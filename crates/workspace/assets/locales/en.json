@@ -1493,6 +1493,7 @@
       "retired": "{{tool}} was retired with auto mode and changes nothing. Use {{replacement}} instead.",
       "personsPoints": "A person set this task’s story points; automation does not change them.",
       "pointsOffScale": "Story points are 1, 2, 3, 5, 8, 13 or 21.",
+      "branchNotFound": "The repository has no branch {{branch}}, locally or on a remote. Name one of its branches, inherit or checked_out; nothing was saved.",
       "runNotEnded": "The run still works; its worktree is removed once it ended.",
       "worktreeRemoved": "The run’s worktree was removed already.",
       "integrationRunning": "A merge or worktree removal of this task is running; try again once it ended.",
