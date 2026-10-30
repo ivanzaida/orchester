@@ -201,6 +201,8 @@ changed by hand
   .expect("an uncommitted change");
   let dirty = served.refused("merge_run", &run_one);
   assert_eq!(dirty["code"], "merge_failed", "{dirty}");
+  // A preflight failure of the merge's job has this code too; only the uncommitted-file refusal names the file.
+  assert!(dirty.to_string().contains("README.md"), "{dirty}");
   assert_eq!(
     git(&repo, &["show", "main:README.md"]),
     "hi\n",
