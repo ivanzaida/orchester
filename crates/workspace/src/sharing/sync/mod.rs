@@ -1,10 +1,12 @@
 //! The shared projects' live event streams (`docs/architecture/server.md`, "Live updates"): one per shared project on
 //! this computer while its server takes this computer's token and the person is a member, each following the project's
-//! events into its cache ([`stream`], [`apply`]) with the team's configuration ([`config`]) and saying how it stands
-//! ([`state`]). Started with the connection monitor and kept in step with the servers and the projects: a project
-//! shared, joined or made local, a sign-in or sign-out starts or ends its stream.
+//! events into its cache ([`stream`], [`apply`]) with the team's configuration ([`config`]), reporting this computer's
+//! catalog while it is open ([`catalog`]) and saying how it stands ([`state`]). Started with the connection monitor and
+//! kept in step with the servers and the projects: a project shared, joined or made local, a sign-in or sign-out
+//! starts or ends its stream.
 
 mod apply;
+mod catalog;
 mod config;
 mod state;
 pub mod stream;
@@ -19,7 +21,7 @@ use std::{
 };
 
 use orchester_api::{
-  SharedTask, Versions,
+  CatalogReport, SharedTask, Versions,
   client::{ClientError, EventStream, StreamEnd},
 };
 use orchester_core::{
@@ -30,6 +32,7 @@ use tokio::task::JoinHandle;
 
 pub(super) use self::state::SyncStates;
 pub use self::{
+  catalog::CATALOG_CHECK,
   config::{
     ConfigServer, RemoteResourceStore, Waiting, bind, keep_uploaded_configuration, upload_configuration, use_here,
     waiting,
@@ -208,6 +211,16 @@ impl Source for Live {
       .servers
       .with_token_for(Behalf::Background, self.project.entry(), |client, token| async move {
         client.versions(&token, project, resource, after).await
+      })
+      .await
+  }
+
+  async fn report_catalog(&self, report: CatalogReport) -> Result<(), SharingError> {
+    let project = self.project.link().project;
+    self
+      .servers
+      .with_token_for(Behalf::Background, self.project.entry(), |client, token| async move {
+        client.report_catalog(&token, project, &report).await
       })
       .await
   }
