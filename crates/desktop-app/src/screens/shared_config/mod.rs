@@ -1,9 +1,11 @@
 //! What a shared project's configuration needs of this computer, as the screens show it
 //! (`docs/design/shared-configuration.md`, decisions 7, 8 and 11; `Shared configuration · redesign` `UC5xk`): the
-//! picker of the person's own connections with *Add an account…* ([`picker`]), the words that name who needs a
-//! reference ([`needs`]), and binding one, which only the person does ([`bind_action`]). Sharing › On this computer
-//! and a profile's *Runs here use* build on them.
+//! picker of the person's own connections with *Add an account…* ([`picker`]), *Missing on this computer* on a
+//! resource's or a pipeline's page ([`missing`]), the words that name who needs a reference ([`needs`]), and binding
+//! one, which only the person does ([`bind_action`]). Sharing › On this computer and a profile's *Runs here use* build
+//! on them.
 
+pub(crate) mod missing;
 pub(crate) mod picker;
 
 use std::path::PathBuf;

@@ -105,11 +105,12 @@ impl Component for OnThisComputer {
       .state()
       .get();
     let column = Column::new().id("sharing-bindings").width(Dimension::Pct(100.0));
+    // A failed re-read keeps the last data; the section then says so instead of staying answerable as if current.
     let shown: Element = match (state.data, state.error) {
-      (Some(Read(here)), _) if !here.references.is_empty() => self.section(ctx, &here),
-      (None, Some(reason)) => column
+      (_, Some(reason)) => column
         .child(field_error("sharing-bindings-unread", &reason.text(ctx)))
         .into(),
+      (Some(Read(here)), None) if !here.references.is_empty() => self.section(ctx, &here),
       _ => column.into(),
     };
     shown

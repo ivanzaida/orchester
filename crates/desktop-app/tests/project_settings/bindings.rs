@@ -1,6 +1,6 @@
-//! Sharing › On this computer (`04b` `e41po`, `04c` `rpQ7s`, `04d` `z0iFy`): a shared project's references with who
-//! needs them and how they stand here; the picker binds a connection, and an MCP server is bound only once a person
-//! confirms it in the modal, never by synthetic input.
+//! Sharing › On this computer (`04b` `e41po`, `04c` `rpQ7s`, `04d` `z0iFy`, `04e` `LRXYn`): a shared project's
+//! references with who needs them and how they stand here; the picker binds a connection for a person only, and an
+//! MCP server or a secret is bound only once a person confirms it in the modal, never by synthetic input.
 //! `cargo test -p orchester-app --test project_settings bindings_`.
 
 use std::collections::{BTreeSet, HashMap};
@@ -14,8 +14,9 @@ use orchester_core::{
   resource::{
     AgentTargets, CommandProgram, InjectionEvent, Instruction, InstructionScope, PromptText, Slug, VersionNumber,
   },
+  secret::{Environment, NewSecret, Secret, SecretKind, SecretName},
   sharing::SharedPerson,
-  store::{ConnectionStore, McpServerStore, ResourceStore},
+  store::{ConnectionStore, McpServerStore, ResourceStore, SecretStore},
   time::Timestamp,
 };
 use orchester_store::{
@@ -254,6 +255,78 @@ fn bindings_an_mcp_server_is_bound_only_when_a_person_confirms_it() {
       reference: theirs.docs,
       bound: Some(Bound {
         local: docs,
+        by: BoundBy::Person,
+      }),
+    }
+  );
+}
+
+#[test]
+fn bindings_synthetic_input_binds_no_connection_from_the_picker() {
+  let mut page = Settings::new(true);
+  let (theirs, _) = shared(&mut page.db());
+  open(&mut page);
+  page.click("sharing-binding-connection-0-picker");
+  page.until("the picker's menu", |page| {
+    page.exists("sharing-binding-connection-0-picker-option-0")
+  });
+  with_synthetic_input(|| page.click("sharing-binding-connection-0-picker-option-0"));
+  page.until("the refusal", |page| page.exists("sharing-bindings-picked-person-only"));
+  assert_eq!(
+    kept(&page, "Work"),
+    BoundReference::Connection {
+      reference: theirs.connection,
+      bound: None,
+    },
+    "synthetic input binds nothing"
+  );
+}
+
+#[test]
+fn bindings_a_secret_is_bound_through_its_modal_only_by_a_person() {
+  let mut page = Settings::new(false);
+  let (theirs, _) = shared(&mut page.db());
+  let token = Secret::new(
+    SecretId::generate(),
+    NewSecret {
+      name: SecretName::new("MY_TOKEN").expect("name"),
+      kind: SecretKind::ApiKey,
+      environment: Environment::Development,
+    },
+    Timestamp::now(),
+  );
+  page.db().create_secret(&token).expect("secret");
+  open(&mut page);
+  page.click("sharing-binding-secret-0-picker");
+  page.until("the picker's menu", |page| {
+    page.exists("sharing-binding-secret-0-picker-option-0")
+  });
+  page.click("sharing-binding-secret-0-picker-option-0");
+  page.until("the modal", |page| page.exists("sharing-bind-secret"));
+  assert_eq!(
+    page.text("sharing-bind-secret-title"),
+    "Give a secret to TOKEN on this computer?"
+  );
+
+  with_synthetic_input(|| page.click("sharing-bind-confirm"));
+  page.until("the refusal", |page| page.exists("sharing-bind-confirm-person-only"));
+  assert_eq!(
+    kept(&page, "TOKEN"),
+    BoundReference::Secret {
+      reference: theirs.token,
+      bound: None,
+    },
+    "synthetic input binds nothing"
+  );
+
+  page.click("sharing-bind-confirm");
+  page.until("the secret bound", |page| page.exists("sharing-binding-secret-0-bound"));
+  assert_eq!(
+    kept(&page, "TOKEN"),
+    BoundReference::Secret {
+      reference: theirs.token,
+      bound: Some(Bound {
+        local: token.id(),
         by: BoundBy::Person,
       }),
     }

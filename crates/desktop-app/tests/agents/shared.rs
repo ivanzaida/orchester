@@ -151,3 +151,95 @@ fn shared_profile_says_what_is_missing_and_only_a_person_uses_the_waiting_versio
     None
   );
 }
+
+/// Caches a teammate's v3 of profile `id`, the same as v2, which waits too.
+fn shared_v3(agents: &Agents, id: ResourceId) {
+  let mut db = ProjectDb::open(&agents.root).expect("database");
+  let v2 = db
+    .cached_version::<AgentProfile>(id, VersionNumber::FIRST.next().expect("v2"))
+    .expect("read")
+    .expect("v2");
+  db.cache_shared_version(
+    id,
+    &CachedVersion {
+      number: v2.number.next().expect("v3"),
+      hash: ContentHash::new(&"c".repeat(64)).expect("a hash"),
+      ..v2
+    },
+  )
+  .expect("cached");
+}
+
+/// Opens *Runs here use*'s menu, scrolled into view as a person sees it first.
+fn open_runs_here(agents: &mut Agents) {
+  agents
+    .window
+    .tree
+    .get_element_by_id_mut("agent-runs-here")
+    .expect("Runs here use")
+    .scroll_into_view();
+  agents.window.pass();
+  agents.click("agent-runs-here");
+  agents.until("the picker's menu", |s| s.exists("agent-runs-here-option-0"));
+}
+#[test]
+fn shared_profile_head_says_where_it_runs_and_synthetic_input_chooses_no_connection() {
+  let mut agents = Agents::new(true);
+  let id = agents.profile(true);
+  shared_v2(&agents, id);
+  agents.open(id);
+  agents.until("the shared parts", |s| s.exists("agent-runs-here-status"));
+  assert_eq!(agents.text("agent-runs-here-status"), "runs here: Test Codex");
+
+  open_runs_here(&mut agents);
+  with_synthetic_input(|| agents.click("agent-runs-here-option-0"));
+  agents.until("the refusal", |s| s.exists("agent-runs-here-person-only"));
+  let bindings = ProjectDb::open(&agents.root)
+    .expect("database")
+    .reference_bindings()
+    .expect("bindings");
+  let work = bindings.iter().find(|binding| binding.name == "Work").expect("Work");
+  assert!(
+    matches!(
+      work.reference,
+      BoundReference::Connection {
+        bound: Some(Bound { by: BoundBy::Role, .. }),
+        ..
+      }
+    ),
+    "synthetic input chose nothing: {work:?}"
+  );
+}
+
+#[test]
+fn shared_profile_use_here_uses_the_version_the_bar_shows() {
+  let mut agents = Agents::new(true);
+  let id = agents.profile(true);
+  shared_v2(&agents, id);
+  agents.open(id);
+  agents.until("v2 waits", |s| s.exists("agent-widens-bar"));
+  assert_eq!(
+    agents.text("agent-widens-bar-status"),
+    "v2 widens what agents may do here"
+  );
+
+  // v3 arrives; choosing the connection here reads the page again.
+  shared_v3(&agents, id);
+  open_runs_here(&mut agents);
+  agents.click("agent-runs-here-option-0");
+  agents.until("v3 waits", |s| {
+    s.exists("agent-widens-bar-status") && s.text("agent-widens-bar-status") == "v3 widens what agents may do here"
+  });
+  assert_eq!(agents.text("agent-use-here"), "Use v3 here");
+
+  agents.press_until("agent-use-here", "v3 used here", |s| !s.exists("agent-widens-bar"));
+  let db = ProjectDb::open(&agents.root).expect("database");
+  assert_eq!(db.waiting_version(id).expect("read"), None, "nothing waits");
+  assert_eq!(
+    db.latest_version::<AgentProfile>(id)
+      .expect("read")
+      .map(|version| version.number().get()),
+    Some(3),
+    "runs use v3, the version the bar showed"
+  );
+}

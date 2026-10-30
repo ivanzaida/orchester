@@ -33,7 +33,10 @@ use crate::{
   navigation::Navigation,
   project::{ShownProject, own::OwnChanges},
   routes::{ProjectPage, Route, ToolTab},
-  screens::hub::{self, page_head::More},
+  screens::{
+    hub::{self, page_head::More},
+    shared_config::missing,
+  },
   theme::HubSpacing,
   ui::{icon::Icon, inspector::note, message::message_text},
 };
@@ -192,12 +195,24 @@ impl Component for ToolEditor {
         }),
       }
     });
+    // *Missing on this computer* (`04` `w0Evp`): a shared tool that names a secret or an MCP server not bound here.
+    let missing = missing::missing_here(
+      ctx,
+      &missing::Page {
+        project: &p.project,
+        prefix: "tool-missing",
+        resources: baseline.iter().map(|entry| entry.id).collect(),
+        name: &title,
+        whose: missing::Whose::Resource,
+      },
+    );
     let mut pane = Column::new()
       .id("tool-editor")
       .width(Dimension::Pct(100.0))
       .spacing(HubSpacing::Sections.role())
       .child(head::crumb(ctx, &p))
       .child(head::head(ctx, &p, (baseline.as_ref(), &title), more))
+      .with_children(missing)
       .with_children(self.remove_question(ctx, &p, baseline.as_ref()));
     pane = match (self.discard_question(ctx, &p, baseline.as_ref()), self.asking.get().0) {
       (Some(question), _) => pane.child(question),

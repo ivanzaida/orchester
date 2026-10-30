@@ -226,12 +226,16 @@ impl Editor {
         std::sync::Arc::new(move || ask.set(Ask::Remove))
       },
     });
-    let (shared_bars, runs_here) = shared::parts(ctx, props);
+    let shared::Parts {
+      bars: shared_bars,
+      runs_here,
+      status: here_status,
+    } = shared::parts(ctx, props);
     let top = Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(HubSpacing::Row.role())
       .child(page_head::crumb(ctx, &props.nav))
-      .child(page_head::head(ctx, (&self.fields, &props.listed), more))
+      .child(page_head::head(ctx, (&self.fields, &props.listed), here_status, more))
       .with_children(shared_bars)
       .with_children(self.remove_question(ctx, props, state))
       .child(self.bar_or_question(ctx, props, state))

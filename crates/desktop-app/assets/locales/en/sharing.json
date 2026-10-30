@@ -593,11 +593,15 @@
         "several": "Missing on this computer: {{count}} references",
         "bodyConnection": "Pipelines that use {{resource}} can't run here until you choose a connection ({{role}}) on this computer.",
         "body": "Pipelines that use {{resource}} can't run here until you choose what it names on this computer.",
+        "bodyPipeline": "{{resource}} can't run here until you choose what its steps name on this computer.",
         "choose": "Choose on this computer…"
       },
       "widens": {
         "title": "v{{version}} widens what agents may do here",
         "body": "{{publisher}} published v{{version}}. Runs on this computer keep the version before it until you use v{{version}} here.",
+        "bodyUsed": "{{publisher}} published v{{version}}. Runs on this computer keep v{{used}} until you use v{{version}} here.",
+        "compare": "Compare v{{version}} with v{{used}}",
+        "compareLater": "Comparing a profile's versions comes in a later update.",
         "personOnly": "Only you can press this: not the Orchestrator, a tool or automation.",
         "use": "Use v{{version}} here",
         "adds": {
@@ -627,7 +631,9 @@
       "noAccount": "Missing on this computer: no account for it here · {{resource}} can't run here",
       "note": "Runs here use stays on this computer and is never sent to the team.",
       "noteNoAccount": "Add an account… opens Settings › Accounts. Runs here use stays on this computer and is never sent.",
-      "choose": "Choose a connection"
+      "choose": "Choose a connection",
+      "head": "runs here: {{connection}}",
+      "cantRun": "Can't run here"
     }
   }
 }

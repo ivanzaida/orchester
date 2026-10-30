@@ -19,7 +19,7 @@ use crate::{
   screens::hub::{
     draft_bar::{DraftBar, Standing},
     page_head::MORE_MENU_WIDTH,
-    parts::{status, tile},
+    parts::{Tone, status, tile},
   },
   theme::{ExtraSpacing, HubText, IconSize},
   ui::{
@@ -48,7 +48,13 @@ pub struct More {
   pub remove: Arc<dyn Fn() + Send + Sync>,
 }
 
-pub fn head(ctx: &mut Ctx, (fields, listed): (&Fields, &ProjectAgents), more: Option<More>) -> Element {
+/// The head; `here` ends its line in a shared project: *runs here: …* or *Can't run here* (06, 06c).
+pub fn head(
+  ctx: &mut Ctx,
+  (fields, listed): (&Fields, &ProjectAgents),
+  here: Option<(Tone, Arc<str>)>,
+  more: Option<More>,
+) -> Element {
   let role = fields.role.get();
   let title = if role.trim().is_empty() {
     ctx.t("agents.new")
@@ -56,18 +62,20 @@ pub fn head(ctx: &mut Ctx, (fields, listed): (&Fields, &ProjectAgents), more: Op
     role.as_str().into()
   };
   let (summary, enforced) = policy_panel::summary(ctx, fields, listed);
+  let separated = |id: &str, (tone, text): (Tone, Arc<str>)| {
+    Row::new()
+      .spacing(ExtraSpacing::Snug.role())
+      .align_items(Alignment::Center)
+      .child(Text::new(&ctx.t("agents.summarySeparator")).variant(HubText::Hint.role()))
+      .child(status(id, tone, &text))
+  };
   let sub = Row::new()
     .id("agent-permission-summary")
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
     .child(Text::new(&summary).variant(HubText::Hint.role()))
-    .with_children(enforced.map(|(tone, text)| {
-      Row::new()
-        .spacing(ExtraSpacing::Snug.role())
-        .align_items(Alignment::Center)
-        .child(Text::new(&ctx.t("agents.summarySeparator")).variant(HubText::Hint.role()))
-        .child(status("agent-enforced", tone, &text))
-    }));
+    .with_children(enforced.map(|enforced| separated("agent-enforced", enforced)))
+    .with_children(here.map(|here| separated("agent-runs-here-status", here)));
   let menu = more.map(|more| {
     let remove = more.remove.clone();
     let item = MenuItem::new("agent-remove", ctx.t("hub.remove.action"), move || remove())

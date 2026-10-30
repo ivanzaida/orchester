@@ -172,13 +172,23 @@ fn chosen(reference: BoundReference, local: &str) -> Option<BoundReference> {
   }
 }
 
-/// The role, the secret's kind, of the reference `ask` is about.
+/// The role, the secret's kind, of the reference `ask` is about: found by its kind and id, whatever it is bound to.
 fn here_role(here: &Here, ask: &Ask) -> Option<String> {
   here
     .references
     .iter()
-    .find(|reference| reference.binding.reference == ask.reference)
+    .find(|reference| same_reference(reference.binding.reference, ask.reference))
     .and_then(|reference| reference.binding.role.clone())
+}
+
+/// `a` and `b` are the same reference, bound or not.
+fn same_reference(a: BoundReference, b: BoundReference) -> bool {
+  match (a, b) {
+    (BoundReference::Connection { reference: a, .. }, BoundReference::Connection { reference: b, .. })
+    | (BoundReference::McpServer { reference: a, .. }, BoundReference::McpServer { reference: b, .. }) => a == b,
+    (BoundReference::Secret { reference: a, .. }, BoundReference::Secret { reference: b, .. }) => a == b,
+    _ => false,
+  }
 }
 
 /// The name of the option whose id is `chosen`; empty while none is.

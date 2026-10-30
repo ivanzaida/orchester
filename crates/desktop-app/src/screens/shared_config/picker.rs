@@ -61,16 +61,21 @@ pub(crate) struct Props {
   pub items: Vec<Item>,
   /// The menu ends in *Add an account…*.
   pub add_account: bool,
+  /// A binding is being made: the picker neither opens nor chooses until it is done.
+  pub busy: bool,
   /// Runs with the index of the chosen item, in the handler of the input that chose it.
   pub choose: Arc<dyn Fn(usize) + Send + Sync>,
 }
 
 impl PartialEq for Props {
+  /// The same `choose` too: a parent that renders again makes a new one, which may hold other ids for the same items.
   fn eq(&self, other: &Self) -> bool {
     self.id == other.id
       && self.opener == other.opener
       && self.items == other.items
       && self.add_account == other.add_account
+      && self.busy == other.busy
+      && Arc::ptr_eq(&self.choose, &other.choose)
   }
 }
 
@@ -106,18 +111,24 @@ impl Component for Picker {
 
 impl Picker {
   fn trigger(&self, ctx: &Ctx, props: &Props) -> Element {
-    let open = self.open.clone();
-    let toggle = move || open.update(|open| *open = !*open);
+    let (open, busy) = (self.open.clone(), props.busy);
+    let toggle = move || {
+      if !busy {
+        open.update(|open| *open = !*open);
+      }
+    };
     match &props.opener {
-      Opener::Change => ActionButton::new(
-        format!("{}-change", props.id),
-        ButtonKind::Secondary,
-        ctx.t("sharing.bindings.change"),
-      )
-      .in_form()
-      .element_ref(self.anchor.clone())
-      .on_click(toggle)
-      .into(),
+      Opener::Change => {
+        let change = ActionButton::new(
+          format!("{}-change", props.id),
+          ButtonKind::Secondary,
+          ctx.t("sharing.bindings.change"),
+        )
+        .in_form()
+        .element_ref(self.anchor.clone())
+        .on_click(toggle);
+        if busy { change.disabled() } else { change }.into()
+      }
       Opener::Select { words, width } => {
         let open = self.open.get();
         Focus::Keyboard
@@ -125,7 +136,14 @@ impl Picker {
           .id(props.id.to_string())
           .ref_element(self.anchor.clone())
           .describe("a11y_name", words.clone())
-          .describe("state", if open { "open" } else { "closed" })
+          .describe(
+            "state",
+            match (busy, open) {
+              (true, _) => "disabled",
+              (false, true) => "open",
+              (false, false) => "closed",
+            },
+          )
           .width(Dimension::Px(*width))
           .height(Dimension::Px(ControlHeight::Md.value()))
           .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
@@ -144,7 +162,11 @@ impl Picker {
           .child(
             Text::new(words)
               .variant(TypographyStyle::Description)
-              .color(PaletteColor::TextPrimary)
+              .color(if busy {
+                PaletteColor::TextMuted
+              } else {
+                PaletteColor::TextPrimary
+              })
               .flex(1.0)
               .min_width(Dimension::Px(0.0))
               .nowrap()
@@ -170,8 +192,12 @@ impl Picker {
         let row = match &item.unavailable {
           Some(reason) => MenuItem::unavailable(id, item.label.clone(), reason.clone()).without_lock(),
           None => {
-            let choose = props.choose.clone();
-            let row = MenuItem::new(id, item.label.clone(), move || choose(index));
+            let (choose, busy) = (props.choose.clone(), props.busy);
+            let row = MenuItem::new(id, item.label.clone(), move || {
+              if !busy {
+                choose(index);
+              }
+            });
             match &item.detail {
               Some(detail) => row.detail(detail.clone()),
               None => row,

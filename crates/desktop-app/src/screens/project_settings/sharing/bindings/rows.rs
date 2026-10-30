@@ -308,6 +308,7 @@ fn connection_picker(
       opener,
       items,
       add_account: true,
+      busy: actions.busy,
       choose: Arc::new(move |index| {
         let (BoundReference::Connection { reference, .. }, Some(local)) = (target, ids.get(index)) else {
           return;
@@ -362,6 +363,7 @@ fn asking_picker(
       opener,
       items,
       add_account: false,
+      busy: actions.busy,
       choose: Arc::new(move |index| {
         if let Some((local, _)) = choices.get(index) {
           actions.ask(ask.clone(), local.clone());

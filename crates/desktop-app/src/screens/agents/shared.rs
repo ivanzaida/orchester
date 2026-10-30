@@ -1,8 +1,9 @@
 //! A shared profile's page on this computer (`Shared configuration · redesign` `UC5xk`): what it names that is missing
 //! here (`04` `w0Evp`: the bar with *Choose on this computer…*, which opens Sharing › On this computer), a teammate's
 //! version that widens what agents may do here (`02d` `FuOXA`: what it adds, with *Use v<N> here*, which only the
-//! person presses), and *Runs here use* (`06` `sakAV`, `06c` `FO7Cq`): the person's own connection the profile's runs
-//! take on this computer, chosen through the same picker as On this computer, kept here and never sent.
+//! person presses), *Runs here use* (`06` `sakAV`, `06c` `FO7Cq`): the person's own connection the profile's runs
+//! take on this computer, chosen through the same picker as On this computer, kept here and never sent; and the page
+//! head's *runs here: …* or *Can't run here*.
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -31,16 +32,15 @@ use orchester_workspace::{
 };
 
 use crate::{
-  navigation::Navigation,
-  routes::{ProjectPage, ProjectSettingsTab, Route},
   screens::{
     hub::{
       draft_bar::{DraftBar, Standing as BarStanding},
-      parts::note,
+      parts::{Tone as DotTone, note},
     },
     settings::orchester::{PersonOnly, Said, follow_shared, sharing_said},
     shared_config::{
       bind_action,
+      missing::{self, Whose},
       picker::{self, Item, Opener},
     },
   },
@@ -70,24 +70,39 @@ pub(super) struct Shared {
 
 impl DevtoolsInspectable for Shared {}
 
-/// A teammate's version that widens, who published it and what it adds.
+/// A teammate's version that widens, who published it, what it adds, and the version runs use meanwhile.
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Waiting {
   number: VersionNumber,
+  used: Option<VersionNumber>,
   publisher: String,
   adds: Vec<VersionWidening>,
 }
 
-/// What the page shows of it: the bars under the page head, and *Runs here use* with the note under its section.
-pub(super) fn parts(ctx: &mut Ctx, props: &super::editor::Props) -> (Vec<Element>, Option<(Element, Element)>) {
+/// What the page shows of a shared profile.
+#[derive(Default)]
+pub(super) struct Parts {
+  /// The bars under the page head.
+  pub bars: Vec<Element>,
+  /// *Runs here use* with the note under its section.
+  pub runs_here: Option<(Element, Element)>,
+  /// What the page head ends in: *runs here: …* or *Can't run here*.
+  pub status: Option<(DotTone, Arc<str>)>,
+}
+
+/// What the page shows of it, read for the profile `props` shows.
+pub(super) fn parts(ctx: &mut Ctx, props: &super::editor::Props) -> Parts {
   let Some(entry) = &props.entry else {
-    return (Vec::new(), None);
+    return Parts::default();
   };
   let root = props.project.open.repo_root.clone();
   let name = entry.profile.role().as_str().to_owned();
   match read(ctx, root.clone(), entry.id, props.revision.get()) {
-    Err(reason) => (vec![field_error("agent-shared-unread", &reason.text(ctx)).into()], None),
-    Ok(None) => (Vec::new(), None),
+    Err(reason) => Parts {
+      bars: vec![field_error("agent-shared-unread", &reason.text(ctx)).into()],
+      ..Parts::default()
+    },
+    Ok(None) => Parts::default(),
     Ok(Some(shared)) => {
       let project = props.project.open.project.id();
       let bars = bars(
@@ -96,8 +111,11 @@ pub(super) fn parts(ctx: &mut Ctx, props: &super::editor::Props) -> (Vec<Element
         (project, entry.id, &name),
         (root.clone(), &props.revision),
       );
-      let runs = runs_here(ctx, &shared, (entry.id, &name), (root, &props.revision));
-      (bars, runs)
+      Parts {
+        bars,
+        status: head_status(ctx, &shared, entry.id),
+        runs_here: runs_here(ctx, &shared, (entry.id, &name), (root, &props.revision)),
+      }
     }
   }
 }
@@ -115,9 +133,10 @@ fn read(ctx: &mut Ctx, root: PathBuf, resource: ResourceId, revision: u64) -> Re
     })
     .state()
     .get();
+  // A failed re-read keeps the last data; it must not stay answerable (Use v<N> here, Runs here use) as if current.
   match (state.data, state.error) {
-    (Some(shared), _) => Ok(Some(shared)),
-    (None, Some(reason)) => Err(reason),
+    (_, Some(reason)) => Err(reason),
+    (Some(shared), None) => Ok(Some(shared)),
     (None, None) => Ok(None),
   }
 }
@@ -137,6 +156,7 @@ fn read_shared(
         .unwrap_or_default();
       Some(Waiting {
         number: waiting.number,
+        used: waiting.used,
         publisher,
         adds: waiting.adds,
       })
@@ -153,11 +173,11 @@ fn bars(
   (project, resource, name): (orchester_core::id::ProjectId, ResourceId, &str),
   (root, revision): (PathBuf, &Signal<u64>),
 ) -> Vec<Element> {
-  let mut bars = Vec::new();
+  // *Missing on this computer: connection “DeepSeek”* and *Choose on this computer…* (`Pf5rK` in 04).
   let missing = shared.here.missing_for(resource);
-  if !missing.is_empty() {
-    bars.push(missing_bar(ctx, &missing, (project, name)));
-  }
+  let mut bars: Vec<Element> = missing::bar(ctx, "agent-missing", &missing, (project, name, Whose::Resource))
+    .into_iter()
+    .collect();
   if let Some(waiting) = &shared.waiting {
     bars.push(ctx.mount_keyed::<UseHere>(
       &format!("agent-use-here-{resource}"),
@@ -172,43 +192,17 @@ fn bars(
   bars
 }
 
-/// *Missing on this computer: connection “DeepSeek”* and *Choose on this computer…* (`Pf5rK` in 04).
-fn missing_bar(
-  ctx: &mut Ctx,
-  missing: &[&HereReference],
-  (project, name): (orchester_core::id::ProjectId, &str),
-) -> Element {
-  let first = missing[0];
-  let reference = ("name", first.binding.name.clone());
-  let status = match (missing.len(), first.binding.reference) {
-    (1, BoundReference::Connection { .. }) => ctx.t_args("sharing.config.missing.connection", [reference]),
-    (1, BoundReference::McpServer { .. }) => ctx.t_args("sharing.config.missing.server", [reference]),
-    (1, BoundReference::Secret { .. }) => ctx.t_args("sharing.config.missing.secret", [reference]),
-    (count, _) => ctx.t_args("sharing.config.missing.several", [("count", count.to_string())]),
-  };
-  let sub = match (missing.len(), first.binding.reference, &first.binding.role) {
-    (1, BoundReference::Connection { .. }, Some(role)) => ctx.t_args(
-      "sharing.config.missing.bodyConnection",
-      [("resource", name.to_owned()), ("role", role.clone())],
+/// The status the page head ends in: *runs here: Claude Code · Work* once the profile's connection is bound here,
+/// *Can't run here* while it is missing; `None` for a profile that names no connection this computer binds.
+fn head_status(ctx: &Ctx, shared: &Shared, resource: ResourceId) -> Option<(DotTone, Arc<str>)> {
+  let reference = shared.here.connection_of(resource)?;
+  Some(match &reference.standing {
+    Standing::Bound { local, .. } => (
+      DotTone::Success,
+      ctx.t_args("sharing.runsHere.head", [("connection", local.as_str())]),
     ),
-    _ => ctx.t_args("sharing.config.missing.body", [("resource", name.to_owned())]),
-  };
-  let open = Navigation::of(ctx).to(Route::Project(
-    project,
-    ProjectPage::Settings(ProjectSettingsTab::Sharing),
-  ));
-  DraftBar::new("agent-missing-bar", BarStanding::Missing, status)
-    .sub(sub)
-    .action(
-      ActionButton::new(
-        "agent-missing-choose",
-        ButtonKind::Secondary,
-        ctx.t("sharing.config.missing.choose"),
-      )
-      .icon(Icon::ArrowRight)
-      .opens(open),
-    )
-    .into()
+    Standing::Found { .. } | Standing::Missing => (DotTone::Danger, ctx.t("sharing.runsHere.cantRun")),
+  })
 }
 
 #[derive(Clone)]
@@ -229,7 +223,9 @@ impl DevtoolsInspectable for UseHereProps {}
 
 /// The widens bar with *Use v<N> here* (`V097I` in 02d).
 struct UseHere {
-  use_here: FutureAction<(), (), Said>,
+  /// Takes the version the bar shows when pressed, so a newer version that arrives while it is mounted is the one
+  /// used.
+  use_here: FutureAction<VersionNumber, (), Said>,
   person: PersonOnly,
 }
 
@@ -238,13 +234,8 @@ impl Component for UseHere {
 
   fn create(ctx: &mut Ctx) -> Self {
     let props = ctx.props::<UseHereProps>().clone();
-    let use_here = ctx.future_action(move |(): ()| {
-      let (root, resource, number, revision) = (
-        props.root.clone(),
-        props.resource,
-        props.waiting.number,
-        props.revision.clone(),
-      );
+    let use_here = ctx.future_action(move |number: VersionNumber| {
+      let (root, resource, revision) = (props.root.clone(), props.resource, props.revision.clone());
       async move {
         background::run(move || sync::use_here(&root, resource, number, Answerer::Person))
           .await
@@ -263,29 +254,7 @@ impl Component for UseHere {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<UseHereProps>().clone();
     let version = props.waiting.number.get().to_string();
-    let adds = Column::new()
-      .id("agent-widens-adds")
-      .width(Dimension::Pct(100.0))
-      .padding(Padding::new().top(ExtraSpacing::Snug.role()))
-      .spacing(SpacingSize::Xs)
-      .with_children(props.waiting.adds.iter().enumerate().map(|(index, add)| {
-        Row::new()
-          .id(format!("agent-widens-add-{index}"))
-          .width(Dimension::Pct(100.0))
-          .spacing(SpacingSize::Sm)
-          .align_items(Alignment::Center)
-          .child(icon(
-            Icon::Plus,
-            crate::theme::IconSize::Sm,
-            PaletteColor::TextSecondary,
-          ))
-          .child(
-            Text::new(&ctx.t(adds_key(add)))
-              .variant(HubText::Status.role())
-              .flex(1.0)
-              .min_width(Dimension::Px(0.0)),
-          )
-      }));
+    let adds = adds_list(ctx, &props.waiting.adds);
     let state = self.use_here.state().get();
     let button = ActionButton::new(
       USE_HERE,
@@ -296,28 +265,49 @@ impl Component for UseHere {
     let button = if state.is_pending() {
       button.loading()
     } else {
-      let (action, person) = (self.use_here.clone(), self.person.clone());
+      let (action, person, number) = (self.use_here.clone(), self.person.clone(), props.waiting.number);
       button.on_click(move || {
         if person.allows(USE_HERE) {
-          action.run(());
+          action.run(number);
         }
       })
     };
-    let bar = DraftBar::new(
+    let names = |used: &str| {
+      [
+        ("publisher", props.waiting.publisher.clone()),
+        ("version", version.clone()),
+        ("used", used.to_owned()),
+      ]
+    };
+    let (sub, compare) = match props.waiting.used {
+      Some(used) => {
+        let used = used.get().to_string();
+        // Profiles have no compare view yet: the action is shown, unavailable, with why.
+        let compare = ActionButton::new(
+          "agent-widens-compare",
+          ButtonKind::Secondary,
+          ctx.t_args("sharing.config.widens.compare", names(&used)),
+        )
+        .unavailable(ctx.t("sharing.config.widens.compareLater"));
+        (
+          ctx.t_args("sharing.config.widens.bodyUsed", names(&used)),
+          Some(compare),
+        )
+      }
+      None => (ctx.t_args("sharing.config.widens.body", names("")), None),
+    };
+    let mut bar = DraftBar::new(
       "agent-widens-bar",
       BarStanding::Widens,
       ctx.t_args("sharing.config.widens.title", [("version", version.as_str())]),
     )
-    .sub(ctx.t_args(
-      "sharing.config.widens.body",
-      [
-        ("publisher", props.waiting.publisher.as_str()),
-        ("version", version.as_str()),
-      ],
-    ))
+    .sub(sub)
     .list(adds)
-    .foot(ctx.t("sharing.config.widens.personOnly"))
-    .action(button);
+    .foot(ctx.t("sharing.config.widens.personOnly"));
+    if let Some(compare) = compare {
+      bar = bar.action(compare);
+    }
+    let bar = bar.action(button);
     let failed = state
       .error
       .clone()
@@ -330,6 +320,33 @@ impl Component for UseHere {
       .with_children(self.person.reason(ctx, USE_HERE))
       .with_children(failed)
   }
+}
+
+/// What a version adds, one line each with a plus (`uOQNr` in 02d).
+fn adds_list(ctx: &Ctx, adds: &[VersionWidening]) -> Column {
+  Column::new()
+    .id("agent-widens-adds")
+    .width(Dimension::Pct(100.0))
+    .padding(Padding::new().top(ExtraSpacing::Snug.role()))
+    .spacing(SpacingSize::Xs)
+    .with_children(adds.iter().enumerate().map(|(index, add)| {
+      Row::new()
+        .id(format!("agent-widens-add-{index}"))
+        .width(Dimension::Pct(100.0))
+        .spacing(SpacingSize::Sm)
+        .align_items(Alignment::Center)
+        .child(icon(
+          Icon::Plus,
+          crate::theme::IconSize::Sm,
+          PaletteColor::TextSecondary,
+        ))
+        .child(
+          Text::new(&ctx.t(adds_key(add)))
+            .variant(HubText::Status.role())
+            .flex(1.0)
+            .min_width(Dimension::Px(0.0)),
+        )
+    }))
 }
 
 /// The few words that say what a version adds (`Add` rows in `uOQNr`).
@@ -526,6 +543,7 @@ impl RunsHere {
         },
         items,
         add_account: true,
+        busy: self.bind.state().get().is_pending(),
         choose: Arc::new(move |index| {
           let (BoundReference::Connection { reference, .. }, Some(local)) = (target, ids.get(index)) else {
             return;
