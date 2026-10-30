@@ -186,8 +186,9 @@ const SPECS: &[Spec] = &[
                   merged_by_runner.before_step and merge_commit when it overlapped none of the run's changes and \
                   Orchester merged it itself before that step started). delivery is the run's \
                   place in the project's merge queue (null when its pipeline has no Deliver step or it never joined): \
-                  state queued (place: its place in line), syncing, rechecking, integrating (integrate_step, \
-                  files), waiting_for_approval, blocked (blocked.why: uncommitted_changes with files, \
+                  lane (the base branch it delivers into; each lane delivers one run at a time, independently of the \
+                  others), state queued (place: its place in its lane's line), syncing, rechecking, integrating \
+                  (integrate_step, files), waiting_for_approval, blocked (blocked.why: uncommitted_changes with files, \
                   other_branch_checked_out, operation_in_progress, local_integration), failed or needs_you (reason.why: \
                   conflicts with files, check_failed, base_keeps_moving with heads, stopped, later_run), merged \
                   (revision, kind merge_commit or squash, worktree_removed, branch_deleted) or removed; since, \

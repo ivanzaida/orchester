@@ -1,12 +1,16 @@
 //! The project's merge queue (`docs/design/orchester-workspace.md` › *Delivery*, ORC-19): the runs of pipelines that
 //! end in a Deliver step join it once every step passed ([`join`]), and it delivers them into their base branch one
-//! at a time, first finished first ([`advance`]): the current base is merged into the run's branch in its worktree,
-//! Check runs again on the merged result, and the run merges (a merge commit or squashed), its worktree, code index and
-//! branch are cleared and its task is done. Conflicts go back to the run's Integrate step, the agent step whose profile
-//! the Deliver step names; a run whose base moved while it was checked syncs and is checked again, at most
-//! [`orchester_core::merge_queue::MAX_RESYNCS`] times in a row, and is never merged on a check of an older base. A
-//! checkout of the base with uncommitted changes blocks delivery, which goes on by itself once it is clean. A run that
-//! waits for a person's approval does not hold the queue.
+//! at a time per base branch, first finished first ([`advance`]): the current base is merged into the run's branch in
+//! its worktree, Check runs again on the merged result, and the run merges (a merge commit or squashed), its worktree,
+//! code index and branch are cleared and its task is done. Conflicts go back to the run's Integrate step, the agent
+//! step whose profile the Deliver step names; a run whose base moved while it was checked syncs and is checked again,
+//! at most [`orchester_core::merge_queue::MAX_RESYNCS`] times in a row, and is never merged on a check of an older
+//! base. A checkout of the base with uncommitted changes blocks delivery, which goes on by itself once it is clean. A
+//! run that waits for a person's approval does not hold the queue.
+//!
+//! The queue has a lane per base branch (ORC-406, `orchester_core::merge_queue::lanes`): a run is in the lane of the
+//! base branch it recorded, and the lanes deliver independently, a run blocked, integrating or waiting in one holding
+//! nothing in another.
 //!
 //! Every rule is here; the screens and automation read the queue ([`read`]) and change it through these functions
 //! only. The store keeps the entries (`orchester_core::merge_queue`). Blocks on SQLite, git and the check's programs:
@@ -31,8 +35,8 @@ pub use self::{
   join::join,
   order::{Move, move_run, remove},
   read::{
-    BaseState, CheckoutState, PhaseState, PipelineDelivery, QueueRead, QueueRow, RowPhase, RunDelivery, TaskDelivery,
-    delivered_by_queue, delivery_of, in_queue, read, task_delivery,
+    BaseState, CheckoutState, LaneLanding, PhaseState, PipelineDelivery, QueueLaneRead, QueueRead, QueueRow, RowPhase,
+    RunDelivery, TaskDelivery, delivered_by_queue, delivery_of, in_queue, read, task_delivery,
   },
   wake::{changes, wake},
 };

@@ -1,12 +1,14 @@
 //! The Profiles tab's list (`01 Profiles` `B94gsw`): the group's head with its counts, one row per profile and the
 //! versions note; with no profile yet, what a profile is, a quiet row with New agent and the project's connections
-//! (`06 Profiles · nothing yet` `KeGdE`), or, without a connection, what to add first (06b).
+//! (`06 Profiles · nothing yet` `KeGdE`), or, without a connection, what to add first (06b). In a shared project the
+//! line over the list says it is the team's, each row its publisher, and a member sees no New or Import (01 `cHvkL`,
+//! 01b `P8tXS`).
 use lurq::{
   app::ctx::Ctx,
   components::{Column, Text},
   node::{Element, dimension::Dimension},
 };
-use orchester_workspace::agents::data::ProjectAgents;
+use orchester_workspace::{agents::data::ProjectAgents, sharing::team::TeamConfiguration};
 
 use super::{AgentsNav, Shown, entries};
 use crate::{
@@ -16,6 +18,7 @@ use crate::{
   screens::hub::{
     self, Head,
     parts::{Entry, Tone, boxed, group, head as group_head, note, status},
+    team,
   },
   theme::{ExtraTypography, HubSpacing},
   ui::{
@@ -24,8 +27,11 @@ use crate::{
   },
 };
 
-/// Import agents and New agent, at the hub head's right.
-pub(super) fn head(ctx: &Ctx, listed: &ProjectAgents, nav: &AgentsNav) -> Head {
+/// Import agents and New agent, at the hub head's right; none for a member of a shared project.
+pub(super) fn head(ctx: &Ctx, (listed, team): (&ProjectAgents, Option<&TeamConfiguration>), nav: &AgentsNav) -> Head {
+  if !team::may_change(team) {
+    return Head::default();
+  }
   Head::actions([
     import(ctx, "agents-import", nav).into(),
     new_button(ctx, "agents-new", ButtonKind::Primary, listed, nav).into(),
@@ -42,6 +48,7 @@ pub(super) fn reading_head(ctx: &Ctx, nav: &AgentsNav) -> Head {
 }
 
 pub(super) fn list(ctx: &mut Ctx, project: &ShownProject, listed: &ProjectAgents, nav: &AgentsNav) -> Element {
+  let team = team::of(project);
   if listed.profiles.is_empty() {
     return hub::list_body("agents-list", empty(ctx, project, listed, nav));
   }
@@ -66,16 +73,21 @@ pub(super) fn list(ctx: &mut Ctx, project: &ShownProject, listed: &ProjectAgents
   let rows = listed
     .profiles
     .iter()
-    .map(|entry| entries::row(ctx, entry, listed, nav));
+    .map(|entry| entries::row(ctx, entry, (listed, team.as_ref()), nav));
+  let foot = match &team {
+    Some(team) => team::foot(ctx, "agents-version-note", team),
+    None => note("agents-version-note", Icon::History, &ctx.t("agents.versionNote")),
+  };
   let pane = Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(HubSpacing::Groups.role())
+    .with_children(team.as_ref().map(|team| team::line(ctx, "agents-team-line", team)))
     .child(group(
       "agents-profiles",
       group_head("agents-profiles", &ctx.t("agents.listTitle"), Some(&counts), None),
       boxed("agents-rows", rows),
     ))
-    .child(note("agents-version-note", Icon::History, &ctx.t("agents.versionNote")));
+    .child(foot);
   hub::list_body("agents-list", pane)
 }
 
@@ -128,10 +140,15 @@ fn empty(ctx: &mut Ctx, project: &ShownProject, listed: &ProjectAgents, nav: &Ag
         .opens(open_connections()),
       )
   } else {
-    Entry::new("agents-none", ctx.t_args("agents.noProfiles", [("project", name)]))
+    let none = Entry::new("agents-none", ctx.t_args("agents.noProfiles", [("project", name)]))
       .tile(Icon::Bot)
-      .hint(ctx.t("agents.emptyNote"))
-      .end(new_button(ctx, "agents-empty-new", ButtonKind::Secondary, listed, nav))
+      .hint(ctx.t("agents.emptyNote"));
+    // A member of a shared project adds none of the team's profiles.
+    if team::may_change(team::of(project).as_ref()) {
+      none.end(new_button(ctx, "agents-empty-new", ButtonKind::Secondary, listed, nav))
+    } else {
+      none
+    }
   };
   let mut pane = Column::new()
     .width(Dimension::Pct(100.0))

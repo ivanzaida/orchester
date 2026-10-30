@@ -23,8 +23,8 @@ use orchester_core::{
   id::ResourceId,
   name::Name,
   resource::{
-    AgentTargets, Draft, InjectionEvent, Instruction, InstructionScope, PromptText, Skill, SkillFile, SkillFilePath,
-    Slug, Version, VersionNumber,
+    AgentTargets, Draft, InjectionEvent, Instruction, InstructionScope, PromptText, ResourceKind, Skill, SkillFile,
+    SkillFilePath, Slug, Version, VersionNumber,
   },
   sharing::MemberRole,
   store::{BlobStore, ResourceStore},
@@ -32,7 +32,7 @@ use orchester_core::{
 };
 use orchester_store::{ProjectDb, PublishState, ResourceSharing, WaitingPublish};
 use orchester_workspace::sharing::{
-  SharingError,
+  SharingError, compare,
   sync::{ConfigServer, RemoteResourceStore},
 };
 use serde_json::Value;
@@ -330,6 +330,125 @@ async fn live_updates_two_publishes_from_one_base_give_the_second_a_version_conf
   assert_eq!(bob.waiting(), []);
   assert_eq!(bob.publisher(style, 3).as_deref(), Some("Bob Lind"));
   assert_eq!(on_server(&server, style)[2], (3, Some(2), "Bob Lind".to_owned()));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn live_updates_after_a_version_conflict_the_admin_compares_and_opens_their_draft_on_the_newer_version() {
+  let (server, style) = style();
+  server.make_admin(BOB);
+  let alice = Computer::new(&server, ALICE, MemberRole::Owner);
+  let bob = Computer::new(&server, BOB, MemberRole::Member);
+  bob.db().set_server_admin(true).expect("the server's admin");
+  alice.cache_first(&server, style).await;
+  bob.cache_first(&server, style).await;
+  alice.publish(&server, style, 1, "Alice's").await.expect("published");
+  bob
+    .publish(&server, style, 1, "Bob's")
+    .await
+    .expect_err("met Alice's v2");
+  let mine = bob.waiting()[0].version;
+
+  let compared = compare::conflict(
+    &bob.workspace.root,
+    (ResourceKind::Instruction, style),
+    mine,
+    (Some(number(1)), number(2)),
+  )
+  .expect("read")
+  .expect("v2 is kept here");
+  assert_eq!(compared.latest_changed, [Arc::from("text")]);
+  let fields: Vec<_> = compared
+    .against_latest
+    .iter()
+    .map(|change| (&*change.field, &*change.from, &*change.to))
+    .collect();
+  assert_eq!(fields, [("text", "Alice's", "Bob's")]);
+
+  bob
+    .db()
+    .reopen_draft::<Instruction>(mine, Timestamp::now())
+    .expect("taken back as a draft");
+  assert_eq!(bob.waiting(), []);
+  let db = bob.db();
+  assert!(
+    db.version::<Instruction>(style, number(3)).expect("read").is_none(),
+    "v3 is gone"
+  );
+  let draft = db.draft::<Instruction>(style).expect("read").expect("a draft");
+  assert_eq!((draft.body(), draft.based_on()), (&rule("Bob's"), Some(number(2))));
+
+  bob
+    .store(&server, move |store| {
+      store.publish_draft::<Instruction>(style, Timestamp::now())
+    })
+    .await
+    .expect("published on v2");
+  assert_eq!(on_server(&server, style)[2], (3, Some(2), "Bob Lind".to_owned()));
+  let history = compare::history(&bob.workspace.root, ResourceKind::Instruction, style).expect("the versions");
+  let listed: Vec<_> = history
+    .iter()
+    .map(|entry| (entry.number.get(), entry.publisher.as_deref(), entry.used_here))
+    .collect();
+  assert_eq!(
+    listed,
+    [
+      (3, Some("Bob Lind"), true),
+      (2, Some("Alice Moreau"), false),
+      (1, Some("Alice Moreau"), false)
+    ]
+  );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn live_updates_the_libraries_read_each_resources_publisher_and_the_versions_that_wait_here() {
+  let (server, style) = style();
+  server.make_admin(BOB);
+  let alice = Computer::new(&server, ALICE, MemberRole::Owner);
+  let bob = Computer::new(&server, BOB, MemberRole::Member);
+  bob.db().set_server_admin(true).expect("the server's admin");
+  alice.cache_first(&server, style).await;
+  bob.cache_first(&server, style).await;
+
+  alice.publish(&server, style, 1, "Alice's").await.expect("published");
+  bob
+    .publish(&server, style, 1, "Bob's")
+    .await
+    .expect_err("met Alice's v2");
+  let standings = bob.db().shared_standings().expect("the standings");
+  let standing = standings
+    .iter()
+    .find(|s| s.resource == style)
+    .expect("Style is the team's");
+  let confirmed = standing.confirmed.as_ref().expect("v2 is numbered");
+  assert_eq!(
+    (confirmed.number.get(), confirmed.publisher.as_deref()),
+    (2, Some("Alice Moreau"))
+  );
+  assert_eq!(standing.waiting.len(), 1, "{standing:?}");
+  assert_eq!(
+    (standing.waiting[0].based_on, standing.waiting[0].state.clone()),
+    (Some(number(1)), PublishState::Conflict { latest: number(2) })
+  );
+
+  alice.go_offline(true);
+  alice
+    .publish(&server, style, 2, "Alice's v3")
+    .await
+    .expect("published here");
+  let standings = alice.db().shared_standings().expect("the standings");
+  let standing = standings
+    .iter()
+    .find(|s| s.resource == style)
+    .expect("Style is the team's");
+  assert_eq!(
+    standing.confirmed.as_ref().map(|c| c.number.get()),
+    Some(2),
+    "v3 is not numbered yet"
+  );
+  assert_eq!(
+    standing.waiting.iter().map(|w| w.state.clone()).collect::<Vec<_>>(),
+    [PublishState::Waiting]
+  );
 }
 
 #[tokio::test(flavor = "multi_thread")]
