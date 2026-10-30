@@ -175,6 +175,7 @@ pub fn new_run(snapshot: RunSnapshot) -> NewRun {
     branch: BranchName::new("orchester/orc-129").expect("valid branch"),
     base: revision('a'),
     base_branch: None,
+    base_source: orchester_core::integration::base::RunBaseSource::CheckedOut,
     budget: Some(tokens(1_400_000)),
     max_duration: Some(std::time::Duration::from_secs(30 * 60)),
   }

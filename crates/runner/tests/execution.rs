@@ -12,10 +12,13 @@ use orchester_core::{
     stream::{AgentEvent, CommandStatus, InvocationOutcome, OutputStream},
   },
   id::{IdempotencyKey, RunId, TaskId},
-  integration::base::BaseBranchSetting,
+  integration::base::{BaseChoice, RunBaseSource, TaskBase},
+  module::{ModuleDetails, ModuleState},
+  name::Name,
   resource::StepKey,
   run::{BranchName, InterruptCause, PreflightProblem, RunStatus, StepStatus},
-  store::{ActivityStore, ConnectionStore, RunStore},
+  store::{ActivityStore, ConnectionStore, RunStore, TaskStore},
+  task::organization::ChangeActor,
   time::Timestamp,
 };
 use orchester_ipc::Rejection;
@@ -235,6 +238,7 @@ async fn execution_records_the_branch_the_checkout_has_when_the_run_starts() {
   let on_main = project(&Setup::new("Append one line."));
   let run = run_to_the_end(on_main.repo.path(), on_main.task).await;
   assert_eq!(run.base_branch().map(|branch| branch.as_str()), Some("main"));
+  assert_eq!(run.base_source(), RunBaseSource::CheckedOut);
   assert_eq!(run.base().as_str(), git(on_main.repo.path(), &["rev-parse", "main"]));
 
   let detached = project(&Setup::new("Append one line."));
@@ -244,9 +248,9 @@ async fn execution_records_the_branch_the_checkout_has_when_the_run_starts() {
   assert_eq!(run.base_branch(), None, "a detached HEAD has no branch to merge into");
 }
 
-/// The project's base branch set (ORC-81): a new run starts from that branch's tip while the checkout is on another
-/// branch, records it as its base, and leaves the checkout where it was; a branch set that is gone refuses the run,
-/// naming it, and no run starts from the checkout instead.
+/// A base branch set (ORC-81), here the task's module's: a new run starts from that branch's tip while the checkout is
+/// on another branch, records it as its base with its source, and leaves the checkout where it was; a branch set on the
+/// task that is gone refuses the run, naming it, and no run starts from the checkout instead.
 #[tokio::test(flavor = "multi_thread")]
 async fn execution_starts_from_the_base_branch_set_wherever_the_checkout_is() {
   let on_main = project(&Setup::new("Append one line."));
@@ -255,13 +259,26 @@ async fn execution_starts_from_the_base_branch_set_wherever_the_checkout_is() {
   git(root, &["commit", "--quiet", "--allow-empty", "-m", "staging work"]);
   git(root, &["switch", "--quiet", "main"]);
   let staging = BranchName::new("staging").expect("branch");
-  ProjectDb::open(root)
-    .expect("open")
-    .save_base_branch_setting(&BaseBranchSetting::Branch(staging.clone()))
-    .expect("set");
+  let module = {
+    let mut db = ProjectDb::open(root).expect("open");
+    let details = ModuleDetails::new(
+      Name::new("Webhooks v2").expect("name"),
+      "",
+      (None, None),
+      ModuleState::Open,
+    )
+    .expect("details");
+    let module = db.create_module(details, Timestamp::now()).expect("module").id();
+    db.set_module_base(module, &BaseChoice::CheckedOut, BaseChoice::Branch(staging.clone()))
+      .expect("set");
+    db.set_task_module(on_main.task, Some(module), ChangeActor::Person, Timestamp::now())
+      .expect("moved");
+    module
+  };
   let run = run_to_the_end(root, on_main.task).await;
   assert_eq!(run.status(), &RunStatus::Succeeded);
   assert_eq!(run.base_branch(), Some(&staging));
+  assert_eq!(run.base_source(), RunBaseSource::Module { module });
   assert_eq!(run.base().as_str(), git(root, &["rev-parse", "staging"]));
   assert_ne!(
     run.base().as_str(),
@@ -276,10 +293,13 @@ async fn execution_starts_from_the_base_branch_set_wherever_the_checkout_is() {
 
   let gone = project(&Setup::new("Append one line."));
   let branch = BranchName::new("gone").expect("branch");
-  ProjectDb::open(gone.repo.path())
-    .expect("open")
-    .save_base_branch_setting(&BaseBranchSetting::Branch(branch.clone()))
-    .expect("set");
+  let mut db = ProjectDb::open(gone.repo.path()).expect("open");
+  let task = db.task(gone.task).expect("read").expect("task");
+  db.set_task_base(gone.task, task.revision(), &TaskBase::Branch(branch.clone()))
+    .expect("set")
+    .saved()
+    .expect("saved on the revision read");
+  drop(db);
   let (scheduler, _events) = scheduler(gone.repo.path());
   assert_eq!(
     scheduler.start_run(IdempotencyKey::generate(), gone.task).await,

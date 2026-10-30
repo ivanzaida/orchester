@@ -1,12 +1,8 @@
 //! Project settings shared by the window and automation. Blocking work belongs off the UI thread.
 
-mod base_branch;
 mod repository;
 use std::path::Path;
 
-pub use base_branch::{
-  BaseBranchChoice, BaseBranchRead, BaseBranchSaved, base_branch_in, landing, save_base_branch_in,
-};
 use orchester_core::{
   agent_files::RepositoryAgentFiles,
   code_index::CodeIndexSetting,

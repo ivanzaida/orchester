@@ -202,6 +202,7 @@ fn record_active(kontur: &mut Kontur, snapshot: RunSnapshot, key: &StepKey) -> R
       branch: BranchName::for_next_run(task.key(), 0),
       base: kontur.base.clone(),
       base_branch: Some(BranchName::new("main").expect("branch")),
+      base_source: orchester_core::integration::base::RunBaseSource::CheckedOut,
       budget: task.details().limits.budget(),
       max_duration: task.details().limits.max_duration(),
     },
