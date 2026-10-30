@@ -189,17 +189,7 @@ impl Component for ToolEditor {
     };
     let errors = checked.as_ref().err().cloned().unwrap_or_default();
     let title = baseline.as_ref().map_or(ctx.t("tools.newTitle"), |e| e.name.clone());
-    let more = baseline.as_ref().filter(|_| may_change).map(|_| {
-      let (ask, open) = (self.ask.clone(), self.more.clone());
-      More {
-        open: self.more.clone(),
-        anchor: self.anchor.clone(),
-        remove: Arc::new(move || {
-          open.set(false);
-          ask.set(Ask::Remove);
-        }),
-      }
-    });
+    let more = baseline.as_ref().filter(|_| may_change).map(|_| self.more_menu());
     let standing = team
       .as_ref()
       .zip(baseline.as_ref())
@@ -264,6 +254,19 @@ fn waiting(ctx: &mut Ctx, p: &EditorProps, standing: Option<(&TeamConfiguration,
 }
 
 impl ToolEditor {
+  /// The ⋯ menu of a saved tool, whose Remove asks first.
+  fn more_menu(&self) -> More {
+    let (ask, open) = (self.ask.clone(), self.more.clone());
+    More {
+      open: self.more.clone(),
+      anchor: self.anchor.clone(),
+      remove: Arc::new(move || {
+        open.set(false);
+        ask.set(Ask::Remove);
+      }),
+    }
+  }
+
   /// A read that shows what this page itself wrote, or the same tool in another standing, becomes the page's
   /// baseline; any other change waits for the person's Reload.
   fn adopt(&self, p: &EditorProps) {
