@@ -264,6 +264,10 @@ name = "approval_mode_launch"
 required-features = ["test-agent"]
 
 [[test]]
+name = "network_hosts"
+required-features = ["test-agent"]
+
+[[test]]
 name = "codex_repository_settings"
 required-features = ["test-agent"]
 

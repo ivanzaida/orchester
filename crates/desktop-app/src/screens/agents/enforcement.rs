@@ -18,6 +18,11 @@ pub fn unavailable(ctx: &Ctx, provider: Option<AgentProvider>, option: Permissio
     Some(Support::Unavailable(Unavailable::CannotLimitCommands)) => "agents.cannotLimitCommands",
     Some(Support::Unavailable(Unavailable::CannotConfineCommands)) => "agents.cannotConfineCommands",
     Some(Support::Unavailable(Unavailable::CannotBlockNetwork)) => "agents.cannotBlockNetwork",
+    Some(Support::Unavailable(Unavailable::CannotLimitHosts)) => match provider {
+      Some(AgentProvider::CodexCli) => "agents.cannotLimitHosts.codex",
+      Some(AgentProvider::ClaudeCodeCli) => "agents.cannotLimitHosts.claudeCode",
+      _ => "agents.cannotLimitHosts.native",
+    },
     _ => "agents.unavailable",
   };
   ctx.t(key)
@@ -35,6 +40,7 @@ pub fn mechanism(ctx: &Ctx, mechanism: Mechanism, permissions: &AgentPermissions
     Mechanism::CodexSandboxedCommands => "codexCommands",
     Mechanism::CodexCommandApprovals => "codexCommandApprovals",
     Mechanism::CodexSandboxNetworkOff => "codexNetworkOff",
+    Mechanism::CodexSandboxNetworkHosts => "codexNetworkHosts",
     Mechanism::CodexSandboxNetworkOn => "codexNetworkOn",
     Mechanism::CodexWritableRoots => "codexWritableRoots",
     Mechanism::ClaudeEditToolsRemoved if empty => "claudeEditToolsRemovedAsk",

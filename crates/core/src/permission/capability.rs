@@ -8,9 +8,9 @@
 //!
 //! - Codex enforces read-only and workspace-write through its sandbox (on Windows only with
 //!   `windows.sandbox=elevated`). It has no way to deny every command outside a list, so *Allowed commands* is
-//!   unavailable. On Windows its sandbox does not turn network access off. A command that needs more than the sandbox
-//!   (network while it is off, a write outside the writable roots, an escalation the model requests) asks a person
-//!   through App Server ([`OutsideCommands::SandboxApproval`]).
+//!   unavailable. On Windows its sandbox does not turn network access off, so a host list cannot run there either. A
+//!   command that needs more than the sandbox (network while it is off, a write outside the writable roots, an
+//!   escalation the model requests) asks a person through App Server ([`OutsideCommands::SandboxApproval`]).
 //! - Claude Code removes its edit tools for read-only and limits Bash to `--allowedTools` prefix rules, besides the
 //!   commands it classifies as read-only, which it runs unlisted as Codex runs its known-safe ones ([`super::claude`]).
 //!   Any other command asks a person through its permission prompt tool. It cannot confine an arbitrary command to the
@@ -50,7 +50,7 @@ pub enum PermissionSetting {
   Network,
 }
 
-/// A value a setting can take, without the command list.
+/// A value a setting can take, without the command list or the host list.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PermissionOption {
@@ -60,6 +60,8 @@ pub enum PermissionOption {
   AllowedCommands,
   AnyCommand,
   NetworkOff,
+  /// Only the hosts of a list (`NetworkAccess::Hosts`).
+  NetworkHosts,
   NetworkOn,
 }
 
@@ -68,12 +70,12 @@ impl PermissionOption {
     match self {
       Self::ReadOnly | Self::EditWorktree => PermissionSetting::Repository,
       Self::AskBeforeCommands | Self::AllowedCommands | Self::AnyCommand => PermissionSetting::Commands,
-      Self::NetworkOff | Self::NetworkOn => PermissionSetting::Network,
+      Self::NetworkOff | Self::NetworkHosts | Self::NetworkOn => PermissionSetting::Network,
     }
   }
 
-  /// The options of `setting` from the most restrictive to the widest. Asking before commands is
-  /// left out: it is never the restrictive choice a reset falls back to.
+  /// The options of `setting` from the most restrictive to the widest. Asking before commands and a
+  /// host list are left out: neither is a choice a reset falls back to (a reset has no list).
   const fn by_restriction(setting: PermissionSetting) -> &'static [Self] {
     match setting {
       PermissionSetting::Repository => &[Self::ReadOnly, Self::EditWorktree],
@@ -97,11 +99,10 @@ impl PermissionOption {
     }
   }
 
-  /// A host list needs what network off needs: until the CLIs limit commands to hosts (ORC-450), a list runs as
-  /// strictly as off, and where off cannot be enforced it does not run at all ([`AgentPermissions::enforced_on`]).
   pub const fn of_network(network: &NetworkAccess) -> Self {
     match network {
-      NetworkAccess::Off | NetworkAccess::Hosts(_) => Self::NetworkOff,
+      NetworkAccess::Off => Self::NetworkOff,
+      NetworkAccess::Hosts(_) => Self::NetworkHosts,
       NetworkAccess::On => Self::NetworkOn,
     }
   }
@@ -161,6 +162,10 @@ pub enum Mechanism {
   NativeCommandList,
   /// Commands the native agent runs reach the network as the OS lets them.
   NativeNetworkUnrestricted,
+  /// A host list on Codex: the sandbox keeps commands off the network, as for network off, and
+  /// `tools.web_search.allowed_domains=[…]` limits web search to the listed domains
+  /// (`crate::connection::invocation::codex`).
+  CodexSandboxNetworkHosts,
 }
 
 /// Why a CLI cannot enforce an option.
@@ -173,6 +178,8 @@ pub enum Unavailable {
   CannotConfineCommands,
   /// The CLI cannot keep commands off the network on this platform.
   CannotBlockNetwork,
+  /// The CLI cannot keep commands from reaching hosts outside a list on this platform.
+  CannotLimitHosts,
 }
 
 /// Whether a CLI enforces an option on a platform.
@@ -190,6 +197,12 @@ impl Support {
 }
 
 /// The capability table: whether `provider` enforces `option` on `platform`.
+///
+/// A host list (`docs/evidence/orc-450-network-hosts-2026-10-30.md`, Codex CLI 0.159.2 and Claude Code 2.1.301):
+/// neither CLI has a host allow-list for commands Orchester can pass. Codex runs a list where its sandbox keeps
+/// commands off the network (macOS), with web search limited to the listed domains; Claude Code's commands keep
+/// network access everywhere (its sandbox, with a domain list, is not supported on Windows and is not used), so a
+/// list there, as on a native agent, refuses the step.
 pub const fn support(provider: AgentProvider, platform: Platform, option: PermissionOption) -> Support {
   use Mechanism as M;
   use PermissionOption as O;
@@ -206,12 +219,17 @@ pub const fn support(provider: AgentProvider, platform: Platform, option: Permis
       Platform::Windows => No(U::CannotBlockNetwork),
       Platform::MacOs => Enforced(M::CodexSandboxNetworkOff),
     },
+    (AgentProvider::CodexCli, O::NetworkHosts) => match platform {
+      Platform::Windows => No(U::CannotLimitHosts),
+      Platform::MacOs => Enforced(M::CodexSandboxNetworkHosts),
+    },
     (AgentProvider::CodexCli, O::NetworkOn) => Enforced(M::CodexSandboxNetworkOn),
     (AgentProvider::ClaudeCodeCli, O::ReadOnly) => Enforced(M::ClaudeEditToolsRemoved),
     (AgentProvider::ClaudeCodeCli, O::EditWorktree) => Enforced(M::ClaudeAcceptEdits),
     (AgentProvider::ClaudeCodeCli, O::AllowedCommands) => Enforced(M::ClaudeAllowedTools),
     (AgentProvider::ClaudeCodeCli, O::AnyCommand) => No(U::CannotConfineCommands),
     (AgentProvider::ClaudeCodeCli, O::NetworkOff) => No(U::CannotBlockNetwork),
+    (AgentProvider::ClaudeCodeCli, O::NetworkHosts) => No(U::CannotLimitHosts),
     (AgentProvider::ClaudeCodeCli, O::NetworkOn) => Enforced(M::ClaudeWebTools),
     (AgentProvider::AnthropicApi | AgentProvider::OpenAiApi, option) => native_support(option),
   }
@@ -228,6 +246,7 @@ const fn native_support(option: PermissionOption) -> Support {
     O::AllowedCommands => Support::Enforced(M::NativeCommandList),
     O::AnyCommand => Support::Unavailable(Unavailable::CannotConfineCommands),
     O::NetworkOff => Support::Unavailable(Unavailable::CannotBlockNetwork),
+    O::NetworkHosts => Support::Unavailable(Unavailable::CannotLimitHosts),
     O::NetworkOn => Support::Enforced(M::NativeNetworkUnrestricted),
   }
 }
@@ -356,7 +375,7 @@ impl AgentPermissions {
     let (network, network_stays_on) = match support(provider, platform, option) {
       Support::Enforced(mechanism) => (mechanism, None),
       // Running a host list with network on would widen it; only network off falls back to on.
-      Support::Unavailable(reason) if matches!(self.network, NetworkAccess::Hosts(_)) => {
+      Support::Unavailable(reason) if option == PermissionOption::NetworkHosts => {
         return Err(PermissionProblem::NotEnforceable { option, reason });
       }
       Support::Unavailable(reason) => {
@@ -435,7 +454,7 @@ impl AgentPermissions {
     // A host list is kept where it cannot be enforced, as a setting without any enforceable option is: resetting it
     // to network on would widen it, and enforcing it refuses it.
     let network = PermissionOption::of_network(&self.network);
-    let hosts = matches!(self.network, NetworkAccess::Hosts(_));
+    let hosts = network == PermissionOption::NetworkHosts;
     if let Some(option) = replacement(network).filter(|_| !hosts) {
       resets.push(network);
       fitted.network = match option {

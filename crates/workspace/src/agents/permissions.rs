@@ -22,6 +22,7 @@ pub const fn option_title(option: PermissionOption) -> &'static str {
     PermissionOption::AllowedCommands => "agents.permissions.option.allowed.title",
     PermissionOption::AnyCommand => "agents.permissions.option.any.title",
     PermissionOption::NetworkOff => "agents.permissions.networkOff",
+    PermissionOption::NetworkHosts => "agents.permissions.networkHosts",
     PermissionOption::NetworkOn => "agents.permissions.networkOn",
   }
 }
@@ -46,6 +47,7 @@ pub fn option_detail(option: PermissionOption, provider: Option<AgentProvider>) 
     PermissionOption::AllowedCommands => "agents.permissions.option.allowed.detail",
     PermissionOption::AnyCommand => "agents.permissions.option.any.detail",
     PermissionOption::NetworkOff => "agents.permissions.networkOffDetail",
+    PermissionOption::NetworkHosts => "agents.permissions.networkHostsDetail",
     PermissionOption::NetworkOn => "agents.permissions.networkOnDetail",
   }
 }
@@ -81,6 +83,7 @@ pub const fn not_enforceable(problem: &PermissionProblem) -> Message {
       Unavailable::CannotLimitCommands => "agents.permissions.notEnforceable.allowedCommands",
       Unavailable::CannotConfineCommands => "agents.permissions.notEnforceable.anyCommand",
       Unavailable::CannotBlockNetwork => "agents.permissions.notEnforceable.networkOff",
+      Unavailable::CannotLimitHosts => "agents.permissions.notEnforceable.networkHosts",
     },
     PermissionProblem::NoEnforceableOption { setting } => match setting {
       PermissionSetting::Repository => "agents.permissions.notEnforceable.noRepositoryOption",
@@ -88,6 +91,15 @@ pub const fn not_enforceable(problem: &PermissionProblem) -> Message {
       PermissionSetting::Network => "agents.permissions.notEnforceable.noNetworkOption",
     },
   })
+}
+
+/// The preflight refusal of a step whose host list `cli` cannot enforce, naming the CLI.
+pub const fn hosts_refusal(cli: AgentProvider) -> &'static str {
+  match cli {
+    AgentProvider::CodexCli => "runs.preflight.networkHostsNotEnforceable.codex",
+    AgentProvider::ClaudeCodeCli => "runs.preflight.networkHostsNotEnforceable.claudeCode",
+    AgentProvider::AnthropicApi | AgentProvider::OpenAiApi => "runs.preflight.networkHostsNotEnforceable.native",
+  }
 }
 
 /// `list` with the command `typed` added, or why it cannot be.
