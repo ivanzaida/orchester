@@ -122,6 +122,7 @@ macro_rules! markers {
     impl $inspect for crate::sharing::project::discovery::DiscoveryFile {}
     impl $inspect for crate::sharing::project::lookup::Lookup {}
     impl $inspect for crate::sharing::project::state::ProjectSharing {}
+    impl $inspect for crate::sharing::team::TeamConfiguration {}
     impl $inspect for crate::skills::data::ProjectSkills {}
     impl $inspect for crate::sources::project::Removed {}
     impl $inspect for crate::skills::repository::RepositoryScan {}

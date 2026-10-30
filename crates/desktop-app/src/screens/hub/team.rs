@@ -376,6 +376,8 @@ enum Act {
   PublishAgain(VersionId),
 }
 
+impl lurq::app::component::DevtoolsInspectable for Act {}
+
 #[derive(Clone, PartialEq)]
 pub(crate) struct WaitingProps {
   id: Arc<str>,
