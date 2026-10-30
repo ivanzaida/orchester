@@ -3,6 +3,7 @@ use std::{io, path::PathBuf, time::Duration};
 use orchester_core::{
   id::{
     AgentAccountId, ConnectionId, InvocationId, MemoryId, ProjectId, ResourceId, RunId, SecretId, ServerId, TaskId,
+    VersionId,
   },
   resource::{PublishError, ResourceKind},
   run::{AlwaysAllowError, RunError, RunnerFailure},
@@ -123,6 +124,9 @@ pub enum StoreError {
   /// The draft of resource `0` is not the one the caller checked: it changed meanwhile.
   #[error("the draft of resource {0} changed since it was read")]
   DraftChanged(ResourceId),
+  /// A run or a task here uses the version published here, so it is not taken back. Nothing was changed.
+  #[error("version {0} is used by a run or a task here")]
+  VersionInUse(VersionId),
   #[error(transparent)]
   Publish(#[from] PublishError),
   #[error(transparent)]

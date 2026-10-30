@@ -169,9 +169,21 @@ pub struct ProjectCreated {
   pub cursor: u64,
   pub dropped_links: Vec<DroppedLink>,
 }
+/// A server admin as a project's members list names them: they change the project's configuration as its owners do,
+/// whether or not they are members (`docs/architecture/server.md`, row 72).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ServerAdmin {
+  pub user: UserRef,
+  #[serde(default)]
+  pub username: String,
+}
+
+/// `GET /projects/{id}/members`: the members and the server's admins; a server before admins were listed sends none.
 #[derive(Serialize, Deserialize)]
 pub struct Members {
   pub members: Vec<Member>,
+  #[serde(default)]
+  pub admins: Vec<ServerAdmin>,
 }
 #[derive(Serialize, Deserialize)]
 pub struct MemberResponse {

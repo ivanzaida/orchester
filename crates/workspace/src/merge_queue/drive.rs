@@ -1,13 +1,17 @@
-//! Driving a project's queue, one step at a time ([`advance`]): runs that passed every step join it, then the run
-//! being delivered, else the first one waiting whose run passed every step, moves on. Queued, it syncs with its base
-//! branch; synced cleanly, Check runs again on the merged result, or its conflicts go to the Integrate step; checked on
-//! the base as it still is, it waits for a person's approval (which does not hold the queue) or merges. A base that
-//! moved during the check means syncing and checking again, at most [`MAX_RESYNCS`] times in a row. A checkout that
-//! keeps the merge out blocks the queue until it changes. Whatever stops a run takes it out of the queue with the
-//! reason, and nothing of it reaches the base branch.
+//! Driving a project's queue, one step at a time ([`advance`]): runs that passed every step join it, then, lane by
+//! lane, the run being delivered, else the first one waiting whose run passed every step, moves on. Queued, it syncs
+//! with its base branch; synced cleanly, Check runs again on the merged result, or its conflicts go to the Integrate
+//! step; checked on the base as it still is, it waits for a person's approval (which does not hold its lane) or
+//! merges. A base that moved during the check means syncing and checking again, at most [`MAX_RESYNCS`] times in a
+//! row. A checkout that keeps the merge out blocks the lane until it changes. Whatever stops a run takes it out of the
+//! queue with the reason, and nothing of it reaches the base branch.
+//!
+//! Each lane, the runs of one base branch, moves on by itself (ORC-406): a lane with nothing to do (its run blocked,
+//! integrating, or none ready) leaves the step to the next one, and the lanes take turns, the one after the lane that
+//! last moved going first.
 
 use std::{
-  collections::HashSet,
+  collections::{HashMap, HashSet},
   path::{Path, PathBuf},
   sync::LazyLock,
 };
@@ -18,10 +22,10 @@ use orchester_core::{
     branch_head,
     delivery::{self, Synced},
   },
-  merge_queue::{CheckedOn, Left, MAX_RESYNCS, QueueEntry, QueueEvent, QueueState},
+  merge_queue::{CheckedOn, Left, MAX_RESYNCS, QueueEntry, QueueEvent, QueueState, lanes},
   resource::{DeliverMode, DeliverStep},
   revision::Revision,
-  run::{Run, RunStatus},
+  run::{BranchName, Run, RunStatus},
   store::{RunStore, TaskStore},
   time::Timestamp,
 };
@@ -62,6 +66,9 @@ pub enum Advance {
 /// The projects whose queue moves on now: one step at a time per project, whoever asks.
 static DRIVING: LazyLock<Mutex<HashSet<PathBuf>>> = LazyLock::new(Default::default);
 
+/// The lane of each project's queue that moved on last: the lanes after it take the next turns.
+static LAST_MOVED: LazyLock<Mutex<HashMap<PathBuf, Option<BranchName>>>> = LazyLock::new(Default::default);
+
 /// Holds a project's queue while it moves on.
 struct Driving(PathBuf);
 
@@ -96,40 +103,70 @@ pub fn advance(root: &Path, programs: &Programs) -> Result<Advance, Message> {
   Ok(advanced)
 }
 
+/// Moves the first lane that has something to do on by one step, the lanes taking turns; idle, polling, when no lane
+/// moved and one of them waits for the checkout.
 fn step(root: &Path, programs: &Programs) -> Result<Advance, StoreError> {
   let mut db = ProjectDb::open(root)?;
   if join(&mut db, (root, programs), Timestamp::now())? {
     return Ok(Advance::Changed);
   }
-  let Some((entry, run)) = next(&db)? else {
-    return Ok(Advance::Idle { poll: false });
-  };
-  Driver { db, root, programs }.step(entry, run)
-}
-
-/// The entry that moves on now, with its run: the one being delivered, else the first waiting one whose run passed
-/// every step (one that works again, after a follow-up say, waits until it passed again).
-fn next(db: &ProjectDb) -> Result<Option<(QueueEntry, Option<Run>)>, StoreError> {
-  let entries = db.merge_queue()?;
-  let delivering = entries.iter().find(|entry| entry.state.delivering());
-  let candidates = delivering.into_iter().chain(
-    entries
-      .iter()
-      .filter(|entry| delivering.is_none() && entry.state == QueueState::Queued),
-  );
-  for entry in candidates {
-    let run = db.run(entry.run).map_err(run_store_error)?;
-    let waits =
-      entry.state == QueueState::Queued && run.as_ref().is_some_and(|run| *run.status() != RunStatus::Succeeded);
-    if !waits {
-      return Ok(Some((entry.clone(), run)));
+  let mut poll = false;
+  for (lane, entry, run) in in_turn(root, next(&db)?) {
+    match (Driver {
+      db: &mut db,
+      root,
+      programs,
+    })
+    .step(entry, run)?
+    {
+      Advance::Idle { poll: waits } => poll |= waits,
+      moved => {
+        LAST_MOVED.lock().insert(root.to_path_buf(), lane);
+        return Ok(moved);
+      }
     }
   }
-  Ok(None)
+  Ok(Advance::Idle { poll })
+}
+
+/// An entry that moves on now in its lane, named by its base branch, with its run.
+type Turn = (Option<BranchName>, QueueEntry, Option<Run>);
+
+/// `turns` with those of the lanes after the one that moved last in the project at `root` first.
+fn in_turn(root: &Path, mut turns: Vec<Turn>) -> Vec<Turn> {
+  let last = LAST_MOVED.lock().get(root).cloned();
+  if let Some(at) = last.and_then(|last| turns.iter().position(|(lane, ..)| *lane == last)) {
+    turns.rotate_left(at + 1);
+  }
+  turns
+}
+
+/// The entry that moves on now in each lane, with its run: the one being delivered, else the first waiting one whose
+/// run passed every step (one that works again, after a follow-up say, waits until it passed again). A lane whose
+/// runs all wait has none.
+fn next(db: &ProjectDb) -> Result<Vec<Turn>, StoreError> {
+  let entries = db.merge_queue()?;
+  let mut turns = Vec::new();
+  for lane in lanes(&entries) {
+    let delivering = lane.delivering();
+    let candidates = delivering
+      .into_iter()
+      .chain(lane.waiting().filter(|_| delivering.is_none()));
+    for entry in candidates {
+      let run = db.run(entry.run).map_err(run_store_error)?;
+      let waits =
+        entry.state == QueueState::Queued && run.as_ref().is_some_and(|run| *run.status() != RunStatus::Succeeded);
+      if !waits {
+        turns.push((lane.base.cloned(), entry.clone(), run));
+        break;
+      }
+    }
+  }
+  Ok(turns)
 }
 
 struct Driver<'a> {
-  db: ProjectDb,
+  db: &'a mut ProjectDb,
   root: &'a Path,
   programs: &'a Programs,
 }
@@ -231,7 +268,7 @@ impl Driver<'_> {
     deliver: &DeliverStep,
   ) -> Result<Advance, StoreError> {
     let worktree = run_worktree(self.root, run.id());
-    let tools = match check(&self.db, self.programs, (self.root, &worktree), run)? {
+    let tools = match check(self.db, self.programs, (self.root, &worktree), run)? {
       Checked::Failed { tool, detail } => {
         let events = vec![QueueEvent::CheckFailed {
           base,
@@ -271,7 +308,7 @@ impl Driver<'_> {
   /// The base moved while Check ran: the run syncs again, or leaves once it did so [`MAX_RESYNCS`] times in a row.
   fn superseded(self, mut entry: QueueEntry, run: &Run, events: Vec<QueueEvent>) -> Result<Advance, StoreError> {
     if entry.resyncs >= MAX_RESYNCS {
-      let mut heads = superseded_heads(&self.db, run.id())?;
+      let mut heads = superseded_heads(self.db, run.id())?;
       heads.extend(events.iter().filter_map(|event| match event {
         QueueEvent::CheckSuperseded { now, .. } => Some(now.clone()),
         _ => None,
@@ -294,7 +331,7 @@ impl Driver<'_> {
     run: &Run,
     (deliver, events): (&DeliverStep, Vec<QueueEvent>),
   ) -> Result<Advance, StoreError> {
-    if deliver.mode() == DeliverMode::ApproveToMerge && !approval_holds(&self.db, &entry, run)? {
+    if deliver.mode() == DeliverMode::ApproveToMerge && !approval_holds(self.db, &entry, run)? {
       entry.approved_at = None;
       return self.save(entry, QueueState::WaitingForApproval, &events);
     }
@@ -361,7 +398,7 @@ impl Driver<'_> {
   }
 
   /// Saves `entry` in `state` with `events`, unless it moved on meanwhile: either way the queue changed.
-  fn save(mut self, mut entry: QueueEntry, state: QueueState, events: &[QueueEvent]) -> Result<Advance, StoreError> {
+  fn save(self, mut entry: QueueEntry, state: QueueState, events: &[QueueEvent]) -> Result<Advance, StoreError> {
     let expected = std::mem::replace(&mut entry.state, state);
     let now = Timestamp::now();
     if entry.state != expected {

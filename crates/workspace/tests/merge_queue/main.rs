@@ -10,6 +10,7 @@
 mod conversation;
 mod decisions;
 mod harness;
+mod lanes;
 
 use std::{fs, sync::Arc};
 

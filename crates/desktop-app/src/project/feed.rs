@@ -28,6 +28,7 @@ use orchester_workspace::{
   background,
   messages::{self, Message},
   runner::{RunnerStatus, Runners, state::RunnerState},
+  sharing::team::TeamConfiguration,
   tasks::{
     answering::PendingAnswers,
     data::ProjectTasks,
@@ -87,6 +88,9 @@ pub struct ProjectFeed {
   pub hub_unread: Signal<u8>,
   /// Whether the sidebar's Configure section is folded for the project, in every tab of the session.
   pub configure_folded: Signal<bool>,
+  /// The team's configuration as the five libraries show it, while the project is shared (`team`); `None` while it is
+  /// local or not read yet.
+  pub team: Signal<Option<TeamConfiguration>>,
   /// The tasks last read while no runner served the project, as they stand without one.
   offline: Arc<Mutex<Option<Offline>>>,
 }
@@ -181,6 +185,7 @@ impl ProjectFeed {
       hub_counts: Signal::new(None),
       hub_unread: Signal::new(0),
       configure_folded: Signal::new(false),
+      team: Signal::new(None),
       offline: Arc::default(),
       jobs,
     }
@@ -314,11 +319,12 @@ impl Component for FeedLoader {
     // Tasks automation saved count as the screens' own saves, and so does a change of the merge queue: a run it
     // merged is done, and the sidebar counts the queue. So does a change of a shared project's cache: a status another
     // member set on the team server, or one this computer's run reached that the server took (ORC-150).
-    let saved = self.feed.revision.get()
-      + outside.tasks
-      + super::merge_queue::changes(ctx, &root)
-      + super::closed::shared_changes(ctx, &services.servers);
+    let shared = super::closed::shared_changes(ctx, &services.servers);
+    let saved = self.feed.revision.get() + outside.tasks + super::merge_queue::changes(ctx, &root) + shared;
     publish(&self.feed.saves, saved);
+    if let Some(team) = super::team::read(ctx, (&services.servers, &root), (shared, outside), &services.hold) {
+      publish(&self.feed.team, team);
+    }
     // A task closed while its run waited to be completed settles that completion, however it was closed (ORC-150).
     super::closed::settle(ctx, (&open, saved + states));
     let hold = services.hold;

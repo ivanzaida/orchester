@@ -20,6 +20,14 @@ pub struct SharedMember {
   pub added_at: Timestamp,
 }
 
+/// One of the server's admins, as the members list last named them.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ServerAdmin {
+  pub user: UserId,
+  pub display_name: String,
+  pub username: String,
+}
+
 impl ProjectDb {
   /// The repository the server project was set up for as last read (`None` inside: it names none), and when; `None`
   /// until it has been read.
@@ -118,6 +126,50 @@ impl ProjectDb {
           role_text(member.role),
           member.added_at.unix_millis()
         ],
+      )?;
+    }
+    transaction.commit()?;
+    Ok(())
+  }
+
+  /// The server's admins as the members list last named them, by name; none until a server named them.
+  pub fn server_admins(&self) -> Result<Vec<ServerAdmin>, StoreError> {
+    let mut statement = self
+      .connection
+      .prepare("SELECT user_id, display_name, username FROM shared_server_admins ORDER BY username, display_name")?;
+    let rows = statement
+      .query_map([], |row| {
+        Ok((
+          row.get::<_, String>(0)?,
+          row.get::<_, String>(1)?,
+          row.get::<_, String>(2)?,
+        ))
+      })?
+      .collect::<Result<Vec<_>, _>>()?;
+    rows
+      .into_iter()
+      .map(|(user, display_name, username)| {
+        Ok(ServerAdmin {
+          user: parse("server admin id", &user)?,
+          display_name,
+          username,
+        })
+      })
+      .collect()
+  }
+
+  /// Replaces the server's admins with `admins`, as the members list named them.
+  pub fn record_server_admins(&mut self, admins: &[ServerAdmin]) -> Result<(), StoreError> {
+    let transaction = self.connection.transaction()?;
+    let shared: bool = transaction.query_row("SELECT EXISTS(SELECT 1 FROM sharing)", [], |row| row.get(0))?;
+    if !shared {
+      return Err(StoreError::NotShared);
+    }
+    transaction.execute("DELETE FROM shared_server_admins", [])?;
+    for admin in admins {
+      transaction.execute(
+        "INSERT OR REPLACE INTO shared_server_admins (user_id, display_name, username) VALUES (?1, ?2, ?3)",
+        params![admin.user.to_string(), admin.display_name, admin.username],
       )?;
     }
     transaction.commit()?;

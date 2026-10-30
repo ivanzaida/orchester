@@ -64,10 +64,10 @@ impl Client {
     Ok(response.project)
   }
 
-  pub async fn members(&self, token: &SecretValue, project: ProjectId) -> Result<Vec<Member>, ClientError> {
+  /// The project's members and the server's admins.
+  pub async fn members(&self, token: &SecretValue, project: ProjectId) -> Result<Members, ClientError> {
     let path = format!("/projects/{project}/members");
-    let response: Members = self.call(bearer(self.request(Method::GET, &path)?, token)).await?;
-    Ok(response.members)
+    self.call(bearer(self.request(Method::GET, &path)?, token)).await
   }
 
   pub async fn add_member(
