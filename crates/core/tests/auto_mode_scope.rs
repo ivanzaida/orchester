@@ -292,6 +292,61 @@ fn auto_mode_holds_git_run_in_a_form_the_push_rules_cannot_follow() {
   }
 }
 
+/// The rules of a writing step with its network on, where a plain push of the run's branch goes to the reviewer.
+fn writing_run(writing: &AgentPermissions) -> HoldRules<'_> {
+  HoldRules {
+    permissions: Some(writing),
+    push: PushFacts {
+      branch: Some("orc/kon-1"),
+      head: Some("orc/kon-1"),
+      origin_kept: true,
+    },
+    escalation: false,
+    build_output: &[],
+  }
+}
+
+#[test]
+fn disguised_git_is_not_read_in_the_arguments_of_a_read() {
+  let writing = step(RepositoryAccess::Write, NetworkAccess::On);
+  let rules = writing_run(&writing);
+  for command in [
+    r#"rg -n "pub fn checked_out_branch|pub const GIT|pub fn git_message|pub fn store_error" crates/core/src/integration crates/workspace/src"#,
+    r#"rg -n "GIT_DIR" crates"#,
+    "cat docs/git.md",
+    "grep -r Git src",
+    "ls tools/git.exe",
+    "cat vendor/bin/git",
+  ] {
+    assert_eq!(review_hold(&subject(command).1, &rules), None, "{command}");
+  }
+}
+
+#[test]
+fn disguised_git_still_holds_git_run_through_a_path_a_wrapper_a_variable_or_a_shell() {
+  let writing = step(RepositoryAccess::Write, NetworkAccess::On);
+  let rules = writing_run(&writing);
+  for command in [
+    "/usr/bin/git push",
+    "git.exe push",
+    "Git push origin orc/kon-1",
+    "env git push",
+    "xargs git push",
+    "GIT_DIR=x git push",
+    "GIT_DIR=x && git push origin orc/kon-1",
+    "export GIT_DIR=x && git push origin orc/kon-1",
+    r#"sh -c "git push""#,
+    r#"sh -c "GIT_DIR=x git push origin orc/kon-1""#,
+    r#"bash -c "/usr/bin/git push origin orc/kon-1""#,
+  ] {
+    assert_eq!(
+      review_hold(&subject(command).1, &rules),
+      Some(ReviewHold::Push),
+      "{command}"
+    );
+  }
+}
+
 /// A reviewer that reads its instructions and message as a model would and asks only for what they say
 /// to ask for: here, it approves a command with unread parts in a writing step with network on only
 /// when the instructions say unread parts alone are no reason to ask.
