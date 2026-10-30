@@ -70,9 +70,10 @@ impl Seeded {
 
   fn queue_screen(&mut self) {
     self.go(ProjectPage::MergeQueue);
-    self
-      .window
-      .until("the merge queue", |window| window.texts("merge-queue-header").is_some());
+    // Reading the queue asks git how the checkout stands for each lane, beside the driver's own git work.
+    self.window.until_within(GIT_WORK, "the merge queue", |window| {
+      window.texts("merge-queue-header").is_some()
+    });
   }
 
   fn summary(&mut self, key: &str) {
