@@ -10,6 +10,7 @@ mod api_providers;
 mod approval_answers;
 mod approval_settings;
 mod automation_permissions;
+mod base_branch;
 mod base_moved;
 mod basics;
 mod board;
