@@ -92,6 +92,7 @@ fn startup_join_lists_cloud_teams_and_invites() {
   assert_eq!(teams.servers[0].server.name, NAME);
   assert_eq!(teams.servers[0].server.address, server.url());
   assert_eq!(teams.servers[0].joined, None, "this computer has joined nothing yet");
+  assert!(!teams.servers[0].owner, "the account is a member there");
   let invites: Vec<_> = teams.invites.iter().map(|invite| invite.id.to_string()).collect();
   assert_eq!(invites, [INVITE]);
   assert_eq!(

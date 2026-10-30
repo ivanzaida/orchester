@@ -17,7 +17,7 @@ use orchester_workspace::sharing::cloud::{Challenge, CodeKind};
 static ENTRIES: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Clone)]
-pub(super) enum Step {
+pub(crate) enum Step {
   /// The email and the password; `timed_out` once a code step ended before a code finished it (`R2wOmb`).
   Password {
     timed_out: bool,
@@ -46,7 +46,7 @@ impl Step {
 
 /// One code entry of a sign-in: its challenge and the kind of code the person types.
 #[derive(Clone)]
-pub(super) struct Entry {
+pub(crate) struct Entry {
   pub(super) challenge: Arc<Challenge>,
   pub(super) kind: CodeKind,
   pub(super) id: u64,

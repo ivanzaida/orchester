@@ -3,10 +3,11 @@
 //! the shared projects' work reads the project's tags, modules and tasks into its cache, and the screens' own reading
 //! of the project (`ProjectTasks::load`) has them without the workspace being opened again. A download that fails
 //! says why, and *Try again* downloads again; a checkout the round cannot reach at all fails rather than staying
-//! downloading.
+//! downloading. What the download reports as it runs is in [`first_download`].
 //!
 //! `cargo test -p orchester-workspace --test shared_download shared_download`
 
+mod first_download;
 mod responder;
 
 use std::{
@@ -81,6 +82,10 @@ struct Linked {
 
 impl Linked {
   fn new(tasks: TasksAnswer) -> Self {
+    Self::on(Responder::start(tasks))
+  }
+
+  fn on(responder: Responder) -> Self {
     let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/orc-282-tests");
     fs::create_dir_all(&scratch).expect("scratch");
     let dir = tempfile::Builder::new()
@@ -99,7 +104,7 @@ impl Linked {
     let workspace = Workspace::new(AppDb::open(&database).expect("database"));
     workspace.open(&root).expect("register Kontur");
     let servers = Servers::new(workspace, Vault::with(Arc::new(MemoryVault::default())));
-    let (runtime, responder) = (Runtime::new().expect("runtime"), Responder::start(tasks));
+    let runtime = Runtime::new().expect("runtime");
     let address = ServerAddress::parse(responder.url()).expect("address");
     let server = runtime
       .block_on(servers.add(&address, SERVER.to_owned(), PlainHttp::NotAllowed))

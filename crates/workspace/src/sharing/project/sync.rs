@@ -1,14 +1,17 @@
 //! Bringing a shared project's cache up to the server (`docs/architecture/server.md`, "Live
-//! updates"): its project, tags, modules and tasks are read and written to the cache, with when it last
-//! matched, then the moves of tasks into and out of modules the cache does not have yet. Until the live event stream
-//! (S2d) this runs when the project is opened, every minute, after a join ([`super::download`])
-//! and when the person asks (*Try now*, *Check again*). A server that answers `404` for the project
-//! no longer has the person as a member (10.44); the cache then says since when. The workflow
-//! statuses this computer's runs reached go to the server then ([`super::automatic`]).
+//! updates"): its project, tags and modules are read and written to the cache, then its tasks page by page, then when
+//! the cache last matched and the moves of tasks into and out of modules the cache does not have yet. The screens are
+//! told at the end, and of each page while a first download runs. Until the live event stream (S2d) this runs when the
+//! project is opened, every minute, after a join or a link ([`super::download`], which each step reports to) and when
+//! the person asks (*Try now*, *Check again*). A server that answers `404` for the project no longer has the person as
+//! a member (10.44); the cache then says since when. The workflow statuses this computer's runs reached go to the
+//! server then ([`super::automatic`]).
 
-use orchester_api::ErrorCode;
+use std::time::Instant;
+
+use orchester_api::{ErrorCode, SharedTag, TasksPage};
 use orchester_core::time::Timestamp;
-use orchester_store::ProjectDb;
+use orchester_store::{CachedModule, ProjectDb};
 
 use super::{ProjectServer, convert, organization::tag, store::RemoteTaskStore};
 use crate::{
@@ -16,17 +19,32 @@ use crate::{
   sharing::{ProjectAddress, SharingError},
 };
 
+/// What a sync found on the server.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Synced {
+  /// The project was read into the cache.
+  Read,
+  /// The server no longer has the person as a member of the project.
+  Removed,
+}
+
 impl ProjectServer {
   /// Reads the server project into the cache. A server that cannot be reached leaves the cache as
   /// it is.
   pub async fn sync(&self) -> Result<(), SharingError> {
+    self.sync_round(Instant::now()).await.map(drop)
+  }
+
+  /// [`Self::sync`] in the round that began at `round`, which reports to the project's first download.
+  pub(super) async fn sync_round(&self, round: Instant) -> Result<Synced, SharingError> {
     super::reachable(self.servers.connection(self.link.server))?;
     let project = match self
       .call(|client, token, project| async move { client.project(&token, project).await })
       .await
     {
       Err(SharingError::Client(error)) if error.code() == Some(ErrorCode::NotFound) => {
-        return self.removed().await;
+        self.removed().await?;
+        return Ok(Synced::Removed);
       }
       answer => answer?,
     };
@@ -38,9 +56,14 @@ impl ProjectServer {
     let modules = self
       .call(|client, token, project| async move { client.modules(&token, project, after).await })
       .await?;
-    let tasks = self
-      .call(|client, token, project| async move { client.tasks(&token, project).await })
-      .await?;
+    let cached = modules
+      .modules
+      .iter()
+      .map(convert::cached_module)
+      .collect::<Result<Vec<_>, _>>()?;
+    self.store_parts(&tags, cached).await?;
+    self.servers.download_parts_read(&self.repo_root, round);
+    self.read_tasks(round).await?;
     let server = self.clone();
     // A link made before API 3 learns the project's address, its identity since, from the server; one on another
     // server is not kept, and the tasks are synced all the same. This repeats every minute, so it is not a warning.
@@ -51,18 +74,9 @@ impl ProjectServer {
         .map(|address| address.to_text()),
       Some(_) => None,
     };
+    let changes: Vec<_> = modules.changes.iter().map(convert::cached_change).collect();
     background::run(move || -> Result<(), SharingError> {
-      let tags = tags.iter().map(tag).collect::<Result<Vec<_>, _>>()?;
-      let cached = modules
-        .modules
-        .iter()
-        .map(convert::cached_module)
-        .collect::<Result<Vec<_>, _>>()?;
-      let changes: Vec<_> = modules.changes.iter().map(convert::cached_change).collect();
       let mut store = RemoteTaskStore::new(ProjectDb::open(server.repo_root())?, server)?;
-      store.db.cache_shared_tags(&tags)?;
-      store.db.cache_shared_modules(&cached)?;
-      store.cache(&tasks.tasks, None)?;
       store.db.cache_module_changes(&changes)?;
       store
         .db
@@ -76,7 +90,52 @@ impl ProjectServer {
     })
     .await??;
     self.servers.shared_changed();
+    Ok(Synced::Read)
+  }
+
+  /// Writes the project's tags and modules to the cache, before the tasks that name them.
+  async fn store_parts(&self, tags: &[SharedTag], modules: Vec<CachedModule>) -> Result<(), SharingError> {
+    let tags = tags.iter().map(tag).collect::<Result<Vec<_>, _>>()?;
+    let root = self.repo_root.clone();
+    background::run(move || -> Result<(), SharingError> {
+      let mut db = ProjectDb::open(&root)?;
+      db.cache_shared_tags(&tags)?;
+      db.cache_shared_modules(&modules)?;
+      Ok(())
+    })
+    .await??;
     Ok(())
+  }
+
+  /// Reads the project's tasks into the cache page by page, from where the first download of the round that began at
+  /// `round` stopped. A page that does not move on is refused: following it would never end.
+  async fn read_tasks(&self, round: Instant) -> Result<(), SharingError> {
+    let mut after = self.servers.download_resume(&self.repo_root, round);
+    loop {
+      let page = self
+        .call(|client, token, project| async move { client.tasks_page(&token, project, after).await })
+        .await?;
+      if !moves_on(&page, after) {
+        return Err(SharingError::InvalidAnswer("task page"));
+      }
+      let page = self.store_page(page).await?;
+      self.servers.download_page_stored(&self.repo_root, &page, round);
+      match page.next {
+        Some(next) => after = next,
+        None => return Ok(()),
+      }
+    }
+  }
+
+  /// Writes `page`'s tasks to the cache.
+  async fn store_page(&self, page: TasksPage) -> Result<TasksPage, SharingError> {
+    let server = self.clone();
+    background::run(move || -> Result<TasksPage, SharingError> {
+      let mut store = RemoteTaskStore::new(ProjectDb::open(server.repo_root())?, server)?;
+      store.cache(&page.tasks, None)?;
+      Ok(page)
+    })
+    .await?
   }
 
   /// The server no longer has the person as a member of the project.
@@ -89,4 +148,13 @@ impl ProjectServer {
     self.servers.shared_changed();
     Ok(())
   }
+}
+
+/// Whether `page`, read after `after`, ends or leads somewhere: one that names a next page starts later and brings
+/// tasks above `after`, or a server could keep a round going almost without end, with every other project waiting
+/// behind it.
+fn moves_on(page: &TasksPage, after: u32) -> bool {
+  page
+    .next
+    .is_none_or(|next| next > after && page.tasks.iter().any(|task| task.number > after))
 }

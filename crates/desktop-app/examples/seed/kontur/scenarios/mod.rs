@@ -82,13 +82,14 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 60] = [
+pub const ALL: [Scenario; 61] = [
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-library", agents_library::seed),
   Scenario::of("agents-empty", agents::empty),
   Scenario::of("agents-no-connections", agents::no_connections),
   Scenario::of("agents-unreadable", agents::unreadable),
   Scenario::of("empty", empty::seed),
+  Scenario::of("join-team", empty::seed),
   Scenario::of("tasks", tasks::seed),
   Scenario::of("tasks-memory", tasks_memory::seed),
   Scenario::of("memory-only", tasks_memory::alone),

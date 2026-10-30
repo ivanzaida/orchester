@@ -63,6 +63,95 @@
     "openLog": "Open log",
     "showDataFolder": "Show data folder",
     "showFolder": "Show folder",
-    "log": "Log: {{path}}"
+    "log": "Log: {{path}}",
+    "crumbs": {
+      "start": "Start"
+    },
+    "steps": {
+      "join": "Join the team",
+      "project": "Choose a project",
+      "folder": "Link a folder",
+      "download": "Download tasks"
+    },
+    "join": {
+      "crumb": "Join a team",
+      "title": "Join a team",
+      "lead": "Two ways in. Either one gives this computer its own sign-in on the team server; nothing local is uploaded.",
+      "note": "Orchester Cloud is only for team features. Without it, local projects work as before.",
+      "cloud": {
+        "title": "With Orchester Cloud",
+        "sub": "Lists every team and invite of your account",
+        "passwordPlaceholder": "Password",
+        "noAccount": "No account yet?",
+        "create": "Create one",
+        "signedIn": "· signed in with Orchester Cloud",
+        "yourTeams": "Your teams"
+      },
+      "code": {
+        "title": "With a code",
+        "sub": "For a team server without the internet, or without Cloud",
+        "address": "Team server address",
+        "addressPlaceholder": "orchester.example.com",
+        "label": "Code",
+        "placeholder": "XXXX-XXXX",
+        "hint": "An invite code from a teammate, or a pairing code from your other computer. 8 characters, works once.",
+        "submit": "Join with the code",
+        "joining": "Joining…",
+        "wrong": "Wrong or expired. A code works once, within 10 minutes: ask for a new one.",
+        "addressInvalid": "That isn't a server address.",
+        "unreachable": {
+          "title": "Can't reach {{host}}",
+          "body": "No answer in {{seconds}} seconds. Check the address and your network, or ask the team's owner if the server is running."
+        },
+        "settings": {
+          "title": "{{server}} needs a check first",
+          "body": "Its certificate or plain HTTP needs your check. Join it in Settings › Orchester › Connect a server.",
+          "open": "Open Connect a server"
+        }
+      },
+      "teams": {
+        "title": "Choose a team",
+        "lead": "The team servers and invites of your Orchester Cloud account. Joining gives this computer its own sign-in there.",
+        "signOut": "Sign out",
+        "section": "YOUR TEAMS",
+        "member": "Member",
+        "owner": "Owner",
+        "projects": {
+          "one": "1 project",
+          "other": "{{count}} projects for you"
+        },
+        "join": "Join",
+        "open": "Open",
+        "joining": "Joining…",
+        "none": "No team servers in your account yet.",
+        "notListed": "A team not listed? Ask its owner to invite {{email}}, or join with a code.",
+        "useCode": "Use a code",
+        "reading": "Reading your teams…"
+      },
+      "invites": {
+        "section": "INVITES",
+        "toProject": "{{server}} invited you to {{project}}",
+        "toServer": "{{server}} invited you",
+        "sub": "from {{inviter}} · expires {{expires}} · {{address}}",
+        "accept": "Accept",
+        "decline": "Decline",
+        "none": "No invites are waiting."
+      },
+      "outcome": {
+        "joined": {
+          "title": "Joined {{server}} as {{username}}",
+          "body": "This computer has its own sign-in there now.",
+          "open": "See your projects there"
+        },
+        "waiting": {
+          "title": "Waiting for approval",
+          "body": "{{server}} asks for approval of new computers. Approve this one on another computer of yours, or ask an admin. Nothing has been uploaded."
+        },
+        "notInvited": {
+          "title": "{{server}} has no place for {{email}}",
+          "body": "Ask its owner to invite this email, or join with a code."
+        }
+      }
+    }
   }
 }

@@ -28,7 +28,7 @@ use orchester_app::{
   project::{ProjectState, Projects},
   root::Start,
   routes::{
-    ChangeSource, ChangedFile, ConnectionsView, FilesView, ImportTab, ModuleListTab, ModuleTab, NewConnection,
+    ChangeSource, ChangedFile, ConnectionsView, FilesView, ImportTab, JoinWay, ModuleListTab, ModuleTab, NewConnection,
     OrchestratorChat, OverviewTab, ProjectPage, Route, Screen, TaskList, TaskListTab, TaskTab, TaskView, routes,
   },
   services::Services,
@@ -65,6 +65,7 @@ const BUILT: &[Screen] = &[
   Screen::EditTask,
   Screen::Files,
   Screen::ImportResources,
+  Screen::JoinTeam,
   Screen::Instructions,
   Screen::Memory,
   Screen::MergeQueue,
@@ -249,11 +250,14 @@ fn key(key: &str) -> orchester_core::project::TaskKey {
   key.parse().expect("a task key")
 }
 
-/// The screens outside a project, all built; Settings is `tests/settings` and `tests/settings_general`.
+/// The screens outside a project, all built; Settings is `tests/settings` and `tests/settings_general`, Join a team
+/// `tests/join_team`.
 fn home_screens() -> Vec<(Route, Vec<&'static str>)> {
   [
     Route::AllProjects,
     Route::AddProject(None),
+    Route::JoinTeam(JoinWay::Cloud),
+    Route::JoinTeam(JoinWay::Code),
     Route::Settings,
     Route::General,
   ]

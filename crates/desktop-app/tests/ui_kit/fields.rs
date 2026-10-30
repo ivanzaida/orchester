@@ -2,7 +2,10 @@
 //! an ellipsis.
 
 use lurq::{
-  app::theme::SpacingSize,
+  app::{
+    synthetic_input::{SyntheticInput, apply},
+    theme::SpacingSize,
+  },
   components::{Column, SelectOption},
   core::Signal,
   layout::quad::QuadContent,
@@ -230,6 +233,49 @@ fn a_select_with_a_glyph_cuts_a_long_label_before_its_chevron() {
     label.x + label.width <= select.x + select.width,
     "the label stays inside the box: {label:?}"
   );
+}
+
+#[test]
+fn a_glyph_while_empty_goes_with_the_first_key_and_the_field_keeps_the_focus() {
+  let value = Signal::new(String::new());
+  let typed = value.clone();
+  let mut kit = Kit::show(move |ctx| {
+    Column::new()
+      .width(Dimension::Px(COLUMN))
+      .child(
+        FieldInput::new("address", "Address", typed.clone())
+          .leading_while_empty(Icon::Server)
+          .render(ctx),
+      )
+      .into()
+  });
+  let (frame, input, glyph) = (
+    kit.bounds("address-box"),
+    kit.bounds("address"),
+    kit.bounds("address-icon"),
+  );
+  assert_close(glyph.x - frame.x, 10.0, "the glyph's inset");
+  assert_close(gap_after(glyph, input), 8.0, "glyph to value");
+
+  kit.click("address");
+  for character in ['a', 'b'] {
+    apply(&mut kit.tree, &SyntheticInput::char(character));
+    kit.pass();
+  }
+  assert_eq!(value.get_untracked(), "ab", "both keys reach the field");
+  assert!(!kit.exists("address-icon"), "a filled field has no glyph");
+  assert_close(
+    kit.bounds("address").x - frame.x,
+    10.0,
+    "the value takes the glyph's place",
+  );
+
+  for _ in 0..2 {
+    apply(&mut kit.tree, &SyntheticInput::key_down("Backspace"));
+    kit.pass();
+  }
+  assert_eq!(value.get_untracked(), "");
+  assert!(kit.exists("address-icon"), "emptied, the glyph is back");
 }
 
 #[test]

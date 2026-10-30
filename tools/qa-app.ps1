@@ -46,6 +46,11 @@
 # secrets in three environments with uses, the MCP server figma); project-settings-shared is it linked to a team
 # server no one answers for (Sharing · shared).
 #
+# -Scenario join-team is `empty` with a stand-in team server on loopback (orchester-api's test support) that the
+# stand-in cloud names as the account's, with an invite to its project Billing, for Join a team (navigate to
+# join_team). The QA app (--join-team) prints the server's address and its codes to app.log: one joins, any other is
+# wrong; an address where nothing listens (http://127.0.0.1:9) does not answer.
+#
 # .tmp/qa/<task>/ is replaced on every start; a QA app still running from it is refused, not stopped,
 # and so is a folder on the way to it that is a junction or a link. Besides .tmp/qa/<task>/ it writes
 # only cargo's target folder: never inside an installed Orchester (a folder with orchester.exe beside orchester.db),
@@ -205,6 +210,7 @@ $appProgram = Join-Path $bin "orchester-app-qa$exe"
 # Start-Process takes no empty argument list: an option that is always there leads the QA app's arguments.
 $appArguments = if ($SignedOut) { "--signed-out" } else { "--signed-in" }
 if ($Scenario -eq "settings") { $appArguments += " --settings" }
+if ($Scenario -eq "join-team") { $appArguments += " --join-team" }
 $appLog = Join-Path $qa "app.log"
 $appErrors = Join-Path $qa "app.err.log"
 if ($onWindows) {

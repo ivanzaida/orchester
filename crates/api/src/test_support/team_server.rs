@@ -1,10 +1,10 @@
 //! A stand-in team server on loopback over plain HTTP, in the shapes of `orchester-api`, for the tests and QA builds
-//! that join a team with no project open (the workspace's `startup_join`, the app's All projects, the QA app's team
-//! scenarios): what it is (`GET /server`, not linked to Orchester Cloud, so a code needs no cloud identity), joining
-//! with a code (`POST /auth/code`) or a cloud identity (`POST /auth/cloud`), who signed in (`GET /auth/me`), and the
-//! projects the person is a member of (`GET /projects`, by `?slug=` too). What a linked checkout's first download reads
-//! is in [`first_download`]. It answers a wrong code and an expired one alike, `invalid_code`, as a real server does;
-//! it can have no place for a cloud identity, and it can stop answering.
+//! that join a team with no project open (the workspace's `startup_join`, the app's All projects and Join a team, the
+//! QA app's team scenarios): what it is (`GET /server`, not linked to Orchester Cloud, so a code needs no cloud
+//! identity), joining with a code (`POST /auth/code`) or a cloud identity (`POST /auth/cloud`), who signed in
+//! (`GET /auth/me`), and the projects the person is a member of (`GET /projects`, by `?slug=` too). What a linked
+//! checkout's first download reads is in [`first_download`]. It answers a wrong code and an expired one alike,
+//! `invalid_code`, as a real server does; it can have no place for a cloud identity, and it can stop answering.
 
 use std::{
   io::{Read, Write},
