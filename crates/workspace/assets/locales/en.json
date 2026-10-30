@@ -745,6 +745,7 @@
       "notAGitRepository": "The project folder is not a git repository.",
       "noCommits": "The repository has no commit to start the run from.",
       "baseBranchMissing": "The base branch {{branch}} no longer exists, so no run starts. Choose another base branch for the task or its module.",
+      "noBranchCheckedOut": "Can't start: no branch checked out. The checkout is on no branch (detached at {{head}}); set a base branch for the task or its module, or check out a branch.",
       "commandListNotOffered": "Step “{{step}}” lists the commands it may run, but its agent profile now asks before commands. This step's command list doesn't fit its profile any more; a person updates the step.",
       "account": {
         "none": "Step “{{step}}” runs on a connection that has no account. Choose one for the connection in Connections.",
