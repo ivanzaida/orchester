@@ -2,8 +2,6 @@
 //! place. In a shared project the head says the team's version and where it stands here (`Sub` `Du8OB` in 02
 //! `Sflw7`), a member reads who may change the profile in the bar's place (03 `pjEjf`), and an admin sees a version
 //! published here that waits (02b `iLwm9`, 02c `JZFlA`).
-use std::sync::Arc;
-
 use lurq::{
   app::ctx::Ctx,
   components::Column,
@@ -14,25 +12,28 @@ use orchester_workspace::{agents::data::ProfileEntry, sharing::team::TeamConfigu
 
 use super::{
   super::{
-    page_head,
+    entries, page_head,
     questions::{self, Asking},
+    shared::ConnectionHere,
   },
   Ask, Editor, Props, State,
 };
 use crate::{
-  screens::hub::{discard, parts::Tone, removal, team},
+  screens::hub::{discard, removal, team},
   theme::HubSpacing,
+  ui::icon::Icon,
 };
 
 impl Editor {
-  /// `here` ends the head's line and `bars` follow the head: what is missing on this computer, a version that widens
-  /// (04, 02d, 06).
+  /// `here` is what the head's line says of this computer and `bars` follow the head: what is missing on this
+  /// computer, a version that widens (04, 02d, 06); `connection`, the team's connection as this computer has it, gives
+  /// the head its mark while it is missing here.
   pub(super) fn top(
     &self,
     ctx: &mut Ctx,
     props: &Props,
     (state, team): (&State, Option<&TeamConfiguration>),
-    (bars, here): (Vec<Element>, Option<(Tone, Arc<str>)>),
+    (bars, here, connection): (Vec<Element>, Option<team::Here>, Option<&ConnectionHere>),
   ) -> Column {
     // A member of a shared project removes none of the team's profiles.
     let more = state
@@ -49,18 +50,21 @@ impl Editor {
       });
     let shared = team.zip(state.saved.as_ref()).and_then(|(team, entry)| {
       let standing = team.standing(entry.id)?;
-      Some(team::head_line(
+      Some(team::head_line_with(
         ctx,
         "agent-team-state",
-        team,
-        standing,
-        team::draft_on(entry.state),
+        (team, standing, team::draft_on(entry.state)),
+        here,
       ))
     });
     let versions = state
       .saved
       .as_ref()
       .and_then(|entry| team::member_versions(ctx, "agent", (&props.project, team), entry.id));
+    // The team's connection missing here still shows its CLI's mark, or an API's (`FNW1M` in 04, `qQCQN` in 06c).
+    let glyph = connection
+      .filter(|connection| connection.local.is_none())
+      .map(|connection| connection.cli.map_or(Icon::Cloud, entries::cli_glyph));
     Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(HubSpacing::Row.role())
@@ -68,7 +72,7 @@ impl Editor {
       .child(page_head::head(
         ctx,
         (&self.fields, &props.listed),
-        (more, here),
+        (more, glyph),
         (shared, versions),
       ))
       .with_children(bars)

@@ -172,6 +172,11 @@ fn shared_profile_says_what_is_missing_and_only_a_person_uses_the_waiting_versio
     "runs use v2 now, which names docs"
   );
   assert!(agents.exists("agent-missing-choose"));
+  assert_eq!(
+    agents.text("agent-team-state-runs-here"),
+    "runs here: Test Codex",
+    "nothing waits now: the head says which connection runs take here (06)"
+  );
 }
 
 /// Caches a teammate's v3 of profile `id`, the same as v2, which waits too.
@@ -210,8 +215,23 @@ fn shared_profile_head_says_where_it_runs_and_synthetic_input_chooses_no_connect
   let id = agents.profile(true);
   shared_v2(&agents, id);
   agents.open(id);
-  agents.until("the shared parts", |s| s.exists("agent-runs-here-status"));
-  assert_eq!(agents.text("agent-runs-here-status"), "runs here: Test Codex");
+  agents.until("the shared parts", |s| s.exists("agent-cli-value"));
+  assert_eq!(
+    agents.text("agent-team-state-state"),
+    "Runs here use v1",
+    "v2 waits, so runs keep v1 (02d)"
+  );
+  // The team chose the CLI, the model and the effort: a member reads them (06).
+  assert_eq!(agents.text("agent-cli-value"), "Codex");
+  assert_eq!(
+    agents.text("agent-cli-hint"),
+    "The team's choice in Builder v1 · admins change it"
+  );
+  assert_eq!(agents.text("agent-effort-hint"), "The team's choice");
+  assert!(
+    !agents.exists("agent-validation-error"),
+    "nothing is edited on a member's page, so nothing is invalid there"
+  );
 
   open_runs_here(&mut agents);
   with_synthetic_input(|| agents.click("agent-runs-here-option-0"));

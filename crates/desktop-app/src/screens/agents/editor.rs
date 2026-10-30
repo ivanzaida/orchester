@@ -236,9 +236,10 @@ impl Editor {
     let shared::Parts {
       bars: shared_bars,
       runs_here,
-      status: here_status,
+      here,
+      connection: connection_here,
     } = shared::parts(ctx, props);
-    let top = self.top(ctx, props, (state, team), (shared_bars, here_status));
+    let top = self.top(ctx, props, (state, team), (shared_bars, here, connection_here.as_ref()));
     let asking = Asking {
       pending: self.pending.clone(),
       allowed: self.allowed.clone(),
@@ -268,10 +269,11 @@ impl Editor {
         model::connection_model(ctx, &self.fields, &props.listed, (extra, runs_note)),
       )
     } else {
-      (
-        model::role_read_only(ctx, &self.fields),
-        model::connection_read_only(ctx, &self.fields, &props.listed, (runs_here, runs_note)),
-      )
+      let connection = match &connection_here {
+        Some(here) => model::connection_shared(ctx, &self.fields, here, (runs_here, runs_note)),
+        None => model::connection_read_only(ctx, &self.fields, &props.listed, (runs_here, runs_note)),
+      };
+      (model::role_read_only(ctx, &self.fields), connection)
     };
     let context = Context {
       fields: &self.fields,
@@ -430,7 +432,11 @@ impl Editor {
           .page(ctx),
       );
     }
+    // A member reads the team's profile: nothing of it is edited here, so nothing of it is invalid here; a connection
+    // missing on this computer is said by the page head and *Runs here use* (06c).
+    let may_change = team::may_change(team::of(&props.project).as_ref());
     if let Err(errors) = &state.checked
+      && may_change
       && (state.saved.is_some() || self.tried.get())
     {
       for error in [

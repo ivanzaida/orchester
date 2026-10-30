@@ -747,13 +747,23 @@
     "runsHere": {
       "label": "Runs here use",
       "yours": "Yours",
-      "hint": "Your connection on this computer",
-      "noAccount": "Missing on this computer: no account for it here · {{resource}} can't run here",
+      "hint": "Your connection and account on this computer",
+      "hintFound": "Your connection and account on this computer · {{found}}",
+      "noAccount": "Missing on this computer: no {{cli}} account here · {{resource}} can't run here",
       "note": "Runs here use stays on this computer and is never sent to the team.",
       "noteNoAccount": "Add an account… opens Settings › Accounts. Runs here use stays on this computer and is never sent.",
       "choose": "Choose a connection",
       "head": "runs here: {{connection}}",
-      "cantRun": "Can't run here"
+      "cantRun": "Can't run here",
+      "missing": "Missing on this computer",
+      "usesVersion": "Runs here use v{{version}}"
+    },
+    "member": {
+      "cli": "Agent CLI",
+      "cliHint": "The team's choice in {{profile}} v{{version}} · admins change it",
+      "modelHint": "The team's choice · from {{cli}}'s list",
+      "effortHint": "The team's choice",
+      "apiHint": "API “{{name}}” · {{role}}"
     }
   }
 }
