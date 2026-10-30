@@ -336,6 +336,8 @@ pub fn preflight_message(problem: &PreflightProblem) -> Message {
     PreflightProblem::BaseBranchMissing { branch } => {
       Message::new("runs.preflight.baseBranchMissing").with("branch", branch.to_string())
     }
+    PreflightProblem::NoBranchCheckedOut { head } => Message::new("runs.preflight.noBranchCheckedOut")
+      .with("head", crate::display::short_revision(head.as_str()).to_owned()),
   }
 }
 

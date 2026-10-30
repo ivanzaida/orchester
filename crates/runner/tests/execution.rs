@@ -16,6 +16,7 @@ use orchester_core::{
   module::{ModuleDetails, ModuleState},
   name::Name,
   resource::StepKey,
+  revision::Revision,
   run::{BranchName, InterruptCause, PreflightProblem, RunStatus, StepStatus},
   store::{ActivityStore, ConnectionStore, RunStore, TaskStore},
   task::organization::ChangeActor,
@@ -234,25 +235,95 @@ async fn execution_rejects_what_the_preflight_finds_and_tasks_that_are_not_queue
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn execution_records_the_branch_the_checkout_has_when_the_run_starts() {
+async fn run_base_resolution_records_the_branch_the_checkout_has_when_the_run_starts() {
   let on_main = project(&Setup::new("Append one line."));
   let run = run_to_the_end(on_main.repo.path(), on_main.task).await;
   assert_eq!(run.base_branch().map(|branch| branch.as_str()), Some("main"));
   assert_eq!(run.base_source(), RunBaseSource::CheckedOut);
   assert_eq!(run.base().as_str(), git(on_main.repo.path(), &["rev-parse", "main"]));
+}
 
+/// A detached checkout leaves a task with no base branch of its own or its module's nothing to deliver into: the start
+/// is refused with the commit `HEAD` is at, and no run is recorded. A base branch set on the task starts it from that
+/// branch all the same.
+#[tokio::test(flavor = "multi_thread")]
+async fn run_base_resolution_a_detached_checkout_refuses_a_run_with_no_base_branch_set() {
   let detached = project(&Setup::new("Append one line."));
-  git(detached.repo.path(), &["switch", "--quiet", "--detach", "main"]);
-  let run = run_to_the_end(detached.repo.path(), detached.task).await;
+  let root = detached.repo.path();
+  git(root, &["switch", "--quiet", "--detach", "main"]);
+  let head = Revision::new(&git(root, &["rev-parse", "HEAD"])).expect("revision");
+  let (scheduler, _events) = scheduler(root);
+  assert_eq!(
+    scheduler.start_run(IdempotencyKey::generate(), detached.task).await,
+    Err(Rejection::Preflight {
+      problems: vec![PreflightProblem::NoBranchCheckedOut { head }]
+    })
+  );
+  assert!(
+    ProjectDb::open(root)
+      .expect("open")
+      .runs_of_task(detached.task)
+      .expect("runs")
+      .is_empty(),
+    "no run was recorded"
+  );
+
+  let main = BranchName::new("main").expect("branch");
+  set_task_base(root, detached.task, &TaskBase::Branch(main.clone()));
+  let run = run_to_the_end(root, detached.task).await;
   assert_eq!(run.status(), &RunStatus::Succeeded);
-  assert_eq!(run.base_branch(), None, "a detached HEAD has no branch to merge into");
+  assert_eq!(run.base_branch(), Some(&main));
+  assert_eq!(run.base_source(), RunBaseSource::Task);
+}
+
+/// Run again is a new run, which resolves its base again: after the task got a base branch of its own, the next run
+/// starts from it, while the run before keeps the checked-out branch it recorded.
+#[tokio::test(flavor = "multi_thread")]
+async fn run_base_resolution_run_again_resolves_the_base_again() {
+  let project = project(&Setup::new("Report failure."));
+  let root = project.repo.path();
+  git(root, &["switch", "--quiet", "-c", "staging"]);
+  git(root, &["commit", "--quiet", "--allow-empty", "-m", "staging work"]);
+  git(root, &["switch", "--quiet", "main"]);
+  let (scheduler, mut events) = scheduler(root);
+  let first = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("the run starts");
+  let failed = wait_for(root, &mut events, first, |run| run.status().is_terminal()).await;
+  assert_eq!(failed.base_source(), RunBaseSource::CheckedOut);
+
+  let staging = BranchName::new("staging").expect("branch");
+  set_task_base(root, project.task, &TaskBase::Branch(staging.clone()));
+  let again = scheduler
+    .run_again(IdempotencyKey::generate(), project.task, first, None)
+    .await
+    .expect("the task runs again");
+  let db = ProjectDb::open(root).expect("open");
+  let next = db.run(again).expect("read").expect("run");
+  assert_eq!(next.base_branch(), Some(&staging));
+  assert_eq!(next.base_source(), RunBaseSource::Task);
+  assert_eq!(next.base().as_str(), git(root, &["rev-parse", "staging"]));
+  let before = db.run(first).expect("read").expect("run");
+  assert_eq!(before.base_branch().map(BranchName::as_str), Some("main"));
+  assert_eq!(before.base_source(), RunBaseSource::CheckedOut, "the run before keeps its base");
+  wait_for(root, &mut events, again, |run| run.status().is_terminal()).await;
+}
+
+fn set_task_base(root: &std::path::Path, task: TaskId, base: &TaskBase) {
+  let mut db = ProjectDb::open(root).expect("open");
+  let read = db.task(task).expect("read").expect("task");
+  db.set_task_base(task, read.revision(), base)
+    .expect("set")
+    .saved()
+    .expect("saved on the revision read");
 }
 
 /// A base branch set (ORC-81), here the task's module's: a new run starts from that branch's tip while the checkout is
 /// on another branch, records it as its base with its source, and leaves the checkout where it was; a branch set on the
 /// task that is gone refuses the run, naming it, and no run starts from the checkout instead.
 #[tokio::test(flavor = "multi_thread")]
-async fn execution_starts_from_the_base_branch_set_wherever_the_checkout_is() {
+async fn run_base_resolution_starts_from_the_base_branch_set_wherever_the_checkout_is() {
   let on_main = project(&Setup::new("Append one line."));
   let root = on_main.repo.path();
   git(root, &["switch", "--quiet", "-c", "staging"]);
@@ -291,15 +362,11 @@ async fn execution_starts_from_the_base_branch_set_wherever_the_checkout_is() {
     "the checkout stays on main"
   );
 
+  // On a detached checkout too: the branch set is what is missing, not a checked-out one.
   let gone = project(&Setup::new("Append one line."));
+  git(gone.repo.path(), &["switch", "--quiet", "--detach", "main"]);
   let branch = BranchName::new("gone").expect("branch");
-  let mut db = ProjectDb::open(gone.repo.path()).expect("open");
-  let task = db.task(gone.task).expect("read").expect("task");
-  db.set_task_base(gone.task, task.revision(), &TaskBase::Branch(branch.clone()))
-    .expect("set")
-    .saved()
-    .expect("saved on the revision read");
-  drop(db);
+  set_task_base(gone.repo.path(), gone.task, &TaskBase::Branch(branch.clone()));
   let (scheduler, _events) = scheduler(gone.repo.path());
   assert_eq!(
     scheduler.start_run(IdempotencyKey::generate(), gone.task).await,
