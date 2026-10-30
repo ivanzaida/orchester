@@ -1,8 +1,9 @@
 //! A run's base branch (ORC-81) against a real git repository whose checkout stays on `main` while runs work on
 //! `staging`: a run whose base branch was set merged into `staging` beside the checkout, which is neither switched nor
-//! touched, and cleared up after; a run that took the checked-out branch still needs `staging` checked out; moves of
-//! `staging` told to its runs; and work merged into `staging` outside Orchester read as merged there.
-//! `cargo test -p orchester-workspace --test base_branch base_branch`.
+//! touched, and cleared up after; a run that took the checked-out branch still needs `staging` checked out; how each
+//! run lands by where its own base came from (ORC-405); moves of `staging` told to its runs; and work merged into
+//! `staging` outside Orchester read as merged there.
+//! `cargo test -p orchester-workspace --test base_branch` (filters `base_branch`, `run_base_resolution`).
 
 use std::{
   collections::{BTreeMap, BTreeSet},
@@ -14,6 +15,7 @@ use std::{
 use orchester_core::{
   id::{IdempotencyKey, ProjectId},
   integration::{MergeError, MergeKind, base::RunBaseSource},
+  module::{ModuleDetails, ModuleState},
   name::Name,
   project::{Project, ProjectKey},
   resource::{CommandAction, CommandArg, CommandProgram, Pipeline, PromptText, Slug, Step, StepKey, StepKind, Tool},
@@ -269,6 +271,53 @@ fn base_branch_merge_lands_beside_a_checkout_on_another_branch_and_clears_up() {
       .expect("read")
       .is_some(),
     "the merge is recorded"
+  );
+}
+
+/// Landing follows where each run's base came from, not the project: in one project, with the checkout on `main`, a
+/// run that took `staging` from its module and one recorded with the project's old base branch land beside the
+/// checkout, while a run that took `staging` as the checked-out branch merges only on it; a run still at work on
+/// `staging` is told its own base branch moved, though the checkout has another.
+#[test]
+fn run_base_resolution_each_run_lands_by_where_its_base_came_from() {
+  let mut repo = Repo::new();
+  let main = git(repo.root(), &["rev-parse", "main"]);
+  let programs = Programs::processes();
+  let checked_out = repo.task("Sign up");
+  let checked_out = repo.succeeded(&checked_out, "orchester/orc-1-run-1", ("feature.txt", "work\n"));
+  let working = repo.task("Sign out");
+  let working = repo.working(&working, "orchester/orc-2-run-1", ("shared.txt", "sign out\n"));
+  let details = ModuleDetails::new(name("Webhooks v2"), "", (None, None), ModuleState::Open).expect("details");
+  let module = repo.db.create_module(details, at(5)).expect("module").id();
+  repo.source = RunBaseSource::Module { module };
+  let from_module = repo.task("Sign in");
+  let from_module = repo.succeeded(&from_module, "orchester/orc-3-run-1", ("module.txt", "module\n"));
+  repo.source = RunBaseSource::Project;
+  let from_project = repo.task("Reset");
+  let from_project = repo.succeeded(&from_project, "orchester/orc-4-run-1", ("shared.txt", "reset\n"));
+  assert_eq!(base_moved::observe_in(repo.root(), &programs).expect("observed"), 0);
+
+  let refused = merge_in(repo.root(), &programs, (checked_out.id(), None)).map(|merged| merged.merge);
+  assert!(
+    matches!(&refused, Err(IntegrationProblem::Merge(MergeError::WrongBranch { .. }))),
+    "a run that took the checked-out branch merges only there: {refused:?}"
+  );
+  for run in [&from_module, &from_project] {
+    let merged = merge_in(repo.root(), &programs, (run.id(), None)).expect("merged beside the checkout");
+    assert_eq!(merged.merge.into, branch("staging"));
+  }
+  assert_eq!(git(repo.root(), &["show", "staging:module.txt"]), "module");
+  assert_eq!(git(repo.root(), &["show", "staging:shared.txt"]), "reset");
+  repo.assert_checkout_untouched(&main);
+
+  let notices = ProjectDb::open(repo.root())
+    .expect("open")
+    .run_base_notices(working.id())
+    .expect("notices");
+  assert!(!notices.is_empty(), "the working run is told staging moved");
+  assert!(
+    notices.iter().all(|notice| notice.branch == branch("staging")),
+    "{notices:?}"
   );
 }
 

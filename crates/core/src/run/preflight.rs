@@ -70,9 +70,12 @@ pub enum PreflightProblem {
   NotAGitRepository,
   /// The repository has no commit to start the run's branch from.
   NoCommits,
-  /// The project's base branch (Project settings › General) is set to a branch the repository no longer has: no run
-  /// starts until a person chooses another, and none starts from the checkout instead.
+  /// The base branch set for the task or its module is a branch the repository no longer has: no run starts until a
+  /// person chooses another, and none starts from the checkout instead.
   BaseBranchMissing { branch: super::BranchName },
+  /// Neither the task nor its module has a base branch, and the checkout has a detached `HEAD` at `head`: a run has
+  /// no branch to deliver into, so it does not start.
+  NoBranchCheckedOut { head: crate::revision::Revision },
 }
 
 /// The configuration a task's run would use.

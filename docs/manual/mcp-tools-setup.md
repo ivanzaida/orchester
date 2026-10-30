@@ -45,7 +45,9 @@ command tools get (plain text by design — they never hold secrets), whether ag
 files (`AGENTS.md`, `CLAUDE.md`), its GitHub link, how many connections, profiles, pipelines and instructions it has,
 and its app link (its Overview).
 
-Base branches are set on tasks and modules, not on the project; each run's own base is in its reads.
+A project has no base branch: the branch runs start from is set on tasks (`create_task`/`update_task`'s `base_branch`,
+read by `get_task`) and modules (`create_module`/`update_module`'s, read by `list_modules` and `get_module`), on this
+computer only ([work tools](mcp-tools-work.md#2-tasks)); each run's own base is in `get_run`.
 
 | Parameter | Type   | Req. | Description                    |
 |-----------|--------|------|--------------------------------|

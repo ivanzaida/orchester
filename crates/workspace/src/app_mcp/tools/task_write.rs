@@ -5,9 +5,12 @@
 //! project's task goes to its server. The task's history records the organization changes as
 //! automation's: they come from a client of the app's MCP server or the Orchestrator chat.
 
+use std::path::Path;
+
 use orchester_core::{
   id::{IdempotencyKey, ModuleId},
-  store::SettingsStore,
+  integration::base::TaskBase,
+  store::{SettingsStore, TaskStore},
   task::{
     Task, TaskDetails,
     estimate::{StoryPoints, check_automation},
@@ -22,6 +25,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::{
+  base_branch,
   modules::find_module,
   task_organization::{Blocker, Changes},
   tasks::find_task,
@@ -103,6 +107,11 @@ pub struct CreateTask {
   /// tools outside the repository) or changes_or_report; left out, as its pipeline says.
   #[serde(default)]
   pub delivers: Option<Delivers>,
+  /// The branch the task's runs start from and deliver into, kept on this computer only: `inherit` (its module's;
+  /// the default), `checked_out` (whatever branch the checkout has when a run starts) or a branch name; a name only
+  /// a remote has (`release` or `origin/release`) creates its local branch, tracking it.
+  #[serde(default)]
+  pub base_branch: Option<String>,
 }
 
 /// The fields to change; those left out stay as they are.
@@ -160,6 +169,11 @@ pub struct UpdateTask {
   /// `null` follows its pipeline again.
   #[serde(default, deserialize_with = "wire::present")]
   pub delivers: Option<Option<Delivers>>,
+  /// The branch the task's next runs start from and deliver into, kept on this computer only: `inherit` (its
+  /// module's), `checked_out` or a branch name; a name only a remote has creates its local branch, tracking it. Runs
+  /// that started keep theirs.
+  #[serde(default)]
+  pub base_branch: Option<String>,
 }
 
 impl CreateTask {
@@ -270,6 +284,7 @@ fn create(services: &Services, args: &CreateTask) -> Result<Task, ToolError> {
     ),
   };
   let details = fields.details()?;
+  let branch = given_base(services, &root, args.base_branch.as_deref())?;
   let mut writer = TaskWriter::open(&root, &services.servers).map_err(write_error)?;
   // An opt-out a shared project refuses is refused before the task is made, so a retry makes no second task.
   writer.ensure_merging(&base, &edited).map_err(write_error)?;
@@ -280,9 +295,41 @@ fn create(services: &Services, args: &CreateTask) -> Result<Task, ToolError> {
     .map_err(write_error)?
     .saved()
     .ok_or_else(changed)?;
-  let task = moved(&mut writer, task, module)?;
+  let task = placed(&mut writer, &root, task, (Some(module), branch))?;
   services.changes.record(open.project.id(), Outside::Tasks);
   with_points(services, open, task, points)
+}
+
+/// The base branch `given`, taken in the repository at `root` before anything of the task is saved.
+fn given_base(services: &Services, root: &Path, given: Option<&str>) -> Result<Option<TaskBase>, ToolError> {
+  given
+    .map(|given| base_branch::task_base(&services.programs, root, given))
+    .transpose()
+}
+
+/// `task`, saved, moved to `module` and given base branch `base` where they are given. The base branch is this
+/// computer's: a shared task's is never sent to its server.
+fn placed(
+  writer: &mut TaskWriter,
+  root: &Path,
+  task: Task,
+  (module, base): (Option<Option<ModuleId>>, Option<TaskBase>),
+) -> Result<Task, ToolError> {
+  let task = match module {
+    Some(module) => moved(writer, task, module)?,
+    None => task,
+  };
+  let Some(base) = base.filter(|base| base != task.base()) else {
+    return Ok(task);
+  };
+  let mut db = ProjectDb::open(root)?;
+  // The task as the save and the move just left it: its revision is the one they gave it.
+  let read = db
+    .task(task.id())?
+    .ok_or_else(|| ToolError::not_found(Missing::Task, task.key().to_string()))?;
+  db.set_task_base(task.id(), read.revision(), &base)?
+    .saved()
+    .ok_or_else(changed)
 }
 
 /// The story points given, on the scale.
@@ -401,6 +448,7 @@ fn update(services: &Services, args: &UpdateTask) -> Result<Task, ToolError> {
   if args.pipeline.is_none() && pipeline.is_none() {
     details.pipeline = current.pipeline;
   }
+  let branch = given_base(services, &root, args.base_branch.as_deref())?;
   let mut writer = TaskWriter::open(&root, &services.servers).map_err(write_error)?;
   // An opt-out a shared project refuses is refused before the task's details are saved.
   writer.ensure_merging(&base, &edited).map_err(write_error)?;
@@ -416,10 +464,7 @@ fn update(services: &Services, args: &UpdateTask) -> Result<Task, ToolError> {
     EditSaved::Saved { task, .. } => task,
     EditSaved::Conflict(_) => return Err(changed()),
   };
-  let saved = match module {
-    Some(module) => moved(&mut writer, saved, module)?,
-    None => saved,
-  };
+  let saved = placed(&mut writer, &root, saved, (module, branch))?;
   services.changes.record(open.project.id(), Outside::Tasks);
   with_points(services, open, saved, points)
 }
@@ -449,6 +494,7 @@ fn saved(task: &Task) -> Value {
     "no_automatic_merge": task.organization().no_automatic_merge(),
     "delivers": task.organization().delivers().map(Delivers::from),
     "module": task.module().map(|module| module.to_string()),
+    "base_branch": base_branch::choice_json(task.base()),
   })
 }
 
