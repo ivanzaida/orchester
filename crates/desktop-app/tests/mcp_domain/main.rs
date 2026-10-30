@@ -356,6 +356,17 @@ impl Drop for Served {
   }
 }
 
+/// A file that is not a CLI, with the Unix permission `mode`: `add_cli_connection` checks a chosen program file
+/// exists before its gate.
+fn write_program(path: &Path, #[cfg_attr(windows, expect(unused_variables))] mode: u32) {
+  std::fs::write(path, "not a program").expect("the file is written");
+  #[cfg(unix)]
+  {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode)).expect("the file's permissions");
+  }
+}
+
 /// The titles of the tasks `feed` holds; `None` while it holds none.
 fn titles(feed: &ProjectFeed) -> Option<Vec<String>> {
   match feed.tasks.get_untracked() {
