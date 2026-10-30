@@ -58,6 +58,8 @@ pub(crate) struct SettingRow {
   cut_label: bool,
   info: Option<Arc<str>>,
   hint: Option<(Arc<str>, Tone)>,
+  /// Lines under the hint, in the words' column.
+  lines: Vec<Element>,
   lead: Option<Element>,
   controls: Vec<Element>,
   under: Vec<Element>,
@@ -78,6 +80,7 @@ impl SettingRow {
       cut_label: false,
       info: None,
       hint: None,
+      lines: Vec::new(),
       lead: None,
       controls: Vec::new(),
       under: Vec::new(),
@@ -85,6 +88,13 @@ impl SettingRow {
       item: false,
       bones: (None, None),
     }
+  }
+
+  /// Lines of their own under the hint, in the words' column beside the control, the words then 4 apart (`Moved`
+  /// `HcizH` in 04b `NDTCw`).
+  pub(crate) fn lines(mut self, lines: impl IntoIterator<Item = Element>) -> Self {
+    self.lines.extend(lines);
+    self
   }
 
   /// A row of an item: 10 over and under, its parts 12 apart.
@@ -243,9 +253,14 @@ impl SettingRow {
     let words = Column::new()
       .flex(1.0)
       .min_width(Dimension::Px(0.0))
-      .spacing(ExtraSpacing::Tight.role())
+      .spacing(if self.lines.is_empty() {
+        ExtraSpacing::Tight.role()
+      } else {
+        SpacingSize::Xs
+      })
       .child(heading)
-      .with_children(hint);
+      .with_children(hint)
+      .with_children(self.lines);
     let line = Row::new()
       .width(Dimension::Pct(100.0))
       .spacing(if self.item { SpacingSize::Md } else { SpacingSize::Lg })

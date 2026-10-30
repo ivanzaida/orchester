@@ -468,7 +468,7 @@ open at the next start means the previous session crashed.
 | `money_budgets_before_tokens` | the money budgets tasks and runs had before budgets became tokens, kept by the migration that replaced them with the default run budget |
 | `money_step_budgets_before_tokens` | the money step budgets of published pipeline versions and drafts from before step budgets became tokens, per version or draft and step |
 | `repository_link` | at most one row: GitHub connection, git remote, host / owner / name, default branch, permission, expected login, checked at |
-| `base_branch_move`, `base_branch_move_modules` | ORC-404: the project's former base branch (`project_base_branch`, dropped) and when it moved to the open modules that had none, and which modules took it, for Project settings › General's one-time line. A task's base branch is `tasks.base_choice`/`tasks.base_branch`, a module's `modules.base_branch`; both kept on this computer only, outside a shared task's or module's revision (see [Integration](#integration)) |
+| `base_branch_move`, `base_branch_move_modules` | ORC-404: the project's former base branch (`project_base_branch`, dropped) and when it moved to the open modules that had none, and which modules took it, for Project settings › General's one-time line; ORC-409 deletes both once General showed the line and the settings closed. A task's base branch is `tasks.base_choice`/`tasks.base_branch`, a module's `modules.base_branch`; both kept on this computer only, outside a shared task's or module's revision (see [Integration](#integration)) |
 
 ### Versioned configuration
 

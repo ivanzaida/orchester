@@ -7,6 +7,7 @@
 mod burndown;
 mod chart;
 mod form;
+mod form_base;
 mod form_chips;
 mod header;
 mod list;
