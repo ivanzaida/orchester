@@ -15,6 +15,7 @@ mod catalog;
 mod config;
 mod desktop;
 mod http;
+mod merged;
 mod publish;
 mod server;
 mod share;

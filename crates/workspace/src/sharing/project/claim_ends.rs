@@ -6,7 +6,8 @@
 //! that asked for it after the run ended (Run again, before the runner records the new run) or on the person's other
 //! computer (the claim's `since`), is kept. This runs on every run change and every sync, so claims that ended before
 //! it existed end on the first sync too. The heartbeat names only the claims that are kept: one whose end the server
-//! did not take goes stale instead of staying fresh, and the next sync tries again.
+//! did not take goes stale instead of staying fresh, and the next sync tries again. A merged run's claim is completed
+//! only once its Done went to the server ([`ProjectServer::send_automatic_status`]), which needs the claim held.
 
 use std::{collections::HashMap, path::Path};
 
@@ -36,6 +37,9 @@ pub enum ClaimEndError {
   /// does.
   #[error("the server does not take run progress reports (not_supported)")]
   NotSupported,
+  /// The merged run's workflow status could not be sent yet; the claim it needs stays held until it is.
+  #[error("the merged run's workflow status waits to be sent")]
+  StatusWaits,
   #[error(transparent)]
   Sharing(#[from] SharingError),
 }
@@ -250,6 +254,11 @@ impl ProjectServer {
     let Some(report) = report else {
       return Ok(self.release_claim(task).await?);
     };
+    // The merge's Done goes while the claim it needs is held, whether or not the run change sent it already; one
+    // that waits keeps the claim until it goes.
+    if self.send_automatic_status(task).await? {
+      return Err(ClaimEndError::StatusWaits);
+    }
     let answer = self
       .call(|client, token, project| async move { client.report_run(&token, project, task, &report).await })
       .await;
