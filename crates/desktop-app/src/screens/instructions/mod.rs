@@ -174,8 +174,13 @@ impl Component for InstructionsScreen {
   }
 }
 impl InstructionsScreen {
-  /// Import from repository and New instruction, in the scope of the rule shown.
+  /// Import from repository and New instruction, in the scope of the rule shown; none for a member of a shared
+  /// project.
   fn head(&self, ctx: &Ctx, view: View) -> Head {
+    let project = &ctx.props::<Props>().0;
+    if !hub::team::may_change(hub::team::of(project).as_ref()) {
+      return Head::default();
+    }
     let tab = view.tab().unwrap_or_default();
     Head::actions([
       ActionButton::new("instructions-import", ButtonKind::Ghost, ctx.t("instructions.import"))

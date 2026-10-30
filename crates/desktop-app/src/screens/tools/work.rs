@@ -33,16 +33,18 @@ impl DevtoolsInspectable for Saved {}
 pub(super) type Work = FutureAction<Start, Saved, Message>;
 pub(super) fn action(ctx: &mut Ctx) -> Work {
   let services = Services::of(ctx);
-  let (activity, changes) = (services.activity, services.changes);
   ctx.future_action(move |start: Start| {
-    let (activity, changes) = (activity.clone(), changes.clone());
+    let services = services.clone();
     async move {
       let (name, change, version) = operation(&start.edit);
+      let publishing = matches!(change, ToolChange::Publish(_));
       let spec = operations::tool_change(&start.open, &name, &change, version);
       let root: PathBuf = start.open.repo_root.clone();
-      let target = root.clone();
+      let (target, published) = (root.clone(), root.clone());
       let project = start.open.project.id();
-      activity
+      let changes = services.changes.clone();
+      let saved = services
+        .activity
         .track_to(
           spec,
           async move {
@@ -55,7 +57,12 @@ pub(super) fn action(ctx: &mut Ctx) -> Work {
           },
           move |saved| Some(operations::tool(&target, saved.0)),
         )
-        .await
+        .await;
+      // A version published in a shared project goes to its team server at once (02).
+      if publishing && saved.is_ok() {
+        crate::screens::hub::team::send_published(&services, &published).await;
+      }
+      saved
     }
   })
 }

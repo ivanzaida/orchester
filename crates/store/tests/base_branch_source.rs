@@ -216,6 +216,10 @@ fn base_branch_source_a_shared_tasks_base_stays_outside_its_revision() {
   );
 }
 
+/// The migrations appended after the base sources' (the server's admins, *Open my draft on vN*): the schema before it
+/// is this many and one more under the latest.
+const AFTER_BASE_SOURCES: u32 = 2;
+
 /// A project whose base branch was `set` (none: the checked-out branch) before tasks and modules had theirs, with
 /// open modules Webhooks and Billing, closed Legacy, and runs from a detached HEAD, `staging` and `main`, opened at
 /// the latest schema: its repository, which holds the database, its modules and its runs as they read now.
@@ -236,7 +240,7 @@ fn migrated(set: Option<&str>) -> (TempDir, ProjectDb, [ModuleId; 3], Vec<Run>) 
   drop(db);
   let database = current.path().join(".orchester").join("orchester.db");
   let latest = schema_version(&database);
-  let old = copied_at_version(&database, latest - 1);
+  let old = copied_at_version(&database, latest - AFTER_BASE_SOURCES - 1);
   let old_database = old.path().join(".orchester").join("orchester.db");
   if let Some(set) = set {
     rusqlite::Connection::open(&old_database)
