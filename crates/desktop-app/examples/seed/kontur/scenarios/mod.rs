@@ -33,6 +33,7 @@ mod task_states;
 mod tasks;
 mod tasks_memory;
 mod tasks_unreadable;
+pub mod team;
 mod unreadable_db;
 mod usage;
 mod usage_accounts;
@@ -81,7 +82,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 52] = [
+pub const ALL: [Scenario; 60] = [
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-library", agents_library::seed),
   Scenario::of("agents-empty", agents::empty),
@@ -134,6 +135,14 @@ pub const ALL: [Scenario; 52] = [
   Scenario::of("modules", modules::seed),
   Scenario::of("modules-short", modules::short),
   Scenario::of("modules-none", modules::none),
+  Scenario::of("team-join", team::join),
+  Scenario::of("team-join-wrong-code", team::wrong_code),
+  Scenario::of("team-join-expired-code", team::expired_code),
+  Scenario::of("team-join-unreachable", team::unreachable),
+  Scenario::of("team-join-joined", team::joined),
+  Scenario::of("team-offer", team::offer),
+  Scenario::of("team-downloading", team::downloading),
+  Scenario::of("team-download-failed", team::download_failed),
 ];
 
 /// The scenario called `name`.
