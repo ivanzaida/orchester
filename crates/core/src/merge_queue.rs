@@ -2,6 +2,10 @@
 //! entry per run that passed every step of a pipeline ending in a Deliver step, where it stands in delivering it into
 //! the base branch, and what happened to it on the way ([`QueueEvent`]). The order, the moves from state to state and
 //! every rule of delivery are `orchester-workspace`'s (`merge_queue`); these are only its records.
+//!
+//! The queue has a lane per base branch ([`lanes`], ORC-406): a run is in the lane of the base branch it recorded when
+//! it started, and each lane delivers on its own, one run at a time, first finished first. What holds one lane (a run
+//! being delivered, blocked by the checkout say) holds no other.
 
 use serde::{Deserialize, Serialize};
 
@@ -10,7 +14,7 @@ use crate::{
   integration::MergeKind,
   resource::StepKey,
   revision::Revision,
-  run::Answerer,
+  run::{Answerer, BranchName},
   time::Timestamp,
 };
 
@@ -36,10 +40,10 @@ pub enum QueueState {
     files: Vec<String>,
     after: u64,
   },
-  /// Check passed on the merged result; the run waits for a person to review it and merge. It does not hold the
-  /// queue.
+  /// Check passed on the merged result; the run waits for a person to review it and merge. It does not hold its
+  /// lane.
   WaitingForApproval,
-  /// Delivery cannot go on until what [`Blocked`] names changes; it holds the whole queue.
+  /// Delivery cannot go on until what [`Blocked`] names changes; it holds its lane, and no other.
   Blocked(Blocked),
   /// The run left the queue; nothing of it reached the base branch.
   Left(Left),
@@ -127,6 +131,9 @@ pub struct CheckedOn {
 pub struct QueueEntry {
   pub run: RunId,
   pub task: TaskId,
+  /// The base branch the run recorded when it started, which names its lane (`None`: it recorded none, and leaves the
+  /// queue once its turn comes). The store reads it from the run.
+  pub base: Option<BranchName>,
   /// When the run passed every step: the queue delivers first finished first.
   pub finished_at: Timestamp,
   /// Its place in the queue's order; lower goes first.
@@ -140,6 +147,61 @@ pub struct QueueEntry {
   pub checked: Option<CheckedOn>,
   /// When a person approved the merge; a run of an Auto-merge pipeline is never approved.
   pub approved_at: Option<Timestamp>,
+}
+
+/// The entries of the queue whose runs deliver into one base branch, in the queue's order: a lane. It delivers one run
+/// at a time, first finished first, whatever the other lanes do.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct QueueLane<'a> {
+  /// The base branch its runs deliver into (`None`: runs that recorded none).
+  pub base: Option<&'a BranchName>,
+  pub entries: Vec<&'a QueueEntry>,
+}
+
+impl<'a> QueueLane<'a> {
+  /// The entry being delivered now: at most one per lane.
+  pub fn delivering(&self) -> Option<&'a QueueEntry> {
+    self.entries.iter().copied().find(|entry| entry.state.delivering())
+  }
+
+  /// The entries waiting their turn, in the lane's order.
+  pub fn waiting(&self) -> impl Iterator<Item = &'a QueueEntry> + '_ {
+    self
+      .entries
+      .iter()
+      .copied()
+      .filter(|entry| entry.state == QueueState::Queued)
+  }
+
+  /// `run`'s place among the lane's runs in the queue, from 1, the one being delivered first; `None` once it is out
+  /// of the queue or not in this lane.
+  pub fn place(&self, run: RunId) -> Option<usize> {
+    let mut queue: Vec<&QueueEntry> = self
+      .entries
+      .iter()
+      .copied()
+      .filter(|entry| entry.state.in_queue())
+      .collect();
+    queue.sort_by_key(|entry| !entry.state.delivering());
+    queue.iter().position(|entry| entry.run == run).map(|index| index + 1)
+  }
+}
+
+/// The lanes of `entries`, which are in the queue's order: one per base branch, each holding its entries in that
+/// order, the lanes in the order of their first entry.
+pub fn lanes(entries: &[QueueEntry]) -> Vec<QueueLane<'_>> {
+  let mut lanes: Vec<QueueLane<'_>> = Vec::new();
+  for entry in entries {
+    let base = entry.base.as_ref();
+    match lanes.iter_mut().find(|lane| lane.base == base) {
+      Some(lane) => lane.entries.push(entry),
+      None => lanes.push(QueueLane {
+        base,
+        entries: vec![entry],
+      }),
+    }
+  }
+  lanes
 }
 
 /// What happened to a run on its way through the queue, for its Activity and the task's conversation.

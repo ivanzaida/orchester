@@ -43,17 +43,17 @@ pub enum ToolPolicy {
 }
 
 /// The policy of `tool` in a step with `permissions`; `None` when the step is not offered it. A check runs outside
-/// every sandbox, so a step without network gets none; [`StepTools::for_step`] lets the checks that ask no person
-/// run.
+/// every sandbox, where no host list holds, so a step without network on gets none; [`StepTools::for_step`] lets the
+/// checks that ask no person run.
 pub fn decide(tool: OrchesterTool, permissions: &AgentPermissions) -> Option<ToolPolicy> {
   match tool.access() {
     AccessClass::ReadOnly | AccessClass::Records | AccessClass::RunProcesses => Some(ToolPolicy::Runs),
     AccessClass::WritesWorktree => (permissions.repository() == RepositoryAccess::Write).then_some(ToolPolicy::Runs),
-    AccessClass::Outside if tool == OrchesterTool::RunCheck && permissions.network() == NetworkAccess::Off => None,
-    // A QA copy builds the worktree's code: a step that may not write it or reach the network gets none.
+    AccessClass::Outside if tool == OrchesterTool::RunCheck && *permissions.network() != NetworkAccess::On => None,
+    // A QA copy builds the worktree's code: a step that may not write it or reach any host gets none.
     AccessClass::Outside
       if tool == OrchesterTool::StartQaApp
-        && (permissions.network() == NetworkAccess::Off || permissions.repository() != RepositoryAccess::Write) =>
+        && (*permissions.network() != NetworkAccess::On || permissions.repository() != RepositoryAccess::Write) =>
     {
       None
     }

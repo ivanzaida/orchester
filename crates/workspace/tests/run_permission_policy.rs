@@ -289,7 +289,7 @@ fn run_policy_recorded_network_on_is_displayed_even_when_desired_network_off() {
   );
   let current = view(&fixture, &run, &[invocation]);
   assert_eq!(current.invocation_policy, InvocationPolicy::Active(actual));
-  assert_eq!(current.base.network(), NetworkAccess::Off);
+  assert_eq!(*current.base.network(), NetworkAccess::Off);
 }
 
 #[test]

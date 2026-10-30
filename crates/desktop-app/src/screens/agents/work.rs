@@ -13,7 +13,7 @@ use lurq::{
 use orchester_workspace::{
   agents::{
     data::ProfileEntry,
-    editor::{self, Outcome, Request},
+    editor::{self, Action, Outcome, Request},
   },
   background,
   messages::Message,
@@ -21,7 +21,7 @@ use orchester_workspace::{
 };
 
 use super::editor::Props;
-use crate::services::Services;
+use crate::{screens::hub::team, services::Services};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Done {
@@ -59,30 +59,39 @@ pub type Work = FutureAction<Request, Done, Message>;
 
 pub fn work(ctx: &mut Ctx) -> Work {
   let root = ctx.props::<Props>().project.open.repo_root.clone();
+  let services = Services::of(ctx);
   ctx.future_action(move |request: Request| {
-    let root = root.clone();
+    let (root, services) = (root.clone(), services.clone());
     async move {
-      background::run(move || {
+      let worked = root.clone();
+      let done = background::run(move || {
         let mut request = request;
         if let Some(existing) = request.existing.as_ref() {
-          for reason in editor::approved_in(&root, existing)? {
+          for reason in editor::approved_in(&worked, existing)? {
             if !request.allowed.contains(&reason) {
               request.allowed.push(reason);
             }
           }
         }
-        let outcome = editor::apply(&root, &request)?;
+        let outcome = editor::apply(&worked, &request)?;
         let entry = match &outcome {
-          Outcome::Saved(id) => Some(editor::entry_in(&root, *id)?),
+          Outcome::Saved(id) => Some(editor::entry_in(&worked, *id)?),
           Outcome::Confirm(_) => None,
         };
-        Ok(Done {
+        Ok::<_, Message>(Done {
           request,
           outcome,
           entry,
         })
       })
-      .await?
+      .await??;
+      // A version published in a shared project goes to its team server at once (02).
+      if matches!(done.outcome, Outcome::Saved(_))
+        && matches!(done.request.action, Action::Publish | Action::PublishStale)
+      {
+        team::send_published(&services, &root).await;
+      }
+      Ok(done)
     }
   })
 }

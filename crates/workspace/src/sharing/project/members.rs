@@ -6,9 +6,9 @@
 
 use std::path::Path;
 
-use orchester_api::{ErrorCode, Member, MemberChanges, MemberCreate, MemberRole};
+use orchester_api::{ErrorCode, Member, MemberChanges, MemberCreate, MemberRole, Members};
 use orchester_core::{id::UserId, time::Timestamp};
-use orchester_store::{ProjectDb, SharedMember, StoreError};
+use orchester_store::{ProjectDb, ServerAdmin, SharedMember, StoreError};
 
 use super::ProjectServer;
 use crate::{
@@ -86,12 +86,18 @@ impl ProjectServer {
       None => self.members().await,
     };
     let error = match read {
-      Ok(members) => {
-        let mut members: Vec<SharedMember> = members.into_iter().map(shared_member).collect();
+      Ok(listed) => {
+        let mut members: Vec<SharedMember> = listed.members.into_iter().map(shared_member).collect();
         // Owners first, then by when they were added, as the cache keeps them.
         members.sort_by_key(|member| (member.role != MemberRole::Owner, member.added_at));
+        let admins: Vec<ServerAdmin> = listed.admins.into_iter().map(server_admin).collect();
         let (kept, read_at, me) = (members.clone(), Timestamp::now(), self.me());
-        background::run(move || ProjectDb::open(&root)?.record_shared_members(&kept, read_at, me)).await??;
+        background::run(move || {
+          let mut db = ProjectDb::open(&root)?;
+          db.record_shared_members(&kept, read_at, me)?;
+          db.record_server_admins(&admins)
+        })
+        .await??;
         return Ok(ProjectMembers {
           members,
           read_at,
@@ -111,8 +117,8 @@ impl ProjectServer {
     last_read(&root, why).await?.ok_or(error)
   }
 
-  /// The project's members, as the server lists them.
-  pub async fn members(&self) -> Result<Vec<Member>, SharingError> {
+  /// The project's members and the server's admins, as the server lists them.
+  pub async fn members(&self) -> Result<Members, SharingError> {
     reachable_member(self)?;
     self
       .call(|client, token, project| async move { client.members(&token, project).await })
@@ -201,6 +207,14 @@ fn shared_member(member: Member) -> SharedMember {
     username: member.username,
     role: member.role,
     added_at: Timestamp::from_unix_millis(member.added_at),
+  }
+}
+
+fn server_admin(admin: orchester_api::ServerAdmin) -> ServerAdmin {
+  ServerAdmin {
+    user: admin.user.id,
+    display_name: admin.user.display_name,
+    username: admin.username,
   }
 }
 

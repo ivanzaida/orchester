@@ -206,7 +206,7 @@ fn permissions_codex_refuses_a_command_list_and_keeps_network_on_where_it_cannot
   let windows = offline
     .enforced_on(AgentProvider::CodexCli, Platform::Windows)
     .expect("enforceable");
-  assert_eq!(windows.permissions().network(), NetworkAccess::On);
+  assert_eq!(*windows.permissions().network(), NetworkAccess::On);
   assert_eq!(windows.network_stays_on(), Some(Unavailable::CannotBlockNetwork));
   assert_eq!(
     windows.mechanism(PermissionSetting::Repository),
@@ -266,7 +266,7 @@ fn permissions_effective_network_is_on_where_off_cannot_be_enforced() {
     let enforced = offline
       .enforced_on(AgentProvider::ClaudeCodeCli, platform)
       .expect("enforceable");
-    assert_eq!(enforced.permissions().network(), NetworkAccess::On);
+    assert_eq!(*enforced.permissions().network(), NetworkAccess::On);
   }
   let codex = permissions(
     RepositoryAccess::Write,
@@ -328,7 +328,7 @@ fn permissions_fitting_to_a_connection_resets_to_the_most_restrictive_enforceabl
   );
   assert_eq!(resets, [O::AllowedCommands, O::NetworkOff]);
   let (mac, resets) = listed.fitted_to(AgentProvider::CodexCli, Platform::MacOs);
-  assert_eq!(mac.network(), NetworkAccess::Off);
+  assert_eq!(*mac.network(), NetworkAccess::Off);
   assert_eq!(resets, [O::AllowedCommands]);
 
   let (claude, resets) = codex.fitted_to(AgentProvider::ClaudeCodeCli, Platform::MacOs);
@@ -458,7 +458,7 @@ fn codex_args(permissions: &AgentPermissions, platform: Platform) -> Vec<String>
     executable: Path::new("/bin/codex"),
     repository: Path::new("/repo"),
     access: enforced.permissions().repository(),
-    network: enforced.permissions().network(),
+    network: enforced.permissions().network().clone(),
     writable_roots: &[],
     worktree: Path::new("/w"),
     platform,
