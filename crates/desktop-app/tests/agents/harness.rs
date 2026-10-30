@@ -83,8 +83,14 @@ impl Agents {
     self.until("agents", |s| s.exists("agents-new") && !s.exists("agents-loading"));
   }
   pub fn open(&mut self, id: ResourceId) {
-    self.go();
-    self.click(&format!("agent-{id}"));
+    self
+      .window
+      .navigation()
+      .go(Route::Project(project_id(), ProjectPage::Agents));
+    // Waits for the profile's row, not *New profile*: a member of a shared project has no New (`list::head`).
+    let row = format!("agent-{id}");
+    self.until("agents", |s| s.exists(&row) && !s.exists("agents-loading"));
+    self.click(&row);
     // A member of a shared project reads the role as text, with no input: the row stands on both pages.
     self.until("editor", |s| s.exists("agent-role-row"));
   }
