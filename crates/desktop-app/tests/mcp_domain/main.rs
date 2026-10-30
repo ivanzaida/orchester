@@ -32,6 +32,7 @@ mod kontur;
 mod live;
 mod mcp_servers;
 mod merge;
+mod merge_queue_lanes;
 mod merged_outside;
 mod modules;
 mod native_connections;

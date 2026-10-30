@@ -285,8 +285,10 @@ The complete state of a run:
   only non-merging steps like Review/Verify are left), `kept_until_run_goes_on`, `waits_for_follow_up`, `delivered`
   (with the agent and step that read it), or `merged_by_runner` (with `merged_by_runner.before_step` and
   `merge_commit`: the move overlapped none of the run's changes, so Orchester merged it itself before that step).
-- **`delivery`** (merge queue; `null` without a Deliver step or if it never joined): `queued` (with `place`),
-  `syncing`, `rechecking`, `integrating` (`integrate_step`, `files`), `waiting_for_approval`, `blocked`
+- **`delivery`** (merge queue; `null` without a Deliver step or if it never joined): `lane` (the base branch it
+  delivers into: the queue has a lane per base branch, each delivering one run at a time on its own), `queued` (with
+  `place`, its place in its lane), `syncing`, `rechecking`, `integrating` (`integrate_step`, `files`),
+  `waiting_for_approval`, `blocked`
   (`blocked.why`: `uncommitted_changes` + files, `other_branch_checked_out`, `operation_in_progress`,
   `local_integration`), `failed` or `needs_you` (`reason.why`: `conflicts` + files, `check_failed`,
   `base_keeps_moving` + heads, `stopped`, `later_run`), `merged` (revision, kind `merge_commit`/`squash`,

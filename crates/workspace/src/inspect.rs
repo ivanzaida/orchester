@@ -57,6 +57,8 @@ macro_rules! markers {
     impl $inspect for crate::memory::read::GivenTo {}
     impl $inspect for crate::memory::read::ProjectMemory {}
     impl $inspect for crate::memory::read::TaskMemory {}
+    impl $inspect for crate::merge_queue::LaneLanding {}
+    impl $inspect for crate::merge_queue::QueueLaneRead {}
     impl $inspect for crate::merge_queue::QueueRead {}
     impl $inspect for crate::merge_queue::QueueRefusal {}
     impl $inspect for crate::merge_queue::QueueRow {}
