@@ -27,7 +27,7 @@ const HEAD_HEIGHT: f32 = 28.0;
 pub(super) const LINE_HEIGHT: f32 = 40.0;
 pub(super) const SIDE_LINE_HEIGHT: f32 = 30.0;
 /// The key's room (`TdXZC`).
-const KEY_WIDTH: f32 = 52.0;
+pub(super) const KEY_WIDTH: f32 = 52.0;
 
 /// A section named `id`: its head, then its lines 2 apart.
 pub(super) fn section(id: &str) -> Column {
@@ -39,6 +39,12 @@ pub(super) fn section(id: &str) -> Column {
 
 /// A section's head: `title`, its `count` when it has one, and `end` at its end.
 pub(super) fn head(id: &str, title: &str, count: Option<String>, end: Option<Element>) -> Row {
+  let count = count.map(|count| muted(&count).id(format!("{id}-count")).into());
+  counted_head(id, title, count, end)
+}
+
+/// [`head`] with its count already made: words, or a bone while it is read.
+pub(super) fn counted_head(id: &str, title: &str, count: Option<Element>, end: Option<Element>) -> Row {
   Row::new()
     .id(format!("{id}-head"))
     .width(Dimension::Pct(100.0))
@@ -52,7 +58,7 @@ pub(super) fn head(id: &str, title: &str, count: Option<String>, end: Option<Ele
         .variant(OverviewText::Section.role())
         .nowrap(),
     )
-    .with_children(count.map(|count| muted(&count).id(format!("{id}-count"))))
+    .with_children(count)
     .child(Spacer::new().flex(1.0))
     .with_children(end)
 }

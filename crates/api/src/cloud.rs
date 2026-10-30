@@ -424,6 +424,11 @@ pub enum CloudErrorCode {
   InvalidCode,
   /// A sign-in's two-factor challenge that is unknown, used, expired or out of tries: sign in again.
   ChallengeExpired,
+  /// The token is valid but may not do this: a release token without the `releases:write` scope, or a release admin
+  /// call from an account that is not Orchester staff.
+  Forbidden,
+  /// A download's `Range` starts at or past the end of the file.
+  RangeNotSatisfiable,
   Internal,
 }
 

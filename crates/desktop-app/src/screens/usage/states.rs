@@ -1,8 +1,7 @@
-//! The page's states other than its charts (`Usage · states` `cK32U`): while reading, dashes in the summary
-//! and a loader with what is being read in each chart's card, no skeletons; no runs in the period, with when
-//! the project's last run reported usage and *Show last 7 days*; filters that match nothing, naming them,
-//! with *Clear filters*; and the usage that could not be read, as reported, with *Retry*. Without charts the
-//! plan limits shrink to what each window last reported, beside.
+//! The page's states other than its charts (`Usage · states` `cK32U`): while reading, the figures' and the cards'
+//! skeletons (`super::reading`); no runs in the period, with when the project's last run reported usage and *Show
+//! last 7 days*; filters that match nothing, naming them, with *Clear filters*; and the usage that could not be read,
+//! as reported, with *Retry*. Without charts the plan limits shrink to what each window last reported, beside.
 
 use std::sync::Arc;
 
@@ -14,14 +13,14 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::usage::Period;
-use orchester_workspace::usage::{Dashboard, DashboardState};
+use orchester_workspace::usage::{Dashboard, DashboardState, UsageQuery};
 
 use super::{
   Requery, Views,
-  card::{Card, card_row, reading, state, state_room},
+  card::{Card, card_row, state, state_room},
   filters, limits,
   read::ReadFailure,
-  summary, tokens, words,
+  reading, summary, tokens, words,
 };
 use crate::ui::{
   button::{ActionButton, ButtonKind},
@@ -53,30 +52,29 @@ pub fn unread_runs(ctx: &Ctx, dashboard: &Dashboard) -> Option<Element> {
 /// The least height of the page's body when the usage could not be read (`Load failed` in `cK32U`).
 const FAILED_HEIGHT: f32 = 350.0;
 
-/// While reading (`Mock · loading` `PLqiN`): the summary's dashes, and the two charts' cards each saying
-/// what it reads.
-pub fn loading(ctx: &mut Ctx, project: Option<&str>, views: &Signal<Views>) -> Vec<Element> {
+/// While reading (`11 Usage · loading` `P74Xv`): the summary's names over bones, and the two charts' cards with
+/// their titles and switches over their bones; the chart's caption and days are `query`'s.
+pub fn loading(ctx: &mut Ctx, project: Option<&str>, views: &Signal<Views>, query: &UsageQuery) -> Vec<Element> {
   let reads = match project {
     Some(project) => ctx.t_args("usage.loading.tokens", [("project", project)]),
     None => ctx.t("usage.loading.tokensEverywhere"),
   };
+  let tokens_bones = reading::tokens(ctx, reads.clone(), (query, views.get().measure));
   let tokens = Card::new("usage-tokens", ctx.t("usage.tokens.title"))
     .trailing(tokens::measure_switch(ctx, views))
     .trailing(tokens::tokens_view_switch(ctx, views))
     .fill()
-    .body([state_room(reading("usage-tokens-reading", &reads))]);
+    .body(tokens_bones);
   let menu = IconButton::new("usage-limits-menu", Icon::Ellipsis, ctx.t("usage.limits.menu")).render(ctx);
+  let limits_bones = reading::limits(ctx);
   let limits = Card::new("usage-limits", ctx.t("usage.limits.title"))
     .note(ctx.t("usage.limits.note"))
     .trailing(limits::limits_view_switch(ctx, views))
     .trailing(menu)
     .fill()
-    .body([state_room(reading(
-      "usage-limits-reading",
-      &ctx.t("usage.loading.limits"),
-    ))]);
+    .body([state_room(limits_bones)]);
   vec![
-    summary::summary(ctx, None),
+    summary::reading(ctx, &reads),
     card_row("usage-charts", vec![tokens, limits]),
   ]
 }

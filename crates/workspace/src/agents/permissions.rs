@@ -156,20 +156,21 @@ pub fn without_site(list: &AllowedSites, removed: &AllowedSite) -> AllowedSites 
   AllowedSites::new(rest).expect("a shorter list keeps its entries unique")
 }
 
-/// Sets `permissions`' network access. The browser needs network access, so turning network off turns the browser off
-/// too, keeping its allowed sites.
+/// Sets `permissions`' network access. The browser needs network on, so network off or to listed hosts only turns the
+/// browser off too, keeping its allowed sites.
 pub fn set_network(permissions: &mut AgentPermissions, network: NetworkAccess) {
+  let browser_kept = matches!(network, NetworkAccess::On);
   permissions.set_network(network);
-  if network == NetworkAccess::Off {
+  if !browser_kept {
     let sites = permissions.browser().sites().clone();
     permissions.set_browser(BrowserPermission::new(BrowserAccess::Off, sites));
   }
 }
 
 /// Turns `permissions`' browser on or off, keeping its allowed sites, or says why it cannot be on: it needs network
-/// access.
+/// on, not only to listed hosts.
 pub fn set_browser_access(permissions: &mut AgentPermissions, access: BrowserAccess) -> Result<(), Message> {
-  if access == BrowserAccess::On && permissions.network() == NetworkAccess::Off {
+  if access == BrowserAccess::On && !matches!(permissions.network(), NetworkAccess::On) {
     return Err(Message::new("appMcp.errors.browserNeedsNetwork"));
   }
   let sites = permissions.browser().sites().clone();

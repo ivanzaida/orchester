@@ -74,15 +74,22 @@ impl Session {
     }
   }
 
+  /// Attaches, sends `catch_up` (a change the runner missed while it started) and serves the requests.
   pub(super) async fn serve(
     mut self,
     (session, agent_slots): (AttachSession, NonZeroU32),
+    catch_up: Option<Command>,
     requests: &mut mpsc::UnboundedReceiver<Control>,
     reporter: &Reporter,
   ) -> Served {
     let (reply, mut attached) = oneshot::channel();
     let attach = Command::Attach { session, agent_slots };
     if !self.send(attach, Some(reply)).await {
+      return Served::Dropped(RunnerFailure::Lost);
+    }
+    if let Some(command) = catch_up
+      && !self.send(command, None).await
+    {
       return Served::Dropped(RunnerFailure::Lost);
     }
     let mut attaching = true;

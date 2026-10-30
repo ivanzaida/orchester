@@ -376,7 +376,7 @@ pub fn merge_in_as(
     return Err(IntegrationProblem::Store(Message::new("appMcp.errors.notLatestRun")));
   }
   let git = programs.git_work();
-  let landing = Landing::of(&db.base_branch_setting()?);
+  let landing = Landing::of(run.base_source());
   let outcome = merge_run_as(
     &git,
     (Path::new(GIT), repo_root),

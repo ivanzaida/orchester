@@ -45,7 +45,10 @@ use super::{TabProps, page};
 use crate::{
   screens::settings::orchester::{Said, follow, follow_shared},
   services::Services,
-  ui::state::{load_error, loading},
+  ui::{
+    skeleton::{self, Skeleton},
+    state::load_error,
+  },
 };
 
 /// What the tab shows: the link, the servers this computer is signed in to, the checkout's `origin`, what
@@ -165,7 +168,12 @@ impl Component for Sharing {
           move || revision.update(|count| *count += 1),
         )
       }
-      (None, None) => loading("project-settings-sharing-loading", &ctx.t("sharing.reading")).into(),
+      (None, None) => {
+        // No loading frame draws the Sharing tab: its rows' bones stand in one outline until where the list lives
+        // is read.
+        let bones = skeleton::list(ctx, "project-settings-sharing-rows", &[(160.0, 300.0), (120.0, 260.0)]);
+        Skeleton::new("project-settings-sharing-loading", ctx.t("sharing.reading")).show(ctx, bones)
+      }
     };
     page::scroll_with(Column::new().width(Dimension::Pct(100.0)).child(content), &self.scroll)
   }

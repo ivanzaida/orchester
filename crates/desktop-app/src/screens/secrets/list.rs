@@ -31,6 +31,7 @@ use crate::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
     pressable::Focus,
+    skeleton::{self, Skeleton, fading},
     tabs::{Segment, SegmentFace, segmented},
   },
 };
@@ -66,6 +67,66 @@ pub(super) fn list(ctx: &mut Ctx, listed: &ProjectSecrets, view: &View) -> Eleme
         .variant(ProjectSettingsText::Hint.role())
         .width(Dimension::Pct(100.0)),
     )
+    .into()
+}
+
+/// Each secret's bones while they are read: its name, what uses it and its masked value with when it was set.
+const READING: [(f32, f32, f32); 4] = [
+  (112.0, 150.0, 130.0),
+  (56.0, 156.0, 138.0),
+  (82.0, 64.0, 96.0),
+  (96.0, 222.0, 0.0),
+];
+
+/// The list while the secrets are read (`12 · Project settings · Secrets · loading` `IHhqs`): the environments, Import
+/// from project and Add secret work, the key glyph and the note stay; the group's name and count and each secret's
+/// name, use line and set date are bones, the lower rows fading. *Reading the secrets…* (`secrets.reading`) names it.
+pub(super) fn reading(ctx: &mut Ctx, view: &View) -> Element {
+  let chosen = view.environment.get().0;
+  let rows: Vec<Element> = fading(
+    READING
+      .iter()
+      .enumerate()
+      .map(|(at, (name, used, set))| {
+        let row = SettingRow::new(format!("secrets-reading-{at}"), "")
+          .item()
+          .mono_label()
+          .label_reading(*name)
+          .hint_reading(*used)
+          .lead(icon(Icon::KeyRound, IconSize::Md, PaletteColor::TextMuted));
+        let row = if *set > 0.0 {
+          row.control(skeleton::line(ctx, ExtraTypography::Note.role(), *set))
+        } else {
+          row
+        };
+        Column::new().width(Dimension::Pct(100.0)).child(row.render(ctx))
+      })
+      .collect(),
+  )
+  .into_iter()
+  .map(Element::from)
+  .collect();
+  let title = Row::new()
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .child(skeleton::line(ctx, ProjectSettingsText::GroupTitle.role(), 70.0))
+    .child(skeleton::line(ctx, ExtraTypography::Note.role(), 50.0));
+  let group = Group::new("secrets-reading-group", "").beside(title).rows(rows);
+  let bones = Column::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(ExtraSpacing::Roomy.role())
+    .child(group)
+    .child(
+      Text::new(&ctx.t("secrets.footer"))
+        .variant(ProjectSettingsText::Hint.role())
+        .width(Dimension::Pct(100.0)),
+    );
+  Column::new()
+    .id("secrets-list")
+    .width(Dimension::Pct(100.0))
+    .spacing(ExtraSpacing::Roomy.role())
+    .child(toolbar(ctx, view, chosen))
+    .child(Skeleton::new("secrets-loading", ctx.t("secrets.reading")).show(ctx, bones))
     .into()
 }
 

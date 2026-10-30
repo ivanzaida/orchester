@@ -8,11 +8,18 @@
 //!
 //! `modules-short`: the Tasks scenario's project, nothing merged yet, with *Checkout* and two of its tasks (not enough
 //! history for a forecast). `modules-none`: the same project without a module (the list's empty state).
+//!
+//! `modules-base-branch` (`Base branch · redesign` `ri5ru`, 02 `eyrnI`, 04b `NDTCw`): `modules` with the branches
+//! `release/2.0` and `staging` beside `main`, and `origin/hotfix-1.9` only on the remote; *Webhooks v2* runs from
+//! `release/2.0`, and yesterday the project's base branch `main` moved to *Billing exports* and *API rate limits*,
+//! which had none, as Project settings › General says once.
 
 use chrono::{Days, NaiveDate};
 use orchester_core::{
+  integration::base::BaseChoice,
   module::{ModuleDetails, ModuleState},
   name::Name,
+  run::BranchName,
   store::TaskStore,
   task::{
     Task,
@@ -23,7 +30,7 @@ use orchester_core::{
 };
 
 use super::{tasks, usage};
-use crate::kontur::{Kontur, SeedError};
+use crate::kontur::{Kontur, SeedError, git};
 
 const DAY: i64 = 24 * 60;
 
@@ -112,9 +119,53 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
   Ok(())
 }
 
+/// `modules-base-branch`: `modules` with branches to choose from, one module on its own base branch and the
+/// project's base branch moved to two others.
+pub fn base_branch(kontur: &mut Kontur) -> Result<(), SeedError> {
+  seed(kontur)?;
+  git::branches(&kontur.repo, &["release/2.0", "staging"], &["hotfix-1.9"])?;
+  let branch = |name: &str| BranchName::new(name).map_err(|error| SeedError::Invalid(error.to_string()));
+  let modules = kontur.db.modules()?;
+  let id = |name: &str| {
+    modules
+      .iter()
+      .find(|module| module.name().as_str() == name)
+      .map(|module| module.id())
+      .ok_or_else(|| SeedError::Invalid(format!("no module {name}")))
+  };
+  let checked_out = BaseChoice::CheckedOut;
+  let release = BaseChoice::Branch(branch("release/2.0")?);
+  kontur.db.set_module_base(id(WEBHOOKS.name)?, &checked_out, release)?;
+  let main = branch(git::MAIN)?;
+  let took = [id(BILLING.name)?, id(RATE_LIMITS.name)?];
+  for module in took {
+    kontur
+      .db
+      .set_module_base(module, &checked_out, BaseChoice::Branch(main.clone()))?;
+  }
+  // The store records a move only as it migrates a project that had a base branch; the seed writes what it leaves.
+  let database = rusqlite::Connection::open(kontur.database())?;
+  database.execute(
+    "INSERT INTO base_branch_move (id, branch, moved_at) VALUES (1, ?1, ?2)",
+    rusqlite::params![main.as_str(), kontur.ago(DAY).unix_millis()],
+  )?;
+  for module in took {
+    database.execute(
+      "INSERT INTO base_branch_move_modules (module_id) VALUES (?1)",
+      [module.to_string()],
+    )?;
+  }
+  Ok(())
+}
+
 /// `modules-short`: a module on a project with nothing merged yet.
 pub fn short(kontur: &mut Kontur) -> Result<(), SeedError> {
   tasks::seed(kontur)?;
+  checkout(kontur)
+}
+
+/// *Checkout*, open from 3 days ago to 4 days ahead, with two of the project's Todo tasks moved in on its first day.
+pub fn checkout(kontur: &mut Kontur) -> Result<(), SeedError> {
   let details = details(
     kontur,
     ("Checkout", "Card form and the order summary"),

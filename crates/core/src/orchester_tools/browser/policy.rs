@@ -22,10 +22,11 @@ use crate::{
   },
 };
 
-/// Whether a step with `permissions` is offered the browser tools: its profile's *Browser* is on and it has network
-/// access, whatever its repository access.
+/// Whether a step with `permissions` is offered the browser tools: its profile's *Browser* is on and its network is
+/// on, whatever its repository access. Network to listed hosts only gives no browser: the browser's own allowed
+/// sites are a different list, and a page loads from hosts neither names.
 pub fn offered(permissions: &AgentPermissions) -> bool {
-  permissions.browser().access() == BrowserAccess::On && permissions.network() == NetworkAccess::On
+  permissions.browser().access() == BrowserAccess::On && matches!(permissions.network(), NetworkAccess::On)
 }
 
 /// The policy of a call of `tool` in a step with `permissions`; `None` when the step is not offered the browser.

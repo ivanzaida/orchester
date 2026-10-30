@@ -149,6 +149,37 @@
       "denyTells": "Deny tells {{agent}}: “{{message}}”",
       "deny": "Deny",
       "approveOnce": "Approve once",
+      "approve": "Approve",
+      "moreAnswers": "More answers",
+      "asks": {
+        "outside": "{{agent}} asks to edit a file outside the worktree",
+        "outsideTool": "{{agent}} asks to reach outside the worktree",
+        "notAllowed": "{{agent}} asks to run a command not on its allowed list",
+        "notAllowedTool": "{{agent}} asks to call a tool not on its allowed list",
+        "push": "{{agent}} asks to push to a remote",
+        "refs": "{{agent}} asks to change another branch",
+        "meta": "{{step}} · {{time}}"
+      },
+      "cameToYou": {
+        "outside": "Came to you: the path is outside the worktree, its Sources and {{agent}}'s temp folders. Autopilot never approves these.",
+        "outsidePath": "Came to you: {{path}} is outside the worktree, its Sources and {{agent}}'s temp folders. Autopilot never approves these.",
+        "notAllowed": "Not on {{agent}}'s allowed list.",
+        "reviewerUnsure": "The reviewer wasn't sure: “{{reason}}”",
+        "reviewerUnsureSilent": "The reviewer wasn't sure.",
+        "reviewerDenied": "The reviewer denied it: “{{reason}}” Not on {{agent}}'s allowed list.",
+        "reviewerDeniedSilent": "The reviewer denied it. Not on {{agent}}'s allowed list.",
+        "push": "Pushes to a remote always come to you, in Autopilot too.",
+        "refs": "Only the run's branch {{branch}} is the run's own; other refs come to you."
+      },
+      "quiet": {
+        "autopilot": "Approved by autopilot",
+        "profile": "Allowed by the profile",
+        "reviewer": "Approved by the reviewer",
+        "at": "· {{time}}",
+        "listedAt": "· on the allowed list · {{time}}",
+        "reasonAt": "· “{{reason}}” · {{time}}",
+        "more": "· {{count}} more"
+      },
       "denyWithMessage": "Deny with a message",
       "denyWithMessageNative": "Deny with a message is not available for a native agent's command yet: its denial carries no words. Deny, then write to {{agent}} in the composer.",
       "message": {

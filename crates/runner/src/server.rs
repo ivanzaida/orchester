@@ -25,8 +25,8 @@ use orchester_core::{
   tokens::TokenBudget,
 };
 use orchester_ipc::{
-  AttachSession, ChatTools, Command, Endpoint, Event, IpcError, Rejection, Reply, Request, RequestId, ShutdownMode,
-  WorkReturn,
+  AttachSession, ChatTools, Command, Endpoint, ErrorReports, Event, IpcError, Rejection, Reply, Request, RequestId,
+  ShutdownMode, WorkReturn,
   frame::{FrameReader, FrameWriter},
   handshake,
 };
@@ -34,6 +34,7 @@ use orchester_vault::KeychainVault;
 use tokio::sync::mpsc;
 
 use crate::{
+  error_reports::{self, Switch},
   execution::{Notifier, QaSlots, Scheduler},
   notify::coalesce,
   shutdown_signal::ShutdownSignal,
@@ -47,8 +48,9 @@ type Incoming = Result<Option<Request>, IpcError>;
 
 /// Accepts the desktop's connection and serves it until the desktop disconnects, asks the
 /// runner to stop, or `shutdown` is signalled. Runs still executing then are interrupted: their
-/// agents are ended and the runs keep their last checkpoint. The project's browser stops last.
-pub async fn serve(project_root: &Path, mut shutdown: ShutdownSignal) -> Result<(), IpcError> {
+/// agents are ended and the runs keep their last checkpoint. The project's browser stops last. The desktop turns the
+/// runner's error reports on and off with `reports`, which a build that never reports has none of.
+pub async fn serve(project_root: &Path, mut shutdown: ShutdownSignal, reports: Option<Switch>) -> Result<(), IpcError> {
   // Made before the desktop can connect: it notes the groups queued before this runner started.
   let (notifications, outgoing) = mpsc::unbounded_channel();
   // Replies of requests answered later travel with the notifications.
@@ -99,6 +101,7 @@ pub async fn serve(project_root: &Path, mut shutdown: ShutdownSignal) -> Result<
     finishing: None,
     in_flight: InFlight::default(),
     shutdown,
+    reports,
   }
   .run()
   .await;
@@ -119,6 +122,7 @@ struct Session<W> {
   finishing: Option<tokio::task::JoinHandle<()>>,
   in_flight: InFlight,
   shutdown: ShutdownSignal,
+  reports: Option<Switch>,
 }
 
 /// Requests about a run still being carried out after the request was read ([`Later`]): work the
@@ -198,6 +202,11 @@ impl<W: tokio::io::AsyncWrite + Unpin> Session<W> {
       Answer::Reply(event) => self.writer.write_event(&event).await?,
       Answer::Later => {}
       Answer::StopIfIdle(id) => return self.stop_if_idle(id).await,
+      Answer::ErrorReports(id, reports) => {
+        error_reports::turned(self.reports.as_ref(), reports);
+        let reply = Reply::ErrorReportsSet;
+        self.writer.write(&Event::Reply { id, reply }).await?;
+      }
       Answer::Shutdown(ShutdownMode::FinishAtCheckpoints) => {
         tracing::info!("shutdown requested: finishing at checkpoints");
         if self.finishing.is_none() {
@@ -267,6 +276,8 @@ enum Answer {
   Shutdown(ShutdownMode),
   /// [`Command::StopIfIdle`], answered by the session, which knows the requests in flight.
   StopIfIdle(RequestId),
+  /// [`Command::SetErrorReports`], carried out by the session, which holds the reports' switch.
+  ErrorReports(RequestId, Option<ErrorReports>),
 }
 
 /// The reply to a request that starts a run.
@@ -358,6 +369,7 @@ async fn answer(
         }
       });
     }
+    Command::SetErrorReports { ref reports } => return Answer::ErrorReports(id, reports.clone()),
   };
   Answer::Reply(Event::Reply { id, reply })
 }

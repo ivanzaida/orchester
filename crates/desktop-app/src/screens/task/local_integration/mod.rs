@@ -44,7 +44,7 @@ use crate::{
   services::Services,
   ui::{
     notice::{Notice, NoticeTone},
-    state::loading,
+    skeleton::{self, Skeleton},
   },
 };
 
@@ -268,8 +268,10 @@ impl Component for LocalPage {
 }
 
 impl LocalPage {
-  fn pending(&self, ctx: &Ctx) -> Element {
-    let loading = loading("local-loading", &ctx.t("local_integration.loading"));
+  fn pending(&self, ctx: &mut Ctx) -> Element {
+    // No loading frame draws Local integration: the checkout's facts are lines of bones until they are read.
+    let bones = skeleton::lines(ctx, &[360.0, 520.0, 440.0, 300.0]);
+    let loading = Skeleton::new("local-loading", ctx.t("local_integration.loading")).show(ctx, bones);
     let state = self.work.state().get();
     if !state.is_pending() && state.error.is_none() && matches!(state.data, Some(Outcome::Aborted)) {
       // Report the verified worker outcome while fresh checkout evidence loads; offer no decisions yet.
@@ -279,7 +281,7 @@ impl LocalPage {
         .child(loading)
         .into()
     } else {
-      loading.into()
+      loading
     }
   }
 

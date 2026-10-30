@@ -172,8 +172,8 @@ pub fn merge_run_at(
 }
 
 /// [`merge_run_at`], landed as `delivering` says when the merge queue asks (`None`: fast-forwarding when it can, as
-/// the task page merges), where `landing` lets it: beside a checkout on another branch for a project whose base
-/// branch is set.
+/// the task page merges), where `landing` lets it: beside a checkout on another branch for a run whose base branch
+/// was set.
 pub fn merge_run_as(
   runner: &impl CommandRunner,
   (git, repo): (&Path, &Path),

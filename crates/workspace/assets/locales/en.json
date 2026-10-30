@@ -6,7 +6,8 @@
       "notFound": "This module no longer exists.",
       "changedMeanwhile": "This module was changed since you opened it. Close the editor and open it again to see the change.",
       "invalidDate": "Write the date as YYYY-MM-DD."
-    }
+    },
+    "baseBranchGone": "{{branch}} no longer exists in the repository. Choose another base branch; nothing was saved."
   },
   "localIntegration": {
     "sensitiveOutcome": "Integration details are unavailable under the current sensitive-data policy. Inspect the actual recorded outcome before continuing.",
@@ -18,10 +19,7 @@
   "projectSettings": {
     "personOnly": "Only a person can confirm this environment change.",
     "changedOutside": "Changed outside this screen. Reload the stored variables and review your change again.",
-    "autopilotPersonOnly": "Only you can allow Autopilot: it lets agents set to Autopilot approve their own requests. Input from an MCP client is not taken; turning it off is.",
-    "baseBranch": {
-      "gone": "{{branch}} no longer exists in the repository. Choose another base branch; nothing was saved."
-    }
+    "autopilotPersonOnly": "Only you can allow Autopilot: it lets agents set to Autopilot approve their own requests. Input from an MCP client is not taken; turning it off is."
   },
   "projects": {
     "removeRefused": "Agents are at work in {{name}}. Remove it once its runs are paused or finished.",
@@ -748,7 +746,8 @@
       "nativeNotAvailable": "Step “{{step}}” runs on a native agent connection. Native agents are not available in this version yet; choose a Codex or Claude Code connection for its agent profile.",
       "notAGitRepository": "The project folder is not a git repository.",
       "noCommits": "The repository has no commit to start the run from.",
-      "baseBranchMissing": "The project’s base branch {{branch}} no longer exists, so no run starts. Choose another base branch in Project settings › General.",
+      "baseBranchMissing": "The base branch {{branch}} no longer exists, so no run starts. Choose another base branch for the task or its module.",
+      "noBranchCheckedOut": "Can't start: no branch checked out. The checkout is on no branch (detached at {{head}}); set a base branch for the task or its module, or check out a branch.",
       "commandListNotOffered": "Step “{{step}}” lists the commands it may run, but its agent profile now asks before commands. This step's command list doesn't fit its profile any more; a person updates the step.",
       "account": {
         "none": "Step “{{step}}” runs on a connection that has no account. Choose one for the connection in Connections.",
@@ -1511,6 +1510,7 @@
       "retired": "{{tool}} was retired with auto mode and changes nothing. Use {{replacement}} instead.",
       "personsPoints": "A person set this task’s story points; automation does not change them.",
       "pointsOffScale": "Story points are 1, 2, 3, 5, 8, 13 or 21.",
+      "branchNotFound": "The repository has no branch {{branch}}, locally or on a remote. Name one of its branches, inherit or checked_out; nothing was saved.",
       "runNotEnded": "The run still works; its worktree is removed once it ended.",
       "worktreeRemoved": "The run’s worktree was removed already.",
       "integrationRunning": "A merge or worktree removal of this task is running; try again once it ended.",
@@ -1971,7 +1971,9 @@
       "twoFactorSession": "Entering a code needs this computer signed in to Orchester Cloud with two-factor authentication; nothing was sent.",
       "unprovenServer": "The server didn't prove it is the server it says it is; nothing was sent.",
       "notAdmin": "Only the project's owner or the server's admin changes the team's configuration; nothing was changed.",
-      "versionConflict": "Someone published v{{version}} from the same version meanwhile. Open your draft on v{{version}}, or publish yours as the next version."
+      "versionInUse": "Runs or tasks here use the version you published, so it stays; nothing was changed. Publish yours as the next version instead.",
+      "versionConflict": "Someone published v{{version}} from the same version meanwhile. Open your draft on v{{version}}, or publish yours as the next version.",
+      "personOnly": "Only a person can do this in the window: it changes what agents may do on this computer. Nothing was changed."
     },
     "members": {
       "noSuchUser": "The server has no user with this username. Usernames are exact; an admin of the server creates accounts.",

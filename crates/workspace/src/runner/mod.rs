@@ -34,7 +34,7 @@ use std::{
 };
 
 use orchester_core::id::RunId;
-use orchester_ipc::{AttachSession, ErrorReports, RefusedRun, Rejection, SessionEnd, WorkState};
+use orchester_ipc::{AttachSession, Command, ErrorReports, RefusedRun, Rejection, Reply, SessionEnd, WorkState};
 use parking_lot::Mutex;
 use tokio::{runtime::Handle, sync::watch, task::JoinSet};
 
@@ -92,8 +92,11 @@ pub struct Runners {
 
 struct Inner {
   runner_exe: PathBuf,
-  /// Whether the runners started next send error reports, and in which environment and release.
-  reports: Mutex<Option<ErrorReports>>,
+  /// Whether the runners send error reports, and in which environment and release; each runner reads it when it
+  /// starts.
+  reports: Arc<Mutex<Option<ErrorReports>>>,
+  /// Held while the setting is stored and handed to the running runners ([`Runners::set_error_reports`]).
+  report_updates: Mutex<()>,
   runtime: Handle,
   /// How the previous session ended: each project's first runner attaches with it.
   previous_end: SessionEnd,
@@ -139,12 +142,13 @@ impl Runners {
   }
 
   /// The runners of the program `runner_exe`. They send no error reports until
-  /// [`Self::send_error_reports`] says so.
+  /// [`Self::set_error_reports`] says so.
   pub fn new(runner_exe: PathBuf, runtime: Handle, activity: Activity, previous_end: SessionEnd) -> Self {
     Self {
       inner: Arc::new(Inner {
         runner_exe,
-        reports: Mutex::new(None),
+        reports: Arc::new(Mutex::new(None)),
+        report_updates: Mutex::new(()),
         runtime,
         previous_end,
         shared: Arc::new(Shared {
@@ -297,17 +301,48 @@ impl Runners {
     Connection::spawn(
       &self.inner.runtime,
       self.inner.runner_exe.clone(),
-      self.inner.reports.lock().clone(),
+      self.inner.reports.clone(),
       root.to_path_buf(),
       Reporter::new(generation, name.clone(), status.clone(), self.inner.shared.clone()),
       session,
     )
   }
 
-  /// The runners started from now on send their panics and ERROR lines as error reports with
-  /// `reports` (`orchester_ipc::error_reports`); a runner already running keeps what it was started with.
-  pub fn send_error_reports(&self, reports: ErrorReports) {
-    *self.inner.reports.lock() = Some(reports);
+  /// The runners send their panics and ERROR lines as error reports with `reports`, or none with `None`
+  /// (`orchester_ipc::error_reports`): every runner running now is told at once
+  /// (`Command::SetErrorReports`), without waiting for its answer, and every runner started from now on starts so.
+  /// A runner that is starting is told once it is connected; one that cannot be reached misses nothing, since it
+  /// starts with the setting the next time.
+  pub fn set_error_reports(&self, reports: Option<&ErrorReports>) {
+    let reports = reports.cloned();
+    // Held while storing and telling the runners, so they end with the setting stored last.
+    let _in_order = self.inner.report_updates.lock();
+    *self.inner.reports.lock() = reports.clone();
+    let answers: Vec<_> = self
+      .inner
+      .projects
+      .lock()
+      .iter()
+      .filter_map(|(root, entry)| {
+        let connection = entry.connection.as_ref()?;
+        let command = Command::SetErrorReports {
+          reports: reports.clone(),
+        };
+        Some((root.clone(), connection.request(command)))
+      })
+      .collect();
+    for (root, answer) in answers {
+      self.inner.runtime.spawn(async move {
+        // The task ended without answering, e.g. when the runner stopped meanwhile.
+        match answer.await.unwrap_or(Err(RequestError::Lost)) {
+          Ok(Reply::ErrorReportsSet) => {}
+          Ok(other) => tracing::error!(?other, "unexpected reply to SetErrorReports"),
+          Err(error) => {
+            tracing::info!(project = %root.display(), %error, "no runner took the error reports setting now");
+          }
+        }
+      });
+    }
   }
 
   fn displayed(&self) -> Option<PathBuf> {

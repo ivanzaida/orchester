@@ -307,7 +307,7 @@ fn permissions(given: &Permissions, root: &Path, kept: BrowserPermission) -> Res
     Network::On => NetworkAccess::On,
   };
   let browser = match &given.browser {
-    Some(browser) => browser_permission(browser, network).map_err(invalid)?,
+    Some(browser) => browser_permission(browser, &network).map_err(invalid)?,
     None => kept,
   };
   let mut permissions =
@@ -320,10 +320,12 @@ fn permissions(given: &Permissions, root: &Path, kept: BrowserPermission) -> Res
 }
 
 /// The browser permission given, each site checked as the editor adds it; on needs network on.
-fn browser_permission(given: &Browser, network: NetworkAccess) -> Result<BrowserPermission, Message> {
+fn browser_permission(given: &Browser, network: &NetworkAccess) -> Result<BrowserPermission, Message> {
   let access = match given.access {
     Network::Off => BrowserAccess::Off,
-    Network::On if network == NetworkAccess::Off => return Err(Message::new("appMcp.errors.browserNeedsNetwork")),
+    Network::On if !matches!(network, NetworkAccess::On) => {
+      return Err(Message::new("appMcp.errors.browserNeedsNetwork"));
+    }
     Network::On => BrowserAccess::On,
   };
   let mut sites = AllowedSites::none();

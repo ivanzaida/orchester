@@ -6,6 +6,7 @@ mod agents_browser;
 mod agents_cases;
 mod agents_library;
 mod api_providers;
+mod approval_answers;
 mod approval_modes;
 mod auto_mode;
 mod browser;
@@ -22,6 +23,7 @@ mod import;
 mod interrupted;
 mod lifecycle;
 mod live;
+mod loading_states;
 mod long_chats;
 mod memory;
 mod modules;
@@ -32,6 +34,7 @@ mod pipelines;
 mod project_settings;
 mod pull_requests;
 pub mod settings;
+mod shared_config;
 mod sources;
 mod task_states;
 mod tasks;
@@ -85,7 +88,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 67] = [
+pub const ALL: [Scenario; 72] = [
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-library", agents_library::seed),
   Scenario::of("agents-browser", agents_browser::seed),
@@ -114,6 +117,7 @@ pub const ALL: [Scenario; 67] = [
   Scenario::of("changes", changes::seed),
   Scenario::of("cards", cards::seed),
   Scenario::of("cards-auto-mode", auto_mode::seed),
+  Scenario::of("cards-approval-modes", approval_answers::seed),
   Scenario::of("approval-modes", approval_modes::seed),
   Scenario::of("approval-modes-project", approval_modes::project),
   Scenario::of("decisions", decisions::seed),
@@ -133,6 +137,8 @@ pub const ALL: [Scenario; 67] = [
   Scenario::of("native", native::seed),
   Scenario::of("project-settings", project_settings::seed),
   Scenario::of("project-settings-shared", project_settings::shared),
+  Scenario::of("shared-config", shared_config::admin),
+  Scenario::of("shared-config-member", shared_config::member),
   Scenario::of("pipelines", pipelines::seed),
   Scenario::of("pipelines-empty", pipelines::empty),
   Scenario::of("pipelines-publish", pipelines::publish),
@@ -153,6 +159,8 @@ pub const ALL: [Scenario; 67] = [
   Scenario::of("modules", modules::seed),
   Scenario::of("modules-short", modules::short),
   Scenario::of("modules-none", modules::none),
+  Scenario::of("modules-base-branch", modules::base_branch),
+  Scenario::of("loading-states", loading_states::seed),
 ];
 
 /// The scenario called `name`.

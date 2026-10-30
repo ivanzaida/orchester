@@ -1,4 +1,4 @@
-//! The *Browser* window's messages (protocol 33): every request, reply and event round-trips, a screencast frame
+//! The *Browser* window's messages (protocol 34): every request, reply and event round-trips, a screencast frame
 //! travels as a binary frame with its JPEG within the frame limit, malformed binary frames are refused, and a frame
 //! crosses the platform's real endpoint (the Unix socket on macOS, the named pipe on Windows).
 

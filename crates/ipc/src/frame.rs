@@ -1,5 +1,5 @@
 //! Message framing: a 4-byte big-endian header followed by a body. The header's lower 31 bits are the body's length;
-//! its top bit marks a binary frame (protocol 33, `docs/design/browser.md`, decision 13).
+//! its top bit marks a binary frame (protocol 34, `docs/design/browser.md`, decision 13).
 //!
 //! - A JSON frame's body is one JSON message.
 //! - A binary frame's body is a 4-byte big-endian length of a JSON head, the head, then raw bytes: a screencast frame's

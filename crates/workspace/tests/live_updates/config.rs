@@ -1,7 +1,8 @@
 //! The team's configuration through the stream (`docs/architecture/server.md`, "Shared configuration"): resources the
 //! snapshot names and versions published later reach the workspace's cache from the fake server; a connection
 //! reference binds by its role, an MCP server or secret reference stays unbound and preflight refuses a run that needs
-//! it, and a person's binding writes the local bodies again while the server's stay as published.
+//! it, and a person's binding writes the local bodies again while the server's stay as published. A teammate's version
+//! that widens what agents may do here waits for the person ([`super::widening`]).
 
 use std::{
   collections::{BTreeMap, BTreeSet},
@@ -16,19 +17,22 @@ use orchester_core::{
   },
   id::{ConnectionId, ResourceId, SecretId},
   name::Name,
-  permission::StepPermissions,
+  permission::{AgentPermissions, StepPermissions},
   resource::{
     AccessPolicy, AccessWindow, AgentProfile, AllowedSteps, ApprovalMode, CommandProgram, DatabaseQuery,
     DeniedBehavior, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, ResourceBody, Step, StepKey,
     StepKind, Tool, ToolAction, Version, VersionNumber,
   },
-  run::PreflightProblem,
+  run::{Answerer, PreflightProblem},
   store::{ConnectionStore, McpServerStore, ResourceStore},
   task::{TaskDetails, TaskLimits},
   time::Timestamp,
 };
 use orchester_store::{Bound, BoundBy, BoundReference, ProjectDb, ReferenceBinding};
-use orchester_workspace::{sharing::sync::bind, tasks::run::check};
+use orchester_workspace::{
+  sharing::sync::{bind, use_here},
+  tasks::run::check,
+};
 use serde_json::Value;
 
 use super::{ALICE, LIVE, Member, TeamServer, Workspace, seen_within};
@@ -37,7 +41,7 @@ fn name(value: &str) -> Name {
   Name::new(value).expect("valid name")
 }
 
-fn key(value: &str) -> StepKey {
+pub(super) fn key(value: &str) -> StepKey {
   StepKey::new(value).expect("valid key")
 }
 
@@ -46,7 +50,7 @@ fn at() -> Timestamp {
 }
 
 /// A signed-in Codex connection named `called`, kept in `db`.
-fn codex(db: &mut ProjectDb, root: &Path, called: &str) -> ConnectionId {
+pub(super) fn codex(db: &mut ProjectDb, root: &Path, called: &str) -> ConnectionId {
   let mut connection = AgentConnection::new(
     ConnectionId::generate(),
     name(called),
@@ -71,7 +75,7 @@ fn codex(db: &mut ProjectDb, root: &Path, called: &str) -> ConnectionId {
 }
 
 /// An MCP server named `docs`, kept in `db`.
-fn docs(db: &mut ProjectDb) -> ConnectionId {
+pub(super) fn docs(db: &mut ProjectDb) -> ConnectionId {
   let server = McpServer::new(
     ConnectionId::generate(),
     McpServerName::new("docs").expect("valid name"),
@@ -88,9 +92,14 @@ fn docs(db: &mut ProjectDb) -> ConnectionId {
   server.id()
 }
 
-/// The publisher's Builder profile, on their connection `connection`, with their MCP servers `servers`.
-fn builder(connection: ConnectionId, servers: &[ConnectionId]) -> Value {
-  let profile = AgentProfile::new(
+/// The publisher's Builder profile, on their connection `connection`, with their MCP servers `servers` and
+/// `permissions`.
+pub(super) fn profile(
+  connection: ConnectionId,
+  servers: &[ConnectionId],
+  permissions: AgentPermissions,
+) -> AgentProfile {
+  AgentProfile::new(
     name("Builder"),
     String::new(),
     PromptText::new("Build.").expect("prompt"),
@@ -98,11 +107,28 @@ fn builder(connection: ConnectionId, servers: &[ConnectionId]) -> Value {
     ModelId::new("gpt-5.5").expect("valid model"),
     ProviderSettings::default(),
   )
-  .with_mcp_servers(McpServerSelection::new(servers.to_vec()).expect("servers"));
-  serde_json::to_value(profile).expect("a profile serializes")
+  .with_mcp_servers(McpServerSelection::new(servers.to_vec()).expect("servers"))
+  .with_permissions(permissions)
 }
 
-fn step(step: &str, kind: StepKind) -> Step {
+/// [`profile`] with a profile's first permissions — read-only, any command in the worktree, network off — as the
+/// server keeps it. As a teammate's first version it waits for the person: it runs commands.
+pub(super) fn builder(connection: ConnectionId, servers: &[ConnectionId]) -> Value {
+  serde_json::to_value(profile(connection, servers, AgentPermissions::before_permissions()))
+    .expect("a profile serializes")
+}
+
+/// The person's *Use v1 here* of `resource`, once the stream cached it.
+pub(super) async fn use_first(workspace: &Workspace, resource: ResourceId) {
+  seen_within(LIVE, "v1 waiting for the person", || {
+    workspace.db().waiting_version(resource).ok().flatten() == Some(VersionNumber::FIRST)
+  })
+  .await;
+  let used = use_here(&workspace.root, resource, VersionNumber::FIRST, Answerer::Person);
+  assert!(used.expect("used"), "v1 waited for the person");
+}
+
+pub(super) fn step(step: &str, kind: StepKind) -> Step {
   Step {
     key: key(step),
     name: name(step),
@@ -115,7 +141,7 @@ fn step(step: &str, kind: StepKind) -> Step {
   }
 }
 
-fn agent(profile: ResourceId) -> StepKind {
+pub(super) fn agent(profile: ResourceId) -> StepKind {
   StepKind::Agent {
     profile: Some(profile),
     repository: RepositoryAccess::Write,
@@ -124,7 +150,7 @@ fn agent(profile: ResourceId) -> StepKind {
   }
 }
 
-fn pipeline(steps: Vec<Step>) -> Value {
+pub(super) fn pipeline(steps: Vec<Step>) -> Value {
   serde_json::to_value(Pipeline::new(steps).expect("pipeline")).expect("a pipeline serializes")
 }
 
@@ -143,7 +169,7 @@ fn lookup(credentials: SecretId, delivery: ResourceId) -> Value {
   serde_json::to_value(tool).expect("a tool serializes")
 }
 
-fn reference(target: ReferenceTarget, called: &str, role: Option<&str>) -> Reference {
+pub(super) fn reference(target: ReferenceTarget, called: &str, role: Option<&str>) -> Reference {
   Reference {
     target,
     name: called.to_owned(),
@@ -151,13 +177,13 @@ fn reference(target: ReferenceTarget, called: &str, role: Option<&str>) -> Refer
   }
 }
 
-fn latest<B: ResourceBody>(workspace: &Workspace, resource: ResourceId) -> Option<Version<B>> {
+pub(super) fn latest<B: ResourceBody>(workspace: &Workspace, resource: ResourceId) -> Option<Version<B>> {
   // The resource is not in the cache until its first version is read.
   workspace.db().latest_version::<B>(resource).ok().flatten()
 }
 
 /// What preflight says of a run of `delivery`'s v1 here.
-fn problems(workspace: &Workspace, delivery: ResourceId) -> Vec<PreflightProblem> {
+pub(super) fn problems(workspace: &Workspace, delivery: ResourceId) -> Vec<PreflightProblem> {
   let details = TaskDetails {
     title: name("Search"),
     brief: String::new(),
@@ -205,6 +231,7 @@ async fn live_updates_a_profile_published_on_the_server_runs_here_with_its_conne
     latest::<Pipeline>(&workspace, delivery).is_some()
   })
   .await;
+  use_first(&workspace, profile).await;
 
   let kept = workspace
     .db()
@@ -257,6 +284,7 @@ struct Unbound {
   theirs: ConnectionId,
   their_docs: ConnectionId,
   profile: ResourceId,
+  tool: ResourceId,
   delivery: ResourceId,
 }
 
@@ -295,12 +323,14 @@ impl Unbound {
       theirs,
       their_docs,
       profile,
+      tool,
       delivery,
     }
   }
 
   /// A workspace with a Codex connection named as the publisher's and an MCP server of the same name as theirs, which
-  /// follows the server until its configuration is cached; with the stream that follows it.
+  /// follows the server until its configuration is cached and the person used Builder's and Lookup's v1 here (a first
+  /// version that runs commands, names an MCP server or a secret waits for them); with the stream that follows it.
   async fn cached(
     &self,
   ) -> (
@@ -318,6 +348,8 @@ impl Unbound {
       latest::<Pipeline>(&workspace, self.delivery).is_some()
     })
     .await;
+    use_first(&workspace, self.profile).await;
+    use_first(&workspace, self.tool).await;
     (workspace, work, docs, stream)
   }
 
@@ -382,7 +414,7 @@ async fn live_updates_a_binding_change_rewrites_the_local_bodies() {
     }),
   };
   assert_eq!(
-    bind(&workspace.root, chosen).expect("bound"),
+    bind(&workspace.root, chosen, Answerer::Person).expect("bound"),
     1,
     "Builder's v1 names it"
   );
@@ -427,7 +459,7 @@ async fn live_updates_a_binding_change_rewrites_the_local_bodies() {
       by: BoundBy::Person,
     }),
   };
-  assert_eq!(bind(&workspace.root, rebound).expect("rebound"), 1);
+  assert_eq!(bind(&workspace.root, rebound, Answerer::Person).expect("rebound"), 1);
   let profile = latest::<AgentProfile>(&workspace, unbound.profile).expect("cached");
   assert_eq!(profile.body().connection(), spare);
 
@@ -435,7 +467,7 @@ async fn live_updates_a_binding_change_rewrites_the_local_bodies() {
     reference: unbound.their_docs,
     bound: None,
   };
-  assert_eq!(bind(&workspace.root, unchosen).expect("unbound"), 1);
+  assert_eq!(bind(&workspace.root, unchosen, Answerer::Person).expect("unbound"), 1);
   assert_eq!(
     unbound.servers_here(&workspace),
     [unbound.their_docs],

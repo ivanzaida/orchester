@@ -30,12 +30,17 @@ use crate::{
   navigation::Navigation,
   routes::{OrchestratorChat, ProjectPage, Route},
   theme::{ExtraColor, ExtraSpacing, ExtraTypography, OrchestratorShadow, OrchestratorText},
-  ui::{field::FieldInput, pressable::opening},
+  ui::{
+    field::FieldInput,
+    pressable::opening,
+    skeleton::{self, Skeleton, fading},
+  },
 };
 
-/// The panel's width (`eFI39`) and a conversation's row's height (`aowsX`).
+/// The panel's width (`eFI39`) and a conversation's row's height (`aowsX`), and a day heading's bone (`ipw6U`).
 const WIDTH: f32 = 300.0;
 const ROW_HEIGHT: f32 = 46.0;
+const DAY_BONE: f32 = 36.0;
 
 /// When a conversation last changed, as the list groups it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -89,37 +94,22 @@ impl Item {
   }
 }
 
-/// The panel over `chats` of the project, `current` the one shown; `search` filters it by title.
+/// The panel over `chats` of the project, `current` the one shown; `search` filters it by title. While the
+/// conversations are read (`chats` none), the list is bones (`06 Orchestrator · History reading` `ipw6U`).
 pub(super) fn panel(
   ctx: &mut Ctx,
   search: &Signal<String>,
   project: ProjectId,
-  (chats, current): (&[ChatListing], Option<ChatId>),
+  (chats, current): (Option<&[ChatListing]>, Option<ChatId>),
 ) -> Element {
   let label = ctx.t("orchestrator.historyPanel.search");
   let field = FieldInput::new("orchestrator-history-search", label.clone(), search.clone())
     .search()
     .placeholder(label)
     .render(ctx);
-  let items = items(chats, (current, project), &search.get());
-  let list: Element = if items.is_empty() {
-    let words = if chats.is_empty() {
-      "orchestrator.historyPanel.empty"
-    } else {
-      "orchestrator.historyPanel.noMatch"
-    };
-    Column::new()
-      .id("orchestrator-history-empty")
-      .flex(1.0)
-      .padding(Padding::symmetric(SpacingSize::Sm, ExtraSpacing::Loose.role()))
-      .child(Text::new(&ctx.t(words)).variant(TypographyStyle::Caption))
-      .into()
-  } else {
-    VirtualizedList::new_shared(ctx, Arc::new(items))
-      .list_key("orchestrator-history-list")
-      .width(Dimension::Pct(100.0))
-      .flex(1.0)
-      .mount_keyed::<ItemView, _, _, _>(Item::key, Clone::clone)
+  let list: Element = match chats {
+    None => reading(ctx),
+    Some(chats) => list(ctx, chats, (current, project), &search.get()),
   };
   Column::new()
     .id("orchestrator-history-panel")
@@ -150,6 +140,91 @@ pub(super) fn panel(
     )
     .child(foot(ctx))
     .into()
+}
+
+/// The conversations the search finds, under their days, or why there are none.
+fn list(
+  ctx: &mut Ctx,
+  chats: &[ChatListing],
+  (current, project): (Option<ChatId>, ProjectId),
+  search: &str,
+) -> Element {
+  let items = items(chats, (current, project), search);
+  if items.is_empty() {
+    let words = if chats.is_empty() {
+      "orchestrator.historyPanel.empty"
+    } else {
+      "orchestrator.historyPanel.noMatch"
+    };
+    return Column::new()
+      .id("orchestrator-history-empty")
+      .flex(1.0)
+      .padding(Padding::symmetric(SpacingSize::Sm, ExtraSpacing::Loose.role()))
+      .child(Text::new(&ctx.t(words)).variant(TypographyStyle::Caption))
+      .into();
+  }
+  VirtualizedList::new_shared(ctx, Arc::new(items))
+    .list_key("orchestrator-history-list")
+    .width(Dimension::Pct(100.0))
+    .flex(1.0)
+    .mount_keyed::<ItemView, _, _, _>(Item::key, Clone::clone)
+}
+
+/// The list's lines while the conversations are read: a day's heading, or a conversation's title and meta.
+const READING: [Option<(f32, f32)>; 11] = [
+  None,
+  Some((230.0, 100.0)),
+  Some((164.0, 100.0)),
+  None,
+  Some((240.0, 100.0)),
+  Some((186.0, 100.0)),
+  None,
+  Some((218.0, 100.0)),
+  Some((250.0, 100.0)),
+  Some((176.0, 100.0)),
+  Some((150.0, 100.0)),
+];
+
+/// The list while it is read: the days' headings and the conversations' rows as bones in the rows' own geometry,
+/// lower rows fading. *Reading conversations…* (`orchestrator.historyPanel.reading`) names it.
+fn reading(ctx: &mut Ctx) -> Element {
+  let lines = READING
+    .iter()
+    .map(|line| match line {
+      None => Row::new()
+        .width(Dimension::Pct(100.0))
+        .padding(
+          Padding::new()
+            .left(SpacingSize::Sm)
+            .right(SpacingSize::Sm)
+            .top(ExtraSpacing::Loose.role())
+            .bottom(SpacingSize::Xs),
+        )
+        .child(skeleton::line(ctx, OrchestratorText::Eyebrow.role(), DAY_BONE)),
+      Some((title, meta)) => Row::new()
+        .width(Dimension::Pct(100.0))
+        .height(Dimension::Px(ROW_HEIGHT))
+        .padding(Padding::symmetric(
+          ExtraSpacing::Loose.role(),
+          ExtraSpacing::TextArea.role(),
+        ))
+        .align_items(Alignment::Center)
+        .child(
+          Column::new()
+            .width(Dimension::Pct(100.0))
+            .spacing(ExtraSpacing::Tight.role())
+            .child(skeleton::line(ctx, OrchestratorText::Emphasis.role(), *title))
+            .child(skeleton::line(ctx, OrchestratorText::HistoryMeta.role(), *meta)),
+        ),
+    })
+    .collect();
+  let bones = Column::new().width(Dimension::Pct(100.0)).with_children(fading(lines));
+  Skeleton::new(
+    "orchestrator-history-loading",
+    ctx.t("orchestrator.historyPanel.reading"),
+  )
+  .fills()
+  .show(ctx, bones)
 }
 
 /// The note at the panel's foot.

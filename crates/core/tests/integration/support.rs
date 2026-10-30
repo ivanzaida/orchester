@@ -13,6 +13,7 @@ use std::{
 use orchester_core::{
   command::{Command, CommandError, CommandOutput, CommandRunner},
   id::{ConnectionId, ResourceId, RunId, StepExecutionId, TaskId, VersionId},
+  integration::base::RunBaseSource,
   name::Name,
   permission::StepPermissions,
   project::{ProjectKey, TaskKey},
@@ -224,6 +225,7 @@ pub fn run(base: &str, base_branch: Option<&str>, ending: Ending) -> Run {
     branch: BranchName::new(RUN_BRANCH).expect("valid branch"),
     base: Revision::new(base).expect("a full revision"),
     base_branch: base_branch.map(|branch| BranchName::new(branch).expect("valid branch")),
+    base_source: RunBaseSource::CheckedOut,
     budget: Some(TokenBudget::new(1_400_000).expect("a budget")),
     max_duration: Some(Duration::from_secs(30 * 60)),
   };

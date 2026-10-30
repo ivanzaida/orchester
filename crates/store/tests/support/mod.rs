@@ -137,6 +137,7 @@ fn recorded_run(approval_gate: bool, limits: TaskLimits) -> (TempDir, ProjectDb,
     branch: BranchName::new("orchester/orc-1-run-1").expect("branch"),
     base: Revision::new(&"a".repeat(40)).expect("revision"),
     base_branch: None,
+    base_source: orchester_core::integration::base::RunBaseSource::CheckedOut,
     budget: limits.budget(),
     max_duration: limits.max_duration(),
   };

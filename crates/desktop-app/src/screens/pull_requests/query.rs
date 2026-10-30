@@ -38,23 +38,35 @@ pub(super) struct Choices {
 }
 
 /// The tabs, `tab` the current one, each with its count once `list` is known.
-pub(super) fn tabs(ctx: &mut Ctx, project: ProjectId, tab: PullRequestTab, list: Option<&LinkedList>) -> Stack {
+pub(super) fn tabs(
+  ctx: &mut Ctx,
+  project: ProjectId,
+  (tab, reading): (PullRequestTab, bool),
+  list: Option<&LinkedList>,
+) -> Stack {
   let navigation = Navigation::of(ctx);
   let unknown = ctx.t("pull_requests.tabs.unknownCount");
   let tabs: Vec<PageTab> = PullRequestTab::ALL
     .into_iter()
     .map(|shown| {
       let word = ctx.t(label_key(shown));
+      // While the list is first read each count is a bone; once reading it failed, a dash says it is not known.
       let label = match list {
         Some(list) => counted(ctx, &word, list.count(shown)),
+        None if reading => word,
         None => ctx.t_args("ui.tabCount", [("label", word), ("count", unknown.clone())]),
       };
-      PageTab::to(
+      let page_tab = PageTab::to(
         format!("pull-requests-tab-{}", shown.name()),
         label,
         shown == tab,
         navigation.to(Route::Project(project, ProjectPage::PullRequests(shown))),
-      )
+      );
+      if list.is_none() && reading {
+        page_tab.count_reading()
+      } else {
+        page_tab
+      }
     })
     .collect();
   page_tabs(ctx, "pull-requests-tabs", tabs)

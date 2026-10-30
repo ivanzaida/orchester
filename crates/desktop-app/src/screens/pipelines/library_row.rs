@@ -20,12 +20,14 @@ use orchester_workspace::{
   background,
   messages::Message,
   pipelines::library::{LibraryEntry, VersionState, make_default_in},
+  sharing::team::TeamConfiguration,
   tasks::outside::Outside,
 };
 
 use crate::{
   navigation::Navigation,
   routes::{PipelineView, ProjectPage, Route},
+  screens::hub::team,
   theme::{ExtraSpacing, GroupText, IconSize},
   ui::{
     icon::{Icon, icon},
@@ -43,6 +45,8 @@ pub struct RowProps {
   /// The project's repository, where *Make default* stores the default.
   pub root: std::path::PathBuf,
   pub entry: LibraryEntry,
+  /// The team's configuration while the project is shared: the row shows its publisher (01 `cHvkL`).
+  pub team: Option<TeamConfiguration>,
 }
 impl DevtoolsInspectable for RowProps {}
 
@@ -78,12 +82,28 @@ impl Component for LibraryRow {
     if let Some(error) = make_default.state().get().error {
       row = row.toned_hint(message_text(ctx, &error), HintTone::Danger);
     }
-    if !matches!(entry.state, VersionState::DraftOnly) {
+    // A member of a shared project duplicates none of the team's pipelines.
+    if !matches!(entry.state, VersionState::DraftOnly) && team::may_change(props.team.as_ref()) {
       row = row.end(self.menu(ctx, &props, &make_default));
     }
-    row
-      .end(state(ctx, entry, &id))
-      .end(icon(Icon::ChevronRight, IconSize::Md, PaletteColor::TextMuted))
+    let row = match props
+      .team
+      .as_ref()
+      .and_then(|team| Some((team, team.standing(entry.id)?)))
+    {
+      Some((team, standing)) => {
+        let draft = match entry.state {
+          VersionState::DraftOnly => Some(None),
+          VersionState::PublishedWithDraft(version) => Some(Some(version)),
+          VersionState::Published(_) => None,
+        };
+        row
+          .end(team::publisher(ctx, &format!("{id}-publisher"), team, standing))
+          .end(team::row_state(ctx, &format!("{id}-state"), standing, draft))
+      }
+      None => row.end(state(ctx, entry, &id)),
+    };
+    row.end(icon(Icon::ChevronRight, IconSize::Md, PaletteColor::TextMuted))
   }
 }
 
@@ -229,6 +249,6 @@ fn state(ctx: &Ctx, entry: &LibraryEntry, id: &str) -> Column {
 }
 
 /// The state column's width (`State` `T5CHp`).
-const STATE_WIDTH: f32 = 170.0;
+pub(super) const STATE_WIDTH: f32 = 170.0;
 /// The row menu's width (`Row menu` `v8j3h`).
 const MENU_WIDTH: f32 = 200.0;

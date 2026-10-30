@@ -16,7 +16,7 @@ pub fn can_write(choice: &ProfileChoice) -> bool {
 }
 /// Whether this connection enforces turning network access off.
 pub fn can_block_network(choice: &ProfileChoice) -> bool {
-  choice.permissions.network() == NetworkAccess::On && enforced(choice, PermissionOption::NetworkOff)
+  *choice.permissions.network() == NetworkAccess::On && enforced(choice, PermissionOption::NetworkOff)
 }
 /// The profile's commands that this connection lets a step narrow.
 pub fn commands(choice: &ProfileChoice) -> Vec<String> {
@@ -83,7 +83,7 @@ pub fn permissions(
     }
   }
   if network_off {
-    if choice.permissions.network() != NetworkAccess::On || !enforced(PermissionOption::NetworkOff) {
+    if *choice.permissions.network() != NetworkAccess::On || !enforced(PermissionOption::NetworkOff) {
       return Err(Message::new("appMcp.errors.networkOffNotOffered"));
     }
     permissions.network = StepNetwork::Off;

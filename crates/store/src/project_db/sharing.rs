@@ -86,7 +86,10 @@ impl ProjectDb {
   /// cache, as do the members, and the next task number follows the highest. The project's tags, the server project's
   /// as last synced, become its local tags with their ids, as its modules, each task's module and their moves become
   /// its own. The tasks kept *Not shared* when it
-  /// joined return to the list after the highest number; they are returned with their keys.
+  /// joined return to the list after the highest number; they are returned with their keys. The server's resources
+  /// become local resources with every cached version, ids, numbers and local bodies kept, so the runs that pinned
+  /// them read them as before; a version published here and not sent yet stays with its number here. The references
+  /// the versions named on their publishers' computers and this computer's bindings of them go.
   pub fn make_local(&mut self) -> Result<Vec<ReturnedTask>, StoreError> {
     let transaction = self.connection.transaction()?;
     if link(&transaction)?.is_none() {
@@ -102,7 +105,11 @@ impl ProjectDb {
        DELETE FROM task_run_status;
        DELETE FROM shared_automatic_status;
        DELETE FROM shared_members;
+       DELETE FROM shared_server_admins;
        DELETE FROM shared_publishes;
+       DELETE FROM shared_version_references;
+       DELETE FROM reference_bindings;
+       UPDATE resources SET sharing = NULL, server_revision = NULL WHERE sharing IS NOT NULL;
        DELETE FROM sharing;
        UPDATE modules SET revision = NULL;
        UPDATE counters SET next = (SELECT COALESCE(MAX(number), 0) + 1 FROM tasks) WHERE name = 'task';",

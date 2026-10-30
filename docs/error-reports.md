@@ -26,15 +26,22 @@ which sent it: `app` or `runner`.
 
 - **Only while the setting is on.** The app reads it from `orchester.db` as soon as the database is open, right after
   the session starts and before the window opens. A panic before that point is not reported: while the log starts,
-  while the window's position is checked, and while the session opens the database.
+  while the window's position is checked, and while the session opens the database. The setting is *Send error
+  reports* in Settings › General › Privacy, on until a person turns it off. A change takes effect at once, without a
+  restart: turned off, the app makes no report from the click on and drops the ones still waiting to leave (only one
+  already on its way can still arrive); turned on, it sends from then on. The runners follow it with the app (below).
 - **Only the installed app and QA copies.** The installed app reports as environment `production`. A QA copy that
   `tools/qa-app.ps1` starts reports as `qa`, and so does a release build started with `ORCHESTER_APP_MCP_DISCOVERY`.
   Other debug builds, `cargo run --release` and the tests never start the client.
 - **The runner reports only when the app says so.** The runner never reads `orchester.db`. While the app's own
   client runs, every runner it starts gets the environment variables `ORCHESTER_ERROR_REPORTS` (the app's environment)
   and `ORCHESTER_ERROR_REPORTS_RELEASE` (the app's release); a runner started without them sends nothing, and the app
-  removes them from a runner's environment when it does not report. A runner keeps what it was started with until it
-  exits. Debug builds of the runner, a QA copy's among them, and the tests never report.
+  removes them from a runner's environment when it does not report. When the setting changes, the app tells every
+  running runner at once (`Runners::set_error_reports`, IPC `SetErrorReports`, protocol 33). Turned off, a runner sends
+  nothing more: the reports still waiting to leave are dropped, and only one already on its way can still arrive.
+  Turned on, it sends from then on. A runner that is starting is told once it is connected; one the app cannot reach
+  starts with the setting the next time. Debug builds of the runner, a QA copy's among them, and the tests never
+  report.
 - **No other data.** The client sends no default personal data (`send_default_pii` is off), no traces and no
   sessions. The release is `orchester@<version>`, the app's version from its `Cargo.toml`, for the runner's reports
   too.
@@ -72,8 +79,9 @@ window's thread beats once a second from a timer its event loop runs; a watchdog
   counts from then. The window is watched from its first beat until it closes; the startup before it and the work
   after it (the runners stopping) are not.
 - **Only with the other reports.** The watchdog runs only while the app's client does (above): the installed app or a
-  release build a QA harness started, with the setting on. A debug build, `tools/qa-app.ps1`'s QA copy among them,
-  and the tests never start it, and without a client it reads no stack and sends nothing.
+  release build a QA harness started. While the setting is off it reads no stack and sends nothing. A debug build,
+  `tools/qa-app.ps1`'s QA copy among them, and the tests never start it, and without a client it reads no stack and
+  sends nothing.
 - **One report per hang**, sent at once (the client's queue is flushed), so it has left even if the person then ends
   the process. Its error type is `ApplicationNotResponding`, its message how long the window has not responded, and
   it carries:

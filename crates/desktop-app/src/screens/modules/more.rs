@@ -115,5 +115,6 @@ fn with_state(root: &Path, module: Arc<Module>, state: ModuleState) -> SaveModul
     root: root.to_path_buf(),
     module: Some(module),
     details: changed,
+    base: None,
   }
 }

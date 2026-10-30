@@ -3,9 +3,10 @@
 //! module's name, opening its page), the name typed as the title, what the module delivers typed under it, and the
 //! property chips of the task form (`task_form::chips`): State for a module that exists, Start date and Target date,
 //! each opening its control under it, the dates the date picker (`ui::date_picker`) with the other date ruling its
-//! range. Under them a save the module refused says why (another module's name, a change made meanwhile). The action
-//! bar at the panel's bottom has Cancel and *Create module* or *Save changes*, which turns its loader while it saves;
-//! a saved module's page takes the form's place.
+//! range, and the Base branch (02 `eyrnI`, `super::form_base`). Under them a save the module refused says why (another
+//! module's name, a change made meanwhile, a branch that is gone). The action bar at the panel's bottom has Cancel and
+//! *Create module* or *Save changes*, which turns its loader while it saves; a saved module's page takes the form's
+//! place.
 
 use std::sync::Arc;
 
@@ -22,9 +23,13 @@ use lurq::{
   node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::module::{Module, ModuleDetails, ModuleState};
-use orchester_workspace::modules::form::{DATE_FORMAT, ModuleForm, ModuleFormErrors};
+use orchester_workspace::modules::{
+  base::ModuleBasePick,
+  form::{DATE_FORMAT, ModuleForm, ModuleFormErrors},
+};
 
 use super::{
+  form_base::BasePick,
   form_chips as chips,
   save::{self, SaveModule},
 };
@@ -77,6 +82,7 @@ pub struct Fields {
   pub start: Signal<Day>,
   pub target: Signal<Day>,
   pub state: Signal<StatePick>,
+  pub base: Signal<BasePick>,
 }
 
 pub struct ModuleFormPage {
@@ -118,6 +124,7 @@ impl Component for ModuleFormPage {
       state: ctx.signal(StatePick(
         details.as_ref().map(ModuleDetails::state).unwrap_or_default(),
       )),
+      base: ctx.signal(BasePick(read_base(props.module.as_deref()))),
     };
     Self {
       fields,
@@ -268,10 +275,13 @@ impl ModuleFormPage {
       None => ("modules.form.create", Icon::Plus),
     };
     let (save, tried) = (self.save.clone(), self.tried.clone());
+    let picked = self.fields.base.get().0;
+    let base = (picked != read_base(self.base.as_deref())).then_some(picked);
     let args = details.map(|details| SaveModule {
       root: props.project.open.repo_root.clone(),
       module: self.base.clone(),
       details,
+      base,
     });
     let mut submit = ActionButton::new("module-editor-save", ButtonKind::Primary, ctx.t(label))
       .icon(glyph)
@@ -299,6 +309,11 @@ impl ModuleFormPage {
       )
       .into()
   }
+}
+
+/// The base branch `module` was read with, the checked-out branch for a new one.
+fn read_base(module: Option<&Module>) -> ModuleBasePick {
+  module.map_or_else(ModuleBasePick::default, |module| ModuleBasePick::of(module.base()))
 }
 
 /// A saved module's page takes the form's place, and the project's tasks are read again.

@@ -1,10 +1,9 @@
-//! The project's base branch (ORC-81, `orchester_workspace::project_settings::base_branch_in`) against a real git
-//! repository whose checkout stays on `main` while runs work on `staging`: the setting saved with the count of runs
-//! that keep their base, a remote-tracking choice creating its local branch, a gone branch refused; a run merged into
-//! `staging` beside the checkout, which is neither switched nor touched, and cleared up after; with the default, the
-//! same merge still needs `staging` checked out; moves of `staging` told to its runs; and work merged into `staging`
-//! outside Orchester read as merged there.
-//! `cargo test -p orchester-workspace --test base_branch base_branch`.
+//! A run's base branch (ORC-81) against a real git repository whose checkout stays on `main` while runs work on
+//! `staging`: a run whose base branch was set merged into `staging` beside the checkout, which is neither switched nor
+//! touched, and cleared up after; a run that took the checked-out branch still needs `staging` checked out; how each
+//! run lands by where its own base came from (ORC-405); moves of `staging` told to its runs; and work merged into
+//! `staging` outside Orchester read as merged there.
+//! `cargo test -p orchester-workspace --test base_branch` (filters `base_branch`, `run_base_resolution`).
 
 use std::{
   collections::{BTreeMap, BTreeSet},
@@ -15,7 +14,8 @@ use std::{
 
 use orchester_core::{
   id::{IdempotencyKey, ProjectId},
-  integration::{MergeError, MergeKind, base::BaseBranchSetting},
+  integration::{MergeError, MergeKind, base::RunBaseSource},
+  module::{ModuleDetails, ModuleState},
   name::Name,
   project::{Project, ProjectKey},
   resource::{CommandAction, CommandArg, CommandProgram, Pipeline, PromptText, Slug, Step, StepKey, StepKind, Tool},
@@ -29,7 +29,6 @@ use orchester_exec::programs::Programs;
 use orchester_store::ProjectDb;
 use orchester_workspace::{
   base_moved,
-  project_settings::{self, BaseBranchChoice},
   tasks::{
     delivery::{self, Delivery},
     integration::{IntegrationProblem, merge_in},
@@ -59,11 +58,13 @@ fn at(millis: i64) -> Timestamp {
 }
 
 /// A project in a git repository whose checkout is on `main` with an uncommitted edit of the person's, and whose
-/// `staging` branch is one commit ahead of it; a one-step pipeline its runs pin.
+/// `staging` branch is one commit ahead of it; a one-step pipeline its runs pin, and where the runs made from now on
+/// took `staging` from.
 struct Repo {
   dir: tempfile::TempDir,
   db: ProjectDb,
   snapshot: RunSnapshot,
+  source: RunBaseSource,
 }
 
 impl Repo {
@@ -97,7 +98,12 @@ impl Repo {
     );
     let mut db = ProjectDb::create(root, project).expect("project");
     let snapshot = snapshot(&mut db);
-    Self { dir, db, snapshot }
+    Self {
+      dir,
+      db,
+      snapshot,
+      source: RunBaseSource::CheckedOut,
+    }
   }
 
   fn root(&self) -> &Path {
@@ -133,6 +139,7 @@ impl Repo {
           branch: branch(run_branch),
           base: Revision::new(&base).expect("revision"),
           base_branch: Some(branch("staging")),
+          base_source: self.source,
           budget: None,
           max_duration: None,
         },
@@ -174,13 +181,6 @@ impl Repo {
 
   fn worktree(&self, run: &Run) -> PathBuf {
     self.root().join(".orchester/worktrees").join(run.id().to_string())
-  }
-
-  fn set(&self, setting: &BaseBranchSetting) {
-    ProjectDb::open(self.root())
-      .expect("open")
-      .save_base_branch_setting(setting)
-      .expect("set");
   }
 
   /// The checkout is on `main` at `head` with the person's edit and none of the runs' files.
@@ -233,66 +233,21 @@ fn snapshot(db: &mut ProjectDb) -> RunSnapshot {
 }
 
 #[test]
-fn base_branch_setting_saves_a_choice_and_says_how_many_runs_keep_their_base() {
-  let mut repo = Repo::new();
-  let programs = Programs::processes();
-  git(
-    repo.root(),
-    &["remote", "add", "origin", "https://example.invalid/kontur.git"],
-  );
-  git(repo.root(), &["update-ref", "refs/remotes/origin/release", "main"]);
-  let read = project_settings::base_branch_in(repo.root(), &programs).expect("read");
-  assert_eq!(read.setting, BaseBranchSetting::CheckedOut);
-  assert_eq!(read.choices.local, [branch("main"), branch("staging")]);
-  assert_eq!(read.missing(), None);
-
-  let task = repo.task("Sign in");
-  repo.working(&task, "orchester/orc-1-run-1", ("feature.txt", "work\n"));
-  let saved =
-    project_settings::save_base_branch_in(repo.root(), &programs, &BaseBranchChoice::Local(branch("staging")))
-      .expect("saved");
-  assert_eq!(saved.setting, BaseBranchSetting::Branch(branch("staging")));
-  assert_eq!(saved.kept, 1, "the working run keeps its base");
-  let again =
-    project_settings::save_base_branch_in(repo.root(), &programs, &BaseBranchChoice::Local(branch("staging")))
-      .expect("saved");
-  assert_eq!(again.kept, 0, "nothing changed");
-
-  let release = read.choices.remote.first().expect("origin/release").clone();
-  let saved =
-    project_settings::save_base_branch_in(repo.root(), &programs, &BaseBranchChoice::Remote(release)).expect("saved");
-  assert_eq!(saved.setting, BaseBranchSetting::Branch(branch("release")));
-  assert_eq!(
-    git(repo.root(), &["rev-parse", "release"]),
-    git(repo.root(), &["rev-parse", "main"])
-  );
-  assert_eq!(git(repo.root(), &["symbolic-ref", "--short", "HEAD"]), "main");
-
-  let refused = project_settings::save_base_branch_in(repo.root(), &programs, &BaseBranchChoice::Local(branch("gone")));
-  assert_eq!(
-    refused.map_err(|message| message.key),
-    Err("projectSettings.baseBranch.gone")
-  );
-  git(repo.root(), &["branch", "-D", "release"]);
-  let read = project_settings::base_branch_in(repo.root(), &programs).expect("read");
-  assert_eq!(read.missing(), Some(&branch("release")), "the branch set is gone");
-}
-
-#[test]
 fn base_branch_merge_lands_beside_a_checkout_on_another_branch_and_clears_up() {
   let mut repo = Repo::new();
-  let task = repo.task("Sign in");
-  let run = repo.succeeded(&task, "orchester/orc-1-run-1", ("feature.txt", "work\n"));
+  let following = repo.task("Sign up");
+  let checked_out = repo.succeeded(&following, "orchester/orc-1-run-1", ("feature.txt", "work\n"));
   let main = git(repo.root(), &["rev-parse", "main"]);
   let programs = Programs::processes();
-
-  let refused = merge_in(repo.root(), &programs, (run.id(), None)).map(|merged| merged.merge);
+  let refused = merge_in(repo.root(), &programs, (checked_out.id(), None)).map(|merged| merged.merge);
   assert!(
     matches!(&refused, Err(IntegrationProblem::Merge(MergeError::WrongBranch { .. }))),
-    "a project that follows the checkout merges only there: {refused:?}"
+    "a run that took the checked-out branch merges only there: {refused:?}"
   );
 
-  repo.set(&BaseBranchSetting::Branch(branch("staging")));
+  repo.source = RunBaseSource::Task;
+  let task = repo.task("Sign in");
+  let run = repo.succeeded(&task, "orchester/orc-2-run-1", ("feature.txt", "work\n"));
   let merged = merge_in(repo.root(), &programs, (run.id(), None)).expect("merged beside the checkout");
   assert_eq!(merged.merge.into, branch("staging"));
   assert_eq!(merged.merge.kind, MergeKind::FastForward);
@@ -306,7 +261,7 @@ fn base_branch_merge_lands_beside_a_checkout_on_another_branch_and_clears_up() {
   assert!(cleanup.removed_run_worktree(), "the run's worktree went");
   assert!(!repo.worktree(&run).exists());
   assert!(
-    git(repo.root(), &["branch", "--list", "orchester/orc-1-run-1"]).is_empty(),
+    git(repo.root(), &["branch", "--list", "orchester/orc-2-run-1"]).is_empty(),
     "its branch, merged into staging, went"
   );
   assert!(
@@ -319,10 +274,57 @@ fn base_branch_merge_lands_beside_a_checkout_on_another_branch_and_clears_up() {
   );
 }
 
+/// Landing follows where each run's base came from, not the project: in one project, with the checkout on `main`, a
+/// run that took `staging` from its module and one recorded with the project's old base branch land beside the
+/// checkout, while a run that took `staging` as the checked-out branch merges only on it; a run still at work on
+/// `staging` is told its own base branch moved, though the checkout has another.
+#[test]
+fn run_base_resolution_each_run_lands_by_where_its_base_came_from() {
+  let mut repo = Repo::new();
+  let main = git(repo.root(), &["rev-parse", "main"]);
+  let programs = Programs::processes();
+  let checked_out = repo.task("Sign up");
+  let checked_out = repo.succeeded(&checked_out, "orchester/orc-1-run-1", ("feature.txt", "work\n"));
+  let working = repo.task("Sign out");
+  let working = repo.working(&working, "orchester/orc-2-run-1", ("shared.txt", "sign out\n"));
+  let details = ModuleDetails::new(name("Webhooks v2"), "", (None, None), ModuleState::Open).expect("details");
+  let module = repo.db.create_module(details, at(5)).expect("module").id();
+  repo.source = RunBaseSource::Module { module };
+  let from_module = repo.task("Sign in");
+  let from_module = repo.succeeded(&from_module, "orchester/orc-3-run-1", ("module.txt", "module\n"));
+  repo.source = RunBaseSource::Project;
+  let from_project = repo.task("Reset");
+  let from_project = repo.succeeded(&from_project, "orchester/orc-4-run-1", ("shared.txt", "reset\n"));
+  assert_eq!(base_moved::observe_in(repo.root(), &programs).expect("observed"), 0);
+
+  let refused = merge_in(repo.root(), &programs, (checked_out.id(), None)).map(|merged| merged.merge);
+  assert!(
+    matches!(&refused, Err(IntegrationProblem::Merge(MergeError::WrongBranch { .. }))),
+    "a run that took the checked-out branch merges only there: {refused:?}"
+  );
+  for run in [&from_module, &from_project] {
+    let merged = merge_in(repo.root(), &programs, (run.id(), None)).expect("merged beside the checkout");
+    assert_eq!(merged.merge.into, branch("staging"));
+  }
+  assert_eq!(git(repo.root(), &["show", "staging:module.txt"]), "module");
+  assert_eq!(git(repo.root(), &["show", "staging:shared.txt"]), "reset");
+  repo.assert_checkout_untouched(&main);
+
+  let notices = ProjectDb::open(repo.root())
+    .expect("open")
+    .run_base_notices(working.id())
+    .expect("notices");
+  assert!(!notices.is_empty(), "the working run is told staging moved");
+  assert!(
+    notices.iter().all(|notice| notice.branch == branch("staging")),
+    "{notices:?}"
+  );
+}
+
 #[test]
 fn base_branch_moves_of_the_branch_set_are_told_to_its_runs() {
   let mut repo = Repo::new();
-  repo.set(&BaseBranchSetting::Branch(branch("staging")));
+  repo.source = RunBaseSource::Task;
   let merged_task = repo.task("Sign in");
   let working_task = repo.task("Sign out");
   let merged = repo.succeeded(&merged_task, "orchester/orc-1-run-1", ("shared.txt", "sign in\n"));

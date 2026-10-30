@@ -341,6 +341,7 @@ fn answer(shared: &Shared, project: ProjectId, mut stream: TcpStream) {
     ("PUT", ["tasks", task, "run"]) => run(shared, &user, task.parse().expect("a task id"), &request, &mut stream),
     ("POST", ["resources", ..]) | ("PUT", ["files", _]) if !admin => publishing::not_admin(&mut stream),
     ("POST", ["resources"]) => publishing::create(shared, &user, &request, &mut stream),
+    ("POST", ["resources", "import"]) => publishing::import(shared, &user, &request, &mut stream),
     ("POST", ["resources", resource, "versions"]) => {
       publishing::publish(shared, &user, resource, &request, &mut stream)
     }

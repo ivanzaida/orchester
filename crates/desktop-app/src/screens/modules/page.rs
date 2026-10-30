@@ -40,7 +40,7 @@ use crate::{
     icon::{Icon, icon},
     message::message_text,
     pressable::opening,
-    state::{EmptyState, load_error, loading},
+    state::{EmptyState, load_error},
     tabs::{PageTab, page_tabs},
   },
 };
@@ -144,10 +144,7 @@ impl Component for ModuleScreen {
         self.body(ctx, &project, page, tab),
       ),
       (None, Some(Read(None))) => (back_only(ctx, id), padded(missing(ctx))),
-      (None, None) => (
-        back_only(ctx, id),
-        padded(loading("module-loading", &ctx.t("modules.page.reading")).into()),
-      ),
+      (None, None) => super::reading::page(ctx, (id, module), tab),
     };
     Column::new()
       .id("screen-modules")
@@ -304,19 +301,24 @@ fn read<D>(ctx: &mut Ctx, root: PathBuf, module: ModuleId, deps: D) -> lurq::app
 where
   D: Clone + PartialEq + Send + Sync + 'static,
 {
+  let hold = crate::services::Services::of(ctx).hold;
   ctx
-    .future((root, module, deps), |(root, module, _)| async move {
-      background::run(move || {
-        let db = orchester_store::ProjectDb::open(&root)?;
-        ModulePage::read(&db, module, Timestamp::now())
-      })
-      .await
-      .map_err(ReadFailed)?
-      .map(|page| Read(page.map(Arc::new)))
-      .map_err(|error| {
-        tracing::error!(%error, "cannot read the module");
-        ReadFailed(messages::store_error(&error))
-      })
+    .future((root, module, deps), move |(root, module, _)| {
+      let hold = hold.clone();
+      async move {
+        hold.released().await;
+        background::run(move || {
+          let db = orchester_store::ProjectDb::open(&root)?;
+          ModulePage::read(&db, module, Timestamp::now())
+        })
+        .await
+        .map_err(ReadFailed)?
+        .map(|page| Read(page.map(Arc::new)))
+        .map_err(|error| {
+          tracing::error!(%error, "cannot read the module");
+          ReadFailed(messages::store_error(&error))
+        })
+      }
     })
     .state()
     .get()

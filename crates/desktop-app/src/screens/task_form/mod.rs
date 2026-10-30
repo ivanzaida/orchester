@@ -60,7 +60,8 @@ use crate::{
   ui::{
     icon::Icon,
     message::message_text,
-    state::{load_error, loading},
+    skeleton::{self, Skeleton},
+    state::load_error,
   },
 };
 
@@ -140,10 +141,12 @@ fn task_ids(tasks: &ProjectTasks) -> Arc<[TaskId]> {
 fn read_tasks(ctx: &mut Ctx, project: &ShownProject, form: Screen) -> Result<ProjectTasks, Element> {
   match project.feed.tasks.get() {
     TasksState::Ready(tasks) => Ok(tasks),
-    TasksState::Loading => Err(screen(
-      form,
-      loading("task-form-loading", &ctx.t("task_form.load.reading")).into(),
-    )),
+    TasksState::Loading => {
+      // No loading frame draws the task form: its fields' lines are bones until the project's tasks are read.
+      let bones = skeleton::lines(ctx, &[180.0, 640.0, 520.0, 600.0, 300.0]);
+      let reading = Skeleton::new("task-form-loading", ctx.t("task_form.load.reading")).show(ctx, bones);
+      Err(screen(form, reading))
+    }
     TasksState::Failed(error) => {
       let feed = project.feed.clone();
       let body = message_text(ctx, &error);

@@ -20,11 +20,11 @@ use crate::{
 };
 
 /// Settings on `tab`, showing `body`, with what its saves did (`saved`) on a tab whose changes save as they are made;
-/// `accounts` is how many accounts there are, once read.
+/// `accounts` is how many accounts there are, once read, and whether they are being read for the first time.
 pub(super) fn page(
   ctx: &mut Ctx,
   (tab, saved): (SettingsTab, Option<Summary>),
-  accounts: Option<usize>,
+  accounts: (Option<usize>, bool),
   body: Element,
 ) -> Element {
   let navigation = Navigation::of(ctx);
@@ -39,7 +39,12 @@ pub(super) fn page(
   )
 }
 
-fn tabs(ctx: &mut Ctx, tab: SettingsTab, accounts: Option<usize>, navigation: &Navigation) -> Element {
+fn tabs(
+  ctx: &mut Ctx,
+  tab: SettingsTab,
+  (accounts, reading): (Option<usize>, bool),
+  navigation: &Navigation,
+) -> Element {
   // Each tab is a place of its own. The current one opens nothing, unless a sub-page of it shows: then it goes back.
   let tab_to = |id: &str, label: Arc<str>, (current, at_tab): (bool, bool), route: Route| {
     if current && at_tab {
@@ -60,6 +65,7 @@ fn tabs(ctx: &mut Ctx, tab: SettingsTab, accounts: Option<usize>, navigation: &N
   );
   let accounts_tab = match accounts {
     Some(count) => accounts_tab.count(count, false),
+    None if reading => accounts_tab.count_reading(),
     None => accounts_tab,
   };
   let tabs = [

@@ -206,8 +206,30 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
     };
     pull_requests.push(pull_request(kontur, &listed, head)?);
   }
+  link(kontur, &pull_requests)
+}
+
+/// The project linked as [`seed`] links it, with the same pull requests stored, each from a branch of its own
+/// instead of a task's run: the list a project's own tasks don't change, for scenarios that add it to theirs.
+pub fn linked(kontur: &mut Kontur) -> Result<(), SeedError> {
+  let pull_requests = PULL_REQUESTS
+    .iter()
+    .map(|listed| {
+      let head = match listed.from {
+        From::Branch(branch) => branch_name(branch)?,
+        From::Task(_) => branch_name(&format!("feature/pr-{}", listed.number))?,
+      };
+      pull_request(kontur, listed, head)
+    })
+    .collect::<Result<Vec<_>, _>>()?;
+  link(kontur, &pull_requests)
+}
+
+/// Links the project to `ivanzaida/kontur` through the fake `gh` answering with `pull_requests`, stored as a sync a
+/// minute ago left them.
+fn link(kontur: &mut Kontur, pull_requests: &[PullRequest]) -> Result<(), SeedError> {
   let repo = repo()?;
-  let program = gh::install(kontur, &pull_requests)?;
+  let program = gh::install(kontur, pull_requests)?;
   let connection = super::connections::github(kontur, program, kontur.ago(60))?;
   let view = RepositoryView {
     repo: repo.clone(),
@@ -222,7 +244,7 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
     kontur.ago(60),
   );
   kontur.db.save_repository_link(&link)?;
-  kontur.db.replace_pull_requests(&repo, &pull_requests, kontur.ago(1))?;
+  kontur.db.replace_pull_requests(&repo, pull_requests, kontur.ago(1))?;
   let synced = SyncAttempt {
     at: kontur.ago(1),
     failure: None,

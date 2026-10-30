@@ -96,17 +96,17 @@ fn seed_agents_browser_has_the_browser_row_in_each_state() {
   let on = permissions("Browser on");
   assert_eq!(
     (on.network(), on.browser().access()),
-    (NetworkAccess::On, BrowserAccess::On)
+    (&NetworkAccess::On, BrowserAccess::On)
   );
   let sites: Vec<String> = on.browser().sites().entries().iter().map(ToString::to_string).collect();
   assert_eq!(sites, ["docs.rs", "*.example.com"]);
   let off = permissions("Browser off");
   assert_eq!(
     (off.network(), off.browser().access()),
-    (NetworkAccess::On, BrowserAccess::Off)
+    (&NetworkAccess::On, BrowserAccess::Off)
   );
   let offline = permissions("Browser without network");
-  assert_eq!(offline.network(), NetworkAccess::Off);
+  assert_eq!(offline.network(), &NetworkAccess::Off);
 }
 
 #[test]

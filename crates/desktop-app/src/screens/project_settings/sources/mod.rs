@@ -37,7 +37,8 @@ use crate::{
     add_source::Asked,
     field::field_error,
     message::message_text,
-    state::{load_error, loading},
+    skeleton::{self, Skeleton},
+    state::load_error,
   },
 };
 
@@ -171,7 +172,7 @@ impl Sources {
       .get()
   }
 
-  fn pending(&self, ctx: &Ctx, state: &FutureState<Read, Message>) -> Element {
+  fn pending(&self, ctx: &mut Ctx, state: &FutureState<Read, Message>) -> Element {
     match state.error.as_ref().filter(|_| state.is_rejected()) {
       Some(error) => {
         let retried = self.retried.clone();
@@ -185,7 +186,11 @@ impl Sources {
           move || retried.update(|retried| *retried += 1),
         )
       }
-      None => loading("settings-loading", &ctx.t("project_settings.sourcesTab.reading")).into(),
+      None => {
+        // No loading frame draws the Context tab's sources: their rows' bones stand in the group's outline.
+        let bones = skeleton::list(ctx, "settings-sources-reading", &[(180.0, 260.0), (150.0, 220.0)]);
+        Skeleton::new("settings-loading", ctx.t("project_settings.sourcesTab.reading")).show(ctx, bones)
+      }
     }
   }
 

@@ -81,6 +81,13 @@ pub enum Row {
   Agent(AgentRow),
   /// A person's message, a card, a problem, a return or restart, a result or the run's end.
   Item(Item),
+  /// Requests Autopilot approved one after another in one step, each a quiet row; the chat lists the first few and
+  /// how many more follow, all of them once `open` (`docs/design/approval-modes.md`, open question 3).
+  Approvals {
+    key: Arc<str>,
+    items: Vec<Item>,
+    open: bool,
+  },
   /// A transcript entry on its own line, in *Tools*.
   Entry { key: Arc<str>, entry: Entry },
   /// A message on one line, in *Tools*.
@@ -93,6 +100,7 @@ impl Row {
       Self::Step { key, .. }
       | Self::Folded { key, .. }
       | Self::NotStarted { key, .. }
+      | Self::Approvals { key, .. }
       | Self::Entry { key, .. }
       | Self::Agent(AgentRow { key, .. }) => key,
       Self::Item(item) | Self::Line(item) => &item.key,
@@ -336,9 +344,27 @@ impl Pass<'_> {
       (Show::All | Show::Messages, ItemKind::AgentMessage { agent, text, .. }) => {
         Row::Agent(self.agent_row(item, agent.clone(), Some(text.clone())))
       }
+      (Show::All | Show::Messages, ItemKind::Approval(card)) if card.by_autopilot() => return self.autopilot(item),
       (Show::All | Show::Messages, _) => Row::Item(item.clone()),
     };
     self.shown.rows.push(row);
+  }
+
+  /// Puts `item`, a request Autopilot approved, among the ones right before it in its step, or starts their row.
+  fn autopilot(&mut self, item: &Item) {
+    if let Some(Row::Approvals { items, .. }) = self.shown.rows.last_mut()
+      && items.first().is_some_and(|first| first.execution == item.execution)
+    {
+      items.push(item.clone());
+      return;
+    }
+    let key: Arc<str> = format!("approvals-{}", item.key).into();
+    let open = (self.open)(&key, false);
+    self.shown.rows.push(Row::Approvals {
+      key,
+      items: vec![item.clone()],
+      open,
+    });
   }
 
   fn agent_row(&mut self, item: &Item, agent: Arc<str>, text: Option<Arc<str>>) -> AgentRow {

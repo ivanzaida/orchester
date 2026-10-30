@@ -55,6 +55,16 @@ pub enum ChooseBrowserError {
 }
 
 impl Workspace {
+  /// Whether the *Browser* window opens by itself when an agent starts browsing (Settings › Browser,
+  /// `docs/design/browser.md` decision 14); on until a person turns it off.
+  pub fn browser_window_opens_itself(&self) -> Result<bool, StoreError> {
+    self.db.lock().browser_window_opens_itself()
+  }
+
+  pub fn set_browser_window_opens_itself(&self, opens: bool) -> Result<(), StoreError> {
+    self.db.lock().set_browser_window_opens_itself(opens)
+  }
+
   /// What Settings › Browser shows. Blocks on SQLite and, finding the browser on Windows, on the registry.
   pub fn browser_settings(&self) -> Result<BrowserSettings, StoreError> {
     let (chosen, opens_window) = {

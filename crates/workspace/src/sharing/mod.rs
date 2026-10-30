@@ -12,6 +12,7 @@
 mod account;
 pub mod address;
 pub mod cloud;
+pub mod compare;
 mod connect;
 mod connection;
 pub mod device;
@@ -24,6 +25,7 @@ mod password;
 pub mod project;
 mod server_key;
 pub mod sync;
+pub mod team;
 pub mod trust;
 
 use std::{

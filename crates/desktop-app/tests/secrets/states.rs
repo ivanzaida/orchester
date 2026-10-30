@@ -208,7 +208,8 @@ fn secrets_loading_can_be_held_then_released() {
     ProjectPage::Secrets(Default::default()),
   ));
   s.until("held read", |s| s.exists("secrets-loading"));
-  assert!(s.text("secrets-loading").contains("Reading the secrets"));
+  // While the secrets are read the toolbar works over their bones (`12 · Project settings · Secrets · loading`).
+  assert!(s.exists("secrets-add"), "Add secret works while the secrets are read");
   hold.set(false);
   s.until("released read", |s| s.exists("secrets-empty"));
 }
