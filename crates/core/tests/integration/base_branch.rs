@@ -1,8 +1,8 @@
-//! The project's base branch (ORC-81) against real repositories: the branches it can be set to, a remote-tracking
-//! one creating its local branch, the tip a new run starts from on a branch set and a branch set that is gone, and a
-//! run merged into a base branch the checkout does not have checked out: beside the checkout, which is neither switched
-//! nor touched, never into a base checked out in another worktree, and, for a project that follows the checked-out
-//! branch, still only in the checkout.
+//! A run's base branch (ORC-81) against real repositories: the branches it can be set to, a remote-tracking one
+//! creating its local branch, the tip a new run starts from on a branch set and a branch set that is gone, and a run
+//! merged into a base branch the checkout does not have checked out: beside the checkout, which is neither switched
+//! nor touched, never into a base checked out in another worktree, and, for a run that took the checked-out branch,
+//! still only in the checkout.
 //! `cargo test -p orchester-core --test integration base_branch`.
 
 use std::fs;
@@ -10,7 +10,7 @@ use std::fs;
 use orchester_core::{
   integration::{
     DeliveredAs, Delivering, MergeError, MergeKind,
-    base::{BaseBranchSetting, Landing, RunBaseError, branch_choices, create_tracking_branch, set_branch_tip},
+    base::{Landing, RunBaseError, branch_choices, create_tracking_branch, set_branch_tip},
     merge_run_as,
   },
   revision::Revision,
@@ -119,7 +119,6 @@ fn base_branch_a_new_run_starts_from_the_tip_of_the_branch_set_and_a_gone_one_is
     set_branch_tip(&Processes, &git_program(), (&repo.root, &branch("gone"))),
     Err(RunBaseError::Missing(branch("gone")))
   );
-  assert_eq!(BaseBranchSetting::default(), BaseBranchSetting::CheckedOut);
 }
 
 #[test]

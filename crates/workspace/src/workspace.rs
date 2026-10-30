@@ -451,6 +451,12 @@ impl Workspace {
     self.db.lock().sends_error_reports()
   }
 
+  /// Keeps a person's choice of *Send error reports* (Settings › General); the app's client and its runners follow it
+  /// at once (`orchester_app::error_reports::turn`), not through this.
+  pub fn set_sends_error_reports(&self, allowed: bool) -> Result<(), StoreError> {
+    self.db.lock().set_sends_error_reports(allowed)
+  }
+
   /// When the Orchestrator's daily report comes; `None` while it is off, as it is until a person turns it on.
   pub fn daily_report_schedule(&self) -> Result<Option<ReportSchedule>, StoreError> {
     self.db.lock().daily_report_schedule()

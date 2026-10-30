@@ -1,6 +1,6 @@
 //! Merging a run the queue delivers into its base branch, as the task page's *Merge into <base>* merges
 //! (`tasks::integration::merge_in`): in the person's checkout, which must have the base branch checked out and no
-//! uncommitted changes, or beside it when the project's base branch is set and the checkout has another branch;
+//! uncommitted changes, or beside it when the run's base branch was set and the checkout has another branch;
 //! recording the merge (its task is done) and clearing the run's worktree, code index and merged branch after it. It
 //! lands exactly what was checked: the run's branch at the tip the check ran on, over the base at the head it held; a
 //! base that moved since lands nothing, and the run syncs again. The Deliver step's method decides the commit: always
@@ -10,7 +10,9 @@ use std::path::Path;
 
 use orchester_core::{
   integration::{
-    DeliveredAs, Delivering, MergeError, MergeKind, branch_head,
+    DeliveredAs, Delivering, MergeError, MergeKind,
+    base::Landing,
+    branch_head,
     delivery::{self, Checkout},
     drift,
   },
@@ -21,13 +23,10 @@ use orchester_core::{
 };
 use orchester_exec::programs::Programs;
 
-use crate::{
-  project_settings::landing,
-  tasks::{
-    changes::GIT,
-    integration::{IntegrationProblem, merge_in_as},
-    local_integration::CheckoutHolder,
-  },
+use crate::tasks::{
+  changes::GIT,
+  integration::{IntegrationProblem, merge_in_as},
+  local_integration::CheckoutHolder,
 };
 
 /// Characters of the task's brief the squash commit's body keeps.
@@ -50,8 +49,8 @@ pub(super) enum Landed {
 }
 
 /// Merges `run`, of `task`, which was synced and checked on `checked` (`None`: its pipeline does not check the merged
-/// result again), into its base branch in the checkout at `root`, or beside it when the project's base branch is set
-/// and the checkout has another branch, as `deliver` says.
+/// result again), into its base branch in the checkout at `root`, or beside it when the run's base branch was set and
+/// the checkout has another branch, as `deliver` says.
 pub(super) fn land(
   (root, programs): (&Path, &Programs),
   (run, task): (&Run, &Task),
@@ -60,10 +59,7 @@ pub(super) fn land(
   let Some(base) = run.base_branch() else {
     return Landed::Stopped("the run did not record its base branch".to_owned());
   };
-  let landing = match orchester_store::ProjectDb::open(root).and_then(|db| landing(&db)) {
-    Ok(landing) => landing,
-    Err(error) => return Landed::Stopped(error.to_string()),
-  };
+  let landing = Landing::of(run.base_source());
   let runner = programs.runner();
   match delivery::checkout(&runner, Path::new(GIT), (root, base)) {
     Ok(Checkout::OnBase { uncommitted }) if uncommitted.is_empty() => {}

@@ -131,7 +131,7 @@ fn members_name_the_servers_admins_as_last_read_and_make_local_forgets_them() {
   shared(&mut db);
   assert_eq!(db.server_admins().expect("admins"), [], "none named yet");
   db.record_server_admins(&[olha.clone(), olha.clone()]).expect("recorded");
-  assert_eq!(db.server_admins().expect("admins"), [olha.clone()]);
+  assert_eq!(db.server_admins().expect("admins"), std::slice::from_ref(&olha));
   db.record_server_admins(&[]).expect("replaced");
   assert_eq!(db.server_admins().expect("admins"), []);
 

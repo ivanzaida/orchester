@@ -287,13 +287,15 @@ fewer stop no agent, and new work waits until fewer agents work than the slots.
 
 A run that succeeded is merged by the desktop, in the user's checkout (the repository folder), into
 its base branch: the runner records it with the run when it starts (`runs.base_branch`; none on a
-detached HEAD, and none for runs recorded before it was kept, which cannot be merged from Orchester).
-That is the project's base branch when one is set (Project settings › General, `project_base_branch`,
-ORC-81), and the run then starts from that branch's tip wherever the checkout is; else the branch the
-checkout had when the run started, at its `HEAD`. A base branch set that no longer exists refuses new
-runs (preflight `base_branch_missing`); nothing falls back to the checkout. Runs already started keep
-the base they recorded. All of it is git through `orchester-exec`, with git's messages in English and
-no optional locks (`orchester_core::integration`).
+detached HEAD, and none for runs recorded before it was kept, which cannot be merged from Orchester),
+and where it came from (`runs.base_source`: `task`, `module` with `runs.base_module`, `checked_out`,
+or `project` for runs recorded before ORC-404). That is the task's base branch, else its module's
+(ORC-404, `orchester_core::integration::base::resolve`), and the run then starts from that branch's
+tip wherever the checkout is and may land beside it; else the branch the checkout had when the run
+started, at its `HEAD`. A base branch set that no longer exists refuses new runs (preflight
+`base_branch_missing`); nothing falls back to the checkout. Runs already started keep the base they
+recorded. All of it is git through `orchester-exec`, with git's messages in English and no optional
+locks (`orchester_core::integration`).
 
 - **Only a checkout that is ready.** The checkout must be on that branch and have no merge,
   cherry-pick or revert in progress; otherwise the merge is refused with the reason and nothing
@@ -466,7 +468,7 @@ open at the next start means the previous session crashed.
 | `money_budgets_before_tokens` | the money budgets tasks and runs had before budgets became tokens, kept by the migration that replaced them with the default run budget |
 | `money_step_budgets_before_tokens` | the money step budgets of published pipeline versions and drafts from before step budgets became tokens, per version or draft and step |
 | `repository_link` | at most one row: GitHub connection, git remote, host / owner / name, default branch, permission, expected login, checked at |
-| `project_base_branch` | Project settings › General › Base branch (ORC-81): at most one row, the branch new runs start from and deliver into; without it they take the branch the checkout has checked out. Kept on this computer only: a shared project does not sync it (see [Integration](#integration)) |
+| `base_branch_move`, `base_branch_move_modules` | ORC-404: the project's former base branch (`project_base_branch`, dropped) and when it moved to the open modules that had none, and which modules took it, for Project settings › General's one-time line. A task's base branch is `tasks.base_choice`/`tasks.base_branch`, a module's `modules.base_branch`; both kept on this computer only, outside a shared task's or module's revision (see [Integration](#integration)) |
 
 ### Versioned configuration
 

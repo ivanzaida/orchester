@@ -55,6 +55,7 @@ fn task_group_cap_and_usage_belong_only_to_first_runs_after_reopening() {
     branch: BranchName::new(branch).expect("branch"),
     base: template.base().clone(),
     base_branch: None,
+    base_source: orchester_core::integration::base::RunBaseSource::CheckedOut,
     budget: template.budget(),
     max_duration: template.max_duration(),
   };
@@ -349,6 +350,7 @@ fn task_group_release_returns_held_unstarted_tasks_to_drafts_and_finishes() {
     branch: BranchName::new("orchester/late-start").expect("branch"),
     base: template.base().clone(),
     base_branch: None,
+    base_source: orchester_core::integration::base::RunBaseSource::CheckedOut,
     budget: template.budget(),
     max_duration: template.max_duration(),
   };

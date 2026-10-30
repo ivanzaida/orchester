@@ -173,6 +173,7 @@ impl Fixture {
       branch: BranchName::new("orchester/orc-1").expect("valid branch"),
       base: revision('a'),
       base_branch: None,
+      base_source: orchester_core::integration::base::RunBaseSource::CheckedOut,
       budget: Some(TokenBudget::new(1_400_000).expect("above zero")),
       max_duration: Some(std::time::Duration::from_secs(1_800)),
     }

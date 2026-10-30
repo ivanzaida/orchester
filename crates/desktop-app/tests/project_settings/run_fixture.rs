@@ -42,6 +42,7 @@ pub fn started_run(db: &mut ProjectDb) -> RunId {
         branch: BranchName::new("orchester/kon-1-run-1").expect("branch"),
         base: Revision::new(&"a".repeat(40)).expect("revision"),
         base_branch: None,
+        base_source: orchester_core::integration::base::RunBaseSource::CheckedOut,
         budget: None,
         max_duration: None,
       },

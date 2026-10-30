@@ -75,6 +75,7 @@ impl<'k> Drive<'k> {
       branch: BranchName::for_next_run(task.key(), earlier),
       base: kontur.base.clone(),
       base_branch,
+      base_source: orchester_core::integration::base::RunBaseSource::CheckedOut,
       budget: limits.budget(),
       max_duration: limits.max_duration(),
     };

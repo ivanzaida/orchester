@@ -14,6 +14,7 @@ use std::{
 use orchester_core::{
   command::{Command as Program, CommandError, CommandOutput, CommandRunner},
   id::{ConnectionId, IdempotencyKey, ProjectId, ResourceId},
+  integration::base::RunBaseSource,
   merge_queue::{QueueEvent, QueueState},
   name::Name,
   permission::{AgentPermissions, CommandPermission, NetworkAccess, StepPermissions},
@@ -87,6 +88,8 @@ pub struct Repo {
   db: ProjectDb,
   pipelines: BTreeMap<&'static str, RunSnapshot>,
   answered: Arc<Answered>,
+  /// Where the runs made from now on took `main` from: the checked-out branch unless a test sets it.
+  pub base_source: RunBaseSource,
 }
 
 impl Repo {
@@ -131,6 +134,7 @@ impl Repo {
       db,
       pipelines,
       answered,
+      base_source: RunBaseSource::CheckedOut,
     }
   }
 
@@ -197,6 +201,7 @@ impl Repo {
           branch: BranchName::new(branch).expect("branch"),
           base: Revision::new(&base).expect("revision"),
           base_branch: Some(BranchName::new("main").expect("branch")),
+          base_source: self.base_source,
           budget: None,
           max_duration: None,
         },

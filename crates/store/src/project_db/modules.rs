@@ -18,7 +18,8 @@ use crate::{
   rows::{corrupt, parse},
 };
 
-const SELECT_MODULES: &str = "SELECT id, name, description, start_date, target_date, state, created_at FROM modules";
+const SELECT_MODULES: &str =
+  "SELECT id, name, description, start_date, target_date, state, created_at, base_branch FROM modules";
 
 impl ProjectDb {
   /// The project's modules, oldest first.
@@ -174,7 +175,7 @@ impl ProjectDb {
   }
 }
 
-fn load(connection: &Connection, id: ModuleId) -> Result<Option<Module>, StoreError> {
+pub(super) fn load(connection: &Connection, id: ModuleId) -> Result<Option<Module>, StoreError> {
   connection
     .query_row(
       &format!("{SELECT_MODULES} WHERE id = ?1"),
@@ -249,6 +250,7 @@ struct ModuleRow {
   target: Option<String>,
   state: String,
   created_at: i64,
+  base_branch: Option<String>,
 }
 
 impl ModuleRow {
@@ -261,6 +263,7 @@ impl ModuleRow {
       target: row.get(4)?,
       state: row.get(5)?,
       created_at: row.get(6)?,
+      base_branch: row.get(7)?,
     })
   }
 
@@ -287,10 +290,13 @@ impl ModuleRow {
       state,
     )
     .map_err(|error| corrupt("module dates", error))?;
-    Ok(Module::new(
-      parse("module id", &self.id)?,
-      details,
-      Timestamp::from_unix_millis(self.created_at),
-    ))
+    Ok(
+      Module::new(
+        parse("module id", &self.id)?,
+        details,
+        Timestamp::from_unix_millis(self.created_at),
+      )
+      .with_base(super::base_branch::parse_module_base(self.base_branch.as_deref())?),
+    )
   }
 }
