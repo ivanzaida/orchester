@@ -77,6 +77,8 @@ struct Waiting {
   used: Option<VersionNumber>,
   publisher: String,
   adds: Vec<VersionWidening>,
+  /// The MCP servers and secrets it names that the version runs use does not, as this computer has them.
+  added: Vec<HereReference>,
 }
 
 /// What the page shows of a shared profile.
@@ -154,11 +156,18 @@ fn read_shared(
         .cached_version::<AgentProfile>(resource, waiting.number)?
         .map(|cached| cached.publisher.name)
         .unwrap_or_default();
+      let added = here
+        .added_in(resource, waiting.number, waiting.used)
+        .into_iter()
+        .filter(|reference| !matches!(reference.binding.reference, BoundReference::Connection { .. }))
+        .cloned()
+        .collect();
       Some(Waiting {
         number: waiting.number,
         used: waiting.used,
         publisher,
         adds: waiting.adds,
+        added,
       })
     }
     None => None,
@@ -254,7 +263,7 @@ impl Component for UseHere {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<UseHereProps>().clone();
     let version = props.waiting.number.get().to_string();
-    let adds = adds_list(ctx, &props.waiting.adds);
+    let adds = adds_list(ctx, &props.waiting);
     let state = self.use_here.state().get();
     let button = ActionButton::new(
       USE_HERE,
@@ -322,14 +331,31 @@ impl Component for UseHere {
   }
 }
 
-/// What a version adds, one line each with a plus (`uOQNr` in 02d).
-fn adds_list(ctx: &Ctx, adds: &[VersionWidening]) -> Column {
+/// What a version adds, one line each with a plus (`uOQNr` in 02d): first each MCP server and secret it names by
+/// name with how it stands here, *MCP server github · bound here to “GitHub (remote)”*, then the rest.
+fn adds_list(ctx: &Ctx, waiting: &Waiting) -> Column {
+  let mut named: Vec<String> = Vec::new();
+  let mut rest: Vec<String> = Vec::new();
+  for add in &waiting.adds {
+    let of_kind = |reference: &&HereReference| match add {
+      VersionWidening::McpServer => matches!(reference.binding.reference, BoundReference::McpServer { .. }),
+      VersionWidening::Secret => matches!(reference.binding.reference, BoundReference::Secret { .. }),
+      _ => false,
+    };
+    let references: Vec<&HereReference> = waiting.added.iter().filter(of_kind).collect();
+    if references.is_empty() {
+      rest.push(ctx.t(adds_key(add)).to_string());
+    } else {
+      named.extend(references.into_iter().map(|reference| named_add(ctx, reference)));
+    }
+  }
+  named.dedup();
   Column::new()
     .id("agent-widens-adds")
     .width(Dimension::Pct(100.0))
     .padding(Padding::new().top(ExtraSpacing::Snug.role()))
     .spacing(SpacingSize::Xs)
-    .with_children(adds.iter().enumerate().map(|(index, add)| {
+    .with_children(named.into_iter().chain(rest).enumerate().map(|(index, words)| {
       Row::new()
         .id(format!("agent-widens-add-{index}"))
         .width(Dimension::Pct(100.0))
@@ -341,12 +367,27 @@ fn adds_list(ctx: &Ctx, adds: &[VersionWidening]) -> Column {
           PaletteColor::TextSecondary,
         ))
         .child(
-          Text::new(&ctx.t(adds_key(add)))
+          Text::new(&words)
             .variant(HubText::Status.role())
             .flex(1.0)
             .min_width(Dimension::Px(0.0)),
         )
     }))
+}
+
+/// An MCP server or secret a version adds, by name, with how it stands on this computer.
+fn named_add(ctx: &Ctx, reference: &HereReference) -> String {
+  let key = match reference.binding.reference {
+    BoundReference::Secret { .. } => "sharing.config.widens.adds.secretNamed",
+    _ => "sharing.config.widens.adds.serverNamed",
+  };
+  let what = ctx.t_args(key, [("name", reference.binding.name.as_str())]).to_string();
+  let (key, local) = match &reference.standing {
+    Standing::Bound { local, .. } => ("sharing.config.widens.adds.boundHere", local.clone()),
+    Standing::Found { name, .. } => ("sharing.config.widens.adds.foundHere", name.clone()),
+    Standing::Missing => ("sharing.config.widens.adds.missingHere", String::new()),
+  };
+  ctx.t_args(key, [("what", what), ("local", local)]).to_string()
 }
 
 /// The few words that say what a version adds (`Add` rows in `uOQNr`).

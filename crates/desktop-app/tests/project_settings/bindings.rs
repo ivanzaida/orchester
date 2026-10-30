@@ -182,10 +182,15 @@ fn bindings_on_this_computer_says_who_needs_each_reference_and_the_picker_binds_
   let mut page = Settings::new(true);
   let (theirs, _) = shared(&mut page.db());
   open(&mut page);
-  assert_eq!(page.text("sharing-bindings-count"), "3 references · 3 need you");
+  assert_eq!(
+    page.text("sharing-bindings-count"),
+    "3 references · 2 need you",
+    "the server found by name waits on its own row, not counted"
+  );
+  assert_eq!(page.text("sharing-binding-connection-0-label"), "Claude Code “Work”");
   assert_eq!(
     page.text("sharing-binding-connection-0-hint"),
-    "claude_code_cli · missing on this computer · Review rules v1 can't run here"
+    "claude_code_cli · missing on this computer · Review rules can't run here"
   );
   assert_eq!(
     page.text("sharing-binding-server-0-hint"),
@@ -203,8 +208,12 @@ fn bindings_on_this_computer_says_who_needs_each_reference_and_the_picker_binds_
   let laptop = page.db().connections().expect("connections")[0].id();
   page.click("sharing-binding-connection-0-picker");
   page.until("the picker's menu", |page| {
-    page.exists("sharing-binding-connection-0-picker-add-account")
+    page.exists("sharing-binding-connection-0-picker-option-0")
   });
+  assert!(
+    !page.exists("sharing-binding-connection-0-picker-add-account"),
+    "a missing connection's select offers the ones here, not Add an account… (04c)"
+  );
   page.click("sharing-binding-connection-0-picker-option-0");
   page.until("the connection bound", |page| {
     page.exists("sharing-binding-connection-0-bound")
@@ -219,7 +228,7 @@ fn bindings_on_this_computer_says_who_needs_each_reference_and_the_picker_binds_
       }),
     }
   );
-  assert_eq!(page.text("sharing-bindings-count"), "3 references · 2 need you");
+  assert_eq!(page.text("sharing-bindings-count"), "3 references · 1 need you");
 }
 
 #[test]

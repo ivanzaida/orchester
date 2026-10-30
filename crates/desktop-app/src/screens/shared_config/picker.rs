@@ -1,7 +1,8 @@
 //! The picker of what a reference is bound to on this computer (`04c` `rpQ7s`, `07b` `zE2cB`, `06b` `p779C`): a
 //! select (*Choose a connection*, 200 wide) or *Change* opens a menu, 300 wide at the control's end, of the person's
-//! own connections (or MCP servers, secrets), the current one checked; one of another role says so after its name and
-//! cannot be chosen. A connection's menu ends, after a line, in *Add an account…*, which opens Settings › Accounts.
+//! own connections (or MCP servers, secrets), the current one checked; after a line, the ones of another role say so
+//! after their name and cannot be chosen. A menu may end, after a line, in *Add an account…*, which opens Settings ›
+//! Accounts.
 
 use std::sync::Arc;
 
@@ -183,35 +184,38 @@ impl Picker {
   }
 
   fn rows(&self, ctx: &mut Ctx, props: &Props) -> Vec<Element> {
-    let mut rows: Vec<Element> = props
-      .items
-      .iter()
-      .enumerate()
-      .map(|(index, item)| {
-        let id = format!("{}-option-{index}", props.id);
-        let row = match &item.unavailable {
-          Some(reason) => MenuItem::unavailable(id, item.label.clone(), reason.clone()).without_lock(),
-          None => {
-            let (choose, busy) = (props.choose.clone(), props.busy);
-            let row = MenuItem::new(id, item.label.clone(), move || {
-              if !busy {
-                choose(index);
-              }
-            });
-            match &item.detail {
-              Some(detail) => row.detail(detail.clone()),
-              None => row,
+    let mut rows: Vec<Element> = Vec::new();
+    for (index, item) in props.items.iter().enumerate() {
+      // A line between the choosable ones and the first that can't be chosen (`04c`).
+      let after_choosable = index > 0 && props.items[index - 1].unavailable.is_none();
+      if item.unavailable.is_some() && after_choosable {
+        rows.push(separator(ctx));
+      }
+      let id = format!("{}-option-{index}", props.id);
+      let row = match &item.unavailable {
+        Some(reason) => MenuItem::unavailable(id, item.label.clone(), reason.clone()).without_lock(),
+        None => {
+          let (choose, busy) = (props.choose.clone(), props.busy);
+          let row = MenuItem::new(id, item.label.clone(), move || {
+            if !busy {
+              choose(index);
             }
+          });
+          match &item.detail {
+            Some(detail) => row.detail(detail.clone()),
+            None => row,
           }
-        };
+        }
+      };
+      rows.push(
         row
           .icon(item.glyph)
           .inline_detail()
           .chosen(item.chosen)
           .in_form()
-          .render(ctx, &self.open)
-      })
-      .collect();
+          .render(ctx, &self.open),
+      );
+    }
     if props.add_account {
       rows.push(separator(ctx));
       let open = Navigation::of(ctx).to(Route::Accounts(AccountsView {

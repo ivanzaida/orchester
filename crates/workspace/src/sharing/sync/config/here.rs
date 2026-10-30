@@ -28,6 +28,8 @@ pub struct Needer {
   pub kind: ResourceKind,
   pub name: String,
   pub number: VersionNumber,
+  /// Every cached version of it that names the reference, oldest first.
+  pub numbers: Vec<VersionNumber>,
 }
 
 /// How a reference stands on this computer.
@@ -51,21 +53,31 @@ pub struct HereReference {
 }
 
 impl HereReference {
-  /// Whether the person has something to do for it: it is missing, or found and waiting.
-  pub const fn needs_you(&self) -> bool {
-    matches!(self.standing, Standing::Found { .. } | Standing::Missing)
+  /// Whether nothing here is bound to it, so what names it can't run here. An MCP server found by its name is not
+  /// missing: it waits for the person's *Confirm…* on its own row.
+  pub const fn is_missing(&self) -> bool {
+    matches!(self.standing, Standing::Missing)
   }
 
   /// Whether `resource` names it.
   pub fn needed_by(&self, resource: ResourceId) -> bool {
     self.needed_by.iter().any(|needer| needer.resource == resource)
   }
+
+  /// Whether version `number` of `resource` names it.
+  pub fn named_in(&self, resource: ResourceId, number: VersionNumber) -> bool {
+    self
+      .needed_by
+      .iter()
+      .any(|needer| needer.resource == resource && needer.numbers.contains(&number))
+  }
 }
 
 /// What this computer has of a shared project's references, and what it may bind them to.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Here {
-  /// Connections first, then MCP servers, then secrets, each kind by name.
+  /// Connections first, then MCP servers, then secrets, each kind in the order the publisher made them (their ids
+  /// are time-ordered), so a row keeps its place when it is bound or goes missing.
   pub references: Vec<HereReference>,
   pub connections: Vec<Connection>,
   pub mcp_servers: Vec<McpServer>,
@@ -90,10 +102,8 @@ impl Here {
         })
       })
       .collect::<Result<Vec<_>, SharingError>>()?;
-    references.sort_by(|a, b| {
-      (kind_order(a.binding.reference), a.binding.name.to_lowercase())
-        .cmp(&(kind_order(b.binding.reference), b.binding.name.to_lowercase()))
-    });
+    // The store lists them by reference id; a stable sort by kind keeps that order within each kind.
+    references.sort_by_key(|reference| kind_order(reference.binding.reference));
     Ok(Self {
       references,
       connections,
@@ -102,17 +112,38 @@ impl Here {
     })
   }
 
-  /// How many references need the person.
+  /// How many references are missing here, each for the person to choose (*3 need you*). An MCP server found by its
+  /// name says *Waits for you* on its own row instead.
   pub fn needs_you(&self) -> usize {
-    self.references.iter().filter(|reference| reference.needs_you()).count()
+    self
+      .references
+      .iter()
+      .filter(|reference| reference.is_missing())
+      .count()
   }
 
-  /// The references `resource` names that need the person.
+  /// The references `resource` names that are missing here.
   pub fn missing_for(&self, resource: ResourceId) -> Vec<&HereReference> {
     self
       .references
       .iter()
-      .filter(|reference| reference.needs_you() && reference.needed_by(resource))
+      .filter(|reference| reference.is_missing() && reference.needed_by(resource))
+      .collect()
+  }
+
+  /// The references version `number` of `resource` names that version `before` does not (any, for none): what it adds.
+  pub fn added_in(
+    &self,
+    resource: ResourceId,
+    number: VersionNumber,
+    before: Option<VersionNumber>,
+  ) -> Vec<&HereReference> {
+    self
+      .references
+      .iter()
+      .filter(|reference| {
+        reference.named_in(resource, number) && before.is_none_or(|before| !reference.named_in(resource, before))
+      })
       .collect()
   }
 
@@ -145,12 +176,13 @@ impl Here {
   }
 }
 
-/// The resources whose cached versions name `binding`'s reference, each with its newest version that does.
+/// The resources whose cached versions name `binding`'s reference, each with the versions that do.
 fn needers(db: &ProjectDb, binding: &ReferenceBinding) -> Result<Vec<Needer>, StoreError> {
   let mut needers: Vec<Needer> = Vec::new();
   for naming in db.versions_naming(binding_target(binding.reference))? {
     if let Some(kept) = needers.iter_mut().find(|needer| needer.resource == naming.resource) {
       kept.number = kept.number.max(naming.number);
+      kept.numbers.push(naming.number);
       continue;
     }
     let Some(resource) = db.resource(naming.resource)? else {
@@ -161,6 +193,7 @@ fn needers(db: &ProjectDb, binding: &ReferenceBinding) -> Result<Vec<Needer>, St
       kind: naming.kind,
       name: resource.name().as_str().to_owned(),
       number: naming.number,
+      numbers: vec![naming.number],
     });
   }
   Ok(needers)

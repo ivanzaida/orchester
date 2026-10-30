@@ -9,7 +9,7 @@
 //! - secrets: `STAGING_DB_URL` (tool Query staging), bound by the person; `SENTRY_TOKEN` (tool Report crash), missing,
 //!   with `SENTRY_AUTH_TOKEN` here to give it (04e).
 //!
-//! Reviewer's v5 widens what agents may do (an MCP server, network, a command) and waits for *Use v5 here* (02d); the
+//! Reviewer's v5 widens what agents may do (the MCP server `github`, network) and waits for *Use v5 here* (02d); the
 //! pipeline Feature delivery runs Explorer, so it can't run here (04). Builder's page shows *Runs here use* (06, 06b).
 //! The pickers and the modals open with a click; only choosing in them and confirming are a person's.
 //!

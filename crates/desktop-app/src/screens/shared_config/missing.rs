@@ -7,13 +7,17 @@ use lurq::{
   app::{component::DevtoolsInspectable, ctx::Ctx},
   node::Element,
 };
-use orchester_core::id::{ProjectId, ResourceId};
+use orchester_core::{
+  id::{ProjectId, ResourceId},
+  sharing::ConnectionRole,
+};
 use orchester_store::BoundReference;
 use orchester_workspace::{
   background,
   sharing::sync::{Here, HereReference},
 };
 
+use super::kind_of;
 use crate::{
   navigation::Navigation,
   project::ShownProject,
@@ -47,18 +51,36 @@ pub(crate) fn bar(
 ) -> Option<Element> {
   let first = *missing.first()?;
   let reference = ("name", first.binding.name.clone());
-  let status = match (missing.len(), first.binding.reference) {
-    (1, BoundReference::Connection { .. }) => ctx.t_args("sharing.config.missing.connection", [reference]),
-    (1, BoundReference::McpServer { .. }) => ctx.t_args("sharing.config.missing.server", [reference]),
-    (1, BoundReference::Secret { .. }) => ctx.t_args("sharing.config.missing.secret", [reference]),
-    (count, _) => ctx.t_args("sharing.config.missing.several", [("count", count.to_string())]),
+  // The kind a connection's role names, *API connection “DeepSeek”*; a role this version does not know has none.
+  let known = first
+    .binding
+    .role
+    .as_deref()
+    .and_then(ConnectionRole::parse)
+    .map(ConnectionRole::as_str);
+  let status = match (missing.len(), first.binding.reference, kind_of(ctx, known)) {
+    (1, BoundReference::Connection { .. }, Some(kind)) => ctx.t_args(
+      "sharing.config.missing.connectionOf",
+      [reference, ("kind", kind.to_string())],
+    ),
+    (1, BoundReference::Connection { .. }, None) => ctx.t_args("sharing.config.missing.connection", [reference]),
+    (1, BoundReference::McpServer { .. }, _) => ctx.t_args("sharing.config.missing.server", [reference]),
+    (1, BoundReference::Secret { .. }, _) => ctx.t_args("sharing.config.missing.secret", [reference]),
+    (count, ..) => ctx.t_args("sharing.config.missing.several", [("count", count.to_string())]),
   };
   let resource = ("resource", name.to_owned());
-  let sub = match (whose, missing.len(), first.binding.reference, &first.binding.role) {
+  let sub = match (whose, missing.len(), first.binding.reference, known) {
     (Whose::Pipeline, ..) => ctx.t_args("sharing.config.missing.bodyPipeline", [resource]),
     (Whose::Resource, 1, BoundReference::Connection { .. }, Some(role)) => ctx.t_args(
       "sharing.config.missing.bodyConnection",
-      [resource, ("role", role.clone())],
+      [
+        resource,
+        ("role", role.to_owned()),
+        (
+          "connection",
+          ctx.t(&format!("sharing.bindings.aConnection.{role}")).to_string(),
+        ),
+      ],
     ),
     (Whose::Resource, ..) => ctx.t_args("sharing.config.missing.body", [resource]),
   };

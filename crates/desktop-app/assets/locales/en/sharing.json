@@ -546,10 +546,29 @@
       "separator": ", ",
       "version": "{{name}} v{{version}}",
       "tool": "Tool “{{name}}”",
+      "titled": "{{kind}} “{{name}}”",
+      "detailed": "{{name}} · {{detail}}",
+      "projectSecret": "project secret",
+      "kind": {
+        "claude_code_cli": "Claude Code",
+        "codex_cli": "Codex",
+        "anthropic_api": "API",
+        "openai_api": "API",
+        "github": "GitHub"
+      },
+      "aConnection": {
+        "claude_code_cli": "a Claude Code connection",
+        "codex_cli": "a Codex connection",
+        "anthropic_api": "an API connection",
+        "openai_api": "an API connection",
+        "github": "a GitHub connection"
+      },
       "hint": {
         "connection": "{{role}} · {{needs}}",
-        "connectionMissing": "{{role}} · missing on this computer · {{needs}} can't run here",
+        "connectionAccounts": "{{role}} · {{needs}} · {{count}} {{kind}} accounts here",
+        "connectionMissing": "{{role}} · missing on this computer · {{names}} can't run here",
         "noAccount": "{{role}} · {{needs}} · no account for it on this computer",
+        "noAccountOf": "{{role}} · {{needs}} · no {{kind}} account on this computer",
         "missing": "{{needs}} · missing on this computer",
         "found": "{{needs}} · found “{{local}}” here by name",
         "confirmed": "{{needs}} · confirmed {{date}}"
@@ -588,10 +607,11 @@
     "config": {
       "missing": {
         "connection": "Missing on this computer: connection “{{name}}”",
+        "connectionOf": "Missing on this computer: {{kind}} connection “{{name}}”",
         "server": "Missing on this computer: MCP server “{{name}}”",
         "secret": "Missing on this computer: secret “{{name}}”",
         "several": "Missing on this computer: {{count}} references",
-        "bodyConnection": "Pipelines that use {{resource}} can't run here until you choose a connection ({{role}}) on this computer.",
+        "bodyConnection": "Pipelines that use {{resource}} can't run here until you choose {{connection}} ({{role}}) on this computer.",
         "body": "Pipelines that use {{resource}} can't run here until you choose what it names on this computer.",
         "bodyPipeline": "{{resource}} can't run here until you choose what its steps name on this computer.",
         "choose": "Choose on this computer…"
@@ -600,7 +620,7 @@
         "title": "v{{version}} widens what agents may do here",
         "body": "{{publisher}} published v{{version}}. Runs on this computer keep the version before it until you use v{{version}} here.",
         "bodyUsed": "{{publisher}} published v{{version}}. Runs on this computer keep v{{used}} until you use v{{version}} here.",
-        "compare": "Compare v{{version}} with v{{used}}",
+        "compare": "Compare v{{used}} with v{{version}}",
         "compareLater": "Comparing a profile's versions comes in a later update.",
         "personOnly": "Only you can press this: not the Orchestrator, a tool or automation.",
         "use": "Use v{{version}} here",
@@ -614,6 +634,11 @@
           "autopilot": "Autopilot · was Manual",
           "mcpServer": "An MCP server it did not give its agents",
           "secret": "A secret it did not use",
+          "serverNamed": "MCP server {{name}}",
+          "secretNamed": "Secret {{name}}",
+          "boundHere": "{{what}} · bound here to “{{local}}”",
+          "foundHere": "{{what}} · found “{{local}}” here by name",
+          "missingHere": "{{what}} · missing on this computer",
           "command": "A command it did not run",
           "address": "Another address its requests go to",
           "method": "Another request method",

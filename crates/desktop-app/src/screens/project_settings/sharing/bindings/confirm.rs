@@ -1,43 +1,75 @@
-//! The person-only confirmation that binds an MCP server (`04d` `z0iFy`) or a secret (`04e` `LRXYn`): a modal with the
-//! one chosen here, which the person may change in it, what binding it lets agents or tools do, that nothing about it
-//! is sent, and *Only you can confirm this; the Orchestrator and tools can't.* Its action binds it only for a person's
-//! input; synthetic input (an MCP client's) is refused and the dialog says so.
+//! The person-only confirmation that binds an MCP server (`04d` `z0iFy`) or a secret (`04e` `LRXYn`): a modal with,
+//! under its title, the one chosen here with where it is, which the person may change in it; then what binding it lets
+//! agents or tools do, that nothing about it is sent, and *Only you can confirm this; the Orchestrator and tools
+//! can't.* Its action binds it only for a person's input; synthetic input (an MCP client's) is refused and the dialog
+//! says so.
 
-use lurq::{app::ctx::Ctx, components::SelectOption, node::Element};
+use lurq::{
+  app::ctx::Ctx,
+  components::{Column, SelectOption},
+  node::Element,
+};
 use orchester_store::{Bound, BoundBy, BoundReference};
 use orchester_workspace::sharing::sync::Here;
 
 use super::{Ask, rows::Actions};
-use crate::ui::{
-  button::{ActionButton, ButtonKind},
-  dialog::{Dialog, choice, line, lines},
-  field::SelectField,
-  icon::Icon,
+use crate::{
+  screens::shared_config::server_detail,
+  ui::{
+    button::{ActionButton, ButtonKind},
+    dialog::{Dialog, choice, line, lines},
+    field::SelectField,
+    icon::Icon,
+  },
 };
 
 /// The action, which only a person presses.
 const CONFIRM: &str = "sharing-bind-confirm";
 
+/// One the modal offers: its id, its name, and the select's words for it, `GitHub (remote) ·
+/// api.githubcopilot.com/mcp`.
+struct Offered {
+  id: String,
+  name: String,
+  words: String,
+}
+
 /// The modal asking about `ask`.
 pub(super) fn dialog(ctx: &Ctx, here: &Here, ask: &Ask, actions: &Actions) -> Element {
   let chosen = actions.chosen.get();
-  let (dialog, options) = match ask.reference {
+  let detailed = |name: &str, detail: &str| -> String {
+    ctx
+      .t_args("sharing.bindings.detailed", [("name", name), ("detail", detail)])
+      .to_string()
+  };
+  let (dialog, options, what) = match ask.reference {
     BoundReference::McpServer { .. } => {
-      let options: Vec<(String, String)> = here
+      let options: Vec<Offered> = here
         .mcp_servers
         .iter()
-        .map(|server| (server.id().to_string(), server.name().as_str().to_owned()))
+        .map(|server| Offered {
+          id: server.id().to_string(),
+          name: server.name().as_str().to_owned(),
+          words: detailed(server.name().as_str(), &server_detail(server)),
+        })
         .collect();
-      let local = label_of(&options, &chosen);
-      (server(ctx, ask, &local), options)
+      let local = name_of(&options, &chosen);
+      let (dialog, what) = server(ctx, ask, &local);
+      (dialog, options, what)
     }
     BoundReference::Secret { .. } => {
-      let options: Vec<(String, String)> = here
+      let project = ctx.t("sharing.bindings.projectSecret");
+      let options: Vec<Offered> = here
         .secrets_of(here_role(here, ask).as_deref())
         .into_iter()
-        .map(|secret| (secret.id().to_string(), secret.name().as_str().to_owned()))
+        .map(|secret| Offered {
+          id: secret.id().to_string(),
+          name: secret.name().as_str().to_owned(),
+          words: detailed(secret.name().as_str(), &project),
+        })
         .collect();
-      (secret(ctx, ask), options)
+      let (dialog, what) = secret(ctx, ask);
+      (dialog, options, what)
     }
     // A connection is bound from its picker at once; it is never asked about.
     BoundReference::Connection { .. } => return Element::new(),
@@ -52,13 +84,14 @@ pub(super) fn dialog(ctx: &Ctx, here: &Here, ask: &Ask, actions: &Actions) -> El
     actions.chosen.clone(),
     options
       .iter()
-      .map(|(id, name)| SelectOption::new(id.clone(), name.clone()))
+      .map(|offered| SelectOption::new(offered.id.clone(), offered.words.clone()))
       .collect(),
   )
   .render(ctx);
   let action = action(ctx, ask, actions);
   dialog
     .part(choice("sharing-bind-choice-field", &label, select))
+    .part(what)
     .person_only(ctx.t("sharing.bindings.personOnly"))
     .action(action)
     .under(actions.person.reason(ctx, CONFIRM))
@@ -66,7 +99,7 @@ pub(super) fn dialog(ctx: &Ctx, here: &Here, ask: &Ask, actions: &Actions) -> El
 }
 
 /// *Use “GitHub (remote)” for github on this computer?* and what it lets agents do.
-fn server(ctx: &Ctx, ask: &Ask, local: &str) -> Dialog {
+fn server(ctx: &Ctx, ask: &Ask, local: &str) -> (Dialog, Column) {
   let names = [
     ("name", ask.name.clone()),
     ("local", local.to_owned()),
@@ -88,17 +121,17 @@ fn server(ctx: &Ctx, ask: &Ask, local: &str) -> Dialog {
       line("sharing-bind-later", Icon::Undo2, &ctx.t("sharing.bindings.later")),
     ],
   );
-  Dialog::new(
+  let dialog = Dialog::new(
     "sharing-bind-server",
     Icon::Server,
     ctx.t_args("sharing.bindings.server.title", names),
     ctx.t("sharing.bindings.cancel"),
-  )
-  .part(what)
+  );
+  (dialog, what)
 }
 
 /// *Give a secret to SENTRY_TOKEN on this computer?* and what it lets tools do.
-fn secret(ctx: &Ctx, ask: &Ask) -> Dialog {
+fn secret(ctx: &Ctx, ask: &Ask) -> (Dialog, Column) {
   let names = [("name", ask.name.clone()), ("needs", ask.needs.clone())];
   let what = lines(
     "sharing-bind-does",
@@ -116,13 +149,13 @@ fn secret(ctx: &Ctx, ask: &Ask) -> Dialog {
       line("sharing-bind-later", Icon::Undo2, &ctx.t("sharing.bindings.later")),
     ],
   );
-  Dialog::new(
+  let dialog = Dialog::new(
     "sharing-bind-secret",
     Icon::KeyRound,
     ctx.t_args("sharing.bindings.secret.title", names),
     ctx.t("sharing.bindings.cancel"),
-  )
-  .part(what)
+  );
+  (dialog, what)
 }
 
 /// *Use for github* or *Use this secret*: binds the chosen one, once a person pressed it.
@@ -192,10 +225,10 @@ fn same_reference(a: BoundReference, b: BoundReference) -> bool {
 }
 
 /// The name of the option whose id is `chosen`; empty while none is.
-fn label_of(options: &[(String, String)], chosen: &str) -> String {
+fn name_of(options: &[Offered], chosen: &str) -> String {
   options
     .iter()
-    .find(|(id, _)| id == chosen)
-    .map(|(_, name)| name.clone())
+    .find(|offered| offered.id == chosen)
+    .map(|offered| offered.name.clone())
     .unwrap_or_default()
 }

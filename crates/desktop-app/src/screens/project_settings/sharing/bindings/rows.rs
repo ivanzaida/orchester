@@ -10,7 +10,7 @@ use lurq::{
   core::Signal,
   node::Element,
 };
-use orchester_core::{id::ConnectionId, sharing::ConnectionRole};
+use orchester_core::{connection::Connection, id::ConnectionId, sharing::ConnectionRole};
 use orchester_store::{Bound, BoundBy, BoundReference};
 use orchester_workspace::sharing::sync::{Here, HereReference, Standing, chosen_at};
 
@@ -21,8 +21,9 @@ use crate::{
     project_settings::kit::{SettingRow, Tone, tile},
     settings::orchester::{PersonOnly, Said, day_of},
     shared_config::{
-      needs,
+      connection_look, kind_of, needs, needs_names,
       picker::{self, Item, Opener, SELECT_WIDTH},
+      titled,
     },
   },
   ui::{
@@ -113,7 +114,7 @@ fn row(
     Standing::Found { local, .. } => found(ctx, &id, reference, *local, (&needs, actions)),
     Standing::Missing => missing(ctx, &id, here, reference, &needs, actions),
   };
-  SettingRow::new(id, reference.binding.name.clone())
+  SettingRow::new(id, titled(ctx, &reference.binding))
     .lead(tile(ctx, kind.glyph()))
     .toned(hint, tone)
     .controls(controls)
@@ -123,34 +124,54 @@ fn row(
 /// Who needs it and how it stands, and the tone that says it.
 fn hint(ctx: &Ctx, here: &Here, reference: &HereReference, needs: &str) -> (Arc<str>, Tone) {
   let role = reference.binding.role.clone().unwrap_or_default();
+  let kind = kind_of(ctx, reference.binding.role.as_deref());
+  let accounts = here.connections_of(&role).len();
   let args = |more: Vec<(&'static str, String)>| {
     let mut args = vec![("needs", needs.to_owned()), ("role", role.clone())];
     args.extend(more);
     args
   };
   let connection = matches!(reference.binding.reference, BoundReference::Connection { .. });
-  match &reference.standing {
-    Standing::Missing if connection && here.connections_of(&role).is_empty() => (
+  match (&reference.standing, &kind) {
+    (Standing::Missing, Some(kind)) if connection && accounts == 0 => (
+      ctx.t_args(
+        "sharing.bindings.hint.noAccountOf",
+        args(vec![("kind", kind.to_string())]),
+      ),
+      Tone::Danger,
+    ),
+    (Standing::Missing, None) if connection && accounts == 0 => (
       ctx.t_args("sharing.bindings.hint.noAccount", args(Vec::new())),
       Tone::Danger,
     ),
-    Standing::Missing if connection => (
-      ctx.t_args("sharing.bindings.hint.connectionMissing", args(Vec::new())),
+    (Standing::Missing, _) if connection => (
+      ctx.t_args(
+        "sharing.bindings.hint.connectionMissing",
+        args(vec![("names", needs_names(ctx, &reference.needed_by))]),
+      ),
       Tone::Danger,
     ),
-    Standing::Missing => (
+    (Standing::Missing, _) => (
       ctx.t_args("sharing.bindings.hint.missing", args(Vec::new())),
       Tone::Danger,
     ),
-    Standing::Found { name, .. } => (
+    (Standing::Found { name, .. }, _) => (
       ctx.t_args("sharing.bindings.hint.found", args(vec![("local", name.clone())])),
       Tone::Muted,
     ),
-    Standing::Bound { .. } if connection => (
+    // *· 2 Claude Code accounts here* once there is more than one to change to (`07`).
+    (Standing::Bound { .. }, Some(kind)) if connection && accounts > 1 => (
+      ctx.t_args(
+        "sharing.bindings.hint.connectionAccounts",
+        args(vec![("kind", kind.to_string()), ("count", accounts.to_string())]),
+      ),
+      Tone::Muted,
+    ),
+    (Standing::Bound { .. }, _) if connection => (
       ctx.t_args("sharing.bindings.hint.connection", args(Vec::new())),
       Tone::Muted,
     ),
-    Standing::Bound { .. } => match chosen_at(&reference.binding) {
+    (Standing::Bound { .. }, _) => match chosen_at(&reference.binding) {
       Some(at) => (
         ctx.t_args("sharing.bindings.hint.confirmed", args(vec![("date", day_of(ctx, at))])),
         Tone::Muted,
@@ -273,7 +294,9 @@ fn missing(
   }
 }
 
-/// The person's connections, the ones of another role unavailable, then *Add an account…*: a choice binds it.
+/// The person's connections of the reference's role, which a choice binds it to. A missing one's select (`04c`) then
+/// shows, after a line, the ones of another role, unavailable; *Change* on a bound one (`07b`) ends in *Add an
+/// account…* instead.
 fn connection_picker(
   ctx: &mut Ctx,
   id: &str,
@@ -288,18 +311,29 @@ fn connection_picker(
     _ => None,
   };
   let another = ctx.t("sharing.bindings.anotherRole");
-  let items = here
+  let changes = opener == Opener::Change;
+  let (choosable, others): (Vec<&Connection>, Vec<&Connection>) = here
     .connections
     .iter()
-    .map(|connection| Item {
+    .partition(|connection| ConnectionRole::of(connection.kind()).as_str() == role);
+  let others = if changes { Vec::new() } else { others };
+  let item = |connection: &Connection, unavailable: Option<Arc<str>>| {
+    let (glyph, detail) = connection_look(connection);
+    Item {
       label: connection.name().as_str().into(),
-      glyph: Icon::User,
-      detail: None,
+      glyph,
+      detail,
       chosen: current == Some(connection.id()),
-      unavailable: (ConnectionRole::of(connection.kind()).as_str() != role).then(|| another.clone()),
-    })
+      unavailable,
+    }
+  };
+  let items = choosable
+    .iter()
+    .map(|connection| item(connection, None))
+    .chain(others.iter().map(|connection| item(connection, Some(another.clone()))))
     .collect();
-  let ids: Vec<ConnectionId> = here.connections.iter().map(|connection| connection.id()).collect();
+  // The choosable ones come first, so a choice's index is theirs.
+  let ids: Vec<ConnectionId> = choosable.iter().map(|connection| connection.id()).collect();
   let (actions, target) = (actions.clone(), reference.binding.reference);
   picker::picker(
     ctx,
@@ -307,7 +341,7 @@ fn connection_picker(
       id: format!("{id}-picker").into(),
       opener,
       items,
-      add_account: true,
+      add_account: changes,
       busy: actions.busy,
       choose: Arc::new(move |index| {
         let (BoundReference::Connection { reference, .. }, Some(local)) = (target, ids.get(index)) else {

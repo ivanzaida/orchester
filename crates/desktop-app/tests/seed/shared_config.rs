@@ -50,15 +50,17 @@ fn seed_shared_config_names_every_kind_of_reference_and_a_version_that_widens() 
   assert_eq!(
     standings(&here),
     [
-      ("DeepSeek", "missing"),
-      ("Default", "by role"),
       ("Work", "by name"),
+      ("Default", "by role"),
+      ("DeepSeek", "missing"),
       ("github", "found"),
       ("linear", "missing"),
-      ("SENTRY_TOKEN", "missing"),
       ("STAGING_DB_URL", "chosen"),
-    ]
+      ("SENTRY_TOKEN", "missing"),
+    ],
+    "each kind in the order the publisher made them (04b)"
   );
+  assert_eq!(here.needs_you(), 3, "04b: 3 need you");
   assert_eq!(
     here.connections_of("openai_api").len(),
     2,
@@ -90,10 +92,21 @@ fn seed_shared_config_names_every_kind_of_reference_and_a_version_that_widens() 
     (5, Some(4))
   );
   assert!(waiting.adds.contains(&VersionWidening::McpServer), "{:?}", waiting.adds);
-  assert!(
-    waiting.adds.len() >= 3,
-    "an MCP server, network and a command: {:?}",
+  assert_eq!(
+    waiting.adds.len(),
+    2,
+    "an MCP server and network (02d): {:?}",
     waiting.adds
+  );
+  let added: Vec<_> = here
+    .added_in(reviewer, waiting.number, waiting.used)
+    .iter()
+    .map(|reference| reference.binding.name.as_str())
+    .collect();
+  assert_eq!(added, ["github"], "v5 names github, v4 doesn't");
+  assert!(
+    here.missing_for(reviewer).is_empty(),
+    "github waits for Confirm…, it isn't missing"
   );
   let explorer = profile(&db, "Explorer");
   assert_eq!(here.missing_for(explorer).len(), 1, "Explorer can't run here");

@@ -120,11 +120,10 @@ fn shared_profile_says_what_is_missing_and_only_a_person_uses_the_waiting_versio
     agents.text("agent-widens-bar-status"),
     "v2 widens what agents may do here"
   );
-  assert!(
-    agents
-      .text("agent-widens-adds")
-      .contains("An MCP server it did not give its agents"),
-    "what v2 adds"
+  assert_eq!(
+    agents.text("agent-widens-add-0"),
+    "MCP server docs · missing on this computer",
+    "what v2 adds, by name"
   );
   assert!(
     agents.exists("agent-runs-here-row"),

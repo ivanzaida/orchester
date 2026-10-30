@@ -180,8 +180,8 @@ fn planner((theirs, here): Work) -> Result<Vec<Published<AgentProfile>>, SeedErr
   Ok(vec![version((2, "dana-k", 9 * DAY), body, vec![work])])
 }
 
-/// Reviewer v4 on the team's Codex `Default`, and olha's v5, which adds the MCP server `github`, network and
-/// `gh pr comment`: it widens, so it waits.
+/// Reviewer v4 on the team's Codex `Default`, and olha's v5, which adds the MCP server `github` and network (02d): it
+/// widens, so it waits.
 fn reviewer(theirs: &Theirs, codex: ConnectionId) -> Result<Vec<Published<AgentProfile>>, SeedError> {
   let commands = |listed: &[&str]| -> Result<CommandPermission, SeedError> {
     let prefixes = listed
@@ -209,7 +209,7 @@ fn reviewer(theirs: &Theirs, codex: ConnectionId) -> Result<Vec<Published<AgentP
     .clone()
     .with_permissions(AgentPermissions::new(
       RepositoryAccess::ReadOnly,
-      commands(&["gh pr view", "gh pr comment"])?,
+      commands(&["gh pr view"])?,
       NetworkAccess::On,
     ))
     .with_mcp_servers(McpServerSelection::new(vec![theirs.github]).map_err(invalid)?);

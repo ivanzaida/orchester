@@ -524,10 +524,13 @@ async fn live_updates_on_this_computer_lists_each_reference_with_who_needs_it() 
   );
   assert_eq!(
     here.needs_you(),
-    2,
-    "the server found by name waits for the person, the secret is missing"
+    1,
+    "the secret is missing; the server found by name waits on its own row"
   );
-  assert_eq!(here.missing_for(unbound.profile).len(), 1);
+  assert!(
+    here.missing_for(unbound.profile).is_empty(),
+    "a server found by name is not missing"
+  );
   assert_eq!(here.missing_for(unbound.tool).len(), 1);
   assert!(
     here.missing_for(unbound.delivery).is_empty(),
@@ -566,5 +569,28 @@ async fn live_updates_on_this_computer_lists_each_reference_with_who_needs_it() 
   );
   assert!(chosen_at(&here.references[1].binding).is_some(), "the person chose it");
   assert_eq!(here.needs_you(), 1);
+  stream.abort();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn live_updates_on_this_computer_says_what_a_version_adds() {
+  let unbound = Unbound::publish();
+  let (workspace, _, _, stream) = unbound.cached().await;
+  let here = Here::read(&workspace.root).expect("read");
+  let first = here.references[0].needed_by[0].number;
+  let added: Vec<_> = here
+    .added_in(unbound.profile, first, None)
+    .iter()
+    .map(|reference| reference.binding.name.clone())
+    .collect();
+  assert_eq!(
+    added,
+    ["Work", "docs"],
+    "Builder's only version names its connection and the server"
+  );
+  assert!(
+    here.added_in(unbound.profile, first, Some(first)).is_empty(),
+    "a version adds nothing over itself"
+  );
   stream.abort();
 }
