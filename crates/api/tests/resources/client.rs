@@ -22,21 +22,21 @@ use crate::fixtures::{hash, key, resource, version};
 
 /// One request as the server read it.
 #[derive(Debug)]
-struct Seen {
+pub struct Seen {
   /// e.g. `POST /api/v1/projects/…/resources`.
-  line: String,
-  content_type: Option<String>,
-  body: Vec<u8>,
+  pub line: String,
+  pub content_type: Option<String>,
+  pub body: Vec<u8>,
 }
 
 /// A listener on loopback that answers each request with the next of its answers and keeps what it read.
-struct Server {
+pub struct Server {
   url: String,
   seen: Arc<Mutex<Vec<Seen>>>,
 }
 
 impl Server {
-  fn start(answers: Vec<(u16, Vec<u8>)>) -> Self {
+  pub fn start(answers: Vec<(u16, Vec<u8>)>) -> Self {
     let listener = TcpListener::bind("127.0.0.1:0").expect("listen");
     let url = format!("http://localhost:{}", listener.local_addr().expect("address").port());
     let seen = Arc::new(Mutex::new(Vec::new()));
@@ -58,12 +58,12 @@ impl Server {
     Self { url, seen }
   }
 
-  fn client(&self) -> Client {
+  pub fn client(&self) -> Client {
     let address = ServerAddress::parse(&self.url).expect("address");
     Client::new(address, PlainHttp::NotAllowed).expect("client")
   }
 
-  fn seen(&self) -> Vec<Seen> {
+  pub fn seen(&self) -> Vec<Seen> {
     std::mem::take(&mut *self.seen.lock().expect("seen"))
   }
 }
@@ -97,11 +97,11 @@ fn read(stream: &std::net::TcpStream) -> Seen {
   }
 }
 
-fn json_answer(status: u16, value: &Value) -> (u16, Vec<u8>) {
+pub fn json_answer(status: u16, value: &Value) -> (u16, Vec<u8>) {
   (status, serde_json::to_vec(value).expect("answer"))
 }
 
-fn token() -> SecretValue {
+pub fn token() -> SecretValue {
   SecretValue::new("token".to_owned()).expect("token")
 }
 

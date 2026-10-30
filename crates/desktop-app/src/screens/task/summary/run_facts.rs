@@ -432,6 +432,10 @@ fn permission_words(ctx: &Ctx, permissions: &AgentPermissions, mcp_asks: bool) -
   };
   let network = match permissions.network() {
     NetworkAccess::Off => ctx.t("summary.thisRun.networkOff"),
+    NetworkAccess::Hosts(hosts) => ctx.t_args(
+      "summary.thisRun.networkHosts",
+      [("count", hosts.entries().len().to_string())],
+    ),
     NetworkAccess::On => ctx.t("summary.thisRun.networkOn"),
   };
   let key = if mcp_asks {

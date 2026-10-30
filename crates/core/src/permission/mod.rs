@@ -18,6 +18,7 @@ pub(crate) mod link_targets;
 mod local_file;
 pub mod mcp;
 mod narrow;
+mod network;
 #[cfg(windows)]
 pub(crate) mod remote_drive;
 pub mod roots;
@@ -38,6 +39,7 @@ pub use self::{
   launch::{LaunchPermissions, OutsideCommands},
   local_file::{ProgramPlace, program_place, resolve_local, stays_local},
   narrow::{StepCommands, StepNetwork, StepPermissions},
+  network::{HostPattern, HostPatternError, NetworkAccess, NetworkHosts, NetworkHostsError},
   writable::{
     FolderBounds, ResolvedFolder, WritableFolder, WritableFolderError, WritableFolders, WritableFoldersError,
   },
@@ -221,14 +223,6 @@ pub enum CommandPermission {
   AnyInWorktree,
 }
 
-/// Whether the agent's commands and tools may reach the network.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum NetworkAccess {
-  Off,
-  On,
-}
-
 /// The permissions of an agent profile version, or the effective permissions of a step.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct AgentPermissions {
@@ -306,8 +300,8 @@ impl AgentPermissions {
     &self.commands
   }
 
-  pub const fn network(&self) -> NetworkAccess {
-    self.network
+  pub const fn network(&self) -> &NetworkAccess {
+    &self.network
   }
 
   pub const fn interactive_tool_approvals(&self) -> bool {
@@ -347,7 +341,7 @@ impl AgentPermissions {
     self.commands = commands;
   }
 
-  pub const fn set_network(&mut self, network: NetworkAccess) {
+  pub fn set_network(&mut self, network: NetworkAccess) {
     self.network = network;
   }
 }

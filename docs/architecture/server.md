@@ -616,11 +616,13 @@ the role the step's connection reference has, sorted, plus *Other model id…*, 
 string in the profile as today; a computer whose CLI does not know it fails the step as it does today for an unknown
 model.
 
-**Reporting.** The desktop sends `PUT /projects/{id}/catalog/report` for every shared project it is linked to: after
+**Reporting.** The desktop sends `PUT /projects/{id}/catalog` for every shared project it is linked to: after
 joining, after each connect, and when a connection, an MCP server or a connection's model list changes (at most once
 a minute, the latest state winning). The body is the whole state, so a lost report costs nothing; offline it is not
-queued in the outbox, only sent again after reconnect. Members and admins both report and both read: the catalog is
-what the editor offers, not a permission.
+queued in the outbox, only sent again after reconnect. Members and admins both report and both read
+(`GET …/references`, `GET …/models`): the catalog is what the editor offers, not a permission. The references read
+also lists the connections and MCP servers the project's versions already name, so a reference a version carries
+stays pickable after the desktop that reported it leaves.
 
 **Nothing personal leaves a computer.** A report holds kinds, names, roles and model ids only: no account, email,
 user name, path, URL, key, token, program or setting. Names are the person's own labels for their connections and MCP
@@ -1056,9 +1058,9 @@ The *Since* column marks what API 3 adds or changes; the rest is built (S1a, S1b
 | `PATCH /projects/{id}/resources/{resource}` | admin (row 72) | `{ idempotency_key, revision, name?, archived? }` | `{ resource }` | `403 not_admin`, `409 revision_conflict { current }`, `422 invalid` | new in 3 (S5); admin row 72 |
 | `PUT /projects/{id}/files/{sha256}` | admin (row 72) | raw bytes (`application/octet-stream`), at most 1 MiB | `201`, or `200` when the server has it; idempotent by its hash | `403 not_admin`, `422 hash_mismatch`, `413 payload_too_large` | new in 3 (S5, row 37); admin row 72 |
 | `GET /projects/{id}/files/{sha256}` | member | | raw bytes | `404` | new in 3 (S5, row 37) |
-| `PUT /projects/{id}/catalog/report` | member (admins too; not a configuration write, row 72 does not apply) | `{ references: [{ kind: "connection" \| "mcp_server", name, role? }], models: [{ role, ids: [model id] }] }`: this device's whole state, at most 256 references and 512 ids per role, each word at most 200 characters | `204`; it replaces this device's previous report | `422 invalid { reason: "catalog" }` (an unknown kind or role, a connection without a role, an MCP server with one, too many) | S5, row 75 |
-| `GET /projects/{id}/catalog/references?kind={kind}&role={role}` | member | | `{ references: [{ kind, name, role? }] }`: the union of the current reports (both filters optional), one per kind, role and name without regard to case, sorted by name; no count, no device or person | | S5, row 75 |
-| `GET /projects/{id}/catalog/models?role={role}` | member | | `{ models: [{ role, ids: [model id] }] }`: the union per role (only `role`'s with the filter), each sorted | | S5, row 75 |
+| `PUT /projects/{id}/catalog` | member (admins too; not a configuration write, row 72 does not apply); an app's device token only, refused to a browser sign-in (`admin_web`) | `{ references: [{ kind: "connection" \| "mcp_server", name, role }], models: { role: [model id] } }`: this device's whole state, at most 256 references and 512 ids per role, each word at most 200 characters; `role` is `null` (or left out) for an MCP server | `204`; it replaces this device's previous report | `422 invalid { reason: "catalog" }` (an unknown kind or role, a connection without a role, an MCP server with one, too many), `422 invalid` (an unknown field) | S5, row 75 (ORC-451) |
+| `GET /projects/{id}/references` | member, also through the web app's browser sign-in (`admin_web`) | | `{ references: [{ kind, name, role }] }`: the union of the current reports with the connection and MCP server references the project's versions name (`version_references`; secrets and tools are not listed), one per kind, role and name without regard to case, sorted by name; no count, no device or person | | S5, row 75 (ORC-451) |
+| `GET /projects/{id}/models` | member, also through the web app's browser sign-in (`admin_web`) | | `{ models: { role: [model id] } }`: the union of the current reports per role, each sorted | | S5, row 75 (ORC-451) |
 | `GET /projects/{id}/events` | member | `Last-Event-ID` header (none, or older than 30 days: the snapshot first) | `text/event-stream`: `snapshot.begin`, `snapshot.tasks`, `snapshot.end`; `task.created`, `task.changed`, `task.claim`, `task.run`; `tag.created`, `tag.renamed`, `tag.deleted`, `tag.merged`; `module.created`, `module.changed`; `member.added`, `member.removed`, `member.role_changed`; `project.changed`; `resource.published`, `resource.renamed`, `resource.archived` (S5); `revoked` | `401`, `403`, `429 rate_limited` | row 73 (S2d): these kinds replace `task`, `members`, `tags`, `project`, `modules` (ORC-78), the planned `resources` (3) and `reset` |
 | `GET /admin/users` | admin | | `{ users: [User] }` | | |
 | `DELETE /admin/users/{id}/cloud` | admin | | `{ user }`: the account linked to no cloud identity, audited | `404 not_found` | new in 3 ([Codes](#codes)) |
@@ -1097,11 +1099,19 @@ the requests `ResourceCreate`, `ResourcesImport`, `VersionPublish`, `ResourcePat
 `SharingErrorDetails`' `Resource` (`slug_taken`), `Version` (`version_conflict`), `Files` (`missing_files`),
 `ResourceRevision` (`revision_conflict`) and `Reason` (`invalid`).
 
-**Catalog** (row 75). `PUT …/catalog/report` is keyed by the calling device's session: one report per device and
-project, replaced whole, removed with the device's session or the member's membership. The reads compute the union
-of the remaining reports; they never name a device, a person or how many computers have an entry. A role is one of
-core's connection kinds; an unknown one is refused, so the catalog follows the kinds this server's core knows. The
-web's profile editor reads both; the desktop reports and never reads them (it binds against its own connections).
+**Catalog** (row 75). `PUT …/catalog` is keyed by the calling device's session: one report per device and project,
+replaced whole, removed with the device's session or the member's membership. The reads compute the union of the
+remaining reports, `GET …/references` with the connection and MCP server references of the project's versions too;
+they never name a device, a person or how many computers have an entry. A role is one of core's connection kinds
+(`ConnectionRole::as_str`: `codex_cli`, `claude_code_cli`, `anthropic_api`, `openai_api`, `github`); an unknown one is
+refused, so the catalog follows the kinds this server's core knows. A model id is core's `ModelId`. The web's profile
+editor reads both through its server side, with the browser sign-in; the desktop reports and never reads them (it
+binds against its own connections).
+
+The contract is `orchester-api`'s `catalog.rs` (`CatalogKind`, `CatalogReference`, `ModelsPerRole`, the request
+`CatalogReport` and the answers `CatalogReferences` and `CatalogModels`, each refusing fields it does not know, so no
+account, path, setting, key, id or device can ride along) and its client's `client/catalog.rs`: `report_catalog`,
+`catalog_references` and `catalog_models`.
 
 **Progress reports.** `PUT …/run` replaces the task's report. The server checks the shape (step keys unique, `step`
 among `steps`, `waiting_for` only with `waiting`, `stuck` or `stopped_at_limit`; a URL that is `https`), stores it,
@@ -2171,11 +2181,13 @@ each server once and links each project (rows 49–50, plan phase N1) and gets S
   server reference stays unbound until the person confirms; a widening version waits for *Use v<N> here* while runs
   keep the previous one; two publishes from one base give the second a `version_conflict`; a skill with parts
   round-trips by hash.
+- [x] Row 75 contract: `orchester-api`'s `catalog.rs` and `client/catalog.rs` (ORC-451); `crates/api/tests/resources`
+  filter `catalog`.
 - [ ] Row 75: core's `NetworkAccess::Hosts` with its order and *widens*, each connection's enforcement or refusal at
   preflight; the catalog report built by one core function from the local connections and MCP servers; the server's
-  `catalog_*` tables, `PUT …/catalog/report` and the two reads; the desktop reports after join, connect and changes.
-  A loopback test: two desktops report, the reads list the union with no device or person, and a revoked device's
-  entries leave.
+  `catalog_*` tables, `PUT …/catalog` and the two reads (`GET …/references`, `GET …/models`); the desktop reports
+  after join, connect and changes. A loopback test: two desktops report, the reads list the union with no device or
+  person, and a revoked device's entries leave.
 
 **ORC-78 · Modules in shared projects** (rows 66–71). Built 2026-10-22.
 - [x] Server: schema 7 (`modules`, `module_changes`, `tasks.module`, `change_keys`, the `modules` event kind with the
