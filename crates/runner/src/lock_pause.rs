@@ -8,15 +8,18 @@ use std::{thread, time::Duration};
 
 use tokio::runtime::{Handle, RuntimeFlavor};
 
-/// Sleeps for `pause` without holding up the runtime's other tasks. On an async worker of the multi-threaded
-/// runtime the worker's other tasks move to a new worker first ([`tokio::task::block_in_place`]; on a thread that
-/// already handed them over, as after the first pause of a wait, it only sleeps). On any other thread (a blocking
-/// one, a test's single-threaded runtime, none) the sleep holds up nothing else.
+/// Sleeps for `pause` without holding up the runtime's other tasks ([`off_async_workers`]).
 pub(crate) fn pause_off_async_workers(pause: Duration) {
+  off_async_workers(|| thread::sleep(pause));
+}
+
+/// Does `work`, which blocks, without holding up the runtime's other tasks. On an async worker of the multi-threaded
+/// runtime the worker's other tasks move to a new worker first ([`tokio::task::block_in_place`]; on a thread that
+/// already handed them over, as after the first pause of a wait, it only works). On any other thread (a blocking
+/// one, a test's single-threaded runtime, none) the work holds up nothing else.
+pub(crate) fn off_async_workers<T>(work: impl FnOnce() -> T) -> T {
   match Handle::try_current() {
-    Ok(runtime) if runtime.runtime_flavor() == RuntimeFlavor::MultiThread => {
-      tokio::task::block_in_place(|| thread::sleep(pause));
-    }
-    _ => thread::sleep(pause),
+    Ok(runtime) if runtime.runtime_flavor() == RuntimeFlavor::MultiThread => tokio::task::block_in_place(work),
+    _ => work(),
   }
 }

@@ -108,6 +108,16 @@ fewer stop no agent, and new work waits until fewer agents work than the slots.
   beside others, read-only or writing, gets a worktree of its own on `<run-branch>--<step>-<attempt>`,
   created from the run's branch as it is then (it holds every step it depends on). Parallel writes
   in one worktree would overwrite each other, and a merge would change files under an agent at work.
+  Such a worktree starts with a warm build (ORC-544, `crates/runner/src/worktree/warm_start/`):
+  when the run's worktree has a `target/` on the same volume, its profile folders are seeded into
+  the new worktree as hard links (rustc replaces the rlibs, rmeta and incremental files it
+  rebuilds). What a build writes in place is copied with its time instead: fingerprints, dep-info,
+  lock files, everything under `build/`, and shared libraries (proc macros) with their `.pdb`;
+  programs (tests, binaries, examples) are left out, since MSVC's linker overwrites them in place
+  and cargo links a missing one again. Checked-out files unchanged in the run's worktree, and
+  folders holding the same names, take the run's times, so the step's first cargo build is
+  incremental. The step's builds never change the run's files, and removing the step's worktree
+  removes only its links. Without a run `target/`, or across volumes, the step starts cold.
 - **Joining.** When such a step passes, its work is committed on its branch and merged into the
   run's branch in the run's worktree, one merge at a time, with the repository's git identity (fast
   forward when possible, else a merge commit); its worktree and branch are then removed. A conflict

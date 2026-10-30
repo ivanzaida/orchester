@@ -2,9 +2,11 @@
 //! `git` CLI. Creating one adds a new branch without touching the user's checkout; removing one
 //! refuses to discard uncommitted work unless forced, and always keeps the run's branch. A step
 //! that runs beside other steps of its run works in a worktree of its own,
-//! `<repo>/.orchester/worktrees/<step-execution-id>/`, on a branch off the run's branch.
+//! `<repo>/.orchester/worktrees/<step-execution-id>/`, on a branch off the run's branch, which
+//! starts with the run's build output ([`warm_start`]).
 
 mod names;
+pub mod warm_start;
 
 use std::{
   fs, io, iter,
