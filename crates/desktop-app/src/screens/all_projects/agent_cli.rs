@@ -254,13 +254,15 @@ impl AgentCli {
 }
 
 /// The folders searched, each a text of its own: one text would break inside a path, after its `:` or a `/`. A folder
-/// wider than a whole line still breaks. The room after each is padding, since a gap would also space the lines.
+/// wider than a whole line still breaks, held to the row. The room after each is padding, since a gap would also space
+/// the lines.
 fn searched(ctx: &Ctx, folders: &[String]) -> Row {
   let piece = |index: usize, text: &str| {
     Text::new(text)
       .id(format!("start-cli-searched-{index}"))
       .variant(ProjectsText::SearchedFolders.role())
       .min_width(Dimension::Px(0.0))
+      .max_width(Dimension::Pct(100.0))
       .padding(Padding::new().right(ExtraSpacing::Snug.role()))
   };
   let row = Row::new()

@@ -167,11 +167,18 @@ fn all_projects_agent_cli_breaks_lines_between_folders() {
   let (mut window, stand_ins) = Window::with_stand_ins(Data::new());
   window.until("the warning", |window| shows(window, CLI));
   let root = TempDir::new().expect("a folder");
-  let [first, second, wide] = [("a", 40), ("b", 40), ("c", 300)].map(|(name, length)| root.path().join(name.repeat(length)));
+  // Wider than a line, yet a name a file system holds: a longer one is not a folder that can be searched.
+  let [first, second, wide] =
+    [("a", 40), ("b", 40), ("c", 200)].map(|(name, length)| root.path().join(name.repeat(length)));
   let path = std::env::join_paths([&first, &second, &wide]).expect("a search path");
   stand_ins.search(SearchPath::merge(Some(&path), &[], &[]), SearchBasis::Path);
   window.press("start-cli-check");
-  let shown = format!("Looked in {}, {}, {}", first.display(), second.display(), wide.display());
+  let shown = format!(
+    "Looked in {}, {}, {}",
+    first.display(),
+    second.display(),
+    wide.display()
+  );
   window.until("the folders searched", |window| {
     window.text("start-cli-searched") == shown
   });
@@ -183,7 +190,10 @@ fn all_projects_agent_cli_breaks_lines_between_folders() {
   );
   assert!((one.height - line).abs() < 0.5, "{one:?} is one line of {line}");
   assert!((two.height - line).abs() < 0.5, "{two:?} is one line of {line}");
-  assert!(two.y >= one.y + one.height - 0.5, "the two folders do not fit on one line");
+  assert!(
+    two.y >= one.y + one.height - 0.5,
+    "the two folders do not fit on one line"
+  );
 
   let (searched, wide) = (
     bounds(&mut window, "start-cli-searched"),
