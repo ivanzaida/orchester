@@ -6,7 +6,8 @@
       "notFound": "This module no longer exists.",
       "changedMeanwhile": "This module was changed since you opened it. Close the editor and open it again to see the change.",
       "invalidDate": "Write the date as YYYY-MM-DD."
-    }
+    },
+    "baseBranchGone": "{{branch}} no longer exists in the repository. Choose another base branch; nothing was saved."
   },
   "localIntegration": {
     "sensitiveOutcome": "Integration details are unavailable under the current sensitive-data policy. Inspect the actual recorded outcome before continuing.",
@@ -845,6 +846,7 @@
       "failedNoAgent": "This run has no agent step to continue. Its saved work remains on its branch.",
       "merged": "This run's work was merged. Messages no longer reach its agents.",
       "worktreeRemoved": "The run’s worktree was removed, so its agent cannot continue. Messages no longer reach its agents.",
+      "worktreeNotRemoved": "The run’s worktree could not be removed: its folder is still on disk, and its agent cannot continue. Messages no longer reach its agents. Remove worktree tries again.",
       "ended": "This run has ended. Messages no longer reach its agents."
     },
     "errors": {

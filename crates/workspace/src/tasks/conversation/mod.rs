@@ -215,6 +215,8 @@ pub struct Conversation {
   pub working: Vec<WorkingAgent>,
   /// The agent of the run's first step, which a message reaches when the run starts.
   pub first_agent: Option<Arc<str>>,
+  /// The run's worktree removal is recorded but left its folder on disk (ORC-418): it is not removed.
+  pub worktree_stays: bool,
 }
 
 impl Conversation {
@@ -269,6 +271,18 @@ impl Conversation {
       first_agent: run
         .and_then(|run| run.steps.iter().find_map(|step| step.agent.clone()))
         .or_else(|| detail.first_agent.clone()),
+      worktree_stays: run.is_some_and(|run| run.worktree_not_removed.is_some()),
+    }
+  }
+
+  /// Why no agent of the run reads a message written now, as the closed composer says it: a worktree whose removal
+  /// left its folder on disk is not removed, never removed (ORC-418).
+  pub const fn closed_reason(&self) -> &'static str {
+    match self.state {
+      PanelState::WorktreeRemoved | PanelState::FailedWorktreeRemoved if self.worktree_stays => {
+        "conversation.explanation.worktreeNotRemoved"
+      }
+      state => state.closed_reason(),
     }
   }
 

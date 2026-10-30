@@ -45,7 +45,7 @@ fn task_form_roles_follow_the_composer() {
       1.3,
       PaletteColor::TextMuted,
     ),
-    // A branch's name in the Base branch menu (`f9wHj` in `fSsas`), in Geist Mono.
+    // A branch named in a Base branch menu (`f9wHj` in `fSsas`, `Nr7fn` in `eyrnI`), in Geist Mono.
     (
       TaskFormText::OptionMono,
       12.5,

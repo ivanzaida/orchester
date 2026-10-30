@@ -39,7 +39,8 @@ pub enum TaskFormText {
   CriteriaHint,
   /// 11.5 `text_muted`, 1.3: a pipeline's steps and gates under its name in the Pipeline menu (`Meta` `H1NsU`).
   OptionMeta,
-  /// Geist Mono 12.5/500 `text_primary`, 1.3: a branch's name in the Base branch menu (`Name` `f9wHj` in `fSsas`).
+  /// Geist Mono 12.5/500 `text_primary`, 1.3: a branch named in a Base branch menu (`Name` `f9wHj` in `fSsas`, `Nr7fn`
+  /// in `eyrnI`).
   OptionMono,
   /// 12 `text_secondary`, 1.3: a note under the head, one 16 line in its 32 (`Text` `vpy3p` in `Note` `CvMGI`).
   Note,

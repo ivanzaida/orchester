@@ -185,6 +185,10 @@ pub fn leftovers_of(
     for mut worktree in listed.iter().filter_map(|listed| owned_by(run, listed)) {
       if !worktree.missing {
         worktree.uncommitted = git.at(Path::new(&worktree.path)).uncommitted()?;
+      } else if Path::new(&worktree.path).is_dir() {
+        // Git counts a worktree gone once its `.git` file is, while what a removal left of its folder is still
+        // there: a folder git forgot, its files listed.
+        super::forgotten::forget(&mut worktree);
       }
       worktrees.push(worktree);
     }
@@ -250,7 +254,12 @@ fn clear(
   let current = leftovers(runner, git, repo, run)?;
   let git = Git::new(runner, git, repo);
   let mut cleanup = Cleanup::default();
-  if current.worktrees.iter().any(|worktree| worktree.missing) {
+  // A forgotten folder git still lists goes from its list here, its folder below.
+  if current
+    .worktrees
+    .iter()
+    .any(|worktree| worktree.missing || worktree.forgotten)
+  {
     git.stdout(&["worktree", "prune"])?;
   }
   for worktree in current.worktrees {
@@ -278,7 +287,7 @@ fn clear(
   Ok(cleanup)
 }
 
-fn remove<R: CommandRunner>(git: &Git<'_, R>, worktree: LeftWorktree, discard: Discard<'_>, cleanup: &mut Cleanup) {
+fn remove<R: CommandRunner>(git: &Git<'_, R>, mut worktree: LeftWorktree, discard: Discard<'_>, cleanup: &mut Cleanup) {
   if worktree.missing {
     cleanup.removed.push(worktree);
     return;
@@ -300,21 +309,55 @@ fn remove<R: CommandRunner>(git: &Git<'_, R>, worktree: LeftWorktree, discard: D
   let outcome = if worktree.forgotten {
     super::forgotten::delete(&worktree)
   } else {
-    let mut args = vec!["worktree", "remove"];
-    if discard {
-      args.push("--force");
-    }
-    args.push(&worktree.path);
-    match git.output(&args) {
-      Ok(output) if output.success() => Ok(()),
-      Ok(output) => Err(super::git::message(&output)),
-      Err(error) => Err(error.to_string()),
-    }
+    let removed = remove_listed(git, &worktree.path, discard);
+    // Git forgot it, and what it left is a folder like any other: trying again deletes it as one.
+    worktree.forgotten = removed.as_ref().is_err_and(|refusal| refusal.forgotten);
+    removed.map_err(|refusal| refusal.detail)
   };
   match outcome {
     Ok(()) => cleanup.removed.push(worktree),
     Err(detail) => cleanup.kept_worktrees.push((worktree, KeepReason::Failed(detail))),
   }
+}
+
+/// Why a worktree git listed stays: what git or deleting the folder said, and whether git no longer lists it.
+pub(super) struct Refusal {
+  pub(super) detail: String,
+  pub(super) forgotten: bool,
+}
+
+/// Removes the worktree git lists at `path` (with `--force` when `force`), and what is left of its folder once git no
+/// longer lists it: `git worktree remove` can forget a worktree and stop with its folder half deleted ("Directory not
+/// empty"), its ignored build output and `.tmp/` still there. It is removed only once the folder is gone.
+pub(super) fn remove_listed<R: CommandRunner>(git: &Git<'_, R>, path: &str, force: bool) -> Result<(), Refusal> {
+  let mut args = vec!["worktree", "remove"];
+  if force {
+    args.push("--force");
+  }
+  args.push(path);
+  let said = match git.output(&args) {
+    Ok(output) if output.success() => None,
+    Ok(output) => Some(super::git::message(&output)),
+    Err(error) => Some(error.to_string()),
+  };
+  let folder = Path::new(path);
+  if said.is_none() && !folder.exists() {
+    return Ok(());
+  }
+  let refused = |detail: String, forgotten| Refusal { detail, forgotten };
+  let listed = git
+    .stdout(&["worktree", "list", "--porcelain", "-z"])
+    .map_err(|error| refused(said.clone().unwrap_or_else(|| error.to_string()), false))?;
+  if parse_worktree_list(&listed).iter().any(|listed| listed.path == path) {
+    return Err(refused(said.unwrap_or_else(|| "git still lists it".to_owned()), false));
+  }
+  super::forgotten::delete_folder(folder).map_err(|error| {
+    let detail = match said {
+      Some(said) => format!("{said} ({error})"),
+      None => error,
+    };
+    refused(detail, true)
+  })
 }
 
 /// What a branch of the run must be reachable from to count as merged: the run's base branch and
