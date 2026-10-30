@@ -3,8 +3,8 @@
 //! page, never here: the account card says whether it is on, with *Turn on…* ↗ while it is off. Accepting an invite
 //! needs it on the account and a sign-in with a code on this computer: an invite the cloud says needs it, or whose
 //! accept it refused, says which one is missing and offers the one step that fixes it, *Turn on two-factor
-//! authentication* ↗ or *Sign in again*, which signs out and locks so the person signs in at the gate with the code
-//! (the designer's decision, `Nq3Mf`). After a sign-in with a recovery code that leaves few, a warning says to make new
+//! authentication* ↗ or *Sign in again*, which signs out so the person signs in with the code in Settings › Orchester
+//! Cloud (`d1yW2I`). After a sign-in with a recovery code that leaves few, a warning says to make new
 //! ones; no frame draws it, so it is the UI kit's warning callout.
 
 use lurq::{
@@ -176,7 +176,7 @@ fn opener(ctx: &mut Ctx, answers: &Answers, id: &str) -> impl Fn() + Send + Sync
   }
 }
 
-/// What `invite` is to, as the gate names it after *Sign in again*: its project, or its server.
+/// What `invite` is to, as the sign-in names it after *Sign in again*: its project, or its server.
 pub(super) fn invite_to(invite: &CloudInvite) -> &str {
   invite
     .project
@@ -196,7 +196,7 @@ pub(super) fn turn_on(ctx: &mut Ctx, id: &str, answers: &Answers) -> ActionButto
     .on_click(open)
 }
 
-/// *Sign in again*: signs out and locks for a sign-in with a code, a person's; `to`: what the invite is to.
+/// *Sign in again*: signs out for a sign-in with a code, a person's; `to`: what the invite is to.
 pub(super) fn sign_in_again(ctx: &Ctx, id: &str, to: &str, answers: &Answers) -> ActionButton {
   let button = ActionButton::new(
     format!("{id}-sign-in-again"),

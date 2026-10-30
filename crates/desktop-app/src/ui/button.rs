@@ -125,6 +125,7 @@ pub struct ActionButton {
   id: Arc<str>,
   label: Arc<str>,
   icon: Option<Icon>,
+  after: Option<Icon>,
   kind: ButtonKind,
   action: Option<Press>,
   hold: Option<Hold>,
@@ -161,6 +162,7 @@ impl ActionButton {
       id: id.into(),
       label: label.into(),
       icon: None,
+      after: None,
       kind,
       action: None,
       hold: None,
@@ -183,6 +185,13 @@ impl ActionButton {
 
   pub fn icon(mut self, icon: Icon) -> Self {
     self.icon = Some(icon);
+    self
+  }
+
+  /// `icon` after the label, where a press goes on to a next step (`Sign in →` in `j7SbPk`); gone while the button is
+  /// held, when the loader says it is under way.
+  pub fn after(mut self, icon: Icon) -> Self {
+    self.after = Some(icon);
     self
   }
 
@@ -510,7 +519,15 @@ impl From<ActionButton> for Element {
     if let Some(lead) = button.lead() {
       frame = frame.child(icon(lead, glyph, color.clone()).id(format!("{}-icon", button.id)));
     }
-    frame = button.kind.dressed(frame).child(button.slot(color));
+    let after = button
+      .after
+      .filter(|_| button.hold.is_none())
+      .map(|after| icon(after, glyph, color.clone()));
+    frame = button
+      .kind
+      .dressed(frame)
+      .child(button.slot(color))
+      .with_children(after);
     if button.kind == ButtonKind::Select {
       frame = frame.child(icon(Icon::ChevronDown, IconSize::Md, PaletteColor::TextMuted));
     }

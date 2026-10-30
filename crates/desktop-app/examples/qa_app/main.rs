@@ -1,11 +1,10 @@
 //! The app as `tools/qa-app.ps1` starts it for QA and design verification: the app's own window (`window::open`, as
-//! `main` opens it) on the data beside this program, past the sign-in gate (2026-10-16). It signs in as a person would,
-//! to a stand-in Orchester Cloud on loopback that answers while the window is open, with the device token in a keychain
-//! in memory: nothing reaches the OS keychain and no QA copy talks to the real cloud. `--signed-out` stops at the gate,
-//! with the stand-in set as the cloud (Advanced) so a person can sign in there. `--settings` (the `settings`
-//! scenario) also sets up the kept invites and installed app's MCP rows app Settings shows ([`settings`]).
-//! `--join-team` starts a stand-in team server on loopback that the stand-in cloud names as the account's, with an
-//! invite to one of its projects, and prints its address and codes, for *Join a team*.
+//! `main` opens it) on the data beside this program. Nobody is signed in, as on a first run, with a stand-in Orchester
+//! Cloud on loopback set as the cloud (Advanced), so a person can sign in; `--signed-in` signs in to it as a person
+//! would. The device token stays in a keychain in memory: nothing reaches the OS keychain and no QA copy talks to the
+//! real cloud. `--settings` (with `--signed-in`) also sets up the kept invites and installed app's MCP rows app
+//! Settings shows ([`settings`]). `--join-team` starts a stand-in team server on loopback that the stand-in cloud names
+//! as the account's, with an invite to one of its projects, and prints its address and codes, for *Join a team*.
 //! What it moves to the Recycle Bin / Trash goes to `trash` beside its data. Fixture data for QA, never shipped: an
 //! example is no part of the app's program.
 //!
@@ -36,13 +35,14 @@ const INVITE: &str = "0191c7c0-0000-7000-8000-00000000171e";
 
 fn main() -> Result<(), Box<dyn Error>> {
   let log = app_log::install();
-  let mut signed_out = false;
+  let mut sign_in = false;
   let mut with_settings = false;
   let mut join_team = false;
   for argument in std::env::args().skip(1) {
     match argument.as_str() {
-      "--signed-in" => signed_out = false,
-      "--signed-out" => signed_out = true,
+      "--signed-in" => sign_in = true,
+      // The script's Start-Process takes no empty argument list, so it always names one of the two.
+      "--signed-out" => sign_in = false,
       "--settings" => with_settings = true,
       "--join-team" => join_team = true,
       other => {
@@ -80,14 +80,14 @@ fn main() -> Result<(), Box<dyn Error>> {
   // Kept to the end of `main`: the team server answers while the window is open.
   let _team = join_team.then(|| team(&cloud));
   if let Some(services) = launch.services() {
-    if signed_out {
+    if sign_in {
+      signed_in::sign_in(services, runtime.handle(), &cloud);
+    } else {
       let address = signed_in::cloud_address(&cloud);
       runtime.block_on(services.cloud.set_address(Some(address)))?;
-    } else {
-      signed_in::sign_in(services, runtime.handle(), &cloud);
     }
   }
-  let shown = match (with_settings && !signed_out, launch.workspace()) {
+  let shown = match (with_settings && sign_in, launch.workspace()) {
     (true, Some(workspace)) => Some(settings::prepare(workspace, &location.database)?),
     (true, None) => return Err("--settings needs a started session".into()),
     (false, _) => None,
@@ -96,7 +96,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     "cloud {} as {}\nsigned in {}\nsettings fixtures {}",
     cloud.url(),
     signed_in::account_cloud::EMAIL,
-    !signed_out,
+    sign_in,
     shown.is_some()
   );
   window::open_showing(&runtime, &launch, position, shown);

@@ -133,11 +133,9 @@ impl AppDb {
   pub fn server_owner(&self, server: ServerId) -> Result<Option<Option<CloudAccountId>>, StoreError> {
     let owner: Option<Option<String>> = self
       .connection
-      .query_row(
-        "SELECT owner FROM servers WHERE id = ?1",
-        [server.to_string()],
-        |row| row.get(0),
-      )
+      .query_row("SELECT owner FROM servers WHERE id = ?1", [server.to_string()], |row| {
+        row.get(0)
+      })
       .optional()?;
     owner
       .map(|owner| {

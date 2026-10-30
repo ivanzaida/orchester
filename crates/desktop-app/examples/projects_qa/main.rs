@@ -218,9 +218,7 @@ fn window(state: State, folders: &Folders) -> Result<(), Box<dyn Error>> {
     .and_then(Path::parent)
     .ok_or("the example's folder is in the target folder")?
     .join(format!("orchester-runner{}", env::consts::EXE_SUFFIX));
-  // Past the sign-in gate, as a person who signed in; the stand-in cloud answers while the window is open.
-  let cloud = signed_in::account_cloud::AccountCloud::start();
-  let launch = signed_in::launch(&database, runner, runtime.handle(), &cloud);
+  let launch = signed_in::launch(&database, runner, runtime.handle());
   let workspace = launch.workspace().ok_or("the QA session did not start")?.clone();
   prepare(state, &workspace, &database)?;
   // The team answers while the window is open.

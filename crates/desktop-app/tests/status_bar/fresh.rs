@@ -22,6 +22,9 @@ use super::{
   support::{Data, Window, reads::Reads},
 };
 
+/// What each reading of the accounts takes in the window: one read by the status bar, one by the notifications' host.
+const READERS: usize = 2;
+
 /// A Codex reading of `account` with its five-hour window `used` percent full.
 fn reading(account: AgentAccountId, used: f64) -> LimitReading {
   LimitReading {
@@ -109,7 +112,7 @@ fn status_plan_limits_follow_the_accounts_and_the_connections() {
   let renamed = reads.take();
   assert_eq!(
     renamed.get("accounts"),
-    Some(&1),
+    Some(&READERS),
     "the rename read the accounts again: {renamed:?}"
   );
   assert_eq!(
@@ -150,5 +153,5 @@ fn status_accounts_changed_before_the_window_opened_are_read_once() {
     std::thread::sleep(std::time::Duration::from_millis(5));
   }
   let opened = reads.take();
-  assert_eq!(opened.get("accounts"), Some(&1), "{opened:?}");
+  assert_eq!(opened.get("accounts"), Some(&READERS), "{opened:?}");
 }

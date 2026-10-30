@@ -337,11 +337,21 @@ Dock badge with the Needs-you count.
 
 ## Orchester Cloud and team servers
 
-**Orchester Cloud sign-in.** The app is locked until this computer signs in to Orchester Cloud
-(`https://orchester.cloud`, API at `https://api.orchester.cloud`; both can be changed in Settings › Orchester
-Cloud › Advanced) with email and password (plus a TOTP or recovery code with two-factor on). After that it
-works offline. While signed out every MCP tool answers `sign_in_required` except `sign_in_state`. Only a person signs
-in.
+**Orchester Cloud sign-in.** Orchester works without an account: projects, tasks, agents and runs are on this
+computer and nothing asks for a sign-in. Sharing to a team, joining through Orchester Cloud, invites and the account's
+team servers each say they need one and offer it in place. A sign-in (`https://orchester.cloud`, API at
+`https://api.orchester.cloud`; both can be changed in Settings › Orchester Cloud › Advanced) takes an email and password,
+plus a TOTP or recovery code with two-factor on, and works offline afterwards. Only a person signs in. A team server's
+own code works without an account.
+
+**Whose a project is.** A project added while nobody is signed in is *this computer's*; one added while signed in is
+*the account's*. Signing in claims nothing. While signed in, All projects offers *Move to account* and *Move to this
+computer* on a row that is not shared. While nobody is signed in, only this computer's show, and All projects says how
+many of an account's wait; their runners keep working. Another account signed in here sees this computer's and its own,
+never the first account's. A project and its server always have the same owner: sharing a local project to the account's
+server moves it into the account first and the page says so, a server joined by code while signed out is this computer's,
+and a shared project doesn't move. Over MCP, a project an account holds answers `sign_in_required` while nobody is signed
+in, and `project_not_found` while another account is.
 
 **Team servers and shared projects.** A team runs its own `orchester-server`. A computer joins through an invite
 (needs two-factor) or *Connect a server* (address, check-code comparison for self-signed certificates, then the

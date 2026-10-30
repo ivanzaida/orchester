@@ -1,8 +1,8 @@
 //! The Orchester Cloud way (`With Orchester Cloud` in `B914L`). Signed out, its sign-in: the email, the password
 //! with its lock, *Sign in*, and *No account yet? Create one ↗*, which opens the cloud's sign-up page in the browser.
-//! It signs in as the sign-in gate does ([`crate::screens::gate::form`]), with the gate's words and refusals in
+//! It signs in as the app's sign-in does ([`crate::screens::cloud_sign_in::form`]), with its words and refusals in
 //! place; while it signs in the fields fade and the button says so (`BD519`). An account with two-factor
-//! authentication goes on to the gate's code step in the column's place. Signed in, the account the step goes on
+//! authentication goes on to the code step in the column's place. Signed in, the account the step goes on
 //! with, and *Your teams* back to its teams and invites ([`account_row`] is the 04 account row, `uNGRZ`).
 
 use lurq::{
@@ -16,19 +16,17 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::id::CloudAccountId;
-use orchester_workspace::{
-  background,
-  sharing::cloud::{Cloud, WebPage},
-};
+use orchester_workspace::{background, sharing::cloud::WebPage};
 
 use super::ways;
 use crate::{
   navigation::Navigation,
   routes::{JoinWay, Route},
   screens::{
-    gate::{
-      code::{self as gate_code, CodeForm},
+    cloud_sign_in::{
+      code::{self as sign_in_code, CodeForm},
       form::{Form, Refusal, opener, refusal_part, submit_button, unopened},
+      host,
       step::Step,
     },
     settings::orchester::Account,
@@ -48,7 +46,7 @@ const ID: &str = "join-team-cloud";
 /// *Sign in*, which only a person presses.
 const SUBMIT: &str = "join-team-sign-in";
 
-/// The sign-in's state: the gate's password form and its code step, on the cloud whose host is `host`.
+/// The sign-in's state: the password form and the code step, on the cloud whose host is `host`.
 pub(super) struct CloudSignIn {
   form: Form,
   code: CodeForm,
@@ -77,22 +75,10 @@ impl CloudSignIn {
   }
 }
 
-/// The cloud's host, as the progress line and the refusals name it.
-fn host(cloud: &Cloud) -> String {
-  match cloud.address() {
-    Ok(address) => address.address.web().authority(),
-    Err(error) => {
-      // Only the words while it signs in and a refusal's note name the host; signing in reads the address itself.
-      tracing::warn!(%error, "the cloud's address could not be read for Join a team");
-      String::new()
-    }
-  }
-}
-
-/// The column signed out: the sign-in, or the gate's code step in its place.
+/// The column signed out: the sign-in, or the code step in its place.
 pub(super) fn signed_out(ctx: &mut Ctx, sign_in: &CloudSignIn) -> Element {
   if let Step::Code(entry) = sign_in.step.get() {
-    return gate_code::card(ctx, &sign_in.code, &entry, &sign_in.host);
+    return sign_in_code::step(ctx, &sign_in.code, &entry, &sign_in.host);
   }
   sign_in.code.rest();
   let form = &sign_in.form;
@@ -115,7 +101,7 @@ pub(super) fn signed_out(ctx: &mut Ctx, sign_in: &CloudSignIn) -> Element {
       .as_ref()
       .map(|refusal| refusal_part(ctx, form, (refusal, &sign_in.host))),
   );
-  parts.push(submit_button(ctx, form).large().into());
+  parts.push(submit_button(ctx, form).icon(Icon::LogIn).large().into());
   parts.extend(form.person.reason(ctx, form.submit));
   parts.extend(unopened(ctx, form));
   parts.push(faded(create(ctx, form)));
@@ -128,9 +114,9 @@ pub(super) fn signed_out(ctx: &mut Ctx, sign_in: &CloudSignIn) -> Element {
 
 /// The email and the password, 36 high, the password behind its lock; both marked after a wrong one.
 fn fields(ctx: &mut Ctx, form: &Form, wrong: bool) -> (Element, Element) {
-  let (email_label, password_label) = (ctx.t("gate.email"), ctx.t("gate.password"));
+  let (email_label, password_label) = (ctx.t("sign_in.email"), ctx.t("sign_in.password"));
   let mut email = FieldInput::new(format!("{ID}-email"), email_label.clone(), form.email.clone())
-    .placeholder(ctx.t("gate.emailPlaceholder"))
+    .placeholder(ctx.t("sign_in.emailPlaceholder"))
     .text_style(TypographyStyle::Body)
     .box_height(ControlHeight::Lg.value())
     .element(form.email_input.clone());

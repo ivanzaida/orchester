@@ -2839,3 +2839,8 @@ M8 · Orchester's typed agent tools (`git_status`, `git_diff`, `git_log`, `git_s
 M9 · Orchester's file tools for Claude Code and Codex (`read_file`, `list_files`, `search`, `edit_file`, `write_file`,
 `find_symbol` with the code index) · merge `6a7d57bd` (security review). A live run with the real CLIs was still open
 when they were merged.
+ORC-132 · Local use without an Orchester Cloud account · branch `orchester/orc-132-run-1`: the sign-in gate is gone; a
+project or server added with nobody signed in is this computer's (`owner` NULL, no migration), moved by a person on All
+projects; sharing, joining, invites and team servers offer the sign-in in place; MCP answers `sign_in_required` only for
+a named project an account holds while nobody is signed in. Open: the *Verify* step's design verification, the `ownership`
+and `invite-signed-out` QA scenarios, macOS unchecked. The three-way start page stays ORC-293.

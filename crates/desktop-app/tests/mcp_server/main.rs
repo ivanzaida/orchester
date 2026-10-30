@@ -38,7 +38,6 @@ struct Served {
   folder: TempDir,
   port: u16,
   token: String,
-  link: WindowLink,
   launch: Launch,
   data: Data,
 }
@@ -52,17 +51,6 @@ impl Served {
     let data = Data::new();
     let launch = data.launch();
     Self::serve(folder, (data, launch), window_control)
-  }
-
-  /// [`Self::start`] on a session that is not signed in: the window shows the sign-in gate.
-  fn start_signed_out(window_control: bool) -> Self {
-    let data = Data::new();
-    let launch = data.launch_signed_out();
-    Self::serve(
-      tempfile::tempdir().expect("a temporary folder"),
-      (data, launch),
-      window_control,
-    )
   }
 
   fn serve(folder: TempDir, (data, launch): (Data, Launch), window_control: bool) -> Self {
@@ -93,14 +81,7 @@ impl Served {
     let port = server.port().expect("the server listens").get();
     let mcp = McpLink::new(&server);
     let start = launch.start();
-    tree.mount_root::<Root>(
-      &mut app,
-      RootProps {
-        link: link.clone(),
-        mcp,
-        start,
-      },
-    );
+    tree.mount_root::<Root>(&mut app, RootProps { link, mcp, start });
     tree.pass_headless(&mut app);
     Self {
       app,
@@ -109,7 +90,6 @@ impl Served {
       folder,
       port,
       token,
-      link,
       launch,
       data,
     }

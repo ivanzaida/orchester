@@ -1,5 +1,5 @@
 //! What a person does in the window before it shows, with the pointer and the keyboard of the example itself (never an
-//! MCP client's, which the gate refuses): typing and pressing *Sign in*, typing a code and pressing *Verify*, opening
+//! MCP client's, which signing in refuses): typing and pressing *Sign in*, typing a code and pressing *Verify*, opening
 //! *Advanced*, resting the pointer on a status item, asking to sign out, pressing Tab.
 
 use std::{
@@ -11,6 +11,7 @@ use std::{
 use lurq::app::{App, Tree, events::MouseButton};
 use orchester_app::{
   mcp::WindowLink,
+  root::WINDOW_ID,
   routes::{OrchesterView, Route},
   ui::tooltip::TOOLTIP_DELAY,
 };
@@ -20,7 +21,7 @@ use super::{
   signed_in::account_cloud::{AccountCloud, EMAIL, PASSWORD, PAUSED, UNCONFIRMED},
 };
 
-/// Takes the window to `state`, then presses Tab `tabs` times.
+/// Takes the window to Settings › Orchester Cloud and to `state` there, then presses Tab `tabs` times.
 pub fn to(
   app: &mut App,
   tree: &mut Tree,
@@ -28,10 +29,12 @@ pub fn to(
   tabs: usize,
 ) -> Result<(), Box<dyn Error>> {
   let mut window = Window { app, tree };
+  window.until(WINDOW_ID)?;
+  link.navigation()?.go(Route::Orchester(OrchesterView::default()));
   if state.code_step() {
     code_step(&mut window, state, cloud)?;
   } else {
-    reach(&mut window, (state, link))?;
+    reach(&mut window, state)?;
   }
   for _ in 0..tabs {
     window.tab();
@@ -39,24 +42,23 @@ pub fn to(
   Ok(())
 }
 
-fn reach(window: &mut Window<'_>, (state, link): (State, &WindowLink)) -> Result<(), Box<dyn Error>> {
+fn reach(window: &mut Window<'_>, state: State) -> Result<(), Box<dyn Error>> {
   match state {
     State::FirstRun | State::Unreachable | State::Wrong | State::Unconfirmed | State::Paused | State::SigningIn => {
-      window.until("gate-email")?;
+      window.until("sign-in-email")?;
       let (email, password, shows) = match state {
         State::FirstRun => return Ok(()),
-        State::Wrong => (EMAIL, "not the password", "gate-wrong"),
-        State::Unreachable => (EMAIL, PASSWORD, "gate-unreachable"),
-        State::Unconfirmed => (UNCONFIRMED, "a password for it", "gate-unconfirmed"),
-        State::Paused => (PAUSED, "a password for it", "gate-paused"),
-        _ => (EMAIL, PASSWORD, "gate-checking"),
+        State::Wrong => (EMAIL, "not the password", "sign-in-wrong"),
+        State::Unreachable => (EMAIL, PASSWORD, "sign-in-unreachable"),
+        State::Unconfirmed => (UNCONFIRMED, "a password for it", "sign-in-unconfirmed"),
+        State::Paused => (PAUSED, "a password for it", "sign-in-paused"),
+        _ => (EMAIL, PASSWORD, "sign-in-checking"),
       };
-      window.set("gate-email", email)?;
-      window.set("gate-password", password)?;
-      window.press("gate-sign-in")?;
+      window.set("sign-in-email", email)?;
+      window.set("sign-in-password", password)?;
+      window.press("sign-in-submit")?;
       window.until(shows)
     }
-    State::McpCard => window.rest_on("status-mcp", "status-mcp-card"),
     State::Advanced => {
       window.until("orchester-advanced")?;
       window.press("orchester-advanced")?;
@@ -67,9 +69,8 @@ fn reach(window: &mut Window<'_>, (state, link): (State, &WindowLink)) -> Result
     | State::AccountDeleted
     | State::Other
     | State::SignedOut
-    | State::SignInForCode => window.until("gate-notice"),
+    | State::SignInForCode => window.until("sign-in-notice"),
     State::SignOut => {
-      link.navigation()?.go(Route::Orchester(OrchesterView::default()));
       window.until("orchester-cloud-sign-out")?;
       window.press("orchester-cloud-sign-out")?;
       window.until("orchester-cloud-sign-out-question")
@@ -84,35 +85,35 @@ fn reach(window: &mut Window<'_>, (state, link): (State, &WindowLink)) -> Result
 
 /// Signs in with the password of an account with two-factor authentication, then takes the code step to `state`.
 fn code_step(window: &mut Window<'_>, state: State, cloud: &AccountCloud) -> Result<(), Box<dyn Error>> {
-  window.until("gate-email")?;
-  window.set("gate-email", EMAIL)?;
-  window.set("gate-password", PASSWORD)?;
-  window.press("gate-sign-in")?;
-  window.until("gate-code-card")?;
+  window.until("sign-in-email")?;
+  window.set("sign-in-email", EMAIL)?;
+  window.set("sign-in-password", PASSWORD)?;
+  window.press("sign-in-submit")?;
+  window.until("sign-in-code-card")?;
   let next = cloud.next_code();
   let spaced = format!("{} {}", &next[..3], &next[3..]);
   let (code, shows) = match state {
     State::Recovery => {
-      window.press("gate-code-switch")?;
-      return window.until("gate-code-card");
+      window.press("sign-in-code-switch")?;
+      return window.until("sign-in-code-card");
     }
     State::Verifying => {
       cloud.slow_sign_in(std::time::Duration::from_secs(3600));
-      (spaced, "gate-code-checking")
+      (spaced, "sign-in-code-checking")
     }
-    State::WrongCode => ("000000".to_owned(), "gate-code-note"),
+    State::WrongCode => ("000000".to_owned(), "sign-in-code-note"),
     State::TooManyCodes => {
       cloud.limit_codes(true);
-      (spaced, "gate-code-paused")
+      (spaced, "sign-in-code-paused")
     }
     State::TimedOut => {
       cloud.end_challenges();
-      (spaced, "gate-timed-out")
+      (spaced, "sign-in-timed-out")
     }
     _ => return Ok(()),
   };
-  window.set("gate-code", &code)?;
-  window.press("gate-verify")?;
+  window.set("sign-in-code", &code)?;
+  window.press("sign-in-verify")?;
   window.until(shows)
 }
 

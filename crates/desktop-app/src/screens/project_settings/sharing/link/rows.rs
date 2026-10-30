@@ -56,6 +56,7 @@ impl Link {
     );
     parts.push(self.project_group(ctx, props, listed));
     parts.push(self.repository_line(ctx, props, listed));
+    parts.extend(self.moves_line(ctx, props));
     parts.push(self.link_row(ctx, props, listed));
     let resolving = self.resolve.state().get();
     let pending = resolving.is_pending();
@@ -338,6 +339,31 @@ impl Link {
       Some(fill) => line.background(fill).into(),
       None => line.border(Border::inside(BorderSize::Sm, PaletteColor::Border)).into(),
     }
+  }
+
+  /// *Kontur moves into your account, so it shows only while you're signed in.* (`Ib9ca`): the chosen server is the
+  /// account's and the project this computer's, and a project and its server have the same owner.
+  fn moves_line(&self, ctx: &Ctx, props: &Props) -> Option<Element> {
+    let chosen = self.chosen_entry(props)?.stored.id;
+    props.facts.moves_on.contains(&chosen).then(|| {
+      let project = props.project.open.project.name().as_str();
+      Row::new()
+        .id("sharing-moves-to-account")
+        .width(Dimension::Pct(100.0))
+        .padding(Padding::symmetric(SpacingSize::Md, SpacingSize::Sm))
+        .spacing(SpacingSize::Sm)
+        .align_items(Alignment::Center)
+        .rounded(RadiusSize::Md)
+        .background(PaletteColor::InfoMuted)
+        .child(icon(Icon::UserRound, IconSize::Base, PaletteColor::TextSecondary))
+        .child(
+          Text::new(&ctx.t_args("sharing.share.movesToAccount", [("project", project)]))
+            .id("sharing-moves-to-account-text")
+            .variant(crate::theme::ExtraTypography::Prose.role())
+            .flex(1.0),
+        )
+        .into()
+    })
   }
 
   pub(super) fn picked_project<'a>(&self, listed: Option<&'a Result<Listed, Said>>) -> Option<&'a SharedProject> {

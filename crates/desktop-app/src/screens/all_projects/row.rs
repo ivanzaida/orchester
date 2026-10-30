@@ -20,7 +20,11 @@ use orchester_workspace::{
   sharing::Place,
 };
 
-use super::{Ask, remove};
+use super::{
+  Ask, Hovered,
+  move_project::{self, Offer},
+  remove,
+};
 use crate::{
   navigation::Navigation,
   routes::{OverviewTab, ProjectPage, Route},
@@ -42,6 +46,9 @@ const STATUS_WIDTH: f32 = 168.0;
 const COUNT_WIDTH: f32 = 88.0;
 const OPENED_WIDTH: f32 = 96.0;
 const ACTIONS_WIDTH: f32 = 56.0;
+/// The room *Move to account* takes under the pointer: *Needs you* and *Last opened* with the 12 between them
+/// (`LinZt`).
+const MOVE_WIDTH: f32 = COUNT_WIDTH + 12.0 + OPENED_WIDTH;
 const TILE: f32 = 28.0;
 const OPEN_WIDTH: f32 = 20.0;
 const HEADINGS_HEIGHT: f32 = 32.0;
@@ -72,11 +79,20 @@ pub(super) fn headings(ctx: &Ctx) -> Row {
     .child(Row::new().width(Dimension::Px(ACTIONS_WIDTH)))
 }
 
-/// The row of `listed` and where it is (`None` while that is not read, or cannot be), with its removal question when
-/// it is asked; `last` draws no line under it.
-pub(super) fn row(ctx: &mut Ctx, (listed, place): (&ListedProject, Option<&Place>), ask: &Ask, last: bool) -> Element {
+/// The row of `listed` and where it is (`None` while that is not read, or cannot be), with its removal or move question
+/// when it is asked; `last` draws no line under it. Under the pointer, with an account signed in, it offers what moving
+/// it can do (`LinZt`, `xx4ST`).
+pub(super) fn row(
+  ctx: &mut Ctx,
+  (listed, place, signed_in): (&ListedProject, Option<&Place>, bool),
+  ask: &Ask,
+  last: bool,
+) -> Element {
   let id = listed.project.id;
   let asking = ask.removing.get().0 == Some(id);
+  let moving = ask.moving.get().0.filter(|(project, _)| *project == id);
+  let offer = move_project::offer(signed_in, listed, place);
+  let hovered = ask.hovered.get().0 == Some(id) && !asking && moving.is_none();
   let now = Services::of(ctx).clock.now();
   let opened = message_text(ctx, &display::elapsed(now, listed.project.last_opened_at));
   let cells = Row::new()
@@ -87,15 +103,17 @@ pub(super) fn row(ctx: &mut Ctx, (listed, place): (&ListedProject, Option<&Place
     .child(identity(ctx, listed))
     .child(where_cell(ctx, listed, place))
     .child(Row::new().width(Dimension::Px(STATUS_WIDTH)).child(status(ctx, listed)))
-    .child(count(ctx, listed, Count::Active))
-    .child(count(ctx, listed, Count::NeedsYou))
-    .child(
+    .child(count(ctx, listed, Count::Active));
+  let cells = match offer {
+    Offer::Move(to) if hovered => cells.child(move_project::link(ctx, listed, to, ask, MOVE_WIDTH)),
+    _ => cells.child(count(ctx, listed, Count::NeedsYou)).child(
       Text::new(&opened)
         .variant(TypographyStyle::Description)
         .nowrap()
         .width(Dimension::Px(OPENED_WIDTH)),
-    )
-    .child(actions(ctx, listed, ask, asking));
+    ),
+  }
+  .child(actions(ctx, listed, ask, asking));
   let cells: Element = if listed.opens() && !asking {
     let navigation = Navigation::of(ctx);
     opening(navigation.to(Route::Project(id, ProjectPage::Overview(OverviewTab::default()))))
@@ -106,16 +124,23 @@ pub(super) fn row(ctx: &mut Ctx, (listed, place): (&ListedProject, Option<&Place
   } else {
     cells.into()
   };
+  let (enter, leave) = (ask.hovered.clone(), ask.hovered.clone());
   let mut block = Column::new()
     .id(format!("project-row-{id}"))
     .describe("project", listed.project.name.to_string())
     .describe("opens", if listed.opens() { "yes" } else { "no" })
     .width(Dimension::Pct(100.0))
-    .child(cells);
+    .on_mouse_enter(move || enter.set(Hovered(Some(id))))
+    .on_mouse_leave(move || leave.update(|hovered| hovered.0 = hovered.0.filter(|shown| *shown != id)))
+    .child(cells)
+    .with_children((hovered && offer == Offer::Shared).then(|| move_project::shared_note(ctx, id)));
   if asking {
     block = block
       .background(ExtraColor::Hover.role())
       .child(remove::question(ctx, listed, ask));
+  }
+  if let Some((_, to)) = moving {
+    block = block.child(move_project::question(ctx, listed, to, ask));
   }
   if last {
     block.into()
@@ -177,8 +202,8 @@ fn identity(ctx: &Ctx, listed: &ListedProject) -> Row {
     .child(text)
 }
 
-/// Where the project is (`Where` `mmabW`, `aDEWg`): a badge saying *Shared · Acme* in `info` (`MOCLi`) or *Local*
-/// in `text_secondary` (`eQqrn`); a dash while it is not read, and when its folder or data cannot be read. The team's
+/// Where the project is (`Where` in `LinZt`): a badge saying *Shared · Acme* in `info`, or *This computer* or *Your
+/// account* in `text_secondary`; a dash while it is not read, and when its folder or data cannot be read. The team's
 /// name is the server's own, of any length: a long one is cut to the column, whole in a tooltip.
 fn where_cell(ctx: &mut Ctx, listed: &ListedProject, place: Option<&Place>) -> Row {
   let id = format!("project-row-where-{}", listed.project.id);
@@ -188,7 +213,14 @@ fn where_cell(ctx: &mut Ctx, listed: &ListedProject, place: Option<&Place>) -> R
       .variant(TypographyStyle::Description)
       .color(PaletteColor::TextMuted)
       .into(),
-    Some(Place::Local) => badge(&badge_id, BadgeTone::Neutral, &ctx.t("projects.where.local")).into(),
+    Some(Place::Local) => {
+      let key = if listed.project.owner.is_some() {
+        "projects.where.account"
+      } else {
+        "projects.where.thisComputer"
+      };
+      badge(&badge_id, BadgeTone::Neutral, &ctx.t(key)).into()
+    }
     Some(Place::Shared { team: Some(team) }) => {
       let words = ctx.t_args("projects.where.shared", [("team", team.as_str())]);
       cut_badge(ctx, &badge_id, BadgeTone::Info, &words).into()

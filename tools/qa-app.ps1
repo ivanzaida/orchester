@@ -1,17 +1,17 @@
 # Starts orchester-app on a seeded QA project, isolated from the user's data, for QA and design
 # verification (.claude/skills/design-verification/SKILL.md):
 #
-#   powershell -File tools/qa-app.ps1 -Name <task> -Scenario <scenario> [-FakeAgents] [-NoRunner] [-SignedOut]
+#   powershell -File tools/qa-app.ps1 -Name <task> -Scenario <scenario> [-FakeAgents] [-NoRunner] [-SignedIn]
 #       [-WindowX <x> -WindowY <y>] [-Editor <program>]
 #
 # <scenario> is one of the seed's (`cargo run -p orchester-app --example seed -- --list-scenarios` lists them). A new
 # scenario is added only to the seed's registry (crates/desktop-app/examples/seed/kontur/scenarios/mod.rs), never
 # here: the seed checks the name, and on an unknown one exits non-zero with the known ones before it writes anything.
 #
-# 1. Builds the QA app (examples/qa_app: the app's own window, signed in to a stand-in Orchester Cloud on loopback
-#    with its token in a keychain in memory, past the sign-in gate; -SignedOut stops at the gate, with that stand-in
-#    as the cloud; with lurq's `perf_profile`, for profile sessions), the seed example and orchester-runner
-#    (-FakeAgents: the runner with its `test-agent` binaries, orchester-fake-codex among them; -NoRunner: no runner).
+# 1. Builds the QA app (examples/qa_app: the app's own window, nobody signed in as on a first run, a stand-in Orchester
+#    Cloud on loopback set as the cloud; -SignedIn signs in to it, with its token in a keychain in memory; with lurq's
+#    `perf_profile`, for profile sessions), the seed example and orchester-runner (-FakeAgents: the runner with its
+#    `test-agent` binaries, orchester-fake-codex among them; -NoRunner: no runner).
 # 2. Copies the programs into .tmp/qa/<task>/bin/, which keeps its own orchester.db beside them; the QA app as
 #    orchester-app-qa.
 # 3. Seeds a new repository .tmp/qa/<task>/repo-<scenario> (examples/seed; -FakeAgents points the
@@ -36,7 +36,7 @@
 # Archive's folder missing), quiet hours 22:30-07:00 and the daily report at 18:30, and stand-in claude and codex in
 # bin/settings-qa/ that answer as those accounts stand: the QA app runs with them first on its PATH (folders that
 # hold a real claude or codex are left out) and its home, CLAUDE_CONFIG_DIR, CODEX_HOME and ORCHESTER_ACCOUNTS_DIR
-# there, so no real CLI or sign-in is read. The QA app (--settings) keeps two invites here (one waiting for approval,
+# there, so no real CLI or sign-in is read. With -SignedIn, the QA app (--settings) keeps two invites here (one waiting for approval,
 # one that didn't finish) and shows the installed app's MCP rows: that server listens on a free port with a token in
 # memory, while the window's own server stays the QA copy's for the verifier. Team servers answering on loopback are
 # the private platform repository's (ivanzaida/orchester-platform, crates/e2e, the n1_qa example), where the team
@@ -61,7 +61,7 @@ param(
     [Parameter(Mandatory = $true)][string]$Scenario,
     [switch]$FakeAgents,
     [switch]$NoRunner,
-    [switch]$SignedOut,
+    [switch]$SignedIn,
     [int]$WindowX,
     [int]$WindowY,
     [string]$Editor
@@ -208,7 +208,7 @@ if ($Scenario -eq "settings") {
 }
 $appProgram = Join-Path $bin "orchester-app-qa$exe"
 # Start-Process takes no empty argument list: an option that is always there leads the QA app's arguments.
-$appArguments = if ($SignedOut) { "--signed-out" } else { "--signed-in" }
+$appArguments = if ($SignedIn) { "--signed-in" } else { "--signed-out" }
 if ($Scenario -eq "settings") { $appArguments += " --settings" }
 if ($Scenario -eq "join-team") { $appArguments += " --join-team" }
 $appLog = Join-Path $qa "app.log"

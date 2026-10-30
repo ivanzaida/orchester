@@ -323,7 +323,8 @@ impl FieldInput {
   }
 
   /// Tab reaches the field `position`th (from 1) of the window's first stops, before the stops in the order the window
-  /// shows them, where a control drawn over the field comes after it, as *Forgot password?* over the gate's password.
+  /// shows them, where a control drawn over the field comes after it, as *Forgot password?* over the sign-in's
+  /// password.
   pub fn tab_first(mut self, position: i32) -> Self {
     self.tab_first = Some(position);
     self

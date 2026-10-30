@@ -1,16 +1,16 @@
-//! The sign-in gate's states for design verification without a person's press (layer *Sign-in gate* `ASl21`): the
-//! window opens in one of [`State::ALL`] at 1440 or, with `--narrow`, 960 wide. What a person would have done is done
-//! before the window shows: signing in, the cloud ending the sign-in, or typing and pressing *Sign in* with the pointer
-//! ([`drive`]); with `--tab <count>`, Tab pressed that many times after, so a focus ring shows. The window keeps its
-//! tokens in a keychain in memory, and its cloud is a stand-in on loopback. Fixture data for QA, never shipped: an
-//! example is no part of the app's program.
+//! The Orchester Cloud sign-in's states for design verification without a person's press (board *Signed out · redesign*
+//! `uBND2`), in Settings › Orchester Cloud: the window opens in one of [`State::ALL`] at 1440 or, with `--narrow`, 960
+//! wide. What a person would have done is done before the window shows: signing in, the cloud ending the sign-in, or
+//! typing and pressing *Sign in* with the pointer ([`drive`]); with `--tab <count>`, Tab pressed that many times after,
+//! so a focus ring shows. The window keeps its tokens in a keychain in memory, and its cloud is a stand-in on loopback.
+//! Fixture data for QA, never shipped: an example is no part of the app's program.
 //!
-//!   ORCHESTER_CLOUD_URL=http://localhost:47990 cargo run -p orchester-app --example gate_qa -- <state> [--narrow] [--tab <count>]
+//!   ORCHESTER_CLOUD_URL=http://localhost:47990 cargo run -p orchester-app --example sign_in_qa -- <state> [--narrow] [--tab <count>]
 //!
-//! Built that way, the stand-in is the build's own cloud, as the frames draw it (*default*, no test cloud); built
-//! without it, the stand-in is set as a test cloud, and the gate says so. It prints its pid and the folder of its MCP
-//! discovery file, `.tmp/qa/signin-gate/mcp/`. `ORCHESTER_APP_WINDOW_POSITION=<x>,<y>` opens the window there. Stop it
-//! by its pid, or close its window.
+//! Built that way, the stand-in is the build's own cloud, as the frames draw it (no test cloud); built without it, the
+//! stand-in is set as a test cloud, and Advanced says so. It prints its pid and the folder of its MCP discovery file,
+//! `.tmp/qa/sign-in/mcp/`. `ORCHESTER_APP_WINDOW_POSITION=<x>,<y>` opens the window there. Stop it by its pid, or close
+//! its window.
 
 #![allow(clippy::print_stdout, reason = "a QA helper says where it is")]
 
@@ -42,61 +42,58 @@ use tokio::runtime::Runtime;
 /// The stand-in's port in a build whose own cloud it is.
 const STAND_IN_PORT: u16 = 47990;
 
-/// What the window opens on.
+/// What the window opens on, in Settings › Orchester Cloud.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum State {
-  /// A first run (`Lpznn`, `Rmtl1`).
+  /// Nobody signed in, as on a first run (`j7SbPk`).
   FirstRun,
-  /// A first run, the MCP item's card on hover (`e2DPHR`).
-  McpCard,
-  /// *Advanced · cloud address* open with a test cloud set (`S8aPFV`).
+  /// *Advanced* open with a test cloud set.
   Advanced,
-  /// A wrong email or password (`Atym1`).
+  /// A wrong email or password.
   Wrong,
-  /// No internet on a first run (`i8HD8`, `bHBBo`).
+  /// No internet.
   Unreachable,
-  /// *Confirm your email first* (`vovth`).
+  /// *Confirm your email first*.
   Unconfirmed,
-  /// *Too many attempts* (`t2C4a`).
+  /// *Too many attempts*.
   Paused,
-  /// Signing in (`U0v7kx`, `G1ermB`).
+  /// Signing in (`wpD5E`).
   SigningIn,
-  /// The gate came back: signed out from another device (`ztigw`, `i3jJp`).
+  /// Signed out from another device (`CBmxe`).
   Revoked,
-  /// The gate came back: the password changed (`obc19`).
+  /// The password changed.
   PasswordReset,
-  /// The gate came back: the account was deleted (no frame).
+  /// The account was deleted.
   AccountDeleted,
-  /// The gate came back with no reason this app knows (`obc19`).
+  /// A sign-in ended for no reason this app knows.
   Other,
-  /// After *Sign out and lock* (`mnT1S`).
+  /// After *Sign out*.
   SignedOut,
-  /// Signed in, Settings › Orchester asking before it signs out (`p2VeL`).
+  /// Signed in, asking before it signs out (`xQQbr`).
   SignOut,
   /// Signed in and offline: the status bar's item (`ZSB6h`).
   Offline,
   /// The same, its card on hover.
   OfflineCard,
-  /// The code step after the password of an account with two-factor authentication (`Tmwkg`, `Dix2w`).
+  /// The code step after the password of an account with two-factor authentication (`eWsUb`).
   Code,
-  /// The code step with a recovery code (`hJ2yS`, `AZVn7`).
+  /// The code step with a recovery code.
   Recovery,
-  /// Verifying a code (`iflk6`, `MHk6K`).
+  /// Verifying a code.
   Verifying,
-  /// A wrong code (`DtxLq`, `d0gfiq`).
+  /// A wrong code.
   WrongCode,
-  /// Too many codes: paused (`qZyaZ`, `LfTnj`).
+  /// Too many codes: paused.
   TooManyCodes,
-  /// The challenge ended: back to the password (`R2wOmb`, `Z0ceYP`).
+  /// The challenge ended: back to the password.
   TimedOut,
-  /// Signed out to sign in again with a code, which accepting an invite to Billing needs (`Nq3Mf`, `y4WjRA`).
+  /// Signed out to sign in again with a code, which accepting an invite to Billing needs.
   SignInForCode,
 }
 
 impl State {
-  const ALL: [(&'static str, Self); 23] = [
+  const ALL: [(&'static str, Self); 22] = [
     ("first-run", Self::FirstRun),
-    ("mcp-card", Self::McpCard),
     ("advanced", Self::Advanced),
     ("wrong", Self::Wrong),
     ("unreachable", Self::Unreachable),
@@ -166,7 +163,7 @@ fn main() -> Result<(), Box<dyn Error>> {
   } else {
     AccountCloud::start()
   };
-  let launch = signed_in::launch_signed_out(
+  let launch = signed_in::launch(
     &data.path().join("orchester.db"),
     data.path().join("no-runner"),
     runtime.handle(),
@@ -292,7 +289,7 @@ fn window(
   drive::to(&mut app, &mut tree, (state, &link, cloud), tabs)?;
   tree.set_render_engine_factory(|| Box::new(WgpuRenderEngine::new()));
   let window = WinitWindow::new(app, tree)
-    .with_title("Orchester sign-in gate QA")
+    .with_title("Orchester sign-in QA")
     .with_icon(brand::window_icon()?)
     .with_size(width, 900)
     .with_min_size(960, 640)
@@ -308,11 +305,11 @@ fn window(
   Ok(())
 }
 
-/// `.tmp/qa/signin-gate/` of this checkout.
+/// `.tmp/qa/sign-in/` of this checkout.
 fn qa_folder() -> Result<PathBuf, &'static str> {
   Path::new(env!("CARGO_MANIFEST_DIR"))
     .ancestors()
     .nth(2)
-    .map(|checkout| checkout.join(".tmp").join("qa").join("signin-gate"))
+    .map(|checkout| checkout.join(".tmp").join("qa").join("sign-in"))
     .ok_or("the crate is two folders into the checkout")
 }

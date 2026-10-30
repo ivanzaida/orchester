@@ -4,9 +4,8 @@
 //! token stops working with its turn. It serves none of
 //! the window's tools and none of the app's other tools, and its token is not the app server's, so the agent never
 //! reaches the app's own server. Each call goes through the same tool an MCP client of the app calls
-//! ([`super::domain`]), so it is refused or carried out exactly as for that client; while this computer is signed out
-//! of Orchester Cloud every call is refused, as there (`input_gate::signed_out`). The servers still under way stop with
-//! the session.
+//! ([`super::domain`]), so it is refused or carried out exactly as for that client, signed in to Orchester Cloud or
+//! not. The servers still under way stop with the session.
 
 use std::{
   borrow::Cow,
@@ -34,14 +33,12 @@ use orchester_workspace::{
   app_mcp::{self, Translate},
   orchestrator::tools::{self, ChatScope},
   runner::Runners,
-  sharing::cloud::Cloud,
 };
 use parking_lot::Mutex;
 use serde_json::Value;
 
 use super::{
   APP_NAME, domain,
-  input_gate::signed_out,
   server::{BindError, Listening, endpoint},
   token::BearerToken,
 };
@@ -86,7 +83,6 @@ impl ChatServers {
       services: Arc::new(domain::on(services)),
       translate: Arc::new(domain::translate(i18n)),
       runners: services.runners.clone(),
-      cloud: services.cloud.clone(),
       scope: Arc::new(scope),
     };
     let token = BearerToken::generate();
@@ -151,8 +147,6 @@ struct ChatHandler {
   services: Arc<app_mcp::Services>,
   translate: Arc<Translate>,
   runners: Runners,
-  /// Signed out of the cloud, every call is refused.
-  cloud: Cloud,
   scope: Arc<ChatScope>,
 }
 
@@ -185,11 +179,6 @@ impl ServerHandler for ChatHandler {
     request: CallToolRequestParams,
     _context: RequestContext<lurq::mcp::rmcp::RoleServer>,
   ) -> Result<CallToolResponse, McpError> {
-    if !self.cloud.is_signed_in() {
-      tracing::info!(tool = %request.name, "a tool of the Orchestrator refused while Orchester is signed out");
-      let refusal = serde_json::json!({ "code": signed_out::CODE, "message": signed_out::REFUSAL });
-      return Ok(CallToolResult::error(vec![ContentBlock::text(refusal.to_string())]).into());
-    }
     let arguments = request.arguments.unwrap_or_default();
     let called = tools::call(
       (&self.services, &self.translate, &self.runners),

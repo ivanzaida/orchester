@@ -4,10 +4,10 @@
 //! off the UI thread before forwarding input; lurq's event-loop denial and confirmation handlers recheck it.
 //! Looking stays allowed, except while the app's MCP token shows in the window: then screenshots and the window's
 //! text are refused too, so no client reads it. Neither consent nor this gate grants window-control scopes or
-//! provider permissions. While this computer is signed out of Orchester Cloud, every tool is refused ([`signed_out`]).
+//! provider permissions. Whether this computer is signed in to Orchester Cloud changes none of this: the local tools
+//! answer without a sign-in, and signing in stays a person's ([`Guarded::Sharing`]).
 
 mod local;
-pub mod signed_out;
 use std::{
   borrow::Cow,
   sync::{
@@ -29,7 +29,7 @@ use lurq::mcp::{
   },
 };
 use orchester_core::run::Answerer;
-use orchester_workspace::{app_mcp, decisions::DecisionKind, sharing::cloud::Cloud};
+use orchester_workspace::{app_mcp, decisions::DecisionKind};
 use parking_lot::Mutex;
 
 use super::clients::SessionMark;
@@ -159,10 +159,6 @@ struct Counts {
   in_flight: AtomicUsize,
   /// lurq's control of its tools once the server started, and the tools the gate denied through it.
   tools: Mutex<Option<(McpHandle, Vec<&'static str>)>>,
-  /// The session's cloud account: signed out, every tool is refused.
-  cloud: Mutex<Option<Cloud>>,
-  /// A QA copy or a development build: lurq's looking tools still answer on the sign-in gate.
-  looks_on_gate: AtomicBool,
 }
 
 #[derive(Default)]
@@ -203,19 +199,6 @@ impl InputGate {
     self.count(what, true);
     self.refresh_tools();
     Protected(self.clone(), what)
-  }
-
-  /// Refuses every tool while the session's `cloud` account is signed out ([`signed_out`]); `looks` lets lurq's
-  /// looking tools answer on the gate, in a QA copy or a development build only.
-  pub fn bind_cloud(&self, cloud: Cloud, looks: bool) {
-    *self.0.cloud.lock() = Some(cloud);
-    self.0.looks_on_gate.store(looks, Ordering::SeqCst);
-  }
-
-  /// Whether the session's cloud account is signed out: no tool but `sign_in_state` answers. A window without a
-  /// session (a startup screen) has nothing behind a gate.
-  pub fn signed_out(&self) -> bool {
-    self.0.cloud.lock().as_ref().is_some_and(|cloud| !cloud.is_signed_in())
   }
 
   /// Connects the session's stored authority without broadening window-control scopes.
@@ -450,11 +433,6 @@ impl ServerHandler for GuardedTools {
   ) -> Result<CallToolResponse, McpError> {
     if let Some(session) = &self.session {
       session.requested();
-    }
-    if self.gate.signed_out() && !signed_out::answers(&request.name, self.gate.0.looks_on_gate.load(Ordering::SeqCst)) {
-      tracing::info!(tool = %request.name, "a tool refused while Orchester is signed out");
-      let refusal = serde_json::json!({ "code": signed_out::CODE, "message": signed_out::REFUSAL });
-      return Ok(CallToolResult::error(vec![ContentBlock::text(refusal.to_string())]).into());
     }
     if self.gate.token_shown() && WINDOW_TEXT.contains(&request.name.as_ref()) {
       tracing::info!(tool = %request.name, "a look at the window refused while the access token shows");

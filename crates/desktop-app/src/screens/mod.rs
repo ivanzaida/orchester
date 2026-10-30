@@ -7,10 +7,10 @@
 mod add_project;
 mod agents;
 mod all_projects;
+pub(crate) mod cloud_sign_in;
 mod connections;
 mod delivery;
 mod files;
-pub(crate) mod gate;
 pub(crate) mod hub;
 mod import;
 mod instructions;

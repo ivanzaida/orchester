@@ -13,9 +13,8 @@ use orchester_workspace::{display, runner::state::RunnerState};
 
 use super::{
   facts::{BarAction, BarFacts, Dispatch, ProjectFacts},
-  gate::version,
   item::{dot, frame, pressed},
-  mcp, server,
+  mcp, server, version,
 };
 use crate::{
   mcp::{McpKind, McpStatus, address},

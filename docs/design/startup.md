@@ -37,7 +37,7 @@ projects* tab. Controls are instances of `Button/*` (`iBDdP`, `O1AstI`, `YaUJX`,
 1. **Three equal ways in.** *Add a project from a folder* (Choose folder…), *Join a team* (Sign in, Use a code),
    *Open a team's shared project* (Choose project…). None needs another first; each ends in an open project.
 2. **No account to work locally.** Orchester Cloud is asked for only when the person joins a team (decided
-   2026-10-28); the design assumes the sign-in gate is gone. The start page says so in one line.
+   2026-10-28); the sign-in gate is gone (ORC-132). The start page says so in one line.
 3. **In place, no modals.** Join, pick, link and download are steps of the start page: a breadcrumb
    (*Start › Join a team › Acme › Kontur*), a step line (*Join the team, Choose a project, Link a folder, Download
    tasks*) and *Back*.

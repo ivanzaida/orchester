@@ -10,7 +10,7 @@ use orchester_core::{
 };
 use orchester_store::StoreError;
 
-use crate::runner::state::RunnerFailure;
+use crate::{runner::state::RunnerFailure, workspace::MoveError};
 
 /// A translatable message: `key` in the locale files and the values of its placeholders.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -62,6 +62,16 @@ pub fn module_error(error: &orchester_core::module::ModuleError) -> Message {
     ModuleError::NotFound(_) => "modules.errors.notFound",
     ModuleError::ChangedMeanwhile => "modules.errors.changedMeanwhile",
   })
+}
+
+/// Why a project did not move between this computer and the account.
+pub fn move_error(error: &MoveError) -> Message {
+  match error {
+    MoveError::SignedOut => Message::new("errors.moveSignedOut"),
+    MoveError::Shared => Message::new("errors.moveShared"),
+    MoveError::FolderMissing => Message::new("errors.projectMissing"),
+    MoveError::Store(error) => store_error(error),
+  }
 }
 
 pub fn store_error(error: &StoreError) -> Message {

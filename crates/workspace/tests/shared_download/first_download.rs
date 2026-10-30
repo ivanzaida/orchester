@@ -9,7 +9,7 @@ use std::process::Command;
 use orchester_api::{ErrorCode, client::ClientError};
 use orchester_core::{id::IdempotencyKey, secret::VaultError, task::organization::WorkflowStatus};
 use orchester_exec::programs::Programs;
-use orchester_store::{AppDb, ProjectDb, StoreError};
+use orchester_store::{ProjectDb, StoreError};
 use orchester_workspace::{
   sharing::{
     SharingError,
@@ -312,11 +312,7 @@ fn startup_first_download_a_round_with_no_download_tells_the_screens_once() {
 fn startup_first_download_a_server_gone_from_the_list_fails_typed() {
   let linked = Linked::on(Responder::paged(2, 2, Some(2)));
   linked.join();
-  let forgotten = AppDb::open(&linked.database)
-    .expect("database")
-    .forget_unowned_server(linked.server)
-    .expect("forgotten");
-  assert!(forgotten, "the server left the list");
+  linked.server_leaves_the_list();
   linked.round();
   assert_eq!(
     linked.failure(),

@@ -6,16 +6,20 @@
 //! they report. Selecting a project that opens shows its Overview; *Open project folder…* opens the project a folder
 //! keeps ([`folder`]); *Add project* opens Add project; *Join a team* and *Open shared project…* open the teams in
 //! Settings › Orchester Cloud; a joined team's project with no checkout here is offered above the list until *Not
-//! now* ([`teams`], [`offer`]); the × asks in place whether to remove a project from the list ([`remove`]). The
-//! *Usage* tab shows every project's usage (`rHA8G`, `crate::screens::usage::everywhere`). The rules are
-//! `orchester_workspace::project_list`'s and `orchester_workspace::sharing`'s.
+//! now* ([`teams`], [`offer`]); the × asks in place whether to remove a project from the list ([`remove`]); a row under
+//! the pointer offers to move its project between this computer and the account ([`move_project`]); and while nobody is
+//! signed in a line says what waits for a sign-in ([`waiting`]). The *Usage* tab shows every project's usage (`rHA8G`,
+//! `crate::screens::usage::everywhere`). The rules are `orchester_workspace::project_list`'s and
+//! `orchester_workspace::sharing`'s.
 
 mod folder;
+mod move_project;
 mod offer;
 mod page;
 mod remove;
 mod row;
 mod teams;
+mod waiting;
 mod welcome;
 
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
@@ -38,8 +42,8 @@ use orchester_workspace::{
 };
 use parking_lot::Mutex;
 
-use self::teams::Teams;
-use crate::{routes::Screen, screens::settings::orchester::InvitesNotice, services::Services};
+use self::{move_project::Moving, teams::Teams};
+use crate::{root::follow_sign_in, routes::Screen, screens::settings::orchester::InvitesNotice, services::Services};
 
 /// The element of the screen, as every screen has one (`screen-<name>`).
 fn screen_id() -> String {
@@ -64,13 +68,17 @@ pub(super) enum Tab {
 
 impl DevtoolsInspectable for Tab {}
 
-/// The screen's own state: what was removed, and which project's removal is asked.
+/// The screen's own state: what was removed or moved, and which project's removal or move is asked.
 #[derive(Clone)]
 struct Ask {
-  /// Counts removals, so the list is read again after one.
+  /// Counts removals and moves, so the list is read again after one.
   revision: Signal<u64>,
   /// The project whose removal is asked under its row.
   removing: Signal<Removing>,
+  /// The project whose move is asked under its row.
+  moving: Signal<Moving>,
+  /// The row under the pointer, which offers what moving its project can do.
+  hovered: Signal<Hovered>,
 }
 
 /// The project whose removal is asked, if any.
@@ -78,6 +86,12 @@ struct Ask {
 struct Removing(Option<ProjectId>);
 
 impl DevtoolsInspectable for Removing {}
+
+/// The project whose row is under the pointer, if any.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct Hovered(Option<ProjectId>);
+
+impl DevtoolsInspectable for Hovered {}
 
 struct AllProjects {
   ask: Ask,
@@ -101,6 +115,8 @@ impl Component for AllProjects {
       ask: Ask {
         revision: ctx.signal(0),
         removing: ctx.signal(Removing::default()),
+        moving: ctx.signal(Moving::default()),
+        hovered: ctx.signal(Hovered::default()),
       },
       followed: Mutex::new(false),
       read: Arc::default(),
@@ -113,10 +129,12 @@ impl Component for AllProjects {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     // First in every render: lurq keeps a component's futures by the order it asks for them.
     let services = Services::of(ctx);
+    let sign_in = follow_sign_in(ctx, &services.cloud);
     let open = folder::open_action(ctx, &services);
     let workspace = services.workspace.clone();
+    let revision = self.ask.revision.get();
     let listing = ctx
-      .future((workspace, self.ask.revision.get()), |(workspace, _)| async move {
+      .future((workspace, revision, sign_in.account()), |(workspace, ..)| async move {
         background::run(move || workspace.listing()).await?.map_err(|error| {
           tracing::error!(%error, "cannot read the workspace's projects");
           messages::store_error(&error)
@@ -124,6 +142,7 @@ impl Component for AllProjects {
       })
       .state()
       .get();
+    let waiting = waiting::read(ctx, revision, &sign_in, &services.workspace);
     let entries = match &listing.data {
       Some(Listing::Projects(entries)) => entries.clone(),
       Some(Listing::Welcome) | None => Vec::new(),
@@ -149,30 +168,34 @@ impl Component for AllProjects {
     match (listing.data, failed) {
       (_, Some(error)) => {
         let notice = self.invites.notice(ctx, &invites);
-        page::page(ctx, heading, page::Body::Failed(&error), (notice, None))
+        page::page(ctx, heading, page::Body::Failed(&error), (None, notice, None))
       }
       (Some(Listing::Welcome), None) => welcome::welcome(ctx, &open),
       (Some(Listing::Projects(_)), None) if let Tab::Usage(query) = tab => {
         let usage = crate::screens::usage::everywhere(ctx, &query, work);
-        page::page(ctx, heading, page::Body::Usage(usage), (None, None))
+        page::page(ctx, heading, page::Body::Usage(usage), (None, None, None))
       }
       (Some(Listing::Projects(_)), None) => {
         let rows = project_list::listed(&entries, &data, &services.runners);
-        let body = if rows.is_empty() {
-          page::Body::Empty
-        } else {
+        let line = waiting::line(ctx, waiting, &sign_in);
+        let body = if !rows.is_empty() {
           page::Body::List {
             rows: &rows,
             places: teams.joined.as_ref().map(|joined| &joined.places),
+            signed_in: sign_in.is_signed_in(),
             ask: &self.ask,
           }
+        } else if line.is_some() {
+          page::Body::NothingHere
+        } else {
+          page::Body::Empty
         };
         let notice = self.invites.notice(ctx, &invites);
         let offer = teams
           .offer
           .as_ref()
           .map(|offered| offer::strip(ctx, offered, &teams.answer));
-        page::page(ctx, heading, body, (notice, offer))
+        page::page(ctx, heading, body, (line, notice, offer))
       }
       // Reading the list takes a moment; the screen stays empty meanwhile.
       (None, None) => lurq::components::Column::new().id(screen_id()).into(),

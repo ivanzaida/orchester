@@ -265,6 +265,7 @@
       "changedBody": "A task was added or removed meanwhile, so nothing was sent and {{local}} is still local. Review again reads what linking it to {{project}} does now.",
       "reviewAgain": "Review again",
       "foreignAddress": "The server names this project at {{own}}, not at the address this computer connected to, so Orchester didn't use it and nothing was sent. If {{own}} is how your team reaches the server, connect to it by that address.",
+      "accountProject": "This project is in your account, and this server was joined with a code. Move the project to this computer on All projects first; nothing was sent.",
       "taken": "The project got tasks of its own meanwhile, so linking this checkout is a join, reviewed first. Nothing was sent: Cancel, then link again to open the join review.",
       "whatGoesUp": "What is uploaded",
       "whatComesDown": "What comes down",
@@ -458,6 +459,9 @@
     "landing": {
       "title": "Join {{project}} on {{server}}",
       "titlePending": "Join {{project}}",
+      "signInLead": "Sign in to Orchester Cloud to accept this invite. Nothing changes on this computer until you've picked a checkout and read the join review.",
+      "notConnected": "{{server}} · not connected yet",
+      "unknownFact": "—",
       "lead": "This computer is connected to {{server}} as {{username}}. Pick the checkout of {{project}} here; the next page shows what joining does before anything is sent.",
       "reading": "Reading the project and your checkouts…",
       "opening": "Opening the join review…",
@@ -519,6 +523,10 @@
       "onlyYou": "Only you",
       "onServer": "Share on a team server",
       "onServerHint": "Its tasks move to the server; teammates see and run them",
+      "signInHint": "Sharing to a team needs an Orchester Cloud sign-in, or a code from the team server",
+      "useCode": "Use a code",
+      "signIn": "Sign in",
+      "movesToAccount": "{{project}} moves into your account, so it shows only while you're signed in.",
       "open": "Share…"
     },
     "team": {

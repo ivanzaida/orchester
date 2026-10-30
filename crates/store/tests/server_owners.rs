@@ -1,7 +1,6 @@
-//! Whose each team server is (the person's decision, 2026-10-16: servers per account, as projects are): listed for its
-//! own Orchester Cloud account only, an address once per account, a server no account took yet given once and never
-//! beside an account's own entry at its address, and those known before servers had owners to the account signed in
-//! then, with all they kept.
+//! Whose each team server is (the person's decisions, 2026-10-16 and 2026-10-30: servers per owner, as projects are):
+//! an account's is listed for that account only, this computer's beside it, an address once per owner, and those known
+//! before servers had owners are the account's signed in then, with all they kept.
 //!
 //! `cargo test -p orchester-store --test server_owners server_owners_`
 
@@ -71,32 +70,47 @@ fn server_owners_list_only_their_own_and_an_address_once_each() {
 }
 
 #[test]
-fn server_owners_an_unowned_server_is_given_once_and_never_beside_an_accounts_own() {
+fn server_owners_this_computers_servers_show_beside_an_accounts_own() {
   let dir = tempfile::tempdir().expect("temporary directory");
   let mut db = AppDb::open(&dir.path().join("orchester.db")).expect("open");
   let (bohdan, olena) = (CloudAccountId::generate(), CloudAccountId::generate());
-  let kontur = server("https://orchester.kontur.lan", 1);
-  let lab = server("http://10.0.4.20:8740", 2);
-  let bohdans_lab = server("http://10.0.4.20:8740", 3);
-  db.add_server(&kontur, None).expect("nobody's");
-  db.add_server(&lab, None).expect("nobody's");
-  db.add_server(&bohdans_lab, Some(&bohdan)).expect("Bohdan's");
+  let lab = server("http://10.0.4.20:8740", 1);
+  let bohdans_lab = server("http://10.0.4.20:8740", 2);
+  let olenas = server("https://orchester.olena.lan", 3);
+  db.add_server(&lab, None).expect("this computer's");
+  db.add_server(&bohdans_lab, Some(&bohdan))
+    .expect("Bohdan's, at the same address");
+  db.add_server(&olenas, Some(&olena)).expect("Olena's");
+  let visible = |db: &AppDb, owner: Option<&CloudAccountId>| -> Vec<ServerId> {
+    db.servers_visible_to(owner)
+      .expect("list")
+      .iter()
+      .map(|server| server.id)
+      .collect()
+  };
+  assert_eq!(visible(&db, Some(&bohdan)), [lab.id, bohdans_lab.id]);
+  assert_eq!(visible(&db, Some(&olena)), [lab.id, olenas.id]);
+  assert_eq!(visible(&db, None), [lab.id], "signed out: only this computer's");
+  assert_eq!(db.server_owner(lab.id).expect("whose"), Some(None));
+  assert_eq!(db.server_owner(olenas.id).expect("whose"), Some(Some(olena)));
+  assert_eq!(db.server_owner(ServerId::generate()).expect("whose"), None);
+}
 
-  assert!(db.give_unowned_server(kontur.id, &bohdan).expect("given"));
+#[test]
+fn server_owners_a_signed_in_account_uses_this_computers_server_and_its_own_only() {
+  let dir = tempfile::tempdir().expect("temporary directory");
+  let mut db = AppDb::open(&dir.path().join("orchester.db")).expect("open");
+  let lab = server("http://10.0.4.20:8740", 1);
+  let (kontur, kontur_owner) = (server("https://orchester.kontur.lan", 2), CloudAccountId::generate());
+  db.add_server(&lab, None).expect("this computer's");
+  db.add_server(&kontur, Some(&kontur_owner)).expect("an account's");
   assert!(
-    !db.give_unowned_server(kontur.id, &olena).expect("asked"),
-    "a server an account has is never given on"
+    db.is_signed_in_accounts_server(lab.id).expect("asked"),
+    "with nobody signed in too"
   );
-  assert!(
-    !db.give_unowned_server(lab.id, &bohdan).expect("asked"),
-    "not beside Bohdan's own entry at that address"
-  );
-  assert_eq!(ids(&db, Some(&bohdan)), [kontur.id, bohdans_lab.id]);
-  assert_eq!(ids(&db, None), [lab.id]);
-  assert!(!db.forget_unowned_server(kontur.id).expect("asked"), "Bohdan's stays");
-  assert!(db.forget_unowned_server(lab.id).expect("forgotten"));
-  assert!(ids(&db, None).is_empty());
-  assert_eq!(ids(&db, Some(&bohdan)), [kontur.id, bohdans_lab.id]);
+  assert!(!db.is_signed_in_accounts_server(kontur.id).expect("asked"));
+  assert!(db.sign_out_of_server(lab.id).expect("signed out"));
+  assert!(!db.sign_out_of_server(kontur.id).expect("asked"), "an account's stays");
 }
 
 /// A server row as the schema before owners kept it: joined with the cloud, pinned, signed in.

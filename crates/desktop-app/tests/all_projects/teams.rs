@@ -172,7 +172,7 @@ fn all_projects_says_where_each_project_is() {
     window.texts(&billing).is_some_and(|texts| texts != ["—"])
   });
   assert_eq!(window.text(&billing), "Shared · Acme");
-  assert_eq!(window.text(&place(project_id())), "Local");
+  assert_eq!(window.text(&place(project_id())), "This computer");
   assert_eq!(
     window.text(&place(gone.project.id())),
     "—",
@@ -309,7 +309,7 @@ fn all_projects_offers_nothing_without_a_team() {
     window.text(HINT),
     "Working with a team? Join it to see the projects it shares with you."
   );
-  assert_eq!(window.text(&place(project_id())), "Local");
+  assert_eq!(window.text(&place(project_id())), "This computer");
   window.pass();
   assert!(window.texts(OFFER).is_none(), "no team, no offer");
 }

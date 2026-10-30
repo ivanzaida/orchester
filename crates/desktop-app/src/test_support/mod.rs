@@ -2,9 +2,9 @@
 //! here and the end-to-end tests of the private platform repository, which build this crate by git: the real root
 //! with the theme and the bundled locales, the project Kontur (KON) registered in a temporary git repository, and
 //! runners whose program does not exist, so a project's runner fails to start (`MissingExecutable`) without starting
-//! anything. The session is signed in to a stand-in Orchester Cloud with a keychain in memory ([`signed_in`]), past the
-//! sign-in gate; [`Data::launch_signed_out`] stops at the gate. Never part of the app's program: only the
-//! `test-support` feature builds it.
+//! anything. The session has a keychain in memory and nobody signed in; [`Data::launch_signed_in`] signs it in to a
+//! stand-in Orchester Cloud ([`signed_in`]). Never part of the app's program: only the `test-support` feature builds
+//! it.
 
 pub mod signed_in;
 pub mod stand_ins;
@@ -98,19 +98,19 @@ impl Data {
     repo
   }
 
-  /// Starts a session of the data folder, signed in to the stand-in cloud. Its runner program does not exist.
+  /// Starts a session of the data folder, as on a first run: nobody is signed in. Its runner program does not exist.
   pub fn launch(&self) -> Launch {
     self.launch_with(self.no_runner())
   }
 
   /// [`Self::launch`] with the runner program `runner`.
   pub fn launch_with(&self, runner: PathBuf) -> Launch {
-    signed_in::launch(&self.database(), runner, self.runtime.handle(), &self.cloud)
+    signed_in::launch(&self.database(), runner, self.runtime.handle())
   }
 
-  /// A session of the data folder that is not signed in: the window shows the sign-in gate.
-  pub fn launch_signed_out(&self) -> Launch {
-    signed_in::launch_signed_out(&self.database(), self.no_runner(), self.runtime.handle())
+  /// A session of the data folder signed in to the stand-in cloud, for what needs an account.
+  pub fn launch_signed_in(&self) -> Launch {
+    signed_in::launch_signed_in(&self.database(), self.no_runner(), self.runtime.handle(), &self.cloud)
   }
 
   /// A runner program that does not exist.

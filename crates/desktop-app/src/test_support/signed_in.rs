@@ -1,8 +1,7 @@
-//! A signed-in session for the app's tests and QA examples (the sign-in gate, 2026-10-16). The window shows only the
-//! sign-in gate until this computer is signed in to Orchester Cloud, so every harness signs in first, as a person
-//! would: through the workspace, to a stand-in cloud on loopback (`account_cloud`), with the device token in a keychain
-//! in memory, never the OS's. The stand-in answers the app's check of its sign-in, so the session stays signed in.
-//! Fixture data for tests and QA only: the app's program never includes it.
+//! A session for the app's tests and QA examples, with a keychain in memory, never the OS's: signed out as on a first
+//! run, or signed in as a person would, through the workspace, to a stand-in cloud on loopback (`account_cloud`), which
+//! answers the app's check of its sign-in, so the session stays signed in. Fixture data for tests and QA only: the
+//! app's program never includes it.
 
 use std::{
   collections::HashMap,
@@ -58,16 +57,16 @@ pub fn keychain() -> Vault {
 
 /// The session of the application database `database` with a keychain in memory, its runners the program `runner`,
 /// on `runtime`; signed in to `cloud`. A session that did not start is returned as it is, to say why.
-pub fn launch(database: &Path, runner: PathBuf, runtime: &Handle, cloud: &AccountCloud) -> Launch {
-  let launch = Launch::begin_with_vault(database, runner, runtime, (None, keychain()));
+pub fn launch_signed_in(database: &Path, runner: PathBuf, runtime: &Handle, cloud: &AccountCloud) -> Launch {
+  let launch = launch(database, runner, runtime);
   if let Some(services) = launch.services() {
     sign_in(services, runtime, cloud);
   }
   launch
 }
 
-/// [`launch`] without signing in: the window shows the sign-in gate.
-pub fn launch_signed_out(database: &Path, runner: PathBuf, runtime: &Handle) -> Launch {
+/// [`launch_signed_in`] without signing in: this computer's projects only, as on a first run.
+pub fn launch(database: &Path, runner: PathBuf, runtime: &Handle) -> Launch {
   Launch::begin_with_vault(database, runner, runtime, (None, keychain()))
 }
 
@@ -78,8 +77,8 @@ pub fn cloud_address(cloud: &AccountCloud) -> CloudAddress {
   CloudAddress::new(address.clone(), Some(address))
 }
 
-/// Signs the session of `services` in to the stand-in `cloud`, as a person does in the gate: it uses that cloud from
-/// now on (Settings › Orchester › Advanced) and signs in with its account.
+/// Signs the session of `services` in to the stand-in `cloud`, as a person does in Settings › Orchester Cloud: it uses
+/// that cloud from now on (Advanced) and signs in with its account.
 pub fn sign_in(services: &Services, runtime: &Handle, cloud: &AccountCloud) {
   let address = cloud_address(cloud);
   runtime

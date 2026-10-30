@@ -4,6 +4,8 @@
 //!
 //! `cargo test -p orchester-app --test all_projects all_projects`
 
+#[path = "all_projects/owners.rs"]
+mod owners;
 mod support;
 #[path = "all_projects/teams.rs"]
 mod teams;
@@ -21,6 +23,7 @@ fn all_projects(window: &mut Window) {
   window.until("All projects to be read", |window| {
     window.tree.get_element_by_id("project-list").is_some()
       || window.tree.get_element_by_id("all-projects-empty").is_some()
+      || window.tree.get_element_by_id("all-projects-nothing-here").is_some()
   });
 }
 

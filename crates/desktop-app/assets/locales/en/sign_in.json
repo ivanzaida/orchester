@@ -1,24 +1,18 @@
 {
-  "gate": {
-    "first": {
-      "eyebrow": "WELCOME TO ORCHESTER",
-      "title": "Sign in to start",
-      "lead": "Orchester works with your Orchester Cloud account. Sign in once on this computer; after that, it keeps working offline too."
-    },
-    "again": {
-      "eyebrow": "ORCHESTER CLOUD",
-      "title": "Sign in again"
-    },
+  "sign_in": {
+    "notSignedIn": "Not signed in",
+    "notSignedInLead": "Your projects on this computer work without an account. Sign in to join teams and accept invites.",
+    "again": "Sign in again",
     "email": "Email",
     "emailPlaceholder": "you@example.com",
     "password": "Password",
+    "passwordPlaceholder": "Password",
     "forgot": "Forgot password?",
     "submit": "Sign in",
     "signingIn": "Signing in…",
     "checking": "Checking with {{host}}…",
     "newHere": "New to Orchester?",
     "create": "Create an account",
-    "browserNote": "Create an account and Forgot password? open the cloud's pages in your browser. Confirm your email there, then sign in here.",
     "wrong": "The email or password is not right. Check both, or reset your password.",
     "unconfirmed": {
       "title": "Confirm your email first",
@@ -35,14 +29,13 @@
       "when": "{{host}} didn't answer · {{time}}"
     },
     "code": {
-      "eyebrow": "TWO-FACTOR AUTHENTICATION",
+      "passwordAccepted": "Password accepted",
+      "step": "Code",
       "title": "Enter your code",
       "lead": "Your account has two-factor authentication on. Enter the 6-digit code from your authenticator app.",
       "recoveryTitle": "Enter a recovery code",
       "recoveryLead": "Use one of the recovery codes you saved when you turned on two-factor. Each code works once.",
-      "passwordAccepted": "Password accepted",
       "label": "6-digit code",
-      "placeholder": "000 000",
       "recoveryLabel": "Recovery code",
       "recoveryPlaceholder": "xxxxx-xxxxx",
       "back": "Back",
@@ -63,12 +56,6 @@
       }
     },
     "openFailed": "{{page}} couldn't be opened: Orchester opens only https pages in the browser.",
-    "footer": {
-      "offline": "Signing in needs the internet once. After that, Orchester works offline and checks your sign-in when it can reach Orchester Cloud.",
-      "offlineShort": "Signing in needs the internet once. After that, Orchester works offline.",
-      "personOnly": "Only you can sign in, here in this window. Orchester's MCP tools can't sign in for you.",
-      "testCloud": "{{host}} · test cloud"
-    },
     "ended": {
       "revoked": {
         "title": "This computer was signed out",
@@ -84,7 +71,7 @@
       },
       "signedOut": {
         "title": "You signed out",
-        "body": "Orchester stays locked on this computer until you sign in again."
+        "body": "Your account's projects wait on this computer until you sign in again."
       },
       "twoFactor": {
         "title": "Sign in with your code to accept invites",
@@ -93,13 +80,8 @@
       },
       "other": {
         "title": "Your sign-in ended",
-        "body": "Orchester Cloud no longer accepts this computer's sign-in. Sign in again to keep working."
+        "body": "Orchester Cloud no longer accepts this computer's sign-in. Sign in again to get to your account's projects."
       }
-    },
-    "whileSignedOut": {
-      "projects": "Your projects and tasks stay on this computer.",
-      "runs": "Runs that are going keep going. Anything that needs you waits until you're back.",
-      "mcp": "Agents and other MCP clients get “sign in required” until then."
     }
   }
 }

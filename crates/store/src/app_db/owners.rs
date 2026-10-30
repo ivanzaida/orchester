@@ -37,10 +37,7 @@ impl AppDb {
   /// The projects shown while `owner` is signed in (`None`: nobody), most recently opened first: this computer's and
   /// `owner`'s own.
   pub fn projects_visible_to(&self, owner: Option<&CloudAccountId>) -> Result<Vec<RegisteredProject>, StoreError> {
-    self.listed_projects(
-      "WHERE owner IS NULL OR owner = ?1",
-      [owner.map(ToString::to_string)],
-    )
+    self.listed_projects("WHERE owner IS NULL OR owner = ?1", [owner.map(ToString::to_string)])
   }
 
   /// The projects any account holds, most recently opened first: what waits for a sign-in while nobody is signed in.
@@ -54,10 +51,10 @@ impl AppDb {
     self.listed_projects("", [])
   }
 
-  fn listed_projects<const N: usize>(
+  fn listed_projects(
     &self,
     condition: &str,
-    arguments: [Option<String>; N],
+    arguments: impl rusqlite::Params,
   ) -> Result<Vec<RegisteredProject>, StoreError> {
     let mut statement = self
       .connection
@@ -149,11 +146,7 @@ impl AppDb {
   ) -> Result<bool, StoreError> {
     let changed = self.connection.execute(
       "UPDATE projects SET owner = ?2 WHERE id = ?1 AND (owner IS NULL OR owner = ?3)",
-      params![
-        project.to_string(),
-        to.map(ToString::to_string),
-        signed_in.to_string()
-      ],
+      params![project.to_string(), to.map(ToString::to_string), signed_in.to_string()],
     )?;
     Ok(changed == 1)
   }

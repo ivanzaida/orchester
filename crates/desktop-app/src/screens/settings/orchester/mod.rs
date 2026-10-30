@@ -49,7 +49,6 @@ use orchester_workspace::{
   },
 };
 
-pub(crate) use self::advanced::{Advanced, Place, section as advanced_section};
 pub use self::{
   notice::InvitesNotice,
   person::PersonOnly,

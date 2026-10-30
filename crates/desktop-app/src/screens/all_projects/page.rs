@@ -56,29 +56,39 @@ pub(super) enum Body<'a> {
   Failed(&'a Message),
   /// Every project was removed from the list.
   Empty,
+  /// Nothing is on this computer, and an account's projects wait for its sign-in (`MvIpm`).
+  NothingHere,
   List {
     rows: &'a [ListedProject],
     /// Where each project is, once it is read.
     places: Option<&'a Places>,
+    /// Whether an account is signed in, so a row may offer a move.
+    signed_in: bool,
     ask: &'a Ask,
   },
   /// The *Usage* tab's page.
   Usage(Element),
 }
 
-/// The page with `body` under its tabs, and between them the invites notice and the team project offered while they
-/// show something.
+/// The page with `body` under its tabs, and between them what waits for a sign-in, the invites notice and the team
+/// project offered while they show something.
 pub(super) fn page(
   ctx: &mut Ctx,
   heading: Heading<'_>,
   body: Body<'_>,
-  (notice, offer): (Option<Element>, Option<Element>),
+  (waiting, notice, offer): (Option<Element>, Option<Element>, Option<Element>),
 ) -> Element {
   let failure = folder::failure(ctx, heading.open);
   let (state, content) = match body {
     Body::Failed(error) => ("failed", failed(ctx, error)),
     Body::Empty => ("empty", empty(ctx, heading.open)),
-    Body::List { rows, places, ask } => ("list", list(ctx, (rows, places), ask, heading.joined)),
+    Body::NothingHere => ("nothing-here", super::waiting::nothing_here(ctx)),
+    Body::List {
+      rows,
+      places,
+      signed_in,
+      ask,
+    } => ("list", list(ctx, (rows, places, signed_in), ask, heading.joined)),
     Body::Usage(usage) => return usage_page(ctx, heading, failure, usage),
   };
   let column = Column::new()
@@ -86,6 +96,7 @@ pub(super) fn page(
     .spacing(ProjectsSpacing::Page.role())
     .child(header(ctx, heading))
     .child(tabs(ctx, false))
+    .with_children(waiting)
     .with_children(notice)
     .with_children(failure.map(|failure| error_line(&failure)))
     .with_children(offer)
@@ -243,7 +254,7 @@ fn error_line(failure: &str) -> Element {
 /// is read that no team is joined, how to see a team's projects (`Hint` `b3WTlF` in 09b `dLOCJ`).
 fn list(
   ctx: &mut Ctx,
-  (rows, places): (&[ListedProject], Option<&Places>),
+  (rows, places, signed_in): (&[ListedProject], Option<&Places>, bool),
   ask: &Ask,
   joined: Option<&[ServerId]>,
 ) -> Element {
@@ -253,7 +264,7 @@ fn list(
     .enumerate()
     .map(|(index, listed)| {
       let place = places.and_then(|places| places.of(listed.project.id));
-      row::row(ctx, (listed, place), ask, index == last)
+      row::row(ctx, (listed, place, signed_in), ask, index == last)
     })
     .collect();
   let table = Column::new()

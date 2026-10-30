@@ -77,6 +77,8 @@ struct State {
   checks: usize,
   /// How `GET /me` is answered instead of the account.
   check_answer: Option<CheckAnswer>,
+  /// How many connections arrived, whatever they asked.
+  requests: usize,
 }
 
 pub struct AccountCloud {
@@ -119,6 +121,11 @@ impl AccountCloud {
 
   pub fn url(&self) -> String {
     format!("http://localhost:{}", self.address.port())
+  }
+
+  /// How many connections reached it, answered or not: none for work that needs no cloud.
+  pub fn requests(&self) -> usize {
+    self.state.lock().requests
   }
 
   /// Names the team server `audience` at `address`, trusting `fingerprint` (hex SHA-256) when it has its own
@@ -262,6 +269,7 @@ impl AccountCloud {
 }
 
 fn serve(mut stream: TcpStream, state: &Mutex<State>, key_set: &str, signing: &SigningKey) {
+  state.lock().requests += 1;
   if state.lock().down {
     return;
   }

@@ -1,7 +1,7 @@
-//! Moving a project between this computer and the signed-in Orchester Cloud account (the person's decision, 2026-10-30).
-//! A person does it on All projects, only for a project that is not shared: a project and its server always have the
-//! same owner, and each shared project syncs through its own owner's server. Nothing about the project's folder or its
-//! data changes, only whose it is.
+//! Moving a project between this computer and the signed-in Orchester Cloud account (the person's decision,
+//! 2026-10-30). A person does it on All projects, only for a project that is not shared: a project and its server
+//! always have the same owner, and each shared project syncs through its own owner's server. Nothing about the
+//! project's folder or its data changes, only whose it is.
 
 use orchester_core::id::{CloudAccountId, ProjectId, ServerId};
 use orchester_store::{ProjectDb, RegisteredProject, StoreError};
@@ -74,21 +74,45 @@ impl Workspace {
     db.projects_of_accounts()
   }
 
-  /// Whether a project `named`, by its id or its name, waits for its account while nobody is signed in: what
-  /// [`crate::app_mcp`] answers instead of *not found*. Signed in, another account's stays not found.
-  pub(crate) fn held_by_an_account(&self, named: &str) -> Result<bool, StoreError> {
+  /// The servers a first link to which moves `project` into the signed-in account, as the share page says: the
+  /// account's own, while the project is this computer's.
+  pub fn servers_moving_project(&self, project: ProjectId) -> Result<Vec<ServerId>, StoreError> {
+    let db = self.db.lock();
+    let (Some(account), Some(None)) = (owner(&db)?, db.project_owner(project)?) else {
+      return Ok(Vec::new());
+    };
     Ok(
-      self
-        .waiting_projects()?
-        .iter()
-        .any(|project| named_by(project, named)),
+      db.servers_of(Some(&account))?
+        .into_iter()
+        .map(|server| server.id)
+        .collect(),
     )
   }
 
-  /// Makes `project`, about to be linked to `server`, have the server's owner, as
-  /// [`crate::sharing::Servers::move_project`] leaves it to the first link: one that is not known yet has no row to
-  /// change.
-  pub(crate) fn follow_server(&self, project: ProjectId, server: ServerId) -> Result<(), SharingError> {
+  /// The name and address of `server`, for an invite landing that asks a sign-in first: it says what the invite is to
+  /// on this computer, whoever's the server is, since the invite names it anyway.
+  pub fn server_named(&self, server: ServerId) -> Result<Option<String>, StoreError> {
+    Ok(
+      self
+        .db
+        .lock()
+        .every_server()?
+        .into_iter()
+        .find(|known| known.id == server)
+        .map(|known| known.name),
+    )
+  }
+
+  /// Whether a project `named`, by its id or its name, waits for its account while nobody is signed in: what
+  /// [`crate::app_mcp`] answers instead of *not found*. Signed in, another account's stays not found.
+  pub(crate) fn held_by_an_account(&self, named: &str) -> Result<bool, StoreError> {
+    Ok(self.waiting_projects()?.iter().any(|project| named_by(project, named)))
+  }
+
+  /// Makes `project`, about to be linked to `server`, have the server's owner, as every first link does: a project of
+  /// this computer's moves into the account whose server it is; an account's is refused a server of this computer's
+  /// ([`SharingError::AccountProject`]); one that is not known yet has no row to change.
+  pub fn follow_server(&self, project: ProjectId, server: ServerId) -> Result<(), SharingError> {
     let mut db = self.db.lock();
     let Some(server_owner) = db.server_owner(server)? else {
       return Err(SharingError::ServerMissing);
@@ -109,7 +133,11 @@ impl Workspace {
 
   /// Gives a project just added for a first link to `server` the server's owner: it holds nothing yet that anyone else
   /// could see by surprise, and a server of this computer's takes only this computer's projects.
-  pub(crate) fn give_new_project_to_server_owner(&self, project: ProjectId, server: ServerId) -> Result<(), StoreError> {
+  pub(crate) fn give_new_project_to_server_owner(
+    &self,
+    project: ProjectId,
+    server: ServerId,
+  ) -> Result<(), StoreError> {
     let mut db = self.db.lock();
     let (Some(account), Some(server_owner)): (Option<CloudAccountId>, _) = (owner(&db)?, db.server_owner(server)?)
     else {

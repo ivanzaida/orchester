@@ -5,7 +5,9 @@
 //! review at once; otherwise the page lists the checkouts with how each compares ([`rows`]), adds a folder Orchester
 //! doesn't know yet, or shows the `git clone` to run first (Orchester never clones). *Continue to the join review*,
 //! under the checkouts, opens it in the chosen project; nothing is sent until the review is confirmed. *Later* leaves
-//! the invite accepted: the server's entry in Settings › Orchester lists the project with *Link a checkout…*.
+//! the invite accepted: the server's entry in Settings › Orchester lists the project with *Link a checkout…*. With
+//! nobody signed in and the project's server out of reach, the page asks for the sign-in in place of the checkouts
+//! (`zoihT`), and goes on by itself once it is made.
 
 mod adding;
 mod rows;
@@ -16,9 +18,11 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction},
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
+  components::{Column, Text},
   core::Signal,
-  node::Element,
+  node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::id::ProjectId;
 use orchester_workspace::{
@@ -33,12 +37,17 @@ use parking_lot::Mutex;
 use super::{Said, sharing_said};
 use crate::{
   navigation::Navigation,
+  root::follow_sign_in,
   routes::{JoinTarget, OrchesterView, ProjectPage, ProjectSettingsTab, Route},
-  screens::settings::frame,
+  screens::{
+    cloud_sign_in::{Place, SignInOffer},
+    settings::frame,
+  },
   services::{
     Services,
     path_picker::{PathKind, PathPicker},
   },
+  theme::ExtraSpacing,
   ui::{
     button::{ActionButton, ButtonKind},
     icon::Icon,
@@ -46,6 +55,9 @@ use crate::{
     state::{load_error, loading},
   },
 };
+
+/// The words for a project on a server this computer can't reach now.
+const NO_SERVER: &str = "sharing.join.noServer";
 
 #[derive(Clone, PartialEq)]
 struct Props {
@@ -146,19 +158,27 @@ impl Component for LandingPage {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let target = ctx.props::<Props>().target.clone();
     let services = Services::of(ctx);
+    // First in every render: lurq keeps a component's futures by the order it asks for them.
+    let sign_in = follow_sign_in(ctx, &services.cloud);
+    let known_server = known_server(ctx, target.server);
     let deps = (
       self.revision.get(),
+      sign_in.account(),
       target.clone(),
       (services.servers.clone(), services.programs),
     );
     let state = ctx
-      .future(deps, |(_, target, (servers, programs))| async move {
+      .future(deps, |(_, _, target, (servers, programs))| async move {
         read(&servers, &programs, &target)
           .await
           .map(|landing| Read(Arc::new(landing)))
       })
       .state()
       .get();
+    // Nobody signed in, and the project's server is not this computer's to reach: the invite needs the sign-in.
+    if !sign_in.is_signed_in() && state.error.as_ref().is_some_and(|said| *said == Said::new(NO_SERVER)) {
+      return sign_in_page(ctx, &target, known_server.as_deref());
+    }
     let body = match (state.data, state.error) {
       (Some(Read(landing)), _) => {
         if self.open_at_once(ctx, &landing, &target) {
@@ -322,6 +342,73 @@ fn page(ctx: &mut Ctx, landing: Option<&Landing>, target: &JoinTarget, body: Ele
     .child(body);
   frame::column("orchester-landing-scroll", pane)
 }
+
+/// The landing while nobody is signed in (`zoihT`): the crumb, then in one card the invite as this computer knows it
+/// and the sign-in in place of the checkouts.
+fn sign_in_page(ctx: &mut Ctx, target: &JoinTarget, server: Option<&str>) -> Element {
+  let navigation = Navigation::of(ctx);
+  let title = match server {
+    Some(server) => ctx.t_args(
+      "sharing.landing.title",
+      [("project", target.slug()), ("server", server)],
+    ),
+    None => ctx.t_args("sharing.landing.titlePending", [("project", target.slug())]),
+  };
+  let facts = rows::known_facts(ctx, target.slug(), server);
+  let sign_in = ctx.mount_keyed::<SignInOffer>("orchester-landing-sign-in", Place::Card);
+  let card = Column::new()
+    .id("orchester-landing-signed-out")
+    .width(Dimension::Pct(100.0))
+    .padding(SpacingSize::Md)
+    .spacing(ExtraSpacing::Loose.role())
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .rounded(RadiusSize::Lg)
+    .child(
+      Text::new(&title)
+        .id("orchester-landing-signed-out-title")
+        .variant(crate::theme::ExtraTypography::FormSection.role()),
+    )
+    .child(
+      Text::new(&ctx.t("sharing.landing.signInLead"))
+        .id("orchester-landing-signed-out-lead")
+        .variant(lurq::app::theme::TypographyStyle::Description)
+        .width(Dimension::Pct(100.0)),
+    )
+    .child(facts)
+    .child(sign_in);
+  let pane = frame::pane("orchester-landing-page")
+    .child(frame::crumb(
+      "orchester-landing-crumb",
+      &ctx.t("settings.tabs.orchester"),
+      navigation.to(Route::Orchester(OrchesterView::default())),
+    ))
+    .child(card);
+  frame::column("orchester-landing-scroll", pane)
+}
+
+/// The name of the server the target names, as this computer keeps it, read once off the UI thread; `None` until it is
+/// read, or when it is not in the list.
+fn known_server(ctx: &mut Ctx, server: orchester_core::id::ServerId) -> Option<String> {
+  let workspace = Services::of(ctx).workspace;
+  ctx
+    .future((server, workspace), |(server, workspace)| async move {
+      background::run(move || workspace.server_named(server))
+        .await
+        .map_err(drop)?
+        .map(KnownServer)
+        .map_err(|error| tracing::warn!(%error, "the invite's server could not be read"))
+    })
+    .state()
+    .get()
+    .data
+    .and_then(|known| known.0)
+}
+
+/// The name of an invite's server, for a future's answer.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct KnownServer(Option<String>);
+
+impl DevtoolsInspectable for KnownServer {}
 
 /// The project the target names, with this computer's checkouts.
 async fn read(

@@ -136,7 +136,7 @@ impl Served {
   ) -> Self {
     let runtime = Runtime::new().expect("tokio runtime");
     // An editor that is not one a person named, at a path where nothing is: *Resolve in editor* never opens one here.
-    let launch = signed_in::launch(
+    let launch = signed_in::launch_signed_in(
       database,
       runner,
       runtime.handle(),
