@@ -4,7 +4,8 @@
 //! would. The device token stays in a keychain in memory: nothing reaches the OS keychain and no QA copy talks to the
 //! real cloud. `--settings` (with `--signed-in`) also sets up the kept invites and installed app's MCP rows app
 //! Settings shows ([`settings`]). `--join-team` starts a stand-in team server on loopback that the stand-in cloud names
-//! as the account's, with an invite to one of its projects, and prints its address and codes, for *Join a team*.
+//! as the account's, with an invite to one of its projects, and prints its address and codes, for *Join a team*. A
+//! scenario that needs the account says so beside the data ([`qa_app_asks`]), whatever the arguments say.
 //! What it moves to the Recycle Bin / Trash goes to `trash` beside its data. Fixture data for QA, never shipped: an
 //! example is no part of the app's program.
 //!
@@ -13,7 +14,10 @@
 #![allow(clippy::print_stdout, reason = "a QA helper says where it is")]
 
 mod agents;
+#[path = "../seed/kontur/scenarios/qa_app_asks.rs"]
+mod qa_app_asks;
 mod settings;
+mod team;
 
 use std::{error::Error, fs, sync::Arc};
 
@@ -79,14 +83,24 @@ fn main() -> Result<(), Box<dyn Error>> {
   let cloud = AccountCloud::start();
   // Kept to the end of `main`: the team server answers while the window is open.
   let _team = join_team.then(|| team(&cloud));
-  if let Some(services) = launch.services() {
-    if sign_in {
+  // What the scenario asks ([`qa_app_asks`]): `start_qa_app` has no way to pass `--signed-in`.
+  let asked = |file: &str| location.database.with_file_name(file).exists();
+  let sign_in = sign_in || asked(qa_app_asks::SIGN_IN);
+  // Kept to the end of `main`, as the other team server is.
+  let _joined = match launch.services() {
+    Some(services) if sign_in => {
       signed_in::sign_in(services, runtime.handle(), &cloud);
-    } else {
+      asked(qa_app_asks::JOIN_TEAM)
+        .then(|| team::join(services, &runtime))
+        .transpose()?
+    }
+    Some(services) => {
       let address = signed_in::cloud_address(&cloud);
       runtime.block_on(services.cloud.set_address(Some(address)))?;
+      None
     }
-  }
+    None => None,
+  };
   let shown = match (with_settings && sign_in, launch.workspace()) {
     (true, Some(workspace)) => Some(settings::prepare(workspace, &location.database)?),
     (true, None) => return Err("--settings needs a started session".into()),

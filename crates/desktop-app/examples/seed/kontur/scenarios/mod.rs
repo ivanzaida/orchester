@@ -24,9 +24,11 @@ mod modules;
 mod native;
 mod orchestrator;
 mod overview_states;
+mod ownership;
 mod pipelines;
 mod project_settings;
 mod pull_requests;
+pub mod qa_app_asks;
 pub mod settings;
 mod sources;
 mod task_states;
@@ -81,7 +83,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 53] = [
+pub const ALL: [Scenario; 58] = [
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-library", agents_library::seed),
   Scenario::of("agents-empty", agents::empty),
@@ -135,6 +137,11 @@ pub const ALL: [Scenario; 53] = [
   Scenario::of("modules", modules::seed),
   Scenario::of("modules-short", modules::short),
   Scenario::of("modules-none", modules::none),
+  Scenario::of("ownership", ownership::seed),
+  Scenario::of("ownership-signed-in", ownership::signed_in),
+  Scenario::of("ownership-ended", ownership::ended),
+  Scenario::of("ownership-nothing-here", ownership::nothing_here),
+  Scenario::of("invite-signed-out", ownership::invite),
 ];
 
 /// The scenario called `name`.

@@ -60,7 +60,12 @@ fn seed_names_every_scenario_once() {
       "import-done",
       "modules",
       "modules-short",
-      "modules-none"
+      "modules-none",
+      "ownership",
+      "ownership-signed-in",
+      "ownership-ended",
+      "ownership-nothing-here",
+      "invite-signed-out"
     ]
   );
   for name in names {

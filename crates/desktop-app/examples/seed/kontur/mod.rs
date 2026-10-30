@@ -19,7 +19,7 @@ use std::{
 
 use orchester_core::{
   connection::ConnectionError,
-  id::{IdempotencyKey, ProjectId, RunId, TagId, TaskId},
+  id::{CloudAccountId, IdempotencyKey, ProjectId, RunId, TagId, TaskId},
   integration::MergeError,
   limits::ProjectLimits,
   name::Name,
@@ -137,6 +137,8 @@ pub struct Kontur {
   now: Timestamp,
   fake_codex: Option<PathBuf>,
   app_database: PathBuf,
+  /// The account Kontur is registered for, when the scenario gives it to one.
+  owner: Option<CloudAccountId>,
   tags: BTreeMap<&'static str, TagId>,
   seeded: Vec<SeededTask>,
 }
@@ -311,6 +313,13 @@ impl Kontur {
     self.repo.join(".orchester").join("orchester.db")
   }
 
+  /// Leaves `file` beside the application database, which the QA app started on the scenario looks for
+  /// ([`scenarios::qa_app_asks`]).
+  fn ask_qa_app(&self, file: &str) -> Result<(), SeedError> {
+    let path = self.app_database.with_file_name(file);
+    fs::write(&path, "").map_err(io_error(&path))
+  }
+
   /// The task with key `key`, e.g. `KON-12`.
   fn find(&self, key: &str) -> Result<Task, SeedError> {
     self
@@ -351,16 +360,23 @@ pub fn seed(request: &SeedRequest) -> Result<Seeded, SeedError> {
     now: request.now,
     fake_codex,
     app_database,
+    owner: None,
     tags: BTreeMap::new(),
     seeded: Vec::new(),
   };
   request.scenario.seed(&mut kontur)?;
   let Kontur {
-    app_database, seeded, ..
+    app_database,
+    seeded,
+    owner,
+    ..
   } = kontur;
   let mut db = AppDb::open(&app_database)?;
-  // The signed-in account's project, or the next one's to sign in.
-  let owner = db.cloud_account()?.map(|account| account.account);
+  // The account the scenario gave it to or the signed-in account's project, otherwise this computer's.
+  let owner = match owner {
+    Some(owner) => Some(owner),
+    None => db.cloud_account()?.map(|account| account.account),
+  };
   db.register_project(&project, &repo, request.now, owner.as_ref())?;
   Ok(Seeded {
     project: project.id(),
