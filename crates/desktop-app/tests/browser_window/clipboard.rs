@@ -6,7 +6,7 @@ use std::{path::PathBuf, sync::Arc};
 
 use lurq::app::{
   ClipboardReader,
-  events::{ClipboardContent, MouseButton as Button},
+  events::{ClipboardContent, MouseButton as Button, with_synthetic_input},
 };
 use orchester_app::ui::clipboard::Clipboard;
 use orchester_ipc::browser::{
@@ -165,6 +165,60 @@ fn browser_clipboard_copy_puts_the_selection_on_the_clipboard() {
     });
   }
   assert_eq!(*copied.lock(), ["picked", "taken"]);
+}
+
+/// An MCP client driving the window gets nothing: no request, so no selection on the clipboard and nothing cut, and no
+/// key for the page either, with the release of the shortcut kept from it too.
+#[test]
+fn browser_clipboard_shortcuts_refuse_synthetic_input() {
+  let Some((mut browser, copied)) = on_page("P1") else {
+    return;
+  };
+  holds(&mut browser, ClipboardContent::text("the person's"));
+  for shortcut in ["c", "x", "v"] {
+    with_synthetic_input(|| browser.command(shortcut));
+    assert_eq!(asked(&browser), [], "{shortcut}");
+  }
+  assert_eq!(*copied.lock(), [] as [String; 0]);
+
+  browser.command("c");
+  assert_eq!(
+    asked(&browser),
+    [BrowserCommand::CopySelection { tab: tab("P1") }],
+    "the person's own press still works"
+  );
+}
+
+/// A synthetic paste carries its own content, past lurq's refusal to read the system clipboard; it is no person's input
+/// either, and the hidden input keeps none of it.
+#[test]
+fn browser_clipboard_paste_refuses_a_synthetic_paste_with_content() {
+  let Some((mut browser, _)) = on_page("P1") else {
+    return;
+  };
+  with_synthetic_input(|| browser.tree.paste(ClipboardContent::text("from an agent")));
+  browser.pass();
+  assert_eq!(asked(&browser), []);
+  let hidden = browser
+    .tree
+    .get_element_by_id_mut("browser-page-text")
+    .and_then(|element| element.as_text_input())
+    .expect("the page has its hidden input")
+    .value();
+  assert_eq!(hidden, "", "the hidden input keeps nothing");
+
+  browser.tree.paste(ClipboardContent::text("from the person"));
+  browser.pass();
+  assert_eq!(
+    asked(&browser),
+    [BrowserCommand::Input {
+      tab: tab("P1"),
+      input: PersonInput::Text {
+        text: "from the person".to_owned()
+      },
+    }],
+    "the person's own paste still works"
+  );
 }
 
 /// Only the page's focus makes them the window's: the address line pastes for itself, and Shift makes it a key of the

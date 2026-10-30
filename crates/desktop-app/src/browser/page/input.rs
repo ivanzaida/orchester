@@ -9,7 +9,8 @@
 //! types in the input. The runner makes the tab's agent wait on each input it gets (`02b` `k7xvx`); the window marks
 //! the tab as used only to know whether to follow an agent to its new tab. With the page's focus Ctrl+C, X and V (⌘ on
 //! macOS) bridge the page and the clipboard: the tab's selection comes back for the clipboard, and the clipboard's text
-//! is sent as `PersonInput::Text`; they are no key presses for the page.
+//! is sent as `PersonInput::Text`; they are no key presses for the page. All three are the person's alone: synthetic
+//! input (an MCP client driving the window) is refused, so automation never gets a page's text onto the clipboard.
 
 use std::{
   collections::HashSet,
@@ -20,7 +21,9 @@ use std::{
 use lurq::{
   app::{
     ctx::Ctx,
-    events::{KeyboardEvent, MouseButton as Button, MouseEvent, PasteEvent, ScrollEvent, TextInputEvent},
+    events::{
+      KeyboardEvent, MouseButton as Button, MouseEvent, PasteEvent, ScrollEvent, TextInputEvent, is_synthetic_input,
+    },
   },
   components::{Stack, TextInput},
   core::{ElementRef, Signal},
@@ -276,6 +279,10 @@ impl Sender {
       ClipboardShortcut::Paste => return,
     };
     event.prevent_default();
+    if is_synthetic_input() {
+      tracing::warn!("synthetic input pressed copy or cut on a page; not sent");
+      return;
+    }
     if !self.showing.usable() {
       return;
     }
@@ -292,6 +299,10 @@ impl Sender {
   /// are not pasted.
   fn pasted(&self, event: &PasteEvent) {
     event.prevent_default();
+    if is_synthetic_input() {
+      tracing::warn!("synthetic input pasted into a page; not sent");
+      return;
+    }
     let Some(text) = event.text().filter(|_| self.showing.usable()) else {
       return;
     };
