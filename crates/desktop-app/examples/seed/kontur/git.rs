@@ -83,6 +83,11 @@ pub fn commit(dir: &Path, files: &[(&str, String)], message: &str) -> Result<Rev
   head(dir)
 }
 
+/// Makes branch `name` at the head of `from` in the repository at `repo`, leaving the checkout as it is.
+pub fn branch(repo: &Path, name: &str, from: &str) -> Result<(), GitError> {
+  git(repo, &["branch", name, from]).map(drop)
+}
+
 /// Makes `root` a repository on `main` with `files` in one commit, under a QA identity of its own so
 /// the user's global identity and signing settings stay out of it; the commit.
 pub fn init(root: &Path, files: &[(&str, String)]) -> Result<Revision, GitError> {

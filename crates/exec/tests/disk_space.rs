@@ -1,18 +1,16 @@
-//! The disk guard's reading of free space, and folder sizes (ORC-114).
+//! The disk guard's reading of free space, and folder sizes (ORC-114). The disk is read as the operating system
+//! reports it (`LocalDisks::measured`), whatever `ORCHESTER_FREE_SPACE_OVERRIDE_GB` the test run sets.
 
 use std::fs;
 
-use orchester_core::workspaces::DiskSpace;
 use orchester_exec::disk_space::{LocalDisks, folder_size};
 
 #[test]
 fn disk_space_reads_the_disk_of_a_folder_and_of_one_still_to_be_made() {
   let folder = tempfile::tempdir().expect("a temporary folder");
-  let usage = LocalDisks.usage(folder.path()).expect("the free space");
+  let usage = LocalDisks::measured(folder.path()).expect("the free space");
   assert!(usage.total > 0 && usage.free <= usage.total);
-  let later = LocalDisks
-    .usage(&folder.path().join("workspaces/1"))
-    .expect("the free space of its disk");
+  let later = LocalDisks::measured(&folder.path().join("workspaces/1")).expect("the free space of its disk");
   assert_eq!(later.total, usage.total);
 }
 

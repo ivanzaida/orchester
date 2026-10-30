@@ -32,16 +32,14 @@ impl QueueActions {
     }
   }
 
-  /// `button` moving `run` as `how` says.
-  pub(super) fn moves(&self, button: ActionButton, run: RunId, how: Move) -> ActionButton {
-    let actions = self.clone();
-    button.on_click(move || actions.change(move |root| merge_queue::move_run(root, run, how)))
+  /// Moves `run` as `how` says.
+  pub(super) fn move_run(&self, run: RunId, how: Move) {
+    self.change(move |root| merge_queue::move_run(root, run, how));
   }
 
-  /// `button` taking `run` out of the queue.
-  pub(super) fn removes(&self, button: ActionButton, run: RunId) -> ActionButton {
-    let actions = self.clone();
-    button.on_click(move || actions.change(move |root| merge_queue::remove(root, run, Timestamp::now())))
+  /// Takes `run` out of the queue.
+  pub(super) fn remove(&self, run: RunId) {
+    self.change(move |root| merge_queue::remove(root, run, Timestamp::now()));
   }
 
   /// `button` making the queue look again now, as a blocked delivery's *Retry*.

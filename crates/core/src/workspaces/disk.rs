@@ -35,7 +35,8 @@ pub struct KeepFreeError {
   pub gigabytes: u64,
 }
 
-/// Free space the disk guard keeps, in whole gigabytes.
+/// Free space the disk guard keeps, in whole gigabytes: a setting of the project on its own (Project settings › Runs ›
+/// Storage), which the guard holds for every project, whether its runs borrow warm workspaces or own a worktree.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct KeepFree(u64);
 
@@ -43,8 +44,8 @@ impl KeepFree {
   pub const MIN_GB: u64 = 1;
   /// Far beyond any disk a computer has; a bound only so bytes never overflow.
   pub const MAX_GB: u64 = 1 << 20;
-  /// 150 GB: a few warm builds of a large project.
-  pub const DEFAULT: Self = Self(150);
+  /// 50 GB, for a project whose person never set it: room for a few builds before the disk fills.
+  pub const DEFAULT: Self = Self(50);
 
   pub const fn from_gigabytes(gigabytes: u64) -> Result<Self, KeepFreeError> {
     if gigabytes < Self::MIN_GB || gigabytes > Self::MAX_GB {
