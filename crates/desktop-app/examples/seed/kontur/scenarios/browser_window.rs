@@ -31,6 +31,10 @@ pub fn acting(kontur: &mut Kontur) -> Result<(), SeedError> {
   seed(kontur, BrowserState::Acting)
 }
 
+pub fn waiting(kontur: &mut Kontur) -> Result<(), SeedError> {
+  seed(kontur, BrowserState::Waiting)
+}
+
 pub fn dialog(kontur: &mut Kontur) -> Result<(), SeedError> {
   seed(kontur, BrowserState::Dialog)
 }

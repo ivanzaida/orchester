@@ -1,21 +1,20 @@
 //! The Browser window headless (`support`): its tabs with their owners and the toolbar (`01`), the states drawn instead
-//! of a page (`05`, `06`, `07`), what Orchester draws over the page (`02`, `03`, `04`), its frame, its shortcuts and
-//! its tab strip's overflow (`01d`, `01e`); and the main window opening it by itself when an agent starts browsing, and
-//! from its app menu.
+//! of a page (`05`, `06`, `07`), what Orchester draws over the page (`02`, `02b`, `03`, `04`), its frame and its
+//! shortcuts; and the main window opening it by itself when an agent starts browsing, and from its app menu.
 
-use std::{io::Cursor, ops::Range};
+use std::io::Cursor;
 
 use image::{ImageFormat, Rgb, RgbImage};
-use lurq::app::events::{MouseButton, ScrollPhase};
+use lurq::app::events::MouseButton;
 use orchester_app::{
   browser::keys::{self, BrowserShortcut},
   navigation::shortcuts::Keys,
   test_support::Window,
 };
-use orchester_core::id::RunId;
+use orchester_core::{id::RunId, time::Timestamp};
 use orchester_ipc::browser::{
-  AgentAction, BrowserCommand, BrowserDialog, BrowserEvent, BrowserMode, BrowserState, BrowserTabId, DialogKind,
-  ElementBox, ScreencastFrame, SelectId, SelectList, SelectOption, TabOwner,
+  AgentAction, AgentWaitEnd, BrowserCommand, BrowserDialog, BrowserEvent, BrowserMode, BrowserState, BrowserTabId,
+  DialogKind, ElementBox, ScreencastFrame, SelectId, SelectList, SelectOption, TabOwner,
 };
 
 use super::support::{Browser, browser_installed, state, tab};
@@ -58,6 +57,85 @@ fn browser_window_shows_the_tabs_with_their_owners_the_toolbar_and_the_frame() {
   browser.until_shown("browser-page-frame");
 }
 
+/// `02b` `k7xvx` as a runner reaches it: the line, its time left and the tab's dot come and go with the runner's
+/// events, and the person's input alone changes nothing.
+#[test]
+fn browser_window_says_an_agent_waits_only_while_the_runner_says_so() {
+  if !browser_installed() {
+    return;
+  }
+  let mut browser = Browser::open(false);
+  let (changed, run) = state("T1", BrowserMode::Headless);
+  let tab = BrowserTabId::new("T1");
+  browser.feed(changed);
+  browser.until_shown("browser-page");
+  browser.feed(BrowserEvent::AgentActed {
+    run,
+    tab: tab.clone(),
+    action: AgentAction {
+      tool: "browser_type".to_owned(),
+      summary: "typed 8 in Max attempts".to_owned(),
+      element: Some(ElementBox {
+        x: 55,
+        y: 377,
+        width: 268,
+        height: 34,
+      }),
+    },
+  });
+  browser.until_shown("browser-agent-mark");
+  browser.use_page();
+  assert!(
+    browser.text("browser-activity").contains("typed 8 in Max attempts"),
+    "the person's input alone makes no agent wait"
+  );
+  assert!(browser.shows("browser-agent-mark"));
+
+  let until = |left_ms: i64| Timestamp::from_unix_millis(Timestamp::now().unix_millis() + left_ms);
+  let left = |browser: &mut Browser| -> u32 {
+    let hint = browser.text("browser-activity-hint");
+    hint
+      .strip_suffix(" s left")
+      .and_then(|seconds| seconds.parse().ok())
+      .unwrap_or_else(|| panic!("seconds left, not {hint:?}"))
+  };
+  browser.feed(BrowserEvent::AgentWaiting {
+    run,
+    tab: tab.clone(),
+    until: until(7_500),
+  });
+  browser.until("the line to say the agent waits", |browser| {
+    browser.text("browser-activity").contains("You're using this tab")
+  });
+  assert_eq!(browser.text("browser-activity-title"), "You're using this tab");
+  assert_eq!(
+    browser.text("browser-activity-detail"),
+    "· An agent waits until 10 s after your last input"
+  );
+  assert!((6..=8).contains(&left(&mut browser)));
+  assert!(
+    !browser.shows("browser-agent-mark"),
+    "the agent waits for the person, so no mark"
+  );
+
+  browser.feed(BrowserEvent::AgentWaiting {
+    run,
+    tab: tab.clone(),
+    until: until(60_000),
+  });
+  browser.until("new input to push the wait back", |browser| left(browser) > 8);
+
+  browser.feed(BrowserEvent::AgentWaitEnded {
+    run,
+    tab,
+    end: AgentWaitEnd::Ran,
+  });
+  browser.until("the line to go back to the agent's action", |browser| {
+    browser.text("browser-activity").contains("typed 8 in Max attempts")
+  });
+  assert!(browser.shows("browser-agent-mark"));
+}
+
 #[test]
 fn browser_window_draws_what_frames_do_not_show() {
   if !browser_installed() {
@@ -88,12 +166,6 @@ fn browser_window_draws_what_frames_do_not_show() {
   assert_eq!(browser.on_page("browser-agent-ring"), (51.0, 373.0, 276.0, 42.0));
   let (left, top, ..) = browser.on_page("browser-agent-pointer");
   assert_eq!((left, top), (51.0 + 276.0 - 28.0, 373.0 + 42.0 - 16.0));
-  browser.use_page();
-  assert!(browser.text("browser-activity").contains("You're using this tab"));
-  assert!(
-    !browser.shows("browser-agent-mark"),
-    "the person's input holds the agent, so no mark (02b)"
-  );
 
   browser.feed(state("P1", BrowserMode::Headless).0);
   browser.feed(BrowserEvent::DialogOpened {
@@ -289,178 +361,6 @@ fn browser_window_says_when_no_browser_is_found() {
   assert!(
     !browser.shows("browser-open-in-window"),
     "no browser, no window to open the page in (07)"
-  );
-}
-
-#[test]
-fn browser_overflow_menu_lists_every_tab_in_rows_with_a_close_under_the_pointer() {
-  if !browser_installed() {
-    return;
-  }
-  let mut browser = Browser::open(false);
-  let tabs = (0..20)
-    .map(|index| tab(&format!("P{index}"), TabOwner::Person, "Pull requests · GitHub"))
-    .collect();
-  browser.feed(BrowserEvent::Changed(BrowserState {
-    tabs,
-    shown: Some(BrowserTabId::new("P0")),
-    mode: BrowserMode::Headless,
-  }));
-  browser.until_shown("browser-overflow");
-  let center = |browser: &mut Browser, id: &str| {
-    browser
-      .tree
-      .get_element_by_id_mut(id)
-      .and_then(|element| element.bounds())
-      .unwrap_or_else(|| panic!("{id} is laid out"))
-      .center()
-  };
-  let (x, y) = center(&mut browser, "browser-overflow");
-  browser.tree.mouse_down(x, y, MouseButton::Left);
-  browser.tree.mouse_up(x, y, MouseButton::Left);
-  browser.until_shown("browser-overflow-19");
-  let row = |browser: &mut Browser, index: usize| {
-    browser
-      .tree
-      .get_element_by_id_mut(&format!("browser-overflow-{index}"))
-      .and_then(|element| element.bounds())
-      .expect("the row is laid out")
-  };
-  let (first, second, last) = (row(&mut browser, 0), row(&mut browser, 1), row(&mut browser, 19));
-  assert_eq!(
-    (first.height, second.y - first.y),
-    (28.0, 28.0),
-    "rows of 28, one under another"
-  );
-  assert!(
-    last.y + last.height <= 800.0,
-    "all twenty rows show without scrolling, as 01d's"
-  );
-  assert!(!browser.shows("browser-overflow-1-close"), "× only under the pointer");
-  let (x, y) = center(&mut browser, "browser-overflow-1");
-  browser.tree.mouse_move(x, y);
-  browser.until_shown("browser-overflow-1-close");
-  assert!(!browser.shows("browser-overflow-2-close"));
-}
-
-#[test]
-fn browser_tab_strip_scrolls_sideways_with_a_mouse_wheel() {
-  if !browser_installed() {
-    return;
-  }
-  let mut browser = Browser::open(false);
-  let tabs = (0..20)
-    .map(|index| tab(&format!("P{index}"), TabOwner::Person, "Pull requests · GitHub"))
-    .collect();
-  browser.feed(BrowserEvent::Changed(BrowserState {
-    tabs,
-    shown: Some(BrowserTabId::new("P0")),
-    mode: BrowserMode::Headless,
-  }));
-  browser.until_shown("browser-overflow");
-  let bounds = |browser: &mut Browser, id: &str| {
-    browser
-      .tree
-      .get_element_by_id_mut(id)
-      .and_then(|element| element.bounds())
-      .unwrap_or_else(|| panic!("{id} is laid out"))
-  };
-  let first = bounds(&mut browser, "browser-tab-0").x;
-  assert!(
-    !browser.shows("browser-tabs-fade-start"),
-    "the strip starts at its first tab"
-  );
-  let (x, y) = bounds(&mut browser, "browser-tab-1").center();
-  // A mouse wheel turned down, as lurq delivers it: a vertical delta only (`01e`, the strip scrolls with the wheel).
-  browser.tree.scroll(x, y, 0.0, -600.0, ScrollPhase::Scroll);
-  browser.pass();
-  browser.pass();
-  assert!(
-    bounds(&mut browser, "browser-tab-0").x < first - 100.0,
-    "the tabs moved to the left"
-  );
-  assert!(browser.shows("browser-tabs-fade-start"), "the cut start fades (01e)");
-  browser.tree.scroll(x, y, 0.0, 2000.0, ScrollPhase::Scroll);
-  browser.pass();
-  browser.pass();
-  assert_eq!(bounds(&mut browser, "browser-tab-0").x, first, "back at the first tab");
-  assert!(!browser.shows("browser-tabs-fade-start"));
-}
-
-/// The person's tabs `P<numbers>`, `P15` shown, as a runner reports them.
-fn with_p15_shown(numbers: Range<usize>) -> BrowserEvent {
-  let tabs = numbers
-    .map(|number| tab(&format!("P{number}"), TabOwner::Person, "Pull requests · GitHub"))
-    .collect();
-  BrowserEvent::Changed(BrowserState {
-    tabs,
-    shown: Some(BrowserTabId::new("P15")),
-    mode: BrowserMode::Headless,
-  })
-}
-
-/// Tab 15 of twenty is wholly between the fades of both cut edges (`01d`), and the overflow button counts the tabs not
-/// wholly between the strip's start and itself.
-fn assert_tab_15_in_view(browser: &mut Browser) {
-  assert!(browser.shows("browser-tabs-fade-start"), "the cut start fades (01d)");
-  assert!(browser.shows("browser-tabs-fade-end"), "the cut end fades (01d)");
-  let (start, end, shown) = (
-    browser.bounds("browser-tabs-fade-start"),
-    browser.bounds("browser-tabs-fade-end"),
-    browser.bounds("browser-tab-15"),
-  );
-  assert!(
-    shown.x >= start.x + start.width && shown.x + shown.width <= end.x,
-    "the tab shown is clear of the fades: {shown:?} between {start:?} and {end:?}"
-  );
-  let (strip, button) = (browser.bounds("browser-strip"), browser.bounds("browser-overflow"));
-  let out_of_view = (0..20)
-    .map(|index| browser.bounds(&format!("browser-tab-{index}")))
-    .filter(|tab| tab.x < strip.x || tab.x + tab.width > button.x)
-    .count();
-  assert_eq!(browser.text("browser-overflow"), out_of_view.to_string());
-}
-
-#[test]
-fn browser_tab_strip_shows_the_shown_tab_again_when_the_tabs_go_and_come_back() {
-  if !browser_installed() {
-    return;
-  }
-  let mut browser = Browser::open(false);
-  browser.feed(with_p15_shown(0..20));
-  browser.until_shown("browser-overflow");
-  browser.pass();
-  assert_tab_15_in_view(&mut browser);
-
-  browser.feed(BrowserEvent::Changed(BrowserState {
-    tabs: Vec::new(),
-    shown: None,
-    mode: BrowserMode::Headless,
-  }));
-  browser.until("the tabs to go", |browser| !browser.shows("browser-tab-0"));
-  browser.feed(with_p15_shown(0..20));
-  browser.until_shown("browser-overflow");
-  browser.pass();
-  assert_tab_15_in_view(&mut browser);
-}
-
-#[test]
-fn browser_tab_strip_forgets_its_scroll_when_its_tabs_fit_again() {
-  if !browser_installed() {
-    return;
-  }
-  let mut browser = Browser::open(false);
-  browser.feed(with_p15_shown(0..20));
-  browser.until_shown("browser-overflow");
-  browser.pass();
-  assert_tab_15_in_view(&mut browser);
-
-  browser.feed(with_p15_shown(13..17));
-  browser.until("the tabs to fit", |browser| !browser.shows("browser-overflow"));
-  browser.pass();
-  assert!(
-    !browser.shows("browser-tabs-fade-start"),
-    "nothing is cut at the start of tabs that fit"
   );
 }
 

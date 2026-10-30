@@ -1,10 +1,11 @@
 //! What the *Browser* window sees of the project's browser (`docs/design/browser.md`, "The *Browser* window"): the
 //! desktop that subscribed, the tab it shows, and that tab's latest screencast frame, which waits alone to be written:
 //! a newer frame replaces it, so frames are dropped rather than queued when the desktop reads slower than the page
-//! changes. Each tab's events are followed for it ([`follow`]), the person's inputs keep their order ([`order`]), and
-//! the browser's state is sent whenever it changes.
+//! changes. Each tab's events are followed for it ([`follow`]), the person's inputs keep their order ([`order`]) and
+//! hold the agent of their tab ([`hold`]), and the browser's state is sent whenever it changes.
 
 mod follow;
+mod hold;
 mod input;
 mod order;
 mod select;
@@ -29,8 +30,11 @@ use tokio::{
 };
 
 pub(super) use self::follow::{Followed, follow_tab, follow_targets};
-pub use self::order::Arrived;
-use self::order::InputLines;
+use self::{hold::Holds, order::InputLines};
+pub use self::{
+  hold::{HoldClock, PERSON_HOLD, PersonWait, WAIT_CAP},
+  order::Arrived,
+};
 use super::{
   cdp::{Cdp, SessionId, TargetId},
   running::Running,
@@ -55,6 +59,7 @@ pub(super) struct Window {
   /// Wakes the publisher of the running browser's state.
   changed: Notify,
   inputs: InputLines,
+  holds: Holds,
 }
 
 /// The tab the window shows: screencast now, or with the browser in a window of its own only named, since that window
@@ -104,6 +109,7 @@ impl Window {
   /// `target` is gone: the window shows nothing if it showed it.
   pub(super) fn forget(&self, target: &TargetId) {
     self.inputs.forget(target);
+    self.holds.forget(target);
     let mut shown = self.shown.lock();
     if shown.as_ref().is_some_and(|shown| &shown.target == target) {
       *shown = None;
@@ -143,6 +149,7 @@ impl Window {
   /// A browser starts: the number it ends with ([`Window::ended`]).
   pub(super) fn started(&self) -> u64 {
     self.inputs.clear();
+    self.holds.clear();
     self.generation.fetch_add(1, Ordering::AcqRel) + 1
   }
 
@@ -180,6 +187,7 @@ impl Window {
   }
 
   fn no_browser(&self) {
+    self.holds.clear();
     self.show(None);
     self.send(BrowserEvent::Changed(BrowserState::default()));
   }
