@@ -253,6 +253,13 @@ impl BrowserWindow {
     self.receive(root, &Arc::from(name), event);
   }
 
+  /// [`Self::ended`], for tests of what follows a runner's end, which run no runner.
+  #[cfg(feature = "test-support")]
+  #[doc(hidden)]
+  pub fn ended_for_test(&self, root: &Path) {
+    self.ended(root);
+  }
+
   /// [`Self::receive_frame`], for tests of the window's state, which run no runner.
   #[cfg(feature = "test-support")]
   #[doc(hidden)]

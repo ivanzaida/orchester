@@ -1,8 +1,8 @@
 //! How the main window opens and points the Browser window (`docs/design/browser.md`, "The *Browser* window"): the
-//! app menu's *Browser* and the run line's *Show* ask for a project's browser, a run's tab too, and the window opens if
-//! it is closed or switches to it if it is open; and it opens by itself when an agent starts browsing while the
-//! person lets it (decision 14, [`AutoOpen`]). lurq has no command to bring an open window to the front, so a window
-//! already open switches without taking the focus.
+//! app menu's *Browser*, the status bar's item and the run line's *Show* ask for a project's browser, a run's tab too,
+//! and the window opens if it is closed or switches to it if it is open; and it opens by itself when an agent starts
+//! browsing while the person lets it (decision 14, [`AutoOpen`]). lurq has no command to bring an open window to the
+//! front, so a window already open switches without taking the focus.
 
 use std::{
   path::{Path, PathBuf},

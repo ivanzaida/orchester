@@ -489,9 +489,14 @@ sensitive input that shows its value.
      input as the window sends it to the tab shown, at a scale factor of 2: `--test browser_window browser_person_`.
      Not yet: an input method's composition under way (lurq shows it in its text input and tells no handler, so the
      page gets the text only once committed), the cursor's shape over
-     links and fields, the file chooser, the status bar's *Browser 3 tabs*, bringing an open window to the front
+     links and fields, the file chooser, bringing an open window to the front
      (no lurq command), and back and forward faded by the tab's history as `01` fades forward (the runner does not
      report the history; they fade only without a tab to go through).
+   - **Status bar item.** Done (ORC-194): *Browser 3 tabs* (`PwuEd` in `RGeKO`; the redesigned status bar's board
+     `bZVXG` does not draw it) in the main window's right group before the MCP item, while the shown project's browser
+     has tabs; a press opens the window on the project. On a narrow bar its words give way and its globe stays. Tests:
+     `cargo test -p orchester-app --test status_bar status_browser`. QA: `browser-window` shows *Browser 6 tabs*,
+     `browser-window-empty` no item, both with `no_runner`.
    - **Clipboard.** Done (ORC-190): Ctrl+C, X and V (⌘ on macOS) while the page has the focus, described under "What
      frames do not show" above. Tests: `cargo test -p orchester-ipc --test browser browser_`, `cargo test -p
      orchester-runner --features test-agent --test browser browser_person_` and `cargo test -p orchester-app --test

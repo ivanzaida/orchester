@@ -249,6 +249,10 @@
       "mcpLockedDevelopment": "MCP :{{port}} · sign-in required",
       "mcpLockedShort": "MCP · sign-in required",
       "cloudOffline": "Orchester Cloud · offline",
+      "browser": {
+        "one": "Browser {{count}} tab",
+        "other": "Browser {{count}} tabs"
+      },
       "health": {
         "since": "since {{time}}",
         "agents": "Agents",

@@ -44,6 +44,7 @@ use orchester_workspace::{
 use parking_lot::Mutex;
 
 mod activity;
+mod browser;
 mod fresh;
 mod give_way;
 mod items;
@@ -182,6 +183,7 @@ fn kontur(runner: RunnerFacts, tasks: ProjectTasks) -> ProjectFacts {
     read_failure: None,
     undecided_runs: 0,
     limits: Vec::new(),
+    browser_tabs: 0,
   }
 }
 
