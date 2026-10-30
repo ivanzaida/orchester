@@ -74,9 +74,9 @@ impl AgentPermissions {
       // refuses it (`PreflightProblem::CommandListNotOffered`) until a person updates the step.
       (CommandPermission::AskBefore, StepCommands::Only(_)) => CommandPermission::AskBefore,
     };
-    let network = match (self.network, step.network) {
-      (NetworkAccess::On, StepNetwork::AsProfile) => NetworkAccess::On,
-      _ => NetworkAccess::Off,
+    let network = match step.network {
+      StepNetwork::AsProfile => self.network.clone(),
+      StepNetwork::Off => NetworkAccess::Off,
     };
     let mut effective = Self::new(repository, commands, network).with_writable_folders(self.writable_folders.clone());
     effective.set_interactive_tool_approvals(self.interactive_tool_approvals() || step.interactive_tool_approvals);
