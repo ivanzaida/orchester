@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 use lurq::app::ctx::Ctx;
 use orchester_core::{
+  integration::base::TaskBase,
   sharing::TaskRevision,
   task::{
     Task,
@@ -21,7 +22,7 @@ use orchester_workspace::{
   background,
   budget::minutes_text,
   modules::ModuleChoice,
-  tasks::{conflict::EditConflict, run::StartOutcome},
+  tasks::{base_branch::BasePick, conflict::EditConflict, run::StartOutcome},
 };
 use parking_lot::Mutex;
 
@@ -89,6 +90,11 @@ impl Base {
   /// The module the task is stored in; none for a task not made yet.
   pub fn module(&self) -> Option<orchester_core::id::ModuleId> {
     self.task.as_ref().and_then(|task| task.module())
+  }
+
+  /// The base branch the task is stored with; a task not made yet inherits its module's.
+  pub fn base_branch(&self) -> TaskBase {
+    self.task.as_ref().map(|task| task.base().clone()).unwrap_or_default()
   }
 }
 
@@ -168,13 +174,14 @@ impl TaskForm {
   fn start_from(&self, base: &Base) {
     self.fields.fill(&base.values);
     self.fields.module.set(ModuleChoice(base.module()));
+    self.fields.base_branch.set(BasePick::of(&base.base_branch()));
     self.base.set(Some(base.clone()));
     self.dismissed.set(true);
   }
 
   /// Fills in edits kept earlier, made on the version they were made on: when the task changed since,
-  /// a save meets the change, and fields both changed are the person's to choose. The module is the stored
-  /// task's: kept edits hold its details only.
+  /// a save meets the change, and fields both changed are the person's to choose. The module and the base branch are
+  /// the stored task's: kept edits hold its details only.
   fn restore(&self, kept: Kept, stored: Base, (separator, at): (&str, Option<Timestamp>)) {
     let made_on = kept.base.revision.map_or(0, TaskRevision::get);
     let newer = (made_on < stored.revision_number())
@@ -190,6 +197,7 @@ impl TaskForm {
     };
     self.fields.fill(&kept.values);
     self.fields.module.set(ModuleChoice(base.module()));
+    self.fields.base_branch.set(BasePick::of(&base.base_branch()));
     self.base.set(Some(base.clone()));
     self.kept_at.set(Some(KeptAt(kept.at)));
     // This form keeps them from now on, as it would have written them: it removes them once saved.

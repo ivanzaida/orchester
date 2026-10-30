@@ -269,6 +269,8 @@ pub struct PageState {
   /// and its switch that removes the worktrees of the run before, off each time it opens.
   pub run_again: Signal<header::run_again::Confirming>,
   pub run_again_remove: Signal<bool>,
+  /// A run the runner refused for want of a branch: the header's status line and Properties › Base say so.
+  pub no_branch: Signal<Option<header::no_branch::NoBranch>>,
 }
 
 impl PageState {
@@ -322,6 +324,7 @@ impl Component for TaskFrame {
         share: ctx.signal(false),
         run_again: ctx.signal(header::run_again::Confirming::default()),
         run_again_remove: ctx.signal(false),
+        no_branch: ctx.signal(None),
       },
       requested: ctx.signal(None),
       live: ctx.signal(false),

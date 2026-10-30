@@ -10,7 +10,10 @@ use std::sync::Arc;
 
 use lurq::{app::ctx::Ctx, core::Signal};
 use orchester_core::task::organization::TaskOrganization;
-use orchester_workspace::{modules::ModuleChoice, tasks::data::SaveTarget};
+use orchester_workspace::{
+  modules::ModuleChoice,
+  tasks::{base_branch::BasePick, data::SaveTarget},
+};
 
 use super::{
   actions::{RunAction, RunArgs, SaveAction, SaveArgs, SaveOutcome, Saved, Started},
@@ -68,6 +71,7 @@ impl TaskForm {
       organization: (organization.clone(), edited.clone()),
       points: view.values.points,
       module: view.module,
+      base_branch: view.base_branch.clone(),
       // Read tracked: the handlers are made again once the form's sources change.
       sources: if made_on.is_none() {
         self.sources.get().0
@@ -132,6 +136,7 @@ impl TaskForm {
       organization: (organization, edited),
       points: view.values.points,
       module: view.module,
+      base_branch: view.base_branch.clone(),
       sources: Vec::new(),
     };
     Some(press(save, args, &self.dismissed))
@@ -153,11 +158,13 @@ impl TaskForm {
     Arc::new(move || {
       let base = base.get_untracked();
       let module = base.as_ref().and_then(Base::module);
+      let branch = base.as_ref().map(Base::base_branch).unwrap_or_default();
       let values = base.map_or_else(Values::default, |base| base.values);
       kept.remove();
       *written.lock() = Written::Nothing;
       fields.fill(&values);
       fields.module.set(ModuleChoice(module));
+      fields.base_branch.set(BasePick::of(&branch));
       kept_at.set(None);
       confirming.set(false);
     })
@@ -207,6 +214,7 @@ impl TaskForm {
       *written.lock() = Written::Nothing;
       fields.fill(&stored.values);
       fields.module.set(ModuleChoice(stored.module()));
+      fields.base_branch.set(BasePick::of(&stored.base_branch()));
       base.set(Some(stored));
       dismissed.set(true);
       conflict.set(None);

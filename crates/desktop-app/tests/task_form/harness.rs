@@ -102,7 +102,12 @@ impl Form {
   /// Opens the popover of the chip `id` (`task-form-limits`, `task-form-more`…), unless it is open.
   pub fn open(&mut self, id: &str) {
     let panel = match id {
-      "task-form-pipeline" | "task-form-delivers" | "task-form-module" | "task-form-points" | "task-form-priority" => {
+      "task-form-pipeline"
+      | "task-form-delivers"
+      | "task-form-module"
+      | "task-form-base-branch"
+      | "task-form-points"
+      | "task-form-priority" => {
         format!("{id}-menu")
       }
       _ => format!("{id}-popover"),

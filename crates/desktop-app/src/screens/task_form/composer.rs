@@ -1,8 +1,9 @@
 //! The composer (`Composer` `IxeaX`): one 720 wide column, its parts 20 apart, centred in the scroll area: the head
 //! row, a note where there is one, the title and the outcome typed on the page, the acceptance criteria inline, the
-//! property chips in two rows (`Properties` `TUAba`: Pipeline, Delivers, Limits, Sources, then Module, Priority, Points
-//! and *…*; 8 apart, 4 over them) and, once a pipeline is chosen, the plan line. While a newer version conflicts with
-//! the edits, the fields to choose between take the place of everything under the head.
+//! property chips in two rows (`Properties` `TUAba`: Pipeline, Delivers, Limits, Sources, then Module, Base branch
+//! (`aaqSu` in `eUFSd`), Priority, Points and *…*; 8 apart, 4 over them) and, once a pipeline is chosen, the plan line.
+//! While a newer version conflicts with the edits, the fields to choose between take the place of everything under the
+//! head.
 
 use lurq::{
   app::{ctx::Ctx, theme::SpacingSize},
@@ -12,6 +13,7 @@ use lurq::{
 
 use super::{
   FORM_WIDTH,
+  base_branch::base_branch_chip,
   brief::{BriefFields, outcome, title},
   chips::chip_row,
   conflict::conflict_parts,
@@ -28,7 +30,7 @@ use super::{
   sources::{SourcesProps, sources_chip},
   state::View,
 };
-use crate::theme::TaskFormSpacing;
+use crate::{services::Services, theme::TaskFormSpacing};
 
 impl TaskForm {
   pub(super) fn composer(&self, ctx: &mut Ctx, props: &FormProps, view: &View, separator: &str) -> Column {
@@ -97,6 +99,13 @@ impl TaskForm {
     let mut organize: Vec<_> = module_chip(ctx, view, (&props.modules, &chips.module), &fields.module)
       .into_iter()
       .collect();
+    let programs = Services::of(ctx).programs;
+    organize.push(base_branch_chip(
+      ctx,
+      view,
+      (&props.modules, &chips.base_branch, &chips.branch_find),
+      (&fields.base_branch, props.project.open.repo_root.clone(), programs),
+    ));
     organize.push(priority_chip(ctx, view, &chips.priority, &fields.priority));
     organize.push(points_chip(ctx, view, &chips.points, &fields.points));
     organize.extend(more(ctx, view, (props.shared, &chips.more), &fields.no_automatic_merge));
