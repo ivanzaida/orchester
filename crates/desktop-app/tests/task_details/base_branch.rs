@@ -3,7 +3,17 @@
 //! before a run, what the next one takes.
 
 use orchester_app::routes::TaskTab;
-use orchester_core::{integration::base::TaskBase, run::BranchName, store::RunStore};
+use orchester_core::{
+  id::IdempotencyKey,
+  integration::base::{BaseChoice, RunBaseSource, TaskBase},
+  module::{ModuleDetails, ModuleState},
+  name::Name,
+  revision::Revision,
+  run::{BranchName, NewRun},
+  store::RunStore,
+  task::organization::ChangeActor,
+  time::Timestamp,
+};
 use orchester_store::ProjectDb;
 
 use crate::Page;
@@ -72,4 +82,54 @@ fn task_base_branch_property_before_a_run_says_what_the_next_one_takes() {
       .is_some_and(|texts| texts.join("") == "release/2.0 · this task's")
   });
   assert_eq!(page.text("task-property-base-source"), "the next run starts from it");
+}
+
+/// A run that took its module's base branch names the module it came from (`PgNtj`, *from module*), and keeps it
+/// while the task's next run would take the same.
+#[test]
+fn task_base_branch_property_says_a_run_took_its_modules_branch() {
+  let mut page = Page::seeded("task-states");
+  let key = page.key("failed");
+  page.open(&key, TaskTab::Summary, "task-property-base");
+  let task = page.task(&key);
+  let mut db = ProjectDb::open(&page.repo).expect("the project");
+  let details = ModuleDetails::new(
+    Name::new("Webhooks v2").expect("a name"),
+    "",
+    (None, None),
+    ModuleState::Open,
+  )
+  .expect("details");
+  let module = db.create_module(details, Timestamp::now()).expect("module");
+  let release = BranchName::new("release/2.0").expect("a branch name");
+  db.set_module_base(module.id(), module.base(), BaseChoice::Branch(release.clone()))
+    .expect("the module's base branch");
+  db.set_task_module(task.id(), Some(module.id()), ChangeActor::Person, Timestamp::now())
+    .expect("moved into the module");
+  let latest = db
+    .runs_of_task(task.id())
+    .expect("runs")
+    .into_iter()
+    .filter_map(Result::ok)
+    .max_by_key(|run| run.number().get())
+    .expect("a run");
+  let new = NewRun {
+    task: task.id(),
+    snapshot: latest.snapshot().clone(),
+    branch: BranchName::new("orchester/module-base-run").expect("a branch name"),
+    base: Revision::new(&"b".repeat(40)).expect("a revision"),
+    base_branch: Some(release),
+    base_source: RunBaseSource::Module { module: module.id() },
+    budget: latest.budget(),
+    max_duration: latest.max_duration(),
+  };
+  db.create_run(IdempotencyKey::generate(), new, Timestamp::now())
+    .expect("the run");
+  page.changed_outside();
+  page.window.until("the run's module named", |window| {
+    window
+      .texts("task-property-base-source")
+      .is_some_and(|texts| texts.join("") == "from module Webhooks v2")
+  });
+  assert_eq!(page.text("task-property-base-branch"), "release/2.0");
 }

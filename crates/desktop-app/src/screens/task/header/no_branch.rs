@@ -3,7 +3,7 @@
 //! branch to deliver into. The header's status line says so in place of the run's status, a 14 `triangle-alert` and
 //! *Can't start: no branch checked out* in 13/500 `warning`, then why in 12 `text_muted`, 8 apart, with *Set base
 //! branch* (Edit task, where the Base branch chip is) and *Run again* under it, 8 apart; no card. It stays until the
-//! task's latest run changes or Run again is pressed.
+//! task's latest run changes, the task sets a base branch of its own, or Run again is pressed.
 
 use std::sync::Arc;
 
@@ -62,9 +62,12 @@ impl NoBranch {
     })
   }
 
-  /// The refusal `refused` holds while it is about the task's latest run as `task` shows it.
+  /// The refusal `refused` holds while it is about the task's latest run as `task` shows it, and the task has set no
+  /// base branch of its own since.
   pub fn shown(refused: Option<Self>, task: &TaskContext) -> Option<Self> {
-    refused.filter(|refused| refused.after == task.detail.run.as_ref().map(|run| run.id()))
+    refused.filter(|refused| {
+      refused.after == task.detail.run.as_ref().map(|run| run.id()) && task.detail.task.base().branch().is_none()
+    })
   }
 }
 

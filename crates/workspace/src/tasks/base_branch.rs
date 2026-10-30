@@ -109,7 +109,8 @@ pub fn set_task_base(programs: &Programs, root: &Path, task: Task, pick: &BasePi
   })?
 }
 
-/// Stores `base` on the task `id` as the save before left it; `Err` inside when it changed since.
+/// Stores `base` on the task `id` as it reads now; `Err` inside when it is gone, or changed between that read and the
+/// write. Only the base columns are written, so a change made since the save keeps its other fields.
 fn stored(root: &Path, id: TaskId, base: &TaskBase) -> Result<Result<Task, Message>, orchester_store::StoreError> {
   let mut db = ProjectDb::open(root)?;
   let Some(read) = db.task(id)? else {
