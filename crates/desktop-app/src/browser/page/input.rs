@@ -7,7 +7,10 @@
 //! page was pressed. A composition under way is not sent, as lurq shows it in the input and tells no handler of it;
 //! nor is a key event of the composition, though the text of a key the input method passes on goes as text, which lurq
 //! types in the input. The runner makes the tab's agent wait on each input it gets (`02b` `k7xvx`); the window marks
-//! the tab as used only to know whether to follow an agent to its new tab.
+//! the tab as used only to know whether to follow an agent to its new tab. With the page's focus Ctrl+C, X and V (⌘ on
+//! macOS) bridge the page and the clipboard: the tab's selection comes back for the clipboard, and the clipboard's text
+//! is sent as `PersonInput::Text`; they are no key presses for the page. All three are the person's alone: synthetic
+//! input (an MCP client driving the window) is refused, so automation never gets a page's text onto the clipboard.
 
 use std::{
   collections::HashSet,
@@ -18,18 +21,29 @@ use std::{
 use lurq::{
   app::{
     ctx::Ctx,
-    events::{KeyboardEvent, MouseButton as Button, MouseEvent, ScrollEvent, TextInputEvent},
+    events::{
+      KeyboardEvent, MouseButton as Button, MouseEvent, PasteEvent, ScrollEvent, TextInputEvent, is_synthetic_input,
+    },
   },
   components::{Stack, TextInput},
   core::{ElementRef, Signal},
   node::{HitTestBehavior, dimension::Dimension},
 };
 use orchester_ipc::browser::{
-  BrowserCommand, BrowserTabId, KeyAction, Modifiers, MouseAction, MouseButton, PersonInput,
+  BrowserCommand, BrowserReply, BrowserTabId, KeyAction, MAX_CLIPBOARD_TEXT, Modifiers, MouseAction, MouseButton,
+  PersonInput,
 };
 use parking_lot::Mutex;
 
-use crate::browser::state::Showing;
+use crate::{
+  browser::{
+    commands::Commands,
+    keys::{self, ClipboardShortcut},
+    state::Showing,
+  },
+  navigation::shortcuts::Keys,
+  ui::clipboard::Clipboard,
+};
 
 /// Two presses this close in time are a double click.
 const DOUBLE_CLICK: Duration = Duration::from_millis(500);
@@ -94,13 +108,15 @@ impl PageInput {
       css,
       text: showing.page_text.clone(),
       pressed: self.pressed.clone(),
+      clipboard: ctx.use_context::<Clipboard>().unwrap_or_default(),
     };
     let (down, up, moved) = (
       (send.clone(), self.clone()),
       (send.clone(), self.pressed.clone()),
       (send.clone(), self.pressed.clone()),
     );
-    let (wheel, key_down, key_up, typed) = (send.clone(), send.clone(), send.clone(), send);
+    let (wheel, key_down, key_up) = (send.clone(), send.clone(), send.clone());
+    let (typed, pasted) = (send.clone(), send);
     let (x, y) = self.at.get();
     let hidden = TextInput::new(self.value.clone())
       .id("browser-page-text")
@@ -109,7 +125,8 @@ impl PageInput {
       .hit_test(HitTestBehavior::None)
       .opacity(HIDDEN_OPACITY)
       .single_line()
-      .on_input(move |event: TextInputEvent| typed.committed(&event));
+      .on_input(move |event: TextInputEvent| typed.committed(&event))
+      .on_paste(move |event: PasteEvent| pasted.pasted(&event));
     page
       .on_mouse_down(move |event: MouseEvent| {
         let (send, input) = &down;
@@ -167,6 +184,8 @@ struct Sender {
   /// The hidden input, whose focus is the page's.
   text: ElementRef,
   pressed: Arc<Mutex<Pressed>>,
+  /// Where the page's selection goes: the system clipboard, or a headless window's own.
+  clipboard: Clipboard,
 }
 
 impl Sender {
@@ -223,9 +242,16 @@ impl Sender {
   }
 
   /// A key the window took for a shortcut (`browser::keys`) does not reach the page, nor one an input method's
-  /// composition takes: what the composition commits comes as text (`Self::committed`).
+  /// composition takes: what the composition commits comes as text (`Self::committed`). Nor does a press of the
+  /// clipboard's shortcuts, whose release then is not the page's either.
   fn key(&self, event: &KeyboardEvent, action: KeyAction) {
     if !self.text.focused() || event.default_prevented() || event.composing {
+      return;
+    }
+    if action == KeyAction::Down
+      && let Some(shortcut) = keys::clipboard_shortcut(Keys::of(event))
+    {
+      self.clipboard_key(event, shortcut);
       return;
     }
     event.prevent_default();
@@ -242,6 +268,57 @@ impl Sender {
       modifiers: modifiers(event.alt, event.ctrl, event.meta, event.shift),
     };
     self.send(input, action == KeyAction::Down);
+  }
+
+  /// Copy and cut ask the page for its selection. Paste is left to lurq, whose hidden input reads the clipboard and
+  /// asks `Self::pasted` what to do with it.
+  fn clipboard_key(&self, event: &KeyboardEvent, shortcut: ClipboardShortcut) {
+    let command = match shortcut {
+      ClipboardShortcut::Copy => BrowserCommand::CopySelection { tab: self.tab.clone() },
+      ClipboardShortcut::Cut => BrowserCommand::CutSelection { tab: self.tab.clone() },
+      ClipboardShortcut::Paste => return,
+    };
+    event.prevent_default();
+    if is_synthetic_input() {
+      tracing::warn!("synthetic input pressed copy or cut on a page; not sent");
+      return;
+    }
+    if !self.showing.usable() {
+      return;
+    }
+    self.showing.person.used(&self.tab);
+    let (clipboard, commands) = (self.clipboard.clone(), self.showing.commands.clone());
+    self.showing.commands.send_then(command, move |reply| {
+      if let BrowserReply::Selection { text } = reply {
+        to_clipboard(clipboard, commands, text);
+      }
+    });
+  }
+
+  /// What the clipboard holds goes to the tab as text, in place of what the hidden input would take; an image or files
+  /// are not pasted.
+  fn pasted(&self, event: &PasteEvent) {
+    event.prevent_default();
+    if is_synthetic_input() {
+      tracing::warn!("synthetic input pasted into a page; not sent");
+      return;
+    }
+    let Some(text) = event.text().filter(|_| self.showing.usable()) else {
+      return;
+    };
+    if text.len() > MAX_CLIPBOARD_TEXT {
+      tracing::warn!(
+        bytes = text.len(),
+        "the clipboard's text is too long to paste into a page"
+      );
+      self.showing.commands.say_failed();
+      return;
+    }
+    self.showing.person.used(&self.tab);
+    self.showing.commands.send(BrowserCommand::Input {
+      tab: self.tab.clone(),
+      input: PersonInput::Text { text: text.to_owned() },
+    });
   }
 
   /// Notes a press of the key `code` on the page; whether this press or release is the page's.
@@ -264,6 +341,20 @@ impl Sender {
       self.send(PersonInput::Text { text }, true);
     }
   }
+}
+
+/// Puts the page's selection on the clipboard, off the async workers as another program may hold the clipboard; no
+/// selection leaves the clipboard as it is, as in any browser.
+fn to_clipboard(clipboard: Clipboard, commands: Commands, text: String) {
+  if text.is_empty() {
+    return;
+  }
+  drop(tokio::task::spawn_blocking(move || {
+    if !clipboard.copy(&text) {
+      tracing::warn!("the clipboard did not take the page's selection");
+      commands.say_failed();
+    }
+  }));
 }
 
 const fn button(button: Button) -> MouseButton {

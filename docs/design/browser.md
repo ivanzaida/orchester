@@ -364,10 +364,11 @@ not jump to another project by itself.
   request to the runner's connection as it is made, and the runner keeps one line per tab, in which an input goes out
   once the one before it has gone out, without waiting for its answer (a click that opens a dialog is not answered
   until the dialog is).
-- **IPC** (protocol 35, `orchester_ipc::browser`). The window's requests (`BrowserCommand`: subscribe, show a tab at a
+- **IPC** (protocol 36, `orchester_ipc::browser`). The window's requests (`BrowserCommand`: subscribe, show a tab at a
   viewport, stop showing, the person's input, navigation, open and close a tab, answer a dialog, choose a `<select>`
-  option, *Open in a browser window*, *Back to Orchester*) and events (`BrowserEvent`: the browser's state with its
-  tabs, their owners, titles, addresses and loading, the tab shown and the mode; an agent started browsing; an agent
+  option, copy or cut the selection, *Open in a browser window*, *Back to Orchester*) and events (`BrowserEvent`: the
+  browser's state with its tabs, their owners, titles, addresses and loading, the tab shown and the mode; an agent
+  started browsing; an agent
   acted, with its element box; an agent waits on a tab until a moment, sent again when new input pushes it back, and its
   wait ended: it ran, reached the cap or was cancelled; a dialog opened or closed; a `<select>` list opened). A frame is
   one event with its JPEG bytes, in a binary frame after a small JSON head (decision 13); at 30 frames a second of a
@@ -384,7 +385,7 @@ not jump to another project by itself.
 | File chooser | `Page.setInterceptFileChooserDialog`: the app's own native file dialog, files set with `DOM.setFileInputFiles`. Agents get none (the tool answers that a file was asked). |
 | `<select>` drop-down lists | The list drawn by the window in the app's menu style from the element's options; the choice set through CDP (`04` `r31HX`). |
 | Mouse cursor shape | Not reported by CDP: an arrow, a hand over links and buttons (hit test of the element under the pointer), a text cursor over fields. |
-| Copy and paste | Ctrl/Cmd+C, X, V bridged between the page and the system clipboard by the window. |
+| Copy and paste | Ctrl/Cmd+C, X, V bridged between the page and the system clipboard by the window, while the page has the focus, and never as key presses for the page. Copy and cut ask the tab shown for its selection (`CopySelection`, `CutSelection`, read through `Runtime.evaluate`): a field's own, or else the document's, also in shadow roots and same-origin frames; a cut deletes it where it can be edited, and a page's own `copy` and `cut` listeners do not run. A password field gives nothing, no selection leaves the clipboard as it is, and a cross-origin frame's selection is out of reach. Paste sends the clipboard's text as `PersonInput::Text`; images and files are not pasted. Up to 2 MiB of text either way (`MAX_CLIPBOARD_TEXT`), and past that the window's failure line says so. Each of them makes the tab's agent wait, as any input of the person's does. Agents get nothing of this, and the window refuses all three to synthetic input (an MCP client driving it). |
 | Sound | Muted (`--mute-audio`). |
 | Passkeys, the password manager, sites that refuse headless browsers | *Open in a browser window* (decision 7). |
 | Context menu, drag and drop of files, printing | Not supported; *Open in a browser window*. |
@@ -487,10 +488,14 @@ sensitive input that shows its value.
      input method composes there and what it commits is sent as text (`Input.insertText`); tests of the person's
      input as the window sends it to the tab shown, at a scale factor of 2: `--test browser_window browser_person_`.
      Not yet: an input method's composition under way (lurq shows it in its text input and tells no handler, so the
-     page gets the text only once committed), copy and paste bridged to the system clipboard, the cursor's shape over
+     page gets the text only once committed), the cursor's shape over
      links and fields, the file chooser, the status bar's *Browser 3 tabs*, bringing an open window to the front
      (no lurq command), and back and forward faded by the tab's history as `01` fades forward (the runner does not
      report the history; they fade only without a tab to go through).
+   - **Clipboard.** Done (ORC-190): Ctrl+C, X and V (⌘ on macOS) while the page has the focus, described under "What
+     frames do not show" above. Tests: `cargo test -p orchester-ipc --test browser browser_`, `cargo test -p
+     orchester-runner --features test-agent --test browser browser_person_` and `cargo test -p orchester-app --test
+     browser_window browser_clipboard_`.
 
 ## Not in scope
 

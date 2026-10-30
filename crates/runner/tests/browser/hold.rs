@@ -217,6 +217,26 @@ async fn browser_hold_is_kept_for_a_tab_the_person_used_less_than_ten_seconds_ag
   held.told_nothing_more();
 }
 
+/// A copy or a cut is the person at work on the tab too, whether or not the page changes.
+#[tokio::test]
+async fn browser_hold_starts_on_a_copy_and_on_a_cut() {
+  let mut held = Held::new().await;
+  let tab = held.tab_id();
+  drop(held.browser.arrived(BrowserCommand::CopySelection { tab: tab.clone() }));
+  let call = held.call();
+  held.told_waiting_until(PERSON_HOLD).await;
+  held.clock.advance(PERSON_HOLD);
+  assert_eq!(came_to(call).await, PersonWait::Over(PERSON_HOLD));
+  held.told_ended(AgentWaitEnd::Ran).await;
+
+  drop(held.browser.arrived(BrowserCommand::CutSelection { tab }));
+  let call = held.call();
+  held.told_waiting_until(PERSON_HOLD * 2).await;
+  held.clock.advance(PERSON_HOLD);
+  assert_eq!(came_to(call).await, PersonWait::Over(PERSON_HOLD));
+  held.told_ended(AgentWaitEnd::Ran).await;
+}
+
 #[tokio::test]
 async fn browser_hold_waits_until_ten_seconds_after_the_last_input_and_each_input_pushes_it_back() {
   let mut held = Held::new().await;

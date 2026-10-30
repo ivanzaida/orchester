@@ -5,6 +5,8 @@
 mod frames;
 mod input;
 
+use std::fmt;
+
 use orchester_core::{id::RunId, time::Timestamp};
 use serde::{Deserialize, Serialize};
 
@@ -12,6 +14,12 @@ pub use self::{
   frames::ScreencastFrame,
   input::{KeyAction, Modifiers, MouseAction, MouseButton, PersonInput},
 };
+use crate::frame::MAX_FRAME_LEN;
+
+/// The most text copied from a page or pasted into one at a time, in bytes or in the page's UTF-16 units. JSON takes at
+/// most six bytes for either (`\u001f`), so such a text always fits a frame; a larger one would not reach the other
+/// end.
+pub const MAX_CLIPBOARD_TEXT: usize = MAX_FRAME_LEN as usize / 8;
 
 /// A tab of the project's browser, by the id the browser gave it.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -253,6 +261,14 @@ pub enum BrowserCommand {
     select: SelectId,
     index: u32,
   },
+  /// The person's copy on `tab`: answered with its [`BrowserReply::Selection`], in its place among the person's inputs.
+  CopySelection {
+    tab: BrowserTabId,
+  },
+  /// The person's cut on `tab`: as [`Self::CopySelection`], and the selection is deleted from an editable element.
+  CutSelection {
+    tab: BrowserTabId,
+  },
   /// *Open in a browser window*: the browser starts again headed on the same profile and reopens the tabs by their
   /// URLs ([`BrowserMode::Headed`]).
   OpenInWindow,
@@ -260,13 +276,26 @@ pub enum BrowserCommand {
   BackToOrchester,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data", rename_all = "snake_case")]
 pub enum BrowserReply {
   /// The request was carried out.
   Done,
   /// The person's new tab.
   TabOpened { tab: BrowserTabId },
+  /// The text selected on the page; empty when nothing is, or in a password field, which never gives its text.
+  Selection { text: String },
+}
+
+/// Without the selected text, which may be anything the person keeps on a page.
+impl fmt::Debug for BrowserReply {
+  fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    match self {
+      Self::Done => formatter.write_str("Done"),
+      Self::TabOpened { tab } => formatter.debug_struct("TabOpened").field("tab", tab).finish(),
+      Self::Selection { text } => formatter.debug_struct("Selection").field("bytes", &text.len()).finish(),
+    }
+  }
 }
 
 /// How an agent's wait for the person on a tab ended.

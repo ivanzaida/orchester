@@ -1,6 +1,6 @@
 //! The *Browser* window's requests, served from the project's browser: the screencast of the tab shown, the person's
-//! input and navigation, the person's own tabs, dialogs, `<select>` lists, and the restart in a browser window of its
-//! own and back (`docs/design/browser.md`, "The *Browser* window", decision 7).
+//! input, copy, cut and navigation, the person's own tabs, dialogs, `<select>` lists, and the restart in a browser
+//! window of its own and back (`docs/design/browser.md`, "The *Browser* window", decision 7).
 
 use std::sync::Arc;
 
@@ -17,7 +17,7 @@ use tokio::sync::mpsc;
 use super::{
   Shown, input,
   order::{Arrived, Turn},
-  select,
+  select, selection,
 };
 use crate::browser::{
   BrowserError, ProjectBrowser,
@@ -37,12 +37,14 @@ struct WindowTab {
 }
 
 impl ProjectBrowser {
-  /// The window's `command` as it arrives, to be carried out ([`Self::serve`]): the person's input takes its place in
-  /// its tab's line now, whenever it is carried out, and it and the person's navigation make the agent of their tab
-  /// wait from now.
+  /// The window's `command` as it arrives, to be carried out ([`Self::serve`]): the person's input, and a copy or cut
+  /// of what it selected, takes its place in its tab's line now, whenever it is carried out, and these and the person's
+  /// navigation make the agent of their tab wait from now.
   pub fn arrived(&self, command: BrowserCommand) -> Arrived {
     let turn = match &command {
-      BrowserCommand::Input { tab, .. } => {
+      BrowserCommand::Input { tab, .. }
+      | BrowserCommand::CopySelection { tab }
+      | BrowserCommand::CutSelection { tab } => {
         let target = TargetId::from(tab.as_str());
         self.window.holds.used(target.clone());
         self.window.inputs.join(target)
@@ -81,6 +83,8 @@ impl ProjectBrowser {
       BrowserCommand::CloseTab { tab } => self.close_window_tab(&tab).await,
       BrowserCommand::AnswerDialog { tab, accept, text } => self.answer_dialog(&tab, accept, text).await,
       BrowserCommand::ChooseOption { tab, select, index } => self.choose_option(&tab, select, index).await,
+      BrowserCommand::CopySelection { tab } => return selected(self.selection(&tab, false, turn).await),
+      BrowserCommand::CutSelection { tab } => return selected(self.selection(&tab, true, turn).await),
       BrowserCommand::OpenInWindow => self.restart(BrowserMode::Headed).await,
       BrowserCommand::BackToOrchester => self.restart(BrowserMode::Headless).await,
     };
@@ -140,6 +144,14 @@ impl ProjectBrowser {
       self.window.send(BrowserEvent::SelectOpened { tab: tab.clone(), list });
     }
     Ok(())
+  }
+
+  /// The text selected on `tab` once the person's inputs before it have gone out; deleted from an editable element when
+  /// `cut`.
+  async fn selection(&self, tab: &BrowserTabId, cut: bool, mut turn: Turn) -> Result<String, BrowserError> {
+    turn.come().await;
+    let reached = self.window_tab(tab).await?;
+    selection::take(&reached.cdp, &reached.session, cut, turn).await
   }
 
   async fn navigate(&self, tab: &BrowserTabId, to: &Navigation) -> Result<(), BrowserError> {
@@ -298,6 +310,13 @@ async fn through_history(cdp: &Cdp, session: &SessionId, step: i64) -> Result<()
     .call(Some(session), "Page.navigateToHistoryEntry", json!({ "entryId": id }))
     .await?;
   Ok(())
+}
+
+/// The answer to a copy or a cut.
+fn selected(text: Result<String, BrowserError>) -> Result<BrowserReply, Rejection> {
+  text
+    .map(|text| BrowserReply::Selection { text })
+    .map_err(|error| rejection(&error))
 }
 
 /// What the window is told when its request could not be carried out.

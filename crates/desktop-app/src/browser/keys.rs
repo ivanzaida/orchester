@@ -2,7 +2,8 @@
 //! (⌘W) closes the tab shown, Ctrl+Tab and Ctrl+Shift+Tab show the next and the previous tab, Ctrl+L (⌘L) puts the
 //! focus in the address line and Ctrl+R (⌘R) reloads the tab shown. The window takes them before the page, as a browser
 //! does, also while the page or the address line has the focus; every other key goes on to them. Without a browser,
-//! with it in a window of its own, or while it restarts, the window's requests are not made.
+//! with it in a window of its own, or while it restarts, the window's requests are not made. Ctrl+C, X and V (⌘C, X, V)
+//! are the window's only while the page has the focus (`page::input`), so the address line keeps its own.
 
 use lurq::app::events::KeyboardEvent;
 use orchester_ipc::browser::{BrowserCommand, BrowserReply, Navigation};
@@ -55,6 +56,29 @@ pub fn handler(showing: Showing, address: impl Fn() + Send + Sync + 'static) -> 
       run(&showing, shortcut, &address);
     }
   }
+}
+
+/// What a key press on the page asks of the system clipboard.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ClipboardShortcut {
+  Copy,
+  Cut,
+  Paste,
+}
+
+/// The clipboard's shortcut `keys` are, if any: Ctrl (⌘ on macOS) and C, X or V, whichever the page has the focus for.
+pub fn clipboard_shortcut(keys: Keys<'_>) -> Option<ClipboardShortcut> {
+  if !keys.only_command() {
+    return None;
+  }
+  [
+    ("c", "KeyC", ClipboardShortcut::Copy),
+    ("x", "KeyX", ClipboardShortcut::Cut),
+    ("v", "KeyV", ClipboardShortcut::Paste),
+  ]
+  .into_iter()
+  .find(|(key, code, _)| keys.is(key, code))
+  .map(|(_, _, shortcut)| shortcut)
 }
 
 /// Takes a key up of a shortcut away from the page, which did not get its key down.

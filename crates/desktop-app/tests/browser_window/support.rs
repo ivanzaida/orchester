@@ -10,18 +10,54 @@ use std::{
 };
 
 use lurq::{
-  app::{Tree, events::MouseButton},
+  app::{
+    Tree,
+    component::{Component, DevtoolsInspectable},
+    ctx::Ctx,
+    events::MouseButton,
+  },
   core::ElementRect,
-  node::element::ElementRef,
+  node::{Element, element::ElementRef},
 };
 use orchester_app::{
   browser::{BrowserLink, BrowserRoot},
   test_support::Window,
-  ui::loader,
+  ui::{clipboard::Clipboard, loader},
 };
 use orchester_core::id::RunId;
 use orchester_ipc::browser::{BrowserEvent, BrowserMode, BrowserState, BrowserTab, BrowserTabId, TabOwner};
 use orchester_workspace::browser::BrowserWindow;
+
+/// The window under a clipboard of the test's own.
+#[derive(Clone)]
+struct HostProps {
+  link: BrowserLink,
+  clipboard: Clipboard,
+}
+
+impl PartialEq for HostProps {
+  fn eq(&self, other: &Self) -> bool {
+    self.link == other.link
+  }
+}
+
+impl DevtoolsInspectable for HostProps {}
+
+struct Host;
+
+impl Component for Host {
+  type Props = HostProps;
+
+  fn create(_: &mut Ctx) -> Self {
+    Self
+  }
+
+  fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
+    let props = ctx.props::<HostProps>().clone();
+    ctx.provide(props.clipboard);
+    ctx.mount_keyed::<BrowserRoot>("browser", props.link)
+  }
+}
 
 /// The main window and the Browser window's tree on its session, showing Kontur.
 pub struct Browser {
@@ -41,6 +77,22 @@ impl Browser {
   /// The window 1280 × 800 logical pixels big on a display of `scale` physical pixels to a logical one, whose events
   /// lurq takes in physical pixels.
   pub fn open_at(nowhere: bool, scale: f32) -> Self {
+    let (mut browser, link) = Self::unmounted(nowhere, scale);
+    browser.tree.mount_root::<BrowserRoot>(&mut browser.window.app, link);
+    browser.pass();
+    browser
+  }
+
+  /// The window at one physical pixel to a logical one, putting what it copies on `clipboard`, never the system's.
+  pub fn open_with_clipboard(clipboard: Clipboard) -> Self {
+    let (mut browser, link) = Self::unmounted(false, 1.0);
+    let props = HostProps { link, clipboard };
+    browser.tree.mount_root::<Host>(&mut browser.window.app, props);
+    browser.pass();
+    browser
+  }
+
+  fn unmounted(nowhere: bool, scale: f32) -> (Self, BrowserLink) {
     let window = Window::open();
     let services = window.launch.services().expect("the session started").clone();
     if nowhere {
@@ -61,9 +113,7 @@ impl Browser {
     browser.tree.set_scale_factor(scale);
     browser.tree.resize((1280.0 * scale) as u32, (800.0 * scale) as u32);
     loader::install(&mut browser.tree);
-    browser.tree.mount_root::<BrowserRoot>(&mut browser.window.app, link);
-    browser.pass();
-    browser
+    (browser, link)
   }
 
   pub fn pass(&mut self) {

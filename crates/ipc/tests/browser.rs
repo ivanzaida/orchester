@@ -1,6 +1,7 @@
-//! The *Browser* window's messages (protocol 34): every request, reply and event round-trips, a screencast frame
-//! travels as a binary frame with its JPEG within the frame limit, malformed binary frames are refused, and a frame
-//! crosses the platform's real endpoint (the Unix socket on macOS, the named pipe on Windows).
+//! The *Browser* window's messages (protocol 36): every request, reply and event round-trips, a page's selection at
+//! its limit fits a frame and stays out of the log, a screencast frame travels as a binary frame with its JPEG within
+//! the frame limit, malformed binary frames are refused, and a frame crosses the platform's real endpoint (the Unix
+//! socket on macOS, the named pipe on Windows).
 
 use std::time::Duration;
 
@@ -9,8 +10,8 @@ use orchester_ipc::{
   Command, Endpoint, Event, FrameError, PROTOCOL_VERSION, Rejection, Reply, Request, RequestId,
   browser::{
     AgentAction, AgentWaitEnd, BrowserCommand, BrowserDialog, BrowserEvent, BrowserMode, BrowserReply, BrowserState,
-    BrowserTab, BrowserTabId, DialogKind, ElementBox, KeyAction, Modifiers, MouseAction, MouseButton, Navigation,
-    PersonInput, ScreencastFrame, SelectId, SelectList, SelectOption, TabOwner, Viewport,
+    BrowserTab, BrowserTabId, DialogKind, ElementBox, KeyAction, MAX_CLIPBOARD_TEXT, Modifiers, MouseAction,
+    MouseButton, Navigation, PersonInput, ScreencastFrame, SelectId, SelectList, SelectOption, TabOwner, Viewport,
   },
   frame::{FrameReader, FrameWriter, MAX_FRAME_LEN},
 };
@@ -126,6 +127,8 @@ fn commands() -> Vec<BrowserCommand> {
       select: SelectId::new(77),
       index: 3,
     },
+    BrowserCommand::CopySelection { tab: tab("T1") },
+    BrowserCommand::CutSelection { tab: tab("T1") },
     BrowserCommand::OpenInWindow,
     BrowserCommand::BackToOrchester,
   ];
@@ -217,6 +220,10 @@ fn events(run: RunId) -> Vec<Event> {
     }),
     reply(Reply::Browser(BrowserReply::Done)),
     reply(Reply::Browser(BrowserReply::TabOpened { tab: tab("T3") })),
+    reply(Reply::Browser(BrowserReply::Selection {
+      text: "héllo \"quoted\"\nnext".to_owned(),
+    })),
+    reply(Reply::Browser(BrowserReply::Selection { text: String::new() })),
     reply(Reply::Rejected(Rejection::BrowserUnavailable {
       detail: "browser_unavailable: no Chromium-based browser is installed".to_owned(),
     })),
@@ -224,11 +231,11 @@ fn events(run: RunId) -> Vec<Event> {
   ]
 }
 
-/// The events of an agent waiting for the person came with protocol 35, so a runner of 34 is told apart at the
-/// handshake: where it waits and until when, and each way its wait ends.
+/// The events of an agent waiting for the person came with protocol 35 and a page's selection with 36, so an older
+/// runner is told apart at the handshake: where it waits and until when, and each way its wait ends.
 #[tokio::test]
 async fn browser_agent_waiting_events_round_trip_under_a_raised_protocol() {
-  assert_eq!(PROTOCOL_VERSION, 35);
+  assert_eq!(PROTOCOL_VERSION, 36);
   let (mut reader, mut writer) = connection();
   let run = RunId::generate();
   let ended = |end| {
@@ -420,6 +427,31 @@ async fn browser_malformed_frames_are_refused() {
   assert!(matches!(no_head_len, Err(FrameError::Malformed(_))), "{no_head_len:?}");
 }
 
+/// Each character of the worst text for JSON takes six bytes, and the limit's text still fits a frame.
+#[tokio::test]
+async fn browser_selection_at_its_limit_fits_a_frame() {
+  let (mut reader, mut writer) = connection();
+  let sent = Event::Reply {
+    id: RequestId::new(1),
+    reply: Reply::Browser(BrowserReply::Selection {
+      text: "\u{1f}".repeat(MAX_CLIPBOARD_TEXT),
+    }),
+  };
+  let written = async {
+    writer.write_event(&sent).await.expect("the limit's text fits a frame");
+    drop(writer);
+  };
+  let (_, received) = tokio::join!(written, reader.read_event());
+  assert_eq!(received.expect("read").expect("an event"), sent);
+}
+
+#[test]
+fn browser_selection_stays_out_of_a_replys_log_line() {
+  let reply = BrowserReply::Selection {
+    text: "hunter2".to_owned(),
+  };
+  assert_eq!(format!("{reply:?}"), "Selection { bytes: 7 }");
+}
 #[test]
 fn browser_viewport_outside_its_bounds_is_refused() {
   assert!(Viewport::new(0, 800, 100).is_none());
