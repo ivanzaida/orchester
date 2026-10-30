@@ -76,6 +76,26 @@
         "none": "None",
         "noModule": "No module"
       },
+      "baseBranch": {
+        "label": "Base branch",
+        "fromModule": "{{branch}} · from module",
+        "checkedOut": "Checked-out branch",
+        "find": "Find a branch",
+        "inherit": "Inherit",
+        "branches": "Branches",
+        "remoteOnly": "Remote only",
+        "fromModuleOption": "From module · {{module}}",
+        "fromModuleBranch": "{{branch}} · the module's base branch",
+        "fromModuleCheckedOut": "The module sets none: the branch checked out when the run starts",
+        "noModuleOption": "From its module",
+        "noModuleHelp": "The task is in no module: the branch checked out when the run starts",
+        "checkedOutNow": "{{branch}} now · taken when the run starts",
+        "checkedOutDetached": "No branch checked out now · taken when the run starts",
+        "checkedOutLater": "Taken when the run starts",
+        "createsLocal": "Choosing it creates the local branch {{branch}}",
+        "reading": "Reading the repository's branches…",
+        "noMatch": "No branch matches “{{text}}”"
+      },
       "priority": {
         "label": "Priority",
         "none": "None"

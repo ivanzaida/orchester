@@ -18,7 +18,10 @@ use crate::{
     mcp::McpServer,
   },
   id::{ConnectionId, ResourceId, SecretId},
-  permission::{CommandPermission, StepCommands, capability::PermissionProblem},
+  permission::{
+    CommandPermission, StepCommands,
+    capability::{PermissionOption, PermissionProblem},
+  },
   resource::{AgentProfile, Pipeline, Step, StepKey, StepKind, Tool, ToolKind, Version},
   secret::Secret,
 };
@@ -62,6 +65,9 @@ pub enum PreflightProblem {
   /// The connection's CLI cannot enforce the step's effective permissions (profile ∩ step) on this
   /// platform; a step never runs with permissions that are not enforced.
   PermissionsNotEnforceable { step: StepKey, reason: PermissionProblem },
+  /// The step's network is a host list, which `cli` cannot enforce on this platform
+  /// ([`crate::permission::capability::Unavailable::CannotLimitHosts`]): it is never run with network on instead.
+  NetworkHostsNotEnforceable { step: StepKey, cli: AgentProvider },
   /// The step lists the commands it may run, but its profile asks a person about commands now (it was
   /// republished so): asking would offer commands outside the list for approval, and running the list
   /// unasked would skip the profile's asking, so a person updates the step.
@@ -198,9 +204,13 @@ fn permission_problem(step: &Step, profile: &AgentProfile, provider: AgentProvid
     .narrowed(*repository, permissions)
     .enforced_on(provider, Platform::current())
     .err()?;
-  Some(PreflightProblem::PermissionsNotEnforceable {
-    step: step.key.clone(),
-    reason,
+  let step = step.key.clone();
+  Some(match reason {
+    PermissionProblem::NotEnforceable {
+      option: PermissionOption::NetworkHosts,
+      ..
+    } => PreflightProblem::NetworkHostsNotEnforceable { step, cli: provider },
+    reason => PreflightProblem::PermissionsNotEnforceable { step, reason },
   })
 }
 

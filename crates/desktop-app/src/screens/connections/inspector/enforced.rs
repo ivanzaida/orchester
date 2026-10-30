@@ -12,7 +12,7 @@ use orchester_core::{
 use crate::screens::project_settings::kit::{Group, SettingRow, Tone, form_note, value};
 
 /// Each option with its name and how Orchester enforces it when it does.
-const OPTIONS: [(PermissionOption, &str, &str); 7] = [
+const OPTIONS: [(PermissionOption, &str, &str); 8] = [
   (
     PermissionOption::ReadOnly,
     "connections.native.enforced.readOnly",
@@ -42,6 +42,11 @@ const OPTIONS: [(PermissionOption, &str, &str); 7] = [
     PermissionOption::NetworkOff,
     "connections.native.enforced.networkOff",
     "connections.native.enforced.networkOffHow",
+  ),
+  (
+    PermissionOption::NetworkHosts,
+    "connections.native.enforced.networkHosts",
+    "connections.native.enforced.networkHostsHow",
   ),
   (
     PermissionOption::NetworkOn,
@@ -85,5 +90,6 @@ const fn unavailable_key(why: Unavailable) -> &'static str {
     Unavailable::CannotLimitCommands => "connections.native.enforced.cannotLimit",
     Unavailable::CannotConfineCommands => "connections.native.enforced.cannotConfine",
     Unavailable::CannotBlockNetwork => "connections.native.enforced.cannotBlockNetwork",
+    Unavailable::CannotLimitHosts => "connections.native.enforced.cannotLimitHosts",
   }
 }

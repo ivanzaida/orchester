@@ -1,10 +1,10 @@
 //! The form's fields as signals the composer types into and its chips set, read together as [`Values`]; the task's
-//! module beside them, which is not one of the task's details: it is saved after them and is no part of a version's
-//! conflict.
+//! module and base branch beside them, which are not the task's details: they are saved after them and are no part of
+//! a version's conflict.
 
 use lurq::{app::ctx::Ctx, core::Signal};
 use orchester_core::task::organization::Priority;
-use orchester_workspace::modules::ModuleChoice;
+use orchester_workspace::{modules::ModuleChoice, tasks::base_branch::BasePick};
 
 use super::{
   criteria::{Criterion, texts},
@@ -28,6 +28,7 @@ pub struct Fields {
   pub priority: Signal<PriorityPick>,
   pub delivers: Signal<DeliversPick>,
   pub module: Signal<ModuleChoice>,
+  pub base_branch: Signal<BasePick>,
 }
 
 impl Fields {
@@ -44,6 +45,7 @@ impl Fields {
       priority: ctx.signal(PriorityPick(Priority::None)),
       delivers: ctx.signal(DeliversPick(None)),
       module: ctx.signal(ModuleChoice::default()),
+      base_branch: ctx.signal(BasePick::default()),
     }
   }
 

@@ -44,7 +44,10 @@ use orchester_workspace::{
   workspace::OpenProject,
 };
 
-use super::controls::{Control, Offer, Reason, named_steps};
+use super::{
+  controls::{Control, Offer, Reason, named_steps},
+  no_branch::NoBranch,
+};
 use crate::{
   project::ProjectFeed,
   theme::{ExtraTypography, TaskText},
@@ -154,20 +157,22 @@ impl lurq::app::component::DevtoolsInspectable for Refused {}
 pub type StartAction = FutureAction<Request, (), Refused>;
 
 /// Asks the runner to run the task again; closes the confirmation once the new run started. The task
-/// is read again either way: the new run, or what blocked it.
+/// is read again either way: the new run, or what blocked it. A run refused for want of a branch closes the
+/// confirmation too: the header's status line says so (`no_branch`), with no card.
 pub fn start_action(
   ctx: &mut Ctx,
   (runners, servers): (Runners, Servers),
   (project, feed): (OpenProject, ProjectFeed),
-  open: Signal<Confirming>,
+  (open, no_branch): (Signal<Confirming>, Signal<Option<NoBranch>>),
 ) -> StartAction {
   ctx.future_action(move |request: Request| {
-    let (runners, servers, project, feed, open) = (
+    let (runners, servers, project, feed, open, no_branch) = (
       runners.clone(),
       servers.clone(),
       project.clone(),
       feed.clone(),
       open.clone(),
+      no_branch.clone(),
     );
     async move {
       let refused = |messages| Refused {
@@ -191,12 +196,17 @@ pub fn start_action(
       match started {
         Ok(run) => {
           tracing::info!(%run, "the task runs again");
+          no_branch.set(None);
           open.set(Confirming(None));
           Ok(())
         }
         Err(error) => {
           tracing::warn!(%error, "the runner did not run the task again");
           claim.release(&servers).await;
+          if let Some(refusal) = NoBranch::of(&error, Some(request.after)) {
+            no_branch.set(Some(refusal));
+            open.set(Confirming(None));
+          }
           let named = request_messages(&error, &request.pipeline)
             .into_iter()
             .map(|message| named_steps(message, &request.steps))

@@ -141,6 +141,8 @@ pub(super) fn option_row(
         PermissionOption::AnyCommand => p.0.set_commands(CommandPermission::AnyInWorktree),
         PermissionOption::NetworkOff => p.0.set_network(NetworkAccess::Off),
         PermissionOption::NetworkOn => p.0.set_network(NetworkAccess::On),
+        // No row offers a host list: choosing one needs its hosts, which this page does not edit.
+        PermissionOption::NetworkHosts => {}
       })
     })
   } else {
