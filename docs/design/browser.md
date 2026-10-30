@@ -6,8 +6,8 @@ browsing by default (open question 2); decisions 13 to 15 (binary frames, the wi
 ORC-378. P1 (the core rules, ORC-355) is built, and P2: its first half (ORC-358: finding and starting the browser,
 the CDP client, the project browser's lifecycle and the run-to-tabs map) and its second (ORC-359: the `browser_*`
 tools offered to steps through the runner's relay); the profile's Browser row (ORC-368), Settings › Browser (ORC-369),
-the window's plumbing (ORC-378: its IPC, the screencast, the person's input and tabs, the window's state) and the
-window itself (ORC-379, P4d) are built too.
+the window's plumbing (ORC-378: its IPC, the screencast, the person's input and tabs, the window's state), the
+window itself (ORC-379, P4d) and the agent waiting while the person uses its tab (ORC-184, P4e) are built too.
 
 Agents of a run can open web pages, read them and act in them, as Claude desktop's built-in browser lets Claude do:
 check the app the run builds on a local dev server, read documentation, reproduce a bug in a web front, fill a form
@@ -64,12 +64,22 @@ time.
 13. **Screencast frames travel as a binary IPC message** (the person, ORC-378): a frame's JPEG bytes follow a small
     JSON head in a frame of their own kind in `orchester-ipc`, not base64 in JSON. Both ends, both platforms (the
     named pipe on Windows, the Unix socket on macOS), within the frame limit (16 MiB) and under the protocol version
-    the IPC already checks (`PROTOCOL_VERSION` 34).
+    the IPC already checks (`PROTOCOL_VERSION`).
 14. **The window opens by itself when an agent starts browsing, on by default** (the person, ORC-378). Settings ›
     Browser has the switch *Open the Browser window when an agent starts browsing* (ORC-369 draws it); the setting is
     stored with the application's settings and is on until a person turns it off.
 15. **A window that opens by itself takes focus; no lurq change** (the person, ORC-378). lurq has no "open without
     activating", and the window opening on an agent's first tab is what the setting asks for.
+16. **An agent's wait for the person on a tab is capped at 60 seconds** (ORC-184). The person may use a tab for minutes,
+    and a call that waited 60 s answers without acting, saying the person is still using the tab; the agent then
+    decides what to do. Sixty seconds is the longest the browser tools otherwise take (`browser_wait`'s bound): the CLIs
+    would allow far longer (`MCP_TOOL_TIMEOUT` about 28 hours in Claude Code, `tool_timeout_sec` 24 hours for Codex), but
+    their limits are the CLIs' to change. What sets the cap is the run: the relay handles one request at a time, so a
+    waiting call holds the invocation's other calls, reads included, and its time counts as the agent's active time.
+    The hold itself stays 10 s after the last input, the design's number, and the cap counts from when the first call
+    on the tab began to wait. The site policy is applied after the wait, not before it: the person's navigation starts
+    the hold, so a tab can be on another site by the time the wait ends, and a call must not act on a page nobody judged
+    ("What the agent gets").
 
 Decision 3's *one browser profile per project* is the person's too (2026-10-29): the project's runs share its
 sign-ins, and the window's project switcher relies on it.
@@ -104,7 +114,23 @@ sign-ins, and the window's project switcher relies on it.
 - Every answer with page content starts with a fixed line that the content is the page's data, not instructions
   (`PAGE_DATA_NOTICE`). Agents' instructions say the same (the step prompt's tool section).
 - While the person drives a tab in the window (input in the last 10 seconds), the agent's actions on that tab wait,
-  and its answer says the person was using it.
+  and its answer says the person was using it (decision 16). The runner notes when each input and each navigation of
+  the window reaches a tab, a moving pointer's too. A call that reports what it did to the window (`browser_open` on the
+  current tab, `browser_navigate`, `browser_click`, `browser_type`, `browser_key`, `browser_scroll`, `browser_eval`)
+  and `browser_close` wait until 10 s after the last of them; `browser_open` of a new tab and the reading tools never
+  do. After a wait the answer starts with *The person was using this tab in the Browser window, so this call waited
+  14 s before it ran.*, before the page data notice. A wait that reaches the cap answers that the person is still using
+  the tab and that the call did not act; so does a wait the run's stop ends. Cancelling or pausing the run ends a wait
+  at once, without acting, and a call that comes before its agents work again does not wait either, since a pause lets
+  a running tool finish and would wait for it. The relay handles one request at a time
+  (`docs/interactive-tool-approvals.md`), so a read the agent sends while a call of the same relay waits comes after
+  it, as it does behind a call waiting for a person.
+- The site is decided when the wait is over, because the person's navigation is one of the things that holds a tab: the
+  policy judges the page the call will act on, and an approval names that site. A wait that reaches the cap or that the
+  run's stop ends asks nobody. A call the person is asked about may be held again while they answer: once approved it
+  waits again and is judged again, so it runs without another question only on the site the approval named, and asks
+  again on any other that asks. A call denied or refused after a wait answers *…so this call waited 14 s and did not
+  run.*, then why. Each wait between two questions has its own cap, as the person's answer lies between them.
 - `browser_eval` reads what the other tools deliberately hide (cookies not marked HttpOnly, local storage), so it is
   offered only as a tool whose every call asks the person (decision 9).
 
@@ -303,8 +329,13 @@ not jump to another project by itself.
   acted on. Orchester draws both from the runner's report of the action (element box, tool, short summary), not
   CDP: each browser tool call that opens a page, goes through its history or acts on it reports what it did once
   carried out, with the element's accessible name and its box as the page has them then; the reading tools and
-  `browser_close` do not. There is no take-over control: the person's input in the tab makes the agent wait
-  (`02b · You use the tab` `k7xvx`: *You're using this tab · Builder waits until 10 s after your last input*).
+  `browser_close` do not. There is no take-over control: the person's input in the tab makes the agent wait.
+- **The agent waiting** (`02b · You use the tab` `k7xvx`): while the runner says an agent's call waits on the tab
+  shown, the line says *You're using this tab · Builder waits until 10 s after your last input* and, at its end where
+  `02` has its hint, how long it still waits (*7 s left*, which the board does not draw; the brief asks for it). The
+  ring is gone and the tab's dot is amber, on any of the strip's tabs an agent waits on. All of it comes from the
+  runner's events: the person's input alone, with no call waiting, shows nothing, and no timer of the window's ends
+  it; the seconds are rounded up and stay at 1 until the runner says the wait ended.
 - **Empty** (`06 · Empty` `eCCuU`): no tabs; the address line is focused (*Type an address*) and a card says when
   agents' tabs appear. **Not found** (`07 · Browser not found` `YEv2c`): the reason, *Open Settings › Browser*,
   *Look again*; toolbar and *+* unavailable. **Opened in a browser window** (`05` `GjcAk`): the page area is an
@@ -329,17 +360,18 @@ not jump to another project by itself.
   request to the runner's connection as it is made, and the runner keeps one line per tab, in which an input goes out
   once the one before it has gone out, without waiting for its answer (a click that opens a dialog is not answered
   until the dialog is).
-- **IPC** (protocol 35, `orchester_ipc::browser`). The window's requests (`BrowserCommand`: subscribe, show a tab at a
+- **IPC** (protocol 36, `orchester_ipc::browser`). The window's requests (`BrowserCommand`: subscribe, show a tab at a
   viewport, stop showing, the person's input, navigation, open and close a tab, answer a dialog, choose a `<select>`
-  option, copy or cut the selection, *Open in a browser window*, *Back to Orchester*) and events (`BrowserEvent`: the browser's state with its
-  tabs, their owners, titles, addresses and loading, the tab shown and the mode; an agent started browsing; an agent
-  acted, with its element box; a dialog opened or closed; a `<select>` list opened). A frame is one event with its JPEG
-  bytes, in a binary frame after a small JSON head (decision 13); at 30 frames a second of a full-size page that is
-  about 3 MB/s, well inside the channel and its 16 MiB frame limit. Only the latest frame waits in the runner, so
-  frames are dropped rather than queued, and the app decodes one at a time per project, keeping only the latest that
-  waits. The desktop subscribes once a runner attached; `orchester_workspace::browser::BrowserWindow` holds what the
-  window shows, `Runners::browser` sends its requests. Not yet: the agent waiting for the person's input, the file
-  chooser.
+  option, copy or cut the selection, *Open in a browser window*, *Back to Orchester*) and events (`BrowserEvent`: the
+  browser's state with its tabs, their owners, titles, addresses and loading, the tab shown and the mode; an agent
+  started browsing; an agent
+  acted, with its element box; an agent waits on a tab until a moment, sent again when new input pushes it back, and its
+  wait ended: it ran, reached the cap or was cancelled; a dialog opened or closed; a `<select>` list opened). A frame is
+  one event with its JPEG bytes, in a binary frame after a small JSON head (decision 13); at 30 frames a second of a
+  full-size page that is about 3 MB/s, well inside the channel and its 16 MiB frame limit. Only the latest frame waits
+  in the runner, so frames are dropped rather than queued, and the app decodes one at a time per project, keeping only
+  the latest that waits. The desktop subscribes once a runner attached; `orchester_workspace::browser::BrowserWindow`
+  holds what the window shows, `Runners::browser` sends its requests. Not yet: the file chooser.
 
 ### What frames do not show, and what Orchester draws instead
 
@@ -389,9 +421,8 @@ not jump to another project by itself.
      in the worktree before any part of it is made. Tests: the tools end to end through the fake CLIs (`cargo test -p
      orchester-runner --features test-agent --test browser browser_tools`), closed tabs in `browser_closed_tabs_`, the
      offering and the approvals in `cargo test -p orchester-core --test browser browser_`. Not
-     yet: the native agent, which gets none of Orchester's relay tools today; the agent's actions waiting while the
-     person drives a tab (P4, with the window); the approval card's reason when *Approve similar* is unavailable for
-     `browser_eval` still reads as for a check (P4).
+     yet: the native agent, which gets none of Orchester's relay tools today; the approval card's reason when *Approve
+     similar* is unavailable for `browser_eval` still reads as for a check (P4).
 3. **P3 · Design (designer).** Drawn 2026-10-28, board `Browser · redesign` `lcNez` in the new `orchester.pen`,
    waiting for the person's review. Not drawn yet: the file chooser state.
 4. **P4 · Window, settings and profile (UI).** IPC requests and events, screencast and input, the drawn dialogs and
@@ -414,11 +445,19 @@ not jump to another project by itself.
      from the window answers the run's next call on it that the person closed it, and one the browser reported closed
      (its page, or the person in the browser's own window) says that, both pointing to `browser_open`; the runner keeps
      only those tabs' ids, per run, until the run ends (`orchester-runner --test browser browser_runs_tab`).
+   - **P4e.** Done (ORC-184): the agent waiting for the person (decision 16), described under "What the agent gets":
+     the hold in the runner (`browser/window/hold.rs`, the tools' side in `execution/step/browser/person.rs`), its
+     events, the state each tab keeps of it, and the window's 02b line and amber dot drawn from that state. QA scenario:
+     `browser-window-waiting`. Tests, on a clock they drive: `cargo test -p orchester-runner --features test-agent
+     --test browser browser_hold`; also `cargo test -p orchester-ipc --test browser browser_`, `cargo test -p
+     orchester-workspace --features test-support --test browser_window browser_window_keeps_the_agent_waiting` and
+     `cargo test -p orchester-app --test browser_window browser_dot_waits`, `browser_seconds_left`,
+     `browser_window_says_an_agent_waits`.
    - **P4d.** Done (ORC-379): the *Browser* window itself, on that state (`orchester-app`'s `browser/`): a secondary
      lurq window named `browser` (`lurq_windows`), its title bar with the mark, the project switcher and the tabs
      (crowded, then scrolling with fades and the overflow button and menu), the toolbar with the tab's owner, the page
-     drawn from the frames with the person's pointer, wheel and keys sent back, the agent-acting line and ring, the
-     person's hold, dialogs and `<select>` lists of the person's tabs, *Empty* (its address line has the focus),
+     drawn from the frames with the person's pointer, wheel and keys sent back, the agent-acting line and ring,
+     dialogs and `<select>` lists of the person's tabs, *Empty* (its address line has the focus),
      *Browser not found* and *Opened in a browser window*; the shortcuts Ctrl+T, Ctrl+W, Ctrl+Tab / Ctrl+Shift+Tab,
      Ctrl+L and Ctrl+R (⌘T, ⌘W, ⌘L, ⌘R on macOS), which the window takes before the page (`browser/keys.rs`); opened
      from the app menu's *Browser*, a run's Summary line *Browser · 2 tabs · … › Show*, and by itself when an agent
@@ -428,10 +467,10 @@ not jump to another project by itself.
      orchester-workspace --features test-support --test browser_window browser_window_owners`. QA scenarios, each
      played by the QA app from a fixture the seed leaves beside the data (`test_support::browser_qa`), its page the
      sample page this computer's browser renders: `browser-window` (01, and the switcher 01b), `browser-window-many`
-     (01c), `browser-window-overflow` (01d, 01e), `browser-window-acting` (02; a press on the page reaches 02b; its
-     first run's Summary has the Browser line 10), `browser-window-dialog` (03), `browser-window-select` (04),
-     `browser-window-headed` (05), `browser-window-empty` (06), `browser-window-not-found` (07); start them with
-     `no_runner`, so no runner reports
+     (01c), `browser-window-overflow` (01d, 01e), `browser-window-acting` (02; its first run's Summary has the Browser
+     line 10), `browser-window-waiting` (02b, which ORC-184 added), `browser-window-dialog` (03),
+     `browser-window-select` (04), `browser-window-headed` (05), `browser-window-empty` (06),
+     `browser-window-not-found` (07); start them with `no_runner`, so no runner reports
      its own browser over the fixture. `browser-window-empty` with a runner reaches a tab coming after *Empty*: *+*, or
      an address and Enter. The address line has the focus on *Empty* and lets go of it when a tab comes, showing that
      tab's address, unless the person typed there; Enter leaves the line, and Ctrl+L on a page keeps the focus (`--test

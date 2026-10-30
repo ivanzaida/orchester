@@ -39,12 +39,21 @@ struct WindowTab {
 
 impl ProjectBrowser {
   /// The window's `command` as it arrives, to be carried out ([`Self::serve`]): the person's input, and a copy or cut
-  /// of what it selected, takes its place in its tab's line now, whenever it is carried out.
+  /// of what it selected, takes its place in its tab's line now, whenever it is carried out, and these and the person's
+  /// navigation make the agent of their tab wait from now.
   pub fn arrived(&self, command: BrowserCommand) -> Arrived {
     let turn = match &command {
       BrowserCommand::Input { tab, .. }
       | BrowserCommand::CopySelection { tab }
-      | BrowserCommand::CutSelection { tab } => self.window.inputs.join(TargetId::from(tab.as_str())),
+      | BrowserCommand::CutSelection { tab } => {
+        let target = TargetId::from(tab.as_str());
+        self.window.holds.used(target.clone());
+        self.window.inputs.join(target)
+      }
+      BrowserCommand::Navigate { tab, .. } => {
+        self.window.holds.used(TargetId::from(tab.as_str()));
+        Turn::default()
+      }
       _ => Turn::default(),
     };
     Arrived { command, turn }
@@ -83,7 +92,7 @@ impl ProjectBrowser {
     done.map(|()| BrowserReply::Done).map_err(|error| rejection(&error))
   }
 
-  /// `desktop` follows the browser from now on, starting with its state now.
+  /// `desktop` follows the browser from now on, starting with its state now and the agents waiting for the person.
   async fn subscribe(&self, desktop: mpsc::UnboundedSender<Event>) {
     self.window.subscribe(desktop);
     if self.running.lock().await.is_some() {
@@ -91,6 +100,7 @@ impl ProjectBrowser {
     } else {
       self.window.send(BrowserEvent::Changed(BrowserState::default()));
     }
+    self.window.report_waits();
   }
 
   /// Screencasts `tab` at `viewport` instead of the tab shown before: the page takes the window's size and scale,

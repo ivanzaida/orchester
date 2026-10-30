@@ -7,7 +7,7 @@ mod input;
 
 use std::fmt;
 
-use orchester_core::id::RunId;
+use orchester_core::{id::RunId, time::Timestamp};
 use serde::{Deserialize, Serialize};
 
 pub use self::{
@@ -298,6 +298,19 @@ impl fmt::Debug for BrowserReply {
   }
 }
 
+/// How an agent's wait for the person on a tab ended.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentWaitEnd {
+  /// The person left the tab alone long enough, and the agent's call goes on: it runs, unless the site it then acts on
+  /// asks and the person denies it.
+  Ran,
+  /// The person was still using the tab when the wait reached its cap: the call answers without acting.
+  Capped,
+  /// The run stopped, or the tab went, while the call waited: it did not act.
+  Cancelled,
+}
+
 /// What the project's browser tells a subscribed desktop.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data", rename_all = "snake_case")]
@@ -312,6 +325,19 @@ pub enum BrowserEvent {
     run: RunId,
     tab: BrowserTabId,
     action: AgentAction,
+  },
+  /// An agent of `run` waits on `tab` because the person uses it, until `until`; sent again when the person's input
+  /// pushes that moment back.
+  AgentWaiting {
+    run: RunId,
+    tab: BrowserTabId,
+    until: Timestamp,
+  },
+  /// The wait of an agent of `run` on `tab` ended, as `end` says.
+  AgentWaitEnded {
+    run: RunId,
+    tab: BrowserTabId,
+    end: AgentWaitEnd,
   },
   /// A JavaScript dialog opened on the person's `tab`; it waits for [`BrowserCommand::AnswerDialog`].
   DialogOpened { tab: BrowserTabId, dialog: BrowserDialog },

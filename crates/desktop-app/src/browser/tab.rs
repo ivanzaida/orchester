@@ -170,9 +170,9 @@ pub fn label(ctx: &Ctx, tab: &StripTab) -> Arc<str> {
   }
 }
 
-/// The page's icon with the tab's dot over its corner; the loader while the page loads. The dot rises over the icon's
-/// top, so the icon stands in a box as much taller at both ends: the box holds the whole dot and keeps the icon
-/// centred.
+/// The page's icon with the tab's dot over its corner; the loader while the page loads. The box is the icon's, as
+/// `Icon · waits` `ORNFA` draws it, so the label stands where it stands on a tab with no dot: the dot reaches past the
+/// box's top and right, and the box lets it.
 pub fn tab_icon(tab: &StripTab, color: PaletteColor, id: &str) -> Element {
   let glyph = if tab.loading {
     Icon::LoaderCircle
@@ -185,14 +185,16 @@ pub fn tab_icon(tab: &StripTab, color: PaletteColor, id: &str) -> Element {
   let Some(indicator) = tab.indicator else {
     return icon.into();
   };
-  let (size, rise) = (IconSize::Base.size(), DOT_RAISE + BrowserBorder::Ring.value());
+  let size = IconSize::Base.size();
   Stack::new()
+    .id(format!("{id}-icon"))
+    .overflow_visible()
     .width(Dimension::Px(size))
-    .height(Dimension::Px(size + 2.0 * rise))
+    .height(Dimension::Px(size))
     .flex_shrink(0.0)
     .child(
       Row::new()
-        .absolute(0.0, rise, Dimension::Px(size), Dimension::Px(size))
+        .absolute(0.0, 0.0, Dimension::Px(size), Dimension::Px(size))
         .align_items(Alignment::Center)
         .justify(lurq::layout::layout_kind::Justify::Center)
         .child(icon),
@@ -210,15 +212,16 @@ const fn dot_color(indicator: Indicator) -> PaletteColor {
   }
 }
 
-/// A tab's dot over its icon (`Indicator · …` in `zxkfr`): amber, blue or white, ringed in the title bar's color
-/// outside it; at the top of the icon's box.
+/// A tab's dot over its icon (`Indicator · …` in `zxkfr`): amber, blue or white, with a ring in the title bar's color
+/// centred on its edge, half of the ring outside its 7 and half over it.
 fn dot(indicator: Indicator, id: String) -> Row {
   let ring = BrowserBorder::Ring.value();
-  let side = DOT + 2.0 * ring;
+  let side = DOT + ring;
+  let (left, top) = (DOT_LEFT - ring / 2.0, -DOT_RAISE - ring / 2.0);
   Row::new()
     .id(id)
     .describe("indicator", indicator.name())
-    .absolute(DOT_LEFT - ring, 0.0, Dimension::Px(side), Dimension::Px(side))
+    .absolute(left, top, Dimension::Px(side), Dimension::Px(side))
     .rounded(ExtraRadius::Full.role())
     .background(dot_color(indicator))
     .border_inside(BrowserBorder::Ring.role(), PaletteColor::SurfaceBase)

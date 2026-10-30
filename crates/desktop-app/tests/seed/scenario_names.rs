@@ -2,7 +2,8 @@
 
 use crate::kontur::scenarios;
 
-const NAMES: &[&str] = &[
+/// The scenarios, in the order the seed lists them.
+const NAMES: [&str; 73] = [
   "agents",
   "agents-library",
   "agents-browser",
@@ -10,6 +11,7 @@ const NAMES: &[&str] = &[
   "browser-window-many",
   "browser-window-overflow",
   "browser-window-acting",
+  "browser-window-waiting",
   "browser-window-dialog",
   "browser-window-select",
   "browser-window-headed",

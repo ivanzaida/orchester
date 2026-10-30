@@ -12,12 +12,12 @@ use std::{
 };
 
 use orchester_app::browser::model::{
-  Indicator, Marks, Owner, PERSON_HOLD, RunTabs, cycled, host, hosts, run_tabs, shown_address, strip, tab_to_show,
+  Indicator, Marks, Owner, RunTabs, cycled, host, hosts, run_tabs, seconds_left, shown_address, strip, tab_to_show,
   typed_address,
 };
-use orchester_core::{id::RunId, run::RunNumber};
+use orchester_core::{id::RunId, run::RunNumber, time::Timestamp};
 use orchester_ipc::browser::{
-  AgentAction, BrowserEvent, BrowserMode, BrowserState, BrowserTab, BrowserTabId, TabOwner,
+  AgentAction, AgentWaitEnd, BrowserEvent, BrowserMode, BrowserState, BrowserTab, BrowserTabId, TabOwner,
 };
 use orchester_workspace::browser::{BrowserView, BrowserWindow, RunOwner};
 
@@ -160,23 +160,65 @@ fn browser_dots_go_by_waits_then_acting_then_new() {
   );
 }
 
+/// The amber dot is the runner's to give: the person's input alone gives none, an agent's wait does until it ends,
+/// however long that takes, and it wins over *acting*.
 #[test]
-fn browser_person_input_makes_the_tab_wait_for_a_while() {
+fn browser_dot_waits_only_while_the_runner_says_an_agent_waits() {
   let run = RunId::generate();
-  let view = view(vec![tab("T", TabOwner::Run { run })], Some("T"), Vec::new());
+  let until = Timestamp::from_unix_millis(1_793_372_042_138);
+  let waiting = BrowserEvent::AgentWaiting {
+    run,
+    tab: id("T"),
+    until,
+  };
+  let ended = BrowserEvent::AgentWaitEnded {
+    run,
+    tab: id("T"),
+    end: AgentWaitEnd::Ran,
+  };
+  let tabs = || vec![tab("T", TabOwner::Run { run })];
   let owners = HashMap::from([(run, owner("ORC-9", 9, false))]);
   let now = Instant::now();
   let mut marks = Marks::default();
   marks.seen(&id("T"));
   marks.used(&id("T"), now);
-  assert!(marks.holds(&id("T"), now));
+
+  let used = view(tabs(), Some("T"), Vec::new());
   assert_eq!(
-    strip(&view, &owners, &marks, now).agents[0].indicator,
-    Some(Indicator::Waits)
+    strip(&used, &owners, &marks, now).agents[0].indicator,
+    None,
+    "no agent waits on the tab the person uses"
   );
-  let after = now + PERSON_HOLD + Duration::from_millis(1);
-  assert!(!marks.holds(&id("T"), after));
-  assert_eq!(strip(&view, &owners, &marks, after).agents[0].indicator, None);
+  let acted = BrowserEvent::AgentActed {
+    run,
+    tab: id("T"),
+    action: AgentAction {
+      tool: "browser_click".to_owned(),
+      summary: "clicked Save".to_owned(),
+      element: None,
+    },
+  };
+  let held = view(tabs(), Some("T"), vec![acted, waiting.clone()]);
+  assert_eq!(held.waiting(&id("T")).map(|waiting| waiting.until), Some(until));
+  for later in [now, now + Duration::from_secs(600)] {
+    assert_eq!(
+      strip(&held, &owners, &marks, later).agents[0].indicator,
+      Some(Indicator::Waits),
+      "no local timer ends it"
+    );
+  }
+  let over = view(tabs(), Some("T"), vec![waiting, ended]);
+  assert_eq!(strip(&over, &owners, &marks, now).agents[0].indicator, None);
+}
+
+#[test]
+fn browser_seconds_left_of_a_wait_round_up_and_stay_above_nothing() {
+  let at = |millis| Timestamp::from_unix_millis(millis);
+  assert_eq!(seconds_left(at(10_000), at(0)), 10);
+  assert_eq!(seconds_left(at(7_001), at(0)), 8);
+  assert_eq!(seconds_left(at(1), at(0)), 1);
+  assert_eq!(seconds_left(at(0), at(0)), 1, "until the runner says it ended");
+  assert_eq!(seconds_left(at(0), at(5_000)), 1, "past its moment too");
 }
 
 #[test]

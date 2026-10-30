@@ -26,9 +26,11 @@ pub enum BrowserState {
   Many,
   /// `01d · Tab overflow` `fWhIr`, `01e` `cmofl`: twenty tabs.
   Overflow,
-  /// `02 · Agent is acting` `UKAkY`: the agent of the tab shown types into a field; a press on the page reaches
-  /// `02b · You use the tab` `k7xvx`.
+  /// `02 · Agent is acting` `UKAkY`: the agent of the tab shown types into a field.
   Acting,
+  /// `02b · You use the tab` `k7xvx`: the agent of the tab shown waits because the person uses it, as a runner reports
+  /// it again and again while the person goes on.
+  Waiting,
   /// `03` `t08Ur`: a confirm on the person's own tab.
   Dialog,
   /// `04` `r31HX`: a `<select>` list open on the person's own tab.
@@ -42,11 +44,12 @@ pub enum BrowserState {
 }
 
 impl BrowserState {
-  const ALL: [Self; 9] = [
+  const ALL: [Self; 10] = [
     Self::Default,
     Self::Many,
     Self::Overflow,
     Self::Acting,
+    Self::Waiting,
     Self::Dialog,
     Self::Select,
     Self::Headed,
@@ -60,6 +63,7 @@ impl BrowserState {
       Self::Many => "many",
       Self::Overflow => "overflow",
       Self::Acting => "acting",
+      Self::Waiting => "waiting",
       Self::Dialog => "dialog",
       Self::Select => "select",
       Self::Headed => "headed",
