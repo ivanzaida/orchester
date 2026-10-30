@@ -50,7 +50,11 @@ fn merge_queue_lanes_put_each_run_in_the_lane_of_its_recorded_base_branch_in_the
   let runs = |index: usize| -> Vec<RunId> { lanes[index].entries.iter().map(|entry| entry.run).collect() };
   assert_eq!(runs(0), [entries[0].run, entries[2].run]);
   assert_eq!(runs(1), [entries[1].run, entries[4].run]);
-  assert_eq!(runs(2), [entries[3].run], "a run that recorded no base branch has a lane of its own");
+  assert_eq!(
+    runs(2),
+    [entries[3].run],
+    "a run that recorded no base branch has a lane of its own"
+  );
   assert!(orchester_core::merge_queue::lanes(&[]).is_empty(), "no run, no lane");
 }
 

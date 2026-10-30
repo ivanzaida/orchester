@@ -22,7 +22,10 @@ fn domain_merge_queue_lanes_get_run_and_list_runs_name_the_lane_of_a_runs_delive
   let shown = served.ok("get_run", &json!({ "project": "Kontur", "run": run.id().to_string() }));
   assert_eq!(shown["delivery"]["lane"], "main", "{shown}");
   assert_eq!(shown["delivery"]["state"], "waiting_for_approval", "{shown}");
-  assert_eq!(shown["delivery"]["place"], 1, "first among the runs of main's lane: {shown}");
+  assert_eq!(
+    shown["delivery"]["place"], 1,
+    "first among the runs of main's lane: {shown}"
+  );
 
   let listed = served.ok("list_runs", &json!({ "project": "Kontur" }));
   let row = listed["runs"]
