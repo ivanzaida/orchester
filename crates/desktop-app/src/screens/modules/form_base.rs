@@ -14,7 +14,7 @@ use lurq::{
     ctx::{Ctx, FutureState},
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Text},
+  components::{Column, Row, ScrollVertical, Text},
   core::Signal,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
@@ -31,10 +31,13 @@ use orchester_workspace::{
 
 use super::form::FormProps;
 use crate::{
-  screens::task_form::chips::{ChipState, HelpPlace, Look, MenuOption, PropertyChip},
+  screens::task_form::{
+    bar::HEIGHT as BAR_HEIGHT,
+    chips::{ChipState, HelpPlace, Look, MenuOption, PropertyChip},
+  },
   services::Services,
   theme::{ExtraSpacing, ExtraTypography},
-  ui::{field::FieldInput, filter::filter_menu_panel, icon::Icon, message::message_text},
+  ui::{field::FieldInput, filter::filter_menu_panel, icon::Icon, message::message_text, popover::room_under},
 };
 
 /// The menu's width (`mTQMc`).
@@ -101,6 +104,8 @@ fn read(ctx: &mut Ctx, props: &FormProps) -> FutureState<Read, Message> {
     .get()
 }
 
+/// The menu, as tall as the room between the chip and the action bar lets it be: *Find a branch*, the checked-out
+/// branch and the note stay, the branches between them scroll.
 fn menu(ctx: &mut Ctx, read: &FutureState<Read, Message>, chosen: &Signal<BasePick>, base: &BaseChip) -> Element {
   let find = FieldInput::new("module-base-find", ctx.t("modules.form.base.find"), base.find.clone())
     .placeholder(ctx.t("modules.form.base.find"))
@@ -108,8 +113,10 @@ fn menu(ctx: &mut Ctx, read: &FutureState<Read, Message>, chosen: &Signal<BasePi
     .text_style(ExtraTypography::Lead.role())
     .box_height(FIND_HEIGHT)
     .render(ctx);
-  let pick = chosen.get().0;
   let mut panel = filter_menu_panel("module-base-menu", MENU_WIDTH).child(find);
+  if let Some(room) = room_under(ctx, &base.state.anchor, BAR_HEIGHT) {
+    panel = panel.max_height(Dimension::Px(room));
+  }
   let Some(Read(read)) = &read.data else {
     let words = match &read.error {
       Some(error) => message_text(ctx, error),
@@ -117,7 +124,24 @@ fn menu(ctx: &mut Ctx, read: &FutureState<Read, Message>, chosen: &Signal<BasePi
     };
     return panel.child(foot(&words, "module-base-reading")).into();
   };
-  panel = panel.child(checked_out(ctx, read, chosen, base)).child(separator(ctx));
+  let lists = ScrollVertical::new(branches(ctx, read, chosen, base))
+    .id("module-base-scroll")
+    .width(Dimension::Pct(100.0))
+    .flex_shrink(1.0);
+  panel
+    .child(checked_out(ctx, read, chosen, base))
+    .child(separator(ctx))
+    .child(lists)
+    .child(note(ctx, read.inheriting))
+    .into()
+}
+
+/// The branches *Find a branch* matches, under *Branches* and *Remote only*, or that none does.
+fn branches(ctx: &mut Ctx, read: &ModuleBaseRead, chosen: &Signal<BasePick>, base: &BaseChip) -> Column {
+  let pick = chosen.get().0;
+  let mut panel = Column::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(ExtraSpacing::Tight.role());
   let typed = base.find.get().trim().to_lowercase();
   let matches = |name: &str| name.to_lowercase().contains(&typed);
   let mut local: Vec<&BranchName> = read
@@ -165,7 +189,7 @@ fn menu(ctx: &mut Ctx, read: &FutureState<Read, Message>, chosen: &Signal<BasePi
       (choice, chosen, base),
     ));
   }
-  panel.child(note(ctx, read.inheriting)).into()
+  panel
 }
 
 /// *Checked-out branch*, with the branch the checkout has now (`Option · Checked-out branch` `NPwra`).
