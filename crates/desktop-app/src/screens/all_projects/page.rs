@@ -273,8 +273,16 @@ fn list(
     .iter()
     .enumerate()
     .map(|(index, listed)| {
-      let place = places.and_then(|places| places.of(listed.project.id));
-      row::row(ctx, (listed, place, signed_in), ask, index == last)
+      ctx.mount_keyed::<row::ProjectRow>(
+        &format!("project-row-component-{}", listed.project.id),
+        row::RowProps {
+          listed: listed.clone(),
+          place: places.and_then(|places| places.of(listed.project.id)).cloned(),
+          signed_in,
+          ask: ask.clone(),
+          last: index == last,
+        },
+      )
     })
     .collect();
   let table = Column::new()

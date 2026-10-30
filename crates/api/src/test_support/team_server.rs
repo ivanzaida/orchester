@@ -1,9 +1,10 @@
 //! A stand-in team server on loopback over plain HTTP, in the shapes of `orchester-api`, for the tests and QA builds
 //! that join a team with no project open (the workspace's `startup_join`, the app's All projects and Join a team):
 //! what it is (`GET /server`, not linked to Orchester Cloud, so a code needs no cloud identity), joining with a code
-//! (`POST /auth/code`) or a cloud identity (`POST /auth/cloud`), and the projects the person is a member of
-//! (`GET /projects`). It answers a wrong code and an expired one alike, `invalid_code`, as a real server does; it can
-//! have no place for a cloud identity, and it can stop answering.
+//! (`POST /auth/code`) or a cloud identity (`POST /auth/cloud`), the projects the person is a member of
+//! (`GET /projects`), and what a first link of a project with no tasks reads and sends (the workspace's `local_owner`).
+//! It answers a wrong code and an expired one alike, `invalid_code`, as a real server does; it can have no place for a
+//! cloud identity, it can refuse a link, and it can stop answering.
 
 use std::{
   io::{Read, Write},
@@ -37,6 +38,10 @@ struct State {
   later_expired: bool,
   /// Connections are closed without an answer, as when the server cannot be reached.
   down: bool,
+  /// `POST /projects/{id}/link` answers `forbidden`.
+  refuses_links: bool,
+  /// What `GET /projects/{id}/tasks` lists, of every project.
+  tasks: Vec<Value>,
   /// Whether each code join carried an Orchester Cloud identity token.
   code_joins: Vec<bool>,
   cloud_joins: usize,
@@ -63,6 +68,8 @@ impl TeamServer {
       not_invited: false,
       later_expired: false,
       down: false,
+      refuses_links: false,
+      tasks: Vec::new(),
       code_joins: Vec::new(),
       cloud_joins: 0,
     }));
@@ -107,6 +114,23 @@ impl TeamServer {
 
   pub fn set_down(&self, down: bool) {
     self.state.lock().down = down;
+  }
+
+  /// Every project holds one task titled `title` from now on, so a checkout with tasks of its own joins through its
+  /// review.
+  pub fn hold_task(&self, title: &str) {
+    let person = json!({"by": {"id": "0191c7c0-0000-7000-8000-000000000b0b", "display_name": "Bohdan Koval"}, "at": 1});
+    self.state.lock().tasks = vec![json!({
+      "id": "0191c7c0-0000-7000-8000-00000000a001", "number": 1, "key": "KON-1", "former_key": null, "revision": 1,
+      "title": title, "brief": "", "criteria": [], "pipeline": null, "limits": null, "workflow": "backlog",
+      "priority": "none", "tags": [], "blocking": [], "blocked_reason": null, "module": null, "status": "queued",
+      "has_run": false, "created": person, "updated": person, "claim": null, "run": null,
+    })];
+  }
+
+  /// A first link of a project is refused from now on, as a server that took the person's role away refuses it.
+  pub fn refuse_links(&self) {
+    self.state.lock().refuses_links = true;
   }
 
   /// Whether each code join so far carried an Orchester Cloud identity token, in order.
@@ -166,10 +190,43 @@ fn route(path: &str, (headers, body): (&str, &str), state: &Mutex<State>) -> (&'
         ("201 Created", joined("cloud"))
       }
     }
-    "GET /api/v1/projects" if headers.contains(&format!("authorization: bearer {TOKEN}")) => {
-      ("200 OK", json!({"projects": state.lock().projects}))
+    path if path.starts_with("GET /api/v1/projects") || path.starts_with("POST /api/v1/projects") => {
+      if headers.contains(&format!("authorization: bearer {TOKEN}")) {
+        project_route(path, &state.lock())
+      } else {
+        ("401 Unauthorized", error("unauthorized"))
+      }
     }
-    "GET /api/v1/projects" => ("401 Unauthorized", error("unauthorized")),
+    _ => ("404 Not Found", error("not_found")),
+  }
+}
+
+/// What a project's endpoints answer: the projects, and for one of them what a first link reads and sends. It holds no
+/// task, so a first link of a project with no local tasks goes through.
+fn project_route(path: &str, state: &State) -> (&'static str, Value) {
+  let (verb, rest) = path.split_once(" /api/v1/projects").unwrap_or((path, ""));
+  if verb == "GET" && rest.is_empty() {
+    return ("200 OK", json!({"projects": state.projects}));
+  }
+  let found = |wanted: &str, field: &str| state.projects.iter().find(|project| project[field] == wanted).cloned();
+  if let Some(slug) = rest.strip_prefix("?slug=") {
+    return found(slug, "slug").map_or_else(
+      || ("404 Not Found", error("not_found")),
+      |project| ("200 OK", json!({"project": project})),
+    );
+  }
+  let rest = rest.trim_start_matches('/');
+  let (id, part) = rest.split_once('/').unwrap_or((rest, ""));
+  let Some(project) = found(id, "id") else {
+    return ("404 Not Found", error("not_found"));
+  };
+  match (verb, part.split('?').next().unwrap_or_default()) {
+    ("GET", "") => ("200 OK", json!({"project": project})),
+    ("GET", "tasks") => ("200 OK", json!({"tasks": state.tasks, "cursor": 0})),
+    ("GET", "tags") => ("200 OK", json!({"tags": []})),
+    ("GET", "modules") => ("200 OK", json!({"modules": [], "changes": []})),
+    ("POST", "link") if state.refuses_links => ("403 Forbidden", error("forbidden")),
+    ("POST", "link") => ("200 OK", json!({"tasks": [], "dropped_links": [], "cursor": 0})),
     _ => ("404 Not Found", error("not_found")),
   }
 }

@@ -2,7 +2,7 @@
 //! `main` opens it) on the data beside this program. Nobody is signed in, as on a first run, with a stand-in Orchester
 //! Cloud on loopback set as the cloud (Advanced), so a person can sign in; `--signed-in` signs in to it as a person
 //! would. The device token stays in a keychain in memory: nothing reaches the OS keychain and no QA copy talks to the
-//! real cloud. `--settings` (with `--signed-in`) also sets up the kept invites and installed app's MCP rows app
+//! real cloud. `--settings`, once signed in, also sets up the kept invites and installed app's MCP rows app
 //! Settings shows ([`settings`]). `--join-team` starts a stand-in team server on loopback that the stand-in cloud names
 //! as the account's, with an invite to one of its projects, and prints its address and codes, for *Join a team*. A
 //! scenario that needs the account says so beside the data ([`qa_app_asks`]), whatever the arguments say.

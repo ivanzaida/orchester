@@ -188,15 +188,16 @@ impl Servers {
     })
   }
 
-  /// Adds the git checkout in `folder` as a local project, or opens the one it keeps: a new one is named after the
-  /// folder. Nothing in the folder changes but Orchester's own data.
-  pub async fn add_checkout(&self, folder: PathBuf) -> Result<OpenProject, CheckoutRefusal> {
+  /// Adds the git checkout in `folder` as a local project for a first link to `server`, or opens the one it keeps: a
+  /// new one is named after the folder and has the server's owner. Nothing in the folder changes but Orchester's own
+  /// data.
+  pub async fn add_checkout(&self, folder: PathBuf, server: ServerId) -> Result<OpenProject, CheckoutRefusal> {
     let workspace = self.inner.workspace.clone();
     background::run(move || {
       if !folder.join(".git").exists() {
         return Err(CheckoutRefusal::NotGit);
       }
-      Ok(open_or_add(&workspace, folder)?)
+      Ok(add_for_link(&workspace, folder, server)?)
     })
     .await?
   }
@@ -268,6 +269,19 @@ pub(super) fn open_or_add(workspace: &Workspace, folder: PathBuf) -> Result<Open
     }
     opened => opened,
   }
+}
+/// [`open_or_add`] for a first link to `server`: a project added for it now has the server's owner. Blocking.
+pub(super) fn add_for_link(
+  workspace: &Workspace,
+  folder: PathBuf,
+  server: ServerId,
+) -> Result<OpenProject, StoreError> {
+  let known = folder.join(".orchester").exists();
+  let open = open_or_add(workspace, folder)?;
+  if !known {
+    workspace.give_new_project_to_server_owner(open.project.id(), server)?;
+  }
+  Ok(open)
 }
 
 /// The name a folder's new project takes: the folder's own, else a word anyone recognises.

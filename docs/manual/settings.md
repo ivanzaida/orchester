@@ -104,11 +104,23 @@ Every row is off until a person turns it on (except as noted), and only a person
 
 ### 1.5 Orchester Cloud
 
-One column:
+One column. Nothing needs a sign-in except what uses the cloud or an account's team server.
+
+While nobody is signed in:
+
+- The **sign-in** card in the account card's place: *Not signed in*, what signing in is for, email and password, *Forgot
+  your password?*, **Sign in**, *Create an account*. An account with two-factor authentication goes on to its code in
+  the same card. After a sign-in ended, the card says *Sign in again* and why it ended, with your email filled in.
+- **Invites** say a sign-in is needed to see them.
+- **Team servers**, **Connect a server** and **Advanced** as below. A server joined with a code stays here, and is this
+  computer's.
+
+While an account is signed in:
 
 - The **account** card: name, *Two-factor on* / *Two-factor: off* with **Turn on…** (opens the cloud's security page),
-  email and host, **Sign out** ("Sign out of Orchester Cloud on this computer?" → *Sign out and lock* / *Stay signed
-  in*). A warning appears when few recovery codes are left.
+  email and host, **Sign out** ("Sign out of Orchester Cloud on this computer?" → *Sign out* / *Stay signed in*). Projects
+  on this computer keep working; the account's projects wait until you sign in again, and their runs keep going. A
+  warning appears when few recovery codes are left.
 - **This computer**: device, signed in since, *Other devices* (not in this app yet).
 - **Invites**: waiting invites to projects and servers — **Accept** (connects this computer; needs two-factor and a
   sign-in with a code) or **Decline** (asked in place).
@@ -117,7 +129,8 @@ One column:
   other computers* (*Add a computer* — a pairing code), *Open server admin* / *Sign in to the admin*. A changed
   certificate must be checked (*It matches · trust it* / *It doesn't match · sign out*).
 - **Connect a server** (a page): *Address* → *Compare the check code* (self-signed servers; *It matches* is
-  person-only) → *Join* (with your Orchester account or an 8-character invite code) → *Your username there*.
+  person-only) → *Join* (with your Orchester account, whose **Sign in** opens in place while nobody is signed in, or an
+  8-character invite code, which needs no sign-in) → *Your username there*.
 - **Advanced** › *Cloud address* (*Change*): the *Orchester Cloud address* (default `https://orchester.cloud`) and an
   *API address* (default `https://api.orchester.cloud`; empty = `/api/v1` on the cloud address), *Use this address* /
   *Back to the default*. Changing it signs you out of the cloud; team servers keep working.

@@ -75,11 +75,13 @@ impl PartialEq for Resolved {
 
 impl DevtoolsInspectable for Resolved {}
 
-/// A review with the server it is on and how the checkout's `origin` compares with the project's hint.
+/// A review with the server it is on, how the checkout's `origin` compares with the project's hint, and whether joining
+/// moves the project into the account.
 pub(super) struct Reviewed {
   pub entry: ServerEntry,
   pub review: JoinReview,
   pub remote: RemoteMatch,
+  pub moves_to_account: bool,
 }
 
 /// The join of the project `target` names, for `project`.
@@ -258,6 +260,7 @@ async fn resolve(servers: &Servers, programs: &Programs, root: PathBuf, target: 
       entry,
       review,
       remote: link.remote,
+      moves_to_account: plan.moves_to_account,
     })));
   }
   let remote = match &link.remote {

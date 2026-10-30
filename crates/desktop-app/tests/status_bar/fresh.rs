@@ -123,7 +123,7 @@ fn status_plan_limits_follow_the_accounts_and_the_connections() {
 }
 
 #[test]
-fn status_accounts_changed_before_the_window_opened_are_read_once() {
+fn status_accounts_changed_before_the_window_opened_are_read_once_by_each_reader() {
   let reads = Reads::count();
   let data = Data::new();
   let launch = data.launch();

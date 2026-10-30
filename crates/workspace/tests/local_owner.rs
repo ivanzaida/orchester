@@ -1,7 +1,8 @@
 //! Local use without an Orchester Cloud account (the person's decisions, 2026-10-28 and 2026-10-30): a project added
 //! while nobody is signed in is this computer's and no sign-in claims it; an account's waits while it is signed out;
 //! another account sees this computer's and its own, never the first account's; a person moves an unshared project
-//! between the two; and a project and its server always have the same owner.
+//! between the two; and a project and its server always have the same owner, which a real first link, against the
+//! stand-in team server, makes so only once the server accepted it.
 //!
 //! `cargo test -p orchester-workspace --test local_owner local_owner_`
 
@@ -10,17 +11,28 @@
 mod support;
 
 use orchester_api::{
-  Credential,
+  Credential, SharedProject,
   client::{CloudAddress, PlainHttp, ServerAddress},
-  test_support::account_cloud::{AccountCloud, EMAIL, OTHER_EMAIL, PASSWORD},
+  test_support::{
+    account_cloud::{AccountCloud, EMAIL, OTHER_EMAIL, PASSWORD},
+    team_server::{CODE, TeamServer, USERNAME},
+  },
 };
-use orchester_core::id::{ProjectId, ServerId};
+use orchester_core::id::{IdempotencyKey, ProjectId, ServerId};
 use orchester_store::{RegisteredProject, StoreError};
 use orchester_workspace::{
-  sharing::SharingError,
-  workspace::{MoveError, MoveTo},
+  sharing::{
+    CodeRequest, ServerEntry, SharingError, Trust,
+    project::{JoinFailed, JoinReview, Joined, LinkFirst, ShareError, Shared, first_link::LinkPlan},
+    team_join::JoinOutcome,
+  },
+  workspace::{MoveError, MoveTo, OpenProject},
 };
 use support::Desk;
+use tempfile::TempDir;
+
+/// The address of the stand-in team server's project.
+const SLUG: &str = "team";
 
 fn use_cloud(desk: &Desk, cloud: &AccountCloud) {
   let address = ServerAddress::parse(&cloud.url()).expect("the stand-in cloud's address");
@@ -70,6 +82,83 @@ fn add_server(desk: &Desk, host: &str) -> ServerId {
   desk
     .run(desk.servers.add(&address, host.to_owned(), PlainHttp::NotAllowed))
     .expect("the server is in the list")
+}
+
+/// The stand-in team server, with the project at [`SLUG`] the person is a member of.
+fn team_server() -> TeamServer {
+  let team = TeamServer::start();
+  team.share(&[("Team project", SLUG, None)]);
+  team
+}
+
+/// Joins `team` with its code from `desk`: the account's while one is signed in, this computer's otherwise.
+fn join(desk: &Desk, team: &TeamServer) -> ServerEntry {
+  let address = ServerAddress::parse(&team.url()).expect("the team server's address");
+  let request = CodeRequest {
+    code: Credential::new(CODE.to_owned()),
+    username: Some(USERNAME.to_owned()),
+    display_name: None,
+    proof: None,
+  };
+  let outcome = desk
+    .run(
+      desk
+        .join
+        .join_by_code(&address, Trust::System(PlainHttp::NotAllowed), request),
+    )
+    .expect("the code joins");
+  let JoinOutcome::Joined(joined) = outcome else {
+    panic!("not joined: {outcome:?}");
+  };
+  desk
+    .entries()
+    .into_iter()
+    .find(|entry| entry.stored.id == joined.id)
+    .expect("the server is in the list")
+}
+
+fn project_on(desk: &Desk, entry: &ServerEntry) -> SharedProject {
+  desk
+    .run(desk.servers.find_project(entry, SLUG))
+    .expect("the project there")
+}
+
+fn plan(desk: &Desk, entry: &ServerEntry, local: &OpenProject) -> LinkPlan {
+  let project = project_on(desk, entry);
+  desk
+    .run(desk.servers.link_plan(entry, &local.repo_root, project))
+    .expect("what linking would do")
+}
+
+/// Links `local` to the project at [`SLUG`] as its first checkout.
+fn link_first(desk: &Desk, entry: &ServerEntry, local: &OpenProject) -> Result<Shared, ShareError> {
+  desk.run(desk.servers.link_first(
+    entry,
+    &local.repo_root,
+    LinkFirst {
+      slug: SLUG.to_owned(),
+      remote: None,
+      key: IdempotencyKey::generate(),
+      write_discovery: false,
+    },
+  ))
+}
+
+fn review(desk: &Desk, entry: &ServerEntry, local: &OpenProject) -> JoinReview {
+  desk
+    .run(desk.servers.join_review_at(entry, &local.repo_root, SLUG))
+    .expect("what joining would do")
+}
+
+/// Joins `local` to the project at [`SLUG`], uploading nothing.
+fn join_project(desk: &Desk, entry: &ServerEntry, local: &OpenProject) -> Result<Joined, JoinFailed> {
+  let review = review(desk, entry, local);
+  desk.run(desk.servers.join(
+    entry,
+    &local.repo_root,
+    &review,
+    (Vec::new(), IdempotencyKey::generate()),
+  ))
 }
 
 #[test]
@@ -192,51 +281,188 @@ fn local_owner_moves_are_refused_while_shared_and_without_a_folder() {
 }
 
 #[test]
-fn local_owner_a_project_goes_with_its_server() {
+fn local_owner_a_first_link_to_a_server_of_the_account_moves_the_project() {
   let cloud = AccountCloud::start();
   let desk = Desk::new();
   use_cloud(&desk, &cloud);
-  let computers = add_server(&desk, "code.kontur.lan");
   let notes = desk.project("notes", "Notes");
-  desk
-    .workspace
-    .follow_server(notes.project.id(), computers)
-    .expect("this computer's project on this computer's server");
-  assert_eq!(
-    registered(&desk, "Notes").owner,
-    None,
-    "joined with a code: it stays this computer's"
-  );
-
   sign_in(&desk, EMAIL);
   let account = desk.cloud.sign_in_state().account();
-  let accounts = add_server(&desk, "orchester.kontur.lan");
+  let team = team_server();
+  let entry = join(&desk, &team);
   assert_eq!(
     desk.workspace.servers_moving_project(notes.project.id()).expect("read"),
-    [accounts],
-    "the share page says so before it moves"
+    [entry.stored.id],
+    "what confirms the link says so before it moves"
   );
-  desk
-    .workspace
-    .follow_server(notes.project.id(), accounts)
-    .expect("into the account");
+  assert!(plan(&desk, &entry, &notes).moves_to_account);
+
+  link_first(&desk, &entry, &notes).expect("linked");
   assert_eq!(
     registered(&desk, "Notes").owner,
     account,
     "shared to the account's server, it moves"
   );
-  assert!(
-    desk
-      .workspace
-      .servers_moving_project(notes.project.id())
-      .expect("read")
-      .is_empty(),
-    "it has moved"
+  sign_out(&desk);
+  assert!(shown(&desk).is_empty(), "and waits with the account");
+}
+
+#[test]
+fn local_owner_a_join_of_a_server_of_the_account_moves_the_project() {
+  let cloud = AccountCloud::start();
+  let desk = Desk::new();
+  use_cloud(&desk, &cloud);
+  let notes = desk.project("notes", "Notes");
+  sign_in(&desk, EMAIL);
+  let account = desk.cloud.sign_in_state().account();
+  let team = team_server();
+  let entry = join(&desk, &team);
+
+  join_project(&desk, &entry, &notes).expect("joined");
+  assert_eq!(registered(&desk, "Notes").owner, account, "joined, it moves too");
+}
+
+#[test]
+fn local_owner_a_first_link_to_a_server_of_this_computer_keeps_the_project_here() {
+  let desk = Desk::new();
+  let team = team_server();
+  let entry = join(&desk, &team);
+  let (notes, ledger) = (desk.project("notes", "Notes"), desk.project("ledger", "Ledger"));
+  assert!(!plan(&desk, &entry, &notes).moves_to_account, "nothing says it moves");
+
+  link_first(&desk, &entry, &notes).expect("linked with a code's server");
+  join_project(&desk, &entry, &ledger).expect("joined with a code's server");
+  assert_eq!(registered(&desk, "Notes").owner, None, "it stays this computer's");
+  assert_eq!(registered(&desk, "Ledger").owner, None);
+  assert_eq!(shown(&desk), ["Ledger", "Notes"], "and shows with nobody signed in");
+}
+
+#[test]
+fn local_owner_a_first_link_that_fails_moves_nothing() {
+  let cloud = AccountCloud::start();
+  let desk = Desk::new();
+  use_cloud(&desk, &cloud);
+  let notes = desk.project("notes", "Notes");
+  sign_in(&desk, EMAIL);
+  let team = team_server();
+  let entry = join(&desk, &team);
+
+  team.refuse_links();
+  let refused = link_first(&desk, &entry, &notes);
+  assert!(refused.is_err(), "{:?}", refused.map(|shared| shared.link));
+  assert_eq!(
+    registered(&desk, "Notes").owner,
+    None,
+    "a refused link leaves it this computer's"
   );
 
-  let refused = desk.workspace.follow_server(notes.project.id(), computers);
+  let review = review(&desk, &entry, &notes);
+  team.set_down(true);
+  let failed = desk
+    .run(desk.servers.join(
+      &entry,
+      &notes.repo_root,
+      &review,
+      (Vec::new(), IdempotencyKey::generate()),
+    ))
+    .expect_err("the server is down");
+  assert_eq!(failed.uploaded, Some(false), "and said that nothing went up");
+  assert_eq!(
+    registered(&desk, "Notes").owner,
+    None,
+    "a join that did not reach the server too"
+  );
+  sign_out(&desk);
+  assert_eq!(shown(&desk), ["Notes"], "so it still shows after a sign-out");
+}
+
+#[test]
+fn local_owner_a_link_that_is_not_written_gives_the_project_back() {
+  let cloud = AccountCloud::start();
+  let desk = Desk::signed_in(&cloud);
+  let account = desk.cloud.sign_in_state().account();
+  let server = add_server(&desk, "orchester.kontur.lan");
+  sign_out(&desk);
+  let notes = desk.project("notes", "Notes");
+  sign_in(&desk, EMAIL);
+
+  let during = desk.workspace.link_with_owner(notes.project.id(), server, || {
+    assert_eq!(
+      registered(&desk, "Notes").owner,
+      account,
+      "the owner meets the server's before the link exists"
+    );
+    Err::<(), _>(SharingError::NoProject)
+  });
+  assert!(matches!(during, Err(SharingError::NoProject)), "{during:?}");
+  assert_eq!(registered(&desk, "Notes").owner, None, "given back");
+
+  desk
+    .workspace
+    .link_with_owner(notes.project.id(), server, || Ok(()))
+    .expect("written");
+  assert_eq!(registered(&desk, "Notes").owner, account, "and kept once written");
+}
+
+#[test]
+fn local_owner_a_project_of_the_account_is_refused_a_server_of_this_computer() {
+  let cloud = AccountCloud::start();
+  let desk = Desk::new();
+  use_cloud(&desk, &cloud);
+  let team = team_server();
+  let entry = join(&desk, &team);
+  sign_in(&desk, EMAIL);
+  let account = desk.cloud.sign_in_state().account();
+  let notes = desk.project("notes", "Notes");
+
+  let refused = link_first(&desk, &entry, &notes);
+  assert!(
+    matches!(refused, Err(ShareError::Sharing(SharingError::AccountProject))),
+    "{:?}",
+    refused.map(|shared| shared.link)
+  );
+  let refused = desk.run(desk.servers.join_review_at(&entry, &notes.repo_root, SLUG));
   assert!(matches!(refused, Err(SharingError::AccountProject)), "{refused:?}");
   assert_eq!(registered(&desk, "Notes").owner, account, "nothing moved");
+}
+
+#[test]
+fn local_owner_a_checkout_added_for_a_link_has_the_owner_of_its_server() {
+  let cloud = AccountCloud::start();
+  let desk = Desk::new();
+  use_cloud(&desk, &cloud);
+  let team = team_server();
+  let computers = join(&desk, &team);
+  sign_in(&desk, EMAIL);
+  let account = desk.cloud.sign_in_state().account();
+  let accounts = add_server(&desk, "orchester.kontur.lan");
+  let folders = TempDir::new().expect("the checkouts' folder");
+  let checkout = |name: &str| {
+    let root = folders.path().join(name);
+    std::fs::create_dir_all(root.join(".git")).expect("a checkout");
+    root
+  };
+
+  let open = desk
+    .run(desk.servers.add_checkout(checkout("site"), computers.stored.id))
+    .expect("added");
+  assert_eq!(
+    registered(&desk, open.project.name().as_str()).owner,
+    None,
+    "for a server of this computer's, it is this computer's and may link to it"
+  );
+  desk
+    .run(desk.servers.join_review_at(&computers, &open.repo_root, SLUG))
+    .expect("not refused");
+
+  let open = desk
+    .run(desk.servers.add_checkout(checkout("docs"), accounts))
+    .expect("added");
+  assert_eq!(
+    registered(&desk, open.project.name().as_str()).owner,
+    account,
+    "for a server of the account's, it is the account's"
+  );
 }
 
 #[test]

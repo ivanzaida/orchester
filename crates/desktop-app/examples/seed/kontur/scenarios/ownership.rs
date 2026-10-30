@@ -9,8 +9,8 @@
 //!   `xx4ST`; `Ib9ca` on Ledger's Sharing; `xQQbr`).
 //! - `ownership-ended`: `ownership` after the cloud ended the sign-in from another device (`qxq4t`, `CBmxe`).
 //! - `ownership-nothing-here`: only the account's two projects (`MvIpm`).
-//! - `invite-signed-out`: the catalogue, nobody signed in, and the server [`INVITE_SERVER`] in the account's list, which
-//!   the invite landing names while it asks for the sign-in (`zoihT`).
+//! - `invite-signed-out`: the catalogue, nobody signed in, and the server [`INVITE_SERVER`] in the account's list,
+//!   which the invite landing names while it asks for the sign-in (`zoihT`).
 
 use std::{collections::HashMap, fs, path::PathBuf};
 

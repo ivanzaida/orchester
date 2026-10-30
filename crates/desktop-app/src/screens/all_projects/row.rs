@@ -7,10 +7,12 @@
 
 use lurq::{
   app::{
+    component::{Component, DevtoolsInspectable},
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text, TextOverflow},
+  core::Signal,
   layout::{Alignment, layout_kind::Justify},
   node::{Element, Style, border::Border, dimension::Dimension, padding::Padding},
 };
@@ -21,7 +23,7 @@ use orchester_workspace::{
 };
 
 use super::{
-  Ask, Hovered,
+  Ask,
   move_project::{self, Offer},
   remove,
 };
@@ -79,20 +81,72 @@ pub(super) fn headings(ctx: &Ctx) -> Row {
     .child(Row::new().width(Dimension::Px(ACTIONS_WIDTH)))
 }
 
-/// The row of `listed` and where it is (`None` while that is not read, or cannot be), with its removal or move question
-/// when it is asked; `last` draws no line under it. Under the pointer, with an account signed in, it offers what moving
-/// it can do (`LinZt`, `xx4ST`).
-pub(super) fn row(
+/// What a row shows: the project, where it is (`None` while that is not read, or cannot be), whether an account is
+/// signed in, what the screen asks, and whether it is the last, which draws no line under it.
+#[derive(Clone)]
+pub(super) struct RowProps {
+  pub listed: ListedProject,
+  pub place: Option<Place>,
+  pub signed_in: bool,
+  pub ask: Ask,
+  pub last: bool,
+}
+
+impl PartialEq for RowProps {
+  fn eq(&self, other: &Self) -> bool {
+    self.listed == other.listed
+      && self.place == other.place
+      && self.signed_in == other.signed_in
+      && self.last == other.last
+  }
+}
+
+impl DevtoolsInspectable for RowProps {}
+
+/// The row of a project, with its removal or move question when it is asked. Under the pointer, with an account signed
+/// in, it offers what moving it can do (`LinZt`, `xx4ST`): a component of its own, so the pointer moving over the list
+/// renders only the rows it enters and leaves.
+pub(super) struct ProjectRow {
+  under_pointer: Signal<bool>,
+}
+
+impl Component for ProjectRow {
+  type Props = RowProps;
+
+  fn create(ctx: &mut Ctx) -> Self {
+    Self {
+      under_pointer: ctx.signal(false),
+    }
+  }
+
+  fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
+    let RowProps {
+      listed,
+      place,
+      signed_in,
+      ask,
+      last,
+    } = ctx.props::<RowProps>().clone();
+    row(
+      ctx,
+      (&listed, place.as_ref(), signed_in),
+      (&ask, &self.under_pointer),
+      last,
+    )
+  }
+}
+
+fn row(
   ctx: &mut Ctx,
   (listed, place, signed_in): (&ListedProject, Option<&Place>, bool),
-  ask: &Ask,
+  (ask, under_pointer): (&Ask, &Signal<bool>),
   last: bool,
 ) -> Element {
   let id = listed.project.id;
   let asking = ask.removing.get().0 == Some(id);
   let moving = ask.moving.get().0.filter(|(project, _)| *project == id);
   let offer = move_project::offer(signed_in, listed, place);
-  let hovered = ask.hovered.get().0 == Some(id) && !asking && moving.is_none();
+  let hovered = under_pointer.get() && !asking && moving.is_none();
   let now = Services::of(ctx).clock.now();
   let opened = message_text(ctx, &display::elapsed(now, listed.project.last_opened_at));
   let cells = Row::new()
@@ -124,14 +178,14 @@ pub(super) fn row(
   } else {
     cells.into()
   };
-  let (enter, leave) = (ask.hovered.clone(), ask.hovered.clone());
+  let (enter, leave) = (under_pointer.clone(), under_pointer.clone());
   let mut block = Column::new()
     .id(format!("project-row-{id}"))
     .describe("project", listed.project.name.to_string())
     .describe("opens", if listed.opens() { "yes" } else { "no" })
     .width(Dimension::Pct(100.0))
-    .on_mouse_enter(move || enter.set(Hovered(Some(id))))
-    .on_mouse_leave(move || leave.update(|hovered| hovered.0 = hovered.0.filter(|shown| *shown != id)))
+    .on_mouse_enter(move || enter.set(true))
+    .on_mouse_leave(move || leave.set(false))
     .child(cells)
     .with_children((hovered && offer == Offer::Shared).then(|| move_project::shared_note(ctx, id)));
   if asking {

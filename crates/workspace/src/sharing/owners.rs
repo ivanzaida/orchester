@@ -3,8 +3,9 @@
 //! ([`SharingError::ServerMissing`]), whatever asks for it: a screen, a domain tool or the Orchestrator chat. The
 //! background work that keeps every server's connection and every shared project in step goes on for each owner's
 //! servers while another is signed in, and shows the signed-in account nothing of it: each shared project syncs through
-//! its own owner's server only. So a project and its server always have the same owner: a first link makes it so
-//! ([`Servers::keep_with_server`]), and a shared project does not move ([`Servers::move_project`]).
+//! its own owner's server only. So a project and its server always have the same owner: a first link makes it so once
+//! the server accepted it ([`crate::workspace::Workspace::link_with_owner`]), and a shared project does not move
+//! ([`Servers::move_project`]).
 
 use std::path::Path;
 
@@ -55,15 +56,13 @@ impl Servers {
       .unwrap_or(Err(MoveError::Shared))
   }
 
-  /// Makes the project at `repo_root`, about to be linked to `entry`, have the server's owner: a project of this
-  /// computer's moves into the account whose server it is, as the share page says. An account's project stays where it
-  /// is and is refused a server of this computer's ([`SharingError::AccountProject`]): the person moves it, and only
-  /// they know it should show to everyone on this computer.
-  pub(super) async fn keep_with_server(&self, entry: &ServerEntry, repo_root: &Path) -> Result<(), SharingError> {
+  /// Refuses, before anything is sent, linking the project at `repo_root` to `entry` when their owners cannot meet
+  /// ([`crate::workspace::Workspace::check_link_owner`]).
+  pub(super) async fn check_link_owner(&self, entry: &ServerEntry, repo_root: &Path) -> Result<(), SharingError> {
     let (workspace, root, server) = (self.inner.workspace.clone(), repo_root.to_owned(), entry.stored.id);
     background::run(move || -> Result<(), SharingError> {
       let project = ProjectDb::open(&root)?.project().id();
-      workspace.follow_server(project, server)
+      workspace.check_link_owner(project, server)
     })
     .await?
   }

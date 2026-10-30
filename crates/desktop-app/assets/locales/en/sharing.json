@@ -60,7 +60,8 @@
         "account": "With my Orchester account",
         "accountBody": "You're signed in as {{email}}. For an invite by email, or a server you're already on.",
         "accountSignedOut": "For an invite by email, or a server you're already on.",
-        "accountUnavailable": "Sign in to Orchester Cloud first, in Settings › Orchester.",
+        "accountUnavailable": "Sign in to Orchester Cloud first.",
+        "signIn": "Sign in",
         "code": "With an invite code",
         "codeBody": "8 characters from whoever invited you. Works without the internet.",
         "submit": "Join {{server}}"

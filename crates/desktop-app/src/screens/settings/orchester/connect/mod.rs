@@ -34,6 +34,7 @@ use super::{
 };
 use crate::{
   navigation::Navigation,
+  root::follow_sign_in,
   routes::{ConnectStep, OrchesterView, Route},
   screens::settings::frame,
   services::Services,
@@ -162,6 +163,10 @@ impl Component for ConnectPage {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
+    // First in every render: lurq keeps a component's futures by the order it asks for them. A sign-in made in place
+    // renders the page again, which then offers the Orchester account's way.
+    let cloud = Services::of(ctx).cloud;
+    follow_sign_in(ctx, &cloud);
     let entries = entries(ctx);
     self.seed(ctx, entries.as_deref());
     let steps = steps::steps(ctx, self, entries.as_deref().unwrap_or_default());

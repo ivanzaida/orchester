@@ -188,9 +188,7 @@ impl Component for SessionWindow {
     ctx.provide(self.needs_you.clone());
     ctx.provide(self.notifications.clone());
     let sign_in = follow_sign_in(ctx, &services.cloud);
-    self
-      .account_tabs
-      .follow(sign_in.account(), &self.navigation, &self.projects);
+    self.account_tabs.follow(&sign_in, &self.navigation, &self.projects);
     let phase = lifecycle::phase(ctx, &services.close);
     let closing = phase.holds_window();
     let projects = ctx.mount_keyed::<ProjectsHost>("projects", ());

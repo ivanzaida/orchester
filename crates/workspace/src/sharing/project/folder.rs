@@ -18,7 +18,7 @@ use orchester_store::{ProjectDb, StoreError};
 use super::{
   IdentityProblem, JoinReview, ShareError,
   first_link::{LinkKind, LinkRequest},
-  landing::{Linked, linked_to, open_or_add},
+  landing::{Linked, add_for_link, linked_to, open_or_add},
   repository_identity,
 };
 use crate::{
@@ -212,15 +212,7 @@ impl Servers {
   /// [`Self::open_folder`] for a first link to `server`: a project added for it now has the server's owner.
   async fn add_for_link(&self, folder: &Path, server: ServerId) -> Result<(), SharingError> {
     let (workspace, root) = (self.inner.workspace.clone(), folder.to_owned());
-    background::run(move || -> Result<(), StoreError> {
-      let known = root.join(".orchester").exists();
-      let open = open_or_add(&workspace, root)?;
-      if !known {
-        workspace.give_new_project_to_server_owner(open.project.id(), server)?;
-      }
-      Ok(())
-    })
-    .await??;
+    background::run(move || add_for_link(&workspace, root, server)).await??;
     Ok(())
   }
 }

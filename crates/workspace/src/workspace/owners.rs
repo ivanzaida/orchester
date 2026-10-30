@@ -4,7 +4,7 @@
 //! project's folder or its data changes, only whose it is.
 
 use orchester_core::id::{CloudAccountId, ProjectId, ServerId};
-use orchester_store::{ProjectDb, RegisteredProject, StoreError};
+use orchester_store::{AppDb, ProjectDb, RegisteredProject, StoreError};
 
 use super::{Workspace, owner};
 use crate::sharing::SharingError;
@@ -37,6 +37,25 @@ pub enum MoveError {
 /// Whether `named` names `project`, as a tool names a project: by its id, or by its name ignoring case.
 fn named_by(project: &RegisteredProject, named: &str) -> bool {
   project.id.to_string() == named || project.name.as_str().to_lowercase() == named.to_lowercase()
+}
+
+/// The account a first link of `project` to `server` moves it into: a project of this computer's goes into the account
+/// whose server it is. An account's is refused a server of this computer's ([`SharingError::AccountProject`]): the
+/// person moves it, and only they know it should show to everyone on this computer. One not known yet has no row to
+/// change.
+fn moved_by_link(db: &AppDb, project: ProjectId, server: ServerId) -> Result<Option<CloudAccountId>, SharingError> {
+  let Some(server_owner) = db.server_owner(server)? else {
+    return Err(SharingError::ServerMissing);
+  };
+  let Some(project_owner) = db.project_owner(project)? else {
+    return Ok(None);
+  };
+  match (project_owner, server_owner) {
+    (None, Some(account)) => Ok(Some(account)),
+    (Some(_), None) => Err(SharingError::AccountProject),
+    (Some(held), Some(account)) if held != account => Err(StoreError::ProjectOfAnotherAccount(project).into()),
+    _ => Ok(None),
+  }
 }
 
 impl Workspace {
@@ -109,26 +128,35 @@ impl Workspace {
     Ok(self.waiting_projects()?.iter().any(|project| named_by(project, named)))
   }
 
-  /// Makes `project`, about to be linked to `server`, have the server's owner, as every first link does: a project of
-  /// this computer's moves into the account whose server it is; an account's is refused a server of this computer's
-  /// ([`SharingError::AccountProject`]); one that is not known yet has no row to change.
-  pub fn follow_server(&self, project: ProjectId, server: ServerId) -> Result<(), SharingError> {
-    let mut db = self.db.lock();
-    let Some(server_owner) = db.server_owner(server)? else {
-      return Err(SharingError::ServerMissing);
-    };
-    let Some(project_owner) = db.project_owner(project)? else {
-      return Ok(());
-    };
-    match (project_owner, server_owner) {
-      (None, Some(account)) => {
-        db.set_project_owner(project, Some(&account), &account)?;
-        Ok(())
+  /// Refuses a first link of `project` to `server` before anything is sent, when their owners cannot meet.
+  pub fn check_link_owner(&self, project: ProjectId, server: ServerId) -> Result<(), SharingError> {
+    moved_by_link(&self.db.lock(), project, server).map(drop)
+  }
+
+  /// Writes a first link of `project` to `server` with `write`, once the server accepted it, the project taking the
+  /// server's owner first so the two never differ while the link exists. A link that is not written leaves the project
+  /// whose it was: a local project moves into an account only when it is shared there.
+  pub fn link_with_owner<T>(
+    &self,
+    project: ProjectId,
+    server: ServerId,
+    write: impl FnOnce() -> Result<T, SharingError>,
+  ) -> Result<T, SharingError> {
+    let moved = {
+      let mut db = self.db.lock();
+      let moved = moved_by_link(&db, project, server)?;
+      if let Some(account) = &moved {
+        db.set_project_owner(project, Some(account), account)?;
       }
-      (Some(_), None) => Err(SharingError::AccountProject),
-      (Some(held), Some(account)) if held != account => Err(StoreError::ProjectOfAnotherAccount(project).into()),
-      _ => Ok(()),
-    }
+      moved
+    };
+    write().inspect_err(|_| {
+      if let Some(account) = &moved
+        && let Err(error) = self.db.lock().set_project_owner(project, None, account)
+      {
+        tracing::error!(%error, %project, "a project stays in the account after a link that was not written");
+      }
+    })
   }
 
   /// Gives a project just added for a first link to `server` the server's owner: it holds nothing yet that anyone else

@@ -38,7 +38,7 @@ use orchester_workspace::sharing::{
   },
 };
 
-pub(super) use self::parts::{join_sends, sends};
+pub(super) use self::parts::{join_sends, moves_to_account, sends};
 use super::{
   Facts,
   make_local::Made,

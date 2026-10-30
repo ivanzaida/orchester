@@ -122,13 +122,14 @@ impl Component for LandingPage {
   fn create(ctx: &mut Ctx) -> Self {
     let picker = PathPicker::of(ctx);
     let servers = Services::of(ctx).servers;
+    let server = ctx.props::<Props>().target.server;
     let add = ctx.future_action(move |title: Arc<str>| {
       let (picker, servers) = (picker.clone(), servers.clone());
       async move {
         let Some(folder) = picker.pick(PathKind::Folder, title).await else {
           return Ok(Added::Closed);
         };
-        Ok(match servers.add_checkout(folder.clone()).await {
+        Ok(match servers.add_checkout(folder.clone(), server).await {
           Ok(open) => Added::Project(open.project.id()),
           Err(CheckoutRefusal::NotGit) => Added::NotGit(folder),
           Err(error) => {
@@ -394,6 +395,7 @@ fn known_server(ctx: &mut Ctx, server: orchester_core::id::ServerId) -> Option<S
     .future((server, workspace), |(server, workspace)| async move {
       background::run(move || workspace.server_named(server))
         .await
+        // Work that did not finish was logged where it ended; the page then names no server, which it can do without.
         .map_err(drop)?
         .map(KnownServer)
         .map_err(|error| tracing::warn!(%error, "the invite's server could not be read"))

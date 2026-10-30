@@ -29,7 +29,7 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc};
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
-    ctx::{Ctx, StreamEmitter},
+    ctx::{Ctx, FutureState, StreamEmitter},
   },
   core::Signal,
   node::Element,
@@ -39,8 +39,9 @@ use orchester_workspace::{
   background, messages,
   project_list::{self, Listing},
   runner::{RunnerStatus, Runners},
+  sharing::cloud::SignIn,
   usage::UsageQuery,
-  workspace::{ListedData, ProjectEntry},
+  workspace::{ListedData, ProjectEntry, Workspace},
 };
 use parking_lot::Mutex;
 
@@ -79,8 +80,6 @@ struct Ask {
   removing: Signal<Removing>,
   /// The project whose move is asked under its row.
   moving: Signal<Moving>,
-  /// The row under the pointer, which offers what moving its project can do.
-  hovered: Signal<Hovered>,
 }
 
 /// The project whose removal is asked, if any.
@@ -88,12 +87,6 @@ struct Ask {
 struct Removing(Option<ProjectId>);
 
 impl DevtoolsInspectable for Removing {}
-
-/// The project whose row is under the pointer, if any.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-struct Hovered(Option<ProjectId>);
-
-impl DevtoolsInspectable for Hovered {}
 
 struct AllProjects {
   ask: Ask,
@@ -120,7 +113,6 @@ impl Component for AllProjects {
         revision: ctx.signal(0),
         removing: ctx.signal(Removing::default()),
         moving: ctx.signal(Moving::default()),
-        hovered: ctx.signal(Hovered::default()),
       },
       followed: Mutex::new(false),
       read: Arc::default(),
@@ -136,17 +128,8 @@ impl Component for AllProjects {
     let services = Services::of(ctx);
     let sign_in = follow_sign_in(ctx, &services.cloud);
     let open = folder::open_action(ctx, &services);
-    let workspace = services.workspace.clone();
     let revision = self.ask.revision.get();
-    let listing = ctx
-      .future((workspace, revision, sign_in.account()), |(workspace, ..)| async move {
-        background::run(move || workspace.listing()).await?.map_err(|error| {
-          tracing::error!(%error, "cannot read the workspace's projects");
-          messages::store_error(&error)
-        })
-      })
-      .state()
-      .get();
+    let listing = read_listing(ctx, &services.workspace, revision, &sign_in);
     let waiting = waiting::read(ctx, revision, &sign_in, &services.workspace);
     let entries = match &listing.data {
       Some(Listing::Projects(entries)) => entries.clone(),
@@ -221,6 +204,27 @@ impl Component for AllProjects {
       (None, None) => lurq::components::Column::new().id(screen_id()).into(),
     }
   }
+}
+
+/// What the screen lists, read when it shows, after a removal or a move (`revision`) and whenever the sign-in changes.
+fn read_listing(
+  ctx: &mut Ctx,
+  workspace: &Workspace,
+  revision: u64,
+  sign_in: &SignIn,
+) -> FutureState<Listing, messages::Message> {
+  ctx
+    .future(
+      (workspace.clone(), revision, sign_in.account()),
+      |(workspace, ..)| async move {
+        background::run(move || workspace.listing()).await?.map_err(|error| {
+          tracing::error!(%error, "cannot read the workspace's projects");
+          messages::store_error(&error)
+        })
+      },
+    )
+    .state()
+    .get()
 }
 
 /// What each listed project's database says, read after the list is shown and again whenever its runner

@@ -4,7 +4,7 @@
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, SpacingSize},
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
   components::{Column, Row, Text},
   core::Signal,
@@ -132,6 +132,27 @@ pub(super) fn admin_note(ctx: &Ctx, entry: Option<&ServerEntry>) -> Element {
     },
   );
   page::icon_note("sharing-no-project-yet", Icon::ExternalLink, &words)
+}
+
+/// *Kontur moves into your account, so it shows only while you're signed in.* (`Ib9ca`): a first link moves `project`,
+/// this computer's, into the account whose server it is, as a project and its server have the same owner.
+pub fn moves_to_account(ctx: &Ctx, project: &str) -> Element {
+  Row::new()
+    .id("sharing-moves-to-account")
+    .width(Dimension::Pct(100.0))
+    .padding(Padding::symmetric(SpacingSize::Md, SpacingSize::Sm))
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .rounded(RadiusSize::Md)
+    .background(PaletteColor::InfoMuted)
+    .child(icon(Icon::UserRound, IconSize::Base, PaletteColor::TextSecondary))
+    .child(
+      Text::new(&ctx.t_args("sharing.share.movesToAccount", [("project", project)]))
+        .id("sharing-moves-to-account-text")
+        .variant(ExtraTypography::Prose.role())
+        .flex(1.0),
+    )
+    .into()
 }
 
 /// *What linking sends* (`What linking sends` in `bWD9q`).

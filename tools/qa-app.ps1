@@ -36,7 +36,8 @@
 # Archive's folder missing), quiet hours 22:30-07:00 and the daily report at 18:30, and stand-in claude and codex in
 # bin/settings-qa/ that answer as those accounts stand: the QA app runs with them first on its PATH (folders that
 # hold a real claude or codex are left out) and its home, CLAUDE_CONFIG_DIR, CODEX_HOME and ORCHESTER_ACCOUNTS_DIR
-# there, so no real CLI or sign-in is read. With -SignedIn, the QA app (--settings) keeps two invites here (one waiting for approval,
+# there, so no real CLI or sign-in is read. The scenario asks for the sign-in itself, with or without -SignedIn, and the
+# QA app (--settings) keeps two invites here (one waiting for approval,
 # one that didn't finish) and shows the installed app's MCP rows: that server listens on a free port with a token in
 # memory, while the window's own server stays the QA copy's for the verifier. Team servers answering on loopback are
 # the private platform repository's (ivanzaida/orchester-platform, crates/e2e, the n1_qa example), where the team

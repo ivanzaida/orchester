@@ -39,6 +39,8 @@ pub(super) fn read(ctx: &mut Ctx, revision: u64, sign_in: &SignIn, workspace: &W
     .future((revision, account, workspace.clone()), |(_, _, workspace)| async move {
       background::run(move || workspace.waiting_projects())
         .await
+        // Work that did not finish was logged where it ended; the list then says nothing of what waits, as the next
+        // read may.
         .map_err(drop)?
         .map(|projects| Waiting(projects.len()))
         .map_err(|error| tracing::warn!(%error, "cannot read which projects wait for a sign-in"))

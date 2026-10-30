@@ -290,6 +290,111 @@ fn sign_in_advanced_refuses_synthetic_input() {
   );
 }
 
+/// Brings `id` into the column's view and presses it.
+fn press_shown(window: &mut Window, id: &str) {
+  window
+    .tree
+    .get_element_by_id_mut(id)
+    .expect("laid out")
+    .scroll_into_view();
+  window.pass();
+  window.press(id);
+}
+
+/// Opens *Advanced* and uses the cloud's address `web` with the API address `api`.
+fn use_addresses(window: &mut Window, (web, api): (&str, &str)) {
+  shows(window, "orchester-advanced");
+  press_shown(window, "orchester-advanced");
+  shows(window, "orchester-advanced-api");
+  window.set("orchester-advanced-address", web);
+  window.set("orchester-advanced-api", api);
+  press_shown(window, "orchester-advanced-use");
+}
+
+#[test]
+fn sign_in_advanced_takes_an_api_address_or_none() {
+  let mut window = signed_out();
+  let services = window.launch.services().expect("services").clone();
+  window.press("orchester-advanced");
+  shows(&mut window, "orchester-advanced-api");
+  let build = services.cloud.address().expect("address").address;
+  assert_eq!(value(&mut window, "orchester-advanced-address"), build.web().as_str());
+  let build_api = build.api().map(|api| api.as_str().to_owned()).unwrap_or_default();
+  assert_eq!(
+    value(&mut window, "orchester-advanced-api"),
+    build_api,
+    "the build's API address"
+  );
+  press_shown(&mut window, "orchester-advanced");
+  gone(&mut window, "orchester-advanced-api");
+
+  let stand_in = window.data.cloud.url();
+  use_addresses(&mut window, (&stand_in, "ftp://api.test"));
+  shows(&mut window, "orchester-advanced-error");
+  assert!(
+    window
+      .text("orchester-advanced-error")
+      .contains("That isn't an API address.")
+  );
+  assert!(services.cloud.address().expect("address").default, "nothing changed");
+  press_shown(&mut window, "orchester-advanced");
+  gone(&mut window, "orchester-advanced-api");
+
+  // Without an API address, the API is at the old paths on the cloud's address.
+  use_addresses(&mut window, (&stand_in, ""));
+  gone(&mut window, "orchester-advanced-api");
+  let set = services.cloud.address().expect("address").address;
+  assert_eq!(set.api_base(), format!("{stand_in}/api/v1"));
+
+  use_addresses(&mut window, (&stand_in, &stand_in));
+  gone(&mut window, "orchester-advanced-api");
+  let set = services.cloud.address().expect("address").address;
+  assert_eq!(set.api_base(), format!("{stand_in}/v1"));
+  press_shown(&mut window, "sign-in-submit");
+  sign_in(&mut window, (EMAIL, PASSWORD));
+  shows(&mut window, ACCOUNT_CARD);
+  let account = services.cloud.account().expect("account").expect("signed in");
+  assert_eq!(account.cloud_api_address, Some(stand_in));
+}
+
+#[test]
+fn sign_in_enter_does_nothing_while_signing_in() {
+  let mut window = signed_out();
+  use_stand_in(&mut window);
+  window.data.cloud.slow_sign_in(Duration::from_secs(2));
+  focus_on(&mut window, "sign-in-email");
+  window.set("sign-in-email", EMAIL);
+  window.set("sign-in-password", PASSWORD);
+  enter(&mut window);
+  shows(&mut window, "sign-in-checking");
+  assert_eq!(
+    focused(&window).as_deref(),
+    Some("sign-in-email"),
+    "the faded field keeps the focus"
+  );
+  // Another Enter with a wrong password would replace the sign-in under way and be refused.
+  window.set("sign-in-password", "not the password");
+  enter(&mut window);
+  shows(&mut window, ACCOUNT_CARD);
+  assert!(!has(&mut window, "sign-in-wrong"));
+}
+
+#[test]
+fn sign_in_enter_does_nothing_while_paused() {
+  let mut window = signed_out();
+  use_stand_in(&mut window);
+  sign_in(&mut window, (PAUSED, "any password at all"));
+  shows(&mut window, "sign-in-paused");
+  window.press("sign-in-email");
+  focus_on(&mut window, "sign-in-email");
+  enter(&mut window);
+  assert!(
+    !has(&mut window, "sign-in-checking"),
+    "Enter waits until the pause is over"
+  );
+  assert!(has(&mut window, "sign-in-paused"));
+}
+
 #[test]
 fn sign_in_tab_goes_through_the_fields_in_order_and_enter_signs_in() {
   let mut window = signed_out();

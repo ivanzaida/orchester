@@ -26,7 +26,7 @@ use orchester_workspace::sharing::{
 use super::{PersonOnly, Said, words::cloud_error};
 use crate::{
   navigation::Navigation,
-  routes::{JoinTarget, OrchesterView, Route},
+  routes::{JoinTarget, Route},
   services::Services,
 };
 
@@ -146,13 +146,6 @@ impl Answers {
       }) = state.data.as_ref().filter(|_| state.is_fulfilled())
       {
         navigation.go(Route::Invite(target.clone()));
-      }
-    });
-    // *Sign in again* goes on to the sign-in, wherever it was pressed (`d1yW2I`).
-    let navigation = Navigation::of(ctx);
-    ctx.watch(&answers.sign_in_again.state(), move |state| {
-      if state.is_fulfilled() {
-        navigation.go(Route::Orchester(OrchesterView::default()));
       }
     });
     answers
