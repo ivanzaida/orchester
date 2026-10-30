@@ -66,7 +66,8 @@
       "choose": "Choose the {{program}} file…",
       "chooseTitle": "Choose the {{program}} file",
       "checkAgain": "Check again",
-      "lookedIn": "Looked in {{folders}}",
+      "lookedIn": "Looked in",
+      "folderInList": "{{folder}},",
       "noFolders": "There are no folders on PATH to look in."
     },
     "keepWorking": "To keep working",

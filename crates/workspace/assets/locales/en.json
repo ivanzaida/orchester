@@ -173,8 +173,7 @@
     },
     "start": {
       "connect": {
-        "title": "Connect an agent CLI",
-        "none": "No agent connection signed in yet"
+        "title": "Connect an agent CLI"
       },
       "profile": {
         "title": "Publish an agent profile",
@@ -2208,6 +2207,10 @@
       "recordsInvalid": "Enter a whole number of records from {{min}} to {{max}}.",
       "tokensInvalid": "Enter a whole number of tokens from {{min}} to {{max}}."
     }
+  },
+  "warmWorkspaces": {
+    "notRemoved": "The old worktree wasn't removed: its run is working, it has uncommitted changes, or Git refused.",
+    "notChanged": "The workspace wasn't changed. It may be in use, or the log has the details."
   },
   "mergeQueue": {
     "refused": {

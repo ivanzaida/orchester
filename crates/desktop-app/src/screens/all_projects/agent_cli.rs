@@ -16,7 +16,7 @@ use lurq::{
   components::{Column, Row, Text},
   core::Signal,
   layout::Alignment,
-  node::{Element, dimension::Dimension},
+  node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::id::ProjectId;
 use orchester_exec::search_path::SearchBasis;
@@ -40,7 +40,7 @@ use crate::{
     cli_search::CliSearch,
     path_picker::{PathKind, PathPicker},
   },
-  theme::ProjectsText,
+  theme::{ExtraSpacing, ProjectsText},
   ui::{
     button::{ActionButton, ButtonKind},
     callout::{Callout, CalloutTone},
@@ -242,11 +242,6 @@ impl AgentCli {
       let checks = self.checks.clone();
       check.on_click(move || checks.update(|count| *count += 1))
     };
-    let searched = if missing.searched.is_empty() {
-      ctx.t("startup.agentCli.noFolders")
-    } else {
-      ctx.t_args("startup.agentCli.lookedIn", [("folders", missing.searched.join(", "))])
-    };
     Row::new()
       .id("start-cli-fix")
       .width(Dimension::Pct(100.0))
@@ -254,14 +249,37 @@ impl AgentCli {
       .align_items(Alignment::Center)
       .child(choose)
       .child(check)
-      .child(
-        Text::new(&searched)
-          .id("start-cli-searched")
-          .variant(ProjectsText::SearchedFolders.role())
-          .flex(1.0)
-          .min_width(Dimension::Px(0.0)),
-      )
+      .child(searched(ctx, &missing.searched))
   }
+}
+
+/// The folders searched, each a text of its own: one text would break inside a path, after its `:` or a `/`. A folder
+/// wider than a whole line still breaks. The room after each is padding, since a gap would also space the lines.
+fn searched(ctx: &Ctx, folders: &[String]) -> Row {
+  let piece = |index: usize, text: &str| {
+    Text::new(text)
+      .id(format!("start-cli-searched-{index}"))
+      .variant(ProjectsText::SearchedFolders.role())
+      .min_width(Dimension::Px(0.0))
+      .padding(Padding::new().right(ExtraSpacing::Snug.role()))
+  };
+  let row = Row::new()
+    .id("start-cli-searched")
+    .flex(1.0)
+    .min_width(Dimension::Px(0.0))
+    .wrap();
+  let Some((last, others)) = folders.split_last() else {
+    return row.child(piece(0, &ctx.t("startup.agentCli.noFolders")));
+  };
+  row
+    .child(piece(0, &ctx.t("startup.agentCli.lookedIn")))
+    .with_children(others.iter().enumerate().map(|(index, folder)| {
+      piece(
+        index + 1,
+        &ctx.t_args("startup.agentCli.folderInList", [("folder", folder.as_str())]),
+      )
+    }))
+    .child(piece(folders.len(), last))
 }
 
 /// The title and what the callout says, never claiming a read of the login shell that did not happen.

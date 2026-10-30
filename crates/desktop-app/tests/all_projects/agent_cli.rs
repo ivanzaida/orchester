@@ -160,6 +160,42 @@ fn all_projects_agent_cli_shows_on_the_welcome_as_drawn() {
   assert!((check.x - (choose.x + choose.width) - 8.0).abs() < 0.5, "8 apart");
 }
 
+/// A line breaks between two folders, never inside one that fits on a line of its own; one wider than a whole line
+/// breaks and stays inside the row.
+#[test]
+fn all_projects_agent_cli_breaks_lines_between_folders() {
+  let (mut window, stand_ins) = Window::with_stand_ins(Data::new());
+  window.until("the warning", |window| shows(window, CLI));
+  let root = TempDir::new().expect("a folder");
+  let [first, second, wide] = [("a", 40), ("b", 40), ("c", 300)].map(|(name, length)| root.path().join(name.repeat(length)));
+  let path = std::env::join_paths([&first, &second, &wide]).expect("a search path");
+  stand_ins.search(SearchPath::merge(Some(&path), &[], &[]), SearchBasis::Path);
+  window.press("start-cli-check");
+  let shown = format!("Looked in {}, {}, {}", first.display(), second.display(), wide.display());
+  window.until("the folders searched", |window| {
+    window.text("start-cli-searched") == shown
+  });
+
+  let line = bounds(&mut window, "start-cli-searched-0").height;
+  let (one, two) = (
+    bounds(&mut window, "start-cli-searched-1"),
+    bounds(&mut window, "start-cli-searched-2"),
+  );
+  assert!((one.height - line).abs() < 0.5, "{one:?} is one line of {line}");
+  assert!((two.height - line).abs() < 0.5, "{two:?} is one line of {line}");
+  assert!(two.y >= one.y + one.height - 0.5, "the two folders do not fit on one line");
+
+  let (searched, wide) = (
+    bounds(&mut window, "start-cli-searched"),
+    bounds(&mut window, "start-cli-searched-3"),
+  );
+  assert!(wide.height > line * 1.5, "{wide:?} breaks");
+  assert!(
+    wide.x + wide.width <= searched.x + searched.width + 0.5,
+    "{wide:?} stays inside {searched:?}"
+  );
+}
+
 /// The frame's own words, reached on any system through the search's basis.
 #[test]
 fn all_projects_agent_cli_says_the_frames_words_on_macos() {
