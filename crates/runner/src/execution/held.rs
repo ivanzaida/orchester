@@ -5,7 +5,8 @@
 //!
 //! In every project, below the free space it keeps, no step starts, and agents at work are stopped with their work
 //! committed: the run pauses for low disk space and goes on by itself once there is room ([`super::Scheduler`]). A
-//! step whose agent failed while the disk was low ran out of space, most likely: it pauses the same way.
+//! step whose agent's turn broke, or whose command failed, while the disk was low ran out of space, most likely: it
+//! pauses the same way. An agent's own `failed` or `unverified` verdict is kept.
 
 use std::path::Path;
 
@@ -36,14 +37,31 @@ impl RunTask {
 
   /// What holds the run's next steps back, as [`RunTask::start_ready`] answers: `Some(false)` when the disk is low —
   /// nothing new starts, agents still at work beside a step that ended are stopped with their work committed, and the
-  /// run pauses until there is room — and `Some(true)` while it waits for a workspace.
+  /// run pauses until there is room — and `Some(true)` while it waits for a workspace. The disk is read when a step
+  /// is to start or continue, or an agent ended since the last look; not at each event of agents at work, which the
+  /// guard looks at its own interval ([`RunTask::check_disk_while_working`]): an agent that ends with its verdict is
+  /// not stopped for low disk space first.
   pub(super) fn held_back(&mut self) -> Result<Option<bool>, ExecutionError> {
+    let ended = std::mem::take(&mut self.ended_since_disk_look);
+    if !ended && !self.has_steps_to_start() {
+      return Ok(None);
+    }
     if self.disk_is_low()? {
       tracing::warn!(run = %self.run.id(), "the disk is low; the run's next step waits for room");
       self.disk_ran_low();
       return Ok(Some(false));
     }
     Ok((!self.hold_workspace()?).then_some(true))
+  }
+
+  /// Whether a step is ready to start, or stopped mid-step with no agent at work on it.
+  fn has_steps_to_start(&self) -> bool {
+    !self.run.executions_to_start(1).is_empty()
+      || self
+        .run
+        .running_executions()
+        .into_iter()
+        .any(|execution| !self.agents.contains_key(&execution))
   }
   /// Takes the run's workspace, unless it holds one or works in its own worktree; `false` while every workspace is
   /// in use, when the run waits for one as it waits for an agent slot.

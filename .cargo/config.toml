@@ -1,7 +1,0 @@
-# What `cargo test` and `cargo run` processes get, and the runners and apps they start.
-[env]
-# Tests never depend on how full this computer's disk is: the disk guard (ORC-422) keeps 50 GB free in every project
-# by default, so a test that starts a real runner in a temporary folder would be refused on a nearly full disk. A debug
-# build reads this instead of the disk (`orchester_exec::disk_space::FREE_SPACE_OVERRIDE`); a release build ignores it,
-# and a value set in the environment wins over this one.
-ORCHESTER_FREE_SPACE_OVERRIDE_GB = "10000"

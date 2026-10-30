@@ -21,7 +21,9 @@
 # -TestTimeoutSeconds (default 30 minutes) is ended with the processes it started. Cargo reads CARGO_BUILD_JOBS
 # itself. The tests build with line tables only (CARGO_PROFILE_TEST_DEBUG, unless set already): with full debug
 # information each orchester-app test binary brings a PDB of about 900 MB, and every crate's tests together filled
-# more than 160 GB.
+# more than 160 GB. The tests and the runners they start read 10000 GB free (ORCHESTER_FREE_SPACE_OVERRIDE_GB, unless
+# set already; a debug build only): the disk guard keeps 50 GB free in every project (ORC-422), and a test does not
+# depend on how full this computer's disk is. orchester-exec's own disk test reads the real disk regardless.
 #
 # tools/check-tests-known-failures.txt lists the tests that fail on master and the binaries that run no test on
 # purpose. A failing test listed there is reported and does not fail the gate. Any other failing test fails it, as do
@@ -400,6 +402,8 @@ function Invoke-SelectedTests($Packages, [string[]] $Selected) {
 
 $debugBefore = $env:CARGO_PROFILE_TEST_DEBUG
 if (-not $debugBefore) { $env:CARGO_PROFILE_TEST_DEBUG = "line-tables-only" }
+$freeSpaceBefore = $env:ORCHESTER_FREE_SPACE_OVERRIDE_GB
+if (-not $freeSpaceBefore) { $env:ORCHESTER_FREE_SPACE_OVERRIDE_GB = "10000" }
 Push-Location $repositoryRoot
 try {
     $packages = @(Get-WorkspacePackages)
@@ -423,4 +427,5 @@ try {
 finally {
     Pop-Location
     $env:CARGO_PROFILE_TEST_DEBUG = $debugBefore
+    $env:ORCHESTER_FREE_SPACE_OVERRIDE_GB = $freeSpaceBefore
 }

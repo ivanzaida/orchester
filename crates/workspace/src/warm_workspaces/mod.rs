@@ -14,7 +14,7 @@ use orchester_core::{
   store::{RunStore, SettingsStore, TaskStore, WorkspaceStore},
   time::Timestamp,
   workspaces::{
-    DiskSpace, DiskUsage, DiskVerdict, KeepFree, Suggestion, WarmFolder, WarmUpCommand, WarmUpFailure, WorkspaceRecord,
+    DiskSpace, DiskUsage, KeepFree, Suggestion, WarmFolder, WarmUpCommand, WarmUpFailure, WorkspaceRecord,
     WorkspaceState, suggest,
   },
 };
@@ -22,7 +22,10 @@ use orchester_exec::disk_space::{LocalDisks, folder_size};
 use orchester_store::{ProjectDb, StoreError};
 
 pub use self::scan::ignored_folders;
-use crate::tasks::{changes::run_worktree, detail::run_store_error};
+use crate::{
+  storage::DiskGuard,
+  tasks::{changes::run_worktree, detail::run_store_error},
+};
 
 /// One workspace.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -90,11 +93,13 @@ pub struct WorkspacesView {
 }
 
 impl WorkspacesView {
-  /// Whether the disk guard holds work back: the disk has less free space than the project keeps.
+  /// Whether the disk guard holds work back ([`DiskGuard::holds`]).
   pub fn low_disk(&self) -> bool {
-    self
-      .disk
-      .is_some_and(|usage| matches!(self.keep_free.verdict(usage), DiskVerdict::Low { .. }))
+    DiskGuard {
+      keep_free: self.keep_free,
+      disk: self.disk,
+    }
+    .holds()
   }
 
   /// What the workspaces hold on disk together.
