@@ -57,6 +57,48 @@ fn browser_window_shows_the_tabs_with_their_owners_the_toolbar_and_the_frame() {
   );
   browser.until_shown("browser-page-frame");
 }
+/// `Icon · waits` `ORNFA` in `k7xvx`: the dot stands over the icon's corner, whole, and the icon's box stays the icon's,
+/// so the label stands where it stands on a tab with no dot.
+#[test]
+fn browser_tab_dot_is_whole_over_the_icons_corner_and_leaves_the_label_alone() {
+  if !browser_installed() {
+    return;
+  }
+  let mut browser = Browser::open(false);
+  browser.feed(state("P1", BrowserMode::Headless).0);
+  browser.until_shown("browser-tab-0-dot");
+
+  let (icon, dot) = (browser.bounds("browser-tab-0-icon"), browser.bounds("browser-tab-0-dot"));
+  assert_eq!((icon.width, icon.height), (13.0, 13.0), "the icon's box");
+  assert_eq!(
+    (dot.x - icon.x, dot.y - icon.y, dot.width, dot.height),
+    (6.25, -2.75, 8.5, 8.5),
+    "7 from the icon's left and 2 over its top, the 1.5 ring centred on the edge of its 7"
+  );
+
+  let (tab, label) = (browser.bounds("browser-tab-0"), browser.bounds("browser-tab-0-label"));
+  let (plain, plain_label) = (browser.bounds("browser-tab-2"), browser.bounds("browser-tab-2-label"));
+  assert_eq!(label.x - tab.x, 29.0, "`Q3022`: 10, the icon's 13 and 6");
+  assert_eq!(plain_label.x - plain.x, 29.0, "the same on the person's tab, with no dot");
+
+  let painted = browser.tree.painted_quads();
+  let quad = painted
+    .iter()
+    .find(|quad| (quad.x, quad.y, quad.width, quad.height) == (dot.x, dot.y, dot.width, dot.height))
+    .expect("the dot is painted");
+  let clip = quad.clip;
+  assert!(
+    !clip.active
+      || (clip.x <= quad.x
+        && clip.y <= quad.y
+        && quad.x + quad.width <= clip.x + clip.width
+        && quad.y + quad.height <= clip.y + clip.height),
+    "the dot {:?} lies inside its clip {:?}",
+    (quad.x, quad.y, quad.width, quad.height),
+    (clip.x, clip.y, clip.width, clip.height)
+  );
+}
+
 
 /// `02b` `k7xvx` as a runner reaches it: the line, its time left and the tab's dot come and go with the runner's
 /// events, and the person's input alone changes nothing.
