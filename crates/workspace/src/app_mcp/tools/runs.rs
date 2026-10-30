@@ -23,7 +23,11 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::{
-  Translate, approvals::approval, base_branch, base_moved, message_waits::message_waits, orchestrated, plans, wire,
+  Translate,
+  approvals::approval,
+  base_branch, base_moved,
+  message_waits::message_waits,
+  orchestrated, plans, wire,
   worktree::{worktree_left, worktree_state},
 };
 use crate::{

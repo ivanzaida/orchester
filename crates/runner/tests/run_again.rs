@@ -418,7 +418,10 @@ async fn worktree_removal_sweep_at_the_runners_start_deletes_only_ended_runs_fol
   let pending = record_pending_run(root, queue_another_task(root)).await;
   // What a removal that failed part way left: git forgot the failed run's worktree, its build output stayed.
   let orphan = worktree(root, first);
-  git(root, &["worktree", "remove", "--force", orphan.to_str().expect("a UTF-8 path")]);
+  git(
+    root,
+    &["worktree", "remove", "--force", orphan.to_str().expect("a UTF-8 path")],
+  );
   fs::create_dir_all(orphan.join("target/debug")).expect("build folder");
   fs::write(orphan.join("target/debug/app.bin"), "built\n").expect("build output");
   let at_work = worktree(root, pending.id());
@@ -435,6 +438,9 @@ async fn worktree_removal_sweep_at_the_runners_start_deletes_only_ended_runs_fol
   })
   .await
   .expect("the runner sweeps the folder at its start");
-  assert!(at_work.is_dir(), "a folder of a run that has not ended is never touched");
+  assert!(
+    at_work.is_dir(),
+    "a folder of a run that has not ended is never touched"
+  );
   assert!(unknown.is_dir(), "a folder no run has is left alone");
 }

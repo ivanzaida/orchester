@@ -175,7 +175,10 @@ fn repository(root: &Path) {
 fn add_worktree(root: &Path, run: &Run) -> PathBuf {
   let folder = root.join(".orchester/worktrees").join(run.id().to_string());
   let path = folder.to_str().expect("a UTF-8 path");
-  git(root, &["worktree", "add", "--quiet", "-b", run.branch().as_str(), path, "main"]);
+  git(
+    root,
+    &["worktree", "add", "--quiet", "-b", run.branch().as_str(), path, "main"],
+  );
   folder
 }
 
@@ -230,9 +233,9 @@ fn worktree_removal_deletes_the_build_output_git_leaves_behind() {
   repository(&root);
   let folder = add_worktree(&root, &run);
   build_output(&folder);
-  let programs = Programs::with_runner(Arc::new(StopsAtBuildOutput(ProcessRunner::new(
-    Duration::from_secs(60),
-  ))));
+  let programs = Programs::with_runner(Arc::new(StopsAtBuildOutput(ProcessRunner::new(Duration::from_secs(
+    60,
+  )))));
   let seen = left(&root, &programs, &run);
   assert!(!seen.loses_files(), "ignored build output is not work: {seen:?}");
 

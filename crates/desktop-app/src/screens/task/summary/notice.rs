@@ -371,7 +371,10 @@ fn interrupted(ctx: &Ctx, run: &RunView) -> Said {
             "summary.notice.cantContinueNotRemovedBody",
             [path, ("reason", reason.as_str()), ("branch", branch)],
           ),
-          None => ctx.t_args("summary.notice.cantContinueNotRemovedNoReasonBody", [path, ("branch", branch)]),
+          None => ctx.t_args(
+            "summary.notice.cantContinueNotRemovedNoReasonBody",
+            [path, ("branch", branch)],
+          ),
         }
       }
       None => ctx.t_args(

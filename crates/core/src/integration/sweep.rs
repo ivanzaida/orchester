@@ -45,9 +45,11 @@ pub fn sweep(
     let Some(name) = name.to_str() else {
       continue;
     };
-    let owned_by_git = listed
-      .iter()
-      .any(|worktree| Path::new(&worktree.path).file_name().is_some_and(|listed| listed == name));
+    let owned_by_git = listed.iter().any(|worktree| {
+      Path::new(&worktree.path)
+        .file_name()
+        .is_some_and(|listed| listed == name)
+    });
     if owned_by_git || !ended(name) {
       continue;
     }

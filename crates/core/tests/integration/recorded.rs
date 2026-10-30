@@ -191,11 +191,18 @@ fn recorded_clean_up_git_refused_stays_not_removed_until_a_removal_finishes() {
     stopped.push(folder.to_path_buf());
   })
   .expect("recorded");
-  assert_eq!(stopped.len(), 2, "what of the run runs in each folder is stopped before trying again");
+  assert_eq!(
+    stopped.len(),
+    2,
+    "what of the run runs in each folder is stopped before trying again"
+  );
   let left = store.not_removed.clone().expect("recorded as not removed");
   assert!(Path::new(&left.path).is_dir());
   assert!(
-    left.reason.as_deref().is_some_and(|reason| reason.contains("Invalid argument")),
+    left
+      .reason
+      .as_deref()
+      .is_some_and(|reason| reason.contains("Invalid argument")),
     "{left:?}"
   );
 

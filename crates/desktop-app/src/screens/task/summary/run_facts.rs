@@ -306,7 +306,10 @@ fn worktree(ctx: &mut Ctx, run: &RunView, root: &Path) -> Element {
   if let Some(left) = &run.worktree_not_removed {
     let path = ("path", left.path.as_str());
     let text = match &left.reason {
-      Some(reason) => ctx.t_args("summary.thisRun.worktreeNotRemoved", [path, ("reason", reason.as_str())]),
+      Some(reason) => ctx.t_args(
+        "summary.thisRun.worktreeNotRemoved",
+        [path, ("reason", reason.as_str())],
+      ),
       None => ctx.t_args("summary.thisRun.worktreeNotRemovedNoReason", [path]),
     };
     return fact(

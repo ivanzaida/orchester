@@ -129,9 +129,10 @@ impl WorktreeStore for ProjectDb {
   }
 
   fn clear_worktree_not_removed(&mut self, run: RunId) -> Result<(), StoreError> {
-    self
-      .connection
-      .execute("DELETE FROM run_worktrees_not_removed WHERE run_id = ?1", [run.to_string()])?;
+    self.connection.execute(
+      "DELETE FROM run_worktrees_not_removed WHERE run_id = ?1",
+      [run.to_string()],
+    )?;
     Ok(())
   }
 }

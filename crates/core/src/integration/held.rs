@@ -5,12 +5,7 @@
 
 use std::path::Path;
 
-use super::{
-  Cleanup, KeepReason,
-  cleanup::remove_listed,
-  forgotten,
-  git::Git,
-};
+use super::{Cleanup, KeepReason, cleanup::remove_listed, forgotten, git::Git};
 use crate::{command::CommandRunner, id::RunId, store::WorktreeStore, time::Timestamp};
 
 /// Ends the removal of `run`'s worktrees `cleanup` did in the repository at `repo`: tries again those held
