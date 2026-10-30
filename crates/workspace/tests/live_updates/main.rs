@@ -16,6 +16,7 @@ mod config;
 mod desktop;
 mod here;
 mod http;
+mod merged;
 mod publish;
 mod server;
 mod share;

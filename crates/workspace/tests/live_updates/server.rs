@@ -24,6 +24,7 @@ use orchester_api::{
 use orchester_core::{
   blob::ContentHash,
   id::{ClaimId, ProjectId, TagId, TaskId, UserId},
+  run::TaskPhase,
   sharing::{MemberRole, TaskRevision},
   task::{
     TaskStatus,
@@ -222,6 +223,16 @@ impl TeamServer {
   /// The workflow status `task` has on the server.
   pub fn workflow(&self, task: TaskId) -> WorkflowStatus {
     self.state().task(task).content.workflow
+  }
+
+  /// The revision `task` has on the server.
+  pub fn revision(&self, task: TaskId) -> u64 {
+    self.state().task(task).revision.get()
+  }
+
+  /// Whether someone holds `task`'s claim on the server.
+  pub fn claimed_now(&self, task: TaskId) -> bool {
+    self.state().task(task).claim.is_some()
   }
 }
 
@@ -434,6 +445,7 @@ fn claim(shared: &Shared, user: &UserRef, id: TaskId, request: &Request, stream:
   respond(stream, 200, &json!({ "task": confirmed }));
 }
 
+/// `PUT …/tasks/{task}/run`: the run's progress; a merged run's completes the task's claim.
 fn run(shared: &Shared, user: &UserRef, id: TaskId, request: &Request, stream: &mut TcpStream) {
   let report: RunReport = request.json();
   let mut state = shared.state.lock().expect("state");
@@ -449,6 +461,7 @@ fn run(shared: &Shared, user: &UserRef, id: TaskId, request: &Request, stream: &
     phase_since: report.phase_since,
     updated_at: at,
   });
+  let completed = report.phase == TaskPhase::Merged && task.claim.take().is_some();
   let confirmed = task.clone();
   let delta = TaskRun {
     task: id,
@@ -462,6 +475,14 @@ fn run(shared: &Shared, user: &UserRef, id: TaskId, request: &Request, stream: &
     updated_at: at,
   };
   state.append(user, delta, Event::TaskRun);
+  if completed {
+    let delta = TaskClaim {
+      task: id,
+      claim: None,
+      action: ClaimAction::Completed,
+    };
+    state.append(user, delta, Event::TaskClaim);
+  }
   drop(state);
   shared.appended.notify_all();
   respond(stream, 200, &json!({ "task": confirmed }));
