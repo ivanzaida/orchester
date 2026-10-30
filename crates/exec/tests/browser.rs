@@ -177,6 +177,107 @@ fn browser_unavailable_keeps_its_reason() {
   );
 }
 
+/// The version an install tells, each platform's way read on either platform, and what tells none.
+mod version {
+  use std::{fs, path::Path};
+
+  use orchester_exec::browser::version::{in_bundle, in_folder_beside};
+
+  /// A stand-in for `program` in `folder`, with its folders.
+  fn stand_in(folder: &Path, program: &str) -> std::path::PathBuf {
+    let path = folder.join(program);
+    fs::create_dir_all(path.parent().expect("a folder above")).expect("make its folders");
+    fs::write(&path, "").expect("write a stand-in program");
+    path
+  }
+
+  /// The app bundle's program, with `plist` as its `Info.plist`.
+  fn bundle_with(folder: &Path, plist: &[u8]) -> std::path::PathBuf {
+    let program = stand_in(folder, "Google Chrome.app/Contents/MacOS/Google Chrome");
+    fs::write(folder.join("Google Chrome.app/Contents/Info.plist"), plist).expect("write Info.plist");
+    program
+  }
+
+  #[test]
+  fn browser_version_is_the_short_version_in_the_bundle_s_info_plist() {
+    let folder = tempfile::tempdir().expect("temporary folder");
+    let program = bundle_with(
+      folder.path(),
+      b"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<plist version=\"1.0\">\n<dict>\n\
+        \t<key>CFBundleName</key>\n\t<string>Chrome</string>\n\
+        \t<key>CFBundleShortVersionString</key>\n\t<string>130.0.6723.92</string>\n\
+        \t<key>CFBundleVersion</key>\n\t<string>6723.92</string>\n</dict>\n</plist>\n",
+    );
+
+    assert_eq!(in_bundle(&program).as_deref(), Some("130.0.6723.92"));
+  }
+
+  #[test]
+  fn browser_version_a_bundle_that_does_not_tell_shows_none() {
+    let folder = tempfile::tempdir().expect("temporary folder");
+    let missing = stand_in(folder.path(), "Chromium.app/Contents/MacOS/Chromium");
+    assert_eq!(in_bundle(&missing), None, "no Info.plist");
+
+    for plist in [
+      b"<plist><dict><key>CFBundleName</key><string>Chrome</string></dict></plist>".as_slice(),
+      b"<plist><dict><key>CFBundleShortVersionString</key><integer>130</integer></dict></plist>".as_slice(),
+      b"<plist><dict><key>CFBundleShortVersionString</key><string>unknown</string></dict></plist>".as_slice(),
+      b"<plist><dict><key>CFBundleShortVersionString</key><string>130.0.</string></dict></plist>".as_slice(),
+      b"<plist><dict><key>CFBundleShortVersionString</key><string>130</string></dict></plist>".as_slice(),
+      b"<plist><dict><key>CFBundleShortVersionString</key><string>".as_slice(),
+      b"bplist00\xD1\x01\x02\xFF\xFE".as_slice(),
+    ] {
+      let folder = tempfile::tempdir().expect("temporary folder");
+      let program = bundle_with(folder.path(), plist);
+      assert_eq!(in_bundle(&program), None, "{}", String::from_utf8_lossy(plist));
+    }
+
+    let outside = stand_in(folder.path(), "chrome");
+    fs::write(
+      folder.path().join("Info.plist"),
+      "<key>CFBundleShortVersionString</key><string>1.2</string>",
+    )
+    .expect("write Info.plist");
+    assert_eq!(in_bundle(&outside), None, "a program outside an app bundle");
+  }
+
+  #[test]
+  fn browser_version_is_the_newest_folder_named_after_one_beside_the_program() {
+    let folder = tempfile::tempdir().expect("temporary folder");
+    let program = stand_in(folder.path(), "Application/msedge.exe");
+    let beside = program.parent().expect("its folder");
+    for name in [
+      "129.0.2792.89",
+      "130.0.2849.46",
+      "99.0.1150.30",
+      "Dictionaries",
+      "SetupMetrics",
+    ] {
+      fs::create_dir(beside.join(name)).expect("make a folder");
+    }
+
+    assert_eq!(in_folder_beside(&program).as_deref(), Some("130.0.2849.46"));
+  }
+
+  #[test]
+  fn browser_version_a_program_without_a_version_folder_beside_it_shows_none() {
+    let folder = tempfile::tempdir().expect("temporary folder");
+    let program = stand_in(folder.path(), "Application/chrome.exe");
+    assert_eq!(in_folder_beside(&program), None, "nothing else beside it");
+
+    let beside = program.parent().expect("its folder");
+    fs::create_dir(beside.join("Locales")).expect("make a folder");
+    fs::create_dir(beside.join("2024")).expect("make a folder");
+    fs::write(beside.join("130.0.6723.92"), "").expect("a file named like a version");
+    assert_eq!(in_folder_beside(&program), None, "no folder named after a version");
+    assert_eq!(
+      in_folder_beside(&folder.path().join("gone/chrome.exe")),
+      None,
+      "no folder at all"
+    );
+  }
+}
+
 /// A chosen program, and the folders [`orchester_exec::browser::find_in`] looks in, on Windows and macOS.
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 mod chosen {
@@ -200,6 +301,46 @@ mod chosen {
     fs::create_dir_all(path.parent().expect("a folder above")).expect("make its folder");
     fs::write(&path, "").expect("write a stand-in program");
     path
+  }
+
+  /// Makes the install around the stand-in `program` tell `version`, the way this platform's does.
+  #[cfg(target_os = "macos")]
+  fn tell_version(program: &Path, version: &str) {
+    let contents = program.parent().and_then(Path::parent).expect("the bundle's Contents");
+    fs::write(
+      contents.join("Info.plist"),
+      format!("<plist><dict><key>CFBundleShortVersionString</key><string>{version}</string></dict></plist>"),
+    )
+    .expect("write Info.plist");
+  }
+
+  /// Makes the install around the stand-in `program` tell `version`, the way this platform's does.
+  #[cfg(target_os = "windows")]
+  fn tell_version(program: &Path, version: &str) {
+    fs::create_dir(program.with_file_name(version)).expect("make the version's folder");
+  }
+
+  #[test]
+  fn browser_found_or_chosen_program_says_the_version_its_install_tells() {
+    let folder = tempfile::tempdir().expect("temporary folder");
+    let program = install(folder.path(), CHROME);
+    assert_eq!(
+      chosen(&program).expect("taken").version(),
+      None,
+      "the install tells none"
+    );
+    assert_eq!(
+      find_in(&[folder.path().to_path_buf()]).expect("found").version(),
+      None,
+      "the install tells none"
+    );
+
+    tell_version(&program, "130.0.6723.92");
+    assert_eq!(chosen(&program).expect("taken").version(), Some("130.0.6723.92"));
+    assert_eq!(
+      find_in(&[folder.path().to_path_buf()]).expect("found").version(),
+      Some("130.0.6723.92")
+    );
   }
 
   #[test]
@@ -318,7 +459,13 @@ mod macos {
   #[test]
   fn browser_macos_finds_an_installed_program_or_says_why_not() {
     match orchester_exec::browser::find() {
-      Ok(program) => assert!(program.path().is_file(), "{program:?}"),
+      Ok(program) => {
+        assert!(program.path().is_file(), "{program:?}");
+        assert!(
+          program.version().is_some(),
+          "a real install tells its version: {program:?}"
+        );
+      }
       Err(unavailable) => assert!(unavailable.reason().contains("/Applications"), "{unavailable}"),
     }
   }

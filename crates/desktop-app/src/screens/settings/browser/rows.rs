@@ -1,7 +1,7 @@
 //! *Browser program* (`Browser program` `ixBG8` in `j3Lre`, `VGqZe` in `NZECi`): the notice of none found over the
-//! box (`Not found` `PzLrb`), then *Browser* with the browser agents use or *None found* at its end (`Browser`
-//! `z0jJyh`, `J64Qb`), *Program* with its path and *Choose another program…* or *Choose a program…* (`Program`
-//! `LToFT`, `N5GaIM`), and *Browser profiles* with their folder and Copy (`Browser profiles` `bVCKX`).
+//! box (`Not found` `PzLrb`), then *Browser* with the browser agents use and its version or *None found* at its end
+//! (`Browser` `z0jJyh`, `J64Qb`), *Program* with its path and *Choose another program…* or *Choose a program…*
+//! (`Program` `LToFT`, `N5GaIM`), and *Browser profiles* with their folder and Copy (`Browser profiles` `bVCKX`).
 
 use std::{path::Path, sync::Arc};
 
@@ -15,7 +15,7 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_exec::browser::NotABrowser;
+use orchester_exec::browser::{BrowserProgram, NotABrowser};
 use orchester_workspace::{
   messages::Message,
   workspace::{AgentsBrowser, BrowserSettings},
@@ -93,8 +93,8 @@ fn not_found(ctx: &Ctx, actions: &Actions) -> Element {
 /// *Browser*: the browser agents use, by its name after a check, or why there is none.
 fn browser_row(ctx: &mut Ctx, browser: &AgentsBrowser) -> Element {
   let (hint, state) = match browser {
-    AgentsBrowser::Found(program) => ("settings.browser.found.found", usable(program.name())),
-    AgentsBrowser::Chosen(program) => ("settings.browser.found.chosen", usable(program.name())),
+    AgentsBrowser::Found(program) => ("settings.browser.found.found", usable(program)),
+    AgentsBrowser::Chosen(program) => ("settings.browser.found.chosen", usable(program)),
     AgentsBrowser::ChosenUnusable(_) => (
       "settings.browser.found.unavailable",
       unusable(&ctx.t("settings.browser.found.unusable")),
@@ -110,14 +110,19 @@ fn browser_row(ctx: &mut Ctx, browser: &AgentsBrowser) -> Element {
     .render(ctx)
 }
 
-/// A browser's name after a `success` check (`Value` `MkbMA`).
-fn usable(name: &str) -> Row {
-  state(
+/// A browser's name after a `success` check (`Value` `MkbMA`), then its version in `text_muted` when its install tells
+/// (`Version` `xaVpS`).
+fn usable(program: &BrowserProgram) -> Row {
+  let name = state(
     Icon::CircleCheck,
     PaletteColor::Success,
-    name,
+    program.name(),
     PaletteColor::TextSecondary,
-  )
+  );
+  match program.version() {
+    Some(version) => name.child(mono_value("settings-browser-found-version", version).color(PaletteColor::TextMuted)),
+    None => name,
+  }
 }
 
 /// Why there is no browser, in `warning` after its mark (`Value` `rrxpf`).

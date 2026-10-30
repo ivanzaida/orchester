@@ -1,8 +1,9 @@
 //! The Chromium-based browser Orchester's agents browse with (`docs/design/browser.md`, "The browser process"): which
 //! one is installed ([`find`]), or the program the person chose in Settings › Browser when it is a Chromium-based
-//! browser's ([`chosen`]), the command that starts it headless on a project's own profile folder ([`headless`]), and
-//! the debugging address it writes into that folder once it listens ([`DevToolsActivePort`]). Orchester ships no
-//! browser: none found is an explicit [`BrowserUnavailable`] with its reason, never a silent gap.
+//! browser's ([`chosen`]), which version it is when its install tells ([`version`]), the command that starts it
+//! headless on a project's own profile folder ([`headless`]), and the debugging address it writes into that folder once
+//! it listens ([`DevToolsActivePort`]). Orchester ships no browser: none found is an explicit [`BrowserUnavailable`]
+//! with its reason, never a silent gap.
 //!
 //! - Windows (`windows`): Microsoft Edge, then Google Chrome, from the registry's `App Paths` and the usual install
 //!   folders; a chosen program is `msedge.exe`, `chrome.exe` (Google Chrome or Chromium) or `brave.exe`.
@@ -14,6 +15,7 @@
 pub mod macos;
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
 mod unsupported;
+pub mod version;
 #[cfg(target_os = "windows")]
 mod windows;
 
@@ -42,9 +44,15 @@ pub const DEVTOOLS_ACTIVE_PORT: &str = "DevToolsActivePort";
 pub struct BrowserProgram {
   name: &'static str,
   path: PathBuf,
+  version: Option<String>,
 }
 
 impl BrowserProgram {
+  fn at(name: &'static str, path: PathBuf) -> Self {
+    let version = platform::version(&path);
+    Self { name, path, version }
+  }
+
   /// The browser's product name, such as `Google Chrome`.
   pub const fn name(&self) -> &'static str {
     self.name
@@ -52,6 +60,11 @@ impl BrowserProgram {
 
   pub fn path(&self) -> &Path {
     &self.path
+  }
+
+  /// The version its install says it is, read without starting it; `None` when it does not tell ([`version`]).
+  pub fn version(&self) -> Option<&str> {
+    self.version.as_deref()
   }
 }
 
@@ -116,7 +129,7 @@ pub fn chosen(path: &Path) -> Result<BrowserProgram, NotABrowser> {
     return Err(NotABrowser::Folder(path.to_path_buf()));
   }
   let name = platform::named(&program).ok_or_else(|| NotABrowser::NotChromium(path.to_path_buf()))?;
-  Ok(BrowserProgram { name, path: program })
+  Ok(BrowserProgram::at(name, program))
 }
 
 /// The first of `candidates`, each a browser's name and where its program would be, whose program is a file;
@@ -128,7 +141,7 @@ pub fn first_installed(
   let mut names: Vec<&str> = Vec::new();
   for (name, path) in candidates {
     if path.is_file() {
-      return Ok(BrowserProgram { name, path });
+      return Ok(BrowserProgram::at(name, path));
     }
     if !names.contains(&name) {
       names.push(name);

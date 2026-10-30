@@ -12,6 +12,7 @@ use std::{
 
 use orchester_core::command::{Command, CommandRunner};
 
+pub(super) use super::version::in_folder_beside as version;
 use super::{BrowserProgram, BrowserUnavailable, first_installed, listed, registry_default_value};
 use crate::ProcessRunner;
 
