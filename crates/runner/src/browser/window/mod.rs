@@ -33,6 +33,7 @@ pub use self::order::Arrived;
 use self::order::InputLines;
 use super::{
   cdp::{Cdp, SessionId, TargetId},
+  running::Running,
   tabs::Tabs,
 };
 
@@ -161,14 +162,17 @@ impl Window {
     self.started();
   }
 
-  /// The restart is over: the window learns the state of the browser `running`, or that none runs.
-  pub(super) fn restarted(&self, running: bool) {
-    self.restarting.store(false, Ordering::Release);
-    if running {
-      self.changed();
-    } else {
-      self.no_browser();
+  /// The restart is over: the window learns the state of the browser `running`, or that none runs. Sent here, before
+  /// the restart's reply on the same channel, so the window never has the reply with the old tabs.
+  pub(super) async fn restarted(&self, running: Option<&Running>) {
+    match running {
+      Some(running) => {
+        let state = state(&running.cdp, &running.tabs, self, running.mode).await;
+        self.send(BrowserEvent::Changed(state));
+      }
+      None => self.no_browser(),
     }
+    self.restarting.store(false, Ordering::Release);
   }
 
   fn is_restarting(&self) -> bool {

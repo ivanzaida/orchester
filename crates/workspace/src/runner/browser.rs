@@ -47,12 +47,7 @@ impl Runners {
   ) -> Result<oneshot::Receiver<Result<Reply, RequestError>>, RequestError> {
     #[cfg(feature = "test-support")]
     let command = match self.inner.shared.browser.record(root, command) {
-      Ok(()) => {
-        let (reply, answer) = oneshot::channel();
-        // `answer` is right here to take it.
-        drop(reply.send(Ok(Reply::Browser(BrowserReply::Done))));
-        return Ok(answer);
-      }
+      Ok(answer) => return Ok(answer),
       Err(command) => command,
     };
     self.request(Some(root), Command::Browser(command))

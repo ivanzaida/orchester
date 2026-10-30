@@ -304,6 +304,12 @@ not jump to another project by itself.
   the strip keeps it selected and the faded toolbar its address and owner; the window hears of the restart only when the
   tabs are back. Nothing is screencast meanwhile: a tab the person picks in the strip is only named as the one shown,
   and it is the one *Back to Orchester* shows. Picking does not bring it forward in the browser's own window.
+- **While a restart is pending.** *Open in a browser window* and *Back to Orchester* restart the browser, which takes
+  seconds. Until the runner answers, the toolbar is faded and, like the shortcuts, takes no input, and the pressed
+  button turns its loader and cannot be pressed again; no board frame draws this, it reuses the faded toolbar of `05`
+  and `07` and the button's loader. The runner sends the new state before its answer, on the same connection, so the
+  window never has the answer with the old tabs. A refused restart says so on the failure line under the toolbar, and
+  the toolbar takes input again; when the old browser is gone by then, the state says no tabs are left.
 - **The page.** `Page.startScreencast` on the tab shown, at the window's size and scale
   (`Emulation.setDeviceMetricsOverride` with the window's logical size and DPI); frames arrive only when the page
   changes, are acknowledged (`Page.screencastFrameAck`), decoded from JPEG to RGBA (`zune-jpeg`, already in the

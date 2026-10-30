@@ -197,13 +197,13 @@ impl ProjectBrowser {
 
   /// Starts the browser again on the same profile, headless or in a window of its own as `mode` says, and reopens
   /// its tabs by their addresses for the same owners. The tabs get new ids, the tab shown stays the one shown, and the
-  /// window learns all of that at once when the tabs are back: until then it keeps what it shows. Nothing is
-  /// screencast until it asks.
+  /// window learns all of that at once when the tabs are back, before this answers: until then it keeps what it shows.
+  /// Nothing is screencast until it asks.
   async fn restart(&self, mode: BrowserMode) -> Result<(), BrowserError> {
     let mut running = self.running.lock().await;
     self.window.restarting();
     let restarted = self.start_again(&mut running, mode).await;
-    self.window.restarted(running.is_some());
+    self.window.restarted(running.as_ref()).await;
     restarted
   }
 

@@ -95,6 +95,12 @@ async fn browser_restart_keeps_the_tab_shown_and_tells_the_window_when_the_tabs_
   let before = desktop.received().len();
 
   desktop.serve(&browser, BrowserCommand::BackToOrchester).await;
+  let told = last_state(&desktop.received()[before..]).expect("the state came before the reply");
+  assert_eq!(told.tabs.len(), 2, "the tabs are back: {told:?}");
+  assert!(
+    told.tabs.iter().all(|listed| listed.id != tab),
+    "the reply never comes with the old tabs: {told:?}"
+  );
   let state = desktop
     .state(|state| {
       state.tabs.len() == 2
@@ -120,4 +126,56 @@ async fn browser_restart_keeps_the_tab_shown_and_tells_the_window_when_the_tabs_
     .expect("a frame in time");
   assert_eq!(frame.tab, shown);
   browser.stop().await;
+}
+
+/// A restart that cannot start the browser again: the old browser is gone, so the answer says why, and the window,
+/// which heard nothing meanwhile, has already learned that no tabs are left and none is shown. Only ever headless, so
+/// no window opens.
+#[tokio::test(flavor = "multi_thread")]
+async fn browser_restart_that_fails_tells_the_window_the_tabs_are_gone_before_it_answers() {
+  if !browser_installed() {
+    return;
+  }
+  let installed = orchester_exec::browser::find().expect("installed");
+  let data = tempfile::tempdir().expect("temporary folder");
+  let database = data.path().join("orchester.db");
+  let mut settings = orchester_store::AppDb::open(&database).expect("the application database");
+  settings
+    .set_browser_program(Some(installed.path()))
+    .expect("the choice is kept");
+  let browser = ProjectBrowser::new(data.path().join("profile")).with_settings(database);
+  let site = pages().await;
+  let mut desktop = Desktop::new();
+  desktop.serve(&browser, BrowserCommand::Subscribe).await;
+  let tab = person_tab(&desktop, &browser, Some(format!("{site}first"))).await;
+  let show = BrowserCommand::Show {
+    tab: tab.clone(),
+    viewport: viewport(),
+  };
+  desktop.serve(&browser, show).await;
+  desktop.state(|state| state.shown.as_ref() == Some(&tab)).await;
+  let before = desktop.received().len();
+  settings
+    .set_browser_program(Some(&data.path().join("gone").join("chrome")))
+    .expect("the choice is kept");
+
+  let refused = browser
+    .serve(browser.arrived(BrowserCommand::BackToOrchester), &desktop.sender)
+    .await;
+
+  assert!(
+    matches!(refused, Err(Rejection::BrowserUnavailable { .. })),
+    "the chosen program is gone: {refused:?}"
+  );
+  let told = last_state(&desktop.received()[before..]).expect("the state came before the answer");
+  assert_eq!(told, &BrowserState::default(), "no tabs, nothing shown");
+  browser.stop().await;
+}
+
+/// The last state among `events`.
+fn last_state(events: &[BrowserEvent]) -> Option<&BrowserState> {
+  events.iter().rev().find_map(|event| match event {
+    BrowserEvent::Changed(state) => Some(state),
+    _ => None,
+  })
 }

@@ -55,7 +55,7 @@ pub struct BrowserRoot {
   was_empty: Mutex<bool>,
   /// The request last acted on.
   handled: Mutex<Option<u64>>,
-  /// What the browser was last asked to screencast.
+  /// What the browser was last asked to show: screencast, or with the browser in a window of its own only named.
   sent: Mutex<Option<Sent>>,
   /// The tabs of the project shown as the window last saw them: a tab not among them just opened.
   known: Mutex<Option<(PathBuf, HashSet<BrowserTabId>)>>,

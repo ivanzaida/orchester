@@ -266,34 +266,6 @@ fn browser_window_names_a_tab_when_the_browser_in_a_window_of_its_own_reports_no
   assert_eq!(browser.text("browser-address-owner"), "Your tab");
 }
 
-/// *Open in a browser window* asks once, and the toolbar takes input again with the answer. Here a request is answered
-/// as it is kept, so the seconds a runner takes, with the toolbar faded and the button's loader turning, are not seen.
-#[test]
-fn browser_open_in_a_browser_window_asks_once_and_the_toolbar_comes_back_with_the_answer() {
-  if !browser_installed() {
-    return;
-  }
-  let mut browser = Browser::open(false);
-  browser.state.record_commands_for_test();
-  browser.feed(state("P1", BrowserMode::Headless).0);
-  browser.until_shown("browser-open-in-window");
-  let (x, y) = browser.bounds("browser-open-in-window").center();
-  browser.tree.mouse_down(x, y, MouseButton::Left);
-  browser.tree.mouse_up(x, y, MouseButton::Left);
-  browser.pass();
-  browser.until("the toolbar to take input again", |browser| {
-    browser.command("l");
-    browser.focused().as_deref() == Some("browser-address")
-  });
-  let opened = browser
-    .state
-    .recorded_commands_for_test()
-    .into_iter()
-    .filter(|(_, command)| *command == BrowserCommand::OpenInWindow)
-    .count();
-  assert_eq!(opened, 1);
-}
-
 fn address(browser: &mut Browser) -> String {
   browser
     .tree

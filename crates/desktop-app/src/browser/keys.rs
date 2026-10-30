@@ -1,8 +1,8 @@
 //! The window's shortcuts (`docs/design/browser.md`, "Tabs"): Ctrl+T (⌘T on macOS) opens a tab of the person's, Ctrl+W
 //! (⌘W) closes the tab shown, Ctrl+Tab and Ctrl+Shift+Tab show the next and the previous tab, Ctrl+L (⌘L) puts the
 //! focus in the address line and Ctrl+R (⌘R) reloads the tab shown. The window takes them before the page, as a browser
-//! does, also while the page or the address line has the focus; every other key goes on to them. Without a browser, or
-//! with it in a window of its own, the window's requests are not made.
+//! does, also while the page or the address line has the focus; every other key goes on to them. Without a browser,
+//! with it in a window of its own, or while it restarts, the window's requests are not made.
 
 use lurq::app::events::KeyboardEvent;
 use orchester_ipc::browser::{BrowserCommand, BrowserReply, Navigation};
