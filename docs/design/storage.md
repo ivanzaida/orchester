@@ -18,7 +18,7 @@ status bar and the modal. Exports at scale 1: `.tmp/design/ORC-424/<node id>.png
 | --- | --- | --- |
 | Head | `AbCsw` | title and lead |
 | Row 1 · Storage, the low-disk item and Clean up | `mSu5E` | `Jsbd1` 01 Project settings › Runs › Storage while the guard holds; `SqEDB` 02 status bar · Low disk space (runs paused, hover with tooltip, new steps wait, narrow 960); `X9BwMn` 03 Clean up confirmation modal |
-| Row 2 · States | `LcKJr` | `yi3YU` 04 measuring sizes; `S5ek6a` 05 nothing to clean; `YwxsQ` 06 a worktree could not be removed |
+| Row 2 · States | `LcKJr` | `yi3YU` 04 measuring sizes; `S5ek6a` 05 nothing to clean; `YwxsQ` 06 a worktree could not be removed; `MfINi` 08 loading (the page opens, nothing read yet); `ubeHK` 09 empty (a new project, Orchester keeps nothing) |
 | Row 3 · Entry and notes | `nHXUZ` | `meNMR` 07 the Runs tab's Storage row (calm, guard holds); `QU1YI` notes · what the design decides |
 
 ## Decisions (proposed)
@@ -39,10 +39,19 @@ status bar and the modal. Exports at scale 1: `.tmp/design/ORC-424/<node id>.png
 5. **Status bar.** *Low disk space · 32 GB free · 4 runs paused*: `warning` on the raised fill, left and pinned like
    interrupted runs, no dismiss; the whole item is the button and opens Storage, its tooltip says so. Below keep-free
    with nothing working it reads *new steps wait*. At 960 the words shorten; the free space and the count stay.
-6. **States.** Measuring: free space at once, sizes fill in (`…`), the group head shows *Measuring sizes* and the
-   count, *Clean up* is disabled until counted. Nothing to clean: the Clean up row says so and its button is
-   disabled. Could not remove: the row turns `danger` with the process, its pid and the full path, *Open folder* and
-   *Try again*; the bar's latest event says what Clean up freed.
+6. **States.** Loading: the page opens before anything is read; the disk row says *Reading the disk…* without a
+   meter, the list is a `State/Loading` (*Reading what Orchester keeps…*), *Clean up* is disabled. Measuring: free
+   space at once, sizes fill in (`…`), the group head shows *Measuring sizes* and the count, *Clean up* is disabled
+   until counted. Empty: a new project with no worktree and no warm workspace; the meter has no Orchester share, the
+   list is a `State/Empty` (*Orchester keeps nothing on this disk yet*, no action), *Clean up* disabled. Nothing to
+   clean: the Clean up row says so and its button is disabled. Could not remove: the row turns `danger` and a
+   full-width line under it names the process, its pid and the full path (*Held by cargo.exe (pid 18244) · H:\…*),
+   with *Open folder* and *Try again*; the bar's latest event says what Clean up freed.
+7. **Sample data agrees across a frame.** While the guard holds, all runs are paused, so the sidebar has no Running
+   section; after Clean up (06) two runs work and two are queued, matching the sidebar and *Agents 2/4*. Group totals
+   are the sum of the rows (160.1 GB, 130.2 GB). Times in the status bar are mono.
+8. **Window height.** The windows are 1130 tall instead of the Read me's 900 so the whole list shows without a
+   scroll; the app scrolls the pane at 900.
 
 ## Notes for the implementation
 
