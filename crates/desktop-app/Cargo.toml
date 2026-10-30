@@ -154,11 +154,16 @@ objc2-foundation.workspace = true
 embed-resource.workspace = true
 
 [dev-dependencies]
+# Reads the image a `lurq_screenshot` answers with (`tests/browser_window/inspection.rs`); already built through lurq.
+base64.workspace = true
 # The tests' and QA examples' window and stand-in cloud (`test_support`).
 orchester-app = { workspace = true, features = ["test-support"] }
 # Counts a runner's reports in tests of what follows them, which run no runner.
 orchester-workspace = { workspace = true, features = ["devtools-inspect", "test-support"] }
 orchester-api = { workspace = true, features = ["client", "identity"] }
+# The handles of lurq's `RenderEngine`, for a stand-in engine that captures without a GPU
+# (`tests/browser_window/inspection.rs`); already built through lurq.
+raw-window-handle.workspace = true
 # Exercises the production MCP tools over an in-process transport without discovery-file ACLs.
 rmcp = { workspace = true, features = ["client"] }
 # The QA seed (`examples/seed`) damages a run's record and sets a project database's schema version the way an

@@ -31,4 +31,9 @@ fn browser_roles_follow_the_redesign() {
     Color::from_hex("#11111300"),
     "the fade ends in the title bar's color, clear"
   );
+  assert_eq!(
+    theme.palette_color(BrowserColor::PageCover.role()),
+    Color::from_hex("#00000000"),
+    "no one sees what covers the page in an inspection capture"
+  );
 }

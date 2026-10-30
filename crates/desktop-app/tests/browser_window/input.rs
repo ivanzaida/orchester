@@ -150,7 +150,7 @@ fn key_down(browser: &mut Browser, key: &str, code: &str) {
 }
 
 /// A frame of `tab`, `css` big in CSS pixels, handed over as a runner's connection does.
-fn frame(browser: &Browser, tab: &str, sequence: u64, (css_width, css_height): (u32, u32)) {
+pub(super) fn frame(browser: &Browser, tab: &str, sequence: u64, (css_width, css_height): (u32, u32)) {
   let mut jpeg = Cursor::new(Vec::new());
   RgbImage::from_pixel(64, 40, Rgb([250, 250, 250]))
     .write_to(&mut jpeg, ImageFormat::Jpeg)

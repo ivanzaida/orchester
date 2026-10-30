@@ -259,9 +259,10 @@ impl BrowserRoot {
         scale.clamp(Viewport::MIN_SCALE_PERCENT, Viewport::MAX_SCALE_PERCENT),
       )
     });
+    let minimized = window.is_minimized || ctx.props::<BrowserLink>().minimized_for_test();
     let next = Sent {
       project: showing.project.as_ref().clone(),
-      tab: target.filter(|_| !window.is_minimized).zip(viewport),
+      tab: target.filter(|_| !minimized).zip(viewport),
     };
     if sent.as_ref() == Some(&next) {
       return;
