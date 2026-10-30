@@ -58,6 +58,8 @@ pub enum WorktreeError {
   NotAWorktree(PathBuf),
   #[error("worktree {path} has {changes} uncommitted change(s); commit them or remove it with force")]
   Dirty { path: PathBuf, changes: usize },
+  #[error("git no longer lists worktree {path}, but its folder cannot be deleted: {source}")]
+  NotDeleted { path: PathBuf, source: io::Error },
 }
 
 impl WorktreeError {
@@ -72,7 +74,9 @@ impl WorktreeError {
       Self::InvalidBranch(_) => WorktreeFailure::InvalidBranch,
       Self::AlreadyExists(_) | Self::NotFound(_) | Self::NotAWorktree(_) => WorktreeFailure::FolderInTheWay,
       Self::Git { stderr, .. } => WorktreeFailure::Git(GitMessage::new(stderr)),
-      Self::RepositoryPath { .. } | Self::UnexpectedRevision(_) | Self::Dirty { .. } => WorktreeFailure::Unexpected,
+      Self::RepositoryPath { .. } | Self::UnexpectedRevision(_) | Self::Dirty { .. } | Self::NotDeleted { .. } => {
+        WorktreeFailure::Unexpected
+      }
     }
   }
 }
@@ -349,7 +353,22 @@ impl Worktrees {
       RemoveMode::DiscardChanges => command.push("--force"),
     }
     command.push(&relative);
-    Git::new(&self.repo_root).stdout(&command)?;
-    Ok(())
+    let removed = Git::new(&self.repo_root).stdout(&command).map(drop);
+    // Git can forget the worktree and stop with its folder half deleted ("Directory not empty"): what is left of it,
+    // ignored build output and `.tmp/` included, goes as a folder once git no longer lists it.
+    if !path.exists() || self.lists(name)? {
+      return removed;
+    }
+    fs::remove_dir_all(&path).map_err(|source| WorktreeError::NotDeleted { path, source })
+  }
+
+  /// Whether git lists a worktree in the folder `name`.
+  fn lists(&self, name: &str) -> Result<bool, WorktreeError> {
+    Ok(
+      self
+        .listed()?
+        .iter()
+        .any(|listed| Path::new(&listed.path).file_name().is_some_and(|listed| listed == name)),
+    )
   }
 }

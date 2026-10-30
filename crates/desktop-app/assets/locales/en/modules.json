@@ -52,6 +52,23 @@
       "target": "Target date",
       "noDate": "None",
       "state": "State",
+      "base": {
+        "label": "Base branch",
+        "checkedOut": "Checked-out branch",
+        "checkedOutNow": "{{branch}} now · its tasks take the branch checked out when each run starts",
+        "checkedOutDetached": "Its tasks take the branch checked out when each run starts",
+        "find": "Find a branch",
+        "branches": "Branches",
+        "remote": "Remote only",
+        "creates": "Choosing it creates the local branch {{branch}}",
+        "reading": "Reading the repository's branches…",
+        "noMatch": "No branch matches",
+        "note": {
+          "none": "Its tasks without a base branch of their own will run from it. Runs under way keep theirs.",
+          "one": "Its 1 task without a base branch of its own runs from it. Runs under way keep theirs.",
+          "other": "Its {{count}} tasks without a base branch of their own run from it. Runs under way keep theirs."
+        }
+      },
       "create": "Create module",
       "save": "Save changes",
       "cancel": "Cancel"

@@ -113,6 +113,16 @@ impl ProjectDb {
     }))
   }
 
+  /// Forgets how the project's base branch moved, once Project settings › General said so and the settings closed:
+  /// the line shows once (`NDTCw`).
+  pub fn forget_base_branch_move(&mut self) -> Result<(), StoreError> {
+    let transaction = self.connection.transaction()?;
+    transaction.execute("DELETE FROM base_branch_move_modules", [])?;
+    transaction.execute("DELETE FROM base_branch_move", [])?;
+    transaction.commit()?;
+    Ok(())
+  }
+
   /// How many runs still deliver into the base branch they recorded: those that have not ended, and each task's
   /// latest run that succeeded and that Orchester has not merged. A change of a base branch leaves them on theirs.
   pub fn runs_keeping_their_base(&self) -> Result<usize, StoreError> {

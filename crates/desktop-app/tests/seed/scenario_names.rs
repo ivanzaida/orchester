@@ -65,6 +65,7 @@ fn seed_names_every_scenario_once() {
       "modules",
       "modules-short",
       "modules-none",
+      "modules-base-branch",
       "loading-states"
     ]
   );

@@ -10,7 +10,7 @@ use std::path::Path;
 
 use orchester_core::{
   id::{IdempotencyKey, RunId, TaskId},
-  integration::{Branches, Delivered, KeepReason, Leftovers, RunWork, clean_up_recorded},
+  integration::{Branches, Delivered, KeepReason, Leftovers, RunWork, clean_up_recorded, finish_removal},
   resource::{Pipeline, WithoutCommits},
   run::{Run, RunAgainInput, RunStatus, run_again, run_delivers},
   sharing::TaskRevision,
@@ -18,7 +18,7 @@ use orchester_core::{
   task::Task,
   time::Timestamp,
 };
-use orchester_exec::ProcessRunner;
+use orchester_exec::{ProcessRunner, run_processes::RunProcesses};
 use orchester_index::CodebaseIndexes;
 use orchester_ipc::Rejection;
 use orchester_store::ProjectDb;
@@ -181,7 +181,9 @@ fn committed_nothing(root: &Path, task: &Task, run: &Run) -> bool {
 }
 
 /// Removes what `previous` left in the repository at `root`, as the person confirmed it
-/// (`confirmed`), with the removal recorded in `db` first; refused when a worktree stays.
+/// (`confirmed`), with the removal recorded in `db` first; a folder something held is deleted again once the run's own
+/// processes there are stopped, and one that still stays is recorded as not removed ([`finish_removal`]). Refused when
+/// a worktree stays.
 pub(super) fn remove_worktrees(
   db: &mut ProjectDb,
   root: &Path,
@@ -189,14 +191,13 @@ pub(super) fn remove_worktrees(
   confirmed: &Leftovers,
 ) -> Result<(), Rejection> {
   let git = ProcessRunner::new(REMOVE_TIMEOUT);
-  let cleanup = clean_up_recorded(
-    db,
-    (&git, Path::new("git"), root),
-    previous,
-    Some(confirmed),
-    Timestamp::now(),
-  )
-  .map_err(|error| failed("cannot remove the worktrees of the run before", &error))?;
+  let git = (&git, Path::new("git"), root);
+  let mut cleanup = clean_up_recorded(db, git, previous, Some(confirmed), Timestamp::now())
+    .map_err(|error| failed("cannot remove the worktrees of the run before", &error))?;
+  let stop = |folder: &Path| RunProcesses::stop_in(folder, previous.created_at());
+  if let Err(error) = finish_removal(db, git, (previous.id(), Timestamp::now()), &mut cleanup, stop) {
+    tracing::warn!(%error, run = %previous.id(), "cannot record what the worktree removal left");
+  }
   // Off the runtime's threads: the worktrees are gone either way, and an index left behind goes
   // with the next removal.
   let indexes = CodebaseIndexes::new(root);
@@ -205,6 +206,7 @@ pub(super) fn remove_worktrees(
       tracing::warn!(%error, "cannot remove the codebase indexes of removed worktrees");
     }
   });
+  super::worktree_sweep::sweep_in_background(root.to_path_buf());
   match cleanup.kept_worktrees.into_iter().next() {
     None => Ok(()),
     Some((worktree, KeepReason::Failed(detail))) => {

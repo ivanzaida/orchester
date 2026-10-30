@@ -6,6 +6,7 @@
 //! error or `Debug` output.
 
 mod address;
+mod catalog;
 mod cloud;
 mod cloud_address;
 mod error;
@@ -13,6 +14,8 @@ mod events;
 mod modules;
 mod pinned;
 mod recorded;
+mod release_admin;
+mod releases;
 mod resources;
 mod sharing;
 
@@ -38,6 +41,7 @@ pub use self::{
   cloud_address::CloudAddress,
   error::ClientError,
   events::{EventStream, StreamEnd},
+  releases::ReleaseDownload,
 };
 use crate::{
   ApiError, ApprovalResponse, CloudJoin, CloudJoinAnswer, CodeJoin, Joined, KeyProofRequest, KeyProofResponse,

@@ -168,6 +168,18 @@ pub trait WorktreeStore {
 
   /// The runs of `task` whose worktree was removed, with when, ordered by run number.
   fn worktree_removals(&self, task: TaskId) -> Result<Vec<(RunId, Timestamp)>, Self::Error>;
+
+  /// Records that removing the worktrees of `run` left `left` on disk at `at` (ORC-418), in place of what was
+  /// recorded before: the removal did not finish.
+  fn save_worktree_not_removed(
+    &mut self,
+    run: RunId,
+    left: &crate::integration::NotRemoved,
+    at: Timestamp,
+  ) -> Result<(), Self::Error>;
+
+  /// Forgets what a removal of the worktrees of `run` left, once one left nothing behind.
+  fn clear_worktree_not_removed(&mut self, run: RunId) -> Result<(), Self::Error>;
 }
 
 pub use crate::workspaces::WorkspaceStore;

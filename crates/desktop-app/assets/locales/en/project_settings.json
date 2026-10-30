@@ -126,6 +126,15 @@
     "filesNote": "Agents read these files as they are in the run's worktree, so they are not versioned with the run. Claude Code is started without project settings, so it loads neither CLAUDE.md nor .claude/skills. To keep them in Orchester instead, import them as drafts and turn this off.",
     "import": "Import from repository",
     "importUnavailable": "Repository import is not built in this app yet.",
+    "baseBranch": "Base branch",
+    "baseBranchHint": "Set on each task and module. A task without one takes its module's; without either, the branch checked out when its run starts.",
+    "openModules": "Open Modules",
+    "baseBranchMoved": {
+      "took": "Moved on {{date}}: {{branch}} went to {{modules}}, which had none; runs under way keep theirs.",
+      "keptOne": "Moved on {{date}}: {{branch}} went to {{modules}}, which had none. {{kept}} keeps its own; runs under way keep theirs.",
+      "keptMany": "Moved on {{date}}: {{branch}} went to {{modules}}, which had none. {{kept}} keep their own; runs under way keep theirs.",
+      "none": "Moved on {{date}}: {{branch}} went to no module, as none was open; runs under way keep theirs. Set one on a module or a task."
+    },
     "baseMovedSection": "When the base branch moves",
     "baseMoved": "Tell working agents when the base branch moves",
     "baseMovedDetail": "When a merge, a commit or a pull moves the branch a run started from, the run's next agent that may write is told to merge it into its worktree, after its turn and never mid-edit. Moves within two minutes are one notice.",
