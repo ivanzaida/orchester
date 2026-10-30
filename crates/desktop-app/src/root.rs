@@ -258,8 +258,8 @@ fn gate_screen(ctx: &mut Ctx, sign_in: &SignIn, since: orchester_core::time::Tim
     .into()
 }
 
-/// Whether this computer is signed in to Orchester Cloud, whenever that changes.
-fn follow_sign_in(ctx: &mut Ctx, cloud: &Cloud) -> SignIn {
+/// Whether this computer is signed in to Orchester Cloud, whenever that changes; *Join a team* follows it too.
+pub(crate) fn follow_sign_in(ctx: &mut Ctx, cloud: &Cloud) -> SignIn {
   ctx
     .stream(cloud.clone(), |cloud, emitter: StreamEmitter<SignIn, ()>| async move {
       let mut changes = cloud.follow_sign_in();

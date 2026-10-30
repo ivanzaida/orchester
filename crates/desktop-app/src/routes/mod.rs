@@ -1,7 +1,8 @@
 //! Where the window can be: typed routes and the router paths they stand for. A path is all a tab's
 //! history keeps, so everything a person can go back to is part of it, its query included.
 //!
-//! Paths: `/` is All projects, `/add-project` Add project (`?folder=` the folder it starts with) and
+//! Paths: `/` is All projects, `/add-project` Add project (`?folder=` the folder it starts with), `/join-team` Join a
+//! team (`?way=code` with a code, [`JoinWay`]) and
 //! `/settings` the app's settings (`?tab=general`, `notifications`, `accounts` or `orchester` for Orchester Cloud;
 //! Automation without one, and `?ask=rotate-token` asks *Rotate the token?* there). A project's screens start at
 //! `/project/<id>`, its Overview (`?tab=` the tab of its task list), and add the screen's segment, e.g.
@@ -48,6 +49,7 @@ mod files;
 mod import;
 mod instructions;
 mod join;
+mod join_team;
 mod memory;
 mod modules;
 mod orchester;
@@ -81,6 +83,7 @@ pub use self::{
   import::ImportTab,
   instructions::{InstructionsPanel, InstructionsTab, InstructionsView},
   join::JoinTarget,
+  join_team::JoinWay,
   memory::MemoryTab,
   modules::{ModuleListTab, ModuleTab},
   orchester::{ConnectStep, OrchesterAsk, OrchesterPanel, OrchesterView},
@@ -179,6 +182,8 @@ pub enum Route {
   Usage(Box<UsageQuery>),
   /// Add project, with the folder it starts with, e.g. one Open folder… found no project in.
   AddProject(Option<RouteFolder>),
+  /// Join a team, on the way it shows first (`drCQd`, `B914L`).
+  JoinTeam(JoinWay),
   /// Settings › Automation, where Settings opens.
   Settings,
   /// Settings › Automation asking *Rotate the token?* in place under the access token (`shpsk`); only a person's
@@ -225,6 +230,7 @@ impl Route {
     match self {
       Self::AllProjects | Self::Usage(_) => Screen::AllProjects,
       Self::AddProject(_) => Screen::AddProject,
+      Self::JoinTeam(_) => Screen::JoinTeam,
       Self::Settings
       | Self::RotateToken
       | Self::General
@@ -237,9 +243,12 @@ impl Route {
   }
 
   /// Whether the route is the window's home, which the home tab shows by its icon alone: All projects, and
-  /// Add project opened from it (`W5PIR`, `kkGWj`).
+  /// Add project and Join a team opened from it (`W5PIR`, `kkGWj`).
   pub const fn is_home(&self) -> bool {
-    matches!(self, Self::AllProjects | Self::Usage(_) | Self::AddProject(_))
+    matches!(
+      self,
+      Self::AllProjects | Self::Usage(_) | Self::AddProject(_) | Self::JoinTeam(_)
+    )
   }
 
   pub const fn project(&self) -> Option<ProjectId> {
@@ -248,6 +257,7 @@ impl Route {
       Self::AllProjects
       | Self::Usage(_)
       | Self::AddProject(_)
+      | Self::JoinTeam(_)
       | Self::Settings
       | Self::RotateToken
       | Self::General
@@ -277,6 +287,7 @@ impl Route {
         format!("/{ADD_PROJECT}"),
         &[(FOLDER, folder.as_ref().map(RouteFolder::as_str))],
       ),
+      Self::JoinTeam(way) => way.path(),
       Self::Settings => format!("/{SETTINGS}"),
       Self::RotateToken => with_query(format!("/{SETTINGS}"), &[(ASK, Some(ROTATE_TOKEN))]),
       Self::General => with_query(format!("/{SETTINGS}"), &[(TAB, Some(GENERAL))]),
@@ -313,6 +324,7 @@ impl Route {
       [] => Self::AllProjects,
       [usage::SEGMENT] => Self::Usage(Box::new(usage::take_everywhere(&mut params)?)),
       [ADD_PROJECT] => Self::AddProject(params.take(FOLDER)?.map(RouteFolder)),
+      [join_team::SEGMENT] => Self::JoinTeam(JoinWay::take(&mut params)?),
       [SETTINGS] => Self::settings(&mut params)?,
       [SETTINGS, INVITE] => Self::Invite(JoinTarget::take(&mut params)?.ok_or(RouteError::NoScreen)?),
       [PROJECT, project, page @ ..] => {

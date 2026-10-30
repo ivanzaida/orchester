@@ -14,6 +14,7 @@ fn seed_names_every_scenario_once() {
       "agents-no-connections",
       "agents-unreadable",
       "empty",
+      "join-team",
       "tasks",
       "tasks-memory",
       "memory-only",

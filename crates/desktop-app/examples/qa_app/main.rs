@@ -4,10 +4,12 @@
 //! in memory: nothing reaches the OS keychain and no QA copy talks to the real cloud. `--signed-out` stops at the gate,
 //! with the stand-in set as the cloud (Advanced) so a person can sign in there. `--settings` (the `settings`
 //! scenario) also sets up the kept invites and installed app's MCP rows app Settings shows ([`settings`]).
+//! `--join-team` starts a stand-in team server on loopback that the stand-in cloud names as the account's, with an
+//! invite to one of its projects, and prints its address and codes, for *Join a team*.
 //! What it moves to the Recycle Bin / Trash goes to `trash` beside its data. Fixture data for QA, never shipped: an
 //! example is no part of the app's program.
 //!
-//!   qa_app [--signed-in | --signed-out] [--settings]
+//!   qa_app [--signed-in | --signed-out] [--settings] [--join-team]
 
 #![allow(clippy::print_stdout, reason = "a QA helper says where it is")]
 
@@ -16,6 +18,7 @@ mod settings;
 
 use std::{error::Error, fs, sync::Arc};
 
+use orchester_api::test_support::team_server::{CODE, LATER_CODE, TeamServer};
 use orchester_app::{
   app_log, clipboard,
   error_reports::{self, Environment},
@@ -27,16 +30,24 @@ use orchester_workspace::{accounts::trash::FolderTrash, app_paths};
 use signed_in::account_cloud::AccountCloud;
 use tokio::runtime::Runtime;
 
+/// The stand-in team server's id at the stand-in cloud, and its invite to Billing.
+const TEAM: &str = "0191c7c0-0000-7000-8000-0000000005e1";
+const INVITE: &str = "0191c7c0-0000-7000-8000-00000000171e";
+
 fn main() -> Result<(), Box<dyn Error>> {
   let log = app_log::install();
   let mut signed_out = false;
   let mut with_settings = false;
+  let mut join_team = false;
   for argument in std::env::args().skip(1) {
     match argument.as_str() {
       "--signed-in" => signed_out = false,
       "--signed-out" => signed_out = true,
       "--settings" => with_settings = true,
-      other => return Err(format!("expected --signed-in, --signed-out or --settings, not {other}").into()),
+      "--join-team" => join_team = true,
+      other => {
+        return Err(format!("expected --signed-in, --signed-out, --settings or --join-team, not {other}").into());
+      }
     }
   }
   let position = WindowPosition::from_environment()?;
@@ -66,6 +77,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     workspace.use_trash(Arc::new(FolderTrash::new(&folder.join("trash"))));
   }
   let cloud = AccountCloud::start();
+  // Kept to the end of `main`: the team server answers while the window is open.
+  let _team = join_team.then(|| team(&cloud));
   if let Some(services) = launch.services() {
     if signed_out {
       let address = signed_in::cloud_address(&cloud);
@@ -90,4 +103,17 @@ fn main() -> Result<(), Box<dyn Error>> {
   clipboard::clear_at_exit();
   launch.end();
   Ok(())
+}
+
+/// A stand-in team server that `cloud` names as the account's, with an invite to its project Billing; says where it
+/// is and which codes it takes.
+fn team(cloud: &AccountCloud) -> TeamServer {
+  let team = TeamServer::start();
+  cloud.name_server(TEAM, &team.url(), None);
+  cloud.invite(INVITE, Some(("Billing", &format!("{}/billing", team.url()))));
+  println!(
+    "team server {}\ncode {CODE} joins, {LATER_CODE} joins until it expires; any other code is wrong",
+    team.url()
+  );
+  team
 }

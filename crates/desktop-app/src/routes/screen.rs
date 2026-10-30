@@ -1,6 +1,6 @@
 use super::{
   ADD_PROJECT, CONNECTIONS, EDIT, IMPORT, MODULES, NEW, ORCHESTRATOR, PROJECT_PATTERN, PULL_REQUESTS, SETTINGS, TASKS,
-  files::FILES, project_screen_path,
+  files::FILES, join_team, project_screen_path,
 };
 
 /// A screen of the window, as the sidebar, the tabs and the app's MCP tools name it.
@@ -8,6 +8,8 @@ use super::{
 pub enum Screen {
   AllProjects,
   AddProject,
+  /// Join a team, a step of the start page (`qzzYw`), which no sidebar item names.
+  JoinTeam,
   Settings,
   Overview,
   Orchestrator,
@@ -39,9 +41,10 @@ pub enum Screen {
 }
 
 impl Screen {
-  pub const ALL: [Self; 27] = [
+  pub const ALL: [Self; 28] = [
     Self::AllProjects,
     Self::AddProject,
+    Self::JoinTeam,
     Self::Settings,
     Self::Overview,
     Self::Orchestrator,
@@ -95,6 +98,7 @@ impl Screen {
     match self {
       Self::AllProjects => "all_projects",
       Self::AddProject => "add_project",
+      Self::JoinTeam => "join_team",
       Self::Settings => "settings",
       Self::Overview => "overview",
       Self::Orchestrator => "orchestrator",
@@ -132,6 +136,7 @@ impl Screen {
     match self {
       Self::AllProjects => "shell.screens.allProjects",
       Self::AddProject => "shell.screens.addProject",
+      Self::JoinTeam => "shell.screens.joinTeam",
       Self::Settings => "shell.screens.settings",
       Self::Overview => "shell.screens.overview",
       Self::Orchestrator => "shell.screens.orchestrator",
@@ -166,6 +171,7 @@ impl Screen {
     match self {
       Self::AllProjects
       | Self::AddProject
+      | Self::JoinTeam
       | Self::Settings
       | Self::Overview
       | Self::NewTask
@@ -202,6 +208,7 @@ impl Screen {
     match self {
       Self::AllProjects => "/".to_owned(),
       Self::AddProject => format!("/{ADD_PROJECT}"),
+      Self::JoinTeam => format!("/{}", join_team::SEGMENT),
       Self::Settings => format!("/{SETTINGS}"),
       Self::NewTask => format!("{tasks}/{NEW}"),
       Self::EditTask => format!("{tasks}/:key/{EDIT}"),

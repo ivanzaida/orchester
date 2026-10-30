@@ -5,7 +5,7 @@
 use orchester_api::{
   ErrorCode,
   client::{ClientError, ServerAddress},
-  cloud::{CloudErrorCode, CloudInvite, CloudServer},
+  cloud::{AccountServer, CloudErrorCode, CloudInvite, CloudServer},
 };
 use orchester_core::id::{InviteId, TeamServerId};
 
@@ -47,12 +47,12 @@ impl Cloud {
     Ok(())
   }
 
-  /// The team servers the account owns or joined, as the cloud lists them (`docs/architecture/server.md`, row 44).
-  pub async fn team_servers(&self) -> Result<Vec<CloudServer>, CloudError> {
-    let listed = self
+  /// The team servers the account owns or joined, each with whether it owns it, as the cloud lists them
+  /// (`docs/architecture/server.md`, row 44).
+  pub async fn team_servers(&self) -> Result<Vec<AccountServer>, CloudError> {
+    self
       .with_token(|client, token| async move { Ok(client.servers(&token).await?) })
-      .await?;
-    Ok(listed.into_iter().map(|listed| listed.server).collect())
+      .await
   }
 
   /// Joins the team server at `address` with the account (*Connect a server › With my Orchester account*). The server
@@ -75,6 +75,7 @@ impl Cloud {
         .team_servers()
         .await?
         .into_iter()
+        .map(|listed| listed.server)
         .find(|server| at(server, address))
         .ok_or(CloudError::NoServer)?,
     };

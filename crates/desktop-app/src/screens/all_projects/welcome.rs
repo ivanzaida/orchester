@@ -1,7 +1,8 @@
 //! The welcome of a first launch (`Content · Welcome` `MANaM` in `UQZRa`): the mark, what Orchester is for,
-//! *Create your first project* and *Open project folder…*, the three steps to a first task, and a footer that
-//! says each project keeps its own instructions, tools, secrets and connections. Nothing is made up: no
-//! recent project, no activity, no runner.
+//! *Create your first project*, *Open project folder…* and *Join a team* (no frame draws it: it leads to the start
+//! page's step until that page lands, ORC-293), the three steps to a first task, and a footer that says each project
+//! keeps its own instructions, tools, secrets and connections. Nothing is made up: no recent project, no activity, no
+//! runner.
 
 use lurq::{
   app::{
@@ -20,7 +21,7 @@ use super::{
 use crate::{
   brand,
   navigation::Navigation,
-  routes::Route,
+  routes::{JoinWay, Route},
   theme::{ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, ProjectsSpacing, ProjectsText},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -88,11 +89,21 @@ fn introduction(ctx: &mut Ctx, open: &OpenAction) -> Column {
   .icon(Icon::Plus)
   .large()
   .opens(navigation.to(Route::AddProject(None)));
+  // Until the start page (ORC-293) has its own way in: no frame draws it here.
+  let join = ActionButton::new(
+    "welcome-join-team",
+    ButtonKind::Secondary,
+    ctx.t("projects.welcome.joinTeam"),
+  )
+  .icon(Icon::Users)
+  .large()
+  .opens(navigation.to(Route::JoinTeam(JoinWay::Cloud)));
   let actions = Row::new()
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .child(create)
-    .child(folder::button(ctx, open, "welcome-open-folder").large());
+    .child(folder::button(ctx, open, "welcome-open-folder").large())
+    .child(join);
   Column::new()
     .id("welcome-introduction")
     .width(Dimension::Px(INTRODUCTION_WIDTH))

@@ -46,6 +46,8 @@ pub struct FieldInput {
   value: Signal<String>,
   placeholder: Option<Arc<str>>,
   leading: Option<Icon>,
+  /// The leading glyph goes once the field holds text.
+  leading_while_empty: bool,
   unit: Option<Arc<str>>,
   lines: Lines,
   mono: bool,
@@ -90,6 +92,7 @@ impl PartialEq for FieldInput {
       && self.value.id() == other.value.id()
       && self.placeholder == other.placeholder
       && self.leading == other.leading
+      && self.leading_while_empty == other.leading_while_empty
       && self.unit == other.unit
       && self.lines == other.lines
       && self.mono == other.mono
@@ -123,6 +126,7 @@ impl FieldInput {
       value,
       placeholder: None,
       leading: None,
+      leading_while_empty: false,
       unit: None,
       lines: Lines::One,
       mono: false,
@@ -176,6 +180,14 @@ impl FieldInput {
   /// A glyph before the value that says what the field is for (`pencil-line` in the plan's note `c2mWh`).
   pub fn leading(mut self, glyph: Icon) -> Self {
     self.leading = Some(glyph);
+    self
+  }
+
+  /// [`Self::leading`] only while the field is empty, where the design draws the filled field without it (`server` in
+  /// `B914L`, none in `aWsVx`). The input keeps the focus when the glyph goes.
+  pub fn leading_while_empty(mut self, glyph: Icon) -> Self {
+    self.leading = Some(glyph);
+    self.leading_while_empty = true;
     self
   }
 
