@@ -415,7 +415,10 @@ not jump to another project by itself.
      first run's Summary has the Browser line 10), `browser-window-dialog` (03), `browser-window-select` (04),
      `browser-window-headed` (05), `browser-window-empty` (06), `browser-window-not-found` (07); start them with
      `no_runner`, so no runner reports
-     its own browser over the fixture. The page's focus is a hidden text input of lurq's, at the point pressed, so an
+     its own browser over the fixture. `browser-window-empty` with a runner reaches a tab coming after *Empty*: *+*, or
+     an address and Enter. The address line has the focus on *Empty* and lets go of it when a tab comes, showing that
+     tab's address, unless the person typed there; Enter leaves the line, and Ctrl+L on a page keeps the focus (`--test
+     browser_window browser_address_line_`). The page's focus is a hidden text input of lurq's, at the point pressed, so an
      input method composes there and what it commits is sent as text (`Input.insertText`); tests of the person's
      input as the window sends it to the tab shown, at a scale factor of 2: `--test browser_window browser_person_`.
      Not yet: an input method's composition under way (lurq shows it in its text input and tells no handler, so the

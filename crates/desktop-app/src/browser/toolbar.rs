@@ -1,6 +1,7 @@
 //! The window's panel under the title bar (`Body` `JiHDn`, `Panel` `DsHim`) and its toolbar (`Toolbar` `Zv6Z5`): back,
 //! forward and reload; the address line, which ends with the owner of the tab shown (*Run #102 · ORC-107*, *Your
-//! tab*) and has the focus while the strip is empty (`06` `eCCuU`, given by the root); and *Open in a browser window*
+//! tab*) and has the focus while the strip is empty (`06` `eCCuU`, given by the root, and let go of when a tab comes
+//! unless the person typed there); and *Open in a browser window*
 //! (decision 7). Under the toolbar the line that says what an agent did or that the person's input holds it
 //! (`page::activity`), and a line when the browser could not do what was asked; then the page. Without a browser the
 //! toolbar is faded and takes no input (`07` `YEv2c`); with the browser in a window of its own the address line shows
@@ -171,6 +172,8 @@ pub struct Address {
   focused: Signal<bool>,
   /// The tab and address the value follows while the person is not typing.
   follows: Mutex<Option<(Option<BrowserTabId>, String)>>,
+  /// The text input's key. Moving it lets go of the focus: lurq has no call for that, but blurs a node it replaces.
+  input_key: Mutex<u64>,
 }
 
 impl Component for Address {
@@ -181,6 +184,7 @@ impl Component for Address {
       value: ctx.signal(String::new()),
       focused: ctx.signal(false),
       follows: Mutex::new(None),
+      input_key: Mutex::new(0),
     }
   }
 
@@ -218,17 +222,27 @@ impl Component for Address {
 }
 
 impl Address {
-  /// While the person is not typing, the value follows the tab shown and its address.
+  /// The value follows the tab shown and its address, unless the person is typing over it. The focus *Empty* gave the
+  /// line to wait for an address goes when a tab comes instead; text typed there keeps it.
   fn follow(&self, tab: Option<BrowserTabId>, address: &str) {
-    if self.focused.get_untracked() {
+    let focused = self.focused.get_untracked();
+    let mut follows = self.follows.lock();
+    let typed = follows
+      .as_ref()
+      .is_some_and(|(_, followed)| *followed != self.value.get_untracked());
+    if focused && typed {
       return;
     }
-    let mut follows = self.follows.lock();
     let next = (tab, address.to_owned());
-    if follows.as_ref() != Some(&next) {
-      self.value.set(next.1.clone());
-      *follows = Some(next);
+    if follows.as_ref() == Some(&next) {
+      return;
     }
+    let tab_came = next.0.is_some() && follows.as_ref().is_some_and(|(tab, _)| tab.is_none());
+    if focused && tab_came {
+      *self.input_key.lock() += 1;
+    }
+    self.value.set(next.1.clone());
+    *follows = Some(next);
   }
 
   /// The address in mono; the words that stand in for it in sans (`URL` in `06` `eCCuU`, `07` `YEv2c`).
@@ -251,6 +265,7 @@ impl Address {
     .placeholder(&placeholder)
     .caret_color(PaletteColor::TextPrimary)
     .id("browser-address")
+    .key(self.input_key.lock().to_string())
     .ref_element(showing.address.clone())
     .describe("a11y_name", ctx.t("browser.toolbar.address"))
     .flex(1.0)
@@ -258,13 +273,14 @@ impl Address {
     .single_line()
     .on_focus(move || gained.set(true))
     .on_blur(move || lost.set(false))
-    // Every key reaches every handler: an Enter on the page is the page's.
+    // Every key reaches every handler: an Enter on the page is the page's. lurq's own Enter then blurs the line, so it
+    // follows the tab again; with nothing to open the line keeps the focus.
     .on_key_down(move |event: KeyboardEvent| {
       if event.key != "Enter" || !address.focused() {
         return;
       }
-      event.prevent_default();
       let Some(url) = model::typed_address(&value.get_untracked()) else {
+        event.prevent_default();
         return;
       };
       match tab.clone() {

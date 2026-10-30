@@ -322,7 +322,7 @@ impl BrowserRoot {
   }
 
   /// Gives the address line the focus when Ctrl+L asks for it, and when the window starts to show *Empty*, whose
-  /// address line has the focus (`06` `eCCuU`).
+  /// address line has the focus (`06` `eCCuU`); the line itself lets go of that when a tab comes (`toolbar::Address`).
   fn focus_address(&self, ctx: &mut Ctx, showing: &Showing) {
     let empty = showing.found == Lookup::Found && showing.usable() && showing.strip.is_empty();
     let became_empty = {
