@@ -200,17 +200,7 @@ impl Component for ToolEditor {
     let shared = standing.map(|(team, standing, e)| {
       hub::team::head_line(ctx, "tool-team-state", team, standing, hub::team::draft_on(e.state))
     });
-    // *Missing on this computer* (`04` `w0Evp`): a shared tool that names a secret or an MCP server not bound here.
-    let missing = missing::missing_here(
-      ctx,
-      &missing::Page {
-        project: &p.project,
-        prefix: "tool-missing",
-        resources: baseline.iter().map(|entry| entry.id).collect(),
-        name: &title,
-        whose: missing::Whose::Resource,
-      },
-    );
+    let missing = missing_here(ctx, &p, baseline.as_ref(), &title);
     let versions = baseline
       .as_ref()
       .and_then(|e| hub::team::member_versions(ctx, "tool", (&p.project, team.as_ref()), e.id));
@@ -258,6 +248,20 @@ impl Component for ToolEditor {
       ));
     hub::item_body("tool-page", pane, Some(inspector::inspector(ctx, &p).into()))
   }
+}
+
+/// *Missing on this computer* (`04` `w0Evp`): a shared tool that names a secret or an MCP server not bound here.
+fn missing_here(ctx: &mut Ctx, p: &EditorProps, baseline: Option<&ToolEntry>, title: &str) -> Option<Element> {
+  missing::missing_here(
+    ctx,
+    &missing::Page {
+      project: &p.project,
+      prefix: "tool-missing",
+      resources: baseline.iter().map(|entry| entry.id).collect(),
+      name: title,
+      whose: missing::Whose::Resource,
+    },
+  )
 }
 
 /// In a shared project, a version of the tool published here that waits, in the draft bar's place (02b, 02c); after

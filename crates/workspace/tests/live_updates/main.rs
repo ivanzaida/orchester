@@ -12,6 +12,7 @@
 
 mod config;
 mod desktop;
+mod here;
 mod http;
 mod publish;
 mod server;

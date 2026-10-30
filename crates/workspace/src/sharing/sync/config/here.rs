@@ -10,7 +10,7 @@ use std::path::Path;
 use orchester_core::{
   connection::{Connection, mcp::McpServer},
   id::{ConnectionId, ResourceId},
-  resource::{ResourceKind, VersionNumber},
+  resource::{AgentProfile, Instruction, Pipeline, ResourceBody, ResourceKind, Skill, Tool, VersionNumber},
   secret::{Secret, SecretKind},
   sharing::ConnectionRole,
   store::{ConnectionStore, McpServerStore, ResourceStore, SecretStore},
@@ -30,6 +30,9 @@ pub struct Needer {
   pub number: VersionNumber,
   /// Every cached version of it that names the reference, oldest first.
   pub numbers: Vec<VersionNumber>,
+  /// The version of it runs use here, whether it names the reference or not; `None` when every version waits for the
+  /// person's *Use v<N> here*.
+  pub used: Option<VersionNumber>,
 }
 
 /// How a reference stands on this computer.
@@ -59,9 +62,12 @@ impl HereReference {
     matches!(self.standing, Standing::Missing)
   }
 
-  /// Whether `resource` names it.
-  pub fn needed_by(&self, resource: ResourceId) -> bool {
-    self.needed_by.iter().any(|needer| needer.resource == resource)
+  /// Whether the version of `resource` its runs use here names it; with no such version, the newest that names it.
+  pub fn used_by(&self, resource: ResourceId) -> bool {
+    self
+      .needed_by
+      .iter()
+      .any(|needer| needer.resource == resource && needer.numbers.contains(&needer.used.unwrap_or(needer.number)))
   }
 
   /// Whether version `number` of `resource` names it.
@@ -122,12 +128,13 @@ impl Here {
       .count()
   }
 
-  /// The references `resource` names that are missing here.
+  /// The references the version of `resource` its runs use here names that are missing here; what an older version or
+  /// one that waits for *Use v<N> here* names doesn't count.
   pub fn missing_for(&self, resource: ResourceId) -> Vec<&HereReference> {
     self
       .references
       .iter()
-      .filter(|reference| reference.is_missing() && reference.needed_by(resource))
+      .filter(|reference| reference.is_missing() && reference.used_by(resource))
       .collect()
   }
 
@@ -147,10 +154,11 @@ impl Here {
       .collect()
   }
 
-  /// The connection reference `resource` names: the one a profile's runs take here (*Runs here use*).
+  /// The connection reference the version of `resource` its runs use here names: the one a profile's runs take here
+  /// (*Runs here use*).
   pub fn connection_of(&self, resource: ResourceId) -> Option<&HereReference> {
     self.references.iter().find(|reference| {
-      matches!(reference.binding.reference, BoundReference::Connection { .. }) && reference.needed_by(resource)
+      matches!(reference.binding.reference, BoundReference::Connection { .. }) && reference.used_by(resource)
     })
   }
 
@@ -176,7 +184,8 @@ impl Here {
   }
 }
 
-/// The resources whose cached versions name `binding`'s reference, each with the versions that do.
+/// The resources whose cached versions name `binding`'s reference, each with the versions that do and the version its
+/// runs use here.
 fn needers(db: &ProjectDb, binding: &ReferenceBinding) -> Result<Vec<Needer>, StoreError> {
   let mut needers: Vec<Needer> = Vec::new();
   for naming in db.versions_naming(binding_target(binding.reference))? {
@@ -194,9 +203,26 @@ fn needers(db: &ProjectDb, binding: &ReferenceBinding) -> Result<Vec<Needer>, St
       name: resource.name().as_str().to_owned(),
       number: naming.number,
       numbers: vec![naming.number],
+      used: used_version(db, naming.resource, naming.kind)?,
     });
   }
   Ok(needers)
+}
+
+/// The version of `resource` runs use here: the newest that does not wait for the person's *Use v<N> here*.
+fn used_version(db: &ProjectDb, resource: ResourceId, kind: ResourceKind) -> Result<Option<VersionNumber>, StoreError> {
+  fn number<B: ResourceBody>(db: &ProjectDb, resource: ResourceId) -> Result<Option<VersionNumber>, StoreError> {
+    Ok(db.latest_version::<B>(resource)?.map(|version| version.number()))
+  }
+  match kind {
+    ResourceKind::Pipeline => number::<Pipeline>(db, resource),
+    ResourceKind::AgentProfile => number::<AgentProfile>(db, resource),
+    ResourceKind::Instruction => number::<Instruction>(db, resource),
+    ResourceKind::Tool => number::<Tool>(db, resource),
+    ResourceKind::Skill => number::<Skill>(db, resource),
+    // Agent testing's kinds are never shared.
+    ResourceKind::TestSuite | ResourceKind::Service | ResourceKind::Stack => Ok(None),
+  }
 }
 
 fn standing(
