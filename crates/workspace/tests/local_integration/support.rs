@@ -102,6 +102,7 @@ impl Fixture {
           branch: BranchName::new(branch).expect("branch"),
           base: Revision::new(&base).expect("revision"),
           base_branch: Some(BranchName::new("main").expect("branch")),
+          base_source: orchester_core::integration::base::RunBaseSource::CheckedOut,
           budget: None,
           max_duration: None,
         },

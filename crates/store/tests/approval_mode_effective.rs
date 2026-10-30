@@ -15,9 +15,9 @@ use rusqlite::{Connection, params};
 
 use self::support::{copied_at_version, started_run};
 
-/// The migrations after approval modes': shared configuration's, ORC-346's request answers, then when and by whom a
-/// run was switched.
-const LATER_MIGRATIONS: u32 = 3;
+/// The migrations after approval modes': shared configuration's, ORC-346's request answers, when and by whom a run
+/// was switched, shared publishes, waiting versions, then base branches of tasks and modules.
+const LATER_MIGRATIONS: u32 = 6;
 
 fn database(repo: &Path) -> PathBuf {
   repo.join(".orchester").join("orchester.db")

@@ -289,6 +289,7 @@ fn record_pending_member(
       branch: orchester_core::run::BranchName::for_next_run(task.key(), 0),
       base: first.base().clone(),
       base_branch: None,
+      base_source: orchester_core::integration::base::RunBaseSource::CheckedOut,
       budget: limits.budget(),
       max_duration: limits.max_duration(),
     },

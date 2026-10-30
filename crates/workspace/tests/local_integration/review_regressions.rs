@@ -246,6 +246,7 @@ pub(super) fn second_run(fixture: &Fixture, supersedes: bool) -> RunId {
         branch: BranchName::new("second").expect("branch"),
         base: Revision::new(&git(fixture.root(), &["rev-parse", "HEAD"])).expect("base"),
         base_branch: Some(BranchName::new("main").expect("branch")),
+        base_source: orchester_core::integration::base::RunBaseSource::CheckedOut,
         budget: None,
         max_duration: None,
       },

@@ -1,9 +1,8 @@
 //! General (`01 · General` `hz6eK`, its states `01b` `nHr9b`): the project's name, key and folder as plain values, and
 //! the repository: its GitHub repository with Check again, the GitHub account the project expects with how `gh`
-//! matches it, the base branch (ORC-81), telling working agents when the base branch moves (ORC-54), and the
-//! repository's agent files with what each CLI loads in a popover.
+//! matches it, telling working agents when the base branch moves (ORC-54), and the repository's agent files with what
+//! each CLI loads in a popover. Base branches are set on tasks and modules (`Base branch · redesign`, `ri5ru`).
 mod agent_files;
-mod base_branch;
 mod github;
 use lurq::{
   app::{component::Component, ctx::Ctx, theme::PaletteColor},
@@ -31,8 +30,6 @@ use crate::{
   },
 };
 
-/// The base branch's select (`Base branch` in `XvyXm`).
-const BRANCH: f32 = 218.0;
 #[derive(Clone)]
 pub(super) struct General {
   save: work::Save,
@@ -80,7 +77,6 @@ impl Component for General {
     let settings = read.0;
     let identity = identity(ctx, &props);
     let mut rows = github::rows(ctx, &props, &settings, &save, self.revision.get());
-    rows.push(ctx.mount_keyed::<base_branch::BaseBranch>("settings-base-branch-setting", props.clone()));
     rows.push(base_notices(ctx, &props, &settings, &save));
     rows.push(agent_files::row(
       ctx,
@@ -155,7 +151,7 @@ fn identity(ctx: &mut Ctx, props: &TabProps) -> Element {
 }
 /// The General tab while its settings are read (`09 · Project settings · General · loading` `XvyXm`): the Project and
 /// Repository headings, every row label and its fixed help line stay; the name, key, folder, repository, signed-in
-/// account, base branch and both switches are bones in the value column, the lower rows fading.
+/// account and both switches are bones in the value column, the lower rows fading.
 fn bones(ctx: &mut Ctx) -> lurq::components::Column {
   let mono = |ctx: &Ctx, width| skeleton::line(ctx, ProjectSettingsText::MonoValue.role(), width);
   let marked = |ctx: &Ctx, glyph: Element, width| {
@@ -196,9 +192,6 @@ fn bones(ctx: &mut Ctx) -> lurq::components::Column {
     .info(ctx.t("project_settings.githubAccountDetail"))
     .hint_reading(152.0)
     .control(mono(ctx, 42.0)),
-    SettingRow::new("settings-base-branch-reading", ctx.t("project_settings.baseBranch"))
-      .hint(ctx.t("project_settings.baseBranchShortHint"))
-      .control(skeleton::select(ctx, BRANCH, 22.0)),
     SettingRow::new(
       "settings-base-moved-reading",
       ctx.t("project_settings.baseMovedSection"),

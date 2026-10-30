@@ -12,7 +12,7 @@ use orchester_core::{
   diff::git::git_command,
   id::{RunId, TaskId},
   integration::{
-    base::{BaseBranchSetting, set_branch_tip},
+    base::{BaseChoice, set_branch_tip},
     checked_out_branch,
   },
   resource::{Pipeline, VersionNumber, WithoutCommits},
@@ -35,8 +35,8 @@ use super::{
 };
 use crate::{messages::Message, runner::RunRequestError};
 
-/// Where the next run starts from: the project's base branch at its tip, or the branch the user's checkout has, if
-/// any, at its `HEAD`.
+/// Where the next run starts from: the task's or its module's base branch at its tip, or the branch the user's
+/// checkout has, if any, at its `HEAD`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Base {
   pub branch: Option<BranchName>,
@@ -126,7 +126,7 @@ impl RunAgainCheck {
         .first()
         .map_or_else(|| Arc::from(""), |step| step.name.as_str().into()),
       steps: steps.len(),
-      base: base(programs.runner(), repo_root, &db.base_branch_setting()?),
+      base: base(programs.runner(), repo_root, &db.next_run_base(&task)?.0),
       branch: BranchName::for_next_run(task.key(), listed.len()),
       limits: task.details().limits,
     };
@@ -172,18 +172,18 @@ pub fn request_messages(error: &RunRequestError, pipeline: &str) -> Vec<Message>
   }
 }
 
-/// Where the next run starts at `repo_root`: the tip of the project's base branch when `setting` sets one, else the
-/// checkout's branch and `HEAD`; `None`, logged, when git cannot tell or the branch set is gone.
-fn base(runner: &(dyn CommandRunner + Send + Sync), repo_root: &Path, setting: &BaseBranchSetting) -> Option<Base> {
+/// Where the next run starts at `repo_root`: the tip of the base branch `choice` sets, else the checkout's branch and
+/// `HEAD`; `None`, logged, when git cannot tell or the branch set is gone.
+fn base(runner: &(dyn CommandRunner + Send + Sync), repo_root: &Path, choice: &BaseChoice) -> Option<Base> {
   let git = Path::new(GIT);
-  if let Some(branch) = setting.branch() {
+  if let Some(branch) = choice.branch() {
     return match set_branch_tip(&runner, git, (repo_root, branch)) {
       Ok(revision) => Some(Base {
         branch: Some(branch.clone()),
         revision,
       }),
       Err(error) => {
-        tracing::warn!(%error, "cannot read the project's base branch");
+        tracing::warn!(%error, "cannot read the task's base branch");
         None
       }
     };

@@ -48,6 +48,7 @@ fn next_run(fixture: &mut Fixture) -> RunId {
         branch: BranchName::new("next-result").expect("branch"),
         base: git(fixture.root(), &["rev-parse", "HEAD"]).parse().expect("base"),
         base_branch: Some(BranchName::new("main").expect("branch")),
+        base_source: orchester_core::integration::base::RunBaseSource::CheckedOut,
         budget: None,
         max_duration: None,
       },

@@ -16,6 +16,7 @@ use super::{
 };
 use crate::{
   id::{AttemptId, CheckpointId, ResourceId, RunId, StepExecutionId, TaskId},
+  integration::base::RunBaseSource,
   permission::AgentPermissions,
   resource::StepKey,
   revision::Revision,
@@ -89,11 +90,14 @@ pub struct RunCreated {
   pub snapshot: RunSnapshot,
   pub branch: BranchName,
   pub base: Revision,
-  /// The branch the user's checkout had when the run started, which merging the run brings its
-  /// work into; `None` when the checkout had a detached HEAD, and for runs recorded before
-  /// Orchester recorded it.
+  /// The branch the run started from, which merging the run brings its work into; `None` when it took the checkout's
+  /// branch on a detached HEAD, and for runs recorded before Orchester recorded it.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub base_branch: Option<BranchName>,
+  /// Where `base_branch` came from. A creation event written before it was kept reads as the checked-out branch; the
+  /// store's `runs.base_source` holds what such a run migrated to.
+  #[serde(default = "checked_out")]
+  pub base_source: RunBaseSource,
   /// `None`: the run has no token budget.
   #[serde(default)]
   pub budget: Option<TokenBudget>,
@@ -101,6 +105,10 @@ pub struct RunCreated {
   /// `None`: the run has no time limit.
   #[serde(default, with = "optional_millis")]
   pub max_duration: Option<Duration>,
+}
+
+const fn checked_out() -> RunBaseSource {
+  RunBaseSource::CheckedOut
 }
 
 /// A step execution created by a new attempt.

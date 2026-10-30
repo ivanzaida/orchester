@@ -6,7 +6,6 @@ use std::{collections::BTreeMap, path::PathBuf};
 
 use orchester_core::{
   agent_files::RepositoryAgentFiles,
-  integration::{base::BaseBranchSetting, branch_head},
   resource::{CommandEnvironment, ResourceKind, VariableName},
   store::{ConnectionStore, RepositoryStore, ResourceStore, SettingsStore},
 };
@@ -153,7 +152,6 @@ pub async fn get_project(services: &Services, args: InProject) -> Result<Value, 
       "code_index": db.code_index()?.is_on(),
       "environment": environment_json(&db.project_environment()?),
       "repository_agent_files": db.repository_agent_files()?.is_on(),
-      "base_branch": base_branch_json(&services, &open, &db.base_branch_setting()?),
       "github": db.repository_link()?.map(|link| link.repo().to_string()),
       "connections": db.connections()?.len(),
       "profiles": resources(ResourceKind::AgentProfile)?,
@@ -166,28 +164,6 @@ pub async fn get_project(services: &Services, args: InProject) -> Result<Value, 
     Ok(json!({ "project": project }))
   })
   .await
-}
-
-/// Project settings › General › Base branch: `branch` is the branch set, `null` while new runs take the branch the
-/// checkout has checked out; `missing` says the repository no longer has the branch set, so new runs are refused
-/// (`null` when git cannot tell).
-fn base_branch_json(services: &Services, open: &OpenProject, setting: &BaseBranchSetting) -> Value {
-  let Some(branch) = setting.branch() else {
-    return json!({ "branch": null, "missing": false });
-  };
-  let head = branch_head(
-    &services.programs.runner(),
-    std::path::Path::new(crate::tasks::changes::GIT),
-    (&open.repo_root, branch),
-  );
-  let missing = match head {
-    Ok(head) => Some(head.is_none()),
-    Err(error) => {
-      tracing::warn!(%error, "cannot tell whether the project's base branch exists");
-      None
-    }
-  };
-  json!({ "branch": branch.as_str(), "missing": missing })
 }
 
 pub async fn set_environment(services: &Services, args: SetProjectEnvironment) -> Result<Value, ToolError> {
