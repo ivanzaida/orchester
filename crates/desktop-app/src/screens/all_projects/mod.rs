@@ -6,12 +6,14 @@
 //! they report. Selecting a project that opens shows its Overview; *Open project folder…* opens the project a folder
 //! keeps ([`folder`]); *Add project* opens Add project; *Join a team* and *Open shared project…* open the teams in
 //! Settings › Orchester Cloud; a joined team's project with no checkout here is offered above the list until *Not
-//! now* ([`teams`], [`offer`]); the × asks in place whether to remove a project from the list ([`remove`]); a row under
-//! the pointer offers to move its project between this computer and the account ([`move_project`]); and while nobody is
-//! signed in a line says what waits for a sign-in ([`waiting`]). The *Usage* tab shows every project's usage (`rHA8G`,
+//! now* ([`teams`], [`offer`]); an agent CLI that is not found is warned of above the list and on the welcome
+//! ([`agent_cli`]); the × asks in place whether to remove a project from the list ([`remove`]); a row under the pointer
+//! offers to move its project between this computer and the account ([`move_project`]); and while nobody is signed in a
+//! line says what waits for a sign-in ([`waiting`]). The *Usage* tab shows every project's usage (`rHA8G`,
 //! `crate::screens::usage::everywhere`). The rules are `orchester_workspace::project_list`'s and
 //! `orchester_workspace::sharing`'s.
 
+mod agent_cli;
 mod folder;
 mod move_project;
 mod offer;
@@ -42,7 +44,7 @@ use orchester_workspace::{
 };
 use parking_lot::Mutex;
 
-use self::{move_project::Moving, teams::Teams};
+use self::{agent_cli::AgentCli, move_project::Moving, teams::Teams};
 use crate::{root::follow_sign_in, routes::Screen, screens::settings::orchester::InvitesNotice, services::Services};
 
 /// The element of the screen, as every screen has one (`screen-<name>`).
@@ -105,6 +107,8 @@ struct AllProjects {
   invites: InvitesNotice,
   /// What was put off of the teams' projects offered.
   teams: Teams,
+  /// The warning that an agent CLI is not found.
+  cli: AgentCli,
 }
 
 impl Component for AllProjects {
@@ -123,6 +127,7 @@ impl Component for AllProjects {
       seen: Arc::default(),
       invites: InvitesNotice::new(ctx),
       teams: Teams::new(ctx),
+      cli: AgentCli::new(ctx),
     }
   }
 
@@ -148,6 +153,11 @@ impl Component for AllProjects {
       Some(Listing::Welcome) | None => Vec::new(),
     };
     let failed = listing.error.clone().filter(|_| !listing.is_pending());
+    let cli = self.cli.read(
+      ctx,
+      &services,
+      agent_cli::listed(listing.data.as_ref(), failed.is_some()),
+    );
     // The teams are read once the page shows: for the listed projects, or for the header alone when the list failed.
     let shown = match (&listing.data, &failed) {
       (Some(Listing::Projects(entries)), _) => Some(entries.as_slice()),
@@ -167,13 +177,19 @@ impl Component for AllProjects {
     let tab = ctx.props::<Tab>().clone();
     match (listing.data, failed) {
       (_, Some(error)) => {
-        let notice = self.invites.notice(ctx, &invites);
-        page::page(ctx, heading, page::Body::Failed(&error), (None, notice, None))
+        let above = page::Above {
+          notice: self.invites.notice(ctx, &invites),
+          ..page::Above::default()
+        };
+        page::page(ctx, heading, page::Body::Failed(&error), above)
       }
-      (Some(Listing::Welcome), None) => welcome::welcome(ctx, &open),
+      (Some(Listing::Welcome), None) => {
+        let cli = self.cli.element(ctx, &cli);
+        welcome::welcome(ctx, &open, cli)
+      }
       (Some(Listing::Projects(_)), None) if let Tab::Usage(query) = tab => {
         let usage = crate::screens::usage::everywhere(ctx, &query, work);
-        page::page(ctx, heading, page::Body::Usage(usage), (None, None, None))
+        page::page(ctx, heading, page::Body::Usage(usage), page::Above::default())
       }
       (Some(Listing::Projects(_)), None) => {
         let rows = project_list::listed(&entries, &data, &services.runners);
@@ -190,12 +206,16 @@ impl Component for AllProjects {
         } else {
           page::Body::Empty
         };
-        let notice = self.invites.notice(ctx, &invites);
-        let offer = teams
-          .offer
-          .as_ref()
-          .map(|offered| offer::strip(ctx, offered, &teams.answer));
-        page::page(ctx, heading, body, (line, notice, offer))
+        let above = page::Above {
+          waiting: line,
+          cli: self.cli.element(ctx, &cli),
+          notice: self.invites.notice(ctx, &invites),
+          offer: teams
+            .offer
+            .as_ref()
+            .map(|offered| offer::strip(ctx, offered, &teams.answer)),
+        };
+        page::page(ctx, heading, body, above)
       }
       // Reading the list takes a moment; the screen stays empty meanwhile.
       (None, None) => lurq::components::Column::new().id(screen_id()).into(),

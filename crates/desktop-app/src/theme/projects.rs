@@ -51,10 +51,12 @@ pub enum ProjectsText {
   ChoiceLabel,
   /// Geist Mono 11.5 `text_secondary`, 1.5: what git wrote when it failed (`gpVqf`).
   GitOutput,
+  /// Geist Mono 11.5 `text_muted`, 1.3: the folders searched for an agent CLI (`qMnzd` in `U4QvYO`).
+  SearchedFolders,
 }
 
 impl ProjectsText {
-  pub const ALL: [Self; 18] = [
+  pub const ALL: [Self; 19] = [
     Self::Eyebrow,
     Self::WelcomeTitle,
     Self::WelcomeLead,
@@ -73,6 +75,7 @@ impl ProjectsText {
     Self::CreateTitle,
     Self::ChoiceLabel,
     Self::GitOutput,
+    Self::SearchedFolders,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -99,6 +102,7 @@ impl ProjectsText {
       Self::CreateTitle => "projects_create_title",
       Self::ChoiceLabel => "projects_choice_label",
       Self::GitOutput => "projects_git_output",
+      Self::SearchedFolders => "projects_searched_folders",
     }
   }
 
@@ -123,6 +127,7 @@ impl ProjectsText {
       Self::CreateTitle => sans(12.5, FontWeight::Medium, 1.3, palette.text_primary),
       Self::ChoiceLabel => sans(10.5, FontWeight::SemiBold, 1.3, palette.text_muted),
       Self::GitOutput => mono(sans(11.5, FontWeight::Normal, 1.5, palette.text_secondary)),
+      Self::SearchedFolders => mono(sans(11.5, FontWeight::Normal, 1.3, palette.text_muted)),
     }
   }
 }

@@ -1,10 +1,10 @@
 //! The page of All projects (`Column` `k4fycz` in `S5HDKf`; `P5z2w` in 09 `i5G19A`, `aPjYW` in 09b `dLOCJ`): the
 //! heading with *Join a team*, *Open shared project…*, *Open project folder…* and *Add project*, the *Projects* |
-//! *Usage* tabs, the error line of *Open project folder…* (`FV5pQ`), the team project offered (`ZyS3T`), then the
-//! list with what removing means under it and, with no team joined, how to see a team's projects (`b3WTlF`), the
-//! empty list (`d1oNx8`) or why the list cannot be read (`T46trR`). *Usage* is a page of its own (`rHA8G`): the
-//! heading and tabs pinned across the whole content panel, 40 from its sides, over every project's usage, which pins
-//! its toolbar and scrolls its sections.
+//! *Usage* tabs, that an agent CLI is not found ([`super::agent_cli`]), the error line of *Open project folder…*
+//! (`FV5pQ`), the team project offered (`ZyS3T`), then the list with what removing means under it and, with no team
+//! joined, how to see a team's projects (`b3WTlF`), the empty list (`d1oNx8`) or why the list cannot be read
+//! (`T46trR`). *Usage* is a page of its own (`rHA8G`): the heading and tabs pinned across the whole content panel, 40
+//! from its sides, over every project's usage, which pins its toolbar and scrolls its sections.
 
 use std::sync::Arc;
 
@@ -41,6 +41,8 @@ use crate::{
 
 /// The page's column (`k4fycz`).
 const COLUMN_WIDTH: f32 = 1120.0;
+/// The line that says why *Open project folder…* opened nothing.
+const OPEN_ERROR: &str = "all-projects-error";
 
 /// What the heading's actions need: *Open project folder…*'s action, and the team servers joined (`None` until they
 /// are read).
@@ -70,14 +72,21 @@ pub(super) enum Body<'a> {
   Usage(Element),
 }
 
-/// The page with `body` under its tabs, and between them what waits for a sign-in, the invites notice and the team
-/// project offered while they show something.
-pub(super) fn page(
-  ctx: &mut Ctx,
-  heading: Heading<'_>,
-  body: Body<'_>,
-  (waiting, notice, offer): (Option<Element>, Option<Element>, Option<Element>),
-) -> Element {
+/// What the page shows between its tabs and its body, while each shows something.
+#[derive(Default)]
+pub(super) struct Above {
+  /// What waits for a sign-in.
+  pub waiting: Option<Element>,
+  /// That an agent CLI is not found.
+  pub cli: Option<Element>,
+  /// The invites notice.
+  pub notice: Option<Element>,
+  /// The team project offered.
+  pub offer: Option<Element>,
+}
+
+/// The page with `body` under its tabs, and between them what is `above` it.
+pub(super) fn page(ctx: &mut Ctx, heading: Heading<'_>, body: Body<'_>, above: Above) -> Element {
   let failure = folder::failure(ctx, heading.open);
   let (state, content) = match body {
     Body::Failed(error) => ("failed", failed(ctx, error)),
@@ -96,10 +105,11 @@ pub(super) fn page(
     .spacing(ProjectsSpacing::Page.role())
     .child(header(ctx, heading))
     .child(tabs(ctx, false))
-    .with_children(waiting)
-    .with_children(notice)
-    .with_children(failure.map(|failure| error_line(&failure)))
-    .with_children(offer)
+    .with_children(above.waiting)
+    .with_children(above.cli)
+    .with_children(above.notice)
+    .with_children(failure.map(|failure| error_line(OPEN_ERROR, &failure)))
+    .with_children(above.offer)
     .child(content);
   let scrolled = Column::new()
     .width(Dimension::Pct(100.0))
@@ -130,7 +140,7 @@ fn usage_page(ctx: &mut Ctx, heading: Heading<'_>, failure: Option<Arc<str>>, us
     .spacing(ExtraSpacing::SettingsHead.role())
     .child(header(ctx, heading))
     .child(tabs(ctx, true))
-    .with_children(failure.map(|failure| error_line(&failure)));
+    .with_children(failure.map(|failure| error_line(OPEN_ERROR, &failure)));
   Column::new()
     .id(screen_id())
     .describe("state", "usage")
@@ -225,10 +235,10 @@ fn tabs(ctx: &mut Ctx, usage: bool) -> Element {
   page_tabs(ctx, "all-projects-tabs", [projects, usage]).into()
 }
 
-/// Why *Open project folder…* opened nothing (`FV5pQ`).
-fn error_line(failure: &str) -> Element {
+/// Why an action of the page did nothing (`FV5pQ`).
+pub(super) fn error_line(id: &str, failure: &str) -> Element {
   Row::new()
-    .id("all-projects-error")
+    .id(id.to_owned())
     .width(Dimension::Pct(100.0))
     .padding(Padding::symmetric(
       ExtraSpacing::Inset.role(),
@@ -242,7 +252,7 @@ fn error_line(failure: &str) -> Element {
     .child(icon(Icon::CircleAlert, IconSize::Lg, PaletteColor::TextSecondary))
     .child(
       Text::new(failure)
-        .id("all-projects-error-text")
+        .id(format!("{id}-text"))
         .variant(ProjectsText::ErrorLine.role())
         .flex(1.0)
         .min_width(Dimension::Px(0.0)),

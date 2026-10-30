@@ -123,6 +123,7 @@ icons! {
   FilePen => '\u{e31f}',
   FilePenLine => '\u{e320}',
   FilePlus => '\u{e0c9}',
+  FileSearch => '\u{e0cb}',
   FileText => '\u{e0cc}',
   FileWarning => '\u{e319}',
   FileX => '\u{e0cd}',

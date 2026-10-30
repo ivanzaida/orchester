@@ -97,6 +97,7 @@ fn instructions_icons_match_bundled_font_names() {
   for (icon, name) in [
     (Icon::Braces, "braces"),
     (Icon::CalendarClock, "calendar-clock"),
+    (Icon::FileSearch, "file-search"),
     (Icon::Replace, "replace"),
     (Icon::ArchiveRestore, "archive-restore"),
     (Icon::ChevronsUp, "chevrons-up"),

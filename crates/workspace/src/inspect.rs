@@ -24,6 +24,8 @@ macro_rules! markers {
     impl $inspect for crate::connections::data::ConnectionDraft {}
     impl $inspect for crate::connections::data::ProjectConnections {}
     impl $inspect for crate::connections::github::GitHubDraft {}
+    impl $inspect for crate::connections::missing_cli::KnownCopies {}
+    impl $inspect for crate::connections::missing_cli::MissingCli {}
     impl $inspect for crate::connections::mcp::TransportChoice {}
     impl $inspect for crate::connections::native::NativeDraft {}
     impl $inspect for crate::files::FileFacts {}

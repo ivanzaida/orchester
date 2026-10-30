@@ -108,7 +108,7 @@ more before Orchester reads the project secrets it keeps in the login keychain; 
 Allow*.
 
 **Programs from Finder.** An app started from Finder gets a minimal `PATH`
-(`/usr/bin:/bin:/usr/sbin:/sbin`). Orchester therefore asks your login shell for its `PATH` once
+(`/usr/bin:/bin:/usr/sbin:/sbin`). Orchester therefore asks your login shell for its `PATH`
 as it starts (`$SHELL -l -i -c`, or `/bin/zsh` without `$SHELL`, on a background thread; a shell
 that has not answered within 5 seconds is stopped and its `PATH` is not used, which the log says).
 It looks for the agent CLIs and `gh`, and starts every program, the runner included, with the
@@ -117,8 +117,11 @@ inherited `PATH`, then the login shell's folders, then the usual install folders
 `~/.npm-global/bin`, `~/.volta/bin`, `~/.bun/bin`, `~/Library/pnpm`, `~/.cargo/bin`, the `bin` of
 npm's `prefix` in `~/.npmrc` and nvm's Node.js versions (newest first), each only if it exists; a
 program's own folder is appended for it too, so an npm-installed CLI finds the Node.js beside it.
-A shell that does not take `-l -i -c` (csh, tcsh) gives no `PATH`. When a CLI is still not found,
-the app MCP tool `add_cli_connection` names the folders it searched; a CLI installed elsewhere can
+A shell that does not take `-l -i -c` (csh, tcsh) gives no `PATH`. When an agent CLI a connection
+needs is still not found, the start page warns of it with the folders it searched, *Choose the
+claude file…*, whose file becomes that connection's program and is offered in *Add connection*, and
+*Check again*, which reads the login shell again; on Windows it says the same of the `PATH`. The app
+MCP tool `add_cli_connection` names the folders it searched too, and a CLI installed elsewhere can
 be added there by its file path (`program`): the app's *Connections* does not offer choosing a file
 in this version. Starting the program itself from a terminal,
 `~/Applications/Orchester.app/Contents/MacOS/orchester`, passes that terminal's `PATH` on, and the

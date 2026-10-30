@@ -9,13 +9,17 @@ use std::{
   io::{self, Read},
   path::{Path, PathBuf},
   process::{Child, ChildStdout, Command as Process, Stdio},
-  sync::mpsc::{self, Receiver, RecvTimeoutError},
+  sync::{
+    Arc,
+    mpsc::{self, Receiver, RecvTimeoutError},
+  },
   thread,
   time::{Duration, Instant},
 };
 
 use thiserror::Error;
 
+use super::SearchBasis;
 use crate::console;
 
 /// Printed right before the `PATH`.
@@ -39,6 +43,40 @@ pub enum LoginShellError {
   Output(io::Error),
   #[error("the shell's output has no PATH between the markers")]
   NoPath,
+}
+
+/// What the reads so far found of the login shell's `PATH`: its folders, and the name of the shell that last gave them.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct LoginShellPath {
+  folders: Arc<[PathBuf]>,
+  shell: Option<String>,
+}
+
+impl LoginShellPath {
+  /// What is known after a read of `shell`: a read that failed keeps what an earlier one found, so *Check again* in a
+  /// shell that stopped answering loses nothing.
+  #[must_use]
+  pub fn after_read(self, read: Result<Vec<PathBuf>, LoginShellError>, shell: &Path) -> Self {
+    match read {
+      Ok(folders) => Self {
+        folders: folders.into(),
+        shell: shell.file_name().map(|name| name.to_string_lossy().into_owned()),
+      },
+      Err(_) => self,
+    }
+  }
+
+  pub const fn folders(&self) -> &Arc<[PathBuf]> {
+    &self.folders
+  }
+
+  /// What a search with these folders can say it looked at: the login shell only once a read succeeded.
+  pub fn basis(&self) -> SearchBasis {
+    self
+      .shell
+      .clone()
+      .map_or(SearchBasis::UsualFolders, |shell| SearchBasis::LoginShell { shell })
+  }
 }
 
 /// The folders of the `PATH` that `shell` builds as an interactive login shell, so the start-up
