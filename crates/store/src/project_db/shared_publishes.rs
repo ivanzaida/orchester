@@ -198,7 +198,7 @@ fn configuring(connection: &Connection) -> Result<Option<bool>, StoreError> {
 }
 
 /// Whether resources of `kind` are the team's in a shared project: every kind but agent testing's.
-const fn shared_kind(kind: ResourceKind) -> bool {
+pub(super) const fn shared_kind(kind: ResourceKind) -> bool {
   !matches!(
     kind,
     ResourceKind::TestSuite | ResourceKind::Service | ResourceKind::Stack

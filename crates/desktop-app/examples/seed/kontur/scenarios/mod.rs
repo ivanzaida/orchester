@@ -29,6 +29,7 @@ mod pipelines;
 mod project_settings;
 mod pull_requests;
 pub mod settings;
+mod shared_config;
 mod sources;
 mod task_states;
 mod tasks;
@@ -82,7 +83,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 54] = [
+pub const ALL: [Scenario; 56] = [
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-library", agents_library::seed),
   Scenario::of("agents-empty", agents::empty),
@@ -120,6 +121,8 @@ pub const ALL: [Scenario; 54] = [
   Scenario::of("native", native::seed),
   Scenario::of("project-settings", project_settings::seed),
   Scenario::of("project-settings-shared", project_settings::shared),
+  Scenario::of("shared-config", shared_config::admin),
+  Scenario::of("shared-config-member", shared_config::member),
   Scenario::of("pipelines", pipelines::seed),
   Scenario::of("pipelines-empty", pipelines::empty),
   Scenario::of("pipelines-publish", pipelines::publish),

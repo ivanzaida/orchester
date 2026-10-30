@@ -20,6 +20,7 @@ use crate::{
     draft_bar::{DraftBar, Standing},
     page_head::MORE_MENU_WIDTH,
     parts::{status, tile},
+    team,
   },
   theme::{ExtraSpacing, HubText, IconSize},
   ui::{
@@ -48,26 +49,35 @@ pub struct More {
   pub remove: Arc<dyn Fn() + Send + Sync>,
 }
 
-pub fn head(ctx: &mut Ctx, (fields, listed): (&Fields, &ProjectAgents), more: Option<More>) -> Element {
+/// The page head; in a shared project `shared`, the team's version and where it stands here, says what the
+/// permissions say otherwise (`Sub` `Du8OB` in 02).
+pub fn head(
+  ctx: &mut Ctx,
+  (fields, listed): (&Fields, &ProjectAgents),
+  more: Option<More>,
+  shared: Option<Row>,
+) -> Element {
   let role = fields.role.get();
   let title = if role.trim().is_empty() {
     ctx.t("agents.new")
   } else {
     role.as_str().into()
   };
-  let (summary, enforced) = policy_panel::summary(ctx, fields, listed);
-  let sub = Row::new()
-    .id("agent-permission-summary")
-    .spacing(ExtraSpacing::Snug.role())
-    .align_items(Alignment::Center)
-    .child(Text::new(&summary).variant(HubText::Hint.role()))
-    .with_children(enforced.map(|(tone, text)| {
-      Row::new()
-        .spacing(ExtraSpacing::Snug.role())
-        .align_items(Alignment::Center)
-        .child(Text::new(&ctx.t("agents.summarySeparator")).variant(HubText::Hint.role()))
-        .child(status("agent-enforced", tone, &text))
-    }));
+  let sub = shared.unwrap_or_else(|| {
+    let (summary, enforced) = policy_panel::summary(ctx, fields, listed);
+    Row::new()
+      .id("agent-permission-summary")
+      .spacing(ExtraSpacing::Snug.role())
+      .align_items(Alignment::Center)
+      .child(Text::new(&summary).variant(HubText::Hint.role()))
+      .with_children(enforced.map(|(tone, text)| {
+        Row::new()
+          .spacing(ExtraSpacing::Snug.role())
+          .align_items(Alignment::Center)
+          .child(Text::new(&ctx.t("agents.summarySeparator")).variant(HubText::Hint.role()))
+          .child(status("agent-enforced", tone, &text))
+      }))
+  });
   let menu = more.map(|more| {
     let remove = more.remove.clone();
     let item = MenuItem::new("agent-remove", ctx.t("hub.remove.action"), move || remove())
@@ -113,6 +123,8 @@ pub struct Bar<'a> {
   pub publishable: bool,
   /// Turning Autopilot on waits for the person to allow it: the bar names the change (07b).
   pub autopilot_waits: bool,
+  /// The project is shared: a draft stays on this computer until it is published for the team (02).
+  pub shared: bool,
   pub actions: Vec<Element>,
 }
 
@@ -132,6 +144,11 @@ pub fn bar(ctx: &Ctx, fields: &Fields, listed: &ProjectAgents, bar: Bar<'_>) -> 
     |at| ctx.t_args("agents.savedAt", [("time", orchester_workspace::display::clock(at))]),
   );
   let (standing, status, sub) = match state {
+    VersionState::Draft { published: base } if bar.shared => (
+      Standing::Draft,
+      team::draft_status(ctx, base, &saved),
+      team::draft_sub(ctx, changes(ctx, fields, listed, bar.published).as_deref(), version + 1),
+    ),
     VersionState::Published(_) => (
       Standing::Published,
       ctx.t_args("agents.published", [("version", version.to_string())]),
@@ -166,7 +183,7 @@ pub fn bar(ctx: &Ctx, fields: &Fields, listed: &ProjectAgents, bar: Bar<'_>) -> 
           ("version", version.to_string()),
         ],
       ),
-      changes(ctx, fields, listed, bar.published),
+      changes(ctx, fields, listed, bar.published).unwrap_or_else(|| ctx.t("agents.versionNote")),
     ),
   };
   let sub = if bar.autopilot_waits {
@@ -200,11 +217,9 @@ fn mode_change(ctx: &Ctx, key: &str, from: ApprovalMode, to: ApprovalMode) -> Ar
 }
 
 /// What the draft changes from the published version: `Model a → b · Approvals · Manual → Autopilot · Permissions ·
-/// Changed`.
-fn changes(ctx: &Ctx, fields: &Fields, listed: &ProjectAgents, base: Option<&AgentProfile>) -> Arc<str> {
-  let Some(base) = base else {
-    return ctx.t("agents.versionNote");
-  };
+/// Changed`; `None` when it changes nothing, or there is no published version.
+fn changes(ctx: &Ctx, fields: &Fields, listed: &ProjectAgents, base: Option<&AgentProfile>) -> Option<Arc<str>> {
+  let base = base?;
   let on_provider = fields.connection(listed).is_some_and(|c| c.api_provider().is_some());
   let mut parts: Vec<String> = Vec::new();
   for (key, from, to) in [
@@ -262,8 +277,8 @@ fn changes(ctx: &Ctx, fields: &Fields, listed: &ProjectAgents, base: Option<&Age
     }
   }
   if parts.is_empty() {
-    return ctx.t("agents.versionNote");
+    return None;
   }
   parts.push(ctx.t("agents.changed").to_string());
-  parts.join(&format!(" {} ", ctx.t("agents.summarySeparator"))).into()
+  Some(parts.join(&format!(" {} ", ctx.t("agents.summarySeparator"))).into())
 }

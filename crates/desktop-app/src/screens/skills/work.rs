@@ -68,9 +68,9 @@ pub enum Operation {
 impl DevtoolsInspectable for Operation {}
 pub type Work = FutureAction<(OpenProject, Change), Saved, Message>;
 pub fn action(ctx: &mut Ctx) -> Work {
-  let activity = Services::of(ctx).activity;
+  let services = Services::of(ctx);
   ctx.future_action(move |(open, change): (OpenProject, Change)| {
-    let activity = activity.clone();
+    let services = services.clone();
     async move {
       let spec = match &change {
         Change::Save {
@@ -83,7 +83,10 @@ pub fn action(ctx: &mut Ctx) -> Work {
           skill_operations::skill_publish(&open, entry.id, &entry.name, super::words::next(entry.state))
         }
       };
-      activity
+      let publishing = matches!(change, Change::Publish(_));
+      let root = open.repo_root.clone();
+      let saved = services
+        .activity
         .track(spec, async move {
           background::run(move || match change {
             Change::Save {
@@ -97,7 +100,12 @@ pub fn action(ctx: &mut Ctx) -> Work {
           .await?
           .map(Saved)
         })
-        .await
+        .await;
+      // A version published in a shared project goes to its team server at once (02).
+      if publishing && saved.is_ok() {
+        crate::screens::hub::team::send_published(&services, &root).await;
+      }
+      saved
     }
   })
 }

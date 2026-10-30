@@ -1,7 +1,10 @@
-//! A profile's page (`01b Profile` `acOlR`, `01c` `WAWHr`): its head and draft bar, then Role, Connection & model and
-//! the permissions, with what enforces them, what else reaches its prompts and where it is used beside them. Edits save
-//! as a draft once the fields rest ([`super::autosave`]); a widening change is asked about at its section first. A new
-//! profile is created with Create draft, and saves the same way from then on.
+//! A profile's page (`01b Profile` `acOlR`, `01c` `WAWHr`): its head and draft bar ([`top`]), then Role, Connection &
+//! model and the permissions, with what enforces them, what else reaches its prompts and where it is used beside them.
+//! Edits save as a draft once the fields rest ([`super::autosave`]); a widening change is asked about at its section
+//! first. A new profile is created with Create draft, and saves the same way from then on. A member of a shared project
+//! reads the team's profile: its values as plain text, nothing saved (03 `pjEjf`).
+mod top;
+
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
@@ -13,21 +16,21 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::resource::{AgentProfile, ResourceKind};
+use orchester_core::resource::AgentProfile;
 use orchester_workspace::{
   agents::{
     data::{ProfileEntry, ProjectAgents, VersionState},
     editor::{Action, Request},
   },
   messages::Message,
-  tasks::outside::Outside,
+  sharing::team::TeamConfiguration,
 };
 
 use super::{
   AgentsNav,
   autosave::{Autosave, Source},
   fields::Fields,
-  list, model, page_head,
+  list, model,
   permissions::{self, Context, Section},
   questions::{self, Asking},
   side,
@@ -36,7 +39,7 @@ use super::{
 use crate::{
   mcp::input_gate::{Guarded, InputGate, input_may_decide},
   project::{ShownProject, own::OwnChanges},
-  screens::hub::{self, Head, discard, removal},
+  screens::hub::{self, Head, team},
   theme::{ExtraSpacing, HubSpacing, HubText, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -151,11 +154,22 @@ impl Component for Editor {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>().clone();
-    self.autosave.held.set(props.reading || props.load_error.is_some());
+    let team = team::of(&props.project);
+    let may_change = team::may_change(team.as_ref());
+    // A member of a shared project reads the team's profile: nothing of it is saved here.
+    self
+      .autosave
+      .held
+      .set(props.reading || props.load_error.is_some() || !may_change);
     self.autosave.listed.set(Some(props.listed.clone()));
     let state = self.state(&props);
-    let head: Head = list::head(ctx, &props.listed, &props.nav).saved(self.saved_state(ctx, &state));
-    let pane = self.pane(ctx, &props, &state);
+    let saved = if may_change {
+      self.saved_state(ctx, &state)
+    } else {
+      None
+    };
+    let head: Head = list::head(ctx, (&props.listed, team.as_ref()), &props.nav).saved(saved);
+    let pane = self.pane(ctx, &props, (&state, team.as_ref()));
     let side = side::render(ctx, &props, &self.fields, self.pipeline_blocked(&props, &state));
     let body = hub::item_body("agent-editor", pane, Some(side));
     super::frame(ctx, &props.project, head, body)
@@ -217,23 +231,9 @@ impl Editor {
     )
   }
 
-  fn pane(&self, ctx: &mut Ctx, props: &Props, state: &State) -> Element {
-    let more = state.saved.as_ref().map(|_| page_head::More {
-      open: self.more.clone(),
-      anchor: self.anchor.clone(),
-      remove: {
-        let ask = self.ask.clone();
-        std::sync::Arc::new(move || ask.set(Ask::Remove))
-      },
-    });
-    let top = Column::new()
-      .width(Dimension::Pct(100.0))
-      .spacing(HubSpacing::Row.role())
-      .child(page_head::crumb(ctx, &props.nav))
-      .child(page_head::head(ctx, (&self.fields, &props.listed), more))
-      .with_children(self.remove_question(ctx, props, state))
-      .child(self.bar_or_question(ctx, props, state))
-      .with_children(self.notices(ctx, props, state));
+  fn pane(&self, ctx: &mut Ctx, props: &Props, (state, team): (&State, Option<&TeamConfiguration>)) -> Element {
+    let may_change = team::may_change(team);
+    let top = self.top(ctx, props, (state, team));
     let asking = Asking {
       pending: self.pending.clone(),
       allowed: self.allowed.clone(),
@@ -255,14 +255,36 @@ impl Editor {
       .filter(|_| !state.changed_outside)
       .zip(state.saved.as_ref())
       .map(|(error, entry)| (&entry.profile, field_hint(ctx, &error)));
-    let role = model::role(ctx, &self.fields, unsaved);
-    let connection = model::connection_model(ctx, &self.fields, &props.listed, connection_asked);
+    let (role, connection) = if may_change {
+      (
+        model::role(ctx, &self.fields, unsaved),
+        model::connection_model(ctx, &self.fields, &props.listed, connection_asked),
+      )
+    } else {
+      (
+        model::role_read_only(ctx, &self.fields),
+        model::connection_read_only(ctx, &self.fields, &props.listed),
+      )
+    };
     let context = Context {
       fields: &self.fields,
       listed: &props.listed,
       project: &props.project,
     };
-    let rest = permissions::sections(ctx, &context, section.zip(asked));
+    // A member reads the permissions as they are: nothing of them takes a press.
+    let rest = permissions::sections(ctx, &context, section.zip(asked))
+      .into_iter()
+      .map(|section| {
+        if may_change {
+          section
+        } else {
+          Column::new()
+            .width(Dimension::Pct(100.0))
+            .pointer_events_none()
+            .child(section)
+            .into()
+        }
+      });
     Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(HubSpacing::Sections.role())
@@ -271,82 +293,6 @@ impl Editor {
       .child(connection)
       .with_children(rest)
       .into()
-  }
-
-  fn remove_question(&self, ctx: &mut Ctx, props: &Props, state: &State) -> Option<Element> {
-    let entry = state.saved.as_ref().filter(|_| self.ask.get() == Ask::Remove)?;
-    let (keep, nav) = (self.ask.clone(), props.nav.clone());
-    Some(removal::question(
-      ctx,
-      removal::RemoveProps {
-        project: props.project.clone(),
-        resource: entry.id,
-        kind: ResourceKind::AgentProfile,
-        name: entry.profile.role().as_str().into(),
-        on_keep: std::sync::Arc::new(move || keep.set(Ask::Nothing)),
-        on_removed: std::sync::Arc::new(move || nav.removed()),
-      },
-    ))
-  }
-
-  /// The draft bar, or what is asked about the draft in its place.
-  fn bar_or_question(&self, ctx: &mut Ctx, props: &Props, state: &State) -> Element {
-    let asking = Asking {
-      pending: self.pending.clone(),
-      allowed: self.allowed.clone(),
-      work: self.work.clone(),
-    };
-    if let Some(question) = questions::stale(ctx, &asking) {
-      return question;
-    }
-    if let Some(entry) = state.saved.as_ref().filter(|_| self.ask.get() == Ask::Discard) {
-      return self.discard_question(ctx, props, entry);
-    }
-    let published = state
-      .saved
-      .as_ref()
-      .and_then(|entry| props.listed.published.iter().find(|p| p.id == entry.id))
-      .map(|p| &p.profile);
-    let actions = self.bar_actions(ctx, props, state);
-    page_head::bar(
-      ctx,
-      &self.fields,
-      &props.listed,
-      page_head::Bar {
-        entry: state.saved.as_ref(),
-        published,
-        saved_at: state
-          .saved
-          .as_ref()
-          .and_then(|entry| props.listed.draft_times.get(&entry.id).copied()),
-        publishable: self.publishable(props),
-        autopilot_waits: questions::autopilot_waits(&self.pending.get()),
-        actions,
-      },
-    )
-  }
-
-  fn discard_question(&self, ctx: &mut Ctx, props: &Props, entry: &ProfileEntry) -> Element {
-    let published = entry.state.published().map_or(0, |v| v.get());
-    let (root, id, expected) = (props.project.open.repo_root.clone(), entry.id, entry.profile.clone());
-    let (keep, done, revision) = (self.ask.clone(), self.ask.clone(), props.revision.clone());
-    discard::question(
-      ctx,
-      discard::DiscardProps {
-        project: props.project.clone(),
-        versions: (published + 1, published),
-        discard: std::sync::Arc::new(move || {
-          orchester_workspace::removal::discard_in::<AgentProfile>(&root, id, &expected)
-        }),
-        change: Outside::Profiles,
-        on_keep: std::sync::Arc::new(move || keep.set(Ask::Nothing)),
-        on_discarded: std::sync::Arc::new(move || {
-          done.set(Ask::Nothing);
-          // The page reads the published version anew into its fields.
-          revision.update(|n| *n += 1);
-        }),
-      },
-    )
   }
 
   /// Whether the profile's connection runs agents and enforces its permissions here.
@@ -366,7 +312,7 @@ impl Editor {
     })
   }
 
-  fn bar_actions(&self, ctx: &Ctx, props: &Props, state: &State) -> Vec<Element> {
+  fn bar_actions(&self, ctx: &Ctx, props: &Props, (state, shared): (&State, bool)) -> Vec<Element> {
     let Some(entry) = state.saved.as_ref() else {
       return vec![self.create_button(ctx, state).into()];
     };
@@ -385,7 +331,7 @@ impl Editor {
       );
     }
     if entry.state.has_draft() {
-      actions.push(self.publish_button(ctx, props, (state, entry)).into());
+      actions.push(self.publish_button(ctx, props, (state, entry), shared).into());
     }
     actions
   }
@@ -411,14 +357,21 @@ impl Editor {
     })
   }
 
-  fn publish_button(&self, ctx: &Ctx, props: &Props, (state, entry): (&State, &ProfileEntry)) -> ActionButton {
+  /// *Publish v5*, or *Publish for the team* in a shared project (02).
+  fn publish_button(
+    &self,
+    ctx: &Ctx,
+    props: &Props,
+    (state, entry): (&State, &ProfileEntry),
+    shared: bool,
+  ) -> ActionButton {
     let next = entry.state.published().map_or(1, |v| v.get().saturating_add(1));
-    let publish = ActionButton::new(
-      "agent-publish",
-      ButtonKind::Primary,
-      ctx.t_args("agents.publish", [("version", next.to_string())]),
-    )
-    .icon(Icon::Upload);
+    let label = if shared {
+      team::publish_label(ctx)
+    } else {
+      ctx.t_args("agents.publish", [("version", next.to_string())])
+    };
+    let publish = ActionButton::new("agent-publish", ButtonKind::Primary, label).icon(Icon::Upload);
     if !self.publishable(props) {
       return publish.unavailable(ctx.t("agents.notEnforced"));
     }

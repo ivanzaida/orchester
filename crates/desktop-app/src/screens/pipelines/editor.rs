@@ -24,6 +24,7 @@ use orchester_workspace::{
     widening::draft_reasons,
     write::{Allowed, needs_reload},
   },
+  sharing::team::TeamConfiguration,
 };
 use parking_lot::Mutex;
 
@@ -36,6 +37,7 @@ use super::{
 use crate::{
   navigation::Navigation,
   project::ShownProject,
+  screens::hub,
   ui::{
     button::{ActionButton, ButtonKind},
     field::field_error,
@@ -122,25 +124,45 @@ impl Component for Editor {
     let editing = self.state.get();
     let locked = self.confirm_save.get() || props.loading || reading_version;
     let busy = writing || locked;
+    let team = hub::team::of(&props.project);
+    let may_change = hub::team::may_change(team.as_ref());
     let writes = Writes {
       state: self.state.clone(),
       action: self.action.clone(),
       root: props.project.open.repo_root.clone(),
       asking: self.confirm_save.clone(),
+      shared: team.is_some(),
     };
     ctx.provide(super::actions::ColumnWrites(writes.clone()));
+    let shared = team.as_ref().and_then(|team| {
+      let standing = team.standing(editing.opened.id)?;
+      // A draft is saved here or not; its base is the latest version this computer has.
+      let draft = editing
+        .opened
+        .draft_saved_at
+        .map(|_| editing.opened.latest.as_ref().map(|latest| latest.number));
+      Some(hub::team::head_line(ctx, "pipeline-team-state", team, standing, draft))
+    });
+    // A member of a shared project neither saves nor publishes the team's pipeline (03).
+    let buttons = if may_change {
+      (
+        writes.save_button(ctx, &editing, busy),
+        Some(writes.publish_button(ctx, &editing, busy)),
+      )
+    } else {
+      (None, None)
+    };
     let head = super::header::header(
       ctx,
       &self.state,
-      (
-        writes.save_button(ctx, &editing, busy),
-        writes.publish_button(ctx, &editing, busy),
-      ),
+      buttons,
       // While the save question waits, nothing is being saved: the status says the changes are unsaved.
-      writing || props.loading || reading_version,
+      (writing || props.loading || reading_version, shared),
     );
-    let notices = self.notices(ctx, &props, (&writes, writing));
-    let content = self.content(ctx, &props, (&writes, (locked, busy)));
+    let mut notices = self.team_notice(ctx, &props, team.as_ref());
+    notices.extend(self.notices(ctx, &props, (&writes, writing)));
+    // A member's page is locked as one being saved is: its fields take no edit.
+    let content = self.content(ctx, &props, (&writes, (locked || !may_change, busy)));
     let body = Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Lg)
@@ -151,6 +173,28 @@ impl Component for Editor {
   }
 }
 impl Editor {
+  /// In a shared project, under the header: who may change the pipeline for a member (03), and for an admin a version
+  /// published here that waits (02b, 02c).
+  fn team_notice(&self, ctx: &mut Ctx, props: &EditorProps, team: Option<&TeamConfiguration>) -> Vec<Element> {
+    let Some(team) = team else {
+      return Vec::new();
+    };
+    if !team.may_change {
+      return vec![hub::team::line(ctx, "pipeline-team-line", team).into()];
+    }
+    let Some(standing) = team.standing(props.opened.id) else {
+      return Vec::new();
+    };
+    hub::team::waiting_bar(
+      ctx,
+      &props.project,
+      (team, standing),
+      ("pipeline", orchester_workspace::tasks::outside::Outside::Pipelines),
+    )
+    .into_iter()
+    .collect()
+  }
+
   /// What sits in place under the header: what an import did, leaving, the save question, problems and failures.
   fn notices(&self, ctx: &mut Ctx, props: &EditorProps, (writes, writing): (&Writes, bool)) -> Vec<Element> {
     let editing = self.state.get();
@@ -311,7 +355,10 @@ impl Editor {
   fn autosave(&self, ctx: &mut Ctx, props: &EditorProps, writing: bool) {
     let editing = self.state.get();
     let root = props.project.open.repo_root.clone();
+    // A member of a shared project saves nothing of the team's pipeline.
+    let may_change = crate::screens::hub::team::may_change(crate::screens::hub::team::of(&props.project).as_ref());
     let body = (editing.dirty()
+      && may_change
       && !writing
       && editing.errors.is_empty()
       && editing.viewing.is_none()

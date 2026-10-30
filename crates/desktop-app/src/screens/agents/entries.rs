@@ -1,6 +1,7 @@
 //! A profile's row in the list (`Builder` `fYNhS` in `01 Profiles`): its CLI's mark, its name, one line with its
 //! connection, model and effort and what it may do, how many pipelines use it and where its version stands; a profile
-//! whose connection is gone says so in `warning` (06b).
+//! whose connection is gone says so in `warning` (06b). In a shared project its publisher and its state there take the
+//! place of its uses and version (`IV2Xs` in 01 `cHvkL`).
 use std::sync::Arc;
 
 use lurq::{
@@ -11,15 +12,21 @@ use orchester_core::{
   connection::{AgentConnection, AgentProvider, invocation::Platform},
   permission::{AgentPermissions, NetworkAccess, RepositoryAccess},
 };
-use orchester_workspace::agents::{
-  data::{ProfileEntry, ProjectAgents, VersionState},
-  form::stored_effort,
+use orchester_workspace::{
+  agents::{
+    data::{ProfileEntry, ProjectAgents, VersionState},
+    form::stored_effort,
+  },
+  sharing::team::TeamConfiguration,
 };
 
 use super::{AgentsNav, Shown, words};
 use crate::{
   routes::AgentTab,
-  screens::hub::parts::{Entry, Tone, quiet, status},
+  screens::hub::{
+    parts::{Entry, Tone, quiet, status},
+    team,
+  },
   ui::{icon::Icon, pressable::Press},
 };
 
@@ -36,22 +43,41 @@ pub(super) fn provider_glyph(connection: Option<&AgentConnection>) -> Icon {
   }
 }
 
-pub(super) fn row(ctx: &Ctx, entry: &ProfileEntry, listed: &ProjectAgents, nav: &AgentsNav) -> Element {
+pub(super) fn row(
+  ctx: &Ctx,
+  entry: &ProfileEntry,
+  (listed, team): (&ProjectAgents, Option<&TeamConfiguration>),
+  nav: &AgentsNav,
+) -> Element {
   let profile = &entry.profile;
   let connection = listed.connections.iter().find(|c| c.id() == profile.connection());
   let id = entry.id;
-  let count = listed.usage.count(id);
-  let used = if count == 0 {
-    ctx.t("agents.notUsed")
-  } else {
-    ctx.t_args("agents.pipelineCount", [("count", count.to_string())])
-  };
-  let (tone, version) = version(ctx, entry.state);
-  let entry_row = Entry::new(format!("agent-{id}"), profile.role().as_str())
-    .tile(provider_glyph(connection))
-    .end(quiet(&used).id(format!("agent-used-{id}")))
-    .end(status(&format!("agent-version-{id}"), tone, &version))
-    .press(Press::Open(nav.to(Shown::Edit(id, AgentTab::default()))));
+  let entry_row = Entry::new(format!("agent-{id}"), profile.role().as_str()).tile(provider_glyph(connection));
+  let entry_row = match team.and_then(|team| Some((team, team.standing(id)?))) {
+    Some((team, standing)) => entry_row
+      .end(team::publisher(ctx, &format!("agent-publisher-{id}"), team, standing))
+      .end(team::row_state(
+        ctx,
+        &format!("agent-version-{id}"),
+        standing,
+        team::draft_on(entry.state),
+      )),
+    None => {
+      let count = listed.usage.count(id);
+      let used = if count == 0 {
+        ctx.t("agents.notUsed")
+      } else {
+        ctx.t_args("agents.pipelineCount", [("count", count.to_string())])
+      };
+      let (tone, version) = version(ctx, entry.state);
+      entry_row.end(quiet(&used).id(format!("agent-used-{id}"))).end(status(
+        &format!("agent-version-{id}"),
+        tone,
+        &version,
+      ))
+    }
+  }
+  .press(Press::Open(nav.to(Shown::Edit(id, AgentTab::default()))));
   match connection {
     Some(connection) => entry_row.hint(line(ctx, profile, connection)).into(),
     None => entry_row

@@ -206,7 +206,8 @@ impl AgentsScreen {
     let revision = self.revision.get();
     let entry = match shown {
       Shown::List => {
-        let head = list::head(ctx, &listed, &self.nav);
+        let team = hub::team::of(&project);
+        let head = list::head(ctx, (&listed, team.as_ref()), &self.nav);
         let body = list::list(ctx, &project, &listed, &self.nav);
         return frame(ctx, &project, head, body);
       }

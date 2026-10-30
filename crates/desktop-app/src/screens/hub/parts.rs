@@ -33,6 +33,8 @@ pub(crate) enum Tone {
   Success,
   Warning,
   Danger,
+  /// A version published here that waits for the team server (`MaHFt` in 01 `cHvkL`).
+  Info,
   Muted,
 }
 
@@ -42,6 +44,7 @@ impl Tone {
       Self::Success => PaletteColor::Success,
       Self::Warning => PaletteColor::Warning,
       Self::Danger => PaletteColor::Danger,
+      Self::Info => PaletteColor::Info,
       Self::Muted => PaletteColor::TextMuted,
     }
   }

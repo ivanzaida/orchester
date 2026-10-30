@@ -16,6 +16,7 @@ mod pipelines;
 mod refusals;
 mod scenario_names;
 mod settings;
+mod shared_config;
 
 use std::{
   collections::BTreeMap,

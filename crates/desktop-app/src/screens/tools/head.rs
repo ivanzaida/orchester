@@ -3,7 +3,7 @@
 //! Access and Usage log.
 use std::sync::Arc;
 
-use lurq::{app::ctx::Ctx, node::Element};
+use lurq::{app::ctx::Ctx, components::Row, node::Element};
 use orchester_workspace::{agents::data::VersionState, tools::data::ToolEntry};
 
 use super::{editor::EditorProps, words};
@@ -13,6 +13,7 @@ use crate::{
   screens::hub::{
     draft_bar::{DraftBar, Standing},
     page_head::{self, More},
+    team,
   },
   ui::{
     icon::Icon,
@@ -31,12 +32,14 @@ pub(super) fn crumb(ctx: &mut Ctx, p: &EditorProps) -> Element {
   )
 }
 
-/// The head: `title`, then the kind, whether it runs and how many steps call it.
+/// The head: `title`, then the kind, whether it runs and how many steps call it; in a shared project `shared`, the
+/// team's version and where it stands here, in that line's place (`Sub` `Du8OB` in 02).
 pub(super) fn head(
   ctx: &mut Ctx,
   p: &EditorProps,
   (entry, title): (Option<&ToolEntry>, &str),
   more: Option<More>,
+  shared: Option<Row>,
 ) -> Element {
   let (glyph, sub) = match entry {
     Some(entry) => {
@@ -61,13 +64,17 @@ pub(super) fn head(
     }
     None => (Icon::Terminal, ctx.t("tools.newDetail")),
   };
-  page_head::head(ctx, "tool", (glyph, title, &sub), more)
+  match shared {
+    Some(shared) => page_head::head_with(ctx, "tool", (glyph, title, shared.into()), more),
+    None => page_head::head(ctx, "tool", (glyph, title, &sub), more),
+  }
 }
 
-/// What the bar says about the tool now, with its actions.
+/// What the bar says about the tool now, with its actions; in a shared project that publishing makes the next version
+/// for the whole team (02).
 pub(super) fn bar(
   ctx: &Ctx,
-  entry: Option<&ToolEntry>,
+  (entry, shared): (Option<&ToolEntry>, bool),
   (status, unchanged): (Arc<str>, bool),
   actions: Vec<Element>,
 ) -> Element {
@@ -79,6 +86,7 @@ pub(super) fn bar(
   let sub = match entry.map(|e| (e.state, super::editor::next_version(Some(e)))) {
     None => ctx.t("tools.barSubNew"),
     Some((VersionState::Published(_), _)) => ctx.t("tools.barSubPublished"),
+    Some((_, Some(next))) if shared => team::draft_sub(ctx, None, next.get()),
     Some((_, Some(next))) => ctx.t_args("tools.barSubDraft", [("version", next.get().to_string())]),
     Some((_, None)) => ctx.t("tools.versionLimit"),
   };

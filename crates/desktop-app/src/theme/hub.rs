@@ -37,10 +37,13 @@ pub enum HubText {
   Statement,
   /// Geist Mono 13/500 `text_primary`: a row's label that is code, e.g. a variable (`wuoOU` in 02d `JXvc0`).
   Code,
+  /// 12.5 `text_secondary`, 1.4: the line over a shared project's library and editor saying it is the team's
+  /// (`Kk64E` in 01 `cHvkL`, `xUInm` in 03 `pjEjf`).
+  TeamLine,
 }
 
 impl HubText {
-  pub const ALL: [Self; 11] = [
+  pub const ALL: [Self; 12] = [
     Self::PageTitle,
     Self::Crumb,
     Self::GroupTitle,
@@ -52,6 +55,7 @@ impl HubText {
     Self::Kind,
     Self::Statement,
     Self::Code,
+    Self::TeamLine,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -71,6 +75,7 @@ impl HubText {
       Self::Kind => "hub_kind",
       Self::Statement => "hub_statement",
       Self::Code => "hub_code",
+      Self::TeamLine => "hub_team_line",
     }
   }
 
@@ -87,6 +92,7 @@ impl HubText {
       Self::Kind => style(12.0, FontWeight::Medium, 1.3, 0.0, palette.text_secondary),
       Self::Statement => style(13.5, FontWeight::Medium, 1.45, 0.0, palette.text_primary),
       Self::Code => mono(style(13.0, FontWeight::Medium, 1.3, 0.0, palette.text_primary)),
+      Self::TeamLine => style(12.5, FontWeight::Normal, 1.4, 0.0, palette.text_secondary),
     }
   }
 }

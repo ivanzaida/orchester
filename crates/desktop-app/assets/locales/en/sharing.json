@@ -532,6 +532,60 @@
       "refused": "What a shared project can't do yet",
       "refusedFields": "Task fields the server doesn't keep",
       "refusedFieldsHint": "Delivers, Don't merge automatically · the server refuses a change rather than lose it"
+    },
+    "config": {
+      "shared": "Shared with {{team}}. What you publish here is the version everyone's runs use.",
+      "sharedNoServer": "Shared with your team. What you publish here is the version everyone's runs use.",
+      "readOnly": "Only admins change the team's configuration: {{admins}}.",
+      "owner": "{{name}} (owner)",
+      "ownersAndAdmins": "{{owners}} and the server's admins",
+      "noOwners": "the project's owners and the server's admins",
+      "separator": ", ",
+      "dot": "·",
+      "publishNote": "Publishing sends a new version to {{host}}; teammates get it at once unless it widens what their agents may do.",
+      "publishNoteNoServer": "Publishing sends a new version to the team server; teammates get it at once unless it widens what their agents may do.",
+      "memberNote": "Runs here use the published versions. A version that widens what agents may do waits until you use it here.",
+      "publisher": "{{name}} · {{when}}",
+      "today": "today {{time}}",
+      "day": "{{month}} {{day}}",
+      "here": "Published here",
+      "state": {
+        "version": "v{{version}}",
+        "draft": "v{{version}} · your draft",
+        "firstDraft": "Your draft",
+        "notSent": "Published here, not sent",
+        "conflict": "v{{latest}} published meanwhile",
+        "refused": "Not taken by the server"
+      },
+      "head": {
+        "published": "v{{version}} · published by {{name}} · {{when}}",
+        "publishedHere": "v{{version}} · published here · {{when}}",
+        "notPublished": "Not published yet",
+        "draft": "Your draft on v{{version}}",
+        "firstDraft": "Your first draft",
+        "notSent": "v? · published here, not sent",
+        "conflict": "Your draft wasn't published",
+        "refused": "Your version wasn't published",
+        "used": "Used here"
+      },
+      "bar": {
+        "draft": "Draft on v{{version}} · {{saved}} · only on this computer",
+        "firstDraft": "First draft · {{saved}} · only on this computer",
+        "makes": "{{changes}} · publishing makes v{{next}} for the whole team",
+        "makesOnly": "Publishing makes v{{next}} for the whole team",
+        "publish": "Publish for the team",
+        "notSent": "v? · published here, not sent · {{time}}",
+        "notSentBody": "{{host}} can't be reached. Your new runs use this version now; it gets its number when the server answers.",
+        "theServer": "The team server",
+        "tryAgain": "Try again",
+        "conflict": "{{name}} published v{{latest}} while you edited v{{base}}",
+        "conflictFirst": "{{name}} published v{{latest}} while you wrote your first version",
+        "someone": "Someone",
+        "conflictBody": "Your draft is kept on this computer and your new runs use it here. Nothing is merged: publish yours as v{{next}} anyway.",
+        "publishMine": "Publish mine as v{{next}}",
+        "refused": "{{host}} didn't take this version · {{time}}",
+        "refusedBody": "Your new runs use it here. It isn't sent again on its own: change it and publish again."
+      }
     }
   }
 }

@@ -71,12 +71,21 @@ impl Component for ToolsScreen {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let project = ctx.props::<Props>().project.clone();
     let body = self.body(ctx);
-    let actions = add_menu::actions(ctx, project.open.project.id(), (&self.menu, &self.anchor));
+    // A member of a shared project adds none of the team's tools.
+    let head = if hub::team::may_change(hub::team::of(&project).as_ref()) {
+      Head::actions(add_menu::actions(
+        ctx,
+        project.open.project.id(),
+        (&self.menu, &self.anchor),
+      ))
+    } else {
+      Head::default()
+    };
     Column::new()
       .id("screen-tools")
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
-      .child(hub::page(ctx, &project, (HubTab::Tools, Head::actions(actions)), body))
+      .child(hub::page(ctx, &project, (HubTab::Tools, head), body))
   }
 }
 impl ToolsScreen {

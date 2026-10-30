@@ -312,6 +312,58 @@ async fn live_updates_two_publishes_from_one_base_give_the_second_a_version_conf
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn live_updates_the_libraries_read_each_resources_publisher_and_the_versions_that_wait_here() {
+  let (server, style) = style();
+  server.make_admin(BOB);
+  let alice = Computer::new(&server, ALICE, MemberRole::Owner);
+  let bob = Computer::new(&server, BOB, MemberRole::Member);
+  bob.db().set_server_admin(true).expect("the server's admin");
+  alice.cache_first(&server, style).await;
+  bob.cache_first(&server, style).await;
+
+  alice.publish(&server, style, 1, "Alice's").await.expect("published");
+  bob
+    .publish(&server, style, 1, "Bob's")
+    .await
+    .expect_err("met Alice's v2");
+  let standings = bob.db().shared_standings().expect("the standings");
+  let standing = standings
+    .iter()
+    .find(|s| s.resource == style)
+    .expect("Style is the team's");
+  let confirmed = standing.confirmed.as_ref().expect("v2 is numbered");
+  assert_eq!(
+    (confirmed.number.get(), confirmed.publisher.as_deref()),
+    (2, Some("Alice Moreau"))
+  );
+  assert_eq!(standing.waiting.len(), 1, "{standing:?}");
+  assert_eq!(
+    (standing.waiting[0].based_on, standing.waiting[0].state.clone()),
+    (Some(number(1)), PublishState::Conflict { latest: number(2) })
+  );
+
+  alice.go_offline(true);
+  alice
+    .publish(&server, style, 2, "Alice's v3")
+    .await
+    .expect("published here");
+  let standings = alice.db().shared_standings().expect("the standings");
+  let standing = standings
+    .iter()
+    .find(|s| s.resource == style)
+    .expect("Style is the team's");
+  assert_eq!(
+    standing.confirmed.as_ref().map(|c| c.number.get()),
+    Some(2),
+    "v3 is not numbered yet"
+  );
+  assert_eq!(
+    standing.waiting.iter().map(|w| w.state.clone()).collect::<Vec<_>>(),
+    [PublishState::Waiting]
+  );
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn live_updates_a_members_draft_and_publish_answer_not_admin_here_and_from_the_server() {
   let (server, style) = style();
   let bob = Computer::new(&server, BOB, MemberRole::Member);

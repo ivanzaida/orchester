@@ -21,6 +21,7 @@ use crate::{
     draft_bar::{DraftBar, Standing},
     page_head::MORE_MENU_WIDTH,
     parts::tile,
+    team,
   },
   theme::{ExtraSpacing, HubText, IconSize},
   ui::{
@@ -58,8 +59,14 @@ pub struct More {
   pub remove: Arc<dyn Fn() + Send + Sync>,
 }
 
-/// The page head; `sub_id` names the line under the title, which on a new rule says whether it is saved yet.
-pub fn head(ctx: &mut Ctx, (title, sub, sub_id): (&str, &str, &str), more: Option<More>) -> Element {
+/// The page head; `sub_id` names the line under the title, which on a new rule says whether it is saved yet. In a
+/// shared project `shared`, the team's version and where it stands here, takes the line's place (`Sub` `Du8OB` in 02).
+pub fn head(
+  ctx: &mut Ctx,
+  (title, sub, sub_id): (&str, &str, &str),
+  more: Option<More>,
+  shared: Option<Row>,
+) -> Element {
   let menu = more.map(|more| {
     let remove = more.remove.clone();
     let item = MenuItem::new("instruction-remove", ctx.t("hub.remove.action"), move || remove())
@@ -78,6 +85,13 @@ pub fn head(ctx: &mut Ctx, (title, sub, sub_id): (&str, &str, &str), more: Optio
       .child(button)
       .child(menu_at_end(more.anchor, more.open, panel))
   });
+  let sub: Element = match shared {
+    Some(shared) => shared.into(),
+    None => Text::new(sub)
+      .id(sub_id.to_owned())
+      .variant(HubText::Hint.role())
+      .into(),
+  };
   Row::new()
     .id("instruction-page-head")
     .width(Dimension::Pct(100.0))
@@ -94,7 +108,7 @@ pub fn head(ctx: &mut Ctx, (title, sub, sub_id): (&str, &str, &str), more: Optio
             .id("instruction-title")
             .variant(HubText::PageTitle.role()),
         )
-        .child(Text::new(sub).id(sub_id.to_owned()).variant(HubText::Hint.role())),
+        .child(sub),
     )
     .with_children(menu)
     .into()
@@ -108,11 +122,24 @@ pub struct Now {
   pub invalid: bool,
   pub automated: bool,
   pub saved_at: Option<orchester_core::time::Timestamp>,
+  /// The project is shared: a draft stays on this computer until it is published for the team (02).
+  pub shared: bool,
 }
 
 pub fn bar(ctx: &Ctx, tab: Tab, now: &Now, actions: Vec<Element>) -> Element {
   let state = now.state;
   let version = state.published().map_or(0, |v| v.get());
+  let saved = || {
+    now.saved_at.map_or_else(
+      || ctx.t("instructions.savedPlain"),
+      |at| {
+        ctx.t_args(
+          "instructions.savedAt",
+          [("time", orchester_workspace::display::clock(at))],
+        )
+      },
+    )
+  };
   let (standing, status) = if now.busy {
     (Standing::Draft, ctx.t("instructions.saving"))
   } else if now.invalid {
@@ -123,34 +150,30 @@ pub fn bar(ctx: &Ctx, tab: Tab, now: &Now, actions: Vec<Element>) -> Element {
     (Standing::Draft, words::automation_version(ctx, state))
   } else {
     match state {
+      VersionState::Draft { published } if now.shared => {
+        (Standing::Draft, team::draft_status(ctx, published, &saved()))
+      }
       VersionState::Published(_) => (Standing::Published, words::version(ctx, state)),
       VersionState::StaleDraft { .. } => (Standing::Attention, words::version(ctx, state)),
       VersionState::Draft { published: None } => (Standing::Draft, ctx.t("instructions.newDraft")),
-      VersionState::Draft { .. } => {
-        let saved = now.saved_at.map_or_else(
-          || ctx.t("instructions.savedPlain"),
-          |at| {
-            ctx.t_args(
-              "instructions.savedAt",
-              [("time", orchester_workspace::display::clock(at))],
-            )
-          },
-        );
-        (
-          Standing::Draft,
-          ctx.t_args(
-            "instructions.barDraft",
-            [
-              ("next", (version + 1).to_string()),
-              ("saved", saved.to_string()),
-              ("version", version.to_string()),
-            ],
-          ),
-        )
-      }
+      VersionState::Draft { .. } => (
+        Standing::Draft,
+        ctx.t_args(
+          "instructions.barDraft",
+          [
+            ("next", (version + 1).to_string()),
+            ("saved", saved().to_string()),
+            ("version", version.to_string()),
+          ],
+        ),
+      ),
     }
   };
-  let sub = words::footer(ctx, tab, state);
+  let sub = if now.shared && matches!(state, VersionState::Draft { .. }) {
+    team::draft_sub(ctx, None, version + 1)
+  } else {
+    words::footer(ctx, tab, state)
+  };
   // `instruction-save`: its status keeps the id the rule's save state had (`instruction-save-status`).
   let mut draft = DraftBar::new("instruction-save", standing, status).sub(sub);
   for action in actions {

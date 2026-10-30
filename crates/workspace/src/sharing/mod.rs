@@ -24,6 +24,7 @@ mod password;
 pub mod project;
 mod server_key;
 pub mod sync;
+pub mod team;
 pub mod trust;
 
 use std::{
