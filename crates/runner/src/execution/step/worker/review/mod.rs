@@ -264,7 +264,7 @@ impl Worker {
     let step = ReviewedStep {
       name: self.step_name(watch, approval)?,
       repository: permissions.unwrap_or(&defaults).repository(),
-      network: permissions.unwrap_or(&defaults).network(),
+      network: permissions.unwrap_or(&defaults).network().clone(),
       writable_folders: self.writable_folders(permissions),
     };
     let task = ReviewedTask {

@@ -292,7 +292,7 @@ fn orchester_enforces_a_native_provider_alike_on_both_platforms() {
       assert_eq!(enforced.writable_folders(), Some(M::NativeFileScopeFolders));
       // Off cannot be enforced, so commands keep the network, as with Claude Code.
       assert_eq!(enforced.network_stays_on(), Some(Unavailable::CannotBlockNetwork));
-      assert_eq!(enforced.permissions().network(), NetworkAccess::On);
+      assert_eq!(*enforced.permissions().network(), NetworkAccess::On);
       assert_eq!(enforced.outside_commands(), OutsideCommands::OrchesterAsks);
       assert_eq!(offline.effective_network(provider, platform), NetworkAccess::On);
       assert_eq!(
