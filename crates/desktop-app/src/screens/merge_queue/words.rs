@@ -1,96 +1,19 @@
-//! What a run of the merge queue says (`Queue row` `kcUhy`): its state's glyph, word and color, the line under the
-//! word, the run's meta line and the detail under it. Shared by the Merge queue screen and the task page.
+//! What a run of the merge queue says, shared by the Merge queue screen and the task page: the base branch it delivers
+//! into, its place in line, how its pipeline delivers, why it left the queue and how long a phase has run.
 
 use std::sync::Arc;
 
-use lurq::app::{ctx::Ctx, theme::PaletteColor};
+use lurq::app::ctx::Ctx;
 use orchester_core::{
-  integration::MergeKind,
-  merge_queue::{Left, QueueEvent, QueueState},
+  merge_queue::Left,
   resource::{DeliverMode, MergeMethod},
   time::Timestamp,
 };
-use orchester_workspace::{
-  display::{clock, short_revision},
-  merge_queue::QueueRow,
-};
-
-use crate::ui::icon::Icon;
-
-/// How a row's state shows: its glyph, its word and their color.
-pub(crate) struct StateLook {
-  pub icon: Icon,
-  pub icon_color: PaletteColor,
-  pub label: Arc<str>,
-  pub label_color: PaletteColor,
-}
+use orchester_workspace::{display::short_revision, merge_queue::QueueRow};
 
 /// The base branch `row` delivers into, as its words name it.
 pub(crate) fn base(row: &QueueRow) -> &str {
   row.base_branch.as_ref().map_or("", |branch| branch.as_str())
-}
-
-pub(crate) fn state(ctx: &Ctx, row: &QueueRow) -> StateLook {
-  let look = |icon, label: Arc<str>| StateLook {
-    icon,
-    icon_color: PaletteColor::TextSecondary,
-    label,
-    label_color: PaletteColor::TextPrimary,
-  };
-  let tinted = |icon, label: Arc<str>, color: PaletteColor| StateLook {
-    icon,
-    icon_color: color.clone(),
-    label,
-    label_color: color,
-  };
-  match &row.entry.state {
-    QueueState::Queued | QueueState::Removed => look(Icon::Clock3, ctx.t("delivery.queue.state.queued")),
-    QueueState::Syncing => look(
-      Icon::LoaderCircle,
-      ctx.t_args("delivery.queue.state.syncing", [("base", base(row))]),
-    ),
-    QueueState::Rechecking { .. } => look(Icon::LoaderCircle, ctx.t("delivery.queue.state.rechecking")),
-    QueueState::Integrating { .. } => look(Icon::LoaderCircle, ctx.t("delivery.queue.state.integrating")),
-    QueueState::WaitingForApproval => tinted(
-      Icon::Hand,
-      ctx.t("delivery.queue.state.waitingForApproval"),
-      PaletteColor::Warning,
-    ),
-    QueueState::Blocked(_) => tinted(
-      Icon::CirclePause,
-      ctx.t("delivery.queue.state.blocked"),
-      PaletteColor::Warning,
-    ),
-    QueueState::Left(left) if left.failed() => tinted(
-      Icon::CircleX,
-      ctx.t("delivery.queue.state.failed"),
-      PaletteColor::Danger,
-    ),
-    QueueState::Left(_) => tinted(
-      Icon::Hand,
-      ctx.t("delivery.queue.state.needsYou"),
-      PaletteColor::Warning,
-    ),
-    QueueState::Merged(_) => look(Icon::GitMerge, ctx.t("delivery.queue.state.merged")),
-  }
-}
-
-/// The line under the state's word: a waiting run's place, how many re-syncs a run is into, since when it is in its
-/// state, or when it was merged or left.
-pub(crate) fn sub(ctx: &Ctx, row: &QueueRow) -> Arc<str> {
-  let entry = &row.entry;
-  match &entry.state {
-    QueueState::Queued => place(ctx, row.place.unwrap_or(1)),
-    QueueState::Syncing if entry.resyncs > 0 => ctx.t_args(
-      "delivery.queue.again",
-      [
-        ("count", entry.resyncs.to_string()),
-        ("max", orchester_core::merge_queue::MAX_RESYNCS.to_string()),
-      ],
-    ),
-    QueueState::Merged(_) | QueueState::Left(_) | QueueState::Removed => clock(entry.since).into(),
-    _ => ctx.t_args("delivery.queue.since", [("time", clock(entry.since))]),
-  }
 }
 
 /// `1st in line`, `2nd in line`, …
@@ -114,144 +37,6 @@ pub(crate) fn method(ctx: &Ctx, method: MergeMethod) -> Arc<str> {
   match method {
     MergeMethod::MergeCommit => ctx.t("delivery.queue.method.mergeCommit"),
     MergeMethod::Squash => ctx.t("delivery.queue.method.squash"),
-  }
-}
-
-fn merged_method(ctx: &Ctx, kind: MergeKind) -> Arc<str> {
-  match kind {
-    MergeKind::Squash => ctx.t("delivery.queue.method.squash"),
-    MergeKind::MergeCommit | MergeKind::FastForward | MergeKind::AlreadyMerged => {
-      ctx.t("delivery.queue.method.mergeCommit")
-    }
-  }
-}
-
-/// The pipeline as a row names it: `Feature delivery v3`.
-pub(crate) fn pipeline(ctx: &Ctx, row: &QueueRow) -> Arc<str> {
-  ctx.t_args(
-    "delivery.queue.empty.pipeline",
-    [
-      ("name", row.pipeline.0.clone()),
-      ("version", row.pipeline.1.to_string()),
-    ],
-  )
-}
-
-/// The run's meta line: its number, pipeline and what fits its state.
-pub(crate) fn meta(ctx: &Ctx, row: &QueueRow) -> Arc<str> {
-  let run = row.run_number.to_string();
-  let pipeline = pipeline(ctx, row);
-  let entry = &row.entry;
-  let method = method(ctx, row.deliver.method());
-  match &entry.state {
-    QueueState::Queued => ctx.t_args(
-      "delivery.queue.meta.queued",
-      [
-        ("run", run),
-        ("pipeline", pipeline.to_string()),
-        ("mode", mode(ctx, row.deliver.mode()).to_string()),
-        ("method", method.to_string()),
-        ("time", clock(entry.finished_at)),
-      ],
-    ),
-    QueueState::Syncing if entry.resyncs > 0 => moved_meta(ctx, row, (run, pipeline)),
-    QueueState::Integrating { base, files, .. } => ctx.t_args(
-      "delivery.queue.meta.conflicts",
-      [
-        ("run", run),
-        ("pipeline", pipeline.to_string()),
-        ("count", files.len().to_string()),
-        ("base", self::base(row).to_owned()),
-        ("revision", short_revision(base.as_str()).to_owned()),
-      ],
-    ),
-    QueueState::WaitingForApproval => match &entry.checked {
-      Some(checked) => ctx.t_args(
-        "delivery.queue.meta.checked",
-        [
-          ("run", run),
-          ("pipeline", pipeline.to_string()),
-          ("base", self::base(row).to_owned()),
-          ("revision", short_revision(checked.base.as_str()).to_owned()),
-        ],
-      ),
-      None => delivering_meta(ctx, row, (run, pipeline)),
-    },
-    QueueState::Blocked(_) if entry.approved_at.is_some() => ctx.t_args(
-      "delivery.queue.meta.approved",
-      [
-        ("run", run),
-        ("pipeline", pipeline.to_string()),
-        ("method", method.to_string()),
-      ],
-    ),
-    QueueState::Merged(delivered) => ctx.t_args(
-      "delivery.queue.meta.merged",
-      [
-        ("run", run),
-        ("pipeline", pipeline.to_string()),
-        ("revision", short_revision(delivered.revision.as_str()).to_owned()),
-        ("method", merged_method(ctx, delivered.kind).to_string()),
-      ],
-    ),
-    QueueState::Left(_) | QueueState::Removed => ctx.t_args(
-      "delivery.queue.meta.left",
-      [("run", run), ("pipeline", pipeline.to_string())],
-    ),
-    _ => delivering_meta(ctx, row, (run, pipeline)),
-  }
-}
-
-fn delivering_meta(ctx: &Ctx, row: &QueueRow, (run, pipeline): (String, Arc<str>)) -> Arc<str> {
-  ctx.t_args(
-    "delivery.queue.meta.delivering",
-    [
-      ("run", run),
-      ("pipeline", pipeline.to_string()),
-      ("mode", mode(ctx, row.deliver.mode()).to_string()),
-      ("method", method(ctx, row.deliver.method()).to_string()),
-    ],
-  )
-}
-
-/// A run syncing again: where the base moved to and when.
-fn moved_meta(ctx: &Ctx, row: &QueueRow, (run, pipeline): (String, Arc<str>)) -> Arc<str> {
-  let moved = row.events.iter().rev().find_map(|recorded| match &recorded.event {
-    QueueEvent::CheckSuperseded { now, .. } => Some((now.clone(), recorded.at)),
-    _ => None,
-  });
-  let Some((now, at)) = moved else {
-    return delivering_meta(ctx, row, (run, pipeline));
-  };
-  ctx.t_args(
-    "delivery.queue.meta.moved",
-    [
-      ("run", run),
-      ("pipeline", pipeline.to_string()),
-      ("base", base(row).to_owned()),
-      ("revision", short_revision(now.as_str()).to_owned()),
-      ("time", clock(at)),
-    ],
-  )
-}
-
-/// The detail under a row's meta line, when its state has one: why it left, what was cleared after its merge, or
-/// that its base moved since its check.
-pub(crate) fn detail(ctx: &Ctx, row: &QueueRow) -> Option<Arc<str>> {
-  match &row.entry.state {
-    QueueState::WaitingForApproval if row.base_moved => {
-      Some(ctx.t_args("delivery.queue.detail.baseMoved", [("base", base(row))]))
-    }
-    QueueState::Merged(delivered) => Some(match (delivered.worktree_removed, delivered.branch_deleted) {
-      (true, true) => ctx.t_args("delivery.queue.detail.cleared", [("branch", row.branch.as_str())]),
-      (true, false) => ctx.t_args(
-        "delivery.queue.detail.clearedKeptBranch",
-        [("branch", row.branch.as_str())],
-      ),
-      (false, _) => ctx.t("delivery.queue.detail.notCleared"),
-    }),
-    QueueState::Left(left) => Some(left_reason(ctx, left)),
-    _ => None,
   }
 }
 

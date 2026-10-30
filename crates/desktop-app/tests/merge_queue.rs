@@ -2,8 +2,9 @@
 //! queue screen with its rows, its blocked notice and its sidebar count, and a task's Summary while the queue delivers
 //! its run: Review before merging with its changes, commits and checks and *Merge into main*, which the queue then
 //! merges; Integrate failed with *Resolve myself*, which leaves the merge in the run's worktree, and *I've resolved it*
-//! with markers left; a run merged by the queue, and its conversation telling its delivery. The queue's driver runs as
-//! in the app, with git. Needs `git`, as the seed does.
+//! with markers left; a run merged by the queue, and its conversation telling its delivery. A lane per base branch
+//! (ORC-410, `merge_queue_lanes`): each with its head, how it lands and its runs, and a run waiting in one lane holding
+//! no other. The queue's driver runs as in the app, with git. Needs `git`, as the seed does.
 
 #[path = "../examples/seed/kontur/mod.rs"]
 #[allow(
@@ -97,7 +98,7 @@ fn merge_queue_lists_runs_waiting_for_approval_left_and_merged_today_and_counts_
     seeded.window.until(row, |window| window.texts(row).is_some());
   }
   let waiting = seeded.window.text("merge-queue-row-2");
-  assert!(waiting.contains("Waiting for approval"), "{waiting}");
+  assert!(waiting.contains("Waiting for your approval"), "{waiting}");
   assert!(waiting.contains("Typed errors per module"), "{waiting}");
   assert!(seeded.shows("merge-queue-row-2-review"), "Review & merge is offered");
   let left = seeded.window.text("merge-queue-row-3");
@@ -124,7 +125,7 @@ fn merge_queue_blocked_by_a_dirty_checkout_says_why_and_goes_on_once_it_is_clean
   let notice = seeded.window.text("merge-queue-blocked");
   assert!(notice.contains("uncommitted changes"), "{notice}");
   let checkout = seeded.window.text("merge-queue-checkout-state");
-  assert_eq!(checkout, "· 1 uncommitted file");
+  assert_eq!(checkout, "on main · 1 uncommitted file");
   let first = seeded.window.text("merge-queue-row-1");
   assert!(first.contains("src/webhooks/settings.rs"), "{first}");
   let held = seeded.window.text("merge-queue-row-2");
@@ -170,6 +171,87 @@ fn merge_queue_removes_a_waiting_run_which_then_merges_by_hand() {
   seeded
     .window
     .until("Ready for review", |window| window.texts("task-merge").is_some());
+}
+
+/// Waits for the lane of `branch` and gives the texts of its head and of its rows.
+fn lane(seeded: &mut Seeded, branch: &str) -> (String, String) {
+  let id = format!("merge-queue-lane-{branch}");
+  seeded
+    .window
+    .until(&id, |window| window.texts(&format!("{id}-rows")).is_some());
+  (
+    seeded.window.text(&format!("{id}-head")),
+    seeded.window.text(&format!("{id}-rows")),
+  )
+}
+
+#[test]
+fn merge_queue_lanes_show_a_lane_per_base_branch_with_its_head_how_it_lands_and_its_runs() {
+  let mut seeded = Seeded::new("delivery-lanes");
+  seeded.queue_screen();
+  let (main_head, main_rows) = lane(&mut seeded, "main");
+  assert!(main_head.starts_with("Into main"), "{main_head}");
+  assert!(main_head.ends_with("merges in the checkout"), "{main_head}");
+  for title in ["Retry budget per endpoint", "Honor Retry-After on 429 and 503"] {
+    assert!(main_rows.contains(title), "{main_rows}");
+  }
+  assert!(!main_rows.contains("Add retry to webhook sender"), "{main_rows}");
+  let (release_head, release_rows) = lane(&mut seeded, "release/2.0");
+  assert_eq!(
+    release_head, "Into release/2.0 1 lands beside the checkout: it is on main",
+    "the run waiting for approval is counted in its own lane only"
+  );
+  assert!(release_rows.contains("Add retry to webhook sender"), "{release_rows}");
+  assert!(
+    release_rows.contains("Waiting for your approval · checked on release/2.0 @"),
+    "{release_rows}"
+  );
+  assert!(!release_rows.contains("Retry budget per endpoint"), "{release_rows}");
+  assert!(seeded.shows("merge-queue-row-1-review"), "Review & merge is offered");
+  // main's lane comes first: its run is delivered now.
+  let mut top = |id: &str| {
+    seeded
+      .window
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|lane| lane.bounds())
+      .map(|bounds| bounds.y)
+      .unwrap_or_else(|| panic!("{id} is laid out"))
+  };
+  assert!(
+    top("merge-queue-lane-main") < top("merge-queue-lane-release/2.0"),
+    "main's lane is above release/2.0's"
+  );
+  // The note names a run waiting for the person and another lane: release/2.0's run, or main's first once the queue
+  // delivered it to the person too.
+  let note = seeded.window.text("merge-queue-note");
+  assert!(
+    note.contains("holds nothing in main's lane") || note.contains("holds nothing in release/2.0's lane"),
+    "{note}"
+  );
+}
+
+#[test]
+fn merge_queue_lanes_a_run_waiting_for_approval_in_one_lane_holds_no_other() {
+  let mut seeded = Seeded::new("delivery-lanes");
+  seeded.queue_screen();
+  let repo = seeded.repo.clone();
+  // main's first run is synced and checked while release/2.0's waits for the person.
+  seeded
+    .window
+    .until_within(GIT_WORK, "main's first run to be delivered", |_| {
+      entry_state(&repo, 2) == Some(QueueState::WaitingForApproval)
+    });
+  assert_eq!(seeded.entry(1).state, QueueState::WaitingForApproval);
+  seeded.window.until("main's lane to show it", |window| {
+    window.texts("merge-queue-row-2-state-line").is_some_and(|texts| {
+      texts
+        .iter()
+        .any(|text| text.starts_with("Waiting for your approval · checked on main"))
+    })
+  });
+  let (_, release_rows) = lane(&mut seeded, "release/2.0");
+  assert!(release_rows.contains("Add retry to webhook sender"), "{release_rows}");
 }
 
 #[test]

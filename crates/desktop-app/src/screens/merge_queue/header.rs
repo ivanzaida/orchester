@@ -1,164 +1,131 @@
-//! The head of the Merge queue screen (`Header` in `SMzTk`): what the queue does — the Review hub's head and tab name
-//! the page (`screens::review`) — and beside it the base branch it delivers into with its head, and how the person's
-//! checkout stands (a 6 dot: `success` when it is clean, `warning` otherwise, the box then `warning_muted` in
-//! `warning`). Under it, while delivery is blocked, the notice that says why with *Open folder* and *Retry* (`mM0HY`).
+//! The head of the Merge queue screen (`Info` `IqFXZ` in 05 `S1pTL`): what the queue does — the Review hub's head and
+//! tab name the page (`screens::review`) — and at its end how the person's checkout stands: a 6 dot (`success` while
+//! it keeps no lane out, `warning` otherwise), *Checkout*, the branch it has and whether it is clean. Its path is in
+//! the blocked notice. Under it, while delivery is blocked, the notice that says why with *Open folder* and *Retry*
+//! (`mM0HY`).
 
 use std::{path::Path, sync::Arc};
 
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
+    theme::{PaletteColor, SpacingSize},
   },
-  components::{Column, Row, Text},
+  components::{Row, Text},
   layout::Alignment,
-  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  node::{Element, dimension::Dimension},
 };
 use orchester_core::merge_queue::{Blocked, QueueState};
-use orchester_workspace::{
-  display::{short_revision, shorten_path},
-  merge_queue::{BaseState, CheckoutState, QueueRead},
-};
+use orchester_workspace::merge_queue::{BaseState, CheckoutState, QueueRead};
 
 use super::actions::QueueActions;
 use crate::{
-  theme::{DeliveryText, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize},
+  theme::{DeliveryText, ExtraRadius, ExtraSpacing, ExtraTypography},
   ui::{
     button::{ActionButton, ButtonKind},
-    icon::{Icon, icon},
+    icon::Icon,
     notice::{Notice, NoticeTone},
   },
 };
 
-/// The size of the checkout's dot (`Dot` in `aYFBa`).
-const DOT: f32 = 6.0;
-/// Characters of the checkout's path in the base box before its middle gives way to an ellipsis: the box stays the
-/// size the design draws it (`XEGEf`, 271 wide with `H:/projects/kontur`) beside a long path too.
-const PATH_CHARS: usize = 28;
+/// The size of the checkout's dot and of a lane's (`Dot` `fBuea`, `L74dei`).
+pub(super) const DOT: f32 = 6.0;
 
-pub(super) fn header(ctx: &Ctx, read: &QueueRead, checkout: &Arc<str>) -> Row {
-  let lead = read.base.as_ref().map_or_else(
-    || ctx.t("delivery.queue.leadNoBase"),
-    |base| ctx.t_args("delivery.queue.lead", [("base", base.branch.as_str())]),
-  );
+pub(super) fn header(ctx: &Ctx, read: &QueueRead) -> Row {
   Row::new()
     .id("merge-queue-header")
     .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Xl)
-    .align_items(Alignment::Start)
+    .spacing(SpacingSize::Lg)
+    .align_items(Alignment::Center)
     .child(
-      Column::new().flex(1.0).min_width(Dimension::Px(0.0)).child(
-        Text::new(&lead)
-          .id("merge-queue-lead")
-          .variant(DeliveryText::Lead.role()),
-      ),
+      Text::new(&ctx.t("delivery.queue.leadLanes"))
+        .id("merge-queue-lead")
+        .variant(DeliveryText::Lead.role())
+        .flex(1.0)
+        .min_width(Dimension::Px(0.0)),
     )
-    .with_children(read.base.as_ref().map(|base| base_box(ctx, base, checkout)))
+    .with_children(read.base.as_ref().map(|base| checkout(ctx, base)))
 }
 
-fn base_box(ctx: &Ctx, base: &BaseState, checkout: &Arc<str>) -> Column {
+/// A 6 dot of `color` (`Dot` `fBuea`).
+pub(super) fn dot(color: PaletteColor) -> Row {
+  Row::new()
+    .width(Dimension::Px(DOT))
+    .height(Dimension::Px(DOT))
+    .flex_shrink(0.0)
+    .rounded(ExtraRadius::Full.role())
+    .background(color)
+}
+
+/// How the checkout stands (`Checkout` `yZyeK`).
+fn checkout(ctx: &Ctx, base: &BaseState) -> Row {
   // A checkout the runs land beside does not keep delivery out either.
   let clean = matches!(base.checkout, CheckoutState::Clean | CheckoutState::Beside(_));
-  // The panel's own fill, or `warning_muted` in `warning` while the checkout keeps delivery out.
-  let (fill, stroke, mark) = if clean {
-    (PaletteColor::SurfacePanel, PaletteColor::Border, PaletteColor::Success)
+  let mark = if clean {
+    PaletteColor::Success
   } else {
-    (PaletteColor::WarningMuted, PaletteColor::Warning, PaletteColor::Warning)
+    PaletteColor::Warning
   };
-  let head = base.head.as_ref().map_or_else(
-    || ctx.t_args("delivery.queue.base.noHead", [("branch", base.branch.as_str())]),
-    |head| {
-      ctx.t_args(
-        "delivery.queue.base.value",
-        [
-          ("branch", base.branch.as_str()),
-          ("revision", short_revision(head.as_str())),
-        ],
-      )
-    },
-  );
-  let (state, state_color) = checkout_words(ctx, &base.checkout);
-  let key = |key: &str| {
-    Text::new(&ctx.t(key))
-      .variant(ExtraTypography::Property.role())
-      .color(PaletteColor::TextMuted)
-  };
-  Column::new()
-    .id("merge-queue-base")
+  let (state, state_color) = checkout_words(ctx, base);
+  Row::new()
+    .id("merge-queue-checkout")
     .flex_shrink(0.0)
-    .padding(Padding::symmetric(
-      ExtraSpacing::Loose.role(),
-      ExtraSpacing::Inset.role(),
-    ))
     .spacing(ExtraSpacing::Snug.role())
-    .background(fill)
-    .border(Border::inside(BorderSize::Sm, stroke))
-    .rounded(RadiusSize::Lg)
+    .align_items(Alignment::Center)
     .describe("checkout", if clean { "clean" } else { "not_clean" })
+    .child(dot(mark))
     .child(
-      Row::new()
-        .spacing(ExtraSpacing::Snug.role())
-        .align_items(Alignment::Center)
-        .child(icon(Icon::GitBranch, IconSize::Base, PaletteColor::TextSecondary))
-        .child(key("delivery.queue.base.key"))
-        .child(
-          Text::new(&head)
-            .id("merge-queue-base-head")
-            .variant(ExtraTypography::PropertyMono.role()),
-        ),
+      Text::new(&ctx.t("delivery.queue.checkout.key"))
+        .variant(ExtraTypography::Property.role())
+        .color(PaletteColor::TextMuted)
+        .nowrap(),
     )
     .child(
-      Row::new()
-        .spacing(ExtraSpacing::Snug.role())
-        .align_items(Alignment::Center)
-        .child(
-          Row::new()
-            .width(Dimension::Px(DOT))
-            .height(Dimension::Px(DOT))
-            .rounded(ExtraRadius::Full.role())
-            .background(mark),
-        )
-        .child(key("delivery.queue.base.checkout"))
-        .child(
-          Text::new(&shorten_path(Path::new(&**checkout), PATH_CHARS))
-            .id("merge-queue-checkout-path")
-            .variant(ExtraTypography::PropertyMono.role())
-            .nowrap(),
-        )
-        .child(
-          Text::new(&state)
-            .id("merge-queue-checkout-state")
-            .variant(ExtraTypography::Property.role())
-            .color(state_color),
-        ),
+      Text::new(&state)
+        .id("merge-queue-checkout-state")
+        .variant(ExtraTypography::Property.role())
+        .color(state_color)
+        .nowrap(),
     )
 }
 
-fn checkout_words(ctx: &Ctx, checkout: &CheckoutState) -> (Arc<str>, PaletteColor) {
-  match checkout {
-    CheckoutState::Clean => (ctx.t("delivery.queue.base.clean"), PaletteColor::TextSecondary),
-    CheckoutState::Uncommitted(files) if files.len() == 1 => {
-      (ctx.t("delivery.queue.base.uncommittedOne"), PaletteColor::Warning)
-    }
+/// The branch the checkout has and how it stands, for `base`'s lane.
+fn checkout_words(ctx: &Ctx, base: &BaseState) -> (Arc<str>, PaletteColor) {
+  let on = [("branch", base.branch.as_str().to_owned())];
+  match &base.checkout {
+    CheckoutState::Clean => (
+      ctx.t_args("delivery.queue.checkout.clean", on),
+      PaletteColor::TextSecondary,
+    ),
+    CheckoutState::Uncommitted(files) if files.len() == 1 => (
+      ctx.t_args("delivery.queue.checkout.uncommittedOne", on),
+      PaletteColor::Warning,
+    ),
     CheckoutState::Uncommitted(files) => (
       ctx.t_args(
-        "delivery.queue.base.uncommittedOther",
-        [("count", files.len().to_string())],
+        "delivery.queue.checkout.uncommittedOther",
+        [
+          ("branch", base.branch.as_str().to_owned()),
+          ("count", files.len().to_string()),
+        ],
       ),
+      PaletteColor::Warning,
+    ),
+    CheckoutState::InProgress => (
+      ctx.t_args("delivery.queue.checkout.inProgress", on),
       PaletteColor::Warning,
     ),
     CheckoutState::OtherBranch(Some(branch)) => (
-      ctx.t_args("delivery.queue.base.otherBranch", [("branch", branch.as_str())]),
+      ctx.t_args("delivery.queue.checkout.on", [("branch", branch.as_str())]),
       PaletteColor::Warning,
     ),
-    CheckoutState::OtherBranch(None) => (ctx.t("delivery.queue.base.detached"), PaletteColor::Warning),
     CheckoutState::Beside(Some(branch)) => (
-      ctx.t_args("delivery.queue.base.beside", [("branch", branch.as_str())]),
+      ctx.t_args("delivery.queue.checkout.on", [("branch", branch.as_str())]),
       PaletteColor::TextSecondary,
     ),
-    CheckoutState::Beside(None) => (ctx.t("delivery.queue.base.besideDetached"), PaletteColor::TextSecondary),
-    CheckoutState::InProgress => (ctx.t("delivery.queue.base.inProgress"), PaletteColor::Warning),
-    CheckoutState::Unknown => (ctx.t("delivery.queue.base.unknown"), PaletteColor::TextMuted),
+    CheckoutState::OtherBranch(None) => (ctx.t("delivery.queue.checkout.detached"), PaletteColor::Warning),
+    CheckoutState::Beside(None) => (ctx.t("delivery.queue.checkout.detached"), PaletteColor::TextSecondary),
+    CheckoutState::Unknown => (ctx.t("delivery.queue.checkout.unknown"), PaletteColor::TextMuted),
   }
 }
 

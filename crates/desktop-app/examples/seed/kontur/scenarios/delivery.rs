@@ -10,13 +10,16 @@
 //! `delivery-blocked`: the checkout of `main` holds an uncommitted change, so the run being delivered is blocked
 //! and the run behind it waits (`H7OHPT`); committing or discarding the change lets delivery go on.
 //!
+//! `delivery-lanes`: a lane per base branch (05 `S1pTL`): `main`'s lane delivers while a run waits for approval in
+//! `release/2.0`'s.
+//!
 //! `delivery-empty`: the delivering catalogue and no run: the empty queue says how each pipeline delivers (`mtrlT`).
 
 use orchester_core::{
   merge_queue::{Blocked, CheckedOn, Delivered, Left, QueueEntry, QueueEvent, QueueState},
   resource::StepKey,
   revision::Revision,
-  run::Run,
+  run::{BranchName, Run},
   store::MergeStore,
   task::Task,
   time::Timestamp,
@@ -32,6 +35,8 @@ const CHECKS: &str = "Run checks";
 const CONFLICTS: [&str; 2] = ["src/webhooks/sender.rs", "src/webhooks/settings.rs"];
 /// The tracked file the person changed in their checkout and did not commit.
 const DIRTY: &str = "src/webhooks/settings.rs";
+/// The release branch beside `main`, the base of a run of `delivery-lanes`.
+const RELEASE: &str = "release/2.0";
 
 /// How a run's work was made, and what became of it before the queue had it.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -144,6 +149,61 @@ pub fn blocked(kontur: &mut Kontur) -> Result<(), SeedError> {
   Ok(())
 }
 
+/// `delivery-lanes` (05 `S1pTL`): a lane per base branch. Two runs into `main`, which the checkout has, merge in the
+/// checkout one after the other: the queue delivers the first as the QA copy opens and the second waits behind it.
+/// A run into `release/2.0`, set on its task, waits for approval in its own lane, landing beside the checkout; it
+/// holds nothing in `main`'s lane.
+pub fn lanes(kontur: &mut Kontur) -> Result<(), SeedError> {
+  let catalogue = kontur.delivering_catalogue()?;
+  let feature = &catalogue.feature_delivery;
+  git::branch(&kontur.repo, RELEASE, git::MAIN)?;
+  let release = passed_into(
+    kontur,
+    feature,
+    (
+      "Add retry to webhook sender",
+      "waits for approval in release/2.0's lane",
+    ),
+    (RELEASE, 150),
+  )?;
+  let first = passed(
+    kontur,
+    feature,
+    ("Retry budget per endpoint", "delivered first in main's lane"),
+    (Work::Clean, 120),
+  )?;
+  let second = passed(
+    kontur,
+    feature,
+    ("Honor Retry-After on 429 and 503", "waits behind it in main's lane"),
+    (Work::Clean, 90),
+  )?;
+  // main's runs join first, so its lane comes first.
+  for run in [&first, &second] {
+    let at = kontur.ago(5);
+    enter(kontur, run, (QueueState::Queued, at), |_| {}, &[])?;
+  }
+  let checked = release
+    .last_checkpoint()
+    .map(|checkpoint| checkpoint.revision().clone())
+    .ok_or_else(|| SeedError::Invalid("the run committed nothing".to_owned()))?;
+  let base = kontur.base.clone();
+  let at = kontur.today_ago(20);
+  enter(
+    kontur,
+    &release,
+    (QueueState::WaitingForApproval, at),
+    |entry| {
+      entry.checked = Some(CheckedOn {
+        base: base.clone(),
+        tip: checked,
+        at,
+      });
+    },
+    &checked_events(&base),
+  )
+}
+
 /// `delivery-empty`: nothing in the queue; the project's pipelines, one of which delivers.
 pub fn empty(kontur: &mut Kontur) -> Result<(), SeedError> {
   kontur.delivering_catalogue().map(drop)
@@ -188,6 +248,22 @@ fn passed(
   if work == Work::Merged {
     drive.merge()?;
   }
+  Ok(drive.finish())
+}
+
+/// A run of a new task titled `title` into `base`, a branch set on it, that passed every step, started `ago` minutes
+/// before now.
+fn passed_into(
+  kontur: &mut Kontur,
+  pipeline: &Published,
+  (title, state): (&str, &'static str),
+  (base, ago): (&str, i64),
+) -> Result<Run, SeedError> {
+  let task = queued(kontur, pipeline, (title, state))?;
+  let at = kontur.ago(ago);
+  let base = BranchName::new(base).map_err(|error| SeedError::Invalid(error.to_string()))?;
+  let mut drive = Drive::start_into(kontur, &task, pipeline, (at, base))?;
+  drive.pass_all()?;
   Ok(drive.finish())
 }
 
