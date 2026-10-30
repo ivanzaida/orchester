@@ -60,8 +60,10 @@ const SPECS: &[Spec] = &[
     description: "A project's setup: id, key, name, folder, limits, code index, the environment variables its agents \
                   and command tools get (plain text by design: they hold no secrets), whether agents load the \
                   repository's own agent files (AGENTS.md, CLAUDE.md), its GitHub link, how many connections, \
-                  profiles, pipelines and instructions it has, and its link in the app (its Overview). Base branches \
-                  are set on tasks and modules; each run's own base is in its reads.",
+                  profiles, pipelines and instructions it has, and its link in the app (its Overview). A project has \
+                  no base branch: the branch runs start from is set on tasks (create_task and update_task's \
+                  base_branch, read by get_task) and modules (create_module and update_module's, read by \
+                  list_modules and get_module), on this computer only; each run's own base is in get_run.",
     schema: schema_for_type::<super::projects::InProject>,
     read_only: true,
   },
