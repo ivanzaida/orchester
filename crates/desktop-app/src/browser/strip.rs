@@ -25,7 +25,7 @@ use parking_lot::Mutex;
 
 use super::{
   fit::{self, StripFit, gap},
-  overflow::{Overflow, OverflowProps},
+  overflow::{MenuFocus, Overflow, OverflowProps},
   state::Showing,
   tab::{TAB_HEIGHT, Tab, TabProps},
 };
@@ -52,6 +52,7 @@ pub struct Strip {
   scrolled: Signal<f32>,
   /// The tab last scrolled into view.
   followed: Mutex<Option<BrowserTabId>>,
+  menu_focus: MenuFocus,
 }
 
 impl Component for Strip {
@@ -64,6 +65,7 @@ impl Component for Strip {
       scroll: ScrollState::new(),
       scrolled: ctx.signal(0.0),
       followed: Mutex::new(None),
+      menu_focus: MenuFocus::new(ctx),
     }
   }
 
@@ -98,9 +100,13 @@ impl Component for Strip {
           hidden: hidden.len(),
           strongest,
           showing: showing.clone(),
+          focus: self.menu_focus.clone(),
         },
       )
     });
+    if overflow.is_none() {
+      self.menu_focus.follow(ctx, &showing, false);
+    }
     let strip = Row::new()
       .id("browser-strip")
       .ref_element(self.element.clone())

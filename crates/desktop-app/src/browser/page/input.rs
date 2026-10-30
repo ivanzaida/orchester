@@ -9,6 +9,7 @@
 //! types in the input. Each input marks the tab as used, so its agent waits (`02b` `k7xvx`).
 
 use std::{
+  collections::HashSet,
   sync::Arc,
   time::{Duration, Instant},
 };
@@ -37,11 +38,10 @@ const DOUBLE_CLICK: Duration = Duration::from_millis(500);
 const HIDDEN_OPACITY: f32 = 0.0;
 const HIDDEN_SIZE: f32 = 1.0;
 
-/// What the page remembers of the pointer between events, and the hidden input that holds its focus.
+/// What the page remembers of the pointer and the keys between events.
 #[derive(Clone)]
 pub struct PageInput {
   pressed: Arc<Mutex<Pressed>>,
-  text: ElementRef,
   /// The hidden input's value, kept empty: what it would take goes to the tab.
   value: Signal<String>,
   /// Where the page was last pressed, from its top left, where the hidden input stands.
@@ -58,21 +58,23 @@ struct Pressed {
   last: Option<Instant>,
   /// The last press's click count, which its release carries: the page fires `dblclick` on the release.
   clicks: u8,
+  /// The keys the page got the press of. Another key's release is not the page's: the Esc that closed the all-tabs
+  /// menu is released with the focus back on the page.
+  keys: HashSet<String>,
 }
 
 impl PageInput {
   pub fn new(ctx: &mut Ctx) -> Self {
     Self {
       pressed: Arc::new(Mutex::new(Pressed::default())),
-      text: ctx.element_ref(),
       value: ctx.signal(String::new()),
       at: ctx.signal((0.0, 0.0)),
       focus: ctx.signal(false),
     }
   }
 
-  /// `page` with the handlers that send the person's input to `tab`, and the hidden input; `css` is the frame's size
-  /// in CSS pixels, once a frame came.
+  /// `page` with the handlers that send the person's input to `tab`, and the hidden input, which holds the page's focus
+  /// (`Showing::page_text`); `css` is the frame's size in CSS pixels, once a frame came.
   pub fn attach(
     &self,
     ctx: &mut Ctx,
@@ -81,7 +83,7 @@ impl PageInput {
     (element, css): (ElementRef, Option<(u32, u32)>),
   ) -> Stack {
     if self.focus.get() {
-      ctx.focus(&self.text);
+      ctx.focus(&showing.page_text);
       self.focus.set(false);
     }
     let send = Sender {
@@ -89,7 +91,8 @@ impl PageInput {
       tab: tab.clone(),
       element,
       css,
-      text: self.text.clone(),
+      text: showing.page_text.clone(),
+      pressed: self.pressed.clone(),
     };
     let (down, up, moved) = (
       (send.clone(), self.clone()),
@@ -100,7 +103,7 @@ impl PageInput {
     let (x, y) = self.at.get();
     let hidden = TextInput::new(self.value.clone())
       .id("browser-page-text")
-      .ref_element(self.text.clone())
+      .ref_element(showing.page_text.clone())
       .absolute(x, y, Dimension::Px(HIDDEN_SIZE), Dimension::Px(HIDDEN_SIZE))
       .hit_test(HitTestBehavior::None)
       .opacity(HIDDEN_OPACITY)
@@ -162,6 +165,7 @@ struct Sender {
   css: Option<(u32, u32)>,
   /// The hidden input, whose focus is the page's.
   text: ElementRef,
+  pressed: Arc<Mutex<Pressed>>,
 }
 
 impl Sender {
@@ -224,6 +228,9 @@ impl Sender {
       return;
     }
     event.prevent_default();
+    if !self.track(&event.code, action) {
+      return;
+    }
     let shortcut = event.ctrl || event.meta;
     let text = (action == KeyAction::Down && !shortcut && event.key.chars().count() == 1).then(|| event.key.clone());
     let input = PersonInput::Key {
@@ -234,6 +241,18 @@ impl Sender {
       modifiers: modifiers(event.alt, event.ctrl, event.meta, event.shift),
     };
     self.send(input, action == KeyAction::Down);
+  }
+
+  /// Notes a press of the key `code` on the page; whether this press or release is the page's.
+  fn track(&self, code: &str, action: KeyAction) -> bool {
+    let keys = &mut self.pressed.lock().keys;
+    match action {
+      KeyAction::Down => {
+        keys.insert(code.to_owned());
+        true
+      }
+      KeyAction::Up => keys.remove(code),
+    }
   }
 
   /// The text an input method committed or passed on in the hidden input goes to the tab; the input keeps nothing.

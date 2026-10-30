@@ -286,7 +286,8 @@ not jump to another project by itself.
   with the mouse wheel, keeps the shown tab in view and fades at a cut edge. A button before *+* counts the hidden tabs
   (*⌄ 13*) and carries the strongest dot among them; it opens a menu of all the project's tabs: a filter field, one row
   per tab with its dot, full label and owner run, × on hover, the person's tabs after a divider. Choosing a row shows
-  that tab.
+  that tab. The filter has the focus while the menu is open, so what is typed filters the rows and never reaches the
+  page; when the menu closes the focus goes back where it was.
 
 - **Toolbar** (`01 · Default` `uCSan`): an address line that ends with the owner of the tab shown (*Run #102 ·
   ORC-107*); back, forward, reload; *Open in a browser window* (decision 7).

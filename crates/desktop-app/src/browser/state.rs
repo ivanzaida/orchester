@@ -60,6 +60,10 @@ pub struct Showing {
   pub person: PersonHooks,
   /// The address line's text input, which Ctrl+L and the empty strip give the focus.
   pub address: ElementRef,
+  /// The page's hidden text input, whose focus is the page's (`page::input`).
+  pub page_text: ElementRef,
+  /// The field of a JavaScript prompt, while one waits (`page::dialog`).
+  pub dialog_answer: ElementRef,
 }
 
 /// Two showings are the same while the project, its browser and what the window knows of it are.

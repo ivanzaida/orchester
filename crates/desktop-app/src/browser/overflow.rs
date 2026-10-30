@@ -2,6 +2,10 @@
 //! wholly in view (*⌄ 13*) and the strongest dot among them; it opens a menu of every tab of the project: a filter
 //! field, one row per tab with its dot, its full label cut only at the menu's width and its run on the right, × under
 //! the pointer, the person's tabs after a divider. Choosing a row shows its tab, which the strip scrolls into view.
+//! The filter has the focus while the menu is open, so what is typed filters the rows and does not reach the page
+//! ([`MenuFocus`]).
+
+use std::sync::Arc;
 
 use lurq::{
   app::{
@@ -16,6 +20,7 @@ use lurq::{
   node::{CursorIcon, Element, Style, dimension::Dimension, padding::Padding},
 };
 use orchester_ipc::browser::BrowserCommand;
+use parking_lot::Mutex;
 
 use super::{
   model::{Indicator, Owner, StripTab},
@@ -37,12 +42,64 @@ use crate::{
 const MENU_WIDTH: f32 = 440.0;
 const MENU_MAX_HEIGHT: f32 = 640.0;
 
-#[derive(Clone, PartialEq)]
+/// The menu's hold on the window's focus: its filter takes it when the menu opens, and it goes back where it was when
+/// the menu closes. The strip keeps this, because the menu also goes when its button does, once the tabs fit again.
+#[derive(Clone)]
+pub struct MenuFocus {
+  filter: ElementRef,
+  opened: Arc<Mutex<Option<Opened>>>,
+}
+
+/// The menu is open; where the focus was when it opened, if it was somewhere that takes what is typed.
+struct Opened(Option<ElementRef>);
+
+impl MenuFocus {
+  pub fn new(ctx: &mut Ctx) -> Self {
+    Self {
+      filter: ctx.element_ref(),
+      opened: Arc::new(Mutex::new(None)),
+    }
+  }
+
+  /// Told at each render whether the menu is open. Focus the person moved on while it was open, with Ctrl+L, stays.
+  pub fn follow(&self, ctx: &Ctx, showing: &Showing, open: bool) {
+    let mut opened = self.opened.lock();
+    if open == opened.is_some() {
+      return;
+    }
+    if open {
+      *opened = Some(Opened(focus_holder(showing).cloned()));
+      ctx.focus(&self.filter);
+    } else if let Some(Opened(Some(before))) = opened.take()
+      && focus_holder(showing).is_none()
+    {
+      ctx.focus(&before);
+    }
+  }
+}
+
+/// The place of the window that takes what is typed and has the focus. lurq only answers for an element it is asked
+/// about, so a toolbar or dialog button the Tab key reached is not known here.
+fn focus_holder(showing: &Showing) -> Option<&ElementRef> {
+  [&showing.page_text, &showing.address, &showing.dialog_answer]
+    .into_iter()
+    .find(|place| place.focus_signal().get_untracked())
+}
+
+#[derive(Clone)]
 pub struct OverflowProps {
   /// How many tabs are not wholly in view.
   pub hidden: usize,
   pub strongest: Option<Indicator>,
   pub showing: Showing,
+  pub focus: MenuFocus,
+}
+
+/// Compared by what it shows: the menu's focus is the strip's, kept for the strip's life.
+impl PartialEq for OverflowProps {
+  fn eq(&self, other: &Self) -> bool {
+    self.hidden == other.hidden && self.strongest == other.strongest && self.showing == other.showing
+  }
 }
 
 impl DevtoolsInspectable for OverflowProps {}
@@ -72,7 +129,9 @@ impl Component for Overflow {
       hidden,
       strongest,
       showing,
+      focus,
     } = ctx.props::<OverflowProps>().clone();
+    focus.follow(ctx, &showing, self.open.get());
     let (open, filter, hovered) = (self.open.clone(), self.filter.clone(), self.hovered.clone());
     let count_name = if hidden == 1 {
       ctx.t_args("browser.overflow.button.one", [("count", hidden.to_string())])
@@ -107,7 +166,7 @@ impl Component for Overflow {
     } else {
       button
     };
-    let menu = self.open.get().then(|| self.menu(ctx, &showing));
+    let menu = self.open.get().then(|| self.menu(ctx, &showing, &focus));
     let popup = Popup::new(self.anchor.clone(), menu.unwrap_or_else(Element::new))
       .open(self.open.clone())
       .placement(Placement::BottomEnd)
@@ -117,7 +176,7 @@ impl Component for Overflow {
 }
 
 impl Overflow {
-  fn menu(&self, ctx: &mut Ctx, showing: &Showing) -> Element {
+  fn menu(&self, ctx: &mut Ctx, showing: &Showing, focus: &MenuFocus) -> Element {
     let filter = self.filter.get().to_lowercase();
     let rows = |tabs: &[StripTab], offset: usize, ctx: &mut Ctx| -> Vec<Element> {
       let mut rows = Vec::new();
@@ -145,6 +204,7 @@ impl Overflow {
     )
     .placeholder(ctx.t("browser.overflow.filter"))
     .search()
+    .element(focus.filter.clone())
     .render(ctx);
     // Rows of 28 one under another, as the frame's (`Row · …` in `P6RCw`).
     let rows = Column::new()

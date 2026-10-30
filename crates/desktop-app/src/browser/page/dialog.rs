@@ -111,6 +111,7 @@ impl Component for Dialog {
         ctx.t("browser.dialog.answer"),
         self.answer.clone(),
       )
+      .element(showing.dialog_answer.clone())
       .render(ctx)
     });
     let actions = Row::new()
