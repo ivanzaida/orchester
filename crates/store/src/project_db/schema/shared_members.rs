@@ -25,3 +25,13 @@ pub(super) const READ_AS_MIGRATION: &str = r"
 -- The person's user id on the server when the members were last read; NULL when the reader was not one of them.
 ALTER TABLE sharing ADD COLUMN members_read_as TEXT;
 ";
+
+/// The server's admins as the members list last named them: they change the team's configuration as the project's
+/// owners do (row 72), so a member's libraries name them.
+pub(super) const SERVER_ADMINS_MIGRATION: &str = r"
+CREATE TABLE shared_server_admins (
+  user_id TEXT PRIMARY KEY,
+  display_name TEXT NOT NULL,
+  username TEXT NOT NULL
+) STRICT;
+";

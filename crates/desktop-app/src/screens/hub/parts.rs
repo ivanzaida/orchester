@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use lurq::{
   app::theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
-  components::{Column, Row, Text},
+  components::{Column, Row, Text, TextOverflow},
   layout::{Alignment, layout_kind::Justify},
   node::{Element, Style, border::Border, dimension::Dimension, padding::Padding},
 };
@@ -33,6 +33,8 @@ pub(crate) enum Tone {
   Success,
   Warning,
   Danger,
+  /// A version published here that waits for the team server (`MaHFt` in 01 `cHvkL`).
+  Info,
   Muted,
 }
 
@@ -42,6 +44,7 @@ impl Tone {
       Self::Success => PaletteColor::Success,
       Self::Warning => PaletteColor::Warning,
       Self::Danger => PaletteColor::Danger,
+      Self::Info => PaletteColor::Info,
       Self::Muted => PaletteColor::TextMuted,
     }
   }
@@ -160,6 +163,7 @@ pub(crate) struct Entry {
   code: bool,
   chevron: bool,
   dense: bool,
+  one_line: bool,
 }
 
 impl Entry {
@@ -177,7 +181,15 @@ impl Entry {
       code: false,
       chevron: true,
       dense: false,
+      one_line: false,
     }
+  }
+
+  /// The hint keeps to one line, cut at its end: a team row's publisher and state leave it little room (`QPjYG` in 01
+  /// `cHvkL`).
+  pub(crate) const fn one_line(mut self) -> Self {
+    self.one_line = true;
+    self
   }
 
   /// The row is the one chosen, filled with `hover` (`Db46B` in 02b's sources, `pHCCx` in 02d).
@@ -264,6 +276,11 @@ impl From<Entry> for Element {
           .id(format!("{}-hint", entry.id))
           .variant(HubText::Hint.role())
           .width(Dimension::Pct(100.0));
+        let hint = if entry.one_line {
+          hint.nowrap().text_overflow(TextOverflow::Elipsis)
+        } else {
+          hint
+        };
         match color {
           Some(color) => hint.color(color),
           None => hint,

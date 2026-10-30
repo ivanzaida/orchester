@@ -98,7 +98,7 @@ pub fn permission_args(
   // Without a listed command, every command asks a person.
   let ask_commands = commands.is_empty();
   let ask_tools = permissions.interactive_tool_approvals();
-  let network = permissions.network() == NetworkAccess::On && enforced.network_stays_on().is_none();
+  let network = *permissions.network() == NetworkAccess::On && enforced.network_stays_on().is_none();
   let edit_rules = enforced.mechanism(PermissionSetting::Repository) == Mechanism::ClaudeEditRules;
   let accepts_edits = writes && !edit_rules;
   let mut offered: Vec<&str> = READ_TOOLS.to_vec();

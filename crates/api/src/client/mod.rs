@@ -6,6 +6,7 @@
 //! error or `Debug` output.
 
 mod address;
+mod catalog;
 mod cloud;
 mod cloud_address;
 mod error;

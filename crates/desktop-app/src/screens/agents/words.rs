@@ -61,7 +61,7 @@ pub fn network(ctx: &Ctx, permissions: &AgentPermissions, provider: Option<Agent
     return ctx.t("agents.networkUnknown");
   };
   let effective = permissions.effective_network(provider, Platform::current());
-  ctx.t(if effective != permissions.network() {
+  ctx.t(if effective != *permissions.network() {
     "agents.networkFallback"
   } else if effective == NetworkAccess::On {
     "agents.networkOn"

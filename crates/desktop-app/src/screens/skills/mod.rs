@@ -65,16 +65,21 @@ impl Component for SkillsScreen {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let project = ctx.props::<Props>().project.clone();
     let body = self.body(ctx, &project);
-    let head = Head::actions([
-      ActionButton::new("skills-import-open", ButtonKind::Ghost, ctx.t("skills.import"))
-        .icon(Icon::FolderOpen)
-        .opens(self.view.panel.to(Panel::Import))
-        .into(),
-      ActionButton::new("skills-new", ButtonKind::Primary, ctx.t("skills.new"))
-        .icon(Icon::Plus)
-        .opens(self.view.panel.to(Panel::New))
-        .into(),
-    ]);
+    // A member of a shared project adds and imports none of the team's skills.
+    let head = if hub::team::may_change(hub::team::of(&project).as_ref()) {
+      Head::actions([
+        ActionButton::new("skills-import-open", ButtonKind::Ghost, ctx.t("skills.import"))
+          .icon(Icon::FolderOpen)
+          .opens(self.view.panel.to(Panel::Import))
+          .into(),
+        ActionButton::new("skills-new", ButtonKind::Primary, ctx.t("skills.new"))
+          .icon(Icon::Plus)
+          .opens(self.view.panel.to(Panel::New))
+          .into(),
+      ])
+    } else {
+      Head::default()
+    };
     Column::new()
       .id("screen-skills")
       .width(Dimension::Pct(100.0))

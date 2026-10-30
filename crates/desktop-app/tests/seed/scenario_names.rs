@@ -47,6 +47,8 @@ fn seed_names_every_scenario_once() {
       "native",
       "project-settings",
       "project-settings-shared",
+      "shared-config",
+      "shared-config-member",
       "pipelines",
       "pipelines-empty",
       "pipelines-publish",

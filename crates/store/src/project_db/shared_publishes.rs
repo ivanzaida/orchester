@@ -7,14 +7,15 @@
 
 use orchester_core::{
   id::{IdempotencyKey, ResourceId, VersionId},
-  resource::{ResourceBody, ResourceKind, Version, VersionNumber},
+  resource::{Draft, ResourceBody, ResourceKind, Version, VersionNumber},
   sharing::{MemberRole, may_change_configuration},
+  time::Timestamp,
 };
 use rusqlite::{Connection, OptionalExtension, params};
 
 use super::{
   ProjectDb,
-  resources::{check_kind, parse_kind, version_number},
+  resources::{check_kind, load_draft, load_versions, parse_kind, save_draft, version_number},
   shared_versions::CachedVersion,
   sharing::parse_role,
 };
@@ -129,6 +130,64 @@ impl ProjectDb {
     Ok(())
   }
 
+  /// *Open my draft on vN*: `version`, published here and met by a version someone published from the same base, is
+  /// taken back, with the versions of its resource published here after it; the server numbered none of them. The
+  /// resource's draft, the one kept here or else the newest version taken back, is then edited from the latest version
+  /// the server numbered; nothing is merged. A version a run or a task here uses stays
+  /// ([`StoreError::VersionInUse`]); nothing is changed then.
+  pub fn reopen_draft<B: ResourceBody + Clone>(
+    &mut self,
+    version: VersionId,
+    now: Timestamp,
+  ) -> Result<(), StoreError> {
+    let transaction = self.connection.transaction()?;
+    // The versions go before their rows in `shared_publishes`, which the delete trigger reads.
+    transaction.pragma_update(None, "defer_foreign_keys", true)?;
+    let (resource, number): (String, i64) = transaction
+      .query_row(
+        "SELECT mine.resource_id, mine.number FROM shared_publishes \
+         JOIN resource_versions AS mine ON mine.id = shared_publishes.version_id \
+         WHERE shared_publishes.version_id = ?1 AND shared_publishes.conflict_latest IS NOT NULL",
+        [version.to_string()],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+      )
+      .optional()?
+      .ok_or_else(|| corrupt("version in conflict", version))?;
+    let resource: ResourceId = parse("resource id", &resource)?;
+    check_kind::<B>(&transaction, resource)?;
+    ensure_may_change(&transaction, resource)?;
+    let latest = latest_confirmed(&transaction, resource)?.ok_or_else(|| corrupt("version in conflict", version))?;
+    let taken = load_versions::<B>(
+      &transaction,
+      "WHERE resource_id = ?1 AND number >= ?2 AND id IN (SELECT version_id FROM shared_publishes) ORDER BY number",
+      params![resource.to_string(), number],
+    )?;
+    for kept in &taken {
+      if in_use(&transaction, resource, kept)? {
+        return Err(StoreError::VersionInUse(kept.id()));
+      }
+    }
+    let body = match load_draft::<B>(&transaction, resource)? {
+      Some(draft) => draft.body().clone(),
+      None => taken
+        .last()
+        .ok_or_else(|| corrupt("version in conflict", version))?
+        .body()
+        .clone(),
+    };
+    for kept in &taken {
+      transaction.execute("DELETE FROM resource_versions WHERE id = ?1", [kept.id().to_string()])?;
+      transaction.execute(
+        "DELETE FROM shared_publishes WHERE version_id = ?1",
+        [kept.id().to_string()],
+      )?;
+    }
+    let draft = Draft::new(body, Some(version_number(latest)?), now);
+    save_draft(&transaction, resource, &draft)?;
+    transaction.commit()?;
+    Ok(())
+  }
+
   /// The server numbered `version`, published here, as `confirmed`: it takes the server's number, moving up another
   /// waiting version that has it, and is kept as every version cached from the server is, with its publisher.
   pub fn confirm_publish<B: ResourceBody>(
@@ -200,7 +259,7 @@ fn configuring(connection: &Connection) -> Result<Option<bool>, StoreError> {
 }
 
 /// Whether resources of `kind` are the team's in a shared project: every kind but agent testing's.
-const fn shared_kind(kind: ResourceKind) -> bool {
+pub(super) const fn shared_kind(kind: ResourceKind) -> bool {
   !matches!(
     kind,
     ResourceKind::TestSuite | ResourceKind::Service | ResourceKind::Stack
@@ -302,6 +361,16 @@ pub(super) fn latest_confirmed(connection: &Connection, resource: ResourceId) ->
     "SELECT MAX(number) FROM resource_versions WHERE resource_id = ?1 \
      AND id NOT IN (SELECT version_id FROM shared_publishes)",
     [resource.to_string()],
+    |row| row.get(0),
+  )?)
+}
+
+/// Whether a run here pinned `version` of `resource`, or a task picked it by its number: then it stays.
+fn in_use<B>(connection: &Connection, resource: ResourceId, version: &Version<B>) -> Result<bool, StoreError> {
+  Ok(connection.query_row(
+    "SELECT EXISTS(SELECT 1 FROM runs WHERE pipeline_version_id = ?1 OR instr(snapshot, ?1) > 0) \
+     OR EXISTS(SELECT 1 FROM tasks WHERE pipeline_id = ?2 AND pipeline_version = ?3)",
+    params![version.id().to_string(), resource.to_string(), version.number().get()],
     |row| row.get(0),
   )?)
 }
