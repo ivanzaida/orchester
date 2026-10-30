@@ -1,0 +1,86 @@
+{
+  "browser": {
+    "window": {
+      "title": "Browser · {{project}}",
+      "titleAlone": "Browser"
+    },
+    "switcher": {
+      "label": "Switch project",
+      "section": "PROJECTS",
+      "tabs": {
+        "none": "No tabs",
+        "one": "1 tab",
+        "other": "{{count}} tabs"
+      },
+      "separator": "·",
+      "acting": "acting",
+      "note": "Each project opens pages in its own browser profile, with its own sign-ins."
+    },
+    "tabs": {
+      "agentLabel": "{{key}} - {{title}}",
+      "blank": "New tab",
+      "close": "Close tab",
+      "newTab": "New tab",
+      "indicator": {
+        "waits": "Waits for you",
+        "acting": "An agent is acting",
+        "new": "An agent opened it; you have not looked at it yet"
+      }
+    },
+    "overflow": {
+      "button": {
+        "one": "{{count}} more tab",
+        "other": "{{count}} more tabs"
+      },
+      "filter": "Filter tabs",
+      "run": "Run #{{number}}",
+      "none": "No tab matches"
+    },
+    "toolbar": {
+      "back": "Back",
+      "forward": "Forward",
+      "reload": "Reload",
+      "address": "Address",
+      "typeAddress": "Type an address",
+      "noBrowser": "No browser to open pages in",
+      "ownerRun": "Run #{{number}} · {{key}}",
+      "ownerYours": "Your tab",
+      "openInWindow": "Open in a browser window"
+    },
+    "activity": {
+      "acting": "{{agent}} is acting in this tab",
+      "detail": "· {{summary}}",
+      "hint": "Click or type here and it waits until you stop",
+      "using": "You're using this tab",
+      "waits": "· {{agent}} waits until 10 s after your last input",
+      "someAgent": "An agent"
+    },
+    "dialog": {
+      "says": "{{origin}} says",
+      "ok": "OK",
+      "cancel": "Cancel",
+      "leave": "Leave",
+      "stay": "Stay",
+      "leaveMessage": "Leave this page? What it has not saved is lost.",
+      "answer": "Answer"
+    },
+    "empty": {
+      "title": "No pages yet",
+      "body": "When an agent of a run opens a page, its tab shows here. Agents browse only when their profile allows it. Type an address above to open a page yourself."
+    },
+    "headed": {
+      "title": "{{project}}'s browser is open in a window of its own",
+      "body": "Use it for passkeys, a password manager or a site that refuses this view. Agents keep working there. Back to Orchester restarts the browser here and reopens the tabs by their addresses; what a page has not saved is lost.",
+      "back": "Back to Orchester"
+    },
+    "notFound": {
+      "title": "No Chromium-based browser found",
+      "bodyWindows": "Orchester looked for Microsoft Edge and Google Chrome in the registry and the usual install folders and found neither. Until one is set, agents' browser tools answer that the browser is unavailable.",
+      "bodyMacos": "Orchester looked for Google Chrome, Microsoft Edge, Brave and Chromium in /Applications and ~/Applications and found none. Until one is set, agents' browser tools answer that the browser is unavailable.",
+      "bodyUnsupported": "Orchester's browser is not supported on this platform yet, so agents' browser tools answer that the browser is unavailable.",
+      "openSettings": "Open Settings › Browser",
+      "lookAgain": "Look again"
+    },
+    "failed": "The browser could not do that. The log has the details."
+  }
+}

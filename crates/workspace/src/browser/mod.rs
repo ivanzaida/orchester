@@ -8,6 +8,7 @@
 //! replaces it, so a slow decode drops frames instead of queueing them, as the runner does before sending.
 
 mod frame;
+mod owners;
 mod view;
 
 use std::{
@@ -18,14 +19,24 @@ use std::{
 
 use orchester_core::id::RunId;
 use orchester_ipc::browser::{BrowserEvent, ScreencastFrame};
+#[cfg(feature = "test-support")]
+use orchester_ipc::{
+  Rejection, Reply,
+  browser::{BrowserCommand, BrowserReply},
+};
 use orchester_store::StoreError;
 use parking_lot::Mutex;
+#[cfg(feature = "test-support")]
+use tokio::sync::oneshot;
 use tokio::sync::watch;
 
 pub use self::{
   frame::{FrameDecodeError, RgbaFrame},
+  owners::{RunOwner, run_owners},
   view::{AgentActing, BrowserView, OpenSelect},
 };
+#[cfg(feature = "test-support")]
+use crate::runner::RequestError;
 use crate::workspace::Workspace;
 
 /// An agent of `run` opened the run's first tab in the browser of the project at `project`.
@@ -49,6 +60,8 @@ impl Default for BrowserWindow {
         showing: Mutex::new(None),
         changes: watch::Sender::new(0),
         started: watch::Sender::new(None),
+        #[cfg(feature = "test-support")]
+        recorded: Mutex::new(None),
       }),
     }
   }
@@ -61,6 +74,20 @@ struct Inner {
   /// Counts the changes of every project's browser and of its frames.
   changes: watch::Sender<u64>,
   started: watch::Sender<Option<StartedBrowsing>>,
+  /// The window's requests, kept instead of sent while a test records them.
+  #[cfg(feature = "test-support")]
+  recorded: Mutex<Option<Recorded>>,
+}
+
+/// What a test keeps of the window's requests.
+#[cfg(feature = "test-support")]
+#[derive(Default)]
+struct Recorded {
+  /// Each with its project.
+  commands: Vec<(PathBuf, BrowserCommand)>,
+  /// A request waits for its answer in `held`, instead of being answered as it is kept.
+  holding: bool,
+  held: Vec<oneshot::Sender<Result<Reply, RequestError>>>,
 }
 
 struct Project {
@@ -231,5 +258,78 @@ impl BrowserWindow {
   #[doc(hidden)]
   pub fn receive_frame_for_test(&self, root: &Path, frame: ScreencastFrame) {
     self.receive_frame(root, frame);
+  }
+
+  /// From now on the window's requests are kept, each answered as carried out, instead of sent to a runner: for tests
+  /// of what the window asks, which run no runner.
+  #[cfg(feature = "test-support")]
+  #[doc(hidden)]
+  pub fn record_commands_for_test(&self) {
+    self.inner.recorded.lock().get_or_insert_with(Recorded::default);
+  }
+
+  /// From now on a request kept waits for its answer until [`Self::answer_held_for_test`], as one waits for a runner:
+  /// for tests of what the window does meanwhile.
+  #[cfg(feature = "test-support")]
+  #[doc(hidden)]
+  pub fn hold_answers_for_test(&self) {
+    self.inner.recorded.lock().get_or_insert_with(Recorded::default).holding = true;
+  }
+
+  /// Gives every request waiting since [`Self::hold_answers_for_test`] `answer`.
+  #[cfg(feature = "test-support")]
+  #[doc(hidden)]
+  pub fn answer_held_for_test(&self, answer: &Result<BrowserReply, Rejection>) {
+    let held = self
+      .inner
+      .recorded
+      .lock()
+      .as_mut()
+      .map(|recorded| std::mem::take(&mut recorded.held))
+      .unwrap_or_default();
+    for reply in held {
+      let answered = match answer.clone() {
+        Ok(reply) => Reply::Browser(reply),
+        Err(rejection) => Reply::Rejected(rejection),
+      };
+      // A request nobody waits for any more needs no answer.
+      drop(reply.send(Ok(answered)));
+    }
+  }
+
+  /// The requests kept since the last call, each with the project it was for.
+  #[cfg(feature = "test-support")]
+  #[doc(hidden)]
+  pub fn recorded_commands_for_test(&self) -> Vec<(PathBuf, BrowserCommand)> {
+    self
+      .inner
+      .recorded
+      .lock()
+      .as_mut()
+      .map(|recorded| std::mem::take(&mut recorded.commands))
+      .unwrap_or_default()
+  }
+
+  /// Keeps `command` for the project at `root` while a test records the requests, and gives where its answer comes;
+  /// gives it back otherwise.
+  #[cfg(feature = "test-support")]
+  pub(crate) fn record(
+    &self,
+    root: &Path,
+    command: BrowserCommand,
+  ) -> Result<oneshot::Receiver<Result<Reply, RequestError>>, BrowserCommand> {
+    let mut recorded = self.inner.recorded.lock();
+    let Some(recorded) = recorded.as_mut() else {
+      return Err(command);
+    };
+    recorded.commands.push((root.to_path_buf(), command));
+    let (reply, answer) = oneshot::channel();
+    if recorded.holding {
+      recorded.held.push(reply);
+    } else {
+      // `answer` is right here to take it.
+      drop(reply.send(Ok(Reply::Browser(BrowserReply::Done))));
+    }
+    Ok(answer)
   }
 }

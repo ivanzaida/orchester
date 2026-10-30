@@ -8,6 +8,7 @@
 //! says why it is read-only, or asks *Share task* in place; a task whose latest run cannot be read says why.
 
 mod brief;
+mod browser_line;
 mod decisions;
 mod empty;
 mod live;

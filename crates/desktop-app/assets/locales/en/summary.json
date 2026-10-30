@@ -1,6 +1,14 @@
 {
   "summary": {
     "openConversation": "Conversation →",
+    "browser": {
+      "title": "Browser",
+      "tabs": {
+        "one": "1 tab · {{hosts}}",
+        "other": "{{count}} tabs · {{hosts}}"
+      },
+      "show": "Show"
+    },
     "brief": "Brief",
     "criteria": "Acceptance criteria",
     "noBrief": "No brief yet",

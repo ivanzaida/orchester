@@ -1,11 +1,15 @@
 //! The *Browser* window's state (`orchester_workspace::browser`): each project's browser as its runner reports it,
-//! the frames of the tab shown decoded to RGBA off the UI thread, and the rule that opens the window when an agent
-//! starts browsing. The state is fed here as a runner's connection feeds it; [`with_runner`] runs the real
-//! `orchester-runner` with this computer's Chrome, Edge, Brave or Chromium, and says so and checks nothing where
-//! none is found. Run with `cargo test -p orchester-workspace --test browser_window browser_window_`.
+//! the frames of the tab shown decoded to RGBA off the UI thread, the rule that opens the window when an agent
+//! starts browsing, and the tabs' owners ([`owners`]). The state is fed here as a runner's connection feeds it;
+//! [`with_runner`] runs the real `orchester-runner` with this computer's Chrome, Edge, Brave or Chromium, and says so
+//! and checks nothing where none is found. Run with `cargo test -p orchester-workspace --test browser_window
+//! browser_window_`.
 
+#[path = "browser_window/owners.rs"]
+mod owners;
 #[path = "support/runner_programs.rs"]
 mod runner_programs;
+mod support;
 #[path = "browser_window/with_runner.rs"]
 mod with_runner;
 

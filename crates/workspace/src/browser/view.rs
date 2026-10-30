@@ -61,7 +61,7 @@ impl BrowserView {
     &self.state.tabs
   }
 
-  /// The tab screencast now, if the window shows one.
+  /// The tab shown, if the window shows one: screencast now, or only named with the browser in a window of its own.
   pub fn shown(&self) -> Option<&BrowserTabId> {
     self.state.shown.as_ref()
   }

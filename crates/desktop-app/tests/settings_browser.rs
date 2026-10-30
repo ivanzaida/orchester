@@ -223,15 +223,12 @@ fn browser_a_program_that_is_not_chromium_based_is_refused_with_the_reason() {
 }
 
 #[test]
-fn browser_window_switch_is_on_until_turned_off_and_says_the_window_comes_later() {
+fn browser_window_switch_is_on_until_turned_off() {
   let mut page = Page::open(&[CHROME]);
   assert!(page.workspace.browser_settings().expect("read").opens_window);
   assert!(
-    page
-      .window
-      .text("settings-browser-window-group-note")
-      .starts_with("The Browser window isn't in this version yet"),
-    "it says what it will do and that the window comes later"
+    page.window.texts("settings-browser-window-group-note").is_none(),
+    "the window is there, so no note says it comes later"
   );
 
   page.window.press("settings-browser-window");

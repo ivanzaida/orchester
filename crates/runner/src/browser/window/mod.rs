@@ -1,17 +1,19 @@
 //! What the *Browser* window sees of the project's browser (`docs/design/browser.md`, "The *Browser* window"): the
 //! desktop that subscribed, the tab it shows, and that tab's latest screencast frame, which waits alone to be written:
 //! a newer frame replaces it, so frames are dropped rather than queued when the desktop reads slower than the page
-//! changes. Each tab's events are followed for it ([`follow`]), and the browser's state is sent whenever it changes.
+//! changes. Each tab's events are followed for it ([`follow`]), the person's inputs keep their order ([`order`]), and
+//! the browser's state is sent whenever it changes.
 
 mod follow;
 mod input;
+mod order;
 mod select;
 mod serve;
 
 use std::{
   sync::{
     Arc,
-    atomic::{AtomicU64, Ordering},
+    atomic::{AtomicBool, AtomicU64, Ordering},
   },
   time::Duration,
 };
@@ -27,8 +29,11 @@ use tokio::{
 };
 
 pub(super) use self::follow::{Followed, follow_tab, follow_targets};
+pub use self::order::Arrived;
+use self::order::InputLines;
 use super::{
   cdp::{Cdp, SessionId, TargetId},
+  running::Running,
   tabs::Tabs,
 };
 
@@ -45,11 +50,15 @@ pub(super) struct Window {
   sequence: AtomicU64,
   /// Counts the browser's starts: a browser that ended on its own tells the window only while it is the latest.
   generation: AtomicU64,
+  /// The browser restarts: its state is not sent until its tabs are back.
+  restarting: AtomicBool,
   /// Wakes the publisher of the running browser's state.
   changed: Notify,
+  inputs: InputLines,
 }
 
-/// The tab the window shows, screencast now.
+/// The tab the window shows: screencast now, or with the browser in a window of its own only named, since that window
+/// draws its own pages.
 #[derive(Clone)]
 pub(super) struct Shown {
   pub(super) target: TargetId,
@@ -94,6 +103,7 @@ impl Window {
 
   /// `target` is gone: the window shows nothing if it showed it.
   pub(super) fn forget(&self, target: &TargetId) {
+    self.inputs.forget(target);
     let mut shown = self.shown.lock();
     if shown.as_ref().is_some_and(|shown| &shown.target == target) {
       *shown = None;
@@ -132,6 +142,7 @@ impl Window {
 
   /// A browser starts: the number it ends with ([`Window::ended`]).
   pub(super) fn started(&self) -> u64 {
+    self.inputs.clear();
     self.generation.fetch_add(1, Ordering::AcqRel) + 1
   }
 
@@ -141,6 +152,34 @@ impl Window {
     if self.generation.load(Ordering::Acquire) != generation {
       return;
     }
+    self.no_browser();
+  }
+
+  /// The browser restarts: until [`Self::restarted`] the window hears nothing of it, neither of the one stopping nor of
+  /// the one starting, and keeps what it shows.
+  pub(super) fn restarting(&self) {
+    self.restarting.store(true, Ordering::Release);
+    self.started();
+  }
+
+  /// The restart is over: the window learns the state of the browser `running`, or that none runs. Sent here, before
+  /// the restart's reply on the same channel, so the window never has the reply with the old tabs.
+  pub(super) async fn restarted(&self, running: Option<&Running>) {
+    match running {
+      Some(running) => {
+        let state = state(&running.cdp, &running.tabs, self, running.mode).await;
+        self.send(BrowserEvent::Changed(state));
+      }
+      None => self.no_browser(),
+    }
+    self.restarting.store(false, Ordering::Release);
+  }
+
+  fn is_restarting(&self) -> bool {
+    self.restarting.load(Ordering::Acquire)
+  }
+
+  fn no_browser(&self) {
     self.show(None);
     self.send(BrowserEvent::Changed(BrowserState::default()));
   }
@@ -189,10 +228,14 @@ pub(super) async fn publish(cdp: Arc<Cdp>, tabs: Arc<Mutex<Tabs>>, window: Arc<W
       () = window.changed.notified() => true,
       _ = poll.tick() => false,
     };
-    if !window.subscribed() {
+    if !window.subscribed() || window.is_restarting() {
       continue;
     }
     let state = state(&cdp, &tabs, &window, mode).await;
+    // The restart may have begun while the tabs were read.
+    if window.is_restarting() {
+      continue;
+    }
     if told || sent.as_ref() != Some(&state) {
       window.send(BrowserEvent::Changed(state.clone()));
       sent = Some(state);

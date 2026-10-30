@@ -12,6 +12,7 @@ use orchester_core::{
 };
 use orchester_ipc::{Command, Reply};
 use orchester_store::StoreError;
+use tokio::sync::oneshot;
 
 use super::{Continued, RequestError, RunRequestError, Runners, state::RunnerState};
 use crate::{tasks::answering::Answered, workspace::OpenProject};
@@ -248,18 +249,25 @@ impl Runners {
   }
 
   pub(super) async fn ask(&self, root: Option<&Path>, command: Command) -> Result<Reply, RequestError> {
-    let answer = {
-      let projects = self.inner.projects.lock();
-      match root
-        .and_then(|root| projects.get(root))
-        .and_then(|entry| entry.connection.as_ref())
-      {
-        Some(connection) => connection.request(command),
-        None => return Err(RequestError::NotConnected),
-      }
-    };
+    let answer = self.request(root, command)?;
     // The task ended without answering, e.g. when the runner stopped meanwhile.
     answer.await.unwrap_or(Err(RequestError::Lost))
+  }
+
+  /// Hands `command` to the runner of `root` now, without waiting for its answer, which comes through the receiver.
+  pub(super) fn request(
+    &self,
+    root: Option<&Path>,
+    command: Command,
+  ) -> Result<oneshot::Receiver<Result<Reply, RequestError>>, RequestError> {
+    let projects = self.inner.projects.lock();
+    match root
+      .and_then(|root| projects.get(root))
+      .and_then(|entry| entry.connection.as_ref())
+    {
+      Some(connection) => Ok(connection.request(command)),
+      None => Err(RequestError::NotConnected),
+    }
   }
 }
 

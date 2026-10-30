@@ -58,8 +58,8 @@ impl<'a> Keys<'a> {
     self.key.eq_ignore_ascii_case(key) || (!self.key.is_ascii() && self.code == code)
   }
 
-  /// Only `ctrl` of the modifiers other than Shift.
-  const fn only_ctrl(self) -> bool {
+  /// Only `ctrl` of the modifiers other than Shift: Ctrl+Tab on every platform.
+  pub const fn only_ctrl(self) -> bool {
     self.ctrl && !self.alt && !self.meta
   }
 

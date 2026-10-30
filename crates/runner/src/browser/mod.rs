@@ -44,6 +44,7 @@ pub use self::{
   log::{ConsoleMessage, KEPT, Request, TabLog},
   running::LOAD_LIMIT,
   tab::Tab,
+  window::Arrived,
 };
 
 #[derive(Debug, Error)]

@@ -5,9 +5,9 @@ port and keep-running decisions (11, 12) the same day, and that the Browser wind
 browsing by default (open question 2); decisions 13 to 15 (binary frames, the window opening by itself, focus) with
 ORC-378. P1 (the core rules, ORC-355) is built, and P2: its first half (ORC-358: finding and starting the browser,
 the CDP client, the project browser's lifecycle and the run-to-tabs map) and its second (ORC-359: the `browser_*`
-tools offered to steps through the runner's relay); the profile's Browser row (ORC-368), Settings › Browser (ORC-369)
-and the window's plumbing (ORC-378: its IPC, the screencast, the person's input and tabs, the window's state) are
-built too. The window itself is not yet.
+tools offered to steps through the runner's relay); the profile's Browser row (ORC-368), Settings › Browser (ORC-369),
+the window's plumbing (ORC-378: its IPC, the screencast, the person's input and tabs, the window's state) and the
+window itself (ORC-379, P4d) are built too.
 
 Agents of a run can open web pages, read them and act in them, as Claude desktop's built-in browser lets Claude do:
 check the app the run builds on a local dev server, read documentation, reproduce a bug in a web front, fill a form
@@ -300,7 +300,16 @@ not jump to another project by itself.
 - **Empty** (`06 · Empty` `eCCuU`): no tabs; the address line is focused (*Type an address*) and a card says when
   agents' tabs appear. **Not found** (`07 · Browser not found` `YEv2c`): the reason, *Open Settings › Browser*,
   *Look again*; toolbar and *+* unavailable. **Opened in a browser window** (`05` `GjcAk`): the page area is an
-  in-place notice with *Back to Orchester*.
+  in-place notice with *Back to Orchester*. The tab shown stays the one shown through the restart, under its new id, so
+  the strip keeps it selected and the faded toolbar its address and owner; the window hears of the restart only when the
+  tabs are back. Nothing is screencast meanwhile: a tab the person picks in the strip is only named as the one shown,
+  and it is the one *Back to Orchester* shows. Picking does not bring it forward in the browser's own window.
+- **While a restart is pending.** *Open in a browser window* and *Back to Orchester* restart the browser, which takes
+  seconds. Until the runner answers, the toolbar is faded and, like the shortcuts, takes no input, and the pressed
+  button turns its loader and cannot be pressed again; no board frame draws this, it reuses the faded toolbar of `05`
+  and `07` and the button's loader. The runner sends the new state before its answer, on the same connection, so the
+  window never has the answer with the old tabs. A refused restart says so on the failure line under the toolbar, and
+  the toolbar takes input again; when the old browser is gone by then, the state says no tabs are left.
 - **The page.** `Page.startScreencast` on the tab shown, at the window's size and scale
   (`Emulation.setDeviceMetricsOverride` with the window's logical size and DPI); frames arrive only when the page
   changes, are acknowledged (`Page.screencastFrameAck`), decoded from JPEG to RGBA (`zune-jpeg`, already in the
@@ -308,7 +317,10 @@ not jump to another project by itself.
   screencast; the screencast stops while the window is closed or minimised.
 - **The person's input.** lurq's pointer, wheel, keyboard, text input and IME events become
   `Input.dispatchMouseEvent`, `Input.dispatchKeyEvent`, `Input.insertText` and `Input.imeSetComposition`, with
-  coordinates in the page's CSS pixels.
+  coordinates in the page's CSS pixels. Inputs reach a tab in the order the person made them: the app hands each
+  request to the runner's connection as it is made, and the runner keeps one line per tab, in which an input goes out
+  once the one before it has gone out, without waiting for its answer (a click that opens a dialog is not answered
+  until the dialog is).
 - **IPC** (protocol 33, `orchester_ipc::browser`). The window's requests (`BrowserCommand`: subscribe, show a tab at a
   viewport, stop showing, the person's input, navigation, open and close a tab, answer a dialog, choose a `<select>`
   option, *Open in a browser window*, *Back to Orchester*) and events (`BrowserEvent`: the browser's state with its
@@ -394,7 +406,35 @@ not jump to another project by itself.
      from the window answers the run's next call on it that the person closed it, and one the browser reported closed
      (its page, or the person in the browser's own window) says that, both pointing to `browser_open`; the runner keeps
      only those tabs' ids, per run, until the run ends (`orchester-runner --test browser browser_runs_tab`).
-   - **P4d.** The *Browser* window itself, on that state.
+   - **P4d.** Done (ORC-379): the *Browser* window itself, on that state (`orchester-app`'s `browser/`): a secondary
+     lurq window named `browser` (`lurq_windows`), its title bar with the mark, the project switcher and the tabs
+     (crowded, then scrolling with fades and the overflow button and menu), the toolbar with the tab's owner, the page
+     drawn from the frames with the person's pointer, wheel and keys sent back, the agent-acting line and ring, the
+     person's hold, dialogs and `<select>` lists of the person's tabs, *Empty* (its address line has the focus),
+     *Browser not found* and *Opened in a browser window*; the shortcuts Ctrl+T, Ctrl+W, Ctrl+Tab / Ctrl+Shift+Tab,
+     Ctrl+L and Ctrl+R (⌘T, ⌘W, ⌘L, ⌘R on macOS), which the window takes before the page (`browser/keys.rs`); opened
+     from the app menu's *Browser*, a run's Summary line *Browser · 2 tabs · … › Show*, and by itself when an agent
+     starts browsing. The tab owners' task keys, run numbers and agent names are read from the project's database
+     (`orchester_workspace::browser::run_owners`). Tests: `cargo test -p orchester-app --test browser_window
+     browser_`, `--test task_summary summary_browser_line` and `--test theme browser_roles`, and `cargo test -p
+     orchester-workspace --features test-support --test browser_window browser_window_owners`. QA scenarios, each
+     played by the QA app from a fixture the seed leaves beside the data (`test_support::browser_qa`), its page the
+     sample page this computer's browser renders: `browser-window` (01, and the switcher 01b), `browser-window-many`
+     (01c), `browser-window-overflow` (01d, 01e), `browser-window-acting` (02; a press on the page reaches 02b; its
+     first run's Summary has the Browser line 10), `browser-window-dialog` (03), `browser-window-select` (04),
+     `browser-window-headed` (05), `browser-window-empty` (06), `browser-window-not-found` (07); start them with
+     `no_runner`, so no runner reports
+     its own browser over the fixture. `browser-window-empty` with a runner reaches a tab coming after *Empty*: *+*, or
+     an address and Enter. The address line has the focus on *Empty* and lets go of it when a tab comes, showing that
+     tab's address, unless the person typed there; Enter leaves the line, and Ctrl+L on a page keeps the focus (`--test
+     browser_window browser_address_line_`). The page's focus is a hidden text input of lurq's, at the point pressed, so an
+     input method composes there and what it commits is sent as text (`Input.insertText`); tests of the person's
+     input as the window sends it to the tab shown, at a scale factor of 2: `--test browser_window browser_person_`.
+     Not yet: an input method's composition under way (lurq shows it in its text input and tells no handler, so the
+     page gets the text only once committed), copy and paste bridged to the system clipboard, the cursor's shape over
+     links and fields, the file chooser, the status bar's *Browser 3 tabs*, bringing an open window to the front
+     (no lurq command), and back and forward faded by the tab's history as `01` fades forward (the runner does not
+     report the history; they fade only without a tab to go through).
 
 ## Not in scope
 

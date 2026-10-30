@@ -12,6 +12,7 @@
 #![allow(clippy::print_stdout, reason = "a QA helper says where it is")]
 
 mod agents;
+mod browser;
 mod settings;
 
 use std::{error::Error, fs, sync::Arc};
@@ -84,14 +85,23 @@ fn main() -> Result<(), Box<dyn Error>> {
     (true, None) => return Err("--settings needs a started session".into()),
     (false, _) => None,
   };
+  // The Browser window's states, when the seed left their fixture (`browser-*` scenarios); played until exit.
+  let browser = match launch.services() {
+    Some(services) if !signed_out => browser::start(services, &location.database)?,
+    _ => None,
+  };
   println!(
-    "cloud {} as {}\nsigned in {}\nsettings fixtures {}",
+    "cloud {} as {}\nsigned in {}\nsettings fixtures {}\nbrowser fixture {}",
     cloud.url(),
     signed_in::account_cloud::EMAIL,
     !signed_out,
-    shown.is_some()
+    shown.is_some(),
+    browser.is_some()
   );
   window::open_showing(&runtime, &launch, position, shown);
+  if let Some(browser) = browser {
+    browser.abort();
+  }
   clipboard::clear_at_exit();
   launch.end();
   Ok(())

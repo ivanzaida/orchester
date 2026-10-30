@@ -26,9 +26,9 @@ devtools = ["lurq/devtools"]
 # (`tests/orchestrator/open_long.rs`).
 perf_profile = ["lurq/perf_profile"]
 # The window headless on a data folder of its own, signed in to a stand-in cloud (`test_support`), for the tests and QA
-# examples here and the end-to-end tests of the private platform repository, which build this crate by git. Never in
-# the app's program.
-test-support = ["dep:tempfile", "orchester-api/test-support"]
+# examples here and the end-to-end tests of the private platform repository, which build this crate by git; the QA
+# Browser window's fixture fed as a runner's reports (`test_support::browser_qa`). Never in the app's program.
+test-support = ["dep:tempfile", "orchester-api/test-support", "orchester-workspace/test-support"]
 
 [dependencies]
 # The Usage page's days (`orchester_core::usage::DayRange`) read as month, day and weekday; already built

@@ -6,6 +6,7 @@
 //! sign-in gate; [`Data::launch_signed_out`] stops at the gate. Never part of the app's program: only the
 //! `test-support` feature builds it.
 
+pub mod browser_qa;
 pub mod signed_in;
 pub mod stand_ins;
 

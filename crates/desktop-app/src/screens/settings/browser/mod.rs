@@ -5,7 +5,7 @@
 //! Chromium-based browser's. None found, a notice over the rows says what was looked for, with *Look again*, and the
 //! row says agents' browser tools answer that the browser is unavailable. Under them is the folder of the projects'
 //! browser profiles with Copy. *Browser window* ([`window`]) holds *Open the Browser window when an agent starts
-//! browsing*, on until a person turns it off; the window is not in this version yet, as the group's note says.
+//! browsing*, on until a person turns it off.
 //!
 //! What it shows is read off the UI thread (finding the browser reads the registry on Windows), again after each
 //! choice and at *Look again*; the runner starts a project's browser by the same rule. The header's save state

@@ -4,12 +4,14 @@
 //! stops with the runner; it starts again after it was killed, and each project's is a process of its own
 //! (`browser/lifecycle.rs`); what a run's tab someone else closed answers (`browser/closed.rs`); a tab's console log
 //! is bounded (`browser/logs.rs`); the agents' browser tools through the relay (`browser/tools.rs`,
-//! `browser/pages.rs`); the *Browser* window's side of it is in [`window`]. Where no browser
+//! `browser/pages.rs`); the *Browser* window's side of it is in [`window`], and the order of the person's inputs in
+//! `browser/input_order.rs`. Where no browser
 //! is found each test says so and checks nothing. Needs `git` for the scheduler's projects. Run with
 //! `cargo test -p orchester-runner --features test-agent --test browser browser_`.
 
 mod browser {
   mod closed;
+  mod input_order;
   mod lifecycle;
   mod logs;
   mod pages;

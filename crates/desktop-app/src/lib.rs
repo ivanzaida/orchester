@@ -10,6 +10,7 @@
 pub mod app_log;
 pub mod appearance;
 pub mod brand;
+pub mod browser;
 pub mod chrome;
 pub mod clipboard;
 pub mod error_reports;

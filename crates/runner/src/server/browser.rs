@@ -11,8 +11,10 @@ impl Later<'_> {
   /// browser's events with the replies.
   pub(super) fn browser(&self, scheduler: Scheduler, command: BrowserCommand) -> Answer {
     let desktop = self.replies.clone();
+    // Here, as the request is read: the tasks that carry requests out start in no certain order.
+    let arrived = scheduler.browser().arrived(command);
     self.reply(async move {
-      match scheduler.browser().serve(command, &desktop).await {
+      match scheduler.browser().serve(arrived, &desktop).await {
         Ok(reply) => Reply::Browser(reply),
         Err(rejection) => Reply::Rejected(rejection),
       }
