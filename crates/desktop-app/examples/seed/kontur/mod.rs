@@ -202,8 +202,8 @@ impl Kontur {
     catalogue::live(&mut self.db, connection, published)
   }
 
-  /// The pipeline of the `slot-wait` scenario ([`catalogue::slot_wait`]), published an hour before now.
-  fn slot_wait_catalogue(&mut self) -> Result<Published, SeedError> {
+  /// The pipelines of the `slot-wait` scenario ([`catalogue::slot_wait`]), published an hour before now.
+  fn slot_wait_catalogue(&mut self) -> Result<(Published, Published), SeedError> {
     let published = self.ago(60);
     let connection = catalogue::codex(&mut self.db, self.fake_codex.as_deref(), published)?;
     catalogue::slot_wait(&mut self.db, connection, published)
