@@ -6,13 +6,18 @@
 
 use std::process::Command;
 
-use orchester_core::{id::IdempotencyKey, task::organization::WorkflowStatus};
+use orchester_api::{ErrorCode, client::ClientError};
+use orchester_core::{id::IdempotencyKey, secret::VaultError, task::organization::WorkflowStatus};
 use orchester_exec::programs::Programs;
+use orchester_store::{AppDb, ProjectDb, StoreError};
 use orchester_workspace::{
-  sharing::project::{
-    Arrival, DownloadFailure, DownloadProgress, DownloadState, FirstDownload, PartState, folder::FolderLinked,
+  sharing::{
+    SharingError,
+    project::{
+      Arrival, DownloadFailure, DownloadProgress, DownloadState, FirstDownload, PartState, folder::FolderLinked,
+    },
   },
-  tasks::data::ProjectTasks,
+  tasks::{data::ProjectTasks, detail::TaskDetail},
 };
 
 use crate::{
@@ -100,10 +105,12 @@ fn startup_first_download_counts_advance_with_the_latest_arrivals() {
   );
   assert_eq!(linked.tasks().tasks.len(), 2, "readable as they arrive");
   assert!(changes.has_changed().expect("open"), "the screens are told");
+  changes.borrow_and_update();
   linked.responder.page(2, PageAnswer::Serve);
   until("the third page asked for", || {
     linked.responder.pages_asked() == [0, 2, 4]
   });
+  assert!(changes.has_changed().expect("open"), "and of each page");
   assert_eq!(linked.progress().stored, 4);
   assert_eq!(linked.latest(), ["KON-4", "KON-3", "KON-2"], "only the latest three");
   assert_eq!(linked.tasks().tasks.len(), 4);
@@ -227,17 +234,139 @@ fn startup_first_download_tasks_a_server_repeats_are_not_counted_again() {
 
 #[test]
 fn startup_first_download_a_page_that_does_not_move_on_fails() {
-  let linked = Linked::on(Responder::paged(6, 2, Some(6)));
-  linked.responder.page(2, PageAnswer::Stuck);
+  for answer in [PageAnswer::Stuck, PageAnswer::Empty, PageAnswer::Repeats] {
+    let linked = Linked::on(Responder::paged(6, 2, Some(6)));
+    linked.responder.page(2, answer);
+    linked.join();
+    linked.round();
+    assert_eq!(
+      linked.failure(),
+      (DownloadFailure::InvalidAnswer, "sharing.errors.invalidAnswer"),
+      "{answer:?}"
+    );
+    assert_eq!(linked.responder.pages_asked(), [0, 2], "the round ended: {answer:?}");
+    assert_eq!(
+      linked.progress().stored,
+      2,
+      "the refused page is not stored: {answer:?}"
+    );
+    assert_eq!(linked.tasks().tasks.len(), 2, "{answer:?}");
+  }
+}
+
+#[test]
+fn startup_first_download_a_task_opens_before_its_blocker_arrives() {
+  let linked = Linked::on(Responder::paged(4, 2, Some(4)));
+  linked.responder.blocked_by(1, 3);
+  linked.responder.page(2, PageAnswer::Hold);
   linked.join();
+  let round = linked.round_under_way();
+  until("the second page asked for", || linked.responder.pages_asked() == [0, 2]);
+  let blocked = linked
+    .tasks()
+    .tasks
+    .iter()
+    .find(|task| task.key().to_string() == "KON-1")
+    .expect("the first page arrived")
+    .id();
+  let detail = TaskDetail::load_in(&linked.root, blocked).expect("the task page opens");
+  assert_eq!(
+    detail.blocked_by,
+    Vec::<String>::new(),
+    "its blocker has no key here yet"
+  );
+  let db = ProjectDb::open(&linked.root).expect("Kontur");
+  assert!(db.check_task_readiness(blocked).is_err(), "it cannot run all the same");
+  linked.responder.page(2, PageAnswer::Serve);
+  linked.runtime.block_on(round).expect("the round ends");
+  let detail = TaskDetail::load_in(&linked.root, blocked).expect("the task page opens");
+  assert_eq!(detail.blocked_by, ["KON-3"], "its blocker arrived");
+}
+
+#[test]
+fn startup_first_download_the_latest_arrivals_do_not_follow_the_order_of_the_answer() {
+  let linked = Linked::on(Responder::paged(5, 2, None));
+  linked.responder.page(0, PageAnswer::NewestFirst);
+  linked.join();
+  linked.round();
+  let progress = linked.progress();
+  assert_eq!(progress.state, DownloadState::Done);
+  assert_eq!((progress.stored, progress.total), (5, Some(5)));
+  assert_eq!(linked.latest(), ["KON-5", "KON-4", "KON-3"]);
+}
+
+#[test]
+fn startup_first_download_a_round_with_no_download_tells_the_screens_once() {
+  let linked = Linked::on(Responder::paged(6, 2, Some(6)));
+  linked.join();
+  linked.round();
+  assert_eq!(linked.progress().state, DownloadState::Done);
+  let changes = linked.servers.subscribe_shared();
+  let before = *changes.borrow();
+  linked.round();
+  assert_eq!(linked.responder.pages_asked(), [0, 2, 4, 0, 2, 4], "it read every page");
+  assert_eq!(*changes.borrow() - before, 1, "at its end, not for each page");
+}
+
+#[test]
+fn startup_first_download_a_server_gone_from_the_list_fails_typed() {
+  let linked = Linked::on(Responder::paged(2, 2, Some(2)));
+  linked.join();
+  let forgotten = AppDb::open(&linked.database)
+    .expect("database")
+    .forget_unowned_server(linked.server)
+    .expect("forgotten");
+  assert!(forgotten, "the server left the list");
   linked.round();
   assert_eq!(
     linked.failure(),
-    (DownloadFailure::InvalidAnswer, "sharing.errors.invalidAnswer")
+    (DownloadFailure::ServerMissing, "sharing.errors.serverMissing")
   );
-  assert_eq!(linked.responder.pages_asked(), [0, 2], "the round ended");
-  assert_eq!(linked.progress().stored, 2, "the refused page is not stored");
-  assert_eq!(linked.tasks().tasks.len(), 2);
+}
+
+#[test]
+fn startup_first_download_every_error_has_its_failure() {
+  let refused = |code| {
+    SharingError::Client(ClientError::Api {
+      status: 400,
+      code,
+      retry_after: None,
+      details: None,
+    })
+  };
+  let errors = [
+    (SharingError::Offline, DownloadFailure::Offline),
+    (SharingError::Client(ClientError::TimedOut), DownloadFailure::Offline),
+    (SharingError::Client(ClientError::Unreachable), DownloadFailure::Offline),
+    (SharingError::SignedOut, DownloadFailure::SignedOut),
+    (refused(ErrorCode::Unauthorized), DownloadFailure::SignedOut),
+    (SharingError::NotMember, DownloadFailure::NotMember),
+    (refused(ErrorCode::NotMember), DownloadFailure::NotMember),
+    (SharingError::ServerMissing, DownloadFailure::ServerMissing),
+    (refused(ErrorCode::Forbidden), DownloadFailure::Refused),
+    (SharingError::KeptChanging, DownloadFailure::Refused),
+    (SharingError::InvalidAnswer("task page"), DownloadFailure::InvalidAnswer),
+    (
+      SharingError::Client(ClientError::NotOrchester { status: 200 }),
+      DownloadFailure::InvalidAnswer,
+    ),
+    (
+      SharingError::Client(ClientError::Redirect { location: None }),
+      DownloadFailure::InvalidAnswer,
+    ),
+    (SharingError::CertificateChanged, DownloadFailure::Certificate),
+    (
+      SharingError::Client(ClientError::UntrustedCertificate),
+      DownloadFailure::Certificate,
+    ),
+    (SharingError::Store(StoreError::NotShared), DownloadFailure::Local),
+    (SharingError::Vault(VaultError::NotFound), DownloadFailure::Local),
+    (SharingError::Interrupted, DownloadFailure::Local),
+    (SharingError::Client(ClientError::Setup), DownloadFailure::Local),
+  ];
+  for (error, failure) in errors {
+    assert_eq!(DownloadFailure::from(&error), failure, "{error:?}");
+  }
 }
 
 #[test]

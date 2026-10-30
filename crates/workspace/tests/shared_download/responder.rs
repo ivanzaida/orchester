@@ -61,8 +61,14 @@ pub enum PageAnswer {
   Drop,
   /// A page whose `next` is where it started.
   Stuck,
+  /// A page without tasks, whose `next` is one further.
+  Empty,
+  /// The tasks up to where it starts again, with a `next` one further.
+  Repeats,
   /// Every task as one page, as a server that does not know `after`.
   Whole,
+  /// [`Self::Whole`], highest number first.
+  NewestFirst,
 }
 
 /// A paged responder's tasks and how each page is answered.
@@ -71,11 +77,25 @@ struct Paging {
   per_page: usize,
   total: Option<usize>,
   answers: HashMap<u32, PageAnswer>,
+  /// The number of the task that blocks a task, by that task's number.
+  blockers: HashMap<usize, usize>,
 }
 
 impl Paging {
   fn answer(&self, after: u32) -> PageAnswer {
     self.answers.get(&after).copied().unwrap_or(PageAnswer::Serve)
+  }
+
+  fn numbered(&self, numbers: std::ops::RangeInclusive<usize>) -> Vec<Value> {
+    numbers
+      .map(|number| {
+        let mut task = task(&numbered_id(number), number, &format!("Task {number}"));
+        if let Some(blocker) = self.blockers.get(&number) {
+          task["blocking"] = json!([{ "task": numbered_id(*blocker), "gate": "merge" }]);
+        }
+        task
+      })
+      .collect()
   }
 }
 
@@ -107,6 +127,7 @@ impl Responder {
       per_page,
       total,
       answers: HashMap::new(),
+      blockers: HashMap::new(),
     };
     Self::listen(TasksAnswer::Serve, Some(paging))
   }
@@ -161,6 +182,16 @@ impl Responder {
       .answers
       .insert(after, answer);
     self.state.page_changed.notify_all();
+  }
+
+  /// The task numbered `task` is blocked by the one numbered `blocker`, until that one's merge.
+  pub fn blocked_by(&self, task: usize, blocker: usize) {
+    let mut paging = self.state.paging.lock();
+    paging
+      .as_mut()
+      .expect("a paged responder")
+      .blockers
+      .insert(task, blocker);
   }
 
   /// From now on the project answers `404`, as for a person no longer a member.
@@ -261,8 +292,11 @@ fn tasks(target: &str, state: &State) -> Option<(u16, Value)> {
   match (paged, after_of(target)) {
     (true, Some(after)) => page(state, after),
     (true, None) => {
-      let all = state.paging.lock().as_ref().map_or(0, |paging| paging.tasks);
-      Some((200, json!({ "tasks": numbered(1..=all), "cursor": 7 })))
+      let paging = state.paging.lock();
+      let all = paging
+        .as_ref()
+        .map_or_else(Vec::new, |paging| paging.numbered(1..=paging.tasks));
+      Some((200, json!({ "tasks": all, "cursor": 7 })))
     }
     (false, _) => Some(whole_list(state)),
   }
@@ -308,9 +342,16 @@ fn page(state: &State, after: u32) -> Option<(u16, Value)> {
   let first = after as usize + 1;
   let last = (after as usize + paging.per_page).min(paging.tasks);
   let mut body = match paging.answer(after) {
-    PageAnswer::Serve => json!({ "tasks": numbered(first..=last), "cursor": 7 }),
-    PageAnswer::Whole => return Some((200, json!({ "tasks": numbered(1..=paging.tasks), "cursor": 7 }))),
-    PageAnswer::Stuck => json!({ "tasks": numbered(first..=last), "cursor": 7, "next": after }),
+    PageAnswer::Serve => json!({ "tasks": paging.numbered(first..=last), "cursor": 7 }),
+    PageAnswer::Whole => return Some((200, json!({ "tasks": paging.numbered(1..=paging.tasks), "cursor": 7 }))),
+    PageAnswer::NewestFirst => {
+      let mut tasks = paging.numbered(1..=paging.tasks);
+      tasks.reverse();
+      return Some((200, json!({ "tasks": tasks, "cursor": 7 })));
+    }
+    PageAnswer::Stuck => json!({ "tasks": paging.numbered(first..=last), "cursor": 7, "next": after }),
+    PageAnswer::Empty => json!({ "tasks": [], "cursor": 7, "next": after + 1 }),
+    PageAnswer::Repeats => json!({ "tasks": paging.numbered(1..=after as usize), "cursor": 7, "next": after + 1 }),
     PageAnswer::Hold | PageAnswer::Fail => return Some(refused()),
     PageAnswer::Drop => return None,
   };
@@ -323,13 +364,8 @@ fn page(state: &State, after: u32) -> Option<(u16, Value)> {
   Some((200, body))
 }
 
-fn numbered(numbers: std::ops::RangeInclusive<usize>) -> Vec<Value> {
-  numbers
-    .map(|number| {
-      let id = format!("01a18f00-0000-7000-8000-{:012x}", 0xe00 + number);
-      task(&id, number, &format!("Task {number}"))
-    })
-    .collect()
+fn numbered_id(number: usize) -> String {
+  format!("01a18f00-0000-7000-8000-{:012x}", 0xe00 + number)
 }
 
 fn refused() -> (u16, Value) {

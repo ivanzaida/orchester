@@ -1,10 +1,11 @@
 //! Bringing a shared project's cache up to the server (`docs/architecture/server.md`, "Live
-//! updates"): its project, tags and modules are read and written to the cache, then its tasks page by page, each page
-//! told to the screens, then when the cache last matched and the moves of tasks into and out of modules the cache does
-//! not have yet. Until the live event stream (S2d) this runs when the project is opened, every minute, after a join or
-//! a link ([`super::download`], which each step reports to) and when the person asks (*Try now*, *Check again*). A
-//! server that answers `404` for the project no longer has the person as a member (10.44); the cache then says since
-//! when. The workflow statuses this computer's runs reached go to the server then ([`super::automatic`]).
+//! updates"): its project, tags and modules are read and written to the cache, then its tasks page by page, then when
+//! the cache last matched and the moves of tasks into and out of modules the cache does not have yet. The screens are
+//! told at the end, and of each page while a first download runs. Until the live event stream (S2d) this runs when the
+//! project is opened, every minute, after a join or a link ([`super::download`], which each step reports to) and when
+//! the person asks (*Try now*, *Check again*). A server that answers `404` for the project no longer has the person as
+//! a member (10.44); the cache then says since when. The workflow statuses this computer's runs reached go to the
+//! server then ([`super::automatic`]).
 
 use std::time::Instant;
 
@@ -114,12 +115,11 @@ impl ProjectServer {
       let page = self
         .call(|client, token, project| async move { client.tasks_page(&token, project, after).await })
         .await?;
-      if page.next.is_some_and(|next| next <= after) {
+      if !moves_on(&page, after) {
         return Err(SharingError::InvalidAnswer("task page"));
       }
       let page = self.store_page(page).await?;
       self.servers.download_page_stored(&self.repo_root, &page, round);
-      self.servers.shared_changed();
       match page.next {
         Some(next) => after = next,
         None => return Ok(()),
@@ -148,4 +148,13 @@ impl ProjectServer {
     self.servers.shared_changed();
     Ok(())
   }
+}
+
+/// Whether `page`, read after `after`, ends or leads somewhere: one that names a next page starts later and brings
+/// tasks above `after`, or a server could keep a round going almost without end, with every other project waiting
+/// behind it.
+fn moves_on(page: &TasksPage, after: u32) -> bool {
+  page
+    .next
+    .is_none_or(|next| next > after && page.tasks.iter().any(|task| task.number > after))
 }

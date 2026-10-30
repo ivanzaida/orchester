@@ -440,15 +440,16 @@ impl TaskDetail {
   }
 }
 
-/// The keys of `task`'s unfinished blocking tasks.
+/// The keys of `task`'s unfinished blocking tasks that are in the project: a shared project's first download brings its
+/// tasks page by page, so a blocker may not have arrived yet. A run stays refused until it finished, arrived or not.
 fn blocking_keys(db: &ProjectDb, task: &Task) -> Result<Vec<String>, StoreError> {
-  db.unfinished_blocking_tasks(task.id())?
-    .into_iter()
-    .map(|id| {
-      let blocker = db.task(id)?.ok_or(StoreError::TaskNotFound(id))?;
-      Ok(blocker.key().to_string())
-    })
-    .collect()
+  let mut keys = Vec::new();
+  for blocker in db.unfinished_blocking_tasks(task.id())? {
+    if let Some(blocker) = db.task(blocker)? {
+      keys.push(blocker.key().to_string());
+    }
+  }
+  Ok(keys)
 }
 
 /// `run` with its steps and invocations, as the task page shows it.

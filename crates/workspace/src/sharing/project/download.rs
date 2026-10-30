@@ -150,18 +150,22 @@ impl Servers {
   }
 
   /// A round that began at `round` has `page` of the tasks of the checkout at `root` in its cache. A server that does
-  /// not know where a page starts repeats the tasks before it, which are not new arrivals.
+  /// not know where a page starts repeats the tasks before it, which are not new arrivals, and it promises no order.
   pub(super) fn download_page_stored(&self, root: &Path, page: &TasksPage, round: Instant) {
-    let mut downloads = self.inner.downloads.lock();
-    let Some(mark) = unsettled(&mut downloads, root, round) else {
-      return;
-    };
-    let arrived: Vec<_> = page.tasks.iter().filter(|task| task.number > mark.after).collect();
-    mark.progress.stored(&arrived, page.total);
-    mark.after = page
-      .next
-      .or(arrived.iter().map(|task| task.number).max())
-      .unwrap_or(mark.after);
+    {
+      let mut downloads = self.inner.downloads.lock();
+      let Some(mark) = unsettled(&mut downloads, root, round) else {
+        return;
+      };
+      let mut arrived: Vec<_> = page.tasks.iter().filter(|task| task.number > mark.after).collect();
+      arrived.sort_by_key(|task| task.number);
+      mark.progress.stored(&arrived, page.total);
+      mark.after = page
+        .next
+        .or(arrived.last().map(|task| task.number))
+        .unwrap_or(mark.after);
+    }
+    self.shared_changed();
   }
 
   /// A round that began at `round` synced the checkout at `root`, on `entry`: reading it all ends its first download, a
