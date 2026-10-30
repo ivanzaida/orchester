@@ -26,14 +26,8 @@ async fn catalog_the_report_and_the_reads_go_to_their_endpoints() {
     }],
     models: [("codex_cli".to_owned(), vec![ModelId::new("gpt-5.5").expect("model")])].into(),
   };
-  client
-    .report_catalog(&token(), project, &report)
-    .await
-    .expect("report");
-  let references = client
-    .catalog_references(&token(), project)
-    .await
-    .expect("references");
+  client.report_catalog(&token(), project, &report).await.expect("report");
+  let references = client.catalog_references(&token(), project).await.expect("references");
   assert_eq!(references[0].kind, CatalogKind::McpServer);
   let models = client.catalog_models(&token(), project).await.expect("models");
   assert_eq!(models["codex_cli"][0].as_str(), "gpt-5.5");

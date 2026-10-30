@@ -27,7 +27,10 @@ fn catalog_a_report_round_trips_with_references_and_models_per_role() {
     [CatalogKind::Connection, CatalogKind::Connection, CatalogKind::McpServer]
   );
   assert_eq!(report.references[2].role, None);
-  let claude: Vec<_> = report.models["claude_code_cli"].iter().map(|model| model.as_str()).collect();
+  let claude: Vec<_> = report.models["claude_code_cli"]
+    .iter()
+    .map(|model| model.as_str())
+    .collect();
   assert_eq!(claude, ["claude-opus-5-5", "claude-sonnet-5-5"]);
   round_trip::<CatalogReport>(&json!({"references":[],"models":{}}));
 }
@@ -79,7 +82,10 @@ fn catalog_no_shape_takes_an_account_path_setting_or_key() {
   for (field, value) in extras {
     let mut reference = references()[0].clone();
     reference[field] = value.clone();
-    assert!(serde_json::from_value::<CatalogReference>(reference).is_err(), "{field}");
+    assert!(
+      serde_json::from_value::<CatalogReference>(reference).is_err(),
+      "{field}"
+    );
     let mut report = json!({"references":[],"models":{}});
     report[field] = value.clone();
     assert!(serde_json::from_value::<CatalogReport>(report).is_err(), "{field}");
