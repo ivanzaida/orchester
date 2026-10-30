@@ -18,6 +18,7 @@ mod refusals;
 mod scenario_names;
 mod settings;
 mod shared_config;
+mod shared_here;
 
 use std::{
   collections::BTreeMap,

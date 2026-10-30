@@ -270,6 +270,7 @@ pub fn typography(palette: &ThemePalette) -> ThemeTypography {
       .chain(super::groups::typography(palette))
       .chain(super::pipelines::typography(palette))
       .chain(super::date_picker::typography(palette))
+      .chain(super::dialog::typography(palette))
       .collect(),
   }
 }

@@ -28,6 +28,7 @@ mod pull_requests;
 mod review;
 mod secrets;
 mod settings;
+mod shared_config;
 mod skills;
 pub(crate) mod task;
 mod task_close;

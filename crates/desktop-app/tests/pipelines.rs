@@ -259,6 +259,8 @@ mod flow;
 mod history_safety;
 #[path = "pipelines/layout.rs"]
 mod layout;
+#[path = "pipelines/missing_here.rs"]
+mod missing_here;
 #[path = "pipelines/panel_history.rs"]
 mod panel_history;
 #[path = "pipelines/permissions.rs"]

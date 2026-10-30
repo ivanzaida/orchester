@@ -128,6 +128,7 @@ async fn live_updates_a_widening_version_waits_and_runs_keep_the_previous_one_un
     waiting(&workspace.root, builder_id).expect("read"),
     Some(Waiting {
       number: VersionNumber::FIRST,
+      used: None,
       adds: vec![VersionWidening::Permissions(Widening::Commands)],
     }),
     "a first version that runs commands waits too"
@@ -164,6 +165,7 @@ async fn live_updates_a_widening_version_waits_and_runs_keep_the_previous_one_un
     waiting(&workspace.root, builder_id).expect("read"),
     Some(Waiting {
       number: number(2),
+      used: Some(number(1)),
       adds: vec![
         VersionWidening::Permissions(Widening::Repository),
         VersionWidening::Permissions(Widening::Network),

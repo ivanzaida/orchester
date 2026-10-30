@@ -14,6 +14,7 @@
 mod catalog;
 mod config;
 mod desktop;
+mod here;
 mod http;
 mod merged;
 mod publish;

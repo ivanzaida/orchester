@@ -2,7 +2,9 @@
 //! saved 16:40 · Based on Published v4*, *Draft written by automation · Published v3*, *Published v1*) over what
 //! changed or what to do next, then Discard draft and Publish. A question about the draft opens in its place. In a
 //! shared project the same bar says a version published here was not sent (`p2Qaq` in 02b `iLwm9`), or met one someone
-//! published meanwhile, with its actions on a line under it (`Conflict bar` `n9GgD` in 02c `JZFlA`).
+//! published meanwhile, with its actions on a line under it (`Conflict bar` `n9GgD` in 02c `JZFlA`); what is missing on
+//! this computer (`Missing bar` `Pf5rK` in 04), or what a teammate's version adds with its list and its actions on a
+//! line under the words (`Widens bar` `V097I` in 02d).
 
 use std::sync::Arc;
 
@@ -29,6 +31,10 @@ pub(crate) enum Standing {
   Published,
   /// Items being chosen, e.g. what an import creates (`F3ukWF` in 02c).
   Choosing,
+  /// What it names is missing on this computer: a plug with a spark in `danger` (`JnKum` in 04).
+  Missing,
+  /// A teammate's version widens what agents may do here: a shield in `warning` (`A4mB5` in 02d).
+  Widens,
   /// A version published here waits for the team server: a cloud crossed out in `info` (`y6CD8b` in 02b).
   NotSent,
   /// A version published here met one someone published from the same base: two branches in `danger` inside a
@@ -43,6 +49,8 @@ impl Standing {
       Self::Attention => (Icon::TriangleAlert, PaletteColor::Warning),
       Self::Published => (Icon::CircleCheck, PaletteColor::Success),
       Self::Choosing => (Icon::ListChecks, PaletteColor::TextSecondary),
+      Self::Missing => (Icon::PlugZap, PaletteColor::Danger),
+      Self::Widens => (Icon::ShieldAlert, PaletteColor::Warning),
       Self::NotSent => (Icon::CloudOff, PaletteColor::Info),
       Self::Conflict => (Icon::GitCompare, PaletteColor::Danger),
     }
@@ -61,6 +69,8 @@ pub(crate) struct DraftBar {
   standing: Standing,
   status: Arc<str>,
   sub: Option<Arc<str>>,
+  /// What the bar lists under its words, e.g. what a version adds.
+  list: Option<Element>,
   actions: Vec<Element>,
   /// The actions go on a line of their own under the words.
   below: bool,
@@ -75,6 +85,7 @@ impl DraftBar {
       standing,
       status: status.into(),
       sub: None,
+      list: None,
       actions: Vec::new(),
       below: false,
       foot: None,
@@ -86,12 +97,17 @@ impl DraftBar {
     self
   }
 
+  pub(crate) fn list(mut self, list: impl Into<Element>) -> Self {
+    self.list = Some(list.into());
+    self
+  }
+
   pub(crate) fn action(mut self, action: impl Into<Element>) -> Self {
     self.actions.push(action.into());
     self
   }
 
-  /// Puts the actions on a line under the words, at its end (`Actions` `lWkZn` in 02c).
+  /// Puts the actions on a line under the words, at its end (`Actions` `lWkZn` in 02c, `CtBkw` in 02d).
   pub(crate) const fn actions_below(mut self) -> Self {
     self.below = true;
     self
@@ -123,7 +139,8 @@ impl From<DraftBar> for Element {
           .id(format!("{}-sub", bar.id))
           .variant(HubText::Hint.role())
           .width(Dimension::Pct(100.0))
-      }));
+      }))
+      .with_children(bar.list);
     let main = Row::new()
       .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Loose.role())

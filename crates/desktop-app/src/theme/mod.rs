@@ -21,6 +21,7 @@ mod conversation;
 mod date_picker;
 mod decisions;
 mod delivery;
+mod dialog;
 mod failure;
 mod files;
 mod fonts;
@@ -76,6 +77,7 @@ pub use self::{
   date_picker::{DatePickerText, UNAVAILABLE_DAY_OPACITY},
   decisions::{DecisionSpacing, DecisionText},
   delivery::{DeliverySpacing, DeliveryText, LOCKED_SWITCH_OPACITY},
+  dialog::{DIALOG_TILE, DIALOG_WIDTH, DialogSpacing, DialogText},
   failure::{FailureSpacing, FailureText},
   files::{FilesRadius, FilesText},
   fonts::mono_space,
@@ -170,6 +172,7 @@ pub fn install(app: &mut App, mode: Mode) {
   failure::install(theme);
   modules::install(theme);
   project_settings::install(theme);
+  dialog::install(theme);
   theme.set_shadows(shadow::shadows());
   theme.set_form(form::form());
 }

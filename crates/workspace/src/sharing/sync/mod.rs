@@ -34,8 +34,8 @@ pub(super) use self::state::SyncStates;
 pub use self::{
   catalog::CATALOG_CHECK,
   config::{
-    ConfigServer, RemoteResourceStore, Waiting, bind, keep_uploaded_configuration, upload_configuration, use_here,
-    waiting,
+    ConfigServer, Here, HereReference, Needer, RemoteResourceStore, Standing, Waiting, bind, chosen_at,
+    keep_uploaded_configuration, upload_configuration, use_here, waiting,
   },
   state::SyncState,
   stream::{Clock, Source, Stopped, SystemClock, follow},
