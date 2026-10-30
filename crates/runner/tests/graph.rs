@@ -259,14 +259,7 @@ async fn graph_agent_slots_bound_the_steps_that_run_at_once() {
 /// A step waiting for an agent slot starts once the slots are raised, beside the one at work.
 #[tokio::test(flavor = "multi_thread")]
 async fn graph_raised_agent_slots_start_a_step_waiting_for_one() {
-  let project = project(&Setup {
-    steps: vec![
-      StepSpec::new("implement", "Implement", "Write own file.", &[]),
-      StepSpec::new("checks", "Checks", "Keep working.", &["implement"]),
-      StepSpec::new("review", "Review", "Keep working.", &["implement"]),
-    ],
-    ..Setup::new("Say hello.")
-  });
+  let project = project(&parallel_after_implement(Vec::new()));
   let root = project.repo.path();
   let (scheduler, mut events) = scheduler(root);
   let slots = |count| std::num::NonZeroU32::new(count).expect("above zero");
@@ -323,10 +316,7 @@ fn parallel_after_implement(more: Vec<StepSpec>) -> Setup {
 }
 
 /// A scheduler for `root` with one agent slot, its run of `task` started.
-async fn started_on_one_slot(
-  root: &Path,
-  task: TaskId,
-) -> (Scheduler, mpsc::UnboundedReceiver<Event>, RunId) {
+async fn started_on_one_slot(root: &Path, task: TaskId) -> (Scheduler, mpsc::UnboundedReceiver<Event>, RunId) {
   let (scheduler, events) = scheduler(root);
   scheduler
     .attach(
@@ -383,7 +373,13 @@ async fn graph_slot_wait_names_the_ready_step_no_slot_is_free_for() {
   let (scheduler, mut events, id) = started_on_one_slot(root, project.task).await;
   let summary = summary_where(&mut events, |summary| !summary.slot_waits.is_empty()).await;
   let (review, status) = execution_of(root, id, "review");
-  assert_eq!(summary.slot_waits, [SlotWait { run: id, execution: review }]);
+  assert_eq!(
+    summary.slot_waits,
+    [SlotWait {
+      run: id,
+      execution: review
+    }]
+  );
   assert!(summary.waits_for_slot(review));
   assert_eq!(summary.steps_waiting_for_slot(), 1);
   assert_eq!(summary.agents_working(), 1, "Checks has the slot");
@@ -391,7 +387,11 @@ async fn graph_slot_wait_names_the_ready_step_no_slot_is_free_for() {
   let (checks, status) = execution_of(root, id, "checks");
   assert_eq!(status, StepStatus::Running);
   assert!(!summary.waits_for_slot(checks));
-  let run = ProjectDb::open(root).expect("open").run(id).expect("read").expect("run");
+  let run = ProjectDb::open(root)
+    .expect("open")
+    .run(id)
+    .expect("read")
+    .expect("run");
   assert!(!run.waits_for_a_person());
   scheduler.stop_all(InterruptCause::QuitNow).await;
 }
@@ -405,7 +405,13 @@ async fn graph_slot_wait_leaves_out_a_step_whose_dependencies_have_not_passed() 
   let summary = summary_where(&mut events, |summary| !summary.slot_waits.is_empty()).await;
   let (review, _) = execution_of(root, id, "review");
   let (report, status) = execution_of(root, id, "report");
-  assert_eq!(summary.slot_waits, [SlotWait { run: id, execution: review }]);
+  assert_eq!(
+    summary.slot_waits,
+    [SlotWait {
+      run: id,
+      execution: review
+    }]
+  );
   assert_eq!(status, StepStatus::Pending, "Report also stands pending, but not ready");
   assert!(!summary.waits_for_slot(report));
   scheduler.stop_all(InterruptCause::QuitNow).await;
@@ -452,7 +458,13 @@ async fn graph_slot_wait_leaves_out_a_tool_step() {
   let summary = summary_where(&mut events, |summary| !summary.slot_waits.is_empty()).await;
   let (review, _) = execution_of(root, id, "review");
   let (lint, status) = execution_of(root, id, "lint");
-  assert_eq!(summary.slot_waits, [SlotWait { run: id, execution: review }]);
+  assert_eq!(
+    summary.slot_waits,
+    [SlotWait {
+      run: id,
+      execution: review
+    }]
+  );
   assert_eq!(status, StepStatus::Pending, "the start loop stopped at Review");
   assert!(!summary.waits_for_slot(lint));
   scheduler.stop_all(InterruptCause::QuitNow).await;
@@ -465,11 +477,7 @@ async fn graph_slot_wait_is_announced_once() {
   let root = project.repo.path();
   let (scheduler, mut events, _) = started_on_one_slot(root, project.task).await;
   summary_where(&mut events, |summary| !summary.slot_waits.is_empty()).await;
-  let quiet = tokio::time::timeout(
-    Duration::from_millis(2_500),
-    summary_where(&mut events, |_| true),
-  )
-  .await;
+  let quiet = tokio::time::timeout(Duration::from_millis(2_500), summary_where(&mut events, |_| true)).await;
   assert!(quiet.is_err(), "no further summary across two retries: {quiet:?}");
   scheduler.stop_all(InterruptCause::QuitNow).await;
 }

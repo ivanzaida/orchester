@@ -47,26 +47,29 @@ pub struct StepRow {
   waits_since: Option<Timestamp>,
 }
 
-/// The rail of `run`'s steps at `now`, the step with key `current` drawn as the one the run stands at. `lost`: the run
-/// is recorded as running but has no runner; `waiting`: the steps, by key, whose agent waits for an approval, and
-/// since when; `slot_waits`: the executions the runner says wait for an agent slot.
-pub fn rail(
-  ctx: &mut Ctx,
-  run: &RunView,
-  (lost, waiting, slot_waits): (bool, &[(Arc<str>, Timestamp)], &[StepExecutionId]),
-  current: Option<Arc<str>>,
-  now: Timestamp,
-) -> Element {
-  let rows = rows(run, (lost, waiting, slot_waits), now);
+/// What the run's record does not say of its steps.
+pub struct LiveSteps<'a> {
+  /// The run is recorded as running but has no runner.
+  pub lost: bool,
+  /// The steps, by key, whose agent waits for an approval, and since when.
+  pub waiting: &'a [(Arc<str>, Timestamp)],
+  /// The executions the runner says wait for an agent slot.
+  pub slot_waits: &'a [StepExecutionId],
+}
+
+/// The rail of `run`'s steps at `now`, the step with key `current` drawn as the one the run stands at.
+pub fn rail(ctx: &mut Ctx, run: &RunView, live: &LiveSteps<'_>, current: Option<Arc<str>>, now: Timestamp) -> Element {
+  let rows = rows(run, live, now);
   ctx.mount_keyed::<LiveRail>("task-steps-rail", RailProps { rows, current })
 }
 
-/// The rows of `run`'s steps at `now`, in stage order; `lost`, `waiting` and `slot_waits` as for [`rail`].
-fn rows(
-  run: &RunView,
-  (lost, waiting, slot_waits): (bool, &[(Arc<str>, Timestamp)], &[StepExecutionId]),
-  now: Timestamp,
-) -> Vec<StepRow> {
+/// The rows of `run`'s steps at `now`, in stage order.
+fn rows(run: &RunView, live: &LiveSteps<'_>, now: Timestamp) -> Vec<StepRow> {
+  let LiveSteps {
+    lost,
+    waiting,
+    slot_waits,
+  } = *live;
   progress_with_waits(run, lost, slot_waits, now)
     .into_iter()
     .map(|progress| without_runner(progress, lost))
@@ -202,8 +205,8 @@ fn without_runner(mut row: ProgressRow, lost: bool) -> ProgressRow {
   row
 }
 
-/// The label a step's state reads as. No frame draws a step waiting for an agent slot: it takes Waiting's muted `clock`,
-/// where Not started is `circle-dashed`.
+/// The label a step's state reads as. No frame draws a step waiting for an agent slot: it takes Waiting's muted
+/// `clock`, where Not started is `circle-dashed`.
 const fn status(state: ProgressState) -> Status {
   match state {
     ProgressState::Waiting => Status::NotStarted,

@@ -39,8 +39,14 @@ fn parallel_steps_on_one_slot(served: &mut Served) {
       { "key": "report", "name": "Report", "profile": "Builder", "repository": "write", "instructions": "Append one line.", "runs_after": ["checks", "review"] },
     ] }),
   );
-  served.ok("publish_pipeline", &json!({ "project": "Kontur", "pipeline": "Delivery" }));
-  served.ok("update_project_limits", &json!({ "project": "Kontur", "agent_slots": 1 }));
+  served.ok(
+    "publish_pipeline",
+    &json!({ "project": "Kontur", "pipeline": "Delivery" }),
+  );
+  served.ok(
+    "update_project_limits",
+    &json!({ "project": "Kontur", "agent_slots": 1 }),
+  );
 }
 
 #[test]
@@ -88,7 +94,10 @@ fn domain_slot_wait_shows_in_get_run_list_runs_the_summary_and_the_overview() {
     inspected(served, "task-step-review").contains("WaitsForSlot")
   });
   let report = inspected(&mut served, "task-step-report");
-  assert!(report.contains("Waiting") && !report.contains("WaitsForSlot"), "{report}");
+  assert!(
+    report.contains("Waiting") && !report.contains("WaitsForSlot"),
+    "{report}"
+  );
   assert!(
     text(&mut served, "task-event-text").contains("Review is ready and starts when an agent slot frees up"),
     "{}",
@@ -100,7 +109,10 @@ fn domain_slot_wait_shows_in_get_run_list_runs_the_summary_and_the_overview() {
     text(served, "overview-at-work-slot-waits") == "1 step waits for a slot · raise Agents at once to start it"
   });
 
-  served.ok("update_project_limits", &json!({ "project": "Kontur", "agent_slots": 2 }));
+  served.ok(
+    "update_project_limits",
+    &json!({ "project": "Kontur", "agent_slots": 2 }),
+  );
   served.until("Review to start", |served| {
     let read = served.ok("get_run", &run_one);
     step(&read, "review")["status"] == json!({ "state": "running", "waits_for": null })

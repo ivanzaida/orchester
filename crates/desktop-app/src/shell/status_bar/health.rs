@@ -1,8 +1,8 @@
 //! The health dot (`Health dot` `RqoXF` in `Status bar · redesign`): a 6 `success` dot at the bar's end while the
 //! shown project's runner is online, or on a screen outside a project; it never gives way. Its card on hover
 //! (`19 · Health dot · hover` `fPWaD`, `oagTL`) holds what the bar no longer shows: the runner and since when, the
-//! agents at work of its slots, the queued tasks, while any wait the ready steps waiting for a slot (no frame draws that
-//! row: it reads like the facts around it), the team server, the app's MCP server with the agents connected,
+//! agents at work of its slots, the queued tasks, while any wait the ready steps waiting for a slot (no frame draws
+//! that row: it reads like the facts around it), the team server, the app's MCP server with the agents connected,
 //! and the version. In a project a press opens the runner log; outside one it does nothing.
 
 use lurq::{

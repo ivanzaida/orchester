@@ -103,9 +103,14 @@ pub async fn list_runs(services: &Services, args: ListRuns, translate: &Translat
       .iter()
       .flat_map(|(task, runs)| {
         let waits = &waits;
-        runs
-          .iter()
-          .map(move |run| run_json(open.project.id(), (task, run, deliveries.get(&run.id)), waits, translate))
+        runs.iter().map(move |run| {
+          run_json(
+            open.project.id(),
+            (task, run, deliveries.get(&run.id)),
+            waits,
+            translate,
+          )
+        })
       })
       .collect()
   });
@@ -169,5 +174,9 @@ fn detail(record: &RunRecord, waits: &[StepExecutionId], translate: &Translate) 
     _ => "runs.history.slotWait.other",
   };
   let separator = translate.text(&Message::new("runs.history.slotWaitSeparator"));
-  translate.text(&Message::new(key).with("detail", detail).with("steps", steps.join(&separator)))
+  translate.text(
+    &Message::new(key)
+      .with("detail", detail)
+      .with("steps", steps.join(&separator)),
+  )
 }

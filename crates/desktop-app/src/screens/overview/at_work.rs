@@ -1,10 +1,11 @@
 //! *At work* (`At work` `Xbz55` in 01 `LXhun`): one line per run under way (`orchester_workspace::overview::at_work`),
 //! its head with how many and *N of M agent slots* as the runner reports them, and beside that, while ready steps wait
-//! for a slot, how many and what would start them (no frame draws it; it reads like the slots). A line: the turning loader, the key,
-//! the title in 13/500, the step's dots and the step (`GI561`: one 10×4 dash per step, 3 apart, the steps done in
-//! `text_muted`, the current one in `text_primary`, the rest in `border`), the account and model with the maker's mark
-//! (`VJWOi`), and how long the run has run. A run that lost its runner keeps its line and its age, with a pause mark.
-//! Up to six lines; more opens Tasks on Active. A line opens its task's conversation, as the sidebar's Running does.
+//! for a slot, how many and what would start them (no frame draws it; it reads like the slots). A line: the turning
+//! loader, the key, the title in 13/500, the step's dots and the step (`GI561`: one 10×4 dash per step, 3 apart, the
+//! steps done in `text_muted`, the current one in `text_primary`, the rest in `border`), the account and model with the
+//! maker's mark (`VJWOi`), and how long the run has run. A run that lost its runner keeps its line and its age, with a
+//! pause mark. Up to six lines; more opens Tasks on Active. A line opens its task's conversation, as the sidebar's
+//! Running does.
 
 use std::num::NonZeroU32;
 

@@ -6,11 +6,7 @@ mod support;
 
 use std::{path::Path, sync::Arc};
 
-use orchester_core::{
-  id::StepExecutionId,
-  resource::StepKey,
-  run::StepStatus,
-};
+use orchester_core::{id::StepExecutionId, resource::StepKey, run::StepStatus};
 use orchester_workspace::{
   runner::RunnerStatus,
   tasks::{
