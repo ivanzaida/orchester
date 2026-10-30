@@ -156,7 +156,7 @@
     "browser": "Browser",
     "browserHint": "Open, read and act in web pages through Orchester’s browser tools. Needs Network access.",
     "browserNeedsNetwork": "Turn on Network access to give agents the browser.",
-    "browserNotYet": "Agents can use the browser once Orchester’s browser runs on this computer. You can’t watch their pages yet.",
+    "browserSignIns": "Sign-ins with a password are yours, in the Browser window; they stay in this project’s browser profile. No browser tool takes a secret.",
     "allowedSites": "Allowed sites",
     "allowedSitesHint": "The agent opens and acts on these without asking. Any other site asks you first.",
     "site": "Site",
