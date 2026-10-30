@@ -113,7 +113,7 @@ pub(super) struct Refused(u64, Refusal);
 impl DevtoolsInspectable for Refused {}
 
 /// The code step's state: what was typed, the check under way and what it came to.
-pub(super) struct CodeForm {
+pub(crate) struct CodeForm {
   /// Made outside the component's context, so DevTools never records it.
   code: Signal<String>,
   verify: FutureAction<(Entry, String), (), Refused>,
@@ -131,7 +131,7 @@ pub(super) struct CodeForm {
 }
 
 impl CodeForm {
-  pub(super) fn new(ctx: &mut Ctx, step: Signal<Step>, to_password: ToPassword) -> Self {
+  pub(crate) fn new(ctx: &mut Ctx, step: Signal<Step>, to_password: ToPassword) -> Self {
     let cloud = Services::of(ctx).cloud;
     let code = Signal::new(String::new());
     let (unsent, pause) = (ctx.signal(None), ctx.signal(PausedUntil(None)));
@@ -188,7 +188,7 @@ impl CodeForm {
   }
 
   /// Stops looking at the clock while the gate is on the password.
-  pub(super) fn rest(&self) {
+  pub(crate) fn rest(&self) {
     self.look.stop();
   }
 
@@ -260,7 +260,7 @@ impl CodeForm {
 }
 
 /// The code step's card for `entry`, on the cloud whose host is `host`.
-pub(super) fn card(ctx: &mut Ctx, form: &CodeForm, entry: &Entry, host: &str) -> Element {
+pub(crate) fn card(ctx: &mut Ctx, form: &CodeForm, entry: &Entry, host: &str) -> Element {
   form.look.start();
   form.take_focus(ctx, entry);
   let verifying = form.verifying();

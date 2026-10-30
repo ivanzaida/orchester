@@ -12,8 +12,8 @@ use std::num::NonZeroU64;
 
 use lurq::router::RouteMatch;
 use orchester_app::routes::{
-  ChangeSource, ChangedFile, ConnectionsView, JoinTarget, MemoryTab, NewConnection, OverviewTab, ProjectPage, Route,
-  RouteError, RouteFolder, Screen, TaskList, TaskListTab, TaskTab, TaskView, routes,
+  ChangeSource, ChangedFile, ConnectionsView, JoinTarget, JoinWay, MemoryTab, NewConnection, OverviewTab, ProjectPage,
+  Route, RouteError, RouteFolder, Screen, TaskList, TaskListTab, TaskTab, TaskView, routes,
 };
 use orchester_core::{
   id::{ConnectionId, FeedbackId, ProjectId},
@@ -73,6 +73,8 @@ fn every_route() -> Vec<Route> {
     Route::AllProjects,
     Route::AddProject(None),
     Route::AddProject(RouteFolder::new(std::path::Path::new(AWKWARD))),
+    Route::JoinTeam(JoinWay::Cloud),
+    Route::JoinTeam(JoinWay::Code),
     Route::Settings,
     Route::General,
   ];
@@ -231,6 +233,17 @@ fn paths_are_the_documented_ones() {
   for (route, path) in paths {
     assert_eq!(route.path(), path);
   }
+}
+
+/// Join a team opens on the account's teams; `way=code` on the code.
+#[test]
+fn paths_of_join_a_team_are_the_documented_ones() {
+  assert_eq!(Route::JoinTeam(JoinWay::Cloud).path(), "/join-team");
+  assert_eq!(Route::JoinTeam(JoinWay::Code).path(), "/join-team?way=code");
+  assert!(
+    Route::parse("/join-team?way=cloud").is_err(),
+    "the account's teams have no way of their own"
+  );
 }
 
 /// Memory opens on the tab it chooses without one in its path; another screen opens a tab by naming it, as *Review

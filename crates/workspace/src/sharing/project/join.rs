@@ -108,6 +108,15 @@ struct Upload {
   held: bool,
 }
 
+/// When a join's server tasks come down.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum JoinTasks {
+  /// In the link's own transaction, so the copies uploaded are there for a change made while joining.
+  WithLink,
+  /// In the first download the link starts ([`super::download`]): nothing was uploaded, so nothing waits for them.
+  FirstDownload,
+}
+
 impl Servers {
   /// What linking the project at `repo_root` to the project at `slug` on `entry` would do. Not a member, or no
   /// project there: [`SharingError::NoProject`].
@@ -178,6 +187,19 @@ impl Servers {
     entry: &ServerEntry,
     repo_root: &Path,
     review: &JoinReview,
+    upload: (Vec<TaskId>, IdempotencyKey),
+  ) -> Result<Joined, JoinFailed> {
+    self
+      .join_taking((entry, JoinTasks::WithLink), repo_root, review, upload)
+      .await
+  }
+
+  /// [`Self::join`], the server project's tasks coming down as `join_tasks` says.
+  pub(super) async fn join_taking(
+    &self,
+    (entry, join_tasks): (&ServerEntry, JoinTasks),
+    repo_root: &Path,
+    review: &JoinReview,
     (ticked, key): (Vec<TaskId>, IdempotencyKey),
   ) -> Result<Joined, JoinFailed> {
     let _in_progress = share::InProgress::start(self, repo_root);
@@ -231,17 +253,22 @@ impl Servers {
     }
     let uploaded = held || !upload.import.tasks.is_empty();
     let open = self
-      .link_joined(entry, repo_root, review, (&upload.claimed, &upload.revisions))
+      .link_joined(
+        (entry, join_tasks),
+        repo_root,
+        review,
+        (&upload.claimed, &upload.revisions),
+      )
       .await
       .map_err(failed(Some(uploaded)))?;
     Ok(Joined { open, dropped })
   }
 
-  /// Caches `review`'s server project as it is now and links the project at `repo_root` to it; a
-  /// change made here while joining (a run's) is sent on top of the uploaded copy.
+  /// Caches `review`'s server project as it is now and links the project at `repo_root` to it, its tasks as
+  /// `join_tasks` says; a change made here while joining (a run's) is sent on top of the uploaded copy.
   async fn link_joined(
     &self,
-    entry: &ServerEntry,
+    (entry, join_tasks): (&ServerEntry, JoinTasks),
     repo_root: &Path,
     review: &JoinReview,
     (claimed, revisions): (&HashMap<TaskId, NonZeroU32>, &HashMap<TaskId, TaskRevision>),
@@ -261,19 +288,25 @@ impl Servers {
         client.modules(&token, project, 0).await
       })
       .await?;
-    let tasks = self
-      .with_token(
-        entry,
-        |client, token| async move { client.tasks(&token, project).await },
-      )
-      .await?;
+    let (tasks, cursor) = match join_tasks {
+      JoinTasks::WithLink => {
+        let tasks = self
+          .with_token(
+            entry,
+            |client, token| async move { client.tasks(&token, project).await },
+          )
+          .await?;
+        (tasks.tasks, tasks.cursor)
+      }
+      JoinTasks::FirstDownload => (Vec::new(), 0),
+    };
     let link = SharingLink {
       server: entry.stored.id,
       project,
       key: review.key.clone(),
       role: shared.role,
       joined_at: Timestamp::now(),
-      cursor: tasks.cursor,
+      cursor,
       last_synced_at: Timestamp::now(),
       removed_at: None,
       address: Some(review.address.clone()),
@@ -282,7 +315,7 @@ impl Servers {
     let read = (claimed.clone(), revisions.clone());
     let open = background::run(move || -> Result<OpenProject, SharingError> {
       let tags = tags.iter().map(tag).collect::<Result<Vec<_>, _>>()?;
-      let cached = tasks.tasks.iter().map(convert::cached).collect::<Result<Vec<_>, _>>()?;
+      let cached = tasks.iter().map(convert::cached).collect::<Result<Vec<_>, _>>()?;
       let shared_modules = modules
         .modules
         .iter()
@@ -301,7 +334,10 @@ impl Servers {
       Ok(workspace.open(&root)?)
     })
     .await??;
-    self.shared_changed();
+    match join_tasks {
+      JoinTasks::WithLink => self.shared_changed(),
+      JoinTasks::FirstDownload => self.download_linked(&open.repo_root, &entry.stored.name),
+    }
     Ok(open)
   }
 }

@@ -5,6 +5,7 @@
       "title": "Build with a team\nof AI agents.",
       "lead": "Connect a repository, assign models to roles, and guide each task from a plan to a reviewed pull request.",
       "createFirst": "Create your first project",
+      "joinTeam": "Join a team",
       "next": "Choose a local repository next.",
       "stepsHeading": "THREE STEPS TO YOUR FIRST TASK",
       "steps": {

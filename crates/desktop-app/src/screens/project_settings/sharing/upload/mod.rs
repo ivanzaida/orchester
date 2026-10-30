@@ -164,8 +164,8 @@ impl Component for UploadPage {
     ctx.watch(&link.state(), move |state| {
       if state.is_fulfilled() && state.error.is_none() {
         page.set(LinkPage::default());
-        // The project has the server project's key now, and the tasks that came down are the server's: both are read
-        // again, as after a join (`join::review`).
+        // The project has the server project's key now, and its tasks are the server's, whether they came with the link
+        // or its first download brings them: both are read again, as after a join (`join::review`).
         projects.retry(project);
         feed.saved();
       }

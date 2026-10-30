@@ -931,7 +931,7 @@ The *Since* column marks what API 3 adds or changes; the rest is built (S1a, S1b
 | `POST /projects/{id}/members` | owner | `{ username, role }` | `201 { member }` | `404 no_such_user`, `409 already_member` | |
 | `PATCH /projects/{id}/members/{user}` | owner | `{ role }` | `{ member }` | `404`, `409 last_owner` | |
 | `DELETE /projects/{id}/members/{user}` | owner, or the member themself | | `204`; their claims are released | `409 last_owner` | |
-| `GET /projects/{id}/tasks` | member | | `{ tasks: [Task], cursor }` | | |
+| `GET /projects/{id}/tasks?after={n}` | member | | `{ tasks: [Task], cursor, next?, total? }`: with `after`, the tasks numbered above `n`, lowest first, at most 64, `next` (the `after` of the following page) only when there is one, and `total` (the project's tasks now); without it, every task, with neither. A server that ignores the parameter answers one page | | `after` ORC-291 |
 | `GET /projects/{id}/tasks/{task}` | member | | `{ task }` | `404` | |
 | `POST /projects/{id}/tasks` | member | `{ idempotency_key, tasks: [TaskContent] }` | `201 { tasks: [Task] }`, consecutive numbers; a repeated key returns the first result | `422 invalid` | |
 | `POST /projects/{id}/tasks/import` | member | `{ idempotency_key, tasks: [UploadTask], modules?: [UploadModule] }` | `201 { tasks: [Task], dropped_links, modules, mapped }`, new numbers, ids and former keys kept. Also the create of tasks made offline (`former_key: null`) | `409 id_taken`, `409 conflict`, `422 module`, `422 invalid` | used by the outbox in 3; modules ORC-78 |

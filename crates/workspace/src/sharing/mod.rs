@@ -108,7 +108,7 @@ struct Inner {
   /// When work on each shared task last asked for its run claim this session, by this computer's clock: a claim
   /// asked for after its task's latest run ended is not that run's to end (`project::claim_ends`).
   work_asked: Mutex<HashMap<orchester_core::id::TaskId, Timestamp>>,
-  /// The checkouts whose first download after a join is under way or failed (`project::download`).
+  /// The checkouts whose first download after a join or a link is under way, failed or ended (`project::download`).
   downloads: Mutex<HashMap<PathBuf, project::download::Mark>>,
 }
 
