@@ -137,6 +137,10 @@ impl RunTask {
     self.note_cli_too_old(execution, active, &finished.outcome)?;
     let asked = finished.closed_after_result && output.outcome == Some(StepOutcome::Question);
     let failure = output.failure(finished.outcome.is_success() || asked);
+    // Nothing fails for space: the step stays open, leaves no output yet, and goes on once there is room.
+    if failure.is_some() && self.out_of_space()? {
+      return self.save(execution, active, "saved for low disk space");
+    }
     if finished.outcome.is_success() || asked {
       self.acknowledge(execution, &active.invocation, &output)?;
     }

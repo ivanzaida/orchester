@@ -29,6 +29,7 @@ mod services;
 mod skill_input;
 mod skills;
 mod stacks;
+mod storage;
 mod tool_input;
 mod tool_program;
 pub(super) mod widening;
@@ -57,7 +58,9 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "get_project",
-    description: "A project's setup: id, key, name, folder, limits, code index, the environment variables its agents \
+    description: "A project's setup: id, key, name, folder, limits, the disk guard (disk_guard: keep_free_gb, free_gb, \
+                  total_gb, and holds while no step starts for low disk space; get_storage adds what could be \
+                  cleaned), code index, the environment variables its agents \
                   and command tools get (plain text by design: they hold no secrets), whether agents load the \
                   repository's own agent files (AGENTS.md, CLAUDE.md), its GitHub link, how many connections, \
                   profiles, pipelines and instructions it has, and its link in the app (its Overview). Base branches \
@@ -437,6 +440,7 @@ pub fn listed() -> Vec<Tool> {
     .chain(skills::SPECS)
     .chain(secrets::SPECS)
     .chain(services::SPECS)
+    .chain(storage::SPECS)
     .map(tool)
     .collect()
 }
@@ -460,6 +464,9 @@ pub async fn call(
   }
   if named(self::services::SPECS) {
     return Some(self::services::call(services, translate, name, Value::Object(arguments)).await);
+  }
+  if named(storage::SPECS) {
+    return Some(storage::call(services, name, Value::Object(arguments)).await);
   }
   if !SPECS.iter().any(|spec| spec.name == name) {
     return None;

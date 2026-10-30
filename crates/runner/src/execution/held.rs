@@ -1,17 +1,18 @@
-//! The workspace a run holds while its steps follow one another, and the disk guard (ORC-114). A borrowing run takes
-//! a workspace before its first step starts — waiting, like for an agent slot, while all are in use — and gives it
-//! back, with a checkpoint commit of what is left, once its task no longer executes it: it waits for a person, a
-//! limit or a review, paused, or ended. Its steps that worked beside others give theirs back then too.
+//! The workspace a run holds while its steps follow one another, and the disk guard (ORC-114, ORC-422). A borrowing
+//! run takes a workspace before its first step starts — waiting, like for an agent slot, while all are in use — and
+//! gives it back, with a checkpoint commit of what is left, once its task no longer executes it: it waits for a
+//! person, a limit or a review, paused, or ended. Its steps that worked beside others give theirs back then too.
 //!
-//! Below the free space the project keeps, no step starts, and agents at work are stopped with their work committed:
-//! the run pauses for low disk space and goes on by itself once there is room ([`super::Scheduler`]).
+//! In every project, below the free space it keeps, no step starts, and agents at work are stopped with their work
+//! committed: the run pauses for low disk space and goes on by itself once there is room ([`super::Scheduler`]). A
+//! step whose agent failed while the disk was low ran out of space, most likely: it pauses the same way.
 
 use std::path::Path;
 
 use orchester_core::{
   id::StepExecutionId,
   integration::workspace::SwitchTo,
-  store::WorkspaceStore,
+  store::{SettingsStore, WorkspaceStore},
   workspaces::{DiskVerdict, Holder},
 };
 use orchester_ipc::Event;
@@ -107,15 +108,11 @@ impl RunTask {
     self.announce_workspace();
   }
 
-  /// Whether the disk the workspaces are on has less free space than the project keeps. The guard watches only a
-  /// project that turned warm workspaces on; a disk that cannot be read holds nothing back: the guard is for space,
-  /// not for errors of its own, which are logged.
+  /// Whether the repository's disk, where the run's folder is, has less free space than the project keeps, read now,
+  /// whether the run borrows a workspace or owns a worktree. A disk that cannot be read holds nothing back: the guard
+  /// is for space, not for errors of its own, which are logged.
   pub(super) fn disk_is_low(&self) -> Result<bool, ExecutionError> {
-    let settings = self.db.workspace_settings()?;
-    if !settings.enabled {
-      return Ok(false);
-    }
-    let keep = settings.keep_free;
+    let keep = self.db.keep_free()?;
     match self.disks.usage(&self.root) {
       Ok(usage) => Ok(matches!(keep.verdict(usage), DiskVerdict::Low { .. })),
       Err(error) => {
@@ -138,6 +135,18 @@ impl RunTask {
       self.disk_ran_low();
     }
     Ok(())
+  }
+
+  /// Whether a step that would fail now ran out of space instead: the disk is low, so it is not failed — it stays
+  /// open, the run pauses for low disk space as when the guard stops its agents, and the step goes on once there is
+  /// room.
+  pub(super) fn out_of_space(&mut self) -> Result<bool, ExecutionError> {
+    if !self.disk_is_low()? {
+      return Ok(false);
+    }
+    tracing::warn!(run = %self.run.id(), "a step failed while the disk is low; it pauses instead of failing");
+    self.disk_ran_low();
+    Ok(true)
   }
 
   /// The disk is low: the run pauses once its agents have ended, and those at work are stopped, each once, with their

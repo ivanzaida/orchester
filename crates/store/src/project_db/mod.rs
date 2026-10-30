@@ -17,6 +17,7 @@ mod completions;
 mod connections;
 mod consistent;
 mod default_pipeline;
+mod disk_guard;
 mod environment;
 mod estimates;
 mod feedback;

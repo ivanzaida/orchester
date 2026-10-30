@@ -780,7 +780,7 @@
     "capacity": {
       "dailyBudgetUsed": "Daily token budget used — new runs wait until tomorrow or raise it in Project settings.",
       "noAgentSlot": "All {{slots}} agent slots are in use. Try again when a running run settles.",
-      "lowDisk": "Low disk space: {{free}} GB free of the {{needed}} GB the project keeps free. New steps wait until there is room; Clean up in Project settings › Runs frees some.",
+      "lowDisk": "Low disk space: {{free}} GB free, keeps {{needed}} GB. New steps wait and go on by themselves once there is room; Project settings › Runs › Storage shows what could be cleaned.",
       "shuttingDown": "Orchester is closing; no new work starts."
     },
     "control": {
@@ -1522,6 +1522,7 @@
       "planNoteRequired": "Request changes needs a note that says what should change in the plan.",
       "approveTakesNoNote": "Approving takes no note, as the plan card approves without one. Request changes to send the agent a note.",
       "folderNotAbsolute": "Name the project’s folder by its absolute path.",
+      "invalidKeepFree": "Keep free is whole GB from {{min}} to {{max}}.",
       "cliNotFound": "No {{program}} was found on the search path. Give the CLI’s absolute path as the program.",
       "notAnAgentConnection": "{{connection}} is not an agent connection; profiles run on agent connections only.",
       "checkFound": "The check found: {{status}}.",
