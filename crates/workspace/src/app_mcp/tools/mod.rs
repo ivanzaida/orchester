@@ -172,6 +172,8 @@ const SPECS: &[Spec] = &[
                   or automation through this server). merge says whether its work was merged, as its task's Summary \
                   tells it: merged by orchester (with the recorded merge) or outside (git proves its base branch \
                   holds the run's commits), not_merged, nothing_to_merge, or null for a run that has not succeeded. \
+                  worktree is present, removed, not_removed (its removal could not finish and its folder is on disk: \
+                  worktree_not_removed gives its path and the reason, null when none was recorded) or none. \
                   base_moved lists Orchester's notices that the run's base branch moved (kind base_moved): the \
                   branch and revision, the tasks and commits that landed, the files both sides changed, and its \
                   state (waits_for_writing_step, waits_until_work_goes_back with waits_for_step when only steps \
@@ -295,7 +297,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "remove_worktree",
-    description: "Removes an ended run's worktree as the task page's Remove worktree does: committed work stays on the branches, and only merged branches are deleted. Refused while the run works, while a merge or removal of its task runs, when the worktree holds uncommitted changes (a person decides that on the task page), or when it was removed already; refused as run_changed when the run worked again in other worktrees since this read it.",
+    description: "Removes an ended run's worktree as the task page's Remove worktree does: committed work stays on the branches, and only merged branches are deleted. The folder goes with everything in it, build output included; what of the run still runs from it is stopped first when a file is held, and a folder that still cannot be deleted is refused as removal_failed with its path and why, and stays not_removed. Refused while the run works, while a merge or removal of its task runs, when the worktree holds uncommitted changes (a person decides that on the task page), or when it was removed already (a removal whose folder stayed, not_removed, is finished again); refused as run_changed when the run worked again in other worktrees since this read it.",
     schema: schema_for_type::<worktree::RemoveWorktree>,
     read_only: false,
   },

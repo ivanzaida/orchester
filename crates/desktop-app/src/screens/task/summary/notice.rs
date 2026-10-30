@@ -363,12 +363,25 @@ fn interrupted(ctx: &Ctx, run: &RunView) -> Said {
   if let Some(removed) = run.worktree_removed {
     let number = run.run.number().get().to_string();
     let time = display::clock(removed);
-    let text = (
-      ctx.t_args("summary.notice.cantContinueTitle", [("run", number.as_str())]),
-      ctx.t_args(
+    let body = match &run.worktree_not_removed {
+      Some(left) => {
+        let path = ("path", left.path.as_str());
+        match &left.reason {
+          Some(reason) => ctx.t_args(
+            "summary.notice.cantContinueNotRemovedBody",
+            [path, ("reason", reason.as_str()), ("branch", branch)],
+          ),
+          None => ctx.t_args("summary.notice.cantContinueNotRemovedNoReasonBody", [path, ("branch", branch)]),
+        }
+      }
+      None => ctx.t_args(
         "summary.notice.cantContinueBody",
         [("time", time.as_str()), ("branch", branch)],
       ),
+    };
+    let text = (
+      ctx.t_args("summary.notice.cantContinueTitle", [("run", number.as_str())]),
+      body,
     );
     return Said::new(NoticeTone::Warning, Icon::FolderX, text);
   }

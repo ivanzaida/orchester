@@ -1,8 +1,11 @@
-//! `run_worktree_removals`: when runs' own worktrees were removed, one row per run.
+//! `run_worktree_removals`: when runs' own worktrees were removed, one row per run; `run_worktrees_not_removed`: the
+//! folder a removal that could not finish left, and why (ORC-418).
+
+use std::collections::HashMap;
 
 use orchester_core::{
   id::{RunId, TaskId},
-  integration::RemovalStart,
+  integration::{NotRemoved, RemovalStart},
   store::WorktreeStore,
   time::Timestamp,
 };
@@ -10,6 +13,47 @@ use rusqlite::{Connection, OptionalExtension, params};
 
 use super::{ProjectDb, runs::stored_status};
 use crate::{StoreError, rows::parse};
+
+impl ProjectDb {
+  /// The folder the last removal of the worktrees of `run` left on disk, and why, as recorded; whether it is still
+  /// there is the file system's to say.
+  pub fn worktree_not_removed(&self, run: RunId) -> Result<Option<NotRemoved>, StoreError> {
+    Ok(
+      self
+        .connection
+        .query_row(
+          "SELECT path, reason FROM run_worktrees_not_removed WHERE run_id = ?1",
+          [run.to_string()],
+          |row| {
+            Ok(NotRemoved {
+              path: row.get(0)?,
+              reason: row.get(1)?,
+            })
+          },
+        )
+        .optional()?,
+    )
+  }
+
+  /// The names of the worktree folders runs own, `.orchester/worktrees/<name>` — each run's id and its step
+  /// executions' ids — with whether the run ended: it succeeded, failed or was cancelled, or it was interrupted and its
+  /// worktree removal recorded, so no agent of it works there again.
+  pub fn worktree_folder_owners(&self) -> Result<HashMap<String, bool>, StoreError> {
+    const ENDED: &str = "(runs.status IN ('succeeded', 'failed', 'cancelled') \
+                         OR (runs.status = 'interrupted' AND removals.run_id IS NOT NULL))";
+    let sql = format!(
+      "SELECT runs.id, {ENDED} FROM runs \
+       LEFT JOIN run_worktree_removals AS removals ON removals.run_id = runs.id \
+       UNION ALL \
+       SELECT executions.id, {ENDED} FROM step_executions AS executions \
+       JOIN attempts ON attempts.id = executions.attempt_id JOIN runs ON runs.id = attempts.run_id \
+       LEFT JOIN run_worktree_removals AS removals ON removals.run_id = runs.id"
+    );
+    let mut statement = self.connection.prepare(&sql)?;
+    let rows = statement.query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, bool>(1)?)))?;
+    Ok(rows.collect::<Result<_, _>>()?)
+  }
+}
 
 impl WorktreeStore for ProjectDb {
   type Error = StoreError;
@@ -73,6 +117,22 @@ impl WorktreeStore for ProjectDb {
         Ok((parse("run id", &run)?, Timestamp::from_unix_millis(removed_at)))
       })
       .collect()
+  }
+
+  fn save_worktree_not_removed(&mut self, run: RunId, left: &NotRemoved, at: Timestamp) -> Result<(), StoreError> {
+    self.connection.execute(
+      "INSERT INTO run_worktrees_not_removed (run_id, path, reason, at) VALUES (?1, ?2, ?3, ?4) \
+       ON CONFLICT (run_id) DO UPDATE SET path = excluded.path, reason = excluded.reason, at = excluded.at",
+      params![run.to_string(), left.path, left.reason, at.unix_millis()],
+    )?;
+    Ok(())
+  }
+
+  fn clear_worktree_not_removed(&mut self, run: RunId) -> Result<(), StoreError> {
+    self
+      .connection
+      .execute("DELETE FROM run_worktrees_not_removed WHERE run_id = ?1", [run.to_string()])?;
+    Ok(())
   }
 }
 

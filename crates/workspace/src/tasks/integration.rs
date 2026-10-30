@@ -13,15 +13,15 @@ use orchester_core::{
   id::{RunId, StepExecutionId},
   integration::{
     Cleanup, CleanupError, Delivering, FolderListing, GitError, KeepReason, LeftWorktree, Leftovers, MergeError,
-    RecordedCleanupError, RunMerge, TemporaryLeft, base::Landing, clean_up_recorded_as_seen, leftovers_of,
-    merge_run_as,
+    RecordedCleanupError, RunMerge, TemporaryLeft, base::Landing, clean_up_recorded_as_seen, finish_removal,
+    leftovers_of, merge_run_as,
   },
   revision::Revision,
   run::{BranchName, Run},
   store::{MergeStore, RunStore, TaskStore},
   time::Timestamp,
 };
-use orchester_exec::programs::Programs;
+use orchester_exec::{programs::Programs, run_processes::RunProcesses};
 use orchester_index::CodebaseIndexes;
 use orchester_store::{ProjectDb, StoreError};
 
@@ -481,7 +481,9 @@ fn worktree_owners(run: &Run) -> (&BranchName, Vec<StepExecutionId>) {
 
 /// Removes what `run` left with the removal recorded first, refused once the run has live work as
 /// stored now, e.g. continued from another window since its page was read, or, read again once the
-/// removal is recorded, has other worktrees than `run` ([`clean_up_recorded_as_seen`]).
+/// removal is recorded, has other worktrees than `run` ([`clean_up_recorded_as_seen`]). A folder something held is
+/// deleted again once the run's own processes there are stopped, and one that still stays is recorded as not removed
+/// ([`finish_removal`]); then folders no run uses any more are swept ([`super::worktree_sweep`]).
 fn clear(
   db: &mut ProjectDb,
   programs: &Programs,
@@ -495,14 +497,24 @@ fn clear(
     Ok(stored.is_some_and(|stored| worktree_owners(&stored) == worktree_owners(run)))
   };
   let git = (&git, Path::new(GIT), repo_root);
-  let cleanup = clean_up_recorded_as_seen(db, git, run, confirmed, (Timestamp::now(), unchanged)).map_err(|error| {
-    tracing::warn!("cannot remove what the run left");
-    match error {
-      RecordedCleanupError::Cleanup(error) => IntegrationProblem::Cleanup(error),
-      RecordedCleanupError::Store(error) => IntegrationProblem::from(error),
-      RecordedCleanupError::RunChanged => IntegrationProblem::RunChanged,
-    }
-  })?;
+  let mut cleanup =
+    clean_up_recorded_as_seen(db, git, run, confirmed, (Timestamp::now(), unchanged)).map_err(|error| {
+      tracing::warn!("cannot remove what the run left");
+      match error {
+        RecordedCleanupError::Cleanup(error) => IntegrationProblem::Cleanup(error),
+        RecordedCleanupError::Store(error) => IntegrationProblem::from(error),
+        RecordedCleanupError::RunChanged => IntegrationProblem::RunChanged,
+      }
+    })?;
+  let stop = |folder: &Path| RunProcesses::stop_in(folder, run.created_at());
+  if let Err(error) = finish_removal(db, git, (run.id(), Timestamp::now()), &mut cleanup, stop) {
+    // The worktrees are as the clean-up says either way; only the record of what stayed is missing.
+    tracing::warn!(%error, run = %run.id(), "cannot record what the worktree removal left");
+  }
+  if let Some(left) = cleanup.not_removed() {
+    tracing::warn!(run = %run.id(), path = %left.path, reason = ?left.reason, "a worktree of the run was not removed");
+  }
+  super::worktree_sweep::sweep_in(db, programs, repo_root);
   prune_indexes(repo_root);
   Ok(cleanup)
 }

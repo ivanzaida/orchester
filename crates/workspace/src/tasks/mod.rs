@@ -62,4 +62,6 @@ pub mod unreadable;
 mod unverified;
 pub mod usage;
 pub mod views;
+pub mod worktree_left;
+mod worktree_sweep;
 pub mod writer;

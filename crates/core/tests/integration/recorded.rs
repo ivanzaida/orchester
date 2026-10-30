@@ -8,8 +8,8 @@ use orchester_core::{
   command::{Command, CommandError, CommandOutput, CommandRunner},
   id::{RunId, TaskId},
   integration::{
-    CleanupError, FolderListing, KeepReason, RecordedCleanupError, RemovalStart, WorktreeOwner, clean_up_recorded,
-    clean_up_recorded_as_seen, leftovers,
+    CleanupError, FolderListing, KeepReason, NotRemoved, RecordedCleanupError, RemovalStart, WorktreeOwner,
+    clean_up_recorded, clean_up_recorded_as_seen, finish_removal, leftovers,
   },
   store::WorktreeStore,
   time::Timestamp,
@@ -25,6 +25,8 @@ use crate::{
 struct Removals {
   live_work: bool,
   recorded: Option<Timestamp>,
+  /// What a removal that could not finish left, as recorded.
+  not_removed: Option<NotRemoved>,
 }
 
 impl WorktreeStore for Removals {
@@ -59,6 +61,16 @@ impl WorktreeStore for Removals {
 
   fn worktree_removals(&self, _task: TaskId) -> Result<Vec<(RunId, Timestamp)>, Self::Error> {
     Ok(Vec::new())
+  }
+
+  fn save_worktree_not_removed(&mut self, _run: RunId, left: &NotRemoved, _at: Timestamp) -> Result<(), Self::Error> {
+    self.not_removed = Some(left.clone());
+    Ok(())
+  }
+
+  fn clear_worktree_not_removed(&mut self, _run: RunId) -> Result<(), Self::Error> {
+    self.not_removed = None;
+    Ok(())
   }
 }
 
@@ -165,6 +177,35 @@ fn recorded_clean_up_keeps_the_record_once_git_refused_a_worktree() {
     Some(at),
     "a refusal can come part way: the run no longer continues"
   );
+}
+
+#[test]
+fn recorded_clean_up_git_refused_stays_not_removed_until_a_removal_finishes() {
+  let (repo, run) = repo_with_leftovers(Ending::Interrupted);
+  let mut store = Removals::default();
+  let program = git_program();
+  let git = (&RefusingRemove, program.as_path(), repo.root.as_path());
+  let mut cleanup = clean_up_recorded(&mut store, git, &run, None, now()).expect("cleared");
+  let mut stopped = Vec::new();
+  finish_removal(&mut store, git, (run.id(), now()), &mut cleanup, |folder| {
+    stopped.push(folder.to_path_buf());
+  })
+  .expect("recorded");
+  assert_eq!(stopped.len(), 2, "what of the run runs in each folder is stopped before trying again");
+  let left = store.not_removed.clone().expect("recorded as not removed");
+  assert!(Path::new(&left.path).is_dir());
+  assert!(
+    left.reason.as_deref().is_some_and(|reason| reason.contains("Invalid argument")),
+    "{left:?}"
+  );
+
+  // Once nothing holds it, the next removal finishes, and the record goes.
+  let git = (&Processes, program.as_path(), repo.root.as_path());
+  let mut cleanup = clean_up_recorded(&mut store, git, &run, None, now()).expect("cleared");
+  finish_removal(&mut store, git, (run.id(), now()), &mut cleanup, |_| {}).expect("recorded");
+  assert!(cleanup.kept_worktrees.is_empty(), "{cleanup:?}");
+  assert!(!own(&repo.root, run.id()).exists());
+  assert_eq!(store.not_removed, None);
 }
 
 #[test]
