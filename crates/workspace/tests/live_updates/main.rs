@@ -6,10 +6,12 @@
 //! *reconnecting*, *offline* and *not a member*, also as the desktop's servers keep it, and goes once the project is
 //! local. Without the minute's poll, a run's workflow status the server could not take goes with the minute's round,
 //! without *Check again*. The team's configuration comes with it ([`config`]), its admins publish it from here
-//! ([`publish`]), Share uploads it with its history and Make local keeps it ([`share`]).
+//! ([`publish`]), Share uploads it with its history and Make local keeps it ([`share`]). This computer's catalog is
+//! reported while the stream is open ([`catalog`]).
 //!
 //! `cargo test -p orchester-workspace --test live_updates live_updates_`
 
+mod catalog;
 mod config;
 mod desktop;
 mod here;
@@ -31,7 +33,7 @@ use std::{
 
 use desktop::Desktop;
 use orchester_api::{
-  ClaimTake, RunReport, SharedTask, TaskChanges, TaskPatch, Versions,
+  CatalogReport, ClaimTake, RunReport, SharedTask, TaskChanges, TaskPatch, Versions,
   client::{Client, ClientError, EventStream, PlainHttp, ServerAddress, StreamEnd},
 };
 use orchester_core::{
@@ -127,6 +129,10 @@ impl Source for Member {
 
   async fn versions(&self, resource: ResourceId, after: Option<VersionNumber>) -> Result<Versions, SharingError> {
     Ok(self.client.versions(&self.token, self.project, resource, after).await?)
+  }
+
+  async fn report_catalog(&self, report: CatalogReport) -> Result<(), SharingError> {
+    Ok(self.client.report_catalog(&self.token, self.project, &report).await?)
   }
 
   fn changed(&self) {}
@@ -407,6 +413,10 @@ impl Source for Unreachable {
   }
 
   async fn versions(&self, _: ResourceId, _: Option<VersionNumber>) -> Result<Versions, SharingError> {
+    Err(SharingError::Offline)
+  }
+
+  async fn report_catalog(&self, _: CatalogReport) -> Result<(), SharingError> {
     Err(SharingError::Offline)
   }
 

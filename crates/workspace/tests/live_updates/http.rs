@@ -96,3 +96,9 @@ pub fn respond(stream: &mut TcpStream, status: u16, body: &Value) {
 pub fn refusal(stream: &mut TcpStream, status: u16, error: &str) {
   respond(stream, status, &json!({ "error": error, "message": "Refused" }));
 }
+
+/// `204`: a success without a body.
+pub fn no_content(stream: &mut TcpStream) {
+  // A client that hung up learns nothing; the test reads what reached it.
+  let _ = stream.write_all(b"HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n");
+}

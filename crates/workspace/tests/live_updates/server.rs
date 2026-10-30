@@ -2,8 +2,8 @@
 //! tokens, and an event log its streams follow. It serves the snapshot to a stream without `Last-Event-ID` and the
 //! deltas after the cursor to one with it, live as they are appended; lists and reads tasks; publishes and serves
 //! resource versions ([`resources`]); and takes a task change, a claim and a run report, each appending its delta. Its
-//! admins publish the team's configuration ([`publishing`]). A member's session can be revoked, streams dropped or
-//! refused for a while, and every other request refused.
+//! admins publish the team's configuration ([`publishing`]). It keeps each catalog report as its JSON. A member's
+//! session can be revoked, streams dropped or refused for a while, and every other request refused.
 
 mod publishing;
 mod resources;
@@ -30,9 +30,9 @@ use orchester_core::{
     organization::{ChangeActor, Priority, WorkflowStatus},
   },
 };
-use serde_json::json;
+use serde_json::{Value, json};
 
-use crate::http::{Request, refusal, respond, sse};
+use crate::http::{Request, no_content, refusal, respond, sse};
 
 /// The first event's sequence: the project had a history before the test.
 const FIRST_EVENT: u64 = 100;
@@ -64,6 +64,8 @@ struct State {
   /// The `Last-Event-ID` of each stream opened, in order.
   connects: Vec<Option<u64>>,
   reads: Vec<TaskId>,
+  /// Each `PUT …/catalog` body, as it came.
+  catalogs: Vec<Value>,
   revoked: Vec<String>,
   /// Streams opened before this generation end.
   generation: u64,
@@ -110,6 +112,7 @@ impl TeamServer {
         events: Vec::new(),
         connects: Vec::new(),
         reads: Vec::new(),
+        catalogs: Vec::new(),
         revoked: Vec::new(),
         generation: 0,
         refuse_streams: 0,
@@ -149,6 +152,11 @@ impl TeamServer {
   /// The tasks read one by one so far.
   pub fn reads(&self) -> Vec<TaskId> {
     self.state().reads.clone()
+  }
+
+  /// The catalog reports taken so far, each as its JSON body.
+  pub fn catalogs(&self) -> Vec<Value> {
+    self.state().catalogs.clone()
   }
 
   /// The sequence of the last event; the cursor of a snapshot taken now.
@@ -339,6 +347,11 @@ fn answer(shared: &Shared, project: ProjectId, mut stream: TcpStream) {
     ("PATCH", ["tasks", task]) => change(shared, &user, task.parse().expect("a task id"), &request, &mut stream),
     ("POST", ["tasks", task, "claim"]) => claim(shared, &user, task.parse().expect("a task id"), &request, &mut stream),
     ("PUT", ["tasks", task, "run"]) => run(shared, &user, task.parse().expect("a task id"), &request, &mut stream),
+    ("PUT", ["catalog"]) => {
+      let report = serde_json::from_slice(request.bytes()).expect("a JSON report");
+      shared.state.lock().expect("state").catalogs.push(report);
+      no_content(&mut stream);
+    }
     ("POST", ["resources", ..]) | ("PUT", ["files", _]) if !admin => publishing::not_admin(&mut stream),
     ("POST", ["resources"]) => publishing::create(shared, &user, &request, &mut stream),
     ("POST", ["resources", "import"]) => publishing::import(shared, &user, &request, &mut stream),
