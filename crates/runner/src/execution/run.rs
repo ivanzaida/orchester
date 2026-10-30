@@ -326,8 +326,12 @@ impl RunTask {
     Ok(Some(limit.saturating_sub(active)))
   }
 
-  /// Tells every agent still counted for the run `stop`.
+  /// Tells every agent still counted for the run `stop`. A cancel, a pause or any other stop that ends the agents ends
+  /// their calls waiting for the person too: a pause lets a running tool finish first, and such a call would act.
   pub(super) fn stop_agents(&mut self, stop: Stop) {
+    if matches!(stop, Stop::Now(_) | Stop::AtApproval) {
+      self.browser.stop_person_waits(self.run.id());
+    }
     for active in self.agents.values_mut().filter(|active| !active.abandoned) {
       active.tell(stop);
     }

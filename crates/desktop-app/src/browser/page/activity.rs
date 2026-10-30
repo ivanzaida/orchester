@@ -1,8 +1,8 @@
 //! The line under the toolbar about the agent of the tab shown (`Activity` `WTzV9`): while it acts, a blue dot,
 //! *Builder is acting in this tab* and what it did last (*· typed 8 in Max attempts*), and at the line's end that the
-//! person's input makes it wait (`02 · Agent is acting` `UKAkY`); while the person's input holds it, an amber hand,
-//! *You're using this tab* and how long it waits (`02b · You use the tab` `k7xvx`). There is no take-over control:
-//! using the page is taking over.
+//! person's input makes it wait (`02 · Agent is acting` `UKAkY`); while the runner says it waits because the person
+//! uses the tab, an amber hand, *You're using this tab*, what it waits for and at the line's end how long it still does
+//! (`02b · You use the tab` `k7xvx`). There is no take-over control: using the page is taking over.
 
 use std::{sync::Arc, time::Instant};
 
@@ -38,7 +38,7 @@ pub fn line(ctx: &mut Ctx, showing: &Showing) -> Option<Element> {
   let view = showing.view.as_ref()?;
   let now = Instant::now();
   let agent = agent_name(ctx, tab);
-  if showing.marks.holds(&tab.id, now) {
+  if let Some(left) = showing.waits_left {
     return Some(frame(
       "using",
       icon(Icon::Hand, IconSize::Md, PaletteColor::Warning).into(),
@@ -46,7 +46,7 @@ pub fn line(ctx: &mut Ctx, showing: &Showing) -> Option<Element> {
         ctx.t("browser.activity.using"),
         ctx.t_args("browser.activity.waits", [("agent", agent.as_ref())]),
       ),
-      None,
+      Some(ctx.t_args("browser.activity.waitsLeft", [("seconds", left.to_string().as_str())])),
     ));
   }
   let acting = view

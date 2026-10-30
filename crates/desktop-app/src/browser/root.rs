@@ -20,6 +20,7 @@ use lurq::{
   core::{ElementRef, Signal},
   node::{Element, dimension::Dimension},
 };
+use orchester_core::time::Timestamp;
 use orchester_ipc::browser::{BrowserCommand, BrowserMode, BrowserTabId, Viewport};
 use parking_lot::Mutex;
 
@@ -161,6 +162,10 @@ impl Component for BrowserRoot {
       project.clone(),
       (self.failed.clone(), self.restarting.clone()),
     );
+    let waits_left = view
+      .as_ref()
+      .and_then(|view| view.waiting(view.shown()?))
+      .map(|waiting| model::seconds_left(waiting.until, Timestamp::now()));
     let showing = Showing {
       restarting: self.restarting.get().0.as_ref() == Some(&project),
       project: Arc::new(project.clone()),
@@ -171,6 +176,7 @@ impl Component for BrowserRoot {
       found,
       commands,
       marks,
+      waits_left,
       person: self.hooks(&project),
       address: self.address.clone(),
       page_text: self.page_text.clone(),
@@ -316,7 +322,8 @@ impl BrowserRoot {
     self.page_size.get()
   }
 
-  /// Ticks while a dot depends on the time: an agent acting, or the person's input holding an agent.
+  /// Ticks while what is shown depends on the time: an agent acting or waiting and the seconds it still waits, or the
+  /// person's recent input, which keeps the window from following an agent to its new tab.
   fn keep_ticking(&self, showing: &Showing, now: Instant) {
     let timed = showing
       .strip
@@ -325,7 +332,7 @@ impl BrowserRoot {
       || showing
         .marks
         .last_input()
-        .is_some_and(|at| now.saturating_duration_since(at) < model::PERSON_HOLD);
+        .is_some_and(|at| now.saturating_duration_since(at) < model::LEFT_ALONE_AFTER);
     if timed {
       self.interval.start();
     } else {

@@ -53,11 +53,13 @@ use tokio::{
 };
 
 use super::{
+  browser::StepBrowser,
   claude_approval::{Asked, AskedBy, PromptAnswer},
   orchester_tools::{Looked, ToolHost},
   question::AskedQuestion,
   relay_calls::Calls,
 };
+use crate::browser::PersonWait;
 
 /// How long a connection has to show the token.
 const HANDSHAKE: Duration = Duration::from_secs(10);
@@ -466,8 +468,10 @@ impl Relay {
   }
 
   /// The answer to a call of browser tool `name`: refused when the step is not offered the browser, the call is not
-  /// valid or acts on a tab that is not the run's; asked about first when the site it goes to or acts on asks, or it
-  /// runs a script, showing the site; `None` when the relay closed its connection while the call waited.
+  /// valid or acts on a tab that is not the run's; waiting while the person uses its tab; then asked about when the
+  /// site it goes to or acts on asks, or it runs a script, showing the site. The person's input and navigation start
+  /// the wait, so only the page a wait leaves is judged, and an approval holds only while the wait after it leaves the
+  /// call on the site it named. `None` when the relay closed its connection while the call waited.
   async fn browser_call(
     &self,
     name: &str,
@@ -485,16 +489,30 @@ impl Relay {
       Ok(call) => call,
       Err(error) => return Some(ToolResult::unavailable(&error.to_string())),
     };
-    let looked = match browser.look(&call).await {
-      Ok(looked) => looked,
-      Err(refused) => return Some(ToolResult::unavailable(&refused)),
-    };
-    if looked.asks
-      && let Some(denied) = self.ask_call((name, arguments), looked.target, lines).await?
-    {
-      return Some(denied);
+    let mut waited = PersonWait::NotHeld;
+    let mut approved = None;
+    loop {
+      waited = tokio::select! {
+        waited = browser.wait_for_person(&call, waited) => waited,
+        // The relay sends nothing while it waits; anything, or the end of the stream, ends the wait without acting.
+        _ = lines.next_line() => return None,
+      };
+      if waited.ends_the_call() {
+        break;
+      }
+      let looked = match browser.look(&call).await {
+        Ok(looked) => looked,
+        Err(refused) => return Some(StepBrowser::not_run(waited, &refused)),
+      };
+      if !looked.asks || approved.as_ref() == Some(&looked.target) {
+        break;
+      }
+      if let Some(denied) = self.ask_call((name, arguments), looked.target.clone(), lines).await? {
+        return Some(StepBrowser::not_run(waited, denied.text()));
+      }
+      approved = Some(looked.target);
     }
-    Some(browser.run(call).await.redacted(tools.secrets()))
+    Some(browser.run(call, waited).await.redacted(tools.secrets()))
   }
 
   /// Asks a person about the call of `name` with `arguments` that reached the runner without an approval, the request

@@ -1,10 +1,11 @@
 //! What the *Browser* window knows of one project's browser, from its runner's events: its tabs with their owners,
 //! the tab shown and the one shown last, the latest frame, what an agent did last on each tab (*Agent is acting*),
-//! the JavaScript dialogs waiting on the person's tabs and the `<select>` list the person opened.
+//! which tabs an agent waits on because the person uses them and until when, the JavaScript dialogs waiting on the
+//! person's tabs and the `<select>` list the person opened.
 
 use std::{collections::HashMap, sync::Arc, time::Instant};
 
-use orchester_core::id::RunId;
+use orchester_core::{id::RunId, time::Timestamp};
 use orchester_ipc::browser::{
   AgentAction, BrowserDialog, BrowserEvent, BrowserMode, BrowserState, BrowserTab, BrowserTabId, SelectList,
 };
@@ -17,6 +18,13 @@ pub struct AgentActing {
   pub run: RunId,
   pub action: AgentAction,
   pub at: Instant,
+}
+
+/// An agent of `run` waits on a tab because the person uses it, until `until` as the runner last said.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AgentWaiting {
+  pub run: RunId,
+  pub until: Timestamp,
 }
 
 /// A `<select>` list the person opened on a tab, which the window draws.
@@ -34,6 +42,7 @@ pub struct BrowserView {
   last_shown: Option<BrowserTabId>,
   frame: Option<Arc<RgbaFrame>>,
   acting: HashMap<BrowserTabId, AgentActing>,
+  waiting: HashMap<BrowserTabId, AgentWaiting>,
   dialogs: HashMap<BrowserTabId, BrowserDialog>,
   select: Option<OpenSelect>,
 }
@@ -46,6 +55,7 @@ impl BrowserView {
       last_shown: None,
       frame: None,
       acting: HashMap::new(),
+      waiting: HashMap::new(),
       dialogs: HashMap::new(),
       select: None,
     }
@@ -93,6 +103,11 @@ impl BrowserView {
     self.acting.values().max_by_key(|acting| acting.at)
   }
 
+  /// The agent waiting on `tab` because the person uses it.
+  pub fn waiting(&self, tab: &BrowserTabId) -> Option<&AgentWaiting> {
+    self.waiting.get(tab)
+  }
+
   /// The JavaScript dialog waiting on the person's `tab`.
   pub fn dialog(&self, tab: &BrowserTabId) -> Option<&BrowserDialog> {
     self.dialogs.get(tab)
@@ -111,6 +126,12 @@ impl BrowserView {
         let at = Instant::now();
         self.acting.insert(tab, AgentActing { run, action, at });
       }
+      BrowserEvent::AgentWaiting { run, tab, until } => {
+        self.waiting.insert(tab, AgentWaiting { run, until });
+      }
+      BrowserEvent::AgentWaitEnded { tab, .. } => {
+        self.waiting.remove(&tab);
+      }
       BrowserEvent::DialogOpened { tab, dialog } => {
         self.dialogs.insert(tab, dialog);
       }
@@ -125,6 +146,7 @@ impl BrowserView {
   fn changed(&mut self, state: BrowserState) {
     let open = |tab: &BrowserTabId| state.tabs.iter().any(|open| &open.id == tab);
     self.acting.retain(|tab, _| open(tab));
+    self.waiting.retain(|tab, _| open(tab));
     self.dialogs.retain(|tab, _| open(tab));
     if self.select.as_ref().is_some_and(|select| !open(&select.tab)) {
       self.select = None;

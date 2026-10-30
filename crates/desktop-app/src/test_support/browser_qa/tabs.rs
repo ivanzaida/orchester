@@ -1,7 +1,7 @@
 //! The tabs each QA state shows, after the board's frames: which runs own which pages, the tab shown, and what else
 //! the runner reports (an agent's action, a dialog, a `<select>` list).
 
-use orchester_core::id::RunId;
+use orchester_core::{id::RunId, time::Timestamp};
 use orchester_ipc::browser::{
   AgentAction, BrowserDialog, BrowserEvent, BrowserMode, BrowserState as Reported, BrowserTab, BrowserTabId,
   DialogKind, ElementBox, SelectId, SelectList, SelectOption, TabOwner,
@@ -68,6 +68,11 @@ pub const RETRY_POLICY: ElementBox = ElementBox {
   height: 34,
 };
 
+/// When an agent's wait ends if the person's last input is now, as the runner reports it.
+pub fn until_after_input() -> Timestamp {
+  Timestamp::from_unix_millis(Timestamp::now().unix_millis() + 10_000)
+}
+
 /// What a QA state reports.
 pub struct Scene {
   pub reported: Reported,
@@ -117,6 +122,15 @@ pub fn scene(state: BrowserState, runs: &[RunId]) -> Scene {
     BrowserState::Acting => (
       shown.clone(),
       vec![acting(shown, "typed 8 in Max attempts", Some(MAX_ATTEMPTS))],
+      8,
+    ),
+    BrowserState::Waiting => (
+      shown.clone(),
+      vec![BrowserEvent::AgentWaiting {
+        run: runs[0],
+        tab: shown,
+        until: until_after_input(),
+      }],
       8,
     ),
     BrowserState::Dialog => (yours.clone(), vec![confirm(yours)], 5),

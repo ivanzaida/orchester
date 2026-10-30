@@ -16,9 +16,15 @@ impl Scheduler {
   /// This scheduler's browser on the profile folder `profile`, before it is shared: what tests give it instead of
   /// the project's folder in the application data.
   #[must_use]
-  pub fn with_browser_profile(mut self, profile: PathBuf) -> Self {
+  pub fn with_browser_profile(self, profile: PathBuf) -> Self {
+    self.with_browser(ProjectBrowser::new(profile))
+  }
+
+  /// This scheduler with `browser`, before it is shared: what tests give it to drive the browser's clock.
+  #[must_use]
+  pub fn with_browser(mut self, browser: ProjectBrowser) -> Self {
     if let Some(inner) = Arc::get_mut(&mut self.inner) {
-      inner.browser = Arc::new(ProjectBrowser::new(profile));
+      inner.browser = Arc::new(browser);
     }
     self
   }

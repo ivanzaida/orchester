@@ -33,6 +33,11 @@ use crate::{
 
 /// A read-only profile on `provider` whose *Browser* is `access`, allowing `docs.example.invalid`.
 pub(super) fn browsing(provider: AgentProvider, access: BrowserAccess) -> TestProject {
+  project(&browsing_setup(provider, access))
+}
+
+/// What [`browsing`] sets up.
+pub(super) fn browsing_setup(provider: AgentProvider, access: BrowserAccess) -> Setup {
   let commands = match provider {
     AgentProvider::CodexCli => CommandPermission::AnyInWorktree,
     _ => CommandPermission::Allowed(AllowedCommands::default()),
@@ -43,11 +48,11 @@ pub(super) fn browsing(provider: AgentProvider, access: BrowserAccess) -> TestPr
     access,
     AllowedSites::new(vec![docs]).expect("sites"),
   ));
-  project(&Setup {
+  Setup {
     provider,
     permissions: Some(permissions),
     ..Setup::new("Use the browser tools.")
-  })
+  }
 }
 
 /// The run's browser calls, `<tool> <ok|error>[ +image]: <first line>`, in order.

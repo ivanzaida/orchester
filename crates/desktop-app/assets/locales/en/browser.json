@@ -53,6 +53,7 @@
       "hint": "Click or type here and it waits until you stop",
       "using": "You're using this tab",
       "waits": "· {{agent}} waits until 10 s after your last input",
+      "waitsLeft": "{{seconds}} s left",
       "someAgent": "An agent"
     },
     "dialog": {
