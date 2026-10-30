@@ -3,11 +3,12 @@
 //! 1 s and doubles to 60 s, with jitter, the connection monitor's [`Schedule`]. A stream that opened starts the waits
 //! over. `401` stops it signed out; `403` and `revoked` stop it and the list reads *not a member*. Each step says the
 //! project's [`SyncState`]: *live* once the stream opened, *reconnecting* or *offline* while it waits, *not a member*.
+//! While the stream is open, this computer's catalog is reported beside it ([`catalog`]).
 
 use std::{path::Path, time::Duration};
 
 use orchester_api::{
-  Event, SharedResource, SharedTask, Versions,
+  CatalogReport, Event, SharedResource, SharedTask, Versions,
   client::{EventStream, StreamEnd},
 };
 use orchester_core::{
@@ -19,6 +20,7 @@ use orchester_core::{
 use super::{
   SyncState,
   apply::{self, Applied, Pages},
+  catalog::{self, CATALOG_CHECK},
   config,
 };
 use crate::{
@@ -41,6 +43,9 @@ pub trait Source: Send + Sync {
     after: Option<VersionNumber>,
   ) -> impl Future<Output = Result<Versions, SharingError>> + Send;
 
+  /// Sends this computer's whole catalog for the project (`PUT …/catalog`).
+  fn report_catalog(&self, report: CatalogReport) -> impl Future<Output = Result<(), SharingError>> + Send;
+
   /// The cache took a change from the stream.
   fn changed(&self);
 
@@ -54,6 +59,11 @@ pub trait Clock: Send + Sync {
 
   /// A random share of the jitter, 0 to 1.
   fn jitter(&self) -> f64;
+
+  /// How often an open stream reads the catalog again to report a change ([`CATALOG_CHECK`]).
+  fn catalog_check(&self) -> Duration {
+    CATALOG_CHECK
+  }
 }
 
 /// Tokio's timer and a random jitter.
@@ -91,7 +101,7 @@ pub async fn follow(source: &impl Source, root: &Path, clock: &impl Clock) -> St
   // When the connects that failed in a row began; offline counts from it.
   let mut trouble_since = None;
   loop {
-    let (opened, ending) = connect(source, root).await;
+    let (opened, ending) = connect(source, root, clock).await;
     match ending {
       Ending::Stream(StreamEnd::Unauthorized) => return Stopped::SignedOut,
       Ending::Stream(end) if apply::ends_membership(&end) => {
@@ -119,8 +129,9 @@ pub async fn follow(source: &impl Source, root: &Path, clock: &impl Clock) -> St
   }
 }
 
-/// One connection from the cache's cursor, read until it ends: whether it opened, and how it ended.
-async fn connect(source: &impl Source, root: &Path) -> (bool, Ending) {
+/// One connection from the cache's cursor, read until it ends: whether it opened, and how it ended. While it is open,
+/// the catalog is reported on connect and after each change `clock`'s checks find.
+async fn connect(source: &impl Source, root: &Path, clock: &impl Clock) -> (bool, Ending) {
   let cursor = match blocking(root, apply::cursor).await {
     Ok(cursor) => cursor,
     Err(error) => return (false, Ending::Cache(error)),
@@ -128,7 +139,11 @@ async fn connect(source: &impl Source, root: &Path) -> (bool, Ending) {
   match source.open(cursor).await {
     Ok(mut stream) => {
       source.state(SyncState::Live);
-      (true, read(source, root, &mut stream).await)
+      let ending = tokio::select! {
+        ending = read(source, root, &mut stream) => ending,
+        never = catalog::keep_reported(source, root, clock.catalog_check()) => match never {},
+      };
+      (true, ending)
     }
     Err(end) => (false, Ending::Stream(end)),
   }
