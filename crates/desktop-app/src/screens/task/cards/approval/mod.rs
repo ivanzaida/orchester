@@ -166,9 +166,7 @@ impl Component for ApprovalView {
       vec![answers::answers(ctx, &answering)]
     };
     // A request that came to the person keeps what automation may do with its other answers.
-    let automation = came
-      .is_none()
-      .then(|| answers::automation(ctx, &id, shown.as_ref()));
+    let automation = came.is_none().then(|| answers::automation(ctx, &id, shown.as_ref()));
     let padding = Padding::symmetric(SpacingSize::Lg, ExtraSpacing::Inset.role());
     // In the panel its parts are 10 apart, as the item's own (`YDJsC`), and so are a request's that came to the
     // person (`vO7CW`).

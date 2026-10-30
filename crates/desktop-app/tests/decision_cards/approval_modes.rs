@@ -55,10 +55,7 @@ fn card_approval_came_to_you_names_why_and_approves_with_approve() {
   for (task, (title, glyph), reason) in [
     (
       "Add retry to webhook sender",
-      (
-        "Builder asks to edit a file outside the worktree",
-        Icon::FolderLock,
-      ),
+      ("Builder asks to edit a file outside the worktree", Icon::FolderLock),
       "Came to you: C:\\Users\\dana\\.cargo\\config.toml is outside the worktree, its Sources and Builder's temp \
        folders. Autopilot never approves these.",
     ),
@@ -122,7 +119,15 @@ fn card_approval_came_to_you_keeps_its_other_answers_under_more_answers() {
   let (mut window, ..) = opened_in(SCENARIO, "Publish the retry branch", "cards-approval-");
   let card = came_card(&mut window);
   assert_eq!(text(&mut window, &format!("{card}-action")), "git push origin HEAD");
-  for part in ["-explain", "-subject", "-value", "-facts", "-deny-tells", "-wider", "-deny-message"] {
+  for part in [
+    "-explain",
+    "-subject",
+    "-value",
+    "-facts",
+    "-deny-tells",
+    "-wider",
+    "-deny-message",
+  ] {
     assert!(
       window.tree.get_element_by_id(&format!("{card}{part}")).is_none(),
       "{part} is not on the compact card"

@@ -196,7 +196,11 @@ fn came_answers(ctx: &mut Ctx, answering: &Answering<'_>) -> Element {
       (ButtonKind::Primary, Icon::Check, "cards.approval.approve"),
     )
     .element_ref(answering.once.clone());
-  let deny = answering.button(ctx, Given::Deny, (ButtonKind::Secondary, Icon::X, "cards.approval.deny"));
+  let deny = answering.button(
+    ctx,
+    Given::Deny,
+    (ButtonKind::Secondary, Icon::X, "cards.approval.deny"),
+  );
   let open = answering.more.get();
   let more = answering.more.clone();
   let toggle = ActionButton::new(
