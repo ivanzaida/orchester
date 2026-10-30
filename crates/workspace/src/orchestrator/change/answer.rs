@@ -111,7 +111,9 @@ pub(super) fn message_change(root: &Path, sending: Sending) -> Result<(ProposedC
   let then = match prepared.mode {
     ComposerMode::PlanChanges { .. } => return Err(plan_person_only()),
     ref mode if mode.then().is_none() => {
-      return Err(outgoing_refusal(OutgoingError::Closed(prepared.conversation.state)));
+      return Err(outgoing_refusal(OutgoingError::Closed(
+        prepared.conversation.closed_reason(),
+      )));
     }
     ref mode => moves(mode),
   };

@@ -74,6 +74,9 @@ pub(super) fn set_up(served: &mut Served, repo: &Path, fake: &Path) {
     &json!({ "name": "Kontur", "folder": repo.display().to_string() }),
   );
   assert_eq!(added["project"]["key"], "KON");
+  // The runs start whatever this computer's disk has free: the guard keeps 1 GB here instead of 50.
+  let kept = served.ok("set_keep_free", &json!({ "project": "Kontur", "gigabytes": 1 }));
+  assert_eq!(kept["disk_guard"]["keep_free_gb"], 1);
   let fake_codex =
     json!({ "project": "Kontur", "kind": "codex", "name": "Codex · Kontur", "program": fake.display().to_string() });
   let refused = served.refused("add_cli_connection", &fake_codex);

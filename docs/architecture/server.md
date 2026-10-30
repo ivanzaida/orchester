@@ -2183,11 +2183,14 @@ each server once and links each project (rows 49–50, plan phase N1) and gets S
   round-trips by hash.
 - [x] Row 75 contract: `orchester-api`'s `catalog.rs` and `client/catalog.rs` (ORC-451); `crates/api/tests/resources`
   filter `catalog`.
+- [x] Row 75 desktop report (ORC-452): core's `sharing::catalog` builds it from the local connections and MCP servers
+  (agent connections only, at most 256 references and 512 ids per role); the workspace's `sharing/sync/catalog.rs`
+  sends it while the project's stream is open, on each connect and then every minute when it changed;
+  `crates/workspace/tests/live_updates` filter `catalog`. *What linking sends* and *What joining sends* name it.
 - [ ] Row 75: core's `NetworkAccess::Hosts` with its order and *widens*, each connection's enforcement or refusal at
-  preflight; the catalog report built by one core function from the local connections and MCP servers; the server's
-  `catalog_*` tables, `PUT …/catalog` and the two reads (`GET …/references`, `GET …/models`); the desktop reports
-  after join, connect and changes. A loopback test: two desktops report, the reads list the union with no device or
-  person, and a revoked device's entries leave.
+  preflight; the server's `catalog_*` tables, `PUT …/catalog` and the two reads (`GET …/references`,
+  `GET …/models`). A loopback test: two desktops report, the reads list the union with no device or person, and a
+  revoked device's entries leave.
 
 **ORC-78 · Modules in shared projects** (rows 66–71). Built 2026-10-22.
 - [x] Server: schema 7 (`modules`, `module_changes`, `tasks.module`, `change_keys`, the `modules` event kind with the

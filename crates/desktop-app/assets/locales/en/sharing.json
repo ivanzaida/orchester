@@ -173,9 +173,9 @@
       "sends": {
         "title": "What linking sends",
         "shared": "Shared with members",
-        "sharedValue": "Tasks (title, brief, criteria, organization, status), who holds each, short run progress, published configuration",
+        "sharedValue": "Tasks (title, brief, criteria, organization, status), who holds each, short run progress, published configuration, and the catalog: your agent connections and MCP servers by kind, name and role, and the model ids they list",
         "stays": "Stays on each computer",
-        "staysValue": "Runs, worktrees, conversations, memory, secrets, connections, accounts",
+        "staysValue": "Runs, worktrees, conversations, memory, secrets, accounts, and every setting, program and path of your connections and MCP servers",
         "never": "The server never receives transcripts, prompts, diffs, file or branch names, code or secrets."
       },
       "unconnected": {
@@ -428,7 +428,7 @@
       "note": "Similar titles are only a hint; nothing is merged. Status, priority, tags and links go with each task: tags match {{key}}'s tags by name (new names become {{key}} tags), and a link to a task that stays here is dropped. Runs, conversations and memory stay attached, and run branches keep their names.",
       "sends": {
         "title": "What joining sends",
-        "sharedValue": "The tasks you keep ticked: title, brief, criteria, pipeline name, limits, status"
+        "sharedValue": "The tasks you keep ticked: title, brief, criteria, pipeline name, limits, status; and the catalog: your agent connections and MCP servers by kind, name and role, and the model ids they list"
       },
       "failed": "Couldn't join {{key}}",
       "failedNothing": "Nothing was uploaded and {{project}} is still local. Your ticks are kept; try again when {{server}} can be reached.",

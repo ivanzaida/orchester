@@ -19,6 +19,9 @@ test-support = ["client", "identity"]
 # Orchester Cloud's identity tokens and signed key sets (`identity` module): signing for the cloud, verifying for team
 # servers.
 identity = ["dep:base64", "dep:ring"]
+# The check of a release file's Ed25519 signature against the accepted release keys (`releases::AcceptedReleaseKeys`):
+# for the app before it runs an update, and for the cloud when CI finalizes an upload.
+release-signature = ["dep:ring"]
 
 [dependencies]
 orchester-core.workspace = true
@@ -62,3 +65,7 @@ required-features = ["client"]
 [[test]]
 name = "events_client"
 required-features = ["client"]
+
+[[test]]
+name = "releases"
+required-features = ["client", "release-signature"]

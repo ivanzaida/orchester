@@ -1,7 +1,8 @@
-//! The chips of New module and Edit module (`Properties` `MyYPA` in `08`, `eJj5w` in `09`), the task form's property
-//! chips (`task_form::chips`), 8 apart and 4 under the description: State, set, for a module that exists, opening a
-//! menu of Open and Closed; Start date and Target date, each saying its name and its day (`calendar`,
-//! `calendar-check`), opening the date picker under it with the other date ruling its range and tinted on it.
+//! The chips of New module and Edit module (`Properties` `MyYPA` in `08`, `eJj5w` in `09`, `J0390O` in `eyrnI`), the
+//! task form's property chips (`task_form::chips`), 8 apart and 4 under the description: State, set, for a module that
+//! exists, opening a menu of Open and Closed; Start date and Target date, each saying its name and its day
+//! (`calendar`, `calendar-check`), opening the date picker under it with the other date ruling its range and tinted on
+//! it; and Base branch after them (`super::form_base`).
 
 use std::sync::Arc;
 
@@ -16,6 +17,7 @@ use orchester_core::{module::ModuleState, time::Timestamp, usage::local_date};
 
 use super::{
   form::{Day, Fields, FormProps, StatePick},
+  form_base::{self, BaseChip},
   words,
 };
 use crate::{
@@ -40,6 +42,7 @@ pub struct Chips {
   state: ChipState,
   start: ChipState,
   target: ChipState,
+  base: BaseChip,
 }
 
 impl Chips {
@@ -48,6 +51,7 @@ impl Chips {
       state: ChipState::new(ctx),
       start: ChipState::new(ctx),
       target: ChipState::new(ctx),
+      base: BaseChip::new(ctx),
     }
   }
 }
@@ -84,6 +88,7 @@ pub fn row(ctx: &mut Ctx, props: &FormProps, fields: &Fields, chips: &Chips) -> 
     ),
     &chips.target,
   ));
+  row.push(form_base::chip(ctx, props, &fields.base, &chips.base));
   Column::new()
     .id("module-form-properties")
     .width(Dimension::Pct(100.0))

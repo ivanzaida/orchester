@@ -1,10 +1,12 @@
 //! Modules of a project's tasks (ORC-48, `orchester_core::module`): the Modules list with each module's progress, a
 //! module's page with its tasks and its burndown ([`burndown`]), what a module form and the tools give
-//! ([`form::ModuleForm`]), the unit work is counted in ([`measure`]), and the Tasks list's module filter
-//! ([`ModuleFilter`]). Modules are changed through the project's `crate::tasks::writer::TaskWriter`; a shared
-//! project's on its server, and the burndown reads the moves the server kept ([`data`]). A module's page changes it
-//! over what it last wrote until it reads the module again ([`last_write`]).
+//! ([`form::ModuleForm`]), a module's base branch ([`base`]), the unit work is counted in ([`measure`]), and the Tasks
+//! list's module filter ([`ModuleFilter`]). Modules are changed through the project's
+//! `crate::tasks::writer::TaskWriter`; a shared project's on its server, and the burndown reads the moves the server
+//! kept ([`data`]). A module's page changes it over what it last wrote until it reads the module again
+//! ([`last_write`]).
 
+pub mod base;
 pub mod burndown;
 pub mod data;
 pub mod form;

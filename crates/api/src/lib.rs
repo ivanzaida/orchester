@@ -1,5 +1,6 @@
 //! The shared server's and Orchester Cloud's versioned JSON contract, with the `client` feature the HTTP client the
-//! desktop uses, and with the `identity` feature the cloud's identity tokens and key sets and its two-factor codes.
+//! desktop uses, with the `identity` feature the cloud's identity tokens and key sets and its two-factor codes, and
+//! with the `release-signature` feature the check of a release file's signature.
 
 mod accounts;
 mod catalog;
@@ -16,6 +17,7 @@ mod invites;
 mod joins;
 mod modules;
 mod projects;
+pub mod releases;
 mod resources;
 mod server_admin;
 pub mod sse;

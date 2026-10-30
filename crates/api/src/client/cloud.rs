@@ -118,16 +118,37 @@ impl CloudClient {
       .map(|answer| answer.server)
   }
 
-  fn json<T: serde::Serialize>(&self, method: Method, path: &str, body: &T) -> Result<RequestBuilder, ClientError> {
+  pub(super) fn json<T: serde::Serialize>(
+    &self,
+    method: Method,
+    path: &str,
+    body: &T,
+  ) -> Result<RequestBuilder, ClientError> {
     // Serializing the contract's own types fails only for a map with non-string keys, which it has not.
     let bytes = serde_json::to_vec(body).map_err(|_| ClientError::Setup)?;
     Ok(
       self
-        .http
-        .request(method, self.address.endpoint(path)?)
+        .request(method, path)?
         .header(CONTENT_TYPE, "application/json")
         .body(bytes),
     )
+  }
+
+  /// A request to `path` in the cloud's API.
+  pub(super) fn request(&self, method: Method, path: &str) -> Result<RequestBuilder, ClientError> {
+    Ok(self.http.request(method, self.address.endpoint(path)?))
+  }
+
+  /// A request to `path` in the cloud's API with the query `pairs`.
+  pub(super) fn request_with_query<'a>(
+    &self,
+    method: Method,
+    path: &str,
+    pairs: impl IntoIterator<Item = (&'a str, String)>,
+  ) -> Result<RequestBuilder, ClientError> {
+    let mut url = self.address.endpoint(path)?;
+    url.query_pairs_mut().extend_pairs(pairs);
+    Ok(self.http.request(method, url))
   }
 
   /// `POST /identity-tokens`: a token to join the team server `audience`, valid five minutes, for the signed-in cloud
@@ -183,12 +204,12 @@ impl CloudClient {
 }
 
 /// Sends `request` whose success has no body (`204`), and reads the cloud's refusal.
-async fn send(request: RequestBuilder) -> Result<(), ClientError> {
+pub(super) async fn send(request: RequestBuilder) -> Result<(), ClientError> {
   answered(request).await.map(drop)
 }
 
 /// Sends `request` and reads the cloud's JSON answer, or its refusal.
-async fn call<T: DeserializeOwned>(request: RequestBuilder) -> Result<T, ClientError> {
+pub(super) async fn call<T: DeserializeOwned>(request: RequestBuilder) -> Result<T, ClientError> {
   read(answered(request).await?).await
 }
 
@@ -201,7 +222,7 @@ async fn read<T: DeserializeOwned>(response: reqwest::Response) -> Result<T, Cli
 }
 
 /// Sends `request`: the response of a success, or the error of a redirect, a refusal or a failed transport.
-async fn answered(request: RequestBuilder) -> Result<reqwest::Response, ClientError> {
+pub(super) async fn answered(request: RequestBuilder) -> Result<reqwest::Response, ClientError> {
   let response = request.send().await.map_err(|error| ClientError::transport(&error))?;
   let status = response.status();
   if status.is_redirection() {

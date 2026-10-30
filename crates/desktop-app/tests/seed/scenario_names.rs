@@ -33,6 +33,7 @@ fn seed_names_every_scenario_once() {
       "deliverables",
       "delivery",
       "delivery-blocked",
+      "delivery-lanes",
       "delivery-empty",
       "overview-quiet",
       "overview-states",
@@ -65,6 +66,7 @@ fn seed_names_every_scenario_once() {
       "modules",
       "modules-short",
       "modules-none",
+      "modules-base-branch",
       "loading-states"
     ]
   );

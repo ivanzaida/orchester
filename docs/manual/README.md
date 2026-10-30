@@ -67,6 +67,8 @@ widening calls; **AA** = needs *Let automation answer approvals*; **WC** = needs
 | `get_project` | RO | A project's setup |
 | `set_project_environment` | AP | Environment variables for agents and command tools |
 | `set_repository_agent_files` | AP to turn on | Whether agents load `AGENTS.md`/`CLAUDE.md` |
+| `get_storage` | RO | The disk guard and, while it holds, what could be cleaned |
+| `set_keep_free` | | The free space the disk guard keeps |
 | `list_connections` | RO | Agent connections, GitHub, MCP servers |
 | `add_cli_connection` | AP for unusual programs / API providers | Add a Claude Code or Codex connection |
 | `set_api_provider` | AP for new hosts/keys | Run a CLI connection on an API provider, or back on its sign-in |

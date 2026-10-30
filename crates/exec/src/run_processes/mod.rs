@@ -164,6 +164,31 @@ impl RunProcesses {
     Ok(pids)
   }
 
+  /// Stops what of the run created at `run_created` still runs from `folder`, its worktree, each process with its tree
+  /// as `stop_run_process` does: a QA copy or a build of the run holds files there that cannot be deleted while it
+  /// runs. Each stop is logged; processes that cannot be listed are logged and left as they are, for the deletion to
+  /// say what holds the folder.
+  pub fn stop_in(folder: &Path, run_created: Timestamp) {
+    let pids = Self::new(folder, run_created)
+      .map_err(|error| error.to_string())
+      .and_then(|processes| Ok((processes.pids().map_err(|error| error.to_string())?, processes)));
+    let (pids, processes) = match pids {
+      Ok(found) => found,
+      Err(error) => {
+        tracing::warn!(folder = %folder.display(), %error, "cannot list the processes running from a worktree");
+        return;
+      }
+    };
+    for pid in pids {
+      match processes.stop(pid) {
+        Ok(report) => tracing::info!(folder = %folder.display(), %report, "stopped a process running from a worktree"),
+        Err(error) => {
+          tracing::warn!(folder = %folder.display(), %error, "cannot stop a process running from a worktree");
+        }
+      }
+    }
+  }
+
   fn list(&self) -> Result<String, ProcessError> {
     let mut listed = Vec::new();
     for entry in platform::snapshot()? {

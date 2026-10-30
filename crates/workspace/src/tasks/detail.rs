@@ -116,6 +116,9 @@ pub struct RunView {
   /// When its own worktree was removed, if Orchester removed it: an interrupted run then can never
   /// continue (ORC-63).
   pub worktree_removed: Option<Timestamp>,
+  /// What that removal left on disk, and why, while it is there (ORC-418): its worktree is then not removed. Read
+  /// where the task page loads the run (`TaskDetail::load_in`); `None` elsewhere.
+  pub worktree_not_removed: Option<orchester_core::integration::NotRemoved>,
   /// Why the runner failed, for a run it interrupted so and recorded why (ORC-75).
   pub runner_failure: Option<RunnerFailure>,
   /// What its step executions left for the steps after them.
@@ -393,7 +396,10 @@ impl TaskDetail {
       None => super::first_agent::first_agent(&db, &task)?,
       Some(_) => None,
     };
-    let run = latest.map(|run| run_view(&db, run)).transpose()?;
+    let mut run = latest.map(|run| run_view(&db, run)).transpose()?;
+    if let Some(view) = &mut run {
+      view.worktree_not_removed = super::worktree_left::not_removed(&db, repo_root, view.id())?;
+    }
     let result = run
       .as_ref()
       .filter(|view| *view.run.status() == RunStatus::Succeeded)
@@ -525,6 +531,7 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
     saved_at_pause,
     finished_at,
     worktree_removed,
+    worktree_not_removed: None,
     runner_failure: history::runner_failure(db, &run)?,
     pipeline,
     version: pinned.number,

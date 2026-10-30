@@ -1,9 +1,9 @@
 use orchester_core::workspaces::{DiskUsage, DiskVerdict, GIGABYTE, KeepFree, KeepFreeError};
 
 #[test]
-fn disk_guard_keeps_150_gb_free_by_default() {
-  assert_eq!(KeepFree::default().gigabytes(), 150);
-  assert_eq!(KeepFree::default().bytes(), 150 * GIGABYTE);
+fn disk_guard_keeps_50_gb_free_by_default() {
+  assert_eq!(KeepFree::default().gigabytes(), 50);
+  assert_eq!(KeepFree::default().bytes(), 50 * GIGABYTE);
 }
 
 #[test]

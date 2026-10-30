@@ -1,5 +1,5 @@
-//! Warm workspaces (ORC-114): borrowing and giving back through the project database, waits, stranded leftovers and
-//! the workspace settings.
+//! Warm workspaces (ORC-114): borrowing and giving back through the project database, waits, stranded leftovers,
+//! the workspace settings and the free space the disk guard keeps (ORC-422).
 
 mod support;
 
@@ -7,15 +7,16 @@ use std::num::NonZeroU32;
 
 use orchester_core::{
   run::BranchName,
-  store::{RunStore, WorkspaceStore},
+  store::{RunStore, SettingsStore, WorkspaceStore},
   workspaces::{
     Borrow, Holder, KeepFree, Stranded, WaitReason, WarmChoice, WarmFolder, WarmPattern, WarmUpCommand, Warmth,
     WorkspaceNumber, WorkspaceSettings,
   },
 };
 use orchester_store::ProjectDb;
+use rusqlite::Connection;
 
-use self::support::{at, started_run};
+use self::support::{at, copied_at_version, started_run};
 
 fn number(n: u32) -> WorkspaceNumber {
   WorkspaceNumber::new(n).expect("above zero")
@@ -137,7 +138,7 @@ fn workspaces_a_reserved_workspace_is_not_borrowed_and_keeps_its_use_and_warmth_
 }
 
 #[test]
-fn workspaces_settings_round_trip_and_default_to_150_gb() {
+fn workspaces_settings_round_trip() {
   let (repo, mut db, _run, _execution) = started_run();
   assert_eq!(db.workspace_settings().expect("read"), WorkspaceSettings::default());
   assert!(
@@ -146,7 +147,6 @@ fn workspaces_settings_round_trip_and_default_to_150_gb() {
   );
   let settings = WorkspaceSettings {
     enabled: true,
-    keep_free: KeepFree::from_gigabytes(200).expect("200 GB"),
     warm_up: Some(WarmUpCommand::new("cargo build --tests").expect("a command")),
     folders: vec![
       WarmFolder::new(WarmPattern::new("target").expect("a pattern"), WarmChoice::Keep),
@@ -160,4 +160,56 @@ fn workspaces_settings_round_trip_and_default_to_150_gb() {
   drop(db);
   let reopened = ProjectDb::open(repo.path()).expect("open");
   assert_eq!(reopened.workspace_settings().expect("read"), settings);
+}
+
+#[test]
+fn workspaces_keep_free_is_a_setting_of_its_own_and_defaults_to_50_gb() {
+  let (repo, mut db, _run, _execution) = started_run();
+  assert_eq!(db.keep_free().expect("read"), KeepFree::DEFAULT);
+  assert_eq!(KeepFree::DEFAULT.gigabytes(), 50);
+  let keep = KeepFree::from_gigabytes(200).expect("200 GB");
+  db.save_keep_free(keep).expect("save");
+  db.save_workspace_settings(&WorkspaceSettings {
+    enabled: true,
+    ..WorkspaceSettings::default()
+  })
+  .expect("workspaces on");
+  drop(db);
+  let reopened = ProjectDb::open(repo.path()).expect("open");
+  assert_eq!(
+    reopened.keep_free().expect("read"),
+    keep,
+    "the workspaces switch leaves it"
+  );
+}
+
+#[test]
+fn workspaces_migration_keeps_the_free_space_only_a_project_with_workspaces_on_kept() {
+  for (enabled, expected) in [
+    (true, KeepFree::from_gigabytes(200).expect("200 GB")),
+    (false, KeepFree::DEFAULT),
+  ] {
+    let (current, db, _run, _execution) = started_run();
+    drop(db);
+    let database = current.path().join(".orchester").join("orchester.db");
+    let latest: u32 = Connection::open(&database)
+      .expect("open")
+      .pragma_query_value(None, "user_version", |row| row.get(0))
+      .expect("user_version");
+    let old = copied_at_version(&database, latest - 1);
+    Connection::open(old.path().join(".orchester").join("orchester.db"))
+      .expect("open")
+      .execute(
+        "INSERT INTO workspace_settings (id, enabled, keep_free_gb) VALUES (1, ?1, 200)",
+        [enabled],
+      )
+      .expect("the settings of before");
+    let upgraded = ProjectDb::open(old.path()).expect("migrate");
+    assert_eq!(
+      upgraded.keep_free().expect("read"),
+      expected,
+      "workspaces on: {enabled}"
+    );
+    assert_eq!(upgraded.workspace_settings().expect("read").enabled, enabled);
+  }
 }

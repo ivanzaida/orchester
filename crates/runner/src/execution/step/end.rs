@@ -137,6 +137,11 @@ impl RunTask {
     self.note_cli_too_old(execution, active, &finished.outcome)?;
     let asked = finished.closed_after_result && output.outcome == Some(StepOutcome::Question);
     let failure = output.failure(finished.outcome.is_success() || asked);
+    // Nothing fails for space: a turn that broke while the disk is low stays open, leaves no output yet, and goes on
+    // once there is room. The agent's own `failed` or `unverified` verdict is kept: it decides on the work.
+    if failure == Some(StepFailure::AgentFailed) && self.out_of_space()? {
+      return self.save(execution, active, "saved for low disk space");
+    }
     if finished.outcome.is_success() || asked {
       self.acknowledge(execution, &active.invocation, &output)?;
     }
