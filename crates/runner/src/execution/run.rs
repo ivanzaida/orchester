@@ -161,7 +161,7 @@ impl RunTask {
       relay: context.relay,
       board: context.board,
       qa: context.qa,
-      // Every step starts only once the guard looked (`held_back`): the first look while agents work is one interval on.
+      // Every step starts only once the guard looked (`held_back`); the first look while agents work is an interval on.
       next_disk_check: Instant::now() + context.disks.every,
       disks: context.disks,
       ended_since_disk_look: false,
