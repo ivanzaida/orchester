@@ -315,7 +315,10 @@ fn run_base_resolution_each_run_lands_by_where_its_base_came_from() {
     .run_base_notices(working.id())
     .expect("notices");
   assert!(!notices.is_empty(), "the working run is told staging moved");
-  assert!(notices.iter().all(|notice| notice.branch == branch("staging")), "{notices:?}");
+  assert!(
+    notices.iter().all(|notice| notice.branch == branch("staging")),
+    "{notices:?}"
+  );
 }
 
 #[test]

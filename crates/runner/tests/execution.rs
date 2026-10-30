@@ -306,7 +306,11 @@ async fn run_base_resolution_run_again_resolves_the_base_again() {
   assert_eq!(next.base().as_str(), git(root, &["rev-parse", "staging"]));
   let before = db.run(first).expect("read").expect("run");
   assert_eq!(before.base_branch().map(BranchName::as_str), Some("main"));
-  assert_eq!(before.base_source(), RunBaseSource::CheckedOut, "the run before keeps its base");
+  assert_eq!(
+    before.base_source(),
+    RunBaseSource::CheckedOut,
+    "the run before keeps its base"
+  );
   wait_for(root, &mut events, again, |run| run.status().is_terminal()).await;
 }
 
