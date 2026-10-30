@@ -170,7 +170,7 @@ impl SkillsScreen {
       Panel::Import => return ctx.mount_keyed::<repository::Import>("skills-import", props),
       Panel::Edit(id) => match props.data.listed.entry(id).cloned() {
         Some(entry) => Some(entry),
-        None if pending => return loading("skill-loading", &ctx.t("skills.reading")).into(),
+        None if pending => return library::reading(ctx),
         None => {
           return crate::ui::notice::Notice::new(
             "skill-missing",
@@ -238,7 +238,7 @@ impl SkillsScreen {
       move || revision.update(|r| *r += 1),
     ) {
       Some(failure) => hub::list_body("skills-failed", failure.page(ctx)),
-      None => loading("skills-loading", &ctx.t("skills.reading")).into(),
+      None => library::reading(ctx),
     }
   }
 }

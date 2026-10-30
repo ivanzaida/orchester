@@ -5,6 +5,7 @@
 //! hub at their tab. Each tab's screen draws the hub around its body with [`page`], so its actions and save state
 //! stay its own.
 
+pub(crate) mod bones;
 pub(crate) mod discard;
 pub(crate) mod draft_bar;
 pub(crate) mod import_detail;

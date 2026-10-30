@@ -33,10 +33,10 @@ use crate::{
 };
 
 /// The step's room (`GI561`), the account's (`VJWOi`) and the age's (`QMEnN`); a step's dash (`C4rq2O`).
-const STEP_WIDTH: f32 = 150.0;
-const ACCOUNT_WIDTH: f32 = 196.0;
-const AGE_WIDTH: f32 = 30.0;
-const DASH: (f32, f32) = (10.0, 4.0);
+pub(super) const STEP_WIDTH: f32 = 150.0;
+pub(super) const ACCOUNT_WIDTH: f32 = 196.0;
+pub(super) const AGE_WIDTH: f32 = 30.0;
+pub(super) const DASH: (f32, f32) = (10.0, 4.0);
 
 /// The section; `slots` is what the runner reported in use of its agent slots, when it did.
 pub(super) fn at_work(

@@ -245,6 +245,7 @@ fn cached<B: ResourceBody>(
     hash: ContentHash::new(HASH).map_err(invalid)?,
     references: Vec::new(),
     local_body: body,
+    waits_here: false,
   })
 }
 

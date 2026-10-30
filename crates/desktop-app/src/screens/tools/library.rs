@@ -3,8 +3,9 @@
 //! a command tool is (06b). In a shared project the line over the list says it is the team's, and each row its
 //! publisher (`Shared configuration · redesign`, 01 `cHvkL`).
 use lurq::{
-  app::ctx::Ctx,
-  components::Column,
+  app::{ctx::Ctx, theme::SpacingSize},
+  components::{Column, Row},
+  layout::Alignment,
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{id::ProjectId, resource::ToolAction};
@@ -20,15 +21,16 @@ use crate::{
   project::ShownProject,
   routes::{ProjectPage, Route, ToolTab},
   screens::hub::{
-    self,
+    self, bones,
     parts::{Entry, Tone, boxed, group, head, note, quiet, status},
     team,
   },
-  theme::HubSpacing,
+  theme::{HubSpacing, HubText},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::Icon,
     pressable::Press,
+    skeleton::{self, Skeleton, fading},
   },
 };
 
@@ -72,6 +74,47 @@ pub(super) fn list(ctx: &mut Ctx, project: &ShownProject, listed: &ProjectTools)
     .child(ownership)
     .child(note("tools-other-kinds", Icon::Lock, &ctx.t("tools.otherKinds")));
   hub::list_body("tools-list-page", pane)
+}
+
+/// Each tool's bones while they are read: its name, its command line, its use and its readiness.
+const READING: [(f32, f32, f32, f32); 2] = [(74.0, 230.0, 32.0, 86.0), (108.0, 260.0, 28.0, 120.0)];
+
+/// The list while the tools are read (`07 Agents · Tools · loading` `Z1ph6`): the Tools heading and both notes real,
+/// the count and each tool's kind mark, name, command line, use and readiness bones, the lower rows fading. *Reading
+/// the tools…* (`tools.reading`) names it.
+pub(super) fn reading(ctx: &mut Ctx, project: &ShownProject) -> Element {
+  let rows: Vec<Element> = fading(
+    READING
+      .iter()
+      .map(|(name, line, uses, state)| {
+        let end = Row::new()
+          .spacing(SpacingSize::Sm)
+          .align_items(Alignment::Center)
+          .child(skeleton::line(ctx, HubText::Hint.role(), *uses))
+          .child(bones::status(ctx, *state));
+        bones::entry(ctx, Some(bones::tile().into()), (*name, *line), vec![end.into()])
+      })
+      .collect(),
+  )
+  .into_iter()
+  .map(Element::from)
+  .collect();
+  let pane = Column::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(HubSpacing::Sections.role())
+    .child(group(
+      "tools-reading",
+      bones::head(ctx, "tools-reading", &ctx.t("hub.tabs.tools"), Some(14.0)),
+      boxed("tools-reading-rows", rows),
+    ))
+    .child(note(
+      "tools-ownership",
+      Icon::Info,
+      &ctx.t_args("tools.ownership", [("project", project.open.project.name().as_str())]),
+    ))
+    .child(note("tools-other-kinds", Icon::Lock, &ctx.t("tools.otherKinds")));
+  let body = Skeleton::new("tools-loading", ctx.t("tools.reading")).show(ctx, pane);
+  hub::list_body("tools-reading-list", body)
 }
 
 fn row(

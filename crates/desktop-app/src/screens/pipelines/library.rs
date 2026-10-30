@@ -2,8 +2,14 @@
 //! pipeline*, the pipelines in the groups Published and Draft only, how many there are and how versions work; with
 //! none yet, the two ways to start one.
 use lurq::{
-  app::{component::Component, ctx::Ctx, theme::PaletteColor},
+  app::{
+    component::Component,
+    ctx::Ctx,
+    theme::{PaletteColor, SpacingSize},
+  },
+  components::Column,
   core::Signal,
+  layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::id::ProjectId;
@@ -14,19 +20,24 @@ use orchester_workspace::{
   tasks::outside::Outside,
 };
 
-use super::{library_row::RowProps, parts};
+use super::{
+  library_row::{RowProps, STATE_WIDTH},
+  parts,
+};
 use crate::{
   navigation::Navigation,
   project::ShownProject,
   routes::{ImportTab, ProjectPage, Route},
   screens::hub::team,
-  theme::{ExtraSpacing, IconSize},
+  services::Services,
+  theme::{ExtraSpacing, GroupText, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
     message::message_text,
     row_group::{GroupRow, RowGroup, note},
-    state::{load_error, loading},
+    skeleton::{self, BoneRow, Skeleton, Words, fading},
+    state::load_error,
   },
 };
 
@@ -41,9 +52,14 @@ impl Component for Library {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let project = ctx.props::<ShownProject>().clone();
     let revision = self.retry.get() + project.feed.outside.get().of(Outside::Pipelines);
+    let hold = Services::of(ctx).hold;
     let loaded = ctx
-      .future((project.open.repo_root.clone(), revision), |(root, _)| async move {
-        background::run(move || library_in(&root).map_err(|e| messages::store_error(&e))).await?
+      .future((project.open.repo_root.clone(), revision), move |(root, _)| {
+        let hold = hold.clone();
+        async move {
+          hold.released().await;
+          background::run(move || library_in(&root).map_err(|e| messages::store_error(&e))).await?
+        }
       })
       .state()
       .get();
@@ -63,10 +79,60 @@ impl Component for Library {
       }
       (Some(entries), _) if entries.is_empty() => empty(ctx, id).into(),
       (Some(entries), _) => populated(ctx, (&project, team.as_ref()), &entries).into(),
-      (None, _) => loading("pipelines-loading", &ctx.t("pipelines.reading")).into(),
+      (None, _) => reading(ctx),
     };
     page.child(parts::body("pipelines-body", body))
   }
+}
+
+/// The bone of the line that counts the pipelines.
+const COUNT_BONE: f32 = 130.0;
+
+/// The library while it is read (`01 Pipelines · loading` `SJC78`): the group headings real and their counts, each
+/// row's name, steps line, state and age bones, lower rows fading; the versions note real.
+fn reading(ctx: &mut Ctx) -> Element {
+  let row = |ctx: &Ctx, id: &str, (name, steps, state): (f32, f32, f32)| -> Element {
+    let end = Column::new()
+      .width(Dimension::Px(STATE_WIDTH))
+      .align_items(Alignment::End)
+      .spacing(ExtraSpacing::Tight.role())
+      .child(skeleton::status(ctx, state))
+      .child(skeleton::line(ctx, GroupText::Hint.role(), state));
+    BoneRow::new(id, Words::Bone(name))
+      .hint(Words::Bone(steps))
+      .end(end)
+      .end(skeleton::chevron())
+      .build(ctx)
+      .into()
+  };
+  let published = vec![
+    row(ctx, "pipelines-reading-1", (150.0, 250.0, 72.0)),
+    row(ctx, "pipelines-reading-2", (50.0, 230.0, 84.0)),
+  ];
+  let drafts = vec![row(ctx, "pipelines-reading-3", (98.0, 236.0, 120.0))];
+  let groups = fading(vec![
+    skeleton::group(
+      ctx,
+      "pipelines-reading-published",
+      (Words::Real(ctx.t("pipelines.groups.published")), true),
+      None,
+      published,
+    ),
+    skeleton::group(
+      ctx,
+      "pipelines-reading-drafts",
+      (Words::Real(ctx.t("pipelines.groups.draftOnly")), true),
+      None,
+      drafts,
+    ),
+  ]);
+  let foot = Column::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Sm)
+    .child(skeleton::line(ctx, GroupText::Hint.role(), COUNT_BONE))
+    .child(note("pipelines-versions-note", &ctx.t("pipelines.versionsExplanation")));
+  let pane = parts::pane("pipelines-reading").with_children(groups).child(foot);
+  Skeleton::new("pipelines-loading", ctx.t("pipelines.reading")).show(ctx, pane)
 }
 
 /// The title with its actions (`Header` `rDRoY`): 24 over it and 12 under it; a member of a shared project imports

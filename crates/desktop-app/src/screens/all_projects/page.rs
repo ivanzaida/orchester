@@ -31,6 +31,7 @@ use crate::{
     icon::{Icon, icon},
     inspector::note,
     message::message_text,
+    skeleton::{Skeleton, fading},
     state::EmptyState,
     tabs::{PageTab, page_tabs},
   },
@@ -41,6 +42,8 @@ const COLUMN_WIDTH: f32 = 1120.0;
 
 /// What the page shows under its tabs.
 pub(super) enum Body<'a> {
+  /// The list is being read.
+  Reading,
   /// The list cannot be read, and why.
   Failed(&'a Message),
   /// Every project was removed from the list.
@@ -53,10 +56,14 @@ pub(super) enum Body<'a> {
   Usage(Element),
 }
 
+/// Each project row's name and folder bones while the list is read (`EZ5Bq`).
+const READING: [(f32, f32); 4] = [(120.0, 326.0), (98.0, 282.0), (140.0, 348.0), (110.0, 260.0)];
+
 /// The page with `body` under its tabs, and the invites notice between them while it shows something.
 pub(super) fn page(ctx: &mut Ctx, open: &OpenAction, body: Body<'_>, notice: Option<Element>) -> Element {
   let failure = folder::failure(ctx, open);
   let (state, content) = match body {
+    Body::Reading => ("reading", reading(ctx)),
     Body::Failed(error) => ("failed", failed(ctx, error)),
     Body::Empty => ("empty", empty(ctx, open)),
     Body::List { rows, ask } => ("list", list(ctx, rows, ask)),
@@ -215,6 +222,35 @@ fn list(ctx: &mut Ctx, rows: &[ListedProject], ask: &Ask) -> Element {
       &ctx.t("projects.removal.note"),
     ))
     .into()
+}
+
+/// The list while it is read (`12 · All projects · loading` `EZ5Bq`): the column headings and what removing means stay;
+/// each project's row is bones in its own cells, the lower rows fading. *Reading your projects…* (`projects.reading`)
+/// names it.
+fn reading(ctx: &mut Ctx) -> Element {
+  let last = READING.len() - 1;
+  let rows = READING
+    .iter()
+    .enumerate()
+    .map(|(index, words)| row::bones(ctx, *words, index == last))
+    .collect();
+  let table = Column::new()
+    .width(Dimension::Pct(100.0))
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .rounded(RadiusSize::Lg)
+    .clip()
+    .child(row::headings(ctx))
+    .with_children(fading(rows));
+  let bones = Column::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(ProjectsSpacing::Page.role())
+    .child(table)
+    .child(note(
+      "all-projects-removal-note",
+      Icon::Info,
+      &ctx.t("projects.removal.note"),
+    ));
+  Skeleton::new("all-projects-loading", ctx.t("projects.reading")).show(ctx, bones)
 }
 
 /// No projects in the list, with the heading's actions again (`State · No projects in the list` `d1oNx8`).

@@ -27,12 +27,16 @@ use super::{
 };
 use crate::{
   screens::hub::{
-    self,
+    self, bones,
     parts::{Entry, Tone, boxed, group, head, note, status, sub_head},
     team,
   },
   theme::HubSpacing,
-  ui::{icon::Icon, pressable::Press},
+  ui::{
+    icon::Icon,
+    pressable::Press,
+    skeleton::{Skeleton, fading},
+  },
 };
 
 pub fn list(ctx: &mut Ctx, data: &ProjectInstructions, selection: &Selection) -> Element {
@@ -62,6 +66,75 @@ pub fn list(ctx: &mut Ctx, data: &ProjectInstructions, selection: &Selection) ->
     pane = pane.child(team::foot(ctx, "instructions-team-note", team));
   }
   hub::list_body("instructions-list", pane)
+}
+
+/// One line of a group while the rules are read: a role's or a pipeline's sub-head, or a rule.
+#[derive(Clone, Copy)]
+enum Bone {
+  Head(f32),
+  Rule(f32, f32),
+}
+
+/// The groups' lines while the rules are read (`05 Agents · Instructions · loading` `pkDIG`).
+const READING: [(Tab, &[Bone]); 4] = [
+  (
+    Tab::Roles,
+    &[
+      Bone::Head(80.0),
+      Bone::Rule(72.0, 94.0),
+      Bone::Head(100.0),
+      Bone::Rule(98.0, 136.0),
+      Bone::Head(80.0),
+    ],
+  ),
+  (Tab::Project, &[Bone::Rule(74.0, 148.0), Bone::Rule(86.0, 150.0)]),
+  (
+    Tab::Pipelines,
+    &[Bone::Head(110.0), Bone::Rule(80.0, 150.0), Bone::Head(70.0)],
+  ),
+  (
+    Tab::Steps,
+    &[
+      Bone::Head(108.0),
+      Bone::Rule(80.0, 106.0),
+      Bone::Head(70.0),
+      Bone::Rule(68.0, 120.0),
+    ],
+  ),
+];
+
+/// The list while the rules are read: the order note and the four group headings real, the sub-heads, their counts
+/// and every rule bones, the lower groups fading. *Reading instructions…* (`instructions.reading`) names it.
+pub fn reading(ctx: &mut Ctx) -> Element {
+  let groups = READING
+    .iter()
+    .map(|(tab, lines)| {
+      let id = format!("instructions-reading-{}", tab.name());
+      let rows = lines.iter().map(|line| -> Element {
+        match *line {
+          Bone::Head(label) => bones::sub_head(ctx, label, 28.0).into(),
+          Bone::Rule(name, hint) => bones::entry(ctx, None, (name, hint), vec![bones::status(ctx, 66.0).into()]).into(),
+        }
+      });
+      let count = (*tab == Tab::Project).then_some(14.0);
+      group(
+        &id,
+        bones::head(ctx, &id, &ctx.t(tab.key()), count),
+        boxed(&format!("{id}-rows"), rows),
+      )
+    })
+    .collect();
+  let pane = Column::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(HubSpacing::Groups.role())
+    .child(note(
+      "instructions-order-note",
+      Icon::ListOrdered,
+      &ctx.t("instructions.orderNote"),
+    ))
+    .with_children(fading(groups));
+  let body = Skeleton::new("instructions-loading", ctx.t("instructions.reading")).show(ctx, pane);
+  hub::list_body("instructions-reading-list", body)
 }
 
 const fn tab(part: PromptPart) -> Tab {

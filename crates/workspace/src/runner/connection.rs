@@ -7,6 +7,7 @@ use std::{
   num::NonZeroU32,
   path::{Path, PathBuf},
   pin::pin,
+  sync::Arc,
   time::Duration,
 };
 
@@ -15,6 +16,7 @@ use orchester_ipc::{
   AttachSession, Command, CommandSender, ErrorReports, Event, IpcError, LaunchError, Reply, RunnerClient,
   RunnerProcess, ShutdownMode,
 };
+use parking_lot::Mutex;
 use tokio::{
   runtime::Handle,
   sync::{mpsc, oneshot},
@@ -59,13 +61,12 @@ impl Drop for Connection {
 }
 
 impl Connection {
-  /// Starts the runner for `project`, sending error reports with `reports`. Its first attach is
-  /// for `session`; every runner started after a drop attaches as a reconnect, with the same
-  /// `reports`.
+  /// Starts the runner for `project`, sending error reports as `reports` says when it starts. Its
+  /// first attach is for `session`; every runner started after a drop attaches as a reconnect.
   pub(super) fn spawn(
     runtime: &Handle,
     runner_exe: PathBuf,
-    reports: Option<ErrorReports>,
+    reports: Arc<Mutex<Option<ErrorReports>>>,
     project: PathBuf,
     reporter: Reporter,
     session: AttachSession,
@@ -133,8 +134,8 @@ impl Connection {
 
 struct Supervisor {
   runner_exe: PathBuf,
-  /// Whether its runners send error reports, as the runners were told when this connection started.
-  reports: Option<ErrorReports>,
+  /// Whether its runners send error reports, as the person set it last; each runner is started so.
+  reports: Arc<Mutex<Option<ErrorReports>>>,
   project: PathBuf,
   reporter: Reporter,
   requests: mpsc::UnboundedReceiver<Control>,
@@ -161,7 +162,8 @@ impl Supervisor {
 
   async fn supervise(&mut self) {
     loop {
-      let client = match self.launch().await {
+      let started_with = self.reports.lock().clone();
+      let client = match self.launch(started_with.as_ref()).await {
         Some(Ok(client)) => client,
         Some(Err(failure)) => {
           if !self.retry_after(RunnerEvent::LaunchFailed(failure)).await {
@@ -178,8 +180,11 @@ impl Supervisor {
       // Whatever happens to this runner, the next one replaces it after a drop.
       self.session = AttachSession::Reconnect;
       let agent_slots = attach_slots(&self.project).await;
+      // A change of the setting while it started was refused as not connected; one from now on waits for it.
+      let reports = self.reports.lock().clone();
+      let catch_up = (reports != started_with).then_some(Command::SetErrorReports { reports });
       match Session::start(client)
-        .serve((session, agent_slots), &mut self.requests, &self.reporter)
+        .serve((session, agent_slots), catch_up, &mut self.requests, &self.reporter)
         .await
       {
         Served::Dropped(failure) => {
@@ -192,13 +197,9 @@ impl Supervisor {
     }
   }
 
-  /// The launched runner, or `None` when a stop request or the desktop ended the task first.
-  async fn launch(&mut self) -> Option<Result<RunnerClient, RunnerFailure>> {
-    let mut launch = pin!(RunnerClient::launch(
-      &self.runner_exe,
-      &self.project,
-      self.reports.as_ref()
-    ));
+  /// The runner launched with `reports`, or `None` when a stop request or the desktop ended the task first.
+  async fn launch(&mut self, reports: Option<&ErrorReports>) -> Option<Result<RunnerClient, RunnerFailure>> {
+    let mut launch = pin!(RunnerClient::launch(&self.runner_exe, &self.project, reports));
     let result = loop {
       tokio::select! {
         result = &mut launch => break result,
@@ -352,15 +353,22 @@ impl Session {
     }
   }
 
+  /// Attaches, sends `catch_up` (a change the runner missed while it started) and serves the requests.
   async fn serve(
     mut self,
     (session, agent_slots): (AttachSession, NonZeroU32),
+    catch_up: Option<Command>,
     requests: &mut mpsc::UnboundedReceiver<Control>,
     reporter: &Reporter,
   ) -> Served {
     let (reply, mut attached) = oneshot::channel();
     let attach = Command::Attach { session, agent_slots };
     if !self.send(attach, Some(reply)).await {
+      return Served::Dropped(RunnerFailure::Lost);
+    }
+    if let Some(command) = catch_up
+      && !self.send(command, None).await
+    {
       return Served::Dropped(RunnerFailure::Lost);
     }
     let mut attaching = true;

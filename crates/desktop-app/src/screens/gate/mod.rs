@@ -38,7 +38,7 @@ use crate::{
   ui::{
     field::field_error,
     icon::{Icon, icon},
-    state::loading,
+    skeleton::{self, Skeleton},
   },
 };
 
@@ -92,7 +92,14 @@ impl Component for SignInGate {
     let cloud = Services::of(ctx).cloud;
     let address = match address(ctx, &cloud) {
       Ok(Some(address)) => address,
-      Ok(None) => return panel(loading("gate-reading", &ctx.t("cloud.reading")).into(), None),
+      Ok(None) => {
+        // No loading frame draws the gate: its form's lines are bones until the cloud's address is read.
+        let bones = skeleton::lines(ctx, &[220.0, 360.0, 300.0]);
+        return panel(
+          Skeleton::new("gate-reading", ctx.t("cloud.reading")).show(ctx, bones),
+          None,
+        );
+      }
       Err(()) => {
         let failed = field_error("gate-address-failed", &ctx.t("cloud.errors.local"));
         return panel(failed.into(), None);

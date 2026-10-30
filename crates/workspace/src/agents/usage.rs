@@ -54,13 +54,15 @@ impl Usage {
       .collect::<std::collections::BTreeSet<_>>()
       .len()
   }
+  /// A running run whose record cannot be read is left out of the counts: its task page says why, and one
+  /// damaged record does not keep every profile from being read.
   pub fn load(db: &ProjectDb) -> Result<Self, StoreError> {
-    let running = db
+    let running: Vec<Run> = db
       .running_runs()
       .map_err(crate::tasks::detail::run_store_error)?
       .into_iter()
-      .collect::<Result<Vec<_>, _>>()
-      .map_err(|bad| crate::tasks::detail::run_store_error(bad.error))?;
+      .filter_map(Result::ok)
+      .collect();
     let mut usage = Self::default();
     for resource in db.resources(ResourceKind::Pipeline)? {
       let latest = db.latest_version::<Pipeline>(resource.id())?;

@@ -34,6 +34,7 @@ use crate::{
     field::{NumberField, field_error},
     message::message_text,
     notice::{Notice, NoticeTone},
+    skeleton,
     tooltip::Tooltip,
   },
 };
@@ -132,6 +133,24 @@ impl Field {
     matches!(self, Self::Slots | Self::Qa)
   }
 }
+/// The Limits group while it is read (`10 · Project settings · Runs · loading` `lUFjj`): its heading, its note and
+/// every row's label, hint and unit real, each value a bone in its field.
+pub(super) fn bones(ctx: &mut Ctx) -> Element {
+  let rows = [Field::Default, Field::Daily, Field::Time, Field::Slots, Field::Qa].map(|kind| {
+    let [label, hint, info, unit] = kind.keys();
+    let value = if kind.counts() { 14.0 } else { 46.0 };
+    SettingRow::new(format!("{}-reading", kind.row()), ctx.t(label))
+      .hint(ctx.t(hint))
+      .info(ctx.t(info))
+      .control(skeleton::unit_field(ctx, FIELD_WIDTH, value, &ctx.t(unit)))
+      .render(ctx)
+  });
+  let note = Text::new(&ctx.t("project_settings.limitsNote")).variant(ExtraTypography::Note.role());
+  Group::new("settings-limits-reading", ctx.t("project_settings.limits"))
+    .end(note)
+    .rows(rows)
+    .into()
+}
 impl Component for Limits {
   type Props = TabProps;
   fn create(ctx: &mut Ctx) -> Self {
@@ -182,7 +201,7 @@ impl Component for Limits {
     let revision = self.revision.get() + self.own.count(&props.project.feed);
     let state = work::load(ctx, props.project.open.repo_root.clone(), revision, &self.own);
     let Some(data) = state.data.clone().or_else(|| self.stored.get()) else {
-      return work::pending(ctx, &state, &self.revision);
+      return work::pending(ctx, &state, &self.revision, bones);
     };
     if self.stored.get_untracked().is_none() {
       self.fill(data.clone());

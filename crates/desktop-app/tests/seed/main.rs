@@ -10,6 +10,7 @@ mod command_line;
 #[path = "../../examples/seed/kontur/mod.rs"]
 mod kontur;
 mod live;
+mod loading_states;
 mod native;
 mod orchestrator;
 mod pipelines;

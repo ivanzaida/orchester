@@ -10,8 +10,8 @@ use orchester_core::{
   tokens::TokenBudget,
 };
 use orchester_ipc::{
-  AttachSession, Command, Event, LaunchError, Rejection, Reply, Request, RequestId, RunnerClient, SessionEnd,
-  ShutdownMode, WorkSummary,
+  AttachSession, Command, ErrorReports, Event, LaunchError, Rejection, Reply, Request, RequestId, RunnerClient,
+  SessionEnd, ShutdownMode, WorkSummary,
 };
 use orchester_store::ProjectDb;
 use tempfile::TempDir;
@@ -99,6 +99,40 @@ async fn runner_answers_ping_and_stops_at_checkpoints() {
 #[tokio::test]
 async fn runner_answers_ping_and_stops_immediately() {
   stop(ShutdownMode::Immediate).await;
+}
+
+/// The person turns error reports on and then off while the runner runs (ORC-159): the runner answers each at once
+/// and keeps serving. This debug build sends no report either way (`tests/error_reports.rs` covers what is sent).
+#[tokio::test]
+async fn runner_turns_its_error_reports_on_and_off_while_it_runs() {
+  let project = project();
+  let mut client = launch(project.path()).await;
+  let on = ErrorReports::new("qa", "orchester@9.8.7").expect("both are text");
+
+  for (id, reports) in [(1, Some(on)), (2, None)] {
+    client
+      .send(&request(id, Command::SetErrorReports { reports }))
+      .await
+      .expect("set error reports");
+    assert_eq!(
+      next_event(&mut client).await,
+      Some(Event::Reply {
+        id: RequestId::new(id),
+        reply: Reply::ErrorReportsSet
+      })
+    );
+  }
+  client
+    .send(&request(3, Command::Ping { nonce: 9 }))
+    .await
+    .expect("ping");
+  assert_eq!(
+    next_event(&mut client).await,
+    Some(Event::Reply {
+      id: RequestId::new(3),
+      reply: Reply::Pong { nonce: 9 }
+    })
+  );
 }
 
 #[tokio::test]

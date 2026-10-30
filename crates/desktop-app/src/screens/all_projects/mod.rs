@@ -106,13 +106,17 @@ impl Component for AllProjects {
     // First in every render: lurq keeps a component's futures by the order it asks for them.
     let services = Services::of(ctx);
     let open = folder::open_action(ctx, &services);
-    let workspace = services.workspace.clone();
+    let (workspace, hold) = (services.workspace.clone(), services.hold.clone());
     let listing = ctx
-      .future((workspace, self.ask.revision.get()), |(workspace, _)| async move {
-        background::run(move || workspace.listing()).await?.map_err(|error| {
-          tracing::error!(%error, "cannot read the workspace's projects");
-          messages::store_error(&error)
-        })
+      .future((workspace, self.ask.revision.get()), move |(workspace, _)| {
+        let hold = hold.clone();
+        async move {
+          hold.released().await;
+          background::run(move || workspace.listing()).await?.map_err(|error| {
+            tracing::error!(%error, "cannot read the workspace's projects");
+            messages::store_error(&error)
+          })
+        }
       })
       .state()
       .get();
@@ -150,8 +154,7 @@ impl Component for AllProjects {
         let notice = self.invites.notice(ctx, &invites);
         page::page(ctx, &open, body, notice)
       }
-      // Reading the list takes a moment; the screen stays empty meanwhile.
-      (None, None) => lurq::components::Column::new().id(screen_id()).into(),
+      (None, None) => page::page(ctx, &open, page::Body::Reading, None),
     }
   }
 }

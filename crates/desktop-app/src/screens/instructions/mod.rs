@@ -47,7 +47,6 @@ use crate::{
     button::{ActionButton, ButtonKind},
     failure::LastFailure,
     icon::Icon,
-    state::loading,
   },
 };
 
@@ -141,8 +140,8 @@ impl Component for InstructionsScreen {
       failure => failure,
     };
     if read.is_pending() && read.data.is_none() {
-      let body = loading("instructions-loading", &ctx.t("instructions.reading"));
-      return frame(ctx, &project, head, body.into());
+      let body = library::reading(ctx);
+      return frame(ctx, &project, head, body);
     }
     let mut page = Column::new().width(Dimension::Pct(100.0)).height(Dimension::Pct(100.0));
     if let Some(failure) = failure {

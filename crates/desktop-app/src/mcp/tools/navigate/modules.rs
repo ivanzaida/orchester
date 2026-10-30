@@ -1,12 +1,27 @@
 //! What navigate makes of `route` modules: the list on a tab, New module, a module's page on a tab, or Edit module;
-//! and of `route` new_task with `module`: New task in that module. A `tab` or `view` where it names nothing is refused,
-//! not left out.
+//! of `route` new_task with `module`: New task in that module; and of `route` agents with `agent`: a profile's page or
+//! a new profile. A `tab` or `view` where it names nothing is refused, not left out.
 
-use orchester_core::id::ModuleId;
+use orchester_core::id::{ModuleId, ResourceId};
 use serde_json::{Map, Value};
 
 use super::{ToolError, string, tab};
-use crate::routes::{ModuleListTab, ModuleTab, ProjectPage};
+use crate::routes::{AgentTab, ModuleListTab, ModuleTab, ProjectPage};
+
+/// The profiles' list; with `agent` new, a new profile; with a profile's id, its page.
+pub(super) fn agent_page(args: &Map<String, Value>) -> Result<ProjectPage, ToolError> {
+  match string(args, "agent")? {
+    None => Ok(ProjectPage::Agents),
+    Some("new") => Ok(ProjectPage::NewAgent(AgentTab::default())),
+    Some(agent) => agent
+      .parse::<ResourceId>()
+      .map(|id| ProjectPage::Agent(id, AgentTab::default()))
+      .map_err(|error| ToolError::InvalidParam {
+        param: "agent",
+        reason: error.to_string(),
+      }),
+  }
+}
 
 /// The Modules list on `tab`; with `module` new or `view` new, New module; with a module's id, its page on `tab`, or
 /// with `view` edit, Edit module.

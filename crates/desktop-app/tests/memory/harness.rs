@@ -146,8 +146,10 @@ impl Page {
       .window
       .navigation()
       .go(Route::Project(self.project, ProjectPage::Memory(tab)));
+    // The body stands over bones while the records read (ORC-110).
     self.window.until("the project's memory", |window| {
-      window.texts("memory-body").is_some() || window.texts("memory-load-error").is_some()
+      (window.texts("memory-body").is_some() && window.texts("memory-loading").is_none())
+        || window.texts("memory-load-error").is_some()
     });
   }
 

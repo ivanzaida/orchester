@@ -7,7 +7,9 @@
 //! from here on. The request is idempotent by the key the confirmation was opened with, so a retry
 //! after a lost answer shares once. While it is under way the project's tasks take no change from
 //! this computer's screens; a run's change made meanwhile is sent once the project is linked, so
-//! the server's copy of the upload does not replace it.
+//! the server's copy of the upload does not replace it. Before the tasks, the project's pipelines, profiles,
+//! instructions, skills and tools go up with every published version, numbers kept (S5,
+//! [`upload_configuration`]), and are the server's from then on.
 
 use std::{
   collections::HashMap,
@@ -15,7 +17,7 @@ use std::{
   path::{Path, PathBuf},
 };
 
-use orchester_api::{Organization, ProjectLink, SharedProject, UploadTask, UserRef};
+use orchester_api::{ErrorCode, Organization, ProjectLink, SharedProject, SharedResource, UploadTask, UserRef};
 use orchester_core::{
   id::{IdempotencyKey, ProjectId, TaskId},
   project::TaskKey,
@@ -31,7 +33,10 @@ use orchester_store::{ProjectDb, SharingLink, StoreError};
 use super::{ProjectServer, convert, discovery, organization::tag, store::RemoteTaskStore};
 use crate::{
   background,
-  sharing::{ProjectAddress, ServerEntry, Servers, SharingError},
+  sharing::{
+    Behalf, ProjectAddress, ServerEntry, Servers, SharingError,
+    sync::{keep_uploaded_configuration, upload_configuration},
+  },
 };
 
 /// What sharing the project would do, as the confirmation says it (10.12).
@@ -214,29 +219,24 @@ impl Servers {
       });
     }
     let _in_progress = InProgress::start(self, repo_root);
+    let server = self.linking(entry, repo_root, &project, &address)?;
+    let configuration = upload_configuration_as_admin(&server).await?;
     let root = repo_root.to_owned();
-    let (link, uploaded) = background::run(move || upload(&root, remote.as_ref(), key))
+    let (request, uploaded) = background::run(move || upload(&root, remote.as_ref(), key))
       .await
       .map_err(SharingError::from)??;
     let linked = self
       .with_token(entry, |client, token| async move {
-        client.link_project(&token, id, &link).await
+        client.link_project(&token, id, &request).await
       })
       .await?;
     let tags = self
       .with_token(entry, |client, token| async move { client.tags(&token, id).await })
       .await?;
     let link = SharingLink {
-      server: entry.stored.id,
-      project: id,
-      key: orchester_core::project::ProjectKey::new(&project.key)
-        .map_err(|_| SharingError::InvalidAnswer("project key"))?,
-      role: project.role,
-      joined_at: Timestamp::now(),
       cursor: linked.cursor,
       last_synced_at: Timestamp::now(),
-      removed_at: None,
-      address: Some(address.clone()),
+      ..server.link.clone()
     };
     let (root, stored) = (repo_root.to_owned(), link.clone());
     let servers = self.clone();
@@ -262,8 +262,54 @@ impl Servers {
     })
     .await
     .map_err(SharingError::from)??;
+    if let Err(error) = keep_uploaded_configuration(&server, repo_root, configuration).await {
+      // The stream's snapshot names the uploaded resources too, and keeps them when it reads them.
+      tracing::warn!(%error, "the uploaded configuration was not kept as the server's at once");
+    }
     self.shared_changed();
     Ok(Shared { link, discovery })
+  }
+
+  /// The server project `project` on `entry` as the project at `repo_root` is linked to it, before the link is stored.
+  fn linking(
+    &self,
+    entry: &ServerEntry,
+    repo_root: &Path,
+    project: &SharedProject,
+    address: &str,
+  ) -> Result<ProjectServer, SharingError> {
+    let link = SharingLink {
+      server: entry.stored.id,
+      project: project.id,
+      key: orchester_core::project::ProjectKey::new(&project.key)
+        .map_err(|_| SharingError::InvalidAnswer("project key"))?,
+      role: project.role,
+      joined_at: Timestamp::now(),
+      cursor: 0,
+      last_synced_at: Timestamp::now(),
+      removed_at: None,
+      address: Some(address.to_owned()),
+    };
+    Ok(ProjectServer {
+      servers: self.clone(),
+      entry: entry.clone(),
+      link,
+      repo_root: repo_root.to_owned(),
+      behalf: Behalf::Account,
+    })
+  }
+}
+
+/// Uploads the project's configuration before its tasks, so a Share retried after a failure uploads it once (the
+/// import is idempotent, and the server project still has no tasks). The server takes it from its admins only (row
+/// 72): a member who links first shares the tasks, and the resources stay this computer's own.
+async fn upload_configuration_as_admin(server: &ProjectServer) -> Result<Vec<SharedResource>, SharingError> {
+  match upload_configuration(server, server.repo_root()).await {
+    Err(SharingError::Client(error)) if error.code() == Some(ErrorCode::NotAdmin) => {
+      tracing::warn!("the configuration stays on this computer: only the server's admins share it");
+      Ok(Vec::new())
+    }
+    uploaded => uploaded,
   }
 }
 

@@ -327,6 +327,7 @@
       "failed": "A change was not saved"
     },
     "sub": "Orchester on this computer, in every project",
+    "reading": "Reading Orchester's settings…",
     "connectServer": "Connect a server",
     "tabs": {
       "general": "General",

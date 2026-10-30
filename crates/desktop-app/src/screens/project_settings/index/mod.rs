@@ -119,7 +119,10 @@ impl Component for CodeIndex {
       self.stored.set(Some(read.clone()));
     }
     let Some(read) = self.stored.get() else {
-      return work::pending(ctx, &state, &self.revision);
+      // No loading frame draws this tab: its rows' bones stand in the same outline as the other tabs'.
+      let bones =
+        |ctx: &mut Ctx| crate::ui::skeleton::list(ctx, "settings-index-reading", &[(150.0, 260.0), (120.0, 220.0)]);
+      return work::pending(ctx, &state, &self.revision, bones);
     };
     let on = read.0.code_index.is_on();
     let mut group =

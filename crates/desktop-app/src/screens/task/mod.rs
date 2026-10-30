@@ -22,8 +22,11 @@ mod local_integration;
 mod memory;
 mod orchestrated;
 mod read;
+mod reading;
 mod sharing;
 pub(crate) mod summary;
+
+use std::time::Instant;
 
 use lurq::{
   app::{component::Component, ctx::Ctx, theme::SpacingSize},
@@ -57,7 +60,7 @@ use crate::{
   ui::{
     icon::Icon,
     message::message_text,
-    state::{EmptyState, load_error, loading},
+    state::{EmptyState, load_error},
   },
 };
 
@@ -86,19 +89,31 @@ struct PageProps {
 impl lurq::app::component::DevtoolsInspectable for PageProps {}
 
 /// Finds the task the path names among the project's tasks; once found, shows its frame.
-struct TaskPage;
+struct TaskPage {
+  /// When the page opened: its reading began then, the task's after the project's tasks.
+  opened: Instant,
+}
 
 impl Component for TaskPage {
   type Props = PageProps;
 
   fn create(_ctx: &mut Ctx) -> Self {
-    Self
+    Self { opened: Instant::now() }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<PageProps>().clone();
     let found = match props.project.feed.tasks.get() {
-      TasksState::Loading => return page(loading("task-loading", &ctx.t("task.page.loading"))),
+      TasksState::Loading => {
+        let task = reading::Reading {
+          project: props.project.open.project.id(),
+          key: &props.key,
+          kept: props.kept,
+          title: None,
+          since: self.opened,
+        };
+        return page(reading::page(ctx, &task, &props.view));
+      }
       TasksState::Failed(reason) => return page(read_failed(ctx, &reason, None)),
       // A task kept Not shared keeps its key from before the join, which a shared task may have too: its own
       // address names it. A link to a key no shared task has still finds it.
@@ -122,6 +137,7 @@ impl Component for TaskPage {
       key: props.key,
       kept,
       view: props.view,
+      opened: self.opened,
     };
     page(ctx.mount_keyed::<TaskFrame>(&format!("task-frame-{task}"), frame))
   }
@@ -190,6 +206,8 @@ struct FrameProps {
   /// The task is one kept *Not shared*: its page's links keep its own address.
   kept: bool,
   view: TaskView,
+  /// When the page opened, which the reading skeleton's delay runs from.
+  opened: Instant,
 }
 
 impl lurq::app::component::DevtoolsInspectable for FrameProps {}
@@ -338,7 +356,7 @@ impl Component for TaskFrame {
     };
     let root = props.project.open.repo_root.clone();
     let (detail, stale) = match read::task(ctx, root.clone(), props.task, again) {
-      TaskRead::Loading => return loading("task-loading", &ctx.t("task.page.loading")).into(),
+      TaskRead::Loading => return reading_page(ctx, &props),
       TaskRead::Failed(reason) => return read_failed(ctx, &reason, Some(self.retries.clone())),
       TaskRead::Ready(detail, stale, pending) => (detail, self.stale(stale, pending)),
     };
@@ -415,6 +433,31 @@ impl TaskFrame {
 struct StaleRead(Option<Message>);
 
 impl lurq::app::component::DevtoolsInspectable for StaleRead {}
+
+/// The page while the task is read: its key, and its title once the project's tasks list it, over the bones.
+fn reading_page(ctx: &mut Ctx, props: &FrameProps) -> Element {
+  let task = reading::Reading {
+    project: props.project.open.project.id(),
+    key: &props.key,
+    kept: props.kept,
+    title: listed_title(props),
+    since: props.opened,
+  };
+  reading::page(ctx, &task, &props.view)
+}
+
+/// The task's title from the project's tasks; `None` while they are not read either.
+fn listed_title(props: &FrameProps) -> Option<std::sync::Arc<str>> {
+  match props.project.feed.tasks.get() {
+    TasksState::Ready(tasks) => tasks
+      .tasks
+      .iter()
+      .chain(tasks.not_shared.iter())
+      .find(|task| task.id() == props.task)
+      .map(|task| std::sync::Arc::from(task.details().title.as_str())),
+    TasksState::Loading | TasksState::Failed(_) => None,
+  }
+}
 
 /// The Conversation tab's mount point: its timeline (C1), with the composer (C2) and the decision cards (C3)
 /// inside it.

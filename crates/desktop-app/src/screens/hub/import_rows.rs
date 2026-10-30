@@ -7,7 +7,7 @@ use std::{collections::BTreeSet, sync::Arc};
 
 use lurq::{
   app::{component::DevtoolsInspectable, ctx::Ctx, theme::PaletteColor},
-  components::{Column, Text},
+  components::{Column, Row, Text},
   core::Signal,
   layout::Alignment,
   node::{Element, Style, dimension::Dimension, padding::Padding},
@@ -19,9 +19,13 @@ use crate::{
   theme::{ExtraColor, ExtraSpacing, ExtraTypography, HubSpacing, HubText},
   ui::{
     pressable::pressable,
+    skeleton::{self, bone},
     toggle::{Toggle, ToggleKind},
   },
 };
+
+/// A row's check while the repository is read: a bone of its size.
+const CHECK: f32 = 16.0;
 
 /// Importable items left out of the import, by source: every other importable item is chosen.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -172,6 +176,40 @@ impl Review<'_> {
       )
       .into()
   }
+}
+
+/// The import review while the repository is read: the instructions group, its title real, its rows' checks, paths
+/// and details bones of the widths `rows` gives, the lower ones fading, in the geometry of [`Review::row`].
+pub(crate) fn reading(ctx: &Ctx, id: &str, rows: &[(f32, f32)]) -> Element {
+  let rows = rows
+    .iter()
+    .map(|(path, detail)| {
+      Row::new()
+        .width(Dimension::Pct(100.0))
+        .align_items(Alignment::Start)
+        .padding(Padding::symmetric(HubSpacing::Row.role(), HubSpacing::FieldY.role()))
+        .spacing(HubSpacing::FieldGap.role())
+        .child(bone(CHECK, CHECK))
+        .child(
+          Column::new()
+            .flex(1.0)
+            .min_width(Dimension::Px(0.0))
+            .spacing(ExtraSpacing::Tight.role())
+            .child(skeleton::line(ctx, ExtraTypography::Strong.role(), *path))
+            .child(skeleton::line(ctx, HubText::Hint.role(), *detail)),
+        )
+    })
+    .collect();
+  let group = format!("{id}-instructions");
+  parts::group(
+    &group,
+    parts::head(&group, &ctx.t("instructions.importInstructionGroup"), None, None),
+    parts::boxed(
+      &format!("{group}-rows"),
+      skeleton::fading(rows).into_iter().map(Element::from),
+    ),
+  )
+  .into()
 }
 
 /// Whether the item cannot be imported for want of something in the repository (`No SKILL.md · cannot import`),

@@ -22,12 +22,17 @@ use super::{
 };
 use crate::{
   mcp::input_gate::InputGate,
-  theme::{ExtraSpacing, IconSize},
+  theme::{ExtraSpacing, IconSize, ProjectSettingsText},
   ui::{
+    github_mark::github_mark,
     icon::{Icon, icon},
+    skeleton,
     toggle::{Toggle, ToggleKind},
   },
 };
+
+/// The base branch's select (`Base branch` in `XvyXm`).
+const BRANCH: f32 = 218.0;
 #[derive(Clone)]
 pub(super) struct General {
   save: work::Save,
@@ -69,7 +74,7 @@ impl Component for General {
     let revision = self.revision.get() + self.own.count(&props.project.feed);
     let state = work::load(ctx, props.project.open.repo_root.clone(), revision, &self.own);
     let Some(read) = state.data.clone().or_else(|| self.stored.get()) else {
-      return page::scroll(work::pending(ctx, &state, &self.revision));
+      return page::scroll(work::pending(ctx, &state, &self.revision, bones));
     };
     self.stored.set(Some(read.clone()));
     let settings = read.0;
@@ -147,4 +152,76 @@ fn identity(ctx: &mut Ctx, props: &TabProps) -> Element {
   Group::new("settings-project", ctx.t("project_settings.project"))
     .rows(rows)
     .into()
+}
+/// The General tab while its settings are read (`09 · Project settings · General · loading` `XvyXm`): the Project and
+/// Repository headings, every row label and its fixed help line stay; the name, key, folder, repository, signed-in
+/// account, base branch and both switches are bones in the value column, the lower rows fading.
+fn bones(ctx: &mut Ctx) -> lurq::components::Column {
+  let mono = |ctx: &Ctx, width| skeleton::line(ctx, ProjectSettingsText::MonoValue.role(), width);
+  let marked = |ctx: &Ctx, glyph: Element, width| {
+    Row::new()
+      .spacing(ExtraSpacing::Snug.role())
+      .align_items(Alignment::Center)
+      .child(glyph)
+      .child(mono(ctx, width))
+  };
+  let project = [
+    SettingRow::new("settings-name-reading", ctx.t("project_settings.nameLabel")).control(skeleton::line(
+      ctx,
+      ProjectSettingsText::Value.role(),
+      40.0,
+    )),
+    SettingRow::new("settings-key-reading", ctx.t("project_settings.keyLabel"))
+      .hint(ctx.t("project_settings.keyHint"))
+      .control(mono(ctx, 18.0)),
+    SettingRow::new("settings-folder-reading", ctx.t("project_settings.folderLabel"))
+      .hint(ctx.t("project_settings.folderHint"))
+      .control(marked(
+        ctx,
+        icon(Icon::Folder, IconSize::Base, PaletteColor::TextMuted).into(),
+        120.0,
+      )),
+  ]
+  .map(|row| row.render(ctx));
+  let github = github_mark(ctx, IconSize::Base, PaletteColor::TextSecondary);
+  let repository = [
+    SettingRow::new("settings-github-repo-reading", ctx.t("project_settings.githubRepo"))
+      .info(ctx.t("project_settings.githubRepoDetail"))
+      .hint(ctx.t("project_settings.githubRepoHint"))
+      .control(marked(ctx, github, 58.0)),
+    SettingRow::new(
+      "settings-github-login-reading",
+      ctx.t("project_settings.githubAccountLabel"),
+    )
+    .info(ctx.t("project_settings.githubAccountDetail"))
+    .hint_reading(152.0)
+    .control(mono(ctx, 42.0)),
+    SettingRow::new("settings-base-branch-reading", ctx.t("project_settings.baseBranch"))
+      .hint(ctx.t("project_settings.baseBranchShortHint"))
+      .control(skeleton::select(ctx, BRANCH, 22.0)),
+    SettingRow::new(
+      "settings-base-moved-reading",
+      ctx.t("project_settings.baseMovedSection"),
+    )
+    .info(ctx.t("project_settings.baseMovedDetail"))
+    .hint(ctx.t("project_settings.baseMovedHint"))
+    .control(skeleton::switch()),
+    SettingRow::new("settings-files-reading", ctx.t("project_settings.agentFiles"))
+      .info(ctx.t("project_settings.agentFilesDetail"))
+      .hint(ctx.t("project_settings.agentFilesHint"))
+      .control(skeleton::switch()),
+  ]
+  .map(|row| row.render(ctx));
+  let groups = vec![
+    lurq::components::Column::new()
+      .width(lurq::node::dimension::Dimension::Pct(100.0))
+      .child(Group::new("settings-project-reading", ctx.t("project_settings.project")).rows(project)),
+    lurq::components::Column::new()
+      .width(lurq::node::dimension::Dimension::Pct(100.0))
+      .child(Group::new("settings-repository-reading", ctx.t("project_settings.repository")).rows(repository)),
+  ];
+  lurq::components::Column::new()
+    .width(lurq::node::dimension::Dimension::Pct(100.0))
+    .spacing(ExtraSpacing::Roomy.role())
+    .with_children(skeleton::fading(groups))
 }

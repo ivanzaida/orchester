@@ -18,10 +18,10 @@ use lurq::{
 
 use crate::{
   navigation::link::Open,
-  theme::{ExtraRadius, ExtraSpacing, IconSize, UsageSpacing, UsageText},
+  theme::{ExtraRadius, ExtraSpacing, UsageSpacing, UsageText},
   ui::{
     card::{CardSurface, card_frame},
-    icon::{Icon, glyph, icon},
+    icon::{Icon, glyph},
     pressable::{Focus, opening},
     tabs::{Segment, SegmentFace, segmented},
   },
@@ -223,22 +223,6 @@ pub fn view_switch(
     Focus::Pointer,
   )
   .into()
-}
-
-/// A loader and what is being read, in the room the chart was going to fill (`Reading` `YAWmD`): no
-/// skeletons.
-pub fn reading(id: &str, text: &str) -> Element {
-  Column::new()
-    .id(id.to_owned())
-    .width(Dimension::Pct(100.0))
-    .flex(1.0)
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
-    .justify(Justify::Center)
-    .describe("state", "loading")
-    .child(icon(Icon::LoaderCircle, IconSize::Lg, PaletteColor::TextSecondary))
-    .child(Text::new(text).variant(TypographyStyle::Description))
-    .into()
 }
 
 /// What stands in a chart's place (`State` `i9jMW`): its glyph, what it says, why, and an action when one

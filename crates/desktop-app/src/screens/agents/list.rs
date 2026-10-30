@@ -38,6 +38,15 @@ pub(super) fn head(ctx: &Ctx, (listed, team): (&ProjectAgents, Option<&TeamConfi
   ])
 }
 
+/// Import agents and New agent while the profiles are read (`KHDar`): New agent opens a new profile, whose page says
+/// what it needs once the project's connections are read.
+pub(super) fn reading_head(ctx: &Ctx, nav: &AgentsNav) -> Head {
+  let new = ActionButton::new("agents-new", ButtonKind::Primary, ctx.t("agents.new"))
+    .icon(Icon::Plus)
+    .opens(nav.to(Shown::New(AgentTab::default())));
+  Head::actions([import(ctx, "agents-import", nav).into(), new.into()])
+}
+
 pub(super) fn list(ctx: &mut Ctx, project: &ShownProject, listed: &ProjectAgents, nav: &AgentsNav) -> Element {
   let team = team::of(project);
   if listed.profiles.is_empty() {

@@ -81,6 +81,10 @@ pub enum SharingError {
   /// publish theirs as the next version anyway.
   #[error("version {latest} was published from the same version meanwhile")]
   VersionConflict { latest: VersionNumber },
+  /// Only a person does this: *Use v<N> here* and binding a reference widen what agents may do here, so automation is
+  /// refused and nothing changed.
+  #[error("only a person does this; nothing was changed")]
+  PersonOnly,
 }
 
 impl From<Message> for SharingError {
@@ -129,6 +133,7 @@ impl SharingError {
       Self::VersionConflict { latest } => {
         Message::new("sharing.errors.versionConflict").with("version", latest.get().to_string())
       }
+      Self::PersonOnly => Message::new("sharing.errors.personOnly"),
     }
   }
 }
