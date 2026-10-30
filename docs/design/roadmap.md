@@ -1,6 +1,7 @@
 # Roadmap and releases
 
-Status: draft for the person's review (2026-10-28). Nothing here is built yet.
+Status: draft for the person's review (2026-10-28); designed 2026-10-30 on the board `Roadmap · redesign` `ipCAf`
+(see *The screens*). Nothing here is built yet. Sprints, the Roadmap's fifth tab, are in `docs/design/sprints.md`.
 
 Planning in Orchester above single tasks: which work ships in which release, when, and how far along it is. Today a
 project has modules (epics, milestones, sprints) with start and target dates, a burndown and a delivery forecast
@@ -96,24 +97,32 @@ changelog.
 Pencil designs come first (on the *Orchester design* pipeline), in the desktop file
 `crates/desktop-app/design/orchester.pen`, using the Modules pages'
 geometry (`Modules · redesign` `oEELJ`, the task page's header). Confirmations are modals, new things are pages
-(decision 15). Rough wireframes for discussion (not a design to build from) are on the board `Roadmap ·
-wireframes` `HtxlM` of that file: 01 Timeline, 02 Now / Next / Later, 03 Releases, 03b Modules, 04 release Summary,
-05 Mark released (modal), 06 Changelog, 07 released with tasks moved, 08 Delete (modal), 09 New release, 10 a task's
-Release.
+(decision 15). The design to build from is the board `Roadmap · redesign` `ipCAf` of that file (2026-10-30): 01
+Timeline `ViD7I`, 02 Now / Next / Later `QE8a9`, 03 Releases `dxAnQ`, 04 Modules `Ydi52`, 05 release Summary
+`Sf0eO`, 06 Changelog `mCkvp`, 07 Mark released (modal) `x4Tkxm`, 08 released with tasks moved `GnmCC`, 09 Delete
+(modal) `R9lII`, 10 New release `C1h7ll`; parts: a task's Release `fCwnY`, a module's Horizon and releases `bcW4G`,
+Tasks' Filter and Display `XwAWe`, states `r3Pban`; notes `tZxeN`, open choices `U55F9I`. The earlier wireframes
+(`Roadmap · wireframes` `HtxlM`) are superseded.
 
-- **Roadmap** (`/project/<id>/roadmap?view=timeline|horizons|modules|releases`), a sidebar entry right under *Docs*
-  (decision 8) with the views *Timeline*, *Now / Next / Later*, *Modules* and *Releases* as its tabs, and *New
-  release* and *New module* in its header.
+- **Roadmap** (`/project/<id>/roadmap?view=timeline|horizons|sprints|modules|releases`), a sidebar entry right under
+  *Docs* (decision 8) in place of *Modules*, with the views *Timeline*, *Now / Next / Later*, *Sprints*
+  (`docs/design/sprints.md`), *Modules* and *Releases* as its tabs. The header's actions follow the tab: *New module*
+  and *New release* on Timeline and Now / Next / Later, *New sprint* on Sprints, search and *New module* on Modules,
+  search and *New release* on Releases.
 - **Modules** (decision 14): the sidebar entry *Modules* goes; the Modules list as built (ORC-112: search, Open ·
-  Closed, a row per module) becomes the *Modules* tab, its Open · Closed views a switch under the tabs. A module's
+  Closed, a row per module) becomes the *Modules* tab, its Open · Closed views a switch under the tabs, each row with
+  its horizon (*Now*, *Next*, *Later*) before its name. A module's
   page and its new and edit pages keep their addresses and layout; their back row reads `← Roadmap / name` and
   returns to the tab. `/project/<id>/modules` opens the tab, and MCP `navigate` `modules` keeps working.
 - **Timeline** (`view=timeline`, `&scale=month|quarter`):
   - a row per open module, ordered by start date, its name and *N of M done* at the left; its bar runs from its
     start (or its first task's day) to its target date; without a target it runs to the 85 % date, dashed;
   - on the bar the forecast: the 50 % date as a tick, the 85 % as a whisker, both in `warning` past the target;
-  - releases as vertical markers across the rows with their name at the top: dashed while planned (in `warning` when
-    overdue), solid in `success` once released; a marker opens its release;
+  - a *Sprints* strip above the modules: each sprint as a band over its days, closed ones muted, the active one in
+    `info`, planned ones outlined; a band opens its sprint;
+  - releases as vertical markers across the rows with their name in a *Releases* row under them: a thin line while
+    planned (in `warning` when overdue), solid in `success` once released; a marker opens its release;
+  - a legend under the chart (done, 50 %, 85 %, after target, released, planned release, today, active sprint);
   - a line for today, *Today* to scroll to it, *Months* · *Quarters*; horizontal scroll and wheel with Shift;
   - modules without dates and without forecast in a last row *No dates*, as chips; a module opens its page;
   - *Show closed modules* adds closed ones, muted. Dates are not dragged on the timeline; they change on the
