@@ -95,7 +95,22 @@ fn merge_queue_lanes_deliver_each_base_branch_on_its_own_while_another_lane_is_b
   assert!(!holds(&repo, "main", &tips.1), "release's run went into release only");
   assert!(!holds(&repo, "main", &tips.0));
 
-  let queue = read(&repo);
+  assert_reads_both_lanes(&repo, &on_main, &released);
+
+  git(repo.root(), &["checkout", "--", "other.txt"]);
+  repo.drive();
+  assert!(
+    matches!(repo.state(&on_main), QueueState::Merged(_)),
+    "{:?}",
+    repo.state(&on_main)
+  );
+  assert!(holds(&repo, "main", &tips.0));
+}
+
+/// The read model of `merge_queue_lanes_deliver_each_base_branch_on_its_own_while_another_lane_is_blocked`: main's
+/// lane blocked in the checkout, release's beside it with its own head, and the delivery naming its lane.
+fn assert_reads_both_lanes(repo: &Repo, on_main: &Run, released: &Run) {
+  let queue = read(repo);
   let lanes: Vec<(&str, &LaneLanding)> = queue
     .lanes
     .iter()
@@ -135,15 +150,6 @@ fn merge_queue_lanes_deliver_each_base_branch_on_its_own_while_another_lane_is_b
     Some("release"),
     "the delivery names its lane"
   );
-
-  git(repo.root(), &["checkout", "--", "other.txt"]);
-  repo.drive();
-  assert!(
-    matches!(repo.state(&on_main), QueueState::Merged(_)),
-    "{:?}",
-    repo.state(&on_main)
-  );
-  assert!(holds(&repo, "main", &tips.0));
 }
 
 #[test]
