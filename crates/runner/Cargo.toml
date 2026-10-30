@@ -343,6 +343,10 @@ required-features = ["test-agent"]
 name = "db_busy_retry"
 required-features = ["test-agent"]
 
+[[test]]
+name = "disk_guard"
+required-features = ["test-agent"]
+
 [features]
 test-agent = []
 

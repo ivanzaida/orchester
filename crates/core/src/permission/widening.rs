@@ -6,7 +6,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use super::{AgentPermissions, CommandPermission, NetworkAccess, RepositoryAccess};
+use super::{AgentPermissions, CommandPermission, RepositoryAccess};
 use crate::resource::{CommandAction, CommandEnvironment};
 
 /// One way permissions are broader than those they are compared with.
@@ -19,7 +19,8 @@ pub enum Widening {
   /// Commands that run where they did not: any command, a prefix not allowed, or an allowed list or
   /// asking about commands in place of the other.
   Commands,
-  /// Network access where it was off.
+  /// Network access to more than before: on where it was off or limited to hosts, or a host the previous list did
+  /// not cover ([`super::NetworkAccess::covers`]).
   Network,
   /// Tool calls no longer asked about.
   ToolCallsUnasked,
@@ -49,10 +50,7 @@ impl AgentPermissions {
         Widening::WritableFolder,
       ),
       (commands_widen(&base.commands, &self.commands), Widening::Commands),
-      (
-        self.network == NetworkAccess::On && base.network == NetworkAccess::Off,
-        Widening::Network,
-      ),
+      (!base.network.covers(&self.network), Widening::Network),
       (
         base.interactive_tool_approvals && !self.interactive_tool_approvals,
         Widening::ToolCallsUnasked,

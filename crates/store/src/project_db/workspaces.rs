@@ -9,7 +9,7 @@ use orchester_core::{
   run::BranchName,
   time::Timestamp,
   workspaces::{
-    Borrow, Holder, KeepFree, Stranded, WarmChoice, WarmFolder, WarmPattern, WarmUpCommand, WarmUpFailure, Warmth,
+    Borrow, Holder, Stranded, WarmChoice, WarmFolder, WarmPattern, WarmUpCommand, WarmUpFailure, Warmth,
     WorkspaceNumber, WorkspaceRecord, WorkspaceSettings, WorkspaceStore, choose,
   },
 };
@@ -186,31 +186,18 @@ impl WorkspaceStore for ProjectDb {
   }
 
   fn workspace_settings(&self) -> Result<WorkspaceSettings, StoreError> {
-    let row: Option<(bool, i64, Option<String>)> = self
+    let row: Option<(bool, Option<String>)> = self
       .connection
-      .query_row(
-        "SELECT enabled, keep_free_gb, warm_up_command FROM workspace_settings",
-        [],
-        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-      )
+      .query_row("SELECT enabled, warm_up_command FROM workspace_settings", [], |row| {
+        Ok((row.get(0)?, row.get(1)?))
+      })
       .optional()?;
-    let (enabled, keep_free, warm_up) = match row {
-      Some((enabled, gigabytes, command)) => (
-        enabled,
-        u64::try_from(gigabytes)
-          .ok()
-          .and_then(|gigabytes| KeepFree::from_gigabytes(gigabytes).ok())
-          .ok_or_else(|| corrupt("keep free", gigabytes))?,
-        command
-          .map(|command| WarmUpCommand::new(&command).map_err(|error| corrupt("warm-up command", error)))
-          .transpose()?,
-      ),
-      None => (false, KeepFree::DEFAULT, None),
-    };
+    let (enabled, command) = row.unwrap_or_default();
     Ok(WorkspaceSettings {
       enabled,
-      keep_free,
-      warm_up,
+      warm_up: command
+        .map(|command| WarmUpCommand::new(&command).map_err(|error| corrupt("warm-up command", error)))
+        .transpose()?,
       folders: warm_folders(&self.connection)?,
     })
   }
@@ -218,14 +205,9 @@ impl WorkspaceStore for ProjectDb {
   fn save_workspace_settings(&mut self, settings: &WorkspaceSettings) -> Result<(), StoreError> {
     let transaction = self.connection.transaction()?;
     transaction.execute(
-      "INSERT INTO workspace_settings (id, enabled, keep_free_gb, warm_up_command) VALUES (1, ?1, ?2, ?3) \
-       ON CONFLICT (id) DO UPDATE SET enabled = excluded.enabled, keep_free_gb = excluded.keep_free_gb, \
-       warm_up_command = excluded.warm_up_command",
-      params![
-        settings.enabled,
-        i64::try_from(settings.keep_free.gigabytes()).map_err(|_| StoreError::Unrepresentable("keep free"))?,
-        settings.warm_up.as_ref().map(WarmUpCommand::as_str),
-      ],
+      "INSERT INTO workspace_settings (id, enabled, warm_up_command) VALUES (1, ?1, ?2) \
+       ON CONFLICT (id) DO UPDATE SET enabled = excluded.enabled, warm_up_command = excluded.warm_up_command",
+      params![settings.enabled, settings.warm_up.as_ref().map(WarmUpCommand::as_str)],
     )?;
     transaction.execute("DELETE FROM warm_folders", [])?;
     for (position, folder) in settings.folders.iter().enumerate() {

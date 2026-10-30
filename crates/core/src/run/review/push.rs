@@ -34,30 +34,66 @@ pub struct PushFacts<'a> {
 const WRAPPERS: [&str; 11] = [
   "env", "command", "builtin", "exec", "timeout", "nice", "nohup", "xargs", "sudo", "stdbuf", "time",
 ];
+/// Programs that set, export or remove the variables the programs after them see.
+const SETS_VARIABLES: [&str; 8] = [
+  "export", "declare", "typeset", "local", "readonly", "unset", "set", "setx",
+];
 
-/// Whether `command` may run git in a form the push rules cannot follow: it names a `GIT_*` variable, runs
-/// git through a path or under a wrapper, or names `push` in a part that is not a plain `git push`.
-/// Checked on the words of the whole line, so a form the classifier did not read still counts.
+/// Whether `command` may run git in a form the push rules cannot follow: it sets a `GIT_*` variable, runs git
+/// through a path or under a wrapper, or names `push` in a git part that is not a plain `git push`. Only what the
+/// line runs is judged, each part's program and a wrapper's words, not the arguments another program reads
+/// (`rg -n "GIT"`, `cat docs/git.md`). A line the classifier could not read to the end is judged on all its words
+/// ([`names_git`]), so a form it did not read still counts.
 pub(super) fn disguised_git(command: &ClassifiedCommand) -> bool {
-  let tokens: Vec<&str> = command
-    .text()
-    .split(|c: char| c.is_whitespace() || ";|&()`$<>\"'{}".contains(c))
-    .filter(|token| !token.is_empty())
-    .collect();
-  let git_like = |token: &str| {
-    let name = token.rsplit(['/', '\\']).next().unwrap_or(token).to_lowercase();
-    name == "git" || name == "git.exe"
+  let parts = command.parts();
+  if parts.is_empty() || parts.iter().any(|part| part.category() == CommandCategory::Unknown) {
+    return names_git(command);
+  }
+  sets_git_variable(command.text()) || parts.iter().any(disguised_part)
+}
+
+/// Whether `part`, which the classifier read, runs git in a form the push rules cannot follow: git written with a
+/// folder or another name (`git.exe`, `Git`), `push` in a git part that is not a plain `git push`, a wrapper that
+/// names git or a `GIT_*` variable, or a program that sets such a variable.
+fn disguised_part(part: &CommandPart) -> bool {
+  let words = part.words();
+  let Some(first) = words.first() else {
+    return false;
   };
+  if git_like(first) {
+    return first != "git"
+      || (words.iter().any(|word| word.contains("push")) && !plain_push(part) && !stash_push(part));
+  }
+  let program = file_name(first);
+  let program = program.strip_suffix(".exe").unwrap_or(&program);
+  let names_variable = words.iter().any(|word| word.contains("GIT_"));
+  if WRAPPERS.contains(&program) {
+    return names_variable || words.iter().flat_map(|word| tokens(word)).any(git_like);
+  }
+  SETS_VARIABLES.contains(&program) && names_variable
+}
+
+/// Whether `text` assigns a `GIT_*` variable anywhere (`GIT_DIR=…`, `GIT_DIR+=…`, `$env:GIT_DIR = …`): a lone
+/// assignment is no part of the classified line, its value is read into the parts after it.
+fn sets_git_variable(text: &str) -> bool {
+  text.match_indices("GIT_").any(|(at, prefix)| {
+    let rest = text[at + prefix.len()..]
+      .trim_start_matches(|c: char| c.is_ascii_alphanumeric() || c == '_')
+      .trim_start();
+    rest.strip_prefix('+').unwrap_or(rest).starts_with('=')
+  })
+}
+
+/// Whether the words of the whole line, quoted or not, may run git in a form the push rules cannot follow: for a
+/// line the classifier could not read, where any word may be what runs.
+fn names_git(command: &ClassifiedCommand) -> bool {
+  let tokens: Vec<&str> = tokens(command.text()).collect();
   if tokens.iter().any(|token| token.contains("GIT_")) {
     return true;
   }
   if !tokens.iter().any(|token| git_like(token)) {
     return false;
   }
-  let plain_push = |part: &CommandPart| {
-    let words = part.words();
-    words.first().map(String::as_str) == Some("git") && words.get(1).map(String::as_str) == Some("push")
-  };
   tokens.iter().any(|token| git_like(token) && *token != "git")
     || tokens.iter().any(|token| WRAPPERS.contains(token))
     || (tokens.contains(&"push")
@@ -65,6 +101,30 @@ pub(super) fn disguised_git(command: &ClassifiedCommand) -> bool {
         .parts()
         .iter()
         .any(|part| part.words().iter().any(|word| word.contains("push")) && !plain_push(part) && !stash_push(part)))
+}
+
+/// The words of `text` split on whitespace and the shell's operators and quotes.
+fn tokens(text: &str) -> impl Iterator<Item = &str> {
+  text
+    .split(|c: char| c.is_whitespace() || ";|&()`$<>\"'{}".contains(c))
+    .filter(|token| !token.is_empty())
+}
+
+/// Whether `word` names git, with a folder or in any case: `/usr/bin/git`, `git.exe`, `Git`.
+fn git_like(word: &str) -> bool {
+  let name = file_name(word);
+  name == "git" || name == "git.exe"
+}
+
+/// The last segment of the path `word`, in lower case.
+fn file_name(word: &str) -> String {
+  word.rsplit(['/', '\\']).next().unwrap_or(word).to_lowercase()
+}
+
+/// Whether `part` is `git push` written plainly: no option before `push`.
+fn plain_push(part: &CommandPart) -> bool {
+  let words = part.words();
+  words.first().map(String::as_str) == Some("git") && words.get(1).map(String::as_str) == Some("push")
 }
 
 /// Whether `part` runs `git push`, with whatever options come before it; `git stash push` keeps its work in the

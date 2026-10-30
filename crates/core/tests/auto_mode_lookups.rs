@@ -198,7 +198,7 @@ fn lookups_hold_while_the_step_network_is_off() {
     "git remote show origin",
   ] {
     assert_eq!(
-      fixture.held_in(&fixture.scope(), command, offline),
+      fixture.held_in(&fixture.scope(), command, offline.clone()),
       Some(ReviewHold::NetworkOff),
       "{command}"
     );
@@ -258,6 +258,10 @@ fn lookups_writing_a_tool_cache_go_to_the_reviewer_in_a_step_that_may_write() {
     "pip index versions lurq",
     "cargo search lurq --limit 3",
   ] {
-    assert_eq!(fixture.held_in(&fixture.scope(), command, writing), None, "{command}");
+    assert_eq!(
+      fixture.held_in(&fixture.scope(), command, writing.clone()),
+      None,
+      "{command}"
+    );
   }
 }

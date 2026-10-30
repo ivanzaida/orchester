@@ -1,12 +1,11 @@
-//! A project's workspace settings (Project settings › Runs): the warm folders, the optional warm-up command and the
-//! free space the disk guard keeps. How many workspaces there are is the project's agents at once
-//! ([`crate::limits::AgentSlots`]), not a setting of its own.
+//! A project's workspace settings (Project settings › Runs): the warm folders and the optional warm-up command. How
+//! many workspaces there are is the project's agents at once ([`crate::limits::AgentSlots`]), not a setting of its
+//! own.
 
 use thiserror::Error;
 
 use super::{
   WorkspaceNumber,
-  disk::KeepFree,
   warm::{WarmChoice, WarmFolder, WarmPattern},
 };
 use crate::time::Timestamp;
@@ -61,14 +60,13 @@ impl WarmUpCommand {
   }
 }
 
-/// The workspace settings of a project.
+/// The workspace settings of a project. The free space the disk guard keeps is a setting of its own
+/// ([`crate::store::SettingsStore::keep_free`]): the guard holds for every project, workspaces on or off.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct WorkspaceSettings {
-  /// Whether the project uses warm workspaces: new runs borrow them, and the disk guard keeps `keep_free` free. Off
-  /// until a person turns it on in Project settings › Runs; until then every new run gets a worktree of its own, as
-  /// before workspaces, and the disk guard neither refuses nor pauses runs.
+  /// Whether the project uses warm workspaces: new runs borrow them. Off until a person turns it on in Project
+  /// settings › Runs; until then every new run gets a worktree of its own, as before workspaces.
   pub enabled: bool,
-  pub keep_free: KeepFree,
   pub warm_up: Option<WarmUpCommand>,
   /// In the order the person sees them.
   pub folders: Vec<WarmFolder>,

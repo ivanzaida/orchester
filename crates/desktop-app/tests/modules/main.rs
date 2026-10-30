@@ -1,10 +1,11 @@
 //! The Modules screens (ORC-48, redesigned in ORC-112) on seeded Kontur projects whose modules are made before the
 //! window opens: the list on its views with its search (`list`); a module's page with its tabs and their routes, its
 //! Summary's grouped tasks and in-place properties, its burndown, its *More actions* and the task page's header
-//! geometry (`page`); New module and Edit module as pages (`forms`); and here the module filter of Tasks, the module
-//! field of the task's header and of the task form, and the Delivery view beside Usage forecasting an open module
-//! (ORC-50). Needs `git`, as the seed does.
+//! geometry (`page`); New module and Edit module as pages (`forms`); a module's base branch and where General says it
+//! is set (`base_branch`); and here the module filter of Tasks, the module field of the task's header and of the task
+//! form, and the Delivery view beside Usage forecasting an open module (ORC-50). Needs `git`, as the seed does.
 
+mod base_branch;
 mod forms;
 mod harness;
 #[allow(

@@ -14,7 +14,7 @@ use orchester_core::{
   store::{RunStore, SettingsStore, TaskStore, WorkspaceStore},
   time::Timestamp,
   workspaces::{
-    DiskSpace, DiskUsage, DiskVerdict, KeepFree, Suggestion, WarmFolder, WarmUpCommand, WarmUpFailure, WorkspaceRecord,
+    DiskSpace, DiskUsage, KeepFree, Suggestion, WarmFolder, WarmUpCommand, WarmUpFailure, WorkspaceRecord,
     WorkspaceState, suggest,
   },
 };
@@ -22,7 +22,10 @@ use orchester_exec::disk_space::{LocalDisks, folder_size};
 use orchester_store::{ProjectDb, StoreError};
 
 pub use self::scan::ignored_folders;
-use crate::tasks::{changes::run_worktree, detail::run_store_error};
+use crate::{
+  storage::DiskGuard,
+  tasks::{changes::run_worktree, detail::run_store_error},
+};
 
 /// One workspace.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -75,8 +78,9 @@ pub struct WorkspacesView {
   pub limit: NonZeroU32,
   pub rows: Vec<WorkspaceRow>,
   pub disk: Option<DiskUsage>,
-  /// Whether the project turned warm workspaces on, and with them the disk guard.
+  /// Whether the project turned warm workspaces on.
   pub enabled: bool,
+  /// The free space the disk guard keeps, workspaces on or off.
   pub keep_free: KeepFree,
   pub folders: Vec<FolderRow>,
   /// Suggested folders the project has no warm folder for yet.
@@ -89,13 +93,13 @@ pub struct WorkspacesView {
 }
 
 impl WorkspacesView {
-  /// Whether the disk guard holds work back: workspaces are on and the disk has less free space than the project
-  /// keeps.
+  /// Whether the disk guard holds work back ([`DiskGuard::holds`]).
   pub fn low_disk(&self) -> bool {
-    self.enabled
-      && self
-        .disk
-        .is_some_and(|usage| matches!(self.keep_free.verdict(usage), DiskVerdict::Low { .. }))
+    DiskGuard {
+      keep_free: self.keep_free,
+      disk: self.disk,
+    }
+    .holds()
   }
 
   /// What the workspaces hold on disk together.
@@ -133,7 +137,7 @@ pub fn read(repo_root: &Path, disks: &dyn DiskSpace) -> Result<WorkspacesView, S
       .inspect_err(|error| tracing::warn!(%error, "the disk guard cannot read the free space"))
       .ok(),
     enabled: settings.enabled,
-    keep_free: settings.keep_free,
+    keep_free: db.keep_free()?,
     folders,
     suggestions,
     warm_up: settings.warm_up,
@@ -207,8 +211,8 @@ fn folder_row(
   }
 }
 
-/// The worktrees of runs made before workspaces that are still there.
-fn old_worktrees(db: &ProjectDb, repo_root: &Path) -> Result<Vec<OldWorktree>, StoreError> {
+/// The worktrees of runs made before workspaces, or while they are off, that are still there.
+pub(crate) fn old_worktrees(db: &ProjectDb, repo_root: &Path) -> Result<Vec<OldWorktree>, StoreError> {
   let folder = repo_root.join(orchester_core::integration::WORKTREES_DIR);
   let Ok(entries) = std::fs::read_dir(&folder) else {
     return Ok(Vec::new());

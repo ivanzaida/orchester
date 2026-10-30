@@ -295,6 +295,7 @@ fn changed(
     root: props.project.open.repo_root.clone(),
     module: Some(base),
     details,
+    base: None,
   })
 }
 

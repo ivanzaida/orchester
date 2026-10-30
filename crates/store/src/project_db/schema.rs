@@ -23,6 +23,7 @@ mod creation_snapshots;
 mod decision_authors;
 mod default_pipeline;
 mod denial_notes;
+mod disk_guard;
 mod editor_drafts;
 mod feedback;
 mod import;

@@ -70,6 +70,7 @@ mod usage;
 #[path = "../mcp_stable/vault.rs"]
 mod vault;
 mod window;
+mod worktree_removal;
 
 use std::{
   path::{Path, PathBuf},

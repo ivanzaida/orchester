@@ -97,9 +97,11 @@ impl PermissionOption {
     }
   }
 
-  pub const fn of_network(network: NetworkAccess) -> Self {
+  /// A host list needs what network off needs: until the CLIs limit commands to hosts (ORC-450), a list runs as
+  /// strictly as off, and where off cannot be enforced it does not run at all ([`AgentPermissions::enforced_on`]).
+  pub const fn of_network(network: &NetworkAccess) -> Self {
     match network {
-      NetworkAccess::Off => Self::NetworkOff,
+      NetworkAccess::Off | NetworkAccess::Hosts(_) => Self::NetworkOff,
       NetworkAccess::On => Self::NetworkOn,
     }
   }
@@ -350,8 +352,13 @@ impl AgentPermissions {
       manual_commands
     };
     let mut permissions = self.clone();
-    let (network, network_stays_on) = match support(provider, platform, PermissionOption::of_network(self.network)) {
+    let option = PermissionOption::of_network(&self.network);
+    let (network, network_stays_on) = match support(provider, platform, option) {
       Support::Enforced(mechanism) => (mechanism, None),
+      // Running a host list with network on would widen it; only network off falls back to on.
+      Support::Unavailable(reason) if matches!(self.network, NetworkAccess::Hosts(_)) => {
+        return Err(PermissionProblem::NotEnforceable { option, reason });
+      }
       Support::Unavailable(reason) => {
         permissions.network = NetworkAccess::On;
         let mechanism = match provider {
@@ -386,12 +393,12 @@ impl AgentPermissions {
 
   /// The network access a run on `provider` gets on `platform`: the chosen one, or on when off
   /// cannot be enforced there (as [`Self::enforced_on`] runs it).
-  pub const fn effective_network(&self, provider: AgentProvider, platform: Platform) -> NetworkAccess {
-    match self.network {
+  pub fn effective_network(&self, provider: AgentProvider, platform: Platform) -> NetworkAccess {
+    match &self.network {
       NetworkAccess::Off if !support(provider, platform, PermissionOption::NetworkOff).is_enforced() => {
         NetworkAccess::On
       }
-      network => network,
+      network => network.clone(),
     }
   }
 
@@ -425,8 +432,12 @@ impl AgentPermissions {
         _ => CommandPermission::Allowed(AllowedCommands::default()),
       };
     }
-    if let Some(option) = replacement(PermissionOption::of_network(self.network)) {
-      resets.push(PermissionOption::of_network(self.network));
+    // A host list is kept where it cannot be enforced, as a setting without any enforceable option is: resetting it
+    // to network on would widen it, and enforcing it refuses it.
+    let network = PermissionOption::of_network(&self.network);
+    let hosts = matches!(self.network, NetworkAccess::Hosts(_));
+    if let Some(option) = replacement(network).filter(|_| !hosts) {
+      resets.push(network);
       fitted.network = match option {
         PermissionOption::NetworkOn => NetworkAccess::On,
         _ => NetworkAccess::Off,

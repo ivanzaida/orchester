@@ -21,7 +21,7 @@ use orchester_ipc::Command;
 use orchester_store::{ProjectDb, StoreError};
 
 use super::{
-  Conversation, PanelState, SendError,
+  Conversation, SendError,
   composer::{ComposerMode, Then},
   send::send_as,
 };
@@ -137,8 +137,9 @@ pub enum OutgoingError {
   NotLatestRun(Option<u32>),
   /// The run's state changed since the person saw it: sending would do something else than they pressed.
   Changed,
-  /// No agent reads messages any more, and the task does not run again, as the state says.
-  Closed(PanelState),
+  /// No agent reads messages any more, and the task does not run again, for the reason (a message key)
+  /// [`Conversation::closed_reason`] gives.
+  Closed(&'static str),
   /// The mode has one way of sending only.
   NoSecondWay,
   /// A plan's changes were asked for, but no plan waits for a decision.
@@ -155,7 +156,7 @@ impl OutgoingError {
       }
       Self::NotLatestRun(None) => UiMessage::new("runs.unreadable.rejected"),
       Self::Changed => UiMessage::new("conversation.errors.runChanged"),
-      Self::Closed(state) => UiMessage::new(state.closed_reason()),
+      Self::Closed(reason) => UiMessage::new(reason),
       Self::NoSecondWay => UiMessage::new("conversation.errors.noSecondWay"),
       Self::NoPlan => UiMessage::new("runs.plan.errors.notAwaited"),
       Self::Send(error) => error.message(),
@@ -327,7 +328,7 @@ fn store_as(
   let then = match (then, way) {
     (Some(then), _) => then,
     (None, Way::Second | Way::StopTurn) => return Err(OutgoingError::NoSecondWay),
-    (None, Way::Primary) => return Err(OutgoingError::Closed(prepared.conversation.state)),
+    (None, Way::Primary) => return Err(OutgoingError::Closed(prepared.conversation.closed_reason())),
   };
   let timing = match Action::of(&prepared.mode, way, prepared.recipient) {
     Some(Action::SendNow) => Timing::Now,
