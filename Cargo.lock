@@ -2868,6 +2868,7 @@ name = "orchester-app"
 version = "0.3.0"
 dependencies = [
  "axum",
+ "base64 0.22.1",
  "block2 0.6.2",
  "chrono",
  "embed-resource",
@@ -2887,6 +2888,7 @@ dependencies = [
  "orchester-workspace",
  "parking_lot",
  "pulldown-cmark",
+ "raw-window-handle",
  "rfd",
  "rmcp",
  "rusqlite",

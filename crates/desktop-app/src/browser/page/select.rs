@@ -1,7 +1,8 @@
 //! A `<select>` list the person opened on the tab shown (`04 · Select list` `r31HX`), which a headless frame does not
 //! show: drawn under its field, as wide as it, in the menu's look (`surface_raised` in a `border_strong` stroke, radius
 //! 8, rows of 28 with the chosen one checked). Choosing an option sets it in the page; a press outside the list or a
-//! choice closes it.
+//! choice closes it. The options are the page's text, so they are sensitive: painted, but redacted in the MCP and
+//! DevTools trees and their screenshots.
 
 use lurq::{
   app::{
@@ -61,7 +62,6 @@ pub fn list(ctx: &mut Ctx, showing: &Showing, tab: &BrowserTabId, scale: Scale) 
       });
     })
     .id(format!("browser-select-option-{index}"))
-    .describe("a11y_name", option.label.clone())
     .describe("chosen", if option.selected { "true" } else { "false" })
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(ControlHeight::Md.value()))
@@ -71,6 +71,7 @@ pub fn list(ctx: &mut Ctx, showing: &Showing, tab: &BrowserTabId, scale: Scale) 
     .hovered_style(Style::new().background(ExtraColor::Hover.role()))
     .child(
       Text::new(&option.label)
+        .sensitive()
         .variant(TypographyStyle::Description)
         .color(PaletteColor::TextPrimary)
         .nowrap()

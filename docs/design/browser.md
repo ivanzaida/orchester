@@ -354,6 +354,12 @@ not jump to another project by itself.
 | Passkeys, the password manager, sites that refuse headless browsers | *Open in a browser window* (decision 7). |
 | Context menu, drag and drop of files, printing | Not supported; *Open in a browser window*. |
 
+What a page holds stays out of inspection: a dialog's message and a list's options are sensitive text, and a glyph no
+one sees covers the page (`page::cover`), so the window's MCP and DevTools trees carry none of it and `lurq_screenshot`
+paints over the whole page area, what Orchester draws over it too, while the person sees all of it. Tabs, the address
+line, owners and buttons stay readable. Not covered yet: the text of a JavaScript prompt's field, as lurq has no
+sensitive input that shows its value.
+
 ## Where the code goes
 
 - `orchester-core`: the tool names, schemas and inputs (`orchester_tools::browser`), the policy rows, the profile

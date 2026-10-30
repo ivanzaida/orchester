@@ -112,6 +112,8 @@ pulldown-cmark = { version = "0.13.4", default-features = false }
 # defined and matched when it starts. A regular expression engine is not a few lines of code; already built for
 # tree-sitter and sentry, so it adds no crate.
 regex = "1"
+# The handles of lurq's `RenderEngine`, for a test's stand-in engine; already built through lurq and winit.
+raw-window-handle = "0.6"
 # Native folder picker for choosing a project repository; lurq already uses it for DevTools.
 rfd = "0.15"
 # The MCP protocol of Orchester's own MCP server: its tools (`orchester_workspace::app_mcp`) and, in
