@@ -111,6 +111,7 @@ pub const ALL: [Scenario; 59] = [
   Scenario::of("deliverables", deliverables::seed),
   Scenario::of("delivery", delivery::seed),
   Scenario::of("delivery-blocked", delivery::blocked),
+  Scenario::of("delivery-lanes", delivery::lanes),
   Scenario::of("delivery-empty", delivery::empty),
   Scenario::of("overview-quiet", delivery::quiet),
   Scenario::of("overview-states", overview_states::seed),

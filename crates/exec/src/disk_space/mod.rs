@@ -23,16 +23,20 @@ pub const FREE_SPACE_OVERRIDE: &str = "ORCHESTER_FREE_SPACE_OVERRIDE_GB";
 #[derive(Clone, Copy, Debug, Default)]
 pub struct LocalDisks;
 
-impl DiskSpace for LocalDisks {
-  fn usage(&self, folder: &Path) -> Result<DiskUsage, DiskSpaceError> {
-    if let Some(usage) = overridden() {
-      return Ok(usage);
-    }
+impl LocalDisks {
+  /// The space of the disk `folder` is on as the operating system reports it, whatever [`FREE_SPACE_OVERRIDE`] says.
+  pub fn measured(folder: &Path) -> Result<DiskUsage, DiskSpaceError> {
     let existing = existing_ancestor(folder);
     platform_usage(&existing).map_err(|error| DiskSpaceError::Unreadable {
       path: folder.to_path_buf(),
       detail: error.to_string(),
     })
+  }
+}
+
+impl DiskSpace for LocalDisks {
+  fn usage(&self, folder: &Path) -> Result<DiskUsage, DiskSpaceError> {
+    overridden().map_or_else(|| Self::measured(folder), Ok)
   }
 }
 
