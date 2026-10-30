@@ -250,8 +250,10 @@ fixed address instead (see *The new app's MCP server* below).
   `step_not_offered` or `task_blocked`), `set_run_manual`, `get_approvals`, `set_allow_autopilot` and
   `set_reviewer` (approval modes, see below; auto mode's `set_run_auto_mode`, `get_auto_mode` and `set_auto_mode`
   answer `retired` for one release), `remove_worktree` (an ended run's worktree, as the task page's *Remove worktree* removes it;
-  refused with `run_not_ended`, `merge_running`, `uncommitted_changes` or `already_removed`; `get_task` and
-  `get_run` show each run's worktree as `present`, `removed` or `none`), `list_approvals`,
+  refused with `run_not_ended`, `merge_running`, `uncommitted_changes` or `already_removed`; a removal whose folder
+  stayed is finished by it again; `get_task` and `get_run` show each run's worktree as `present`, `removed`,
+  `not_removed` (its removal could not finish: `get_run`'s `worktree_not_removed` names the folder and why) or
+  `none`), `list_approvals`,
   `decide_approval`, `decide_plan` (the plan a gated step waits with, decided as the task page's plan card
   decides it: `approve` with the `version` it is for and no note, only while *Let automation answer
   approvals* is on (refused with `automation_not_allowed` otherwise), or `request_changes` with a `note` the

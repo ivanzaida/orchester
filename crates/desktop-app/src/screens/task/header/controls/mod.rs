@@ -265,15 +265,25 @@ fn primary(controls: &Controls, run: &RunView) -> Option<(Look, RunControl, Gate
 }
 
 /// Why Continue run of an interrupted run whose worktree was removed is unavailable: it stays, with why; Run again
-/// starts a new run instead.
+/// starts a new run instead. A removal that left the folder on disk says it is not removed (ORC-418).
 fn continue_removed(ctx: &Ctx, run: &RunView) -> Option<Reason> {
   if !matches!(run.run.status(), RunStatus::Interrupted(_)) {
     return None;
   }
   run.worktree_removed?;
   let number = run.run.number().get().to_string();
-  Some(Reason {
-    short: ctx.t("task.reasons.worktreeRemoved"),
-    full: ctx.t_args("task.controls.worktreeRemoved", [("run", number.as_str())]),
+  let run_arg = ("run", number.as_str());
+  Some(match &run.worktree_not_removed {
+    Some(left) => Reason {
+      short: ctx.t("task.reasons.worktreeNotRemoved"),
+      full: ctx.t_args(
+        "task.controls.worktreeNotRemoved",
+        [run_arg, ("path", left.path.as_str())],
+      ),
+    },
+    None => Reason {
+      short: ctx.t("task.reasons.worktreeRemoved"),
+      full: ctx.t_args("task.controls.worktreeRemoved", [run_arg]),
+    },
   })
 }

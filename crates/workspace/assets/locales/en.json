@@ -842,6 +842,7 @@
       "failedNoAgent": "This run has no agent step to continue. Its saved work remains on its branch.",
       "merged": "This run's work was merged. Messages no longer reach its agents.",
       "worktreeRemoved": "The run’s worktree was removed, so its agent cannot continue. Messages no longer reach its agents.",
+      "worktreeNotRemoved": "The run’s worktree could not be removed: its folder is still on disk, and its agent cannot continue. Messages no longer reach its agents. Remove worktree tries again.",
       "ended": "This run has ended. Messages no longer reach its agents."
     },
     "errors": {
