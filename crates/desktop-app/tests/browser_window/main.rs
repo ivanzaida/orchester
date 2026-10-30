@@ -3,15 +3,18 @@
 //! window itself headless on a session's browser state as a runner reports it (`window`, on `support`), its tab strip
 //! drawn (`strip`), the person's input on the page as it sends it to the tab (`input`), copy, cut and paste on the page
 //! (`clipboard`), what the address line shows and whether it holds the focus (`address`), the all-tabs menu's hold on
-//! the focus (`overflow`), and what it does while a restart waits for its answer (`restart`). Run with
+//! the focus (`overflow`), what it does while a restart waits for its answer (`restart`), what its own MCP shows of a
+//! page (`inspection`), and when it stops the screencast (`screencast`). Run with
 //! `cargo test -p orchester-app --test browser_window browser_`.
 
 mod address;
 mod clipboard;
 mod fit;
 mod input;
+mod inspection;
 mod overflow;
 mod restart;
+mod screencast;
 mod strip;
 mod support;
 mod tabs;

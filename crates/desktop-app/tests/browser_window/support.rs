@@ -65,6 +65,7 @@ pub struct Browser {
   pub tree: Tree,
   pub root: PathBuf,
   pub state: BrowserWindow,
+  pub link: BrowserLink,
 }
 
 impl Browser {
@@ -107,6 +108,7 @@ impl Browser {
       window,
       root,
       state,
+      link: link.clone(),
     };
     browser.tree.set_scale_factor(scale);
     browser.tree.resize((1280.0 * scale) as u32, (800.0 * scale) as u32);

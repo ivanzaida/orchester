@@ -19,10 +19,13 @@ use super::{
 pub enum BrowserColor {
   /// `surface_base` fully transparent: where a cut edge's fade of the tab strip ends (`Fade` in `01e` `cmofl`).
   FadeClear,
+  /// Fully transparent: the glyph that covers the page in captures made for inspection, which no one sees (no design
+  /// node).
+  PageCover,
 }
 
 impl BrowserColor {
-  pub const ALL: [Self; 1] = [Self::FadeClear];
+  pub const ALL: [Self; 2] = [Self::FadeClear, Self::PageCover];
 
   pub fn role(self) -> PaletteColor {
     PaletteColor::extra(self.name())
@@ -31,6 +34,7 @@ impl BrowserColor {
   const fn name(self) -> &'static str {
     match self {
       Self::FadeClear => "browser_fade_clear",
+      Self::PageCover => "browser_page_cover",
     }
   }
 
@@ -38,6 +42,7 @@ impl BrowserColor {
     match (self, mode) {
       (Self::FadeClear, Mode::Dark) => Color::from_hex("#11111300"),
       (Self::FadeClear, Mode::Light) => Color::from_hex("#E4E4E800"),
+      (Self::PageCover, _) => Color::from_hex("#00000000"),
     }
   }
 }

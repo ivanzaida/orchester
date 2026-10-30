@@ -2,7 +2,9 @@
 //! show: drawn over the page only, on the scrim, near its top: where it comes from (*localhost:5173 says*), its
 //! message, a field for a prompt's answer, and its buttons: OK for an alert, Cancel and OK for a confirm or a prompt,
 //! Stay and Leave for a page that asks before it unloads. The answer goes back to the tab
-//! (`Page.handleJavaScriptDialog`). An agent's tab never shows one: the runner dismisses it and tells the agent.
+//! (`Page.handleJavaScriptDialog`). An agent's tab never shows one: the runner dismisses it and tells the agent. The
+//! message is the page's text, so it is sensitive: painted, but redacted in the MCP and DevTools trees and their
+//! screenshots.
 
 use lurq::{
   app::{
@@ -160,6 +162,7 @@ fn card(ctx: &Ctx, (kind, origin, message): (DialogKind, &str, &str), field: Opt
     )
     .child(
       Text::new(message)
+        .sensitive()
         .id("browser-dialog-message")
         .variant(BrowserText::DialogMessage.role())
         .width(Dimension::Pct(100.0)),

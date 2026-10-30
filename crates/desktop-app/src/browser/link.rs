@@ -48,6 +48,8 @@ struct Inner {
   /// Whether the window is open.
   open: Mutex<bool>,
   asked: watch::Sender<Option<Show>>,
+  #[cfg(feature = "test-support")]
+  minimized_for_test: lurq::core::Signal<bool>,
 }
 
 /// One link for the session's life.
@@ -71,6 +73,8 @@ impl BrowserLink {
         title,
         open: Mutex::new(false),
         asked: watch::Sender::new(None),
+        #[cfg(feature = "test-support")]
+        minimized_for_test: lurq::core::Signal::new(false),
       }),
     }
   }
@@ -132,6 +136,25 @@ impl BrowserLink {
   pub(super) fn closed(&self) {
     *self.inner.open.lock() = false;
     self.inner.services.runners.browser_window().closed();
+  }
+
+  /// Whether a test minimised the window, read as lurq's report of it is.
+  #[cfg(feature = "test-support")]
+  pub(super) fn minimized_for_test(&self) -> bool {
+    self.inner.minimized_for_test.get()
+  }
+
+  #[cfg(not(feature = "test-support"))]
+  pub(super) const fn minimized_for_test(&self) -> bool {
+    false
+  }
+
+  /// Minimises or restores the window for tests of what follows: only lurq's shell reports that, which a headless
+  /// window has none of.
+  #[cfg(feature = "test-support")]
+  #[doc(hidden)]
+  pub fn minimize_for_test(&self, minimized: bool) {
+    self.inner.minimized_for_test.set(minimized);
   }
 }
 
