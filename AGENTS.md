@@ -10,10 +10,16 @@ be added later, so domain logic must not depend on the desktop app.
 - Work plan and backlog: `docs/plan.md`. Take tasks from it and move them to its *Done* list when finished.
 - Design source: `crates/desktop-app/design/orchester.pen`, the desktop app's design with its `· redesign` boards
   (committed 2026-10-29; it replaces the Pencil document `87147a2b-…` that briefs named before). It is encrypted —
-  read it only through the `pencil` MCP, passing the absolute path of `crates/desktop-app/design/orchester.pen` in
-  your own checkout or worktree as `filePath`; never Read/Grep it. The person edits it in Pencil from the main
-  checkout and commits it; design steps change it only in the document the person has open and leave the commit to
-  the person. `data/orchester.pen` and `data/orchester2.pen` are older designs: do not use them.
+  read it only through the `pencil` MCP; never Read/Grep it. Pass as `filePath` the absolute path of
+  `crates/desktop-app/design/orchester.pen` in the project's MAIN checkout — the folder that holds `.orchester/` (for a
+  run, the part of your worktree's path before `.orchester/worktrees/`), e.g.
+  `H:/projects/orchester/crates/desktop-app/design/orchester.pen` — never the copy in your own worktree. Pencil has
+  the main checkout's file open (in any tab, active or not) and answers for it by its path; a path Pencil has not
+  open (a worktree copy) is not refused: the MCP silently answers from whichever tab is active, often
+  `orchester-web.pen`. So make your first `execute` print the file's top-level frame names and stop if they are not
+  the desktop boards (`Task page · redesign`, `Shared configuration · redesign`, …). The person edits it in Pencil
+  from the main checkout and commits it; design steps change it only in that document and leave the commit to the
+  person. `data/orchester.pen` and `data/orchester2.pen` are older designs: do not use them.
 
 Cross-agent skill layout:
 
