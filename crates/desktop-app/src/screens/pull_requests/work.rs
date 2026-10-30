@@ -79,13 +79,18 @@ impl Actions {
 
 /// The stored list, read when the page opens and again for each `reread`, after reading it failed.
 pub(super) fn load(ctx: &mut Ctx, open: &OpenProject, reread: u64) -> FutureHandle<PullRequestList, Message> {
-  ctx.future((open.repo_root.clone(), reread), |(repo_root, _)| async move {
-    background::run(move || load_list_in(&repo_root))
-      .await?
-      .map_err(|error| {
-        tracing::error!(%error, "cannot read the project's pull requests");
-        error.message()
-      })
+  let hold = Services::of(ctx).hold;
+  ctx.future((open.repo_root.clone(), reread), move |(repo_root, _)| {
+    let hold = hold.clone();
+    async move {
+      hold.released().await;
+      background::run(move || load_list_in(&repo_root))
+        .await?
+        .map_err(|error| {
+          tracing::error!(%error, "cannot read the project's pull requests");
+          error.message()
+        })
+    }
   })
 }
 

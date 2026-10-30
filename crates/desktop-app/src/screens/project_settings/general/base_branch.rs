@@ -34,7 +34,7 @@ use crate::{
     field::{SelectField, field_error},
     icon::Icon,
     message::message_text,
-    state::loading,
+    skeleton::{self, Skeleton},
   },
 };
 
@@ -45,6 +45,8 @@ const LOCAL: &str = "local:";
 const REMOTE: &str = "remote:";
 /// The select's width (`Select` `FZgxm`).
 const SELECT_WIDTH: f32 = 200.0;
+/// The bone of the branch in the select while it is read.
+const VALUE_BONE: f32 = 96.0;
 
 /// A read of the setting and the branches, with the row's revision and the project's count of settings changes it
 /// was asked at.
@@ -92,15 +94,16 @@ impl Component for BaseBranch {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let project = ctx.props::<TabProps>().project.clone();
-    let programs = Services::of(ctx).programs;
+    let Services { programs, hold, .. } = Services::of(ctx);
     let asked = (
       self.revision.get(),
       project.feed.outside.get().of(Outside::ProjectSettings),
     );
     let state = ctx
       .future((project.open.repo_root, asked), move |(root, asked)| {
-        let programs = programs.clone();
+        let (programs, hold) = (programs.clone(), hold.clone());
         async move {
+          hold.released().await;
           background::run(move || project_settings::base_branch_in(&root, &programs).map(|read| Read(read, asked)))
             .await?
         }
@@ -118,10 +121,14 @@ impl Component for BaseBranch {
     let row = match (rejected, &state.data) {
       (Some(error), _) => row.under(field_error("settings-base-branch-error", &message_text(ctx, error))),
       (None, Some(read)) if shown || read.1 == asked => self.control(ctx, row, (read, read.1 == asked)),
-      (None, _) => row.under(loading(
-        "settings-base-branch-loading",
-        &ctx.t("project_settings.reading"),
-      )),
+      // The row stands; only the branch in its select is a bone while it is read (`17 · Patterns` `d2yqa`).
+      (None, _) => {
+        let bone = skeleton::select(ctx, SELECT_WIDTH, VALUE_BONE);
+        let bone = Skeleton::new("settings-base-branch-loading", ctx.t("project_settings.reading"))
+          .inline()
+          .show(ctx, bone);
+        row.hint(ctx.t("project_settings.baseBranchShortHint")).control(bone)
+      }
     };
     row.render(ctx)
   }

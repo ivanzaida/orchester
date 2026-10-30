@@ -476,6 +476,19 @@ async fn live_updates_a_binding_change_rewrites_the_local_bodies() {
   stream.abort();
 }
 
+/// Who needs each reference of `here`, by name, kind and newest version.
+fn needers(here: &Here) -> Vec<Vec<(String, ResourceKind, u32)>> {
+  here
+    .references
+    .iter()
+    .map(|reference| {
+      (reference.needed_by.iter())
+        .map(|needer| (needer.name.clone(), needer.kind, needer.number.get()))
+        .collect()
+    })
+    .collect()
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn live_updates_on_this_computer_lists_each_reference_with_who_needs_it() {
   let unbound = Unbound::publish();
@@ -501,17 +514,8 @@ async fn live_updates_on_this_computer_lists_each_reference_with_who_needs_it() 
     ],
     "connections, then MCP servers, then secrets"
   );
-  let needers: Vec<Vec<(String, ResourceKind, u32)>> = here
-    .references
-    .iter()
-    .map(|reference| {
-      (reference.needed_by.iter())
-        .map(|needer| (needer.name.clone(), needer.kind, needer.number.get()))
-        .collect()
-    })
-    .collect();
   assert_eq!(
-    needers,
+    needers(&here),
     [
       vec![("Builder".to_owned(), ResourceKind::AgentProfile, 1)],
       vec![("Builder".to_owned(), ResourceKind::AgentProfile, 1)],

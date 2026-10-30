@@ -44,10 +44,7 @@ use self::save_state::SaveState;
 use crate::{
   routes::{AccountsView, JoinTarget, OrchesterView},
   services::Services,
-  ui::{
-    message::message_text,
-    state::{load_error, loading},
-  },
+  ui::{message::message_text, state::load_error},
 };
 
 /// The accounts as read, shared with the tab.
@@ -150,11 +147,13 @@ impl Component for SettingsScreen {
     let Props { tab, rotation, invite } = ctx.props::<Props>().clone();
     self.follow_tab(tab);
     ctx.provide(self.saves.clone());
-    let workspace = Services::of(ctx).workspace;
+    let services = Services::of(ctx);
+    let (workspace, hold) = (services.workspace, services.hold);
     let loaded = ctx
       .future(self.revision.get(), move |_| {
-        let workspace = workspace.clone();
+        let (workspace, hold) = (workspace.clone(), hold.clone());
         async move {
+          hold.released().await;
           background::run(move || workspace.agent_accounts())
             .await?
             .map(|accounts| Listed(Arc::new(accounts)))
@@ -185,11 +184,11 @@ impl Component for SettingsScreen {
             revision: self.revision.clone(),
           },
         ),
-        _ => accounts_pane(loading("settings-accounts-loading", &ctx.t("accounts.reading")).into()),
+        _ => accounts_pane(accounts::reading(ctx)),
       },
     };
     let saved = tab.saves_as_made().then(|| self.saves.summary());
-    page::page(ctx, (tab, saved), count, body)
+    page::page(ctx, (tab, saved), (count, loaded.is_pending()), body)
   }
 }
 

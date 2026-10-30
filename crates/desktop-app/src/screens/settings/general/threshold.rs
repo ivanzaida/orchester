@@ -28,12 +28,15 @@ use crate::{
     field::{FieldInput, field_error},
     message::message_text,
     setting_rows::SettingRow,
+    skeleton::{self, Skeleton},
   },
 };
 
 const ID: &str = "settings-threshold";
 /// The value's field and its unit (`Box` `C8WIQw` in `01 · General`).
 const FIELD_WIDTH: f32 = 120.0;
+/// The value's bone while it is read: a two-digit percentage.
+const VALUE_BONE: f32 = 14.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Read(WarningThreshold);
@@ -155,7 +158,15 @@ impl Component for ThresholdRow {
     } else {
       None
     };
-    let field = field.render(ctx);
+    // While the threshold is read, its value is a bone in its field (`13 · App settings · General · loading` `JVv11`).
+    let field = if read.is_pending() && read.data.is_none() {
+      let bone = skeleton::unit_field(ctx, FIELD_WIDTH, VALUE_BONE, &ctx.t("settings.general.threshold.unit"));
+      Skeleton::new(format!("{ID}-reading"), ctx.t("settings.reading"))
+        .inline()
+        .show(ctx, bone)
+    } else {
+      field.render(ctx)
+    };
     SettingRow::new(ID, ctx.t("settings.general.threshold.title"))
       .hint(ctx.t("settings.general.threshold.hint"))
       .info(ctx.t("settings.general.threshold.description"))
@@ -168,11 +179,13 @@ impl Component for ThresholdRow {
 impl ThresholdRow {
   /// The threshold as stored, read when the row shows.
   fn stored(&self, ctx: &mut Ctx) -> lurq::app::ctx::FutureState<Read, Message> {
-    let workspace = Services::of(ctx).workspace;
+    let services = Services::of(ctx);
+    let (workspace, hold) = (services.workspace, services.hold);
     ctx
       .future((), move |()| {
-        let workspace = workspace.clone();
+        let (workspace, hold) = (workspace.clone(), hold.clone());
         async move {
+          hold.released().await;
           background::run(move || workspace.usage_warning_threshold())
             .await?
             .map(Read)

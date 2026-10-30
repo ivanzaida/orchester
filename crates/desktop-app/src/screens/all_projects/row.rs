@@ -30,6 +30,7 @@ use crate::{
     icon_button::IconButton,
     message::message_text,
     pressable::opening,
+    skeleton::{self, bone},
   },
 };
 
@@ -45,6 +46,10 @@ const HEADINGS_HEIGHT: f32 = 32.0;
 /// Longest folder path shown in full in a row; a longer one keeps its drive and last folders, so the folder's
 /// own name stays in view.
 const PATH_CHARS: usize = 72;
+/// A row's status, needs-you count and last-opened bones while the projects are read (`EZ5Bq`).
+const BONE_STATUS: f32 = 120.0;
+const BONE_COUNT: f32 = 26.0;
+const BONE_OPENED: f32 = 62.0;
 
 pub(super) fn headings(ctx: &Ctx) -> Row {
   let heading = |key: &str| {
@@ -66,6 +71,46 @@ pub(super) fn headings(ctx: &Ctx) -> Row {
     .child(heading("projects.columns.needsYou").width(Dimension::Px(COUNT_WIDTH)))
     .child(heading("projects.columns.lastOpened").width(Dimension::Px(OPENED_WIDTH)))
     .child(Row::new().width(Dimension::Px(ACTIONS_WIDTH)))
+}
+
+/// A project's row while the projects are read (`12 · All projects · loading` `EZ5Bq`): its tile, name, folder, runner
+/// status, counts, last opened and actions as bones in the row's own cells; `(name, folder)` are its words' lengths.
+pub(super) fn bones(ctx: &Ctx, (name, folder): (f32, f32), last: bool) -> Row {
+  let text = Column::new()
+    .flex(1.0)
+    .min_width(Dimension::Px(0.0))
+    .spacing(ExtraSpacing::Tight.role())
+    .child(skeleton::line(ctx, ExtraTypography::Strong.role(), name))
+    .child(skeleton::line(ctx, ExtraTypography::MonoNote.role(), folder));
+  let identity = Row::new()
+    .flex(1.0)
+    .min_width(Dimension::Px(0.0))
+    .spacing(SpacingSize::Md)
+    .align_items(Alignment::Center)
+    .child(bone(TILE, TILE).rounded(RadiusSize::Md))
+    .child(text);
+  let cell = |width: f32| Row::new().width(Dimension::Px(width)).align_items(Alignment::Center);
+  let row = Row::new()
+    .width(Dimension::Pct(100.0))
+    .padding(SpacingSize::Md)
+    .spacing(SpacingSize::Md)
+    .align_items(Alignment::Center)
+    .child(identity)
+    .child(cell(STATUS_WIDTH).child(skeleton::status(ctx, BONE_STATUS)))
+    .child(cell(COUNT_WIDTH).child(skeleton::count()))
+    .child(cell(COUNT_WIDTH).child(bone(BONE_COUNT, 8.0)))
+    .child(cell(OPENED_WIDTH).child(skeleton::line(ctx, TypographyStyle::Description, BONE_OPENED)))
+    .child(
+      cell(ACTIONS_WIDTH)
+        .spacing(SpacingSize::Sm)
+        .child(bone(OPEN_WIDTH - 4.0, OPEN_WIDTH - 4.0))
+        .child(bone(OPEN_WIDTH - 4.0, OPEN_WIDTH - 4.0)),
+    );
+  if last {
+    row
+  } else {
+    row.border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
+  }
 }
 
 /// The row of `listed`, with its removal question when it is asked; `last` draws no line under it.

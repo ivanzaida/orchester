@@ -38,7 +38,7 @@ use crate::{
       draft_bar::{DraftBar, Standing},
       import_detail::item_detail,
       import_preview, import_result,
-      import_rows::{Review, Unchosen, Viewed},
+      import_rows::{self, Review, Unchosen, Viewed},
       page_head,
     },
     skills::words,
@@ -49,6 +49,7 @@ use crate::{
     field::field_error,
     icon::Icon,
     notice::{Notice, NoticeTone},
+    skeleton::Skeleton,
   },
 };
 #[derive(Clone)]
@@ -127,15 +128,20 @@ impl Component for Import {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>().clone();
     let root = props.project.open.repo_root.clone();
+    let hold = crate::services::Services::of(ctx).hold;
     let read = ctx
-      .future(root, |root| async move {
-        background::run(move || repository::scan(&root))
-          .await
-          .map_err(ImportError::Background)?
-          .map_err(|error| {
-            tracing::error!(%error,"repository scan failed");
-            ImportError::Read
-          })
+      .future(root, move |root| {
+        let hold = hold.clone();
+        async move {
+          hold.released().await;
+          background::run(move || repository::scan(&root))
+            .await
+            .map_err(ImportError::Background)?
+            .map_err(|error| {
+              tracing::error!(%error,"repository scan failed");
+              ImportError::Read
+            })
+        }
       })
       .state()
       .get();
@@ -145,10 +151,10 @@ impl Component for Import {
       .spacing(HubSpacing::Sections.role())
       .child(top(ctx, &props));
     if read.is_pending() && read.data.is_none() {
-      page = page.child(crate::ui::state::loading(
-        "instruction-import-loading",
-        &ctx.t("instructions.importReading"),
-      ));
+      // The notice is fixed words and stays; only what the repository holds is a bone while it is read.
+      let bones = import_rows::reading(ctx, "instruction-import", READING_ROWS);
+      let bones = Skeleton::new("instruction-import-loading", ctx.t("instructions.importReading")).show(ctx, bones);
+      page = page.child(notice(ctx)).child(bones);
       return hub::item_body(PAGE, page, None);
     }
     if read.is_rejected() {
@@ -166,6 +172,8 @@ impl Component for Import {
 }
 /// The page's scrolling body (`instruction-import-page`, its `-pane` and `-side`).
 const PAGE: &str = "instruction-import-page";
+/// The import review's rows while the repository is read: each path's and detail's bone widths.
+const READING_ROWS: &[(f32, f32)] = &[(180.0, 240.0), (150.0, 210.0), (200.0, 260.0), (160.0, 220.0)];
 impl Import {
   fn loaded(&self, ctx: &mut Ctx, props: &Props, scan: &RepositoryScan, mut page: Column) -> Element {
     let state = self.action.state().get();
@@ -185,16 +193,7 @@ impl Import {
       .page(ctx);
       return hub::item_body(PAGE, result, None);
     }
-    page = page.child(
-      Notice::new(
-        "instruction-import-notice",
-        NoticeTone::Info,
-        ctx.t("instructions.importDraftsOnly"),
-      )
-      .icon(Icon::Info)
-      .body(ctx.t("instructions.importNote"))
-      .flat(),
-    );
+    page = page.child(notice(ctx));
     if state.is_rejected() {
       page = page.child(field_error(
         "instruction-import-error",
@@ -284,6 +283,17 @@ impl Import {
   fn chosen(&self, scan: &RepositoryScan) -> Vec<ImportItem> {
     self.unchosen.get().of(&scan.items)
   }
+}
+/// The notice that the import only creates drafts.
+fn notice(ctx: &Ctx) -> Notice {
+  Notice::new(
+    "instruction-import-notice",
+    NoticeTone::Info,
+    ctx.t("instructions.importDraftsOnly"),
+  )
+  .icon(Icon::Info)
+  .body(ctx.t("instructions.importNote"))
+  .flat()
 }
 /// The crumb back to Instructions, then the page's title and where it read (`Top` `F9FVc`).
 fn top(ctx: &Ctx, props: &Props) -> Element {

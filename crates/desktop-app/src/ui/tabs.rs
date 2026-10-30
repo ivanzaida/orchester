@@ -29,6 +29,7 @@ use lurq::{
 use super::{
   icon::{Icon, icon},
   pressable::{Focus, Press, inert, pressable},
+  skeleton,
   tooltip::Tooltip,
 };
 use crate::{
@@ -65,6 +66,8 @@ pub struct PageTab {
   badge: Option<usize>,
   /// How many there are, a number after the label, and whether it counts what waits for the person.
   count: Option<(usize, bool)>,
+  /// The count is still read: its bone after the label.
+  reading: bool,
   height: f32,
 }
 
@@ -78,6 +81,7 @@ impl PageTab {
       explanation: None,
       badge: None,
       count: None,
+      reading: false,
       height: TAB_HEIGHT,
     }
   }
@@ -138,6 +142,14 @@ impl PageTab {
     self
   }
 
+  /// How many there are is still read: a count's bone after the label (`D · Bones` in `13 · Patterns` `AOQZ3`); its
+  /// element id is `<id>-count`.
+  #[must_use]
+  pub const fn count_reading(mut self) -> Self {
+    self.reading = true;
+    self
+  }
+
   fn render(self, ctx: &mut Ctx) -> Element {
     let open = match self.state {
       TabState::Unavailable(reason) => {
@@ -182,7 +194,7 @@ impl PageTab {
       .align_items(Alignment::Center)
       .describe("a11y_name", self.label.clone())
       .describe("state", if self.current { "current" } else { "enabled" });
-    let button = button.child(counted_label(&self.id, label, (self.badge, self.count)));
+    let button = button.child(counted_label(&self.id, label, (self.badge, self.count, self.reading)));
     let button = if self.explanation.is_some() {
       button.child(icon(Icon::Lock, IconSize::Xs, PaletteColor::TextMuted))
     } else {
@@ -202,8 +214,13 @@ impl PageTab {
   }
 }
 
-/// A tab's label with its badge, or its quiet count (in `warning` when it counts what waits for the person).
-fn counted_label(id: &str, label: Text, (badge, count): (Option<usize>, Option<(usize, bool)>)) -> Element {
+/// A tab's label with its badge, its quiet count (in `warning` when it counts what waits for the person), or the
+/// count's bone while it is read.
+fn counted_label(
+  id: &str,
+  label: Text,
+  (badge, count, reading): (Option<usize>, Option<(usize, bool)>, bool),
+) -> Element {
   let row = Row::new()
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
@@ -223,6 +240,7 @@ fn counted_label(id: &str, label: Text, (badge, count): (Option<usize>, Option<(
           .nowrap(),
       )
       .into(),
+    (None, None) if reading => row.child(skeleton::count().id(format!("{id}-count"))).into(),
     (None, None) => row.into(),
   }
 }

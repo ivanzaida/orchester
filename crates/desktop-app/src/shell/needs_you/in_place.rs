@@ -38,7 +38,11 @@ use crate::{
   },
   services::Services,
   theme::{ExtraSpacing, ExtraTypography},
-  ui::{field::field_error, message::message_text, state::loading},
+  ui::{
+    field::field_error,
+    message::message_text,
+    skeleton::{self, Skeleton},
+  },
 };
 
 /// Which card answers which item.
@@ -149,8 +153,10 @@ impl Component for InPlaceCard {
       return with_conversation(ctx, &props, error.into());
     }
     let Some(Read(read)) = state.data else {
-      let reading = loading(&format!("{}-reading", props.id), &ctx.t("needs_you.reading"));
-      return with_conversation(ctx, &props, reading.into());
+      // The request's lines are bones while it is read, under the card's own head.
+      let bones = skeleton::lines(ctx, &[260.0, 200.0]);
+      let reading = Skeleton::new(format!("{}-reading", props.id), ctx.t("needs_you.reading")).show(ctx, bones);
+      return with_conversation(ctx, &props, reading);
     };
     let lost = read.detail.lost_its_runner(online);
     // The panel expands one item at a time, so its decisions follow that item's run, as a tab's follow its own.

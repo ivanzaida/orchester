@@ -25,6 +25,7 @@ use serde_json::{Value, json};
 use support::Window;
 
 const PROJECT: &str = "3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b";
+const PROFILE: &str = "5a1e3b7c-2d4f-4a6b-8c9d-0e1f2a3b4c5d";
 
 #[test]
 fn window_control_is_on_in_debug_builds_only_unless_the_environment_says_otherwise() {
@@ -183,6 +184,12 @@ fn navigate_takes_the_parameters_each_screen_has_and_answers_them_back() {
       json!({ "route": "memory", "project": PROJECT, "tab": "waiting" }),
       format!("{root}/memory?tab=waiting"),
       json!({ "project": PROJECT, "tab": "waiting" }),
+    ),
+    // A profile's page, which QA opens straight away to hold its read.
+    (
+      json!({ "route": "agents", "project": PROJECT, "agent": PROFILE }),
+      format!("{root}/agents/{PROFILE}"),
+      json!({ "project": PROJECT, "agent": PROFILE }),
     ),
     (
       json!({ "route": "settings", "tab": "general" }),

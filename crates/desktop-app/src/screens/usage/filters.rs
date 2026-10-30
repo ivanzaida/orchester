@@ -12,7 +12,7 @@ use lurq::{
     ctx::Ctx,
     theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Row, Text},
+  components::{Column, Row, Text},
   core::Signal,
   layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
@@ -32,7 +32,7 @@ use crate::{
     filter::{FilterChip, filter_group, filter_menu_panel, filter_option, filter_option_explained},
     icon::{Icon, icon},
     menu::separator,
-    state::loading,
+    skeleton::{self, Skeleton},
   },
 };
 
@@ -42,6 +42,8 @@ const PROVIDER_MENU_WIDTH: f32 = 260.0;
 const SEARCH_MENU_WIDTH: f32 = 240.0;
 /// A list longer than this gets a search; *Model* always has one (`Model filter · search in a long list`).
 const SEARCH_FROM: usize = 8;
+/// A menu's values while the period is read.
+const READING: [f32; 3] = [140.0, 110.0, 160.0];
 
 /// The words of a filter's name.
 pub fn facet_name(ctx: &Ctx, facet: Facet) -> Arc<str> {
@@ -119,9 +121,13 @@ pub fn menu(
 ) -> Element {
   let id = format!("{}-menu", facet_id(facet));
   let Some(dashboard) = dashboard else {
-    return filter_menu_panel(&id, MENU_WIDTH)
-      .child(loading(&format!("{id}-reading"), &ctx.t("usage.filters.reading")).padding(SpacingSize::Sm))
-      .into();
+    // The menu's values are bones while the period is read (`usage.filters.reading` inside an open filter).
+    let bones = Column::new()
+      .width(Dimension::Pct(100.0))
+      .padding(SpacingSize::Sm)
+      .child(skeleton::lines(ctx, &READING));
+    let bones = Skeleton::new(format!("{id}-reading"), ctx.t("usage.filters.reading")).show(ctx, bones);
+    return filter_menu_panel(&id, MENU_WIDTH).child(bones).into();
   };
   if facet == Facet::Provider {
     return provider_menu(ctx, dashboard, &id, requery);

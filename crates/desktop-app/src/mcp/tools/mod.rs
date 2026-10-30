@@ -180,6 +180,8 @@ fn page_params(page: &ProjectPage, params: &mut Map<String, Value>) {
     }
     ProjectPage::NewConnection(kind) => insert("kind", kind.name()),
     ProjectPage::EditConnection(connection) => insert("connection", &connection.to_string()),
+    ProjectPage::NewAgent(_) => insert("agent", "new"),
+    ProjectPage::Agent(id, _) => insert("agent", &id.to_string()),
     ProjectPage::NewSkill => insert("skill", "new"),
     ProjectPage::Skill(id) => insert("skill", &id.to_string()),
     ProjectPage::ImportSkills => insert("skill", "import"),

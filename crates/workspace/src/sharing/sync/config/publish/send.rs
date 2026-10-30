@@ -7,8 +7,7 @@
 //! resource's later versions wait behind it.
 
 use orchester_api::{
-  ErrorCode, Reference as SharedReference, ReferenceTarget as SharedTarget, ResourceCreate, SharedResource,
-  SharedVersion, SharingErrorDetails, VersionContent, VersionPublish,
+  ErrorCode, ResourceCreate, SharedResource, SharedVersion, SharingErrorDetails, VersionContent, VersionPublish,
 };
 use orchester_core::{
   blob::ContentHash,
@@ -27,7 +26,7 @@ use super::{ConfigServer, RemoteResourceStore};
 use crate::sharing::{
   SharingError,
   project::convert,
-  sync::config::{bindings, cache_version, reference, resource as kept_resource},
+  sync::config::{bindings, cache_version, reference, resource as kept_resource, shared_reference},
 };
 
 impl<S: ConfigServer> RemoteResourceStore<S> {
@@ -304,18 +303,5 @@ fn base_reference(kept: &VersionReference) -> Option<Reference> {
       role: kept.role.as_deref()?.parse::<SecretKind>().ok()?,
     }),
     ReferenceTarget::Tool(_) => None,
-  }
-}
-
-fn shared_reference(reference: &Reference) -> SharedReference {
-  let target = match reference {
-    Reference::Connection { id, .. } => SharedTarget::Connection { id: *id },
-    Reference::McpServer { id, .. } => SharedTarget::McpServer { id: *id },
-    Reference::Secret { id, .. } => SharedTarget::Secret { id: *id },
-  };
-  SharedReference {
-    target,
-    name: reference.name().to_owned(),
-    role: reference.role().map(str::to_owned),
   }
 }

@@ -38,6 +38,7 @@ use crate::{
     icon::{Icon, icon},
     message::message_text,
     notice::{Notice, NoticeTone},
+    skeleton::Skeleton,
   },
 };
 
@@ -89,15 +90,12 @@ fn number(run: &RunView) -> String {
   run.run.number().get().to_string()
 }
 
-/// The transcript of `run` is being read (`r5vGK`).
-pub(super) fn loading(ctx: &Ctx, run: &RunView) -> Element {
+/// The transcript of `run` is being read (`03 Task · Conversation · loading` `WAW2N`): its bones anchored to the
+/// composer, named *Loading activity for Run 128…* (`conversation.loading`).
+pub(super) fn loading(ctx: &mut Ctx, run: &RunView) -> Element {
   let title = ctx.t_args("conversation.loading", [("run", number(run).as_str())]);
-  state(
-    "conversation-loading",
-    (Icon::LoaderCircle, PaletteColor::TextMuted),
-    (&title, None),
-    Vec::new(),
-  )
+  let bones = super::super::reading::transcript(ctx);
+  Skeleton::new("conversation-loading", title).fills().show(ctx, bones)
 }
 
 /// The transcript of `run` could not be read, and why (`YGnwp`): the run is unaffected, and its agents keep

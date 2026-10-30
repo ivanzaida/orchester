@@ -1,8 +1,8 @@
 //! *Summary* (`Summary` `CY4ZI`, `Summary figure` `R22iW`): spent tokens, runs, agent time, cache share
 //! and the share of failed runs, each on `surface_raised` with its change against the period before (an
 //! icon and words: runs in runs, shares in points; never good or bad) and what it counts. While reading,
-//! every figure is a dash and says nothing more (`sAQ7z`); without runs, counts are zero, shares a dash and
-//! the change line gives the period before's value (`EKcoY`); when the filters match nothing, the figures
+//! every figure keeps its name over bones (`11 Usage · loading` `P74Xv`); without runs, counts are zero, shares a
+//! dash and the change line gives the period before's value (`EKcoY`); when the filters match nothing, the figures
 //! say so (`YxAed`).
 
 use std::sync::Arc;
@@ -40,14 +40,11 @@ const FIGURES: [(&str, &str); 5] = [
 /// What one figure says under its value: the change's icon and words.
 type ChangeLine = Option<(Option<Icon>, Arc<str>)>;
 
-pub fn summary(ctx: &Ctx, dashboard: Option<&Dashboard>) -> Element {
-  let (values, changes, details) = match dashboard {
-    Some(dashboard) => match dashboard.state {
-      DashboardState::Charts => figures(ctx, dashboard),
-      DashboardState::NoRuns => idle(ctx, dashboard),
-      DashboardState::FilteredOut { .. } => unmatched(ctx),
-    },
-    None => reading(ctx),
+pub fn summary(ctx: &Ctx, dashboard: &Dashboard) -> Element {
+  let (values, changes, details) = match dashboard.state {
+    DashboardState::Charts => figures(ctx, dashboard),
+    DashboardState::NoRuns => idle(ctx, dashboard),
+    DashboardState::FilteredOut { .. } => unmatched(ctx),
   };
   let cards = FIGURES
     .into_iter()
@@ -55,6 +52,25 @@ pub fn summary(ctx: &Ctx, dashboard: Option<&Dashboard>) -> Element {
     .zip(changes)
     .zip(details)
     .map(|((((id, label), value), change), detail)| figure(ctx, (id, label), &value, change, detail));
+  row(cards.collect())
+}
+
+/// While the period is read (`11 Usage · loading` `P74Xv`): each figure's name over its bones, named `label`.
+pub fn reading(ctx: &mut Ctx, label: &Arc<str>) -> Element {
+  let cards = FIGURES
+    .into_iter()
+    .map(|(id, name)| {
+      let bones = super::reading::figure(ctx, id, label.clone());
+      frame(id)
+        .child(Text::new(&ctx.t(name)).variant(TypographyStyle::FieldLabel).nowrap())
+        .child(bones)
+        .into()
+    })
+    .collect();
+  row(cards)
+}
+
+fn row(cards: Vec<Element>) -> Element {
   Row::new()
     .id("usage-summary")
     .width(Dimension::Pct(100.0))
@@ -169,17 +185,18 @@ fn unmatched(ctx: &Ctx) -> Figures {
   )
 }
 
-fn reading(ctx: &Ctx) -> Figures {
-  let unknown = ctx.t("usage.unknown");
-  (
-    [(); 5].map(|()| unknown.clone()),
-    [None, None, None, None, None],
-    [None, None, None, None, None],
-  )
-}
-
 /// A figure's card (`Summary figure` `R22iW`).
 const FIGURE_HEIGHT: f32 = 118.0;
+
+/// A figure's card around what it shows.
+fn frame(id: &str) -> lurq::components::Column {
+  card(id, CardSurface::Raised)
+    .width(Dimension::Px(0.0))
+    .height(Dimension::Px(FIGURE_HEIGHT))
+    .flex(1.0)
+    .padding(SpacingSize::Lg)
+    .spacing(SpacingSize::Xs)
+}
 
 fn figure(ctx: &Ctx, (id, label): (&str, &str), value: &str, change: ChangeLine, detail: Option<Arc<str>>) -> Element {
   let change = change.map(|(glyph, text)| {
@@ -203,12 +220,7 @@ fn figure(ctx: &Ctx, (id, label): (&str, &str), value: &str, change: ChangeLine,
       .variant(TypographyStyle::Caption)
       .nowrap()
   });
-  card(id, CardSurface::Raised)
-    .width(Dimension::Px(0.0))
-    .height(Dimension::Px(FIGURE_HEIGHT))
-    .flex(1.0)
-    .padding(SpacingSize::Lg)
-    .spacing(SpacingSize::Xs)
+  frame(id)
     .child(Text::new(&ctx.t(label)).variant(TypographyStyle::FieldLabel).nowrap())
     .child(
       Text::new(value)

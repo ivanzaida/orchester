@@ -61,7 +61,8 @@ fn seed_names_every_scenario_once() {
       "import-done",
       "modules",
       "modules-short",
-      "modules-none"
+      "modules-none",
+      "loading-states"
     ]
   );
   for name in names {

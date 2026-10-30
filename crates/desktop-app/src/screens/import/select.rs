@@ -31,7 +31,7 @@ use crate::{
     inspector::note,
     message::message_text,
     notice::{Notice, NoticeTone},
-    state::loading,
+    skeleton::{self, Skeleton},
     tabs::{PageTab, counted, page_tabs_with_note},
     unavailable::reason_at_end,
   },
@@ -191,7 +191,15 @@ const fn tab_key(tab: ImportTab) -> &'static str {
 /// What the body shows under the tabs: the list, or why there is none.
 fn content(ctx: &mut Ctx, state: &State, tab: ImportTab, source: &Source) -> Element {
   match source {
-    Source::Listing => loading("import-listing", &ctx.t("import.empty.listing")).into(),
+    Source::Listing => {
+      // No loading frame draws Import: the projects' rows are bones in a list's outline while they are listed.
+      let bones = skeleton::list(
+        ctx,
+        "import-listing-rows",
+        &[(140.0, 260.0), (120.0, 220.0), (160.0, 240.0)],
+      );
+      Skeleton::new("import-listing", ctx.t("import.empty.listing")).show(ctx, bones)
+    }
     Source::Unlisted(error) => Notice::new("import-unlisted", NoticeTone::Danger, message_text(ctx, error))
       .action(retry(ctx, state))
       .into(),

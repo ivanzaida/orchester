@@ -10,8 +10,14 @@ use orchester_workspace::{background, tasks::detail::RunView};
 use super::{TaskContext, work::problem};
 use crate::ui::{
   notice::{Notice, NoticeTone},
-  state::loading,
+  skeleton::{self, Skeleton},
 };
+
+/// The checkout's facts while they are read: lines of bones, as Local integration has no loading frame.
+fn reading(ctx: &mut Ctx) -> Element {
+  let bones = skeleton::lines(ctx, &[360.0, 520.0, 440.0, 300.0]);
+  Skeleton::new("local-target-loading", ctx.t("local_integration.loading")).show(ctx, bones)
+}
 
 #[derive(Clone, Debug, PartialEq)]
 struct Recovery(Option<RunView>, orchester_core::id::TaskId);
@@ -44,11 +50,11 @@ impl Component for Target {
     let Some(Recovery(recovery, observed)) = state.data else {
       return match state.error {
         Some(reason) => Element::from(Notice::new("local-target-error", NoticeTone::Danger, ctx.t(reason.0))),
-        None => loading("local-target-loading", &ctx.t("local_integration.loading")).into(),
+        None => reading(ctx),
       };
     };
     if observed != task.detail.task.id() {
-      return loading("local-target-loading", &ctx.t("local_integration.loading")).into();
+      return reading(ctx);
     }
     let prior = recovery.filter(|run| task.detail.run.as_ref().is_none_or(|latest| latest.id() != run.id()));
     let notice = prior.as_ref().map(|run| {
