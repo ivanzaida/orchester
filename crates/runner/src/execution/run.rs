@@ -228,6 +228,7 @@ impl RunTask {
         continue;
       }
       let waiting_for_slot = self.start_ready()?;
+      self.report_slot_waits(waiting_for_slot);
       if self.agents.is_empty() && !waiting_for_slot {
         // A step that could not start fails, which may open a retry attempt to start next.
         let startable = !self.run.executions_to_start(1).is_empty() || !self.run.running_executions().is_empty();

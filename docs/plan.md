@@ -980,6 +980,16 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
+ORC-403 · A ready step that waits for an agent slot says so · branch `orchester/orc-403-run-1` (implemented 2026-10-30;
+pipeline QA scenarios, Review and Verify follow). The runner reports ready agent steps held back only by the slots in
+`WorkSummary.slot_waits` (protocol 33); nothing is stored. `get_run` gives `status: { state: "pending", waits_for:
+"agent_slot" }`, `list_runs`' `detail` names the steps, the Summary's rail and Last event say it, and the Overview's *At
+work* and the health card count them and name *Agents at once*. Who gets the next free slot did not change. A refused
+`Board::take` no longer announces a summary. **No Pencil frame draws this wait.**
+Tests: `orchester-ipc --test framing frames_round_trip`, `orchester-runner --test graph graph_slot_wait`,
+`orchester-workspace --test slot_waits slot_wait`, `orchester-app --test mcp_domain domain_slot_wait`, `--test status_bar
+status_health_card`.
+
 ORC-100 · Task page redesign: one header, three tabs, Summary gathers the task's info · branch `orchester/orc-100-run-1`
 (implemented 2026-10-26; pipeline Check, Review and Verify follow). Design: `Task page · redesign` `C3wC8` (`01 ·
 Summary` `AsE7R`, `01b` `HvPSr`, `01c` `SaKMC`, `Decision cards` `CqVv3`, `02` `XIBg8`, `03` `X5ZKG`).

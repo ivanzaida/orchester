@@ -606,7 +606,12 @@
       "storageFailureAt": "Interrupted at {{step}} · database unavailable",
       "storageFailure": "Interrupted · database unavailable",
       "runnerErrorAt": "Interrupted at {{step}} · runner error",
-      "runnerError": "Interrupted · runner error"
+      "runnerError": "Interrupted · runner error",
+      "slotWait": {
+        "one": "{{detail}} · {{steps}} waits for an agent slot",
+        "other": "{{detail}} · {{steps}} wait for an agent slot"
+      },
+      "slotWaitSeparator": ", "
     },
     "permissions": {
       "errors": {

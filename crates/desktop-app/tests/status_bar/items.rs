@@ -8,6 +8,7 @@ fn online_with_slots(slots: u32) -> RunnerFacts {
     work: Some(WorkSummary {
       agent_slots: NonZeroU32::new(slots).expect("slots"),
       runs: Vec::new(),
+      slot_waits: Vec::new(),
     }),
     online_since: Some(SystemTime::now()),
     ..runner(RunnerState::Online)
@@ -85,6 +86,40 @@ fn status_health_card_holds_the_runner_agents_queue_server_mcp_and_version() {
   );
   bar.press("status-health");
   assert!(bar.asked().contains(&BarAction::OpenRunnerLog));
+}
+
+/// Only the card says it: the bar stays calm, and the fact is gone once no step waits (ORC-403).
+#[test]
+fn status_health_card_says_how_many_steps_wait_for_a_slot() {
+  let waiting = |count: usize| {
+    let mut runner = online_with_slots(1);
+    let work = runner.work.as_mut().expect("the runner's work");
+    work.slot_waits = (0..count)
+      .map(|_| SlotWait {
+        run: RunId::generate(),
+        execution: StepExecutionId::generate(),
+      })
+      .collect();
+    Bar::of(facts(Some(kontur(runner, ProjectTasks::default()))))
+  };
+  for (count, words) in [
+    (1, "1 step for a slot · raise Agents at once"),
+    (2, "2 steps for a slot · raise Agents at once"),
+  ] {
+    let mut bar = waiting(count);
+    for id in ["status-agents", "status-counts", "status-runner"] {
+      assert!(bar.texts(id).is_none(), "{id} does not show while all is well");
+    }
+    let card = bar
+      .card("status-health", "status-health-card")
+      .expect("the card shows on hover");
+    assert!(card.iter().any(|text| text == "Waiting"), "{card:?}");
+    assert!(card.iter().any(|text| text == words), "{words} in {card:?}");
+  }
+  let card = waiting(0)
+    .card("status-health", "status-health-card")
+    .expect("the card shows on hover");
+  assert!(!card.iter().any(|text| text == "Waiting"), "{card:?}");
 }
 
 #[test]

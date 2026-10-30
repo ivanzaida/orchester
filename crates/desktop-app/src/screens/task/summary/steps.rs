@@ -18,12 +18,12 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
 };
-use orchester_core::{run::StepFailure, time::Timestamp, tokens::compact_tokens};
+use orchester_core::{id::StepExecutionId, run::StepFailure, time::Timestamp, tokens::compact_tokens};
 use orchester_workspace::{
   display,
   tasks::{
     detail::RunView,
-    progress::{ProgressRow, ProgressState, progress},
+    progress::{ProgressRow, ProgressState, progress_with_waits},
   },
 };
 
@@ -49,21 +49,25 @@ pub struct StepRow {
 
 /// The rail of `run`'s steps at `now`, the step with key `current` drawn as the one the run stands at. `lost`: the run
 /// is recorded as running but has no runner; `waiting`: the steps, by key, whose agent waits for an approval, and
-/// since when.
+/// since when; `slot_waits`: the executions the runner says wait for an agent slot.
 pub fn rail(
   ctx: &mut Ctx,
   run: &RunView,
-  (lost, waiting): (bool, &[(Arc<str>, Timestamp)]),
+  (lost, waiting, slot_waits): (bool, &[(Arc<str>, Timestamp)], &[StepExecutionId]),
   current: Option<Arc<str>>,
   now: Timestamp,
 ) -> Element {
-  let rows = rows(run, lost, waiting, now);
+  let rows = rows(run, (lost, waiting, slot_waits), now);
   ctx.mount_keyed::<LiveRail>("task-steps-rail", RailProps { rows, current })
 }
 
-/// The rows of `run`'s steps at `now`, in stage order; `lost` and `waiting` as for [`rail`].
-fn rows(run: &RunView, lost: bool, waiting: &[(Arc<str>, Timestamp)], now: Timestamp) -> Vec<StepRow> {
-  progress(run, lost, now)
+/// The rows of `run`'s steps at `now`, in stage order; `lost`, `waiting` and `slot_waits` as for [`rail`].
+fn rows(
+  run: &RunView,
+  (lost, waiting, slot_waits): (bool, &[(Arc<str>, Timestamp)], &[StepExecutionId]),
+  now: Timestamp,
+) -> Vec<StepRow> {
+  progress_with_waits(run, lost, slot_waits, now)
     .into_iter()
     .map(|progress| without_runner(progress, lost))
     .map(|progress| StepRow {
@@ -149,7 +153,9 @@ fn chip(ctx: &mut Ctx, row: &StepRow, here: bool, now: Timestamp) -> Element {
   };
   let (typography, name_color) = match (here, progress.state) {
     (true, _) => (TypographyStyle::Label, PaletteColor::TextPrimary),
-    (false, ProgressState::Waiting) => (TypographyStyle::Description, PaletteColor::TextMuted),
+    (false, ProgressState::Waiting | ProgressState::WaitsForSlot) => {
+      (TypographyStyle::Description, PaletteColor::TextMuted)
+    }
     (false, _) => (TypographyStyle::Description, PaletteColor::TextSecondary),
   };
   let detail = detail(ctx, row, now);
@@ -196,10 +202,12 @@ fn without_runner(mut row: ProgressRow, lost: bool) -> ProgressRow {
   row
 }
 
-/// The label a step's state reads as.
+/// The label a step's state reads as. No frame draws a step waiting for an agent slot: it takes Waiting's muted `clock`,
+/// where Not started is `circle-dashed`.
 const fn status(state: ProgressState) -> Status {
   match state {
     ProgressState::Waiting => Status::NotStarted,
+    ProgressState::WaitsForSlot => Status::Waiting,
     ProgressState::Working => Status::Working,
     ProgressState::NeedsYou => Status::NeedsInput,
     ProgressState::Paused => Status::Paused,
@@ -268,6 +276,7 @@ fn stands(ctx: &Ctx, row: &StepRow, now: Timestamp) -> Arc<str> {
 const fn state_key(state: ProgressState) -> &'static str {
   match state {
     ProgressState::Waiting => "summary.steps.state.notStarted",
+    ProgressState::WaitsForSlot => "summary.steps.state.waitsForSlot",
     ProgressState::Working => "summary.steps.state.working",
     ProgressState::NeedsYou => "summary.steps.state.needsYou",
     ProgressState::Paused => "summary.steps.state.paused",

@@ -248,6 +248,13 @@ shown separately and never counted. Values are what the CLI reports, never estim
 There is no maximum: a raised limit only has to be above what was used. *Remove the limit* continues with none.
 Raising applies to that run only.
 
+**A step waiting for an agent slot.** A step whose dependencies have passed starts as soon as an agent slot is free. While
+every slot is in use, its chip on the task's Summary shows a clock instead of the not-started mark and its tooltip says
+*Waits for an agent slot*; the run's last event names it, the Overview's *At work* and the status bar's health card say how
+many steps wait, and raising *Agents at once* starts them. A step whose dependencies have not passed stays *Not started*.
+Command steps take command slots instead and are not counted. Only the runner knows this, so with no runner online
+no step shows it.
+
 ## Waiting for the person
 
 **Needs you.** Everything that waits for you: tool and command approvals, agents' questions, steps waiting for a

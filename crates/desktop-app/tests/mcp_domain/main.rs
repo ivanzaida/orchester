@@ -58,6 +58,7 @@ mod return_ended;
 #[path = "../../../workspace/tests/support/runner_programs.rs"]
 mod runner_programs;
 mod skills_window;
+mod slot_waits;
 mod story_points;
 mod task_organization;
 mod tools;

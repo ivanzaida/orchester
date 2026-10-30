@@ -1,7 +1,8 @@
 //! The health dot (`Health dot` `RqoXF` in `Status bar · redesign`): a 6 `success` dot at the bar's end while the
 //! shown project's runner is online, or on a screen outside a project; it never gives way. Its card on hover
 //! (`19 · Health dot · hover` `fPWaD`, `oagTL`) holds what the bar no longer shows: the runner and since when, the
-//! agents at work of its slots, the queued tasks, the team server, the app's MCP server with the agents connected,
+//! agents at work of its slots, the queued tasks, while any wait the ready steps waiting for a slot (no frame draws that
+//! row: it reads like the facts around it), the team server, the app's MCP server with the agents connected,
 //! and the version. In a project a press opens the runner log; outside one it does nothing.
 
 use lurq::{
@@ -74,7 +75,8 @@ fn card(ctx: &Ctx, facts: &BarFacts) -> FactsCard {
   }
 }
 
-/// *Agents 2 of 4 at work* and *Queued 3 tasks*, a dash while not known.
+/// *Agents 2 of 4 at work* and *Queued 3 tasks*, a dash while not known; *Waiting 1 step for a slot* only while ready
+/// steps wait for an agent slot.
 fn project_facts(ctx: &Ctx, project: &ProjectFacts) -> Vec<Fact> {
   let unknown = || ctx.t("shell.status.unknown").to_string();
   let agents = project.runner.work.as_ref().map_or_else(unknown, |work| {
@@ -97,10 +99,25 @@ fn project_facts(ctx: &Ctx, project: &ProjectFacts) -> Vec<Fact> {
     };
     ctx.t_args(key, [("count", count.to_string())]).to_string()
   });
-  vec![
+  let mut facts = vec![
     fact(ctx, "agents", "shell.status.health.agents", agents),
     fact(ctx, "queued", "shell.status.health.queued", queued),
-  ]
+  ];
+  let waiting = project
+    .runner
+    .work
+    .as_ref()
+    .map_or(0, |work| work.steps_waiting_for_slot());
+  if waiting > 0 {
+    let key = if waiting == 1 {
+      "shell.status.health.slotWaitsValue.one"
+    } else {
+      "shell.status.health.slotWaitsValue.other"
+    };
+    let words = ctx.t_args(key, [("count", waiting.to_string())]).to_string();
+    facts.push(fact(ctx, "slot-waits", "shell.status.health.slotWaits", words));
+  }
+  facts
 }
 
 /// The server's address and the agents connected to it (*127.0.0.1:47821 · 2 agents connected*), or what keeps

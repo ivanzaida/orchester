@@ -6,7 +6,7 @@
 use std::path::Path;
 
 use orchester_core::{
-  id::{ProjectId, RunId},
+  id::{ProjectId, RunId, StepExecutionId},
   run::{
     Plan, Run, RunStatus,
     review::{ReviewRecord, reviews_usage},
@@ -40,6 +40,7 @@ use crate::{
     history,
     plan::PlanReview,
     run::control_message,
+    slot_wait::slot_waits,
   },
   workspace::OpenProject,
 };
@@ -110,7 +111,8 @@ fn read_run(services: &Services, args: &InRun) -> Result<(Value, Vec<ShownApprov
     .count();
   let reviewer = reviewer_tokens(&view.reviews);
   let run = &view.run;
-  let steps: Vec<Value> = view.steps.iter().map(step).collect();
+  let waits = slot_waits(services.runners.status_of(&root).as_ref(), &root);
+  let steps: Vec<Value> = view.steps.iter().map(|shown| step(shown, &waits)).collect();
   let unverified: Vec<Value> = view
     .unverified()
     .iter()
@@ -286,14 +288,16 @@ fn decided_plans(view: &RunView, link: &str) -> Vec<Value> {
     .collect()
 }
 
-fn step(step: &StepView) -> Value {
+/// A step of the run; `waits`: the executions the project's runner says wait for an agent slot.
+fn step(step: &StepView, waits: &[StepExecutionId]) -> Value {
+  let waits_for_slot = step.execution.is_some_and(|execution| waits.contains(&execution));
   json!({
     "key": step.key.to_string(),
     "name": &*step.name,
     "agent": step.agent.as_deref(),
     "model": step.model.as_deref(),
     "tool_step": step.tool_step,
-    "status": step.status.map(wire::step_status),
+    "status": step.status.map(|status| wire::step_status(status, waits_for_slot)),
     "attempt": step.attempt.map(std::num::NonZeroU32::get),
   })
 }

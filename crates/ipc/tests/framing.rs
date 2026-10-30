@@ -14,7 +14,7 @@ use orchester_core::{
 };
 use orchester_ipc::{
   AttachSession, Command, Event, FrameError, Handshake, IpcError, PROTOCOL_VERSION, RefusedRun, Rejection, Reply,
-  Request, RequestId, RunWork, SessionEnd, ShutdownMode, WorkState, WorkSummary,
+  Request, RequestId, RunWork, SessionEnd, ShutdownMode, SlotWait, WorkState, WorkSummary,
   frame::{FrameReader, FrameWriter, MAX_FRAME_LEN},
   handshake,
 };
@@ -306,6 +306,10 @@ fn events(run: RunId, task: TaskId) -> Vec<Event> {
         state,
       })
       .collect(),
+      slot_waits: vec![SlotWait {
+        run,
+        execution: StepExecutionId::generate(),
+      }],
     }),
   ]
 }

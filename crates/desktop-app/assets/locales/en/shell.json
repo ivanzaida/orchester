@@ -257,6 +257,11 @@
           "one": "{{count}} task",
           "other": "{{count}} tasks"
         },
+        "slotWaits": "Waiting",
+        "slotWaitsValue": {
+          "one": "{{count}} step for a slot · raise Agents at once",
+          "other": "{{count}} steps for a slot · raise Agents at once"
+        },
         "server": "Team server",
         "mcp": "MCP server",
         "mcpQa": ":{{port}} · QA",
