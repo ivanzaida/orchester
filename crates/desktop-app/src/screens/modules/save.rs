@@ -1,7 +1,9 @@
 //! Writing a module through the project's task writer off the UI thread, for New module, Edit module, the Summary's
 //! properties and the page's *Close module*: a new one, or a change over the module as it was read, refused when it
 //! changed since. A module's page keeps what it last wrote ([`Written`]), so a second change made before the page reads
-//! again goes over that and not over the read it replaced.
+//! again goes over that and not over the read it replaced. The base branch a form chose is taken in the repository
+//! before anything is written (a remote one creates its local branch; one that is gone refuses the save) and is set
+//! once the details are, on this computer only.
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -12,9 +14,20 @@ use lurq::{
   },
   core::Signal,
 };
-use orchester_core::module::{Module, ModuleDetails};
+use orchester_core::{
+  integration::base::BaseChoice,
+  module::{Module, ModuleDetails},
+};
+use orchester_exec::programs::Programs;
 use orchester_workspace::{
-  background, messages::Message, modules::last_write::LastWrite, sharing::Servers, tasks::writer::TaskWriter,
+  background,
+  messages::Message,
+  modules::{
+    base::{ModuleBasePick, save_module_base_in, take_module_base_in},
+    last_write::LastWrite,
+  },
+  sharing::Servers,
+  tasks::writer::TaskWriter,
 };
 
 use crate::services::Services;
@@ -25,6 +38,8 @@ pub struct SaveModule {
   pub root: PathBuf,
   pub module: Option<Arc<Module>>,
   pub details: ModuleDetails,
+  /// The base branch a form chose in place of the module's; `None` leaves it.
+  pub base: Option<ModuleBasePick>,
 }
 
 /// The module as written, and the one it was written over (none for a new one).
@@ -45,10 +60,14 @@ pub type SaveAction = FutureAction<SaveModule, Saved, Refused>;
 
 /// The component's save of a module.
 pub fn action(ctx: &mut Ctx) -> SaveAction {
-  let servers = Services::of(ctx).servers;
+  let Services { servers, programs, .. } = Services::of(ctx);
   ctx.future_action(move |args: SaveModule| {
-    let servers = servers.clone();
-    async move { background::run(move || write(&args, &servers)).await.map_err(Refused)? }
+    let (servers, programs) = (servers.clone(), programs.clone());
+    async move {
+      background::run(move || write(&args, (&servers, &programs)))
+        .await
+        .map_err(Refused)?
+    }
   })
 }
 
@@ -89,18 +108,31 @@ impl Written {
 }
 
 /// Creates or changes the module through the project's task writer; a change is refused when the module changed
-/// since it was read.
-fn write(args: &SaveModule, servers: &Servers) -> Result<Saved, Refused> {
+/// since it was read. A base branch chosen is taken first and set last, over the one the module was read with.
+fn write(args: &SaveModule, (servers, programs): (&Servers, &Programs)) -> Result<Saved, Refused> {
   let refused = |error: &orchester_workspace::tasks::writer::WriteError| {
     tracing::warn!(%error, "the module was not saved");
     Refused(error.message())
   };
+  let base = match &args.base {
+    Some(pick) => Some(take_module_base_in(&args.root, programs, pick).map_err(Refused)?),
+    None => None,
+  };
   let mut writer = TaskWriter::open(&args.root, servers).map_err(|error| refused(&error))?;
-  let module = match &args.module {
+  let mut module = match &args.module {
     Some(base) => writer.update_module(base.id(), base.details(), args.details.clone()),
     None => writer.create_module(args.details.clone()),
   }
   .map_err(|error| refused(&error))?;
+  drop(writer);
+  if let Some(after) = base {
+    let before = args
+      .module
+      .as_ref()
+      .map_or(BaseChoice::CheckedOut, |read| read.base().clone());
+    save_module_base_in(&args.root, module.id(), (&before, after.clone())).map_err(Refused)?;
+    module = module.with_base(after);
+  }
   Ok(Saved {
     over: args.module.clone(),
     module: Arc::new(module),
