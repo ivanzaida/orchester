@@ -83,6 +83,7 @@ impl Component for FieldBox {
       .with_children(
         props
           .leading
+          .filter(|_| !props.leading_while_empty || props.value.get().is_empty())
           .map(|glyph| icon(glyph, IconSize::Base, PaletteColor::TextMuted).id(format!("{}-icon", props.id))),
       )
       .child(input)

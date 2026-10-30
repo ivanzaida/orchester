@@ -139,6 +139,7 @@ impl ProjectPage {
     Some(match screen {
       Screen::AllProjects
       | Screen::AddProject
+      | Screen::JoinTeam
       | Screen::Settings
       | Screen::EditTask
       | Screen::Task

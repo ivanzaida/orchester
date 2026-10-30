@@ -92,6 +92,7 @@
     "screens": {
       "allProjects": "All projects",
       "addProject": "Add project",
+      "joinTeam": "Join a team",
       "settings": "Settings",
       "overview": "Overview",
       "orchestrator": "Orchestrator",

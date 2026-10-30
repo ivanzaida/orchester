@@ -25,7 +25,7 @@ use super::{
 use crate::{
   navigation::Navigation,
   routes::{
-    ChangeSource, ChangedFile, FilesView, ImportTab, InstructionsView, MemoryTab, ModuleListTab, ModuleTab,
+    ChangeSource, ChangedFile, FilesView, ImportTab, InstructionsView, JoinWay, MemoryTab, ModuleListTab, ModuleTab,
     NewConnection, OrchestratorChat, OverviewTab, ProjectPage, Route, Screen, SecretsView, SkillsFilter, TaskList,
     TaskListTab, TaskTab, TaskView,
   },
@@ -33,7 +33,8 @@ use crate::{
 
 const DESCRIPTION: &str = "Take the active tab of the Orchester window to a route, as a new entry of its history \
   (the mouse's back button, or Alt+Left, Cmd+[ on macOS, returns). `route` is the screen's name: all_projects takes no \
-  other argument; settings takes `tab` (automation, general, notifications, accounts, orchester for Orchester \
+  other argument; join_team takes `way` (cloud, the default: the account's teams and invites; code: the code page); \
+  settings takes `tab` (automation, general, notifications, accounts, orchester for Orchester \
   Cloud, connect for Connect a server, invite for an invite's landing) and what that tab opens on: accounts \
   `account` (an account's id or name, or claude-default / codex-default: its page) and `panel` (add for Add account \
   without `account`; sign_in, rename or remove for that account's step 2, name field or Remove question); orchester \
@@ -129,6 +130,7 @@ fn schema() -> Value {
       "skill": { "type": "string", "description": "skills: the skill id, new, or import; omitted opens the library." },
       "tool": { "type": "string", "description": "tools: the tool’s id, or new for a command draft; omitted opens the library." },
       "chat": { "type": "string", "description": "orchestrator: a conversation's id, or new; omitted opens the latest." },
+      "way": { "type": "string", "enum": ["cloud", "code"], "description": "join_team: the account's teams and invites (cloud, the default) or the code page." },
       "at": { "type": "string", "description": "files: the version, checkout (the default), base, run:<run id> or rev:<commit>." },
       "line": { "type": "string", "description": "files: the line or lines to show, 12 or 12-20." },
       "number": { "type": "string", "description": "pull_requests: the number of the pull request to open, e.g. 142; with tab feedback, on its Agent feedback." },
@@ -182,6 +184,7 @@ fn target(args: &Map<String, Value>, lookup: Option<&Lookup>) -> Result<Route, T
   let page = match screen {
     Screen::AllProjects => return Ok(Route::AllProjects),
     Screen::AddProject => return Ok(Route::AddProject(None)),
+    Screen::JoinTeam => return join_team_route(args),
     Screen::Settings => return settings_route::route(args, lookup),
     Screen::Overview => ProjectPage::Overview(tab(
       args,
@@ -249,6 +252,7 @@ fn import_route(args: &Map<String, Value>) -> Result<Route, ToolError> {
 const fn params(screen: Screen) -> &'static [&'static str] {
   match screen {
     Screen::AllProjects | Screen::AddProject => &[],
+    Screen::JoinTeam => &["way"],
     Screen::Settings => settings_route::PARAMS,
     Screen::Overview | Screen::ImportResources => &["project", "tab"],
     Screen::Tasks => &["project", "tab", "q", "highlight"],
@@ -273,6 +277,18 @@ const fn params(screen: Screen) -> &'static [&'static str] {
     | Screen::Instructions
     | Screen::Secrets
     | Screen::OrchestratorSettings => &["project"],
+  }
+}
+
+/// Join a team on the way `way` names, Orchester Cloud when left out.
+fn join_team_route(args: &Map<String, Value>) -> Result<Route, ToolError> {
+  match string(args, "way")? {
+    None | Some("cloud") => Ok(Route::JoinTeam(JoinWay::Cloud)),
+    Some("code") => Ok(Route::JoinTeam(JoinWay::Code)),
+    Some(other) => Err(ToolError::InvalidParam {
+      param: "way",
+      reason: format!("`{other}` is neither cloud nor code"),
+    }),
   }
 }
 

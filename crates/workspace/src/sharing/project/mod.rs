@@ -10,6 +10,7 @@ mod claims;
 pub mod convert;
 pub mod discovery;
 pub(super) mod download;
+mod download_progress;
 pub mod first_link;
 pub mod folder;
 mod join;
@@ -40,6 +41,7 @@ pub use self::{
   claim_ends::{ClaimEndError, EndedClaim},
   claims::{WorkClaim, WorkRefusal},
   download::FirstDownload,
+  download_progress::{Arrival, DownloadFailure, DownloadProgress, DownloadState, PartState},
   join::{JoinFailed, JoinReview, Joined, ReviewTask, SimilarTask},
   make_local::{ClaimRelease, MadeLocal, MakeLocalPlan},
   members::{MemberChange, MembersRead, ProjectMembers},

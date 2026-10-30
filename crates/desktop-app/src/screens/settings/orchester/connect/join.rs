@@ -147,8 +147,9 @@ impl Join {
 }
 
 /// The username and the name to start from: the signed-in account's (`ivan` and *Ivan Zaida* in `bIwte`), the
-/// username taken from the email's local part with only the characters a server accepts.
-fn suggested(cloud: &orchester_workspace::sharing::cloud::Cloud) -> (String, String) {
+/// username taken from the email's local part with only the characters a server accepts. *Join a team* suggests the
+/// same.
+pub(crate) fn suggested(cloud: &orchester_workspace::sharing::cloud::Cloud) -> (String, String) {
   let account = match cloud.account() {
     Ok(account) => account,
     Err(error) => {

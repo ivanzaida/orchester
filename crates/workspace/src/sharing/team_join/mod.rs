@@ -34,10 +34,11 @@ pub struct Teams {
   pub invites: Vec<CloudInvite>,
 }
 
-/// A team server of the account, and this computer's entry of it once it joined.
+/// A team server of the account, whether the account owns it, and this computer's entry of it once it joined.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TeamServer {
   pub server: CloudServer,
+  pub owner: bool,
   pub joined: Option<ServerId>,
 }
 
@@ -72,14 +73,18 @@ impl TeamJoin {
     let entries = self.entries().await?;
     let servers = listed
       .into_iter()
-      .map(|server| {
+      .map(|listed| {
         // A server the cloud names at no address there is cannot be in the list: none is added without one.
-        let address = ServerAddress::parse(&server.address).ok();
+        let address = ServerAddress::parse(&listed.server.address).ok();
         let joined = entries
           .iter()
           .find(|entry| Some(&entry.address) == address.as_ref() && entry.in_use())
           .map(|entry| entry.stored.id);
-        TeamServer { server, joined }
+        TeamServer {
+          server: listed.server,
+          owner: listed.owner,
+          joined,
+        }
       })
       .collect();
     Ok(Teams { servers, invites })

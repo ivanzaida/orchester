@@ -27,6 +27,7 @@ use orchester_workspace::{
   sharing::{Reached, Reaching, ServerEntry, SharingError, team_join::JoinError},
 };
 
+pub(crate) use self::join::suggested;
 use super::{
   Said,
   words::{cloud_error, sharing_error},
@@ -63,7 +64,7 @@ impl DevtoolsInspectable for Found {}
 
 /// Why a step did not go on, in the page's own words or in a refusal's of the workspace.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) enum Shown {
+pub(crate) enum Shown {
   Said(Said),
   Message(Message),
 }
@@ -71,7 +72,7 @@ pub(super) enum Shown {
 impl DevtoolsInspectable for Shown {}
 
 impl Shown {
-  pub(super) fn text(&self, ctx: &Ctx) -> String {
+  pub(crate) fn text(&self, ctx: &Ctx) -> String {
     match self {
       Self::Said(said) => said.text(ctx),
       Self::Message(message) => message_text(ctx, message).to_string(),
@@ -80,8 +81,8 @@ impl Shown {
 }
 
 /// What to tell the person about a join that did not happen: a refusal in its own words, the rest as Settings says
-/// the cloud's and the team server's failures.
-pub(super) fn join_error(error: &JoinError) -> Shown {
+/// the cloud's and the team server's failures. *Join a team* says the same.
+pub(crate) fn join_error(error: &JoinError) -> Shown {
   match error {
     JoinError::Refused(refusal) => Shown::Message(refusal.message()),
     JoinError::Cloud(error) => Shown::Said(cloud_error(error)),
@@ -254,7 +255,7 @@ struct Entries(Vec<ServerEntry>);
 impl DevtoolsInspectable for Entries {}
 
 /// Why nothing usable answered at `address`; nothing answering at all is the workspace's refusal.
-fn reach_error(error: &JoinError, address: &ServerAddress) -> Shown {
+pub(crate) fn reach_error(error: &JoinError, address: &ServerAddress) -> Shown {
   match error {
     JoinError::Server(SharingError::Client(ClientError::NotOrchester { .. } | ClientError::Redirect { .. })) => {
       Shown::Said(Said::new("sharing.connect.address.notOrchester").with("address", address.as_str()))

@@ -8,10 +8,10 @@
 //! ([`code`]) takes the card's place, under a head of its own and without *Advanced* (`Tmwkg`). The same layout at 1440
 //! and 960; the footer's words are shorter in a narrow window.
 
-mod code;
+pub(crate) mod code;
 mod ended;
-mod form;
-mod step;
+pub(crate) mod form;
+pub(crate) mod step;
 
 use lurq::{
   app::{
@@ -73,7 +73,7 @@ impl Component for SignInGate {
       SignIn::SignedOut { ended: None, .. } | SignIn::SignedIn { .. } => String::new(),
     };
     let step = Signal::new(Step::Password { timed_out: false });
-    let form = form::Form::new(ctx, &email, step.clone());
+    let form = form::Form::new(ctx, &email, step.clone(), form::SUBMIT);
     let code = code::CodeForm::new(ctx, step.clone(), form.to_password());
     Self {
       form,
