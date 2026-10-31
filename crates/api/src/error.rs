@@ -71,6 +71,10 @@ pub enum ErrorCode {
   /// API 3: an invite by email to an address that has an open one to the same project (or to the server) already.
   /// The error names that invite and when it was sent ([`SharingErrorDetails::Invite`]); revoking it lets a new one go.
   InviteOpen,
+  /// API 3 (row 77): `410` of `POST /auth/cloud/accept` for an invite the server revoked or that expired there while
+  /// the cloud still listed it. The error carries the server's signed revocation
+  /// ([`SharingErrorDetails::Revocation`]), which the browser takes back to the cloud so it deletes the invite.
+  InviteEnded,
   /// API 3 (S5, row 72): a write of the team's configuration by someone who is neither the project's owner nor the
   /// server's admin.
   NotAdmin,
@@ -159,6 +163,10 @@ pub enum SharingErrorDetails {
   Invite {
     invite: orchester_core::id::InviteId,
     sent_at: i64,
+  },
+  /// `410 invite_ended`: the server's signed revocation of the ended invite (`statements::InviteRevocation`).
+  Revocation {
+    revocation: String,
   },
 }
 
