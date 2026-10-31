@@ -500,8 +500,7 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
   })
 }
 
-/// The steps of `run`'s pinned pipeline in pipeline order, each with its latest execution, what executes it, the
-/// engine its latest invocation of `invocations` recorded and how full that execution's session is.
+/// The steps of `run`'s pinned pipeline in order, each with its latest execution, executor, engine and context use.
 fn step_views(db: &ProjectDb, run: &Run, invocations: &[Invocation]) -> Result<Vec<StepView>, StoreError> {
   let contexts = db.invocation_contexts(run.id())?;
   let mut steps = Vec::new();
