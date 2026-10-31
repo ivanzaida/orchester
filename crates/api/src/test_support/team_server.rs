@@ -1,10 +1,11 @@
 //! A stand-in team server on loopback over plain HTTP, in the shapes of `orchester-api`, for the tests and QA builds
-//! that join a team with no project open (the workspace's `startup_join`, the app's All projects and Join a team):
-//! what it is (`GET /server`, not linked to Orchester Cloud, so a code needs no cloud identity), joining with a code
-//! (`POST /auth/code`) or a cloud identity (`POST /auth/cloud`), the projects the person is a member of
-//! (`GET /projects`), and what a first link of a project with no tasks reads and sends (the workspace's `local_owner`).
-//! It answers a wrong code and an expired one alike, `invalid_code`, as a real server does; it can have no place for a
-//! cloud identity, it can refuse a link, and it can stop answering.
+//! that join a team with no project open (the workspace's `startup_join`, the app's All projects and Join a team, the
+//! QA app's team scenarios): what it is (`GET /server`, not linked to Orchester Cloud, so a code needs no cloud
+//! identity), joining with a code (`POST /auth/code`) or a cloud identity (`POST /auth/cloud`), who signed in
+//! (`GET /auth/me`), and the projects the person is a member of (`GET /projects`, by `?slug=` too). What a linked
+//! checkout's first download reads, and what a first link of a project sends (the workspace's `local_owner`), is in
+//! [`first_download`]. It answers a wrong code and an expired one alike, `invalid_code`, as a real server does; it can
+//! have no place for a cloud identity, it can refuse a link, and it can stop answering.
 
 use std::{
   io::{Read, Write},
@@ -13,8 +14,12 @@ use std::{
   thread,
 };
 
+use orchester_core::id::ProjectId;
 use parking_lot::Mutex;
 use serde_json::{Value, json};
+
+mod first_download;
+pub use first_download::TasksAnswer;
 
 /// The server's name, as it gives it at `GET /server`, unless it is [`TeamServer::named`] otherwise.
 pub const NAME: &str = "Kontur team";
@@ -26,6 +31,8 @@ pub const LATER_CODE: &str = "Z9XW4TPL";
 pub const USERNAME: &str = "bohdan";
 /// The device token every join issues.
 const TOKEN: &str = "orc_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+/// Who every join signs in as.
+const USER: &str = "0191c7c0-0000-7000-8000-000000000b0b";
 
 struct State {
   /// The name it gives at `GET /server`.
@@ -40,11 +47,13 @@ struct State {
   down: bool,
   /// `POST /projects/{id}/link` answers `forbidden`.
   refuses_links: bool,
-  /// What `GET /projects/{id}/tasks` lists, of every project.
-  tasks: Vec<Value>,
   /// Whether each code join carried an Orchester Cloud identity token.
   code_joins: Vec<bool>,
   cloud_joins: usize,
+  /// How a project's tasks are answered.
+  tasks: TasksAnswer,
+  /// How often a project's tasks were asked for.
+  tasks_asked: usize,
 }
 
 pub struct TeamServer {
@@ -69,9 +78,10 @@ impl TeamServer {
       later_expired: false,
       down: false,
       refuses_links: false,
-      tasks: Vec::new(),
       code_joins: Vec::new(),
       cloud_joins: 0,
+      tasks: TasksAnswer::default(),
+      tasks_asked: 0,
     }));
     let serving = state.clone();
     thread::spawn(move || {
@@ -98,7 +108,7 @@ impl TeamServer {
         json!({
           "id": format!("0191c7c0-0000-7000-8000-00000000{index:04x}"), "slug": slug,
           "address": format!("{url}/{slug}"), "key": "KON", "name": name, "remote_hint": hint,
-          "role": "member", "next_number": 1,
+          "role": "member", "next_number": 4,
         })
       })
       .collect();
@@ -116,18 +126,6 @@ impl TeamServer {
     self.state.lock().down = down;
   }
 
-  /// Every project holds one task titled `title` from now on, so a checkout with tasks of its own joins through its
-  /// review.
-  pub fn hold_task(&self, title: &str) {
-    let person = json!({"by": {"id": "0191c7c0-0000-7000-8000-000000000b0b", "display_name": "Bohdan Koval"}, "at": 1});
-    self.state.lock().tasks = vec![json!({
-      "id": "0191c7c0-0000-7000-8000-00000000a001", "number": 1, "key": "KON-1", "former_key": null, "revision": 1,
-      "title": title, "brief": "", "criteria": [], "pipeline": null, "limits": null, "workflow": "backlog",
-      "priority": "none", "tags": [], "blocking": [], "blocked_reason": null, "module": null, "status": "queued",
-      "has_run": false, "created": person, "updated": person, "claim": null, "run": null,
-    })];
-  }
-
   /// A first link of a project is refused from now on, as a server that took the person's role away refuses it.
   pub fn refuse_links(&self) {
     self.state.lock().refuses_links = true;
@@ -141,6 +139,24 @@ impl TeamServer {
   pub fn cloud_joins(&self) -> usize {
     self.state.lock().cloud_joins
   }
+
+  /// Answers a project's tasks as `tasks` from now on, held ones too.
+  pub fn answer_tasks(&self, tasks: TasksAnswer) {
+    self.state.lock().tasks = tasks;
+  }
+
+  /// How often a project's tasks were asked for.
+  pub fn tasks_asked(&self) -> usize {
+    self.state.lock().tasks_asked
+  }
+
+  /// The id here of the project at `slug`.
+  pub fn project(&self, slug: &str) -> Option<ProjectId> {
+    let state = self.state.lock();
+    let project = state.projects.iter().find(|project| project["slug"] == slug)?;
+    let id = project["id"].as_str().expect("`share` gives each project its id");
+    Some(id.parse().expect("`share` makes its ids in a project id's shape"))
+  }
 }
 
 fn serve(mut stream: TcpStream, state: &Mutex<State>) {
@@ -150,8 +166,9 @@ fn serve(mut stream: TcpStream, state: &Mutex<State>) {
   let Some((line, headers, body)) = read_request(&mut stream) else {
     return;
   };
-  let path = line.split_whitespace().take(2).collect::<Vec<_>>().join(" ");
-  let (status, answer) = route(&path, (&headers, &body), state);
+  let target = line.split_whitespace().take(2).collect::<Vec<_>>().join(" ");
+  let (path, query) = target.split_once('?').unwrap_or((&target, ""));
+  let (status, answer) = route((path, query), (&headers, &body), state);
   let answer = answer.to_string();
   let reply = format!(
     "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{answer}",
@@ -161,8 +178,9 @@ fn serve(mut stream: TcpStream, state: &Mutex<State>) {
   let _ = stream.write_all(reply.as_bytes());
 }
 
-fn route(path: &str, (headers, body): (&str, &str), state: &Mutex<State>) -> (&'static str, Value) {
+fn route((path, query): (&str, &str), (headers, body): (&str, &str), state: &Mutex<State>) -> (&'static str, Value) {
   let request: Value = serde_json::from_str(body).unwrap_or(Value::Null);
+  let signed_in = headers.contains(&format!("authorization: bearer {TOKEN}"));
   match path {
     "GET /api/v1/server" => {
       let name = state.lock().name.clone();
@@ -190,44 +208,15 @@ fn route(path: &str, (headers, body): (&str, &str), state: &Mutex<State>) -> (&'
         ("201 Created", joined("cloud"))
       }
     }
-    path if path.starts_with("GET /api/v1/projects") || path.starts_with("POST /api/v1/projects") => {
-      if headers.contains(&format!("authorization: bearer {TOKEN}")) {
-        project_route(path, &state.lock())
-      } else {
-        ("401 Unauthorized", error("unauthorized"))
-      }
+    _ if (path.starts_with("GET ") || path.starts_with("POST /api/v1/projects/")) && !signed_in => {
+      ("401 Unauthorized", error("unauthorized"))
     }
-    _ => ("404 Not Found", error("not_found")),
-  }
-}
-
-/// What a project's endpoints answer: the projects, and for one of them what a first link reads and sends. It holds no
-/// task, so a first link of a project with no local tasks goes through.
-fn project_route(path: &str, state: &State) -> (&'static str, Value) {
-  let (verb, rest) = path.split_once(" /api/v1/projects").unwrap_or((path, ""));
-  if verb == "GET" && rest.is_empty() {
-    return ("200 OK", json!({"projects": state.projects}));
-  }
-  let found = |wanted: &str, field: &str| state.projects.iter().find(|project| project[field] == wanted).cloned();
-  if let Some(slug) = rest.strip_prefix("?slug=") {
-    return found(slug, "slug").map_or_else(
-      || ("404 Not Found", error("not_found")),
-      |project| ("200 OK", json!({"project": project})),
-    );
-  }
-  let rest = rest.trim_start_matches('/');
-  let (id, part) = rest.split_once('/').unwrap_or((rest, ""));
-  let Some(project) = found(id, "id") else {
-    return ("404 Not Found", error("not_found"));
-  };
-  match (verb, part.split('?').next().unwrap_or_default()) {
-    ("GET", "") => ("200 OK", json!({"project": project})),
-    ("GET", "tasks") => ("200 OK", json!({"tasks": state.tasks, "cursor": 0})),
-    ("GET", "tags") => ("200 OK", json!({"tags": []})),
-    ("GET", "modules") => ("200 OK", json!({"modules": [], "changes": []})),
-    ("POST", "link") if state.refuses_links => ("403 Forbidden", error("forbidden")),
-    ("POST", "link") => ("200 OK", json!({"tasks": [], "dropped_links": [], "cursor": 0})),
-    _ => ("404 Not Found", error("not_found")),
+    "GET /api/v1/auth/me" => ("200 OK", json!({"user": user(false)})),
+    "GET /api/v1/projects" => match query.strip_prefix("slug=") {
+      Some(slug) => first_download::by_slug(slug, state),
+      None => ("200 OK", json!({"projects": state.lock().projects})),
+    },
+    _ => first_download::answer(path, state).unwrap_or_else(|| ("404 Not Found", error("not_found"))),
   }
 }
 
@@ -237,10 +226,15 @@ fn joined(via: &str) -> Value {
     "token": TOKEN,
     "session": {"id": "0191c7c0-0000-7000-8000-00000000d0d0", "device": "Bohdan's laptop", "created_at": 1,
       "last_used_at": 1, "current": true, "via": via},
-    "user": {"id": "0191c7c0-0000-7000-8000-000000000b0b", "username": USERNAME, "display_name": "Bohdan Koval",
-      "admin": false, "disabled": false, "cloud": via == "cloud"},
+    "user": user(via == "cloud"),
     "joined": null,
   })
+}
+
+/// Bohdan's account.
+fn user(cloud: bool) -> Value {
+  json!({"id": USER, "username": USERNAME, "display_name": "Bohdan Koval", "admin": false, "disabled": false,
+    "cloud": cloud})
 }
 
 fn error(code: &str) -> Value {

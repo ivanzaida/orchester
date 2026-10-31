@@ -12,7 +12,7 @@ mod support;
 use orchester_api::{
   Credential,
   client::{PlainHttp, ServerAddress},
-  test_support::team_server::{CODE, TeamServer, USERNAME},
+  test_support::team_server::{CODE, TasksAnswer, TeamServer, USERNAME},
 };
 use orchester_app::routes::{
   JoinTarget, JoinWay, OrchesterView, ProjectPage, ProjectSettingsTab, Route, TaskList, TaskListTab,
@@ -314,7 +314,7 @@ fn local_use_the_pages_that_confirm_a_link_say_the_project_moves_into_the_accoun
       Route::Project(_, ProjectPage::Tasks(_))
     )
   });
-  team.hold_task("Plan the release");
+  team.answer_tasks(TasksAnswer::Serve);
   window.navigation().go(join_route(server));
   shows(&mut window, "sharing-join");
   assert_eq!(

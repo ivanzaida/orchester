@@ -8,19 +8,19 @@ use std::error::Error;
 use orchester_api::{
   Credential,
   client::{PlainHttp, ServerAddress},
-  test_support::team_server::{CODE, TeamServer, USERNAME},
+  test_support::team_server::{CODE, TasksAnswer, TeamServer, USERNAME},
 };
 use orchester_app::services::Services;
 use orchester_workspace::sharing::{CodeRequest, Trust, team_join::JoinOutcome};
 use tokio::runtime::Runtime;
 
-/// Starts the server, whose project holds a task when `holds_task` says so, and joins it from the session of
+/// Starts the server, whose project holds tasks when `holds_task` says so, and joins it from the session of
 /// `services`; it answers while the returned value is kept.
 pub fn join(services: &Services, runtime: &Runtime, holds_task: bool) -> Result<TeamServer, Box<dyn Error>> {
   let team = TeamServer::start();
   team.share(&[("Ledger", "ledger", Some("github.com/acme/ledger"))]);
   if holds_task {
-    team.hold_task("Plan the quarter's close");
+    team.answer_tasks(TasksAnswer::Serve);
   }
   let address = ServerAddress::parse(&team.url())?;
   let request = CodeRequest {
