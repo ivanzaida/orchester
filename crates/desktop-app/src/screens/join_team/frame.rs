@@ -1,7 +1,7 @@
 //! The frame of a start page's step (`Startup · redesign` `qzzYw`; `Page` `qlOo2` in *Join a team* `B914L`): the
 //! breadcrumb back to the start and the step line at the top, the step's title and lead, its body and a note under
-//! it, in a column 960 wide centered in the content panel, which scrolls where the window is too low. The start
-//! page's other steps (ORC-293) take it over.
+//! it, in a column 960 wide centered in the content panel, which scrolls where the window is too low. Every step of the
+//! start page is in it: joining, the team's projects, linking a folder; a step's *Back* is in its own actions.
 //!
 //! The breadcrumb is the start page's own: its crumbs are 12.5 and the step's own crumb `text_primary`, where the
 //! kit's ([`crate::ui::breadcrumb`]) draws 12 and `text_secondary`.

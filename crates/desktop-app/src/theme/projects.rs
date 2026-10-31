@@ -1,6 +1,6 @@
-//! Values of the welcome screen, All projects and Add project (layer `Welcome & projects` `CGlZY`: `UQZRa`,
-//! `S5HDKf`, the states `kwpO2`, `kkGWj`, `W5PIR`, `vJTcd` and the GitHub detection states `gh5wV`) that the UI
-//! kit's roles do not carry, registered as lurq `Extra` roles.
+//! Values of the first start, All projects and Add project (layer `Welcome & projects` `CGlZY`: `S5HDKf`, the
+//! states `kwpO2`, `kkGWj`, `W5PIR`, `vJTcd` and the GitHub detection states `gh5wV`; the first start `H9CZ1`) that
+//! the UI kit's roles do not carry, registered as lurq `Extra` roles.
 
 use std::sync::Arc;
 
@@ -11,19 +11,13 @@ use lurq::{
 
 use super::typography::{mono, style};
 
-/// Text of the welcome screen, All projects and Add project.
+/// Text of the first start, All projects and Add project.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ProjectsText {
-  /// Geist Mono 11 `text_muted`, tracked 0.6: *WELCOME TO ORCHESTER*, *PROJECT SETUP* (`NJQoY`, `SIvZm`).
+  /// Geist Mono 11 `text_muted`, tracked 0.6: *WELCOME TO ORCHESTER*, *PROJECT SETUP* (`MLfrQ`, `SIvZm`).
   Eyebrow,
-  /// 34/600, 1.12, tracked -0.8: the welcome's headline (`DAAGK`).
-  WelcomeTitle,
-  /// 14 `text_secondary`, 1.55: what the welcome says under it (`aFsI6`).
-  WelcomeLead,
-  /// Geist Mono 12 `text_muted`: a welcome step's number (`P0IME`).
-  StepNumber,
-  /// 13/600 `text_primary`: a block's title — a welcome step, the GitHub repository block, the removal
-  /// question, *A home for this project's work* (`oL3s8`, `yFgXP`, `AoSrO`, `XWb1r`).
+  /// 13/600 `text_primary`: a block's title — the GitHub repository block, the removal question, *A home for this
+  /// project's work* (`yFgXP`, `AoSrO`, `XWb1r`).
   Heading,
   /// 20/600 `text_primary`, 1.3, tracked -0.2: *All projects* (`SxLos` in 09 `i5G19A`).
   Title,
@@ -62,11 +56,8 @@ pub enum ProjectsText {
 }
 
 impl ProjectsText {
-  pub const ALL: [Self; 22] = [
+  pub const ALL: [Self; 19] = [
     Self::Eyebrow,
-    Self::WelcomeTitle,
-    Self::WelcomeLead,
-    Self::StepNumber,
     Self::Heading,
     Self::Title,
     Self::Sub,
@@ -94,9 +85,6 @@ impl ProjectsText {
   const fn name(self) -> &'static str {
     match self {
       Self::Eyebrow => "projects_eyebrow",
-      Self::WelcomeTitle => "projects_welcome_title",
-      Self::WelcomeLead => "projects_welcome_lead",
-      Self::StepNumber => "projects_step_number",
       Self::Heading => "projects_heading",
       Self::Title => "projects_title",
       Self::Sub => "projects_sub",
@@ -122,9 +110,6 @@ impl ProjectsText {
     let sans = |size, weight, line_height, color| style(size, weight, line_height, 0.0, color);
     match self {
       Self::Eyebrow => mono(style(11.0, FontWeight::Normal, 1.3, 0.6, palette.text_muted)),
-      Self::WelcomeTitle => style(34.0, FontWeight::SemiBold, 1.12, -0.8, palette.text_primary),
-      Self::WelcomeLead => sans(14.0, FontWeight::Normal, 1.55, palette.text_secondary),
-      Self::StepNumber => mono(sans(12.0, FontWeight::Normal, 1.3, palette.text_muted)),
       Self::Heading => sans(13.0, FontWeight::SemiBold, 1.3, palette.text_primary),
       Self::Title => style(20.0, FontWeight::SemiBold, 1.3, -0.2, palette.text_primary),
       Self::Sub => sans(12.5, FontWeight::Normal, 1.4, palette.text_secondary),
@@ -147,30 +132,21 @@ impl ProjectsText {
   }
 }
 
-/// Gaps and paddings of the welcome screen, All projects and Add project.
+/// Gaps and paddings of the first start, All projects and Add project.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ProjectsSpacing {
   /// 20: between All projects' heading, tabs and list (`k4fycz`); a setup rail's bottom (`l9ZCVs`).
   Page,
-  /// 40: the welcome's top and bottom (`p71bBF`), a welcome step's indent past the line (`RZyxY`), under the
-  /// setup form (`r5sel`).
+  /// 40: the first start's top and bottom (`Page` `A9qPh`), under the setup form (`r5sel`).
   Wide,
   /// 52: the removal question's indent, past a row's tile (`J4XaiO`).
   RowIndent,
-  /// 56: the welcome's sides (`p71bBF`).
+  /// 56: the first start's sides (`A9qPh`).
   WelcomeEdge,
-  /// 72: between the welcome's introduction and its steps (`UvN35`).
-  WelcomeColumns,
 }
 
 impl ProjectsSpacing {
-  pub const ALL: [Self; 5] = [
-    Self::Page,
-    Self::Wide,
-    Self::RowIndent,
-    Self::WelcomeEdge,
-    Self::WelcomeColumns,
-  ];
+  pub const ALL: [Self; 4] = [Self::Page, Self::Wide, Self::RowIndent, Self::WelcomeEdge];
 
   pub fn role(self) -> SpacingSize {
     SpacingSize::extra(self.name())
@@ -182,7 +158,6 @@ impl ProjectsSpacing {
       Self::Wide => "projects_wide",
       Self::RowIndent => "projects_row_indent",
       Self::WelcomeEdge => "projects_welcome_edge",
-      Self::WelcomeColumns => "projects_welcome_columns",
     }
   }
 
@@ -192,7 +167,6 @@ impl ProjectsSpacing {
       Self::Wide => 40.0,
       Self::RowIndent => 52.0,
       Self::WelcomeEdge => 56.0,
-      Self::WelcomeColumns => 72.0,
     }
   }
 }

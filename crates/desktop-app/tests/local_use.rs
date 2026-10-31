@@ -65,8 +65,8 @@ fn sign_out(window: &mut Window) {
 #[test]
 fn local_use_a_fresh_install_works_with_the_cloud_asked_nothing() {
   let mut window = fresh();
-  window.until("the welcome", |window| {
-    window.tree.get_element_by_id("welcome-introduction").is_some()
+  window.until("the first start", |window| {
+    window.tree.get_element_by_id("welcome-ways-row").is_some()
   });
   assert!(
     window.tree.get_element_by_id("tab-strip").is_some(),

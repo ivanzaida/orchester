@@ -1,7 +1,7 @@
 //! *Join a team*, a step of the start page (`docs/design/startup.md` decision 4; `Startup · redesign` `qzzYw`): this
 //! computer gets its own sign-in on a team's server, with Orchester Cloud or with a code, and nothing local is
-//! uploaded. The start page itself (ORC-293) has not landed: All projects' welcome opens the step, and its frame
-//! ([`frame`]) is the one the start page's steps share.
+//! uploaded. The first start's ways open the step (`crate::screens::all_projects`), and its frame ([`frame`]) is the
+//! one the start page's steps share.
 //!
 //! - Signed in to Orchester Cloud, `/join-team` shows the account's teams and invites (`04` `drCQd`, [`teams`]), and
 //!   *Use a code* (`/join-team?way=code`) the two ways side by side, the account in the Cloud column's place.

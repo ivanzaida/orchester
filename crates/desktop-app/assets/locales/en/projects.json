@@ -1,24 +1,5 @@
 {
   "projects": {
-    "welcome": {
-      "eyebrow": "WELCOME TO ORCHESTER",
-      "title": "Build with a team\nof AI agents.",
-      "lead": "Connect a repository, assign models to roles, and guide each task from a plan to a reviewed pull request.",
-      "createFirst": "Create your first project",
-      "joinTeam": "Join a team",
-      "next": "Choose a local repository next.",
-      "stepsHeading": "THREE STEPS TO YOUR FIRST TASK",
-      "steps": {
-        "repository": "Connect a repository",
-        "repositorySummary": "Choose a project and its local git repository.",
-        "agents": "Assign your agents",
-        "agentsSummary": "Mix providers and models for each role.",
-        "task": "Start a task",
-        "taskSummary": "Approve the plan, then follow the work."
-      },
-      "scope": "Instructions, tools, secrets and connections stay within each project.",
-      "noProjects": "No projects yet"
-    },
     "title": "All projects",
     "description": "The projects Orchester knows on this computer. Each one keeps its tasks, pipelines and settings in its own .orchester folder.",
     "openFolder": "Open project folder…",

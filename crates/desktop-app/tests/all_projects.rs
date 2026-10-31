@@ -1,12 +1,14 @@
-//! All projects and the welcome of a first launch: what the list says of each project, opening one, removing one
-//! in place, the empty list, *Open project folder…* with a stand-in picker, the *Usage* tab, the person's teams
-//! ([`teams`]) and that an agent CLI is not found ([`agent_cli`]). Projects live in repositories of the test's own
-//! data folder.
+//! All projects and the first start: what the list says of each project, opening one, removing one in place, the
+//! empty list, *Open project folder…* with a stand-in picker, the *Usage* tab, the three ways in of a first start
+//! ([`first_start`]), whose each project is and moving it ([`owners`]), the person's teams ([`teams`]) and that an
+//! agent CLI is not found ([`agent_cli`]). Projects live in repositories of the test's own data folder.
 //!
 //! `cargo test -p orchester-app --test all_projects all_projects`
 
 #[path = "all_projects/agent_cli.rs"]
 mod agent_cli;
+#[path = "all_projects/first_start.rs"]
+mod first_start;
 #[path = "all_projects/owners.rs"]
 mod owners;
 mod support;
@@ -41,21 +43,6 @@ fn newer(repo: &Path) {
   connection
     .pragma_update(None, "user_version", 999)
     .expect("a newer schema version");
-}
-
-#[test]
-fn all_projects_welcomes_a_first_launch() {
-  let (mut window, _stand_ins) = Window::with_stand_ins(Data::new());
-  window.until("the welcome", |window| {
-    window.tree.get_element_by_id("welcome-introduction").is_some()
-  });
-  let texts = window.text(SCREEN);
-  assert!(texts.contains("WELCOME TO ORCHESTER"), "{texts}");
-  assert!(texts.contains("THREE STEPS TO YOUR FIRST TASK"), "{texts}");
-  assert!(texts.contains("No projects yet"), "{texts}");
-  assert!(window.tree.get_element_by_id("sidebar").is_none(), "no sidebar");
-  window.press("welcome-create-project");
-  assert_eq!(window.navigation().route_now(), Route::AddProject(None));
 }
 
 #[test]

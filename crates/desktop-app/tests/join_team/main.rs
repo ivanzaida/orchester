@@ -94,20 +94,8 @@ fn join_with(window: &mut Window, (address, code): (&str, &str)) {
 fn join_team_opens_from_welcome_on_your_teams() {
   let server = TeamServer::start();
   let mut window = window_of(Data::new(), &server, false);
-  shows(&mut window, "welcome-join-team");
-  let right = |window: &mut Window, id: &str| {
-    let bounds = window
-      .tree
-      .get_element_by_id_mut(id)
-      .and_then(|element| element.bounds())
-      .unwrap_or_else(|| panic!("{id} is laid out"));
-    bounds.x + bounds.width
-  };
-  assert!(
-    right(&mut window, "welcome-join-team") <= right(&mut window, "welcome-introduction"),
-    "Join a team fits in the introduction beside the other actions"
-  );
-  window.press("welcome-join-team");
+  shows(&mut window, "welcome-your-teams");
+  window.press("welcome-your-teams");
   assert_eq!(window.navigation().route_now(), Route::JoinTeam(JoinWay::Cloud));
   shows(&mut window, "screen-join_team");
 
@@ -154,6 +142,36 @@ fn join_team_joins_a_listed_team() {
   assert_eq!(joined(&window), [NAME]);
   shows(&mut window, &format!("{}-open", team_row()));
   assert!(!has(&mut window, &format!("{}-join", team_row())));
+}
+
+/// Signed in with a team this computer joined, the first start's third way names the team and the invite waiting, and
+/// leads to the team's projects (01b `Knacr`).
+#[test]
+fn join_team_first_start_names_the_joined_team() {
+  let server = TeamServer::start();
+  let mut window = window_of(Data::new(), &server, false);
+  window.navigation().go(Route::JoinTeam(JoinWay::Cloud));
+  shows(&mut window, &format!("{}-join", team_row()));
+  window.press(&format!("{}-join", team_row()));
+  shows(&mut window, "join-team-teams-outcome-joined");
+
+  window.navigation().go(Route::AllProjects);
+  window.until("the joined team on the third way", |window| {
+    window.tree.get_element_by_id("welcome-shared-meta").is_some()
+      && window.text("welcome-shared-meta") == format!("Joined · {NAME}")
+  });
+  window.until("how many projects are the person's", |window| {
+    window
+      .text("welcome-shared-body")
+      .starts_with(&format!("{NAME} shares"))
+  });
+  shows(&mut window, "welcome-invites");
+  assert_eq!(window.text("welcome-invites"), "1 invite");
+  window.press("welcome-choose-project");
+  assert!(
+    matches!(window.navigation().route_now(), Route::JoinTeam(JoinWay::Projects(_))),
+    "the team's projects"
+  );
 }
 
 #[test]
