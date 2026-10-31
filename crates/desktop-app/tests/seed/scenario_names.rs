@@ -69,6 +69,8 @@ fn seed_names_every_scenario_once() {
       "team-offer",
       "team-downloading",
       "team-download-failed",
+      "team-download-progress",
+      "team-download-stopped",
       "team-shared-projects",
       "team-shared-none"
     ]

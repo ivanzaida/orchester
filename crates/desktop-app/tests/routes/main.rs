@@ -77,6 +77,7 @@ fn every_route() -> Vec<Route> {
     Route::JoinTeam(JoinWay::Code),
     Route::JoinTeam(JoinWay::Projects(join_target().server)),
     Route::JoinTeam(JoinWay::Folder(join_target())),
+    Route::FirstDownload(project()),
     Route::Settings,
     Route::General,
   ];

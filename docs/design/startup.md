@@ -108,3 +108,14 @@ projects* tab. Controls are instances of `Button/*` (`iBDdP`, `O1AstI`, `YaUJX`,
     no copy of that CLI. With none, neither CLI is on the search path and no chosen file exists; it then names `claude`.
     A connection whose program is gone while a copy is on the search path shows nothing, since "not found" would be
     false.
+- Decision 7 as built (`crates/desktop-app/src/screens/first_download/`, `/first-download?project=<id>`):
+  - **Where it leads from.** A link of a checkout without tasks, on Project settings' link page, opens it. The steps
+    before it (05, 06, 07) lead to the same route when they land.
+  - **Team settings.** The sync does not read them yet (`DownloadProgress::team_settings`), so their row says *not
+    downloaded yet* where frame 08 draws *after the tasks*, which would promise work that does not happen.
+  - **The bar.** It fills to what was stored of what the server said (84 of 212 is 40 %; the frame draws 250 of 520),
+    and there is none until the server said.
+  - **Not drawn.** Frame 08 draws only the download under way. A failure shows in the tasks' row, with the reason and
+    *Try again*, and the callout leaves; the end says *Tasks downloaded* without the callout and *Stay here*. *Stay
+    here* puts the callout away and stays on the page. The tasks and the team settings are the only parts: the tags and
+    modules the download reports are not drawn.

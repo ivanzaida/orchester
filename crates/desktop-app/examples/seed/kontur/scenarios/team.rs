@@ -54,6 +54,16 @@ pub fn download_failed(kontur: &mut Kontur) -> Result<(), SeedError> {
   mark(kontur, State::DownloadFailed)
 }
 
+pub fn download_progress(kontur: &mut Kontur) -> Result<(), SeedError> {
+  mark(kontur, State::DownloadProgress)?;
+  origin(kontur)
+}
+
+pub fn download_stopped(kontur: &mut Kontur) -> Result<(), SeedError> {
+  mark(kontur, State::DownloadStopped)?;
+  origin(kontur)
+}
+
 /// With three folders beside the database to link the team's Kontur to, in `checkouts`: `kontur` matches its repository
 /// hint (06 `go2aM`), `kontur-fork` has another `origin` (13b `tDFeg`), `plain` is no repository (13 `sN8Pa`).
 pub fn shared_projects(kontur: &mut Kontur) -> Result<(), SeedError> {
@@ -74,6 +84,12 @@ pub fn shared_projects(kontur: &mut Kontur) -> Result<(), SeedError> {
 
 pub fn shared_none(kontur: &mut Kontur) -> Result<(), SeedError> {
   mark(kontur, State::NoSharedProjects)
+}
+
+/// Kontur's checkout has the team's repository as its `origin`, which the QA app's server names for its project.
+fn origin(kontur: &Kontur) -> Result<(), SeedError> {
+  git::add_origin(&kontur.repo, "https://github.com/acme/kontur.git")?;
+  Ok(())
 }
 
 fn mark(kontur: &mut Kontur, state: State) -> Result<(), SeedError> {

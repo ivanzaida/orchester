@@ -187,6 +187,7 @@ fn target(args: &Map<String, Value>, lookup: Option<&Lookup>) -> Result<Route, T
     Screen::AllProjects => return Ok(Route::AllProjects),
     Screen::AddProject => return Ok(Route::AddProject(None)),
     Screen::JoinTeam => return join_team::route(args, lookup),
+    Screen::FirstDownload => return Ok(Route::FirstDownload(project(args)?)),
     Screen::Settings => return settings_route::route(args, lookup),
     Screen::Overview => ProjectPage::Overview(tab(
       args,
@@ -255,6 +256,7 @@ const fn params(screen: Screen) -> &'static [&'static str] {
   match screen {
     Screen::AllProjects | Screen::AddProject => &[],
     Screen::JoinTeam => join_team::PARAMS,
+    Screen::FirstDownload => &["project"],
     Screen::Settings => settings_route::PARAMS,
     Screen::Overview | Screen::ImportResources => &["project", "tab"],
     Screen::Tasks => &["project", "tab", "q", "highlight"],

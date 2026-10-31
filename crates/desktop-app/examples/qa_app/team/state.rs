@@ -26,6 +26,10 @@ pub enum State {
   Downloading,
   /// Joined, with Kontur linked and the download of its tasks refused.
   DownloadFailed,
+  /// Joined, with Kontur linked, its `origin` the project's, and 84 of its 212 tasks down, the rest held (`YN6MO`).
+  DownloadProgress,
+  /// As [`Self::DownloadProgress`], with the download stopped there by the server's refusal.
+  DownloadStopped,
   /// Joined, with Kontur and Billing to pick and nothing linked; the seed leaves folders to link them to.
   SharedProjects,
   /// Joined, with no project the person is invited to.
@@ -33,7 +37,7 @@ pub enum State {
 }
 
 impl State {
-  pub const ALL: [Self; 10] = [
+  pub const ALL: [Self; 12] = [
     Self::Join,
     Self::WrongCode,
     Self::ExpiredCode,
@@ -42,6 +46,8 @@ impl State {
     Self::Offer,
     Self::Downloading,
     Self::DownloadFailed,
+    Self::DownloadProgress,
+    Self::DownloadStopped,
     Self::SharedProjects,
     Self::NoSharedProjects,
   ];
@@ -57,6 +63,8 @@ impl State {
       Self::Offer => "team-offer",
       Self::Downloading => "team-downloading",
       Self::DownloadFailed => "team-download-failed",
+      Self::DownloadProgress => "team-download-progress",
+      Self::DownloadStopped => "team-download-stopped",
       Self::SharedProjects => "team-shared-projects",
       Self::NoSharedProjects => "team-shared-none",
     }

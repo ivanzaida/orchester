@@ -156,24 +156,24 @@ pub(crate) fn step_frame(ctx: &mut Ctx, frame: StepFrame) -> Element {
     .into()
 }
 
-/// *Start*, the steps on the way here and the step's own crumb, a chevron between two (`Breadcrumb` `LTKnD`, `T3NzX`);
-/// *Start* opens All projects, a step on the way its place.
+/// *Start*, the steps on the way here and the step's own crumb, a chevron between two (`Breadcrumb` `LTKnD`, `T3NzX`,
+/// `pRFzL`); *Start* opens All projects, a step on the way its place.
 fn breadcrumb(ctx: &mut Ctx, id: &str, (ancestors, crumb): (Vec<Crumb>, &str)) -> Row {
   let start = Crumb {
     name: "start",
     label: ctx.t("startup.crumbs.start").to_string(),
     route: Route::AllProjects,
   };
+  let navigation = Navigation::of(ctx);
   let mut row = Row::new()
     .id(format!("{id}-crumbs"))
     .flex_shrink(0.0)
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center);
   for ancestor in std::iter::once(start).chain(ancestors) {
-    let open = Navigation::of(ctx).to(ancestor.route);
     row = row
       .child(
-        opening(open)
+        opening(navigation.to(ancestor.route))
           .id(format!("{id}-crumb-{}", ancestor.name))
           .flex_shrink(0.0)
           .describe("a11y_name", ancestor.label.clone())
@@ -190,14 +190,16 @@ fn breadcrumb(ctx: &mut Ctx, id: &str, (ancestors, crumb): (Vec<Crumb>, &str)) -
   )
 }
 
-/// The step line (`F7crC`): each step's number in a ring and its name, `current` in `text_primary`, a step done its
-/// `success` check and its name in `text_secondary` (`x7dnu`), a line between two.
+/// The step line (`F7crC`, `YLUz1`): a step before `current` as a `success` check and its name in `text_secondary`
+/// (`x7dnu`), the others as their number in a ring; each with its name, `current` in `text_primary`, a line between
+/// two.
 fn steps(ctx: &Ctx, id: &str, current: StartStep) -> Row {
   let mut row = Row::new()
     .id(format!("{id}-steps"))
     .flex_shrink(0.0)
     .spacing(StartupSpacing::Steps.role())
     .align_items(Alignment::Center);
+  let reached = StartStep::ALL.iter().position(|step| *step == current);
   for (index, step) in StartStep::ALL.into_iter().enumerate() {
     if index > 0 {
       row = row.child(
@@ -208,25 +210,19 @@ fn steps(ctx: &Ctx, id: &str, current: StartStep) -> Row {
       );
     }
     let here = step == current;
-    let done = index < current as usize;
-    let name = Text::new(&ctx.t(step.key())).nowrap();
-    let (lead, name): (Element, Text) = if done {
-      (
-        icon(Icon::CircleCheck, IconSize::Md, PaletteColor::Success).into(),
-        name
-          .variant(StartupText::StepLabel.role())
-          .color(PaletteColor::TextSecondary),
-      )
-    } else if here {
-      (
-        step_number(index, PaletteColor::TextPrimary, PaletteColor::TextPrimary).into(),
-        name.variant(StartupText::StepLabelCurrent.role()),
-      )
+    let done = reached.is_some_and(|reached| index < reached);
+    let label = Text::new(&ctx.t(step.key()))
+      .variant(if here {
+        StartupText::StepLabelCurrent.role()
+      } else {
+        StartupText::StepLabel.role()
+      })
+      .nowrap();
+    let (mark, label) = if done {
+      let check = icon(Icon::CircleCheck, IconSize::Md, PaletteColor::Success);
+      (Element::from(check), label.color(PaletteColor::TextSecondary))
     } else {
-      (
-        step_number(index, PaletteColor::BorderStrong, PaletteColor::TextMuted).into(),
-        name.variant(StartupText::StepLabel.role()),
-      )
+      (step_number(index + 1, here).into(), label)
     };
     row = row.child(
       Row::new()
@@ -235,15 +231,20 @@ fn steps(ctx: &Ctx, id: &str, current: StartStep) -> Row {
         .describe("done", done.to_string())
         .spacing(ExtraSpacing::Snug.role())
         .align_items(Alignment::Center)
-        .child(lead)
-        .child(name),
+        .child(mark)
+        .child(label),
     );
   }
   row
 }
 
-/// A step's number from 1, in `digit` inside a `ring` (`Number` `P6t15`).
-fn step_number(index: usize, ring: PaletteColor, digit: PaletteColor) -> Row {
+/// A step's `number` in its ring, in `text_primary` when it is the current one (`Number` `P6t15`).
+fn step_number(number: usize, here: bool) -> Row {
+  let (ring, digit) = if here {
+    (PaletteColor::TextPrimary, PaletteColor::TextPrimary)
+  } else {
+    (PaletteColor::BorderStrong, PaletteColor::TextMuted)
+  };
   Row::new()
     .width(Dimension::Px(STEP_NUMBER))
     .height(Dimension::Px(STEP_NUMBER))
@@ -252,7 +253,7 @@ fn step_number(index: usize, ring: PaletteColor, digit: PaletteColor) -> Row {
     .rounded(ExtraRadius::Full.role())
     .border(Border::inside(BorderSize::Sm, ring))
     .child(
-      Text::new(&(index + 1).to_string())
+      Text::new(&number.to_string())
         .variant(StartupText::StepNumber.role())
         .color(digit)
         .nowrap(),

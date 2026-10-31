@@ -51,7 +51,7 @@ pub fn layout(ctx: &mut Ctx) -> Element {
   let screen = Route::parse(&ctx.route_path()).ok().map(|route| route.screen());
   let sidebar = !matches!(
     screen,
-    Some(Screen::AllProjects | Screen::AddProject | Screen::JoinTeam)
+    Some(Screen::AllProjects | Screen::AddProject | Screen::JoinTeam | Screen::FirstDownload)
   );
   // `Content wrap` (`dHxPJ`): 8 between the panel and the window's right edge, and its left without a sidebar.
   let wrap = Padding::new().right(SpacingSize::Sm);
