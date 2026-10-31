@@ -36,13 +36,17 @@ use crate::{
 /// The question's element id.
 const DIALOG_ID: &str = "update-install";
 
-/// Whether the window asks about the runs at work before the update installs. The session window provides it.
+/// Whether the window asks about the runs at work before the update installs, and the state shown when a press was
+/// refused because it was set for testing. The session window provides it.
 #[derive(Clone)]
-pub struct UpdateAsk(Signal<bool>);
+pub struct UpdateAsk {
+  asking: Signal<bool>,
+  refused: Signal<Option<UpdateState>>,
+}
 
 impl UpdateAsk {
-  pub const fn new(asking: Signal<bool>) -> Self {
-    Self(asking)
+  pub const fn new(asking: Signal<bool>, refused: Signal<Option<UpdateState>>) -> Self {
+    Self { asking, refused }
   }
 
   /// The one the session window provides to everything it mounts.
@@ -59,29 +63,50 @@ pub struct Restart {
   services: Services,
   window: WindowHandle,
   asking: Signal<bool>,
+  refused: Signal<Option<UpdateState>>,
 }
 
 impl Restart {
   pub fn of(ctx: &mut Ctx) -> Self {
+    let UpdateAsk { asking, refused } = UpdateAsk::of(ctx);
     Self {
       services: Services::of(ctx),
       window: ctx.window(),
-      asking: UpdateAsk::of(ctx).0,
+      asking,
+      refused,
     }
   }
 
   /// Installs at once with no run at work; asks with runs at work, also while an install waits for them; nothing
-  /// without a ready update.
+  /// without a ready update. In a state set for testing it still asks, so the question can be seen, and otherwise
+  /// refuses ([`Self::refused`]).
   pub fn press(&self) {
     match self.services.updates.restart_plan(&self.services.runners) {
+      RestartPlan::Ask { .. } => self.asking.set(true),
+      _ if self.services.updates.is_set_for_testing() => self.refuse(),
       RestartPlan::NothingReady => {}
       RestartPlan::InstallNow(_) => self.install(RunsAtWork::WaitForThem),
-      RestartPlan::Ask { .. } => self.asking.set(true),
     }
   }
 
-  /// Installs the ready update as `runs` says; the window closes once the installer took over.
+  /// The state shown when a press was refused because it was set for testing (`set_update_state`); reading it in a
+  /// render renders again when a press is refused.
+  pub fn refused(&self) -> Option<UpdateState> {
+    self.refused.get()
+  }
+
+  fn refuse(&self) {
+    tracing::warn!("Restart to update was pressed in an update state set for testing; nothing installs");
+    self.asking.set(false);
+    self.refused.set(Some(self.services.updates.state()));
+  }
+
+  /// Installs the ready update as `runs` says; the window closes once the installer took over. Nothing installs in a
+  /// state set for testing: the press is refused.
   pub fn install(&self, runs: RunsAtWork) {
+    if self.services.updates.is_set_for_testing() {
+      return self.refuse();
+    }
     self.asking.set(false);
     let installer = match Installer::this_program() {
       Ok(installer) => installer,

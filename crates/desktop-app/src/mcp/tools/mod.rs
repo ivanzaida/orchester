@@ -1,8 +1,9 @@
 //! The app's own MCP tools, served beside lurq's `lurq_*`: `app_state` reads where the window is,
 //! `navigate` takes the active tab somewhere, `set_theme` switches the colors, `sign_in_state` says whether the
 //! app is signed in to Orchester Cloud (the one tool that answers while it is not), `update_state` where this copy's
-//! own update stands, and in debug builds `hold_reads` holds the project feeds' reads for QA. They run on the
-//! event-loop thread, with the tree and the app, like every other change to the window.
+//! own update stands, and in debug builds `hold_reads` holds the project feeds' reads and `set_update_state` shows
+//! any update state, for QA. They run on the event-loop thread, with the tree and the app, like every other change
+//! to the window.
 
 mod app_state;
 mod error;
@@ -10,6 +11,7 @@ mod hold_reads;
 mod navigate;
 mod project_settings_route;
 mod set_theme;
+mod set_update_state;
 mod settings_route;
 mod sign_in_state;
 mod update_state;
@@ -24,6 +26,7 @@ pub use self::{
   hold_reads::hold_reads,
   navigate::{navigate, navigate_with},
   set_theme::set_theme,
+  set_update_state::set_update_state,
   settings_route::Lookup,
   sign_in_state::{SIGN_IN_STATE, sign_in_state},
   update_state::update_state,
@@ -36,13 +39,14 @@ use crate::{
 };
 
 /// Every app tool, for lurq's MCP configuration; for a started `session` `sign_in_state` on its cloud and `navigate`
-/// finding Settings' accounts and team servers in its data, and in debug builds `hold_reads`, whose reads its hold
-/// holds.
+/// finding Settings' accounts and team servers in its data, and for a `debug_build` the tools only debug builds serve,
+/// for QA: `hold_reads`, whose reads its hold holds, and `set_update_state` on its updates.
 pub fn all(
   link: &WindowLink,
   appearance: &Appearance,
   settings: McpSettings,
   session: Option<&Services>,
+  debug_build: bool,
 ) -> Vec<McpTool> {
   let lookup = session.map(Lookup::of);
   let mut tools = vec![
@@ -52,10 +56,9 @@ pub fn all(
   ];
   tools.extend(session.map(|services| sign_in_state::tool(services.cloud.clone())));
   tools.extend(session.map(|services| update_state::tool(services.updates.clone())));
-  if cfg!(debug_assertions)
-    && let Some(services) = session
-  {
+  if debug_build && let Some(services) = session {
     tools.push(hold_reads::tool(services.hold.clone()));
+    tools.push(set_update_state::tool(services.updates.clone()));
   }
   tools
 }

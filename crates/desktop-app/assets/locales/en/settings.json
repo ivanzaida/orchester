@@ -429,7 +429,8 @@
         },
         "unreadable": "The update settings can't be read: {{reason}}",
         "notSaved": "Not saved: {{reason}}",
-        "notOpened": "The page could not be opened. It is {{url}}"
+        "notOpened": "The page could not be opened. It is {{url}}",
+        "setForTesting": "Nothing installs: this update state was set for testing."
       },
       "version": {
         "title": "Version",

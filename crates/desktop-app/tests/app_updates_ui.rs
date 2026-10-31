@@ -449,3 +449,32 @@ fn app_updates_ui_settings_general_stores_the_channel_and_the_switch() {
     window.text("settings-save-state") == "All changes saved"
   });
 }
+
+/// ORC-583: a state set for testing shows in the update's row, and *Restart to update* in it says so instead of
+/// installing; the real state shows again after.
+#[test]
+fn app_updates_ui_restart_in_a_state_set_for_testing_says_so_and_installs_nothing() {
+  let mut window = Window::open();
+  let updates = window.launch.services().expect("services").updates.clone();
+  let real = updates.state();
+  updates.set_for_testing(UpdateState::Ready(ready(false)), None);
+  window.navigation().go(Route::Updates(UpdatesShow::Section));
+  window.until("the ready row", |window| {
+    window.texts("settings-update-restart").is_some()
+  });
+  window.press("settings-update-restart");
+  window.until("the refusal", |window| {
+    window.texts("settings-updates-problem").is_some()
+  });
+  assert_eq!(
+    window.text("settings-updates-problem"),
+    "Nothing installs: this update state was set for testing."
+  );
+  assert_eq!(updates.state(), UpdateState::Ready(ready(false)), "no install began");
+  updates.show_real_state();
+  window.until("the real state", |window| {
+    window.texts("settings-update-restart").is_none()
+  });
+  assert_eq!(updates.state(), real);
+  assert_eq!(window.texts("settings-updates-problem"), None);
+}

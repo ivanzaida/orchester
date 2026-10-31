@@ -1,6 +1,7 @@
 //! The OS notification that this copy's update is ready (`Auto-updater · redesign` `acFkz`), among the app's other
 //! notifications: once per version, also across restarts, as the application database's window state keeps the
-//! version told ([`TOLD`]). A critical release says so. Its click opens Settings › Updates.
+//! version told ([`TOLD`]); of a state set for testing only for as long as the app runs. A critical release says so.
+//! Its click opens Settings › Updates. A build that shows no notifications logs its words instead.
 
 use lurq::app::{
   component::DevtoolsInspectable,
@@ -84,13 +85,6 @@ pub(super) fn tell(ctx: &mut Ctx, delivery: Delivery, told: &Mutex<Told>) {
     return;
   };
   told.version = Some(ready.version.clone());
-  if delivery == Delivery::Silent {
-    tracing::debug!(
-      version = ready.version,
-      "an update is ready; this build shows no notification"
-    );
-    return;
-  }
   let (title, body) = if ready.critical {
     ("shell.update.criticalTitle", "shell.update.criticalBody")
   } else {
@@ -102,8 +96,20 @@ pub(super) fn tell(ctx: &mut Ctx, delivery: Delivery, told: &Mutex<Told>) {
     route: Route::Updates(UpdatesShow::Section).path(),
     sound: false,
   };
+  if delivery == Delivery::Silent {
+    tracing::info!(
+      title = shown.title,
+      body = shown.body,
+      "an update is ready; this build shows no notification"
+    );
+    return;
+  }
   if let Err(error) = os::show(&shown) {
     tracing::warn!(%error, "the system did not take the notification of a ready update");
+    return;
+  }
+  // A state set for testing stays in memory, and so does the version told of it.
+  if services.updates.is_set_for_testing() {
     return;
   }
   let workspace = services.workspace;

@@ -21,10 +21,10 @@ use orchester_store::SessionEnd;
 use orchester_workspace::{
   activity::Activity,
   app_updates::{
-    AppUpdates, ThisApp, ThisCopy, UpdateState,
+    AppUpdates, ReadyUpdate, ThisApp, ThisCopy, UpdateState,
     install::{
-      AfterInstall, BACKUPS_FOLDER, Databases, Handover, InstallRecord, InstallStep, Installer, RECORD_FILE,
-      RESULT_FILE, RestartPlan, RunsAtWork, after_install, back_up, backups,
+      AfterInstall, BACKUPS_FOLDER, Databases, Handover, InstallRecord, InstallStep, Installer, JustUpdated,
+      RECORD_FILE, RESULT_FILE, RestartPlan, RunsAtWork, after_install, back_up, backups,
     },
   },
   runner::Runners,
@@ -281,7 +281,7 @@ fn update_install_a_new_start_shows_updated_to_or_the_failure() {
   keep();
   let updated = open(NEWER);
   assert_eq!(
-    updated.just_updated().map(|updated| updated.version.clone()),
+    updated.just_updated().map(|updated| updated.version),
     Some(version(NEWER))
   );
   drop(updated);
@@ -519,4 +519,56 @@ async fn update_install_pressed_while_it_waits_asks_again_and_stops_the_runs_on_
     .expect("the install");
   assert!(handed.is_some(), "the installer took over: {:?}", copy.updates.state());
   assert_eq!(backups(copy.dir.path()).expect("the backups"), [version(RUNNING)]);
+}
+
+/// ORC-583: a state set for testing shows in place of the real one, installs nothing, and leaves the real state as it
+/// was until it shows again.
+#[tokio::test]
+async fn update_install_a_state_set_for_testing_installs_nothing() {
+  let (copy, _stand) = ready_copy().await;
+  let real = copy.updates.state();
+  let changes = copy.updates.subscribe();
+  let set = UpdateState::WaitingForRuns {
+    update: ReadyUpdate {
+      version: version("9.9.9"),
+      notes: String::new(),
+      critical: true,
+      installer: PathBuf::new(),
+    },
+    runs: vec!["KON-5".to_owned()],
+  };
+  let updated = JustUpdated {
+    version: version("9.9.8"),
+    notes: "Runs start faster.".to_owned(),
+  };
+  copy.updates.set_for_testing(set.clone(), Some(updated.clone()));
+  assert!(
+    changes.has_changed().expect("the state is followed"),
+    "what follows it wakes"
+  );
+  assert_eq!(
+    (copy.updates.state(), copy.updates.just_updated()),
+    (set.clone(), Some(updated))
+  );
+
+  let handed = copy
+    .updates
+    .install(&no_runners(), RunsAtWork::StopThem, &installer(&copy, cannot_start))
+    .await;
+  assert_eq!(handed, None);
+  assert_eq!(copy.updates.state(), set, "no install began");
+  assert!(
+    backups(copy.dir.path()).expect("the backups").is_empty(),
+    "nothing was copied aside"
+  );
+  copy.updates.set_runs_at_work(vec!["KON-6".to_owned()]);
+  assert_eq!(copy.updates.state(), set, "the real state changes behind it");
+
+  copy.updates.show_real_state();
+  assert!(!copy.updates.is_set_for_testing());
+  assert_eq!(copy.updates.just_updated(), None);
+  let UpdateState::WaitingForRuns { update, runs } = copy.updates.state() else {
+    panic!("the real ready update, waiting for the run: {:?}", copy.updates.state());
+  };
+  assert_eq!((Some(&update), runs), (real.ready(), vec!["KON-6".to_owned()]));
 }

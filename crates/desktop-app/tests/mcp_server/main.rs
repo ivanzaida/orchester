@@ -9,6 +9,7 @@ mod http;
 mod signed_out;
 #[path = "../support/mod.rs"]
 mod support;
+mod update_states;
 mod versions;
 
 use std::{fs, path::Path, sync::Arc, thread, time::Duration};
@@ -51,7 +52,18 @@ impl Served {
   fn start_in(folder: TempDir, window_control: bool) -> Self {
     let data = Data::new();
     let launch = data.launch();
-    Self::serve(folder, (data, launch), window_control)
+    Self::serve(folder, (data, launch), (window_control, cfg!(debug_assertions)))
+  }
+
+  /// [`Self::start`] with the tools a release build serves, whatever this test's build.
+  fn start_as_release() -> Self {
+    let data = Data::new();
+    let launch = data.launch();
+    Self::serve(
+      tempfile::tempdir().expect("a temporary folder"),
+      (data, launch),
+      (true, false),
+    )
   }
 
   /// [`Self::start`] on a session that is not signed in: the window shows the sign-in gate.
@@ -61,11 +73,11 @@ impl Served {
     Self::serve(
       tempfile::tempdir().expect("a temporary folder"),
       (data, launch),
-      window_control,
+      (window_control, cfg!(debug_assertions)),
     )
   }
 
-  fn serve(folder: TempDir, (data, launch): (Data, Launch), window_control: bool) -> Self {
+  fn serve(folder: TempDir, (data, launch): (Data, Launch), (window_control, debug_build): (bool, bool)) -> Self {
     let runtime = data.runtime.handle();
     let appearance = Appearance::new(ThemeSetting::Dark, Arc::default(), None);
     let mut app = App::new();
@@ -75,12 +87,12 @@ impl Served {
     let mut tree = Tree::new();
     tree.resize(1440, 900);
     let link = WindowLink::default();
-    let config = mcp::config(
+    let config = mcp::config_for_build(
       McpSettings::with_window_control(window_control),
       &link,
       &appearance,
       launch.services(),
-      app.i18n(),
+      (app.i18n(), debug_build),
     );
     let at = McpMode::Qa(folder.path().to_path_buf());
     let settings = McpSettings::with_window_control(window_control);
@@ -323,7 +335,14 @@ fn every_lurq_tool_is_known_as_looking_or_input() {
 fn the_apps_own_tools_word_their_schemas_in_single_spaces() {
   let served = Served::start(true);
   let tools = served.endpoint().tools(&served.session());
-  for name in ["app_state", "navigate", "set_theme", "hold_reads", "update_state"] {
+  for name in [
+    "app_state",
+    "navigate",
+    "set_theme",
+    "hold_reads",
+    "update_state",
+    "set_update_state",
+  ] {
     let tool = tools
       .iter()
       .find(|tool| tool["name"] == name)

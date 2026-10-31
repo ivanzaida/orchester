@@ -421,7 +421,8 @@ A native acceptance of an Orchestrator proposal is the person's decision; automa
 **The new app's MCP server.** `orchester-app` runs one MCP server of its own instead of two. It listens on
 `127.0.0.1` only and needs a bearer token on every request; where it listens and where its token is kept depend on
 how the app was started (below). It hosts lurq's window tools, the app's
-own (`app_state`, `navigate`, `set_theme`, `hold_reads` in debug builds) and Orchester's domain tools:
+own (`app_state`, `navigate`, `set_theme`, `update_state`, and `hold_reads` and `set_update_state` in debug
+builds) and Orchester's domain tools:
 every tool of Orchester's MCP server above, and the setup tools that only this app serves, which set a
 project up end to end without its configuration screens: `add_project` and `get_project`;
 `set_project_environment` and `set_repository_agent_files` (Project settings; limits through
@@ -437,6 +438,18 @@ input with the rules of the screen it stands for and takes only what that screen
 returns a secret's value. Tools that read are in lurq's Observe scope. Tools that change data are in a
 `data` scope that is always granted, apart from window control (`navigate`, `set_theme`, lurq's input),
 which a release build grants only when its settings or `ORCHESTER_APP_MCP_WINDOW_CONTROL=on` allow it.
+
+**Update states in a QA copy.** A QA copy never updates itself, so `update_state` always answers
+`not_this_copy` (reason `qa`). To see the other states on screen, debug builds (QA copies included) serve
+`set_update_state` (window control): it takes the very JSON `update_state` answers and shows that state in place of
+the real one, in Settings › Updates, the status bar's update item and the ready notification, with
+`updated: {version, notes}` for the status bar's *Updated to* (S6) and *What's new*. `{"real": true}` shows the real
+state again. A state set this way lives in memory only: nothing of it is written to `orchester.db`, and it is gone at
+the next start. It never checks, downloads or installs anything: *Restart to update* or *Install now* pressed in it
+says *Nothing installs: this update state was set for testing.* under the *Channel* row. *Install now* with runs at
+work still opens the question about them (`MGILm`); its buttons give that same answer. A release build does not
+serve the tool. A QA copy shows no OS notifications unless `ORCHESTER_APP_NOTIFICATIONS=1`; without it the app's log
+has the ready notification's title and body (`an update is ready; this build shows no notification`).
 
 | Started as | Address | Token | Discovery file |
 | --- | --- | --- | --- |

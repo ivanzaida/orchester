@@ -119,7 +119,7 @@ pub fn update_facts(ctx: &mut Ctx, updates: &AppUpdates) -> UpdateFacts {
         loop {
           let fresh = Instant::now() < until;
           let state = changes.borrow_and_update().clone();
-          let facts = UpdateFacts::of(&state, updates.just_updated().filter(|_| fresh));
+          let facts = UpdateFacts::of(&state, updates.just_updated().filter(|_| fresh).as_ref());
           if !emitter.emit(facts) {
             return;
           }

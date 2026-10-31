@@ -13,7 +13,8 @@ const DESCRIPTION: &str = "Where this copy's own update stands, as Settings › 
   wrong_digest, unknown_key, bad_signature, not_saved), install_failed (version, reason, exit_code, log), \
   cloud_unreachable (last_checked), not_this_copy (reason: development, qa, script_install, portable, \
   program_folder_unknown; newest with its download, or null) or not_on_this_platform (newest). Times are milliseconds \
-  since the Unix epoch. Read only: an update installs only when the person presses Restart to update.";
+  since the Unix epoch. Read only: an update installs only when the person presses Restart to update. In a debug \
+  build, set_update_state shows a state set for testing in place of the real one, and this tool answers that one.";
 
 pub fn tool(updates: AppUpdates) -> McpTool {
   McpTool::new("update_state")
@@ -126,7 +127,7 @@ fn newest_json(newest: &NewestRelease) -> Value {
   json!({ "version": newest.version.as_str(), "download": newest.download })
 }
 
-const fn failure_name(failure: UpdateFailure) -> &'static str {
+pub(super) const fn failure_name(failure: UpdateFailure) -> &'static str {
   match failure {
     UpdateFailure::NoInstaller => "no_installer",
     UpdateFailure::WrongSize => "wrong_size",
@@ -137,7 +138,7 @@ const fn failure_name(failure: UpdateFailure) -> &'static str {
   }
 }
 
-const fn reason_name(reason: CopyReason) -> &'static str {
+pub(super) const fn reason_name(reason: CopyReason) -> &'static str {
   match reason {
     CopyReason::Development => "development",
     CopyReason::Qa => "qa",

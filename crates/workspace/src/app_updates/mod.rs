@@ -4,13 +4,15 @@
 //! the download of an offered installer into the data folder's [`UPDATES_FOLDER`], resumed after an interruption and
 //! kept only once its SHA-256 and its signature by a release key built into the app check out ([`download`]). Only a
 //! copy the installer installed on Windows downloads ([`ThisCopy`]); every other copy still asks, to name the newest
-//! release and its download. What the window and the app's MCP server show is one [`UpdateState`]. A ready update
-//! installs when the person says so ([`install`]): the databases are copied aside and the installer takes over.
+//! release and its download. What the window and the app's MCP server show is one [`UpdateState`], or in a debug
+//! build's QA a state set for testing in its place ([`testing`]). A ready update installs when the person says so
+//! ([`install`]): the databases are copied aside and the installer takes over.
 
 mod copy;
 mod download;
 pub mod install;
 mod state;
+mod testing;
 
 use std::{
   env,
@@ -40,6 +42,7 @@ pub use self::{
 use self::{
   download::{Download, Fetched},
   install::{AfterInstall, JustUpdated},
+  testing::SetForTesting,
 };
 use crate::{
   background,
@@ -101,7 +104,12 @@ struct Inner {
   /// The data folder, which backups and the note of a handed over update go to.
   data_folder: PathBuf,
   folder: PathBuf,
+  /// The real state, which the checks, the download and the install go by.
   state: watch::Sender<UpdateState>,
+  /// What the window and the MCP server show: the real state, or the one set for testing.
+  shown: watch::Sender<UpdateState>,
+  /// Set while a state set for testing shows instead of the real one.
+  testing: Mutex<Option<SetForTesting>>,
   /// The update that installed at this start.
   just_updated: Option<JustUpdated>,
   /// The runs at work, which a ready update waits for.
@@ -158,7 +166,9 @@ impl AppUpdates {
         keys,
         data_folder: data_folder.to_path_buf(),
         folder: data_folder.join(UPDATES_FOLDER),
-        state: watch::channel(state).0,
+        state: watch::channel(state.clone()).0,
+        shown: watch::channel(state).0,
+        testing: Mutex::default(),
         just_updated,
         runs: Mutex::default(),
         checking: tokio::sync::Mutex::new(()),
@@ -173,13 +183,19 @@ impl AppUpdates {
     &self.inner.app
   }
 
+  /// The state the window shows: the real one, or one set for testing.
   pub fn state(&self) -> UpdateState {
-    self.inner.state.borrow().clone()
+    self.inner.shown.borrow().clone()
   }
 
-  /// Wakes whenever the state changed.
+  /// Wakes whenever the state shown changed.
   pub fn subscribe(&self) -> watch::Receiver<UpdateState> {
-    self.inner.state.subscribe()
+    self.inner.shown.subscribe()
+  }
+
+  /// The real state, whatever shows.
+  fn real(&self) -> UpdateState {
+    self.inner.state.borrow().clone()
   }
 
   /// Settings › Updates. Blocking.
@@ -214,10 +230,13 @@ impl AppUpdates {
   /// The runs at work now, as the person knows them (`ORC-110`): a ready update waits for them to end.
   pub fn set_runs_at_work(&self, runs: Vec<String>) {
     let mut kept = self.inner.runs.lock();
-    self.inner.state.send_if_modified(|state| {
+    let changed = self.inner.state.send_if_modified(|state| {
       let next = state.clone().with_runs(&runs);
       std::mem::replace(state, next) != *state
     });
+    if changed {
+      self.show_real();
+    }
     *kept = runs;
   }
 
@@ -262,7 +281,7 @@ impl AppUpdates {
   }
 
   async fn update(&self, target: (ReleasePlatform, ReleaseArch)) {
-    let state = self.state();
+    let state = self.real();
     // An install under way is not checked under: the installer it hands over to stays where it is. A paused download
     // waits for the person's *Resume*.
     let paused = matches!(state, UpdateState::Paused { .. }) && *self.inner.paused.borrow();
@@ -335,7 +354,7 @@ impl AppUpdates {
       // What arrived stays in the part file, which *Resume* goes on from. The flag's `Ref` is dropped before the branch:
       // it read-locks the flag, and `pause` takes the state's lock before the flag's.
       _ = async { paused.wait_for(|paused| *paused).await.map(drop) } => {
-        let received = match self.state() {
+        let received = match self.real() {
           UpdateState::Downloading { received, .. } => received,
           _ => 0,
         };
@@ -368,7 +387,7 @@ impl AppUpdates {
       Ok((_, offered)) => offered.and_then(|release| newest(&release, target)),
       Err(error) => {
         tracing::info!(%error, "Orchester Cloud did not answer the update check");
-        self.state().newest().cloned()
+        self.real().newest().cloned()
       }
     };
     self.set(not_updating(copy, newest));
@@ -435,6 +454,7 @@ impl AppUpdates {
       }
       *kept = state;
     });
+    self.show_real();
   }
 }
 

@@ -107,8 +107,8 @@ pub struct HandedOver {
 }
 
 impl AppUpdates {
-  /// What *Restart to update* does with the runs at work now. While an install waits for them it asks again, so the
-  /// person can stop them instead.
+  /// What *Restart to update* does with the runs at work now, for the state shown. While an install waits for them it
+  /// asks again, so the person can stop them instead.
   pub fn restart_plan(&self, runners: &Runners) -> RestartPlan {
     let state = self.state();
     let Some(update) = state.to_install().cloned() else {
@@ -123,9 +123,13 @@ impl AppUpdates {
     }
   }
 
-  /// The update that installed at this start, for the status bar's *Updated to* and What's new.
-  pub fn just_updated(&self) -> Option<&JustUpdated> {
-    self.inner.just_updated.as_ref()
+  /// The update that installed at this start, for the status bar's *Updated to* and What's new; while a state set for
+  /// testing shows, the one set with it.
+  pub fn just_updated(&self) -> Option<JustUpdated> {
+    match &*self.inner.testing.lock() {
+      Some(testing) => testing.just_updated.clone(),
+      None => self.inner.just_updated.clone(),
+    }
   }
 
   /// Installs the ready update: waits for the runs at work or stops them as `runs` says, stops the runners, copies
@@ -133,8 +137,13 @@ impl AppUpdates {
   /// the window must close; `None` when nothing was ready or an install runs already, or when it failed, which leaves
   /// this version running with its runners and the state [`UpdateState::InstallFailed`]. Asked again while an install
   /// waits for the runs at work, [`RunsAtWork::StopThem`] makes that install stop them now and this call returns
-  /// `None`; [`RunsAtWork::WaitForThem`] changes nothing.
+  /// `None`; [`RunsAtWork::WaitForThem`] changes nothing. Nothing installs while a state set for testing shows
+  /// ([`AppUpdates::set_for_testing`]); the window says so instead of calling this.
   pub async fn install(&self, runners: &Runners, runs: RunsAtWork, installer: &Installer) -> Option<HandedOver> {
+    if self.is_set_for_testing() {
+      tracing::warn!("the update state shown was set for testing; nothing installs");
+      return None;
+    }
     if self.answer_waiting_install(runs) {
       return None;
     }
@@ -166,7 +175,7 @@ impl AppUpdates {
   /// The person's answer to the question asked again while an install waits for the runs at work: `true` when one
   /// waits, which then stops them if `runs` says so.
   fn answer_waiting_install(&self, runs: RunsAtWork) -> bool {
-    if !self.state().waits_for_runs() {
+    if !self.real().waits_for_runs() {
       return false;
     }
     if runs == RunsAtWork::StopThem {
@@ -178,7 +187,7 @@ impl AppUpdates {
   /// Moves a ready update on to installing; `None` when none is ready or one installs already.
   fn begin_install(&self, runs: RunsAtWork, runners: &Runners) -> Option<ReadyUpdate> {
     let mut update = None;
-    self.inner.state.send_if_modified(|state| {
+    let began = self.inner.state.send_if_modified(|state| {
       let Some(ready) = state.ready().cloned() else {
         return false;
       };
@@ -195,6 +204,9 @@ impl AppUpdates {
       update = Some(ready);
       true
     });
+    if began {
+      self.show_real();
+    }
     update
   }
 

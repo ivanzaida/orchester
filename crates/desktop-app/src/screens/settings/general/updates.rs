@@ -100,6 +100,7 @@ impl Component for UpdatesGroup {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let Shown(show) = *ctx.props::<Shown>();
     let services = Services::of(ctx);
+    let restart = Restart::of(ctx);
     // Hooks in the same order on every render: the action, the stream, then the read.
     let save = save_action(ctx, &services.updates);
     let saving = save.state().get();
@@ -113,24 +114,30 @@ impl Component for UpdatesGroup {
       .data
       .as_ref()
       .map(|stored| chosen.map_or(stored.settings, |change| change.applied(stored.settings)));
+    // A press refused in the state set for testing says so while that state shows.
+    let refused = services.updates.is_set_for_testing() && restart.refused().as_ref() == Some(&followed.state);
+    let problem = if refused {
+      Some(ctx.t("settings.general.updates.setForTesting").to_string())
+    } else {
+      self.problem(ctx, (&stored, &saving))
+    };
     let facts = UpdatesFacts {
       running: services.updates.this_app().version.to_string(),
       state: followed.state,
-      just_updated: services.updates.just_updated().cloned(),
+      just_updated: services.updates.just_updated(),
       settings,
       last_checked: stored.data.as_ref().map(|stored| stored.last_checked),
-      problem: self.problem(ctx, (&stored, &saving)),
+      problem,
       show,
     };
-    let dispatch = self.dispatch(ctx, &services, save);
+    let dispatch = self.dispatch(&services, restart, save);
     ctx.mount_keyed::<UpdatesSection>("settings-updates-section", SectionProps { facts, dispatch })
   }
 }
 
 impl UpdatesGroup {
   /// What the section's presses do in this window.
-  fn dispatch(&self, ctx: &mut Ctx, services: &Services, save: SaveAction) -> UpdateDispatch {
-    let restart = Restart::of(ctx);
+  fn dispatch(&self, services: &Services, restart: Restart, save: SaveAction) -> UpdateDispatch {
     let (updates, runtime, links) = (
       services.updates.clone(),
       services.runtime.clone(),

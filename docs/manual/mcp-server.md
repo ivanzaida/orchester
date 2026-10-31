@@ -2,7 +2,8 @@
 
 Orchester exposes everything it does to automation through **MCP** (Model Context Protocol). This page covers the
 app's own MCP server: how to connect, what it permits, the conventions every tool follows, the error format, and
-the window tools (`app_state`, `navigate`, `set_theme`, `hold_reads`, `sign_in_state` and lurq's `lurq_*` tools).
+the window tools (`app_state`, `navigate`, `set_theme`, `hold_reads`, `set_update_state`, `sign_in_state` and lurq's
+`lurq_*` tools).
 
 The domain tools are documented in [mcp-tools-setup.md](mcp-tools-setup.md) and [mcp-tools-work.md](mcp-tools-work.md).
 Two other MCP surfaces exist and are documented separately: the tools agents get inside runs
@@ -12,7 +13,7 @@ Two other MCP surfaces exist and are documented separately: the tools agents get
 
 | Server | Who connects | Name the client registers | Tools |
 |---|---|---|---|
-| **The app's MCP server** (this page) | Your own agent CLIs (Claude Code, Codex), QA and design-verification agents | `orchester` → `mcp__orchester__*` | `lurq_*` window tools, `app_state`, `navigate`, `set_theme`, `sign_in_state`, `hold_reads` (debug) and 80 domain tools |
+| **The app's MCP server** (this page) | Your own agent CLIs (Claude Code, Codex), QA and design-verification agents | `orchester` → `mcp__orchester__*` | `lurq_*` window tools, `app_state`, `navigate`, `set_theme`, `sign_in_state`, `hold_reads` and `set_update_state` (debug) and 80 domain tools |
 | **The runner's relay**, one per agent invocation | Agents inside runs | `Orchester` (capital O) → `mcp__Orchester__*` in Claude Code, bare names in Codex | Run tools (`read_file`, `edit_file`, `run_check`, `start_qa_app`, …), `approve`, `ask_question` |
 | **The Orchestrator chat's server**, one per chat turn | The project's Orchestrator chat agent | `orchester` | 60 domain tools + 23 chat-only tools (git, MCP servers, `init_repository`, `apply_proposal`) |
 
@@ -92,7 +93,7 @@ Tools outside the granted scopes are **not listed**, and calling one answers `un
 |---|---|---|
 | Observe | always | lurq looking tools, `app_state`, `sign_in_state`, read-only domain tools |
 | `data` | always | domain tools that change data (each still applies its own gates) |
-| Interact | only with **window control** | lurq input tools, `navigate`, `set_theme`, `hold_reads` |
+| Interact | only with **window control** | lurq input tools, `navigate`, `set_theme`, `hold_reads`, `set_update_state` |
 | Navigate | never | `lurq_navigate` (use `navigate`, which keeps the tabs' histories) |
 
 ### Window control
@@ -278,6 +279,18 @@ Answers `{setting, mode}`. Errors: `unknown_theme` (with `known`), `not_saved` (
 `held` (boolean, req.). `true` holds every read of a project's tasks, limits and agent profiles that starts from then
 on, so a screen reading them for the first time stays in its loading state (for capturing loading states in design
 verification); data already on screen stays. `false` releases them. Answers `{held}`.
+
+### `set_update_state` — debug builds only, needs window control
+
+Shows an update state in place of this copy's real one, for seeing every state of Settings › Updates, the status
+bar's update item and the ready notification in a QA copy (which itself always reports `not_this_copy`). Takes the
+JSON `update_state` answers: `state` with that state's fields, and `updated` (`{version, notes}` of the update this
+start finished, for *Updated to* and *What's new*, or `null`); `running` and `percent` are ignored. `{"real": true}`
+shows the real state again. The state lives in memory only and is gone at the next start; nothing is checked,
+downloaded, written to `orchester.db` or installed for it, and *Restart to update* / *Install now* pressed in it answer
+*Nothing installs: this update state was set for testing.* Answers what `update_state` answers, with
+`set_for_testing`. Errors: `invalid_param` (an unknown state, step or reason, or a version that is not one),
+`missing_param`, `not_a_string`, `not_a_bool`.
 
 ### `sign_in_state` — read-only, always answers
 
