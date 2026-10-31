@@ -17,7 +17,7 @@ use std::{
 };
 
 use lurq::app::events::with_synthetic_input;
-use orchester_api::test_support::team_server::{CODE, TeamServer};
+use orchester_api::test_support::team_server::{CODE, TeamServer, USERNAME};
 use orchester_app::routes::{JoinWay, Route};
 use support::{Data, Window, stand_ins::StandIns};
 
@@ -161,6 +161,10 @@ fn shared_projects_none_yet_is_the_empty_state_and_check_again_reads_again() {
   );
   assert_eq!(window.text("join_team-crumbs"), "Start Join a team Acme");
   assert!(!has(&mut window, "join_team-lead"), "12 draws no lead");
+  // Joined with a code, while this computer is signed in to Orchester Cloud: the team knows the account there.
+  let said = window.text("join-team-projects-none");
+  assert!(said.contains(&format!("has invited {USERNAME}.")), "{said}");
+  assert!(!said.contains('@'), "no Cloud email: {said}");
 
   server.share(&[("Kontur", "kontur", Some(HINT))]);
   window.press("join-team-projects-check-again");
@@ -239,6 +243,25 @@ fn shared_projects_not_a_repository_errors_under_the_row() {
   window.set(FOLDER, &other.display().to_string());
   shows(&mut window, "join-team-link-check");
   assert!(!has(&mut window, "join-team-link-error"), "another folder clears it");
+}
+
+#[test]
+fn shared_projects_a_relative_path_errors_under_the_row() {
+  let server = acme();
+  let (mut window, _) = at_link(&server);
+  let checkout = folder(&window, "kontur", Some("https://github.com/acme/kontur.git"));
+  window.set(FOLDER, "kontur");
+  shows(&mut window, "join-team-link-error");
+  assert_eq!(
+    window.text("join-team-link-error"),
+    "Give the folder's full path, from its drive or from /, or choose the folder."
+  );
+  presses_nothing(&mut window, SUBMIT, &checkout);
+
+  // A pasted path keeps no spaces around it.
+  window.set(FOLDER, &format!("  {}  ", checkout.display()));
+  shows(&mut window, "join-team-link-check");
+  assert!(!has(&mut window, "join-team-link-error"));
 }
 
 #[test]

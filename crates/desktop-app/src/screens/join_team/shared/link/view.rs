@@ -17,7 +17,7 @@ use lurq::{
 use orchester_api::SharedProject;
 use orchester_workspace::sharing::project::folder::FolderCheck;
 
-use super::{Chosen, refused};
+use super::Chosen;
 use crate::{
   screens::settings::orchester::shown_address,
   theme::{ControlHeight, ExtraSpacing, IconSize, StartupSpacing, StartupText},
@@ -82,7 +82,7 @@ pub(super) fn existing_option(
       &ctx.t("startup.shared.link.existing.title"),
       &ctx.t("startup.shared.link.existing.sub"),
     ));
-  let row = folder_row(ctx, (folder, choose), check.is_some_and(refused));
+  let row = folder_row(ctx, (folder, choose), check.is_some_and(FolderCheck::refuses));
   let found = check.map(|check| found(ctx, project, check, can_clone));
   Column::new()
     .id("join-team-link-existing")
@@ -196,9 +196,10 @@ fn found(ctx: &Ctx, project: &SharedProject, check: &FolderCheck, can_clone: boo
       };
       field_error("join-team-link-error", &ctx.t(words)).into()
     }
-    FolderCheck::Unreadable | FolderCheck::LinkedElsewhere { .. } => {
-      field_error("join-team-link-error", &said()).into()
-    }
+    FolderCheck::NotAbsolute
+    | FolderCheck::NotLocal
+    | FolderCheck::Unreadable
+    | FolderCheck::LinkedElsewhere { .. } => field_error("join-team-link-error", &said()).into(),
     FolderCheck::NoHint | FolderCheck::NoOrigin | FolderCheck::LinkedHere => {
       line((Icon::Info, PaletteColor::TextMuted), &said())
     }

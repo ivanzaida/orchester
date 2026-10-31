@@ -19,6 +19,7 @@ use lurq::{
 };
 use orchester_api::MemberRole;
 use orchester_core::id::{ProjectId, ServerId};
+use orchester_store::JoinedWith;
 use orchester_workspace::sharing::{ServerProject, cloud::SignIn};
 
 use super::{ID, Team, join_crumb, read};
@@ -264,13 +265,14 @@ impl SharedProjects {
     }
   }
 
-  /// No project yet (`State/Empty` `RLNFt`): who was not invited, *Check again* and *Back to start*.
+  /// No project yet (`State/Empty` `RLNFt`): who was not invited, *Check again* and *Back to start*. A team joined
+  /// with Orchester Cloud invites the Cloud email; one joined with a code has no Cloud account behind it, so it is
+  /// the account there, whoever is signed in to Cloud.
   fn none(&self, ctx: &mut Ctx, team: &Team, (name, address): (&str, &str), reading: bool) -> Element {
-    let who = match Services::of(ctx).cloud.sign_in_state() {
-      SignIn::SignedIn { email, .. } => email,
-      SignIn::SignedOut { .. } => team
-        .entry()
-        .stored
+    let stored = &team.entry().stored;
+    let who = match (stored.joined_with, Services::of(ctx).cloud.sign_in_state()) {
+      (Some(JoinedWith::Cloud(_)), SignIn::SignedIn { email, .. }) => email,
+      _ => stored
         .account
         .as_ref()
         .map(|account| account.username.clone())

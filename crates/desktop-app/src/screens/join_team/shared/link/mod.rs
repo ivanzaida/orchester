@@ -10,10 +10,7 @@
 
 mod view;
 
-use std::{
-  path::{Path, PathBuf},
-  sync::Arc,
-};
+use std::{path::PathBuf, sync::Arc};
 
 use lurq::{
   app::{
@@ -323,7 +320,7 @@ impl LinkFolder {
       ActionButton::new(SUBMIT, ButtonKind::Primary, ctx.t("startup.shared.link.linking")).loading()
     } else {
       let button = ActionButton::new(SUBMIT, ButtonKind::Primary, ctx.t(label)).icon(Icon::ArrowRight);
-      if check.is_some_and(|check| !refused(check)) {
+      if check.is_some_and(|check| !check.refuses()) {
         let ask = (team.entry().clone(), project.clone(), target.clone(), anyway);
         button.on_click(self.asker(ask))
       } else {
@@ -384,7 +381,7 @@ impl LinkFolder {
         entry: entry.clone(),
         project: project.clone(),
         target: target.clone(),
-        folder: PathBuf::from(text),
+        folder: typed_path(&text),
         anyway,
         key,
       });
@@ -392,12 +389,9 @@ impl LinkFolder {
   }
 }
 
-/// Whether `check` refuses the folder whatever the person says: an error under the row.
-const fn refused(check: &FolderCheck) -> bool {
-  matches!(
-    check,
-    FolderCheck::NotRepository | FolderCheck::Unreadable | FolderCheck::LinkedElsewhere { .. }
-  )
+/// The folder the field's text names, without the spaces a paste brings around it.
+fn typed_path(text: &str) -> PathBuf {
+  PathBuf::from(text.trim())
 }
 
 /// What `folder` is as a checkout of the project `target` names on `team`. A project database that can't be read says
@@ -407,8 +401,8 @@ async fn checked(programs: Programs, team: Option<Team>, target: &JoinTarget, fo
   let (Some(project), false) = (project, folder.trim().is_empty()) else {
     return Checked { folder, check: None };
   };
-  let (root, server) = (PathBuf::from(&folder), target.server);
-  let check = background::run(move || check_folder(&programs, (server, &project), Path::new(&root))).await;
+  let (root, server) = (typed_path(&folder), target.server);
+  let check = background::run(move || check_folder(&programs, (server, &project), &root)).await;
   let check = match check {
     Ok(Ok(check)) => check,
     Ok(Err(error)) => {
