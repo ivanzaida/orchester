@@ -5,9 +5,9 @@
 //! entry, a call of an MCP tool that runs without asking marks its command (Claude Code) or is an entry
 //! of its own (Codex, which reports no command for it), and a failed turn that repeats the error before
 //! it, or comes right after the request a closed permission prompt interrupted, is not shown twice. Session and turn
-//! starts carry no text of their own; the invocation panel shows the session. A native agent's calls read as rows of
-//! their tools ([`native`]), and so do a CLI's calls of Orchester's file tools ([`mcp`] for Codex's). Nothing else
-//! is left out.
+//! starts carry no text of their own; the invocation panel shows the session, and the step its latest todo list. A
+//! native agent's calls read as rows of their tools ([`native`]), and so do a CLI's calls of Orchester's file tools
+//! ([`mcp`] for Codex's). Nothing else is left out.
 
 mod ended;
 mod mcp;
@@ -207,7 +207,11 @@ pub fn entries(activity: &[ActivityEntry]) -> Vec<Entry> {
       kind,
     };
     match &stored.event {
-      AgentEvent::SessionStarted { .. } | AgentEvent::TurnStarted | AgentEvent::PlanLimits { .. } => {}
+      // The todo list is the step's latest one (`crate::tasks::detail::StepView::todo`), not an entry.
+      AgentEvent::SessionStarted { .. }
+      | AgentEvent::TurnStarted
+      | AgentEvent::PlanLimits { .. }
+      | AgentEvent::TodoList { .. } => {}
       AgentEvent::Message { text } => entries.push(entry(EntryKind::Message(text.as_str().into()))),
       AgentEvent::Reasoning { text } => entries.push(entry(EntryKind::Reasoning(text.as_str().into()))),
       AgentEvent::CommandStarted { item, command } => {

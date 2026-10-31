@@ -7,7 +7,7 @@ use std::{collections::BTreeMap, num::NonZeroU32, path::Path, sync::Arc};
 
 use orchester_core::{
   attachment::Attachment,
-  connection::{AgentProvider, Effort, EngineVendor},
+  connection::{AgentProvider, Effort, EngineVendor, stream::TodoList},
   conversation::Message,
   id::{InvocationId, MessageId, RunId, StepExecutionId, TaskId},
   integration::RunMerge,
@@ -78,6 +78,8 @@ pub struct StepView {
   pub attempt: Option<NonZeroU32>,
   /// Why the latest execution failed, when it did and its log says.
   pub failure: Option<StepFailure>,
+  /// The todo list the latest execution's agent keeps, as its latest update left it; `None` when it keeps none.
+  pub todo: Option<TodoList>,
   /// The step's stage in the pipeline graph, from 0: steps of one stage run beside each other.
   pub stage: usize,
 }
@@ -465,6 +467,40 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
     .resource(pinned.resource)?
     .map_or_else(|| Arc::from(""), |resource| resource.name().as_str().into());
   let invocations = db.invocations(run.id())?;
+  let steps = step_views(db, &run, &invocations)?;
+  let (paused_at, saved_at_pause) = paused_at(db, &run)?;
+  let finished_at = finished_at(db, &run)?;
+  let worktree_removed = db.worktree_removal(run.id())?;
+  let attempt_starts = starts_of(db, &run)?;
+  Ok(RunView {
+    attempt_starts,
+    first_run,
+    group_hold,
+    approvals: RunApprovals::read(db, &run)?,
+    waiting_questions: waiting_questions(db, &run)?,
+    base_notices: db.run_base_notices(run.id())?,
+    accounts: db.invocation_accounts(run.id())?,
+    index: IndexUses::read(db, &invocations)?,
+    invocations,
+    reviews: db.reviewer_usage(run.id())?,
+    outputs: db.step_outputs(run.id())?,
+    plans: db.plans(run.id()).map_err(run_store_error)?,
+    paused_at,
+    saved_at_pause,
+    finished_at,
+    worktree_removed,
+    worktree_not_removed: None,
+    runner_failure: history::runner_failure(db, &run)?,
+    pipeline,
+    version: pinned.number,
+    steps,
+    run,
+  })
+}
+
+/// The steps of `run`'s pinned pipeline in pipeline order, each with its latest execution, what executes it and the
+/// engine its latest invocation of `invocations` recorded.
+fn step_views(db: &ProjectDb, run: &Run, invocations: &[Invocation]) -> Result<Vec<StepView>, StoreError> {
   let mut steps = Vec::new();
   let stages = run.snapshot().body().stages();
   let stage_of = |key: &StepKey| {
@@ -475,7 +511,7 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
   };
   for (index, step) in run.snapshot().body().steps().iter().enumerate() {
     let executor = run.snapshot().step(&step.key).map(|pinned| pinned.executor());
-    let (agent, reached, model, permissions) = executed(db, (&run, &invocations), &step.key, executor)?;
+    let (agent, reached, model, permissions) = executed(db, (run, invocations), &step.key, executor)?;
     let Reached {
       provider,
       endpoint,
@@ -506,38 +542,15 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
       status: latest.map(|execution| execution.status()),
       attempt,
       failure: latest.and_then(|execution| execution.failure()),
+      todo: latest
+        .map(|execution| db.step_todo(run.id(), execution.id()))
+        .transpose()?
+        .flatten(),
       stage: stage_of(&step.key),
     });
   }
-  engines::apply_recorded(db, &mut steps, &invocations)?;
-  let (paused_at, saved_at_pause) = paused_at(db, &run)?;
-  let finished_at = finished_at(db, &run)?;
-  let worktree_removed = db.worktree_removal(run.id())?;
-  let attempt_starts = starts_of(db, &run)?;
-  Ok(RunView {
-    attempt_starts,
-    first_run,
-    group_hold,
-    approvals: RunApprovals::read(db, &run)?,
-    waiting_questions: waiting_questions(db, &run)?,
-    base_notices: db.run_base_notices(run.id())?,
-    accounts: db.invocation_accounts(run.id())?,
-    index: IndexUses::read(db, &invocations)?,
-    invocations,
-    reviews: db.reviewer_usage(run.id())?,
-    outputs: db.step_outputs(run.id())?,
-    plans: db.plans(run.id()).map_err(run_store_error)?,
-    paused_at,
-    saved_at_pause,
-    finished_at,
-    worktree_removed,
-    worktree_not_removed: None,
-    runner_failure: history::runner_failure(db, &run)?,
-    pipeline,
-    version: pinned.number,
-    steps,
-    run,
-  })
+  engines::apply_recorded(db, &mut steps, invocations)?;
+  Ok(steps)
 }
 
 /// `run`'s agents' questions with suggested answers that wait for the person.

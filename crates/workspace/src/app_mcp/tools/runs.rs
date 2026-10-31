@@ -309,6 +309,8 @@ fn decided_plans(view: &RunView, link: &str) -> Vec<Value> {
     .collect()
 }
 
+/// A step of the run; `todo` is its latest execution's todo list (`text` and `state`: `pending`, `in_progress` or
+/// `done` per item), `null` when its agent keeps none.
 fn step(step: &StepView) -> Value {
   json!({
     "key": step.key.to_string(),
@@ -318,5 +320,6 @@ fn step(step: &StepView) -> Value {
     "tool_step": step.tool_step,
     "status": step.status.map(wire::step_status),
     "attempt": step.attempt.map(std::num::NonZeroU32::get),
+    "todo": step.todo,
   })
 }

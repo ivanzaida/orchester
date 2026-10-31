@@ -141,7 +141,8 @@ impl Turn {
     })
   }
 
-  /// Keeps what `event` of the CLI on `account` says: the session, a reply, or how the turn goes.
+  /// Keeps what `event` of the CLI on `account` says: the session, a reply, the agent's todo list, or how the turn
+  /// goes.
   pub(super) fn keep(&self, event: AgentEvent, account: AgentAccountId, seen: &mut Seen) {
     match event {
       AgentEvent::SessionStarted { session } => {
@@ -150,6 +151,9 @@ impl Turn {
       }
       AgentEvent::Message { text } if !text.trim().is_empty() => {
         self.record(|db| db.add_chat_reply(self.chat.id(), (&text, self.settings.model()), Timestamp::now()));
+      }
+      AgentEvent::TodoList { items } => {
+        self.record(|db| db.keep_chat_todo(self.message, &items, Timestamp::now()));
       }
       AgentEvent::TurnCompleted { usage } => {
         seen.answered = true;

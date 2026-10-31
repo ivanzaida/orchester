@@ -23,7 +23,7 @@ use self::{
 };
 use super::{
   mcp::InvocationExemptions,
-  stream::{AgentEvent, QuestionRefusal},
+  stream::{AgentEvent, QuestionRefusal, codex_plan},
 };
 use crate::run::TokenUsage;
 
@@ -393,6 +393,10 @@ impl AppServerStream {
         Vec::new()
       }
       "turn/completed" => self.turn_completed(params),
+      // Each update holds the whole plan, which replaces the one before.
+      "turn/plan/updated" => codex_plan(params)
+        .map(|items| vec![Update::Activity(AgentEvent::TodoList { items })])
+        .unwrap_or_default(),
       "error" => string(params.get("error").unwrap_or(&Value::Null), "message")
         .map(|message| vec![Update::Activity(AgentEvent::Error { message })])
         .unwrap_or_default(),
