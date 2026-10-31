@@ -408,7 +408,7 @@ label) and five minor ones; all are fixed and wait for a re-check.
 
 ## U · Screens
 
-### ORC-584 · Clone the repository from *Link a folder* in a console · branch `orchester/orc-584-run-1` (implemented 2026-10-31, waiting for the Pencil design, review and design verification)
+### ORC-584 · Clone the repository from *Link a folder* in a console · branch `orchester/orc-584-run-1` (implemented 2026-10-31, waiting for review and verification)
 
 *Clone it here* on *Link a folder* (06 `go2aM`): *Clone into* with *Choose…*, what Git will do with that folder, and
 *Clone repository…*, which opens a console window the person sees (PowerShell on Windows, Terminal on macOS) running
@@ -421,10 +421,11 @@ canceled. As built: `docs/design/startup.md`, "Clone in a console". Tests: `carg
 test-program --test clone_console clone_console_`, `cargo test -p orchester-workspace --test startup_clone
 startup_clone_`, `cargo test -p orchester-app --features test-support --test shared_projects shared_projects_`.
 
-**Done when** the Pencil frames are drawn (06 `go2aM` with the clone panel, 07 `phoYc` as *Cloning in a console*, Row
-3b with 07b–07f), an independent verifier reports no blocking or major mismatches against them, and a person has
-cloned once for real on Windows and on macOS (a real console with Git's sign-in, Terminal's window closed mid-clone),
-which no test can do; then move this entry to *Done*.
+The Pencil design is not updated for it (the person, 2026-10-31): 06 `go2aM` and 07 `phoYc` still draw the older
+*Clone it here*, an agreed deviation (`docs/design/startup.md`, "Clone in a console").
+
+**Done when** review and verification pass and a person has cloned once for real on Windows and on macOS (a real
+console with Git's sign-in, Terminal's window closed mid-clone), which no test can do; then move this entry to *Done*.
 
 ### ORC-16 · All projects and Add project in the new app · branch `claude/all-projects` (implemented 2026-10-14, waiting for review and design verification)
 

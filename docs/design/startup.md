@@ -27,8 +27,7 @@ projects* tab. Controls are instances of `Button/*` (`iBDdP`, `O1AstI`, `YaUJX`,
 | Flow | `oPJyJ` | the steps with the frames that show them |
 | Row 1 · First start | `D4yHz3` | `H9CZ1` 01 first start (dark), `ifctO` 01L the same in light, `Knacr` 01b signed in to Cloud already: the third way names the team and an invite |
 | Row 2 · Join a team | `z4TXN` | `B914L` 02 join a team: Orchester Cloud or a code, `BD519` 03 signing in, `drCQd` 04 your teams and invites, `v5qbWM` 05 the team's shared projects |
-| Row 3 · Open a shared project | `yzHyC` | `go2aM` 06 link to a folder (existing checkout, origin matches; the clone panel under it), `phoYc` 07 cloning in a console (ORC-584), `YN6MO` 08 first download with tasks arriving |
-| Row 3b · Clone in a console (ORC-584) | to be drawn | 07b cloned and chosen in the folder field, 07c destination already has files, 07d Git not found, 07e Git failed with its code and the folder it left, 07f console closed before Git ended |
+| Row 3 · Open a shared project | `yzHyC` | `go2aM` 06 link to a folder (existing checkout, origin matches), `phoYc` 07 cloning with progress (not built: ORC-584 clones in a console, see "Clone in a console"), `YN6MO` 08 first download with tasks arriving |
 | Row 4 · Returning start | `d2ww3X` | `i5G19A` 09 All projects with a team's project offered above the list, `dLOCJ` 09b All projects, local only |
 | Row 5 · States | `NPuAL` | `aWsVx` 10 wrong or expired code, `oOn6j` 11 server can't be reached, `NaEPI` 12 no shared projects yet, `sN8Pa` 13 folder is not a git repository, `tDFeg` 13b origin doesn't match the hint, `mruEH` 14 macOS: agent CLI not found (Finder-started app without the shell's PATH) |
 | Row 6 · Notes | `i5TU1E` | `kcyR3` what the design decides, `OQiuc` open choices |
@@ -136,6 +135,12 @@ projects* tab. Controls are instances of `Button/*` (`iBDdP`, `O1AstI`, `YaUJX`,
 Code: `crates/exec/src/clone_console/` (the console, behind `cfg`), `crates/workspace/src/sharing/project/clone/` (the
 destination check, the clone's end, `Clones`), `crates/desktop-app/src/screens/join_team/shared/link/clone.rs` and
 `clone_view.rs` (the panel).
+
+**No frame draws it** (the person, 2026-10-31: the design is not updated for ORC-584). 06 `go2aM` (and 13 `sN8Pa`,
+13b `tDFeg`) still draw *Clone it here* as a collapsed radio option, and 07 `phoYc` the in-app clone with progress and
+*Cancel*, which is not built. The clone panel in their place follows the panel of the checkout option above it
+(`surface_panel`, `border`, `radius_lg`, its folder row as `d3Cx27` with the error under the row as `DNRz3`) and the
+`Callout/*` tones: an agreed deviation, not a mismatch.
 
 - **The flow.** *Clone into* is the folder the checkout gets; *Choose…* picks the folder it goes in and adds the
   repository's name (`kontur`). Under the row, what Git will do: *Creates the folder kontur in …*, or *An empty
