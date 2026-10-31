@@ -139,6 +139,8 @@ pub struct ActionButton {
   small: bool,
   /// 36 high with a 13/500 label.
   large: bool,
+  /// Large and not primary, with a primary's room at each side.
+  roomy: bool,
   bounded: bool,
   /// Drawn pressed while what it opened shows.
   held: bool,
@@ -172,6 +174,7 @@ impl ActionButton {
       tight: false,
       small: false,
       large: false,
+      roomy: false,
       bounded: false,
       held: false,
       applied: false,
@@ -302,6 +305,13 @@ impl ActionButton {
     self
   }
 
+  /// A large button that is not primary with 16 at each side, as the start page's steps draw it (`Back` `eMkuS`,
+  /// `Choose…` `a0csJ`).
+  pub fn roomy(mut self) -> Self {
+    self.roomy = true;
+    self
+  }
+
   /// Keep a long label within the available width; the full accessible name is retained.
   pub fn bounded_label(mut self) -> Self {
     self.bounded = true;
@@ -383,12 +393,14 @@ impl ActionButton {
     }
   }
 
-  /// The room at each side of its content: 12, a tight one's 10, a large button's 16, or 14 when it is not primary.
+  /// The room at each side of its content: 12, a tight one's 10, a large button's 16, or 14 when it is not primary and
+  /// not [`Self::roomy`].
   fn side(&self) -> SpacingSize {
     match (self.large, self.kind) {
       (false, _) if self.tight => ExtraSpacing::Loose.role(),
       (false, _) => SpacingSize::Md,
       (true, ButtonKind::Primary) => SpacingSize::Lg,
+      (true, _) if self.roomy => SpacingSize::Lg,
       (true, _) => ExtraSpacing::Inset.role(),
     }
   }

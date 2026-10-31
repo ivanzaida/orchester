@@ -275,6 +275,72 @@ fn startup_link_reports_an_unreadable_folder() {
 }
 
 #[test]
+fn startup_link_refuses_a_relative_path() {
+  let setup = Setup::new();
+  setup.repository("kontur", Some("https://github.com/acme/kontur.git"));
+  for typed in [".", "kontur", "../kontur"] {
+    assert_eq!(setup.check(Path::new(typed)), FolderCheck::NotAbsolute, "{typed}");
+  }
+  assert_eq!(
+    setup.check(Path::new("kontur")).message(&setup.project).key,
+    "sharing.folder.notAbsolute"
+  );
+  let refused = setup.link(Path::new("."), true).expect_err("refused");
+  assert!(
+    matches!(refused, FolderLinkError::Refused(FolderCheck::NotAbsolute)),
+    "{refused:?}"
+  );
+  assert!(
+    setup.workspace.projects().expect("projects").is_empty(),
+    "nothing was added"
+  );
+}
+
+/// A network path is refused by its text: a host that does not resolve would read as unreadable had it been asked.
+#[cfg(windows)]
+#[test]
+fn startup_link_refuses_a_network_path_without_reading_it() {
+  let setup = Setup::new();
+  for typed in [
+    r"\\orchester-test.invalid\share\kontur",
+    r"\\?\UNC\orchester-test.invalid\share",
+  ] {
+    assert_eq!(setup.check(Path::new(typed)), FolderCheck::NotLocal, "{typed}");
+  }
+  let refused = setup
+    .link(Path::new(r"\\orchester-test.invalid\share\kontur"), true)
+    .expect_err("refused");
+  assert!(
+    matches!(refused, FolderLinkError::Refused(FolderCheck::NotLocal)),
+    "{refused:?}"
+  );
+}
+
+#[test]
+fn startup_link_check_leaves_an_older_project_database_as_it_is() {
+  let setup = Setup::new();
+  let folder = setup.linked("older", "Billing", (setup.server, ProjectId::generate()));
+  let database = folder.join(".orchester").join("orchester.db");
+  let older = {
+    let connection = rusqlite::Connection::open(&database).expect("database");
+    let current: u32 = connection
+      .pragma_query_value(None, "user_version", |row| row.get(0))
+      .expect("version");
+    connection
+      .pragma_update(None, "user_version", current - 1)
+      .expect("older");
+    current - 1
+  };
+  // Its links can't be read without migrating it: the check compares the origin alone.
+  assert_eq!(setup.check(&folder), FolderCheck::Matches);
+  let connection = rusqlite::Connection::open(&database).expect("database");
+  let version: u32 = connection
+    .pragma_query_value(None, "user_version", |row| row.get(0))
+    .expect("version");
+  assert_eq!(version, older, "the check migrated nothing");
+}
+
+#[test]
 fn startup_link_refuses_a_different_origin_without_anyway() {
   let setup = Setup::new();
   let folder = setup.repository("billing", Some("https://github.com/acme/billing.git"));

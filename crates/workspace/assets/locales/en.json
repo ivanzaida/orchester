@@ -605,7 +605,11 @@
       "storageFailureAt": "Interrupted at {{step}} · database unavailable",
       "storageFailure": "Interrupted · database unavailable",
       "runnerErrorAt": "Interrupted at {{step}} · runner error",
-      "runnerError": "Interrupted · runner error"
+      "runnerError": "Interrupted · runner error",
+      "slotWait": {
+        "one": "{{detail}} · {{steps}} waits for an agent slot",
+        "other": "{{detail}} · {{steps}} wait for an agent slot"
+      }
     },
     "permissions": {
       "errors": {
@@ -1969,6 +1973,8 @@
       "noHint": "{{project}} names no repository, so this folder's origin isn't compared.",
       "differs": "Its origin is {{origin}}, but {{project}} names {{hint}}. Link it anyway only if this folder holds that project's code.",
       "noOrigin": "This repository has no origin on a server, so it can't be compared with {{hint}}. It can still be linked.",
+      "notAbsolute": "Give the folder's full path, from its drive or from /, or choose the folder.",
+      "notLocal": "This folder is on another computer or a network drive. Link a checkout on this computer.",
       "notRepository": "This folder isn't the top of a git repository: it has no .git. Choose the folder of your checkout.",
       "unreadable": "Orchester couldn't read this folder or its git remotes. Check that it exists and that you can open it.",
       "linkedHere": "This folder is linked to {{project}} already, so it opens as it is.",

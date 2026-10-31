@@ -3,8 +3,8 @@
 //! again whenever a server's connection or the account changes. *Join* gives this computer its own sign-in on a team's
 //! server ([`TeamJoin::join_team`]), *Accept* accepts an invite and joins its server ([`TeamJoin::join_invite`]); what
 //! that came to shows under its section, in place. A server this computer joined shows how many of its projects are
-//! the person's and *Open* instead of *Join*; no count is shown for one it has not joined. Under the sections, a team
-//! not listed leads to the code.
+//! the person's and *Open*, which leads to them ([`super::shared`]), instead of *Join*; no count is shown for one it
+//! has not joined. Under the sections, a team not listed leads to the code.
 //!
 //! *Decline* and *Sign out* ask first, in Settings › Orchester's questions in place; an invite that needs two-factor
 //! authentication is accepted there too. Joining and accepting are a person's: synthetic input is refused, and the
@@ -182,7 +182,7 @@ pub(super) fn page(ctx: &mut Ctx, joins: &TeamJoins, (email, account): (&str, Cl
     crumb: ctx.t("startup.join.crumb").to_string(),
     step: StartStep::Join,
     title: ctx.t("startup.join.teams.title").to_string(),
-    lead: ctx.t("startup.join.teams.lead").to_string(),
+    lead: Some(ctx.t("startup.join.teams.lead").to_string()),
     body: Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Xl)
@@ -238,7 +238,7 @@ fn team_action(ctx: &mut Ctx, joins: &TeamJoins, (id, team): (&str, &TeamServer)
       ctx.t("startup.join.teams.open"),
     )
     .icon(Icon::ArrowRight)
-    .opens(Navigation::of(ctx).to(Route::Orchester(OrchesterView::server(joined))))
+    .opens(Navigation::of(ctx).to(Route::JoinTeam(JoinWay::Projects(joined))))
     .into();
   }
   let button = format!("{id}-join");

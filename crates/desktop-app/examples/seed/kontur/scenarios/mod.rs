@@ -30,6 +30,7 @@ mod project_settings;
 mod pull_requests;
 pub mod qa_app_asks;
 pub mod settings;
+mod slot_wait;
 mod sources;
 mod task_states;
 mod tasks;
@@ -84,7 +85,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 70] = [
+pub const ALL: [Scenario; 73] = [
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-library", agents_library::seed),
   Scenario::of("agents-empty", agents::empty),
@@ -116,6 +117,7 @@ pub const ALL: [Scenario; 70] = [
   Scenario::of("tasks-unreadable", tasks_unreadable::seed),
   Scenario::with_fake_codex("live", live::seed),
   Scenario::with_fake_codex("lifecycle", lifecycle::seed),
+  Scenario::with_fake_codex("slot-wait", slot_wait::seed),
   Scenario::of("connections", connections::seed),
   Scenario::of("api-providers", api_providers::seed),
   Scenario::of("native", native::seed),
@@ -155,6 +157,8 @@ pub const ALL: [Scenario; 70] = [
   Scenario::of("team-download-failed", team::download_failed),
   Scenario::of("team-download-progress", team::download_progress),
   Scenario::of("team-download-stopped", team::download_stopped),
+  Scenario::of("team-shared-projects", team::shared_projects),
+  Scenario::of("team-shared-none", team::shared_none),
 ];
 
 /// The scenario called `name`.

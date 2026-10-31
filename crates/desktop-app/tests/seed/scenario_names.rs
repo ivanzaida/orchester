@@ -39,6 +39,7 @@ fn seed_names_every_scenario_once() {
       "tasks-unreadable",
       "live",
       "lifecycle",
+      "slot-wait",
       "connections",
       "api-providers",
       "native",
@@ -77,7 +78,9 @@ fn seed_names_every_scenario_once() {
       "team-downloading",
       "team-download-failed",
       "team-download-progress",
-      "team-download-stopped"
+      "team-download-stopped",
+      "team-shared-projects",
+      "team-shared-none"
     ]
   );
   for name in names {

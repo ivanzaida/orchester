@@ -1,9 +1,11 @@
 //! *At work* (`At work` `Xbz55` in 01 `LXhun`): one line per run under way (`orchester_workspace::overview::at_work`),
-//! its head with how many and *N of M agent slots* as the runner reports them. A line: the turning loader, the key,
-//! the title in 13/500, the step's dots and the step (`GI561`: one 10×4 dash per step, 3 apart, the steps done in
-//! `text_muted`, the current one in `text_primary`, the rest in `border`), the account and model with the maker's mark
-//! (`VJWOi`), and how long the run has run. A run that lost its runner keeps its line and its age, with a pause mark.
-//! Up to six lines; more opens Tasks on Active. A line opens its task's conversation, as the sidebar's Running does.
+//! its head with how many and *N of M agent slots* as the runner reports them, and beside that, while ready steps wait
+//! for a slot, how many and what would start them (no frame draws it; it reads like the slots). A line: the turning
+//! loader, the key, the title in 13/500, the step's dots and the step (`GI561`: one 10×4 dash per step, 3 apart, the
+//! steps done in `text_muted`, the current one in `text_primary`, the rest in `border`), the account and model with the
+//! maker's mark (`VJWOi`), and how long the run has run. A run that lost its runner keeps its line and its age, with a
+//! pause mark. Up to six lines; more opens Tasks on Active. A line opens its task's conversation, as the sidebar's
+//! Running does.
 
 use std::num::NonZeroU32;
 
@@ -38,12 +40,13 @@ const ACCOUNT_WIDTH: f32 = 196.0;
 const AGE_WIDTH: f32 = 30.0;
 const DASH: (f32, f32) = (10.0, 4.0);
 
-/// The section; `slots` is what the runner reported in use of its agent slots, when it did.
+/// The section; `slots` is what the runner reported in use of its agent slots, when it did, and `slot_waits` how many
+/// ready steps it says wait for one.
 pub(super) fn at_work(
   ctx: &mut Ctx,
   project: ProjectId,
   (lines, accounts): (&[AtWorkLine], &Accounts),
-  (slots, now): (Option<(usize, NonZeroU32)>, Timestamp),
+  (slots, slot_waits, now): (Option<(usize, NonZeroU32)>, usize, Timestamp),
 ) -> Column {
   let end = slots.map(|(working, slots)| {
     let key = if slots.get() == 1 {
@@ -52,7 +55,12 @@ pub(super) fn at_work(
       "overview.atWork.slots.other"
     };
     let words = ctx.t_args(key, [("count", working.to_string()), ("slots", slots.to_string())]);
-    muted(&words).id("overview-at-work-slots").into()
+    Row::new()
+      .spacing(SpacingSize::Sm)
+      .align_items(Alignment::Center)
+      .child(muted(&words).id("overview-at-work-slots"))
+      .with_children(waiting_steps(ctx, slot_waits))
+      .into()
   });
   let navigation = Navigation::of(ctx);
   let shown: Vec<Element> = lines
@@ -77,6 +85,17 @@ pub(super) fn at_work(
     ))
     .with_children(shown)
     .with_children(more)
+}
+
+/// How many ready steps wait for an agent slot and what would start them, beside the slots while any do.
+fn waiting_steps(ctx: &Ctx, count: usize) -> Option<Text> {
+  let key = match count {
+    0 => return None,
+    1 => "overview.atWork.slotWaits.one",
+    _ => "overview.atWork.slotWaits.other",
+  };
+  let words = ctx.t_args(key, [("count", count.to_string())]);
+  Some(muted(&words).id("overview-at-work-slot-waits"))
 }
 
 fn run_line(

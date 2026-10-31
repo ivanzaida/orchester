@@ -10,6 +10,7 @@ use orchester_api::SharedProject;
 use orchester_core::{
   id::{IdempotencyKey, ServerId},
   name::Name,
+  permission::stays_local,
   repository::RepositoryIdentity,
 };
 use orchester_exec::programs::Programs;
@@ -42,6 +43,10 @@ pub enum FolderCheck {
   },
   /// It has no `origin`, or one that is a folder on this computer.
   NoOrigin,
+  /// The path is not absolute: it would name a folder relative to wherever Orchester runs. Nothing was read.
+  NotAbsolute,
+  /// The path names another machine, a device or a drive mapped to a network share. Nothing was read through it.
+  NotLocal,
   /// It has no `.git` at its top.
   NotRepository,
   /// The folder, or its git remotes, can't be read.
@@ -53,6 +58,14 @@ pub enum FolderCheck {
 }
 
 impl FolderCheck {
+  /// Whether the folder can't be linked whatever the person says.
+  pub const fn refuses(&self) -> bool {
+    matches!(
+      self,
+      Self::NotAbsolute | Self::NotLocal | Self::NotRepository | Self::Unreadable | Self::LinkedElsewhere { .. }
+    )
+  }
+
   /// What the check found, in words, for `project`.
   pub fn message(&self, project: &SharedProject) -> Message {
     let hint = || {
@@ -70,6 +83,8 @@ impl FolderCheck {
         .with("project", named)
         .with("hint", hint.as_str().to_owned()),
       Self::NoOrigin => Message::new("sharing.folder.noOrigin").with("hint", hint()),
+      Self::NotAbsolute => Message::new("sharing.folder.notAbsolute"),
+      Self::NotLocal => Message::new("sharing.folder.notLocal"),
       Self::NotRepository => Message::new("sharing.folder.notRepository"),
       Self::Unreadable => Message::new("sharing.folder.unreadable"),
       Self::LinkedHere => Message::new("sharing.folder.linkedHere").with("project", named),
@@ -112,13 +127,40 @@ impl From<StoreError> for FolderLinkError {
   }
 }
 
-/// What `folder` is as a checkout of `project` on `server`. A project database that can't be read is an error, not a
-/// check. Blocking.
+/// How the check opens the folder's project database.
+#[derive(Clone, Copy)]
+enum Opening {
+  /// As it is: nothing in the folder is written, so a field that changes, or automation, can check any folder.
+  ReadOnly,
+  /// Migrated first, as opening the project does: only when the person links it.
+  Migrating,
+}
+
+/// What `folder` is as a checkout of `project` on `server`, read without writing anything in it. A path that is not
+/// absolute, or that names another machine, is refused by its text before anything reads it: reading
+/// `\\server\share` or a drive mapped to one makes Windows contact that server with the person's credentials. A
+/// project database that can't be read is an error, not a check. Blocking.
 pub fn check_folder(
   programs: &Programs,
   (server, project): (ServerId, &SharedProject),
   folder: &Path,
 ) -> Result<FolderCheck, StoreError> {
+  check_with(programs, (server, project), folder, Opening::ReadOnly)
+}
+
+fn check_with(
+  programs: &Programs,
+  (server, project): (ServerId, &SharedProject),
+  folder: &Path,
+  opening: Opening,
+) -> Result<FolderCheck, StoreError> {
+  if !folder.is_absolute() {
+    return Ok(FolderCheck::NotAbsolute);
+  }
+  if let Err(error) = stays_local(folder) {
+    tracing::warn!(%error, "a folder chosen for a shared project is not on this computer");
+    return Ok(FolderCheck::NotLocal);
+  }
   match fs::metadata(folder) {
     Ok(metadata) if metadata.is_dir() => {}
     Ok(_) => return Ok(FolderCheck::Unreadable),
@@ -135,19 +177,8 @@ pub fn check_folder(
       return Ok(FolderCheck::Unreadable);
     }
   }
-  match ProjectDb::open(folder) {
-    Err(StoreError::NotInitialized(_)) => {}
-    Err(error) => return Err(error),
-    Ok(db) => match linked_to(&db, server, project.id)? {
-      Some(Linked::This) => return Ok(FolderCheck::LinkedHere),
-      Some(Linked::Other(address)) => {
-        return Ok(FolderCheck::LinkedElsewhere {
-          name: db.project().name().clone(),
-          address,
-        });
-      }
-      None => {}
-    },
+  if let Some(linked) = linked_check(folder, (server, project), opening)? {
+    return Ok(linked);
   }
   let origin = match repository_identity(programs, folder) {
     Ok(identity) => Some(identity),
@@ -162,10 +193,43 @@ pub fn check_folder(
   })
 }
 
+/// Whether `folder`'s project is linked to `project` or to another one; `None` when it has no project, or none linked.
+/// Read [`Opening::ReadOnly`], a database this build has not migrated yet can't be read without writing it: its links
+/// are read again when the person links the folder, which migrates it.
+fn linked_check(
+  folder: &Path,
+  (server, project): (ServerId, &SharedProject),
+  opening: Opening,
+) -> Result<Option<FolderCheck>, StoreError> {
+  let linked = |db: &ProjectDb| -> Result<Option<FolderCheck>, StoreError> {
+    Ok(match linked_to(db, server, project.id)? {
+      Some(Linked::This) => Some(FolderCheck::LinkedHere),
+      Some(Linked::Other(address)) => Some(FolderCheck::LinkedElsewhere {
+        name: db.project().name().clone(),
+        address,
+      }),
+      None => None,
+    })
+  };
+  match opening {
+    Opening::ReadOnly => match ProjectDb::open_read_only(folder) {
+      Err(StoreError::NotInitialized(_) | StoreError::SchemaTooOld { .. }) => Ok(None),
+      Err(error) => Err(error),
+      Ok(db) => linked(&db),
+    },
+    Opening::Migrating => match ProjectDb::open(folder) {
+      Err(StoreError::NotInitialized(_)) => Ok(None),
+      Err(error) => Err(error),
+      Ok(db) => linked(&db),
+    },
+  }
+}
+
 impl Servers {
-  /// Links `folder` to `project` on `entry`, as [`check_folder`] allows: a different `origin` only `anyway`. Its
-  /// `.orchester` is set up first, so a server that fails afterwards leaves it a local project. `key` is the upload's
-  /// idempotency key, made when the person chose the folder: a retry links once.
+  /// Links `folder` to `project` on `entry`, as [`check_folder`] allows: a different `origin` only `anyway`. The check
+  /// runs again here, its project database migrated, since this is the person's press. Its `.orchester` is set up
+  /// first, so a server that fails afterwards leaves it a local project. `key` is the upload's idempotency key, made
+  /// when the person chose the folder: a retry links once.
   pub async fn link_folder(
     &self,
     entry: &ServerEntry,
@@ -175,14 +239,16 @@ impl Servers {
     (anyway, key): (bool, IdempotencyKey),
   ) -> Result<FolderLinked, FolderLinkError> {
     let (programs, target, root, server) = (programs.clone(), project.clone(), folder.to_owned(), entry.stored.id);
-    let check = background::run(move || check_folder(&programs, (server, &target), &root))
+    let check = background::run(move || check_with(&programs, (server, &target), &root, Opening::Migrating))
       .await
       .map_err(SharingError::from)??;
     // The `origin` the server project takes as its hint when it has none, as the Join page sends it.
     let remote = match check {
-      FolderCheck::NotRepository | FolderCheck::Unreadable | FolderCheck::LinkedElsewhere { .. } => {
-        return Err(FolderLinkError::Refused(check));
-      }
+      FolderCheck::NotAbsolute
+      | FolderCheck::NotLocal
+      | FolderCheck::NotRepository
+      | FolderCheck::Unreadable
+      | FolderCheck::LinkedElsewhere { .. } => return Err(FolderLinkError::Refused(check)),
       FolderCheck::Differs { .. } if !anyway => return Err(FolderLinkError::Refused(check)),
       FolderCheck::LinkedHere => return Ok(FolderLinked::Open(self.open_folder(folder).await?)),
       FolderCheck::Matches => project.remote_hint.clone(),

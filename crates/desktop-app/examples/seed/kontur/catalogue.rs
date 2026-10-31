@@ -388,6 +388,60 @@ pub fn live(db: &mut ProjectDb, connection: ConnectionId, now: Timestamp) -> Res
   })
 }
 
+/// The pipelines of `slot-wait`, for live runs with `orchester-fake-codex`: *Review and verify*, where one step waits
+/// for a single agent slot, and *Review, verify and test*, where two do. "Keep working" is not the steps' first
+/// sentence: a step's prompt shows that of each later step, and the fake would keep Implement working.
+pub fn slot_wait(
+  db: &mut ProjectDb,
+  connection: ConnectionId,
+  now: Timestamp,
+) -> Result<(Published, Published), SeedError> {
+  let profiles = Profiles::publish(db, connection, now)?;
+  let review = ("review", "Review", "Review the work. Keep working.");
+  let verify = ("verify", "Verify", "Verify the work. Keep working.");
+  let test = ("test", "Test", "Test the work. Keep working.");
+  let tools = BTreeMap::new();
+  let two = side_by_side(&profiles, &[review, verify]);
+  let (id, version) = publish(db, "Review and verify", vec![two], now)?;
+  let one_waits = pinned(id, &version, &profiles, &tools)?;
+  let three = side_by_side(&profiles, &[review, verify, test]);
+  let (id, version) = publish(db, "Review, verify and test", vec![three], now)?;
+  Ok((one_waits, pinned(id, &version, &profiles, &tools)?))
+}
+
+/// Implement, then the `parallel` steps (key, name, instructions) side by side, each working until stopped, then
+/// Report after them all.
+fn side_by_side(profiles: &Profiles, parallel: &[(&str, &str, &str)]) -> Pipeline {
+  let with_instructions = |step: Step, instructions: &str| Step {
+    instructions: PromptText::new(instructions).expect("the steps' instructions are valid prompts"),
+    ..step
+  };
+  let mut steps = vec![with_instructions(
+    agent_step(
+      ("implement", "Implement"),
+      profiles.builder,
+      RepositoryAccess::Write,
+      &[],
+    ),
+    "Implement the change.",
+  )];
+  for &(key, title, instructions) in parallel {
+    let step = agent_step(
+      (key, title),
+      profiles.reviewer,
+      RepositoryAccess::ReadOnly,
+      &["implement"],
+    );
+    steps.push(with_instructions(step, instructions));
+  }
+  let keys: Vec<&str> = parallel.iter().map(|(key, ..)| *key).collect();
+  steps.push(with_instructions(
+    agent_step(("report", "Report"), profiles.builder, RepositoryAccess::Write, &keys),
+    "Sum up the work.",
+  ));
+  Pipeline::new(steps).expect("the slot wait's pipelines are valid")
+}
+
 /// The command line the tool of step `step` runs, as its transcript shows it.
 pub fn command_line(step: &str) -> String {
   if step == StarterStep::RunChecks.key() {

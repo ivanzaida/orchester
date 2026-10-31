@@ -31,7 +31,7 @@ use orchester_core::{
   run::{PendingToolApproval, RunNumber, SimilarUnavailable},
   time::Timestamp,
 };
-use orchester_ipc::WorkSummary;
+use orchester_ipc::{SlotWait, WorkSummary};
 use orchester_workspace::{
   activity::{ActivityLog, OperationSpec, Target},
   messages::Message,

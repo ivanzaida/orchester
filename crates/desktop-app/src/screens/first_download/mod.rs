@@ -26,7 +26,7 @@ use orchester_workspace::sharing::project::{DownloadProgress, DownloadState};
 
 use self::read::{Linked, Standing};
 use super::{
-  join_team::frame::{Ancestor, StartStep, StepFrame, step_frame},
+  join_team::frame::{Crumb, StartStep, StepFrame, step_frame},
   settings::orchester::{follow, follow_shared, shown_address},
 };
 use crate::{
@@ -173,11 +173,13 @@ impl FirstDownloadPage {
       [("project", name), ("folder", folder.as_str()), ("address", address)],
     );
     let ancestors = vec![
-      Ancestor {
+      Crumb {
+        name: "join",
         label: ctx.t("startup.join.crumb").to_string(),
         route: Route::JoinTeam(JoinWay::default()),
       },
-      Ancestor {
+      Crumb {
+        name: "server",
         label: linked.sharing.server_name().to_owned(),
         route: Route::Orchester(OrchesterView::server(linked.sharing.link.server)),
       },
@@ -202,7 +204,7 @@ fn open_button(ctx: &mut Ctx, project: ProjectId, name: &str) -> ActionButton {
 /// `body` in the frame of the start page's steps.
 fn frame(
   ctx: &mut Ctx,
-  (ancestors, crumb): (Vec<Ancestor>, String),
+  (ancestors, crumb): (Vec<Crumb>, String),
   (title, lead): (&str, &str),
   body: Element,
 ) -> Element {
@@ -214,7 +216,7 @@ fn frame(
       crumb,
       step: StartStep::Download,
       title: title.to_owned(),
-      lead: lead.to_owned(),
+      lead: Some(lead.to_owned()),
       body,
       note: None,
     },

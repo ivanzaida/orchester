@@ -30,10 +30,14 @@ pub enum State {
   DownloadProgress,
   /// As [`Self::DownloadProgress`], with the download stopped there by the server's refusal.
   DownloadStopped,
+  /// Joined, with Kontur and Billing to pick and nothing linked; the seed leaves folders to link them to.
+  SharedProjects,
+  /// Joined, with no project the person is invited to.
+  NoSharedProjects,
 }
 
 impl State {
-  pub const ALL: [Self; 10] = [
+  pub const ALL: [Self; 12] = [
     Self::Join,
     Self::WrongCode,
     Self::ExpiredCode,
@@ -44,6 +48,8 @@ impl State {
     Self::DownloadFailed,
     Self::DownloadProgress,
     Self::DownloadStopped,
+    Self::SharedProjects,
+    Self::NoSharedProjects,
   ];
 
   /// The seed's scenario of this state.
@@ -59,6 +65,8 @@ impl State {
       Self::DownloadFailed => "team-download-failed",
       Self::DownloadProgress => "team-download-progress",
       Self::DownloadStopped => "team-download-stopped",
+      Self::SharedProjects => "team-shared-projects",
+      Self::NoSharedProjects => "team-shared-none",
     }
   }
 

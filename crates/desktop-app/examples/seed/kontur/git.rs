@@ -83,7 +83,7 @@ pub fn commit(dir: &Path, files: &[(&str, String)], message: &str) -> Result<Rev
   head(dir)
 }
 
-/// The repository at `root` has `url` as its `origin`.
+/// Gives the repository `root` the remote `origin` at `url`.
 pub fn add_origin(root: &Path, url: &str) -> Result<(), GitError> {
   git(root, &["remote", "add", "origin", url]).map(drop)
 }

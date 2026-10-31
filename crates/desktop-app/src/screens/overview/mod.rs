@@ -47,7 +47,7 @@ use orchester_workspace::{
     limits::near_limits,
     queue::queue as queued_tasks,
   },
-  tasks::{attention, data::ProjectTasks},
+  tasks::{attention, data::ProjectTasks, slot_wait::slot_waits},
 };
 
 use self::skeleton::{BonesProps, bones};
@@ -93,11 +93,13 @@ struct OverviewScreen {
   interval: Interval,
 }
 
-/// What the page knows besides the tasks: the accounts and their readings, the runner's slots, and the time.
+/// What the page knows besides the tasks: the accounts and their readings, the runner's slots and how many ready steps
+/// wait for one, and the time.
 struct Around {
   accounts: Accounts,
   readings: PlanReadings,
   slots: Option<(usize, NonZeroU32)>,
+  slot_waits: usize,
   now: Timestamp,
 }
 
@@ -117,16 +119,15 @@ impl Component for OverviewScreen {
     self.interval.start();
     let OverviewProps { project } = ctx.props::<OverviewProps>().clone();
     let recovery = ctx.mount_keyed::<RecoveryNotice>("recovery-notice", project.clone());
+    let status = project.feed.status.get();
     let around = Around {
       accounts: accounts::listed(ctx),
       readings: plan_limits::account_readings(ctx),
-      slots: project
-        .feed
-        .status
-        .get()
+      slots: status
         .as_ref()
         .and_then(|status| status.work())
         .map(|work| work.agents()),
+      slot_waits: slot_waits(status.as_ref(), &project.open.repo_root).len(),
       now: Timestamp::now(),
     };
     let state = project.tasks();
@@ -210,7 +211,7 @@ fn body(ctx: &mut Ctx, project: &ShownProject, tasks: &ProjectTasks, around: &Ar
       ctx,
       id,
       (&at_work, &around.accounts),
-      (around.slots, around.now),
+      (around.slots, around.slot_waits, around.now),
     ));
   }
   if !queued.is_empty() || tasks.queue.project {

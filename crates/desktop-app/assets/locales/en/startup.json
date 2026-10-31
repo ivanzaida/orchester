@@ -226,6 +226,56 @@
           "lead": "Add its folder again from All projects."
         },
         "unread": "This project could not be read"
+      },
+      "reading": "Reading the team's projects…",
+      "readFailed": "The team's projects could not be read",
+      "joined": "Joined",
+      "signedIn": "This computer has its own sign-in there now.",
+      "back": "Back",
+      "projects": {
+        "titlePending": "Pick a project",
+        "title": "Pick a project from {{team}}",
+        "lead": "Only the projects you are invited to are listed. Each one keeps its tasks and team settings on {{address}}.",
+        "member": "you: member",
+        "owner": "you: owner",
+        "sub": "{{address}} · remote {{hint}}",
+        "continue": "Continue with {{project}}",
+        "none": {
+          "title": "No projects for you on {{team}} yet",
+          "body": "You joined {{address}}, but no project there has invited {{who}}. Ask an owner to invite you: the project then shows here and in All projects.",
+          "checkAgain": "Check again",
+          "backToStart": "Back to start"
+        }
+      },
+      "link": {
+        "titlePending": "Link a project to a folder",
+        "title": "Link {{project}} to a folder",
+        "lead": "Orchester works in a checkout on this computer. The team server never touches code: use a checkout you have, or clone it with the command below.",
+        "leadNoClone": "Orchester works in a checkout on this computer. The team server never touches code: use a checkout you have.",
+        "hint": "· remote hint {{hint}}",
+        "existing": {
+          "title": "Use a checkout I have",
+          "sub": "A folder with the repository already cloned"
+        },
+        "folder": "Folder",
+        "folderPlaceholder": "The folder of your checkout",
+        "choose": "Choose…",
+        "chooseTitle": "Choose the folder of your checkout",
+        "matches": "Git repository · origin {{origin}} matches the project",
+        "notRepository": "Not a git repository. Pick the folder you cloned, or clone it with the command below.",
+        "notRepositoryNoClone": "Not a git repository. Pick the folder you cloned.",
+        "differs": {
+          "title": "origin is {{origin}}",
+          "body": "{{project}} expects {{hint}}. Link anyway if this is your fork; runs push to its origin."
+        },
+        "clone": {
+          "title": "No checkout yet?",
+          "sub": "Clone the repository with this command, then choose the new folder above",
+          "command": "The command that clones {{project}}"
+        },
+        "submit": "Link and download tasks",
+        "anyway": "Link anyway",
+        "linking": "Linking…"
       }
     }
   }

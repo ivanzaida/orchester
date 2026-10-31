@@ -1,6 +1,6 @@
 //! What a join came to, in place under what was pressed: joined, with *See your projects there*, which opens the
-//! server's page under Settings › Orchester and its projects; waiting for another computer's or an admin's approval;
-//! or no place on the server for the account.
+//! team's shared projects, the step's next page ([`super::shared`]); waiting for another computer's or an admin's
+//! approval; or no place on the server for the account.
 
 use lurq::{
   app::{component::DevtoolsInspectable, ctx::Ctx},
@@ -10,7 +10,7 @@ use orchester_workspace::sharing::team_join::{JoinOutcome, JoinedServer};
 
 use crate::{
   navigation::Navigation,
-  routes::{OrchesterView, Route},
+  routes::{JoinWay, Route},
   ui::{
     button::{ActionButton, ButtonKind},
     callout::{Callout, CalloutTone},
@@ -63,7 +63,7 @@ pub(super) fn callout(ctx: &mut Ctx, id: &str, outcome: &Outcome, email: Option<
         ctx.t("startup.join.outcome.joined.open"),
       )
       .icon(Icon::ArrowRight)
-      .opens(Navigation::of(ctx).to(Route::Orchester(OrchesterView::server(*server))));
+      .opens(Navigation::of(ctx).to(Route::JoinTeam(JoinWay::Projects(*server))));
       Callout::new(
         format!("{id}-joined"),
         CalloutTone::Success,

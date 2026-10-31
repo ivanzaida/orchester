@@ -65,8 +65,10 @@ impl StartStep {
   }
 }
 
-/// A crumb between *Start* and the step's own, which opens its place.
-pub(crate) struct Ancestor {
+/// A step on the way to this one in the breadcrumb, which opens its place (`Join a team`, `Acme` in `IqO0N`).
+pub(crate) struct Crumb {
+  /// The last part of its element's id.
+  pub name: &'static str,
   pub label: String,
   pub route: Route,
 }
@@ -75,13 +77,14 @@ pub(crate) struct Ancestor {
 pub(crate) struct StepFrame {
   /// The step's screen, whose element ids start with it.
   pub id: &'static str,
-  /// The crumbs between *Start* and the step's own.
-  pub ancestors: Vec<Ancestor>,
+  /// The steps between *Start* and the step's own crumb.
+  pub ancestors: Vec<Crumb>,
   /// The step's own crumb.
   pub crumb: String,
   pub step: StartStep,
   pub title: String,
-  pub lead: String,
+  /// What the step is, under its title; 12 `NaEPI` draws none.
+  pub lead: Option<String>,
   pub body: Element,
   pub note: Option<Element>,
 }
@@ -103,7 +106,7 @@ pub(crate) fn step_frame(ctx: &mut Ctx, frame: StepFrame) -> Element {
     .width(Dimension::Pct(100.0))
     .align_items(Alignment::Center)
     .justify(Justify::SpaceBetween)
-    .child(breadcrumb(ctx, id, ancestors, &crumb))
+    .child(breadcrumb(ctx, id, (ancestors, &crumb)))
     .child(steps(ctx, id, step));
   let head = Column::new()
     .id(format!("{id}-head"))
@@ -114,12 +117,12 @@ pub(crate) fn step_frame(ctx: &mut Ctx, frame: StepFrame) -> Element {
         .id(format!("{id}-title"))
         .variant(StartupText::Title.role()),
     )
-    .child(
+    .with_children(lead.map(|lead| {
       Text::new(&lead)
         .id(format!("{id}-lead"))
         .variant(StartupText::Lead.role())
-        .width(Dimension::Pct(100.0)),
-    );
+        .width(Dimension::Pct(100.0))
+    }));
   let inner = Column::new()
     .id(format!("{id}-inner"))
     .width(Dimension::Pct(100.0))
@@ -153,9 +156,11 @@ pub(crate) fn step_frame(ctx: &mut Ctx, frame: StepFrame) -> Element {
     .into()
 }
 
-/// *Start*, the step's `ancestors` and its own crumb (`Breadcrumb` `LTKnD`, `pRFzL`); *Start* opens All projects.
-fn breadcrumb(ctx: &mut Ctx, id: &str, ancestors: Vec<Ancestor>, crumb: &str) -> Row {
-  let start = Ancestor {
+/// *Start*, the steps on the way here and the step's own crumb, a chevron between two (`Breadcrumb` `LTKnD`, `T3NzX`,
+/// `pRFzL`); *Start* opens All projects, a step on the way its place.
+fn breadcrumb(ctx: &mut Ctx, id: &str, (ancestors, crumb): (Vec<Crumb>, &str)) -> Row {
+  let start = Crumb {
+    name: "start",
     label: ctx.t("startup.crumbs.start").to_string(),
     route: Route::AllProjects,
   };
@@ -165,16 +170,11 @@ fn breadcrumb(ctx: &mut Ctx, id: &str, ancestors: Vec<Ancestor>, crumb: &str) ->
     .flex_shrink(0.0)
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center);
-  for (index, ancestor) in std::iter::once(start).chain(ancestors).enumerate() {
-    let name = if index == 0 {
-      "start".to_owned()
-    } else {
-      index.to_string()
-    };
+  for ancestor in std::iter::once(start).chain(ancestors) {
     row = row
       .child(
         opening(navigation.to(ancestor.route))
-          .id(format!("{id}-crumb-{name}"))
+          .id(format!("{id}-crumb-{}", ancestor.name))
           .flex_shrink(0.0)
           .describe("a11y_name", ancestor.label.clone())
           .hovered_style(Style::new().border_bottom(Border::inside(BorderSize::Sm, PaletteColor::TextMuted)))
@@ -190,8 +190,9 @@ fn breadcrumb(ctx: &mut Ctx, id: &str, ancestors: Vec<Ancestor>, crumb: &str) ->
   )
 }
 
-/// The step line (`F7crC`, `YLUz1`): a step before `current` as a `success` check, the others as their number in a
-/// ring; each with its name, `current` in `text_primary`, a line between two.
+/// The step line (`F7crC`, `YLUz1`): a step before `current` as a `success` check and its name in `text_secondary`
+/// (`x7dnu`), the others as their number in a ring; each with its name, `current` in `text_primary`, a line between
+/// two.
 fn steps(ctx: &Ctx, id: &str, current: StartStep) -> Row {
   let mut row = Row::new()
     .id(format!("{id}-steps"))
@@ -237,7 +238,7 @@ fn steps(ctx: &Ctx, id: &str, current: StartStep) -> Row {
   row
 }
 
-/// A step's `number` in its ring, in `text_primary` when it is the current one.
+/// A step's `number` in its ring, in `text_primary` when it is the current one (`Number` `P6t15`).
 fn step_number(number: usize, here: bool) -> Row {
   let (ring, digit) = if here {
     (PaletteColor::TextPrimary, PaletteColor::TextPrimary)

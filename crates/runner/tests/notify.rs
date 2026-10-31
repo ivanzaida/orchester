@@ -44,6 +44,7 @@ fn notify_keeps_only_the_latest_work_summary() {
     Event::WorkSummary(WorkSummary {
       agent_slots: NonZeroU32::new(slots).expect("above zero"),
       runs: Vec::new(),
+      slot_waits: Vec::new(),
     })
   };
   let changed = Event::RunChanged {

@@ -2012,7 +2012,11 @@ git names them), Import resources, Open Orchestrator and New task. The main colu
   runs on with the maker's mark, and how long it has run; the head says *N of M agent slots* as the runner reports
   them. The account and model come with the tasks' reading (`tasks::at_work`: the latest launch's model and account,
   else the profile's model and its connection's account); an agent without an account names its model only. While no
-  runner looks after the project, its runs keep their lines as read, with a pause mark and no age.
+  runner looks after the project, its runs keep their lines as read, with a pause mark and no age. While ready steps
+  wait for an agent slot (ORC-403), the head adds *N steps wait for a slot · raise Agents at once to start them* beside
+  the slots. The Summary's rail draws such a step with Waiting's muted `clock` and the tooltip *Waits for an agent slot*,
+  its Last event names it, and the health card has a *Waiting* row. The runner reports the wait in its work summary and
+  nothing stores it. **No Pencil frame draws this wait**: the parts follow `Utjda`, `TGEq8`, `SwaLB` and `oagTL`.
 - **Queue**, the queued tasks in start order with why each waits in the app's words (*Waiting for an agent slot*,
   *Waiting for blocking tasks · KON-12*, *Waiting for the previous task · KON-17*, a group's hold) and its place
   (*next*, *2nd*); *Hold new starts* holds or releases the project's new starts as the Tasks list's menu does. Drafts,

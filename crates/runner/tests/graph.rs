@@ -6,19 +6,21 @@
 
 mod support;
 
-use std::fs;
+use std::{fs, num::NonZeroU32, path::Path, time::Duration};
 
 use orchester_core::{
   connection::stream::{AgentEvent, RunnerProblem},
-  id::IdempotencyKey,
+  id::{IdempotencyKey, RunId, StepExecutionId, TaskId},
   resource::StepKey,
-  run::{AttemptReason, Run, RunStatus, StepFailure, StepOutcome},
-  store::ActivityStore,
+  run::{AttemptReason, InterruptCause, Run, RunStatus, StepFailure, StepOutcome, StepStatus},
+  store::{ActivityStore, RunStore},
 };
-use orchester_ipc::{AttachSession, SessionEnd};
+use orchester_ipc::{AttachSession, Event, SessionEnd, SlotWait, WorkSummary};
+use orchester_runner::execution::Scheduler;
 use orchester_store::ProjectDb;
+use tokio::sync::mpsc;
 
-use self::support::{Setup, StepSpec, git, project, reported, scheduler, settled, wait_for};
+use self::support::{PATIENCE, Setup, StepSpec, git, project, reported, scheduler, settled, tools::ToolSpec, wait_for};
 
 fn key(value: &str) -> StepKey {
   StepKey::new(value).expect("key")
@@ -257,14 +259,7 @@ async fn graph_agent_slots_bound_the_steps_that_run_at_once() {
 /// A step waiting for an agent slot starts once the slots are raised, beside the one at work.
 #[tokio::test(flavor = "multi_thread")]
 async fn graph_raised_agent_slots_start_a_step_waiting_for_one() {
-  let project = project(&Setup {
-    steps: vec![
-      StepSpec::new("implement", "Implement", "Write own file.", &[]),
-      StepSpec::new("checks", "Checks", "Keep working.", &["implement"]),
-      StepSpec::new("review", "Review", "Keep working.", &["implement"]),
-    ],
-    ..Setup::new("Say hello.")
-  });
+  let project = project(&parallel_after_implement(Vec::new()));
   let root = project.repo.path();
   let (scheduler, mut events) = scheduler(root);
   let slots = |count| std::num::NonZeroU32::new(count).expect("above zero");
@@ -303,4 +298,186 @@ async fn graph_raised_agent_slots_start_a_step_waiting_for_one() {
     .count();
   assert_eq!(working, 2, "Checks and Review work at once");
   scheduler.stop_all(orchester_core::run::InterruptCause::QuitNow).await;
+}
+
+/// Implement, then Checks and Review side by side, both working until stopped; `more` after them. "Keep working" is
+/// not their first sentence: a step's prompt shows that of each later step, and the fake would keep Implement working.
+fn parallel_after_implement(more: Vec<StepSpec>) -> Setup {
+  let mut steps = vec![
+    StepSpec::new("implement", "Implement", "Write own file.", &[]),
+    StepSpec::new("checks", "Checks", "Check the work. Keep working.", &["implement"]),
+    StepSpec::new("review", "Review", "Review the work. Keep working.", &["implement"]),
+  ];
+  steps.extend(more);
+  Setup {
+    steps,
+    ..Setup::new("Say hello.")
+  }
+}
+
+/// A scheduler for `root` with one agent slot, its run of `task` started.
+async fn started_on_one_slot(root: &Path, task: TaskId) -> (Scheduler, mpsc::UnboundedReceiver<Event>, RunId) {
+  let (scheduler, events) = scheduler(root);
+  scheduler
+    .attach(
+      AttachSession::Fresh {
+        previous_end: SessionEnd::Clean,
+      },
+      NonZeroU32::new(1).expect("above zero"),
+    )
+    .await
+    .expect("attached");
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), task)
+    .await
+    .expect("the run starts");
+  (scheduler, events, id)
+}
+
+/// The next work summary that satisfies `done`.
+async fn summary_where(
+  events: &mut mpsc::UnboundedReceiver<Event>,
+  done: impl Fn(&WorkSummary) -> bool,
+) -> WorkSummary {
+  let wait = async {
+    loop {
+      if let Some(Event::WorkSummary(summary)) = events.recv().await
+        && done(&summary)
+      {
+        return summary;
+      }
+    }
+  };
+  tokio::time::timeout(PATIENCE, wait)
+    .await
+    .expect("the summary arrives in time")
+}
+
+/// The run's latest execution of step `step`, and where it stands in the run's log.
+fn execution_of(root: &Path, run: RunId, step: &str) -> (StepExecutionId, StepStatus) {
+  let run = ProjectDb::open(root)
+    .expect("open")
+    .run(run)
+    .expect("read")
+    .expect("the run exists");
+  let execution = run.latest_execution(&key(step)).expect("the step's execution");
+  (execution.id(), execution.status())
+}
+
+/// With two parallel steps and one slot, the step left out is named: it stays pending in the run's log, and the run
+/// does not wait for a person.
+#[tokio::test(flavor = "multi_thread")]
+async fn graph_slot_wait_names_the_ready_step_no_slot_is_free_for() {
+  let project = project(&parallel_after_implement(Vec::new()));
+  let root = project.repo.path();
+  let (scheduler, mut events, id) = started_on_one_slot(root, project.task).await;
+  let summary = summary_where(&mut events, |summary| !summary.slot_waits.is_empty()).await;
+  let (review, status) = execution_of(root, id, "review");
+  assert_eq!(
+    summary.slot_waits,
+    [SlotWait {
+      run: id,
+      execution: review
+    }]
+  );
+  assert!(summary.waits_for_slot(review));
+  assert_eq!(summary.steps_waiting_for_slot(), 1);
+  assert_eq!(summary.agents_working(), 1, "Checks has the slot");
+  assert_eq!(status, StepStatus::Pending);
+  let (checks, status) = execution_of(root, id, "checks");
+  assert_eq!(status, StepStatus::Running);
+  assert!(!summary.waits_for_slot(checks));
+  let run = ProjectDb::open(root)
+    .expect("open")
+    .run(id)
+    .expect("read")
+    .expect("run");
+  assert!(!run.waits_for_a_person());
+  scheduler.stop_all(InterruptCause::QuitNow).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn graph_slot_wait_leaves_out_a_step_whose_dependencies_have_not_passed() {
+  let after_both = StepSpec::new("report", "Report", "Write own file.", &["checks", "review"]);
+  let project = project(&parallel_after_implement(vec![after_both]));
+  let root = project.repo.path();
+  let (scheduler, mut events, id) = started_on_one_slot(root, project.task).await;
+  let summary = summary_where(&mut events, |summary| !summary.slot_waits.is_empty()).await;
+  let (review, _) = execution_of(root, id, "review");
+  let (report, status) = execution_of(root, id, "report");
+  assert_eq!(
+    summary.slot_waits,
+    [SlotWait {
+      run: id,
+      execution: review
+    }]
+  );
+  assert_eq!(status, StepStatus::Pending, "Report also stands pending, but not ready");
+  assert!(!summary.waits_for_slot(report));
+  scheduler.stop_all(InterruptCause::QuitNow).await;
+}
+
+/// Raising the slots starts the step that waited, and the wait is over.
+#[tokio::test(flavor = "multi_thread")]
+async fn graph_slot_wait_ends_when_the_slots_are_raised() {
+  let project = project(&parallel_after_implement(Vec::new()));
+  let root = project.repo.path();
+  let (scheduler, mut events, id) = started_on_one_slot(root, project.task).await;
+  summary_where(&mut events, |summary| !summary.slot_waits.is_empty()).await;
+  scheduler
+    .set_agent_slots(NonZeroU32::new(2).expect("above zero"))
+    .await
+    .expect("raised");
+  summary_where(&mut events, |summary| {
+    summary.slot_waits.is_empty() && summary.agents_working() == 2
+  })
+  .await;
+  assert_eq!(execution_of(root, id, "review").1, StepStatus::Running);
+  scheduler.stop_all(InterruptCause::QuitNow).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn graph_slot_wait_ends_with_the_run() {
+  let project = project(&parallel_after_implement(Vec::new()));
+  let root = project.repo.path();
+  let (scheduler, mut events, id) = started_on_one_slot(root, project.task).await;
+  summary_where(&mut events, |summary| !summary.slot_waits.is_empty()).await;
+  scheduler.cancel_run(id).await.expect("cancelled");
+  summary_where(&mut events, |summary| summary.slot_waits.is_empty()).await;
+  let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
+  assert_eq!(run.status(), &RunStatus::Cancelled);
+}
+
+/// A tool step waits for a command slot, which more agent slots would not give it.
+#[tokio::test(flavor = "multi_thread")]
+async fn graph_slot_wait_leaves_out_a_tool_step() {
+  let lint = StepSpec::new("lint", "Lint", "", &["implement"]).command(ToolSpec::test_command(&["print", "1"]));
+  let project = project(&parallel_after_implement(vec![lint]));
+  let root = project.repo.path();
+  let (scheduler, mut events, id) = started_on_one_slot(root, project.task).await;
+  let summary = summary_where(&mut events, |summary| !summary.slot_waits.is_empty()).await;
+  let (review, _) = execution_of(root, id, "review");
+  let (lint, status) = execution_of(root, id, "lint");
+  assert_eq!(
+    summary.slot_waits,
+    [SlotWait {
+      run: id,
+      execution: review
+    }]
+  );
+  assert_eq!(status, StepStatus::Pending, "the start loop stopped at Review");
+  assert!(!summary.waits_for_slot(lint));
+  scheduler.stop_all(InterruptCause::QuitNow).await;
+}
+
+/// A run waiting for a slot looks again every second; only a change is news to the desktop.
+#[tokio::test(flavor = "multi_thread")]
+async fn graph_slot_wait_is_announced_once() {
+  let project = project(&parallel_after_implement(Vec::new()));
+  let root = project.repo.path();
+  let (scheduler, mut events, _) = started_on_one_slot(root, project.task).await;
+  summary_where(&mut events, |summary| !summary.slot_waits.is_empty()).await;
+  let quiet = tokio::time::timeout(Duration::from_millis(2_500), summary_where(&mut events, |_| true)).await;
+  assert!(quiet.is_err(), "no further summary across two retries: {quiet:?}");
+  scheduler.stop_all(InterruptCause::QuitNow).await;
 }

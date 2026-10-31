@@ -41,4 +41,4 @@ pub use message::{
 };
 pub use rejection::Rejection;
 pub use transport::{ClientStream, Endpoint, ServerStream, server_process_id};
-pub use work::{RunWork, WorkState, WorkSummary};
+pub use work::{RunWork, SlotWait, WorkState, WorkSummary};
