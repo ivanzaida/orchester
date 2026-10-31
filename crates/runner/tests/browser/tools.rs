@@ -26,9 +26,11 @@ use orchester_store::ProjectDb;
 use tokio::sync::mpsc;
 
 use super::site;
+#[cfg(unix)]
+use crate::support::git;
 use crate::{
   browser_installed,
-  support::{Setup, TestProject, git, pending_approval, project, reported, scheduler, wait_for},
+  support::{Setup, TestProject, pending_approval, project, reported, scheduler, wait_for},
 };
 
 /// A read-only profile on `provider` whose *Browser* is `access`, allowing `docs.example.invalid`.

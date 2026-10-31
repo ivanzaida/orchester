@@ -375,19 +375,21 @@ not jump to another project by itself.
   request to the runner's connection as it is made, and the runner keeps one line per tab, in which an input goes out
   once the one before it has gone out, without waiting for its answer (a click that opens a dialog is not answered
   until the dialog is).
-- **IPC** (protocol 37, `orchester_ipc::browser`). The window's requests (`BrowserCommand`: subscribe, show a tab at a
+- **IPC** (protocol 38, `orchester_ipc::browser`). The window's requests (`BrowserCommand`: subscribe, show a tab at a
   viewport, stop showing, the person's input, navigation, open and close a tab, answer a dialog, choose a `<select>`
-  option, copy or cut the selection, the mouse cursor's shape at a point, *Open in a browser window*, *Back to
-  Orchester*) and events (`BrowserEvent`: the
+  option, the files chosen for a page's file field or the cancel, copy or cut the selection, the mouse cursor's shape
+  at a point, *Open in a browser window*, *Back to Orchester*) and events (`BrowserEvent`: the
   browser's state with its tabs, their owners, titles, addresses and loading, the tab shown and the mode; an agent
   started browsing; an agent
   acted, with its element box; an agent waits on a tab until a moment, sent again when new input pushes it back, and its
-  wait ended: it ran, reached the cap or was cancelled; a dialog opened or closed; a `<select>` list opened). A frame is
+  wait ended: it ran, reached the cap or was cancelled; a dialog opened or closed; a `<select>` list opened; a file
+  field of the person's tab asks for files, with whether it takes more than one, the types it accepts and its name). A
+  frame is
   one event with its JPEG bytes, in a binary frame after a small JSON head (decision 13); at 30 frames a second of a
   full-size page that is about 3 MB/s, well inside the channel and its 16 MiB frame limit. Only the latest frame waits
   in the runner, so frames are dropped rather than queued, and the app decodes one at a time per project, keeping only
   the latest that waits. The desktop subscribes once a runner attached; `orchester_workspace::browser::BrowserWindow`
-  holds what the window shows, `Runners::browser` sends its requests. Not yet: the file chooser.
+  holds what the window shows, `Runners::browser` sends its requests.
 
 ### What frames do not show, and what Orchester draws instead
 
@@ -502,7 +504,7 @@ sensitive input that shows its value.
      input as the window sends it to the tab shown, at a scale factor of 2: `--test browser_window browser_person_`.
      Not yet: an input method's composition under way (lurq shows it in its text input and tells no handler, so the
      page gets the text only once committed), the cursor's shape over
-     links and fields, the file chooser, bringing an open window to the front
+     links and fields, bringing an open window to the front
      (no lurq command), and back and forward faded by the tab's history as `01` fades forward (the runner does not
      report the history; they fade only without a tab to go through).
    - **Status bar item.** Done (ORC-194): *Browser 3 tabs* (`PwuEd` in `RGeKO`; the redesigned status bar's board
@@ -514,6 +516,25 @@ sensitive input that shows its value.
      frames do not show" above. Tests: `cargo test -p orchester-ipc --test browser browser_`, `cargo test -p
      orchester-runner --features test-agent --test browser browser_person_` and `cargo test -p orchester-app --test
      browser_window browser_clipboard_`.
+   - **File chooser.** Done (ORC-192): *A page asks for a file* above. The runner intercepts every tab's file chooser
+     as the tab opens (`Page.setInterceptFileChooserDialog`), the person's tab only while the browser is headless: in a
+     window of its own the browser shows the person its own chooser. On the person's tab it reads the field's `accept`
+     and accessible name, tells the window (`FileChooserOpened`, numbered per request) and keeps the request until the
+     window's `ChooseFiles` sets the chosen files on the field (`DOM.setFileInputFiles`, with the events a page listens
+     to) or cancels it; a tab that navigates or closes first, or asks again, drops it, and files chosen for a dropped
+     request are refused (`browser/window/files.rs`). On an agent's tab the browser cancels the chooser itself
+     (`cancel`, with the page's `cancel` event; a browser too old for it leaves the chooser unanswered) and the tab's log
+     records *a file chooser was cancelled: the page asked for a file, and agents cannot choose files*, which the
+     agent's next answer on the tab says as it says a dismissed dialog. The window opens the system's own dialog
+     (`rfd`, from the app's own process) once per request, for one file or many, offering the extensions the field
+     accepts and *All files* (macOS allows only those extensions; a MIME type such as `image/*` filters nothing), and
+     the hint stays over the page until it closes (`browser/files.rs`, `page/file_chooser.rs`). Tests: `cargo test -p
+     orchester-ipc --test browser browser_file_chooser`, `cargo test -p orchester-runner --features test-agent --test
+     browser browser_file_chooser`, `cargo test -p orchester-workspace --features test-support --test browser_window
+     browser_window_keeps_a_tabs_request_for_files` and `cargo test -p orchester-app --test browser_window
+     browser_file_chooser`. QA: `browser-window-file-chooser` (03b: the stand-in for the system's dialog never closes, so
+     the hint stays) and `browser-window-file-chosen` (03c), with `no_runner`; the sample page has its *Signing
+     certificate* field only in these two.
 
 ## Not in scope
 

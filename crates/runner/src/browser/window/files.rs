@@ -125,7 +125,9 @@ fn described(read: &Value) -> (Vec<String>, Option<String>) {
 /// to; refused for no file, for more files than the field takes, and for a path the browser cannot be given.
 pub(super) async fn set(cdp: &Cdp, session: &SessionId, asked: Asked, paths: &[PathBuf]) -> Result<(), BrowserError> {
   if paths.is_empty() {
-    return Err(BrowserError::Element("no file was chosen for the file field".to_owned()));
+    return Err(BrowserError::Element(
+      "no file was chosen for the file field".to_owned(),
+    ));
   }
   if !asked.multiple && paths.len() > 1 {
     return Err(BrowserError::Element(format!(

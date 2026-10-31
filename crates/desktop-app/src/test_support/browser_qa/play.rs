@@ -40,9 +40,7 @@ pub fn play(
   if fixture.state == BrowserState::NotFound {
     services.browser.look_nowhere();
   }
-  services
-    .page_files
-    .stand_in(|_| Box::pin(std::future::pending()));
+  services.page_files.stand_in(|_| Box::pin(std::future::pending()));
   let window = services.runners.browser_window();
   services.runtime.spawn(async move {
     let runs = settled_first(&fixture).await;

@@ -35,11 +35,11 @@ use tokio::{
   time::MissedTickBehavior,
 };
 
+use self::{files::FileRequests, hold::Holds, order::InputLines};
 pub(super) use self::{
   follow::{Followed, WindowWatch, follow_tab, follow_targets, follow_window_targets},
   restart::Starter,
 };
-use self::{files::FileRequests, hold::Holds, order::InputLines};
 pub use self::{
   hold::{HoldClock, PERSON_HOLD, PersonWait, WAIT_CAP},
   order::Arrived,

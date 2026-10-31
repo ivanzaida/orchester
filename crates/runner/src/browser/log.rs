@@ -22,8 +22,7 @@ pub const KEPT: usize = 1000;
 /// The longest text of one message, URL or dialog kept.
 const MAX_TEXT_CHARS: usize = 2000;
 /// What the agent is told of a file chooser its page opened: agents never open the system's file dialog.
-pub const FILE_ASKED: &str =
-  "a file chooser was cancelled: the page asked for a file, and agents cannot choose files";
+pub const FILE_ASKED: &str = "a file chooser was cancelled: the page asked for a file, and agents cannot choose files";
 
 /// One console message, or an uncaught exception (`exception`).
 #[derive(Clone, Debug, PartialEq, Eq)]

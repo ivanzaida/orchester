@@ -232,7 +232,12 @@ impl ProjectBrowser {
 
   /// The person's `choice` for the request `chooser` of `tab`: a cancel ends it and leaves the field as it is; chosen
   /// files are set on the field, refused once the tab no longer makes that request.
-  async fn choose_files(&self, tab: &BrowserTabId, chooser: FileChooserId, choice: FileChoice) -> Result<(), BrowserError> {
+  async fn choose_files(
+    &self,
+    tab: &BrowserTabId,
+    chooser: FileChooserId,
+    choice: FileChoice,
+  ) -> Result<(), BrowserError> {
     let asked = self.window.files.take(&TargetId::from(tab.as_str()), chooser);
     let FileChoice::Chosen { paths } = choice else {
       return Ok(());

@@ -187,7 +187,9 @@ impl Component for BrowserRoot {
       dialog_answer: self.dialog_answer.clone(),
     };
     self.screencast(ctx, &showing, now);
-    self.file_dialogs.open_new(ctx, &showing, (&services.page_files, &browser));
+    self
+      .file_dialogs
+      .open_new(ctx, &showing, (&services.page_files, &browser));
     self.keep_ticking(&showing, now);
     self.focus_address(ctx, &showing);
     let body = self.body(ctx, &showing);

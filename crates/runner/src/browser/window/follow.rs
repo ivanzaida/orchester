@@ -54,7 +54,8 @@ pub(in crate::browser) async fn follow_tab(
     match event.method.as_str() {
       "Page.screencastFrame" => screencast_frame(&cdp, &tab, &window, &event.params).await,
       loading @ ("Page.frameStartedLoading" | "Page.frameStoppedLoading") => {
-        if main(event.params.get("frameId"))
+        let of_the_tab = main(event.params.get("frameId"));
+        if of_the_tab
           && tabs
             .lock()
             .set_loading(&tab.target, loading == "Page.frameStartedLoading")

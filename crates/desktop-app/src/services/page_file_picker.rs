@@ -35,7 +35,7 @@ impl PageFilePicker {
     let stand_in = self.stand_in.lock().clone();
     match stand_in {
       Some(pick) => pick(asked),
-      None => system(asked),
+      None => system(&asked),
     }
   }
 
@@ -46,7 +46,7 @@ impl PageFilePicker {
 }
 
 /// The system's dialog for `asked`.
-fn system(asked: PageFiles) -> Chosen {
+fn system(asked: &PageFiles) -> Chosen {
   let mut dialog = rfd::AsyncFileDialog::new();
   let extensions = extensions(&asked.accept);
   if !extensions.is_empty() {
@@ -57,8 +57,9 @@ fn system(asked: PageFiles) -> Chosen {
       dialog = dialog.add_filter(asked.all_files.as_ref(), &["*"]);
     }
   }
+  let multiple = asked.multiple;
   Box::pin(async move {
-    if asked.multiple {
+    if multiple {
       let files = dialog.pick_files().await?;
       Some(files.iter().map(|file| file.path().to_path_buf()).collect())
     } else {

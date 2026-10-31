@@ -272,7 +272,12 @@ async fn round_trip(sent: &[Event]) -> Vec<Event> {
 #[tokio::test]
 async fn browser_file_chooser_round_trips_under_a_raised_protocol() {
   assert_eq!(PROTOCOL_VERSION, 38);
-  let opened = |chooser| Event::Browser(BrowserEvent::FileChooserOpened { tab: tab("P1"), chooser });
+  let opened = |chooser| {
+    Event::Browser(BrowserEvent::FileChooserOpened {
+      tab: tab("P1"),
+      chooser,
+    })
+  };
   let sent = [
     opened(FileChooser {
       id: FileChooserId::new(1),

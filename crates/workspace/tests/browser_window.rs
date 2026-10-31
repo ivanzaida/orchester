@@ -253,12 +253,20 @@ fn browser_window_keeps_a_tabs_request_for_files_until_the_window_answers_it() {
 
   window.file_chooser_answered(root, &tab("P1"), FileChooserId::new(1));
   let view = window.view(root).expect("the browser");
-  assert_eq!(view.file_chooser(&tab("P1")), Some(&asked(2)), "an earlier answer leaves it");
+  assert_eq!(
+    view.file_chooser(&tab("P1")),
+    Some(&asked(2)),
+    "an earlier answer leaves it"
+  );
   window.file_chooser_answered(root, &tab("P1"), FileChooserId::new(2));
   let view = window.view(root).expect("the browser");
   assert_eq!(view.file_chooser(&tab("P1")), None);
 
-  window.receive_for_test(root, "Kontur", state(vec![browser_tab("P1", TabOwner::Person)], Some("P1")));
+  window.receive_for_test(
+    root,
+    "Kontur",
+    state(vec![browser_tab("P1", TabOwner::Person)], Some("P1")),
+  );
   let view = window.view(root).expect("the browser");
   assert_eq!(view.file_choosers().count(), 0, "gone with its tab");
 }

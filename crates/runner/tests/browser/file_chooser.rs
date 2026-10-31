@@ -80,17 +80,30 @@ async fn browser_file_chooser_of_the_persons_tab_is_answered_by_the_window() {
     .await;
   // The browser trims the title's trailing space.
   desktop
-    .state(|state| state.tabs.iter().any(|listed| listed.title == "one kontur-hooks.pem many"))
+    .state(|state| {
+      state
+        .tabs
+        .iter()
+        .any(|listed| listed.title == "one kontur-hooks.pem many")
+    })
     .await;
   let again = browser.arrived(choose(&tab, &one, FileChoice::Chosen { paths: pem }));
   let refused = browser.serve(again, &desktop.sender).await;
-  assert!(matches!(refused, Err(Rejection::Failed { .. })), "answered already: {refused:?}");
+  assert!(
+    matches!(refused, Err(Rejection::Failed { .. })),
+    "answered already: {refused:?}"
+  );
 
   let cancelled = ask(&mut desktop, &browser, &tab, ONE).await;
   assert_ne!(cancelled.id, one.id, "each request is its own");
-  desktop.serve(&browser, choose(&tab, &cancelled, FileChoice::Cancelled)).await;
+  desktop
+    .serve(&browser, choose(&tab, &cancelled, FileChoice::Cancelled))
+    .await;
   let many = ask(&mut desktop, &browser, &tab, MANY).await;
-  assert!(many.multiple && many.accept.is_empty() && many.label.is_none(), "{many:?}");
+  assert!(
+    many.multiple && many.accept.is_empty() && many.label.is_none(),
+    "{many:?}"
+  );
   let both = files(&chosen, &["a.txt", "b.txt"]);
   desktop
     .serve(&browser, choose(&tab, &many, FileChoice::Chosen { paths: both }))
@@ -150,7 +163,12 @@ async fn browser_file_chooser_of_a_tab_that_navigates_is_dropped() {
 async fn asked_of_agent(browser: &ProjectBrowser, run: RunId, target: &TargetId) -> Vec<String> {
   tokio::time::timeout(PATIENCE, async {
     loop {
-      let asked = browser.tab(run, Some(target)).await.expect("the run's tab").log().take_dialogs();
+      let asked = browser
+        .tab(run, Some(target))
+        .await
+        .expect("the run's tab")
+        .log()
+        .take_dialogs();
       if !asked.is_empty() {
         return asked;
       }
@@ -208,9 +226,10 @@ async fn browser_file_chooser_of_an_agents_tab_is_cancelled_and_told_to_the_agen
   )
   .await;
   assert_eq!(chosen, 0, "no file was set");
-  let told = desktop.received().iter().any(|event| {
-    matches!(event, BrowserEvent::FileChooserOpened { tab, .. } if *tab == tab_of(&target))
-  });
+  let told = desktop
+    .received()
+    .iter()
+    .any(|event| matches!(event, BrowserEvent::FileChooserOpened { tab, .. } if *tab == tab_of(&target)));
   assert!(!told, "the window is never asked for an agent's files");
   browser.stop().await;
 }
