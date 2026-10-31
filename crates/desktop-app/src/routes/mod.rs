@@ -2,7 +2,8 @@
 //! history keeps, so everything a person can go back to is part of it, its query included.
 //!
 //! Paths: `/` is All projects, `/add-project` Add project (`?folder=` the folder it starts with), `/join-team` Join a
-//! team (`?way=code` with a code, [`JoinWay`]) and
+//! team (`?way=code` with a code, `?way=projects` a joined team's shared projects, `?way=folder` linking one to a
+//! folder, [`JoinWay`]) and
 //! `/settings` the app's settings (`?tab=general`, `notifications`, `accounts` or `orchester` for Orchester Cloud;
 //! Automation without one, and `?ask=rotate-token` asks *Rotate the token?* there). A project's screens start at
 //! `/project/<id>`, its Overview (`?tab=` the tab of its task list), and add the screen's segment, e.g.

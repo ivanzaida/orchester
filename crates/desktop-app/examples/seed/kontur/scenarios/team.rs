@@ -54,6 +54,28 @@ pub fn download_failed(kontur: &mut Kontur) -> Result<(), SeedError> {
   mark(kontur, State::DownloadFailed)
 }
 
+/// With three folders beside the database to link the team's Kontur to, in `checkouts`: `kontur` matches its repository
+/// hint (06 `go2aM`), `kontur-fork` has another `origin` (13b `tDFeg`), `plain` is no repository (13 `sN8Pa`).
+pub fn shared_projects(kontur: &mut Kontur) -> Result<(), SeedError> {
+  mark(kontur, State::SharedProjects)?;
+  let checkouts = kontur.app_database.with_file_name("checkouts");
+  for (name, origin) in [
+    ("kontur", "https://github.com/acme/kontur.git"),
+    ("kontur-fork", "https://github.com/maria/kontur-fork.git"),
+  ] {
+    let folder = checkouts.join(name);
+    fs::create_dir_all(&folder).map_err(io(&folder))?;
+    git::init(&folder, &files::initial())?;
+    git::add_origin(&folder, origin)?;
+  }
+  let plain = checkouts.join("plain");
+  fs::create_dir_all(&plain).map_err(io(&plain))
+}
+
+pub fn shared_none(kontur: &mut Kontur) -> Result<(), SeedError> {
+  mark(kontur, State::NoSharedProjects)
+}
+
 fn mark(kontur: &mut Kontur, state: State) -> Result<(), SeedError> {
   kontur.catalogue()?;
   let marker = kontur.app_database.with_file_name(FILE);

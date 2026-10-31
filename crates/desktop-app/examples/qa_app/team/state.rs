@@ -26,10 +26,14 @@ pub enum State {
   Downloading,
   /// Joined, with Kontur linked and the download of its tasks refused.
   DownloadFailed,
+  /// Joined, with Kontur and Billing to pick and nothing linked; the seed leaves folders to link them to.
+  SharedProjects,
+  /// Joined, with no project the person is invited to.
+  NoSharedProjects,
 }
 
 impl State {
-  pub const ALL: [Self; 8] = [
+  pub const ALL: [Self; 10] = [
     Self::Join,
     Self::WrongCode,
     Self::ExpiredCode,
@@ -38,6 +42,8 @@ impl State {
     Self::Offer,
     Self::Downloading,
     Self::DownloadFailed,
+    Self::SharedProjects,
+    Self::NoSharedProjects,
   ];
 
   /// The seed's scenario of this state.
@@ -51,6 +57,8 @@ impl State {
       Self::Offer => "team-offer",
       Self::Downloading => "team-downloading",
       Self::DownloadFailed => "team-download-failed",
+      Self::SharedProjects => "team-shared-projects",
+      Self::NoSharedProjects => "team-shared-none",
     }
   }
 

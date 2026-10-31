@@ -106,11 +106,21 @@ pub fn route_json(route: &Route) -> Value {
       params.insert("server".to_owned(), json!(target.server.to_string()));
       params.insert("project".to_owned(), json!(target.slug()));
     }
-    Route::JoinTeam(way) => {
-      if way == &JoinWay::Code {
+    Route::JoinTeam(way) => match way {
+      JoinWay::Cloud => {}
+      JoinWay::Code => {
         params.insert("way".to_owned(), json!("code"));
       }
-    }
+      JoinWay::Projects(server) => {
+        params.insert("way".to_owned(), json!("projects"));
+        params.insert("server".to_owned(), json!(server.to_string()));
+      }
+      JoinWay::Folder(target) => {
+        params.insert("way".to_owned(), json!("folder"));
+        params.insert("server".to_owned(), json!(target.server.to_string()));
+        params.insert("project".to_owned(), json!(target.slug()));
+      }
+    },
     Route::AllProjects | Route::AddProject(_) | Route::Settings => {}
   }
   json!({ "name": name, "path": route.path(), "params": params })

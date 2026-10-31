@@ -68,7 +68,9 @@ fn seed_names_every_scenario_once() {
       "team-join-joined",
       "team-offer",
       "team-downloading",
-      "team-download-failed"
+      "team-download-failed",
+      "team-shared-projects",
+      "team-shared-none"
     ]
   );
   for name in names {

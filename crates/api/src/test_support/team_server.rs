@@ -110,6 +110,14 @@ impl TeamServer {
       .collect();
   }
 
+  /// The person owns the project at `slug`.
+  pub fn own(&self, slug: &str) {
+    let mut state = self.state.lock();
+    if let Some(project) = state.projects.iter_mut().find(|project| project["slug"] == slug) {
+      project["role"] = json!("owner");
+    }
+  }
+
   pub fn not_invited(&self) {
     self.state.lock().not_invited = true;
   }

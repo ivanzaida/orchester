@@ -45,8 +45,52 @@ pub fn prepare(state: State, services: &Services, runtime: &Handle) -> Result<Te
       let kontur = join_linked(&server, services, runtime, TasksAnswer::Hold)?;
       keep_downloading(services.servers.clone(), runtime, kontur);
     }
+    State::SharedProjects => {
+      server.share(&[
+        ("Kontur", SLUG, Some("github.com/acme/kontur")),
+        ("Billing", "billing", Some("github.com/acme/billing")),
+      ]);
+      server.own("billing");
+      let address = add(&server, services, runtime)?.0;
+      join(&address, services, runtime)?;
+    }
+    State::NoSharedProjects => {
+      server.share(&[]);
+      let address = add(&server, services, runtime)?.0;
+      join(&address, services, runtime)?;
+    }
   }
   Ok(server)
+}
+
+/// Adds `server` to the list; its address and id.
+fn add(
+  server: &TeamServer,
+  services: &Services,
+  runtime: &Handle,
+) -> Result<(ServerAddress, ServerId), Box<dyn Error>> {
+  let address = ServerAddress::parse(&server.url())?;
+  let id = runtime.block_on(services.servers.add(&address, TEAM.to_owned(), PlainHttp::NotAllowed))?;
+  Ok((address, id))
+}
+
+/// Joins the server at `address` with the code.
+fn join(address: &ServerAddress, services: &Services, runtime: &Handle) -> Result<(), Box<dyn Error>> {
+  let request = CodeRequest {
+    code: Credential::new(CODE.to_owned()),
+    username: Some(USERNAME.to_owned()),
+    display_name: None,
+    proof: None,
+  };
+  let outcome = runtime.block_on(services.team_join.join_by_code(
+    address,
+    Trust::System(PlainHttp::NotAllowed),
+    request,
+  ))?;
+  match outcome {
+    JoinOutcome::Joined(_) => Ok(()),
+    other => Err(format!("the stand-in team did not take its code: {other:?}").into()),
+  }
 }
 
 /// Adds `server` to the list, links the session's Kontur to the team's and joins with the code, its tasks answered as
@@ -65,24 +109,10 @@ fn join_linked(
     .find(|project| project.name.as_str() == "Kontur")
     .ok_or("the session has Kontur")?
     .repo_root;
-  let address = ServerAddress::parse(&server.url())?;
-  let id = runtime.block_on(services.servers.add(&address, TEAM.to_owned(), PlainHttp::NotAllowed))?;
+  let (address, id) = add(server, services, runtime)?;
   link(&kontur, server, id)?;
-  let request = CodeRequest {
-    code: Credential::new(CODE.to_owned()),
-    username: Some(USERNAME.to_owned()),
-    display_name: None,
-    proof: None,
-  };
-  let outcome = runtime.block_on(services.team_join.join_by_code(
-    &address,
-    Trust::System(PlainHttp::NotAllowed),
-    request,
-  ))?;
-  match outcome {
-    JoinOutcome::Joined(_) => Ok(kontur),
-    other => Err(format!("the stand-in team did not take its code: {other:?}").into()),
-  }
+  join(&address, services, runtime)?;
+  Ok(kontur)
 }
 
 /// Links the project at `repo` to the team's Kontur on `server`, with nothing of it cached yet.
