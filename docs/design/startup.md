@@ -98,10 +98,18 @@ projects* tab. Controls are instances of `Button/*` (`iBDdP`, `O1AstI`, `YaUJX`,
     (`clone_command`), has no panel and the words do not point to one.
   - **Already linked.** *Continue with Kontur* opens a project a checkout on this computer is linked to, past *Link a
     folder*. No frame draws this.
+- Decisions 1–3 as built (`crates/desktop-app/src/screens/all_projects/welcome.rs` and `welcome/`):
+  - **Choose folder….** It picks a folder: one that keeps a project opens it, a git repository Orchester has not set
+    up (or a folder in none) opens Add project on it, and any other refusal says why under the ways in All projects'
+    error line (`FV5pQ`), which no startup frame draws.
+  - **The third way.** Signed in, it names the first team of the account this computer joined, how many of its
+    projects are the person's once read (none is said when it can't be read), and leads to them; the invites waiting
+    show as a badge. Before a team is joined it leads to *Join a team* (choice B as proposed).
+  - **Signed out.** While the sign-in gate is on (until ORC-132), a window signed out shows only the gate, so 01's
+    *Sign in* and its no-account line are reached once the gate makes way.
 - Decision 9 as built (`crates/desktop-app/src/screens/all_projects/agent_cli.rs`):
-  - **Where.** The callout `SIbdo` and fix row `U4QvYO` of frame 14 `mruEH` sit on today's Welcome (`UQZRa`) and above
-    All projects' list, 1120 wide rather than the frame's 1040. The first-start page frame 14 is drawn on (01 `H9CZ1`)
-    is not built, so its Head, Ways, Local note and Footer are not either.
+  - **Where.** The callout `SIbdo` and fix row `U4QvYO` of frame 14 `mruEH` sit under the first start's ways (01
+    `H9CZ1`) and above All projects' list, 1040 and 1120 wide.
   - **A first start has no connection to fix.** The chosen file is kept in the application database (`ui_state`,
     `orchester-app.agentProgram.<program>`) and offered in Add connection.
   - **What counts as not found.** With listed projects, a CLI connection's program file is gone and the search path has

@@ -77,6 +77,47 @@
     "showDataFolder": "Show data folder",
     "showFolder": "Show folder",
     "log": "Log: {{path}}",
+    "start": {
+      "eyebrow": "WELCOME TO ORCHESTER",
+      "title": "How do you want to start?",
+      "lead": "Orchester gives your tasks to coding agents, each in its own worktree, and brings the result back for you to review.",
+      "folder": {
+        "title": "Add a project from a folder",
+        "body": "Pick a git repository on this computer. Orchester keeps the project's tasks, agents and settings next to it.",
+        "meta": "On this computer · no account",
+        "choose": "Choose folder…",
+        "chooseTitle": "Choose the folder of a git repository"
+      },
+      "join": {
+        "title": "Join a team",
+        "body": "Sign in with Orchester Cloud to see your teams, or enter a pairing code a teammate gives you.",
+        "bodySignedIn": "Pick one of your teams, or enter a pairing code a teammate gives you.",
+        "meta": "Orchester Cloud or a code",
+        "signIn": "Sign in",
+        "yourTeams": "Your teams",
+        "useCode": "Use a code"
+      },
+      "shared": {
+        "title": "Open a team's shared project",
+        "body": "Have an invite or a project address? Pick the project and link it to a folder; you join its team on the way.",
+        "meta": "Needs a team · join on the way",
+        "joined": {
+          "one": "{{team}} shares 1 project with you. Pick it and link it to a folder; its tasks download here.",
+          "other": "{{team}} shares {{count}} projects with you. Pick one and link it to a folder; its tasks download here.",
+          "none": "{{team}} shares no project with you yet. Once one invites you, pick it here and link it to a folder.",
+          "unknown": "Pick one of {{team}}'s projects and link it to a folder; its tasks download here."
+        },
+        "metaJoined": "Joined · {{team}}",
+        "choose": "Choose project…",
+        "invites": {
+          "one": "1 invite",
+          "other": "{{count}} invites"
+        }
+      },
+      "local": "No account is needed to work on this computer. Orchester Cloud is only for team features.",
+      "localSignedIn": "Signed in as {{email}}. Local projects never need the account.",
+      "footer": "Projects, tasks, runs and worktrees stay on this computer. A team server keeps only a shared project's tasks and settings."
+    },
     "crumbs": {
       "start": "Start"
     },

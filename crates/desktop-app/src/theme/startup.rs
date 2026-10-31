@@ -1,7 +1,7 @@
 //! The design values of the startup screens (`Startup · Orchester is already open` `g0Kj1`, `Startup ·
-//! Orchester can't open its data` `kMM56` and the variants board `ut8NI`) and of the start page's steps (`Startup ·
-//! redesign` `qzzYw`: *Join a team* `B914L`, `drCQd`, the first download `YN6MO`) that the UI kit's roles do not carry,
-//! registered as lurq `Extra` roles.
+//! Orchester can't open its data` `kMM56` and the variants board `ut8NI`) and of the start page and its steps
+//! (`Startup · redesign` `qzzYw`: the first start `H9CZ1`, *Join a team* `B914L`, `drCQd`, the first download `YN6MO`)
+//! that the UI kit's roles do not carry, registered as lurq `Extra` roles.
 
 use std::sync::Arc;
 
@@ -62,10 +62,20 @@ pub enum StartupText {
   ProjectAddress,
   /// 12 `text_secondary`, line 17: what the folder's check found, beside its mark (`tHuij`).
   CheckLine,
+  /// 26/600 `text_primary`, 1.25, tracking -0.5: the first start's question (`HZTFS` in 01 `H9CZ1`).
+  StartTitle,
+  /// 16/600 `text_primary`, 1.3: a way in's title on its card (`YPoQx`).
+  CardTitle,
+  /// 12.5 `text_secondary`, 1.5: what a way in is, under its title (`nTfuL`).
+  CardBody,
+  /// 11.5 `text_muted`, 1.3: what a way in needs, over its actions (`zbB97`).
+  CardMeta,
+  /// 11.5 `text_muted`, 1.4: what stays on this computer, in the first start's footer (`Z9Zql0`).
+  Footer,
 }
 
 impl StartupText {
-  pub const ALL: [Self; 22] = [
+  pub const ALL: [Self; 27] = [
     Self::TileIcon,
     Self::Crumb,
     Self::CrumbCurrent,
@@ -88,6 +98,11 @@ impl StartupText {
     Self::ProjectName,
     Self::ProjectAddress,
     Self::CheckLine,
+    Self::StartTitle,
+    Self::CardTitle,
+    Self::CardBody,
+    Self::CardMeta,
+    Self::Footer,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -118,6 +133,11 @@ impl StartupText {
       Self::ProjectName => "startup_project_name",
       Self::ProjectAddress => "startup_project_address",
       Self::CheckLine => "startup_check_line",
+      Self::StartTitle => "startup_start_title",
+      Self::CardTitle => "startup_card_title",
+      Self::CardBody => "startup_card_body",
+      Self::CardMeta => "startup_card_meta",
+      Self::Footer => "startup_footer",
     }
   }
 
@@ -149,6 +169,11 @@ impl StartupText {
       Self::ProjectName => style(13.0, FontWeight::Medium, 18.0 / 13.0, 0.0, primary),
       Self::ProjectAddress => mono(style(12.0, FontWeight::Normal, 16.0 / 12.0, 0.0, secondary)),
       Self::CheckLine => style(12.0, FontWeight::Normal, 17.0 / 12.0, 0.0, secondary),
+      Self::StartTitle => style(26.0, FontWeight::SemiBold, 1.25, -0.5, primary),
+      Self::CardTitle => style(16.0, FontWeight::SemiBold, 1.3, 0.0, primary),
+      Self::CardBody => style(12.5, FontWeight::Normal, 1.5, 0.0, secondary),
+      Self::CardMeta => style(11.5, FontWeight::Normal, 1.3, 0.0, muted),
+      Self::Footer => style(11.5, FontWeight::Normal, 1.4, 0.0, muted),
     }
   }
 }
@@ -170,10 +195,12 @@ pub enum StartupSpacing {
   Row,
   /// 26: what an option holds, past its 16 radio and the 10 after it (`Body` `X2MDcb`).
   OptionIndent,
+  /// 10: between the mark, the eyebrow, the question and the lead of the first start (`Head` `A03a5`).
+  Head,
 }
 
 impl StartupSpacing {
-  pub const ALL: [Self; 7] = [
+  pub const ALL: [Self; 8] = [
     Self::Block,
     Self::Panel,
     Self::Page,
@@ -181,6 +208,7 @@ impl StartupSpacing {
     Self::Steps,
     Self::Row,
     Self::OptionIndent,
+    Self::Head,
   ];
 
   pub fn role(self) -> SpacingSize {
@@ -196,6 +224,7 @@ impl StartupSpacing {
       Self::Steps => "startup_steps",
       Self::Row => "startup_row",
       Self::OptionIndent => "startup_option_indent",
+      Self::Head => "startup_head",
     }
   }
 
@@ -205,7 +234,7 @@ impl StartupSpacing {
       Self::Panel => 40.0,
       Self::Page => 28.0,
       Self::PageSide => 56.0,
-      Self::Steps | Self::Row => 10.0,
+      Self::Steps | Self::Row | Self::Head => 10.0,
       Self::OptionIndent => 26.0,
     }
   }

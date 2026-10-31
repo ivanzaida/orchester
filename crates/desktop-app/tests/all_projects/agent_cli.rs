@@ -27,7 +27,7 @@ use super::{
 const CLI: &str = "start-cli";
 const CALLOUT: &str = "start-cli-callout";
 const ERROR: &str = "start-cli-error";
-/// The welcome's footer (`N3VzU`), under what it centres.
+/// The first start's footer (`JSWOZ`), under what it centres.
 const FOOTER_HEIGHT: f32 = 56.0;
 
 /// A stand-in `name` in `folder` that answers `--version` with `version_line`.
@@ -122,7 +122,7 @@ fn settle(window: &mut Window) {
 fn all_projects_agent_cli_shows_on_the_welcome_as_drawn() {
   let (mut window, stand_ins) = Window::with_stand_ins(Data::new());
   window.until("the warning", |window| shows(window, CLI));
-  assert!(shows(&mut window, "welcome-introduction"), "the welcome stays");
+  assert!(shows(&mut window, "welcome-head"), "the first start stays");
   assert_eq!(
     window.text("start-cli-callout-title"),
     "claude isn't found on this computer"
@@ -274,7 +274,7 @@ fn all_projects_agent_cli_first_start_goes_once_a_file_is_chosen() {
   stand_ins.choose(Some(write_claude(folder.path())));
   window.press("start-cli-choose");
   window.until("the warning to go", |window| !shows(window, CLI));
-  assert!(shows(&mut window, "welcome-introduction"), "the welcome stays");
+  assert!(shows(&mut window, "welcome-head"), "the first start stays");
   assert!(!shows(&mut window, "welcome-scroll"), "and needs no scroll without it");
 }
 
@@ -391,23 +391,23 @@ fn all_projects_agent_cli_welcome_scrolls_at_the_smallest_window() {
   );
 }
 
-/// In a window with room to spare the welcome and the warning stay centred above the footer, as the welcome alone does.
+/// In a window with room to spare the first start and the warning stay centred above the footer, as the first start
+/// alone does.
 #[test]
 fn all_projects_agent_cli_welcome_stays_centred_in_a_large_window() {
   let (mut window, _stand_ins) = Window::with_stand_ins(Data::new());
   window.until("the warning", |window| shows(window, CLI));
   window.tree.resize(1440, 900);
   window.pass();
-  let (screen, introduction, steps, fix) = (
+  let (screen, head, fix) = (
     bounds(&mut window, "screen-all_projects"),
-    bounds(&mut window, "welcome-introduction"),
-    bounds(&mut window, "welcome-steps"),
+    bounds(&mut window, "welcome-head"),
     bounds(&mut window, "start-cli-fix"),
   );
-  let above = introduction.y.min(steps.y) - screen.y;
+  let above = head.y - screen.y;
   let below = screen.y + screen.height - FOOTER_HEIGHT - (fix.y + fix.height);
   assert!(
     (above - below).abs() < 1.0,
-    "{above} above and {below} below: {screen:?} {introduction:?} {steps:?} {fix:?}"
+    "{above} above and {below} below: {screen:?} {head:?} {fix:?}"
   );
 }
