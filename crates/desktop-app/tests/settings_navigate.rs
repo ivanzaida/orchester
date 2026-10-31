@@ -186,6 +186,7 @@ fn settings_navigate_routes_keep_their_step_and_question() {
       panel: OrchesterPanel::Connect,
       step: ConnectStep::Compare,
       ask: None,
+      at: None,
     },
     OrchesterView {
       ask: Some(OrchesterAsk::Decline(invite)),
@@ -194,6 +195,11 @@ fn settings_navigate_routes_keep_their_step_and_question() {
     OrchesterView {
       ask: Some(OrchesterAsk::SignOut),
       ..OrchesterView::server(server)
+    },
+    OrchesterView {
+      panel: OrchesterPanel::Invites,
+      at: Some(invite),
+      ..OrchesterView::default()
     },
   ];
   for view in views {

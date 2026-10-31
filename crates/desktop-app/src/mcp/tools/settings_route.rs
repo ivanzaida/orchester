@@ -256,6 +256,7 @@ fn connect(args: &Map<String, Value>, lookup: Option<&Lookup>) -> Result<Orchest
     panel: OrchesterPanel::Connect,
     step,
     ask: None,
+    at: None,
   })
 }
 

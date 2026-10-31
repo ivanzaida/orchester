@@ -97,6 +97,13 @@ Name: "{autodesktop}\Orchester"; Filename: "{app}\orchester.exe"; WorkingDir: "{
 ; The app registers its notifications' AppUserModelID itself on every start (crates/desktop-app/src/notifications);
 ; the uninstaller removes that registration and never creates it.
 Root: HKCU; Subkey: "Software\Classes\AppUserModelId\Orchester.App"; Flags: uninsdeletekey dontcreatekey
+; The orchester:// link (docs/architecture/server.md, "Accepting outside Orchester"; crates/desktop-app/src/open_link),
+; per user, removed by the uninstaller. Only this installer registers it, never the app, so a development build, a QA
+; copy or a zip install never takes links; installing into another folder takes them over.
+Root: HKCU; Subkey: "Software\Classes\orchester"; ValueType: string; ValueName: ""; ValueData: "URL:Orchester link"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\orchester"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""
+Root: HKCU; Subkey: "Software\Classes\orchester\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: """{app}\orchester.exe"",0"
+Root: HKCU; Subkey: "Software\Classes\orchester\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\orchester.exe"" --open-link ""%1"""
 
 [Run]
 Filename: "{app}\orchester.exe"; Description: "{cm:LaunchProgram,Orchester}"; Flags: nowait postinstall skipifsilent

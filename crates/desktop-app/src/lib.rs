@@ -19,6 +19,7 @@ pub mod lifecycle;
 pub mod mcp;
 pub mod navigation;
 pub mod notifications;
+pub mod open_link;
 pub mod project;
 pub mod root;
 pub mod routes;

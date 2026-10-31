@@ -4,6 +4,13 @@
       "name": "Orchester",
       "windowTitle": "{{tab}} — Orchester"
     },
+    "link": {
+      "unknown": {
+        "title": "This link isn't for anything here",
+        "body": "Orchester was opened from a link it has nothing for. Nothing was changed.",
+        "dismiss": "Dismiss"
+      }
+    },
     "notifications": {
       "badge": {
         "one": "{{count}} thing needs you",

@@ -39,7 +39,7 @@ pub mod reference_picker;
 pub mod updates;
 
 use self::links::Links;
-use crate::{mcp::chat::ChatServers, project::hold::ReadHold};
+use crate::{mcp::chat::ChatServers, open_link::LinkInbox, project::hold::ReadHold};
 
 /// The session's services. Every field is a handle: clones share the same workspace, runners and
 /// operations.
@@ -87,6 +87,9 @@ pub struct Services {
   /// This copy's updates: Settings › Updates and where its update stands. Orchester Cloud is asked only once the app's
   /// own program started the checks (`Launch::check_for_updates`), never in a test or a QA example.
   pub updates: AppUpdates,
+  /// The `orchester://` links the window opens: the one the program started with and those other programs hand over,
+  /// once the app's own program takes them (`Launch::take_links`); a test puts its own in.
+  pub opened_links: LinkInbox,
 }
 
 /// Services are the session's: two are equal when they share its workspace.
@@ -140,6 +143,7 @@ impl Services {
       session_start: session.started_at(),
       chat_tools: ChatServers::default(),
       editor: Editor::find(),
+      opened_links: LinkInbox::default(),
     }
   }
 

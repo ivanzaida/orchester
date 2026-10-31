@@ -40,5 +40,5 @@ pub use message::{
   AttachSession, Command, Event, RefusedRun, Reply, Request, RequestId, SessionEnd, ShutdownMode, WorkReturn,
 };
 pub use rejection::Rejection;
-pub use transport::{ClientStream, Endpoint, ServerStream, server_process_id};
+pub use transport::{ClientStream, Endpoint, ServerStream, fnv1a, server_process_id};
 pub use work::{RunWork, WorkState, WorkSummary};

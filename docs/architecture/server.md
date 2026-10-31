@@ -1620,9 +1620,10 @@ Row 43.
 
 #### Accepting outside Orchester
 
-Row 77 (ORC-576, 2026-10-31). Not built: the cloud's Invites page shows *Accept in Orchester* disabled, the desktop
-registers no `orchester://` scheme, and someone who works only in the team server's web app (members work on tasks in
-the browser too, 2026-10-27) cannot accept at all.
+Row 77 (ORC-576, 2026-10-31). Not built: the cloud's Invites page shows *Accept in Orchester* disabled, and someone
+who works only in the team server's web app (members work on tasks in the browser too, 2026-10-27) cannot accept at
+all. The desktop's side of the `orchester://` link below is built on Windows (ORC-578: the installer's registration,
+the hand-over pipe, `crates/desktop-app/src/open_link`); macOS takes no links yet.
 
 **What the cloud's Invites page offers.** Each waiting invite has three actions, in this order:
 
