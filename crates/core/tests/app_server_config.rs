@@ -57,7 +57,8 @@ fn config_read_without_layers_cannot_be_checked() {
   );
 }
 
-/// A server of the user's own configuration named like a chosen one would merge with it.
+/// A server of the user's own configuration with the name Codex gets a chosen one by would merge with it: one the
+/// configuration did not have when the step's servers were named apart from the user's (`CodexMcp::named_apart`).
 #[test]
 fn config_read_user_server_named_like_a_chosen_one_refuses_the_step() {
   let selected = BTreeSet::from(["docs".to_owned()]);

@@ -62,6 +62,8 @@ Workspace layout:
 - `crates/exec` (`orchester-exec`): runs external programs (git, gh, agent CLIs) for the desktop and the runner,
   implementing core's `CommandRunner`. Platform details (hidden console window, process groups and kill, the macOS
   program search path) stay behind `cfg` here.
+- `crates/release` (`orchester-release`): CI's release tool, which signs the app's release files with the release key
+  and uploads them to Orchester Cloud (`docs/stable-build.md`, "Releases from CI"). Not part of the app.
 - Orchester Cloud (`crates/cloud`, `web/cloud` with the orchester.cloud website, `deploy/cloud`, its image workflow
   and `docs/cloud-hosting.md`) moved to the private repository `ivanzaida/orchester-cloud` on 2026-10-27; docs here
   that name those paths mean that repository. Its API contract stays here: `orchester-api` and `docs/cloud-api.md`,

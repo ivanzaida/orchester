@@ -14,10 +14,10 @@ use crate::releases::{
 };
 
 impl CloudClient {
-  /// `GET /admin/releases`: every release, newest version first.
-  pub async fn admin_releases(&self, device: &SecretValue) -> Result<Vec<ReleaseSummary>, ClientError> {
+  /// `GET /admin/releases`: every release, newest version first, and the active installs by channel.
+  pub async fn admin_releases(&self, device: &SecretValue) -> Result<ReleasesResponse, ClientError> {
     let request = bearer(self.request(Method::GET, "/admin/releases")?, device);
-    call::<ReleasesResponse>(request).await.map(|answer| answer.releases)
+    call::<ReleasesResponse>(request).await
   }
 
   /// `GET /admin/releases/{version}`: one release with its files, adoption and history.
@@ -56,7 +56,8 @@ impl CloudClient {
     changed(bearer(request, device)).await
   }
 
-  /// `POST /admin/releases/{version}/pause`: a Stable release is offered to no Stable install until it is resumed.
+  /// `POST /admin/releases/{version}/pause`: the channel the stage names stops offering the release until it is
+  /// resumed, Beta for a `beta` release and Stable for a `stable` one.
   pub async fn pause_release(
     &self,
     device: &SecretValue,

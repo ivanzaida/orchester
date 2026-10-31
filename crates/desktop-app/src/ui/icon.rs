@@ -77,6 +77,8 @@ icons! {
   ChevronsUpDown => '\u{e211}',
   Circle => '\u{e076}',
   CircleAlert => '\u{e077}',
+  // The font's `arrow-up-circle`.
+  CircleArrowUp => '\u{e07b}',
   CircleCheck => '\u{e226}',
   CircleDashed => '\u{e4b0}',
   CircleDot => '\u{e345}',

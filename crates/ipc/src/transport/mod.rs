@@ -22,8 +22,8 @@ pub use self::windows::{ClientStream, Endpoint, ServerStream};
 pub use crate::pipe_owner::server_process_id;
 
 /// 64-bit FNV-1a. Stable across builds, unlike `std`'s `DefaultHasher`, which matters because
-/// both processes must compute the same name.
-fn fnv1a(bytes: &[u8]) -> u64 {
+/// both processes must compute the same name. The app's `orchester://` link pipe names its data folder by it too.
+pub fn fnv1a(bytes: &[u8]) -> u64 {
   const OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
   const PRIME: u64 = 0x0000_0100_0000_01b3;
   bytes

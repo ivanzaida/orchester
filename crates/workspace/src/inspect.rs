@@ -8,6 +8,8 @@ macro_rules! markers {
     impl $inspect for crate::accounts::NewAccount {}
     impl $inspect for crate::tasks::plan_limit::PlanStop {}
     impl $inspect for crate::activity::Activity {}
+    impl $inspect for crate::app_updates::AppUpdates {}
+    impl $inspect for crate::app_updates::UpdateState {}
     impl $inspect for crate::activity::ActivityLog {}
     impl $inspect for crate::activity::OperationSpec {}
     impl $inspect for crate::agents::data::ProfileChange {}

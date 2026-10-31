@@ -56,8 +56,9 @@ orchester-report = { workspace = true, features = ["switch"] }
 # app's settings.
 orchester-store.workspace = true
 # The wire types Settings › Orchester shows (invites, a server's answer, the cloud's and servers' refusals), as
-# `orchester-workspace` hands them over; the client feature for the server addresses and client errors it carries.
-orchester-api = { workspace = true, features = ["client"] }
+# `orchester-workspace` hands them over; the client feature for the server addresses and client errors it carries; the
+# release keys built into the app (`updates`), with `release-signature`.
+orchester-api = { workspace = true, features = ["client", "release-signature"] }
 # The application layer the deprecated desktop shares: the session, projects, runners, activity and
 # project data. Its DevTools markers, because its types are component props and signal values here.
 orchester-workspace = { workspace = true, features = ["devtools-inspect"] }

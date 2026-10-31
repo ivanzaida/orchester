@@ -72,7 +72,10 @@ fn tabs(
     tab_to(
       "settings-tab-general",
       ctx.t("settings.tabs.general"),
-      (tab == SettingsTab::General, true),
+      match tab {
+        SettingsTab::General(show) => (true, show.is_none()),
+        _ => (false, true),
+      },
       Route::General,
     ),
     tab_to(

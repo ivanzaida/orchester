@@ -8,7 +8,9 @@ use orchester_core::{
   connection::{
     AgentProvider,
     claude_approval::{ClaudeApprovalScope, PROMPT_TOOL},
-    invocation::{ClaudeInvocation, ClaudeSession, InvocationError, Platform, input_line, result_schema},
+    invocation::{
+      CLAUDE_NO_AUTO_MEMORY, ClaudeInvocation, ClaudeSession, InvocationError, Platform, input_line, result_schema,
+    },
   },
   permission::{
     AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess,
@@ -540,7 +542,10 @@ fn claude_invocation_command_runs_in_the_worktree_without_the_agent_hosts_variab
   assert_eq!(line["message"]["content"][0]["text"], "Do it");
   assert!(!command.inherits_env());
   let names: Vec<&str> = command.env().iter().map(|(name, _)| name.as_str()).collect();
-  assert_eq!(names, ["PATH", "USERPROFILE", "CLAUDE_CONFIG_DIR"]);
+  assert_eq!(
+    names,
+    ["PATH", "USERPROFILE", "CLAUDE_CONFIG_DIR", CLAUDE_NO_AUTO_MEMORY.0]
+  );
 }
 
 #[test]
@@ -563,6 +568,7 @@ fn claude_invocation_command_adds_the_project_variables() {
     [
       ("PATH".to_owned(), "/usr/bin".to_owned()),
       ("CARGO_TARGET_DIR".to_owned(), "/repo/.orchester/target".to_owned()),
+      (CLAUDE_NO_AUTO_MEMORY.0.to_owned(), CLAUDE_NO_AUTO_MEMORY.1.to_owned()),
     ]
   );
 }

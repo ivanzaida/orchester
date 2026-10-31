@@ -44,6 +44,10 @@ impl ReleasePublicKey {
   pub fn as_bytes(&self) -> &[u8; 32] {
     &self.bytes
   }
+
+  pub fn to_hex(&self) -> String {
+    hex::encode(&self.bytes)
+  }
 }
 
 /// The release keys an app has built in, or the cloud is configured with: the current key and, while one replaces

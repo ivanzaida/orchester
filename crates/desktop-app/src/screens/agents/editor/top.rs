@@ -12,22 +12,28 @@ use orchester_workspace::{agents::data::ProfileEntry, sharing::team::TeamConfigu
 
 use super::{
   super::{
-    page_head,
+    entries, page_head,
     questions::{self, Asking},
+    shared::ConnectionHere,
   },
   Ask, Editor, Props, State,
 };
 use crate::{
   screens::hub::{discard, removal, team},
   theme::HubSpacing,
+  ui::icon::Icon,
 };
 
 impl Editor {
+  /// `here` is what the head's line says of this computer and `bars` follow the head: what is missing on this
+  /// computer, a version that widens (04, 02d, 06); `connection`, the team's connection as this computer has it, gives
+  /// the head its mark while it is missing here.
   pub(super) fn top(
     &self,
     ctx: &mut Ctx,
     props: &Props,
     (state, team): (&State, Option<&TeamConfiguration>),
+    (bars, here, connection): (Vec<Element>, Option<team::Here>, Option<&ConnectionHere>),
   ) -> Column {
     // A member of a shared project removes none of the team's profiles.
     let more = state
@@ -44,18 +50,21 @@ impl Editor {
       });
     let shared = team.zip(state.saved.as_ref()).and_then(|(team, entry)| {
       let standing = team.standing(entry.id)?;
-      Some(team::head_line(
+      Some(team::head_line_with(
         ctx,
         "agent-team-state",
-        team,
-        standing,
-        team::draft_on(entry.state),
+        (team, standing, team::draft_on(entry.state)),
+        here,
       ))
     });
     let versions = state
       .saved
       .as_ref()
       .and_then(|entry| team::member_versions(ctx, "agent", (&props.project, team), entry.id));
+    // The team's connection missing here still shows its CLI's mark, or an API's (`FNW1M` in 04, `qQCQN` in 06c).
+    let glyph = connection
+      .filter(|connection| connection.local.is_none())
+      .map(|connection| connection.cli.map_or(Icon::Cloud, entries::cli_glyph));
     Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(HubSpacing::Row.role())
@@ -63,9 +72,10 @@ impl Editor {
       .child(page_head::head(
         ctx,
         (&self.fields, &props.listed),
-        more,
+        (more, glyph),
         (shared, versions),
       ))
+      .with_children(bars)
       .with_children(self.remove_question(ctx, props, state))
       .child(self.bar_or_question(ctx, props, (state, team)))
       .with_children(self.notices(ctx, props, state))

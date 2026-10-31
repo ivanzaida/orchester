@@ -1,15 +1,16 @@
 //! The MCP servers of one agent invocation, as each CLI is given them (`docs/design/orchester-workspace.md`,
 //! "MCP servers"; checked against Codex CLI 0.139 and Claude Code 2.1.89 on 2026-09-28):
 //!
-//! - **Codex**: configuration overrides next to `--ignore-user-config`, which keeps the user's own servers out: `-c
-//!   mcp_servers.<name>.command=… .args=[…] .cwd=… .env.<VAR>=…` for a program, `-c mcp_servers.<name>.url=…` for an
-//!   HTTP server. A value from a secret never goes into an argument: the variable is set on the Codex process and
-//!   listed in `mcp_servers.<name>.env_vars`, which hands it to the server (Codex starts a server with a few system
-//!   variables, its `env` and its `env_vars` only), a bearer token goes the same way through `bearer_token_env_var`,
-//!   and another header's value through `env_http_headers = { "<header>" = "<VAR>" }` (Codex 0.137 lists it in `codex
-//!   mcp list --json`, 2026-10-25). `shell_environment_policy.exclude` kept a test variable out of an agent shell
-//!   command in a signed-in Codex 0.139 turn (2026-09-29). Because variables pass by name, two servers cannot take one
-//!   name from different secrets, and a secret variable cannot be one the CLI itself needs.
+//! - **Codex**: configuration overrides, `-c mcp_servers.<name>.command=… .args=[…] .cwd=… .env.<VAR>=…` for a program,
+//!   `-c mcp_servers.<name>.url=…` for an HTTP server; the user's own servers are turned off for the thread
+//!   (`crate::connection::app_server_mcp`), and a server named like one of theirs gets another name in Codex
+//!   ([`CodexMcp::named_apart`]). A value from a secret never goes into an argument: the variable is set on the Codex
+//!   process and listed in `mcp_servers.<name>.env_vars`, which hands it to the server (Codex starts a server with a
+//!   few system variables, its `env` and its `env_vars` only), a bearer token goes the same way through
+//!   `bearer_token_env_var`, and another header's value through `env_http_headers = { "<header>" = "<VAR>" }` (Codex
+//!   0.137 lists it in `codex mcp list --json`, 2026-10-25). `shell_environment_policy.exclude` kept a test variable
+//!   out of an agent shell command in a signed-in Codex 0.139 turn (2026-09-29). Because variables pass by name, two
+//!   servers cannot take one name from different secrets, and a secret variable cannot be one the CLI itself needs.
 //! - **Claude Code**: `--strict-mcp-config --mcp-config <file>`, a JSON file the runner writes for the invocation only
 //!   and removes when the CLI has ended ([`ClaudeMcpConfig`]); secret values, a server's `headers` among them, are
 //!   written into it, nowhere else. Claude Code ignores a server's `cwd` and starts every server in the worktree, so a
@@ -18,7 +19,11 @@
 //! Values are TOML for Codex (`-c` parses them as TOML): strings are written as basic strings, so they need no
 //! shell, and pass the `.cmd` launcher only when it is npm's Node.js launcher, which is started directly.
 
-use std::{collections::BTreeMap, fmt, sync::Arc};
+use std::{
+  collections::{BTreeMap, BTreeSet},
+  fmt,
+  sync::Arc,
+};
 
 use serde::Serialize;
 use zeroize::Zeroizing;
@@ -157,11 +162,14 @@ pub fn token_variable(server: &McpServerName) -> String {
 /// The MCP arguments of a Codex invocation and the secret variables its process starts with.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct CodexMcp {
-  args: Vec<String>,
+  /// Each server's settings (`command`, `args`, …, each with its TOML value), whatever name Codex gets it by.
+  settings: Vec<(McpServerName, Vec<(String, String)>)>,
   secrets: Vec<SecretVariable>,
   /// Every secret value of the servers, to hide; not the process's variables.
   hidden: Vec<SecretVariable>,
   servers: Vec<McpServerName>,
+  /// The servers Codex gets by another name ([`Self::named_apart`]), with that name.
+  renamed: BTreeMap<McpServerName, String>,
   exemptions: InvocationExemptions,
   /// Orchester's own server, with the step's Orchester tools.
   orchester: Option<CodexOrchester>,
@@ -176,7 +184,7 @@ impl CodexMcp {
     for server in servers {
       match mcp.shared_secrets(server) {
         Ok(new) => {
-          mcp.add(server);
+          mcp.settings.push((server.name.clone(), settings(server)));
           mcp.secrets.extend(new);
           mcp.hidden.extend(server.hidden());
           mcp.servers.push(server.name.clone());
@@ -186,6 +194,53 @@ impl CodexMcp {
     }
     mcp.exemptions = exemptions(servers.iter().filter(|server| mcp.servers.contains(&server.name)));
     (mcp, left_out)
+  }
+
+  /// These servers, each one whose name `taken` holds (the MCP servers Codex's own configuration has) given to Codex
+  /// as `orchester-<name>`, numbered on (`orchester-<name>-2`, …) while that name is taken too: under its own name
+  /// Codex would merge the two servers' tables, so the user's `env`, `args` or `command` would reach the chosen one,
+  /// and a `url` of theirs next to a chosen `command` makes Codex refuse its whole configuration (Codex 0.159.2,
+  /// `docs/evidence/orc-547-codex-server-names-2026-10-30.md`).
+  #[must_use]
+  pub fn named_apart(mut self, taken: &BTreeSet<String>) -> Self {
+    let mut used: BTreeSet<String> = taken.iter().cloned().collect();
+    used.extend(self.servers.iter().map(ToString::to_string));
+    used.insert(crate::orchester_tools::SERVER.to_owned());
+    for server in self.servers.iter().filter(|server| taken.contains(server.as_str())) {
+      let base = format!("orchester-{server}");
+      let name = std::iter::once(base.clone())
+        .chain((2_u32..).map(|number| format!("{base}-{number}")))
+        .find(|name| !used.contains(name))
+        .expect("there are more numbered names than taken ones");
+      used.insert(name.clone());
+      self.renamed.insert(server.clone(), name);
+    }
+    self
+  }
+
+  /// The name Codex gets `server` by: its own unless [`Self::named_apart`] gave it another.
+  pub fn codex_name<'a>(&'a self, server: &'a McpServerName) -> &'a str {
+    self.renamed.get(server).map_or(server.as_str(), String::as_str)
+  }
+
+  /// The servers Codex gets by another name ([`Self::named_apart`]), with that name.
+  pub const fn renamed(&self) -> &BTreeMap<McpServerName, String> {
+    &self.renamed
+  }
+
+  /// What the agent is told of each server Codex gets by another name ([`Self::named_apart`]); `None` when none is.
+  pub fn renamed_prompt(&self) -> Option<String> {
+    let sentences: Vec<String> = self
+      .renamed
+      .iter()
+      .map(|(server, name)| {
+        format!(
+          "The MCP server `{server}` of this step is called `{name}` in this Codex session, because Codex's own \
+           configuration has another server named `{server}`, turned off for you: use `{name}`'s tools for it."
+        )
+      })
+      .collect();
+    (!sentences.is_empty()).then(|| sentences.join(" "))
   }
 
   /// These servers and Orchester's own, `server`.
@@ -208,13 +263,20 @@ impl CodexMcp {
     self
   }
 
-  /// Arguments after the sandbox settings, in order: the servers, the approval of their exempt tools
-  /// ([`approved_tools`]), then the secret variables kept out of the agent's shell commands.
+  /// Arguments after the sandbox settings, in order: the servers, each under its name in Codex ([`Self::codex_name`]),
+  /// the approval of their exempt tools ([`approved_tools`]), then the secret variables kept out of the agent's shell
+  /// commands.
   pub fn args(&self) -> Vec<String> {
-    let mut args = self.args.clone();
+    let mut args = Vec::new();
+    for (server, settings) in &self.settings {
+      let key = format!("mcp_servers.{}", self.codex_name(server));
+      for (field, value) in settings {
+        args.extend(["-c".to_owned(), format!("{key}.{field}={value}")]);
+      }
+    }
     for (server, tools) in self.exemptions.servers() {
       args.extend(approved_tools(
-        server.as_str(),
+        self.codex_name(server),
         tools.tools().iter().map(McpToolName::as_str),
       ));
     }
@@ -273,53 +335,53 @@ impl CodexMcp {
     }
     Ok(added)
   }
+}
 
-  fn add(&mut self, server: &McpLaunch) {
-    let key = format!("mcp_servers.{}", server.name);
-    let mut set = |field: &str, value: String| {
-      self.args.extend(["-c".to_owned(), format!("{key}.{field}={value}")]);
-    };
-    match &server.transport {
-      Transport::Stdio {
-        program,
-        args,
-        working_directory,
-        environment,
-      } => {
-        set("command", toml_string(program));
-        if !args.is_empty() {
-          set("args", toml_array(args));
-        }
-        if let Some(directory) = working_directory {
-          set("cwd", toml_string(directory));
-        }
-        let mut secret_names = Vec::new();
-        for (name, value) in environment {
-          match value {
-            LaunchValue::Text(text) => set(&format!("env.{name}"), toml_string(text)),
-            LaunchValue::Secret(_) => secret_names.push(name.as_str()),
-          }
-        }
-        if !secret_names.is_empty() {
-          set("env_vars", toml_array(&secret_names));
+/// `server`'s settings as Codex takes them, each field with its TOML value.
+fn settings(server: &McpLaunch) -> Vec<(String, String)> {
+  let mut settings = Vec::new();
+  let mut set = |field: &str, value: String| settings.push((field.to_owned(), value));
+  match &server.transport {
+    Transport::Stdio {
+      program,
+      args,
+      working_directory,
+      environment,
+    } => {
+      set("command", toml_string(program));
+      if !args.is_empty() {
+        set("args", toml_array(args));
+      }
+      if let Some(directory) = working_directory {
+        set("cwd", toml_string(directory));
+      }
+      let mut secret_names = Vec::new();
+      for (name, value) in environment {
+        match value {
+          LaunchValue::Text(text) => set(&format!("env.{name}"), toml_string(text)),
+          LaunchValue::Secret(_) => secret_names.push(name.as_str()),
         }
       }
-      Transport::Http { url, authorization } => {
-        set("url", toml_string(url.as_str()));
-        let variable = toml_string(&token_variable(&server.name));
-        match authorization {
-          HttpAuthorization::None => {}
-          HttpAuthorization::Bearer(_) => set("bearer_token_env_var", variable),
-          HttpAuthorization::Header { name, .. } => {
-            set(
-              "env_http_headers",
-              format!("{{{}={variable}}}", toml_string(name.as_str())),
-            );
-          }
+      if !secret_names.is_empty() {
+        set("env_vars", toml_array(&secret_names));
+      }
+    }
+    Transport::Http { url, authorization } => {
+      set("url", toml_string(url.as_str()));
+      let variable = toml_string(&token_variable(&server.name));
+      match authorization {
+        HttpAuthorization::None => {}
+        HttpAuthorization::Bearer(_) => set("bearer_token_env_var", variable),
+        HttpAuthorization::Header { name, .. } => {
+          set(
+            "env_http_headers",
+            format!("{{{}={variable}}}", toml_string(name.as_str())),
+          );
         }
       }
     }
   }
+  settings
 }
 
 /// The `--mcp-config` file of a Claude Code invocation: JSON with the servers' secret values in it.

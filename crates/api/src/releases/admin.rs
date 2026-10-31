@@ -4,7 +4,8 @@
 use serde::{Deserialize, Serialize};
 
 use super::{
-  Channel, FileDigest, ReleaseArch, ReleaseFileName, ReleaseKeyId, ReleasePlatform, ReleaseVersion, RolloutPercent,
+  Channel, CiRun, FileDigest, FileProgress, ReleaseArch, ReleaseFileName, ReleaseKeyId, ReleasePlatform,
+  ReleaseVersion, RolloutPercent,
 };
 
 /// Where a release is. A draft is being uploaded; a finalized release is on Beta until staff promote it to Stable at a
@@ -13,7 +14,12 @@ use super::{
 #[serde(tag = "stage", rename_all = "snake_case")]
 pub enum ReleaseStage {
   Draft,
-  Beta,
+  /// On Beta for all installs; a paused one is offered to no Beta install until it is resumed. A cloud before Beta
+  /// pausing leaves `paused` out.
+  Beta {
+    #[serde(default)]
+    paused: bool,
+  },
   /// On Stable for `percent` of installs ([`super::rollout_bucket`]), and on Beta for all; a paused one is offered to
   /// no Stable install until it is resumed.
   Stable {
@@ -24,14 +30,36 @@ pub enum ReleaseStage {
 }
 
 impl ReleaseStage {
-  /// The channels the release is offered on now (a paused Stable release still on Beta).
+  /// The channels the release is on (a paused release still on its channels).
   pub fn channels(self) -> &'static [Channel] {
     match self {
       Self::Draft | Self::Withdrawn => &[],
-      Self::Beta => &[Channel::Beta],
+      Self::Beta { .. } => &[Channel::Beta],
       Self::Stable { .. } => &[Channel::Stable, Channel::Beta],
     }
   }
+}
+
+/// Active installs split by the channel each follows, as its newest update check named it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ChannelInstalls {
+  pub stable: u64,
+  pub beta: u64,
+}
+
+impl ChannelInstalls {
+  pub const fn total(self) -> u64 {
+    self.stable + self.beta
+  }
+}
+
+/// When a release was withdrawn, and by whom.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Withdrawal {
+  /// Milliseconds since the Unix epoch.
+  pub at: i64,
+  /// The staff member's display name.
+  pub by: String,
 }
 
 /// A release in the admin's list, and the answer of each change to one.
@@ -48,14 +76,31 @@ pub struct ReleaseSummary {
   /// Active installs that run it: distinct install ids whose newest update check in the last 30 days named this
   /// version.
   pub installs: u64,
+  /// `installs` by channel; `None` from a cloud before it counted them apart.
+  #[serde(default)]
+  pub installs_by_channel: Option<ChannelInstalls>,
   /// Staff deleted its files; the release stays in the list and its history.
   pub files_deleted: bool,
+  /// The CI run that uploaded it; `None` when CI named none.
+  #[serde(default)]
+  pub ci_run: Option<CiRun>,
+  /// Set with stage `withdrawn`; `None` otherwise, and from a cloud before it kept it.
+  #[serde(default)]
+  pub withdrawn: Option<Withdrawal>,
+  /// A draft's declared files with how far each upload is, and the files the last finalizing rejected until CI
+  /// declares them again; empty once the release is published.
+  #[serde(default)]
+  pub uploads: Vec<FileProgress>,
 }
 
 /// `GET /admin/releases`: every release, newest version first.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReleasesResponse {
   pub releases: Vec<ReleaseSummary>,
+  /// Every active install (an install id with an update check in the last 30 days) by channel, whatever it runs;
+  /// `None` from a cloud before it counted them apart.
+  #[serde(default)]
+  pub installs_by_channel: Option<ChannelInstalls>,
 }
 
 /// The answer of each change to a release.
@@ -102,6 +147,9 @@ pub struct AdoptionDay {
   pub day: String,
   /// Distinct install ids whose update checks that day named this version.
   pub installs: u64,
+  /// `installs` by the channel each check named; `None` from a cloud before it counted them apart.
+  #[serde(default)]
+  pub installs_by_channel: Option<ChannelInstalls>,
 }
 
 /// One entry of a release's history.
@@ -128,8 +176,15 @@ pub enum ReleaseAction {
   PercentSet {
     percent: RolloutPercent,
   },
-  Paused,
-  Resumed,
+  /// The channel the release stopped being offered on; Stable from a cloud before Beta pausing.
+  Paused {
+    #[serde(default)]
+    channel: Channel,
+  },
+  Resumed {
+    #[serde(default)]
+    channel: Channel,
+  },
   Withdrawn,
   CriticalSet {
     critical: bool,

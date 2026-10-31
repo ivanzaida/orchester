@@ -55,6 +55,28 @@ fn close_flow_without_work_stops_quietly_and_lets_the_window_close_once() {
   assert_eq!(let_close.load(Ordering::Acquire), 1, "a second request is dropped");
 }
 
+/// ORC-414: once the update handed over to its installer, which stopped the runners at checkpoints itself, the next
+/// close request lets the window close without asking, and the session ends as the update said.
+#[test]
+fn update_install_close_flow_after_a_handover_closes_without_asking() {
+  let runtime = tokio::runtime::Runtime::new().expect("a runtime");
+  let close = flow(&runtime);
+  close.hand_over(SessionEnd::RunsPaused);
+  let let_close = Arc::new(AtomicUsize::new(0));
+  let counted = let_close.clone();
+  close.request(move || {
+    counted.fetch_add(1, Ordering::AcqRel);
+  });
+  let deadline = Instant::now() + Duration::from_secs(10);
+  while close.session_end().is_none() {
+    assert!(Instant::now() < deadline, "the window is let close");
+    std::thread::sleep(Duration::from_millis(10));
+  }
+  assert_eq!(close.phase(), ClosePhase::Stopping);
+  assert_eq!(close.session_end(), Some(SessionEnd::RunsPaused));
+  assert_eq!(let_close.load(Ordering::Acquire), 1);
+}
+
 #[test]
 fn close_flow_choices_do_nothing_while_no_close_is_held() {
   let runtime = tokio::runtime::Runtime::new().expect("a runtime");

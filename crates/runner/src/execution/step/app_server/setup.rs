@@ -1,7 +1,10 @@
 //! What an App Server session starts with: the prompt, the thread's settings and the approvals it may ask a person
 //! for, as a step (`super::super::start::cli`) or the Orchestrator chat (`crate::execution::chat::codex`) sets them.
 
-use std::{collections::BTreeSet, path::PathBuf};
+use std::{
+  collections::{BTreeMap, BTreeSet},
+  path::PathBuf,
+};
 
 use orchester_core::{
   attachment::input::AttachedFile, command::SecretVariable, connection::mcp::InvocationExemptions,
@@ -25,7 +28,11 @@ pub(in crate::execution) struct AppServerSetup {
   pub network: NetworkAccess,
   pub writable_roots: Vec<PathBuf>,
   pub resume: Option<String>,
+  /// The servers the step chooses, Orchester's among them, by the names Codex gets them by.
   pub expected_servers: BTreeSet<String>,
+  /// The servers Codex gets by another name than the project's (`CodexMcp::named_apart`): that name, then the
+  /// project's, which the step's activity and approvals name them by.
+  pub renamed: BTreeMap<String, String>,
   /// The MCP tools that run without asking: empty unless the step asks before MCP actions.
   pub exemptions: InvocationExemptions,
   pub output_schema: Option<Value>,

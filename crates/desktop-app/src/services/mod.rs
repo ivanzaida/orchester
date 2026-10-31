@@ -16,6 +16,7 @@ use orchester_exec::programs::Programs;
 use orchester_ipc::SessionEnd;
 use orchester_workspace::{
   activity::Activity,
+  app_updates::AppUpdates,
   clock::Clock,
   close::CloseFlow,
   plan_limits::reads::PlanReads,
@@ -37,9 +38,10 @@ pub mod page_file_picker;
 pub mod path_picker;
 pub mod plan_limits;
 pub mod reference_picker;
+pub mod updates;
 
 use self::{browser_lookup::BrowserLookup, links::Links, page_file_picker::PageFilePicker};
-use crate::{mcp::chat::ChatServers, project::hold::ReadHold};
+use crate::{mcp::chat::ChatServers, open_link::LinkInbox, project::hold::ReadHold};
 
 /// The session's services. Every field is a handle: clones share the same workspace, runners and
 /// operations.
@@ -88,6 +90,12 @@ pub struct Services {
   /// The reads of the accounts' plan limits outside runs; they read only once the app's own window started them
   /// (`Launch::read_plan_limits`), never in a test or a QA copy.
   pub plan_reads: PlanReads,
+  /// This copy's updates: Settings › Updates and where its update stands. Orchester Cloud is asked only once the app's
+  /// own program started the checks (`Launch::check_for_updates`), never in a test or a QA example.
+  pub updates: AppUpdates,
+  /// The `orchester://` links the window opens: the one the program started with and those other programs hand over,
+  /// once the app's own program takes them (`Launch::take_links`); a test puts its own in.
+  pub opened_links: LinkInbox,
 }
 
 /// Services are the session's: two are equal when they share its workspace.
@@ -115,7 +123,12 @@ impl Services {
       &runtime,
     );
     let servers = Servers::new(workspace.clone(), vault.clone());
+    let database = workspace
+      .database_path()
+      .expect("a session opens its database from a file in its data folder");
+    let data_folder = database.parent().expect("a database file is in a folder");
     Self {
+      updates: updates::start(workspace.clone(), data_folder),
       close: CloseFlow::new(runners.clone(), jobs.clone(), runtime.clone()),
       recovery,
       plan_reads: PlanReads::new(workspace.clone(), runners.clone()),
@@ -138,6 +151,7 @@ impl Services {
       session_start: session.started_at(),
       chat_tools: ChatServers::default(),
       editor: Editor::find(),
+      opened_links: LinkInbox::default(),
     }
   }
 
@@ -149,8 +163,9 @@ impl Services {
   }
 
   /// Starts the shared servers' connection monitor, the shared projects' sync and live event streams, the check of the
-  /// cloud sign-in (`sharing::cloud::keep_checking`) and the activity's following of the account signed in; they run
-  /// until the returned [`Background`] is dropped.
+  /// cloud sign-in (`sharing::cloud::keep_checking`), the activity's following of the account signed in and the
+  /// update's following of the runs at work (`app_updates::follow_runs`); they run until the returned [`Background`]
+  /// is dropped.
   pub fn run_background(&self) -> Background {
     Background(vec![
       self.runtime.spawn(sharing::monitor(self.servers.clone())),
@@ -164,6 +179,10 @@ impl Services {
       self.runtime.spawn(sharing::cloud::keep_activity_to_the_account(
         self.cloud.clone(),
         self.activity.clone(),
+      )),
+      self.runtime.spawn(orchester_workspace::app_updates::follow_runs(
+        self.updates.clone(),
+        self.runners.clone(),
       )),
     ])
   }

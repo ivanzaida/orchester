@@ -28,6 +28,13 @@
 //!   of `.claude/skills`; with `--setting-sources project` it held both, also with `--disable-slash-commands`. So
 //!   Claude Code loads none of them whatever the setting says: *on* does not make it load them, because project
 //!   settings would also bring the repository's permission rules and hooks.
+//! - Claude Code's auto memory is not a setting source, and it is kept per git repository, shared by all its worktrees
+//!   (`code.claude.com/docs/en/memory#storage-location`): an agent in a run's worktree loaded the person's own
+//!   `~/.claude/projects/<repository>/memory/MEMORY.md` (ORC-415, 2026-10-31). Every Claude Code process Orchester
+//!   starts therefore gets `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1` (`code.claude.com/docs/en/env-vars`), set over the
+//!   environment's and the project's variables ([`crate::connection::invocation::CLAUDE_NO_AUTO_MEMORY`]). Not
+//!   `--bare`, which also drops MCP servers and hooks, and no settings file is written. Codex and native agents are
+//!   unchanged.
 //!
 //! Both CLIs can keep the files out, so no profile is refused for the setting; macOS was not checked.
 

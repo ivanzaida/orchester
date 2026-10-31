@@ -6,6 +6,7 @@
 pub mod account;
 pub mod agent_files;
 pub mod app_mcp;
+pub mod app_update;
 pub mod appearance;
 pub mod attachment;
 pub mod base_move;

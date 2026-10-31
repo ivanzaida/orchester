@@ -10,16 +10,19 @@ use serde_json::{Map, Value, json};
 
 use super::{ToolError, string};
 use crate::routes::{
-  AccountsPanel, AccountsView, ConnectStep, JoinTarget, OrchesterAsk, OrchesterPanel, OrchesterView, Route,
+  AccountsPanel, AccountsView, ConnectStep, JoinTarget, OrchesterAsk, OrchesterPanel, OrchesterView, Route, UpdatesShow,
 };
 
 /// The parameters besides `route` that settings takes.
 pub const PARAMS: &[&str] = &["tab", "account", "panel", "server", "step", "ask", "invite", "project"];
 
-/// Each tab, and how a refusal names it: `settings tab accounts` takes no `step`.
-const TABS: [(&str, &str); 8] = [
+/// Each tab, and how a refusal names it: `settings tab accounts` takes no `step`. `updates` and `whats-new` are General
+/// with its *Updates* in view, the release notes open with `whats-new`.
+const TABS: [(&str, &str); 10] = [
   ("automation", "settings tab automation"),
   ("general", "settings tab general"),
+  ("updates", "settings tab updates"),
+  ("whats-new", "settings tab whats-new"),
   ("notifications", "settings tab notifications"),
   ("accounts", "settings tab accounts"),
   ("browser", "settings tab browser"),
@@ -112,6 +115,8 @@ pub fn route(args: &Map<String, Value>, lookup: Option<&Lookup>) -> Result<Route
   match tab {
     "automation" => automation(args),
     "general" => Ok(Route::General),
+    "updates" => Ok(Route::Updates(UpdatesShow::Section)),
+    "whats-new" => Ok(Route::Updates(UpdatesShow::WhatsNew)),
     "notifications" => Ok(Route::Notifications),
     "browser" => Ok(Route::Browser),
     "accounts" => accounts(args, lookup).map(Route::Accounts),
@@ -258,6 +263,7 @@ fn connect(args: &Map<String, Value>, lookup: Option<&Lookup>) -> Result<Orchest
     panel: OrchesterPanel::Connect,
     step,
     ask: None,
+    at: None,
   })
 }
 

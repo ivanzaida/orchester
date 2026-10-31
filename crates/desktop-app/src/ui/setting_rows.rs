@@ -205,6 +205,8 @@ pub struct SettingRow {
   id: Arc<str>,
   label: Arc<str>,
   detail: Option<Element>,
+  /// The label's color when it says how something stands, `text_primary` otherwise.
+  label_color: Option<PaletteColor>,
   hint: Option<(Arc<str>, HintTone)>,
   info: Option<Arc<str>>,
   link: Option<Element>,
@@ -227,6 +229,7 @@ impl SettingRow {
       id: id.into(),
       label: label.into(),
       detail: None,
+      label_color: None,
       hint: None,
       info: None,
       link: None,
@@ -245,6 +248,12 @@ impl SettingRow {
   /// `09 · Settings · Browser` `j3Lre`).
   pub fn detail(mut self, detail: impl Into<Element>) -> Self {
     self.detail = Some(detail.into());
+    self
+  }
+
+  /// The label in `color`: it says how something stands (`Orchester 0.4.0 is ready` in `info`, `c69Eti`).
+  pub fn label_color(mut self, color: PaletteColor) -> Self {
+    self.label_color = Some(color);
     self
   }
 
@@ -337,10 +346,10 @@ impl SettingRow {
       None => Text::new(&self.label)
         .id(format!("{}-label", self.id))
         .variant(ExtraTypography::Strong.role())
-        .color(if self.faded {
-          PaletteColor::TextMuted
-        } else {
-          PaletteColor::TextPrimary
+        .color(match (self.faded, self.label_color.clone()) {
+          (true, _) => PaletteColor::TextMuted,
+          (false, Some(color)) => color,
+          (false, None) => PaletteColor::TextPrimary,
         })
         .into(),
     };

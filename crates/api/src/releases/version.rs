@@ -1,8 +1,9 @@
-//! A release's version and the names around it: its channels, the platforms and architectures it ships for, and its
-//! files' names (`docs/cloud-api.md`, "App releases").
+//! A release's version and the names around it: the platforms and architectures it ships for, and its files' names
+//! (`docs/cloud-api.md`, "App releases"). Its channels are core's ([`Channel`]), which the app's settings keep too.
 
 use std::{cmp::Ordering, fmt, str::FromStr};
 
+pub use orchester_core::app_update::Channel;
 use serde::{Deserialize, Serialize};
 
 use super::ReleaseFormatError;
@@ -153,29 +154,6 @@ impl TryFrom<String> for ReleaseVersion {
 impl From<ReleaseVersion> for String {
   fn from(version: ReleaseVersion) -> Self {
     version.text
-  }
-}
-
-/// The release track an install follows. Beta gets every published release, Stable only those staff promoted to it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Channel {
-  Stable,
-  Beta,
-}
-
-impl Channel {
-  pub const fn as_str(self) -> &'static str {
-    match self {
-      Self::Stable => "stable",
-      Self::Beta => "beta",
-    }
-  }
-
-  pub fn parse(text: &str) -> Option<Self> {
-    [Self::Stable, Self::Beta]
-      .into_iter()
-      .find(|channel| channel.as_str() == text)
   }
 }
 

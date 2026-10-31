@@ -78,20 +78,55 @@ const fn open() -> InviteState {
   InviteState::Open
 }
 
-/// `200` of `DELETE /invites/{id}`: for an invite by email, the revocation the server signed for the cloud, which the
-/// server admin's page delivers.
+/// Why the team server could not reach Orchester Cloud to deliver a signed invite or revocation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CloudCause {
+  /// No connection: no route, the name did not resolve, or the connection was reset.
+  Unreachable,
+  /// The cloud's certificate was not trusted, or the TLS handshake failed.
+  Tls,
+  /// The connection was refused.
+  Refused,
+  /// No answer in time.
+  Timeout,
+}
+
+/// How the team server's own delivery of a signed invite or revocation to Orchester Cloud went.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum CloudDelivery {
+  /// The cloud took it.
+  Delivered,
+  /// The cloud answered with another status than the contract's.
+  Declined,
+  /// The server has no cloud configured: the invite was made but nobody delivered it.
+  NoCloud,
+  /// The server could not reach the cloud; the server admin's page offers to send it from the person's browser.
+  Unreachable { cause: CloudCause },
+}
+
+/// `200` of `DELETE /invites/{id}`: for an invite by email, the revocation the server signed for the cloud and how the
+/// server's own delivery of it went; when the server could not reach the cloud, the server admin's page delivers it.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct InviteRevoked {
   pub revocation: Option<String>,
+  /// `None` for an invite by code, and from a server that does not deliver revocations itself.
+  #[serde(default)]
+  pub cloud_delivery: Option<CloudDelivery>,
 }
 
 /// `201` of `POST /invites`. `code` only for `delivery: code` and `signed` only for `delivery: cloud`, each shown
-/// once: the signed invite is what the server admin's page carries to the cloud when the server cannot reach it.
+/// once. The server delivers the signed invite to the cloud itself and says how in `cloud_delivery`; when it could not
+/// reach the cloud, the server admin's page carries `signed` there from the person's browser.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct InviteCreated {
   pub invite: Invite,
   pub code: Option<Credential>,
   pub signed: Option<String>,
+  /// `None` for an invite by code, and from a server that does not deliver invites itself.
+  #[serde(default)]
+  pub cloud_delivery: Option<CloudDelivery>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

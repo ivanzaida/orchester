@@ -88,10 +88,12 @@ pub enum ReviewEnd {
 
 impl ReviewEnd {
   /// How `review` ended; `None` for a request a hard rule kept from the reviewer.
-  pub const fn of(review: &Review) -> Option<Self> {
+  pub fn of(review: &Review) -> Option<Self> {
     match review {
       Review::Approved { .. } => Some(Self::Approved),
       Review::Asked { .. } => Some(Self::Asked),
+      Review::Decided { decision } if decision.approves() => Some(Self::Approved),
+      Review::Decided { .. } => Some(Self::Asked),
       Review::Failed { failure, .. } => Some(Self::Failed(*failure)),
       Review::Held { .. } => None,
     }

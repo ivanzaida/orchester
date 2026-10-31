@@ -1,7 +1,8 @@
 //! Settings › Orchester Cloud (`vPV73`, `C6qnY`, `MrVql` in the new `orchester.pen`): its column, one team server's
 //! page or *Connect a server*, at the step it opens on, and the question it asks in place, so each state has an
 //! address (`/settings?tab=orchester&server=…&panel=connect&step=compare`, `…&ask=sign-out`,
-//! `…&ask=decline&invite=…`). Opening a question is going somewhere; answering it stays a person's.
+//! `…&ask=decline&invite=…`), and the invite row it opens at (`…&panel=invites&at=…`, an `orchester://` link's).
+//! Opening a question is going somewhere; answering it stays a person's.
 
 use orchester_core::id::{InviteId, ServerId};
 
@@ -15,6 +16,7 @@ const PANEL: &str = "panel";
 const STEP: &str = "step";
 const ASK: &str = "ask";
 const INVITE: &str = "invite";
+const AT: &str = "at";
 const SIGN_OUT: &str = "sign-out";
 const DECLINE: &str = "decline";
 
@@ -89,13 +91,15 @@ pub enum OrchesterAsk {
 }
 
 /// The team server Settings › Orchester shows (`None`: the cloud account), the panel, the step *Connect a server*
-/// opens on and the question asked in place.
+/// opens on, the question asked in place and the invite whose row it opens at.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct OrchesterView {
   pub server: Option<ServerId>,
   pub panel: OrchesterPanel,
   pub step: ConnectStep,
   pub ask: Option<OrchesterAsk>,
+  /// The invite whose row the column scrolls to and rings, as an `orchester://invite/…` link opens it.
+  pub at: Option<InviteId>,
 }
 
 impl OrchesterView {
@@ -106,6 +110,7 @@ impl OrchesterView {
       panel: OrchesterPanel::Account,
       step: ConnectStep::Address,
       ask: None,
+      at: None,
     }
   }
 
@@ -116,6 +121,7 @@ impl OrchesterView {
       panel: OrchesterPanel::Connect,
       step: ConnectStep::Address,
       ask: None,
+      at: None,
     }
   }
 
@@ -133,6 +139,7 @@ impl OrchesterView {
       Some(OrchesterAsk::SignOut) => (Some(SIGN_OUT), None),
       Some(OrchesterAsk::Decline(invite)) => (Some(DECLINE), Some(invite.to_string())),
     };
+    let at = self.at.map(|invite| invite.to_string());
     with_query(
       settings,
       &[
@@ -142,6 +149,7 @@ impl OrchesterView {
         (STEP, step),
         (ASK, ask),
         (INVITE, invite.as_deref()),
+        (AT, at.as_deref()),
       ],
     )
   }
@@ -150,6 +158,7 @@ impl OrchesterView {
     let server = params.take_parsed(SERVER)?;
     let panel = params.take_or_default(PANEL, OrchesterPanel::from_name)?;
     let step = params.take_or_default(STEP, ConnectStep::from_name)?;
+    let at = params.take_parsed(AT)?;
     let invite: Option<InviteId> = params.take_parsed(INVITE)?;
     let ask = match (params.take(ASK)?.as_deref(), invite) {
       (None, None) => None,
@@ -172,6 +181,7 @@ impl OrchesterView {
       panel,
       step,
       ask,
+      at,
     })
   }
 }

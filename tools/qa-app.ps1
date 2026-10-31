@@ -46,6 +46,12 @@
 # secrets in three environments with uses, the MCP server figma); project-settings-shared is it linked to a team
 # server no one answers for (Sharing · shared).
 #
+# -Scenario shared-config-here is Kontur seen by a member, with the team's cached versions and what they name here
+# (Shared configuration · redesign, UC5xk): Sharing › On this computer with every kind of row, the missing bars on Explorer,
+# Report crash and Feature delivery, Reviewer's v5 waiting for Use v5 here, Builder's Runs here use. A click opens the
+# pickers and the Confirm… and secret modals; choosing a connection and confirming stay a person's. shared-config-chosen
+# has Work chosen here; shared-config-no-claude has no Claude Code connection.
+#
 # .tmp/qa/<task>/ is replaced on every start; a QA app still running from it is refused, not stopped,
 # and so is a folder on the way to it that is a junction or a link. Besides .tmp/qa/<task>/ it writes
 # only cargo's target folder: never the user's install (E:\Orchester, formerly E:\projects\orchester), the user's discovery

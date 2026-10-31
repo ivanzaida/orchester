@@ -32,6 +32,8 @@ pub struct BarFacts {
   pub servers: super::server::ServerFacts,
   /// Orchester Cloud, while it cannot be reached.
   pub cloud: super::cloud::CloudFacts,
+  /// This copy's update, while it needs the person or has news.
+  pub update: super::update::UpdateFacts,
 }
 
 /// How *Stop* of the runs that auto-approve goes.

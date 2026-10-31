@@ -37,16 +37,16 @@ fn settings_general_shows_its_sections_with_the_save_state() {
     assert!(texts.iter().any(|text| text == words), "{words} in {texts:?}");
   }
   assert_eq!(window.text("settings-save-state"), "All changes saved");
-  // The version and which build it is (`EwNQ3`).
+  // The version, which build it is and the channel it follows (`VjCLF` in `wSMNG`).
   let build = if cfg!(debug_assertions) {
     "development"
   } else {
     "release"
   };
-  assert_eq!(
-    window.text("settings-version-value"),
-    format!("v{} · {build}", env!("CARGO_PKG_VERSION"))
-  );
+  let expected = format!("v{} · {build} · Stable", env!("CARGO_PKG_VERSION"));
+  window.until("the version with its channel", |window| {
+    window.text("settings-version-value") == expected
+  });
   let database = window.data.database();
   assert!(
     window

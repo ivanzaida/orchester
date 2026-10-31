@@ -4,6 +4,13 @@
       "name": "Orchester",
       "windowTitle": "{{tab}} — Orchester"
     },
+    "link": {
+      "unknown": {
+        "title": "This link isn't for anything here",
+        "body": "Orchester was opened from a link it has nothing for. Nothing was changed.",
+        "dismiss": "Dismiss"
+      }
+    },
     "notifications": {
       "badge": {
         "one": "{{count}} thing needs you",
@@ -253,6 +260,28 @@
         "one": "Browser {{count}} tab",
         "other": "Browser {{count}} tabs"
       },
+      "update": {
+        "downloading": "Update {{version}} · downloading {{percent}}%",
+        "paused": "Update {{version}} · paused at {{percent}}%",
+        "ready": "Update {{version}} ready · Restart",
+        "critical": "Critical update {{version}} · Restart",
+        "waiting": {
+          "one": "Update {{version}} · after {{count}} run ends",
+          "other": "Update {{version}} · after {{count}} runs end"
+        },
+        "installing": "Installing {{version}}",
+        "updated": "Updated to {{version}} · What's new",
+        "failed": "Update {{version}} failed · {{why}}",
+        "notInstalled": "Update {{version}} didn't install",
+        "why": {
+          "noInstaller": "no installer for this computer",
+          "wrongSize": "size didn't match",
+          "wrongDigest": "checksum didn't match",
+          "unknownKey": "unknown signing key",
+          "badSignature": "signature didn't match",
+          "notSaved": "couldn't be saved"
+        }
+      },
       "health": {
         "since": "since {{time}}",
         "agents": "Agents",
@@ -292,6 +321,24 @@
       "other": "{{count}} need you",
       "inProject": "{{project}} {{count}}",
       "separator": " · "
+    },
+    "update": {
+      "title": "Install Orchester {{version}} now?",
+      "runsAtWork": {
+        "one": "{{count}} run is at work: {{runs}}. Installing now stops it; it goes on from its last checkpoint after the restart.",
+        "other": "{{count}} runs are at work: {{runs}}. Installing now stops them; each goes on from its last checkpoint after the restart."
+      },
+      "runAtStep": "{{key}} at {{step}}",
+      "runsSeparator": ", ",
+      "backup": "Your data is copied to {{folder}} first.",
+      "restarts": "Orchester closes, installs {{version}} and opens again, in about a minute.",
+      "cancel": "Cancel",
+      "wait": "Install when they end",
+      "stop": "Stop runs and install",
+      "readyTitle": "Orchester {{version}} is ready",
+      "readyBody": "It installs when no run is at work, or now with Restart to update in Settings › General.",
+      "criticalTitle": "Critical update {{version}} is ready",
+      "criticalBody": "It fixes a security problem and installs at the next restart; runs at work are waited for."
     },
     "running": {
       "title": "Running",

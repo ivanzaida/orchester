@@ -9,6 +9,7 @@ use orchester_exec::programs::Programs;
 use orchester_store::SessionEnd;
 use orchester_workspace::{
   app_paths,
+  app_updates::{self, CHECK_EVERY},
   close::{CloseKind, session_end},
   runner::QUIET_STOP_TIMEOUT,
   secrets::Vault,
@@ -20,6 +21,7 @@ use tokio::runtime::Handle;
 
 use super::{Problem, StartupProblem};
 use crate::{
+  open_link::{self, OpenLink},
   project::{self, Landing},
   root::{Ready, Start},
   services::{Background, Services},
@@ -31,10 +33,11 @@ pub struct Launch {
   running: Option<Running>,
 }
 
-/// What a started session holds until it ends: the data folder's lock (in the session), and the
+/// What a started session holds until it ends: the data folder's lock (in the session), the data folder, and the
 /// background tasks.
 struct Running {
   session: AppSession,
+  folder: PathBuf,
   services: Services,
   background: Background,
 }
@@ -100,6 +103,7 @@ impl Launch {
       })),
       running: Some(Running {
         session,
+        folder: database.parent().unwrap_or(Path::new("")).to_path_buf(),
         services,
         background,
       }),
@@ -164,6 +168,58 @@ impl Launch {
     }
   }
 
+  /// Asks Orchester Cloud for a newer release now and every [`CHECK_EVERY`] until the session ends, downloading it in
+  /// a copy that updates itself (`orchester_workspace::app_updates`). Only the app's own program does: a test's or a QA
+  /// example's window never asks the cloud.
+  pub fn check_for_updates(&mut self) {
+    if let Some(running) = &mut self.running {
+      let checks = app_updates::keep_checking(running.services.updates.clone(), CHECK_EVERY);
+      running.background.hold(running.services.runtime.spawn(checks));
+    }
+  }
+
+  /// Hands `link`, the `orchester://` link this program was started with, to the app that has the data folder open,
+  /// when another has (`open_link::pipe`), and brings that app's window to the front: `true` once it took the link,
+  /// and this program ends without a window. `false` leaves it to its *Orchester is already open* screen, or to its
+  /// own session.
+  pub fn hand_over_link(&self, runtime: &Handle, link: &str) -> bool {
+    let Start::Problem(Problem {
+      problem: StartupProblem::AlreadyOpen { folder, holder },
+      ..
+    }) = &self.start
+    else {
+      return false;
+    };
+    if let Err(error) = open_link::pipe::hand_over(runtime, folder, *holder, link) {
+      tracing::warn!(%error, "the link was not handed to the app that has the data folder open");
+      return false;
+    }
+    tracing::info!("a link was handed to the app that has the data folder open");
+    if let Some(holder) = holder
+      && super::front::bring_to_front(*holder) == super::front::Front::NoAnswer
+    {
+      tracing::info!("the system kept the window of the app that took the link where it was");
+    }
+    true
+  }
+
+  /// Opens the `orchester://` links of this session: `first`, the one this program was started with, once the window
+  /// is up, and those other programs hand over until the session ends. Only the app's own program takes them: a test
+  /// or a QA copy never makes the data folder's link pipe.
+  pub fn take_links(&mut self, first: Option<String>) {
+    let Some(running) = &mut self.running else {
+      return;
+    };
+    if let Some(first) = first {
+      running.services.opened_links.push(OpenLink::parse(&first));
+    }
+    let inbox = running.services.opened_links.clone();
+    match open_link::pipe::listen(&running.services.runtime, &running.folder, inbox) {
+      Ok(listening) => running.background.hold(listening),
+      Err(error) => tracing::warn!(%error, "this window takes no links from other programs"),
+    }
+  }
+
   /// Where the session opens; `None` without a session.
   pub fn landing(&self) -> Option<&Landing> {
     match &self.start {
@@ -191,6 +247,7 @@ impl Launch {
       mut session,
       services,
       background,
+      ..
     }) = self.running
     else {
       return;

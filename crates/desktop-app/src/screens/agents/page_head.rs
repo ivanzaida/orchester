@@ -19,7 +19,7 @@ use crate::{
   screens::hub::{
     draft_bar::{DraftBar, Standing},
     page_head::MORE_MENU_WIDTH,
-    parts::{status, tile},
+    parts::{Tone, status, tile},
     team,
   },
   theme::{ExtraSpacing, HubText, IconSize},
@@ -51,11 +51,12 @@ pub struct More {
 
 /// The page head; in a shared project `shared`, the team's version and where it stands here, says what the
 /// permissions say otherwise (`Sub` `Du8OB` in 02), and a member has `versions` at its end in the menu's place
-/// (`Versions` `EGuXw` in 03).
+/// (`Versions` `EGuXw` in 03). `glyph` stands in the tile for the connection's own mark: the team's API connection
+/// missing on this computer (04).
 pub fn head(
   ctx: &mut Ctx,
   (fields, listed): (&Fields, &ProjectAgents),
-  more: Option<More>,
+  (more, glyph): (Option<More>, Option<Icon>),
   (shared, versions): (Option<Row>, Option<Element>),
 ) -> Element {
   let role = fields.role.get();
@@ -64,6 +65,13 @@ pub fn head(
   } else {
     role.as_str().into()
   };
+  let separated = |id: &str, (tone, text): (Tone, Arc<str>)| {
+    Row::new()
+      .spacing(ExtraSpacing::Snug.role())
+      .align_items(Alignment::Center)
+      .child(Text::new(&ctx.t("agents.summarySeparator")).variant(HubText::Hint.role()))
+      .child(status(id, tone, &text))
+  };
   let sub = shared.unwrap_or_else(|| {
     let (summary, enforced) = policy_panel::summary(ctx, fields, listed);
     Row::new()
@@ -71,13 +79,7 @@ pub fn head(
       .spacing(ExtraSpacing::Snug.role())
       .align_items(Alignment::Center)
       .child(Text::new(&summary).variant(HubText::Hint.role()))
-      .with_children(enforced.map(|(tone, text)| {
-        Row::new()
-          .spacing(ExtraSpacing::Snug.role())
-          .align_items(Alignment::Center)
-          .child(Text::new(&ctx.t("agents.summarySeparator")).variant(HubText::Hint.role()))
-          .child(status("agent-enforced", tone, &text))
-      }))
+      .with_children(enforced.map(|enforced| separated("agent-enforced", enforced)))
   });
   let menu = more.map(|more| {
     let remove = more.remove.clone();
@@ -102,7 +104,10 @@ pub fn head(
     .width(Dimension::Pct(100.0))
     .spacing(lurq::app::theme::SpacingSize::Md)
     .align_items(Alignment::Center)
-    .child(tile(entries::provider_glyph(fields.connection(listed)), true))
+    .child(tile(
+      glyph.unwrap_or_else(|| entries::provider_glyph(fields.connection(listed))),
+      true,
+    ))
     .child(
       Column::new()
         .flex(1.0)

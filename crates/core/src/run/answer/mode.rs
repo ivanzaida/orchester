@@ -205,8 +205,12 @@ pub fn after_review(question: ReviewQuestion, review: &Review) -> Result<Request
     (Review::Asked { reason, .. }, ReviewQuestion::Roots) => {
       Err(CameToPerson::with(PersonReason::ReviewerUnsure, reason))
     }
+    (Review::Decided { decision }, _) if decision.approves() => Ok(RequestAnswer::by(AnswerKind::Reviewer)),
+    (Review::Decided { .. }, ReviewQuestion::Request) => Err(CameToPerson::because(PersonReason::ReviewerDenied)),
+    (Review::Decided { .. }, ReviewQuestion::Roots) | (Review::Failed { .. }, _) => {
+      Err(CameToPerson::because(PersonReason::ReviewerUnsure))
+    }
     (Review::Held { hold }, _) => Err(CameToPerson::held(*hold)),
-    (Review::Failed { .. }, _) => Err(CameToPerson::because(PersonReason::ReviewerUnsure)),
   }
 }
 

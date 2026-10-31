@@ -4,8 +4,9 @@
 //! queue, the team server, the MCP server and the version (`health`). Everything else shows only while it needs the
 //! person: on the left the runner while it is not online, a failure nobody opened, tasks that could not be read and
 //! runs interrupted when Orchester closed; on the right, in this order, runs that auto-approve with *Stop*, the plan
-//! limits, a team server that is not connected (`X39PHh`), Orchester Cloud while it cannot be reached (`ZSB6h`), the
-//! project's browser while it has tabs (`PwuEd`),
+//! limits, a team server that is not connected (`X39PHh`), Orchester Cloud while it cannot be reached (`ZSB6h`),
+//! this copy's update while it needs the person or has news (`update`, `acFkz`), the project's browser while it has
+//! tabs (`PwuEd`),
 //! whether agents may control the window and the MCP server unless the installed app's server listens, then the
 //! dot. The project's name, its counts and the waiting requests show elsewhere (the switcher, the health card,
 //! *Needs you* in the title bar), today's tokens on the sidebar's usage card. The sign-in gate has a bar of its own
@@ -30,6 +31,7 @@ mod plan_limits;
 mod recovery;
 mod runner;
 mod server;
+mod update;
 
 use lurq::{
   app::{
@@ -64,6 +66,7 @@ pub use self::{
   item::dot,
   mcp::from_scratch,
   server::{ServerFacts, ServerState, server_facts},
+  update::UpdateFacts,
 };
 use crate::{
   lifecycle,
@@ -143,6 +146,7 @@ impl Component for StatusBar {
       &services.runners.browser_window(),
       shown.as_ref().map(|(facts, _)| facts.repo_root.clone()),
     );
+    let update = update::update_facts(ctx, &services.updates);
     let facts = BarFacts {
       project: shown.map(|(mut facts, _)| {
         facts.limits = limits(&listed, &readings, &used);
@@ -154,6 +158,7 @@ impl Component for StatusBar {
       stopping,
       servers,
       cloud,
+      update,
     };
     ctx.mount_keyed::<StatusBarView>("status-bar-view", BarProps { facts, dispatch })
   }
@@ -340,6 +345,7 @@ impl Component for StatusBarView {
     }
     right.extend(server::item(ctx, &facts.servers, &dispatch));
     right.extend(cloud::item(ctx, &facts.cloud, &dispatch));
+    right.extend(update::item_of(ctx, &facts.update, &dispatch));
     // Before the window control and MCP items: `RGeKO` draws it right before MCP.
     right.extend(project.and_then(|project| browser::item(ctx, project.browser_tabs, &dispatch)));
     right.extend(mcp::app_items(ctx, (&facts.mcp, &self.bar), &dispatch));

@@ -36,11 +36,12 @@ use crate::{
     tabs::TabSet,
   },
   notifications::{Chosen, NotificationPrefs, NotificationsHost},
+  open_link::{self, LinkHost},
   project::{Landing, Projects, ProjectsHost},
   routes,
   screens::gate::{GateProps, SignInGate},
   services::Services,
-  shell::{needs_you::PanelOpen, status_bar},
+  shell::{needs_you::PanelOpen, status_bar, update::UpdateAsk},
   startup::{self, Problem},
   ui::chat::links::ChatLinks,
 };
@@ -138,6 +139,8 @@ struct SessionWindow {
   navigation: Navigation,
   projects: Projects,
   needs_you: PanelOpen,
+  /// Whether *Restart to update* asks about the runs at work, and a press refused in a state set for testing.
+  update_ask: UpdateAsk,
   /// The closing panel's choice the keyboard moved to.
   focus: Signal<Option<lifecycle::Choice>>,
   first_keys: FirstKeys,
@@ -184,6 +187,7 @@ impl Component for SessionWindow {
       navigation,
       projects,
       needs_you: PanelOpen::new(ctx.signal(false)),
+      update_ask: UpdateAsk::new(ctx.signal(false), ctx.signal(None)),
       focus: ctx.signal(None),
       first_keys: FirstKeys::default(),
       notifications: NotificationPrefs::new(ctx.signal(Chosen::default())),
@@ -203,6 +207,7 @@ impl Component for SessionWindow {
     ctx.provide(self.projects.clone());
     ctx.provide(self.first_keys.clone());
     ctx.provide(self.needs_you.clone());
+    ctx.provide(self.update_ask.clone());
     ctx.provide(self.notifications.clone());
     ctx.provide(self.browser.clone());
     let sign_in = follow_sign_in(ctx, &services.cloud);
@@ -227,11 +232,19 @@ impl Component for SessionWindow {
       SignIn::SignedOut { since, .. } => gate_screen(ctx, &sign_in, *since),
     };
     let overlay = lifecycle::overlay(ctx, phase, &services.close, &self.focus);
+    // Over the page or the gate: what an `orchester://` link says, behind the gate as well.
+    let links = ctx.mount_keyed::<LinkHost>(
+      "open-links",
+      open_link::host::Props {
+        signed_in: sign_in.is_signed_in(),
+      },
+    );
     // The closing panel lies over the page, which stays as it was under it.
     let body = Stack::new()
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
       .child(screen)
+      .child(links)
       .with_children(overlay);
     let signed_in = sign_in.is_signed_in();
     let framed = if signed_in {

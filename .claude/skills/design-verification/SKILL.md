@@ -238,6 +238,26 @@ the route's params and answers the route the tab shows, for example:
   Opening a page or a question is navigation and works while Settings refuses window input; answering it stays a
   person's, and a synthetic press is refused.
 
+**Update states.** A QA copy never updates itself: `update_state` answers `not_this_copy` (reason `qa`). Any
+other update state is reached with the debug-only tool `set_update_state` (QA copies are debug builds), in any
+scenario: it takes the JSON `update_state` answers and shows it in place of the real state, in Settings › Updates
+(`{"route": "settings", "tab": "general"}`, the `c69Eti` rows), the status bar's update item (S1–S6) and the ready
+notification, until `{"real": true}`. For example `{"state": "downloading", "version": "0.4.0", "received":
+38400000, "total": 91000000}` (S1), `{"state": "ready", "version": "0.4.0", "notes": "…", "critical": false}`
+(S2; `critical: true` for S4), `{"state": "waiting_for_runs", …, "runs": ["KON-1", "KON-2", "KON-3"]}` (S3),
+`{"state": "failed", "version": "0.4.0", "reason": "bad_signature"}` (S5), `{"state": "up_to_date", "updated":
+{"version": "0.4.0", "notes": "…"}}` (S6 *Updated to*, for the first 10 minutes after the window opened);
+`installing` takes `step` (`waiting_for_runs` with `runs`, `stopping_runs`, `backing_up`, `handing_over`),
+`install_failed` `reason`, `exit_code` and `log`, `cloud_unreachable` `last_checked`, `not_this_copy` `reason` and
+`newest` (`{version, download}` or null), `not_on_this_platform` `newest`. Nothing installs from it: *Restart to
+update* and *Install now* show *Nothing installs: this update state was set for testing.* under *Channel*
+(`settings-updates-problem`), which is the expected answer, not a mismatch. The install question `MGILm` opens only
+while runs are really at work (`live` with fake agents, KON-5 keeps working), and its buttons give that same answer.
+A QA copy shows no OS notification: the ready notification's title and body are logged instead, once per version
+(`an update is ready; this build shows no notification`, in `lurq_logs` and `.tmp/qa/<task>/app.log`); report the
+toast itself as not
+reachable. The state is in memory only and goes with the app.
+
 Then call `lurq_read_tree`, `lurq_interact`, `lurq_set_value`, `lurq_wait`, and `lurq_screenshot`
 through `call_run_app`. Open the returned PNG path and include it in the verification report.
 

@@ -3,6 +3,7 @@
 //!
 //! `cargo test -p orchester-api --features client,release-signature --test releases releases`
 
+mod admin;
 mod client;
 mod format;
 mod shapes;
