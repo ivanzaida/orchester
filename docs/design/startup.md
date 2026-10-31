@@ -151,6 +151,8 @@ destination check, the clone's end, `Clones`), `crates/desktop-app/src/screens/j
 - **Proven done, never linked by itself.** A clone counts only when Git ended with 0 **and** the folder checks as the
   project's checkout (`check_folder` says it matches). It then fills the folder field, so the page's own check shows
   it matches and *Link and download tasks* goes on as for any folder. Nothing is linked until the person presses it.
+  *Clone into* still names the new checkout, without a line under it: the done line says what the folder is now, and
+  *Clone repository…* waits for another folder.
 - **Nothing is deleted.** A folder that already holds anything, a hidden file or a file at the path included, is
   refused under the row before any console opens (*This folder already has files…*), as are a missing parent, a path
   that is not absolute and one on another machine. What a failed or closed clone left is named (*Git left the folder

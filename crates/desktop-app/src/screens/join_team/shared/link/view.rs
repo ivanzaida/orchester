@@ -32,6 +32,7 @@ use crate::{
 };
 
 const FOLDER: &str = "join-team-link-folder";
+const CHECK: &str = "join-team-link-check";
 
 /// The project, its address and the repository it names.
 pub(super) fn project_line(ctx: &Ctx, project: &SharedProject) -> Element {
@@ -172,6 +173,7 @@ fn found(ctx: &Ctx, project: &SharedProject, check: &FolderCheck, can_clone: boo
     FolderCheck::Matches => {
       let origin = project.remote_hint.as_ref().map_or("", |hint| hint.as_str());
       line(
+        CHECK,
         (Icon::CircleCheck, PaletteColor::Success),
         &ctx.t_args("startup.shared.link.matches", [("origin", origin)]),
       )
@@ -200,22 +202,22 @@ fn found(ctx: &Ctx, project: &SharedProject, check: &FolderCheck, can_clone: boo
     | FolderCheck::Unreadable
     | FolderCheck::LinkedElsewhere { .. } => field_error("join-team-link-error", &said()).into(),
     FolderCheck::NoHint | FolderCheck::NoOrigin | FolderCheck::LinkedHere => {
-      line((Icon::Info, PaletteColor::TextMuted), &said())
+      line(CHECK, (Icon::Info, PaletteColor::TextMuted), &said())
     }
   }
 }
 
 /// A 13 mark and what it says, 6 apart (`Check` `N3vRO2`).
-fn line((glyph, color): (Icon, PaletteColor), text: &str) -> Element {
+pub(super) fn line(id: &str, (glyph, color): (Icon, PaletteColor), text: &str) -> Element {
   Row::new()
-    .id("join-team-link-check")
+    .id(id)
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
     .child(icon(glyph, IconSize::Base, color).flex_shrink(0.0))
     .child(
       Text::new(text)
-        .id("join-team-link-check-text")
+        .id(format!("{id}-text"))
         .variant(StartupText::CheckLine.role())
         .flex(1.0)
         .min_width(Dimension::Px(0.0)),

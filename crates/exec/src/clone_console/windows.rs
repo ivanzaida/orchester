@@ -15,13 +15,15 @@ use super::{CloneJob, ConsoleEnd, ConsoleError, Scratch, follow};
 const CREATE_NEW_CONSOLE: u32 = 0x0000_0010;
 
 /// Runs the clone, writes Git's exit code beside the result and renames it there, and after a failure waits for Enter
-/// so its message stays readable. One line without double quotes: `powershell.exe` takes it as one argument.
-const SCRIPT: &str = "$Host.UI.RawUI.WindowTitle = $env:ORCHESTER_CLONE_TITLE; \
+/// so its message stays readable. One line without double quotes: `powershell.exe` takes it as one argument. Only
+/// cmdlets and allowed types, so it runs in Constrained Language Mode too (AppLocker, WDAC), where the window's title
+/// can't be set and keeps PowerShell's own.
+const SCRIPT: &str = "try { $Host.UI.RawUI.WindowTitle = $env:ORCHESTER_CLONE_TITLE } catch { }; \
   $code = 1; \
   try { & $env:ORCHESTER_CLONE_GIT 'clone' '--' $env:ORCHESTER_CLONE_URL $env:ORCHESTER_CLONE_DESTINATION; \
   $code = $LASTEXITCODE } catch { Write-Host $_ }; \
   $written = $env:ORCHESTER_CLONE_RESULT + '.tmp'; \
-  [IO.File]::WriteAllText($written, [string]$code); \
+  Set-Content -LiteralPath $written -Value ([string]$code) -NoNewline -Encoding Ascii; \
   Move-Item -LiteralPath $written -Destination $env:ORCHESTER_CLONE_RESULT; \
   if ($code -ne 0) { Write-Host ''; Write-Host $env:ORCHESTER_CLONE_FAILED; \
   [void](Read-Host $env:ORCHESTER_CLONE_CLOSE) }";

@@ -49,7 +49,10 @@ fn ending(slug: &str) -> Option<(Ending, &'static str)> {
     // The console closed before Git ended, with a half-written checkout kept.
     "courier" => (Plays(WritesThen(Box::new(Closes))), "join-team-link-clone-left"),
     // Git ended with 0, but what it left is no checkout of the project.
-    "depot" => (Plays(WritesThen(Box::new(Exits(0)))), "join-team-link-clone-not-checkout"),
+    "depot" => (
+      Plays(WritesThen(Box::new(Exits(0)))),
+      "join-team-link-clone-not-checkout",
+    ),
     "gateway" => (Refused(CloneRefusal::GitMissing), "join-team-link-clone-git-missing"),
     "harbor" => (Refused(CloneRefusal::NotOpened), "join-team-link-clone-not-opened"),
     "ingest" => (Refused(CloneRefusal::NotStarted), "join-team-link-clone-not-started"),

@@ -8,7 +8,7 @@ use lurq::{
     ctx::{Ctx, FutureAction},
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
-  components::{Column, Row, Text},
+  components::{Column, Row},
   core::Signal,
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension},
@@ -16,14 +16,17 @@ use lurq::{
 use orchester_api::SharedProject;
 use orchester_workspace::sharing::project::clone::{CloneEnd, CloneRefusal, Destination};
 
-use super::{Chosen, view::titles};
+use super::{
+  Chosen,
+  view::{line, titles},
+};
 use crate::{
-  theme::{ControlHeight, ExtraSpacing, IconSize, StartupSpacing, StartupText},
+  theme::{ControlHeight, StartupSpacing, StartupText},
   ui::{
     button::{ActionButton, ButtonKind},
     callout::{Callout, CalloutTone},
     field::{FieldInput, field, field_error},
-    icon::{Icon, icon},
+    icon::Icon,
     message::message_text,
   },
 };
@@ -270,24 +273,6 @@ fn left(ctx: &Ctx, folder: &Path) -> Element {
       [("path", folder.display().to_string().as_str())],
     ),
   )
-}
-
-/// A 13 mark and what it says, 6 apart, as the folder check's line (`Check` `N3vRO2`).
-fn line(id: &str, (glyph, color): (Icon, PaletteColor), text: &str) -> Element {
-  Row::new()
-    .id(id)
-    .width(Dimension::Pct(100.0))
-    .spacing(ExtraSpacing::Snug.role())
-    .align_items(Alignment::Center)
-    .child(icon(glyph, IconSize::Base, color).flex_shrink(0.0))
-    .child(
-      Text::new(text)
-        .id(format!("{id}-text"))
-        .variant(StartupText::CheckLine.role())
-        .flex(1.0)
-        .min_width(Dimension::Px(0.0)),
-    )
-    .into()
 }
 
 /// The actions row of the panel: the button and, under it, why a press of synthetic input did nothing.

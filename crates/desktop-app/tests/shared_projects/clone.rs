@@ -121,6 +121,13 @@ fn shared_projects_clone_chooses_the_checkout_and_links_only_when_pressed() {
     window.text("join-team-link-check-text"),
     format!("Git repository · origin {HINT} matches the project")
   );
+  // Clone into is checked again as the clone ends, before Git checks the folder: the new checkout is no error there.
+  window.pass();
+  assert!(
+    !has(&mut window, "join-team-link-clone-error"),
+    "the new checkout is not refused as a folder to clone into"
+  );
+  assert!(!has(&mut window, "join-team-link-clone-target"));
   let jobs = stand_ins.consoles();
   assert_eq!(jobs.len(), 1);
   assert_eq!((jobs[0].url.as_str(), &jobs[0].destination), (URL, &destination));

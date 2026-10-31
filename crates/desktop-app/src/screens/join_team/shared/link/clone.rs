@@ -4,10 +4,7 @@
 //! checkout fills the page's folder field, whose check then shows it matches; nothing is linked until the person
 //! presses the page's button. Opening a console is a person's: synthetic input is refused, and the panel says so.
 
-use std::sync::{
-  Arc,
-  atomic::{AtomicBool, Ordering},
-};
+use std::sync::Arc;
 
 use lurq::{
   app::{
@@ -25,7 +22,6 @@ use orchester_workspace::{
     CloneEnd, CloneKey, CloneRefusal, CloneRequest, Clones, Destination, check_destination, plain_destination,
   },
 };
-use parking_lot::Mutex;
 
 use super::{
   Chosen,
@@ -102,18 +98,14 @@ struct CloneOption {
   into: Signal<String>,
   choose: Choose,
   clone: FutureAction<Ask, CloneEnd, CloneRefusal>,
-  clones: Clones,
   person: PersonOnly,
-  /// The page's folder field, as the last render's props named it: a clone that ends cloned fills it.
-  folder: Arc<Mutex<Option<Signal<String>>>>,
-  /// Whether the clone the page had before it was left is followed already.
-  followed: Arc<AtomicBool>,
 }
 
 impl Component for CloneOption {
   type Props = Props;
 
   fn create(ctx: &mut Ctx) -> Self {
+    let Props { target, folder, .. } = ctx.props::<Props>().clone();
     let picker = PathPicker::of(ctx);
     let choose = ctx.future_action(move |(title, name): (Arc<str>, String)| {
       let picker = picker.clone();
@@ -140,42 +132,37 @@ impl Component for CloneOption {
       let (clones, programs) = (runner.clone(), programs.clone());
       async move { asked(&clones, programs, ask).await }
     });
-    let folder: Arc<Mutex<Option<Signal<String>>>> = Arc::default();
-    let field = folder.clone();
+    // The page's folder field is one signal for as long as the page shows this project, as the mount's key says.
     ctx.watch(&clone.state(), move |state| {
-      if let (false, Some(CloneEnd::Cloned { folder })) = (state.is_pending(), &state.data)
-        && let Some(field) = field.lock().as_ref()
-      {
-        field.set(folder.display().to_string());
+      if let (false, Some(CloneEnd::Cloned { folder: cloned })) = (state.is_pending(), &state.data) {
+        folder.set(cloned.display().to_string());
       }
     });
+    let key: CloneKey = (target.server, target.slug().to_owned());
+    if clones.follow(&key).is_some() {
+      clone.run(Ask::Follow(key));
+    }
     Self {
       into,
       choose,
       clone,
-      clones,
       person: PersonOnly::new(ctx),
-      folder,
-      followed: Arc::default(),
     }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let Props {
-      target,
-      project,
-      folder,
-    } = ctx.props::<Props>().clone();
-    *self.folder.lock() = Some(folder);
-    let key: CloneKey = (target.server, target.slug().to_owned());
-    if !self.followed.swap(true, Ordering::Relaxed) && self.clones.follow(&key).is_some() {
-      self.clone.run(Ask::Follow(key));
-    }
+    let Props { target, project, .. } = ctx.props::<Props>().clone();
     let state = self.clone.state().get();
     let ended = (!state.is_pending()).then(|| (state.data.clone(), state.error.clone()));
     let text = self.into.get();
     // Asked for in every render, in the same place: lurq keeps a component's futures by the order it asks for them.
     let destination = self.destination(ctx, &text, ended.clone());
+    // The checkout a clone just made there is no place for another: the done line says what the folder is now.
+    let cloned_here = matches!(
+      &ended,
+      Some((Some(CloneEnd::Cloned { folder }), _)) if *folder == plain_destination(&typed_path(&text))
+    );
+    let destination = destination.filter(|_| !cloned_here);
     let name = repository_name(&project);
     let mut parts = clone_view::into_row(ctx, (&self.into, &self.choose), (&project, &name), destination.as_ref());
     let start = destination
