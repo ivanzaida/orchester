@@ -332,8 +332,9 @@ impl AppUpdates {
     let mut paused = self.inner.paused.subscribe();
     let fetched = tokio::select! {
       fetched = download.fetch(client, &progress) => fetched,
-      // What arrived stays in the part file, which *Resume* goes on from.
-      _ = paused.wait_for(|paused| *paused) => {
+      // What arrived stays in the part file, which *Resume* goes on from. The flag's `Ref` is dropped before the branch:
+      // it read-locks the flag, and `pause` takes the state's lock before the flag's.
+      _ = async { paused.wait_for(|paused| *paused).await.map(drop) } => {
         let received = match self.state() {
           UpdateState::Downloading { received, .. } => received,
           _ => 0,
