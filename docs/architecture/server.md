@@ -148,6 +148,7 @@ joins, the cloud link and the removal of passwords (S1c). Orchester Cloud (C1) d
 | 74 | Local pipelines in a shared project | In a shared project a person may keep pipelines of their own that stay on their computer and are never sent to the team server; the team's pipelines stay shared and admin-only (row 72). A local pipeline is a local resource of the project: anyone, member or admin, makes it, publishes its versions and runs it without an admin, and publishing it makes a local version only. Share, Join and sync never upload it. Its steps may use the team's profiles and the person's own local profiles. A shared task that names one keeps on the server only the pipeline's name and kind (local, whose), never its body; other members see *a local pipeline of <person>* and cannot run the task with it until they choose a team pipeline or one of their own. An admin may *Publish for the team*, which makes it a team resource from that version on. Make local keeps local pipelines as they are ([Local pipelines](#local-pipelines)). **Changes 30 and 52** | user (ORC-402, 2026-10-29) |
 | 75 | What the web editor can pick | The web app's profile editor picks from what the server serves. **Network:** a profile's network access is `Off`, `Hosts(list)` (only those hosts) or `On`, ordered Off < Hosts < On; a list with a host the previous one lacked, or Hosts → On, widens (row 35); each CLI enforces it where it can, and where it can't the step refuses to start and says so, as for any permission it can't enforce. **References catalog:** the team server keeps, per shared project, the connections and MCP servers its members' desktops report, each as kind, name and role only; the web pickers list it, and a choice there is a reference by name and role that every computer binds as rows 30 and 35 say. **Models per role:** desktops report, per connection role, the model ids their connections list; the server keeps the union, and the web dropdown lists the role's models plus *Other model id…*. Nothing personal leaves a computer: no account, email, path, key, program or setting, and the reads do not say whose computer reported what ([What the web editor can pick](#what-the-web-editor-can-pick)). **Extends 30 and 35** | the task's brief (ORC-444, 2026-10-30) |
 | 76 | Base branches are local | A task's and a module's base branch (the branch its runs start from and deliver into; `docs/architecture/storage.md`) is kept on each computer and never shared: in a shared project it is not sent to the team server, is not part of the task's or module's shared snapshot, revision or events, and teammates may choose differently for the same task or module. Setting it leaves a shared task's or module's revision alone; the app's screens and MCP tools set and read this computer's choice. Each run records the base it took, which stays local with the run. `orchester-api`'s shared task and module shapes do not change and the team server needs nothing. **Changes 52** | user (ORC-407, 2026-10-30) |
+| 77 | Accepting an invite outside Orchester | **Accepting in the browser** (the person's requirement): one *Accept* on Orchester Cloud's Invites page ends with the membership made on the team server, without the desktop: the server account (and, for a project invite, the membership with the invite's role) and a sign-in of that browser to the server's web app. The cloud never reaches a team server; the person's browser carries a one-time identity token (purpose `accept`, bound to the invite, 5 minutes) to the address the cloud registered for the server, as `/authorize` does for sign-in, and brings the server's signed receipt back. It needs a two-factor session on the cloud, as every acceptance does (row 43). When the browser cannot reach the server either, nothing is used up: the invite stays accepted for that account until it expires, the page says why and offers *Try again* and *Open in Orchester*. **The `orchester://` link**: `orchester://invite/<invite id>` and `orchester://open`, registered per user by the Windows installer; an open window takes the link; a link only opens the invite's existing landing in Settings › Orchester and never accepts, joins or sends anything without the person's click, and nothing in it is ever shown or passed to an agent. The desktop is optional afterwards: the server and project show as joined, and a computer joins later with its own device ([Accepting outside Orchester](#accepting-outside-orchester)). **Extends 43 and 62** | user (requirement 2026-10-31); the flow is the architect's (ORC-576) |
 
 ## Processes and crates
 
@@ -1614,6 +1615,144 @@ Row 43.
   the invite checked: an account invite or code for an account that has become an admin, and an admin invite whose
   inviter is no longer an enabled admin, are refused (`403 forbidden`) and stay open.
 - **Revoking.** The inviter or an admin revokes an open invite; the team server tells the cloud, which deletes it.
+- **Outside Orchester.** The invite is also accepted on the cloud's Invites page, in the browser, or opened from there
+  in Orchester through an `orchester://` link ([Accepting outside Orchester](#accepting-outside-orchester), row 77).
+
+#### Accepting outside Orchester
+
+Row 77 (ORC-576, 2026-10-31). Not built: the cloud's Invites page shows *Accept in Orchester* disabled, the desktop
+registers no `orchester://` scheme, and someone who works only in the team server's web app (members work on tasks in
+the browser too, 2026-10-27) cannot accept at all.
+
+**What the cloud's Invites page offers.** Each waiting invite has three actions, in this order:
+
+| Action | Kind | Does |
+| --- | --- | --- |
+| *Accept* | primary | Accepting in the browser (below): ends with the person on the team server, without the desktop |
+| *Open in Orchester* | secondary | `orchester://invite/<id>`: opens the invite in the app, where its own *Accept* joins this computer |
+| *Decline* | quiet | `POST /invites/{id}/decline`, as in the app, after *Decline the invite to …?* |
+
+Two buttons rather than one with a choice: *Accept* is complete by itself, and *Open in Orchester* is only a shortcut
+to the app's own Accept, which also connects a computer. Without a two-factor session the row shows, in place of
+*Accept*, *Turn on two-factor authentication* (an account without it: `/account#security`) or *Confirm with your
+code* (a browser session that signed in without one: stepping up, `POST /auth/sessions/current/two-factor`), and
+*Open in Orchester* stays. The page's states, for the design: a waiting invite (to a project, to the server, for an
+account); needs two-factor; *Continuing to <server>…* (the hand-off below); *<server> couldn't be reached* with *Try
+again* and *Open in Orchester*; *Waiting for <server>* (accepted, no receipt yet); *You joined <project> on <server>*
+with *Open in the browser* and *Open in Orchester*; ended (expired or revoked); refused (an identity the server links
+to another account, an admin invite whose inviter is no longer an admin). They are drawn in the platform's
+`web/design/orchester-web.pen`, on the cloud's *Account · Invites and servers* page beside its present row with the
+disabled button, which they replace, and are approved before the page is built (row 61).
+
+**Accepting in the browser.**
+
+1. *Accept* is a form `POST` to the cloud's web front (`/invites/<id>/accept`, `Origin` and CSRF checked as every form
+   there). Its server side asks the backend `POST /identity-tokens { audience, invite, purpose: "accept" }` with the
+   browser's session. The backend checks what it checks for the app (a two-factor session, the invite unexpired, to
+   the account's email, from that server, open or accepted by this same account), marks the invite accepted by the
+   account (`accepted_at`), and issues the token: `purpose: "accept"`, `invite`, `mfa`, 5 minutes, one `jti`. Unlike
+   the app's acceptance it records no join yet: the cloud records it when the receipt comes back (step 5).
+2. The web front answers a page that hands the token on: a form whose `action` is the address the cloud registered for
+   that server (`<address>/invite/accept`, never one the request, the invite or a link named), with `identity_token`
+   and the newest `key_set` in its body, sent at once where the page's script runs and by its *Continue to <server>*
+   button where it does not, as `/authorize` returns its tokens. The token is never in a URL, a history or a log.
+3. The team server's web app takes the post only when its `Origin` is the cloud's public URL (the origin of the `iss`
+   the server pinned at link), so another site cannot sign a browser in to someone else's account there. Its server
+   side sends `POST /auth/cloud/accept { identity_token, key_set? }` to the team server's private API. The team server
+   verifies the token as any other (its own `aud`, the pinned root's key set, `jti` once, 2 minutes of skew), takes a
+   token of purpose `accept` here and nowhere else (`POST /auth/cloud` and `POST /auth/code` refuse it as `401
+   invalid_identity`, and this endpoint refuses every other purpose so), requires `mfa` (`403 mfa_required`) and the
+   open invite named by `invite` for the verified email. It then does what an app's join with that invite does, in one
+   transaction: makes the account linked to `sub` (or finds the one linked to it, or for an account invite links the
+   account it names), adds the membership with the invite's role for a project invite, sets admin for a server invite
+   with *admin*, ends the invite as accepted, and audits it (`invite_accepted`, `via: browser`). The checks of
+   [Invites](#invites) apply unchanged: an identity linked to another account is `403 not_invited`, an account invite
+   for an admin or an admin invite whose inviter is no longer an enabled admin is `403 forbidden`; each leaves the
+   invite open.
+4. The answer: a browser sign-in to the web app (the browser kind of device token, 12 hours, as an admin's browser
+   sign-in, issued to members too since they work in the browser) and a **receipt**, a statement of type
+   `orchester-invite-accepted+jws` signed with the server's key: `{ id, server, subject, issued_at }`. No device token
+   for an app: an app's device comes only from an app's own join. With join approval on (row 57) and an account that
+   already existed on the server, the membership is still made (the invite grants it, and a forged identity gains
+   nothing by it) but no browser is signed in: the page says to sign in with a code from one of the person's
+   computers, as the admin's sign-in does.
+5. The receipt goes back to the cloud by two ways, whichever comes first: the web app's server side sends it (`POST
+   /invites/{id}/accepted { receipt }` on the cloud's API) when the host has the internet, and the page the browser
+   lands on carries it in a form's body to the cloud's `/invites/joined` (*Back to Orchester Cloud*). The cloud checks
+   it with the key the server linked with, records the join (the server is then in `GET /servers`) and drops the
+   invite's row. A receipt that never comes leaves the invite *Waiting for <server>* until it expires.
+6. The landing page on the team server: a project invite opens that project in the web app (*You're a member of
+   Kontur*); a server invite opens the server's home with no project yet (*An owner adds you to projects*), or the
+   admin for an admin invite; an account invite says the account is now linked. Each also offers *Open in Orchester*
+   (`orchester://open`).
+
+**When the browser cannot reach the server either** (a server on the team's own network, a VPN that is off, a
+certificate the browser does not trust yet). The cloud cannot see that the post failed, so the hand-off page says it
+before it goes: *Your browser now goes to <address> to finish. If it can't reach it, connect to <server>'s network and
+choose Try again*, with *Try again* and *Open in Orchester* on the cloud's page the person comes back to. Nothing is
+used up: the token is unused and ends in 5 minutes, the server's invite stays open, and the cloud keeps the invite
+accepted for this account until it expires, so *Try again* asks a new token (an accepted invite issues tokens to the
+account that accepted it, [cloud-api.md](../cloud-api.md), "Accepting an invite") and *Open in Orchester* finishes
+it from a computer that reaches the server. For a server with its own certificate the page names its check code and
+says to trust the certificate in the browser after comparing it, as for the admin ([The server
+admin](#the-server-admin), *Air-gapped*).
+
+**Ended invites.** An expired invite, or one the server revoked and told the cloud about, is not listed; a click on a
+page loaded before answers *This invite has ended: it expired or was revoked* (the backend's `404`), and nothing is
+issued. One the server revoked, or that expired there, while the cloud did not know yet gets a token, which the team
+server refuses with `410 invite_ended`; its page says so and carries the server's signed revocation
+(`statements::InviteRevocation`, for an expired one too) back to the cloud the way a receipt goes, and the cloud
+deletes the invite. Revoking after acceptance changes nothing: the membership is then the server's to remove
+(Members).
+
+**What the desktop sees afterwards.** Nothing has to happen on a computer. Once the cloud has the receipt, Settings ›
+Orchester lists the server under Team servers as *joined · this computer isn't connected*, with *Connect*: the [New
+computers](#new-computers) flow (an identity token without `invite`; the account is linked to `sub`), which gives
+this computer its own device token; while join approval is on that waits for an admin, since the account has no
+computer yet. A project invite's project shows under the server, and linking a checkout opens its join review (the
+invite landing `xeFRB`, then `AiCwO`), as for an invite accepted in the app. An invite accepted in the browser whose
+receipt has not come back stays in the app's invites (`accepted_at` set) and its Accept works as today: the cloud
+issues the token, and the team server admits the computer either way, finding the account linked to `sub` when the
+browser's join did happen.
+
+**The `orchester://` link.**
+
+- **Forms.** `orchester://invite/<invite id>` opens that invite. `orchester://open` brings Orchester to the front (the
+  cloud's email-confirmed page, the team server's landing). Nothing else is defined; a later use (a server, a
+  project) gets a row here first. A link carries ids only, never a name, address, token, code or text.
+- **What a link may do.** Bring the window to the front and open a screen the person could open themself. For an
+  invite the app reads its own `GET /invites` and opens Settings › Orchester at that invite's row, with its existing
+  Accept and Decline; the words on screen come from the cloud's listing, never from the link. An id that is not a
+  UUID, an invite not listed for the account signed in here (another account's, ended, declined), any other path or
+  any query string: the window comes to the front with *This link isn't for anything here* and nothing else happens.
+  Signed out, the sign-in gate comes first and the invite opens after it. A link never accepts, declines, joins,
+  connects, uploads or sends anything without the person's click, never reaches an agent, a chat, a prompt, memory or
+  the app's MCP tools, and is logged by its form only (`orchester://invite/…`). A page can start the app, nothing more.
+- **Windows registration.** The installer writes, per user, `HKCU\Software\Classes\orchester` (`URL Protocol`,
+  `DefaultIcon`, and `shell\open\command` = `"{app}\orchester.exe" --open-link "%1"`), removed by the uninstaller.
+  The app never registers it itself, so a development build, a QA copy or a zip install never takes links; installing
+  into another folder takes them over. macOS (later): `CFBundleURLTypes` in the bundle's `Info.plist`, the link
+  arriving as an Apple event to the running app.
+- **One window takes it.** A process started with `--open-link` that finds the data folder's lock held
+  (`orchester.lock.holder`, [stable-build.md](../stable-build.md), "Data") does not show *Orchester is already open*:
+  it hands the link to the holder over a named pipe of that data folder (`\\.\pipe\orchester-link-<hash of the
+  folder>`, the current user only, one line of at most 256 bytes) and exits. The holder parses it (the forwarder never
+  does), brings its window to the front and opens it. With no app running, the started process opens as usual and
+  opens the link once its window is up. A holder that does not answer within 2 seconds (an older build, one that is
+  closing) gets the present *Orchester is already open* page.
+
+**Contract changes** (`orchester-api`, [cloud-api.md](../cloud-api.md)):
+
+- `TokenPurpose::Accept`; `IdentityTokenRequest` takes `invite` with purpose `accept` as well as with none.
+- `CloudInvite.accepted_at: Option<i64>`: `GET /invites` also lists an invite accepted in the browser whose receipt has
+  not come back.
+- `statements::InviteAcceptance` (`orchester-invite-accepted+jws`, `{ id, server, subject, issued_at }`), signed by the
+  team server, verified by the cloud.
+- The cloud's `POST /invites/{id}/accepted { receipt }` (`InviteJoined`), `204`; the web front's `/invites/<id>/accept`
+  and `/invites/joined` forms.
+- The team server's `POST /auth/cloud/accept { identity_token, key_set? }` answering `{ browser_session?, membership:
+  { kind, project?, role? }, receipt, approval_required }` and the new error code `invite_ended` (`410`, carrying the
+  signed revocation in its details).
 
 ### New computers
 

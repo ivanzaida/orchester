@@ -224,8 +224,16 @@ by this same account. It marks the invite accepted by the account, issues a join
 and records the join. The team server admits the verified email to that invite with the token; without the claim it
 admits only an account it already knows.
 
+**Accepting in the browser** (decided 2026-10-31, ORC-576; not built). The web front's *Accept* asks `POST
+/identity-tokens { audience, invite, purpose: "accept" }` under the same checks, marks the invite accepted
+(`accepted_at`) and records no join until the team server's signed receipt (`orchester-invite-accepted+jws`) comes
+back, by `POST /invites/{id}/accepted { receipt }` from the server's web app or the browser's `/invites/joined` form;
+until then `GET /invites` keeps listing it with `accepted_at`. The flow, the `orchester://` link and the ended and
+unreachable cases are in [server.md](architecture/server.md), "Accepting outside Orchester" (row 77).
+
 The rule for an answered invite (N1 security review 1, M2 and minor 1): the cloud keeps the row with its answer
-(`accepted` and by whom, or `declined`) until the invite expires. An answered invite is not in `GET /invites`. An
+(`accepted` and by whom, or `declined`) until the invite expires. An answered invite is not in `GET /invites` (once
+browser acceptance is built, except one accepted in the browser whose receipt has not come back, above). An
 accepted one still issues tokens that accept it, to the account that accepted it only, until it expires or the server
 revokes it: a join that failed after its token (the server unreachable, a token lost) is simply asked again, and the
 team server, which accepts each token once and ends its own invite at the first join, admits it once. A declined one
