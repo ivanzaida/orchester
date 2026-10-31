@@ -187,10 +187,24 @@ impl AppUpdates {
   }
 
   async fn update(&self, target: (ReleasePlatform, ReleaseArch)) {
-    self.set(UpdateState::Checking);
+    // A verified update stays ready while the check runs and when the cloud does not answer it: its installer is still
+    // in the updates folder until a newer release's download replaces it.
+    let ready = self.state().ready().cloned();
+    if ready.is_none() {
+      self.set(UpdateState::Checking);
+    }
     let (client, offered) = match self.ask(target).await {
       Ok(answer) => answer,
-      Err(error) => return self.unreachable(&error).await,
+      Err(error) => {
+        return match ready {
+          Some(update) => {
+            tracing::info!(%error, "Orchester Cloud did not answer the update check; the ready update stays");
+            let runs = self.inner.runs.lock();
+            self.set(UpdateState::Ready(update).with_runs(&runs));
+          }
+          None => self.unreachable(&error).await,
+        };
+      }
     };
     let Some(release) = offered else {
       return self.up_to_date().await;

@@ -59,6 +59,14 @@ impl UpdateState {
     }
   }
 
+  /// The downloaded and verified update, ready or waiting for runs.
+  pub fn ready(&self) -> Option<&ReadyUpdate> {
+    match self {
+      Self::Ready(update) | Self::WaitingForRuns { update, .. } => Some(update),
+      _ => None,
+    }
+  }
+
   /// The newest release a copy that does not update itself was told of.
   pub(super) fn newest(&self) -> Option<&NewestRelease> {
     match self {

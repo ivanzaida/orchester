@@ -75,14 +75,8 @@ async fn app_updates_nothing_newer_is_up_to_date_and_kept_as_the_last_check() {
   assert_eq!(copy.downloads(), Vec::<String>::new());
 }
 
-#[tokio::test]
-async fn app_updates_an_unreachable_cloud_says_when_it_last_answered() {
-  let stand = Stand::start(|_| Answer::json(&json!({ "update": null })));
-  let copy = Copy::installed(&stand.api);
-  copy.updates.check_now().await;
-  let answered = copy.updates.last_checked().expect("read");
-  assert!(answered.is_some());
-
+/// Points `copy` at a cloud nothing answers for.
+fn cloud_gone(copy: &Copy) {
   let address = orchester_store::StoredCloudAddress {
     web: "https://orchester.cloud".to_owned(),
     api: Some(nobody()),
@@ -92,11 +86,48 @@ async fn app_updates_an_unreachable_cloud_says_when_it_last_answered() {
     .expect("the database")
     .set_cloud_address(Some(&address))
     .expect("moved");
+}
+
+#[tokio::test]
+async fn app_updates_an_unreachable_cloud_says_when_it_last_answered() {
+  let stand = Stand::start(|_| Answer::json(&json!({ "update": null })));
+  let copy = Copy::installed(&stand.api);
+  copy.updates.check_now().await;
+  let answered = copy.updates.last_checked().expect("read");
+  assert!(answered.is_some());
+
+  cloud_gone(&copy);
   copy.updates.check_now().await;
 
   assert_eq!(
     copy.updates.state(),
     UpdateState::CloudUnreachable { last_checked: answered }
+  );
+}
+
+#[tokio::test]
+async fn app_updates_a_ready_update_stays_ready_when_the_cloud_is_gone() {
+  let bytes = installer_bytes();
+  let stand = offering(Offer::of(&bytes), bytes);
+  let copy = Copy::installed(&stand.api);
+  copy.updates.check_now().await;
+  let UpdateState::Ready(ready) = copy.updates.state() else {
+    panic!("ready: {:?}", copy.updates.state());
+  };
+
+  cloud_gone(&copy);
+  copy.updates.check_now().await;
+  assert_eq!(copy.updates.state(), UpdateState::Ready(ready.clone()));
+  assert!(ready.installer.is_file(), "the verified installer is kept");
+
+  copy.updates.set_runs_at_work(vec!["ORC-110".to_owned()]);
+  copy.updates.check_now().await;
+  assert_eq!(
+    copy.updates.state(),
+    UpdateState::WaitingForRuns {
+      update: ready,
+      runs: vec!["ORC-110".to_owned()]
+    }
   );
 }
 
