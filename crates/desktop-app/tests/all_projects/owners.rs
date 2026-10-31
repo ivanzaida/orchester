@@ -90,6 +90,13 @@ fn all_projects_where_says_whose_a_project_is_and_a_row_offers_the_move() {
     window.tree.get_element_by_id(&move_link).is_some()
   });
   assert_eq!(window.text(&move_link), "Move to account");
+  assert!(
+    window
+      .tree
+      .get_element_by_id(&format!("project-remove-{}", project_id()))
+      .is_some(),
+    "the × stays at the end of the offer"
+  );
   hover(&mut window, ledger);
   let back = format!("project-move-{ledger}");
   window.until("the other offer", |window| {
