@@ -1,6 +1,6 @@
 //! The Orchestrator chat's conversations as the screen reads them: History's list and one conversation's entries,
-//! with the files the person attached to their messages, which of its waits still stand, what became of the runs
-//! whose ends no longer do, and how full its session's context is.
+//! with the files the person attached to their messages, the todo list each turn's agent keeps, which of its waits
+//! still stand, what became of the runs whose ends no longer do, and how full its session's context is.
 
 use std::{
   collections::{BTreeMap, HashMap, HashSet},
@@ -9,7 +9,7 @@ use std::{
 
 use orchester_core::{
   attachment::Attachment,
-  connection::context_use::ContextUse,
+  connection::{context_use::ContextUse, stream::TodoList},
   id::{ChatId, ChatMessageId},
   orchestrator::{Chat, ChatEntry, TurnState},
   run::RunStatus,
@@ -39,6 +39,8 @@ pub struct ChatView {
   pub entries: Vec<ChatEntry>,
   /// The files attached to the person's messages, by message, in the order they were attached.
   pub attachments: BTreeMap<ChatMessageId, Vec<Attachment>>,
+  /// The todo list of each turn whose agent keeps one, by the message that started the turn.
+  pub todos: BTreeMap<ChatMessageId, TodoList>,
   /// The entries of its waits and runs' ends that still stand as they were read: an agent that still waits, a run
   /// still where it ended. The others were dealt with since, here or elsewhere.
   pub standing: HashSet<i64>,
@@ -98,6 +100,7 @@ impl ChatView {
     let attachments = db
       .chat_attachments(chat)
       .map_err(|error| messages::store_error(&error))?;
+    let todos = db.chat_todos(chat).map_err(|error| messages::store_error(&error))?;
     let (standing, moved) =
       super::waits::standing(&db, chat, &entries).map_err(|error| messages::store_error(&error))?;
     let context = db.chat_context(chat).map_err(|error| messages::store_error(&error))?;
@@ -105,6 +108,7 @@ impl ChatView {
       chat: found,
       entries,
       attachments,
+      todos: todos.into_iter().collect(),
       standing,
       moved,
       context,
@@ -119,6 +123,11 @@ impl ChatView {
   /// The files attached to the person's message `message`.
   pub fn attachments_of(&self, message: ChatMessageId) -> &[Attachment] {
     self.attachments.get(&message).map_or(&[], Vec::as_slice)
+  }
+
+  /// The todo list of the turn `message` started, as its agent's latest update left it; `None` when it keeps none.
+  pub fn todo_of(&self, message: ChatMessageId) -> Option<&TodoList> {
+    self.todos.get(&message)
   }
 
   /// The last turn and where it stands: a person's message's, or one a wait of an agent started by itself.

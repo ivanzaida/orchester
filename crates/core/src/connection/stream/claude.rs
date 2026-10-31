@@ -42,7 +42,7 @@ use std::collections::HashMap;
 
 use serde_json::Value;
 
-use super::{AgentEvent, CommandStatus, FileChange, FileChangeKind, OutputStream};
+use super::{AgentEvent, CommandStatus, FileChange, FileChangeKind, OutputStream, todo::claude_todos};
 use crate::{
   connection::{
     context_use::ContextUse,
@@ -61,6 +61,8 @@ const KNOWN_BLOCKS: [&str; 4] = ["text", "thinking", "redacted_thinking", "tool_
 const NO_RESULT: &str = "Claude Code ended its turn without the step result: a JSON object with outcome and summary";
 /// Claude Code's tools that change the file named in their input.
 const EDIT_TOOLS: [&str; 4] = ["Edit", "MultiEdit", "Write", "NotebookEdit"];
+/// Claude Code's tool that writes the agent's whole todo list.
+const TODO_WRITE: &str = "TodoWrite";
 
 /// Follows one invocation's output: tool calls wait for their results, and usage is counted once.
 #[derive(Clone, Debug, Default)]
@@ -232,6 +234,7 @@ impl ClaudeStream {
       if kind == "tool_use" {
         events.extend(orchester_call(block));
         events.extend(self.not_asked(block));
+        events.extend(todo_list(value, block));
       }
     }
     let usage = message.get("usage").and_then(usage).unwrap_or_default();
@@ -461,6 +464,17 @@ fn failed_server(server: &Value) -> Option<AgentEvent> {
     problem: McpServerProblem::FailedToStart {
       detail: (status != "failed").then(|| status.to_owned()),
     },
+  })
+}
+
+/// The todo list a `TodoWrite` call of the agent itself writes, told right after the call's start. A subagent's call
+/// (its line names the `Task` call it runs under, `parent_tool_use_id`) keeps a list of its own, not the agent's.
+fn todo_list(line: &Value, block: &Value) -> Option<AgentEvent> {
+  if block.get("name")?.as_str()? != TODO_WRITE || line.get("parent_tool_use_id").is_some_and(|id| !id.is_null()) {
+    return None;
+  }
+  Some(AgentEvent::TodoList {
+    items: claude_todos(block.get("input")?)?,
   })
 }
 

@@ -7,7 +7,7 @@ use std::{collections::BTreeMap, num::NonZeroU32, path::Path, sync::Arc};
 
 use orchester_core::{
   attachment::Attachment,
-  connection::{AgentProvider, Effort, EngineVendor, context_use::ContextUse},
+  connection::{AgentProvider, Effort, EngineVendor, context_use::ContextUse, stream::TodoList},
   conversation::Message,
   id::{InvocationId, MessageId, RunId, StepExecutionId, TaskId},
   integration::RunMerge,
@@ -78,6 +78,8 @@ pub struct StepView {
   pub attempt: Option<NonZeroU32>,
   /// Why the latest execution failed, when it did and its log says.
   pub failure: Option<StepFailure>,
+  /// The todo list the latest execution's agent keeps, as its latest update left it; `None` when it keeps none.
+  pub todo: Option<TodoList>,
   /// The step's stage in the pipeline graph, from 0: steps of one stage run beside each other.
   pub stage: usize,
   /// How full its latest execution's agent session is; `None` while its CLI reported nothing (unknown, not empty).
@@ -467,47 +469,7 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
     .resource(pinned.resource)?
     .map_or_else(|| Arc::from(""), |resource| resource.name().as_str().into());
   let invocations = db.invocations(run.id())?;
-  let contexts = db.invocation_contexts(run.id())?;
-  let mut steps = Vec::new();
-  let stages = run.snapshot().body().stages();
-  let stage_of = |key: &StepKey| {
-    stages
-      .iter()
-      .position(|stage| stage.iter().any(|step| step.key == *key))
-      .unwrap_or_default()
-  };
-  for (index, step) in run.snapshot().body().steps().iter().enumerate() {
-    let executor = run.snapshot().step(&step.key).map(|pinned| pinned.executor());
-    let (agent, reached, model, permissions) = executed(db, (&run, &invocations), &step.key, executor)?;
-    let Reached {
-      provider,
-      endpoint,
-      vendor,
-    } = reached;
-    let latest = run.latest_execution(&step.key);
-    let attempt = latest.and_then(|execution| attempt_of(&run, execution.id()));
-    steps.push(StepView {
-      number: index + 1,
-      key: step.key.clone(),
-      name: step.name.as_str().into(),
-      agent,
-      tool_step: matches!(executor, Some(StepExecutor::Tool { .. })),
-      provider,
-      endpoint,
-      vendor,
-      engine_recorded: false,
-      effort: None,
-      model,
-      permissions,
-      execution: latest.map(|execution| execution.id()),
-      status: latest.map(|execution| execution.status()),
-      attempt,
-      failure: latest.and_then(|execution| execution.failure()),
-      stage: stage_of(&step.key),
-      context: super::context_uses::of_execution(&contexts, &invocations, latest.map(|execution| execution.id())),
-    });
-  }
-  engines::apply_recorded(db, &mut steps, &invocations)?;
+  let steps = step_views(db, &run, &invocations)?;
   let (paused_at, saved_at_pause) = paused_at(db, &run)?;
   let finished_at = finished_at(db, &run)?;
   let worktree_removed = db.worktree_removal(run.id())?;
@@ -536,6 +498,57 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
     steps,
     run,
   })
+}
+
+/// The steps of `run`'s pinned pipeline in pipeline order, each with its latest execution, what executes it, the
+/// engine its latest invocation of `invocations` recorded and how full that execution's session is.
+fn step_views(db: &ProjectDb, run: &Run, invocations: &[Invocation]) -> Result<Vec<StepView>, StoreError> {
+  let contexts = db.invocation_contexts(run.id())?;
+  let mut steps = Vec::new();
+  let stages = run.snapshot().body().stages();
+  let stage_of = |key: &StepKey| {
+    stages
+      .iter()
+      .position(|stage| stage.iter().any(|step| step.key == *key))
+      .unwrap_or_default()
+  };
+  for (index, step) in run.snapshot().body().steps().iter().enumerate() {
+    let executor = run.snapshot().step(&step.key).map(|pinned| pinned.executor());
+    let (agent, reached, model, permissions) = executed(db, (run, invocations), &step.key, executor)?;
+    let Reached {
+      provider,
+      endpoint,
+      vendor,
+    } = reached;
+    let latest = run.latest_execution(&step.key);
+    let attempt = latest.and_then(|execution| attempt_of(run, execution.id()));
+    steps.push(StepView {
+      number: index + 1,
+      key: step.key.clone(),
+      name: step.name.as_str().into(),
+      agent,
+      tool_step: matches!(executor, Some(StepExecutor::Tool { .. })),
+      provider,
+      endpoint,
+      vendor,
+      engine_recorded: false,
+      effort: None,
+      model,
+      permissions,
+      execution: latest.map(|execution| execution.id()),
+      status: latest.map(|execution| execution.status()),
+      attempt,
+      failure: latest.and_then(|execution| execution.failure()),
+      todo: latest
+        .map(|execution| db.step_todo(run.id(), execution.id()))
+        .transpose()?
+        .flatten(),
+      stage: stage_of(&step.key),
+      context: super::context_uses::of_execution(&contexts, invocations, latest.map(|execution| execution.id())),
+    });
+  }
+  engines::apply_recorded(db, &mut steps, invocations)?;
+  Ok(steps)
 }
 
 /// The number of `run`'s attempt that holds `execution`.

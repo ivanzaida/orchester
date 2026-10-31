@@ -88,6 +88,7 @@ mod task_effort;
 mod task_groups;
 mod task_snapshots;
 mod tasks;
+mod todo_lists;
 mod tool_approvals;
 mod usage;
 mod used_versions;

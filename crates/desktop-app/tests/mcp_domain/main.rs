@@ -64,6 +64,7 @@ mod runner_programs;
 mod skills_window;
 mod story_points;
 mod task_organization;
+mod todo_lists;
 mod tools;
 mod tools_window;
 mod unverified;
