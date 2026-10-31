@@ -198,6 +198,13 @@ impl Workspace {
     self
   }
 
+  /// The folder `name` for scratch files in Orchester's application data, beside the accounts' folders; the system's
+  /// temporary folder where there is none.
+  pub(crate) fn scratch(&self, name: &str) -> std::path::PathBuf {
+    let data = self.account_root.as_deref().and_then(Path::parent);
+    data.map_or_else(std::env::temp_dir, |data| data.join(name))
+  }
+
   pub fn landing(&self) -> Result<Landing, StoreError> {
     let Some(recent) = self.projects()?.into_iter().next() else {
       return Ok(Landing::FirstLaunch);

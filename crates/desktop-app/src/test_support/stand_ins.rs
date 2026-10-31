@@ -1,7 +1,8 @@
-//! The window with the system's pickers, clipboard and CLI search replaced: a picker that hands over the path a test
-//! chose, an *Attach* picker that hands over the files a test chose, a copier that keeps what was copied, and a search
-//! for agent CLIs in folders a test names, in none until it does, so no native dialog opens, the person's clipboard is
-//! left alone and what is installed on the machine does not change what a test sees.
+//! The window with the system's pickers, clipboard, CLI search and clone console replaced: a picker that hands over
+//! the path a test chose, an *Attach* picker that hands over the files a test chose, a copier that keeps what was
+//! copied, a search for agent CLIs in folders a test names, in none until it does, and a clone console that does what
+//! a test scripts ([`ConsoleScript`]), so no native dialog or console window opens, the person's clipboard is left
+//! alone and what is installed on the machine does not change what a test sees.
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -13,8 +14,10 @@ use lurq::{
   node::Element,
 };
 use orchester_exec::search_path::{SearchBasis, SearchPath};
+use orchester_workspace::sharing::project::clone::{Clones, LaunchJob};
 use parking_lot::Mutex;
 
+pub use super::stand_in_console::{Console, ConsoleScript};
 use super::{Data, Window};
 use crate::{
   mcp::{McpKind, McpLink, McpSettings, McpStatus},
@@ -24,8 +27,8 @@ use crate::{
   ui::code_box::Copier,
 };
 
-/// What the stand-in pickers hand over next, what the stand-in copier was given, where the stand-in search looks, and
-/// how often it was asked to read the login shell again.
+/// What the stand-in pickers hand over next, what the stand-in copier was given, where the stand-in search looks, how
+/// often it was asked to read the login shell again, and what the stand-in clone console does and was given.
 #[derive(Clone)]
 pub struct StandIns {
   pub next: Arc<Mutex<Option<PathBuf>>>,
@@ -33,6 +36,7 @@ pub struct StandIns {
   pub copied: Arc<Mutex<Vec<String>>>,
   pub searched: Arc<Mutex<(SearchPath, SearchBasis)>>,
   pub shell_reads: Arc<Mutex<u32>>,
+  pub console: Console,
 }
 
 impl Default for StandIns {
@@ -43,6 +47,7 @@ impl Default for StandIns {
       copied: Arc::default(),
       searched: Arc::new(Mutex::new((SearchPath::default(), SearchBasis::Path))),
       shell_reads: Arc::default(),
+      console: Console::default(),
     }
   }
 }
@@ -61,6 +66,26 @@ impl StandIns {
   /// Agent CLIs are looked for in `search`, which looked at `basis`, from the next search on.
   pub fn search(&self, search: SearchPath, basis: SearchBasis) {
     *self.searched.lock() = (search, basis);
+  }
+
+  /// The clone console does as `script` says from the next clone on.
+  pub fn console(&self, script: ConsoleScript) {
+    self.console.script(script);
+  }
+
+  /// The clones the stand-in console was asked to run, in order.
+  pub fn consoles(&self) -> Vec<LaunchJob> {
+    self.console.jobs()
+  }
+
+  /// A console that holds ([`ConsoleScript::Holds`]) ends as the script after it says.
+  pub fn release_console(&self) {
+    self.console.release();
+  }
+
+  fn clones(&self) -> Clones {
+    let console = self.console.clone();
+    Clones::with_launcher(move |job| console.run(job))
   }
 
   fn picker(&self) -> PathPicker {
@@ -105,6 +130,7 @@ struct HostProps {
   attach: AttachmentPicker,
   copier: Copier,
   cli_search: CliSearch,
+  clones: Clones,
 }
 
 impl PartialEq for HostProps {
@@ -131,6 +157,7 @@ impl Component for Host {
     ctx.provide(props.attach);
     ctx.provide(props.copier);
     ctx.provide(props.cli_search);
+    ctx.provide(props.clones);
     ctx.mount_keyed::<Root>("app", props.root)
   }
 }
@@ -156,6 +183,7 @@ impl Window {
       attach: stand_ins.attach_picker(),
       copier: stand_ins.copier(),
       cli_search: stand_ins.cli_search(),
+      clones: stand_ins.clones(),
     };
     window.tree.mount_root::<Host>(&mut window.app, props);
     window.pass();

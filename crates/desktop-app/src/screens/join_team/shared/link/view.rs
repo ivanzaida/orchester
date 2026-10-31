@@ -1,6 +1,6 @@
-//! What *Link a folder* draws above its actions: the project it links (`Project` `uU4TU`), the checkout option with its
-//! folder row and what the check found (`Option · Use a checkout I have` `iEWas`), and in the place of the frames'
-//! *Clone it here* (`IOl2o`) the `git clone` command with *Copy*.
+//! What *Link a folder* draws above its actions: the project it links (`Project` `uU4TU`) and the checkout option with
+//! its folder row and what the check found (`Option · Use a checkout I have` `iEWas`). The clone panel under it is
+//! [`super::clone`]'s.
 
 use std::sync::Arc;
 
@@ -24,7 +24,6 @@ use crate::{
   ui::{
     button::{ActionButton, ButtonKind},
     callout::{Callout, CalloutTone},
-    code_box::{CodeBox, Copier},
     field::{FieldInput, field, field_error},
     icon::{Icon, icon},
     message::message_text,
@@ -65,7 +64,7 @@ pub(super) fn project_line(ctx: &Ctx, project: &SharedProject) -> Element {
 }
 
 /// The option: its radio and title, then the folder row and under it what the check found. `can_clone` when the page
-/// shows the command the words may point to.
+/// shows the clone panel the words may point to.
 pub(super) fn existing_option(
   ctx: &mut Ctx,
   (folder, choose): (&Signal<String>, &FutureAction<Arc<str>, Chosen, ()>),
@@ -105,7 +104,7 @@ pub(super) fn existing_option(
 }
 
 /// An option's title and what it is, 2 apart.
-fn titles(id: &str, title: &str, sub: &str) -> Column {
+pub(super) fn titles(id: &str, title: &str, sub: &str) -> Column {
   Column::new()
     .flex(1.0)
     .min_width(Dimension::Px(0.0))
@@ -221,35 +220,5 @@ fn line((glyph, color): (Icon, PaletteColor), text: &str) -> Element {
         .flex(1.0)
         .min_width(Dimension::Px(0.0)),
     )
-    .into()
-}
-
-/// No checkout yet: `command`, which clones the project, with *Copy*. Orchester does not run it (choice A).
-pub(super) fn clone_panel(ctx: &mut Ctx, project: &SharedProject, command: &str) -> Element {
-  let code = CodeBox::new(
-    "join-team-link-clone-command",
-    ctx.t_args(
-      "startup.shared.link.clone.command",
-      [("project", project.name.as_str())],
-    ),
-    command.to_owned(),
-  )
-  .copy_with(Copier::of(ctx))
-  .inline()
-  .render(ctx);
-  Column::new()
-    .id("join-team-link-clone")
-    .width(Dimension::Pct(100.0))
-    .padding(SpacingSize::Lg)
-    .spacing(SpacingSize::Md)
-    .background(PaletteColor::SurfacePanel)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .rounded(RadiusSize::Lg)
-    .child(titles(
-      "join-team-link-clone",
-      &ctx.t("startup.shared.link.clone.title"),
-      &ctx.t("startup.shared.link.clone.sub"),
-    ))
-    .child(code)
     .into()
 }

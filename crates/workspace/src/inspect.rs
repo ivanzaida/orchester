@@ -117,6 +117,9 @@ macro_rules! markers {
     impl $inspect for crate::sharing::cloud::Reach {}
     impl $inspect for crate::sharing::cloud::SignIn {}
     impl $inspect for crate::sharing::project::FirstDownload {}
+    impl $inspect for crate::sharing::project::clone::CloneEnd {}
+    impl $inspect for crate::sharing::project::clone::CloneRefusal {}
+    impl $inspect for crate::sharing::project::clone::Destination {}
     impl $inspect for crate::sharing::project::IdentityProblem {}
     impl $inspect for crate::sharing::project::JoinReview {}
     impl $inspect for crate::sharing::project::Joined {}

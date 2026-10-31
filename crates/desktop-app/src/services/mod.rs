@@ -23,7 +23,7 @@ use orchester_workspace::{
   runner::Runners,
   secrets::Vault,
   session::AppSession,
-  sharing::{self, Servers, cloud::Cloud, team_join::TeamJoin},
+  sharing::{self, Servers, cloud::Cloud, project::clone::Clones, team_join::TeamJoin},
   tasks::{integration_jobs::ProjectJobs, outside::OutsideChanges, resolve::Editor},
   workspace::Workspace,
 };
@@ -59,6 +59,9 @@ pub struct Services {
   pub cloud: Cloud,
   /// Joining a team, by the Cloud account or by a server's address and a code, with no project open.
   pub team_join: TeamJoin,
+  /// The shared projects' clones in a console window, from *Link a folder*; a test or a QA copy provides its own
+  /// in the context.
+  pub clones: Clones,
   /// Where web pages open: the browser, or a record in a test or a QA copy.
   pub links: Links,
   /// What automation changed in which project, so only the screens that show it read it again.
@@ -119,6 +122,7 @@ impl Services {
       plan_reads: PlanReads::new(workspace.clone(), runners.clone()),
       runners,
       team_join: TeamJoin::new(servers.clone(), cloud.clone()),
+      clones: Clones::system(&workspace, programs.clone()),
       cloud,
       links: Links::from_env(),
       servers,

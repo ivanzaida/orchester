@@ -291,7 +291,7 @@
       "link": {
         "titlePending": "Link a project to a folder",
         "title": "Link {{project}} to a folder",
-        "lead": "Orchester works in a checkout on this computer. The team server never touches code: use a checkout you have, or clone it with the command below.",
+        "lead": "Orchester works in a checkout on this computer. The team server never touches code: use a checkout you have, or clone it here.",
         "leadNoClone": "Orchester works in a checkout on this computer. The team server never touches code: use a checkout you have.",
         "hint": "· remote hint {{hint}}",
         "existing": {
@@ -303,16 +303,69 @@
         "choose": "Choose…",
         "chooseTitle": "Choose the folder of your checkout",
         "matches": "Git repository · origin {{origin}} matches the project",
-        "notRepository": "Not a git repository. Pick the folder you cloned, or clone it with the command below.",
+        "notRepository": "Not a git repository. Pick the folder you cloned, or clone it below.",
         "notRepositoryNoClone": "Not a git repository. Pick the folder you cloned.",
         "differs": {
           "title": "origin is {{origin}}",
           "body": "{{project}} expects {{hint}}. Link anyway if this is your fork; runs push to its origin."
         },
         "clone": {
-          "title": "No checkout yet?",
-          "sub": "Clone the repository with this command, then choose the new folder above",
-          "command": "The command that clones {{project}}"
+          "title": "No checkout yet? Clone it here",
+          "sub": "Git clones {{hint}} in a console window, where you can sign in if it asks. Orchester picks the new folder above when Git finishes.",
+          "into": "Clone into",
+          "intoPlaceholder": "The new folder for the checkout",
+          "chooseTitle": "Choose where to put {{project}}",
+          "start": "Clone repository…",
+          "running": "Cloning in a console…",
+          "creates": "Creates the folder {{name}} in {{parent}}",
+          "emptyFolder": "An empty folder: Git clones into it",
+          "occupied": "This folder already has files. Choose an empty folder or a new name: Orchester never clones over files.",
+          "noParent": "The folder {{parent}} doesn't exist.",
+          "notAbsolute": "Give the folder's full path, from its drive or from /, or choose where to put it.",
+          "notLocal": "Choose a folder on this computer: Orchester doesn't clone onto a network share.",
+          "unreadable": "This folder can't be read. Choose another one.",
+          "waiting": {
+            "title": "Git is cloning in a console window",
+            "body": "Sign in there if Git asks. Closing the window stops the clone."
+          },
+          "done": "Cloned into {{path}}. It's chosen above: link it with the button below.",
+          "gitMissing": {
+            "title": "Git isn't installed",
+            "body": "Install Git from git-scm.com (on a Mac, the command line tools), then clone again."
+          },
+          "notOpened": {
+            "title": "The console window didn't open",
+            "body": "Nothing was cloned. Try again, or clone in a terminal of your own and choose the folder above."
+          },
+          "notStarted": {
+            "title": "Terminal didn't start the clone",
+            "body": "Nothing was cloned. Check that Terminal may run scripts from Orchester, then try again."
+          },
+          "unsupported": {
+            "title": "Cloning in a console isn't available on this system yet",
+            "body": "Clone in a terminal of your own, then choose the folder above."
+          },
+          "lost": {
+            "title": "Orchester lost track of the clone",
+            "body": "Look at the console window: when Git has finished, choose the new folder above."
+          },
+          "failed": {
+            "title": "Git stopped before the clone finished (code {{code}})",
+            "body": "Git's message is in the console window. If it says access was denied, sign in when Git asks, or check that your account can read {{hint}}, then try again."
+          },
+          "closed": {
+            "title": "The console closed before the clone finished",
+            "body": "Nothing was linked."
+          },
+          "notCheckout": {
+            "title": "Git finished, but the folder isn't a checkout of this project"
+          },
+          "left": "Git left the folder {{path}}. Orchester didn't remove it: delete it yourself, or choose another folder.",
+          "console": {
+            "title": "Orchester · cloning {{project}}",
+            "failed": "Git did not finish the clone; its message is above.",
+            "close": "Press Enter to close this window"
+          }
         },
         "submit": "Link and download tasks",
         "anyway": "Link anyway",

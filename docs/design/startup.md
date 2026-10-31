@@ -27,7 +27,8 @@ projects* tab. Controls are instances of `Button/*` (`iBDdP`, `O1AstI`, `YaUJX`,
 | Flow | `oPJyJ` | the steps with the frames that show them |
 | Row 1 · First start | `D4yHz3` | `H9CZ1` 01 first start (dark), `ifctO` 01L the same in light, `Knacr` 01b signed in to Cloud already: the third way names the team and an invite |
 | Row 2 · Join a team | `z4TXN` | `B914L` 02 join a team: Orchester Cloud or a code, `BD519` 03 signing in, `drCQd` 04 your teams and invites, `v5qbWM` 05 the team's shared projects |
-| Row 3 · Open a shared project | `yzHyC` | `go2aM` 06 link to a folder (existing checkout, origin matches), `phoYc` 07 cloning with progress, `YN6MO` 08 first download with tasks arriving |
+| Row 3 · Open a shared project | `yzHyC` | `go2aM` 06 link to a folder (existing checkout, origin matches; the clone panel under it), `phoYc` 07 cloning in a console (ORC-584), `YN6MO` 08 first download with tasks arriving |
+| Row 3b · Clone in a console (ORC-584) | to be drawn | 07b cloned and chosen in the folder field, 07c destination already has files, 07d Git not found, 07e Git failed with its code and the folder it left, 07f console closed before Git ended |
 | Row 4 · Returning start | `d2ww3X` | `i5G19A` 09 All projects with a team's project offered above the list, `dLOCJ` 09b All projects, local only |
 | Row 5 · States | `NPuAL` | `aWsVx` 10 wrong or expired code, `oOn6j` 11 server can't be reached, `NaEPI` 12 no shared projects yet, `sN8Pa` 13 folder is not a git repository, `tDFeg` 13b origin doesn't match the hint, `mruEH` 14 macOS: agent CLI not found (Finder-started app without the shell's PATH) |
 | Row 6 · Notes | `i5TU1E` | `kcyR3` what the design decides, `OQiuc` open choices |
@@ -47,7 +48,8 @@ projects* tab. Controls are instances of `Button/*` (`iBDdP`, `O1AstI`, `YaUJX`,
 5. **Projects.** A team lists only the projects the person is invited to (row 50). Before any team is joined, the
    third way goes through Join and then shows the projects.
 6. **Folder.** An existing checkout: `origin` is compared with the project's remote hint; a mismatch warns and *Link
-   anyway* decides (row 49). Without one, the `git clone` command with *Copy* (choice A, decided).
+   anyway* decides (row 49). Without one, *Clone repository…* clones it in a console window the person sees, and a
+   clone that worked fills the folder field (choice A, revised by ORC-584).
 7. **First download.** Joined, linked, tasks (*84 of 212*, the latest arrivals listed), team settings, each with its
    state. *Open Kontur* works before the download ends; tasks keep arriving in the list without a restart (ORC-282).
 8. **Returning start.** All projects stays as built (`crates/desktop-app/src/screens/all_projects/`): the centred
@@ -62,10 +64,11 @@ projects* tab. Controls are instances of `Button/*` (`iBDdP`, `O1AstI`, `YaUJX`,
 
 ## Open choices for the person
 
-- **A.** Decided (the person, 2026-10-30): there is no *Clone it here*. Orchester never clones; *Link a folder* shows
-  the `git clone` command with *Copy*, and ORC-290 and ORC-296 are canceled. Where a frame (06 `go2aM`, 13 `sN8Pa`, 13b
-  `tDFeg`) draws *Clone it here*, and 07 `phoYc` its progress, the command with Copy replaces it: an agreed deviation,
-  not a mismatch.
+- **A.** Revised by ORC-584 (the person, 2026-10-31): *Clone it here* clones in a console window the person sees,
+  not in the app. ORC-290 and ORC-296, which cloned in a hidden process with progress in the app, stay canceled: there
+  is no in-app progress bar and no in-app *Cancel*; closing the console cancels. (Decided on 2026-10-30, before this:
+  no clone at all, only the `git clone` command with *Copy*.) Settings › Orchester's invite landing still shows the
+  command with *Copy* (choice C).
 - **B.** Before any team is joined, *Open a team's shared project* leads through Join (proposed), or is hidden until
   a team is joined?
 - **C.** Settings › Orchester's join and invite landing pages could reuse these steps, so there is one join flow.
@@ -93,9 +96,9 @@ projects* tab. Controls are instances of `Button/*` (`iBDdP`, `O1AstI`, `YaUJX`,
     (`/join-team?way=projects&server=<id>`), then *Link a folder* (`?way=folder&server=<id>&project=<slug>`).
   - **No task count.** The rows of 05 `v5qbWM` draw *212 tasks*; `GET /projects` has no count of a project's tasks and
     `next_number` counts numbers given, so the app shows none until the API has one.
-  - **Clone.** The panel in the place of *Clone it here* holds no radio, as nothing is left to choose: its title, what
-    to do and the command with *Copy*. A project with no hint, or one the command can't hold safely
-    (`clone_command`), has no panel and the words do not point to one.
+  - **Clone.** The panel in the place of *Clone it here* holds no radio: its title, what it does, *Clone into* with
+    *Choose…*, what Git will do with that folder and *Clone repository…* (see "Clone in a console" below). A project
+    with no hint, or one an address can't hold safely (`clone_url`), has no panel and the words do not point to one.
   - **Already linked.** *Continue with Kontur* opens a project a checkout on this computer is linked to, past *Link a
     folder*. No frame draws this.
 - Decisions 1–3 as built (`crates/desktop-app/src/screens/all_projects/welcome.rs` and `welcome/`):
@@ -127,3 +130,40 @@ projects* tab. Controls are instances of `Button/*` (`iBDdP`, `O1AstI`, `YaUJX`,
     *Try again*, and the callout leaves; the end says *Tasks downloaded* without the callout and *Stay here*. *Stay
     here* puts the callout away and stays on the page. The tasks and the team settings are the only parts: the tags and
     modules the download reports are not drawn.
+
+## Clone in a console (ORC-584, as built)
+
+Code: `crates/exec/src/clone_console/` (the console, behind `cfg`), `crates/workspace/src/sharing/project/clone/` (the
+destination check, the clone's end, `Clones`), `crates/desktop-app/src/screens/join_team/shared/link/clone.rs` and
+`clone_view.rs` (the panel).
+
+- **The flow.** *Clone into* is the folder the checkout gets; *Choose…* picks the folder it goes in and adds the
+  repository's name (`kontur`). Under the row, what Git will do: *Creates the folder kontur in …*, or *An empty
+  folder: Git clones into it*. *Clone repository…* (a person's press only, as linking is) opens a console window that
+  runs `git clone -- https://<hint>.git <folder>`. While it runs the button is *Cloning in a console…* and an
+  information callout says to sign in there if Git asks and that closing the window stops the clone. Leaving the page
+  and coming back follows the same console; a second press opens no second one.
+- **Proven done, never linked by itself.** A clone counts only when Git ended with 0 **and** the folder checks as the
+  project's checkout (`check_folder` says it matches). It then fills the folder field, so the page's own check shows
+  it matches and *Link and download tasks* goes on as for any folder. Nothing is linked until the person presses it.
+- **Nothing is deleted.** A folder that already holds anything, a hidden file or a file at the path included, is
+  refused under the row before any console opens (*This folder already has files…*), as are a missing parent, a path
+  that is not absolute and one on another machine. What a failed or closed clone left is named (*Git left the folder
+  …*) and kept; the check under the row then refuses it, so the next clone goes elsewhere.
+- **The states.** Git not installed (none on the search path that starts directly and answers `git --version`, which
+  also covers Apple's stand-in `/usr/bin/git`), the console did not open, Terminal did not start the script (macOS,
+  within two minutes), Git failed with its code (a refused sign-in is one: Git's message stays in the console, not
+  read by Orchester), the console closed before Git ended, Git ended with 0 but the folder is not the project's
+  checkout, and Orchester lost track of the console. Each one leaves *Clone repository…* to press again.
+- **`gh` is not needed.** The address is `https://`, with Git's own credentials: Git Credential Manager, the macOS
+  keychain, or `gh` when the person set it up as Git's helper (`gh auth setup-git`). Pushing already works that way
+  (`GIT_TERMINAL_PROMPT=0` in Orchester's own Git work), and `gh` is only for the pull request API. The console
+  leaves `GIT_TERMINAL_PROMPT` and `GCM_INTERACTIVE` unset, so Git may ask there.
+- **Values as data.** On Windows the console is `powershell.exe` from the system folder with `-NoProfile` and a fixed
+  script; git's path, the address, the folder and the window's words reach it only as environment variables. On macOS
+  Terminal runs a `.command` script of Orchester's own where each value is one single-quoted word. The window's words
+  have no control characters. The address holds no user info and no shell characters (`clone_url`).
+- **Platforms.** Windows: a PowerShell console of its own; after a failure it waits for Enter so Git's message stays
+  readable. macOS: a Terminal window; whether it still runs is told by the process id the script writes first.
+  Elsewhere: *not available on this system yet*. The console outlives the app if the app quits; a folder it left
+  then shows as already having files.

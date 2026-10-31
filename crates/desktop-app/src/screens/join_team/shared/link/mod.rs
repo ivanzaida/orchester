@@ -5,9 +5,11 @@
 //! on its tasks, where the first download shows, or on the join review when both sides have tasks. Linking changes what
 //! this computer sends, so it is a person's: synthetic input is refused, and the page says so.
 //!
-//! Choice A of `docs/design/startup.md`: Orchester never clones, so the frames' *Clone it here* is the `git clone`
-//! command with *Copy* ([`view::clone_panel`]).
+//! Without a checkout, *Clone it here* clones the project's repository in a console window (ORC-584, [`clone`]); a
+//! clone that worked fills the folder field, and is linked only as any other folder is.
 
+mod clone;
+mod clone_view;
 mod view;
 
 use std::{path::PathBuf, sync::Arc};
@@ -33,7 +35,7 @@ use orchester_workspace::{
     project::{
       ShareError,
       folder::{FolderCheck, FolderLinkError, FolderLinked, check_folder},
-      landing::clone_command,
+      landing::clone_url,
     },
   },
   workspace::Workspace,
@@ -262,15 +264,17 @@ impl LinkFolder {
     (team, project): (&Team, &SharedProject),
     (target, check): (&JoinTarget, Option<&FolderCheck>),
   ) -> Element {
-    let command = project.remote_hint.as_ref().and_then(clone_command);
+    let can_clone = project.remote_hint.as_ref().and_then(clone_url).is_some();
     let mut parts = vec![
       view::project_line(ctx, project),
-      view::existing_option(ctx, (&self.folder, &self.choose), project, (check, command.is_some())),
+      view::existing_option(ctx, (&self.folder, &self.choose), project, (check, can_clone)),
     ];
-    parts.extend(command.as_ref().map(|command| view::clone_panel(ctx, project, command)));
+    if can_clone {
+      parts.push(clone::clone_option(ctx, target, project, &self.folder));
+    }
     parts.push(self.actions(ctx, (team, project), (target, check)));
     let name = team.entry().stored.name.clone();
-    let lead = if command.is_some() {
+    let lead = if can_clone {
       "startup.shared.link.lead"
     } else {
       "startup.shared.link.leadNoClone"

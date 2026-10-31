@@ -7,6 +7,7 @@
 //! `test-support` feature builds it.
 
 pub mod signed_in;
+mod stand_in_console;
 pub mod stand_ins;
 
 use std::{

@@ -105,11 +105,16 @@ impl Landing {
   }
 }
 
-/// `git clone https://<identity>.git`, only for an identity made of a plain host (letters, digits, dots and hyphens with
-/// an optional port, or a bracketed IPv6 address) and path segments of letters, digits, dots, underscores and hyphens.
-/// The hint is the server's word, and a person may paste the command into a shell: anything else (`$(…)`, backticks,
-/// `;`, `|`, quotes, control characters) gets no command, and the hint shows as plain text.
+/// `git clone` and [`clone_url`]: the command a person may paste into a shell, so no hint the address refuses gets one.
 pub fn clone_command(identity: &RepositoryIdentity) -> Option<String> {
+  clone_url(identity).map(|url| format!("git clone {url}"))
+}
+
+/// `https://<identity>.git`, only for an identity made of a plain host (letters, digits, dots and hyphens with an
+/// optional port, or a bracketed IPv6 address) and path segments of letters, digits, dots, underscores and hyphens.
+/// The hint is the server's word: anything else (`$(…)`, backticks, `;`, `|`, quotes, `@` and user info, control
+/// characters) gets no address, and the hint shows as plain text.
+pub fn clone_url(identity: &RepositoryIdentity) -> Option<String> {
   let (host, path) = identity.as_str().split_once('/')?;
   let segment = |part: &str| {
     !part.is_empty()
@@ -119,7 +124,7 @@ pub fn clone_command(identity: &RepositoryIdentity) -> Option<String> {
         .bytes()
         .all(|byte| byte.is_ascii_alphanumeric() || b"._-".contains(&byte))
   };
-  (plain_host(host) && path.split('/').all(segment)).then(|| format!("git clone https://{}.git", identity.as_str()))
+  (plain_host(host) && path.split('/').all(segment)).then(|| format!("https://{}.git", identity.as_str()))
 }
 
 /// A host name or IPv4 address with an optional port, or a bracketed IPv6 address with one.

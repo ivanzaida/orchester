@@ -7,6 +7,7 @@
 mod automatic;
 mod claim_ends;
 mod claims;
+pub mod clone;
 pub mod convert;
 pub mod discovery;
 pub(super) mod download;

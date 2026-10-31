@@ -408,6 +408,24 @@ label) and five minor ones; all are fixed and wait for a re-check.
 
 ## U · Screens
 
+### ORC-584 · Clone the repository from *Link a folder* in a console · branch `orchester/orc-584-run-1` (implemented 2026-10-31, waiting for the Pencil design, review and design verification)
+
+*Clone it here* on *Link a folder* (06 `go2aM`): *Clone into* with *Choose…*, what Git will do with that folder, and
+*Clone repository…*, which opens a console window the person sees (PowerShell on Windows, Terminal on macOS) running
+`git clone -- https://<hint>.git <folder>` with each value as data. Git may ask for a sign-in there, with Git's own
+credentials (`gh` is not needed). A clone counts only when Git ended with 0 and the folder checks as the project's
+checkout; it then fills the folder field and is linked only when the person presses *Link and download tasks*. A
+folder with anything in it is refused before a console opens, and what a failed or closed clone left is named and
+kept. Choice A of `docs/design/startup.md` is revised; ORC-290 and ORC-296 (hidden clone with in-app progress) stay
+canceled. As built: `docs/design/startup.md`, "Clone in a console". Tests: `cargo test -p orchester-exec --features
+test-program --test clone_console clone_console_`, `cargo test -p orchester-workspace --test startup_clone
+startup_clone_`, `cargo test -p orchester-app --features test-support --test shared_projects shared_projects_`.
+
+**Done when** the Pencil frames are drawn (06 `go2aM` with the clone panel, 07 `phoYc` as *Cloning in a console*, Row
+3b with 07b–07f), an independent verifier reports no blocking or major mismatches against them, and a person has
+cloned once for real on Windows and on macOS (a real console with Git's sign-in, Terminal's window closed mid-clone),
+which no test can do; then move this entry to *Done*.
+
 ### ORC-16 · All projects and Add project in the new app · branch `claude/all-projects` (implemented 2026-10-14, waiting for review and design verification)
 
 All projects (`S5HDKf`, states `kwpO2`), the welcome of a first launch (`UQZRa`) and Add project as a page

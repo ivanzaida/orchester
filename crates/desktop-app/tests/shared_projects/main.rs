@@ -2,13 +2,15 @@
 //! `qzzYw`): a stand-in team server joined with a code. Its shared projects are listed with the first picked (05
 //! `v5qbWM`), none yet is the empty state with *Check again* (12 `NaEPI`), and choosing one leads to *Link a folder*
 //! (06 `go2aM`), whose folder is checked as it changes: a match goes on (`go2aM`), another `origin` offers *Link
-//! anyway* (13b `tDFeg`), not a repository is an error under the row with nothing to press (13 `sN8Pa`). There is no
-//! *Clone it here*: the `git clone` command with *Copy* is in its place. Only a person links.
+//! anyway* (13b `tDFeg`), not a repository is an error under the row with nothing to press (13 `sN8Pa`). *Clone it
+//! here* clones in a console window ([`clone`]). Only a person links.
 //!
 //! `cargo test -p orchester-app --test shared_projects shared_projects_`
 
 #[path = "../support/mod.rs"]
 mod support;
+
+mod clone;
 
 use std::{
   fs,
@@ -229,7 +231,7 @@ fn shared_projects_not_a_repository_errors_under_the_row() {
   shows(&mut window, "join-team-link-error");
   assert_eq!(
     window.text("join-team-link-error"),
-    "Not a git repository. Pick the folder you cloned, or clone it with the command below."
+    "Not a git repository. Pick the folder you cloned, or clone it below."
   );
   presses_nothing(&mut window, SUBMIT, &plain);
 
@@ -279,18 +281,7 @@ fn shared_projects_choose_fills_the_field_from_the_picker() {
 }
 
 #[test]
-fn shared_projects_there_is_no_clone_only_the_command_with_copy() {
-  let server = acme();
-  let (mut window, stand_ins) = at_link(&server);
-  let command = format!("git clone https://{HINT}.git");
-  assert_eq!(window.text("join-team-link-clone-command"), command);
-  window.press("join-team-link-clone-command-copy");
-  window.until("the command to be copied", |_| stand_ins.copied.lock().len() == 1);
-  assert_eq!(stand_ins.copied.lock().as_slice(), [command]);
-}
-
-#[test]
-fn shared_projects_a_project_without_a_hint_has_no_command() {
+fn shared_projects_a_project_without_a_hint_has_no_clone_panel() {
   let server = acme();
   let (mut window, _) = joined(&server);
   shows(&mut window, "join-team-projects-billing");
