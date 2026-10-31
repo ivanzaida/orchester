@@ -2,8 +2,8 @@
 //! workspace, adds a project, creates a task and opens its pages with the cloud asked nothing; what needs a sign-in
 //! says so in place and offers it; the tabs follow a sign-in and a sign-out; a project that waits for its account tells
 //! nothing meanwhile; and every page that confirms a first link says when it moves the project into the account, which
-//! it does only once the server accepted. Running a task to its end needs a real runner: the QA copy's
-//! `empty -FakeAgents` proves that.
+//! it does only once the server accepted. Running a task to its end needs a real runner: `mcp_domain`'s
+//! `domain_signed_out_a_task_runs_to_its_end_and_merges` does that signed out.
 //!
 //! `cargo test -p orchester-app --test local_use local_use_`
 

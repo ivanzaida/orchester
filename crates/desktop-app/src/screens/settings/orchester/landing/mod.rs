@@ -5,12 +5,13 @@
 //! review at once; otherwise the page lists the checkouts with how each compares ([`rows`]), adds a folder Orchester
 //! doesn't know yet, or shows the `git clone` to run first (Orchester never clones). *Continue to the join review*,
 //! under the checkouts, opens it in the chosen project; nothing is sent until the review is confirmed. *Later* leaves
-//! the invite accepted: the server's entry in Settings › Orchester lists the project with *Link a checkout…*. With
-//! nobody signed in and the project's server out of reach, the page asks for the sign-in in place of the checkouts
-//! (`zoihT`), and goes on by itself once it is made.
+//! the invite accepted: the server's entry in Settings › Orchester lists the project with *Link a checkout…*. With the
+//! project's server out of reach, nobody signed in, or signed in without the code accepting needs, the page asks for
+//! the sign-in in place of the checkouts ([`sign_in`]), and goes on by itself once it is made.
 
 mod adding;
 mod rows;
+mod sign_in;
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -18,36 +19,31 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction},
-    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
-  components::{Column, Text},
   core::Signal,
-  node::{Element, border::Border, dimension::Dimension},
+  node::Element,
 };
 use orchester_core::id::ProjectId;
 use orchester_workspace::{
   background,
   sharing::{
     Servers,
+    cloud::SignIn,
     project::landing::{CheckoutRefusal, Landing, Linked},
   },
 };
 use parking_lot::Mutex;
 
-use super::{Said, sharing_said};
+use super::{Said, answers::Answers, sharing_said, two_factor};
 use crate::{
   navigation::Navigation,
   root::follow_sign_in,
   routes::{JoinTarget, OrchesterView, ProjectPage, ProjectSettingsTab, Route},
-  screens::{
-    cloud_sign_in::{Place, SignInOffer},
-    settings::frame,
-  },
+  screens::settings::frame,
   services::{
     Services,
     path_picker::{PathKind, PathPicker},
   },
-  theme::ExtraSpacing,
   ui::{
     button::{ActionButton, ButtonKind},
     icon::Icon,
@@ -114,6 +110,8 @@ struct LandingPage {
   skipped: Mutex<bool>,
   /// *Later* was pressed: the page says where the invite waits.
   later: Signal<bool>,
+  /// *Sign in again*, a person's, while accepting the invite needs a sign-in with a code.
+  answers: Answers,
 }
 
 impl Component for LandingPage {
@@ -153,6 +151,7 @@ impl Component for LandingPage {
       revision,
       skipped: Mutex::new(false),
       later: ctx.signal(false),
+      answers: Answers::new(ctx),
     }
   }
 
@@ -162,6 +161,7 @@ impl Component for LandingPage {
     // First in every render: lurq keeps a component's futures by the order it asks for them.
     let sign_in = follow_sign_in(ctx, &services.cloud);
     let known_server = known_server(ctx, target.server);
+    let factors = two_factor::read(ctx, 0, &services.cloud, sign_in.account());
     let deps = (
       self.revision.get(),
       sign_in.account(),
@@ -176,9 +176,16 @@ impl Component for LandingPage {
       })
       .state()
       .get();
-    // Nobody signed in, and the project's server is not this computer's to reach: the invite needs the sign-in.
-    if !sign_in.is_signed_in() && state.error.as_ref().is_some_and(|said| *said == Said::new(NO_SERVER)) {
-      return sign_in_page(ctx, &target, known_server.as_deref());
+    // The project's server is not this computer's to reach: accepting the invite may need a sign-in first.
+    if state.error.as_ref().is_some_and(|said| *said == Said::new(NO_SERVER)) {
+      let invite = (&target, known_server.as_deref());
+      match &sign_in {
+        SignIn::SignedOut { .. } => return sign_in::signed_out(ctx, invite),
+        SignIn::SignedIn { email, .. } if factors.is_some_and(|status| status.enabled && !status.this_session) => {
+          return sign_in::again(ctx, invite, (email, &self.answers));
+        }
+        SignIn::SignedIn { .. } => {}
+      }
     }
     let body = match (state.data, state.error) {
       (Some(Read(landing)), _) => {
@@ -341,49 +348,6 @@ fn page(ctx: &mut Ctx, landing: Option<&Landing>, target: &JoinTarget, body: Ele
     ))
     .child(frame::head("orchester-landing-head", None, (&title, lead), Vec::new()))
     .child(body);
-  frame::column("orchester-landing-scroll", pane)
-}
-
-/// The landing while nobody is signed in (`zoihT`): the crumb, then in one card the invite as this computer knows it
-/// and the sign-in in place of the checkouts.
-fn sign_in_page(ctx: &mut Ctx, target: &JoinTarget, server: Option<&str>) -> Element {
-  let navigation = Navigation::of(ctx);
-  let title = match server {
-    Some(server) => ctx.t_args(
-      "sharing.landing.title",
-      [("project", target.slug()), ("server", server)],
-    ),
-    None => ctx.t_args("sharing.landing.titlePending", [("project", target.slug())]),
-  };
-  let facts = rows::known_facts(ctx, target.slug(), server);
-  let sign_in = ctx.mount_keyed::<SignInOffer>("orchester-landing-sign-in", Place::Card);
-  let card = Column::new()
-    .id("orchester-landing-signed-out")
-    .width(Dimension::Pct(100.0))
-    .padding(SpacingSize::Md)
-    .spacing(ExtraSpacing::Loose.role())
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .rounded(RadiusSize::Lg)
-    .child(
-      Text::new(&title)
-        .id("orchester-landing-signed-out-title")
-        .variant(crate::theme::ExtraTypography::FormSection.role()),
-    )
-    .child(
-      Text::new(&ctx.t("sharing.landing.signInLead"))
-        .id("orchester-landing-signed-out-lead")
-        .variant(lurq::app::theme::TypographyStyle::Description)
-        .width(Dimension::Pct(100.0)),
-    )
-    .child(facts)
-    .child(sign_in);
-  let pane = frame::pane("orchester-landing-page")
-    .child(frame::crumb(
-      "orchester-landing-crumb",
-      &ctx.t("settings.tabs.orchester"),
-      navigation.to(Route::Orchester(OrchesterView::default())),
-    ))
-    .child(card);
   frame::column("orchester-landing-scroll", pane)
 }
 

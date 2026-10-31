@@ -461,6 +461,7 @@
       "title": "Join {{project}} on {{server}}",
       "titlePending": "Join {{project}}",
       "signInLead": "Sign in to Orchester Cloud to accept this invite. Nothing changes on this computer until you've picked a checkout and read the join review.",
+      "signInAgainLead": "This computer is signed in as {{email}}. Accepting this invite needs a sign-in with your two-factor code.",
       "notConnected": "{{server}} · not connected yet",
       "unknownFact": "—",
       "lead": "This computer is connected to {{server}} as {{username}}. Pick the checkout of {{project}} here; the next page shows what joining does before anything is sent.",

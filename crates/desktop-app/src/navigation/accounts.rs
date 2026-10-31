@@ -53,12 +53,17 @@ impl AccountTabs {
       // Signed out with no tabs of its own: Settings › Orchester Cloud says why, and signs in again.
       None => TabSet::at(Route::Orchester(OrchesterView::default())),
     });
+    let pressed_on = navigation.route_now();
     let left = navigation.swap_tabs(tabs);
     shown.kept.insert(previous, left);
     projects.forget_all();
-    // *Sign in again* goes on to the sign-in wherever it was pressed (`d1yW2I`), whatever page the tabs kept show.
+    // *Sign in again* goes on to the sign-in wherever it was pressed, whatever page the tabs kept show: in place on the
+    // invite landing, which asks for it there (`d1yW2I`), and in Settings › Orchester Cloud from anywhere else.
     if signing_in_again(sign_in) {
-      navigation.go(Route::Orchester(OrchesterView::default()));
+      navigation.go(match pressed_on {
+        Route::Invite(target) => Route::Invite(target),
+        _ => Route::Orchester(OrchesterView::default()),
+      });
     }
   }
 }

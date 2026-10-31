@@ -4,8 +4,8 @@
 //! needs it on the account and a sign-in with a code on this computer: an invite the cloud says needs it, or whose
 //! accept it refused, says which one is missing and offers the one step that fixes it, *Turn on two-factor
 //! authentication* ↗ or *Sign in again*, which signs out so the person signs in with the code in Settings › Orchester
-//! Cloud (`d1yW2I`). After a sign-in with a recovery code that leaves few, a warning says to make new
-//! ones; no frame draws it, so it is the UI kit's warning callout.
+//! Cloud, or in place on the invite landing (`d1yW2I`, [`super::landing`]). After a sign-in with a recovery code that
+//! leaves few, a warning says to make new ones; no frame draws it, so it is the UI kit's warning callout.
 
 use lurq::{
   app::{
@@ -18,8 +18,7 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_api::cloud::{CloudInvite, TwoFactorStatus};
-use orchester_core::id::InviteId;
-use orchester_store::StoredCloudAccount;
+use orchester_core::id::{CloudAccountId, InviteId};
 use orchester_workspace::sharing::cloud::{Cloud, FEW_RECOVERY_CODES, WebPage};
 
 use super::{
@@ -47,16 +46,10 @@ pub struct TwoFactor(pub Option<TwoFactorStatus>);
 
 impl DevtoolsInspectable for TwoFactor {}
 
-/// The two-factor authentication of `account`, read at `revision` (`GET /me`) and again whenever the window gains or
-/// loses the focus, so turning it on in the browser shows on coming back; `None` until it is read, or when the cloud
-/// cannot say (logged).
-pub fn read(
-  ctx: &mut Ctx,
-  revision: u64,
-  cloud: &Cloud,
-  account: Option<&StoredCloudAccount>,
-) -> Option<TwoFactorStatus> {
-  let signed_in = account.map(|account| account.account);
+/// The two-factor authentication of the account `signed_in`, read at `revision` (`GET /me`) and again whenever the
+/// window gains or loses the focus, so turning it on in the browser shows on coming back; `None` while nobody is signed
+/// in, until it is read, or when the cloud cannot say (logged).
+pub fn read(ctx: &mut Ctx, revision: u64, cloud: &Cloud, signed_in: Option<CloudAccountId>) -> Option<TwoFactorStatus> {
   let focused = ctx.window().info().is_focused;
   ctx
     .future(

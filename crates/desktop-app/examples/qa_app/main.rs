@@ -6,10 +6,10 @@
 //! Settings shows ([`settings`]). `--join-team` starts a stand-in team server on loopback that the stand-in cloud names
 //! as the account's, with an invite to one of its projects, and prints its address and codes, for *Join a team*. A
 //! scenario that needs the account says so beside the data ([`qa_app_asks`]), whatever the arguments say. A marker the
-//! seed's `team-*` scenarios leave beside the database ([`team::State`]) sets up a stand-in team server on loopback that
-//! answers while the window is open ([`team`]); where a person's press is part of the state, the window opens there
-//! ([`team_window`]). What it moves to the Recycle Bin / Trash goes to `trash` beside its data. Fixture data for QA,
-//! never shipped: an example is no part of the app's program.
+//! seed's `team-*` scenarios leave beside the database ([`team::State`]) sets up a stand-in team server on loopback
+//! that answers while the window is open ([`team`]); where a person's press is part of the state, the window opens
+//! there ([`team_window`]). What it moves to the Recycle Bin / Trash goes to `trash` beside its data. Fixture data for
+//! QA, never shipped: an example is no part of the app's program.
 //!
 //!   qa_app [--signed-in | --signed-out] [--settings] [--join-team]
 
