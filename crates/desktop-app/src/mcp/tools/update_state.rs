@@ -1,15 +1,19 @@
 use lurq::mcp::{McpTool, Scope};
 use orchester_workspace::app_updates::{
   AppUpdates, CopyReason, NewestRelease, ReadyUpdate, UpdateFailure, UpdateState,
+  install::{InstallFailure, InstallStep},
 };
 use serde_json::{Value, json};
 
 const DESCRIPTION: &str = "Where this copy's own update stands, as Settings › Updates shows it: `running` (this copy's \
-  version) and `state`: up_to_date (checked_at), checking, downloading (version, received, total, percent), ready \
-  (version, notes, critical), waiting_for_runs (the same and runs), failed (version, reason: no_installer, wrong_size, \
-  wrong_digest, unknown_key, bad_signature, not_saved), cloud_unreachable (last_checked), not_this_copy (reason: \
+  version), `updated` (the version and notes this start updated to, or null) and `state`: up_to_date (checked_at), \
+  checking, downloading (version, received, total, percent), ready (version, notes, critical), waiting_for_runs (the \
+  same and runs), installing (the same and step: waiting_for_runs with runs, stopping_runs, backing_up, handing_over), \
+  failed (version, reason: no_installer, wrong_size, wrong_digest, unknown_key, bad_signature, not_saved), \
+  install_failed (version, reason, exit_code, log), cloud_unreachable (last_checked), not_this_copy (reason: \
   development, qa, script_install, portable, program_folder_unknown; newest with its download, or null) or \
-  not_on_this_platform (newest). Times are milliseconds since the Unix epoch. Read only: no tool installs an update.";
+  not_on_this_platform (newest). Times are milliseconds since the Unix epoch. Read only: an update installs only when \
+  the person presses Restart to update.";
 
 pub fn tool(updates: AppUpdates) -> McpTool {
   McpTool::new("update_state")
@@ -27,6 +31,10 @@ pub fn tool(updates: AppUpdates) -> McpTool {
 pub fn update_state(updates: &AppUpdates) -> Value {
   let mut answer = state_json(&updates.state());
   answer["running"] = json!(updates.this_app().version.as_str());
+  answer["updated"] = updates.just_updated().map_or(
+    Value::Null,
+    |updated| json!({ "version": updated.version.as_str(), "notes": updated.notes }),
+  );
   answer
 }
 
@@ -51,11 +59,20 @@ fn state_json(state: &UpdateState) -> Value {
       answer["runs"] = json!(runs);
       answer
     }
+    UpdateState::Installing { update, step } => {
+      let mut answer = ready_json("installing", update);
+      answer["step"] = json!(step_name(step));
+      if let InstallStep::WaitingForRuns(runs) = step {
+        answer["runs"] = json!(runs);
+      }
+      answer
+    }
     UpdateState::Failed { version, failure } => json!({
       "state": "failed",
       "version": version.as_str(),
       "reason": failure_name(*failure),
     }),
+    UpdateState::InstallFailed { version, failure } => install_failed_json(version.as_str(), failure),
     UpdateState::CloudUnreachable { last_checked } => json!({
       "state": "cloud_unreachable",
       "last_checked": last_checked.map(|at| at.unix_millis()),
@@ -79,6 +96,25 @@ fn ready_json(state: &str, update: &ReadyUpdate) -> Value {
     "notes": update.notes,
     "critical": update.critical,
   })
+}
+
+fn install_failed_json(version: &str, failure: &InstallFailure) -> Value {
+  json!({
+    "state": "install_failed",
+    "version": version,
+    "reason": failure.reason,
+    "exit_code": failure.exit_code,
+    "log": failure.log.as_ref().map(|log| log.display().to_string()),
+  })
+}
+
+const fn step_name(step: &InstallStep) -> &'static str {
+  match step {
+    InstallStep::WaitingForRuns(_) => "waiting_for_runs",
+    InstallStep::StoppingRuns => "stopping_runs",
+    InstallStep::BackingUp => "backing_up",
+    InstallStep::HandingOver => "handing_over",
+  }
 }
 
 fn newest_json(newest: &NewestRelease) -> Value {

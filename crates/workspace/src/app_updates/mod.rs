@@ -4,11 +4,12 @@
 //! the download of an offered installer into the data folder's [`UPDATES_FOLDER`], resumed after an interruption and
 //! kept only once its SHA-256 and its signature by a release key built into the app check out ([`download`]). Only a
 //! copy the installer installed on Windows downloads ([`ThisCopy`]); every other copy still asks, to name the newest
-//! release and its download. What the window and the app's MCP server show is one [`UpdateState`]; nothing here
-//! installs an update.
+//! release and its download. What the window and the app's MCP server show is one [`UpdateState`]. A ready update
+//! installs when the person says so ([`install`]): the databases are copied aside and the installer takes over.
 
 mod copy;
 mod download;
+pub mod install;
 mod state;
 
 use std::{
@@ -32,14 +33,18 @@ use orchester_store::StoreError;
 use parking_lot::Mutex;
 use tokio::sync::watch;
 
-use self::download::{Download, Fetched};
 pub use self::{
   copy::{CopyReason, ThisCopy},
   state::{NewestRelease, ReadyUpdate, UpdateFailure, UpdateState},
 };
+use self::{
+  download::{Download, Fetched},
+  install::{AfterInstall, JustUpdated},
+};
 use crate::{
   background,
   build::Build,
+  runner::Runners,
   sharing::cloud::{CloudError, address_in_use},
   workspace::Workspace,
 };
@@ -82,12 +87,23 @@ pub struct AppUpdates {
   inner: Arc<Inner>,
 }
 
+/// Two are equal when they are clones of one.
+impl PartialEq for AppUpdates {
+  fn eq(&self, other: &Self) -> bool {
+    Arc::ptr_eq(&self.inner, &other.inner)
+  }
+}
+
 struct Inner {
   workspace: Workspace,
   app: ThisApp,
   keys: AcceptedReleaseKeys,
+  /// The data folder, which backups and the note of a handed over update go to.
+  data_folder: PathBuf,
   folder: PathBuf,
   state: watch::Sender<UpdateState>,
+  /// The update that installed at this start.
+  just_updated: Option<JustUpdated>,
   /// The runs at work, which a ready update waits for.
   runs: Mutex<Vec<String>>,
   /// Held while a check, with its download, runs.
@@ -109,20 +125,35 @@ enum CheckError {
 
 impl AppUpdates {
   /// The updates of `app`, whose settings are in `workspace`'s database, checked with `keys` (the release keys built
-  /// into the app), downloading into [`UPDATES_FOLDER`] of `data_folder`. Nothing is asked until a check runs.
+  /// into the app), downloading into [`UPDATES_FOLDER`] of `data_folder`. Nothing is asked until a check runs; what
+  /// became of an update the previous start handed over to the installer is read now ([`install::after_install`]).
   pub fn new(workspace: Workspace, app: ThisApp, keys: AcceptedReleaseKeys, data_folder: &Path) -> Self {
-    let state = match app.copy {
+    let after = install::after_install(data_folder, &app.version);
+    let state = match (app.copy, &after) {
+      (_, Some(AfterInstall::Failed { version, failure })) => UpdateState::InstallFailed {
+        version: version.clone(),
+        failure: failure.clone(),
+      },
       // The app checks as it starts ([`keep_checking`]).
-      ThisCopy::Installer => UpdateState::Checking,
-      copy => not_updating(copy, None),
+      (ThisCopy::Installer, _) => UpdateState::Checking,
+      (copy, _) => not_updating(copy, None),
+    };
+    let just_updated = match after {
+      Some(AfterInstall::Updated(updated)) => {
+        tracing::info!(version = %updated.version, "updated");
+        Some(updated)
+      }
+      _ => None,
     };
     Self {
       inner: Arc::new(Inner {
         workspace,
         app,
         keys,
+        data_folder: data_folder.to_path_buf(),
         folder: data_folder.join(UPDATES_FOLDER),
         state: watch::channel(state).0,
+        just_updated,
         runs: Mutex::default(),
         checking: tokio::sync::Mutex::new(()),
       }),
@@ -187,10 +218,21 @@ impl AppUpdates {
   }
 
   async fn update(&self, target: (ReleasePlatform, ReleaseArch)) {
+    let state = self.state();
+    // An install under way is not checked under: the installer it hands over to stays where it is.
+    if matches!(state, UpdateState::Installing { .. }) {
+      return;
+    }
+    // A failed install stays said while the cloud offers that version again or does not answer; it is not tried again
+    // on its own.
+    let failed_install = match &state {
+      UpdateState::InstallFailed { version, .. } => Some(version.clone()),
+      _ => None,
+    };
     // A verified update stays ready while the check runs and when the cloud does not answer it: its installer is still
     // in the updates folder until a newer release's download replaces it.
-    let ready = self.state().ready().cloned();
-    if ready.is_none() {
+    let ready = state.ready().cloned();
+    if ready.is_none() && failed_install.is_none() {
       self.set(UpdateState::Checking);
     }
     let (client, offered) = match self.ask(target).await {
@@ -202,6 +244,7 @@ impl AppUpdates {
             let runs = self.inner.runs.lock();
             self.set(UpdateState::Ready(update).with_runs(&runs));
           }
+          None if failed_install.is_some() => {}
           None => self.unreachable(&error).await,
         };
       }
@@ -209,6 +252,9 @@ impl AppUpdates {
     let Some(release) = offered else {
       return self.up_to_date().await;
     };
+    if failed_install.as_ref() == Some(&release.version) {
+      return;
+    }
     let Some(file) = installer(&release, target).cloned() else {
       let version = release.version;
       return self.set(UpdateState::Failed {
@@ -324,6 +370,18 @@ pub async fn keep_checking(updates: AppUpdates, every: Duration) {
   loop {
     updates.check_now().await;
     tokio::time::sleep(every).await;
+  }
+}
+
+/// Tells `updates` the runs at work whenever `runners` report a change, for as long as the task runs: a ready update
+/// waits for them ([`UpdateState::WaitingForRuns`]).
+pub async fn follow_runs(updates: AppUpdates, runners: Runners) {
+  let mut work = runners.work_changes();
+  loop {
+    updates.set_runs_at_work(install::run_keys(&runners.active_work()));
+    if work.changed().await.is_err() {
+      return;
+    }
   }
 }
 

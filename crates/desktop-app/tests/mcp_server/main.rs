@@ -279,7 +279,7 @@ fn one_server_hosts_lurqs_window_tools_and_the_apps_own() {
 }
 
 /// ORC-413: `update_state` reads where this copy's own update stands; a test's build is a development copy, which does
-/// not update itself, and no check has named a newer release.
+/// not update itself, and no check has named a newer release. ORC-414: no update installed at this start.
 #[test]
 fn update_state_says_a_development_copy_does_not_update_itself() {
   let mut served = Served::start(true);
@@ -299,6 +299,7 @@ fn update_state_says_a_development_copy_does_not_update_itself() {
       "reason": "development",
       "newest": null,
       "running": env!("CARGO_PKG_VERSION"),
+      "updated": null,
     })
   );
 }

@@ -39,7 +39,7 @@ use crate::{
   routes,
   screens::gate::{GateProps, SignInGate},
   services::Services,
-  shell::{needs_you::PanelOpen, status_bar},
+  shell::{needs_you::PanelOpen, status_bar, update::UpdateAsk},
   startup::{self, Problem},
   ui::chat::links::ChatLinks,
 };
@@ -137,6 +137,8 @@ struct SessionWindow {
   navigation: Navigation,
   projects: Projects,
   needs_you: PanelOpen,
+  /// Whether *Restart to update* asks about the runs at work.
+  update_ask: UpdateAsk,
   /// The closing panel's choice the keyboard moved to.
   focus: Signal<Option<lifecycle::Choice>>,
   first_keys: FirstKeys,
@@ -175,6 +177,7 @@ impl Component for SessionWindow {
       navigation,
       projects,
       needs_you: PanelOpen::new(ctx.signal(false)),
+      update_ask: UpdateAsk::new(ctx.signal(false)),
       focus: ctx.signal(None),
       first_keys: FirstKeys::default(),
       notifications: NotificationPrefs::new(ctx.signal(Chosen::default())),
@@ -193,6 +196,7 @@ impl Component for SessionWindow {
     ctx.provide(self.projects.clone());
     ctx.provide(self.first_keys.clone());
     ctx.provide(self.needs_you.clone());
+    ctx.provide(self.update_ask.clone());
     ctx.provide(self.notifications.clone());
     let sign_in = follow_sign_in(ctx, &services.cloud);
     if let Some(account) = sign_in.account() {

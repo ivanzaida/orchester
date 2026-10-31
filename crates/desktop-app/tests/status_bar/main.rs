@@ -21,7 +21,7 @@ use orchester_app::{
   routes::{OverviewTab, ProjectPage, Route},
   shell::status_bar::{
     BarAction, BarFacts, BarProps, CloudFacts, ProjectFacts, ReadFailure, RunnerFacts, ServerFacts, StatusBarView,
-    Stopping,
+    Stopping, UpdateFacts,
   },
   theme::{self, Mode},
   ui::tooltip::TOOLTIP_DELAY,
@@ -58,6 +58,7 @@ mod plan_limits;
 mod server;
 #[path = "../support/mod.rs"]
 mod support;
+mod update;
 mod window;
 
 const ROOT: &str = "H:/projects/kontur";
@@ -193,6 +194,7 @@ fn facts(project: Option<ProjectFacts>) -> BarFacts {
     stopping: Stopping::Idle,
     servers: ServerFacts::None,
     cloud: CloudFacts::Quiet,
+    update: UpdateFacts::Quiet,
   }
 }
 

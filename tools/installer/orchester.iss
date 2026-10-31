@@ -16,6 +16,16 @@
 ;
 ; A running Orchester is never closed or killed: while a program runs from the install folder, the install and the
 ; uninstall wait for the person to close it (Retry) or stop (Cancel).
+;
+; The app's own update (orchester_workspace::app_updates::install) starts this installer silently with
+;
+;   /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR="<its folder>" /LOG="<log>" /WAITPID=<its pid> /RELAUNCH
+;   /UPDATERESULT="<file>"
+;
+; and exits. /WAITPID waits for that process to exit, and then a while for its runners, before the install checks
+; that nothing runs from the folder. /RELAUNCH starts Orchester again once the install is done; when the install does
+; not get there, the installer writes why to the /UPDATERESULT file and starts the version that is still installed
+; again, which reads it. Without these arguments an install is what it always was.
 
 #ifndef AppVersion
   #error Pass the app's version: iscc /DAppVersion=<version> /DProgramDir=<folder> tools\installer\orchester.iss
@@ -65,6 +75,8 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 [CustomMessages]
 english.AppRunning=Orchester is running from %1 (process %2). Close it, then choose Retry. Nothing has been changed.
 english.DataKept=Your Orchester data in %1 was kept: the application database (orchester.db) and the logs. Delete that folder yourself if you no longer need them.
+english.UpdateStopped=the installer stopped before it installed anything
+english.UpdateRolledBack=installing the files failed and the changes were rolled back
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
@@ -88,8 +100,22 @@ Root: HKCU; Subkey: "Software\Classes\AppUserModelId\Orchester.App"; Flags: unin
 
 [Run]
 Filename: "{app}\orchester.exe"; Description: "{cm:LaunchProgram,Orchester}"; Flags: nowait postinstall skipifsilent
+; The app's own update: Orchester opens again once the install is done, also when silent.
+Filename: "{app}\orchester.exe"; WorkingDir: "{app}"; Flags: nowait; Check: RelaunchAfterUpdate
 
 [Code]
+const
+  { How long an update waits for the app's process to exit, and then for its runners, in milliseconds. }
+  AppExitWait = 120000;
+  RunnersExitWait = 60000;
+  PollEvery = 500;
+
+var
+  { Why the app's own update did not install, for its /UPDATERESULT file; '' until something says why. }
+  UpdateFailure: String;
+  { The install got to copying the files, and past it. }
+  Installing, Installed: Boolean;
+
 { The processes of Orchester's programs running from Folder, as a list of their ids, or '' when none does: the app,
   its runner, and the app as builds before its rename named it (orchester-app.exe), which starts the same runner. }
 function RunningFromFolder(const Folder: String): String;
@@ -147,9 +173,103 @@ begin
   end;
 end;
 
+{ Whether the command line holds the switch Name, such as /RELAUNCH. }
+function HasSwitch(const Name: String): Boolean;
+var
+  Index: Integer;
+begin
+  Result := False;
+  for Index := 1 to ParamCount do
+    if CompareText(ParamStr(Index), Name) = 0 then
+      Result := True;
+end;
+
+{ The app's own update started this installer: it waits for the app's process and opens Orchester again. }
+function IsAppUpdate(): Boolean;
+begin
+  Result := ExpandConstant('{param:WAITPID|}') <> '';
+end;
+
+function RelaunchAfterUpdate(): Boolean;
+begin
+  Result := IsAppUpdate() and HasSwitch('/RELAUNCH');
+end;
+
+{ Whether the process Pid still runs; False when Windows cannot say, so the install goes on to its own check. }
+function ProcessRuns(const Pid: Integer): Boolean;
+var
+  Locator, Service, Processes: Variant;
+begin
+  try
+    Locator := CreateOleObject('WbemScripting.SWbemLocator');
+    Service := Locator.ConnectServer('.', 'root\CIMV2');
+    Processes := Service.ExecQuery('SELECT ProcessId FROM Win32_Process WHERE ProcessId = ' + IntToStr(Pid));
+    Result := Processes.Count > 0;
+  except
+    Log('Could not check whether the app still runs: ' + GetExceptionMessage);
+    Result := False;
+  end;
+end;
+
+{ The update waits for the app's process /WAITPID to exit, then a while for its runners to leave Folder. }
+procedure WaitForApp(const Folder: String);
+var
+  Pid, Waited: Integer;
+begin
+  Pid := StrToIntDef(ExpandConstant('{param:WAITPID|0}'), 0);
+  Waited := 0;
+  Log('Waiting for Orchester (process ' + IntToStr(Pid) + ') to exit');
+  while (Pid > 0) and ProcessRuns(Pid) and (Waited < AppExitWait) do
+  begin
+    Sleep(PollEvery);
+    Waited := Waited + PollEvery;
+  end;
+  Waited := 0;
+  while (RunningFromFolderOrUnknown(Folder) <> '') and (Waited < RunnersExitWait) do
+  begin
+    Sleep(PollEvery);
+    Waited := Waited + PollEvery;
+  end;
+end;
+
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
+  if IsAppUpdate() then
+    WaitForApp(ExpandConstant('{app}'));
   Result := WaitUntilClosed(ExpandConstant('{app}'));
+  if Result <> '' then
+    UpdateFailure := Result;
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssInstall then
+    Installing := True;
+  if CurStep = ssPostInstall then
+    Installed := True;
+end;
+
+{ An update that did not install: why goes to the /UPDATERESULT file, and the version still installed opens again,
+  which reads it. }
+procedure DeinitializeSetup();
+var
+  Folder, ResultFile: String;
+  Code: Integer;
+begin
+  if not IsAppUpdate() or Installed then
+    Exit;
+  if UpdateFailure = '' then
+    if Installing then
+      UpdateFailure := CustomMessage('UpdateRolledBack')
+    else
+      UpdateFailure := CustomMessage('UpdateStopped');
+  Log('The update did not install: ' + UpdateFailure);
+  ResultFile := ExpandConstant('{param:UPDATERESULT|}');
+  if ResultFile <> '' then
+    SaveStringToFile(ResultFile, UpdateFailure, False);
+  Folder := ExpandConstant('{param:DIR|}');
+  if HasSwitch('/RELAUNCH') and (Folder <> '') and FileExists(AddBackslash(Folder) + 'orchester.exe') then
+    ShellExec('', AddBackslash(Folder) + 'orchester.exe', '', Folder, SW_SHOWNORMAL, ewNoWait, Code);
 end;
 
 function InitializeUninstall(): Boolean;

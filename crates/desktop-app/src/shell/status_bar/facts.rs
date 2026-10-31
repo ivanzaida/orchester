@@ -32,6 +32,8 @@ pub struct BarFacts {
   pub servers: super::server::ServerFacts,
   /// Orchester Cloud, while it cannot be reached.
   pub cloud: super::cloud::CloudFacts,
+  /// This copy's update, while it needs the person or has news.
+  pub update: super::update::UpdateFacts,
 }
 
 /// How *Stop* of the runs that auto-approve goes.
@@ -144,6 +146,10 @@ pub enum BarAction {
   ReadAgain,
   /// Open the list of this project's interrupted runs on its Overview.
   ReviewInterrupted(ProjectId),
+  /// *Restart to update*: install the ready update, asking first while runs are at work.
+  RestartToUpdate,
+  /// Open a file with the program the OS opens it with, e.g. the installer's log.
+  OpenFile(PathBuf),
 }
 
 /// Where the bar's actions go.

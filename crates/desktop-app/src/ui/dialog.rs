@@ -2,10 +2,11 @@
 //! MCP server` `z0iFy`, after `05d · Delete connection` `D3c8ht`): the `scrim` over the window under its title bar,
 //! and the dialog centred in it, 500 wide on `surface_raised` in a `border_strong` stroke, radius 12, with the
 //! dialog's shadow. Its body is 20 at its sides and top, its parts 14 apart: a 32 tile in `warning_muted` with the
-//! glyph in `warning` beside the question in 15/600, the parts the caller gives (a choice under its label, lines of
-//! what it does, [`line`]), and for a person-only action the line on `hover` that only the person confirms it. Its
-//! footer, under a `border` line, says *Esc cancels* at its start and ends in *Cancel* and the action. Esc and a press
-//! on the scrim cancel.
+//! glyph in `warning` (or another [`Tone`]) beside the question in 15/600, the parts the caller gives (a choice under
+//! its label, lines of what it does, [`line`]), and for a person-only action the line on `hover` that only the person
+//! confirms it. Its footer, under a `border` line, says *Esc cancels* at its start and ends in *Cancel* and the
+//! actions; a plain footer (`Footer` `a2EDb` of `03 · Install now · runs at work` `MGILm`) ends in a ghost *Cancel*
+//! with its ×, then the actions. Esc and a press on the scrim cancel.
 
 use std::sync::Arc;
 
@@ -34,14 +35,36 @@ use crate::{
 /// A line of what it does: its glyph is 18 high, as the line's first line is (`Icon box` `EyPBp`).
 const LINE_GLYPH_BOX: f32 = 18.0;
 
+/// The colors of the dialog's tile.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Tone {
+  /// `warning_muted` with the glyph in `warning`: what the action changes needs a second look.
+  #[default]
+  Warning,
+  /// `info_muted` with the glyph in `info` (`Tile` `gGQD5` of `MGILm`).
+  Info,
+}
+
+impl Tone {
+  const fn colors(self) -> (PaletteColor, PaletteColor) {
+    match self {
+      Self::Warning => (PaletteColor::WarningMuted, PaletteColor::Warning),
+      Self::Info => (PaletteColor::InfoMuted, PaletteColor::Info),
+    }
+  }
+}
+
 pub struct Dialog {
   id: Arc<str>,
   glyph: Icon,
+  tone: Tone,
   title: Arc<str>,
   parts: Vec<Element>,
   person_only: Option<Arc<str>>,
   cancel: Arc<str>,
-  action: Option<ActionButton>,
+  /// The footer without *Esc cancels*, its *Cancel* a ghost button with its ×.
+  plain_footer: bool,
+  actions: Vec<ActionButton>,
   under: Vec<Element>,
 }
 
@@ -51,13 +74,27 @@ impl Dialog {
     Self {
       id: id.into(),
       glyph,
+      tone: Tone::default(),
       title: title.into(),
       parts: Vec::new(),
       person_only: None,
       cancel: cancel.into(),
-      action: None,
+      plain_footer: false,
+      actions: Vec::new(),
       under: Vec::new(),
     }
+  }
+
+  /// The tile in `tone`'s colors.
+  pub fn tone(mut self, tone: Tone) -> Self {
+    self.tone = tone;
+    self
+  }
+
+  /// The footer without *Esc cancels*: a ghost *Cancel* with its ×, then the actions.
+  pub fn plain_footer(mut self) -> Self {
+    self.plain_footer = true;
+    self
   }
 
   /// A part of its body, in order.
@@ -72,9 +109,9 @@ impl Dialog {
     self
   }
 
-  /// What the footer ends in, after *Cancel*.
+  /// What the footer ends in, after *Cancel* and the actions given before.
   pub fn action(mut self, action: ActionButton) -> Self {
-    self.action = Some(action);
+    self.actions.push(action);
     self
   }
 
@@ -87,7 +124,12 @@ impl Dialog {
   /// The dialog over the window while `open` holds; *Cancel*, Esc and the scrim set it to `false`.
   pub fn render(mut self, ctx: &Ctx, open: &Signal<bool>) -> Element {
     let id = self.id.clone();
-    let footer = footer(ctx, &id, &self.cancel, self.action.take(), open);
+    let actions = std::mem::take(&mut self.actions);
+    let footer = if self.plain_footer {
+      plain_footer(&id, &self.cancel, actions, open)
+    } else {
+      footer(ctx, &id, &self.cancel, actions, open)
+    };
     let body = self.body();
     let dialog = Column::new()
       .id(id.to_string())
@@ -122,6 +164,7 @@ impl Dialog {
 
   fn body(self) -> Column {
     let id = &self.id;
+    let (fill, glyph) = self.tone.colors();
     let tile = Row::new()
       .width(Dimension::Px(DIALOG_TILE))
       .height(Dimension::Px(DIALOG_TILE))
@@ -129,8 +172,8 @@ impl Dialog {
       .align_items(Alignment::Center)
       .justify(Justify::Center)
       .rounded(ExtraRadius::Tile.role())
-      .background(PaletteColor::WarningMuted)
-      .child(icon(self.glyph, IconSize::Lg, PaletteColor::Warning));
+      .background(fill)
+      .child(icon(self.glyph, IconSize::Lg, glyph));
     let head = Row::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Md)
@@ -178,19 +221,13 @@ impl Dialog {
   }
 }
 
-/// *Esc cancels*, *Cancel* and the action.
-fn footer(ctx: &Ctx, id: &str, cancel: &str, action: Option<ActionButton>, open: &Signal<bool>) -> Row {
+/// *Esc cancels*, *Cancel* and the actions.
+fn footer(ctx: &Ctx, id: &str, cancel: &str, actions: Vec<ActionButton>, open: &Signal<bool>) -> Row {
   let shut = open.clone();
   let cancel = ActionButton::new(format!("{id}-cancel"), ButtonKind::Secondary, cancel)
     .in_form()
     .on_click(move || shut.set(false));
-  Row::new()
-    .id(format!("{id}-footer"))
-    .width(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(DialogSpacing::Side.role(), SpacingSize::Md))
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
-    .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
+  footer_row(id)
     .child(
       Row::new()
         .flex(1.0)
@@ -204,7 +241,30 @@ fn footer(ctx: &Ctx, id: &str, cancel: &str, action: Option<ActionButton>, open:
         ),
     )
     .child(cancel)
-    .with_children(action.map(|action| action.in_form()))
+    .with_children(actions.into_iter().map(ActionButton::in_form))
+}
+
+/// A ghost *Cancel* with its × and the actions, at the footer's end.
+fn plain_footer(id: &str, cancel: &str, actions: Vec<ActionButton>, open: &Signal<bool>) -> Row {
+  let shut = open.clone();
+  let cancel = ActionButton::new(format!("{id}-cancel"), ButtonKind::Ghost, cancel)
+    .icon(Icon::X)
+    .in_form()
+    .on_click(move || shut.set(false));
+  footer_row(id)
+    .justify(Justify::End)
+    .child(cancel)
+    .with_children(actions.into_iter().map(ActionButton::in_form))
+}
+
+fn footer_row(id: &str) -> Row {
+  Row::new()
+    .id(format!("{id}-footer"))
+    .width(Dimension::Pct(100.0))
+    .padding(Padding::symmetric(DialogSpacing::Side.role(), SpacingSize::Md))
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
 }
 
 /// A line of what it does: a 13 `glyph` in `text_muted`, 10 from its words in 12.5 `text_secondary`.

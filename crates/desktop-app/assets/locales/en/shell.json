@@ -247,6 +247,16 @@
       "mcpLockedDevelopment": "MCP :{{port}} · sign-in required",
       "mcpLockedShort": "MCP · sign-in required",
       "cloudOffline": "Orchester Cloud · offline",
+      "update": {
+        "ready": "Update {{version}} ready · Restart",
+        "waiting": {
+          "one": "Update {{version}} · after {{count}} run ends",
+          "other": "Update {{version}} · after {{count}} runs end"
+        },
+        "installing": "Installing {{version}}",
+        "updated": "Updated to {{version}}",
+        "failed": "Update {{version}} didn't install"
+      },
       "health": {
         "since": "since {{time}}",
         "agents": "Agents",
@@ -286,6 +296,23 @@
       "other": "{{count}} need you",
       "inProject": "{{project}} {{count}}",
       "separator": " · "
+    },
+    "update": {
+      "title": "Install Orchester {{version}} now?",
+      "runsAtWork": {
+        "one": "{{count}} run is at work: {{runs}}. Installing now stops it; it goes on from its last checkpoint after the restart.",
+        "other": "{{count}} runs are at work: {{runs}}. Installing now stops them; each goes on from its last checkpoint after the restart."
+      },
+      "runAtStep": "{{key}} at {{step}}",
+      "runsSeparator": ", ",
+      "backup": "Your data is copied to {{folder}} first.",
+      "restarts": "Orchester closes, installs {{version}} and opens again, in about a minute.",
+      "cancel": "Cancel",
+      "wait": "Install when they end",
+      "stop": "Stop runs and install",
+      "failedBody": "The version before it keeps running; your data was not changed.",
+      "failedHint": "It is not tried again on its own until another release is offered.",
+      "failedHintLog": "Press to open the installer's log."
     },
     "running": {
       "title": "Running",

@@ -1,12 +1,14 @@
 //! The app's updates (`orchester_workspace::app_updates`) against a stand-in Orchester Cloud, with release files signed
-//! by a throwaway key: the settings, the anonymous check, the download with its resume and its checks, the states and
-//! which copies update themselves.
+//! by a throwaway key: the settings, the anonymous check, the download with its resume and its checks, the states,
+//! which copies update themselves, and installing a ready update (`installs`).
 //!
 //! `cargo test -p orchester-workspace --test app_updates app_updates`
+//! `cargo test -p orchester-workspace --test app_updates update_install`
 
 mod checks;
 mod copies;
 mod downloads;
+mod installs;
 mod stand;
 
 use std::path::{Path, PathBuf};

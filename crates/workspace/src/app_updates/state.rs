@@ -6,7 +6,10 @@ use std::path::PathBuf;
 use orchester_api::releases::{ReleaseVersion, SignatureError};
 use orchester_core::time::Timestamp;
 
-use super::copy::CopyReason;
+use super::{
+  copy::CopyReason,
+  install::{InstallFailure, InstallStep},
+};
 
 /// The update row's state.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -30,10 +33,17 @@ pub enum UpdateState {
     /// The runs at work, as the person knows them (`ORC-110`).
     runs: Vec<String>,
   },
+  /// The person started installing `update` (*Restart to update*); the window closes once the installer took over.
+  Installing { update: ReadyUpdate, step: InstallStep },
   /// `version` could not be made ready; nothing of it was kept or run.
   Failed {
     version: ReleaseVersion,
     failure: UpdateFailure,
+  },
+  /// `version` was ready but did not install: this version keeps running. It stays until another release is offered.
+  InstallFailed {
+    version: ReleaseVersion,
+    failure: InstallFailure,
   },
   /// Orchester Cloud did not answer the last check, or broke off the download; it is asked again at the next check.
   CloudUnreachable { last_checked: Option<Timestamp> },

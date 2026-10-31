@@ -151,8 +151,9 @@ impl Services {
   }
 
   /// Starts the shared servers' connection monitor, the shared projects' sync and live event streams, the check of the
-  /// cloud sign-in (`sharing::cloud::keep_checking`) and the activity's following of the account signed in; they run
-  /// until the returned [`Background`] is dropped.
+  /// cloud sign-in (`sharing::cloud::keep_checking`), the activity's following of the account signed in and the
+  /// update's following of the runs at work (`app_updates::follow_runs`); they run until the returned [`Background`]
+  /// is dropped.
   pub fn run_background(&self) -> Background {
     Background(vec![
       self.runtime.spawn(sharing::monitor(self.servers.clone())),
@@ -166,6 +167,10 @@ impl Services {
       self.runtime.spawn(sharing::cloud::keep_activity_to_the_account(
         self.cloud.clone(),
         self.activity.clone(),
+      )),
+      self.runtime.spawn(orchester_workspace::app_updates::follow_runs(
+        self.updates.clone(),
+        self.runners.clone(),
       )),
     ])
   }

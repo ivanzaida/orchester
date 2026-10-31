@@ -15,7 +15,7 @@ use orchester_workspace::{
 use parking_lot::Mutex;
 
 use super::facts::{BarAction, Dispatch, Stopping};
-use crate::{navigation::Navigation, project::ProjectFeed, services::Services};
+use crate::{navigation::Navigation, project::ProjectFeed, services::Services, shell::update::Restart};
 
 /// Stops runs of a project auto-approving.
 #[derive(Clone, PartialEq)]
@@ -102,6 +102,7 @@ pub fn dispatch(
   (stop, stopper): (&StopAction, &Stopper),
 ) -> Dispatch {
   let navigation = Navigation::of(ctx);
+  let restart = Restart::of(ctx);
   let (services, stop, asked) = (services.clone(), stop.clone(), stopper.asked.clone());
   Arc::new(move |action| match action {
     BarAction::OpenRunnerLog => {
@@ -113,6 +114,12 @@ pub fn dispatch(
     BarAction::Go(route, at) => navigation.open_item(route, at),
     BarAction::Resolve(id) => services.activity.resolve(id),
     BarAction::ReviewInterrupted(project) => services.recovery.review(project, true),
+    BarAction::RestartToUpdate => restart.press(),
+    BarAction::OpenFile(path) => {
+      if let Err(error) = orchester_exec::external::open_path(&path) {
+        tracing::warn!(%error, file = %path.display(), "cannot open the file");
+      }
+    }
     BarAction::ReadAgain => {
       if let Some((_, feed)) = &shown {
         feed.saved();
