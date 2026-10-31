@@ -1,24 +1,30 @@
 //! The parts of a local project's Sharing around the link: the project as local with *Share…* (`04 Sharing · local`
-//! `bSZdW`), where projects are made, and what linking sends.
+//! `bSZdW`) or the sign-in it needs (`g3c5AM`), where projects are made, and what linking sends.
 
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, SpacingSize},
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
   components::{Column, Row, Text},
+  core::Signal,
   layout::Alignment,
-  node::{Element, border::Border, dimension::Dimension},
+  node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_workspace::sharing::ServerEntry;
 
 use super::Props;
 use crate::{
-  screens::project_settings::{
-    kit::{Group, SettingRow, value},
-    page,
+  navigation::Navigation,
+  routes::{JoinWay, Route},
+  screens::{
+    cloud_sign_in::{Place, SignInOffer},
+    project_settings::{
+      kit::{Group, SettingRow, value},
+      page,
+    },
   },
-  theme::{ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, OrchesterText},
+  theme::{ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, OrchesterText, ProjectSettingsSpacing},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
@@ -29,8 +35,15 @@ use crate::{
 const SENDS_LABEL: f32 = 180.0;
 
 /// The project as local (`Local project` `bIi5a`: its tasks only on this computer, with its key and how many) and
-/// *Share on a team server* with *Share…*, which opens the page that links it.
-pub(super) fn local(ctx: &mut Ctx, props: &Props, share: impl Fn() + Send + Sync + 'static) -> Element {
+/// *Share on a team server*: with *Share…*, which opens the page that links it, or `signing_in`: what sharing needs
+/// while nobody is signed in and no server is joined, with *Use a code* and *Sign in*, which opens in place under the
+/// row (`g3c5AM`, `i5lddT`).
+pub(super) fn local(
+  ctx: &mut Ctx,
+  props: &Props,
+  share: impl Fn() + Send + Sync + 'static,
+  signing_in: Option<&Signal<bool>>,
+) -> Element {
   let name = props.project.open.project.name().as_str();
   let key = props.project.open.project.key().as_str();
   let tasks = ctx.t_args(
@@ -47,19 +60,60 @@ pub(super) fn local(ctx: &mut Ctx, props: &Props, share: impl Fn() + Send + Sync
     .info(ctx.t_args("sharing.link.taskListDescription", [("project", name), ("key", key)]))
     .control(only_you)
     .render(ctx);
-  let share = SettingRow::new("sharing-share", ctx.t("sharing.share.onServer"))
-    .hint(ctx.t("sharing.share.onServerHint"))
-    .info(ctx.t("sharing.link.hint"))
-    .control(
-      ActionButton::new("sharing-share-open", ButtonKind::Secondary, ctx.t("sharing.share.open"))
-        .icon(Icon::CloudUpload)
-        .in_form()
-        .on_click(share),
-    )
-    .render(ctx);
+  let share = match signing_in {
+    Some(open) => offer_row(ctx, open),
+    None => SettingRow::new("sharing-share", ctx.t("sharing.share.onServer"))
+      .hint(ctx.t("sharing.share.onServerHint"))
+      .info(ctx.t("sharing.link.hint"))
+      .control(
+        ActionButton::new("sharing-share-open", ButtonKind::Secondary, ctx.t("sharing.share.open"))
+          .icon(Icon::CloudUpload)
+          .in_form()
+          .on_click(share),
+      )
+      .render(ctx),
+  };
   Group::new("project-settings-sharing-task-list", ctx.t("project_settings.sharing"))
     .row(local)
     .row(share)
+    .into()
+}
+
+/// *Share on a team server* while it needs a sign-in, and the sign-in under it once *Sign in* opened it.
+fn offer_row(ctx: &mut Ctx, open: &Signal<bool>) -> Element {
+  let opened = open.get();
+  let navigation = Navigation::of(ctx);
+  let code = ActionButton::new("sharing-use-code", ButtonKind::Ghost, ctx.t("sharing.share.useCode"))
+    .in_form()
+    .opens(navigation.to(Route::JoinTeam(JoinWay::Code)));
+  let flip = open.clone();
+  let sign_in = ActionButton::new("sharing-sign-in", ButtonKind::Secondary, ctx.t("sharing.share.signIn"))
+    .icon(Icon::LogIn)
+    .held(opened)
+    .in_form()
+    .on_click(move || flip.update(|open| *open = !*open));
+  let row = SettingRow::new("sharing-share", ctx.t("sharing.share.onServer"))
+    .hint(ctx.t("sharing.share.signInHint"))
+    .control(
+      Row::new()
+        .spacing(SpacingSize::Sm)
+        .align_items(Alignment::Center)
+        .child(code)
+        .child(sign_in),
+    )
+    .render(ctx);
+  // 14 at the top and sides and 16 under it (`CLPfB` in `i5lddT`).
+  let form = opened.then(|| {
+    Column::new()
+      .id("sharing-sign-in-under")
+      .width(Dimension::Pct(100.0))
+      .padding(Padding::all(ProjectSettingsSpacing::RowX.role()).bottom(SpacingSize::Lg))
+      .child(ctx.mount_keyed::<SignInOffer>("sharing-sign-in-form", Place::Under))
+  });
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .child(row)
+    .with_children(form)
     .into()
 }
 
@@ -80,6 +134,27 @@ pub(super) fn admin_note(ctx: &Ctx, entry: Option<&ServerEntry>) -> Element {
     },
   );
   page::icon_note("sharing-no-project-yet", Icon::ExternalLink, &words)
+}
+
+/// *Kontur moves into your account, so it shows only while you're signed in.* (`Ib9ca`): a first link moves `project`,
+/// this computer's, into the account whose server it is, as a project and its server have the same owner.
+pub fn moves_to_account(ctx: &Ctx, project: &str) -> Element {
+  Row::new()
+    .id("sharing-moves-to-account")
+    .width(Dimension::Pct(100.0))
+    .padding(Padding::symmetric(SpacingSize::Md, SpacingSize::Sm))
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .rounded(RadiusSize::Md)
+    .background(PaletteColor::InfoMuted)
+    .child(icon(Icon::UserRound, IconSize::Base, PaletteColor::TextSecondary))
+    .child(
+      Text::new(&ctx.t_args("sharing.share.movesToAccount", [("project", project)]))
+        .id("sharing-moves-to-account-text")
+        .variant(ExtraTypography::Prose.role())
+        .flex(1.0),
+    )
+    .into()
 }
 
 /// *What linking sends* (`What linking sends` in `bWD9q`).

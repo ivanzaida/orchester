@@ -2,8 +2,8 @@
 //! stand-in Orchester Cloud, which names a stand-in team server on loopback as the account's and has an invite to one
 //! of its projects: the step opens from the welcome on the account's teams and invites (`drCQd`); *Join* and *Accept*
 //! give this computer its own sign-in there; *Use a code* shows the two ways side by side with the account in the
-//! Cloud column; a code joins, and a wrong or expired code (`aWsVx`) and a server that does not answer (`oOn6j`) say
-//! so in place; only a person joins. The step's roles follow the design ([`roles`]).
+//! Cloud column; a code joins, signed out too, and a wrong or expired code (`aWsVx`) and a server that does not answer
+//! (`oOn6j`) say so in place; only a person joins. The step's roles follow the design ([`roles`]).
 //!
 //! `cargo test -p orchester-app --test join_team join_team_`
 
@@ -37,7 +37,7 @@ fn window_of(data: Data, server: &TeamServer, add_kontur: bool) -> Window {
   data
     .cloud
     .invite(INVITE, Some(("Billing", &format!("{}/billing", server.url()))));
-  let launch = data.launch();
+  let launch = data.launch_signed_in();
   if add_kontur {
     data.add_kontur(launch.workspace().expect("the session started"));
   }
@@ -242,6 +242,23 @@ fn join_team_joins_with_a_code() {
   );
   assert_eq!(server.code_joins().len(), 1);
   assert_eq!(joined(&window), [NAME]);
+}
+
+#[test]
+fn join_team_signed_out_offers_the_sign_in_and_a_code_joins_without_one() {
+  let server = TeamServer::start();
+  let data = Data::new();
+  let launch = data.launch();
+  data.add_kontur(launch.workspace().expect("the session started"));
+  let mut window = Window::of(data, launch);
+  window.navigation().go(Route::JoinTeam(JoinWay::Code));
+  shows(&mut window, "join-team-cloud-email");
+  assert!(has(&mut window, "join-team-sign-in"));
+  join_with(&mut window, (&server.url(), CODE));
+
+  shows(&mut window, "join-team-code-joined");
+  assert_eq!(joined(&window), [NAME]);
+  assert_eq!(window.data.cloud.requests(), 0, "a code asks the cloud nothing");
 }
 
 #[test]

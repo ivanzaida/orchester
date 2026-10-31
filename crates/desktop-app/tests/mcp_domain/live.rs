@@ -23,6 +23,7 @@ use orchester_workspace::{
 };
 use parking_lot::{Condvar, Mutex};
 use serde_json::{Value, json};
+use tempfile::TempDir;
 
 use super::{Served, runner_programs::programs};
 
@@ -43,6 +44,11 @@ pub(super) fn git(repo: &Path, args: &[&str]) -> String {
 
 /// A new git repository on `main` with one commit, and the app on a data folder beside it.
 pub(super) fn served(window_control: bool) -> (Served, PathBuf, PathBuf) {
+  served_by(|folder, database, runner| Served::start_with(folder, database, runner, window_control))
+}
+
+/// [`served`], started by `start` on its folder, application database and runner.
+fn served_by(start: impl FnOnce(TempDir, &Path, PathBuf) -> Served) -> (Served, PathBuf, PathBuf) {
   let programs = programs();
   let (runner, fake) = (programs.runner.clone(), programs.fake_codex.clone());
   let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/orc-31-live");
@@ -59,11 +65,7 @@ pub(super) fn served(window_control: bool) -> (Served, PathBuf, PathBuf) {
   git(&repo, &["commit", "--quiet", "-m", "initial"]);
   let database = folder.path().join("bin").join("orchester.db");
   fs::create_dir_all(folder.path().join("bin")).expect("the data folder");
-  (
-    Served::start_with(folder, &database, runner, window_control),
-    repo,
-    fake,
-  )
+  (start(folder, &database, runner), repo, fake)
 }
 
 /// Kontur set up through the tools: its connection to the fake Codex, a Builder profile and the
@@ -260,6 +262,30 @@ fn domain_a_command_step_made_through_the_tools_checks_the_agents_work() {
   let check = &run["steps"][1];
   assert_eq!(check["tool_step"], true, "{run}");
   assert_eq!(check["status"]["state"], "passed", "{run}");
+}
+
+/// With nobody signed in to Orchester Cloud, as on a fresh install (the person's decision, 2026-10-28), a project is
+/// added, set up, worked to its end by the real runner and merged into main, and it stays this computer's.
+#[test]
+fn domain_signed_out_a_task_runs_to_its_end_and_merges() {
+  let (mut served, repo, fake) = served_by(Served::start_signed_out);
+  assert!(!served.services().cloud.is_signed_in(), "nobody signed in");
+  set_up(&mut served, &repo, &fake);
+  let key = run(&mut served, "Say hello.");
+  served.until("the run to be ready for review", |served| {
+    let task = served.ok("get_task", &json!({ "project": "Kontur", "key": key }));
+    task["phase"] == "succeeded"
+  });
+  let merged = served.ok("merge_run", &json!({ "project": "Kontur", "run": "1" }));
+  assert_eq!(merged["merge"]["into"], "main", "{merged}");
+  assert!(
+    git(&repo, &["show", "main:README.md"]).contains("hello"),
+    "main holds the agent's work"
+  );
+  let listed = served.services().workspace.projects().expect("the projects");
+  assert_eq!(listed.len(), 1);
+  assert_eq!(listed[0].owner, None, "it is this computer's");
+  assert!(!served.services().cloud.is_signed_in(), "still nobody signed in");
 }
 
 #[test]

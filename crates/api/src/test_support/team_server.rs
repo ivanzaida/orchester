@@ -3,8 +3,9 @@
 //! QA app's team scenarios): what it is (`GET /server`, not linked to Orchester Cloud, so a code needs no cloud
 //! identity), joining with a code (`POST /auth/code`) or a cloud identity (`POST /auth/cloud`), who signed in
 //! (`GET /auth/me`), and the projects the person is a member of (`GET /projects`, by `?slug=` too). What a linked
-//! checkout's first download reads is in [`first_download`]. It answers a wrong code and an expired one alike,
-//! `invalid_code`, as a real server does; it can have no place for a cloud identity, and it can stop answering.
+//! checkout's first download reads, and what a first link of a project sends (the workspace's `local_owner`), is in
+//! [`first_download`]. It answers a wrong code and an expired one alike, `invalid_code`, as a real server does; it can
+//! have no place for a cloud identity, it can refuse a link, and it can stop answering.
 
 use std::{
   io::{Read, Write},
@@ -45,6 +46,8 @@ struct State {
   later_expired: bool,
   /// Connections are closed without an answer, as when the server cannot be reached.
   down: bool,
+  /// `POST /projects/{id}/link` answers `forbidden`.
+  refuses_links: bool,
   /// Whether each code join carried an Orchester Cloud identity token.
   code_joins: Vec<bool>,
   cloud_joins: usize,
@@ -77,6 +80,7 @@ impl TeamServer {
       not_invited: false,
       later_expired: false,
       down: false,
+      refuses_links: false,
       code_joins: Vec::new(),
       cloud_joins: 0,
       tasks: TasksAnswer::default(),
@@ -132,6 +136,11 @@ impl TeamServer {
 
   pub fn set_down(&self, down: bool) {
     self.state.lock().down = down;
+  }
+
+  /// A first link of a project is refused from now on, as a server that took the person's role away refuses it.
+  pub fn refuse_links(&self) {
+    self.state.lock().refuses_links = true;
   }
 
   /// Whether each code join so far carried an Orchester Cloud identity token, in order.
@@ -217,7 +226,9 @@ fn route((path, query): (&str, &str), (headers, body): (&str, &str), state: &Mut
         ("201 Created", joined("cloud"))
       }
     }
-    _ if path.starts_with("GET ") && !signed_in => ("401 Unauthorized", error("unauthorized")),
+    _ if (path.starts_with("GET ") || path.starts_with("POST /api/v1/projects/")) && !signed_in => {
+      ("401 Unauthorized", error("unauthorized"))
+    }
     "GET /api/v1/auth/me" => ("200 OK", json!({"user": user(false)})),
     "GET /api/v1/projects" => match query.strip_prefix("slug=") {
       Some(slug) => first_download::by_slug(slug, state),

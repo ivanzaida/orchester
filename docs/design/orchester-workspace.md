@@ -736,7 +736,7 @@ time-out today, so a notification carries no countdown.
 (that needs a COM activator, not built). macOS uses UserNotifications, which asks for permission on first use and
 serves only an app bundle (`Orchester App.app`); a program run outside one shows none and logs why. Only the installed
 app notifies: a development build or a QA copy stays silent unless started with `ORCHESTER_APP_NOTIFICATIONS=1` (then
-under its own id), so QA runs never notify the person. Behind the sign-in gate nothing notifies.
+under its own id), so QA runs never notify the person. Notifications don't depend on an Orchester Cloud sign-in.
 
 ## Focus
 

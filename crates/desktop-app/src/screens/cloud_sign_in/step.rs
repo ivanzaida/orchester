@@ -1,6 +1,6 @@
-//! Where the gate's sign-in stands: the password, or the code that finishes a sign-in the password started (`Tmwkg`,
-//! `hJ2yS`). The challenge stays in memory, in the gate's step only, whose signal is made outside the component's
-//! context so DevTools never records it; it is never logged, stored or shown.
+//! Where a sign-in stands: the password, or the code that finishes a sign-in the password started (`eWsUb`). The
+//! challenge stays in memory, in the sign-in's step only, whose signal is made outside the component's context so
+//! DevTools never records it; it is never logged, stored or shown.
 
 use std::{
   sync::{
@@ -18,7 +18,7 @@ static ENTRIES: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Clone)]
 pub(crate) enum Step {
-  /// The email and the password; `timed_out` once a code step ended before a code finished it (`R2wOmb`).
+  /// The email and the password; `timed_out` once a code step ended before a code finished it.
   Password {
     timed_out: bool,
   },

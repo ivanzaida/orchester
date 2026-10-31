@@ -146,7 +146,7 @@ impl Servers {
   }
 
   /// What joining `project` on `entry` would do for the project at `repo_root`, which must still be local
-  /// ([`still_local`]).
+  /// ([`still_local`]) and able to have the server's owner.
   pub(super) async fn review(
     &self,
     entry: &ServerEntry,
@@ -154,6 +154,7 @@ impl Servers {
     project: SharedProject,
   ) -> Result<JoinReview, SharingError> {
     still_local(repo_root).await?;
+    self.check_link_owner(entry, repo_root).await?;
     let address = ProjectAddress::reported(&project.address, &entry.address)?.to_text();
     let id = project.id;
     let server_tasks = self
@@ -207,6 +208,10 @@ impl Servers {
     let failed = |uploaded: Option<bool>| move |error: SharingError| JoinFailed { uploaded, error };
     // A checkout linked meanwhile, or opened at another project's review, uploads nothing into this one.
     still_local(repo_root).await.map_err(failed(Some(false)))?;
+    self
+      .check_link_owner(entry, repo_root)
+      .await
+      .map_err(failed(Some(false)))?;
     let on_server: HashSet<TaskId> = self
       .with_token(
         entry,
@@ -324,7 +329,10 @@ impl Servers {
       let mut db = ProjectDb::open(&root)?;
       // The local modules took the server's ids of their names, so the tasks the server has name modules here.
       db.adopt_shared_modules(&shared_modules)?;
-      let changed = db.join_sharing(&link, (&tags, &cached), (&read.0, &read.1))?;
+      let local = db.project().id();
+      let changed = servers.inner.workspace.link_with_owner(local, link.server, || {
+        Ok(db.join_sharing(&link, (&tags, &cached), (&read.0, &read.1))?)
+      })?;
       let moves: Vec<_> = modules.changes.iter().map(convert::cached_change).collect();
       db.cache_module_changes(&moves)?;
       if let Err(error) = share::reapply(&servers, &root, changed) {

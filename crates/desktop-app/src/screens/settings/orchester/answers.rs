@@ -4,7 +4,7 @@
 //! trying again are a person's ([`PersonOnly`], N1 security review 1, M1). A server that refuses this computer is an
 //! outcome to show (`S5mMY`), not a failure, and so is the cloud's refusal for want of two-factor authentication
 //! (`hC11x`, `rPG8h`): the invite then offers *Turn on two-factor authentication* or *Sign in again*, which signs out
-//! and locks so the person signs in with a code (also a person's).
+//! so the person signs in with a code (also a person's).
 
 use std::sync::Arc;
 
@@ -126,7 +126,7 @@ pub(super) struct Answers {
   pub(super) later: Signal<Later>,
   pub(super) ended: Signal<Ended>,
   pub(super) person: PersonOnly,
-  /// Signs out and locks so the person signs in again with a code, naming what the invite is to.
+  /// Signs out so the person signs in again with a code, naming what the invite is to.
   pub(super) sign_in_again: FutureAction<Option<String>, (), Said>,
   /// The invites whose *Sign in again to accept* the person put off with *Not now*.
   pub(super) not_now: Signal<Later>,
@@ -193,7 +193,7 @@ impl Answers {
     }
   }
 
-  /// Signs out to sign in again with a code for an invite to `to`, which the gate names, when a person pressed the
+  /// Signs out to sign in again with a code for an invite to `to`, which the sign-in names, when a person pressed the
   /// button `id`.
   pub(super) fn sign_in_again(&self, id: &str, to: &str) {
     if self.person.allows(id) {

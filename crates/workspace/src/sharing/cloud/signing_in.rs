@@ -17,7 +17,7 @@ use orchester_api::{
 use orchester_core::{secret::SecretValue, time::Timestamp};
 use orchester_store::{CloudSignInEnd, StoredCloudAccount};
 
-use super::{Cloud, CloudError, SignIn, claiming, device_key, gate::Reach};
+use super::{Cloud, CloudError, SignIn, device_key, state::Reach};
 use crate::{background, sharing::device};
 
 /// How a sign-in went on after the password: signed in, or waiting for a code.
@@ -148,8 +148,8 @@ impl Cloud {
   }
 
   /// Keeps the sign-in the cloud at `address` answered, under the device name `device_name`: its token in the
-  /// keychain, its account in the database, and the projects and servers nobody owns given to it. `recovery`: the
-  /// recovery codes left, when one finished the sign-in.
+  /// keychain and its account in the database. It claims nothing: this computer's projects and servers show beside the
+  /// account's own. `recovery`: the recovery codes left, when one finished the sign-in.
   async fn keep_sign_in(
     &self,
     signed_in: CloudSignedIn,
@@ -173,26 +173,18 @@ impl Cloud {
     let (cloud, kept) = (self.clone(), account.clone());
     background::run(move || -> Result<(), CloudError> {
       let inner = &cloud.inner;
-      let links = claiming::Links::read(&inner.workspace)?;
       let _keychain = inner.keychain.lock();
       let key = device_key(&inner.workspace)?;
       inner.vault.get().store(&key, &token)?;
-      let removed = {
-        let mut db = inner.workspace.db.lock();
-        inner.generation.fetch_add(1, Ordering::SeqCst);
-        // Invites kept through a sign-out for a code are that account's alone.
-        let ended = db.cloud_sign_in_ended()?;
-        if ended.is_some_and(|ended| ended.reason == CloudSignInEnd::TwoFactor && ended.email != kept.email) {
-          db.forget_accepted_invites()?;
-        }
-        db.set_cloud_account(Some(&kept))?;
-        db.set_cloud_sign_in_ended(None)?;
-        // The projects added while no account was signed in, and those from before projects had owners, are its; the
-        // team servers nobody owns go to the account whose projects link to them ([`claiming`]).
-        db.claim_unowned_projects(&kept.account)?;
-        claiming::claim_servers(&mut db, &kept.account, &links)?
-      };
-      claiming::forget_tokens(&inner.vault, &removed);
+      let mut db = inner.workspace.db.lock();
+      inner.generation.fetch_add(1, Ordering::SeqCst);
+      // Invites kept through a sign-out for a code are that account's alone.
+      let ended = db.cloud_sign_in_ended()?;
+      if ended.is_some_and(|ended| ended.reason == CloudSignInEnd::TwoFactor && ended.email != kept.email) {
+        db.forget_accepted_invites()?;
+      }
+      db.set_cloud_account(Some(&kept))?;
+      db.set_cloud_sign_in_ended(None)?;
       Ok(())
     })
     .await??;

@@ -1,15 +1,12 @@
-//! The gate's sign-in card (`Sign-in card` `Bg4k0` in `Lpznn`), N1's cloud sign-in through the cloud's API: the email,
-//! the password with *Forgot password?* over it, *Sign in*, *New to Orchester?* with *Create an account*, and what the
-//! two pages in the browser are for. The refusals in place: a wrong email or password (`Atym1`), no internet
-//! (`i8HD8`), an email to confirm first (`vovth`), too many attempts (`t2C4a`); while it signs in, the fields fade and
-//! the button says so (`U0v7kx`). Signing in is a person's: synthetic input (an MCP client's) is refused, and says so.
-//! A password the cloud answers with a challenge goes on to the code step ([`super::code`]), which comes back here
-//! with *Back* or when the challenge ends.
+//! The sign-in's fields (`j7SbPk`, `wpD5E`): the email, the password with *Forgot password?* over it, *Sign in* and, in
+//! a card, *New to Orchester?* with *Create an account*. The refusals in place: a wrong email or password, no internet,
+//! an email to confirm first, too many attempts; while it signs in, the fields fade and the button says so. Signing in
+//! is a person's: synthetic input (an MCP client's) is refused, and says so. A password the cloud answers with a
+//! challenge goes on to the code step ([`super::code`]), which comes back here with *Back* or when the challenge ends.
 //!
-//! The card is a lurq form: Tab goes through the email, the password, *Forgot password?*, *Sign in* and *Create an
-//! account* in the order the card shows them, and Enter in either field signs in as *Sign in* does. The email takes the
-//! focus when the card opens empty, the password when the email is filled in (the gate came back); the design draws
-//! both fields at rest.
+//! The fields are a lurq form: Tab goes through the email, the password, *Forgot password?*, *Sign in* and *Create an
+//! account* in the order they show, and Enter in either field signs in as *Sign in* does. The email takes the focus
+//! when it opens empty, the password when the email is filled in (a sign-in ended here).
 
 use std::{sync::Arc, time::Duration};
 
@@ -17,12 +14,12 @@ use lurq::{
   app::{
     component::DevtoolsInspectable,
     ctx::{Ctx, FutureAction, Interval},
-    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+    theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Form as LurqForm, FormProps, Row, Spacer, Text},
   core::{ElementRef, Signal},
   layout::Alignment,
-  node::{Element, border::Border, dimension::Dimension},
+  node::{Element, dimension::Dimension},
 };
 use orchester_api::{Credential, cloud::CloudErrorCode};
 use orchester_core::time::Timestamp;
@@ -31,11 +28,11 @@ use orchester_workspace::{
   sharing::cloud::{CloudError, SignInStep, WebPage},
 };
 
-use super::step::Step;
+use super::{WIDTH, step::Step};
 use crate::{
   screens::settings::orchester::{PersonOnly, Said, cloud_said},
   services::Services,
-  theme::{DISABLED_OPACITY, ExtraSpacing, ExtraTypography, GateText, IconSize, OrchesterSpacing},
+  theme::{ControlHeight, DISABLED_OPACITY, ExtraSpacing, ExtraTypography, IconSize, OrchesterSpacing},
   ui::{
     button::{ActionButton, ButtonKind},
     callout::{Callout, CalloutTone},
@@ -45,27 +42,26 @@ use crate::{
   },
 };
 
-/// A divider's thickness (`Divider` `I2ZKts`).
-const DIVIDER: f32 = 1.0;
-/// The email's label line (`Label` `lSC1y` in `Field · Email` `JPVVZ`): the field block is 48 high.
+/// A field's label line: the field block is 48 high.
 pub(super) const LABEL_HEIGHT: f32 = 14.0;
-/// The password's label line with *Forgot password?* (`Password label` `N1TYBK`): the field block is 49 high.
+/// The password's label line with *Forgot password?*: the field block is 49 high.
 const PASSWORD_LABEL_HEIGHT: f32 = 15.0;
 /// How often a paused sign-in looks whether its time has come.
 const PAUSE_LOOK: Duration = Duration::from_secs(15);
 /// How long a pause lasts when the cloud does not say: its sign-in limit's 15 minutes (`docs/cloud-api.md`).
 const PAUSE_DEFAULT: u64 = 15 * 60;
 
-pub(super) const SUBMIT: &str = "gate-sign-in";
+/// *Sign in*, which only a person presses.
+pub(super) const SUBMIT: &str = "sign-in-submit";
 /// The email's and the password's places at the head of the window's Tab order: *Forgot password?* is drawn over the
 /// password, and Tab reaches it after the password, as a person reads the card.
 const EMAIL_TAB: i32 = 1;
 const PASSWORD_TAB: i32 = 2;
 
-/// Takes the gate back to the password step, the password empty and focused; `true` when a code step timed out.
+/// Takes the sign-in back to the password step, the password empty and focused; `true` when a code step timed out.
 pub(crate) type ToPassword = Arc<dyn Fn(bool) + Send + Sync>;
 
-/// A field of the card that takes the focus.
+/// A field that takes the focus.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Field {
   Email,
@@ -74,7 +70,7 @@ enum Field {
 
 impl DevtoolsInspectable for Field {}
 
-/// Why the cloud did not sign this computer in, as the card says it.
+/// Why the cloud did not sign this computer in, as the sign-in says it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum Refusal {
   /// A wrong email or password: both fields are marked.
@@ -113,8 +109,8 @@ impl Refusal {
   }
 }
 
-/// The card's state: what was typed, the sign-in under way, and a page that did not open. The gate's card and the
-/// Cloud column of *Join a team* (`B914L`) share it, each with its own *Sign in*, which lays the fields out itself.
+/// The sign-in's state: what was typed, the sign-in under way, and a page that did not open. [`super::SignInOffer`] and
+/// the Cloud column of *Join a team* (`B914L`) share it, each with its own *Sign in*, which lays the fields out itself.
 pub(crate) struct Form {
   pub(crate) email: Signal<String>,
   /// Made outside the component's context, so DevTools never records it ([`FieldInput::masked`]).
@@ -136,7 +132,7 @@ pub(crate) struct Form {
 }
 
 impl Form {
-  /// The card, its email filled in with `email` (the account whose sign-in ended here), going on to the code step in
+  /// The sign-in, its email filled in with `email` (the account whose sign-in ended here), going on to the code step in
   /// `step`; `submit` is the id of its *Sign in*.
   pub(crate) fn new(ctx: &mut Ctx, email: &str, step: Signal<Step>, submit: &'static str) -> Self {
     let cloud = Services::of(ctx).cloud;
@@ -162,8 +158,8 @@ impl Form {
               tracing::info!(%error, "Orchester Cloud did not sign this computer in");
               Refusal::of(&error, &email)
             });
-          // A wrong email or password leaves the email to correct and the password to type again (`Atym1`); any
-          // other refusal keeps the password, masked, for the next try.
+          // A wrong email or password leaves the email to correct and the password to type again; any other refusal
+          // keeps the password, masked, for the next try.
           if matches!(signed_in, Ok(()) | Err(Refusal::Wrong)) {
             clear.set(String::new());
           }
@@ -186,7 +182,7 @@ impl Form {
     }
   }
 
-  /// Back to this card from the code step: the email kept, the password to type again.
+  /// Back to the fields from the code step: the email kept, the password to type again.
   pub(crate) fn to_password(&self) -> ToPassword {
     let (step, password, focus) = (self.step.clone(), self.password.clone(), self.focus.clone());
     Arc::new(move |timed_out| {
@@ -196,7 +192,7 @@ impl Form {
     })
   }
 
-  /// Whether a sign-in is under way: the gate's other parts fade with the card's.
+  /// Whether a sign-in is under way.
   pub(crate) fn pending(&self) -> bool {
     self.sign_in.state().get().is_pending()
   }
@@ -226,7 +222,7 @@ impl Form {
 
   /// Signs in with what was typed, for *Sign in* and for Enter in either field alike. Nothing happens while a sign-in
   /// is under way or this email's sign-in is paused; an empty field takes the focus instead of a sign-in; synthetic
-  /// input is refused, and the card says so under *Sign in*.
+  /// input is refused, and the sign-in says so under *Sign in*.
   pub(crate) fn submitter(&self) -> impl Fn() + Send + Sync + 'static {
     let (action, email, password, person, focus) = (
       self.sign_in.clone(),
@@ -276,8 +272,9 @@ fn paused_now(refusal: Option<&Refusal>, email: &str) -> bool {
   matches!(refusal, Some(Refusal::Paused { email: paused, until }) if paused == email.trim() && Timestamp::now() < *until)
 }
 
-/// The card, on the cloud whose host is `host`.
-pub(super) fn card(ctx: &mut Ctx, form: &Form, host: &str) -> Element {
+/// The fields on the cloud whose host is `host`, 400 wide, and *Create an account* under them when `create` asks for
+/// it.
+pub(super) fn fields(ctx: &mut Ctx, form: &Form, (host, create): (&str, bool)) -> Element {
   form.take_focus(ctx);
   let pending = form.pending();
   let refusal = form.refusal();
@@ -287,50 +284,39 @@ pub(super) fn card(ctx: &mut Ctx, form: &Form, host: &str) -> Element {
     let row = Row::new().width(Dimension::Pct(100.0)).overflow_visible().child(part);
     if pending { row.opacity(DISABLED_OPACITY) } else { row }.into()
   };
-  let (email, password) = fields(ctx, form, refusal == Some(Refusal::Wrong));
+  let (email, password) = inputs(ctx, form, refusal == Some(Refusal::Wrong));
   let checking = pending.then(|| {
-    Text::new(&ctx.t_args("gate.checking", [("host", host)]))
-      .id("gate-checking")
+    Text::new(&ctx.t_args("sign_in.checking", [("host", host)]))
+      .id("sign-in-checking")
       .variant(ExtraTypography::Note.role())
       .width(Dimension::Pct(100.0))
   });
-  let card = Column::new()
-    .id("gate-card")
-    .width(Dimension::Pct(100.0))
-    .padding(SpacingSize::Xl)
+  let created = create.then(|| faded(create_row(ctx, form)));
+  let column = Column::new()
+    .id("sign-in-form")
+    .width(Dimension::Px(WIDTH))
+    .max_width(Dimension::Pct(100.0))
     .spacing(OrchesterSpacing::FormGap.role())
-    .background(PaletteColor::SurfaceRaised)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .rounded(RadiusSize::Lg)
     .child(faded(email))
     .child(faded(password))
     .with_children(refusal.as_ref().map(|refusal| refusal_part(ctx, form, (refusal, host))))
-    .child(submit_button(ctx, form))
+    .child(submit_button(ctx, form).after(Icon::ArrowRight).large())
     .with_children(checking)
     .with_children(form.person.reason(ctx, form.submit))
     .with_children(unopened(ctx, form))
-    .child(divider())
-    .child(faded(create_row(ctx, form)))
-    .child(
-      Text::new(&ctx.t("gate.browserNote"))
-        .id("gate-browser-note")
-        .variant(GateText::Note.role())
-        .width(Dimension::Pct(100.0)),
-    );
+    .with_children(created);
   let submit = form.submitter();
-  LurqForm::element(FormProps::default().on_submit_data(move |_| submit()), card)
+  LurqForm::element(FormProps::default().on_submit_data(move |_| submit()), column)
 }
 
-/// *Sign in*, as wide as the card, *Signing in…* while it does, faded while this email's sign-in is paused.
+/// *Sign in*, as wide as the fields, *Signing in…* while it does, faded while this email's sign-in is paused.
 pub(crate) fn submit_button(ctx: &mut Ctx, form: &Form) -> ActionButton {
   if form.pending() {
-    return ActionButton::new(form.submit, ButtonKind::Primary, ctx.t("gate.signingIn"))
+    return ActionButton::new(form.submit, ButtonKind::Primary, ctx.t("sign_in.signingIn"))
       .fill_width()
       .loading();
   }
-  let button = ActionButton::new(form.submit, ButtonKind::Primary, ctx.t("gate.submit"))
-    .icon(Icon::LogIn)
-    .fill_width();
+  let button = ActionButton::new(form.submit, ButtonKind::Primary, ctx.t("sign_in.submit")).fill_width();
   if form.paused() {
     return button.disabled();
   }
@@ -338,44 +324,49 @@ pub(crate) fn submit_button(ctx: &mut Ctx, form: &Form) -> ActionButton {
 }
 
 /// The email, and the password with *Forgot password?* over it; both marked after a wrong one.
-fn fields(ctx: &mut Ctx, form: &Form, wrong: bool) -> (Element, Element) {
-  let mut email = FieldInput::new("gate-email", ctx.t("gate.email"), form.email.clone())
-    .placeholder(ctx.t("gate.emailPlaceholder"))
+fn inputs(ctx: &mut Ctx, form: &Form, wrong: bool) -> (Element, Element) {
+  let mut email = FieldInput::new("sign-in-email", ctx.t("sign_in.email"), form.email.clone())
+    .placeholder(ctx.t("sign_in.emailPlaceholder"))
+    .leading(Icon::Mail)
+    .box_height(ControlHeight::Lg.value())
     .element(form.email_input.clone())
     .tab_first(EMAIL_TAB);
-  let mut password = FieldInput::new("gate-password", ctx.t("gate.password"), form.password.clone())
+  let mut password = FieldInput::new("sign-in-password", ctx.t("sign_in.password"), form.password.clone())
+    .placeholder(ctx.t("sign_in.passwordPlaceholder"))
     .masked()
     .no_trailing()
+    .leading(Icon::Lock)
+    .box_height(ControlHeight::Lg.value())
     .element(form.password_input.clone())
     .tab_first(PASSWORD_TAB);
   if wrong {
     email = email.invalid();
     password = password.invalid();
   }
-  let forgot = page_link(ctx, "gate-forgot", &ctx.t("gate.forgot"), (form, WebPage::Forgot));
+  let forgot = forgot_link(ctx, form);
   let label = Row::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(PASSWORD_LABEL_HEIGHT))
     // *Forgot password?* ends where the row does; its ring shows past the row's edge (`Focus::Link`).
     .overflow_visible()
     .align_items(Alignment::Center)
-    .child(Text::new(&ctx.t("gate.password")).variant(TypographyStyle::FieldLabel))
+    .child(Text::new(&ctx.t("sign_in.password")).variant(TypographyStyle::FieldLabel))
     .child(Spacer::new().flex(1.0))
     .child(forgot);
   let password = Column::new()
-    .id("gate-password-field")
+    .id("sign-in-password-field")
     .width(Dimension::Pct(100.0))
     .overflow_visible()
     .spacing(ExtraSpacing::Snug.role())
     .child(label)
     .child(password.render(ctx));
   let email = Column::new()
-    .id("gate-email-field")
+    .id("sign-in-email-field")
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Snug.role())
     .child(
-      Text::new(&ctx.t("gate.email"))
-        .id("gate-email-field-label")
+      Text::new(&ctx.t("sign_in.email"))
+        .id("sign-in-email-field-label")
         .variant(TypographyStyle::FieldLabel)
         .height(Dimension::Px(LABEL_HEIGHT)),
     )
@@ -386,38 +377,38 @@ fn fields(ctx: &mut Ctx, form: &Form, wrong: bool) -> (Element, Element) {
 /// The refusal in place: the fields' error, or a callout.
 pub(crate) fn refusal_part(ctx: &mut Ctx, form: &Form, (refusal, host): (&Refusal, &str)) -> Element {
   match refusal {
-    Refusal::Wrong => field_error("gate-wrong", &ctx.t("gate.wrong")).into(),
+    Refusal::Wrong => field_error("sign-in-wrong", &ctx.t("sign_in.wrong")).into(),
     Refusal::Unconfirmed(email) => Callout::new(
-      "gate-unconfirmed",
+      "sign-in-unconfirmed",
       CalloutTone::Warning,
-      ctx.t("gate.unconfirmed.title"),
+      ctx.t("sign_in.unconfirmed.title"),
     )
     .icon(Icon::MailWarning)
-    .body(ctx.t_args("gate.unconfirmed.body", [("email", email.as_str())]))
+    .body(ctx.t_args("sign_in.unconfirmed.body", [("email", email.as_str())]))
     .action(page_button(
       ctx,
-      "gate-open-cloud",
-      &ctx.t("gate.unconfirmed.open"),
+      "sign-in-open-cloud",
+      &ctx.t("sign_in.unconfirmed.open"),
       (form, WebPage::SignIn),
     ))
     .into(),
-    Refusal::Paused { until, .. } => Callout::new("gate-paused", CalloutTone::Danger, ctx.t("gate.paused.title"))
+    Refusal::Paused { until, .. } => Callout::new("sign-in-paused", CalloutTone::Danger, ctx.t("sign_in.paused.title"))
       .icon(Icon::Clock)
-      .body(ctx.t_args("gate.paused.body", [("time", display::clock(*until))]))
+      .body(ctx.t_args("sign_in.paused.body", [("time", display::clock(*until))]))
       .into(),
     Refusal::Unreachable(at) => Callout::new(
-      "gate-unreachable",
+      "sign-in-unreachable",
       CalloutTone::Neutral,
-      ctx.t("gate.unreachable.title"),
+      ctx.t("sign_in.unreachable.title"),
     )
     .icon(Icon::WifiOff)
-    .body(ctx.t("gate.unreachable.body"))
+    .body(ctx.t("sign_in.unreachable.body"))
     .note(ctx.t_args(
-      "gate.unreachable.when",
+      "sign_in.unreachable.when",
       [("host", host.to_owned()), ("time", display::clock(*at))],
     ))
     .into(),
-    Refusal::Other(said) => field_error("gate-failed", &said.text(ctx)).into(),
+    Refusal::Other(said) => field_error("sign-in-failed", &said.text(ctx)).into(),
   }
 }
 
@@ -426,28 +417,35 @@ pub(crate) fn unopened(ctx: &Ctx, form: &Form) -> Option<Element> {
   let page = form.unopened.get()?;
   Some(
     field_error(
-      "gate-open-failed",
-      &ctx.t_args("gate.openFailed", [("page", page.as_str())]),
+      "sign-in-open-failed",
+      &ctx.t_args("sign_in.openFailed", [("page", page.as_str())]),
     )
     .into(),
   )
 }
 
-/// *New to Orchester?* with *Create an account*.
+/// *New to Orchester?* with *Create an account* ↗.
 fn create_row(ctx: &mut Ctx, form: &Form) -> Element {
-  let create = page_button(
-    ctx,
-    "gate-create-account",
-    &ctx.t("gate.create"),
-    (form, WebPage::SignUp),
-  );
-  Row::new()
-    .id("gate-create")
-    .width(Dimension::Pct(100.0))
+  let label = ctx.t("sign_in.create");
+  let link = Focus::Link
+    .apply(pressable(opener(ctx, (form, WebPage::SignUp))))
+    .id("sign-in-create-account")
+    .spacing(ExtraSpacing::Tight.role())
     .align_items(Alignment::Center)
-    .child(Text::new(&ctx.t("gate.newHere")).variant(ExtraTypography::Lead.role()))
-    .child(Spacer::new().flex(1.0))
-    .child(create)
+    .describe("a11y_name", label.to_string())
+    .child(
+      Text::new(&label)
+        .variant(ExtraTypography::NoteStrong.role())
+        .color(PaletteColor::TextPrimary),
+    )
+    .child(icon(Icon::ArrowUpRight, IconSize::Sm, PaletteColor::TextPrimary));
+  Row::new()
+    .id("sign-in-create")
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .child(Text::new(&ctx.t("sign_in.newHere")).variant(ExtraTypography::Lead.role()))
+    .child(link)
     .into()
 }
 
@@ -481,29 +479,18 @@ fn page_button(ctx: &mut Ctx, id: &str, label: &str, target: (&Form, WebPage)) -
     .into()
 }
 
-/// A quiet link with the external glyph after it (`Link · Forgot password?` `KjUBG`), a stop of the card's Tab order.
-fn page_link(ctx: &mut Ctx, id: &str, label: &str, target: (&Form, WebPage)) -> Element {
+/// *Forgot password?*, a quiet link and a stop of the form's Tab order.
+fn forgot_link(ctx: &mut Ctx, form: &Form) -> Element {
+  let label = ctx.t("sign_in.forgot");
   Focus::Link
-    .apply(pressable(opener(ctx, target)))
-    .id(id.to_owned())
-    .spacing(ExtraSpacing::Pair.role())
+    .apply(pressable(opener(ctx, (form, WebPage::Forgot))))
+    .id("sign-in-forgot")
     .align_items(Alignment::Center)
-    .describe("a11y_name", label.to_owned())
+    .describe("a11y_name", label.to_string())
     .child(
-      Text::new(label)
+      Text::new(&label)
         .variant(ExtraTypography::NoteStrong.role())
         .color(PaletteColor::TextSecondary),
     )
-    .child(icon(Icon::ExternalLink, IconSize::Sm, PaletteColor::TextMuted))
-    .into()
-}
-
-/// The hairline over *New to Orchester?*.
-pub(super) fn divider() -> Element {
-  Row::new()
-    .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(DIVIDER))
-    .flex_shrink(0.0)
-    .background(PaletteColor::Border)
     .into()
 }

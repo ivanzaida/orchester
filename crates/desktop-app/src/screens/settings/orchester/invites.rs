@@ -40,6 +40,18 @@ use crate::{
   },
 };
 
+/// The group while nobody is signed in (`Invites` in `j7SbPk`): the cloud alone knows them, so a sign-in shows them.
+pub(super) fn signed_out(ctx: &mut Ctx) -> Element {
+  SettingGroup::new("orchester-invites", ctx.t("cloud.invites.group"))
+    .row(
+      SettingRow::new("orchester-invites-sign-in", ctx.t("cloud.invites.signIn"))
+        .hint(ctx.t("cloud.invites.signInHint"))
+        .lead(row_tile(icon(Icon::Mail, IconSize::Md, PaletteColor::TextSecondary)))
+        .render(ctx),
+    )
+    .into()
+}
+
 /// The group, as `invites` stand, for an account whose two-factor authentication is `status`.
 pub(super) fn waiting(
   ctx: &mut Ctx,
@@ -56,11 +68,13 @@ pub(super) fn waiting(
   }
   let mut parts: Vec<Element> = Vec::new();
   match invites {
+    // The account's invites are still being read as the column changes to it.
     Invites::SignedOut => {}
     Invites::Failed(reason) => parts.push(field_error("orchester-invites-failed", &reason.text(ctx)).into()),
     Invites::Listed(listed) if listed.is_empty() => {
       group = group.row(
         SettingRow::new("orchester-invites-none", ctx.t("cloud.invites.none"))
+          .hint(ctx.t("cloud.invites.noneHint"))
           .lead(row_tile(icon(Icon::Mail, IconSize::Md, PaletteColor::TextSecondary)))
           .render(ctx),
       );

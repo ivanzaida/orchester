@@ -49,7 +49,6 @@ use orchester_workspace::{
   },
 };
 
-pub(crate) use self::advanced::{Advanced, Place, section as advanced_section};
 pub use self::{
   notice::InvitesNotice,
   person::PersonOnly,
@@ -182,7 +181,8 @@ impl Component for OrchesterTab {
       }
     };
     let invites = invites(ctx, revision, &services.cloud, snapshot.account.as_ref());
-    let two_factor = two_factor::read(ctx, revision, &services.cloud, snapshot.account.as_ref());
+    let signed_in = snapshot.account.as_ref().map(|account| account.account);
+    let two_factor = two_factor::read(ctx, revision, &services.cloud, signed_in);
     let accepted = kept(ctx, revision, &services.cloud, snapshot.account.as_ref());
     match view.server.and_then(|id| snapshot.server(id)) {
       Some((entry, linked)) => {

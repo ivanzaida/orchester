@@ -67,6 +67,9 @@ pub(super) struct Facts {
   pub joined: Vec<orchester_store::JoinedKey>,
   /// What the join left to say, until the person dismisses it.
   pub joined_note: Option<linked::joined::Note>,
+  /// The servers a first link to which moves this project into the account: it is this computer's, and they are the
+  /// account's.
+  pub moves_on: Vec<orchester_core::id::ServerId>,
 }
 
 impl DevtoolsInspectable for Facts {}
@@ -192,6 +195,7 @@ fn read(
   let linked = link
     .as_ref()
     .and_then(|link| entries.iter().find(|entry| entry.stored.id == link.server).cloned());
+  let moves_on = workspace.servers_moving_project(db.project().id()).map_err(local)?;
   let servers = entries.into_iter().filter(ServerEntry::in_use).collect();
   Ok(Facts {
     link,
@@ -203,5 +207,6 @@ fn read(
     linked,
     joined,
     joined_note,
+    moves_on,
   })
 }

@@ -38,7 +38,7 @@ projects* tab. Controls are instances of `Button/*` (`iBDdP`, `O1AstI`, `YaUJX`,
 1. **Three equal ways in.** *Add a project from a folder* (Choose folder…), *Join a team* (Sign in, Use a code),
    *Open a team's shared project* (Choose project…). None needs another first; each ends in an open project.
 2. **No account to work locally.** Orchester Cloud is asked for only when the person joins a team (decided
-   2026-10-28); the design assumes the sign-in gate is gone. The start page says so in one line.
+   2026-10-28); the sign-in gate is gone (ORC-132). The start page says so in one line.
 3. **In place, no modals.** Join, pick, link and download are steps of the start page: a breadcrumb
    (*Start › Join a team › Acme › Kontur*), a step line (*Join the team, Choose a project, Link a folder, Download
    tasks*) and *Back*.
@@ -108,8 +108,8 @@ projects* tab. Controls are instances of `Button/*` (`iBDdP`, `O1AstI`, `YaUJX`,
   - **The third way.** Signed in, it names the first team of the account this computer joined, how many of its
     projects are the person's once read (none is said when it can't be read), and leads to them; the invites waiting
     show as a badge. Before a team is joined it leads to *Join a team* (choice B as proposed).
-  - **Signed out.** While the sign-in gate is on (until ORC-132), a window signed out shows only the gate, so 01's
-    *Sign in* and its no-account line are reached once the gate makes way.
+  - **Signed out.** A fresh install starts signed out (ORC-132), so it shows 01 as drawn: *Sign in* on the second way,
+    which opens *Join a team* on Orchester Cloud, and the line that no account is needed.
 - Decision 9 as built (`crates/desktop-app/src/screens/all_projects/agent_cli.rs`):
   - **Where.** The callout `SIbdo` and fix row `U4QvYO` of frame 14 `mruEH` sit under the first start's ways (01
     `H9CZ1`) and above All projects' list, 1040 and 1120 wide.

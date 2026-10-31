@@ -1,7 +1,7 @@
 //! All projects and the first start: what the list says of each project, opening one, removing one in place, the
 //! empty list, *Open project folder…* with a stand-in picker, the *Usage* tab, the three ways in of a first start
-//! ([`first_start`]), the person's teams ([`teams`]) and that an agent CLI is not found ([`agent_cli`]). Projects live
-//! in repositories of the test's own data folder.
+//! ([`first_start`]), whose each project is and moving it ([`owners`]), the person's teams ([`teams`]) and that an
+//! agent CLI is not found ([`agent_cli`]). Projects live in repositories of the test's own data folder.
 //!
 //! `cargo test -p orchester-app --test all_projects all_projects`
 
@@ -9,6 +9,8 @@
 mod agent_cli;
 #[path = "all_projects/first_start.rs"]
 mod first_start;
+#[path = "all_projects/owners.rs"]
+mod owners;
 mod support;
 #[path = "all_projects/teams.rs"]
 mod teams;
@@ -26,6 +28,7 @@ fn all_projects(window: &mut Window) {
   window.until("All projects to be read", |window| {
     window.tree.get_element_by_id("project-list").is_some()
       || window.tree.get_element_by_id("all-projects-empty").is_some()
+      || window.tree.get_element_by_id("all-projects-nothing-here").is_some()
   });
 }
 

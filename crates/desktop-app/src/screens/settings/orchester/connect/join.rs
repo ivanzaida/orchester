@@ -1,6 +1,7 @@
 //! *Join* and *Your username there* (`bIwte`): with the Orchester account (the cloud names the server and its
-//! certificate, and gives a token for it) or with an invite code (8 characters, read without regard to case or the
-//! hyphen), a username and a name for someone new on the server; then what came of it, with the server's entry.
+//! certificate, and gives a token for it; while nobody is signed in, the sign-in is offered in place) or with an invite
+//! code (8 characters, read without regard to case or the hyphen), a username and a name for someone new on the server;
+//! then what came of it, with the server's entry.
 
 use lurq::{
   app::{
@@ -27,6 +28,7 @@ use super::{ConnectPage, Found, Shown, join_error};
 use crate::{
   navigation::Navigation,
   routes::{OrchesterView, Route},
+  screens::cloud_sign_in::{Place, SignInOffer},
   services::Services,
   theme::OrchesterSpacing,
   ui::{
@@ -102,6 +104,8 @@ impl Request {
 pub(super) struct Join {
   confirmed: Signal<Confirmed>,
   method: Signal<Method>,
+  /// *Sign in* opened the sign-in in place.
+  signing_in: Signal<bool>,
   code: Signal<String>,
   username: Signal<String>,
   name: Signal<String>,
@@ -116,6 +120,7 @@ impl Join {
     Self {
       confirmed: ctx.signal(Confirmed(None)),
       method: ctx.signal(Method::Code),
+      signing_in: ctx.signal(false),
       code: ctx.signal(String::new()),
       username: ctx.signal(username),
       name: ctx.signal(name),
@@ -181,7 +186,29 @@ fn trust_of(join: &Join, found: &Found) -> Option<Trust> {
   }
 }
 
-/// *Join*: the two ways, and the invite code's field.
+/// *Sign in*, which opens the sign-in in place, and the sign-in once it is open: what the Orchester account's way needs
+/// while nobody is signed in (as Sharing offers it, `i5lddT`). Once it is made, the way can be chosen.
+fn sign_in_offer(ctx: &mut Ctx, join: &Join) -> Element {
+  let opened = join.signing_in.get();
+  let flip = join.signing_in.clone();
+  let sign_in = ActionButton::new(
+    "orchester-connect-sign-in",
+    ButtonKind::Secondary,
+    ctx.t("sharing.connect.join.signIn"),
+  )
+  .icon(Icon::LogIn)
+  .held(opened)
+  .in_form()
+  .on_click(move || flip.update(|open| *open = !*open));
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Md)
+    .child(Row::new().child(sign_in))
+    .with_children(opened.then(|| ctx.mount_keyed::<SignInOffer>("orchester-connect-sign-in-form", Place::Under)))
+    .into()
+}
+
+/// *Join*: the two ways, what the Orchester account's needs while nobody is signed in, and the invite code's field.
 pub(super) fn join_step(ctx: &mut Ctx, page: &ConnectPage) -> Element {
   let join = &page.join;
   let account = Services::of(ctx).cloud.account().ok().flatten();
@@ -215,6 +242,7 @@ pub(super) fn join_step(ctx: &mut Ctx, page: &ConnectPage) -> Element {
     method == Method::Code,
     choose(Method::Code),
   );
+  let offer = account.is_none().then(|| sign_in_offer(ctx, join));
   let mut column = Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Md)
@@ -224,7 +252,8 @@ pub(super) fn join_step(ctx: &mut Ctx, page: &ConnectPage) -> Element {
         .spacing(SpacingSize::Sm)
         .child(Column::new().flex(1.0).child(by_account))
         .child(Column::new().flex(1.0).child(by_code)),
-    );
+    )
+    .with_children(offer);
   if method == Method::Code {
     let input = FieldInput::new(
       "orchester-connect-code",

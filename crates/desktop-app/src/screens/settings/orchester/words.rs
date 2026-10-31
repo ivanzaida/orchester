@@ -140,6 +140,7 @@ pub fn sharing_error(error: &SharingError) -> Said {
     SharingError::TwoFactorOff => Said::new("sharing.connect.twoFactorOff"),
     SharingError::TwoFactorSession => Said::new("sharing.connect.twoFactorSession"),
     SharingError::UnprovenServer => Said::new("sharing.connect.unprovenServer"),
+    SharingError::AccountProject => Said::new("sharing.upload.accountProject"),
     _ => Said::new("cloud.errors.local"),
   }
 }

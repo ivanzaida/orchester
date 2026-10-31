@@ -1,14 +1,15 @@
 //! The personal workspace: the application database and the projects it knows. Every method
 //! blocks on SQLite or the file system; the UI calls them off the UI thread.
 //!
-//! The projects belong to the Orchester Cloud account signed in from this computer (the person's decision,
-//! 2026-10-16): the list, every lookup and every opening of a project are that account's alone, keyed by the cloud's
-//! account id. Another account signed in on the same computer sees only its own; while none is, only the projects
-//! added meanwhile, which the next account to sign in takes (`sharing::cloud`). Only the work that follows every
-//! project on this computer, and shows none of them, reads them all ([`Workspace::every_project`]). The team servers
-//! are the account's in the same way ([`servers`]).
+//! The app works without an Orchester Cloud account (the person's decision, 2026-10-28), and a project added while
+//! nobody is signed in is this computer's: it shows to whoever is signed in, and no sign-in claims it. A project added
+//! while an account is signed in is that account's (2026-10-16): its list, lookups and openings are that account's
+//! alone, keyed by the cloud's account id, and it waits while the account is signed out. A person moves an unshared
+//! project between the two ([`owners`]). Only the work that follows every project on this computer, and shows none of
+//! them, reads them all ([`Workspace::every_project`]). The team servers are owned in the same way ([`servers`]).
 
 mod orchestrator_consent;
+mod owners;
 mod servers;
 
 use std::{
@@ -31,7 +32,10 @@ use orchester_exec::programs::Programs;
 use orchester_store::{AppDb, PreviousSession, ProjectDb, RegisteredProject, SessionEnd, SessionId, StoreError};
 use parking_lot::Mutex;
 
-pub use self::orchestrator_consent::OrchestratorConsent;
+pub use self::{
+  orchestrator_consent::OrchestratorConsent,
+  owners::{MoveError, MoveTo},
+};
 use crate::{
   accounts::folders::found,
   messages::{self, Message},
@@ -215,10 +219,10 @@ impl Workspace {
     })
   }
 
-  /// The signed-in account's projects, most recently opened first.
+  /// The projects shown now, most recently opened first: this computer's, and the signed-in account's own.
   pub fn projects(&self) -> Result<Vec<RegisteredProject>, StoreError> {
     let db = self.db.lock();
-    db.projects_of(owner(&db)?.as_ref())
+    db.projects_visible_to(owner(&db)?.as_ref())
   }
 
   /// Every project known on this computer, whichever account's: for the work that follows them all in the background
@@ -227,11 +231,11 @@ impl Workspace {
     self.db.lock().every_project()
   }
 
-  /// The folders of the projects the signed-in account does not see: other accounts' projects on this computer.
+  /// The folders of the projects not shown now: those of accounts other than the signed-in one on this computer.
   pub fn unseen_roots(&self) -> Result<HashSet<PathBuf>, StoreError> {
     let db = self.db.lock();
     let seen: HashSet<ProjectId> = db
-      .projects_of(owner(&db)?.as_ref())?
+      .projects_visible_to(owner(&db)?.as_ref())?
       .into_iter()
       .map(|project| project.id)
       .collect();
@@ -266,8 +270,8 @@ impl Workspace {
   }
 
   /// Opens the project Orchester keeps in the folder `repo_root` and records it as the most
-  /// recently used one; a folder whose project was removed from the list is added again. Another account's project
-  /// is refused ([`StoreError::ProjectOfAnotherAccount`]).
+  /// recently used one; a folder whose project was removed from the list is added again. An account's project is
+  /// refused to anyone else ([`StoreError::ProjectOfAnotherAccount`], [`StoreError::ProjectOfSignedOutAccount`]).
   pub fn open(&self, repo_root: &Path) -> Result<OpenProject, StoreError> {
     let db = ProjectDb::open(repo_root)?;
     let project = db.project().clone();
@@ -292,7 +296,8 @@ impl Workspace {
     })
   }
 
-  /// Records `project` in `repo_root` as the signed-in account's, used now.
+  /// Records `project` in `repo_root` as used now: a new one as the signed-in account's, or this computer's while
+  /// nobody is signed in; a known one stays whose it is.
   fn register(&self, project: &Project, repo_root: &Path) -> Result<(), StoreError> {
     let mut db = self.db.lock();
     let owner = owner(&db)?;

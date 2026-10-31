@@ -1,8 +1,8 @@
-//! The sign-in gate's side of the cloud account (the person's decision, 2026-10-16): the app is used only while this
-//! computer is signed in to Orchester Cloud. A sign-in that was made keeps working without the internet; it is checked
-//! again whenever the cloud can be reached ([`keep_checking`]), and a refusal ends it with the cloud's reason
-//! (`docs/cloud-api.md`, "Why a token ended"). [`SignIn`] and [`Reach`] are published for the window and the app's
-//! MCP server.
+//! Whether this computer is signed in to Orchester Cloud (the person's decision, 2026-10-28: a sign-in is needed only
+//! for team features). A sign-in that was made keeps working without the internet; it is checked again whenever the
+//! cloud can be reached ([`keep_checking`]), and a refusal ends it with the cloud's reason (`docs/cloud-api.md`, "Why a
+//! token ended"). Nothing is asked of the cloud while nobody is signed in. [`SignIn`] and [`Reach`] are published for
+//! the window and the app's MCP server.
 
 use std::time::Duration;
 
@@ -24,9 +24,9 @@ pub const RETRY_AFTER_CAP: Duration = Duration::from_secs(60 * 60);
 /// Whether this computer is signed in to Orchester Cloud.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SignIn {
-  /// The app is open, with the projects of the cloud account `account` (`crate::workspace`).
+  /// This computer's projects show with those of the cloud account `account` (`crate::workspace`).
   SignedIn { account: CloudAccountId, email: String },
-  /// Only the sign-in gate shows, since `since`; `ended` says why the last sign-in from here ended, if one did.
+  /// Only this computer's projects show, since `since`; `ended` says why the last sign-in from here ended, if one did.
   SignedOut {
     ended: Option<EndedCloudSignIn>,
     since: Timestamp,
@@ -76,7 +76,7 @@ impl Reach {
   }
 }
 
-/// The reason a refusal of this computer's token carries, as the gate shows it.
+/// The reason a refusal of this computer's token carries, as Settings and All projects show it.
 pub(super) const fn end_of(reason: Option<SessionEnd>) -> CloudSignInEnd {
   match reason {
     Some(SessionEnd::Revoked) => CloudSignInEnd::Revoked,

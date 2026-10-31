@@ -19,7 +19,7 @@ use orchester_store::{ProjectDb, StoreError};
 use super::{
   IdentityProblem, JoinReview, ShareError,
   first_link::{LinkKind, LinkRequest},
-  landing::{Linked, linked_to, open_or_add},
+  landing::{Linked, add_for_link, linked_to, open_or_add},
   repository_identity,
 };
 use crate::{
@@ -255,7 +255,7 @@ impl Servers {
       FolderCheck::Differs { origin, .. } => Some(origin),
       FolderCheck::NoHint | FolderCheck::NoOrigin => None,
     };
-    self.open_folder(folder).await?;
+    self.add_for_link(folder, server).await?;
     let plan = self.link_plan(entry, folder, project.clone()).await?;
     if let LinkKind::Review { .. } = plan.kind {
       return Ok(FolderLinked::Review(self.review(entry, folder, project.clone()).await?));
@@ -273,5 +273,12 @@ impl Servers {
   async fn open_folder(&self, folder: &Path) -> Result<OpenProject, SharingError> {
     let (workspace, root) = (self.inner.workspace.clone(), folder.to_owned());
     Ok(background::run(move || open_or_add(&workspace, root)).await??)
+  }
+
+  /// [`Self::open_folder`] for a first link to `server`: a project added for it now has the server's owner.
+  async fn add_for_link(&self, folder: &Path, server: ServerId) -> Result<(), SharingError> {
+    let (workspace, root) = (self.inner.workspace.clone(), folder.to_owned());
+    background::run(move || add_for_link(&workspace, root, server)).await??;
+    Ok(())
   }
 }

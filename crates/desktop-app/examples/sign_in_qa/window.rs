@@ -1,5 +1,5 @@
 //! The window before it shows, driven with the pointer of the example itself (never an MCP client's, which a
-//! person-only control refuses), as the sign-in gate's QA and the QA app's team scenarios do.
+//! person-only control refuses), as the sign-in's QA and the QA app's team scenarios do.
 
 use std::{
   error::Error,

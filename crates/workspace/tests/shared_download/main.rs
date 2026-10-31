@@ -156,6 +156,15 @@ impl Linked {
     );
   }
 
+  /// The server goes from the list, as no screen does: only a damaged list loses a server its checkouts link to.
+  fn server_leaves_the_list(&self) {
+    let removed = rusqlite::Connection::open(&self.database)
+      .expect("database")
+      .execute("DELETE FROM servers WHERE id = ?1", [self.server.to_string()])
+      .expect("removed");
+    assert_eq!(removed, 1, "the server left the list");
+  }
+
   /// One round of the shared projects' work, as the request the join made starts.
   fn round(&self) {
     self
@@ -267,11 +276,7 @@ fn shared_download_a_checkout_whose_server_left_the_list_fails_instead_of_stayin
   let linked = Linked::new(TasksAnswer::Serve);
   linked.join();
   assert_eq!(linked.state(), downloading());
-  let forgotten = AppDb::open(&linked.database)
-    .expect("database")
-    .forget_unowned_server(linked.server)
-    .expect("forgotten");
-  assert!(forgotten, "the server left the list");
+  linked.server_leaves_the_list();
   linked.round();
   let Some(FirstDownload::Failed { reason, .. }) = linked.state() else {
     panic!("the download failed: {:?}", linked.state());

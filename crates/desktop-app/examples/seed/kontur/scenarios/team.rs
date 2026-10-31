@@ -110,7 +110,7 @@ fn ledger(kontur: &Kontur) -> Result<(), SeedError> {
   );
   ProjectDb::create(&folder, project.clone())?;
   let mut apps = AppDb::open(&kontur.app_database)?;
-  // The signed-in account's project, or the next one's to sign in.
+  // The signed-in account's project, or this computer's while nobody is signed in.
   let owner = apps.cloud_account()?.map(|account| account.account);
   // Opened a day before Kontur, which stays the project the app opens.
   apps.register_project(&project, &folder, kontur.ago(24 * 60), owner.as_ref())?;

@@ -3,9 +3,9 @@
 //! page, never here: the account card says whether it is on, with *Turn on…* ↗ while it is off. Accepting an invite
 //! needs it on the account and a sign-in with a code on this computer: an invite the cloud says needs it, or whose
 //! accept it refused, says which one is missing and offers the one step that fixes it, *Turn on two-factor
-//! authentication* ↗ or *Sign in again*, which signs out and locks so the person signs in at the gate with the code
-//! (the designer's decision, `Nq3Mf`). After a sign-in with a recovery code that leaves few, a warning says to make new
-//! ones; no frame draws it, so it is the UI kit's warning callout.
+//! authentication* ↗ or *Sign in again*, which signs out so the person signs in with the code in Settings › Orchester
+//! Cloud, or in place on the invite landing (`d1yW2I`, [`super::landing`]). After a sign-in with a recovery code that
+//! leaves few, a warning says to make new ones; no frame draws it, so it is the UI kit's warning callout.
 
 use lurq::{
   app::{
@@ -18,8 +18,7 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_api::cloud::{CloudInvite, TwoFactorStatus};
-use orchester_core::id::InviteId;
-use orchester_store::StoredCloudAccount;
+use orchester_core::id::{CloudAccountId, InviteId};
 use orchester_workspace::sharing::cloud::{Cloud, FEW_RECOVERY_CODES, WebPage};
 
 use super::{
@@ -47,16 +46,16 @@ pub struct TwoFactor(pub Option<TwoFactorStatus>);
 
 impl DevtoolsInspectable for TwoFactor {}
 
-/// The two-factor authentication of `account`, read at `revision` (`GET /me`) and again whenever the window gains or
-/// loses the focus, so turning it on in the browser shows on coming back; `None` until it is read, or when the cloud
-/// cannot say (logged).
-pub fn read(
-  ctx: &mut Ctx,
-  revision: u64,
-  cloud: &Cloud,
-  account: Option<&StoredCloudAccount>,
-) -> Option<TwoFactorStatus> {
-  let signed_in = account.map(|account| account.account);
+/// The two-factor authentication of the account `signed_in`, read at `revision` (`GET /me`) and again whenever the
+/// window gains or loses the focus, so turning it on in the browser shows on coming back; `None` while nobody is signed
+/// in, until it is read, or when the cloud cannot say (logged).
+pub fn read(ctx: &mut Ctx, revision: u64, cloud: &Cloud, signed_in: Option<CloudAccountId>) -> Option<TwoFactorStatus> {
+  settled(ctx, revision, cloud, signed_in).and_then(|read| read.0)
+}
+
+/// What [`read`] reads, `None` until the first answer: a page that waits on it tells *not read yet* from *the cloud
+/// cannot say*.
+pub fn settled(ctx: &mut Ctx, revision: u64, cloud: &Cloud, signed_in: Option<CloudAccountId>) -> Option<TwoFactor> {
   let focused = ctx.window().info().is_focused;
   ctx
     .future(
@@ -77,7 +76,6 @@ pub fn read(
     .state()
     .get()
     .data
-    .and_then(|read| read.0)
 }
 
 /// What an invite needs before it can be accepted.
@@ -176,7 +174,7 @@ fn opener(ctx: &mut Ctx, answers: &Answers, id: &str) -> impl Fn() + Send + Sync
   }
 }
 
-/// What `invite` is to, as the gate names it after *Sign in again*: its project, or its server.
+/// What `invite` is to, as the sign-in names it after *Sign in again*: its project, or its server.
 pub(super) fn invite_to(invite: &CloudInvite) -> &str {
   invite
     .project
@@ -196,7 +194,7 @@ pub(super) fn turn_on(ctx: &mut Ctx, id: &str, answers: &Answers) -> ActionButto
     .on_click(open)
 }
 
-/// *Sign in again*: signs out and locks for a sign-in with a code, a person's; `to`: what the invite is to.
+/// *Sign in again*: signs out for a sign-in with a code, a person's; `to`: what the invite is to.
 pub(super) fn sign_in_again(ctx: &Ctx, id: &str, to: &str, answers: &Answers) -> ActionButton {
   let button = ActionButton::new(
     format!("{id}-sign-in-again"),

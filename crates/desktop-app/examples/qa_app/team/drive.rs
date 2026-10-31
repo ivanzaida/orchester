@@ -2,7 +2,7 @@
 //! example itself: *Join with the code* takes no MCP client's press (`join-team-code-submit`, `PersonOnly`), and Enter
 //! and *Try again* join the same way, so each result of a press is a scenario of its own.
 
-#[path = "../../gate_qa/window.rs"]
+#[path = "../../sign_in_qa/window.rs"]
 mod window;
 
 use std::error::Error;

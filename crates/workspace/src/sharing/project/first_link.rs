@@ -29,6 +29,9 @@ pub struct LinkPlan {
   pub project: SharedProject,
   pub kind: LinkKind,
   pub discovery: DiscoveryState,
+  /// The project is this computer's and the server the account's: the link moves it into the account, and what
+  /// confirms the link says so.
+  pub moves_to_account: bool,
 }
 
 /// How the checkout's tasks and the server project's meet.
@@ -75,8 +78,11 @@ impl Servers {
       .tasks
       .len();
     let (root, address) = (repo_root.to_owned(), project.address.clone());
-    let (local, discovery) = background::run(move || -> Result<_, StoreError> {
-      Ok((upload_keys(&ProjectDb::open(&root)?)?, discovery_state(&root, &address)))
+    let (workspace, target) = (self.inner.workspace.clone(), entry.stored.id);
+    let (local, discovery, moves_to_account) = background::run(move || -> Result<_, StoreError> {
+      let db = ProjectDb::open(&root)?;
+      let moves = workspace.servers_moving_project(db.project().id())?.contains(&target);
+      Ok((upload_keys(&db)?, discovery_state(&root, &address), moves))
     })
     .await??;
     let (tasks, next, claimed) = local;
@@ -89,6 +95,7 @@ impl Servers {
       project,
       kind,
       discovery,
+      moves_to_account,
     })
   }
 

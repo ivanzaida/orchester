@@ -6,7 +6,8 @@
 //! run reported for Work and Client; connections on Work and Client, so removing Work is blocked by the run, removing
 //! Client moves its connection, and Personal is unused; quiet hours on from 22:30 to 07:00 and the daily report at
 //! 18:30. Team servers, invites and the installed app's MCP rows are the QA app's own (`examples/qa_app/settings`):
-//! they need a cloud and servers that answer while the window is open.
+//! they need a cloud and servers that answer while the window is open, and the account, so it asks the QA app to sign
+//! in.
 
 #[allow(
   dead_code,
@@ -87,6 +88,7 @@ const ACCOUNTS: [(AccountCli, &str, Shown); 7] = [
 
 pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
   super::accounts::seed(kontur)?;
+  kontur.ask_qa_app(super::qa_app_asks::SIGN_IN)?;
   let root = folder(&kontur.app_database);
   for folder in [
     root.join("path"),

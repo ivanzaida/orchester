@@ -1,6 +1,7 @@
 //! The first link's page (`KSnOW`, which `N9NFio` reuses for linking a checkout to an empty project): over Project
-//! settings with its breadcrumb, *Link Kontur to orchester.kontur.dev/kontur?*, what goes up and what continues on the
-//! server ([`parts`]), whether to write `orchester.toml`, what linking sends, and *Link and upload*, which only a
+//! settings with its breadcrumb, *Link Kontur to orchester.kontur.dev/kontur?*, that a project of this computer's moves
+//! into the account whose server it is, what goes up and what continues on the server ([`parts`]), whether to write
+//! `orchester.toml`, what linking sends, and *Link and upload*, which only a
 //! person presses. A checkout without tasks takes the project's tasks as they are, on the same page. Nothing is sent
 //! before; *Cancel* returns to Sharing with the project still local, and a link that failed says why and offers *Try
 //! again*. When the project's tasks changed after the page read them (one was added in another tab or over MCP), the
@@ -201,6 +202,10 @@ impl Component for UploadPage {
       .spacing(SpacingSize::Lg);
     if let Some(failure) = state.error.clone().filter(|_| !state.is_pending()) {
       content = content.child(self.failed(ctx, &props, &failure));
+    }
+    if props.upload.plan.moves_to_account {
+      let project = props.project.open.project.name().as_str();
+      content = content.child(super::link::moves_to_account(ctx, project));
     }
     let local = ("local", props.project.open.project.name().as_str().to_owned());
     // Once the tasks changed, the button reads what linking does now instead of linking.

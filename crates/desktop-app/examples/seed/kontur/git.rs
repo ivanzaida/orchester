@@ -109,6 +109,11 @@ pub fn init(root: &Path, files: &[(&str, String)]) -> Result<Revision, GitError>
   head(root)
 }
 
+/// Names `url` as `origin` of the repository `root`; nothing is fetched.
+pub fn set_origin(root: &Path, url: &str) -> Result<(), GitError> {
+  git(root, &["remote", "add", "origin", url]).map(drop)
+}
+
 /// A run's worktree, as the runner adds it: `<repo>/.orchester/worktrees/<run>` on the run's branch.
 pub struct Worktree {
   repo: PathBuf,

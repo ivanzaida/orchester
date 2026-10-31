@@ -1,6 +1,6 @@
 //! Which team scenario a QA copy opens on. The seed knows the scenario and the QA app does not (`tools/qa-app.ps1`
-//! gives it only `--signed-in`), so the seed leaves the state's name in a marker beside the application database. A
-//! marker that names nothing known is an error, not an app without its team. The seed includes this file too.
+//! tells it only whether to sign in), so the seed leaves the state's name in a marker beside the application database.
+//! A marker that names nothing known is an error, not an app without its team. The seed includes this file too.
 
 use std::{error::Error, fs, io::ErrorKind, path::Path};
 

@@ -1,6 +1,8 @@
 //! What a checkout linked to a project on the stand-in team server reads in a round of the shared projects' work: the
-//! project, its one tag, its one module and its three tasks, or as many as [`TaskPages`] says, page by page. Its tasks
-//! can be served, refused with a `500`, or held, for a QA copy to show the first download under way.
+//! project, its one tag, its one module and its three tasks, or as many as [`TaskPages`] says, page by page, or nothing
+//! of them while the project is empty. Its tasks can be served, refused with a `500`, or held, for a QA copy to show
+//! the first download under way. A first link of a project sends its tasks (`POST /projects/{id}/link`), which the
+//! server can refuse.
 
 use std::{
   thread,
@@ -37,7 +39,9 @@ const PAGED: [(&str, &str); 3] = [
 /// How the server answers a project's tasks.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum TasksAnswer {
+  /// No task, tag or module: a first link of a checkout uploads its own.
   #[default]
+  Empty,
   Serve,
   /// Held for at most [`HOLD_AT_MOST`], until another answer is set; then refused like [`Self::Fail`].
   Hold,
@@ -53,10 +57,10 @@ pub(super) struct TaskPages {
   pub(super) until: usize,
 }
 
-/// The answer to `GET /projects/{id}` and what is under it, for the `path` of one of `state`'s projects; `None` for
-/// anything else.
+/// The answer to `GET /projects/{id}` and what is under it, and to a first link's `POST`, for the `path` of one of
+/// `state`'s projects; `None` for anything else.
 pub(super) fn answer((path, query): (&str, &str), state: &Mutex<State>) -> Option<(&'static str, Value)> {
-  let rest = path.strip_prefix("GET /api/v1/projects/")?;
+  let (verb, rest) = path.split_once(" /api/v1/projects/")?;
   let (id, part) = rest.split_once('/').unwrap_or((rest, ""));
   let project = state
     .lock()
@@ -64,11 +68,16 @@ pub(super) fn answer((path, query): (&str, &str), state: &Mutex<State>) -> Optio
     .iter()
     .find(|project| project["id"] == id)
     .cloned()?;
-  match part {
-    "" => Some(("200 OK", json!({"project": project}))),
-    "tags" => Some(("200 OK", json!({"tags": [{"id": TAG, "name": "backend"}]}))),
-    "modules" => Some(("200 OK", json!({"modules": [module()], "changes": []}))),
-    "tasks" => Some(tasks(&project, query, state)),
+  let empty = state.lock().tasks == TasksAnswer::Empty;
+  match (verb, part) {
+    ("GET", "") => Some(("200 OK", json!({"project": project}))),
+    ("GET", "tags") if empty => Some(("200 OK", json!({"tags": []}))),
+    ("GET", "tags") => Some(("200 OK", json!({"tags": [{"id": TAG, "name": "backend"}]}))),
+    ("GET", "modules") if empty => Some(("200 OK", json!({"modules": [], "changes": []}))),
+    ("GET", "modules") => Some(("200 OK", json!({"modules": [module()], "changes": []}))),
+    ("GET", "tasks") => Some(tasks(&project, query, state)),
+    ("POST", "link") if state.lock().refuses_links => Some(("403 Forbidden", error("forbidden"))),
+    ("POST", "link") => Some(("200 OK", json!({"tasks": [], "dropped_links": [], "cursor": 0}))),
     _ => None,
   }
 }
@@ -104,6 +113,7 @@ fn tasks(project: &Value, query: &str, state: &Mutex<State>) -> (&'static str, V
   }
   let answer = state.lock().tasks;
   match (answer, pages) {
+    (TasksAnswer::Empty, _) => ("200 OK", json!({"tasks": [], "cursor": 0})),
     (TasksAnswer::Serve, Some(pages)) => ("200 OK", page(key, after, pages.total, pages.total)),
     (TasksAnswer::Serve, None) => {
       let tasks: Vec<Value> = TASKS

@@ -6,8 +6,7 @@
 //! - Signed in to Orchester Cloud, `/join-team` shows the account's teams and invites (`04` `drCQd`, [`teams`]), and
 //!   *Use a code* (`/join-team?way=code`) the two ways side by side, the account in the Cloud column's place.
 //! - Signed out, both show the two ways (`02` `B914L`): the Cloud column signs in ([`cloud`]), and the code column
-//!   waits, faded, meanwhile (`03` `BD519`). While the sign-in gate is on, a signed-out window shows only the gate, so
-//!   this is reached once the gate makes way for the start page.
+//!   waits, faded, meanwhile (`03` `BD519`). A server joined with a code while signed out is this computer's.
 //! - The code column ([`code`]) joins with an address and a code; a wrong or expired code (`10` `aWsVx`) and a server
 //!   that does not answer (`11` `oOn6j`) say so in place.
 //! - Once joined, the team's shared projects and linking one to a folder ([`shared`], decisions 5–6).

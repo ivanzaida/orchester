@@ -154,6 +154,7 @@ impl From<&SharingError> for DownloadFailure {
       | SharingError::UnprovenServer
       | SharingError::NoProject
       | SharingError::ProjectChanged
+      | SharingError::AccountProject
       | SharingError::ForeignAddress { .. } => Self::Refused,
     }
   }

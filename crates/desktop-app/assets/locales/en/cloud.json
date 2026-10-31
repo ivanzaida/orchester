@@ -29,13 +29,14 @@
         "other": "{{count}} invites waiting"
       },
       "trust": {
-        "pinned": "{{host}} · certificate checked",
-        "system": "{{host}} · trusted by your system",
-        "plain": "{{host}} · plain HTTP"
+        "pinned": "certificate checked",
+        "system": "trusted by your system",
+        "plain": "plain HTTP",
+        "code": "joined with a code"
       },
       "line": {
-        "projects": "{{projects}} on this computer",
-        "noProjects": "No project on this computer yet",
+        "oneProject": "1 project",
+        "projects": "{{count}} projects",
         "reconnecting": "Reconnecting · try {{attempt}}",
         "offline": "Working locally since {{since}}",
         "signedOut": "Signed out · join again",
@@ -76,16 +77,16 @@
       "notInAppYet": "Not in this app yet",
       "address": "Cloud address",
       "signingOut": "Signing out",
-      "signingOutText": "Sign out ends this computer's session with Orchester Cloud and locks Orchester until you sign in again. Projects, tasks and runs on this computer are not touched, and team servers keep this computer's own sign-in.",
+      "signingOutText": "Sign out ends this computer's session with Orchester Cloud. Projects on this computer keep working; your account's projects wait until you sign in again, and their runs keep going.",
       "tokenNote": {
         "windows": "The cloud token for this computer is kept in Windows Credential Manager. Orchester never shows it.",
         "macos": "The cloud token for this computer is kept in your login Keychain. Orchester never shows it."
       },
+      "signedOutNote": "The cloud keeps your account and invites; projects never pass through it. Without a sign-in nothing leaves this computer, and no sign-in is asked for local work.",
       "signOutConfirm": {
         "question": "Sign out of Orchester Cloud on this computer?",
-        "locks": "Orchester locks when you sign out: this window shows only the sign-in until you sign in again, and its MCP tools answer “sign in required”.",
-        "local": "Your projects and tasks stay on this computer, and runs that are going keep going. Team servers keep this computer's own sign-in, so nothing needs joining again.",
-        "confirm": "Sign out and lock",
+        "body": "Projects on this computer keep working. Your account's projects wait until you sign in again, and their runs keep going. A team server joined with a code stays; ones joined through this account wait too.",
+        "confirm": "Sign out",
         "stay": "Stay signed in"
       },
       "twoFactor": {
@@ -102,7 +103,10 @@
         "other": "{{count}} waiting"
       },
       "lead": "Invites to projects and servers reach you here and by email. Accepting connects this computer to the server and opens the project's join review; nothing is uploaded before you confirm there.",
-      "none": "No invites are waiting.",
+      "none": "No invites waiting",
+      "noneHint": "Invites to servers and projects arrive here and by email; accepting opens the join review",
+      "signIn": "Sign in to see invites",
+      "signInHint": "Invites to servers and projects arrive here and by email once you're signed in",
       "toProject": "{{inviter}} invited you to {{project}} on {{server}}, as {{role}}",
       "toServer": "{{inviter}} invited you to {{server}}",
       "toAccount": "{{inviter}} invited you to link your Orchester account on {{server}}",
@@ -164,7 +168,7 @@
         "notNow": "Not now",
         "refusedTitle": "Sign in again to accept",
         "refusedBody": "This computer signed in before you turned on two-factor. Accepting needs a sign-in with your code.",
-        "signInNote": "Orchester locks until you're signed in again; runs keep going. The invite waits here.",
+        "signInNote": "Your projects and runs aren't affected, and the invite waits here.",
         "openFailed": "{{page}} couldn't be opened: Orchester opens only https pages in the browser.",
         "keptTurnOnNote": "This opens your account's security page in the browser. After you turn it on, sign in again here with your code, then try again."
       }
@@ -173,12 +177,10 @@
       "wrong": "Wrong email or password."
     },
     "advanced": {
-      "title": "Advanced · cloud address",
       "group": "Advanced",
       "row": "Cloud address",
       "rowHint": "For a test or self-run cloud; changing it signs you out",
       "change": "Change",
-      "default": "default",
       "label": "Orchester Cloud address",
       "hint": "For a test cloud. Changing it signs you out of Orchester Cloud; team servers you joined keep working.",
       "apiLabel": "API address",
@@ -191,9 +193,7 @@
       "testCloud": {
         "title": "Using a test cloud",
         "body": "Invites and servers from {{host}} don't show here while it's set."
-      },
-      "gateHint": "For a test or self-run cloud. Sign-in, Create an account and Forgot password? use this address instead of {{host}}.",
-      "testCloudState": "test cloud"
+      }
     },
     "server": {
       "runs": "Orchester server {{version}}, API {{api}}",
@@ -334,7 +334,7 @@
       },
       "twoFactor": {
         "turnOnNote": "Turn on two-factor authentication opens your account's security page in the browser. After you turn it on, sign in again here with your code, then accept.",
-        "signInNote": "Orchester locks until you're signed in again; runs keep going. The invite waits here and in Settings › Orchester."
+        "signInNote": "Your projects and runs aren't affected, and the invite waits here and in Settings › Orchester."
       }
     },
     "recovery": {

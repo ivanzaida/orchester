@@ -36,6 +36,10 @@ pub enum StoreError {
   /// Nothing was changed.
   #[error("project {0} is another account's")]
   ProjectOfAnotherAccount(ProjectId),
+  /// The project is an Orchester Cloud account's and nobody is signed in: it waits for that account. Nothing was
+  /// changed.
+  #[error("project {0} is an account's, and nobody is signed in")]
+  ProjectOfSignedOutAccount(ProjectId),
   #[error("database schema version {found} is newer than this build supports ({supported})")]
   SchemaTooNew { found: u32, supported: u32 },
   /// A database opened only to read it has not been migrated to this build's schema yet.
