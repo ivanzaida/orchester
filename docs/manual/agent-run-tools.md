@@ -64,7 +64,7 @@ reach.
 
 | Tool | Parameters | Notes |
 |---|---|---|
-| `search_external_file` | `base_directory` (req., absolute folder); `term` (req.) | E.g. dependency sources. Refused: credential locations, `.git` folders, any `.orchester` folder, `orchester.db`, runner-private folders. |
+| `search_external_file` | `base_directory` (req., absolute folder); `term` (req.) | E.g. dependency sources. Refused: credential locations, `.git` folders, any `.orchester` folder, `orchester.db`, runner-private folders, the browser profiles folder. |
 | `read_external_file` | `filename` (req., absolute path); `start_line`, `length` | Same deny list; at most 56 KiB of lines, each line cut to 16 KiB; paths ≤ 4096 chars. |
 | `run_check` | `name` (req.): one of the checks offered to the step (the tool's description lists them) | Runs a **command tool** of the project's Tools library that the run pinned and whose access rules let this pipeline/step call it — fixed arguments, in the worktree, with the agent's environment and the tool's timeout (≤ 24 h). Returns the exit code and the **end** of the output. |
 

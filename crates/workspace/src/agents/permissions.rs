@@ -1,12 +1,15 @@
 //! How agent permissions read (`docs/design/orchester-workspace.md`, "Agent permissions"): the
-//! options' keys, and the allowed commands as the editor adds and removes them. Which options are
+//! options' keys, the allowed commands and the browser's allowed sites as the editor adds and removes
+//! them, and the browser turned on and off with the network it needs. Which options are
 //! enforceable is decided in core (`orchester_core::permission::capability`); this module only names
 //! them. The sentences built from them are each app's.
 
 use orchester_core::{
   connection::{AgentProvider, invocation::Platform},
   permission::{
-    AgentPermissions, AllowedCommands, AllowedCommandsError, CommandPrefix, CommandPrefixError,
+    AgentPermissions, AllowedCommands, AllowedCommandsError, BrowserPermission, CommandPrefix, CommandPrefixError,
+    NetworkAccess,
+    browser::{AllowedSite, AllowedSiteError, AllowedSites, AllowedSitesError, BrowserAccess},
     capability::{Mechanism, PermissionOption, PermissionProblem, PermissionSetting, Support, Unavailable, support},
   },
 };
@@ -129,4 +132,66 @@ pub fn with_command(list: &AllowedCommands, typed: &str) -> Result<AllowedComman
 pub fn without_command(list: &AllowedCommands, removed: &CommandPrefix) -> AllowedCommands {
   let rest = list.entries().iter().filter(|kept| *kept != removed).cloned().collect();
   AllowedCommands::new(rest).expect("a shorter list keeps its entries unique")
+}
+
+/// `list` with the browser's allowed site `typed` added, or why it cannot be: an entry that is not a host is refused
+/// with its reason.
+pub fn with_site(list: &AllowedSites, typed: &str) -> Result<AllowedSites, Message> {
+  let invalid = |key: &'static str| Message::new(key).with("site", typed.trim().to_owned());
+  let site = AllowedSite::new(typed).map_err(|error| match error {
+    AllowedSiteError::Blank => Message::new("agents.permissions.siteInvalid.blank"),
+    AllowedSiteError::Spaces => invalid("agents.permissions.siteInvalid.spaces"),
+    AllowedSiteError::Scheme => invalid("agents.permissions.siteInvalid.scheme"),
+    AllowedSiteError::Path => invalid("agents.permissions.siteInvalid.path"),
+    AllowedSiteError::Port => invalid("agents.permissions.siteInvalid.port"),
+    AllowedSiteError::Credentials => invalid("agents.permissions.siteInvalid.credentials"),
+    AllowedSiteError::Wildcard => invalid("agents.permissions.siteInvalid.wildcard"),
+    AllowedSiteError::TooBroad(_) => invalid("agents.permissions.siteInvalid.tooBroad"),
+    AllowedSiteError::NotAscii => invalid("agents.permissions.siteInvalid.notAscii"),
+    AllowedSiteError::NotAHost(_) => invalid("agents.permissions.siteInvalid.notAHost"),
+  })?;
+  let mut entries = list.entries().to_vec();
+  entries.push(site);
+  AllowedSites::new(entries).map_err(|error| match error {
+    AllowedSitesError::Duplicate(site) => {
+      Message::new("agents.permissions.siteInvalid.duplicate").with("site", site.to_string())
+    }
+    AllowedSitesError::TooMany => {
+      Message::new("agents.permissions.siteInvalid.tooMany").with("max", AllowedSites::MAX_ENTRIES.to_string())
+    }
+  })
+}
+
+/// `list` without the site `removed`.
+pub fn without_site(list: &AllowedSites, removed: &AllowedSite) -> AllowedSites {
+  let rest = list.entries().iter().filter(|kept| *kept != removed).cloned().collect();
+  AllowedSites::new(rest).expect("a shorter list keeps its entries unique")
+}
+
+/// Sets `permissions`' network access. The browser needs network on, so network off or to listed hosts only turns the
+/// browser off too, keeping its allowed sites.
+pub fn set_network(permissions: &mut AgentPermissions, network: NetworkAccess) {
+  let browser_kept = matches!(network, NetworkAccess::On);
+  permissions.set_network(network);
+  if !browser_kept {
+    let sites = permissions.browser().sites().clone();
+    permissions.set_browser(BrowserPermission::new(BrowserAccess::Off, sites));
+  }
+}
+
+/// Turns `permissions`' browser on or off, keeping its allowed sites, or says why it cannot be on: it needs network
+/// on, not only to listed hosts.
+pub fn set_browser_access(permissions: &mut AgentPermissions, access: BrowserAccess) -> Result<(), Message> {
+  if access == BrowserAccess::On && !matches!(permissions.network(), NetworkAccess::On) {
+    return Err(Message::new("appMcp.errors.browserNeedsNetwork"));
+  }
+  let sites = permissions.browser().sites().clone();
+  permissions.set_browser(BrowserPermission::new(access, sites));
+  Ok(())
+}
+
+/// Sets `permissions`' allowed sites of the browser, keeping whether it is on.
+pub fn set_sites(permissions: &mut AgentPermissions, sites: AllowedSites) {
+  let access = permissions.browser().access();
+  permissions.set_browser(BrowserPermission::new(access, sites));
 }

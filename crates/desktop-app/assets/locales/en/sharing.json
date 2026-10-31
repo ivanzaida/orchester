@@ -632,6 +632,8 @@
           "toolCallsUnasked": "Tool calls no longer asked about",
           "autoApprove": "Approving automatically · was asked",
           "autopilot": "Autopilot · was Manual",
+          "browser": "The browser on · was off",
+          "browserSite": "An allowed site of the browser it did not list",
           "mcpServer": "An MCP server it did not give its agents",
           "secret": "A secret it did not use",
           "serverNamed": "MCP server {{name}}",

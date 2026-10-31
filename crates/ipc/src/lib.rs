@@ -4,11 +4,13 @@
 //! Every connection starts with a [`handshake`] in which both sides send their
 //! [`PROTOCOL_VERSION`]; after that the desktop sends [`Request`]s and the runner sends
 //! [`Event`]s (replies and change notifications), each as one length-prefixed JSON frame (see
-//! [`frame`]).
+//! [`frame`]), except the screencast frames of the *Browser* window, which carry their JPEG in a binary frame
+//! ([`browser`]).
 //!
 //! The transport is a Windows named pipe or a macOS Unix domain socket (see `transport`); the
 //! rest of the crate is written against `AsyncRead`/`AsyncWrite`, so both carry the same frames.
 
+pub mod browser;
 mod chat;
 mod client;
 pub mod daily_log;

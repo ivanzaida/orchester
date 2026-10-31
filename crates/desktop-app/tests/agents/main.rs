@@ -3,6 +3,7 @@ mod actions;
 mod active;
 mod approval_modes;
 mod approvals;
+mod browser;
 mod failure;
 mod harness;
 mod hub;

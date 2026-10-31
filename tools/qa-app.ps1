@@ -78,10 +78,13 @@ if ($Name -notmatch '^[a-z0-9][a-z0-9-]*$') {
 if ($PSBoundParameters.ContainsKey("WindowX") -ne $PSBoundParameters.ContainsKey("WindowY")) {
     throw "-WindowX and -WindowY go together: the window's top-left corner needs both"
 }
-# The app's ORCHESTER_APP_WINDOW_POSITION; $null lets the system place the window.
+# The app's ORCHESTER_APP_WINDOW_POSITION; $null lets the system place the window. The `else` is needed: an `if`
+# without one yields no value at all, which pwsh on macOS assigns to an environment variable as an empty string (the
+# app refuses it as no X,Y pair), where Windows removes the variable.
 $windowPosition = if ($PSBoundParameters.ContainsKey("WindowX")) {
     [string]::Format([System.Globalization.CultureInfo]::InvariantCulture, "{0},{1}", $WindowX, $WindowY)
 }
+else { $null }
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $onWindows = $env:OS -eq "Windows_NT"

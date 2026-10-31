@@ -39,7 +39,13 @@
       "nativeCommandApprovals": "Orchester asks you before each command",
       "nativeCommandList": "listed and known-safe commands run unconfined · others ask you",
       "nativeCommandListEmpty": "no command listed · every command asks you",
-      "nativeNetwork": "commands keep the network · no web tools"
+      "nativeNetwork": "commands keep the network · no web tools",
+      "browserOff": "Off · no browser tools",
+      "browser": {
+        "none": "Orchester tools · local hosts only · others ask",
+        "one": "Orchester tools · 1 site · others ask",
+        "other": "Orchester tools · {{count}} sites · others ask"
+      }
     },
     "outsideChange": "This profile changed elsewhere. Your edits are kept here; reload the saved profile before saving again.",
     "connectionReset": "The connection changed. Unsupported permissions, approval switches and MCP selections were reset. Review the model and permissions before saving.",
@@ -153,6 +159,17 @@
     "networkFallback": "Network on · cannot block",
     "networkUnknown": "Network unavailable",
     "networkOff": "Network off",
+    "browser": "Browser",
+    "browserHint": "Open, read and act in web pages through Orchester’s browser tools. Needs Network access.",
+    "browserNeedsNetwork": "Turn on Network access to give agents the browser.",
+    "browserSignIns": "Sign-ins with a password are yours, in the Browser window; they stay in this project’s browser profile. No browser tool takes a secret.",
+    "allowedSites": "Allowed sites",
+    "allowedSitesHint": "The agent opens and acts on these without asking. Any other site asks you first.",
+    "site": "Site",
+    "sitePlaceholder": "e.g. docs.rs or *.example.com",
+    "addSite": "Add site",
+    "localSites": "Always allowed: localhost, 127.0.0.1, [::1], *.localhost and *.test.",
+    "sitesReach": "Allowed sites limit where the agent goes and acts, not what a page loads: its scripts, images and requests may reach other hosts.",
     "mcp": "MCP servers",
     "mcpNone": "This project has no MCP servers yet. Agents work without them.",
     "mcpHint": "The server keeps its own access to files and network.",

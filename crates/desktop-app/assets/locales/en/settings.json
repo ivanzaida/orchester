@@ -452,6 +452,54 @@
         "unknown": "Orchester can't tell where its log is."
       }
     },
+    "browser": {
+      "reading": "Reading which browser agents use…",
+      "readFailed": "Settings › Browser can't be read",
+      "readFailureDetail": "{{reason}}",
+      "program": {
+        "title": "Browser program",
+        "label": "Program",
+        "hint": "Any Chromium-based browser: Edge, Chrome, Brave or Chromium.",
+        "chooseAnother": "Choose another program…",
+        "choose": "Choose a program…",
+        "pickerTitle": "Choose a Chromium-based browser's program",
+        "refused": "Not taken. {{reason}}",
+        "notSaved": "Not saved: {{reason}}"
+      },
+      "found": {
+        "label": "Browser",
+        "found": "Found on this computer. Agents' pages open in it, headless, in Orchester's own profile.",
+        "chosen": "Chosen by you. Agents' pages open in it, headless, in Orchester's own profile.",
+        "unavailable": "Agents' browser tools answer that the browser is unavailable.",
+        "none": "None found",
+        "unusable": "Can't be used",
+        "unusableDetail": "The program you chose can't be used. {{reason}} Choose another, or install it again."
+      },
+      "reason": {
+        "missing": "{{path}} doesn't exist.",
+        "folder": "{{path}} is a folder, not a program.",
+        "notChromium": "{{path}} isn't a Chromium-based browser. Choose Microsoft Edge, Google Chrome, Brave or Chromium.",
+        "notUnicode": "{{path}} is a path Orchester can't keep."
+      },
+      "notFound": {
+        "title": "No Chromium-based browser found",
+        "windows": "Orchester looked for Microsoft Edge and Google Chrome in the registry and the usual install folders and found neither. Install one and look again, or choose another Chromium-based browser's program.",
+        "macos": "Orchester looked for Google Chrome, Microsoft Edge, Brave and Chromium in /Applications and ~/Applications and found none. Install one and look again, or choose another Chromium-based browser's program.",
+        "other": "The browser for agents isn't supported on this platform yet.",
+        "lookAgain": "Look again"
+      },
+      "profiles": {
+        "label": "Browser profiles",
+        "hint": "One per project. Sign-ins stay there across runs, apart from your own browser.",
+        "unknown": "Orchester can't tell where its application data is, so the profiles have no folder."
+      },
+      "window": {
+        "title": "Browser window",
+        "label": "Open the Browser window when an agent starts browsing",
+        "hint": "It opens and takes focus. Off: open it from a run's Summary or the status bar.",
+        "notSaved": "Not saved: {{reason}}"
+      }
+    },
     "saveState": {
       "saved": "All changes saved",
       "saving": "Saving…",
@@ -465,6 +513,7 @@
       "notifications": "Notifications",
       "automation": "Automation",
       "accounts": "Accounts",
+      "browser": "Browser",
       "orchester": "Orchester Cloud"
     }
   }

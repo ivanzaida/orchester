@@ -94,6 +94,9 @@ pub fn route_json(route: &Route) -> Value {
     Route::Notifications => {
       params.insert("tab".to_owned(), json!("notifications"));
     }
+    Route::Browser => {
+      params.insert("tab".to_owned(), json!("browser"));
+    }
     Route::RotateToken => {
       params.insert("tab".to_owned(), json!("automation"));
       params.insert("ask".to_owned(), json!("rotate-token"));

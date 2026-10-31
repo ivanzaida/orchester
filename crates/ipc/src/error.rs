@@ -11,6 +11,9 @@ pub enum FrameError {
   TooLarge { len: usize, max: u32 },
   #[error("the connection closed in the middle of a frame")]
   Truncated,
+  /// A frame whose kind or layout does not fit what it carries (protocol 34's binary frames).
+  #[error("malformed frame: {0}")]
+  Malformed(&'static str),
   #[error("cannot decode frame: {0}")]
   Decode(serde_json::Error),
   #[error("cannot encode frame: {0}")]

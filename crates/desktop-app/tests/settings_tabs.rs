@@ -1,6 +1,7 @@
-//! Settings' five page tabs (`Tabs` `xEFQ0` in `App settings · redesign` `iUmo3`): *General · Notifications ·
-//! Accounts · Automation · Orchester Cloud* in that order, each opening its own place and its column, and the page's
-//! title with the save state on the tabs whose changes save as they are made.
+//! Settings' six page tabs (`Tabs` `xEFQ0` in `App settings · redesign` `iUmo3`, `EPO9U` in `09 · Settings ·
+//! Browser` `j3Lre`): *General · Notifications · Accounts · Automation · Browser · Orchester Cloud* in that order, each
+//! opening its own place and its column, and the page's title with the save state on the tabs whose changes save as
+//! they are made.
 
 mod support;
 
@@ -8,7 +9,7 @@ use orchester_app::routes::{AccountsView, OrchesterView, Route};
 use support::Window;
 
 /// Each tab: its element id, its words, the place it opens and the column it shows.
-fn tabs() -> [(&'static str, &'static str, Route, &'static str); 5] {
+fn tabs() -> [(&'static str, &'static str, Route, &'static str); 6] {
   [
     ("settings-tab-general", "General", Route::General, "settings-general"),
     (
@@ -29,6 +30,7 @@ fn tabs() -> [(&'static str, &'static str, Route, &'static str); 5] {
       Route::Settings,
       "settings-automation",
     ),
+    ("settings-tab-browser", "Browser", Route::Browser, "settings-browser"),
     (
       "settings-tab-orchester",
       "Orchester Cloud",
@@ -48,7 +50,7 @@ fn left(window: &mut Window, id: &str) -> f32 {
 }
 
 #[test]
-fn settings_five_tabs_open_their_own_places_in_the_designs_order() {
+fn settings_six_tabs_open_their_own_places_in_the_designs_order() {
   let mut window = Window::open();
   window.navigation().go(Route::General);
   window.until("Settings", |window| window.texts("settings-tabs").is_some());

@@ -61,6 +61,8 @@ pub struct ProjectFacts {
   pub undecided_runs: usize,
   /// The accounts the project's connections run on that reported plan limits, by CLI.
   pub limits: Vec<AccountLimits>,
+  /// How many tabs the project's browser has.
+  pub browser_tabs: usize,
 }
 
 /// An account a project's connection runs on, with the newest plan reading its CLI reported, and where that came from:
@@ -146,6 +148,8 @@ pub enum BarAction {
   ReadAgain,
   /// Open the list of this project's interrupted runs on its Overview.
   ReviewInterrupted(ProjectId),
+  /// Open the Browser window on the active project.
+  ShowBrowser,
 }
 
 /// Where the bar's actions go.

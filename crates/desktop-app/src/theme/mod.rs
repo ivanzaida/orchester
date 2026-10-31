@@ -12,6 +12,7 @@
 mod accounts;
 pub mod agents;
 pub mod badge;
+mod browser;
 mod cards;
 mod chat_links;
 mod code;
@@ -68,6 +69,7 @@ use lurq::{
 
 pub use self::{
   accounts::{AccountsSpacing, AccountsText},
+  browser::{BrowserBorder, BrowserColor, BrowserSpacing, BrowserText},
   cards::{CardsSpacing, CardsText, NOT_CHOSEN_OPACITY},
   chat_links::ChatLinkLooks,
   code::{CodeText, token_color},
@@ -172,6 +174,7 @@ pub fn install(app: &mut App, mode: Mode) {
   failure::install(theme);
   modules::install(theme);
   project_settings::install(theme);
+  browser::install(theme);
   dialog::install(theme);
   theme.set_shadows(shadow::shadows());
   theme.set_form(form::form());

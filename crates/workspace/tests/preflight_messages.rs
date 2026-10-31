@@ -2,7 +2,7 @@ use std::num::NonZeroU32;
 
 use orchester_core::{
   id::RunId,
-  run::{AcceptRefusal, GitMessage, PreflightProblem, WorktreeFailure},
+  run::{AcceptRefusal, GitMessage, PreflightProblem, RunLimit, WorktreeFailure},
 };
 use orchester_ipc::Rejection;
 use orchester_workspace::{
@@ -125,4 +125,20 @@ fn a_run_that_could_not_start_says_why_wherever_it_was_started() {
     "no \"Git refused:\" with nothing after it"
   );
   assert!(silent.args.is_empty());
+}
+
+#[test]
+fn a_limit_not_above_what_the_run_used_says_which() {
+  let execution = orchester_core::id::StepExecutionId::generate();
+  let said = |limit| control_message(&RunRequestError::Rejected(Rejection::LimitNotAboveUsed { limit })).key;
+  assert_eq!(said(RunLimit::Tokens), "runs.limit.tokensNotAboveUsed");
+  assert_eq!(said(RunLimit::Time), "runs.limit.timeNotAboveUsed");
+  assert_eq!(said(RunLimit::StepBudget { execution }), "runs.limit.stepNotAboveUsed");
+  for limit in [
+    RunLimit::PlanLimit { execution },
+    RunLimit::DailyBudget,
+    RunLimit::GroupBudget,
+  ] {
+    assert_eq!(said(limit), "runs.control.failed");
+  }
 }

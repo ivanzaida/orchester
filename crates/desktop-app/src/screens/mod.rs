@@ -64,6 +64,7 @@ pub fn screen(ctx: &mut Ctx) -> Element {
     Ok(Route::General) => settings::screen(ctx, settings::SettingsTab::General(None)),
     Ok(Route::Updates(show)) => settings::screen(ctx, settings::SettingsTab::General(Some(show))),
     Ok(Route::Notifications) => settings::screen(ctx, settings::SettingsTab::Notifications),
+    Ok(Route::Browser) => settings::screen(ctx, settings::SettingsTab::Browser),
     Ok(Route::Accounts(view)) => settings::screen(ctx, settings::SettingsTab::Accounts(view)),
     Ok(Route::Orchester(view)) => settings::screen(ctx, settings::SettingsTab::Orchester(view)),
     Ok(Route::Invite(target)) => settings::invite(ctx, target),

@@ -5,6 +5,7 @@ use std::sync::Arc;
 use lurq::app::ctx::Ctx;
 use orchester_core::{
   connection::{AgentConnection, AgentProvider, invocation::Platform},
+  orchester_tools::browser::offered,
   permission::{
     AgentPermissions, CommandPermission,
     capability::{Mechanism, PermissionOption, Support, Unavailable, support},
@@ -74,6 +75,21 @@ pub fn mechanism(ctx: &Ctx, mechanism: Mechanism, permissions: &AgentPermissions
     }
   };
   ctx.t(&format!("agents.mechanism.{key}"))
+}
+
+/// What enforces the browser (`R2Md4h` in `hQfEh`): Orchester's own tools, how many sites run without asking and that
+/// others ask, or that agents get no browser tool.
+pub fn browser(ctx: &Ctx, permissions: &AgentPermissions) -> Arc<str> {
+  if !offered(permissions) {
+    return ctx.t("agents.mechanism.browserOff");
+  }
+  let count = permissions.browser().sites().entries().len();
+  let key = match count {
+    0 => "agents.mechanism.browser.none",
+    1 => "agents.mechanism.browser.one",
+    _ => "agents.mechanism.browser.other",
+  };
+  ctx.t_args(key, [("count", count.to_string())])
 }
 
 /// Whether the connection enforces every permission: *Enforced by …* in `success`, else why not in `warning`.

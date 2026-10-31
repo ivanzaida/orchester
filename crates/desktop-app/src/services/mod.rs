@@ -32,13 +32,15 @@ use tokio::{runtime::Handle, task::JoinHandle};
 
 pub mod accounts;
 pub mod attachment_picker;
+pub mod browser_lookup;
 pub mod links;
+pub mod page_file_picker;
 pub mod path_picker;
 pub mod plan_limits;
 pub mod reference_picker;
 pub mod updates;
 
-use self::links::Links;
+use self::{browser_lookup::BrowserLookup, links::Links, page_file_picker::PageFilePicker};
 use crate::{mcp::chat::ChatServers, open_link::LinkInbox, project::hold::ReadHold};
 
 /// The session's services. Every field is a handle: clones share the same workspace, runners and
@@ -60,6 +62,10 @@ pub struct Services {
   pub cloud: Cloud,
   /// Where web pages open: the browser, or a record in a test or a QA copy.
   pub links: Links,
+  /// Where the Browser window looks for the browser agents use.
+  pub browser: BrowserLookup,
+  /// The file dialog a page of the person's tab in the Browser window asks for: the system's, or a stand-in.
+  pub page_files: PageFilePicker,
   /// What automation changed in which project, so only the screens that show it read it again.
   pub changes: OutsideChanges,
   /// The projects' merge and worktree-removal operations, shared by the task pages and the MCP tools.
@@ -129,6 +135,8 @@ impl Services {
       runners,
       cloud: Cloud::new(workspace.clone(), vault.clone(), servers.clone()),
       links: Links::from_env(),
+      browser: BrowserLookup::default(),
+      page_files: PageFilePicker::default(),
       servers,
       workspace,
       activity,

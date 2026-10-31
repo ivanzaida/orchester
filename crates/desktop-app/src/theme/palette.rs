@@ -213,6 +213,7 @@ pub fn palette(mode: Mode) -> ThemePalette {
       .into_iter()
       .map(|extra| (Arc::from(extra.name()), extra.color(mode)))
       .chain(super::composer::colors(mode))
+      .chain(super::browser::colors(mode))
       .collect(),
   }
 }

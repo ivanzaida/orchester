@@ -120,6 +120,8 @@ const TAB: &str = "tab";
 const GENERAL: &str = "general";
 /// Settings' Notifications tab.
 const NOTIFICATIONS: &str = "notifications";
+/// Settings' Browser tab.
+const BROWSER: &str = "browser";
 /// Settings' Accounts tab.
 const ACCOUNTS: &str = "accounts";
 /// Settings' Orchester Cloud tab, by the id it kept from when it was named Orchester.
@@ -194,6 +196,8 @@ pub enum Route {
   Updates(UpdatesShow),
   /// Settings › Notifications (`fQTFi`): what notifies, how, quiet hours and the daily report.
   Notifications,
+  /// Settings › Browser (`j3Lre`): agents' browser, its profiles and the Browser window's switch.
+  Browser,
   /// Settings › Accounts, the list or the page of the account it shows with its panel.
   Accounts(AccountsView),
   /// Settings › Orchester Cloud, or the page of the team server it shows, or *Connect a server*.
@@ -236,6 +240,7 @@ impl Route {
       | Self::General
       | Self::Updates(_)
       | Self::Notifications
+      | Self::Browser
       | Self::Accounts(_)
       | Self::Orchester(_)
       | Self::Invite(_) => Screen::Settings,
@@ -260,6 +265,7 @@ impl Route {
       | Self::General
       | Self::Updates(_)
       | Self::Notifications
+      | Self::Browser
       | Self::Accounts(_)
       | Self::Orchester(_)
       | Self::Invite(_) => None,
@@ -293,6 +299,7 @@ impl Route {
         &[(TAB, Some(GENERAL)), (updates::SHOW, Some(show.name()))],
       ),
       Self::Notifications => with_query(format!("/{SETTINGS}"), &[(TAB, Some(NOTIFICATIONS))]),
+      Self::Browser => with_query(format!("/{SETTINGS}"), &[(TAB, Some(BROWSER))]),
       Self::Accounts(view) => view.path(format!("/{SETTINGS}"), (TAB, ACCOUNTS)),
       Self::Orchester(view) => view.path(format!("/{SETTINGS}"), (TAB, ORCHESTER)),
       Self::Invite(target) => {
@@ -342,7 +349,7 @@ impl Route {
 
 impl Route {
   /// Settings at the tab its query names: Automation (asking *Rotate the token?* with `ask`), General,
-  /// Notifications, Accounts with the account it shows, or Orchester Cloud.
+  /// Notifications, Accounts with the account it shows, Browser, or Orchester Cloud.
   fn settings(params: &mut Params) -> Result<Self, RouteError> {
     match params.take(TAB)?.as_deref() {
       None => match params.take(ASK)?.as_deref() {
@@ -355,6 +362,7 @@ impl Route {
       },
       Some(GENERAL) => Ok(UpdatesShow::take(params)?.map_or(Self::General, Self::Updates)),
       Some(NOTIFICATIONS) => Ok(Self::Notifications),
+      Some(BROWSER) => Ok(Self::Browser),
       Some(ACCOUNTS) => AccountsView::take(params).map(Self::Accounts),
       Some(ORCHESTER) => OrchesterView::take(params).map(Self::Orchester),
       Some(other) => Err(RouteError::InvalidParam {

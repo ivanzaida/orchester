@@ -1,6 +1,13 @@
 # Browser for agents
 
-Status: draft for the person's review (2026-10-28). Nothing here is built yet.
+Status: draft for the person's review (2026-10-28). The person decided decisions 3, 9 and 10 on 2026-10-29, and the
+port and keep-running decisions (11, 12) the same day, and that the Browser window opens when an agent starts
+browsing by default (open question 2); decisions 13 to 15 (binary frames, the window opening by itself, focus) with
+ORC-378. P1 (the core rules, ORC-355) is built, and P2: its first half (ORC-358: finding and starting the browser,
+the CDP client, the project browser's lifecycle and the run-to-tabs map) and its second (ORC-359: the `browser_*`
+tools offered to steps through the runner's relay); the profile's Browser row (ORC-368), Settings › Browser (ORC-369),
+the window's plumbing (ORC-378: its IPC, the screencast, the person's input and tabs, the window's state), the
+window itself (ORC-379, P4d) and the agent waiting while the person uses its tab (ORC-184, P4e) are built too.
 
 Agents of a run can open web pages, read them and act in them, as Claude desktop's built-in browser lets Claude do:
 check the app the run builds on a local dev server, read documentation, reproduce a bug in a web front, fill a form
@@ -19,9 +26,8 @@ time.
    shows one project's pages at a time from CDP screencast frames and sends the person's mouse, wheel, keys and text
    back through CDP. To the person it is part of Orchester, as Claude desktop's browser pane is part of Claude.
 3. **One browser per project, owned by its runner.** The runner starts it on the first browser tool call of any of
-   the project's runs, with the project's own browser profile, and stops it when the runner exits or after 15
-   minutes without a run or the *Browser* window using it. Sign-ins persist in that profile across runs and app
-   restarts, apart from the person's own browser.
+   the project's runs, with the project's own browser profile, and keeps it running until the runner exits
+   (decision 12). Sign-ins persist in that profile across runs and app restarts, apart from the person's own browser.
 4. **Only the runner talks to Chromium.** The app gets frames and sends the person's input through the runner's IPC
    channel (`orchester-ipc`). The app never opens a CDP connection, and a future server's runner can be watched the
    same way.
@@ -33,11 +39,50 @@ time.
    run ends (completed, merged, cancelled, failed); pausing keeps them.
 7. **A visible Chromium window only for what frames cannot do.** *Open in a browser window* restarts the project's
    browser headed with the same profile (a profile is held by one browser process at a time) for passkeys, a
-   password manager, a site that refuses headless browsers; *Back to Orchester* restarts it headless and reopens the
-   tabs by their URLs.
+   password manager, a site that refuses headless browsers; *Back to Orchester*, or the person closing that window,
+   restarts it headless and reopens the tabs by their URLs.
 8. **Off unless the profile allows it.** A new agent profile permission *Browser* (off by default) with a list of
    allowed sites. Turning it on or adding a site widens what agents may do, so over MCP only a person does it
    (`person_only`, as other widenings).
+9. **`browser_eval` is offered, and every call of it asks** (the person, 2026-10-29). It runs JavaScript in the page
+   and so reads what the other tools hide (cookies not marked HttpOnly, local storage); a person approves each call,
+   whatever the profile's commands setting, the allowed sites or a rule of *Approve similar*, and auto-approval never
+   answers it.
+10. **Read-only steps get the browser** (the person, 2026-10-29, as drafted): a step that only reads the repository
+    (Review, Explorer) gets the browser tools with the same policy as a step that may write, when its profile has
+    *Browser* on and the step has network access.
+11. **CDP over a port, not a pipe** (the person, 2026-10-29). The browser listens with `--remote-debugging-port=0` on
+    127.0.0.1, on a free port it picks and writes into `DevToolsActivePort` in the project's own profile folder, where
+    the runner reads it back. No `unsafe` module: `--remote-debugging-pipe` would need inherited handles 3 and 4 on
+    both platforms. Another process of the same user can reach the port, which opens nothing it could not already
+    read from the profile on disk (*Connection and dependency*).
+12. **The browser keeps running until the runner exits** (the person, 2026-10-29): from its first use, with no idle
+    stop. It ends with the runner: on Windows by its kill-on-close Job Object, however the runner ends; on macOS the
+    runner closes it (`Browser.close`, then its process group) as it exits. Known gap on macOS, as for agents
+    (`AGENTS.md`, rule 0): a runner killed with SIGKILL, or one that aborts, leaves the browser running; the next start
+    on that profile then fails while the old browser holds it, and says so.
+13. **Screencast frames travel as a binary IPC message** (the person, ORC-378): a frame's JPEG bytes follow a small
+    JSON head in a frame of their own kind in `orchester-ipc`, not base64 in JSON. Both ends, both platforms (the
+    named pipe on Windows, the Unix socket on macOS), within the frame limit (16 MiB) and under the protocol version
+    the IPC already checks (`PROTOCOL_VERSION`).
+14. **The window opens by itself when an agent starts browsing, on by default** (the person, ORC-378). Settings ›
+    Browser has the switch *Open the Browser window when an agent starts browsing* (ORC-369 draws it); the setting is
+    stored with the application's settings and is on until a person turns it off.
+15. **A window that opens by itself takes focus; no lurq change** (the person, ORC-378). lurq has no "open without
+    activating", and the window opening on an agent's first tab is what the setting asks for.
+16. **An agent's wait for the person on a tab is capped at 60 seconds** (ORC-184). The person may use a tab for minutes,
+    and a call that waited 60 s answers without acting, saying the person is still using the tab; the agent then
+    decides what to do. Sixty seconds is the longest the browser tools otherwise take (`browser_wait`'s bound): the CLIs
+    would allow far longer (`MCP_TOOL_TIMEOUT` about 28 hours in Claude Code, `tool_timeout_sec` 24 hours for Codex), but
+    their limits are the CLIs' to change. What sets the cap is the run: the relay handles one request at a time, so a
+    waiting call holds the invocation's other calls, reads included, and its time counts as the agent's active time.
+    The hold itself stays 10 s after the last input, the design's number, and the cap counts from when the first call
+    on the tab began to wait. The site policy is applied after the wait, not before it: the person's navigation starts
+    the hold, so a tab can be on another site by the time the wait ends, and a call must not act on a page nobody judged
+    ("What the agent gets").
+
+Decision 3's *one browser profile per project* is the person's too (2026-10-29): the project's runs share its
+sign-ins, and the window's project switcher relies on it.
 
 ## What the agent gets
 
@@ -52,44 +97,85 @@ time.
 | `browser_click` | `tab`, `ref` or `x`,`y`, `button`, `count` | Scrolls the element into view and clicks its centre. |
 | `browser_type` | `tab`, `ref`, `text`, `submit` | Focuses the field, replaces its value, optionally presses Enter. |
 | `browser_key` | `tab`, `keys` | Key presses (`Enter`, `Tab`, `Ctrl+A`, …). |
-| `browser_scroll` | `tab`, `ref` or direction and amount | Scrolls an element into view or the page. |
+| `browser_scroll` | `tab`, `ref` or `direction` and `pixels` | Scrolls an element into view or the page. |
 | `browser_screenshot` | `tab`, `ref` (element only), `full_page` | A PNG saved under the worktree's `.tmp/browser/` and returned as an image answer and a relative path, as `call_run_app` does. |
 | `browser_console` | `tab`, `errors_only`, `pattern`, `limit` | Console messages and uncaught exceptions since the tab opened. |
 | `browser_network` | `tab`, `url_pattern`, `limit` | Requests: method, URL, status, type, size. Never headers or bodies. |
 | `browser_wait` | `tab`, `text` or `ref`, `timeout` | Waits until text or an element appears. |
+| `browser_eval` | `tab`, `expression` | Runs a JavaScript expression in the page and returns its value as JSON. Every call asks a person (decision 9). |
 
+- The catalog, the inputs and the policy are `orchester_core::orchester_tools::browser` (P1). A `tab` left out or
+  `null` is the run's current tab; a call's input is read strictly (unknown fields refused) and checked: tab ids,
+  refs (`e` and digits), key presses (modifiers and one key joined by `+`), and bounds on sizes, limits, pixels and
+  the wait (at most 60 s).
 - Refs follow the lurq convention: each `browser_read_page` of a tab replaces that tab's refs; a stale ref is an error
   that says to read the page again. A ref is the element's CDP `backendNodeId` behind a short name.
 - Every answer is cut to a size (`ToolResult`, as other tools), and says so when it was cut.
-- Every answer with page content starts with a fixed line that the content is the page's data, not instructions.
-  Agents' instructions say the same (the step prompt's tool section).
+- Every answer with page content starts with a fixed line that the content is the page's data, not instructions
+  (`PAGE_DATA_NOTICE`). Agents' instructions say the same (the step prompt's tool section).
 - While the person drives a tab in the window (input in the last 10 seconds), the agent's actions on that tab wait,
-  and its answer says the person was using it.
-- No `browser_eval` (running JavaScript) in the first version: it reads what the other tools deliberately hide
-  (cookies not marked HttpOnly, local storage). See *Open questions*.
+  and its answer says the person was using it (decision 16). The runner notes when each input and each navigation of
+  the window reaches a tab, a moving pointer's too. A call that reports what it did to the window (`browser_open` on the
+  current tab, `browser_navigate`, `browser_click`, `browser_type`, `browser_key`, `browser_scroll`, `browser_eval`)
+  and `browser_close` wait until 10 s after the last of them; `browser_open` of a new tab and the reading tools never
+  do. After a wait the answer starts with *The person was using this tab in the Browser window, so this call waited
+  14 s before it ran.*, before the page data notice. A wait that reaches the cap answers that the person is still using
+  the tab and that the call did not act; so does a wait the run's stop ends. Cancelling or pausing the run ends a wait
+  at once, without acting, and a call that comes before its agents work again does not wait either, since a pause lets
+  a running tool finish and would wait for it. The relay handles one request at a time
+  (`docs/interactive-tool-approvals.md`), so a read the agent sends while a call of the same relay waits comes after
+  it, as it does behind a call waiting for a person.
+- The site is decided when the wait is over, because the person's navigation is one of the things that holds a tab: the
+  policy judges the page the call will act on, and an approval names that site. A wait that reaches the cap or that the
+  run's stop ends asks nobody. A call the person is asked about may be held again while they answer: once approved it
+  waits again and is judged again, so it runs without another question only on the site the approval named, and asks
+  again on any other that asks. A call denied or refused after a wait answers *…so this call waited 14 s and did not
+  run.*, then why. Each wait between two questions has its own cap, as the person's answer lies between them.
+- `browser_eval` reads what the other tools deliberately hide (cookies not marked HttpOnly, local storage), so it is
+  offered only as a tool whose every call asks the person (decision 9).
 
 ## Permissions and policy
 
 A new row in the agent profile's permissions: **Browser** — *Off* (default) / *On*, with **Allowed sites**: a list of
 hosts (`docs.rs`, `*.example.com`). Local development hosts (`localhost`, `127.0.0.1`, `[::1]`, `*.localhost`,
 `*.test`) are always allowed when the browser is on. The row needs Network access. An entry that is not a host (a URL
-with a scheme or a path, spaces) is refused in place under the field with the reason, and the field keeps the text
-(`08 · Profile · Browser permission` `hQfEh`; the profile's Connection enforcement shows *Browser · Orchester
+with a scheme or a path, a port, spaces) is refused in place under the field with the reason, and the field keeps the
+text (`08 · Profile · Browser permission` `hQfEh`; the profile's Connection enforcement shows *Browser · Orchester
 tools · 2 sites · others ask*).
 
-The tools join `docs/interactive-tool-approvals.md`'s table (`orchester_tools::policy`):
+- The permission is `orchester_core::permission::browser`: `*.example.com` allows every host under `example.com`, not
+  `example.com` itself; a wildcard needs a domain of two names at least (`*.com` is refused); hosts compare in lower
+  case without a trailing dot, on any port. The list keeps its sites while the browser is off; the stored form leaves
+  the permission out while it is off with no site, as profiles saved before it.
+- A step narrows the browser only through its network: a step without network gets no browser tool.
+- Widening (`permission::widening`): turning the browser on, and a site no site of the published version covers. Over
+  MCP (`save_profile_draft`, its `permissions.browser`) both are refused as `person_only` unless a person turned on
+  *Let automation change agent permissions*; a `browser` left out keeps the profile's own.
+- The profile editor (ORC-368, `screens/agents/permissions/browser.rs` and `sites.rs`; the data through
+  `orchester_workspace::agents::permissions`): its own *Browser* section between *Commands and network* and *MCP
+  servers*. Without network the switch stays off and says why; turning network off turns the browser off and keeps its
+  sites. The allowed sites show while it is on. Both widenings are asked about in that section before the draft saves,
+  as other widenings are. A note under the section says that sign-ins with a password are the person's, in the
+  Browser window, and stay in the project's browser profile, and that no browser tool takes a secret (ORC-180). QA
+  scenario: `agents-browser` (profiles *Browser on*, *Browser off*, *Browser without network*). Tests:
+  `cargo test -p orchester-app --test agents agents_browser_` and
+  `cargo test -p orchester-workspace --test agents browser_`.
+
+The tools join `docs/interactive-tool-approvals.md`'s table (`orchester_tools::browser::decide`):
 
 | Browser tools | Step that may write the worktree | Read-only step |
 | --- | --- | --- |
 | Browser off, or network off | not offered | not offered |
-| Reading tools (`browser_tabs`, `browser_read_page`, `browser_page_text`, `browser_screenshot`, `browser_console`, `browser_network`, `browser_wait`) | runs | runs |
-| Opening a URL or acting on a page of an allowed site | runs | runs |
-| Opening a URL or acting on a page of any other site | asks; *Approve similar* keeps the host for the run | asks; same |
+| Reading tools (`browser_tabs`, `browser_read_page`, `browser_page_text`, `browser_screenshot`, `browser_console`, `browser_network`, `browser_wait`) and `browser_close` | runs | runs |
+| Opening a URL or acting on a page of an allowed site or a local development host | runs | runs |
+| Opening a URL or acting on a page of any other site, or of a page without a web host | asks; *Approve similar* keeps the host for the run | asks; same |
+| `browser_eval` | asks at every call | asks at every call |
 
-- A read-only step may use the browser: browsing does not write the worktree. Acting on a staging site does change
-  something outside, which is why sites must be allowed.
+- A read-only step uses the browser as a step that may write (decision 10): browsing does not write the worktree.
+  Acting on a staging site does change something outside, which is why sites must be allowed.
+- `browser_close` closes one of the run's own tabs and changes nothing on a site, so it runs as the reading tools do.
 - Auto-approval never answers a browser ask (`auto_approvable`), as for `run_check`: a click on another site can
-  send anything anywhere.
+  send anything anywhere. Auto mode leaves it to the person too (`ReviewHold::Browser`).
 - Allowed sites limit where the agent goes and acts, not what a page loads (scripts, images, requests to other
   hosts). The profile page says so.
 - The person in the window is not limited by the profile: allowed sites and asks apply to agents only.
@@ -98,8 +184,13 @@ The tools join `docs/interactive-tool-approvals.md`'s table (`orchester_tools::p
   microphone, location, notifications: denied). A JavaScript dialog the agent meets (`alert`, `confirm`,
   `beforeunload`) is dismissed and reported in the tool's answer.
 - Secrets: no browser tool takes a secret reference or a secret's value, and `browser_network` never returns headers
-  or bodies. A sign-in with a password is the person's, in the window. The profile folder is never inside a worktree
-  and never offered to `read_external_file` (added to Orchester's own files there).
+  or bodies. A sign-in with a password is the person's, in the window; the step prompt tells the agent to ask a
+  question instead of typing one. The profile folder is never inside a worktree, and `read_external_file` and
+  `search_external_file` refuse `<application data>/browser/` as one of Orchester's own folders
+  (`execution::outside_read_refusals`).
+- The step prompt's browser lines (`orchester_tools::browser::prompt`) also name the step's allowed sites, at most 10
+  and the others counted, and say that local development hosts are always allowed, that the person may watch and take
+  over a tab, and that the agent's actions there then wait.
 - The window's page content is covered in the lurq MCP and DevTools trees, as the code viewer's file text is: MCP
   clients reach pages through the browser tools and their policy, not by reading the window.
 
@@ -107,14 +198,33 @@ The tools join `docs/interactive-tool-approvals.md`'s table (`orchester_tools::p
 
 ### Finding the browser
 
-- Windows: Microsoft Edge (always installed), then Google Chrome, from the registry's `App Paths` and the usual
-  install folders.
-- macOS: Google Chrome, Microsoft Edge, Brave, Chromium in `/Applications` and `~/Applications`.
-- A new Settings section *Browser* shows which one was found and lets the person choose another Chromium-based
-  browser's program. None found: the setting and the *Browser* window say so, and every browser tool answers
-  `browser_unavailable` with that reason (no silent gap, `AGENTS.md` rule 0). The section also shows the folder of
-  the browser profiles and the switch *Open the Browser window when an agent starts browsing* (off)
-  (`09 · Settings · Browser` `j3Lre`, `09b · … not found` `NZECi`).
+- Windows: Microsoft Edge (always installed), then Google Chrome, from the registry's `App Paths` (the machine's,
+  then the person's, read with `%SystemRoot%\System32\reg.exe`, so no `unsafe` registry call) and the usual install
+  folders (`Program Files (x86)`, `Program Files`, the local application data).
+- macOS: Google Chrome, Microsoft Edge, Brave, Chromium in `/Applications` and `~/Applications`; a preferred browser
+  in either folder comes before the next.
+- Other platforms: unavailable, saying that the browser is not supported there yet.
+- `orchester_exec::browser::find` (ORC-358). None found is `BrowserUnavailable`, shown as `browser_unavailable: no
+  Chromium-based browser is installed: looked for … in …`.
+- Settings › *Browser* (ORC-369, `09 · Settings · Browser` `j3Lre`, `09b · … not found` `NZECi`) shows which one
+  was found, by its name, version and program, and lets the person choose another Chromium-based browser's program
+  (*Choose another program…*). A chosen program is taken by its name (`orchester_exec::browser::chosen`): on Windows
+  `msedge.exe`, `chrome.exe` (Chromium's under a folder named so) or `brave.exe`; on macOS the program of Google
+  Chrome, Microsoft Edge, Brave or Chromium, or its app bundle. Anything else, a folder or a path that does not exist,
+  is refused under the row with the reason, and nothing changes. The choice is an application setting
+  (`app_settings.browser_program`) the runner reads, read-only, each time it starts a project's browser, headless or
+  in a window of its own; a chosen program that is gone later is unavailable with that reason, never passed over for
+  the one installed.
+- The version is read from the install without starting the browser (`orchester_exec::browser::version`, ORC-182): on
+  macOS `CFBundleShortVersionString` in the app bundle's XML `Info.plist`, on Windows the newest folder named after a
+  version beside the program. A program whose install does not tell, such as one copied out of its bundle or install
+  folder, shows no version, never a guess.
+- None found: the section says so with what was looked for and where, how to fix it and *Look again*; the *Browser*
+  window will say the same, and every browser tool answers `browser_unavailable` with that reason (no silent gap,
+  `AGENTS.md` rule 0). The section also shows the folder of the browser profiles with Copy, and the switch *Open the
+  Browser window when an agent starts browsing*, **on by default** (the person, 2026-10-29; decision 14), the
+  application setting `app_settings.browser_window_opens_itself` the window's rule reads. Its hint says the window
+  *opens and takes focus*, after decision 15, as `j3Lre` and `NZECi` draw it.
 
 ### Starting it and connecting
 
@@ -122,38 +232,56 @@ The tools join `docs/interactive-tool-approvals.md`'s table (`orchester_tools::p
   never the person's own browser profile. Its own `--user-data-dir` makes it a separate browser process even while
   the person's Edge or Chrome is open; Chrome 136+ also refuses remote debugging on the default profile.
 - Flags: `--headless=new`, `--user-data-dir=<that folder>`, `--remote-debugging-port=0`, `--no-first-run`,
-  `--no-default-browser-check`, `--disable-extensions`, `--disable-sync`, `--mute-audio`. *Open in a browser window*
-  starts the same without `--headless`.
+  `--no-default-browser-check`, `--disable-extensions`, `--disable-sync`, `--mute-audio`, then `about:blank`
+  (`orchester_exec::browser::headless`). *Open in a browser window* starts the same without `--headless`.
+- The runner starts it as it starts agents (`supervisor`): in a kill-on-close Job Object on Windows, leading its own
+  process group on macOS; its output goes to the runner's log at debug level.
 - Chromium writes `DevToolsActivePort` into the profile folder: the port, and the browser's WebSocket path
-  (`/devtools/browser/<uuid>`). The runner waits for the file and connects to `ws://127.0.0.1:<port>/<path>`.
+  (`/devtools/browser/<uuid>`). The runner removes an earlier browser's file first, waits for the new one (30 s; a
+  browser that exits first, as one does whose profile another browser holds, fails at once) and connects to
+  `ws://127.0.0.1:<port>/<path>`.
 - One WebSocket per browser. A run's new tab is `Target.createTarget`; `Target.attachToTarget {flatten: true}` gives a
-  `sessionId`, and every command to that tab carries it on the same connection. The runner keeps `targetId → run`.
-- Stopping: `Browser.close`, then the process tree through `orchester-exec` if it has not exited.
-- Platform code (finding the program, the process group and stopping it) lives in `orchester-exec` behind
-  `cfg(target_os)`, as other programs it runs.
+  `sessionId`, and every command to that tab carries it on the same connection. The runner keeps `targetId → run`
+  (`orchester_runner::browser`): a call on a tab that is not the run's is refused, and a tab the browser reports
+  destroyed (`Target.setDiscoverTargets`) is forgotten.
+- A run's tabs close (`Target.closeTarget`) when its task settles it completed, cancelled or failed, or when a person
+  cancels or stops it while no task runs it; a merged run had completed. Pausing, a limit, a wait for a person and an
+  interruption keep them.
+- Stopping, as the runner exits: `Browser.close`, then the process tree if it has not exited within 5 s. A browser
+  that ended on its own starts again at the next use, without the tabs it had. A browser in a window of its own that
+  ended, or has no page left (on macOS it runs on with its window closed), starts again at once, headless, with its
+  tabs, as *Back to Orchester* does; a run's next call by a tab's old id reaches the tab reopened. Tabs the browser
+  reports closed wait 500 ms for that: the tabs of a window that closes are reported one by one first. If it cannot
+  start again, the window hears that no tabs are left and a run's next call says why.
+- Platform code (finding the program) lives in `orchester-exec` behind `cfg(target_os)`; the process tree is held and
+  ended as the runner's other children are.
 
 ### Connection and dependency
 
-CDP is JSON messages over a WebSocket. The workspace has no WebSocket client, so the runner adds `tokio-tungstenite`
-(client only, no TLS: loopback only; new crates `tungstenite`, `sha1`, `utf-8`, the rest is already in the tree). The
-app does not get it (decision 4). The CDP client itself is Orchester's own small module (send a command, await its
-answer by id, route events by session): only about forty CDP methods are used, so a CDP crate is not worth its size.
+CDP is JSON messages over a WebSocket. The workspace had no WebSocket client, so the runner adds `tokio-tungstenite`
+(client only, no TLS: loopback only; new crates `tungstenite`, `sha1`, `data-encoding`, the rest is already in the
+tree) and pulls `futures-util`, already built, for the socket's stream and sink. The app does not get them (decision
+4). The CDP client itself is Orchester's own small module (`orchester_runner::browser::cdp`: send a command, await
+its answer by id within a time limit, 30 s unless the call gives another; route events by session; typed errors):
+only about forty CDP methods are used, so a CDP crate is not worth its size.
 
 A loopback debugging port can be reached by any process of the same user. That process can already read the profile's
 cookies from disk, so the port opens nothing a same-user process does not already have. `--remote-debugging-pipe`
-would close it, but needs inherited handles 3 and 4 (`unsafe` on both platforms); see *Open questions*.
+would close it, but needs inherited handles 3 and 4 (`unsafe` on both platforms), which decision 11 declines.
 
 ## The *Browser* window
 
-Pencil: board `Browser · redesign` `lcNez` in the new `orchester.pen` (rows `M18Px`, `k99I4m`, `K4zYh`, `T9vqQV`,
-notes `vvVe2` with *What the design decides* `RggGn` and *Open choices* `J6JdR`), tab indicators `zxkfr`; window
-chrome `Window/Browser` `lfxcu` (title bar `Rc27N`, project switcher `u4BK9L`, tab strip `X1V8q`).
+Pencil: board `Browser · redesign` `lcNez` in the new `orchester.pen` (rows `M18Px`, `k99I4m`, `K4zYh`, `bxyB2`,
+`T9vqQV`, notes `vvVe2` with *What the design decides* `RggGn` and *Open choices* `J6JdR`), tab indicators `zxkfr`;
+window chrome `Window/Browser` `lfxcu` (title bar `Rc27N`, project switcher `u4BK9L`, tab strip `X1V8q`).
 
 A secondary lurq window (`WindowOpener::open_with`, window name `browser`), one for the whole app. It opens from the
 run's Summary line *Browser · 2 tabs · localhost:5173, docs.rs › Show* (`10 · Run · Browser line` `RGeKO`) and
 from the status bar item *Browser 3 tabs* of the main window, which is there while the project's browser has tabs; both
-switch the window to that project and tab. It opens without taking focus when an agent's tab appears only if the
-person asked for that (setting); by default it opens only when the person opens it.
+switch the window to that project and tab. It also opens by itself, showing that project, when an agent of a run
+opens the run's first tab, unless the person turned that off in Settings › Browser (on by default: the person,
+2026-10-29; decision 14); a window that opens so takes focus, as lurq opens windows (decision 15). Once open, it does
+not jump to another project by itself.
 
 ### Projects
 
@@ -192,22 +320,50 @@ person asked for that (setting); by default it opens only when the person opens 
 - **A crowded strip** (`01c · Many runs` `fPkxD`): tabs shrink, keeping as much of the task key as fits; at the
   narrowest a tab shows its icon and the start of the task key. A run's tabs disappear when the run ends.
 - **Overflow** (`01d · Tab overflow` `fWhIr`, `01e · … scrolled` `cmofl`): past the narrowest width the strip scrolls
-  with the mouse wheel, keeps the shown tab in view and fades at a cut edge. A button before *+* counts the hidden tabs
-  (*⌄ 13*) and carries the strongest dot among them; it opens a menu of all the project's tabs: a filter field, one row
-  per tab with its dot, full label and owner run, × on hover, the person's tabs after a divider. Choosing a row shows
-  that tab.
+  with the mouse wheel, keeps the shown tab in view, clear of the fades, and fades at a cut edge. A button before *+*
+  counts the hidden tabs (*⌄ 13*) and carries the strongest dot among them; it opens a menu of all the project's tabs:
+  a filter field, one row per tab with its dot, full label and owner run, × on hover, the person's tabs after a
+  divider. Choosing a row shows that tab. The filter has the focus while the menu is open, so what is typed filters the
+  rows and never reaches the page; when the menu closes the focus goes back where it was.
 
 - **Toolbar** (`01 · Default` `uCSan`): an address line that ends with the owner of the tab shown (*Run #102 ·
   ORC-107*); back, forward, reload; *Open in a browser window* (decision 7).
 - **The agent acting** (`02 · Agent is acting` `UKAkY`): a line under the toolbar says what the agent did last
   (*Builder is acting in this tab · typed 8 in Max attempts*), and a ring with the agent's name marks the element it
   acted on. Orchester draws both from the runner's report of the action (element box, tool, short summary), not
-  CDP. There is no take-over control: the person's input in the tab makes the agent wait
-  (`02b · You use the tab` `k7xvx`: *You're using this tab · Builder waits until 10 s after your last input*).
+  CDP: each browser tool call that opens a page, goes through its history or acts on it reports what it did once
+  carried out, with the element's accessible name and its box as the page has them then; the reading tools and
+  `browser_close` do not. There is no take-over control: the person's input in the tab makes the agent wait.
+- **The agent waiting** (`02b · You use the tab` `k7xvx`): while the runner says an agent's call waits on the tab
+  shown, the line says *You're using this tab · Builder waits until 10 s after your last input* and, at its end where
+  `02` has its hint, how long it still waits (*7 s left*, which the board does not draw; the brief asks for it). The
+  ring is gone and the tab's dot is amber, on any of the strip's tabs an agent waits on. All of it comes from the
+  runner's events: the person's input alone, with no call waiting, shows nothing, and no timer of the window's ends
+  it; the seconds are rounded up and stay at 1 until the runner says the wait ended.
 - **Empty** (`06 · Empty` `eCCuU`): no tabs; the address line is focused (*Type an address*) and a card says when
   agents' tabs appear. **Not found** (`07 · Browser not found` `YEv2c`): the reason, *Open Settings › Browser*,
   *Look again*; toolbar and *+* unavailable. **Opened in a browser window** (`05` `GjcAk`): the page area is an
-  in-place notice with *Back to Orchester*.
+  in-place notice with *Back to Orchester*. The tab shown stays the one shown through the restart, under its new id, so
+  the strip keeps it selected and the faded toolbar its address and owner; the window hears of the restart only when the
+  tabs are back. Nothing is screencast meanwhile: a tab the person picks in the strip is only named as the one shown,
+  and it is the one *Back to Orchester* shows. Picking does not bring it forward in the browser's own window.
+- **A page asks for a file** (`03b · File chooser · dialog open` `TWpyp`, `03c · File chooser · file chosen` `x0N8d`,
+  row `Row 3b · File chooser` `bxyB2`). A file field (`<input type=file>`) on the person's tab opens the system's own
+  file dialog, which the board does not draw. Orchester adds no modal of its own: while the dialog is open, the page
+  area is dimmed (`$scrim`) and a hint in its middle says *Choose a file in the dialog that opened* · *localhost:5173
+  asks for a file for Signing certificate. Cancel there to leave the page as it is.* (the page's origin and the field's
+  label; no buttons). A field without an accessible name gives the shorter line *localhost:5173 asks for a file.
+  Cancel there to leave the page as it is.* The label is the page's text, covered for inspection like a dialog's
+  message. After the choice the hint goes and the field shows the file as the page draws it (*kontur-hooks.pem*).
+  Cancel removes the hint and changes nothing else. An agent's tab never opens a dialog and nothing is drawn for it:
+  the agent's tool answer says that a file was asked. Copy namespace for the hint: `browser.fileChooser` (title, and
+  the line with the origin, with and without the field's label).
+- **While a restart is pending.** *Open in a browser window* and *Back to Orchester* restart the browser, which takes
+  seconds. Until the runner answers, the toolbar is faded and, like the shortcuts, takes no input, and the pressed
+  button turns its loader and cannot be pressed again; no board frame draws this, it reuses the faded toolbar of `05`
+  and `07` and the button's loader. The runner sends the new state before its answer, on the same connection, so the
+  window never has the answer with the old tabs. A refused restart says so on the failure line under the toolbar, and
+  the toolbar takes input again; when the old browser is gone by then, the state says no tabs are left.
 - **The page.** `Page.startScreencast` on the tab shown, at the window's size and scale
   (`Emulation.setDeviceMetricsOverride` with the window's logical size and DPI); frames arrive only when the page
   changes, are acknowledged (`Page.screencastFrameAck`), decoded from JPEG to RGBA (`zune-jpeg`, already in the
@@ -215,49 +371,170 @@ person asked for that (setting); by default it opens only when the person opens 
   screencast; the screencast stops while the window is closed or minimised.
 - **The person's input.** lurq's pointer, wheel, keyboard, text input and IME events become
   `Input.dispatchMouseEvent`, `Input.dispatchKeyEvent`, `Input.insertText` and `Input.imeSetComposition`, with
-  coordinates in the page's CSS pixels.
-- **IPC.** New `orchester-ipc` requests (show tab, stop showing, input, window size) and events (frame, tabs changed,
-  load state, agent action with its element box, agent waiting, dialog, file chooser). A frame is one event with its
-  JPEG bytes; at 30 frames a second of a full-size page that is about 3 MB/s, well inside the channel and its 16 MiB
-  frame limit. Base64 in the JSON frame adds a third; a binary frame kind is an open question.
+  coordinates in the page's CSS pixels. Inputs reach a tab in the order the person made them: the app hands each
+  request to the runner's connection as it is made, and the runner keeps one line per tab, in which an input goes out
+  once the one before it has gone out, without waiting for its answer (a click that opens a dialog is not answered
+  until the dialog is).
+- **IPC** (protocol 38, `orchester_ipc::browser`). The window's requests (`BrowserCommand`: subscribe, show a tab at a
+  viewport, stop showing, the person's input, navigation, open and close a tab, answer a dialog, choose a `<select>`
+  option, the files chosen for a page's file field or the cancel, copy or cut the selection, the mouse cursor's shape
+  at a point, *Open in a browser window*, *Back to Orchester*) and events (`BrowserEvent`: the
+  browser's state with its tabs, their owners, titles, addresses and loading, the tab shown and the mode; an agent
+  started browsing; an agent
+  acted, with its element box; an agent waits on a tab until a moment, sent again when new input pushes it back, and its
+  wait ended: it ran, reached the cap or was cancelled; a dialog opened or closed; a `<select>` list opened; a file
+  field of the person's tab asks for files, with whether it takes more than one, the types it accepts and its name). A
+  frame is
+  one event with its JPEG bytes, in a binary frame after a small JSON head (decision 13); at 30 frames a second of a
+  full-size page that is about 3 MB/s, well inside the channel and its 16 MiB frame limit. Only the latest frame waits
+  in the runner, so frames are dropped rather than queued, and the app decodes one at a time per project, keeping only
+  the latest that waits. The desktop subscribes once a runner attached; `orchester_workspace::browser::BrowserWindow`
+  holds what the window shows, `Runners::browser` sends its requests.
 
 ### What frames do not show, and what Orchester draws instead
 
 | Missing in a headless frame | What the window does |
 | --- | --- |
 | JavaScript dialogs (`alert`, `confirm`, `prompt`, `beforeunload`) | `Page.javascriptDialogOpening`: on the person's own tabs, drawn in the window over the page area only and answered with `Page.handleJavaScriptDialog` (`03` `t08Ur`); on an agent's tab the runner dismisses it and tells the agent. |
-| File chooser | `Page.setInterceptFileChooserDialog`: the app's own native file dialog, files set with `DOM.setFileInputFiles`. Agents get none (the tool answers that a file was asked). |
+| File chooser | `Page.setInterceptFileChooserDialog`: the app's own native file dialog, files set with `DOM.setFileInputFiles`; while it is open the window draws a hint over the page area, and the page draws the chosen file in its field (`03b` `TWpyp`, `03c` `x0N8d`). Agents get none (the tool answers that a file was asked). |
 | `<select>` drop-down lists | The list drawn by the window in the app's menu style from the element's options; the choice set through CDP (`04` `r31HX`). |
-| Mouse cursor shape | Not reported by CDP: an arrow, a hand over links and buttons (hit test of the element under the pointer), a text cursor over fields. |
-| Copy and paste | Ctrl/Cmd+C, X, V bridged between the page and the system clipboard by the window. |
+| Mouse cursor shape | Not reported by CDP: an arrow, a hand over links and buttons, a text cursor over fields. While the pointer moves the window asks the runner what is under it (`CursorAt`, `DOM.getNodeForLocation`, then the element's computed `cursor` or what the element is), one question at a time and at most four a second, the last place it moved to included; once it stands still nothing is asked. An arrow by default and on any failure, and for any other cursor a page sets. It makes no agent wait. |
+| Copy and paste | Ctrl/Cmd+C, X, V bridged between the page and the system clipboard by the window, while the page has the focus, and never as key presses for the page. Copy and cut ask the tab shown for its selection (`CopySelection`, `CutSelection`, read through `Runtime.evaluate`): a field's own, or else the document's, also in shadow roots and same-origin frames; a cut deletes it where it can be edited, and a page's own `copy` and `cut` listeners do not run. A password field gives nothing, no selection leaves the clipboard as it is, and a cross-origin frame's selection is out of reach. Paste sends the clipboard's text as `PersonInput::Text`; images and files are not pasted. Up to 2 MiB of text either way (`MAX_CLIPBOARD_TEXT`), and past that the window's failure line says so. Each of them makes the tab's agent wait, as any input of the person's does. Agents get nothing of this, and the window refuses all three to synthetic input (an MCP client driving it). |
 | Sound | Muted (`--mute-audio`). |
 | Passkeys, the password manager, sites that refuse headless browsers | *Open in a browser window* (decision 7). |
 | Context menu, drag and drop of files, printing | Not supported; *Open in a browser window*. |
+
+What a page holds stays out of inspection: a dialog's message and a list's options are sensitive text, and a glyph no
+one sees covers the page (`page::cover`), so the window's MCP and DevTools trees carry none of it and `lurq_screenshot`
+paints over the whole page area, what Orchester draws over it too, while the person sees all of it. Tabs, the address
+line, owners and buttons stay readable. Not covered yet: the text of a JavaScript prompt's field, as lurq has no
+sensitive input that shows its value.
 
 ## Where the code goes
 
 - `orchester-core`: the tool names, schemas and inputs (`orchester_tools::browser`), the policy rows, the profile
   permission and the allowed-site matching (pure rules, tested in `crates/core/tests/`).
-- `orchester-exec`: finding and starting the program on each platform.
-- `orchester-runner`: the project's browser (start, connect, idle stop, headed/headless switch), the CDP client, the
-  run-to-tabs map, the tool calls (`execution/step/browser/`, beside `qa_app/`), and the screencast and input for the
-  window.
+- `orchester-exec`: finding the program on each platform and its headless command (`browser`).
+- `orchester-runner`: the project's browser (start, connect, stop with the runner, headed/headless switch) and its
+  run-to-tabs map (`browser`), the CDP client (`browser::cdp`), the tool calls (`execution/step/browser/`, beside
+  `qa_app/`), and the screencast and input for the window.
 - `orchester-ipc`: the window's requests and events.
 - `orchester-workspace`: the window's state (tabs, the tab shown, frames) and the profile permission.
 - `orchester-app`: the *Browser* window, the Settings section, the profile row, the run page's *Browser* line.
 
 ## Phases
 
-1. **P1 · Core rules (non-UI).** Tool catalog and inputs, the Browser permission with allowed sites, policy rows,
-   person-only widening over MCP. Tests in `orchester-core`.
+1. **P1 · Core rules (non-UI).** Done (ORC-355): tool catalog and inputs, the Browser permission with allowed sites,
+   policy rows, person-only widening over MCP (`save_profile_draft`'s `permissions.browser`). Tests:
+   `cargo test -p orchester-core --test browser browser_`, and the MCP refusal in
+   `cargo test -p orchester-app --test mcp_domain domain_widening_the_browser`. `StepTools` lists the tools since
+   P2b, which the runner serves.
 2. **P2 · Runner and tools (non-UI).** Finding and starting headless Chromium on both platforms, the CDP client, the
-   tools, run tabs closed at run end, idle stop. Tests with a real Edge/Chrome on a local page served by the test
+   tools, run tabs closed at run end. Tests with a real Edge/Chrome on a local page served by the test
    (`orchester-runner --test browser`), skipped with a visible reason where no browser is found. After P2 agents can
    use the browser; the person cannot see it yet, which the profile's Browser row says.
+   - **P2a.** Done (ORC-358): finding and starting the browser (`cargo test -p orchester-exec --test browser
+     browser_`), the CDP client, the project's browser started at its first use and stopped with the runner, and each
+     run's tabs closed when it ends (`cargo test -p orchester-runner --features test-agent --test browser browser_`).
+   - **P2b.** Done (ORC-359): the `browser_*` tools on the runs' tabs (`orchester-runner`'s
+     `execution/step/browser/`), offered through the runner's relay to Claude Code and Codex steps with *Browser* and
+     network on, read-only steps included, each call decided by the policy and asked about by the runner; downloads and
+     the camera, microphone, location and notification permissions are denied when the browser starts. A tab that
+     closes (`browser_close`, its run's end, or the browser) is no longer listened to and its log's follower ends, so
+     the browser that runs as long as the runner keeps nothing of closed tabs; a screenshot's folder is checked to stay
+     in the worktree before any part of it is made. Tests: the tools end to end through the fake CLIs (`cargo test -p
+     orchester-runner --features test-agent --test browser browser_tools`), closed tabs in `browser_closed_tabs_`, the
+     offering and the approvals in `cargo test -p orchester-core --test browser browser_`. Not
+     yet: the native agent, which gets none of Orchester's relay tools today; the approval card's reason when *Approve
+     similar* is unavailable for `browser_eval` still reads as for a check (P4).
 3. **P3 · Design (designer).** Drawn 2026-10-28, board `Browser · redesign` `lcNez` in the new `orchester.pen`,
-   waiting for the person's review. Not drawn yet: the file chooser state.
+   waiting for the person's review. The file chooser state was added on 2026-10-31 (ORC-191: `03b` `TWpyp`, `03c`
+   `x0N8d`, row `bxyB2`, and the Notes entry *File chooser* `o6AJox`).
 4. **P4 · Window, settings and profile (UI).** IPC requests and events, screencast and input, the drawn dialogs and
    lists, clipboard, *Open in a browser window*, the profile row and the Settings section. Design verification.
+   - **P4a.** Done (ORC-368): the profile's Browser row with its allowed sites and the Connection enforcement line,
+     described under "Permissions and policy" above.
+   - **P4b.** Done (ORC-369): Settings › Browser, with the program chosen there started by the runner, and its
+     switch stored as decision 14's setting. Tests: `cargo test -p orchester-app --test settings_browser browser_`,
+     `cargo test -p orchester-workspace --test browser_settings`, `cargo test -p orchester-store --test
+     browser_settings`, the chosen program in `cargo test -p orchester-exec --test browser browser_` and
+     `orchester-runner --test browser browser_`. QA: the seed's scenarios `browser` (found), `browser-not-found` and
+     `browser-chosen` (another program chosen), whose browsers the QA app looks for in `browsers/` beside its data
+     only.
+   - **P4c.** Done (ORC-378): the window's plumbing, no window yet. The IPC (`cargo test -p orchester-ipc --test
+     browser`), the runner's screencast with backpressure, the person's input, navigation and own tabs, dialogs,
+     `<select>` lists and the headed restart (`cargo test -p orchester-runner --features test-agent --test browser
+     browser_`), the stored setting of decision 14 (`cargo test -p orchester-store --test app_db browser_window`), and
+     the window's state with its frames decoded to RGBA and the auto-open rule (`cargo test -p orchester-workspace
+     --features test-support --test browser_window browser_window_`). Since ORC-195 a run's tab the person closed
+     from the window answers the run's next call on it that the person closed it, and one the browser reported closed
+     (its page, or the person in the browser's own window) says that, both pointing to `browser_open`; the runner keeps
+     only those tabs' ids, per run, until the run ends (`orchester-runner --test browser browser_runs_tab`).
+   - **P4e.** Done (ORC-184): the agent waiting for the person (decision 16), described under "What the agent gets":
+     the hold in the runner (`browser/window/hold.rs`, the tools' side in `execution/step/browser/person.rs`), its
+     events, the state each tab keeps of it, and the window's 02b line and amber dot drawn from that state. QA scenario:
+     `browser-window-waiting`. Tests, on a clock they drive: `cargo test -p orchester-runner --features test-agent
+     --test browser browser_hold`; also `cargo test -p orchester-ipc --test browser browser_`, `cargo test -p
+     orchester-workspace --features test-support --test browser_window browser_window_keeps_the_agent_waiting` and
+     `cargo test -p orchester-app --test browser_window browser_dot_waits`, `browser_seconds_left`,
+     `browser_window_says_an_agent_waits`.
+   - **P4d.** Done (ORC-379): the *Browser* window itself, on that state (`orchester-app`'s `browser/`): a secondary
+     lurq window named `browser` (`lurq_windows`), its title bar with the mark, the project switcher and the tabs
+     (crowded, then scrolling with fades and the overflow button and menu), the toolbar with the tab's owner, the page
+     drawn from the frames with the person's pointer, wheel and keys sent back, the agent-acting line and ring,
+     dialogs and `<select>` lists of the person's tabs, *Empty* (its address line has the focus),
+     *Browser not found* and *Opened in a browser window*; the shortcuts Ctrl+T, Ctrl+W, Ctrl+Tab / Ctrl+Shift+Tab,
+     Ctrl+L and Ctrl+R (⌘T, ⌘W, ⌘L, ⌘R on macOS), which the window takes before the page (`browser/keys.rs`); opened
+     from the app menu's *Browser*, a run's Summary line *Browser · 2 tabs · … › Show*, and by itself when an agent
+     starts browsing. The tab owners' task keys, run numbers and agent names are read from the project's database
+     (`orchester_workspace::browser::run_owners`). Tests: `cargo test -p orchester-app --test browser_window
+     browser_`, `--test task_summary summary_browser_line` and `--test theme browser_roles`, and `cargo test -p
+     orchester-workspace --features test-support --test browser_window browser_window_owners`. QA scenarios, each
+     played by the QA app from a fixture the seed leaves beside the data (`test_support::browser_qa`), its page the
+     sample page this computer's browser renders: `browser-window` (01, and the switcher 01b), `browser-window-many`
+     (01c), `browser-window-overflow` (01d, 01e), `browser-window-acting` (02; its first run's Summary has the Browser
+     line 10), `browser-window-waiting` (02b, which ORC-184 added), `browser-window-dialog` (03),
+     `browser-window-select` (04), `browser-window-headed` (05), `browser-window-empty` (06),
+     `browser-window-not-found` (07); start them with `no_runner`, so no runner reports
+     its own browser over the fixture. `browser-window-empty` with a runner reaches a tab coming after *Empty*: *+*, or
+     an address and Enter. The address line has the focus on *Empty* and lets go of it when a tab comes, showing that
+     tab's address, unless the person typed there; Enter leaves the line, and Ctrl+L on a page keeps the focus (`--test
+     browser_window browser_address_line_`). The page's focus is a hidden text input of lurq's, at the point pressed, so an
+     input method composes there and what it commits is sent as text (`Input.insertText`); tests of the person's
+     input as the window sends it to the tab shown, at a scale factor of 2: `--test browser_window browser_person_`.
+     Not yet: an input method's composition under way (lurq shows it in its text input and tells no handler, so the
+     page gets the text only once committed), the cursor's shape over
+     links and fields, bringing an open window to the front
+     (no lurq command), and back and forward faded by the tab's history as `01` fades forward (the runner does not
+     report the history; they fade only without a tab to go through).
+   - **Status bar item.** Done (ORC-194): *Browser 3 tabs* (`PwuEd` in `RGeKO`; the redesigned status bar's board
+     `bZVXG` does not draw it) in the main window's right group before the MCP item, while the shown project's browser
+     has tabs; a press opens the window on the project. On a narrow bar its words give way and its globe stays. Tests:
+     `cargo test -p orchester-app --test status_bar status_browser`. QA: `browser-window` shows *Browser 6 tabs*,
+     `browser-window-empty` no item, both with `no_runner`.
+   - **Clipboard.** Done (ORC-190): Ctrl+C, X and V (⌘ on macOS) while the page has the focus, described under "What
+     frames do not show" above. Tests: `cargo test -p orchester-ipc --test browser browser_`, `cargo test -p
+     orchester-runner --features test-agent --test browser browser_person_` and `cargo test -p orchester-app --test
+     browser_window browser_clipboard_`.
+   - **File chooser.** Done (ORC-192): *A page asks for a file* above. The runner intercepts every tab's file chooser
+     as the tab opens (`Page.setInterceptFileChooserDialog`), the person's tab only while the browser is headless: in a
+     window of its own the browser shows the person its own chooser. On the person's tab it reads the field's `accept`
+     and accessible name, tells the window (`FileChooserOpened`, numbered per request) and keeps the request until the
+     window's `ChooseFiles` sets the chosen files on the field (`DOM.setFileInputFiles`, with the events a page listens
+     to) or cancels it; a tab that navigates or closes first, or asks again, drops it, and files chosen for a dropped
+     request are refused (`browser/window/files.rs`). On an agent's tab the browser cancels the chooser itself
+     (`cancel`, with the page's `cancel` event; a browser too old for it leaves the chooser unanswered) and the tab's log
+     records *a file chooser was cancelled: the page asked for a file, and agents cannot choose files*, which the
+     agent's next answer on the tab says as it says a dismissed dialog. The window opens the system's own dialog
+     (`rfd`, from the app's own process) once per request, for one file or many, offering the extensions the field
+     accepts and *All files* (macOS allows only those extensions; a MIME type such as `image/*` filters nothing), and
+     the hint stays over the page until it closes (`browser/files.rs`, `page/file_chooser.rs`). Tests: `cargo test -p
+     orchester-ipc --test browser browser_file_chooser`, `cargo test -p orchester-runner --features test-agent --test
+     browser browser_file_chooser`, `cargo test -p orchester-workspace --features test-support --test browser_window
+     browser_window_keeps_a_tabs_request_for_files` and `cargo test -p orchester-app --test browser_window
+     browser_file_chooser`. QA: `browser-window-file-chooser` (03b: the stand-in for the system's dialog never closes, so
+     the hint stays) and `browser-window-file-chosen` (03c), with `no_runner`; the sample page has its *Signing
+     certificate* field only in these two.
 
 ## Not in scope
 
@@ -269,14 +546,11 @@ person asked for that (setting); by default it opens only when the person opens 
 
 ## Open questions for review
 
-1. **One profile per project** (sign-ins shared by the project's runs; this draft and the project switcher rely on
-   it), or one for the whole app?
-2. **Read-only steps** get the browser (this draft) or not?
-3. **`browser_eval`**: leave it out (this draft), or offer it as a tool that always asks?
-4. **Pipe instead of port**: worth an `unsafe` module on both platforms to keep other same-user processes off the
-   debugging port?
-5. **Idle stop after 15 minutes**: right, or keep the browser running while the app runs?
-6. **A binary IPC frame kind** for screencast frames, or base64 in JSON (a third more bytes, no protocol change)?
-7. **Opening the window when an agent starts browsing**: off by default (this draft), or on?
-8. **Focus**: lurq's `WindowOptions` has no "open without activating" option; a window that opens on its own needs one
-   in lurq (a lurq change, `app-vs-lurq-scope`).
+Decided by the person on 2026-10-29: one browser profile per project (decision 3), read-only steps get the browser
+(decision 10), `browser_eval` is offered as a tool whose every call asks (decision 9), CDP over a port and not a pipe
+(decision 11), and the browser keeps running until the runner exits, with no idle stop (decision 12). Decided with
+ORC-378: screencast frames as a binary IPC message (decision 13), the window opening by itself when an agent starts
+browsing, on by default (decision 14, the person's decision of 2026-10-29; turned off in Settings › Browser), and
+such a window taking focus, with no lurq change (decision 15).
+
+None open.

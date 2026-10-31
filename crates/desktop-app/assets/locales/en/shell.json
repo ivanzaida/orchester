@@ -25,7 +25,9 @@
     },
     "menu": {
       "quit": "Quit Orchester",
-      "label": "Orchester menu"
+      "label": "Orchester menu",
+      "browser": "Browser",
+      "browserNoProject": "Open a project first: the Browser window shows one project's pages."
     },
     "tabs": {
       "close": "Close tab",
@@ -254,6 +256,10 @@
       "mcpLockedDevelopment": "MCP :{{port}} · sign-in required",
       "mcpLockedShort": "MCP · sign-in required",
       "cloudOffline": "Orchester Cloud · offline",
+      "browser": {
+        "one": "Browser {{count}} tab",
+        "other": "Browser {{count}} tabs"
+      },
       "update": {
         "downloading": "Update {{version}} · downloading {{percent}}%",
         "paused": "Update {{version}} · paused at {{percent}}%",

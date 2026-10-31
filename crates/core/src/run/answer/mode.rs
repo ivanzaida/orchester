@@ -140,7 +140,8 @@ impl CameToPerson {
       | ReviewHold::PermissionsUnknown
       | ReviewHold::TooLong
       | ReviewHold::Escalation
-      | ReviewHold::ProjectProgram => PersonReason::NotAllowed,
+      | ReviewHold::ProjectProgram
+      | ReviewHold::Browser => PersonReason::NotAllowed,
     })
   }
 }

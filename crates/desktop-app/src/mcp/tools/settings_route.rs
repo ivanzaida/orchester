@@ -18,13 +18,14 @@ pub const PARAMS: &[&str] = &["tab", "account", "panel", "server", "step", "ask"
 
 /// Each tab, and how a refusal names it: `settings tab accounts` takes no `step`. `updates` and `whats-new` are General
 /// with its *Updates* in view, the release notes open with `whats-new`.
-const TABS: [(&str, &str); 9] = [
+const TABS: [(&str, &str); 10] = [
   ("automation", "settings tab automation"),
   ("general", "settings tab general"),
   ("updates", "settings tab updates"),
   ("whats-new", "settings tab whats-new"),
   ("notifications", "settings tab notifications"),
   ("accounts", "settings tab accounts"),
+  ("browser", "settings tab browser"),
   ("orchester", "settings tab orchester"),
   ("connect", "settings tab connect"),
   ("invite", "settings tab invite"),
@@ -117,6 +118,7 @@ pub fn route(args: &Map<String, Value>, lookup: Option<&Lookup>) -> Result<Route
     "updates" => Ok(Route::Updates(UpdatesShow::Section)),
     "whats-new" => Ok(Route::Updates(UpdatesShow::WhatsNew)),
     "notifications" => Ok(Route::Notifications),
+    "browser" => Ok(Route::Browser),
     "accounts" => accounts(args, lookup).map(Route::Accounts),
     "orchester" => orchester(args, lookup).map(Route::Orchester),
     "connect" => connect(args, lookup).map(Route::Orchester),

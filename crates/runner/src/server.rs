@@ -1,5 +1,8 @@
 //! Serves the desktop over the project's IPC endpoint: answers its requests and forwards the
-//! scheduler's change notifications.
+//! scheduler's change notifications, the project's browser's events and the frames of the tab the *Browser* window
+//! shows.
+
+mod browser;
 
 use std::{
   future::Future,
@@ -45,8 +48,8 @@ type Incoming = Result<Option<Request>, IpcError>;
 
 /// Accepts the desktop's connection and serves it until the desktop disconnects, asks the
 /// runner to stop, or `shutdown` is signalled. Runs still executing then are interrupted: their
-/// agents are ended and the runs keep their last checkpoint. The desktop turns the runner's error
-/// reports on and off with `reports`, which a build that never reports has none of.
+/// agents are ended and the runs keep their last checkpoint. The project's browser stops last. The desktop turns the
+/// runner's error reports on and off with `reports`, which a build that never reports has none of.
 pub async fn serve(project_root: &Path, mut shutdown: ShutdownSignal, reports: Option<Switch>) -> Result<(), IpcError> {
   // Made before the desktop can connect: it notes the groups queued before this runner started.
   let (notifications, outgoing) = mpsc::unbounded_channel();
@@ -88,6 +91,7 @@ pub async fn serve(project_root: &Path, mut shutdown: ShutdownSignal, reports: O
       }
     }
   });
+  let browser = Arc::clone(scheduler.browser());
   let result = Session {
     scheduler,
     replies,
@@ -102,6 +106,8 @@ pub async fn serve(project_root: &Path, mut shutdown: ShutdownSignal, reports: O
   .run()
   .await;
   reading.abort();
+  // The project's browser ends with the runner, its runs stopped; one never used was never started.
+  browser.stop().await;
   result
 }
 
@@ -147,6 +153,8 @@ impl Drop for InFlightRequest {
 impl<W: tokio::io::AsyncWrite + Unpin> Session<W> {
   async fn run(mut self) -> Result<(), IpcError> {
     let mut groups = tokio::time::interval(Duration::from_secs(1));
+    // Only the latest frame of the window's tab waits there; a newer one replaces it while the desktop reads slowly.
+    let browser = Arc::clone(self.scheduler.browser());
     loop {
       tokio::select! {
         _ = groups.tick(), if self.finishing.is_none() => {
@@ -160,6 +168,7 @@ impl<W: tokio::io::AsyncWrite + Unpin> Session<W> {
           }
         }
         Some(event) = self.outgoing.recv() => self.write_waiting(vec![event]).await?,
+        frame = browser.next_frame() => self.writer.write_event(&Event::BrowserFrame(frame)).await?,
         finished = async { self.finishing.as_mut().expect("polled only while finishing").await }, if self.finishing.is_some() => {
           if let Err(error) = finished {
             tracing::error!(%error, "finishing at checkpoints failed");
@@ -190,7 +199,7 @@ impl<W: tokio::io::AsyncWrite + Unpin> Session<W> {
       }
     };
     match answer(&self.scheduler, (&self.replies, &self.in_flight), &request).await {
-      Answer::Reply(event) => self.writer.write(&event).await?,
+      Answer::Reply(event) => self.writer.write_event(&event).await?,
       Answer::Later => {}
       Answer::StopIfIdle(id) => return self.stop_if_idle(id).await,
       Answer::ErrorReports(id, reports) => {
@@ -245,7 +254,7 @@ impl<W: tokio::io::AsyncWrite + Unpin> Session<W> {
       waiting.push(event);
     }
     for event in coalesce(waiting) {
-      self.writer.write(&event).await?;
+      self.writer.write_event(&event).await?;
     }
     Ok(())
   }
@@ -351,6 +360,7 @@ async fn answer(
       Err(rejection) => Reply::Rejected(rejection),
     },
     Command::StopTurn { run } => return later.answer(run, async move { handle.stop_turn(run).await }),
+    Command::Browser(ref command) => return later.browser(handle, command.clone()),
     Command::EstimateTask { task } => {
       return later.reply(async move {
         match handle.estimate_task(task).await {

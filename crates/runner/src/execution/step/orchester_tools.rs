@@ -1,6 +1,7 @@
 //! The step's Orchester tools (`orchester_core::orchester_tools`), served over the invocation's relay
 //! ([`super::relay`]) and run by the runner: the worktree's file tools ([`super::tool_files`]), a read or a search
-//! outside it, the step's skills ([`StepSkills`]), its checks ([`super::checks`]) and the run's records
+//! outside it, the step's skills ([`StepSkills`]), its checks ([`super::checks`]), the browser ([`StepBrowser`]) and
+//! the run's records
 //! ([`super::run_records`]). A call runs off the async workers, in the worktree, with the
 //! environment the agent's own programs get; its output is read as it comes and kept within its cap, and its answer has
 //! the invocation's secret values removed.
@@ -42,6 +43,7 @@ use serde_json::Value;
 
 use super::{
   super::{handoff::provenance, run::RunTask},
+  browser::StepBrowser,
   claude_approval::ClaudeApprovals,
   mcp::McpSetup,
   qa_app::{StepQa, script_blob},
@@ -91,6 +93,17 @@ impl<'a> ToolFolders<'a> {
 /// The hooks folder git gets when it lists the worktree's changes, empty, among the project's private files.
 const NO_HOOKS: &str = "no-hooks";
 
+/// The folders of Orchester's own files that `read_external_file` and `search_external_file` never reach, `relay`
+/// being the runner's program: every project's private files, the folder of Orchester's programs, and every project's
+/// browser profile with its cookies and sign-ins.
+pub fn outside_read_refusals(relay: Option<&Path>) -> Vec<PathBuf> {
+  let mut refused = vec![private_file::root()];
+  refused.extend(relay.and_then(Path::parent).map(Path::to_path_buf));
+  // Unknown only with the application data, and then no browser has a profile either ([`crate::browser::profile_of`]).
+  refused.extend(crate::browser::profiles_folder().ok());
+  refused
+}
+
 /// What the calls of one step run with.
 pub(in super::super) struct ToolHost {
   tools: StepTools,
@@ -126,6 +139,8 @@ pub(in super::super) struct ToolHost {
   qa_scripts: Mutex<Vec<(QaAppStart, String)>>,
   /// The invocation's QA app (`start_qa_app`); `None` while the host is being made.
   qa: Option<StepQa>,
+  /// The browser tools, for a step that is offered them ([`StepTools::offers_browser`]).
+  browser: Option<StepBrowser>,
 }
 
 impl ToolHost {
@@ -140,6 +155,11 @@ impl ToolHost {
 
   pub(super) fn secrets(&self) -> &[SecretVariable] {
     &self.secrets
+  }
+
+  /// The browser tools; `None` for a step that is not offered them.
+  pub(super) const fn browser(&self) -> Option<&StepBrowser> {
+    self.browser.as_ref()
   }
 
   /// The tools of the server's `tools/list` result.
@@ -355,8 +375,19 @@ impl RunTask {
   ) -> Result<(Arc<ToolHost>, Option<ClaudeApprovals>), RunnerProblem> {
     let worktree = folders.worktree;
     let mut host = self.tool_host((permissions, skills), (execution, folders), environment)?;
-    if matches!(setup, McpSetup::Claude(_)) {
+    let claude = matches!(setup, McpSetup::Claude(_));
+    if claude {
       host = host.with_images();
+    }
+    if host.tools.offers_browser() {
+      self.browser.person_waits_go_on(self.run.id());
+      let browser = StepBrowser::new(
+        Arc::clone(&self.browser),
+        self.run.id(),
+        permissions.clone(),
+        worktree.to_path_buf(),
+      );
+      host.browser = Some(if claude { browser.with_images() } else { browser });
     }
     let qa = self.step_qa(execution, invocation, worktree)?;
     let secrets = setup.secrets().into_iter().chain(provider_key).collect();
@@ -385,8 +416,7 @@ impl RunTask {
         "cannot make the empty hooks folder of Orchester's tools: {error}"
       ))
     })?;
-    let mut refused = vec![private_file::root()];
-    refused.extend(self.relay.as_deref().and_then(Path::parent).map(Path::to_path_buf));
+    let refused = outside_read_refusals(self.relay.as_deref());
     let files = ToolFiles::new(permissions.repository(), folders, self.run.base().as_str())?;
     let processes = RunProcesses::new(worktree, self.run.created_at()).map_err(|error| problem(error.to_string()))?;
     let runner = std::env::current_exe().map_err(|error| problem(error.to_string()))?;
@@ -435,6 +465,7 @@ impl RunTask {
       grants: Mutex::new(Vec::new()),
       qa_scripts: Mutex::new(Vec::new()),
       qa: None,
+      browser: None,
     })
   }
 

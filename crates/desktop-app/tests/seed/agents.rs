@@ -79,6 +79,37 @@ fn seed_agents_exposes_warning_capabilities_and_active_override() {
 }
 
 #[test]
+fn seed_agents_browser_has_the_browser_row_in_each_state() {
+  use orchester_core::permission::{NetworkAccess, browser::BrowserAccess};
+  let seed = Seed::of("agents-browser");
+  let listed = ProjectAgents::for_screen(seed.repo()).expect("profiles");
+  let permissions = |role: &str| {
+    listed
+      .profiles
+      .iter()
+      .find(|p| p.profile.role().as_str() == role)
+      .unwrap_or_else(|| panic!("{role}"))
+      .profile
+      .permissions()
+      .clone()
+  };
+  let on = permissions("Browser on");
+  assert_eq!(
+    (on.network(), on.browser().access()),
+    (&NetworkAccess::On, BrowserAccess::On)
+  );
+  let sites: Vec<String> = on.browser().sites().entries().iter().map(ToString::to_string).collect();
+  assert_eq!(sites, ["docs.rs", "*.example.com"]);
+  let off = permissions("Browser off");
+  assert_eq!(
+    (off.network(), off.browser().access()),
+    (&NetworkAccess::On, BrowserAccess::Off)
+  );
+  let offline = permissions("Browser without network");
+  assert_eq!(offline.network(), &NetworkAccess::Off);
+}
+
+#[test]
 fn seed_agents_library_lists_every_instruction_part_skill_scope_and_repository_file() {
   use orchester_core::{
     agent_files::import::{ItemKind, Unimportable},

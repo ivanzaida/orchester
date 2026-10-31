@@ -4,6 +4,7 @@
 //! newer build left, what the seed refuses (`refusals`) and its command line (`command_line`). Needs `git`.
 
 mod agents;
+mod browser;
 #[path = "../../examples/seed/cli.rs"]
 mod cli;
 mod command_line;

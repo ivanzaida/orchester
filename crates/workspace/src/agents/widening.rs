@@ -64,6 +64,8 @@ pub fn message(widening: Widening) -> Message {
     Widening::Network => "appMcp.widens.network",
     Widening::ToolCallsUnasked => "appMcp.widens.toolCallsUnasked",
     Widening::AutoApprove => "appMcp.widens.autoApprove",
+    Widening::Browser => "appMcp.widens.browser",
+    Widening::BrowserSite => "appMcp.widens.browserSite",
     Widening::Autopilot => "appMcp.widens.autopilot",
   })
 }

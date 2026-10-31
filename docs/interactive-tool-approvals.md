@@ -179,6 +179,9 @@ by `read_external_file` and `search_external_file`.
 | `get_task` | none | read-only | runs | runs |
 | `save_memory` | `kind`, `text`, `key?`, `tags?`, `importance?`, `scope?` (`task`, the default, or `project`) | records | runs | runs |
 | `report_progress` | `text` (one line, ≤ 200 characters) | records | runs | runs |
+| `browser_*` reading tools and `browser_close` (profile's *Browser* and network on) | `docs/design/browser.md`, "What the agent gets" | browser | runs | runs |
+| `browser_open`, `browser_navigate`, `browser_click`, `browser_type`, `browser_key`, `browser_scroll` (*Browser* and network on) | as above | browser | runs on an allowed site or a local development host; asks elsewhere (Approve similar kept to the tool on that host) | as a writing step |
+| `browser_eval` (*Browser* and network on) | `tab?`, `expression` | browser | asks at every call | asks at every call |
 
 - **Run processes (ORC-21).** `list_run_processes` lists processes whose executable lies inside this invocation's
   run worktree: pid, name, relative executable path and start time (UTC Unix microseconds). The executable path
@@ -257,6 +260,14 @@ by `read_external_file` and `search_external_file`.
   The cleanup of what a dead runner left (named by the slot file, which is untrusted) and of the step's own QA folder
   follows no link and stops only programs from that folder's `bin/` started since its run was created; the scope that
   stops them must still resolve to the `bin/` it checked, so a link swapped in after the check refuses the cleanup.
+- **Browser (ORC-359, `docs/design/browser.md`).** The `browser_*` tools are offered, read-only steps included, when
+  the profile's *Browser* is on and the step has network access (`orchester_tools::browser::offered`); without either
+  none is listed and a call is refused as not available. The runner decides each call itself
+  (`execution/step/browser/`), so Claude Code gets an allow rule for every browser tool and Codex approves them all: a
+  call that asks (a site outside the allowed ones and the local development hosts, a page without a web host, every
+  `browser_eval`) is asked about by the runner, its request naming the page's host. *Approve similar* keeps its rule to
+  the tool on that host; none is made for `browser_eval` or a page without a host, and auto-approval and auto mode's
+  reviewer never answer a browser request. Every call reaches only the run's own tabs.
 - **Results that could not check everything.** A step's result may be `unverified` with an `unverified` list of
   `{check, reason}` (`orchester_core::run::STEP_RESULT_SCHEMA`): the step ran but could not check some of what it is
   for. The run waits for the person (`waiting_for_person`, reason `unverified`) without taking the step's failure
@@ -292,7 +303,8 @@ by `read_external_file` and `search_external_file`.
   (`CommandScope::holds_credentials`; published sources such as a package registry's `src` are not credentials),
   anything in a `.git` folder, and Orchester's own state wherever it lies: the whole `<temp>/orchester-mcp` tree
   (every project's private files with MCP secrets and tokens), any `.orchester` folder but the run's worktree, any
-  `orchester.db*` or `orchester-server.db*` file and the folder of Orchester's programs; device, stream, verbatim,
+  `orchester.db*` or `orchester-server.db*` file, the folder of Orchester's programs and the folder of every project's
+  browser profile (`<application data>/browser/`, with its cookies and sign-ins); device, stream, verbatim,
   drive-relative and network paths; a folder or pipe; a file with a NUL anywhere up to the last line read. A read is
   numbered lines, each cut to 16 KiB, at most 56 KiB, with where to read on (`start_line`). A search lists the
   checked folder, keeps only the files a read would reach (each checked; the ones left out are neither counted nor
