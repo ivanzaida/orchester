@@ -4,7 +4,9 @@
 //! changes. Each tab's events are followed for it ([`follow`]), the person's inputs keep their order ([`order`]) and
 //! hold the agent of their tab ([`hold`]), and the browser's state is sent whenever it changes.
 
+mod cursor;
 mod follow;
+mod hit;
 mod hold;
 mod input;
 mod order;

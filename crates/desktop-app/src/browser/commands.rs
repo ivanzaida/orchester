@@ -10,7 +10,7 @@ use std::{
 };
 
 use lurq::{app::component::DevtoolsInspectable, core::Signal};
-use orchester_ipc::browser::{BrowserCommand, BrowserReply};
+use orchester_ipc::browser::{BrowserCommand, BrowserReply, BrowserTabId, PageCursor};
 use orchester_workspace::runner::Runners;
 use tokio::runtime::Handle;
 
@@ -85,6 +85,30 @@ impl Commands {
     self.failed.set(true);
   }
 
+  /// The mouse cursor's shape at `x`, `y` of `tab`: the arrow when the request is refused or lost, which is only logged
+  /// as the person asked nothing.
+  pub fn cursor_at(&self, tab: BrowserTabId, x: i32, y: i32) -> impl Future<Output = PageCursor> + Send + use<> {
+    let answer = self.runners.browser(&self.root, BrowserCommand::CursorAt { tab, x, y });
+    async move {
+      match answer.await {
+        Ok(BrowserReply::Cursor { cursor }) => cursor,
+        Ok(other) => {
+          tracing::debug!(?other, "the browser answered the cursor's shape with something else");
+          PageCursor::Arrow
+        }
+        Err(error) => {
+          tracing::debug!(%error, "the browser did not tell the cursor's shape");
+          PageCursor::Arrow
+        }
+      }
+    }
+  }
+
+  /// Runs `work` off the UI thread.
+  pub fn spawn(&self, work: impl Future<Output = ()> + Send + 'static) {
+    self.runtime.spawn(work);
+  }
+
   fn dispatch(&self, command: BrowserCommand, said: bool, then: impl FnOnce(BrowserReply) + Send + 'static) {
     let what = command_name(&command);
     let restarts = matches!(command, BrowserCommand::OpenInWindow | BrowserCommand::BackToOrchester);
@@ -132,6 +156,7 @@ const fn command_name(command: &BrowserCommand) -> &'static str {
     BrowserCommand::ChooseOption { .. } => "choose option",
     BrowserCommand::CopySelection { .. } => "copy selection",
     BrowserCommand::CutSelection { .. } => "cut selection",
+    BrowserCommand::CursorAt { .. } => "cursor at",
     BrowserCommand::OpenInWindow => "open in window",
     BrowserCommand::BackToOrchester => "back to Orchester",
   }

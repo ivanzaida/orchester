@@ -35,6 +35,7 @@ use orchester_ipc::browser::{
 };
 use parking_lot::Mutex;
 
+use super::cursor::PagePointer;
 use crate::{
   browser::{
     commands::Commands,
@@ -63,6 +64,8 @@ pub struct PageInput {
   at: Signal<(f32, f32)>,
   /// A press asked for the page's focus, which the next render gives the hidden input.
   focus: Signal<bool>,
+  /// The mouse cursor's shape over the page, asked as the pointer moves.
+  pointer: PagePointer,
 }
 
 #[derive(Default)]
@@ -85,6 +88,7 @@ impl PageInput {
       value: ctx.signal(String::new()),
       at: ctx.signal((0.0, 0.0)),
       focus: ctx.signal(false),
+      pointer: PagePointer::new(ctx),
     }
   }
 
@@ -113,7 +117,7 @@ impl PageInput {
     let (down, up, moved) = (
       (send.clone(), self.clone()),
       (send.clone(), self.pressed.clone()),
-      (send.clone(), self.pressed.clone()),
+      (send.clone(), self.pressed.clone(), self.pointer.clone()),
     );
     let (wheel, key_down, key_up) = (send.clone(), send.clone(), send.clone());
     let (typed, pasted) = (send.clone(), send);
@@ -128,6 +132,7 @@ impl PageInput {
       .on_input(move |event: TextInputEvent| typed.committed(&event))
       .on_paste(move |event: PasteEvent| pasted.pasted(&event));
     page
+      .cursor(self.pointer.icon(tab))
       .on_mouse_down(move |event: MouseEvent| {
         let (send, input) = &down;
         input.pressed_at(send, &event);
@@ -153,9 +158,12 @@ impl PageInput {
         send.mouse(&event, (MouseAction::Released, button(event.button), clicks));
       })
       .on_mouse_move(move |event: MouseEvent| {
-        let (send, pressed) = &moved;
+        let (send, pressed, pointer) = &moved;
         let held = pressed.lock().held.unwrap_or(MouseButton::None);
         send.mouse(&event, (MouseAction::Moved, held, 0));
+        if let Some((x, y)) = send.point(event.x, event.y).filter(|_| send.showing.usable()) {
+          pointer.moved(&send.showing.commands, &send.tab, x, y);
+        }
       })
       .on_scroll(move |event: ScrollEvent| {
         event.prevent_default();

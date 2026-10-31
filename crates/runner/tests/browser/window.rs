@@ -2,9 +2,10 @@
 //! a frame of the tab shown, the person's click and typing, `<select>` lists and dialogs drawn by the window, the
 //! person's own tabs apart from runs', frames dropped rather than queued, and the report that an agent started
 //! browsing; navigation and the restart that reopens the tabs are in [`restart`], the browser's own window closing in
-//! [`window_closed`], copy, cut and paste in [`clipboard`].
+//! [`window_closed`], copy, cut and paste in [`clipboard`], the mouse cursor's shape in [`cursor`].
 
 mod clipboard;
+mod cursor;
 mod restart;
 mod window_closed;
 
@@ -49,6 +50,20 @@ pub const CLIPBOARD: &str = r#"<!doctype html><html><head><title>Page clipboard<
 <input id="mail" type="email" value="ada@example.com" style="position:fixed;left:0;top:100px;width:300px;height:40px">
 <input id="fixed" readonly value="read only" style="position:fixed;left:0;top:150px;width:300px;height:40px">
 <div id="notes" contenteditable style="position:fixed;left:0;top:200px;width:300px;height:40px">editable notes</div>
+</body></html>"#;
+
+/// The page of the cursor tests: what the mouse cursor looks like over, at fixed places, in CSS pixels.
+pub const CURSOR: &str = r#"<!doctype html><html><head><title>Page cursor</title><style>body{margin:0}
+.at{position:fixed;left:0;width:300px;height:40px;margin:0;padding:0}</style></head><body>
+<a class="at" href="/later" style="top:0"><span style="display:block;margin-left:100px">A word of a link</span></a>
+<button class="at" style="top:50px">Press</button>
+<button class="at" style="top:100px" disabled>Not now</button>
+<div class="at" style="top:150px;cursor:pointer">Clickable</div>
+<div class="at" style="top:200px;cursor:grab">Grab me</div>
+<input class="at" style="top:250px">
+<textarea class="at" style="top:300px"></textarea>
+<div class="at" contenteditable style="top:350px">Editable</div>
+<p class="at" style="top:400px">Plain text on the page</p>
 </body></html>"#;
 
 /// A page that asks with a prompt shortly after it loads and shows the answer in its title.

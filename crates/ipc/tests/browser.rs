@@ -1,4 +1,4 @@
-//! The *Browser* window's messages (protocol 36): every request, reply and event round-trips, a page's selection at
+//! The *Browser* window's messages (protocol 37): every request, reply and event round-trips, a page's selection at
 //! its limit fits a frame and stays out of the log, a screencast frame travels as a binary frame with its JPEG within
 //! the frame limit, malformed binary frames are refused, and a frame crosses the platform's real endpoint (the Unix
 //! socket on macOS, the named pipe on Windows).
@@ -11,7 +11,8 @@ use orchester_ipc::{
   browser::{
     AgentAction, AgentWaitEnd, BrowserCommand, BrowserDialog, BrowserEvent, BrowserMode, BrowserReply, BrowserState,
     BrowserTab, BrowserTabId, DialogKind, ElementBox, KeyAction, MAX_CLIPBOARD_TEXT, Modifiers, MouseAction,
-    MouseButton, Navigation, PersonInput, ScreencastFrame, SelectId, SelectList, SelectOption, TabOwner, Viewport,
+    MouseButton, Navigation, PageCursor, PersonInput, ScreencastFrame, SelectId, SelectList, SelectOption, TabOwner,
+    Viewport,
   },
   frame::{FrameReader, FrameWriter, MAX_FRAME_LEN},
 };
@@ -129,6 +130,11 @@ fn commands() -> Vec<BrowserCommand> {
     },
     BrowserCommand::CopySelection { tab: tab("T1") },
     BrowserCommand::CutSelection { tab: tab("T1") },
+    BrowserCommand::CursorAt {
+      tab: tab("T1"),
+      x: 120,
+      y: -4,
+    },
     BrowserCommand::OpenInWindow,
     BrowserCommand::BackToOrchester,
   ];
@@ -231,11 +237,22 @@ fn events(run: RunId) -> Vec<Event> {
   ]
 }
 
-/// The events of an agent waiting for the person came with protocol 35 and a page's selection with 36, so an older
-/// runner is told apart at the handshake: where it waits and until when, and each way its wait ends.
+/// The reply of every shape of the mouse cursor.
+fn cursor_replies() -> impl Iterator<Item = Event> {
+  [PageCursor::Arrow, PageCursor::Hand, PageCursor::Text]
+    .into_iter()
+    .map(|cursor| Event::Reply {
+      id: RequestId::new(6),
+      reply: Reply::Browser(BrowserReply::Cursor { cursor }),
+    })
+}
+
+/// The events of an agent waiting for the person came with protocol 35, a page's selection with 36 and the mouse
+/// cursor's shape with 37, so an older runner is told apart at the handshake: where it waits and until when, and each
+/// way its wait ends.
 #[tokio::test]
 async fn browser_agent_waiting_events_round_trip_under_a_raised_protocol() {
-  assert_eq!(PROTOCOL_VERSION, 36);
+  assert_eq!(PROTOCOL_VERSION, 37);
   let (mut reader, mut writer) = connection();
   let run = RunId::generate();
   let ended = |end| {
@@ -283,7 +300,8 @@ async fn browser_requests_replies_and_events_round_trip() {
       command: Command::Browser(command),
     })
     .collect();
-  let events = events(RunId::generate());
+  let mut events = events(RunId::generate());
+  events.extend(cursor_replies());
   let written = async {
     for request in &requests {
       writer.write(request).await.expect("write request");
