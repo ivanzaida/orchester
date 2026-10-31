@@ -38,7 +38,10 @@ use crate::{
   project::{Landing, Projects, ProjectsHost},
   routes,
   screens::gate::{GateProps, SignInGate},
-  services::Services,
+  services::{
+    Services,
+    accounts::{Accounts, AccountsReader, WindowAccounts},
+  },
   shell::{needs_you::PanelOpen, status_bar},
   startup::{self, Problem},
   ui::chat::links::ChatLinks,
@@ -142,6 +145,8 @@ struct SessionWindow {
   account_tabs: AccountTabs,
   /// The person's notification settings, read by the notifications' host and changed in Settings.
   notifications: NotificationPrefs,
+  /// The accounts the status bar and the notifications name, read by the window's [`AccountsReader`].
+  accounts: WindowAccounts,
 }
 
 impl Component for SessionWindow {
@@ -174,6 +179,7 @@ impl Component for SessionWindow {
       focus: ctx.signal(None),
       first_keys: FirstKeys::default(),
       notifications: NotificationPrefs::new(ctx.signal(Chosen::default())),
+      accounts: WindowAccounts::new(ctx.signal(Accounts::default())),
     }
   }
 
@@ -190,6 +196,7 @@ impl Component for SessionWindow {
     ctx.provide(self.first_keys.clone());
     ctx.provide(self.needs_you.clone());
     ctx.provide(self.notifications.clone());
+    ctx.provide(self.accounts.clone());
     let sign_in = follow_sign_in(ctx, &services.cloud);
     if let Some(account) = sign_in.account() {
       self.account_tabs.follow(account, &self.navigation, &self.projects);
@@ -197,7 +204,11 @@ impl Component for SessionWindow {
     let phase = lifecycle::phase(ctx, &services.close);
     let closing = phase.holds_window();
     let projects = ctx.mount_keyed::<ProjectsHost>("projects", ());
-    // Behind the sign-in gate nothing of the projects is told, on the screen or in a notification.
+    // Behind the sign-in gate nothing of the projects is told, on the screen or in a notification; the accounts the
+    // status bar and the notifications name are read once for both.
+    let accounts = sign_in
+      .is_signed_in()
+      .then(|| ctx.mount_keyed::<AccountsReader>("accounts", ()));
     let notifications = sign_in
       .is_signed_in()
       .then(|| ctx.mount_keyed::<NotificationsHost>("notifications", ()));
@@ -222,6 +233,7 @@ impl Component for SessionWindow {
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
       .child(projects)
+      .with_children(accounts)
       .with_children(notifications)
       .child(framed);
     // Behind the gate no shortcut opens a tab or a screen.

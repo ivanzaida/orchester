@@ -31,7 +31,10 @@ use orchester_app::{
     ChangeSource, ChangedFile, ConnectionsView, FilesView, ImportTab, JoinWay, ModuleListTab, ModuleTab, NewConnection,
     OrchestratorChat, OverviewTab, ProjectPage, Route, Screen, TaskList, TaskListTab, TaskTab, TaskView, routes,
   },
-  services::Services,
+  services::{
+    Services,
+    accounts::{Accounts, WindowAccounts},
+  },
   shell::needs_you::PanelOpen,
   startup::Launch,
   theme::{self, Mode},
@@ -114,6 +117,7 @@ struct ScreensRoot {
   links: ChatLinks,
   gate: InputGate,
   notifications: NotificationPrefs,
+  accounts: WindowAccounts,
 }
 
 impl Component for ScreensRoot {
@@ -136,6 +140,7 @@ impl Component for ScreensRoot {
       links,
       gate: InputGate::default(),
       notifications: NotificationPrefs::new(ctx.signal(Chosen::default())),
+      accounts: WindowAccounts::new(ctx.signal(Accounts::default())),
     }
   }
 
@@ -146,9 +151,10 @@ impl Component for ScreensRoot {
       McpSettings::of_build(),
     )));
     // Settings' person-only rows mark themselves on the window's gate, and its notification rows show the window's
-    // choices.
+    // choices; the status bar names the accounts the window read, none here.
     ctx.provide(self.gate.clone());
     ctx.provide(self.notifications.clone());
+    ctx.provide(self.accounts.clone());
     ctx.provide(self.navigation.clone());
     ctx.provide(self.projects.clone());
     ctx.provide(self.needs_you.clone());

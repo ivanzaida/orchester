@@ -70,7 +70,7 @@ use crate::{
   routes::Route,
   services::{
     Services,
-    accounts::{self, Accounts},
+    accounts::{self, Accounts, WindowAccounts},
     plan_limits as readings,
   },
   ui::icon::Icon,
@@ -121,7 +121,7 @@ impl Component for StatusBar {
       self.stopper.stopping(&stop, &facts.repo_root, &runs)
     });
     let readings = readings::readings(ctx);
-    let listed = accounts::listed(ctx);
+    let listed = WindowAccounts::of(ctx).get();
     // Read again when the project's connections changed, or an account moved them (its removal, a new folder).
     let changed = (
       shown
