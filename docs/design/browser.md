@@ -271,9 +271,9 @@ would close it, but needs inherited handles 3 and 4 (`unsafe` on both platforms)
 
 ## The *Browser* window
 
-Pencil: board `Browser · redesign` `lcNez` in the new `orchester.pen` (rows `M18Px`, `k99I4m`, `K4zYh`, `T9vqQV`,
-notes `vvVe2` with *What the design decides* `RggGn` and *Open choices* `J6JdR`), tab indicators `zxkfr`; window
-chrome `Window/Browser` `lfxcu` (title bar `Rc27N`, project switcher `u4BK9L`, tab strip `X1V8q`).
+Pencil: board `Browser · redesign` `lcNez` in the new `orchester.pen` (rows `M18Px`, `k99I4m`, `K4zYh`, `bxyB2`,
+`T9vqQV`, notes `vvVe2` with *What the design decides* `RggGn` and *Open choices* `J6JdR`), tab indicators `zxkfr`;
+window chrome `Window/Browser` `lfxcu` (title bar `Rc27N`, project switcher `u4BK9L`, tab strip `X1V8q`).
 
 A secondary lurq window (`WindowOpener::open_with`, window name `browser`), one for the whole app. It opens from the
 run's Summary line *Browser · 2 tabs · localhost:5173, docs.rs › Show* (`10 · Run · Browser line` `RGeKO`) and
@@ -347,6 +347,17 @@ not jump to another project by itself.
   the strip keeps it selected and the faded toolbar its address and owner; the window hears of the restart only when the
   tabs are back. Nothing is screencast meanwhile: a tab the person picks in the strip is only named as the one shown,
   and it is the one *Back to Orchester* shows. Picking does not bring it forward in the browser's own window.
+- **A page asks for a file** (`03b · File chooser · dialog open` `TWpyp`, `03c · File chooser · file chosen` `x0N8d`,
+  row `Row 3b · File chooser` `bxyB2`). A file field (`<input type=file>`) on the person's tab opens the system's own
+  file dialog, which the board does not draw. Orchester adds no modal of its own: while the dialog is open, the page
+  area is dimmed (`$scrim`) and a hint in its middle says *Choose a file in the dialog that opened* · *localhost:5173
+  asks for a file for Signing certificate. Cancel there to leave the page as it is.* (the page's origin and the field's
+  label; no buttons). A field without an accessible name gives the shorter line *localhost:5173 asks for a file.
+  Cancel there to leave the page as it is.* The label is the page's text, covered for inspection like a dialog's
+  message. After the choice the hint goes and the field shows the file as the page draws it (*kontur-hooks.pem*).
+  Cancel removes the hint and changes nothing else. An agent's tab never opens a dialog and nothing is drawn for it:
+  the agent's tool answer says that a file was asked. Copy namespace for the hint: `browser.fileChooser` (title, and
+  the line with the origin, with and without the field's label).
 - **While a restart is pending.** *Open in a browser window* and *Back to Orchester* restart the browser, which takes
   seconds. Until the runner answers, the toolbar is faded and, like the shortcuts, takes no input, and the pressed
   button turns its loader and cannot be pressed again; no board frame draws this, it reuses the faded toolbar of `05`
@@ -383,7 +394,7 @@ not jump to another project by itself.
 | Missing in a headless frame | What the window does |
 | --- | --- |
 | JavaScript dialogs (`alert`, `confirm`, `prompt`, `beforeunload`) | `Page.javascriptDialogOpening`: on the person's own tabs, drawn in the window over the page area only and answered with `Page.handleJavaScriptDialog` (`03` `t08Ur`); on an agent's tab the runner dismisses it and tells the agent. |
-| File chooser | `Page.setInterceptFileChooserDialog`: the app's own native file dialog, files set with `DOM.setFileInputFiles`. Agents get none (the tool answers that a file was asked). |
+| File chooser | `Page.setInterceptFileChooserDialog`: the app's own native file dialog, files set with `DOM.setFileInputFiles`; while it is open the window draws a hint over the page area, and the page draws the chosen file in its field (`03b` `TWpyp`, `03c` `x0N8d`). Agents get none (the tool answers that a file was asked). |
 | `<select>` drop-down lists | The list drawn by the window in the app's menu style from the element's options; the choice set through CDP (`04` `r31HX`). |
 | Mouse cursor shape | Not reported by CDP: an arrow, a hand over links and buttons, a text cursor over fields. While the pointer moves the window asks the runner what is under it (`CursorAt`, `DOM.getNodeForLocation`, then the element's computed `cursor` or what the element is), one question at a time and at most four a second, the last place it moved to included; once it stands still nothing is asked. An arrow by default and on any failure, and for any other cursor a page sets. It makes no agent wait. |
 | Copy and paste | Ctrl/Cmd+C, X, V bridged between the page and the system clipboard by the window, while the page has the focus, and never as key presses for the page. Copy and cut ask the tab shown for its selection (`CopySelection`, `CutSelection`, read through `Runtime.evaluate`): a field's own, or else the document's, also in shadow roots and same-origin frames; a cut deletes it where it can be edited, and a page's own `copy` and `cut` listeners do not run. A password field gives nothing, no selection leaves the clipboard as it is, and a cross-origin frame's selection is out of reach. Paste sends the clipboard's text as `PersonInput::Text`; images and files are not pasted. Up to 2 MiB of text either way (`MAX_CLIPBOARD_TEXT`), and past that the window's failure line says so. Each of them makes the tab's agent wait, as any input of the person's does. Agents get nothing of this, and the window refuses all three to synthetic input (an MCP client driving it). |
@@ -435,7 +446,8 @@ sensitive input that shows its value.
      yet: the native agent, which gets none of Orchester's relay tools today; the approval card's reason when *Approve
      similar* is unavailable for `browser_eval` still reads as for a check (P4).
 3. **P3 · Design (designer).** Drawn 2026-10-28, board `Browser · redesign` `lcNez` in the new `orchester.pen`,
-   waiting for the person's review. Not drawn yet: the file chooser state.
+   waiting for the person's review. The file chooser state was added on 2026-10-31 (ORC-191: `03b` `TWpyp`, `03c`
+   `x0N8d`, row `bxyB2`, and the Notes entry *File chooser* `o6AJox`).
 4. **P4 · Window, settings and profile (UI).** IPC requests and events, screencast and input, the drawn dialogs and
    lists, clipboard, *Open in a browser window*, the profile row and the Settings section. Design verification.
    - **P4a.** Done (ORC-368): the profile's Browser row with its allowed sites and the Connection enforcement line,
