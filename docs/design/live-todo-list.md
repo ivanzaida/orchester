@@ -27,15 +27,19 @@ KON-12, Builder, Checker), never shipped data. Exports at scale 1: `.tmp/design/
   - *pending*: `circle` in `$text_muted`, text in `$text_secondary`.
   Done items are not struck through, so they stay easy to read (Pencil also cannot draw strikethrough).
 - **Folding.** The chevron folds the box to its head with the current item (*Plan 3 of 7 ⟳ Wiring the policy into the
-  sender*). The choice is kept for the run.
+  sender*). The choice is kept for the run. The chevron points the way the box moves when clicked: an open pinned box
+  shows `chevron-down` (it folds down onto the composer), a folded one `chevron-up` (07, 07a, 07c, 08 and 09 a–c). The
+  divider chip is the reverse because its list opens below it: folded `chevron-down`, opened `chevron-up` (09 d–g).
 - **Long lists.** Up to 7 items show whole. Past 7, the box folds: the done items become one line (*5 done · Show*),
   then the current item, the next three, and *N more to do · Show all*. Opened, more than 8 rows scroll inside the box
-  (a thin `$border_strong` thumb), with *Show less* under them, so the composer never moves off screen.
+  (a thin `$border_strong` thumb), with *Show less* right-aligned under them (`$spacing_sm` above), like 07c's *Show* and
+  *Show all*, so the composer never moves off screen.
 - **When the step ends**, the box leaves the composer. The list folds into that step's divider as a chip at the
-  divider's right end: `$surface_raised`, a `$border` outline and `$radius_full`, with `list-checks`, *Plan · 7 of 7*
-  (11/500) and a chevron. A click opens the list read-only under the divider. If the step failed, stopped or was
-  interrupted with items left, those items keep their empty circle, and one muted line says when it stopped
-  (*2 not done when Implement stopped at 15:44*). The count keeps the plain done-of-all wording, with no colour.
+  divider's right end. The chip is a `Tag chip` `FK4CS` instance: its label is swapped for a `Content` row (gap
+  `$spacing_xs`) with `list-checks`, *Plan · 7 of 7* (11/500) and a chevron. A click opens the list read-only under the
+  divider. If the step failed, stopped or was interrupted with items left, those items keep their empty circle, and one
+  muted line says when it stopped (*2 not done when Implement stopped at 15:44*). The count keeps the plain done-of-all
+  wording, with no colour.
 - **No list, no box.** A step whose agent made no list shows nothing above the composer, and its divider gets no chip.
   The next step pins its own list (07a); the earlier one stays in its divider.
 - **The Orchestrator chat** uses the same box above its composer while it answers (*Orchestrator · answering*). When the
@@ -43,11 +47,15 @@ KON-12, Builder, Checker), never shipped data. Exports at scale 1: `.tmp/design/
 - **Composer while a step works**: the agent chip reads *Builder is working* (`$text_muted`), and the hint reads
   *Builder reads your message at its next turn*. The header's status line reads *Running 03 Implement* with
   `loader-circle`, as `Status/Running` does.
-- **Built from variables**, like the decision cards and tool lines of ORC-357. No component, variable or other board
-  changed. The window, sidebar, task header, status bar and buttons are the existing instances (`Window/Project`
-  `qlXhJ`, `Task header` `j8DakG`, `Button/Primary` `iBDdP`, `Icon button/Small` `RvKML`, `Tag chip` `FK4CS`), and their
-  texts keep those components' own styles. Font sizes 12.5 and 11.5 follow the existing Conversation and Orchestrator
-  frames (the file has no font-size variables).
+- **Built from variables and existing components**, like the decision cards and tool lines of ORC-357. No component,
+  variable or other board changed. The window, sidebar, task header, status bar, buttons and the plan chip are the
+  existing instances (`Window/Project` `qlXhJ`, `Task header` `j8DakG`, `Button/Primary` `iBDdP`, `Icon button/Small`
+  `RvKML`, `Tag chip` `FK4CS`), and their texts keep those components' own styles. Font sizes 12.5 and 11.5 follow the
+  existing Conversation and Orchestrator frames (the file has no font-size variables).
+- **Plan chip node ids** (the `Tag chip` instances, since the design check of attempt 1): 07a `y1fuE`, 07b `ftkpq`,
+  09 d `bvhZU`, 09 e `RnKV7`, 09 f `sS3zf`, 09 g `zOBfI`. They replace the hand-built chips `bPENV`, `rZKcP`,
+  `Vj7HD`, `x0Ef9`, `AaQlx` and `j3epg`. Pencil's visitor needs `resolveInstances: true` to walk these instances,
+  because their label child was replaced.
 
 ## Frames
 
