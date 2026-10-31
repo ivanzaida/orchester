@@ -34,6 +34,9 @@ use crate::{
 const EARLY_EXIT: Duration = Duration::from_secs(2);
 /// How often the wait for the runs at work looks again, besides when the runners report.
 const RUNS_RECHECK: Duration = Duration::from_millis(500);
+/// How long *Stop runs and install* waits for the runs at work to reach their next checkpoints: an agent in the
+/// middle of a long turn is ended then, and its run goes on from its last checkpoint after the restart.
+pub const STOP_RUNS_WAIT: Duration = Duration::from_secs(60);
 
 /// What *Restart to update* does now.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -51,7 +54,8 @@ pub enum RestartPlan {
 pub enum RunsAtWork {
   /// *Install when they end*: it installs once no run is at work.
   WaitForThem,
-  /// *Stop runs and install*: each run pauses at its next checkpoint and goes on from it after the restart.
+  /// *Stop runs and install*: each run pauses at its next checkpoint, or is ended after [`STOP_RUNS_WAIT`], and goes
+  /// on from its last checkpoint after the restart.
   StopThem,
 }
 
@@ -133,7 +137,7 @@ impl AppUpdates {
     }
     self.step(&update, InstallStep::StoppingRuns);
     let (kind, deadline) = match runs {
-      RunsAtWork::StopThem => (CloseKind::WaitForAgents, None),
+      RunsAtWork::StopThem => (CloseKind::WaitForAgents, Some(STOP_RUNS_WAIT)),
       RunsAtWork::WaitForThem => (CloseKind::Quiet, Some(QUIET_STOP_TIMEOUT)),
     };
     let stopped = runners.shutdown(deadline).await;
