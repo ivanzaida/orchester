@@ -887,6 +887,9 @@ to resume from simply gets the snapshot.
 - The desktop keeps the pages aside and, at `snapshot.end`, replaces the project's confirmed cache (project, members,
   tags, modules, tasks, later resources) and sets the cursor in one transaction. A stream that breaks before
   `snapshot.end` leaves the cache as it was, and the next connect sends the snapshot again.
+- A connect from a cursor gets no snapshot, so the desktop first reads `GET …/resources` and keeps the versions it
+  does not have, as it does for the snapshot's resources: Join sets the cursor from `GET …/tasks` without a snapshot,
+  and the team's configuration published before must still reach the cache.
 
 **Deltas.** Every delta carries `id` (its sequence), `by: UserRef` (who did it), `actor: "person"|"orchester"` (a
 person's own action, or Orchester acting for them: a run, the staleness sweep, a merge) and `at`, beside the fields

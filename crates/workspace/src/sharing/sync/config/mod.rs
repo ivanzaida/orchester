@@ -72,6 +72,16 @@ pub(super) async fn sync(source: &impl Source, root: &Path, resource: SharedReso
       after = Some(next);
     }
   }
+  tracing::debug!(
+    resource = %id,
+    slug = %resource.slug,
+    kind = ?resource.kind,
+    latest = ?resource.latest,
+    ?cached,
+    sending,
+    read = versions.len(),
+    "a shared resource is kept"
+  );
   blocking(root, move |root| cache(root, &resource, &versions)).await
 }
 

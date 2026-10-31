@@ -5,9 +5,10 @@
 //! wait 1 s doubling to 60 s with jitter, on a settable clock; the project's state moves through *live*,
 //! *reconnecting*, *offline* and *not a member*, also as the desktop's servers keep it, and goes once the project is
 //! local. Without the minute's poll, a run's workflow status the server could not take goes with the minute's round,
-//! without *Check again*. The team's configuration comes with it ([`config`]), its admins publish it from here
-//! ([`publish`]), Share uploads it with its history and Make local keeps it ([`share`]). This computer's catalog is
-//! reported while the stream is open ([`catalog`]).
+//! without *Check again*. The team's configuration comes with it ([`config`]), also to a stream resumed from a cursor
+//! that came without the snapshot ([`joined`]), its admins publish it from here ([`publish`]), Share uploads it with
+//! its history and Make local keeps it ([`share`]). This computer's catalog is reported while the stream is open
+//! ([`catalog`]).
 //!
 //! `cargo test -p orchester-workspace --test live_updates live_updates_`
 
@@ -16,6 +17,7 @@ mod config;
 mod desktop;
 mod here;
 mod http;
+mod joined;
 mod merged;
 mod publish;
 mod server;
@@ -34,7 +36,7 @@ use std::{
 
 use desktop::Desktop;
 use orchester_api::{
-  CatalogReport, ClaimTake, RunReport, SharedTask, TaskChanges, TaskPatch, Versions,
+  CatalogReport, ClaimTake, RunReport, SharedResource, SharedTask, TaskChanges, TaskPatch, Versions,
   client::{Client, ClientError, EventStream, PlainHttp, ServerAddress, StreamEnd},
 };
 use orchester_core::{
@@ -126,6 +128,10 @@ impl Source for Member {
 
   async fn task(&self, task: TaskId) -> Result<SharedTask, SharingError> {
     Ok(self.client.task(&self.token, self.project, task).await?)
+  }
+
+  async fn resources(&self) -> Result<Vec<SharedResource>, SharingError> {
+    Ok(self.client.resources(&self.token, self.project).await?.resources)
   }
 
   async fn versions(&self, resource: ResourceId, after: Option<VersionNumber>) -> Result<Versions, SharingError> {
@@ -410,6 +416,10 @@ impl Source for Unreachable {
   }
 
   async fn task(&self, _: TaskId) -> Result<SharedTask, SharingError> {
+    Err(SharingError::Offline)
+  }
+
+  async fn resources(&self) -> Result<Vec<SharedResource>, SharingError> {
     Err(SharingError::Offline)
   }
 

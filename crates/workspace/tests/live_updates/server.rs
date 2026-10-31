@@ -351,6 +351,12 @@ fn answer(shared: &Shared, project: ProjectId, mut stream: TcpStream) {
       let task = state.task(id).clone();
       respond(&mut stream, 200, &json!({ "task": task }));
     }
+    ("GET", ["resources"]) => {
+      let state = shared.state.lock().expect("state");
+      let resources = json!({ "resources": state.resources, "cursor": state.cursor() });
+      drop(state);
+      respond(&mut stream, 200, &resources);
+    }
     ("GET", ["resources", resource, "versions"]) => {
       let page = shared.state.lock().expect("state").versions_page(resource, query);
       respond(&mut stream, 200, &page);

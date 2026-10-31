@@ -21,7 +21,7 @@ use std::{
 };
 
 use orchester_api::{
-  CatalogReport, SharedTask, Versions,
+  CatalogReport, SharedResource, SharedTask, Versions,
   client::{ClientError, EventStream, StreamEnd},
 };
 use orchester_core::{
@@ -203,6 +203,17 @@ impl Source for Live {
         client.task(&token, project, task).await
       })
       .await
+  }
+
+  async fn resources(&self) -> Result<Vec<SharedResource>, SharingError> {
+    let project = self.project.link().project;
+    let read = self
+      .servers
+      .with_token_for(Behalf::Background, self.project.entry(), |client, token| async move {
+        client.resources(&token, project).await
+      })
+      .await?;
+    Ok(read.resources)
   }
 
   async fn versions(&self, resource: ResourceId, after: Option<VersionNumber>) -> Result<Versions, SharingError> {
