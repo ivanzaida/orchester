@@ -61,7 +61,8 @@ impl ProjectServer {
       .iter()
       .map(convert::cached_module)
       .collect::<Result<Vec<_>, _>>()?;
-    self.store_parts(&tags, cached).await?;
+    let hint = project.remote_hint.as_ref().map(|hint| hint.as_str().to_owned());
+    self.store_parts(&tags, cached, hint).await?;
     self.servers.download_parts_read(&self.repo_root, round);
     self.read_tasks(round).await?;
     let server = self.clone();
@@ -81,8 +82,6 @@ impl ProjectServer {
       store
         .db
         .record_sharing_state(project.role, Some(Timestamp::now()), None)?;
-      let hint = project.remote_hint.as_ref().map(|hint| hint.as_str());
-      store.db.record_remote_hint(hint, Timestamp::now())?;
       if let Some(address) = address {
         store.db.record_project_address(&address)?;
       }
@@ -93,14 +92,21 @@ impl ProjectServer {
     Ok(Synced::Read)
   }
 
-  /// Writes the project's tags and modules to the cache, before the tasks that name them.
-  async fn store_parts(&self, tags: &[SharedTag], modules: Vec<CachedModule>) -> Result<(), SharingError> {
+  /// Writes the project's tags and modules to the cache, before the tasks that name them, and its repository `hint`,
+  /// which the first download's page compares the checkout's `origin` with while the tasks still come down.
+  async fn store_parts(
+    &self,
+    tags: &[SharedTag],
+    modules: Vec<CachedModule>,
+    hint: Option<String>,
+  ) -> Result<(), SharingError> {
     let tags = tags.iter().map(tag).collect::<Result<Vec<_>, _>>()?;
     let root = self.repo_root.clone();
     background::run(move || -> Result<(), SharingError> {
       let mut db = ProjectDb::open(&root)?;
       db.cache_shared_tags(&tags)?;
       db.cache_shared_modules(&modules)?;
+      db.record_remote_hint(hint.as_deref(), Timestamp::now())?;
       Ok(())
     })
     .await??;

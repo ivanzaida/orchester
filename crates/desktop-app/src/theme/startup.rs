@@ -1,7 +1,7 @@
 //! The design values of the startup screens (`Startup · Orchester is already open` `g0Kj1`, `Startup ·
 //! Orchester can't open its data` `kMM56` and the variants board `ut8NI`) and of the start page's steps (`Startup ·
-//! redesign` `qzzYw`: *Join a team* `B914L`, `drCQd`) that the UI kit's roles do not carry, registered as lurq
-//! `Extra` roles.
+//! redesign` `qzzYw`: *Join a team* `B914L`, `drCQd`, the first download `YN6MO`) that the UI kit's roles do not carry,
+//! registered as lurq `Extra` roles.
 
 use std::sync::Arc;
 
@@ -50,10 +50,22 @@ pub enum StartupText {
   RowAddress,
   /// Geist Mono 13 `text_primary`, line 17: a server address or a code typed in its field (`yK0dX`).
   FieldMono,
+  /// Geist Mono 11.5 `text_muted`, line 15: the key of a task that arrived (`M0Kt9C`).
+  ArrivalKey,
+  /// 12.5 `text_primary`, line 17: the title of a task that arrived (`DBOw1`).
+  ArrivalTitle,
+  /// Geist Mono 12.5 `text_secondary`, line 17: the joined server's address over its projects (`fsVyJ`).
+  ServerAddress,
+  /// 13/500 `text_primary`, line 18: the project being linked (`gC6Dw`).
+  ProjectName,
+  /// Geist Mono 12 `text_secondary`, line 16: its address (`nrHKu`).
+  ProjectAddress,
+  /// 12 `text_secondary`, line 17: what the folder's check found, beside its mark (`tHuij`).
+  CheckLine,
 }
 
 impl StartupText {
-  pub const ALL: [Self; 16] = [
+  pub const ALL: [Self; 22] = [
     Self::TileIcon,
     Self::Crumb,
     Self::CrumbCurrent,
@@ -70,6 +82,12 @@ impl StartupText {
     Self::RowTitle,
     Self::RowAddress,
     Self::FieldMono,
+    Self::ArrivalKey,
+    Self::ArrivalTitle,
+    Self::ServerAddress,
+    Self::ProjectName,
+    Self::ProjectAddress,
+    Self::CheckLine,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -94,6 +112,12 @@ impl StartupText {
       Self::RowTitle => "startup_row_title",
       Self::RowAddress => "startup_row_address",
       Self::FieldMono => "startup_field_mono",
+      Self::ArrivalKey => "startup_arrival_key",
+      Self::ArrivalTitle => "startup_arrival_title",
+      Self::ServerAddress => "startup_server_address",
+      Self::ProjectName => "startup_project_name",
+      Self::ProjectAddress => "startup_project_address",
+      Self::CheckLine => "startup_check_line",
     }
   }
 
@@ -119,6 +143,12 @@ impl StartupText {
       Self::RowTitle => style(13.5, FontWeight::Medium, 18.0 / 13.5, 0.0, primary),
       Self::RowAddress => mono(style(12.0, FontWeight::Normal, 17.0 / 12.0, 0.0, muted)),
       Self::FieldMono => mono(style(13.0, FontWeight::Normal, 17.0 / 13.0, 0.0, primary)),
+      Self::ArrivalKey => mono(style(11.5, FontWeight::Normal, 15.0 / 11.5, 0.0, muted)),
+      Self::ArrivalTitle => style(12.5, FontWeight::Normal, 17.0 / 12.5, 0.0, primary),
+      Self::ServerAddress => mono(style(12.5, FontWeight::Normal, 17.0 / 12.5, 0.0, secondary)),
+      Self::ProjectName => style(13.0, FontWeight::Medium, 18.0 / 13.0, 0.0, primary),
+      Self::ProjectAddress => mono(style(12.0, FontWeight::Normal, 16.0 / 12.0, 0.0, secondary)),
+      Self::CheckLine => style(12.0, FontWeight::Normal, 17.0 / 12.0, 0.0, secondary),
     }
   }
 }
@@ -138,16 +168,19 @@ pub enum StartupSpacing {
   Steps,
   /// 10: the account row's parts (`uNGRZ`), and a section's heading to its rows (`allZn`).
   Row,
+  /// 26: what an option holds, past its 16 radio and the 10 after it (`Body` `X2MDcb`).
+  OptionIndent,
 }
 
 impl StartupSpacing {
-  pub const ALL: [Self; 6] = [
+  pub const ALL: [Self; 7] = [
     Self::Block,
     Self::Panel,
     Self::Page,
     Self::PageSide,
     Self::Steps,
     Self::Row,
+    Self::OptionIndent,
   ];
 
   pub fn role(self) -> SpacingSize {
@@ -162,6 +195,7 @@ impl StartupSpacing {
       Self::PageSide => "startup_page_side",
       Self::Steps => "startup_steps",
       Self::Row => "startup_row",
+      Self::OptionIndent => "startup_option_indent",
     }
   }
 
@@ -172,6 +206,7 @@ impl StartupSpacing {
       Self::Page => 28.0,
       Self::PageSide => 56.0,
       Self::Steps | Self::Row => 10.0,
+      Self::OptionIndent => 26.0,
     }
   }
 }

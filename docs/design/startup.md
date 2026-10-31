@@ -47,7 +47,7 @@ projects* tab. Controls are instances of `Button/*` (`iBDdP`, `O1AstI`, `YaUJX`,
 5. **Projects.** A team lists only the projects the person is invited to (row 50). Before any team is joined, the
    third way goes through Join and then shows the projects.
 6. **Folder.** An existing checkout: `origin` is compared with the project's remote hint; a mismatch warns and *Link
-   anyway* decides (row 49). Or *Clone it here*, with progress in place (open choice A).
+   anyway* decides (row 49). Without one, the `git clone` command with *Copy* (choice A, decided).
 7. **First download.** Joined, linked, tasks (*84 of 212*, the latest arrivals listed), team settings, each with its
    state. *Open Kontur* works before the download ends; tasks keep arriving in the list without a restart (ORC-282).
 8. **Returning start.** All projects stays as built (`crates/desktop-app/src/screens/all_projects/`): the centred
@@ -62,8 +62,10 @@ projects* tab. Controls are instances of `Button/*` (`iBDdP`, `O1AstI`, `YaUJX`,
 
 ## Open choices for the person
 
-- **A.** Today Orchester never clones (the invite landing shows the `git clone` command). Build *Clone it here*
-  (proposed), or keep the command with Copy?
+- **A.** Decided (the person, 2026-10-30): there is no *Clone it here*. Orchester never clones; *Link a folder* shows
+  the `git clone` command with *Copy*, and ORC-290 and ORC-296 are canceled. Where a frame (06 `go2aM`, 13 `sN8Pa`, 13b
+  `tDFeg`) draws *Clone it here*, and 07 `phoYc` its progress, the command with Copy replaces it: an agreed deviation,
+  not a mismatch.
 - **B.** Before any team is joined, *Open a team's shared project* leads through Join (proposed), or is hidden until
   a team is joined?
 - **C.** Settings › Orchester's join and invite landing pages could reuse these steps, so there is one join flow.
@@ -86,6 +88,16 @@ projects* tab. Controls are instances of `Button/*` (`iBDdP`, `O1AstI`, `YaUJX`,
 - Copy: new strings go to `startup.*` (first start, the step line), `startup.join.*` (Cloud, code, teams, invites,
   errors), `startup.shared.*` (projects, link, clone, download) and `projects.header.*` (*Join a team*, *Open shared
   project…*, the team strip). The Cloud sign-in form reuses the Sign-in board's words.
+- Decisions 5–6 as built (`crates/desktop-app/src/screens/join_team/shared/`):
+  - **The way there.** *See your projects there* after a join and *Open* on a joined team lead to the projects
+    (`/join-team?way=projects&server=<id>`), then *Link a folder* (`?way=folder&server=<id>&project=<slug>`).
+  - **No task count.** The rows of 05 `v5qbWM` draw *212 tasks*; `GET /projects` has no count of a project's tasks and
+    `next_number` counts numbers given, so the app shows none until the API has one.
+  - **Clone.** The panel in the place of *Clone it here* holds no radio, as nothing is left to choose: its title, what
+    to do and the command with *Copy*. A project with no hint, or one the command can't hold safely
+    (`clone_command`), has no panel and the words do not point to one.
+  - **Already linked.** *Continue with Kontur* opens a project a checkout on this computer is linked to, past *Link a
+    folder*. No frame draws this.
 - Decision 9 as built (`crates/desktop-app/src/screens/all_projects/agent_cli.rs`):
   - **Where.** The callout `SIbdo` and fix row `U4QvYO` of frame 14 `mruEH` sit on today's Welcome (`UQZRa`) and above
     All projects' list, 1120 wide rather than the frame's 1040. The first-start page frame 14 is drawn on (01 `H9CZ1`)
@@ -96,3 +108,14 @@ projects* tab. Controls are instances of `Button/*` (`iBDdP`, `O1AstI`, `YaUJX`,
     no copy of that CLI. With none, neither CLI is on the search path and no chosen file exists; it then names `claude`.
     A connection whose program is gone while a copy is on the search path shows nothing, since "not found" would be
     false.
+- Decision 7 as built (`crates/desktop-app/src/screens/first_download/`, `/first-download?project=<id>`):
+  - **Where it leads from.** A link of a checkout without tasks, on Project settings' link page, opens it. The steps
+    before it (05, 06, 07) lead to the same route when they land.
+  - **Team settings.** The sync does not read them yet (`DownloadProgress::team_settings`), so their row says *not
+    downloaded yet* where frame 08 draws *after the tasks*, which would promise work that does not happen.
+  - **The bar.** It fills to what was stored of what the server said (84 of 212 is 40 %; the frame draws 250 of 520),
+    and there is none until the server said.
+  - **Not drawn.** Frame 08 draws only the download under way. A failure shows in the tasks' row, with the reason and
+    *Try again*, and the callout leaves; the end says *Tasks downloaded* without the callout and *Stay here*. *Stay
+    here* puts the callout away and stays on the page. The tasks and the team settings are the only parts: the tags and
+    modules the download reports are not drawn.

@@ -5,6 +5,7 @@
 //!
 //! `cargo test -p orchester-app --test team_qa team_qa`
 
+mod first_download;
 #[path = "../../examples/qa_app/team/mod.rs"]
 mod team;
 
@@ -109,15 +110,57 @@ fn team_qa_join_says_it_cannot_reach_the_server_and_keeps_what_was_typed() {
 }
 
 #[test]
-fn team_qa_join_with_the_code_joins_and_leads_to_the_server_in_settings() {
+fn team_qa_join_with_the_code_joins_and_leads_to_the_teams_projects() {
   let (mut window, server) = driven(State::Joined);
   assert_eq!(window.text("join-team-code-joined-title"), "Joined Acme as bohdan");
   assert_eq!(server.code_joins().len(), 1);
 
   window.press("join-team-code-open");
   assert!(
-    matches!(window.navigation().route_now(), Route::Orchester(_)),
-    "See your projects there opens the server's page"
+    matches!(window.navigation().route_now(), Route::JoinTeam(JoinWay::Projects(_))),
+    "See your projects there opens the team's shared projects"
+  );
+  window.until("the team's projects", |window| {
+    window.texts("join-team-projects-kontur").is_some()
+  });
+}
+
+/// The team's projects, in `state`, with the team joined.
+fn at_the_teams_projects(state: State) -> (Window, TeamServer) {
+  let (window, server) = prepared(state);
+  let joined = window
+    .launch
+    .services()
+    .expect("the session started")
+    .servers
+    .entries()
+    .expect("the servers are read")
+    .into_iter()
+    .find(|entry| entry.in_use())
+    .expect("the team was joined");
+  window
+    .navigation()
+    .go(Route::JoinTeam(JoinWay::Projects(joined.stored.id)));
+  (window, server)
+}
+
+#[test]
+fn team_qa_shared_projects_lists_the_team_with_hints_and_an_owner() {
+  let (mut window, _server) = at_the_teams_projects(State::SharedProjects);
+  window.until("Billing", |window| window.texts("join-team-projects-billing").is_some());
+  assert_eq!(window.text("join-team-projects-billing-role"), "you: owner");
+  assert_eq!(window.text("join-team-projects-kontur-role"), "you: member");
+}
+
+#[test]
+fn team_qa_shared_none_says_who_to_ask() {
+  let (mut window, _server) = at_the_teams_projects(State::NoSharedProjects);
+  window.until("the empty state", |window| {
+    window.texts("join-team-projects-none").is_some()
+  });
+  assert_eq!(
+    window.text("join-team-projects-none-title"),
+    "No projects for you on Acme yet"
   );
 }
 
