@@ -11,6 +11,7 @@
 mod actions;
 pub(super) mod bar;
 mod base;
+mod base_branch;
 pub(super) mod brief;
 pub(super) mod chips;
 mod composer;

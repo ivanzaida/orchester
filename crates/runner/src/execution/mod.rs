@@ -51,6 +51,7 @@ mod tool_approval;
 mod turn_stop;
 mod work;
 mod workspace;
+mod worktree_sweep;
 
 use std::{
   collections::HashMap,
@@ -166,6 +167,7 @@ impl Scheduler {
     orchester_store::pause_lock_waits_with(crate::lock_pause::pause_off_async_workers);
     // Before the desktop connects and reads the runs.
     missing_checkpoints::record(project_root);
+    worktree_sweep::sweep_in_background(project_root.to_path_buf());
     Self {
       inner: Arc::new(Inner {
         project_root: project_root.to_path_buf(),

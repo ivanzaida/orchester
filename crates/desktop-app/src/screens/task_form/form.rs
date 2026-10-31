@@ -139,7 +139,7 @@ impl Component for TaskForm {
     );
     let save = save_action(
       ctx,
-      services.servers.clone(),
+      (services.servers.clone(), services.programs.clone()),
       (estimates.clone(), props.project.open.clone()),
     );
     let run = run_action(
@@ -147,6 +147,7 @@ impl Component for TaskForm {
       RunServices {
         runners: services.runners.clone(),
         servers: services.servers.clone(),
+        programs: services.programs.clone(),
         repo_root: props.project.open.repo_root.clone(),
         queued: queued.clone(),
         estimates: (estimates, props.project.open.clone()),
@@ -274,14 +275,17 @@ impl TaskForm {
     let missing = form.missing();
     let base = self.base.get();
     let stored_module = base.as_ref().and_then(Base::module);
+    let stored_branch = base.as_ref().map(Base::base_branch).unwrap_or_default();
     let base = base.map(|base| base.values).unwrap_or_default();
     let module = self.fields.module.get().0;
+    let base_branch = self.fields.base_branch.get();
     let (phase, failure) = self.phase(actions);
     View {
       subject: self.subject(props),
       phase,
-      changed: values.differ_from(&base, separator) || module != stored_module,
+      changed: values.differ_from(&base, separator) || module != stored_module || !base_branch.keeps(&stored_branch),
       module,
+      base_branch,
       values,
       title_error: errors.title,
       budget_error: errors.budget,

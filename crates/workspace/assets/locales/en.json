@@ -349,6 +349,10 @@
     }
   },
   "tasks": {
+    "baseBranch": {
+      "gone": "{{branch}} no longer exists in the repository. The task was saved without it; choose another base branch.",
+      "changedMeanwhile": "The task changed while its base branch was saved. Open it again and choose the base branch once more."
+    },
     "board": {
       "hasRun": "This task already has a run.",
       "deletePersonOnly": "Only a person deletes tasks: input from an MCP client is not taken here."
@@ -743,6 +747,11 @@
       "unsupportedProvider": "Step “{{step}}” uses a connection that is not an agent CLI; choose a Codex or Claude Code connection for its agent profile.",
       "connectionNotUsable": "Step “{{step}}” runs on a connection that cannot be used now, for example because it is not signed in. Check it in Connections.",
       "permissionsNotEnforceable": "Step “{{step}}” has permissions its connection cannot enforce. Change the step’s permissions or the profile’s connection.",
+      "networkHostsNotEnforceable": {
+        "codex": "Step “{{step}}” limits network access to a host list, which Codex can’t enforce on this computer: its sandbox can’t keep commands off the network here. Choose network off or on, or a connection that can enforce the list.",
+        "claudeCode": "Step “{{step}}” limits network access to a host list, which Claude Code can’t enforce: its commands can reach any host. Choose network off or on, or a connection that can enforce the list.",
+        "native": "Step “{{step}}” limits network access to a host list, which Orchester’s native agent can’t enforce: its commands can reach any host. Choose network off or on, or a connection that can enforce the list."
+      },
       "nativeNotAvailable": "Step “{{step}}” runs on a native agent connection. Native agents are not available in this version yet; choose a Codex or Claude Code connection for its agent profile.",
       "notAGitRepository": "The project folder is not a git repository.",
       "noCommits": "The repository has no commit to start the run from.",
@@ -783,7 +792,7 @@
     "capacity": {
       "dailyBudgetUsed": "Daily token budget used — new runs wait until tomorrow or raise it in Project settings.",
       "noAgentSlot": "All {{slots}} agent slots are in use. Try again when a running run settles.",
-      "lowDisk": "Low disk space: {{free}} GB free of the {{needed}} GB the project keeps free. New steps wait until there is room; Clean up in Project settings › Runs frees some.",
+      "lowDisk": "Low disk space: {{free}} GB free, keeps {{needed}} GB. New steps wait and go on by themselves once there is room; Project settings › Runs › Storage shows what could be cleaned.",
       "shuttingDown": "Orchester is closing; no new work starts."
     },
     "control": {
@@ -843,6 +852,7 @@
       "failedNoAgent": "This run has no agent step to continue. Its saved work remains on its branch.",
       "merged": "This run's work was merged. Messages no longer reach its agents.",
       "worktreeRemoved": "The run’s worktree was removed, so its agent cannot continue. Messages no longer reach its agents.",
+      "worktreeNotRemoved": "The run’s worktree could not be removed: its folder is still on disk, and its agent cannot continue. Messages no longer reach its agents. Remove worktree tries again.",
       "ended": "This run has ended. Messages no longer reach its agents."
     },
     "errors": {
@@ -931,6 +941,7 @@
         "allowedCommands": "Allowed commands is unavailable: this connection cannot limit commands to a list. Choose Ask before running commands or change the connection.",
         "anyCommand": "Any command in the worktree is unavailable: this connection cannot confine commands to the worktree. Choose Ask before running commands or change the connection.",
         "networkOff": "Network off is unavailable: this connection cannot block commands from reaching the network. Choose Network on or change the connection.",
+        "networkHosts": "A host list is unavailable: this connection cannot keep commands from reaching other hosts. Choose network off or on, or change the connection.",
         "noRepositoryOption": "This connection cannot enforce any repository access option. Choose another connection.",
         "noCommandsOption": "This connection cannot enforce any command permission option. Choose another connection.",
         "noNetworkOption": "This connection cannot enforce any network option. Choose another connection."
@@ -1006,8 +1017,10 @@
         "tooMany": "At most {{max}} folders can be listed."
       },
       "networkOff": "Off",
+      "networkHosts": "Only listed hosts",
       "networkOn": "On",
       "networkOffDetail": "Package installs and web requests fail while network access is off.",
+      "networkHostsDetail": "Only the listed hosts can be reached.",
       "networkOnDetail": "Commands and web tools can reach the network."
     }
   },
@@ -1540,6 +1553,7 @@
       "planNoteRequired": "Request changes needs a note that says what should change in the plan.",
       "approveTakesNoNote": "Approving takes no note, as the plan card approves without one. Request changes to send the agent a note.",
       "folderNotAbsolute": "Name the project’s folder by its absolute path.",
+      "invalidKeepFree": "Keep free is whole GB from {{min}} to {{max}}.",
       "cliNotFound": "No {{program}} was found on the search path. Give the CLI’s absolute path as the program.",
       "notAnAgentConnection": "{{connection}} is not an agent connection; profiles run on agent connections only.",
       "checkFound": "The check found: {{status}}.",

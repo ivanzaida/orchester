@@ -6,12 +6,18 @@
     "cannotLimitCommands": "This connection cannot enforce a command prefix list. Choose asking before commands or commands inside the sandbox.",
     "cannotConfineCommands": "This connection cannot keep arbitrary commands inside the worktree. Choose asking before commands or an allowed list.",
     "cannotBlockNetwork": "This connection cannot block network access on this platform. Network stays on.",
+    "cannotLimitHosts": {
+      "codex": "Codex can’t limit network access to a host list on this platform: its sandbox can’t keep commands off the network here. A step with the list won’t start.",
+      "claudeCode": "Claude Code can’t limit network access to a host list: its commands can reach any host. A step with the list won’t start.",
+      "native": "The native agent can’t limit network access to a host list: its commands can reach any host. A step with the list won’t start."
+    },
     "mechanism": {
       "codexReadOnly": "sandbox · read-only",
       "codexWorkspaceWrite": "sandbox · workspace-write",
       "codexCommands": "sandbox · escalations ask you",
       "codexCommandApprovals": "Codex App Server · one command approval",
       "codexNetworkOff": "sandbox · network access off",
+      "codexNetworkHosts": "sandbox · commands off network · web search only listed hosts",
       "codexNetworkOn": "sandbox · network access on",
       "codexWritableRoots": "sandbox · writable roots",
       "claudeEditToolsRemoved": "edit tools off · list runs · others ask",

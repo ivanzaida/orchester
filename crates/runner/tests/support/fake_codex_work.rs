@@ -1,6 +1,7 @@
 //! What a turn of `orchester-fake-codex` does, by its prompt:
 //!
-//! - "Please fail": fails the turn as Codex did for an unsupported model;
+//! - "Please fail": fails the turn as Codex did for an unsupported model, once the test releases it (see "Wait for
+//!   release") when the prompt also says "Wait for release";
 //! - "Report plan limits": first sends `account/rateLimits/updated`, then works as the rest of the prompt says;
 //! - "Use Orchester's tools": first lists and calls Orchester's tools (`fake_codex_tools`), then works as below;
 //! - "Keep working": starts a helper process of its own, reports its id (`helper pid: `) and waits until it is ended;
@@ -162,9 +163,7 @@ pub fn work(session: &mut Session, prompt: &str, structured: bool) -> Step {
     return Step::Go;
   }
   if prompt.contains("Please fail") {
-    notify(session, "error", json!({"error": {"message": UNSUPPORTED}}));
-    complete(session, Some(UNSUPPORTED));
-    return Step::Exit(ExitCode::SUCCESS);
+    return fail(session, prompt);
   }
   if prompt.contains("Report plan limits") {
     match serde_json::from_str(LIMITS) {
@@ -398,6 +397,15 @@ pub fn message(session: &Session, id: &str, text: &str) {
   );
 }
 
+/// "Please fail": the turn fails as Codex failed it for an unsupported model, after the release when asked to wait.
+fn fail(session: &Session, prompt: &str) -> Step {
+  if prompt.contains("Wait for release") {
+    wait_for_release(session, false);
+  }
+  notify(session, "error", json!({"error": {"message": UNSUPPORTED}}));
+  complete(session, Some(UNSUPPORTED));
+  Step::Exit(ExitCode::SUCCESS)
+}
 /// "Ask first": a draft, then a question as the step result.
 fn ask(session: &Session) -> Step {
   if let Err(error) = append(&session.cwd, "draft") {

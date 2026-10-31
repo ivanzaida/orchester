@@ -120,6 +120,8 @@ pub(super) struct RunTask {
   pub(super) disks: DiskGuard,
   /// When the disk guard looks at the free space next while agents work.
   pub(super) next_disk_check: Instant,
+  /// An agent or command ended since the disk guard last looked before steps start (`held_back`).
+  pub(super) ended_since_disk_look: bool,
   /// The run waits for a free workspace; the desktop was told once.
   pub(super) waits_for_workspace: bool,
   pub(super) controls: mpsc::UnboundedReceiver<Control>,
@@ -164,8 +166,10 @@ impl RunTask {
       board: context.board,
       qa: context.qa,
       browser: context.browser,
+      // Every step starts only once the guard looked (`held_back`); the first look while agents work is an interval on.
+      next_disk_check: Instant::now() + context.disks.every,
       disks: context.disks,
-      next_disk_check: Instant::now(),
+      ended_since_disk_look: false,
       waits_for_workspace: false,
       controls: context.controls,
       listening: true,
@@ -364,6 +368,7 @@ impl RunTask {
     self.board.release(execution);
     self.release_steered(execution);
     self.qa.end(active.invocation.id);
+    self.ended_since_disk_look = true;
     Some(active)
   }
 

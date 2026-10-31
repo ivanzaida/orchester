@@ -7,9 +7,10 @@
 //!   worktree, on the run's branch, as a sequential pipeline always has. Nothing else can start while it runs: only a
 //!   passing step makes another one ready.
 //! - A step that starts beside others, write or read-only alike, works in a worktree of its own on a branch off the
-//!   run's branch as it is when the step starts, which holds every step it depends on. When it passes, its branch is
-//!   merged back into the run's branch in the run's worktree, one merge at a time, and its worktree and branch are
-//!   removed. A conflict fails the step with the files named; its branch and worktree stay for inspection.
+//!   run's branch as it is when the step starts, which holds every step it depends on; the worktree starts with the
+//!   run's build output as hard links ([`warm_start`]). When it passes, its branch is merged back into the run's branch
+//!   in the run's worktree, one merge at a time, and its worktree and branch are removed. A conflict fails the step
+//!   with the files named; its branch and worktree stay for inspection.
 //!
 //! Which one an execution uses is recorded by the worktree itself: an execution with a worktree of
 //! its own works there, also when it continues after a pause, a limit or an interruption. A run that borrows warm
@@ -27,7 +28,8 @@ use orchester_core::{
 use super::{checkpoint, prepare::RunFolder, run::RunTask};
 use crate::{
   git::Git,
-  worktree::{WorktreeError, Worktrees},
+  lock_pause,
+  worktree::{WorktreeError, Worktrees, warm_start},
 };
 
 /// How an execution starts.
@@ -125,6 +127,7 @@ impl Workspace {
     }
     let base = checkpoint::head(run_worktree)?;
     worktrees.create_step(execution, &branch, base.as_str())?;
+    lock_pause::off_async_workers(|| warm_start::seed(run_worktree, &path));
     Ok(Self::Own {
       path,
       branch,

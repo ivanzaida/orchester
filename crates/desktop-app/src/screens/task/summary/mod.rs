@@ -7,6 +7,7 @@
 //! the task's first run the column says there are no runs yet (`empty`) over the brief; a task kept *Not shared*
 //! says why it is read-only, or asks *Share task* in place; a task whose latest run cannot be read says why.
 
+mod base_branch;
 mod brief;
 mod browser_line;
 mod decisions;

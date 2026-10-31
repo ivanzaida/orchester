@@ -56,6 +56,7 @@ pub mod session;
 pub mod sharing;
 pub mod skills;
 pub mod sources;
+pub mod storage;
 pub mod tasks;
 pub mod tools;
 pub mod usage;

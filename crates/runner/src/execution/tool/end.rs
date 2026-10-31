@@ -34,6 +34,10 @@ impl RunTask {
       // Carried out once every agent and command has ended; *Stop turn* never stops a command.
       Some(StopCause::Requested | StopCause::Abandoned | StopCause::Permissions | StopCause::TurnStopped) => Ok(()),
       None => {
+        // Nothing fails for space: the step stays open, leaves no output yet, and runs again once there is room.
+        if finished.failure.is_some() && self.out_of_space()? {
+          return self.save(execution, &active, "work in progress at low disk space");
+        }
         if let Some(output) = &finished.output {
           self.db.save_step_output(output)?;
         }

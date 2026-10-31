@@ -108,6 +108,16 @@ fewer stop no agent, and new work waits until fewer agents work than the slots.
   beside others, read-only or writing, gets a worktree of its own on `<run-branch>--<step>-<attempt>`,
   created from the run's branch as it is then (it holds every step it depends on). Parallel writes
   in one worktree would overwrite each other, and a merge would change files under an agent at work.
+  Such a worktree starts with a warm build (ORC-544, `crates/runner/src/worktree/warm_start/`):
+  when the run's worktree has a `target/` on the same volume, its profile folders are seeded into
+  the new worktree as hard links (rustc replaces the rlibs, rmeta and incremental files it
+  rebuilds). What a build writes in place is copied with its time instead: fingerprints, dep-info,
+  lock files, everything under `build/`, and shared libraries (proc macros) with their `.pdb`;
+  programs (tests, binaries, examples) are left out, since MSVC's linker overwrites them in place
+  and cargo links a missing one again. Checked-out files unchanged in the run's worktree, and
+  folders holding the same names, take the run's times, so the step's first cargo build is
+  incremental. The step's builds never change the run's files, and removing the step's worktree
+  removes only its links. Without a run `target/`, or across volumes, the step starts cold.
 - **Joining.** When such a step passes, its work is committed on its branch and merged into the
   run's branch in the run's worktree, one merge at a time, with the repository's git identity (fast
   forward when possible, else a merge commit); its worktree and branch are then removed. A conflict
@@ -379,6 +389,15 @@ locks (`orchester_core::integration`).
   continues and no longer keeps its task from running again. The
   Changes tab then shows the checkpointed changes and says the worktree was removed; a run's commits
   stay reachable through the base branch or its kept branch.
+- **A removal ends when the folder is gone (ORC-418).** `git worktree remove` can forget a worktree and stop with its
+  folder half deleted ("Directory not empty" on Windows), its ignored build output and `.tmp/` still there; what git
+  no longer lists is then deleted as a folder. A folder something holds is tried again once the run's own processes
+  running from it (a QA copy, a build) are stopped; one that still stays is recorded as not removed
+  (`run_worktrees_not_removed`, its path and why), and the task page and `get_run` say *not removed*, never
+  *removed*, while it is on disk. Remove worktree finishes it later. The runner at its start, and the desktop and the
+  runner after each removal, sweep `.orchester/worktrees/`: a folder no git worktree lists and whose run (by its own
+  or a step execution's id) ended — succeeded, failed, cancelled, or interrupted with its removal recorded — is
+  deleted and logged; a folder of a run that has not ended, and one no run has, is never touched.
 
 ## Storage layout
 
@@ -534,6 +553,7 @@ it as missing. A tool copy keeps allowed callers only for pipelines copied with 
 | `run_merges` | a run that succeeded and was merged into its base branch: the branch, the commit it was at afterwards, how (fast-forward, merge commit, already merged), when — desktop-written, once per run |
 | `run_completions` | a run that succeeded and committed nothing, completed instead of merged (ORC-93): who completed it (a person, automation through the MCP server or window input, or the Orchestrator) and when; it sets the task Done as a merge does — desktop-written, once per run |
 | `run_worktree_removals` | when a run's own worktree was removed (*Remove worktree*, a merge, Run again), once per run — written by the desktop or the runner, whichever removed it |
+| `run_worktrees_not_removed` | the folder a removal of a run's worktrees could not delete and why (ORC-418), once per run; it goes once a removal leaves nothing behind — written by whichever removed it |
 | `run_step_budgets` | step budgets raised for one run after it stopped at them, per run and step; `NULL` lifted the step's budget |
 | `run_permissions` | permissions changed for one run, per run and agent profile: the permissions the run's steps on that profile use instead of the profile's (each step still narrows them), the agents to restart with them at their next checkpoint (*Apply now*) and the last one that did |
 | `attempts` | run, number, status, reason (initial, retry, a follow-up naming the step it asks, recovery, a restart naming the step that broke, or returned by a person to a step with their note) |

@@ -10,7 +10,10 @@ use orchester_core::{
   task::{MissingDetail, Task, TaskDetails, TaskStatus},
   time::Timestamp,
 };
-use orchester_workspace::{messages::Message, tasks::data::PipelineChoice};
+use orchester_workspace::{
+  messages::Message,
+  tasks::{base_branch::BasePick, data::PipelineChoice},
+};
 
 use super::{
   actions::QueuedTask,
@@ -94,10 +97,12 @@ pub struct View {
   pub ready: Option<TaskDetails>,
   /// What a run still needs that the values do not have.
   pub missing: Vec<MissingDetail>,
-  /// The values or the module differ from what is stored (New task: from an empty form).
+  /// The values, the module or the base branch differ from what is stored (New task: from an empty form).
   pub changed: bool,
   /// The module chosen for the task, saved after its details.
   pub module: Option<ModuleId>,
+  /// The base branch picked for the task, saved after its module.
+  pub base_branch: BasePick,
   /// The published pipelines; `None` while the project's tasks are read.
   pub pipelines: Option<Arc<Vec<PipelineChoice>>>,
   /// A shared task's pipeline, by its slug, that this computer has no pipeline for: saving keeps it.

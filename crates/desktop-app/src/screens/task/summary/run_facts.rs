@@ -300,9 +300,24 @@ fn model(ctx: &Ctx, run: &RunView) -> Arc<str> {
 }
 
 /// Where the run works: its worktree's folder, its middle cut, the whole path in its tooltip and copied by a press; or
-/// when it was removed.
+/// when it was removed, or that its removal left its folder on disk and why (ORC-418).
 fn worktree(ctx: &mut Ctx, run: &RunView, root: &Path) -> Element {
   let key = ctx.t("summary.facts.worktree");
+  if let Some(left) = &run.worktree_not_removed {
+    let path = ("path", left.path.as_str());
+    let text = match &left.reason {
+      Some(reason) => ctx.t_args(
+        "summary.thisRun.worktreeNotRemoved",
+        [path, ("reason", reason.as_str())],
+      ),
+      None => ctx.t_args("summary.thisRun.worktreeNotRemovedNoReason", [path]),
+    };
+    return fact(
+      "task-fact-worktree",
+      &key,
+      value("task-fact-worktree", &text, Look::Secondary),
+    );
+  }
   if let Some(removed) = run.worktree_removed {
     let text = ctx.t_args("summary.thisRun.worktreeRemoved", [("time", display::clock(removed))]);
     return fact(

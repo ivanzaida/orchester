@@ -23,6 +23,7 @@ use super::{
   writer::{TaskWriter, WriteError},
 };
 use crate::{
+  agents::permissions::hosts_refusal,
   messages::{self, Message},
   runner::{RequestError, RunRequestError},
   sharing::{
@@ -330,6 +331,7 @@ pub fn preflight_message(problem: &PreflightProblem) -> Message {
     PreflightProblem::PermissionsNotEnforceable { step: key, .. } => {
       step("runs.preflight.permissionsNotEnforceable", key)
     }
+    PreflightProblem::NetworkHostsNotEnforceable { step: key, cli } => step(hosts_refusal(*cli), key),
     PreflightProblem::CommandListNotOffered { step: key } => step("runs.preflight.commandListNotOffered", key),
     PreflightProblem::NotAGitRepository => Message::new("runs.preflight.notAGitRepository"),
     PreflightProblem::NoCommits => Message::new("runs.preflight.noCommits"),

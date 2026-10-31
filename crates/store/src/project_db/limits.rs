@@ -1,7 +1,7 @@
 //! Project settings › Limits, one row; a project that never changed them uses the defaults. The
 //! environment additions of Project settings › Environment are in [`super::environment`], the
 //! repository agent files setting of General in [`super::agent_files`], the code index setting in
-//! [`super::code_index`].
+//! [`super::code_index`], the free space the disk guard keeps in [`super::disk_guard`].
 
 use orchester_core::{
   agent_files::RepositoryAgentFiles,
@@ -9,6 +9,7 @@ use orchester_core::{
   limits::{AgentSlots, ProjectLimits, QaSlots},
   resource::CommandEnvironment,
   store::SettingsStore,
+  workspaces::KeepFree,
 };
 use rusqlite::{Connection, OptionalExtension, params};
 
@@ -54,6 +55,14 @@ impl SettingsStore for ProjectDb {
 
   fn save_code_index(&mut self, setting: CodeIndexSetting) -> Result<(), StoreError> {
     super::code_index::save_setting(&self.connection, setting)
+  }
+
+  fn keep_free(&self) -> Result<KeepFree, StoreError> {
+    super::disk_guard::load(&self.connection)
+  }
+
+  fn save_keep_free(&mut self, keep: KeepFree) -> Result<(), StoreError> {
+    super::disk_guard::save(&self.connection, keep)
   }
 }
 

@@ -12,7 +12,7 @@ use orchester_core::{
   permission::{
     AgentPermissions, AllowedCommands, CommandPermission, HostPattern, HostPatternError, NetworkAccess, NetworkHosts,
     NetworkHostsError, RepositoryAccess,
-    capability::{PermissionOption, PermissionProblem, Unavailable},
+    capability::{Mechanism, PermissionOption, PermissionProblem, PermissionSetting, Unavailable},
     widening::Widening,
   },
   resource::{AgentProfile, ModelId, PromptText, ProviderSettings},
@@ -204,26 +204,30 @@ fn network_hosts_bodies_store_off_hosts_and_on_as_before() {
 }
 
 #[test]
-fn network_hosts_run_only_where_network_off_is_enforced_and_are_never_reset_to_on() {
+fn network_hosts_run_only_where_the_cli_limits_hosts_and_are_never_reset_to_on() {
   let list = permissions(hosts(&["api.example.org"]));
   let mut confined = list.clone();
   confined.set_commands(CommandPermission::AnyInWorktree);
   let enforced = confined
     .enforced_on(AgentProvider::CodexCli, Platform::MacOs)
-    .expect("network off is enforced there");
+    .expect("Codex's sandbox keeps commands off the network there");
   assert_eq!(*enforced.permissions().network(), hosts(&["api.example.org"]));
+  assert_eq!(
+    enforced.mechanism(PermissionSetting::Network),
+    Mechanism::CodexSandboxNetworkHosts
+  );
   assert_eq!(enforced.network_stays_on(), None);
   for provider in [AgentProvider::ClaudeCodeCli, AgentProvider::AnthropicApi] {
     assert_eq!(
       list.enforced_on(provider, Platform::Windows),
       Err(PermissionProblem::NotEnforceable {
-        option: PermissionOption::NetworkOff,
-        reason: Unavailable::CannotBlockNetwork,
+        option: PermissionOption::NetworkHosts,
+        reason: Unavailable::CannotLimitHosts,
       }),
       "{provider:?}"
     );
     let (fitted, resets) = list.fitted_to(provider, Platform::Windows);
     assert_eq!(fitted, list, "{provider:?} keeps the list");
-    assert!(!resets.contains(&PermissionOption::NetworkOff));
+    assert!(!resets.contains(&PermissionOption::NetworkHosts));
   }
 }

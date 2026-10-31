@@ -5,6 +5,7 @@
 //! *Runs* with *Remove worktree* confirmed in place, and the lock line of a run that cannot be read; the brief and
 //! criteria read as Markdown ([`markdown`]); the run's Browser line ([`browser`]). Needs `git`.
 
+mod base_branch;
 mod browser;
 #[path = "../../examples/seed/kontur/mod.rs"]
 #[allow(dead_code, reason = "the seed's helpers the other scenarios use")]

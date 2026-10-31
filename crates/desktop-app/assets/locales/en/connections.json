@@ -269,11 +269,14 @@
         "anyCommandHow": "commands run in a sandbox confined to the worktree",
         "networkOff": "Network off",
         "networkOffHow": "commands run without the network",
+        "networkHosts": "Only listed hosts",
+        "networkHostsHow": "commands reach only the listed hosts",
         "networkOn": "Network on",
         "networkOnHow": "commands keep the network · no web tools",
         "cannotLimit": "Orchester cannot limit commands to a list on this connection.",
         "cannotConfine": "Orchester has no sandbox yet that keeps a command inside the worktree.",
-        "cannotBlockNetwork": "Orchester cannot keep commands off the network yet; network stays on."
+        "cannotBlockNetwork": "Orchester cannot keep commands off the network yet; network stays on.",
+        "cannotLimitHosts": "Orchester cannot keep commands to a host list yet; a step with one won’t start."
       }
     },
     "kind": {
