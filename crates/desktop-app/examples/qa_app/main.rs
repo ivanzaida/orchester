@@ -96,6 +96,9 @@ fn main() -> Result<(), Box<dyn Error>> {
   let _joined = match launch.services() {
     Some(services) if sign_in => {
       signed_in::sign_in(services, runtime.handle(), &cloud);
+      if asked(qa_app_asks::SESSION_WITHOUT_TWO_FACTOR) {
+        cloud.session_without_two_factor();
+      }
       asked(qa_app_asks::JOIN_TEAM)
         .then(|| ownership_team::join(services, &runtime, asked(qa_app_asks::TEAM_HOLDS_TASK)))
         .transpose()?

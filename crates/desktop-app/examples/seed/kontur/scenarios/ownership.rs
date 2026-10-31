@@ -13,6 +13,8 @@
 //! - `ownership-nothing-here`: only the account's two projects (`MvIpm`).
 //! - `invite-signed-out`: the catalogue, nobody signed in, and the server [`INVITE_SERVER`] in the account's list,
 //!   which the invite landing names while it asks for the sign-in (`zoihT`).
+//! - `invite-sign-in-again`: the catalogue, and the QA app signs in with a session that has no two-factor code, so the
+//!   landing of an invite to a server this computer doesn't know asks to sign in again (`d1yW2I`).
 
 use std::{collections::HashMap, fs, path::PathBuf};
 
@@ -96,6 +98,12 @@ pub fn invite(kontur: &mut Kontur) -> Result<(), SeedError> {
     (INVITE_SERVER, "orchester.example.com", "https://orchester.example.com"),
     &account()?,
   )
+}
+
+pub fn invite_sign_in_again(kontur: &mut Kontur) -> Result<(), SeedError> {
+  kontur.catalogue()?;
+  kontur.ask_qa_app(qa_app_asks::SIGN_IN)?;
+  kontur.ask_qa_app(qa_app_asks::SESSION_WITHOUT_TWO_FACTOR)
 }
 
 /// The stand-in cloud's account, as a sign-in to it stores it.

@@ -9,3 +9,5 @@ pub const SIGN_IN: &str = "qa-app-sign-in";
 pub const JOIN_TEAM: &str = "qa-app-join-team";
 /// That team server's project holds a task, so a checkout with tasks of its own joins through the review.
 pub const TEAM_HOLDS_TASK: &str = "qa-app-team-holds-task";
+/// Signed in, its session has no two-factor code, as when the account turned two-factor authentication on after it.
+pub const SESSION_WITHOUT_TWO_FACTOR: &str = "qa-app-session-without-two-factor";

@@ -84,7 +84,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 67] = [
+pub const ALL: [Scenario; 68] = [
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-library", agents_library::seed),
   Scenario::of("agents-empty", agents::empty),
@@ -144,6 +144,7 @@ pub const ALL: [Scenario; 67] = [
   Scenario::of("ownership-ended", ownership::ended),
   Scenario::of("ownership-nothing-here", ownership::nothing_here),
   Scenario::of("invite-signed-out", ownership::invite),
+  Scenario::of("invite-sign-in-again", ownership::invite_sign_in_again),
   Scenario::of("team-join", team::join),
   Scenario::of("team-join-wrong-code", team::wrong_code),
   Scenario::of("team-join-expired-code", team::expired_code),
