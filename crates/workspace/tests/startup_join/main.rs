@@ -1,9 +1,10 @@
 //! Joining a team with no project open (`orchester_workspace::sharing::team_join`), as the start page and Settings ›
 //! Orchester do: the Cloud account's team servers and invites, a join that gives this computer its own device sign-in,
 //! a join by address and code with and without Cloud, the team's projects after joining, and the refusals in the
-//! workspace's words; and the returning start's All projects ([`returning`]). Run with
-//! `cargo test -p orchester-workspace --test startup_join startup_join`.
+//! workspace's words; the returning start's All projects ([`returning`]); and a linked checkout's first download from
+//! the stand-in ([`first_download`]). Run with `cargo test -p orchester-workspace --test startup_join startup_join`.
 
+mod first_download;
 mod returning;
 mod support;
 

@@ -15,6 +15,7 @@
 #![allow(clippy::print_stdout, reason = "a QA helper says where it is")]
 
 mod drive;
+mod window;
 
 use std::{
   error::Error,
