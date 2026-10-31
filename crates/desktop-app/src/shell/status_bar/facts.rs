@@ -146,10 +146,6 @@ pub enum BarAction {
   ReadAgain,
   /// Open the list of this project's interrupted runs on its Overview.
   ReviewInterrupted(ProjectId),
-  /// *Restart to update*: install the ready update, asking first while runs are at work.
-  RestartToUpdate,
-  /// Open a file with the program the OS opens it with, e.g. the installer's log.
-  OpenFile(PathBuf),
 }
 
 /// Where the bar's actions go.

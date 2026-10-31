@@ -1,6 +1,7 @@
 //! Meter (`Meter` `wtAQI`): how much of something is used, as a 4 high `border` track with the used part
 //! filled from its start, both radius 2. The fill is `text_secondary`; a limit that was reached fills it in
-//! `warning` (`Meter · tokens` in `Raise the limit` `xHs82`). It is as wide as its parent.
+//! `warning` (`Meter · tokens` in `Raise the limit` `xHs82`); a download under way in `info` (`Progress` `vDmIX` in
+//! Settings › Updates `c69Eti`). It is as wide as its parent.
 
 use lurq::{
   app::theme::PaletteColor,
@@ -19,6 +20,8 @@ pub enum MeterTone {
   Plain,
   /// `warning`: a limit that was reached.
   Reached,
+  /// `info`: how far a download has come.
+  Progress,
 }
 
 /// A meter of `used` out of `of`, with the element id `id`; more than `of` fills the whole track.
@@ -32,6 +35,7 @@ pub fn meter(id: &str, (used, of): (u64, u64), tone: MeterTone) -> Element {
   let fill = match tone {
     MeterTone::Plain => PaletteColor::TextSecondary,
     MeterTone::Reached => PaletteColor::Warning,
+    MeterTone::Progress => PaletteColor::Info,
   };
   Row::new()
     .id(id.to_owned())

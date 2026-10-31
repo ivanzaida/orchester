@@ -7,13 +7,13 @@ use serde_json::{Value, json};
 
 const DESCRIPTION: &str = "Where this copy's own update stands, as Settings › Updates shows it: `running` (this copy's \
   version), `updated` (the version and notes this start updated to, or null) and `state`: up_to_date (checked_at), \
-  checking, downloading (version, received, total, percent), ready (version, notes, critical), waiting_for_runs (the \
-  same and runs), installing (the same and step: waiting_for_runs with runs, stopping_runs, backing_up, handing_over), \
-  failed (version, reason: no_installer, wrong_size, wrong_digest, unknown_key, bad_signature, not_saved), \
-  install_failed (version, reason, exit_code, log), cloud_unreachable (last_checked), not_this_copy (reason: \
-  development, qa, script_install, portable, program_folder_unknown; newest with its download, or null) or \
-  not_on_this_platform (newest). Times are milliseconds since the Unix epoch. Read only: an update installs only when \
-  the person presses Restart to update.";
+  checking, downloading (version, received, total, percent), paused (the same: the person paused the download), ready \
+  (version, notes, critical), waiting_for_runs (the same and runs), installing (the same and step: waiting_for_runs \
+  with runs, stopping_runs, backing_up, handing_over), failed (version, reason: no_installer, wrong_size, \
+  wrong_digest, unknown_key, bad_signature, not_saved), install_failed (version, reason, exit_code, log), \
+  cloud_unreachable (last_checked), not_this_copy (reason: development, qa, script_install, portable, \
+  program_folder_unknown; newest with its download, or null) or not_on_this_platform (newest). Times are milliseconds \
+  since the Unix epoch. Read only: an update installs only when the person presses Restart to update.";
 
 pub fn tool(updates: AppUpdates) -> McpTool {
   McpTool::new("update_state")
@@ -46,8 +46,13 @@ fn state_json(state: &UpdateState) -> Value {
       version,
       received,
       total,
+    }
+    | UpdateState::Paused {
+      version,
+      received,
+      total,
     } => json!({
-      "state": "downloading",
+      "state": if matches!(state, UpdateState::Paused { .. }) { "paused" } else { "downloading" },
       "version": version.as_str(),
       "received": received,
       "total": total,

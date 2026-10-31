@@ -85,6 +85,9 @@ pub fn route_json(route: &Route) -> Value {
     Route::General => {
       params.insert("tab".to_owned(), json!("general"));
     }
+    Route::Updates(show) => {
+      params.insert("tab".to_owned(), json!(show.name()));
+    }
     Route::Notifications => {
       params.insert("tab".to_owned(), json!("notifications"));
     }

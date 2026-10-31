@@ -110,6 +110,10 @@ struct Inner {
   checking: tokio::sync::Mutex<()>,
   /// Set when the person says *Stop runs and install* while an install waits for the runs at work.
   stop_runs: watch::Sender<bool>,
+  /// Set while the person paused the download ([`UpdateState::Paused`]).
+  paused: watch::Sender<bool>,
+  /// Counts the settings saved through [`AppUpdates::set_channel`] and [`AppUpdates::set_automatic`].
+  settings_saved: watch::Sender<u64>,
 }
 
 /// Why a check found nothing.
@@ -159,6 +163,8 @@ impl AppUpdates {
         runs: Mutex::default(),
         checking: tokio::sync::Mutex::new(()),
         stop_runs: watch::channel(false).0,
+        paused: watch::channel(false).0,
+        settings_saved: watch::channel(0).0,
       }),
     }
   }
@@ -181,14 +187,23 @@ impl AppUpdates {
     self.inner.workspace.db.lock().update_settings()
   }
 
+  /// Counts the settings saved here; wakes after each, so what shows them reads them again.
+  pub fn settings_saved(&self) -> watch::Receiver<u64> {
+    self.inner.settings_saved.subscribe()
+  }
+
   /// Blocking; the next check asks for `channel`'s releases.
   pub fn set_channel(&self, channel: Channel) -> Result<(), StoreError> {
-    self.inner.workspace.db.lock().set_update_channel(channel)
+    self.inner.workspace.db.lock().set_update_channel(channel)?;
+    self.inner.settings_saved.send_modify(|saved| *saved += 1);
+    Ok(())
   }
 
   /// Blocking.
   pub fn set_automatic(&self, automatic: bool) -> Result<(), StoreError> {
-    self.inner.workspace.db.lock().set_update_automatically(automatic)
+    self.inner.workspace.db.lock().set_update_automatically(automatic)?;
+    self.inner.settings_saved.send_modify(|saved| *saved += 1);
+    Ok(())
   }
 
   /// When Orchester Cloud last answered a check from here. Blocking.
@@ -212,6 +227,10 @@ impl AppUpdates {
     let Ok(_running) = self.inner.checking.try_lock() else {
       return;
     };
+    self.check().await;
+  }
+
+  async fn check(&self) {
     match (self.inner.app.copy, self.inner.app.target) {
       (ThisCopy::Installer, Some(target)) => self.update(target).await,
       (copy, Some(target)) => self.look_for_newest(copy, target).await,
@@ -220,12 +239,38 @@ impl AppUpdates {
     }
   }
 
-  async fn update(&self, target: (ReleasePlatform, ReleaseArch)) {
-    let state = self.state();
-    // An install under way is not checked under: the installer it hands over to stays where it is.
-    if matches!(state, UpdateState::Installing { .. }) {
+  /// Pauses the download under way (*Pause*): what arrived is kept, and no check downloads until [`Self::resume`].
+  /// Nothing happens outside a download.
+  pub fn pause(&self) {
+    // Under the state's lock: a state leaving the download in the meantime clears the flag after this, not before.
+    self.inner.state.send_if_modified(|state| {
+      if matches!(state, UpdateState::Downloading { .. }) {
+        self.inner.paused.send_replace(true);
+      }
+      false
+    });
+  }
+
+  /// Goes on with a paused download (*Resume*), from where it stopped, through a check. It waits for a check under way
+  /// rather than being that one: that check left the download paused.
+  pub async fn resume(&self) {
+    if !self.inner.paused.send_replace(false) {
       return;
     }
+    let _running = self.inner.checking.lock().await;
+    self.check().await;
+  }
+
+  async fn update(&self, target: (ReleasePlatform, ReleaseArch)) {
+    let state = self.state();
+    // An install under way is not checked under: the installer it hands over to stays where it is. A paused download
+    // waits for the person's *Resume*.
+    let paused = matches!(state, UpdateState::Paused { .. }) && *self.inner.paused.borrow();
+    if matches!(state, UpdateState::Installing { .. }) || paused {
+      return;
+    }
+    // A pause no download took up is not one: this check holds the lock every download runs under, so none listens.
+    self.inner.paused.send_replace(false);
     // A failed install stays said while the cloud offers that version again or does not answer; it is not tried again
     // on its own.
     let failed_install = match &state {
@@ -271,6 +316,11 @@ impl AppUpdates {
       file,
       keys: self.inner.keys.clone(),
     };
+    self.download(&client, &download).await;
+  }
+
+  /// Downloads and checks `download` with `client`, until it is ready or failed, or until the person pauses it.
+  async fn download(&self, client: &CloudClient, download: &Download) {
     let (version, total) = (&download.release.version, download.file.size);
     let progress = |received| {
       self.set(UpdateState::Downloading {
@@ -279,7 +329,21 @@ impl AppUpdates {
         total,
       });
     };
-    match download.fetch(&client, &progress).await {
+    let mut paused = self.inner.paused.subscribe();
+    let fetched = tokio::select! {
+      fetched = download.fetch(client, &progress) => fetched,
+      // What arrived stays in the part file, which *Resume* goes on from. The flag's `Ref` is dropped before the branch:
+      // it read-locks the flag, and `pause` takes the state's lock before the flag's.
+      _ = async { paused.wait_for(|paused| *paused).await.map(drop) } => {
+        let received = match self.state() {
+          UpdateState::Downloading { received, .. } => received,
+          _ => 0,
+        };
+        tracing::info!(%version, received, "the person paused the update's download");
+        return self.set(UpdateState::Paused { version: version.clone(), received, total });
+      }
+    };
+    match fetched {
       Fetched::Verified(installer) => {
         let runs = self.inner.runs.lock();
         let ready = ReadyUpdate {
@@ -363,8 +427,14 @@ impl AppUpdates {
     self.set(UpdateState::CloudUnreachable { last_checked });
   }
 
+  /// A state other than a download or a paused one ends a pause: no download is there for *Resume* to go on with.
   fn set(&self, state: UpdateState) {
-    self.inner.state.send_replace(state);
+    self.inner.state.send_modify(|kept| {
+      if !matches!(state, UpdateState::Downloading { .. } | UpdateState::Paused { .. }) {
+        self.inner.paused.send_replace(false);
+      }
+      *kept = state;
+    });
   }
 }
 

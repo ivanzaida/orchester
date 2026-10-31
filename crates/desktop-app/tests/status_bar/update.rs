@@ -1,8 +1,12 @@
-//! The update item (`Row 2 · status bar` of `Auto-updater · redesign` `acFkz`): ready with *Restart* (S2 `RccSH`),
-//! waiting for runs (S3 `UCZt3`), installing, *Updated to* (S6 `wZaZb`), and an update that did not install, with
-//! why on its card; its press asks the window for *Restart to update* or opens the installer's log.
+//! The update item (`Row 2 · status bar` `VFWHJ` of `Auto-updater · redesign` `acFkz`): downloading (S1 `t99e4v`),
+//! ready (S2 `RccSH`), waiting for runs (S3 `UCZt3`), critical (S4 `y550R`), failed (S5 `D0bg7M`) and updated (S6
+//! `wZaZb`), each in its color with its glyph and no card; a press opens Settings › Updates, or after an update its
+//! release notes.
 //!
-//! `cargo test -p orchester-app --test status_bar update_install`
+//! `cargo test -p orchester-app --test status_bar app_updates_ui`
+
+use orchester_app::routes::UpdatesShow;
+use orchester_workspace::app_updates::UpdateFailure;
 
 use super::*;
 
@@ -10,92 +14,105 @@ fn with(update: UpdateFacts) -> Bar {
   Bar::of(BarFacts { update, ..facts(None) })
 }
 
+fn version() -> String {
+  "0.4.0".to_owned()
+}
+
+/// What the item says and where its press goes.
+fn shown(update: UpdateFacts) -> (Vec<String>, Vec<BarAction>) {
+  let mut bar = with(update);
+  let words = bar.texts("status-update").expect("the item shows");
+  bar.press("status-update");
+  (words, bar.asked())
+}
+
+fn opens(show: UpdatesShow) -> Vec<BarAction> {
+  vec![BarAction::Go(Route::Updates(show), OpenIn::ActiveTab)]
+}
+
 #[test]
-fn update_install_nothing_to_say_shows_no_item() {
+fn app_updates_ui_nothing_to_say_shows_no_item() {
   let mut bar = with(UpdateFacts::Quiet);
   assert_eq!(bar.texts("status-update"), None);
 }
 
 #[test]
-fn update_install_a_ready_update_offers_restart_to_update() {
-  let mut bar = with(UpdateFacts::Ready {
-    version: "0.4.0".to_owned(),
-  });
-
-  assert_eq!(
-    bar.texts("status-update"),
-    Some(vec!["Update 0.4.0 ready · Restart".to_owned()])
-  );
-  bar.press("status-update");
-  assert_eq!(bar.asked(), [BarAction::RestartToUpdate]);
+fn app_updates_ui_status_bar_says_each_state_and_opens_settings_updates() {
+  let cases = [
+    (
+      UpdateFacts::Downloading {
+        version: version(),
+        percent: 42,
+      },
+      "Update 0.4.0 · downloading 42%",
+      "downloading",
+    ),
+    (
+      UpdateFacts::Ready { version: version() },
+      "Update 0.4.0 ready · Restart",
+      "ready",
+    ),
+    (
+      UpdateFacts::Waiting {
+        version: version(),
+        runs: 3,
+      },
+      "Update 0.4.0 · after 3 runs end",
+      "waiting",
+    ),
+    (
+      UpdateFacts::Waiting {
+        version: version(),
+        runs: 1,
+      },
+      "Update 0.4.0 · after 1 run ends",
+      "waiting",
+    ),
+    (
+      UpdateFacts::Critical {
+        version: "0.4.1".to_owned(),
+      },
+      "Critical update 0.4.1 · Restart",
+      "critical",
+    ),
+    (
+      UpdateFacts::Failed {
+        version: version(),
+        failure: UpdateFailure::BadSignature,
+      },
+      "Update 0.4.0 failed · signature didn't match",
+      "failed",
+    ),
+    (
+      UpdateFacts::NotInstalled { version: version() },
+      "Update 0.4.0 didn't install",
+      "not-installed",
+    ),
+    (
+      UpdateFacts::Installing { version: version() },
+      "Installing 0.4.0",
+      "installing",
+    ),
+  ];
+  for (facts, words, state) in cases {
+    let (said, asked) = shown(facts);
+    assert_eq!(said, [words.to_owned()], "{state}");
+    assert_eq!(asked, opens(UpdatesShow::Section), "{state} opens Settings › Updates");
+  }
 }
 
 #[test]
-fn update_install_waiting_for_runs_names_how_many_and_asks_again() {
-  let mut bar = with(UpdateFacts::Waiting {
-    version: "0.4.0".to_owned(),
-    runs: 3,
-  });
-  assert_eq!(
-    bar.texts("status-update"),
-    Some(vec!["Update 0.4.0 · after 3 runs end".to_owned()])
-  );
-  bar.press("status-update");
-  assert_eq!(bar.asked(), [BarAction::RestartToUpdate]);
-
-  let mut one = with(UpdateFacts::Waiting {
-    version: "0.4.0".to_owned(),
-    runs: 1,
-  });
-  assert_eq!(
-    one.texts("status-update"),
-    Some(vec!["Update 0.4.0 · after 1 run ends".to_owned()])
-  );
+fn app_updates_ui_after_an_update_the_item_opens_whats_new() {
+  let (said, asked) = shown(UpdateFacts::Updated { version: version() });
+  assert_eq!(said, ["Updated to 0.4.0 · What's new".to_owned()]);
+  assert_eq!(asked, opens(UpdatesShow::WhatsNew));
 }
 
 #[test]
-fn update_install_installing_and_updated_say_so_and_do_nothing() {
-  let mut installing = with(UpdateFacts::Installing {
-    version: "0.4.0".to_owned(),
+fn app_updates_ui_no_item_has_a_card() {
+  let mut bar = with(UpdateFacts::Failed {
+    version: version(),
+    failure: UpdateFailure::WrongDigest,
   });
-  assert_eq!(
-    installing.texts("status-update"),
-    Some(vec!["Installing 0.4.0".to_owned()])
-  );
-  installing.press("status-update");
-  assert_eq!(installing.asked(), []);
-
-  let mut updated = with(UpdateFacts::Updated {
-    version: "0.4.0".to_owned(),
-  });
-  assert_eq!(
-    updated.texts("status-update"),
-    Some(vec!["Updated to 0.4.0".to_owned()])
-  );
-}
-
-#[test]
-fn update_install_a_failed_install_says_why_and_opens_its_log() {
-  let log = PathBuf::from("C:/Orchester/logs/update-0.4.0.log");
-  let mut bar = with(UpdateFacts::NotInstalled {
-    version: "0.4.0".to_owned(),
-    reason: "installing the files failed and the changes were rolled back".to_owned(),
-    log: Some(log.clone()),
-  });
-
-  assert_eq!(
-    bar.texts("status-update-text"),
-    Some(vec!["Update 0.4.0 didn't install".to_owned()])
-  );
-  let card = bar.card("status-update", "status-update-card").expect("the card");
-  assert!(
-    card.contains(&"installing the files failed and the changes were rolled back".to_owned()),
-    "{card:?}"
-  );
-  assert!(
-    card.contains(&"Press to open the installer's log.".to_owned()),
-    "{card:?}"
-  );
-  bar.press("status-update");
-  assert_eq!(bar.asked(), [BarAction::OpenFile(log)]);
+  assert_eq!(bar.card("status-update", "status-update-card"), None);
 }

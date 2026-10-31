@@ -110,6 +110,130 @@ async fn app_updates_an_interrupted_download_resumes_with_a_range() {
   );
 }
 
+/// *Pause* keeps what arrived and stops the download; a check meanwhile downloads nothing; *Resume* goes on from the
+/// byte it stopped at.
+#[tokio::test]
+async fn app_updates_a_paused_download_resumes_where_it_stopped() {
+  let bytes = installer_bytes();
+  let half = bytes.len() / 2;
+  let offer = Offer::of(&bytes);
+  let served = bytes.clone();
+  let stalled = Arc::new(AtomicBool::new(false));
+  let stand = Stand::start(move |asked| {
+    if is_check(asked) {
+      return Answer::json(&offer.answer());
+    }
+    let mut answer = Answer::file(asked, &served);
+    if !stalled.swap(true, Ordering::SeqCst) {
+      answer.stall = Some(half);
+    }
+    answer
+  });
+  let copy = Copy::installed(&stand.api);
+  let updates = copy.updates.clone();
+  let check = tokio::spawn(async move { updates.check_now().await });
+  let mut changes = copy.updates.subscribe();
+  let downloading =
+    changes.wait_for(|state| matches!(state, UpdateState::Downloading { received, .. } if *received > 0));
+  tokio::time::timeout(std::time::Duration::from_secs(20), downloading)
+    .await
+    .expect("the download to start")
+    .map(drop)
+    .expect("the state to be followed");
+
+  copy.updates.pause();
+  check.await.expect("the check ends");
+
+  let UpdateState::Paused {
+    version: paused,
+    received,
+    total,
+  } = copy.updates.state()
+  else {
+    panic!("paused: {:?}", copy.updates.state());
+  };
+  assert_eq!(paused, version("0.4.0"));
+  assert!(received > 0 && received < total, "{received} of {total}");
+  assert_eq!(
+    copy.downloads(),
+    vec![format!("{INSTALLER}.part")],
+    "what arrived is kept"
+  );
+  let kept = std::fs::metadata(copy.folder().join(format!("{INSTALLER}.part")))
+    .expect("the part")
+    .len();
+
+  copy.updates.check_now().await;
+  assert!(
+    matches!(copy.updates.state(), UpdateState::Paused { .. }),
+    "a check while paused downloads nothing: {:?}",
+    copy.updates.state()
+  );
+
+  copy.updates.resume().await;
+
+  assert!(
+    matches!(copy.updates.state(), UpdateState::Ready(_)),
+    "{:?}",
+    copy.updates.state()
+  );
+  let downloads: Vec<_> = stand.asked().into_iter().filter(|asked| !is_check(asked)).collect();
+  assert_eq!(downloads.len(), 2);
+  assert_eq!(downloads[1].header("range"), Some(format!("bytes={kept}-").as_str()));
+  assert_eq!(
+    std::fs::read(copy.folder().join(INSTALLER)).expect("the installer"),
+    bytes
+  );
+}
+
+/// *Pause* pressed while the state still reads a download that no fetch listens to any more (here the check that ran it
+/// was dropped) pauses nothing: the next check still checks and downloads.
+#[tokio::test]
+async fn app_updates_a_pause_no_download_took_up_does_not_stop_later_checks() {
+  let bytes = installer_bytes();
+  let half = bytes.len() / 2;
+  let offer = Offer::of(&bytes);
+  let served = bytes.clone();
+  let stalled = Arc::new(AtomicBool::new(false));
+  let stand = Stand::start(move |asked| {
+    if is_check(asked) {
+      return Answer::json(&offer.answer());
+    }
+    let mut answer = Answer::file(asked, &served);
+    if !stalled.swap(true, Ordering::SeqCst) {
+      answer.stall = Some(half);
+    }
+    answer
+  });
+  let copy = Copy::installed(&stand.api);
+  let updates = copy.updates.clone();
+  let check = tokio::spawn(async move { updates.check_now().await });
+  let mut changes = copy.updates.subscribe();
+  let downloading =
+    changes.wait_for(|state| matches!(state, UpdateState::Downloading { received, .. } if *received > 0));
+  tokio::time::timeout(std::time::Duration::from_secs(20), downloading)
+    .await
+    .expect("the download to start")
+    .map(drop)
+    .expect("the state to be followed");
+  check.abort();
+  let _ = check.await;
+  assert!(
+    matches!(copy.updates.state(), UpdateState::Downloading { .. }),
+    "{:?}",
+    copy.updates.state()
+  );
+
+  copy.updates.pause();
+  copy.updates.check_now().await;
+
+  assert!(
+    matches!(copy.updates.state(), UpdateState::Ready(_)),
+    "a later check still checks: {:?}",
+    copy.updates.state()
+  );
+}
+
 /// Checks once against a cloud that offers `offer` but serves `served`, and returns the copy.
 async fn failing(offer: Offer, served: Vec<u8>) -> Copy {
   let stand = offering(offer, served);

@@ -188,6 +188,8 @@ pub fn group_note(id: &str, text: &str) -> Text {
 pub struct SettingRow {
   id: Arc<str>,
   label: Arc<str>,
+  /// The label's color when it says how something stands, `text_primary` otherwise.
+  label_color: Option<PaletteColor>,
   hint: Option<(Arc<str>, HintTone)>,
   info: Option<Arc<str>>,
   link: Option<Element>,
@@ -209,6 +211,7 @@ impl SettingRow {
     Self {
       id: id.into(),
       label: label.into(),
+      label_color: None,
       hint: None,
       info: None,
       link: None,
@@ -221,6 +224,12 @@ impl SettingRow {
       opens: None,
       bones: (None, None),
     }
+  }
+
+  /// The label in `color`: it says how something stands (`Orchester 0.4.0 is ready` in `info`, `c69Eti`).
+  pub fn label_color(mut self, color: PaletteColor) -> Self {
+    self.label_color = Some(color);
+    self
   }
 
   /// A link under the hint, in the label's column, 2 further down (`Link` `ngNFb` in `tMyiy`).
@@ -312,10 +321,10 @@ impl SettingRow {
       None => Text::new(&self.label)
         .id(format!("{}-label", self.id))
         .variant(ExtraTypography::Strong.role())
-        .color(if self.faded {
-          PaletteColor::TextMuted
-        } else {
-          PaletteColor::TextPrimary
+        .color(match (self.faded, self.label_color.clone()) {
+          (true, _) => PaletteColor::TextMuted,
+          (false, Some(color)) => color,
+          (false, None) => PaletteColor::TextPrimary,
         })
         .into(),
     };
