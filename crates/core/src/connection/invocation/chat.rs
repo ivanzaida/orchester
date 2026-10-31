@@ -27,7 +27,7 @@
 //!   the turn with the chat's bearer token in it ([`super::ClaudeMcpConfig`]); its tools run without asking: they check
 //!   every action themselves, as for any client of the app.
 //! - Isolation from the user's own setup as for a step ([`super::ClaudeInvocation`]): no settings file, no slash
-//!   command, no MCP server but its own.
+//!   command, no MCP server but its own, no auto memory ([`super::without_auto_memory`]).
 //! - The system prompt (`crate::orchestrator::instructions`) is a file given on every turn, a resumed one too.
 //! - Sessions are kept on disk so that the next turn resumes them; no step result schema is asked for.
 
@@ -36,7 +36,7 @@ use std::{
   path::{Path, PathBuf},
 };
 
-use super::{ClaudeSession, InvocationError, agent_environment, first_line};
+use super::{ClaudeSession, InvocationError, agent_environment, first_line, without_auto_memory};
 use crate::{
   attachment::input::AttachedFile,
   command::Command,
@@ -138,12 +138,11 @@ impl ClaudeChat<'_> {
     }
     let mut variables = agent_environment(environment);
     project.add_to(&mut variables);
-    Ok(
-      Command::new(self.executable, self.args())
-        .with_current_dir(self.folder)
-        .with_environment(variables)
-        .with_interactive_input(first_line(message, attached)?),
-    )
+    let command = Command::new(self.executable, self.args())
+      .with_current_dir(self.folder)
+      .with_environment(variables)
+      .with_interactive_input(first_line(message, attached)?);
+    Ok(without_auto_memory(command))
   }
 }
 

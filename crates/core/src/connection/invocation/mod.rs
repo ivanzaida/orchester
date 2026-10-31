@@ -1,6 +1,7 @@
 //! How an agent step starts its CLI: the provider's argv ([`CodexInvocation`],
 //! [`ClaudeInvocation`]), the worktree as working directory, the prompt on standard input and a
-//! cleaned environment ([`agent_environment`]) with the variables the project adds.
+//! cleaned environment ([`agent_environment`]) with the variables the project adds; every Claude Code
+//! process Orchester starts also runs without auto memory ([`without_auto_memory`]).
 
 mod chat;
 mod claude;
@@ -124,6 +125,19 @@ pub fn agent_environment(environment: impl IntoIterator<Item = (OsString, OsStri
 /// without regard to case).
 pub fn is_agent_variable(name: &str) -> bool {
   ALLOWED.iter().any(|allowed| allowed.eq_ignore_ascii_case(name))
+}
+
+/// Turns off Claude Code's auto memory ("Set to `1` to disable auto memory… When disabled, Claude does not create or
+/// load auto memory files", `code.claude.com/docs/en/env-vars`, checked 2026-10-31). Auto memory is kept per git
+/// repository and shared by all its worktrees (`code.claude.com/docs/en/memory#storage-location`), so an agent in a
+/// run's worktree would load the person's own `MEMORY.md`, notes meant for their own sessions (seen in ORC-415: an
+/// agent replied in the person's language). It is not a setting source, so `--setting-sources ""` does not keep it out.
+pub const CLAUDE_NO_AUTO_MEMORY: (&str, &str) = ("CLAUDE_CODE_DISABLE_AUTO_MEMORY", "1");
+
+/// `command`, a Claude Code process's, without auto memory ([`CLAUDE_NO_AUTO_MEMORY`]): set over whatever the
+/// environment or the project set, so neither can turn it back on.
+pub fn without_auto_memory(command: Command) -> Command {
+  command.with_env_replaced(CLAUDE_NO_AUTO_MEMORY.0, CLAUDE_NO_AUTO_MEMORY.1)
 }
 
 /// `command`, an agent CLI's of `provider`, on the connection's `account`: with the CLI's folder variable

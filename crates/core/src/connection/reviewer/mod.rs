@@ -4,11 +4,12 @@
 //! and every failure asks the person.
 //!
 //! - Claude Code ([`ClaudeReviewer`]) in print mode, isolated from everything an agent gets: no tools (`--tools ""`),
-//!   no MCP server (`--strict-mcp-config` without a configuration), no settings, skills or slash commands, no session
-//!   kept; the instructions as the system prompt (`--system-prompt-file`), the message on standard input, and the
-//!   verdict as structured output (`--json-schema`, read from the `structured_output` of the result that ends its
-//!   `--output-format stream-json` output). The same output carries what the review spent (the result's `usage`) and
-//!   the account's plan limits (`rate_limit_event`), which `--output-format json` would leave out.
+//!   no MCP server (`--strict-mcp-config` without a configuration), no settings, skills, slash commands or auto memory
+//!   ([`crate::connection::invocation::without_auto_memory`]), no session kept; the instructions as the system prompt
+//!   (`--system-prompt-file`), the message on standard input, and the verdict as structured output (`--json-schema`,
+//!   read from the `structured_output` of the result that ends its `--output-format stream-json` output). The same
+//!   output carries what the review spent (the result's `usage`) and the account's plan limits (`rate_limit_event`),
+//!   which `--output-format json` would leave out.
 //! - Codex ([`CodexReviewer`]): `codex exec` in its read-only sandbox, see [`codex`].
 //! - A native connection on the Anthropic API: one Messages request without tools, see [`native`].
 //!
@@ -38,7 +39,7 @@ pub use self::{
 };
 use crate::{
   command::{Command, CommandError, CommandRunner},
-  connection::{plan_limits::claude_limits, stream::claude_usage},
+  connection::{invocation::without_auto_memory, plan_limits::claude_limits, stream::claude_usage},
   resource::ModelId,
   run::review::{
     REVIEW_SCHEMA, RequestReviewer, ReviewError, ReviewInput, ReviewSpend, ReviewVerdict, Reviewed, parse_verdict,
@@ -93,12 +94,13 @@ impl<R: CommandRunner> ClaudeReviewer<R> {
   /// The command that reviews `input`.
   pub fn command(&self, input: &ReviewInput) -> Command {
     let args = reviewer_args((&self.model, self.effort.as_deref()), &self.folder.instructions);
-    Command::new(&self.executable, args)
+    let command = Command::new(&self.executable, args)
       .with_current_dir(&self.folder.work)
       .with_environment(self.environment.clone())
       // No update check, telemetry or error reports before the one request: they only delay the verdict.
       .with_env(QUIET.0, QUIET.1)
-      .with_stdin(review_prompt(input))
+      .with_stdin(review_prompt(input));
+    without_auto_memory(command)
   }
 }
 
