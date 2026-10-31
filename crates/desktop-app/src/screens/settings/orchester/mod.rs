@@ -21,6 +21,7 @@ mod list;
 mod notice;
 mod parts;
 mod person;
+mod pointed;
 mod reading;
 mod server;
 mod server_facts;
@@ -207,6 +208,7 @@ impl Component for OrchesterTab {
             accepted,
             two_factor,
             ask: view.ask,
+            at: view.at,
           },
         );
         frame::column("orchester-scroll", page)

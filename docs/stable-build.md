@@ -152,10 +152,14 @@ is published, at `https://api.orchester.cloud/v1/releases/<version>/files/<name>
   for the current user, without administrator rights, into `%LOCALAPPDATA%\Programs\Orchester`
   (another folder can be chosen on the first install; an upgrade keeps it), with the Start menu
   shortcut *Orchester*, an optional desktop shortcut and an uninstaller. There is no install for
-  all users: the app writes its database beside itself, which *Program Files* does not allow.
+  all users: the app writes its database beside itself, which *Program Files* does not allow. It
+  registers the `orchester://` link for the user (`HKCU\Software\Classes\orchester`, opening
+  `orchester.exe --open-link "%1"`), which the uninstaller removes; the app never registers it
+  itself (`docs/architecture/server.md`, "Accepting outside Orchester").
 - `Orchester-<version>-windows-x64.zip`, the portable app: a folder `Orchester-<version>` with
   `orchester.exe`, `orchester-runner.exe` and a `README.txt`. `orchester.exe` is not released on
-  its own: it starts the runner from beside itself and cannot open a project without it.
+  its own: it starts the runner from beside itself and cannot open a project without it. It takes
+  no `orchester://` links.
 
 Their SHA-256 checksums are in the run's log (*Pack the zip and the installer*) and in the cloud,
 which serves each file with `ETag: "<sha256>"`.

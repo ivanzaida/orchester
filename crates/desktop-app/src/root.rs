@@ -35,6 +35,7 @@ use crate::{
     tabs::TabSet,
   },
   notifications::{Chosen, NotificationPrefs, NotificationsHost},
+  open_link::{self, LinkHost},
   project::{Landing, Projects, ProjectsHost},
   routes,
   screens::gate::{GateProps, SignInGate},
@@ -216,11 +217,19 @@ impl Component for SessionWindow {
       SignIn::SignedOut { since, .. } => gate_screen(ctx, &sign_in, *since),
     };
     let overlay = lifecycle::overlay(ctx, phase, &services.close, &self.focus);
+    // Over the page or the gate: what an `orchester://` link says, behind the gate as well.
+    let links = ctx.mount_keyed::<LinkHost>(
+      "open-links",
+      open_link::host::Props {
+        signed_in: sign_in.is_signed_in(),
+      },
+    );
     // The closing panel lies over the page, which stays as it was under it.
     let body = Stack::new()
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
       .child(screen)
+      .child(links)
       .with_children(overlay);
     let signed_in = sign_in.is_signed_in();
     let framed = if signed_in {
