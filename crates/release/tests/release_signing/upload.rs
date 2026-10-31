@@ -18,6 +18,7 @@ fn release() -> NewRelease {
     version: version("0.5.0"),
     notes: "Orchester 0.5.0".to_owned(),
     critical: false,
+    ci_run: None,
   }
 }
 

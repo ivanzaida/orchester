@@ -134,10 +134,12 @@ fn publish(arguments: PublishArguments) -> Result<(), String> {
     .map(|path| ReleaseFile::read(path, &arguments.version, arguments.platform, arguments.arch, &key))
     .collect::<Result<Vec<_>, _>>()
     .map_err(|error| error.to_string())?;
+  // The deployed cloud refuses `ci_run` until it reads this contract (ORC-575); CI names its run after that.
   let release = NewRelease {
     version: arguments.version,
     notes,
     critical: false,
+    ci_run: None,
   };
   let runtime = tokio::runtime::Builder::new_current_thread()
     .enable_all()
