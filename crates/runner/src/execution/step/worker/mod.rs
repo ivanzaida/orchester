@@ -23,7 +23,10 @@ use std::{
 use orchester_core::{
   code_index::CodeIndexUse,
   command::SecretVariable,
-  connection::stream::{AgentEvent, ClaudeStream, InvocationOutcome, InvocationTracker},
+  connection::{
+    context_use::ContextUse,
+    stream::{AgentEvent, ClaudeStream, InvocationOutcome, InvocationTracker},
+  },
   conversation::Message,
   id::{AgentAccountId, ResourceId, StepExecutionId, TaskId},
   native::session::StopMode,
@@ -165,6 +168,21 @@ impl Driver {
       Self::Native(handle) => handle.stop(StopMode::Now),
     }
   }
+
+  /// How full the CLI's context is, as its output said so far; a native agent's loop keeps its own reading.
+  fn context(&self) -> Option<ContextUse> {
+    match self {
+      Self::Process {
+        transport: Transport::Claude(claude),
+        ..
+      } => claude.context(),
+      Self::Process {
+        transport: Transport::AppServer(app),
+        ..
+      } => app.context(),
+      Self::Native(_) => None,
+    }
+  }
 }
 
 /// One agent at work and where its news goes.
@@ -262,6 +280,8 @@ pub(super) struct Watch {
   /// The agent's account is at its plan limit, as its CLI's last plan reading said: a turn that fails now stops at
   /// that limit instead of failing the step.
   pub(super) plan_reached: bool,
+  /// How full the agent's context is, as last stored for the invocation.
+  context: Option<ContextUse>,
 }
 
 impl Watch {
@@ -294,6 +314,7 @@ impl Watch {
       returns_continued: 0,
       idle_continuations: 0,
       plan_reached: false,
+      context: None,
     })
   }
 

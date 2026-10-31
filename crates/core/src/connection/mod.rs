@@ -19,6 +19,7 @@ pub mod app_server_mcp;
 mod catalog;
 pub mod claude_approval;
 mod claude_catalog;
+pub mod context_use;
 mod decision;
 mod discovery;
 mod endpoint;

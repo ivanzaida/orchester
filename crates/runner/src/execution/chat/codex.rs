@@ -163,6 +163,7 @@ impl Turn {
             let over = match session.receive(stream, &line, &process).await {
               Ok(updates) => {
                 self.steer_answered(&mut steering, session.take_steer_answers());
+                self.keep_context(session.context(), &mut seen);
                 self.codex_updates(updates, (&process, started.account), (&mut seen, &mut steering)).await
               }
               Err(failure) => {

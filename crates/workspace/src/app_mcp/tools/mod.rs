@@ -161,7 +161,12 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "get_run",
-    description: "A run: its steps, state (for one the runner interrupted after its own failure, reason \
+    description: "A run: its steps (each with context: how full its latest execution's agent session is, as \
+                  {used, window, estimated}: the tokens its latest model response took in, the context window, null \
+                  when nobody reported one and no model limit is known, and estimated when the window is a model \
+                  limit Orchester assumes rather than one the CLI or provider reported; context is null while the \
+                  session's CLI reported nothing: unknown, not 0%), state (for one the runner interrupted after its \
+                  own failure, reason \
                   runner_failed with runner_failure: storage_contention when the project database stayed busy, \
                   storage_failure when it was unavailable, other, or null when not recorded), tokens (auto mode's \
                   reviewer included, and its part apart; output_unreported counts its agent invocations whose CLI \

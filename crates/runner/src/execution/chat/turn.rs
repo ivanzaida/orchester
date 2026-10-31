@@ -13,6 +13,7 @@ use orchester_core::{
   attachment::input::AttachedFile,
   connection::{
     AccountStartProblem, AgentConnection, AgentProvider, ConnectionError,
+    context_use::ContextUse,
     stream::{AgentEvent, OutputStream},
   },
   conversation::MessageBody,
@@ -176,6 +177,15 @@ impl Turn {
     }
     self.notifier.send(Event::ChatChanged { chat: self.chat.id() });
   }
+
+  /// Keeps how full the session's context is, as the CLI's output said so far, when it changed since it was kept.
+  pub(super) fn keep_context(&self, context: Option<ContextUse>, seen: &mut Seen) {
+    let Some(reading) = context.filter(|reading| seen.context != Some(*reading)) else {
+      return;
+    };
+    seen.context = Some(reading);
+    self.record(|db| db.set_chat_context(self.chat.id(), &reading));
+  }
 }
 
 /// Why a turn could not start, as the runner's log says it.
@@ -195,6 +205,8 @@ pub(super) struct Seen {
   pub(super) stderr: Option<String>,
   /// The runner ended it at the time limit.
   pub(super) timed_out: Option<TurnFailure>,
+  /// How full the session's context is, as last kept.
+  context: Option<ContextUse>,
 }
 
 impl Seen {

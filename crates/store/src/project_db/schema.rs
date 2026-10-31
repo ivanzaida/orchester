@@ -18,6 +18,7 @@ mod base_notices;
 mod base_sources;
 mod code_index;
 mod command_approvals;
+mod context_use;
 mod conversation;
 mod creation_snapshots;
 mod decision_authors;

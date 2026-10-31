@@ -318,5 +318,6 @@ fn step(step: &StepView) -> Value {
     "tool_step": step.tool_step,
     "status": step.status.map(wire::step_status),
     "attempt": step.attempt.map(std::num::NonZeroU32::get),
+    "context": wire::context(step.context.as_ref()),
   })
 }

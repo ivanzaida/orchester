@@ -7,7 +7,7 @@ use std::{collections::BTreeMap, num::NonZeroU32, path::Path, sync::Arc};
 
 use orchester_core::{
   attachment::Attachment,
-  connection::{AgentProvider, Effort, EngineVendor},
+  connection::{AgentProvider, Effort, EngineVendor, context_use::ContextUse},
   conversation::Message,
   id::{InvocationId, MessageId, RunId, StepExecutionId, TaskId},
   integration::RunMerge,
@@ -80,6 +80,8 @@ pub struct StepView {
   pub failure: Option<StepFailure>,
   /// The step's stage in the pipeline graph, from 0: steps of one stage run beside each other.
   pub stage: usize,
+  /// How full its latest execution's agent session is; `None` while its CLI reported nothing (unknown, not empty).
+  pub context: Option<ContextUse>,
 }
 
 impl StepView {
@@ -465,6 +467,7 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
     .resource(pinned.resource)?
     .map_or_else(|| Arc::from(""), |resource| resource.name().as_str().into());
   let invocations = db.invocations(run.id())?;
+  let contexts = db.invocation_contexts(run.id())?;
   let mut steps = Vec::new();
   let stages = run.snapshot().body().stages();
   let stage_of = |key: &StepKey| {
@@ -507,6 +510,7 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
       attempt,
       failure: latest.and_then(|execution| execution.failure()),
       stage: stage_of(&step.key),
+      context: super::context_uses::of_execution(&contexts, &invocations, latest.map(|execution| execution.id())),
     });
   }
   engines::apply_recorded(db, &mut steps, &invocations)?;

@@ -22,6 +22,7 @@ use self::{
   tool_calls::{AskedOwnCalls, ToolContext},
 };
 use super::{
+  context_use::ContextUse,
   mcp::InvocationExemptions,
   stream::{AgentEvent, QuestionRefusal},
 };
@@ -174,6 +175,8 @@ pub struct AppServerStream {
   exemptions: InvocationExemptions,
   /// The runner's requests about calls of Orchester's tools that have not started yet.
   asked_own: AskedOwnCalls,
+  /// How full the thread's context is after its latest model response ([`Self::context`]).
+  context: Option<ContextUse>,
 }
 
 impl AppServerStream {
@@ -449,11 +452,12 @@ impl AppServerStream {
   }
 
   /// A turn takes several model responses; each reports its own usage as `last`, and the thread's
-  /// running `total` grows by it.
+  /// running `total` grows by it. `last` is also how full the context is, against `modelContextWindow`.
   fn count_usage(&mut self, token_usage: &Value) {
     let (Some(last), Some(total)) = (token_usage.get("last"), token_usage.get("total")) else {
       return;
     };
+    self.context = context_use(last, token_usage.get("modelContextWindow")).or(self.context);
     let total = usage(total);
     if self.total != Some(total) {
       if self.in_turn {
@@ -466,6 +470,13 @@ impl AppServerStream {
   /// What the running turn spent so far: the model responses Codex reported before the turn ended.
   pub const fn usage_so_far(&self) -> TokenUsage {
     self.usage
+  }
+
+  /// How full the thread's context is after its latest model response: what Codex counts in the context window (the
+  /// response's `totalTokens`), against the window it named; no window when it named none. `None` while Codex
+  /// reported no usage.
+  pub const fn context(&self) -> Option<ContextUse> {
+    self.context
   }
 
   fn turn_completed(&mut self, params: &Value) -> Vec<Update> {
@@ -524,6 +535,23 @@ fn usage(value: &Value) -> TokenUsage {
     cached_input: value.get("cachedInputTokens").and_then(Value::as_u64).unwrap_or(0),
     output: value.get("outputTokens").and_then(Value::as_u64).unwrap_or(0),
   }
+}
+
+/// How full the context is after the response `last` reports: its `totalTokens` (input and output, else their sum),
+/// against `window`; `None` for a response that reports no tokens.
+fn context_use(last: &Value, window: Option<&Value>) -> Option<ContextUse> {
+  let spent = usage(last);
+  let used = last
+    .get("totalTokens")
+    .and_then(Value::as_u64)
+    .unwrap_or_else(|| spent.input.saturating_add(spent.output));
+  if used == 0 {
+    return None;
+  }
+  Some(match window.and_then(Value::as_u64).filter(|window| *window > 0) {
+    Some(window) => ContextUse::reported(used, window),
+    None => ContextUse::unknown_window(used),
+  })
 }
 
 fn string(value: &Value, key: &str) -> Option<String> {

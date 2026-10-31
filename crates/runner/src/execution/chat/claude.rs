@@ -186,6 +186,7 @@ impl Turn {
               event.redact(&|text| redact_secrets(text, &started.secrets));
               self.keep(event, started.account, &mut seen);
             }
+            self.keep_context(stream.context(), &mut seen);
             for taken in stream.take_replayed() {
               self.took(&mut steering, &taken);
             }

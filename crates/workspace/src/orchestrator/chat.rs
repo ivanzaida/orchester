@@ -1,6 +1,6 @@
 //! The Orchestrator chat's conversations as the screen reads them: History's list and one conversation's entries,
-//! with the files the person attached to their messages, which of its waits still stand and what became of the runs
-//! whose ends no longer do.
+//! with the files the person attached to their messages, which of its waits still stand, what became of the runs
+//! whose ends no longer do, and how full its session's context is.
 
 use std::{
   collections::{BTreeMap, HashMap, HashSet},
@@ -9,6 +9,7 @@ use std::{
 
 use orchester_core::{
   attachment::Attachment,
+  connection::context_use::ContextUse,
   id::{ChatId, ChatMessageId},
   orchestrator::{Chat, ChatEntry, TurnState},
   run::RunStatus,
@@ -43,6 +44,9 @@ pub struct ChatView {
   pub standing: HashSet<i64>,
   /// What became of the runs whose ends no longer stand, by entry.
   pub moved: HashMap<i64, EndMoved>,
+  /// How full the context of the session its turns continue is; `None` while no turn's CLI reported it (unknown, not
+  /// empty).
+  pub context: Option<ContextUse>,
 }
 
 /// What became of a run since an end of it a conversation keeps, once that end no longer stands.
@@ -96,12 +100,14 @@ impl ChatView {
       .map_err(|error| messages::store_error(&error))?;
     let (standing, moved) =
       super::waits::standing(&db, chat, &entries).map_err(|error| messages::store_error(&error))?;
+    let context = db.chat_context(chat).map_err(|error| messages::store_error(&error))?;
     Ok(Some(Self {
       chat: found,
       entries,
       attachments,
       standing,
       moved,
+      context,
     }))
   }
 

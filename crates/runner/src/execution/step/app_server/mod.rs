@@ -146,6 +146,11 @@ impl AppServerSession {
     self.stream.usage_so_far()
   }
 
+  /// How full the thread's context is after its latest model response, as Codex reported it.
+  pub const fn context(&self) -> Option<orchester_core::connection::context_use::ContextUse> {
+    self.stream.context()
+  }
+
   /// Whether a turn runs that a message can join.
   pub fn turn_working(&self) -> bool {
     matches!(self.phase, Phase::Turn | Phase::Working) && self.turn.is_some()

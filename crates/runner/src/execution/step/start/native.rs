@@ -385,6 +385,7 @@ fn loop_settings(api: &ApiEndpoint, model: &ModelId, effort: Option<Effort>, pre
       .and_then(NativeModel::max_output)
       .map_or(DEFAULT_MAX_OUTPUT, NonZeroU32::get),
     context_window: api.models().context_window(model),
+    context_window_estimated: !api.models().lists_context_window(model),
     system: String::new(),
     tools: ToolSet::for_access(prepared.access),
     shell: prepared.commands.shell(),
