@@ -230,7 +230,10 @@ fn orchester_tools_read_skill_refuses_what_is_not_the_skills() {
   for name in ["escaped", "state", "forged"] {
     assert_eq!(
       read(&offered, name, None).expect_err(name),
-      format!("this step has no skill named `{name}`: list_skills names its skills")
+      format!(
+        "this step has no skill named `{name}`: list_skills names its skills; a skill of the repository that is \
+         not offered here is read as a repository file by its path"
+      )
     );
   }
   assert!(StepSkills::default().is_empty());
