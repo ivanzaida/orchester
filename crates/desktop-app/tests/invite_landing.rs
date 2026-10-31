@@ -60,6 +60,16 @@ fn invite_landing_signed_out_asks_for_the_sign_in_in_place() {
      checkout and read the join review."
   );
   assert!(window.tree.get_element_by_id(AGAIN).is_none());
+  let title = window
+    .tree
+    .get_element_by_id_mut("orchester-landing-signed-out-title")
+    .and_then(|element| element.bounds())
+    .expect("the title is laid out");
+  assert!(
+    title.height >= 20.0,
+    "the title's one line is 16/600 as `zoihT` draws it, not 13: {}",
+    title.height
+  );
 }
 
 #[test]

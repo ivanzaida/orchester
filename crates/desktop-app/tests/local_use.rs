@@ -135,6 +135,48 @@ fn local_use_sharing_offers_the_sign_in_in_place() {
   assert!(window.tree.get_element_by_id("sign-in-email").is_none());
 }
 
+/// x, y, width and height of `id`, once it is laid out.
+fn rect(window: &mut Window, id: &str) -> (f32, f32, f32, f32) {
+  let bounds = window
+    .tree
+    .get_element_by_id_mut(id)
+    .and_then(|element| element.bounds())
+    .unwrap_or_else(|| panic!("{id} is laid out"));
+  (bounds.x, bounds.y, bounds.width, bounds.height)
+}
+
+#[test]
+fn local_use_sharing_sign_in_sits_in_the_drawn_padding() {
+  let mut window = fresh();
+  let services = window.launch.services().expect("services").clone();
+  window.data.add_kontur(&services.workspace);
+  window.navigation().go(Route::Project(
+    project_id(),
+    ProjectPage::Settings(ProjectSettingsTab::Sharing),
+  ));
+  shows(&mut window, "sharing-sign-in");
+  window.press("sharing-sign-in");
+  shows(&mut window, "sign-in-email");
+  window.pass();
+  let (_, row_y, _, row_height) = rect(&mut window, "sharing-share-row");
+  let (under_x, under_y, under_width, under_height) = rect(&mut window, "sharing-sign-in-under");
+  let (card_x, card_y, card_width, card_height) = rect(&mut window, "sign-in-card");
+  let same = |a: f32, b: f32| (a - b).abs() < 0.5;
+  assert!(same(under_y, row_y + row_height), "right under the row");
+  assert!(
+    same(card_x - under_x, 14.0) && same(card_y - under_y, 14.0),
+    "14 at its top and start (`CLPfB` in `i5lddT`)"
+  );
+  assert!(
+    same(under_x + under_width - (card_x + card_width), 14.0),
+    "14 at its end"
+  );
+  assert!(
+    same(under_y + under_height - (card_y + card_height), 16.0),
+    "16 under it"
+  );
+}
+
 #[test]
 fn local_use_sharing_a_code_needs_no_sign_in() {
   let mut window = fresh();

@@ -24,7 +24,7 @@ use crate::{
     cloud_sign_in::{Place, SignInOffer},
     settings::frame,
   },
-  theme::{ExtraSpacing, ExtraTypography},
+  theme::{ExtraSpacing, SettingsText},
   ui::{
     button::{ActionButton, ButtonKind},
     notice::NoticeTone,
@@ -97,7 +97,7 @@ fn page(ctx: &mut Ctx, (target, server): (&JoinTarget, Option<&str>), (lead, bel
     .child(
       Text::new(&title)
         .id("orchester-landing-signed-out-title")
-        .variant(ExtraTypography::FormSection.role()),
+        .variant(SettingsText::SubTitle.role()),
     )
     .child(
       Text::new(lead)

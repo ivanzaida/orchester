@@ -102,10 +102,12 @@ fn offer_row(ctx: &mut Ctx, open: &Signal<bool>) -> Element {
         .child(sign_in),
     )
     .render(ctx);
+  // 14 at the top and sides and 16 under it (`CLPfB` in `i5lddT`).
   let form = opened.then(|| {
     Column::new()
+      .id("sharing-sign-in-under")
       .width(Dimension::Pct(100.0))
-      .padding(Padding::horizontal(ProjectSettingsSpacing::RowX.role()).bottom(ProjectSettingsSpacing::RowX.role()))
+      .padding(Padding::all(ProjectSettingsSpacing::RowX.role()).bottom(SpacingSize::Lg))
       .child(ctx.mount_keyed::<SignInOffer>("sharing-sign-in-form", Place::Under))
   });
   Column::new()
