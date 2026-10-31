@@ -1,8 +1,8 @@
 //! The Browser window's QA fixture (ORC-379): which state of `Browser · redesign` `lcNez` a QA copy plays into the
 //! window's state, for which project and runs, written by the seed beside the app's database ([`Fixture::FILE`]) and
 //! played by the QA app ([`play`]) as a project's runner would report its browser: tabs with their owners, the tab
-//! shown, frames of a page, what an agent did, a dialog or a `<select>` list. Fixture data for QA, never shipped: only
-//! the `test-support` feature builds it.
+//! shown, frames of a page, what an agent did, a dialog, a page's request for a file or a `<select>` list. Fixture
+//! data for QA, never shipped: only the `test-support` feature builds it.
 
 mod play;
 mod tabs;
@@ -33,6 +33,11 @@ pub enum BrowserState {
   Waiting,
   /// `03` `t08Ur`: a confirm on the person's own tab.
   Dialog,
+  /// `03b · File chooser · dialog open` `TWpyp`: the page's *Signing certificate* field asks for a file on the person's
+  /// own tab, and the window's hint stays over the page, as the QA copy's stand-in dialog never closes.
+  FileChooser,
+  /// `03c · File chooser · file chosen` `x0N8d`: the field shows the file chosen in it.
+  FileChosen,
   /// `04` `r31HX`: a `<select>` list open on the person's own tab.
   Select,
   /// `05` `GjcAk`: the browser in a window of its own.
@@ -44,13 +49,15 @@ pub enum BrowserState {
 }
 
 impl BrowserState {
-  const ALL: [Self; 10] = [
+  const ALL: [Self; 12] = [
     Self::Default,
     Self::Many,
     Self::Overflow,
     Self::Acting,
     Self::Waiting,
     Self::Dialog,
+    Self::FileChooser,
+    Self::FileChosen,
     Self::Select,
     Self::Headed,
     Self::Empty,
@@ -65,6 +72,8 @@ impl BrowserState {
       Self::Acting => "acting",
       Self::Waiting => "waiting",
       Self::Dialog => "dialog",
+      Self::FileChooser => "file-chooser",
+      Self::FileChosen => "file-chosen",
       Self::Select => "select",
       Self::Headed => "headed",
       Self::Empty => "empty",

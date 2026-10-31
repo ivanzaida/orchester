@@ -31,19 +31,23 @@ pub fn start(services: &Services, database: &Path) -> Result<Option<JoinHandle<(
     .map(Path::to_path_buf)
     .ok_or("the database has no folder")?;
   tracing::info!(state = fixture.state.name(), "the QA Browser window plays its fixture");
-  Ok(Some(play(services, fixture, move |attempts, size| {
-    render(&folder, attempts, size)
+  Ok(Some(play(services, fixture, move |query, size| {
+    render(&folder, query, size)
       .inspect_err(|error| tracing::warn!(%error, "the QA browser's page was not rendered"))
       .ok()
   })))
 }
 
-/// The sample page with `attempts` in its field, `width` × `height` CSS pixels, as a JPEG.
-fn render(folder: &Path, attempts: u32, (width, height): (u32, u32)) -> Result<Page, String> {
+/// The sample page with its fields as `query` says, `width` × `height` CSS pixels, as a JPEG.
+fn render(folder: &Path, query: &str, (width, height): (u32, u32)) -> Result<Page, String> {
   let program = orchester_exec::browser::find().map_err(|error| error.to_string())?;
   let html = folder.join("browser-qa-page.html");
   fs::write(&html, PAGE).map_err(|error| format!("{}: {error}", html.display()))?;
-  let shot = folder.join(format!("browser-qa-{attempts}-{height}.png"));
+  let named: String = query
+    .chars()
+    .map(|glyph| if glyph.is_ascii_alphanumeric() { glyph } else { '-' })
+    .collect();
+  let shot = folder.join(format!("browser-qa-{named}-{height}.png"));
   let profile: PathBuf = folder.join("browser-qa-profile");
   let output = Command::new(program.path())
     .arg("--headless=new")
@@ -55,7 +59,7 @@ fn render(folder: &Path, attempts: u32, (width, height): (u32, u32)) -> Result<P
     .arg(format!("--user-data-dir={}", profile.display()))
     .arg(format!("--window-size={width},{height}"))
     .arg(format!("--screenshot={}", shot.display()))
-    .arg(format!("file://{}?attempts={attempts}", html.display()))
+    .arg(format!("file://{}?{query}", html.display()))
     .output()
     .map_err(|error| format!("{}: {error}", program.path().display()))?;
   if !shot.is_file() {

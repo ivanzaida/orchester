@@ -1,8 +1,8 @@
 //! The window's requests to a project's browser (`orchester_ipc::browser::BrowserCommand`), handed to the project's
 //! runner in the order they are made, their answers awaited off the UI thread. A request of the person's (navigating,
-//! opening or closing a tab, answering a dialog, the clipboard's shortcuts) the runner refuses or loses is logged and
-//! said in the window until the next one is carried out; what the window asks by itself or many times a second (which
-//! tab to screencast, the person's pointer and keys) is only logged.
+//! opening or closing a tab, answering a dialog, the files chosen for a page, the clipboard's shortcuts) the runner
+//! refuses or loses is logged and said in the window until the next one is carried out; what the window asks by itself
+//! or many times a second (which tab to screencast, the person's pointer and keys) is only logged.
 
 use std::{
   path::{Path, PathBuf},
@@ -154,6 +154,7 @@ const fn command_name(command: &BrowserCommand) -> &'static str {
     BrowserCommand::CloseTab { .. } => "close tab",
     BrowserCommand::AnswerDialog { .. } => "answer dialog",
     BrowserCommand::ChooseOption { .. } => "choose option",
+    BrowserCommand::ChooseFiles { .. } => "choose files",
     BrowserCommand::CopySelection { .. } => "copy selection",
     BrowserCommand::CutSelection { .. } => "cut selection",
     BrowserCommand::CursorAt { .. } => "cursor at",

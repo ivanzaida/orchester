@@ -58,14 +58,21 @@ pub enum BrowserText {
   DialogMessage,
   /// 11/500 `text_inverse`: the agent's name on its mark where it acted (`Text` `u7jZ2` in `Agent cursor` `D7l36`).
   AgentTag,
+  /// 13/500 `text_primary`, 1.35: the title of the hint while the system's file dialog is open (`Title` `LcNjE` in
+  /// `03b` `TWpyp`).
+  FileHintTitle,
+  /// 12 `text_secondary`, 1.35: the line under it, which page asks for which field (`Sub` `LIvDb`).
+  FileHintLine,
 }
 
 impl BrowserText {
-  pub const ALL: [Self; 4] = [
+  pub const ALL: [Self; 6] = [
     Self::SwitcherInitial,
     Self::Address,
     Self::DialogMessage,
     Self::AgentTag,
+    Self::FileHintTitle,
+    Self::FileHintLine,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -78,6 +85,8 @@ impl BrowserText {
       Self::Address => "browser_address",
       Self::DialogMessage => "browser_dialog_message",
       Self::AgentTag => "browser_agent_tag",
+      Self::FileHintTitle => "browser_file_hint_title",
+      Self::FileHintLine => "browser_file_hint_line",
     }
   }
 
@@ -87,6 +96,8 @@ impl BrowserText {
       Self::Address => mono(style(12.0, FontWeight::Normal, 1.35, 0.0, palette.text_primary)),
       Self::DialogMessage => style(13.0, FontWeight::Normal, 1.5, 0.0, palette.text_primary),
       Self::AgentTag => style(11.0, FontWeight::Medium, 1.25, 0.0, palette.text_inverse),
+      Self::FileHintTitle => style(13.0, FontWeight::Medium, 1.35, 0.0, palette.text_primary),
+      Self::FileHintLine => style(12.0, FontWeight::Normal, 1.35, 0.0, palette.text_secondary),
     }
   }
 }
@@ -100,10 +111,12 @@ pub enum BrowserSpacing {
   Activity,
   /// 20: inside a page's JavaScript dialog (`Dialog · confirm` `Mcxt7`).
   Dialog,
+  /// 18: at each side of the hint while the system's file dialog is open (`Hint · file dialog open` `FCera`).
+  FileHintSides,
 }
 
 impl BrowserSpacing {
-  pub const ALL: [Self; 3] = [Self::Switcher, Self::Activity, Self::Dialog];
+  pub const ALL: [Self; 4] = [Self::Switcher, Self::Activity, Self::Dialog, Self::FileHintSides];
 
   pub fn role(self) -> SpacingSize {
     SpacingSize::extra(self.name())
@@ -114,6 +127,7 @@ impl BrowserSpacing {
       Self::Switcher => "browser_switcher",
       Self::Activity => "browser_activity",
       Self::Dialog => "browser_dialog",
+      Self::FileHintSides => "browser_file_hint_sides",
     }
   }
 
@@ -122,6 +136,7 @@ impl BrowserSpacing {
       Self::Switcher => 7.0,
       Self::Activity => 14.0,
       Self::Dialog => 20.0,
+      Self::FileHintSides => 18.0,
     }
   }
 }

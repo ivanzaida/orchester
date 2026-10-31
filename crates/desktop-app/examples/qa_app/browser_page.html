@@ -1,7 +1,9 @@
 <!doctype html>
 <!-- The QA Browser window's sample page (Kontur Admin's orders-sync endpoint, `Page content` `G3txY5` of the
      `Browser · redesign` board), rendered by this computer's browser for the window's frames. Light, as a web page
-     reads. Its fields stand where the QA fixture's element boxes say (test_support/browser_qa/tabs.rs). -->
+     reads. Its fields stand where the QA fixture's element boxes say (test_support/browser_qa/tabs.rs). With
+     `certificate` in its query it has the Signing certificate file field of `03b` `TWpyp` and `03c` `x0N8d`, a real
+     `<input type=file>`, showing the file the query names, or none. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -38,6 +40,15 @@
   .row:last-child { border-bottom: 0; }
   .row .time { margin-left: auto; color: #52525b; }
   .ok { color: #15803d; } .bad { color: #dc2626; } .slow { color: #b45309; }
+  .certificate { visibility: hidden; }
+  .with-certificate .certificate { visibility: visible; }
+  .with-certificate .card { height: 406px; }
+  .file { justify-content: flex-start; gap: 8px; padding: 0 4px; }
+  .file input { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; }
+  .choose { height: 26px; padding: 0 9px; border: 1px solid #d4d4d8; border-radius: 4px; display: flex;
+    align-items: center; font-size: 12px; background: #fff; }
+  .none { color: #71717a; }
+  .help { font-size: 12px; color: #71717a; }
 </style>
 </head>
 <body>
@@ -62,9 +73,15 @@
 <div class="at field" id="attempts" style="left:55px; top:377px; width:268px">5</div>
 <label class="at" style="left:339px; top:356px">Timeout</label>
 <div class="at field" style="left:339px; top:377px; width:268px">10 s</div>
-<div class="at button dark" style="left:55px; top:435px">Save changes</div>
-<div class="at button outline" style="left:178px; top:435px">Send test event</div>
-<div class="at danger" style="left:509px; top:444px">Delete endpoint</div>
+<label class="at certificate" for="certificate" style="left:56px; top:430px">Signing certificate</label>
+<div class="at field file certificate" style="left:55px; top:451px; width:552px">
+  <span class="choose">Choose file</span><span id="certificate-name" class="none">No file chosen</span>
+  <input id="certificate" type="file" accept=".pem">
+</div>
+<div class="at help certificate" style="left:56px; top:492px">PEM file, up to 64 KB</div>
+<div class="at button dark below" style="left:55px; top:435px">Save changes</div>
+<div class="at button outline below" style="left:178px; top:435px">Send test event</div>
+<div class="at danger below" style="left:509px; top:444px">Delete endpoint</div>
 <div class="at" style="left:668px; top:118px; font-size:14px; font-weight:600">Recent deliveries</div>
 <div class="at list mono">
   <div class="row"><span class="ok">200</span><span>order.created</span><span class="time">15:41:08</span></div>
@@ -75,8 +92,24 @@
   <div class="row"><span class="ok">200</span><span>order.created</span><span class="time">15:35:19</span></div>
 </div>
 <script>
-  const attempts = new URLSearchParams(location.search).get("attempts");
+  const query = new URLSearchParams(location.search);
+  const attempts = query.get("attempts");
   if (attempts) document.getElementById("attempts").textContent = attempts;
+  // The file field and what it shows, as a page draws its own (`03c` `x0N8d`); the form grows under it.
+  const named = (name) => {
+    const shown = document.getElementById("certificate-name");
+    shown.textContent = name || "No file chosen";
+    shown.className = name ? "chosen mono" : "none";
+  };
+  if (query.has("certificate")) {
+    document.body.classList.add("with-certificate");
+    for (const below of document.querySelectorAll(".below")) {
+      below.style.top = (parseInt(below.style.top, 10) + 97) + "px";
+    }
+    named(query.get("certificate"));
+  }
+  document.getElementById("certificate").addEventListener("change", (event) =>
+    named(Array.from(event.target.files, (file) => file.name).join(", ")));
 </script>
 </body>
 </html>

@@ -29,16 +29,20 @@ const ACTIVITY_HEIGHT: u32 = 34;
 const AGAIN: Duration = Duration::from_secs(4);
 const STEP: Duration = Duration::from_millis(400);
 
-/// Plays `fixture` on the session's runtime; `render(attempts, (width, height))` renders the page with `attempts` in
-/// its `Max attempts` field.
+/// Plays `fixture` on the session's runtime; `render(query, (width, height))` renders the page with what its fields
+/// hold in its `query` (`tabs::Scene::query`). The system's file dialog never opens: the stand-in for it never closes,
+/// so the hint over a page that asks for a file stays (`03b` `TWpyp`).
 pub fn play(
   services: &Services,
   fixture: Fixture,
-  render: impl Fn(u32, (u32, u32)) -> Option<Page> + Send + 'static,
+  render: impl Fn(&str, (u32, u32)) -> Option<Page> + Send + 'static,
 ) -> JoinHandle<()> {
   if fixture.state == BrowserState::NotFound {
     services.browser.look_nowhere();
   }
+  services
+    .page_files
+    .stand_in(|_| Box::pin(std::future::pending()));
   let window = services.runners.browser_window();
   services.runtime.spawn(async move {
     let runs = settled_first(&fixture).await;
@@ -54,7 +58,8 @@ pub fn play(
     } else {
       PAGE_HEIGHT
     };
-    let page = tokio::task::spawn_blocking(move || render(scene.attempts, (PAGE_WIDTH, height)))
+    let query = scene.query();
+    let page = tokio::task::spawn_blocking(move || render(&query, (PAGE_WIDTH, height)))
       .await
       .ok()
       .flatten();

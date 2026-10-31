@@ -26,6 +26,7 @@ use parking_lot::Mutex;
 
 use super::{
   commands::{Commands, Restarting},
+  files::FileDialogs,
   keys,
   link::{BrowserLink, Show},
   model::{self, Indicator},
@@ -63,6 +64,8 @@ pub struct BrowserRoot {
   sent: Mutex<Option<Sent>>,
   /// The tabs of the project shown as the window last saw them: a tab not among them just opened.
   known: Mutex<Option<(PathBuf, HashSet<BrowserTabId>)>>,
+  /// The system's file dialogs opened for the pages' requests.
+  file_dialogs: FileDialogs,
 }
 
 /// A tab asked for, by a request or the person, that is not shown yet.
@@ -118,6 +121,7 @@ impl Component for BrowserRoot {
       handled: Mutex::new(None),
       sent: Mutex::new(None),
       known: Mutex::new(None),
+      file_dialogs: FileDialogs::default(),
     }
   }
 
@@ -183,6 +187,7 @@ impl Component for BrowserRoot {
       dialog_answer: self.dialog_answer.clone(),
     };
     self.screencast(ctx, &showing, now);
+    self.file_dialogs.open_new(ctx, &showing, (&services.page_files, &browser));
     self.keep_ticking(&showing, now);
     self.focus_address(ctx, &showing);
     let body = self.body(ctx, &showing);

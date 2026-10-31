@@ -65,6 +65,12 @@
       "leaveMessage": "Leave this page? What it has not saved is lost.",
       "answer": "Answer"
     },
+    "fileChooser": {
+      "title": "Choose a file in the dialog that opened",
+      "asksFor": "{{origin}} asks for a file for {{label}}. Cancel there to leave the page as it is.",
+      "asks": "{{origin}} asks for a file. Cancel there to leave the page as it is.",
+      "allFiles": "All files"
+    },
     "empty": {
       "title": "No pages yet",
       "body": "When an agent of a run opens a page, its tab shows here. Agents browse only when their profile allows it. Type an address above to open a page yourself."

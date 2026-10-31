@@ -1,10 +1,10 @@
 //! The tabs each QA state shows, after the board's frames: which runs own which pages, the tab shown, and what else
-//! the runner reports (an agent's action, a dialog, a `<select>` list).
+//! the runner reports (an agent's action, a dialog, a request for a file, a `<select>` list).
 
 use orchester_core::{id::RunId, time::Timestamp};
 use orchester_ipc::browser::{
   AgentAction, BrowserDialog, BrowserEvent, BrowserMode, BrowserState as Reported, BrowserTab, BrowserTabId,
-  DialogKind, ElementBox, SelectId, SelectList, SelectOption, TabOwner,
+  DialogKind, ElementBox, FileChooser, FileChooserId, SelectId, SelectList, SelectOption, TabOwner,
 };
 
 use super::BrowserState;
@@ -80,7 +80,23 @@ pub struct Scene {
   pub events: Vec<BrowserEvent>,
   /// What the page's `Max attempts` field holds.
   pub attempts: u32,
+  /// The page's *Signing certificate* field, shown only where a state asks for a file: the file chosen in it, empty
+  /// for none (`03b` `TWpyp`, `03c` `x0N8d`).
+  pub certificate: Option<&'static str>,
 }
+
+impl Scene {
+  /// The sample page's query (`browser_page.html`): what its fields hold.
+  pub fn query(&self) -> String {
+    match self.certificate {
+      Some(file) => format!("attempts={}&certificate={file}", self.attempts),
+      None => format!("attempts={}", self.attempts),
+    }
+  }
+}
+
+/// The file the person chose for the page's *Signing certificate* field (`03c` `x0N8d`).
+const CERTIFICATE: &str = "kontur-hooks.pem";
 
 /// The scene of `state`, its agents' tabs owned by `runs` in turn. The window has looked at no agent's tab but the
 /// one it shows, so the others are *new* until the person shows them.
@@ -134,6 +150,8 @@ pub fn scene(state: BrowserState, runs: &[RunId]) -> Scene {
       8,
     ),
     BrowserState::Dialog => (yours.clone(), vec![confirm(yours)], 5),
+    BrowserState::FileChooser => (yours.clone(), vec![signing_certificate(yours)], 5),
+    BrowserState::FileChosen => (yours, Vec::new(), 5),
     BrowserState::Select => (yours.clone(), vec![retry_policy(yours)], 5),
     // A tab in the middle of the strip, so it scrolls to show it (`01e` `cmofl`).
     BrowserState::Overflow => (
@@ -147,6 +165,11 @@ pub fn scene(state: BrowserState, runs: &[RunId]) -> Scene {
   if state == BrowserState::Headed {
     scene.reported.mode = BrowserMode::Headed;
   }
+  scene.certificate = match state {
+    BrowserState::FileChooser => Some(""),
+    BrowserState::FileChosen => Some(CERTIFICATE),
+    _ => None,
+  };
   scene.events = events;
   scene
 }
@@ -176,6 +199,7 @@ impl Tabs {
       },
       events: Vec::new(),
       attempts,
+      certificate: None,
     }
   }
 }
@@ -188,6 +212,19 @@ fn confirm(tab: BrowserTabId) -> BrowserEvent {
       kind: DialogKind::Confirm,
       message: "Delete orders-sync? Deliveries to this endpoint stop at once.".to_owned(),
       default_prompt: String::new(),
+    },
+  }
+}
+
+/// The page's *Signing certificate* field asks for one PEM file (`03b` `TWpyp`).
+fn signing_certificate(tab: BrowserTabId) -> BrowserEvent {
+  BrowserEvent::FileChooserOpened {
+    tab,
+    chooser: FileChooser {
+      id: FileChooserId::new(1),
+      multiple: false,
+      accept: vec![".pem".to_owned()],
+      label: Some("Signing certificate".to_owned()),
     },
   }
 }

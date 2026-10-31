@@ -39,6 +39,14 @@ pub fn dialog(kontur: &mut Kontur) -> Result<(), SeedError> {
   seed(kontur, BrowserState::Dialog)
 }
 
+pub fn file_chooser(kontur: &mut Kontur) -> Result<(), SeedError> {
+  seed(kontur, BrowserState::FileChooser)
+}
+
+pub fn file_chosen(kontur: &mut Kontur) -> Result<(), SeedError> {
+  seed(kontur, BrowserState::FileChosen)
+}
+
 pub fn select(kontur: &mut Kontur) -> Result<(), SeedError> {
   seed(kontur, BrowserState::Select)
 }

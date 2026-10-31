@@ -3,7 +3,7 @@
 use crate::kontur::scenarios;
 
 /// The scenarios, in the order the seed lists them.
-const NAMES: [&str; 74] = [
+const NAMES: [&str; 76] = [
   "agents",
   "agents-library",
   "agents-browser",
@@ -13,6 +13,8 @@ const NAMES: [&str; 74] = [
   "browser-window-acting",
   "browser-window-waiting",
   "browser-window-dialog",
+  "browser-window-file-chooser",
+  "browser-window-file-chosen",
   "browser-window-select",
   "browser-window-headed",
   "browser-window-empty",
