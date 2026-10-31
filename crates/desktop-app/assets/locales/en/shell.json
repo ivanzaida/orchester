@@ -248,14 +248,26 @@
       "mcpLockedShort": "MCP · sign-in required",
       "cloudOffline": "Orchester Cloud · offline",
       "update": {
+        "downloading": "Update {{version}} · downloading {{percent}}%",
+        "paused": "Update {{version}} · paused at {{percent}}%",
         "ready": "Update {{version}} ready · Restart",
+        "critical": "Critical update {{version}} · Restart",
         "waiting": {
           "one": "Update {{version}} · after {{count}} run ends",
           "other": "Update {{version}} · after {{count}} runs end"
         },
         "installing": "Installing {{version}}",
-        "updated": "Updated to {{version}}",
-        "failed": "Update {{version}} didn't install"
+        "updated": "Updated to {{version}} · What's new",
+        "failed": "Update {{version}} failed · {{why}}",
+        "notInstalled": "Update {{version}} didn't install",
+        "why": {
+          "noInstaller": "no installer for this computer",
+          "wrongSize": "size didn't match",
+          "wrongDigest": "checksum didn't match",
+          "unknownKey": "unknown signing key",
+          "badSignature": "signature didn't match",
+          "notSaved": "couldn't be saved"
+        }
       },
       "health": {
         "since": "since {{time}}",
@@ -310,9 +322,10 @@
       "cancel": "Cancel",
       "wait": "Install when they end",
       "stop": "Stop runs and install",
-      "failedBody": "The version before it keeps running; your data was not changed.",
-      "failedHint": "It is not tried again on its own until another release is offered.",
-      "failedHintLog": "Press to open the installer's log."
+      "readyTitle": "Orchester {{version}} is ready",
+      "readyBody": "It installs when no run is at work, or now with Restart to update in Settings › General.",
+      "criticalTitle": "Critical update {{version}} is ready",
+      "criticalBody": "It fixes a security problem and installs at the next restart; runs at work are waited for."
     },
     "running": {
       "title": "Running",

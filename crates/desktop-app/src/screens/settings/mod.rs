@@ -42,7 +42,7 @@ use parking_lot::Mutex;
 
 use self::save_state::SaveState;
 use crate::{
-  routes::{AccountsView, JoinTarget, OrchesterView},
+  routes::{AccountsView, JoinTarget, OrchesterView, UpdatesShow},
   services::Services,
   ui::{message::message_text, state::load_error},
 };
@@ -56,8 +56,8 @@ impl DevtoolsInspectable for Listed {}
 /// The open tab of Settings.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SettingsTab {
-  /// Settings › General (`l838Ty`).
-  General,
+  /// Settings › General (`l838Ty`), with its *Updates* in view when a route says so (`wSMNG`).
+  General(Option<UpdatesShow>),
   /// Settings › Notifications (`fQTFi`).
   Notifications,
   /// Settings › Automation (`aMkOw`).
@@ -73,7 +73,7 @@ pub enum SettingsTab {
 impl SettingsTab {
   /// Whether the header says if every change was saved: the tabs whose changes save as they are made.
   const fn saves_as_made(self) -> bool {
-    matches!(self, Self::General | Self::Notifications | Self::Automation)
+    matches!(self, Self::General(_) | Self::Notifications | Self::Automation)
   }
 }
 
@@ -164,7 +164,7 @@ impl Component for SettingsScreen {
       .get();
     let count = loaded.data.as_ref().map(|accounts| accounts.0.len());
     let body = match tab {
-      SettingsTab::General => general::tab(ctx),
+      SettingsTab::General(show) => general::tab(ctx, show),
       SettingsTab::Notifications => notifications::tab(ctx),
       SettingsTab::Automation => automation::tab(ctx, rotation),
       SettingsTab::Orchester(view) => {

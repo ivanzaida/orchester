@@ -31,4 +31,5 @@ pub mod system_icon;
 pub mod test_support;
 pub mod theme;
 pub mod ui;
+pub mod updates;
 pub mod window;

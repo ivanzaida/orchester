@@ -24,6 +24,13 @@ pub enum UpdateState {
     received: u64,
     total: u64,
   },
+  /// The person paused the download of `version` with `received` of `total` bytes kept; *Resume* goes on from there.
+  /// No check downloads while it is paused.
+  Paused {
+    version: ReleaseVersion,
+    received: u64,
+    total: u64,
+  },
   /// A newer release was downloaded and checked against its SHA-256 and its signature; it installs once no run is at
   /// work, or when the person says so.
   Ready(ReadyUpdate),
@@ -107,9 +114,9 @@ impl UpdateState {
     }
   }
 
-  /// How far a download has come, as a whole percentage; `None` outside one.
+  /// How far a download has come, as a whole percentage, also while it is paused; `None` outside one.
   pub fn percent(&self) -> Option<u8> {
-    let Self::Downloading { received, total, .. } = self else {
+    let (Self::Downloading { received, total, .. } | Self::Paused { received, total, .. }) = self else {
       return None;
     };
     let percent = (*received).min(*total) * 100 / (*total).max(1);

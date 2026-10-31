@@ -3,11 +3,13 @@
 //! `orchester_workspace::notifications`; this module feeds it what the window follows of every open project
 //! ([`project`]), shows what it decides through the operating system ([`os`]), opens the place a click names and keeps
 //! the *Needs you* count on the app's icon ([`host`]). The person's choices (Settings › Automation, *Notifications*)
-//! are shared through [`NotificationPrefs`].
+//! are shared through [`NotificationPrefs`]. That this copy's update is ready is told once per version
+//! ([`update_ready`]).
 
 mod host;
 pub mod os;
 mod project;
+pub mod update_ready;
 
 use std::sync::Arc;
 

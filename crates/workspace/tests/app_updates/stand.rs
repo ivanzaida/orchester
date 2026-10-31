@@ -1,11 +1,12 @@
-//! A stand-in Orchester Cloud on loopback: answers each request with what its handler makes of it, cut short when the
-//! handler says so, and keeps what it was asked.
+//! A stand-in Orchester Cloud on loopback: answers each request with what its handler makes of it, cut short or
+//! stalled when the handler says so, and keeps what it was asked.
 
 use std::{
   io::{BufRead, BufReader, Write},
   net::{TcpListener, TcpStream},
   sync::{Arc, Mutex},
   thread,
+  time::Duration,
 };
 
 /// One request as the stand-in read it.
@@ -37,13 +38,18 @@ impl Asked {
 }
 
 /// An answer: the status, extra headers and the body; with `cut`, only that many bytes of the body go out before the
-/// connection closes, as when a download breaks off.
+/// connection closes, as when a download breaks off; with `stall`, that many go out and the rest only after
+/// [`STALL`], as a slow download.
 pub struct Answer {
   pub status: &'static str,
   pub headers: Vec<String>,
   pub body: Vec<u8>,
   pub cut: Option<usize>,
+  pub stall: Option<usize>,
 }
+
+/// How long a stalled answer holds the rest of its body.
+const STALL: Duration = Duration::from_secs(30);
 
 impl Answer {
   pub fn json(body: &serde_json::Value) -> Self {
@@ -52,6 +58,7 @@ impl Answer {
       headers: vec!["Content-Type: application/json".to_owned()],
       body: serde_json::to_vec(body).expect("JSON"),
       cut: None,
+      stall: None,
     }
   }
 
@@ -72,6 +79,7 @@ impl Answer {
       headers,
       body: bytes[start_index..].to_vec(),
       cut: None,
+      stall: None,
     }
   }
 }
@@ -96,7 +104,9 @@ impl Stand {
       for stream in listener.incoming().flatten() {
         let request = read(&stream);
         kept.lock().expect("asked").push(request.clone());
-        write(stream, &handler(&request));
+        let answer = handler(&request);
+        // A stalled answer goes out on its own, so the next request is answered meanwhile.
+        thread::spawn(move || write(stream, &answer));
       }
     });
     Self { api, asked }
@@ -138,5 +148,12 @@ fn write(mut stream: TcpStream, answer: &Answer) {
   let body = answer.cut.map_or(&answer.body[..], |cut| &answer.body[..cut]);
   // The test reads what was asked; a client that hung up early fails its own assertions.
   let _ = stream.write_all(head.as_bytes());
+  if let Some(first) = answer.stall {
+    let _ = stream.write_all(&body[..first]);
+    let _ = stream.flush();
+    thread::sleep(STALL);
+    let _ = stream.write_all(&body[first..]);
+    return;
+  }
   let _ = stream.write_all(body);
 }

@@ -25,6 +25,7 @@ use super::{
   NotificationPrefs, NotifierLink,
   os::{self, Clicks, Delivery, Shown},
   project::{ProjectNotices, ProjectProps},
+  update_ready,
 };
 use crate::{
   navigation::{
@@ -69,6 +70,8 @@ pub struct NotificationsHost {
   clicks: Clicks,
   delivery: Delivery,
   kept: Mutex<Kept>,
+  /// The version of this copy's update the person was told is ready.
+  update_told: Mutex<update_ready::Told>,
 }
 
 impl Component for NotificationsHost {
@@ -93,6 +96,7 @@ impl Component for NotificationsHost {
       clicks,
       delivery,
       kept: Mutex::default(),
+      update_told: Mutex::default(),
     }
   }
 
@@ -109,6 +113,7 @@ impl Component for NotificationsHost {
     let readers = self.readers(ctx);
     self.read_accounts(ctx);
     self.show_due(ctx, &navigation, settings);
+    update_ready::tell(ctx, self.delivery, &self.update_told);
     self.badge(ctx);
     let wait = self.link.next_due(Timestamp::now()).unwrap_or(IDLE);
     wake_after(ctx, wait.max(LEAST));
