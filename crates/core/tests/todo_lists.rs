@@ -124,5 +124,8 @@ fn todo_lists_redact_the_items_text() {
     items: vec![item("Use the token abc123", TodoState::Pending)],
   };
   event.redact(&|text| text.replace("abc123", "[redacted]"));
-  assert_eq!(updates([event]), [vec![item("Use the token [redacted]", TodoState::Pending)]]);
+  assert_eq!(
+    updates([event]),
+    [vec![item("Use the token [redacted]", TodoState::Pending)]]
+  );
 }

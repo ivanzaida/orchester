@@ -34,7 +34,10 @@ fn todo_lists_of_a_run_step_are_its_latest_executions_latest_update() {
     .start_invocation(run.id(), execution, &ModelId::new("gpt-5.5").expect("model"), at(55))
     .expect("invocation");
   let started = vec![item("Read the form", TodoState::InProgress)];
-  let later = vec![item("Read the form", TodoState::Done), item("Add the check", TodoState::Pending)];
+  let later = vec![
+    item("Read the form", TodoState::Done),
+    item("Add the check", TodoState::Pending),
+  ];
   fixture
     .db
     .append_activity(
@@ -55,9 +58,18 @@ fn todo_lists_of_orchestrator_turns_are_read_with_their_conversation() {
   let body = MessageBody::new("Plan the login work").expect("text");
   let chat = Chat::start(ChatId::generate(), &body, at(10));
   let (planned, plain) = (ChatMessageId::generate(), ChatMessageId::generate());
-  fixture.db.keep_chat_message(&chat, (planned, &body), at(10)).expect("kept");
-  fixture.db.keep_chat_message(&chat, (plain, &body), at(20)).expect("kept");
-  let list = vec![item("Survey the runs", TodoState::InProgress), item("Report", TodoState::Pending)];
+  fixture
+    .db
+    .keep_chat_message(&chat, (planned, &body), at(10))
+    .expect("kept");
+  fixture
+    .db
+    .keep_chat_message(&chat, (plain, &body), at(20))
+    .expect("kept");
+  let list = vec![
+    item("Survey the runs", TodoState::InProgress),
+    item("Report", TodoState::Pending),
+  ];
   fixture.db.keep_chat_todo(planned, &list, at(11)).expect("kept");
   let view = ChatView::load_in(fixture.repo.path(), chat.id())
     .expect("read")

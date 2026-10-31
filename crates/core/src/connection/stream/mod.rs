@@ -12,7 +12,6 @@ mod todo;
 
 use serde::{Deserialize, Serialize};
 
-pub(crate) use self::{claude::usage as claude_usage, todo::codex_plan};
 pub use self::{
   call_change::{Breaks, CallChange, ChangeHunk, ChangeLine, FinalBreak, MAX_CHANGE_LINES},
   call_input::{CallInput, EditText, Requested},
@@ -20,6 +19,7 @@ pub use self::{
   native::{CallDetail, Declined, DeclinedBy, NativeCall},
   todo::{TodoItem, TodoList, TodoState},
 };
+pub(crate) use self::{claude::usage as claude_usage, todo::codex_plan};
 use crate::{code_index::RipgrepFallback, connection::mcp::McpServerProblem, run::TokenUsage};
 
 /// Which output of the CLI a line came from.

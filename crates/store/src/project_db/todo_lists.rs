@@ -45,7 +45,12 @@ impl ProjectDb {
 
   /// Keeps `items`, reported at `at`, as the todo list of the turn `message` started, in place of the one before;
   /// none for no items.
-  pub fn keep_chat_todo(&mut self, message: ChatMessageId, items: &[TodoItem], at: Timestamp) -> Result<(), StoreError> {
+  pub fn keep_chat_todo(
+    &mut self,
+    message: ChatMessageId,
+    items: &[TodoItem],
+    at: Timestamp,
+  ) -> Result<(), StoreError> {
     let Some(list) = TodoList::new(items.to_vec()) else {
       self.connection.execute(
         "DELETE FROM orchestrator_todos WHERE message_id = ?1",

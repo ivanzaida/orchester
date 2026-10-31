@@ -61,7 +61,10 @@ fn todo_lists_of_a_chat_turn_replace_the_one_before() {
   db.keep_chat_message(&chat, (second, &body), at(20)).expect("kept");
   assert!(db.chat_todos(chat.id()).expect("read").is_empty());
   let planned = vec![item("Survey the runs", TodoState::InProgress)];
-  let done = vec![item("Survey the runs", TodoState::Done), item("Report", TodoState::Pending)];
+  let done = vec![
+    item("Survey the runs", TodoState::Done),
+    item("Report", TodoState::Pending),
+  ];
   db.keep_chat_todo(first, &planned, at(11)).expect("kept");
   db.keep_chat_todo(second, &planned, at(21)).expect("kept");
   db.keep_chat_todo(first, &done, at(12)).expect("replaced");
