@@ -10,6 +10,7 @@ members = [
   "crates/exec",
   "crates/index",
   "crates/ipc",
+  "crates/release",
   "crates/report",
   "crates/runner",
   "crates/store",
