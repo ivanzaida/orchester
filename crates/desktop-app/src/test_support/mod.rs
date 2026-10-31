@@ -235,16 +235,27 @@ impl Window {
 
   /// Presses the middle of the element `id` with the pointer.
   pub fn press(&mut self, id: &str) {
+    let (x, y) = self.middle(id);
+    self.tree.mouse_move(x, y);
+    self.tree.mouse_down(x, y, lurq::app::events::MouseButton::Left);
+    self.tree.mouse_up(x, y, lurq::app::events::MouseButton::Left);
+    self.pass();
+  }
+
+  /// Moves the pointer onto the middle of the element `id`, for what shows only under it.
+  pub fn hover(&mut self, id: &str) {
+    let (x, y) = self.middle(id);
+    self.tree.mouse_move(x, y);
+    self.pass();
+  }
+
+  fn middle(&mut self, id: &str) -> (f32, f32) {
     let bounds = self
       .tree
       .get_element_by_id_mut(id)
       .and_then(|element| element.bounds())
       .unwrap_or_else(|| panic!("{id} is laid out"));
-    let (x, y) = (bounds.x + bounds.width / 2.0, bounds.y + bounds.height / 2.0);
-    self.tree.mouse_move(x, y);
-    self.tree.mouse_down(x, y, lurq::app::events::MouseButton::Left);
-    self.tree.mouse_up(x, y, lurq::app::events::MouseButton::Left);
-    self.pass();
+    (bounds.x + bounds.width / 2.0, bounds.y + bounds.height / 2.0)
   }
 
   /// Types `value` into the text input `id`, in place of what it held.

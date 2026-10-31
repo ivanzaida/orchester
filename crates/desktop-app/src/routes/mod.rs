@@ -248,8 +248,9 @@ impl Route {
     }
   }
 
-  /// Whether the route is the window's home, which the home tab shows by its icon alone: All projects, and
-  /// Add project and the start page's steps opened from it (`W5PIR`, `kkGWj`).
+  /// Whether the route is the window's home, which a tab shows by its icon alone, unless it is the active tab at All
+  /// projects (`jMVvA` in 09 `i5G19A`): All projects, and Add project and the start page's steps opened from it
+  /// (`W5PIR`, `kkGWj`).
   pub const fn is_home(&self) -> bool {
     matches!(
       self,

@@ -28,7 +28,7 @@ use super::{
 use crate::{
   navigation::Navigation,
   routes::{OrchesterView, Route},
-  theme::{ExtraSpacing, ExtraTypography, IconSize, ProjectsSpacing, ProjectsText, UsageSpacing},
+  theme::{ExtraSpacing, IconSize, ProjectsSpacing, ProjectsText, UsageSpacing},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
@@ -157,7 +157,8 @@ fn usage_page(ctx: &mut Ctx, heading: Heading<'_>, failure: Option<Arc<str>>, us
     .into()
 }
 
-/// *All projects*, what it lists, and the actions at the end, 12 apart (`Header` `e9eYnG` in 09 `i5G19A`).
+/// *All projects* in 20 (`SxLos`), what it lists 4 under it, and the actions at the end, 12 apart (`Header` `e9eYnG`
+/// in 09 `i5G19A`).
 fn header(ctx: &mut Ctx, heading: Heading<'_>) -> Row {
   let navigation = Navigation::of(ctx);
   let (join, shared) = team_actions(ctx, heading.joined);
@@ -171,11 +172,11 @@ fn header(ctx: &mut Ctx, heading: Heading<'_>) -> Row {
     .child(
       Column::new()
         .flex(1.0)
-        .spacing(ExtraSpacing::Snug.role())
+        .spacing(SpacingSize::Xs)
         .child(
           Text::new(&ctx.t("projects.title"))
             .id("all-projects-title")
-            .variant(ExtraTypography::Display.role()),
+            .variant(ProjectsText::Title.role()),
         )
         .child(Text::new(&ctx.t("projects.description")).variant(ProjectsText::Sub.role())),
     )
@@ -260,37 +261,25 @@ pub(super) fn error_line(id: &str, failure: &str) -> Element {
     .into()
 }
 
-/// The column headings, the rows, what removing means (`Project list` `FJsmz`, `Note · removal` `phKj1`) and, once it
-/// is read that no team is joined, how to see a team's projects (`Hint` `b3WTlF` in 09b `dLOCJ`).
+/// The column headings and the rows, divided by hairlines only (`Table` `Gq7FB` in 09 `i5G19A`), what removing means
+/// (`Removal note` `S3gIYI`) and, once it is read that no team is joined, how to see a team's projects (`Hint`
+/// `b3WTlF` in 09b `dLOCJ`).
 fn list(
   ctx: &mut Ctx,
   (rows, places, signed_in): (&[ListedProject], Option<&Places>, bool),
   ask: &Ask,
   joined: Option<&[ServerId]>,
 ) -> Element {
-  let last = rows.len().saturating_sub(1);
   let shown: Vec<Element> = rows
     .iter()
-    .enumerate()
-    .map(|(index, listed)| {
-      ctx.mount_keyed::<row::ProjectRow>(
-        &format!("project-row-component-{}", listed.project.id),
-        row::RowProps {
-          listed: listed.clone(),
-          place: places.and_then(|places| places.of(listed.project.id)).cloned(),
-          signed_in,
-          ask: ask.clone(),
-          last: index == last,
-        },
-      )
+    .map(|listed| {
+      let place = places.and_then(|places| places.of(listed.project.id));
+      row::row(ctx, (listed, place, signed_in), ask)
     })
     .collect();
   let table = Column::new()
     .id("project-list")
     .width(Dimension::Pct(100.0))
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .rounded(RadiusSize::Lg)
-    .clip()
     .child(row::headings(ctx))
     .with_children(shown);
   let hint = joined

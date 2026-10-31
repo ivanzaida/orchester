@@ -128,6 +128,44 @@ fn all_projects_puts_the_list_20_under_its_tabs_without_invites() {
   );
 }
 
+/// The list as 09 `i5G19A` draws it, hairlines without an outline: 56 high rows, *Where* 450 and *Status* 622 into the
+/// list; and the active tab at All projects says so, without a close button while it is the only tab (`jMVvA`).
+#[test]
+fn all_projects_lays_out_its_list_and_tab_as_frame_09() {
+  let mut window = Window::open();
+  all_projects(&mut window);
+  let project = project_id();
+  let mut bounds = |id: &str| {
+    window
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|element| element.bounds())
+      .unwrap_or_else(|| panic!("{id} is laid out"))
+  };
+  let (list, shown) = (bounds("project-list"), bounds(&row(project)));
+  let (place, status) = (
+    bounds(&format!("project-row-where-{project}")),
+    bounds(&format!("project-row-status-{project}")),
+  );
+  assert!((shown.height - 56.0).abs() < 0.5, "a row is {} high", shown.height);
+  assert!(
+    (place.x - list.x - 450.0).abs() < 0.5,
+    "Where is {} in",
+    place.x - list.x
+  );
+  assert!(
+    (status.x - list.x - 622.0).abs() < 0.5,
+    "Status is {} in",
+    status.x - list.x
+  );
+  let tab = window.navigation().tabs_now().active().id();
+  assert_eq!(window.text(&format!("tab-{tab}")), "All projects");
+  assert!(
+    window.tree.get_element_by_id(&format!("tab-{tab}-close")).is_none(),
+    "the only tab at All projects cannot be closed"
+  );
+}
+
 /// The *Usage* tab: every project's usage across the whole content panel, its top pinned, and back.
 fn usage_tab(window: &mut Window) {
   window.press("all-projects-tab-usage");
@@ -188,6 +226,11 @@ fn all_projects_removes_a_project_in_place_and_keeps_its_data() {
   let mut window = Window::open();
   all_projects(&mut window);
   let remove = format!("project-remove-{}", project_id());
+  assert!(
+    window.tree.get_element_by_id(&remove).is_none(),
+    "a row at rest shows only its chevron"
+  );
+  window.hover(&row(project_id()));
   window.press(&remove);
   let question = window.text("remove-project-question");
   assert!(question.starts_with("Remove Kontur from the list?"), "{question}");
@@ -200,6 +243,7 @@ fn all_projects_removes_a_project_in_place_and_keeps_its_data() {
     window.texts("remove-project-question").is_none(),
     "Cancel keeps the project"
   );
+  window.hover(&row(project_id()));
   window.press(&remove);
   window.press("remove-project-confirm");
   window.until("the empty list", |window| {

@@ -3,7 +3,7 @@
 //! `surface_raised` in a `border` stroke) with an 18 `text_secondary` glyph, the title in 15/600 with its
 //! explanation 4 under it in 12.5/1.5 `text_secondary`, then the actions 8 apart. Loading (`Reading`
 //! `O8pgq`): the turning 14 loader and what is being read in 12 `text_muted`, 8 apart, centered with 56
-//! over and under them. A failure to read (`Notice · Tasks cannot be read` `kXWCj`) is a danger notice
+//! over and under them. A failure to read (`Tasks cannot be read` `DNeq9`) is a raised danger notice
 //! with its Try again; loading and failure never look like an empty list (handover §5.6).
 
 use std::sync::Arc;
@@ -303,18 +303,20 @@ pub fn loading(id: &str, what: &str) -> Row {
     )
 }
 
-/// Reading failed: a danger notice saying `title` and `body` with Try again, which runs `retry`.
+/// Reading failed: a raised danger notice saying `title` and `body` with a secondary Try again under the
+/// words at its end (`Notice · danger` `b3htnP` in `DNeq9`), which runs `retry`.
 pub fn load_error(
   ctx: &Ctx,
   id: &str,
   (title, body): (&str, &str),
   retry: impl Fn() + Send + Sync + 'static,
 ) -> Element {
-  let again = ActionButton::new(format!("{id}-retry"), ButtonKind::Primary, ctx.t("common.tryAgain"))
+  let again = ActionButton::new(format!("{id}-retry"), ButtonKind::Secondary, ctx.t("common.tryAgain"))
     .icon(Icon::RotateCcw)
     .on_click(retry);
   Notice::new(id, NoticeTone::Danger, title)
     .body(body)
+    .raised()
     .action(again)
     .into()
 }

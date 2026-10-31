@@ -360,6 +360,7 @@ fn all_projects_agent_cli_is_not_on_a_list_that_cannot_be_read() {
 #[test]
 fn all_projects_agent_cli_shows_on_an_emptied_list_as_at_a_first_start() {
   let (mut window, stand_ins, ..) = kontur_without_claude();
+  window.hover(&row(project_id()));
   window.press(&format!("project-remove-{}", project_id()));
   window.press("remove-project-confirm");
   window.until("the empty list", |window| shows(window, "all-projects-empty"));

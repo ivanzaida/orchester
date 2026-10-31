@@ -10,7 +10,7 @@ use lurq::{
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text},
-  layout::{Alignment, layout_kind::Justify},
+  layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_core::id::ProjectId;
@@ -66,25 +66,19 @@ pub(super) fn offer(signed_in: bool, listed: &ListedProject, place: Option<&Plac
   }
 }
 
-/// *Move to account* or *Move to this computer*, at the end of the room of the last two columns.
-pub(super) fn link(ctx: &Ctx, listed: &ListedProject, to: MoveTo, ask: &Ask, width: f32) -> Element {
+/// *Move to account* or *Move to this computer*, which the row sets at the end of the room of its last two columns.
+pub(super) fn link(ctx: &Ctx, listed: &ListedProject, to: MoveTo, ask: &Ask) -> Element {
   let id = listed.project.id;
   let label = ctx.t(match to {
     MoveTo::Account => "projects.move.toAccount",
     MoveTo::Computer => "projects.move.toComputer",
   });
   let moving = ask.moving.clone();
-  Row::new()
-    .width(Dimension::Px(width))
-    .justify(Justify::End)
-    .align_items(Alignment::Center)
-    .child(
-      Focus::Link
-        .apply(pressable(move || moving.set(Moving(Some((id, to))))))
-        .id(format!("project-move-{id}"))
-        .describe("a11y_name", label.to_string())
-        .child(Text::new(&label).variant(ExtraTypography::Prose.role()).nowrap()),
-    )
+  Focus::Link
+    .apply(pressable(move || moving.set(Moving(Some((id, to))))))
+    .id(format!("project-move-{id}"))
+    .describe("a11y_name", label.to_string())
+    .child(Text::new(&label).variant(ExtraTypography::Prose.role()).nowrap())
     .into()
 }
 

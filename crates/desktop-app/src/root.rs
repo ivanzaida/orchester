@@ -35,7 +35,10 @@ use crate::{
   notifications::{Chosen, NotificationPrefs, NotificationsHost},
   project::{Landing, Projects, ProjectsHost},
   routes,
-  services::Services,
+  services::{
+    Services,
+    accounts::{Accounts, AccountsReader, WindowAccounts},
+  },
   shell::needs_you::PanelOpen,
   startup::{self, Problem},
   ui::chat::links::ChatLinks,
@@ -139,6 +142,8 @@ struct SessionWindow {
   account_tabs: AccountTabs,
   /// The person's notification settings, read by the notifications' host and changed in Settings.
   notifications: NotificationPrefs,
+  /// The accounts the status bar and the notifications name, read by the window's [`AccountsReader`].
+  accounts: WindowAccounts,
 }
 
 impl Component for SessionWindow {
@@ -171,6 +176,7 @@ impl Component for SessionWindow {
       focus: ctx.signal(None),
       first_keys: FirstKeys::default(),
       notifications: NotificationPrefs::new(ctx.signal(Chosen::default())),
+      accounts: WindowAccounts::new(ctx.signal(Accounts::default())),
     }
   }
 
@@ -187,11 +193,14 @@ impl Component for SessionWindow {
     ctx.provide(self.first_keys.clone());
     ctx.provide(self.needs_you.clone());
     ctx.provide(self.notifications.clone());
+    ctx.provide(self.accounts.clone());
     let sign_in = follow_sign_in(ctx, &services.cloud);
     self.account_tabs.follow(&sign_in, &self.navigation, &self.projects);
     let phase = lifecycle::phase(ctx, &services.close);
     let closing = phase.holds_window();
     let projects = ctx.mount_keyed::<ProjectsHost>("projects", ());
+    // The accounts the status bar and the notifications name are read once for both.
+    let accounts = ctx.mount_keyed::<AccountsReader>("accounts", ());
     let notifications = ctx.mount_keyed::<NotificationsHost>("notifications", ());
     let screen = Router::mount(ctx, self.router.clone());
     let overlay = lifecycle::overlay(ctx, phase, &services.close, &self.focus);
@@ -206,6 +215,7 @@ impl Component for SessionWindow {
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
       .child(projects)
+      .child(accounts)
       .child(notifications)
       .child(framed);
     window_input(&self.navigation, window.into(), (!closing, self.first_keys.clone()))
