@@ -146,6 +146,7 @@ async fn releases_client_uploads_a_release_in_parts_and_finalizes_it() {
     version: version("0.4.1"),
     notes: "Fixes".to_owned(),
     critical: false,
+    ci_run: None,
   };
   let created = client.create_release(&token(), &release).await.expect("created");
   assert_eq!(created.stage, ReleaseStage::Draft);
@@ -235,7 +236,7 @@ async fn releases_client_sends_each_admin_call_to_its_endpoint() {
   ]);
   let (client, device, release) = (&stand.client, &token(), &version("0.4.1"));
   let ten = RolloutPercent::new(10).expect("a percentage");
-  assert_eq!(client.admin_releases(device).await.expect("listed").len(), 1);
+  assert_eq!(client.admin_releases(device).await.expect("listed").releases.len(), 1);
   assert_eq!(client.admin_release(device, release).await.expect("read").notes, "");
   client.promote_release(device, release, ten).await.expect("promoted");
   client.set_rollout(device, release, ten).await.expect("set");

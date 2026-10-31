@@ -2,12 +2,15 @@
 
 mod accounts;
 mod agents;
+mod agents_browser;
 mod agents_cases;
 mod agents_library;
 mod api_providers;
 mod approval_answers;
 mod approval_modes;
 mod auto_mode;
+mod browser;
+mod browser_window;
 mod cards;
 mod changes;
 mod connections;
@@ -32,6 +35,7 @@ mod project_settings;
 mod pull_requests;
 pub mod settings;
 mod shared_config;
+mod shared_here;
 mod sources;
 mod task_states;
 mod tasks;
@@ -85,9 +89,22 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 60] = [
+pub const ALL: [Scenario; 79] = [
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-library", agents_library::seed),
+  Scenario::of("agents-browser", agents_browser::seed),
+  Scenario::of("browser-window", browser_window::default),
+  Scenario::of("browser-window-many", browser_window::many),
+  Scenario::of("browser-window-overflow", browser_window::overflow),
+  Scenario::of("browser-window-acting", browser_window::acting),
+  Scenario::of("browser-window-waiting", browser_window::waiting),
+  Scenario::of("browser-window-dialog", browser_window::dialog),
+  Scenario::of("browser-window-file-chooser", browser_window::file_chooser),
+  Scenario::of("browser-window-file-chosen", browser_window::file_chosen),
+  Scenario::of("browser-window-select", browser_window::select),
+  Scenario::of("browser-window-headed", browser_window::headed),
+  Scenario::of("browser-window-empty", browser_window::empty),
+  Scenario::of("browser-window-not-found", browser_window::not_found),
   Scenario::of("agents-empty", agents::empty),
   Scenario::of("agents-no-connections", agents::no_connections),
   Scenario::of("agents-unreadable", agents::unreadable),
@@ -127,11 +144,17 @@ pub const ALL: [Scenario; 60] = [
   Scenario::of("project-settings-shared", project_settings::shared),
   Scenario::of("shared-config", shared_config::admin),
   Scenario::of("shared-config-member", shared_config::member),
+  Scenario::of("shared-config-here", shared_here::seed),
+  Scenario::of("shared-config-chosen", shared_here::chosen),
+  Scenario::of("shared-config-no-claude", shared_here::no_claude),
   Scenario::of("pipelines", pipelines::seed),
   Scenario::of("pipelines-empty", pipelines::empty),
   Scenario::of("pipelines-publish", pipelines::publish),
   Scenario::of("accounts", accounts::seed),
   Scenario::of("settings", settings::seed),
+  Scenario::of("browser", browser::seed),
+  Scenario::of("browser-not-found", browser::not_found),
+  Scenario::of("browser-chosen", browser::chosen),
   Scenario::of("pull-requests", pull_requests::seed),
   Scenario::of("pull-request-feedback", pull_requests::feedback::seed),
   Scenario::of("sources", sources::seed),

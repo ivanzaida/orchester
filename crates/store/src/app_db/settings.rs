@@ -8,8 +8,9 @@
 //! this installation that names its token in the keychain, whether the Orchestrator chat publishes drafts,
 //! answers agents, merges runs, merges finished runs on its own, continues interrupted runs and writes with git itself
 //! (each off until a person turns it on in the window), which OS notifications the app shows, when the
-//! Orchestrator's daily report comes (off until a person turns it on), and whether the desktop app sends error
-//! reports (on until a person turns it off).
+//! Orchestrator's daily report comes (off until a person turns it on), whether the desktop app sends error
+//! reports, and whether the *Browser* window opens by itself when an agent starts browsing (both on until a person
+//! turns them off).
 
 use orchester_core::{
   app_mcp::McpPort,
@@ -130,6 +131,13 @@ ALTER TABLE app_settings ADD COLUMN sends_error_reports INTEGER NOT NULL DEFAULT
   CHECK (sends_error_reports IN (0, 1));
 ";
 
+pub(super) const BROWSER_WINDOW_MIGRATION: &str = r"
+-- Open the Browser window when an agent starts browsing (docs/design/browser.md, decision 14, ORC-378): on until a
+-- person turns it off in Settings › Browser, in an existing database too.
+ALTER TABLE app_settings ADD COLUMN browser_window_opens_itself INTEGER NOT NULL DEFAULT 1
+  CHECK (browser_window_opens_itself IN (0, 1));
+";
+
 impl AppDb {
   /// When the Orchestrator's daily report comes; `None` while it is off, as it is until a person turns it on.
   pub fn daily_report_schedule(&self) -> Result<Option<ReportSchedule>, StoreError> {
@@ -193,6 +201,24 @@ impl AppDb {
     self.connection.execute(
       "UPDATE app_settings SET sends_error_reports = ?1 WHERE id = 1",
       params![allowed],
+    )?;
+    Ok(())
+  }
+
+  /// Whether the *Browser* window opens by itself when an agent starts browsing (*Open the Browser window when an
+  /// agent starts browsing*); on until a person turns it off.
+  pub fn browser_window_opens_itself(&self) -> Result<bool, StoreError> {
+    Ok(self.connection.query_row(
+      "SELECT browser_window_opens_itself FROM app_settings WHERE id = 1",
+      [],
+      |row| row.get(0),
+    )?)
+  }
+
+  pub fn set_browser_window_opens_itself(&mut self, opens: bool) -> Result<(), StoreError> {
+    self.connection.execute(
+      "UPDATE app_settings SET browser_window_opens_itself = ?1 WHERE id = 1",
+      params![opens],
     )?;
     Ok(())
   }

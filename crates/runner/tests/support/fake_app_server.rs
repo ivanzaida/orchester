@@ -13,8 +13,8 @@
 //! - "Patch outside" wants to change a file outside the writable roots and asks; it reports the answer (`file change:
 //!   <decision>`) and works on.
 //! - "Use the design tools" calls the `get_screenshot` tool of the `pencil` MCP server (writing `read-once.txt`), then
-//!   its `batch_design` tool as the `write` tool above. A tool the thread's configuration approves runs without a
-//!   request; any other asks.
+//!   its `batch_design` tool as the `write` tool above, by the name Codex's arguments give the server. A tool the
+//!   thread's configuration approves runs without a request; any other asks.
 //! - "Call a tool unasked" calls `batch_design` of `pencil` and asks, as Codex 0.159.2 does even with
 //!   `mcp_elicitations` off; it reports the answer (`mcp answer: <action>`), and when declined ends the call failed and
 //!   works on.
@@ -29,6 +29,7 @@ use serde_json::{Value, json};
 
 use super::{
   Session, Step, complete, fake_codex_question,
+  fake_codex_user::argument_name,
   fake_codex_work::{append, finish, message, report_of},
   notify, request,
 };
@@ -356,27 +357,29 @@ fn tool_request(session: &Session, server: &str, tool: &str) {
   );
 }
 
-/// Reads the design, unasked only when approved by configuration, then changes it.
+/// Reads the design, unasked only when approved by configuration, then changes it; `pencil` by the name Codex got it
+/// by (`fake_codex_user::argument_name`).
 fn design_calls(session: &Session) {
-  let read = json!({"id": "mcp-read", "type": "mcpToolCall", "server": "pencil", "tool": "get_screenshot",
+  let pencil = argument_name(&session.args, "pencil");
+  let read = json!({"id": "mcp-read", "type": "mcpToolCall", "server": pencil, "tool": "get_screenshot",
     "arguments": {}});
-  if !session.approved_tools.contains("pencil/get_screenshot") {
+  if !session.approved_tools.contains(&format!("{pencil}/get_screenshot")) {
     notify(session, "item/started", json!({"item": read}));
     request(
       session,
       MCP,
       "mcpServer/elicitation/request",
-      json!({"serverName": "pencil", "mode": "form", "requestedSchema": {"type": "object", "properties": {}}}),
+      json!({"serverName": pencil, "mode": "form", "requestedSchema": {"type": "object", "properties": {}}}),
     );
     return;
   }
   notify(session, "item/started", json!({"item": read}));
-  eprintln!("unasked: pencil/get_screenshot");
+  eprintln!("unasked: {pencil}/get_screenshot");
   if fs::write(session.cwd.join("read-once.txt"), "read").is_err() {
     eprintln!("cannot write read-once.txt");
   }
   let mut done = read;
   done["status"] = json!("completed");
   notify(session, "item/completed", json!({"item": done}));
-  tool_request(session, "pencil", "batch_design");
+  tool_request(session, &pencil, "batch_design");
 }

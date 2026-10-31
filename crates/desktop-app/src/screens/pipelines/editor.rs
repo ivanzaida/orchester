@@ -37,7 +37,7 @@ use super::{
 use crate::{
   navigation::Navigation,
   project::ShownProject,
-  screens::hub,
+  screens::{hub, shared_config::missing},
   ui::{
     button::{ActionButton, ButtonKind},
     field::field_error,
@@ -202,7 +202,7 @@ impl Editor {
   /// What sits in place under the header: what an import did, leaving, the save question, problems and failures.
   fn notices(&self, ctx: &mut Ctx, props: &EditorProps, (writes, writing): (&Writes, bool)) -> Vec<Element> {
     let editing = self.state.get();
-    let mut notices = Vec::new();
+    let mut notices: Vec<Element> = missing_here(ctx, props, &editing).into_iter().collect();
     // A copy shows what its import did until it is published (`H2g3Hs` in `ky5kJ`).
     if let Some(imported) = editing
       .opened
@@ -418,6 +418,29 @@ impl Editor {
       });
     });
   }
+}
+
+/// *Missing on this computer* (`04` `w0Evp`, decision 7): what the profiles and tools of the pipeline's steps, in its
+/// latest version and its draft, name that is not bound here. A pipeline names no reference itself.
+fn missing_here(ctx: &mut Ctx, props: &EditorProps, editing: &Editing) -> Option<Element> {
+  let opened = &editing.opened;
+  let mut resources = vec![opened.id];
+  let bodies = std::iter::once(&opened.body).chain(opened.latest.as_ref().map(|latest| &latest.body));
+  for executor in bodies.flat_map(|body| body.steps().iter().filter_map(|step| step.kind.executor())) {
+    if !resources.contains(&executor) {
+      resources.push(executor);
+    }
+  }
+  missing::missing_here(
+    ctx,
+    &missing::Page {
+      project: &props.project,
+      prefix: "pipeline-missing",
+      resources,
+      name: &opened.name,
+      whose: missing::Whose::Pipeline,
+    },
+  )
 }
 
 /// The fields' errors and the rules the draft breaks that keep it from being saved.

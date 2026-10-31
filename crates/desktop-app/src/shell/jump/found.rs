@@ -349,6 +349,7 @@ fn app_pages(ctx: &Ctx) -> Vec<Entry> {
       "settings.tabs.accounts",
       Route::Accounts(AccountsView::default()),
     ),
+    ("browser", "settings.tabs.browser", Route::Browser),
     (
       "orchester",
       "settings.tabs.orchester",

@@ -26,6 +26,7 @@ use orchester_workspace::{
 };
 
 use crate::{
+  browser::{AutoOpen, BrowserLink},
   chrome, hang_reports, lifecycle,
   mcp::{self, McpLink, WindowLink},
   navigation::{
@@ -35,11 +36,12 @@ use crate::{
     tabs::TabSet,
   },
   notifications::{Chosen, NotificationPrefs, NotificationsHost},
+  open_link::{self, LinkHost},
   project::{Landing, Projects, ProjectsHost},
   routes,
   screens::gate::{GateProps, SignInGate},
   services::Services,
-  shell::{needs_you::PanelOpen, status_bar},
+  shell::{needs_you::PanelOpen, status_bar, update::UpdateAsk},
   startup::{self, Problem},
   ui::chat::links::ChatLinks,
 };
@@ -137,6 +139,8 @@ struct SessionWindow {
   navigation: Navigation,
   projects: Projects,
   needs_you: PanelOpen,
+  /// Whether *Restart to update* asks about the runs at work, and a press refused in a state set for testing.
+  update_ask: UpdateAsk,
   /// The closing panel's choice the keyboard moved to.
   focus: Signal<Option<lifecycle::Choice>>,
   first_keys: FirstKeys,
@@ -146,6 +150,8 @@ struct SessionWindow {
   account_tabs: AccountTabs,
   /// The person's notification settings, read by the notifications' host and changed in Settings.
   notifications: NotificationPrefs,
+  /// The Browser window, which the window opens and points.
+  browser: BrowserLink,
 }
 
 impl Component for SessionWindow {
@@ -159,7 +165,7 @@ impl Component for SessionWindow {
     } = ctx.props::<SessionProps>().clone();
     let router = ctx.router(routes::routes());
     let navigation = Navigation::new(ctx.signal(TabSet::at(landing.route)), router.clone());
-    let projects = Projects::new(landing.project, services.jobs);
+    let projects = Projects::new(landing.project, services.jobs.clone());
     link.attach(navigation.clone(), projects.clone());
     lifecycle::hook(ctx, &services.close);
     // The Orchestrator's decisions an earlier session left under way are settled by what happened, in its words.
@@ -168,6 +174,12 @@ impl Component for SessionWindow {
       (services.session_start, mcp::domain::translate(ctx.i18n().clone())),
       services.runners.clone(),
     ));
+    let browser = BrowserLink::new(
+      services.clone(),
+      ctx.window_opener(),
+      navigation.clone(),
+      ctx.t("browser.window.titleAlone"),
+    );
     Self {
       router,
       account_tabs: AccountTabs::new(services.cloud.sign_in_state().account()),
@@ -175,9 +187,11 @@ impl Component for SessionWindow {
       navigation,
       projects,
       needs_you: PanelOpen::new(ctx.signal(false)),
+      update_ask: UpdateAsk::new(ctx.signal(false), ctx.signal(None)),
       focus: ctx.signal(None),
       first_keys: FirstKeys::default(),
       notifications: NotificationPrefs::new(ctx.signal(Chosen::default())),
+      browser,
     }
   }
 
@@ -193,7 +207,9 @@ impl Component for SessionWindow {
     ctx.provide(self.projects.clone());
     ctx.provide(self.first_keys.clone());
     ctx.provide(self.needs_you.clone());
+    ctx.provide(self.update_ask.clone());
     ctx.provide(self.notifications.clone());
+    ctx.provide(self.browser.clone());
     let sign_in = follow_sign_in(ctx, &services.cloud);
     if let Some(account) = sign_in.account() {
       self.account_tabs.follow(account, &self.navigation, &self.projects);
@@ -203,20 +219,32 @@ impl Component for SessionWindow {
     let projects = ctx.mount_keyed::<ProjectsHost>("projects", ());
     let link = ctx.props::<SessionProps>().link.clone();
     let beat = hang_reports::beat::beat(ctx, &link);
-    // Behind the sign-in gate nothing of the projects is told, on the screen or in a notification.
+    // Behind the sign-in gate nothing of the projects is told, on the screen or in a notification, and no page
+    // opens by itself.
     let notifications = sign_in
       .is_signed_in()
       .then(|| ctx.mount_keyed::<NotificationsHost>("notifications", ()));
+    let browser = sign_in
+      .is_signed_in()
+      .then(|| ctx.mount_keyed::<AutoOpen>("browser-auto-open", self.browser.clone()));
     let screen = match &sign_in {
       SignIn::SignedIn { .. } => Router::mount(ctx, self.router.clone()),
       SignIn::SignedOut { since, .. } => gate_screen(ctx, &sign_in, *since),
     };
     let overlay = lifecycle::overlay(ctx, phase, &services.close, &self.focus);
+    // Over the page or the gate: what an `orchester://` link says, behind the gate as well.
+    let links = ctx.mount_keyed::<LinkHost>(
+      "open-links",
+      open_link::host::Props {
+        signed_in: sign_in.is_signed_in(),
+      },
+    );
     // The closing panel lies over the page, which stays as it was under it.
     let body = Stack::new()
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
       .child(screen)
+      .child(links)
       .with_children(overlay);
     let signed_in = sign_in.is_signed_in();
     let framed = if signed_in {
@@ -230,6 +258,7 @@ impl Component for SessionWindow {
       .child(projects)
       .with_children(beat)
       .with_children(notifications)
+      .with_children(browser)
       .child(framed);
     // Behind the gate no shortcut opens a tab or a screen.
     window_input(

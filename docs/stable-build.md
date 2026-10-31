@@ -121,8 +121,12 @@ Finder (`open` starts it the same way). Starting the program itself from a termi
 
 ## Releases from CI
 
-GitHub Actions builds the Windows app and publishes it as a GitHub Release
-(`.github/workflows/app-release.yml`).
+GitHub Actions builds the Windows app, signs its two files with the release key and uploads them
+to Orchester Cloud, which publishes the release on Beta; then it tags the commit `app-v<version>`
+(`.github/workflows/app-release.yml`). The files live in the cloud (*Orchester Cloud upload*
+below), not on GitHub: since ORC-412 (2026-10-31) the workflow makes no GitHub Release, not even
+one with notes only, since the notes are the cloud release's and the app shows them with its
+update offer. The GitHub Releases of earlier versions stay as they are.
 
 **To release**, raise `version` in `[package]` of `crates/desktop-app/Cargo.toml` (the app's own
 version, e.g. `0.2.0` to `0.2.1`; a version with a suffix such as `0.3.0-rc.1` is a pre-release)
@@ -134,23 +138,31 @@ its releases (`server-v*` tags) are in the private platform repository `ivanzaid
 **What it builds**, on a Windows runner: `cargo build --release --locked -p orchester-app -p
 orchester-runner` as the installed app (`ORCHESTER_APP_INSTALLED_BUILD=1`, as `tools/install.ps1`
 builds it: the MCP server on its fixed address, the token in Credential Manager), with the C
-runtime linked in so the programs start without the Visual C++ Redistributable. The workspace's
+runtime linked in so the programs start without the Visual C++ Redistributable, and, in a build of
+its own, the release tool `orchester-release` (`crates/release`). The workspace's
 release profile keeps line tables (`debug = "line-tables-only"`), which on Windows land in a PDB
 beside each program (`orchester.pdb`, `orchester_runner.pdb`; on macOS in a `.dSYM`, by
 `split-debuginfo = "packed"`): GlitchTip resolves an error report's frame addresses with them
 (`docs/error-reports.md`). A release uploads both PDBs with their programs to GlitchTip before the
-release is created (*Debug files in GlitchTip* below). Neither the installer, the zip nor the
-release has a PDB. The release `app-v<version>`, tagged on the pushed commit, has:
+files go to the cloud (*Debug files in GlitchTip* below). Neither the installer nor the zip has a
+PDB. The release has two files, which anyone downloads from the cloud without signing in, once it
+is published, at `https://api.orchester.cloud/v1/releases/<version>/files/<name>`:
 
 - `Orchester-<version>-setup.exe`, the installer (Inno Setup, `tools/installer/orchester.iss`):
   for the current user, without administrator rights, into `%LOCALAPPDATA%\Programs\Orchester`
   (another folder can be chosen on the first install; an upgrade keeps it), with the Start menu
   shortcut *Orchester*, an optional desktop shortcut and an uninstaller. There is no install for
-  all users: the app writes its database beside itself, which *Program Files* does not allow.
+  all users: the app writes its database beside itself, which *Program Files* does not allow. It
+  registers the `orchester://` link for the user (`HKCU\Software\Classes\orchester`, opening
+  `orchester.exe --open-link "%1"`), which the uninstaller removes; the app never registers it
+  itself (`docs/architecture/server.md`, "Accepting outside Orchester").
 - `Orchester-<version>-windows-x64.zip`, the portable app: a folder `Orchester-<version>` with
   `orchester.exe`, `orchester-runner.exe` and a `README.txt`. `orchester.exe` is not released on
-  its own: it starts the runner from beside itself and cannot open a project without it.
-- `SHA256SUMS.txt`, the checksums of both.
+  its own: it starts the runner from beside itself and cannot open a project without it. It takes
+  no `orchester://` links.
+
+Their SHA-256 checksums are in the run's log (*Pack the zip and the installer*) and in the cloud,
+which serves each file with `ETag: "<sha256>"`.
 
 **Its Orchester Cloud** has its web pages at `https://orchester.cloud` and its API at
 `https://api.orchester.cloud/v1`, built in (`BUILD_ADDRESS` and `BUILD_API_ADDRESS` in
@@ -182,9 +194,10 @@ never close it themselves. The installer's folder is not the one `tools/install.
 it at an existing install only if that is the one you want to update (see *Installs from before
 the program's rename* above).
 
-**Not signed.** Neither the programs nor the installer carry a code signature, so SmartScreen
-warns (*More info*, then *Run anyway*). Signing would be one step before packing, with a
-certificate in the repository's secrets.
+**Not code-signed.** Neither the programs nor the installer carry a code signature, so SmartScreen
+warns (*More info*, then *Run anyway*). Code signing would be one step before packing, with a
+certificate in the repository's secrets. (The release key below signs the files for the app's
+updater and the cloud; Windows does not know it.)
 
 **Debug files in GlitchTip.** After *Build*, the Windows job uploads `orchester.exe` with
 `orchester.pdb` and `orchester-runner.exe` with `orchester_runner.pdb` to the GlitchTip project
@@ -194,7 +207,8 @@ sources. sentry-cli's version is pinned in the workflow and its download checked
 SHA-256 Sentry's release registry gives for it
 (`https://release-registry.services.sentry.io/apps/sentry-cli/<version>`, the file
 `sentry-cli-Windows-x86_64.exe`); raise both together. The step fails unless GlitchTip has stored
-both PDBs, and then the release is not created: its error reports would show only addresses.
+both PDBs, and then nothing goes to the cloud: the release's error reports would show only
+addresses.
 
 - **The token** is the Actions secret `GLITCHTIP_AUTH_TOKEN` (*Settings › Secrets and variables
   › Actions › New repository secret* on GitHub). Create it in GlitchTip, signed in as a member of
@@ -203,7 +217,7 @@ both PDBs, and then the release is not created: its error reports would show onl
   sentry-cli only in its environment, never on a command line, and GitHub masks it in the log. A
   release run without the secret stops before the build, with *No GlitchTip token*; replace the
   secret when the token is revoked.
-- **The dry run** uploads nothing and says so with the notice *No debug files upload*.
+- **The dry run** uploads nothing and says so with the notice *No uploads*.
 - **To check a release's debug files**, open the release run's *Upload the debug files to
   GlitchTip* step: it logs each PDB's debug ID (such as `77c4e9bf-…-1`) and the files sentry-cli
   uploaded. GlitchTip lists a project's debug files with their debug IDs at
@@ -212,9 +226,80 @@ both PDBs, and then the release is not created: its error reports would show onl
   report: a panic in the installed release shows in its GlitchTip issue with function names, files
   and lines in its frames, not bare addresses.
 
+**Orchester Cloud upload.** The Windows job keeps both files and the release tool as the run's
+artifacts (7 days). The *Orchester Cloud* job, which alone gets the signing key and the release
+token (no checkout, no build), takes them, writes the notes the app shows with its update offer
+(*Write the release notes*: the version, the commit, *Your data stays*, *Not code-signed*; the
+staff can edit them in the cloud's release admin), and *Sign and upload to Orchester Cloud* runs
+`orchester-release publish` against `https://api.orchester.cloud/v1` ([cloud-api.md](cloud-api.md),
+"App releases"). For each of the two files it builds the signed message of the contract (version,
+`windows`, `x86_64`, name, size, SHA-256; "The signed message") and signs it with the release key.
+Then it creates the draft (`POST /releases`), declares each file with its size, SHA-256, key id
+and signature, sends the parts the cloud does not have yet (8 MiB each), and finalizes. The cloud
+checks every file and publishes the release on **Beta** only when it accepted both; a version with
+a pre-release suffix and one without alike go to Beta, and the staff promote a release without a
+suffix to Stable in the cloud's admin. The step fails unless the cloud accepted both (*Release not
+uploaded*), and then the *Tag* job does not run. Its log names the key id it signed with and each
+file's size and SHA-256.
+
+- **The secrets**, both repository secrets (*Settings › Secrets and variables › Actions › New
+  repository secret*); a release run without either stops before the build (*No release signing
+  key*, *No cloud release token*):
+  - `ORCHESTER_RELEASE_SIGNING_KEY`: the release key's private half, its 32-byte Ed25519 seed as
+    64 lowercase hex characters (whitespace around it is ignored). The tool computes the public
+    key and the key id from it, so the key id is no secret of its own.
+  - `ORCHESTER_CLOUD_RELEASE_TOKEN`: a cloud API token with the scope `releases:write`, which the
+    cloud's operator makes (`docs/cloud-hosting.md` in `ivanzaida/orchester-platform`); it signs
+    nobody in. A device token or a token without the scope is refused with `403 forbidden`.
+
+  Both reach only the environment of the steps that need them, never a command line; the tool
+  never prints them, its errors name no key or token, and no artifact holds them. GitHub masks
+  them in the log as well.
+- **Creating the key pair.** On your own computer, never in CI, in a checkout:
+  `cargo run --release -p orchester-release -- generate-key`. It prints the private key (the seed)
+  once, the public key and the key id. Paste the private key into the secret
+  `ORCHESTER_RELEASE_SIGNING_KEY` and keep it nowhere else: do not save it to a file, and clear the
+  terminal. The public key (64 hex characters) goes to two places: the cloud's accepted release
+  keys (its configuration, `docs/cloud-hosting.md` in the platform repository), which finalizing
+  checks against, and the app's list of accepted release keys (`AcceptedReleaseKeys` of
+  `orchester-api`, built into `orchester-app` by its updater, a later Auto-updater task: until it
+  lands, nothing in the app checks signatures yet). With the secret set,
+  `orchester-release key-id` names the public key and key id of what it holds.
+- **Rotating the key** ([cloud-api.md](cloud-api.md), "Key ids and rotation"): make a new pair as
+  above; add its public key beside the old one to the cloud's accepted keys and to the app's list,
+  and release that app version, still signed with the old key. Then replace the secret
+  `ORCHESTER_RELEASE_SIGNING_KEY` with the new private key: the next releases are signed with it,
+  and the installs that have the release before accept them. Once the installs in use are past the
+  versions that know only the old key, drop the old key from both lists. A leaked key is rotated
+  the same way at once, and its releases withdrawn in the cloud's admin; installs that accept only
+  the leaked key cannot tell its signatures from yours, so they need the new version by hand.
+- **When the cloud rejects an upload**, the step's error says which call failed and why, or each
+  file's verdict:
+  - `unknown_key`: the cloud does not accept the key id the step logged. The secret holds another
+    key than the cloud's list (a rotation half done): add its public key to the cloud, or put the
+    right key into the secret.
+  - `signature_mismatch`: the key id is accepted but its key does not verify the signature, so the
+    cloud's public key for that id is not this key's; check both with `orchester-release key-id`.
+  - `sha256_mismatch` or `incomplete`: the bytes did not arrive as declared (a broken upload). The
+    cloud drops the rejected files' parts and keeps the draft.
+  - `403 forbidden`: the release token lacks `releases:write` or was revoked: replace the secret.
+  - `409 conflict` when declaring: the version is no draft any more (published or withdrawn), or
+    the draft holds a file of that name with other bytes (a rebuild: the programs and the
+    installer differ from build to build). A version is never uploaded twice; when the cloud has
+    published it already and only the *Tag* job failed, re-run that job alone. Otherwise raise the
+    version (or wait the 7 days after which the cloud deletes the draft).
+  - `422 invalid`: a file over 2 GiB, notes over 64 KiB, or a version the cloud does not take.
+
+  After fixing the cause, *Re-run failed jobs* on the run (within the artifacts' 7 days): only the
+  *Orchester Cloud* job runs again, with the same files, so it takes up the draft the failed run
+  left (creating it answers `409 conflict`, which it reads as "exists"), declares each file again
+  and sends only the parts the cloud is missing. Do not *Re-run all jobs*: that builds new files.
+  A draft not finalized within 7 days is deleted by the cloud. A failed *Tag* job alone (the cloud
+  accepted the release) is re-run the same way; it leaves a tag it made already.
+
 **Dry run.** *Actions › App release › Run workflow*, on any branch, with *dry_run* ticked: it
 builds and packs both files and keeps them, with the checksums, as the run's artifact for 7 days,
-and releases nothing, and uploads no debug files. Every run costs CI minutes.
+and releases nothing: no debug files, no cloud upload, no tag. Every run costs CI minutes.
 
 macOS is not built by CI yet; `tools/package-macos.sh` makes `Orchester.app` on a Mac and would be
 the base of a later job on a macOS runner (a bundle signed ad hoc is refused by Gatekeeper on other
@@ -336,7 +421,8 @@ A native acceptance of an Orchestrator proposal is the person's decision; automa
 **The new app's MCP server.** `orchester-app` runs one MCP server of its own instead of two. It listens on
 `127.0.0.1` only and needs a bearer token on every request; where it listens and where its token is kept depend on
 how the app was started (below). It hosts lurq's window tools, the app's
-own (`app_state`, `navigate`, `set_theme`, `hold_reads` in debug builds) and Orchester's domain tools:
+own (`app_state`, `navigate`, `set_theme`, `update_state`, and `hold_reads` and `set_update_state` in debug
+builds) and Orchester's domain tools:
 every tool of Orchester's MCP server above, and the setup tools that only this app serves, which set a
 project up end to end without its configuration screens: `add_project` and `get_project`;
 `set_project_environment` and `set_repository_agent_files` (Project settings; limits through
@@ -352,6 +438,18 @@ input with the rules of the screen it stands for and takes only what that screen
 returns a secret's value. Tools that read are in lurq's Observe scope. Tools that change data are in a
 `data` scope that is always granted, apart from window control (`navigate`, `set_theme`, lurq's input),
 which a release build grants only when its settings or `ORCHESTER_APP_MCP_WINDOW_CONTROL=on` allow it.
+
+**Update states in a QA copy.** A QA copy never updates itself, so `update_state` always answers
+`not_this_copy` (reason `qa`). To see the other states on screen, debug builds (QA copies included) serve
+`set_update_state` (window control): it takes the very JSON `update_state` answers and shows that state in place of
+the real one, in Settings › Updates, the status bar's update item and the ready notification, with
+`updated: {version, notes}` for the status bar's *Updated to* (S6) and *What's new*. `{"real": true}` shows the real
+state again. A state set this way lives in memory only: nothing of it is written to `orchester.db`, and it is gone at
+the next start. It never checks, downloads or installs anything: *Restart to update* or *Install now* pressed in it
+says *Nothing installs: this update state was set for testing.* under the *Channel* row. *Install now* with runs at
+work still opens the question about them (`MGILm`); its buttons give that same answer. A release build does not
+serve the tool. A QA copy shows no OS notifications unless `ORCHESTER_APP_NOTIFICATIONS=1`; without it the app's log
+has the ready notification's title and body (`an update is ready; this build shows no notification`).
 
 | Started as | Address | Token | Discovery file |
 | --- | --- | --- | --- |

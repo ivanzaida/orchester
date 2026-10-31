@@ -1,0 +1,345 @@
+//! The window's panel under the title bar (`Body` `JiHDn`, `Panel` `DsHim`) and its toolbar (`Toolbar` `Zv6Z5`): back,
+//! forward and reload; the address line, which ends with the owner of the tab shown (*Run #102 · ORC-107*, *Your
+//! tab*) and has the focus while the strip is empty (`06` `eCCuU`, given by the root, and let go of when a tab comes
+//! unless the person typed there); and *Open in a browser window*
+//! (decision 7). Under the toolbar the line that says what an agent did or that the person's input holds it
+//! (`page::activity`), and a line when the browser could not do what was asked; then the page. Without a browser the
+//! toolbar is faded and takes no input (`07` `YEv2c`); with the browser in a window of its own it is faded too and the
+//! button is gone, and the address line shows the tab shown, which the runner keeps across the restart (`05` `GjcAk`).
+
+use std::sync::Arc;
+
+use lurq::{
+  app::{
+    component::Component,
+    ctx::Ctx,
+    events::KeyboardEvent,
+    theme::{BorderSize, FormTextRole, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+  },
+  components::{Column, Row, Text, TextInput, TextOverflow},
+  core::Signal,
+  layout::Alignment,
+  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+};
+use orchester_ipc::browser::{BrowserCommand, BrowserMode, BrowserTabId, Navigation};
+use parking_lot::Mutex;
+
+use super::{
+  model::{self, Owner},
+  page::activity,
+  state::Showing,
+};
+use crate::{
+  theme::{BrowserSpacing, BrowserText, DISABLED_OPACITY, ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
+  ui::{
+    button::{ActionButton, ButtonKind},
+    icon::{Icon, icon},
+    icon_button::IconButton,
+  },
+};
+
+/// The toolbar (`Toolbar` `Zv6Z5`) and the address line (`Address` `fPcCX`).
+const TOOLBAR_HEIGHT: f32 = 44.0;
+const ADDRESS_HEIGHT: f32 = 28.0;
+
+/// The panel with the toolbar, the lines under it and `page`.
+pub fn panel(ctx: &mut Ctx, showing: &Showing, failed: bool, page: Element) -> Element {
+  let toolbar = toolbar(ctx, showing);
+  let activity = (!showing.unavailable() && showing.mode() == BrowserMode::Headless)
+    .then(|| activity::line(ctx, showing))
+    .flatten();
+  let failure = failed.then(|| {
+    Row::new()
+      .id("browser-failed")
+      .width(Dimension::Pct(100.0))
+      .padding(Padding::symmetric(BrowserSpacing::Activity.role(), SpacingSize::Sm))
+      .spacing(SpacingSize::Sm)
+      .align_items(Alignment::Center)
+      .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
+      .child(icon(Icon::CircleAlert, IconSize::Md, PaletteColor::Danger))
+      .child(Text::new(&ctx.t("browser.failed")).variant(TypographyStyle::Description))
+  });
+  Column::new()
+    .id("browser-body")
+    .width(Dimension::Pct(100.0))
+    .height(Dimension::Pct(100.0))
+    .padding(
+      Padding::new()
+        .left(SpacingSize::Sm)
+        .right(SpacingSize::Sm)
+        .bottom(SpacingSize::Sm),
+    )
+    .background(PaletteColor::SurfaceBase)
+    .child(
+      Column::new()
+        .id("browser-panel")
+        .width(Dimension::Pct(100.0))
+        .flex(1.0)
+        .min_height(Dimension::Px(0.0))
+        .clip()
+        .background(PaletteColor::SurfacePanel)
+        .border(Border::inside(BorderSize::Sm, ExtraColor::PanelBorder.role()))
+        .rounded(RadiusSize::Lg)
+        .child(toolbar)
+        .with_children(activity)
+        .with_children(failure)
+        .child(page),
+    )
+    .into()
+}
+
+fn toolbar(ctx: &mut Ctx, showing: &Showing) -> Element {
+  let tab = showing.shown().cloned();
+  let usable = showing.usable();
+  // With no tab to go through, back, forward and reload are faded (`05`, `06`, `07`).
+  let navigate = |ctx: &mut Ctx, (id, glyph, key): (&str, Icon, &str), to: Navigation| {
+    let button = IconButton::new(id, glyph, ctx.t(key));
+    match tab.clone().filter(|_| usable) {
+      Some(tab) => {
+        let commands = showing.commands.clone();
+        button
+          .on_click(move || {
+            commands.send(BrowserCommand::Navigate {
+              tab: tab.clone(),
+              to: to.clone(),
+            });
+          })
+          .render(ctx)
+      }
+      None => Row::new().opacity(DISABLED_OPACITY).child(button.render(ctx)).into(),
+    }
+  };
+  let back = navigate(
+    ctx,
+    ("browser-back", Icon::ArrowLeft, "browser.toolbar.back"),
+    Navigation::Back,
+  );
+  let forward = navigate(
+    ctx,
+    ("browser-forward", Icon::ArrowRight, "browser.toolbar.forward"),
+    Navigation::Forward,
+  );
+  let reload = navigate(
+    ctx,
+    ("browser-reload", Icon::RotateCw, "browser.toolbar.reload"),
+    Navigation::Reload,
+  );
+  // The address line is faded while it takes no input: the browser in its own window (`05`) or none found (`07`).
+  let address = ctx.mount_keyed::<Address>("browser-address", showing.clone());
+  let address = if usable {
+    address
+  } else {
+    Row::new()
+      .flex(1.0)
+      .min_width(Dimension::Px(0.0))
+      .opacity(DISABLED_OPACITY)
+      .child(address)
+      .into()
+  };
+  // Without a browser there is no window to open the page in (`07`). Once pressed it turns its loader until the browser
+  // restarted, which takes seconds; the toolbar is faded meanwhile.
+  let opening = showing.restarting && showing.mode() == BrowserMode::Headless;
+  let open_in_window = (usable || opening).then(|| {
+    let commands = showing.commands.clone();
+    let button = ActionButton::new(
+      "browser-open-in-window",
+      ButtonKind::Ghost,
+      ctx.t("browser.toolbar.openInWindow"),
+    )
+    .icon(Icon::AppWindow)
+    .on_click(move || commands.send(BrowserCommand::OpenInWindow));
+    if opening { button.loading() } else { button }
+  });
+  Row::new()
+    .id("browser-toolbar")
+    .width(Dimension::Pct(100.0))
+    .height(Dimension::Px(TOOLBAR_HEIGHT))
+    .flex_shrink(0.0)
+    .padding(Padding::horizontal(SpacingSize::Sm))
+    .spacing(SpacingSize::Xs)
+    .align_items(Alignment::Center)
+    .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .child(back)
+    .child(forward)
+    .child(reload)
+    // The 4 more before the address line (`Gap` `K8rnhr`).
+    .child(Row::new().padding(Padding::new().left(SpacingSize::Xs)))
+    .child(address)
+    .with_children(open_in_window.map(|button| Row::new().padding(Padding::new().left(SpacingSize::Xs)).child(button)))
+    .into()
+}
+
+/// The address line: the address of the tab shown, which the person can type over and open with Enter.
+pub struct Address {
+  value: Signal<String>,
+  focused: Signal<bool>,
+  /// The tab and address the value follows while the person is not typing.
+  follows: Mutex<Option<(Option<BrowserTabId>, String)>>,
+  /// The text input's key. Moving it lets go of the focus: lurq has no call for that, but blurs a node it replaces.
+  input_key: Mutex<u64>,
+}
+
+impl Component for Address {
+  type Props = Showing;
+
+  fn create(ctx: &mut Ctx) -> Self {
+    Self {
+      value: ctx.signal(String::new()),
+      focused: ctx.signal(false),
+      follows: Mutex::new(None),
+      input_key: Mutex::new(0),
+    }
+  }
+
+  fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
+    let showing = ctx.props::<Showing>().clone();
+    let shown = showing.shown().and_then(|tab| showing.strip.find(tab)).cloned();
+    let address = shown
+      .as_ref()
+      .map(|tab| model::shown_address(&tab.url).to_owned())
+      .filter(|address| address != "about:blank")
+      .unwrap_or_default();
+    self.follow(showing.usable(), shown.as_ref().map(|tab| tab.id.clone()), &address);
+    let input = self.input(ctx, &showing, shown.as_ref().map(|tab| tab.id.clone()));
+    let owner = shown.as_ref().map(|tab| owner(ctx, &tab.owner));
+    let stroke = if self.focused.get() {
+      PaletteColor::BorderFocus
+    } else {
+      PaletteColor::Border
+    };
+    Row::new()
+      .id("browser-address-box")
+      .flex(1.0)
+      .min_width(Dimension::Px(0.0))
+      .height(Dimension::Px(ADDRESS_HEIGHT))
+      .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
+      .spacing(SpacingSize::Sm)
+      .align_items(Alignment::Center)
+      .background(PaletteColor::SurfaceInput)
+      .border(Border::inside(BorderSize::Sm, stroke))
+      .rounded(RadiusSize::Md)
+      .child(icon(Icon::Globe, IconSize::Base, PaletteColor::TextMuted))
+      .child(input)
+      .with_children(owner)
+  }
+}
+
+impl Address {
+  /// The value follows the tab shown and its address, unless the person is typing over it. The focus *Empty* gave the
+  /// line to wait for an address goes when a tab comes instead; text typed there keeps it. A line that takes no input
+  /// (`05`, `07`) keeps no focus.
+  fn follow(&self, usable: bool, tab: Option<BrowserTabId>, address: &str) {
+    let focused = self.focused.get_untracked();
+    if focused && !usable {
+      *self.input_key.lock() += 1;
+    }
+    let mut follows = self.follows.lock();
+    let typed = follows
+      .as_ref()
+      .is_some_and(|(_, followed)| *followed != self.value.get_untracked());
+    if focused && typed && usable {
+      return;
+    }
+    let next = (tab, address.to_owned());
+    if follows.as_ref() == Some(&next) && (usable || !typed) {
+      return;
+    }
+    let tab_came = next.0.is_some() && follows.as_ref().is_some_and(|(tab, _)| tab.is_none());
+    if focused && tab_came {
+      *self.input_key.lock() += 1;
+    }
+    self.value.set(next.1.clone());
+    *follows = Some(next);
+  }
+
+  /// The address in mono; the words that stand in for it in sans (`URL` in `06` `eCCuU`, `07` `YEv2c`).
+  fn input(&self, ctx: &Ctx, showing: &Showing, tab: Option<BrowserTabId>) -> TextInput {
+    let theme = ctx.theme();
+    let resolve = |typography, color| FormTextRole { typography, color }.resolve(&theme.typography(), &theme.palette());
+    let placeholder = if showing.unavailable() {
+      ctx.t("browser.toolbar.noBrowser")
+    } else {
+      ctx.t("browser.toolbar.typeAddress")
+    };
+    let (gained, lost) = (self.focused.clone(), self.focused.clone());
+    let (value, commands) = (self.value.clone(), showing.commands.clone());
+    let (hooks, address) = (showing.person.clone(), showing.address.clone());
+    let input = TextInput::styled(
+      self.value.clone(),
+      resolve(BrowserText::Address.role(), PaletteColor::TextPrimary),
+    )
+    .placeholder_style(resolve(ExtraTypography::Property.role(), PaletteColor::TextMuted))
+    .placeholder(&placeholder)
+    .caret_color(PaletteColor::TextPrimary)
+    .id("browser-address")
+    .key(self.input_key.lock().to_string())
+    .ref_element(showing.address.clone())
+    .describe("a11y_name", ctx.t("browser.toolbar.address"))
+    .flex(1.0)
+    .min_width(Dimension::Px(0.0))
+    .single_line()
+    .on_focus(move || gained.set(true))
+    .on_blur(move || lost.set(false))
+    // Every key reaches every handler: an Enter on the page is the page's. lurq's own Enter then blurs the line, so it
+    // follows the tab again; with nothing to open the line keeps the focus.
+    .on_key_down(move |event: KeyboardEvent| {
+      if event.key != "Enter" || !address.focused() {
+        return;
+      }
+      let Some(url) = model::typed_address(&value.get_untracked()) else {
+        event.prevent_default();
+        return;
+      };
+      match tab.clone() {
+        Some(tab) => commands.send(BrowserCommand::Navigate {
+          tab,
+          to: Navigation::Address { url },
+        }),
+        None => {
+          let hooks = hooks.clone();
+          commands.send_then(BrowserCommand::OpenTab { url: Some(url) }, move |reply| {
+            if let orchester_ipc::browser::BrowserReply::TabOpened { tab } = reply {
+              hooks.pick(&tab);
+            }
+          });
+        }
+      }
+    });
+    if showing.usable() {
+      input
+    } else {
+      input.focusable(false)
+    }
+  }
+}
+
+/// Whose the tab shown is, at the address line's end (`Owner` `esAS2`).
+fn owner(ctx: &Ctx, owner: &Owner) -> Element {
+  let (glyph, text): (Icon, Arc<str>) = match owner {
+    Owner::Person => (Icon::User, ctx.t("browser.toolbar.ownerYours")),
+    Owner::Run { known: Some(known), .. } => (
+      Icon::Bot,
+      ctx.t_args(
+        "browser.toolbar.ownerRun",
+        [
+          ("number", known.number.get().to_string()),
+          ("key", known.key.to_string()),
+        ],
+      ),
+    ),
+    Owner::Run { known: None, .. } => (Icon::Bot, Arc::from("")),
+  };
+  Row::new()
+    .id("browser-address-owner")
+    .flex_shrink(0.0)
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::Center)
+    .child(icon(glyph, IconSize::Sm, PaletteColor::TextMuted))
+    .child(
+      Text::new(&text)
+        .variant(ExtraTypography::Note.role())
+        .nowrap()
+        .text_overflow(TextOverflow::Elipsis),
+    )
+    .into()
+}

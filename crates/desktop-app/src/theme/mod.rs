@@ -12,6 +12,7 @@
 mod accounts;
 pub mod agents;
 pub mod badge;
+mod browser;
 mod cards;
 mod chat_links;
 mod code;
@@ -21,6 +22,7 @@ mod conversation;
 mod date_picker;
 mod decisions;
 mod delivery;
+mod dialog;
 mod failure;
 mod files;
 mod fonts;
@@ -67,6 +69,7 @@ use lurq::{
 
 pub use self::{
   accounts::{AccountsSpacing, AccountsText},
+  browser::{BrowserBorder, BrowserColor, BrowserSpacing, BrowserText},
   cards::{CardsSpacing, CardsText, NOT_CHOSEN_OPACITY},
   chat_links::ChatLinkLooks,
   code::{CodeText, token_color},
@@ -76,6 +79,7 @@ pub use self::{
   date_picker::{DatePickerText, UNAVAILABLE_DAY_OPACITY},
   decisions::{DecisionSpacing, DecisionText},
   delivery::{DeliverySpacing, DeliveryText, LOCKED_SWITCH_OPACITY},
+  dialog::{DIALOG_TILE, DIALOG_WIDTH, DialogSpacing, DialogText},
   failure::{FailureSpacing, FailureText},
   files::{FilesRadius, FilesText},
   fonts::mono_space,
@@ -170,6 +174,8 @@ pub fn install(app: &mut App, mode: Mode) {
   failure::install(theme);
   modules::install(theme);
   project_settings::install(theme);
+  browser::install(theme);
+  dialog::install(theme);
   theme.set_shadows(shadow::shadows());
   theme.set_form(form::form());
 }

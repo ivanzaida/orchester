@@ -8,6 +8,7 @@
 //! project on this computer, and shows none of them, reads them all ([`Workspace::every_project`]). The team servers
 //! are the account's in the same way ([`servers`]).
 
+mod browser;
 mod orchestrator_consent;
 mod servers;
 
@@ -31,7 +32,10 @@ use orchester_exec::programs::Programs;
 use orchester_store::{AppDb, PreviousSession, ProjectDb, RegisteredProject, SessionEnd, SessionId, StoreError};
 use parking_lot::Mutex;
 
-pub use self::orchestrator_consent::OrchestratorConsent;
+pub use self::{
+  browser::{AgentsBrowser, BrowserSettings, ChooseBrowserError},
+  orchestrator_consent::OrchestratorConsent,
+};
 use crate::{
   accounts::folders::found,
   messages::{self, Message},
@@ -158,6 +162,8 @@ pub struct Workspace {
   pub(crate) listed: Arc<AtomicBool>,
   /// Counts the changes to the agent accounts made through this workspace ([`Workspace::account_changes`]).
   pub(crate) account_changes: Arc<tokio::sync::watch::Sender<u64>>,
+  /// Where Settings › Browser looks for an installed browser ([`browser`]).
+  browser_folders: browser::BrowserFolders,
 }
 
 impl PartialEq for Workspace {
@@ -177,6 +183,7 @@ impl Workspace {
       orchestrator: orchestrator_consent::Consents::default(),
       listed: Arc::default(),
       account_changes: Arc::new(tokio::sync::watch::Sender::new(0)),
+      browser_folders: browser::BrowserFolders::default(),
     }
   }
 

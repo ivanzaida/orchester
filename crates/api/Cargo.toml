@@ -22,6 +22,9 @@ identity = ["dep:base64", "dep:ring"]
 # The check of a release file's Ed25519 signature against the accepted release keys (`releases::AcceptedReleaseKeys`):
 # for the app before it runs an update, and for the cloud when CI finalizes an upload.
 release-signature = ["dep:ring"]
+# Signing a release file with a release key's private half (`releases::ReleaseSigningKey`), for CI's release tool
+# (`orchester-release`).
+release-signing = ["release-signature"]
 
 [dependencies]
 orchester-core.workspace = true
@@ -52,6 +55,10 @@ tokio.workspace = true
 
 [[test]]
 name = "identity"
+required-features = ["identity"]
+
+[[test]]
+name = "invites_accept"
 required-features = ["identity"]
 
 [[test]]

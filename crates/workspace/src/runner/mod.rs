@@ -10,6 +10,7 @@
 
 mod answers;
 mod ask;
+mod browser;
 mod chat;
 mod check;
 mod connection;
@@ -50,7 +51,7 @@ use self::{
   report::{Reporter, Shared},
   state::{RunnerEvent, RunnerState},
 };
-use crate::{activity::Activity, workspace::OpenProject};
+use crate::{activity::Activity, browser::BrowserWindow, workspace::OpenProject};
 
 /// How long a close without active work waits for the runner to stop and exit before
 /// terminating it.
@@ -159,6 +160,7 @@ impl Runners {
           counters: Mutex::new(HashMap::new()),
           last_events: Mutex::new(HashMap::new()),
           activity,
+          browser: BrowserWindow::default(),
         }),
         projects: Mutex::new(HashMap::new()),
         tabbed: Mutex::new(HashSet::new()),
@@ -540,6 +542,39 @@ impl Runners {
       .filter_map(|entry| entry.connection.take())
       .collect();
     drop(connections);
+  }
+
+  /// The repositories of the projects with a runner in this session, whether it still runs or not.
+  pub fn project_roots(&self) -> Vec<PathBuf> {
+    let mut roots: Vec<PathBuf> = self.inner.projects.lock().keys().cloned().collect();
+    roots.sort();
+    roots
+  }
+
+  /// Takes back [`Self::shutdown`] when the application did not close after all (an update that did not install):
+  /// runners start again, at once for the projects the tabs show and the displayed one, and for the others when they
+  /// are shown.
+  pub fn reopen(&self) {
+    self.inner.closing.store(false, Ordering::Release);
+    let stopped: Vec<(PathBuf, Arc<str>)> = {
+      let mut projects = self.inner.projects.lock();
+      let roots: Vec<PathBuf> = projects
+        .iter()
+        .filter(|(_, entry)| entry.connection.is_none())
+        .map(|(root, _)| root.clone())
+        .collect();
+      roots
+        .into_iter()
+        .filter_map(|root| projects.remove(&root).map(|entry| (root, entry.name)))
+        .collect()
+    };
+    let displayed = self.displayed();
+    let tabbed = self.inner.tabbed.lock().clone();
+    for (root, name) in stopped {
+      if tabbed.contains(&root) || displayed.as_ref() == Some(&root) {
+        self.ensure(&root, &name);
+      }
+    }
   }
 }
 

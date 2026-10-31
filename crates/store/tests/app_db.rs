@@ -540,3 +540,36 @@ fn error_reports_are_on_in_a_database_that_never_stored_them() {
   assert!(db.estimates_story_points().expect("kept"));
   assert!(db.sends_error_reports().expect("read"), "on until turned off");
 }
+
+#[test]
+fn browser_window_opens_itself_until_turned_off_and_kept() {
+  let dir = tempfile::tempdir().expect("temporary directory");
+  let path = dir.path().join("orchester.db");
+  let mut db = AppDb::open(&path).expect("create");
+  assert!(db.browser_window_opens_itself().expect("read"), "on in a new database");
+  db.set_browser_window_opens_itself(false).expect("turn off");
+  drop(db);
+  let mut db = AppDb::open(&path).expect("reopen");
+  assert!(!db.browser_window_opens_itself().expect("read"), "off is kept");
+  db.set_browser_window_opens_itself(true).expect("turn on");
+  drop(db);
+  let db = AppDb::open(&path).expect("reopen");
+  assert!(db.browser_window_opens_itself().expect("read"), "on is kept");
+}
+
+/// The schema before the *Browser* window's setting (30).
+const BEFORE_BROWSER_WINDOW: u32 = 29;
+
+#[test]
+fn browser_window_opens_itself_in_a_database_that_never_stored_it() {
+  let dir = tempfile::tempdir().expect("temporary directory");
+  let path = dir.path().join("orchester.db");
+  let raw = AppDb::create_at_version(&path, BEFORE_BROWSER_WINDOW).expect("the schema before the setting");
+  raw
+    .execute("UPDATE app_settings SET sends_error_reports = 0", [])
+    .expect("a setting of that schema");
+  drop(raw);
+  let db = AppDb::open(&path).expect("migrate");
+  assert!(!db.sends_error_reports().expect("kept"));
+  assert!(db.browser_window_opens_itself().expect("read"), "on until turned off");
+}

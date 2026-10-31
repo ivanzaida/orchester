@@ -246,11 +246,12 @@ pub struct DevicesResponse {
 pub struct IdentityTokenRequest {
   pub audience: String,
   /// `admin` for a sign-in to that server's admin, which must be linked to the cloud; `code` to show with a code
-  /// entered in the app; `None` to join with a device.
+  /// entered in the app; `accept` to accept `invite` in the browser; `None` to join with a device.
   #[serde(default)]
   pub purpose: Option<TokenPurpose>,
   /// An open invite to the account's email from that server, which the token accepts: the token names it, and the
-  /// team server admits the verified email to it. Only for a join (no purpose). The cloud's copy of the invite ends.
+  /// team server admits the verified email to it. Only for a join (no purpose) or with purpose `accept`. The cloud's
+  /// copy of the invite ends.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub invite: Option<InviteId>,
 }
@@ -267,6 +268,9 @@ pub enum TokenPurpose {
   /// Showing, with a code entered in the app, that the person signed in with two-factor authentication. The server
   /// takes it only with a code (`POST /auth/code`), never to join or sign in with the identity itself.
   Code,
+  /// Accepting the invite the token names in the browser (`docs/architecture/server.md`, "Accepting outside
+  /// Orchester"): the server takes it only at `POST /auth/cloud/accept`, which takes no other purpose.
+  Accept,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -377,11 +381,24 @@ pub struct CloudInvite {
   /// (`403 mfa_required`) and a device that signed in or stepped up with it (`403 session_without_mfa`).
   #[serde(default)]
   pub needs_two_factor: bool,
+  /// When the account accepted it in the browser, while the team server's receipt has not come back
+  /// (`docs/architecture/server.md`, "Accepting outside Orchester"); `None` for an open invite, and from a cloud from
+  /// before browser acceptance.
+  #[serde(default)]
+  pub accepted_at: Option<i64>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CloudInvites {
   pub invites: Vec<CloudInvite>,
+}
+
+/// `POST /invites/{id}/accepted`: the team server's signed receipt (`statements::InviteAcceptance`) for an invite
+/// accepted in the browser, from the server's web app or carried by the browser; the cloud then records the join.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct InviteJoined {
+  pub receipt: String,
 }
 
 /// The current key set as a compact JWS signed by the cloud's root key (`identity::KeySet` verifies it).

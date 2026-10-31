@@ -11,6 +11,8 @@
 //! | the checks, network off | not offered | not offered |
 //! | a QA copy of the app, built from the worktree (`start_qa_app`), network on | asks; Approve similar is kept to the script's content | not offered |
 //! | a QA copy of the app, network off | not offered | not offered |
+//! | the browser tools (`browser_*`), the profile's Browser and network on | runs or asks per call, by the page's site ([`browser::decide`]) | the same |
+//! | the browser tools, Browser or network off | not offered | not offered |
 //!
 //! A call that asks reaches a person as any request outside the step's permissions does, and Orchester's
 //! own answers (a rule of Approve similar, auto-approval) apply to it as to an MCP call, but auto-approval
@@ -26,9 +28,13 @@
 
 use serde_json::{Value, json};
 
-use super::{AccessClass, OrchesterTool, ProjectTool, SERVER, ToolCall, catalog::input_schema};
+use super::{
+  AccessClass, OrchesterTool, ProjectTool, SERVER, ToolCall,
+  browser::{self, BrowserTool},
+  catalog::input_schema,
+};
 use crate::{
-  permission::{AgentPermissions, NetworkAccess},
+  permission::{AgentPermissions, NetworkAccess, browser::AllowedSites},
   resource::RepositoryAccess,
   source::{RunSources, SourcePath},
 };
@@ -62,9 +68,13 @@ pub fn decide(tool: OrchesterTool, permissions: &AgentPermissions) -> Option<Too
 }
 
 /// Whether auto-approval may answer a call of `tool` of MCP server `server`: any call but one of Orchester's
-/// `run_check` or `start_qa_app`, which run programs outside every sandbox.
+/// `run_check` or `start_qa_app`, which run programs outside every sandbox, or of its browser tools
+/// ([`super::browser`]), which can send anything to any site.
 pub fn auto_approvable(server: &str, tool: &str) -> bool {
-  server != SERVER || (tool != OrchesterTool::RunCheck.as_str() && tool != OrchesterTool::StartQaApp.as_str())
+  server != SERVER
+    || (tool != OrchesterTool::RunCheck.as_str()
+      && tool != OrchesterTool::StartQaApp.as_str()
+      && BrowserTool::from_name(tool).is_none())
 }
 
 /// The tools one step is offered, with their policy, the checks `run_check` runs, and the run's sources, which the
@@ -75,11 +85,15 @@ pub struct StepTools {
   /// Name, description and whether a call asks, of each check, in library order.
   checks: Vec<(String, String, bool)>,
   sources: Vec<SourcePath>,
+  /// The allowed sites, the prompt names them, when the browser tools are offered ([`super::browser::offered`]).
+  /// Whether a call of one asks depends on the page it acts on, so the runner decides each call itself
+  /// ([`super::browser::decide`]): every CLI runs them unasked.
+  browser: Option<AllowedSites>,
 }
 
 impl StepTools {
   /// The tools of a step with `permissions` offered `checks`; `run_check` only when there is one. `run_check` runs
-  /// without asking when no check asks.
+  /// without asking when no check asks. The browser tools come with the profile's *Browser* and the step's network.
   pub fn for_step(permissions: &AgentPermissions, checks: &[ProjectTool]) -> Self {
     let all_run = checks.iter().all(|check| !check.asks());
     let offered = OrchesterTool::ALL
@@ -104,7 +118,18 @@ impl StepTools {
         .map(|check| (check.name().to_owned(), check.description().to_owned(), check.asks()))
         .collect(),
       sources: Vec::new(),
+      browser: browser::offered(permissions).then(|| permissions.browser().sites().clone()),
     }
+  }
+
+  /// Whether the step is offered the browser tools.
+  pub const fn offers_browser(&self) -> bool {
+    self.browser.is_some()
+  }
+
+  /// The browser tools the step is offered: all of them, or none.
+  fn browser_tools(&self) -> impl Iterator<Item = BrowserTool> {
+    BrowserTool::ALL.into_iter().filter(|_| self.offers_browser())
   }
 
   /// These tools in a run with `sources`, which the prompt names.
@@ -168,13 +193,15 @@ impl StepTools {
   }
 
   /// One Claude Code allow rule per tool that runs, `mcp__Orchester__<tool>`; the tools that ask get none,
-  /// so they reach the permission prompt.
+  /// so they reach the permission prompt. Every browser tool gets one: the runner asks about a browser call itself
+  /// when it arrives.
   pub fn claude_allow_rules(&self) -> Vec<String> {
     self
       .offered
       .iter()
       .filter(|(_, policy)| *policy == ToolPolicy::Runs)
       .map(|(tool, _)| tool.called(true))
+      .chain(self.browser_tools().map(|tool| tool.called(true)))
       .collect()
   }
 
@@ -182,11 +209,24 @@ impl StepTools {
   /// approval request of its own. The runner asks about a tool that asks when its call arrives; whether
   /// Codex 0.159.2 honours `prompt` while the step's `mcp_elicitations` is off is not verified.
   pub fn codex_approved(&self) -> Vec<&'static str> {
-    self.offered.iter().map(|(tool, _)| tool.as_str()).collect()
+    self
+      .offered
+      .iter()
+      .map(|(tool, _)| tool.as_str())
+      .chain(self.browser_tools().map(BrowserTool::as_str))
+      .collect()
   }
 
   /// The `tools` of the server's MCP `tools/list` result.
   pub fn mcp_tools(&self) -> Vec<Value> {
+    let browser = self.browser_tools().map(|tool| {
+      json!({
+        "name": tool.as_str(),
+        "description": tool.description(),
+        "inputSchema": tool.input_schema(),
+        "annotations": {"readOnlyHint": tool.read_only(), "destructiveHint": false, "openWorldHint": true},
+      })
+    });
     self
       .offered
       .iter()
@@ -202,6 +242,7 @@ impl StepTools {
           },
         })
       })
+      .chain(browser)
       .collect()
   }
 
@@ -253,6 +294,9 @@ impl StepTools {
         OrchesterTool::StartQaApp.called(claude),
         OrchesterTool::CallRunApp.called(claude),
       ));
+    }
+    if let Some(sites) = &self.browser {
+      text.push_str(&browser::prompt::lines(sites, claude));
     }
     text
   }

@@ -21,7 +21,7 @@ use orchester_app::{
   routes::{OverviewTab, ProjectPage, Route},
   shell::status_bar::{
     BarAction, BarFacts, BarProps, CloudFacts, ProjectFacts, ReadFailure, RunnerFacts, ServerFacts, StatusBarView,
-    Stopping,
+    Stopping, UpdateFacts,
   },
   theme::{self, Mode},
   ui::tooltip::TOOLTIP_DELAY,
@@ -44,6 +44,7 @@ use orchester_workspace::{
 use parking_lot::Mutex;
 
 mod activity;
+mod browser;
 mod fresh;
 mod give_way;
 mod items;
@@ -58,6 +59,7 @@ mod plan_limits;
 mod server;
 #[path = "../support/mod.rs"]
 mod support;
+mod update;
 mod window;
 
 const ROOT: &str = "H:/projects/kontur";
@@ -182,6 +184,7 @@ fn kontur(runner: RunnerFacts, tasks: ProjectTasks) -> ProjectFacts {
     read_failure: None,
     undecided_runs: 0,
     limits: Vec::new(),
+    browser_tabs: 0,
   }
 }
 
@@ -193,6 +196,7 @@ fn facts(project: Option<ProjectFacts>) -> BarFacts {
     stopping: Stopping::Idle,
     servers: ServerFacts::None,
     cloud: CloudFacts::Quiet,
+    update: UpdateFacts::Quiet,
   }
 }
 

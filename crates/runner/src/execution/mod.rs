@@ -18,6 +18,7 @@ mod attach;
 mod blocked_runs;
 mod board;
 mod broken;
+mod browser;
 mod chat;
 mod checkpoint;
 mod codebase_index;
@@ -77,7 +78,10 @@ use tokio::{
   task::JoinHandle,
 };
 
-pub use self::{attach::Attached, step::QaSlots};
+pub use self::{
+  attach::Attached,
+  step::{QaSlots, outside_read_refusals},
+};
 use self::{
   board::Board,
   control::Control,
@@ -85,6 +89,7 @@ use self::{
   run::{RunTask, TaskContext},
   step::QaApps,
 };
+use crate::browser::ProjectBrowser;
 pub use crate::notify::Notifier;
 
 /// How long stopping waits for each run to end its agent and record the interruption.
@@ -130,6 +135,8 @@ struct Inner {
   board: Arc<Board>,
   /// The QA apps the runs' agents started, and the computer's QA slots they take.
   qa: Arc<QaApps>,
+  /// The project's browser, started at its runs' first use (`browser`).
+  browser: Arc<ProjectBrowser>,
   active: Mutex<HashMap<RunId, ActiveRun>>,
   /// Serializes requests that start a task or change a run while its task may end. A fallback
   /// must not change a stored run after another request has started its next task.
@@ -168,6 +175,7 @@ impl Scheduler {
         relay,
         board: Arc::new(Board::new(notifier.clone())),
         qa: Arc::new(QaApps::new(qa_slots)),
+        browser: Arc::new(ProjectBrowser::of_project(project_root)),
         notifier,
         active: Mutex::new(HashMap::new()),
         continuing: tokio::sync::Mutex::new(()),
@@ -329,6 +337,7 @@ impl Scheduler {
         run,
         task: cancelled.task(),
       });
+      self.inner.browser.end_run(run);
       return Ok(());
     }
   }
@@ -544,13 +553,16 @@ impl Scheduler {
       relay: self.inner.relay.clone(),
       board: self.inner.board.clone(),
       qa: self.inner.qa.clone(),
+      browser: self.inner.browser.clone(),
       disks: self.inner.disks.clone(),
       controls,
       settled: settled.clone(),
     };
     let scheduler = self.clone();
     let task = tokio::spawn(async move {
-      RunTask::new(db, prepared, context).drive().await;
+      if RunTask::new(db, prepared, context).drive().await {
+        scheduler.inner.browser.end_run(run);
+      }
       // A run its task stopped at a plan limit continues at the reset, and one it paused for low disk space once
       // the disk has room.
       scheduler.wait_for_plan_resets();

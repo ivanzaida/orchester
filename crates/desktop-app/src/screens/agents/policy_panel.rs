@@ -1,6 +1,7 @@
 //! Connection enforcement beside a profile's page (`Connection enforcement` `Lj9fe` in 01c): the CLI and when it was
-//! checked, then each setting with what enforces it and *Enforced* or *Not enforced*, the approval mode and the
-//! repository's agent files too, and that the limits apply to new runs after publishing.
+//! checked, then each setting with what enforces it and *Enforced* or *Not enforced*, the Browser (`R2Md4h` in
+//! `hQfEh`), the approval mode and the repository's agent files too, and that the limits apply to new runs after
+//! publishing.
 use std::sync::Arc;
 
 use lurq::{
@@ -94,6 +95,14 @@ fn rows(
     };
     rows.push(row(ctx, key, &ctx.t(key), &mechanism, State::Enforced(enforced)));
   }
+  // The browser tools are Orchester's own, served by its runner whatever the CLI (`docs/design/browser.md`).
+  rows.push(row(
+    ctx,
+    "agents.browser",
+    &ctx.t("agents.browser"),
+    &enforcement::browser(ctx, permissions),
+    State::Enforced(true),
+  ));
   let available = !connection.provider().is_native();
   rows.push(row(
     ctx,

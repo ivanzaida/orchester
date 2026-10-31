@@ -3,6 +3,7 @@
 //! configuration file. Run with `cargo test -p orchester-core --test mcp mcp`.
 
 mod authorization;
+mod codex_names;
 mod exempt;
 mod invocation;
 mod server;

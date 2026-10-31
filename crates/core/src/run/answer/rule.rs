@@ -47,7 +47,8 @@ pub enum RuleScope {
   SimilarCommand { command: SimilarCommand },
   /// Any call of `tool` of MCP server `server`, whatever its arguments. With a `folder` (Orchester's tools that read
   /// outside the worktree), any call of those tools that reads in it or below it; with a `check` (`run_check`), the
-  /// calls of that check; for `start_qa_app`, `check` is the QA script's git blob, so a changed script asks again.
+  /// calls of that check; for `start_qa_app`, `check` is the QA script's git blob, so a changed script asks again; for
+  /// a browser tool that acts on a site, `check` is the page's host, so another site asks again.
   /// Rules made before folders were kept have neither.
   SimilarMcpTool {
     server: String,
@@ -76,7 +77,8 @@ pub enum SimilarUnavailable {
   /// It reads outside the worktree in a drive or file system root, a home folder, or a folder fewer than two levels
   /// below one: a rule would reach too much.
   BroadFolder,
-  /// It runs a check whose access rules ask before every call.
+  /// It runs a check whose access rules ask before every call, runs JavaScript in a browser page (`browser_eval`), or
+  /// acts on a page without a web host.
   EveryCall,
 }
 
@@ -90,10 +92,14 @@ impl RuleScope {
           ToolReach::Any => (None, None),
           ToolReach::Folder { broad: true, .. } => return Err(SimilarUnavailable::BroadFolder),
           ToolReach::Folder { folder, .. } => (Some(folder.clone()), None),
-          ToolReach::Check { every_call: true, .. } => return Err(SimilarUnavailable::EveryCall),
+          ToolReach::Check { every_call: true, .. } | ToolReach::PageScript => {
+            return Err(SimilarUnavailable::EveryCall);
+          }
           ToolReach::Check { name, .. } => (None, Some(name.clone())),
-          ToolReach::Script { blob } if blob.is_empty() => return Err(SimilarUnavailable::EveryCall),
-          ToolReach::Script { blob } => (None, Some(blob.clone())),
+          ToolReach::Script { blob: kept } | ToolReach::Site { host: kept } if kept.is_empty() => {
+            return Err(SimilarUnavailable::EveryCall);
+          }
+          ToolReach::Script { blob: kept } | ToolReach::Site { host: kept } => (None, Some(kept.clone())),
         };
         Ok(Self::SimilarMcpTool {
           server: server.clone(),
@@ -204,8 +210,8 @@ pub fn answering<'a>(rules: &'a [ApprovalRule], subject: &ApprovalSubject) -> Op
           check: Some(check),
           ..
         },
-        ToolReach::Check { name: script, .. } | ToolReach::Script { blob: script },
-      ) => s == server && t == tool && check == script,
+        ToolReach::Check { name: kept, .. } | ToolReach::Script { blob: kept } | ToolReach::Site { host: kept },
+      ) => s == server && t == tool && check == kept,
       _ => false,
     }),
     ApprovalSubject::Command(command) => {

@@ -120,14 +120,15 @@ or turned two-factor authentication on itself.
 | `DELETE /devices/{id}` | device | | `204` | `404` |
 | `GET /me/sign-ins` | device | | `{ sign_ins: [{ at, device_name, platform, succeeded, two_factor }] }`: the account's own sign-ins of the last 90 days, newest first, at most 50; `two_factor`: a code was asked for. A wrong password counts only for an account that exists | |
 | `GET /keys` | none | | `{ key_set }`: the newest key set, a compact JWS the cloud's root key signed. The cloud makes its root at its first start and publishes a key set before it listens, so a running cloud always has one | `503 keys_unavailable` |
-| `POST /identity-tokens` | device | `{ audience, purpose?, invite? }`: the team server's id (a UUID); `purpose: "admin"` for a sign-in to that server's admin, `"code"` to show with a code entered in the app; `invite`: an invite from that server to the account's email, open or accepted by this account, which the token accepts | `201 { identity_token, expires_at }` (seconds) | `403 mfa_required`, `403 session_without_mfa` (an `invite` from a device that is not a two-factor session; the invite stays open), `404 not_found` (purpose `admin` for a server not linked here; an `invite` that is expired, declined, accepted by another account, not to the account's email or not from `audience`), `422 invalid` (also purpose `link`, or `invite` with a purpose), `429`, `503 keys_unavailable` |
+| `POST /identity-tokens` | device | `{ audience, purpose?, invite? }`: the team server's id (a UUID); `purpose: "admin"` for a sign-in to that server's admin, `"code"` to show with a code entered in the app, `"accept"` (with `invite`) to accept the invite in the browser (*Accepting in the browser* below); `invite`: an invite from that server to the account's email, open or accepted by this account, which the token accepts | `201 { identity_token, expires_at }` (seconds) | `403 mfa_required`, `403 session_without_mfa` (an `invite` from a device that is not a two-factor session; the invite stays open), `404 not_found` (purpose `admin` for a server not linked here; an `invite` that is expired, declined, accepted by another account, not to the account's email or not from `audience`), `422 invalid` (also purpose `link`, `invite` with a purpose other than `accept`, or `accept` without `invite`), `429`, `503 keys_unavailable` |
 | `POST /servers` | device | `{ link }`: the link statement the team server signed | `201 { server, root_key, key_set, identity_token, expires_at }` | `409 conflict` (a replayed or older statement), `409 too_many_servers`, `422 invalid` (also a `server` that is not its `public_key`'s id), `429`, `503 keys_unavailable` |
 | `GET /servers` | device | | `{ servers: [{ id, name, address, fingerprint, owner, joined_at }] }` | |
 | `GET /servers/{id}` | device | | `{ server: { id, name, address, fingerprint, check_code } }` | `404` (unknown or not linked) |
 | `DELETE /servers/{id}` | device | | `204`: the owner unlinks the server. The cloud forgets its link, its members' joins and its invites, so invites in flight are refused; nothing on the server changes, and it links again with a new statement | `403 session_without_mfa` (two-factor authentication on, and this device is not a two-factor session), `404` (not linked, or not this account's), `409 conflict` (an administrator of the cloud blocked it) |
 | `POST /invites` | the server's signature | `{ invite }`: an invite the team server signed | `202 { server: { id, name, address } }`: the inviting server as the cloud registered it | `422 invalid` (also an invite that was revoked, until it would have expired), `429` |
-| `GET /invites` | device | | `{ invites: [{ id, kind, role, server: { id, name, address }, project: { address, name } \| null, inviter_display_name, expires_at, needs_two_factor }] }`; `needs_two_factor`: this device could not accept it now (it is not a two-factor session) | |
+| `GET /invites` | device | | `{ invites: [{ id, kind, role, server: { id, name, address }, project: { address, name } \| null, inviter_display_name, expires_at, needs_two_factor, accepted_at }] }`; `needs_two_factor`: this device could not accept it now (it is not a two-factor session); `accepted_at` (ms, absent or `null` for an open invite and from a cloud before browser acceptance): accepted in the browser, the team server's receipt not back yet | |
 | `DELETE /invites/{id}` | the server's signature | `{ revocation }`: the team server's signed revocation | `204`; the id stays revoked until the invite would have expired | `422 invalid` |
+| `POST /invites/{id}/accepted` | the server's signature | `{ receipt }`: the team server's signed receipt (`orchester-invite-accepted+jws`) for this invite, accepted in the browser | `204`: the join is recorded and the invite's row dropped | `422 invalid` (a receipt the server's linked key did not sign, or one for another invite or server), `429` |
 | `POST /invites/{id}/decline` | device | | `204`; the invite stays declined until it expires: no token accepts it, and delivering it again changes nothing | `404` (also one already answered) |
 
 **Sign-up.** `202` means the request was taken. The answer is the same whether or not the email has an account, so
@@ -209,11 +210,12 @@ The desktop hands it to that team server, which checks it with `orchester_api::i
 the key set from `GET /keys`, itself checked with the root key the team server pinned, and accepts each `jti` once.
 Claims: `iss` (the public URL), `aud`, `sub` (the account id), `email`, `name`, `device { name, platform }`,
 `purpose` (absent to join with a device; `admin` for a sign-in to the server admin; `link` for linking the server;
-`code` to show with a code), `invite` (when the token accepts an invite), `mfa` (`true` when the device it was issued
-to is a two-factor session; absent otherwise, and in every token from a cloud before two-factor authentication),
-`jti`, `iat`, `exp`. A team server
+`code` to show with a code; `accept` to accept an invite in the browser), `invite` (when the token accepts an invite),
+`mfa` (`true` when the device it was issued to is a two-factor session; absent otherwise, and in every token from a
+cloud before two-factor authentication), `jti`, `iat`, `exp`. A team server
 accepts a token only for the use it was issued for: a `code` token is taken with a code and nowhere else, so a server
-that passes on a token an app got for a code there cannot join or sign in with it anywhere.
+that passes on a token an app got for a code there cannot join or sign in with it anywhere; an `accept` token is taken
+only at the team server's `POST /auth/cloud/accept`, which takes no other.
 
 **Accepting an invite** (the desktop, N1). The app reads the invite's server from the registry (`GET /servers/{id}`:
 the address and the certificate fingerprint it pins), then asks `POST /identity-tokens { audience, invite }`. The
@@ -224,8 +226,38 @@ by this same account. It marks the invite accepted by the account, issues a join
 and records the join. The team server admits the verified email to that invite with the token; without the claim it
 admits only an account it already knows.
 
+**Accepting in the browser** (decided 2026-10-31, ORC-576; the contract is in `orchester-api` since ORC-577, the cloud,
+the team server and the web front are not built). The web front's *Accept* asks `POST /identity-tokens { audience,
+invite, purpose: "accept" }` (`TokenPurpose::Accept`) under the same checks, marks the invite accepted (`accepted_at`)
+and records no join until the team server's signed receipt comes back; until then `GET /invites` keeps listing it with
+`accepted_at` (`CloudInvite::accepted_at`). The flow, the `orchester://` link and the ended and unreachable cases are
+in [server.md](architecture/server.md), "Accepting outside Orchester" (row 77).
+
+- **The team server's side.** The web front hands the token and the newest key set to the team server's web app,
+  whose server side sends `POST /auth/cloud/accept { identity_token, key_set? }` (`CloudAccept`) to the team server.
+  It takes only an `accept` token with `mfa` that names an open invite for the verified email, makes the account and
+  the membership in one transaction and answers `201 { browser_session?, membership: { kind, project?, role? },
+  receipt, approval_required }` (`CloudAccepted`): `browser_session` (`{ token, session, user }`, the browser kind of
+  device token, 12 hours) is absent when `approval_required`, join approval being on for an account that existed
+  already. Errors: `401 invalid_identity` (also a token of another purpose), `403 mfa_required`, `403 not_invited`
+  (also an identity linked to another account), `403 forbidden` (an account invite for an admin, or an admin invite
+  whose inviter is no longer an enabled admin), `403 cloud_off`, `409 key_set_stale`, `410 invite_ended`, `429
+  rate_limited`; each but `invite_ended` leaves the invite open.
+- **The receipt** (`statements::InviteAcceptance`, type `orchester-invite-accepted+jws`): `{ id, server, subject,
+  issued_at }`, the invite, the server, the cloud account (`sub`) that joined and when (milliseconds), signed with the
+  server's own key (`SigningKey::sign_invite_acceptance`). It reaches the cloud by `POST /invites/{id}/accepted {
+  receipt }` (`InviteJoined`) from the server's web app, or by the browser's `/invites/joined` form, whichever comes
+  first. The cloud checks it with the key the server linked with and that it names this invite and that server
+  (`identity::verify_invite_acceptance`), records the join (the server is then in `GET /servers`), drops the invite's
+  row and answers `204`.
+- **`410 invite_ended`.** An invite the server revoked, or that expired there, while the cloud still listed it: the
+  error carries the server's signed revocation in its details (`{ "error": "invite_ended", "message": "…",
+  "revocation": "<orchester-invite-revocation+jws>" }`, an expired invite's too), which the browser takes back to the
+  cloud as `DELETE /invites/{id} { revocation }` does, and the cloud deletes the invite.
+
 The rule for an answered invite (N1 security review 1, M2 and minor 1): the cloud keeps the row with its answer
-(`accepted` and by whom, or `declined`) until the invite expires. An answered invite is not in `GET /invites`. An
+(`accepted` and by whom, or `declined`) until the invite expires. An answered invite is not in `GET /invites` (once
+browser acceptance is built, except one accepted in the browser whose receipt has not come back, above). An
 accepted one still issues tokens that accept it, to the account that accepted it only, until it expires or the server
 revokes it: a join that failed after its token (the server unreachable, a token lost) is simply asked again, and the
 team server, which accepts each token once and ends its own invite at the first join, admits it once. A declined one
@@ -431,9 +463,12 @@ Three kinds of caller:
 - **Channels** `stable` and `beta`. A Beta install is offered every published release; a Stable install only releases
   staff promoted to Stable, at their rollout percentage. A version with a pre-release suffix is Beta only: it cannot be
   promoted (`422 invalid`).
-- **Stages** (`stage` in the admin's shapes): `draft` while CI uploads; `beta` once finalized; `stable` with `percent`
-  (0–100) and `paused` once promoted (it stays on Beta for every Beta install); `withdrawn`, offered to nobody, its
-  files no longer served (`404`). Withdrawing is final; a fixed build is a new version.
+- **Stages** (`stage` in the admin's shapes): `draft` while CI uploads; `beta` with `paused` once finalized; `stable`
+  with `percent` (0–100) and `paused` once promoted (it stays on Beta for every Beta install); `withdrawn`, offered to
+  nobody, its files no longer served (`404`). Withdrawing is final; a fixed build is a new version. `paused` is about
+  the channel the stage names: a paused `beta` release is offered to no Beta install, a paused `stable` one to no
+  Stable install (Beta installs still get it). A cloud before ORC-575 leaves `paused` out of `beta`; read it as
+  `false`.
 
 ### The signed message
 
@@ -483,16 +518,16 @@ copy have databases, and so ids, of their own.
 | --- | --- | --- | --- | --- |
 | `GET /updates/check?version&platform&arch&channel&install_id` | anonymous | the query, every field required: the app's version, platform, architecture, channel and install id | `200 { update: null }` when nothing newer is offered; `200 { update: { version, channel, notes, critical, published_at, files: [{ name, platform, arch, url, size, sha256, key_id, signature }] } }` | `400 bad_request` (a field missing, unknown or repeated), `422 invalid` (a version, platform, architecture, channel or id that is not one), `429` |
 | `GET /releases/{version}/files/{name}` | anonymous | `Range: bytes=<start>-[<end>]` to resume, optional | `200` the whole file, or `206` with `Content-Range: bytes <start>-<end>/<size>`; both with `Content-Type: application/octet-stream`, `Content-Length`, `Accept-Ranges: bytes` and `ETag: "<sha256>"` | `404 not_found` (no such release or file, a draft, a withdrawn release, deleted files), `416 range_not_satisfiable`, `429` |
-| `POST /releases` | `releases:write` | `{ version, notes, critical? }`: notes in Markdown, at most 64 KiB | `201 { release: ReleaseSummary }`, a draft | `403 forbidden`, `409 conflict` (the version exists, in any stage), `422 invalid` |
+| `POST /releases` | `releases:write` | `{ version, notes, critical?, ci_run? }`: notes in Markdown, at most 64 KiB; `ci_run` the CI run that uploads it, `{ number, url }` | `201 { release: ReleaseSummary }`, a draft | `403 forbidden`, `409 conflict` (the version exists, in any stage), `422 invalid` (also a `url` that is not `https://…`, over 2048 characters or with spaces or control characters) |
 | `POST /releases/{version}/files` | `releases:write` | `{ name, platform, arch, size, sha256, key_id, signature }` | `201 FileUpload` for a new file, `200 FileUpload` for the same declaration again (resume) | `403 forbidden`, `404` (no such draft), `409 conflict` (the release is not a draft, or another declaration under this name, or a second file for the same platform, architecture and name), `422 invalid` (size 0 or over 2 GiB) |
 | `PUT /releases/{version}/files/{name}/parts/{part}` | `releases:write` | the part's bytes, `Content-Type: application/octet-stream`: `part_size` bytes, the last part the rest | `200 FileUpload`; a part sent again replaces it | `403 forbidden`, `404` (no such draft or declared file), `409 conflict` (not a draft), `413 payload_too_large`, `415`, `422 invalid` (a part number past `parts`, or a part of the wrong length) |
 | `POST /releases/{version}/finalize` | `releases:write` | | `200 { version, files: [{ name, result: "accepted" }` or `{ name, result: "rejected", reason }] }` | `403 forbidden`, `404` (no such release), `409 conflict` (not a draft), `422 invalid` (no file declared) |
-| `GET /admin/releases` | admin | | `{ releases: [ReleaseSummary] }`, newest version first | `403 forbidden`, `403 mfa_required`, `403 session_without_mfa` |
+| `GET /admin/releases` | admin | | `{ releases: [ReleaseSummary], installs_by_channel: ChannelInstalls \| null }`, newest version first | `403 forbidden`, `403 mfa_required`, `403 session_without_mfa` |
 | `GET /admin/releases/{version}` | admin | | `{ release: ReleaseDetails }` | as above, `404` |
-| `POST /admin/releases/{version}/promote` | admin | `{ percent }` | `200 { release: ReleaseSummary }`, stage `stable`, not paused | as above, `404`, `409 conflict` (not `beta`), `422 invalid` (a pre-release version; a percent over 100) |
+| `POST /admin/releases/{version}/promote` | admin | `{ percent }` | `200 { release: ReleaseSummary }`, stage `stable`, not paused | as above, `404`, `409 conflict` (not `beta`, or a paused `beta`: resume it first), `422 invalid` (a pre-release version; a percent over 100) |
 | `PUT /admin/releases/{version}/rollout` | admin | `{ percent }` | `200 { release }` | as above, `404`, `409 conflict` (not `stable`), `422 invalid` |
-| `POST /admin/releases/{version}/pause` | admin | | `200 { release }`, `paused: true` | as above, `404`, `409 conflict` (not `stable`, or paused already) |
-| `POST /admin/releases/{version}/resume` | admin | | `200 { release }`, `paused: false` | as above, `404`, `409 conflict` (not `stable`, or not paused) |
+| `POST /admin/releases/{version}/pause` | admin | | `200 { release }`, `paused: true`: a `beta` release stops being offered on Beta, a `stable` one on Stable | as above, `404`, `409 conflict` (a draft or withdrawn release, or paused already) |
+| `POST /admin/releases/{version}/resume` | admin | | `200 { release }`, `paused: false`: offered again on the channel it was paused on | as above, `404`, `409 conflict` (a draft or withdrawn release, or not paused) |
 | `POST /admin/releases/{version}/withdraw` | admin | | `200 { release }`, stage `withdrawn` | as above, `404`, `409 conflict` (a draft, or withdrawn already) |
 | `PATCH /admin/releases/{version}` | admin | `{ notes?, critical? }` | `200 { release }` | as above, `404`, `409 conflict` (withdrawn), `422 invalid` (notes over 64 KiB) |
 | `DELETE /admin/releases/{version}/files` | admin | | `204`; the release stays in the list with `files_deleted: true` | as above, `404`, `409 conflict` (the release is still offered: see below) |
@@ -500,10 +535,17 @@ copy have databases, and so ids, of their own.
 Shapes of the admin:
 
 ```text
-ReleaseSummary  { version, stage: "draft"|"beta"|"stable"|"withdrawn", percent?, paused? (with stable), critical,
-                  created_at, published_at: ms | null, installs, files_deleted }
-ReleaseDetails  { …ReleaseSummary, notes, files: [AdminFile], adoption: [{ day: "YYYY-MM-DD", installs }],
-                  activity: [{ at, actor: string | null, action, percent? | critical? }] }
+ReleaseSummary  { version, stage: "draft"|"beta"|"stable"|"withdrawn", percent? (with stable),
+                  paused? (with beta and stable), critical, created_at, published_at: ms | null, installs,
+                  installs_by_channel: ChannelInstalls | null, files_deleted, ci_run: CiRun | null,
+                  withdrawn: { at: ms, by: string } | null, uploads: [FileProgress] }
+ReleaseDetails  { …ReleaseSummary, notes, files: [AdminFile],
+                  adoption: [{ day: "YYYY-MM-DD", installs, installs_by_channel: ChannelInstalls | null }],
+                  activity: [{ at, actor: string | null, action, percent? | critical? | channel? }] }
+ChannelInstalls { stable, beta }
+CiRun           { number, url: "https://…" }
+FileProgress    { name, platform, arch, size, sha256, parts, received, state: "receiving"|"verifying"|"verified"
+                  | "rejected", reason? (with rejected), received_sha256? (with rejected) }
 AdminFile       { name, platform, arch, size, sha256, key_id, downloads }
 FileUpload      { name, size, part_size, parts, received: [part numbers, ascending] }
 ```
@@ -512,16 +554,39 @@ FileUpload      { name, size, part_size, parts, received: [part numbers, ascendi
 `adoption` counts, for each of the last 30 days (UTC, oldest first), the install ids whose checks that day named it;
 `downloads` counts downloads that started at byte 0, so resumed ranges do not count twice. `activity` is newest first;
 `action` is one of `created`, `rejected` (a finalize that rejected a file), `published`, `promoted` and `percent_set`
-(with `percent`), `paused`, `resumed`, `withdrawn`, `critical_set` (with `critical`), `notes_edited`,
-`files_deleted`; `actor` is the staff member's display name, `null` for CI.
+(with `percent`), `paused` and `resumed` (with `channel`, `stable` or `beta`), `withdrawn`, `critical_set` (with
+`critical`), `notes_edited`, `files_deleted`; `actor` is the staff member's display name, `null` for CI.
+
+The fields ORC-575 added, each optional for a reader, so a cloud or app on the shapes before it still reads:
+
+- **`installs_by_channel`** splits a count by the channel each install follows, as the update check named it: on a
+  release, its `installs`; on an adoption day, that day's `installs`; on the list, every active install (an install id
+  with an update check in the last 30 days), whatever version it runs. `stable + beta` is the total. `null` (or absent)
+  from a cloud that does not count them apart.
+- **`withdrawn`** on a summary: when the release was withdrawn and the display name of the staff member who did it.
+  Set with stage `withdrawn`, `null` otherwise.
+- **`ci_run`**: the CI run that uploaded the release, as CI named it at `POST /releases`: its number as the CI shows it
+  and an `https` link the cloud stores and shows as it is, without following it. `null` when CI named none. The body
+  of `POST /releases` takes no unknown field, so a cloud before ORC-575 refuses one with `ci_run`: CI sends it only
+  once the cloud reads this contract, and leaves the field out when it has no run.
+- **`uploads`**: a draft's declared files and how far each is. `parts` is the file's part count, `received` how many
+  of them the cloud has (`received` of `parts`), `sha256` the declared digest. `state` is `receiving` while parts
+  arrive and until CI finalizes, `verifying` while finalizing checks it, `verified` once finalizing accepted it, and
+  `rejected` with the `reason` finalizing gave (`incomplete`, `sha256_mismatch`, `unknown_key`, `signature_mismatch`)
+  and `received_sha256`, the digest of the bytes that arrived (absent with `incomplete`). A rejected file stays in
+  `uploads` until CI declares that name again, though its parts and declaration are dropped. Empty once the release
+  is published, and from a cloud before ORC-575.
+- **`paused` on `beta`**, and `channel` on `paused` and `resumed` activity: absent from a cloud before ORC-575, which
+  paused only Stable; read them as `false` and `stable`.
 
 **What the check offers.** Among releases newer than the asked version, for the asked platform and architecture
-(a release without a file for them is skipped): on Beta, the newest in stage `beta` or `stable`; on Stable, the newest
-in stage `stable` that is not paused and whose rollout includes the install. `critical` is true when the offered
-release or any release between the asked version and it that this install could have been offered is marked
-critical, so skipping a critical release still installs promptly. `files` are the offered release's files for that
-platform and architecture; `url` is the absolute URL of its download on the cloud's API address. An asked version the
-cloud does not know is still compared by order. Each check counts the install id toward `installs` and `adoption`.
+(a release without a file for them is skipped): on Beta, the newest in stage `beta` that is not paused or in stage
+`stable`; on Stable, the newest in stage `stable` that is not paused and whose rollout includes the install.
+`critical` is true when the offered release or any release between the asked version and it that this install could
+have been offered is marked critical, so skipping a critical release still installs promptly. `files` are the offered
+release's files for that platform and architecture; `url` is the absolute URL of its download on the cloud's API
+address. An asked version the cloud does not know is still compared by order. Each check counts the install id toward
+`installs`, `adoption` and their `installs_by_channel` under the channel it names.
 
 **Uploading a release.** CI creates the draft, then declares each file with its size, SHA-256, key id and signature.
 The answer gives the cloud's `part_size` (8 MiB) and the number of parts (`size / part_size`, rounded up). CI sends

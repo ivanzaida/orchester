@@ -5,7 +5,7 @@
 use orchester_app::{
   app_log, clipboard,
   error_reports::{self, Environment},
-  hang_reports,
+  hang_reports, open_link,
   startup::{Launch, WindowPosition},
   window,
 };
@@ -19,11 +19,19 @@ fn main() {
     tracing::error!(%error, "the requested window position is refused; not starting");
     std::process::exit(2);
   });
+  // An `orchester://` link the system started this program with (the installer registers the scheme).
+  let link = open_link::argument(std::env::args_os());
 
   let runtime = Runtime::new().expect("the OS provides threads for the background runtime");
   // Started before the window exists: the data folder's lock, the session, the runners' client and
   // where the window opens, or why there is no session.
   let mut launch = Launch::begin(runtime.handle(), log);
+  // The app that has the data folder open takes the link, and this program ends without a window.
+  if let Some(link) = &link
+    && launch.hand_over_link(runtime.handle(), link)
+  {
+    return;
+  }
   // Error reports start here, once the database that holds the person's setting is open: a panic before this line is
   // not reported. Kept to the end of `main`, whose drop sends what is still pending. The runners, which start once
   // the window shows a project, report too while the setting is on.
@@ -39,6 +47,10 @@ fn main() {
   }
   // Only this window reads the accounts' plan limits on its own; tests and QA copies never read a real account.
   launch.read_plan_limits();
+  // Only this program checks for updates; tests and QA examples never ask Orchester Cloud.
+  launch.check_for_updates();
+  // Only this program takes links, the one it started with once the window is up and those other programs hand over.
+  launch.take_links(link);
   // A frozen window is reported while the error reports are sent, from this thread's first beat in the window until
   // the window has closed: the work after it is not watched.
   let watchdog = reports.as_ref().and_then(|_| hang_reports::Watchdog::start());

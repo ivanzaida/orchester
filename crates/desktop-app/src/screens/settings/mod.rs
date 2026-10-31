@@ -1,17 +1,19 @@
-//! The app's settings (`App settings · redesign` `iUmo3` in the new `orchester.pen`): the title, the five page tabs
-//! *General · Notifications · Accounts · Automation · Orchester Cloud* (`page`) and the open tab's column of groups
-//! under them (`frame`). *General* (`l838Ty`, `general`) holds the theme, the plan limits' warning threshold and this
-//! computer. *Notifications* (`fQTFi`, `notifications`) holds what notifies, how, quiet hours and the Orchestrator's
-//! daily report (`daily_report`). *Automation* (`aMkOw`) holds *Orchester MCP server* (`server`) and what automation
-//! may do (`automation`): what it may always do, and the person's own switches for what it may widen through the MCP
-//! server and whether the Orchestrator chat acts itself, which no tool can change. On these three the header says
-//! whether every change was saved (`save_state`). *Accounts* (`t8i6m`, `accounts`) lists the person's agent CLI
-//! accounts by CLI, an account opening its page and *Add account* its own. *Orchester Cloud* (`vPV73`, `orchester`;
-//! its route keeps the id `orchester`) holds the cloud account, invites and the team servers in one column, a server
-//! opening its page and *Connect a server* its steps.
+//! The app's settings (`App settings · redesign` `iUmo3` in the new `orchester.pen`): the title, the six page tabs
+//! *General · Notifications · Accounts · Automation · Browser · Orchester Cloud* (`page`) and the open tab's column of
+//! groups under them (`frame`). *General* (`l838Ty`, `general`) holds the theme, the plan limits' warning threshold and
+//! this computer. *Notifications* (`fQTFi`, `notifications`) holds what notifies, how, quiet hours and the
+//! Orchestrator's daily report (`daily_report`). *Automation* (`aMkOw`) holds *Orchester MCP server* (`server`) and
+//! what automation may do (`automation`): what it may always do, and the person's own switches for what it may widen
+//! through the MCP server and whether the Orchestrator chat acts itself, which no tool can change. *Browser* (`j3Lre`,
+//! `NZECi` in `Browser · redesign`, `browser`) holds agents' browser, its profiles' folder and the Browser window's
+//! switch. On these four the header says whether every change was saved (`save_state`). *Accounts* (`t8i6m`,
+//! `accounts`) lists the person's agent CLI accounts by CLI, an account opening its page and *Add account* its own.
+//! *Orchester Cloud* (`vPV73`, `orchester`; its route keeps the id `orchester`) holds the cloud account, invites and
+//! the team servers in one column, a server opening its page and *Connect a server* its steps.
 
 mod accounts;
 mod automation;
+mod browser;
 mod daily_report;
 mod frame;
 mod general;
@@ -42,7 +44,7 @@ use parking_lot::Mutex;
 
 use self::save_state::SaveState;
 use crate::{
-  routes::{AccountsView, JoinTarget, OrchesterView},
+  routes::{AccountsView, JoinTarget, OrchesterView, UpdatesShow},
   services::Services,
   ui::{message::message_text, state::load_error},
 };
@@ -56,12 +58,14 @@ impl DevtoolsInspectable for Listed {}
 /// The open tab of Settings.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SettingsTab {
-  /// Settings › General (`l838Ty`).
-  General,
+  /// Settings › General (`l838Ty`), with its *Updates* in view when a route says so (`wSMNG`).
+  General(Option<UpdatesShow>),
   /// Settings › Notifications (`fQTFi`).
   Notifications,
   /// Settings › Automation (`aMkOw`).
   Automation,
+  /// Settings › Browser (`j3Lre`, `NZECi`).
+  Browser,
   /// Settings › Accounts (`t8i6m`), an account's page (`xN1Jy`) or *Add account* (`XAm8i`).
   Accounts(AccountsView),
   /// Settings › Orchester Cloud (`vPV73`), a team server's page (`C6qnY`) or *Connect a server* (`MrVql`).
@@ -73,7 +77,10 @@ pub enum SettingsTab {
 impl SettingsTab {
   /// Whether the header says if every change was saved: the tabs whose changes save as they are made.
   const fn saves_as_made(self) -> bool {
-    matches!(self, Self::General | Self::Notifications | Self::Automation)
+    matches!(
+      self,
+      Self::General(_) | Self::Notifications | Self::Automation | Self::Browser
+    )
   }
 }
 
@@ -164,9 +171,10 @@ impl Component for SettingsScreen {
       .get();
     let count = loaded.data.as_ref().map(|accounts| accounts.0.len());
     let body = match tab {
-      SettingsTab::General => general::tab(ctx),
+      SettingsTab::General(show) => general::tab(ctx, show),
       SettingsTab::Notifications => notifications::tab(ctx),
       SettingsTab::Automation => automation::tab(ctx, rotation),
+      SettingsTab::Browser => browser::tab(ctx),
       SettingsTab::Orchester(view) => {
         ctx.mount_keyed::<orchester::OrchesterTab>("settings-orchester", orchester::Props { view })
       }

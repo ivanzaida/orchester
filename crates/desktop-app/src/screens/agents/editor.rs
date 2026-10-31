@@ -33,7 +33,7 @@ use super::{
   list, model,
   permissions::{self, Context, Section},
   questions::{self, Asking},
-  side,
+  shared, side,
   work::{self, Allowed, Asked, Follow, Pending, Saved, Work},
 };
 use crate::{
@@ -233,7 +233,13 @@ impl Editor {
 
   fn pane(&self, ctx: &mut Ctx, props: &Props, (state, team): (&State, Option<&TeamConfiguration>)) -> Element {
     let may_change = team::may_change(team);
-    let top = self.top(ctx, props, (state, team));
+    let shared::Parts {
+      bars: shared_bars,
+      runs_here,
+      here,
+      connection: connection_here,
+    } = shared::parts(ctx, props);
+    let top = self.top(ctx, props, (state, team), (shared_bars, here, connection_here.as_ref()));
     let asking = Asking {
       pending: self.pending.clone(),
       allowed: self.allowed.clone(),
@@ -255,16 +261,19 @@ impl Editor {
       .filter(|_| !state.changed_outside)
       .zip(state.saved.as_ref())
       .map(|(error, entry)| (&entry.profile, field_hint(ctx, &error)));
+    let (runs_here, runs_note) = runs_here.unzip();
     let (role, connection) = if may_change {
+      let extra = runs_here.into_iter().chain(connection_asked).collect();
       (
         model::role(ctx, &self.fields, unsaved),
-        model::connection_model(ctx, &self.fields, &props.listed, connection_asked),
+        model::connection_model(ctx, &self.fields, &props.listed, (extra, runs_note)),
       )
     } else {
-      (
-        model::role_read_only(ctx, &self.fields),
-        model::connection_read_only(ctx, &self.fields, &props.listed),
-      )
+      let connection = match &connection_here {
+        Some(here) => model::connection_shared(ctx, &self.fields, here, (runs_here, runs_note)),
+        None => model::connection_read_only(ctx, &self.fields, &props.listed, (runs_here, runs_note)),
+      };
+      (model::role_read_only(ctx, &self.fields), connection)
     };
     let context = Context {
       fields: &self.fields,
@@ -423,7 +432,11 @@ impl Editor {
           .page(ctx),
       );
     }
+    // A member reads the team's profile: nothing of it is edited here, so nothing of it is invalid here; a connection
+    // missing on this computer is said by the page head and *Runs here use* (06c).
+    let may_change = team::may_change(team::of(&props.project).as_ref());
     if let Err(errors) = &state.checked
+      && may_change
       && (state.saved.is_some() || self.tried.get())
     {
       for error in [

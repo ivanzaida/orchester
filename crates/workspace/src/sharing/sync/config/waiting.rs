@@ -21,6 +21,8 @@ use crate::sharing::SharingError;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Waiting {
   pub number: VersionNumber,
+  /// The version runs use here meanwhile; `None` before the first.
+  pub used: Option<VersionNumber>,
   pub adds: Vec<VersionWidening>,
 }
 
@@ -42,15 +44,15 @@ pub fn waiting(root: &Path, resource: ResourceId) -> Result<Option<Waiting>, Sha
     .resource(resource)?
     .ok_or(StoreError::ResourceNotFound(resource))?
     .kind();
-  let adds = match kind {
+  let (used, adds) = match kind {
     ResourceKind::Pipeline => adds::<Pipeline>(&db, resource, number)?,
     ResourceKind::AgentProfile => adds::<AgentProfile>(&db, resource, number)?,
     ResourceKind::Instruction => adds::<Instruction>(&db, resource, number)?,
     ResourceKind::Tool => adds::<Tool>(&db, resource, number)?,
     // Skills are not kept here yet, and agent testing's kinds are never shared.
-    ResourceKind::Skill | ResourceKind::TestSuite | ResourceKind::Service | ResourceKind::Stack => Vec::new(),
+    ResourceKind::Skill | ResourceKind::TestSuite | ResourceKind::Service | ResourceKind::Stack => (None, Vec::new()),
   };
-  Ok(Some(Waiting { number, adds }))
+  Ok(Some(Waiting { number, used, adds }))
 }
 
 /// Fails unless `by` is the person.
@@ -86,14 +88,18 @@ pub(super) fn waits<B: ResourceBody + SharedBody>(
   Ok(!widens(used.as_ref().map(Version::body), next).is_empty())
 }
 
+/// The version runs use here, and what version `number` adds over it.
 fn adds<B: ResourceBody + SharedBody>(
   db: &ProjectDb,
   resource: ResourceId,
   number: VersionNumber,
-) -> Result<Vec<VersionWidening>, StoreError> {
-  let Some(next) = db.version::<B>(resource, number)? else {
-    return Ok(Vec::new());
-  };
+) -> Result<(Option<VersionNumber>, Vec<VersionWidening>), StoreError> {
   let used = db.latest_version::<B>(resource)?;
-  Ok(widens(used.as_ref().map(Version::body), next.body()))
+  let Some(next) = db.version::<B>(resource, number)? else {
+    return Ok((used.as_ref().map(Version::number), Vec::new()));
+  };
+  Ok((
+    used.as_ref().map(Version::number),
+    widens(used.as_ref().map(Version::body), next.body()),
+  ))
 }

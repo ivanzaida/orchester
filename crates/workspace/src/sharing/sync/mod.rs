@@ -21,7 +21,7 @@ use std::{
 };
 
 use orchester_api::{
-  CatalogReport, SharedTask, Versions,
+  CatalogReport, SharedResource, SharedTask, Versions,
   client::{ClientError, EventStream, StreamEnd},
 };
 use orchester_core::{
@@ -34,8 +34,8 @@ pub(super) use self::state::SyncStates;
 pub use self::{
   catalog::CATALOG_CHECK,
   config::{
-    ConfigServer, RemoteResourceStore, Waiting, bind, keep_uploaded_configuration, upload_configuration, use_here,
-    waiting,
+    ConfigServer, Here, HereReference, Needer, RemoteResourceStore, Standing, Waiting, bind, chosen_at,
+    keep_uploaded_configuration, upload_configuration, use_here, waiting,
   },
   state::SyncState,
   stream::{Clock, Source, Stopped, SystemClock, follow},
@@ -203,6 +203,17 @@ impl Source for Live {
         client.task(&token, project, task).await
       })
       .await
+  }
+
+  async fn resources(&self) -> Result<Vec<SharedResource>, SharingError> {
+    let project = self.project.link().project;
+    let read = self
+      .servers
+      .with_token_for(Behalf::Background, self.project.entry(), |client, token| async move {
+        client.resources(&token, project).await
+      })
+      .await?;
+    Ok(read.resources)
   }
 
   async fn versions(&self, resource: ResourceId, after: Option<VersionNumber>) -> Result<Versions, SharingError> {

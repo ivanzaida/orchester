@@ -348,6 +348,10 @@ name = "db_busy_retry"
 required-features = ["test-agent"]
 
 [[test]]
+name = "browser"
+required-features = ["test-agent"]
+
+[[test]]
 name = "disk_guard"
 required-features = ["test-agent"]
 
@@ -385,6 +389,9 @@ sentry = { workspace = true, features = ["reqwest", "rustls-no-provider", "traci
 tempfile.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+# The project's browser over the DevTools Protocol (`browser::cdp`): its WebSocket, and the stream and sink of it.
+tokio-tungstenite.workspace = true
+futures-util.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 

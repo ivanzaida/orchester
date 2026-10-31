@@ -24,6 +24,7 @@ use orchester_core::time::Timestamp;
 pub(super) use super::answers::{Answers, Asked, Outcome};
 use super::{
   Invites, Kept, Said, accepted,
+  pointed::PointedInvite,
   two_factor::{self, Need},
   words::{counted, day, shown_address},
 };
@@ -40,11 +41,12 @@ use crate::{
   },
 };
 
-/// The group, as `invites` stand, for an account whose two-factor authentication is `status`.
+/// The group, as `invites` stand, for an account whose two-factor authentication is `status`, ringing the row an
+/// `orchester://` link opened it at (`pointed`).
 pub(super) fn waiting(
   ctx: &mut Ctx,
   (invites, kept, status): (&Invites, &Kept, Option<&TwoFactorStatus>),
-  answers: &Answers,
+  (answers, pointed): (&Answers, &PointedInvite),
 ) -> Element {
   let mut group = SettingGroup::new("orchester-invites", ctx.t("cloud.invites.group"));
   if invites.waiting() > 0 {
@@ -67,7 +69,7 @@ pub(super) fn waiting(
     }
     Invites::Listed(listed) => {
       for invite in listed.iter() {
-        group = group.row(card(ctx, invite, (status, answers)));
+        group = group.row(card(ctx, invite, (status, answers, pointed)));
       }
     }
   }
@@ -209,8 +211,12 @@ const fn role_key(role: MemberRole) -> &'static str {
 /// An invite's row (`Dana Koval invited you to Kontur…` `Ec1re` in `ZUuMT`): a mail tile, what it is to, when it
 /// expires (its address in the tooltip), and *Accept* and *Decline*; *Decline the invite?* in place of the actions
 /// while asked; *Connecting…* while it is accepted. While it needs two-factor authentication, the step that fixes it
-/// is under the row in place of its actions.
-fn card(ctx: &mut Ctx, invite: &CloudInvite, (status, answers): (Option<&TwoFactorStatus>, &Answers)) -> Element {
+/// is under the row in place of its actions. Ringed while an `orchester://` link points at it.
+fn card(
+  ctx: &mut Ctx,
+  invite: &CloudInvite,
+  (status, answers, pointed): (Option<&TwoFactorStatus>, &Answers, &PointedInvite),
+) -> Element {
   let id = format!("orchester-invite-{}", invite.id);
   let address = invite
     .project
@@ -241,11 +247,8 @@ fn card(ctx: &mut Ctx, invite: &CloudInvite, (status, answers): (Option<&TwoFact
     row = row.below(decline_question(ctx, &id, invite, answers));
   }
   row = row.below_all(answers.person.reason(ctx, &format!("{id}-accept")));
-  Column::new()
-    .id(id)
-    .width(Dimension::Pct(100.0))
-    .child(row.render(ctx))
-    .into()
+  let card = Column::new().id(id).width(Dimension::Pct(100.0)).child(row.render(ctx));
+  pointed.ring(ctx, invite.id, card).into()
 }
 
 /// *Connecting to Kontur team…* with *Cancel* under it (`Accepting · the invite row while it joins` `at7XI`).

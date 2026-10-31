@@ -6,7 +6,10 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use super::{AgentPermissions, CommandPermission, RepositoryAccess};
+use super::{
+  AgentPermissions, CommandPermission, RepositoryAccess,
+  browser::{BrowserAccess, BrowserPermission},
+};
 use crate::resource::{CommandAction, CommandEnvironment};
 
 /// One way permissions are broader than those they are compared with.
@@ -26,6 +29,10 @@ pub enum Widening {
   ToolCallsUnasked,
   /// Approving automatically where a person was asked.
   AutoApprove,
+  /// The browser where it was off.
+  Browser,
+  /// An allowed site of the browser that no site of the base covers.
+  BrowserSite,
   /// Autopilot where the approval mode was Manual ([`super::ApprovalMode::is_stricter_than`]).
   Autopilot,
 }
@@ -40,6 +47,7 @@ impl AgentPermissions {
         .unwrap_or_default()
     };
     let base_folders = granted(base);
+    let (browser, browser_site) = browser_widens(&base.browser, &self.browser);
     [
       (
         self.repository == RepositoryAccess::Write && base.repository == RepositoryAccess::ReadOnly,
@@ -56,6 +64,8 @@ impl AgentPermissions {
         Widening::ToolCallsUnasked,
       ),
       (self.auto_approve && !base.auto_approve, Widening::AutoApprove),
+      (browser, Widening::Browser),
+      (browser_site, Widening::BrowserSite),
       (
         base.approval_mode.is_stricter_than(self.approval_mode),
         Widening::Autopilot,
@@ -65,6 +75,16 @@ impl AgentPermissions {
     .filter_map(|(widens, widening)| widens.then_some(widening))
     .collect()
   }
+}
+
+/// Whether `next` turns the browser on where `base` has it off, and whether it allows a site no site of `base` covers.
+/// Sites apply only while the browser is on, so a list kept while it is off widens nothing.
+fn browser_widens(base: &BrowserPermission, next: &BrowserPermission) -> (bool, bool) {
+  if next.access() == BrowserAccess::Off {
+    return (false, false);
+  }
+  let site = next.sites().entries().iter().any(|site| !base.sites().covers(site));
+  (base.access() == BrowserAccess::Off, site)
 }
 
 /// Whether `next` lets commands run that `base` does not. Any command in the worktree is the widest; an

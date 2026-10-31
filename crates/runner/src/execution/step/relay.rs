@@ -34,7 +34,10 @@ use orchester_core::{
   connection::claude_approval::{
     ApprovalToken, ClaudeApprovalRequest, ClaudeApprovalScope, ClaudeAsk, refusal, relay::RelayRequest,
   },
-  orchester_tools::{OrchesterTool, SERVER, ToolResult},
+  orchester_tools::{
+    OrchesterTool, SERVER, ToolResult,
+    browser::{BrowserCall, BrowserTool},
+  },
   question::tool as ask_question,
 };
 use serde_json::Value;
@@ -50,11 +53,13 @@ use tokio::{
 };
 
 use super::{
+  browser::StepBrowser,
   claude_approval::{Asked, AskedBy, PromptAnswer},
   orchester_tools::{Looked, ToolHost},
   question::AskedQuestion,
   relay_calls::Calls,
 };
+use crate::browser::PersonWait;
 
 /// How long a connection has to show the token.
 const HANDSHAKE: Duration = Duration::from_secs(10);
@@ -440,6 +445,9 @@ impl Relay {
     arguments: &Value,
     lines: &mut Lines<BufReader<OwnedReadHalf>>,
   ) -> Option<ToolResult> {
+    if BrowserTool::from_name(name).is_some() {
+      return self.browser_call(name, arguments, lines).await;
+    }
     let tools = &self.served.tools;
     let call = match tools.parse(name, arguments) {
       Ok(call) => call,
@@ -450,21 +458,90 @@ impl Relay {
       // A path the call may not reach is refused before anybody is asked.
       Err(refused) => return Some(ToolResult::unavailable(&refused)),
     };
-    if looked.asks && !tools.take_grant(call.tool(), arguments) {
-      let number = self.asked.fetch_add(1, Ordering::Relaxed);
-      let request =
-        ClaudeApprovalRequest::tool_call(format!("orchester-call-{number}"), name, arguments, tools.secrets());
-      let request = match looked.target {
-        Some(target) => request.with_target(target),
-        None => request,
-      };
-      match self.ask(request, (AskedBy::ToolCall, arguments.clone()), lines).await? {
-        PromptAnswer::Allow => {}
-        PromptAnswer::Deny(told) => return Some(ToolResult::unavailable(&told)),
-        PromptAnswer::Repeated => return Some(ToolResult::unavailable(DENIED)),
-      }
+    if looked.asks
+      && !tools.take_grant(call.tool(), arguments)
+      && let Some(denied) = self.ask_call((name, arguments), looked.target, lines).await?
+    {
+      return Some(denied);
     }
     Some(tools.run(call).await)
+  }
+
+  /// The answer to a call of browser tool `name`: refused when the step is not offered the browser, the call is not
+  /// valid or acts on a tab that is not the run's; waiting while the person uses its tab; then asked about when the
+  /// site it goes to or acts on asks, or it runs a script, showing the site. The person's input and navigation start
+  /// the wait, so only the page a wait leaves is judged, and an approval holds only while the wait after it leaves the
+  /// call on the site it named. `None` when the relay closed its connection while the call waited.
+  async fn browser_call(
+    &self,
+    name: &str,
+    arguments: &Value,
+    lines: &mut Lines<BufReader<OwnedReadHalf>>,
+  ) -> Option<ToolResult> {
+    let tools = &self.served.tools;
+    let Some(browser) = tools.browser() else {
+      return Some(ToolResult::unavailable(&format!(
+        "`{name}` is not available in this step: its profile's Browser permission is off, or the step has no network \
+         access"
+      )));
+    };
+    let call = match BrowserCall::parse(name, arguments) {
+      Ok(call) => call,
+      Err(error) => return Some(ToolResult::unavailable(&error.to_string())),
+    };
+    let mut waited = PersonWait::NotHeld;
+    let mut approved = None;
+    loop {
+      waited = tokio::select! {
+        waited = browser.wait_for_person(&call, waited) => waited,
+        // The relay sends nothing while it waits; anything, or the end of the stream, ends the wait without acting.
+        _ = lines.next_line() => return None,
+      };
+      if waited.ends_the_call() {
+        break;
+      }
+      let looked = match browser.look(&call).await {
+        Ok(looked) => looked,
+        Err(refused) => return Some(StepBrowser::not_run(waited, &refused)),
+      };
+      if !looked.asks || approved.as_ref() == Some(&looked.target) {
+        break;
+      }
+      if let Some(denied) = self.ask_call((name, arguments), looked.target.clone(), lines).await? {
+        return Some(StepBrowser::not_run(waited, denied.text()));
+      }
+      approved = Some(looked.target);
+    }
+    Some(browser.run(call, waited).await.redacted(tools.secrets()))
+  }
+
+  /// Asks a person about the call of `name` with `arguments` that reached the runner without an approval, the request
+  /// naming `target`: `Some(None)` once approved, `Some(Some(denial))` with what the agent is told when denied; `None`
+  /// when the relay closed its connection while the call waited.
+  async fn ask_call(
+    &self,
+    (name, arguments): (&str, &Value),
+    target: Option<String>,
+    lines: &mut Lines<BufReader<OwnedReadHalf>>,
+  ) -> Option<Option<ToolResult>> {
+    let number = self.asked.fetch_add(1, Ordering::Relaxed);
+    let request = ClaudeApprovalRequest::tool_call(
+      format!("orchester-call-{number}"),
+      name,
+      arguments,
+      self.served.tools.secrets(),
+    );
+    let request = match target {
+      Some(target) => request.with_target(target),
+      None => request,
+    };
+    Some(
+      match self.ask(request, (AskedBy::ToolCall, arguments.clone()), lines).await? {
+        PromptAnswer::Allow => None,
+        PromptAnswer::Deny(told) => Some(ToolResult::unavailable(&told)),
+        PromptAnswer::Repeated => Some(ToolResult::unavailable(DENIED)),
+      },
+    )
   }
 
   /// The person's answer on `request`; a repeated call's denial when the worker ended without one; `None`

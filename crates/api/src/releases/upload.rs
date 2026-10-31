@@ -5,7 +5,8 @@
 use serde::{Deserialize, Serialize};
 
 use super::{
-  FileDigest, FileSignature, ReleaseArch, ReleaseFileName, ReleaseKeyId, ReleasePlatform, ReleaseVersion, SignedFile,
+  CiRun, FileDigest, FileSignature, ReleaseArch, ReleaseFileName, ReleaseKeyId, ReleasePlatform, ReleaseVersion,
+  SignedFile,
 };
 
 /// `POST /releases`: a new release, a draft until it is finalized.
@@ -17,6 +18,9 @@ pub struct NewRelease {
   pub notes: String,
   #[serde(default)]
   pub critical: bool,
+  /// The CI run that uploads it. Left out when `None`, because a cloud before this field refuses it.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub ci_run: Option<CiRun>,
 }
 
 /// `POST /releases/{version}/files`: one file of a draft and what CI signed for it. Declaring the same file again

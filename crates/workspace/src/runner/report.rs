@@ -12,13 +12,17 @@ use orchester_core::{
   id::{RunId, TaskId},
   run::{PlanVersion, RunNumber},
 };
-use orchester_ipc::WorkSummary;
+use orchester_ipc::{
+  WorkSummary,
+  browser::{BrowserEvent, ScreencastFrame},
+};
 use parking_lot::Mutex;
 use tokio::sync::watch;
 
 use super::state::{RunnerEvent, RunnerState};
 use crate::{
   activity::{Activity, Place, Target},
+  browser::BrowserWindow,
   messages::Message,
   tasks::answering::PendingAnswers,
 };
@@ -68,6 +72,17 @@ impl RunnerStatus {
       online_since: None,
       work: None,
       interrupted: 0,
+    }
+  }
+
+  /// Project `project`'s runner online, working on `work`. For tests of what follows the runs at work.
+  #[cfg(feature = "test-support")]
+  pub(super) fn online_for_test(project: PathBuf, work: WorkSummary) -> Self {
+    Self {
+      state: RunnerState::Online,
+      online_since: Some(SystemTime::now()),
+      work: Some(Arc::new(work)),
+      ..Self::starting(0, project)
     }
   }
 
@@ -168,6 +183,8 @@ pub(super) struct Shared {
   pub(super) last_events: Mutex<HashMap<RunId, (PathBuf, SystemTime)>>,
   /// Where runner events (a reconnect) are recorded for the status bar.
   pub(super) activity: Activity,
+  /// The projects' browsers, as the *Browser* window shows them.
+  pub(super) browser: BrowserWindow,
 }
 
 /// Counts of one project's run change notifications.
@@ -270,10 +287,35 @@ impl Reporter {
     }
   }
 
+  /// The project's browser changed, as `event` says.
+  pub(super) fn browser(&self, event: BrowserEvent) {
+    if let Some(root) = self.root() {
+      self.shared.browser.receive(&root, &self.project, event);
+    }
+  }
+
+  /// A frame of the tab the *Browser* window shows.
+  pub(super) fn browser_frame(&self, frame: ScreencastFrame) {
+    if let Some(root) = self.root() {
+      self.shared.browser.receive_frame(&root, frame);
+    }
+  }
+
+  /// This runner is gone, and the project's browser with it.
+  pub(super) fn browser_ended(&self) {
+    if let Some(root) = self.root() {
+      self.shared.browser.ended(&root);
+    }
+  }
+
+  /// This runner's project.
+  fn root(&self) -> Option<PathBuf> {
+    self.status.borrow().project_root().map(Path::to_path_buf)
+  }
+
   /// The counters of this runner's project.
   fn counters(&self) -> Option<RunCounters> {
-    let root = self.status.borrow().project_root().map(Path::to_path_buf)?;
-    Some(self.shared.counters(&root))
+    Some(self.shared.counters(&self.root()?))
   }
 
   /// The state after `event`, or `None` when this runner has been replaced.

@@ -144,6 +144,76 @@ fn approval_mode_mcp_profile_autopilot_is_person_only() {
 }
 
 #[test]
+fn domain_widening_the_browser_needs_a_person() {
+  let mut served = served();
+  let publish = json!({ "project": "Kontur", "profile": "Browser" });
+  let save = |browser: Option<Value>, network: &str| {
+    let mut permissions = json!({ "repository": "write", "commands": "any_in_worktree", "network": network });
+    if let Some(browser) = browser {
+      permissions["browser"] = browser;
+    }
+    let mut args = profile("Browser", Some(permissions));
+    args["profile"] = json!("Browser");
+    args
+  };
+  let browser = |access: &str, sites: &[&str]| json!({ "access": access, "allowed_sites": sites });
+  served.let_automation_widen(true);
+  served.ok("save_profile_draft", &profile("Browser", None));
+  served.ok("save_profile_draft", &save(None, "on"));
+  served.ok("publish_profile", &publish);
+  served.let_automation_widen(false);
+  let turned_on = served.refused("save_profile_draft", &save(Some(browser("on", &[])), "on"));
+  assert_person_only(&turned_on);
+  assert!(
+    turned_on["reasons"]
+      .to_string()
+      .contains("The browser, which the latest version does not give."),
+    "{turned_on}"
+  );
+  served.let_automation_widen(true);
+  let saved = served.ok(
+    "save_profile_draft",
+    &save(Some(browser("on", &["docs.rs", "*.example.com"])), "on"),
+  );
+  assert_eq!(
+    saved["profile"]["permissions"]["browser"],
+    browser("on", &["docs.rs", "*.example.com"])
+  );
+  served.ok("publish_profile", &publish);
+  served.let_automation_widen(false);
+  let added = served.refused(
+    "save_profile_draft",
+    &save(Some(browser("on", &["docs.rs", "github.com"])), "on"),
+  );
+  assert_person_only(&added);
+  assert!(
+    added["reasons"].to_string().contains("Allowed sites of the browser"),
+    "{added}"
+  );
+  served.ok(
+    "save_profile_draft",
+    &save(Some(browser("on", &["staging.example.com"])), "on"),
+  );
+  let kept = served.ok("save_profile_draft", &save(None, "on"));
+  assert_eq!(
+    kept["profile"]["permissions"]["browser"],
+    browser("on", &["staging.example.com"]),
+    "permissions without a browser keep the profile's own"
+  );
+  served.ok(
+    "save_profile_draft",
+    &save(Some(browser("off", &["staging.example.com"])), "on"),
+  );
+  for (given, network) in [
+    (browser("on", &["https://docs.rs/std"]), "on"),
+    (browser("on", &[]), "off"),
+  ] {
+    let invalid = served.refused("save_profile_draft", &save(Some(given), network));
+    assert_eq!(invalid["code"], "invalid_permissions", "{invalid}");
+  }
+}
+
+#[test]
 fn domain_what_a_profile_tells_its_agents_reaches_them_only_through_a_person() {
   let mut served = served();
   let publish = json!({ "project": "Kontur", "profile": "Scribe" });

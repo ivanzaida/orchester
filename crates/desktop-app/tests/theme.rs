@@ -3,6 +3,10 @@
 
 #[path = "theme/appearance.rs"]
 mod appearance;
+#[path = "theme/browser.rs"]
+mod browser;
+#[path = "theme/dialog.rs"]
+mod dialog;
 #[path = "theme/import.rs"]
 mod import;
 #[path = "theme/instructions.rs"]

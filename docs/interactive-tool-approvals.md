@@ -179,6 +179,9 @@ by `read_external_file` and `search_external_file`.
 | `get_task` | none | read-only | runs | runs |
 | `save_memory` | `kind`, `text`, `key?`, `tags?`, `importance?`, `scope?` (`task`, the default, or `project`) | records | runs | runs |
 | `report_progress` | `text` (one line, ≤ 200 characters) | records | runs | runs |
+| `browser_*` reading tools and `browser_close` (profile's *Browser* and network on) | `docs/design/browser.md`, "What the agent gets" | browser | runs | runs |
+| `browser_open`, `browser_navigate`, `browser_click`, `browser_type`, `browser_key`, `browser_scroll` (*Browser* and network on) | as above | browser | runs on an allowed site or a local development host; asks elsewhere (Approve similar kept to the tool on that host) | as a writing step |
+| `browser_eval` (*Browser* and network on) | `tab?`, `expression` | browser | asks at every call | asks at every call |
 
 - **Run processes (ORC-21).** `list_run_processes` lists processes whose executable lies inside this invocation's
   run worktree: pid, name, relative executable path and start time (UTC Unix microseconds). The executable path
@@ -257,6 +260,14 @@ by `read_external_file` and `search_external_file`.
   The cleanup of what a dead runner left (named by the slot file, which is untrusted) and of the step's own QA folder
   follows no link and stops only programs from that folder's `bin/` started since its run was created; the scope that
   stops them must still resolve to the `bin/` it checked, so a link swapped in after the check refuses the cleanup.
+- **Browser (ORC-359, `docs/design/browser.md`).** The `browser_*` tools are offered, read-only steps included, when
+  the profile's *Browser* is on and the step has network access (`orchester_tools::browser::offered`); without either
+  none is listed and a call is refused as not available. The runner decides each call itself
+  (`execution/step/browser/`), so Claude Code gets an allow rule for every browser tool and Codex approves them all: a
+  call that asks (a site outside the allowed ones and the local development hosts, a page without a web host, every
+  `browser_eval`) is asked about by the runner, its request naming the page's host. *Approve similar* keeps its rule to
+  the tool on that host; none is made for `browser_eval` or a page without a host, and auto-approval and auto mode's
+  reviewer never answer a browser request. Every call reaches only the run's own tabs.
 - **Results that could not check everything.** A step's result may be `unverified` with an `unverified` list of
   `{check, reason}` (`orchester_core::run::STEP_RESULT_SCHEMA`): the step ran but could not check some of what it is
   for. The run waits for the person (`waiting_for_person`, reason `unverified`) without taking the step's failure
@@ -292,7 +303,8 @@ by `read_external_file` and `search_external_file`.
   (`CommandScope::holds_credentials`; published sources such as a package registry's `src` are not credentials),
   anything in a `.git` folder, and Orchester's own state wherever it lies: the whole `<temp>/orchester-mcp` tree
   (every project's private files with MCP secrets and tokens), any `.orchester` folder but the run's worktree, any
-  `orchester.db*` or `orchester-server.db*` file and the folder of Orchester's programs; device, stream, verbatim,
+  `orchester.db*` or `orchester-server.db*` file, the folder of Orchester's programs and the folder of every project's
+  browser profile (`<application data>/browser/`, with its cookies and sign-ins); device, stream, verbatim,
   drive-relative and network paths; a folder or pipe; a file with a NUL anywhere up to the last line read. A read is
   numbered lines, each cut to 16 KiB, at most 56 KiB, with where to read on (`start_line`). A search lists the
   checked folder, keeps only the files a read would reach (each checked; the ones left out are neither counted nor
@@ -578,7 +590,7 @@ execpolicy rules, which are the user's choice (user decision 2026-10-01):
 | plugins, their skills and MCP servers (`code-review`, `cua_repl`, …) | `-c features.plugins=false` |
 | apps (`codex_app`) | `-c features.apps=false` |
 | permission overlays that can stay granted (`with_additional_permissions`, `request_permissions`) | `-c features.exec_permission_approvals=false`, `-c features.request_permissions_tool=false` |
-| the user's MCP servers | each turned off for the thread by name (`config` of `thread/start`/`thread/resume`: the dotted key `"mcp_servers.<name>.enabled": false`), the names read with `config/read` first; a table merges with the user's, so `mcp_servers={}` would not remove them, and it replaces the servers of the process's overrides, the step's own and Orchester's. A dotted key cannot name a server whose name has a dot (Codex splits it at every dot), so such a server of the user's configuration refuses the step before its thread starts and says to rename it. A server the step chooses that is not connected is named in the step's failure (it asks before MCP actions) or its activity, with Codex's state and reason. The thread's inventory must then show every server the step does not choose `disabled`, or the step fails. A server of the user's own configuration named like one the step chooses would merge its `command`, `args` or `env` into it (Codex merges the tables of its layers), so the step stops and says to rename one. |
+| the user's MCP servers | each turned off for the thread by name (`config` of `thread/start`/`thread/resume`: the dotted key `"mcp_servers.<name>.enabled": false`), the names read with `config/read` first; a table merges with the user's, so `mcp_servers={}` would not remove them, and it replaces the servers of the process's overrides, the step's own and Orchester's. A dotted key cannot name a server whose name has a dot (Codex splits it at every dot), so such a server of the user's configuration refuses the step before its thread starts and says to rename it. A server the step chooses that is not connected is named in the step's failure (it asks before MCP actions) or its activity, with Codex's state and reason. The thread's inventory must then show every server the step does not choose `disabled`, or the step fails. A server of the user's own configuration named like one the step chooses would merge its `command`, `args` or `env` into it (Codex merges the tables of its layers; a `url` of theirs next to a chosen `command` makes Codex refuse its whole configuration). So before the step's Codex starts, a Codex App Server started for that alone, on the step's account, reads the names its configuration has (`config/read`), and a chosen server named like one of them reaches Codex as `orchester-<name>` (numbered on while that is taken too); the user's server of that name is turned off like the others. The step's activity, approvals, their rules and the tools that run without asking still name it as the project does, and the agent's prompt says the name Codex lists it by (`docs/evidence/orc-547-codex-server-names-2026-10-30.md`). Only Orchester's own `Orchester` keeps its name: a user server named so still stops the step. |
 | hooks (`$CODEX_HOME/hooks.json`, which another agent tool may install, with its trust `state` in `config.toml`) | `-c features.hooks=false`: checked live 2026-10-28, a trusted `SessionStart`/`UserPromptSubmit` hook ran at a turn's start without it and none ran with it (`hooks/list` empty). `config/read` still lists the `hooks` table (empty event lists and `state`) and reports `features.hooks = false`; while that flag is missing or on, a configuration with hooks refuses the step |
 | computer use (on by default in 0.161.0), which drives the person's desktop | `-c features.computer_use=false`. Issue #69: Codex 0.161.0's Windows sandbox helper failed its setup refresh on the computer-use runtime's files, held by another process, and no command started (`docs/evidence/orc-588-codex-setup-refresh-2026-11-01.md`); whether the override avoids that is not checked live yet |
 | the user's execpolicy `.rules` (`$CODEX_HOME/rules`) | **kept**, as the user's choice (0.159.2 has no App Server setting for them anyway). A command an `allow` rule matches runs outside the sandbox without asking. The enforcement panel says *Your own Codex rules still apply · allow rules run unsandboxed, unasked*, and the run permissions popover says it under Commands. |

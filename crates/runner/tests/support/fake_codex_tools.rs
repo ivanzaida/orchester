@@ -7,7 +7,7 @@
 //! (`orchester-call: <tool> <ok|error>: <first line>`). Codex sends no approval request for a tool whose approval
 //! mode is `approve`, so neither does the fake: the runner asks about a call that needs it before it answers. With
 //! "Use the skill tools" it makes the calls of [`fake_skill_calls`], with "Use the file tools" those of a read-only
-//! step ([`fake_tool_calls::files`]).
+//! step ([`fake_tool_calls::files`]), with "Use the browser tools" those of [`fake_browser_tools`].
 
 use std::{path::Path, process::Command, sync::mpsc, thread, time::Duration};
 
@@ -17,6 +17,9 @@ use super::fake_permission_prompt::Prompt;
 
 #[path = "fake_app_tools.rs"]
 mod fake_app_tools;
+
+#[path = "fake_browser_tools.rs"]
+mod fake_browser_tools;
 
 #[path = "fake_process_tools.rs"]
 mod fake_process_tools;
@@ -143,6 +146,10 @@ pub fn report(server: Option<&mut Prompt>, worktree: &Path, prompt: &str) {
   }
   if prompt.contains("Use the process tools") {
     fake_process_tools::exercise(worktree, |tool, arguments| report_call(server, tool, arguments));
+    return;
+  }
+  if prompt.contains("Use the browser tools") {
+    fake_browser_tools::exercise(worktree, &mut |tool, arguments| server.call_result(tool, arguments));
     return;
   }
   if prompt.contains("Start the QA app") {

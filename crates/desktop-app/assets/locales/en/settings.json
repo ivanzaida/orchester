@@ -314,12 +314,132 @@
           "notOpened": "The page could not be opened. It is {{url}}"
         }
       },
+      "updates": {
+        "title": "Updates",
+        "stable": "Stable",
+        "beta": "Beta",
+        "checkNow": "Check now",
+        "pause": "Pause",
+        "resume": "Resume",
+        "whatsNew": "What's new",
+        "restart": "Restart to update",
+        "installNow": "Install now",
+        "tryAgain": "Try again",
+        "download": "Download {{version}}",
+        "installerLog": "Installer log",
+        "notesTitle": "What's new in {{version}}",
+        "noNotes": "This release came without notes.",
+        "listSeparator": ", ",
+        "listLast": " and ",
+        "upToDate": {
+          "label": "Orchester is up to date",
+          "hint": "{{version}} · {{channel}} · checked {{time}}",
+          "updatedHint": "Updated to {{version}} · {{channel}} · checked {{time}}"
+        },
+        "checking": {
+          "label": "Checking for updates…",
+          "hint": "Asking Orchester Cloud for the newest {{channel}} release"
+        },
+        "downloading": {
+          "label": "Downloading Orchester {{version}} · {{percent}}%",
+          "hint": "{{received}} of {{total}} MB · it is checked against its signature once downloaded"
+        },
+        "paused": {
+          "label": "Download of Orchester {{version}} paused · {{percent}}%",
+          "hint": "{{received}} of {{total}} MB · Resume goes on where it stopped"
+        },
+        "ready": {
+          "label": "Orchester {{version}} is ready",
+          "hint": "Downloaded and checked · installs when no run is at work, or now"
+        },
+        "waiting": {
+          "label": {
+            "one": "Orchester {{version}} installs when {{count}} run ends",
+            "other": "Orchester {{version}} installs when {{count}} runs end"
+          },
+          "hint": {
+            "one": "{{runs}} is at work",
+            "other": "{{runs}} are at work"
+          }
+        },
+        "critical": {
+          "label": "Critical update {{version}}",
+          "hint": "It fixes a security problem and installs at the next restart; runs at work are waited for"
+        },
+        "installing": {
+          "label": "Installing Orchester {{version}}",
+          "stoppingRuns": "The runs at work stop at their next checkpoints",
+          "backingUp": "Your data is copied to backups first",
+          "handingOver": "The installer starts; Orchester closes and opens again"
+        },
+        "failed": {
+          "noInstaller": "Couldn't update to {{version}}: the release has no installer for this computer",
+          "wrongSize": "Couldn't install {{version}}: the download wasn't the size the release names",
+          "wrongDigest": "Couldn't install {{version}}: the download didn't match its checksum",
+          "unknownKey": "Couldn't install {{version}}: the download was signed with a key Orchester doesn't accept",
+          "badSignature": "Couldn't install {{version}}: the download didn't match its signature",
+          "notSaved": "Couldn't install {{version}}: the download couldn't be saved",
+          "deletedHint": "The file was deleted; nothing was installed. Orchester tries again at the next check.",
+          "nothingHint": "Nothing was downloaded or installed. Orchester tries again at the next check.",
+          "notSavedHint": "Nothing was installed; the app log says why. Orchester tries again at the next check."
+        },
+        "installFailed": {
+          "label": "Orchester {{version}} didn't install",
+          "hint": "{{reason}} · this version keeps running and your data was not changed"
+        },
+        "unreachable": {
+          "label": "Couldn't reach Orchester Cloud",
+          "hint": "Last checked {{ago}} · Orchester tries again in 6 hours",
+          "neverHint": "It hasn't answered from here yet · Orchester tries again in 6 hours"
+        },
+        "notThisCopy": {
+          "label": "This copy doesn't update itself",
+          "development": "It's a development build, not the installer's copy.",
+          "developmentNewest": "It's a development build, not the installer's copy. Orchester {{version}} is out.",
+          "qa": "It's a QA copy, not the installer's copy.",
+          "qaNewest": "It's a QA copy, not the installer's copy. Orchester {{version}} is out.",
+          "scriptInstall": "It was installed by install.ps1, not by the installer.",
+          "scriptInstallNewest": "It was installed by install.ps1, not by the installer. Orchester {{version}} is out.",
+          "portable": "It wasn't installed by the installer (a portable zip).",
+          "portableNewest": "It wasn't installed by the installer (a portable zip). Orchester {{version}} is out.",
+          "programFolderUnknown": "Orchester can't tell which folder it runs from.",
+          "programFolderUnknownNewest": "Orchester can't tell which folder it runs from. Orchester {{version}} is out."
+        },
+        "macos": {
+          "label": "Updates aren't automatic on macOS yet",
+          "hint": "Download new releases and install them by hand",
+          "newestHint": "Orchester {{version}} is out; download and install it by hand"
+        },
+        "otherPlatform": {
+          "label": "Orchester isn't released for this computer",
+          "hint": "No release ships for this operating system and processor"
+        },
+        "channel": {
+          "title": "Channel",
+          "hint": "Beta gets each release first; Stable once it has held up there"
+        },
+        "automatic": {
+          "title": "Update automatically",
+          "hint": "Checks at start and every 6 hours, downloads in the background, installs when no run is at work"
+        },
+        "lastChecked": {
+          "title": "Last checked",
+          "at": "Orchester Cloud · {{time}}",
+          "never": "Orchester Cloud hasn't answered a check from here yet"
+        },
+        "unreadable": "The update settings can't be read: {{reason}}",
+        "notSaved": "Not saved: {{reason}}",
+        "notOpened": "The page could not be opened. It is {{url}}",
+        "setForTesting": "Nothing installs: this update state was set for testing."
+      },
       "version": {
         "title": "Version",
         "release": "Orchester {{version}}, release build.",
         "development": "Orchester {{version}}, development build.",
         "releaseValue": "v{{version}} · release",
-        "developmentValue": "v{{version}} · development"
+        "developmentValue": "v{{version}} · development",
+        "releaseChannelValue": "v{{version}} · release · {{channel}}",
+        "developmentChannelValue": "v{{version}} · development · {{channel}}"
       },
       "data": {
         "title": "Application data",
@@ -330,6 +450,54 @@
         "title": "App log",
         "description": "What Orchester did and why something failed. Attach it when you report a problem.",
         "unknown": "Orchester can't tell where its log is."
+      }
+    },
+    "browser": {
+      "reading": "Reading which browser agents use…",
+      "readFailed": "Settings › Browser can't be read",
+      "readFailureDetail": "{{reason}}",
+      "program": {
+        "title": "Browser program",
+        "label": "Program",
+        "hint": "Any Chromium-based browser: Edge, Chrome, Brave or Chromium.",
+        "chooseAnother": "Choose another program…",
+        "choose": "Choose a program…",
+        "pickerTitle": "Choose a Chromium-based browser's program",
+        "refused": "Not taken. {{reason}}",
+        "notSaved": "Not saved: {{reason}}"
+      },
+      "found": {
+        "label": "Browser",
+        "found": "Found on this computer. Agents' pages open in it, headless, in Orchester's own profile.",
+        "chosen": "Chosen by you. Agents' pages open in it, headless, in Orchester's own profile.",
+        "unavailable": "Agents' browser tools answer that the browser is unavailable.",
+        "none": "None found",
+        "unusable": "Can't be used",
+        "unusableDetail": "The program you chose can't be used. {{reason}} Choose another, or install it again."
+      },
+      "reason": {
+        "missing": "{{path}} doesn't exist.",
+        "folder": "{{path}} is a folder, not a program.",
+        "notChromium": "{{path}} isn't a Chromium-based browser. Choose Microsoft Edge, Google Chrome, Brave or Chromium.",
+        "notUnicode": "{{path}} is a path Orchester can't keep."
+      },
+      "notFound": {
+        "title": "No Chromium-based browser found",
+        "windows": "Orchester looked for Microsoft Edge and Google Chrome in the registry and the usual install folders and found neither. Install one and look again, or choose another Chromium-based browser's program.",
+        "macos": "Orchester looked for Google Chrome, Microsoft Edge, Brave and Chromium in /Applications and ~/Applications and found none. Install one and look again, or choose another Chromium-based browser's program.",
+        "other": "The browser for agents isn't supported on this platform yet.",
+        "lookAgain": "Look again"
+      },
+      "profiles": {
+        "label": "Browser profiles",
+        "hint": "One per project. Sign-ins stay there across runs, apart from your own browser.",
+        "unknown": "Orchester can't tell where its application data is, so the profiles have no folder."
+      },
+      "window": {
+        "title": "Browser window",
+        "label": "Open the Browser window when an agent starts browsing",
+        "hint": "It opens and takes focus. Off: open it from a run's Summary or the status bar.",
+        "notSaved": "Not saved: {{reason}}"
       }
     },
     "saveState": {
@@ -345,6 +513,7 @@
       "notifications": "Notifications",
       "automation": "Automation",
       "accounts": "Accounts",
+      "browser": "Browser",
       "orchester": "Orchester Cloud"
     }
   }

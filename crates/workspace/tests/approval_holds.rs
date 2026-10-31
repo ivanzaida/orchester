@@ -11,7 +11,7 @@ use orchester_workspace::{
 };
 use serde_json::Value;
 
-const HOLDS: [ReviewHold; 11] = [
+const HOLDS: [ReviewHold; 12] = [
   ReviewHold::Secrets,
   ReviewHold::Unreadable,
   ReviewHold::Destructive,
@@ -23,6 +23,7 @@ const HOLDS: [ReviewHold; 11] = [
   ReviewHold::TooLong,
   ReviewHold::Escalation,
   ReviewHold::ProjectProgram,
+  ReviewHold::Browser,
 ];
 
 /// The words of `hold` in the fallback locale.

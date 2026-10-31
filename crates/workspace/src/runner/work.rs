@@ -93,6 +93,44 @@ impl ActiveWork {
   }
 }
 
+#[cfg(feature = "test-support")]
+impl super::Runners {
+  /// Reports `work` as the runner of project `root` (`name`) online, without starting one; an empty `work` ends its
+  /// runs. For tests of what follows the runs at work, which run no runner.
+  #[doc(hidden)]
+  pub fn report_work_for_test(&self, root: &std::path::Path, name: &str, work: orchester_ipc::WorkSummary) {
+    let status = super::RunnerStatus::online_for_test(root.to_path_buf(), work);
+    {
+      let mut projects = self.inner.projects.lock();
+      match projects.get_mut(root) {
+        Some(entry) => {
+          entry.status.send_replace(status);
+        }
+        None => {
+          let generation = self
+            .inner
+            .generations
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+          projects.insert(
+            root.to_path_buf(),
+            super::ProjectRunner {
+              name: name.into(),
+              status: tokio::sync::watch::Sender::new(status),
+              connection: None,
+              lingering: None,
+              pins: 0,
+              generation,
+              asking: None,
+              forgetting: false,
+            },
+          );
+        }
+      }
+    }
+    self.inner.shared.work.send_modify(|revision| *revision += 1);
+  }
+}
+
 /// Where a run stands while the application closes after "Wait for agents to save" (02.D).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SaveState {

@@ -9,6 +9,7 @@
 
 mod base_branch;
 mod brief;
+mod browser_line;
 mod decisions;
 mod empty;
 mod live;

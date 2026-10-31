@@ -36,6 +36,9 @@ pub trait Source: Send + Sync {
   /// Reads `task` as the server has it now.
   fn task(&self, task: TaskId) -> impl Future<Output = Result<SharedTask, SharingError>> + Send;
 
+  /// Reads every resource of the project as the server has it now.
+  fn resources(&self) -> impl Future<Output = Result<Vec<SharedResource>, SharingError>> + Send;
+
   /// Reads one page of `resource`'s versions after `after`, from v1 without it.
   fn versions(
     &self,
@@ -136,17 +139,47 @@ async fn connect(source: &impl Source, root: &Path, clock: &impl Clock) -> (bool
     Ok(cursor) => cursor,
     Err(error) => return (false, Ending::Cache(error)),
   };
+  tracing::info!(?cursor, "a project's event stream connects");
   match source.open(cursor).await {
     Ok(mut stream) => {
       source.state(SyncState::Live);
       let ending = tokio::select! {
-        ending = read(source, root, &mut stream) => ending,
+        ending = resume(source, root, cursor.is_some(), &mut stream) => ending,
         never = catalog::keep_reported(source, root, clock.catalog_check()) => match never {},
       };
       (true, ending)
     }
     Err(end) => (false, Ending::Stream(end)),
   }
+}
+
+/// Applies the events of `stream` until it ends. A stream `resumed` from a cursor gets no snapshot, so the project's
+/// resources are read first: a cursor that came without the snapshot (Join's) or a `resource.published` missed would
+/// otherwise leave the team's configuration out of the cache until its next version. Resources that cannot be read
+/// now do not hold the tasks' deltas: the next connect reads them again.
+async fn resume(source: &impl Source, root: &Path, resumed: bool, stream: &mut EventStream) -> Ending {
+  if resumed {
+    match resources(source, root).await {
+      Ok(()) => {}
+      Err(SharingError::SignedOut) => return Ending::Stream(StreamEnd::Unauthorized),
+      Err(error) => tracing::warn!(%error, "the project's resources could not be read; the next connect reads them"),
+    }
+  }
+  read(source, root, stream).await
+}
+
+/// Keeps every resource the server has with the versions this computer does not have yet.
+async fn resources(source: &impl Source, root: &Path) -> Result<(), SharingError> {
+  let resources = source.resources().await?;
+  tracing::info!(
+    count = resources.len(),
+    "a resumed stream reads the project's resources"
+  );
+  for resource in resources {
+    config::sync(source, root, resource).await?;
+  }
+  source.changed();
+  Ok(())
 }
 
 /// Applies the events of `stream` until it ends.
@@ -186,16 +219,28 @@ async fn read(source: &impl Source, root: &Path, stream: &mut EventStream) -> En
     };
     match result {
       Ok(()) => source.changed(),
-      Err(SharingError::SignedOut) => return Ending::Stream(StreamEnd::Unauthorized),
-      Err(SharingError::Client(error)) => return Ending::Stream(StreamEnd::Failed(error)),
-      Err(error) => return Ending::Cache(error),
+      Err(error) => return ended(error),
     }
+  }
+}
+
+/// How a connection ends on `error` reading the server or the cache.
+fn ended(error: SharingError) -> Ending {
+  match error {
+    SharingError::SignedOut => Ending::Stream(StreamEnd::Unauthorized),
+    SharingError::Client(error) => Ending::Stream(StreamEnd::Failed(error)),
+    error => Ending::Cache(error),
   }
 }
 
 /// Keeps the snapshot's resources with their versions, then takes the snapshot at `cursor`: a stream that breaks
 /// before takes the snapshot again on its next connect.
 async fn snapshot(source: &impl Source, root: &Path, pages: Pages, cursor: u64) -> Result<Applied, SharingError> {
+  tracing::info!(
+    resources = pages.resources().len(),
+    cursor,
+    "a project's snapshot ended"
+  );
   for resource in pages.resources() {
     config::sync(source, root, resource.clone()).await?;
   }

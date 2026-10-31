@@ -1,33 +1,45 @@
 //! MCP servers end to end with `orchester-fake-codex` and `orchester-fake-claude`: the servers the
 //! profile chooses reach the CLI, a secret value only through the CLI's environment (Codex) or its
 //! private configuration file (Claude Code), never its arguments, and every server the agent works
-//! without is in the run's activity. Needs `git`. Run with `cargo test -p orchester-runner
+//! without is in the run's activity; a server named like one of the user's own Codex servers reaches
+//! Codex under another name. Needs `git`. Run with `cargo test -p orchester-runner
 //! --features test-agent --test mcp mcp`.
 
 mod support;
 
-use std::{collections::BTreeMap, path::Path};
+use std::{
+  collections::{BTreeMap, BTreeSet},
+  fs,
+  path::Path,
+  time::Duration,
+};
 
 use orchester_core::{
+  command::Command,
   connection::{
     AgentProvider,
+    app_server_config::{names_read_command, read_configured_names},
+    invocation::{CodexMcp, McpLaunch},
     mcp::{
-      HttpServer, McpAuthorization, McpEnvValue, McpEnvironment, McpServer, McpServerName, McpServerProblem,
-      McpTransport, McpUrl, StdioServer, WorkingDirectory,
+      ExemptTools, HttpServer, McpAuthorization, McpEnvValue, McpEnvironment, McpServer, McpServerName,
+      McpServerProblem, McpTransport, McpUrl, StdioServer, WorkingDirectory,
     },
     stream::AgentEvent,
   },
   id::{ConnectionId, IdempotencyKey, SecretId},
   permission::{AgentPermissions, CommandPermission, NetworkAccess, RepositoryAccess},
   resource::{CommandArg, CommandProgram, VariableName},
-  run::{Run, RunStatus, Stuck},
+  run::{Answerer, ApprovalAnswer, Run, RunStatus, Stuck},
   secret::{Environment, NewSecret, Secret, SecretKind, SecretName},
   store::ActivityStore,
   time::Timestamp,
 };
+use orchester_exec::ProcessRunner;
 use orchester_store::ProjectDb;
 
-use self::support::{Setup, TestProject, project, reported, scheduler_with, settled, tools::TEST_COMMAND, wait_for};
+use self::support::{
+  PATIENCE, Setup, TestProject, git, project, reported, scheduler_with, settled, threads, tools::TEST_COMMAND, wait_for,
+};
 
 const TOKEN: &str = "docs-token-value-7f3a";
 const BEARER: &str = "bearer-value-91c2";
@@ -276,38 +288,139 @@ async fn mcp_servers_reach_claude_code_in_a_private_file_removed_after_the_run()
   assert_eq!(left_out(&db, &run), expected);
 }
 
-/// A server of the user's own Codex configuration named like a chosen one would merge its
-/// `command`, `args` or `env` into the chosen server, so the step stops before its thread starts.
-#[tokio::test(flavor = "multi_thread")]
-async fn mcp_servers_named_like_one_of_the_users_own_refuse_the_codex_step() {
-  let taken = server("user-global", stdio(TEST_COMMAND, None), McpEnvironment::default());
-  let project = project(&Setup {
-    mcp: vec![taken],
-    ..Setup::new("Say hello.")
-  });
-  let run = run_to_the_end(&project).await;
-  assert!(
-    matches!(run.status(), RunStatus::WaitingForPerson(Stuck::BrokeAgain(_))),
-    "{:?}",
-    run.status()
+/// A Builder that asks before MCP actions and uses the design tools of `pencil`, whose `get_screenshot` runs without
+/// asking, in a repository whose fake Codex user has a server named `pencil` too (`fake_codex_user`).
+fn pencil_named_like_the_users() -> TestProject {
+  let mut pencil = server("pencil", stdio(TEST_COMMAND, None), McpEnvironment::default());
+  pencil.set_exempt_tools(ExemptTools::parse("get_screenshot").expect("valid tools"));
+  let mut permissions = AgentPermissions::new(
+    RepositoryAccess::Write,
+    CommandPermission::AnyInWorktree,
+    NetworkAccess::Off,
   );
-  let db = ProjectDb::open(project.repo.path()).expect("open");
-  let failures: Vec<String> = db
-    .activity(run.id(), 0)
+  permissions.set_interactive_tool_approvals(true);
+  let project = project(&Setup {
+    mcp: vec![pencil],
+    permissions: Some(permissions),
+    ..Setup::new("Use the design tools.")
+  });
+  let root = project.repo.path();
+  fs::write(root.join("fake-user-servers"), "pencil\n").expect("the user's servers");
+  git(root, &["add", "."]);
+  git(root, &["commit", "--quiet", "-m", "the user's own Codex servers"]);
+  project
+}
+
+/// The user's own Codex configuration has a server named `pencil`, like the one the step chooses: under one name
+/// Codex would merge the user's `command`, `args` or `env` into it. Codex gets the step's as `orchester-pencil`, with
+/// the project's settings only, the user's is turned off for the thread, and the step runs; its tool exemption,
+/// approvals and activity go by `pencil`, and the agent is told the name it calls the server by.
+#[tokio::test(flavor = "multi_thread")]
+async fn mcp_server_named_like_one_of_the_users_own_runs_under_another_name_in_codex() {
+  let project = pencil_named_like_the_users();
+  let root = project.repo.path();
+  let (scheduler, mut events) = scheduler_with(root, project.vault.clone());
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("the run starts");
+  let request = tokio::time::timeout(PATIENCE, async {
+    loop {
+      let db = ProjectDb::open(root).expect("open");
+      if let Some(request) = db.pending_tool_approvals(id).expect("requests").first() {
+        return request.clone();
+      }
+      events.recv().await.expect("notification");
+    }
+  })
+  .await
+  .expect("an approval arrives");
+  assert_eq!(
+    (request.server.as_str(), request.action.as_str()),
+    ("pencil", "batch_design")
+  );
+  scheduler
+    .decide_tool_approval(id, request.id, ApprovalAnswer::Once, Answerer::Person)
+    .await
+    .expect("approved");
+  let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  let db = ProjectDb::open(root).expect("open");
+  let program = serde_json::to_string(TEST_COMMAND).expect("a JSON string");
+  let args = reported(&db, id, "mcp-arg: ");
+  for expected in [
+    format!("mcp_servers.orchester-pencil.command={program}"),
+    r#"mcp_servers.orchester-pencil.tools={"get_screenshot"={approval_mode="approve"}}"#.to_owned(),
+  ] {
+    assert!(args.contains(&expected), "{expected} not in {args:#?}");
+  }
+  assert!(
+    !args.iter().any(|arg| arg.starts_with("mcp_servers.pencil.")),
+    "{args:#?}"
+  );
+  for thread in threads(&db, id) {
+    let off = serde_json::json!({"mcp_servers.pencil.enabled": false, "mcp_servers.user-global.enabled": false});
+    assert_eq!(thread["config"], off, "the user's servers are off: {thread}");
+  }
+  assert_eq!(reported(&db, id, "unasked: "), ["orchester-pencil/get_screenshot"]);
+  let calls: Vec<(String, String)> = db
+    .activity(id, 0)
     .expect("activity")
     .into_iter()
     .filter_map(|entry| match entry.event {
-      AgentEvent::TurnFailed { message } => Some(message),
+      AgentEvent::McpToolNotAsked { server, tool, .. } | AgentEvent::McpToolFinished { server, tool, .. } => {
+        Some((server, tool))
+      }
       _ => None,
     })
     .collect();
-  assert!(
-    failures
-      .iter()
-      .any(|message| message.contains("has an MCP server named `user-global`")),
-    "{failures:?}"
+  // The exempt tool, not asked then finished, and the one a person approved.
+  let named = |tool: &str| ("pencil".to_owned(), tool.to_owned());
+  assert_eq!(
+    calls,
+    [named("get_screenshot"), named("get_screenshot"), named("batch_design")]
   );
-  assert!(reported(&db, run.id(), "thread: ").is_empty(), "no thread starts");
+  let prompt = reported(&db, id, "prompt| ").join("\n");
+  assert!(
+    prompt.contains("The MCP server `pencil` of this step is called `orchester-pencil` in this Codex session"),
+    "{prompt}"
+  );
+}
+
+/// Live: the real Codex CLI that `ORCHESTER_LIVE_CODEX` names, in a scratch `CODEX_HOME` whose configuration has
+/// `pencil` (an HTTP server, which next to a chosen `command` would make Codex refuse its whole configuration) and
+/// `user-notes`, reports both to the read the runner makes before a step's Codex starts, so the step's `pencil` gets
+/// another name (`docs/evidence/orc-547-codex-server-names-2026-10-30.md`).
+#[test]
+#[ignore = "live: runs the real Codex CLI named by ORCHESTER_LIVE_CODEX in a scratch CODEX_HOME"]
+fn mcp_live_codex_reports_the_server_names_of_its_configuration() {
+  let program = std::env::var_os("ORCHESTER_LIVE_CODEX").expect("ORCHESTER_LIVE_CODEX names the Codex CLI");
+  let home = tempfile::tempdir().expect("a scratch CODEX_HOME");
+  let config =
+    "[mcp_servers.pencil]\nurl = \"http://127.0.0.1:9/mcp\"\n\n[mcp_servers.user-notes]\ncommand = \"notes\"\n";
+  fs::write(home.path().join("config.toml"), config).expect("the user's configuration");
+  let worktree = tempfile::tempdir().expect("a worktree");
+  let codex = Command::new(Path::new(&program), ["app-server", "--stdio"])
+    .with_current_dir(worktree.path())
+    .with_env("CODEX_HOME", &home.path().to_string_lossy());
+  let read = names_read_command(codex, worktree.path());
+  let names = read_configured_names(&ProcessRunner::new(Duration::from_secs(60)), &read).expect("read");
+  assert_eq!(names, BTreeSet::from(["pencil".to_owned(), "user-notes".to_owned()]));
+  let pencil = McpLaunch::stdio(
+    McpServerName::new("pencil").expect("valid name"),
+    ("pencil-mcp".to_owned(), Vec::new()),
+    None,
+    Vec::new(),
+  );
+  let (mcp, _) = CodexMcp::new(&[pencil]);
+  let mcp = mcp.named_apart(&names);
+  assert!(
+    mcp
+      .args()
+      .contains(&r#"mcp_servers.orchester-pencil.command="pencil-mcp""#.to_owned()),
+    "{:?}",
+    mcp.args()
+  );
 }
 
 /// A step that asks before MCP actions needs every server it chooses: one Codex lists as not connected

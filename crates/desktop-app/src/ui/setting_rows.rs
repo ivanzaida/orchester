@@ -64,6 +64,7 @@ pub struct SettingGroup {
   /// The meta's bone while it is read.
   meta_bone: Option<Element>,
   end: Option<Element>,
+  notice: Option<Element>,
   rows: Vec<Element>,
   note: Option<Arc<str>>,
 }
@@ -77,9 +78,17 @@ impl SettingGroup {
       meta: None,
       meta_bone: None,
       end: None,
+      notice: None,
       rows: Vec::new(),
       note: None,
     }
+  }
+
+  /// A notice between the heading and the box, 4 further from the box (`Not found` `PzLrb` in `09b · … not found`
+  /// `NZECi`).
+  pub fn notice(mut self, notice: impl Into<Element>) -> Self {
+    self.notice = Some(notice.into());
+    self
   }
 
   /// A count or when it was read, after the title in 12 `text_muted` (`Count` `e8kTSZ`, `Meta` `F5yRK`).
@@ -164,11 +173,18 @@ impl From<SettingGroup> for Element {
         .clip()
         .with_children(cells)
     });
+    let notice = group.notice.map(|notice| {
+      Column::new()
+        .width(Dimension::Pct(100.0))
+        .padding(Padding::new().bottom(SpacingSize::Xs))
+        .child(notice)
+    });
     Column::new()
       .id(group.id.to_string())
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)
       .child(heading)
+      .with_children(notice)
       .with_children(rows)
       .with_children(group.note.map(|note| group_note(&format!("{}-note", group.id), &note)))
       .into()
@@ -188,6 +204,9 @@ pub fn group_note(id: &str, text: &str) -> Text {
 pub struct SettingRow {
   id: Arc<str>,
   label: Arc<str>,
+  detail: Option<Element>,
+  /// The label's color when it says how something stands, `text_primary` otherwise.
+  label_color: Option<PaletteColor>,
   hint: Option<(Arc<str>, HintTone)>,
   info: Option<Arc<str>>,
   link: Option<Element>,
@@ -209,6 +228,8 @@ impl SettingRow {
     Self {
       id: id.into(),
       label: label.into(),
+      detail: None,
+      label_color: None,
       hint: None,
       info: None,
       link: None,
@@ -221,6 +242,19 @@ impl SettingRow {
       opens: None,
       bones: (None, None),
     }
+  }
+
+  /// A value on a line of its own between the label and the hint, such as a program's path (`Path` `M2Pwq` in
+  /// `09 · Settings · Browser` `j3Lre`).
+  pub fn detail(mut self, detail: impl Into<Element>) -> Self {
+    self.detail = Some(detail.into());
+    self
+  }
+
+  /// The label in `color`: it says how something stands (`Orchester 0.4.0 is ready` in `info`, `c69Eti`).
+  pub fn label_color(mut self, color: PaletteColor) -> Self {
+    self.label_color = Some(color);
+    self
   }
 
   /// A link under the hint, in the label's column, 2 further down (`Link` `ngNFb` in `tMyiy`).
@@ -305,17 +339,17 @@ impl SettingRow {
     self
   }
 
-  /// The label with its (i), and the hint under them.
-  fn text(&self, ctx: &mut Ctx) -> Column {
+  /// The label with its (i), its detail and the hint under them.
+  fn text(&mut self, ctx: &mut Ctx) -> Column {
     let label: Element = match self.bones.0 {
       Some(width) => skeleton::line(ctx, ExtraTypography::Strong.role(), width).into(),
       None => Text::new(&self.label)
         .id(format!("{}-label", self.id))
         .variant(ExtraTypography::Strong.role())
-        .color(if self.faded {
-          PaletteColor::TextMuted
-        } else {
-          PaletteColor::TextPrimary
+        .color(match (self.faded, self.label_color.clone()) {
+          (true, _) => PaletteColor::TextMuted,
+          (false, Some(color)) => color,
+          (false, None) => PaletteColor::TextPrimary,
         })
         .into(),
     };
@@ -349,6 +383,7 @@ impl SettingRow {
           .child(label)
           .with_children(info),
       )
+      .with_children(self.detail.take())
       .with_children(hint)
   }
 

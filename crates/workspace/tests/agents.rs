@@ -3,6 +3,8 @@
 
 #[path = "agents/approval_mode.rs"]
 mod approval_mode;
+#[path = "agents/browser.rs"]
+mod browser;
 #[path = "agents/concurrency.rs"]
 mod concurrency;
 #[path = "agents/servers.rs"]

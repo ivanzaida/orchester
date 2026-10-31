@@ -12,6 +12,7 @@
 #![allow(clippy::print_stdout, reason = "a QA helper says where it is")]
 
 mod agents;
+mod browser;
 mod settings;
 
 use std::{error::Error, fs, sync::Arc};
@@ -59,9 +60,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     services.runners.set_error_reports(reports.for_runners().as_ref());
   }
   // What the QA copy moves to the Recycle Bin / Trash (a removed account's folder, discarded local changes) goes to
-  // `trash` beside its data instead, never to the person's own.
+  // `trash` beside its data instead, never to the person's own. The seed's `browser` scenarios put the browsers
+  // Settings › Browser finds in `browsers` beside the data; with that folder there, it looks in it only.
   if let (Some(workspace), Some(folder)) = (launch.workspace(), location.database.parent()) {
     workspace.use_trash(Arc::new(FolderTrash::new(&folder.join("trash"))));
+    let browsers = folder.join("browsers");
+    if browsers.is_dir() {
+      workspace.look_for_browsers_in(&[browsers]);
+    }
   }
   let cloud = AccountCloud::start();
   if let Some(services) = launch.services() {
@@ -77,14 +83,23 @@ fn main() -> Result<(), Box<dyn Error>> {
     (true, None) => return Err("--settings needs a started session".into()),
     (false, _) => None,
   };
+  // The Browser window's states, when the seed left their fixture (`browser-*` scenarios); played until exit.
+  let browser = match launch.services() {
+    Some(services) if !signed_out => browser::start(services, &location.database)?,
+    _ => None,
+  };
   println!(
-    "cloud {} as {}\nsigned in {}\nsettings fixtures {}",
+    "cloud {} as {}\nsigned in {}\nsettings fixtures {}\nbrowser fixture {}",
     cloud.url(),
     signed_in::account_cloud::EMAIL,
     !signed_out,
-    shown.is_some()
+    shown.is_some(),
+    browser.is_some()
   );
   window::open_showing(&runtime, &launch, position, shown);
+  if let Some(browser) = browser {
+    browser.abort();
+  }
   clipboard::clear_at_exit();
   launch.end();
   Ok(())

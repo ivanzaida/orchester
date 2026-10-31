@@ -1,12 +1,15 @@
 //! What a request asks to do, as the answers judge it: a command, classified, or a call of one tool of
 //! an MCP server; for a call of one of Orchester's tools that reads outside the worktree, also the folder it reads in,
-//! and for `run_check`, the check it runs ([`ToolReach`]).
+//! for `run_check`, the check it runs, and for a browser tool, the site it acts on ([`ToolReach`]).
 
 use std::path::Path;
 
 use crate::{
   native::command::CommandSyntax,
-  orchester_tools::{OrchesterTool, ProjectTool, QaApproval, SERVER},
+  orchester_tools::{
+    OrchesterTool, ProjectTool, QaApproval, SERVER,
+    browser::{BrowserReach, BrowserTool},
+  },
   permission::category::{ClassifiedCommand, CommandScope},
   resource::ApprovalMode,
   run::{CommandShell, NativeCommandAsk, PendingToolApproval},
@@ -38,6 +41,13 @@ pub enum ToolReach {
   /// A call of `start_qa_app`, which runs the worktree's QA script at git blob `blob` (`QaApproval`); empty when the
   /// request names none: no rule is made for it.
   Script { blob: String },
+  /// A call of a browser tool that opens or acts on a page of `host` (`BrowserReach::Site`), as the request's target
+  /// names it: Approve similar keeps its rule to the tool on that host. Empty for a page without a web host: no rule
+  /// is made for it.
+  Site { host: String },
+  /// A call of `browser_eval`, which runs JavaScript in a page: a person approves every one, so no rule is made for it
+  /// (`docs/design/browser.md`, decision 9).
+  PageScript,
 }
 
 impl ApprovalSubject {
@@ -52,9 +62,8 @@ impl ApprovalSubject {
         None => ClassifiedCommand::classify_in(&approval.action, folder, scope),
       })
     } else {
-      let own = (approval.server == SERVER)
-        .then(|| OrchesterTool::from_name(&approval.action))
-        .flatten();
+      let ours = approval.server == SERVER;
+      let own = ours.then(|| OrchesterTool::from_name(&approval.action)).flatten();
       let target = approval.target.clone();
       let reach = match (own, target) {
         (Some(tool), Some(folder)) if tool.reads_outside() => ToolReach::Folder {
@@ -72,6 +81,7 @@ impl ApprovalSubject {
             .unwrap_or_default()
             .to_owned(),
         },
+        (None, host) if ours => browser_reach(&approval.action, host),
         _ => ToolReach::Any,
       };
       Self::McpTool {
@@ -97,6 +107,18 @@ impl ApprovalSubject {
         .is_none_or(|check| check.approval() == ApprovalMode::EveryCall);
     }
     self
+  }
+}
+
+/// What a call of Orchester's browser tool `tool` that asked reaches: the host of the page it opens or acts on, which
+/// the request's target names, or a script in a page. `Any` for another tool, and for a reading one, which never asks.
+fn browser_reach(tool: &str, host: Option<String>) -> ToolReach {
+  match BrowserTool::from_name(tool).map(BrowserTool::reach) {
+    Some(BrowserReach::Site) => ToolReach::Site {
+      host: host.unwrap_or_default(),
+    },
+    Some(BrowserReach::Script) => ToolReach::PageScript,
+    Some(BrowserReach::Reads) | None => ToolReach::Any,
   }
 }
 
