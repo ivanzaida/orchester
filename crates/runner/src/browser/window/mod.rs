@@ -2,9 +2,11 @@
 //! desktop that subscribed, the tab it shows, and that tab's latest screencast frame, which waits alone to be written:
 //! a newer frame replaces it, so frames are dropped rather than queued when the desktop reads slower than the page
 //! changes. Each tab's events are followed for it ([`follow`]), the person's inputs keep their order ([`order`]) and
-//! hold the agent of their tab ([`hold`]), and the browser's state is sent whenever it changes.
+//! hold the agent of their tab ([`hold`]), the requests of the person's tabs for files wait for the window's answer
+//! ([`files`]), and the browser's state is sent whenever it changes.
 
 mod cursor;
+mod files;
 mod follow;
 mod hit;
 mod hold;
@@ -37,7 +39,7 @@ pub(super) use self::{
   follow::{Followed, WindowWatch, follow_tab, follow_targets, follow_window_targets},
   restart::Starter,
 };
-use self::{hold::Holds, order::InputLines};
+use self::{files::FileRequests, hold::Holds, order::InputLines};
 pub use self::{
   hold::{HoldClock, PERSON_HOLD, PersonWait, WAIT_CAP},
   order::Arrived,
@@ -67,6 +69,7 @@ pub(super) struct Window {
   changed: Notify,
   inputs: InputLines,
   holds: Holds,
+  files: FileRequests,
 }
 
 /// The tab the window shows: screencast now, or with the browser in a window of its own only named, since that window
@@ -113,10 +116,11 @@ impl Window {
     before
   }
 
-  /// `target` is gone: the window shows nothing if it showed it.
+  /// `target` is gone: the window shows nothing if it showed it, and its request for files is dropped.
   pub(super) fn forget(&self, target: &TargetId) {
     self.inputs.forget(target);
     self.holds.forget(target);
+    self.files.forget(target);
     let mut shown = self.shown.lock();
     if shown.as_ref().is_some_and(|shown| &shown.target == target) {
       *shown = None;
@@ -157,6 +161,7 @@ impl Window {
   pub(super) fn started(&self) -> u64 {
     self.inputs.clear();
     self.holds.clear();
+    self.files.clear();
     self.generation.fetch_add(1, Ordering::AcqRel) + 1
   }
 
@@ -195,6 +200,7 @@ impl Window {
 
   fn no_browser(&self) {
     self.holds.clear();
+    self.files.clear();
     self.show(None);
     self.send(BrowserEvent::Changed(BrowserState::default()));
   }

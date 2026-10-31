@@ -42,7 +42,7 @@ use self::{
   window::{Starter, Window},
 };
 pub use self::{
-  log::{ConsoleMessage, KEPT, Request, TabLog},
+  log::{ConsoleMessage, FILE_ASKED, KEPT, Request, TabLog},
   running::LOAD_LIMIT,
   tab::Tab,
   window::{Arrived, HoldClock, PERSON_HOLD, PersonWait, WAIT_CAP},

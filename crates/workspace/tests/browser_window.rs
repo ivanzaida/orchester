@@ -19,7 +19,7 @@ use image::{ImageFormat, Rgb, RgbImage};
 use orchester_core::{id::RunId, time::Timestamp};
 use orchester_ipc::browser::{
   AgentAction, AgentWaitEnd, BrowserDialog, BrowserEvent, BrowserMode, BrowserState, BrowserTab, BrowserTabId,
-  DialogKind, ElementBox, ScreencastFrame, SelectId, SelectList, SelectOption, TabOwner,
+  DialogKind, ElementBox, FileChooser, FileChooserId, ScreencastFrame, SelectId, SelectList, SelectOption, TabOwner,
 };
 use orchester_store::AppDb;
 use orchester_workspace::{
@@ -224,6 +224,43 @@ fn browser_window_keeps_what_belongs_to_a_tab_until_it_closes() {
   let view = window.view(root).expect("the browser");
   assert_eq!((view.acting(&tab("T1")), view.latest_acting()), (None, None));
   assert_eq!(view.last_shown(), None);
+}
+
+/// A request of the person's tab for files stays until the window answers it, whose answer to an earlier request
+/// leaves a later one; it goes with its tab.
+#[test]
+fn browser_window_keeps_a_tabs_request_for_files_until_the_window_answers_it() {
+  let window = BrowserWindow::default();
+  let root = Path::new("/p/kontur");
+  let tabs = || vec![browser_tab("P1", TabOwner::Person), browser_tab("P2", TabOwner::Person)];
+  window.receive_for_test(root, "Kontur", state(tabs(), Some("P1")));
+  let asked = |id: u64| FileChooser {
+    id: FileChooserId::new(id),
+    multiple: false,
+    accept: vec![".pem".to_owned()],
+    label: Some("Signing certificate".to_owned()),
+  };
+  for (on, id) in [("P1", 1), ("P1", 2), ("P2", 3)] {
+    let opened = BrowserEvent::FileChooserOpened {
+      tab: tab(on),
+      chooser: asked(id),
+    };
+    window.receive_for_test(root, "Kontur", opened);
+  }
+  let view = window.view(root).expect("the browser");
+  assert_eq!(view.file_chooser(&tab("P1")), Some(&asked(2)), "the later request");
+  assert_eq!(view.file_choosers().count(), 2);
+
+  window.file_chooser_answered(root, &tab("P1"), FileChooserId::new(1));
+  let view = window.view(root).expect("the browser");
+  assert_eq!(view.file_chooser(&tab("P1")), Some(&asked(2)), "an earlier answer leaves it");
+  window.file_chooser_answered(root, &tab("P1"), FileChooserId::new(2));
+  let view = window.view(root).expect("the browser");
+  assert_eq!(view.file_chooser(&tab("P1")), None);
+
+  window.receive_for_test(root, "Kontur", state(vec![browser_tab("P1", TabOwner::Person)], Some("P1")));
+  let view = window.view(root).expect("the browser");
+  assert_eq!(view.file_choosers().count(), 0, "gone with its tab");
 }
 
 /// Each tab keeps whether an agent waits on it and until when: pushed back, ended whichever way, and gone with its tab.

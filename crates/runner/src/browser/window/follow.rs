@@ -1,5 +1,5 @@
-//! Following the browser for the window: each tab's screencast frames, loading and dialogs, and the browser's own
-//! reports of tabs that changed or closed.
+//! Following the browser for the window: each tab's screencast frames, loading, dialogs and requests for files, and
+//! the browser's own reports of tabs that changed or closed.
 
 use std::{
   sync::{Arc, Weak},
@@ -15,7 +15,7 @@ use tokio::{
   time::Instant,
 };
 
-use super::{Window, tab_id};
+use super::{Window, files, tab_id};
 use crate::browser::{
   cdp::{Cdp, CdpEvent, SessionId, TargetId},
   tabs::{ClosedBy, Tabs},
@@ -38,7 +38,8 @@ pub(in crate::browser) struct WindowWatch {
 }
 
 /// Follows one tab's `events` until the tab is no longer kept: acknowledges and keeps its screencast frames, notes
-/// whether its page loads, and tells the window of the dialogs of the person's tabs (an agent's are its tools').
+/// whether its page loads, and tells the window of the dialogs and the requests for files of the person's tabs (an
+/// agent's are its tools'), a request until the tab navigates.
 pub(in crate::browser) async fn follow_tab(
   cdp: Arc<Cdp>,
   tab: Followed,
@@ -47,13 +48,13 @@ pub(in crate::browser) async fn follow_tab(
   window: Arc<Window>,
 ) {
   let person = tab.owner == TabOwner::Person;
+  // The main frame of a tab has the tab's id; its frames' loads and navigations are their own.
+  let main = |frame: Option<&Value>| frame.and_then(Value::as_str) == Some(tab.target.as_str());
   while let Some(event) = events.recv().await {
     match event.method.as_str() {
       "Page.screencastFrame" => screencast_frame(&cdp, &tab, &window, &event.params).await,
       loading @ ("Page.frameStartedLoading" | "Page.frameStoppedLoading") => {
-        // The main frame of a tab has the tab's id; its frames' loads are their own.
-        let main = event.params.get("frameId").and_then(Value::as_str) == Some(tab.target.as_str());
-        if main
+        if main(event.params.get("frameId"))
           && tabs
             .lock()
             .set_loading(&tab.target, loading == "Page.frameStartedLoading")
@@ -68,6 +69,8 @@ pub(in crate::browser) async fn follow_tab(
       "Page.javascriptDialogClosed" if person => window.send(BrowserEvent::DialogClosed {
         tab: tab_id(&tab.target),
       }),
+      "Page.fileChooserOpened" if person => files::asked(&cdp, &tab, &window, &event.params).await,
+      "Page.frameNavigated" if main(event.params.pointer("/frame/id")) => window.files.forget(&tab.target),
       _ => {}
     }
   }

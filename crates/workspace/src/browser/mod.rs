@@ -18,7 +18,7 @@ use std::{
 };
 
 use orchester_core::id::RunId;
-use orchester_ipc::browser::{BrowserEvent, ScreencastFrame};
+use orchester_ipc::browser::{BrowserEvent, BrowserTabId, FileChooserId, ScreencastFrame};
 #[cfg(feature = "test-support")]
 use orchester_ipc::{
   Rejection, Reply,
@@ -167,6 +167,20 @@ impl BrowserWindow {
       .get_mut(root)
       .is_some_and(|project| project.view.close_select());
     if closed {
+      self.changed();
+    }
+  }
+
+  /// The system's file dialog for the request `chooser` of `tab` in the project at `root` closed, with a choice or
+  /// without: the request is no longer the window's to answer.
+  pub fn file_chooser_answered(&self, root: &Path, tab: &BrowserTabId, chooser: FileChooserId) {
+    let answered = self
+      .inner
+      .projects
+      .lock()
+      .get_mut(root)
+      .is_some_and(|project| project.view.file_chooser_answered(tab, chooser));
+    if answered {
       self.changed();
     }
   }

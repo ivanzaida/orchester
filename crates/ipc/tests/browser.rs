@@ -1,18 +1,18 @@
-//! The *Browser* window's messages (protocol 37): every request, reply and event round-trips, a page's selection at
-//! its limit fits a frame and stays out of the log, a screencast frame travels as a binary frame with its JPEG within
-//! the frame limit, malformed binary frames are refused, and a frame crosses the platform's real endpoint (the Unix
-//! socket on macOS, the named pipe on Windows).
+//! The *Browser* window's messages (protocol 38): every request, reply and event round-trips, a page's request for
+//! files and its answers too, a page's selection at its limit fits a frame and stays out of the log, a screencast frame
+//! travels as a binary frame with its JPEG within the frame limit, malformed binary frames are refused, and a frame
+//! crosses the platform's real endpoint (the Unix socket on macOS, the named pipe on Windows).
 
-use std::time::Duration;
+use std::{path::PathBuf, time::Duration};
 
 use orchester_core::{id::RunId, time::Timestamp};
 use orchester_ipc::{
   Command, Endpoint, Event, FrameError, PROTOCOL_VERSION, Rejection, Reply, Request, RequestId,
   browser::{
     AgentAction, AgentWaitEnd, BrowserCommand, BrowserDialog, BrowserEvent, BrowserMode, BrowserReply, BrowserState,
-    BrowserTab, BrowserTabId, DialogKind, ElementBox, KeyAction, MAX_CLIPBOARD_TEXT, Modifiers, MouseAction,
-    MouseButton, Navigation, PageCursor, PersonInput, ScreencastFrame, SelectId, SelectList, SelectOption, TabOwner,
-    Viewport,
+    BrowserTab, BrowserTabId, DialogKind, ElementBox, FileChoice, FileChooser, FileChooserId, KeyAction,
+    MAX_CLIPBOARD_TEXT, Modifiers, MouseAction, MouseButton, Navigation, PageCursor, PersonInput, ScreencastFrame,
+    SelectId, SelectList, SelectOption, TabOwner, Viewport,
   },
   frame::{FrameReader, FrameWriter, MAX_FRAME_LEN},
 };
@@ -247,13 +247,92 @@ fn cursor_replies() -> impl Iterator<Item = Event> {
     })
 }
 
-/// The events of an agent waiting for the person came with protocol 35, a page's selection with 36 and the mouse
-/// cursor's shape with 37, so an older runner is told apart at the handshake: where it waits and until when, and each
-/// way its wait ends.
-#[tokio::test]
-async fn browser_agent_waiting_events_round_trip_under_a_raised_protocol() {
-  assert_eq!(PROTOCOL_VERSION, 37);
+/// Writes `sent` on one end of a connection and reads every event back on the other.
+async fn round_trip(sent: &[Event]) -> Vec<Event> {
   let (mut reader, mut writer) = connection();
+  let written = async {
+    for event in sent {
+      writer.write_event(event).await.expect("write event");
+    }
+    drop(writer);
+  };
+  let read = async {
+    let mut events = Vec::new();
+    while let Some(event) = reader.read_event().await.expect("read event") {
+      events.push(event);
+    }
+    events
+  };
+  let ((), received) = tokio::join!(written, read);
+  received
+}
+
+/// A page's request for files came with protocol 38, so an older runner is told apart at the handshake: the request
+/// with each kind of field, and each answer the window gives it.
+#[tokio::test]
+async fn browser_file_chooser_round_trips_under_a_raised_protocol() {
+  assert_eq!(PROTOCOL_VERSION, 38);
+  let opened = |chooser| Event::Browser(BrowserEvent::FileChooserOpened { tab: tab("P1"), chooser });
+  let sent = [
+    opened(FileChooser {
+      id: FileChooserId::new(1),
+      multiple: false,
+      accept: vec![".pem".to_owned(), "application/x-pem-file".to_owned()],
+      label: Some("Signing certificate".to_owned()),
+    }),
+    opened(FileChooser {
+      id: FileChooserId::new(u64::MAX),
+      multiple: true,
+      accept: Vec::new(),
+      label: None,
+    }),
+  ];
+  assert_eq!(round_trip(&sent).await, sent);
+
+  let (mut reader, mut writer) = connection();
+  let answers: Vec<Request> = [
+    FileChoice::Chosen {
+      paths: vec![PathBuf::from("kontur-hooks.pem")],
+    },
+    FileChoice::Chosen {
+      paths: vec![
+        std::env::temp_dir().join("first file.pem"),
+        std::env::temp_dir().join("ünïcode.txt"),
+      ],
+    },
+    FileChoice::Cancelled,
+  ]
+  .into_iter()
+  .enumerate()
+  .map(|(index, choice)| Request {
+    id: RequestId::new(index as u64 + 1),
+    command: Command::Browser(BrowserCommand::ChooseFiles {
+      tab: tab("P1"),
+      chooser: FileChooserId::new(7),
+      choice,
+    }),
+  })
+  .collect();
+  let written = async {
+    for request in &answers {
+      writer.write(request).await.expect("write request");
+    }
+  };
+  let read = async {
+    let mut read = Vec::new();
+    for _ in 0..answers.len() {
+      read.push(reader.read::<Request>().await.expect("read").expect("a request"));
+    }
+    read
+  };
+  let ((), read) = tokio::join!(written, read);
+  assert_eq!(read, answers);
+}
+
+/// The events of an agent waiting for the person came with protocol 35, a page's selection with 36 and the mouse
+/// cursor's shape with 37: where it waits and until when, and each way its wait ends.
+#[tokio::test]
+async fn browser_agent_waiting_events_round_trip() {
   let run = RunId::generate();
   let ended = |end| {
     Event::Browser(BrowserEvent::AgentWaitEnded {
@@ -272,21 +351,7 @@ async fn browser_agent_waiting_events_round_trip_under_a_raised_protocol() {
     ended(AgentWaitEnd::Capped),
     ended(AgentWaitEnd::Cancelled),
   ];
-  let written = async {
-    for event in &sent {
-      writer.write_event(event).await.expect("write event");
-    }
-    drop(writer);
-  };
-  let read = async {
-    let mut events = Vec::new();
-    while let Some(event) = reader.read_event().await.expect("read event") {
-      events.push(event);
-    }
-    events
-  };
-  let ((), received) = tokio::join!(written, read);
-  assert_eq!(received, sent);
+  assert_eq!(round_trip(&sent).await, sent);
 }
 
 #[tokio::test]

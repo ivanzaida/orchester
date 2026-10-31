@@ -1,21 +1,22 @@
 //! The *Browser* window's requests, served from the project's browser: the screencast of the tab shown, the person's
-//! input, copy, cut and navigation, the mouse cursor's shape, the person's own tabs, dialogs, `<select>` lists, and the
-//! restart in a browser window of its own and back (`docs/design/browser.md`, "The *Browser* window", decision 7).
+//! input, copy, cut and navigation, the mouse cursor's shape, the person's own tabs, dialogs, `<select>` lists, the
+//! files chosen for a page, and the restart in a browser window of its own and back (`docs/design/browser.md`, "The
+//! *Browser* window", decision 7).
 
 use std::sync::Arc;
 
 use orchester_ipc::{
   Event, Rejection,
   browser::{
-    BrowserCommand, BrowserEvent, BrowserMode, BrowserReply, BrowserState, BrowserTabId, Navigation, PageCursor,
-    PersonInput, SelectId, TabOwner, Viewport,
+    BrowserCommand, BrowserEvent, BrowserMode, BrowserReply, BrowserState, BrowserTabId, FileChoice, FileChooserId,
+    Navigation, PageCursor, PersonInput, SelectId, TabOwner, Viewport,
   },
 };
 use serde_json::{Value, json};
 use tokio::sync::mpsc;
 
 use super::{
-  Shown, cursor, input,
+  Shown, cursor, files, input,
   order::{Arrived, Turn},
   select, selection,
 };
@@ -83,6 +84,7 @@ impl ProjectBrowser {
       BrowserCommand::CloseTab { tab } => self.close_window_tab(&tab).await,
       BrowserCommand::AnswerDialog { tab, accept, text } => self.answer_dialog(&tab, accept, text).await,
       BrowserCommand::ChooseOption { tab, select, index } => self.choose_option(&tab, select, index).await,
+      BrowserCommand::ChooseFiles { tab, chooser, choice } => self.choose_files(&tab, chooser, choice).await,
       BrowserCommand::CopySelection { tab } => return selected(self.selection(&tab, false, turn).await),
       BrowserCommand::CutSelection { tab } => return selected(self.selection(&tab, true, turn).await),
       BrowserCommand::CursorAt { tab, x, y } => {
@@ -226,6 +228,20 @@ impl ProjectBrowser {
   async fn choose_option(&self, tab: &BrowserTabId, list: SelectId, index: u32) -> Result<(), BrowserError> {
     let reached = self.window_tab(tab).await?;
     select::choose(&reached.cdp, &reached.session, list, index).await
+  }
+
+  /// The person's `choice` for the request `chooser` of `tab`: a cancel ends it and leaves the field as it is; chosen
+  /// files are set on the field, refused once the tab no longer makes that request.
+  async fn choose_files(&self, tab: &BrowserTabId, chooser: FileChooserId, choice: FileChoice) -> Result<(), BrowserError> {
+    let asked = self.window.files.take(&TargetId::from(tab.as_str()), chooser);
+    let FileChoice::Chosen { paths } = choice else {
+      return Ok(());
+    };
+    let asked = asked.ok_or_else(|| {
+      BrowserError::Element("the page no longer asks for these files: it navigated, closed or asked again".to_owned())
+    })?;
+    let reached = self.window_tab(tab).await?;
+    files::set(&reached.cdp, &reached.session, asked, &paths).await
   }
 
   /// The connection and session of `tab`, any of the browser's tabs; none while the browser does not run.

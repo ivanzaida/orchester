@@ -1,11 +1,12 @@
 //! The *Browser* window's messages (`docs/design/browser.md`, decisions 2 and 4, "The *Browser* window"): the app
 //! never talks to the browser itself, it sends [`BrowserCommand`]s to the project's runner and gets
-//! [`BrowserEvent`]s and screencast frames ([`ScreencastFrame`], a binary frame) back.
+//! [`BrowserEvent`]s and screencast frames ([`ScreencastFrame`], a binary frame) back. A page's request for files
+//! ([`FileChooser`]) came with protocol 38.
 
 mod frames;
 mod input;
 
-use std::fmt;
+use std::{fmt, path::PathBuf};
 
 use orchester_core::{id::RunId, time::Timestamp};
 use serde::{Deserialize, Serialize};
@@ -182,6 +183,44 @@ impl SelectId {
   }
 }
 
+/// One request of a page for files, numbered by the runner, so an answer reaches only the request it was made for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct FileChooserId(u64);
+
+impl FileChooserId {
+  pub const fn new(number: u64) -> Self {
+    Self(number)
+  }
+
+  pub const fn get(self) -> u64 {
+    self.0
+  }
+}
+
+/// A file field (`<input type=file>`) of the person's tab that asks for files: the window opens the system's own file
+/// dialog for it and answers with [`BrowserCommand::ChooseFiles`].
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FileChooser {
+  pub id: FileChooserId,
+  /// More than one file may be chosen (`multiple`).
+  pub multiple: bool,
+  /// The types the field accepts, as the page lists them in its `accept` (`.pem`, `image/*`); none for any file.
+  pub accept: Vec<String>,
+  /// The field's accessible name, the page's own text; `None` when it has none.
+  pub label: Option<String>,
+}
+
+/// What the person did in the file dialog.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum FileChoice {
+  /// These files, by this computer's paths: one, or more where the field takes more.
+  Chosen { paths: Vec<PathBuf> },
+  /// Closed without a choice: the field stays as it is.
+  Cancelled,
+}
+
 /// An element's box in the page's CSS pixels, relative to the page area's top left corner.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ElementBox {
@@ -273,6 +312,14 @@ pub enum BrowserCommand {
     tab: BrowserTabId,
     select: SelectId,
     index: u32,
+  },
+  /// Answers the request `chooser` of `tab` for files with the person's `choice` in the system's file dialog: chosen
+  /// files are set on the field that asked, as the page's own chooser would; a cancel leaves it as it is. A choice for
+  /// a request the tab no longer makes, as it navigated or asked again, is refused.
+  ChooseFiles {
+    tab: BrowserTabId,
+    chooser: FileChooserId,
+    choice: FileChoice,
   },
   /// The person's copy on `tab`: answered with its [`BrowserReply::Selection`], in its place among the person's inputs.
   CopySelection {
@@ -368,4 +415,7 @@ pub enum BrowserEvent {
   DialogClosed { tab: BrowserTabId },
   /// The person opened a `<select>` list on `tab`.
   SelectOpened { tab: BrowserTabId, list: SelectList },
+  /// A file field of the person's `tab` asks for files; it waits for [`BrowserCommand::ChooseFiles`], until the tab
+  /// navigates or closes. An agent's tab never sends this: the runner cancels its request and tells the agent.
+  FileChooserOpened { tab: BrowserTabId, chooser: FileChooser },
 }

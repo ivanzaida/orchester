@@ -1,13 +1,15 @@
 //! What the *Browser* window knows of one project's browser, from its runner's events: its tabs with their owners,
 //! the tab shown and the one shown last, the latest frame, what an agent did last on each tab (*Agent is acting*),
 //! which tabs an agent waits on because the person uses them and until when, the JavaScript dialogs waiting on the
-//! person's tabs and the `<select>` list the person opened.
+//! person's tabs, the `<select>` list the person opened, and the requests of the person's tabs for files until the
+//! window answered them.
 
 use std::{collections::HashMap, sync::Arc, time::Instant};
 
 use orchester_core::{id::RunId, time::Timestamp};
 use orchester_ipc::browser::{
-  AgentAction, BrowserDialog, BrowserEvent, BrowserMode, BrowserState, BrowserTab, BrowserTabId, SelectList,
+  AgentAction, BrowserDialog, BrowserEvent, BrowserMode, BrowserState, BrowserTab, BrowserTabId, FileChooser,
+  FileChooserId, SelectList,
 };
 
 use super::RgbaFrame;
@@ -45,6 +47,7 @@ pub struct BrowserView {
   waiting: HashMap<BrowserTabId, AgentWaiting>,
   dialogs: HashMap<BrowserTabId, BrowserDialog>,
   select: Option<OpenSelect>,
+  files: HashMap<BrowserTabId, FileChooser>,
 }
 
 impl BrowserView {
@@ -58,6 +61,7 @@ impl BrowserView {
       waiting: HashMap::new(),
       dialogs: HashMap::new(),
       select: None,
+      files: HashMap::new(),
     }
   }
 
@@ -117,6 +121,16 @@ impl BrowserView {
     self.select.as_ref()
   }
 
+  /// The request of the person's `tab` for files, while the window has not answered it.
+  pub fn file_chooser(&self, tab: &BrowserTabId) -> Option<&FileChooser> {
+    self.files.get(tab)
+  }
+
+  /// Every request of the person's tabs for files the window has not answered, with its tab.
+  pub fn file_choosers(&self) -> impl Iterator<Item = (&BrowserTabId, &FileChooser)> {
+    self.files.iter()
+  }
+
   /// Applies the runner's `event`. An agent starting to browse changes nothing here (see `BrowserWindow`).
   pub(super) fn apply(&mut self, event: BrowserEvent) {
     match event {
@@ -139,6 +153,9 @@ impl BrowserView {
         self.dialogs.remove(&tab);
       }
       BrowserEvent::SelectOpened { tab, list } => self.select = Some(OpenSelect { tab, list }),
+      BrowserEvent::FileChooserOpened { tab, chooser } => {
+        self.files.insert(tab, chooser);
+      }
     }
   }
 
@@ -148,6 +165,7 @@ impl BrowserView {
     self.acting.retain(|tab, _| open(tab));
     self.waiting.retain(|tab, _| open(tab));
     self.dialogs.retain(|tab, _| open(tab));
+    self.files.retain(|tab, _| open(tab));
     if self.select.as_ref().is_some_and(|select| !open(&select.tab)) {
       self.select = None;
     }
@@ -177,5 +195,14 @@ impl BrowserView {
 
   pub(super) fn close_select(&mut self) -> bool {
     self.select.take().is_some()
+  }
+
+  /// The window answered the request `chooser` of `tab`; whether it was still kept. A later request of the tab stays.
+  pub(super) fn file_chooser_answered(&mut self, tab: &BrowserTabId, chooser: FileChooserId) -> bool {
+    let answered = self.files.get(tab).is_some_and(|kept| kept.id == chooser);
+    if answered {
+      self.files.remove(tab);
+    }
+    answered
   }
 }

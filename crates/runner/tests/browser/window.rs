@@ -2,10 +2,12 @@
 //! a frame of the tab shown, the person's click and typing, `<select>` lists and dialogs drawn by the window, the
 //! person's own tabs apart from runs', frames dropped rather than queued, and the report that an agent started
 //! browsing; navigation and the restart that reopens the tabs are in [`restart`], the browser's own window closing in
-//! [`window_closed`], copy, cut and paste in [`clipboard`], the mouse cursor's shape in [`cursor`].
+//! [`window_closed`], copy, cut and paste in [`clipboard`], the mouse cursor's shape in [`cursor`], a page's request
+//! for files in [`file_chooser`].
 
 mod clipboard;
 mod cursor;
+mod file_chooser;
 mod restart;
 mod window_closed;
 
@@ -69,6 +71,16 @@ pub const CURSOR: &str = r#"<!doctype html><html><head><title>Page cursor</title
 /// A page that asks with a prompt shortly after it loads and shows the answer in its title.
 pub const DIALOG: &str = r#"<!doctype html><html><head><title>Page dialog</title></head><body><script>
 setTimeout(()=>{document.title='answered '+prompt('How many?','3')},300)</script></body></html>"#;
+
+/// The page of the file chooser tests: a labelled field for one certificate and a field for many files, at fixed
+/// places, in CSS pixels, whose files the title names.
+pub const FILES: &str = r#"<!doctype html><html><head><title>Page files</title><style>body{margin:0}
+input{position:fixed;left:0;width:300px;height:40px}</style></head><body>
+<input id="one" type="file" accept=".pem, application/x-pem-file" style="top:0" onchange="named()">
+<label for="one" style="position:fixed;left:0;top:50px">Signing   certificate</label>
+<input id="many" type="file" multiple style="top:100px" onchange="named()">
+<script>const names=(id)=>Array.from(document.getElementById(id).files,(file)=>file.name).join(',');
+function named(){document.title='one '+names('one')+' many '+names('many')}</script></body></html>"#;
 
 /// The window as the desktop is: its events, as the server hands them over.
 struct Desktop {

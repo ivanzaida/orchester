@@ -1,7 +1,8 @@
 //! What a run's tab reported since it opened, as `browser_console` and `browser_network` read it
 //! (`docs/design/browser.md`, "What the agent gets"): its console messages and uncaught exceptions, its requests with
 //! their method, URL, status, type and size, never their headers or bodies, and the JavaScript dialogs the runner
-//! dismissed for the agent, which the next answer on the tab reports. Each list keeps its newest entries only.
+//! dismissed for the agent and the files its page asked for, whose chooser the browser cancelled, which the next
+//! answer on the tab reports. Each list keeps its newest entries only.
 
 use std::{
   collections::VecDeque,
@@ -20,6 +21,9 @@ use super::{
 pub const KEPT: usize = 1000;
 /// The longest text of one message, URL or dialog kept.
 const MAX_TEXT_CHARS: usize = 2000;
+/// What the agent is told of a file chooser its page opened: agents never open the system's file dialog.
+pub const FILE_ASKED: &str =
+  "a file chooser was cancelled: the page asked for a file, and agents cannot choose files";
 
 /// One console message, or an uncaught exception (`exception`).
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -96,6 +100,7 @@ impl TabLog {
         text_of(params, "type"),
         text_of(params, "message")
       ))),
+      "Page.fileChooserOpened" => self.dialogs.push(FILE_ASKED.to_owned()),
       "Network.requestWillBeSent" => self.request_sent(params),
       "Network.responseReceived" => {
         if let Some(request) = self.request(params) {
@@ -153,7 +158,8 @@ impl TabLog {
 
 /// Records what the tab of `session` reports in `state`'s log, and dismisses each JavaScript dialog it opens, which
 /// would block the page, until the tab is no longer listened to: it closed or is no longer a run's
-/// (`RunTabs`), or the connection ended. `follower` is held until then.
+/// (`RunTabs`), or the connection ended. A file chooser needs nothing here: the browser cancelled it as it opened.
+/// `follower` is held until then.
 pub(super) async fn follow(
   mut events: mpsc::UnboundedReceiver<CdpEvent>,
   cdp: Weak<Cdp>,

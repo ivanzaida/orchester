@@ -170,12 +170,41 @@ impl Running {
     }
     self.window.changed();
     self.cdp.call(Some(&session), "Page.enable", json!({})).await?;
+    self.intercept_file_choosers(&session, owner).await?;
     if matches!(owner, TabOwner::Run { .. }) {
       for domain in ["Runtime.enable", "Network.enable", "Log.enable"] {
         self.cdp.call(Some(&session), domain, json!({})).await?;
       }
     }
     Ok((target, session))
+  }
+
+  /// A page's file chooser comes to the runner instead of opening (`docs/design/browser.md`, "What frames do not
+  /// show"): on the person's tab for the window's own file dialog (`window::files`); on an agent's tab it is cancelled
+  /// at once, with the events a page listens to where the browser has them, and the tab's log tells the agent
+  /// ([`log::follow`]). A browser in a window of its own shows the person its own chooser.
+  async fn intercept_file_choosers(&self, session: &SessionId, owner: TabOwner) -> Result<(), CdpError> {
+    const METHOD: &str = "Page.setInterceptFileChooserDialog";
+    let session = Some(session);
+    match owner {
+      TabOwner::Run { .. } => {
+        let cancelled = self
+          .cdp
+          .call(session, METHOD, json!({ "enabled": true, "cancel": true }))
+          .await;
+        if let Err(CdpError::Refused { .. }) = cancelled {
+          // A browser older than `cancel` still never shows the chooser, which then waits unanswered.
+          self.cdp.call(session, METHOD, json!({ "enabled": true })).await?;
+        } else {
+          cancelled?;
+        }
+      }
+      TabOwner::Person if self.mode == BrowserMode::Headless => {
+        self.cdp.call(session, METHOD, json!({ "enabled": true })).await?;
+      }
+      TabOwner::Person => {}
+    }
+    Ok(())
   }
 
   pub(super) async fn stop(self) {
