@@ -1,5 +1,5 @@
-//! The first start (01 `H9CZ1`, signed in 01b `Knacr`): the three ways in, signed in to the stand-in Orchester Cloud
-//! as the window is past the sign-in gate, where each leads, *Choose folder…* with a stand-in picker, and its roles.
+//! The first start (01 `H9CZ1`, signed in 01b `Knacr`): the three ways in, signed out as a fresh install starts and
+//! signed in to the stand-in Orchester Cloud, where each leads, *Choose folder…* with a stand-in picker, and its roles.
 //! A joined team named on the third way is `join_team`'s (`join_team_first_start_names_the_joined_team`).
 
 use std::fs;
@@ -10,6 +10,7 @@ use lurq::{
 };
 use orchester_app::{
   routes::{JoinWay, Route, RouteFolder},
+  test_support::stand_ins::StandIns,
   theme::{self, Mode, StartupSpacing, StartupText},
 };
 
@@ -18,8 +19,19 @@ use super::{
   support::{Data, Window, signed_in::account_cloud::EMAIL},
 };
 
-fn first_start() -> (Window, orchester_app::test_support::stand_ins::StandIns) {
-  let (mut window, stand_ins) = Window::with_stand_ins(Data::new());
+/// The first start of a fresh install, nobody signed in (01 `H9CZ1`).
+fn first_start() -> (Window, StandIns) {
+  shown(Window::with_stand_ins(Data::new()))
+}
+
+/// The first start signed in to the stand-in Orchester Cloud (01b `Knacr`).
+fn signed_in_first_start() -> (Window, StandIns) {
+  let data = Data::new();
+  let launch = data.launch_signed_in();
+  shown(Window::launched_with_stand_ins(data, launch))
+}
+
+fn shown((mut window, stand_ins): (Window, StandIns)) -> (Window, StandIns) {
   window.until("the first start", |window| {
     window.tree.get_element_by_id("welcome-ways-row").is_some()
   });
@@ -35,8 +47,34 @@ fn bounds(window: &mut Window, id: &str) -> lurq::core::ElementRect {
 }
 
 #[test]
-fn all_projects_first_start_offers_three_equal_ways() {
+fn all_projects_first_start_signed_out_needs_no_account() {
   let (mut window, _stand_ins) = first_start();
+  let texts = window.text(SCREEN);
+  for words in [
+    "Sign in with Orchester Cloud to see your teams, or enter a pairing code a teammate gives you.",
+    "Use a code",
+    "Choose project…",
+  ] {
+    assert!(texts.contains(words), "{words}: {texts}");
+  }
+  assert!(window.tree.get_element_by_id("welcome-your-teams").is_none());
+  assert_eq!(
+    window.text("welcome-local-text"),
+    "No account is needed to work on this computer. Orchester Cloud is only for team features."
+  );
+  window.press("welcome-sign-in");
+  assert_eq!(window.navigation().route_now(), Route::JoinTeam(JoinWay::Cloud));
+  window.navigation().go(Route::AllProjects);
+  window.until("the first start again", |window| {
+    window.tree.get_element_by_id("welcome-use-code").is_some()
+  });
+  window.press("welcome-use-code");
+  assert_eq!(window.navigation().route_now(), Route::JoinTeam(JoinWay::Code));
+}
+
+#[test]
+fn all_projects_first_start_offers_three_equal_ways() {
+  let (mut window, _stand_ins) = signed_in_first_start();
   let texts = window.text(SCREEN);
   for words in [
     "WELCOME TO ORCHESTER",
@@ -81,7 +119,7 @@ fn all_projects_first_start_offers_three_equal_ways() {
 
 #[test]
 fn all_projects_first_start_ways_lead_to_their_steps() {
-  let (mut window, _stand_ins) = first_start();
+  let (mut window, _stand_ins) = signed_in_first_start();
   window.press("welcome-your-teams");
   assert_eq!(window.navigation().route_now(), Route::JoinTeam(JoinWay::Cloud));
   window.navigation().go(Route::AllProjects);
