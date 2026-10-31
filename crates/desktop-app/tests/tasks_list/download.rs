@@ -204,14 +204,18 @@ fn tasks_download_a_checkout_linked_on_the_link_page_shows_its_tasks() {
     .window
     .until("the link page", |window| laid_out(window, "sharing-link-confirm"));
   joining.window.press("sharing-link-confirm");
-  joining.window.until("the link", |window| {
-    matches!(
-      window.projects().feed(project_id()).tasks.get(),
-      TasksState::Ready(tasks) if tasks.tasks.len() == 3
-    )
+  joining.window.until("the first download's step", |window| {
+    window.navigation().route_now() == Route::FirstDownload(project_id())
   });
   joining.window.navigation().go(tasks_route());
   joining.until_filled();
+  assert!(
+    matches!(
+      joining.window.projects().feed(project_id()).tasks.get(),
+      TasksState::Ready(tasks) if tasks.tasks.len() == 3
+    ),
+    "the feed holds what the list shows"
+  );
 }
 
 fn tasks_route() -> Route {

@@ -19,6 +19,7 @@ use parking_lot::Mutex;
 use serde_json::{Value, json};
 
 mod first_download;
+use first_download::TaskPages;
 pub use first_download::TasksAnswer;
 
 /// The server's name, as it gives it at `GET /server`, unless it is [`TeamServer::named`] otherwise.
@@ -52,6 +53,8 @@ struct State {
   cloud_joins: usize,
   /// How a project's tasks are answered.
   tasks: TasksAnswer,
+  /// A project's tasks in pages, instead of its three in one answer.
+  pages: Option<TaskPages>,
   /// How often a project's tasks were asked for.
   tasks_asked: usize,
 }
@@ -81,6 +84,7 @@ impl TeamServer {
       code_joins: Vec::new(),
       cloud_joins: 0,
       tasks: TasksAnswer::default(),
+      pages: None,
       tasks_asked: 0,
     }));
     let serving = state.clone();
@@ -143,6 +147,12 @@ impl TeamServer {
   /// Answers a project's tasks as `tasks` from now on, held ones too.
   pub fn answer_tasks(&self, tasks: TasksAnswer) {
     self.state.lock().tasks = tasks;
+  }
+
+  /// A project has `total` tasks, read in pages: those up to number `until` are served, and what comes after them is
+  /// answered as [`Self::answer_tasks`] says.
+  pub fn page_tasks(&self, total: usize, until: usize) {
+    self.state.lock().pages = Some(TaskPages { total, until });
   }
 
   /// How often a project's tasks were asked for.
@@ -216,7 +226,7 @@ fn route((path, query): (&str, &str), (headers, body): (&str, &str), state: &Mut
       Some(slug) => first_download::by_slug(slug, state),
       None => ("200 OK", json!({"projects": state.lock().projects})),
     },
-    _ => first_download::answer(path, state).unwrap_or_else(|| ("404 Not Found", error("not_found"))),
+    _ => first_download::answer((path, query), state).unwrap_or_else(|| ("404 Not Found", error("not_found"))),
   }
 }
 

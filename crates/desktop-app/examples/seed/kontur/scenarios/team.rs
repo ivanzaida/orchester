@@ -54,6 +54,22 @@ pub fn download_failed(kontur: &mut Kontur) -> Result<(), SeedError> {
   mark(kontur, State::DownloadFailed)
 }
 
+pub fn download_progress(kontur: &mut Kontur) -> Result<(), SeedError> {
+  mark(kontur, State::DownloadProgress)?;
+  origin(kontur)
+}
+
+pub fn download_stopped(kontur: &mut Kontur) -> Result<(), SeedError> {
+  mark(kontur, State::DownloadStopped)?;
+  origin(kontur)
+}
+
+/// Kontur's checkout has the team's repository as its `origin`, which the QA app's server names for its project.
+fn origin(kontur: &Kontur) -> Result<(), SeedError> {
+  git::add_origin(&kontur.repo, "https://github.com/acme/kontur.git")?;
+  Ok(())
+}
+
 fn mark(kontur: &mut Kontur, state: State) -> Result<(), SeedError> {
   kontur.catalogue()?;
   let marker = kontur.app_database.with_file_name(FILE);

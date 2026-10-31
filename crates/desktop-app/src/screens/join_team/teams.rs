@@ -178,6 +178,7 @@ pub(super) fn page(ctx: &mut Ctx, joins: &TeamJoins, (email, account): (&str, Cl
   let not_listed = ctx.t_args("startup.join.teams.notListed", [("email", email)]);
   let frame = StepFrame {
     id: "join_team",
+    ancestors: Vec::new(),
     crumb: ctx.t("startup.join.crumb").to_string(),
     step: StartStep::Join,
     title: ctx.t("startup.join.teams.title").to_string(),

@@ -67,6 +67,7 @@ fn seed_names_every_scenario_once() {
       "ownership-ended",
       "ownership-nothing-here",
       "invite-signed-out",
+      "invite-sign-in-again",
       "team-join",
       "team-join-wrong-code",
       "team-join-expired-code",
@@ -74,7 +75,9 @@ fn seed_names_every_scenario_once() {
       "team-join-joined",
       "team-offer",
       "team-downloading",
-      "team-download-failed"
+      "team-download-failed",
+      "team-download-progress",
+      "team-download-stopped"
     ]
   );
   for name in names {

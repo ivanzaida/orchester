@@ -97,6 +97,7 @@ impl Component for JoinTeam {
 fn ways_page(ctx: &mut Ctx, columns: Element) -> Element {
   let frame = StepFrame {
     id: "join_team",
+    ancestors: Vec::new(),
     crumb: ctx.t("startup.join.crumb").to_string(),
     step: StartStep::Join,
     title: ctx.t("startup.join.title").to_string(),
