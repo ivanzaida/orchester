@@ -131,6 +131,7 @@ pub(super) fn text(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Option<Arc<
         [("folder", folder.as_str())],
       )),
     ),
+    RunnerProblem::CodexSandboxSetupFailed { code, message } => codex_sandbox_setup(ctx, code, message),
     RunnerProblem::StderrLeftOut { lines } => counted(
       ctx,
       *lines,
@@ -146,6 +147,16 @@ pub(super) fn text(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Option<Arc<
     | RunnerProblem::ThinkingStripped
     | RunnerProblem::WaitingForQaSlot { .. } => note(ctx, problem),
   }
+}
+
+/// Codex's sandbox that could not be set up: Codex's `message`, which names the stage, and its `code`, then where
+/// Codex's log says why.
+fn codex_sandbox_setup(ctx: &Ctx, code: &str, message: &str) -> (Arc<str>, Option<Arc<str>>) {
+  let title = ctx.t_args(
+    "conversation.problem.codexSandboxSetupFailed",
+    [("message", message), ("code", code)],
+  );
+  (title, Some(ctx.t("conversation.problem.codexSandboxSetupFailedDetail")))
 }
 
 /// A command tool's program that did not start: not found, or `moved` into the project's repository or off this

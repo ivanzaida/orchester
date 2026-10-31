@@ -90,6 +90,10 @@ impl RunnerProblem {
       | Self::RunnerFailed { detail }
       | Self::ModelRetrying { error: detail, .. } => *detail = redact(detail),
       Self::CodexSettingsIgnored { folder } => *folder = redact(folder),
+      Self::CodexSandboxSetupFailed { code, message } => {
+        *code = redact(code);
+        *message = redact(message);
+      }
       Self::UnavailableVariable { variable } => *variable = redact(variable),
       Self::ProgramNotFound { program } | Self::ProgramMoved { program } => *program = redact(program),
       Self::QuestionRefused { question, .. } => *question = redact(question),
