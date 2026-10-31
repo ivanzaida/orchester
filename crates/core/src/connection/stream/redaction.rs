@@ -14,6 +14,11 @@ impl AgentEvent {
   pub fn redact(&mut self, redact: &impl Fn(&str) -> String) {
     match self {
       Self::Message { text } | Self::Reasoning { text } => *text = redact(text),
+      Self::TodoList { items } => {
+        for item in items {
+          item.text = redact(&item.text);
+        }
+      }
       Self::CommandStarted { command, .. }
       | Self::PermissionDenied { command, .. }
       | Self::ToolCommandStarted { command, .. } => *command = redact(command),

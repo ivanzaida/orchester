@@ -7,7 +7,7 @@ use std::{collections::BTreeMap, num::NonZeroU32, path::Path, sync::Arc};
 
 use orchester_core::{
   attachment::Attachment,
-  connection::{AgentProvider, Effort, EngineVendor},
+  connection::{AgentProvider, Effort, EngineVendor, stream::TodoList},
   conversation::Message,
   id::{InvocationId, MessageId, RunId, StepExecutionId, TaskId},
   integration::RunMerge,
@@ -78,6 +78,8 @@ pub struct StepView {
   pub attempt: Option<NonZeroU32>,
   /// Why the latest execution failed, when it did and its log says.
   pub failure: Option<StepFailure>,
+  /// The todo list the latest execution's agent keeps, as its latest update left it; `None` when it keeps none.
+  pub todo: Option<TodoList>,
   /// The step's stage in the pipeline graph, from 0: steps of one stage run beside each other.
   pub stage: usize,
 }
@@ -506,6 +508,7 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
       status: latest.map(|execution| execution.status()),
       attempt,
       failure: latest.and_then(|execution| execution.failure()),
+      todo: latest.map(|execution| db.step_todo(run.id(), execution.id())).transpose()?.flatten(),
       stage: stage_of(&step.key),
     });
   }
