@@ -41,23 +41,40 @@ use tokio::runtime::Runtime;
 const TEAM: &str = "0191c7c0-0000-7000-8000-0000000005e1";
 const INVITE: &str = "0191c7c0-0000-7000-8000-00000000171e";
 
-fn main() -> Result<(), Box<dyn Error>> {
-  let log = app_log::install();
-  let mut sign_in = false;
-  let mut with_settings = false;
-  let mut join_team = false;
-  for argument in std::env::args().skip(1) {
-    match argument.as_str() {
-      "--signed-in" => sign_in = true,
-      // The script's Start-Process takes no empty argument list, so it always names one of the two.
-      "--signed-out" => sign_in = false,
-      "--settings" => with_settings = true,
-      "--join-team" => join_team = true,
-      other => {
-        return Err(format!("expected --signed-in, --signed-out, --settings or --join-team, not {other}").into());
+/// What the command line asks for.
+#[derive(Default)]
+struct Arguments {
+  sign_in: bool,
+  with_settings: bool,
+  join_team: bool,
+}
+
+impl Arguments {
+  fn read() -> Result<Self, Box<dyn Error>> {
+    let mut read = Self::default();
+    for argument in std::env::args().skip(1) {
+      match argument.as_str() {
+        "--signed-in" => read.sign_in = true,
+        // The script's Start-Process takes no empty argument list, so it always names one of the two.
+        "--signed-out" => read.sign_in = false,
+        "--settings" => read.with_settings = true,
+        "--join-team" => read.join_team = true,
+        other => {
+          return Err(format!("expected --signed-in, --signed-out, --settings or --join-team, not {other}").into());
+        }
       }
     }
+    Ok(read)
   }
+}
+
+fn main() -> Result<(), Box<dyn Error>> {
+  let log = app_log::install();
+  let Arguments {
+    sign_in,
+    with_settings,
+    join_team,
+  } = Arguments::read()?;
   let position = WindowPosition::from_environment()?;
   let location = app_paths::app_data_location()?;
   if let Some(folder) = location.database.parent() {

@@ -50,6 +50,12 @@ impl DevtoolsInspectable for TwoFactor {}
 /// window gains or loses the focus, so turning it on in the browser shows on coming back; `None` while nobody is signed
 /// in, until it is read, or when the cloud cannot say (logged).
 pub fn read(ctx: &mut Ctx, revision: u64, cloud: &Cloud, signed_in: Option<CloudAccountId>) -> Option<TwoFactorStatus> {
+  settled(ctx, revision, cloud, signed_in).and_then(|read| read.0)
+}
+
+/// What [`read`] reads, `None` until the first answer: a page that waits on it tells *not read yet* from *the cloud
+/// cannot say*.
+pub fn settled(ctx: &mut Ctx, revision: u64, cloud: &Cloud, signed_in: Option<CloudAccountId>) -> Option<TwoFactor> {
   let focused = ctx.window().info().is_focused;
   ctx
     .future(
@@ -70,7 +76,6 @@ pub fn read(ctx: &mut Ctx, revision: u64, cloud: &Cloud, signed_in: Option<Cloud
     .state()
     .get()
     .data
-    .and_then(|read| read.0)
 }
 
 /// What an invite needs before it can be accepted.

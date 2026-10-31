@@ -85,6 +85,23 @@ fn invite_landing_signed_in_without_a_code_asks_to_sign_in_again() {
 }
 
 #[test]
+fn invite_landing_waits_for_the_two_factor_status_before_saying_anything() {
+  let mut window = signed_in_without_a_code();
+  window.data.cloud.hold_checks();
+  let arrived = window.data.cloud.checks_arrived();
+  window.navigation().go(landing());
+  window.until("the two-factor status asked for", |window| {
+    window.data.cloud.checks_arrived() > arrived
+  });
+  shows(&mut window, "orchester-landing-loading");
+  assert!(window.tree.get_element_by_id("orchester-landing-failed").is_none());
+  assert!(window.tree.get_element_by_id(AGAIN).is_none());
+
+  window.data.cloud.let_checks_go();
+  shows(&mut window, AGAIN);
+}
+
+#[test]
 fn invite_landing_sign_in_again_opens_the_sign_in_on_the_landing() {
   let mut window = signed_in_without_a_code();
   let route = landing();

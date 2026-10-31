@@ -161,7 +161,7 @@ impl Component for LandingPage {
     // First in every render: lurq keeps a component's futures by the order it asks for them.
     let sign_in = follow_sign_in(ctx, &services.cloud);
     let known_server = known_server(ctx, target.server);
-    let factors = two_factor::read(ctx, 0, &services.cloud, sign_in.account());
+    let factors = two_factor::settled(ctx, 0, &services.cloud, sign_in.account());
     let deps = (
       self.revision.get(),
       sign_in.account(),
@@ -179,12 +179,17 @@ impl Component for LandingPage {
     // The project's server is not this computer's to reach: accepting the invite may need a sign-in first.
     if state.error.as_ref().is_some_and(|said| *said == Said::new(NO_SERVER)) {
       let invite = (&target, known_server.as_deref());
-      match &sign_in {
-        SignIn::SignedOut { .. } => return sign_in::signed_out(ctx, invite),
-        SignIn::SignedIn { email, .. } if factors.is_some_and(|status| status.enabled && !status.this_session) => {
+      match (&sign_in, factors.map(|read| read.0)) {
+        (SignIn::SignedOut { .. }, _) => return sign_in::signed_out(ctx, invite),
+        // Whether the sign-in can accept is not read yet: the page waits rather than say the server can't be read.
+        (SignIn::SignedIn { .. }, None) => {
+          let body = loading("orchester-landing-loading", &ctx.t("sharing.landing.reading")).into();
+          return page(ctx, None, &target, body);
+        }
+        (SignIn::SignedIn { email, .. }, Some(Some(status))) if status.enabled && !status.this_session => {
           return sign_in::again(ctx, invite, (email, &self.answers));
         }
-        SignIn::SignedIn { .. } => {}
+        (SignIn::SignedIn { .. }, Some(_)) => {}
       }
     }
     let body = match (state.data, state.error) {
