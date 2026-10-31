@@ -431,9 +431,12 @@ Three kinds of caller:
 - **Channels** `stable` and `beta`. A Beta install is offered every published release; a Stable install only releases
   staff promoted to Stable, at their rollout percentage. A version with a pre-release suffix is Beta only: it cannot be
   promoted (`422 invalid`).
-- **Stages** (`stage` in the admin's shapes): `draft` while CI uploads; `beta` once finalized; `stable` with `percent`
-  (0–100) and `paused` once promoted (it stays on Beta for every Beta install); `withdrawn`, offered to nobody, its
-  files no longer served (`404`). Withdrawing is final; a fixed build is a new version.
+- **Stages** (`stage` in the admin's shapes): `draft` while CI uploads; `beta` with `paused` once finalized; `stable`
+  with `percent` (0–100) and `paused` once promoted (it stays on Beta for every Beta install); `withdrawn`, offered to
+  nobody, its files no longer served (`404`). Withdrawing is final; a fixed build is a new version. `paused` is about
+  the channel the stage names: a paused `beta` release is offered to no Beta install, a paused `stable` one to no
+  Stable install (Beta installs still get it). A cloud before ORC-575 leaves `paused` out of `beta`; read it as
+  `false`.
 
 ### The signed message
 
@@ -483,16 +486,16 @@ copy have databases, and so ids, of their own.
 | --- | --- | --- | --- | --- |
 | `GET /updates/check?version&platform&arch&channel&install_id` | anonymous | the query, every field required: the app's version, platform, architecture, channel and install id | `200 { update: null }` when nothing newer is offered; `200 { update: { version, channel, notes, critical, published_at, files: [{ name, platform, arch, url, size, sha256, key_id, signature }] } }` | `400 bad_request` (a field missing, unknown or repeated), `422 invalid` (a version, platform, architecture, channel or id that is not one), `429` |
 | `GET /releases/{version}/files/{name}` | anonymous | `Range: bytes=<start>-[<end>]` to resume, optional | `200` the whole file, or `206` with `Content-Range: bytes <start>-<end>/<size>`; both with `Content-Type: application/octet-stream`, `Content-Length`, `Accept-Ranges: bytes` and `ETag: "<sha256>"` | `404 not_found` (no such release or file, a draft, a withdrawn release, deleted files), `416 range_not_satisfiable`, `429` |
-| `POST /releases` | `releases:write` | `{ version, notes, critical? }`: notes in Markdown, at most 64 KiB | `201 { release: ReleaseSummary }`, a draft | `403 forbidden`, `409 conflict` (the version exists, in any stage), `422 invalid` |
+| `POST /releases` | `releases:write` | `{ version, notes, critical?, ci_run? }`: notes in Markdown, at most 64 KiB; `ci_run` the CI run that uploads it, `{ number, url }` | `201 { release: ReleaseSummary }`, a draft | `403 forbidden`, `409 conflict` (the version exists, in any stage), `422 invalid` (also a `url` that is not `https://…`, over 2048 characters or with spaces or control characters) |
 | `POST /releases/{version}/files` | `releases:write` | `{ name, platform, arch, size, sha256, key_id, signature }` | `201 FileUpload` for a new file, `200 FileUpload` for the same declaration again (resume) | `403 forbidden`, `404` (no such draft), `409 conflict` (the release is not a draft, or another declaration under this name, or a second file for the same platform, architecture and name), `422 invalid` (size 0 or over 2 GiB) |
 | `PUT /releases/{version}/files/{name}/parts/{part}` | `releases:write` | the part's bytes, `Content-Type: application/octet-stream`: `part_size` bytes, the last part the rest | `200 FileUpload`; a part sent again replaces it | `403 forbidden`, `404` (no such draft or declared file), `409 conflict` (not a draft), `413 payload_too_large`, `415`, `422 invalid` (a part number past `parts`, or a part of the wrong length) |
 | `POST /releases/{version}/finalize` | `releases:write` | | `200 { version, files: [{ name, result: "accepted" }` or `{ name, result: "rejected", reason }] }` | `403 forbidden`, `404` (no such release), `409 conflict` (not a draft), `422 invalid` (no file declared) |
-| `GET /admin/releases` | admin | | `{ releases: [ReleaseSummary] }`, newest version first | `403 forbidden`, `403 mfa_required`, `403 session_without_mfa` |
+| `GET /admin/releases` | admin | | `{ releases: [ReleaseSummary], installs_by_channel: ChannelInstalls \| null }`, newest version first | `403 forbidden`, `403 mfa_required`, `403 session_without_mfa` |
 | `GET /admin/releases/{version}` | admin | | `{ release: ReleaseDetails }` | as above, `404` |
-| `POST /admin/releases/{version}/promote` | admin | `{ percent }` | `200 { release: ReleaseSummary }`, stage `stable`, not paused | as above, `404`, `409 conflict` (not `beta`), `422 invalid` (a pre-release version; a percent over 100) |
+| `POST /admin/releases/{version}/promote` | admin | `{ percent }` | `200 { release: ReleaseSummary }`, stage `stable`, not paused | as above, `404`, `409 conflict` (not `beta`, or a paused `beta`: resume it first), `422 invalid` (a pre-release version; a percent over 100) |
 | `PUT /admin/releases/{version}/rollout` | admin | `{ percent }` | `200 { release }` | as above, `404`, `409 conflict` (not `stable`), `422 invalid` |
-| `POST /admin/releases/{version}/pause` | admin | | `200 { release }`, `paused: true` | as above, `404`, `409 conflict` (not `stable`, or paused already) |
-| `POST /admin/releases/{version}/resume` | admin | | `200 { release }`, `paused: false` | as above, `404`, `409 conflict` (not `stable`, or not paused) |
+| `POST /admin/releases/{version}/pause` | admin | | `200 { release }`, `paused: true`: a `beta` release stops being offered on Beta, a `stable` one on Stable | as above, `404`, `409 conflict` (a draft or withdrawn release, or paused already) |
+| `POST /admin/releases/{version}/resume` | admin | | `200 { release }`, `paused: false`: offered again on the channel it was paused on | as above, `404`, `409 conflict` (a draft or withdrawn release, or not paused) |
 | `POST /admin/releases/{version}/withdraw` | admin | | `200 { release }`, stage `withdrawn` | as above, `404`, `409 conflict` (a draft, or withdrawn already) |
 | `PATCH /admin/releases/{version}` | admin | `{ notes?, critical? }` | `200 { release }` | as above, `404`, `409 conflict` (withdrawn), `422 invalid` (notes over 64 KiB) |
 | `DELETE /admin/releases/{version}/files` | admin | | `204`; the release stays in the list with `files_deleted: true` | as above, `404`, `409 conflict` (the release is still offered: see below) |
@@ -500,10 +503,17 @@ copy have databases, and so ids, of their own.
 Shapes of the admin:
 
 ```text
-ReleaseSummary  { version, stage: "draft"|"beta"|"stable"|"withdrawn", percent?, paused? (with stable), critical,
-                  created_at, published_at: ms | null, installs, files_deleted }
-ReleaseDetails  { …ReleaseSummary, notes, files: [AdminFile], adoption: [{ day: "YYYY-MM-DD", installs }],
-                  activity: [{ at, actor: string | null, action, percent? | critical? }] }
+ReleaseSummary  { version, stage: "draft"|"beta"|"stable"|"withdrawn", percent? (with stable),
+                  paused? (with beta and stable), critical, created_at, published_at: ms | null, installs,
+                  installs_by_channel: ChannelInstalls | null, files_deleted, ci_run: CiRun | null,
+                  withdrawn: { at: ms, by: string } | null, uploads: [FileProgress] }
+ReleaseDetails  { …ReleaseSummary, notes, files: [AdminFile],
+                  adoption: [{ day: "YYYY-MM-DD", installs, installs_by_channel: ChannelInstalls | null }],
+                  activity: [{ at, actor: string | null, action, percent? | critical? | channel? }] }
+ChannelInstalls { stable, beta }
+CiRun           { number, url: "https://…" }
+FileProgress    { name, platform, arch, size, sha256, parts, received, state: "receiving"|"verifying"|"verified"
+                  | "rejected", reason? (with rejected), received_sha256? (with rejected) }
 AdminFile       { name, platform, arch, size, sha256, key_id, downloads }
 FileUpload      { name, size, part_size, parts, received: [part numbers, ascending] }
 ```
@@ -512,16 +522,39 @@ FileUpload      { name, size, part_size, parts, received: [part numbers, ascendi
 `adoption` counts, for each of the last 30 days (UTC, oldest first), the install ids whose checks that day named it;
 `downloads` counts downloads that started at byte 0, so resumed ranges do not count twice. `activity` is newest first;
 `action` is one of `created`, `rejected` (a finalize that rejected a file), `published`, `promoted` and `percent_set`
-(with `percent`), `paused`, `resumed`, `withdrawn`, `critical_set` (with `critical`), `notes_edited`,
-`files_deleted`; `actor` is the staff member's display name, `null` for CI.
+(with `percent`), `paused` and `resumed` (with `channel`, `stable` or `beta`), `withdrawn`, `critical_set` (with
+`critical`), `notes_edited`, `files_deleted`; `actor` is the staff member's display name, `null` for CI.
+
+The fields ORC-575 added, each optional for a reader, so a cloud or app on the shapes before it still reads:
+
+- **`installs_by_channel`** splits a count by the channel each install follows, as the update check named it: on a
+  release, its `installs`; on an adoption day, that day's `installs`; on the list, every active install (an install id
+  with an update check in the last 30 days), whatever version it runs. `stable + beta` is the total. `null` (or absent)
+  from a cloud that does not count them apart.
+- **`withdrawn`** on a summary: when the release was withdrawn and the display name of the staff member who did it.
+  Set with stage `withdrawn`, `null` otherwise.
+- **`ci_run`**: the CI run that uploaded the release, as CI named it at `POST /releases`: its number as the CI shows it
+  and an `https` link the cloud stores and shows as it is, without following it. `null` when CI named none. The body
+  of `POST /releases` takes no unknown field, so a cloud before ORC-575 refuses one with `ci_run`: CI sends it only
+  once the cloud reads this contract, and leaves the field out when it has no run.
+- **`uploads`**: a draft's declared files and how far each is. `parts` is the file's part count, `received` how many
+  of them the cloud has (`received` of `parts`), `sha256` the declared digest. `state` is `receiving` while parts
+  arrive and until CI finalizes, `verifying` while finalizing checks it, `verified` once finalizing accepted it, and
+  `rejected` with the `reason` finalizing gave (`incomplete`, `sha256_mismatch`, `unknown_key`, `signature_mismatch`)
+  and `received_sha256`, the digest of the bytes that arrived (absent with `incomplete`). A rejected file stays in
+  `uploads` until CI declares that name again, though its parts and declaration are dropped. Empty once the release
+  is published, and from a cloud before ORC-575.
+- **`paused` on `beta`**, and `channel` on `paused` and `resumed` activity: absent from a cloud before ORC-575, which
+  paused only Stable; read them as `false` and `stable`.
 
 **What the check offers.** Among releases newer than the asked version, for the asked platform and architecture
-(a release without a file for them is skipped): on Beta, the newest in stage `beta` or `stable`; on Stable, the newest
-in stage `stable` that is not paused and whose rollout includes the install. `critical` is true when the offered
-release or any release between the asked version and it that this install could have been offered is marked
-critical, so skipping a critical release still installs promptly. `files` are the offered release's files for that
-platform and architecture; `url` is the absolute URL of its download on the cloud's API address. An asked version the
-cloud does not know is still compared by order. Each check counts the install id toward `installs` and `adoption`.
+(a release without a file for them is skipped): on Beta, the newest in stage `beta` that is not paused or in stage
+`stable`; on Stable, the newest in stage `stable` that is not paused and whose rollout includes the install.
+`critical` is true when the offered release or any release between the asked version and it that this install could
+have been offered is marked critical, so skipping a critical release still installs promptly. `files` are the offered
+release's files for that platform and architecture; `url` is the absolute URL of its download on the cloud's API
+address. An asked version the cloud does not know is still compared by order. Each check counts the install id toward
+`installs`, `adoption` and their `installs_by_channel` under the channel it names.
 
 **Uploading a release.** CI creates the draft, then declares each file with its size, SHA-256, key id and signature.
 The answer gives the cloud's `part_size` (8 MiB) and the number of parts (`size / part_size`, rounded up). CI sends

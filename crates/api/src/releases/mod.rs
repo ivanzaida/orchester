@@ -5,7 +5,9 @@
 
 mod admin;
 mod check;
+mod ci_run;
 mod hex;
+mod progress;
 mod rollout;
 #[cfg(feature = "release-signing")]
 mod sign;
@@ -16,10 +18,12 @@ mod verify;
 mod version;
 
 pub use admin::{
-  AdminFile, AdoptionDay, PercentChange, ReleaseAction, ReleaseActivity, ReleaseChanges, ReleaseDetails,
-  ReleaseDetailsResponse, ReleaseResponse, ReleaseStage, ReleaseSummary, ReleasesResponse,
+  AdminFile, AdoptionDay, ChannelInstalls, PercentChange, ReleaseAction, ReleaseActivity, ReleaseChanges,
+  ReleaseDetails, ReleaseDetailsResponse, ReleaseResponse, ReleaseStage, ReleaseSummary, ReleasesResponse, Withdrawal,
 };
 pub use check::{OfferedFile, OfferedRelease, UpdateCheck, UpdateCheckAnswer};
+pub use ci_run::{CiRun, CiRunUrl};
+pub use progress::{FileProgress, UploadState};
 pub use rollout::{RolloutPercent, rollout_bucket};
 #[cfg(feature = "release-signing")]
 pub use sign::{ReleaseSigningKey, SigningKeyError};
@@ -46,4 +50,6 @@ pub enum ReleaseFormatError {
   Signature,
   #[error("a rollout percentage is 0 to 100")]
   Percent,
+  #[error("a CI run link is an https URL of at most 2048 printable characters without spaces")]
+  CiRunUrl,
 }
