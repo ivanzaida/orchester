@@ -227,6 +227,10 @@ impl AppUpdates {
     let Ok(_running) = self.inner.checking.try_lock() else {
       return;
     };
+    self.check().await;
+  }
+
+  async fn check(&self) {
     match (self.inner.app.copy, self.inner.app.target) {
       (ThisCopy::Installer, Some(target)) => self.update(target).await,
       (copy, Some(target)) => self.look_for_newest(copy, target).await,
@@ -238,26 +242,35 @@ impl AppUpdates {
   /// Pauses the download under way (*Pause*): what arrived is kept, and no check downloads until [`Self::resume`].
   /// Nothing happens outside a download.
   pub fn pause(&self) {
-    if matches!(self.state(), UpdateState::Downloading { .. }) {
-      self.inner.paused.send_replace(true);
-    }
+    // Under the state's lock: a state leaving the download in the meantime clears the flag after this, not before.
+    self.inner.state.send_if_modified(|state| {
+      if matches!(state, UpdateState::Downloading { .. }) {
+        self.inner.paused.send_replace(true);
+      }
+      false
+    });
   }
 
-  /// Goes on with a paused download (*Resume*), from where it stopped, through a check.
+  /// Goes on with a paused download (*Resume*), from where it stopped, through a check. It waits for a check under way
+  /// rather than being that one: that check left the download paused.
   pub async fn resume(&self) {
     if !self.inner.paused.send_replace(false) {
       return;
     }
-    self.check_now().await;
+    let _running = self.inner.checking.lock().await;
+    self.check().await;
   }
 
   async fn update(&self, target: (ReleasePlatform, ReleaseArch)) {
     let state = self.state();
     // An install under way is not checked under: the installer it hands over to stays where it is. A paused download
     // waits for the person's *Resume*.
-    if matches!(state, UpdateState::Installing { .. }) || *self.inner.paused.borrow() {
+    let paused = matches!(state, UpdateState::Paused { .. }) && *self.inner.paused.borrow();
+    if matches!(state, UpdateState::Installing { .. }) || paused {
       return;
     }
+    // A pause no download took up is not one: this check holds the lock every download runs under, so none listens.
+    self.inner.paused.send_replace(false);
     // A failed install stays said while the cloud offers that version again or does not answer; it is not tried again
     // on its own.
     let failed_install = match &state {
@@ -413,8 +426,14 @@ impl AppUpdates {
     self.set(UpdateState::CloudUnreachable { last_checked });
   }
 
+  /// A state other than a download or a paused one ends a pause: no download is there for *Resume* to go on with.
   fn set(&self, state: UpdateState) {
-    self.inner.state.send_replace(state);
+    self.inner.state.send_modify(|kept| {
+      if !matches!(state, UpdateState::Downloading { .. } | UpdateState::Paused { .. }) {
+        self.inner.paused.send_replace(false);
+      }
+      *kept = state;
+    });
   }
 }
 
