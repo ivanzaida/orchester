@@ -120,14 +120,15 @@ or turned two-factor authentication on itself.
 | `DELETE /devices/{id}` | device | | `204` | `404` |
 | `GET /me/sign-ins` | device | | `{ sign_ins: [{ at, device_name, platform, succeeded, two_factor }] }`: the account's own sign-ins of the last 90 days, newest first, at most 50; `two_factor`: a code was asked for. A wrong password counts only for an account that exists | |
 | `GET /keys` | none | | `{ key_set }`: the newest key set, a compact JWS the cloud's root key signed. The cloud makes its root at its first start and publishes a key set before it listens, so a running cloud always has one | `503 keys_unavailable` |
-| `POST /identity-tokens` | device | `{ audience, purpose?, invite? }`: the team server's id (a UUID); `purpose: "admin"` for a sign-in to that server's admin, `"code"` to show with a code entered in the app; `invite`: an invite from that server to the account's email, open or accepted by this account, which the token accepts | `201 { identity_token, expires_at }` (seconds) | `403 mfa_required`, `403 session_without_mfa` (an `invite` from a device that is not a two-factor session; the invite stays open), `404 not_found` (purpose `admin` for a server not linked here; an `invite` that is expired, declined, accepted by another account, not to the account's email or not from `audience`), `422 invalid` (also purpose `link`, or `invite` with a purpose), `429`, `503 keys_unavailable` |
+| `POST /identity-tokens` | device | `{ audience, purpose?, invite? }`: the team server's id (a UUID); `purpose: "admin"` for a sign-in to that server's admin, `"code"` to show with a code entered in the app, `"accept"` (with `invite`) to accept the invite in the browser (*Accepting in the browser* below); `invite`: an invite from that server to the account's email, open or accepted by this account, which the token accepts | `201 { identity_token, expires_at }` (seconds) | `403 mfa_required`, `403 session_without_mfa` (an `invite` from a device that is not a two-factor session; the invite stays open), `404 not_found` (purpose `admin` for a server not linked here; an `invite` that is expired, declined, accepted by another account, not to the account's email or not from `audience`), `422 invalid` (also purpose `link`, `invite` with a purpose other than `accept`, or `accept` without `invite`), `429`, `503 keys_unavailable` |
 | `POST /servers` | device | `{ link }`: the link statement the team server signed | `201 { server, root_key, key_set, identity_token, expires_at }` | `409 conflict` (a replayed or older statement), `409 too_many_servers`, `422 invalid` (also a `server` that is not its `public_key`'s id), `429`, `503 keys_unavailable` |
 | `GET /servers` | device | | `{ servers: [{ id, name, address, fingerprint, owner, joined_at }] }` | |
 | `GET /servers/{id}` | device | | `{ server: { id, name, address, fingerprint, check_code } }` | `404` (unknown or not linked) |
 | `DELETE /servers/{id}` | device | | `204`: the owner unlinks the server. The cloud forgets its link, its members' joins and its invites, so invites in flight are refused; nothing on the server changes, and it links again with a new statement | `403 session_without_mfa` (two-factor authentication on, and this device is not a two-factor session), `404` (not linked, or not this account's), `409 conflict` (an administrator of the cloud blocked it) |
 | `POST /invites` | the server's signature | `{ invite }`: an invite the team server signed | `202 { server: { id, name, address } }`: the inviting server as the cloud registered it | `422 invalid` (also an invite that was revoked, until it would have expired), `429` |
-| `GET /invites` | device | | `{ invites: [{ id, kind, role, server: { id, name, address }, project: { address, name } \| null, inviter_display_name, expires_at, needs_two_factor }] }`; `needs_two_factor`: this device could not accept it now (it is not a two-factor session) | |
+| `GET /invites` | device | | `{ invites: [{ id, kind, role, server: { id, name, address }, project: { address, name } \| null, inviter_display_name, expires_at, needs_two_factor, accepted_at }] }`; `needs_two_factor`: this device could not accept it now (it is not a two-factor session); `accepted_at` (ms, absent or `null` for an open invite and from a cloud before browser acceptance): accepted in the browser, the team server's receipt not back yet | |
 | `DELETE /invites/{id}` | the server's signature | `{ revocation }`: the team server's signed revocation | `204`; the id stays revoked until the invite would have expired | `422 invalid` |
+| `POST /invites/{id}/accepted` | the server's signature | `{ receipt }`: the team server's signed receipt (`orchester-invite-accepted+jws`) for this invite, accepted in the browser | `204`: the join is recorded and the invite's row dropped | `422 invalid` (a receipt the server's linked key did not sign, or one for another invite or server), `429` |
 | `POST /invites/{id}/decline` | device | | `204`; the invite stays declined until it expires: no token accepts it, and delivering it again changes nothing | `404` (also one already answered) |
 
 **Sign-up.** `202` means the request was taken. The answer is the same whether or not the email has an account, so
@@ -209,11 +210,12 @@ The desktop hands it to that team server, which checks it with `orchester_api::i
 the key set from `GET /keys`, itself checked with the root key the team server pinned, and accepts each `jti` once.
 Claims: `iss` (the public URL), `aud`, `sub` (the account id), `email`, `name`, `device { name, platform }`,
 `purpose` (absent to join with a device; `admin` for a sign-in to the server admin; `link` for linking the server;
-`code` to show with a code), `invite` (when the token accepts an invite), `mfa` (`true` when the device it was issued
-to is a two-factor session; absent otherwise, and in every token from a cloud before two-factor authentication),
-`jti`, `iat`, `exp`. A team server
+`code` to show with a code; `accept` to accept an invite in the browser), `invite` (when the token accepts an invite),
+`mfa` (`true` when the device it was issued to is a two-factor session; absent otherwise, and in every token from a
+cloud before two-factor authentication), `jti`, `iat`, `exp`. A team server
 accepts a token only for the use it was issued for: a `code` token is taken with a code and nowhere else, so a server
-that passes on a token an app got for a code there cannot join or sign in with it anywhere.
+that passes on a token an app got for a code there cannot join or sign in with it anywhere; an `accept` token is taken
+only at the team server's `POST /auth/cloud/accept`, which takes no other.
 
 **Accepting an invite** (the desktop, N1). The app reads the invite's server from the registry (`GET /servers/{id}`:
 the address and the certificate fingerprint it pins), then asks `POST /identity-tokens { audience, invite }`. The
@@ -224,12 +226,34 @@ by this same account. It marks the invite accepted by the account, issues a join
 and records the join. The team server admits the verified email to that invite with the token; without the claim it
 admits only an account it already knows.
 
-**Accepting in the browser** (decided 2026-10-31, ORC-576; not built). The web front's *Accept* asks `POST
-/identity-tokens { audience, invite, purpose: "accept" }` under the same checks, marks the invite accepted
-(`accepted_at`) and records no join until the team server's signed receipt (`orchester-invite-accepted+jws`) comes
-back, by `POST /invites/{id}/accepted { receipt }` from the server's web app or the browser's `/invites/joined` form;
-until then `GET /invites` keeps listing it with `accepted_at`. The flow, the `orchester://` link and the ended and
-unreachable cases are in [server.md](architecture/server.md), "Accepting outside Orchester" (row 77).
+**Accepting in the browser** (decided 2026-10-31, ORC-576; the contract is in `orchester-api` since ORC-577, the cloud,
+the team server and the web front are not built). The web front's *Accept* asks `POST /identity-tokens { audience,
+invite, purpose: "accept" }` (`TokenPurpose::Accept`) under the same checks, marks the invite accepted (`accepted_at`)
+and records no join until the team server's signed receipt comes back; until then `GET /invites` keeps listing it with
+`accepted_at` (`CloudInvite::accepted_at`). The flow, the `orchester://` link and the ended and unreachable cases are
+in [server.md](architecture/server.md), "Accepting outside Orchester" (row 77).
+
+- **The team server's side.** The web front hands the token and the newest key set to the team server's web app,
+  whose server side sends `POST /auth/cloud/accept { identity_token, key_set? }` (`CloudAccept`) to the team server.
+  It takes only an `accept` token with `mfa` that names an open invite for the verified email, makes the account and
+  the membership in one transaction and answers `201 { browser_session?, membership: { kind, project?, role? },
+  receipt, approval_required }` (`CloudAccepted`): `browser_session` (`{ token, session, user }`, the browser kind of
+  device token, 12 hours) is absent when `approval_required`, join approval being on for an account that existed
+  already. Errors: `401 invalid_identity` (also a token of another purpose), `403 mfa_required`, `403 not_invited`
+  (also an identity linked to another account), `403 forbidden` (an account invite for an admin, or an admin invite
+  whose inviter is no longer an enabled admin), `403 cloud_off`, `409 key_set_stale`, `410 invite_ended`, `429
+  rate_limited`; each but `invite_ended` leaves the invite open.
+- **The receipt** (`statements::InviteAcceptance`, type `orchester-invite-accepted+jws`): `{ id, server, subject,
+  issued_at }`, the invite, the server, the cloud account (`sub`) that joined and when (milliseconds), signed with the
+  server's own key (`SigningKey::sign_invite_acceptance`). It reaches the cloud by `POST /invites/{id}/accepted {
+  receipt }` (`InviteJoined`) from the server's web app, or by the browser's `/invites/joined` form, whichever comes
+  first. The cloud checks it with the key the server linked with and that it names this invite and that server
+  (`identity::verify_invite_acceptance`), records the join (the server is then in `GET /servers`), drops the invite's
+  row and answers `204`.
+- **`410 invite_ended`.** An invite the server revoked, or that expired there, while the cloud still listed it: the
+  error carries the server's signed revocation in its details (`{ "error": "invite_ended", "message": "…",
+  "revocation": "<orchester-invite-revocation+jws>" }`, an expired invite's too), which the browser takes back to the
+  cloud as `DELETE /invites/{id} { revocation }` does, and the cloud deletes the invite.
 
 The rule for an answered invite (N1 security review 1, M2 and minor 1): the cloud keeps the row with its answer
 (`accepted` and by whom, or `declined`) until the invite expires. An answered invite is not in `GET /invites` (once

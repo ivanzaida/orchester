@@ -6,6 +6,7 @@
 //! is accepted once, is the team server's job.
 
 mod error;
+mod invite_acceptance;
 mod jws;
 mod key_proof;
 mod key_set;
@@ -14,6 +15,7 @@ mod statement;
 mod token;
 
 pub use error::IdentityError;
+pub use invite_acceptance::verify_invite_acceptance;
 pub use key_proof::{key_proof_nonce, verify_key_proof};
 pub use key_set::{
   KEY_LISTED_AFTER_SECS, KEY_SET_LIFETIME_SECS, KEY_SIGNS_SECS, KeySetStatement, ListedKey, STATEMENT_FRESH_SECS,
