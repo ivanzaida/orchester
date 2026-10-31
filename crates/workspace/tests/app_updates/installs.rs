@@ -6,10 +6,17 @@
 
 use std::{
   fs, io,
+  num::NonZeroU32,
   path::{Path, PathBuf},
   process::{Child, Command, Stdio},
+  time::Duration,
 };
 
+use orchester_core::{
+  connection::AgentProvider,
+  id::{RunId, TaskId},
+};
+use orchester_ipc::{RunWork, WorkState, WorkSummary};
 use orchester_store::SessionEnd;
 use orchester_workspace::{
   activity::Activity,
@@ -401,4 +408,115 @@ async fn update_install_without_a_ready_update_does_nothing() {
 
   assert_eq!(handed, None);
   assert_eq!(backups(copy.dir.path()).expect("the backups"), Vec::new());
+}
+
+/// Runs of tasks `keys` at work in project Kontur, as its runner reports them.
+fn at_work(runners: &Runners, root: &Path, keys: &[&str]) {
+  let runs = keys
+    .iter()
+    .map(|key| RunWork {
+      run: RunId::generate(),
+      task: TaskId::generate(),
+      task_key: (*key).to_owned(),
+      task_title: "Sign in with GitHub".to_owned(),
+      step: "Implement".to_owned(),
+      agent: "Builder".to_owned(),
+      provider: AgentProvider::ClaudeCodeCli,
+      model: "claude-opus-5-5".to_owned(),
+      state: WorkState::Working,
+    })
+    .collect();
+  let work = WorkSummary {
+    agent_slots: NonZeroU32::new(3).expect("slots"),
+    runs,
+  };
+  runners.report_work_for_test(root, "Kontur", work);
+}
+
+/// Waits until `done` says the state is there.
+async fn state_when(updates: &AppUpdates, done: impl Fn(&UpdateState) -> bool) {
+  let mut changes = updates.subscribe();
+  tokio::time::timeout(Duration::from_secs(10), changes.wait_for(|state| done(state)))
+    .await
+    .expect("the state in time")
+    .expect("the updates");
+}
+
+fn waits_for(state: &UpdateState, keys: &[&str]) -> bool {
+  matches!(state, UpdateState::Installing { step: InstallStep::WaitingForRuns(runs), .. } if runs == keys)
+}
+
+#[tokio::test]
+async fn update_install_with_runs_at_work_asks_and_waits_for_them_to_end() {
+  let (copy, _stand) = ready_copy().await;
+  let runners = no_runners();
+  let repo = tempfile::tempdir().expect("a folder");
+  at_work(&runners, repo.path(), &["KON-5", "KON-7"]);
+  let RestartPlan::Ask { runs, .. } = copy.updates.restart_plan(&runners) else {
+    panic!("asks: {:?}", copy.updates.restart_plan(&runners));
+  };
+  assert_eq!(runs.len(), 2);
+
+  let install = tokio::spawn({
+    let (updates, runners, installer) = (copy.updates.clone(), runners.clone(), installer(&copy, waits));
+    async move { updates.install(&runners, RunsAtWork::WaitForThem, &installer).await }
+  });
+  state_when(&copy.updates, |state| waits_for(state, &["KON-5", "KON-7"])).await;
+  at_work(&runners, repo.path(), &["KON-7"]);
+  state_when(&copy.updates, |state| waits_for(state, &["KON-7"])).await;
+  assert_eq!(
+    backups(copy.dir.path()).expect("the backups"),
+    Vec::new(),
+    "nothing installs yet"
+  );
+  at_work(&runners, repo.path(), &[]);
+
+  let handed = install.await.expect("the install");
+  assert_eq!(
+    handed.map(|handed| handed.end),
+    Some(SessionEnd::Clean),
+    "it installs once they ended"
+  );
+  assert_eq!(backups(copy.dir.path()).expect("the backups"), [version(RUNNING)]);
+}
+
+#[tokio::test]
+async fn update_install_pressed_while_it_waits_asks_again_and_stops_the_runs_on_consent() {
+  let (copy, _stand) = ready_copy().await;
+  let runners = no_runners();
+  let repo = tempfile::tempdir().expect("a folder");
+  at_work(&runners, repo.path(), &["KON-5"]);
+  let install = tokio::spawn({
+    let (updates, runners, installer) = (copy.updates.clone(), runners.clone(), installer(&copy, waits));
+    async move { updates.install(&runners, RunsAtWork::WaitForThem, &installer).await }
+  });
+  state_when(&copy.updates, |state| waits_for(state, &["KON-5"])).await;
+
+  let RestartPlan::Ask { update, runs } = copy.updates.restart_plan(&runners) else {
+    panic!("asks again: {:?}", copy.updates.restart_plan(&runners));
+  };
+  assert_eq!((update.version, runs.len()), (version(NEWER), 1));
+  let again = installer(&copy, waits);
+  assert_eq!(
+    copy.updates.install(&runners, RunsAtWork::WaitForThem, &again).await,
+    None,
+    "waiting again changes nothing"
+  );
+  assert!(
+    waits_for(&copy.updates.state(), &["KON-5"]),
+    "{:?}",
+    copy.updates.state()
+  );
+  assert_eq!(
+    copy.updates.install(&runners, RunsAtWork::StopThem, &again).await,
+    None,
+    "the waiting install stops them"
+  );
+
+  let handed = tokio::time::timeout(Duration::from_secs(30), install)
+    .await
+    .expect("it no longer waits for the run")
+    .expect("the install");
+  assert!(handed.is_some(), "the installer took over: {:?}", copy.updates.state());
+  assert_eq!(backups(copy.dir.path()).expect("the backups"), [version(RUNNING)]);
 }

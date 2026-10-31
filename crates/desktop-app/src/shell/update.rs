@@ -2,8 +2,9 @@
 //! once, no question; with runs at work the window asks (`03 · Install now · runs at work` `MGILm`): the runs it would
 //! stop and each step's name, that the data is copied to `backups\<this version>` first, and that Orchester closes,
 //! installs and opens again. *Install when they end* (the default) waits for them; *Stop runs and install* pauses each
-//! at its next checkpoint so it goes on after the restart. Once the installer took over, the window closes through the
-//! close flow without asking again.
+//! at its next checkpoint so it goes on after the restart. While it waits, the status bar's press asks again: *Stop
+//! runs and install* stops them now, *Install when they end* and *Cancel* leave it waiting. Once the installer took
+//! over, the window closes through the close flow without asking again.
 
 use lurq::{
   app::{
@@ -16,7 +17,10 @@ use lurq::{
   node::Element,
 };
 use orchester_workspace::{
-  app_updates::install::{BACKUPS_FOLDER, Installer, RestartPlan, RunsAtWork},
+  app_updates::{
+    AppUpdates, UpdateState,
+    install::{BACKUPS_FOLDER, Installer, RestartPlan, RunsAtWork},
+  },
   runner::{ActiveWork, Runners},
 };
 
@@ -66,7 +70,8 @@ impl Restart {
     }
   }
 
-  /// Installs at once with no run at work; asks with runs at work; nothing without a ready update.
+  /// Installs at once with no run at work; asks with runs at work, also while an install waits for them; nothing
+  /// without a ready update.
   pub fn press(&self) {
     match self.services.updates.restart_plan(&self.services.runners) {
       RestartPlan::NothingReady => {}
@@ -113,10 +118,9 @@ impl Component for UpdateQuestion {
     }
     let services = restart.services.clone();
     let runs = runs_at_work(ctx, &services.runners);
-    let Some(update) = services.updates.state().ready().cloned() else {
+    let Some(version) = version_to_install(ctx, &services.updates) else {
       return Row::new().into();
     };
-    let version = update.version.to_string();
     let running = services.updates.this_app().version.to_string();
     let named = runs
       .iter()
@@ -180,6 +184,28 @@ impl Component for UpdateQuestion {
     );
     dialog.render(ctx, &restart.asking)
   }
+}
+
+/// The version of the update *Restart to update* asks about, whenever the update's state changes.
+fn version_to_install(ctx: &mut Ctx, updates: &AppUpdates) -> Option<String> {
+  let version = |state: &UpdateState| state.to_install().map(|update| update.version.to_string());
+  ctx
+    .stream(
+      updates.clone(),
+      move |updates, emitter: StreamEmitter<Option<String>, ()>| async move {
+        let mut changes = updates.subscribe();
+        loop {
+          let update = version(&changes.borrow_and_update());
+          if !emitter.emit(update) || changes.changed().await.is_err() {
+            return;
+          }
+        }
+      },
+    )
+    .state()
+    .get()
+    .data
+    .unwrap_or_else(|| version(&updates.state()))
 }
 
 /// The runs at work, whenever the runners report a change.

@@ -71,6 +71,17 @@ impl RunnerStatus {
     }
   }
 
+  /// Project `project`'s runner online, working on `work`. For tests of what follows the runs at work.
+  #[cfg(feature = "test-support")]
+  pub(super) fn online_for_test(project: PathBuf, work: WorkSummary) -> Self {
+    Self {
+      state: RunnerState::Online,
+      online_since: Some(SystemTime::now()),
+      work: Some(Arc::new(work)),
+      ..Self::starting(0, project)
+    }
+  }
+
   pub(super) fn generation(&self) -> u64 {
     self.generation
   }

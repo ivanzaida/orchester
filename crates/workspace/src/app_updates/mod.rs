@@ -108,6 +108,8 @@ struct Inner {
   runs: Mutex<Vec<String>>,
   /// Held while a check, with its download, runs.
   checking: tokio::sync::Mutex<()>,
+  /// Set when the person says *Stop runs and install* while an install waits for the runs at work.
+  stop_runs: watch::Sender<bool>,
 }
 
 /// Why a check found nothing.
@@ -156,6 +158,7 @@ impl AppUpdates {
         just_updated,
         runs: Mutex::default(),
         checking: tokio::sync::Mutex::new(()),
+        stop_runs: watch::channel(false).0,
       }),
     }
   }

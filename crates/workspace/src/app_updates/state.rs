@@ -77,6 +77,28 @@ impl UpdateState {
     }
   }
 
+  /// What *Restart to update* asks about: a ready update, or one whose install waits for the runs at work.
+  pub fn to_install(&self) -> Option<&ReadyUpdate> {
+    match self {
+      Self::Installing {
+        update,
+        step: InstallStep::WaitingForRuns(_),
+      } => Some(update),
+      state => state.ready(),
+    }
+  }
+
+  /// Whether an install the person started waits for the runs at work.
+  pub fn waits_for_runs(&self) -> bool {
+    matches!(
+      self,
+      Self::Installing {
+        step: InstallStep::WaitingForRuns(_),
+        ..
+      }
+    )
+  }
+
   /// The newest release a copy that does not update itself was told of.
   pub(super) fn newest(&self) -> Option<&NewestRelease> {
     match self {

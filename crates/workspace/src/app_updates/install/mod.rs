@@ -1,6 +1,7 @@
 //! Installing a ready update on Windows (*Restart to update*): with no run at work it installs at once; with runs at
 //! work the person waits for them (the default) or stops them, each paused at its next checkpoint so it goes on after
-//! the restart (design 03 `MGILm`). Then the runners stop, the databases are copied aside ([`backup`]), the installer
+//! the restart (design 03 `MGILm`); asked again while it waits, the person can still stop them (status bar S3
+//! `UCZt3`). Then the runners stop, the databases are copied aside ([`backup`]), the installer
 //! is started silently to wait for the app's exit and open Orchester again ([`handover`]), and the window closes. Every
 //! failure before the installer took over leaves this version running, its runners started again, and the state
 //! [`UpdateState::InstallFailed`] with the reason; the next start tells how the installer did ([`outcome`]).
@@ -106,16 +107,19 @@ pub struct HandedOver {
 }
 
 impl AppUpdates {
-  /// What *Restart to update* does with the runs at work now.
+  /// What *Restart to update* does with the runs at work now. While an install waits for them it asks again, so the
+  /// person can stop them instead.
   pub fn restart_plan(&self, runners: &Runners) -> RestartPlan {
-    let Some(update) = self.state().ready().cloned() else {
+    let state = self.state();
+    let Some(update) = state.to_install().cloned() else {
       return RestartPlan::NothingReady;
     };
     let runs = runners.active_work();
-    if runs.is_empty() {
-      RestartPlan::InstallNow(update)
-    } else {
-      RestartPlan::Ask { update, runs }
+    match (runs.is_empty(), state.waits_for_runs()) {
+      (true, false) => RestartPlan::InstallNow(update),
+      // The waiting install goes on by itself now.
+      (true, true) => RestartPlan::NothingReady,
+      (false, _) => RestartPlan::Ask { update, runs },
     }
   }
 
@@ -127,14 +131,20 @@ impl AppUpdates {
   /// Installs the ready update: waits for the runs at work or stops them as `runs` says, stops the runners, copies
   /// the databases aside and hands over to the installer `installer` starts. `Some` once the installer took over and
   /// the window must close; `None` when nothing was ready or an install runs already, or when it failed, which leaves
-  /// this version running with its runners and the state [`UpdateState::InstallFailed`].
+  /// this version running with its runners and the state [`UpdateState::InstallFailed`]. Asked again while an install
+  /// waits for the runs at work, [`RunsAtWork::StopThem`] makes that install stop them now and this call returns
+  /// `None`; [`RunsAtWork::WaitForThem`] changes nothing.
   pub async fn install(&self, runners: &Runners, runs: RunsAtWork, installer: &Installer) -> Option<HandedOver> {
+    if self.answer_waiting_install(runs) {
+      return None;
+    }
     // No check runs meanwhile: none replaces the installer this hands over to.
     let _no_checks = self.inner.checking.lock().await;
     let update = self.begin_install(runs, runners)?;
-    if runs == RunsAtWork::WaitForThem {
-      self.wait_for_runs(runners, &update).await;
-    }
+    let runs = match runs {
+      RunsAtWork::WaitForThem => self.wait_for_runs(runners, &update).await,
+      RunsAtWork::StopThem => RunsAtWork::StopThem,
+    };
     self.step(&update, InstallStep::StoppingRuns);
     let (kind, deadline) = match runs {
       RunsAtWork::StopThem => (CloseKind::WaitForAgents, Some(STOP_RUNS_WAIT)),
@@ -153,6 +163,18 @@ impl AppUpdates {
     }
   }
 
+  /// The person's answer to the question asked again while an install waits for the runs at work: `true` when one
+  /// waits, which then stops them if `runs` says so.
+  fn answer_waiting_install(&self, runs: RunsAtWork) -> bool {
+    if !self.state().waits_for_runs() {
+      return false;
+    }
+    if runs == RunsAtWork::StopThem {
+      self.inner.stop_runs.send_replace(true);
+    }
+    true
+  }
+
   /// Moves a ready update on to installing; `None` when none is ready or one installs already.
   fn begin_install(&self, runs: RunsAtWork, runners: &Runners) -> Option<ReadyUpdate> {
     let mut update = None;
@@ -164,6 +186,8 @@ impl AppUpdates {
         RunsAtWork::WaitForThem => InstallStep::WaitingForRuns(run_keys(&runners.active_work())),
         RunsAtWork::StopThem => InstallStep::StoppingRuns,
       };
+      // An earlier answer does not carry over to this install.
+      self.inner.stop_runs.send_replace(false);
       *state = UpdateState::Installing {
         update: ready.clone(),
         step,
@@ -174,17 +198,24 @@ impl AppUpdates {
     update
   }
 
-  /// Waits until no run is at work, telling which runs it waits for.
-  async fn wait_for_runs(&self, runners: &Runners, update: &ReadyUpdate) {
+  /// Waits until no run is at work, telling which runs it waits for, or until the person says to stop them: how the
+  /// runners stop then.
+  async fn wait_for_runs(&self, runners: &Runners, update: &ReadyUpdate) -> RunsAtWork {
     let mut work = runners.work_changes();
+    let mut stop = self.inner.stop_runs.subscribe();
     loop {
+      if *stop.borrow_and_update() {
+        tracing::info!(version = %update.version, "the person stops the runs the update waited for");
+        return RunsAtWork::StopThem;
+      }
       let runs = run_keys(&runners.active_work());
       if runs.is_empty() {
-        return;
+        return RunsAtWork::WaitForThem;
       }
       self.step(update, InstallStep::WaitingForRuns(runs));
       tokio::select! {
         _ = work.changed() => {}
+        _ = stop.changed() => {}
         () = tokio::time::sleep(RUNS_RECHECK) => {}
       }
     }
