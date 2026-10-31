@@ -181,7 +181,10 @@ impl ClaudeStream {
       1 => self.windows.values().next(),
       _ => None,
     });
-    Some(reported.map_or_else(|| ContextUse::of_model(*used, model), |window| ContextUse::reported(*used, *window)))
+    Some(reported.map_or_else(
+      || ContextUse::of_model(*used, model),
+      |window| ContextUse::reported(*used, *window),
+    ))
   }
 
   /// The tokens a message of the main conversation took in; a subagent's messages fill a context of their own, and a
@@ -200,7 +203,11 @@ impl ClaudeStream {
   fn note_windows(&mut self, value: &Value) {
     let models = value.get("modelUsage").and_then(Value::as_object).into_iter().flatten();
     for (model, used) in models {
-      if let Some(window) = used.get("contextWindow").and_then(Value::as_u64).filter(|window| *window > 0) {
+      if let Some(window) = used
+        .get("contextWindow")
+        .and_then(Value::as_u64)
+        .filter(|window| *window > 0)
+      {
         self.windows.insert(model.clone(), window);
       }
     }

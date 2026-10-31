@@ -52,7 +52,11 @@ impl ProjectDb {
       .query_map([run.to_string()], |row| {
         Ok((
           row.get::<_, String>(0)?,
-          (row.get::<_, i64>(1)?, row.get::<_, Option<i64>>(2)?, row.get::<_, bool>(3)?),
+          (
+            row.get::<_, i64>(1)?,
+            row.get::<_, Option<i64>>(2)?,
+            row.get::<_, bool>(3)?,
+          ),
         ))
       })?
       .collect::<Result<Vec<_>, _>>()?;

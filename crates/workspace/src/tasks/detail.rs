@@ -485,13 +485,7 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
       vendor,
     } = reached;
     let latest = run.latest_execution(&step.key);
-    let attempt = latest.and_then(|execution| {
-      run
-        .attempts()
-        .iter()
-        .find(|attempt| attempt.execution(execution.id()).is_some())
-        .map(orchester_core::run::Attempt::number)
-    });
+    let attempt = latest.and_then(|execution| attempt_of(&run, execution.id()));
     steps.push(StepView {
       number: index + 1,
       key: step.key.clone(),
@@ -542,6 +536,15 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
     steps,
     run,
   })
+}
+
+/// The number of `run`'s attempt that holds `execution`.
+fn attempt_of(run: &Run, execution: StepExecutionId) -> Option<NonZeroU32> {
+  run
+    .attempts()
+    .iter()
+    .find(|attempt| attempt.execution(execution).is_some())
+    .map(orchester_core::run::Attempt::number)
 }
 
 /// `run`'s agents' questions with suggested answers that wait for the person.
