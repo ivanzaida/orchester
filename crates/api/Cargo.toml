@@ -58,6 +58,10 @@ name = "identity"
 required-features = ["identity"]
 
 [[test]]
+name = "invites_accept"
+required-features = ["identity"]
+
+[[test]]
 name = "totp"
 required-features = ["identity"]
 

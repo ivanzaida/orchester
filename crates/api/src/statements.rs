@@ -1,9 +1,10 @@
 //! What a team server signs with its own key for Orchester Cloud (`docs/architecture/server.md`, "Linking a team
-//! server at setup", "Invites", "Codes"): its link statement, its invites and their revocations, and for an app its
-//! proof that it holds the key of the id it gives itself, each a compact JWS of its own type. The cloud verifies them
-//! with the server's public key; the server admin's page may carry them there.
+//! server at setup", "Invites", "Codes", "Accepting outside Orchester"): its link statement, its invites, their
+//! revocations and the receipts of those accepted in the browser, and for an app its proof that it holds the key of the
+//! id it gives itself, each a compact JWS of its own type. The cloud verifies them with the server's public key; the
+//! server admin's page, or the browser, may carry them there.
 
-use orchester_core::id::{InviteId, TeamServerId};
+use orchester_core::id::{CloudAccountId, InviteId, TeamServerId};
 use serde::{Deserialize, Serialize};
 
 use crate::{InviteKind, MemberRole};
@@ -11,6 +12,7 @@ use crate::{InviteKind, MemberRole};
 pub const LINK_STATEMENT_TYPE: &str = "orchester-link+jws";
 pub const SIGNED_INVITE_TYPE: &str = "orchester-invite+jws";
 pub const INVITE_REVOCATION_TYPE: &str = "orchester-invite-revocation+jws";
+pub const INVITE_ACCEPTANCE_TYPE: &str = "orchester-invite-accepted+jws";
 pub const KEY_PROOF_TYPE: &str = "orchester-key-proof+jws";
 
 /// What the server signs to be linked: its id (its public key's, `identity::PublicKey::server_id`), name, address,
@@ -57,6 +59,18 @@ pub struct SignedInvite {
 pub struct InviteRevocation {
   pub id: InviteId,
   pub server: TeamServerId,
+  pub issued_at: i64,
+}
+
+/// The server's receipt for an invite accepted in the browser (`POST /auth/cloud/accept`): the account it made or
+/// found for the cloud account `subject` joined by invite `id`. The cloud records the join on it and drops the invite.
+/// `issued_at` in milliseconds.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct InviteAcceptance {
+  pub id: InviteId,
+  pub server: TeamServerId,
+  pub subject: CloudAccountId,
   pub issued_at: i64,
 }
 

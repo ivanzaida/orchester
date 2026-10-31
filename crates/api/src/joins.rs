@@ -5,7 +5,7 @@
 use orchester_core::id::{ApprovalId, ProjectId};
 use serde::{Deserialize, Serialize};
 
-use crate::{Credential, DeviceKind, MemberRole, Session, User, UserRef};
+use crate::{Credential, DeviceKind, InviteKind, MemberRole, Session, User, UserRef};
 
 /// `POST /auth/cloud`.
 #[derive(Debug, Serialize, Deserialize)]
@@ -64,6 +64,49 @@ pub struct Joined {
   pub session: Session,
   pub user: User,
   pub joined: Option<JoinedProject>,
+}
+
+/// `POST /auth/cloud/accept`, from the team server's web app: an identity token of purpose `accept` naming an open
+/// invite, which the browser brought from Orchester Cloud (`docs/architecture/server.md`, "Accepting outside
+/// Orchester"). No device: an app's device comes only from an app's own join.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CloudAccept {
+  pub identity_token: Credential,
+  /// The newest key set the cloud's page sent with the token, for a server that cannot reach the cloud itself.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub key_set: Option<String>,
+}
+
+/// What accepting an invite gave: for a project invite its project and role; for a server invite neither (an admin
+/// invite made the account an admin); for an account invite only the link to the cloud identity.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AcceptedMembership {
+  pub kind: InviteKind,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub project: Option<ProjectId>,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub role: Option<MemberRole>,
+}
+
+/// A browser signed in to the team server's web app (the browser kind of device token, 12 hours), shown once.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct BrowserSession {
+  pub token: Credential,
+  pub session: Session,
+  pub user: User,
+}
+
+/// `201` of `POST /auth/cloud/accept`: the membership made and the receipt the server signed for the cloud
+/// (`statements::InviteAcceptance`), with a browser sign-in unless `approval_required`: join approval is on and the
+/// account existed already, so the person signs in with a code from one of their computers instead.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CloudAccepted {
+  #[serde(default)]
+  pub browser_session: Option<BrowserSession>,
+  pub membership: AcceptedMembership,
+  pub receipt: String,
+  pub approval_required: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
