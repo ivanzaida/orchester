@@ -157,6 +157,27 @@ fn team_qa_first_download_a_failure_shows_in_place_and_try_again_goes_on() {
 }
 
 #[test]
+fn team_qa_first_download_a_failure_before_the_first_page_asks_nobody() {
+  let (mut window, server) = prepared(State::DownloadFailed);
+  window.navigation().go(Route::FirstDownload(project_id()));
+  window.until("the failure", |window| window.texts(FAILED).is_some());
+  assert_eq!(window.text("first_download-tasks-title"), "Downloading tasks stopped");
+  assert_eq!(window.text(COUNT), "No tasks arrived");
+  assert_eq!(window.text(FAILED), "The server refused this.");
+  assert!(window.texts(CAN_OPEN).is_none());
+
+  server.answer_tasks(TasksAnswer::Hold);
+  window.press(RETRY);
+  window.until("the server to be asked again", |window| {
+    window
+      .texts(COUNT)
+      .is_some_and(|count| count.concat() == "Asking Acme for them…")
+  });
+  assert_eq!(window.text("first_download-tasks-title"), "Downloading tasks");
+  assert!(window.texts(FAILED).is_none());
+}
+
+#[test]
 fn team_qa_first_download_stay_here_puts_away_what_says_it_can_open() {
   let (mut window, _server) = at_84(State::DownloadProgress);
   window.until("the callout", |window| window.texts(CAN_OPEN).is_some());

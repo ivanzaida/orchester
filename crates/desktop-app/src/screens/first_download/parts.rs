@@ -264,7 +264,7 @@ fn tasks(ctx: &mut Ctx, id: &str, linked: &Linked, progress: Option<&DownloadPro
     below.push(arrivals(ctx, &id, &progress.latest));
   }
   Part {
-    sub: count(ctx, progress, server),
+    sub: count(ctx, progress),
     title: ctx.t(key).to_string(),
     id,
     mark,
@@ -272,15 +272,20 @@ fn tasks(ctx: &mut Ctx, id: &str, linked: &Linked, progress: Option<&DownloadPro
   }
 }
 
-/// *84 of 212*; before the server said how many, how many so far.
-fn count(ctx: &Ctx, progress: &DownloadProgress, server: &str) -> String {
+/// *84 of 212*; before the server said how many, how many so far, and before the first of them, that the server is
+/// being asked, only while it is: a download that stopped there asks nobody.
+fn count(ctx: &Ctx, progress: &DownloadProgress) -> String {
   let stored = progress.stored;
   match (progress.total, stored) {
     (Some(total), _) => ctx.t_args(
       "startup.shared.download.tasks.count",
       [("stored", stored.to_string()), ("total", total.to_string())],
     ),
-    (None, 0) => ctx.t_args("startup.shared.download.tasks.asking", [("server", server)]),
+    (None, 0) if progress.state == DownloadState::Downloading => ctx.t_args(
+      "startup.shared.download.tasks.asking",
+      [("server", progress.server.as_str())],
+    ),
+    (None, 0) => ctx.t("startup.shared.download.tasks.none"),
     (None, 1) => ctx.t("startup.shared.download.tasks.soFar.one"),
     (None, count) => ctx.t_args(
       "startup.shared.download.tasks.soFar.other",
