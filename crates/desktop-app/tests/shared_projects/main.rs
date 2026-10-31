@@ -161,7 +161,7 @@ fn shared_projects_none_yet_is_the_empty_state_and_check_again_reads_again() {
   );
   assert_eq!(window.text("join_team-crumbs"), "Start Join a team Acme");
   assert!(!has(&mut window, "join_team-lead"), "12 draws no lead");
-  // Joined with a code, while this computer is signed in to Orchester Cloud: the team knows the account there.
+  // Joined with a code, with nobody signed in to Orchester Cloud: the team knows the account it made there.
   let said = window.text("join-team-projects-none");
   assert!(said.contains(&format!("has invited {USERNAME}.")), "{said}");
   assert!(!said.contains('@'), "no Cloud email: {said}");
