@@ -1,11 +1,13 @@
 //! The QA app's team scenarios (`team-*` in the seed's registry): the stand-in team server *Acme* on loopback, sharing
 //! Kontur and Billing, which answers while the window is open, with Kontur linked to the team's Kontur and joined by
 //! code where the [`State`] says. The link comes first: a join marks as downloading only the checkouts already linked.
-//! What a person presses is in [`drive`]. Fixture data for QA, never shipped: an example is no part of the app's
-//! program.
+//! What a person presses is in [`drive`], and for `team-clone` in the QA app's `team_clone`. Fixture data for QA, never
+//! shipped: an example is no part of the app's program.
 
 pub mod drive;
 mod state;
+#[path = "../../sign_in_qa/window.rs"]
+pub mod window;
 
 use std::{
   error::Error,
@@ -35,6 +37,20 @@ const REMOTE: &str = "github.com/acme/kontur";
 const TASKS: (usize, usize) = (212, 84);
 /// The server's refusal, as the workspace words it.
 const REFUSED: &str = "servers.errors.refused";
+/// Acme's projects in `team-clone`, `(name, slug, remote hint)`: one per way a clone from *Link a folder* ends, in the
+/// order the QA app's `team_clone` clones them, Kontur last, so the window stays on its page.
+pub const CLONED: [(&str, &str, Option<&str>); 10] = [
+  ("Atlas", "atlas", Some("github.com/acme/atlas")),
+  ("Billing", "billing", Some("github.com/acme/billing")),
+  ("Courier", "courier", Some("github.com/acme/courier")),
+  ("Depot", "depot", Some("github.com/acme/depot")),
+  ("Gateway", "gateway", Some("github.com/acme/gateway")),
+  ("Harbor", "harbor", Some("github.com/acme/harbor")),
+  ("Ingest", "ingest", Some("github.com/acme/ingest")),
+  ("Juno", "juno", Some("github.com/acme/juno")),
+  ("Ledger", "ledger", Some("github.com/acme/ledger")),
+  ("Kontur", SLUG, Some(REMOTE)),
+];
 
 /// Sets `state` up for the session of `services`; the server, to hold while the window is open.
 pub fn prepare(state: State, services: &Services, runtime: &Handle) -> Result<TeamServer, Box<dyn Error>> {
@@ -67,6 +83,11 @@ pub fn prepare(state: State, services: &Services, runtime: &Handle) -> Result<Te
     }
     State::NoSharedProjects => {
       server.share(&[]);
+      let address = add(&server, services, runtime)?.0;
+      join(&address, services, runtime)?;
+    }
+    State::Clones => {
+      server.share(&CLONED);
       let address = add(&server, services, runtime)?.0;
       join(&address, services, runtime)?;
     }

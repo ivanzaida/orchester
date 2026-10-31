@@ -85,7 +85,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 73] = [
+pub const ALL: [Scenario; 74] = [
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-library", agents_library::seed),
   Scenario::of("agents-empty", agents::empty),
@@ -159,6 +159,7 @@ pub const ALL: [Scenario; 73] = [
   Scenario::of("team-download-stopped", team::download_stopped),
   Scenario::of("team-shared-projects", team::shared_projects),
   Scenario::of("team-shared-none", team::shared_none),
+  Scenario::of("team-clone", team::clones),
 ];
 
 /// The scenario called `name`.

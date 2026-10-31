@@ -1,7 +1,7 @@
 //! The team scenarios, each Kontur with the catalogue and no task (`empty`) and a marker beside the application
 //! database that names its state: the stand-in team server has to answer while the window is open, so what joins it is
-//! the QA app's own (`examples/qa_app/team`). `team-offer` also has Ledger, a local project, so All projects shows
-//! *Local* beside *Shared · Acme* (09 `i5G19A`).
+//! the QA app's own (`examples/qa_app/team`), and so are `team-clone`'s clones. `team-offer` also has Ledger, a local
+//! project, so All projects shows *Local* beside *Shared · Acme* (09 `i5G19A`).
 
 #[allow(
   dead_code,
@@ -84,6 +84,12 @@ pub fn shared_projects(kontur: &mut Kontur) -> Result<(), SeedError> {
 
 pub fn shared_none(kontur: &mut Kontur) -> Result<(), SeedError> {
   mark(kontur, State::NoSharedProjects)
+}
+
+/// Acme's projects, each cloned from *Link a folder* by the QA app's stand-in console before the window shows
+/// (`examples/qa_app/team_clone.rs`), which makes the folder they go in.
+pub fn clones(kontur: &mut Kontur) -> Result<(), SeedError> {
+  mark(kontur, State::Clones)
 }
 
 /// Kontur's checkout has the team's repository as its `origin`, which the QA app's server names for its project.

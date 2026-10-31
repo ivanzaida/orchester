@@ -21,6 +21,7 @@ mod ownership_team;
 mod qa_app_asks;
 mod settings;
 mod team;
+mod team_clone;
 mod team_window;
 
 use std::{error::Error, fs, sync::Arc};
@@ -138,6 +139,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     (Some(_), None) => return Err("a team scenario needs a started session".into()),
     (None, _) => None,
   };
+  // `team-clone`'s stand-in console; dropped before the runtime, so the clone it holds ends first.
+  let clones = (team_state == Some(team::State::Clones))
+    .then(|| team_clone::StandIn::new(&location.database))
+    .transpose()?;
   println!(
     "cloud {} as {}\nsigned in {}\nsettings fixtures {}\nteam {}",
     cloud.url(),
@@ -147,7 +152,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     team_server.as_ref().map_or_else(|| "none".to_owned(), TeamServer::url),
   );
   match (team_state.filter(|state| state.drives()), &team_server) {
-    (Some(state), Some(server)) => team_window::open(&runtime, &launch, position, (state, server))?,
+    (Some(state), Some(server)) => team_window::open(&runtime, &launch, position, (state, server, clones.as_ref()))?,
     _ => window::open_showing(&runtime, &launch, position, shown),
   }
   clipboard::clear_at_exit();

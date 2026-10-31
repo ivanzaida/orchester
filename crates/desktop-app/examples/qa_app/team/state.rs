@@ -34,10 +34,12 @@ pub enum State {
   SharedProjects,
   /// Joined, with no project the person is invited to.
   NoSharedProjects,
+  /// Joined, with one project per way a clone from *Link a folder* ends, each cloned by a stand-in console (ORC-584).
+  Clones,
 }
 
 impl State {
-  pub const ALL: [Self; 12] = [
+  pub const ALL: [Self; 13] = [
     Self::Join,
     Self::WrongCode,
     Self::ExpiredCode,
@@ -50,6 +52,7 @@ impl State {
     Self::DownloadStopped,
     Self::SharedProjects,
     Self::NoSharedProjects,
+    Self::Clones,
   ];
 
   /// The seed's scenario of this state.
@@ -67,15 +70,16 @@ impl State {
       Self::DownloadStopped => "team-download-stopped",
       Self::SharedProjects => "team-shared-projects",
       Self::NoSharedProjects => "team-shared-none",
+      Self::Clones => "team-clone",
     }
   }
 
-  /// Whether the QA copy presses in the window before it shows: *Join with the code* is a person's, which an MCP client
-  /// cannot press.
+  /// Whether the QA copy presses in the window before it shows: *Join with the code* and *Clone repository…* are a
+  /// person's, which an MCP client cannot press.
   pub const fn drives(self) -> bool {
     matches!(
       self,
-      Self::Join | Self::WrongCode | Self::ExpiredCode | Self::Unreachable | Self::Joined
+      Self::Join | Self::WrongCode | Self::ExpiredCode | Self::Unreachable | Self::Joined | Self::Clones
     )
   }
 

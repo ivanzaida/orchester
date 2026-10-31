@@ -1,13 +1,23 @@
-//! The window of the team scenarios a person's press reaches ([`team::drive`]): the app's root and MCP server as
-//! `window::open` starts them, in an order of its own, because the press needs the tree before the window runs. Each
-//! other QA state opens the app's own window.
+//! The window of the team scenarios a person's press reaches ([`team::drive`], [`team_clone`]): the app's root and MCP
+//! server as `window::open` starts them, in an order of its own, because the press needs the tree before the window
+//! runs; for `team-clone` the root has the stand-in clones in its context. Each other QA state opens the app's own
+//! window.
 
 use std::{
   error::Error,
   sync::{Arc, OnceLock},
 };
 
-use lurq::app::{App, Tree, WindowCornerRadius, wgpu_render::WgpuRenderEngine, winit_shell::WinitWindow};
+use lurq::{
+  app::{
+    App, Tree, WindowCornerRadius,
+    component::{Component, DevtoolsInspectable},
+    ctx::Ctx,
+    wgpu_render::WgpuRenderEngine,
+    winit_shell::WinitWindow,
+  },
+  node::Element,
+};
 use orchester_api::test_support::team_server::TeamServer;
 use orchester_app::{
   appearance::{Appearance, ThemeSetting},
@@ -18,17 +28,18 @@ use orchester_app::{
   theme::{self, Mode},
   ui::{loader, skeleton},
 };
+use orchester_workspace::sharing::project::clone::Clones;
 use tokio::runtime::Runtime;
 
-use super::team;
+use super::{team, team_clone::StandIn};
 
-/// Takes the window of `launch` to `state` on `server`, shows it, and returns once it closed and its MCP server
-/// stopped.
+/// Takes the window of `launch` to `state` on `server`, with `clones` for `team-clone`, shows it, and returns once it
+/// closed and its MCP server stopped.
 pub fn open(
   runtime: &Runtime,
   launch: &Launch,
   position: Option<WindowPosition>,
-  (state, server): (team::State, &TeamServer),
+  (state, server, clones): (team::State, &TeamServer, Option<&StandIn>),
 ) -> Result<(), Box<dyn Error>> {
   let appearance = Appearance::new(
     ThemeSetting::Dark,
@@ -54,20 +65,64 @@ pub fn open(
     (config, settings),
     &link.input_gate(),
   );
-  tree.mount_root::<Root>(
-    &mut app,
-    RootProps {
-      link: link.clone(),
-      mcp: McpLink::new(&mcp_server),
-      start: launch.start(),
-    },
-  );
+  let root = RootProps {
+    link: link.clone(),
+    mcp: McpLink::new(&mcp_server),
+    start: launch.start(),
+  };
+  match clones {
+    Some(stand_in) => tree.mount_root::<Host>(
+      &mut app,
+      HostProps {
+        root,
+        clones: stand_in.clones.clone(),
+      },
+    ),
+    None => tree.mount_root::<Root>(&mut app, root),
+  }
   tree.resize(1440, 900);
   tree.pass_headless(&mut app);
-  let shown = team::drive::to(&mut app, &mut tree, (state, &link, server)).and_then(|()| show(app, tree, position));
+  let driven = match (clones, launch.services()) {
+    (Some(stand_in), Some(services)) => stand_in.drive((&mut app, &mut tree), &link, services),
+    (Some(_), None) => Err("team-clone needs a started session".into()),
+    (None, _) => team::drive::to(&mut app, &mut tree, (state, &link, server)),
+  };
+  let shown = driven.and_then(|()| show(app, tree, position));
   // Also on an error: `tools/qa-app.ps1` takes a discovery file left behind for a copy that started.
   mcp_server.shutdown();
   shown
+}
+
+#[derive(Clone)]
+struct HostProps {
+  root: RootProps,
+  clones: Clones,
+}
+
+/// The stand-in clones never change while the window is open.
+impl PartialEq for HostProps {
+  fn eq(&self, other: &Self) -> bool {
+    self.root == other.root
+  }
+}
+
+impl DevtoolsInspectable for HostProps {}
+
+/// The app's root with the stand-in clones in its context, which *Link a folder* takes before the session's.
+struct Host;
+
+impl Component for Host {
+  type Props = HostProps;
+
+  fn create(_: &mut Ctx) -> Self {
+    Self
+  }
+
+  fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
+    let props = ctx.props::<HostProps>().clone();
+    ctx.provide(props.clones);
+    ctx.mount_keyed::<Root>("app", props.root)
+  }
 }
 
 /// Shows the window of `app` and `tree`, and returns once it closed.

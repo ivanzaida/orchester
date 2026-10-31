@@ -3,7 +3,7 @@
 use crate::kontur::scenarios;
 
 /// Every scenario's name, in the order the registry lists them.
-const NAMES: [&str; 73] = [
+const NAMES: [&str; 74] = [
   "agents",
   "agents-library",
   "agents-empty",
@@ -77,6 +77,7 @@ const NAMES: [&str; 73] = [
   "team-download-stopped",
   "team-shared-projects",
   "team-shared-none",
+  "team-clone",
 ];
 
 #[test]

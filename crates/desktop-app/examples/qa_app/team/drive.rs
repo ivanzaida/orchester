@@ -2,9 +2,6 @@
 //! example itself: *Join with the code* takes no MCP client's press (`join-team-code-submit`, `PersonOnly`), and Enter
 //! and *Try again* join the same way, so each result of a press is a scenario of its own.
 
-#[path = "../../sign_in_qa/window.rs"]
-mod window;
-
 use std::error::Error;
 
 use lurq::app::{App, Tree};
@@ -13,9 +10,8 @@ use orchester_app::{
   mcp::WindowLink,
   routes::{JoinWay, Route},
 };
-use window::Window;
 
-use super::State;
+use super::{State, window::Window};
 
 const ADDRESS: &str = "join-team-code-address";
 const CODE_FIELD: &str = "join-team-code-code";
@@ -40,6 +36,7 @@ pub fn to(
     State::ExpiredCode => join_with(&mut window, LATER_CODE, WRONG),
     State::Unreachable => join_with(&mut window, CODE, "join-team-code-unreachable"),
     State::Joined => join_with(&mut window, CODE, "join-team-code-joined"),
+    State::Clones => Err("team-clone presses on Link a folder, with its stand-in console (`clones`)".into()),
     State::Offer
     | State::Downloading
     | State::DownloadFailed
