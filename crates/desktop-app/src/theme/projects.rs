@@ -25,12 +25,18 @@ pub enum ProjectsText {
   /// 13/600 `text_primary`: a block's title — a welcome step, the GitHub repository block, the removal
   /// question, *A home for this project's work* (`oL3s8`, `yFgXP`, `AoSrO`, `XWb1r`).
   Heading,
-  /// 13 `text_secondary`, 1.45: what All projects lists, under its title (`dcMiE`).
+  /// 20/600 `text_primary`, 1.3, tracked -0.2: *All projects* (`SxLos` in 09 `i5G19A`).
+  Title,
+  /// 12.5 `text_secondary`, 1.4: what All projects lists, under its title (`kmxj0`).
   Sub,
-  /// 11/500 `text_muted`: a column's heading in the project list (`xp4j3` in `L5sps`).
+  /// 11/500 `text_muted`, tracked 0.4: a column's heading in the project list (`wZMxY` in `C7osHr`).
   ColumnHeading,
-  /// 12/600 `text_primary`: a project's initial on its tile (`DuQhh`).
+  /// 12/600 `text_secondary`, 1.2: a project's initial on its tile (`Vp4xD`).
   Initial,
+  /// Geist Mono 11.5 `text_muted`, 1.3: a listed project's folder (`ewbVX`).
+  Folder,
+  /// 12 `text_secondary`, 1.35: a listed project's counts and when it was last opened (`gTVG7`, `wDX76`).
+  Value,
   /// 11.5 `text_secondary`, 1.45: why a listed project cannot be opened (`z596zF`).
   Hint,
   /// 12.5 `text_primary`, 1.45: why *Open project folder…* failed (`OswfE` in `FV5pQ`).
@@ -56,15 +62,18 @@ pub enum ProjectsText {
 }
 
 impl ProjectsText {
-  pub const ALL: [Self; 19] = [
+  pub const ALL: [Self; 22] = [
     Self::Eyebrow,
     Self::WelcomeTitle,
     Self::WelcomeLead,
     Self::StepNumber,
     Self::Heading,
+    Self::Title,
     Self::Sub,
     Self::ColumnHeading,
     Self::Initial,
+    Self::Folder,
+    Self::Value,
     Self::Hint,
     Self::ErrorLine,
     Self::Offer,
@@ -89,9 +98,12 @@ impl ProjectsText {
       Self::WelcomeLead => "projects_welcome_lead",
       Self::StepNumber => "projects_step_number",
       Self::Heading => "projects_heading",
+      Self::Title => "projects_title",
       Self::Sub => "projects_sub",
       Self::ColumnHeading => "projects_column_heading",
       Self::Initial => "projects_initial",
+      Self::Folder => "projects_folder",
+      Self::Value => "projects_value",
       Self::Hint => "projects_hint",
       Self::ErrorLine => "projects_error_line",
       Self::Offer => "projects_offer",
@@ -114,9 +126,12 @@ impl ProjectsText {
       Self::WelcomeLead => sans(14.0, FontWeight::Normal, 1.55, palette.text_secondary),
       Self::StepNumber => mono(sans(12.0, FontWeight::Normal, 1.3, palette.text_muted)),
       Self::Heading => sans(13.0, FontWeight::SemiBold, 1.3, palette.text_primary),
-      Self::Sub => sans(13.0, FontWeight::Normal, 1.45, palette.text_secondary),
-      Self::ColumnHeading => sans(11.0, FontWeight::Medium, 1.3, palette.text_muted),
-      Self::Initial => sans(12.0, FontWeight::SemiBold, 1.3, palette.text_primary),
+      Self::Title => style(20.0, FontWeight::SemiBold, 1.3, -0.2, palette.text_primary),
+      Self::Sub => sans(12.5, FontWeight::Normal, 1.4, palette.text_secondary),
+      Self::ColumnHeading => style(11.0, FontWeight::Medium, 1.3, 0.4, palette.text_muted),
+      Self::Initial => sans(12.0, FontWeight::SemiBold, 1.2, palette.text_secondary),
+      Self::Folder => mono(sans(11.5, FontWeight::Normal, 1.3, palette.text_muted)),
+      Self::Value => sans(12.0, FontWeight::Normal, 1.35, palette.text_secondary),
       Self::Hint => sans(11.5, FontWeight::Normal, 1.45, palette.text_secondary),
       Self::ErrorLine => sans(12.5, FontWeight::Normal, 1.45, palette.text_primary),
       Self::Offer => sans(12.5, FontWeight::Normal, 1.45, palette.text_secondary),

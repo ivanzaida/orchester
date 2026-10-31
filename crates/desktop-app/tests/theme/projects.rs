@@ -26,4 +26,17 @@ fn projects_roles_follow_the_returning_start() {
     (11.5, 1.3, FontWeight::Normal, "Geist Mono")
   );
   assert_eq!(searched.color, theme.palette_color(PaletteColor::TextMuted));
+  // *All projects* (`SxLos`): 20/600 on 1.3, tracked -0.2.
+  let title = theme.typography_style(ProjectsText::Title.role());
+  assert_eq!(
+    (title.font_size, title.line_height, title.letter_spacing, title.weight),
+    (20.0, 1.3, -0.2, FontWeight::SemiBold)
+  );
+  // A row's counts and when it was last opened (`gTVG7`, `wDX76`): 12 on 1.35 `text_secondary`.
+  let value = theme.typography_style(ProjectsText::Value.role());
+  assert_eq!(
+    (value.font_size, value.line_height, value.weight),
+    (12.0, 1.35, FontWeight::Normal)
+  );
+  assert_eq!(value.color, theme.palette_color(PaletteColor::TextSecondary));
 }

@@ -155,10 +155,11 @@ pub fn page(ctx: &mut Ctx, projects: &Projects, route: &Route) -> String {
 }
 
 /// The icon of a tab at `route`: its screen's, or for a file of the code viewer the file's, as the page's title
-/// shows it (`o1Uea4`, `c2jICC`, `ISM2O`).
+/// shows it (`o1Uea4`, `c2jICC`, `ISM2O`); All projects' the layout grid (`Active tab` `jMVvA` in 09 `i5G19A`).
 pub fn tab_icon(route: &Route) -> Icon {
   match route {
     Route::Project(_, ProjectPage::Files(view)) => view.file().map_or(Icon::FolderTree, file_icon),
+    Route::AllProjects | Route::Usage(_) => Icon::LayoutGrid,
     route => screen_icon(route.screen()),
   }
 }
