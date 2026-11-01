@@ -108,7 +108,7 @@ pub async fn check_in(
     at: Timestamp::now(),
     result,
   };
-  record_checked_in(root, &tested, check, models, selected)
+  record_checked_in(root, &tested, check, models.as_deref(), selected)
 }
 
 /// Keeps edits made while HTTP was in flight; never attaches an old server's answer to a new one.
@@ -116,25 +116,29 @@ pub fn record_checked_in(
   root: &Path,
   tested: &DecisionConnection,
   mut check: DecisionCheck,
-  models: Option<Vec<ModelId>>,
+  models: Option<&[ModelId]>,
   selected: Option<&ModelId>,
 ) -> Result<DecisionConnection, DecisionError> {
   let mut db = ProjectDb::open(root)?;
-  let mut current = load(&db, tested.id())?;
-  if current.base_url() != tested.base_url() || current.key() != tested.key() {
-    return Err(DecisionError::CheckStale);
-  }
-  if let Some(models) = models {
-    if check.result == DecisionCheckResult::Connected
-      && let Some(model) = selected.filter(|model| !models.contains(model))
-    {
-      check.result = DecisionCheckResult::ModelGone { model: model.clone() };
+  loop {
+    let current = load(&db, tested.id())?;
+    if current.base_url() != tested.base_url() || current.key() != tested.key() {
+      return Err(DecisionError::CheckStale);
     }
-    current.record_models(models);
+    let mut checked = current.clone();
+    if let Some(models) = models {
+      if check.result == DecisionCheckResult::Connected
+        && let Some(model) = selected.filter(|model| !models.contains(model))
+      {
+        check.result = DecisionCheckResult::ModelGone { model: model.clone() };
+      }
+      checked.record_models(models.to_vec());
+    }
+    checked.record_check(check.clone());
+    if db.save_decision_check_if_unchanged(&current, &checked)? {
+      return Ok(checked);
+    }
   }
-  current.record_check(check);
-  db.save_decision_connection(&current)?;
-  Ok(current)
 }
 
 fn ensure_key(db: &ProjectDb, key: SecretId) -> Result<(), DecisionError> {

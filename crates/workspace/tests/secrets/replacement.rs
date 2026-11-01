@@ -62,6 +62,50 @@ fn replace(repo: &TempDir, vault: &dyn SecretVault, id: SecretId) -> Replacement
 }
 
 #[test]
+fn decision_connections_secret_replacement_requires_person_and_tracks_usage() {
+  use orchester_core::connection::DecisionServerUrl;
+  use orchester_workspace::connections::decision::{DecisionDraft, Writer, delete_in, save_in};
+
+  let (repo, mut db) = project_db();
+  let active = secret("DECISION_KEY");
+  db.create_secret(&active).expect("metadata");
+  let snapshot = ProjectSecrets::load(&db).expect("unused snapshot");
+  let draft = DecisionDraft {
+    id: None,
+    name: Name::new("Hosted reviewer").expect("name"),
+    base_url: DecisionServerUrl::new("https://hosted.example/v1").expect("URL"),
+    key: Some(active.id()),
+  };
+  let id = save_in(repo.path(), &draft, Writer::Person).expect("person saves hosted connection");
+  assert!(!snapshot.replacement_needs_person(active.id()));
+  let current = ProjectSecrets::load(&db).expect("current usage");
+  assert!(current.replacement_needs_person(active.id()));
+  assert_eq!(current.decision_uses.len(), 1);
+  assert_eq!(current.decision_uses[0].secret, active.id());
+  assert_eq!(current.decision_uses[0].connection, id);
+  assert_eq!(&*current.decision_uses[0].name, "Hosted reviewer");
+
+  let vault = CountingVault::default();
+  assert_eq!(replace(&repo, &vault, active.id()), ReplacementOutcome::NeedsPerson);
+  assert_eq!(vault.0.load(Ordering::SeqCst), 0);
+  assert!(
+    db.secret(active.id())
+      .expect("metadata")
+      .expect("secret")
+      .rotated_at()
+      .is_none()
+  );
+  delete_in(repo.path(), id).expect("remove reference");
+  assert!(
+    !ProjectSecrets::load(&db)
+      .expect("usage")
+      .replacement_needs_person(active.id())
+  );
+  assert_eq!(replace(&repo, &vault, active.id()), ReplacementOutcome::Replaced);
+  assert_eq!(vault.0.load(Ordering::SeqCst), 1);
+}
+
+#[test]
 fn secrets_replacement_native_key_requires_person_without_mutation() {
   let (repo, mut db) = project_db();
   let active = secret("API_KEY");

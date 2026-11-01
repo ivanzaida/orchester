@@ -72,6 +72,17 @@ formatting passed; the full quality gate (workspace/all-targets/all-features cli
 formatting, file sizes and UI literals) finished with `check: OK`. The first integration run exercised an earlier
 parser build and found an ambiguous-catalog acceptance; the final run includes the rejection and passes.
 
-Out-of-scope observation for follow-up: `secrets/replacement.rs::needs_person` counts agent connections,
-MCP servers and tools, but currently does not count decision-connection secret references. That existing
-replacement authorization path was not changed in this CRUD/check task.
+## Review corrections
+
+Check persistence now uses an atomic conditional UPDATE matching the loaded name and complete settings.
+If another handle edits between the read and write, the check reloads and validates the URL/key again;
+renames survive and changed credentials or URLs return CheckStale. The store regression explicitly
+interleaves a second handle's rename, URL edit and key edit between that read and conditional write.
+
+Decision-key references now participate in the authoritative secret replacement guard under its
+existing write transaction. ProjectSecrets exposes decision_uses (connection id, name and secret id)
+and includes them in replacement_needs_person. The regression starts from a stale unused snapshot,
+saves a hosted decision connection as a person, and verifies UnusedOnly returns NeedsPerson without
+vault or rotation-metadata mutation. Removing the connection makes the credential unused again.
+
+These corrections change no visual layer and add no target_os-specific code.

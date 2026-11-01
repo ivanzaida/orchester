@@ -10,6 +10,10 @@ use orchester_store::{ProjectDb, StoreError};
 
 pub(super) fn needs_person(db: &ProjectDb, id: SecretId) -> Result<bool, StoreError> {
   if db.connections()?.iter().any(|connection| connection.key() == Some(id))
+    || db
+      .decision_connections()?
+      .iter()
+      .any(|connection| connection.key() == Some(id))
     || db.mcp_servers()?.iter().any(|server| server.secrets().contains(&id))
   {
     return Ok(true);

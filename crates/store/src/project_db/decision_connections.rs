@@ -84,6 +84,24 @@ impl ProjectDb {
     Ok(())
   }
 
+  /// Saves check settings only if the entire loaded connection still matches, preserving concurrent edits.
+  pub fn save_decision_check_if_unchanged(
+    &mut self,
+    expected: &DecisionConnection,
+    checked: &DecisionConnection,
+  ) -> Result<bool, StoreError> {
+    let changed = self.connection.execute(
+      "UPDATE decision_connections SET settings = ?1 WHERE id = ?2 AND name = ?3 AND settings = ?4",
+      params![
+        encode_json(WHAT, SCHEMA, &Settings::of(checked))?,
+        expected.id().to_string(),
+        expected.name().as_str(),
+        encode_json(WHAT, SCHEMA, &Settings::of(expected))?
+      ],
+    )?;
+    Ok(changed != 0)
+  }
+
   pub fn decision_connection(&self, id: DecisionConnectionId) -> Result<Option<DecisionConnection>, StoreError> {
     Ok(load(&self.connection, "WHERE id = ?1", [id.to_string()])?.pop())
   }

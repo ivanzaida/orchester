@@ -304,14 +304,8 @@ fn decision_connections_keep_renames_refuse_stale_checks_and_used_deletion() {
     at: Timestamp::now(),
     result: DecisionCheckResult::Connected,
   };
-  let checked = record_checked_in(
-    repo.path(),
-    &before,
-    check.clone(),
-    Some(vec![model("jev-latest")]),
-    None,
-  )
-  .expect("record");
+  let checked =
+    record_checked_in(repo.path(), &before, check.clone(), Some(&[model("jev-latest")]), None).expect("record");
   assert_eq!(checked.name(), &value.name);
   save_in(repo.path(), &value, Writer::Automation).expect("rename retains check");
   assert_eq!(
@@ -321,7 +315,7 @@ fn decision_connections_keep_renames_refuse_stale_checks_and_used_deletion() {
   value.base_url = DecisionServerUrl::new("http://localhost:9000/v1").expect("url");
   save_in(repo.path(), &value, Writer::Automation).expect("change server");
   assert!(matches!(
-    record_checked_in(repo.path(), &before, check, Some(vec![]), None),
+    record_checked_in(repo.path(), &before, check, Some(&[]), None),
     Err(DecisionError::CheckStale)
   ));
   let changed = db.decision_connection(id).expect("read").expect("saved");
