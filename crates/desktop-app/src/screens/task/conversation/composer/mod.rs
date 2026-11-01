@@ -31,6 +31,7 @@ use lurq::{
   app::{
     component::Component,
     ctx::Ctx,
+    events::KeyboardEvent,
     theme::{BorderSize, FormTextRole, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text, TextInput},
@@ -70,6 +71,7 @@ use crate::{
     chat::follow::Follow,
     composer::message_scrollbar,
     icon::{Icon, icon},
+    mention::{self, MentionField, MenuProps},
     message::message_text,
   },
 };
@@ -202,7 +204,10 @@ impl lurq::app::component::DevtoolsInspectable for DockProps {}
 struct Composer {
   menu: Signal<bool>,
   focused: Signal<bool>,
+  /// The message field, its @ menu and mentions (`ui::mention`), and the box the menu opens over.
   input: ElementRef,
+  mention: MentionField,
+  box_anchor: ElementRef,
   anchor: ElementRef,
   /// The question the field last took the focus for: once per question.
   answering: Mutex<Option<MessageId>>,
@@ -220,10 +225,14 @@ impl Component for Composer {
         follow.follow_again();
       }
     });
+    let focused = ctx.signal(false);
+    let mention = MentionField::new(ctx, props.composing.state.draft.clone(), focused.clone());
     Self {
       menu: ctx.signal(false),
-      focused: ctx.signal(false),
-      input: ElementRef::new(),
+      focused,
+      input: mention.element(),
+      mention,
+      box_anchor: ElementRef::new(),
       anchor: ElementRef::new(),
       answering: Mutex::new(None),
     }
@@ -317,6 +326,7 @@ impl Composer {
     let composer = Column::new()
       .id("composer-box")
       .describe("mode", mode_name(&mode))
+      .ref_element(self.box_anchor.clone())
       .width(Dimension::Pct(100.0))
       .padding_vertical(ExtraSpacing::Loose.role())
       .padding_horizontal(SpacingSize::Md)
@@ -330,13 +340,35 @@ impl Composer {
     let refused = tray::refusals(ctx, ATTACHMENTS, attached);
     let feedback = feedback::line(ctx, &composing.state, (&props.conversation, mode_name(&mode)), &presses);
     let note = words::note(ctx, &mode, &props.conversation).map(|note| quiet(&note));
+    let mentions = self.mentions(ctx, composing);
     context::line(ctx, composing, (&mode, recipient), leave)
       .into_iter()
       .chain(std::iter::once(tray::drop_target(composer, attached).into()))
       .chain(refused)
       .chain(feedback)
       .chain(note)
+      .chain(std::iter::once(mentions))
       .collect()
+  }
+
+  /// The @ menu over the box: the task's own task and its latest run lead it.
+  fn mentions(&self, ctx: &mut Ctx, composing: &Composing) -> Element {
+    let own = (
+      composing.key.clone(),
+      composing.detail.run.as_ref().map(|run| run.run.number()),
+    );
+    mention::menu(
+      ctx,
+      MenuProps {
+        id: "composer",
+        field: self.mention.clone(),
+        anchor: self.box_anchor.clone(),
+        root: composing.project.open.repo_root.clone(),
+        project: Arc::from(composing.project.open.project.name().as_str()),
+        own: Some(own),
+        revision: composing.project.feed.saves.get(),
+      },
+    )
   }
 
   /// The field takes the focus once for each question that waits.
@@ -375,7 +407,10 @@ impl Composer {
       _ => None,
     };
     let keys = presses::keys(presses, (leave, self.input.clone(), stop), self.menu.clone());
-    TextInput::styled(props.composing.state.draft.clone(), resolve(PaletteColor::TextPrimary))
+    let mention = self.mention.clone();
+    let draft = &props.composing.state.draft;
+    let chips = draft.with(|text| MentionField::tokens(text));
+    TextInput::styled(draft.clone(), resolve(PaletteColor::TextPrimary))
       .placeholder_style(resolve(PaletteColor::TextMuted))
       .caret_color(PaletteColor::TextPrimary)
       .id("composer-input")
@@ -385,10 +420,16 @@ impl Composer {
       .scrollbar(message_scrollbar(ctx))
       .width(Dimension::Pct(100.0))
       .placeholder(&placeholder)
-      .ref_element(self.input.clone())
+      .controller(self.mention.controller())
+      .tokens(chips)
       .on_focus(move || gained.set(true))
       .on_blur(move || lost.set(false))
-      .on_key_down(keys)
+      .on_key_down(move |event: KeyboardEvent| {
+        // The @ menu and the chips take their keys first: Enter inserts while the menu is open, Esc closes it.
+        if !mention.key(&event) {
+          keys(event);
+        }
+      })
       .on_paste(props.composing.state.attached.on_paste())
       .into()
   }

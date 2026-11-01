@@ -22,6 +22,37 @@
       "ctrlEnter": "Ctrl+Enter",
       "enter": "Enter"
     },
+    "mention": {
+      "count": "{{shown}} of {{total}}",
+      "empty": {
+        "hint": "Tasks and runs of {{project}} are found by key, title and run number. Keep typing, or press Esc and the text stays as typed.",
+        "title": "Nothing matches “{{query}}”"
+      },
+      "hint": {
+        "close": "Close",
+        "insert": "Insert",
+        "move": "Move"
+      },
+      "keys": {
+        "enter": "Enter",
+        "esc": "Esc",
+        "move": "↑ ↓",
+        "tab": "Tab"
+      },
+      "matches": {
+        "one": "1 match for “{{query}}”",
+        "other": "{{count}} matches for “{{query}}”"
+      },
+      "run": "{{key}} · #{{number}}",
+      "section": {
+        "runs": "Runs",
+        "tasks": "Tasks"
+      },
+      "thisRun": "{{title}} · this run",
+      "typeToFilter": "Type to filter",
+      "unreadable": "The menu could not read them: {{reason}}",
+      "unreadableTitle": "Tasks and runs could not be read"
+    },
     "menu": {
       "afterTurn": "Waits until {{agent}} finishes its turn",
       "continueLater": "Waits until the run continues",

@@ -260,6 +260,7 @@ icons! {
   Sparkle => '\u{e47e}',
   Sparkles => '\u{e412}',
   Square => '\u{e167}',
+  SquareCheck => '\u{e559}',
   // The font's `edit`, which lucide renamed `square-pen`.
   SquarePen => '\u{e172}',
   SquarePlus => '\u{e173}',

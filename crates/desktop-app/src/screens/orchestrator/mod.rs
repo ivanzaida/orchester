@@ -80,6 +80,7 @@ use crate::{
     attachments::draft::DraftAttachments,
     chat::{self, follow::Follow},
     markdown::LinkHandler,
+    mention::MentionField,
   },
 };
 
@@ -125,7 +126,10 @@ struct View {
   focus: Signal<bool>,
   /// The message field has the focus.
   focused: Signal<bool>,
+  /// The message field, the field's @ menu and its mentions (`ui::mention`), and the box the menu opens over.
   input: ElementRef,
+  mention: MentionField,
+  mention_anchor: ElementRef,
   /// The send menu over the send button is open while the Orchestrator answers, and its chevron.
   menu: Signal<bool>,
   menu_anchor: ElementRef,
@@ -147,8 +151,10 @@ impl Component for OrchestratorScreen {
   type Props = Props;
 
   fn create(ctx: &mut Ctx) -> Self {
+    let (draft, focused) = (ctx.signal(String::new()), ctx.signal(false));
+    let mention = MentionField::new(ctx, draft.clone(), focused.clone());
     let view = View {
-      draft: ctx.signal(String::new()),
+      draft,
       attached: DraftAttachments::new(ctx, Vec::new()),
       of: ctx.signal(None),
       outgoing: ctx.signal(None),
@@ -157,8 +163,10 @@ impl Component for OrchestratorScreen {
       search: ctx.signal(String::new()),
       runs_on: ctx.signal(false),
       focus: ctx.signal(false),
-      focused: ctx.signal(false),
-      input: ElementRef::new(),
+      focused,
+      input: mention.element(),
+      mention,
+      mention_anchor: ElementRef::new(),
       menu: ctx.signal(false),
       menu_anchor: ElementRef::new(),
       send: send::send_action(ctx),
@@ -408,9 +416,10 @@ impl View {
   }
 
   /// A queued message taken back: its words go into the composer after what is written there, its files after the
-  /// draft's, with the focus there.
+  /// draft's, with the focus there. The facts its mentions carried are read again when it is sent again.
   fn take_back(&self, taken: &TakenBack) {
-    let (draft, words) = (self.draft.get_untracked(), taken.words.as_str());
+    let words = orchester_workspace::mentions::facts::said(&taken.words);
+    let draft = self.draft.get_untracked();
     let text = if draft.trim().is_empty() {
       words.to_owned()
     } else if words.trim().is_empty() {

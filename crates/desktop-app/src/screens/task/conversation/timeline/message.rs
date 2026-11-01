@@ -36,7 +36,7 @@ use super::{super::super::orchestrated::sent_line, Timeline, chips};
 pub(crate) use crate::ui::chat::links;
 use crate::ui::{
   attachments,
-  chat::{Avatar, agent_text, chat_row, delivery_line, person_message as bubble, person_side_message},
+  chat::{self, Avatar, agent_text, chat_row, delivery_line, person_message as bubble, person_side_message},
   icon::Icon,
 };
 
@@ -86,19 +86,26 @@ pub(in super::super) fn person_message(
   let delivery = delivery_line("conversation-delivery", (glyph, color), &words);
   let undelivered = super::super::composer::undelivered(ctx, entry);
   let id = format!("conversation-message-{}", entry.id);
-  let body: Arc<str> = if entry.attachments_only() {
-    Arc::from("")
-  } else {
-    entry.body.clone()
-  };
   let attached = attachments::sent::sent(ctx, &id, root, &entry.attachments);
+  // The person's words, with their mentions as links and without the facts the agent got with them.
+  let mut said = || {
+    if entry.attachments_only() {
+      None
+    } else {
+      chat::said::said(ctx, &id, &entry.body, project)
+    }
+  };
   let message = match entry.orchestrator {
     Some(from) => orchestrator_message(ctx, &id, (project, entry, from), delivery),
     None if entry.by_automation => {
+      let said = said();
       let author = ctx.t("conversation.byAutomation");
-      person_side_message(&id, (&author, &body, Some(entry.at)), (attached, Some(delivery)))
+      person_side_message(&id, (&author, said, Some(entry.at)), (attached, Some(delivery)))
     }
-    None => bubble(ctx, &id, (&body, Some(entry.at)), (attached, Some(delivery))),
+    None => {
+      let said = said();
+      bubble(ctx, &id, (said, Some(entry.at)), (attached, Some(delivery)))
+    }
   };
   message
     .with_children(undelivered)
@@ -170,11 +177,12 @@ pub(super) fn person_note(
   at: Option<Timestamp>,
   by: Option<orchester_core::run::Answerer>,
 ) -> Element {
+  let said = chat::plain_said(id, note);
   if by == Some(orchester_core::run::Answerer::Automation) {
     let author = ctx.t("conversation.byAutomation");
-    return person_side_message(id, (&author, note, at), (None, None)).into();
+    return person_side_message(id, (&author, said, at), (None, None)).into();
   }
-  bubble(ctx, id, (note, at), (None, None)).into()
+  bubble(ctx, id, (said, at), (None, None)).into()
 }
 
 /// How the Orchestrator chat went on with the run (ORC-45): its row, with the note the work returned with when there

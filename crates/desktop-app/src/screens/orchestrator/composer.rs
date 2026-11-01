@@ -39,6 +39,7 @@ use crate::{
     attachments::tray::{self, PutBack},
     composer::message_scrollbar,
     icon::{Icon, icon},
+    mention::MentionField,
     pressable::{inert, pressable},
     tooltip::Tooltip,
   },
@@ -85,6 +86,8 @@ pub(super) struct ComposerBox<'a> {
   /// The box starts a new conversation (`Composer` `QcfyZ` in `03 New conversation`): 12 over it and 28 between the
   /// message and its bar.
   pub(super) starts: bool,
+  /// The @ menu over the box (`ui::mention`).
+  pub(super) mentions: Element,
 }
 
 /// The box, and why the files last given were not attached under it.
@@ -120,6 +123,7 @@ pub(super) fn composer(ctx: &mut Ctx, view: &View, composer: ComposerBox<'_>) ->
   let boxed = Column::new()
     .id("orchestrator-composer")
     .describe("set_up", (!not_set_up).to_string())
+    .ref_element(view.mention_anchor.clone())
     .width(Dimension::Pct(100.0))
     .padding(
       Padding::new()
@@ -140,6 +144,7 @@ pub(super) fn composer(ctx: &mut Ctx, view: &View, composer: ComposerBox<'_>) ->
     .spacing(SpacingSize::Sm)
     .child(tray::drop_target(boxed, &view.attached))
     .with_children(tray::refusals(ctx, ATTACHMENTS, &view.attached))
+    .child(composer.mentions)
 }
 
 /// *Ctrl Enter* (*⌘ Enter* on macOS), the keys that send.
@@ -183,6 +188,8 @@ fn field(ctx: &Ctx, view: &View, composer: &ComposerBox<'_>, not_set_up: bool) -
   } else {
     PaletteColor::TextMuted
   };
+  let mention = view.mention.clone();
+  let chips = view.draft.with(|text| MentionField::tokens(text));
   TextInput::styled(view.draft.clone(), resolve(PaletteColor::TextPrimary))
     .placeholder_style(resolve(placeholder))
     .caret_color(PaletteColor::TextPrimary)
@@ -193,10 +200,16 @@ fn field(ctx: &Ctx, view: &View, composer: &ComposerBox<'_>, not_set_up: bool) -
     .scrollbar(message_scrollbar(ctx))
     .width(Dimension::Pct(100.0))
     .placeholder(&composer.placeholder)
-    .ref_element(view.input.clone())
+    .controller(view.mention.controller())
+    .tokens(chips)
     .on_focus(move || gained.set(true))
     .on_blur(move || lost.set(false))
-    .on_key_down(move |event: KeyboardEvent| keys.down(&event))
+    .on_key_down(move |event: KeyboardEvent| {
+      // The @ menu and the chips take their keys first: Enter inserts while the menu is open, Esc closes it.
+      if !mention.key(&event) {
+        keys.down(&event);
+      }
+    })
     .on_paste(view.attached.on_paste())
     .into()
 }

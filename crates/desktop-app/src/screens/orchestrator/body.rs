@@ -50,6 +50,7 @@ use crate::{
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
+    mention::{self, MenuProps},
     message::message_text,
     notice::{Notice, NoticeTone},
     state::load_error,
@@ -174,6 +175,18 @@ impl Foot<'_> {
         open: view.runs_on.clone(),
       },
     );
+    let mentions = mention::menu(
+      ctx,
+      MenuProps {
+        id: "orchestrator-composer",
+        field: view.mention.clone(),
+        anchor: view.mention_anchor.clone(),
+        root: project.open.repo_root.clone(),
+        project: Arc::from(project.open.project.name().as_str()),
+        own: None,
+        revision: project.feed.saves.get(),
+      },
+    );
     composer(
       ctx,
       view,
@@ -185,6 +198,7 @@ impl Foot<'_> {
         runs_on,
         set_up,
         starts,
+        mentions,
       },
     )
   }

@@ -14,6 +14,7 @@ use lurq::app::{
 use orchester_core::id::{ChatId, ChatMessageId};
 use orchester_workspace::{
   background,
+  mentions::facts::with_facts_in,
   messages::Message,
   orchestrator::{
     queue::{self, TakenBack, WhileAnswering},
@@ -95,6 +96,7 @@ pub(super) fn send_action(ctx: &mut Ctx) -> SendAction {
         message: outgoing.message,
         from_draft,
       };
+      let outgoing = with_facts(&project, outgoing).await?;
       if let Some(how) = how {
         queue::send_while_answering(&services.runners, &project, &outgoing, how).await?;
         return Ok(sent);
@@ -126,6 +128,17 @@ pub(super) fn send_action(ctx: &mut Ctx) -> SendAction {
       Ok(sent)
     }
   })
+}
+
+/// `outgoing` with the facts of the tasks and runs it mentions after the person's words (`mentions::facts`), read off
+/// the UI thread from `project`; nothing is sent when they cannot be read.
+async fn with_facts(project: &OpenProject, mut outgoing: Outgoing) -> Result<Outgoing, SendError> {
+  let (root, words) = (project.repo_root.clone(), outgoing.text.clone());
+  outgoing.text = background::run(move || with_facts_in(&root, &words))
+    .await
+    .and_then(|text| text)
+    .map_err(SendError::NotSent)?;
+  Ok(outgoing)
 }
 
 pub(super) fn stop_action(ctx: &mut Ctx) -> StopAction {

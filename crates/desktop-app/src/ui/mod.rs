@@ -42,6 +42,7 @@ pub mod loader;
 pub mod local_integration_error;
 pub(crate) mod local_metadata;
 pub mod markdown;
+pub mod mention;
 pub mod menu;
 pub mod menu_button;
 pub mod message;

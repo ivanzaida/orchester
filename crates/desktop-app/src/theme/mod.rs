@@ -73,7 +73,7 @@ pub use self::{
   cards::{CardsSpacing, CardsText, NOT_CHOSEN_OPACITY},
   chat_links::ChatLinkLooks,
   code::{CodeText, token_color},
-  composer::{ComposerColor, ComposerRadius},
+  composer::{ComposerColor, ComposerRadius, mention_chip},
   connections::{ConnectionsSpacing, ConnectionsText},
   conversation::{ConversationRadius, ConversationShadow, ConversationSpacing, ConversationText},
   date_picker::{DatePickerText, UNAVAILABLE_DAY_OPACITY},

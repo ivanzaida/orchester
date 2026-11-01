@@ -26,6 +26,7 @@ use orchester_ipc::Command;
 use orchester_workspace::{
   background,
   decisions::DecisionKind,
+  mentions::facts::with_facts_in,
   messages::{self, Message},
   runner::AnswerMark,
   tasks::{
@@ -273,8 +274,10 @@ impl ComposerState {
   }
 
   /// Puts `text`, the refused message `message`, into the composer, with the focus there; after what is
-  /// written already, if anything is. The message offers nothing more.
+  /// written already, if anything is. The message offers nothing more. The facts its mentions carried are read again
+  /// when it is sent again: only the person's words go back.
   pub(super) fn edit(&self, message: MessageId, text: &str) {
+    let text = orchester_workspace::mentions::facts::said(text);
     kept::handle(self.task, message, text);
     self.handled.set(Handled(kept::handled(self.task)));
     let draft = self.draft.get_untracked();
@@ -333,8 +336,9 @@ fn send_action(ctx: &mut Ctx) -> SendAction {
   })
 }
 
-/// Stores the message of `request` with its files as `prepared` offers, off the UI thread: the task as read and
-/// what follows the stored message.
+/// Stores the message of `request` with its files as `prepared` offers, off the UI thread, with the facts of the tasks
+/// and runs it mentions after the person's words (`mentions::facts`): the task as read and what follows the stored
+/// message.
 async fn store(
   request: &Request,
   prepared: Prepared,
@@ -348,12 +352,13 @@ async fn store(
     request.way,
   );
   background::run(move || {
-    let stored = store_answer_in(&root, &prepared, (key, way), (&text, &attachments), by);
+    let stored = with_facts_in(&root, &text)
+      .map(|text| store_answer_in(&root, &prepared, (key, way), (&text, &attachments), by));
     (prepared, stored)
   })
   .await
   .and_then(|(prepared, stored)| {
-    let stored = stored.map_err(|error| {
+    let stored = stored?.map_err(|error| {
       tracing::warn!(?error, "the message was not stored");
       error.message()
     })?;
@@ -457,8 +462,8 @@ async fn send(services: Services, request: Request) -> Result<Outcome, Message> 
   })
 }
 
-/// Tells the runner the plan's changes, which are words only: a request with attached files is refused, keeping
-/// them in the draft.
+/// Tells the runner the plan's changes, which are words only, with the facts of the tasks and runs they mention: a
+/// request with attached files is refused, keeping them in the draft.
 async fn send_plan_changes(
   services: &Services,
   request: Request,
@@ -468,7 +473,9 @@ async fn send_plan_changes(
   if !request.attachments.is_empty() {
     return Err(orchester_workspace::attachments::plan_changes_refused());
   }
-  let command = plan_changes(prepared, &request.text, (by, Some(version))).map_err(|error| error.message())?;
+  let (root, words) = (request.project.repo_root.clone(), request.text.clone());
+  let text = background::run(move || with_facts_in(&root, &words)).await??;
+  let command = plan_changes(prepared, &text, (by, Some(version))).map_err(|error| error.message())?;
   services
     .runners
     .control_run_in(&request.project, command)

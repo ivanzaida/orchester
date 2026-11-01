@@ -22,7 +22,7 @@ use super::{send::QueuedChange, timeline::TurnRow, turns::Arrival};
 use crate::ui::{
   attachments,
   button::{ActionButton, ButtonKind},
-  chat::{delivery_line, own_bubble},
+  chat::{delivery_line, own_bubble, said::said},
   icon::Icon,
 };
 
@@ -37,7 +37,9 @@ pub(super) fn opening_message(ctx: &mut Ctx, row: &TurnRow, key: &str) -> Elemen
     .align_items(Alignment::End)
     .child(delivery)
     .with_children(queued_actions(ctx, row));
-  own_bubble(&id, &row.turn.text, (attached, Some(under.into()))).into()
+  // The person's words, with their mentions as links and without the facts the Orchestrator got with them.
+  let said = said(ctx, &id, &row.turn.text, row.env.project);
+  own_bubble(&id, said, (attached, Some(under.into()))).into()
 }
 
 /// Where the message stands: its glyph, its color and its words.

@@ -16,8 +16,7 @@ pub mod names;
 mod place;
 pub mod presentation;
 pub mod references;
-
-use std::sync::Arc;
+pub mod said;
 
 use lurq::{
   app::{
@@ -112,24 +111,24 @@ pub fn chat_row(id: String, avatar: Avatar, (name, meta): (&str, &str), body: Ve
     .into()
 }
 
-/// *You*, the time when it is known, the bubble with `body` as written, the files attached to it (`attached`,
-/// [`super::attachments::sent`]) and `delivery` under it; `id` names the message. A message of attachments only has
-/// no bubble.
+/// *You*, the time when it is known, the bubble with what the message says (`said`, [`said::said`]), the files
+/// attached to it (`attached`, [`super::attachments::sent`]) and `delivery` under it; `id` names the message. A
+/// message of attachments only has no bubble.
 pub fn person_message(
   ctx: &mut Ctx,
   id: &str,
-  (body, at): (&Arc<str>, Option<Timestamp>),
+  (said, at): (Option<Element>, Option<Timestamp>),
   (attached, delivery): (Option<Element>, Option<Element>),
 ) -> Column {
   let you = ctx.t("conversation.you");
-  person_side_message(id, (&you, body, at), (attached, delivery))
+  person_side_message(id, (&you, said, at), (attached, delivery))
 }
 
 /// A message on the person's side as [`person_message`] shows it, written by `author` (the project's Orchestrator
 /// for one it sent the agents of a task) instead of *You*.
 pub fn person_side_message(
   id: &str,
-  (author, body, at): (&str, &Arc<str>, Option<Timestamp>),
+  (author, said, at): (&str, Option<Element>, Option<Timestamp>),
   (attached, delivery): (Option<Element>, Option<Element>),
 ) -> Column {
   let head = Row::new()
@@ -146,28 +145,35 @@ pub fn person_side_message(
         .variant(TypographyStyle::Caption)
         .nowrap()
     }));
-  message_column(id, Some(head), body, (attached, delivery))
+  message_column(id, Some(head), said, (attached, delivery))
 }
 
 /// The person's message without its *You* and time (`Your message` in the Orchestrator's `01 Conversation`
-/// `wRSL4`): the bubble with `body` as written, the files attached to it and `delivery` under it; `id` names it.
-pub fn own_bubble(id: &str, body: &Arc<str>, (attached, delivery): (Option<Element>, Option<Element>)) -> Column {
-  message_column(id, None, body, (attached, delivery))
+/// `wRSL4`): the bubble with what it says, the files attached to it and `delivery` under it; `id` names it.
+pub fn own_bubble(id: &str, said: Option<Element>, (attached, delivery): (Option<Element>, Option<Element>)) -> Column {
+  message_column(id, None, said, (attached, delivery))
+}
+
+/// What `body` says as written, without links (a note the person returned the work with); `id` names the message.
+pub fn plain_said(id: &str, body: &str) -> Option<Element> {
+  (!body.trim().is_empty()).then(|| {
+    Text::new(body)
+      .id(format!("{id}-text"))
+      .variant(TypographyStyle::Body)
+      .selectable(true)
+      .into()
+  })
 }
 
 fn message_column(
   id: &str,
   head: Option<Row>,
-  body: &Arc<str>,
+  said: Option<Element>,
   (attached, delivery): (Option<Element>, Option<Element>),
 ) -> Column {
-  // As the person wrote it, so the bubble hugs its words up to its widest (`pCzqz`): lurq's Markdown always
-  // fills its parent's width.
-  let bubble = (!body.trim().is_empty()).then(|| {
-    let said = Text::new(body)
-      .id(format!("{id}-text"))
-      .variant(TypographyStyle::Body)
-      .selectable(true);
+  // Words as the person wrote them hug the bubble up to its widest (`pCzqz`); words with mentions are lurq's
+  // Markdown ([`said::said`]), which fills it.
+  let bubble = said.map(|said| {
     Column::new()
       .id(format!("{id}-bubble"))
       .max_width(Dimension::Pct(BUBBLE_WIDTH))
