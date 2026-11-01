@@ -8,6 +8,7 @@ mod failure;
 mod harness;
 mod hub;
 mod models;
+mod project_sets;
 mod reads;
 mod regressions;
 mod shared;
