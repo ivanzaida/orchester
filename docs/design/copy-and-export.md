@@ -16,11 +16,14 @@ do the same in a terminal.
 | | | `Iogxc` 07b · Copy · Copied | The code block's button `PB5Az` shows a `check` in `success` and *Copied*; no message actions, because the pointer is on the code block |
 | | Row 7 `Nt744` | `ovxpJ` 07c · Export · header menu | A new … button in the chat header, open (`naGfn`, `Icon button/Active`), with menu `GqEXT` (`Menu`): *Copy conversation as Markdown* and *Export conversation…* (hover) |
 | | | `alIPD` 07d · Export · dialog | Dialog `hysCz` over the scrim, with *Messages only* chosen |
-| `Task page · redesign` `C3wC8` | Row 5 `PNBbE` | `w7TIt` 06 · Conversation · Copy | The pointer is on the Reviewer's message. Its head row shows `Message actions` `Lx2Cs`. The `rust · sender.rs` code block `chLpT` has *Copy* `HdtEG` |
-| | | `JB0f0` 06b · Conversation · Copied | The message button `CrKZp` shows a `check` in `success`, with the tooltip *Copied* |
-| | | `O3jhaZ` 06c · Conversation · Export in the … menu | The task header's … is pressed. The More menu `Y2KGi3` gains a group with *Copy conversation as Markdown* and *Export conversation…* (hover) |
-| | | `A2YMy` 06d · Conversation · Export dialog | Dialog `rbdgW` for the run, with *Messages and tool calls* chosen |
-| | | `Ezec2` 06e · Copy and export · states | The message action in its states: resting, hover, Copied, Failed. The code-head button in the same four states. *What each copies* |
+| `Task page · redesign` `C3wC8` | Row 9 · Copy and export · run Conversation (ORC-323) `PNBbE` | `w7TIt` 09 · Conversation · Copy | The pointer is on the Reviewer's message. Its head row shows `Message actions` `Lx2Cs`. The `rust · sender.rs` code block `chLpT` has *Copy* `HdtEG` |
+| | | `JB0f0` 09b · Conversation · Copied | The message button `CrKZp` shows a `check` in `success`, with the tooltip *Copied* |
+| | | `O3jhaZ` 09c · Conversation · Export in the … menu | The task header's … is pressed. The More menu `Y2KGi3` gains a group with *Copy conversation as Markdown* and *Export conversation…* (hover) |
+| | | `A2YMy` 09d · Conversation · Export dialog | Dialog `rbdgW` for the run, with *Messages and tool calls* chosen |
+| | | `Ezec2` 09e · Copy and export · states | The message action in its states: resting, hover, Copied, Failed. The code-head button in the same four states. *What each copies* |
+
+The Task page row is the board's last row, numbered 09 because 06 and 07 belong to the slash menu (ORC-318) and 08 to model
+and effort (ORC-590). The dialogs' scrims (`mq0ix`, `Vwf47`) sit at y 37, under the frame label, like the other dialogs.
 
 Exports at scale 1: `.tmp/design/ORC-323/<node>.png` (not committed). Pencil exports a nested frame without its board's
 theme, so the exports can render light. The canvas shows them dark.
@@ -31,9 +34,10 @@ page board had room below it, so nothing else moved.
 
 ## Copy on a message
 
-- The action shows on hover or on keyboard focus of the message, at the right end of its head row (name and time). The head
-  row reserves `control_height_sm`, so the message does not shift when the action appears.
-- It is a small toolbar: `surface_raised`, `border_strong`, `radius_md`, padding 1. It holds `Icon button/Small` with
+- The action shows on hover or on keyboard focus of the message, at the right end of its head row (name and time). Every
+  message head row is `control_height_sm` (24) high, with or without the action, so the message does not shift when the
+  action appears. Pencil cannot bind a size to a variable, so the frames hold the value 24.
+- It is a small toolbar, `control_height_sm` square: `surface_raised`, `border_strong`, `radius_md`, padding 1. It holds `Icon button/Small` with
   `copy`, which takes the `hover` fill under the pointer. `Tooltip` *Copy message* sits to its left, without a shortcut.
 - It applies to every message: the person's own, the Orchestrator's answers and an agent's messages in a run. Event lines,
   step dividers and cards have no Copy.
