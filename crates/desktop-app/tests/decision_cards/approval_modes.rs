@@ -145,6 +145,53 @@ fn card_approval_the_reviewer_that_could_not_run_says_why_and_opens_its_settings
   });
 }
 
+/// A request whose review timed out or whose answer could not be read says so in plain words, not that the reviewer
+/// could not run, and keeps *Reviewer settings* (ORC-586).
+#[test]
+fn card_approval_a_failed_review_names_how_it_failed() {
+  for (task, said) in [
+    ("Retry downloads on 503", "The reviewer didn't answer in time."),
+    ("Bump the JSON parser", "The reviewer's answer couldn't be read."),
+  ] {
+    let (mut window, ..) = opened_in(SCENARIO, task, "cards-approval-");
+    let card = came_card(&mut window);
+    assert_eq!(text(&mut window, &format!("{card}-title")), NOT_ALLOWED, "{task}");
+    assert!(
+      glyphs(&mut window, &format!("{card}-head")).contains(&Icon::ShieldAlert.glyph().to_string()),
+      "{task}: the head's glyph is a shield with an alert"
+    );
+    assert_eq!(text(&mut window, &format!("{card}-came-text")), said, "{task}");
+    assert_eq!(
+      text(&mut window, &format!("{card}-reviewer-settings")),
+      "Reviewer settings",
+      "{task}"
+    );
+  }
+}
+
+/// An Autopilot step has no allowed list for MCP tools: its call's headline names the tool; a Manual step's call is
+/// still not on its allowed list (ORC-586).
+#[test]
+fn card_approval_an_mcp_call_is_headed_by_its_mode() {
+  for (task, title, reason) in [
+    (
+      "Redraw the retry banner",
+      "Builder asks to call batch_design",
+      "The reviewer wasn't sure: “Can't tell which files the design tool writes.”",
+    ),
+    (
+      "Sketch the retry banner",
+      "Builder asks to call a tool not on its allowed list",
+      "Not on Builder's allowed list.",
+    ),
+  ] {
+    let (mut window, ..) = opened_in(SCENARIO, task, "cards-approval-");
+    let card = came_card(&mut window);
+    assert_eq!(text(&mut window, &format!("{card}-title")), title, "{task}");
+    assert_eq!(text(&mut window, &format!("{card}-came-text")), reason, "{task}");
+  }
+}
+
 /// The card is compact, as 04c draws it: none of the full card's explanation, subject, command box or facts, and the
 /// other answers only once *More answers* is pressed.
 #[test]

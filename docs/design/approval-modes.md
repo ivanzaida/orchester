@@ -111,17 +111,22 @@ ORC-610): Autopilot's CLI hands even those calls to Orchester, which approves th
   `outside` for a write outside the folders, else `notAllowed`), as does a project without a reviewer (`notAllowed`);
   the reviewer's ask is `reviewerDenied`, a review without a verdict `reviewerCouldNotRun`.
 - A review without a verdict (its CLI failed, it timed out, its answer could not be read) says the reviewer couldn't
-  run, never that it was unsure (ORC-611): the card says why — for a CLI that failed, what Orchester knows of the
-  reviewer's account (its plan limit reached, with when it resets; nobody signed in), else that the CLI failed — with
-  *Reviewer settings*, which opens Project settings › Runs. There the Reviewer row says, in its hint's place, when the
-  reviewer's account cannot run or its last review failed, and the Estimates row when the estimator's last request
-  could not run (`run::review::ReviewerHealth`, read by `Workspace::reviewer_health`).
+  run, never that it was unsure (ORC-611), and keeps how it failed with the reason (`failure`: `could_not_run`,
+  `timed_out`, `unreadable`; ORC-586). The card says it in plain words — *The reviewer didn't answer in time.*, *The
+  reviewer's answer couldn't be read.*, or, for a CLI that failed, what Orchester knows of the reviewer's account (its
+  plan limit reached, with when it resets; nobody signed in), else that the CLI failed — with *Reviewer settings*,
+  which opens Project settings › Runs. A reason recorded before the kind was kept takes it from the recorded review.
+  There the Reviewer row says, in its hint's place, when the reviewer's account cannot run or its last review failed,
+  and the Estimates row when the estimator's last request could not run (`run::review::ReviewerHealth`, read by
+  `Workspace::reviewer_health`).
 - The reviewer's verdict stays *approve* or *ask*: on Manual's question an ask reads as a denial, on Autopilot's as
   doubt.
 - Each request records how it was answered (`autopilot`, `profile`, `reviewer` with its reason, `person`, which
   includes automation answering in the person's place and the person's own rules) and, while it waits for the person
-  and after, why it came (`tool_approvals.answered_as`, `came_to_person`); `get_run`'s `requests` and `list_approvals`'
-  `came_to_you` show them.
+  and after, why it came (`tool_approvals.answered_as`, `came_to_person`), with `autopilot: true` when it came by
+  Autopilot's rules; `get_run`'s `requests` and `list_approvals`' `came_to_you` show them. An Autopilot step has no
+  allowed list for MCP tools, so the card of its MCP call that came by the reviewer or the step's limits says what was
+  asked (*Builder asks to call batch_design*); Manual's says *asks to call a tool not on its allowed list*.
 - A request that came to the person by Autopilot's rules is looked at again by Manual's rules once its run drops to
   Manual (the worker reads the mode at its regular beat while such a request waits): it is no longer waiting for the
   person while the reviewer judges it. A review whose run changed mode meanwhile is dropped, and the request is answered

@@ -2,8 +2,8 @@
 //! `vO7CW` and the cards beside it in 04c `vZcoN`, `WOOIC` in 04b `p6tXIO`): its head says what the agent asks
 //! (`Head` `V65HM4`), and its reason line why it came (`Reason` `R332d`) — a path outside the worktree (with the
 //! path), a request not on the agent's allowed list, the reviewer unsure or denying it (with its words) or unable to
-//! run (why, with a link to its settings: [`super::could_not_run`]), a push to a remote, another ref (with the run's
-//! branch).
+//! judge it (how its review failed, with a link to its settings: [`super::could_not_run`]), a push to a remote,
+//! another ref (with the run's branch).
 
 use std::sync::Arc;
 
@@ -19,7 +19,7 @@ use lurq::{
 use orchester_core::run::{CameToPerson, PendingToolApproval, PersonReason};
 use orchester_workspace::display;
 
-use super::super::Place;
+use super::{super::Place, could_not_run};
 use crate::{
   theme::{CardsText, ExtraTypography, IconSize},
   ui::icon::{Icon, icon},
@@ -46,7 +46,7 @@ pub(super) fn head(
     .align_items(Alignment::Center)
     .child(icon(glyph(came.reason), IconSize::Md, PaletteColor::Warning))
     .child(
-      Text::new(&title(ctx, request, came.reason))
+      Text::new(&title(ctx, request, came))
         .id(format!("{id}-title"))
         .variant(CardsText::ApprovalTitle.role())
         .nowrap()
@@ -78,9 +78,11 @@ const fn glyph(reason: PersonReason) -> Icon {
   }
 }
 
-/// What the agent asks, by why it came: *Builder asks to edit a file outside the worktree*.
-fn title(ctx: &Ctx, request: &PendingToolApproval, reason: PersonReason) -> Arc<str> {
-  let key = match (reason, request.command) {
+/// What the agent asks, by why it came: *Builder asks to edit a file outside the worktree*. An Autopilot step has no
+/// allowed list for MCP tools, so its call is named as asked: *Builder asks to call batch_design*.
+fn title(ctx: &Ctx, request: &PendingToolApproval, came: &CameToPerson) -> Arc<str> {
+  let agent = request.agent.as_str();
+  let key = match (came.reason, request.command) {
     (PersonReason::Outside, true) => "cards.approval.asks.outside",
     (PersonReason::Outside, false) => "cards.approval.asks.outsideTool",
     (
@@ -96,11 +98,23 @@ fn title(ctx: &Ctx, request: &PendingToolApproval, reason: PersonReason) -> Arc<
       | PersonReason::ReviewerCouldNotRun
       | PersonReason::ReviewerDenied,
       false,
+    ) if came.autopilot => {
+      return ctx.t_args(
+        "cards.approval.asks.callTool",
+        [("agent", agent), ("tool", request.action.as_str())],
+      );
+    }
+    (
+      PersonReason::NotAllowed
+      | PersonReason::ReviewerUnsure
+      | PersonReason::ReviewerCouldNotRun
+      | PersonReason::ReviewerDenied,
+      false,
     ) => "cards.approval.asks.notAllowedTool",
     (PersonReason::Push, _) => "cards.approval.asks.push",
     (PersonReason::Refs, _) => "cards.approval.asks.refs",
   };
-  ctx.t_args(key, [("agent", request.agent.as_str())])
+  ctx.t_args(key, [("agent", agent)])
 }
 
 /// The reason line `{id}-came` of a request of `agent` that `came` to the person, at `place` ([`reason_line`]).
@@ -145,7 +159,8 @@ fn words(ctx: &Ctx, (place, agent): (&Place, &str), came: &CameToPerson) -> Arc<
     }
     (PersonReason::ReviewerUnsure, None) => ctx.t("cards.approval.cameToYou.reviewerUnsureSilent"),
     // Why it could not run is said by `could_not_run`, once the reviewer is read.
-    (PersonReason::ReviewerCouldNotRun, _) => ctx.t("cards.approval.cameToYou.reviewerCouldNotRunSilent"),
+    (PersonReason::ReviewerCouldNotRun, _) => could_not_run::failed_words(ctx, came.failure)
+      .unwrap_or_else(|| ctx.t("cards.approval.cameToYou.reviewerCouldNotRunSilent")),
     (PersonReason::ReviewerDenied, Some(reason)) => ctx.t_args(
       "cards.approval.cameToYou.reviewerDenied",
       [("reason", reason), ("agent", agent)],

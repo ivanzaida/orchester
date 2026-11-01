@@ -1,9 +1,11 @@
 //! The reason line of a request the reviewer could not judge (ORC-611): *The reviewer couldn't run: its account
 //! reached its plan limit, which resets Thu 09:00.*, from the review the request recorded and what Orchester knows of
-//! the reviewer's account ([`crate::screens::reviewer_trouble`]), then *Reviewer settings*, which opens Project
-//! settings › Runs, where the Reviewer row says the same. Its own component, so the read of the reviewer is its own.
+//! the reviewer's account ([`crate::screens::reviewer_trouble`]); *The reviewer didn't answer in time.* or *The
+//! reviewer's answer couldn't be read.* when its review failed so (ORC-586); then *Reviewer settings*, which opens
+//! Project settings › Runs, where the Reviewer row says the same. Its own component, so the read of the reviewer is its
+//! own.
 
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc};
 
 use lurq::{
   app::{
@@ -58,10 +60,13 @@ pub(super) fn line(
   let Some(open) = place.open(ctx) else {
     return came::line(ctx, id, (place, agent), came);
   };
-  let failure = match shown.and_then(|shown| shown.review.as_ref()) {
-    Some(Review::Failed { failure, .. }) => Some(*failure),
-    _ => None,
-  };
+  // A reason recorded before the kind was kept has it from the recorded review alone.
+  let failure = came
+    .failure
+    .or_else(|| match shown.and_then(|shown| shown.review.as_ref()) {
+      Some(Review::Failed { failure, .. }) => Some(*failure),
+      _ => None,
+    });
   ctx.mount_keyed::<CouldNotRun>(
     &format!("{id}-could-not-run"),
     Props {
@@ -71,6 +76,16 @@ pub(super) fn line(
       failure,
     },
   )
+}
+
+/// How the review failed in plain words, where that alone says it: *The reviewer didn't answer in time.*, *The
+/// reviewer's answer couldn't be read.*; `None` for a reviewer that could not run, whose words need its account.
+pub(super) fn failed_words(ctx: &Ctx, failure: Option<ReviewFailure>) -> Option<Arc<str>> {
+  match failure? {
+    ReviewFailure::TimedOut => Some(ctx.t("cards.approval.cameToYou.reviewerTimedOut")),
+    ReviewFailure::Unreadable => Some(ctx.t("cards.approval.cameToYou.reviewerUnreadable")),
+    ReviewFailure::CouldNotRun | ReviewFailure::NoReviewer => None,
+  }
 }
 
 pub(super) struct CouldNotRun;
@@ -88,12 +103,13 @@ impl Component for CouldNotRun {
     let trouble = health
       .zip(props.failure)
       .and_then(|(health, failure)| health.request(failure, Timestamp::now()));
-    let words = match trouble {
-      Some(trouble) => {
+    let words = match (failed_words(ctx, props.failure), trouble) {
+      (Some(words), _) => words,
+      (None, Some(trouble)) => {
         let reason = reviewer_trouble::reason(ctx, trouble, Timestamp::now());
         ctx.t_args("cards.approval.cameToYou.reviewerCouldNotRun", [("reason", &*reason)])
       }
-      None => ctx.t("cards.approval.cameToYou.reviewerCouldNotRunSilent"),
+      (None, None) => ctx.t("cards.approval.cameToYou.reviewerCouldNotRunSilent"),
     };
     let link = settings_link(ctx, &props);
     reason_line(&props.id, PersonReason::ReviewerCouldNotRun, &words, Some(link))
