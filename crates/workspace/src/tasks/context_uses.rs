@@ -10,7 +10,24 @@ use orchester_core::{
 };
 use orchester_store::{ProjectDb, StoreError};
 
+use super::detail::{RunView, StepView};
 use crate::messages::{self, Message};
+
+impl RunView {
+  /// The agent steps whose session is at work now, in pipeline order: not a tool step, and its latest execution runs
+  /// or waits for the person in its session. The context meter shows the first's reading (ORC-308).
+  pub fn sessions_at_work(&self) -> impl Iterator<Item = &StepView> {
+    self
+      .working_steps()
+      .filter(|step| !step.tool_step && step.execution.is_some())
+  }
+
+  /// The step whose session is at work, while `execution` is that step's latest execution; `None` for an earlier
+  /// execution of it, a finished step's or a tool step's.
+  pub fn session_at_work(&self, execution: StepExecutionId) -> Option<&StepView> {
+    self.sessions_at_work().find(|step| step.execution == Some(execution))
+  }
+}
 
 /// The latest reading of `execution`'s session: that of its latest invocation that recorded one, as a resumed
 /// session's later invocation that reported nothing yet goes on with the context before. `None` while none did.

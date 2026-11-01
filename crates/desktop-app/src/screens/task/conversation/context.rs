@@ -15,7 +15,6 @@ use lurq::{
 use orchester_core::{
   connection::context_use::ContextUse,
   id::{RunId, StepExecutionId},
-  run::StepStatus,
 };
 use orchester_workspace::{
   background,
@@ -31,35 +30,22 @@ use crate::{
   ui::context_meter::{ContextMeterProps, MeterPlace, MeterReading, context_meter},
 };
 
-/// The agent step of `run` at work now: running, or waiting for the person in its session.
-pub(super) fn at_work(run: &RunView) -> Option<&StepView> {
-  run.steps.iter().find(|step| is_at_work(step))
-}
-
-fn is_at_work(step: &StepView) -> bool {
-  !step.tool_step
-    && step.execution.is_some()
-    && matches!(step.status, Some(StepStatus::Running | StepStatus::Waiting(_)))
-}
-
-/// The meter on the divider of `execution` of `run`, while it is its step's latest and that step is at work.
+/// The meter on the divider of `execution` of `run`, while it is its step's latest and that step's session is at work
+/// ([`RunView::session_at_work`]).
 pub(super) fn on_divider(
   ctx: &mut Ctx,
   project: &ShownProject,
   run: &RunView,
   execution: Option<StepExecutionId>,
 ) -> Option<Element> {
-  let step = run
-    .steps
-    .iter()
-    .find(|step| step.execution.is_some() && step.execution == execution && is_at_work(step))?;
+  let step = run.session_at_work(execution?)?;
   let id = format!("conversation-context-step-{:02}", step.number);
   meter(ctx, project, (run, step), (id, MeterPlace::Divider))
 }
 
-/// The meter in the composer's bar, of the step of `run` at work.
+/// The meter in the composer's bar, of the first step of `run` whose session is at work.
 pub(super) fn in_composer(ctx: &mut Ctx, project: &ShownProject, run: &RunView) -> Option<Element> {
-  let step = at_work(run)?;
+  let step = run.sessions_at_work().next()?;
   meter(
     ctx,
     project,
@@ -74,10 +60,11 @@ fn meter(
   (run, step): (&RunView, &StepView),
   (id, place): (String, MeterPlace),
 ) -> Option<Element> {
+  let execution = step.execution?;
   let props = StepContextProps {
     project: project.clone(),
     run: run.id(),
-    execution: step.execution?,
+    execution,
     meter: ContextMeterProps {
       id: id.as_str().into(),
       reading: step.context,
@@ -86,7 +73,9 @@ fn meter(
       place,
     },
   };
-  Some(ctx.mount_keyed::<StepContext>(&id, props))
+  // Keyed by the execution it reads: another execution's meter (the next step's, a retry's) starts afresh from the
+  // reading the task was read with, never from the reading this one last read.
+  Some(ctx.mount_keyed::<StepContext>(&format!("{id}:{execution}"), props))
 }
 
 #[derive(Clone, PartialEq)]
