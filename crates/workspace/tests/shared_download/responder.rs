@@ -373,7 +373,7 @@ fn refused() -> (u16, Value) {
 }
 
 fn server() -> Value {
-  json!({ "name": "Kontur team", "api_version": 3, "needs_setup": false, "cloud": null, "certificate": null,
+  json!({ "name": "Kontur team", "api_version": orchester_api::TEAM_API_VERSION, "needs_setup": false, "cloud": null, "certificate": null,
     "version": "0.2.0" })
 }
 
@@ -394,7 +394,7 @@ fn joined() -> Value {
 
 fn shared_project(base: &str) -> Value {
   json!({ "id": PROJECT, "slug": SLUG, "address": format!("{base}/{SLUG}"), "key": KEY, "name": NAME,
-    "remote_hint": null, "role": "owner", "next_number": 4 })
+    "remote_hint": null, "role": "admin", "next_number": 4 })
 }
 
 fn attribution() -> Value {

@@ -1084,6 +1084,13 @@ explicitly chosen decision connection and model with a validated threshold (0.80
 disconnected and no-longer-listed choices without fallback, and exposes the person-only rule for hosted servers.
 Language defaults and effort remain unchanged. Storage and execution of decision reviewers belong to later tasks.
 Tests: `orchester-core --test decision_reviewer_choice decision_reviewer_choice`, `--test auto_mode_reviewers auto_mode`.
+OP-144 / S1 public prerequisite · Workspace `Admin` / `Member` contract, inherited server-admin capabilities and a
+last-workspace-admin invariant guard in core; API 4 role, admin-contact and error shapes. Existing local SQLite
+role encodings are preserved by the store adapter. Twenty focused core/API/store tests and `tools/check.ps1` passed.
+Server migrations,
+endpoint enforcement and platform dependency pins remain OP-144 in `ivanzaida/orchester-platform`. Contract:
+`docs/architecture/workspace-roles.md`.
+
 ORC-403 · A ready step that waits for an agent slot says so · branch `orchester/orc-403-run-1` (implemented 2026-10-30;
 pipeline QA scenarios, Review and Verify follow). The runner reports ready agent steps held back only by the slots in
 `WorkSummary.slot_waits` (protocol 33); nothing is stored. `get_run` gives `status: { state: "pending", waits_for:

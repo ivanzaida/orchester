@@ -182,7 +182,7 @@ fn base_branch_source_a_shared_tasks_base_stays_outside_its_revision() {
     server: ServerId::generate(),
     project: ProjectId::generate(),
     key: ProjectKey::new("ORC").expect("key"),
-    role: Some(MemberRole::Owner),
+    role: Some(MemberRole::Admin),
     joined_at: at(100),
     cursor: 7,
     last_synced_at: at(100),

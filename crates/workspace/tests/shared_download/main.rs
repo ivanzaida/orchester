@@ -113,7 +113,7 @@ impl Linked {
       server,
       project: Responder::project(),
       key: ProjectKey::new(KEY).expect("key"),
-      role: Some(MemberRole::Owner),
+      role: Some(MemberRole::Admin),
       joined_at: Timestamp::now(),
       cursor: 0,
       last_synced_at: Timestamp::now(),

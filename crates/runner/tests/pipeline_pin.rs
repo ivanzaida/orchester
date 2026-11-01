@@ -127,7 +127,7 @@ async fn shared_queued_task_runs_from_the_cache_unchanged() {
     server: ServerId::generate(),
     project: ProjectId::generate(),
     key: ProjectKey::new("KON").expect("key"),
-    role: Some(MemberRole::Owner),
+    role: Some(MemberRole::Admin),
     joined_at: now,
     cursor: 0,
     last_synced_at: now,

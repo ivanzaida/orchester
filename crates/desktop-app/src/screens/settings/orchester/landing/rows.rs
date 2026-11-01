@@ -130,7 +130,7 @@ fn facts(ctx: &mut Ctx, landing: &Landing) -> Element {
     .as_ref()
     .map_or_else(|| ctx.t("sharing.landing.noHint"), |hint| Arc::from(hint.as_str()));
   let role = match project.role {
-    Some(MemberRole::Owner) => ctx.t("sharing.landing.owner"),
+    Some(MemberRole::Admin) => ctx.t("sharing.landing.owner"),
     Some(MemberRole::Member) | None => ctx.t("sharing.landing.member"),
   };
   fact_rows(ctx, [project.name.as_str(), &*server, &*hint, &*role])

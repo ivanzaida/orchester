@@ -50,7 +50,7 @@ pub enum MembersRead {
 impl ProjectMembers {
   /// The members who are the project's owners.
   pub fn owners(&self) -> impl Iterator<Item = &SharedMember> {
-    self.members.iter().filter(|member| member.role == MemberRole::Owner)
+    self.members.iter().filter(|member| member.role == MemberRole::Admin)
   }
 
   pub fn live(&self) -> bool {
@@ -89,7 +89,7 @@ impl ProjectServer {
       Ok(listed) => {
         let mut members: Vec<SharedMember> = listed.members.into_iter().map(shared_member).collect();
         // Owners first, then by when they were added, as the cache keeps them.
-        members.sort_by_key(|member| (member.role != MemberRole::Owner, member.added_at));
+        members.sort_by_key(|member| (member.role != MemberRole::Admin, member.added_at));
         let admins: Vec<ServerAdmin> = listed.admins.into_iter().map(server_admin).collect();
         let (kept, read_at, me) = (members.clone(), Timestamp::now(), self.me());
         background::run(move || {

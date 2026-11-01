@@ -26,7 +26,7 @@ impl Client {
   }
 
   /// `GET /projects?slug=`: the project at the address ending in `slug`. `403 not_member` names the project and its
-  /// owners when the person is not a member; `404` when there is none.
+  /// workspace admins when the person is not a member; `404` when there is none.
   pub async fn project_by_slug(&self, token: &SecretValue, slug: &str) -> Result<SharedProject, ClientError> {
     let mut url = self.address.endpoint("/projects")?;
     url.query_pairs_mut().append_pair("slug", slug);
@@ -83,7 +83,7 @@ impl Client {
     Ok(response.member)
   }
 
-  /// `PATCH …/members/{user}`: the last owner cannot become a member (`409 last_owner`).
+  /// `PATCH …/members/{user}`: the last workspace admin cannot become a member (`409 last_workspace_admin`).
   pub async fn change_member(
     &self,
     token: &SecretValue,
@@ -98,7 +98,7 @@ impl Client {
     Ok(response.member)
   }
 
-  /// `DELETE …/members/{user}`: by an owner, or the member themself (Leave); their claims are
+  /// `DELETE …/members/{user}`: by a workspace admin, server admin or the member themself (Leave); their claims are
   /// released.
   pub async fn remove_member(&self, token: &SecretValue, project: ProjectId, user: UserId) -> Result<(), ClientError> {
     let path = format!("/projects/{project}/members/{user}");

@@ -568,7 +568,7 @@ fn snapshot(state: &State, token: &str) -> String {
       key: "ORC".to_owned(),
       name: "Orchester".to_owned(),
       remote_hint: None,
-      role: Some(if owner { MemberRole::Owner } else { MemberRole::Member }),
+      role: Some(if owner { MemberRole::Admin } else { MemberRole::Member }),
       next_number: u64::try_from(state.tasks.len()).expect("a count") + 1,
     },
     members: Vec::new(),

@@ -38,14 +38,14 @@ pub struct Member {
   pub added_at: i64,
 }
 
-/// A project as the server admin manages it: admins see every project, owners theirs.
+/// A project as an administrator manages it: server admins see every workspace, workspace admins theirs.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ManagedProject {
   #[serde(flatten)]
   pub project: SharedProject,
   pub members: u32,
   pub open_invites: u32,
-  pub owners: Vec<UserRef>,
+  pub admins: Vec<UserRef>,
   pub created_at: i64,
   pub created_by: UserRef,
 }
@@ -73,7 +73,7 @@ pub struct ProjectCreate {
   pub tasks: Vec<UploadTask>,
 }
 
-/// `POST /projects` (admins): a project by name and slug; the caller becomes its owner.
+/// `POST /projects` (server admins): a project by name and slug; the caller becomes a workspace admin.
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct NewProject {
@@ -169,7 +169,7 @@ pub struct ProjectCreated {
   pub cursor: u64,
   pub dropped_links: Vec<DroppedLink>,
 }
-/// A server admin as a project's members list names them: they change the project's configuration as its owners do,
+/// A server admin as a project's members list names them: they change configuration as its workspace admins do,
 /// whether or not they are members (`docs/architecture/server.md`, row 72).
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ServerAdmin {

@@ -252,7 +252,7 @@ fn on_server(server: &TeamServer, resource: ResourceId) -> Vec<(u32, Option<u32>
 #[tokio::test(flavor = "multi_thread")]
 async fn live_updates_an_owner_publishes_online_and_offline_and_the_offline_version_gets_its_number_on_reconnect() {
   let (server, style) = style();
-  let alice = Computer::new(&server, ALICE, MemberRole::Owner);
+  let alice = Computer::new(&server, ALICE, MemberRole::Admin);
   alice.cache_first(&server, style).await;
 
   let v2 = alice.publish(&server, style, 1, "v2").await.expect("published");
@@ -299,7 +299,7 @@ async fn live_updates_an_owner_publishes_online_and_offline_and_the_offline_vers
 async fn live_updates_two_publishes_from_one_base_give_the_second_a_version_conflict_the_admin_decides() {
   let (server, style) = style();
   server.make_admin(BOB);
-  let alice = Computer::new(&server, ALICE, MemberRole::Owner);
+  let alice = Computer::new(&server, ALICE, MemberRole::Admin);
   let bob = Computer::new(&server, BOB, MemberRole::Member);
   bob.db().set_server_admin(true).expect("the server's admin");
   alice.cache_first(&server, style).await;
@@ -336,7 +336,7 @@ async fn live_updates_two_publishes_from_one_base_give_the_second_a_version_conf
 async fn live_updates_after_a_version_conflict_the_admin_compares_and_opens_their_draft_on_the_newer_version() {
   let (server, style) = style();
   server.make_admin(BOB);
-  let alice = Computer::new(&server, ALICE, MemberRole::Owner);
+  let alice = Computer::new(&server, ALICE, MemberRole::Admin);
   let bob = Computer::new(&server, BOB, MemberRole::Member);
   bob.db().set_server_admin(true).expect("the server's admin");
   alice.cache_first(&server, style).await;
@@ -403,7 +403,7 @@ async fn live_updates_after_a_version_conflict_the_admin_compares_and_opens_thei
 async fn live_updates_the_libraries_read_each_resources_publisher_and_the_versions_that_wait_here() {
   let (server, style) = style();
   server.make_admin(BOB);
-  let alice = Computer::new(&server, ALICE, MemberRole::Owner);
+  let alice = Computer::new(&server, ALICE, MemberRole::Admin);
   let bob = Computer::new(&server, BOB, MemberRole::Member);
   bob.db().set_server_admin(true).expect("the server's admin");
   alice.cache_first(&server, style).await;
@@ -489,7 +489,7 @@ async fn live_updates_a_members_draft_and_publish_answer_not_admin_here_and_from
 #[tokio::test(flavor = "multi_thread")]
 async fn live_updates_a_new_skill_is_created_on_the_server_with_its_parts_uploaded_by_hash() {
   let server = TeamServer::start(&[(ALICE, "Alice Moreau")], &[]);
-  let alice = Computer::new(&server, ALICE, MemberRole::Owner);
+  let alice = Computer::new(&server, ALICE, MemberRole::Admin);
   let content = b"One line per change.".to_vec();
   let hash = alice.db().put_blob("text/markdown", &content).expect("a part");
   let file = SkillFile {
