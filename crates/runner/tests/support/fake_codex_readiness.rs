@@ -23,23 +23,38 @@ pub fn status(session: &mut Session, message: &Value) {
     } else {
       "connected"
     };
-    servers.retain(|server| !(scenario.contains("missing") && server["name"] == "readiness"));
+    let chat = super::fake_codex_chat::is_chat(&session.args);
+    let name = if chat {
+      "orchester"
+    } else if scenario.contains("orchester") {
+      "Orchester"
+    } else {
+      "readiness"
+    };
+    servers.retain(|server| !(scenario.contains("missing") && server["name"] == name));
     for server in &mut servers {
-      if server["name"]
-        == if scenario.contains("orchester") {
-          "Orchester"
-        } else {
-          "readiness"
-        }
-      {
+      if server["name"] == name {
         server["runtimeStatus"] = json!(state);
         if state == "failed" {
-          let token = std::env::var("ORCHESTER_APPROVAL_TOKEN").expect("relay token");
+          let variable = if chat {
+            session
+              .args
+              .iter()
+              .find_map(|arg| arg.strip_prefix("mcp_servers.orchester.bearer_token_env_var="))
+              .expect("chat token variable")
+              .trim_matches('"')
+          } else {
+            "ORCHESTER_APPROVAL_TOKEN"
+          };
+          let token = std::env::var(variable).expect("tools token");
           server["toolsError"] = json!(format!("startup refused token {token}\nsecond line"));
         }
       }
     }
     eprintln!("mcp-readiness: {state}");
+    if chat {
+      super::fake_codex_chat::append_log(session, &[format!("mcp-readiness: {state}")]);
+    }
     if target.is_some() && scenario.contains("silent") {
       return;
     }

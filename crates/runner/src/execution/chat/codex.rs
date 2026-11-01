@@ -11,7 +11,10 @@
 //! waits for more. A stopped or timed-out turn keeps what Codex reported it spent so far. On the connection's API
 //! provider App Server starts with the provider's overrides and key as a step's does ([`OnProvider`]).
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+  collections::{BTreeMap, BTreeSet},
+  time::Duration,
+};
 
 use orchester_core::{
   agent_files::skills::RepositorySkills,
@@ -152,6 +155,8 @@ impl Turn {
     }
     let mut seen = Seen::default();
     let mut steering = Steering::default();
+    let mut beat = tokio::time::interval(Duration::from_millis(100));
+    beat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let limit = tokio::time::sleep(self.time_limit);
     tokio::pin!(limit);
     loop {
@@ -181,6 +186,16 @@ impl Turn {
           Some(ProcessEvent::Exited(exit)) => return seen.ended(&exit),
           None => return seen.ended(&ProcessExit::WaitFailed { reason: "the CLI's output ended".to_owned() }),
         },
+        _ = beat.tick(), if !seen.stopped && !seen.finished && seen.timed_out.is_none() => {
+          if let Err(failure) = session.poll_servers(&process).await {
+            seen.failure.get_or_insert(match failure {
+              AppServerFailure::NotSignedIn(_) => TurnFailure::NotSignedIn,
+              AppServerFailure::Protocol(reason) => TurnFailure::Failed { reason },
+            });
+            seen.finished = true;
+            process.terminate();
+          }
+        }
         Some(message) = steers.recv(), if !seen.stopped && !seen.finished && seen.timed_out.is_none() => {
           self.steer_codex((&session, &process), &mut steering, message).await;
         }
