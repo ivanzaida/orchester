@@ -1001,6 +1001,12 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
+ORC-555 · Decision reviewer request and answer · branch `orchester/orc-555-run-1` (implemented 2026-11-01).
+Runner pure functions build the six System One questions from core's shared, bounded and redacted review state,
+keep agent data apart as untrusted, substitute Autopilot's roots policy, and strictly parse choice/noul probabilities
+into a decision verdict. Documentation-derived fixtures cover Jev and Laya shapes; no live calls were made.
+HTTP execution remains ORC-558. Tests: `orchester-runner --test system_one_request system_one_request`.
+
 ORC-557 · Decision reviewer choice · branch `orchester/orc-557-run-1` (implemented 2026-11-01). Core resolves an
 explicitly chosen decision connection and model with a validated threshold (0.80 by default), distinguishes gone,
 disconnected and no-longer-listed choices without fallback, and exposes the person-only rule for hosted servers.
