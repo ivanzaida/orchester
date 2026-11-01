@@ -39,7 +39,7 @@ pub(in crate::orchestrator) async fn call(
   }
   let called = async {
     asked_in_turn(scope, kind).await?;
-    let writes = allows(services).await?;
+    let writes = allows(services, scope).await?;
     run(services, scope, (name, arguments), writes).await
   }
   .await;
@@ -101,10 +101,10 @@ async fn asked_in_turn(scope: &ChatScope, kind: Kind) -> Result<(), ToolError> {
   Err(refused("person_only", Message::new("orchestrator.git.onItsOwn")))
 }
 
-/// Whether the person lets the Orchestrator write with git.
-async fn allows(services: &Services) -> Result<bool, ToolError> {
-  let workspace = services.workspace().clone();
-  blocking(move || Ok(workspace.orchestrator_allows(OrchestratorConsent::WriteGit)?)).await
+/// Whether the person lets the Orchestrator write with git in `scope`'s project.
+async fn allows(services: &Services, scope: &ChatScope) -> Result<bool, ToolError> {
+  let (workspace, root) = (services.workspace().clone(), scope.root.clone());
+  blocking(move || Ok(workspace.orchestrator_allows(&root, OrchestratorConsent::WriteGit)?)).await
 }
 
 /// How a write went, as its action keeps it.

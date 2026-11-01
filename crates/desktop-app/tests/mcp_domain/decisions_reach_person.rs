@@ -96,7 +96,7 @@ fn decisions_reach_person_orchestrator_answer_is_proposed_under_autopilot_until_
   let told = chat_call(&mut served, &scope, "answer_question", answer.clone()).expect("proposed");
   assert_eq!(told["waits_for_person"], true, "{told}");
   assert!(db.questions(run.id()).expect("questions")[0].waits());
-  allow(&served, OrchestratorConsent::AnswerAgents);
+  allow(&served, &seeded.repo, OrchestratorConsent::AnswerAgents);
   served
     .services()
     .workspace
@@ -128,7 +128,7 @@ fn decisions_reach_person_orchestrator_proposes_how_a_waiting_run_goes_on_under_
     OrchestratorConsent::MergeRuns,
     OrchestratorConsent::ContinueInterrupted,
   ] {
-    allow(&served, consent);
+    allow(&served, &seeded.repo, consent);
   }
   let retry = json!({ "project": "Kontur", "run": run.id().to_string(), "choice": { "kind": "allow_retry" } });
   let told = chat_call(&mut served, &scope, "continue_run", retry).expect("proposed");

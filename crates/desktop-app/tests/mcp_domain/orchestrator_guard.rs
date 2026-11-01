@@ -45,7 +45,7 @@ fn chat_turn_on_its_own_only_proposes_a_merge_or_a_start() {
   served
     .services()
     .workspace
-    .set_orchestrator_allows(OrchestratorConsent::MergeRuns, true)
+    .set_orchestrator_allows(&seeded.repo, OrchestratorConsent::MergeRuns, true)
     .expect("the person turned it on");
   db.save_allow_autopilot(AllowAutopilot::ON).expect("Autopilot allowed");
   // The tools of a turn a run's end started by itself.

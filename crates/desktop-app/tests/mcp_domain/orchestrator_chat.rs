@@ -120,11 +120,12 @@ pub(super) fn actions(db: &ProjectDb, scope: &ChatScope) -> Vec<ChatAction> {
     .collect()
 }
 
-pub(super) fn allow(served: &Served, consent: OrchestratorConsent) {
+/// The person turns `consent` on in the project at `repo`.
+pub(super) fn allow(served: &Served, repo: &std::path::Path, consent: OrchestratorConsent) {
   served
     .services()
     .workspace
-    .set_orchestrator_allows(consent, true)
+    .set_orchestrator_allows(repo, consent, true)
     .expect("the person turned it on");
 }
 
@@ -203,7 +204,7 @@ fn chat_merge_is_a_proposal_until_the_person_lets_the_orchestrator_merge() {
   );
   assert_eq!(actions(&db, &scope)[0].outcome, ActionOutcome::Waits);
 
-  allow(&served, OrchestratorConsent::MergeRuns);
+  allow(&served, &seeded.repo, OrchestratorConsent::MergeRuns);
   let merged = chat_call(&mut served, &scope, "merge_run", merge).expect("merged at once");
   assert_eq!(merged["merge"]["run"], run.id().to_string(), "{merged}");
   assert!(db.run_merge(run.id()).expect("read").is_some(), "the run is merged");
@@ -233,7 +234,7 @@ fn chat_message_is_a_proposal_until_the_person_lets_the_orchestrator_answer() {
     Some(Change::Message { text, .. }) if text == "Keep the HubSpot owner."
   ));
 
-  allow(&served, OrchestratorConsent::AnswerAgents);
+  allow(&served, &seeded.repo, OrchestratorConsent::AnswerAgents);
   let refused = chat_call(&mut served, &scope, "send_message", answer.clone()).expect_err("decision consent required");
   assert!(matches!(&refused, ToolError::Refused { code, .. } if code == "automation_not_allowed"));
   served
@@ -325,7 +326,7 @@ fn chat_message_that_would_decide_a_plan_is_refused() {
   let mut db = ProjectDb::open(&seeded.repo).expect("the project's data");
   let (_, run) = task_run(&db, PLANNING);
   let scope = chat(&served, &mut db);
-  allow(&served, OrchestratorConsent::AnswerAgents);
+  allow(&served, &seeded.repo, OrchestratorConsent::AnswerAgents);
   let refused = chat_call(
     &mut served,
     &scope,
@@ -374,7 +375,7 @@ fn chat_answer_is_a_proposal_until_the_person_lets_the_orchestrator_answer() {
     Some(Change::Answer { request: named, choices, .. }) if named == request && choices == ["In the top bar"]
   ));
 
-  allow(&served, OrchestratorConsent::AnswerAgents);
+  allow(&served, &seeded.repo, OrchestratorConsent::AnswerAgents);
   let refused =
     chat_call(&mut served, &scope, "answer_question", answer.clone()).expect_err("global consent is required too");
   assert!(matches!(&refused, ToolError::Refused { code, .. } if code == "automation_not_allowed"));

@@ -62,7 +62,7 @@ fn chat_report_turn_only_proposes_even_with_answer_agents_on() {
   let (mut served, seeded) = Served::seeded("tasks");
   let mut db = ProjectDb::open(&seeded.repo).expect("the project's data");
   let (task, run) = task_run(&db, ASKING);
-  allow(&served, OrchestratorConsent::AnswerAgents);
+  allow(&served, &seeded.repo, OrchestratorConsent::AnswerAgents);
   served
     .services()
     .workspace

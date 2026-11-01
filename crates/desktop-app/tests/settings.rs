@@ -218,11 +218,15 @@ fn settings_only_a_person_lets_the_orchestrator_publish_answer_merge_or_continue
       window.texts(&format!("{switch}-blocked")).is_some()
     });
     assert!(
-      !workspace.orchestrator_allows(consent).expect("the setting reads"),
+      !workspace
+        .app_wide_orchestrator_allows(consent)
+        .expect("the setting reads"),
       "synthetic input does not turn {title} on"
     );
     window.until("the person's choice to be saved", |window| {
-      let stored = workspace.orchestrator_allows(consent).expect("the setting reads");
+      let stored = workspace
+        .app_wide_orchestrator_allows(consent)
+        .expect("the setting reads");
       if !stored {
         press_element(window, switch);
       }
@@ -242,10 +246,14 @@ fn settings_only_a_person_lets_the_orchestrator_publish_answer_merge_or_continue
 fn settings_turning_off_an_orchestrator_switch_holds_from_the_click() {
   let mut window = Window::open();
   let workspace = window.launch.workspace().expect("session").clone();
+  let kontur = workspace.projects().expect("the projects")[0].repo_root.clone();
   for (_, _, consent) in ORCHESTRATOR_SWITCHES {
     workspace
-      .set_orchestrator_allows(consent, true)
+      .set_app_wide_orchestrator_allows(consent, true)
       .expect("the person turned it on");
+    workspace
+      .set_orchestrator_allows(&kontur, consent, true)
+      .expect("on in Kontur");
   }
   window.navigation().go(Route::Settings);
   for (switch, title, consent) in ORCHESTRATOR_SWITCHES {
@@ -255,8 +263,12 @@ fn settings_turning_off_an_orchestrator_switch_holds_from_the_click() {
     // The person's click; its save has not run yet.
     window.tree.get_element_by_id_mut(switch).expect("the switch").click();
     assert!(
-      !workspace.orchestrator_allows(consent).expect("read"),
+      !workspace.app_wide_orchestrator_allows(consent).expect("read"),
       "{title} holds off from the click, before the save"
+    );
+    assert!(
+      !workspace.orchestrator_allows(&kontur, consent).expect("read"),
+      "{title} stops the Orchestrator in Kontur from the click, until ORC-599 moves the row"
     );
   }
 }

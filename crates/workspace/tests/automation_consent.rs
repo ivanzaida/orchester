@@ -1,12 +1,12 @@
-//! UI permission snapshots reflect actual serialized storage, and fail closed while a save is in flight.
+//! UI permission snapshots reflect actual serialized storage, and fail closed while a save is in flight. The
+//! Orchestrator's switches, each project's own, are in `orchestrator_switches`.
 use std::{
-  sync::{Arc, Barrier},
   thread,
   time::{Duration, Instant},
 };
 
 use orchester_store::AppDb;
-use orchester_workspace::workspace::{OrchestratorConsent, Workspace};
+use orchester_workspace::workspace::Workspace;
 
 #[test]
 fn automation_consent_is_unknown_until_read_and_separate_from_approvals() {
@@ -190,103 +190,4 @@ fn automation_consent_old_pending_grant_cannot_clear_a_later_human_revocation() 
     !workspace.automation_permission_consent(),
     "older grant completion cannot undo later revocation"
   );
-}
-
-const ORCHESTRATOR_CONSENTS: [OrchestratorConsent; 5] = [
-  OrchestratorConsent::PublishDrafts,
-  OrchestratorConsent::AnswerAgents,
-  OrchestratorConsent::MergeRuns,
-  OrchestratorConsent::ContinueInterrupted,
-  OrchestratorConsent::WriteGit,
-];
-
-#[test]
-fn orchestrator_consents_are_off_until_a_person_turns_each_on() {
-  let dir = tempfile::tempdir().expect("private consent directory");
-  let workspace = Workspace::new(AppDb::open(&dir.path().join("app.db")).expect("private database"));
-  for consent in ORCHESTRATOR_CONSENTS {
-    assert!(
-      !workspace.orchestrator_allows(consent).expect("read"),
-      "{consent:?} is off by default"
-    );
-  }
-  workspace
-    .set_orchestrator_allows(OrchestratorConsent::AnswerAgents, true)
-    .expect("human opt-in");
-  assert!(
-    workspace
-      .orchestrator_allows(OrchestratorConsent::AnswerAgents)
-      .expect("read")
-  );
-  assert!(
-    !workspace
-      .orchestrator_allows(OrchestratorConsent::MergeRuns)
-      .expect("read")
-      && !workspace
-        .orchestrator_allows(OrchestratorConsent::PublishDrafts)
-        .expect("read"),
-    "each switch is its own"
-  );
-}
-
-#[test]
-fn orchestrator_consents_are_off_from_a_persons_revocation_before_it_is_saved() {
-  let dir = tempfile::tempdir().expect("private consent directory");
-  let workspace = Workspace::new(AppDb::open(&dir.path().join("app.db")).expect("private database"));
-  for consent in ORCHESTRATOR_CONSENTS {
-    workspace.set_orchestrator_allows(consent, true).expect("human opt-in");
-    assert!(workspace.orchestrator_allows(consent).expect("read"));
-    workspace.revoke_orchestrator_consent(consent);
-    assert!(
-      !workspace.orchestrator_allows(consent).expect("read"),
-      "{consent:?}: off from the person's click, though the stored setting is still on"
-    );
-    workspace
-      .set_orchestrator_allows(consent, true)
-      .expect("turned on again");
-    assert!(workspace.orchestrator_allows(consent).expect("read"));
-  }
-}
-
-#[test]
-fn orchestrator_consent_reads_that_overlap_each_report_the_stored_grant() {
-  let dir = tempfile::tempdir().expect("private consent directory");
-  let path = dir.path().join("app.db");
-  let workspace = Workspace::new(AppDb::open(&path).expect("private database"));
-  let consent = OrchestratorConsent::AnswerAgents;
-  workspace.set_orchestrator_allows(consent, true).expect("human opt-in");
-  workspace
-    .set_automation_changes_permissions(true)
-    .expect("a grant whose next save shows when it starts");
-  let blocker = rusqlite::Connection::open(path).expect("same private database");
-  blocker
-    .execute_batch("BEGIN IMMEDIATE")
-    .expect("real SQLite write reservation");
-  // An unrelated save holds the workspace's database lock while SQLite keeps it waiting, so both reads below start
-  // before either of them can read.
-  let holder = workspace.clone();
-  let held = thread::spawn(move || holder.set_automation_changes_permissions(true));
-  let deadline = Instant::now() + Duration::from_secs(3);
-  while workspace.automation_permission_consent() {
-    assert!(Instant::now() < deadline, "the holding save must start");
-    thread::yield_now();
-  }
-  let started = Arc::new(Barrier::new(3));
-  let reads = [(); 2].map(|()| {
-    let (reader, started) = (workspace.clone(), Arc::clone(&started));
-    thread::spawn(move || {
-      started.wait();
-      reader.orchestrator_allows(consent)
-    })
-  });
-  started.wait();
-  assert!(!held.is_finished(), "the save actually waits in SQLite");
-  blocker.execute_batch("COMMIT").expect("release reservation");
-  held.join().expect("holder joins").expect("the save finishes");
-  for read in reads {
-    assert!(
-      read.join().expect("reader joins").expect("the setting reads"),
-      "a read that overlaps another still reports the person's stored grant"
-    );
-  }
 }

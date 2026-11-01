@@ -63,4 +63,23 @@ impl ProjectDb {
     )?;
     Ok(())
   }
+
+  /// The project's `switch`; one never written for the project first takes the application-wide value it moved from
+  /// (ORC-594), once: `application_wide` is read only then, and a project's own value always stays.
+  pub fn copy_orchestrator_switch(
+    &mut self,
+    switch: OrchestratorSwitch,
+    application_wide: impl FnOnce() -> Result<bool, StoreError>,
+  ) -> Result<bool, StoreError> {
+    if let Some(allowed) = self.orchestrator_switch(switch)? {
+      return Ok(allowed);
+    }
+    let column = switch.column();
+    self.connection.execute(
+      &format!("UPDATE orchestrator_switches SET {column} = ?1 WHERE id = 1 AND {column} IS NULL"),
+      params![application_wide()?],
+    )?;
+    // Another copy or a person's save may have come first: what the project holds now is its value.
+    Ok(self.orchestrator_switch(switch)?.unwrap_or(false))
+  }
 }
