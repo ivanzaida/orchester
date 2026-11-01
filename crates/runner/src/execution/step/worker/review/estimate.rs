@@ -181,6 +181,12 @@ impl ReviewerSetup {
           cli: match kind {
             ReviewerKind::Codex => EstimatorCli::Codex,
             ReviewerKind::ClaudeCode | ReviewerKind::AnthropicApi => EstimatorCli::ClaudeCode,
+            ReviewerKind::Decision => {
+              return Some((
+                model,
+                not_run("a decision model cannot estimate story points".to_owned()),
+              ));
+            }
           },
           executable,
           model: (model.clone(), effort),

@@ -28,8 +28,9 @@ use thiserror::Error;
 pub(crate) use self::prompt::one_line;
 pub use self::{
   choice::{
-    AutoModeSettings, DEFAULT_REVIEW_MODEL, ResolvedReviewer, ReviewerChoice, ReviewerKind, ReviewerUnavailable,
-    default_review_model, resolve_reviewer, reviewer_kind,
+    AutoModeSettings, DEFAULT_REVIEW_MODEL, DecisionReviewerConnection, ResolvedReviewer, ReviewerChoice,
+    ReviewerConnection, ReviewerConnectionId, ReviewerKind, ReviewerUnavailable, decision_reviewer_person_only,
+    default_decision_threshold, default_review_model, resolve_reviewer, reviewer_kind,
   },
   decision::{DecisionVerdict, NotProbability, Probability, Risk, Risks},
   hold::{HoldRules, ReviewHold, StepLimit, review_hold, step_limit, unread_parts},
