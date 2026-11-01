@@ -24,6 +24,13 @@ pub struct Agents {
 }
 impl Agents {
   pub fn new(connection: bool) -> Self {
+    Self::with(connection.then_some(CODEX_VERSION))
+  }
+  /// The project with a Codex connection whose last check found `version`, the one Autopilot needs or newer.
+  pub fn on_codex(version: &str) -> Self {
+    Self::with(Some(version))
+  }
+  fn with(codex_version: Option<&str>) -> Self {
     let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/agents");
     std::fs::create_dir_all(&scratch).expect("scratch directory");
     let data = Data::at(
@@ -33,9 +40,9 @@ impl Agents {
     let launch = data.launch();
     let project = data.add_kontur(launch.workspace().expect("workspace"));
     let root = project.repo_root;
-    if connection {
+    if let Some(version) = codex_version {
       let mut db = ProjectDb::open(&root).expect("database");
-      db.create_connection(&codex(&root)).expect("connection");
+      db.create_connection(&codex(&root, version)).expect("connection");
     }
     Self {
       window: Window::of(data, launch),
@@ -72,12 +79,20 @@ impl Agents {
       .window
       .navigation()
       .go(Route::Project(project_id(), ProjectPage::Agents));
-    self.until("agents", |s| s.exists("agents-new"));
+    // *New profile* stands over the bones while the profiles read (ORC-110).
+    self.until("agents", |s| s.exists("agents-new") && !s.exists("agents-loading"));
   }
   pub fn open(&mut self, id: ResourceId) {
-    self.go();
-    self.click(&format!("agent-{id}"));
-    self.until("editor", |s| s.exists("agent-role"));
+    self
+      .window
+      .navigation()
+      .go(Route::Project(project_id(), ProjectPage::Agents));
+    // Waits for the profile's row, not *New profile*: a member of a shared project has no New (`list::head`).
+    let row = format!("agent-{id}");
+    self.until("agents", |s| s.exists(&row) && !s.exists("agents-loading"));
+    self.click(&row);
+    // A member of a shared project reads the role as text, with no input: the row stands on both pages.
+    self.until("editor", |s| s.exists("agent-role-row"));
   }
   pub fn until(&mut self, what: &str, mut done: impl FnMut(&mut Self) -> bool) {
     let deadline = std::time::Instant::now() + Duration::from_secs(15);
@@ -163,7 +178,9 @@ pub fn changed(profile: &AgentProfile) -> AgentProfile {
   .with_permissions(profile.permissions().clone())
   .with_mcp_servers(profile.mcp_servers().clone())
 }
-fn codex(root: &std::path::Path) -> AgentConnection {
+/// The Codex version `Agents::new` checks: older than Autopilot needs (`CODEX_AUTOPILOT`).
+const CODEX_VERSION: &str = "0.139.0";
+fn codex(root: &std::path::Path, version: &str) -> AgentConnection {
   let mut connection = AgentConnection::new(
     ConnectionId::generate(),
     Name::new("Test Codex").expect("name"),
@@ -176,7 +193,7 @@ fn codex(root: &std::path::Path) -> AgentConnection {
     .record_check(ConnectionCheck {
       at: Timestamp::now(),
       result: CheckResult::Available {
-        version: "0.139.0".into(),
+        version: version.into(),
         sign_in: SignIn::SignedIn,
         catalog: ModelCatalog::new(
           CatalogSource::Provider,

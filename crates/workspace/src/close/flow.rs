@@ -66,6 +66,8 @@ struct Inner {
   request: Mutex<Option<Proceed>>,
   end: Mutex<Option<SessionEnd>>,
   stopping: Mutex<Option<JoinHandle<()>>>,
+  /// How the session ends once an update handed over to its installer, which stopped the runners itself.
+  handed_over: Mutex<Option<SessionEnd>>,
 }
 
 impl PartialEq for CloseFlow {
@@ -85,6 +87,7 @@ impl CloseFlow {
         request: Mutex::new(None),
         end: Mutex::new(None),
         stopping: Mutex::new(None),
+        handed_over: Mutex::new(None),
       }),
     }
   }
@@ -103,11 +106,32 @@ impl CloseFlow {
     Board::of(&self.phase(), &self.inner.runners, &self.inner.jobs)
   }
 
+  /// An update handed over to its installer (`crate::app_updates::install`), which stopped the runners already: the
+  /// next close request closes once git is done, nothing asked, and the session ends as `end`.
+  pub fn hand_over(&self, end: SessionEnd) {
+    *self.inner.handed_over.lock() = Some(end);
+  }
+
   /// The window asks to close; `proceed` lets it. A request while a close is under way is dropped,
   /// which keeps the window open until that close finishes: the window's × and Alt+F4 / Cmd+Q do
-  /// nothing more while the panel is shown.
+  /// nothing more while the panel is shown. After [`Self::hand_over`] it closes without asking.
   pub fn request(&self, proceed: impl FnOnce() + Send + 'static) {
     if self.phase() != ClosePhase::Open {
+      return;
+    }
+    if let Some(end) = self.inner.handed_over.lock().take() {
+      self.inner.phase.send_replace(ClosePhase::Stopping);
+      let jobs = self.inner.jobs.clone();
+      let ended = Arc::clone(&self.inner);
+      self.inner.runtime.spawn(async move {
+        // Git's operations run on threads of their own; the process must not end under them.
+        while !jobs.busy().is_empty() {
+          tokio::time::sleep(JOBS_RECHECK).await;
+        }
+        tracing::info!(?end, "closing the window for the update's installer");
+        *ended.end.lock() = Some(end);
+        proceed();
+      });
       return;
     }
     *self.inner.request.lock() = Some(Box::new(proceed));

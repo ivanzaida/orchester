@@ -15,6 +15,7 @@ use thiserror::Error;
 
 use crate::{
   id::{ModuleId, TaskId},
+  integration::base::BaseChoice,
   name::Name,
   task::organization::ChangeActor,
   time::Timestamp,
@@ -100,6 +101,8 @@ pub struct Module {
   id: ModuleId,
   details: ModuleDetails,
   created_at: Timestamp,
+  /// Kept on this computer only, outside a shared module's revision ([`crate::integration::base`]).
+  base: BaseChoice,
 }
 
 impl Module {
@@ -108,6 +111,7 @@ impl Module {
       id,
       details,
       created_at,
+      base: BaseChoice::CheckedOut,
     }
   }
 
@@ -127,10 +131,21 @@ impl Module {
     self.created_at
   }
 
+  /// The base branch the module's tasks that have none of their own take.
+  pub const fn base(&self) -> &BaseChoice {
+    &self.base
+  }
+
   /// The module with `details` in place of its own.
   #[must_use]
   pub fn with_details(self, details: ModuleDetails) -> Self {
     Self { details, ..self }
+  }
+
+  /// The module with base branch `base`.
+  #[must_use]
+  pub fn with_base(self, base: BaseChoice) -> Self {
+    Self { base, ..self }
   }
 }
 

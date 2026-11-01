@@ -102,8 +102,8 @@ fn invocation_marks_the_worktree_and_its_repository_untrusted() {
 }
 
 /// What App Server would otherwise take from the user's own Codex setup is turned off on every start, read-only or
-/// writing, on every platform: the notify program, plugins and apps, the user's own hooks, and the permission requests
-/// that could stay granted.
+/// writing, on every platform: the notify program, plugins and apps, the user's own hooks, the permission requests
+/// that could stay granted, and computer use, whose runtime Codex's Windows sandbox helper failed on (issue #69).
 #[test]
 fn invocation_turns_off_what_the_users_codex_setup_would_add() {
   for access in [RepositoryAccess::ReadOnly, RepositoryAccess::Write] {
@@ -116,6 +116,7 @@ fn invocation_turns_off_what_the_users_codex_setup_would_add() {
         "features.exec_permission_approvals=false",
         "features.request_permissions_tool=false",
         "features.hooks=false",
+        "features.computer_use=false",
       ] {
         assert!(
           args.windows(2).any(|pair| pair == ["-c", setting]),

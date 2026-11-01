@@ -64,11 +64,11 @@ fn main() -> ExitCode {
     .with(error_reports::layer())
     .init();
   // Kept to the end of `main`, whose drop sends what is still pending.
-  let _reports = error_reports::start();
+  let reports = error_reports::Reports::start();
   if let Some(error) = log_error {
     tracing::warn!("runner log file unavailable, logging to stderr only: {error}");
   }
-  match run(project_root) {
+  match run(project_root, reports.as_ref().map(error_reports::Reports::switch)) {
     Ok(()) => ExitCode::SUCCESS,
     Err(error) => {
       tracing::error!("{error}");
@@ -87,7 +87,7 @@ impl RunnerError {
   }
 }
 
-fn run(project_root: Result<PathBuf, RunnerError>) -> Result<(), RunnerError> {
+fn run(project_root: Result<PathBuf, RunnerError>, reports: Option<error_reports::Switch>) -> Result<(), RunnerError> {
   let project_root = project_root?;
   let _lock = RunnerLock::acquire(&project_root)?;
   remove_leftover_files(&project_root);
@@ -98,7 +98,7 @@ fn run(project_root: Result<PathBuf, RunnerError>) -> Result<(), RunnerError> {
     .map_err(RunnerError::Runtime)?;
   let served = runtime.block_on(async {
     let shutdown = ShutdownSignal::install().map_err(RunnerError::Signal)?;
-    Ok(server::serve(&project_root, shutdown).await?)
+    Ok(server::serve(&project_root, shutdown, reports).await?)
   });
   // Blocking work still running (a codebase index build, which can take a minute) does not hold
   // up the exit: it is abandoned with the process. A build is published by one rename only once

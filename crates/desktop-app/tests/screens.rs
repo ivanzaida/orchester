@@ -55,8 +55,9 @@ use support::Data;
 
 const PROJECT: &str = "3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b";
 const CONNECTION: &str = "7e1f2a3b-4c5d-4e6f-8a9b-0c1d2e3f4a5b";
-/// What a task's page shows while the project's tasks are read; nothing reads them here.
-const READING_TASK: &str = "Reading the task…";
+/// What a task's page shows while the project's tasks are read, nothing reads them here: its crumb and tabs, the
+/// rest bones (ORC-110).
+const READING_TASK: [&str; 4] = ["Tasks", "Summary", "Conversation", "Changes"];
 /// The screens that show their own content, which their own tests check, in place of the placeholder.
 const BUILT: &[Screen] = &[
   // One per line, sorted, so each screen's task adds a line of its own.
@@ -303,9 +304,9 @@ fn every_screen() -> Vec<(Route, Vec<&'static str>)> {
     (at(ProjectPage::EditTask(key("KON-7"))), placeholder("Edit KON-7")),
     (
       at(ProjectPage::Task(key("KON-12"), TaskView::of(TaskTab::Summary))),
-      vec![READING_TASK],
+      READING_TASK.to_vec(),
     ),
-    (at(ProjectPage::Task(key("KON-12"), changes)), vec![READING_TASK]),
+    (at(ProjectPage::Task(key("KON-12"), changes)), READING_TASK.to_vec()),
     (at(ProjectPage::MergeQueue), placeholder("Merge queue")),
     (
       at(ProjectPage::PullRequests(PullRequestTab::Merged)),

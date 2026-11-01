@@ -44,6 +44,7 @@ use super::{
     worker::{Stop, StopCause, WorkerEvent},
   },
 };
+use crate::browser::ProjectBrowser;
 
 /// How long a run waiting for a free agent slot waits before it looks again, in case the slot
 /// was freed by another run in a way it was not woken for. More slots wake it at once.
@@ -76,6 +77,7 @@ pub(super) struct TaskContext {
   pub(super) relay: Option<PathBuf>,
   pub(super) board: Arc<Board>,
   pub(super) qa: Arc<QaApps>,
+  pub(super) browser: Arc<ProjectBrowser>,
   pub(super) disks: DiskGuard,
   pub(super) controls: mpsc::UnboundedReceiver<Control>,
   pub(super) settled: Arc<AtomicBool>,
@@ -112,10 +114,14 @@ pub(super) struct RunTask {
   pub(super) board: Arc<Board>,
   /// The QA apps the run's agents started ([`QaApps`]), shared with the runner's other runs for the QA slots.
   pub(super) qa: Arc<QaApps>,
+  /// The project's browser, whose tabs the run's browser tools open and drive.
+  pub(super) browser: Arc<ProjectBrowser>,
   /// The disk guard's reading of free space, and how often it looks while agents work.
   pub(super) disks: DiskGuard,
   /// When the disk guard looks at the free space next while agents work.
   pub(super) next_disk_check: Instant,
+  /// An agent or command ended since the disk guard last looked before steps start (`held_back`).
+  pub(super) ended_since_disk_look: bool,
   /// The run waits for a free workspace; the desktop was told once.
   pub(super) waits_for_workspace: bool,
   pub(super) controls: mpsc::UnboundedReceiver<Control>,
@@ -159,8 +165,11 @@ impl RunTask {
       relay: context.relay,
       board: context.board,
       qa: context.qa,
+      browser: context.browser,
+      // Every step starts only once the guard looked (`held_back`); the first look while agents work is an interval on.
+      next_disk_check: Instant::now() + context.disks.every,
       disks: context.disks,
-      next_disk_check: Instant::now(),
+      ended_since_disk_look: false,
       waits_for_workspace: false,
       controls: context.controls,
       listening: true,
@@ -177,10 +186,10 @@ impl RunTask {
     }
   }
 
-  /// Executes the run until it ends or settles. A failure of the runner itself (the database, a
-  /// rejected transition) ends the run's agents and interrupts the run where it was last recorded,
-  /// with the error in its activity ([`super::broken`]); it is logged, and its steps are not retried.
-  pub(super) async fn drive(mut self) {
+  /// Executes the run until it ends or settles; whether it ended (completed, cancelled or failed). A failure of the
+  /// runner itself (the database, a rejected transition) ends the run's agents and interrupts the run where it was
+  /// last recorded, with the error in its activity ([`super::broken`]); it is logged, and its steps are not retried.
+  pub(super) async fn drive(mut self) -> bool {
     let run = self.run.id();
     tracing::info!(%run, "run executing");
     let result = self.steps().await;
@@ -212,6 +221,7 @@ impl RunTask {
         }
       }
     }
+    self.run.status().is_terminal()
   }
 
   async fn steps(&mut self) -> Result<(), ExecutionError> {
@@ -321,8 +331,12 @@ impl RunTask {
     Ok(Some(limit.saturating_sub(active)))
   }
 
-  /// Tells every agent still counted for the run `stop`.
+  /// Tells every agent still counted for the run `stop`. A cancel, a pause or any other stop that ends the agents ends
+  /// their calls waiting for the person too: a pause lets a running tool finish first, and such a call would act.
   pub(super) fn stop_agents(&mut self, stop: Stop) {
+    if matches!(stop, Stop::Now(_) | Stop::AtApproval) {
+      self.browser.stop_person_waits(self.run.id());
+    }
     for active in self.agents.values_mut().filter(|active| !active.abandoned) {
       active.tell(stop);
     }
@@ -355,6 +369,7 @@ impl RunTask {
     self.board.release(execution);
     self.release_steered(execution);
     self.qa.end(active.invocation.id);
+    self.ended_since_disk_look = true;
     Some(active)
   }
 

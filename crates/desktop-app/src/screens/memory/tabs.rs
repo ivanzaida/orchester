@@ -99,13 +99,20 @@ pub const fn route(project: ProjectId, tab: MemoryTab) -> Route {
 }
 
 /// The status pills in `order` (`05` `padSP`), `shown` the current one, each with its count of `memory` — the
-/// proposals that wait in `warning` — and Settings at the right end.
-pub fn strip(ctx: &mut Ctx, project: ProjectId, (memory, order): (&ProjectMemory, Order), shown: MemoryTab) -> Element {
+/// proposals that wait in `warning` — and Settings at the right end; while the records are read (`memory` none),
+/// each status's count is a bone.
+pub fn strip(
+  ctx: &mut Ctx,
+  project: ProjectId,
+  (memory, order): (Option<&ProjectMemory>, Order),
+  shown: MemoryTab,
+) -> Element {
   let navigation = Navigation::of(ctx);
   let pill = |ctx: &Ctx, tab: MemoryTab| Pill {
     id: format!("memory-tab-{}", tab.name()).into(),
     label: name(ctx, tab),
-    count: statuses(tab).map(|status| (memory.count(status), tab == MemoryTab::Waiting)),
+    count: statuses(tab).and_then(|status| Some((memory?.count(status), tab == MemoryTab::Waiting))),
+    reading: memory.is_none() && statuses(tab).is_some(),
     current: tab == shown,
     open: navigation.to(route(project, tab)),
   };

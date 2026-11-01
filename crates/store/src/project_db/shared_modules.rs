@@ -152,7 +152,8 @@ pub(super) fn write_task_module(
   Ok(())
 }
 
-/// The local module `local` becomes the server's `shared`: its tasks and its moves name `shared` from now on.
+/// The local module `local` becomes the server's `shared`: its tasks, its moves and its base branch, which stays on
+/// this computer, name `shared` from now on.
 fn rekey(transaction: &Transaction<'_>, local: ModuleId, shared: ModuleId) -> Result<(), StoreError> {
   if local == shared {
     return Ok(());
@@ -167,6 +168,15 @@ fn rekey(transaction: &Transaction<'_>, local: ModuleId, shared: ModuleId) -> Re
     |row| row.get(0),
   )?;
   if taken {
+    transaction.execute(
+      "UPDATE modules SET base_branch = COALESCE(base_branch, (SELECT base_branch FROM modules WHERE id = ?1)) \
+       WHERE id = ?2",
+      ids,
+    )?;
+    transaction.execute(
+      "UPDATE OR IGNORE base_branch_move_modules SET module_id = ?2 WHERE module_id = ?1",
+      ids,
+    )?;
     transaction.execute("DELETE FROM modules WHERE id = ?1", [local.to_string()])?;
   } else {
     transaction.execute("UPDATE modules SET id = ?2 WHERE id = ?1", ids)?;
@@ -174,7 +184,7 @@ fn rekey(transaction: &Transaction<'_>, local: ModuleId, shared: ModuleId) -> Re
   Ok(())
 }
 
-fn write(transaction: &Transaction<'_>, cached: &[CachedModule]) -> Result<(), StoreError> {
+pub(super) fn write(transaction: &Transaction<'_>, cached: &[CachedModule]) -> Result<(), StoreError> {
   // A name can pass from one module to another between two reads: each module's name is set aside first.
   for module in cached {
     transaction.execute(

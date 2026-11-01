@@ -24,7 +24,7 @@ use tokio::sync::oneshot;
 
 use super::{
   super::{control::answer, tool_approval::end_unheld},
-  answer::Settled,
+  answer::{Itself, Settled},
   claude_approval::{Asked, AskedBy, PromptAnswer},
   native::NativeAsk,
   worker::{ApprovalDecision, Driver, Transport, Watch, Worker},
@@ -295,20 +295,47 @@ impl Worker {
     // when it would wait for the person.
     self.flush(watch)?;
     watch.db.request_tool_approval(&approval)?;
-    if let Some(settled) = self.answer_itself(watch, &approval)? {
-      // Recorded and delivered like a person's answer; a call that can no longer take it ends the
-      // agent there, as for a person.
-      if let Err(rejection) = self.settle(watch, &approval, awaiting, settled).await? {
-        tracing::debug!(?rejection, "Orchester's own answer did not reach the agent");
+    let since = approval.requested_at;
+    self.route(watch, (approval, awaiting), since).await
+  }
+
+  /// Answers `approval` by the run's approval mode now, or leaves it waiting in `awaiting`: under the reviewer's
+  /// review, which keeps it from the person, or for the person, with why, from `since`.
+  pub(super) async fn route(
+    &mut self,
+    watch: &mut Watch,
+    (approval, awaiting): (PendingToolApproval, Awaiting),
+    since: Timestamp,
+  ) -> Result<(), StoreError> {
+    // Read again at each request: disallowing Autopilot, or switching the run to Manual, stops it from the next one.
+    let autopilot = watch.in_autopilot()?;
+    let came = match self.answer_itself(watch, &approval, autopilot)? {
+      Itself::Settled(settled) => {
+        // Recorded and delivered like a person's answer; a call that can no longer take it ends the
+        // agent there, as for a person.
+        if let Err(rejection) = self.settle(watch, &approval, awaiting, settled).await? {
+          tracing::debug!(?rejection, "Orchester's own answer did not reach the agent");
+        }
+        return Ok(());
       }
-      return Ok(());
-    }
-    // Auto mode judges it first, without asking the person; a hard rule (a Codex command asks to leave
-    // its sandbox, which only the person grants) asks the person at once.
-    let escalation = matches!(&awaiting, Awaiting::Codex(request) if request.is_command());
-    self.reviewing = self.start_review(watch, &approval, escalation)?;
-    if self.reviewing.is_none() {
-      watch.invocation.timing.wait_for_person(approval.requested_at);
+      // The reviewer judges it first, without asking the person; a hard rule (a Codex command asks to leave
+      // its sandbox, which only the person grants) asks the person at once.
+      Itself::Review(question) => {
+        let escalation = matches!(&awaiting, Awaiting::Codex(request) if request.is_command());
+        match self.start_review(watch, &approval, (question, escalation))? {
+          Ok(reviewing) => {
+            self.reviewing = Some(reviewing);
+            None
+          }
+          Err(came) => Some(came),
+        }
+      }
+      Itself::Person(came) => Some(came),
+    };
+    watch.asked_in_autopilot = autopilot && came.is_some();
+    if let Some(came) = &came {
+      watch.db.record_came_to_person(approval.run, &approval.id, Some(came))?;
+      watch.invocation.timing.wait_for_person(since);
       // A person's wait never holds one of the computer's QA slots.
       self.qa.release(watch.invocation.id);
       watch.db.save_invocation(&watch.invocation)?;
@@ -318,6 +345,32 @@ impl Worker {
       task: self.task,
     });
     watch.approval = Some((approval, awaiting));
+    Ok(())
+  }
+
+  /// The run dropped to Manual while its waiting request had come to the person by Autopilot's rules: Manual's rules
+  /// look at it again, the profile's permissions first, then the reviewer, which keeps it from the person meanwhile.
+  pub(super) async fn recheck_mode(&mut self, watch: &mut Watch) -> Result<(), StoreError> {
+    if !watch.asked_in_autopilot || watch.stop.is_some() || self.reviewing.is_some() {
+      return Ok(());
+    }
+    if watch.approval.is_none() {
+      watch.asked_in_autopilot = false;
+      return Ok(());
+    }
+    if watch.in_autopilot()? {
+      return Ok(());
+    }
+    let (approval, awaiting) = watch.approval.take().expect("a waiting request was found above");
+    watch.asked_in_autopilot = false;
+    watch.db.record_came_to_person(approval.run, &approval.id, None)?;
+    let now = Timestamp::now();
+    watch.invocation.timing.resume(now);
+    watch.db.save_invocation(&watch.invocation)?;
+    self.route(watch, (approval, awaiting), now).await?;
+    if self.reviewing.is_some() {
+      self.resume_qa(watch, None);
+    }
     Ok(())
   }
 

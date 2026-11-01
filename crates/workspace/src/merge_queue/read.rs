@@ -1,17 +1,19 @@
-//! The queue as the Merge queue screen, the sidebar, the task page and automation read it: its runs in order with
-//! their tasks, pipelines and what happened to them, the base branch and how the person's checkout stands, and, for an
-//! empty queue, how the project's pipelines deliver. A run that left the queue or was merged shows on the day it did.
+//! The queue as the Merge queue screen, the sidebar, the task page and automation read it: its lanes, one per base
+//! branch a run of it delivers into, each with its branch, how the person's checkout stands for it and how its runs
+//! land; its runs in order with their tasks, pipelines and what happened to them; and, for an empty queue, how the
+//! project's pipelines deliver. A run that left the queue or was merged shows on the day it did, and a lane shows
+//! once a run of it joined.
 
 use std::path::Path;
 
 use orchester_core::{
   id::{ResourceId, RunId, TaskId},
   integration::{
-    base::Landing,
+    base::{Landing, RunBaseSource},
     branch_head,
     delivery::{self, Checkout},
   },
-  merge_queue::{QueueEntry, QueueEvent, QueueState, RecordedQueueEvent},
+  merge_queue::{QueueEntry, QueueEvent, QueueState, RecordedQueueEvent, lanes},
   resource::{DeliverMode, DeliverStep, Pipeline, ResourceKind},
   revision::Revision,
   run::BranchName,
@@ -26,10 +28,12 @@ use crate::tasks::{changes::GIT, detail::run_store_error};
 /// The queue of a project.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct QueueRead {
-  /// Where its runs deliver, when one names a base branch or the checkout has one checked out.
+  /// Where its first lane delivers, else the branch the checkout has checked out, if any.
   pub base: Option<BaseState>,
+  /// Its lanes, one per base branch its runs shown deliver into, in the order of their first run.
+  pub lanes: Vec<QueueLaneRead>,
   /// Its runs in the queue's order: the one being delivered, the waiting ones, those waiting for approval, and the
-  /// ones that left it or were merged today.
+  /// ones that left it or were merged today. Each row names its lane ([`QueueRow::base_branch`]).
   pub rows: Vec<QueueRow>,
   /// How the project's published pipelines deliver, for an empty queue.
   pub pipelines: Vec<PipelineDelivery>,
@@ -40,11 +44,40 @@ impl QueueRead {
   pub fn in_queue(&self) -> usize {
     in_queue(self.rows.iter().map(|row| &row.entry))
   }
+
+  /// The rows of `lane`, in the queue's order.
+  pub fn lane_rows<'a>(&'a self, lane: &'a QueueLaneRead) -> impl Iterator<Item = &'a QueueRow> + 'a {
+    self.rows.iter().filter(move |row| lane.runs.contains(&row.entry.run))
+  }
 }
 
 /// How many of `entries` are in the queue, not merged and not out of it: the count beside *Merge queue*.
 pub fn in_queue<'a>(entries: impl IntoIterator<Item = &'a QueueEntry>) -> usize {
   entries.into_iter().filter(|entry| entry.state.in_queue()).count()
+}
+
+/// One lane of the queue: the runs that deliver into one base branch, one at a time, whatever the other lanes do.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct QueueLaneRead {
+  /// Its base branch, that branch's head and how the person's checkout stands for it.
+  pub base: BaseState,
+  /// Where its runs land.
+  pub lands: LaneLanding,
+  /// Its runs shown, in the queue's order.
+  pub runs: Vec<RunId>,
+}
+
+/// Where the runs of a lane land.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum LaneLanding {
+  /// In the checkout, which has the lane's base branch checked out.
+  InCheckout,
+  /// Beside the checkout, which has this other branch (`None`: a detached HEAD): the runs' base branch was set, and
+  /// the checkout does not hold them up.
+  Beside(Option<String>),
+  /// The runs took the branch the checkout had checked out when they started: the lane waits while the checkout has
+  /// this other branch (`None`: a detached HEAD).
+  WaitsForCheckout(Option<String>),
 }
 
 /// The base branch the queue delivers into and how the person's checkout stands.
@@ -55,6 +88,19 @@ pub struct BaseState {
   pub checkout: CheckoutState,
 }
 
+impl BaseState {
+  /// Where the runs of a lane into this branch land, as the checkout stands.
+  pub fn lands(&self) -> LaneLanding {
+    match &self.checkout {
+      CheckoutState::Beside(current) => LaneLanding::Beside(current.clone()),
+      CheckoutState::OtherBranch(current) => LaneLanding::WaitsForCheckout(current.clone()),
+      CheckoutState::Clean | CheckoutState::Uncommitted(_) | CheckoutState::InProgress | CheckoutState::Unknown => {
+        LaneLanding::InCheckout
+      }
+    }
+  }
+}
+
 /// How the person's checkout stands for delivering.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CheckoutState {
@@ -62,8 +108,8 @@ pub enum CheckoutState {
   /// These files have uncommitted changes (`git status` lines).
   Uncommitted(Vec<String>),
   OtherBranch(Option<String>),
-  /// The checkout has this other branch (`None`: a detached HEAD), and the project's base branch is set: runs land
-  /// beside it, which it does not hold up.
+  /// The checkout has this other branch (`None`: a detached HEAD), and the runs' base branch was set: they land beside
+  /// it, which it does not hold up.
   Beside(Option<String>),
   InProgress,
   /// Git could not tell.
@@ -80,6 +126,8 @@ pub struct QueueRow {
   pub run_number: u32,
   pub branch: BranchName,
   pub base_branch: Option<BranchName>,
+  /// Where the run's base branch came from when it started.
+  pub base_source: RunBaseSource,
   /// Its pipeline's name and the version the run pinned.
   pub pipeline: (String, u32),
   pub deliver: DeliverStep,
@@ -243,13 +291,15 @@ pub struct PipelineDelivery {
 /// A run's place in its project's queue, as its task page and automation read it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RunDelivery {
+  /// Its entry, which names its lane ([`QueueEntry::base`]).
   pub entry: QueueEntry,
   pub events: Vec<RecordedQueueEvent>,
-  /// Its place among the runs in the queue, from 1, while it is in it.
+  /// Its place among the runs of its lane in the queue, from 1, while it is in it.
   pub place: Option<usize>,
 }
 
-/// The queue of the project at `root`, with `programs`' git telling how the checkout stands. Blocks on SQLite and git.
+/// The queue of the project at `root`, with `programs`' git telling how the checkout stands for each lane. Blocks on
+/// SQLite and git.
 pub fn read(root: &Path, programs: &Programs) -> Result<QueueRead, StoreError> {
   let db = ProjectDb::open(root)?;
   let today = Timestamp::now().local_day_start();
@@ -258,30 +308,47 @@ pub fn read(root: &Path, programs: &Programs) -> Result<QueueRead, StoreError> {
     .into_iter()
     .filter(|entry| entry.state.in_queue() || (entry.state != QueueState::Removed && entry.since >= today))
     .collect();
-  let waiting: Vec<RunId> = entries
+  let places: Vec<(RunId, usize)> = lanes(&entries)
     .iter()
-    .filter(|entry| entry.state == QueueState::Queued)
-    .map(|entry| entry.run)
+    .flat_map(|lane| {
+      lane
+        .waiting()
+        .enumerate()
+        .map(|(index, entry)| (entry.run, index + 1))
+        .collect::<Vec<_>>()
+    })
     .collect();
   let mut rows = Vec::with_capacity(entries.len());
   for entry in entries {
-    let place = waiting.iter().position(|run| *run == entry.run).map(|index| index + 1);
+    let place = places
+      .iter()
+      .find_map(|(run, place)| (*run == entry.run).then_some(*place));
     if let Some(row) = row(&db, entry, place)? {
       rows.push(row);
     }
   }
-  let setting = db.base_branch_setting()?;
-  let base = base_branch(&rows, setting.branch(), (root, programs));
-  let base = base.map(|branch| base_state(branch, Landing::of(&setting), (root, programs)));
+  let lanes = lane_reads(&rows, (root, programs));
+  let first = rows
+    .iter()
+    .find(|row| row.entry.state.in_queue())
+    .and_then(|row| lane_of(&lanes, row))
+    .or_else(|| lanes.first());
+  let base = first.map(|lane| lane.base.clone()).or_else(|| {
+    orchester_core::integration::checked_out_branch(&programs.runner(), Path::new(GIT), root)
+      .ok()
+      .flatten()
+      .map(|branch| base_state((branch, Landing::Checkout), (root, programs)))
+  });
   let rows = rows
     .into_iter()
     .map(|mut row| {
-      row.base_moved = moved_since_check(&row, base.as_ref());
+      row.base_moved = moved_since_check(&row, lane_of(&lanes, &row).map(|lane| &lane.base));
       row
     })
     .collect();
   Ok(QueueRead {
     base,
+    lanes,
     rows,
     pipelines: pipelines(&db)?,
   })
@@ -333,7 +400,7 @@ fn integrator_name(db: &ProjectDb, deliver: &DeliverStep) -> Result<Option<Strin
   )
 }
 
-/// `run`'s place in the queue of the project in `db`, when it ever joined it.
+/// `run`'s place in its lane of the queue of the project in `db`, when it ever joined it.
 pub fn delivery_of(db: &ProjectDb, run: RunId) -> Result<Option<RunDelivery>, StoreError> {
   let Some(entry) = db.merge_queue_entry(run)? else {
     return Ok(None);
@@ -344,9 +411,10 @@ pub fn delivery_of(db: &ProjectDb, run: RunId) -> Result<Option<RunDelivery>, St
     .then(|| db.merge_queue())
     .transpose()?
     .and_then(|entries| {
-      let mut queue: Vec<&QueueEntry> = entries.iter().filter(|other| other.state.in_queue()).collect();
-      queue.sort_by_key(|other| !other.state.delivering());
-      queue.iter().position(|other| other.run == run).map(|index| index + 1)
+      lanes(&entries)
+        .iter()
+        .find(|lane| lane.base == entry.base.as_ref())
+        .and_then(|lane| lane.place(run))
     });
   Ok(Some(RunDelivery {
     events: db.merge_queue_events(run)?,
@@ -377,6 +445,7 @@ fn row(db: &ProjectDb, entry: QueueEntry, place: Option<usize>) -> Result<Option
     run_number: run.number().get(),
     branch: run.branch().clone(),
     base_branch: run.base_branch().cloned(),
+    base_source: run.base_source(),
     pipeline: (pipeline, pinned.number.get()),
     deliver,
     integrator,
@@ -387,30 +456,45 @@ fn row(db: &ProjectDb, entry: QueueEntry, place: Option<usize>) -> Result<Option
   }))
 }
 
-/// The base branch the queue delivers into: that of the first run in it that names one, else of any run shown, else
-/// the project's base branch `set`, else the branch the checkout has checked out.
-fn base_branch(
-  rows: &[QueueRow],
-  set: Option<&BranchName>,
-  (root, programs): (&Path, &Programs),
-) -> Option<BranchName> {
-  let named = |in_queue: bool| {
-    rows
-      .iter()
-      .filter(|row| row.entry.state.in_queue() == in_queue)
-      .find_map(|row| row.base_branch.clone())
-  };
-  named(true)
-    .or_else(|| named(false))
-    .or_else(|| set.cloned())
-    .or_else(|| {
-      orchester_core::integration::checked_out_branch(&programs.runner(), Path::new(GIT), root)
-        .ok()
-        .flatten()
+/// The lanes of `rows`, one per base branch a run shown recorded, in the order of their first row. A lane lands as
+/// its first run in the queue does (the one it delivers next), else as its first run shown; a run that recorded no
+/// base branch is in no lane.
+fn lane_reads(rows: &[QueueRow], (root, programs): (&Path, &Programs)) -> Vec<QueueLaneRead> {
+  let mut branches: Vec<&BranchName> = Vec::new();
+  for branch in rows.iter().filter_map(|row| row.base_branch.as_ref()) {
+    if !branches.contains(&branch) {
+      branches.push(branch);
+    }
+  }
+  branches
+    .into_iter()
+    .map(|branch| {
+      let of_lane: Vec<&QueueRow> = rows
+        .iter()
+        .filter(|row| row.base_branch.as_ref() == Some(branch))
+        .collect();
+      let source = of_lane
+        .iter()
+        .find(|row| row.entry.state.in_queue())
+        .or_else(|| of_lane.first())
+        .map_or(RunBaseSource::CheckedOut, |row| row.base_source);
+      let base = base_state((branch.clone(), Landing::of(source)), (root, programs));
+      QueueLaneRead {
+        lands: base.lands(),
+        base,
+        runs: of_lane.iter().map(|row| row.entry.run).collect(),
+      }
     })
+    .collect()
 }
 
-fn base_state(branch: BranchName, landing: Landing, (root, programs): (&Path, &Programs)) -> BaseState {
+/// The lane of `row`, when it recorded a base branch.
+fn lane_of<'a>(lanes: &'a [QueueLaneRead], row: &QueueRow) -> Option<&'a QueueLaneRead> {
+  let branch = row.base_branch.as_ref()?;
+  lanes.iter().find(|lane| lane.base.branch == *branch)
+}
+
+fn base_state((branch, landing): (BranchName, Landing), (root, programs): (&Path, &Programs)) -> BaseState {
   let runner = programs.runner();
   let head = branch_head(&runner, Path::new(GIT), (root, &branch)).ok().flatten();
   let checkout = match delivery::checkout(&runner, Path::new(GIT), (root, &branch)) {

@@ -1,5 +1,6 @@
 {
   "projects": {
+    "reading": "Reading your projects…",
     "title": "All projects",
     "description": "The projects Orchester knows on this computer. Each one keeps its tasks, pipelines and settings in its own .orchester folder.",
     "openFolder": "Open project folder…",

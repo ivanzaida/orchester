@@ -103,13 +103,15 @@ fn domain_widening_a_profile_needs_a_person_and_narrowing_never_does() {
 }
 
 /// Manual → Autopilot widens what agents do unasked and answers requests in a person's place: over MCP it needs both
-/// of a person's switches, as the window's question does. Switching back to Manual is always taken.
+/// of a person's switches, as the window's question does. Switching back to Manual is always taken. `get_profile`
+/// reads the mode.
 #[test]
-fn domain_approval_mode_profile_autopilot_is_person_only() {
+fn approval_mode_mcp_profile_autopilot_is_person_only() {
   let mut served = served();
   let manual = served.most_restrictive();
   assert_eq!(manual["approval_mode"], "manual", "a new profile is Manual");
   served.ok("save_profile_draft", &profile("Pilot", Some(manual.clone())));
+  let read = json!({ "project": "Kontur", "profile": "Pilot" });
   let mut autopilot = manual.clone();
   autopilot["approval_mode"] = json!("autopilot");
   let mut pilot = profile("Pilot", Some(autopilot));
@@ -117,6 +119,8 @@ fn domain_approval_mode_profile_autopilot_is_person_only() {
   let refused = served.refused("save_profile_draft", &pilot);
   assert_person_only(&refused);
   assert!(refused["reasons"].to_string().contains("Autopilot"), "{refused}");
+  let kept = served.ok("get_profile", &read);
+  assert_eq!(kept["profile"]["permissions"]["approval_mode"], "manual", "{kept}");
   served.let_automation_widen(true);
   let answers = served.refused("save_profile_draft", &pilot);
   assert_eq!(
@@ -130,11 +134,83 @@ fn domain_approval_mode_profile_autopilot_is_person_only() {
     .expect("a person lets automation answer approvals");
   let saved = served.ok("save_profile_draft", &pilot);
   assert_eq!(saved["profile"]["permissions"]["approval_mode"], "autopilot");
+  let read_back = served.ok("get_profile", &read);
+  assert_eq!(read_back["profile"]["permissions"]["approval_mode"], "autopilot");
   served.let_automation_widen(false);
   let mut back = profile("Pilot", Some(manual));
   back["profile"] = json!("Pilot");
   let saved = served.ok("save_profile_draft", &back);
   assert_eq!(saved["profile"]["permissions"]["approval_mode"], "manual");
+}
+
+#[test]
+fn domain_widening_the_browser_needs_a_person() {
+  let mut served = served();
+  let publish = json!({ "project": "Kontur", "profile": "Browser" });
+  let save = |browser: Option<Value>, network: &str| {
+    let mut permissions = json!({ "repository": "write", "commands": "any_in_worktree", "network": network });
+    if let Some(browser) = browser {
+      permissions["browser"] = browser;
+    }
+    let mut args = profile("Browser", Some(permissions));
+    args["profile"] = json!("Browser");
+    args
+  };
+  let browser = |access: &str, sites: &[&str]| json!({ "access": access, "allowed_sites": sites });
+  served.let_automation_widen(true);
+  served.ok("save_profile_draft", &profile("Browser", None));
+  served.ok("save_profile_draft", &save(None, "on"));
+  served.ok("publish_profile", &publish);
+  served.let_automation_widen(false);
+  let turned_on = served.refused("save_profile_draft", &save(Some(browser("on", &[])), "on"));
+  assert_person_only(&turned_on);
+  assert!(
+    turned_on["reasons"]
+      .to_string()
+      .contains("The browser, which the latest version does not give."),
+    "{turned_on}"
+  );
+  served.let_automation_widen(true);
+  let saved = served.ok(
+    "save_profile_draft",
+    &save(Some(browser("on", &["docs.rs", "*.example.com"])), "on"),
+  );
+  assert_eq!(
+    saved["profile"]["permissions"]["browser"],
+    browser("on", &["docs.rs", "*.example.com"])
+  );
+  served.ok("publish_profile", &publish);
+  served.let_automation_widen(false);
+  let added = served.refused(
+    "save_profile_draft",
+    &save(Some(browser("on", &["docs.rs", "github.com"])), "on"),
+  );
+  assert_person_only(&added);
+  assert!(
+    added["reasons"].to_string().contains("Allowed sites of the browser"),
+    "{added}"
+  );
+  served.ok(
+    "save_profile_draft",
+    &save(Some(browser("on", &["staging.example.com"])), "on"),
+  );
+  let kept = served.ok("save_profile_draft", &save(None, "on"));
+  assert_eq!(
+    kept["profile"]["permissions"]["browser"],
+    browser("on", &["staging.example.com"]),
+    "permissions without a browser keep the profile's own"
+  );
+  served.ok(
+    "save_profile_draft",
+    &save(Some(browser("off", &["staging.example.com"])), "on"),
+  );
+  for (given, network) in [
+    (browser("on", &["https://docs.rs/std"]), "on"),
+    (browser("on", &[]), "off"),
+  ] {
+    let invalid = served.refused("save_profile_draft", &save(Some(given), network));
+    assert_eq!(invalid["code"], "invalid_permissions", "{invalid}");
+  }
 }
 
 #[test]

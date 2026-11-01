@@ -1,7 +1,7 @@
 # MCP reference — work tools
 
 These tools drive a project's work through data: projects and limits, tasks and modules, runs, the waits of a run
-(approvals, questions, plans, messages), auto mode, worktrees, pull requests, and usage and delivery reports.
+(approvals, questions, plans, messages), approval modes, worktrees, pull requests, and usage and delivery reports.
 Conventions (naming, strict schemas, links, errors, gates) are in [mcp-server.md](mcp-server.md); project setup
 tools are in [mcp-tools-setup.md](mcp-tools-setup.md).
 
@@ -49,35 +49,54 @@ saved) unless a person turned on *Let automation answer approvals*; lowering it 
 | `agent_slots`                 | integer \| null | no   | Agents working at once across runs, **1–16**. Applied at once by the runner: more lets queued work start; fewer stops no agent and holds new work. |
 | `qa_slots`                    | integer \| null | no   | QA apps (`start_qa_app`) runs may have open at once, **1–16**. Applies from the next start; a start beyond it waits until one closes. |
 
-### `get_auto_mode` — read-only
+### Approval modes
 
-A project's auto mode settings: whether new runs use it, `approve_everything` (`{on, turned_on_by}`, `turned_on_by`
-`person`, `automation` or null), and which connection, model and effort review requests (or why auto mode has no
-reviewer). Parameter: `project` (req.).
+Each agent profile has an **approval mode** (`save_profile_draft`'s `permissions.approval_mode`, see
+[setup](mcp-tools-setup.md#save_profile_draft--changes-data--gate-ap-for-widening)): **Autopilot** approves every
+tool request at once, except work outside the run's worktree, its Sources and the agent's temp folders, pushes to a
+remote and refs other than the run's branch, which still come to the person; **Manual** runs the profile's allowed
+commands, asks the project's reviewer about the rest, and leaves what the reviewer denies or is unsure about to the
+person. A run's step is in Autopilot only when its profile says Autopilot, the project allows it (*Allow Autopilot for
+agents in this project*, Project settings › Runs) and the run was not switched to Manual. Decisions (questions, plans,
+limits, conflicts) always come to the person in both modes.
 
-### `set_auto_mode` — changes data · gate AA
+### `get_approvals` — read-only
 
-Changes the project's auto mode settings. **Auto mode**: a reviewer model answers the requests the rules leave to the
-person, approving only those that clearly serve the task.
+A project's approvals. Parameter: `project` (req.). Answers `approvals` with:
 
-| Parameter            | Type              | Req. | Description                                                 |
-|----------------------|-------------------|------|-------------------------------------------------------------|
-| `project`            | string            | yes  | The project's id, or its name.                              |
-| `new_runs`           | boolean \| null   | no   | Whether runs created from now on use auto mode.             |
-| `approve_everything` | boolean \| null   | no   | *With auto mode on, approve everything in each run* (below). |
-| `reviewer`           | Reviewer \| null  | no   | The reviewer; unchanged when left out.                      |
+- `allow_autopilot` — *Allow Autopilot for agents in this project*.
+- `reviewer` — the connection, model and effort that review Manual's requests (`default` when no one chose another),
+  or `unavailable` with why the project has none.
+- `runs` — each run of the project that has not ended: `id`, `number`, `task`, `link`, and `approval_mode`: `{"mode":
+  "autopilot"}`, or `{"mode": "manual", "because": …}` with `profile` (its profile is Manual), `project` (the project
+  does not allow Autopilot) or `run` (the run was switched to Manual), the first that says so.
 
-**`approve_everything`** (ORC-199, per project, off by default, kept on this computer only like the other auto mode
-settings): every run that uses auto mode answers from its start as *Approve everything in this run* would — worktree
-commands, reads (also outside the worktree, such as a dependency's checkout) and MCP calls run without a card,
-recorded as `auto_approved`; network commands, writes outside the worktree, secrets, installs, destructive and unread
-commands still ask, and the reviewer still reviews them. The runner reads it at each request, so turning it or a run's
-auto mode off stops it from the next request; a run's own *Stop* wins over it. Turning it on also needs *Let automation
-change agent permissions* (`person_only` otherwise); turning it off alone needs no gate.
+### `set_allow_autopilot` — changes data · person only to turn on
 
-**Reviewer**: `connection` (string | null — an agent connection: Claude Code, Codex, or a native one on the Anthropic
-API; left out = the default reviewer, the first Claude Code connection with Haiku 4.5), `model` (string | null —
-the connection's default when left out), `effort` (string | null).
+Turns the project's *Allow Autopilot for agents in this project* on or off. `false` is always taken: every agent of
+the project then runs as Manual. `true` is refused as `person_only` whatever automation may do: only a person allows
+Autopilot, in Project settings › Runs (asking for it while it is on already changes nothing). Parameters: `project`,
+`allow_autopilot` (boolean) — both required. Answers as `get_approvals`.
+
+### `set_reviewer` — changes data · gate AA, and AP for another reviewer
+
+Chooses the reviewer Manual asks before the person. Refused as `automation_not_allowed` unless AA is on; a reviewer
+other than the current one also needs AP (`person_only`), and one on another account says so among the reasons.
+Answers as `get_approvals`.
+
+| Parameter    | Type           | Req. | Description                                                                                                   |
+|--------------|----------------|------|---------------------------------------------------------------------------------------------------------------|
+| `project`    | string         | yes  | The project's id, or its name.                                                                                |
+| `connection` | string \| null | no   | An agent connection: Claude Code, Codex, or a native one on the Anthropic API; left out = the default reviewer, the first Claude Code connection with Haiku 4.5. |
+| `model`      | string \| null | no   | A model of that connection; its default when left out.                                                        |
+| `effort`     | string \| null | no   | An effort the model takes; the connection's default when left out.                                            |
+
+### Retired: `get_auto_mode`, `set_auto_mode`, `set_run_auto_mode`
+
+Auto mode was replaced by approval modes. For one release these names stay listed, change nothing and answer the
+error `retired`, whose message names the tool to use instead: `get_auto_mode` → `get_approvals`; `set_auto_mode` →
+`set_allow_autopilot` and `set_reviewer` (*New runs use auto mode* and *approve everything in each run* are gone: a
+profile's approval mode and the project's *Allow Autopilot* take their place); `set_run_auto_mode` → `set_run_manual`.
 
 ---
 
@@ -111,11 +130,15 @@ which runs were merged outside Orchester; across projects, data is read as store
 
 ### `get_task` — read-only
 
-One task: title, brief, criteria, draft or submitted, workflow status, priority, story points, tags,
-`blocked_reason`, `blocked_by`, `no_automatic_merge`, `delivers` (`null` = as its pipeline says), pipeline, limits,
-where it stands, `result` (for a latest run that passed every step: what it delivers, whether it committed nothing,
-its completion, its report and the MCP tool calls it was let make outside the repository; `null` otherwise), its runs
-and its link (Details tab; each run links to the Summary).
+One task: title, brief, criteria, draft or submitted, workflow status, priority, story points, tags, module,
+`base_branch`, `blocked_reason`, `blocked_by`, `no_automatic_merge`, `delivers` (`null` = as its pipeline says),
+pipeline, limits, where it stands, `result` (for a latest run that passed every step: what it delivers, whether it
+committed nothing, its completion, its report and the MCP tool calls it was let make outside the repository; `null`
+otherwise), its runs and its link (Details tab; each run links to the Summary).
+
+`base_branch` holds `choice` (`inherit`, `checked_out` or `branch`) with the `branch` set, and `next_run`: the branch
+its next run takes as things stand (`null` = whatever the checkout has checked out), with its `source` (`task`,
+`module` with that `module`'s id, or `checked_out`). Each run's own base is in `get_run`.
 
 Parameters: `project` (req.), `key` (req.: key or id).
 
@@ -124,6 +147,10 @@ Parameters: `project` (req.), `key` (req.: key or id).
 Saves a new **draft** task. Limits left out take the project's defaults (as the *New task* form fills them); `null`
 is no limit. Any published pipeline may be chosen. Organization is checked as the task form checks it. The task's
 history records the organization as automation's.
+
+A task's **base branch** is the branch its runs start from and deliver into. It is kept on this computer only: in a
+shared project the tools set and read this computer's choice, which is never sent to the server, and teammates may
+choose differently.
 
 | Parameter            | Type                       | Req. | Description                                                                                       |
 |----------------------|----------------------------|------|---------------------------------------------------------------------------------------------------|
@@ -143,9 +170,11 @@ history records the organization as automation's.
 | `module`             | string \| null             | no   | Module id or name (`list_modules`).                                                               |
 | `no_automatic_merge` | boolean                    | no   | *Don't merge automatically*: the Orchestrator won't merge its runs on its own. Default `false`.   |
 | `delivers`           | Delivers \| null           | no   | Overrides the pipeline's `delivers`.                                                              |
+| `base_branch`        | string \| null             | no   | `inherit` (its module's; default), `checked_out` or a branch name; a name only a remote has (`release` or `origin/release`) creates its local branch, tracking it. |
 
 Refusals: `task_not_found` (unknown blocker), `invalid_organization` (blank reason, cycle), `shared_task`
-(`no_automatic_merge` in a shared project), `module_not_found`.
+(`no_automatic_merge` in a shared project), `module_not_found`, `branch_not_found` (the repository has the base branch
+nowhere; nothing is saved).
 
 ### `update_task` — changes data · gate AP for switching pipelines
 
@@ -164,6 +193,7 @@ as `create_task` (all optional) plus `key` (req.). Specifics:
 - **`module`**: `null` takes it out of its module.
 - **`no_automatic_merge`**: `true`/`false`; in a shared project refused as `shared_task` before anything is saved.
 - **`delivers`**: `null` follows the pipeline again.
+- **`base_branch`**: the task's next runs take it; runs that started keep the base they recorded.
 - **`story_points`**: refused as `persons_points` when a person set them. After a brief/criteria change without
   points, Orchester re-estimates when the switch allows.
 - **Deleting a task** is a person's alone, in the app — no tool deletes one.
@@ -187,19 +217,23 @@ canceled). Parameters: `project`, `key` (both req.).
 
 Modules are epics, milestones or sprints that group a project's tasks. Shared projects have no modules.
 
+A module's **base branch** is the branch its tasks that inherit theirs start from and deliver into (`null` = whatever
+the checkout has checked out when a run starts). Like a task's, it is kept on this computer only and never sent to a
+server.
+
 ### `list_modules` — read-only
 
-Oldest first: name, description, start and target dates (`YYYY-MM-DD`, local days), state (`open`/`closed`), task
-count, progress (scope and done in its unit — tasks, until tasks have story points; Canceled tasks are out of scope),
-link. Parameter: `project` (req.).
+Oldest first: name, description, start and target dates (`YYYY-MM-DD`, local days), state (`open`/`closed`),
+`base_branch`, task count, progress (scope and done in its unit — tasks, until tasks have story points; Canceled tasks
+are out of scope), link. Parameter: `project` (req.).
 
 ### `get_module` — read-only
 
-One module as its page shows it: details, progress, tasks (key, title, workflow status, link), and its **burndown** by
-local day from its start (or its first task's day) to today or its target date (at most 366 days): scope and
-remaining work at each day's end (`null` for future days), the ideal line (`null` without a target), and work added
-and removed that day. *Done* is the task's Done (merging its run sets it, in Orchester or found merged outside by git,
-as does a person). `forecast`: 50% and 85% delivery dates, or `not_enough_history`.
+One module as its page shows it: details (`base_branch` among them), progress, tasks (key, title, workflow status,
+link), and its **burndown** by local day from its start (or its first task's day) to today or its target date (at most
+366 days): scope and remaining work at each day's end (`null` for future days), the ideal line (`null` without a
+target), and work added and removed that day. *Done* is the task's Done (merging its run sets it, in Orchester or found
+merged outside by git, as does a person). `forecast`: 50% and 85% delivery dates, or `not_enough_history`.
 
 Parameters: `project` (req.), `module` (req.: id or name).
 
@@ -214,13 +248,16 @@ Makes a new open module in a **local** project (refused as `shared_task` in a sh
 | `description` | string \| null | no   |                                           |
 | `start_date`  | string \| null | no   | `YYYY-MM-DD`.                             |
 | `target_date` | string \| null | no   | `YYYY-MM-DD`, not before the start.       |
+| `base_branch` | string \| null | no   | `checked_out` (default) or a branch name; a name only a remote has (`release` or `origin/release`) creates its local branch, tracking it. |
 
-Put tasks in it with `create_task`/`update_task`'s `module`.
+Put tasks in it with `create_task`/`update_task`'s `module`. Refusals: `branch_not_found` (the repository has the
+branch nowhere; nothing is made).
 
 ### `update_module` — changes data
 
-Changes `name`, `description`, `start_date`, `target_date` (`null` = no date) or `state` (`open` | `closed`); fields
-left out stay. Its tasks and history stay. Parameters: `project`, `module` (req.) + the fields.
+Changes `name`, `description`, `start_date`, `target_date` (`null` = no date), `state` (`open` | `closed`) or
+`base_branch` (as `create_module` takes it; the next runs of its tasks that inherit theirs take it, runs that started
+keep theirs); fields left out stay. Its tasks and history stay. Parameters: `project`, `module` (req.) + the fields.
 
 ---
 
@@ -253,7 +290,7 @@ detail ends by naming them (`… · Review waits for an agent slot`).
 
 The complete state of a run:
 
-- **Steps**, **state** and **tokens** (auto mode's reviewer included and shown apart), **active time**. A step's
+- **Steps**, **state** and **tokens** (the reviewer's included and shown apart), **active time**. A step's
   `status` is its `state` and `waits_for`: while it is `waiting`, what for; `agent_slot` on a `pending` step that is
   ready and held back only because every agent slot is in use (raising *Agents at once* starts it), which the online
   runner reports and nothing stores; `null` on a step whose dependencies have not passed.
@@ -263,6 +300,10 @@ The complete state of a run:
   what each agent wrote last (`awaiting.messages`); the plan waiting for a decision (version, step, whole text,
   excerpt).
 - **Decided plans** with decision, note, time and `decided_by` (person, or automation through MCP).
+- **`base`**: the base the run started from and delivers into, as it recorded it when it started — `branch` (`null`
+  when it took a detached HEAD's), `revision`, and `source`: `task` (the task's base branch), `module` (its module's,
+  with that `module`'s id), `checked_out` (whatever the checkout had checked out) or `project` (a run recorded before
+  tasks and modules had a base branch). A later change of the task's or module's base branch leaves it alone.
 - **`merge`**: `merged` by `orchester` (with the recorded merge) or `outside` (git proves the base holds the run's
   commits), `not_merged`, `nothing_to_merge`, or `null` for a run that has not succeeded.
 - **`base_moved`**: notices that the base branch moved — branch and revision, tasks and commits that landed, files
@@ -270,8 +311,10 @@ The complete state of a run:
   only non-merging steps like Review/Verify are left), `kept_until_run_goes_on`, `waits_for_follow_up`, `delivered`
   (with the agent and step that read it), or `merged_by_runner` (with `merged_by_runner.before_step` and
   `merge_commit`: the move overlapped none of the run's changes, so Orchester merged it itself before that step).
-- **`delivery`** (merge queue; `null` without a Deliver step or if it never joined): `queued` (with `place`),
-  `syncing`, `rechecking`, `integrating` (`integrate_step`, `files`), `waiting_for_approval`, `blocked`
+- **`delivery`** (merge queue; `null` without a Deliver step or if it never joined): `lane` (the base branch it
+  delivers into: the queue has a lane per base branch, each delivering one run at a time on its own), `queued` (with
+  `place`, its place in its lane), `syncing`, `rechecking`, `integrating` (`integrate_step`, `files`),
+  `waiting_for_approval`, `blocked`
   (`blocked.why`: `uncommitted_changes` + files, `other_branch_checked_out`, `operation_in_progress`,
   `local_integration`), `failed` or `needs_you` (`reason.why`: `conflicts` + files, `check_failed`,
   `base_keeps_moving` + heads, `stopped`, `later_run`), `merged` (revision, kind `merge_commit`/`squash`,
@@ -314,9 +357,13 @@ Refusals: `run_merged`, `worktree_removed`, `worktree_in_merge`, `run_not_ended`
 `step_cannot_write`, `no_writing_step`, `integration_running`, `automation_not_allowed`. Decisions are recorded as
 automation's.
 
-### `set_run_auto_mode` — changes data · gate AA
+### `set_run_manual` — changes data
 
-Turns one run's auto mode on or off. Parameters: `project`, `run`, `enabled` (boolean) — all required.
+Switches one run to Manual for itself, as its status line's *Switch to Manual for this run* does: its agents'
+requests no longer go through Autopilot but through the profile's allowed commands, the reviewer, then the person. A
+narrowing, so always taken, whatever the person's switches; a run never goes back to Autopilot. Refused as `run_ended`
+for a run that ended. Parameters: `project`, `run` — both required. Answers the run's `id`, `number` and
+`approval_mode` (as `get_approvals` gives it).
 
 ### `remove_worktree` — changes data
 
@@ -350,8 +397,13 @@ what holds now.
 
 Tool requests waiting for a decision, oldest first (kind, command or tool, arguments, agent, run, task, since when),
 and the plans runs wait on (version, step, excerpt) with decisions on their earlier versions and `decided_by`. Each
-links to its card on the task's Conversation. A request auto mode's reviewer still judges has `reviewing: true`: it
+links to its card on the task's Conversation. A request the reviewer still judges has `reviewing: true`: it
 waits for the reviewer, not for a person, until the review ends (`get_run`'s `awaiting.approvals` mark it the same).
+A request the run's approval mode brought to the person says why in `came_to_you`: `reason` is the card's code
+(`outside`, `notAllowed`, `reviewerUnsure`, `reviewerDenied`, `push`, `refs`) and `detail` what the card names with
+it (the path, the ref, or the reviewer's reason). `get_run`'s `requests` lists every request of the run, oldest first,
+with `answered` (`kind`: `autopilot`, `profile`, `reviewer` with its `reason`, `person`; absent while it waits) and
+`came_to_you`.
 
 Parameters: `project` (string | null), `run` (string | null — needs `project`).
 

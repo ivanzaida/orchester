@@ -22,6 +22,7 @@ use lurq::{
 use super::{
   icon::{Icon, icon},
   pressable::opening,
+  skeleton,
   tooltip::Tooltip,
 };
 use crate::{
@@ -60,7 +61,10 @@ pub struct SettingGroup {
   id: Arc<str>,
   title: Arc<str>,
   meta: Option<Arc<str>>,
+  /// The meta's bone while it is read.
+  meta_bone: Option<Element>,
   end: Option<Element>,
+  notice: Option<Element>,
   rows: Vec<Element>,
   note: Option<Arc<str>>,
 }
@@ -72,15 +76,30 @@ impl SettingGroup {
       id: id.into(),
       title: title.into(),
       meta: None,
+      meta_bone: None,
       end: None,
+      notice: None,
       rows: Vec::new(),
       note: None,
     }
   }
 
+  /// A notice between the heading and the box, 4 further from the box (`Not found` `PzLrb` in `09b · … not found`
+  /// `NZECi`).
+  pub fn notice(mut self, notice: impl Into<Element>) -> Self {
+    self.notice = Some(notice.into());
+    self
+  }
+
   /// A count or when it was read, after the title in 12 `text_muted` (`Count` `e8kTSZ`, `Meta` `F5yRK`).
   pub fn meta(mut self, meta: impl Into<Arc<str>>) -> Self {
     self.meta = Some(meta.into());
+    self
+  }
+
+  /// The meta is still read: `bone` stands in its place.
+  pub fn meta_reading(mut self, bone: impl Into<Element>) -> Self {
+    self.meta_bone = Some(bone.into());
     self
   }
 
@@ -113,15 +132,20 @@ impl From<SettingGroup> for Element {
       .id(format!("{}-title", group.id))
       .variant(SettingsText::GroupTitle.role())
       .nowrap();
-    let meta = group.meta.map(|meta| {
-      Text::new(&meta)
-        .id(format!("{}-meta", group.id))
-        .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
-        .flex(1.0)
-        .min_width(Dimension::Px(0.0))
-        .nowrap()
-    });
+    let meta: Option<Element> = match (group.meta, group.meta_bone) {
+      (Some(meta), _) => Some(
+        Text::new(&meta)
+          .id(format!("{}-meta", group.id))
+          .variant(TypographyStyle::Description)
+          .color(PaletteColor::TextMuted)
+          .flex(1.0)
+          .min_width(Dimension::Px(0.0))
+          .nowrap()
+          .into(),
+      ),
+      (None, Some(bone)) => Some(Row::new().flex(1.0).child(bone).into()),
+      (None, None) => None,
+    };
     let title = if meta.is_some() { title } else { title.flex(1.0) };
     let heading = Row::new()
       .id(format!("{}-heading", group.id))
@@ -149,11 +173,18 @@ impl From<SettingGroup> for Element {
         .clip()
         .with_children(cells)
     });
+    let notice = group.notice.map(|notice| {
+      Column::new()
+        .width(Dimension::Pct(100.0))
+        .padding(Padding::new().bottom(SpacingSize::Xs))
+        .child(notice)
+    });
     Column::new()
       .id(group.id.to_string())
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)
       .child(heading)
+      .with_children(notice)
       .with_children(rows)
       .with_children(group.note.map(|note| group_note(&format!("{}-note", group.id), &note)))
       .into()
@@ -173,8 +204,12 @@ pub fn group_note(id: &str, text: &str) -> Text {
 pub struct SettingRow {
   id: Arc<str>,
   label: Arc<str>,
+  detail: Option<Element>,
+  /// The label's color when it says how something stands, `text_primary` otherwise.
+  label_color: Option<PaletteColor>,
   hint: Option<(Arc<str>, HintTone)>,
   info: Option<Arc<str>>,
+  link: Option<Element>,
   lead: Option<Element>,
   control: Option<Element>,
   below: Vec<Element>,
@@ -182,6 +217,8 @@ pub struct SettingRow {
   faded: bool,
   selected: bool,
   opens: Option<Open>,
+  /// The label's and the hint's bones, while they are read.
+  bones: (Option<f32>, Option<f32>),
 }
 
 impl SettingRow {
@@ -191,8 +228,11 @@ impl SettingRow {
     Self {
       id: id.into(),
       label: label.into(),
+      detail: None,
+      label_color: None,
       hint: None,
       info: None,
+      link: None,
       lead: None,
       control: None,
       below: Vec::new(),
@@ -200,7 +240,27 @@ impl SettingRow {
       faded: false,
       selected: false,
       opens: None,
+      bones: (None, None),
     }
+  }
+
+  /// A value on a line of its own between the label and the hint, such as a program's path (`Path` `M2Pwq` in
+  /// `09 · Settings · Browser` `j3Lre`).
+  pub fn detail(mut self, detail: impl Into<Element>) -> Self {
+    self.detail = Some(detail.into());
+    self
+  }
+
+  /// The label in `color`: it says how something stands (`Orchester 0.4.0 is ready` in `info`, `c69Eti`).
+  pub fn label_color(mut self, color: PaletteColor) -> Self {
+    self.label_color = Some(color);
+    self
+  }
+
+  /// A link under the hint, in the label's column, 2 further down (`Link` `ngNFb` in `tMyiy`).
+  pub fn link(mut self, link: impl Into<Element>) -> Self {
+    self.link = Some(link.into());
+    self
   }
 
   /// One short line under the label.
@@ -267,16 +327,32 @@ impl SettingRow {
     self
   }
 
-  /// The label with its (i), and the hint under them.
-  fn text(&self, ctx: &mut Ctx) -> Column {
-    let label = Text::new(&self.label)
-      .id(format!("{}-label", self.id))
-      .variant(ExtraTypography::Strong.role())
-      .color(if self.faded {
-        PaletteColor::TextMuted
-      } else {
-        PaletteColor::TextPrimary
-      });
+  /// The label is not read yet: its bone, `width` long, in its place.
+  pub fn label_reading(mut self, width: f32) -> Self {
+    self.bones.0 = Some(width);
+    self
+  }
+
+  /// The hint is not read yet: its bone, `width` long, in its place.
+  pub fn hint_reading(mut self, width: f32) -> Self {
+    self.bones.1 = Some(width);
+    self
+  }
+
+  /// The label with its (i), its detail and the hint under them.
+  fn text(&mut self, ctx: &mut Ctx) -> Column {
+    let label: Element = match self.bones.0 {
+      Some(width) => skeleton::line(ctx, ExtraTypography::Strong.role(), width).into(),
+      None => Text::new(&self.label)
+        .id(format!("{}-label", self.id))
+        .variant(ExtraTypography::Strong.role())
+        .color(match (self.faded, self.label_color.clone()) {
+          (true, _) => PaletteColor::TextMuted,
+          (false, Some(color)) => color,
+          (false, None) => PaletteColor::TextPrimary,
+        })
+        .into(),
+    };
     let info = self.info.clone().map(|info| {
       let mark = Row::new()
         .id(format!("{}-info", self.id))
@@ -284,6 +360,18 @@ impl SettingRow {
         .child(icon(Icon::Info, IconSize::Sm, PaletteColor::TextMuted));
       Tooltip::new(format!("{}-info", self.id), info).wrap(ctx, mark)
     });
+    let hint: Option<Element> = match (&self.hint, self.bones.1) {
+      (Some((hint, tone)), _) => Some(
+        Text::new(hint)
+          .id(format!("{}-hint", self.id))
+          .variant(TypographyStyle::Description)
+          .color(tone.color())
+          .width(Dimension::Pct(100.0))
+          .into(),
+      ),
+      (None, Some(width)) => Some(skeleton::line(ctx, TypographyStyle::Description, width).into()),
+      (None, None) => None,
+    };
     Column::new()
       .flex(1.0)
       .min_width(Dimension::Px(0.0))
@@ -295,17 +383,17 @@ impl SettingRow {
           .child(label)
           .with_children(info),
       )
-      .with_children(self.hint.as_ref().map(|(hint, tone)| {
-        Text::new(hint)
-          .id(format!("{}-hint", self.id))
-          .variant(TypographyStyle::Description)
-          .color(tone.color())
-          .width(Dimension::Pct(100.0))
-      }))
+      .with_children(self.detail.take())
+      .with_children(hint)
   }
 
-  pub fn render(self, ctx: &mut Ctx) -> Element {
-    let text = self.text(ctx);
+  pub fn render(mut self, ctx: &mut Ctx) -> Element {
+    let link = self.link.take().map(|link| {
+      Row::new()
+        .padding(Padding::new().top(ExtraSpacing::Tight.role()))
+        .child(link)
+    });
+    let text = self.text(ctx).with_children(link);
     let padding = Padding::symmetric(ExtraSpacing::Inset.role(), SettingsSpacing::RowY.role());
     let padding = if self.dependent {
       padding.left(SettingsSpacing::Dependent.role())

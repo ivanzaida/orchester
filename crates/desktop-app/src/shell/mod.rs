@@ -9,6 +9,7 @@ pub mod jump;
 pub mod needs_you;
 pub mod sidebar;
 pub mod status_bar;
+pub mod update;
 
 use lurq::{
   app::{
@@ -20,7 +21,7 @@ use lurq::{
   node::{Element, dimension::Dimension, padding::Padding},
 };
 
-use self::{jump::JumpTo, sidebar::Sidebar, status_bar::StatusBar};
+use self::{jump::JumpTo, sidebar::Sidebar, status_bar::StatusBar, update::UpdateQuestion};
 use crate::{
   navigation::Navigation,
   routes::{Route, Screen},
@@ -74,5 +75,7 @@ pub fn layout(ctx: &mut Ctx) -> Element {
     .background(PaletteColor::SurfaceBase)
     .child(body)
     .child(ctx.mount_keyed::<StatusBar>("status-bar", ()))
+    // A modal over the window: it takes no room in the shell.
+    .child(ctx.mount_keyed::<UpdateQuestion>("update-question", ()))
     .into()
 }

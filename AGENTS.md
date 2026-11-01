@@ -10,10 +10,16 @@ be added later, so domain logic must not depend on the desktop app.
 - Work plan and backlog: `docs/plan.md`. Take tasks from it and move them to its *Done* list when finished.
 - Design source: `crates/desktop-app/design/orchester.pen`, the desktop app's design with its `· redesign` boards
   (committed 2026-10-29; it replaces the Pencil document `87147a2b-…` that briefs named before). It is encrypted —
-  read it only through the `pencil` MCP, passing the absolute path of `crates/desktop-app/design/orchester.pen` in
-  your own checkout or worktree as `filePath`; never Read/Grep it. The person edits it in Pencil from the main
-  checkout and commits it; design steps change it only in the document the person has open and leave the commit to
-  the person. `data/orchester.pen` and `data/orchester2.pen` are older designs: do not use them.
+  read it only through the `pencil` MCP; never Read/Grep it. Pass as `filePath` the absolute path of
+  `crates/desktop-app/design/orchester.pen` in the project's MAIN checkout — the folder that holds `.orchester/` (for a
+  run, the part of your worktree's path before `.orchester/worktrees/`), e.g.
+  `H:/projects/orchester/crates/desktop-app/design/orchester.pen` — never the copy in your own worktree. Pencil has
+  the main checkout's file open (in any tab, active or not) and answers for it by its path; a path Pencil has not
+  open (a worktree copy) is not refused: the MCP silently answers from whichever tab is active, often
+  `orchester-web.pen`. So make your first `execute` print the file's top-level frame names and stop if they are not
+  the desktop boards (`Task page · redesign`, `Shared configuration · redesign`, …). The person edits it in Pencil
+  from the main checkout and commits it; design steps change it only in that document and leave the commit to the
+  person. `data/orchester.pen` and `data/orchester2.pen` are older designs: do not use them.
 
 Cross-agent skill layout:
 
@@ -56,6 +62,8 @@ Workspace layout:
 - `crates/exec` (`orchester-exec`): runs external programs (git, gh, agent CLIs) for the desktop and the runner,
   implementing core's `CommandRunner`. Platform details (hidden console window, process groups and kill, the macOS
   program search path) stay behind `cfg` here.
+- `crates/release` (`orchester-release`): CI's release tool, which signs the app's release files with the release key
+  and uploads them to Orchester Cloud (`docs/stable-build.md`, "Releases from CI"). Not part of the app.
 - Orchester Cloud (`crates/cloud`, `web/cloud` with the orchester.cloud website, `deploy/cloud`, its image workflow
   and `docs/cloud-hosting.md`) moved to the private repository `ivanzaida/orchester-cloud` on 2026-10-27; docs here
   that name those paths mean that repository. Its API contract stays here: `orchester-api` and `docs/cloud-api.md`,
@@ -114,12 +122,13 @@ Hard requirements:
    `crates/desktop-app/src/mcp/bind/windows.rs`, `crates/desktop-app/src/appearance/motion/windows.rs`,
    `crates/desktop-app/src/notifications/os/windows/toast.rs`,
    `crates/desktop-app/src/notifications/os/windows/badge.rs`, `crates/desktop-app/src/notifications/os/macos.rs`,
+   `crates/desktop-app/src/hang_reports/stack/windows.rs`,
    `crates/agent/src/files/entry/windows.rs`, `crates/core/src/permission/remote_drive.rs`,
    `crates/exec/src/run_processes/windows.rs`, `crates/exec/src/run_processes/macos.rs`,
    `crates/exec/src/run_processes/macos/identity.rs`, `crates/exec/src/trash/windows.rs`,
    `crates/exec/src/disk_space/windows.rs`, and the tests `crates/desktop-app/tests/system_icon.rs`,
-   `crates/exec/tests/support/process_window.rs`, `crates/exec/tests/support/process_term.rs` and
-   `crates/exec/tests/support/console_children.rs`).
+   `crates/desktop-app/tests/browser_window/inspection.rs`, `crates/exec/tests/support/process_window.rs`,
+   `crates/exec/tests/support/process_term.rs` and `crates/exec/tests/support/console_children.rs`).
 10. Domain types enforce their invariants through constructors; do not make fields public just to allow raw struct
    literals from other modules.
 11. Secrets: a secret value never reaches logs, `Debug`/`Display` output, prompts, variables, copied text, errors,

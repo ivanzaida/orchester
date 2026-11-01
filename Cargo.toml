@@ -10,6 +10,7 @@ members = [
   "crates/exec",
   "crates/index",
   "crates/ipc",
+  "crates/release",
   "crates/report",
   "crates/runner",
   "crates/store",
@@ -67,6 +68,9 @@ chrono = { version = "0.4", default-features = false, features = ["clock", "std"
 # (`orchester-app`'s build script, Windows only). It finds the Windows SDK's resource compiler for the MSVC
 # toolchain in use, which the build script cannot do in a few lines.
 embed-resource = "3"
+# The sending and receiving sides of the runner's WebSocket to the project's browser (`SinkExt`, `StreamExt`), which
+# tokio-tungstenite's stream implements. Already built for hyper and reqwest, so it adds no crate.
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
 # Decodes the bundled PNG of the window icon. Already compiled with its PNG decoder for lurq's
 # clipboard (arboard), so it adds no crate to the build.
 base64 = "0.22"
@@ -109,6 +113,8 @@ pulldown-cmark = { version = "0.13.4", default-features = false }
 # defined and matched when it starts. A regular expression engine is not a few lines of code; already built for
 # tree-sitter and sentry, so it adds no crate.
 regex = "1"
+# The handles of lurq's `RenderEngine`, for a test's stand-in engine; already built through lurq and winit.
+raw-window-handle = "0.6"
 # Native folder picker for choosing a project repository; lurq already uses it for DevTools.
 rfd = "0.15"
 # The MCP protocol of Orchester's own MCP server: its tools (`orchester_workspace::app_mcp`) and, in
@@ -164,6 +170,11 @@ thiserror = "2"
 # `signal`: the macOS runner ends its agents on SIGTERM/SIGINT; it builds on the signal handling
 # `process` already compiles in.
 tokio = { version = "1.53", features = ["io-util", "macros", "net", "process", "rt", "rt-multi-thread", "signal", "sync", "time"] }
+# The runner's connection to the project's headless browser over the DevTools Protocol (`docs/design/browser.md`,
+# "Connection and dependency"): CDP is JSON over a WebSocket, and a WebSocket client (handshake, framing, masking) is
+# not a few lines of code. Client only and without TLS: the browser listens on loopback. It adds tungstenite, sha1 and
+# data-encoding; the rest is already built. The app does not get it: only the runner talks to the browser.
+tokio-tungstenite = { version = "0.30", default-features = false, features = ["connect"] }
 # Reads package manifests (`Cargo.toml`, `pyproject.toml`) for the codebase index's repository map.
 # Already built for embed-resource on Windows; a TOML parser is not a few lines of code.
 toml = { version = "1", default-features = false, features = ["std", "parse", "serde"] }

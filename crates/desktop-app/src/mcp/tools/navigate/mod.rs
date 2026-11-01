@@ -4,7 +4,7 @@ mod modules;
 use std::num::NonZeroU64;
 
 use lurq::mcp::{McpTool, Scope};
-use modules::{module_page, new_task_page};
+use modules::{agent_page, module_page, new_task_page};
 use orchester_core::{
   id::{ConnectionId, ProjectId},
   project::{TaskKey, TaskKeyError},
@@ -36,11 +36,9 @@ const DESCRIPTION: &str = "Take the active tab of the Orchester window to a rout
   (the mouse's back button, or Alt+Left, Cmd+[ on macOS, returns). `route` is the screen's name: all_projects takes no \
   other argument; join_team takes `way` (cloud, the default: the account's teams and invites; code: the code page; \
   projects with `server`: a joined team's shared projects; folder with `server` and `project`: link one to a folder); \
-  settings takes `tab` (automation, general, notifications, accounts, orchester for Orchester \
-  Cloud, connect for Connect a server, invite for an invite's landing) and what that tab opens on: accounts \
-  `account` (an account's id or name, or claude-default / codex-default: its page) and `panel` (add for Add account \
+  settings takes `tab` (automation, general, updates or whats-new for General with its Updates in \n  view and, with whats-new, the release notes open, notifications, accounts, browser, orchester for Orchester \n  Cloud, connect for Connect a server, invite for an invite's landing) and what that tab opens on: accounts \n  `account` (an account's id or name, or claude-default / codex-default: its page) and `panel` (add for Add account \
   without `account`; sign_in, rename or remove for that account's step 2, name field or Remove question); orchester \
-  `server` (a team server's id, name or host: its page) and `ask` (sign-out: Sign out…? under the account card, or \
+  `server` (a team server's id, name or host: its page) and `ask` (sign-out: Sign outÃ¢â‚¬Â¦? under the account card, or \
   on that server's page; decline with `invite`, an invite's id: Decline the invite?); connect `server` and `step` \
   (address, compare, join or username: past address it asks what answers at that server's address, and a server \
   with its own certificate stays at compare, which only a person answers); invite `server` and `project` (the \
@@ -57,7 +55,8 @@ const DESCRIPTION: &str = "Take the active tab of the Orchester window to a rout
   (the id of the connection whose page it opens); secrets opens the Secrets tab; new_connection takes `kind` (Add \
   provider or Add MCP server); edit_connection `connection` (an MCP server's id, or an agent CLI connection's for its \
   account); each opens Project settings on that tab or page. agents, instructions, skills, tools and memory are the \
-  five tabs of one Agents page (Profiles, Instructions, Skills, Tools, Memory), each its own route: skills takes \
+  five tabs of one Agents page (Profiles, Instructions, Skills, Tools, Memory), each its own route: agents takes \
+  `agent` (a profile's id, or new), skills takes \
   `skill` (a skill id, new or import), tools takes tool (a tool id, or new), and its page's tab; merge_queue and \
   pull_requests are the two tabs of one Review page, each its own route; orchestrator takes `chat` (a \
   conversation's id, or new; left out, the latest); files takes `file` (a path in the project; the tree alone when \
@@ -93,10 +92,7 @@ pub fn tool(link: WindowLink, lookup: Option<Lookup>) -> McpTool {
 fn schema() -> Value {
   let names: Vec<&str> = Screen::ALL.into_iter().map(Screen::name).collect();
   let tabs = format!(
-    "The screen's tab, the one it opens on when left out: settings automation, general, notifications, accounts, \
-     orchester (Orchester Cloud), connect (Connect a server), invite (an invite's landing); overview {} (kept for old \
-     links: the Overview shows every section on one page); tasks {}; \
-     task {}; project_settings {}; pull_requests {}; memory {}; import_resources {}; modules {}, a module's page {}.",
+    "The screen's tab, the one it opens on when left out: settings automation, general, updates, whats-new, \n     notifications, accounts, browser, \n     orchester (Orchester Cloud), connect (Connect a server), invite (an invite's landing); overview {} (kept for old \n     links: the Overview shows every section on one page); tasks {}; \n     task {}; project_settings {}; pull_requests {}; memory {}; import_resources {}; modules {}, a module's page {}.",
     OverviewTab::ALL.map(OverviewTab::name).join(", "),
     TaskListTab::ALL.map(TaskListTab::name).join(", "),
     TaskTab::ALL.map(TaskTab::name).join(", "),
@@ -126,11 +122,12 @@ fn schema() -> Value {
         "type": "string",
         "description": "task: the repository path of a changed file to show on the changes tab (the tab when left out). files: the path of the file to show (the tree alone when left out).",
       },
-      "selected": { "type": "string", "description": "connections: the id of the connection whose page Project settings › Connections opens." },
-      "kind": { "type": "string", "enum": kinds, "description": "new_connection: what it adds, on a page of Project settings › Connections." },
-      "connection": { "type": "string", "description": "edit_connection: the connection's id: an MCP server's form, or an agent CLI connection's account, on a page of Project settings › Connections." },
+      "selected": { "type": "string", "description": "connections: the id of the connection whose page Project settings Ã¢â‚¬Âº Connections opens." },
+      "kind": { "type": "string", "enum": kinds, "description": "new_connection: what it adds, on a page of Project settings Ã¢â‚¬Âº Connections." },
+      "connection": { "type": "string", "description": "edit_connection: the connection's id: an MCP server's form, or an agent CLI connection's account, on a page of Project settings Ã¢â‚¬Âº Connections." },
+      "agent": { "type": "string", "description": "agents: a profile's id for its page, or new; omitted opens the list." },
       "skill": { "type": "string", "description": "skills: the skill id, new, or import; omitted opens the library." },
-      "tool": { "type": "string", "description": "tools: the tool’s id, or new for a command draft; omitted opens the library." },
+      "tool": { "type": "string", "description": "tools: the toolÃ¢â‚¬â„¢s id, or new for a command draft; omitted opens the library." },
       "chat": { "type": "string", "description": "orchestrator: a conversation's id, or new; omitted opens the latest." },
       "way": { "type": "string", "enum": ["cloud", "code", "projects", "folder"], "description": "join_team: the account's teams and invites (cloud, the default), the code page, a joined team's shared projects (projects, with `server`) or linking one of them to a folder (folder, with `server` and `project`, its slug)." },
       "at": { "type": "string", "description": "files: the version, checkout (the default), base, run:<run id> or rev:<commit>." },
@@ -183,6 +180,11 @@ fn target(args: &Map<String, Value>, lookup: Option<&Lookup>) -> Result<Route, T
   let name = string(args, "route")?.ok_or(ToolError::Missing { param: "route" })?;
   let screen = Screen::from_name(name).ok_or_else(|| ToolError::UnknownRoute { name: name.to_owned() })?;
   only_params(screen, args)?;
+  screen_route(screen, args, lookup)
+}
+
+/// A validated screen and its parameters as the window's route.
+fn screen_route(screen: Screen, args: &Map<String, Value>, lookup: Option<&Lookup>) -> Result<Route, ToolError> {
   let page = match screen {
     Screen::AllProjects => return Ok(Route::AllProjects),
     Screen::AddProject => return Ok(Route::AddProject(None)),
@@ -205,7 +207,7 @@ fn target(args: &Map<String, Value>, lookup: Option<&Lookup>) -> Result<Route, T
     Screen::PullRequests => pull_requests_page(args)?,
     Screen::Usage => return usage_route(args),
     Screen::Pipelines => ProjectPage::Pipelines,
-    Screen::Agents => ProjectPage::Agents,
+    Screen::Agents => agent_page(args)?,
     Screen::Instructions => ProjectPage::Instructions(InstructionsView::default()),
     Screen::Memory => ProjectPage::Memory(memory_tab(args)?),
     Screen::Skills => skills_page(args)?,
@@ -275,12 +277,10 @@ const fn params(screen: Screen) -> &'static [&'static str] {
     Screen::Modules => &["project", "module", "tab", "view"],
     Screen::NewTask => &["project", "module"],
     Screen::ProjectSettings => &["project", "tab", "view"],
-    Screen::MergeQueue
-    | Screen::Pipelines
-    | Screen::Agents
-    | Screen::Instructions
-    | Screen::Secrets
-    | Screen::OrchestratorSettings => &["project"],
+    Screen::Agents => &["project", "agent"],
+    Screen::MergeQueue | Screen::Pipelines | Screen::Instructions | Screen::Secrets | Screen::OrchestratorSettings => {
+      &["project"]
+    }
   }
 }
 

@@ -37,6 +37,7 @@
       "openWorktree": "Open worktree in Files",
       "memory": "Memory for this task",
       "worktreeRemoved": "The run's worktree was removed; its committed work stays on its branch.",
+      "worktreeNotRemoved": "The run's worktree could not be removed: {{path}} is still on disk, but git no longer has it as a worktree. Remove worktree tries again; its committed work stays on its branch.",
       "underWay": "Under way…",
       "waits": "Waits for what is under way"
     },
@@ -70,6 +71,15 @@
       "unreadable": "Run {{run}} · could not be read",
       "unreadableUnnumbered": "Its latest run could not be read"
     },
+    "run": {
+      "mode": {
+        "autopilot": "Autopilot",
+        "manualRun": "Manual · this run",
+        "manualProject": "Manual · project",
+        "manualProfile": "Manual · profile",
+        "switchToManual": "Switch to Manual for this run"
+      }
+    },
     "controls": {
       "start": "Start run",
       "pause": "Pause run",
@@ -83,6 +93,7 @@
         "other": "Unavailable until {{tasks}} finish."
       },
       "worktreeRemoved": "Continue is unavailable: run #{{run}}'s worktree was removed, so its agent has nothing to continue from. Run again starts a new run.",
+      "worktreeNotRemoved": "Continue is unavailable: run #{{run}}'s worktree could not be removed and {{path}} is still on disk, but git no longer has it as a worktree. Remove worktree tries again; Run again starts a new run.",
       "refused": {
         "start": "The runner didn't start the run",
         "pause": "The runner didn't pause the run",
@@ -101,6 +112,13 @@
         "other": "The run neither starts nor goes on until {{tasks}} finish."
       },
       "blockedReason": "{{reason}} · {{waiting}}"
+    },
+    "noBranch": {
+      "title": "Can't start: no branch checked out",
+      "moduleNone": "{{task}} has no base branch and its module none; set one, or check out a branch",
+      "noModule": "{{task}} has no base branch and is in no module; set one, or check out a branch",
+      "takesCheckedOut": "{{task}} takes the checked-out branch and none is checked out; set a base branch, or check out a branch",
+      "setBaseBranch": "Set base branch"
     },
     "runAgain": {
       "action": "Run again",
@@ -146,6 +164,7 @@
       "offline": "Runner not connected",
       "blocked": "Blocked by {{tasks}}",
       "worktreeRemoved": "Worktree removed",
+      "worktreeNotRemoved": "Worktree not removed",
       "unreadable": "This run can't be read",
       "runAgainUnknown": "Run again: couldn't check",
       "runAgainBlocked": "Blocked by unfinished tasks",

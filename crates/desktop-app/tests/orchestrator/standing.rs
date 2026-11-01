@@ -56,6 +56,7 @@ pub fn waiting(screen: &Orchestrator, pipeline: ResourceId, title: &str) -> (Run
     branch: BranchName::new(&format!("orchester/{}", key.to_lowercase())).expect("branch"),
     base: Revision::new(&"a".repeat(40)).expect("revision"),
     base_branch: None,
+    base_source: orchester_core::integration::base::RunBaseSource::CheckedOut,
     budget: None,
     max_duration: None,
   };

@@ -12,7 +12,8 @@ use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 
 use super::{
   ProjectDb,
-  resources::{check_kind, kind_text, load_draft, load_resources, load_versions, save_draft},
+  resources::{check_kind, kind_text, load_draft, load_resources, save_draft},
+  used_versions::used_here,
 };
 use crate::StoreError;
 
@@ -59,6 +60,7 @@ pub(super) fn remove(
   let resource = load_resources(&transaction, "WHERE id = ?1", [id.to_string()])?
     .pop()
     .ok_or(StoreError::ResourceNotFound(id))?;
+  super::shared_publishes::ensure_may_change(&transaction, id)?;
   if removed_at(&transaction, id)?.is_some() {
     return Err(StoreError::ResourceNotFound(id));
   }
@@ -116,14 +118,7 @@ fn reset(
 }
 
 fn latest<B: ResourceBody>(connection: &Connection, resource: ResourceId) -> Result<Option<Version<B>>, StoreError> {
-  Ok(
-    load_versions::<B>(
-      connection,
-      "WHERE resource_id = ?1 ORDER BY number DESC LIMIT 1",
-      [resource.to_string()],
-    )?
-    .pop(),
-  )
+  used_here(connection, resource)
 }
 
 fn removed_at(connection: &Connection, id: ResourceId) -> Result<Option<Timestamp>, StoreError> {

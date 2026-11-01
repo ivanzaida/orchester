@@ -10,7 +10,7 @@ use serde_json::Value;
 use super::{AppServerStream, Update, string};
 use crate::{
   connection::stream::{AgentEvent, FileChange, NativeCall},
-  orchester_tools::{OrchesterTool, SERVER as ORCHESTER},
+  orchester_tools::{OrchesterTool, SERVER as ORCHESTER, browser::BrowserTool},
 };
 
 /// A started MCP call, until it ends.
@@ -104,12 +104,14 @@ impl AppServerStream {
     let own = (server == ORCHESTER)
       .then(|| OrchesterTool::from_name(&action))
       .flatten();
+    // The runner asks about calls of Orchester's browser tools too.
+    let ours = own.is_some() || (server == ORCHESTER && BrowserTool::from_name(&action).is_some());
     let context = ToolContext {
       thread,
       turn,
       target: string(arguments, "filePath"),
-      asked: own.is_some() && self.asked_own.take(&action, arguments),
-      arguments: if own.is_some() { arguments.clone() } else { Value::Null },
+      asked: ours && self.asked_own.take(&action, arguments),
+      arguments: if ours { arguments.clone() } else { Value::Null },
       changes: own.map_or_else(Vec::new, |tool| tool.changed_files(arguments)),
       call: own.and_then(|tool| tool.shown_call(arguments)),
       server,

@@ -1,13 +1,13 @@
 //! Warm workspaces end to end (ORC-114): a run borrows one of the project's workspaces, gives it back detached and
 //! clean once it settles, the next run takes the one idle longest, a run waits while every workspace is in use, a
 //! workspace with another run's leftovers is stranded instead of switched, and below the free space the project keeps
-//! no run starts, agents at work stop with their work committed and the run pauses until there is room — unless the
-//! project has not turned workspaces on. Against `orchester-fake-codex`; needs `git`. Run with
+//! no run starts, agents at work stop with their work committed and the run pauses until there is room. The guard
+//! without warm workspaces is in `disk_guard`. Against `orchester-fake-codex`; needs `git`. Run with
 //! `cargo test -p orchester-runner --features test-agent --test workspaces`.
 
 mod support;
 
-use std::{fs, num::NonZeroU32, sync::Arc, time::Duration};
+use std::{fs, num::NonZeroU32, time::Duration};
 
 use orchester_core::{
   id::{IdempotencyKey, RunId},
@@ -23,16 +23,14 @@ use orchester_store::ProjectDb;
 use self::support::{
   Setup, StepSpec,
   disk::{TestDisk, pooled_scheduler},
-  git, project, queue_another_task, scheduler_on,
-  vault::MemoryVault,
-  wait_for, wait_for_idle, wait_for_turns,
+  git, project, queue_another_task, wait_for, wait_for_idle, wait_for_turns,
 };
 
 /// How often the disk guard looks in the tests that watch it work, instead of every 30 seconds.
 const QUICK: Duration = Duration::from_millis(100);
 
-/// Free gigabytes below the 150 the project keeps free by default.
-const LOW_GB: u64 = 92;
+/// Free gigabytes below the 50 the project keeps free by default.
+const LOW_GB: u64 = 32;
 
 fn number(n: u32) -> WorkspaceNumber {
   WorkspaceNumber::new(n).expect("above zero")
@@ -256,7 +254,7 @@ async fn workspaces_disk_guard_refuses_new_work_below_what_the_project_keeps_fre
     scheduler.start_run(IdempotencyKey::generate(), project.task).await,
     Err(Rejection::LowDisk {
       free_gb: LOW_GB,
-      needed_gb: 150
+      needed_gb: 50
     })
   );
 }
@@ -334,28 +332,4 @@ async fn workspaces_disk_guard_stops_a_step_beside_one_that_ends_while_the_disk_
   assert_eq!(paused.status(), &RunStatus::Paused(PauseReason::LowDisk));
   let records = ProjectDb::open(root).expect("open").workspaces().expect("workspaces");
   assert!(records.iter().all(|record| record.holder.is_none()), "{records:?}");
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn workspaces_disk_guard_holds_nothing_back_while_the_project_has_not_turned_workspaces_on() {
-  let project = project(&Setup::new("Work slowly."));
-  let root = project.repo.path();
-  let disk = TestDisk::default();
-  disk.set_free(LOW_GB);
-  let (scheduler, mut events) = scheduler_on(root, Arc::new(MemoryVault::default()), disk);
-  let scheduler = scheduler.with_disk_checks(QUICK);
-  let id = scheduler
-    .start_run(IdempotencyKey::generate(), project.task)
-    .await
-    .expect("the guard does not refuse it");
-  let done = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
-  wait_for_idle(&scheduler).await;
-  assert_eq!(done.status(), &RunStatus::Succeeded);
-  let db = ProjectDb::open(root).expect("open");
-  assert_eq!(db.invocations(id).expect("invocations").len(), 1, "never paused");
-  assert!(db.workspaces().expect("workspaces").is_empty(), "no workspace borrowed");
-  assert!(
-    root.join(".orchester/worktrees").join(id.to_string()).is_dir(),
-    "its own worktree"
-  );
 }

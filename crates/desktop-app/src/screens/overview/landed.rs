@@ -178,7 +178,40 @@ fn weekday(ctx: &Ctx, at: Timestamp) -> String {
   message_text(ctx, &Message::new(WEEKDAY_KEYS[display::weekday(at)])).to_string()
 }
 
-/// The section's skeleton head while the tasks are read: its head and the merge queue's name.
-pub(super) fn reading(ctx: &Ctx) -> Column {
-  section("overview-landed").child(head("overview-landed", &ctx.t("overview.landed.title"), None, None))
+/// The section while the tasks are read (`ae6PR`): its head with *Done ↗*, the merge queue's line with its name real
+/// and its `state` a bone, *Review ↗* left out until the state is known, then the runs' `bones`.
+pub(super) fn reading(ctx: &mut Ctx, project: ProjectId, (state, bones): (Element, Element)) -> Column {
+  let done = Navigation::of(ctx).to(Route::Project(
+    project,
+    ProjectPage::Tasks(TaskList::new(TaskListTab::Done)),
+  ));
+  let queue = Row::new()
+    .id("overview-merge-queue-reading-line")
+    .width(Dimension::Pct(100.0))
+    .height(Dimension::Px(QUEUE_HEIGHT))
+    .padding(Padding::horizontal(SpacingSize::Sm))
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .background(PaletteColor::SurfaceRaised)
+    .rounded(RadiusSize::Md)
+    .child(icon(Icon::GitPullRequest, IconSize::Base, PaletteColor::TextSecondary))
+    .child(
+      Text::new(&ctx.t("overview.landed.queue"))
+        .variant(OverviewText::Line.role())
+        .nowrap(),
+    )
+    .child(state);
+  section("overview-landed")
+    .child(head(
+      "overview-landed",
+      &ctx.t("overview.landed.title"),
+      None,
+      Some(link(
+        "overview-landed-done",
+        &ctx.t("overview.landed.done"),
+        Press::Open(done),
+      )),
+    ))
+    .child(queue)
+    .child(bones)
 }

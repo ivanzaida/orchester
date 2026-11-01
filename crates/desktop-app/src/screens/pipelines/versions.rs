@@ -26,9 +26,12 @@ use crate::{
     message::message_text,
     pressable::Press,
     row_group::{GroupRow, RowGroup, note, tag},
-    state::loading,
+    skeleton::{self, Skeleton},
   },
 };
+
+/// The versions' bones while they are read: each one's name and what it says.
+const VERSION_BONES: [(f32, f32); 3] = [(64.0, 220.0), (56.0, 180.0), (60.0, 200.0)];
 
 #[derive(Clone)]
 pub struct Props {
@@ -69,7 +72,8 @@ impl Component for Versions {
         pane = pane.child(published(ctx, &props.state, &history));
       }
       None if loaded.error.is_none() => {
-        pane = pane.child(loading("pipeline-history-loading", &ctx.t("pipelines.reading")));
+        let rows = skeleton::list(ctx, "pipeline-history-reading", &VERSION_BONES);
+        pane = pane.child(Skeleton::new("pipeline-history-loading", ctx.t("pipelines.reading")).show(ctx, rows));
       }
       None => {}
     }

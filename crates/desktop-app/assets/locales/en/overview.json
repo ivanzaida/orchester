@@ -106,6 +106,7 @@
     "delivery": {
       "title": "Delivery",
       "link": "Delivery ↗",
+      "reading": "Reading the delivery forecasts…",
       "tasks": "{{done}} / {{scope}} tasks",
       "dates": "Likely {{likely}} · 85% by {{safe}}",
       "done": "Done",

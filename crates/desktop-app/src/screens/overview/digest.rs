@@ -37,7 +37,7 @@ use crate::{
 
 /// The head's height (`l4C6vQ`) and a line's (`TyACW`).
 const HEAD_HEIGHT: f32 = 36.0;
-const LINE_HEIGHT: f32 = 34.0;
+pub(super) const LINE_HEIGHT: f32 = 34.0;
 
 /// The digest of `items`, oldest first.
 pub(super) fn digest(ctx: &mut Ctx, project: ProjectId, items: &[NeedItem], now: Timestamp) -> Column {

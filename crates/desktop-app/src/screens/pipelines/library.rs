@@ -2,29 +2,42 @@
 //! pipeline*, the pipelines in the groups Published and Draft only, how many there are and how versions work; with
 //! none yet, the two ways to start one.
 use lurq::{
-  app::{component::Component, ctx::Ctx, theme::PaletteColor},
+  app::{
+    component::Component,
+    ctx::Ctx,
+    theme::{PaletteColor, SpacingSize},
+  },
+  components::Column,
   core::Signal,
+  layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::id::ProjectId;
 use orchester_workspace::{
   background, messages,
   pipelines::library::{LibraryEntry, VersionState, library_in},
+  sharing::team::TeamConfiguration,
   tasks::outside::Outside,
 };
 
-use super::{library_row::RowProps, parts};
+use super::{
+  library_row::{RowProps, STATE_WIDTH},
+  parts,
+};
 use crate::{
   navigation::Navigation,
   project::ShownProject,
   routes::{ImportTab, ProjectPage, Route},
-  theme::{ExtraSpacing, IconSize},
+  screens::hub::team,
+  services::Services,
+  theme::{ExtraSpacing, GroupText, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
     message::message_text,
     row_group::{GroupRow, RowGroup, note},
-    state::{load_error, loading},
+    skeleton::{self, BoneRow, Skeleton, Words, fading},
+    state::load_error,
   },
 };
 
@@ -39,14 +52,20 @@ impl Component for Library {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let project = ctx.props::<ShownProject>().clone();
     let revision = self.retry.get() + project.feed.outside.get().of(Outside::Pipelines);
+    let hold = Services::of(ctx).hold;
     let loaded = ctx
-      .future((project.open.repo_root.clone(), revision), |(root, _)| async move {
-        background::run(move || library_in(&root).map_err(|e| messages::store_error(&e))).await?
+      .future((project.open.repo_root.clone(), revision), move |(root, _)| {
+        let hold = hold.clone();
+        async move {
+          hold.released().await;
+          background::run(move || library_in(&root).map_err(|e| messages::store_error(&e))).await?
+        }
       })
       .state()
       .get();
     let id = project.open.project.id();
-    let page = parts::page().child(header(ctx, id));
+    let team = team::of(&project);
+    let page = parts::page().child(header(ctx, id, team::may_change(team.as_ref())));
     let pending = loaded.is_pending();
     let body = match (loaded.data, loaded.error) {
       (_, Some(error)) if !pending => {
@@ -59,22 +78,76 @@ impl Component for Library {
         )
       }
       (Some(entries), _) if entries.is_empty() => empty(ctx, id).into(),
-      (Some(entries), _) => populated(ctx, &project, &entries).into(),
-      (None, _) => loading("pipelines-loading", &ctx.t("pipelines.reading")).into(),
+      (Some(entries), _) => populated(ctx, (&project, team.as_ref()), &entries).into(),
+      (None, _) => reading(ctx),
     };
     page.child(parts::body("pipelines-body", body))
   }
 }
 
-/// The title with its actions (`Header` `rDRoY`): 24 over it and 12 under it.
-fn header(ctx: &mut Ctx, project: ProjectId) -> Element {
+/// The bone of the line that counts the pipelines.
+const COUNT_BONE: f32 = 130.0;
+
+/// The library while it is read (`01 Pipelines · loading` `SJC78`): the group headings real and their counts, each
+/// row's name, steps line, state and age bones, lower rows fading; the versions note real.
+fn reading(ctx: &mut Ctx) -> Element {
+  let row = |ctx: &Ctx, id: &str, (name, steps, state): (f32, f32, f32)| -> Element {
+    let end = Column::new()
+      .width(Dimension::Px(STATE_WIDTH))
+      .align_items(Alignment::End)
+      .spacing(ExtraSpacing::Tight.role())
+      .child(skeleton::status(ctx, state))
+      .child(skeleton::line(ctx, GroupText::Hint.role(), state));
+    BoneRow::new(id, Words::Bone(name))
+      .hint(Words::Bone(steps))
+      .end(end)
+      .end(skeleton::chevron())
+      .build(ctx)
+      .into()
+  };
+  let published = vec![
+    row(ctx, "pipelines-reading-1", (150.0, 250.0, 72.0)),
+    row(ctx, "pipelines-reading-2", (50.0, 230.0, 84.0)),
+  ];
+  let drafts = vec![row(ctx, "pipelines-reading-3", (98.0, 236.0, 120.0))];
+  let groups = fading(vec![
+    skeleton::group(
+      ctx,
+      "pipelines-reading-published",
+      (Words::Real(ctx.t("pipelines.groups.published")), true),
+      None,
+      published,
+    ),
+    skeleton::group(
+      ctx,
+      "pipelines-reading-drafts",
+      (Words::Real(ctx.t("pipelines.groups.draftOnly")), true),
+      None,
+      drafts,
+    ),
+  ]);
+  let foot = Column::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Sm)
+    .child(skeleton::line(ctx, GroupText::Hint.role(), COUNT_BONE))
+    .child(note("pipelines-versions-note", &ctx.t("pipelines.versionsExplanation")));
+  let pane = parts::pane("pipelines-reading").with_children(groups).child(foot);
+  Skeleton::new("pipelines-loading", ctx.t("pipelines.reading")).show(ctx, pane)
+}
+
+/// The title with its actions (`Header` `rDRoY`): 24 over it and 12 under it; a member of a shared project imports
+/// and adds none of the team's pipelines.
+fn header(ctx: &mut Ctx, project: ProjectId, may_change: bool) -> Element {
   let nav = Navigation::of(ctx);
-  let import = ActionButton::new("pipeline-import", ButtonKind::Secondary, ctx.t("pipelines.import"))
-    .icon(Icon::Download)
-    .opens(nav.to(Route::Project(project, ProjectPage::Import(ImportTab::Pipelines))));
-  let new = ActionButton::new("pipeline-new", ButtonKind::Primary, ctx.t("pipelines.new"))
-    .icon(Icon::Plus)
-    .opens(nav.to(Route::Project(project, ProjectPage::NewPipeline)));
+  let actions = may_change.then(|| {
+    let import = ActionButton::new("pipeline-import", ButtonKind::Secondary, ctx.t("pipelines.import"))
+      .icon(Icon::Download)
+      .opens(nav.to(Route::Project(project, ProjectPage::Import(ImportTab::Pipelines))));
+    let new = ActionButton::new("pipeline-new", ButtonKind::Primary, ctx.t("pipelines.new"))
+      .icon(Icon::Plus)
+      .opens(nav.to(Route::Project(project, ProjectPage::NewPipeline)));
+    [import, new]
+  });
   parts::header()
     .padding(
       Padding::new()
@@ -83,19 +156,20 @@ fn header(ctx: &mut Ctx, project: ProjectId) -> Element {
         .left(ExtraSpacing::Roomy.role())
         .right(ExtraSpacing::Roomy.role()),
     )
-    .child(
-      parts::title_row("pipelines-title", &ctx.t("pipelines.title"))
-        .child(import)
-        .child(new),
-    )
+    .child(parts::title_row("pipelines-title", &ctx.t("pipelines.title")).with_children(actions.into_iter().flatten()))
     .into()
 }
 
-fn populated(ctx: &mut Ctx, shown: &ShownProject, entries: &[LibraryEntry]) -> lurq::components::Column {
+fn populated(
+  ctx: &mut Ctx,
+  (shown, team): (&ShownProject, Option<&TeamConfiguration>),
+  entries: &[LibraryEntry],
+) -> lurq::components::Column {
   let (published, drafts): (Vec<_>, Vec<_>) = entries
     .iter()
     .partition(|entry| !matches!(entry.state, VersionState::DraftOnly));
-  let mut pane = parts::pane("pipelines-library");
+  let mut pane =
+    parts::pane("pipelines-library").with_children(team.map(|team| team::line(ctx, "pipelines-team-line", team)));
   for (id, title, group) in [
     ("pipelines-published", "pipelines.groups.published", published.clone()),
     ("pipelines-drafts", "pipelines.groups.draftOnly", drafts),
@@ -112,6 +186,7 @@ fn populated(ctx: &mut Ctx, shown: &ShownProject, entries: &[LibraryEntry]) -> l
             project: shown.open.project.id(),
             root: shown.open.repo_root.clone(),
             entry: entry.clone(),
+            team: team.cloned(),
           },
         )
       })

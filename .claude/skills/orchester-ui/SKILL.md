@@ -18,8 +18,9 @@ skill is the Orchester-specific layer: where things live and how to name them.
 ## The new app (`orchester-app`)
 
 `crates/desktop-app` (the `crates/desktop-app/design/orchester.pen` design: read it through the `pencil` MCP with
-the absolute path of that file in your own checkout as `filePath`; `data/orchester2.pen` is an older design, not
-used) follows the same two rules with its own
+the absolute path of that file in the project's main checkout as `filePath` — the folder holding `.orchester/`, not
+your worktree's copy, which Pencil has not open, so the MCP would silently answer from its active tab instead; see
+AGENTS.md › Design source; `data/orchester2.pen` is an older design, not used) follows the same two rules with its own
 files; the paths and the mapping tables below are the deprecated `orchester-desktop`'s.
 
 - Strings: one file per locale and area, `crates/desktop-app/assets/locales/<locale>/<area>.json`
@@ -204,6 +205,7 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | a tool chip's padding over and under its line 5 (`a7zbJ`); 4 between the rail strip's badges and the composer's send chevron and button (`fFDrw`, `eI8en`) | `ExtraSpacing::Chip.role()` / `ExtraSpacing::Snug.role()` |
 | the composer dock's room above its box 4, under it and the closed box's side padding 18 (`CoGTj`, `W9LMuM`) | `ExtraSpacing::ComposerTop.role()` / `ExtraSpacing::ComposerEdge.role()` |
 | a rail step that has not started, at 70 % (`r27KI` in `K4AOD`) | `theme::NOT_STARTED_OPACITY` |
+| Browser window (`lcNez`): switcher initial 10.5/600, address mono 12, a page dialog's message 13/1.5, the agent's name on its mark 11/500 `text_inverse`, the file dialog's hint 13/500 and 12 `text_secondary` (`FCera` in `03b` `TWpyp`); switcher gap 7, activity line sides 14, dialog padding 20, the hint's sides 18; the dots' and the agent ring's 1.5 stroke; the tab strip's fade to clear `surface_base` | `BrowserText::*` / `BrowserSpacing::*` / `BrowserBorder::Ring` / `BrowserColor::FadeClear` (`theme/browser.rs`) |
 
 | `TypographyStyle` | Size/weight | Used for |
 | --- | --- | --- |

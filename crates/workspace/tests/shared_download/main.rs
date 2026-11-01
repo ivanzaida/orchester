@@ -167,9 +167,7 @@ impl Linked {
 
   /// One round of the shared projects' work, as the request the join made starts.
   fn round(&self) {
-    self
-      .runtime
-      .block_on(self.servers.sync_shared(false, &Programs::processes()));
+    self.runtime.block_on(self.servers.sync_shared(&Programs::processes()));
   }
 
   fn state(&self) -> Option<FirstDownload> {
@@ -240,7 +238,7 @@ fn shared_download_a_join_reads_the_linked_checkouts_tasks_tags_and_modules_as_t
   let servers = linked.servers.clone();
   let round = linked
     .runtime
-    .spawn(async move { servers.sync_shared(false, &Programs::processes()).await });
+    .spawn(async move { servers.sync_shared(&Programs::processes()).await });
   until("the tasks asked for", || linked.responder.tasks_asked() == 1);
   assert_eq!(linked.state(), downloading(), "downloading while the server answers");
   assert!(linked.tasks().tasks.is_empty(), "nothing is cached yet");

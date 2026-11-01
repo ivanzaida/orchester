@@ -89,6 +89,10 @@
       "waitingSince": "Showing what was read at {{time}}. Orchester tries again on its own.",
       "waiting": "Orchester tries again on its own; nothing was changed."
     },
+    "dialog": {
+      "escKey": "Esc",
+      "escCancels": "cancels"
+    },
     "datePicker": {
       "monthYear": "{{month}} {{year}}",
       "day": "{{month}} {{day}}, {{year}}",

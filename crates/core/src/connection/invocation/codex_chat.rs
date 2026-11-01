@@ -45,10 +45,10 @@ use crate::{
 /// it, but 0.159.2's `codex features list` still shows `unified_exec` on with it, so nothing rests on it. `view_image`
 /// reads an image file outside any sandbox; `skill_mcp_dependency_install` would let a skill bring an MCP server into
 /// the thread; the rest offer tools the chat has no use for. Each of these but `unified_exec` shows off in
-/// `codex features list` with the overrides. Sub-agents and the user's own hooks are off for every Codex invocation
-/// already ([`super::CODEX_SUB_AGENTS_OFF`], [`super::CODEX_ISOLATION`]). A turned-off tool is not offered to the
-/// model, and a call of it is refused.
-pub const CONFINEMENT: [&str; 10] = [
+/// `codex features list` with the overrides. Sub-agents, computer use and the user's own hooks are off for every Codex
+/// invocation already ([`super::CODEX_SUB_AGENTS_OFF`], [`super::CODEX_ISOLATION`]). A turned-off tool is not offered
+/// to the model, and a call of it is refused.
+pub const CONFINEMENT: [&str; 9] = [
   "features.shell_tool=false",
   "features.unified_exec=false",
   "features.view_image=false",
@@ -56,7 +56,6 @@ pub const CONFINEMENT: [&str; 10] = [
   "features.goals=false",
   "features.memories=false",
   "features.browser_use=false",
-  "features.computer_use=false",
   "features.image_generation=false",
   "web_search=\"disabled\"",
 ];

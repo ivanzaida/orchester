@@ -55,6 +55,7 @@ widening calls; **AA** = needs *Let automation answer approvals*; **WC** = needs
 | [`navigate`](mcp-server.md#navigate--needs-window-control) | WC | Take the active tab to a route |
 | [`set_theme`](mcp-server.md#set_theme--needs-window-control) | WC | Dark, light or system |
 | [`hold_reads`](mcp-server.md#hold_reads--debug-builds-only-needs-window-control) | WC, debug | Hold project reads to capture loading states |
+| [`set_update_state`](mcp-server.md#set_update_state--debug-builds-only-needs-window-control) | WC, debug | Show any update state in place of the real one |
 | [`sign_in_state`](mcp-server.md#sign_in_state--read-only-always-answers) | RO | Whether Orchester is signed in to Orchester Cloud |
 | [`lurq_screenshot`, `lurq_read_tree`, `lurq_inspect`, `lurq_find`, `lurq_find_by_id`, `lurq_find_by_class`, `lurq_windows`, `lurq_menu`, `lurq_wait`, `lurq_logs`, `lurq_profile_start`, `lurq_profile_read`, `lurq_profile_end`](mcp-server.md#looking-tools-always-available) | RO | Look at the window |
 | [`lurq_act`, `lurq_set_value`, `lurq_interact`, `lurq_resize`](mcp-server.md#input-tools-need-window-control) | WC | Drive the window |
@@ -67,6 +68,8 @@ widening calls; **AA** = needs *Let automation answer approvals*; **WC** = needs
 | `get_project` | RO | A project's setup |
 | `set_project_environment` | AP | Environment variables for agents and command tools |
 | `set_repository_agent_files` | AP to turn on | Whether agents load `AGENTS.md`/`CLAUDE.md` |
+| `get_storage` | RO | The disk guard and, while it holds, what could be cleaned |
+| `set_keep_free` | | The free space the disk guard keeps |
 | `list_connections` | RO | Agent connections, GitHub, MCP servers |
 | `add_cli_connection` | AP for unusual programs / API providers | Add a Claude Code or Codex connection |
 | `set_api_provider` | AP for new hosts/keys | Run a CLI connection on an API provider, or back on its sign-in |
@@ -107,8 +110,10 @@ widening calls; **AA** = needs *Let automation answer approvals*; **WC** = needs
 | `list_projects` | RO | All projects |
 | `set_code_index` | | Turn the code index on or off |
 | `update_project_limits` | | Budgets, time limit, agent and QA slots |
-| `get_auto_mode` | RO | Auto mode settings |
-| `set_auto_mode` | AA | Change auto mode settings |
+| `get_approvals` | RO | Allow Autopilot, the reviewer, running runs' approval modes |
+| `set_allow_autopilot` | person only to turn on | Allow Autopilot in the project, or stop |
+| `set_reviewer` | AA; AP for another reviewer | Manual's reviewer |
+| `get_auto_mode` / `set_auto_mode` / `set_run_auto_mode` | retired | Answer `retired`, naming the tools above |
 | `list_tasks` / `get_task` | RO | Tasks |
 | `create_task` | | New draft task |
 | `update_task` | AP to switch pipelines | Change a task, close or reopen it |
@@ -120,7 +125,7 @@ widening calls; **AA** = needs *Let automation answer approvals*; **WC** = needs
 | `list_runs` / `get_run` | RO | Runs and their full state |
 | `pause_run` / `resume_run` / `cancel_run` | | Control a run |
 | `continue_run` | AA for retry/return/accept/resolve | Continue a stopped run |
-| `set_run_auto_mode` | AA | One run's auto mode |
+| `set_run_manual` | | Switch one run to Manual for good |
 | `remove_worktree` | | Remove an ended run's worktree |
 | `hold_queue` / `release_queue` | | Hold or release new starts |
 | `list_approvals` | RO | Waiting tool requests and plans |

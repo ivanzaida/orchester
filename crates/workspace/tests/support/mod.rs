@@ -360,6 +360,7 @@ impl Fixture {
       branch: BranchName::new(&format!("orchester/orc-run-{}", self.runs)).expect("branch"),
       base: Revision::new(base).expect("revision"),
       base_branch,
+      base_source: orchester_core::integration::base::RunBaseSource::CheckedOut,
       budget: Some(budget(1_000_000)),
       max_duration: Some(Duration::from_secs(1_800)),
     };

@@ -27,6 +27,7 @@ use orchester_core::{
   },
   time::Timestamp,
 };
+use orchester_exec::programs::Programs;
 use orchester_ipc::Rejection;
 use orchester_store::ProjectDb;
 use orchester_workspace::{
@@ -36,6 +37,7 @@ use orchester_workspace::{
   sharing::{Servers, project::WorkClaim},
   sources::task as sources,
   tasks::{
+    base_branch::{BasePick, set_task_base},
     conflict::{Edit, EditConflict, EditSaved, save_edit},
     data::SaveTarget,
     estimate::{Estimates, apply_person_points},
@@ -62,6 +64,8 @@ pub struct SaveArgs {
   pub points: Option<StoryPoints>,
   /// The module the task goes in once its details are saved.
   pub module: Option<ModuleId>,
+  /// The task's base branch, stored once it is in its module; a remote-only branch picked creates its local one then.
+  pub base_branch: BasePick,
   /// A new task's sources, each confirmed by the person on the form, stored with it; a stored task's are saved as
   /// they change (`super::sources`).
   pub sources: Vec<SourcePath>,
@@ -98,12 +102,16 @@ impl lurq::app::component::DevtoolsInspectable for SaveOutcome {}
 pub type SaveAction = FutureAction<SaveArgs, SaveOutcome, Problems>;
 
 /// Saves the form; once a task is stored, Orchester is asked for its story points (`estimates`, which estimates them
-/// only while the person allows it and has set none).
-pub fn save_action(ctx: &mut Ctx, servers: Servers, (estimates, open): (Estimates, OpenProject)) -> SaveAction {
+/// only while the person allows it and has set none). `programs` runs git for the base branch picked.
+pub fn save_action(
+  ctx: &mut Ctx,
+  (servers, programs): (Servers, Programs),
+  (estimates, open): (Estimates, OpenProject),
+) -> SaveAction {
   ctx.future_action(move |args: SaveArgs| {
-    let (servers, estimates, open) = (servers.clone(), estimates.clone(), open.clone());
+    let (servers, programs, estimates, open) = (servers.clone(), programs.clone(), estimates.clone(), open.clone());
     async move {
-      let outcome = background::run(move || store(&args, &servers))
+      let outcome = background::run(move || store(&args, &servers, &programs))
         .await
         .map_err(Problems::one)??;
       if let SaveOutcome::Stored(task) = &outcome {
@@ -129,8 +137,8 @@ fn with_points(repo_root: &Path, task: Task, points: Option<StoryPoints>) -> Res
 
 /// Saves `args` through the project's task writer: a shared project's server, else its database. A new
 /// draft under the form's key; an edit on the version it was made on, merged into a version stored
-/// meanwhile when no field both changed, else a conflict for the person.
-fn store(args: &SaveArgs, servers: &Servers) -> Result<SaveOutcome, Problems> {
+/// meanwhile when no field both changed, else a conflict for the person. Its module and base branch after.
+fn store(args: &SaveArgs, servers: &Servers, programs: &Programs) -> Result<SaveOutcome, Problems> {
   let mut writer = TaskWriter::open(&args.repo_root, servers).map_err(|error| write_problem(&error))?;
   let organization = (&args.organization.0, &args.organization.1);
   let (task, details) = match args.target {
@@ -169,6 +177,7 @@ fn store(args: &SaveArgs, servers: &Servers) -> Result<SaveOutcome, Problems> {
     return Err(Problems::one(messages::task_saved_differently()));
   }
   let task = moved(&mut writer, task, args.module).map_err(|error| write_problem(&error))?;
+  let task = set_task_base(programs, &args.repo_root, task, &args.base_branch).map_err(Problems::one)?;
   let task = with_points(&args.repo_root, task, args.points)?;
   Ok(SaveOutcome::Stored(Arc::new(task)))
 }
@@ -236,6 +245,8 @@ pub type RunAction = FutureAction<RunArgs, Started, RunProblems>;
 pub struct RunServices {
   pub runners: Runners,
   pub servers: Servers,
+  /// Runs git for the base branch picked.
+  pub programs: Programs,
   pub repo_root: PathBuf,
   /// Set as soon as the task is queued, so the form shows it while the start request is under way.
   pub queued: Signal<Option<QueuedTask>>,
@@ -299,7 +310,7 @@ async fn queue(
   };
   let servers = services.servers.clone();
   let (repo_root, target, points, module) = (save.repo_root.clone(), save.target, save.points, save.module);
-  let sources = save.sources.clone();
+  let (sources, base_branch) = (save.sources.clone(), save.base_branch.clone());
   let (queued, unsourced) = background::run(move || queue_with_sources(*save, &servers, version))
     .await
     .map_err(|message| not_queued(Arc::from([message])))?;
@@ -333,31 +344,40 @@ async fn queue(
       saved: None,
     });
   }
-  let in_module = queued.task.module() == module;
+  let placing = queued.task.clone();
   keep_points(services, repo_root.clone(), queued.task, points).await;
-  if !in_module {
-    let (servers, id) = (services.servers.clone(), task.task);
-    let moved = background::run(move || {
-      let mut writer = TaskWriter::open(&repo_root, &servers)?;
-      writer.set_task_module(id, module, ChangeActor::Person)
-    })
-    .await;
-    // The task is queued: the form keeps it, with Retry run, and says why it is not in the module.
-    let refused = |message: Message| RunProblems {
+  let (servers, programs) = (services.servers.clone(), services.programs.clone());
+  let placed =
+    background::run(move || place_queued(&repo_root, (&servers, &programs), placing, (module, &base_branch))).await;
+  if let Err(message) = placed.and_then(|placed| placed) {
+    // The task is queued: the form keeps it, with Retry run, and says why it is not in the module or on its base
+    // branch.
+    return Err(RunProblems {
       messages: Arc::from([message]),
-      queued: Some(task.clone()),
+      queued: Some(task),
       saved: None,
-    };
-    match moved {
-      Ok(Ok(_)) => {}
-      Ok(Err(error)) => {
-        tracing::warn!(%error, "the queued task was not put in its module");
-        return Err(refused(error.message()));
-      }
-      Err(message) => return Err(refused(message)),
-    }
+    });
   }
   Ok((task, queued.claim))
+}
+
+/// Puts the queued `task` in `module` and gives it the base branch `pick`, where it has neither yet, before its run is
+/// asked to start, which takes them. Blocks on SQLite and git.
+fn place_queued(
+  repo_root: &Path,
+  (servers, programs): (&Servers, &Programs),
+  task: Task,
+  (module, pick): (Option<ModuleId>, &BasePick),
+) -> Result<(), Message> {
+  if task.module() != module {
+    TaskWriter::open(repo_root, servers)
+      .and_then(|mut writer| writer.set_task_module(task.id(), module, ChangeActor::Person))
+      .map_err(|error| {
+        tracing::warn!(%error, "the queued task was not put in its module");
+        error.message()
+      })?;
+  }
+  set_task_base(programs, repo_root, task, pick).map(drop)
 }
 
 /// Stores the person's `points` beside the queued `task` and asks for Orchester's estimate. The run goes on either

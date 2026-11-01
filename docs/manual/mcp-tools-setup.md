@@ -39,14 +39,15 @@ Refusals: `not_a_git_repository` (not a repository's top), `no_commits` (runs ne
 
 ### `get_project` — read-only
 
-A project's setup: id, key, name, folder, limits, code index, the environment variables its agents and command tools
-get (plain text by design — they never hold secrets), whether agents load the repository's own agent files
-(`AGENTS.md`, `CLAUDE.md`), its **base branch**, its GitHub link, how many connections, profiles, pipelines and
-instructions it has, and its app link (its Overview).
+A project's setup: id, key, name, folder, limits, the disk guard (`disk_guard`: `keep_free_gb`, `free_gb` and
+`total_gb` of the repository's disk, `holds`; see `get_storage`), code index, the environment variables its agents and
+command tools get (plain text by design — they never hold secrets), whether agents load the repository's own agent
+files (`AGENTS.md`, `CLAUDE.md`), its GitHub link, how many connections, profiles, pipelines and instructions it has,
+and its app link (its Overview).
 
-`base_branch.branch` is the branch new runs start from and deliver into (`null`: whatever branch the checkout has
-checked out). `base_branch.missing` is `true` when the chosen branch is gone — new runs are then refused — and `null`
-when git cannot tell. The base branch is kept on this computer only; each run's own base is in its reads.
+A project has no base branch: the branch runs start from is set on tasks (`create_task`/`update_task`'s `base_branch`,
+read by `get_task`) and modules (`create_module`/`update_module`'s, read by `list_modules` and `get_module`), on this
+computer only ([work tools](mcp-tools-work.md#2-tasks)); each run's own base is in `get_run`.
 
 | Parameter | Type   | Req. | Description                    |
 |-----------|--------|------|--------------------------------|
@@ -80,8 +81,38 @@ accepted; turning on puts the repository's text into every agent's prompt and is
 | `project` | string  | yes  | The project's id, or its name.                    |
 | `enabled` | boolean | yes  | Whether agents load the repository's agent files. |
 
+### `get_storage` — read-only
+
+The project's disk guard, as Project settings › Runs › Storage reads it. It holds in **every** project, warm
+workspaces on or off: below the free space the project keeps on the repository's disk (50 GB until it is set) no step
+starts and working steps pause with their work committed; a step that fails while the disk is low is paused, not
+failed; they all go on by themselves once there is room.
+
+`disk_guard` holds `keep_free_gb`, `free_gb` and `total_gb` of the disk (`null` when it cannot be read) and `holds`.
+While it holds, `cleanable` lists what could be cleaned, in the order to clean: the worktrees of ended runs first
+(`kind` `worktree`, with `run`, `task_key`, `run_number`), then idle warm workspaces (`kind` `workspace`, with
+`number`), each the largest first, with `path` and `size_bytes` (`null` when unreadable). Sizing walks the folders,
+so the call can take a while while the guard holds.
+
+| Parameter | Type   | Req. | Description                    |
+|-----------|--------|------|--------------------------------|
+| `project` | string | yes  | The project's id, or its name. |
+
+### `set_keep_free` — changes data
+
+Sets the free space, in whole GB (1 to 1048576), the disk guard keeps on the repository's disk, as Project settings ›
+Runs › Storage does. It is no permission: lowering and raising it are both taken. The runner applies it at its next
+check, without a restart. Refused with `invalid_keep_free` outside the range. Returns `disk_guard` as `get_storage`
+gives it.
+
+| Parameter   | Type    | Req. | Description                    |
+|-------------|---------|------|--------------------------------|
+| `project`   | string  | yes  | The project's id, or its name. |
+| `gigabytes` | integer | yes  | Whole GB to keep free.         |
+
 Related project tools in the work reference: `list_projects`, `set_code_index`, `update_project_limits`,
-`get_auto_mode`, `set_auto_mode`.
+`get_approvals`, `set_allow_autopilot`, `set_reviewer` (auto mode's `get_auto_mode` and `set_auto_mode` are retired:
+they answer `retired`, naming these).
 
 ---
 
@@ -336,6 +367,10 @@ window's question does).
 | `ask_before_tool_calls` | boolean                                       | no   | Ask a person before each MCP or app tool call.                             |
 | `approve_automatically` | boolean                                       | no   | *Approve automatically (don't ask me)*: Orchester answers what would ask a person. |
 | `approval_mode`         | `autopilot` \| `manual`                       | no   | Who answers tool requests. Default `manual`; `manual` → `autopilot` widens (gate AP, and AA as approving automatically), the reverse never asks. |
+
+`get_profile` gives the same permissions object, `approval_mode` included. A profile set to Autopilot runs as Manual
+where its project does not allow Autopilot or its run was switched to Manual: `get_approvals` gives the mode each
+running run is in, and why ([work › Approval modes](mcp-tools-work.md#approval-modes)).
 
 ### `publish_profile` — changes data · gate AP for broader or re-worded profiles
 

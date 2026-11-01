@@ -40,6 +40,7 @@ fn domain_merge_run_takes_only_the_latest_run_ready_for_review() {
         branch: BranchName::for_next_run(task.key(), 1),
         base: ready.base().clone(),
         base_branch: ready.base_branch().cloned(),
+        base_source: ready.base_source(),
         budget: ready.budget(),
         max_duration: ready.max_duration(),
       },

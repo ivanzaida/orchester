@@ -17,6 +17,7 @@ use super::{
 };
 use crate::{
   project::ShownProject,
+  services::Services,
   ui::{
     message::message_text,
     state::{load_error, loading},
@@ -48,11 +49,16 @@ impl Component for LoadEditor {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<LoadProps>().clone();
     let revision = self.retry.get();
+    let hold = Services::of(ctx).hold;
     let loaded = ctx
       .future(
         (props.project.open.repo_root.clone(), props.id, revision),
-        |(root, id, _)| async move {
-          background::run(move || OpenedPipeline::load_in(&root, id).map_err(super::work_error)).await?
+        move |(root, id, _)| {
+          let hold = hold.clone();
+          async move {
+            hold.released().await;
+            background::run(move || OpenedPipeline::load_in(&root, id).map_err(super::work_error)).await?
+          }
         },
       )
       .state()
@@ -63,6 +69,10 @@ impl Component for LoadEditor {
       && self.accepted.get_untracked().as_ref().map(|(n, _)| *n) != Some(revision)
     {
       self.accepted.set(Some((revision, opened.clone())));
+    }
+    if loaded.is_pending() && self.accepted.get().is_none() {
+      let project = props.project.open.project.id();
+      return super::reading::page(ctx, (project, props.id), props.view.tab());
     }
     let mut page = parts::page();
     if let Some((accepted, opened)) = self.accepted.get() {
@@ -89,6 +99,6 @@ impl Component for LoadEditor {
         move || retry.update(|v| *v += 1),
       ));
     }
-    page
+    page.into()
   }
 }

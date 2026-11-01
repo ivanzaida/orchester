@@ -2,10 +2,23 @@
 
 use crate::kontur::scenarios;
 
-/// Every scenario's name, in the order the registry lists them.
-const NAMES: [&str; 74] = [
+/// The scenarios, in the order the seed lists them.
+const NAMES: [&str; 101] = [
   "agents",
   "agents-library",
+  "agents-browser",
+  "browser-window",
+  "browser-window-many",
+  "browser-window-overflow",
+  "browser-window-acting",
+  "browser-window-waiting",
+  "browser-window-dialog",
+  "browser-window-file-chooser",
+  "browser-window-file-chosen",
+  "browser-window-select",
+  "browser-window-headed",
+  "browser-window-empty",
+  "browser-window-not-found",
   "agents-empty",
   "agents-no-connections",
   "agents-unreadable",
@@ -23,10 +36,14 @@ const NAMES: [&str; 74] = [
   "changes",
   "cards",
   "cards-auto-mode",
+  "cards-approval-modes",
+  "approval-modes",
+  "approval-modes-project",
   "decisions",
   "deliverables",
   "delivery",
   "delivery-blocked",
+  "delivery-lanes",
   "delivery-empty",
   "overview-quiet",
   "overview-states",
@@ -41,11 +58,19 @@ const NAMES: [&str; 74] = [
   "native",
   "project-settings",
   "project-settings-shared",
+  "shared-config",
+  "shared-config-member",
+  "shared-config-here",
+  "shared-config-chosen",
+  "shared-config-no-claude",
   "pipelines",
   "pipelines-empty",
   "pipelines-publish",
   "accounts",
   "settings",
+  "browser",
+  "browser-not-found",
+  "browser-chosen",
   "pull-requests",
   "pull-request-feedback",
   "sources",
@@ -78,6 +103,8 @@ const NAMES: [&str; 74] = [
   "team-shared-projects",
   "team-shared-none",
   "team-clone",
+  "modules-base-branch",
+  "loading-states",
 ];
 
 #[test]

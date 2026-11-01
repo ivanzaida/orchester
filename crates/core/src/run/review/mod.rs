@@ -15,6 +15,7 @@
 //! redacted the same way. Its reason is the reviewer's own text, so it is kept to one plain line.
 
 mod choice;
+mod decision;
 mod hold;
 mod input;
 mod prompt;
@@ -30,10 +31,12 @@ pub use self::{
     AutoModeSettings, DEFAULT_REVIEW_MODEL, ResolvedReviewer, ReviewerChoice, ReviewerKind, ReviewerUnavailable,
     default_review_model, resolve_reviewer, reviewer_kind,
   },
-  hold::{HoldRules, ReviewHold, review_hold, unread_parts},
-  input::{ReviewInput, ReviewedRequest, ReviewedStep, ReviewedTask, UnreadPart, UnreadWhy},
+  decision::{DecisionVerdict, NotProbability, Probability, Risk, Risks},
+  hold::{HoldRules, ReviewHold, StepLimit, review_hold, step_limit, unread_parts},
+  input::{ReviewInput, ReviewedRequest, ReviewedStep, ReviewedTask, RootsQuestion, UnreadPart, UnreadWhy},
   prompt::{
-    DATA_END, DATA_START, REVIEW_INSTRUCTIONS, REVIEW_SCHEMA, parse_verdict, parse_verdict_text, review_prompt,
+    DATA_END, DATA_START, REVIEW_INSTRUCTIONS, REVIEW_SCHEMA, ROOTS_QUESTION, parse_verdict, parse_verdict_text,
+    review_prompt,
   },
   push::PushFacts,
   spend::{AutoReview, ReviewCost, ReviewEnd, ReviewRecord, ReviewSpend, Reviewed, reviews_usage},
@@ -98,6 +101,8 @@ pub enum Review {
   Approved { reason: String, model: String },
   /// The reviewer left it to the person, for this reason.
   Asked { reason: String, model: String },
+  /// A decision model judged it: approved at or above the threshold, left to the person below it.
+  Decided { decision: DecisionVerdict },
   /// A hard rule left it to the person without a review.
   Held { hold: ReviewHold },
   /// The review gave no verdict, so the person decides.
@@ -133,15 +138,19 @@ impl Review {
   }
 
   /// Whether the request is approved without the person.
-  pub const fn approves(&self) -> bool {
-    matches!(self, Self::Approved { .. })
+  pub fn approves(&self) -> bool {
+    match self {
+      Self::Approved { .. } => true,
+      Self::Decided { decision } => decision.approves(),
+      Self::Asked { .. } | Self::Held { .. } | Self::Failed { .. } => false,
+    }
   }
 
-  /// The reviewer's own reason, when it gave one.
+  /// The reviewer's own reason, when it gave one; a decision model gives none.
   pub fn reason(&self) -> Option<&str> {
     match self {
       Self::Approved { reason, .. } | Self::Asked { reason, .. } => Some(reason),
-      Self::Held { .. } | Self::Failed { .. } => None,
+      Self::Decided { .. } | Self::Held { .. } | Self::Failed { .. } => None,
     }
   }
 }
@@ -176,17 +185,44 @@ pub fn review_request(
   (subject, rules): (&ApprovalSubject, &HoldRules<'_>),
   input: Result<ReviewInput, ReviewHold>,
 ) -> AutoReview {
-  let held = |hold| AutoReview {
-    review: Review::Held { hold },
-    cost: None,
-  };
   if let Some(hold) = review_hold(subject, rules) {
     return held(hold);
   }
-  let input = match input {
-    Ok(input) => input.with_unread(unread_parts(subject)),
-    Err(hold) => return held(hold),
-  };
+  match input {
+    Ok(input) => ask(reviewer, &input.with_unread(unread_parts(subject))),
+    Err(hold) => held(hold),
+  }
+}
+
+/// Autopilot's one question about a request about `subject` that Orchester could not place: `reviewer`'s answer to
+/// `question` on `input`. Of Manual's hard rules only the step's own limits under `rules` hold ([`step_limit`]), as
+/// Autopilot never asks the reviewer whether to approve; a request too long to be reviewed whole is held.
+pub fn review_roots(
+  reviewer: Option<&dyn RequestReviewer>,
+  (subject, question, rules): (&ApprovalSubject, RootsQuestion, &HoldRules<'_>),
+  input: Result<ReviewInput, ReviewHold>,
+) -> AutoReview {
+  if let StepLimit::Held(hold) = step_limit(subject, rules.permissions, rules.build_output) {
+    return held(hold);
+  }
+  match input {
+    Ok(input) => ask(
+      reviewer,
+      &input.with_unread(unread_parts(subject)).with_roots_question(question),
+    ),
+    Err(hold) => held(hold),
+  }
+}
+
+fn held(hold: ReviewHold) -> AutoReview {
+  AutoReview {
+    review: Review::Held { hold },
+    cost: None,
+  }
+}
+
+/// `reviewer`'s verdict on `input`, with what asking it cost; a failure when the project has none.
+fn ask(reviewer: Option<&dyn RequestReviewer>, input: &ReviewInput) -> AutoReview {
   let Some(reviewer) = reviewer else {
     return AutoReview {
       review: Review::Failed {
@@ -196,7 +232,7 @@ pub fn review_request(
       cost: None,
     };
   };
-  let reviewed = reviewer.review(&input);
+  let reviewed = reviewer.review(input);
   let cost = ReviewCost::of(&reviewed, reviewer.model());
   AutoReview {
     review: Review::of(reviewed.verdict, reviewer.model()),

@@ -15,7 +15,8 @@
 //! - Orchester's own state wherever it lies: any `.orchester` folder (every project's database, memory and runs'
 //!   worktrees), an application or shared server database (`orchester.db`, `orchester-server.db`, their journals), and
 //!   the folders the runner names (every project's private files with MCP secrets and tokens, the folder of Orchester's
-//!   programs and database); the run's own worktree stays readable.
+//!   programs and database, every project's browser profile with its cookies and sign-ins); the run's own worktree
+//!   stays readable.
 //!
 //! Known limits: a path is checked, then opened, so a link swapped in between by another program could lead
 //! the read elsewhere; a mapped network drive (`Z:\`) or a mounted share (`/Volumes/…`) reads as a local

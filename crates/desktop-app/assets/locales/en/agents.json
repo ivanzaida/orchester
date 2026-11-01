@@ -6,12 +6,18 @@
     "cannotLimitCommands": "This connection cannot enforce a command prefix list. Choose asking before commands or commands inside the sandbox.",
     "cannotConfineCommands": "This connection cannot keep arbitrary commands inside the worktree. Choose asking before commands or an allowed list.",
     "cannotBlockNetwork": "This connection cannot block network access on this platform. Network stays on.",
+    "cannotLimitHosts": {
+      "codex": "Codex can’t limit network access to a host list on this platform: its sandbox can’t keep commands off the network here. A step with the list won’t start.",
+      "claudeCode": "Claude Code can’t limit network access to a host list: its commands can reach any host. A step with the list won’t start.",
+      "native": "The native agent can’t limit network access to a host list: its commands can reach any host. A step with the list won’t start."
+    },
     "mechanism": {
       "codexReadOnly": "sandbox · read-only",
       "codexWorkspaceWrite": "sandbox · workspace-write",
       "codexCommands": "sandbox · escalations ask you",
       "codexCommandApprovals": "Codex App Server · one command approval",
       "codexNetworkOff": "sandbox · network access off",
+      "codexNetworkHosts": "sandbox · commands off network · web search only listed hosts",
       "codexNetworkOn": "sandbox · network access on",
       "codexWritableRoots": "sandbox · writable roots",
       "claudeEditToolsRemoved": "edit tools off · list runs · others ask",
@@ -33,7 +39,13 @@
       "nativeCommandApprovals": "Orchester asks you before each command",
       "nativeCommandList": "listed and known-safe commands run unconfined · others ask you",
       "nativeCommandListEmpty": "no command listed · every command asks you",
-      "nativeNetwork": "commands keep the network · no web tools"
+      "nativeNetwork": "commands keep the network · no web tools",
+      "browserOff": "Off · no browser tools",
+      "browser": {
+        "none": "Orchester tools · local hosts only · others ask",
+        "one": "Orchester tools · 1 site · others ask",
+        "other": "Orchester tools · {{count}} sites · others ask"
+      }
     },
     "outsideChange": "This profile changed elsewhere. Your edits are kept here; reload the saved profile before saving again.",
     "connectionReset": "The connection changed. Unsupported permissions, approval switches and MCP selections were reset. Review the model and permissions before saving.",
@@ -147,6 +159,17 @@
     "networkFallback": "Network on · cannot block",
     "networkUnknown": "Network unavailable",
     "networkOff": "Network off",
+    "browser": "Browser",
+    "browserHint": "Open, read and act in web pages through Orchester’s browser tools. Needs Network access.",
+    "browserNeedsNetwork": "Turn on Network access to give agents the browser.",
+    "browserSignIns": "Sign-ins with a password are yours, in the Browser window; they stay in this project’s browser profile. No browser tool takes a secret.",
+    "allowedSites": "Allowed sites",
+    "allowedSitesHint": "The agent opens and acts on these without asking. Any other site asks you first.",
+    "site": "Site",
+    "sitePlaceholder": "e.g. docs.rs or *.example.com",
+    "addSite": "Add site",
+    "localSites": "Always allowed: localhost, 127.0.0.1, [::1], *.localhost and *.test.",
+    "sitesReach": "Allowed sites limit where the agent goes and acts, not what a page loads: its scripts, images and requests may reach other hosts.",
     "mcp": "MCP servers",
     "mcpNone": "This project has no MCP servers yet. Agents work without them.",
     "mcpHint": "The server keeps its own access to files and network.",
@@ -184,8 +207,34 @@
           "untitled": "Allow Autopilot for this profile?",
           "reason": "Autopilot approves this agent’s tool requests in the worktree without asking you."
         },
+        "notAllowed": {
+          "title": "Not allowed in {{project}}",
+          "hint": "{{project}} doesn’t allow Autopilot, so {{profile}}’s runs there use Manual. The choice stays for projects that allow it.",
+          "untitled": "{{project}} doesn’t allow Autopilot, so this profile’s runs there use Manual. The choice stays for projects that allow it."
+        },
+        "usedIn": {
+          "title": "Used in {{project}}",
+          "hint": "What {{profile}}’s runs use in {{project}} now: allowed commands run at once; anything else goes to the reviewer, then to you.",
+          "untitled": "What this profile’s runs use in {{project}} now: allowed commands run at once; anything else goes to the reviewer, then to you."
+        },
+        "openSettings": "Open Project settings › Runs",
         "change": "Approvals · {{from}} → {{to}}",
         "waiting": "Approvals · {{from}} → {{to}} · waits for you to allow it"
+      }
+    },
+    "enforcement": {
+      "approvalMode": {
+        "title": "Approval mode",
+        "line": "{{mode}} · {{how}}",
+        "autopilot": "Orchester answers every request; {{cli}}’s own prompt is off",
+        "manual": "Orchester answers: allowed list, then the reviewer, then you",
+        "native": "Orchester answers every request; it runs each tool call itself",
+        "cantEnforce": "Can’t hand its requests to Orchester · runs as Manual until {{cli}} is updated",
+        "versionUnknown": "No check has found its version · runs as Manual until {{cli}} is checked",
+        "cli": {
+          "claudeCode": "Claude Code",
+          "codex": "Codex"
+        }
       }
     },
     "whenAsked": "When the agent asks",
@@ -249,7 +298,6 @@
     "mcpCount": "{{selected}} of {{total}} servers",
     "mcpSelection": "{{selected}} of {{total}}",
     "mcpLoading": "Only selected, enabled servers available to this connection are loaded.",
-    "approvalMechanism": "Orchester · requests go to Needs you",
     "approvalsAsk": "MCP actions requiring approval ask you",
     "approvalsAuto": "Eligible requests are approved automatically",
     "approvalsDefault": "The connection’s approval rules apply",

@@ -4,18 +4,22 @@
 //! newer build left, what the seed refuses (`refusals`) and its command line (`command_line`). Needs `git`.
 
 mod agents;
+mod browser;
 #[path = "../../examples/seed/cli.rs"]
 mod cli;
 mod command_line;
 #[path = "../../examples/seed/kontur/mod.rs"]
 mod kontur;
 mod live;
+mod loading_states;
 mod native;
 mod orchestrator;
 mod pipelines;
 mod refusals;
 mod scenario_names;
 mod settings;
+mod shared_config;
+mod shared_here;
 mod team;
 
 use std::{

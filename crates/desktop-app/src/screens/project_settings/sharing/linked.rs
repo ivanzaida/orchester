@@ -182,12 +182,17 @@ impl Component for Linked {
       removed::notice(ctx, (link, &names), (&servers, &self.making_local))
     });
     let (joined_note, keys) = self.joined(ctx, &props, (link.key.as_str(), &server));
+    let here = props
+      .facts
+      .references
+      .then(|| super::bindings::section(ctx, &props.project));
     Column::new()
       .id("project-settings-sharing")
       .width(Dimension::Pct(100.0))
       .spacing(crate::theme::ExtraSpacing::Roomy.role())
       .with_children(joined_note)
       .with_children(notice)
+      .with_children(here)
       .child(team)
       .child(refused(ctx))
       .child(discovery)

@@ -52,14 +52,38 @@ pub fn bare(ctx: &mut Ctx, screen: Element) -> Element {
 
 fn window(ctx: &mut Ctx, screen: Element, kind: Bar, closing: bool) -> Element {
   let close = close(ctx);
-  let lights = cfg!(target_os = "macos").then(|| {
-    ctx.mount_keyed::<traffic_lights::TrafficLights>("traffic-lights", traffic_lights::LightsProps(close.clone()))
-  });
+  framed(ctx, screen, close, |ctx, bar, lights| {
+    title_bar::content(ctx, bar, (kind, closing), lights)
+  })
+}
+
+/// A secondary window around `screen` (the Browser window), its title bar's content from `content`, given the bar
+/// with the window controls and on macOS the traffic lights. Its close controls close only this window, as the
+/// system's close does.
+pub fn secondary(
+  ctx: &mut Ctx,
+  screen: Element,
+  content: impl FnOnce(&mut Ctx, ChromeTitleBar, Option<Element>) -> ChromeTitleBar,
+) -> Element {
+  let window = ctx.window();
+  framed(ctx, screen, Arc::new(move || window.request_close()), content)
+}
+
+fn framed(
+  ctx: &mut Ctx,
+  screen: Element,
+  close: Close,
+  content: impl FnOnce(&mut Ctx, ChromeTitleBar, Option<Element>) -> ChromeTitleBar,
+) -> Element {
+  let controls = controls(ctx, &close);
+  let lights = cfg!(target_os = "macos")
+    .then(|| ctx.mount_keyed::<traffic_lights::TrafficLights>("traffic-lights", traffic_lights::LightsProps(close)));
   let bar = ChromeTitleBar::new()
     .background(PaletteColor::SurfaceBase)
     .border_bottom(None)
-    .controls(controls(ctx, &close));
+    .controls(controls);
   let outline = ctx.mount_keyed::<WindowOutline>("window-outline", ());
+  let title_bar = content(ctx, bar, lights);
   WindowChrome::new()
     .props(
       WindowChromeProps::new()
@@ -70,7 +94,7 @@ fn window(ctx: &mut Ctx, screen: Element, kind: Bar, closing: bool) -> Element {
         .windows_height(TITLE_BAR_HEIGHT)
         .macos_height(TITLE_BAR_HEIGHT),
     )
-    .title_bar(title_bar::content(ctx, bar, (kind, closing), lights))
+    .title_bar(title_bar)
     .content(screen)
     .overlay(outline)
     .mount(ctx)

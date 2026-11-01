@@ -8,6 +8,7 @@ mod answer;
 pub(super) mod app_server;
 mod approval;
 mod base_notice;
+mod browser;
 mod checks;
 mod claude_approval;
 mod cli_version;
@@ -21,6 +22,7 @@ mod qa_app;
 pub(super) mod question;
 mod relay;
 mod relay_calls;
+mod roots;
 mod run_app;
 mod run_records;
 mod skills;
@@ -47,13 +49,13 @@ use orchester_ipc::Event;
 use tokio::sync::mpsc;
 
 pub(super) use self::qa_app::QaApps;
-pub use self::qa_app::QaSlots;
 use self::{
   command_scope::command_scope,
   end::Taken,
   start::Driven,
   worker::{Stop, Worker},
 };
+pub use self::{orchester_tools::outside_read_refusals, qa_app::QaSlots};
 use super::{
   record::RecordError,
   run::{ExecutionError, RunTask},
@@ -411,6 +413,7 @@ impl RunTask {
         &permissions,
         &self.db.project_environment()?,
       ),
+      roots: self.run_roots(execution, workspace.path()),
       profile: self.profile_of(execution),
       checks: self.checks_of(execution),
       root: self.root.clone(),

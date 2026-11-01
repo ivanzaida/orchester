@@ -301,8 +301,9 @@ Connections and secrets are never copied; importing never grants access.
 
 ### Project settings
 
-**General** (project, GitHub, base branch, base-moved notices, repository agent files), **Runs** (auto mode,
-approved-for-every-run rules, story-point estimates, limits, environment), **Context** (sources, code index),
+**General** (project, GitHub, base branch, base-moved notices, repository agent files), **Runs** (approvals: Allow
+Autopilot and the reviewer, approved-for-every-run rules, story-point estimates, limits, environment), **Context**
+(sources, code index),
 **Connections**, **Secrets**, **Sharing** — see [settings.md](settings.md#2-project-settings-projectidsettings).
 
 ## 5. Tasks
@@ -508,7 +509,9 @@ projects.
    the run's facts; **Changes** shows the diff.
 2. **Approvals** — the header's **Approve** opens the card. Answer there or in the Needs you panel: *Approve once*,
    *Deny*, *Deny with a message*, or more widely (*Approve similar in this run*, *Approve everything in this run*). To
-   stop being asked: the profile's *Approve automatically*, or auto mode.
+   be asked less: the profile's *Approve automatically*, or its approval mode set to Autopilot while the project
+   allows Autopilot (Project settings › Runs). Under Manual the project's reviewer answers before you. A run's
+   *Switch to Manual for this run* takes it out of Autopilot for good.
 3. **Questions** — the header's **Answer** opens the card; pick options or write your own answer, then *Send answer*.
    A plain question is answered from the composer.
 4. **Plans** — the header's **Review** opens the Summary's plan review: read plan vN, then **Approve plan & continue**,

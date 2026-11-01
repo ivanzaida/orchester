@@ -6,6 +6,7 @@
 //! linked project shows where it lives, its discovery file, its members read-only with *Manage members and invites*
 //! (the server admin, in the browser), *Make local* and *Leave* ([`linked`]).
 
+mod bindings;
 mod confirm;
 mod join;
 mod link;
@@ -45,7 +46,10 @@ use super::{TabProps, page};
 use crate::{
   screens::settings::orchester::{Said, follow, follow_shared},
   services::Services,
-  ui::state::{load_error, loading},
+  ui::{
+    skeleton::{self, Skeleton},
+    state::load_error,
+  },
 };
 
 /// What the tab shows: the link, the servers this computer is signed in to, the checkout's `origin`, what
@@ -70,6 +74,8 @@ pub(super) struct Facts {
   /// The servers a first link to which moves this project into the account: it is this computer's, and they are the
   /// account's.
   pub moves_on: Vec<orchester_core::id::ServerId>,
+  /// The team's versions name references this computer binds: the page shows *On this computer*.
+  pub references: bool,
 }
 
 impl DevtoolsInspectable for Facts {}
@@ -168,7 +174,12 @@ impl Component for Sharing {
           move || revision.update(|count| *count += 1),
         )
       }
-      (None, None) => loading("project-settings-sharing-loading", &ctx.t("sharing.reading")).into(),
+      (None, None) => {
+        // No loading frame draws the Sharing tab: its rows' bones stand in one outline until where the list lives
+        // is read.
+        let bones = skeleton::list(ctx, "project-settings-sharing-rows", &[(160.0, 300.0), (120.0, 260.0)]);
+        Skeleton::new("project-settings-sharing-loading", ctx.t("sharing.reading")).show(ctx, bones)
+      }
     };
     page::scroll_with(Column::new().width(Dimension::Pct(100.0)).child(content), &self.scroll)
   }
@@ -187,6 +198,7 @@ fn read(
     .then(|| linked::joined::read(workspace, db.project().id()))
     .flatten();
   let tasks = db.tasks().map_err(local)?.len();
+  let references = !db.reference_bindings().map_err(local)?.is_empty();
   let linked_discovery = link
     .as_ref()
     .and_then(|link| link.address.as_deref())
@@ -208,5 +220,6 @@ fn read(
     joined,
     joined_note,
     moves_on,
+    references,
   })
 }

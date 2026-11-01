@@ -1,6 +1,7 @@
 //! What an agent may do while it works on a task (`docs/design/orchester-workspace.md`, "Agent
 //! permissions"): repository access, the folders outside the worktree it may also write to
-//! ([`writable`]), which commands it may run and whether it has network access.
+//! ([`writable`]), which commands it may run, whether it has network access, and whether it gets the
+//! browser and on which sites ([`browser`]).
 //! Permissions belong to an agent profile version; a pipeline step can only narrow them
 //! ([`StepPermissions`]). Which options a connection's CLI can enforce is decided by
 //! [`capability`]; an option it cannot enforce is never offered, and Orchester never starts an agent
@@ -8,6 +9,7 @@
 
 mod approval_enforcement;
 mod approval_mode;
+pub mod browser;
 pub(crate) mod canonical;
 pub mod capability;
 pub mod category;
@@ -18,6 +20,7 @@ pub(crate) mod link_targets;
 mod local_file;
 pub mod mcp;
 mod narrow;
+mod network;
 #[cfg(windows)]
 pub(crate) mod remote_drive;
 pub mod roots;
@@ -35,9 +38,11 @@ pub use self::{
     ManualReason, autopilot_support,
   },
   approval_mode::ApprovalMode,
+  browser::BrowserPermission,
   launch::{LaunchPermissions, OutsideCommands},
   local_file::{ProgramPlace, program_place, resolve_local, stays_local},
   narrow::{StepCommands, StepNetwork, StepPermissions},
+  network::{HostPattern, HostPatternError, NetworkAccess, NetworkHosts, NetworkHostsError},
   writable::{
     FolderBounds, ResolvedFolder, WritableFolder, WritableFolderError, WritableFolders, WritableFoldersError,
   },
@@ -221,14 +226,6 @@ pub enum CommandPermission {
   AnyInWorktree,
 }
 
-/// Whether the agent's commands and tools may reach the network.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum NetworkAccess {
-  Off,
-  On,
-}
-
 /// The permissions of an agent profile version, or the effective permissions of a step.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct AgentPermissions {
@@ -246,6 +243,9 @@ pub struct AgentPermissions {
   /// off, as before it existed.
   #[serde(default, skip_serializing_if = "std::ops::Not::not")]
   auto_approve: bool,
+  /// The *Browser* permission. Left out of the stored form while off with no site, as before it existed.
+  #[serde(default, skip_serializing_if = "BrowserPermission::is_unset")]
+  browser: BrowserPermission,
   /// Left out of the stored form while Manual, so every profile saved before approval modes existed reads as
   /// Manual with its commands as they were ([`crate::resource::AgentProfile`]'s schema 5).
   #[serde(default, skip_serializing_if = "ApprovalMode::is_manual")]
@@ -262,6 +262,7 @@ impl AgentPermissions {
       network,
       interactive_tool_approvals: false,
       auto_approve: false,
+      browser: BrowserPermission::off(),
       approval_mode: ApprovalMode::Manual,
     }
   }
@@ -306,8 +307,8 @@ impl AgentPermissions {
     &self.commands
   }
 
-  pub const fn network(&self) -> NetworkAccess {
-    self.network
+  pub const fn network(&self) -> &NetworkAccess {
+    &self.network
   }
 
   pub const fn interactive_tool_approvals(&self) -> bool {
@@ -347,7 +348,17 @@ impl AgentPermissions {
     self.commands = commands;
   }
 
-  pub const fn set_network(&mut self, network: NetworkAccess) {
+  pub fn set_network(&mut self, network: NetworkAccess) {
     self.network = network;
+  }
+
+  /// The *Browser* permission as chosen, whatever the network access; the step's tools need both
+  /// ([`crate::orchester_tools::browser::offered`]).
+  pub const fn browser(&self) -> &BrowserPermission {
+    &self.browser
+  }
+
+  pub fn set_browser(&mut self, browser: BrowserPermission) {
+    self.browser = browser;
   }
 }

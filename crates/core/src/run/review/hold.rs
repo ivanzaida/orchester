@@ -35,8 +35,13 @@
 //! command Orchester could read at all ([`ReviewHold::Unreadable`]) goes to the person unreviewed.
 //! A Codex escalation (a command outside its sandbox)
 //! always goes to the person. Orchester's `run_check` and `start_qa_app` (a project program outside every
-//! sandbox) and a request too long to be reviewed whole go to the person too; a project rule a person made
-//! for `start_qa_app` answers before auto mode looks ([`crate::run::ProjectRule`]).
+//! sandbox), its browser tools (a page of a site the profile does not allow, or JavaScript in a page) and a request
+//! too long to be reviewed whole go to the person too; a project rule a person made for `start_qa_app` answers before
+//! auto mode looks ([`crate::run::ProjectRule`]).
+//!
+//! Autopilot keeps the step's own limits of these rules ([`step_limit`]): a credential read, a write in a read-only
+//! step, the network or an install while it is off, and permissions not recorded come to the person; a part
+//! Orchester could not read in a step so limited goes to the reviewer's question about the roots and the step's facts.
 
 use std::path::PathBuf;
 
@@ -47,7 +52,7 @@ use super::{
   push::{PushFacts, disguised_git, is_push, reviewable_push},
 };
 use crate::{
-  orchester_tools::auto_approvable,
+  orchester_tools::{SERVER, auto_approvable, browser::BrowserTool},
   permission::{
     AgentPermissions, NetworkAccess, RepositoryAccess,
     category::{CommandCategory, CommandPart},
@@ -84,6 +89,8 @@ pub enum ReviewHold {
   Escalation,
   /// It runs one of the project's programs, outside every sandbox.
   ProjectProgram,
+  /// It goes to or acts on a page of a site the profile does not allow, or runs JavaScript in a page.
+  Browser,
 }
 
 /// What the hard rules know besides the request: the step's recorded permissions, where a push of the
@@ -135,27 +142,75 @@ pub fn review_hold(subject: &ApprovalSubject, rules: &HoldRules<'_>) -> Option<R
   outside_permissions(parts, permissions, rules.build_output)
 }
 
-/// The hard rule a part outside the step's permissions breaks: in a read-only step a part that may write
-/// ([`may_write`]); the network or an install while it is off; a write outside the folders.
+/// The hard rule a part outside the step's permissions breaks: one of its limits ([`limits_hold`]), or a write
+/// outside the folders.
 fn outside_permissions(
   parts: &[CommandPart],
   permissions: &AgentPermissions,
   ignored: &[PathBuf],
 ) -> Option<ReviewHold> {
+  limits_hold(parts, permissions, ignored).or_else(|| {
+    parts
+      .iter()
+      .any(|part| part.category() == CommandCategory::OutsideWrite || part.writes_outside())
+      .then_some(ReviewHold::OutsideFolders)
+  })
+}
+
+/// The step's limit a part breaks: in a read-only step a part that may write ([`may_write`]); the network or an
+/// install while it is not on. A host list counts as off here: Orchester does not read which host a command reaches.
+fn limits_hold(parts: &[CommandPart], permissions: &AgentPermissions, ignored: &[PathBuf]) -> Option<ReviewHold> {
   if permissions.repository() == RepositoryAccess::ReadOnly && parts.iter().any(|part| may_write(part, ignored)) {
     return Some(ReviewHold::ReadOnlyStep);
   }
-  if permissions.network() == NetworkAccess::Off
+  (*permissions.network() != NetworkAccess::On
     && parts
       .iter()
-      .any(|part| part.category() == CommandCategory::Network || part.installs() || is_push(part))
-  {
-    return Some(ReviewHold::NetworkOff);
+      .any(|part| part.category() == CommandCategory::Network || part.installs() || is_push(part)))
+  .then_some(ReviewHold::NetworkOff)
+}
+
+/// What a step's own permissions make of a command in Autopilot, which approves by the run's roots: whatever the
+/// roots say, Autopilot never approves what the step forbids. Out of Codex's sandbox (an escalation) and in Claude
+/// Code's commands alike, only these rules keep the step's network off and its repository read-only.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StepLimit {
+  /// Nothing Orchester read breaks the step's limits, and nothing it could not read matters to them.
+  Within,
+  /// A hard rule, which brings it to the person: a credential read, a write in a read-only step, the network or an
+  /// install while it is off, or permissions that were not recorded.
+  Held(ReviewHold),
+  /// A part Orchester could not read to the end, in a step that only reads or whose network is off: the reviewer
+  /// judges it against the step's facts.
+  Unread,
+}
+
+/// The step's own limits for `subject` under `permissions` in Autopilot ([`StepLimit`]); `build_output` as
+/// [`HoldRules::build_output`]. A call of an MCP tool is within them: Autopilot places it by its server.
+pub fn step_limit(
+  subject: &ApprovalSubject,
+  permissions: Option<&AgentPermissions>,
+  build_output: &[PathBuf],
+) -> StepLimit {
+  let ApprovalSubject::Command(command) = subject else {
+    return StepLimit::Within;
+  };
+  if command.reads_secrets() {
+    return StepLimit::Held(ReviewHold::Secrets);
   }
-  parts
-    .iter()
-    .any(|part| part.category() == CommandCategory::OutsideWrite || part.writes_outside())
-    .then_some(ReviewHold::OutsideFolders)
+  let Some(permissions) = permissions else {
+    return StepLimit::Held(ReviewHold::PermissionsUnknown);
+  };
+  let parts = command.parts();
+  if let Some(hold) = limits_hold(parts, permissions, build_output) {
+    return StepLimit::Held(hold);
+  }
+  let limited = permissions.repository() == RepositoryAccess::ReadOnly || *permissions.network() != NetworkAccess::On;
+  if limited && (parts.is_empty() || parts.iter().any(unread)) {
+    StepLimit::Unread
+  } else {
+    StepLimit::Within
+  }
 }
 
 /// Whether `part` may write in a read-only step as far as Orchester can tell: a part it read that writes anything
@@ -211,9 +266,13 @@ pub fn unread_parts(subject: &ApprovalSubject) -> Vec<UnreadPart> {
     .collect()
 }
 
-/// The hard rule for a call of an MCP tool: Orchester's `run_check` never goes to the reviewer.
+/// The hard rule for a call of an MCP tool: Orchester's `run_check`, `start_qa_app` and browser tools never go to the
+/// reviewer.
 fn tool_hold(subject: &ApprovalSubject, permissions: Option<&AgentPermissions>) -> Option<ReviewHold> {
   match subject {
+    ApprovalSubject::McpTool { server, tool, .. } if server == SERVER && BrowserTool::from_name(tool).is_some() => {
+      Some(ReviewHold::Browser)
+    }
     ApprovalSubject::McpTool { server, tool, .. } if !auto_approvable(server, tool) => Some(ReviewHold::ProjectProgram),
     _ => permissions.is_none().then_some(ReviewHold::PermissionsUnknown),
   }

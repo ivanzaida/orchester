@@ -14,6 +14,7 @@ use std::{
 use orchester_core::{
   command::{Command as Program, CommandError, CommandOutput, CommandRunner},
   id::{ConnectionId, IdempotencyKey, ProjectId, ResourceId},
+  integration::base::RunBaseSource,
   merge_queue::{QueueEvent, QueueState},
   name::Name,
   permission::{AgentPermissions, CommandPermission, NetworkAccess, StepPermissions},
@@ -87,6 +88,10 @@ pub struct Repo {
   db: ProjectDb,
   pipelines: BTreeMap<&'static str, RunSnapshot>,
   answered: Arc<Answered>,
+  /// Where the runs made from now on took their base branch from: the checked-out branch unless a test sets it.
+  pub base_source: RunBaseSource,
+  /// The base branch the runs made from now on start from and record: `main` unless a test sets it.
+  pub base_branch: &'static str,
 }
 
 impl Repo {
@@ -131,6 +136,8 @@ impl Repo {
       db,
       pipelines,
       answered,
+      base_source: RunBaseSource::CheckedOut,
+      base_branch: "main",
     }
   }
 
@@ -184,9 +191,10 @@ impl Repo {
     run
   }
 
-  /// A run of `task` on `pipeline` from `main`'s head on `branch`, started before `finished` in a worktree of its own.
+  /// A run of `task` on `pipeline` from the head of [`Self::base_branch`] on `branch`, started before `finished` in a
+  /// worktree of its own.
   fn in_worktree(&mut self, (task, pipeline): (&Task, &str), branch: &str, finished: i64) -> Run {
-    let base = git(self.root(), &["rev-parse", "main"]);
+    let base = git(self.root(), &["rev-parse", self.base_branch]);
     let mut run = self
       .db
       .create_run(
@@ -196,7 +204,8 @@ impl Repo {
           snapshot: self.pipelines[pipeline].clone(),
           branch: BranchName::new(branch).expect("branch"),
           base: Revision::new(&base).expect("revision"),
-          base_branch: Some(BranchName::new("main").expect("branch")),
+          base_branch: Some(BranchName::new(self.base_branch).expect("branch")),
+          base_source: self.base_source,
           budget: None,
           max_duration: None,
         },
@@ -209,7 +218,14 @@ impl Repo {
     fs::create_dir_all(worktree.parent().expect("parent")).expect("parent");
     git(
       self.root(),
-      &["worktree", "add", "-b", branch, worktree.to_str().expect("path")],
+      &[
+        "worktree",
+        "add",
+        "-b",
+        branch,
+        worktree.to_str().expect("path"),
+        self.base_branch,
+      ],
     );
     run
   }

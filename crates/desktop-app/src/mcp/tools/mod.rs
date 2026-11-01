@@ -1,8 +1,9 @@
 //! The app's own MCP tools, served beside lurq's `lurq_*`: `app_state` reads where the window is,
 //! `navigate` takes the active tab somewhere, `set_theme` switches the colors, `sign_in_state` says whether the
-//! app is signed in to Orchester Cloud (the one tool that answers while it is not), and in debug builds
-//! `hold_reads` holds the project feeds' reads for QA. They run on the event-loop thread, with the tree
-//! and the app, like every other change to the window.
+//! app is signed in to Orchester Cloud (the one tool that answers while it is not), `update_state` where this copy's
+//! own update stands, and in debug builds `hold_reads` holds the project feeds' reads and `set_update_state` shows
+//! any update state, for QA. They run on the event-loop thread, with the tree and the app, like every other change
+//! to the window.
 
 mod app_state;
 mod error;
@@ -10,8 +11,10 @@ mod hold_reads;
 mod navigate;
 mod project_settings_route;
 mod set_theme;
+mod set_update_state;
 mod settings_route;
 mod sign_in_state;
+mod update_state;
 
 use lurq::mcp::McpTool;
 use orchester_workspace::links::with_usage_query;
@@ -23,8 +26,10 @@ pub use self::{
   hold_reads::hold_reads,
   navigate::{navigate, navigate_with},
   set_theme::set_theme,
+  set_update_state::set_update_state,
   settings_route::Lookup,
   sign_in_state::{SIGN_IN_STATE, sign_in_state},
+  update_state::update_state,
 };
 use super::{McpSettings, WindowLink};
 use crate::{
@@ -36,13 +41,14 @@ use crate::{
 };
 
 /// Every app tool, for lurq's MCP configuration; for a started `session` `sign_in_state` on its cloud and `navigate`
-/// finding Settings' accounts and team servers in its data, and in debug builds `hold_reads`, whose reads its hold
-/// holds.
+/// finding Settings' accounts and team servers in its data, and for a `debug_build` the tools only debug builds serve,
+/// for QA: `hold_reads`, whose reads its hold holds, and `set_update_state` on its updates.
 pub fn all(
   link: &WindowLink,
   appearance: &Appearance,
   settings: McpSettings,
   session: Option<&Services>,
+  debug_build: bool,
 ) -> Vec<McpTool> {
   let lookup = session.map(Lookup::of);
   let mut tools = vec![
@@ -51,10 +57,10 @@ pub fn all(
     set_theme::tool(appearance.clone()),
   ];
   tools.extend(session.map(|services| sign_in_state::tool(services.cloud.clone())));
-  if cfg!(debug_assertions)
-    && let Some(services) = session
-  {
+  tools.extend(session.map(|services| update_state::tool(services.updates.clone())));
+  if debug_build && let Some(services) = session {
     tools.push(hold_reads::tool(services.hold.clone()));
+    tools.push(set_update_state::tool(services.updates.clone()));
   }
   tools
 }
@@ -84,8 +90,14 @@ pub fn route_json(route: &Route) -> Value {
     Route::General => {
       params.insert("tab".to_owned(), json!("general"));
     }
+    Route::Updates(show) => {
+      params.insert("tab".to_owned(), json!(show.name()));
+    }
     Route::Notifications => {
       params.insert("tab".to_owned(), json!("notifications"));
+    }
+    Route::Browser => {
+      params.insert("tab".to_owned(), json!("browser"));
     }
     Route::RotateToken => {
       params.insert("tab".to_owned(), json!("automation"));
@@ -200,6 +212,8 @@ fn page_params(page: &ProjectPage, params: &mut Map<String, Value>) {
     }
     ProjectPage::NewConnection(kind) => insert("kind", kind.name()),
     ProjectPage::EditConnection(connection) => insert("connection", &connection.to_string()),
+    ProjectPage::NewAgent(_) => insert("agent", "new"),
+    ProjectPage::Agent(id, _) => insert("agent", &id.to_string()),
     ProjectPage::NewSkill => insert("skill", "new"),
     ProjectPage::Skill(id) => insert("skill", &id.to_string()),
     ProjectPage::ImportSkills => insert("skill", "import"),

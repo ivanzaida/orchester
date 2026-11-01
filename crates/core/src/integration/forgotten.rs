@@ -56,18 +56,28 @@ pub(super) fn forgotten(repo: &Path, run: &Run, listed: &[LeftWorktree]) -> Vec<
     .map(|(name, owner)| (repo.join(WORKTREES_DIR).join(name), owner))
     .filter(|(path, _)| path.is_dir())
     .map(|(path, owner)| {
-      let (uncommitted, listing) = list(&path);
-      LeftWorktree {
+      let mut worktree = LeftWorktree {
         path: slashed(&path),
         owner,
         branch: None,
-        uncommitted,
+        uncommitted: Vec::new(),
         missing: false,
-        forgotten: true,
-        listing,
-      }
+        forgotten: false,
+        listing: FolderListing::Whole,
+      };
+      forget(&mut worktree);
+      worktree
     })
     .collect()
+}
+
+/// Takes `worktree`, whose folder is there, as one git forgot: its files are listed as far as they are read.
+pub(super) fn forget(worktree: &mut LeftWorktree) {
+  let (uncommitted, listing) = list(Path::new(&worktree.path));
+  worktree.uncommitted = uncommitted;
+  worktree.listing = listing;
+  worktree.missing = false;
+  worktree.forgotten = true;
 }
 
 /// The files under `root`, relative to it with `/` separators and sorted, and how far they were
@@ -131,5 +141,15 @@ fn slashed(path: &Path) -> String {
 
 /// Deletes the folder of `worktree`, which git forgot; why not, when it stays.
 pub(super) fn delete(worktree: &LeftWorktree) -> Result<(), String> {
-  fs::remove_dir_all(&worktree.path).map_err(|error| error.to_string())
+  delete_folder(Path::new(&worktree.path))
+}
+
+/// Deletes the folder at `path`, which git does not list as a worktree, with everything in it, ignored build output
+/// included; why not, when anything of it stays (on Windows a file a process holds open).
+pub(super) fn delete_folder(path: &Path) -> Result<(), String> {
+  match fs::remove_dir_all(path) {
+    Ok(()) => Ok(()),
+    Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+    Err(error) => Err(error.to_string()),
+  }
 }

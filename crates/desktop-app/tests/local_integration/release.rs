@@ -140,6 +140,7 @@ fn supersede(page: &Page) {
       branch: BranchName::new("newer").expect("branch"),
       base: first.base().clone(),
       base_branch: first.base_branch().cloned(),
+      base_source: first.base_source(),
       budget: None,
       max_duration: None,
     },

@@ -2,7 +2,7 @@
 //! request's detail states (`Pull request · detail states` `c07NAC`): a state card (`yUrNX`) 32 from the
 //! tab's sides, for a run that changed nothing yet or more than Orchester shows, or whose changes could
 //! not be read; a notice (`R3Pyx`) over the files for the worktree's part, while the checkpointed files
-//! still show. Reading shows the loading line, never an empty list.
+//! still show. Reading shows the tab's skeleton, never an empty list.
 
 use std::path::PathBuf;
 
@@ -26,12 +26,12 @@ use crate::ui::{
   icon::Icon,
   message::message_text,
   notice::{Notice, NoticeTone},
-  state::{EmptyState, loading},
+  state::EmptyState,
 };
 
-/// The run's changes are being read.
-pub fn reading(ctx: &Ctx) -> Element {
-  loading("changes-loading", &ctx.t("changes.loading")).into()
+/// The run's changes are being read: the toolbar and the panes in bones (`super::reading`).
+pub fn reading(ctx: &mut Ctx) -> Element {
+  super::reading::bones(ctx)
 }
 
 /// The task has not run: nothing changed yet.

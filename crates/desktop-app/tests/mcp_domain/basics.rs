@@ -197,8 +197,18 @@ fn domain_setup_tools_check_their_input_as_the_forms_do() {
   let project = served.ok("get_project", &json!({ "project": "Kontur" }));
   assert_eq!(project["project"]["key"], "KON");
   assert_eq!(project["project"]["repository_agent_files"], false);
+  assert_eq!(project["project"]["disk_guard"]["keep_free_gb"], 50, "the default");
   let unknown_argument = served.refused("get_project", &json!({ "project": "Kontur", "secret": "x" }));
   assert_eq!(unknown_argument["code"], "invalid_arguments");
+  let zero = served.refused("set_keep_free", &json!({ "project": "Kontur", "gigabytes": 0 }));
+  assert_eq!(zero["code"], "invalid_keep_free");
+  let kept = served.ok("set_keep_free", &json!({ "project": "Kontur", "gigabytes": 120 }));
+  assert_eq!(kept["disk_guard"]["keep_free_gb"], 120);
+  let storage = served.ok("get_storage", &json!({ "project": "Kontur" }));
+  assert_eq!(storage["disk_guard"]["keep_free_gb"], 120);
+  assert!(storage["cleanable"].is_array(), "{storage}");
+  let lowered = served.ok("set_keep_free", &json!({ "project": "Kontur", "gigabytes": 1 }));
+  assert_eq!(lowered["disk_guard"]["keep_free_gb"], 1, "lowering is taken too");
 }
 
 #[test]

@@ -30,8 +30,8 @@ that.
    without asking.
 3. **Publishing** is a proposal card unless the person turned on *Let the Orchestrator publish drafts*. Widening what
    agents may do additionally needs *Let automation change agent permissions*.
-4. **Starting runs** is a proposal card by default; while auto mode is on for the project the chat starts them
-   directly. **Canceling** a run is always a proposal.
+4. **Starting runs** is a proposal card by default; while the project allows Autopilot (*Allow Autopilot for agents
+   in this project*, `get_approvals`) the chat starts them directly. **Canceling** a run is always a proposal.
 5. **Answering agents and merging** are proposals, or direct under the person's switches (below).
 
 ## Domain tools the chat has (60)
@@ -42,7 +42,7 @@ Each goes through exactly the same tool an MCP client of the app calls ([mcp-too
 `list_projects`, `get_project`, `list_tasks`, `get_task`, `create_task`, `update_task`, `list_modules`, `get_module`,
 `create_module`, `update_module`, `list_runs`, `get_run`, `get_changes`, `get_conversation`, `run_task`, `pause_run`,
 `resume_run`, `cancel_run`, `merge_run`, `continue_run`, `answer_question`, `send_message`, `list_approvals`,
-`list_questions`, `get_plan`, `hold_queue`, `release_queue`, `get_auto_mode`, `list_pipelines`, `get_pipeline`,
+`list_questions`, `get_plan`, `hold_queue`, `release_queue`, `get_approvals`, `list_pipelines`, `get_pipeline`,
 `save_pipeline_draft`, `create_pipeline`, `duplicate_pipeline`, `publish_pipeline`, `list_profiles`, `get_profile`,
 `save_profile_draft`, `publish_profile`, `list_instructions`, `get_instruction`, `save_instruction_draft`,
 `publish_instruction`, `list_skills`, `get_skill`, `save_skill_draft`, `publish_skill`, `list_tools`, `get_tool`,
@@ -52,8 +52,9 @@ Each goes through exactly the same tool an MCP client of the app calls ([mcp-too
 **Not available to the chat**: `decide_approval`, `decide_plan` (approvals and plan decisions stay the person's);
 `continue_run`'s `raise_limits`, `raise_step_budget`, `resume` and `accept`; project setup (`add_project`,
 `set_project_environment`, `set_repository_agent_files`, `update_project_limits`, `set_code_index`); connections
-(`add_cli_connection`, `set_api_provider`, `check_connection`, `set_connection_account`); `set_auto_mode`,
-`set_run_auto_mode`, `remove_worktree`, `return_to_draft`; the app's `*_mcp_server` tools (the chat has its own);
+(`add_cli_connection`, `set_api_provider`, `check_connection`, `set_connection_account`); `set_allow_autopilot`,
+`set_reviewer`, `set_run_manual` (and the retired auto mode tools), `remove_worktree`, `return_to_draft`; the app's
+`*_mcp_server` tools (the chat has its own);
 deleting anything.
 
 ## Direct or proposal
@@ -62,7 +63,7 @@ deleting anything.
 |---|---|---|---|---|
 | Reads | direct | — | direct | direct |
 | `create_task`, `update_task`, `create_module`, `update_module`, `save_*_draft` | direct | — | direct | refused `report_turn` |
-| `run_task` | proposal (refused `task_blocked` for a task marked Blocked) | direct while auto mode is on for the project | proposal | proposal |
+| `run_task` | proposal (refused `task_blocked` for a task marked Blocked) | direct while the project allows Autopilot | proposal | proposal |
 | `pause_run` | direct | — | proposal | proposal |
 | `resume_run` | direct for a paused run; an interrupted run only with *continue interrupted runs*; stopped at a limit, canceled or failed → `person_only` | — | proposal (see run ends) | proposal |
 | `hold_queue` | direct | — | direct | refused |

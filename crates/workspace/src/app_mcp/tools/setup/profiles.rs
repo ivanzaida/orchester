@@ -197,6 +197,8 @@ pub(super) fn permissions_json(permissions: &AgentPermissions) -> Value {
     .iter()
     .map(ToString::to_string)
     .collect();
+  let browser = permissions.browser();
+  let sites: Vec<String> = browser.sites().entries().iter().map(ToString::to_string).collect();
   json!({
     "repository": permissions.repository(),
     "writable_folders": folders,
@@ -205,6 +207,7 @@ pub(super) fn permissions_json(permissions: &AgentPermissions) -> Value {
     "network": permissions.network(),
     "ask_before_tool_calls": permissions.interactive_tool_approvals(),
     "approve_automatically": permissions.auto_approve(),
+    "browser": { "access": browser.access(), "allowed_sites": sites },
     "approval_mode": permissions.approval_mode(),
   })
 }
@@ -226,6 +229,7 @@ fn publish_error(error: &StoreError) -> ToolError {
     StoreError::Publish(PublishError::ConnectionMissing) => "connection_missing",
     StoreError::Publish(PublishError::Permissions(_)) => "permissions_not_enforced",
     StoreError::Publish(PublishError::VersionLimit) => "version_limit",
+    StoreError::NotAdmin => "not_admin",
     _ => "project_data",
   };
   ToolError::refused(code, vec![messages::store_error(error)])

@@ -10,8 +10,9 @@
 //!   by their size ([`suggest`]).
 //! - What runs write for people to see lives in the run's own storage, `.orchester/runs/<run-id>/`, which cleaning or
 //!   reusing a workspace never touches ([`artifacts_folder`]).
-//! - The disk guard keeps free space on the repository's disk ([`disk`]): below it no step starts and working steps
-//!   pause with a checkpoint; cleanup deletes warm folders of the workspaces idle longest first ([`cleanup`]).
+//! - The disk guard keeps free space on the repository's disk ([`disk`]) in every project, workspaces on or off: below
+//!   it no step starts and working steps pause with a checkpoint; cleanup deletes warm folders of the workspaces idle
+//!   longest first ([`cleanup`]); while it holds, the project lists what could be cleaned ([`storage`]).
 //!
 //! The rules live here; the runner and the app do git and the filesystem.
 
@@ -19,6 +20,7 @@ pub mod cleanup;
 pub mod disk;
 pub mod pool;
 pub mod settings;
+pub mod storage;
 mod store;
 pub mod suggest;
 pub mod warm;
@@ -36,6 +38,7 @@ pub use self::{
   disk::{DiskSpace, DiskSpaceError, DiskUsage, DiskVerdict, GIGABYTE, KeepFree, KeepFreeError},
   pool::{Borrow, Holder, Stranded, WaitReason, Warmth, WorkspaceRecord, WorkspaceState, choose},
   settings::{WarmUpCommand, WarmUpCommandError, WarmUpFailure, WorkspaceSettings},
+  storage::{Cleanable, CleanableKind, cleanable_order},
   store::WorkspaceStore,
   suggest::{IgnoredFolder, SUGGEST_DEPTH, SUGGEST_OVER, Suggestion, suggest},
   warm::{Cleaning, WarmChoice, WarmFolder, WarmPattern, WarmPatternError, cleaning},

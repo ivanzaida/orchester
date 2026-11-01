@@ -17,6 +17,7 @@ mod completions;
 mod connections;
 mod consistent;
 mod default_pipeline;
+mod disk_guard;
 mod environment;
 mod estimates;
 mod feedback;
@@ -53,9 +54,11 @@ mod questions;
 mod queue_holds;
 mod read_only;
 mod rebases;
+mod reference_bindings;
 mod removals;
 mod repository;
 mod repository_import;
+mod request_answers;
 mod resolutions;
 mod resources;
 mod reviewer_usage;
@@ -67,9 +70,13 @@ mod runs;
 mod schema;
 mod secrets;
 mod service_needs;
+mod shared_events;
 mod shared_members;
 mod shared_modules;
+mod shared_publishes;
+mod shared_standing;
 mod shared_tasks;
+mod shared_versions;
 mod sharing;
 mod sources;
 mod step_outputs;
@@ -82,6 +89,7 @@ mod task_snapshots;
 mod tasks;
 mod tool_approvals;
 mod usage;
+mod used_versions;
 mod workspaces;
 mod worktree_removals;
 mod write_transaction;
@@ -102,6 +110,7 @@ pub use self::{
   attachments::{AttachmentOwner, attachment_file},
   auto_mode::AutoModeSave,
   automatic_status::{AutomaticStatus, NotSent, UnsentStatus},
+  base_branch::BaseBranchMove,
   chat_decisions::KeptAction,
   estimates::AutomationPoints,
   joining::{JoinedKey, ReturnedTask},
@@ -110,13 +119,18 @@ pub use self::{
   orchestrator_reports::KeptReport,
   orchestrator_waits::KeptWait,
   read_only::ReadOnlyProjectDb,
+  reference_bindings::{Bound, BoundBy, BoundReference, ReferenceBinding},
   resolutions::ResolutionStart,
   resources::ResourceUpdate,
   run_ends::EndedRun,
   runs::RunBranch,
-  shared_members::SharedMember,
+  shared_events::{SharedEvent, SharedSnapshot},
+  shared_members::{ServerAdmin, SharedMember},
   shared_modules::{CachedModule, CachedModuleChange},
+  shared_publishes::{PublishState, WaitingPublish},
+  shared_standing::{ConfirmedVersion, SharedStanding, WaitingVersion},
   shared_tasks::{CachedClaim, CachedRunStatus, CachedTask, SharedPerson, SharedTaskInfo},
+  shared_versions::{CachedVersion, NamingVersion, ReferenceTarget, ResourceSharing, VersionReference},
   sharing::SharingLink,
   task_deletion::TaskDeletionFacts,
 };

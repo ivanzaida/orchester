@@ -23,8 +23,12 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::{
-  Translate, approvals::approval, base_moved, message_waits::message_waits, orchestrated, plans, wire,
-  worktree::worktree_state,
+  Translate,
+  approvals::approval,
+  base_branch, base_moved,
+  message_waits::message_waits,
+  orchestrated, plans, wire,
+  worktree::{worktree_left, worktree_state},
 };
 use crate::{
   app_mcp::{
@@ -93,7 +97,6 @@ fn read_run(services: &Services, args: &InRun) -> Result<(Value, Vec<ShownApprov
   let (questions, proposed) = orchestrated::awaiting(&root, &run, (&asked, &conversation))?;
   let messages = message_waits(&db, &run, &asked, Some(&conversation))?;
   let approval_mode = db.run_approval_mode(run.id())?;
-  let worktree = worktree_state(&db, &root, run.id())?;
   let merge = merge_state(&db, (&root, &services.programs), &run)?;
   let view = run_view(&db, run)?;
   let plan = PlanReview::of(&view).map(|review| {
@@ -102,14 +105,6 @@ fn read_run(services: &Services, args: &InRun) -> Result<(Value, Vec<ShownApprov
     plan
   });
   let decided = decided_plans(&view, &conversation);
-  let usage = view.usage();
-  // Invocations whose CLI reported input but no output yet: their output is unknown, not 0.
-  let output_unreported = view
-    .invocations
-    .iter()
-    .filter(|invocation| invocation.usage.output_unreported())
-    .count();
-  let reviewer = reviewer_tokens(&view.reviews);
   let run = &view.run;
   let waits = slot_waits(services.runners.status_of(&root).as_ref(), &root);
   let steps: Vec<Value> = view.steps.iter().map(|shown| step(shown, &waits)).collect();
@@ -125,15 +120,7 @@ fn read_run(services: &Services, args: &InRun) -> Result<(Value, Vec<ShownApprov
     "pipeline": { "name": &*view.pipeline, "version": view.version.get() },
     "status": wire::run_status(run.status(), view.runner_failure),
     "unverified": unverified,
-    "tokens": {
-      "used": run.used().get(),
-      "budget": run.budget().map(TokenBudget::get),
-      "input": usage.input,
-      "cached_input": usage.cached_input,
-      "output": usage.output,
-      "output_unreported": output_unreported,
-      "reviewer": reviewer,
-    },
+    "tokens": run_tokens(&view),
     "time": {
       "active_seconds": view.active_time(Timestamp::now()).as_secs(),
       "limit_seconds": run.max_duration().map(|limit| limit.as_secs()),
@@ -141,7 +128,10 @@ fn read_run(services: &Services, args: &InRun) -> Result<(Value, Vec<ShownApprov
     "steps": steps,
     "plans": decided,
     "approval_mode": approval_mode,
-    "worktree": worktree,
+    "requests": request_answers(&db, run.id())?,
+    "worktree": worktree_state(&db, &root, run.id())?,
+    "worktree_not_removed": worktree_left(&db, &root, run.id())?,
+    "base": base_branch::run_json(run),
     "merge": merge,
     "delivery": super::merge_queue::run_delivery(&db, run.id())?,
     "base_moved": base_moved::of_run(&view),
@@ -158,6 +148,44 @@ fn read_run(services: &Services, args: &InRun) -> Result<(Value, Vec<ShownApprov
     "link": Link::Task(project, task.key().clone(), TaskPage::Summary).path(),
   });
   Ok((read, waiting, project))
+}
+
+/// The run's token totals, with the reviewer's use apart and unknown output reported explicitly.
+fn run_tokens(view: &RunView) -> Value {
+  let usage = view.usage();
+  // Invocations whose CLI reported input but no output yet: their output is unknown, not 0.
+  let output_unreported = view
+    .invocations
+    .iter()
+    .filter(|invocation| invocation.usage.output_unreported())
+    .count();
+  json!({
+    "used": view.run.used().get(),
+    "budget": view.run.budget().map(TokenBudget::get),
+    "input": usage.input,
+    "cached_input": usage.cached_input,
+    "output": usage.output,
+    "output_unreported": output_unreported,
+    "reviewer": reviewer_tokens(&view.reviews),
+  })
+}
+
+/// How each tool request of `run` was answered by its approval mode, oldest first: `answered` (`autopilot`, `profile`,
+/// `reviewer` with its reason, `person`), absent while it waits; `came_to_you` with the reason its card shows, for one
+/// that came to the person and still waits there or was answered there.
+fn request_answers(db: &ProjectDb, run: RunId) -> Result<Vec<Value>, ToolError> {
+  Ok(
+    db.request_answers(run)?
+      .into_iter()
+      .map(|record| {
+        json!({
+          "id": record.request,
+          "answered": record.answer,
+          "came_to_you": record.came_to_person,
+        })
+      })
+      .collect(),
+  )
 }
 
 /// Whether `run`'s work was merged, as its task's Summary tells it: by Orchester, with the merge it recorded, or

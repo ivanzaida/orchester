@@ -5,7 +5,7 @@
 use std::time::Duration;
 
 use lurq::{
-  app::theme::{SpacingSize, Theme},
+  app::theme::{SpacingSize, Theme, TypographyStyle},
   layout::scrollbar::ScrollBarStyle,
 };
 
@@ -39,6 +39,21 @@ pub fn list_scrollbar(base: &ScrollBarStyle) -> ScrollBarStyle {
     edge_inset: Some(LIST_SCROLL_EDGE),
     ..base.clone()
   }
+}
+
+/// A skeleton's line of words in `style`: how high the line is, and how high its bone is in its middle, as the design
+/// draws words of that size (`D · Bones` in `13 · Patterns` `AOQZ3`: 13 px words 10 high, 12 px 9, 11 px 8).
+pub fn skeleton_line(theme: &Theme, style: impl Into<TypographyStyle>) -> (f32, f32) {
+  let text = theme.typography().get(style);
+  let size = text.font_size;
+  let bone = match size {
+    size if size >= 20.0 => 16.0,
+    size if size >= 15.0 => 12.0,
+    size if size >= 13.0 => 10.0,
+    size if size >= 12.0 => 9.0,
+    _ => 8.0,
+  };
+  (size * text.line_height, bone)
 }
 
 /// Gaps and paddings of the Tasks list.

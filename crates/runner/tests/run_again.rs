@@ -26,7 +26,9 @@ use orchester_runner::execution::Scheduler;
 use orchester_store::ProjectDb;
 use rusqlite::Connection;
 
-use self::support::{Setup, project, scheduler, wait_for, wait_for_turns};
+use self::support::{
+  PATIENCE, Setup, git, pending::record_pending_run, project, queue_another_task, scheduler, wait_for, wait_for_turns,
+};
 
 async fn start(scheduler: &Scheduler, task: TaskId) -> RunId {
   scheduler
@@ -404,4 +406,41 @@ async fn run_again_of_a_task_changed_since_it_was_checked_starts_nothing() {
       .is_ok(),
     "the task as it is now runs"
   );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn worktree_removal_sweep_at_the_runners_start_deletes_only_ended_runs_folders() {
+  let project = project(&Setup::new("Report failure."));
+  let root = project.repo.path();
+  let (first_runner, mut events) = scheduler(root);
+  let first = start(&first_runner, project.task).await;
+  wait_for(root, &mut events, first, |run| run.status().is_terminal()).await;
+  let pending = record_pending_run(root, queue_another_task(root)).await;
+  // What a removal that failed part way left: git forgot the failed run's worktree, its build output stayed.
+  let orphan = worktree(root, first);
+  git(
+    root,
+    &["worktree", "remove", "--force", orphan.to_str().expect("a UTF-8 path")],
+  );
+  fs::create_dir_all(orphan.join("target/debug")).expect("build folder");
+  fs::write(orphan.join("target/debug/app.bin"), "built\n").expect("build output");
+  let at_work = worktree(root, pending.id());
+  fs::create_dir_all(at_work.join("target")).expect("a folder of a run that has not ended");
+  let unknown = root.join(".orchester/worktrees/notes");
+  fs::create_dir_all(&unknown).expect("a folder no run has");
+
+  let (_restarted, _events) = scheduler(root);
+
+  tokio::time::timeout(PATIENCE, async {
+    while orphan.exists() {
+      tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+  })
+  .await
+  .expect("the runner sweeps the folder at its start");
+  assert!(
+    at_work.is_dir(),
+    "a folder of a run that has not ended is never touched"
+  );
+  assert!(unknown.is_dir(), "a folder no run has is left alone");
 }

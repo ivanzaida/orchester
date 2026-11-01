@@ -4,14 +4,15 @@
 
 ### Windows — release installer
 
-Raising `version` in `crates/desktop-app/Cargo.toml` on `master` publishes a GitHub Release `app-v<version>` with:
+Raising `version` in `crates/desktop-app/Cargo.toml` on `master` signs and uploads a release to Orchester Cloud, where
+it is published on Beta, and tags the commit `app-v<version>` (no GitHub Release since 2026-10-31;
+`docs/stable-build.md`, "Releases from CI"). It has, at `https://api.orchester.cloud/v1/releases/<version>/files/<name>`:
 
 - `Orchester-<version>-setup.exe` — an installer for the current user, no admin rights. Installs into
   `%LOCALAPPDATA%\Programs\Orchester` by default (another folder can be chosen on the first install), adds a Start menu
   shortcut, an optional desktop shortcut and an uninstaller.
 - `Orchester-<version>-windows-x64.zip` — the portable app: `orchester.exe` + `orchester-runner.exe` (the app needs the
   runner beside it).
-- `SHA256SUMS.txt`.
 
 The installer is **not code-signed**, so SmartScreen warns (*More info* → *Run anyway*). An upgrade replaces the
 programs and keeps `orchester.db`, the logs and the MCP token. The installer and uninstaller ask you to close a running
@@ -117,8 +118,8 @@ The design describes more than this version implements. The following are shown 
 - A workflow-status picker on the task page or in the form (the board moves tasks between statuses); creating tags in
   the window and *Manage tags* (existing tags are toggled on the board; new ones only over MCP); Blocked / blocked-by
   fields (over MCP only).
-- The run's *Approvals* section (changing a run's permissions or auto mode in the window — over MCP:
-  `set_run_auto_mode`).
+- The run's *Approvals* section (changing a run's permissions, or switching it to Manual, in the window — over MCP:
+  `set_run_manual`).
 - *Always allow…* on approval cards; a per-category approval policy.
 - Run artifacts other than step reports (the Summary's *Output* lists the reports); *Ask agent* on the Ready card (use
   *Send follow-up*); the Conversation's step rail, filter and search.

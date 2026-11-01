@@ -1,8 +1,9 @@
 //! The page of Settings (`Header` `t7cJ0W` and `Tabs` `xEFQ0` in `01 · General` `l838Ty` of the new
 //! `orchester.pen`): the title with what Settings is on its line and, at its end, whether the open tab's changes were
-//! saved (General, Notifications and Automation, whose changes save as they are made), then the five page tabs
-//! *General · Notifications · Accounts · Automation · Orchester Cloud*, each a place of its own, and the open tab
-//! under them. A sub-page of a tab keeps its tab current; a press on the current tab goes back to the tab itself.
+//! saved (General, Notifications, Automation and Browser, whose changes save as they are made), then the six page tabs
+//! *General · Notifications · Accounts · Automation · Browser · Orchester Cloud* (`EPO9U` in `09 · Settings · Browser`
+//! `j3Lre`), each a place of its own, and the open tab under them. A sub-page of a tab keeps its tab current; a press
+//! on the current tab goes back to the tab itself.
 
 use std::sync::Arc;
 
@@ -19,11 +20,11 @@ use crate::{
 };
 
 /// Settings on `tab`, showing `body`, with what its saves did (`saved`) on a tab whose changes save as they are made;
-/// `accounts` is how many accounts there are, once read.
+/// `accounts` is how many accounts there are, once read, and whether they are being read for the first time.
 pub(super) fn page(
   ctx: &mut Ctx,
   (tab, saved): (SettingsTab, Option<Summary>),
-  accounts: Option<usize>,
+  accounts: (Option<usize>, bool),
   body: Element,
 ) -> Element {
   let navigation = Navigation::of(ctx);
@@ -38,7 +39,12 @@ pub(super) fn page(
   )
 }
 
-fn tabs(ctx: &mut Ctx, tab: SettingsTab, accounts: Option<usize>, navigation: &Navigation) -> Element {
+fn tabs(
+  ctx: &mut Ctx,
+  tab: SettingsTab,
+  (accounts, reading): (Option<usize>, bool),
+  navigation: &Navigation,
+) -> Element {
   // Each tab is a place of its own. The current one opens nothing, unless a sub-page of it shows: then it goes back.
   let tab_to = |id: &str, label: Arc<str>, (current, at_tab): (bool, bool), route: Route| {
     if current && at_tab {
@@ -59,13 +65,17 @@ fn tabs(ctx: &mut Ctx, tab: SettingsTab, accounts: Option<usize>, navigation: &N
   );
   let accounts_tab = match accounts {
     Some(count) => accounts_tab.count(count, false),
+    None if reading => accounts_tab.count_reading(),
     None => accounts_tab,
   };
   let tabs = [
     tab_to(
       "settings-tab-general",
       ctx.t("settings.tabs.general"),
-      (tab == SettingsTab::General, true),
+      match tab {
+        SettingsTab::General(show) => (true, show.is_none()),
+        _ => (false, true),
+      },
       Route::General,
     ),
     tab_to(
@@ -80,6 +90,12 @@ fn tabs(ctx: &mut Ctx, tab: SettingsTab, accounts: Option<usize>, navigation: &N
       ctx.t("settings.tabs.automation"),
       (tab == SettingsTab::Automation, true),
       Route::Settings,
+    ),
+    tab_to(
+      "settings-tab-browser",
+      ctx.t("settings.tabs.browser"),
+      (tab == SettingsTab::Browser, true),
+      Route::Browser,
     ),
     tab_to(
       "settings-tab-orchester",

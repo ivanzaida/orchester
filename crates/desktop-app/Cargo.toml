@@ -26,9 +26,9 @@ devtools = ["lurq/devtools"]
 # (`tests/orchestrator/open_long.rs`).
 perf_profile = ["lurq/perf_profile"]
 # The window headless on a data folder of its own, signed in to a stand-in cloud (`test_support`), for the tests and QA
-# examples here and the end-to-end tests of the private platform repository, which build this crate by git. Never in
-# the app's program.
-test-support = ["dep:tempfile", "orchester-api/test-support"]
+# examples here and the end-to-end tests of the private platform repository, which build this crate by git; the QA
+# Browser window's fixture fed as a runner's reports (`test_support::browser_qa`). Never in the app's program.
+test-support = ["dep:tempfile", "orchester-api/test-support", "orchester-workspace/test-support"]
 
 [dependencies]
 # The Usage page's days (`orchester_core::usage::DayRange`) read as month, day and weekday; already built
@@ -49,15 +49,16 @@ orchester-core.workspace = true
 orchester-exec.workspace = true
 # The daily log file (`app_log`), shared with the deprecated desktop, and how a session ended.
 orchester-ipc.workspace = true
-# The client options every error report is sent with, the runner's too, and the scrubber it passes through before it
-# leaves (`error_reports`, `docs/error-reports.md`).
-orchester-report = { workspace = true, features = ["client"] }
+# The client options every error report is sent with, the runner's too, the scrubber it passes through before it
+# leaves, and the switch *Send error reports* turns (`error_reports`, `docs/error-reports.md`).
+orchester-report = { workspace = true, features = ["switch"] }
 # Where the apps keep their data and logs, and the application database (`orchester.db`) that holds the
 # app's settings.
 orchester-store.workspace = true
 # The wire types Settings › Orchester shows (invites, a server's answer, the cloud's and servers' refusals), as
-# `orchester-workspace` hands them over; the client feature for the server addresses and client errors it carries.
-orchester-api = { workspace = true, features = ["client"] }
+# `orchester-workspace` hands them over; the client feature for the server addresses and client errors it carries; the
+# release keys built into the app (`updates`), with `release-signature`.
+orchester-api = { workspace = true, features = ["client", "release-signature"] }
 # The application layer the deprecated desktop shares: the session, projects, runners, activity and
 # project data. Its DevTools markers, because its types are component props and signal values here.
 orchester-workspace = { workspace = true, features = ["devtools-inspect"] }
@@ -127,13 +128,17 @@ zeroize.workspace = true
 # Gives lurq's window class and the window the executable's embedded icon (`system_icon`): neither lurq
 # nor winit loads icon resources or sets class icons. Brings the window of the app that has the data folder
 # open to the front (`startup::front`). Holds the MCP server's port so no other socket can share it
-# (SO_EXCLUSIVEADDRUSE, `mcp::bind`), on a socket2 socket set up before it binds.
+# (SO_EXCLUSIVEADDRUSE, `mcp::bind`), on a socket2 socket set up before it binds. Suspends a frozen window's thread
+# and unwinds its stack for its hang report (`hang_reports::stack::windows`: `Diagnostics_Debug`, and `Kernel` for
+# `RtlVirtualUnwind`).
 [target.'cfg(windows)'.dependencies]
 socket2.workspace = true
 # Toasts with the app's AppUserModelID and the taskbar's overlay badge (`notifications::os::windows`).
 windows.workspace = true
 windows-sys = { workspace = true, features = [
   "Win32_Networking_WinSock",
+  "Win32_System_Diagnostics_Debug",
+  "Win32_System_Kernel",
   "Win32_System_LibraryLoader",
   "Win32_System_Threading",
   "Win32_UI_WindowsAndMessaging",
@@ -150,11 +155,16 @@ objc2-foundation.workspace = true
 embed-resource.workspace = true
 
 [dev-dependencies]
+# Reads the image a `lurq_screenshot` answers with (`tests/browser_window/inspection.rs`); already built through lurq.
+base64.workspace = true
 # The tests' and QA examples' window and stand-in cloud (`test_support`).
 orchester-app = { workspace = true, features = ["test-support"] }
 # Counts a runner's reports in tests of what follows them, which run no runner.
 orchester-workspace = { workspace = true, features = ["devtools-inspect", "test-support"] }
 orchester-api = { workspace = true, features = ["client", "identity"] }
+# The handles of lurq's `RenderEngine`, for a stand-in engine that captures without a GPU
+# (`tests/browser_window/inspection.rs`); already built through lurq.
+raw-window-handle.workspace = true
 # Exercises the production MCP tools over an in-process transport without discovery-file ACLs.
 rmcp = { workspace = true, features = ["client"] }
 # The QA seed (`examples/seed`) damages a run's record and sets a project database's schema version the way an

@@ -6,7 +6,8 @@
       "notFound": "This module no longer exists.",
       "changedMeanwhile": "This module was changed since you opened it. Close the editor and open it again to see the change.",
       "invalidDate": "Write the date as YYYY-MM-DD."
-    }
+    },
+    "baseBranchGone": "{{branch}} no longer exists in the repository. Choose another base branch; nothing was saved."
   },
   "localIntegration": {
     "sensitiveOutcome": "Integration details are unavailable under the current sensitive-data policy. Inspect the actual recorded outcome before continuing.",
@@ -18,10 +19,7 @@
   "projectSettings": {
     "personOnly": "Only a person can confirm this environment change.",
     "changedOutside": "Changed outside this screen. Reload the stored variables and review your change again.",
-    "autopilotPersonOnly": "Only you can allow Autopilot: it lets agents set to Autopilot approve their own requests. Input from an MCP client is not taken; turning it off is.",
-    "baseBranch": {
-      "gone": "{{branch}} no longer exists in the repository. Choose another base branch; nothing was saved."
-    }
+    "autopilotPersonOnly": "Only you can allow Autopilot: it lets agents set to Autopilot approve their own requests. Input from an MCP client is not taken; turning it off is."
   },
   "projects": {
     "removeRefused": "Agents are at work in {{name}}. Remove it once its runs are paused or finished.",
@@ -42,7 +40,8 @@
     "permissionsUnknown": "Auto mode didn’t review this: the step’s permissions weren’t recorded, so nothing tells what is within them.",
     "tooLong": "Auto mode didn’t review this: the request is longer than a review reads whole.",
     "escalation": "Auto mode didn’t review this: Codex asks to run it outside its sandbox.",
-    "projectProgram": "Auto mode didn’t review this: it runs one of the project’s programs, outside every sandbox."
+    "projectProgram": "Auto mode didn’t review this: it runs one of the project’s programs, outside every sandbox.",
+    "browser": "Auto mode didn’t review this: it uses the browser on a site the profile doesn’t allow, or runs JavaScript in a page."
   },
   "attachments": {
     "refused": {
@@ -349,6 +348,10 @@
     }
   },
   "tasks": {
+    "baseBranch": {
+      "gone": "{{branch}} no longer exists in the repository. The task was saved without it; choose another base branch.",
+      "changedMeanwhile": "The task changed while its base branch was saved. Open it again and choose the base branch once more."
+    },
     "board": {
       "hasRun": "This task already has a run.",
       "deletePersonOnly": "Only a person deletes tasks: input from an MCP client is not taken here."
@@ -742,13 +745,21 @@
       "approvalGate": "Step “{{step}}” calls a tool and waits for an approval; only agent steps can propose a plan for review in this version.",
       "profileNotPublished": "Step “{{step}}” uses an agent profile without a published version.",
       "connectionMissing": "Step “{{step}}” uses an agent profile whose connection no longer exists.",
+      "mcpServerMissing": "Step “{{step}}” uses an agent profile that gives its agents an MCP server missing on this computer, for example one a shared version names that is not bound here.",
+      "secretMissing": "Step “{{step}}” calls a tool that uses a secret missing on this computer, for example one a shared version names that is not bound here.",
       "unsupportedProvider": "Step “{{step}}” uses a connection that is not an agent CLI; choose a Codex or Claude Code connection for its agent profile.",
       "connectionNotUsable": "Step “{{step}}” runs on a connection that cannot be used now, for example because it is not signed in. Check it in Connections.",
       "permissionsNotEnforceable": "Step “{{step}}” has permissions its connection cannot enforce. Change the step’s permissions or the profile’s connection.",
+      "networkHostsNotEnforceable": {
+        "codex": "Step “{{step}}” limits network access to a host list, which Codex can’t enforce on this computer: its sandbox can’t keep commands off the network here. Choose network off or on, or a connection that can enforce the list.",
+        "claudeCode": "Step “{{step}}” limits network access to a host list, which Claude Code can’t enforce: its commands can reach any host. Choose network off or on, or a connection that can enforce the list.",
+        "native": "Step “{{step}}” limits network access to a host list, which Orchester’s native agent can’t enforce: its commands can reach any host. Choose network off or on, or a connection that can enforce the list."
+      },
       "nativeNotAvailable": "Step “{{step}}” runs on a native agent connection. Native agents are not available in this version yet; choose a Codex or Claude Code connection for its agent profile.",
       "notAGitRepository": "The project folder is not a git repository.",
       "noCommits": "The repository has no commit to start the run from.",
-      "baseBranchMissing": "The project’s base branch {{branch}} no longer exists, so no run starts. Choose another base branch in Project settings › General.",
+      "baseBranchMissing": "The base branch {{branch}} no longer exists, so no run starts. Choose another base branch for the task or its module.",
+      "noBranchCheckedOut": "Can't start: no branch checked out. The checkout is on no branch (detached at {{head}}); set a base branch for the task or its module, or check out a branch.",
       "commandListNotOffered": "Step “{{step}}” lists the commands it may run, but its agent profile now asks before commands. This step's command list doesn't fit its profile any more; a person updates the step.",
       "account": {
         "none": "Step “{{step}}” runs on a connection that has no account. Choose one for the connection in Connections.",
@@ -784,7 +795,7 @@
     "capacity": {
       "dailyBudgetUsed": "Daily token budget used — new runs wait until tomorrow or raise it in Project settings.",
       "noAgentSlot": "All {{slots}} agent slots are in use. Try again when a running run settles.",
-      "lowDisk": "Low disk space: {{free}} GB free of the {{needed}} GB the project keeps free. New steps wait until there is room; Clean up in Project settings › Runs frees some.",
+      "lowDisk": "Low disk space: {{free}} GB free, keeps {{needed}} GB. New steps wait and go on by themselves once there is room; Project settings › Runs › Storage shows what could be cleaned.",
       "shuttingDown": "Orchester is closing; no new work starts."
     },
     "control": {
@@ -844,6 +855,7 @@
       "failedNoAgent": "This run has no agent step to continue. Its saved work remains on its branch.",
       "merged": "This run's work was merged. Messages no longer reach its agents.",
       "worktreeRemoved": "The run’s worktree was removed, so its agent cannot continue. Messages no longer reach its agents.",
+      "worktreeNotRemoved": "The run’s worktree could not be removed: its folder is still on disk, and its agent cannot continue. Messages no longer reach its agents. Remove worktree tries again.",
       "ended": "This run has ended. Messages no longer reach its agents."
     },
     "errors": {
@@ -932,6 +944,7 @@
         "allowedCommands": "Allowed commands is unavailable: this connection cannot limit commands to a list. Choose Ask before running commands or change the connection.",
         "anyCommand": "Any command in the worktree is unavailable: this connection cannot confine commands to the worktree. Choose Ask before running commands or change the connection.",
         "networkOff": "Network off is unavailable: this connection cannot block commands from reaching the network. Choose Network on or change the connection.",
+        "networkHosts": "A host list is unavailable: this connection cannot keep commands from reaching other hosts. Choose network off or on, or change the connection.",
         "noRepositoryOption": "This connection cannot enforce any repository access option. Choose another connection.",
         "noCommandsOption": "This connection cannot enforce any command permission option. Choose another connection.",
         "noNetworkOption": "This connection cannot enforce any network option. Choose another connection."
@@ -974,6 +987,20 @@
         "duplicate": "{{command}} is already allowed.",
         "tooMany": "At most {{max}} commands can be allowed."
       },
+      "siteInvalid": {
+        "blank": "Type a host first, such as staging.example.com.",
+        "spaces": "{{site}} is not a host: a site is one host, without spaces.",
+        "scheme": "Enter {{site}} without its scheme (https://): a host such as staging.example.com.",
+        "path": "Enter {{site}} without a path, query or fragment: a host such as staging.example.com.",
+        "port": "Enter {{site}} without a port: every port of an allowed host is allowed.",
+        "credentials": "Enter {{site}} without a user name or password.",
+        "wildcard": "In {{site}}, a * may only start the entry, as in *.example.com.",
+        "tooBroad": "{{site}} would allow too many sites: name a domain under it, as in *.example.com.",
+        "notAscii": "Enter {{site}} in its ASCII form (xn--…).",
+        "notAHost": "{{site}} is not a host: letters, digits and - between dots, or an IPv6 address in brackets.",
+        "duplicate": "{{site}} is already allowed.",
+        "tooMany": "At most {{max}} sites can be allowed."
+      },
       "folderInvalid": {
         "repository": "The repository cannot be read, so the folder cannot be checked.",
         "blank": "Type a folder first.",
@@ -993,8 +1020,10 @@
         "tooMany": "At most {{max}} folders can be listed."
       },
       "networkOff": "Off",
+      "networkHosts": "Only listed hosts",
       "networkOn": "On",
       "networkOffDetail": "Package installs and web requests fail while network access is off.",
+      "networkHostsDetail": "Only the listed hosts can be reached.",
       "networkOnDetail": "Commands and web tools can reach the network."
     }
   },
@@ -1502,8 +1531,10 @@
       "messageChanged": "Run #{{run}} changed since the message was checked: sending it now would do something else. Nothing was sent; read the run again before you send.",
       "notAnAgentStep": "{{step}} is not an agent step, so it has no agent profile to change.",
       "automationNotAllowed": "Let automation answer approvals is off. A person turns it on in Settings › What automation may do.",
+      "retired": "{{tool}} was retired with auto mode and changes nothing. Use {{replacement}} instead.",
       "personsPoints": "A person set this task’s story points; automation does not change them.",
       "pointsOffScale": "Story points are 1, 2, 3, 5, 8, 13 or 21.",
+      "branchNotFound": "The repository has no branch {{branch}}, locally or on a remote. Name one of its branches, inherit or checked_out; nothing was saved.",
       "runNotEnded": "The run still works; its worktree is removed once it ended.",
       "worktreeRemoved": "The run’s worktree was removed already.",
       "integrationRunning": "A merge or worktree removal of this task is running; try again once it ended.",
@@ -1534,6 +1565,7 @@
       "planNoteRequired": "Request changes needs a note that says what should change in the plan.",
       "approveTakesNoNote": "Approving takes no note, as the plan card approves without one. Request changes to send the agent a note.",
       "folderNotAbsolute": "Name the project’s folder by its absolute path.",
+      "invalidKeepFree": "Keep free is whole GB from {{min}} to {{max}}.",
       "cliNotFound": "No {{program}} was found on the search path. Give the CLI’s absolute path as the program.",
       "cliNotFoundIn": "No {{program}} was found in the folders searched: {{folders}}. Give the CLI’s absolute path as the program.",
       "programMissing": "There is no file at {{program}}.",
@@ -1547,6 +1579,7 @@
       "effortNotOffered": "{{model}} does not list the effort {{effort}}. list_models gives the efforts each model takes.",
       "commandsNeedAllowed": "Allowed commands are listed only with the commands choice allowed.",
       "foldersNeedWrite": "Extra writable folders apply only with write access to the repository.",
+      "browserNeedsNetwork": "The browser needs network access: turn network on, or leave the browser off.",
       "nativeNoSwitches": "On a connection whose agents Orchester runs itself, the approval switches and MCP servers are not offered in this version.",
       "mcpServerMissing": "MCP server {{server}} is no longer available. Remove it from the selection and try again.",
       "mcpServerOff": "MCP server {{server}} is turned off. Turn it on in Connections before adding it to this profile.",
@@ -1632,6 +1665,8 @@
       "network": "Network access, which the latest version does not give.",
       "toolCallsUnasked": "Tool calls no longer asked about, which the latest version asks about.",
       "autoApprove": "Approving automatically, where the latest version asks a person.",
+      "browser": "The browser, which the latest version does not give.",
+      "browserSite": "Allowed sites of the browser that the latest version does not list.",
       "autopilot": "Autopilot, which approves the agents' tool requests in the worktree without asking, where the latest version is Manual.",
       "mcpServers": "MCP servers the latest version does not give its agents.",
       "reviewer": "Another reviewer would approve requests in every Manual run in your place.",
@@ -1966,7 +2001,11 @@
       "foreignAddress": "{{server}} names this project at {{own}}, not at the address this computer connected to, so Orchester didn't use it and nothing was changed. If {{own}} is how your team reaches this server, connect to it by that address.",
       "twoFactorOff": "Entering a code needs two-factor authentication on your Orchester Cloud account; nothing was sent.",
       "twoFactorSession": "Entering a code needs this computer signed in to Orchester Cloud with two-factor authentication; nothing was sent.",
-      "unprovenServer": "The server didn't prove it is the server it says it is; nothing was sent."
+      "unprovenServer": "The server didn't prove it is the server it says it is; nothing was sent.",
+      "notAdmin": "Only the project's owner or the server's admin changes the team's configuration; nothing was changed.",
+      "versionInUse": "Runs or tasks here use the version you published, so it stays; nothing was changed. Publish yours as the next version instead.",
+      "versionConflict": "Someone published v{{version}} from the same version meanwhile. Open your draft on v{{version}}, or publish yours as the next version.",
+      "personOnly": "Only a person can do this in the window: it changes what agents may do on this computer. Nothing was changed."
     },
     "folder": {
       "matches": "Its origin is {{hint}}, the repository this project names.",

@@ -291,12 +291,8 @@ impl TasksScreen {
       Layout::List => skeleton::Place::List,
       Layout::Board => skeleton::Place::Board(list.tab(), display.columns),
     };
-    page
-      .child(inset(views::views(ctx, (id, list), Counts::Reading, None)))
-      .child(ctx.mount_keyed::<skeleton::Skeleton>(
-        &format!("tasks-skeleton-{id}"),
-        skeleton::SkeletonProps { place, label },
-      ))
+    let views = inset(views::views(ctx, (id, list), Counts::Reading, None));
+    page.child(views).child(skeleton::skeleton(ctx, place, label))
   }
   /// The views, what is held and filtered, and the view's rows as searched, filtered and ordered, or why there is none.
   fn list(&self, ctx: &mut Ctx, page: Column, shown: &Shown<'_>, options: &Options) -> Column {

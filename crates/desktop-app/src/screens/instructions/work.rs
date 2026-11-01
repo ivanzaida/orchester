@@ -228,6 +228,10 @@ async fn record(project: &OpenProject, services: &crate::services::Services, cha
     Ok(_) => activity.finish(),
     Err(error) => activity.fail(error.message().clone()),
   }
+  // A version published in a shared project goes to its team server at once (02).
+  if published && result.is_ok() {
+    crate::screens::hub::team::send_published(services, &project.repo_root).await;
+  }
   result.map(|entry| {
     // Every screen that shows the instructions reads them again; Instructions itself reads them again only so.
     services.changes.record(project.project.id(), Outside::Instructions);

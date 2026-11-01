@@ -18,7 +18,10 @@ use lurq::{
 use orchester_core::time::Timestamp;
 use orchester_workspace::tasks::detail::RunView;
 
-use super::{decisions, section_head, steps};
+use super::{
+  browser_line::{BrowserLine, LineProps},
+  decisions, section_head, steps,
+};
 use crate::{
   navigation::Navigation,
   routes::{Route, TaskTab, TaskView},
@@ -55,7 +58,20 @@ pub fn section(ctx: &mut Ctx, task: &TaskContext, run: Option<&RunView>) -> Elem
   } else {
     section = section.child(head);
   }
-  section.child(last_event(ctx, task, run.is_some())).into()
+  // The run's tabs in its project's browser, under its last event (`RGeKO`).
+  let browser = run.map(|run| {
+    ctx.mount_keyed::<BrowserLine>(
+      "task-browser-line",
+      LineProps {
+        root: task.project.open.repo_root.clone(),
+        run: run.run.id(),
+      },
+    )
+  });
+  section
+    .child(last_event(ctx, task, run.is_some()))
+    .with_children(browser)
+    .into()
 }
 
 /// The rail of `run`'s steps, the one it stands at marked.

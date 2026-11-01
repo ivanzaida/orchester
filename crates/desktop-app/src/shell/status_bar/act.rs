@@ -1,7 +1,7 @@
 //! What the bar's items do in the window: open the shown project's runner log or start its runner again
-//! (the runners show the active tab's project), open a place where a press asks, leave a failure in the
-//! activity's history, and stop runs auto-approving, written off the UI thread, after which every tab of
-//! the project reads its tasks again.
+//! (the runners show the active tab's project), open the Browser window on it, open a place where a press asks,
+//! leave a failure in the activity's history, and stop runs auto-approving, written off the UI thread, after which
+//! every tab of the project reads its tasks again.
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -15,7 +15,7 @@ use orchester_workspace::{
 use parking_lot::Mutex;
 
 use super::facts::{BarAction, Dispatch, Stopping};
-use crate::{navigation::Navigation, project::ProjectFeed, services::Services};
+use crate::{browser::BrowserLink, navigation::Navigation, project::ProjectFeed, services::Services};
 
 /// Stops runs of a project auto-approving.
 #[derive(Clone, PartialEq)]
@@ -102,6 +102,7 @@ pub fn dispatch(
   (stop, stopper): (&StopAction, &Stopper),
 ) -> Dispatch {
   let navigation = Navigation::of(ctx);
+  let browser = BrowserLink::of(ctx).expect("the session's window provides the Browser window's link before the shell");
   let (services, stop, asked) = (services.clone(), stop.clone(), stopper.asked.clone());
   Arc::new(move |action| match action {
     BarAction::OpenRunnerLog => {
@@ -116,6 +117,11 @@ pub fn dispatch(
     BarAction::ReadAgain => {
       if let Some((_, feed)) = &shown {
         feed.saved();
+      }
+    }
+    BarAction::ShowBrowser => {
+      if let Some((repo_root, _)) = &shown {
+        browser.show(repo_root, None);
       }
     }
     BarAction::StopAutoApproving(runs) => {

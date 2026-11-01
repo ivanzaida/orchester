@@ -1,11 +1,13 @@
 //! The agent CLI's command: Codex App Server with what the runner tells it once it runs, or Claude
 //! Code with its prompt on standard input. The repository's skills Codex disables while the
-//! project has its agent files off are found here too.
+//! project has its agent files off are found here too, and the names Codex gets the step's MCP
+//! servers by.
 
 use std::{
   collections::BTreeSet,
   path::{Path, PathBuf},
   sync::Arc,
+  time::Duration,
 };
 
 use orchester_core::{
@@ -14,6 +16,7 @@ use orchester_core::{
   command::Command,
   connection::{
     AgentConnection, AgentProvider, ConnectionAccount,
+    app_server_config::{names_read_command, read_configured_names},
     invocation::{
       CODEX_PROVIDER_ID, ClaudeInvocation, ClaudeMcp, ClaudeSession, CodexAgentFiles, CodexInvocation, CodexMcp,
       InvocationError, OnProvider, Platform, on_account,
@@ -25,6 +28,7 @@ use orchester_core::{
   resource::{CommandEnvironment, ModelId},
   store::SettingsStore,
 };
+use orchester_exec::ProcessRunner;
 
 use super::{
   super::{
@@ -37,6 +41,10 @@ use super::{
   NATIVE_NOT_AVAILABLE, problem,
 };
 use crate::private_file::PrivateFile;
+
+/// How long the read of the MCP server names of Codex's configuration may take: App Server answers it in a fraction of
+/// a second once it runs (Codex 0.159.2, 2026-10-30), but its first start on a machine is slower.
+const NAMES_TIMEOUT: Duration = Duration::from_secs(20);
 
 /// The CLI's command, and what must live as long as the CLI: Claude Code's MCP configuration file, or
 /// what the runner tells Codex App Server and the listener of its relay of Orchester's tools.
@@ -125,6 +133,11 @@ impl RunTask {
       .map_err(|error| problem(format!("cannot protect agent CLI: {error}")))?;
     match setup {
       McpSetup::Codex(mcp) => {
+        let mcp = self.named_apart(cli, mcp);
+        let prompt = match mcp.renamed_prompt() {
+          Some(names) => format!("{prompt}\n\n{names}"),
+          None => prompt,
+        };
         let CodexTools { server, listening } = self.codex_tools(tools)?;
         let mcp = mcp.with_orchester(server);
         // Autopilot exempts no tool: every call that needs approval reaches Orchester.
@@ -153,6 +166,51 @@ impl RunTask {
     }
   }
 
+  /// `mcp` with a name of its own in Codex for each server named like one Codex's configuration already has
+  /// (`CodexMcp::named_apart`), read with a Codex App Server started for that alone, without the step's servers, on
+  /// the step's account but not its API provider, whose key it does not need
+  /// (`orchester_core::connection::app_server_config`). Unchanged when it chooses no server, or when the read fails:
+  /// the step's own Codex reads its configuration again and refuses a name that is taken.
+  fn named_apart(&self, cli: &Cli<'_>, mcp: CodexMcp) -> CodexMcp {
+    if mcp.servers().is_empty() {
+      return mcp;
+    }
+    let read = self
+      .app_server_process(cli, None)
+      .map_err(|error| error.to_string())
+      .and_then(|command| {
+        let command = names_read_command(command, cli.worktree);
+        read_configured_names(&ProcessRunner::new(NAMES_TIMEOUT), &command).map_err(|error| error.to_string())
+      });
+    match read {
+      Ok(taken) => mcp.named_apart(&taken),
+      Err(error) => {
+        tracing::warn!(%error, "cannot read the MCP server names of Codex's configuration");
+        mcp
+      }
+    }
+  }
+
+  /// Codex App Server's process with the MCP servers `mcp`, if any, on the step's account.
+  fn app_server_process(&self, cli: &Cli<'_>, mcp: Option<&CodexMcp>) -> Result<Command, InvocationError> {
+    let invocation = CodexInvocation {
+      executable: cli.executable,
+      repository: &self.root,
+      access: cli.enforced.permissions().repository(),
+      network: cli.enforced.permissions().network().clone(),
+      writable_roots: cli.writable_roots,
+      worktree: cli.worktree,
+      platform: Platform::current(),
+      mcp,
+      agent_files: cli
+        .repository_skills
+        .map_or(CodexAgentFiles::Loaded, |skills| CodexAgentFiles::LeftOut { skills }),
+    };
+    invocation
+      .command(std::env::vars_os(), cli.environment)
+      .and_then(|command| on_account(command, cli.account, AgentProvider::CodexCli))
+  }
+
   /// Codex App Server with the MCP servers `mcp`, Orchester's among them, and what the runner tells it
   /// once it runs: the prompt and its attached files, the thread's settings and the approvals it may ask a person
   /// for.
@@ -162,24 +220,19 @@ impl RunTask {
     mcp: &CodexMcp,
     (prompt, attached): (String, Vec<AttachedFile>),
   ) -> Result<(Command, AppServerSetup), RunnerProblem> {
-    let mut expected_servers = mcp.servers().iter().map(ToString::to_string).collect::<BTreeSet<_>>();
+    let mut expected_servers: BTreeSet<String> = mcp
+      .servers()
+      .iter()
+      .map(|server| mcp.codex_name(server).to_owned())
+      .collect();
     expected_servers.insert(SERVER.to_owned());
-    let invocation = CodexInvocation {
-      executable: cli.executable,
-      repository: &self.root,
-      access: cli.enforced.permissions().repository(),
-      network: cli.enforced.permissions().network(),
-      writable_roots: cli.writable_roots,
-      worktree: cli.worktree,
-      platform: Platform::current(),
-      mcp: Some(mcp),
-      agent_files: cli
-        .repository_skills
-        .map_or(CodexAgentFiles::Loaded, |skills| CodexAgentFiles::LeftOut { skills }),
-    };
-    let command = invocation
-      .command(std::env::vars_os(), cli.environment)
-      .and_then(|command| on_account(command, cli.account, AgentProvider::CodexCli))
+    let renamed = mcp
+      .renamed()
+      .iter()
+      .map(|(server, name)| (name.clone(), server.to_string()))
+      .collect();
+    let command = self
+      .app_server_process(cli, Some(mcp))
       .map(|command| on_provider(command, cli.provider, AgentProvider::CodexCli))
       .map_err(|error| problem(error.to_string()))?;
     let autopilot = cli.enforced.permissions().hands_requests_to_orchester();
@@ -202,10 +255,11 @@ impl RunTask {
         command_approvals: autopilot || *cli.enforced.permissions().commands() == CommandPermission::AskBefore,
         sandbox_approvals: cli.enforced.outside_commands() == OutsideCommands::SandboxApproval,
         tool_approvals: autopilot || cli.enforced.permissions().interactive_tool_approvals(),
-        network: cli.enforced.permissions().network(),
+        network: cli.enforced.permissions().network().clone(),
         writable_roots: cli.writable_roots.to_vec(),
         resume: cli.resume.map(str::to_owned),
         expected_servers,
+        renamed,
         exemptions: mcp.exemptions().clone(),
         output_schema: schema,
         secrets,

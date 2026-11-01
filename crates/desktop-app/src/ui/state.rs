@@ -36,6 +36,8 @@ const SECRETS_EXPLANATION_WIDTH: f32 = 640.0;
 pub struct EmptyState {
   id: Arc<str>,
   glyph: Icon,
+  /// The glyph says something is wrong: in `warning` (`07 · Browser not found` `YEv2c`).
+  warning: bool,
   title: Arc<str>,
   explanation: Arc<str>,
   actions: Vec<Element>,
@@ -60,6 +62,7 @@ impl EmptyState {
     Self {
       id: id.into(),
       glyph,
+      warning: false,
       title: title.into(),
       explanation: explanation.into(),
       actions: Vec::new(),
@@ -78,6 +81,12 @@ impl EmptyState {
   /// Full-width explanation, as the Tools state panel (`yUrNX`) uses.
   pub fn wide(mut self) -> Self {
     self.wide = true;
+    self
+  }
+
+  /// The glyph in `warning`: what the state says is wrong (`07 · Browser not found` `YEv2c`).
+  pub fn warning(mut self) -> Self {
+    self.warning = true;
     self
   }
 
@@ -143,7 +152,12 @@ impl EmptyState {
     } else {
       GLYPH_TILE
     };
-    sized_tile(&self.id, self.glyph, tile_size)
+    let color = if self.warning {
+      PaletteColor::Warning
+    } else {
+      PaletteColor::TextSecondary
+    };
+    sized_tile(&self.id, (self.glyph, color), tile_size)
   }
   /// An action in the row under the explanation.
   pub fn action(mut self, action: impl Into<Element>) -> Self {
@@ -268,10 +282,10 @@ impl From<EmptyState> for Element {
 
 /// An empty state's glyph tile (`q4tTW`), for a state laid out on its own (`X0l2I6` in Project memory).
 pub fn glyph_tile(id: &str, glyph: Icon) -> Row {
-  sized_tile(id, glyph, GLYPH_TILE)
+  sized_tile(id, (glyph, PaletteColor::TextSecondary), GLYPH_TILE)
 }
 
-fn sized_tile(id: &str, glyph: Icon, size: f32) -> Row {
+fn sized_tile(id: &str, (glyph, color): (Icon, PaletteColor), size: f32) -> Row {
   Row::new()
     .width(Dimension::Px(size))
     .height(Dimension::Px(size))
@@ -280,7 +294,7 @@ fn sized_tile(id: &str, glyph: Icon, size: f32) -> Row {
     .rounded(ExtraRadius::Tile.role())
     .background(PaletteColor::SurfaceRaised)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(icon(glyph, IconSize::Xl, PaletteColor::TextSecondary))
+    .child(icon(glyph, IconSize::Xl, color))
     .id(format!("{id}-glyph"))
 }
 

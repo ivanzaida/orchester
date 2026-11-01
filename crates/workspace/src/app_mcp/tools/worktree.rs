@@ -31,6 +31,7 @@ use crate::{
     integration::leftovers_in,
     integration_jobs::{RemoveArgs, Remover},
     outside::Outside,
+    worktree_left::not_removed,
   },
 };
 
@@ -44,15 +45,29 @@ pub struct RemoveWorktree {
   pub run: String,
 }
 
-/// A run's worktree: `present`, `removed` (a person or a tool removed it), or `none`.
+/// A run's worktree: `present`, `removed` (a person or a tool removed it), `not_removed` (its removal could not finish
+/// and its folder is still on disk, [`not_removed`] says where and why), or `none`.
 pub fn worktree_state(db: &ProjectDb, repo_root: &Path, run: RunId) -> Result<&'static str, ToolError> {
   if db.worktree_removal(run)?.is_some() {
-    return Ok("removed");
+    return Ok(if not_removed(db, repo_root, run)?.is_some() {
+      "not_removed"
+    } else {
+      "removed"
+    });
   }
   Ok(if run_worktree(repo_root, run).is_dir() {
     "present"
   } else {
     "none"
+  })
+}
+
+/// Where the folder of a run whose worktree is `not_removed` is, and why it stays when that was recorded; `null`
+/// otherwise.
+pub fn worktree_left(db: &ProjectDb, repo_root: &Path, run: RunId) -> Result<Value, ToolError> {
+  Ok(match not_removed(db, repo_root, run)? {
+    Some(left) => json!({ "path": left.path, "reason": left.reason }),
+    None => Value::Null,
   })
 }
 
@@ -85,7 +100,9 @@ pub async fn remove_worktree(
     if task_runs.iter().any(|id| jobs.of(*id).busy()) {
       return Err(refused("merge_running", "appMcp.errors.integrationRunning"));
     }
-    if db.worktree_removal(run.id())?.is_some() {
+    // A removal recorded before whose folder stayed is finished: what git forgot of it was agreed to go then.
+    let finishing = db.worktree_removal(run.id())?.is_some();
+    if finishing && not_removed(&db, &open.repo_root, run.id())?.is_none() {
       return Err(refused("already_removed", "appMcp.errors.worktreeRemoved"));
     }
     let left = leftovers_in(&open.repo_root, &services.programs, &[Arc::new(run.clone())])
@@ -96,7 +113,8 @@ pub async fn remove_worktree(
       .map(|(_, left)| left)
       .filter(|left| !left.worktrees.is_empty())
       .ok_or_else(|| refused("no_worktree", "appMcp.errors.noWorktree"))?;
-    if left.loses_files() {
+    let only_forgotten = left.worktrees.iter().all(|worktree| worktree.forgotten);
+    if left.loses_files() && !(finishing && only_forgotten) {
       return Err(refused("uncommitted_changes", "appMcp.errors.uncommittedChanges"));
     }
     let task = db

@@ -30,11 +30,11 @@
 //! the worktree, unless its id has `-gone-` in it: then Codex has no history of it and refuses, as 0.159.2 does.
 //!
 //! Its configuration (`config/read`) has, besides the project servers of its arguments, the user's own
-//! server `user-global`, which runs unless the thread's configuration turns it off, and the user's own hooks
-//! (`hooks.state` entries), turned off only while the arguments have `features.hooks=false`. Its layers are the
-//! user's, the arguments', and, when the worktree has a `.codex` folder, a project layer that is
-//! disabled only while the arguments mark the worktree untrusted (`projects={"<worktree>"=…}`), as Codex
-//! names it.
+//! servers (`user-global`, and those `fake_codex_user` lists), each running unless the thread's configuration turns
+//! it off, and the user's own hooks (`hooks.state` entries), turned off only while the arguments have
+//! `features.hooks=false`. Its layers are the user's, the arguments', and, when the worktree has a `.codex` folder, a
+//! project layer that is disabled only while the arguments mark the worktree untrusted
+//! (`projects={"<worktree>"=…}`), as Codex names it.
 
 #![allow(
   clippy::print_stdout,
@@ -73,6 +73,8 @@ mod fake_codex_relay;
 mod fake_codex_review;
 #[path = "fake_codex_tools.rs"]
 mod fake_codex_tools;
+#[path = "fake_codex_user.rs"]
+mod fake_codex_user;
 #[path = "fake_codex_work.rs"]
 mod fake_codex_work;
 #[path = "fake_mcp.rs"]
@@ -158,8 +160,9 @@ pub struct Session {
   pub thread: String,
   pub resumed: bool,
   roots: BTreeSet<String>,
-  /// The user's server `user-global` was turned off for the thread.
-  user_server_off: bool,
+  /// The user's own servers (`fake_codex_user`), and those turned off for the thread.
+  user_servers: Vec<String>,
+  user_off: BTreeSet<String>,
   /// The thread keeps the servers of the arguments: its configuration has no `mcp_servers` table.
   argument_servers: bool,
   /// The thread's start of Orchester's server, once its tools were listed (after `mcpServerStatus/list`).
@@ -202,7 +205,8 @@ impl Session {
       thread: String::new(),
       resumed: false,
       roots: BTreeSet::new(),
-      user_server_off: false,
+      user_servers: fake_codex_user::servers(),
+      user_off: BTreeSet::new(),
       argument_servers: false,
       orchester: None,
       turn: String::new(),
@@ -278,13 +282,12 @@ impl Session {
       return;
     }
     let config = &params["config"];
-    if let Some(server) = without_transport(&config["mcp_servers"]) {
+    if let Some(server) = fake_codex_user::without_transport(&config["mcp_servers"], &self.user_servers) {
       let message = format!("failed to load configuration: invalid transport\nin `mcp_servers.{server}`\n");
       emit(&json!({"id": 3, "error": {"code": -32600, "message": message}}));
       return;
     }
-    self.user_server_off = config["mcp_servers"]["user-global"]["enabled"] == json!(false)
-      || config["mcp_servers.user-global.enabled"] == json!(false);
+    self.user_off = fake_codex_user::turned_off(&self.user_servers, config);
     self.argument_servers = config.get("mcp_servers").is_none();
     self.probe = fake_codex_relay::Probe::of(params["model"].as_str().unwrap_or_default());
     self.approved_tools = approved_tools(&self.args);
@@ -337,7 +340,7 @@ impl Session {
       .collect()
   }
 
-  /// The effective configuration: the project servers, the user's own `user-global`, and the user's own hooks as
+  /// The effective configuration: the project servers, the user's own (`fake_codex_user`), and the user's own hooks as
   /// Codex 0.159.2 reported them for a person whose other agent tool installed global ones (2026-10-28): every event
   /// with an empty list and the trust `state` of each, with `features.hooks = false` only while the arguments turn
   /// hooks off.
@@ -347,10 +350,9 @@ impl Session {
       .into_iter()
       .map(|name| (name.to_owned(), json!({"enabled": true})))
       .collect();
-    servers.insert(
-      "user-global".to_owned(),
-      json!({"enabled": true, "command": "user-tool"}),
-    );
+    for name in &self.user_servers {
+      servers.insert(name.clone(), json!({"enabled": true, "command": "user-tool"}));
+    }
     let hooks = json!({
       "PreToolUse": [], "PermissionRequest": [], "PostToolUse": [], "SessionStart": [], "UserPromptSubmit": [],
       "Stop": [],
@@ -366,10 +368,15 @@ impl Session {
     config
   }
 
-  /// The configuration's layers: the user's (with `user-global`), the arguments' and, for a worktree
+  /// The configuration's layers: the user's (with the user's servers), the arguments' and, for a worktree
   /// with a `.codex` folder, the project's, disabled while the worktree is untrusted.
   fn layers(&self, cwd: &std::path::Path) -> Vec<Value> {
-    let mut user = json!({"mcp_servers": {"user-global": {"command": "user-tool"}}});
+    let servers: serde_json::Map<String, Value> = self
+      .user_servers
+      .iter()
+      .map(|name| (name.clone(), json!({"command": "user-tool"})))
+      .collect();
+    let mut user = json!({"mcp_servers": servers});
     if fake_provider::clashes(&self.args) {
       user["model_providers"] = json!({"orchester": {"http_headers": {"X-Mine": "1"}}});
     }
@@ -426,8 +433,14 @@ impl Session {
         eprintln!("knock: {}", fake_codex_relay::knock(&self.args, None));
       }
     }
-    let user = if self.user_server_off { "disabled" } else { "connected" };
-    servers.push(json!({"name": "user-global", "runtimeStatus": user, "toolsError": null}));
+    for name in &self.user_servers {
+      let status = if self.user_off.contains(name) {
+        "disabled"
+      } else {
+        "connected"
+      };
+      servers.push(json!({"name": name, "runtimeStatus": status, "toolsError": null}));
+    }
     servers
   }
 
@@ -497,17 +510,6 @@ fn orchester_status(args: &[String]) -> Value {
     Some(Err(error)) => json!({"name": "Orchester", "runtimeStatus": "connected", "toolsError": error}),
     None => json!({"name": "Orchester", "runtimeStatus": "failed", "toolsError": "no command"}),
   }
-}
-
-/// A server of `servers` (a thread's `mcp_servers` configuration) Codex 0.159.2 refuses: one with
-/// neither a `command` nor a `url` that the user's configuration does not define.
-fn without_transport(servers: &Value) -> Option<&str> {
-  servers
-    .as_object()
-    .into_iter()
-    .flatten()
-    .find(|(name, table)| *name != "user-global" && table.get("command").is_none() && table.get("url").is_none())
-    .map(|(name, _)| name.as_str())
 }
 
 /// The tools the arguments approve (`<server>/<tool>`), which run without a request: each

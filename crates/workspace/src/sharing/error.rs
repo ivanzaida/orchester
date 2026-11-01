@@ -6,7 +6,7 @@ use orchester_api::{
   ErrorCode,
   client::{ClientError, ServerAddress},
 };
-use orchester_core::secret::VaultError;
+use orchester_core::{resource::VersionNumber, secret::VaultError};
 use orchester_store::StoreError;
 use thiserror::Error;
 
@@ -77,6 +77,18 @@ pub enum SharingError {
   /// owner, so the person moves it to this computer first. Nothing was sent.
   #[error("the project is in the account, and the server is this computer's")]
   AccountProject,
+  /// Only the project's owner or the server's admin changes the team's configuration (row 72): this computer refused
+  /// it, or the server answered `403 not_admin`. Nothing was sent.
+  #[error("only an admin changes the team's configuration")]
+  NotAdmin,
+  /// Someone published `latest` from the same version meanwhile: the admin decides whether to edit on top of it or to
+  /// publish theirs as the next version anyway.
+  #[error("version {latest} was published from the same version meanwhile")]
+  VersionConflict { latest: VersionNumber },
+  /// Only a person does this: *Use v<N> here* and binding a reference widen what agents may do here, so automation is
+  /// refused and nothing changed.
+  #[error("only a person does this; nothing was changed")]
+  PersonOnly,
 }
 
 impl From<Message> for SharingError {
@@ -122,6 +134,11 @@ impl SharingError {
       Self::TwoFactorOff => Message::new("sharing.errors.twoFactorOff"),
       Self::TwoFactorSession => Message::new("sharing.errors.twoFactorSession"),
       Self::UnprovenServer => Message::new("sharing.errors.unprovenServer"),
+      Self::NotAdmin => Message::new("sharing.errors.notAdmin"),
+      Self::VersionConflict { latest } => {
+        Message::new("sharing.errors.versionConflict").with("version", latest.get().to_string())
+      }
+      Self::PersonOnly => Message::new("sharing.errors.personOnly"),
     }
   }
 }
@@ -173,6 +190,7 @@ fn api_message(code: ErrorCode) -> Message {
     ErrorCode::SameTag => "tasks.tags.sameTarget",
     ErrorCode::ClaimHeld => "claims.refused.heldUnknown",
     ErrorCode::TaskMerged => "claims.refused.merged",
+    ErrorCode::NotAdmin => "sharing.errors.notAdmin",
     _ => "servers.errors.refused",
   })
 }

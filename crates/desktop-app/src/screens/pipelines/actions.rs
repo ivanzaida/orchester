@@ -30,6 +30,19 @@ pub struct Writes {
   pub action: Action,
   pub root: std::path::PathBuf,
   pub asking: Signal<bool>,
+  /// The project is shared: Publish reads *Publish for the team* (02).
+  pub shared: bool,
+}
+
+impl Writes {
+  /// *Publish vN*, or *Publish for the team* in a shared project.
+  fn publish_label(&self, ctx: &Ctx, version: String) -> std::sync::Arc<str> {
+    if self.shared {
+      crate::screens::hub::team::publish_label(ctx)
+    } else {
+      ctx.t_args("pipelines.publish", [("version", version)])
+    }
+  }
 }
 
 /// The page's writes, provided to the Steps tab's column, which asks the save question in place (`02e` `T46Jq`).
@@ -108,13 +121,9 @@ impl Writes {
     let next = next_version(&editing.opened)
       .map(|v| v.get().to_string())
       .unwrap_or_default();
-    let publish = ActionButton::new(
-      "pipeline-publish",
-      ButtonKind::Primary,
-      ctx.t_args("pipelines.publish", [("version", next)]),
-    )
-    .icon(Icon::ArrowUp)
-    .on_click(move || views.choose(View::Publish));
+    let publish = ActionButton::new("pipeline-publish", ButtonKind::Primary, self.publish_label(ctx, next))
+      .icon(Icon::ArrowUp)
+      .on_click(move || views.choose(View::Publish));
     if busy
       || editing.viewing.is_some()
       || editing.unsaved()
@@ -179,7 +188,7 @@ impl Writes {
       let publish = ActionButton::new(
         "pipeline-publish-confirm",
         ButtonKind::Primary,
-        ctx.t_args("pipelines.publish", [("version", version)]),
+        self.publish_label(ctx, version),
       )
       .icon(Icon::ArrowUp)
       .on_click(move || writes.publish(before.clone(), Allowed::default()));

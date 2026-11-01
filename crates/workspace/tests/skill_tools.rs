@@ -2,21 +2,23 @@
 //! replaced draft take every field the editor has and are refused as the editor refuses them (name, scope, reference
 //! file paths and limits, expected_revision); a draft automation saved is marked until a person saves it or it is
 //! published; publishing reaches agents, so it waits for a person's switch and is refused for a blank description or
-//! body, a stale draft and a draft that changed.
+//! body, a stale draft and a draft that changed. In a shared project a member has no drafts of the team's skills
+//! (`not_admin`).
 
-use std::{fs, sync::Arc};
+use std::{collections::HashMap, fs, sync::Arc};
 
 use orchester_core::{
-  id::ProjectId,
+  id::{ProjectId, ServerId},
   name::Name,
   project::{Project, ProjectKey},
   resource::{Draft, InstructionScope, Pipeline, PipelineEdit, Skill, Slug, StepKind},
   secret::{SecretValue, SecretVault, VaultError, VaultKey},
+  sharing::MemberRole,
   store::{BlobStore, ResourceStore},
   time::Timestamp,
 };
 use orchester_exec::programs::Programs;
-use orchester_store::{AppDb, ProjectDb, StoreError};
+use orchester_store::{AppDb, ProjectDb, SharingLink, StoreError};
 use orchester_workspace::{
   activity::Activity,
   app_mcp::{self, ToolError, Translate},
@@ -526,4 +528,50 @@ fn skill_tools_name_the_editors_rule_that_refused_a_write() {
   );
   assert_eq!(Refusal::BlankBody.code(), "blank_body");
   assert_eq!(Refusal::InvalidFiles.code(), "invalid_files");
+}
+
+#[test]
+fn skill_tools_and_the_skills_editor_answer_a_member_of_a_shared_project_not_admin() {
+  let desktop = Desktop::new();
+  desktop.let_automation_widen();
+  desktop.ok(
+    "save_skill_draft",
+    &save(json!({ "name": "Checks", "description": "Running checks.", "body": "# Checks" })),
+  );
+  let entry = ProjectSkills::load_in(desktop.repo.path()).expect("skills").entries[0].clone();
+  let link = SharingLink {
+    server: ServerId::generate(),
+    project: ProjectId::generate(),
+    key: ProjectKey::new("KON").expect("key"),
+    role: Some(MemberRole::Member),
+    joined_at: Timestamp::from_unix_millis(1),
+    cursor: 0,
+    last_synced_at: Timestamp::from_unix_millis(1),
+    removed_at: None,
+    address: Some("https://team.example/kontur".to_owned()),
+  };
+  desktop
+    .db()
+    .start_sharing(&link, &[], (&[], &HashMap::new()))
+    .expect("joined as a member");
+
+  for args in [
+    save(json!({ "skill": "Checks", "body": "# Mine" })),
+    save(json!({ "name": "Lint", "description": "Linting.", "body": "# Lint" })),
+  ] {
+    assert_eq!(desktop.refused("save_skill_draft", &args), "not_admin", "{args}");
+  }
+  assert_eq!(desktop.refused("publish_skill", &publish("Checks")), "not_admin");
+  let body = Skill::new(
+    "Running checks.".into(),
+    "# Mine".into(),
+    Vec::new(),
+    InstructionScope::Project,
+  )
+  .expect("a body");
+  match editor::save_checked_in(desktop.repo.path(), (Some(&entry), "Checks", &body), Timestamp::now()) {
+    Err(WriteError::Store(StoreError::NotAdmin)) => {}
+    other => panic!("the editor's save answers not_admin: {other:?}"),
+  }
+  assert_eq!(desktop.listed("Checks")["state"]["state"], "draft", "nothing changed");
 }

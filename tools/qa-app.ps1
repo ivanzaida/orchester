@@ -51,6 +51,11 @@
 # stand-in cloud names as the account's, with an invite to its project Billing, for Join a team (navigate to
 # join_team). The QA app (--join-team) prints the server's address and its codes to app.log: one joins, any other is
 # wrong; an address where nothing listens (http://127.0.0.1:9) does not answer.
+# -Scenario shared-config-here is Kontur seen by a member, with the team's cached versions and what they name here
+# (Shared configuration · redesign, UC5xk): Sharing › On this computer with every kind of row, the missing bars on Explorer,
+# Report crash and Feature delivery, Reviewer's v5 waiting for Use v5 here, Builder's Runs here use. A click opens the
+# pickers and the Confirm… and secret modals; choosing a connection and confirming stay a person's. shared-config-chosen
+# has Work chosen here; shared-config-no-claude has no Claude Code connection.
 #
 # .tmp/qa/<task>/ is replaced on every start; a QA app still running from it is refused, not stopped,
 # and so is a folder on the way to it that is a junction or a link. Besides .tmp/qa/<task>/ it writes
@@ -78,10 +83,13 @@ if ($Name -notmatch '^[a-z0-9][a-z0-9-]*$') {
 if ($PSBoundParameters.ContainsKey("WindowX") -ne $PSBoundParameters.ContainsKey("WindowY")) {
     throw "-WindowX and -WindowY go together: the window's top-left corner needs both"
 }
-# The app's ORCHESTER_APP_WINDOW_POSITION; $null lets the system place the window.
+# The app's ORCHESTER_APP_WINDOW_POSITION; $null lets the system place the window. The `else` is needed: an `if`
+# without one yields no value at all, which pwsh on macOS assigns to an environment variable as an empty string (the
+# app refuses it as no X,Y pair), where Windows removes the variable.
 $windowPosition = if ($PSBoundParameters.ContainsKey("WindowX")) {
     [string]::Format([System.Globalization.CultureInfo]::InvariantCulture, "{0},{1}", $WindowX, $WindowY)
 }
+else { $null }
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $onWindows = $env:OS -eq "Windows_NT"

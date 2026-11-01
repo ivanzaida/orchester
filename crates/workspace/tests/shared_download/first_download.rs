@@ -50,7 +50,7 @@ impl Linked {
     let servers = self.servers.clone();
     self
       .runtime
-      .spawn(async move { servers.sync_shared(false, &Programs::processes()).await })
+      .spawn(async move { servers.sync_shared(&Programs::processes()).await })
   }
 
   /// Reconnects the server, as the monitor's next check does once it answers.

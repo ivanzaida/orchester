@@ -16,6 +16,7 @@
 #![allow(clippy::print_stdout, reason = "a QA helper says where it is")]
 
 mod agents;
+mod browser;
 mod ownership_team;
 #[path = "../seed/kontur/scenarios/qa_app_asks.rs"]
 mod qa_app_asks;
@@ -24,7 +25,7 @@ mod team;
 mod team_clone;
 mod team_window;
 
-use std::{error::Error, fs, sync::Arc};
+use std::{error::Error, fs, path::Path, sync::Arc};
 
 use orchester_api::test_support::team_server::{CODE, LATER_CODE, TeamServer};
 use orchester_app::{
@@ -94,16 +95,10 @@ fn main() -> Result<(), Box<dyn Error>> {
   // database is open and while its setting allows; kept to the end of `main`. Its runners are told too, though a debug
   // runner never sends.
   let reports = error_reports::start(Environment::Qa, launch.workspace());
-  if let (Some(_), Some(services)) = (&reports, launch.services()) {
-    services
-      .runners
-      .send_error_reports(error_reports::for_runners(Environment::Qa));
+  if let (Some(reports), Some(services)) = (&reports, launch.services()) {
+    services.runners.set_error_reports(reports.for_runners().as_ref());
   }
-  // What the QA copy moves to the Recycle Bin / Trash (a removed account's folder, discarded local changes) goes to
-  // `trash` beside its data instead, never to the person's own.
-  if let (Some(workspace), Some(folder)) = (launch.workspace(), location.database.parent()) {
-    workspace.use_trash(Arc::new(FolderTrash::new(&folder.join("trash"))));
-  }
+  isolate_files(&launch, &location.database);
   let cloud = AccountCloud::start();
   // Kept to the end of `main`: the team server answers while the window is open.
   let _team = join_team.then(|| team(&cloud));
@@ -133,6 +128,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     (true, None) => return Err("--settings needs a started session".into()),
     (false, _) => None,
   };
+  // The Browser window's states, when the seed left their fixture (`browser-*` scenarios); played until exit.
+  let browser = match launch.services() {
+    Some(services) => browser::start(services, &location.database)?,
+    _ => None,
+  };
   // The team answers while the window is open.
   let team_server = match (team_state, launch.services()) {
     (Some(state), Some(services)) => Some(team::prepare(state, services, runtime.handle())?),
@@ -155,9 +155,26 @@ fn main() -> Result<(), Box<dyn Error>> {
     (Some(state), Some(server)) => team_window::open(&runtime, &launch, position, (state, server, clones.as_ref()))?,
     _ => window::open_showing(&runtime, &launch, position, shown),
   }
+  if let Some(browser) = browser {
+    browser.abort();
+  }
   clipboard::clear_at_exit();
   launch.end();
   Ok(())
+}
+
+/// Keeps removed files and browser discovery inside this QA copy's data folder.
+fn isolate_files(launch: &Launch, database: &Path) {
+  // What the QA copy moves to the Recycle Bin / Trash (a removed account's folder, discarded local changes) goes to
+  // `trash` beside its data instead, never to the person's own. The seed's `browser` scenarios put the browsers
+  // Settings â€º Browser finds in `browsers` beside the data; with that folder there, it looks in it only.
+  if let (Some(workspace), Some(folder)) = (launch.workspace(), database.parent()) {
+    workspace.use_trash(Arc::new(FolderTrash::new(&folder.join("trash"))));
+    let browsers = folder.join("browsers");
+    if browsers.is_dir() {
+      workspace.look_for_browsers_in(&[browsers]);
+    }
+  }
 }
 
 /// A stand-in team server that `cloud` names as the account's, with an invite to its project Billing; says where it

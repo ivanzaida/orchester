@@ -63,9 +63,7 @@ impl Linked {
   }
 
   fn round(&self) {
-    self
-      .desk
-      .run(self.desk.servers.sync_shared(false, &Programs::processes()));
+    self.desk.run(self.desk.servers.sync_shared(&Programs::processes()));
   }
 }
 
@@ -95,7 +93,7 @@ fn startup_join_first_download_stays_downloading_while_held() {
   let round = linked
     .desk
     .runtime
-    .spawn(async move { servers.sync_shared(false, &Programs::processes()).await });
+    .spawn(async move { servers.sync_shared(&Programs::processes()).await });
   let deadline = Instant::now() + Duration::from_secs(20);
   while linked.server.tasks_asked() == 0 {
     assert!(Instant::now() < deadline, "the tasks are asked for");

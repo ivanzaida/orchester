@@ -35,9 +35,9 @@ reach.
 
 - `run_check` and `start_qa_app` are not offered to a step without network.
 - A call that asks reaches a person like any request outside the step's permissions; a run rule (*Approve similar*)
-  may answer it. **Auto-approval and auto mode never answer `run_check` or `start_qa_app`.**
+  may answer it. **Auto-approval and the reviewer never answer `run_check` or `start_qa_app`.**
 - *Approve for every run of this project* on a `start_qa_app` card keeps a project rule tied to the QA script's git
-  blob (revoked in Project settings › Runs › Auto mode › *Approved for every run*).
+  blob (revoked in Project settings › Runs › Approvals › *Approved for every run*).
 
 ## Tool reference
 
@@ -64,7 +64,7 @@ reach.
 
 | Tool | Parameters | Notes |
 |---|---|---|
-| `search_external_file` | `base_directory` (req., absolute folder); `term` (req.) | E.g. dependency sources. Refused: credential locations, `.git` folders, any `.orchester` folder, `orchester.db`, runner-private folders. |
+| `search_external_file` | `base_directory` (req., absolute folder); `term` (req.) | E.g. dependency sources. Refused: credential locations, `.git` folders, any `.orchester` folder, `orchester.db`, runner-private folders, the browser profiles folder. |
 | `read_external_file` | `filename` (req., absolute path); `start_line`, `length` | Same deny list; at most 56 KiB of lines, each line cut to 16 KiB; paths ≤ 4096 chars. |
 | `run_check` | `name` (req.): one of the checks offered to the step (the tool's description lists them) | Runs a **command tool** of the project's Tools library that the run pinned and whose access rules let this pipeline/step call it — fixed arguments, in the worktree, with the agent's environment and the tool's timeout (≤ 24 h). Returns the exit code and the **end** of the output. |
 

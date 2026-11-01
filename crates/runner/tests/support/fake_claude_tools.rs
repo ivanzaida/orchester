@@ -15,6 +15,9 @@ use super::{Fake, fake_claude_rules, fake_permission_prompt::Prompt, fake_skill_
 #[path = "fake_app_tools.rs"]
 mod fake_app_tools;
 
+#[path = "fake_browser_tools.rs"]
+mod fake_browser_tools;
+
 #[path = "fake_index_prompt.rs"]
 mod fake_index_prompt;
 
@@ -60,12 +63,16 @@ impl Fake {
     self.finish(worktree, "hello", step)
   }
 
+  /// "Use the process tools", or "Use the browser tools" ([`Self::use_browser_tools`]).
   pub fn use_process_tools(
     &self,
     worktree: &Path,
     (args, opened): (&[String], Option<Prompt>),
     step: &str,
   ) -> ExitCode {
+    if self.prompt.contains("Use the browser tools") {
+      return self.use_browser_tools(worktree, (args, opened), step);
+    }
     let Some(mut server) = opened.or_else(|| Prompt::open(args)) else {
       return ExitCode::from(2);
     };
@@ -95,6 +102,27 @@ impl Fake {
     fake_process_tools::exercise(worktree, |tool, input| {
       index += 1;
       self.use_tool(args, &mut server, (&format!("toolu_process_{index}"), tool, input));
+    });
+    self.finish(worktree, "hello", step)
+  }
+
+  /// "Use the browser tools": the calls of [`fake_browser_tools`], each reporting whether an allow rule names it
+  /// (`browser-permission: <tool> <allow-by-rule|ask>`), as the runner asks about a browser call itself.
+  pub fn use_browser_tools(
+    &self,
+    worktree: &Path,
+    (args, opened): (&[String], Option<Prompt>),
+    step: &str,
+  ) -> ExitCode {
+    let Some(mut server) = opened.or_else(|| Prompt::open(args)) else {
+      eprintln!("no permission prompt");
+      return ExitCode::from(2);
+    };
+    eprintln!("orchester-tools: {}", server.list().unwrap_or_default().join(","));
+    fake_browser_tools::exercise(worktree, &mut |tool, input| {
+      let rule = fake_claude_rules::mcp(args, &format!("mcp__Orchester__{tool}"));
+      eprintln!("browser-permission: {tool} {}", rule.as_str());
+      server.call_result(tool, input)
     });
     self.finish(worktree, "hello", step)
   }

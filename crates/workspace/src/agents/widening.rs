@@ -1,6 +1,6 @@
 //! Widenings shared by the profile editor and the domain tools.
 use orchester_core::{
-  connection::{AgentProvider, invocation::Platform, moves_to_another_account},
+  connection::{AgentProvider, invocation::Platform, mcp::McpServerSelection, moves_to_another_account},
   id::ResourceId,
   permission::{AgentPermissions, widening::Widening},
   resource::AgentProfile,
@@ -47,11 +47,10 @@ pub fn reasons(
   {
     reasons.push(Message::new("appMcp.widens.account"));
   }
-  if profile.mcp_servers().ids().iter().any(|server| {
-    !latest
-      .as_ref()
-      .is_some_and(|version| version.body().mcp_servers().ids().contains(server))
-  }) {
+  let servers = latest
+    .as_ref()
+    .map_or_else(McpServerSelection::none, |version| version.body().mcp_servers().clone());
+  if profile.mcp_servers().adds_to(&servers) {
     reasons.push(Message::new("appMcp.widens.mcpServers"));
   }
   Ok(reasons)
@@ -65,6 +64,8 @@ pub fn message(widening: Widening) -> Message {
     Widening::Network => "appMcp.widens.network",
     Widening::ToolCallsUnasked => "appMcp.widens.toolCallsUnasked",
     Widening::AutoApprove => "appMcp.widens.autoApprove",
+    Widening::Browser => "appMcp.widens.browser",
+    Widening::BrowserSite => "appMcp.widens.browserSite",
     Widening::Autopilot => "appMcp.widens.autopilot",
   })
 }

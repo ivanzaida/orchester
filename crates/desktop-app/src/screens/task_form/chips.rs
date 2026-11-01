@@ -67,6 +67,9 @@ pub struct Chips {
   pub delivers: ChipState,
   pub limits: ChipState,
   pub module: ChipState,
+  pub base_branch: ChipState,
+  /// What the Base branch menu's *Find a branch* holds.
+  pub branch_find: Signal<String>,
   pub priority: ChipState,
   pub points: ChipState,
   pub more: ChipState,
@@ -79,6 +82,8 @@ impl Chips {
       delivers: ChipState::new(ctx),
       limits: ChipState::new(ctx),
       module: ChipState::new(ctx),
+      base_branch: ChipState::new(ctx),
+      branch_find: ctx.signal(String::new()),
       priority: ChipState::new(ctx),
       points: ChipState::new(ctx),
       more: ChipState::new(ctx),
@@ -292,9 +297,10 @@ pub enum HelpPlace {
 }
 
 /// One choice of a chip's menu that says what it chooses (`Feature delivery v3` `I2BrOT`, `Outside the repository`
-/// `yufU5`): a 14 icon, its name in 12.5/500 and its help in 11.5 `text_muted` under it, a check at its end while it is
-/// the choice; 10 at the sides, radius 6, the `hover` fill under the pointer and while it is the choice. A press
-/// chooses it and closes the menu `open`.
+/// `yufU5`): a 14 icon, its name in 12.5/500 (in Geist Mono where it is an identifier, a branch `f9wHj` in `eUFSd`,
+/// `Nr7fn` in `eyrnI`) and its help in 11.5 `text_muted` under it, a check at its end while it is the choice; 10 at the
+/// sides, radius 6, the `hover` fill under the pointer and while it is the choice. A press chooses it and closes the
+/// menu `open`.
 pub struct MenuOption {
   pub id: String,
   pub icon: Icon,
@@ -302,13 +308,19 @@ pub struct MenuOption {
   pub help: Option<Arc<str>>,
   pub help_place: HelpPlace,
   pub chosen: bool,
+  /// The name is an identifier, such as a branch.
+  pub mono: bool,
 }
 
 impl MenuOption {
   fn title(&self) -> Text {
     Text::new(&self.title)
       .id(format!("{}-title", self.id))
-      .variant(ExtraTypography::OptionTitle.role())
+      .variant(if self.mono {
+        TaskFormText::OptionMono.role()
+      } else {
+        ExtraTypography::OptionTitle.role()
+      })
   }
 
   fn help(&self, style: TypographyStyle) -> Option<Text> {

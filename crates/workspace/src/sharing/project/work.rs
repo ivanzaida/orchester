@@ -1,10 +1,11 @@
 //! The shared projects' background work, a task of the application's runtime beside the connection
-//! monitor (`docs/architecture/server.md`, "Claims", "Live updates"): every minute, one heartbeat
-//! request per server names the claims the person holds in the projects this computer shares there,
-//! and what they lost is written to the cache; then each shared project's cache is read again, and
-//! the claims of runs that ended are ended ([`super::claim_ends`]). A request to sync now (opening a
-//! project, *Try now*, *Check again*, after Share, the first download of a join or a link) reads the caches at once
-//! without a heartbeat, which keeps to the server's limit of 12 heartbeats a minute.
+//! monitor and the live event streams (`docs/architecture/server.md`, "Claims", "Live updates", "The sync engine"):
+//! every minute, the workflow statuses that could not be sent yet are tried again ([`super::automatic`]), one
+//! heartbeat request per server names the claims the person holds in the projects this computer shares there, what
+//! they lost is written to the cache, and the claims of runs that ended are ended ([`super::claim_ends`]). The caches
+//! follow the servers through the streams ([`crate::sharing::sync`]), so nothing reads them every minute: a full read
+//! is left only for a person's request to sync now (*Check again*, *Try now*), which sends no heartbeat and so keeps to
+//! the server's limit of 12 heartbeats a minute.
 
 use std::{
   collections::{BTreeMap, HashMap},
@@ -26,7 +27,7 @@ use crate::{
   sharing::{Servers, SharingError},
 };
 
-/// How often claims are kept fresh and the caches read again.
+/// How often claims are kept fresh.
 pub const INTERVAL: Duration = Duration::from_secs(60);
 /// The most task ids one heartbeat may name.
 const HEARTBEAT_IDS: usize = 256;
@@ -39,71 +40,82 @@ const RUN_SETTLE: Duration = Duration::from_secs(1);
 
 /// Runs until the window closes, as a task on the app runtime that `Root` starts and aborts when it
 /// drops. `runs` changes whenever a runner reports a run change: the workflow statuses runs reached
-/// are sent then, between the minute's syncs, and the claims of runs that ended are ended. Git,
+/// are sent then, between the minute's heartbeats, and the claims of runs that ended are ended. Git,
 /// through `programs`, tells which runs a person merged without Orchester.
 pub async fn run(servers: Servers, mut runs: watch::Receiver<u64>, programs: Programs) {
   let mut requests = servers.subscribe_sync();
-  let mut last_heartbeat: Option<Instant> = None;
+  requests.borrow_and_update();
+  let mut next_beat = tokio::time::Instant::now();
   let mut runs_open = true;
   loop {
-    requests.borrow_and_update();
-    let beat = last_heartbeat.is_none_or(|at| at.elapsed() >= INTERVAL);
-    if beat {
-      last_heartbeat = Some(Instant::now());
-    }
-    servers.sync_shared(beat, &programs).await;
-    let next = tokio::time::Instant::now() + INTERVAL;
-    loop {
-      tokio::select! {
-        () = sleep_until(next) => break,
-        changed = requests.changed() => if changed.is_err() { return } else { break },
-        changed = runs.changed(), if runs_open => {
-          if changed.is_err() {
-            runs_open = false;
-            continue;
-          }
-          sleep(RUN_SETTLE).await;
-          runs.borrow_and_update();
-          servers.send_automatic_statuses().await;
-          servers.end_claims(&programs).await;
+    tokio::select! {
+      () = sleep_until(next_beat) => {
+        next_beat = tokio::time::Instant::now() + INTERVAL;
+        servers.keep_claims(&programs).await;
+      }
+      changed = requests.changed() => {
+        if changed.is_err() {
+          return;
         }
+        requests.borrow_and_update();
+        servers.sync_shared(&programs).await;
+      }
+      changed = runs.changed(), if runs_open => {
+        if changed.is_err() {
+          runs_open = false;
+          continue;
+        }
+        sleep(RUN_SETTLE).await;
+        runs.borrow_and_update();
+        servers.send_automatic_statuses().await;
+        servers.end_claims(&programs).await;
       }
     }
   }
 }
 
 impl Servers {
-  /// One round over every shared project of the workspace, by server: the heartbeat when `beat`,
-  /// then each project's sync and the end of the claims whose runs ended. Each first download asked for before the
-  /// round began reports to it and ends with it ([`super::download`]).
-  pub async fn sync_shared(&self, beat: bool, programs: &Programs) {
+  /// The minute's round over every shared project of the workspace: the workflow statuses that wait, sent while the
+  /// claims they need are still held, then by server the heartbeat and the end of the claims whose runs ended.
+  pub async fn keep_claims(&self, programs: &Programs) {
+    self.send_automatic_statuses().await;
+    for projects in self.shared_by_server().await.values() {
+      self.heartbeat(projects, programs).await;
+      for project in projects {
+        claim_ends::end_claims_of(project, programs).await;
+      }
+    }
+  }
+
+  /// A full read of every shared project of the workspace into its cache, as a person asked for (*Check again*), then
+  /// the end of the claims whose runs ended.
+  pub async fn sync_shared(&self, programs: &Programs) {
     let round = Instant::now();
+    let mut attempted = Vec::new();
+    for project in self.shared_by_server().await.values().flatten() {
+      let synced = project.sync_round(round).await;
+      self.downloaded((project.repo_root(), project.entry()), synced.as_ref(), round);
+      attempted.push(project.repo_root().to_owned());
+      match synced {
+        Ok(_) => claim_ends::end_claims_of(project, programs).await,
+        Err(SharingError::Offline | SharingError::SignedOut) => {}
+        Err(error) => tracing::warn!(%error, project = %project.link().project, "cannot read the shared project"),
+      }
+    }
+    self.unreached(&attempted, round);
+  }
+
+  /// [`shared_projects`], by server; none while the blocking pool shuts down with the window.
+  async fn shared_by_server(&self) -> BTreeMap<ServerId, Vec<ProjectServer>> {
     let servers = self.clone();
-    let Ok(projects) = background::run(move || shared_projects(&servers)).await else {
-      // The blocking pool is shutting down with the window.
-      return;
-    };
+    let projects = background::run(move || shared_projects(&servers))
+      .await
+      .unwrap_or_default();
     let mut by_server: BTreeMap<ServerId, Vec<ProjectServer>> = BTreeMap::new();
     for project in projects {
       by_server.entry(project.link().server).or_default().push(project);
     }
-    let mut attempted = Vec::new();
-    for projects in by_server.values() {
-      if beat {
-        self.heartbeat(projects, programs).await;
-      }
-      for project in projects {
-        let synced = project.sync_round(round).await;
-        self.downloaded((project.repo_root(), project.entry()), synced.as_ref(), round);
-        attempted.push(project.repo_root().to_owned());
-        match synced {
-          Ok(_) => claim_ends::end_claims_of(project, programs).await,
-          Err(SharingError::Offline | SharingError::SignedOut) => {}
-          Err(error) => tracing::warn!(%error, project = %project.link().project, "cannot read the shared project"),
-        }
-      }
-    }
-    self.unreached(&attempted, round);
+    by_server
   }
 
   /// One heartbeat request (more for more than 256 claims) for the claims the person holds in
@@ -176,7 +188,7 @@ impl Servers {
 /// The shared projects on this computer whose folder can be read, whichever account's: each keeps in step with its
 /// server while another account is signed in, through its own account's servers only, so a checkout another account
 /// linked and this one opened later reaches no server of that other account's.
-pub(super) fn shared_projects(servers: &Servers) -> Vec<ProjectServer> {
+pub(in crate::sharing) fn shared_projects(servers: &Servers) -> Vec<ProjectServer> {
   let owners = match servers.inner.workspace.server_owners() {
     Ok(owners) => owners,
     Err(error) => {

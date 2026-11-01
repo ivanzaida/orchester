@@ -32,12 +32,13 @@ const DOT_SIZE: f32 = 6.0;
 /// The order in which the parts of the bar give way when the window is narrow (lurq `shrink_order`):
 /// the bar is one line, so both of its groups give way in one order, each part down to its limit before
 /// the next shrinks at all (handover §3.3, `Narrow` in `Status bar · redesign`). The room between the groups
-/// goes first, then the words of the window-control item; then which run auto-approves, the times and clocks,
-/// the activity's words, and last the runner's words. Icons, *Open*, *Stop*, MCP and the health dot never
-/// give way.
+/// goes first, then the words of the window-control item and of the Browser item; then which run auto-approves, the
+/// times and clocks, the activity's words, and last the runner's words. Icons, *Open*, *Stop*, MCP and the health dot
+/// never give way.
 pub mod give_way {
   pub const ROOM: i32 = -1;
   pub const WINDOW_CONTROL: i32 = 0;
+  pub const BROWSER: i32 = 1;
   pub const RUN: i32 = 2;
   pub const TIMES: i32 = 3;
   pub const ACTIVITY: i32 = 8;

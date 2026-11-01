@@ -21,6 +21,8 @@ mod list;
 mod notice;
 mod parts;
 mod person;
+mod pointed;
+mod reading;
 mod server;
 mod server_facts;
 mod server_parts;
@@ -64,7 +66,7 @@ use super::frame;
 use crate::{
   routes::{OrchesterAsk, OrchesterPanel, OrchesterView},
   services::Services,
-  ui::{icon::Icon, setting_notice::status_line, state::load_error},
+  ui::state::load_error,
 };
 
 /// What the tab shows: the cloud account, the cloud's address, and the servers with their projects on this computer.
@@ -170,8 +172,8 @@ impl Component for OrchesterTab {
     let snapshot = match loaded {
       Ok(Some(snapshot)) => snapshot,
       Ok(None) => {
-        let line = status_line("orchester-loading", Icon::LoaderCircle, &ctx.t("cloud.reading"));
-        return frame::column("orchester-scroll", frame::pane("orchester-tab").child(line));
+        let bones = reading::column(ctx);
+        return frame::column("orchester-scroll", frame::pane("orchester-tab").child(bones));
       }
       Err(reason) => {
         let (text, retry) = (reason.text(ctx), self.retry.clone());
@@ -206,6 +208,7 @@ impl Component for OrchesterTab {
             accepted,
             two_factor,
             ask: view.ask,
+            at: view.at,
           },
         );
         frame::column("orchester-scroll", page)
@@ -254,13 +257,18 @@ pub fn follow_shared(ctx: &mut Ctx, servers: &Servers) -> u64 {
 
 /// What the tab shows, read off the UI thread at `revision`; `None` until the first read finished.
 fn snapshot(ctx: &mut Ctx, revision: u64, (servers, cloud): (&Servers, &Cloud)) -> Result<Option<Snapshot>, Said> {
+  let hold = Services::of(ctx).hold;
   let state = ctx
     .future(
       (revision, servers.clone(), cloud.clone()),
-      |(_, servers, cloud)| async move {
-        background::run(move || read(&servers, &cloud))
-          .await
-          .map_err(|_| Said::new("cloud.errors.local"))?
+      move |(_, servers, cloud)| {
+        let hold = hold.clone();
+        async move {
+          hold.released().await;
+          background::run(move || read(&servers, &cloud))
+            .await
+            .map_err(|_| Said::new("cloud.errors.local"))?
+        }
       },
     )
     .state()

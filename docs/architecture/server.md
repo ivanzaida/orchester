@@ -101,7 +101,7 @@ joins, the cloud link and the removal of passwords (S1c). Orchester Cloud (C1) d
 | 27 | Offline-first | Without the server, a shared project works as usual. Every change goes into a local outbox with the revision it was based on, and is sent in order after reconnect. Organization fields merge automatically, as in 26; title, brief, criteria, pipeline and limits that both sides changed go to the person. A task created offline has a temporary number until the server assigns one; its links, references and keys are remapped, and the person sees the change ([Offline and the outbox](#offline-and-the-outbox)). **Replaces 8** | user (2026-10-15) |
 | 28 | Claims offline | Offline, a run may start only on a task whose claim is already the person's; row 5's staleness applies: once the claim would be stale by the last heartbeat the server answered, nothing new starts until the server confirms the claim. Taking a new task needs the server ([Claims](#claims)) | user (2026-10-15) |
 | 29 | Shared progress | Shared: who took the task, the run phase, which pipeline step it is on, what it waits for (a person, a limit, a question, an approval: kinds only, no content), each step's result (passed, failed, unverified, unchanged), the branch and the pull request. Local only: transcripts, diffs, prompts, tool calls and secrets ([Shared run progress](#shared-run-progress)). Both ways (row 53). **Extends S3** | user (2026-10-15) |
-| 30 | Shared team configuration | Shared: pipelines, agent profiles, instructions, skills and the project's ~~command~~ tools (**changed by 52:** every kind). Publishing creates a version on the server; drafts stay local until published (**changed by 72:** only admins, the project's owner or the server's admin, publish and keep drafts of shared resources; members read and run with them). Per person and local: connections, accounts, MCP servers' credentials, secrets and environment. A published version names what it needs by name and role, resolved on each computer, with a visible *missing on this computer* state ([Shared configuration](#shared-configuration)). **Changes 4** | user (2026-10-15; changed 2026-10-29) |
+| 30 | Shared team configuration | Shared: pipelines, agent profiles, instructions, skills and the project's ~~command~~ tools (**changed by 52:** every kind). Publishing creates a version on the server; drafts stay local until published (**changed by 72:** only admins, the project's owner or the server's admin, publish and keep drafts of shared resources; members read and run with them). (**Changed by 74:** besides the team's pipelines, a person may keep pipelines of their own that stay on their computer and are never sent.) Per person and local: connections, accounts, MCP servers' credentials, secrets and environment. A published version names what it needs by name and role, resolved on each computer, with a visible *missing on this computer* state ([Shared configuration](#shared-configuration)). **Changes 4** | user (2026-10-15; changed 2026-10-29) |
 | 31 | The deprecated app | `crates/desktop` is frozen as of 2026-10-15 and never updated again (AGENTS.md). Its S2a–c sharing screens stay exactly as they are; after S4 they show read-only offline states that no longer apply, by design. Every phase touches only the new app, `orchester-workspace`, core, api and server | user (2026-10-15) |
 | 32 | Create & run offline | The task is saved with its temporary key and nothing more. Once it has its number and the server can give the claim, the task and the temporary-key notice offer *Start*; the run starts only when the person presses it. Nothing starts on its own | user (2026-10-15) |
 | 33 | Tags offline | Creating a tag works offline (it waits in the outbox); renaming, merging and deleting need the server, since they rewrite other people's tasks ([Tags](#tags)) | coordinator (2026-10-15) |
@@ -123,7 +123,7 @@ joins, the cloud link and the removal of passwords (S1c). Orchester Cloud (C1) d
 | 49 | Server and project addresses | A team server runs at its owner's own address (`orchester.userdomain.com`) and holds several projects, each at its own address (`orchester.userdomain.com/project-a`). The owner creates projects on the server by name and slug. The project address is the server project's identity; the repository remote is kept as a hint, compared with `origin` when someone links a local checkout, with a warning on a mismatch. Everyone clones and sets up the code themselves; the server never touches code ([Servers and project addresses](#servers-and-project-addresses)). **Replaces 10, changes 11, 12 and 16** | user (2026-10-15) |
 | 50 | One connection per server | The app connects to a server once, with one device token per server. Each local project is linked to one project on it. Access is per project: an invite to project-a grants project-a only. **Replaces the wording of 40** | user (2026-10-15) |
 | 51 | Joining | Invites go by email through the cloud (row 43): B downloads Orchester, signs in to the cloud, accepts the invite to project-a, and links their local checkout through the join review. The code fallback for networks without the internet stays (row 45). Team servers have no passwords and trust the cloud's identity tokens, verified locally (rows 42, 46) | user (2026-10-15) |
-| 52 | What a project shares | Shared in a project: tasks (with organization, claims and progress) and all team configuration: pipelines, agent profiles, instructions, skills (stored in the database, files written at step start) and tools of every kind. Local: runs, worktrees, transcripts, connections, CLI accounts, secrets (and, by row 30, environment). **Changes 30. Changed by 72:** only admins (the project's owner or the server's admin) change the team configuration; members read it and run with it | user (2026-10-15; changed 2026-10-29) |
+| 52 | What a project shares | Shared in a project: tasks (with organization, claims and progress) and all team configuration: pipelines, agent profiles, instructions, skills (stored in the database, files written at step start) and tools of every kind. Local: runs, worktrees, transcripts, connections, CLI accounts, secrets (and, by row 30, environment). **Changes 30. Changed by 72:** only admins (the project's owner or the server's admin) change the team configuration; members read it and run with it. **Changed by 74:** a person's local pipelines are local too, never sent; a shared task that names one keeps only its name and whose it is. **Changed by 76:** a task's and a module's base branch is local too, like runs and connections | user (2026-10-15; changed 2026-10-30) |
 | 53 | Live progress both ways | A sees when B's task goes in progress or done, with its step, and B sees A's the same way (row 29) | user (2026-10-15) |
 | 54 | The cloud's database | Orchester Cloud's database is PostgreSQL, not SQLite. Team servers stay on SQLite ([Framework and storage](#framework-and-storage)). **Narrows 13 to team servers** | user (2026-10-15) |
 | 55 | Skill limits | A skill part up to 1 MiB, a version up to 16 MiB in all, at most 256 parts, for local and shared skills alike; each part uploaded by its hash, no general chunked upload; Import from repository goes down from 4 MiB to 1 MiB per file ([Skills in the database](#skills-in-the-database)) | user (2026-10-15) |
@@ -145,7 +145,11 @@ joins, the cloud link and the removal of passwords (S1c). Orchester Cloud (C1) d
 | 71 | Modules offline | Until S4 builds the outbox, module writes in a shared project fail at once offline, as task writes do; with S4 a create waits in the outbox with the id made on the desktop, a change with its revision (in `conflict` when met by a newer one), and a move in its task's change ([Modules](#modules)). **Under 27** | user (ORC-78, 2026-10-22) |
 | 72 | Who changes the team's configuration | In a shared project, the team's configuration (pipelines, agent profiles, instructions, skills, tools of every kind) is changed only by admins: the project's owner or the team server's admin. Members read it and run with it, on the desktop and in the web app; they have no drafts of shared resources. Admins change it in both places; every write of S5's resource endpoints answers a member `403 not_admin`. Core decides it with `sharing::may_change_configuration` ([Shared configuration](#shared-configuration)). **Changes 30 and 52** | user (2026-10-29) |
 | 73 | Snapshot and deltas | The project stream sends a client without a cursor, or with one older than the 30-day retention, a paged snapshot (`snapshot.begin`, `snapshot.tasks` pages of 64, `snapshot.end { cursor }`) with the project, members, tags, modules and tasks, later resources; a cursor inside the retention gets only the deltas after it, and `reset` goes away. Every delta carries `id`, `by`, `actor` (person or Orchester) and `at`; `task.changed` holds only the changed fields with `revision` and `base`, and a client applies it only when its cached revision equals `base`, otherwise it reads the task again; its own changes come back and are skipped by revision. The deltas are the record of who did what; there is no `activity` event, and the server's Activity feed stays. Not included: presence, typing, docs and plugins ([Events](#events)). **Extends 7 and 22; replaces the `task`, `members`, `tags`, `project`, `modules`, `resources` and `reset` kinds** | user (ORC-392, 2026-10-29) |
-| 74 | Local use and owners | The desktop needs no Orchester Cloud account for local work: the sign-in gate is gone, and sharing, cloud joining, invites and account servers offer the sign-in in place. A project or team server's `owner` NULL means this computer's: added with nobody signed in, it shows to nobody signed in and to every account, and no sign-in claims it. One added signed in is the account's, and waits (runners working) while that account is signed out. A person moves an unshared project between the two on All projects. A project and its server always have the same owner: a first link to the account's server moves a project of this computer's into the account and the page says so, an account's project is refused a server of this computer's, and a shared project doesn't move. Over MCP a project an account holds answers `sign_in_required` while nobody is signed in and `project_not_found` while another account is | user (ORC-132, 2026-10-30) |
+| 74 | Local pipelines in a shared project | In a shared project a person may keep pipelines of their own that stay on their computer and are never sent to the team server; the team's pipelines stay shared and admin-only (row 72). A local pipeline is a local resource of the project: anyone, member or admin, makes it, publishes its versions and runs it without an admin, and publishing it makes a local version only. Share, Join and sync never upload it. Its steps may use the team's profiles and the person's own local profiles. A shared task that names one keeps on the server only the pipeline's name and kind (local, whose), never its body; other members see *a local pipeline of <person>* and cannot run the task with it until they choose a team pipeline or one of their own. An admin may *Publish for the team*, which makes it a team resource from that version on. Make local keeps local pipelines as they are ([Local pipelines](#local-pipelines)). **Changes 30 and 52** | user (ORC-402, 2026-10-29) |
+| 75 | What the web editor can pick | The web app's profile editor picks from what the server serves. **Network:** a profile's network access is `Off`, `Hosts(list)` (only those hosts) or `On`, ordered Off < Hosts < On; a list with a host the previous one lacked, or Hosts → On, widens (row 35); each CLI enforces it where it can, and where it can't the step refuses to start and says so, as for any permission it can't enforce. **References catalog:** the team server keeps, per shared project, the connections and MCP servers its members' desktops report, each as kind, name and role only; the web pickers list it, and a choice there is a reference by name and role that every computer binds as rows 30 and 35 say. **Models per role:** desktops report, per connection role, the model ids their connections list; the server keeps the union, and the web dropdown lists the role's models plus *Other model id…*. Nothing personal leaves a computer: no account, email, path, key, program or setting, and the reads do not say whose computer reported what ([What the web editor can pick](#what-the-web-editor-can-pick)). **Extends 30 and 35** | the task's brief (ORC-444, 2026-10-30) |
+| 76 | Base branches are local | A task's and a module's base branch (the branch its runs start from and deliver into; `docs/architecture/storage.md`) is kept on each computer and never shared: in a shared project it is not sent to the team server, is not part of the task's or module's shared snapshot, revision or events, and teammates may choose differently for the same task or module. Setting it leaves a shared task's or module's revision alone; the app's screens and MCP tools set and read this computer's choice. Each run records the base it took, which stays local with the run. `orchester-api`'s shared task and module shapes do not change and the team server needs nothing. **Changes 52** | user (ORC-407, 2026-10-30) |
+| 77 | Accepting an invite outside Orchester | **Accepting in the browser** (the person's requirement): one *Accept* on Orchester Cloud's Invites page ends with the membership made on the team server, without the desktop: the server account (and, for a project invite, the membership with the invite's role) and a sign-in of that browser to the server's web app. The cloud never reaches a team server; the person's browser carries a one-time identity token (purpose `accept`, bound to the invite, 5 minutes) to the address the cloud registered for the server, as `/authorize` does for sign-in, and brings the server's signed receipt back. It needs a two-factor session on the cloud, as every acceptance does (row 43). When the browser cannot reach the server either, nothing is used up: the invite stays accepted for that account until it expires, the page says why and offers *Try again* and *Open in Orchester*. **The `orchester://` link**: `orchester://invite/<invite id>` and `orchester://open`, registered per user by the Windows installer; an open window takes the link; a link only opens the invite's existing landing in Settings › Orchester and never accepts, joins or sends anything without the person's click, and nothing in it is ever shown or passed to an agent. The desktop is optional afterwards: the server and project show as joined, and a computer joins later with its own device ([Accepting outside Orchester](#accepting-outside-orchester)). **Extends 43 and 62** | user (requirement 2026-10-31); the flow is the architect's (ORC-576) |
+| 78 | Local use and owners | The desktop needs no Orchester Cloud account for local work: the sign-in gate is gone, and sharing, cloud joining, invites and account servers offer the sign-in in place. A project or team server's `owner` NULL means this computer's: added with nobody signed in, it shows to nobody signed in and to every account, and no sign-in claims it. One added signed in is the account's, and waits (runners working) while that account is signed out. A person moves an unshared project between the two on All projects. A project and its server always have the same owner: a first link to the account's server moves a project of this computer's into the account and the page says so, an account's project is refused a server of this computer's, and a shared project doesn't move. Over MCP a project an account holds answers `sign_in_required` while nobody is signed in and `project_not_found` while another account is | user (ORC-132, 2026-10-30) |
 
 ## Processes and crates
 
@@ -490,16 +494,20 @@ environment variables or secrets. The fields above are all it gets.
 
 ## Shared configuration
 
-Rows 30 and 52. Pipelines, agent profiles, instructions, skills and tools of every kind (command, HTTP, database)
-are shared resources of the server project. What a tool needs that belongs to the person (its secrets, the MCP
-servers and connections around it) stays on each computer and is bound there.
+Rows 30, 52, 74 and 75. Pipelines, agent profiles, instructions, skills and tools of every kind (command, HTTP,
+database) are shared resources of the server project. What a tool needs that belongs to the person (its secrets, the
+MCP servers and connections around it) stays on each computer and is bound there. Besides the team's pipelines, each
+person may keep [local pipelines](#local-pipelines) that are never sent. The web app's editor picks connections, MCP
+servers and models from a catalog the desktops report ([What the web editor can pick](#what-the-web-editor-can-pick)).
 
 | Part | Where it lives |
 | --- | --- |
 | Resource (id, kind, slug, name, archived) | Server; cached locally. Ids are the sharer's `ResourceId`s, kept on upload as task ids are |
 | Published versions (`v1..vN`, immutable) | Server; numbered by the server; cached locally with who published them and when |
 | Draft | Local only, per admin, based on a server version. Publishing sends it. A member has none (row 72) |
+| A person's local pipeline, its drafts and versions (row 74) | Local only, per person; never sent. A shared task that names one keeps only its name and whose it is |
 | Connections, CLI accounts, MCP servers and their credentials, secrets, environment | Local only, per person |
+| Catalog: connection and MCP server names and roles, model ids per role (row 75) | Server, the union of the desktops' reports; nothing else about them is sent |
 
 **Who publishes** (row 72). Only admins change the team's configuration: the project's owner or the team server's
 admin. They edit drafts, publish versions, create, import, rename and archive resources and upload their files, on
@@ -523,7 +531,8 @@ using that previous version, and the resource shows *v5 widens what agents may d
 automation change agent permissions*. Core decides *widens* with one pure function over the two versions, reusing the
 comparison the MCP person gate already makes:
 
-- an agent profile whose permissions are broader (repository access, commands, network), or that references an MCP
+- an agent profile whose permissions are broader (repository access, commands, network: up the order Off < Hosts <
+  On, or a host list that gains a host, row 75), or that references an MCP
   server the previous version did not;
 - any version that references a secret the previous version did not;
 - a tool whose program, arguments or environment (command), address, method or headers (HTTP), database or
@@ -564,6 +573,98 @@ data. Core does the walk with `import`'s reference functions; it is not written 
 reference; any other local connection, MCP server or secret becomes a new reference with its kind, name and
 role. Nothing about it is sent beyond those three words: never its settings, account, credentials, values or
 program.
+
+### What the web editor can pick
+
+Row 75. The web app's profile editor (Orchester Platform OP-51, frames C10, C11, C17 and C18 of its
+`web/design/orchester-web.pen`) has no computer of its own: it lists what the team server serves. Three of its controls
+need more than the contract above.
+
+**Network: Off / These hosts / On.** Core's `NetworkAccess` (`permission/mod.rs`) gains a third value between its two:
+
+| Value | Stored form | Agents may reach |
+| --- | --- | --- |
+| `Off` | `"off"` | nothing |
+| `Hosts(list)` | `{ "hosts": ["api.example.com", "*.example.org"] }` | only the listed hosts; `*.` covers the domain's subdomains |
+| `On` | `"on"` | any host |
+
+They are ordered Off < Hosts < On. A host is a lowercased name or address with no scheme, port or path; the list is
+sorted, without duplicates, not empty, at most 64 hosts (core's constructor refuses anything else, the server with
+`422 invalid { reason: "network" }`). For *widens* (row 35, and the MCP person gate's comparison, which is the same
+function) a change widens when it moves up the order, or when a `Hosts` list gains a host the previous list did not
+cover; narrowing a list, or On → Hosts → Off, never widens. Each CLI enforces the value where it can, through its
+connection's own sandbox or network settings for the step. Where a CLI cannot limit the network to hosts (or cannot
+turn it off), the step refuses to start and says which permission this connection cannot enforce, as the preflight
+does today for every permission a connection cannot enforce; Orchester never runs it with wider access instead.
+
+**References catalog.** The team server keeps, per shared project, the connections and MCP servers its members'
+desktops report: for each, its kind (connection or MCP server), its name and, for a connection, its role (the
+connection's kind: `claude_cli`, `codex_cli`, `openai_api`, …; an MCP server has none, as in core's `sharing::Reference`).
+Never its settings, account, program,
+arguments, address, environment or credentials, and secrets are not reported at all. The catalog is the union of the
+latest report of each device of each current member, without regard to case of the name: one entry per kind, role
+and name, with no count and nothing that says whose computer has it. A device's report replaces its previous one; a
+revoked device's or a removed member's entries leave with it. The web's connection and MCP server pickers list the
+catalog for the reference kind and, for a connection, the role the step needs. A choice there writes a reference by
+kind, name and role into the version, with a fresh reference id the web mints, the same shape a desktop publish sends.
+Nothing changes on the computers: each binds the reference as [What a version names on each
+computer](#shared-configuration) says (rows 30 and 35): a connection by name, else by role; an MCP server only after
+the person confirms it; *missing on this computer* otherwise.
+
+**Models per role.** Models come from each computer's CLI (`connection/catalog.rs`). The desktop reports, per
+connection role, the model ids its connections of that role list, ids only: no display names, account tiers or
+limits. The server keeps the union per role over the same latest reports. The web's model dropdown lists the models of
+the role the step's connection reference has, sorted, plus *Other model id…*, which takes any id. A model id is a
+string in the profile as today; a computer whose CLI does not know it fails the step as it does today for an unknown
+model.
+
+**Reporting.** The desktop sends `PUT /projects/{id}/catalog` for every shared project it is linked to: after
+joining, after each connect, and when a connection, an MCP server or a connection's model list changes (at most once
+a minute, the latest state winning). The body is the whole state, so a lost report costs nothing; offline it is not
+queued in the outbox, only sent again after reconnect. Members and admins both report and both read
+(`GET …/references`, `GET …/models`): the catalog is what the editor offers, not a permission. The references read
+also lists the connections and MCP servers the project's versions already name, so a reference a version carries
+stays pickable after the desktop that reported it leaves.
+
+**Nothing personal leaves a computer.** A report holds kinds, names, roles and model ids only: no account, email,
+user name, path, URL, key, token, program or setting. Names are the person's own labels for their connections and MCP
+servers, the same words a published version already carries (row 30). Core builds the report from the local
+connections and MCP servers with one function, so no other field can reach it.
+
+### Local pipelines
+
+Row 74 (the person, 2026-10-29). In a shared project a person may keep pipelines of their own beside the team's. The
+team's pipelines stay shared and admin-only (row 72); a local pipeline stays on the person's computer and is never
+sent to the team server.
+
+- **Kind.** A local pipeline is a local resource of the project, as every resource of a project that is not shared.
+  Making it, editing its draft, publishing its versions, archiving and running it need no admin: members and admins
+  alike. Publishing it makes a local version only (numbered on this computer), never a server version and never an
+  outbox entry. The resource's `sharing` is empty, as for a local project's resources; core's
+  `sharing::may_change_configuration` answers only for shared resources.
+- **Share and sync.** Share's `POST …/resources/import`, Join's upload and sync never upload a local pipeline: the
+  upload takes only shared resources, and nothing else about a local pipeline reaches the server. Share and the Join
+  review list it under *Stays on this computer*, and *What sharing sends* says *Pipelines you keep only on this
+  computer* among what stays here. At Join, *Keep on this computer* on a pipeline keeps it as a local pipeline,
+  runnable as before, instead of *Not shared*; other kinds kept at Join stay *Not shared* as before.
+- **Steps.** A local pipeline's steps may use the team's profiles (pinned to the team's versions, resolved with this
+  computer's bindings like any run) and the person's own local profiles. The team's profiles stay read-only for a
+  member; the pipeline only names them.
+- **Tasks.** A shared task that names a local pipeline keeps on the server only its name and kind: `TaskContent`'s
+  `pipeline` becomes `slug | { local: { name, of: user id } } | null`. The body, the steps and the versions never
+  leave the computer. The person who made it runs the task with it as with any pipeline. Other members see *a local
+  pipeline of <person>* and cannot run the task with it: *Run* is unavailable with that reason until they choose a
+  team pipeline or one of their own in the task's *Pipeline*, which changes the task as any edit does (row 18). A
+  run's progress (row 29) names the pipeline the same way.
+- **Promotion.** An admin may *Publish for the team* on their own local pipeline, after a confirmation. It is
+  uploaded with its id and slug (a taken slug asks for a free one) and becomes a team resource from that version
+  on: the new version is the team's `v1`, and the earlier local versions stay on this computer as its history, kept
+  by the runs that pinned them. It is unavailable while a step uses a local profile, with that reason: the profile is
+  published for the team first, or the step picks a team profile. Tasks that named it as local name its slug from
+  then on. A member has no *Publish for the team*; they ask an admin.
+- **Make local.** Make local keeps local pipelines as they are; they were never the server's. Tasks that named
+  another person's local pipeline keep its name and show it as missing, as an unresolved pipeline does today.
+
 
 ### Skills in the database
 
@@ -787,6 +888,9 @@ to resume from simply gets the snapshot.
 - The desktop keeps the pages aside and, at `snapshot.end`, replaces the project's confirmed cache (project, members,
   tags, modules, tasks, later resources) and sets the cursor in one transaction. A stream that breaks before
   `snapshot.end` leaves the cache as it was, and the next connect sends the snapshot again.
+- A connect from a cursor gets no snapshot, so the desktop first reads `GET …/resources` and keeps the versions it
+  does not have, as it does for the snapshot's resources: Join sets the cursor from `GET …/tasks` without a snapshot,
+  and the team's configuration published before must still reach the cache.
 
 **Deltas.** Every delta carries `id` (its sequence), `by: UserRef` (who did it), `actor: "person"|"orchester"` (a
 person's own action, or Orchester acting for them: a run, the staleness sweep, a merge) and `at`, beside the fields
@@ -810,7 +914,7 @@ of its kind:
 | `project.changed` | `project: { id, key, name }` |
 | `resource.published` | `resource` with its metadata and the new version number; the body is read with `GET …/versions` (S5) |
 | `resource.renamed` | `resource`, `name` (S5) |
-| `resource.archived` | `resource` (S5) |
+| `resource.archived` | `resource`, `archived`: `true` when it was archived, `false` when it was restored (S5) |
 | `revoked` | `{}`: the session or this person's membership ended; the stream closes after it |
 
 **Applying.** A client applies `task.changed` only when its cached revision of that task equals `base`; otherwise it
@@ -843,7 +947,7 @@ Invite      { id, kind: "server"|"project"|"account", email|null, project|null, 
               by: UserRef, delivery: "cloud"|"code", expires_at }                                       // API 3
 Project     { id, slug, address, key, name, remote_hint|null, role: "owner"|"member"|null, next_number } // API 3: slug, address, remote_hint (was remote)
 Member      { user: UserRef, role, added_at }
-TaskContent { title, brief, criteria: [string], pipeline: slug|null,
+TaskContent { title, brief, criteria: [string], pipeline: slug|{ local: { name, of: user id } }|null, // local: row 74
               limits: { budget_tokens, max_duration_ms }|null,
               ...Organization, module: module id|null }                                     // module: ORC-78
 Organization { workflow: "backlog"|"todo"|"in_progress"|"in_review"|"done"|"canceled",
@@ -908,6 +1012,7 @@ The *Since* column marks what API 3 adds or changes; the rest is built (S1a, S1b
 | `POST /server/key-proof` | none | `{ nonce }`; header `Orchester-Presented-Certificate` (optional): the SHA-256 hex of the certificate the app's connection presented | `{ public_key, proof }`: the server's key, and its signature of its id, the nonce and its certificate (with the header, also the one before a proxy's renewal) | `422 invalid` (also a header that is not 64 hex characters) | new in 3 ([Codes](#codes)); the header came with `proxy_certificate = "auto"`, and a server from before ignores it |
 | ~~`POST /auth/sessions`~~ | | | | | removed in 3 (row 46) |
 | `POST /auth/cloud` | none, or user (to link an account) | `{ identity_token, key_set?, device }` | `201 { token, session, user, joined: { project, role }\|null }` | `401 invalid_identity` (also a token whose `name` is blank or over 256 characters), `403 not_invited`, `403 cloud_off`, `409 key_set_stale`, `429 rate_limited` | new in 3 (row 42) |
+| `POST /auth/cloud/accept` | none (the web app's server side) | `{ identity_token, key_set? }`: a token of purpose `accept` naming an open invite | `201 { browser_session: { token, session, user }?, membership: { kind, project?, role? }, receipt, approval_required }` | `401 invalid_identity` (also another purpose), `403 mfa_required`, `403 not_invited`, `403 forbidden`, `403 cloud_off`, `409 key_set_stale`, `410 invite_ended { revocation }`, `429 rate_limited` | contract only (row 77, [Accepting outside Orchester](#accepting-outside-orchester)) |
 | `POST /auth/code` | none | `{ code, device, username?, display_name? }` | `201 { token, session, user, joined }` | `401 invalid_code` (one answer for unknown, used and expired), `409 username_taken`, `422 invalid`, `429 rate_limited` | new in 3 (row 45) |
 | `POST /auth/pairings` | user | | `201 { code, expires_at }` | `409 too_many_codes` (the server's 50 open codes), `429 rate_limited` (3 open per account) | new in 3 (row 44) |
 | `GET /auth/me` | user | | `{ user }` | `401` | |
@@ -915,9 +1020,9 @@ The *Since* column marks what API 3 adds or changes; the rest is built (S1a, S1b
 | `DELETE /auth/sessions/current` | user | | `204` | | |
 | `DELETE /auth/sessions/{id}` | user (own sessions) | | `204` | `404` | |
 | ~~`POST /auth/password`~~ | | | | | removed in 3 (row 46) |
-| `POST /invites` | admin (server, account), owner (project) | `{ kind, email?, project?, role?, user?, delivery }` | `201 { invite, code? }` (a code only for `delivery: code`, shown once), `signed?` (the signed invite for the server admin's page to carry through the browser when the server cannot reach the cloud) | `403` (also an account invite naming an admin), `403 mfa_required`, `409 invite_open { invite, sent_at }` (the address has an open invite of the same kind to the same project or the server), `409 already_member` (its account, known by the email its cloud identity last verified, has what the invite gives), `409 too_many_codes`, `422 invalid` | new in 3 (row 43) |
+| `POST /invites` | admin (server, account), owner (project) | `{ kind, email?, project?, role?, user?, delivery }` | `201 { invite, code? }` (a code only for `delivery: code`, shown once), `signed?` (the signed invite for the server admin's page to carry through the browser when the server cannot reach the cloud), `cloud_delivery?` (how the server's own delivery went: `delivered`, `declined`, `no_cloud` or `unreachable { cause: unreachable \| tls \| refused \| timeout }`; none for a code) | `403` (also an account invite naming an admin), `403 mfa_required`, `409 invite_open { invite, sent_at }` (the address has an open invite of the same kind to the same project or the server), `409 already_member` (its account, known by the email its cloud identity last verified, has what the invite gives), `409 too_many_codes`, `422 invalid` | new in 3 (row 43) |
 | `GET /invites` | admin (all), owner (their projects') | | `{ invites: [Invite] }`, open only, never a code | | new in 3 |
-| `DELETE /invites/{id}` | the inviter, owner, admin | | `204`; the cloud is told | `404` | new in 3 |
+| `DELETE /invites/{id}` | the inviter, owner, admin | | `200 { revocation?, cloud_delivery? }`: for an invite by email the signed revocation and how the server's own delivery of it went, as for `POST /invites`; the server admin's page delivers it through the browser when the server could not | `404` | new in 3 |
 | `GET /server/cloud`, `PATCH /server/cloud` | admin | `{ accepting?, link?, unlink?, pin? }` | `{ cloud }` | `422 invalid` | new in 3 (rows 47, 62) |
 | `GET /server/settings`, `PATCH /server/settings` | admin | `{ join_approval? }` | `{ settings, check_code }` | `422 invalid` | new in 3 (rows 57, 62) |
 | `GET /admin/sessions`, `DELETE /admin/sessions/{id}` | admin | | `{ sessions: [Session with user] }`; `204` | `404` | new in 3 (row 62) |
@@ -959,6 +1064,9 @@ The *Since* column marks what API 3 adds or changes; the rest is built (S1a, S1b
 | `PATCH /projects/{id}/resources/{resource}` | admin (row 72) | `{ idempotency_key, revision, name?, archived? }` | `{ resource }` | `403 not_admin`, `409 revision_conflict { current }`, `422 invalid` | new in 3 (S5); admin row 72 |
 | `PUT /projects/{id}/files/{sha256}` | admin (row 72) | raw bytes (`application/octet-stream`), at most 1 MiB | `201`, or `200` when the server has it; idempotent by its hash | `403 not_admin`, `422 hash_mismatch`, `413 payload_too_large` | new in 3 (S5, row 37); admin row 72 |
 | `GET /projects/{id}/files/{sha256}` | member | | raw bytes | `404` | new in 3 (S5, row 37) |
+| `PUT /projects/{id}/catalog` | member (admins too; not a configuration write, row 72 does not apply); an app's device token only, refused to a browser sign-in (`admin_web`) | `{ references: [{ kind: "connection" \| "mcp_server", name, role }], models: { role: [model id] } }`: this device's whole state, at most 256 references and 512 ids per role, each word at most 200 characters; `role` is `null` (or left out) for an MCP server | `204`; it replaces this device's previous report | `422 invalid { reason: "catalog" }` (an unknown kind or role, a connection without a role, an MCP server with one, too many), `422 invalid` (an unknown field) | S5, row 75 (ORC-451) |
+| `GET /projects/{id}/references` | member, also through the web app's browser sign-in (`admin_web`) | | `{ references: [{ kind, name, role }] }`: the union of the current reports with the connection and MCP server references the project's versions name (`version_references`; secrets and tools are not listed), one per kind, role and name without regard to case, sorted by name; no count, no device or person | | S5, row 75 (ORC-451) |
+| `GET /projects/{id}/models` | member, also through the web app's browser sign-in (`admin_web`) | | `{ models: { role: [model id] } }`: the union of the current reports per role, each sorted | | S5, row 75 (ORC-451) |
 | `GET /projects/{id}/events` | member | `Last-Event-ID` header (none, or older than 30 days: the snapshot first) | `text/event-stream`: `snapshot.begin`, `snapshot.tasks`, `snapshot.end`; `task.created`, `task.changed`, `task.claim`, `task.run`; `tag.created`, `tag.renamed`, `tag.deleted`, `tag.merged`; `module.created`, `module.changed`; `member.added`, `member.removed`, `member.role_changed`; `project.changed`; `resource.published`, `resource.renamed`, `resource.archived` (S5); `revoked` | `401`, `403`, `429 rate_limited` | row 73 (S2d): these kinds replace `task`, `members`, `tags`, `project`, `modules` (ORC-78), the planned `resources` (3) and `reset` |
 | `GET /admin/users` | admin | | `{ users: [User] }` | | |
 | `DELETE /admin/users/{id}/cloud` | admin | | `{ user }`: the account linked to no cloud identity, audited | `404 not_found` | new in 3 ([Codes](#codes)) |
@@ -996,6 +1104,20 @@ the requests `ResourceCreate`, `ResourcesImport`, `VersionPublish`, `ResourcePat
 `update_resource`, `upload_file` (`FileStored::Created` for `201`, `Known` for `200`) and `file`. The error details are
 `SharingErrorDetails`' `Resource` (`slug_taken`), `Version` (`version_conflict`), `Files` (`missing_files`),
 `ResourceRevision` (`revision_conflict`) and `Reason` (`invalid`).
+
+**Catalog** (row 75). `PUT …/catalog` is keyed by the calling device's session: one report per device and project,
+replaced whole, removed with the device's session or the member's membership. The reads compute the union of the
+remaining reports, `GET …/references` with the connection and MCP server references of the project's versions too;
+they never name a device, a person or how many computers have an entry. A role is one of core's connection kinds
+(`ConnectionRole::as_str`: `codex_cli`, `claude_code_cli`, `anthropic_api`, `openai_api`, `github`); an unknown one is
+refused, so the catalog follows the kinds this server's core knows. A model id is core's `ModelId`. The web's profile
+editor reads both through its server side, with the browser sign-in; the desktop reports and never reads them (it
+binds against its own connections).
+
+The contract is `orchester-api`'s `catalog.rs` (`CatalogKind`, `CatalogReference`, `ModelsPerRole`, the request
+`CatalogReport` and the answers `CatalogReferences` and `CatalogModels`, each refusing fields it does not know, so no
+account, path, setting, key, id or device can ride along) and its client's `client/catalog.rs`: `report_catalog`,
+`catalog_references` and `catalog_models`.
 
 **Progress reports.** `PUT …/run` replaces the task's report. The server checks the shape (step keys unique, `step`
 among `steps`, `waiting_for` only with `waiting`, `stuck` or `stopped_at_limit`; a URL that is `https`), stores it,
@@ -1498,6 +1620,145 @@ Row 43.
   the invite checked: an account invite or code for an account that has become an admin, and an admin invite whose
   inviter is no longer an enabled admin, are refused (`403 forbidden`) and stay open.
 - **Revoking.** The inviter or an admin revokes an open invite; the team server tells the cloud, which deletes it.
+- **Outside Orchester.** The invite is also accepted on the cloud's Invites page, in the browser, or opened from there
+  in Orchester through an `orchester://` link ([Accepting outside Orchester](#accepting-outside-orchester), row 77).
+
+#### Accepting outside Orchester
+
+Row 77 (ORC-576, 2026-10-31). Not built: the cloud's Invites page shows *Accept in Orchester* disabled, and someone
+who works only in the team server's web app (members work on tasks in the browser too, 2026-10-27) cannot accept at
+all. The desktop's side of the `orchester://` link below is built on Windows (ORC-578: the installer's registration,
+the hand-over pipe, `crates/desktop-app/src/open_link`); macOS takes no links yet.
+
+**What the cloud's Invites page offers.** Each waiting invite has three actions, in this order:
+
+| Action | Kind | Does |
+| --- | --- | --- |
+| *Accept* | primary | Accepting in the browser (below): ends with the person on the team server, without the desktop |
+| *Open in Orchester* | secondary | `orchester://invite/<id>`: opens the invite in the app, where its own *Accept* joins this computer |
+| *Decline* | quiet | `POST /invites/{id}/decline`, as in the app, after *Decline the invite to …?* |
+
+Two buttons rather than one with a choice: *Accept* is complete by itself, and *Open in Orchester* is only a shortcut
+to the app's own Accept, which also connects a computer. Without a two-factor session the row shows, in place of
+*Accept*, *Turn on two-factor authentication* (an account without it: `/account#security`) or *Confirm with your
+code* (a browser session that signed in without one: stepping up, `POST /auth/sessions/current/two-factor`), and
+*Open in Orchester* stays. The page's states, for the design: a waiting invite (to a project, to the server, for an
+account); needs two-factor; *Continuing to <server>…* (the hand-off below); *<server> couldn't be reached* with *Try
+again* and *Open in Orchester*; *Waiting for <server>* (accepted, no receipt yet); *You joined <project> on <server>*
+with *Open in the browser* and *Open in Orchester*; ended (expired or revoked); refused (an identity the server links
+to another account, an admin invite whose inviter is no longer an admin). They are drawn in the platform's
+`web/design/orchester-web.pen`, on the cloud's *Account · Invites and servers* page beside its present row with the
+disabled button, which they replace, and are approved before the page is built (row 61).
+
+**Accepting in the browser.**
+
+1. *Accept* is a form `POST` to the cloud's web front (`/invites/<id>/accept`, `Origin` and CSRF checked as every form
+   there). Its server side asks the backend `POST /identity-tokens { audience, invite, purpose: "accept" }` with the
+   browser's session. The backend checks what it checks for the app (a two-factor session, the invite unexpired, to
+   the account's email, from that server, open or accepted by this same account), marks the invite accepted by the
+   account (`accepted_at`), and issues the token: `purpose: "accept"`, `invite`, `mfa`, 5 minutes, one `jti`. Unlike
+   the app's acceptance it records no join yet: the cloud records it when the receipt comes back (step 5).
+2. The web front answers a page that hands the token on: a form whose `action` is the address the cloud registered for
+   that server (`<address>/invite/accept`, never one the request, the invite or a link named), with `identity_token`
+   and the newest `key_set` in its body, sent at once where the page's script runs and by its *Continue to <server>*
+   button where it does not, as `/authorize` returns its tokens. The token is never in a URL, a history or a log.
+3. The team server's web app takes the post only when its `Origin` is the cloud's public URL (the origin of the `iss`
+   the server pinned at link), so another site cannot sign a browser in to someone else's account there. Its server
+   side sends `POST /auth/cloud/accept { identity_token, key_set? }` to the team server's private API. The team server
+   verifies the token as any other (its own `aud`, the pinned root's key set, `jti` once, 2 minutes of skew), takes a
+   token of purpose `accept` here and nowhere else (`POST /auth/cloud` and `POST /auth/code` refuse it as `401
+   invalid_identity`, and this endpoint refuses every other purpose so), requires `mfa` (`403 mfa_required`) and the
+   open invite named by `invite` for the verified email. It then does what an app's join with that invite does, in one
+   transaction: makes the account linked to `sub` (or finds the one linked to it, or for an account invite links the
+   account it names), adds the membership with the invite's role for a project invite, sets admin for a server invite
+   with *admin*, ends the invite as accepted, and audits it (`invite_accepted`, `via: browser`). The checks of
+   [Invites](#invites) apply unchanged: an identity linked to another account is `403 not_invited`, an account invite
+   for an admin or an admin invite whose inviter is no longer an enabled admin is `403 forbidden`; each leaves the
+   invite open.
+4. The answer: a browser sign-in to the web app (the browser kind of device token, 12 hours, as an admin's browser
+   sign-in, issued to members too since they work in the browser) and a **receipt**, a statement of type
+   `orchester-invite-accepted+jws` signed with the server's key: `{ id, server, subject, issued_at }`. No device token
+   for an app: an app's device comes only from an app's own join. With join approval on (row 57) and an account that
+   already existed on the server, the membership is still made (the invite grants it, and a forged identity gains
+   nothing by it) but no browser is signed in: the page says to sign in with a code from one of the person's
+   computers, as the admin's sign-in does.
+5. The receipt goes back to the cloud by two ways, whichever comes first: the web app's server side sends it (`POST
+   /invites/{id}/accepted { receipt }` on the cloud's API) when the host has the internet, and the page the browser
+   lands on carries it in a form's body to the cloud's `/invites/joined` (*Back to Orchester Cloud*). The cloud checks
+   it with the key the server linked with, records the join (the server is then in `GET /servers`) and drops the
+   invite's row. A receipt that never comes leaves the invite *Waiting for <server>* until it expires.
+6. The landing page on the team server: a project invite opens that project in the web app (*You're a member of
+   Kontur*); a server invite opens the server's home with no project yet (*An owner adds you to projects*), or the
+   admin for an admin invite; an account invite says the account is now linked. Each also offers *Open in Orchester*
+   (`orchester://open`).
+
+**When the browser cannot reach the server either** (a server on the team's own network, a VPN that is off, a
+certificate the browser does not trust yet). The cloud cannot see that the post failed, so the hand-off page says it
+before it goes: *Your browser now goes to <address> to finish. If it can't reach it, connect to <server>'s network and
+choose Try again*, with *Try again* and *Open in Orchester* on the cloud's page the person comes back to. Nothing is
+used up: the token is unused and ends in 5 minutes, the server's invite stays open, and the cloud keeps the invite
+accepted for this account until it expires, so *Try again* asks a new token (an accepted invite issues tokens to the
+account that accepted it, [cloud-api.md](../cloud-api.md), "Accepting an invite") and *Open in Orchester* finishes
+it from a computer that reaches the server. For a server with its own certificate the page names its check code and
+says to trust the certificate in the browser after comparing it, as for the admin ([The server
+admin](#the-server-admin), *Air-gapped*).
+
+**Ended invites.** An expired invite, or one the server revoked and told the cloud about, is not listed; a click on a
+page loaded before answers *This invite has ended: it expired or was revoked* (the backend's `404`), and nothing is
+issued. One the server revoked, or that expired there, while the cloud did not know yet gets a token, which the team
+server refuses with `410 invite_ended`; its page says so and carries the server's signed revocation
+(`statements::InviteRevocation`, for an expired one too) back to the cloud the way a receipt goes, and the cloud
+deletes the invite. Revoking after acceptance changes nothing: the membership is then the server's to remove
+(Members).
+
+**What the desktop sees afterwards.** Nothing has to happen on a computer. Once the cloud has the receipt, Settings ›
+Orchester lists the server under Team servers as *joined · this computer isn't connected*, with *Connect*: the [New
+computers](#new-computers) flow (an identity token without `invite`; the account is linked to `sub`), which gives
+this computer its own device token; while join approval is on that waits for an admin, since the account has no
+computer yet. A project invite's project shows under the server, and linking a checkout opens its join review (the
+invite landing `xeFRB`, then `AiCwO`), as for an invite accepted in the app. An invite accepted in the browser whose
+receipt has not come back stays in the app's invites (`accepted_at` set) and its Accept works as today: the cloud
+issues the token, and the team server admits the computer either way, finding the account linked to `sub` when the
+browser's join did happen.
+
+**The `orchester://` link.**
+
+- **Forms.** `orchester://invite/<invite id>` opens that invite. `orchester://open` brings Orchester to the front (the
+  cloud's email-confirmed page, the team server's landing). Nothing else is defined; a later use (a server, a
+  project) gets a row here first. A link carries ids only, never a name, address, token, code or text.
+- **What a link may do.** Bring the window to the front and open a screen the person could open themself. For an
+  invite the app reads its own `GET /invites` and opens Settings › Orchester at that invite's row, with its existing
+  Accept and Decline; the words on screen come from the cloud's listing, never from the link. An id that is not a
+  UUID, an invite not listed for the account signed in here (another account's, ended, declined), any other path or
+  any query string: the window comes to the front with *This link isn't for anything here* and nothing else happens.
+  Signed out, the sign-in gate comes first and the invite opens after it. A link never accepts, declines, joins,
+  connects, uploads or sends anything without the person's click, never reaches an agent, a chat, a prompt, memory or
+  the app's MCP tools, and is logged by its form only (`orchester://invite/…`). A page can start the app, nothing more.
+- **Windows registration.** The installer writes, per user, `HKCU\Software\Classes\orchester` (`URL Protocol`,
+  `DefaultIcon`, and `shell\open\command` = `"{app}\orchester.exe" --open-link "%1"`), removed by the uninstaller.
+  The app never registers it itself, so a development build, a QA copy or a zip install never takes links; installing
+  into another folder takes them over. macOS (later): `CFBundleURLTypes` in the bundle's `Info.plist`, the link
+  arriving as an Apple event to the running app.
+- **One window takes it.** A process started with `--open-link` that finds the data folder's lock held
+  (`orchester.lock.holder`, [stable-build.md](../stable-build.md), "Data") does not show *Orchester is already open*:
+  it hands the link to the holder over a named pipe of that data folder (`\\.\pipe\orchester-link-<hash of the
+  folder>`, the current user only, one line of at most 256 bytes) and exits. The holder parses it (the forwarder never
+  does), brings its window to the front and opens it. With no app running, the started process opens as usual and
+  opens the link once its window is up. A holder that does not answer within 2 seconds (an older build, one that is
+  closing) gets the present *Orchester is already open* page.
+
+**Contract changes** (`orchester-api`, [cloud-api.md](../cloud-api.md)):
+
+- `TokenPurpose::Accept`; `IdentityTokenRequest` takes `invite` with purpose `accept` as well as with none.
+- `CloudInvite.accepted_at: Option<i64>`: `GET /invites` also lists an invite accepted in the browser whose receipt has
+  not come back.
+- `statements::InviteAcceptance` (`orchester-invite-accepted+jws`, `{ id, server, subject, issued_at }`), signed by the
+  team server, verified by the cloud.
+- The cloud's `POST /invites/{id}/accepted { receipt }` (`InviteJoined`), `204`; the web front's `/invites/<id>/accept`
+  and `/invites/joined` forms.
+- The team server's `POST /auth/cloud/accept { identity_token, key_set? }` answering `{ browser_session?, membership:
+  { kind, project?, role? }, receipt, approval_required }` and the new error code `invite_ended` (`410`, carrying the
+  signed revocation in its details).
 
 ### New computers
 
@@ -1762,6 +2023,8 @@ milliseconds. Rows marked *3* are new or changed for API 3.
 | `resource_versions` (*3*) | resource, number (unique per resource), body (JSON), hash, based on, published by / at |
 | `files` (*3*) | project, sha256, size, content (zstd); unique (project, sha256): the parts of skill versions |
 | `version_references` (*3*) | version, reference id, kind, name, role |
+| `catalog_reports` (S5, row 75) | project, device session, reported at; unique (project, device session); removed with the session or the membership |
+| `catalog_references`, `catalog_models` (S5, row 75) | per report: kind, name, role; role, model id. Nothing else about a connection or MCP server is stored |
 | `events` | append-only: sequence, project, kind (*3*: adds `resources`; schema 7: adds `modules`, the table rebuilt with its sequence carried over; S2d: the delta kinds of [Live updates](#live-updates) replace them, row 73), by, actor, payload, at; older than 30 days removed |
 | `audit_events` | append-only: actor, action, target, address, at |
 
@@ -1900,7 +2163,7 @@ later through the same import. Keeping them as live local-only tasks beside the 
 would have two sources, and the rules for them have no good answers.
 
 **Not shared:** daily token budgets and usage, conversations and memory, connections, CLI accounts, secrets,
-environment, task and project sources, limits settings, and the code itself.
+environment, task and project sources, limits settings, the person's local pipelines (row 74), and the code itself.
 
 ## Platforms
 
@@ -2045,7 +2308,7 @@ each server once and links each project (rows 49–50, plan phase N1) and gets S
 - [ ] Screens: the status bar's waiting counts, the offline notice, the per-task sync marks, the conflict and refused
   views, the temporary-key notice, *Waiting to send* in Sharing.
 
-**S5 · Shared configuration** (rows 30, 35–37).
+**S5 · Shared configuration** (rows 30, 35–37, 75).
 - [ ] Server: `resources`, `resource_versions`, `version_references`, `files`, the endpoints of API 3 with core's body
   checks; the `resource.published`, `resource.renamed` and `resource.archived` deltas (each with `by`, `actor` and
   `at`) and the project's resources in the connect snapshot's `snapshot.begin` (row 73; they replace the planned
@@ -2063,6 +2326,16 @@ each server once and links each project (rows 49–50, plan phase N1) and gets S
   server reference stays unbound until the person confirms; a widening version waits for *Use v<N> here* while runs
   keep the previous one; two publishes from one base give the second a `version_conflict`; a skill with parts
   round-trips by hash.
+- [x] Row 75 contract: `orchester-api`'s `catalog.rs` and `client/catalog.rs` (ORC-451); `crates/api/tests/resources`
+  filter `catalog`.
+- [x] Row 75 desktop report (ORC-452): core's `sharing::catalog` builds it from the local connections and MCP servers
+  (agent connections only, at most 256 references and 512 ids per role); the workspace's `sharing/sync/catalog.rs`
+  sends it while the project's stream is open, on each connect and then every minute when it changed;
+  `crates/workspace/tests/live_updates` filter `catalog`. *What linking sends* and *What joining sends* name it.
+- [ ] Row 75: core's `NetworkAccess::Hosts` with its order and *widens*, each connection's enforcement or refusal at
+  preflight; the server's `catalog_*` tables, `PUT …/catalog` and the two reads (`GET …/references`,
+  `GET …/models`). A loopback test: two desktops report, the reads list the union with no device or person, and a
+  revoked device's entries leave.
 
 **ORC-78 · Modules in shared projects** (rows 66–71). Built 2026-10-22.
 - [x] Server: schema 7 (`modules`, `module_changes`, `tasks.module`, `change_keys`, the `modules` event kind with the

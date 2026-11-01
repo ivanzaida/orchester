@@ -8,6 +8,8 @@
 //! project between the two ([`owners`]). Only the work that follows every project on this computer, and shows none of
 //! them, reads them all ([`Workspace::every_project`]). The team servers are owned in the same way ([`servers`]).
 
+mod account_root;
+mod browser;
 mod orchestrator_consent;
 mod owners;
 mod servers;
@@ -33,6 +35,7 @@ use orchester_store::{AppDb, PreviousSession, ProjectDb, RegisteredProject, Sess
 use parking_lot::Mutex;
 
 pub use self::{
+  browser::{AgentsBrowser, BrowserSettings, ChooseBrowserError},
   orchestrator_consent::OrchestratorConsent,
   owners::{MoveError, MoveTo},
 };
@@ -162,6 +165,8 @@ pub struct Workspace {
   pub(crate) listed: Arc<AtomicBool>,
   /// Counts the changes to the agent accounts made through this workspace ([`Workspace::account_changes`]).
   pub(crate) account_changes: Arc<tokio::sync::watch::Sender<u64>>,
+  /// Where Settings â€º Browser looks for an installed browser ([`browser`]).
+  browser_folders: browser::BrowserFolders,
 }
 
 impl PartialEq for Workspace {
@@ -174,13 +179,14 @@ impl Workspace {
   pub fn new(db: AppDb) -> Self {
     Self {
       db: Arc::new(Mutex::new(db)),
-      account_root: account_root().map(|root| Arc::from(found(&root))),
+      account_root: account_root::account_root().map(|root| Arc::from(found(&root))),
       trash: crate::accounts::trash::SharedTrash::default(),
       permission_consent: Arc::default(),
       approval_consent: Arc::default(),
       orchestrator: orchestrator_consent::Consents::default(),
       listed: Arc::default(),
       account_changes: Arc::new(tokio::sync::watch::Sender::new(0)),
+      browser_folders: browser::BrowserFolders::default(),
     }
   }
 
@@ -416,7 +422,7 @@ impl Workspace {
   }
 
   /// Whether Orchester estimates the story points of the tasks of the project at `repo_root` that have no person's
-  /// value (*Let Orchester estimate story points*, Project settings › Runs): the project's own setting once a person
+  /// value (*Let Orchester estimate story points*, Project settings â€º Runs): the project's own setting once a person
   /// set it there, else the application-wide one it moved from, which was off until a person turned it on.
   pub fn estimates_story_points(&self, repo_root: &Path) -> Result<bool, StoreError> {
     match ProjectDb::open(repo_root)?.estimates_story_points()? {
@@ -430,7 +436,7 @@ impl Workspace {
     ProjectDb::open(repo_root)?.set_estimates_story_points(allowed)
   }
 
-  /// Where Usage › Plan limits draws its warning line, for every project; 80 % until it is changed.
+  /// Where Usage â€º Plan limits draws its warning line, for every project; 80 % until it is changed.
   pub fn usage_warning_threshold(&self) -> Result<WarningThreshold, StoreError> {
     self.db.lock().usage_warning_threshold()
   }
@@ -463,6 +469,12 @@ impl Workspace {
     self.db.lock().sends_error_reports()
   }
 
+  /// Keeps a person's choice of *Send error reports* (Settings â€º General); the app's client and its runners follow it
+  /// at once (`orchester_app::error_reports::turn`), not through this.
+  pub fn set_sends_error_reports(&self, allowed: bool) -> Result<(), StoreError> {
+    self.db.lock().set_sends_error_reports(allowed)
+  }
+
   /// When the Orchestrator's daily report comes; `None` while it is off, as it is until a person turns it on.
   pub fn daily_report_schedule(&self) -> Result<Option<ReportSchedule>, StoreError> {
     self.db.lock().daily_report_schedule()
@@ -487,7 +499,7 @@ impl Workspace {
     self.db.lock().set_mcp_window_control(Some(allowed))
   }
 
-  /// The application database's file (Settings › General › *Application data*); `None` for one only in memory.
+  /// The application database's file (Settings â€º General â€º *Application data*); `None` for one only in memory.
   pub fn database_path(&self) -> Option<PathBuf> {
     self.db.lock().path()
   }
@@ -566,27 +578,5 @@ impl Consent {
   fn finish_save(&mut self, saved: bool) {
     self.saving -= 1;
     self.allowed = self.saving == 0 && !self.revoked && saved;
-  }
-}
-
-/// Where new agent accounts' folders go: `ORCHESTER_ACCOUNTS_DIR` when a QA copy or a test names one, so it never
-/// writes the person's own account folders, else Orchester's application data (`location::accounts_dir`). The
-/// installed app ignores the variable ([`crate::build::Build`]); one that is not a plain full path gives no folder.
-fn account_root() -> Option<std::path::PathBuf> {
-  let named = std::env::var_os("ORCHESTER_ACCOUNTS_DIR").filter(|folder| !folder.is_empty());
-  if let Some(folder) = named.filter(|_| crate::build::Build::this() == crate::build::Build::Other) {
-    let folder = std::path::PathBuf::from(folder);
-    if orchester_core::account::plain_full_path(&folder) {
-      return Some(folder);
-    }
-    tracing::error!(folder = %folder.display(), "ORCHESTER_ACCOUNTS_DIR is not a plain full path; no folder for new agent accounts");
-    return None;
-  }
-  match orchester_store::location::accounts_dir() {
-    Ok(folder) => Some(folder),
-    Err(error) => {
-      tracing::warn!(%error, "no folder for new agent accounts");
-      None
-    }
   }
 }

@@ -19,7 +19,10 @@ use thiserror::Error;
 use super::{PlanLimits, claude_limits, codex_read_limits};
 use crate::{
   command::{Command, CommandError, CommandOutput, LineExchange},
-  connection::{invocation::CODEX_ISOLATION, reviewer::QUIET},
+  connection::{
+    invocation::{CODEX_ISOLATION, without_auto_memory},
+    reviewer::QUIET,
+  },
 };
 
 /// The id of the `account/rateLimits/read` request.
@@ -140,11 +143,12 @@ pub fn claude_check_command(program: &Path, environment: Vec<(String, String)>, 
     "--system-prompt",
     CLAUDE_CHECK_SYSTEM,
   ];
-  Command::new(program, args)
+  let command = Command::new(program, args)
     .with_current_dir(folder)
     .with_environment(environment)
     .with_env(QUIET.0, QUIET.1)
-    .with_stdin(CLAUDE_CHECK_PROMPT.to_owned())
+    .with_stdin(CLAUDE_CHECK_PROMPT.to_owned());
+  without_auto_memory(command)
 }
 
 /// The plan limits of every `rate_limit_event` in `output` of [`claude_check_command`], in order. A turn that

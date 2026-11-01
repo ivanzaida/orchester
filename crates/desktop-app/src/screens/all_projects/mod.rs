@@ -1,15 +1,15 @@
-//! All projects (`All projects · dark` `S5HDKf`, its states `kwpO2`; the returning start, 09 `i5G19A` with a team and
-//! 09b `dLOCJ` without) and the welcome of a first launch (`Welcome · first launch · dark` `UQZRa`): the projects the
+//! All projects (`All projects Â· dark` `S5HDKf`, its states `kwpO2`; the returning start, 09 `i5G19A` with a team and
+//! 09b `dLOCJ` without) and the welcome of a first launch (`Welcome Â· first launch Â· dark` `UQZRa`): the projects the
 //! application database knows, each with where it is, where it stands, its runs and when it was last opened, read
 //! without starting a runner; or, while a session has no project yet, the welcome. The list and its folders show at
 //! once, the counts and where each project is once its data is read (a dash until then), and the runners' states as
-//! they report. Selecting a project that opens shows its Overview; *Open project folder…* opens the project a folder
-//! keeps ([`folder`]); *Add project* opens Add project; *Join a team* and *Open shared project…* open the teams in
-//! Settings › Orchester Cloud; a joined team's project with no checkout here is offered above the list until *Not
+//! they report. Selecting a project that opens shows its Overview; *Open project folderâ€¦* opens the project a folder
+//! keeps ([`folder`]); *Add project* opens Add project; *Join a team* and *Open shared projectâ€¦* open the teams in
+//! Settings â€º Orchester Cloud; a joined team's project with no checkout here is offered above the list until *Not
 //! now* ([`teams`], [`offer`]); an agent CLI that is not found is warned of above the list and on the welcome
-//! ([`agent_cli`]); the × asks in place whether to remove a project from the list ([`remove`]); a row under the pointer
-//! offers to move its project between this computer and the account ([`move_project`]); and while nobody is signed in a
-//! line says what waits for a sign-in ([`waiting`]). The *Usage* tab shows every project's usage (`rHA8G`,
+//! ([`agent_cli`]); the Ã— asks in place whether to remove a project from the list ([`remove`]); a row under the
+//! pointer offers to move its project between this computer and the account ([`move_project`]); and while nobody is
+//! signed in a line says what waits for a sign-in ([`waiting`]). The *Usage* tab shows every project's usage (`rHA8G`,
 //! `crate::screens::usage::everywhere`). The rules are `orchester_workspace::project_list`'s and
 //! `orchester_workspace::sharing`'s.
 
@@ -41,7 +41,7 @@ use orchester_workspace::{
   runner::{RunnerStatus, Runners},
   sharing::cloud::SignIn,
   usage::UsageQuery,
-  workspace::{ListedData, ProjectEntry, Workspace},
+  workspace::{ListedData, ProjectEntry},
 };
 use parking_lot::Mutex;
 
@@ -90,7 +90,7 @@ impl DevtoolsInspectable for Removing {}
 
 struct AllProjects {
   ask: Ask,
-  /// Whether *Open project folder…*'s end is followed already; once per screen.
+  /// Whether *Open project folderâ€¦*'s end is followed already; once per screen.
   followed: Mutex<bool>,
   /// The projects' data as last read, and the runners' reports it was read at.
   read: Arc<Mutex<(Reported, ListedData)>>,
@@ -129,7 +129,7 @@ impl Component for AllProjects {
     let sign_in = follow_sign_in(ctx, &services.cloud);
     let open = folder::open_action(ctx, &services);
     let revision = self.ask.revision.get();
-    let listing = read_listing(ctx, &services.workspace, revision, &sign_in);
+    let listing = read_listing(ctx, &services, revision, &sign_in);
     let waiting = waiting::read(ctx, revision, &sign_in, &services.workspace);
     let entries = match &listing.data {
       Some(Listing::Projects(entries)) => entries.clone(),
@@ -200,8 +200,7 @@ impl Component for AllProjects {
         };
         page::page(ctx, heading, body, above)
       }
-      // Reading the list takes a moment; the screen stays empty meanwhile.
-      (None, None) => lurq::components::Column::new().id(screen_id()).into(),
+      (None, None) => page::page(ctx, heading, page::Body::Reading, page::Above::default()),
     }
   }
 }
@@ -209,20 +208,23 @@ impl Component for AllProjects {
 /// What the screen lists, read when it shows, after a removal or a move (`revision`) and whenever the sign-in changes.
 fn read_listing(
   ctx: &mut Ctx,
-  workspace: &Workspace,
+  services: &Services,
   revision: u64,
   sign_in: &SignIn,
 ) -> FutureState<Listing, messages::Message> {
+  let workspace = services.workspace.clone();
+  let hold = services.hold.clone();
   ctx
-    .future(
-      (workspace.clone(), revision, sign_in.account()),
-      |(workspace, ..)| async move {
+    .future((workspace, revision, sign_in.account()), move |(workspace, ..)| {
+      let hold = hold.clone();
+      async move {
+        hold.released().await;
         background::run(move || workspace.listing()).await?.map_err(|error| {
           tracing::error!(%error, "cannot read the workspace's projects");
           messages::store_error(&error)
         })
-      },
-    )
+      }
+    })
     .state()
     .get()
 }

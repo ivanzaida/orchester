@@ -15,7 +15,7 @@ use orchester_core::{
   project::{Project, ProjectKey},
   sharing::MemberRole,
 };
-use orchester_store::{ProjectDb, SharedMember, SharingLink, StoreError};
+use orchester_store::{ProjectDb, ServerAdmin, SharedMember, SharingLink, StoreError};
 use support::{at, copied_at_version, name};
 use tempfile::TempDir;
 
@@ -114,6 +114,31 @@ fn members_are_kept_as_last_read_with_owners_first_and_replaced_by_the_next_read
     Some((at(400), Vec::new())),
     "read, with nobody in it"
   );
+}
+
+#[test]
+fn members_name_the_servers_admins_as_last_read_and_make_local_forgets_them() {
+  let (_repo, mut db) = project();
+  let olha = ServerAdmin {
+    user: UserId::generate(),
+    display_name: "Olha".to_owned(),
+    username: "olha".to_owned(),
+  };
+  assert!(matches!(
+    db.record_server_admins(std::slice::from_ref(&olha)),
+    Err(StoreError::NotShared)
+  ));
+  shared(&mut db);
+  assert_eq!(db.server_admins().expect("admins"), [], "none named yet");
+  db.record_server_admins(&[olha.clone(), olha.clone()])
+    .expect("recorded");
+  assert_eq!(db.server_admins().expect("admins"), std::slice::from_ref(&olha));
+  db.record_server_admins(&[]).expect("replaced");
+  assert_eq!(db.server_admins().expect("admins"), []);
+
+  db.record_server_admins(std::slice::from_ref(&olha)).expect("recorded");
+  db.make_local().expect("local");
+  assert_eq!(db.server_admins().expect("admins"), [], "forgotten");
 }
 
 #[test]

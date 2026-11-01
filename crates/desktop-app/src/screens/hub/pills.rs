@@ -13,7 +13,10 @@ use lurq::{
 use crate::{
   navigation::link::Open,
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, HubText},
-  ui::pressable::{Press, pressed},
+  ui::{
+    pressable::{Press, pressed},
+    skeleton,
+  },
 };
 
 /// A pill's height (`Pill` `TVWsV`).
@@ -24,6 +27,8 @@ pub(crate) struct Pill {
   pub label: Arc<str>,
   /// The count, and whether it waits on the person.
   pub count: Option<(usize, bool)>,
+  /// The count is still read: its bone after the name.
+  pub reading: bool,
   pub current: bool,
   pub open: Open,
 }
@@ -38,16 +43,22 @@ impl From<Pill> for Element {
         .color(PaletteColor::TextSecondary)
     }
     .nowrap();
-    let count = pill.count.filter(|(count, _)| *count > 0).map(|(count, waits)| {
-      Text::new(&count.to_string())
-        .id(format!("{}-count", pill.id))
-        .variant(HubText::Hint.role())
-        .color(if waits {
-          PaletteColor::Warning
-        } else {
-          PaletteColor::TextMuted
-        })
-    });
+    let count: Option<Element> = match pill.count.filter(|(count, _)| *count > 0) {
+      Some((count, waits)) => Some(
+        Text::new(&count.to_string())
+          .id(format!("{}-count", pill.id))
+          .variant(HubText::Hint.role())
+          .color(if waits {
+            PaletteColor::Warning
+          } else {
+            PaletteColor::TextMuted
+          })
+          .into(),
+      ),
+      None => pill
+        .reading
+        .then(|| skeleton::count().id(format!("{}-count", pill.id)).into()),
+    };
     let row = Row::new()
       .height(Dimension::Px(HEIGHT))
       .padding(Padding::horizontal(ExtraSpacing::Loose.role()))

@@ -32,7 +32,7 @@ use crate::{
   routes::ProjectPage,
   screens::hub::{self, Head, HubTab},
   theme::HubSpacing,
-  ui::{failure::LastFailure, state::loading},
+  ui::failure::LastFailure,
 };
 
 #[derive(Clone, PartialEq)]
@@ -71,12 +71,21 @@ impl Component for ToolsScreen {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let project = ctx.props::<Props>().project.clone();
     let body = self.body(ctx);
-    let actions = add_menu::actions(ctx, project.open.project.id(), (&self.menu, &self.anchor));
+    // A member of a shared project adds none of the team's tools.
+    let head = if hub::team::may_change(hub::team::of(&project).as_ref()) {
+      Head::actions(add_menu::actions(
+        ctx,
+        project.open.project.id(),
+        (&self.menu, &self.anchor),
+      ))
+    } else {
+      Head::default()
+    };
     Column::new()
       .id("screen-tools")
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
-      .child(hub::page(ctx, &project, (HubTab::Tools, Head::actions(actions)), body))
+      .child(hub::page(ctx, &project, (HubTab::Tools, head), body))
   }
 }
 impl ToolsScreen {
@@ -90,12 +99,15 @@ impl ToolsScreen {
     let revision = self.revision.get();
     let outside = props.project.feed.outside.get();
     let outside = (outside.pipelines, self.tools.count(&props.project.feed));
+    let hold = crate::services::Services::of(ctx).hold;
     let reading = ctx
       .future(
         (root, id, revision, outside, self.retry.get()),
-        |(root, id, revision, ..)| {
+        move |(root, id, revision, ..)| {
           tracing::trace!(target: crate::app_log::READ_LOG, read = "tools");
+          let hold = hold.clone();
           async move {
+            hold.released().await;
             background::run(move || EditorData::load_in(&root, id))
               .await?
               .map(|data| (id, revision, data))
@@ -124,7 +136,7 @@ impl ToolsScreen {
       (Some(failure), current) if current.is_none() || matches!(props.page, ProjectPage::Tools) => {
         return hub::list_body("tools-failed", failure.page(ctx));
       }
-      (_, None) => return frame.child(loading("tools-loading", &ctx.t("tools.reading"))).into(),
+      (_, None) => return frame.child(library::reading(ctx, &props.project)).into(),
       (failure, Some((_, _, data))) => (failure, data),
     };
     let child = self.content(ctx, props, data, id);

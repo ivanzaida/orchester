@@ -1,4 +1,4 @@
-//! The tab's column (`05 · Orchester Cloud` `vPV73`): the account card with its two-factor authentication
+//! The tab's column (`05 Â· Orchester Cloud` `vPV73`): the account card with its two-factor authentication
 //! ([`super::two_factor`]) and *Sign out* asked in place ([`super::account`]); few recovery codes left, after a sign-in
 //! with one; *This computer*; the invites ([`super::invites`]); the team servers ([`super::list`]); *Advanced* with the
 //! cloud's address ([`super::advanced`]); and where the cloud token is kept. Signed out (`j7SbPk`), the sign-in takes
@@ -14,8 +14,9 @@ use lurq::{
   node::Element,
 };
 use orchester_api::cloud::TwoFactorStatus;
+use orchester_core::id::InviteId;
 
-use super::{Invites, Said, Snapshot, account, advanced, invites, list, words::cloud_error};
+use super::{Invites, Said, Snapshot, account, advanced, invites, list, pointed::PointedInvite, words::cloud_error};
 use crate::{
   routes::OrchesterAsk,
   screens::{
@@ -36,6 +37,8 @@ pub(super) struct Props {
   pub two_factor: Option<TwoFactorStatus>,
   /// The question the route asks in place: it opens once it does.
   pub ask: Option<OrchesterAsk>,
+  /// The invite whose row the route opens at.
+  pub at: Option<InviteId>,
 }
 
 impl DevtoolsInspectable for Props {}
@@ -48,6 +51,8 @@ pub(super) struct CloudPanel {
   pub(super) asking: Signal<bool>,
   /// What the route asked when the column last rendered: each question opens once each time it is asked.
   asked: parking_lot::Mutex<Option<OrchesterAsk>>,
+  /// The invite row an `orchester://` link opened the column at.
+  pointed: PointedInvite,
   /// Signing this computer out of the cloud is a person's (review 1, M1).
   pub(super) person: super::PersonOnly,
   /// Counts the checks of joins that wait for approval ([`super::accepted::check`]).
@@ -72,6 +77,7 @@ impl Component for CloudPanel {
       }),
       asking: ctx.signal(false),
       asked: parking_lot::Mutex::new(None),
+      pointed: PointedInvite::new(ctx),
       person: super::PersonOnly::new(ctx),
       tick,
       checks,
@@ -81,6 +87,7 @@ impl Component for CloudPanel {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>().clone();
     self.follow_route(props.ask);
+    self.pointed.follow(props.at);
     self.checks.start();
     let pane = frame::pane("orchester-cloud-details");
     let snapshot = &props.snapshot;
@@ -108,7 +115,7 @@ impl Component for CloudPanel {
     let invites = invites::waiting(
       ctx,
       (&props.invites, &props.accepted, props.two_factor.as_ref()),
-      &self.invites,
+      (&self.invites, &self.pointed),
     );
     let servers = list::group(ctx, snapshot, list::trust_key);
     let advanced = advanced::section(ctx, &snapshot.address, &self.advanced);
@@ -149,7 +156,7 @@ impl CloudPanel {
       ))
   }
   /// Opens the question the route starts asking, as its button would: *Sign out of Orchester Cloud?* under the card,
-  /// or *Decline the invite to …?* in place of the invite's actions. Only a person's answer signs out or declines.
+  /// or *Decline the invite to â€¦?* in place of the invite's actions. Only a person's answer signs out or declines.
   fn follow_route(&self, ask: Option<OrchesterAsk>) {
     let mut asked = self.asked.lock();
     if ask != *asked {

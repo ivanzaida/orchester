@@ -5,7 +5,7 @@
 use std::{ffi::OsString, path::Path};
 
 use orchester_core::{
-  connection::invocation::{ClaudeInvocation, ClaudeSession},
+  connection::invocation::{CLAUDE_NO_AUTO_MEMORY, ClaudeInvocation, ClaudeSession},
   permission::{NetworkAccess, RepositoryAccess},
   resource::CommandEnvironment,
 };
@@ -76,7 +76,11 @@ fn app_mcp_token_variable_is_not_passed_to_claude() {
       .expect("unicode worktree");
     assert_eq!(command.program(), Path::new("/bin/claude"));
     let names: Vec<&str> = command.env().iter().map(|(name, _)| name.as_str()).collect();
-    assert_eq!(names, ["PATH", "CLAUDE_CONFIG_DIR"], "{platform:?}");
+    assert_eq!(
+      names,
+      ["PATH", "CLAUDE_CONFIG_DIR", CLAUDE_NO_AUTO_MEMORY.0],
+      "{platform:?}"
+    );
     assert!(
       !command.env().iter().any(|(_, value)| value == "app-token"),
       "{platform:?}"

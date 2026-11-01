@@ -373,7 +373,7 @@ async fn run_permissions_apply_from_the_next_claude_invocation() {
   let next = enforced(&with_pnpm_build(), AgentProvider::ClaudeCodeCli);
   assert_eq!(
     next.network(),
-    NetworkAccess::On,
+    &NetworkAccess::On,
     "unsupported network-off is not claimed"
   );
   assert_eq!(launch_permissions(root, id), [original, next]);

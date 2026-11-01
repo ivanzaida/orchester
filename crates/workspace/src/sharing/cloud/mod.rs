@@ -203,17 +203,7 @@ impl Cloud {
 
   /// The cloud this computer uses. Blocking.
   pub fn address(&self) -> Result<CloudInUse, CloudError> {
-    let set = self.inner.workspace.db.lock().cloud_address()?;
-    Ok(match set {
-      Some(set) => CloudInUse {
-        address: parse_address(&set.web, set.api.as_deref())?,
-        default: false,
-      },
-      None => CloudInUse {
-        address: build_address()?,
-        default: true,
-      },
-    })
+    address_in_use(&self.inner.workspace)
   }
 
   /// The address of `page` on the web address of the cloud this computer uses. Blocking.
@@ -446,6 +436,22 @@ impl Cloud {
   fn servers(&self) -> &Servers {
     &self.inner.servers
   }
+}
+
+/// The cloud `workspace`'s computer uses: the one Settings › Orchester Cloud › Advanced names, or the build's own.
+/// Blocking.
+pub(crate) fn address_in_use(workspace: &Workspace) -> Result<CloudInUse, CloudError> {
+  let set = workspace.db.lock().cloud_address()?;
+  Ok(match set {
+    Some(set) => CloudInUse {
+      address: parse_address(&set.web, set.api.as_deref())?,
+      default: false,
+    },
+    None => CloudInUse {
+      address: build_address()?,
+      default: true,
+    },
+  })
 }
 
 /// Whether `workspace`'s application database has an account signed in, and why the last one ended if not. A database

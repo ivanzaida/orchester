@@ -13,6 +13,7 @@
 mod account;
 pub mod address;
 pub mod cloud;
+pub mod compare;
 mod connect;
 mod connection;
 pub mod device;
@@ -26,6 +27,8 @@ mod password;
 mod place;
 pub mod project;
 mod server_key;
+pub mod sync;
+pub mod team;
 pub mod team_join;
 pub mod trust;
 
@@ -103,6 +106,8 @@ struct Inner {
   shared: watch::Sender<u64>,
   /// Counts requests to read the shared projects' caches again now.
   sync: watch::Sender<u64>,
+  /// How each shared project's stream stands, by folder; a change counts in `changes`.
+  sync_states: Mutex<sync::SyncStates>,
   /// The projects being shared now: their tasks take no change from the screens meanwhile.
   sharing_now: Mutex<HashSet<PathBuf>>,
   /// When work on each shared task last asked for its run claim this session, by this computer's clock: a claim
@@ -146,6 +151,7 @@ impl Servers {
         changes: watch::channel(0).0,
         shared: watch::channel(0).0,
         sync: watch::channel(0).0,
+        sync_states: Mutex::new(HashMap::new()),
         sharing_now: Mutex::new(HashSet::new()),
         work_asked: Mutex::new(HashMap::new()),
         downloads: Mutex::new(HashMap::new()),
@@ -187,7 +193,8 @@ impl Servers {
     (!sharing.contains(root)).then(change)
   }
 
-  /// Reads the shared projects' caches again now (opening a project, *Try now*, *Check again*).
+  /// Reads the shared projects whole into their caches now (*Try now*, *Check again*); their streams keep them in step
+  /// otherwise.
   pub fn sync_now(&self) {
     self.inner.sync.send_modify(|count| *count += 1);
   }

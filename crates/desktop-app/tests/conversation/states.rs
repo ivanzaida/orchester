@@ -54,15 +54,18 @@ fn timeline_an_unreadable_run_shows_nothing_it_did() {
 #[test]
 fn timeline_shows_loading_while_reads_are_held() {
   let (mut window, seeded) = seeded("task-states");
-  // The project's tasks are read first; only the transcript's reads are held then.
+  // The project's tasks are read first; the task's own reads and its transcript's are held then.
   let first = key_of(&seeded, "Docs: connecting GitHub");
   open(&mut window, &seeded, &first, "conversation-no-run");
   let hold = window.launch.services().expect("a started session").hold.clone();
   hold.set(true);
   let key = key_of(&seeded, "Paginate the events API");
-  open(&mut window, &seeded, &key, "conversation-loading");
-  let title = window.texts("conversation-loading-title").expect("a title").join(" ");
-  assert!(title.starts_with("Loading activity for Run "), "{title}");
+  // The task page's skeleton on its Conversation tab: the transcript's bones over the composer's (`WAW2N`).
+  open(&mut window, &seeded, &key, "task-loading");
+  assert!(
+    window.tree.get_element_by_id("task-tab-conversation").is_some(),
+    "the tabs stay real while the task is read"
+  );
   hold.set(false);
   window.until("the timeline", |window| {
     window.tree.get_element_by_id("conversation-chat").is_some()

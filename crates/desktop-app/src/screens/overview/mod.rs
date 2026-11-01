@@ -50,7 +50,6 @@ use orchester_workspace::{
   tasks::{attention, data::ProjectTasks, slot_wait::slot_waits},
 };
 
-use self::skeleton::{BonesProps, bones};
 use crate::{
   lifecycle::recovery::RecoveryNotice,
   project::{ShownProject, TasksState},
@@ -66,10 +65,6 @@ use crate::{
 const SIDE_WIDTH: f32 = 344.0;
 /// How often the ages move on while the Overview shows; *today* rolls over at local midnight within one tick.
 const TICK: Duration = Duration::from_secs(30);
-/// The bones' titles in each section while the tasks are read (04 `A3qRTI`).
-const WAIT_BONES: &[f32] = &[200.0, 260.0, 180.0, 230.0];
-const RUN_BONES: &[f32] = &[200.0, 180.0, 210.0];
-const SIDE_BONES: &[f32] = &[170.0, 140.0, 190.0];
 
 pub fn screen(ctx: &mut Ctx, project: &ShownProject) -> Element {
   let key = format!("overview-{}", project.open.project.id());
@@ -227,60 +222,52 @@ fn body(ctx: &mut Ctx, project: &ShownProject, tasks: &ProjectTasks, around: &Ar
   columns(main, side)
 }
 
-/// The page while the tasks are read: the sections' heads with bones for their rows, the plan limits from memory.
+/// The page while the tasks are read (`ae6PR`): the sections' heads, links and *Hold new starts* real, their counts
+/// and lines bones, the plan limits from memory.
 fn reading(ctx: &mut Ctx, project: &ShownProject, around: &Around) -> Element {
   let id = project.open.project.id();
+  let root = project.open.repo_root.clone();
   let account_ids: Vec<_> = around.accounts.0.iter().map(|account| account.id()).collect();
   let near = near_limits(&account_ids, &around.readings, around.now);
-  let row_bones = |id: &'static str, titles| BonesProps {
-    id,
-    height: section::LINE_HEIGHT,
-    titles,
-  };
+  let label = skeleton::label(ctx, project.open.project.name().as_str());
+  let waits_count = skeleton::count(ctx, "overview-waits", &label);
+  let waits = digest::frame("overview-waits")
+    .child(digest::reading_head(ctx).child(waits_count))
+    .child(skeleton::waits(ctx, &label));
+  let at_work_count = skeleton::count(ctx, "overview-at-work", &label);
+  let slots = skeleton::slots(ctx, &label);
+  let at_work = section::section("overview-at-work")
+    .child(section::counted_head(
+      "overview-at-work",
+      &ctx.t("overview.atWork.title"),
+      Some(at_work_count),
+      Some(slots),
+    ))
+    .child(skeleton::at_work(ctx, &label));
+  let queue_count = skeleton::count(ctx, "overview-queue", &label);
+  let hold = queue::hold_reading(ctx, (id, root.clone()));
+  let queue = section::section("overview-queue")
+    .child(section::counted_head(
+      "overview-queue",
+      &ctx.t("overview.queue.title"),
+      Some(queue_count),
+      Some(hold),
+    ))
+    .child(skeleton::queue(ctx, &label));
   let main = Column::new()
     .id("overview-main")
     .flex(1.0)
     .min_width(Dimension::Px(0.0))
     .spacing(SpacingSize::Xl)
-    .child(
-      digest::frame("overview-waits")
-        .child(digest::reading_head(ctx))
-        .child(bones(ctx, row_bones("overview-waits-bones", WAIT_BONES))),
-    )
-    .child(
-      section::section("overview-at-work")
-        .child(section::head(
-          "overview-at-work",
-          &ctx.t("overview.atWork.title"),
-          None,
-          None,
-        ))
-        .child(bones(ctx, row_bones("overview-at-work-bones", RUN_BONES))),
-    )
-    .child(
-      section::section("overview-queue")
-        .child(section::head(
-          "overview-queue",
-          &ctx.t("overview.queue.title"),
-          None,
-          None,
-        ))
-        .child(bones(ctx, row_bones("overview-queue-bones", RUN_BONES))),
-    );
-  let side_bones = BonesProps {
-    id: "overview-landed-bones",
-    height: section::SIDE_LINE_HEIGHT,
-    titles: SIDE_BONES,
-  };
+    .child(waits)
+    .child(at_work)
+    .child(queue);
+  let queue_state = skeleton::queue_state(ctx, &label);
+  let landed_bones = skeleton::landed(ctx, &label);
   let side = side_column()
     .with_children(limits::limits(ctx, (&near, &around.accounts), &[], around.now))
-    .child(landed::reading(ctx).child(bones(ctx, side_bones)))
-    .child(delivery::delivery(
-      ctx,
-      id,
-      project.open.repo_root.clone(),
-      project.feed.saves.get(),
-    ));
+    .child(landed::reading(ctx, id, (queue_state, landed_bones)))
+    .child(delivery::delivery(ctx, id, root, project.feed.saves.get()));
   columns(main, side)
 }
 

@@ -29,6 +29,7 @@ mod services;
 mod skill_input;
 mod skills;
 mod stacks;
+mod storage;
 mod tool_input;
 mod tool_program;
 pub(super) mod widening;
@@ -57,14 +58,15 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "get_project",
-    description: "A project's setup: id, key, name, folder, limits, code index, the environment variables its agents \
+    description: "A project's setup: id, key, name, folder, limits, the disk guard (disk_guard: keep_free_gb, free_gb, \
+                  total_gb, and holds while no step starts for low disk space; get_storage adds what could be \
+                  cleaned), code index, the environment variables its agents \
                   and command tools get (plain text by design: they hold no secrets), whether agents load the \
-                  repository's own agent files (AGENTS.md, CLAUDE.md), its base branch (`base_branch.branch`: the \
-                  branch new runs start from and deliver into, null while they take the branch the checkout has \
-                  checked out; `base_branch.missing`: the branch set is gone and new runs are refused, null when \
-                  git cannot tell; kept on this computer only; each run's own base is in its reads), its GitHub \
-                  link, how many connections, profiles, pipelines and instructions it has, and its link in the app \
-                  (its Overview).",
+                  repository's own agent files (AGENTS.md, CLAUDE.md), its GitHub link, how many connections, \
+                  profiles, pipelines and instructions it has, and its link in the app (its Overview). A project has \
+                  no base branch: the branch runs start from is set on tasks (create_task and update_task's \
+                  base_branch, read by get_task) and modules (create_module and update_module's, read by \
+                  list_modules and get_module), on this computer only; each run's own base is in get_run.",
     schema: schema_for_type::<super::projects::InProject>,
     read_only: true,
   },
@@ -440,6 +442,7 @@ pub fn listed() -> Vec<Tool> {
     .chain(skills::SPECS)
     .chain(secrets::SPECS)
     .chain(services::SPECS)
+    .chain(storage::SPECS)
     .map(tool)
     .collect()
 }
@@ -463,6 +466,9 @@ pub async fn call(
   }
   if named(self::services::SPECS) {
     return Some(self::services::call(services, translate, name, Value::Object(arguments)).await);
+  }
+  if named(storage::SPECS) {
+    return Some(storage::call(services, name, Value::Object(arguments)).await);
   }
   if !SPECS.iter().any(|spec| spec.name == name) {
     return None;

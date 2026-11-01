@@ -6,6 +6,7 @@
 //! stand-in Orchester Cloud ([`signed_in`]). Never part of the app's program: only the `test-support` feature builds
 //! it.
 
+pub mod browser_qa;
 pub mod signed_in;
 mod stand_in_console;
 pub mod stand_ins;

@@ -7,8 +7,10 @@
 mod accounts;
 mod accounts_window;
 mod api_providers;
+mod approval_answers;
 mod approval_settings;
 mod automation_permissions;
+mod base_branch;
 mod base_moved;
 mod basics;
 mod board;
@@ -31,6 +33,7 @@ mod kontur;
 mod live;
 mod mcp_servers;
 mod merge;
+mod merge_queue_lanes;
 mod merged_outside;
 mod modules;
 mod native_connections;
@@ -68,6 +71,7 @@ mod usage;
 #[path = "../mcp_stable/vault.rs"]
 mod vault;
 mod window;
+mod worktree_removal;
 
 use std::{
   path::{Path, PathBuf},

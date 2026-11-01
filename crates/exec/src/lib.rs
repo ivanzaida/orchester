@@ -8,6 +8,7 @@ mod capped;
 mod console;
 mod exchange;
 
+pub mod browser;
 pub mod clone_console;
 pub mod disk_space;
 pub mod external;

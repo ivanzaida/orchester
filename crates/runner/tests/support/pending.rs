@@ -39,6 +39,7 @@ pub async fn record_pending_run(root: &Path, task: TaskId) -> Run {
       branch: BranchName::for_next_run(task.key(), 0),
       base: lent.base().clone(),
       base_branch: lent.base_branch().cloned(),
+      base_source: lent.base_source(),
       budget: limits.budget(),
       max_duration: limits.max_duration(),
     },

@@ -28,6 +28,7 @@ mod history;
 mod line;
 mod page;
 mod proposal;
+mod reading;
 mod report;
 mod run_end;
 mod runs_on;
@@ -238,10 +239,12 @@ impl Component for OrchestratorScreen {
     let main = body::main(ctx, view, (&props.project, &reads));
     // History opens over the chat's right edge, under the header.
     let panel = view.history.get().then(|| {
-      let chats = reads
-        .history
-        .ready()
-        .map_or(&[][..], |history| history.chats.as_slice());
+      // While the conversations are read the list is bones; a failed reading lists none.
+      let chats = match &reads.history {
+        data::Read::Loading => None,
+        data::Read::Failed(_) => Some(&[][..]),
+        data::Read::Ready(history) => Some(history.chats.as_slice()),
+      };
       history::panel(
         ctx,
         &view.search,

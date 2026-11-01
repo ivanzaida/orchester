@@ -11,11 +11,13 @@ mod back;
 pub(super) mod controls;
 mod module;
 mod more;
+pub(super) mod no_branch;
 mod notices;
 mod primary;
 mod refusal;
 pub(super) mod run_again;
 mod run_line;
+mod run_mode;
 
 use std::sync::Arc;
 
@@ -63,6 +65,9 @@ pub struct TaskHeader {
   confirming: Signal<Confirming>,
   /// Its switch that removes the worktrees of the run before, off each time it opens.
   remove: Signal<bool>,
+  /// A run Run again asked for that the runner refused for want of a branch, the page's: Properties › Base says it
+  /// too.
+  no_branch: Signal<Option<no_branch::NoBranch>>,
   /// Closing, reopening and deleting the task; a deleted task's page goes to the Tasks list.
   closer: Closer,
   /// Where *More actions* is open.
@@ -80,6 +85,7 @@ impl Component for TaskHeader {
       refusals: Refusals::new(ctx),
       confirming: state.run_again,
       remove: state.run_again_remove,
+      no_branch: state.no_branch,
       closer: Closer::new(ctx, (project.open, project.feed), Some(tasks)),
       menu: MenuPlace::new(ctx),
     }
@@ -99,7 +105,12 @@ impl Component for TaskHeader {
       feed.outside.get().limits,
     );
     let check = run_again::check(ctx, (open.repo_root.clone(), services.programs), &detail, again);
-    let start = run_again::start_action(ctx, runners, (open, feed), self.confirming.clone());
+    let start = run_again::start_action(
+      ctx,
+      runners,
+      (open, feed),
+      (self.confirming.clone(), self.no_branch.clone()),
+    );
     let latest_busy = detail
       .run
       .as_ref()
@@ -113,6 +124,8 @@ impl Component for TaskHeader {
     let run_controls = RunControls::of(ctx);
     let state = run_controls.action.state().get();
     let refused = self.refusals.shown(&state, run_controls.requested.get(), &detail);
+    let status_line = no_branch::status_line(ctx, &props.task, &self.no_branch, (&self.confirming, &self.remove))
+      .unwrap_or_else(|| run_line::status_line(ctx, &props.task));
     Column::new()
       .id("task-header")
       .width(Dimension::Pct(100.0))
@@ -126,7 +139,7 @@ impl Component for TaskHeader {
       .on_key_down(edit_key(ctx, &props.task, &props.view))
       .child(back::row(ctx, &props))
       .child(title_row)
-      .child(run_line::status_line(ctx, &props.task))
+      .child(status_line)
       .with_children(module::field(ctx, &props.task))
       .with_children(notices::notices(ctx, &detail, props.stale.as_ref(), refused))
       .with_children(confirmation)

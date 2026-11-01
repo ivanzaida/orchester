@@ -9,9 +9,11 @@
 //!
 //! `cargo test -p orchester-app --test task_details <filter>`
 
+mod base_branch;
 #[path = "../../examples/seed/kontur/mod.rs"]
 #[allow(dead_code, reason = "the seed's helpers the other scenarios use")]
 mod kontur;
+mod run_mode;
 mod shared;
 #[path = "../support/mod.rs"]
 mod support;

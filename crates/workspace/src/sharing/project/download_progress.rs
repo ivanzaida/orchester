@@ -155,6 +155,9 @@ impl From<&SharingError> for DownloadFailure {
       | SharingError::NoProject
       | SharingError::ProjectChanged
       | SharingError::AccountProject
+      | SharingError::NotAdmin
+      | SharingError::VersionConflict { .. }
+      | SharingError::PersonOnly
       | SharingError::ForeignAddress { .. } => Self::Refused,
     }
   }

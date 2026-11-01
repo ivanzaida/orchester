@@ -2,13 +2,19 @@
 //! name and responsibility fields and the role instructions inline, then the connection, the model and the reasoning
 //! effort as dropdowns of one width (01d). *Other model id…* opens the Model id row under Model (01e); a model that
 //! lists no efforts has no effort row.
+mod member;
+
 use std::sync::Arc;
 
 use lurq::{
-  app::{ctx::Ctx, theme::SpacingSize},
-  components::Column,
-  node::{Element, dimension::Dimension},
+  app::{
+    ctx::Ctx,
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
+  },
+  components::{Column, Row, Text},
+  node::{Element, dimension::Dimension, padding::Padding},
 };
+pub(super) use member::connection_shared;
 use orchester_core::{
   connection::{AgentConnection, ProviderEffortError, provider_effort},
   resource::{AgentProfile, ModelId},
@@ -22,6 +28,7 @@ use super::{fields::Fields, words};
 use crate::{
   routes::{ConnectionsView, ProjectPage, Route},
   screens::hub::parts::{boxed, field, group, head, note, stacked_field},
+  theme::{ExtraSpacing, HubText},
   ui::{
     button::{ActionButton, ButtonKind},
     choice_field::{Choice, ChoiceField},
@@ -108,11 +115,140 @@ fn with_hint(input: FieldInput, hint: Option<Arc<str>>) -> FieldInput {
   }
 }
 
+/// The Role section as a member of a shared project reads it: the values as plain text, the role instructions in a
+/// box of their own (`Role` `MZjud` in 03 `pjEjf`).
+pub(super) fn role_read_only(ctx: &Ctx, fields: &Fields) -> Element {
+  let rows = [
+    field(
+      "agent-role",
+      &ctx.t("agents.role"),
+      Some(&ctx.t("agents.roleHint")),
+      value("agent-role-value", &fields.role.get(), false),
+    )
+    .into(),
+    field(
+      "agent-responsibility",
+      &ctx.t("agents.responsibility"),
+      Some(&ctx.t("agents.responsibilityHint")),
+      value("agent-responsibility-value", &fields.responsibility.get(), false),
+    )
+    .into(),
+    stacked_field(
+      "agent-instructions",
+      (&ctx.t("agents.instructions"), Some(&ctx.t("agents.instructionsHint"))),
+      Column::new()
+        .id("agent-instructions-value")
+        .width(Dimension::Pct(100.0))
+        .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Loose.role()))
+        .background(PaletteColor::SurfaceInput)
+        .border_inside(BorderSize::Sm, PaletteColor::Border)
+        .rounded(RadiusSize::Md)
+        .child(
+          Text::new(&fields.instructions.get())
+            .variant(HubText::Area.role())
+            .width(Dimension::Pct(100.0)),
+        ),
+      None,
+    )
+    .into(),
+  ];
+  group(
+    "agent-role-section",
+    head("agent-role-section", &ctx.t("agents.roleSection"), None, None),
+    boxed("agent-role-rows", rows),
+  )
+  .into()
+}
+
+/// The Connection & model section as a member reads it (`Connection & model` `qjWQP` in 03): the connection, the
+/// model and the effort as plain text, then the member's own *Runs here use* row with `note_under` under the section
+/// before the assignment note (06).
+pub(super) fn connection_read_only(
+  ctx: &mut Ctx,
+  fields: &Fields,
+  listed: &ProjectAgents,
+  (runs_here, note_under): (Option<Element>, Option<Element>),
+) -> Element {
+  let connection = fields.connection(listed);
+  let accounts = crate::services::accounts::listed(ctx);
+  let readings = crate::services::plan_limits::account_readings(ctx);
+  let detail = connection.map(|c| words::connection_choice(ctx, c, (&accounts, &readings)).0);
+  let hint = detail
+    .filter(|d| !d.is_empty())
+    .unwrap_or_else(|| ctx.t("agents.connectionHint").to_string());
+  let name = connection.map_or_else(|| fields.connection.get(), |c| c.name().as_str().to_owned());
+  let mut rows = vec![
+    field(
+      "agent-connection",
+      &ctx.t("agents.connection"),
+      Some(&hint),
+      value("agent-connection-value", &name, false),
+    )
+    .into(),
+    field(
+      "agent-model",
+      &ctx.t("agents.model"),
+      Some(&ctx.t("agents.modelHint")),
+      value("agent-model-value", &fields.model_value(), true),
+    )
+    .into(),
+  ];
+  let effort = fields.effort.get();
+  if !effort.is_empty() {
+    rows.push(
+      field(
+        "agent-effort",
+        &ctx.t("agents.effort"),
+        Some(&ctx.t("agents.effortHint")),
+        value("agent-effort-value", &words::effort(ctx, &effort), false),
+      )
+      .into(),
+    );
+  }
+  rows.extend(runs_here);
+  Column::new()
+    .id("agent-model-section")
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Sm)
+    .child(group(
+      "agent-model-group",
+      head("agent-model-group", &ctx.t("agents.connectionModel"), None, None),
+      boxed("agent-model-rows", rows),
+    ))
+    .with_children(note_under)
+    .child(note(
+      "agent-assignment-note",
+      Icon::Info,
+      &ctx.t("agents.assignmentNote"),
+    ))
+    .into()
+}
+
+/// A value read, not edited, where a field's control goes; a model id in mono.
+fn value(id: &str, text: &str, code: bool) -> Element {
+  Row::new()
+    .width(Dimension::Px(CONTROL_WIDTH))
+    .flex_shrink(0.0)
+    .child(
+      Text::new(text)
+        .id(id.to_owned())
+        .variant(if code {
+          HubText::Area.role()
+        } else {
+          HubText::Value.role()
+        })
+        .width(Dimension::Pct(100.0)),
+    )
+    .into()
+}
+
+/// The section, with `extra` rows after the effort (a shared profile's *Runs here use*, what a change asks) and
+/// `note` under it before the assignment note.
 pub(super) fn connection_model(
   ctx: &mut Ctx,
   fields: &Fields,
   listed: &ProjectAgents,
-  asked: Option<Element>,
+  (extra, note_under): (Vec<Element>, Option<Element>),
 ) -> Element {
   let connection = fields.connection(listed);
   let on_provider = connection.is_some_and(|c| c.api_provider().is_some());
@@ -167,7 +303,7 @@ pub(super) fn connection_model(
       .into(),
     );
   }
-  rows.extend(asked);
+  rows.extend(extra);
   Column::new()
     .id("agent-model-section")
     .width(Dimension::Pct(100.0))
@@ -185,6 +321,7 @@ pub(super) fn connection_model(
         &ctx.t("agents.connectionReset"),
       )
     }))
+    .with_children(note_under)
     .child(note(
       "agent-assignment-note",
       Icon::Info,

@@ -24,7 +24,8 @@ use orchester_workspace::{
 };
 
 use crate::{
-  chrome, lifecycle,
+  browser::{AutoOpen, BrowserLink},
+  chrome, hang_reports, lifecycle,
   mcp::{self, McpLink, WindowLink},
   navigation::{
     Navigation,
@@ -33,13 +34,14 @@ use crate::{
     tabs::TabSet,
   },
   notifications::{Chosen, NotificationPrefs, NotificationsHost},
+  open_link::{self, LinkHost},
   project::{Landing, Projects, ProjectsHost},
   routes,
   services::{
     Services,
     accounts::{Accounts, AccountsReader, WindowAccounts},
   },
-  shell::needs_you::PanelOpen,
+  shell::{needs_you::PanelOpen, update::UpdateAsk},
   startup::{self, Problem},
   ui::chat::links::ChatLinks,
 };
@@ -108,12 +110,16 @@ impl Component for Root {
           },
         )
       }
-      Start::Problem(problem) => Column::new()
-        .id(WINDOW_ID)
-        .width(Dimension::Pct(100.0))
-        .height(Dimension::Pct(100.0))
-        .child(startup::window(ctx, problem))
-        .into(),
+      Start::Problem(problem) => {
+        let beat = hang_reports::beat::beat(ctx, &link);
+        Column::new()
+          .id(WINDOW_ID)
+          .width(Dimension::Pct(100.0))
+          .height(Dimension::Pct(100.0))
+          .with_children(beat)
+          .child(startup::window(ctx, problem))
+          .into()
+      }
     }
   }
 }
@@ -133,6 +139,8 @@ struct SessionWindow {
   navigation: Navigation,
   projects: Projects,
   needs_you: PanelOpen,
+  /// Whether *Restart to update* asks about the runs at work, and a press refused in a state set for testing.
+  update_ask: UpdateAsk,
   /// The closing panel's choice the keyboard moved to.
   focus: Signal<Option<lifecycle::Choice>>,
   first_keys: FirstKeys,
@@ -144,6 +152,8 @@ struct SessionWindow {
   notifications: NotificationPrefs,
   /// The accounts the status bar and the notifications name, read by the window's [`AccountsReader`].
   accounts: WindowAccounts,
+  /// The Browser window, which the window opens and points.
+  browser: BrowserLink,
 }
 
 impl Component for SessionWindow {
@@ -157,7 +167,7 @@ impl Component for SessionWindow {
     } = ctx.props::<SessionProps>().clone();
     let router = ctx.router(routes::routes());
     let navigation = Navigation::new(ctx.signal(TabSet::at(landing.route)), router.clone());
-    let projects = Projects::new(landing.project, services.jobs);
+    let projects = Projects::new(landing.project, services.jobs.clone());
     link.attach(navigation.clone(), projects.clone());
     lifecycle::hook(ctx, &services.close);
     // The Orchestrator's decisions an earlier session left under way are settled by what happened, in its words.
@@ -166,6 +176,12 @@ impl Component for SessionWindow {
       (services.session_start, mcp::domain::translate(ctx.i18n().clone())),
       services.runners.clone(),
     ));
+    let browser = BrowserLink::new(
+      services.clone(),
+      ctx.window_opener(),
+      navigation.clone(),
+      ctx.t("browser.window.titleAlone"),
+    );
     Self {
       router,
       account_tabs: AccountTabs::new(services.cloud.sign_in_state().account()),
@@ -173,10 +189,12 @@ impl Component for SessionWindow {
       navigation,
       projects,
       needs_you: PanelOpen::new(ctx.signal(false)),
+      update_ask: UpdateAsk::new(ctx.signal(false), ctx.signal(None)),
       focus: ctx.signal(None),
       first_keys: FirstKeys::default(),
       notifications: NotificationPrefs::new(ctx.signal(Chosen::default())),
       accounts: WindowAccounts::new(ctx.signal(Accounts::default())),
+      browser,
     }
   }
 
@@ -192,8 +210,10 @@ impl Component for SessionWindow {
     ctx.provide(self.projects.clone());
     ctx.provide(self.first_keys.clone());
     ctx.provide(self.needs_you.clone());
+    ctx.provide(self.update_ask.clone());
     ctx.provide(self.notifications.clone());
     ctx.provide(self.accounts.clone());
+    ctx.provide(self.browser.clone());
     let sign_in = follow_sign_in(ctx, &services.cloud);
     self.account_tabs.follow(&sign_in, &self.navigation, &self.projects);
     let phase = lifecycle::phase(ctx, &services.close);
@@ -203,12 +223,23 @@ impl Component for SessionWindow {
     let accounts = ctx.mount_keyed::<AccountsReader>("accounts", ());
     let notifications = ctx.mount_keyed::<NotificationsHost>("notifications", ());
     let screen = Router::mount(ctx, self.router.clone());
+    let link = ctx.props::<SessionProps>().link.clone();
+    let beat = hang_reports::beat::beat(ctx, &link);
+    let browser = ctx.mount_keyed::<AutoOpen>("browser-auto-open", self.browser.clone());
     let overlay = lifecycle::overlay(ctx, phase, &services.close, &self.focus);
+    // Over the page or the gate: what an `orchester://` link says, behind the gate as well.
+    let links = ctx.mount_keyed::<LinkHost>(
+      "open-links",
+      open_link::host::Props {
+        signed_in: sign_in.is_signed_in(),
+      },
+    );
     // The closing panel lies over the page, which stays as it was under it.
     let body = Stack::new()
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
       .child(screen)
+      .child(links)
       .with_children(overlay);
     let framed = chrome::chrome(ctx, body.into(), closing);
     let window = Column::new()
@@ -217,6 +248,8 @@ impl Component for SessionWindow {
       .child(projects)
       .child(accounts)
       .child(notifications)
+      .with_children(beat)
+      .child(browser)
       .child(framed);
     window_input(&self.navigation, window.into(), (!closing, self.first_keys.clone()))
       .id(WINDOW_ID)

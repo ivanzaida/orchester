@@ -1,0 +1,506 @@
+//! The desktop app's own updates (`docs/cloud-api.md`, "App releases"): Settings › Updates in the application
+//! database ([`UpdateSettings`]), the check at the start, every [`CHECK_EVERY`] and on *Check now* — Orchester Cloud's
+//! anonymous update check with this copy's version, platform, architecture, channel and install id, no sign-in — and
+//! the download of an offered installer into the data folder's [`UPDATES_FOLDER`], resumed after an interruption and
+//! kept only once its SHA-256 and its signature by a release key built into the app check out ([`download`]). Only a
+//! copy the installer installed on Windows downloads ([`ThisCopy`]); every other copy still asks, to name the newest
+//! release and its download. What the window and the app's MCP server show is one [`UpdateState`], or in a debug
+//! build's QA a state set for testing in its place ([`testing`]). A ready update installs when the person says so
+//! ([`install`]): the databases are copied aside and the installer takes over.
+
+mod copy;
+mod download;
+pub mod install;
+mod state;
+mod testing;
+
+use std::{
+  env,
+  path::{Path, PathBuf},
+  sync::Arc,
+  time::Duration,
+};
+
+use orchester_api::{
+  client::{ClientError, CloudClient},
+  releases::{
+    AcceptedReleaseKeys, OfferedFile, OfferedRelease, ReleaseArch, ReleasePlatform, ReleaseVersion, UpdateCheck,
+  },
+};
+use orchester_core::{
+  app_update::{Channel, UpdateSettings},
+  time::Timestamp,
+};
+use orchester_store::StoreError;
+use parking_lot::Mutex;
+use tokio::sync::watch;
+
+pub use self::{
+  copy::{CopyReason, ThisCopy},
+  state::{NewestRelease, ReadyUpdate, UpdateFailure, UpdateState},
+};
+use self::{
+  download::{Download, Fetched},
+  install::{AfterInstall, JustUpdated},
+  testing::SetForTesting,
+};
+use crate::{
+  background,
+  build::Build,
+  runner::Runners,
+  sharing::cloud::{CloudError, address_in_use},
+  workspace::Workspace,
+};
+
+/// How often the app asks for a newer release while it runs.
+pub const CHECK_EVERY: Duration = Duration::from_secs(6 * 60 * 60);
+/// The folder of the data folder downloads go to.
+pub const UPDATES_FOLDER: &str = "updates";
+/// How the release's installer is named, `Orchester-<version>-setup.exe` (`.github/workflows/app-release.yml`).
+const INSTALLER_SUFFIX: &str = "-setup.exe";
+
+/// This program, as its updates see it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ThisApp {
+  /// The app's own release version.
+  pub version: ReleaseVersion,
+  /// The platform and architecture releases ship for; `None` on one they do not.
+  pub target: Option<(ReleasePlatform, ReleaseArch)>,
+  pub copy: ThisCopy,
+}
+
+impl ThisApp {
+  /// This program at `version`, started as a QA copy or not.
+  pub fn detect(version: ReleaseVersion, qa: bool) -> Self {
+    let target = copy::this_platform().zip(ReleaseArch::parse(env::consts::ARCH));
+    let program = env::current_exe()
+      .map_err(|error| tracing::warn!(%error, "this program cannot tell where it is; it does not update itself"))
+      .ok();
+    let copy = match target {
+      Some((platform, _)) => ThisCopy::of(Build::this(), qa, platform, program.as_deref().and_then(Path::parent)),
+      None => ThisCopy::NotOnThisPlatform,
+    };
+    Self { version, target, copy }
+  }
+}
+
+/// The app's updates. Clones share the state and the check in progress.
+#[derive(Clone)]
+pub struct AppUpdates {
+  inner: Arc<Inner>,
+}
+
+/// Two are equal when they are clones of one.
+impl PartialEq for AppUpdates {
+  fn eq(&self, other: &Self) -> bool {
+    Arc::ptr_eq(&self.inner, &other.inner)
+  }
+}
+
+struct Inner {
+  workspace: Workspace,
+  app: ThisApp,
+  keys: AcceptedReleaseKeys,
+  /// The data folder, which backups and the note of a handed over update go to.
+  data_folder: PathBuf,
+  folder: PathBuf,
+  /// The real state, which the checks, the download and the install go by.
+  state: watch::Sender<UpdateState>,
+  /// What the window and the MCP server show: the real state, or the one set for testing.
+  shown: watch::Sender<UpdateState>,
+  /// Set while a state set for testing shows instead of the real one.
+  testing: Mutex<Option<SetForTesting>>,
+  /// The update that installed at this start.
+  just_updated: Option<JustUpdated>,
+  /// The runs at work, which a ready update waits for.
+  runs: Mutex<Vec<String>>,
+  /// Held while a check, with its download, runs.
+  checking: tokio::sync::Mutex<()>,
+  /// Set when the person says *Stop runs and install* while an install waits for the runs at work.
+  stop_runs: watch::Sender<bool>,
+  /// Set while the person paused the download ([`UpdateState::Paused`]).
+  paused: watch::Sender<bool>,
+  /// Counts the settings saved through [`AppUpdates::set_channel`] and [`AppUpdates::set_automatic`].
+  settings_saved: watch::Sender<u64>,
+}
+
+/// Why a check found nothing.
+#[derive(Debug, thiserror::Error)]
+enum CheckError {
+  #[error(transparent)]
+  Store(#[from] StoreError),
+  #[error(transparent)]
+  Cloud(#[from] CloudError),
+  #[error(transparent)]
+  Client(#[from] ClientError),
+  #[error("the check's database work did not finish")]
+  Interrupted,
+}
+
+impl AppUpdates {
+  /// The updates of `app`, whose settings are in `workspace`'s database, checked with `keys` (the release keys built
+  /// into the app), downloading into [`UPDATES_FOLDER`] of `data_folder`. Nothing is asked until a check runs; what
+  /// became of an update the previous start handed over to the installer is read now ([`install::after_install`]).
+  pub fn new(workspace: Workspace, app: ThisApp, keys: AcceptedReleaseKeys, data_folder: &Path) -> Self {
+    let after = install::after_install(data_folder, &app.version);
+    let state = match (app.copy, &after) {
+      (_, Some(AfterInstall::Failed { version, failure })) => UpdateState::InstallFailed {
+        version: version.clone(),
+        failure: failure.clone(),
+      },
+      // The app checks as it starts ([`keep_checking`]).
+      (ThisCopy::Installer, _) => UpdateState::Checking,
+      (copy, _) => not_updating(copy, None),
+    };
+    let just_updated = match after {
+      Some(AfterInstall::Updated(updated)) => {
+        tracing::info!(version = %updated.version, "updated");
+        Some(updated)
+      }
+      _ => None,
+    };
+    Self {
+      inner: Arc::new(Inner {
+        workspace,
+        app,
+        keys,
+        data_folder: data_folder.to_path_buf(),
+        folder: data_folder.join(UPDATES_FOLDER),
+        state: watch::channel(state.clone()).0,
+        shown: watch::channel(state).0,
+        testing: Mutex::default(),
+        just_updated,
+        runs: Mutex::default(),
+        checking: tokio::sync::Mutex::new(()),
+        stop_runs: watch::channel(false).0,
+        paused: watch::channel(false).0,
+        settings_saved: watch::channel(0).0,
+      }),
+    }
+  }
+
+  pub fn this_app(&self) -> &ThisApp {
+    &self.inner.app
+  }
+
+  /// The state the window shows: the real one, or one set for testing.
+  pub fn state(&self) -> UpdateState {
+    self.inner.shown.borrow().clone()
+  }
+
+  /// Wakes whenever the state shown changed.
+  pub fn subscribe(&self) -> watch::Receiver<UpdateState> {
+    self.inner.shown.subscribe()
+  }
+
+  /// The real state, whatever shows.
+  fn real(&self) -> UpdateState {
+    self.inner.state.borrow().clone()
+  }
+
+  /// Settings › Updates. Blocking.
+  pub fn settings(&self) -> Result<UpdateSettings, StoreError> {
+    self.inner.workspace.db.lock().update_settings()
+  }
+
+  /// Counts the settings saved here; wakes after each, so what shows them reads them again.
+  pub fn settings_saved(&self) -> watch::Receiver<u64> {
+    self.inner.settings_saved.subscribe()
+  }
+
+  /// Blocking; the next check asks for `channel`'s releases.
+  pub fn set_channel(&self, channel: Channel) -> Result<(), StoreError> {
+    self.inner.workspace.db.lock().set_update_channel(channel)?;
+    self.inner.settings_saved.send_modify(|saved| *saved += 1);
+    Ok(())
+  }
+
+  /// Blocking.
+  pub fn set_automatic(&self, automatic: bool) -> Result<(), StoreError> {
+    self.inner.workspace.db.lock().set_update_automatically(automatic)?;
+    self.inner.settings_saved.send_modify(|saved| *saved += 1);
+    Ok(())
+  }
+
+  /// When Orchester Cloud last answered a check from here. Blocking.
+  pub fn last_checked(&self) -> Result<Option<Timestamp>, StoreError> {
+    self.inner.workspace.db.lock().update_checked_at()
+  }
+
+  /// The runs at work now, as the person knows them (`ORC-110`): a ready update waits for them to end.
+  pub fn set_runs_at_work(&self, runs: Vec<String>) {
+    let mut kept = self.inner.runs.lock();
+    let changed = self.inner.state.send_if_modified(|state| {
+      let next = state.clone().with_runs(&runs);
+      std::mem::replace(state, next) != *state
+    });
+    if changed {
+      self.show_real();
+    }
+    *kept = runs;
+  }
+
+  /// Asks Orchester Cloud for a newer release now and, in a copy that updates itself, downloads and checks it. A check
+  /// asked for while one runs is that one.
+  pub async fn check_now(&self) {
+    let Ok(_running) = self.inner.checking.try_lock() else {
+      return;
+    };
+    self.check().await;
+  }
+
+  async fn check(&self) {
+    match (self.inner.app.copy, self.inner.app.target) {
+      (ThisCopy::Installer, Some(target)) => self.update(target).await,
+      (copy, Some(target)) => self.look_for_newest(copy, target).await,
+      // No release ships for this platform: there is nothing to ask for.
+      (_, None) => {}
+    }
+  }
+
+  /// Pauses the download under way (*Pause*): what arrived is kept, and no check downloads until [`Self::resume`].
+  /// Nothing happens outside a download.
+  pub fn pause(&self) {
+    // Under the state's lock: a state leaving the download in the meantime clears the flag after this, not before.
+    self.inner.state.send_if_modified(|state| {
+      if matches!(state, UpdateState::Downloading { .. }) {
+        self.inner.paused.send_replace(true);
+      }
+      false
+    });
+  }
+
+  /// Goes on with a paused download (*Resume*), from where it stopped, through a check. It waits for a check under way
+  /// rather than being that one: that check left the download paused.
+  pub async fn resume(&self) {
+    if !self.inner.paused.send_replace(false) {
+      return;
+    }
+    let _running = self.inner.checking.lock().await;
+    self.check().await;
+  }
+
+  async fn update(&self, target: (ReleasePlatform, ReleaseArch)) {
+    let state = self.real();
+    // An install under way is not checked under: the installer it hands over to stays where it is. A paused download
+    // waits for the person's *Resume*.
+    let paused = matches!(state, UpdateState::Paused { .. }) && *self.inner.paused.borrow();
+    if matches!(state, UpdateState::Installing { .. }) || paused {
+      return;
+    }
+    // A pause no download took up is not one: this check holds the lock every download runs under, so none listens.
+    self.inner.paused.send_replace(false);
+    // A failed install stays said while the cloud offers that version again or does not answer; it is not tried again
+    // on its own.
+    let failed_install = match &state {
+      UpdateState::InstallFailed { version, .. } => Some(version.clone()),
+      _ => None,
+    };
+    // A verified update stays ready while the check runs and when the cloud does not answer it: its installer is still
+    // in the updates folder until a newer release's download replaces it.
+    let ready = state.ready().cloned();
+    if ready.is_none() && failed_install.is_none() {
+      self.set(UpdateState::Checking);
+    }
+    let (client, offered) = match self.ask(target).await {
+      Ok(answer) => answer,
+      Err(error) => {
+        return match ready {
+          Some(update) => {
+            tracing::info!(%error, "Orchester Cloud did not answer the update check; the ready update stays");
+            let runs = self.inner.runs.lock();
+            self.set(UpdateState::Ready(update).with_runs(&runs));
+          }
+          None if failed_install.is_some() => {}
+          None => self.unreachable(&error).await,
+        };
+      }
+    };
+    let Some(release) = offered else {
+      return self.up_to_date().await;
+    };
+    if failed_install.as_ref() == Some(&release.version) {
+      return;
+    }
+    let Some(file) = installer(&release, target).cloned() else {
+      let version = release.version;
+      return self.set(UpdateState::Failed {
+        version,
+        failure: UpdateFailure::NoInstaller,
+      });
+    };
+    let download = Download {
+      folder: self.inner.folder.clone(),
+      release,
+      file,
+      keys: self.inner.keys.clone(),
+    };
+    self.download(&client, &download).await;
+  }
+
+  /// Downloads and checks `download` with `client`, until it is ready or failed, or until the person pauses it.
+  async fn download(&self, client: &CloudClient, download: &Download) {
+    let (version, total) = (&download.release.version, download.file.size);
+    let progress = |received| {
+      self.set(UpdateState::Downloading {
+        version: version.clone(),
+        received,
+        total,
+      });
+    };
+    let mut paused = self.inner.paused.subscribe();
+    let fetched = tokio::select! {
+      fetched = download.fetch(client, &progress) => fetched,
+      // What arrived stays in the part file, which *Resume* goes on from. The flag's `Ref` is dropped before the branch:
+      // it read-locks the flag, and `pause` takes the state's lock before the flag's.
+      _ = async { paused.wait_for(|paused| *paused).await.map(drop) } => {
+        let received = match self.real() {
+          UpdateState::Downloading { received, .. } => received,
+          _ => 0,
+        };
+        tracing::info!(%version, received, "the person paused the update's download");
+        return self.set(UpdateState::Paused { version: version.clone(), received, total });
+      }
+    };
+    match fetched {
+      Fetched::Verified(installer) => {
+        let runs = self.inner.runs.lock();
+        let ready = ReadyUpdate {
+          version: version.clone(),
+          notes: download.release.notes.clone(),
+          critical: download.release.critical,
+          installer,
+        };
+        self.set(UpdateState::Ready(ready).with_runs(&runs));
+      }
+      Fetched::Failed(failure) => self.set(UpdateState::Failed {
+        version: version.clone(),
+        failure,
+      }),
+      Fetched::Interrupted(error) => self.unreachable(&error.into()).await,
+    }
+  }
+
+  /// A copy that does not update itself learns the newest release; one the cloud does not answer keeps what it knew.
+  async fn look_for_newest(&self, copy: ThisCopy, target: (ReleasePlatform, ReleaseArch)) {
+    let newest = match self.ask(target).await {
+      Ok((_, offered)) => offered.and_then(|release| newest(&release, target)),
+      Err(error) => {
+        tracing::info!(%error, "Orchester Cloud did not answer the update check");
+        self.real().newest().cloned()
+      }
+    };
+    self.set(not_updating(copy, newest));
+  }
+
+  /// Asks the cloud this computer uses for the release offered to this install, and keeps when it answered.
+  async fn ask(
+    &self,
+    (platform, arch): (ReleasePlatform, ReleaseArch),
+  ) -> Result<(CloudClient, Option<OfferedRelease>), CheckError> {
+    let workspace = self.inner.workspace.clone();
+    let (settings, install_id, cloud) = background::run(move || -> Result<_, CheckError> {
+      let settings = workspace.db.lock().update_settings()?;
+      Ok((settings, workspace.installation_id()?, address_in_use(&workspace)?))
+    })
+    .await
+    .map_err(|_| CheckError::Interrupted)??;
+    let client = CloudClient::new(cloud.address)?;
+    let check = UpdateCheck {
+      version: self.inner.app.version.clone(),
+      platform,
+      arch,
+      channel: settings.channel,
+      install_id,
+    };
+    let offered = client.check_for_update(&check).await?;
+    let workspace = self.inner.workspace.clone();
+    let kept = background::run(move || workspace.db.lock().set_update_checked_at(Timestamp::now())).await;
+    if let Ok(Err(error)) = kept {
+      tracing::warn!(%error, "cannot keep when the update check was answered");
+    }
+    Ok((client, offered))
+  }
+
+  async fn up_to_date(&self) {
+    let folder = self.inner.folder.clone();
+    if let Ok(Err(error)) = background::run(move || download::clear(&folder)).await {
+      tracing::warn!(%error, "cannot remove older update downloads");
+    }
+    self.set(UpdateState::UpToDate {
+      checked_at: Timestamp::now(),
+    });
+  }
+
+  async fn unreachable(&self, error: &CheckError) {
+    tracing::info!(%error, "Orchester Cloud did not answer the update check or the download");
+    let workspace = self.inner.workspace.clone();
+    let last_checked = match background::run(move || workspace.db.lock().update_checked_at()).await {
+      Ok(Ok(at)) => at,
+      Ok(Err(error)) => {
+        tracing::warn!(%error, "cannot read when the update check was last answered");
+        None
+      }
+      Err(_) => None,
+    };
+    self.set(UpdateState::CloudUnreachable { last_checked });
+  }
+
+  /// A state other than a download or a paused one ends a pause: no download is there for *Resume* to go on with.
+  fn set(&self, state: UpdateState) {
+    self.inner.state.send_modify(|kept| {
+      if !matches!(state, UpdateState::Downloading { .. } | UpdateState::Paused { .. }) {
+        self.inner.paused.send_replace(false);
+      }
+      *kept = state;
+    });
+    self.show_real();
+  }
+}
+
+/// Checks at once and then every `every` ([`CHECK_EVERY`] in the app), for as long as the task runs.
+pub async fn keep_checking(updates: AppUpdates, every: Duration) {
+  loop {
+    updates.check_now().await;
+    tokio::time::sleep(every).await;
+  }
+}
+
+/// Tells `updates` the runs at work whenever `runners` report a change, for as long as the task runs: a ready update
+/// waits for them ([`UpdateState::WaitingForRuns`]).
+pub async fn follow_runs(updates: AppUpdates, runners: Runners) {
+  let mut work = runners.work_changes();
+  loop {
+    updates.set_runs_at_work(install::run_keys(&runners.active_work()));
+    if work.changed().await.is_err() {
+      return;
+    }
+  }
+}
+
+/// The state of a copy that does not update itself, told of `newest`.
+fn not_updating(copy: ThisCopy, newest: Option<NewestRelease>) -> UpdateState {
+  match copy {
+    ThisCopy::NotThisCopy(reason) => UpdateState::NotThisCopy { reason, newest },
+    // An installer's copy updates itself and never gets here.
+    ThisCopy::Installer | ThisCopy::NotOnThisPlatform => UpdateState::NotOnThisPlatform { newest },
+  }
+}
+
+/// The release's installer for `target`.
+fn installer(release: &OfferedRelease, (platform, arch): (ReleasePlatform, ReleaseArch)) -> Option<&OfferedFile> {
+  release
+    .files
+    .iter()
+    .find(|file| file.platform == platform && file.arch == arch && file.name.as_str().ends_with(INSTALLER_SUFFIX))
+}
+
+/// `release` for a copy updated by hand: its installer's download, or any file of it for `target`.
+fn newest(release: &OfferedRelease, target: (ReleasePlatform, ReleaseArch)) -> Option<NewestRelease> {
+  let file =
+    installer(release, target).or_else(|| release.files.iter().find(|file| (file.platform, file.arch) == target))?;
+  Some(NewestRelease {
+    version: release.version.clone(),
+    download: file.url.clone(),
+  })
+}

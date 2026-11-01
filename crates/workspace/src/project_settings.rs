@@ -1,20 +1,19 @@
 //! Project settings shared by the window and automation. Blocking work belongs off the UI thread.
 
-mod base_branch;
 mod repository;
 use std::path::Path;
 
-pub use base_branch::{
-  BaseBranchChoice, BaseBranchRead, BaseBranchSaved, base_branch_in, landing, save_base_branch_in,
-};
 use orchester_core::{
   agent_files::RepositoryAgentFiles,
   code_index::CodeIndexSetting,
   connection::{AgentConnection, Connection},
   limits::ProjectLimits,
+  module::{Module, ModuleState},
+  name::Name,
+  permission::ApprovalMode,
   resource::ModelId,
   run::{
-    AllowAutopilot, Answerer, ProjectRule, ProjectRuleId,
+    AllowAutopilot, Answerer, BranchName, ProjectRule, ProjectRuleId,
     review::{AutoModeSettings, ReviewerChoice, default_review_model, resolve_reviewer, reviewer_kind},
   },
   store::{ConnectionStore, SettingsStore},
@@ -25,7 +24,10 @@ use orchester_store::{ProjectDb, StoreError};
 pub use repository::{RepositoryRead, check_repository_in, repository_in};
 
 use crate::{
-  agents::form::{effort_options, listed_models},
+  agents::{
+    data::published_profiles,
+    form::{effort_options, listed_models},
+  },
   budget::{
     LimitsErrors, ReadLimits, minutes_text, read_agent_slots, read_budget, read_minutes, read_optional_budget,
     read_qa_slots,
@@ -44,11 +46,27 @@ pub struct Settings {
   pub auto_mode: AutoModeSettings,
   /// *Allow Autopilot for agents in this project*; off until a person turns it on.
   pub allow_autopilot: AllowAutopilot,
+  /// The roles of the profiles whose published version is set to Autopilot, by slug: what new runs would use while
+  /// the project allows it.
+  pub autopilot_profiles: Vec<String>,
   pub connections: Vec<Connection>,
   /// The project's active approval rules, oldest first (*Approve for every run of this project*).
   pub approval_rules: Vec<ProjectRule>,
   /// *Tell working agents when the base branch moves* (`crate::base_moved`); on until a person turns it off.
   pub base_notices: bool,
+  /// How the project's base branch moved to its open modules, until General said so once.
+  pub base_moved: Option<BaseMoved>,
+}
+
+/// The project's base branch as it moved to its open modules that had none (Project settings › General, `NDTCw`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BaseMoved {
+  pub branch: BranchName,
+  pub at: Timestamp,
+  /// The names of the modules that took it, oldest first.
+  pub took: Vec<Name>,
+  /// The names of the open modules that kept a base branch of their own, oldest first.
+  pub kept: Vec<Name>,
 }
 
 pub fn load_in(root: &Path) -> Result<Settings, StoreError> {
@@ -59,6 +77,11 @@ pub fn load_in(root: &Path) -> Result<Settings, StoreError> {
     code_index: db.code_index()?,
     auto_mode: db.auto_mode_settings()?,
     allow_autopilot: db.allow_autopilot()?,
+    autopilot_profiles: published_profiles(&db)?
+      .into_iter()
+      .filter(|entry| entry.profile.permissions().approval_mode() == ApprovalMode::Autopilot)
+      .map(|entry| entry.profile.role().as_str().to_owned())
+      .collect(),
     connections: db.connections()?,
     approval_rules: db
       .project_approval_rules()?
@@ -66,7 +89,37 @@ pub fn load_in(root: &Path) -> Result<Settings, StoreError> {
       .filter(ProjectRule::is_active)
       .collect(),
     base_notices: db.tells_base_moves()?,
+    base_moved: base_moved(&db)?,
   })
+}
+
+fn base_moved(db: &ProjectDb) -> Result<Option<BaseMoved>, StoreError> {
+  let Some(moved) = db.base_branch_move()? else {
+    return Ok(None);
+  };
+  let modules = db.modules()?;
+  let names = |keep: &dyn Fn(&Module) -> bool| {
+    modules
+      .iter()
+      .filter(|module| keep(module))
+      .map(|module| module.name().clone())
+      .collect()
+  };
+  Ok(Some(BaseMoved {
+    took: names(&|module| moved.modules.contains(&module.id())),
+    kept: names(&|module| {
+      !moved.modules.contains(&module.id())
+        && module.details().state() == ModuleState::Open
+        && module.base().branch().is_some()
+    }),
+    branch: moved.branch,
+    at: moved.at,
+  }))
+}
+
+/// Forgets how the project's base branch moved, once General said so and the settings closed.
+pub fn forget_base_moved_in(root: &Path) -> Result<(), StoreError> {
+  ProjectDb::open(root)?.forget_base_branch_move()
 }
 
 /// Turns *Tell working agents when the base branch moves* on or off. While it is off, moves queue no notice and the

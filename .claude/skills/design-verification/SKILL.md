@@ -100,7 +100,12 @@ run waits for the person instead, unless they ask for the step again.
 ## orchester-app: start, connect, reach the state
 
 **Design frames.** `crates/desktop-app/design/orchester.pen`, through the `pencil` MCP with the absolute path of
-that file in your own worktree as `filePath` (read-only: `get_app_state`, Get and Export only; never edit it). Its
+that file in the project's MAIN checkout as `filePath` — the folder that holds `.orchester/`, i.e. your worktree's
+path before `.orchester/worktrees/` (e.g. `H:/projects/orchester/crates/desktop-app/design/orchester.pen`), never
+your worktree's copy (read-only: `get_app_state`, Get and Export only; never edit it). Pencil has the main
+checkout's file open, active tab or not; a worktree copy is not open there, and the MCP then silently answers from
+the active tab (often `orchester-web.pen`) instead of refusing. Your first `execute` prints the file's top-level
+frame names: stop and say so if they are not the desktop boards. Its
 boards are named `<Area> · redesign` (Tasks, Task page, Project settings, Agents, Startup, Status bar, …); the brief
 names the board and frame ids, and the board's Notes row and `docs/design/<area>.md` say what each frame shows. A
 frame is the whole window at 1440 × 900 (exports are 1442 × 902 with the frame's 1 px outline); a
@@ -257,6 +262,26 @@ the route's params and answers the route the tab shows, for example:
 
   Opening a page or a question is navigation and works while Settings refuses window input; answering it stays a
   person's, and a synthetic press is refused.
+
+**Update states.** A QA copy never updates itself: `update_state` answers `not_this_copy` (reason `qa`). Any
+other update state is reached with the debug-only tool `set_update_state` (QA copies are debug builds), in any
+scenario: it takes the JSON `update_state` answers and shows it in place of the real state, in Settings › Updates
+(`{"route": "settings", "tab": "general"}`, the `c69Eti` rows), the status bar's update item (S1–S6) and the ready
+notification, until `{"real": true}`. For example `{"state": "downloading", "version": "0.4.0", "received":
+38400000, "total": 91000000}` (S1), `{"state": "ready", "version": "0.4.0", "notes": "…", "critical": false}`
+(S2; `critical: true` for S4), `{"state": "waiting_for_runs", …, "runs": ["KON-1", "KON-2", "KON-3"]}` (S3),
+`{"state": "failed", "version": "0.4.0", "reason": "bad_signature"}` (S5), `{"state": "up_to_date", "updated":
+{"version": "0.4.0", "notes": "…"}}` (S6 *Updated to*, for the first 10 minutes after the window opened);
+`installing` takes `step` (`waiting_for_runs` with `runs`, `stopping_runs`, `backing_up`, `handing_over`),
+`install_failed` `reason`, `exit_code` and `log`, `cloud_unreachable` `last_checked`, `not_this_copy` `reason` and
+`newest` (`{version, download}` or null), `not_on_this_platform` `newest`. Nothing installs from it: *Restart to
+update* and *Install now* show *Nothing installs: this update state was set for testing.* under *Channel*
+(`settings-updates-problem`), which is the expected answer, not a mismatch. The install question `MGILm` opens only
+while runs are really at work (`live` with fake agents, KON-5 keeps working), and its buttons give that same answer.
+A QA copy shows no OS notification: the ready notification's title and body are logged instead, once per version
+(`an update is ready; this build shows no notification`, in `lurq_logs` and `.tmp/qa/<task>/app.log`); report the
+toast itself as not
+reachable. The state is in memory only and goes with the app.
 
 Then call `lurq_read_tree`, `lurq_interact`, `lurq_set_value`, `lurq_wait`, and `lurq_screenshot`
 through `call_run_app`. Open the returned PNG path and include it in the verification report.

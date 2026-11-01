@@ -40,7 +40,10 @@ use crate::{
     settings::orchester::{Said, sharing_said},
   },
   services::Services,
-  ui::state::{load_error, loading},
+  ui::{
+    skeleton::{self, Skeleton},
+    state::load_error,
+  },
 };
 
 #[derive(Clone, PartialEq)]
@@ -153,12 +156,19 @@ impl Component for JoinPage {
       (Some(Resolved::Link(upload)), _) => self.link(ctx, &props.project, upload),
       (Some(Resolved::Here), _) => self.here(ctx, &props.project),
       (None, Some(reason)) => self.failed(ctx, &reason),
-      (None, None) => page::screen(
-        loading("sharing-join-loading", &ctx.t("sharing.join.loading")).into(),
-        page::page_scroll(lurq::components::Column::new()),
-      ),
+      (None, None) => reading(ctx),
     }
   }
+}
+
+/// The join while what it joins is read, or while it hands over to the page it opens: lines of bones, as the join has
+/// no loading frame.
+fn reading(ctx: &mut Ctx) -> Element {
+  let bones = skeleton::lines(ctx, &[300.0, 460.0, 380.0]);
+  page::screen(
+    Skeleton::new("sharing-join-loading", ctx.t("sharing.join.loading")).show(ctx, bones),
+    page::page_scroll(lurq::components::Column::new()),
+  )
 }
 
 impl JoinPage {
@@ -172,10 +182,8 @@ impl JoinPage {
         ProjectPage::Settings(ProjectSettingsTab::Sharing),
       ));
     }
-    page::screen(
-      loading("sharing-join-loading", &ctx.t("sharing.join.loading")).into(),
-      page::page_scroll(lurq::components::Column::new()),
-    )
+    drop(opened);
+    reading(ctx)
   }
 
   /// The first link's page for `upload`, opened once.
@@ -185,13 +193,11 @@ impl JoinPage {
       *opened = true;
       self.page.set(LinkPage(Some(upload)));
     }
+    drop(opened);
     match self.page.get().0 {
       Some(upload) => link_page(ctx, project, upload, &self.page),
       // Put away: the watch above returns to Sharing.
-      None => page::screen(
-        loading("sharing-join-loading", &ctx.t("sharing.join.loading")).into(),
-        page::page_scroll(lurq::components::Column::new()),
-      ),
+      None => reading(ctx),
     }
   }
 

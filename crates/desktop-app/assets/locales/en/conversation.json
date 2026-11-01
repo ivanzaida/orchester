@@ -117,6 +117,15 @@
       "line": "Autopilot approves this run's requests · work outside the worktree, pushes and other branches still ask you",
       "settings": "Project settings"
     },
+    "approval": {
+      "switched": "Switched to Manual for this run",
+      "switchedBy": {
+        "person": "by you · {{time}}",
+        "personProfile": "by you · {{time}} · {{agent}}’s profile stays on Autopilot",
+        "automation": "by automation · {{time}}",
+        "automationProfile": "by automation · {{time}} · {{agent}}’s profile stays on Autopilot"
+      }
+    },
     "entry": {
       "agentMessage": "agent message",
       "awaitsApproval": "waiting for approval",
@@ -320,6 +329,8 @@
       "cliTooOld": "Claude Code {{installed}} can’t run {{model}}; version {{required}} or newer is needed",
       "cliTooOldDetail": "The model’s provider refused this CLI version. Update Claude Code, or point the connection at a newer one, then check the connection again.",
       "codebaseIndexUnavailable": "The codebase index is unavailable; the agent works without it",
+      "codexSandboxSetupFailed": "Codex couldn’t set up its sandbox, so the agent’s commands don’t run · {{message}} ({{code}})",
+      "codexSandboxSetupFailedDetail": "Codex’s sandbox helper failed before the command started, and later commands fail the same way. The step’s permissions are not the cause: Codex’s sandbox log, in the .sandbox folder of your Codex home (usually .codex in your home folder), names the file it could not change. If the log says that file is used by another process, close that program, then retry the step.",
       "codexSettingsIgnored": "This branch has .codex/ settings; Orchester ignores them",
       "codexSettingsIgnoredDetail": "Codex loaded no configuration, hooks, rules or MCP servers from {{folder}}. Its skills follow Repository agent files. Your own Codex settings still apply.",
       "commandDenied": "Command denied · {{command}}",

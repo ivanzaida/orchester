@@ -108,6 +108,16 @@ fewer stop no agent, and new work waits until fewer agents work than the slots.
   beside others, read-only or writing, gets a worktree of its own on `<run-branch>--<step>-<attempt>`,
   created from the run's branch as it is then (it holds every step it depends on). Parallel writes
   in one worktree would overwrite each other, and a merge would change files under an agent at work.
+  Such a worktree starts with a warm build (ORC-544, `crates/runner/src/worktree/warm_start/`):
+  when the run's worktree has a `target/` on the same volume, its profile folders are seeded into
+  the new worktree as hard links (rustc replaces the rlibs, rmeta and incremental files it
+  rebuilds). What a build writes in place is copied with its time instead: fingerprints, dep-info,
+  lock files, everything under `build/`, and shared libraries (proc macros) with their `.pdb`;
+  programs (tests, binaries, examples) are left out, since MSVC's linker overwrites them in place
+  and cargo links a missing one again. Checked-out files unchanged in the run's worktree, and
+  folders holding the same names, take the run's times, so the step's first cargo build is
+  incremental. The step's builds never change the run's files, and removing the step's worktree
+  removes only its links. Without a run `target/`, or across volumes, the step starts cold.
 - **Joining.** When such a step passes, its work is committed on its branch and merged into the
   run's branch in the run's worktree, one merge at a time, with the repository's git identity (fast
   forward when possible, else a merge commit); its worktree and branch are then removed. A conflict
@@ -287,13 +297,15 @@ fewer stop no agent, and new work waits until fewer agents work than the slots.
 
 A run that succeeded is merged by the desktop, in the user's checkout (the repository folder), into
 its base branch: the runner records it with the run when it starts (`runs.base_branch`; none on a
-detached HEAD, and none for runs recorded before it was kept, which cannot be merged from Orchester).
-That is the project's base branch when one is set (Project settings › General, `project_base_branch`,
-ORC-81), and the run then starts from that branch's tip wherever the checkout is; else the branch the
-checkout had when the run started, at its `HEAD`. A base branch set that no longer exists refuses new
-runs (preflight `base_branch_missing`); nothing falls back to the checkout. Runs already started keep
-the base they recorded. All of it is git through `orchester-exec`, with git's messages in English and
-no optional locks (`orchester_core::integration`).
+detached HEAD, and none for runs recorded before it was kept, which cannot be merged from Orchester),
+and where it came from (`runs.base_source`: `task`, `module` with `runs.base_module`, `checked_out`,
+or `project` for runs recorded before ORC-404). That is the task's base branch, else its module's
+(ORC-404, `orchester_core::integration::base::resolve`), and the run then starts from that branch's
+tip wherever the checkout is and may land beside it; else the branch the checkout had when the run
+started, at its `HEAD`. A base branch set that no longer exists refuses new runs (preflight
+`base_branch_missing`); nothing falls back to the checkout. Runs already started keep the base they
+recorded. All of it is git through `orchester-exec`, with git's messages in English and no optional
+locks (`orchester_core::integration`).
 
 - **Only a checkout that is ready.** The checkout must be on that branch and have no merge,
   cherry-pick or revert in progress; otherwise the merge is refused with the reason and nothing
@@ -377,6 +389,15 @@ no optional locks (`orchester_core::integration`).
   continues and no longer keeps its task from running again. The
   Changes tab then shows the checkpointed changes and says the worktree was removed; a run's commits
   stay reachable through the base branch or its kept branch.
+- **A removal ends when the folder is gone (ORC-418).** `git worktree remove` can forget a worktree and stop with its
+  folder half deleted ("Directory not empty" on Windows), its ignored build output and `.tmp/` still there; what git
+  no longer lists is then deleted as a folder. A folder something holds is tried again once the run's own processes
+  running from it (a QA copy, a build) are stopped; one that still stays is recorded as not removed
+  (`run_worktrees_not_removed`, its path and why), and the task page and `get_run` say *not removed*, never
+  *removed*, while it is on disk. Remove worktree finishes it later. The runner at its start, and the desktop and the
+  runner after each removal, sweep `.orchester/worktrees/`: a folder no git worktree lists and whose run (by its own
+  or a step execution's id) ended — succeeded, failed, cancelled, or interrupted with its removal recorded — is
+  deleted and logged; a folder of a run that has not ended, and one no run has, is never touched.
 
 ## Storage layout
 
@@ -466,7 +487,7 @@ open at the next start means the previous session crashed.
 | `money_budgets_before_tokens` | the money budgets tasks and runs had before budgets became tokens, kept by the migration that replaced them with the default run budget |
 | `money_step_budgets_before_tokens` | the money step budgets of published pipeline versions and drafts from before step budgets became tokens, per version or draft and step |
 | `repository_link` | at most one row: GitHub connection, git remote, host / owner / name, default branch, permission, expected login, checked at |
-| `project_base_branch` | Project settings › General › Base branch (ORC-81): at most one row, the branch new runs start from and deliver into; without it they take the branch the checkout has checked out. Kept on this computer only: a shared project does not sync it (see [Integration](#integration)) |
+| `base_branch_move`, `base_branch_move_modules` | ORC-404: the project's former base branch (`project_base_branch`, dropped) and when it moved to the open modules that had none, and which modules took it, for Project settings › General's one-time line; ORC-409 deletes both once General showed the line and the settings closed. A task's base branch is `tasks.base_choice`/`tasks.base_branch`, a module's `modules.base_branch`; both kept on this computer only, outside a shared task's or module's revision (see [Integration](#integration)) |
 
 ### Versioned configuration
 
@@ -475,9 +496,12 @@ immutable published versions `v1..vN`. Runs pin versions; publishing affects new
 
 | Table | Purpose |
 | --- | --- |
-| `resources` | id, kind (`agent_profile`, `instruction`, `pipeline`, `tool`), slug, name, archived |
+| `resources` | id, kind (`agent_profile`, `instruction`, `pipeline`, `tool`), slug, name, archived; in a shared project (S5) `sharing` (`shared` with the server revision, `not_shared` for one kept local at a join, empty for a local project's) |
 | `resource_drafts` | resource id, body, based-on version, updated at |
-| `resource_versions` | id, resource id, number, body, content hash, published at; unique (resource, number) |
+| `resource_versions` | id, resource id, number, body, content hash, published at; unique (resource, number); S5: the publisher (server user id and name), set once on a version published here before the project was shared, otherwise immutable like the rest |
+| `shared_version_bodies` (S5) | per version cached from the server: the server's body unchanged, its SHA-256, and the local body with this computer's bindings in place of the references, which reads of the version return |
+| `shared_version_references` (S5) | per cached version and in its order: each connection, MCP server, secret or shared tool its body names, by its id on the publisher's computer, with its name and role |
+| `reference_bindings` (S5) | per reference (kind and id on the publisher's computer): its name and role, the local connection, MCP server or secret it means here (none while unbound), how it was bound (`name`, `role`, `person`), changed at |
 | `resource_imports` | a resource copied from another project (Import resources): import key, source project (id and name), source resource (id and name; no name for copies made before it was kept), source version (none for a draft), imported at; unique (import key, source resource). For display only: the copy does not follow its source |
 | `import_resolutions` | per import key and in plan order, each source resource, connection, MCP server or secret the import did not copy: its kind, id and name in the source, and this project's own used in its place (none when left unresolved). For display only: what an imported copy shows of its import |
 | `connections` | kind (GitHub, agent provider, MCP), name, settings, keychain reference, status, last check |
@@ -529,6 +553,7 @@ it as missing. A tool copy keeps allowed callers only for pipelines copied with 
 | `run_merges` | a run that succeeded and was merged into its base branch: the branch, the commit it was at afterwards, how (fast-forward, merge commit, already merged), when — desktop-written, once per run |
 | `run_completions` | a run that succeeded and committed nothing, completed instead of merged (ORC-93): who completed it (a person, automation through the MCP server or window input, or the Orchestrator) and when; it sets the task Done as a merge does — desktop-written, once per run |
 | `run_worktree_removals` | when a run's own worktree was removed (*Remove worktree*, a merge, Run again), once per run — written by the desktop or the runner, whichever removed it |
+| `run_worktrees_not_removed` | the folder a removal of a run's worktrees could not delete and why (ORC-418), once per run; it goes once a removal leaves nothing behind — written by whichever removed it |
 | `run_step_budgets` | step budgets raised for one run after it stopped at them, per run and step; `NULL` lifted the step's budget |
 | `run_permissions` | permissions changed for one run, per run and agent profile: the permissions the run's steps on that profile use instead of the profile's (each step still narrows them), the agents to restart with them at their next checkpoint (*Apply now*) and the last one that did |
 | `attempts` | run, number, status, reason (initial, retry, a follow-up naming the step it asks, recovery, a restart naming the step that broke, or returned by a person to a step with their note) |

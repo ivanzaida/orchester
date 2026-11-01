@@ -97,6 +97,7 @@ pub(super) fn working_run(scratch: &Scratch) -> Run {
         branch: BranchName::new("orc-1-run").expect("branch"),
         base: Revision::new(&scratch.head("HEAD")).expect("revision"),
         base_branch: None,
+        base_source: orchester_core::integration::base::RunBaseSource::CheckedOut,
         budget: None,
         max_duration: None,
       },

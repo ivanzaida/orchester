@@ -15,6 +15,8 @@ mod permissions;
 mod policy_panel;
 mod prompts;
 mod questions;
+mod reading;
+mod shared;
 mod side;
 mod uses;
 mod words;
@@ -37,7 +39,7 @@ use crate::{
   project::{ShownProject, own::OwnChanges},
   routes::{AgentTab, ProjectPage, Route},
   screens::hub::{self, Head, HubTab},
-  ui::{failure::LastFailure, state::loading},
+  ui::failure::LastFailure,
 };
 
 /// What the route shows of the profiles: their list, a new profile, or one profile. The tab a route names is kept
@@ -145,6 +147,8 @@ impl Component for AgentsScreen {
       outside.of(Outside::Connections),
       outside.of(Outside::Pipelines),
       outside.of(Outside::Instructions) + outside.of(Outside::Skills),
+      // The project's Allow Autopilot, which a profile set to Autopilot reads (02e).
+      outside.of(Outside::AutoMode),
       self.profiles.count(&project.feed),
       // The profiles' active uses: the runs that run them start and end.
       project.feed.states.get(),
@@ -181,16 +185,31 @@ impl Component for AgentsScreen {
       return frame(ctx, &project, Head::default(), body);
     }
     if loaded.is_pending() && loaded.data.as_ref().is_none_or(|(saved, _)| *saved != revision) {
-      let body = loading("agents-loading", &ctx.t("agents.reading"));
-      return frame(ctx, &project, Head::default(), body);
+      return self.reading(ctx, &project, shown);
     }
     let error = failed.filter(|(_, retrying)| !retrying).map(|(error, _)| error);
     let reading = loaded.is_pending();
     let Some((_, listed)) = loaded.data else {
-      let body = loading("agents-loading", &ctx.t("agents.reading"));
-      return frame(ctx, &project, Head::default(), body);
+      return self.reading(ctx, &project, shown);
     };
     self.content(ctx, (project, shown), listed, (error, reading))
+  }
+}
+impl AgentsScreen {
+  /// The list or the profile's page while the profiles are read.
+  fn reading(&self, ctx: &mut Ctx, project: &ShownProject, shown: Shown) -> Element {
+    match shown {
+      Shown::List => {
+        let head = list::reading_head(ctx, &self.nav);
+        let body = reading::list(ctx);
+        frame(ctx, project, head, body)
+      }
+      Shown::New(_) | Shown::Edit(..) => {
+        let head = list::reading_head(ctx, &self.nav);
+        let body = reading::profile(ctx, &self.nav);
+        frame(ctx, project, head, body)
+      }
+    }
   }
 }
 impl AgentsScreen {
@@ -204,7 +223,8 @@ impl AgentsScreen {
     let revision = self.revision.get();
     let entry = match shown {
       Shown::List => {
-        let head = list::head(ctx, &listed, &self.nav);
+        let team = hub::team::of(&project);
+        let head = list::head(ctx, (&listed, team.as_ref()), &self.nav);
         let body = list::list(ctx, &project, &listed, &self.nav);
         return frame(ctx, &project, head, body);
       }

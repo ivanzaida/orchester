@@ -88,6 +88,11 @@ pub fn add_origin(root: &Path, url: &str) -> Result<(), GitError> {
   git(root, &["remote", "add", "origin", url]).map(drop)
 }
 
+/// Makes branch `name` at the head of `from` in the repository at `repo`, leaving the checkout as it is.
+pub fn branch(repo: &Path, name: &str, from: &str) -> Result<(), GitError> {
+  git(repo, &["branch", name, from]).map(drop)
+}
+
 /// Makes `root` a repository on `main` with `files` in one commit, under a QA identity of its own so
 /// the user's global identity and signing settings stay out of it; the commit.
 pub fn init(root: &Path, files: &[(&str, String)]) -> Result<Revision, GitError> {
@@ -112,6 +117,19 @@ pub fn init(root: &Path, files: &[(&str, String)]) -> Result<Revision, GitError>
 /// Names `url` as `origin` of the repository `root`; nothing is fetched.
 pub fn set_origin(root: &Path, url: &str) -> Result<(), GitError> {
   git(root, &["remote", "add", "origin", url]).map(drop)
+}
+
+/// Adds the local branches `local` at `HEAD` in `root`, and the remote `origin` (an address that is never fetched)
+/// with the remote-tracking branches `tracking` at `HEAD`, as a fetch would leave them.
+pub fn branches(root: &Path, local: &[&str], tracking: &[&str]) -> Result<(), GitError> {
+  for branch in local {
+    git(root, &["branch", branch])?;
+  }
+  git(root, &["remote", "add", "origin", "https://example.invalid/kontur.git"])?;
+  for branch in tracking {
+    git(root, &["update-ref", &format!("refs/remotes/origin/{branch}"), "HEAD"])?;
+  }
+  Ok(())
 }
 
 /// A run's worktree, as the runner adds it: `<repo>/.orchester/worktrees/<run>` on the run's branch.

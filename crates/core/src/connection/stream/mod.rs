@@ -273,6 +273,10 @@ pub enum RunnerProblem {
   /// The worktree has the repository's own Codex settings in `folder` (`.codex\` in the worktree),
   /// which Codex did not load for the agent; the agent started all the same.
   CodexSettingsIgnored { folder: String },
+  /// Codex's sandbox could not be set up, so a command of the agent did not start, nor will later ones: its setup
+  /// helper failed with `code` (`helper_unknown_error`), and `message` names the stage (`setup refresh had errors`).
+  /// Codex's own sandbox log names the cause; told once per invocation.
+  CodexSandboxSetupFailed { code: String, message: String },
   /// The CLI wrote `lines` more lines to standard error than the activity keeps; they were left out.
   StderrLeftOut { lines: u64 },
   /// A native conversation neared its model's context window and was replaced by a summary

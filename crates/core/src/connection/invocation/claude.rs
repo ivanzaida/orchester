@@ -44,7 +44,7 @@
 //!   `--setting-sources ""`, its rules were not applied.
 //! - Repository agent files ([`crate::agent_files`]): `--setting-sources ""` already keeps `CLAUDE.md` and
 //!   `.claude/skills` out (checked 2026-09-29 against the request the CLI sends), so the project's setting adds
-//!   nothing.
+//!   nothing. The person's auto memory is not a setting source: [`super::without_auto_memory`] keeps it out.
 //! - Orchester's skills ([`crate::resource::Skill`]) are placed in a folder outside the worktree, which `--add-dir`
 //!   lets the agent read (Claude Code asks before reading outside its working directories, and print mode denies what
 //!   it would ask). In `acceptEdits` an agent that edits files may also write there, as in every working directory; the
@@ -67,7 +67,7 @@ use std::{
 
 use uuid::Uuid;
 
-use super::{InvocationError, agent_command, unicode_folders};
+use super::{InvocationError, agent_command, unicode_folders, without_auto_memory};
 use crate::{
   attachment::input::{AttachedFile, claude_line},
   command::Command,
@@ -302,6 +302,7 @@ impl ClaudeInvocation<'_> {
       first_line(prompt, attached)?,
       (environment, project, &[]),
     )
+    .map(without_auto_memory)
   }
 }
 

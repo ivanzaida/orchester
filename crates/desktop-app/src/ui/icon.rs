@@ -16,8 +16,8 @@ use crate::{routes::Screen, theme::IconSize};
 /// `file-exclamation-point`, `house` its `home`, `loader-circle` its `loader-2`,
 /// `message-circle-question` its `message-circle-question-mark`, `plug-zap` its `plug-zap-2`,
 /// `square-arrow-out-up-right` its `external-link` ([`Icon::ExternalLink`]), `square-plus` its `plus-square`,
-/// `shield-x` its `shield-close`, `triangle-alert` its `alert-triangle`, `user-round-check` its `user-check` and
-/// `user-round-cog` its `user-cog`.
+/// `shield-question` its `shield-question-mark`, `shield-x` its `shield-close`, `triangle-alert` its
+/// `alert-triangle`, `user-round-check` its `user-check` and `user-round-cog` its `user-cog`.
 macro_rules! icons {
   ($($name:ident => $glyph:literal,)*) => {
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -77,6 +77,8 @@ icons! {
   ChevronsUpDown => '\u{e211}',
   Circle => '\u{e076}',
   CircleAlert => '\u{e077}',
+  // The font's `arrow-up-circle`.
+  CircleArrowUp => '\u{e07b}',
   CircleCheck => '\u{e226}',
   CircleDashed => '\u{e4b0}',
   CircleDot => '\u{e345}',
@@ -246,6 +248,7 @@ icons! {
   ShieldAlert => '\u{e1fe}',
   ShieldCheck => '\u{e1ff}',
   ShieldOff => '\u{e15a}',
+  ShieldQuestion => '\u{e40e}',
   ShieldX => '\u{e200}',
   Signal => '\u{e25f}',
   SignalHigh => '\u{e260}',

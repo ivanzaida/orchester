@@ -11,7 +11,7 @@ use orchester_core::{
   id::ResourceId,
   resource::{AgentProfile, Pipeline, ResourceBody, ResourceKind, Tool, ToolKind, Version, VersionNumber},
   run::{AcceptRefusal, AutoAsk, PreflightInput, PreflightProblem, RunLimit, WorktreeFailure, preflight},
-  store::{ConnectionStore, ResourceStore, TaskStore},
+  store::{ConnectionStore, McpServerStore, ResourceStore, SecretStore, TaskStore},
   task::{QueueError, Task, TaskDetails, TaskStatus, TaskUpdate},
   time::Timestamp,
 };
@@ -23,6 +23,7 @@ use super::{
   writer::{TaskWriter, WriteError},
 };
 use crate::{
+  agents::permissions::hosts_refusal,
   messages::{self, Message},
   runner::{RequestError, RunRequestError},
   sharing::{
@@ -260,7 +261,7 @@ fn chosen_is_latest(db: &ProjectDb, details: &TaskDetails, chosen: VersionNumber
 
 /// Problems the runner would refuse the run for, as far as the configuration shows them. The
 /// runner checks again and also checks the repository.
-pub(crate) fn check(
+pub fn check(
   db: &ProjectDb,
   details: &TaskDetails,
   selected_version: VersionNumber,
@@ -275,6 +276,8 @@ pub(crate) fn check(
     profiles: &latest::<AgentProfile>(db, ResourceKind::AgentProfile)?,
     tools: &latest::<Tool>(db, ResourceKind::Tool)?,
     connections: &connections,
+    mcp_servers: &db.mcp_servers()?,
+    secrets: &db.secrets()?,
   }))
 }
 
@@ -314,6 +317,8 @@ pub fn preflight_message(problem: &PreflightProblem) -> Message {
     PreflightProblem::ApprovalGate { step: key } => step("runs.preflight.approvalGate", key),
     PreflightProblem::ProfileNotPublished { step: key } => step("runs.preflight.profileNotPublished", key),
     PreflightProblem::ConnectionMissing { step: key } => step("runs.preflight.connectionMissing", key),
+    PreflightProblem::McpServerMissing { step: key } => step("runs.preflight.mcpServerMissing", key),
+    PreflightProblem::SecretMissing { step: key } => step("runs.preflight.secretMissing", key),
     PreflightProblem::UnsupportedProvider { step: key } => step("runs.preflight.unsupportedProvider", key),
     PreflightProblem::NativeNotAvailable { step: key } => step("runs.preflight.nativeNotAvailable", key),
     PreflightProblem::ConnectionNotUsable { step: key, .. } => step("runs.preflight.connectionNotUsable", key),
@@ -326,12 +331,15 @@ pub fn preflight_message(problem: &PreflightProblem) -> Message {
     PreflightProblem::PermissionsNotEnforceable { step: key, .. } => {
       step("runs.preflight.permissionsNotEnforceable", key)
     }
+    PreflightProblem::NetworkHostsNotEnforceable { step: key, cli } => step(hosts_refusal(*cli), key),
     PreflightProblem::CommandListNotOffered { step: key } => step("runs.preflight.commandListNotOffered", key),
     PreflightProblem::NotAGitRepository => Message::new("runs.preflight.notAGitRepository"),
     PreflightProblem::NoCommits => Message::new("runs.preflight.noCommits"),
     PreflightProblem::BaseBranchMissing { branch } => {
       Message::new("runs.preflight.baseBranchMissing").with("branch", branch.to_string())
     }
+    PreflightProblem::NoBranchCheckedOut { head } => Message::new("runs.preflight.noBranchCheckedOut")
+      .with("head", crate::display::short_revision(head.as_str()).to_owned()),
   }
 }
 
@@ -400,6 +408,8 @@ pub fn start_messages(error: &RunRequestError) -> Vec<Message> {
       | Rejection::NotAcceptable { .. }
       | Rejection::NoTurnToStop
       | Rejection::TurnNotStoppable
+      | Rejection::BrowserUnavailable { .. }
+      | Rejection::NoSuchTab
       | Rejection::Busy,
     ) => vec![Message::new("runs.start.failed")],
   }
@@ -488,19 +498,7 @@ pub fn control_message(error: &RunRequestError) -> Message {
     ) => capacity_message(rejection),
     RunRequestError::Rejected(rejection @ Rejection::ShuttingDown) => capacity_message(rejection),
     RunRequestError::Rejected(Rejection::LimitNotRaised { .. }) => Message::new("runs.limit.notRaised"),
-    RunRequestError::Rejected(Rejection::LimitNotAboveUsed {
-      limit: RunLimit::Tokens,
-    }) => Message::new("runs.limit.tokensNotAboveUsed"),
-    RunRequestError::Rejected(Rejection::LimitNotAboveUsed { limit: RunLimit::Time }) => {
-      Message::new("runs.limit.timeNotAboveUsed")
-    }
-    RunRequestError::Rejected(Rejection::LimitNotAboveUsed {
-      limit: RunLimit::StepBudget { .. },
-    }) => Message::new("runs.limit.stepNotAboveUsed"),
-    // An account's plan limit is not raised by Orchester; no runner refuses it for being too low.
-    RunRequestError::Rejected(Rejection::LimitNotAboveUsed {
-      limit: RunLimit::PlanLimit { .. },
-    }) => Message::new("runs.control.failed"),
+    RunRequestError::Rejected(Rejection::LimitNotAboveUsed { limit }) => limit_not_above_used(limit),
     RunRequestError::Rejected(Rejection::PermissionsNotEnforceable { step, .. }) => {
       Message::new("runs.permissions.errors.notEnforceable").with("step", step.to_string())
     }
@@ -528,9 +526,6 @@ pub fn control_message(error: &RunRequestError) -> Message {
     RunRequestError::Rejected(
       Rejection::RunNotFound
       | Rejection::ProfileNotInRun
-      | Rejection::LimitNotAboveUsed {
-        limit: RunLimit::DailyBudget | RunLimit::GroupBudget,
-      }
       | Rejection::ChatMessageNotFound
       | Rejection::ChatBusy
       | Rejection::NoOrchestrator
@@ -542,8 +537,21 @@ pub fn control_message(error: &RunRequestError) -> Message {
       | Rejection::RunAgainBlocked { .. }
       | Rejection::WorktreeChanged { .. }
       | Rejection::WorktreeNotRemoved { .. }
+      | Rejection::BrowserUnavailable { .. }
+      | Rejection::NoSuchTab
       | Rejection::Busy,
     ) => Message::new("runs.control.failed"),
+  }
+}
+
+/// Why a raised limit was refused for not being above what the run used.
+fn limit_not_above_used(limit: &RunLimit) -> Message {
+  match limit {
+    RunLimit::Tokens => Message::new("runs.limit.tokensNotAboveUsed"),
+    RunLimit::Time => Message::new("runs.limit.timeNotAboveUsed"),
+    RunLimit::StepBudget { .. } => Message::new("runs.limit.stepNotAboveUsed"),
+    // An account's plan limit is not raised by Orchester; no runner refuses it for being too low.
+    RunLimit::PlanLimit { .. } | RunLimit::DailyBudget | RunLimit::GroupBudget => Message::new("runs.control.failed"),
   }
 }
 

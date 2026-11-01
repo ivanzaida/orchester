@@ -110,3 +110,37 @@ fn instructions_icons_match_bundled_font_names() {
     assert_eq!(glyph_name(font, font_glyph(font, icon.glyph() as usize)), name);
   }
 }
+
+/// The glyphs of the reasons a tool request came to the person (04c `vZcoN`); the font names `shield-question`
+/// `shield-question-mark` and `shield-x` `shield-close`.
+#[test]
+fn icons_of_approval_reasons_match_bundled_font_names() {
+  let font = include_bytes!("../../assets/fonts/lucide.ttf");
+  for (icon, name) in [
+    (Icon::FolderLock, "folder-lock"),
+    (Icon::ShieldQuestion, "shield-question-mark"),
+    (Icon::ShieldX, "shield-close"),
+    (Icon::Upload, "upload"),
+    (Icon::GitBranch, "git-branch"),
+  ] {
+    assert_eq!(glyph_name(font, font_glyph(font, icon.glyph() as usize)), name);
+  }
+}
+
+/// The glyphs of the update's status item and question (`acFkz`); the font names `circle-arrow-up` `arrow-up-circle`
+/// and `circle-check` `check-circle-2`.
+#[test]
+fn update_install_icons_match_bundled_font_names() {
+  let font = include_bytes!("../../assets/fonts/lucide.ttf");
+  for (icon, name) in [
+    (Icon::CircleArrowUp, "arrow-up-circle"),
+    (Icon::CircleCheck, "check-circle-2"),
+    (Icon::Hourglass, "hourglass"),
+    (Icon::CircleStop, "circle-stop"),
+    (Icon::Pause, "pause"),
+    (Icon::Database, "database"),
+    (Icon::RotateCcw, "rotate-ccw"),
+  ] {
+    assert_eq!(glyph_name(font, font_glyph(font, icon.glyph() as usize)), name);
+  }
+}

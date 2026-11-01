@@ -21,8 +21,12 @@ devtools-inspect = ["dep:lurq"]
 [dependencies]
 # Local wall-clock time of status bar events and the local day of the daily project budget.
 chrono.workspace = true
-# Shared servers: the HTTP client of the server's API (`sharing`).
-orchester-api = { workspace = true, features = ["client", "identity"] }
+# Decodes the *Browser* window's screencast frames from JPEG to RGBA (`browser::RgbaFrame`), with zune-jpeg; image and
+# its JPEG decoder are already built for lurq's clipboard, so it adds no crate.
+image = { workspace = true, features = ["jpeg"] }
+# Shared servers: the HTTP client of the server's API (`sharing`); the check of a downloaded update's signature
+# (`app_updates`).
+orchester-api = { workspace = true, features = ["client", "identity", "release-signature"] }
 orchester-core.workspace = true
 orchester-exec.workspace = true
 # Removes the codebase indexes of run worktrees it removes.
@@ -61,6 +65,8 @@ windows-sys = { workspace = true, features = ["Wdk_Foundation", "Wdk_Storage_Fil
 # The stand-in Orchester Cloud on loopback (`test_support::account_cloud`), for joining a team (`tests/startup_join`).
 orchester-api = { workspace = true, features = ["test-support"] }
 orchester-workspace = { workspace = true, features = ["test-support"] }
+# Signs the stand-in cloud's release files with a throwaway release key (`tests/app_updates`); already built.
+ring.workspace = true
 # Damages a run's row the way an edit outside Orchester would; the store has no API for that.
 rusqlite.workspace = true
 tempfile.workspace = true

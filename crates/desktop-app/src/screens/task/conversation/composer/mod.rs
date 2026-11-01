@@ -278,7 +278,7 @@ impl Composer {
   fn content(&self, ctx: &mut Ctx, props: &DockProps) -> Vec<Element> {
     let (mode, recipient, (left, leave)) = self.mode(props);
     if mode == ComposerMode::Closed {
-      let reason = Message::new(props.conversation.state.closed_reason());
+      let reason = Message::new(props.conversation.closed_reason());
       return vec![closed(&message_text(ctx, &reason))];
     }
     self.focus_question(ctx, &mode);

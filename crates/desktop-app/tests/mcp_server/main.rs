@@ -9,6 +9,7 @@ mod http;
 mod signed_out;
 #[path = "../support/mod.rs"]
 mod support;
+mod update_states;
 mod versions;
 
 use std::{fs, path::Path, sync::Arc, thread, time::Duration};
@@ -50,10 +51,21 @@ impl Served {
   fn start_in(folder: TempDir, window_control: bool) -> Self {
     let data = Data::new();
     let launch = data.launch();
-    Self::serve(folder, (data, launch), window_control)
+    Self::serve(folder, (data, launch), (window_control, cfg!(debug_assertions)))
   }
 
-  fn serve(folder: TempDir, (data, launch): (Data, Launch), window_control: bool) -> Self {
+  /// [`Self::start`] with the tools a release build serves, whatever this test's build.
+  fn start_as_release() -> Self {
+    let data = Data::new();
+    let launch = data.launch();
+    Self::serve(
+      tempfile::tempdir().expect("a temporary folder"),
+      (data, launch),
+      (true, false),
+    )
+  }
+
+  fn serve(folder: TempDir, (data, launch): (Data, Launch), (window_control, debug_build): (bool, bool)) -> Self {
     let runtime = data.runtime.handle();
     let appearance = Appearance::new(ThemeSetting::Dark, Arc::default(), None);
     let mut app = App::new();
@@ -63,12 +75,12 @@ impl Served {
     let mut tree = Tree::new();
     tree.resize(1440, 900);
     let link = WindowLink::default();
-    let config = mcp::config(
+    let config = mcp::config_for_build(
       McpSettings::with_window_control(window_control),
       &link,
       &appearance,
       launch.services(),
-      app.i18n(),
+      (app.i18n(), debug_build),
     );
     let at = McpMode::Qa(folder.path().to_path_buf());
     let settings = McpSettings::with_window_control(window_control);
@@ -258,6 +270,32 @@ fn one_server_hosts_lurqs_window_tools_and_the_apps_own() {
   );
 }
 
+/// ORC-413: `update_state` reads where this copy's own update stands; a test's build is a development copy, which does
+/// not update itself, and no check has named a newer release. ORC-414: no update installed at this start.
+#[test]
+fn update_state_says_a_development_copy_does_not_update_itself() {
+  let mut served = Served::start(true);
+  let session = served.session();
+  let tools = served.endpoint().tools(&session);
+  let tool = tools
+    .iter()
+    .find(|tool| tool["name"] == "update_state")
+    .expect("update_state is listed");
+  assert_eq!(tool["annotations"]["readOnlyHint"], true);
+  let (state, error) = tool_value(&served.call(&session, "update_state", &json!({})));
+  assert!(!error, "{state}");
+  assert_eq!(
+    state,
+    json!({
+      "state": "not_this_copy",
+      "reason": "development",
+      "newest": null,
+      "running": env!("CARGO_PKG_VERSION"),
+      "updated": null,
+    })
+  );
+}
+
 #[test]
 fn every_lurq_tool_is_known_as_looking_or_input() {
   use orchester_app::mcp::input_gate::{INPUT, LOOKING};
@@ -277,7 +315,14 @@ fn every_lurq_tool_is_known_as_looking_or_input() {
 fn the_apps_own_tools_word_their_schemas_in_single_spaces() {
   let served = Served::start(true);
   let tools = served.endpoint().tools(&served.session());
-  for name in ["app_state", "navigate", "set_theme", "hold_reads"] {
+  for name in [
+    "app_state",
+    "navigate",
+    "set_theme",
+    "hold_reads",
+    "update_state",
+    "set_update_state",
+  ] {
     let tool = tools
       .iter()
       .find(|tool| tool["name"] == name)
@@ -368,7 +413,7 @@ fn tools_answer_from_the_window_without_revealing_the_token() {
     assert!(!text.contains(&token), "the token shows in {text}");
   }
   assert_eq!(format!("{:?}", BearerToken::generate()), "BearerToken(<redacted>)");
-  assert_eq!(status_bar, Some(vec![format!("MCP :{} · QA", served.port)]));
+  assert_eq!(status_bar, Some(vec![format!("MCP :{} Â· QA", served.port)]));
   assert!(
     served.tree.get_element_by_id("status-window-control").is_some(),
     "the status bar says agents can control the window"

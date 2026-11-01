@@ -248,6 +248,10 @@ name = "approval_mode_effective"
 required-features = ["test-agent"]
 
 [[test]]
+name = "approval_mode_answer"
+required-features = ["test-agent"]
+
+[[test]]
 name = "stale_approvals"
 required-features = ["test-agent"]
 
@@ -257,6 +261,10 @@ required-features = ["test-agent"]
 
 [[test]]
 name = "approval_mode_launch"
+required-features = ["test-agent"]
+
+[[test]]
+name = "network_hosts"
 required-features = ["test-agent"]
 
 [[test]]
@@ -339,6 +347,14 @@ required-features = ["test-agent"]
 name = "db_busy_retry"
 required-features = ["test-agent"]
 
+[[test]]
+name = "browser"
+required-features = ["test-agent"]
+
+[[test]]
+name = "disk_guard"
+required-features = ["test-agent"]
+
 [features]
 test-agent = []
 
@@ -352,8 +368,9 @@ orchester-exec.workspace = true
 # The codebase index of each run's base revision, built before its first step.
 orchester-index.workspace = true
 orchester-ipc.workspace = true
-# The client options and the scrubber of the runner's error reports, the app's too (`error_reports`).
-orchester-report = { workspace = true, features = ["client"] }
+# The client options, the scrubber and the switch the app turns of the runner's error reports, the app's too
+# (`error_reports`).
+orchester-report = { workspace = true, features = ["switch"] }
 orchester-store.workspace = true
 # Reads the values of the secrets MCP servers use from the OS keychain when an agent starts.
 orchester-vault.workspace = true
@@ -372,6 +389,9 @@ sentry = { workspace = true, features = ["reqwest", "rustls-no-provider", "traci
 tempfile.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+# The project's browser over the DevTools Protocol (`browser::cdp`): its WebSocket, and the stream and sink of it.
+tokio-tungstenite.workspace = true
+futures-util.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 

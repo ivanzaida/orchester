@@ -1,6 +1,7 @@
 //! What a turn of `orchester-fake-codex` does, by its prompt:
 //!
-//! - "Please fail": fails the turn as Codex did for an unsupported model;
+//! - "Please fail": fails the turn as Codex did for an unsupported model, once the test releases it (see "Wait for
+//!   release") when the prompt also says "Wait for release";
 //! - "Report plan limits": first sends `account/rateLimits/updated`, then works as the rest of the prompt says;
 //! - "Use Orchester's tools": first lists and calls Orchester's tools (`fake_codex_tools`), then works as below;
 //! - "Keep working": starts a helper process of its own, reports its id (`helper pid: `) and waits until it is ended;
@@ -126,6 +127,19 @@ const ANSWERS: [(&str, SteerAnswer); 6] = [
   ("Wait for a message", SteerAnswer::Take),
 ];
 
+/// The prompts whose work uses Orchester's tools ([`fake_codex_tools::report`]).
+const TOOL_PROMPTS: [&str; 9] = [
+  "Use Orchester's tools",
+  "Use the file tools",
+  "Use the run tools",
+  "Use the process tools",
+  "Run the check twice",
+  "Use the index tools",
+  "Use the skill tools",
+  "Start the QA app",
+  "Use the browser tools",
+];
+
 pub fn work(session: &mut Session, prompt: &str, structured: bool) -> Step {
   if let Some(step) = super::fake_codex_cell::work(session, prompt, structured) {
     return step;
@@ -149,9 +163,7 @@ pub fn work(session: &mut Session, prompt: &str, structured: bool) -> Step {
     return Step::Go;
   }
   if prompt.contains("Please fail") {
-    notify(session, "error", json!({"error": {"message": UNSUPPORTED}}));
-    complete(session, Some(UNSUPPORTED));
-    return Step::Exit(ExitCode::SUCCESS);
+    return fail(session, prompt);
   }
   if prompt.contains("Report plan limits") {
     match serde_json::from_str(LIMITS) {
@@ -159,19 +171,7 @@ pub fn work(session: &mut Session, prompt: &str, structured: bool) -> Step {
       Err(error) => eprintln!("the limits fixture is not JSON: {error}"),
     }
   }
-  if [
-    "Use Orchester's tools",
-    "Use the file tools",
-    "Use the run tools",
-    "Use the process tools",
-    "Run the check twice",
-    "Use the index tools",
-    "Use the skill tools",
-    "Start the QA app",
-  ]
-  .iter()
-  .any(|words| prompt.contains(words))
-  {
+  if TOOL_PROMPTS.iter().any(|words| prompt.contains(words)) {
     fake_codex_tools::report(session.orchester.as_mut(), &session.cwd, prompt);
   }
   if prompt.contains("Hold the QA app") {
@@ -397,6 +397,15 @@ pub fn message(session: &Session, id: &str, text: &str) {
   );
 }
 
+/// "Please fail": the turn fails as Codex failed it for an unsupported model, after the release when asked to wait.
+fn fail(session: &Session, prompt: &str) -> Step {
+  if prompt.contains("Wait for release") {
+    wait_for_release(session, false);
+  }
+  notify(session, "error", json!({"error": {"message": UNSUPPORTED}}));
+  complete(session, Some(UNSUPPORTED));
+  Step::Exit(ExitCode::SUCCESS)
+}
 /// "Ask first": a draft, then a question as the step result.
 fn ask(session: &Session) -> Step {
   if let Err(error) = append(&session.cwd, "draft") {

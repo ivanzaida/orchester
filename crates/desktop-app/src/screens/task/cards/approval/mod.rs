@@ -1,16 +1,21 @@
 //! A tool request an agent waits on (`Approval card` `gwOaJ`): on `surface_raised` in a `warning` stroke,
-//! radius 10, 14 by 16 inside and 12 between its parts: what it asks ([`request`]), its answers
-//! ([`answers`]) and what automation may do with it. The answers are the approval dialog's, given here (D6);
+//! radius 10, 14 by 16 inside and 12 between its parts: what it asks ([`request`]), its answers ([`answers`]) and
+//! what automation may do with it. One that came to the person by the run's approval mode is the compact card of
+//! 04c `vZcoN`, its parts 10 apart: what the agent asks by the reason it came, on one line, and why ([`came`]), then
+//! *Approve* and *Deny*, its other answers under *More answers*. The answers
+//! are the approval dialog's, given here (D6);
 //! which a request offers is core's decision (`tasks::approvals::ApprovalChoices`), read with the project's
 //! waiting requests. *Deny with a message* puts its editor in place of the answers ([`message`], `D2fdTQ`) until
 //! *Back*. While auto mode's reviewer judges it, it is a quiet row until the person chooses to answer it
 //! ([`reviewing`]). Once it is answered, or its agent stopped waiting, it is a quiet row that says how, by whom and
 //! when ([`decided`]), with a denial's message; as soon as the runner takes the person's answer, before the run is
-//! read again.
+//! read again. One the run's approval mode approved without the person is a quiet row of its own ([`quiet`]).
 
 mod answers;
+mod came;
 mod decided;
 mod message;
+mod quiet;
 mod request;
 mod reviewing;
 mod words;
@@ -28,6 +33,7 @@ use lurq::{
 use orchester_core::run::{Answerer, DecidedBy, ToolApprovalDecision};
 use orchester_workspace::tasks::{approvals::ShownApproval, timeline::ApprovalCard};
 
+pub(crate) use self::quiet::line as quiet_line;
 use self::{
   answers::{Answering, approval_answer},
   decided::Decided,
@@ -51,6 +57,9 @@ struct ApprovalProps {
 impl lurq::app::component::DevtoolsInspectable for ApprovalProps {}
 
 pub(super) fn card(ctx: &mut Ctx, place: Place, card: &ApprovalCard) -> Element {
+  if card.quiet().is_some() {
+    return quiet::line(ctx, &format!("cards-approval-{}", card.request.id), card, None);
+  }
   ctx.mount_keyed::<ApprovalView>(
     &format!("cards-approval-{}", card.request.id),
     ApprovalProps {
@@ -73,6 +82,8 @@ struct ApprovalView {
   focus_field: Arc<AtomicBool>,
   /// The person chose to answer a request auto mode's reviewer is still judging: the whole card shows.
   answer_myself: Signal<bool>,
+  /// A request that came to the person shows its other answers under *Approve* and *Deny*.
+  more: Signal<bool>,
 }
 
 impl Component for ApprovalView {
@@ -87,6 +98,7 @@ impl Component for ApprovalView {
       field: ElementRef::new(),
       focus_field: Arc::default(),
       answer_myself: ctx.signal(false),
+      more: ctx.signal(false),
     }
   }
 
@@ -121,6 +133,7 @@ impl Component for ApprovalView {
       message: &self.message,
       field: &self.field,
       focus_field: &self.focus_field,
+      more: &self.more,
     };
     // A native agent's denial carries no words, so its card never edits one.
     let editing = self.editing.get() && request.native.is_none();
@@ -133,16 +146,31 @@ impl Component for ApprovalView {
       Stage::Refused(refused) => Some(refusal(ctx, &id, &refused, &request.agent)),
       Stage::Sending | Stage::Taken(_) => None,
     });
-    let head = request::head(ctx, &id, request);
-    let body = request::body(ctx, &id, (&place, request), (shown.as_ref(), reviewing, editing));
+    let came = shown.as_ref().and_then(|shown| shown.came_to_person.clone());
+    let (head, body) = match &came {
+      Some(came) => {
+        let step = request::step(&place, shown.as_ref());
+        (
+          came::head(ctx, &id, (request, step.as_deref()), came),
+          request::came_body(ctx, &id, (&place, request), (came, reviewing)),
+        )
+      }
+      None => (
+        request::head(ctx, &id, request),
+        request::body(ctx, &id, (&place, request), (shown.as_ref(), reviewing, editing)),
+      ),
+    };
     let answers = if editing {
       message::editor(ctx, &answering)
     } else {
       vec![answers::answers(ctx, &answering)]
     };
+    // A request that came to the person keeps what automation may do with its other answers.
+    let automation = came.is_none().then(|| answers::automation(ctx, &id, shown.as_ref()));
     let padding = Padding::symmetric(SpacingSize::Lg, ExtraSpacing::Inset.role());
-    // In the panel its parts are 10 apart, as the item's own (`YDJsC`).
-    let gap = if place.in_panel {
+    // In the panel its parts are 10 apart, as the item's own (`YDJsC`), and so are a request's that came to the
+    // person (`vO7CW`).
+    let gap = if place.in_panel || came.is_some() {
       ExtraSpacing::Loose.role()
     } else {
       SpacingSize::Md
@@ -152,7 +180,7 @@ impl Component for ApprovalView {
       .with_children(body)
       .with_children(answers)
       .with_children(failed)
-      .child(answers::automation(ctx, &id, shown.as_ref()))
+      .with_children(automation)
       .into()
   }
 }

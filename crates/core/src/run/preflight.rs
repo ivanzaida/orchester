@@ -15,10 +15,15 @@ use serde::{Deserialize, Serialize};
 use crate::{
   connection::{
     AccountStartProblem, AgentProvider, Connection, ConnectionKind, ConnectionStatus, invocation::Platform,
+    mcp::McpServer,
   },
-  id::{ConnectionId, ResourceId},
-  permission::{CommandPermission, StepCommands, capability::PermissionProblem},
+  id::{ConnectionId, ResourceId, SecretId},
+  permission::{
+    CommandPermission, StepCommands,
+    capability::{PermissionOption, PermissionProblem},
+  },
   resource::{AgentProfile, Pipeline, Step, StepKey, StepKind, Tool, ToolKind, Version},
+  secret::Secret,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -43,6 +48,12 @@ pub enum PreflightProblem {
   ProfileNotPublished { step: StepKey },
   /// The profile's connection no longer exists.
   ConnectionMissing { step: StepKey },
+  /// The profile gives its agents an MCP server this computer does not have, such as one a shared version names
+  /// that is not bound here.
+  McpServerMissing { step: StepKey },
+  /// The step's tool uses a secret this computer does not have, such as one a shared version names that is not
+  /// bound here.
+  SecretMissing { step: StepKey },
   /// The profile's connection is not an agent CLI, so it cannot run the step.
   UnsupportedProvider { step: StepKey },
   /// The profile's connection is to a native agent provider, which this version runs no agent on.
@@ -54,6 +65,9 @@ pub enum PreflightProblem {
   /// The connection's CLI cannot enforce the step's effective permissions (profile ∩ step) on this
   /// platform; a step never runs with permissions that are not enforced.
   PermissionsNotEnforceable { step: StepKey, reason: PermissionProblem },
+  /// The step's network is a host list, which `cli` cannot enforce on this platform
+  /// ([`crate::permission::capability::Unavailable::CannotLimitHosts`]): it is never run with network on instead.
+  NetworkHostsNotEnforceable { step: StepKey, cli: AgentProvider },
   /// The step lists the commands it may run, but its profile asks a person about commands now (it was
   /// republished so): asking would offer commands outside the list for approval, and running the list
   /// unasked would skip the profile's asking, so a person updates the step.
@@ -62,9 +76,12 @@ pub enum PreflightProblem {
   NotAGitRepository,
   /// The repository has no commit to start the run's branch from.
   NoCommits,
-  /// The project's base branch (Project settings › General) is set to a branch the repository no longer has: no run
-  /// starts until a person chooses another, and none starts from the checkout instead.
+  /// The base branch set for the task or its module is a branch the repository no longer has: no run starts until a
+  /// person chooses another, and none starts from the checkout instead.
   BaseBranchMissing { branch: super::BranchName },
+  /// Neither the task nor its module has a base branch, and the checkout has a detached `HEAD` at `head`: a run has
+  /// no branch to deliver into, so it does not start.
+  NoBranchCheckedOut { head: crate::revision::Revision },
 }
 
 /// The configuration a task's run would use.
@@ -77,6 +94,9 @@ pub struct PreflightInput<'a> {
   /// Latest published version of each tool.
   pub tools: &'a BTreeMap<ResourceId, Version<Tool>>,
   pub connections: &'a [Connection],
+  pub mcp_servers: &'a [McpServer],
+  /// The secrets that are not archived.
+  pub secrets: &'a [Secret],
 }
 
 /// Every configuration problem that keeps the run from starting, in step order. Repository
@@ -102,6 +122,12 @@ pub fn preflight(input: PreflightInput<'_>) -> Vec<PreflightProblem> {
           problems.push(PreflightProblem::ApprovalGate { step: key() });
         }
         let tool = tool.and_then(|tool| input.tools.get(&tool)).map(Version::body);
+        if tool
+          .and_then(Tool::secret)
+          .is_some_and(|secret| !has_secret(input.secrets, secret))
+        {
+          problems.push(PreflightProblem::SecretMissing { step: key() });
+        }
         problems.extend(tool_problem(tool, key()));
         continue;
       }
@@ -117,6 +143,9 @@ pub fn preflight(input: PreflightInput<'_>) -> Vec<PreflightProblem> {
     match usable_provider(&connections, profile.body().connection(), key()) {
       Ok(provider) => problems.extend(permission_problem(step, profile.body(), provider)),
       Err(problem) => problems.push(problem),
+    }
+    if names_a_missing_server(profile.body(), input.mcp_servers) {
+      problems.push(PreflightProblem::McpServerMissing { step: key() });
     }
   }
   problems
@@ -134,6 +163,20 @@ fn tool_problem(tool: Option<&Tool>, step: StepKey) -> Option<PreflightProblem> 
     });
   }
   tool.access().map(|_| PreflightProblem::ToolAccessRules { step })
+}
+
+fn has_secret(secrets: &[Secret], id: SecretId) -> bool {
+  secrets.iter().any(|secret| secret.id() == id)
+}
+
+/// Whether `profile` chooses an MCP server that is not among `servers`. A disabled server is there: the agent starts
+/// without it, as the person chose.
+fn names_a_missing_server(profile: &AgentProfile, servers: &[McpServer]) -> bool {
+  profile
+    .mcp_servers()
+    .ids()
+    .iter()
+    .any(|id| !servers.iter().any(|server| server.id() == *id))
 }
 
 /// Whether the step narrows its commands to a list while its profile asks a person about commands: the
@@ -161,9 +204,13 @@ fn permission_problem(step: &Step, profile: &AgentProfile, provider: AgentProvid
     .narrowed(*repository, permissions)
     .enforced_on(provider, Platform::current())
     .err()?;
-  Some(PreflightProblem::PermissionsNotEnforceable {
-    step: step.key.clone(),
-    reason,
+  let step = step.key.clone();
+  Some(match reason {
+    PermissionProblem::NotEnforceable {
+      option: PermissionOption::NetworkHosts,
+      ..
+    } => PreflightProblem::NetworkHostsNotEnforceable { step, cli: provider },
+    reason => PreflightProblem::PermissionsNotEnforceable { step, reason },
   })
 }
 

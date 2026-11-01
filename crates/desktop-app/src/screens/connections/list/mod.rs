@@ -5,6 +5,7 @@
 //! Work on a connection reads them all again once done.
 
 mod empty;
+mod reading;
 mod rows;
 
 use std::sync::Arc;
@@ -37,10 +38,7 @@ use crate::{
     Services,
     accounts::{self, Accounts},
   },
-  ui::{
-    message::message_text,
-    state::{load_error, loading},
-  },
+  ui::{message::message_text, state::load_error},
 };
 
 #[derive(Clone, PartialEq)]
@@ -125,7 +123,7 @@ impl Component for ConnectionsScreen {
     let Some(listed) = loaded.data else {
       return kit::scroll(match loaded.error {
         Some(error) if !loaded.is_pending() => self.failed(ctx, &error),
-        _ => loading("connections-loading", &ctx.t("connections.reading")).into(),
+        _ => reading::groups(ctx, &project),
       });
     };
     // Set only while the latest reading failed: `listed` is then an earlier one.

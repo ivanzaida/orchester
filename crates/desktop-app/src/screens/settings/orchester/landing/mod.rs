@@ -48,6 +48,7 @@ use crate::{
     button::{ActionButton, ButtonKind},
     icon::Icon,
     notice::{Notice, NoticeTone},
+    skeleton::{self, Skeleton},
     state::{load_error, loading},
   },
 };
@@ -215,7 +216,11 @@ impl Component for LandingPage {
           move || revision.update(|count| *count += 1),
         )
       }
-      (None, None) => loading("orchester-landing-loading", &ctx.t("sharing.landing.reading")).into(),
+      (None, None) => {
+        // No loading frame draws the invite's landing: its choices' rows are bones in one outline until read.
+        let bones = skeleton::list(ctx, "orchester-landing-rows", &[(160.0, 280.0), (140.0, 240.0)]);
+        Skeleton::new("orchester-landing-loading", ctx.t("sharing.landing.reading")).show(ctx, bones)
+      }
     };
     page(ctx, None, &target, body)
   }

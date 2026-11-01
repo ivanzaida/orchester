@@ -19,6 +19,7 @@ use thiserror::Error;
 pub use self::questions::{NO_OPTIONS_REFUSED, PendingQuestion, SECRET_REFUSED};
 use self::{
   items::{command_finished, file_changed, mcp_tool_finished},
+  sandbox_setup::setup_failure,
   tool_calls::{AskedOwnCalls, ToolContext},
 };
 use super::{
@@ -29,6 +30,7 @@ use crate::run::TokenUsage;
 
 mod items;
 mod questions;
+mod sandbox_setup;
 mod tool_calls;
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
@@ -174,6 +176,8 @@ pub struct AppServerStream {
   exemptions: InvocationExemptions,
   /// The runner's requests about calls of Orchester's tools that have not started yet.
   asked_own: AskedOwnCalls,
+  /// A command already reported that Codex's sandbox could not be set up ([`sandbox_setup`]).
+  sandbox_setup_failed: bool,
 }
 
 impl AppServerStream {
@@ -430,7 +434,7 @@ impl AppServerStream {
         .filter(|text| !text.is_empty())
         .map(|text| vec![Update::Activity(AgentEvent::Reasoning { text })])
         .unwrap_or_default(),
-      Some("commandExecution") => command_finished(item),
+      Some("commandExecution") => self.command_completed(item),
       Some("fileChange") => file_changed(item),
       Some("userMessage") => item
         .get("content")
@@ -446,6 +450,18 @@ impl AppServerStream {
         .unwrap_or_default(),
       _ => Vec::new(),
     }
+  }
+
+  /// A command's end, and the first time a command did not start because Codex's sandbox could not be set up.
+  fn command_completed(&mut self, item: &Value) -> Vec<Update> {
+    let mut updates = command_finished(item);
+    if !self.sandbox_setup_failed
+      && let Some(problem) = setup_failure(item)
+    {
+      self.sandbox_setup_failed = true;
+      updates.push(Update::Activity(AgentEvent::RunnerProblem { problem }));
+    }
+    updates
   }
 
   /// A turn takes several model responses; each reports its own usage as `last`, and the thread's
