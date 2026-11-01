@@ -174,6 +174,7 @@ impl Foot<'_> {
         open: view.runs_on.clone(),
       },
     );
+    let context = super::context::meter(ctx, project, self.reads, self.readiness);
     composer(
       ctx,
       view,
@@ -183,6 +184,7 @@ impl Foot<'_> {
         focused: &view.focused,
         stop,
         runs_on,
+        context,
         set_up,
         starts,
       },

@@ -59,6 +59,7 @@ pub(super) use self::{
 use super::shared::Shared;
 use crate::{
   navigation::{Navigation, link::Open},
+  project::ShownProject,
   routes::{ProjectPage, Route, TaskView},
   theme::ExtraSpacing,
   ui::chat::{
@@ -72,6 +73,8 @@ use crate::{
 #[derive(Clone, PartialEq)]
 pub(super) struct Timeline {
   pub(super) project: ProjectId,
+  /// The project as the window shows it, whose run changes move the context meter of the step at work.
+  pub(super) shown_project: ShownProject,
   /// The project as the Orchestrator chat's proposals are decided in it.
   pub(super) chat_project: ChatProject,
   /// The projects' names, for what a link to another project's place says.

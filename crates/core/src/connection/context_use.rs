@@ -75,6 +75,42 @@ impl ContextUse {
   pub const fn estimated(&self) -> bool {
     self.estimated
   }
+
+  /// The whole percent of the window `used` takes, rounded down so a share never reads fuller than it is; `None`
+  /// while the window is not known. Past the window it says more than 100.
+  pub const fn share(&self) -> Option<u64> {
+    match self.window {
+      Some(0) => Some(100),
+      Some(window) => Some(self.used.saturating_mul(100) / window),
+      None => None,
+    }
+  }
+
+  /// How full the window is, as the context meter shows it (ORC-305).
+  pub const fn fullness(&self) -> Fullness {
+    match (self.share(), self.window) {
+      (Some(_), Some(window)) if self.used >= window => Fullness::Full,
+      (Some(share), _) if share >= NEAR_FULL_PERCENT => Fullness::NearFull,
+      (Some(_), _) => Fullness::Plenty,
+      (None, _) => Fullness::Unknown,
+    }
+  }
+}
+
+/// The share from which a window is near full: where a native session compacts on its own.
+pub const NEAR_FULL_PERCENT: u64 = 80;
+
+/// How full a session's context window is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Fullness {
+  /// Under [`NEAR_FULL_PERCENT`].
+  Plenty,
+  /// From [`NEAR_FULL_PERCENT`], short of the whole window.
+  NearFull,
+  /// The whole window, or more.
+  Full,
+  /// Nobody reported the window, so there is no share.
+  Unknown,
 }
 
 /// The context window of `model` as the table of model limits has it, for a session whose CLI reports none; `None`

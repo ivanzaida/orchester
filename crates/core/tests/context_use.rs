@@ -4,7 +4,7 @@
 
 use orchester_core::connection::{
   app_server::AppServerStream,
-  context_use::{ContextUse, estimated_window},
+  context_use::{ContextUse, Fullness, estimated_window},
   stream::{ClaudeStream, OutputStream},
 };
 use serde_json::json;
@@ -107,4 +107,28 @@ fn the_table_of_model_limits_knows_claude_models_only() {
   assert_eq!(estimated_window("deepseek-v4-pro"), None);
   let unknown = ContextUse::of_model(10, "deepseek-v4-pro");
   assert_eq!((unknown.window(), unknown.estimated()), (None, false));
+}
+
+#[test]
+fn fullness_is_near_full_from_80_percent_and_full_at_the_window() {
+  let of = |used| ContextUse::reported(used, 200_000);
+  assert_eq!(
+    (of(159_999).share(), of(159_999).fullness()),
+    (Some(79), Fullness::Plenty)
+  );
+  assert_eq!(
+    (of(160_000).share(), of(160_000).fullness()),
+    (Some(80), Fullness::NearFull)
+  );
+  assert_eq!(
+    (of(199_999).share(), of(199_999).fullness()),
+    (Some(99), Fullness::NearFull)
+  );
+  assert_eq!(of(200_000).fullness(), Fullness::Full);
+  assert_eq!(
+    (of(230_000).share(), of(230_000).fullness()),
+    (Some(115), Fullness::Full)
+  );
+  let unknown = ContextUse::unknown_window(720);
+  assert_eq!((unknown.share(), unknown.fullness()), (None, Fullness::Unknown));
 }

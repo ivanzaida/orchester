@@ -11,6 +11,7 @@ mod changes;
 mod chat;
 mod code_block;
 mod connections;
+mod context;
 mod continuation;
 mod decisions;
 mod drafts;

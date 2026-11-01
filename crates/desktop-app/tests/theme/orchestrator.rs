@@ -1,5 +1,7 @@
-//! The Orchestrator's own type roles and spacing (`hujxu`, `zuvUi` in the new orchester.pen; `Xir64`), and its
-//! replies' links (`agv8r`).
+//! The Orchestrator's own type roles and spacing (`hujxu`, `zuvUi` in the new orchester.pen; `Xir64`), its replies'
+//! links (`agv8r`), and the context meter in its composer.
+use orchester_app::theme::ContextText;
+
 use super::*;
 
 #[test]
@@ -154,5 +156,36 @@ fn orchestrator_labelled_link_roles_follow_the_grid() {
   assert_eq!(
     theme.spacing_value(OrchestratorSpacing::LinkColumns.role()),
     Dimension::Px(12.0)
+  );
+}
+
+/// The context meter in the Orchestrator's composer and on a run's step at work (`Context meter · states` `Kp4IZ`,
+/// its popovers `v6vdj` and `OZGiw`).
+#[test]
+fn context_meter_roles_follow_the_design() {
+  let app = themed(Mode::Dark);
+  let theme = app.theme();
+  let mono = theme.typography_style(ExtraTypography::MonoNote.role()).font_family;
+  for (role, size, weight, in_mono) in [
+    // The share (`kYtZG`), *Full* (`kqwKb`), *Context* (`C0x35f`), the model (`hncjV`), the tokens (`DtYpM`), a note
+    // (`YwJOp`).
+    (ContextText::Share, 11.0, FontWeight::Normal, true),
+    (ContextText::Full, 11.0, FontWeight::Normal, false),
+    (ContextText::Title, 12.0, FontWeight::SemiBold, false),
+    (ContextText::Model, 11.0, FontWeight::Normal, true),
+    (ContextText::Tokens, 12.0, FontWeight::Normal, false),
+    (ContextText::Note, 11.0, FontWeight::Normal, false),
+  ] {
+    let style = theme.typography_style(role.role());
+    assert_eq!(
+      (style.font_size, style.weight, style.font_family == mono),
+      (size, weight, in_mono),
+      "{role:?}"
+    );
+  }
+  assert_eq!(
+    theme.typography_style(ContextText::Full.role()).color,
+    theme.palette_color(PaletteColor::Danger),
+    "kqwKb"
   );
 }

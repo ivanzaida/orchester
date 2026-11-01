@@ -5,14 +5,17 @@
 use orchester_core::{
   connection::context_use::ContextUse,
   conversation::MessageBody,
-  id::{ChatId, ChatMessageId},
+  id::{ChatId, ChatMessageId, RunId},
   orchestrator::Chat,
   run::InvocationKind,
   store::{ActivityStore, RunStore, TaskStore},
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
-use orchester_workspace::orchestrator::chat::ChatView;
+use orchester_workspace::{
+  orchestrator::chat::{ChatView, context_in},
+  tasks::context_uses::of_execution_in,
+};
 use serde_json::{Value, json};
 
 use super::{Served, kontur::Seeded};
@@ -81,8 +84,39 @@ fn domain_context_use_of_the_orchestrator_conversation() {
   .expect("kept");
   let view = ChatView::load_in(&seeded.repo, chat).expect("read").expect("kept");
   assert_eq!(view.context, None, "unknown until a turn reports it");
+  assert_eq!(context_in(&seeded.repo, chat).expect("read"), None);
   let reading = ContextUse::reported(42_000, 258_400);
   db.set_chat_context(chat, &reading).expect("kept");
   let view = ChatView::load_in(&seeded.repo, chat).expect("read").expect("kept");
   assert_eq!(view.context, Some(reading));
+  // The meter reads the reading alone as each turn arrives.
+  let later = ContextUse::reported(220_000, 258_400);
+  db.set_chat_context(chat, &later).expect("kept");
+  assert_eq!(context_in(&seeded.repo, chat).expect("read"), Some(later));
+}
+
+#[test]
+fn domain_context_use_of_the_step_at_work_read_alone_per_turn() {
+  let (_served, seeded) = Served::seeded("usage");
+  let first = ContextUse::reported(60_000, 200_000);
+  let (run, _) = reported(&seeded, "Add retry to webhook sender", &first);
+  let db = ProjectDb::open(&seeded.repo).expect("the database opens");
+  let run: RunId = run.parse().expect("a run id");
+  let invocation = db
+    .invocations(run)
+    .expect("invocations")
+    .into_iter()
+    .find(|invocation| invocation.ended_at.is_none() && matches!(invocation.kind, InvocationKind::Agent { .. }))
+    .expect("the agent at work");
+  assert_eq!(
+    of_execution_in(&seeded.repo, run, invocation.execution).expect("read"),
+    Some(first)
+  );
+  let later = ContextUse::reported(170_000, 200_000);
+  reported(&seeded, "Add retry to webhook sender", &later);
+  assert_eq!(
+    of_execution_in(&seeded.repo, run, invocation.execution).expect("read"),
+    Some(later),
+    "the turn's new reading"
+  );
 }
