@@ -17,7 +17,9 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::run::{Answerer, CameToPerson, NativeCommandAsk, PendingToolApproval, denial_message};
+use orchester_core::run::{
+  Answerer, CameToPerson, NativeCommandAsk, PendingToolApproval, PersonReason, denial_message,
+};
 use orchester_workspace::{display, tasks::approvals::ShownApproval};
 
 use super::{
@@ -25,7 +27,7 @@ use super::{
     Place,
     frame::{head as card_head, note},
   },
-  came,
+  came, could_not_run,
   decided::asked,
   words,
 };
@@ -49,12 +51,13 @@ pub(super) fn step(place: &Place, shown: Option<&ShownApproval>) -> Option<Arc<s
 }
 
 /// Between the head and the answers of a request that `came` to the person (`vO7CW`): what it asks on one mono
-/// line (`Body` `ZNwbH`), then why it came ([`came::line`]); in the Needs you panel, whose item says what it asks,
-/// only why. A note says when auto mode's reviewer judges it all the same.
+/// line (`Body` `ZNwbH`), then why it came ([`came::line`]; why the reviewer could not run, [`could_not_run::line`]);
+/// in the Needs you panel, whose item says what it asks, only why. A note says when auto mode's reviewer judges it
+/// all the same.
 pub(super) fn came_body(
-  ctx: &Ctx,
+  ctx: &mut Ctx,
   id: &str,
-  (place, request): (&Place, &PendingToolApproval),
+  (place, request, shown): (&Place, &PendingToolApproval, Option<&ShownApproval>),
   (came, reviewing): (&CameToPerson, bool),
 ) -> Vec<Element> {
   let action = (!place.in_panel).then(|| {
@@ -65,9 +68,15 @@ pub(super) fn came_body(
       .width(Dimension::Pct(100.0))
       .into()
   });
+  let agent = request.agent.as_str();
+  let reason = if came.reason == PersonReason::ReviewerCouldNotRun {
+    could_not_run::line(ctx, id, (place, agent), (came, shown))
+  } else {
+    came::line(ctx, id, (place, agent), came)
+  };
   action
     .into_iter()
-    .chain([came::line(ctx, id, (place, request.agent.as_str()), came)])
+    .chain([reason])
     .chain(reviewing.then(|| note(&format!("{id}-reviewing"), &ctx.t("cards.approval.reviewing")).into()))
     .collect()
 }

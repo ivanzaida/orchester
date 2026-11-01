@@ -20,6 +20,7 @@ mod input;
 mod prompt;
 mod push;
 mod spend;
+mod trouble;
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -38,6 +39,7 @@ pub use self::{
   },
   push::PushFacts,
   spend::{AutoReview, ReviewCost, ReviewEnd, ReviewRecord, ReviewSpend, Reviewed, reviews_usage},
+  trouble::{ReviewerAccount, ReviewerHealth, ReviewerTrouble},
 };
 use super::answer::ApprovalSubject;
 use crate::resource::ModelId;

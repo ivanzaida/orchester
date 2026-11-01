@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use orchester_core::{
-  id::{AgentAccountId, RunId},
+  id::{AgentAccountId, ConnectionId, RunId},
   resource::ModelId,
   run::{
     TokenUsage,
@@ -14,7 +14,7 @@ use orchester_core::{
   tokens::TokensUsed,
   usage::{ReviewUsage, UsedProvider},
 };
-use rusqlite::{Connection, Row, params};
+use rusqlite::{Connection, OptionalExtension, Row, params};
 
 use super::{
   ProjectDb,
@@ -97,6 +97,19 @@ impl ProjectDb {
       }
     }
     Ok(reviews)
+  }
+
+  /// How the last review on `connection` that asked a model ended; `None` when none was recorded.
+  pub fn last_review_end(&self, connection: ConnectionId) -> Result<Option<ReviewEnd>, StoreError> {
+    let verdict: Option<String> = self
+      .connection
+      .query_row(
+        "SELECT verdict FROM reviewer_usage WHERE connection_id = ?1 ORDER BY ended_at DESC, id DESC LIMIT 1",
+        [connection.to_string()],
+        |row| row.get(0),
+      )
+      .optional()?;
+    verdict.as_deref().map(parse_verdict).transpose()
   }
 }
 
