@@ -79,6 +79,7 @@ mod story_points;
 mod stuck_runs;
 mod task_edits;
 mod task_groups;
+mod team_reviewer;
 mod test_suites;
 mod token_budgets;
 mod tool_approvals;

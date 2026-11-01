@@ -1001,6 +1001,9 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
+ORC-570 · Team reviewer as a shared resource · branch `orchester/orc-570-run-1` (implemented 2026-11-01).
+Core adds immutable reviewer versions with named connection references, exact allowed hosts, widening rules and a
+member threshold that cannot undercut the team's. Tests: `orchester-core --test team_reviewer team_reviewer`.
 ORC-557 · Decision reviewer choice · branch `orchester/orc-557-run-1` (implemented 2026-11-01). Core resolves an
 explicitly chosen decision connection and model with a validated threshold (0.80 by default), distinguishes gone,
 disconnected and no-longer-listed choices without fallback, and exposes the person-only rule for hosted servers.

@@ -77,6 +77,7 @@ impl<S: ConfigServer> RemoteResourceStore<S> {
       ResourceKind::Instruction => self.send_kind::<Instruction>(waiting),
       ResourceKind::Skill => self.send_kind::<Skill>(waiting),
       ResourceKind::Tool => self.send_kind::<Tool>(waiting),
+      ResourceKind::TeamReviewer => self.send_kind::<orchester_core::resource::TeamReviewer>(waiting),
       // The store never records a version of agent testing's kinds, which stay on this computer.
       ResourceKind::TestSuite | ResourceKind::Service | ResourceKind::Stack => Err(
         StoreError::Corrupt {
@@ -263,6 +264,9 @@ impl<S: ConfigServer> RemoteResourceStore<S> {
         ResourceKind::AgentProfile => cache_version::<AgentProfile>(&mut self.db, version, &bound)?,
         ResourceKind::Instruction => cache_version::<Instruction>(&mut self.db, version, &bound)?,
         ResourceKind::Tool => cache_version::<Tool>(&mut self.db, version, &bound)?,
+        ResourceKind::TeamReviewer => {
+          cache_version::<orchester_core::resource::TeamReviewer>(&mut self.db, version, &bound)?
+        }
         // Skills are left out above, and agent testing's kinds are never shared.
         ResourceKind::Skill | ResourceKind::TestSuite | ResourceKind::Service | ResourceKind::Stack => {}
       }
