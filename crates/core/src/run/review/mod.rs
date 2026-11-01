@@ -15,7 +15,6 @@
 //! redacted the same way. Its reason is the reviewer's own text, so it is kept to one plain line.
 
 mod choice;
-mod decision;
 mod hold;
 mod input;
 mod prompt;
@@ -32,7 +31,6 @@ pub use self::{
     AutoModeSettings, DEFAULT_REVIEW_MODEL, ResolvedReviewer, ReviewerChoice, ReviewerKind, ReviewerUnavailable,
     default_review_model, resolve_reviewer, reviewer_kind,
   },
-  decision::{DecisionVerdict, NotProbability, Probability, Risk, Risks},
   hold::{HoldRules, ReviewHold, StepLimit, review_hold, step_limit, unread_parts},
   input::{ReviewInput, ReviewedRequest, ReviewedStep, ReviewedTask, RootsQuestion, UnreadPart, UnreadWhy},
   prompt::{
@@ -103,8 +101,6 @@ pub enum Review {
   Approved { reason: String, model: String },
   /// The reviewer left it to the person, for this reason.
   Asked { reason: String, model: String },
-  /// A decision model judged it: approved at or above the threshold, left to the person below it.
-  Decided { decision: DecisionVerdict },
   /// A hard rule left it to the person without a review.
   Held { hold: ReviewHold },
   /// The review gave no verdict, so the person decides.
@@ -140,19 +136,15 @@ impl Review {
   }
 
   /// Whether the request is approved without the person.
-  pub fn approves(&self) -> bool {
-    match self {
-      Self::Approved { .. } => true,
-      Self::Decided { decision } => decision.approves(),
-      Self::Asked { .. } | Self::Held { .. } | Self::Failed { .. } => false,
-    }
+  pub const fn approves(&self) -> bool {
+    matches!(self, Self::Approved { .. })
   }
 
-  /// The reviewer's own reason, when it gave one; a decision model gives none.
+  /// The reviewer's own reason, when it gave one.
   pub fn reason(&self) -> Option<&str> {
     match self {
       Self::Approved { reason, .. } | Self::Asked { reason, .. } => Some(reason),
-      Self::Decided { .. } | Self::Held { .. } | Self::Failed { .. } => None,
+      Self::Held { .. } | Self::Failed { .. } => None,
     }
   }
 }

@@ -49,10 +49,14 @@ pub fn codex_limits(value: &Value) -> Option<PlanLimits> {
   });
   let credits = match value.get("credits") {
     None | Some(Value::Null) => None,
-    Some(value) => Some(Credits {
-      has_credits: value.get("hasCredits")?.as_bool()?,
-      unlimited: value.get("unlimited")?.as_bool()?,
-      balance: optional_text(value.get("balance"))?.map(str::to_owned),
+    Some(credits) => Some(Credits {
+      has_credits: credits.get("hasCredits")?.as_bool()?,
+      unlimited: credits.get("unlimited")?.as_bool()?,
+      balance: optional_text(credits.get("balance"))?.map(str::to_owned),
+      // Codex 0.164.0 reports it beside the credits; read on the snapshot and on its credits alike, and either one
+      // set stops spending them.
+      spend_control_reached: optional_flag(value.get("spendControlReached"))?
+        || optional_flag(credits.get("spendControlReached"))?,
     }),
   };
   let plan = optional_text(value.get("planType"))?.map(str::to_owned);
@@ -92,6 +96,14 @@ fn optional_text(value: Option<&Value>) -> Option<Option<&str>> {
   match value {
     None | Some(Value::Null) => Some(None),
     Some(value) => value.as_str().map(Some),
+  }
+}
+
+/// A flag that may be left out, which reads as not set; `None` when it is not a flag.
+fn optional_flag(value: Option<&Value>) -> Option<bool> {
+  match value {
+    None | Some(Value::Null) => Some(false),
+    Some(value) => value.as_bool(),
   }
 }
 

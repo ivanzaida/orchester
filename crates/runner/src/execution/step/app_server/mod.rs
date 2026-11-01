@@ -37,6 +37,7 @@ use super::stderr::StderrLog;
 
 mod checks;
 mod names;
+mod readiness;
 mod setup;
 pub(in crate::execution) use self::setup::AppServerSetup;
 use crate::supervisor::Supervised;
@@ -96,6 +97,7 @@ pub(in crate::execution) struct AppServerSession {
   stream: AppServerStream,
   /// The configured MCP servers the step does not choose, turned off for its thread.
   turned_off: Vec<String>,
+  readiness: Option<readiness::Readiness>,
   stderr: StderrLog,
   /// Answers to `turn/steer` requests not taken yet.
   steer_answers: Vec<SteerAnswer>,
@@ -105,6 +107,7 @@ impl AppServerSession {
   pub fn new(setup: AppServerSetup) -> Self {
     Self {
       phase: Phase::Initialize,
+      readiness: None,
       turned_off: Vec::new(),
       stderr: StderrLog::default(),
       steer_answers: Vec::new(),
@@ -310,6 +313,15 @@ impl AppServerSession {
   }
 
   async fn response(&mut self, value: &Value, process: &Supervised) -> Result<Vec<Update>, AppServerFailure> {
+    if self.phase == Phase::Servers && value.get("id").and_then(Value::as_str) == Some(readiness::STATUS_REQUEST) {
+      if let Some(error) = value.get("error") {
+        return Err(self.rejected(error).into());
+      }
+      let result = value
+        .get("result")
+        .ok_or_else(|| "Codex omitted an MCP readiness result".to_owned())?;
+      return self.servers_received(result, true, process).await;
+    }
     let id = value
       .get("id")
       .and_then(Value::as_u64)
@@ -351,32 +363,8 @@ impl AppServerSession {
         Ok(Vec::new())
       }
       (Phase::Configuration, 6) => self.configured(result, process).await,
-      (Phase::Thread, 3) => {
-        self.check_thread(result)?;
-        let thread = result
-          .get("thread")
-          .and_then(|thread| thread.get("id"))
-          .and_then(Value::as_str)
-          .ok_or_else(|| "Codex App Server omitted the thread ID".to_owned())?
-          .to_owned();
-        self.thread = Some(thread.clone());
-        self.phase = Phase::Servers;
-        send(
-          process,
-          json!({"id":4,"method":"mcpServerStatus/list","params":{
-            "threadId":thread,"limit":1000
-          }}),
-        )
-        .await
-        .map_err(|error| io_message(&error))?;
-        Ok(vec![Update::Activity(AgentEvent::SessionStarted { session: thread })])
-      }
-      (Phase::Servers, 4) => {
-        let left_out = self.check_servers(result)?;
-        self.phase = Phase::Turn;
-        self.start_turn(process).await.map_err(|error| io_message(&error))?;
-        Ok(left_out)
-      }
+      (Phase::Thread, 3) => self.thread_started(result, process).await,
+      (Phase::Servers, 4) => self.servers_received(result, false, process).await,
       (Phase::Turn | Phase::Working | Phase::Complete, id) if self.turn_replies.remove(&id) => {
         // A previous turn/start reply may arrive after its turn completed and the next one started.
         if id == self.turn_request && self.phase == Phase::Turn {
