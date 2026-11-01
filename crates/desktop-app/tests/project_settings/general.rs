@@ -1,11 +1,12 @@
-//! General's identity and repository settings, and Runs' Approvals with its reviewer and *Approved for every run*
-//! (`12` `wQy6o`), a page under Runs with Revoke.
+//! General's identity and repository settings, Context's *Repository agent files* (`S04` `gY4HX`), and Runs' Approvals
+//! with its reviewer and *Approved for every run* (`12` `wQy6o`), a page under Runs with Revoke.
 use orchester_core::store::SettingsStore;
 
 use super::harness::Settings;
 
+/// General (`S01` `WHjIP`) keeps the project and its repository; the repository's agent files are not among them.
 #[test]
-fn project_settings_general_shows_project_identity_and_saves_repository_agent_files() {
+fn project_settings_general_shows_project_identity_without_repository_agent_files() {
   let mut page = Settings::new(false);
   page.tab("general", "settings-project-name");
   assert_eq!(page.text("settings-project-name"), "Kontur");
@@ -16,6 +17,42 @@ fn project_settings_general_shows_project_identity_and_saves_repository_agent_fi
     "a plain value, without the not-available sentence"
   );
   assert!(page.exists("settings-repository"));
+  assert!(page.exists("settings-base-moved-row"));
+  assert!(!page.exists("settings-agent-files"), "moved to Context");
+  assert!(!page.exists("settings-files-row"));
+}
+
+/// Context shows *Repository agent files* as its own group between Sources and Code index (`S04` `oTBHM`); its switch
+/// saves and *What each CLI loads* opens its popover.
+#[test]
+fn project_settings_context_shows_and_saves_repository_agent_files() {
+  let mut page = Settings::new(false);
+  page.tab("context", "settings-agent-files");
+  page.until("Sources and the code index", |p| {
+    p.exists("settings-sources-title") && p.exists("settings-index-section")
+  });
+  assert_eq!(page.text("settings-repository-files-title"), "Repository agent files");
+  let row = page.text("settings-files-row");
+  assert!(row.contains("Read the repository's agent files"), "{row}");
+  assert!(
+    row.contains("AGENTS.md, CLAUDE.md and skills folders go into every agent's prompt"),
+    "{row}"
+  );
+  let top = |page: &mut Settings, id: &str| {
+    page
+      .window
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|element| element.bounds())
+      .unwrap_or_else(|| panic!("{id} is laid out"))
+      .y
+  };
+  let (sources, files, index) = (
+    top(&mut page, "settings-sources-title"),
+    top(&mut page, "settings-repository-files-title"),
+    top(&mut page, "settings-index-section-title"),
+  );
+  assert!(sources < files && files < index, "{sources} < {files} < {index}");
   let before = page.db().repository_agent_files().expect("setting").is_on();
   page.click("settings-agent-files");
   page.until("agent-file save", |p| {

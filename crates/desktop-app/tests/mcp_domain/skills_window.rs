@@ -2,7 +2,7 @@
 //! Publishing a skill or a profile's new role text, and turning on the repository's agent files, reach agents'
 //! prompts, so an MCP client's press does it only under *Let automation change agent permissions* (ORC-30); a
 //! person's always does.
-use orchester_app::routes::{AgentTab, ProjectPage, Route};
+use orchester_app::routes::{AgentTab, ProjectPage, ProjectSettingsTab, Route};
 use orchester_core::{
   agent_files::RepositoryAgentFiles,
   resource::{InstructionScope, Skill},
@@ -144,10 +144,10 @@ fn project_settings_turn_on_repository_files_by_client_input_only_under_the_pers
   let mut db = ProjectDb::open(&repo).expect("db");
   db.save_repository_agent_files(RepositoryAgentFiles::Off).expect("off");
   s.until("navigation attached", |s| s.link.navigation().is_ok());
-  s.link
-    .navigation()
-    .expect("navigation")
-    .go(Route::Project(project, ProjectPage::Settings(Default::default())));
+  s.link.navigation().expect("navigation").go(Route::Project(
+    project,
+    ProjectPage::Settings(ProjectSettingsTab::Context),
+  ));
   s.until("the switch off", |s| shows_switch(s, OFF));
   s.click_by_client("settings-agent-files")
     .expect("the click is delivered");
