@@ -25,9 +25,8 @@ use lurq::{
 use orchester_core::app_update::Channel;
 use orchester_workspace::{app_paths, background};
 
-use super::frame;
+use super::{GeneralShow, frame};
 use crate::{
-  routes::UpdatesShow,
   services::Services,
   theme::ExtraTypography,
   ui::{
@@ -40,23 +39,25 @@ use crate::{
 /// A path's bone while it is read (`Application data` in `JVv11`).
 const PATH_BONE: f32 = 162.0;
 
-/// The tab, scrolling under the header; `show` brings *Updates* into view.
-pub fn tab(ctx: &mut Ctx, show: Option<UpdatesShow>) -> Element {
+/// The tab, scrolling under the header; `show` brings *Plan limits* or *Updates* into view.
+pub fn tab(ctx: &mut Ctx, show: Option<GeneralShow>) -> Element {
+  let updates = match show {
+    Some(GeneralShow::Updates(updates)) => Some(updates),
+    Some(GeneralShow::PlanLimits) | None => None,
+  };
+  let plan_limits = threshold::InView(show == Some(GeneralShow::PlanLimits));
   let pane = frame::pane("settings-general")
     .child(
       SettingGroup::new("settings-appearance", ctx.t("settings.general.appearance"))
         .row(ctx.mount_keyed::<theme::ThemeRow>("settings-theme", ()))
         .note(ctx.t(theme::NOTE)),
     )
-    .child(
-      SettingGroup::new("settings-plan-limits", ctx.t("settings.general.planLimits"))
-        .row(ctx.mount_keyed::<threshold::ThresholdRow>("settings-threshold", ())),
-    )
+    .child(ctx.mount_keyed::<threshold::PlanLimitsGroup>("settings-plan-limits-group", plan_limits))
     .child(
       SettingGroup::new("settings-privacy", ctx.t("settings.general.privacy.title"))
         .row(ctx.mount_keyed::<error_reports::ErrorReportsRow>("settings-error-reports", ())),
     )
-    .child(ctx.mount_keyed::<updates::UpdatesGroup>("settings-updates-group", updates::Shown(show)))
+    .child(ctx.mount_keyed::<updates::UpdatesGroup>("settings-updates-group", updates::Shown(updates)))
     .child(ctx.mount_keyed::<ThisComputer>("settings-computer", ()));
   frame::column("settings-general-scroll", pane)
 }

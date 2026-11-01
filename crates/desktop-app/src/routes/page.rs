@@ -444,9 +444,12 @@ fn tools(params: &mut Params) -> Result<ProjectPage, RouteError> {
 }
 
 /// Project settings on the tab the query names, *Make local*'s question on Sharing (`ask=make-local`), the join
-/// review there (`view=join` with the project), or *Approved for every run* under Runs (`view=rules`).
+/// review there (`view=join` with the project), or *Approved for every run* under Runs (`view=rules`); Environment
+/// (`tab=environment`, or `secrets` from before it was renamed) is the secrets' route.
 fn settings(params: &mut Params) -> Result<ProjectPage, RouteError> {
-  let tab = ProjectSettingsTab::take(params)?;
+  let Some(tab) = ProjectSettingsTab::take(params)? else {
+    return Ok(ProjectPage::Secrets(SecretsView::default()));
+  };
   match (tab, params.take(VIEW)?) {
     (_, None) => {}
     (ProjectSettingsTab::Sharing, Some(view)) if view == JOIN => {

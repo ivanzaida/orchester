@@ -22,17 +22,22 @@ fn project_settings_environment_validates_each_line_and_saves_harmless_changes_o
     page.db().project_environment().expect("stored").get("RUST_LOG"),
     Some("info")
   );
-  assert_eq!(page.text("settings-variable-count"), "2 variables");
+  assert_eq!(
+    page.text("settings-variable-count"),
+    "2 variables · plain text, not for secrets"
+  );
+  // Each variable is a row of its own, its name over its value (`RUST_LOG` `cWwmK` in `S06`).
+  assert_eq!(page.text("settings-variable-RUST_LOG-label"), "RUST_LOG");
+  assert_eq!(page.text("settings-variable-RUST_LOG-hint"), "info");
+  assert!(page.exists("settings-variable-CI-row"));
   assert!(!page.exists("settings-environment-question"));
   page.set(INPUT, "");
   page.leave();
   page.saved();
   assert_eq!(page.db().project_environment().expect("cleared").iter().count(), 0);
-  page.click("settings-open-secrets");
-  assert!(matches!(
-    page.window.navigation().route_now(),
-    orchester_app::routes::Route::Project(_, orchester_app::routes::ProjectPage::Secrets(_))
-  ));
+  assert!(!page.exists("settings-variable-RUST_LOG-row"));
+  // The variables share their tab with the secrets, under them.
+  assert!(page.exists("secrets-filter"));
 }
 
 #[test]
@@ -98,6 +103,35 @@ fn project_settings_environment_a_confirmed_change_cannot_overwrite_outside_edit
   assert!(!page.exists("settings-environment-save-error"));
   assert!(!page.window.link.input_gate().protecting());
   page.tab("limits", "settings-default-budget");
+}
+
+#[test]
+fn project_settings_environment_new_secret_drops_an_unfinished_variables_edit_and_its_status() {
+  let mut page = Settings::new(false);
+  for (text, edit) in [("1NAME=value", "invalid"), ("PATH=tools", "widening")] {
+    page.tab("environment", INPUT);
+    page.set(INPUT, text);
+    page.leave();
+    if edit == "widening" {
+      page.until("question", |p| p.exists("settings-environment-question"));
+    } else {
+      assert_eq!(
+        page.text("project-settings-save-status"),
+        "Not saved · fix the marked field"
+      );
+    }
+    page.click("secrets-add");
+    page.until("New secret", |p| p.exists("secret-name"));
+    // New secret saves per action: no status of the variables' editor it left, and no tab locked by it.
+    assert!(
+      !page.exists("project-settings-save-status"),
+      "{edit} edit's status is gone"
+    );
+    page.tab("general", "settings-project-name");
+  }
+  page.tab("environment", "settings-environment-edit");
+  page.saved();
+  assert!(page.db().project_environment().expect("unchanged").is_empty());
 }
 
 fn failed_save(page: &mut Settings) {

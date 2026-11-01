@@ -1,11 +1,12 @@
 //! Project settings (`Project settings · redesign` `XGtkg`): its title with the save status over six tabs, General,
-//! Runs, Context, Connections, Secrets and Sharing, each a 720 column of groups of rows ([`kit`]). General, Runs and
-//! Context save as a person leaves a field or flips a switch, widening changes asked in place; Connections and Secrets
-//! save per action and say nothing of a save state, but Add provider says it isn't saved yet. Add, open and edit flows
-//! are pages inside their tab with a crumb
-//! back to it: a connection's, Add provider and Add MCP server under Connections, a secret's under Secrets, *Approved
-//! for every run* under Runs, and the first link (`Share`) under Sharing.
+//! Runs, Context, Connections, Environment and Sharing, each a 720 column of groups of rows ([`kit`]). General, Runs,
+//! Context and Environment's variables save as a person leaves a field or flips a switch, widening changes asked in
+//! place; Connections and Environment's secrets save per action, and Connections says nothing of a save state, but Add
+//! provider says it isn't saved yet. Add, open and edit flows are pages inside their tab with a crumb back to it: a
+//! connection's, Add provider and Add MCP server under Connections, a secret's and New secret under Environment,
+//! *Approved for every run* under Runs, and the first link (`Share`) under Sharing.
 mod context;
+mod environment;
 mod general;
 mod index;
 pub(crate) mod kit;
@@ -31,8 +32,8 @@ use crate::{
   routes::{ConnectionsView, NewConnection, ProjectPage, ProjectSettingsTab as Tab, SecretsView},
 };
 
-/// What the page shows under its tabs: one of its own tabs, a page under one, or Connections or Secrets, whose routes
-/// are their own.
+/// What the page shows under its tabs: one of its own tabs, a page under one, or Connections or Environment (the
+/// secrets' view), whose routes are their own.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Shown {
   Tab(Tab),
@@ -52,7 +53,16 @@ impl Shown {
       Self::Tab(Tab::Context) => Section::Context,
       Self::Tab(Tab::Sharing) => Section::Sharing,
       Self::Connections(_) | Self::NewConnection(_) | Self::EditConnection(_) => Section::Connections,
-      Self::Secrets(_) => Section::Secrets,
+      Self::Secrets(_) => Section::Environment,
+    }
+  }
+
+  /// Whether what shows saves as a person edits it and says its save status: its tab's own page or one under it,
+  /// but not a secret's page or New secret, which save per action under Environment.
+  const fn autosaves(self) -> bool {
+    match self {
+      Self::Secrets(view) => !environment::is_page(view),
+      _ => self.section().autosaves(),
     }
   }
 
@@ -76,7 +86,8 @@ enum Section {
   Runs,
   Context,
   Connections,
-  Secrets,
+  /// The project's variables and secrets (`S06` `EnL2D`), the Secrets tab it was.
+  Environment,
   Sharing,
 }
 
@@ -86,7 +97,7 @@ impl Section {
     Self::Runs,
     Self::Context,
     Self::Connections,
-    Self::Secrets,
+    Self::Environment,
     Self::Sharing,
   ];
 
@@ -97,7 +108,7 @@ impl Section {
       Self::Runs => "runs",
       Self::Context => "context",
       Self::Connections => "connections",
-      Self::Secrets => "secrets",
+      Self::Environment => "environment",
       Self::Sharing => "sharing",
     }
   }
@@ -108,7 +119,7 @@ impl Section {
       Self::Runs => "project_settings.runs",
       Self::Context => "project_settings.context",
       Self::Connections => "project_settings.connections",
-      Self::Secrets => "project_settings.secrets",
+      Self::Environment => "project_settings.environment",
       Self::Sharing => "project_settings.sharing",
     }
   }
@@ -121,14 +132,14 @@ impl Section {
       Self::Context => Shown::Tab(Tab::Context),
       Self::Sharing => Shown::Tab(Tab::Sharing),
       Self::Connections => Shown::Connections(ConnectionsView::default()),
-      Self::Secrets => Shown::Secrets(SecretsView::default()),
+      Self::Environment => Shown::Secrets(SecretsView::default()),
     }
   }
 
-  /// Whether the tab saves as a person edits it, and says so at the title's right; Connections and Secrets save per
-  /// action.
+  /// Whether the tab saves as a person edits it, and says so at the title's right; Connections saves per action, and
+  /// Environment's status is its variables' (its secrets save per action).
   const fn autosaves(self) -> bool {
-    !matches!(self, Self::Connections | Self::Secrets)
+    !matches!(self, Self::Connections)
   }
 }
 
@@ -251,7 +262,7 @@ impl Component for SettingsScreen {
       (Shown::Connections(view), _) => super::connections::screen(ctx, &project, view),
       (Shown::NewConnection(kind), _) => super::connections::new_connection(ctx, &project, kind),
       (Shown::EditConnection(id), _) => super::connections::edit_connection(ctx, &project, id),
-      (Shown::Secrets(view), _) => super::secrets::screen(ctx, &project, view),
+      (Shown::Secrets(view), _) => environment::tab(ctx, props, view),
     };
     page::settings(ctx, (&project, shown), &self.status, content)
   }

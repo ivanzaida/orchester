@@ -23,6 +23,8 @@ pub enum ProjectSettingsText {
   MonoValue,
   /// Geist Mono 12.5/500 `text_primary`: an identifier as a row's label, a secret's name (`Name` `HaAqu`).
   MonoLabel,
+  /// Geist Mono 12 `text_muted`: a row's hint line that is a value as written, a variable's (`Hint` `X4oGlO` in `S06`).
+  MonoHint,
   /// 16/600 `text_primary`: a sub-page's or an opened item's title (`Title` `RYStU`, `N9Na8Q`).
   PageTitle,
   /// Geist Mono 16/500 `text_primary`: an opened item's title that is an identifier, a secret's name (`CKPaZ` in
@@ -31,12 +33,13 @@ pub enum ProjectSettingsText {
 }
 
 impl ProjectSettingsText {
-  pub const ALL: [Self; 7] = [
+  pub const ALL: [Self; 8] = [
     Self::GroupTitle,
     Self::Hint,
     Self::Value,
     Self::MonoValue,
     Self::MonoLabel,
+    Self::MonoHint,
     Self::PageTitle,
     Self::MonoPageTitle,
   ];
@@ -52,6 +55,7 @@ impl ProjectSettingsText {
       Self::Value => "project_settings_value",
       Self::MonoValue => "project_settings_mono_value",
       Self::MonoLabel => "project_settings_mono_label",
+      Self::MonoHint => "project_settings_mono_hint",
       Self::PageTitle => "project_settings_page_title",
       Self::MonoPageTitle => "project_settings_mono_page_title",
     }
@@ -72,6 +76,7 @@ impl ProjectSettingsText {
         0.0,
         palette.text_primary,
       )),
+      Self::MonoHint => mono(style(12.0, FontWeight::Normal, LINE_16 / 12.0, 0.0, palette.text_muted)),
       Self::PageTitle => style(16.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
       Self::MonoPageTitle => mono(style(16.0, FontWeight::Medium, 1.3, 0.0, palette.text_primary)),
     }
