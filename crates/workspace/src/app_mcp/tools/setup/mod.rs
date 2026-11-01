@@ -87,7 +87,7 @@ const SPECS: &[Spec] = &[
   Spec {
     name: "set_repository_agent_files",
     description: "Turns on or off whether the project's agents load the repository's own agent files (AGENTS.md, \
-                  CLAUDE.md and the like), as Project settings › General does. Runs that start from now on use it. \
+                  CLAUDE.md and the like), as Project settings › Context does. Runs that start from now on use it. \
                   Turning them off is always taken; turning them on puts what the repository says in every agent's \
                   prompt, so it is refused as person_only unless a person turned on Let automation change agent \
                   permissions.",

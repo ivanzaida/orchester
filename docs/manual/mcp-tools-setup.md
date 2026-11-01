@@ -73,7 +73,7 @@ connect, what they trust or where tools keep their configuration.
 ### `set_repository_agent_files` — changes data · gate AP when turning on
 
 Turns on or off whether the project's agents load the repository's own agent files (`AGENTS.md`, `CLAUDE.md` and
-the like), as Project settings › General › *Repository agent files* does. Applies to runs that start from now on. Turning off is always
+the like), as Project settings › Context › *Repository agent files* does. Applies to runs that start from now on. Turning off is always
 accepted; turning on puts the repository's text into every agent's prompt and is `person_only` unless AP is on.
 
 | Parameter | Type    | Req. | Description                                       |

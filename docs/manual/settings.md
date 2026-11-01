@@ -161,7 +161,6 @@ Tabs: **General · Runs · Context · Connections · Secrets · Sharing**.
 | | **GitHub account** | the account detected at setup | Pull requests are created only while `gh` is signed in as it; *Use <account>*. Orchester never switches `gh` accounts. |
 | | **Base branch** | Checked-out branch | Or a named local/remote branch. Kept on this computer only. A branch that's gone refuses new runs. |
 | | **When the base branch moves** | On | The next writing agent merges the moved base after its turn; moves within two minutes are one notice. |
-| | **Repository agent files** | On | Whether agents may read the repository's own `AGENTS.md`, `CLAUDE.md` and skills folders (*What each CLI loads*: Codex may load `AGENTS.md`, `.agents/skills`, `.codex/skills`; Claude Code loads none either way). Turning it on is person-only. |
 
 ### 2.2 Runs
 
@@ -187,6 +186,10 @@ Runs already started keep their budget and time limit.
   worktree asks first; sources are never writable; `.git` folders, Orchester's data, credential files (`.ssh`, `.aws`,
   `.env`…) and other projects' private state are always refused. Tasks and pipelines can add their own sources. Changes
   apply to runs that start later.
+- **Repository agent files** — **Read the repository's agent files** (on by default): whether agents may read the
+  repository's own `AGENTS.md`, `CLAUDE.md` and skills folders (*What each CLI loads*: Codex may load `AGENTS.md`,
+  `.agents/skills`, `.codex/skills`; Claude Code loads none either way). Turning it on is person-only unless *Let
+  automation change agent permissions* is on.
 - **Code index** — **Use code index** (off by default). On: agents get a built-in skill and `find_symbol` that search an
   index of the run's starting revision. *Index* rows (Ready, Building, Failed, Outdated) with *Rebuild* and *Retry*.
   **Search tool** shows ripgrep's version and source; *Install ripgrep* runs winget (Windows) or Homebrew (macOS).
