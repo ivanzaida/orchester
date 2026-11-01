@@ -105,3 +105,39 @@ comparison (no visual change), or macOS checks (no Apple SDK/C cross-compiler); 
 No app copies were started and no commits were made.
 Unrelated observation left unchanged: `crates/ipc/tests/browser.rs:274` asserts protocol 38; the input revision
 already used protocol 40. That test was not run in this correction.
+
+## Verification after the moved-base merge
+
+Verified merge `2e10eab162abeefdf0f4a418fff88f2c1a58b178`, with parents `ab8757ac0` (saved correction)
+and `97956508a` (module/decision-models, ORC-562). The person performed the merge externally after Git metadata
+writes were refused by the sandbox. Only `docs/plan.md` conflicted; the resolution retains both tasks' Done entries.
+No production-code conflict resolution was needed. The runner, IPC and workspace Test code match the first parent.
+Updated the ORC-561 Done entry to record protocol 41 and eight tests; no Rust changes were needed after merging.
+
+Fresh commands and outcomes for the merged candidate:
+
+- `git status --short`: clean initially.
+- `git log -4 --oneline --parents`: confirmed the merge and both parents.
+- `git show --stat HEAD`: inspected merged files and documented conflict.
+- `git show --format=fuller --no-patch HEAD`: confirmed merge metadata.
+- `git diff HEAD^1 HEAD -- crates/runner crates/ipc crates/workspace/src/runner`: empty.
+- `git rev-parse HEAD`: `2e10eab162abeefdf0f4a418fff88f2c1a58b178`.
+- `git diff --check`: passed.
+- `powershell -ExecutionPolicy Bypass -File .tmp/decision-test/run.ps1 cargo test -p orchester-runner --test decision_test decision_test`: **8 passed**.
+- `powershell -ExecutionPolicy Bypass -File .tmp/decision-test/run.ps1 cargo test -p orchester-workspace --test decision_connections mcp_decision_reviewer`: **3 passed** (another target had no matching tests).
+- `powershell -ExecutionPolicy Bypass -File .tmp/decision-test/run.ps1 cargo test -p orchester-workspace --test decision_reviewer_setting mcp_decision_reviewer`: **3 passed**.
+- `cargo +nightly fmt -p orchester-ipc`: passed.
+- `cargo +nightly fmt -p orchester-runner`: passed.
+- `cargo +nightly fmt -p orchester-workspace`: passed.
+
+Earlier attempted `git add -A`, `git commit --allow-empty -m "checkpoint before merging module/decision-models"`
+and `git merge --no-ff module/decision-models` each failed on sandbox Git metadata writes; no merge occurred
+from those commands. The external merge above supersedes those attempts.
+
+- `powershell -ExecutionPolicy Bypass -File .tmp/decision-test/run.ps1 powershell -ExecutionPolicy Bypass -File tools/check.ps1`: passed; whole output read. Final line: **`check: OK`**.
+- Final `git diff --check`: passed; `git status --short`: only this evidence and the plan entry changed.
+
+The fresh gate covers the merged Rust candidate at `2e10eab162abeefdf0f4a418fff88f2c1a58b178`.
+Only this result was appended after the gate. Not run: full-suite tests, live inference, shared transport
+regression (transport unchanged), desktop QA/Pencil comparison (no visual changes), and macOS checks (no Apple
+SDK/C cross-compiler). No `cfg(target_os)` code changed. Ready for the pipeline's independent Review step.

@@ -1005,8 +1005,9 @@ ORC-561 · Test a decision model on recorded project requests (implemented 2026-
 Workspace exposes an explicit test action, stored progress/results and Stop; the runner reconstructs historical
 review context, omits unavailable facts explicitly, runs eight requests at once and refuses hosted automation.
 Results retain counts at 0.50 / 0.80 / 0.90 / 0.95, tested requests, median milliseconds and input tokens, including
-unknown usage after interruption. IPC protocol 40; no automatic test or resume and no visual changes.
-Tests: `orchester-runner --test decision_test decision_test` (7 passed), existing `--features test-agent --test
+unknown usage after interruption. IPC protocol 41 binds Test to the selected URL/key reference; stale requests
+are refused. No automatic test or resume and no visual changes.
+Tests: `orchester-runner --test decision_test decision_test` (8 passed), existing `--features test-agent --test
 decision_review decision_review` (9 passed, live test ignored). Quality gate: `check: OK`.
 API and limitations: `docs/evidence/orc-561-decision-test.md`.
 
