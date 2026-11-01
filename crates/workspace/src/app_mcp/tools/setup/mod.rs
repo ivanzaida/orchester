@@ -270,7 +270,7 @@ const SPECS: &[Spec] = &[
                   restrictive permissions its CLI enforces and no MCP server) is refused as person_only unless a \
                   person turned on Let automation change agent permissions in Settings › What automation may do: write \
                   access, writable folders, broader commands, network on, MCP servers, no longer asking before \
-                  tool calls, approving automatically (which also needs Let automation answer approvals). Left \
+                  tool calls, Autopilot (which also needs Let automation answer approvals). Left \
                   out, a new profile gets the most restrictive permissions. With expected_revision, the revision \
                   get_profile or the last save returned, the draft is saved only while it is unchanged, else \
                   refused as draft_changed; without it the save goes over a change a person or another agent \

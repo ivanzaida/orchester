@@ -349,13 +349,11 @@ fn profile_connection_transition_clears_native_incompatibilities_and_preserves_c
     ),
     NetworkAccess::Off,
   );
-  permissions.set_auto_approve(true);
   permissions.set_interactive_tool_approvals(true);
   let servers = McpServerSelection::new(vec![ConnectionId::generate()]).expect("selection");
   for platform in [Platform::Windows, Platform::MacOs] {
     for provider in [AgentProvider::AnthropicApi, AgentProvider::OpenAiApi] {
       let (adapted, selected) = access_for_connection(&permissions, &servers, provider, platform);
-      assert!(!adapted.auto_approve());
       assert!(!adapted.interactive_tool_approvals());
       assert!(selected.ids().is_empty());
       assert_eq!(adapted.commands(), permissions.commands());
@@ -364,7 +362,6 @@ fn profile_connection_transition_clears_native_incompatibilities_and_preserves_c
       assert!(adapted.enforced_on(provider, platform).is_ok());
     }
     let (adapted, selected) = access_for_connection(&permissions, &servers, AgentProvider::ClaudeCodeCli, platform);
-    assert!(adapted.auto_approve());
     assert!(adapted.interactive_tool_approvals());
     assert_eq!(selected, servers);
     assert_eq!(adapted.commands(), permissions.commands());

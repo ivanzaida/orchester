@@ -6,7 +6,7 @@
 //! allow (a tool its server lists to run without asking since the agent started, a command whose every part the step's
 //! permissions run on their own,
 //! `orchester_core::run::permitted`), then a rule of the project (Approve for every run of this project,
-//! `start_qa_app` only) and the run's own auto-approval or a profile's; the rest goes to the reviewer. Otherwise a
+//! `start_qa_app` only) and the run's own auto-approval; the rest goes to the reviewer. Otherwise a
 //! person answers, and a wider answer first leaves what it promises: a rule, a profile version or a server setting, or
 //! the run's auto-approval. Each answer is recorded with who gave it and how by the mode
 //! (`orchester_core::run::RequestAnswer`), delivered to the one call that asked, and marked in the activity; Deny
@@ -145,7 +145,7 @@ impl Worker {
   }
 
   /// Manual's rules for `approval` about `subject`: what the profile's permissions allow, a rule of the project (only
-  /// in Manual), the run's own auto-approval or the profile's; else the reviewer.
+  /// in Manual), the run's own auto-approval; else the reviewer.
   fn manual(
     &self,
     watch: &Watch,
@@ -169,24 +169,13 @@ impl Worker {
         ..Settled::by(DecidedBy::SimilarRule, category)
       }));
     }
-    let chosen = watch.db.run_auto_approve(approval.run)?;
-    let profile = watch
-      .invocation
-      .permissions
-      .as_ref()
-      .is_some_and(|launch| launch.permissions().auto_approve());
-    if auto_approves(chosen, profile)
+    // Manual is not Autopilot: only the run's own *Approve everything in this run*, a person's answer, approves here.
+    if auto_approves(watch.db.run_auto_approve(approval.run)?, false)
       && (approval.command || auto_approvable(&approval.server, &approval.action))
       && let AutoVerdict::Approve(category) = auto_verdict(subject)
     {
-      // The run's own *Approve everything in this run* is a person's answer; else the profile's setting answered.
-      let kind = if chosen == Some(true) {
-        AnswerKind::Person
-      } else {
-        AnswerKind::Profile
-      };
       return Ok(Itself::Settled(Settled {
-        answer: RequestAnswer::by(kind),
+        answer: RequestAnswer::by(AnswerKind::Person),
         ..Settled::by(DecidedBy::AutoApproved, category)
       }));
     }

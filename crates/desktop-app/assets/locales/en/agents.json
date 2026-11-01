@@ -198,10 +198,6 @@
           "note": "Sources are the folders the project lends to runs; temp folders are the agent’s own scratch folders."
         },
         "decisions": "In both modes decisions come to you: questions, plans, a step that needs a choice or ends unverified, limits and merge conflicts.",
-        "autoApprove": {
-          "title": "Approve automatically (don’t ask me)",
-          "hint": "Set before approval modes: Orchester answers every request in your place, also what Autopilot still asks you. Turn it off to use the mode above."
-        },
         "widen": {
           "title": "Allow Autopilot for {{profile}}?",
           "untitled": "Allow Autopilot for this profile?",

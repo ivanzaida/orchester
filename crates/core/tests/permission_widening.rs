@@ -2,8 +2,8 @@
 //! a project environment variable but the few harmless ones.
 
 use orchester_core::permission::{
-  AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, FolderBounds, NetworkAccess, RepositoryAccess,
-  WritableFolder, WritableFolders,
+  AgentPermissions, AllowedCommands, ApprovalMode, CommandPermission, CommandPrefix, FolderBounds, NetworkAccess,
+  RepositoryAccess, WritableFolder, WritableFolders,
   widening::{Widening, harmless_variable},
 };
 
@@ -49,14 +49,14 @@ fn widening_names_every_broader_setting() {
     CommandPermission::AnyInWorktree,
     NetworkAccess::On,
   );
-  wider.set_auto_approve(true);
+  wider.set_approval_mode(ApprovalMode::Autopilot);
   assert_eq!(
     wider.widenings_from(&base),
     [
       Widening::Repository,
       Widening::Commands,
       Widening::Network,
-      Widening::AutoApprove
+      Widening::Autopilot
     ]
   );
   let added = permissions(
@@ -84,11 +84,8 @@ fn widening_names_every_broader_setting() {
   asked.set_interactive_tool_approvals(true);
   assert_eq!(base.widenings_from(&asked), [Widening::ToolCallsUnasked]);
   let mut auto = base;
-  auto.set_auto_approve(true);
-  assert!(
-    auto.widenings_from(&auto).is_empty(),
-    "keeping auto-approval is no change"
-  );
+  auto.set_approval_mode(ApprovalMode::Autopilot);
+  assert!(auto.widenings_from(&auto).is_empty(), "keeping Autopilot is no change");
 }
 
 #[test]

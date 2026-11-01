@@ -206,7 +206,6 @@ pub(super) fn permissions_json(permissions: &AgentPermissions) -> Value {
     "allowed_commands": allowed,
     "network": permissions.network(),
     "ask_before_tool_calls": permissions.interactive_tool_approvals(),
-    "approve_automatically": permissions.auto_approve(),
     "browser": { "access": browser.access(), "allowed_sites": sites },
     "approval_mode": permissions.approval_mode(),
   })

@@ -27,8 +27,6 @@ pub enum Widening {
   Network,
   /// Tool calls no longer asked about.
   ToolCallsUnasked,
-  /// Approving automatically where a person was asked.
-  AutoApprove,
   /// The browser where it was off.
   Browser,
   /// An allowed site of the browser that no site of the base covers.
@@ -63,7 +61,6 @@ impl AgentPermissions {
         base.interactive_tool_approvals && !self.interactive_tool_approvals,
         Widening::ToolCallsUnasked,
       ),
-      (self.auto_approve && !base.auto_approve, Widening::AutoApprove),
       (browser, Widening::Browser),
       (browser_site, Widening::BrowserSite),
       (
