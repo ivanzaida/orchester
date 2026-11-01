@@ -104,7 +104,7 @@ fn chat_continue_is_a_proposal_the_person_dismisses() {
     served
       .services()
       .workspace
-      .set_orchestrator_allows(consent, true)
+      .set_orchestrator_allows(&scope.root, consent, true)
       .expect("the person turned it on");
   }
   let number = run.number().get().to_string();

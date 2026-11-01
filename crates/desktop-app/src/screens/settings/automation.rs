@@ -231,7 +231,8 @@ impl Consent {
       Self::WindowControl => workspace.mcp_window_control().map(McpSettings::next_start),
       Self::AnswerApprovals => workspace.automation_answers_approvals(),
       Self::ChangePermissions => workspace.automation_changes_permissions(),
-      Self::Orchestrator(consent) => workspace.orchestrator_allows(consent),
+      // Application-wide until ORC-599 and ORC-600 move these rows to Project settings › Orchestrator.
+      Self::Orchestrator(consent) => workspace.app_wide_orchestrator_allows(consent),
     }
   }
 
@@ -241,7 +242,7 @@ impl Consent {
       Self::WindowControl => workspace.set_mcp_window_control(allowed),
       Self::AnswerApprovals => workspace.set_automation_answers_approvals(allowed),
       Self::ChangePermissions => workspace.set_automation_changes_permissions(allowed),
-      Self::Orchestrator(consent) => workspace.set_orchestrator_allows(consent, allowed),
+      Self::Orchestrator(consent) => workspace.set_app_wide_orchestrator_allows(consent, allowed),
     }
   }
 }
@@ -441,7 +442,7 @@ impl ConsentRow {
         match consent {
           Consent::AnswerApprovals => workspace.revoke_automation_approval_consent(),
           Consent::ChangePermissions => workspace.revoke_automation_permission_consent(),
-          Consent::Orchestrator(consent) => workspace.revoke_orchestrator_consent(consent),
+          Consent::Orchestrator(consent) => workspace.revoke_app_wide_orchestrator_consent(consent),
           // Read when the app starts: this run keeps what it started with, as the row's hint says.
           Consent::WindowControl => {}
         }

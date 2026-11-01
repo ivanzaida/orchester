@@ -345,14 +345,17 @@ fn read_facts(ctx: &mut Ctx, props: &ChangeProps) -> lurq::app::ctx::FutureState
       let (services, root, action) = (services.clone(), root.clone(), action.clone());
       async move {
         background::run(move || {
-          let facts = match root {
-            Some(root) => read::load_in(&root, &services.programs, &action)?,
-            None => None,
-          };
           let workspace = &services.workspace;
-          let publishes = workspace
-            .orchestrator_allows(OrchestratorConsent::PublishDrafts)
-            .map_err(|error| messages::store_error(&error))?;
+          // Without a scope there is no project whose switch could let it publish.
+          let (facts, publishes) = match root {
+            Some(root) => (
+              read::load_in(&root, &services.programs, &action)?,
+              workspace
+                .orchestrator_allows(&root, OrchestratorConsent::PublishDrafts)
+                .map_err(|error| messages::store_error(&error))?,
+            ),
+            None => (None, false),
+          };
           let widens = workspace
             .automation_changes_permissions()
             .map_err(|error| messages::store_error(&error))?;

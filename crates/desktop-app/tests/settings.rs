@@ -218,11 +218,15 @@ fn settings_only_a_person_lets_the_orchestrator_publish_answer_merge_or_continue
       window.texts(&format!("{switch}-blocked")).is_some()
     });
     assert!(
-      !workspace.orchestrator_allows(consent).expect("the setting reads"),
+      !workspace
+        .app_wide_orchestrator_allows(consent)
+        .expect("the setting reads"),
       "synthetic input does not turn {title} on"
     );
     window.until("the person's choice to be saved", |window| {
-      let stored = workspace.orchestrator_allows(consent).expect("the setting reads");
+      let stored = workspace
+        .app_wide_orchestrator_allows(consent)
+        .expect("the setting reads");
       if !stored {
         press_element(window, switch);
       }
@@ -244,7 +248,7 @@ fn settings_turning_off_an_orchestrator_switch_holds_from_the_click() {
   let workspace = window.launch.workspace().expect("session").clone();
   for (_, _, consent) in ORCHESTRATOR_SWITCHES {
     workspace
-      .set_orchestrator_allows(consent, true)
+      .set_app_wide_orchestrator_allows(consent, true)
       .expect("the person turned it on");
   }
   window.navigation().go(Route::Settings);
@@ -255,7 +259,7 @@ fn settings_turning_off_an_orchestrator_switch_holds_from_the_click() {
     // The person's click; its save has not run yet.
     window.tree.get_element_by_id_mut(switch).expect("the switch").click();
     assert!(
-      !workspace.orchestrator_allows(consent).expect("read"),
+      !workspace.app_wide_orchestrator_allows(consent).expect("read"),
       "{title} holds off from the click, before the save"
     );
   }

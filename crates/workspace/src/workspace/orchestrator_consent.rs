@@ -1,19 +1,28 @@
 //! The person's switches over what the Orchestrator chat does itself (`docs/design/orchestrator-toolset.md`,
-//! decisions 3 and 5), in Settings › What automation may do: *Let the Orchestrator publish drafts*, *Let the
-//! Orchestrator answer agents*, *Let the Orchestrator merge runs*, *Let the Orchestrator merge finished runs on its
-//! own*, *Let the Orchestrator continue interrupted runs* and *Let the Orchestrator write with git* (decision 9). Each
-//! is off until a person turns it on in the window, no tool changes it, and it is off from the moment a person turns it
-//! off, whether or not that was saved.
+//! decisions 3 and 5): *Let the Orchestrator publish drafts*, *Let the Orchestrator answer agents*, *Let the
+//! Orchestrator merge runs*, *Let the Orchestrator merge finished runs on its own*, *Let the Orchestrator continue
+//! interrupted runs* and *Let the Orchestrator write with git* (decision 9). Each is the project's own
+//! (`docs/design/settings.md`, ORC-594), kept in its database: a project with none of its own takes the
+//! application-wide value it moved from, once, when it is first read. Each is off until a person turns it on in the
+//! window, no tool changes it, and it is off in its project from the moment a person turns it off there, whether or
+//! not that was saved.
+//!
+//! Settings › What automation may do shows the application-wide values until its rows move to Project settings
+//! (ORC-599, ORC-600): the `app_wide_` methods are that screen's alone, and the Orchestrator never reads them.
 
-use std::sync::Arc;
+use std::{
+  collections::HashMap,
+  path::{Path, PathBuf},
+  sync::Arc,
+};
 
-use orchester_store::{AppDb, StoreError};
+use orchester_store::{AppDb, OrchestratorSwitch, ProjectDb, StoreError};
 use parking_lot::Mutex;
 
 use super::{Consent, Workspace};
 
 /// A switch over what the Orchestrator chat does itself.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum OrchestratorConsent {
   /// It publishes the drafts it saved instead of proposing each publication.
   PublishDrafts,
@@ -34,6 +43,7 @@ pub enum OrchestratorConsent {
 }
 
 impl OrchestratorConsent {
+  /// The application-wide value, in `app_settings`.
   fn read(self, db: &AppDb) -> Result<bool, StoreError> {
     match self {
       Self::PublishDrafts => db.orchestrator_publishes_drafts(),
@@ -55,64 +65,120 @@ impl OrchestratorConsent {
       Self::WriteGit => db.set_orchestrator_writes_git(allowed),
     }
   }
+
+  /// Its column in a project's database.
+  const fn switch(self) -> OrchestratorSwitch {
+    match self {
+      Self::PublishDrafts => OrchestratorSwitch::PublishDrafts,
+      Self::AnswerAgents => OrchestratorSwitch::AnswerAgents,
+      Self::MergeRuns => OrchestratorSwitch::MergeRuns,
+      Self::MergeFinished => OrchestratorSwitch::MergeFinished,
+      Self::ContinueInterrupted => OrchestratorSwitch::ContinueInterrupted,
+      Self::WriteGit => OrchestratorSwitch::WriteGit,
+    }
+  }
 }
 
-/// Each switch's last verified state: a person's revocation holds from their click, before it is saved.
+/// Each switch's last verified state, by project (`None`: the application-wide one): a person's revocation holds from
+/// their click, before it is saved.
 #[derive(Clone, Default)]
 pub(super) struct Consents {
-  publish: Arc<Mutex<Consent>>,
-  answer: Arc<Mutex<Consent>>,
-  merge: Arc<Mutex<Consent>>,
-  merge_finished: Arc<Mutex<Consent>>,
-  continue_interrupted: Arc<Mutex<Consent>>,
-  write_git: Arc<Mutex<Consent>>,
+  cells: Arc<Mutex<HashMap<(Option<PathBuf>, OrchestratorConsent), Arc<Mutex<Consent>>>>>,
+  /// Held around each read and save of a project's switch, as the application database's lock is around the
+  /// application-wide ones, so they publish in the order of their database work.
+  projects: Arc<Mutex<()>>,
 }
 
 impl Consents {
-  fn of(&self, consent: OrchestratorConsent) -> &Mutex<Consent> {
-    match consent {
-      OrchestratorConsent::PublishDrafts => &self.publish,
-      OrchestratorConsent::AnswerAgents => &self.answer,
-      OrchestratorConsent::MergeRuns => &self.merge,
-      OrchestratorConsent::MergeFinished => &self.merge_finished,
-      OrchestratorConsent::ContinueInterrupted => &self.continue_interrupted,
-      OrchestratorConsent::WriteGit => &self.write_git,
-    }
+  fn of(&self, project: Option<&Path>, consent: OrchestratorConsent) -> Arc<Mutex<Consent>> {
+    let key = (project.map(Path::to_path_buf), consent);
+    Arc::clone(self.cells.lock().entry(key).or_default())
   }
 }
 
 impl Workspace {
-  /// Whether the person lets the Orchestrator chat do what `consent` names itself.
-  pub fn orchestrator_allows(&self, consent: OrchestratorConsent) -> Result<bool, StoreError> {
+  /// Whether the person lets the Orchestrator chat do what `consent` names itself in the project at `repo_root`. A
+  /// project without a value of its own takes the application-wide one now, and keeps it.
+  pub fn orchestrator_allows(&self, repo_root: &Path, consent: OrchestratorConsent) -> Result<bool, StoreError> {
+    let _projects = self.orchestrator.projects.lock();
+    let result = ProjectDb::open(repo_root).and_then(|mut db| {
+      db.copy_orchestrator_switch(consent.switch(), || consent.read(&self.db.lock()))
+    });
+    publish_read(&self.orchestrator.of(Some(repo_root), consent), result)
+  }
+
+  /// Saves the person's choice for `consent` in the project at `repo_root`. Only the window's switch, which takes a
+  /// person's input alone, calls it.
+  pub fn set_orchestrator_allows(
+    &self,
+    repo_root: &Path,
+    consent: OrchestratorConsent,
+    allowed: bool,
+  ) -> Result<(), StoreError> {
+    let cell = self.orchestrator.of(Some(repo_root), consent);
+    save(&cell, allowed, || {
+      let projects = self.orchestrator.projects.lock();
+      let result = ProjectDb::open(repo_root).and_then(|mut db| db.set_orchestrator_switch(consent.switch(), allowed));
+      (projects, result)
+    })
+  }
+
+  /// A person turned `consent` off in the project at `repo_root`: it holds there now, before the save runs or if it
+  /// fails.
+  pub fn revoke_orchestrator_consent(&self, repo_root: &Path, consent: OrchestratorConsent) {
+    self.orchestrator.of(Some(repo_root), consent).lock().revoke();
+  }
+
+  /// The application-wide value of `consent`, which Settings › What automation may do shows until ORC-600; projects
+  /// copied it once, and the Orchestrator reads its project's own ([`Self::orchestrator_allows`]).
+  pub fn app_wide_orchestrator_allows(&self, consent: OrchestratorConsent) -> Result<bool, StoreError> {
     let db = self.db.lock();
-    let result = consent.read(&db);
-    let allowed = self.orchestrator.of(consent).lock().read(matches!(&result, Ok(true)));
-    result.map(|_| allowed)
+    publish_read(&self.orchestrator.of(None, consent), consent.read(&db))
   }
 
-  /// Saves the person's choice for `consent`. Only the window's switch, which takes a person's input alone, calls it.
-  pub fn set_orchestrator_allows(&self, consent: OrchestratorConsent, allowed: bool) -> Result<(), StoreError> {
-    let cell = self.orchestrator.of(consent);
-    let revision = {
-      let mut held = cell.lock();
-      if !allowed {
-        held.revoke();
-      }
-      held.begin_save();
-      held.revision
-    };
-    let mut db = self.db.lock();
-    let result = consent.write(&mut db, allowed);
+  /// Saves the person's application-wide choice for `consent`; only Settings › What automation may do calls it, and
+  /// a project that has its own value keeps it.
+  pub fn set_app_wide_orchestrator_allows(&self, consent: OrchestratorConsent, allowed: bool) -> Result<(), StoreError> {
+    let cell = self.orchestrator.of(None, consent);
+    save(&cell, allowed, || {
+      let mut db = self.db.lock();
+      let result = consent.write(&mut db, allowed);
+      (db, result)
+    })
+  }
+
+  /// A person turned the application-wide `consent` off: it holds now, before the save runs or if it fails.
+  pub fn revoke_app_wide_orchestrator_consent(&self, consent: OrchestratorConsent) {
+    self.orchestrator.of(None, consent).lock().revoke();
+  }
+}
+
+/// Publishes in `cell` what a read found, while the caller still holds its database lock, and returns what it reports.
+fn publish_read(cell: &Mutex<Consent>, result: Result<bool, StoreError>) -> Result<bool, StoreError> {
+  let allowed = cell.lock().read(matches!(&result, Ok(true)));
+  result.map(|_| allowed)
+}
+
+/// Saves `allowed` through `write`, which returns its database lock with the result so the outcome is published in
+/// `cell` before the lock is let go. Off holds in `cell` from before the save waits for the lock.
+fn save<Held>(
+  cell: &Mutex<Consent>,
+  allowed: bool,
+  write: impl FnOnce() -> (Held, Result<(), StoreError>),
+) -> Result<(), StoreError> {
+  let revision = {
     let mut held = cell.lock();
-    if result.is_ok() && held.revision == revision {
-      held.revoked = !allowed;
+    if !allowed {
+      held.revoke();
     }
-    held.finish_save(allowed && result.is_ok());
-    result
+    held.begin_save();
+    held.revision
+  };
+  let (_lock, result) = write();
+  let mut held = cell.lock();
+  if result.is_ok() && held.revision == revision {
+    held.revoked = !allowed;
   }
-
-  /// A person turned `consent` off: it holds now, before the save runs or if it fails.
-  pub fn revoke_orchestrator_consent(&self, consent: OrchestratorConsent) {
-    self.orchestrator.of(consent).lock().revoke();
-  }
+  held.finish_save(allowed && result.is_ok());
+  result
 }

@@ -60,11 +60,11 @@ pub(super) fn deliver(ctx: &mut Ctx, open: &OpenProject) {
 /// Delivers each report due now that this run of the app did not settle; how many it kept. The conversations are told
 /// when it kept one.
 async fn deliver_due(services: &Services, i18n: &I18n, open: &OpenProject) -> Result<u64, Message> {
-  let workspace = services.workspace.clone();
+  let (workspace, root) = (services.workspace.clone(), open.repo_root.clone());
   let read = background::run(move || {
     Ok::<_, StoreError>((
       workspace.daily_report_schedule()?,
-      workspace.orchestrator_allows(OrchestratorConsent::AnswerAgents)?,
+      workspace.orchestrator_allows(&root, OrchestratorConsent::AnswerAgents)?,
     ))
   })
   .await?
