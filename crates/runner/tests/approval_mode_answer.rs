@@ -209,6 +209,7 @@ async fn approval_mode_answer_autopilot_asks_the_reviewer_one_question_about_wha
   let (request, came) = unsure.came_to_person().await;
   assert_eq!(came.reason, PersonReason::ReviewerUnsure);
   assert_eq!(came.detail.as_deref(), Some(ASKS));
+  assert!(came.autopilot, "it came by Autopilot's rules");
   unsure.deny(request).await;
   unsure.ended().await;
   assert_eq!(unsure.logged("roots"), ["true"]);
@@ -226,7 +227,7 @@ async fn approval_mode_answer_autopilot_keeps_the_step_limits() {
   }
   let mut started = Started::new(with_default_reviewer(project(&setup))).await;
   let (request, came) = started.came_to_person().await;
-  assert_eq!(came, CameToPerson::because(PersonReason::NotAllowed));
+  assert_eq!(came, CameToPerson::because(PersonReason::NotAllowed).in_mode(true));
   started.deny(request).await;
   started.ended().await;
   assert_eq!(
@@ -332,6 +333,7 @@ async fn approval_mode_answer_manual_sends_the_rest_to_the_reviewer_then_the_per
   let (request, came) = denied.came_to_person().await;
   assert_eq!(came.reason, PersonReason::ReviewerDenied);
   assert_eq!(came.detail.as_deref(), Some(ASKS));
+  assert!(!came.autopilot, "it came by Manual's rules");
   denied.deny(request).await;
   denied.ended().await;
   assert_eq!(

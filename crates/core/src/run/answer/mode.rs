@@ -117,18 +117,48 @@ pub struct CameToPerson {
   pub reason: PersonReason,
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub detail: Option<String>,
+  /// How the review failed, for [`PersonReason::ReviewerCouldNotRun`]; `None` for a record written before the kind
+  /// was kept.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub failure: Option<ReviewFailure>,
+  /// It came by Autopilot's rules, which have no allowed list for MCP tools; `false` by Manual's, and for a record
+  /// written before the mode was kept.
+  #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+  pub autopilot: bool,
 }
 
 impl CameToPerson {
   pub const fn because(reason: PersonReason) -> Self {
-    Self { reason, detail: None }
+    Self {
+      reason,
+      detail: None,
+      failure: None,
+      autopilot: false,
+    }
   }
 
   fn with(reason: PersonReason, detail: &str) -> Self {
     Self {
-      reason,
       detail: Some(detail.to_owned()),
+      ..Self::because(reason)
     }
+  }
+
+  /// Why a request whose review ended with `failure`, no verdict, comes to the person: the reviewer could not judge it.
+  pub const fn reviewer_failed(failure: ReviewFailure) -> Self {
+    Self {
+      reason: PersonReason::ReviewerCouldNotRun,
+      detail: None,
+      failure: Some(failure),
+      autopilot: false,
+    }
+  }
+
+  /// The same, as it came by Autopilot's rules (`autopilot`) or Manual's.
+  #[must_use]
+  pub fn in_mode(mut self, autopilot: bool) -> Self {
+    self.autopilot = autopilot;
+    self
   }
 
   /// Why a request a hard rule kept from the reviewer comes to the person.
@@ -199,8 +229,8 @@ pub fn autopilot_step(check: &RootsCheck, limit: StepLimit) -> ModeStep {
 }
 
 /// What the reviewer's `review` of a request it was asked `question` about brings: its approval, or the person with
-/// why. A review that gave no verdict says the reviewer could not run, not that it was unsure; one that never asked a
-/// reviewer, as the project had none, comes as [`without_reviewer`] says.
+/// why. A review that gave no verdict says the reviewer could not judge it, with how it failed, not that it was
+/// unsure; one that never asked a reviewer, as the project had none, comes as [`without_reviewer`] says.
 pub fn after_review(question: ReviewQuestion, review: &Review) -> Result<RequestAnswer, CameToPerson> {
   match (review, question) {
     (Review::Approved { reason, .. }, _) => Ok(RequestAnswer::reviewer(reason)),
@@ -217,7 +247,7 @@ pub fn after_review(question: ReviewQuestion, review: &Review) -> Result<Request
       },
       _,
     ) => Err(without_reviewer(question)),
-    (Review::Failed { .. }, _) => Err(CameToPerson::because(PersonReason::ReviewerCouldNotRun)),
+    (Review::Failed { failure, .. }, _) => Err(CameToPerson::reviewer_failed(*failure)),
     (Review::Held { hold }, _) => Err(CameToPerson::held(*hold)),
   }
 }

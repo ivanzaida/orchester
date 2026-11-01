@@ -193,8 +193,8 @@ pub fn approval(shown: &ShownApproval, project: ProjectId, translate: &Translate
     // The hard rule that held it, as the card says it; absent unless a hard rule held it.
     "hold_cause": shown.hold_cause().map(|cause| translate.text(&cause)),
     // Why the run's approval mode brought it to the person (`outside`, `notAllowed`, `reviewerUnsure`,
-    // `reviewerCouldNotRun`, `reviewerDenied`, `push`, `refs`) with the path, ref or reviewer's reason; absent while
-    // the reviewer judges it. Why a reviewer could not run is `auto_mode`'s `failure`.
+    // `reviewerCouldNotRun`, `reviewerDenied`, `push`, `refs`) with the path, ref or reviewer's reason, how a review
+    // failed (`failure`) and whether it came by Autopilot's rules; absent while the reviewer judges it.
     "came_to_you": shown.came_to_person.as_ref(),
     "link": shown.task.as_deref().and_then(|key| wire::task_link(project, key, TaskPage::Conversation)),
   })
