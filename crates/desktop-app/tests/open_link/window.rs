@@ -1,6 +1,6 @@
-//! The window that takes a link: an invite the account's own listing has opens Settings › Orchester at its row, which
-//! keeps its own *Accept* and *Decline*; any other link, an invite not listed included, only shows *This link isn't
-//! for anything here* over the screen; signed out, the gate shows first and the invite opens after the sign-in.
+//! The window that takes a link: an invite the account's own listing has opens Settings Ã¢â‚¬Âº Orchester at its row,
+//! which keeps its own *Accept* and *Decline*; any other link, an invite not listed included, only shows *This link
+//! isn't for anything here* over the screen; signed out, Settings offers sign-in in place and then opens the invite.
 
 use orchester_app::{
   open_link::{OpenLink, host::NOTICE_ID},
@@ -36,6 +36,12 @@ fn with_invite(window: Window) -> Window {
   window
 }
 
+fn signed_in_window() -> Window {
+  let data = Data::new();
+  let launch = data.launch_signed_in();
+  with_invite(Window::of(data, launch))
+}
+
 fn push(window: &Window, link: OpenLink) {
   window.launch.services().expect("services").opened_links.push(link);
 }
@@ -58,10 +64,10 @@ fn has(window: &mut Window, id: &str) -> bool {
 
 #[test]
 fn open_link_window_opens_a_listed_invite_at_its_row() {
-  let mut window = with_invite(Window::open());
+  let mut window = signed_in_window();
   let before = window.navigation().route_now();
   push(&window, OpenLink::Invite(invite()));
-  window.until("Settings › Orchester at the invite", |window| {
+  window.until("Settings Ã¢â‚¬Âº Orchester at the invite", |window| {
     window.navigation().route_now() == at_invite()
   });
   assert_ne!(before, at_invite());
@@ -85,7 +91,7 @@ fn open_link_window_opens_a_listed_invite_at_its_row() {
 
 #[test]
 fn open_link_window_says_an_unlisted_invite_is_for_nothing_here() {
-  let mut window = with_invite(Window::open());
+  let mut window = signed_in_window();
   let before = window.navigation().route_now();
   push(&window, OpenLink::Invite(OTHER.parse().expect("an id")));
   shows(&mut window, NOTICE_ID);
@@ -98,7 +104,7 @@ fn open_link_window_says_an_unlisted_invite_is_for_nothing_here() {
 
 #[test]
 fn open_link_window_says_an_unknown_link_is_for_nothing_here_until_dismissed() {
-  let mut window = with_invite(Window::open());
+  let mut window = signed_in_window();
   let before = window.navigation().route_now();
   push(&window, OpenLink::Unknown);
   shows(&mut window, NOTICE_ID);
@@ -115,19 +121,10 @@ fn open_link_window_says_an_unknown_link_is_for_nothing_here_until_dismissed() {
 }
 
 #[test]
-fn open_link_window_signed_out_opens_the_invite_after_the_gate() {
+fn open_link_window_signed_out_offers_sign_in_in_settings_then_opens_the_invite() {
   let data = Data::new();
-  let launch = data.launch_signed_out();
+  let launch = data.launch();
   let mut window = with_invite(Window::of(data, launch));
-  push(&window, OpenLink::Invite(invite()));
-  shows(&mut window, "screen-sign-in-gate");
-  for _ in 0..20 {
-    window.tree.tick_futures();
-    window.pass();
-  }
-  assert!(!has(&mut window, NOTICE_ID), "the gate comes first");
-  assert!(has(&mut window, "screen-sign-in-gate"));
-  // The gate on the stand-in cloud, as *Advanced · cloud address* sets it, and a person's sign-in.
   let services = window.launch.services().expect("services").clone();
   let address = signed_in::cloud_address(&window.data.cloud);
   window
@@ -135,17 +132,19 @@ fn open_link_window_signed_out_opens_the_invite_after_the_gate() {
     .runtime
     .block_on(services.cloud.set_address(Some(address)))
     .expect("a test cloud");
-  window.until("the gate on the test cloud", |window| {
-    window
-      .texts("gate-footer-cloud")
-      .is_some_and(|texts| texts.join("").ends_with("· test cloud"))
-  });
-  shows(&mut window, "gate-email");
-  window.set("gate-email", EMAIL);
-  window.set("gate-password", PASSWORD);
-  window.press("gate-sign-in");
+  push(&window, OpenLink::Invite(invite()));
+  shows(&mut window, "sign-in-email");
+  assert_eq!(
+    window.navigation().route_now(),
+    Route::Orchester(OrchesterView::default())
+  );
+  assert!(!has(&mut window, NOTICE_ID), "the invite waits for sign-in");
+  assert!(!has(&mut window, "screen-sign-in-gate"), "local use stays unlocked");
+  window.set("sign-in-email", EMAIL);
+  window.set("sign-in-password", PASSWORD);
+  window.press("sign-in-submit");
   window.until("the invite after the sign-in", |window| {
-    window.tree.get_element_by_id("screen-sign-in-gate").is_none() && window.navigation().route_now() == at_invite()
+    window.navigation().route_now() == at_invite()
   });
   shows(&mut window, &format!("orchester-invite-{INVITE}"));
 }

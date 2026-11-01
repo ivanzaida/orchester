@@ -1,15 +1,28 @@
-//! The usual install folders of command-line programs on macOS, in the order they are searched
-//! after the inherited `PATH`. Only folders that exist are used.
+//! The macOS side of the search path: the `PATH` of the user's login shell, read as the app starts
+//! and again when a person asks, and the usual install folders of command-line programs, in the
+//! order they are searched after the inherited `PATH`. Only install folders that exist are used.
 
 use std::{
   env,
-  ffi::{OsStr, OsString},
+  ffi::OsString,
   fs,
+  io::{self, IsTerminal},
   path::{Path, PathBuf},
   process::Command as Process,
+  sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+  },
+  thread,
 };
 
 use orchester_core::command::Command;
+use parking_lot::Mutex;
+
+use super::{
+  SearchBasis, SearchPath,
+  login_shell::{self, LoginShellPath},
+};
 
 /// Homebrew on Apple silicon, Homebrew on Intel and the Node.js installer, MacPorts.
 const SYSTEM_FOLDERS: [&str; 3] = ["/opt/homebrew/bin", "/usr/local/bin", "/opt/local/bin"];
@@ -26,6 +39,14 @@ const HOME_FOLDERS: [&str; 7] = [
   ".cargo/bin",
 ];
 const NVM_VERSIONS: &str = ".nvm/versions/node";
+/// The login shell when `$SHELL` names none: macOS's default since Catalina.
+const DEFAULT_SHELL: &str = "/bin/zsh";
+
+/// What the reads found of the login shell's `PATH`; `None` until the first read ended, which holds the lock so
+/// whoever needs it waits for it.
+static LOGIN_SHELL: Mutex<Option<LoginShellPath>> = Mutex::new(None);
+/// Whether this process reads the login shell's `PATH` ([`start_reading`]).
+static READING: AtomicBool = AtomicBool::new(false);
 
 pub fn home() -> Option<PathBuf> {
   env::var_os("HOME").map(PathBuf::from).filter(|home| home.is_absolute())
@@ -53,24 +74,62 @@ pub fn home_folders(home: &Path) -> Vec<PathBuf> {
   folders
 }
 
-/// `path` followed by each of `folders` it does not contain yet.
-pub fn extend(path: Option<&OsStr>, folders: &[PathBuf]) -> OsString {
-  let mut entries: Vec<PathBuf> = path.map(|path| env::split_paths(path).collect()).unwrap_or_default();
-  for folder in folders {
-    if !entries.contains(folder) {
-      entries.push(folder.clone());
-    }
+/// Starts reading the login shell's `PATH` on a thread of its own, so the app's start does not wait
+/// for the user's shell start-up files.
+pub(super) fn start_reading() {
+  // Started from a terminal, the inherited PATH is the shell's already; and an interactive shell
+  // in a process group of its own would be stopped as soon as it touched that terminal.
+  if io::stdin().is_terminal() {
+    tracing::info!("started from a terminal: the login shell's PATH is not read");
+    return;
   }
-  env::join_paths(entries).unwrap_or_else(|error| {
-    // A folder with `:` in its name cannot be on a PATH; keep the PATH as it was.
-    tracing::warn!(%error, "cannot extend the PATH");
-    path.map(OsStr::to_os_string).unwrap_or_default()
-  })
+  READING.store(true, Ordering::Release);
+  let reading = thread::Builder::new().name("login-shell-path".into()).spawn(|| {
+    login_shell_folders();
+  });
+  if let Err(error) = reading {
+    tracing::warn!(%error, "cannot read the login shell's PATH in the background; the first program search reads it");
+  }
+}
+
+/// The folders of the login shell's `PATH`: none in a process that does not read it ([`start_reading`]),
+/// otherwise as last read, waiting for the first read, which takes at most [`login_shell::TIMEOUT`].
+pub fn login_shell_folders() -> Arc<[PathBuf]> {
+  known().map_or_else(Arc::default, |known| Arc::clone(known.folders()))
+}
+
+/// Reads the login shell's `PATH` again, without holding up the programs that start meanwhile; nothing in a process
+/// that does not read it ([`start_reading`]).
+pub(super) fn read_again() {
+  if !READING.load(Ordering::Acquire) {
+    return;
+  }
+  let known = LOGIN_SHELL.lock().clone().unwrap_or_default();
+  let read = read_login_shell(known);
+  *LOGIN_SHELL.lock() = Some(read);
+}
+
+/// What a search now can say it looked at, waiting for the first read as [`login_shell_folders`] does.
+pub(super) fn basis() -> SearchBasis {
+  known().map_or(SearchBasis::UsualFolders, |known| known.basis())
+}
+
+/// What is known of the login shell's `PATH`; `None` in a process that does not read it.
+fn known() -> Option<LoginShellPath> {
+  if !READING.load(Ordering::Acquire) {
+    return None;
+  }
+  let mut known = LOGIN_SHELL.lock();
+  Some(
+    known
+      .get_or_insert_with(|| read_login_shell(LoginShellPath::default()))
+      .clone(),
+  )
 }
 
 /// Gives the process of `command` the search path as its `PATH`: the `PATH` the command sets or
-/// inherits, then the usual folders, then the folder of `program` (the file that starts), so a
-/// CLI finds the Node.js installed beside it.
+/// inherits, then the login shell's and the usual folders, then the folder of `program` (the file
+/// that starts), so a CLI finds the Node.js installed beside it.
 pub(crate) fn apply(process: &mut Process, command: &Command, program: &Path) {
   let set = command
     .env()
@@ -79,11 +138,30 @@ pub(crate) fn apply(process: &mut Process, command: &Command, program: &Path) {
     .find(|(key, _)| key == "PATH")
     .map(|(_, value)| OsString::from(value));
   let path = set.or_else(|| command.inherits_env().then(|| env::var_os("PATH")).flatten());
-  let mut folders = usual_folders(home().as_deref());
+  let install = usual_folders(home().as_deref());
+  let mut search = SearchPath::merge(path.as_deref(), &login_shell_folders(), &install);
   if let Some(folder) = program.parent().filter(|folder| folder.is_absolute()) {
-    folders.push(folder.to_path_buf());
+    search = search.with_program_folder(folder);
   }
-  process.env("PATH", extend(path.as_deref(), &folders));
+  process.env("PATH", search.joined());
+}
+
+/// `known` after reading the login shell's `PATH`; the log says when the shell cannot be read.
+fn read_login_shell(known: LoginShellPath) -> LoginShellPath {
+  let shell = env::var_os("SHELL")
+    .map(PathBuf::from)
+    .filter(|shell| shell.is_absolute())
+    .unwrap_or_else(|| PathBuf::from(DEFAULT_SHELL));
+  let read = login_shell::read(&shell, login_shell::TIMEOUT);
+  match &read {
+    Ok(folders) => {
+      tracing::info!(folders = folders.len(), shell = %shell.display(), "read the login shell's PATH");
+    }
+    Err(error) => {
+      tracing::warn!(%error, shell = %shell.display(), "cannot read the login shell's PATH; programs are searched without it");
+    }
+  }
+  known.after_read(read, &shell)
 }
 
 /// The `prefix` npm installs global packages under, when `~/.npmrc` sets one.

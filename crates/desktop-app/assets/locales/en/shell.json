@@ -101,6 +101,8 @@
     "screens": {
       "allProjects": "All projects",
       "addProject": "Add project",
+      "joinTeam": "Join a team",
+      "firstDownload": "First download",
       "settings": "Settings",
       "overview": "Overview",
       "orchestrator": "Orchestrator",
@@ -251,10 +253,6 @@
           "certificateChanged": "{{count}} servers · a certificate changed"
         }
       },
-      "mcpLocked": "MCP {{address}} · sign-in required",
-      "mcpLockedQa": "MCP :{{port}} · QA · sign-in required",
-      "mcpLockedDevelopment": "MCP :{{port}} · sign-in required",
-      "mcpLockedShort": "MCP · sign-in required",
       "cloudOffline": "Orchester Cloud · offline",
       "browser": {
         "one": "Browser {{count}} tab",
@@ -290,6 +288,11 @@
         "queuedValue": {
           "one": "{{count}} task",
           "other": "{{count}} tasks"
+        },
+        "slotWaits": "Waiting",
+        "slotWaitsValue": {
+          "one": "{{count}} step for a slot · raise Agents at once",
+          "other": "{{count}} steps for a slot · raise Agents at once"
         },
         "server": "Team server",
         "mcp": "MCP server",
@@ -419,14 +422,7 @@
         "environment": "For this run: ORCHESTER_APP_MCP_WINDOW_CONTROL is set."
       },
       "openSettings": "Open Automation settings",
-      "portRefused": "Port {{port}} refused",
-      "locked": {
-        "title": "Orchester's MCP server",
-        "since": "Refusing every tool · since {{time}}",
-        "body": "Agents and other MCP clients still connect to {{address}}, but every tool answers “sign in required” until you sign in to Orchester Cloud in this window.",
-        "hint": "Signing in can't be done over MCP: only a person, in the window.",
-        "version": "Orchester {{version}}"
-      }
+      "portRefused": "Port {{port}} refused"
     },
     "cloud": {
       "title": "Orchester Cloud",

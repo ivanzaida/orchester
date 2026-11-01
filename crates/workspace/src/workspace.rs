@@ -1,15 +1,17 @@
 //! The personal workspace: the application database and the projects it knows. Every method
 //! blocks on SQLite or the file system; the UI calls them off the UI thread.
 //!
-//! The projects belong to the Orchester Cloud account signed in from this computer (the person's decision,
-//! 2026-10-16): the list, every lookup and every opening of a project are that account's alone, keyed by the cloud's
-//! account id. Another account signed in on the same computer sees only its own; while none is, only the projects
-//! added meanwhile, which the next account to sign in takes (`sharing::cloud`). Only the work that follows every
-//! project on this computer, and shows none of them, reads them all ([`Workspace::every_project`]). The team servers
-//! are the account's in the same way ([`servers`]).
+//! The app works without an Orchester Cloud account (the person's decision, 2026-10-28), and a project added while
+//! nobody is signed in is this computer's: it shows to whoever is signed in, and no sign-in claims it. A project added
+//! while an account is signed in is that account's (2026-10-16): its list, lookups and openings are that account's
+//! alone, keyed by the cloud's account id, and it waits while the account is signed out. A person moves an unshared
+//! project between the two ([`owners`]). Only the work that follows every project on this computer, and shows none of
+//! them, reads them all ([`Workspace::every_project`]). The team servers are owned in the same way ([`servers`]).
 
+mod account_root;
 mod browser;
 mod orchestrator_consent;
+mod owners;
 mod servers;
 
 use std::{
@@ -35,6 +37,7 @@ use parking_lot::Mutex;
 pub use self::{
   browser::{AgentsBrowser, BrowserSettings, ChooseBrowserError},
   orchestrator_consent::OrchestratorConsent,
+  owners::{MoveError, MoveTo},
 };
 use crate::{
   accounts::folders::found,
@@ -162,7 +165,7 @@ pub struct Workspace {
   pub(crate) listed: Arc<AtomicBool>,
   /// Counts the changes to the agent accounts made through this workspace ([`Workspace::account_changes`]).
   pub(crate) account_changes: Arc<tokio::sync::watch::Sender<u64>>,
-  /// Where Settings › Browser looks for an installed browser ([`browser`]).
+  /// Where Settings â€º Browser looks for an installed browser ([`browser`]).
   browser_folders: browser::BrowserFolders,
 }
 
@@ -176,7 +179,7 @@ impl Workspace {
   pub fn new(db: AppDb) -> Self {
     Self {
       db: Arc::new(Mutex::new(db)),
-      account_root: account_root().map(|root| Arc::from(found(&root))),
+      account_root: account_root::account_root().map(|root| Arc::from(found(&root))),
       trash: crate::accounts::trash::SharedTrash::default(),
       permission_consent: Arc::default(),
       approval_consent: Arc::default(),
@@ -205,6 +208,13 @@ impl Workspace {
     self
   }
 
+  /// The folder `name` for scratch files in Orchester's application data, beside the accounts' folders; the system's
+  /// temporary folder where there is none.
+  pub(crate) fn scratch(&self, name: &str) -> std::path::PathBuf {
+    let data = self.account_root.as_deref().and_then(Path::parent);
+    data.map_or_else(std::env::temp_dir, |data| data.join(name))
+  }
+
   pub fn landing(&self) -> Result<Landing, StoreError> {
     let Some(recent) = self.projects()?.into_iter().next() else {
       return Ok(Landing::FirstLaunch);
@@ -215,10 +225,10 @@ impl Workspace {
     })
   }
 
-  /// The signed-in account's projects, most recently opened first.
+  /// The projects shown now, most recently opened first: this computer's, and the signed-in account's own.
   pub fn projects(&self) -> Result<Vec<RegisteredProject>, StoreError> {
     let db = self.db.lock();
-    db.projects_of(owner(&db)?.as_ref())
+    db.projects_visible_to(owner(&db)?.as_ref())
   }
 
   /// Every project known on this computer, whichever account's: for the work that follows them all in the background
@@ -227,11 +237,11 @@ impl Workspace {
     self.db.lock().every_project()
   }
 
-  /// The folders of the projects the signed-in account does not see: other accounts' projects on this computer.
+  /// The folders of the projects not shown now: those of accounts other than the signed-in one on this computer.
   pub fn unseen_roots(&self) -> Result<HashSet<PathBuf>, StoreError> {
     let db = self.db.lock();
     let seen: HashSet<ProjectId> = db
-      .projects_of(owner(&db)?.as_ref())?
+      .projects_visible_to(owner(&db)?.as_ref())?
       .into_iter()
       .map(|project| project.id)
       .collect();
@@ -266,8 +276,8 @@ impl Workspace {
   }
 
   /// Opens the project Orchester keeps in the folder `repo_root` and records it as the most
-  /// recently used one; a folder whose project was removed from the list is added again. Another account's project
-  /// is refused ([`StoreError::ProjectOfAnotherAccount`]).
+  /// recently used one; a folder whose project was removed from the list is added again. An account's project is
+  /// refused to anyone else ([`StoreError::ProjectOfAnotherAccount`], [`StoreError::ProjectOfSignedOutAccount`]).
   pub fn open(&self, repo_root: &Path) -> Result<OpenProject, StoreError> {
     let db = ProjectDb::open(repo_root)?;
     let project = db.project().clone();
@@ -292,7 +302,8 @@ impl Workspace {
     })
   }
 
-  /// Records `project` in `repo_root` as the signed-in account's, used now.
+  /// Records `project` in `repo_root` as used now: a new one as the signed-in account's, or this computer's while
+  /// nobody is signed in; a known one stays whose it is.
   fn register(&self, project: &Project, repo_root: &Path) -> Result<(), StoreError> {
     let mut db = self.db.lock();
     let owner = owner(&db)?;
@@ -411,7 +422,7 @@ impl Workspace {
   }
 
   /// Whether Orchester estimates the story points of the tasks of the project at `repo_root` that have no person's
-  /// value (*Let Orchester estimate story points*, Project settings › Runs): the project's own setting once a person
+  /// value (*Let Orchester estimate story points*, Project settings â€º Runs): the project's own setting once a person
   /// set it there, else the application-wide one it moved from, which was off until a person turned it on.
   pub fn estimates_story_points(&self, repo_root: &Path) -> Result<bool, StoreError> {
     match ProjectDb::open(repo_root)?.estimates_story_points()? {
@@ -425,7 +436,7 @@ impl Workspace {
     ProjectDb::open(repo_root)?.set_estimates_story_points(allowed)
   }
 
-  /// Where Usage › Plan limits draws its warning line, for every project; 80 % until it is changed.
+  /// Where Usage â€º Plan limits draws its warning line, for every project; 80 % until it is changed.
   pub fn usage_warning_threshold(&self) -> Result<WarningThreshold, StoreError> {
     self.db.lock().usage_warning_threshold()
   }
@@ -458,7 +469,7 @@ impl Workspace {
     self.db.lock().sends_error_reports()
   }
 
-  /// Keeps a person's choice of *Send error reports* (Settings › General); the app's client and its runners follow it
+  /// Keeps a person's choice of *Send error reports* (Settings â€º General); the app's client and its runners follow it
   /// at once (`orchester_app::error_reports::turn`), not through this.
   pub fn set_sends_error_reports(&self, allowed: bool) -> Result<(), StoreError> {
     self.db.lock().set_sends_error_reports(allowed)
@@ -488,7 +499,7 @@ impl Workspace {
     self.db.lock().set_mcp_window_control(Some(allowed))
   }
 
-  /// The application database's file (Settings › General › *Application data*); `None` for one only in memory.
+  /// The application database's file (Settings â€º General â€º *Application data*); `None` for one only in memory.
   pub fn database_path(&self) -> Option<PathBuf> {
     self.db.lock().path()
   }
@@ -567,27 +578,5 @@ impl Consent {
   fn finish_save(&mut self, saved: bool) {
     self.saving -= 1;
     self.allowed = self.saving == 0 && !self.revoked && saved;
-  }
-}
-
-/// Where new agent accounts' folders go: `ORCHESTER_ACCOUNTS_DIR` when a QA copy or a test names one, so it never
-/// writes the person's own account folders, else Orchester's application data (`location::accounts_dir`). The
-/// installed app ignores the variable ([`crate::build::Build`]); one that is not a plain full path gives no folder.
-fn account_root() -> Option<std::path::PathBuf> {
-  let named = std::env::var_os("ORCHESTER_ACCOUNTS_DIR").filter(|folder| !folder.is_empty());
-  if let Some(folder) = named.filter(|_| crate::build::Build::this() == crate::build::Build::Other) {
-    let folder = std::path::PathBuf::from(folder);
-    if orchester_core::account::plain_full_path(&folder) {
-      return Some(folder);
-    }
-    tracing::error!(folder = %folder.display(), "ORCHESTER_ACCOUNTS_DIR is not a plain full path; no folder for new agent accounts");
-    return None;
-  }
-  match orchester_store::location::accounts_dir() {
-    Ok(folder) => Some(folder),
-    Err(error) => {
-      tracing::warn!(%error, "no folder for new agent accounts");
-      None
-    }
   }
 }

@@ -8,7 +8,7 @@ use std::{
 };
 
 use orchester_core::{
-  id::{ProjectId, RunId},
+  id::{ProjectId, RunId, StepExecutionId},
   run::RunNumber,
   store::TaskStore,
   task::Task,
@@ -31,9 +31,11 @@ use crate::{
     services::{Services, blocking},
   },
   links::{Link, TaskPage},
+  messages::Message,
   tasks::{
     delivery::settle_records,
     history::{RunRecord, runs_of},
+    slot_wait::{slot_waits, waiting_steps},
   },
 };
 
@@ -66,9 +68,9 @@ pub async fn list_runs(services: &Services, args: ListRuns, translate: &Translat
       "`limit` is 1 to {MAX_LIMIT}, not {limit}"
     )));
   }
-  let services = services.clone();
+  let reading = services.clone();
   let read = blocking(move || {
-    let mut read = across(&services, args.project.as_deref(), |_, db| {
+    let mut read = across(&reading, args.project.as_deref(), |_, db| {
       let tasks = match &args.task {
         Some(named) => vec![find_task(db, named)?],
         None => db.tasks()?,
@@ -90,18 +92,25 @@ pub async fn list_runs(services: &Services, args: ListRuns, translate: &Translat
         .iter_mut()
         .flat_map(|(_, runs)| runs.iter_mut())
         .filter(|run| given.contains(&run.id));
-      settle_records(&services.programs, &open.repo_root, runs);
+      settle_records(&reading.programs, &open.repo_root, runs);
     });
     Ok(read)
   })
   .await?;
   let mut runs = read.items(|open, (tasks, deliveries)| {
+    let waits = slot_waits(services.runners.status_of(&open.repo_root).as_ref(), &open.repo_root);
     tasks
       .iter()
       .flat_map(|(task, runs)| {
-        runs
-          .iter()
-          .map(|run| run_json(open.project.id(), (task, run, deliveries.get(&run.id)), translate))
+        let waits = &waits;
+        runs.iter().map(move |run| {
+          run_json(
+            open.project.id(),
+            (task, run, deliveries.get(&run.id)),
+            waits,
+            translate,
+          )
+        })
       })
       .collect()
   });
@@ -129,10 +138,11 @@ fn newest(read: &Across<Listed>, limit: usize) -> HashSet<RunId> {
 
 /// A run of `task` of `project` as the task's Summary lists it, with its state, its place in the merge queue
 /// (`delivery`, when it joined it), its tokens and its link: the task's page. A run that cannot be read has its id,
-/// number and why alone.
+/// number and why alone. `waits`: the executions the project's runner says wait for an agent slot.
 fn run_json(
   project: ProjectId,
   (task, record, delivery): (&Task, &RunRecord, Option<&Value>),
+  waits: &[StepExecutionId],
   translate: &Translate,
 ) -> Value {
   let run = record.run.as_deref();
@@ -143,10 +153,30 @@ fn run_json(
     "phase": record.phase.map(wire::phase),
     "status": run.map(|run| wire::run_status(run.status(), record.runner_failure)),
     "delivery": delivery,
-    "detail": translate.text(&record.detail),
+    "detail": detail(record, waits, translate),
     "tokens": run.map(|run| json!({ "used": run.used().get(), "budget": run.budget().map(TokenBudget::get) })),
     "created_at": run.map(|run| wire::time(run.created_at())),
     "changed_at": record.at.map(wire::time),
     "link": Link::Task(project, task.key().clone(), TaskPage::Summary).path(),
   })
+}
+
+/// What happened in the run and, while any of its steps wait for an agent slot, which.
+fn detail(record: &RunRecord, waits: &[StepExecutionId], translate: &Translate) -> String {
+  let detail = translate.text(&record.detail);
+  let steps = record
+    .run
+    .as_deref()
+    .map_or_else(Vec::new, |run| waiting_steps(run, waits));
+  let key = match steps.len() {
+    0 => return detail,
+    1 => "runs.history.slotWait.one",
+    _ => "runs.history.slotWait.other",
+  };
+  let separator = translate.text(&Message::new("common.listSeparator"));
+  translate.text(
+    &Message::new(key)
+      .with("detail", detail)
+      .with("steps", steps.join(&separator)),
+  )
 }

@@ -55,6 +55,7 @@ pub mod run;
 pub mod run_again;
 pub mod run_approvals;
 pub(crate) mod run_times;
+pub mod slot_wait;
 pub mod standing;
 mod step_executors;
 pub mod timeline;

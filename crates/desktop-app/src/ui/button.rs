@@ -125,6 +125,7 @@ pub struct ActionButton {
   id: Arc<str>,
   label: Arc<str>,
   icon: Option<Icon>,
+  after: Option<Icon>,
   kind: ButtonKind,
   action: Option<Press>,
   hold: Option<Hold>,
@@ -138,6 +139,8 @@ pub struct ActionButton {
   small: bool,
   /// 36 high with a 13/500 label.
   large: bool,
+  /// Large and not primary, with a primary's room at each side.
+  roomy: bool,
   bounded: bool,
   /// Drawn pressed while what it opened shows.
   held: bool,
@@ -161,6 +164,7 @@ impl ActionButton {
       id: id.into(),
       label: label.into(),
       icon: None,
+      after: None,
       kind,
       action: None,
       hold: None,
@@ -170,6 +174,7 @@ impl ActionButton {
       tight: false,
       small: false,
       large: false,
+      roomy: false,
       bounded: false,
       held: false,
       applied: false,
@@ -183,6 +188,13 @@ impl ActionButton {
 
   pub fn icon(mut self, icon: Icon) -> Self {
     self.icon = Some(icon);
+    self
+  }
+
+  /// `icon` after the label, where a press goes on to a next step (`Sign in →` in `j7SbPk`); gone while the button is
+  /// held, when the loader says it is under way.
+  pub fn after(mut self, icon: Icon) -> Self {
+    self.after = Some(icon);
     self
   }
 
@@ -293,6 +305,13 @@ impl ActionButton {
     self
   }
 
+  /// A large button that is not primary with 16 at each side, as the start page's steps draw it (`Back` `eMkuS`,
+  /// `Choose…` `a0csJ`).
+  pub fn roomy(mut self) -> Self {
+    self.roomy = true;
+    self
+  }
+
   /// Keep a long label within the available width; the full accessible name is retained.
   pub fn bounded_label(mut self) -> Self {
     self.bounded = true;
@@ -374,12 +393,14 @@ impl ActionButton {
     }
   }
 
-  /// The room at each side of its content: 12, a tight one's 10, a large button's 16, or 14 when it is not primary.
+  /// The room at each side of its content: 12, a tight one's 10, a large button's 16, or 14 when it is not primary and
+  /// not [`Self::roomy`].
   fn side(&self) -> SpacingSize {
     match (self.large, self.kind) {
       (false, _) if self.tight => ExtraSpacing::Loose.role(),
       (false, _) => SpacingSize::Md,
       (true, ButtonKind::Primary) => SpacingSize::Lg,
+      (true, _) if self.roomy => SpacingSize::Lg,
       (true, _) => ExtraSpacing::Inset.role(),
     }
   }
@@ -510,7 +531,15 @@ impl From<ActionButton> for Element {
     if let Some(lead) = button.lead() {
       frame = frame.child(icon(lead, glyph, color.clone()).id(format!("{}-icon", button.id)));
     }
-    frame = button.kind.dressed(frame).child(button.slot(color));
+    let after = button
+      .after
+      .filter(|_| button.hold.is_none())
+      .map(|after| icon(after, glyph, color.clone()));
+    frame = button
+      .kind
+      .dressed(frame)
+      .child(button.slot(color))
+      .with_children(after);
     if button.kind == ButtonKind::Select {
       frame = frame.child(icon(Icon::ChevronDown, IconSize::Md, PaletteColor::TextMuted));
     }

@@ -1,6 +1,8 @@
-//! The window with the system's pickers and clipboard replaced: a picker that hands over the path a test chose, an
-//! *Attach* picker that hands over the files a test chose, and a copier that keeps what was copied, so no native
-//! dialog opens and the person's clipboard is left alone.
+//! The window with the system's pickers, clipboard, CLI search and clone console replaced: a picker that hands over
+//! the path a test chose, an *Attach* picker that hands over the files a test chose, a copier that keeps what was
+//! copied, a search for agent CLIs in folders a test names, in none until it does, and a clone console that does what
+//! a test scripts ([`ConsoleScript`]), so no native dialog or console window opens, the person's clipboard is left
+//! alone and what is installed on the machine does not change what a test sees.
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -11,23 +13,43 @@ use lurq::{
   },
   node::Element,
 };
+use orchester_exec::search_path::{SearchBasis, SearchPath};
+use orchester_workspace::sharing::project::clone::{Clones, LaunchJob};
 use parking_lot::Mutex;
 
+pub use super::stand_in_console::{Console, ConsoleScript};
 use super::{Data, Window};
 use crate::{
   mcp::{McpKind, McpLink, McpSettings, McpStatus},
   root::{Root, RootProps},
-  services::{attachment_picker::AttachmentPicker, path_picker::PathPicker},
+  services::{attachment_picker::AttachmentPicker, cli_search::CliSearch, path_picker::PathPicker},
   startup::Launch,
   ui::code_box::Copier,
 };
 
-/// What the stand-in pickers hand over next, and what the stand-in copier was given.
-#[derive(Clone, Default)]
+/// What the stand-in pickers hand over next, what the stand-in copier was given, where the stand-in search looks, how
+/// often it was asked to read the login shell again, and what the stand-in clone console does and was given.
+#[derive(Clone)]
 pub struct StandIns {
   pub next: Arc<Mutex<Option<PathBuf>>>,
   pub attach: Arc<Mutex<Vec<PathBuf>>>,
   pub copied: Arc<Mutex<Vec<String>>>,
+  pub searched: Arc<Mutex<(SearchPath, SearchBasis)>>,
+  pub shell_reads: Arc<Mutex<u32>>,
+  pub console: Console,
+}
+
+impl Default for StandIns {
+  fn default() -> Self {
+    Self {
+      next: Arc::default(),
+      attach: Arc::default(),
+      copied: Arc::default(),
+      searched: Arc::new(Mutex::new((SearchPath::default(), SearchBasis::Path))),
+      shell_reads: Arc::default(),
+      console: Console::default(),
+    }
+  }
 }
 
 impl StandIns {
@@ -39,6 +61,31 @@ impl StandIns {
   /// *Attach*'s picker hands over `files` the next times it is opened; none closes it without a choice.
   pub fn attach(&self, files: Vec<PathBuf>) {
     *self.attach.lock() = files;
+  }
+
+  /// Agent CLIs are looked for in `search`, which looked at `basis`, from the next search on.
+  pub fn search(&self, search: SearchPath, basis: SearchBasis) {
+    *self.searched.lock() = (search, basis);
+  }
+
+  /// The clone console does as `script` says from the next clone on.
+  pub fn console(&self, script: ConsoleScript) {
+    self.console.script(script);
+  }
+
+  /// The clones the stand-in console was asked to run, in order.
+  pub fn consoles(&self) -> Vec<LaunchJob> {
+    self.console.jobs()
+  }
+
+  /// A console that holds ([`ConsoleScript::Holds`]) ends as the script after it says.
+  pub fn release_console(&self) {
+    self.console.release();
+  }
+
+  fn clones(&self) -> Clones {
+    let console = self.console.clone();
+    Clones::with_launcher(move |job| console.run(job))
   }
 
   fn picker(&self) -> PathPicker {
@@ -64,6 +111,16 @@ impl StandIns {
       true
     })
   }
+
+  fn cli_search(&self) -> CliSearch {
+    let (searched, shell_reads) = (self.searched.clone(), self.shell_reads.clone());
+    CliSearch::new(move |read_again| {
+      if read_again {
+        *shell_reads.lock() += 1;
+      }
+      searched.lock().clone()
+    })
+  }
 }
 
 #[derive(Clone)]
@@ -72,6 +129,8 @@ struct HostProps {
   picker: PathPicker,
   attach: AttachmentPicker,
   copier: Copier,
+  cli_search: CliSearch,
+  clones: Clones,
 }
 
 impl PartialEq for HostProps {
@@ -97,6 +156,8 @@ impl Component for Host {
     ctx.provide(props.picker);
     ctx.provide(props.attach);
     ctx.provide(props.copier);
+    ctx.provide(props.cli_search);
+    ctx.provide(props.clones);
     ctx.mount_keyed::<Root>("app", props.root)
   }
 }
@@ -121,6 +182,8 @@ impl Window {
       picker: stand_ins.picker(),
       attach: stand_ins.attach_picker(),
       copier: stand_ins.copier(),
+      cli_search: stand_ins.cli_search(),
+      clones: stand_ins.clones(),
     };
     window.tree.mount_root::<Host>(&mut window.app, props);
     window.pass();

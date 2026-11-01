@@ -58,7 +58,8 @@ them, and an older build then refuses them ("Orchester can't open its data").
 
 - **git** — projects are git repositories and runs work in git worktrees.
 - **An agent CLI** — Claude Code (`claude`) and/or Codex (`codex`), installed and signed in.
-- **An Orchester Cloud account** — the app is locked until this computer signs in once.
+- Optional: **an Orchester Cloud account**, for sharing to a team, invites and the account's team servers. Local work
+  needs none.
 - Optional: **`gh`** (GitHub CLI) for GitHub detection, pull requests and the Pull requests page; **ripgrep** for the
   code index (installable from Project settings › Context › Code index).
 

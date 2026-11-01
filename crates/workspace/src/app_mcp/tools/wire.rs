@@ -190,9 +190,11 @@ pub fn run_status(status: &RunStatus, runner_failure: Option<RunnerFailure>) -> 
   json!({ "state": state, "reason": reason })
 }
 
-/// A step's state and, while it waits, what for.
-pub fn step_status(status: StepStatus) -> Value {
+/// A step's state and, while it waits, what for: `agent_slot` for a ready step that `waits_for_slot`, which only the
+/// runner knows and nothing stores.
+pub fn step_status(status: StepStatus, waits_for_slot: bool) -> Value {
   let (state, waits_for) = match status {
+    StepStatus::Pending if waits_for_slot => ("pending", json!("agent_slot")),
     StepStatus::Pending => ("pending", Value::Null),
     StepStatus::Running => ("running", Value::Null),
     StepStatus::Waiting(reason) => ("waiting", plain(&reason)),

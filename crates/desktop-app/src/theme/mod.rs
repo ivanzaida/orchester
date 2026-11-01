@@ -27,7 +27,6 @@ mod failure;
 mod files;
 mod fonts;
 mod form;
-mod gate;
 mod groups;
 mod hub;
 mod import;
@@ -51,6 +50,7 @@ mod secrets;
 mod settings;
 mod shadow;
 mod shell;
+mod sign_in;
 pub mod skills;
 mod sources;
 mod startup;
@@ -83,7 +83,6 @@ pub use self::{
   failure::{FailureSpacing, FailureText},
   files::{FilesRadius, FilesText},
   fonts::mono_space,
-  gate::{GateSpacing, GateText},
   groups::GroupText,
   hub::{HubSpacing, HubText},
   import::{ImportSpacing, ImportText},
@@ -106,6 +105,7 @@ pub use self::{
   settings::{SettingsSpacing, SettingsText},
   shadow::ExtraShadow,
   shell::{ShellSpacing, ShellText},
+  sign_in::{SignInSpacing, SignInText},
   sources::{SourcesSpacing, SourcesText},
   startup::{StartupSpacing, StartupText},
   task::{TaskSpacing, TaskText},
@@ -146,7 +146,7 @@ pub fn install(app: &mut App, mode: Mode) {
   settings::install(theme);
   accounts::install(theme);
   orchester::install(theme);
-  gate::install(theme);
+  sign_in::install(theme);
   task::install(theme);
   decisions::install(theme);
   task_form::install(theme);

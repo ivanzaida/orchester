@@ -1,7 +1,6 @@
-//! Why this computer's last Orchester Cloud sign-in ended (the sign-in gate, 2026-10-16): at most one row, the email
-//! that was signed in, the reason and when, and for a sign-in ended to sign in again with a code, the invite that asked
-//! for it. The gate names the reason in its notice and fills in the email; the row goes when an account signs in
-//! again.
+//! Why this computer's last Orchester Cloud sign-in ended (2026-10-16): at most one row, the email that was signed in,
+//! the reason and when, and for a sign-in ended to sign in again with a code, the invite that asked for it. The sign-in
+//! names the reason in its notice and fills in the email; the row goes when an account signs in again.
 
 use orchester_core::time::Timestamp;
 use rusqlite::{OptionalExtension, params};

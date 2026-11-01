@@ -13,6 +13,20 @@ use orchester_ipc::{RunWork, WorkState};
 use super::run::{ExecutionError, RunTask};
 
 impl RunTask {
+  /// Tells the board which ready agent steps of the run wait for an agent slot, after [`RunTask::start_ready`] said
+  /// whether anything could not start (`waiting_for_slot`). A free slot means something else held it back (a busy
+  /// workspace, no command slot); a run waiting for its workspace would not start with more slots either, and a tool
+  /// step waits for a command slot, which more agent slots would not give it.
+  pub(super) fn report_slot_waits(&self, waiting_for_slot: bool) {
+    let waiting = if waiting_for_slot && !self.waits_for_workspace && !self.board.has_free_slot() {
+      let ready = self.run.executions_to_start(usize::MAX).into_iter();
+      ready.filter(|execution| !self.is_tool_step(*execution)).collect()
+    } else {
+      Vec::new()
+    };
+    self.board.waiting_for_slot(self.run.id(), waiting);
+  }
+
   /// The work of `execution`, an agent step of the run; `None` when its agent profile version
   /// or connection is gone, which fails the step when it starts.
   pub(super) fn work(&self, execution: StepExecutionId) -> Result<Option<RunWork>, ExecutionError> {

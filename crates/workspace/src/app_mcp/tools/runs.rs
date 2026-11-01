@@ -6,7 +6,7 @@
 use std::path::Path;
 
 use orchester_core::{
-  id::{ProjectId, RunId},
+  id::{ProjectId, RunId, StepExecutionId},
   run::{
     Plan, Run, RunStatus,
     review::{ReviewRecord, reviews_usage},
@@ -44,6 +44,7 @@ use crate::{
     history,
     plan::PlanReview,
     run::control_message,
+    slot_wait::slot_waits,
   },
   workspace::OpenProject,
 };
@@ -104,15 +105,9 @@ fn read_run(services: &Services, args: &InRun) -> Result<(Value, Vec<ShownApprov
     plan
   });
   let decided = decided_plans(&view, &conversation);
-  let usage = view.usage();
-  // Invocations whose CLI reported input but no output yet: their output is unknown, not 0.
-  let output_unreported = view
-    .invocations
-    .iter()
-    .filter(|invocation| invocation.usage.output_unreported())
-    .count();
   let run = &view.run;
-  let steps: Vec<Value> = view.steps.iter().map(step).collect();
+  let waits = slot_waits(services.runners.status_of(&root).as_ref(), &root);
+  let steps: Vec<Value> = view.steps.iter().map(|shown| step(shown, &waits)).collect();
   let unverified: Vec<Value> = view
     .unverified()
     .iter()
@@ -125,15 +120,7 @@ fn read_run(services: &Services, args: &InRun) -> Result<(Value, Vec<ShownApprov
     "pipeline": { "name": &*view.pipeline, "version": view.version.get() },
     "status": wire::run_status(run.status(), view.runner_failure),
     "unverified": unverified,
-    "tokens": {
-      "used": run.used().get(),
-      "budget": run.budget().map(TokenBudget::get),
-      "input": usage.input,
-      "cached_input": usage.cached_input,
-      "output": usage.output,
-      "output_unreported": output_unreported,
-      "reviewer": reviewer_tokens(&view.reviews),
-    },
+    "tokens": run_tokens(&view),
     "time": {
       "active_seconds": view.active_time(Timestamp::now()).as_secs(),
       "limit_seconds": run.max_duration().map(|limit| limit.as_secs()),
@@ -161,6 +148,26 @@ fn read_run(services: &Services, args: &InRun) -> Result<(Value, Vec<ShownApprov
     "link": Link::Task(project, task.key().clone(), TaskPage::Summary).path(),
   });
   Ok((read, waiting, project))
+}
+
+/// The run's token totals, with the reviewer's use apart and unknown output reported explicitly.
+fn run_tokens(view: &RunView) -> Value {
+  let usage = view.usage();
+  // Invocations whose CLI reported input but no output yet: their output is unknown, not 0.
+  let output_unreported = view
+    .invocations
+    .iter()
+    .filter(|invocation| invocation.usage.output_unreported())
+    .count();
+  json!({
+    "used": view.run.used().get(),
+    "budget": view.run.budget().map(TokenBudget::get),
+    "input": usage.input,
+    "cached_input": usage.cached_input,
+    "output": usage.output,
+    "output_unreported": output_unreported,
+    "reviewer": reviewer_tokens(&view.reviews),
+  })
 }
 
 /// How each tool request of `run` was answered by its approval mode, oldest first: `answered` (`autopilot`, `profile`,
@@ -309,14 +316,16 @@ fn decided_plans(view: &RunView, link: &str) -> Vec<Value> {
     .collect()
 }
 
-fn step(step: &StepView) -> Value {
+/// A step of the run; `waits`: the executions the project's runner says wait for an agent slot.
+fn step(step: &StepView, waits: &[StepExecutionId]) -> Value {
+  let waits_for_slot = step.execution.is_some_and(|execution| waits.contains(&execution));
   json!({
     "key": step.key.to_string(),
     "name": &*step.name,
     "agent": step.agent.as_deref(),
     "model": step.model.as_deref(),
     "tool_step": step.tool_step,
-    "status": step.status.map(wire::step_status),
+    "status": step.status.map(|status| wire::step_status(status, waits_for_slot)),
     "attempt": step.attempt.map(std::num::NonZeroU32::get),
   })
 }

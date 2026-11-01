@@ -3,20 +3,20 @@
 //! *Forgot password* open in the browser, the cloud's web and API addresses (the build's, or a test cloud's from
 //! Settings › Orchester Cloud › Advanced), and the account's invites ([`invites`]). The account is in the application
 //! database's `cloud_account` row; its device token in the keychain, under this installation's id, so a development
-//! build or a QA copy never signs the installed app in or out. The projects and team servers on this computer are each
-//! account's own: the signed-in account sees only its own, and another's stay, with their tokens, for when it signs in
-//! again, their shared projects kept in step meanwhile. The app is used only while this computer is signed in
-//! ([`gate`]).
+//! build or a QA copy never signs the installed app in or out. The app works without a sign-in (the person's decision,
+//! 2026-10-28): only team features ask for one. The projects and team servers added while nobody is signed in are this
+//! computer's and show to everyone; those added while an account is signed in are that account's: it alone sees them,
+//! and they stay, with their tokens, for when it signs in again, their shared projects kept in step meanwhile
+//! ([`state`]).
 
 mod accepting;
 mod asking;
-mod claiming;
 mod error;
-mod gate;
 mod invites;
 mod moved;
 mod seen;
 mod signing_in;
+mod state;
 mod two_factor;
 
 use std::sync::{
@@ -41,10 +41,10 @@ pub use self::{
   accepting::Accepted,
   asking::{Checked, MAX_ASKS, may_ask, waits},
   error::CloudError,
-  gate::{CHECK_EVERY, RETRY_AFTER_CAP, RETRY_CAP, RETRY_EVERY, Reach, SignIn, keep_checking, retry_wait},
   invites::ServerJoin,
   seen::keep_activity_to_the_account,
   signing_in::{CHALLENGE_LIFE, Challenge, CodeKind, CodeSignedIn, SignInStep},
+  state::{CHECK_EVERY, RETRY_AFTER_CAP, RETRY_CAP, RETRY_EVERY, Reach, SignIn, keep_checking, retry_wait},
   two_factor::FEW_RECOVERY_CODES,
 };
 use super::Servers;
@@ -275,7 +275,7 @@ impl Cloud {
     }
   }
 
-  /// Ends this computer's sign-in for `reason` at `at`: the gate shows from now on, whatever the database or the
+  /// Ends this computer's sign-in for `reason` at `at`: signed out from now on, whatever the database or the
   /// keychain answer. The account leaves the database first, then its token the keychain; a token the keychain keeps
   /// (it refused) does no harm without an account, and the next sign-in replaces it. With `generation`, only the
   /// sign-in of that generation ends: a refusal that arrives after a newer sign-in or end changes nothing (`false`).
@@ -295,7 +295,7 @@ impl Cloud {
     let ended = match &forgot {
       Ok(Forgot::Stale) => return Ok(false),
       Ok(Forgot::Ended(ended)) => ended.clone(),
-      // The database did not take the end: the gate shows all the same, with what this session knows.
+      // The database did not take the end: signed out all the same, with what this session knows.
       Err(_) => self.ended_now((reason, invite), at),
     };
     self.recovery_codes_used(None);
@@ -424,7 +424,7 @@ impl Cloud {
       Err(error) if error.cloud_code() == Some(CloudErrorCode::Unauthorized) => {
         let (reason, at) = error.ended().map_or((None, None), |(reason, at)| (Some(reason), at));
         let at = at.map_or_else(Timestamp::now, Timestamp::from_unix_millis);
-        if self.forget((gate::end_of(reason), None), at, Some(generation)).await? {
+        if self.forget((state::end_of(reason), None), at, Some(generation)).await? {
           self.changed();
         }
         Err(CloudError::SignedOut)
@@ -455,7 +455,7 @@ pub(crate) fn address_in_use(workspace: &Workspace) -> Result<CloudInUse, CloudE
 }
 
 /// Whether `workspace`'s application database has an account signed in, and why the last one ended if not. A database
-/// that cannot be read shows the gate: nothing is used without a sign-in.
+/// that cannot be read counts as signed out: an account's projects are shown only to a sign-in that can be read.
 fn stored_sign_in(workspace: &Workspace) -> SignIn {
   let db = workspace.db.lock();
   match (db.cloud_account(), db.cloud_sign_in_ended()) {
@@ -468,7 +468,7 @@ fn stored_sign_in(workspace: &Workspace) -> SignIn {
       since: Timestamp::now(),
     },
     (Err(error), _) | (_, Err(error)) => {
-      tracing::error!(%error, "cannot read this computer's cloud sign-in; the sign-in gate shows");
+      tracing::error!(%error, "cannot read this computer's cloud sign-in; it counts as signed out");
       SignIn::SignedOut {
         ended: None,
         since: Timestamp::now(),

@@ -39,7 +39,6 @@ struct Served {
   folder: TempDir,
   port: u16,
   token: String,
-  link: WindowLink,
   launch: Launch,
   data: Data,
 }
@@ -63,17 +62,6 @@ impl Served {
       tempfile::tempdir().expect("a temporary folder"),
       (data, launch),
       (true, false),
-    )
-  }
-
-  /// [`Self::start`] on a session that is not signed in: the window shows the sign-in gate.
-  fn start_signed_out(window_control: bool) -> Self {
-    let data = Data::new();
-    let launch = data.launch_signed_out();
-    Self::serve(
-      tempfile::tempdir().expect("a temporary folder"),
-      (data, launch),
-      (window_control, cfg!(debug_assertions)),
     )
   }
 
@@ -105,14 +93,7 @@ impl Served {
     let port = server.port().expect("the server listens").get();
     let mcp = McpLink::new(&server);
     let start = launch.start();
-    tree.mount_root::<Root>(
-      &mut app,
-      RootProps {
-        link: link.clone(),
-        mcp,
-        start,
-      },
-    );
+    tree.mount_root::<Root>(&mut app, RootProps { link, mcp, start });
     tree.pass_headless(&mut app);
     Self {
       app,
@@ -121,7 +102,6 @@ impl Served {
       folder,
       port,
       token,
-      link,
       launch,
       data,
     }
@@ -433,7 +413,7 @@ fn tools_answer_from_the_window_without_revealing_the_token() {
     assert!(!text.contains(&token), "the token shows in {text}");
   }
   assert_eq!(format!("{:?}", BearerToken::generate()), "BearerToken(<redacted>)");
-  assert_eq!(status_bar, Some(vec![format!("MCP :{} · QA", served.port)]));
+  assert_eq!(status_bar, Some(vec![format!("MCP :{} Â· QA", served.port)]));
   assert!(
     served.tree.get_element_by_id("status-window-control").is_some(),
     "the status bar says agents can control the window"

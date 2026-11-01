@@ -23,7 +23,8 @@ pub enum SettingsText {
   GroupTitle,
   /// 12.5 `text_muted`: what Settings is, beside its title (`Sub` `Uq8Sh` in `l838Ty`).
   PageSub,
-  /// 16/600 `text_primary`: a sub-page's title (`Title` `e7z5H` in `xN1Jy`).
+  /// 16/600 `text_primary`: a sub-page's title (`Title` `e7z5H` in `xN1Jy`), the signed-out invite landing's
+  /// (`zoihT`, `d1yW2I`).
   SubTitle,
   /// 14/600 `text_primary`: the cloud account's name (`Name` `dNkSD` in `vPV73`).
   CardName,

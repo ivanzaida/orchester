@@ -119,15 +119,22 @@ closed" → *Review runs* → **Continue all N from checkpoints** or **Don't con
 
 ## 2. Signing in
 
-Until this computer is signed in to **Orchester Cloud**, the window shows only the sign-in gate ("Sign in to start").
+Orchester works without an account. Sign in to **Orchester Cloud** only to share to a team, see invites or reach your
+account's team servers: each of those says so and offers the sign-in in place, and Settings › Orchester Cloud has it too.
 
 1. Enter *Email* and *Password*, press **Sign in**.
 2. With two-factor on: enter the 6-digit code and **Verify**, or *Use a recovery code instead*.
 3. *Create an account* and *Forgot password?* open the cloud's pages in your browser.
 
-Signing in needs the internet once; after that Orchester works offline and re-checks when it can. While signed out,
-projects and running work stay as they are, and MCP clients get "sign in required". *Advanced · cloud address* sets a
-test cloud. Only a person can sign in, never over MCP.
+Signing in needs the internet once; after that Orchester works offline and re-checks when it can. *Advanced · cloud
+address* sets a test cloud. Only a person can sign in, never over MCP. *Use a code* in Project settings › Sharing joins a
+team server without an account.
+
+**Whose a project is.** All projects' *Where* column says *This computer*, *Your account* or the team it is shared with.
+A project added while nobody is signed in is this computer's and stays so when you sign in. Hover a row to *Move to
+account* or *Move to this computer*; a shared project stays where it is until you make it local. After you sign out, or
+when a sign-in ends, only this computer's projects show: All projects says how many of your account's wait, and their
+runners keep working. Another account signed in here sees this computer's projects and its own, not yours.
 
 ## 3. Projects
 

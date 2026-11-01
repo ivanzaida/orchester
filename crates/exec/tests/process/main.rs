@@ -6,8 +6,10 @@ use std::{path::Path, time::Duration};
 use orchester_core::command::{Command, CommandError, CommandRunner};
 use orchester_exec::ProcessRunner;
 
+mod chosen_program;
 #[cfg(unix)]
 mod group;
+mod login_shell_path;
 #[cfg(target_os = "macos")]
 mod search_path;
 #[cfg(windows)]
@@ -118,13 +120,16 @@ fn process_with_an_explicit_environment_sees_nothing_else() {
   #[cfg(windows)]
   assert!(!names.iter().any(|name| name.eq_ignore_ascii_case("PATH")), "{names:?}");
   // On macOS every program gets the search path as its PATH (`search_path::macos::apply`): with no PATH of the
-  // parent's, only the usual folders and the program's own.
+  // parent's, only the usual folders and the program's own (this test process reads no login shell).
   #[cfg(target_os = "macos")]
   {
-    use orchester_exec::search_path::macos::{extend, home, usual_folders};
-    let mut folders = usual_folders(home().as_deref());
-    folders.push("/usr/bin".into());
-    let expected = format!("PATH={}", extend(None, &folders).to_string_lossy());
+    use orchester_exec::search_path::{
+      SearchPath,
+      macos::{home, usual_folders},
+    };
+    let search =
+      SearchPath::merge(None, &[], &usual_folders(home().as_deref())).with_program_folder("/usr/bin".as_ref());
+    let expected = format!("PATH={}", search.joined().to_string_lossy());
     assert!(output.stdout.lines().any(|line| line == expected), "{}", output.stdout);
   }
   assert!(

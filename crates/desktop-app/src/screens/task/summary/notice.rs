@@ -21,6 +21,7 @@ use orchester_workspace::{
     detail::{RunView, StepView, TaskDetail},
     return_work,
     run::worktree_failure_message,
+    slot_wait::waiting_steps,
   },
 };
 
@@ -69,8 +70,15 @@ impl EventWords {
 impl lurq::app::component::DevtoolsInspectable for EventWords {}
 
 /// The notice of `detail`. `runner`: the project's runner, while a run recorded as running lost it;
-/// `approval`: a tool request of the run that waits for the person.
-pub fn said(ctx: &Ctx, detail: &TaskDetail, runner: Option<&RunnerState>, approval: Option<&ShownApproval>) -> Said {
+/// `approval`: a tool request of the run that waits for the person; `slot_waits`: the executions the runner says wait
+/// for an agent slot.
+pub fn said(
+  ctx: &Ctx,
+  detail: &TaskDetail,
+  runner: Option<&RunnerState>,
+  approval: Option<&ShownApproval>,
+  slot_waits: &[StepExecutionId],
+) -> Said {
   let Some(run) = &detail.run else {
     return without_run(ctx, detail);
   };
@@ -81,7 +89,7 @@ pub fn said(ctx: &Ctx, detail: &TaskDetail, runner: Option<&RunnerState>, approv
     return waits_for_approval(ctx, run, approval);
   }
   match run.run.status() {
-    RunStatus::Running => running(ctx, run),
+    RunStatus::Running => running(ctx, run, slot_waits),
     RunStatus::Paused(PauseReason::Requested) => paused(ctx, run),
     RunStatus::Paused(PauseReason::LimitReached(limit)) => stopped(ctx, run, *limit),
     RunStatus::Interrupted(_) => interrupted(ctx, run),
@@ -139,7 +147,7 @@ fn step_words(ctx: &Ctx, step: Option<&StepView>) -> (String, String) {
   (name, agent)
 }
 
-fn running(ctx: &Ctx, run: &RunView) -> Said {
+fn running(ctx: &Ctx, run: &RunView, slot_waits: &[StepExecutionId]) -> Said {
   let (step, agent) = step_words(ctx, run.current_step());
   let branch = run.run.branch().as_str();
   let args = [("step", step.as_str()), ("agent", agent.as_str()), ("branch", branch)];
@@ -171,8 +179,26 @@ fn running(ctx: &Ctx, run: &RunView) -> Said {
       [("step", step.as_str()), ("attempt", attempt.as_str())],
     )
   };
+  let held_back = waiting_steps(&run.run, slot_waits);
+  if !held_back.is_empty() {
+    return slot_wait(ctx, &held_back, (!working.is_empty()).then_some(title));
+  }
   let body = ctx.t_args("summary.notice.runningBody", args);
   Said::new(NoticeTone::Info, Icon::LoaderCircle, (title, body))
+}
+
+/// Ready `steps` of the run that wait for an agent slot; `working` says what works meanwhile, and with nothing at work
+/// the wait itself is the title.
+fn slot_wait(ctx: &Ctx, steps: &[String], working: Option<Arc<str>>) -> Said {
+  let key = if steps.len() == 1 {
+    "summary.notice.slotWaitBody.one"
+  } else {
+    "summary.notice.slotWaitBody.other"
+  };
+  let steps = steps.join(&ctx.t("task.listSeparator"));
+  let title = working.unwrap_or_else(|| ctx.t("summary.notice.slotWaitTitle"));
+  let body = ctx.t_args(key, [("steps", steps.as_str())]);
+  Said::new(NoticeTone::Info, Icon::Clock, (title, body))
 }
 
 /// The step the run's work was returned to, to resolve a merge's conflicts, while it works on them (board 5 of

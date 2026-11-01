@@ -153,11 +153,11 @@ fn session_that_cannot_land_ends_cleanly() {
   data.launch().end();
   {
     let connection = rusqlite::Connection::open(data.database()).expect("the database opens");
-    // The signed-in account's project: the start reads only that account's list (projects per account).
+    // This computer's project: with nobody signed in, the start reads this computer's list.
     connection
       .execute(
-        "INSERT INTO projects (id, name, repo_root, added_at, last_opened_at, owner) \
-         VALUES ('not an id', '', 'x', 1, 1, (SELECT account_id FROM cloud_account WHERE id = 1))",
+        "INSERT INTO projects (id, name, repo_root, added_at, last_opened_at) \
+         VALUES ('not an id', '', 'x', 1, 1)",
         [],
       )
       .expect("a project the list cannot read");

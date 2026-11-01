@@ -1,8 +1,19 @@
-//! All projects and the welcome of a first launch: what the list says of each project, opening one, removing one
-//! in place, the empty list, *Open project folder…* with a stand-in picker, and the *Usage* tab. Projects live in
-//! repositories of the test's own data folder.
+//! All projects and the first start: what the list says of each project, opening one, removing one in place, the
+//! empty list, *Open project folder…* with a stand-in picker, the *Usage* tab, the three ways in of a first start
+//! ([`first_start`]), whose each project is and moving it ([`owners`]), the person's teams ([`teams`]) and that an
+//! agent CLI is not found ([`agent_cli`]). Projects live in repositories of the test's own data folder.
+//!
+//! `cargo test -p orchester-app --test all_projects all_projects`
 
+#[path = "all_projects/agent_cli.rs"]
+mod agent_cli;
+#[path = "all_projects/first_start.rs"]
+mod first_start;
+#[path = "all_projects/owners.rs"]
+mod owners;
 mod support;
+#[path = "all_projects/teams.rs"]
+mod teams;
 
 use std::{fs, path::Path};
 
@@ -17,6 +28,7 @@ fn all_projects(window: &mut Window) {
   window.until("All projects to be read", |window| {
     window.tree.get_element_by_id("project-list").is_some()
       || window.tree.get_element_by_id("all-projects-empty").is_some()
+      || window.tree.get_element_by_id("all-projects-nothing-here").is_some()
   });
 }
 
@@ -31,21 +43,6 @@ fn newer(repo: &Path) {
   connection
     .pragma_update(None, "user_version", 999)
     .expect("a newer schema version");
-}
-
-#[test]
-fn all_projects_welcomes_a_first_launch() {
-  let (mut window, _stand_ins) = Window::with_stand_ins(Data::new());
-  window.until("the welcome", |window| {
-    window.tree.get_element_by_id("welcome-introduction").is_some()
-  });
-  let texts = window.text(SCREEN);
-  assert!(texts.contains("WELCOME TO ORCHESTER"), "{texts}");
-  assert!(texts.contains("THREE STEPS TO YOUR FIRST TASK"), "{texts}");
-  assert!(texts.contains("No projects yet"), "{texts}");
-  assert!(window.tree.get_element_by_id("sidebar").is_none(), "no sidebar");
-  window.press("welcome-create-project");
-  assert_eq!(window.navigation().route_now(), Route::AddProject(None));
 }
 
 #[test]
@@ -70,7 +67,7 @@ fn all_projects_lists_projects_with_where_they_stand() {
   all_projects(&mut window);
   assert!(window.tree.get_element_by_id("sidebar").is_none(), "no sidebar");
   let headings = window.text("project-list-headings");
-  assert_eq!(headings, "PROJECT STATUS ACTIVE RUNS NEEDS YOU LAST OPENED");
+  assert_eq!(headings, "PROJECT WHERE STATUS ACTIVE RUNS NEEDS YOU LAST OPENED");
   window.until("the counts to be read", |window| {
     window.text(&row(project_id())).contains(" 0 0 Just now")
   });
@@ -82,8 +79,8 @@ fn all_projects_lists_projects_with_where_they_stand() {
   assert!(missing.contains("Folder missing — — "), "never a made-up 0: {missing}");
   let unreadable = window.text(&row(old.project.id()));
   assert!(
-    unreadable.contains("The data was written by a newer version of Orchester. Can’t be opened"),
-    "{unreadable}"
+    unreadable.contains("The data was written by a newer version of Orchester. — Can’t be opened"),
+    "where it is cannot be read either: {unreadable}"
   );
   let note = window.text("all-projects-removal-note");
   assert!(
@@ -115,6 +112,44 @@ fn all_projects_puts_the_list_20_under_its_tabs_without_invites() {
   assert!(
     window.tree.get_element_by_id("all-projects-invites").is_none(),
     "no notice"
+  );
+}
+
+/// The list as 09 `i5G19A` draws it, hairlines without an outline: 56 high rows, *Where* 450 and *Status* 622 into the
+/// list; and the active tab at All projects says so, without a close button while it is the only tab (`jMVvA`).
+#[test]
+fn all_projects_lays_out_its_list_and_tab_as_frame_09() {
+  let mut window = Window::open();
+  all_projects(&mut window);
+  let project = project_id();
+  let mut bounds = |id: &str| {
+    window
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|element| element.bounds())
+      .unwrap_or_else(|| panic!("{id} is laid out"))
+  };
+  let (list, shown) = (bounds("project-list"), bounds(&row(project)));
+  let (place, status) = (
+    bounds(&format!("project-row-where-{project}")),
+    bounds(&format!("project-row-status-{project}")),
+  );
+  assert!((shown.height - 56.0).abs() < 0.5, "a row is {} high", shown.height);
+  assert!(
+    (place.x - list.x - 450.0).abs() < 0.5,
+    "Where is {} in",
+    place.x - list.x
+  );
+  assert!(
+    (status.x - list.x - 622.0).abs() < 0.5,
+    "Status is {} in",
+    status.x - list.x
+  );
+  let tab = window.navigation().tabs_now().active().id();
+  assert_eq!(window.text(&format!("tab-{tab}")), "All projects");
+  assert!(
+    window.tree.get_element_by_id(&format!("tab-{tab}-close")).is_none(),
+    "the only tab at All projects cannot be closed"
   );
 }
 
@@ -178,6 +213,11 @@ fn all_projects_removes_a_project_in_place_and_keeps_its_data() {
   let mut window = Window::open();
   all_projects(&mut window);
   let remove = format!("project-remove-{}", project_id());
+  assert!(
+    window.tree.get_element_by_id(&remove).is_none(),
+    "a row at rest shows only its chevron"
+  );
+  window.hover(&row(project_id()));
   window.press(&remove);
   let question = window.text("remove-project-question");
   assert!(question.starts_with("Remove Kontur from the list?"), "{question}");
@@ -190,6 +230,7 @@ fn all_projects_removes_a_project_in_place_and_keeps_its_data() {
     window.texts("remove-project-question").is_none(),
     "Cancel keeps the project"
   );
+  window.hover(&row(project_id()));
   window.press(&remove);
   window.press("remove-project-confirm");
   window.until("the empty list", |window| {

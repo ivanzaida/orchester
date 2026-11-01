@@ -21,12 +21,22 @@ name = "orchester-local-process-probe"
 path = "tests/support/local_process_probe.rs"
 required-features = ["test-program"]
 
+# Writes down its arguments and exits with the code a test names, as git in the clone console's tests.
+[[bin]]
+name = "orchester-exit-with"
+path = "tests/support/exit_with.rs"
+required-features = ["test-program"]
+
 [[test]]
 name = "local_process_containment"
 required-features = ["test-program"]
 
 [[test]]
 name = "launcher_program"
+required-features = ["test-program"]
+
+[[test]]
+name = "clone_console"
 required-features = ["test-program"]
 
 [features]

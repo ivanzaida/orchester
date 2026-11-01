@@ -8,9 +8,11 @@
 //! and so do the versions of the team's configuration published here that wait ([`RemoteResourceStore`]); the stream
 //! sends those too each time it connects.
 
-use orchester_api::ErrorCode;
+use std::time::Instant;
+
+use orchester_api::{ErrorCode, SharedTag, TasksPage};
 use orchester_core::time::Timestamp;
-use orchester_store::ProjectDb;
+use orchester_store::{CachedModule, ProjectDb};
 
 use super::{ProjectServer, convert, organization::tag, store::RemoteTaskStore};
 use crate::{
@@ -18,17 +20,32 @@ use crate::{
   sharing::{ProjectAddress, SharingError, sync::RemoteResourceStore},
 };
 
+/// What a sync found on the server.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Synced {
+  /// The project was read into the cache.
+  Read,
+  /// The server no longer has the person as a member of the project.
+  Removed,
+}
+
 impl ProjectServer {
   /// Reads the server project into the cache. A server that cannot be reached leaves the cache as
   /// it is.
   pub async fn sync(&self) -> Result<(), SharingError> {
+    self.sync_round(Instant::now()).await.map(drop)
+  }
+
+  /// [`Self::sync`] in the round that began at `round`, which reports to the project's first download.
+  pub(super) async fn sync_round(&self, round: Instant) -> Result<Synced, SharingError> {
     super::reachable(self.servers.connection(self.link.server))?;
     let project = match self
       .call(|client, token, project| async move { client.project(&token, project).await })
       .await
     {
       Err(SharingError::Client(error)) if error.code() == Some(ErrorCode::NotFound) => {
-        return self.removed().await;
+        self.removed().await?;
+        return Ok(Synced::Removed);
       }
       answer => answer?,
     };
@@ -40,9 +57,15 @@ impl ProjectServer {
     let modules = self
       .call(|client, token, project| async move { client.modules(&token, project, after).await })
       .await?;
-    let tasks = self
-      .call(|client, token, project| async move { client.tasks(&token, project).await })
-      .await?;
+    let cached = modules
+      .modules
+      .iter()
+      .map(convert::cached_module)
+      .collect::<Result<Vec<_>, _>>()?;
+    let hint = project.remote_hint.as_ref().map(|hint| hint.as_str().to_owned());
+    self.store_parts(&tags, cached, hint).await?;
+    self.servers.download_parts_read(&self.repo_root, round);
+    self.read_tasks(round).await?;
     let server = self.clone();
     // A link made before API 3 learns the project's address, its identity since, from the server; one on another
     // server is not kept, and the tasks are synced all the same. This repeats at every read, so it is not a warning.
@@ -53,25 +76,14 @@ impl ProjectServer {
         .map(|address| address.to_text()),
       Some(_) => None,
     };
+    let changes: Vec<_> = modules.changes.iter().map(convert::cached_change).collect();
     background::run(move || -> Result<(), SharingError> {
-      let tags = tags.iter().map(tag).collect::<Result<Vec<_>, _>>()?;
-      let cached = modules
-        .modules
-        .iter()
-        .map(convert::cached_module)
-        .collect::<Result<Vec<_>, _>>()?;
-      let changes: Vec<_> = modules.changes.iter().map(convert::cached_change).collect();
       let publishing = server.clone();
       let mut store = RemoteTaskStore::new(ProjectDb::open(server.repo_root())?, server)?;
-      store.db.cache_shared_tags(&tags)?;
-      store.db.cache_shared_modules(&cached)?;
-      store.cache(&tasks.tasks, None)?;
       store.db.cache_module_changes(&changes)?;
       store
         .db
         .record_sharing_state(project.role, Some(Timestamp::now()), None)?;
-      let hint = project.remote_hint.as_ref().map(|hint| hint.as_str());
-      store.db.record_remote_hint(hint, Timestamp::now())?;
       if let Some(address) = address {
         store.db.record_project_address(&address)?;
       }
@@ -81,7 +93,59 @@ impl ProjectServer {
     })
     .await??;
     self.servers.shared_changed();
+    Ok(Synced::Read)
+  }
+
+  /// Writes the project's tags and modules to the cache, before the tasks that name them, and its repository `hint`,
+  /// which the first download's page compares the checkout's `origin` with while the tasks still come down.
+  async fn store_parts(
+    &self,
+    tags: &[SharedTag],
+    modules: Vec<CachedModule>,
+    hint: Option<String>,
+  ) -> Result<(), SharingError> {
+    let tags = tags.iter().map(tag).collect::<Result<Vec<_>, _>>()?;
+    let root = self.repo_root.clone();
+    background::run(move || -> Result<(), SharingError> {
+      let mut db = ProjectDb::open(&root)?;
+      db.cache_shared_tags(&tags)?;
+      db.cache_shared_modules(&modules)?;
+      db.record_remote_hint(hint.as_deref(), Timestamp::now())?;
+      Ok(())
+    })
+    .await??;
     Ok(())
+  }
+
+  /// Reads the project's tasks into the cache page by page, from where the first download of the round that began at
+  /// `round` stopped. A page that does not move on is refused: following it would never end.
+  async fn read_tasks(&self, round: Instant) -> Result<(), SharingError> {
+    let mut after = self.servers.download_resume(&self.repo_root, round);
+    loop {
+      let page = self
+        .call(|client, token, project| async move { client.tasks_page(&token, project, after).await })
+        .await?;
+      if !moves_on(&page, after) {
+        return Err(SharingError::InvalidAnswer("task page"));
+      }
+      let page = self.store_page(page).await?;
+      self.servers.download_page_stored(&self.repo_root, &page, round);
+      match page.next {
+        Some(next) => after = next,
+        None => return Ok(()),
+      }
+    }
+  }
+
+  /// Writes `page`'s tasks to the cache.
+  async fn store_page(&self, page: TasksPage) -> Result<TasksPage, SharingError> {
+    let server = self.clone();
+    background::run(move || -> Result<TasksPage, SharingError> {
+      let mut store = RemoteTaskStore::new(ProjectDb::open(server.repo_root())?, server)?;
+      store.cache(&page.tasks, None)?;
+      Ok(page)
+    })
+    .await?
   }
 
   /// The server no longer has the person as a member of the project.
@@ -94,4 +158,13 @@ impl ProjectServer {
     self.servers.shared_changed();
     Ok(())
   }
+}
+
+/// Whether `page`, read after `after`, ends or leads somewhere: one that names a next page starts later and brings
+/// tasks above `after`, or a server could keep a round going almost without end, with every other project waiting
+/// behind it.
+fn moves_on(page: &TasksPage, after: u32) -> bool {
+  page
+    .next
+    .is_none_or(|next| next > after && page.tasks.iter().any(|task| task.number > after))
 }

@@ -5,10 +5,13 @@
 //! review at once; otherwise the page lists the checkouts with how each compares ([`rows`]), adds a folder Orchester
 //! doesn't know yet, or shows the `git clone` to run first (Orchester never clones). *Continue to the join review*,
 //! under the checkouts, opens it in the chosen project; nothing is sent until the review is confirmed. *Later* leaves
-//! the invite accepted: the server's entry in Settings › Orchester lists the project with *Link a checkout…*.
+//! the invite accepted: the server's entry in Settings › Orchester lists the project with *Link a checkout…*. With the
+//! project's server out of reach, nobody signed in, or signed in without the code accepting needs, the page asks for
+//! the sign-in in place of the checkouts ([`sign_in`]), and goes on by itself once it is made.
 
 mod adding;
 mod rows;
+mod sign_in;
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -25,14 +28,16 @@ use orchester_workspace::{
   background,
   sharing::{
     Servers,
+    cloud::SignIn,
     project::landing::{CheckoutRefusal, Landing, Linked},
   },
 };
 use parking_lot::Mutex;
 
-use super::{Said, sharing_said};
+use super::{Said, answers::Answers, sharing_said, two_factor};
 use crate::{
   navigation::Navigation,
+  root::follow_sign_in,
   routes::{JoinTarget, OrchesterView, ProjectPage, ProjectSettingsTab, Route},
   screens::settings::frame,
   services::{
@@ -47,6 +52,9 @@ use crate::{
     state::{load_error, loading},
   },
 };
+
+/// The words for a project on a server this computer can't reach now.
+const NO_SERVER: &str = "sharing.join.noServer";
 
 #[derive(Clone, PartialEq)]
 struct Props {
@@ -103,6 +111,8 @@ struct LandingPage {
   skipped: Mutex<bool>,
   /// *Later* was pressed: the page says where the invite waits.
   later: Signal<bool>,
+  /// *Sign in again*, a person's, while accepting the invite needs a sign-in with a code.
+  answers: Answers,
 }
 
 impl Component for LandingPage {
@@ -111,13 +121,14 @@ impl Component for LandingPage {
   fn create(ctx: &mut Ctx) -> Self {
     let picker = PathPicker::of(ctx);
     let servers = Services::of(ctx).servers;
+    let server = ctx.props::<Props>().target.server;
     let add = ctx.future_action(move |title: Arc<str>| {
       let (picker, servers) = (picker.clone(), servers.clone());
       async move {
         let Some(folder) = picker.pick(PathKind::Folder, title).await else {
           return Ok(Added::Closed);
         };
-        Ok(match servers.add_checkout(folder.clone()).await {
+        Ok(match servers.add_checkout(folder.clone(), server).await {
           Ok(open) => Added::Project(open.project.id()),
           Err(CheckoutRefusal::NotGit) => Added::NotGit(folder),
           Err(error) => {
@@ -141,25 +152,47 @@ impl Component for LandingPage {
       revision,
       skipped: Mutex::new(false),
       later: ctx.signal(false),
+      answers: Answers::new(ctx),
     }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let target = ctx.props::<Props>().target.clone();
     let services = Services::of(ctx);
+    // First in every render: lurq keeps a component's futures by the order it asks for them.
+    let sign_in = follow_sign_in(ctx, &services.cloud);
+    let known_server = known_server(ctx, target.server);
+    let factors = two_factor::settled(ctx, 0, &services.cloud, sign_in.account());
     let deps = (
       self.revision.get(),
+      sign_in.account(),
       target.clone(),
       (services.servers.clone(), services.programs),
     );
     let state = ctx
-      .future(deps, |(_, target, (servers, programs))| async move {
+      .future(deps, |(_, _, target, (servers, programs))| async move {
         read(&servers, &programs, &target)
           .await
           .map(|landing| Read(Arc::new(landing)))
       })
       .state()
       .get();
+    // The project's server is not this computer's to reach: accepting the invite may need a sign-in first.
+    if state.error.as_ref().is_some_and(|said| *said == Said::new(NO_SERVER)) {
+      let invite = (&target, known_server.as_deref());
+      match (&sign_in, factors.map(|read| read.0)) {
+        (SignIn::SignedOut { .. }, _) => return sign_in::signed_out(ctx, invite),
+        // Whether the sign-in can accept is not read yet: the page waits rather than say the server can't be read.
+        (SignIn::SignedIn { .. }, None) => {
+          let body = loading("orchester-landing-loading", &ctx.t("sharing.landing.reading")).into();
+          return page(ctx, None, &target, body);
+        }
+        (SignIn::SignedIn { email, .. }, Some(Some(status))) if status.enabled && !status.this_session => {
+          return sign_in::again(ctx, invite, (email, &self.answers));
+        }
+        (SignIn::SignedIn { .. }, Some(_)) => {}
+      }
+    }
     let body = match (state.data, state.error) {
       (Some(Read(landing)), _) => {
         if self.open_at_once(ctx, &landing, &target) {
@@ -327,6 +360,31 @@ fn page(ctx: &mut Ctx, landing: Option<&Landing>, target: &JoinTarget, body: Ele
     .child(body);
   frame::column("orchester-landing-scroll", pane)
 }
+
+/// The name of the server the target names, as this computer keeps it, read once off the UI thread; `None` until it is
+/// read, or when it is not in the list.
+fn known_server(ctx: &mut Ctx, server: orchester_core::id::ServerId) -> Option<String> {
+  let workspace = Services::of(ctx).workspace;
+  ctx
+    .future((server, workspace), |(server, workspace)| async move {
+      background::run(move || workspace.server_named(server))
+        .await
+        // Work that did not finish was logged where it ended; the page then names no server, which it can do without.
+        .map_err(drop)?
+        .map(KnownServer)
+        .map_err(|error| tracing::warn!(%error, "the invite's server could not be read"))
+    })
+    .state()
+    .get()
+    .data
+    .and_then(|known| known.0)
+}
+
+/// The name of an invite's server, for a future's answer.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct KnownServer(Option<String>);
+
+impl DevtoolsInspectable for KnownServer {}
 
 /// The project the target names, with this computer's checkouts.
 async fn read(

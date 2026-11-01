@@ -55,7 +55,8 @@ impl InvitesNotice {
     let revision = follow(ctx, (&services.servers, &services.cloud));
     let account = account(ctx, revision);
     let invites = super::invites(ctx, revision, &services.cloud, account.as_ref());
-    let two_factor = two_factor::read(ctx, revision, &services.cloud, account.as_ref());
+    let signed_in = account.as_ref().map(|account| account.account);
+    let two_factor = two_factor::read(ctx, revision, &services.cloud, signed_in);
     Waiting { invites, two_factor }
   }
 

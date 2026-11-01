@@ -9,7 +9,7 @@
 
 use std::{
   collections::{BTreeMap, HashMap},
-  time::Duration,
+  time::{Duration, Instant},
 };
 
 use orchester_api::Heartbeat;
@@ -90,13 +90,19 @@ impl Servers {
   /// A full read of every shared project of the workspace into its cache, as a person asked for (*Check again*), then
   /// the end of the claims whose runs ended.
   pub async fn sync_shared(&self, programs: &Programs) {
+    let round = Instant::now();
+    let mut attempted = Vec::new();
     for project in self.shared_by_server().await.values().flatten() {
-      match project.sync().await {
-        Ok(()) => claim_ends::end_claims_of(project, programs).await,
+      let synced = project.sync_round(round).await;
+      self.downloaded((project.repo_root(), project.entry()), synced.as_ref(), round);
+      attempted.push(project.repo_root().to_owned());
+      match synced {
+        Ok(_) => claim_ends::end_claims_of(project, programs).await,
         Err(SharingError::Offline | SharingError::SignedOut) => {}
         Err(error) => tracing::warn!(%error, project = %project.link().project, "cannot read the shared project"),
       }
     }
+    self.unreached(&attempted, round);
   }
 
   /// [`shared_projects`], by server; none while the blocking pool shuts down with the window.

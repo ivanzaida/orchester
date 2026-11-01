@@ -4,7 +4,8 @@
 //! compete for the same slots. Every change is announced as an [`Event::WorkSummary`] once the
 //! desktop has said how many slots there are. The desktop may change the count at any time: more
 //! slots wake the runs waiting for one; fewer take none away, so agents at work finish and new ones
-//! wait until fewer work than there are slots.
+//! wait until fewer work than there are slots. Each run says which of its ready steps wait for a
+//! slot, so a person can tell them from steps whose dependencies have not passed.
 //!
 //! Tool steps running a command tool take no agent slot: a command is no agent and uses no
 //! tokens. They take one of [`COMMAND_SLOTS`] command slots instead, shared by all runs, since a
@@ -17,7 +18,7 @@ use orchester_core::{
   id::{RunId, StepExecutionId},
   run::{Run, RunStatus},
 };
-use orchester_ipc::{Event, RunWork, WorkState, WorkSummary};
+use orchester_ipc::{Event, RunWork, SlotWait, WorkState, WorkSummary};
 use parking_lot::Mutex;
 use tokio::sync::Notify;
 
@@ -41,6 +42,8 @@ struct State {
   slots: Option<NonZeroU32>,
   stop: StopMode,
   agents: Vec<Agent>,
+  /// Ready agent steps held back only because every slot is in use, as their runs last said.
+  slot_waits: Vec<SlotWait>,
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
@@ -113,8 +116,12 @@ impl Board {
     });
   }
 
-  /// Takes a slot for `execution` of `run`, which shows as `work`; `false` when none is free.
+  /// Takes a slot for `execution` of `run`, which shows as `work`; `false` when none is free. Nothing changed then, so
+  /// nothing is announced: a run waiting for a slot asks again every second.
   pub(super) fn take(&self, run: RunId, execution: StepExecutionId, mut work: Option<RunWork>) -> bool {
+    if !self.has_free_slot() {
+      return false;
+    }
     let mut taken = false;
     self.change(|state| {
       if state.free() == 0 {
@@ -173,6 +180,7 @@ impl Board {
   /// as saved.
   pub(super) fn settled(&self, run: &Run) {
     self.change(|state| {
+      state.slot_waits.retain(|wait| wait.run != run.id());
       let listed: Vec<Agent> = state.agents.extract_if(.., |agent| agent.run == run.id()).collect();
       if state.stop != StopMode::Checkpoints || run.status() == &RunStatus::Running {
         return;
@@ -194,6 +202,27 @@ impl Board {
     });
   }
 
+  /// `executions` of `run` are ready and wait for an agent slot, in place of those it named before. Only a change is
+  /// announced: a run waiting for a slot looks again every second.
+  pub(super) fn waiting_for_slot(&self, run: RunId, executions: Vec<StepExecutionId>) {
+    let unchanged = self
+      .state
+      .lock()
+      .slot_waits
+      .iter()
+      .filter(|wait| wait.run == run)
+      .map(|wait| wait.execution)
+      .eq(executions.iter().copied());
+    if unchanged {
+      return;
+    }
+    self.change(|state| {
+      state.slot_waits.retain(|wait| wait.run != run);
+      let waits = executions.into_iter().map(|execution| SlotWait { run, execution });
+      state.slot_waits.extend(waits);
+    });
+  }
+
   /// Announces the current summary again, e.g. right after attaching.
   pub(super) fn announce(&self) {
     self.change(|_| {});
@@ -206,6 +235,7 @@ impl Board {
       state.slots.map(|agent_slots| WorkSummary {
         agent_slots,
         runs: state.agents.iter().filter_map(|agent| agent.work.clone()).collect(),
+        slot_waits: state.slot_waits.clone(),
       })
     };
     if let Some(summary) = summary {

@@ -13,9 +13,11 @@ use std::{
 };
 
 use orchester_core::{
-  id::ProjectId,
+  connection::{AgentConnection, AgentProvider},
+  id::{ConnectionId, ProjectId},
   name::Name,
   project::{Project, ProjectKey},
+  store::ConnectionStore,
   time::Timestamp,
 };
 use orchester_store::{AppDb, ProjectDb};
@@ -24,9 +26,11 @@ use super::kontur;
 
 /// The seed's scenario for Kontur: tasks in every state, so it has runs that need the person.
 const SCENARIO: &str = "task-states";
+/// The folder of the project whose Claude connection's file is gone in the `cli-…` states.
+const ATLAS: &str = "atlas";
 /// The other projects of the list: name, key, folder and how long ago each was opened, in minutes.
 const LISTED: [(&str, &str, &str, i64); 5] = [
-  ("Atlas", "ATL", "atlas", 12),
+  ("Atlas", "ATL", ATLAS, 12),
   ("Orchester", "ORC", "orchester", 120),
   ("Personal website", "PER", "personal-website", 300),
   ("Notes", "NOT", "notes", 9 * 24 * 60),
@@ -57,6 +61,12 @@ impl Folders {
     self.root.join("program").join(gh_name())
   }
 
+  /// The stand-in `claude` *Choose the claude file…* picks, off the `PATH`.
+  pub fn claude(&self) -> PathBuf {
+    let name = if cfg!(windows) { "claude.cmd" } else { "claude" };
+    self.root.join("program").join(name)
+  }
+
   pub fn app(&self) -> PathBuf {
     self.root.join("app")
   }
@@ -64,6 +74,11 @@ impl Folders {
   /// A folder Add project or *Open project folder…* is shown with.
   pub fn folder(&self, name: &str) -> PathBuf {
     self.root.join("folders").join(name)
+  }
+
+  /// The seeded Kontur's repository.
+  pub fn kontur(&self) -> PathBuf {
+    self.root.join("projects").join("kontur")
   }
 
   /// The window's git settings (`GIT_CONFIG_GLOBAL`).
@@ -103,6 +118,44 @@ pub fn stand_in(folders: &Folders, state: &str) -> Result<(), Box<dyn Error>> {
   Ok(())
 }
 
+/// Writes the stand-in `claude` into the program folder, off the `PATH`: it answers its version and that it is signed
+/// in. [`stand_in`] makes the folder.
+#[cfg(windows)]
+pub fn claude(folders: &Folders) -> Result<(), Box<dyn Error>> {
+  fs::write(
+    folders.claude(),
+    "@echo off\r\nif \"%1\"==\"--version\" goto version\r\nif \"%1\"==\"auth\" goto status\r\nexit /b 1\r\n:version\r\necho 2.1.296 ^(Claude Code^)\r\nexit /b 0\r\n:status\r\necho {\"loggedIn\":true,\"authMethod\":\"claude.ai\"}\r\nexit /b 0\r\n",
+  )?;
+  Ok(())
+}
+
+/// Writes the stand-in `claude` into the program folder, off the `PATH`: it answers its version and that it is signed
+/// in. [`stand_in`] makes the folder.
+#[cfg(not(windows))]
+pub fn claude(folders: &Folders) -> Result<(), Box<dyn Error>> {
+  use std::os::unix::fs::PermissionsExt;
+  fs::write(
+    folders.claude(),
+    "#!/bin/sh\ncase \"$1\" in\n  --version) echo '2.1.296 (Claude Code)' ;;\n  auth) echo '{\"loggedIn\":true,\"authMethod\":\"claude.ai\"}' ;;\n  *) exit 1 ;;\nesac\n",
+  )?;
+  fs::set_permissions(folders.claude(), fs::Permissions::from_mode(0o755))?;
+  Ok(())
+}
+
+/// Gives Atlas a Claude connection whose program file is gone.
+pub fn claude_gone(folders: &Folders) -> Result<(), Box<dyn Error>> {
+  let connection = AgentConnection::new(
+    ConnectionId::generate(),
+    Name::new("Claude · Atlas")?,
+    AgentProvider::ClaudeCodeCli,
+    folders.root.join("gone").join("claude"),
+    Timestamp::now(),
+  )?;
+  let mut atlas = ProjectDb::open(&folders.root.join("projects").join(ATLAS))?;
+  atlas.create_connection(&connection)?;
+  Ok(())
+}
+
 /// The application database the window opens, and what the start prints of it.
 pub struct Seeded {
   pub database: PathBuf,
@@ -115,7 +168,7 @@ pub fn projects(folders: &Folders) -> Result<Seeded, Box<dyn Error>> {
   let now = Timestamp::now();
   let seeded = kontur::seed(&kontur::SeedRequest {
     data_dir: folders.app(),
-    repo: folders.root.join("projects").join("kontur"),
+    repo: folders.kontur(),
     scenario,
     fake_codex: None,
     now,

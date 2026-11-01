@@ -124,6 +124,11 @@
       "runningTitle": "{{step}} is running · attempt {{attempt}}",
       "runningTogetherTitle": "{{steps}} are running",
       "runningBody": "{{agent}} works in the run's own worktree on {{branch}}; your checkout is not touched.",
+      "slotWaitTitle": "Waiting for an agent slot",
+      "slotWaitBody": {
+        "one": "{{steps}} is ready and starts when an agent slot frees up; every slot is in use. Raising Agents at once in Project settings › Runs › Limits starts it sooner.",
+        "other": "{{steps}} are ready and start when an agent slot frees up; every slot is in use. Raising Agents at once in Project settings › Runs › Limits starts them sooner."
+      },
       "returnedResolvingTitle": "Returned to {{step}} to resolve the conflicts with {{branch}}",
       "returnedResolvingBody": "{{agent}} merges {{branch}} into the run's branch in its worktree and resolves {{files}}. The steps after {{step}} run again; nothing reaches {{branch}} until you merge.",
       "pausingTitle": "Pausing at the next checkpoint",
@@ -204,6 +209,7 @@
       "waitsForApproval": "Needs you · waiting since {{time}}",
       "state": {
         "notStarted": "Not started",
+        "waitsForSlot": "Waits for an agent slot",
         "working": "Working…",
         "needsYou": "Needs you",
         "paused": "Paused",

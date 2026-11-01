@@ -1,3 +1,4 @@
+mod join_team;
 mod modules;
 
 use std::num::NonZeroU64;
@@ -33,9 +34,11 @@ use crate::{
 
 const DESCRIPTION: &str = "Take the active tab of the Orchester window to a route, as a new entry of its history \
   (the mouse's back button, or Alt+Left, Cmd+[ on macOS, returns). `route` is the screen's name: all_projects takes no \
-  other argument; settings takes `tab` (automation, general, updates or whats-new for General with its Updates in \n  view and, with whats-new, the release notes open, notifications, accounts, browser, orchester for Orchester \n  Cloud, connect for Connect a server, invite for an invite's landing) and what that tab opens on: accounts \n  `account` (an account's id or name, or claude-default / codex-default: its page) and `panel` (add for Add account \
+  other argument; join_team takes `way` (cloud, the default: the account's teams and invites; code: the code page; \
+  projects with `server`: a joined team's shared projects; folder with `server` and `project`: link one to a folder); \
+  settings takes `tab` (automation, general, updates or whats-new for General with its Updates in \n  view and, with whats-new, the release notes open, notifications, accounts, browser, orchester for Orchester \n  Cloud, connect for Connect a server, invite for an invite's landing) and what that tab opens on: accounts \n  `account` (an account's id or name, or claude-default / codex-default: its page) and `panel` (add for Add account \
   without `account`; sign_in, rename or remove for that account's step 2, name field or Remove question); orchester \
-  `server` (a team server's id, name or host: its page) and `ask` (sign-out: Sign out…? under the account card, or \
+  `server` (a team server's id, name or host: its page) and `ask` (sign-out: Sign outÃ¢â‚¬Â¦? under the account card, or \
   on that server's page; decline with `invite`, an invite's id: Decline the invite?); connect `server` and `step` \
   (address, compare, join or username: past address it asks what answers at that server's address, and a server \
   with its own certificate stays at compare, which only a person answers); invite `server` and `project` (the \
@@ -119,13 +122,14 @@ fn schema() -> Value {
         "type": "string",
         "description": "task: the repository path of a changed file to show on the changes tab (the tab when left out). files: the path of the file to show (the tree alone when left out).",
       },
-      "selected": { "type": "string", "description": "connections: the id of the connection whose page Project settings › Connections opens." },
-      "kind": { "type": "string", "enum": kinds, "description": "new_connection: what it adds, on a page of Project settings › Connections." },
-      "connection": { "type": "string", "description": "edit_connection: the connection's id: an MCP server's form, or an agent CLI connection's account, on a page of Project settings › Connections." },
+      "selected": { "type": "string", "description": "connections: the id of the connection whose page Project settings Ã¢â‚¬Âº Connections opens." },
+      "kind": { "type": "string", "enum": kinds, "description": "new_connection: what it adds, on a page of Project settings Ã¢â‚¬Âº Connections." },
+      "connection": { "type": "string", "description": "edit_connection: the connection's id: an MCP server's form, or an agent CLI connection's account, on a page of Project settings Ã¢â‚¬Âº Connections." },
       "agent": { "type": "string", "description": "agents: a profile's id for its page, or new; omitted opens the list." },
       "skill": { "type": "string", "description": "skills: the skill id, new, or import; omitted opens the library." },
-      "tool": { "type": "string", "description": "tools: the tool’s id, or new for a command draft; omitted opens the library." },
+      "tool": { "type": "string", "description": "tools: the toolÃ¢â‚¬â„¢s id, or new for a command draft; omitted opens the library." },
       "chat": { "type": "string", "description": "orchestrator: a conversation's id, or new; omitted opens the latest." },
+      "way": { "type": "string", "enum": ["cloud", "code", "projects", "folder"], "description": "join_team: the account's teams and invites (cloud, the default), the code page, a joined team's shared projects (projects, with `server`) or linking one of them to a folder (folder, with `server` and `project`, its slug)." },
       "at": { "type": "string", "description": "files: the version, checkout (the default), base, run:<run id> or rev:<commit>." },
       "line": { "type": "string", "description": "files: the line or lines to show, 12 or 12-20." },
       "number": { "type": "string", "description": "pull_requests: the number of the pull request to open, e.g. 142; with tab feedback, on its Agent feedback." },
@@ -176,9 +180,16 @@ fn target(args: &Map<String, Value>, lookup: Option<&Lookup>) -> Result<Route, T
   let name = string(args, "route")?.ok_or(ToolError::Missing { param: "route" })?;
   let screen = Screen::from_name(name).ok_or_else(|| ToolError::UnknownRoute { name: name.to_owned() })?;
   only_params(screen, args)?;
+  screen_route(screen, args, lookup)
+}
+
+/// A validated screen and its parameters as the window's route.
+fn screen_route(screen: Screen, args: &Map<String, Value>, lookup: Option<&Lookup>) -> Result<Route, ToolError> {
   let page = match screen {
     Screen::AllProjects => return Ok(Route::AllProjects),
     Screen::AddProject => return Ok(Route::AddProject(None)),
+    Screen::JoinTeam => return join_team::route(args, lookup),
+    Screen::FirstDownload => return Ok(Route::FirstDownload(project(args)?)),
     Screen::Settings => return settings_route::route(args, lookup),
     Screen::Overview => ProjectPage::Overview(tab(
       args,
@@ -246,6 +257,8 @@ fn import_route(args: &Map<String, Value>) -> Result<Route, ToolError> {
 const fn params(screen: Screen) -> &'static [&'static str] {
   match screen {
     Screen::AllProjects | Screen::AddProject => &[],
+    Screen::JoinTeam => join_team::PARAMS,
+    Screen::FirstDownload => &["project"],
     Screen::Settings => settings_route::PARAMS,
     Screen::Overview | Screen::ImportResources => &["project", "tab"],
     Screen::Tasks => &["project", "tab", "q", "highlight"],

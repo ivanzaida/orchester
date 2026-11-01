@@ -57,12 +57,320 @@
       "description": "Orchester keeps its data and its runner beside its program, so it can't open them. The log has the system's reason.",
       "step": "Start Orchester from its install folder, or install it again."
     },
+    "agentCli": {
+      "titleMac": "{{program}} isn't found on this Mac",
+      "title": "{{program}} isn't found on this computer",
+      "bodyLoginShell": "Apps started from Finder don't get your terminal's PATH. Orchester read it from your login shell ({{shell}}) and still can't find {{program}}. Local projects open; agents can't start until it's found.",
+      "bodyUsualFolders": "Orchester looked on your PATH and in the usual install folders and can't find {{program}}. Local projects open; agents can't start until it's found.",
+      "bodyPath": "Orchester looked in the folders on your PATH and can't find {{program}}. Local projects open; agents can't start until it's found.",
+      "choose": "Choose the {{program}} file…",
+      "chooseTitle": "Choose the {{program}} file",
+      "checkAgain": "Check again",
+      "lookedIn": "Looked in",
+      "folderInList": "{{folder}},",
+      "noFolders": "There are no folders on PATH to look in."
+    },
     "keepWorking": "To keep working",
     "database": "Database",
     "dataFolder": "Data folder",
     "openLog": "Open log",
     "showDataFolder": "Show data folder",
     "showFolder": "Show folder",
-    "log": "Log: {{path}}"
+    "log": "Log: {{path}}",
+    "start": {
+      "eyebrow": "WELCOME TO ORCHESTER",
+      "title": "How do you want to start?",
+      "lead": "Orchester gives your tasks to coding agents, each in its own worktree, and brings the result back for you to review.",
+      "folder": {
+        "title": "Add a project from a folder",
+        "body": "Pick a git repository on this computer. Orchester keeps the project's tasks, agents and settings next to it.",
+        "meta": "On this computer · no account",
+        "choose": "Choose folder…",
+        "chooseTitle": "Choose the folder of a git repository"
+      },
+      "join": {
+        "title": "Join a team",
+        "body": "Sign in with Orchester Cloud to see your teams, or enter a pairing code a teammate gives you.",
+        "bodySignedIn": "Pick one of your teams, or enter a pairing code a teammate gives you.",
+        "meta": "Orchester Cloud or a code",
+        "signIn": "Sign in",
+        "yourTeams": "Your teams",
+        "useCode": "Use a code"
+      },
+      "shared": {
+        "title": "Open a team's shared project",
+        "body": "Have an invite or a project address? Pick the project and link it to a folder; you join its team on the way.",
+        "meta": "Needs a team · join on the way",
+        "joined": {
+          "one": "{{team}} shares 1 project with you. Pick it and link it to a folder; its tasks download here.",
+          "other": "{{team}} shares {{count}} projects with you. Pick one and link it to a folder; its tasks download here.",
+          "none": "{{team}} shares no project with you yet. Once one invites you, pick it here and link it to a folder.",
+          "unknown": "Pick one of {{team}}'s projects and link it to a folder; its tasks download here."
+        },
+        "metaJoined": "Joined · {{team}}",
+        "choose": "Choose project…",
+        "invites": {
+          "one": "1 invite",
+          "other": "{{count}} invites"
+        }
+      },
+      "local": "No account is needed to work on this computer. Orchester Cloud is only for team features.",
+      "localSignedIn": "Signed in as {{email}}. Local projects never need the account.",
+      "footer": "Projects, tasks, runs and worktrees stay on this computer. A team server keeps only a shared project's tasks and settings."
+    },
+    "crumbs": {
+      "start": "Start"
+    },
+    "steps": {
+      "join": "Join the team",
+      "project": "Choose a project",
+      "folder": "Link a folder",
+      "download": "Download tasks"
+    },
+    "join": {
+      "crumb": "Join a team",
+      "title": "Join a team",
+      "lead": "Two ways in. Either one gives this computer its own sign-in on the team server; nothing local is uploaded.",
+      "note": "Orchester Cloud is only for team features. Without it, local projects work as before.",
+      "cloud": {
+        "title": "With Orchester Cloud",
+        "sub": "Lists every team and invite of your account",
+        "passwordPlaceholder": "Password",
+        "noAccount": "No account yet?",
+        "create": "Create one",
+        "signedIn": "· signed in with Orchester Cloud",
+        "yourTeams": "Your teams"
+      },
+      "code": {
+        "title": "With a code",
+        "sub": "For a team server without the internet, or without Cloud",
+        "address": "Team server address",
+        "addressPlaceholder": "orchester.example.com",
+        "label": "Code",
+        "placeholder": "XXXX-XXXX",
+        "hint": "An invite code from a teammate, or a pairing code from your other computer. 8 characters, works once.",
+        "submit": "Join with the code",
+        "joining": "Joining…",
+        "wrong": "Wrong or expired. A code works once, within 10 minutes: ask for a new one.",
+        "addressInvalid": "That isn't a server address.",
+        "unreachable": {
+          "title": "Can't reach {{host}}",
+          "body": "No answer in {{seconds}} seconds. Check the address and your network, or ask the team's owner if the server is running."
+        },
+        "settings": {
+          "title": "{{server}} needs a check first",
+          "body": "Its certificate or plain HTTP needs your check. Join it in Settings › Orchester › Connect a server.",
+          "open": "Open Connect a server"
+        }
+      },
+      "teams": {
+        "title": "Choose a team",
+        "lead": "The team servers and invites of your Orchester Cloud account. Joining gives this computer its own sign-in there.",
+        "signOut": "Sign out",
+        "section": "YOUR TEAMS",
+        "member": "Member",
+        "owner": "Owner",
+        "projects": {
+          "one": "1 project",
+          "other": "{{count}} projects for you"
+        },
+        "join": "Join",
+        "open": "Open",
+        "joining": "Joining…",
+        "none": "No team servers in your account yet.",
+        "notListed": "A team not listed? Ask its owner to invite {{email}}, or join with a code.",
+        "useCode": "Use a code",
+        "reading": "Reading your teams…"
+      },
+      "invites": {
+        "section": "INVITES",
+        "toProject": "{{server}} invited you to {{project}}",
+        "toServer": "{{server}} invited you",
+        "sub": "from {{inviter}} · expires {{expires}} · {{address}}",
+        "accept": "Accept",
+        "decline": "Decline",
+        "none": "No invites are waiting."
+      },
+      "outcome": {
+        "joined": {
+          "title": "Joined {{server}} as {{username}}",
+          "body": "This computer has its own sign-in there now.",
+          "open": "See your projects there"
+        },
+        "waiting": {
+          "title": "Waiting for approval",
+          "body": "{{server}} asks for approval of new computers. Approve this one on another computer of yours, or ask an admin. Nothing has been uploaded."
+        },
+        "notInvited": {
+          "title": "{{server}} has no place for {{email}}",
+          "body": "Ask its owner to invite this email, or join with a code."
+        }
+      }
+    },
+    "shared": {
+      "download": {
+        "title": {
+          "downloading": "Downloading {{project}}'s tasks",
+          "done": "{{project}}'s tasks are here",
+          "failed": "{{project}}'s tasks stopped downloading",
+          "idle": "{{project}} is linked"
+        },
+        "lead": "{{project}} is linked to {{folder}}. Its tasks and team settings come from {{address}}.",
+        "joined": {
+          "title": "Joined {{server}}",
+          "sub": "{{address}} · this computer has its own sign-in",
+          "signedOutTitle": "Not signed in to {{server}}",
+          "signedOutSub": "{{address}} · this computer has no sign-in there",
+          "noServerTitle": "Its team server is no longer in the list",
+          "noServerSub": "Add the server again in Settings › Orchester."
+        },
+        "linked": {
+          "title": "Linked to {{folder}}",
+          "matches": "origin {{origin}} matches the project",
+          "differs": "origin {{origin}} isn't the project's {{hint}}",
+          "noHint": "origin {{origin}} · the project names no repository",
+          "origin": "origin {{origin}}",
+          "noOrigin": "This checkout has no origin"
+        },
+        "tasks": {
+          "downloading": "Downloading tasks",
+          "done": "Tasks downloaded",
+          "failed": "Downloading tasks stopped",
+          "idle": "Tasks",
+          "count": "{{stored}} of {{total}}",
+          "soFar": {
+            "one": "1 task so far",
+            "other": "{{count}} tasks so far"
+          },
+          "asking": "Asking {{server}} for them…",
+          "none": "No tasks arrived",
+          "idleSub": "Nothing is downloading now. They stay up to date with {{server}}."
+        },
+        "settings": {
+          "title": "Team settings",
+          "pending": "Pipelines, agent profiles, instructions, skills and tools · after the tasks",
+          "done": "Pipelines, agent profiles, instructions, skills and tools · downloaded",
+          "notAvailable": "Pipelines, agent profiles, instructions, skills and tools · not downloaded yet"
+        },
+        "canOpen": {
+          "title": "You can open {{project}} now",
+          "body": "Tasks keep arriving in the list as they download. No restart is needed."
+        },
+        "open": "Open {{project}}",
+        "stay": "Stay here",
+        "notShared": {
+          "title": "{{project}} isn't linked to a team",
+          "lead": "Nothing is downloading for it. Link it in its Project settings › Sharing."
+        },
+        "missing": {
+          "title": "This project is no longer on this computer",
+          "lead": "Add its folder again from All projects."
+        },
+        "unread": "This project could not be read"
+      },
+      "reading": "Reading the team's projects…",
+      "readFailed": "The team's projects could not be read",
+      "joined": "Joined",
+      "signedIn": "This computer has its own sign-in there now.",
+      "back": "Back",
+      "projects": {
+        "titlePending": "Pick a project",
+        "title": "Pick a project from {{team}}",
+        "lead": "Only the projects you are invited to are listed. Each one keeps its tasks and team settings on {{address}}.",
+        "member": "you: member",
+        "owner": "you: owner",
+        "sub": "{{address}} · remote {{hint}}",
+        "continue": "Continue with {{project}}",
+        "none": {
+          "title": "No projects for you on {{team}} yet",
+          "body": "You joined {{address}}, but no project there has invited {{who}}. Ask an owner to invite you: the project then shows here and in All projects.",
+          "checkAgain": "Check again",
+          "backToStart": "Back to start"
+        }
+      },
+      "link": {
+        "titlePending": "Link a project to a folder",
+        "title": "Link {{project}} to a folder",
+        "lead": "Orchester works in a checkout on this computer. The team server never touches code: use a checkout you have, or clone it here.",
+        "leadNoClone": "Orchester works in a checkout on this computer. The team server never touches code: use a checkout you have.",
+        "hint": "· remote hint {{hint}}",
+        "existing": {
+          "title": "Use a checkout I have",
+          "sub": "A folder with the repository already cloned"
+        },
+        "folder": "Folder",
+        "folderPlaceholder": "The folder of your checkout",
+        "choose": "Choose…",
+        "chooseTitle": "Choose the folder of your checkout",
+        "matches": "Git repository · origin {{origin}} matches the project",
+        "notRepository": "Not a git repository. Pick the folder you cloned, or clone it below.",
+        "notRepositoryNoClone": "Not a git repository. Pick the folder you cloned.",
+        "differs": {
+          "title": "origin is {{origin}}",
+          "body": "{{project}} expects {{hint}}. Link anyway if this is your fork; runs push to its origin."
+        },
+        "clone": {
+          "title": "No checkout yet? Clone it here",
+          "sub": "Git clones {{hint}} in a console window, where you can sign in if it asks. Orchester picks the new folder above when Git finishes.",
+          "into": "Clone into",
+          "intoPlaceholder": "The new folder for the checkout",
+          "chooseTitle": "Choose where to put {{project}}",
+          "start": "Clone repository…",
+          "running": "Cloning in a console…",
+          "creates": "Creates the folder {{name}} in {{parent}}",
+          "emptyFolder": "An empty folder: Git clones into it",
+          "occupied": "This folder already has files. Choose an empty folder or a new name: Orchester never clones over files.",
+          "noParent": "The folder {{parent}} doesn't exist.",
+          "notAbsolute": "Give the folder's full path, from its drive or from /, or choose where to put it.",
+          "notLocal": "Choose a folder on this computer: Orchester doesn't clone onto a network share.",
+          "unreadable": "This folder can't be read. Choose another one.",
+          "waiting": {
+            "title": "Git is cloning in a console window",
+            "body": "Sign in there if Git asks. Closing the window stops the clone."
+          },
+          "done": "Cloned into {{path}}. It's chosen above: link it with the button below.",
+          "gitMissing": {
+            "title": "Git isn't installed",
+            "body": "Install Git from git-scm.com (on a Mac, the command line tools), then clone again."
+          },
+          "notOpened": {
+            "title": "The console window didn't open",
+            "body": "Nothing was cloned. Try again, or clone in a terminal of your own and choose the folder above."
+          },
+          "notStarted": {
+            "title": "Terminal didn't start the clone",
+            "body": "Nothing was cloned. Check that Terminal may run scripts from Orchester, then try again."
+          },
+          "unsupported": {
+            "title": "Cloning in a console isn't available on this system yet",
+            "body": "Clone in a terminal of your own, then choose the folder above."
+          },
+          "lost": {
+            "title": "Orchester lost track of the clone",
+            "body": "Look at the console window: when Git has finished, choose the new folder above."
+          },
+          "failed": {
+            "title": "Git stopped before the clone finished (code {{code}})",
+            "body": "Git's message is in the console window. If it says access was denied, sign in when Git asks, or check that your account can read {{hint}}, then try again."
+          },
+          "closed": {
+            "title": "The console closed before the clone finished",
+            "body": "Nothing was linked."
+          },
+          "notCheckout": {
+            "title": "Git finished, but the folder isn't a checkout of this project"
+          },
+          "left": "Git left the folder {{path}}. Orchester didn't remove it: delete it yourself, or choose another folder.",
+          "console": {
+            "title": "Orchester · cloning {{project}}",
+            "failed": "Git did not finish the clone; its message is above.",
+            "close": "Press Enter to close this window"
+          }
+        },
+        "submit": "Link and download tasks",
+        "anyway": "Link anyway",
+        "linking": "Linking…"
+      }
+    }
   }
 }

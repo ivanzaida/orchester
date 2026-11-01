@@ -125,6 +125,7 @@ icons! {
   FilePen => '\u{e31f}',
   FilePenLine => '\u{e320}',
   FilePlus => '\u{e0c9}',
+  FileSearch => '\u{e0cb}',
   FileText => '\u{e0cc}',
   FileWarning => '\u{e319}',
   FileX => '\u{e0cd}',
@@ -334,6 +335,8 @@ pub const fn screen_icon(screen: Screen) -> Icon {
   match screen {
     Screen::AllProjects => Icon::Folders,
     Screen::AddProject => Icon::Plus,
+    Screen::JoinTeam => Icon::Users,
+    Screen::FirstDownload => Icon::Download,
     Screen::Settings => Icon::Settings,
     Screen::Overview => Icon::LayoutDashboard,
     Screen::Orchestrator | Screen::OrchestratorSettings => Icon::MessagesSquare,

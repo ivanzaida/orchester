@@ -65,7 +65,7 @@ pub fn properties() -> Map<String, Value> {
     },
     "server": {
       "type": "string",
-      "description": "settings tab orchester: the team server whose page opens; tab connect: the server whose address Connect a server starts at; tab invite: the server of the invite's project. By its id, name or host.",
+      "description": "settings tab orchester: the team server whose page opens; tab connect: the server whose address Connect a server starts at; tab invite: the server of the invite's project; join_team way projects or folder: the joined team. By its id, name or host.",
     },
     "step": {
       "type": "string",
@@ -80,7 +80,7 @@ pub fn properties() -> Map<String, Value> {
     "invite": { "type": "string", "description": "settings tab orchester with ask decline: the invite's id." },
     "project": {
       "type": "string",
-      "description": "The project's id (a UUID), for every screen of a project; settings tab invite: the slug of the invite's project on `server`.",
+      "description": "The project's id (a UUID), for every screen of a project; settings tab invite and join_team way folder: the project's slug on `server`.",
     },
   });
   match properties {
@@ -268,7 +268,7 @@ fn connect(args: &Map<String, Value>, lookup: Option<&Lookup>) -> Result<Orchest
 }
 
 /// The team server `named` names: its id, or its name or address's host (any case), among this account's servers.
-fn server(named: &str, lookup: Option<&Lookup>) -> Result<ServerId, ToolError> {
+pub(super) fn server(named: &str, lookup: Option<&Lookup>) -> Result<ServerId, ToolError> {
   if let Ok(id) = named.parse() {
     return Ok(id);
   }
