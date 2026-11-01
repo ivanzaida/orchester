@@ -9,7 +9,7 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 
-use super::{TabProps, page};
+use super::{Status, TabProps, page};
 use crate::{
   routes::{SecretsPanel, SecretsView},
   screens::secrets,
@@ -19,7 +19,11 @@ use crate::{
 /// The tab showing `view`: its variables and the secrets' list, or a page of a secret.
 pub(super) fn tab(ctx: &mut Ctx, props: TabProps, view: SecretsView) -> Element {
   let shown = secrets::screen(ctx, &props.project, view);
-  if view.secret.is_some() || view.panel == SecretsPanel::Add {
+  if is_page(view) {
+    // The variables' editor is gone with its edit, so the status it said goes too.
+    if props.status.get_untracked() != Status::Saved {
+      props.status.set(Status::Saved);
+    }
     return page::scroll(shown);
   }
   let variables = ctx.mount_keyed::<variables::Variables>("project-settings-environment", props);
@@ -30,4 +34,9 @@ pub(super) fn tab(ctx: &mut Ctx, props: TabProps, view: SecretsView) -> Element 
       .child(variables)
       .child(shown),
   )
+}
+
+/// Whether `view` is a page under the tab (a secret's or New secret), which shows no variables and no save status.
+pub(super) const fn is_page(view: SecretsView) -> bool {
+  view.secret.is_some() || matches!(view.panel, SecretsPanel::Add)
 }

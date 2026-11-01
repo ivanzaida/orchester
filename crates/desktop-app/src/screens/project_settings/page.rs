@@ -39,7 +39,7 @@ pub fn settings(
   let section = shown.section();
   let navigation = Navigation::of(ctx);
   let id = project.open.project.id();
-  let saved = !section.autosaves() || status.get() == Status::Saved;
+  let saved = !shown.autosaves() || status.get() == Status::Saved;
   let tabs = Section::ALL
     .into_iter()
     .map(|choice| {
@@ -66,7 +66,7 @@ pub fn settings(
       (Icon::CircleDashed, PaletteColor::TextMuted),
       "project_settings.notSavedYet",
     )),
-    _ => section.autosaves().then(|| save_status(ctx, status)),
+    _ => shown.autosaves().then(|| save_status(ctx, status)),
   };
   let header = Row::new()
     .id("project-settings-header")

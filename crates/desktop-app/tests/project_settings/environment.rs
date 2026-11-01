@@ -105,6 +105,35 @@ fn project_settings_environment_a_confirmed_change_cannot_overwrite_outside_edit
   page.tab("limits", "settings-default-budget");
 }
 
+#[test]
+fn project_settings_environment_new_secret_drops_an_unfinished_variables_edit_and_its_status() {
+  let mut page = Settings::new(false);
+  for (text, edit) in [("1NAME=value", "invalid"), ("PATH=tools", "widening")] {
+    page.tab("environment", INPUT);
+    page.set(INPUT, text);
+    page.leave();
+    if edit == "widening" {
+      page.until("question", |p| p.exists("settings-environment-question"));
+    } else {
+      assert_eq!(
+        page.text("project-settings-save-status"),
+        "Not saved · fix the marked field"
+      );
+    }
+    page.click("secrets-add");
+    page.until("New secret", |p| p.exists("secret-name"));
+    // New secret saves per action: no status of the variables' editor it left, and no tab locked by it.
+    assert!(
+      !page.exists("project-settings-save-status"),
+      "{edit} edit's status is gone"
+    );
+    page.tab("general", "settings-project-name");
+  }
+  page.tab("environment", "settings-environment-edit");
+  page.saved();
+  assert!(page.db().project_environment().expect("unchanged").is_empty());
+}
+
 fn failed_save(page: &mut Settings) {
   page.tab("environment", INPUT);
   let sql = rusqlite::Connection::open(page.repo.join(".orchester/orchester.db")).expect("fixture DB");

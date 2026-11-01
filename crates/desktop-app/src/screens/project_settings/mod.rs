@@ -57,6 +57,15 @@ impl Shown {
     }
   }
 
+  /// Whether what shows saves as a person edits it and says its save status: its tab's own page or one under it,
+  /// but not a secret's page or New secret, which save per action under Environment.
+  const fn autosaves(self) -> bool {
+    match self {
+      Self::Secrets(view) => !environment::is_page(view),
+      _ => self.section().autosaves(),
+    }
+  }
+
   /// The route's page of what shows.
   const fn page(self) -> ProjectPage {
     match self {
