@@ -22,7 +22,8 @@ fn forward(s: &mut Secrets) {
   s.window.pass();
 }
 
-/// The environment filter shows only that environment's group, and is history like the secret opened from it.
+/// The environment filter shows only that environment's secrets, as the Secrets group's rows (`S06`), and is history
+/// like the secret opened from it.
 #[test]
 fn secrets_environment_filter_and_opened_secret_are_history() {
   let mut s = Secrets::new();
@@ -34,14 +35,15 @@ fn secrets_environment_filter_and_opened_secret_are_history() {
     format!("secret-row-{}-row", beta.id()),
   );
   s.until("both rows", |s| s.exists(&alpha_row) && s.exists(&beta_row));
+  assert!(s.exists("secrets-group-staging") && s.exists("secrets-group-development"));
   s.click("secrets-environment-staging");
   assert_eq!(shown(&s).environment, Some(Environment::Staging));
   s.until("the filtered list", |s| !s.exists(&alpha_row));
   assert!(s.exists(&beta_row), "staging's secret stays");
-  assert!(s.exists("secrets-group-staging"));
+  assert_eq!(s.text("secrets-total"), "1 in Staging");
   assert!(
-    !s.exists("secrets-group-development"),
-    "only the chosen environment's group"
+    !s.exists("secrets-group-staging") && !s.exists("secrets-group-development"),
+    "the chosen environment's secrets are the group's own rows"
   );
   s.click(&beta_row);
   assert_eq!(shown(&s).secret, Some(beta.id()));

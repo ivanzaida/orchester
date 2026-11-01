@@ -7,6 +7,7 @@ use orchester_app::routes::{AccountsPanel, AccountsView, OrchesterView, Route, S
 /// The tabs, and the pages under them that have an address.
 pub fn routes() -> Vec<Route> {
   vec![
+    Route::PlanLimits,
     Route::Notifications,
     Route::Browser,
     Route::Accounts(AccountsView::default()),
@@ -23,6 +24,7 @@ pub fn routes() -> Vec<Route> {
 fn settings_tabs_have_their_documented_paths() {
   for (route, path) in [
     (Route::General, "/settings?tab=general"),
+    (Route::PlanLimits, "/settings?tab=general&show=plan-limits"),
     (Route::Notifications, "/settings?tab=notifications"),
     (Route::Browser, "/settings?tab=browser"),
     (Route::Accounts(AccountsView::default()), "/settings?tab=accounts"),

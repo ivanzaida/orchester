@@ -1,7 +1,8 @@
-//! Project settings › Secrets (`06 Secrets` `bVh1e`, nothing yet `08` `aalCu`): metadata and references only. The
-//! secrets by environment with what uses each and when its value was set (`list`), a secret's page with its details,
-//! what uses it, its recent access, and Replace value and Archive asked in place (`06b` `famwr`, `inspector`), and
-//! New secret as a page under the tab (`form`). Values enter the masked form and the vault, and are never shown again.
+//! Project settings › Environment's secrets (`Secrets` `PQJo1` in `S06` `EnL2D`, `06 Secrets` `bVh1e`, nothing yet
+//! `08` `aalCu`): metadata and references only. The secrets by environment with what uses each and when its value was
+//! set (`list`), a secret's page with its details, what uses it, its recent access, and Replace value and Archive asked
+//! in place (`06b` `famwr`, `inspector`), and New secret as a page under the tab (`form`). Values enter the masked form
+//! and the vault, and are never shown again. The tab scrolls what this shows, under its variables on the list.
 mod form;
 mod inspector;
 mod list;
@@ -28,7 +29,6 @@ use crate::{
   navigation::Navigation,
   project::ShownProject,
   routes::{SecretsPanel, SecretsView},
-  screens::project_settings::kit,
   services::Services,
   ui::{message::message_text, state::load_error},
 };
@@ -88,12 +88,12 @@ impl Component for SecretsScreen {
       .clone()
       .filter(|_| loaded.error.is_none() || loaded.is_pending())
     else {
-      return kit::scroll(match loaded.error {
+      return match loaded.error {
         Some(ref error) if !loaded.is_pending() => self.failed(ctx, error),
         _ => list::reading(ctx, &self.view),
-      });
+      };
     };
-    kit::scroll(self.body(ctx, (&project, shown), &listed))
+    self.body(ctx, (&project, shown), &listed)
   }
 }
 

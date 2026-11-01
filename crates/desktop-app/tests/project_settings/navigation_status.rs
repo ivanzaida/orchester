@@ -1,5 +1,5 @@
-//! Tab selection never supplies evidence that an unfinished edit has been saved: Runs, which holds the limits and the
-//! environment, stays its own while an edit there is unfinished, and the other tabs wait.
+//! Tab selection never supplies evidence that an unfinished edit has been saved: Runs, which holds the limits, and
+//! Environment, which holds the variables, stay their own while an edit there is unfinished, and the other tabs wait.
 use orchester_core::store::SettingsStore;
 
 use super::harness::Settings;
@@ -38,7 +38,7 @@ fn project_settings_tab_reselection_keeps_invalid_and_dirty_environment_truthful
   page.tab("environment", "settings-environment-variables");
   page.set("settings-environment-variables", "1NAME=value");
   page.leave();
-  page.click("settings-tab-runs");
+  page.click("settings-tab-environment");
   assert_eq!(
     page.text("project-settings-save-status"),
     "Not saved · fix the marked field"
@@ -48,7 +48,7 @@ fn project_settings_tab_reselection_keeps_invalid_and_dirty_environment_truthful
   assert!(page.db().project_environment().expect("not persisted").is_empty());
   page.set("settings-environment-variables", "RUST_LOG=debug");
   assert_eq!(page.text("project-settings-save-status"), "Changes not saved");
-  page.click("settings-tab-runs");
+  page.click("settings-tab-environment");
   assert_eq!(page.text("project-settings-save-status"), "Changes not saved");
   page.leave();
   page.saved();

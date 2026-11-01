@@ -134,7 +134,8 @@
     "writeTitle": "Edit files in the task worktree",
     "writeHint": "Changes stay in the task’s own worktree and branch.",
     "folders": "Extra writable folders",
-    "foldersHint": "Only with Edit files. Folders outside the worktree this agent may also change.",
+    "foldersHint": "Only with Edit files. Folders outside the worktree this agent may also change. Reading needs nothing here: every agent reads the project’s Sources.",
+    "foldersSources": "Sources in Project settings › Context",
     "folderPath": "Folder path",
     "addFolder": "Add folder",
     "folderNote": "Your home folder, the repository root and system folders can’t be added.",
@@ -251,9 +252,6 @@
     "enforcementNote": "Every run uses these limits. No setting or mode turns them off.",
     "newRuns": "Applies to new runs after publishing.",
     "localRules": "Your own CLI rules on this computer still apply.",
-    "agentFiles": "Repository agent files",
-    "agentFilesOff": "Not loaded; Orchester adds the instructions",
-    "agentFilesOn": "Loaded from the repository",
     "enforcedState": "Enforced",
     "draftCard": "Draft v{{version}}",
     "basedOn": "Based on Published v{{version}}",
@@ -305,7 +303,6 @@
     "pipelineRefreshFirst": "Refresh this profile before opening a pipeline.",
     "enforcementUnavailable": "Not enforced",
     "foldersReadOnly": "No extra write access while read-only",
-    "repositoryFilesMechanism": "Orchester · repository agent files policy",
     "chooseModel": "Choose another model",
     "openConnection": "Open connection",
     "cliTooOld": "CLI {{installed}} is too old for {{model}}",
@@ -331,6 +328,50 @@
     "mcpTurnedOff": "{{transport}} · {{off}}",
     "notEnforcedState": "Not enforced",
     "enforcementNotes": "Applies to new runs after publishing. Every run uses these limits. No setting or mode turns them off. Your own CLI rules on this computer still apply.",
+    "projectSets": {
+      "title": "Set by the project",
+      "note": "Read here, changed only in Project settings. Each row opens its tab.",
+      "reading": "Reading…",
+      "failed": "Couldn’t read this setting: {{reason}}",
+      "autopilot": {
+        "title": "Autopilot",
+        "allowed": "Allowed in {{project}} · Runs › Approvals",
+        "notAllowed": "Not allowed in {{project}} · Runs › Approvals"
+      },
+      "sources": {
+        "title": "Sources",
+        "none": "None · Context",
+        "some": "{{count}} · every agent reads them · Context"
+      },
+      "agentFiles": {
+        "title": "Repository agent files",
+        "on": "Read into every prompt · Context",
+        "off": "Not read; Orchester adds the instructions · Context"
+      },
+      "codeIndex": {
+        "title": "Code index",
+        "on": "On · Context",
+        "off": "Off · Context"
+      },
+      "memory": {
+        "title": "Memory",
+        "one": "1 record, {{tokens}} tokens an invocation · Context",
+        "other": "{{records}} records, {{tokens}} tokens an invocation · Context"
+      },
+      "environment": {
+        "title": "Environment",
+        "none": "No variables · secrets go only to their tools",
+        "one": "1 variable · secrets go only to their tools",
+        "other": "{{count}} variables · secrets go only to their tools"
+      },
+      "limits": {
+        "title": "Limits",
+        "none": "No run budget or time limit · Runs › Limits",
+        "budget": "{{budget}} tokens a run · no time limit · Runs › Limits",
+        "time": "No run budget · {{minutes}} min a run · Runs › Limits",
+        "both": "{{budget}} tokens and {{minutes}} min a run · Runs › Limits"
+      }
+    },
     "promptsTitle": "Also in this profile’s prompts",
     "promptsProjectTitle": "Project rules",
     "promptsRoleTitle": "Agent role rules",

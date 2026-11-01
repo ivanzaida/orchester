@@ -283,7 +283,7 @@ fn hub_tabs(ctx: &Ctx, project: ProjectId) -> Vec<Entry> {
   entries
 }
 
-/// Project settings' tabs, Connections and Secrets among them; Ctrl+, (Cmd+,) opens its first.
+/// Project settings' tabs, Connections and Environment among them; Ctrl+, (Cmd+,) opens its first.
 fn settings_tabs(ctx: &Ctx, project: ProjectId) -> Vec<Entry> {
   let settings = word(ctx, "shell.screens.projectSettings");
   let keys = ctx.t(if cfg!(target_os = "macos") {
@@ -313,8 +313,8 @@ fn settings_tabs(ctx: &Ctx, project: ProjectId) -> Vec<Entry> {
       ProjectPage::Connections(ConnectionsView::default()),
     ),
     (
-      "secrets",
-      "project_settings.secrets",
+      "environment",
+      "project_settings.environment",
       ProjectPage::Secrets(SecretsView::default()),
     ),
     (

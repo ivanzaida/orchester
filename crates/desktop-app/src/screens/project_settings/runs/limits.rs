@@ -133,8 +133,8 @@ impl Field {
     matches!(self, Self::Slots | Self::Qa)
   }
 }
-/// The Limits group while it is read (`10 · Project settings · Runs · loading` `lUFjj`): its heading, its note and
-/// every row's label, hint and unit real, each value a bone in its field.
+/// The Limits group while it is read (`10 · Project settings · Runs · loading` `lUFjj`): its heading, its note, its
+/// foot and every row's label, hint and unit real, each value a bone in its field.
 pub(super) fn bones(ctx: &mut Ctx) -> Element {
   let rows = [Field::Default, Field::Daily, Field::Time, Field::Slots, Field::Qa].map(|kind| {
     let [label, hint, info, unit] = kind.keys();
@@ -149,6 +149,7 @@ pub(super) fn bones(ctx: &mut Ctx) -> Element {
   Group::new("settings-limits-reading", ctx.t("project_settings.limits"))
     .end(note)
     .rows(rows)
+    .foot(&ctx.t("project_settings.limitsFoot"))
     .into()
 }
 impl Component for Limits {
@@ -243,7 +244,8 @@ impl Component for Limits {
     let note = Tooltip::new("settings-changes-notice", ctx.t("project_settings.changesDetail")).wrap(ctx, note);
     let mut group = Group::new("settings-limits", ctx.t("project_settings.limits"))
       .end(note)
-      .rows(rows);
+      .rows(rows)
+      .foot(&ctx.t("project_settings.limitsFoot"));
     if let Some(error) = work::error(ctx, &save) {
       let commit = commit.clone();
       group = group.after(

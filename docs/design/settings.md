@@ -18,9 +18,6 @@ path and value in the frames is illustrative (Kontur, dana-k, KON), never shippe
   - General (`S01` `WHjIP`): the project and its repository. *Repository agent files* moves to Context.
   - Runs (`S02` `Ekiul`): Approvals (Allow Autopilot, Reviewer, Approved for every run), Estimates, Limits. Limits
     says a task's run budget and time limit and a step's budget override these defaults. Environment moves out.
-  - Runs with a decision model reviewing (`S02b` `X7Cz0W`): the reviewer row of `decision-reviewer.md` — connection,
-    model and *Approves at 0.80 or above* in place of an effort, where requests go — and Estimates on a language model
-    connection, as the decision reviewer writes no reasons.
   - Orchestrator (`S03` `X8mFTS`, new): *The Orchestrator may* — publish drafts, answer agents, merge runs, merge
     finished runs on its own, continue interrupted runs, write with git — **moved from Settings › Automation and made
     per project** (person's decision 2). Still the person's alone in the window. Existing app-wide values are copied
@@ -30,9 +27,8 @@ path and value in the frames is illustrative (Kontur, dana-k, KON), never shippe
     index, and **Memory** (saving of task and project records, records and tokens per invocation), **moved from the
     Memory page's Settings tab** (person's decision 3). The Memory page loses that tab and links to Context (`S15`
     `BJQn0`).
-  - Connections (`S05` `yIMQy`): Agent providers, **Decision models** with *Add decision model* (the connection kind
-    of `decision-reviewer.md`), GitHub and MCP servers.
-  - Environment (`S06` `EnL2D`, was Secrets): Variables (from Runs › Environment) and Secrets in one tab; a decision model's API key is one of its secrets.
+  - Connections (`S05` `yIMQy`): Agent providers, GitHub and MCP servers.
+  - Environment (`S06` `EnL2D`, was Secrets): Variables (from Runs › Environment) and Secrets in one tab.
   - Sharing (`S07` `z4pzpm`): unchanged but for the tab row.
 - **The agent profile chooses within the project's bounds:** role, connection and model, approval mode, commands,
   **writable folders (kept in the profile**, person's decision 1), network, browser sites, MCP servers. Under
@@ -46,13 +42,6 @@ path and value in the frames is illustrative (Kontur, dana-k, KON), never shippe
 - **Settings › Automation** (`S11` `V8aAj`) keeps the MCP server, the window and Approvals and permissions; in place of
   *The Orchestrator may* one row says each project sets its own and opens Project settings.
 
-## The decision reviewer
-
-`Decision reviewer · redesign` (`a6B6v`, `decision-reviewer.md`, proposed 2026-10-31) is part of this layout: its
-reviewer row is Runs › Approvals' (`S02b`), its connection kind a group of Connections (`S05`), its key a secret in
-Environment (`S06`), and the profile shows the reviewer read-only (`S14`). Its add form, connection page, approval cards
-and the team's reviewer stay as that board draws them; their old tab row reads as this board's.
-
 ## Duplicates removed
 
 - The app-wide Estimates value a project without its own falls back to: copied into such projects once, then dropped.
@@ -63,4 +52,4 @@ and the team's reviewer stay as that board draws them; their old tab row reads a
 
 The pages under Connections, Sharing, Secrets and Accounts (a connection's, a secret's, an account's); values a team sets for a shared project (as
 `Shared configuration · redesign` draws them); the MCP tools' names and refusals, which follow the settings to their
-new owners in the implementation.
+new owners in the implementation; the decision model reviewer, which is the Decision reviewer module's alone.
