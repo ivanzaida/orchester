@@ -1,5 +1,5 @@
 //! Runs › Estimates (the Runs window `g406O`): *Let Orchester estimate story points* is the project's own setting,
-//! which only a person flips; a project nobody set it for keeps the application-wide setting it moved from.
+//! which only a person flips; the application-wide setting it moved from is no longer read (ORC-595).
 use orchester_store::AppDb;
 
 use super::harness::Settings;
@@ -9,7 +9,7 @@ const SWITCH: &str = "settings-estimate-points";
 /// A person's presses on the switch until the project stores `wanted`: the switch takes none before its value is read.
 fn press_until(page: &mut Settings, wanted: bool) {
   page.until("saved for the project", |p| {
-    if p.db().estimates_story_points().expect("read") == Some(wanted) {
+    if p.db().estimates_story_points().expect("read") == wanted {
       return true;
     }
     p.click(SWITCH);
@@ -31,7 +31,7 @@ fn project_settings_estimates_are_the_projects_and_only_a_person_turns_them_on()
     lurq::app::events::with_synthetic_input(|| p.click(SWITCH));
     p.exists(&format!("{SWITCH}-blocked"))
   });
-  assert_eq!(page.db().estimates_story_points().expect("read"), None);
+  assert!(!page.db().estimates_story_points().expect("read"));
   press_until(&mut page, true);
   assert!(!page.exists(&format!("{SWITCH}-blocked")));
   let app = AppDb::open(&page.window.data.database()).expect("the application database");
@@ -41,22 +41,19 @@ fn project_settings_estimates_are_the_projects_and_only_a_person_turns_them_on()
   );
 }
 
-/// A project nobody set it for shows the application-wide value it moved from: on, so a person's press turns it off.
+/// The row shows the project's own value, whatever the application-wide setting it moved from says.
 #[test]
-fn project_settings_estimates_keep_the_application_setting_until_set_for_the_project() {
+fn project_settings_estimates_show_the_projects_value_not_the_application_setting() {
   let mut page = Settings::new(false);
-  AppDb::open(&page.window.data.database())
-    .expect("the application database")
-    .set_estimates_story_points(true)
-    .expect("on for every project before ORC-103");
+  page.db().set_estimates_story_points(true).expect("on for the project");
   page.tab("general", "settings-project-name");
   page.tab("runs", &format!("{SWITCH}-row"));
-  page.until("turned off for the project", |p| {
-    match p.db().estimates_story_points().expect("read") {
-      Some(false) => return true,
-      Some(true) => panic!("the switch showed off: the application's setting was not the project's"),
-      None => p.click(SWITCH),
-    }
-    false
-  });
+  page.until("the project's value shown", |p| p.switch_on(SWITCH));
+  assert!(
+    !AppDb::open(&page.window.data.database())
+      .expect("the application database")
+      .estimates_story_points()
+      .expect("read"),
+    "the application-wide setting is off"
+  );
 }

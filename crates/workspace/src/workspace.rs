@@ -278,13 +278,18 @@ impl Workspace {
   /// Opens the project Orchester keeps in the folder `repo_root` and records it as the most
   /// recently used one; a folder whose project was removed from the list is added again. An account's project is
   /// refused to anyone else ([`StoreError::ProjectOfAnotherAccount`], [`StoreError::ProjectOfSignedOutAccount`]).
+  /// A project with no *Let Orchester estimate story points* of its own gets the application-wide value it moved from.
   pub fn open(&self, repo_root: &Path) -> Result<OpenProject, StoreError> {
-    let db = ProjectDb::open(repo_root)?;
+    let mut db = ProjectDb::open(repo_root)?;
     let project = db.project().clone();
     self.register(&project, repo_root)?;
     // The project opens all the same; its connections follow the removal the next time it opens.
     if let Err(error) = self.follow_accounts(repo_root) {
       tracing::warn!(%error, "cannot move a project's connections off removed accounts");
+    }
+    // The project opens all the same, its estimates off; the copy is tried again the next time it opens.
+    if let Err(error) = db.copy_estimates_story_points(|| self.db.lock().estimates_story_points()) {
+      tracing::warn!(%error, "cannot copy the application-wide estimates setting into a project");
     }
     Ok(OpenProject {
       project,
@@ -422,13 +427,10 @@ impl Workspace {
   }
 
   /// Whether Orchester estimates the story points of the tasks of the project at `repo_root` that have no person's
-  /// value (*Let Orchester estimate story points*, Project settings â€º Runs): the project's own setting once a person
-  /// set it there, else the application-wide one it moved from, which was off until a person turned it on.
+  /// value (*Let Orchester estimate story points*, Project settings â€º Runs): the project's own setting, which
+  /// [`Self::open`] copied from the application-wide one where the project had none.
   pub fn estimates_story_points(&self, repo_root: &Path) -> Result<bool, StoreError> {
-    match ProjectDb::open(repo_root)?.estimates_story_points()? {
-      Some(allowed) => Ok(allowed),
-      None => self.db.lock().estimates_story_points(),
-    }
+    ProjectDb::open(repo_root)?.estimates_story_points()
   }
 
   /// Sets *Let Orchester estimate story points* for the project at `repo_root`; only a person does, in the window.

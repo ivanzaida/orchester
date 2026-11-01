@@ -149,14 +149,35 @@ fn story_points_estimates_are_off_until_a_person_turns_them_on() {
   assert!(db.estimates_story_points().expect("read"));
 }
 
-/// The project's own setting (ORC-103) is unset until a person sets it in Project settings › Runs, so a project keeps
-/// the application-wide setting it moved from until then.
+/// The project's own setting (ORC-103) is off until a person sets it in Project settings › Runs.
 #[test]
-fn story_points_project_setting_is_unset_until_a_person_sets_it() {
+fn story_points_project_setting_is_off_until_a_person_sets_it() {
   let (_repo, mut db, ..) = started_run();
-  assert_eq!(db.estimates_story_points().expect("read"), None);
+  assert!(!db.estimates_story_points().expect("read"));
   db.set_estimates_story_points(true).expect("on");
-  assert_eq!(db.estimates_story_points().expect("read"), Some(true));
+  assert!(db.estimates_story_points().expect("read"));
   db.set_estimates_story_points(false).expect("off");
-  assert_eq!(db.estimates_story_points().expect("read"), Some(false));
+  assert!(!db.estimates_story_points().expect("read"));
+}
+
+/// A project with no value of its own gets the application-wide one it moved from (ORC-595), once: later copies
+/// neither read it nor change the project's.
+#[test]
+fn story_points_project_without_a_value_gets_the_application_wide_one_once() {
+  let (_repo, mut db, ..) = started_run();
+  db.copy_estimates_story_points(|| Ok(true)).expect("copied");
+  assert!(db.estimates_story_points().expect("read"), "the application-wide value");
+  db.copy_estimates_story_points(|| panic!("read again after the copy"))
+    .expect("nothing to copy");
+  assert!(db.estimates_story_points().expect("read"));
+}
+
+/// A project a person set the value for keeps it: the application-wide value is never read for it.
+#[test]
+fn story_points_project_with_its_own_value_keeps_it() {
+  let (_repo, mut db, ..) = started_run();
+  db.set_estimates_story_points(false).expect("off");
+  db.copy_estimates_story_points(|| panic!("read for a project with its own value"))
+    .expect("nothing to copy");
+  assert!(!db.estimates_story_points().expect("read"));
 }
