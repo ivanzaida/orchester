@@ -35,9 +35,16 @@ pub(super) async fn check(
     },
     None => None,
   };
+  check_with_key(connection.base_url(), key.as_ref()).await
+}
+
+pub(super) async fn check_with_key(
+  url: &orchester_core::connection::DecisionServerUrl,
+  key: Option<&SecretValue>,
+) -> Result<(DecisionCheckResult, Option<Vec<ModelId>>), DecisionError> {
   let client = client()?;
-  let mut request = client.get(format!("{}/models", connection.base_url().as_str()));
-  if let Some(key) = &key {
+  let mut request = client.get(format!("{}/models", url.as_str()));
+  if let Some(key) = key {
     let Ok(mut authorization) = HeaderValue::from_str(&format!("Bearer {}", key.expose())) else {
       return Ok((DecisionCheckResult::KeyRefused, None));
     };
@@ -54,7 +61,7 @@ pub(super) async fn check(
     status if status.is_server_error() || status == StatusCode::TOO_MANY_REQUESTS => {
       Ok((DecisionCheckResult::NothingAnswers, None))
     }
-    status if status.is_success() => read_models(response, key.as_ref()).await,
+    status if status.is_success() => read_models(response, key).await,
     _ => Ok((DecisionCheckResult::NotSystemOneApi, None)),
   }
 }

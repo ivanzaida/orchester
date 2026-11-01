@@ -156,34 +156,15 @@ impl ProviderForm {
   /// The key's secret: the project's, the archived one the connection still names, or a new one with its name and
   /// key under the select.
   pub(in super::super) fn key_row(&self, ctx: &mut Ctx, listed: &ProjectConnections) -> Element {
-    let label = |secret: &Secret| -> String {
-      ctx
-        .t_args(
-          "connections.apiProvider.secretName",
-          [
-            ("name", secret.name().as_str()),
-            ("environment", &*ctx.t(environment_key(secret.environment()))),
-          ],
-        )
-        .to_string()
-    };
-    let mut options: Vec<SelectOption<KeyChoice>> = listed
-      .secrets
-      .iter()
-      .map(|secret| SelectOption::new(KeyChoice::Existing(secret.id()), label(secret)))
-      .collect();
+    self.key_row_with(ctx, listed, false)
+  }
+
+  pub(super) fn key_row_with(&self, ctx: &mut Ctx, listed: &ProjectConnections, decision: bool) -> Element {
     let archived = match self.key.get() {
       KeyChoice::Existing(id) if active(listed, id).is_none() => listed.archived_keys.iter().find(|key| key.id() == id),
       _ => None,
     };
-    if let Some(secret) = archived {
-      let shown = ctx.t_args("connections.apiProvider.archived", [("secret", secret.name().as_str())]);
-      options.push(SelectOption::new(KeyChoice::Existing(secret.id()), shown.to_string()));
-    }
-    options.push(SelectOption::new(
-      KeyChoice::New,
-      ctx.t("connections.apiProvider.newSecret").to_string(),
-    ));
+    let options = key_options(ctx, listed, decision, archived);
     let mut select = SelectField::new(
       "connection-provider-key",
       ctx.t("connections.apiProvider.key"),
@@ -225,8 +206,16 @@ impl ProviderForm {
       ),
     };
     FormField::new("connection-provider-key", ctx.t("connections.apiProvider.key"))
-      .hint(ctx.t(hint))
-      .info(ctx.t(info))
+      .hint(ctx.t(if decision {
+        "decision_connection.editKeyHint"
+      } else {
+        hint
+      }))
+      .info(ctx.t(if decision {
+        "decision_connection.editKeyInfo"
+      } else {
+        info
+      }))
       .render(ctx, control)
   }
 
@@ -249,12 +238,14 @@ impl ProviderForm {
     }
     let name_hint = ctx.t("connections.apiProvider.secretNameHint");
     let value_label = ctx.t("connections.apiProvider.secretValue");
+    let revision = self.key_revision.clone();
     let value = FieldInput::new(
       "connection-provider-secret-value",
       value_label.clone(),
       self.value.clone(),
     )
-    .masked();
+    .masked()
+    .on_typed(move |_| revision.update(|value| *value += 1));
     let value_hint = ctx.t("connections.apiProvider.secretValueHint");
     vec![
       field(
@@ -373,6 +364,45 @@ impl ProviderForm {
       Some(info),
     ))
   }
+}
+
+fn key_options(
+  ctx: &Ctx,
+  listed: &ProjectConnections,
+  decision: bool,
+  archived: Option<&Secret>,
+) -> Vec<SelectOption<KeyChoice>> {
+  let label = |secret: &Secret| -> String {
+    ctx
+      .t_args(
+        "connections.apiProvider.secretName",
+        [
+          ("name", secret.name().as_str()),
+          ("environment", &*ctx.t(environment_key(secret.environment()))),
+        ],
+      )
+      .to_string()
+  };
+  let mut options: Vec<SelectOption<KeyChoice>> = listed
+    .secrets
+    .iter()
+    .map(|secret| SelectOption::new(KeyChoice::Existing(secret.id()), label(secret)))
+    .collect();
+  if decision {
+    options.insert(
+      0,
+      SelectOption::new(KeyChoice::None, ctx.t("decision_connection.noKey").to_string()),
+    );
+  }
+  if let Some(secret) = archived {
+    let shown = ctx.t_args("connections.apiProvider.archived", [("secret", secret.name().as_str())]);
+    options.push(SelectOption::new(KeyChoice::Existing(secret.id()), shown.to_string()));
+  }
+  options.push(SelectOption::new(
+    KeyChoice::New,
+    ctx.t("connections.apiProvider.newSecret").to_string(),
+  ));
+  options
 }
 
 /// The environment's name as Secrets shows it (*Development*).

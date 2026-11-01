@@ -18,6 +18,7 @@ pub(super) struct Read {
   pub connection: Option<DecisionConnection>,
   pub reviewer: Option<ReviewerChoice>,
   pub key_name: Option<String>,
+  pub listed: orchester_workspace::connections::data::ProjectConnections,
 }
 
 impl lurq::app::component::DevtoolsInspectable for Read {}
@@ -48,6 +49,7 @@ pub(super) fn load(
           connection,
           reviewer,
           key_name,
+          listed: orchester_workspace::connections::data::ProjectConnections::load(&db)?,
         })
       })
       .await?

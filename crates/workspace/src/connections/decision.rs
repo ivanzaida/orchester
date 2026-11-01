@@ -1,7 +1,9 @@
 //! Decision model connections: secret references only in drafts and read models. Check lists models,
 //! without sending project content or making an inference request.
 
+mod edit;
 mod http;
+pub use edit::{check_draft_in, save_with_key_in};
 pub mod test;
 
 use std::path::Path;
@@ -53,7 +55,7 @@ impl DecisionError {
     use crate::messages::{self, Message};
     match self {
       Self::Store(error) => messages::store_error(error),
-      Self::PersonOnly => Message::new("appMcp.errors.personOnly"),
+      Self::PersonOnly => Message::new("connections.errors.decisionPersonOnly"),
       Self::CheckStale => Message::new("connections.errors.decisionCheckStale"),
       Self::KeyUnavailable => Message::new("connections.errors.decisionKeyUnavailable"),
       Self::ClientUnavailable => Message::new("connections.errors.decisionClientUnavailable"),
@@ -77,6 +79,9 @@ pub fn save_in(root: &Path, draft: &DecisionDraft, writer: Writer) -> Result<Dec
       draft.key,
     ),
   };
+  if writer == Writer::Automation && !connection.is_on_this_computer() {
+    return Err(DecisionError::PersonOnly);
+  }
   if let Some(key) = draft.key {
     ensure_key(&db, key)?;
   }

@@ -1,4 +1,6 @@
 //! Decision model connection page: frame 02 GM4yE (without Test) and frame 07 FJRFV.
+mod editor;
+pub(super) mod form;
 mod groups;
 mod read;
 mod words;
@@ -53,6 +55,7 @@ pub(super) struct DecisionPage {
   more: (Signal<bool>, ElementRef),
   deleting: Signal<bool>,
   checking: Signal<bool>,
+  editing: Signal<bool>,
 }
 
 impl Component for DecisionPage {
@@ -82,6 +85,7 @@ impl Component for DecisionPage {
       more: (ctx.signal(false), ctx.element_ref()),
       deleting: ctx.signal(false),
       checking: ctx.signal(false),
+      editing: ctx.signal(false),
     }
   }
 
@@ -114,6 +118,17 @@ impl Component for DecisionPage {
           .child(Text::new(&ctx.t("decision_connection.gone"))),
       );
     };
+    if self.editing.get() {
+      return ctx.mount_keyed::<editor::DecisionEditor>(
+        &format!("decision-editor-{}", connection.id()),
+        editor::Props {
+          project: props.project.clone(),
+          connection: connection.clone(),
+          listed: read.listed.clone(),
+          close: self.editing.clone(),
+        },
+      );
+    }
     let content = self.page(ctx, &props, &read, connection);
     let content = if let Some(error) = &loaded.error {
       Column::new().child(self.failed(ctx, error)).child(content).into()
@@ -152,7 +167,7 @@ impl DecisionPage {
     let title = Text::new(connection.name().as_str())
       .id("decision-title")
       .variant(ProjectSettingsText::PageTitle.role());
-    let check = self.check_button(
+    let check = self.header_action(
       ctx,
       props,
       read,
@@ -201,6 +216,33 @@ impl DecisionPage {
       .into()
   }
 
+  fn header_action(
+    &self,
+    ctx: &Ctx,
+    props: &Props,
+    read: &Read,
+    connection: &DecisionConnection,
+    words: (&str, &str),
+  ) -> ActionButton {
+    use orchester_core::connection::DecisionCheckResult;
+    if connection.last_check().is_some_and(|check| {
+      matches!(
+        check.result,
+        DecisionCheckResult::KeyRefused | DecisionCheckResult::NotSystemOneApi
+      )
+    }) {
+      let editing = self.editing.clone();
+      return ActionButton::new(
+        "decision-repair",
+        ButtonKind::Secondary,
+        ctx.t("decision_connection.edit"),
+      )
+      .icon(Icon::Settings)
+      .on_click(move || editing.set(true));
+    }
+    self.check_button(ctx, props, read, connection, words)
+  }
+
   fn check_button(
     &self,
     ctx: &Ctx,
@@ -244,11 +286,10 @@ impl DecisionPage {
       .element(anchor.clone())
       .on_click(move || toggle.update(|value| *value = !*value));
     let button = if open.get() { button.active() } else { button }.render(ctx);
-    let edit = MenuItem::unavailable(
-      "decision-edit",
-      ctx.t("decision_connection.edit"),
-      ctx.t("decision_connection.editUnavailable"),
-    )
+    let editing = self.editing.clone();
+    let edit = MenuItem::new("decision-edit", ctx.t("decision_connection.edit"), move || {
+      editing.set(true)
+    })
     .icon(Icon::Settings);
     let delete = if read.reviewer.is_some() || self.action.state().get().is_pending() {
       MenuItem::unavailable(

@@ -23,6 +23,7 @@ use crate::{
   ui::{
     form_section::Label,
     icon::{Icon, icon},
+    notice::NoticeTone,
     pressable::pressable,
     tooltip::Tooltip,
   },
@@ -190,7 +191,19 @@ pub(crate) fn on_enter(add: impl Fn() + Send + Sync + 'static) -> impl Fn(Keyboa
 /// A warning line under a group (`Widens` `tXVIh`, `Sent to` `s4sjZm`): a `warning` glyph (a triangle for what a change
 /// widens, a send arrow for where requests go) and what it warns of in 12 `text_secondary`, on `warning_muted`, radius
 /// 6, 8 over and under and 10 at its sides; what it leaves out in an (i) at its end (`<id>-info`).
-pub(crate) fn warning_line(ctx: &mut Ctx, (id, glyph): (&str, Icon), words: &str, info: Option<Arc<str>>) -> Element {
+pub(crate) fn warning_line(ctx: &mut Ctx, id: (&str, Icon), words: &str, info: Option<Arc<str>>) -> Element {
+  notice_line(ctx, id, words, info, NoticeTone::Warning)
+}
+
+/// A paragraph notice, as decision server forms draw it in 01 X9rYhd and 01b.
+pub(crate) fn notice_line(
+  ctx: &mut Ctx,
+  (id, glyph): (&str, Icon),
+  words: &str,
+  info: Option<Arc<str>>,
+  tone: NoticeTone,
+) -> Element {
+  let (fill, _, mark) = tone.colors();
   let info = info.map(|info| {
     let glyph = icon(Icon::Info, IconSize::Sm, PaletteColor::TextMuted).id(format!("{id}-info"));
     Tooltip::new(format!("{id}-info"), info).wrap(ctx, glyph)
@@ -201,9 +214,9 @@ pub(crate) fn warning_line(ctx: &mut Ctx, (id, glyph): (&str, Icon), words: &str
     .padding(Padding::symmetric(ExtraSpacing::Loose.role(), SpacingSize::Sm))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Start)
-    .background(PaletteColor::WarningMuted)
+    .background(fill)
     .rounded(RadiusSize::Md)
-    .child(icon(glyph, IconSize::Base, PaletteColor::Warning))
+    .child(icon(glyph, IconSize::Base, mark))
     .child(
       Text::new(words)
         .id(format!("{id}-text"))

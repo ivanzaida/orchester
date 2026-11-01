@@ -11,7 +11,7 @@ use orchester_core::{
 
 use super::harness::Seeded;
 
-fn connection(seeded: &Seeded, result: DecisionCheckResult) -> DecisionConnection {
+pub(super) fn connection(seeded: &Seeded, result: DecisionCheckResult) -> DecisionConnection {
   let mut connection = DecisionConnection::new(
     DecisionConnectionId::generate(),
     Name::new("Decision server").expect("name"),
@@ -27,7 +27,7 @@ fn connection(seeded: &Seeded, result: DecisionCheckResult) -> DecisionConnectio
   connection
 }
 
-fn open(seeded: &mut Seeded, id: DecisionConnectionId) {
+pub(super) fn open(seeded: &mut Seeded, id: DecisionConnectionId) {
   seeded.go(ProjectPage::Connections(ConnectionsView::decision(id)));
   seeded.until("decision page", |seeded| seeded.exists("decision-connection-page"));
 }

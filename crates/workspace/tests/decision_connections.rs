@@ -3,6 +3,8 @@
 //! Laya fixture: https://api.laya.studio/v1/models (public GET, read 2026-11-01);
 //! https://laya.studio/v1/openapi declares that endpoint public.
 
+#[path = "decision_connections/edit.rs"]
+mod edit;
 #[path = "decision_connections/security.rs"]
 mod security;
 #[path = "decision_connections/tools.rs"]
