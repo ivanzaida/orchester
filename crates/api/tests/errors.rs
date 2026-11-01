@@ -11,9 +11,9 @@ fn s1b_every_sharing_error_detail_round_trips_on_the_client() {
   let cases = [
     (
       "remote_taken",
-      json!({"project":ProjectId::generate(),"member":false,"admins":[user]}),
+      json!({"project":ProjectId::generate(),"member":false,"owners":[user]}),
     ),
-    ("not_member", json!({"admins":[user]})),
+    ("not_member", json!({"owners":[user]})),
     (
       "revision_conflict",
       json!({"current":serde_json::from_value::<orchester_api::SharedTask>(task).expect("task")}),

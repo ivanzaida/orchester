@@ -1001,11 +1001,11 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
-OP-144 / S1 public prerequisite · Workspace `Admin` / `Member` contract, inherited server-admin capabilities and a
-last-workspace-admin invariant guard in core; API 4 role, admin-contact and error shapes. Existing local SQLite
-role encodings are preserved by the store adapter. Twenty focused core/API/store tests and `tools/check.ps1` passed.
-Server migrations,
-endpoint enforcement and platform dependency pins remain OP-144 in `ivanzaida/orchester-platform`. Contract:
+OP-144 / S1 public prerequisite · Additive `WorkspaceRole::Admin` / `Member`, inherited server-admin capabilities
+and a last-workspace-admin invariant guard in core; separate role-bearing DTOs in `orchester_api::v2`. Existing
+Owner/Member contracts, API clients, events, SQLite and desktop presentation remain unchanged. Server enforcement,
+versioned routes and dependency pins remain OP-144 in `ivanzaida/orchester-platform`. Twenty-three focused
+core/API/store tests and `tools/check.ps1` passed. Contract:
 `docs/architecture/workspace-roles.md`.
 
 ORC-403 · A ready step that waits for an agent slot says so · branch `orchester/orc-403-run-1` (implemented 2026-10-30;

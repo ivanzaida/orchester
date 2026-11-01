@@ -1,6 +1,6 @@
-use orchester_api::{
-  ErrorCode, InviteCreate, ManagedProject, MemberChanges, MemberCreate, MemberRole, Members, SharingErrorDetails,
-  TEAM_API_VERSION,
+use orchester_api::v2::{
+  InviteCreate, ManagedProject, MemberChanges, MemberCreate, MemberRole, Members, MembershipErrorCode,
+  MembershipErrorDetails,
 };
 use orchester_core::id::{ProjectId, UserId};
 use serde_json::{Value, json};
@@ -46,15 +46,13 @@ fn workspace_roles_managed_projects_and_errors_expose_admins() {
     .remove("admins")
     .expect("admins");
   assert!(serde_json::from_value::<ManagedProject>(legacy).is_err());
-  let detail: SharingErrorDetails = serde_json::from_value(json!({"admins":[admin]})).expect("admins");
-  assert!(matches!(detail, SharingErrorDetails::Admins { .. }));
-  assert!(serde_json::from_value::<SharingErrorDetails>(json!({"owners":[admin]})).is_err());
+  let detail: MembershipErrorDetails = serde_json::from_value(json!({"admins":[admin]})).expect("admins");
+  assert!(matches!(detail, MembershipErrorDetails::Admins { .. }));
+  assert!(serde_json::from_value::<MembershipErrorDetails>(json!({"owners":[admin]})).is_err());
   assert_eq!(
-    serde_json::to_value(ErrorCode::LastWorkspaceAdmin).expect("code"),
+    serde_json::to_value(MembershipErrorCode::LastWorkspaceAdmin).expect("code"),
     "last_workspace_admin"
   );
-  assert_eq!(serde_json::to_value(ErrorCode::LastAdmin).expect("code"), "last_admin");
-  assert_eq!(TEAM_API_VERSION, 4);
 }
 
 #[test]
@@ -86,4 +84,56 @@ fn workspace_roles_project_invites_use_the_shared_role_contract() {
       assert!(decoded.is_err());
     }
   }
+}
+
+#[test]
+fn workspace_roles_legacy_contracts_remain_unchanged() {
+  use orchester_api::{ErrorCode, MemberChanges, MemberCreate, MemberRole, SharingErrorDetails};
+
+  for role in ["owner", "member"] {
+    let request = json!({"username":"alice", "role":role});
+    let create: MemberCreate = serde_json::from_value(request.clone()).expect("legacy request");
+    assert_eq!(serde_json::to_value(create).expect("serialize"), request);
+    let change: MemberChanges = serde_json::from_value(json!({"role":role})).expect("legacy role");
+    assert_eq!(serde_json::to_value(change).expect("serialize")["role"], role);
+  }
+  assert!(serde_json::from_value::<MemberRole>(json!("admin")).is_err());
+  assert_eq!(serde_json::to_value(MemberRole::Owner).expect("legacy owner"), "owner");
+  assert_eq!(
+    serde_json::to_value(ErrorCode::LastOwner).expect("legacy code"),
+    "last_owner"
+  );
+  assert_eq!(
+    serde_json::to_value(ErrorCode::LastAdmin).expect("server code"),
+    "last_admin"
+  );
+  let contacts = json!({"owners":[user()]});
+  let details: SharingErrorDetails = serde_json::from_value(contacts.clone()).expect("legacy contacts");
+  assert!(matches!(details, SharingErrorDetails::Owners { .. }));
+  assert_eq!(serde_json::to_value(details).expect("serialize"), contacts);
+  let project = json!({
+    "id":ProjectId::generate(), "slug":"team", "address":"https://team.example/team",
+    "key":"TEAM", "name":"Team", "remote_hint":null, "role":"owner", "next_number":1,
+    "members":1, "open_invites":0, "owners":[user()], "created_at":1, "created_by":user()
+  });
+  let managed: orchester_api::ManagedProject = serde_json::from_value(project.clone()).expect("legacy project");
+  assert_eq!(managed.project.role, Some(MemberRole::Owner));
+  assert_eq!(managed.owners.len(), 1);
+  assert_eq!(serde_json::to_value(managed).expect("serialize"), project);
+}
+
+#[test]
+fn workspace_roles_versioned_events_do_not_change_the_legacy_stream() {
+  let delta = json!({
+    "kind":"member.role_changed",
+    "data":{"id":1, "by":user(), "actor":"person", "at":1, "user":UserId::generate(), "role":"admin"}
+  });
+  let event: orchester_api::v2::MembershipEvent = serde_json::from_value(delta.clone()).expect("v2 event");
+  assert_eq!(serde_json::to_value(event).expect("serialize"), delta);
+  assert!(serde_json::from_value::<orchester_api::Event>(delta.clone()).is_err());
+  let mut legacy = delta;
+  legacy["data"]["role"] = json!("owner");
+  let event: orchester_api::Event = serde_json::from_value(legacy.clone()).expect("v1 event");
+  assert_eq!(serde_json::to_value(event).expect("serialize"), legacy);
+  assert!(serde_json::from_value::<orchester_api::v2::MembershipEvent>(legacy).is_err());
 }

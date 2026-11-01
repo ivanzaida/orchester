@@ -125,7 +125,7 @@ impl TeamServer {
   pub fn own(&self, slug: &str) {
     let mut state = self.state.lock();
     if let Some(project) = state.projects.iter_mut().find(|project| project["slug"] == slug) {
-      project["role"] = json!("admin");
+      project["role"] = json!("owner");
     }
   }
 
@@ -212,7 +212,7 @@ fn route((path, query): (&str, &str), (headers, body): (&str, &str), state: &Mut
       let name = state.lock().name.clone();
       (
         "200 OK",
-        json!({"name": name, "api_version": crate::TEAM_API_VERSION, "needs_setup": false, "cloud": null, "version": "0.4.0"}),
+        json!({"name": name, "api_version": 3, "needs_setup": false, "cloud": null, "version": "0.4.0"}),
       )
     }
     "POST /api/v1/auth/code" => {

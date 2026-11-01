@@ -52,7 +52,7 @@ fn module() -> Value {
 }
 
 fn member() -> Value {
-  json!({ "user": alice(), "username": "alice", "role": "admin", "added_at": 5 })
+  json!({ "user": alice(), "username": "alice", "role": "owner", "added_at": 5 })
 }
 
 fn resource() -> Value {
@@ -105,7 +105,7 @@ fn samples() -> Vec<Value> {
     delta("module.changed", json!({ "module": module() })),
     delta("member.added", json!({ "member": member() })),
     delta("member.removed", json!({ "user": USER })),
-    delta("member.role_changed", json!({ "user": USER, "role": "admin" })),
+    delta("member.role_changed", json!({ "user": USER, "role": "owner" })),
     delta(
       "project.changed",
       json!({ "project": { "id": PROJECT, "key": "ORC", "name": "Orchester 2" } }),

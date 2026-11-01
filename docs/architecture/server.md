@@ -1,7 +1,7 @@
 # Orchester — shared server
 
-> The current [S1 workspace role contract](workspace-roles.md) supersedes the Owner/Member terminology and
-> owner-list transport fields in the historical plan below. Server implementation lives in the platform repository.
+> New [S1 workspace role contracts](workspace-roles.md) are additive. The existing Owner/Member contracts described
+> here remain supported; the new workspace-authority types live separately in `orchester_api::v2`.
 
 > **Where the code is (2026-10-27).** The team server (`crates/server`), its web app (`web/server`), the shared web
 > kit (`web/ui`), `deploy/server`, `docs/server-hosting.md` and the end-to-end tests against a real server (its

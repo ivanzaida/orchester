@@ -204,7 +204,7 @@ impl SharedProjects {
     let project = &listed.project;
     let id = format!("{PAGE}-{}", project.slug);
     let role = match project.role {
-      Some(MemberRole::Admin) => "startup.shared.projects.owner",
+      Some(MemberRole::Owner) => "startup.shared.projects.owner",
       Some(MemberRole::Member) | None => "startup.shared.projects.member",
     };
     let title = Row::new()

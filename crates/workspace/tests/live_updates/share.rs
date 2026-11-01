@@ -111,7 +111,7 @@ impl Sharer {
     let publisher = Publisher::online(server, ALICE);
     let root = self.fixture.repo.path().to_owned();
     let uploaded = upload_configuration(&publisher, &root).await.expect("uploaded");
-    link(&mut self.db(), server, MemberRole::Admin);
+    link(&mut self.db(), server, MemberRole::Owner);
     keep_uploaded_configuration(&publisher, &root, uploaded)
       .await
       .expect("kept as the server's");

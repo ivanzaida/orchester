@@ -100,7 +100,7 @@ impl InvitesNotice {
       .as_ref()
       .map_or_else(|| invite.server.address.clone(), |project| project.address.clone());
     let role = ctx.t(match invite.role {
-      Some(orchester_api::MemberRole::Admin) => "cloud.notice.role.owner",
+      Some(orchester_api::MemberRole::Owner) => "cloud.notice.role.owner",
       Some(orchester_api::MemberRole::Member) => "cloud.notice.role.member",
       None => "cloud.notice.role.server",
     });

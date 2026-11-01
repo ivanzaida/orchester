@@ -58,7 +58,7 @@ pub fn shared(kontur: &mut Kontur) -> Result<(), SeedError> {
     server: ServerId::generate(),
     project: ProjectId::generate(),
     key: ProjectKey::new("KON").map_err(invalid)?,
-    role: Some(MemberRole::Admin),
+    role: Some(MemberRole::Owner),
     joined_at: kontur.ago(30 * DAY),
     cursor: 0,
     last_synced_at: kontur.ago(20),
@@ -75,7 +75,7 @@ pub fn shared(kontur: &mut Kontur) -> Result<(), SeedError> {
     added_at: added,
   };
   let members = [
-    member(me, ("Dana Kovalenko", EXPECTED, MemberRole::Admin)),
+    member(me, ("Dana Kovalenko", EXPECTED, MemberRole::Owner)),
     member(UserId::generate(), ("Ivan", "ivan", MemberRole::Member)),
     member(UserId::generate(), ("Olha", "olha", MemberRole::Member)),
     member(UserId::generate(), ("Petro", "petro", MemberRole::Member)),

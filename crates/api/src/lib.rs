@@ -27,10 +27,8 @@ mod tasks;
 pub mod test_support;
 #[cfg(feature = "identity")]
 pub mod totp;
+pub mod v2;
 pub mod wire;
-
-/// Coordinated team-server contract: workspace Admin/Member roles replace Owner/Member without wire aliases.
-pub const TEAM_API_VERSION: u8 = 4;
 
 pub use accounts::*;
 pub use catalog::*;
