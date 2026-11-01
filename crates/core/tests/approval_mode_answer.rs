@@ -155,19 +155,10 @@ fn approval_mode_answer_reviewer_approves_denies_or_is_unsure() {
     reason: "It may write elsewhere.".to_owned(),
     model,
   };
-  let failed = Review::Failed {
-    failure: ReviewFailure::TimedOut,
-    model: None,
-  };
   for question in [ReviewQuestion::Request, ReviewQuestion::Roots] {
     assert_eq!(
       after_review(question, &approved),
       Ok(RequestAnswer::reviewer("Serves the task.")),
-      "{question:?}"
-    );
-    assert_eq!(
-      after_review(question, &failed),
-      Err(CameToPerson::because(PersonReason::ReviewerUnsure)),
       "{question:?}"
     );
   }
@@ -184,6 +175,40 @@ fn approval_mode_answer_reviewer_approves_denies_or_is_unsure() {
     after_review(ReviewQuestion::Roots, &asked),
     Err(with(PersonReason::ReviewerUnsure))
   );
+}
+
+/// A review that gave no verdict — its CLI failed, it timed out, its answer could not be read — says the reviewer
+/// could not run, never that it was unsure (ORC-611); one that never asked a reviewer comes as without one.
+#[test]
+fn approval_mode_answer_a_failed_review_says_the_reviewer_could_not_run() {
+  for failure in [
+    ReviewFailure::CouldNotRun,
+    ReviewFailure::TimedOut,
+    ReviewFailure::Unreadable,
+  ] {
+    let failed = Review::Failed {
+      failure,
+      model: Some("claude-haiku-4-5".to_owned()),
+    };
+    for question in [ReviewQuestion::Request, ReviewQuestion::Roots] {
+      assert_eq!(
+        after_review(question, &failed),
+        Err(CameToPerson::because(PersonReason::ReviewerCouldNotRun)),
+        "{failure:?} {question:?}"
+      );
+    }
+  }
+  let none = Review::Failed {
+    failure: ReviewFailure::NoReviewer,
+    model: None,
+  };
+  for question in [ReviewQuestion::Request, ReviewQuestion::Roots] {
+    assert_eq!(
+      after_review(question, &none),
+      Err(without_reviewer(question)),
+      "{question:?}"
+    );
+  }
 }
 
 #[test]
@@ -247,6 +272,7 @@ fn approval_mode_answer_records_the_kind_of_each_answer() {
     PersonReason::Outside,
     PersonReason::NotAllowed,
     PersonReason::ReviewerUnsure,
+    PersonReason::ReviewerCouldNotRun,
     PersonReason::ReviewerDenied,
     PersonReason::Push,
     PersonReason::Refs,
@@ -263,6 +289,7 @@ fn approval_mode_answer_records_the_kind_of_each_answer() {
       "outside",
       "notAllowed",
       "reviewerUnsure",
+      "reviewerCouldNotRun",
       "reviewerDenied",
       "push",
       "refs"

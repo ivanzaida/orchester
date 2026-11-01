@@ -112,6 +112,39 @@ fn card_approval_came_to_you_names_why_and_approves_with_approve() {
   );
 }
 
+/// A request the reviewer could not judge says so, not that it was unsure, with why — the reviewer's account is at its
+/// weekly plan limit, with when it resets — and *Reviewer settings*, which opens Project settings › Runs, whose
+/// Reviewer row says the same (ORC-611).
+#[test]
+fn card_approval_the_reviewer_that_could_not_run_says_why_and_opens_its_settings() {
+  let (mut window, ..) = opened_in(SCENARIO, "Retry uploads on 503", "cards-approval-");
+  let card = came_card(&mut window);
+  assert!(
+    glyphs(&mut window, &format!("{card}-head")).contains(&Icon::ShieldAlert.glyph().to_string()),
+    "the head's glyph is a shield with an alert"
+  );
+  let came = format!("{card}-came-text");
+  window.until("why the reviewer could not run", |window| {
+    text(window, &came) != "The reviewer couldn't run."
+  });
+  let said = text(&mut window, &came);
+  assert!(
+    said.starts_with("The reviewer couldn't run: its account reached its plan limit, which resets ")
+      && said.ends_with('.'),
+    "{said}"
+  );
+  let link = format!("{card}-reviewer-settings");
+  assert_eq!(text(&mut window, &link), "Reviewer settings");
+  click(&mut window, &link);
+  window.until("the Reviewer row says why", |window| {
+    window.texts("settings-auto-reviewer-hint").is_some_and(|hint| {
+      hint
+        .join(" ")
+        .starts_with("The reviewer can't run: its account reached its plan limit, which resets ")
+    })
+  });
+}
+
 /// The card is compact, as 04c draws it: none of the full card's explanation, subject, command box or facts, and the
 /// other answers only once *More answers* is pressed.
 #[test]

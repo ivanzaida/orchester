@@ -209,6 +209,38 @@ fn reviewer_usage_keeps_the_account_and_the_connection_the_reviewer_ran_on() {
   assert_eq!((&*named.name, named.removed), ("Claude · Reviewer", true));
 }
 
+/// Project settings › Runs says when the reviewer's last review failed (ORC-611): the last one on its connection.
+#[test]
+fn reviewer_usage_tells_how_the_last_review_on_a_connection_ended() {
+  let (_repo, mut db, run, execution) = started_run();
+  let invocation = db
+    .start_invocation(run.id(), execution, &model(), at(10))
+    .expect("invocation");
+  let approval = request(&mut db, &invocation);
+  let (reviewer, other) = (ConnectionId::generate(), ConnectionId::generate());
+  assert_eq!(db.last_review_end(reviewer).expect("none yet"), None);
+  let on = |connection: ConnectionId, ended: i64, end: ReviewEnd| ReviewRecord {
+    connection: Some(UsedProvider {
+      id: connection,
+      name: "Claude · Claude 2".into(),
+    }),
+    ..review(&approval, at(ended), None, end)
+  };
+  for record in [
+    on(reviewer, 30, ReviewEnd::Approved),
+    on(reviewer, 40, ReviewEnd::Failed(ReviewFailure::CouldNotRun)),
+    on(other, 50, ReviewEnd::Asked),
+  ] {
+    db.record_reviewer_usage(&record).expect("recorded");
+  }
+  assert_eq!(
+    db.last_review_end(reviewer).expect("read"),
+    Some(ReviewEnd::Failed(ReviewFailure::CouldNotRun)),
+    "another connection's later review does not count"
+  );
+  assert_eq!(db.last_review_end(other).expect("read"), Some(ReviewEnd::Asked));
+}
+
 #[test]
 fn reviewer_usage_from_before_the_account_was_kept_is_given_no_account() {
   let (repo, mut db, run, execution) = started_run();

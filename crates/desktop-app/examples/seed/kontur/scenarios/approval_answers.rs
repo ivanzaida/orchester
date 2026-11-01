@@ -7,21 +7,29 @@
 //! - *Cap Retry-After at 60 s*: a command the profile allowed, one the reviewer approved with its reason, then one the
 //!   reviewer was not sure about;
 //! - one task per other reason a request comes to the person: the reviewer denied it, it is not on the allowed list, a
-//!   push to a remote, another branch.
+//!   push to a remote, another branch, the reviewer could not run (ORC-611: its review failed, and the reviewer's
+//!   account is at its weekly plan limit, which resets two days after the seed's now — Project settings › Runs ›
+//!   Reviewer says so too).
 //!
 //! Its runs are recorded, not executed, as `cards-auto-mode`'s are: a step with a request that came to the person is
 //! recorded waiting for them (`cards::hold`).
 
 use orchester_core::{
+  connection::{
+    AgentProvider,
+    plan_limits::{LimitReading, LimitState, LimitWindow, PlanLimits},
+  },
   run::{
     AnswerKind, CameToPerson, DecidedBy, Invocation, PendingToolApproval, PersonReason, RequestAnswer, Run,
     ToolApprovalDecision,
+    review::{Review, ReviewFailure, resolve_reviewer},
   },
+  store::ConnectionStore,
   time::Timestamp,
 };
 
 use super::cards::{at_work, hold};
-use crate::kontur::{Kontur, SeedError};
+use crate::kontur::{Kontur, SeedError, catalogue::recorded_connection};
 
 const CRITERIA: [&str; 1] = ["The change is covered by tests."];
 /// The agent that asks, Implement's.
@@ -97,8 +105,12 @@ const REFS: [Asked; 1] = [(
   "git update-ref refs/heads/main 4e1c9d2",
   Answered::Came(PersonReason::Refs, Some("refs/heads/main")),
 )];
+const NOT_JUDGED: [Asked; 1] = [(
+  "curl -s https://staging.example.com/uploads/health",
+  Answered::Came(PersonReason::ReviewerCouldNotRun, None),
+)];
 
-const TASKS: [(&str, &[Asked], &str); 6] = [
+const TASKS: [(&str, &[Asked], &str); 7] = [
   (
     "Add retry to webhook sender",
     &AUTOPILOT,
@@ -113,11 +125,27 @@ const TASKS: [(&str, &[Asked], &str); 6] = [
   ("Read the deploy key", &NOT_ALLOWED, "a command not on the allowed list"),
   ("Publish the retry branch", &PUSH, "a push to a remote"),
   ("Move main to the fix", &REFS, "a change to another branch"),
+  (
+    "Retry uploads on 503",
+    &NOT_JUDGED,
+    "a command the reviewer could not judge: its account is at its weekly plan limit",
+  ),
 ];
+
+/// When the reviewer's account's weekly limit resets: two days after the seed's now.
+const RESETS_IN_MINUTES: i64 = 2 * 24 * 60;
 
 pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
   let catalogue = kontur.catalogue()?;
   let pipeline = &catalogue.feature_delivery;
+  // The project's reviewer: a Claude Code connection on its CLI's Default account, recorded and never run.
+  let program = kontur.repo.join(".orchester").join("recorded").join("claude");
+  let published = kontur.ago(7 * 24 * 60);
+  recorded_connection(
+    &mut kontur.db,
+    ("Claude · Claude 2", AgentProvider::ClaudeCodeCli, &program),
+    published,
+  )?;
   for (index, (title, asked, state)) in TASKS.into_iter().enumerate() {
     let minutes = i64::try_from(TASKS.len() - index).expect("a short list") * 30;
     let (created, started) = (kontur.ago(minutes + 20), kontur.ago(minutes));
@@ -180,6 +208,9 @@ fn answer(kontur: &mut Kontur, request: &PendingToolApproval, answered: Answered
       Ok(false)
     }
     Answered::Came(reason, detail) => {
+      if reason == PersonReason::ReviewerCouldNotRun {
+        not_judged(kontur, request)?;
+      }
       let came = CameToPerson {
         reason,
         detail: detail.map(str::to_owned),
@@ -188,4 +219,38 @@ fn answer(kontur: &mut Kontur, request: &PendingToolApproval, answered: Answered
       Ok(true)
     }
   }
+}
+
+/// The reviewer's review of `request` that failed as one at its account's plan limit does (its CLI exits with an
+/// error), and the account's weekly limit reached, as the CLI reported it then.
+fn not_judged(kontur: &mut Kontur, request: &PendingToolApproval) -> Result<(), SeedError> {
+  let failed = Review::Failed {
+    failure: ReviewFailure::CouldNotRun,
+    model: Some("claude-haiku-4-5".to_owned()),
+  };
+  kontur.db.record_review(request.run, &request.id, &failed)?;
+  let (settings, connections) = (kontur.db.auto_mode_settings()?, kontur.db.connections()?);
+  let reviewer = resolve_reviewer(&settings, &connections).expect("the catalogue's connection reviews");
+  let provider = reviewer.kind.provider();
+  let week = LimitWindow::new(
+    7 * 24 * 60,
+    Some(100.0),
+    Some(kontur.ago(-RESETS_IN_MINUTES)),
+    LimitState::Reached,
+    false,
+  )
+  .expect("a whole week, used up");
+  let reading = LimitReading {
+    provider,
+    account: reviewer.connection.account().id(provider),
+    at: request.requested_at,
+    limits: PlanLimits {
+      windows: vec![week],
+      plan: None,
+      credits: None,
+      blocked: None,
+    },
+  };
+  kontur.db.save_limit_snapshot(request.run, &reading)?;
+  Ok(())
 }
