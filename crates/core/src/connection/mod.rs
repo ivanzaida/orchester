@@ -20,6 +20,7 @@ mod catalog;
 pub mod claude_approval;
 mod claude_catalog;
 mod decision;
+mod decision_history;
 mod discovery;
 mod endpoint;
 mod github;
@@ -49,6 +50,7 @@ pub use self::{
   catalog::{CatalogModel, CatalogSource, ModelCatalog, ModelSupport, REASONING_EFFORT},
   claude_catalog::parse_claude_models,
   decision::{DecisionConnection, DecisionServerUrl, DecisionServerUrlError, is_this_computer},
+  decision_history::{DecisionCheck, DecisionCheckResult, DecisionTest, DecisionThresholdFigures},
   discovery::{Installed, compare_versions, rank_installed},
   endpoint::{AgentEndpoint, ApiEndpoint, BaseUrl, EndpointError, EndpointPreset, offers_provider_fallback},
   github::{

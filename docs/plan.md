@@ -1001,6 +1001,11 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
+ORC-557 · Decision reviewer choice · branch `orchester/orc-557-run-1` (implemented 2026-11-01). Core resolves an
+explicitly chosen decision connection and model with a validated threshold (0.80 by default), distinguishes gone,
+disconnected and no-longer-listed choices without fallback, and exposes the person-only rule for hosted servers.
+Language defaults and effort remain unchanged. Storage and execution of decision reviewers belong to later tasks.
+Tests: `orchester-core --test decision_reviewer_choice decision_reviewer_choice`, `--test auto_mode_reviewers auto_mode`.
 ORC-403 · A ready step that waits for an agent slot says so · branch `orchester/orc-403-run-1` (implemented 2026-10-30;
 pipeline QA scenarios, Review and Verify follow). The runner reports ready agent steps held back only by the slots in
 `WorkSummary.slot_waits` (protocol 33); nothing is stored. `get_run` gives `status: { state: "pending", waits_for:
@@ -2884,3 +2889,4 @@ project or server added with nobody signed in is this computer's (`owner` NULL, 
 projects; sharing, joining, invites and team servers offer the sign-in in place; MCP answers `sign_in_required` only for
 a named project an account holds while nobody is signed in. Open: the *Verify* step's design verification, macOS
 unchecked. The three-way start page stays ORC-293.
+ORC-556 · Decision model connections in the project database · branch `orchester/orc-556-run-1`: versioned settings keep the secret reference, listed models, last check and per-threshold test figures; transactional reviewer selection prevents deleting a connection in use.

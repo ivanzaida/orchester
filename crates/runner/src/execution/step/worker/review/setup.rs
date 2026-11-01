@@ -198,7 +198,7 @@ impl ReviewerSetup {
         account,
         connection,
         ..
-      } => Some((kind.provider(), *account, connection.clone())),
+      } => kind.provider().map(|provider| (provider, *account, connection.clone())),
       Self::Native { connection, .. } => Some((AgentProvider::AnthropicApi, None, connection.clone())),
       Self::Unreachable { .. } | Self::Missing => None,
     }
@@ -268,7 +268,10 @@ impl ReviewerSetup {
         let folder = (place.folder(), environment);
         let reviewer: Box<dyn RequestReviewer> = match kind {
           ReviewerKind::Codex => Box::new(CodexReviewer::new(&executable, (model, effort), folder, runner)),
-          _ => Box::new(ClaudeReviewer::new(&executable, (model, effort), folder, runner)),
+          ReviewerKind::ClaudeCode | ReviewerKind::AnthropicApi => {
+            Box::new(ClaudeReviewer::new(&executable, (model, effort), folder, runner))
+          }
+          ReviewerKind::Decision => return ask(Some(&Unreachable { model })),
         };
         let done = ask(Some(reviewer.as_ref()));
         // The folder goes only after the reviewer, which runs in it, has ended.
@@ -307,7 +310,7 @@ impl Worker {
 pub(super) fn reviewer_setup(db: &ProjectDb, keys: &ReviewerKeys) -> Result<ReviewerSetup, StoreError> {
   let settings = db.auto_mode_settings()?;
   let connections = db.connections()?;
-  let Ok(resolved) = resolve_reviewer(&settings, &connections) else {
+  let Ok(resolved) = resolve_reviewer(&settings, &connections, &[]) else {
     return Ok(ReviewerSetup::Missing);
   };
   let ResolvedReviewer {
@@ -317,6 +320,10 @@ pub(super) fn reviewer_setup(db: &ProjectDb, keys: &ReviewerKeys) -> Result<Revi
     effort,
     ..
   } = resolved;
+  let Some(connection) = connection.language() else {
+    // Decision review execution is separate from language review execution; never run a language fallback.
+    return Ok(ReviewerSetup::Missing);
+  };
   let used = UsedProvider {
     id: connection.id(),
     name: connection.name().as_str().into(),
