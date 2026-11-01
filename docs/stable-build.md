@@ -216,7 +216,9 @@ SHA-256 Sentry's release registry gives for it
 (`https://release-registry.services.sentry.io/apps/sentry-cli/<version>`, the file
 `sentry-cli-Windows-x86_64.exe`); raise both together. The step fails unless GlitchTip has stored
 both PDBs, and then nothing goes to the cloud: the release's error reports would show only
-addresses.
+addresses. It checks that in GlitchTip's list of the project's debug files (below), not with
+sentry-cli's `--require-all`, which GlitchTip does not answer and which failed though the PDBs were
+stored.
 
 - **The token** is the Actions secret `GLITCHTIP_AUTH_TOKEN` (*Settings › Secrets and variables
   › Actions › New repository secret* on GitHub). Create it in GlitchTip, signed in as a member of
