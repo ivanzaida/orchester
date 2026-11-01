@@ -55,8 +55,8 @@ pub const LOOKING: &[&str] = &[
 /// What a refused client reads while Settings or Project settings shows the switches only a person turns: *Let
 /// automation change agent permissions* and what the Orchestrator may do.
 const SETTING_REFUSAL: &str = "A person changes these settings in the window: while Settings shows Let automation \
-  change agent permissions or Let the Orchestrator publish drafts, or Project settings shows its Orchestrator tab, \
-  window input from MCP clients (clicks, keys, values, resizing, menus) is refused.";
+  change agent permissions, or Project settings' Orchestrator tab shows what the Orchestrator may do, window input \
+  from MCP clients (clicks, keys, values, resizing, menus) is refused.";
 /// What a refused client reads while a Connections page asks a person to confirm what a change widens.
 const QUESTION_REFUSAL: &str = "A person answers this in the window: while Local integration, a Connections page, Agents page, Tools page, Environment tab, Skills page, Project settings, Pipelines page or a task's form asks to \
   confirm what a change lets agents do (in any tab, until it is answered or the page is left), \
@@ -307,7 +307,7 @@ impl InputGate {
   }
 
   /// Why window input is refused now: the protected controls mounted, in words for the client.
-  fn refusal(&self) -> String {
+  pub fn refusal(&self) -> String {
     let controls = self.0.controls.lock();
     let questions = controls.questions + controls.permissions + controls.approvals;
     let settings = controls.settings + controls.server;

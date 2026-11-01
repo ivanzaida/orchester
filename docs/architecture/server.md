@@ -676,7 +676,7 @@ shared through the server. Nothing of a managed skill lives as files Orchester r
 project blob, a zstd file under `<repo>/.orchester/blobs/`. At each start of a step execution the runner writes the
 skills that reach the agent to `<repo>/.orchester/skills/<execution-id>/<slug>/` and keeps them afterwards
 (`crates/runner/src/execution/step/skills.rs`). Besides that, the repository's own skill folders are a live source:
-while Project settings › *Repository agent files* is on, Codex loads `.agents/skills` and `.codex/skills` from the
+while Project settings › Context › *Repository agent files* is on, Codex loads `.agents/skills` and `.codex/skills` from the
 worktree, the native agent lists them in its prompt (`core::agent_files::skills::native`), and `list_skills` /
 `read_skill` offer them (`core::orchester_tools::skills::repository`). Import from repository
 (`crates/workspace/src/skills/repository/`, its bounded no-follow scan of `.claude/skills` and `.agents/skills`)

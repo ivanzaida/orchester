@@ -1,6 +1,6 @@
 //! Project settings › Runs › Limits, one row; a project that never changed them uses the defaults. The
 //! environment additions of Project settings › Environment are in [`super::environment`], the
-//! repository agent files setting of General in [`super::agent_files`], the code index setting in
+//! repository agent files setting of Context in [`super::agent_files`], the code index setting in
 //! [`super::code_index`], the free space the disk guard keeps in [`super::disk_guard`].
 
 use orchester_core::{

@@ -278,7 +278,7 @@ verification); data already on screen stays. `false` releases them. Answers `{he
 
 ### `set_update_state` — debug builds only, needs window control
 
-Shows an update state in place of this copy's real one, for seeing every state of Settings › Updates, the status
+Shows an update state in place of this copy's real one, for seeing every state of Settings › General's Updates, the status
 bar's update item and the ready notification in a QA copy (which itself always reports `not_this_copy`). Takes the
 JSON `update_state` answers: `state` with that state's fields, and `updated` (`{version, notes}` of the update this
 start finished, for *Updated to* and *What's new*, or `null`); `running` and `percent` are ignored. `{"real": true}`

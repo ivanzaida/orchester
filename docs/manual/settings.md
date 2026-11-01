@@ -4,7 +4,7 @@ Settings live in several places:
 
 | Where | What | Kept in |
 |---|---|---|
-| **Settings** (app menu, the switcher's menu, the ⚙ of the sidebar's usage card) › General · Notifications · Accounts · Automation · Browser · Orchester Cloud | Theme, plan-limit warning, this computer; notifications and the daily report; accounts; the MCP server and what automation may do; agents' browser; Orchester Cloud and team servers | Application database (secrets and tokens in the OS keychain) |
+| **Settings** (app menu, the switcher's menu, the ⚙ of the sidebar's usage card) › General · Notifications · Accounts · Automation · Browser · Orchester Cloud | Theme, plan-limit warning, error reports, updates, this computer; notifications and the daily report; accounts; the MCP server and what automation may do; agents' browser; Orchester Cloud and team servers | Application database (secrets and tokens in the OS keychain) |
 | **Project settings** (the switcher's menu, Ctrl+, / ⌘,) › General · Runs · Orchestrator · Context · Connections · Environment · Sharing | Project, GitHub, base branch, base-moved notices; approvals (Allow Autopilot, reviewer), estimates, limits; what the Orchestrator may do; sources, repository agent files, code index, memory; connections; variables and secrets; sharing | Project database (base branch and Allow Autopilot per computer; secret values in the OS keychain) |
 | **Orchestrator settings** | The chat's connection, model and effort (versioned) | Project database |
 | **Agent profile › Permissions** | Repository access, writable folders, commands, network, MCP servers, approvals | Project database |
@@ -36,7 +36,11 @@ Automation.
 |---|---|---|---|
 | Appearance | **Theme** | Dark (default) · Light · System | *System* uses the OS appearance at app start; a later OS change is followed only after a restart. |
 | Plan limits | **Warning threshold** | 1–100 %, default 80 | The share of a 5-hour or weekly window at which plan limits count as nearly used. App-wide; the menu of Usage › Plan limits opens it here. |
-| This computer | Version, Application data, App log | — | Each with *Copy*. |
+| Privacy | **Send error reports** | On (default) · Off | Errors and crashes go to Orchester's error tracker, without secrets, prompts, file contents or project names. *What a report carries* opens the details. |
+| Updates | **Channel** | Stable (default) · Beta | The first row says where this copy's update stands. |
+| | **Update automatically** | On (default) · Off | |
+| | **Last checked** | — | With *Check now*. |
+| This computer | Version, Application data, App log | — | The version says release or development build and the channel; the two places each have *Copy*. |
 
 ### 1.2 Notifications
 

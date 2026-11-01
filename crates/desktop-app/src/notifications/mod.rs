@@ -2,7 +2,7 @@
 //! `docs/design/orchester-workspace.md`, "Notifications"). Which ones show is decided in one place,
 //! `orchester_workspace::notifications`; this module feeds it what the window follows of every open project
 //! ([`project`]), shows what it decides through the operating system ([`os`]), opens the place a click names and keeps
-//! the *Needs you* count on the app's icon ([`host`]). The person's choices (Settings › Automation, *Notifications*)
+//! the *Needs you* count on the app's icon ([`host`]). The person's choices (Settings › Notifications)
 //! are shared through [`NotificationPrefs`]. That this copy's update is ready is told once per version
 //! ([`update_ready`]).
 
