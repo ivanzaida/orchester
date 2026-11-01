@@ -1010,6 +1010,10 @@ Tests: `orchester-runner --features test-agent --test decision_review decision_r
 `orchester-store --test auto_mode decision_review`, `--test auto_mode auto_mode`,
 `orchester-core --test decision_verdict decision`. Quality gate: `check: OK`. No visual or platform-specific changes.
 
+ORC-571 · Team reviewer API contract (implemented 2026-11-01). Existing `team_reviewer` resources use the shared
+create, publish, read and delta shapes; published versions carry the server-owned `widens` flag from ORC-570.
+Contract and access rules: `docs/cloud-api.md`. Tests: `orchester-api --test resources reviewer_resource`.
+
 ORC-555 · Decision reviewer request and answer · branch `orchester/orc-555-run-1` (implemented 2026-11-01).
 Runner pure functions build the six System One questions from core's shared, bounded and redacted review state,
 keep agent data apart as untrusted, substitute Autopilot's roots policy, and strictly parse choice/noul probabilities

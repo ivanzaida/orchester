@@ -40,6 +40,7 @@ impl State {
       hash: ContentHash::new(&"a".repeat(64)).expect("a hash"),
       references,
       based_on,
+      widens: false,
       published: published.clone(),
     };
     self.versions.push(version.clone());
@@ -174,6 +175,7 @@ pub(super) fn import(shared: &Shared, user: &UserRef, request: &Request, stream:
         hash: ContentHash::new(&"a".repeat(64)).expect("a hash"),
         references: version.references,
         based_on: latest,
+        widens: false,
         published: Attribution {
           by: user.clone(),
           at: version.published_at,
