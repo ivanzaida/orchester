@@ -216,7 +216,7 @@ fn creation_snapshots_a_shared_task_keeps_one_only_when_created_here_unchanged()
     server: ServerId::generate(),
     project: ProjectId::generate(),
     key: ProjectKey::new("ORC").expect("key"),
-    role: Some(MemberRole::Owner),
+    role: Some(MemberRole::Admin),
     joined_at: at(15),
     cursor: 1,
     last_synced_at: at(15),

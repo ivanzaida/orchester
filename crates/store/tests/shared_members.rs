@@ -1,6 +1,6 @@
 //! The members of a shared project and its repository hint as last read (`docs/architecture/server.md`, row 63): kept
 //! in the project database so Sharing shows them while the server cannot be reached; a local project has none and
-//! refuses to record them, a new list replaces the old one, owners come first, who read them is kept so the list names
+//! refuses to record them, a new list replaces the old one, admins come first, who read them is kept so the list names
 //! the person after this computer signed out, and Make local forgets them. A shared
 //! project's database from before them opens with neither read yet.
 //!
@@ -64,7 +64,7 @@ fn members_of_a_local_project_are_none_and_cannot_be_recorded() {
   let (_repo, mut db) = project();
   assert_eq!(db.shared_members().expect("members"), None);
   assert_eq!(db.remote_hint().expect("hint"), None);
-  let members = [member("Alice Moreau", "alice", MemberRole::Owner, 10)];
+  let members = [member("Alice Moreau", "alice", MemberRole::Admin, 10)];
   assert!(matches!(
     db.record_shared_members(&members, at(200), None),
     Err(StoreError::NotShared)
@@ -77,14 +77,14 @@ fn members_of_a_local_project_are_none_and_cannot_be_recorded() {
 }
 
 #[test]
-fn members_are_kept_as_last_read_with_owners_first_and_replaced_by_the_next_read() {
+fn members_are_kept_as_last_read_with_admins_first_and_replaced_by_the_next_read() {
   let (_repo, mut db) = project();
   shared(&mut db);
   assert_eq!(db.shared_members().expect("members"), None, "not read yet");
 
   let maria = member("Maria Lind", "maria", MemberRole::Member, 10);
   let oleh = member("Oleh Petrenko", "oleh", MemberRole::Member, 30);
-  let alice = member("Alice Moreau", "alice", MemberRole::Owner, 20);
+  let alice = member("Alice Moreau", "alice", MemberRole::Admin, 20);
   assert_eq!(db.members_read_as().expect("reader"), None, "not read yet");
   db.record_shared_members(&[maria.clone(), oleh.clone(), alice.clone()], at(200), Some(maria.user))
     .expect("recorded");
@@ -154,7 +154,7 @@ fn members_and_the_hint_are_forgotten_by_make_local() {
     db.remote_hint().expect("hint"),
     Some((Some("github.com/acme/kontur".to_owned()), at(250)))
   );
-  let alice = member("Alice Moreau", "alice", MemberRole::Owner, 20);
+  let alice = member("Alice Moreau", "alice", MemberRole::Admin, 20);
   db.record_shared_members(std::slice::from_ref(&alice), at(200), Some(alice.user))
     .expect("recorded");
 
@@ -180,7 +180,7 @@ fn members_of_a_database_from_before_them_are_not_read_yet() {
   assert_eq!(db.shared_members().expect("members"), None);
   assert_eq!(db.remote_hint().expect("hint"), None);
   assert_eq!(db.members_read_as().expect("reader"), None);
-  let alice = member("Alice Moreau", "alice", MemberRole::Owner, 20);
+  let alice = member("Alice Moreau", "alice", MemberRole::Admin, 20);
   db.record_shared_members(std::slice::from_ref(&alice), at(200), Some(alice.user))
     .expect("recorded");
   assert_eq!(db.members_read_as().expect("reader"), Some(alice.user));

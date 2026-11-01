@@ -19,7 +19,8 @@ pub enum ErrorCode {
   RemoteTaken,
   NoSuchUser,
   AlreadyMember,
-  LastOwner,
+  /// Removing or demoting the workspace's last admin, distinct from the server's last admin.
+  LastWorkspaceAdmin,
   IdTaken,
   Conflict,
   RevisionConflict,
@@ -54,7 +55,7 @@ pub enum ErrorCode {
   SlugTaken,
   /// API 3: the join waited for approval and was refused.
   ApprovalRefused,
-  /// API 3: a sign-in to the server admin by an account that is not an admin and owns no project.
+  /// A sign-in to the server admin by an account that is neither a server admin nor a workspace admin.
   NothingToManage,
   /// API 3: join approval is on, so a sign-in to the server admin through Orchester Cloud is refused: sign in with a
   /// code made on one of the account's own computers (a pairing code), or an account code from the host.
@@ -75,7 +76,7 @@ pub enum ErrorCode {
   /// the cloud still listed it. The error carries the server's signed revocation
   /// ([`SharingErrorDetails::Revocation`]), which the browser takes back to the cloud so it deletes the invite.
   InviteEnded,
-  /// API 3 (S5, row 72): a write of the team's configuration by someone who is neither the project's owner nor the
+  /// A write of the team's configuration by someone who is neither a workspace admin nor the
   /// server's admin.
   NotAdmin,
   /// API 3 (S5): a publish based on a version that is no longer the latest; the error carries the latest
@@ -113,10 +114,10 @@ pub enum SharingErrorDetails {
   Remote {
     project: orchester_core::id::ProjectId,
     member: bool,
-    owners: Vec<crate::UserRef>,
+    admins: Vec<crate::UserRef>,
   },
-  Owners {
-    owners: Vec<crate::UserRef>,
+  Admins {
+    admins: Vec<crate::UserRef>,
   },
   Revision {
     current: Box<crate::SharedTask>,

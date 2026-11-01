@@ -3,6 +3,7 @@
 mod cached;
 mod catalog;
 mod delta;
+mod membership;
 mod references;
 mod similar;
 mod widens;
@@ -14,6 +15,10 @@ pub use self::{
   cached::{CachedClaim, CachedRunStatus, CachedTask, SharedPerson},
   catalog::{CATALOG_MODELS_PER_ROLE, CATALOG_REFERENCES, CatalogEntry, CatalogEntryKind, LocalCatalog, catalog},
   delta::{DeltaOutcome, RunProgress, TagRemap, TaskChange, TaskDelta, TaskDeltaKind, remap_tags},
+  membership::{
+    MemberRole, MembershipChangeError, check_workspace_admin_change, may_administer_workspace,
+    may_change_configuration, may_read_workspace,
+  },
   references::{
     Binding, BindingKindError, ConnectionRole, LocalEntities, Published, Reference, ReferenceKind, for_publishing,
     named, resolve,
@@ -28,20 +33,6 @@ use crate::{
 };
 
 pub const CLAIM_STALE_MS: i64 = 15 * 60 * 1000;
-
-/// A member's role in a server project: owners (and the server's admins) manage its members.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum MemberRole {
-  Owner,
-  Member,
-}
-
-/// Whether a person may change a shared project's team configuration (pipelines, agent profiles, instructions,
-/// skills, tools): only its owner or the server's admin, who may not be a member at all (server.md, row 72).
-pub const fn may_change_configuration(role: Option<MemberRole>, server_admin: bool) -> bool {
-  server_admin || matches!(role, Some(MemberRole::Owner))
-}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

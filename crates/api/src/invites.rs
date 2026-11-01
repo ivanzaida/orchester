@@ -11,7 +11,7 @@ use crate::{Credential, MemberRole, UserRef};
 pub enum InviteKind {
   /// An account on the server with no project yet (admins).
   Server,
-  /// A membership of one project with a role (its owners and admins).
+  /// A membership of one workspace with a role (created by workspace or server admins).
   Project,
   /// A new device for an existing account (admins): an account code, or linking the account's cloud identity.
   Account,

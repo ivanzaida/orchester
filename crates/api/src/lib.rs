@@ -29,6 +29,9 @@ pub mod test_support;
 pub mod totp;
 pub mod wire;
 
+/// Coordinated team-server contract: workspace Admin/Member roles replace Owner/Member without wire aliases.
+pub const TEAM_API_VERSION: u8 = 4;
+
 pub use accounts::*;
 pub use catalog::*;
 pub use credential::Credential;

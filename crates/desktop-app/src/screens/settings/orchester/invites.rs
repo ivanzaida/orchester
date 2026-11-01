@@ -217,7 +217,7 @@ pub(super) fn title(ctx: &Ctx, invite: &CloudInvite) -> String {
 
 const fn role_key(role: MemberRole) -> &'static str {
   match role {
-    MemberRole::Owner => "cloud.invites.role.owner",
+    MemberRole::Admin => "cloud.invites.role.owner",
     MemberRole::Member => "cloud.invites.role.member",
   }
 }

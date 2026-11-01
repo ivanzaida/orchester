@@ -149,7 +149,7 @@ fn project_row(ctx: &mut Ctx, shown: &Shown<'_>, (navigation, server): (&Navigat
     }
   };
   let role = shown.role.map(|role| match role {
-    MemberRole::Owner => ctx.t("cloud.server.projects.owner"),
+    MemberRole::Admin => ctx.t("cloud.server.projects.owner"),
     MemberRole::Member => ctx.t("cloud.server.projects.member"),
   });
   // A long checkout path keeps its start and its last folders, cut in the middle (`H:\…\work\kontur`).

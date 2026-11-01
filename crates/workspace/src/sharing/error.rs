@@ -77,7 +77,7 @@ pub enum SharingError {
   /// owner, so the person moves it to this computer first. Nothing was sent.
   #[error("the project is in the account, and the server is this computer's")]
   AccountProject,
-  /// Only the project's owner or the server's admin changes the team's configuration (row 72): this computer refused
+  /// Only a workspace admin or the server's admin changes the team's configuration (row 72): this computer refused
   /// it, or the server answered `403 not_admin`. Nothing was sent.
   #[error("only an admin changes the team's configuration")]
   NotAdmin,
@@ -185,7 +185,7 @@ fn api_message(code: ErrorCode) -> Message {
     ErrorCode::RevisionConflict => "tasks.conflict.changedMeanwhile",
     ErrorCode::NoSuchUser => "sharing.members.noSuchUser",
     ErrorCode::AlreadyMember => "sharing.members.alreadyMember",
-    ErrorCode::LastOwner => "sharing.members.lastOwner",
+    ErrorCode::LastWorkspaceAdmin => "sharing.members.lastOwner",
     ErrorCode::TagExists => "tasks.tags.duplicate",
     ErrorCode::SameTag => "tasks.tags.sameTarget",
     ErrorCode::ClaimHeld => "claims.refused.heldUnknown",

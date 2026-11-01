@@ -332,7 +332,7 @@ fn refused(ctx: &mut Ctx) -> Element {
 /// The person's role there, as the page says it.
 fn role_words(ctx: &Ctx, role: Option<MemberRole>) -> String {
   match role {
-    Some(MemberRole::Owner) => ctx.t("sharing.linked.owner"),
+    Some(MemberRole::Admin) => ctx.t("sharing.linked.owner"),
     Some(MemberRole::Member) => ctx.t("sharing.linked.member"),
     None => ctx.t("sharing.linked.noRole"),
   }
@@ -352,7 +352,7 @@ fn members_rows(ctx: &mut Ctx, props: &Props, shared: &str, server: &str) -> Ele
       shared: shared.to_owned(),
       address: link.and_then(|link| link.address.clone()),
       entry: entry.cloned(),
-      owner: link.is_some_and(|link| link.role == Some(MemberRole::Owner)),
+      owner: link.is_some_and(|link| link.role == Some(MemberRole::Admin)),
       admin: account.is_some_and(|account| account.admin),
       connected: entry.is_some_and(|entry| entry.connection == Some(Connection::Connected)),
       removed: link.and_then(|link| link.removed_at),

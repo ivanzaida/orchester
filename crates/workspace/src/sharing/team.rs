@@ -73,7 +73,7 @@ impl Servers {
       .map(|member| name_of(member.username.as_str(), member.display_name.as_str()));
     let owners: Vec<_> = members
       .iter()
-      .filter(|member| member.role == MemberRole::Owner)
+      .filter(|member| member.role == MemberRole::Admin)
       .collect();
     let admins = db
       .server_admins()?

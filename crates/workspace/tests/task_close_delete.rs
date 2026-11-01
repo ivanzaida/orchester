@@ -527,7 +527,7 @@ fn task_delete_is_unavailable_in_a_shared_project() {
     server: ServerId::generate(),
     project: ProjectId::generate(),
     key: ProjectKey::new("KON").expect("key"),
-    role: Some(MemberRole::Owner),
+    role: Some(MemberRole::Admin),
     joined_at: at(100),
     cursor: 1,
     last_synced_at: at(100),
