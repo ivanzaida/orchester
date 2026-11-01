@@ -3,8 +3,6 @@
 //! beside what they mean, read back under them (`qzWNa`); and the two quiet notes under them (`BFkJm`, `MkzqV`). At
 //! most 760 wide, so it narrows with the window.
 
-use std::path::Path;
-
 use lurq::{
   app::{
     ctx::Ctx,
@@ -16,7 +14,7 @@ use lurq::{
 };
 use orchester_core::memory::{MemoryLimits, MemorySettings, WritePolicy};
 
-use super::{Scope, SettingsProps, SettingsTab, Status};
+use super::{MemoryForm, Scope, SettingsProps, Status};
 use crate::{
   screens::hub::parts,
   theme::{ExtraSpacing, ExtraTypography, HubSpacing, HubText, IconSize},
@@ -35,8 +33,7 @@ const FORM_WIDTH: f32 = 760.0;
 const RECORDS_WIDTH: f32 = 141.0;
 const TOKENS_WIDTH: f32 = 138.0;
 
-pub(super) fn form(ctx: &mut Ctx, tab: &SettingsTab, (props, base): (&SettingsProps, MemorySettings)) -> Element {
-  let repo = props.project.open.repo_root.clone();
+pub(super) fn form(ctx: &mut Ctx, tab: &MemoryForm, (props, base): (&SettingsProps, MemorySettings)) -> Element {
   let name = props.project.open.project.name().as_str().to_owned();
   let saving = parts::group(
     "memory-settings-saving",
@@ -52,18 +49,18 @@ pub(super) fn form(ctx: &mut Ctx, tab: &SettingsTab, (props, base): (&SettingsPr
         memory_row(
           ("memory-settings-task", &ctx.t("memory.settings.taskMemory")),
           &ctx.t("memory.settings.taskMemoryBody"),
-          policies(ctx, tab, (Scope::Task, base.task_writes), &repo),
+          policies(ctx, tab, (Scope::Task, base.task_writes)),
         ),
         memory_row(
           ("memory-settings-project", &ctx.t("memory.settings.projectMemory")),
           &ctx.t_args("memory.settings.projectMemoryBody", [("project", name.as_str())]),
-          policies(ctx, tab, (Scope::Project, base.project_writes), &repo),
+          policies(ctx, tab, (Scope::Project, base.project_writes)),
         ),
       ],
     ),
   );
-  let records = records_field(ctx, tab, &repo);
-  let tokens = tokens_field(ctx, tab, &repo);
+  let records = records_field(ctx, tab);
+  let tokens = tokens_field(ctx, tab);
   let limits = parts::group(
     "memory-settings-given",
     parts::head("memory-settings-given", &ctx.t("memory.settings.given"), None, None),
@@ -187,7 +184,7 @@ fn head(ctx: &Ctx, status: Status, project: &str) -> Row {
 }
 
 /// Why the last save did nothing, under the head: synthetic input asked for it, or it failed.
-fn failure(ctx: &Ctx, tab: &SettingsTab) -> Option<Row> {
+fn failure(ctx: &Ctx, tab: &MemoryForm) -> Option<Row> {
   if tab.refused.get() {
     return Some(person_only(
       "memory-settings-person-only",
@@ -203,12 +200,9 @@ fn failure(ctx: &Ctx, tab: &SettingsTab) -> Option<Row> {
 }
 
 /// A memory's two ways of saving agents' records, the default one saying so (`bJdmg`).
-fn policies(ctx: &Ctx, tab: &SettingsTab, (scope, chosen): (Scope, WritePolicy), repo: &Path) -> Row {
+fn policies(ctx: &Ctx, tab: &MemoryForm, (scope, chosen): (Scope, WritePolicy)) -> Row {
   let pending = tab.save.state().get().is_pending();
-  let default = match scope {
-    Scope::Task => MemorySettings::DEFAULT.task_writes,
-    Scope::Project => MemorySettings::DEFAULT.project_writes,
-  };
+  let default = scope.of(MemorySettings::DEFAULT);
   let card = |policy: WritePolicy| {
     let (glyph, title, title_default, element) = match policy {
       WritePolicy::Automatic => (
@@ -234,13 +228,13 @@ fn policies(ctx: &Ctx, tab: &SettingsTab, (scope, chosen): (Scope, WritePolicy),
       Scope::Task => "task",
       Scope::Project => "project",
     };
-    let (choose, repo) = (tab.clone(), repo.to_path_buf());
+    let choose = tab.clone();
     let card = OptionCard::new(
       format!("memory-settings-{scope_name}-{element}"),
       (glyph, ctx.t(if policy == default { title_default } else { title })),
       ctx.t(description),
       policy == chosen,
-      move || choose.choose(repo.clone(), (scope, policy)),
+      move || choose.choose((scope, policy)),
     );
     let card = if pending { card.waiting() } else { card };
     Column::new().flex(1.0).min_width(Dimension::Px(0.0)).child(card)
@@ -254,7 +248,7 @@ fn policies(ctx: &Ctx, tab: &SettingsTab, (scope, chosen): (Scope, WritePolicy),
 }
 
 /// *Records per invocation*: from 1 to 50, 8 unless changed (`NZ4YJ`).
-fn records_field(ctx: &mut Ctx, tab: &SettingsTab, repo: &Path) -> Element {
+fn records_field(ctx: &mut Ctx, tab: &MemoryForm) -> Element {
   let (min, max) = (MemoryLimits::RECORDS.start(), MemoryLimits::RECORDS.end());
   let read_back = ctx.t_args(
     "memory.settings.recordsReadBack",
@@ -272,11 +266,11 @@ fn records_field(ctx: &mut Ctx, tab: &SettingsTab, repo: &Path) -> Element {
     read_back,
   )
   .width(Dimension::Px(RECORDS_WIDTH));
-  limit_field(ctx, tab, (field, tab.read_records().err()), repo)
+  limit_field(ctx, tab, (field, tab.read_records().err()))
 }
 
 /// *Tokens per invocation*: from 500 to 20,000, 3,000 unless changed (`V1eYs`).
-fn tokens_field(ctx: &mut Ctx, tab: &SettingsTab, repo: &Path) -> Element {
+fn tokens_field(ctx: &mut Ctx, tab: &MemoryForm) -> Element {
   let range = [
     ("min", tab.grouped(*MemoryLimits::TOKENS.start())),
     ("max", tab.grouped(*MemoryLimits::TOKENS.end())),
@@ -303,20 +297,19 @@ fn tokens_field(ctx: &mut Ctx, tab: &SettingsTab, repo: &Path) -> Element {
   )
   .grouped(tab.separator.clone())
   .width(Dimension::Px(TOKENS_WIDTH));
-  limit_field(ctx, tab, (field, tab.read_tokens().err()), repo)
+  limit_field(ctx, tab, (field, tab.read_tokens().err()))
 }
 
 /// A limit's field at its row's end, saved when it is left, saying why its value is not one in place of its read-back.
 fn limit_field(
   ctx: &mut Ctx,
-  tab: &SettingsTab,
+  tab: &MemoryForm,
   (field, error): (NumberField, Option<orchester_workspace::messages::Message>),
-  repo: &Path,
 ) -> Element {
-  let (commit, repo) = (tab.clone(), repo.to_path_buf());
+  let commit = tab.clone();
   let mut field = field
     .read_back_alignment(Alignment::End)
-    .on_leave(move || commit.commit_limits(repo.clone()));
+    .on_leave(move || commit.commit_limits());
   if let Some(error) = error {
     field = field.error(message_text(ctx, &error));
   }

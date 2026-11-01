@@ -11,6 +11,7 @@ mod harness;
 mod index;
 mod layout;
 mod limits;
+mod memory;
 mod navigation_status;
 mod reads;
 mod review_regressions;
