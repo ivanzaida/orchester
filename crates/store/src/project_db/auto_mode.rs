@@ -32,7 +32,10 @@ impl ProjectDb {
   }
 
   pub fn save_auto_mode_settings(&mut self, settings: &AutoModeSettings) -> Result<(), StoreError> {
-    write_auto_mode(&self.connection, settings)
+    let transaction = self.connection.transaction()?;
+    write_auto_mode(&transaction, settings)?;
+    transaction.commit()?;
+    Ok(())
   }
 
   /// Saves what `change` makes of the stored settings, in one transaction (immediate, the
@@ -170,6 +173,11 @@ pub(super) fn decode_review(stored: Option<String>) -> Result<Option<Review>, St
 }
 
 fn read_auto_mode(connection: &Connection) -> Result<AutoModeSettings, StoreError> {
+  if let Some(reviewer) = read_decision_choice(connection)? {
+    return Ok(AutoModeSettings {
+      reviewer: Some(reviewer),
+    });
+  }
   let stored: Option<(String, Option<String>, Option<String>)> = connection
     .query_row(
       "SELECT model, connection, effort FROM project_auto_mode WHERE id = 1",
@@ -196,14 +204,25 @@ fn read_auto_mode(connection: &Connection) -> Result<AutoModeSettings, StoreErro
 
 fn write_auto_mode(connection: &Connection, settings: &AutoModeSettings) -> Result<(), StoreError> {
   let reviewer = settings.reviewer.as_ref();
-  if reviewer.is_some_and(|choice| {
-    matches!(
-      choice.connection,
-      orchester_core::run::review::ReviewerConnectionId::Decision { .. }
-    )
-  }) {
-    return Err(StoreError::Unrepresentable("decision reviewer settings"));
+  if let Some(choice) = reviewer
+    && let orchester_core::run::review::ReviewerConnectionId::Decision { decision } = choice.connection
+  {
+    connection.execute(
+      "INSERT INTO decision_reviewer_connection (id, connection_id, model, threshold) VALUES (1, ?1, ?2, ?3)
+       ON CONFLICT(id) DO UPDATE SET connection_id = excluded.connection_id, model = excluded.model,
+       threshold = excluded.threshold",
+      params![
+        decision.to_string(),
+        choice.model.as_str(),
+        choice
+          .threshold
+          .unwrap_or_else(orchester_core::run::review::default_decision_threshold)
+          .value()
+      ],
+    )?;
+    return Ok(());
   }
+  connection.execute("DELETE FROM decision_reviewer_connection", [])?;
   connection.execute(
     "INSERT INTO project_auto_mode (id, model, connection, effort) VALUES (1, ?1, ?2, ?3) \
      ON CONFLICT (id) DO UPDATE SET model = excluded.model, connection = excluded.connection, effort = excluded.effort",
@@ -214,4 +233,26 @@ fn write_auto_mode(connection: &Connection, settings: &AutoModeSettings) -> Resu
     ],
   )?;
   Ok(())
+}
+
+fn read_decision_choice(connection: &Connection) -> Result<Option<ReviewerChoice>, StoreError> {
+  let stored: Option<(String, String, f64)> = connection
+    .query_row(
+      "SELECT connection_id, model, threshold FROM decision_reviewer_connection WHERE id = 1 AND model IS NOT NULL",
+      [],
+      |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+    )
+    .optional()?;
+  stored
+    .map(|(id, model, threshold)| {
+      Ok(ReviewerChoice::decision(
+        crate::rows::parse("decision reviewer connection", &id)?,
+        ModelId::new(&model).map_err(|error| corrupt("decision reviewer model", error))?,
+        Some(
+          orchester_core::run::review::Probability::new(threshold)
+            .map_err(|error| corrupt("decision reviewer threshold", error))?,
+        ),
+      ))
+    })
+    .transpose()
 }

@@ -4,6 +4,8 @@
 //! TypeSafe requires a model; Laya permits omission/routing and adds response metadata. We always send the
 //! selected id unchanged and tolerate extra response fields, without interpreting provider-specific routing.
 
+mod http;
+pub use http::DecisionReviewer;
 use orchester_core::{
   resource::ModelId,
   run::review::{

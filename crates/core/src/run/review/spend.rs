@@ -32,6 +32,8 @@ pub enum ReviewSpend {
 pub struct Reviewed {
   pub verdict: Result<ReviewVerdict, ReviewError>,
   pub spend: ReviewSpend,
+  /// The provider's resolved model/version, when it differs from the chosen id.
+  pub reported_model: Option<ModelId>,
   pub limits: Vec<PlanLimits>,
 }
 
@@ -41,6 +43,7 @@ impl Reviewed {
     Self {
       verdict,
       spend,
+      reported_model: None,
       limits: Vec::new(),
     }
   }
@@ -64,7 +67,7 @@ impl ReviewCost {
       ReviewSpend::Reported(usage) => Some(usage),
     };
     Some(Self {
-      model: model.clone(),
+      model: reviewed.reported_model.clone().unwrap_or_else(|| model.clone()),
       usage,
       limits: reviewed.limits.clone(),
     })

@@ -17,6 +17,7 @@ mod completions;
 mod connections;
 mod consistent;
 mod decision_connections;
+mod decision_review_usage;
 mod default_pipeline;
 mod disk_guard;
 mod environment;

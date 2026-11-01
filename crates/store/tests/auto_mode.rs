@@ -96,7 +96,7 @@ fn auto_mode_update_and_compare_and_save_change_what_is_stored() {
 }
 
 #[test]
-fn auto_mode_refuses_a_decision_choice_in_language_connection_columns() {
+fn auto_mode_refuses_a_decision_choice_whose_connection_is_gone() {
   let (_repo, mut db, ..) = started_run();
   let settings = AutoModeSettings {
     reviewer: Some(ReviewerChoice::decision(
@@ -105,11 +105,48 @@ fn auto_mode_refuses_a_decision_choice_in_language_connection_columns() {
       None,
     )),
   };
-  assert!(matches!(
-    db.save_auto_mode_settings(&settings),
-    Err(orchester_store::StoreError::Unrepresentable(
-      "decision reviewer settings"
-    ))
-  ));
+  assert!(db.save_auto_mode_settings(&settings).is_err());
   assert_eq!(db.auto_mode_settings().expect("unchanged"), AutoModeSettings::default());
+}
+
+#[test]
+fn decision_review_settings_keep_threshold_and_connection_across_reopen_and_switches() {
+  use orchester_core::{
+    connection::{DecisionConnection, DecisionServerUrl},
+    name::Name,
+    run::review::Probability,
+  };
+  let (repo, mut db, ..) = started_run();
+  let connection = DecisionConnection::new(
+    DecisionConnectionId::generate(),
+    Name::new("Decision").expect("name"),
+    DecisionServerUrl::new("http://localhost:8000").expect("URL"),
+    None,
+  );
+  db.create_decision_connection(&connection).expect("connection");
+  let settings = AutoModeSettings {
+    reviewer: Some(ReviewerChoice::decision(
+      connection.id(),
+      ModelId::new("jev").expect("model"),
+      Some(Probability::new(0.93).expect("threshold")),
+    )),
+  };
+  db.save_auto_mode_settings(&settings).expect("save decision");
+  assert_eq!(
+    db.decision_reviewer_connection().expect("reference"),
+    Some(connection.id())
+  );
+  drop(db);
+  let mut db = orchester_store::ProjectDb::open(repo.path()).expect("reopen");
+  assert_eq!(db.auto_mode_settings().expect("read"), settings);
+  assert!(db.delete_decision_connection(connection.id()).is_err());
+  assert_eq!(
+    db.save_auto_mode_if_current(&settings, &AutoModeSettings::default())
+      .expect("switch"),
+    AutoModeSave::Saved
+  );
+  assert_eq!(db.decision_reviewer_connection().expect("reference cleared"), None);
+  assert_eq!(db.auto_mode_settings().expect("default"), AutoModeSettings::default());
+  db.delete_decision_connection(connection.id())
+    .expect("unused connection");
 }
