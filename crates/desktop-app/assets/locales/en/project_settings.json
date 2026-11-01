@@ -161,6 +161,7 @@
     "projectRule": "{{server}} {{tool}} while tools/qa-app.ps1 is {{script}} · answered {{answered}} times",
     "projectRuleOnce": "{{server}} {{tool}} while tools/qa-app.ps1 is {{script}} · answered once",
     "revokeRule": "Revoke",
+    "approvalsFoot": "Each profile chooses Autopilot or Manual in Agents › Profiles; a run can switch itself to Manual from its status line.",
     "connection": "Project connection",
     "model": "Model",
     "effort": "Reasoning effort",
@@ -332,6 +333,7 @@
       "blocked": "A change brought by automation was not taken: only you change this setting, here in the window."
     },
     "limitsNote": "Apply to new runs",
+    "limitsFoot": "A task can set its own run budget and time limit, a pipeline step its own budget; these are their defaults.",
     "runBudget": "Run budget",
     "runBudgetHint": "Default for new tasks",
     "dailyBudgetLabel": "Daily budget",

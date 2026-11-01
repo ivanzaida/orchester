@@ -321,3 +321,36 @@ fn project_settings_approved_for_every_run_opens_its_rules_and_revokes_one() {
   page.click("settings-rules-crumb-back");
   page.until("Runs", |p| p.exists("settings-auto-rules-row"));
 }
+
+/// Runs keeps Approvals, Estimates and Limits (`S02` `Ekiul`); Approvals' foot says where a profile chooses its
+/// approval mode and Limits' that a task and a pipeline step set their own, each right under its group's box.
+#[test]
+fn project_settings_runs_feet_say_where_approval_modes_and_task_limits_live() {
+  let mut page = Settings::new(false);
+  page.tab("runs", "settings-limits-foot");
+  let titles = ["settings-auto", "settings-estimates", "settings-limits"].map(|id| page.text(&format!("{id}-title")));
+  assert_eq!(titles, ["Approvals", "Estimates", "Limits"]);
+  assert_eq!(
+    page.text("settings-auto-foot-text"),
+    "Each profile chooses Autopilot or Manual in Agents › Profiles; a run can switch itself to Manual from its status \
+     line."
+  );
+  assert_eq!(
+    page.text("settings-limits-foot-text"),
+    "A task can set its own run budget and time limit, a pipeline step its own budget; these are their defaults."
+  );
+  let mut bounds = |id: &str| {
+    page
+      .window
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|element| element.bounds())
+      .unwrap_or_else(|| panic!("{id} is laid out"))
+  };
+  for group in ["settings-auto", "settings-limits"] {
+    let (rows, foot) = (bounds(&format!("{group}-rows")), bounds(&format!("{group}-foot")));
+    let gap = foot.y - (rows.y + rows.height);
+    assert!((gap - 8.0).abs() < 0.5, "{group}'s foot 8 under its box: {gap}");
+    assert!((foot.x - rows.x).abs() < 0.5, "{group}'s foot starts with its box");
+  }
+}

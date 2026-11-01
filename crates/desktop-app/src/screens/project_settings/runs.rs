@@ -1,7 +1,9 @@
-//! Runs (`02 · Runs` `b7Ya1u`, the Runs window `g406O`): Auto mode (whether new runs use it, its reviewer, and
-//! *Approved for every run* with a count that opens the project's rules, [`super::rules`]), Estimates (*Let Orchester
-//! estimate story points*, a person's switch) and Limits (the run and daily budgets, the time limit and how many agents
-//! and QA apps work at once), each saving as a person leaves a field. The variables moved to Environment.
+//! Runs (`02 · Runs` `b7Ya1u`, the Runs window `g406O`, `S02` `Ekiul`): Approvals (whether Autopilot is allowed, its
+//! reviewer, and *Approved for every run* with a count that opens the project's rules, [`super::rules`]), Estimates
+//! (*Let Orchester estimate story points*, a person's switch) and Limits (the run and daily budgets, the time limit and
+//! how many agents and QA apps work at once), each saving as a person leaves a field. Approvals' foot says where a
+//! profile chooses its approval mode, Limits' that a task and a pipeline step set their own. The variables moved to
+//! Environment.
 mod auto_mode;
 mod estimates;
 mod limits;
@@ -119,7 +121,9 @@ fn bones(ctx: &mut Ctx) -> Column {
       .control(skeleton::chevron()),
   ]
   .map(|row| row.render(ctx));
-  let auto = Group::new("settings-auto-reading", ctx.t("project_settings.auto")).rows(rows);
+  let auto = Group::new("settings-auto-reading", ctx.t("project_settings.auto"))
+    .rows(rows)
+    .foot(&ctx.t("project_settings.approvalsFoot"));
   let row = SettingRow::new(
     "settings-estimates-reading-row",
     ctx.t("project_settings.estimates.label"),
