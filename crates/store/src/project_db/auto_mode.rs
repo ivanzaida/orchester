@@ -5,7 +5,7 @@ use orchester_core::{
   connection::stream::AgentEvent,
   id::{ConnectionId, RunId, StepExecutionId},
   resource::ModelId,
-  run::review::{AutoModeSettings, DEFAULT_REVIEW_MODEL, Review, ReviewerChoice},
+  run::review::{AutoModeSettings, DEFAULT_REVIEW_MODEL, Review, ReviewerChoice, ReviewerConnectionId},
 };
 use rusqlite::{Connection, OptionalExtension, params};
 
@@ -22,6 +22,8 @@ pub enum AutoModeSave {
   ChangedOutside,
 }
 
+const DECISION_SETTING: &str = "decision reviewer settings";
+
 const REVIEW: &str = "tool approval review";
 const REVIEW_SCHEMA: u32 = 1;
 
@@ -32,7 +34,10 @@ impl ProjectDb {
   }
 
   pub fn save_auto_mode_settings(&mut self, settings: &AutoModeSettings) -> Result<(), StoreError> {
-    write_auto_mode(&self.connection, settings)
+    let transaction = self.connection.transaction()?;
+    write_auto_mode(&transaction, settings)?;
+    transaction.commit()?;
+    Ok(())
   }
 
   /// Saves what `change` makes of the stored settings, in one transaction (immediate, the
@@ -170,6 +175,20 @@ pub(super) fn decode_review(stored: Option<String>) -> Result<Option<Review>, St
 }
 
 fn read_auto_mode(connection: &Connection) -> Result<AutoModeSettings, StoreError> {
+  let decision: Option<(String, Option<String>)> = connection
+    .query_row(
+      "SELECT connection_id, settings FROM decision_reviewer_connection WHERE id = 1",
+      [],
+      |row| Ok((row.get(0)?, row.get(1)?)),
+    )
+    .optional()?;
+  if let Some((id, Some(settings))) = decision {
+    let choice: ReviewerChoice = decode_json(DECISION_SETTING, 1, &settings)?;
+    if !matches!(choice.connection, ReviewerConnectionId::Decision { decision } if decision.to_string() == id) {
+      return Err(corrupt(DECISION_SETTING, "connection reference mismatch"));
+    }
+    return Ok(AutoModeSettings { reviewer: Some(choice) });
+  }
   let stored: Option<(String, Option<String>, Option<String>)> = connection
     .query_row(
       "SELECT model, connection, effort FROM project_auto_mode WHERE id = 1",
@@ -196,14 +215,25 @@ fn read_auto_mode(connection: &Connection) -> Result<AutoModeSettings, StoreErro
 
 fn write_auto_mode(connection: &Connection, settings: &AutoModeSettings) -> Result<(), StoreError> {
   let reviewer = settings.reviewer.as_ref();
-  if reviewer.is_some_and(|choice| {
-    matches!(
-      choice.connection,
-      orchester_core::run::review::ReviewerConnectionId::Decision { .. }
-    )
-  }) {
-    return Err(StoreError::Unrepresentable("decision reviewer settings"));
+  if let Some(choice) = reviewer
+    && let ReviewerConnectionId::Decision { decision } = choice.connection
+  {
+    let exists: bool = connection.query_row(
+      "SELECT EXISTS(SELECT 1 FROM decision_connections WHERE id = ?1)",
+      [decision.to_string()],
+      |row| row.get(0),
+    )?;
+    if !exists {
+      return Err(StoreError::DecisionConnectionNotFound(decision));
+    }
+    connection.execute(
+      "INSERT INTO decision_reviewer_connection (id, connection_id, settings) VALUES (1, ?1, ?2) \
+       ON CONFLICT(id) DO UPDATE SET connection_id = excluded.connection_id, settings = excluded.settings",
+      params![decision.to_string(), encode_json(DECISION_SETTING, 1, choice)?],
+    )?;
+    return Ok(());
   }
+  connection.execute("DELETE FROM decision_reviewer_connection", [])?;
   connection.execute(
     "INSERT INTO project_auto_mode (id, model, connection, effort) VALUES (1, ?1, ?2, ?3) \
      ON CONFLICT (id) DO UPDATE SET model = excluded.model, connection = excluded.connection, effort = excluded.effort",

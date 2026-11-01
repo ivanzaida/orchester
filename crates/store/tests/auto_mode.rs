@@ -96,7 +96,7 @@ fn auto_mode_update_and_compare_and_save_change_what_is_stored() {
 }
 
 #[test]
-fn auto_mode_refuses_a_decision_choice_in_language_connection_columns() {
+fn auto_mode_refuses_a_missing_decision_connection() {
   let (_repo, mut db, ..) = started_run();
   let settings = AutoModeSettings {
     reviewer: Some(ReviewerChoice::decision(
@@ -107,9 +107,55 @@ fn auto_mode_refuses_a_decision_choice_in_language_connection_columns() {
   };
   assert!(matches!(
     db.save_auto_mode_settings(&settings),
-    Err(orchester_store::StoreError::Unrepresentable(
-      "decision reviewer settings"
-    ))
+    Err(orchester_store::StoreError::DecisionConnectionNotFound(_))
   ));
   assert_eq!(db.auto_mode_settings().expect("unchanged"), AutoModeSettings::default());
+}
+
+#[test]
+fn auto_mode_decision_reviewer_round_trips_and_protects_connection_until_switching_back() {
+  use orchester_core::{
+    connection::{DecisionConnection, DecisionServerUrl},
+    name::Name,
+    run::review::Probability,
+  };
+  let (repo, mut db, ..) = started_run();
+  let connection = DecisionConnection::new(
+    DecisionConnectionId::generate(),
+    Name::new("Decision").expect("name"),
+    DecisionServerUrl::new("http://localhost:8000/v1").expect("url"),
+    None,
+  );
+  db.create_decision_connection(&connection).expect("connection");
+  let settings = AutoModeSettings {
+    reviewer: Some(ReviewerChoice::decision(
+      connection.id(),
+      ModelId::new("jev-latest").expect("model"),
+      Some(Probability::new(0.85).expect("threshold")),
+    )),
+  };
+  let default = AutoModeSettings::default();
+  assert_eq!(
+    db.save_auto_mode_if_current(&default, &settings).expect("choose"),
+    AutoModeSave::Saved
+  );
+  let reopened = orchester_store::ProjectDb::open(repo.path()).expect("reopen");
+  assert_eq!(reopened.auto_mode_settings().expect("read"), settings);
+  assert_eq!(
+    reopened.decision_reviewer_connection().expect("reference"),
+    Some(connection.id())
+  );
+  assert!(matches!(
+    db.delete_decision_connection(connection.id()),
+    Err(orchester_store::StoreError::DecisionConnectionInUse(_))
+  ));
+  assert_eq!(
+    db.save_auto_mode_if_current(&default, &default).expect("stale"),
+    AutoModeSave::ChangedOutside
+  );
+  db.update_auto_mode_settings(|_| default.clone()).expect("language");
+  assert_eq!(db.decision_reviewer_connection().expect("reference cleared"), None);
+  db.delete_decision_connection(connection.id())
+    .expect("no longer selected");
+  assert_eq!(db.auto_mode_settings().expect("default"), default);
 }

@@ -36,11 +36,11 @@ use crate::{
   },
   links::{Link, TaskPage},
   messages::Message,
-  project_settings::autopilot_person_only,
+  project_settings::{autopilot_person_only, decision_reviewer},
   tasks::{
     detail::run_store_error,
     outside::Outside,
-    run_approvals::{RunApprovalChange, apply_in, reviewer_of, run_mode_in, unavailable_key},
+    run_approvals::{RunApprovalChange, apply_in, run_mode_in, unavailable_key},
   },
 };
 
@@ -82,10 +82,14 @@ pub struct SetReviewer {
   /// An agent connection's id or name: Claude Code, Codex, or a native one on the Anthropic API. Left out:
   /// the default reviewer (the first Claude Code connection with Haiku 4.5).
   pub connection: Option<String>,
+  /// A decision connection id or name; mutually exclusive with connection.
+  pub decision_connection: Option<String>,
   /// A model of that connection; its default when left out.
   pub model: Option<String>,
   /// A reasoning effort the model takes; the connection's default when left out.
   pub effort: Option<String>,
+  /// Decision reviewer threshold, 0.01–0.99 with at most two decimal places; defaults to 0.80.
+  pub threshold: Option<f64>,
 }
 
 /// Whatever a retired tool is given: it answers `retired` alike.
@@ -163,9 +167,16 @@ pub async fn set_reviewer(services: &Services, args: SetReviewer) -> Result<Valu
   blocking(move || {
     let open = services.project(&args.project)?;
     let mut db = ProjectDb::open(&open.repo_root)?;
-    let reviewer = reviewer_change(&services, &db, &args)?;
-    // Read and written in one transaction: a person's save in the window cannot slip in between.
-    db.update_auto_mode_settings(|_| AutoModeSettings { reviewer })?;
+    let current = db.auto_mode_settings()?;
+    let reviewer = reviewer_change(&services, &db, &current, &args)?;
+    if db.save_auto_mode_if_current(&current, &AutoModeSettings { reviewer })?
+      == orchester_store::AutoModeSave::ChangedOutside
+    {
+      return Err(ToolError::refused(
+        "changed_outside",
+        vec![Message::new("projectSettings.changedOutside")],
+      ));
+    }
     services.changes.record(open.project.id(), Outside::AutoMode);
     approvals_json(&db, open.project.id())
   })
@@ -190,18 +201,35 @@ pub fn retired(name: &str, replacement: &str) -> ToolError {
 fn reviewer_change(
   services: &Services,
   db: &ProjectDb,
+  current: &AutoModeSettings,
   argument: &SetReviewer,
 ) -> Result<Option<ReviewerChoice>, ToolError> {
-  gate(services)?;
   let connections = db.connections()?;
-  let reviewer = chosen(&connections, argument)?;
-  let current = db.auto_mode_settings()?;
+  let decisions = db.decision_connections()?;
+  let reviewer = chosen_reviewer(&connections, &decisions, argument)?;
   let next = AutoModeSettings {
     reviewer: reviewer.clone(),
   };
-  if next != current {
+  if decision_reviewer::choosing_hosted(current, &next, &decisions).is_some() {
+    return Err(ToolError::refused(
+      "person_only",
+      vec![Message::new("appMcp.errors.personOnly")],
+    ));
+  }
+  gate(services)?;
+  if crate::project_settings::reviewer_widens(current, &next)
+    || (current != &next
+      && current
+        .reviewer
+        .as_ref()
+        .is_none_or(|c| decision_reviewer::connection_id(c).is_none())
+      && next
+        .reviewer
+        .as_ref()
+        .is_some_and(|c| decision_reviewer::connection_id(c).is_some()))
+  {
     let mut reasons = vec![Message::new("appMcp.widens.reviewer")];
-    if moves_reviewer_account(&connections, &current, &next) {
+    if moves_reviewer_account(&connections, current, &next) {
       reasons.push(Message::new("appMcp.widens.reviewerAccount"));
     }
     allowed(services, reasons)?;
@@ -221,6 +249,49 @@ fn moves_reviewer_account(connections: &[Connection], current: &AutoModeSettings
     })
   };
   account(next).is_some_and(|after| moves_to_another_account(account(current).as_ref(), &after))
+}
+
+fn chosen_reviewer(
+  connections: &[Connection],
+  decisions: &[orchester_core::connection::DecisionConnection],
+  argument: &SetReviewer,
+) -> Result<Option<ReviewerChoice>, ToolError> {
+  if let Some(named) = &argument.decision_connection {
+    if argument.connection.is_some() || argument.effort.is_some() {
+      return Err(ToolError::InvalidArguments(
+        "decision reviewers take neither connection nor effort".into(),
+      ));
+    }
+    let connection = decisions
+      .iter()
+      .find(|c| c.id().to_string() == *named || c.name().as_str() == named)
+      .ok_or_else(|| ToolError::InvalidArguments(format!("no decision connection is named {named}")))?;
+    let model = argument
+      .model
+      .as_deref()
+      .map(ModelId::new)
+      .transpose()
+      .map_err(|error| ToolError::InvalidArguments(error.to_string()))?
+      .or_else(|| connection.models().first().cloned())
+      .ok_or_else(|| unavailable(ReviewerUnavailable::NoModel))?;
+    let threshold = argument
+      .threshold
+      .map(|value| value.to_string())
+      .unwrap_or_else(|| "0.80".into());
+    let choice = decision_reviewer::choose(connection, model, &threshold)
+      .map_err(|error| ToolError::InvalidArguments(error.to_string()))?;
+    let settings = AutoModeSettings {
+      reviewer: Some(choice.clone()),
+    };
+    resolve_reviewer(&settings, connections, &decision_reviewer::states(decisions)).map_err(unavailable)?;
+    return Ok(Some(choice));
+  }
+  if argument.threshold.is_some() {
+    return Err(ToolError::InvalidArguments(
+      "only decision reviewers take a threshold".into(),
+    ));
+  }
+  chosen(connections, argument)
 }
 
 /// The reviewer `argument` names among `connections`; `None` for the default one.
@@ -260,16 +331,7 @@ fn chosen(connections: &[Connection], argument: &SetReviewer) -> Result<Option<R
 /// The project's *Allow Autopilot*, its reviewer or why it has none, and the mode of each of its runs that has not
 /// ended, with why it is Manual.
 fn approvals_json(db: &ProjectDb, project: ProjectId) -> Result<Value, ToolError> {
-  let AutoModeSettings { reviewer } = db.auto_mode_settings()?;
-  let resolved = match reviewer_of(db)? {
-    Ok(shown) => json!({
-      "connection": &*shown.connection,
-      "model": shown.model.as_str(),
-      "effort": shown.effort,
-      "default": reviewer.is_none(),
-    }),
-    Err(why) => json!({ "unavailable": why }),
-  };
+  let resolved = decision_reviewer::read(db)?;
   Ok(json!({ "approvals": {
     "allow_autopilot": db.allow_autopilot()?.is_on(),
     "reviewer": resolved,

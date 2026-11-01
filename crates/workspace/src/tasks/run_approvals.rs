@@ -113,8 +113,10 @@ pub struct ReviewerShown {
 pub fn reviewer_of(db: &ProjectDb) -> Result<Result<ReviewerShown, ReviewerUnavailable>, StoreError> {
   let settings = db.auto_mode_settings()?;
   let connections = db.connections()?;
+  let decisions = db.decision_connections()?;
+  let states = crate::project_settings::decision_reviewer::states(&decisions);
   Ok(
-    resolve_reviewer(&settings, &connections, &[]).map(|resolved| ReviewerShown {
+    resolve_reviewer(&settings, &connections, &states).map(|resolved| ReviewerShown {
       connection: resolved.connection.name().as_str().into(),
       model: resolved.model,
       effort: resolved.effort,

@@ -120,8 +120,8 @@ fn decision_connections_migrate_database_without_table() {
     .execute_batch("DROP TABLE decision_reviewer_connection; DROP TABLE decision_connections;")
     .expect("previous schema");
   raw
-    // Decision connections precede the team-reviewer resource migration.
-    .pragma_update(None, "user_version", version - 2)
+    // Decision connections precede team reviewers and the reviewer settings migration.
+    .pragma_update(None, "user_version", version - 3)
     .expect("previous version");
   drop(raw);
   let mut reopened = ProjectDb::open(repo.path()).expect("migrate");
