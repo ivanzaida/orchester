@@ -25,6 +25,7 @@ mod codebase_index;
 mod connection_check;
 mod control;
 mod conversation;
+mod decision_test;
 mod environment;
 mod estimate;
 mod halt;
@@ -167,6 +168,7 @@ impl Scheduler {
     orchester_store::pause_lock_waits_with(crate::lock_pause::pause_off_async_workers);
     // Before the desktop connects and reads the runs.
     missing_checkpoints::record(project_root);
+    crate::decision_test::recover(project_root);
     worktree_sweep::sweep_in_background(project_root.to_path_buf());
     Self {
       inner: Arc::new(Inner {

@@ -3,6 +3,9 @@
 //! shows.
 
 mod browser;
+mod check;
+mod decision_test;
+mod estimate;
 
 use std::{
   future::Future,
@@ -16,7 +19,6 @@ use std::{
 };
 
 use orchester_core::{
-  connection::{AgentProvider, ApiEndpoint},
   id::{ChatId, ChatMessageId, IdempotencyKey, RunId, StepExecutionId, TaskId},
   integration::Leftovers,
   question::GivenAnswer,
@@ -352,7 +354,8 @@ async fn answer(
     Command::DeliverMessages { run } => return later.answer(run, async move { handle.deliver_messages(run).await }),
     Command::Shutdown { mode } => return Answer::Shutdown(mode),
     Command::StopIfIdle => return Answer::StopIfIdle(id),
-    Command::CheckConnection { provider, ref api } => return answer_check(&later, handle, provider, api.clone()),
+    Command::CheckConnection { provider, ref api } => return check::answer(&later, handle, provider, api.clone()),
+    ref command @ Command::TestDecisionConnection { .. } => return decision_test::answer(&later, handle, command),
     Command::AnswerInChat { message, ref tools } => chat_answering(scheduler, message, tools.clone()).await,
     Command::StopChat { chat } => chat_stopped(scheduler, chat),
     Command::SteerChat { message } => match scheduler.steer_chat(message) {
@@ -361,14 +364,7 @@ async fn answer(
     },
     Command::StopTurn { run } => return later.answer(run, async move { handle.stop_turn(run).await }),
     Command::Browser(ref command) => return later.browser(handle, command.clone()),
-    Command::EstimateTask { task } => {
-      return later.reply(async move {
-        match handle.estimate_task(task).await {
-          Ok(outcome) => Reply::TaskEstimated { task, outcome },
-          Err(rejection) => Reply::Rejected(rejection),
-        }
-      });
-    }
+    Command::EstimateTask { task } => return estimate::answer(&later, handle, task),
     Command::SetErrorReports { ref reports } => return Answer::ErrorReports(id, reports.clone()),
   };
   Answer::Reply(Event::Reply { id, reply })
@@ -506,15 +502,6 @@ fn answer_question(
   let (request, answers) = (request.to_owned(), answers.to_vec());
   later.answer(run, async move {
     scheduler.answer_question(run, request, answers, by).await
-  })
-}
-
-fn answer_check(later: &Later<'_>, scheduler: Scheduler, provider: AgentProvider, api: ApiEndpoint) -> Answer {
-  later.reply(async move {
-    match scheduler.check_connection(provider, api).await {
-      Ok((result, models)) => Reply::ConnectionChecked { result, models },
-      Err(rejection) => Reply::Rejected(rejection),
-    }
   })
 }
 

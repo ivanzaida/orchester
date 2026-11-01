@@ -5,6 +5,7 @@
 pub mod approval_relay;
 pub mod browser;
 pub mod decision_review;
+pub mod decision_test;
 pub mod error_reports;
 pub mod execution;
 mod git;

@@ -24,6 +24,7 @@ mod decision_authors;
 mod decision_connections;
 mod decision_review;
 mod decision_reviewer;
+mod decision_tests;
 mod default_pipeline;
 mod denial_notes;
 mod disk_guard;

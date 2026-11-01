@@ -50,7 +50,15 @@ impl DecisionReviewer {
     }
   }
 
-  async fn request(&self, input: &ReviewInput) -> Reviewed {
+  /// Recorded tests share the live transport, limits, parsing and secret handling.
+  pub(crate) async fn review_body(&self, body: Value) -> Reviewed {
+    match tokio::time::timeout(TIMEOUT, self.request(body)).await {
+      Ok(reviewed) => reviewed,
+      Err(_) => Reviewed::new(Err(ReviewError::TimedOut), ReviewSpend::Unknown),
+    }
+  }
+
+  async fn request(&self, body: Value) -> Reviewed {
     // The runner may already have installed this process-wide provider.
     let _ = rustls::crypto::ring::default_provider().install_default();
     let client = match Client::builder()
@@ -80,7 +88,7 @@ impl DecisionReviewer {
     }
     let mut request = client
       .post(format!("{}/systemone", self.connection.base_url()))
-      .json(&system_one_request(input, &self.model));
+      .json(&body);
     if let Some(header) = authorization {
       request = request.header(AUTHORIZATION, header);
     }
@@ -176,12 +184,9 @@ impl RequestReviewer for DecisionReviewer {
     if !self.connection.models().contains(&self.model) {
       return failed(ReviewFailure::ModelGone, ReviewSpend::Nothing);
     }
-    self.runtime.block_on(async {
-      match tokio::time::timeout(TIMEOUT, self.request(input)).await {
-        Ok(reviewed) => reviewed,
-        Err(_) => Reviewed::new(Err(ReviewError::TimedOut), ReviewSpend::Unknown),
-      }
-    })
+    self
+      .runtime
+      .block_on(self.review_body(system_one_request(input, &self.model)))
   }
 }
 

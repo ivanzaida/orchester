@@ -22,6 +22,7 @@ mod input;
 mod prompt;
 mod push;
 mod spend;
+mod test;
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -43,6 +44,7 @@ pub use self::{
   },
   push::PushFacts,
   spend::{AutoReview, ReviewCost, ReviewEnd, ReviewRecord, ReviewSpend, Reviewed, reviews_usage},
+  test::{DecisionTestReport, DecisionTestStatus, ThresholdFigures},
 };
 use super::answer::ApprovalSubject;
 use crate::resource::ModelId;

@@ -2,6 +2,7 @@
 //! without sending project content or making an inference request.
 
 mod http;
+pub mod test;
 
 use std::path::Path;
 

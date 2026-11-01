@@ -1001,6 +1001,15 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
+ORC-561 · Test a decision model on recorded project requests (implemented 2026-11-01).
+Workspace exposes an explicit test action, stored progress/results and Stop; the runner reconstructs historical
+review context, omits unavailable facts explicitly, runs eight requests at once and refuses hosted automation.
+Results retain counts at 0.50 / 0.80 / 0.90 / 0.95, tested requests, median milliseconds and input tokens, including
+unknown usage after interruption. IPC protocol 40; no automatic test or resume and no visual changes.
+Tests: `orchester-runner --test decision_test decision_test` (7 passed), existing `--features test-agent --test
+decision_review decision_review` (9 passed, live test ignored). Quality gate: `check: OK`.
+API and limitations: `docs/evidence/orc-561-decision-test.md`.
+
 ORC-558 · Decision reviewer HTTP execution · branch `orchester/orc-558-run-1` (implemented 2026-11-01).
 The runner reviews requests on the explicitly chosen decision server, reading its project secret, checking the current
 model list and posting System One questions within a combined two-second deadline. Failures reach the person with
