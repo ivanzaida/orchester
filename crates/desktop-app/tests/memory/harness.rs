@@ -162,34 +162,18 @@ impl Page {
     placed.sort_by(|(left, _), (right, _)| left.total_cmp(right));
     let shown = MemoryTab::ALL
       .into_iter()
-      .find(|tab| {
-        let body = match tab {
-          MemoryTab::Settings => "memory-settings".to_owned(),
-          tab => format!("memory-tab-body-{}", tab.name()),
-        };
-        self.has(&body)
-      })
+      .find(|tab| self.has(&format!("memory-tab-body-{}", tab.name())))
       .expect("a tab's body is shown");
     (placed.into_iter().map(|(_, name)| name).collect(), shown.name())
   }
 
-  fn bounds_of(&mut self, id: &str) -> Option<lurq::core::ElementRect> {
+  /// Where the element `id` is laid out, if it is.
+  pub fn bounds_of(&mut self, id: &str) -> Option<lurq::core::ElementRect> {
     self
       .window
       .tree
       .get_element_by_id_mut(id)
       .and_then(|element| element.bounds())
-  }
-
-  /// Moves the keyboard's focus to the element `id`, as pressing another field does, so the field it leaves saves.
-  pub fn focus(&mut self, id: &str) {
-    self
-      .window
-      .tree
-      .get_element_by_id_mut(id)
-      .unwrap_or_else(|| panic!("{id} is shown"))
-      .focus();
-    self.window.pass();
   }
 
   /// What the text input `id` holds.

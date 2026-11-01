@@ -97,3 +97,17 @@ fn project_settings_environment_opens_the_secrets_route() {
     Err(RouteError::InvalidParam { .. })
   ));
 }
+
+/// The Memory page's Settings tab (`S15` `BJQn0`) is gone: its path opens Context, where the memory settings are now.
+#[test]
+fn memory_settings_tab_route_opens_project_settings_context() {
+  let memory = format!("/project/{PROJECT}/memory");
+  assert_eq!(
+    Route::parse(&format!("{memory}?tab=settings")),
+    Ok(at(ProjectPage::Settings(ProjectSettingsTab::Context)))
+  );
+  assert!(matches!(
+    Route::parse(&format!("{memory}?tab=nowhere")),
+    Err(RouteError::InvalidParam { .. })
+  ));
+}

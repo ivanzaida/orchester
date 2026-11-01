@@ -1,12 +1,8 @@
-//! Project settings › Memory, as two views edit it: the Settings tab of the project's Memory page (`Tab body ·
-//! Settings` `oNMeD` in `U2teQq`), each memory a choice of two cards, and the Memory group of Project settings ›
-//! Context (`project_settings::context::memory`), each memory a select. Both share one [`MemoryForm`]: how agents'
-//! records are saved in task and in project memory, saved when chosen; how many records and tokens each agent
-//! invocation gets, saved when its field is left; and the save state, worded as Project settings words it. A save
-//! rebases what it changed onto the stored settings (`memory::settings::save_in`), and the project's screens read its
-//! memory again after it. Only a person saves: an MCP client's window input is refused.
-
-mod form;
+//! The Memory group's form ([`MemoryForm`]): how agents' records are saved in task and in project memory, saved when
+//! chosen; how many records and tokens each agent invocation gets, saved when its field is left; and the save state,
+//! worded as Project settings words it. A save rebases what it changed onto the stored settings
+//! (`memory::settings::save_in`), and the project's screens read its memory again after it. Only a person saves: an
+//! MCP client's window input is refused.
 
 use std::{
   path::PathBuf,
@@ -18,12 +14,11 @@ use std::{
 
 use lurq::{
   app::{
-    component::{Component, DevtoolsInspectable},
+    component::DevtoolsInspectable,
     ctx::{Ctx, FutureAction},
     events::is_synthetic_input,
   },
   core::Signal,
-  node::Element,
 };
 use orchester_core::memory::{MemoryLimits, MemorySettings, WritePolicy};
 use orchester_workspace::{
@@ -33,15 +28,6 @@ use orchester_workspace::{
 };
 
 use crate::project::ShownProject;
-
-#[derive(Clone, PartialEq)]
-pub struct SettingsProps {
-  pub project: ShownProject,
-  /// The settings as the page read them.
-  pub stored: MemorySettings,
-}
-
-impl DevtoolsInspectable for SettingsProps {}
 
 /// Settings a save asked for or stored.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -299,25 +285,6 @@ impl MemoryForm {
       base,
       asked,
     });
-  }
-}
-
-/// The Memory page's Settings tab.
-pub struct SettingsTab(MemoryForm);
-
-impl Component for SettingsTab {
-  type Props = SettingsProps;
-
-  fn create(ctx: &mut Ctx) -> Self {
-    let project = ctx.props::<SettingsProps>().project.clone();
-    Self(MemoryForm::new(ctx, &project))
-  }
-
-  fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let props = ctx.props::<SettingsProps>().clone();
-    self.0.follow(props.stored);
-    let base = self.0.base(props.stored);
-    form::form(ctx, &self.0, (&props, base))
   }
 }
 

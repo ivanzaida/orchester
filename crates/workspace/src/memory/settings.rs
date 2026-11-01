@@ -1,6 +1,6 @@
-//! Project settings › Memory, as the project's Memory page's Settings tab changes it: how agents' records are saved
-//! in task and in project memory, and how much memory each agent invocation gets ([`MemorySettings`]). Reading and
-//! saving block on SQLite; the UI calls them off the UI thread.
+//! Project settings › Memory, as the Memory group of Project settings › Context changes it: how agents' records are
+//! saved in task and in project memory, and how much memory each agent invocation gets ([`MemorySettings`]). Reading
+//! and saving block on SQLite; the UI calls them off the UI thread.
 
 use std::path::Path;
 

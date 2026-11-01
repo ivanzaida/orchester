@@ -244,6 +244,7 @@ icons! {
   Server => '\u{e153}',
   ServerCrash => '\u{e1e9}',
   Settings => '\u{e154}',
+  Settings2 => '\u{e245}',
   Shield => '\u{e158}',
   ShieldAlert => '\u{e1fe}',
   ShieldCheck => '\u{e1ff}',

@@ -1,9 +1,12 @@
 //! Context › Memory (`Memory` `bdcD4` in `S04 · Context` `oTBHM`, after Code index; `docs/design/settings.md`, the
-//! person's decision 3): how agents' records are saved in task and in project memory, each a select whose default
-//! option says so, and how many records and tokens each agent invocation gets, each a number with its unit and what it
-//! reads back as; *Only you, here in the window* at the heading's right and a note under the box. It saves as the
-//! Memory page's Settings tab does, through the same [`MemoryForm`]: a choice when it is made, a limit when its field
-//! is left. Only a person's input saves: an MCP client's is refused, and the group says so under its box.
+//! person's decision 3; the Memory page's *Memory settings* opens it, `S15` `BJQn0`): how agents' records are saved in
+//! task and in project memory, each a select whose default option says so, and how many records and tokens each agent
+//! invocation gets, each a number with its unit and what it reads back as; *Only you, here in the window* at the
+//! heading's right and a note under the box. It saves through its [`MemoryForm`]: a choice when it is made, a limit
+//! when its field is left. Only a person's input saves: an MCP client's is refused, and the group says so under its
+//! box.
+
+mod form;
 
 use std::sync::Arc;
 
@@ -28,14 +31,12 @@ use orchester_workspace::{
   messages::{self, Message},
 };
 
+use self::form::{Kept, MemoryForm, Scope, Status as FormStatus};
 use crate::{
   project::ShownProject,
-  screens::{
-    memory::settings::{Kept, MemoryForm, Scope, Status as FormStatus},
-    project_settings::{
-      Status, TabProps,
-      kit::{Group, SettingRow},
-    },
+  screens::project_settings::{
+    Status, TabProps,
+    kit::{Group, SettingRow},
   },
   services::Services,
   theme::{ExtraSpacing, IconSize, ProjectSettingsText},

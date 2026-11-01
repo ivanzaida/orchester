@@ -1,5 +1,5 @@
-//! Memory, the Agents hub's last tab (`05 Memory` `padSP`): *New record* at the head's right, then the status pills,
-//! what the open status means and its records, or the tab's settings, scrolling under the hub's tabs.
+//! Memory, the Agents hub's last tab (`05 Memory` `padSP`): *New record* at the head's right, then the status pills
+//! with *Memory settings* at their end, what the open status means and its records, scrolling under the hub's tabs.
 
 use std::sync::Arc;
 
@@ -17,7 +17,6 @@ use orchester_workspace::memory::read::ProjectMemory;
 
 use super::{
   Read, record_page,
-  settings::{SettingsProps, SettingsTab},
   state::{MemoryState, Opened},
   status_tab,
   tabs::{self, Order},
@@ -109,7 +108,7 @@ fn content(
       (Some(&memory), view.order),
       view.tab,
     ))
-    .child(body(ctx, state, (project, &memory), view));
+    .child(body(ctx, state, &memory, view));
   hub::list_body_wide(
     "memory-main",
     Column::new().id("memory-body").width(Dimension::Pct(100.0)).child(pane),
@@ -197,21 +196,7 @@ fn new_record(ctx: &mut Ctx, state: &MemoryState, shown: Option<MemoryTab>) -> E
 }
 
 /// The open tab's body under the pills.
-fn body(
-  ctx: &mut Ctx,
-  state: &MemoryState,
-  (project, memory): (&ShownProject, &Arc<ProjectMemory>),
-  view: View,
-) -> Element {
-  if view.tab == MemoryTab::Settings {
-    return ctx.mount_keyed::<SettingsTab>(
-      "memory-settings-tab",
-      SettingsProps {
-        project: project.clone(),
-        stored: memory.settings,
-      },
-    );
-  }
+fn body(ctx: &mut Ctx, state: &MemoryState, memory: &Arc<ProjectMemory>, view: View) -> Element {
   let shown = status_tab::Shown {
     memory,
     tab: view.tab,

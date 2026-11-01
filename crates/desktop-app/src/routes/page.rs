@@ -334,7 +334,7 @@ impl ProjectPage {
       ["instructions"] => InstructionsView::take(params).map(Self::Instructions),
       ["secrets"] => SecretsView::take(params).map(Self::Secrets),
       [IMPORT] => ImportTab::take(params).map(Self::Import),
-      ["memory"] => MemoryTab::take(params).map(Self::Memory),
+      ["memory"] => MemoryTab::take(params),
       [SETTINGS] => settings(params),
       [PULL_REQUESTS] => Ok(Self::PullRequests(
         params.take_or_default(TAB, PullRequestTab::from_name)?,

@@ -5,9 +5,10 @@
 //!
 //! The project's page: the title with *New record*, then a tab per status of its records — *Waiting for approval*,
 //! every proposal of the project and its tasks; *Active*, *Deprecated*, *Superseded* and *Rejected*, the project's own
-//! records searched, filtered and grouped by type — and *Settings*, how agents' records are saved and what each agent
-//! gets. A record or a proposal under review opens as its own page in the tab (`record_page`, 05c, 05e). The tab is
-//! part of the route (`ProjectPage::Memory`).
+//! records searched, filtered and grouped by type — and at the tabs' end *Memory settings*, which opens Project
+//! settings › Context, where how agents' records are saved and what each agent gets are set (`S15` `BJQn0`). A record
+//! or a proposal under review opens as its own page in the tab (`record_page`, 05c, 05e). The tab is part of the route
+//! (`ProjectPage::Memory`).
 
 mod centered;
 mod delete;
@@ -24,7 +25,6 @@ mod proposal_side;
 mod queue_row;
 mod record_page;
 mod row;
-pub(crate) mod settings;
 pub(crate) mod state;
 mod status_tab;
 mod tab_no_match;

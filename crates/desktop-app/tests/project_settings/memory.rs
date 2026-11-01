@@ -1,7 +1,6 @@
 //! Context › Memory (`S04` `bdcD4`): after Code index, a select per memory whose default option says so, the record and
 //! token limits with their units and read-backs, and the note under the box. A choice saves when it is made, a limit
-//! when its field is left, as the Memory page's Settings tab saves them. Only a person saves: an MCP client's input is
-//! refused and said, and nothing is stored.
+//! when its field is left. Only a person saves: an MCP client's input is refused and said, and nothing is stored.
 use lurq::app::events::with_synthetic_input;
 use orchester_core::memory::{MemorySettings, MemoryStore, WritePolicy};
 

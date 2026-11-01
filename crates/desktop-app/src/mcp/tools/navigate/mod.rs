@@ -210,7 +210,7 @@ fn screen_route(screen: Screen, args: &Map<String, Value>, lookup: Option<&Looku
     Screen::Pipelines => ProjectPage::Pipelines,
     Screen::Agents => agent_page(args)?,
     Screen::Instructions => ProjectPage::Instructions(InstructionsView::default()),
-    Screen::Memory => ProjectPage::Memory(memory_tab(args)?),
+    Screen::Memory => memory_page(args)?,
     Screen::Skills => skills_page(args)?,
     Screen::Tools => tools_page(args)?,
     Screen::Secrets => ProjectPage::Secrets(SecretsView::default()),
@@ -285,16 +285,14 @@ const fn params(screen: Screen) -> &'static [&'static str] {
   }
 }
 
-/// Memory's tab, or none when left out: the page opens on the one it chooses.
-fn memory_tab(args: &Map<String, Value>) -> Result<Option<MemoryTab>, ToolError> {
-  string(args, "tab")?
-    .map(|name| {
-      MemoryTab::from_name(name).ok_or_else(|| ToolError::UnknownTab {
-        name: name.to_owned(),
-        known: MemoryTab::ALL.map(MemoryTab::name).to_vec(),
-      })
-    })
-    .transpose()
+/// Memory on its tab, or on the one it chooses when left out; `settings`, the tab it had, opens Project settings ›
+/// Context.
+fn memory_page(args: &Map<String, Value>) -> Result<ProjectPage, ToolError> {
+  let name = string(args, "tab")?;
+  MemoryTab::page(name).ok_or_else(|| ToolError::UnknownTab {
+    name: name.unwrap_or_default().to_owned(),
+    known: MemoryTab::ALL.map(MemoryTab::name).to_vec(),
+  })
 }
 
 fn files_view(args: &Map<String, Value>) -> Result<FilesView, ToolError> {
