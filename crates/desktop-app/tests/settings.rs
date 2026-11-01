@@ -1,18 +1,18 @@
 //! Settings › Automation's *What automation may do*: *Look at the window*, always on; *Agents can control this
 //! window*, the build's default until a person chooses, applying from the next start; and *Let automation answer
-//! approvals*, *Let automation change agent permissions* and the Orchestrator's switches (*publish drafts*, *answer
-//! agents*, *merge runs*): each off until a person turns it on in the window, where it reads the stored value and
-//! saves what the person chooses; synthetic input never flips one, and MCP clients' window input is refused meanwhile.
+//! approvals* and *Let automation change agent permissions*: each off until a person turns it on in the window, where
+//! it reads the stored value and saves what the person chooses; synthetic input never flips one, and MCP clients'
+//! window input is refused meanwhile. *What the Orchestrator may do* names the open project's switches that are on and
+//! opens its Project settings › Orchestrator (ORC-600).
 
 mod support;
 
 use lurq::app::events::{MouseButton, ScrollPhase};
-use orchester_app::routes::Route;
+use orchester_app::routes::{OverviewTab, ProjectPage, ProjectSettingsTab, Route};
 use orchester_workspace::workspace::OrchestratorConsent;
 use support::Window;
 
 const SWITCH: &str = "settings-change-permissions";
-const PUBLISH: &str = "settings-publish-drafts";
 
 /// Whether the switch shows on: its knob at the end of its track.
 fn on(window: &mut Window) -> bool {
@@ -174,103 +174,76 @@ fn press_element(window: &mut Window, id: &str) {
   window.pass();
 }
 
-/// The switch of *Let the Orchestrator continue interrupted runs*, the section's last.
-const CONTINUE: &str = "settings-continue-interrupted";
-
-/// The Orchestrator's switches: each one's element id, its label under *The Orchestrator may*, and the consent it
-/// saves.
-const ORCHESTRATOR_SWITCHES: [(&str, &str, OrchestratorConsent); 6] = [
-  (PUBLISH, "Publish drafts", OrchestratorConsent::PublishDrafts),
-  (
-    "settings-answer-agents",
-    "Answer agents",
-    OrchestratorConsent::AnswerAgents,
-  ),
-  ("settings-merge-runs", "Merge runs", OrchestratorConsent::MergeRuns),
-  (
-    "settings-merge-finished",
-    "Merge finished runs on its own",
-    OrchestratorConsent::MergeFinished,
-  ),
-  (
-    CONTINUE,
-    "Continue interrupted runs",
-    OrchestratorConsent::ContinueInterrupted,
-  ),
-  ("settings-write-git", "Write with git", OrchestratorConsent::WriteGit),
-];
+/// *What the Orchestrator may do*, the row that points to each project's own switches.
+const ORCHESTRATOR: &str = "settings-orchestrator-may-do";
+/// The foot under its group, the tab's last part.
+const LAST: &str = "settings-orchestrator-foot";
 
 #[test]
-fn settings_only_a_person_lets_the_orchestrator_publish_answer_merge_or_continue() {
-  use lurq::app::events::with_synthetic_input;
+fn settings_automation_names_the_open_projects_orchestrator_switches_and_opens_them() {
   let mut window = Window::open();
   let workspace = window.launch.workspace().expect("session").clone();
-  window.navigation().go(Route::Settings);
-  for (switch, title, consent) in ORCHESTRATOR_SWITCHES {
-    window.until("the setting's row", |window| {
-      window.texts(&format!("{switch}-row")).is_some()
-    });
-    let texts = window.texts(&format!("{switch}-row")).expect("the row shows");
-    assert!(texts.iter().any(|text| text == title), "{texts:?}");
-    assert!(!switch_on(&mut window, switch), "{title} is off until turned on");
-    window.until("synthetic input rejected", |window| {
-      with_synthetic_input(|| press_element(window, switch));
-      window.texts(&format!("{switch}-blocked")).is_some()
-    });
-    assert!(
-      !workspace
-        .app_wide_orchestrator_allows(consent)
-        .expect("the setting reads"),
-      "synthetic input does not turn {title} on"
-    );
-    window.until("the person's choice to be saved", |window| {
-      let stored = workspace
-        .app_wide_orchestrator_allows(consent)
-        .expect("the setting reads");
-      if !stored {
-        press_element(window, switch);
-      }
-      stored
-    });
-    window.until("the switch to show it", |window| switch_on(window, switch));
+  let kontur = workspace.projects().expect("the projects")[0].clone();
+  for consent in [
+    OrchestratorConsent::AnswerAgents,
+    OrchestratorConsent::MergeRuns,
+    OrchestratorConsent::ContinueInterrupted,
+  ] {
+    workspace
+      .set_orchestrator_allows(&kontur.repo_root, consent, true)
+      .expect("on in Kontur");
   }
-  assert!(
-    !workspace
-      .automation_changes_permissions()
-      .expect("the other setting reads"),
-    "the Orchestrator's switches turn nothing else on"
+  // Settings shows the project the tab was in last, once it opened there.
+  window
+    .navigation()
+    .go(Route::Project(kontur.id, ProjectPage::Overview(OverviewTab::default())));
+  window.until("Kontur open", |window| {
+    window
+      .projects()
+      .state_now(kontur.id)
+      .is_some_and(|state| state.open().is_some())
+  });
+  window.navigation().go(Route::Settings);
+  let hint = format!("{ORCHESTRATOR}-hint");
+  let named = format!(
+    "Each project sets its own · {}: answers agents, merges runs, continues interrupted runs",
+    kontur.name.as_str()
   );
+  window.until("the project's switches named", |window| {
+    window.tree.get_element_by_id(&hint).is_some() && window.text(&hint) == named
+  });
+  assert_eq!(
+    window.text(&format!("{ORCHESTRATOR}-label")),
+    "What the Orchestrator may do"
+  );
+  assert_eq!(
+    window.text("settings-orchestrator-foot-text"),
+    "Each project's Orchestrator has its own switches, in Project settings › Orchestrator."
+  );
+  assert!(
+    window.tree.get_element_by_id("settings-publish-drafts").is_none(),
+    "no switch of the Orchestrator's is left here"
+  );
+  press_element(&mut window, &format!("{ORCHESTRATOR}-open"));
+  window.until("the project's Orchestrator tab", |window| {
+    window.navigation().route_now()
+      == Route::Project(kontur.id, ProjectPage::Settings(ProjectSettingsTab::Orchestrator))
+  });
 }
 
 #[test]
-fn settings_turning_off_an_orchestrator_switch_holds_from_the_click() {
+fn settings_automation_with_no_project_open_says_each_project_sets_its_own() {
   let mut window = Window::open();
-  let workspace = window.launch.workspace().expect("session").clone();
-  let kontur = workspace.projects().expect("the projects")[0].repo_root.clone();
-  for (_, _, consent) in ORCHESTRATOR_SWITCHES {
-    workspace
-      .set_app_wide_orchestrator_allows(consent, true)
-      .expect("the person turned it on");
-    workspace
-      .set_orchestrator_allows(&kontur, consent, true)
-      .expect("on in Kontur");
-  }
+  window.navigation().open_tab();
+  window.pass();
   window.navigation().go(Route::Settings);
-  for (switch, title, consent) in ORCHESTRATOR_SWITCHES {
-    window.until("the switch on", |window| {
-      window.texts(&format!("{switch}-row")).is_some() && switch_on(window, switch)
-    });
-    // The person's click; its save has not run yet.
-    window.tree.get_element_by_id_mut(switch).expect("the switch").click();
-    assert!(
-      !workspace.app_wide_orchestrator_allows(consent).expect("read"),
-      "{title} holds off from the click, before the save"
-    );
-    assert!(
-      !workspace.orchestrator_allows(&kontur, consent).expect("read"),
-      "{title} stops the Orchestrator in Kontur from the click, until ORC-599 moves the row"
-    );
-  }
+  let hint = format!("{ORCHESTRATOR}-hint");
+  window.until("the row", |window| window.tree.get_element_by_id(&hint).is_some());
+  assert_eq!(window.text(&hint), "Each project sets its own");
+  assert!(
+    window.tree.get_element_by_id(&format!("{ORCHESTRATOR}-open")).is_none(),
+    "no project to open"
+  );
 }
 
 /// The bottom of `id` as laid out.
@@ -284,15 +257,13 @@ fn bottom(window: &mut Window, id: &str) -> f32 {
 }
 
 #[test]
-fn settings_automation_scrolls_to_its_last_switch_in_a_short_window() {
+fn settings_automation_scrolls_to_its_last_row_in_a_short_window() {
   let mut window = Window::open();
   window.tree.resize(1440, 600);
   window.navigation().go(Route::Settings);
-  window.until("the last switch", |window| {
-    window.tree.get_element_by_id(CONTINUE).is_some()
-  });
+  window.until("the last row", |window| window.tree.get_element_by_id(LAST).is_some());
   assert!(
-    bottom(&mut window, CONTINUE) > 600.0,
+    bottom(&mut window, LAST) > 600.0,
     "below the window's height before scrolling"
   );
   let bounds = window
@@ -305,27 +276,7 @@ fn settings_automation_scrolls_to_its_last_switch_in_a_short_window() {
   window.tree.scroll(x, y, 0.0, -2000.0, ScrollPhase::Scroll);
   window.pass();
   window.pass();
-  assert!(bottom(&mut window, CONTINUE) <= 600.0, "scrolled into the window");
-}
-
-#[test]
-fn settings_merge_finished_runs_starts_further_in_than_merge_runs() {
-  let mut window = Window::open();
-  window.navigation().go(Route::Settings);
-  window.until("the Orchestrator's switches", |window| {
-    window.tree.get_element_by_id(CONTINUE).is_some()
-  });
-  let mut left = |id: &str| {
-    window
-      .tree
-      .get_element_by_id_mut(id)
-      .and_then(|element| element.bounds())
-      .unwrap_or_else(|| panic!("{id} is laid out"))
-      .x
-  };
-  let indent = left("settings-merge-finished-label") - left("settings-merge-runs-label");
-  // `JMLwI` pads its start 40, the other rows 14.
-  assert_eq!(indent, 26.0, "Merge finished runs on its own starts 26 further in");
+  assert!(bottom(&mut window, LAST) <= 600.0, "scrolled into the window");
 }
 
 /// How far the top of `id` is under the top of the scroll `scroll` it is in.
@@ -354,9 +305,7 @@ fn settings_a_tab_opened_after_a_scrolled_one_starts_at_its_top() {
     ("settings-notifications-scroll", "settings-notifications-tab"),
   );
   window.navigation().go(Route::Settings);
-  window.until("the last switch", |window| {
-    window.tree.get_element_by_id(CONTINUE).is_some()
-  });
+  window.until("the last row", |window| window.tree.get_element_by_id(LAST).is_some());
   let bounds = window
     .tree
     .get_element_by_id_mut("settings-automation-scroll")
@@ -367,7 +316,7 @@ fn settings_a_tab_opened_after_a_scrolled_one_starts_at_its_top() {
   window.tree.scroll(x, y, 0.0, -2000.0, ScrollPhase::Scroll);
   window.pass();
   window.pass();
-  assert!(bottom(&mut window, CONTINUE) <= 600.0, "Automation scrolled");
+  assert!(bottom(&mut window, LAST) <= 600.0, "Automation scrolled");
   window.navigation().go(Route::Notifications);
   window.until("Notifications again", |window| {
     window.tree.get_element_by_id("settings-notifications-tab").is_some()
@@ -440,7 +389,7 @@ fn settings_automation_opens_with_what_automation_may_always_do_and_locks_window
       .unwrap_or_else(|| panic!("{id} is laid out"))
       .y
   };
-  let order = [LOOK, WINDOW_CONTROL, APPROVALS, SWITCH, PUBLISH];
+  let order = [LOOK, WINDOW_CONTROL, APPROVALS, SWITCH, ORCHESTRATOR];
   let tops: Vec<f32> = order.iter().map(|id| top(&mut window, id)).collect();
   assert!(tops.windows(2).all(|pair| pair[0] < pair[1]), "{order:?} at {tops:?}");
   assert!(

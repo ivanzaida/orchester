@@ -2,14 +2,15 @@
 //! *General · Notifications · Accounts · Automation · Browser · Orchester Cloud* (`page`) and the open tab's column of
 //! groups under them (`frame`). *General* (`l838Ty`, `general`) holds the theme, the plan limits' warning threshold and
 //! this computer. *Notifications* (`fQTFi`, `notifications`) holds what notifies, how, quiet hours and the
-//! Orchestrator's daily report (`daily_report`). *Automation* (`aMkOw`) holds *Orchester MCP server* (`server`) and
+//! Orchestrator's daily report (`daily_report`). *Automation* (`V8aAj`) holds *Orchester MCP server* (`server`) and
 //! what automation may do (`automation`): what it may always do, and the person's own switches for what it may widen
-//! through the MCP server and whether the Orchestrator chat acts itself, which no tool can change. *Browser* (`j3Lre`,
-//! `NZECi` in `Browser · redesign`, `browser`) holds agents' browser, its profiles' folder and the Browser window's
-//! switch. On these four the header says whether every change was saved (`save_state`). *Accounts* (`t8i6m`,
-//! `accounts`) lists the person's agent CLI accounts by CLI, an account opening its page and *Add account* its own.
-//! *Orchester Cloud* (`vPV73`, `orchester`; its route keeps the id `orchester`) holds the cloud account, invites and
-//! the team servers in one column, a server opening its page and *Connect a server* its steps.
+//! through the MCP server, which no tool can change; what the Orchestrator chat does itself each project sets in its
+//! Project settings, which a row there points to (`orchestrator_row`). *Browser* (`j3Lre`, `NZECi` in `Browser ·
+//! redesign`, `browser`) holds agents' browser, its profiles' folder and the Browser window's switch. On these four the
+//! header says whether every change was saved (`save_state`). *Accounts* (`t8i6m`, `accounts`) lists the person's
+//! agent CLI accounts by CLI, an account opening its page and *Add account* its own. *Orchester Cloud* (`vPV73`,
+//! `orchester`; its route keeps the id `orchester`) holds the cloud account, invites and the team servers in one
+//! column, a server opening its page and *Connect a server* its steps.
 
 mod accounts;
 mod automation;
@@ -19,6 +20,7 @@ mod frame;
 mod general;
 mod notifications;
 pub mod orchester;
+mod orchestrator_row;
 mod page;
 mod save_state;
 mod serial;
@@ -71,7 +73,7 @@ pub enum SettingsTab {
   General(Option<GeneralShow>),
   /// Settings › Notifications (`fQTFi`).
   Notifications,
-  /// Settings › Automation (`aMkOw`).
+  /// Settings › Automation (`V8aAj`).
   Automation,
   /// Settings › Browser (`j3Lre`, `NZECi`).
   Browser,

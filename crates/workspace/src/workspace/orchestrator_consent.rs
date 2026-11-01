@@ -2,17 +2,13 @@
 //! decisions 3 and 5): *Let the Orchestrator publish drafts*, *Let the Orchestrator answer agents*, *Let the
 //! Orchestrator merge runs*, *Let the Orchestrator merge finished runs on its own*, *Let the Orchestrator continue
 //! interrupted runs* and *Let the Orchestrator write with git* (decision 9). Each is the project's own
-//! (`docs/design/settings.md`, ORC-594), kept in its database: a project with none of its own takes the
-//! application-wide value it moved from, once, when it opens or is first read. Each is off until a person turns it on
-//! in the window, no tool changes it, and it is off in its project from the moment a person turns it off there,
-//! whether or not that was saved.
-//!
-//! Settings › What automation may do shows the application-wide values until its rows move to Project settings
-//! (ORC-599, ORC-600): the `app_wide_` methods are that screen's alone, and the Orchestrator never reads them. Off
-//! there is off in every project too, from the click, so that row still stops the Orchestrator.
+//! (`docs/design/settings.md`, ORC-594), kept in its database and set in Project settings › Orchestrator: a project
+//! with none of its own takes the application-wide value it moved from, once, when it opens or is first read; nothing
+//! else reads the application-wide values. Each is off until a person turns it on in the window, no tool changes it,
+//! and it is off in its project from the moment a person turns it off there, whether or not that was saved.
 
 use std::{
-  collections::{HashMap, HashSet},
+  collections::HashMap,
   path::{Path, PathBuf},
   sync::Arc,
 };
@@ -53,7 +49,7 @@ impl OrchestratorConsent {
     Self::WriteGit,
   ];
 
-  /// The application-wide value, in `app_settings`.
+  /// The application-wide value it moved from, in `app_settings`, which a project copies once.
   fn read(self, db: &AppDb) -> Result<bool, StoreError> {
     match self {
       Self::PublishDrafts => db.orchestrator_publishes_drafts(),
@@ -62,17 +58,6 @@ impl OrchestratorConsent {
       Self::MergeFinished => db.orchestrator_merges_finished(),
       Self::ContinueInterrupted => db.orchestrator_continues_interrupted(),
       Self::WriteGit => db.orchestrator_writes_git(),
-    }
-  }
-
-  fn write(self, db: &mut AppDb, allowed: bool) -> Result<(), StoreError> {
-    match self {
-      Self::PublishDrafts => db.set_orchestrator_publishes_drafts(allowed),
-      Self::AnswerAgents => db.set_orchestrator_answers_agents(allowed),
-      Self::MergeRuns => db.set_orchestrator_merges_runs(allowed),
-      Self::MergeFinished => db.set_orchestrator_merges_finished(allowed),
-      Self::ContinueInterrupted => db.set_orchestrator_continues_interrupted(allowed),
-      Self::WriteGit => db.set_orchestrator_writes_git(allowed),
     }
   }
 
@@ -89,50 +74,26 @@ impl OrchestratorConsent {
   }
 }
 
-/// Each switch's last verified state, by its project's folder (`None`: the application-wide one) and the switch, and
-/// the switches a person turned off application-wide.
-#[derive(Default)]
-struct Cells {
-  cells: HashMap<(Option<PathBuf>, OrchestratorConsent), Arc<Mutex<Consent>>>,
-  /// Turned off in Settings › What automation may do: off in every project from the click, a project first read
-  /// later included, until that row is turned on again (ORC-600 removes it with the row).
-  off_everywhere: HashSet<OrchestratorConsent>,
-}
+/// Each switch's last verified state, by its project's folder and the switch.
+type Cells = HashMap<(PathBuf, OrchestratorConsent), Arc<Mutex<Consent>>>;
 
 /// Each switch's last verified state, by project: a person's revocation holds from their click, before it is saved.
 #[derive(Clone, Default)]
 pub(super) struct Consents {
   cells: Arc<Mutex<Cells>>,
-  /// Held around each save of a project's switch, as the application database's lock is around the application-wide
-  /// ones, so the person's choices are stored in the order they were made. A project's switch is read without it:
-  /// only what a read returns counts, never what it published, and a card or a turn never waits for another's read.
+  /// Held around each save of a project's switch, so the person's choices are stored in the order they were made. A
+  /// project's switch is read without it: only what a read returns counts, never what it published, and a card or a
+  /// turn never waits for another's read.
   saves: Arc<Mutex<()>>,
 }
 
 impl Consents {
-  fn of(&self, project: Option<&Path>, consent: OrchestratorConsent) -> Arc<Mutex<Consent>> {
+  fn of(&self, project: &Path, consent: OrchestratorConsent) -> Arc<Mutex<Consent>> {
     let mut cells = self.cells.lock();
-    let revoked = project.is_some() && cells.off_everywhere.contains(&consent);
-    let key = (project.map(Path::to_path_buf), consent);
-    let cell = cells.cells.entry(key).or_insert_with(|| {
-      let mut cell = Consent::default();
-      if revoked {
-        cell.revoke();
-      }
-      Arc::new(Mutex::new(cell))
-    });
+    let cell = cells
+      .entry((project.to_path_buf(), consent))
+      .or_insert_with(|| Arc::new(Mutex::new(Consent::default())));
     Arc::clone(cell)
-  }
-
-  /// Revokes `consent` application-wide and in every project, those not read yet included.
-  fn revoke_everywhere(&self, consent: OrchestratorConsent) {
-    let mut cells = self.cells.lock();
-    cells.off_everywhere.insert(consent);
-    cells
-      .cells
-      .iter()
-      .filter(|((_, of), _)| *of == consent)
-      .for_each(|(_, cell)| cell.lock().revoke());
   }
 }
 
@@ -141,7 +102,7 @@ impl Workspace {
   /// project without a value of its own takes the application-wide one now, and keeps it.
   pub fn orchestrator_allows(&self, repo_root: &Path, consent: OrchestratorConsent) -> Result<bool, StoreError> {
     let result = self.project_switch(repo_root, consent);
-    publish_read(&self.orchestrator.of(Some(repo_root), consent), result)
+    publish_read(&self.orchestrator.of(repo_root, consent), result)
   }
 
   /// The project's `consent`, read through a connection that cannot write, as cards and turns read it often; only a
@@ -180,7 +141,7 @@ impl Workspace {
     consent: OrchestratorConsent,
     allowed: bool,
   ) -> Result<(), StoreError> {
-    let cell = self.orchestrator.of(Some(repo_root), consent);
+    let cell = self.orchestrator.of(repo_root, consent);
     save(&cell, allowed, || {
       let saves = self.orchestrator.saves.lock();
       let result = ProjectDb::open(repo_root).and_then(|mut db| db.set_orchestrator_switch(consent.switch(), allowed));
@@ -191,52 +152,7 @@ impl Workspace {
   /// A person turned `consent` off in the project at `repo_root`: it holds there now, before the save runs or if it
   /// fails.
   pub fn revoke_orchestrator_consent(&self, repo_root: &Path, consent: OrchestratorConsent) {
-    self.orchestrator.of(Some(repo_root), consent).lock().revoke();
-  }
-
-  /// The application-wide value of `consent`, which Settings › What automation may do shows until ORC-600; projects
-  /// copied it once, and the Orchestrator reads its project's own ([`Self::orchestrator_allows`]).
-  pub fn app_wide_orchestrator_allows(&self, consent: OrchestratorConsent) -> Result<bool, StoreError> {
-    let db = self.db.lock();
-    publish_read(&self.orchestrator.of(None, consent), consent.read(&db))
-  }
-
-  /// Saves the person's application-wide choice for `consent`; only Settings › What automation may do calls it. Off
-  /// is also saved in every known project, so that row still stops the Orchestrator until ORC-599 gives each project
-  /// its own; on reaches no project that has its own value. A project that could not be saved stays off in this run
-  /// and the first such failure is returned.
-  pub fn set_app_wide_orchestrator_allows(
-    &self,
-    consent: OrchestratorConsent,
-    allowed: bool,
-  ) -> Result<(), StoreError> {
-    if !allowed {
-      self.orchestrator.revoke_everywhere(consent);
-    }
-    let cell = self.orchestrator.of(None, consent);
-    let saved = save(&cell, allowed, || {
-      let mut db = self.db.lock();
-      let result = consent.write(&mut db, allowed);
-      (db, result)
-    });
-    if allowed {
-      if saved.is_ok() {
-        self.orchestrator.cells.lock().off_everywhere.remove(&consent);
-      }
-      return saved;
-    }
-    let projects = self.every_project()?;
-    projects
-      .iter()
-      .filter(|project| !project.folder_missing())
-      .map(|project| self.set_orchestrator_allows(&project.repo_root, consent, false))
-      .fold(saved, Result::and)
-  }
-
-  /// A person turned the application-wide `consent` off: it holds now in every project too, before the save runs or
-  /// if it fails.
-  pub fn revoke_app_wide_orchestrator_consent(&self, consent: OrchestratorConsent) {
-    self.orchestrator.revoke_everywhere(consent);
+    self.orchestrator.of(repo_root, consent).lock().revoke();
   }
 }
 

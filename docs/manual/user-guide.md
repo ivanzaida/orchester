@@ -603,8 +603,8 @@ the turns in one column, and the composer at the foot.
    You can also approve a waiting proposal in words ("run it"), except click-only ones.
 4. **New** starts a conversation ("What should we plan?" with four suggestions); **History** lists earlier ones (search,
    *Today*, *Yesterday*, *Earlier*).
-5. More autonomy: the person-only switches in Settings › Automation (*The Orchestrator may*); the daily report in
-   Settings › Notifications.
+5. More autonomy: the project's person-only switches in Project settings › Orchestrator (*The Orchestrator may*); the
+   daily report in Settings › Notifications.
 
 Details: [orchestrator-chat.md](orchestrator-chat.md).
 

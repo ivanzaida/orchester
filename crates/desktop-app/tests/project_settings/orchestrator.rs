@@ -117,10 +117,6 @@ fn project_settings_orchestrator_switches_are_the_projects_and_only_a_persons() 
       stored
     });
     page.until("the switch to show it", |p| p.switch_on(switch));
-    assert!(
-      !workspace.app_wide_orchestrator_allows(consent).expect("read"),
-      "{label} is saved for the project, not application-wide"
-    );
   }
   page.saved();
   // Off holds in the project from the person's click, before the save runs.
