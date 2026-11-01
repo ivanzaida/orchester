@@ -2,7 +2,9 @@
 //! replaced by automation's: the write that would do so changes nothing, in the same statement.
 
 use orchester_core::{
+  connection::AgentProvider,
   id::TaskId,
+  resource::ModelId,
   run::{TokenUsage, review::ReviewFailure},
   task::estimate::{EstimateBasis, EstimateRecord, EstimateSource, StoryEstimate, StoryPoints},
   time::Timestamp,
@@ -151,6 +153,23 @@ impl ProjectDb {
     )?)
   }
 
+  /// Why the last request to the estimator on `provider` with `model` that asked a model gave no points; `None` when
+  /// it gave them, or none was recorded.
+  pub fn last_estimate_failure(
+    &self,
+    (provider, model): (AgentProvider, &ModelId),
+  ) -> Result<Option<ReviewFailure>, StoreError> {
+    let failure: Option<Option<String>> = self
+      .connection
+      .query_row(
+        "SELECT failure FROM estimate_usage WHERE provider = ?1 AND model = ?2 ORDER BY ended_at DESC, id DESC LIMIT 1",
+        params![provider_text(provider), model.as_str()],
+        |row| row.get(0),
+      )
+      .optional()?;
+    failure.flatten().as_deref().map(parse_failure).transpose()
+  }
+
   /// What the estimator's requests that ended from `start` until before `end` reported they spent, summed, and how
   /// many asked a model.
   pub fn estimates_between(&self, start: Timestamp, end: Timestamp) -> Result<(TokenUsage, u64), StoreError> {
@@ -264,4 +283,14 @@ const fn failure_text(failure: ReviewFailure) -> &'static str {
     ReviewFailure::CouldNotRun => "could_not_run",
     ReviewFailure::NoReviewer => "no_reviewer",
   }
+}
+
+fn parse_failure(text: &str) -> Result<ReviewFailure, StoreError> {
+  Ok(match text {
+    "timed_out" => ReviewFailure::TimedOut,
+    "unreadable" => ReviewFailure::Unreadable,
+    "could_not_run" => ReviewFailure::CouldNotRun,
+    "no_reviewer" => ReviewFailure::NoReviewer,
+    other => return Err(corrupt("estimate failure", other)),
+  })
 }

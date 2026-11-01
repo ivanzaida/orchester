@@ -307,6 +307,8 @@
     "agentFilesHint": "AGENTS.md, CLAUDE.md and skills folders",
     "whatEachLoads": "What each CLI loads",
     "reviewerHint": "For Manual requests off the allowed list",
+    "reviewerCannotRun": "The reviewer can't run: {{reason}}",
+    "reviewerLastFailed": "The reviewer's last review couldn't run: {{reason}}",
     "reviewerInfo": "{{detail}} {{readback}}",
     "projectRulesHint": "start_qa_app while the QA script is unchanged",
     "noRules": "No rules",
@@ -331,7 +333,8 @@
       "info": "Orchester sizes each new task, and a task whose brief or criteria change, in story points (1, 2, 3, 5, 8, 13 or 21) with a short reason, from the brief, the criteria and the project's merged tasks. Each estimate asks the reviewer’s model under Approvals and spends tokens, which count toward the project's daily budget. Points you set are never changed. Only you can change this, here in the window.",
       "unreadable": "This setting can't be read: {{reason}}",
       "notSaved": "Not saved: {{reason}}",
-      "blocked": "A change brought by automation was not taken: only you change this setting, here in the window."
+      "blocked": "A change brought by automation was not taken: only you change this setting, here in the window.",
+      "couldNotRun": "The last estimate couldn't run: {{reason}}"
     },
     "limitsNote": "Apply to new runs",
     "runBudget": "Run budget",
