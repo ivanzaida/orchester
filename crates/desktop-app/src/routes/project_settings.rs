@@ -11,19 +11,28 @@ pub enum ProjectSettingsTab {
   General,
   /// Auto mode, the estimates and the limits of new runs.
   Runs,
+  /// What the project's Orchestrator may do on its own (`S03` `X8mFTS`).
+  Orchestrator,
   /// The sources agents may read without asking (`kmNiF`) and the code index.
   Context,
   Sharing,
 }
 
 impl ProjectSettingsTab {
-  pub const ALL: [Self; 4] = [Self::General, Self::Runs, Self::Context, Self::Sharing];
+  pub const ALL: [Self; 5] = [
+    Self::General,
+    Self::Runs,
+    Self::Orchestrator,
+    Self::Context,
+    Self::Sharing,
+  ];
 
   /// The tab's name in a path's query and in the app's MCP tools.
   pub const fn name(self) -> &'static str {
     match self {
       Self::General => "general",
       Self::Runs => "runs",
+      Self::Orchestrator => "orchestrator",
       Self::Context => "context",
       Self::Sharing => "sharing",
     }

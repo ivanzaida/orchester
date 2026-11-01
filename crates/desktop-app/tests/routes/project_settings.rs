@@ -60,6 +60,7 @@ fn project_settings_tabs_have_their_documented_paths() {
   for (tab, path) in [
     (ProjectSettingsTab::General, root.clone()),
     (ProjectSettingsTab::Runs, format!("{root}?tab=runs")),
+    (ProjectSettingsTab::Orchestrator, format!("{root}?tab=orchestrator")),
     (ProjectSettingsTab::Context, format!("{root}?tab=context")),
     (ProjectSettingsTab::Sharing, format!("{root}?tab=sharing")),
   ] {

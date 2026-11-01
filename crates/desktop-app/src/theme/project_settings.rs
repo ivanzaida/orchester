@@ -98,10 +98,19 @@ pub enum ProjectSettingsSpacing {
   RowY,
   /// 14: a row's sides (`Pt6ry`).
   RowX,
+  /// 40: the start of a row whose setting needs the one above it (`Merge finished runs on its own` `k1WWv` in `S03`).
+  Dependent,
 }
 
 impl ProjectSettingsSpacing {
-  pub const ALL: [Self; 5] = [Self::HeaderTop, Self::Side, Self::BodyTop, Self::RowY, Self::RowX];
+  pub const ALL: [Self; 6] = [
+    Self::HeaderTop,
+    Self::Side,
+    Self::BodyTop,
+    Self::RowY,
+    Self::RowX,
+    Self::Dependent,
+  ];
 
   pub fn role(self) -> SpacingSize {
     SpacingSize::extra(self.name())
@@ -114,6 +123,7 @@ impl ProjectSettingsSpacing {
       Self::BodyTop => "project_settings_body_top",
       Self::RowY => "project_settings_row_y",
       Self::RowX => "project_settings_row_x",
+      Self::Dependent => "project_settings_dependent",
     }
   }
 
@@ -124,6 +134,7 @@ impl ProjectSettingsSpacing {
       Self::BodyTop => 22.0,
       Self::RowY => 11.0,
       Self::RowX => 14.0,
+      Self::Dependent => 40.0,
     }
   }
 }

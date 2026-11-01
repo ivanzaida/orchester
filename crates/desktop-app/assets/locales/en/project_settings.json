@@ -343,6 +343,56 @@
       "notSaved": "Not saved: {{reason}}",
       "blocked": "A change brought by automation was not taken: only you change this setting, here in the window."
     },
+    "orchestrator": {
+      "tab": "Orchestrator",
+      "may": "The Orchestrator may",
+      "onlyYou": "Only you, here in the window",
+      "foot": "Off: the Orchestrator proposes it in the chat and you apply it. Each project has its own; a new project starts with all off.",
+      "unreadable": "This setting can't be read: {{reason}}",
+      "notSaved": "Not saved: {{reason}}",
+      "blocked": "A change brought by automation was not taken: only you change this setting, here in the window.",
+      "publishDrafts": {
+        "label": "Publish drafts",
+        "hint": "Pipelines, profiles, instructions, skills and tools it drafts",
+        "info": "Lets the Orchestrator's chat publish the pipelines, agent profiles, instructions, skills and tools it drafts in this project, without your click. Off: it proposes each publish as a card you apply. A draft that widens what agents may do still needs Let automation change agent permissions. Only you can change this, here in the window.",
+        "on": "The chat publishes without asking in this project and keeps each publish as an action in its conversation. A draft that widens what agents may do is still proposed while Let automation change agent permissions is off."
+      },
+      "answerAgents": {
+        "label": "Answer agents",
+        "hint": "Read their questions and answer, or tell you with a recommendation",
+        "info": "Lets the Orchestrator's chat answer agents' questions and send messages to a run's agents in this project without your click, and start a turn by itself when an agent asks or waits for a message. Off: it proposes each answer as a card you apply, and tells you when an agent waits. Approvals and plan decisions stay yours. Only you can change this, here in the window."
+      },
+      "mergeRuns": {
+        "label": "Merge runs",
+        "hint": "When you ask it in the chat",
+        "info": "Lets the Orchestrator's chat merge a run you asked it to merge, without your click: only a task's latest run that succeeded, and only when the main checkout needs no local integration. Off: it proposes each merge as a card you apply. Conflicts and approving a merged result stay yours, on the Local integration page. Only you can change this, here in the window."
+      },
+      "mergeFinished": {
+        "label": "Merge finished runs on its own",
+        "hint": "Without asking, when every step passed · needs Merge runs and Answer agents",
+        "info": "When a task's run succeeds, the Orchestrator's chat merges it without your click: only the task's latest run whose every step passed (a step you accepted as it was counts, one automation accepted does not), never a task marked Blocked or blocked by unfinished tasks, while new starts are held, or for a task that says Don't merge automatically, and only when the main checkout needs no local integration. It tries each run once, one at a time in the order they finished; conflicts it proposes to send back to an agent, anything else it leaves to you. Needs Merge runs and Answer agents on too. Off: it tells you a run is ready and the merge stays yours. Only you can change this, here in the window."
+      },
+      "continueInterrupted": {
+        "label": "Continue interrupted runs",
+        "hint": "From their last checkpoint",
+        "info": "Lets the Orchestrator's chat continue a run that a crash, the runner going away or quitting the app interrupted, from its last checkpoint, without your Continue. With Answer agents also on, it continues such a run once when it is interrupted, but leaves one interrupted again within 10 minutes to you. Off: continuing stays yours, on the task's Summary. Runs stopped at a limit, runs you canceled and runs whose worktree is gone stay yours. Only you can change this, here in the window."
+      },
+      "writeGit": {
+        "label": "Write with git",
+        "hint": "Commit, branch, pull and push when you ask it to",
+        "info": "Lets the Orchestrator's chat commit, create and switch branches, pull, push, merge, revert, tag and fetch in the project's repository when you ask it to. None of these loses work: a switch keeps your changes or is refused, a pull only fast-forwards unless you ask for a merge, a push never forces, and a conflict is undone. Reset, clean, deleting a branch or tag, a forced push, discarding changes and rebase stay cards you apply, whatever this says. Never in a run's worktree before the run ended. Off: the chat only reads git. Only you can change this, here in the window."
+      },
+      "alsoNeeded": "Also needed · set for this computer",
+      "alsoNeededFoot": "Set once in Settings for every project: it is about what may answer in your place on this computer.",
+      "answerApprovals": {
+        "label": "Let automation answer approvals",
+        "hint": "Answer agents acts only while this is on too · Settings › Automation",
+        "on": "On",
+        "off": "Off",
+        "open": "Open",
+        "unreadable": "Whether automation may answer approvals can't be read: {{reason}}"
+      }
+    },
     "limitsNote": "Apply to new runs",
     "limitsFoot": "A task can set its own run budget and time limit, a pipeline step its own budget; these are their defaults.",
     "runBudget": "Run budget",

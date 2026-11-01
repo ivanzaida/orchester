@@ -52,11 +52,11 @@ pub const LOOKING: &[&str] = &[
   "lurq_windows",
 ];
 
-/// What a refused client reads while Settings shows the switches only a person turns: *Let automation change agent
-/// permissions* and *Let the Orchestrator publish drafts*.
+/// What a refused client reads while Settings or Project settings shows the switches only a person turns: *Let
+/// automation change agent permissions* and what the Orchestrator may do.
 const SETTING_REFUSAL: &str = "A person changes these settings in the window: while Settings shows Let automation \
-  change agent permissions or Let the Orchestrator publish drafts, window input from MCP clients (clicks, keys, \
-  values, resizing, menus) is refused.";
+  change agent permissions or Let the Orchestrator publish drafts, or Project settings shows its Orchestrator tab, \
+  window input from MCP clients (clicks, keys, values, resizing, menus) is refused.";
 /// What a refused client reads while a Connections page asks a person to confirm what a change widens.
 const QUESTION_REFUSAL: &str = "A person answers this in the window: while Local integration, a Connections page, Agents page, Tools page, Secrets page, Skills page, Project settings, Pipelines page or a task's form asks to \
   confirm what a change lets agents do (in any tab, until it is answered or the page is left), \

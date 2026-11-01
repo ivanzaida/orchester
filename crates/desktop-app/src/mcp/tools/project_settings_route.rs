@@ -7,7 +7,15 @@ use super::{ToolError, string};
 use crate::routes::{ConnectionsView, NewConnection, ProjectPage, ProjectSettingsTab, SecretsView};
 
 /// Project settings' tabs as navigate names them: its own, then the two with routes of their own.
-pub(super) const SETTINGS_TABS: [&str; 6] = ["general", "runs", "context", "connections", "environment", "sharing"];
+pub(super) const SETTINGS_TABS: [&str; 7] = [
+  "general",
+  "runs",
+  "orchestrator",
+  "context",
+  "connections",
+  "environment",
+  "sharing",
+];
 
 /// Project settings › Connections, or the page of the connection `selected` names.
 pub(super) fn connections_view(args: &Map<String, Value>) -> Result<ConnectionsView, ToolError> {

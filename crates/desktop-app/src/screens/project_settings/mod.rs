@@ -1,15 +1,16 @@
-//! Project settings (`Project settings · redesign` `XGtkg`): its title with the save status over six tabs, General,
-//! Runs, Context, Connections, Environment and Sharing, each a 720 column of groups of rows ([`kit`]). General, Runs,
-//! Context and Environment's variables save as a person leaves a field or flips a switch, widening changes asked in
-//! place; Connections and Environment's secrets save per action, and Connections says nothing of a save state, but Add
-//! provider says it isn't saved yet. Add, open and edit flows are pages inside their tab with a crumb back to it: a
-//! connection's, Add provider and Add MCP server under Connections, a secret's and New secret under Environment,
-//! *Approved for every run* under Runs, and the first link (`Share`) under Sharing.
+//! Project settings (`Project settings · redesign` `XGtkg`): its title with the save status over seven tabs, General,
+//! Runs, Orchestrator, Context, Connections, Environment and Sharing, each a 720 column of groups of rows ([`kit`]).
+//! General, Runs, Orchestrator, Context and Environment's variables save as a person leaves a field or flips a switch,
+//! widening changes asked in place; Connections and Environment's secrets save per action, and Connections says
+//! nothing of a save state, but Add provider says it isn't saved yet. Add, open and edit flows are pages inside their
+//! tab with a crumb back to it: a connection's, Add provider and Add MCP server under Connections, a secret's and New
+//! secret under Environment, *Approved for every run* under Runs, and the first link (`Share`) under Sharing.
 mod context;
 mod environment;
 mod general;
 mod index;
 pub(crate) mod kit;
+mod orchestrator;
 mod page;
 mod rules;
 mod runs;
@@ -50,6 +51,7 @@ impl Shown {
     match self {
       Self::Tab(Tab::General) => Section::General,
       Self::Tab(Tab::Runs) | Self::Rules => Section::Runs,
+      Self::Tab(Tab::Orchestrator) => Section::Orchestrator,
       Self::Tab(Tab::Context) => Section::Context,
       Self::Tab(Tab::Sharing) => Section::Sharing,
       Self::Connections(_) | Self::NewConnection(_) | Self::EditConnection(_) => Section::Connections,
@@ -79,11 +81,13 @@ impl Shown {
   }
 }
 
-/// A tab of the page (`Tabs` `A5Sf0Q`).
+/// A tab of the page (`Tabs` `A5Sf0Q`, seven since `S03` `X8mFTS`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Section {
   General,
   Runs,
+  /// What the project's Orchestrator may do on its own (`S03` `X8mFTS`).
+  Orchestrator,
   Context,
   Connections,
   /// The project's variables and secrets (`S06` `EnL2D`), the Secrets tab it was.
@@ -92,9 +96,10 @@ enum Section {
 }
 
 impl Section {
-  const ALL: [Self; 6] = [
+  const ALL: [Self; 7] = [
     Self::General,
     Self::Runs,
+    Self::Orchestrator,
     Self::Context,
     Self::Connections,
     Self::Environment,
@@ -106,6 +111,7 @@ impl Section {
     match self {
       Self::General => "general",
       Self::Runs => "runs",
+      Self::Orchestrator => "orchestrator",
       Self::Context => "context",
       Self::Connections => "connections",
       Self::Environment => "environment",
@@ -117,6 +123,7 @@ impl Section {
     match self {
       Self::General => "project_settings.general",
       Self::Runs => "project_settings.runs",
+      Self::Orchestrator => "project_settings.orchestrator.tab",
       Self::Context => "project_settings.context",
       Self::Connections => "project_settings.connections",
       Self::Environment => "project_settings.environment",
@@ -129,6 +136,7 @@ impl Section {
     match self {
       Self::General => Shown::Tab(Tab::General),
       Self::Runs => Shown::Tab(Tab::Runs),
+      Self::Orchestrator => Shown::Tab(Tab::Orchestrator),
       Self::Context => Shown::Tab(Tab::Context),
       Self::Sharing => Shown::Tab(Tab::Sharing),
       Self::Connections => Shown::Connections(ConnectionsView::default()),
@@ -256,6 +264,9 @@ impl Component for SettingsScreen {
       (Shown::Tab(Tab::Sharing), Some(upload)) => sharing::link_page(ctx, &project, upload, &self.link_page),
       (Shown::Tab(Tab::General), _) => ctx.mount_keyed::<general::General>("project-settings-general", props),
       (Shown::Tab(Tab::Runs), _) => ctx.mount_keyed::<runs::Runs>("project-settings-runs", props),
+      (Shown::Tab(Tab::Orchestrator), _) => {
+        ctx.mount_keyed::<orchestrator::Orchestrator>("project-settings-orchestrator", props)
+      }
       (Shown::Tab(Tab::Context), _) => ctx.mount_keyed::<context::Context>("project-settings-context", props),
       (Shown::Tab(Tab::Sharing), _) => ctx.mount_keyed::<sharing::Sharing>("project-settings-sharing", props),
       (Shown::Rules, _) => ctx.mount_keyed::<rules::Rules>("project-settings-rules", props),

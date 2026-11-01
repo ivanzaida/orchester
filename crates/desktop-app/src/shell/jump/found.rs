@@ -303,6 +303,11 @@ fn settings_tabs(ctx: &Ctx, project: ProjectId) -> Vec<Entry> {
       ProjectPage::Settings(ProjectSettingsTab::Runs),
     ),
     (
+      "orchestrator",
+      "project_settings.orchestrator.tab",
+      ProjectPage::Settings(ProjectSettingsTab::Orchestrator),
+    ),
+    (
       "context",
       "project_settings.context",
       ProjectPage::Settings(ProjectSettingsTab::Context),

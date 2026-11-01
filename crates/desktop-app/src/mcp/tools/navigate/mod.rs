@@ -50,7 +50,7 @@ const DESCRIPTION: &str = "Take the active tab of the Orchester window to a rout
   conversation or changes), `view` for what a tab opens in \
   its place (memory: the task's memory, from summary; local-integration: Local integration, which Try locally opens \
   from changes) and, on its changes tab, `file` with `from`; project_settings \
-  `tab` (general, runs, context, connections, environment or sharing; secrets, the tab Environment was, still opens \
+  `tab` (general, runs, orchestrator, context, connections, environment or sharing; secrets, the tab Environment was, still opens \
   it) and, with tab runs, `view` rules (Approved for every run). Connections and Environment are tabs of Project \
   settings with routes of their own: connections takes `selected` (the id of the connection whose page it opens); \
   secrets opens the Environment tab, the project's variables and secrets; new_connection takes `kind` (Add \
