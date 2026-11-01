@@ -16,7 +16,7 @@ use crate::{
   connection::invocation::without_auto_memory,
   native::model::{ModelError, ModelRequest, ModelResponse},
   resource::ModelId,
-  run::review::{ReviewError, ReviewSpend},
+  run::review::{DetailRedaction, ReviewError, ReviewSpend},
   task::estimate::{
     ESTIMATE_INSTRUCTIONS, ESTIMATE_SCHEMA, EstimateAnswer, EstimateInput, estimate_prompt, parse_estimate,
     parse_estimate_text,
@@ -70,13 +70,15 @@ impl CliEstimator {
     }
   }
 
-  /// The estimate of `input`, run through `runner`, which stops it when it takes too long.
+  /// The estimate of `input`, run through `runner`, which stops it when it takes too long. Why it gave no points
+  /// holds none of the command's secrets and nothing of its prompt.
   pub fn estimate(&self, input: &EstimateInput, runner: &impl CommandRunner) -> Estimated {
     let read = match self.cli {
       EstimatorCli::ClaudeCode => read_claude_estimate,
       EstimatorCli::Codex => read_codex_estimate,
     };
-    match run_cli(runner, &self.command(input)) {
+    let command = self.command(input);
+    let mut estimated = match run_cli(runner, &command) {
       Ok((stdout, exited)) => {
         let mut estimated = read(&stdout);
         if let Err(error) = exited {
@@ -88,7 +90,11 @@ impl CliEstimator {
         answer: Err(error),
         spend,
       },
-    }
+    };
+    estimated.answer = estimated
+      .answer
+      .map_err(|error| error.redacted(&DetailRedaction::of(&command)));
+    estimated
   }
 }
 

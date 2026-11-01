@@ -16,6 +16,7 @@
 
 mod choice;
 mod decision;
+mod detail;
 mod hold;
 mod input;
 mod prompt;
@@ -33,6 +34,7 @@ pub use self::{
     default_review_model, resolve_reviewer, reviewer_kind,
   },
   decision::{DecisionVerdict, NotProbability, Probability, Risk, Risks},
+  detail::DetailRedaction,
   hold::{HoldRules, ReviewHold, StepLimit, review_hold, step_limit, unread_parts},
   input::{ReviewInput, ReviewedRequest, ReviewedStep, ReviewedTask, RootsQuestion, UnreadPart, UnreadWhy},
   prompt::{
@@ -112,6 +114,10 @@ pub enum Review {
     failure: ReviewFailure,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     model: Option<String>,
+    /// Why, in the reviewer's own words with its secrets and prompt kept out ([`ReviewError::detail`]); none without
+    /// a reviewer, and in records kept before it was.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    detail: Option<String>,
   },
 }
 
@@ -129,12 +135,9 @@ impl Review {
         model,
       },
       Err(error) => Self::Failed {
-        failure: match error {
-          ReviewError::TimedOut => ReviewFailure::TimedOut,
-          ReviewError::Unparseable(_) => ReviewFailure::Unreadable,
-          ReviewError::CouldNotRun(_) => ReviewFailure::CouldNotRun,
-        },
+        failure: error.failure(),
         model: Some(model),
+        detail: Some(error.detail()),
       },
     }
   }
@@ -161,7 +164,12 @@ impl Review {
 /// spaces one, double quotation marks single ones (the app quotes it), cut to [`REASON_MAX_CHARS`] with an ellipsis.
 /// The reviewer's reasons and the story-point estimator's are kept so.
 pub fn one_plain_line(reason: &str) -> String {
-  let plain: String = reason
+  plain_line(reason, REASON_MAX_CHARS)
+}
+
+/// `text` as one plain line ([`one_plain_line`]), cut to `max_chars`.
+fn plain_line(text: &str, max_chars: usize) -> String {
+  let plain: String = text
     .chars()
     .map(|c| match c {
       c if QUOTES.contains(&c) => '\'',
@@ -171,10 +179,10 @@ pub fn one_plain_line(reason: &str) -> String {
     .filter(|c| !INVISIBLE.contains(c))
     .collect();
   let line = plain.split_whitespace().collect::<Vec<_>>().join(" ");
-  if line.chars().count() <= REASON_MAX_CHARS {
+  if line.chars().count() <= max_chars {
     return line;
   }
-  let mut cut: String = line.chars().take(REASON_MAX_CHARS - 1).collect();
+  let mut cut: String = line.chars().take(max_chars - 1).collect();
   cut.push('\u{2026}');
   cut
 }
@@ -230,6 +238,7 @@ fn ask(reviewer: Option<&dyn RequestReviewer>, input: &ReviewInput) -> AutoRevie
       review: Review::Failed {
         failure: ReviewFailure::NoReviewer,
         model: None,
+        detail: None,
       },
       cost: None,
     };

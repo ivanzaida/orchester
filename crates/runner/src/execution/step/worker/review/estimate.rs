@@ -16,12 +16,12 @@ use orchester_core::{
   id::TaskId,
   native::model::ModelClient,
   resource::ModelId,
-  run::review::{ReviewError, ReviewFailure, ReviewSpend, ReviewerKind},
+  run::review::{DetailRedaction, ReviewError, ReviewFailure, ReviewSpend, ReviewerKind},
   secret::SecretVault,
   store::TaskStore,
   task::estimate::{
     ESTIMATE_INSTRUCTIONS, ESTIMATE_SCHEMA, EstimateBasis, EstimateInput, EstimateOutcome, EstimateRecord,
-    StoryEstimate, check_automation,
+    StoryEstimate, check_automation, estimate_prompt,
   },
   time::Timestamp,
 };
@@ -79,6 +79,7 @@ fn estimate_blocking(
   let input = EstimateInput::new(task.details(), &db.calibration_records().map_err(failed)?);
   let setup = reviewer_setup(&db, &keys).map_err(failed)?;
   let provider = setup.provider().map(|(provider, ..)| provider);
+  let connection = setup.connection().cloned();
   let started_at = Timestamp::now();
   let Some((model, estimated)) = setup.estimate(&input, runtime) else {
     return Ok(EstimateOutcome::Failed {
@@ -86,12 +87,23 @@ fn estimate_blocking(
     });
   };
   let ended_at = Timestamp::now();
-  let failure = estimated.answer.as_ref().err().map(failure_of);
+  let failure = estimated.answer.as_ref().err().map(ReviewError::failure);
   let usage = match estimated.spend {
     ReviewSpend::Nothing => None,
     ReviewSpend::Unknown => Some(None),
     ReviewSpend::Reported(usage) => Some(Some(usage)),
   };
+  if let Err(error) = &estimated.answer {
+    tracing::warn!(
+      task = %task.key(),
+      connection = connection.as_ref().map_or("", |used| &*used.name),
+      connection_id = connection.as_ref().map(|used| used.id.to_string()).unwrap_or_default(),
+      model = model.as_str(),
+      failure = ?error.failure(),
+      detail = error.detail(),
+      "the story-point estimator gave no points"
+    );
+  }
   // Only a request that asked a model is kept: one that asked none is asked again at the next change.
   if let (Some(provider), Some(usage)) = (provider, usage) {
     let record = EstimateRecord {
@@ -109,9 +121,8 @@ fn estimate_blocking(
   let answer = match estimated.answer {
     Ok(answer) => answer,
     Err(error) => {
-      tracing::info!(task = %task.key(), %error, "the story-point estimator gave no points");
       return Ok(EstimateOutcome::Failed {
-        failure: failure_of(&error),
+        failure: error.failure(),
       });
     }
   };
@@ -121,15 +132,6 @@ fn estimate_blocking(
     AutomationPoints::PersonsValue => EstimateOutcome::PersonsValue,
     AutomationPoints::Outdated => EstimateOutcome::Outdated,
   })
-}
-
-/// How a request that gave no points is recorded.
-const fn failure_of(error: &ReviewError) -> ReviewFailure {
-  match error {
-    ReviewError::TimedOut => ReviewFailure::TimedOut,
-    ReviewError::Unparseable(_) => ReviewFailure::Unreadable,
-    ReviewError::CouldNotRun(_) => ReviewFailure::CouldNotRun,
-  }
 }
 
 impl ReviewerSetup {
@@ -143,12 +145,12 @@ impl ReviewerSetup {
     };
     match self {
       Self::Missing => None,
-      Self::Unreachable { model } => Some((model, not_run("the reviewer cannot be reached".to_owned()))),
+      Self::Unreachable { model, .. } => Some((model, not_run("the reviewer cannot be reached".to_owned()))),
       Self::Native {
         client, model, effort, ..
       } => {
         let request = native_estimate_request(input, &model, effort);
-        let estimated = runtime.block_on(async {
+        let mut estimated = runtime.block_on(async {
           let mut spend = NativeSpend::default();
           let mut streamed = |event| spend.observe(&event);
           match tokio::time::timeout(ESTIMATE_TIMEOUT, client.respond(&request, &mut streamed)).await {
@@ -160,6 +162,11 @@ impl ReviewerSetup {
             },
           }
         });
+        // The client masks its key in its errors itself; the prompt is kept out here.
+        let prompt = format!("{ESTIMATE_INSTRUCTIONS}\n{}", estimate_prompt(input));
+        estimated.answer = estimated
+          .answer
+          .map_err(|error| error.redacted(&DetailRedaction::new(Vec::new(), &prompt)));
         Some((model, estimated))
       }
       Self::Cli {

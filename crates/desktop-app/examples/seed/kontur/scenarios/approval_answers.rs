@@ -227,6 +227,7 @@ fn not_judged(kontur: &mut Kontur, request: &PendingToolApproval) -> Result<(), 
   let failed = Review::Failed {
     failure: ReviewFailure::CouldNotRun,
     model: Some("claude-haiku-4-5".to_owned()),
+    detail: Some("the reviewer could not run: the CLI exited with code 1".to_owned()),
   };
   kontur.db.record_review(request.run, &request.id, &failed)?;
   let (settings, connections) = (kontur.db.auto_mode_settings()?, kontur.db.connections()?);

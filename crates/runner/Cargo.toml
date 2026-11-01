@@ -300,6 +300,10 @@ name = "reviewer_usage"
 required-features = ["test-agent"]
 
 [[test]]
+name = "reviewer_failure"
+required-features = ["test-agent"]
+
+[[test]]
 name = "story_points"
 required-features = ["test-agent"]
 
