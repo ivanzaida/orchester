@@ -29,26 +29,7 @@ async fn call(services: &app_mcp::Services, name: &str, arguments: Value) -> Res
 #[tokio::test]
 async fn mcp_decision_reviewer_connections_save_check_list_edit_delete_and_refuse_hosted() {
   let (repo, _) = project();
-  let workspace = Workspace::new(AppDb::open(&repo.path().join("app.db")).expect("application data"));
-  workspace.open(repo.path()).expect("register project");
-  // The global widening switch does not authorize a hosted decision connection.
-  workspace
-    .set_automation_changes_permissions(true)
-    .expect("person turns switch on");
-  let vault = SharedVault::with(Arc::new(Vault { available: false }));
-  let services = app_mcp::Services::new(
-    workspace.clone(),
-    Runners::new(
-      repo.path().join("no-runner"),
-      tokio::runtime::Handle::current(),
-      Activity::new(),
-      orchester_ipc::SessionEnd::Clean,
-    ),
-    Servers::new(workspace, vault.clone()),
-    Programs::processes(),
-    (OutsideChanges::default(), Activity::new(), ProjectJobs::default()),
-  )
-  .with_vault(vault);
+  let services = services(repo.path());
   let (url, task) = server("200 OK", TYPESAFE, "", false).await;
   let mut args = json!({"project":"Decision checks","name":"Decision","base_url":url,"key_secret":null});
   let saved = call(&services, "save_decision_connection", args.clone())
@@ -152,4 +133,95 @@ fn mcp_decision_reviewer_schemas_only_accept_secret_references_and_offer_no_test
       .iter()
       .any(|tool| tool.name.contains("decision") && tool.name.contains("test"))
   );
+}
+
+fn services(root: &std::path::Path) -> app_mcp::Services {
+  let workspace = Workspace::new(AppDb::open(&root.join("app.db")).expect("application data"));
+  workspace.open(root).expect("register project");
+  // The global widening switch does not authorize a hosted decision connection.
+  workspace
+    .set_automation_changes_permissions(true)
+    .expect("person turns switch on");
+  let vault = SharedVault::with(Arc::new(Vault { available: false }));
+  app_mcp::Services::new(
+    workspace.clone(),
+    Runners::new(
+      root.join("no-runner"),
+      tokio::runtime::Handle::current(),
+      Activity::new(),
+      orchester_ipc::SessionEnd::Clean,
+    ),
+    Servers::new(workspace, vault.clone()),
+    Programs::processes(),
+    (OutsideChanges::default(), Activity::new(), ProjectJobs::default()),
+  )
+  .with_vault(vault)
+}
+
+#[tokio::test]
+async fn mcp_decision_reviewer_models_prioritize_ids_and_reject_ambiguous_names() {
+  use orchester_core::{
+    connection::{AgentConnection, AgentProvider},
+    id::ConnectionId,
+    name::Name,
+    store::ConnectionStore,
+    time::Timestamp,
+  };
+  use orchester_workspace::connections::decision::{Writer, save_in};
+
+  let (repo, mut db) = project();
+  let services = services(repo.path());
+  let agent_id = ConnectionId::generate();
+  let mut decision = super::draft("http://localhost:8000/v1");
+  decision.name = Name::new(&agent_id.to_string()).expect("id as name");
+  let decision_id = save_in(repo.path(), &decision, Writer::Automation).expect("decision");
+  decision.id = Some(decision_id);
+  let mut agent = AgentConnection::new(
+    agent_id,
+    Name::new(&decision_id.to_string()).expect("id as name"),
+    AgentProvider::CodexCli,
+    repo.path().join("codex"),
+    Timestamp::now(),
+  )
+  .expect("agent");
+  db.create_connection(&agent).expect("save agent");
+
+  for (id, name, is_decision) in [
+    (agent_id.to_string(), decision_id.to_string(), false),
+    (decision_id.to_string(), agent_id.to_string(), true),
+  ] {
+    let listed = call(
+      &services,
+      "list_models",
+      json!({"project":"Decision checks","connection":id.to_string()}),
+    )
+    .await
+    .expect("exact id wins over another connection's name");
+    assert_eq!(listed["connection"], name);
+    assert_eq!(listed["source"] == "decision", is_decision);
+  }
+
+  decision.name = Name::new("ShÄrÉd").expect("name");
+  save_in(repo.path(), &decision, Writer::Automation).expect("rename decision");
+  agent.rename(Name::new("shäréd").expect("name"));
+  db.save_connection(&agent).expect("rename agent");
+  for named in ["ShÄrÉd", "shäréd", "SHÄRÉD"] {
+    let error = call(
+      &services,
+      "list_models",
+      json!({"project":"Decision checks","connection":named}),
+    )
+    .await
+    .expect_err("shared name requires an id");
+    assert!(matches!(error, ToolError::InvalidArguments(detail) if detail.contains("name it by id")));
+  }
+  for id in [agent_id.to_string(), decision_id.to_string()] {
+    call(
+      &services,
+      "list_models",
+      json!({"project":"Decision checks","connection":id.to_string()}),
+    )
+    .await
+    .expect("shared names still resolve by id");
+  }
 }
