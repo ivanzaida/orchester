@@ -1,6 +1,7 @@
 //! The Orchestrator's switches are each project's own (ORC-594): two projects differ, a project with no value of its
-//! own takes the application-wide one once when it is first read, and later application-wide changes never reach it;
-//! a person's revocation holds in its project from the click.
+//! own takes the application-wide one once when it is first read, and turning one on application-wide later never
+//! reaches it; a person's revocation holds in its project from the click, and turning one off in Settings › What
+//! automation may do turns it off in every project until ORC-599 moves that row.
 //!
 //! `cargo test -p orchester-workspace --test orchestrator_switches orchestrator_switches_`
 
@@ -147,41 +148,94 @@ fn orchestrator_switches_of_a_project_without_its_own_are_copied_once_from_the_a
       "{consent:?}: copied into the project"
     );
   }
+}
 
-  application_wide(&dir, false);
+#[test]
+fn orchestrator_switches_turned_on_application_wide_later_do_not_reach_a_project() {
+  let dir = TempDir::new().expect("a folder");
+  let workspace = workspace(&dir);
+  let repo = add_project(&dir, &workspace, "KON");
+  for (consent, _) in CONSENTS {
+    assert!(!workspace.orchestrator_allows(&repo, consent).expect("read"));
+  }
+
+  application_wide(&dir, true);
   for (consent, switch) in CONSENTS {
     assert!(
-      workspace.orchestrator_allows(&repo, consent).expect("read"),
+      !workspace.orchestrator_allows(&repo, consent).expect("read"),
       "{consent:?}: a later application-wide change does not reach the project"
     );
-    assert_eq!(stored(&repo, switch), Some(true), "{consent:?}");
+    assert_eq!(stored(&repo, switch), Some(false), "{consent:?}");
   }
   // A project added after the change copies the application-wide value it finds then.
   let later = add_project(&dir, &workspace, "NEW");
   for (consent, _) in CONSENTS {
-    assert!(!workspace.orchestrator_allows(&later, consent).expect("read"));
+    assert!(workspace.orchestrator_allows(&later, consent).expect("read"));
   }
 }
 
 #[test]
 fn orchestrator_switches_are_copied_once_when_the_project_opens() {
   let dir = TempDir::new().expect("a folder");
-  application_wide(&dir, true);
   let workspace = workspace(&dir);
   let repo = add_project(&dir, &workspace, "KON");
   workspace.open(&repo).expect("opened");
   for (consent, switch) in CONSENTS {
     assert_eq!(
       stored(&repo, switch),
-      Some(true),
+      Some(false),
       "{consent:?}: copied before anything reads it"
     );
   }
-  application_wide(&dir, false);
+  application_wide(&dir, true);
   workspace.open(&repo).expect("opened again");
   for (consent, switch) in CONSENTS {
-    assert_eq!(stored(&repo, switch), Some(true), "{consent:?}: the copy is made once");
-    assert!(workspace.orchestrator_allows(&repo, consent).expect("read"));
+    assert_eq!(stored(&repo, switch), Some(false), "{consent:?}: the copy is made once");
+    assert!(!workspace.orchestrator_allows(&repo, consent).expect("read"));
+  }
+}
+
+#[test]
+fn orchestrator_switches_turned_off_in_settings_stop_the_orchestrator_in_projects_that_copied_them() {
+  let dir = TempDir::new().expect("a folder");
+  application_wide(&dir, true);
+  let workspace = workspace(&dir);
+  let (read, unread) = (
+    add_project(&dir, &workspace, "KON"),
+    add_project(&dir, &workspace, "OTH"),
+  );
+  workspace.open(&read).expect("opened");
+  workspace.open(&unread).expect("opened");
+  for (consent, switch) in CONSENTS {
+    assert!(workspace.orchestrator_allows(&read, consent).expect("read"));
+    // The person's click in Settings › What automation may do; its save has not run yet.
+    workspace.revoke_app_wide_orchestrator_consent(consent);
+    for repo in [&read, &unread] {
+      assert_eq!(stored(repo, switch), Some(true), "{consent:?}: the copy is still on");
+      assert!(
+        !workspace.orchestrator_allows(repo, consent).expect("read"),
+        "{consent:?}: off in the project from the person's click"
+      );
+    }
+    workspace
+      .set_app_wide_orchestrator_allows(consent, false)
+      .expect("saved");
+    for repo in [&read, &unread] {
+      assert_eq!(
+        stored(repo, switch),
+        Some(false),
+        "{consent:?}: saved off in the project"
+      );
+      assert!(!workspace.orchestrator_allows(repo, consent).expect("read"));
+    }
+    // Turned on again, the row reaches no project that has its own value.
+    workspace
+      .set_app_wide_orchestrator_allows(consent, true)
+      .expect("saved");
+    assert!(workspace.app_wide_orchestrator_allows(consent).expect("read"));
+    for repo in [&read, &unread] {
+      assert!(!workspace.orchestrator_allows(repo, consent).expect("read"));
+    }
   }
 }
 
