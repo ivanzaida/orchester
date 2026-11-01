@@ -22,17 +22,22 @@ fn project_settings_environment_validates_each_line_and_saves_harmless_changes_o
     page.db().project_environment().expect("stored").get("RUST_LOG"),
     Some("info")
   );
-  assert_eq!(page.text("settings-variable-count"), "2 variables");
+  assert_eq!(
+    page.text("settings-variable-count"),
+    "2 variables · plain text, not for secrets"
+  );
+  // Each variable is a row of its own, its name over its value (`RUST_LOG` `cWwmK` in `S06`).
+  assert_eq!(page.text("settings-variable-RUST_LOG-label"), "RUST_LOG");
+  assert_eq!(page.text("settings-variable-RUST_LOG-hint"), "info");
+  assert!(page.exists("settings-variable-CI-row"));
   assert!(!page.exists("settings-environment-question"));
   page.set(INPUT, "");
   page.leave();
   page.saved();
   assert_eq!(page.db().project_environment().expect("cleared").iter().count(), 0);
-  page.click("settings-open-secrets");
-  assert!(matches!(
-    page.window.navigation().route_now(),
-    orchester_app::routes::Route::Project(_, orchester_app::routes::ProjectPage::Secrets(_))
-  ));
+  assert!(!page.exists("settings-variable-RUST_LOG-row"));
+  // The variables share their tab with the secrets, under them.
+  assert!(page.exists("secrets-filter"));
 }
 
 #[test]

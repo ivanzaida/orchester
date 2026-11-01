@@ -50,9 +50,10 @@ const DESCRIPTION: &str = "Take the active tab of the Orchester window to a rout
   conversation or changes), `view` for what a tab opens in \
   its place (memory: the task's memory, from summary; local-integration: Local integration, which Try locally opens \
   from changes) and, on its changes tab, `file` with `from`; project_settings \
-  `tab` (general, runs, context, connections, secrets or sharing) and, with tab runs, `view` rules (Approved for every \
-  run). Connections and Secrets are tabs of Project settings with routes of their own: connections takes `selected` \
-  (the id of the connection whose page it opens); secrets opens the Secrets tab; new_connection takes `kind` (Add \
+  `tab` (general, runs, context, connections, environment or sharing; secrets, the tab Environment was, still opens \
+  it) and, with tab runs, `view` rules (Approved for every run). Connections and Environment are tabs of Project \
+  settings with routes of their own: connections takes `selected` (the id of the connection whose page it opens); \
+  secrets opens the Environment tab, the project's variables and secrets; new_connection takes `kind` (Add \
   provider or Add MCP server); edit_connection `connection` (an MCP server's id, or an agent CLI connection's for its \
   account); each opens Project settings on that tab or page. agents, instructions, skills, tools and memory are the \
   five tabs of one Agents page (Profiles, Instructions, Skills, Tools, Memory), each its own route: agents takes \

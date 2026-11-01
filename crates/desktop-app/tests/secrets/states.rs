@@ -22,12 +22,15 @@ fn secrets_list_groups_by_environment_and_a_secrets_page_shows_metadata_and_mcp_
     s.text(&format!("secret-row-{}-row", secret.id()))
       .contains("kontur-docs")
   );
-  assert!(!s.exists("project-settings-save-status"), "Secrets saves per action");
+  // The tab's save status is its variables'; the secrets save per action.
+  s.until("the variables' status", |s| s.exists("settings-variable-count"));
+  assert_eq!(s.text("project-settings-save-status"), "All changes saved");
   s.click(&format!("secret-row-{}-row", secret.id()));
   s.until("its page", |s| {
     s.exists("secret-uses") && s.text("secret-uses").contains("kontur-docs")
   });
-  assert_eq!(s.text("secret-crumb-back"), "Secrets");
+  assert_eq!(s.text("secret-crumb-back"), "Environment");
+  assert!(!s.exists("settings-variable-count"), "a secret's page has no variables");
   assert!(s.text("secret-inspector").contains("Never · added today"));
   // *Details* as `06b` draws them: no Kind or Value row; *Used by* names the variable the server is given it in.
   assert!(!s.exists("secret-kind-value") && !s.exists("secret-value"));

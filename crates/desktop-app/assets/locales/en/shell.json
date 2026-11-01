@@ -124,7 +124,7 @@
       "memory": "Memory",
       "skills": "Skills",
       "tools": "Tools",
-      "secrets": "Secrets",
+      "environment": "Environment",
       "connections": "Connections",
       "newConnection": "Add connection",
       "editConnection": "Edit connection",

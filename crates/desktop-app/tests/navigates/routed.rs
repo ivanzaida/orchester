@@ -24,12 +24,12 @@ fn a_project_settings_tab_opens_by_browser_rules() {
 }
 
 #[test]
-fn the_project_settings_secrets_tab_opens_by_browser_rules() {
+fn the_project_settings_environment_tab_opens_by_browser_rules() {
   let mut seeded = Seeded::overview("tasks", OverviewTab::Running);
   let general = Route::Project(seeded.project, ProjectPage::Settings(ProjectSettingsTab::General));
-  let secrets = Route::Project(seeded.project, ProjectPage::Secrets(Default::default()));
+  let environment = Route::Project(seeded.project, ProjectPage::Secrets(Default::default()));
   seeded.window.navigation().go(general);
-  control_opens_by_browser_rules(&mut seeded.window, "settings-tab-secrets", &secrets);
+  control_opens_by_browser_rules(&mut seeded.window, "settings-tab-environment", &environment);
 }
 
 #[test]

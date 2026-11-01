@@ -1,7 +1,8 @@
 //! A group (`Project` `nvlrw`, `Auto mode` `WSQqT`): its heading in 12/600 `text_secondary` with a count or an action
 //! at its right (`Head` `o3JUr`, `CDSyw`) or a count right after it (`Head` `I5nZS`), 8 over its rows in a box with a 1
-//! `border` stroke and radius 10, each row after the first under a 1 `border` line (`Rows` `V1Fos`). What a group says
-//! under its box (a question asked in place, a note) follows the box, 8 under it.
+//! `border` stroke and radius 10, each row after the first under a 1 `border` line (`Rows` `V1Fos`). A toolbar may sit
+//! between the heading and the box, 8 from each (`Toolbar` `jSvl2` in `S06`). What a group says under its box (a
+//! question asked in place, a note) follows the box, 8 under it.
 
 use std::sync::Arc;
 
@@ -19,6 +20,7 @@ pub(crate) struct Group {
   title: Arc<str>,
   beside: Vec<Element>,
   end: Vec<Element>,
+  over: Vec<Element>,
   rows: Vec<Element>,
   after: Vec<Element>,
 }
@@ -31,9 +33,16 @@ impl Group {
       title: title.into(),
       beside: Vec::new(),
       end: Vec::new(),
+      over: Vec::new(),
       rows: Vec::new(),
       after: Vec::new(),
     }
+  }
+
+  /// What sits between the heading and the box: a toolbar over the rows.
+  pub(crate) fn over(mut self, over: impl Into<Element>) -> Self {
+    self.over.push(over.into());
+    self
   }
 
   /// What sits right after the heading, 8 from it: a count (`4 secrets` in `06`).
@@ -106,6 +115,7 @@ impl From<Group> for Element {
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)
       .child(heading)
+      .with_children(group.over)
       .with_children(boxed)
       .with_children(group.after)
       .into()
