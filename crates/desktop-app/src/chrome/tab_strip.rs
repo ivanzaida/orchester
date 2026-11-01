@@ -1,12 +1,13 @@
-//! The tabs in the title bar (`Tabs` `mkCf8`): one per open tab, then *New tab*. A tab at All projects
-//! is the folders icon alone (`All projects tab` `TvmmP`, `Tab/home`); every other tab shows its screen's
-//! icon and name (`Tab/active`, `Tab/inactive`) — a task by its key — after its project's name once the
+//! The tabs in the title bar (`Tabs` `mkCf8`): one per open tab, then *New tab*. A tab at the window's home is the
+//! folders icon alone (`Tab/Home` `qqzuJ`), unless it is the active one at All projects; that one, and every other
+//! tab, shows its screen's icon and name (`Tab/active`, `Tab/inactive`) — All projects with the layout grid (`Active
+//! tab` `jMVvA` in 09 `i5G19A`), a task by its key — after its project's name once the
 //! project is known to be in the list (`Kontur · Overview`); a project's id is never shown. A tab of a
 //! project where something waits for the person ends in an amber hand and how many wait (`Tab/attention`
 //! `iJNwr`, the count as `ruG7r`), one with an unresolved failure (runner offline, tasks unread) in a red alert;
 //! the mark's tooltip says which. The
-//! active tab is filled with `hover` and has a close button; a middle click
-//! closes any tab that can be closed.
+//! active tab is filled with `hover` and has a close button, unless it cannot be closed (the only tab, at All
+//! projects); a middle click closes any tab that can be closed.
 //! The OS window title is the active tab's label and the app's name. A tab whose task form holds edits
 //! that are not saved ends its label in a 6 `text_secondary` dot (`Dirty` `TfKtF` in `Fd1ai`).
 //!
@@ -40,6 +41,7 @@ use crate::{
     tabs::{Tab, TabSet},
   },
   project::Projects,
+  routes::Route,
   shell::needs_you,
   theme::{CLOSING_TABS_OPACITY, ExtraColor, ExtraRadius, ExtraSpacing, IconSize},
   ui::{
@@ -172,6 +174,13 @@ fn marks(projects: &Projects, tab: &Tab) -> f32 {
   dot + mark_width(projects, tab)
 }
 
+/// Whether `tab` is the folders icon alone: a tab at the window's home, unless it is the `active` one at All projects
+/// (`Active tab` `jMVvA` in 09 `i5G19A`); Add project and the start page's steps keep the icon (`W5PIR`, `kkGWj`).
+fn icon_only(tab: &Tab, active: bool) -> bool {
+  let route = tab.route();
+  route.is_home() && !(active && matches!(route, Route::AllProjects | Route::Usage(_)))
+}
+
 /// How `tabs` share `room`, each as wide as what it shows; the active tab as wide as it was `measured`
 /// once it has been laid out.
 fn fit(projects: &Projects, tabs: &TabSet, (room, measured): (f32, Option<f32>)) -> Fit {
@@ -179,7 +188,7 @@ fn fit(projects: &Projects, tabs: &TabSet, (room, measured): (f32, Option<f32>))
   let slots: Vec<Slot> = tabs
     .tabs()
     .iter()
-    .map(|tab| match (tab.route().is_home(), measured) {
+    .map(|tab| match (icon_only(tab, tab.id() == active), measured) {
       (true, _) => Slot::Icon,
       (false, Some(width)) if tab.id() == active => Slot::Measured(width),
       (false, _) => Slot::Labelled(marks(projects, tab)),
@@ -237,11 +246,11 @@ fn tab_button(
   } else {
     button.hovered_style(Style::new().background(ExtraColor::Hover.role()))
   };
-  if tab.route().is_home() {
-    return all_projects_tab(button, active);
+  if icon_only(tab, active) {
+    return home_tab(button, active);
   }
   let attention = attention(ctx, projects, tab, format!("tab-{id}-attention"));
-  let close = active.then(|| close_button(ctx, navigation.clone(), id, format!("tab-{id}-close")));
+  let close = (active && closable).then(|| close_button(ctx, navigation.clone(), id, format!("tab-{id}-close")));
   let dirty = unsaved(projects, tab.route()).then(|| {
     Row::new()
       .id(format!("tab-{id}-unsaved"))
@@ -263,11 +272,11 @@ fn tab_button(
   } else {
     button
   };
-  labelled_tab(button, tab, (&label, widest), (dirty, attention, close))
+  labelled_tab(button, tab, (&label, widest, active), (dirty, attention, close))
 }
 
-/// A tab at All projects: the folders icon.
-fn all_projects_tab(button: Button, active: bool) -> Element {
+/// A tab at the window's home that shows the folders icon alone (`Tab/Home` `qqzuJ`).
+fn home_tab(button: Button, active: bool) -> Element {
   let color = if active {
     PaletteColor::TextPrimary
   } else {
@@ -284,10 +293,10 @@ fn all_projects_tab(button: Button, active: bool) -> Element {
 fn labelled_tab(
   button: Button,
   tab: &Tab,
-  (label, widest): (&str, f32),
+  (label, widest, active): (&str, f32, bool),
   (dirty, attention, close): (Option<Element>, Option<Element>, Option<Element>),
 ) -> Element {
-  let (glyph, text, style) = if close.is_some() {
+  let (glyph, text, style) = if active {
     (
       PaletteColor::TextSecondary,
       PaletteColor::TextPrimary,

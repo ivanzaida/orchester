@@ -67,12 +67,11 @@ const INSTRUCTIONS: &str = "Orchester is a desktop app that orchestrates coding 
   approvals in the app; widening what agents may do (broader profile permissions or MCP servers, a CLI \
   program not found on the search path, environment variables that change program loading, running a CLI on an API provider's host or key, adding or widening   an MCP server or turning one on) is refused as \
   person_only unless a person turned on Let automation change agent permissions in Settings › What automation may do. \
-  Narrowing is always allowed, and no tool takes or returns a secret's value. While Orchester is signed out of Orchester Cloud, every tool answers sign_in_required except sign_in_state; only a person signs in, in the window.";
+  Narrowing is always allowed, and no tool takes or returns a secret's value. The tools work without an Orchester Cloud sign-in. Naming a project that belongs to an Orchester Cloud account while nobody is signed in answers sign_in_required; sign_in_state says whether a sign-in is there, and only a person signs in, in the window.";
 
 /// lurq's tools for `settings`, the app's tools on `link` and `appearance`, and, for a started session,
 /// the domain tools on its `services` (refusals worded by `i18n`) with `sign_in_state`, and `hold_reads` and
-/// `set_update_state` in debug builds. While the session's cloud account is signed out, the gate refuses every tool
-/// but `sign_in_state` (`input_gate::signed_out`).
+/// `set_update_state` in debug builds.
 pub fn config(
   settings: McpSettings,
   link: &WindowLink,
@@ -92,12 +91,6 @@ pub fn config_for_build(
   (i18n, debug_build): (&I18n, bool),
 ) -> McpConfig {
   link.input_gate().bind_window_control(settings.window_control());
-  if let Some(services) = session {
-    link.input_gate().bind_cloud(
-      services.cloud.clone(),
-      input_gate::signed_out::looks_on_gate(Build::this()),
-    );
-  }
   let domain = session.map(|services| domain::tools(services, i18n.clone()));
   tools::all(link, appearance, settings, session, debug_build)
     .into_iter()

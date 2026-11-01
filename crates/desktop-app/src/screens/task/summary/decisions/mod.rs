@@ -134,7 +134,13 @@ fn task_notice(ctx: &Ctx, props: &TaskContext) -> Said {
     .get()
     .map(|status| status.state_for(&props.project.open.repo_root));
   let approval = props.waiting_approval();
-  notice::said(ctx, detail, runner.as_ref().filter(|_| lost), approval.as_ref())
+  notice::said(
+    ctx,
+    detail,
+    runner.as_ref().filter(|_| lost),
+    approval.as_ref(),
+    &props.slot_waits(),
+  )
 }
 
 /// Where the task stands, for the run's last event: as the decision it waits for words it, closer to its own design

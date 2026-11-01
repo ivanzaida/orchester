@@ -10,7 +10,7 @@ use orchester_core::{
 };
 use orchester_store::StoreError;
 
-use crate::runner::state::RunnerFailure;
+use crate::{runner::state::RunnerFailure, workspace::MoveError};
 
 /// A translatable message: `key` in the locale files and the values of its placeholders.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -64,6 +64,16 @@ pub fn module_error(error: &orchester_core::module::ModuleError) -> Message {
   })
 }
 
+/// Why a project did not move between this computer and the account.
+pub fn move_error(error: &MoveError) -> Message {
+  match error {
+    MoveError::SignedOut => Message::new("errors.moveSignedOut"),
+    MoveError::Shared => Message::new("errors.moveShared"),
+    MoveError::FolderMissing => Message::new("errors.projectMissing"),
+    MoveError::Store(error) => store_error(error),
+  }
+}
+
 pub fn store_error(error: &StoreError) -> Message {
   match error {
     StoreError::Organization(error) => organization_error(error),
@@ -72,6 +82,7 @@ pub fn store_error(error: &StoreError) -> Message {
     StoreError::AlreadyInitialized(_) => Message::new("errors.alreadyInitialized"),
     StoreError::NotInitialized(_) => Message::new("errors.projectMissing"),
     StoreError::ProjectOfAnotherAccount(_) => Message::new("errors.anotherAccountsProject"),
+    StoreError::ProjectOfSignedOutAccount(_) => Message::new("errors.accountsProjectSignedOut"),
     StoreError::SchemaTooNew { .. } => Message::new("errors.newerSchema"),
     StoreError::SchemaTooOld { .. } => Message::new("errors.olderSchema"),
     StoreError::UnrepresentablePath(_) => Message::new("errors.unsupportedPath"),

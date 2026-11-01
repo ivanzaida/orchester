@@ -253,9 +253,7 @@ fn seeded_chat(
 /// The window on the seeded data at `state`, its project's runner `runner`; returns once it closed.
 fn window(prepared: &data::Prepared, (state, runner): (State, PathBuf), scratch: &Path) -> Result<(), Box<dyn Error>> {
   let runtime = Runtime::new()?;
-  // Past the sign-in gate, as a person who signed in; the stand-in cloud answers while the window is open.
-  let cloud = signed_in::account_cloud::AccountCloud::start();
-  let launch = signed_in::launch(&prepared.database, runner, runtime.handle(), &cloud);
+  let launch = signed_in::launch(&prepared.database, runner, runtime.handle());
   let appearance = Appearance::new(ThemeSetting::Dark, Arc::new(OnceLock::new()), None);
   let mut app = App::new();
   app.set_tokio_handle(runtime.handle().clone());

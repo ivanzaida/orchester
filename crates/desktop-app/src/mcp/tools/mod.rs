@@ -34,7 +34,9 @@ pub use self::{
 use super::{McpSettings, WindowLink};
 use crate::{
   appearance::Appearance,
-  routes::{AccountsPanel, ConnectStep, OrchesterAsk, OrchesterPanel, OrchestratorChat, ProjectPage, Route, Screen},
+  routes::{
+    AccountsPanel, ConnectStep, JoinWay, OrchesterAsk, OrchesterPanel, OrchestratorChat, ProjectPage, Route, Screen,
+  },
   services::Services,
 };
 
@@ -115,6 +117,24 @@ pub fn route_json(route: &Route) -> Value {
       params.insert("tab".to_owned(), json!("invite"));
       params.insert("server".to_owned(), json!(target.server.to_string()));
       params.insert("project".to_owned(), json!(target.slug()));
+    }
+    Route::JoinTeam(way) => match way {
+      JoinWay::Cloud => {}
+      JoinWay::Code => {
+        params.insert("way".to_owned(), json!("code"));
+      }
+      JoinWay::Projects(server) => {
+        params.insert("way".to_owned(), json!("projects"));
+        params.insert("server".to_owned(), json!(server.to_string()));
+      }
+      JoinWay::Folder(target) => {
+        params.insert("way".to_owned(), json!("folder"));
+        params.insert("server".to_owned(), json!(target.server.to_string()));
+        params.insert("project".to_owned(), json!(target.slug()));
+      }
+    },
+    Route::FirstDownload(project) => {
+      params.insert("project".to_owned(), json!(project.to_string()));
     }
     Route::AllProjects | Route::AddProject(_) | Route::Settings => {}
   }

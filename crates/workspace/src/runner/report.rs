@@ -75,6 +75,18 @@ impl RunnerStatus {
     }
   }
 
+  /// The status of `project`'s runner in `state`, having last reported `work`. For tests of what reads the status,
+  /// which run no runner.
+  #[cfg(feature = "test-support")]
+  #[doc(hidden)]
+  pub fn reported_for_test(project: PathBuf, state: RunnerState, work: WorkSummary) -> Self {
+    Self {
+      state,
+      work: Some(Arc::new(work)),
+      ..Self::starting(1, project)
+    }
+  }
+
   /// Project `project`'s runner online, working on `work`. For tests of what follows the runs at work.
   #[cfg(feature = "test-support")]
   pub(super) fn online_for_test(project: PathBuf, work: WorkSummary) -> Self {

@@ -19,7 +19,11 @@ mod updates;
 
 use std::path::{Path, PathBuf};
 
-use orchester_core::{id::ProjectId, name::Name, time::Timestamp};
+use orchester_core::{
+  id::{CloudAccountId, ProjectId},
+  name::Name,
+  time::Timestamp,
+};
 use rusqlite::{Connection, OptionalExtension, params};
 
 pub use self::{
@@ -119,6 +123,8 @@ pub struct RegisteredProject {
   pub name: Name,
   pub repo_root: PathBuf,
   pub last_opened_at: Timestamp,
+  /// The Orchester Cloud account that holds it; `None` when it is this computer's.
+  pub owner: Option<CloudAccountId>,
 }
 
 impl RegisteredProject {
@@ -259,19 +265,20 @@ impl AppDb {
   }
 }
 
-/// A row of `projects`: id, name, repo root and last use.
-type ProjectRow = (String, String, String, i64);
+/// A row of `projects`: id, name, repo root, last use and whose it is.
+type ProjectRow = (String, String, String, i64, Option<String>);
 
 fn project_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ProjectRow> {
-  Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+  Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?))
 }
 
-fn registered((id, name, repo_root, last_opened_at): ProjectRow) -> Result<RegisteredProject, StoreError> {
+fn registered((id, name, repo_root, last_opened_at, owner): ProjectRow) -> Result<RegisteredProject, StoreError> {
   Ok(RegisteredProject {
     id: parse("project id", &id)?,
     name: Name::new(&name).map_err(|error| corrupt("project name", error))?,
     repo_root: PathBuf::from(repo_root),
     last_opened_at: Timestamp::from_unix_millis(last_opened_at),
+    owner: owner.map(|owner| parse("cloud account id", &owner)).transpose()?,
   })
 }
 

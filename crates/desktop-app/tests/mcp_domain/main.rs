@@ -61,6 +61,7 @@ mod return_ended;
 #[path = "../../../workspace/tests/support/runner_programs.rs"]
 mod runner_programs;
 mod skills_window;
+mod slot_waits;
 mod story_points;
 mod task_organization;
 mod tools;
@@ -139,14 +140,26 @@ impl Served {
     (window_control, vault): (bool, Option<Arc<MemoryVault>>),
   ) -> Self {
     let runtime = Runtime::new().expect("tokio runtime");
+    let cloud = signed_in::account_cloud::AccountCloud::start();
+    let launch = signed_in::launch_signed_in(database, runner, runtime.handle(), &cloud);
+    Self::serve(folder, (launch, runtime), (window_control, vault))
+  }
+
+  /// [`Self::start`] with nobody signed in to Orchester Cloud, as on a first run: this computer's projects only.
+  fn start_signed_out(folder: TempDir, database: &Path, runner: PathBuf) -> Self {
+    let runtime = Runtime::new().expect("tokio runtime");
+    let launch = signed_in::launch(database, runner, runtime.handle());
+    Self::serve(folder, (launch, runtime), (false, None))
+  }
+
+  /// The window and the MCP server of `launch`, on `runtime`.
+  fn serve(
+    folder: TempDir,
+    (launch, runtime): (Launch, Runtime),
+    (window_control, vault): (bool, Option<Arc<MemoryVault>>),
+  ) -> Self {
     // An editor that is not one a person named, at a path where nothing is: *Resolve in editor* never opens one here.
-    let launch = signed_in::launch(
-      database,
-      runner,
-      runtime.handle(),
-      &signed_in::account_cloud::AccountCloud::start(),
-    )
-    .with_editor(Some(Editor::VsCode(folder.path().join("no-editor").join("code"))));
+    let launch = launch.with_editor(Some(Editor::VsCode(folder.path().join("no-editor").join("code"))));
     let mut services = launch.services().cloned();
     if let (Some(services), Some(vault)) = (services.as_mut(), vault) {
       services.vault = Vault::with(vault);
@@ -357,6 +370,17 @@ impl Drop for Served {
     if let Some(launch) = self.launch.take() {
       launch.end();
     }
+  }
+}
+
+/// A file that is not a CLI, with the Unix permission `mode`: `add_cli_connection` checks a chosen program file
+/// exists before its gate.
+fn write_program(path: &Path, #[cfg_attr(windows, expect(unused_variables))] mode: u32) {
+  std::fs::write(path, "not a program").expect("the file is written");
+  #[cfg(unix)]
+  {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode)).expect("the file's permissions");
   }
 }
 

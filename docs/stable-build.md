@@ -108,16 +108,24 @@ more before Orchester reads the project secrets it keeps in the login keychain; 
 Allow*.
 
 **Programs from Finder.** An app started from Finder gets a minimal `PATH`
-(`/usr/bin:/bin:/usr/sbin:/sbin`). Orchester therefore looks for the agent CLIs and `gh`, and
-starts every program, the runner included, with the usual install folders appended to it:
+(`/usr/bin:/bin:/usr/sbin:/sbin`). Orchester therefore asks your login shell for its `PATH`
+as it starts (`$SHELL -l -i -c`, or `/bin/zsh` without `$SHELL`, on a background thread; a shell
+that has not answered within 5 seconds is stopped and its `PATH` is not used, which the log says).
+It looks for the agent CLIs and `gh`, and starts every program, the runner included, with the
+inherited `PATH`, then the login shell's folders, then the usual install folders appended:
 `/opt/homebrew/bin`, `/usr/local/bin`, `/opt/local/bin`, `~/.local/bin`, `~/.claude/local`,
 `~/.npm-global/bin`, `~/.volta/bin`, `~/.bun/bin`, `~/Library/pnpm`, `~/.cargo/bin`, the `bin` of
 npm's `prefix` in `~/.npmrc` and nvm's Node.js versions (newest first), each only if it exists; a
 program's own folder is appended for it too, so an npm-installed CLI finds the Node.js beside it.
-Your shell's start-up files are not read. A CLI installed elsewhere can be chosen as a file in
-*Connections*; a tool an agent needs from elsewhere is not found when the app was started from
-Finder (`open` starts it the same way). Starting the program itself from a terminal,
-`~/Applications/Orchester.app/Contents/MacOS/orchester`, passes that terminal's `PATH` on.
+A shell that does not take `-l -i -c` (csh, tcsh) gives no `PATH`. When an agent CLI a connection
+needs is still not found, the start page warns of it with the folders it searched, *Choose the
+claude file…*, whose file becomes that connection's program and is offered in *Add connection*, and
+*Check again*, which reads the login shell again; on Windows it says the same of the `PATH`. The app
+MCP tool `add_cli_connection` names the folders it searched too, and a CLI installed elsewhere can
+be added there by its file path (`program`): the app's *Connections* does not offer choosing a file
+in this version. Starting the program itself from a terminal,
+`~/Applications/Orchester.app/Contents/MacOS/orchester`, passes that terminal's `PATH` on, and the
+login shell is not asked then.
 
 ## Releases from CI
 
@@ -208,7 +216,9 @@ SHA-256 Sentry's release registry gives for it
 (`https://release-registry.services.sentry.io/apps/sentry-cli/<version>`, the file
 `sentry-cli-Windows-x86_64.exe`); raise both together. The step fails unless GlitchTip has stored
 both PDBs, and then nothing goes to the cloud: the release's error reports would show only
-addresses.
+addresses. It checks that in GlitchTip's list of the project's debug files (below), not with
+sentry-cli's `--require-all`, which GlitchTip does not answer and which failed though the PDBs were
+stored.
 
 - **The token** is the Actions secret `GLITCHTIP_AUTH_TOKEN` (*Settings › Secrets and variables
   › Actions › New repository secret* on GitHub). Create it in GlitchTip, signed in as a member of

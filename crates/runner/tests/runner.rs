@@ -310,6 +310,7 @@ async fn runner_answers_attach_and_start_run_requests() {
     Some(Event::WorkSummary(WorkSummary {
       agent_slots: NonZeroU32::new(2).expect("above zero"),
       runs: Vec::new(),
+      slot_waits: Vec::new(),
     }))
   );
   let start = Command::StartRun {

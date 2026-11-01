@@ -169,7 +169,7 @@ names the computer (the desktop) or the browser (the web front, platform `web`).
 authentication answers the right password with `202 { challenge, expires_at }` instead, and a code finishes the sign-in
 ([Two-factor authentication](#two-factor-authentication)).
 
-**Why a token ended** (the desktop's sign-in gate, 2026-10-16). A `401 unauthorized` for a device's or a web
+**Why a token ended** (the desktop's sign-in notice, 2026-10-16). A `401 unauthorized` for a device's or a web
 session's token that the cloud ended carries why and when (milliseconds):
 `{ "error": "unauthorized", "message": "…", "reason": "<reason>", "ended_at": 1792147957042 }`.
 

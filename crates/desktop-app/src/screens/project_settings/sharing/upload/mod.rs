@@ -1,6 +1,7 @@
 //! The first link's page (`KSnOW`, which `N9NFio` reuses for linking a checkout to an empty project): over Project
-//! settings with its breadcrumb, *Link Kontur to orchester.kontur.dev/kontur?*, what goes up and what continues on the
-//! server ([`parts`]), whether to write `orchester.toml`, what linking sends, and *Link and upload*, which only a
+//! settings with its breadcrumb, *Link Kontur to orchester.kontur.dev/kontur?*, that a project of this computer's moves
+//! into the account whose server it is, what goes up and what continues on the server ([`parts`]), whether to write
+//! `orchester.toml`, what linking sends, and *Link and upload*, which only a
 //! person presses. A checkout without tasks takes the project's tasks as they are, on the same page. Nothing is sent
 //! before; *Cancel* returns to Sharing with the project still local, and a link that failed says why and offers *Try
 //! again*. When the project's tasks changed after the page read them (one was added in another tab or over MCP), the
@@ -32,7 +33,9 @@ use orchester_workspace::sharing::{
 
 use super::super::page;
 use crate::{
-  project::ShownProject,
+  navigation::Navigation,
+  project::{Projects, ShownProject},
+  routes::Route,
   screens::settings::orchester::{PersonOnly, Said, sharing_said, shown_address},
   services::Services,
   theme::{ExtraSpacing, TaskFormSpacing},
@@ -136,7 +139,7 @@ impl Component for UploadPage {
     let write = ctx.signal(true);
     let (wanted, root) = (write.clone(), props.project.open.repo_root.clone());
     let link = ctx.future_action(move |(): ()| {
-      let (servers, root, upload, page) = (servers.clone(), root.clone(), props.upload.clone(), props.page.clone());
+      let (servers, root, upload) = (servers.clone(), root.clone(), props.upload.clone());
       let write_discovery = wanted.get();
       async move {
         let request = LinkRequest {
@@ -150,7 +153,6 @@ impl Component for UploadPage {
               // The link stands; Sharing's discovery row says what the repository's file holds.
               tracing::warn!(%error, "orchester.toml was not written after linking");
             }
-            page.set(LinkPage::default());
             Ok(())
           }
           Err(ShareError::Sharing(SharingError::ProjectChanged)) => Err(Failure::Changed),
@@ -160,6 +162,23 @@ impl Component for UploadPage {
       }
     });
     let props = ctx.props::<Props>().clone();
+    let (projects, feed, page) = (Projects::of(ctx), props.project.feed.clone(), props.page.clone());
+    let project = props.project.open.project.id();
+    let navigation = Navigation::of(ctx);
+    // A link without tasks starts the project's first download, whose step shows how it goes (`YN6MO`).
+    let downloads = matches!(props.upload.plan.kind, LinkKind::Download { .. });
+    ctx.watch(&link.state(), move |state| {
+      if state.is_fulfilled() && state.error.is_none() {
+        page.set(LinkPage::default());
+        // The project has the server project's key now, and its tasks are the server's, whether they came with the link
+        // or its first download brings them: both are read again, as after a join (`join::review`).
+        projects.retry(project);
+        feed.saved();
+        if downloads {
+          navigation.go(Route::FirstDownload(project));
+        }
+      }
+    });
     let (servers, root) = (Services::of(ctx).servers, props.project.open.repo_root.clone());
     let review = ctx.future_action(move |(): ()| {
       let (servers, root, upload, page) = (servers.clone(), root.clone(), props.upload.clone(), props.page.clone());
@@ -183,6 +202,10 @@ impl Component for UploadPage {
       .spacing(SpacingSize::Lg);
     if let Some(failure) = state.error.clone().filter(|_| !state.is_pending()) {
       content = content.child(self.failed(ctx, &props, &failure));
+    }
+    if props.upload.plan.moves_to_account {
+      let project = props.project.open.project.name().as_str();
+      content = content.child(super::link::moves_to_account(ctx, project));
     }
     let local = ("local", props.project.open.project.name().as_str().to_owned());
     // Once the tasks changed, the button reads what linking does now instead of linking.

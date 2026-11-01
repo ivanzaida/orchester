@@ -26,6 +26,8 @@ macro_rules! markers {
     impl $inspect for crate::connections::data::ConnectionDraft {}
     impl $inspect for crate::connections::data::ProjectConnections {}
     impl $inspect for crate::connections::github::GitHubDraft {}
+    impl $inspect for crate::connections::missing_cli::KnownCopies {}
+    impl $inspect for crate::connections::missing_cli::MissingCli {}
     impl $inspect for crate::connections::mcp::TransportChoice {}
     impl $inspect for crate::connections::native::NativeDraft {}
     impl $inspect for crate::files::FileFacts {}
@@ -110,12 +112,18 @@ macro_rules! markers {
     impl $inspect for crate::runner::state::RunnerState {}
     impl $inspect for crate::secrets::Vault {}
     impl $inspect for crate::secrets::data::ProjectSecrets {}
+    impl $inspect for crate::sharing::OfferedProject {}
     impl $inspect for crate::sharing::PendingPasswordChange {}
+    impl $inspect for crate::sharing::Places {}
     impl $inspect for crate::sharing::Servers {}
     impl $inspect for crate::sharing::SignedIn {}
     impl $inspect for crate::sharing::cloud::CloudInUse {}
     impl $inspect for crate::sharing::cloud::Reach {}
     impl $inspect for crate::sharing::cloud::SignIn {}
+    impl $inspect for crate::sharing::project::FirstDownload {}
+    impl $inspect for crate::sharing::project::clone::CloneEnd {}
+    impl $inspect for crate::sharing::project::clone::CloneRefusal {}
+    impl $inspect for crate::sharing::project::clone::Destination {}
     impl $inspect for crate::sharing::project::IdentityProblem {}
     impl $inspect for crate::sharing::project::JoinReview {}
     impl $inspect for crate::sharing::project::Joined {}

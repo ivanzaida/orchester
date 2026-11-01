@@ -196,7 +196,9 @@ focus rings. Note the behaviour changes: `focus()` now scrolls into view; create
   file's folder, not links in the middle of a chain (refuse when any link on it lies inside the repository); the
   App Execution Alias exception accepts any file in `WindowsApps` without reading its reparse tag; launch checks skip
   programs stored by name or relative to the worktree before this change (show a problem for stored `InWorktree`
-  programs); agent CLI connections get no `program_place` check at launch; the deprecated app's MCP dialog saves with
+  programs); agent CLI connections get no `program_place` check at launch, and the file chosen on the start page gets
+  none either, so a file inside one project's repository, which agents can rewrite, can become the program of
+  connections in every listed project (`connections::choose_program`); the deprecated app's MCP dialog saves with
   `Allowed::Anything`; the Connections list shows a server whose secret is archived as plain "On".
 - Command (tool) steps run agent-written worktree content (`tools/check.ps1`, build.rs, cargo/npm/git configs) with
   the person's rights, network on and no sandbox (`crates/runner/src/execution/tool/mod.rs`), escaping a writing
@@ -405,6 +407,25 @@ mismatch. Round 1 (at `6422a6d`) found two major mismatches (the transport note'
 label) and five minor ones; all are fixed and wait for a re-check.
 
 ## U · Screens
+
+### ORC-584 · Clone the repository from *Link a folder* in a console · branch `orchester/orc-584-run-1` (implemented 2026-10-31, waiting for review and verification)
+
+*Clone it here* on *Link a folder* (06 `go2aM`): *Clone into* with *Choose…*, what Git will do with that folder, and
+*Clone repository…*, which opens a console window the person sees (PowerShell on Windows, Terminal on macOS) running
+`git clone -- https://<hint>.git <folder>` with each value as data. Git may ask for a sign-in there, with Git's own
+credentials (`gh` is not needed). A clone counts only when Git ended with 0 and the folder checks as the project's
+checkout; it then fills the folder field and is linked only when the person presses *Link and download tasks*. A
+folder with anything in it is refused before a console opens, and what a failed or closed clone left is named and
+kept. Choice A of `docs/design/startup.md` is revised; ORC-290 and ORC-296 (hidden clone with in-app progress) stay
+canceled. As built: `docs/design/startup.md`, "Clone in a console". Tests: `cargo test -p orchester-exec --features
+test-program --test clone_console clone_console_`, `cargo test -p orchester-workspace --test startup_clone
+startup_clone_`, `cargo test -p orchester-app --features test-support --test shared_projects shared_projects_`.
+
+The Pencil design is not updated for it (the person, 2026-10-31): 06 `go2aM` and 07 `phoYc` still draw the older
+*Clone it here*, an agreed deviation (`docs/design/startup.md`, "Clone in a console").
+
+**Done when** review and verification pass and a person has cloned once for real on Windows and on macOS (a real
+console with Git's sign-in, Terminal's window closed mid-clone), which no test can do; then move this entry to *Done*.
 
 ### ORC-16 · All projects and Add project in the new app · branch `claude/all-projects` (implemented 2026-10-14, waiting for review and design verification)
 
@@ -979,6 +1000,25 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 - **Project settings:** disk use of run worktrees.
 
 ## Done
+
+ORC-403 · A ready step that waits for an agent slot says so · branch `orchester/orc-403-run-1` (implemented 2026-10-30;
+pipeline QA scenarios, Review and Verify follow). The runner reports ready agent steps held back only by the slots in
+`WorkSummary.slot_waits` (protocol 33); nothing is stored. `get_run` gives `status: { state: "pending", waits_for:
+"agent_slot" }`, `list_runs`' `detail` names the steps, the Summary's rail and Last event say it, and the Overview's *At
+work* and the health card count them and name *Agents at once*. A run waiting for a workspace is left out: more slots
+would not start it. A refused `Board::take` no longer announces a summary. **No Pencil frame draws this wait.**
+Tests: `orchester-ipc --test framing frames_round_trip`, `orchester-runner --test graph graph_slot_wait`, `--test
+workspaces workspaces_a_run_waiting_for_one`, `orchester-workspace --test slot_waits slot_wait`, `orchester-app --test
+mcp_domain domain_slot_wait`, `--test status_bar status_health_card`.
+
+**Still for the person to decide: who gets the next free slot.** Nothing about the order changed, so A holds until
+they choose. A, keep today's order: nothing changes and the order stays unpredictable. B, a running run first: `admit`
+refuses new starts while a step waits for a slot; small, and runs in progress finish sooner, but the queue waits longer
+and it does not help the reported case, where the queue is already locked out. C, a queued run first: a parallel step
+takes only slots the queue does not need; tasks start sooner, but pipelines look sequential more often. D, the oldest
+run first for every waiting step: the board keeps a fair line that `take` and `admit` follow; the largest change, and
+the only one that stops a busy run from keeping its slot, which is what the reported case shows. The plan recommended
+B, with D as the follow-up if parallel steps still feel sequential.
 
 ORC-100 · Task page redesign: one header, three tabs, Summary gathers the task's info · branch `orchester/orc-100-run-1`
 (implemented 2026-10-26; pipeline Check, Review and Verify follow). Design: `Task page · redesign` `C3wC8` (`01 ·
@@ -2839,3 +2879,8 @@ M8 · Orchester's typed agent tools (`git_status`, `git_diff`, `git_log`, `git_s
 M9 · Orchester's file tools for Claude Code and Codex (`read_file`, `list_files`, `search`, `edit_file`, `write_file`,
 `find_symbol` with the code index) · merge `6a7d57bd` (security review). A live run with the real CLIs was still open
 when they were merged.
+ORC-132 · Local use without an Orchester Cloud account · branch `orchester/orc-132-run-1`: the sign-in gate is gone; a
+project or server added with nobody signed in is this computer's (`owner` NULL, no migration), moved by a person on All
+projects; sharing, joining, invites and team servers offer the sign-in in place; MCP answers `sign_in_required` only for
+a named project an account holds while nobody is signed in. Open: the *Verify* step's design verification, macOS
+unchecked. The three-way start page stays ORC-293.

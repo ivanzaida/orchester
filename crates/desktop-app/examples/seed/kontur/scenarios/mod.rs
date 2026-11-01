@@ -30,17 +30,21 @@ mod modules;
 mod native;
 mod orchestrator;
 mod overview_states;
+mod ownership;
 mod pipelines;
 mod project_settings;
 mod pull_requests;
+pub mod qa_app_asks;
 pub mod settings;
 mod shared_config;
 mod shared_here;
+mod slot_wait;
 mod sources;
 mod task_states;
 mod tasks;
 mod tasks_memory;
 mod tasks_unreadable;
+pub mod team;
 mod unreadable_db;
 mod usage;
 mod usage_accounts;
@@ -89,7 +93,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 79] = [
+pub const ALL: [Scenario; 101] = [
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-library", agents_library::seed),
   Scenario::of("agents-browser", agents_browser::seed),
@@ -109,6 +113,7 @@ pub const ALL: [Scenario; 79] = [
   Scenario::of("agents-no-connections", agents::no_connections),
   Scenario::of("agents-unreadable", agents::unreadable),
   Scenario::of("empty", empty::seed),
+  Scenario::of("join-team", empty::seed),
   Scenario::of("tasks", tasks::seed),
   Scenario::of("tasks-memory", tasks_memory::seed),
   Scenario::of("memory-only", tasks_memory::alone),
@@ -137,6 +142,7 @@ pub const ALL: [Scenario; 79] = [
   Scenario::of("tasks-unreadable", tasks_unreadable::seed),
   Scenario::with_fake_codex("live", live::seed),
   Scenario::with_fake_codex("lifecycle", lifecycle::seed),
+  Scenario::with_fake_codex("slot-wait", slot_wait::seed),
   Scenario::of("connections", connections::seed),
   Scenario::of("api-providers", api_providers::seed),
   Scenario::of("native", native::seed),
@@ -167,6 +173,26 @@ pub const ALL: [Scenario; 79] = [
   Scenario::of("modules", modules::seed),
   Scenario::of("modules-short", modules::short),
   Scenario::of("modules-none", modules::none),
+  Scenario::of("ownership", ownership::seed),
+  Scenario::of("ownership-signed-in", ownership::signed_in),
+  Scenario::of("ownership-join-review", ownership::join_review),
+  Scenario::of("ownership-ended", ownership::ended),
+  Scenario::of("ownership-nothing-here", ownership::nothing_here),
+  Scenario::of("invite-signed-out", ownership::invite),
+  Scenario::of("invite-sign-in-again", ownership::invite_sign_in_again),
+  Scenario::of("team-join", team::join),
+  Scenario::of("team-join-wrong-code", team::wrong_code),
+  Scenario::of("team-join-expired-code", team::expired_code),
+  Scenario::of("team-join-unreachable", team::unreachable),
+  Scenario::of("team-join-joined", team::joined),
+  Scenario::of("team-offer", team::offer),
+  Scenario::of("team-downloading", team::downloading),
+  Scenario::of("team-download-failed", team::download_failed),
+  Scenario::of("team-download-progress", team::download_progress),
+  Scenario::of("team-download-stopped", team::download_stopped),
+  Scenario::of("team-shared-projects", team::shared_projects),
+  Scenario::of("team-shared-none", team::shared_none),
+  Scenario::of("team-clone", team::clones),
   Scenario::of("modules-base-branch", modules::base_branch),
   Scenario::of("loading-states", loading_states::seed),
 ];

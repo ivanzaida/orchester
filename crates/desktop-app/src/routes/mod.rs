@@ -1,7 +1,9 @@
 //! Where the window can be: typed routes and the router paths they stand for. A path is all a tab's
 //! history keeps, so everything a person can go back to is part of it, its query included.
 //!
-//! Paths: `/` is All projects, `/add-project` Add project (`?folder=` the folder it starts with) and
+//! Paths: `/` is All projects, `/add-project` Add project (`?folder=` the folder it starts with), `/join-team` Join a
+//! team (`?way=code` with a code, `?way=projects` a joined team's shared projects, `?way=folder` linking one to a
+//! folder, [`JoinWay`]), `/first-download?project=<id>` a shared project's first download and
 //! `/settings` the app's settings (`?tab=general`, with `&show=updates` or `whats-new` its *Updates* in view,
 //! [`UpdatesShow`]; `notifications`, `accounts` or `orchester` for Orchester Cloud; Automation without one, and
 //! `?ask=rotate-token` asks *Rotate the token?* there). A project's screens start at
@@ -49,6 +51,7 @@ mod files;
 mod import;
 mod instructions;
 mod join;
+mod join_team;
 mod memory;
 mod modules;
 mod orchester;
@@ -83,6 +86,7 @@ pub use self::{
   import::ImportTab,
   instructions::{InstructionsPanel, InstructionsTab, InstructionsView},
   join::JoinTarget,
+  join_team::JoinWay,
   memory::MemoryTab,
   modules::{ModuleListTab, ModuleTab},
   orchester::{ConnectStep, OrchesterAsk, OrchesterPanel, OrchesterView},
@@ -104,6 +108,8 @@ pub use self::{
 const PROJECT: &str = "project";
 const SETTINGS: &str = "settings";
 const ADD_PROJECT: &str = "add-project";
+/// A shared project's first download; `?project=` names it.
+const FIRST_DOWNLOAD: &str = "first-download";
 /// The query parameter of the folder Add project starts with.
 const FOLDER: &str = "folder";
 const TASKS: &str = "tasks";
@@ -184,6 +190,10 @@ pub enum Route {
   Usage(Box<UsageQuery>),
   /// Add project, with the folder it starts with, e.g. one Open folder… found no project in.
   AddProject(Option<RouteFolder>),
+  /// Join a team, on the way it shows first (`drCQd`, `B914L`).
+  JoinTeam(JoinWay),
+  /// The first download of a shared project, the last step of the start page (`YN6MO`).
+  FirstDownload(ProjectId),
   /// Settings › Automation, where Settings opens.
   Settings,
   /// Settings › Automation asking *Rotate the token?* in place under the access token (`shpsk`); only a person's
@@ -235,6 +245,8 @@ impl Route {
     match self {
       Self::AllProjects | Self::Usage(_) => Screen::AllProjects,
       Self::AddProject(_) => Screen::AddProject,
+      Self::JoinTeam(_) => Screen::JoinTeam,
+      Self::FirstDownload(_) => Screen::FirstDownload,
       Self::Settings
       | Self::RotateToken
       | Self::General
@@ -248,10 +260,14 @@ impl Route {
     }
   }
 
-  /// Whether the route is the window's home, which the home tab shows by its icon alone: All projects, and
-  /// Add project opened from it (`W5PIR`, `kkGWj`).
+  /// Whether the route is the window's home, which a tab shows by its icon alone, unless it is the active tab at All
+  /// projects (`jMVvA` in 09 `i5G19A`): All projects, and Add project and the start page's steps opened from it
+  /// (`W5PIR`, `kkGWj`).
   pub const fn is_home(&self) -> bool {
-    matches!(self, Self::AllProjects | Self::Usage(_) | Self::AddProject(_))
+    matches!(
+      self,
+      Self::AllProjects | Self::Usage(_) | Self::AddProject(_) | Self::JoinTeam(_) | Self::FirstDownload(_)
+    )
   }
 
   pub const fn project(&self) -> Option<ProjectId> {
@@ -260,6 +276,8 @@ impl Route {
       Self::AllProjects
       | Self::Usage(_)
       | Self::AddProject(_)
+      | Self::JoinTeam(_)
+      | Self::FirstDownload(_)
       | Self::Settings
       | Self::RotateToken
       | Self::General
@@ -290,6 +308,11 @@ impl Route {
       Self::AddProject(folder) => with_query(
         format!("/{ADD_PROJECT}"),
         &[(FOLDER, folder.as_ref().map(RouteFolder::as_str))],
+      ),
+      Self::JoinTeam(way) => way.path(),
+      Self::FirstDownload(project) => with_query(
+        format!("/{FIRST_DOWNLOAD}"),
+        &[(PROJECT, Some(project.to_string().as_str()))],
       ),
       Self::Settings => format!("/{SETTINGS}"),
       Self::RotateToken => with_query(format!("/{SETTINGS}"), &[(ASK, Some(ROTATE_TOKEN))]),
@@ -332,6 +355,8 @@ impl Route {
       [] => Self::AllProjects,
       [usage::SEGMENT] => Self::Usage(Box::new(usage::take_everywhere(&mut params)?)),
       [ADD_PROJECT] => Self::AddProject(params.take(FOLDER)?.map(RouteFolder)),
+      [join_team::SEGMENT] => Self::JoinTeam(JoinWay::take(&mut params)?),
+      [FIRST_DOWNLOAD] => Self::FirstDownload(params.take_parsed(PROJECT)?.ok_or(RouteError::NoScreen)?),
       [SETTINGS] => Self::settings(&mut params)?,
       [SETTINGS, INVITE] => Self::Invite(JoinTarget::take(&mut params)?.ok_or(RouteError::NoScreen)?),
       [PROJECT, project, page @ ..] => {

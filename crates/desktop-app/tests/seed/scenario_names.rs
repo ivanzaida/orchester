@@ -3,7 +3,7 @@
 use crate::kontur::scenarios;
 
 /// The scenarios, in the order the seed lists them.
-const NAMES: [&str; 79] = [
+const NAMES: [&str; 101] = [
   "agents",
   "agents-library",
   "agents-browser",
@@ -23,6 +23,7 @@ const NAMES: [&str; 79] = [
   "agents-no-connections",
   "agents-unreadable",
   "empty",
+  "join-team",
   "tasks",
   "tasks-memory",
   "memory-only",
@@ -51,6 +52,7 @@ const NAMES: [&str; 79] = [
   "tasks-unreadable",
   "live",
   "lifecycle",
+  "slot-wait",
   "connections",
   "api-providers",
   "native",
@@ -81,6 +83,26 @@ const NAMES: [&str; 79] = [
   "modules",
   "modules-short",
   "modules-none",
+  "ownership",
+  "ownership-signed-in",
+  "ownership-join-review",
+  "ownership-ended",
+  "ownership-nothing-here",
+  "invite-signed-out",
+  "invite-sign-in-again",
+  "team-join",
+  "team-join-wrong-code",
+  "team-join-expired-code",
+  "team-join-unreachable",
+  "team-join-joined",
+  "team-offer",
+  "team-downloading",
+  "team-download-failed",
+  "team-download-progress",
+  "team-download-stopped",
+  "team-shared-projects",
+  "team-shared-none",
+  "team-clone",
   "modules-base-branch",
   "loading-states",
 ];

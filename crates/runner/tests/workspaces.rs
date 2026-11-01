@@ -12,12 +12,12 @@ use std::{fs, num::NonZeroU32, time::Duration};
 use orchester_core::{
   id::{IdempotencyKey, RunId},
   limits::{AgentSlots, ProjectLimits},
-  run::{PauseReason, RunStatus},
-  store::{SettingsStore, WorkspaceStore},
+  run::{InterruptCause, PauseReason, RunStatus},
+  store::{ActivityStore, SettingsStore, WorkspaceStore},
   time::Timestamp,
   workspaces::{Holder, Stranded, Warmth, WorkspaceNumber},
 };
-use orchester_ipc::Rejection;
+use orchester_ipc::{AttachSession, Event, Rejection, SessionEnd};
 use orchester_store::ProjectDb;
 
 use self::support::{
@@ -141,6 +141,64 @@ async fn workspaces_a_run_waits_while_every_workspace_is_in_use_and_goes_on_once
       .expect("waits")
       .is_empty()
   );
+}
+
+/// More agent slots would not start a run that waits for a workspace, so it does not say it waits for one, even with
+/// every slot in use (ORC-403). The workspaces follow the project's limit of one; the board starts with two slots, so
+/// the second run gets as far as its wait, and then with one, so none is free.
+#[tokio::test(flavor = "multi_thread")]
+async fn workspaces_a_run_waiting_for_one_does_not_say_it_waits_for_an_agent_slot() {
+  let project = project(&Setup::new("Keep working."));
+  let root = project.repo.path();
+  agents_at_once(root, 1);
+  let (scheduler, mut events) = pooled_scheduler(root, TestDisk::default());
+  let fresh = AttachSession::Fresh {
+    previous_end: SessionEnd::Clean,
+  };
+  let two = NonZeroU32::new(2).expect("above zero");
+  scheduler.attach(fresh, two).await.expect("attached");
+  let first = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("start");
+  wait_for(root, &mut events, first, |_| {
+    let db = ProjectDb::open(root).expect("open");
+    !db.invocations(first).expect("invocations").is_empty()
+  })
+  .await;
+  let second = queue_another_task(root);
+  scheduler
+    .start_run(IdempotencyKey::generate(), second)
+    .await
+    .expect("start the second run");
+  tokio::time::timeout(support::PATIENCE, async {
+    while ProjectDb::open(root)
+      .expect("open")
+      .workspace_waits()
+      .expect("waits")
+      .is_empty()
+    {
+      tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+  })
+  .await
+  .expect("the second run waits for a workspace");
+  scheduler.set_agent_slots(NonZeroU32::MIN).await.expect("lowered");
+  let mut lowered = false;
+  let looked = tokio::time::timeout(Duration::from_millis(2_500), async {
+    loop {
+      if let Some(Event::WorkSummary(summary)) = events.recv().await {
+        lowered |= summary.agent_slots == NonZeroU32::MIN;
+        assert!(
+          summary.slot_waits.is_empty(),
+          "no step waits only for a slot: {summary:?}"
+        );
+      }
+    }
+  })
+  .await;
+  assert!(looked.is_err() && lowered, "the board said it has one slot");
+  scheduler.stop_all(InterruptCause::QuitNow).await;
 }
 
 #[tokio::test(flavor = "multi_thread")]

@@ -8,6 +8,7 @@ fn online_with_slots(slots: u32) -> RunnerFacts {
     work: Some(WorkSummary {
       agent_slots: NonZeroU32::new(slots).expect("slots"),
       runs: Vec::new(),
+      slot_waits: Vec::new(),
     }),
     online_since: Some(SystemTime::now()),
     ..runner(RunnerState::Online)
@@ -85,6 +86,85 @@ fn status_health_card_holds_the_runner_agents_queue_server_mcp_and_version() {
   );
   bar.press("status-health");
   assert!(bar.asked().contains(&BarAction::OpenRunnerLog));
+}
+
+/// The bar with `count` ready steps waiting for an agent slot.
+fn waiting(count: usize) -> Bar {
+  let mut runner = online_with_slots(1);
+  let work = runner.work.as_mut().expect("the runner's work");
+  work.slot_waits = (0..count)
+    .map(|_| SlotWait {
+      run: RunId::generate(),
+      execution: StepExecutionId::generate(),
+    })
+    .collect();
+  Bar::of(facts(Some(kontur(runner, ProjectTasks::default()))))
+}
+
+/// Only the card says it: the bar stays calm, and the fact is gone once no step waits (ORC-403).
+#[test]
+fn status_health_card_says_how_many_steps_wait_for_a_slot() {
+  for (count, words) in [
+    (1, "1 step for a slot · raise Agents at once"),
+    (2, "2 steps for a slot · raise Agents at once"),
+  ] {
+    let mut bar = waiting(count);
+    for id in ["status-agents", "status-counts", "status-runner"] {
+      assert!(bar.texts(id).is_none(), "{id} does not show while all is well");
+    }
+    let card = bar
+      .card("status-health", "status-health-card")
+      .expect("the card shows on hover");
+    assert!(card.iter().any(|text| text == "Waiting"), "{card:?}");
+    assert!(card.iter().any(|text| text == words), "{words} in {card:?}");
+  }
+  let card = waiting(0)
+    .card("status-health", "status-health-card")
+    .expect("the card shows on hover");
+  assert!(!card.iter().any(|text| text == "Waiting"), "{card:?}");
+}
+
+/// However many steps wait, all its words show: the value takes a second line inside the card and pushes the facts
+/// under it down, instead of running past the card's edge (ORC-403).
+#[test]
+fn status_health_card_wraps_a_long_value_inside_the_card() {
+  for count in [2, 12, 120] {
+    let mut bar = waiting(count);
+    bar
+      .card("status-health", "status-health-card")
+      .expect("the card shows on hover");
+    let row = bar.bounds("status-health-card-slot-waits");
+    let value = bar.bounds("status-health-card-slot-waits-value");
+    let short = bar.bounds("status-health-card-queued-value");
+    let next = bar.bounds("status-health-card-mcp");
+    assert!(
+      value.x + value.width <= row.x + row.width,
+      "{count}: the value {value:?} stays inside its line {row:?}"
+    );
+    assert!(
+      value.height > short.height,
+      "{count}: the value {value:?} takes more lines than {short:?}"
+    );
+    assert!(
+      next.y >= value.y + value.height,
+      "{count}: the next fact {next:?} starts under the value {value:?}"
+    );
+  }
+}
+
+/// A value that fits keeps its one line: the card reads as `oagTL` draws it.
+#[test]
+fn status_health_card_keeps_a_short_value_on_one_line() {
+  let mut bar = waiting(0);
+  bar
+    .card("status-health", "status-health-card")
+    .expect("the card shows on hover");
+  let label = bar.bounds("status-health-card-queued");
+  let value = bar.bounds("status-health-card-queued-value");
+  assert!(
+    (label.height - value.height).abs() < 0.5,
+    "the row {label:?} is its one line {value:?}"
+  );
 }
 
 #[test]

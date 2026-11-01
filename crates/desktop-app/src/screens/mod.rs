@@ -7,13 +7,15 @@
 mod add_project;
 mod agents;
 mod all_projects;
+pub(crate) mod cloud_sign_in;
 mod connections;
 mod delivery;
 mod files;
-pub(crate) mod gate;
+mod first_download;
 pub(crate) mod hub;
 mod import;
 mod instructions;
+pub(crate) mod join_team;
 mod kept;
 pub(crate) mod memory;
 pub(crate) mod merge_queue;
@@ -59,6 +61,8 @@ pub fn screen(ctx: &mut Ctx) -> Element {
     Ok(Route::AllProjects) => all_projects::screen(ctx),
     Ok(Route::Usage(query)) => all_projects::usage_screen(ctx, *query),
     Ok(Route::AddProject(folder)) => add_project::screen(ctx, folder.map(|folder| folder.path())),
+    Ok(Route::JoinTeam(way)) => join_team::screen(ctx, way),
+    Ok(Route::FirstDownload(project)) => first_download::screen(ctx, project),
     Ok(Route::Settings) => settings::screen(ctx, settings::SettingsTab::Automation),
     Ok(Route::RotateToken) => settings::asking_rotation(ctx),
     Ok(Route::General) => settings::screen(ctx, settings::SettingsTab::General(None)),

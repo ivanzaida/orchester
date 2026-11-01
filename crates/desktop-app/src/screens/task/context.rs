@@ -4,8 +4,10 @@
 
 use std::sync::Arc;
 
-use orchester_core::project::TaskKey;
-use orchester_workspace::tasks::{approvals::ShownApproval, detail::TaskDetail, integration_jobs::ProjectJobState};
+use orchester_core::{id::StepExecutionId, project::TaskKey};
+use orchester_workspace::tasks::{
+  approvals::ShownApproval, detail::TaskDetail, integration_jobs::ProjectJobState, slot_wait::slot_waits,
+};
 
 use super::read::TaskLeftovers;
 use crate::project::{ShownProject, TasksState};
@@ -36,6 +38,15 @@ impl TaskContext {
   /// The run is recorded as running while no runner looks after it: it is interrupted until one does.
   pub fn lost(&self) -> bool {
     self.detail.lost_its_runner(self.online)
+  }
+
+  /// The ready steps that wait for an agent slot, as the project's runner reports them. A run without a runner waits
+  /// for none: nothing schedules it until a runner is back.
+  pub fn slot_waits(&self) -> Vec<StepExecutionId> {
+    if self.lost() {
+      return Vec::new();
+    }
+    slot_waits(self.project.feed.status.get().as_ref(), &self.project.open.repo_root)
   }
 
   /// A tool request of the task's latest run that waits for the person, the oldest first, as the

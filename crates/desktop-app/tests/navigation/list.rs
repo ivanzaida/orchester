@@ -299,11 +299,12 @@ fn keys_the_list_takes_do_not_reach_the_page_under_it() {
   let (mut window, navigation) = window_with(1440, 5);
   navigation.select(tabs(&navigation)[0]);
   assert_eq!(navigation.route_now(), orchester_app::routes::Route::AllProjects);
-  let remove = format!("project-remove-{}", super::support::project_id());
+  let row = format!("project-row-{}", super::support::project_id());
   window.until("All projects to list Kontur", |window| {
-    window.tree.get_element_by_id(&remove).is_some()
+    window.tree.get_element_by_id(&row).is_some()
   });
-  window.press(&remove);
+  window.hover(&row);
+  window.press(&format!("project-remove-{}", super::support::project_id()));
   assert!(
     shown(&mut window, "remove-project-question"),
     "the remove question is open"

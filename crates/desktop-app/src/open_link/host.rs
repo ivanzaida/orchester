@@ -1,9 +1,9 @@
 //! [`LinkHost`]: mounted once by the session's window, over its screen. It opens the links that arrive
-//! ([`super::LinkInbox`]): each brings the window to the front; `orchester://invite/<id>` opens Settings › Orchester at
-//! that invite's row when the cloud's own `GET /invites` lists it for the account signed in here, so the words on
+//! ([`super::LinkInbox`]): each brings the window to the front; `orchester://invite/<id>` opens Settings â€º Orchester
+//! at that invite's row when the cloud's own `GET /invites` lists it for the account signed in here, so the words on
 //! screen are the listing's; anything else, an invite not listed included, shows *This link isn't for anything here*
-//! over the screen until the person dismisses it. Signed out, the sign-in gate shows first and the invite opens after
-//! it. Nothing is accepted, declined or sent: the invite's row keeps its own buttons.
+//! over the screen until the person dismisses it. Signed out, Settings offers sign-in in place and the invite opens
+//! after it. Nothing is accepted, declined or sent: the invite's row keeps its own buttons.
 
 use lurq::{
   app::{
@@ -38,7 +38,7 @@ pub const NOTICE_ID: &str = "open-link-notice";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Props {
-  /// Whether this computer is signed in to Orchester Cloud: an invite waits behind the gate until it is.
+  /// Whether this computer is signed in to Orchester Cloud: an invite waits for sign-in in Settings until it is.
   pub signed_in: bool,
 }
 
@@ -79,10 +79,14 @@ impl Component for LinkHost {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let services = Services::of(ctx);
     let _arrived = follow(ctx, &services.opened_links);
-    for link in services.opened_links.take() {
-      self.arrive(link);
-    }
     let signed_in = ctx.props::<Props>().signed_in;
+    for link in services.opened_links.take() {
+      let needs_sign_in = !signed_in && matches!(&link, OpenLink::Invite(_));
+      self.arrive(link);
+      if needs_sign_in {
+        Navigation::of(ctx).go(Route::Orchester(OrchesterView::default()));
+      }
+    }
     let wanted = self.wanted.get().filter(|_| signed_in);
     if let (Some((invite, arrival)), Some(found)) = (wanted, look_up(ctx, wanted, &services.cloud))
       && found.arrival == arrival

@@ -83,6 +83,11 @@ pub fn commit(dir: &Path, files: &[(&str, String)], message: &str) -> Result<Rev
   head(dir)
 }
 
+/// Gives the repository `root` the remote `origin` at `url`.
+pub fn add_origin(root: &Path, url: &str) -> Result<(), GitError> {
+  git(root, &["remote", "add", "origin", url]).map(drop)
+}
+
 /// Makes branch `name` at the head of `from` in the repository at `repo`, leaving the checkout as it is.
 pub fn branch(repo: &Path, name: &str, from: &str) -> Result<(), GitError> {
   git(repo, &["branch", name, from]).map(drop)
@@ -107,6 +112,11 @@ pub fn init(root: &Path, files: &[(&str, String)]) -> Result<Revision, GitError>
     &["commit", "--quiet", "-m", "Kontur: webhooks, exports and contacts"],
   )?;
   head(root)
+}
+
+/// Names `url` as `origin` of the repository `root`; nothing is fetched.
+pub fn set_origin(root: &Path, url: &str) -> Result<(), GitError> {
+  git(root, &["remote", "add", "origin", url]).map(drop)
 }
 
 /// Adds the local branches `local` at `HEAD` in `root`, and the remote `origin` (an address that is never fetched)

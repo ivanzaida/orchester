@@ -28,10 +28,13 @@ use orchester_app::{
   project::{ProjectState, Projects},
   root::Start,
   routes::{
-    ChangeSource, ChangedFile, ConnectionsView, FilesView, ImportTab, ModuleListTab, ModuleTab, NewConnection,
+    ChangeSource, ChangedFile, ConnectionsView, FilesView, ImportTab, JoinWay, ModuleListTab, ModuleTab, NewConnection,
     OrchestratorChat, OverviewTab, ProjectPage, Route, Screen, TaskList, TaskListTab, TaskTab, TaskView, routes,
   },
-  services::Services,
+  services::{
+    Services,
+    accounts::{Accounts, WindowAccounts},
+  },
   shell::needs_you::PanelOpen,
   startup::Launch,
   theme::{self, Mode},
@@ -65,7 +68,9 @@ const BUILT: &[Screen] = &[
   Screen::EditConnection,
   Screen::EditTask,
   Screen::Files,
+  Screen::FirstDownload,
   Screen::ImportResources,
+  Screen::JoinTeam,
   Screen::Instructions,
   Screen::Memory,
   Screen::MergeQueue,
@@ -113,6 +118,7 @@ struct ScreensRoot {
   links: ChatLinks,
   gate: InputGate,
   notifications: NotificationPrefs,
+  accounts: WindowAccounts,
 }
 
 impl Component for ScreensRoot {
@@ -135,6 +141,7 @@ impl Component for ScreensRoot {
       links,
       gate: InputGate::default(),
       notifications: NotificationPrefs::new(ctx.signal(Chosen::default())),
+      accounts: WindowAccounts::new(ctx.signal(Accounts::default())),
     }
   }
 
@@ -145,9 +152,10 @@ impl Component for ScreensRoot {
       McpSettings::of_build(),
     )));
     // Settings' person-only rows mark themselves on the window's gate, and its notification rows show the window's
-    // choices.
+    // choices; the status bar names the accounts the window read, none here.
     ctx.provide(self.gate.clone());
     ctx.provide(self.notifications.clone());
+    ctx.provide(self.accounts.clone());
     ctx.provide(self.navigation.clone());
     ctx.provide(self.projects.clone());
     ctx.provide(self.needs_you.clone());
@@ -250,11 +258,15 @@ fn key(key: &str) -> orchester_core::project::TaskKey {
   key.parse().expect("a task key")
 }
 
-/// The screens outside a project, all built; Settings is `tests/settings` and `tests/settings_general`.
+/// The screens outside a project, all built; Settings is `tests/settings` and `tests/settings_general`, Join a team
+/// `tests/join_team`.
 fn home_screens() -> Vec<(Route, Vec<&'static str>)> {
   [
     Route::AllProjects,
     Route::AddProject(None),
+    Route::JoinTeam(JoinWay::Cloud),
+    Route::JoinTeam(JoinWay::Code),
+    Route::FirstDownload(PROJECT.parse().expect("a project id")),
     Route::Settings,
     Route::General,
   ]

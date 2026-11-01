@@ -1,9 +1,10 @@
 //! Linking a local checkout to a server project (`docs/architecture/server.md`, "Migration", rows 12 and 49; design
 //! `KSnOW`, which `N9NFio` reuses as the first link's upload page): what linking would do, read before the person
 //! confirms it, and the link itself. The first checkout linked to an empty project uploads its tasks with their
-//! numbers; a checkout without tasks takes a project's tasks as they are; a checkout with tasks linked to a project
-//! that has tasks joins it with new numbers after the person reviewed them (N3). `orchester.toml` is written only
-//! when the person asks for it, and never over a file that names anything else.
+//! numbers; a checkout without tasks is linked first and takes a project's tasks as they are in its first download
+//! ([`super::download`]); a checkout with tasks linked to a project that has tasks joins it with new numbers after the
+//! person reviewed them (N3). `orchester.toml` is written only when the person asks for it, and never over a file that
+//! names anything else.
 
 use std::path::Path;
 
@@ -14,6 +15,7 @@ use orchester_store::{ProjectDb, StoreError};
 use super::{
   ShareError, Shared,
   discovery::{self, DiscoveryState, discovery_state},
+  join::JoinTasks,
   share::{InProgress, upload_keys},
 };
 use crate::{
@@ -27,6 +29,9 @@ pub struct LinkPlan {
   pub project: SharedProject,
   pub kind: LinkKind,
   pub discovery: DiscoveryState,
+  /// The project is this computer's and the server the account's: the link moves it into the account, and what
+  /// confirms the link says so.
+  pub moves_to_account: bool,
 }
 
 /// How the checkout's tasks and the server project's meet.
@@ -73,8 +78,11 @@ impl Servers {
       .tasks
       .len();
     let (root, address) = (repo_root.to_owned(), project.address.clone());
-    let (local, discovery) = background::run(move || -> Result<_, StoreError> {
-      Ok((upload_keys(&ProjectDb::open(&root)?)?, discovery_state(&root, &address)))
+    let (workspace, target) = (self.inner.workspace.clone(), entry.stored.id);
+    let (local, discovery, moves_to_account) = background::run(move || -> Result<_, StoreError> {
+      let db = ProjectDb::open(&root)?;
+      let moves = workspace.servers_moving_project(db.project().id())?.contains(&target);
+      Ok((upload_keys(&db)?, discovery_state(&root, &address), moves))
     })
     .await??;
     let (tasks, next, claimed) = local;
@@ -87,6 +95,7 @@ impl Servers {
       project,
       kind,
       discovery,
+      moves_to_account,
     })
   }
 
@@ -136,7 +145,8 @@ impl Servers {
     self.link_download(entry, repo_root, plan, (request.key, write)).await
   }
 
-  /// Links a checkout without tasks to `plan`'s project as it is on the server: its tasks come down.
+  /// Links a checkout without tasks to `plan`'s project as it is on the server: its tasks come down in the first
+  /// download, which the link only starts, so the project opens before they are in ([`super::download`]).
   async fn link_download(
     &self,
     entry: &ServerEntry,
@@ -146,7 +156,7 @@ impl Servers {
   ) -> Result<Shared, ShareError> {
     let review = self.review(entry, repo_root, plan.project.clone()).await?;
     self
-      .join(entry, repo_root, &review, (Vec::new(), key))
+      .join_taking((entry, JoinTasks::FirstDownload), repo_root, &review, (Vec::new(), key))
       .await
       .map_err(|failed| failed.error)?;
     let (root, address) = (repo_root.to_owned(), review.address);

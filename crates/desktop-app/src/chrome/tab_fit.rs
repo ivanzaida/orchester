@@ -8,7 +8,7 @@
 
 use crate::theme::ExtraSpacing;
 
-/// An All projects tab (`All projects tab` `TvmmP`): the folders icon alone.
+/// A tab at the window's home but the active one at All projects (`Tab/Home` `qqzuJ`): the folders icon alone.
 pub const ICON_TAB_WIDTH: f32 = 28.0;
 /// The drag area that always stays between *New tab* and the window controls.
 pub const MIN_DRAG_WIDTH: f32 = 48.0;

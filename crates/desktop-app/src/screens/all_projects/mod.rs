@@ -1,17 +1,27 @@
-//! All projects (`All projects · dark` `S5HDKf`, its states `kwpO2`) and the welcome of a first launch
-//! (`Welcome · first launch · dark` `UQZRa`): the projects the application database knows, each with where it
-//! stands, its runs and when it was last opened, read without starting a runner; or, while a session has no
-//! project yet, the welcome. The list and its folders show at once, the counts once each project's data is
-//! read (a dash until then), and the runners' states as they report. Selecting a project that opens shows its
-//! Overview; *Open project folder…* opens the project a folder keeps ([`folder`]); *Add project* opens Add
-//! project; the × asks in place whether to remove a project from the list ([`remove`]). The *Usage* tab
-//! shows every project's usage (`rHA8G`, `crate::screens::usage::everywhere`). The rules are
-//! `orchester_workspace::project_list`'s.
+//! All projects (`All projects Â· dark` `S5HDKf`, its states `kwpO2`; the returning start, 09 `i5G19A` with a team and
+//! 09b `dLOCJ` without) and the welcome of a first launch (`Welcome Â· first launch Â· dark` `UQZRa`): the projects the
+//! application database knows, each with where it is, where it stands, its runs and when it was last opened, read
+//! without starting a runner; or, while a session has no project yet, the welcome. The list and its folders show at
+//! once, the counts and where each project is once its data is read (a dash until then), and the runners' states as
+//! they report. Selecting a project that opens shows its Overview; *Open project folderâ€¦* opens the project a folder
+//! keeps ([`folder`]); *Add project* opens Add project; *Join a team* and *Open shared projectâ€¦* open the teams in
+//! Settings â€º Orchester Cloud; a joined team's project with no checkout here is offered above the list until *Not
+//! now* ([`teams`], [`offer`]); an agent CLI that is not found is warned of above the list and on the welcome
+//! ([`agent_cli`]); the Ã— asks in place whether to remove a project from the list ([`remove`]); a row under the
+//! pointer offers to move its project between this computer and the account ([`move_project`]); and while nobody is
+//! signed in a line says what waits for a sign-in ([`waiting`]). The *Usage* tab shows every project's usage (`rHA8G`,
+//! `crate::screens::usage::everywhere`). The rules are `orchester_workspace::project_list`'s and
+//! `orchester_workspace::sharing`'s.
 
+mod agent_cli;
 mod folder;
+mod move_project;
+mod offer;
 mod page;
 mod remove;
 mod row;
+mod teams;
+mod waiting;
 mod welcome;
 
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
@@ -19,7 +29,7 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc};
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
-    ctx::{Ctx, StreamEmitter},
+    ctx::{Ctx, FutureState, StreamEmitter},
   },
   core::Signal,
   node::Element,
@@ -29,12 +39,14 @@ use orchester_workspace::{
   background, messages,
   project_list::{self, Listing},
   runner::{RunnerStatus, Runners},
+  sharing::cloud::SignIn,
   usage::UsageQuery,
   workspace::{ListedData, ProjectEntry},
 };
 use parking_lot::Mutex;
 
-use crate::{routes::Screen, screens::settings::orchester::InvitesNotice, services::Services};
+use self::{agent_cli::AgentCli, move_project::Moving, teams::Teams};
+use crate::{root::follow_sign_in, routes::Screen, screens::settings::orchester::InvitesNotice, services::Services};
 
 /// The element of the screen, as every screen has one (`screen-<name>`).
 fn screen_id() -> String {
@@ -59,13 +71,15 @@ pub(super) enum Tab {
 
 impl DevtoolsInspectable for Tab {}
 
-/// The screen's own state: what was removed, and which project's removal is asked.
+/// The screen's own state: what was removed or moved, and which project's removal or move is asked.
 #[derive(Clone)]
 struct Ask {
-  /// Counts removals, so the list is read again after one.
+  /// Counts removals and moves, so the list is read again after one.
   revision: Signal<u64>,
   /// The project whose removal is asked under its row.
   removing: Signal<Removing>,
+  /// The project whose move is asked under its row.
+  moving: Signal<Moving>,
 }
 
 /// The project whose removal is asked, if any.
@@ -76,7 +90,7 @@ impl DevtoolsInspectable for Removing {}
 
 struct AllProjects {
   ask: Ask,
-  /// Whether *Open project folder…*'s end is followed already; once per screen.
+  /// Whether *Open project folderâ€¦*'s end is followed already; once per screen.
   followed: Mutex<bool>,
   /// The projects' data as last read, and the runners' reports it was read at.
   read: Arc<Mutex<(Reported, ListedData)>>,
@@ -84,6 +98,10 @@ struct AllProjects {
   seen: Arc<Mutex<Seen>>,
   /// The answers of the invites notice, which outlive the notice.
   invites: InvitesNotice,
+  /// What was put off of the teams' projects offered.
+  teams: Teams,
+  /// The warning that an agent CLI is not found.
+  cli: AgentCli,
 }
 
 impl Component for AllProjects {
@@ -94,69 +112,121 @@ impl Component for AllProjects {
       ask: Ask {
         revision: ctx.signal(0),
         removing: ctx.signal(Removing::default()),
+        moving: ctx.signal(Moving::default()),
       },
       followed: Mutex::new(false),
       read: Arc::default(),
       seen: Arc::default(),
       invites: InvitesNotice::new(ctx),
+      teams: Teams::new(ctx),
+      cli: AgentCli::new(ctx),
     }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     // First in every render: lurq keeps a component's futures by the order it asks for them.
     let services = Services::of(ctx);
+    let sign_in = follow_sign_in(ctx, &services.cloud);
     let open = folder::open_action(ctx, &services);
-    let (workspace, hold) = (services.workspace.clone(), services.hold.clone());
-    let listing = ctx
-      .future((workspace, self.ask.revision.get()), move |(workspace, _)| {
-        let hold = hold.clone();
-        async move {
-          hold.released().await;
-          background::run(move || workspace.listing()).await?.map_err(|error| {
-            tracing::error!(%error, "cannot read the workspace's projects");
-            messages::store_error(&error)
-          })
-        }
-      })
-      .state()
-      .get();
+    let revision = self.ask.revision.get();
+    let listing = read_listing(ctx, &services, revision, &sign_in);
+    let waiting = waiting::read(ctx, revision, &sign_in, &services.workspace);
     let entries = match &listing.data {
       Some(Listing::Projects(entries)) => entries.clone(),
       Some(Listing::Welcome) | None => Vec::new(),
+    };
+    let failed = listing.error.clone().filter(|_| !listing.is_pending());
+    let cli = self.cli.read(
+      ctx,
+      &services,
+      agent_cli::listed(listing.data.as_ref(), failed.is_some()),
+    );
+    // The teams are read once the page shows: for the listed projects, or for the header alone when the list failed.
+    let shown = match (&listing.data, &failed) {
+      (Some(Listing::Projects(entries)), _) => Some(entries.as_slice()),
+      (_, Some(_)) => Some(&[][..]),
+      (Some(Listing::Welcome) | None, None) => None,
     };
     let reports = reports(ctx, (&services.runners, &self.seen), &entries);
     let work = reports.total();
     let data = read_data(ctx, (&services, &self.read), Entries(entries.clone(), reports));
     folder::follow(ctx, &open, &self.followed);
     let invites = InvitesNotice::read(ctx);
-    let failed = listing.error.clone().filter(|_| !listing.is_pending());
+    let teams = self.teams.read(ctx, &services.servers, shown);
+    let heading = page::Heading {
+      open: &open,
+      joined: teams.joined.as_ref().map(|joined| joined.servers.as_slice()),
+    };
     let tab = ctx.props::<Tab>().clone();
     match (listing.data, failed) {
       (_, Some(error)) => {
-        let notice = self.invites.notice(ctx, &invites);
-        page::page(ctx, &open, page::Body::Failed(&error), notice)
+        let above = page::Above {
+          notice: self.invites.notice(ctx, &invites),
+          ..page::Above::default()
+        };
+        page::page(ctx, heading, page::Body::Failed(&error), above)
       }
-      (Some(Listing::Welcome), None) => welcome::welcome(ctx, &open),
+      (Some(Listing::Welcome), None) => {
+        let cli = self.cli.element(ctx, &cli);
+        welcome::welcome(ctx, &open, cli)
+      }
       (Some(Listing::Projects(_)), None) if let Tab::Usage(query) = tab => {
         let usage = crate::screens::usage::everywhere(ctx, &query, work);
-        page::page(ctx, &open, page::Body::Usage(usage), None)
+        page::page(ctx, heading, page::Body::Usage(usage), page::Above::default())
       }
       (Some(Listing::Projects(_)), None) => {
         let rows = project_list::listed(&entries, &data, &services.runners);
-        let body = if rows.is_empty() {
-          page::Body::Empty
-        } else {
+        let line = waiting::line(ctx, waiting, &sign_in);
+        let body = if !rows.is_empty() {
           page::Body::List {
             rows: &rows,
+            places: teams.joined.as_ref().map(|joined| &joined.places),
+            signed_in: sign_in.is_signed_in(),
             ask: &self.ask,
           }
+        } else if line.is_some() {
+          page::Body::NothingHere
+        } else {
+          page::Body::Empty
         };
-        let notice = self.invites.notice(ctx, &invites);
-        page::page(ctx, &open, body, notice)
+        let above = page::Above {
+          waiting: line,
+          cli: self.cli.element(ctx, &cli),
+          notice: self.invites.notice(ctx, &invites),
+          offer: teams
+            .offer
+            .as_ref()
+            .map(|offered| offer::strip(ctx, offered, &teams.answer)),
+        };
+        page::page(ctx, heading, body, above)
       }
-      (None, None) => page::page(ctx, &open, page::Body::Reading, None),
+      (None, None) => page::page(ctx, heading, page::Body::Reading, page::Above::default()),
     }
   }
+}
+
+/// What the screen lists, read when it shows, after a removal or a move (`revision`) and whenever the sign-in changes.
+fn read_listing(
+  ctx: &mut Ctx,
+  services: &Services,
+  revision: u64,
+  sign_in: &SignIn,
+) -> FutureState<Listing, messages::Message> {
+  let workspace = services.workspace.clone();
+  let hold = services.hold.clone();
+  ctx
+    .future((workspace, revision, sign_in.account()), move |(workspace, ..)| {
+      let hold = hold.clone();
+      async move {
+        hold.released().await;
+        background::run(move || workspace.listing()).await?.map_err(|error| {
+          tracing::error!(%error, "cannot read the workspace's projects");
+          messages::store_error(&error)
+        })
+      }
+    })
+    .state()
+    .get()
 }
 
 /// What each listed project's database says, read after the list is shown and again whenever its runner

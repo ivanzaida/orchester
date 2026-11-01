@@ -4,20 +4,18 @@
 //! to the app's MCP tools. The window's close requests go to the session's close flow, whose panel takes
 //! the window's body while a close is held (`lifecycle`).
 //!
-//! Until this computer is signed in to Orchester Cloud, the session's window is the sign-in gate alone
-//! (`screens::gate`): no tabs, menu, sidebar, screens or keyboard shortcuts. The tabs stay as they were behind it, so
-//! signing in again opens them again; another account gets its own tabs (`navigation::accounts`). The projects'
-//! runners keep running, and the close flow still holds a close.
+//! The window works the same signed in to Orchester Cloud or not (the person's decision, 2026-10-28): what a sign-in
+//! is for offers one where it is asked (`screens::cloud_sign_in`). Each sign-in keeps its tabs
+//! (`navigation::accounts`), and an account's runners keep running while it is signed out.
 
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, StreamEmitter},
-    theme::{PaletteColor, SpacingSize},
   },
   components::{Column, Router, Stack},
   core::Signal,
-  node::{Element, dimension::Dimension, padding::Padding},
+  node::{Element, dimension::Dimension},
   router::RouterHandle,
 };
 use orchester_workspace::{
@@ -39,9 +37,11 @@ use crate::{
   open_link::{self, LinkHost},
   project::{Landing, Projects, ProjectsHost},
   routes,
-  screens::gate::{GateProps, SignInGate},
-  services::Services,
-  shell::{needs_you::PanelOpen, status_bar, update::UpdateAsk},
+  services::{
+    Services,
+    accounts::{Accounts, AccountsReader, WindowAccounts},
+  },
+  shell::{needs_you::PanelOpen, update::UpdateAsk},
   startup::{self, Problem},
   ui::chat::links::ChatLinks,
 };
@@ -150,6 +150,8 @@ struct SessionWindow {
   account_tabs: AccountTabs,
   /// The person's notification settings, read by the notifications' host and changed in Settings.
   notifications: NotificationPrefs,
+  /// The accounts the status bar and the notifications name, read by the window's [`AccountsReader`].
+  accounts: WindowAccounts,
   /// The Browser window, which the window opens and points.
   browser: BrowserLink,
 }
@@ -191,6 +193,7 @@ impl Component for SessionWindow {
       focus: ctx.signal(None),
       first_keys: FirstKeys::default(),
       notifications: NotificationPrefs::new(ctx.signal(Chosen::default())),
+      accounts: WindowAccounts::new(ctx.signal(Accounts::default())),
       browser,
     }
   }
@@ -209,28 +212,20 @@ impl Component for SessionWindow {
     ctx.provide(self.needs_you.clone());
     ctx.provide(self.update_ask.clone());
     ctx.provide(self.notifications.clone());
+    ctx.provide(self.accounts.clone());
     ctx.provide(self.browser.clone());
     let sign_in = follow_sign_in(ctx, &services.cloud);
-    if let Some(account) = sign_in.account() {
-      self.account_tabs.follow(account, &self.navigation, &self.projects);
-    }
+    self.account_tabs.follow(&sign_in, &self.navigation, &self.projects);
     let phase = lifecycle::phase(ctx, &services.close);
     let closing = phase.holds_window();
     let projects = ctx.mount_keyed::<ProjectsHost>("projects", ());
+    // The accounts the status bar and the notifications name are read once for both.
+    let accounts = ctx.mount_keyed::<AccountsReader>("accounts", ());
+    let notifications = ctx.mount_keyed::<NotificationsHost>("notifications", ());
+    let screen = Router::mount(ctx, self.router.clone());
     let link = ctx.props::<SessionProps>().link.clone();
     let beat = hang_reports::beat::beat(ctx, &link);
-    // Behind the sign-in gate nothing of the projects is told, on the screen or in a notification, and no page
-    // opens by itself.
-    let notifications = sign_in
-      .is_signed_in()
-      .then(|| ctx.mount_keyed::<NotificationsHost>("notifications", ()));
-    let browser = sign_in
-      .is_signed_in()
-      .then(|| ctx.mount_keyed::<AutoOpen>("browser-auto-open", self.browser.clone()));
-    let screen = match &sign_in {
-      SignIn::SignedIn { .. } => Router::mount(ctx, self.router.clone()),
-      SignIn::SignedOut { since, .. } => gate_screen(ctx, &sign_in, *since),
-    };
+    let browser = ctx.mount_keyed::<AutoOpen>("browser-auto-open", self.browser.clone());
     let overlay = lifecycle::overlay(ctx, phase, &services.close, &self.focus);
     // Over the page or the gate: what an `orchester://` link says, behind the gate as well.
     let links = ctx.mount_keyed::<LinkHost>(
@@ -246,56 +241,24 @@ impl Component for SessionWindow {
       .child(screen)
       .child(links)
       .with_children(overlay);
-    let signed_in = sign_in.is_signed_in();
-    let framed = if signed_in {
-      chrome::chrome(ctx, body.into(), closing)
-    } else {
-      chrome::gate(ctx, body.into(), closing)
-    };
+    let framed = chrome::chrome(ctx, body.into(), closing);
     let window = Column::new()
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
       .child(projects)
+      .child(accounts)
+      .child(notifications)
       .with_children(beat)
-      .with_children(notifications)
-      .with_children(browser)
+      .child(browser)
       .child(framed);
-    // Behind the gate no shortcut opens a tab or a screen.
-    window_input(
-      &self.navigation,
-      window.into(),
-      (signed_in && !closing, self.first_keys.clone()),
-    )
-    .id(WINDOW_ID)
-    .on_key_down(lifecycle::keys(&services.close, &self.focus))
+    window_input(&self.navigation, window.into(), (!closing, self.first_keys.clone()))
+      .id(WINDOW_ID)
+      .on_key_down(lifecycle::keys(&services.close, &self.focus))
   }
 }
 
-/// The gate in the content panel over its status bar (`Body` and `Status bar` of `Lpznn`).
-fn gate_screen(ctx: &mut Ctx, sign_in: &SignIn, since: orchester_core::time::Timestamp) -> Element {
-  let gate = ctx.mount_keyed::<SignInGate>(
-    "sign-in-gate",
-    GateProps {
-      sign_in: sign_in.clone(),
-    },
-  );
-  Column::new()
-    .width(Dimension::Pct(100.0))
-    .height(Dimension::Pct(100.0))
-    .background(PaletteColor::SurfaceBase)
-    .child(
-      Column::new()
-        .width(Dimension::Pct(100.0))
-        .flex(1.0)
-        .padding(Padding::horizontal(SpacingSize::Sm))
-        .child(gate),
-    )
-    .child(status_bar::gate(ctx, since))
-    .into()
-}
-
-/// Whether this computer is signed in to Orchester Cloud, whenever that changes.
-fn follow_sign_in(ctx: &mut Ctx, cloud: &Cloud) -> SignIn {
+/// Whether this computer is signed in to Orchester Cloud, whenever that changes; *Join a team* follows it too.
+pub(crate) fn follow_sign_in(ctx: &mut Ctx, cloud: &Cloud) -> SignIn {
   ctx
     .stream(cloud.clone(), |cloud, emitter: StreamEmitter<SignIn, ()>| async move {
       let mut changes = cloud.follow_sign_in();
