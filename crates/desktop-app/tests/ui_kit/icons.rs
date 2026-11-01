@@ -143,3 +143,17 @@ fn update_install_icons_match_bundled_font_names() {
     assert_eq!(glyph_name(font, font_glyph(font, icon.glyph() as usize)), name);
   }
 }
+
+/// The glyphs of the @ menu's rows and its empty state (`qhBhC`, `zzJ78`); the font names `square-check` by its
+/// former name `check-square-2`.
+#[test]
+fn mention_menu_icons_match_bundled_font_names() {
+  let font = include_bytes!("../../assets/fonts/lucide.ttf");
+  for (icon, name) in [
+    (Icon::SquareCheck, "check-square-2"),
+    (Icon::Play, "play"),
+    (Icon::SearchX, "search-x"),
+  ] {
+    assert_eq!(glyph_name(font, font_glyph(font, icon.glyph() as usize)), name);
+  }
+}

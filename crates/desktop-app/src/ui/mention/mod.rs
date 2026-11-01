@@ -109,7 +109,11 @@ impl MentionField {
       "Escape" => self.close(&shown),
       "ArrowDown" | "ArrowUp" if rows > 0 => {
         let at = self.focus.get_untracked().min(rows - 1);
-        let next = if event.key == "ArrowDown" { (at + 1) % rows } else { (at + rows - 1) % rows };
+        let next = if event.key == "ArrowDown" {
+          (at + 1) % rows
+        } else {
+          (at + rows - 1) % rows
+        };
         self.focus.set(next);
       }
       "Enter" | "Tab" if rows > 0 && !event.shift && !event.ctrl && !event.meta => {

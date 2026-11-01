@@ -11,9 +11,7 @@ use orchester_core::{
   store::TaskStore,
   task::{TaskDetails, organization::WorkflowStatus},
 };
-use orchester_workspace::mentions::{
-  Mention, catalog::Catalog, ending_at, facts, find, typed_at,
-};
+use orchester_workspace::mentions::{Mention, catalog::Catalog, ending_at, facts, find, typed_at};
 
 fn key(text: &str) -> TaskKey {
   text.parse().expect("a task key")
@@ -140,17 +138,25 @@ fn mentions_facts_follow_the_message_in_a_marked_block() {
   assert!(!block.contains("Skip spam"), "only the brief's first lines: {block}");
   assert!(block.contains("(the brief goes on)"), "{block}");
   assert!(
-    block.contains("- @ORC-2#2: run #2 of task ORC-2 \"Resend failed invitations\", state running, branch orchester/orc-run-2."),
+    block.contains(
+      "- @ORC-2#2: run #2 of task ORC-2 \"Resend failed invitations\", state running, branch orchester/orc-run-2."
+    ),
     "{block}"
   );
   assert!(block.contains("- @ORC-9: no task ORC-9 in this project."), "{block}");
-  assert!(block.contains("- @ORC-1#7: no run #7 of ORC-1 in this project."), "{block}");
+  assert!(
+    block.contains("- @ORC-1#7: no run #7 of ORC-1 in this project."),
+    "{block}"
+  );
   assert_eq!(block.matches("- @ORC-2:").count(), 1, "each mention once");
 
   assert_eq!(facts::said(&sent), text, "a conversation shows the person's words");
   assert_eq!(facts::said(text), text);
   assert_eq!(facts::with_facts(&catalog, "No mention."), "No mention.");
   let stored = facts::with_facts_in(fixture.repo.path(), "See @ORC-3").expect("read");
-  assert!(stored.contains("- @ORC-3: task ORC-3 \"Rate-limit the public API\""), "{stored}");
+  assert!(
+    stored.contains("- @ORC-3: task ORC-3 \"Rate-limit the public API\""),
+    "{stored}"
+  );
   assert!(stored.contains("Brief: none."), "{stored}");
 }

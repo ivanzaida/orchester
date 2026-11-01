@@ -352,8 +352,8 @@ async fn store(
     request.way,
   );
   background::run(move || {
-    let stored = with_facts_in(&root, &text)
-      .map(|text| store_answer_in(&root, &prepared, (key, way), (&text, &attachments), by));
+    let stored =
+      with_facts_in(&root, &text).map(|text| store_answer_in(&root, &prepared, (key, way), (&text, &attachments), by));
     (prepared, stored)
   })
   .await

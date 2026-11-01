@@ -19,6 +19,7 @@ mod labels;
 mod loader;
 mod markdown_code_scroll;
 mod markdown_link_layout;
+mod mention_links;
 mod prompt_input;
 mod textarea_focus;
 mod virtualized_list;

@@ -226,7 +226,7 @@ impl Component for Composer {
       }
     });
     let focused = ctx.signal(false);
-    let mention = MentionField::new(ctx, props.composing.state.draft.clone(), focused.clone());
+    let mention = MentionField::new(ctx, props.composing.state.draft, focused.clone());
     Self {
       menu: ctx.signal(false),
       focused,

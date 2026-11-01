@@ -22,6 +22,7 @@ mod layout;
 mod lines;
 mod links;
 mod mcp_servers;
+mod mentions;
 mod open_long;
 mod paste;
 mod proposal;

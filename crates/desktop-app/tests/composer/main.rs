@@ -15,6 +15,7 @@ mod keeping;
 )]
 #[path = "../../examples/seed/kontur/mod.rs"]
 mod kontur;
+mod mentions;
 mod sending;
 mod states;
 #[path = "../support/mod.rs"]

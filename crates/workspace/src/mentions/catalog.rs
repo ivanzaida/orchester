@@ -111,7 +111,12 @@ impl Catalog {
     let mut runs = Vec::new();
     for task in db.tasks()? {
       let at = db.task_organization_updated_at(task.id())?.unwrap_or(task.created_at());
-      for run in db.runs_of_task(task.id()).map_err(run_store_error)?.into_iter().flatten() {
+      for run in db
+        .runs_of_task(task.id())
+        .map_err(run_store_error)?
+        .into_iter()
+        .flatten()
+      {
         let merge = db.run_merge(run.id())?;
         runs.push(RunChoice {
           key: task.key().clone(),
@@ -129,8 +134,8 @@ impl Catalog {
         at,
       });
     }
-    tasks.sort_by(|a, b| b.at.cmp(&a.at));
-    runs.sort_by(|a, b| b.number.cmp(&a.number));
+    tasks.sort_by_key(|task| std::cmp::Reverse(task.at));
+    runs.sort_by_key(|run| std::cmp::Reverse(run.number));
     Ok(Self {
       tasks: Arc::new(tasks),
       runs: Arc::new(runs),
@@ -142,10 +147,7 @@ impl Catalog {
   }
 
   pub fn run(&self, key: &TaskKey, number: RunNumber) -> Option<&RunChoice> {
-    self
-      .runs
-      .iter()
-      .find(|run| &run.key == key && run.number == number)
+    self.runs.iter().find(|run| &run.key == key && run.number == number)
   }
 
   /// What the menu shows for `query`, typed after the `@`; `own`, the task a run's Conversation shows and its run,
@@ -171,7 +173,11 @@ impl Catalog {
 }
 
 /// The section of `rows`, the one `leads` says first, up to `limit` of them.
-fn section<'a, T: Clone + 'a>(rows: impl Iterator<Item = &'a T>, limit: usize, leads: impl Fn(&T) -> bool) -> Section<T> {
+fn section<'a, T: Clone + 'a>(
+  rows: impl Iterator<Item = &'a T>,
+  limit: usize,
+  leads: impl Fn(&T) -> bool,
+) -> Section<T> {
   let (mut first, rest): (Vec<&T>, Vec<&T>) = rows.partition(|row| leads(row));
   let total = first.len() + rest.len();
   first.extend(rest);

@@ -37,7 +37,13 @@ pub fn said(ctx: &mut Ctx, id: &str, body: &str, project: ProjectId) -> Option<E
   }
   let linked: Arc<str> = Arc::from(linked(words, &found, project));
   let links = super::links(ctx);
-  Some(agent_text(ctx, &text_id, &linked, (project, &ProjectNames::default()), &links))
+  Some(agent_text(
+    ctx,
+    &text_id,
+    &linked,
+    (project, &ProjectNames::default()),
+    &links,
+  ))
 }
 
 /// `words` as Markdown that shows them as written, with each mention `found` in them a link to its place in

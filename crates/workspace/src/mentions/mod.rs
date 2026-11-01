@@ -115,7 +115,10 @@ fn mention_at(text: &str, start: usize) -> Option<(usize, Mention)> {
   }
   let key_end = start + prefix + 1 + number_len;
   let written = &text[start..key_end];
-  let key: TaskKey = written.parse().ok().filter(|key: &TaskKey| key.to_string() == written)?;
+  let key: TaskKey = written
+    .parse()
+    .ok()
+    .filter(|key: &TaskKey| key.to_string() == written)?;
   let (end, mention) = match text[key_end..].strip_prefix(RUN_MARK) {
     Some(number) if digits(number) > 0 => {
       let end = key_end + RUN_MARK.len_utf8() + digits(number);

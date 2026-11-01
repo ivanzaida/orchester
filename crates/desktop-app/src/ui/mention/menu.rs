@@ -86,9 +86,7 @@ impl Component for MentionMenu {
   type Props = MenuProps;
 
   fn create(_ctx: &mut Ctx) -> Self {
-    Self {
-      last: Mutex::new(None),
-    }
+    Self { last: Mutex::new(None) }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -226,7 +224,10 @@ fn heading<T>(ctx: &Ctx, name: &str, section: &Section<T>) -> Element {
   let count = if section.shown.len() < section.total {
     ctx.t_args(
       "composer.mention.count",
-      [("shown", section.shown.len().to_string()), ("total", section.total.to_string())],
+      [
+        ("shown", section.shown.len().to_string()),
+        ("total", section.total.to_string()),
+      ],
     )
   } else {
     section.total.to_string().into()
@@ -307,7 +308,10 @@ fn task_row(ctx: &Ctx, task: &TaskChoice, focused: bool) -> Vec<Element> {
 /// and its state, and *Enter* while it has the focus.
 fn run_row(ctx: &mut Ctx, props: &MenuProps, run: &RunChoice, focused: bool) -> Vec<Element> {
   let number = run.number.get().to_string();
-  let shown = ctx.t_args("composer.mention.run", [("key", run.key.to_string()), ("number", number)]);
+  let shown = ctx.t_args(
+    "composer.mention.run",
+    [("key", run.key.to_string()), ("number", number)],
+  );
   let own = props
     .own
     .as_ref()
@@ -378,7 +382,11 @@ fn nothing((title, hint): (&str, &str)) -> Element {
         .flex(1.0)
         .min_width(Dimension::Px(0.0))
         .spacing(SpacingSize::Xs)
-        .child(Text::new(title).id("mention-nothing-title").variant(TypographyStyle::Label))
+        .child(
+          Text::new(title)
+            .id("mention-nothing-title")
+            .variant(TypographyStyle::Label),
+        )
         .child(
           Text::new(hint)
             .id("mention-nothing-hint")
