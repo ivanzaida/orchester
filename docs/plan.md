@@ -1001,6 +1001,13 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
+OP-144 / S1 public prerequisite · Additive `WorkspaceRole::Admin` / `Member`, inherited server-admin capabilities
+and a last-workspace-admin invariant guard in core; separate role-bearing DTOs in `orchester_api::v2`. Existing
+Owner/Member contracts, API clients, events, SQLite and desktop presentation remain unchanged. Server enforcement,
+versioned routes and dependency pins remain OP-144 in `ivanzaida/orchester-platform`. Twenty-three focused
+core/API/store tests and `tools/check.ps1` passed. Contract:
+`docs/architecture/workspace-roles.md`.
+
 ORC-403 · A ready step that waits for an agent slot says so · branch `orchester/orc-403-run-1` (implemented 2026-10-30;
 pipeline QA scenarios, Review and Verify follow). The runner reports ready agent steps held back only by the slots in
 `WorkSummary.slot_waits` (protocol 33); nothing is stored. `get_run` gives `status: { state: "pending", waits_for:
@@ -2884,3 +2891,4 @@ project or server added with nobody signed in is this computer's (`owner` NULL, 
 projects; sharing, joining, invites and team servers offer the sign-in in place; MCP answers `sign_in_required` only for
 a named project an account holds while nobody is signed in. Open: the *Verify* step's design verification, macOS
 unchecked. The three-way start page stays ORC-293.
+ORC-613 · Wait for required Codex MCP servers · branch `orchester/orc-613-run-1`: bounded cancellable thread-scoped readiness on fresh start, quota resume and retry; missing/terminal/timeout errors retain redaction and server names. Evidence: `docs/evidence/orc-613-codex-mcp-readiness.md`.

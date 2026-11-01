@@ -5,7 +5,10 @@
 //! thread, and its switch cannot be flipped while either runs. Only a person flips it: the switch refuses lurq's
 //! synthetic input, an MCP client's included, and says so under the row. Unlike the application-wide Automation
 //! section it moved from, the row does not close the whole window to MCP input while it shows, so Runs' other
-//! settings stay open to automation as before.
+//! settings stay open to automation as before. While estimates are on and the estimator's last request could not
+//! run, the row says why in its hint's place, in `warning` (ORC-611), instead of only in the log.
+
+use std::{path::Path, sync::Arc};
 
 use lurq::{
   app::{
@@ -16,6 +19,7 @@ use lurq::{
   core::Signal,
   node::Element,
 };
+use orchester_core::time::Timestamp;
 use orchester_workspace::{
   background,
   messages::{self, Message},
@@ -23,9 +27,10 @@ use orchester_workspace::{
 
 use super::super::{
   TabProps,
-  kit::{Group, SettingRow},
+  kit::{Group, SettingRow, Tone},
 };
 use crate::{
+  screens::reviewer_trouble,
   services::Services,
   ui::{
     field::field_error,
@@ -75,6 +80,7 @@ impl Component for Estimates {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let state = self.save.state().get();
     let read = self.stored(ctx, state.data);
+    let root = ctx.props::<TabProps>().project.open.repo_root.clone();
     let fixed = state.is_pending() || read.is_pending();
     // The person's choice once it saved; the stored value until then, or after a save failed.
     let shown = match (&state.error, self.saved.get()) {
@@ -111,8 +117,13 @@ impl Component for Estimates {
         &ctx.t("project_settings.estimates.blocked"),
       ))
     });
-    let row = SettingRow::new(ID, ctx.t("project_settings.estimates.label"))
-      .hint(ctx.t("project_settings.estimates.hint"))
+    let row = SettingRow::new(ID, ctx.t("project_settings.estimates.label"));
+    // Why the last estimate gave no points, in the hint's place while estimates are on.
+    let row = match could_not_run(ctx, &root, shown) {
+      Some(said) => row.toned(said, Tone::Warning),
+      None => row.hint(ctx.t("project_settings.estimates.hint")),
+    };
+    let row = row
       .info(ctx.t("project_settings.estimates.info"))
       .control(switch)
       .under_all(problem)
@@ -157,4 +168,14 @@ impl Estimates {
       .state()
       .get()
   }
+}
+
+/// Why the estimator's last request on the reviewer gave no points (ORC-611), while estimates are on (`shown`); read
+/// when the row shows and again as the switch changes.
+fn could_not_run(ctx: &mut Ctx, root: &Path, shown: Option<bool>) -> Option<Arc<str>> {
+  let health = reviewer_trouble::health(ctx, root.to_path_buf(), format!("{shown:?}"));
+  let now = Timestamp::now();
+  let trouble = health.filter(|_| shown == Some(true))?.estimates(now)?;
+  let reason = reviewer_trouble::reason(ctx, trouble, now);
+  Some(ctx.t_args("project_settings.estimates.couldNotRun", [("reason", &*reason)]))
 }

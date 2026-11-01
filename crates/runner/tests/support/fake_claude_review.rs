@@ -2,7 +2,8 @@
 //! reads the review prompt as plain text from standard input and answers with Claude Code's
 //! `--output-format stream-json` events: its `init`, then the result with the verdict in `structured_output`
 //! and the review's usage ([`USAGE`]). What it answers depends on the task in the prompt: "Reviewer asks"
-//! asks the person, "Reviewer babbles" prints prose instead of JSON, "Reviewer waits" approves after three
+//! asks the person, "Reviewer babbles" prints prose instead of JSON, "Reviewer signed out" fails as a signed-out
+//! Claude Code does ([`signed_out`]), "Reviewer waits" approves after three
 //! seconds, "Reviewer hangs" never answers, anything else approves; "Reviewer reports limits" adds a
 //! `rate_limit_event` ([`LIMITS`]), "Reviewer hides usage" leaves the usage out of the result, and "Reviewer
 //! rambles" prints more than the runner keeps of its output (320 events of 1 KiB) before its result. It
@@ -45,6 +46,9 @@ pub fn review(args: &[String]) -> ExitCode {
     "roots {}",
     prompt.contains("does the request touch anything outside the roots")
   ));
+  if prompt.contains("Reviewer signed out") {
+    return signed_out(&prompt);
+  }
   if prompt.contains("Reviewer babbles") {
     println!("Sure, that looks fine to me.");
     return ExitCode::SUCCESS;
@@ -88,6 +92,21 @@ pub fn review(args: &[String]) -> ExitCode {
   }
   println!("{answer}");
   ExitCode::SUCCESS
+}
+
+/// Claude Code signed out, as it answers in print mode
+/// (`crates/core/tests/fixtures/claude/check-now-signed-out.jsonl`): an error result and exit code 1. Its error also
+/// carries the value of `FAKE_REVIEW_SECRET` and the whole prompt, and its error output the value again, which must not
+/// reach the review or the log.
+fn signed_out(prompt: &str) -> ExitCode {
+  let secret = std::env::var("FAKE_REVIEW_SECRET").unwrap_or_default();
+  eprintln!("token {secret}");
+  let said = format!("Not logged in · Please run /login\nkey {secret}\n{prompt}");
+  println!(
+    "{}",
+    serde_json::json!({"type": "result", "subtype": "success", "is_error": true, "result": said})
+  );
+  ExitCode::from(1)
 }
 
 /// The story-point estimator's answer on the same connection: "Estimator babbles" prints prose; a task whose brief

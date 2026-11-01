@@ -43,9 +43,10 @@ impl RunTask {
     Ok(true)
   }
 
-  /// Whether `execution`'s agent would start on an account whose plan limit its CLI last reported reached in this
-  /// project and not reset yet (`docs/design/agent-accounts.md`, `XPjSc`): the step does not start there, the run
-  /// waits for the reset holding no agent slot, or a person starts the step elsewhere. A step whose connection can't
+  /// Whether `execution`'s agent would start on an account whose CLI last reported in this project that it refuses
+  /// turns until a reset that has not come yet (`docs/design/agent-accounts.md`, `XPjSc`): the step does not start
+  /// there, the run waits for the reset holding no agent slot, or a person starts the step elsewhere. An account whose
+  /// usable credits carry work past its full window starts: the CLI says if it refuses. A step whose connection can't
   /// be read starts and says why.
   fn account_at_plan_limit(&self, execution: StepExecutionId) -> bool {
     let Ok((step, profile, _)) = self.agent_step(execution) else {
@@ -57,8 +58,9 @@ impl RunTask {
     let Some(account) = connection.plan_account() else {
       return false;
     };
+    let now = orchester_core::time::Timestamp::now();
     match self.db.last_account_reading(account) {
-      Ok(reading) => reading.is_some_and(|reading| reading.resets_at(orchester_core::time::Timestamp::now()).is_some()),
+      Ok(reading) => reading.is_some_and(|reading| reading.refuses_turns(now) && reading.resets_at(now).is_some()),
       Err(error) => {
         tracing::warn!(%error, "cannot read an account's plan limits; the step starts");
         false

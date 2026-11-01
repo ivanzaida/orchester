@@ -7,21 +7,32 @@
 //! - *Cap Retry-After at 60 s*: a command the profile allowed, one the reviewer approved with its reason, then one the
 //!   reviewer was not sure about;
 //! - one task per other reason a request comes to the person: the reviewer denied it, it is not on the allowed list, a
-//!   push to a remote, another branch.
+//!   push to a remote, another branch, the reviewer could not run (ORC-611: its review failed, and the reviewer's
+//!   account is at its weekly plan limit, which resets two days after the seed's now — Project settings › Runs ›
+//!   Reviewer says so too);
+//! - the reviewer did not answer in time, and its answer could not be read (ORC-586);
+//! - an MCP call of an Autopilot step the reviewer was not sure about, and one of a Manual step not on its allowed list
+//!   (ORC-586: only Manual's headline says "not on its allowed list").
 //!
 //! Its runs are recorded, not executed, as `cards-auto-mode`'s are: a step with a request that came to the person is
 //! recorded waiting for them (`cards::hold`).
 
 use orchester_core::{
+  connection::{
+    AgentProvider,
+    plan_limits::{LimitReading, LimitState, LimitWindow, PlanLimits},
+  },
   run::{
     AnswerKind, CameToPerson, DecidedBy, Invocation, PendingToolApproval, PersonReason, RequestAnswer, Run,
     ToolApprovalDecision,
+    review::{Review, ReviewFailure, resolve_reviewer},
   },
+  store::ConnectionStore,
   time::Timestamp,
 };
 
 use super::cards::{at_work, hold};
-use crate::kontur::{Kontur, SeedError};
+use crate::kontur::{Kontur, SeedError, catalogue::recorded_connection};
 
 const CRITERIA: [&str; 1] = ["The change is covered by tests."];
 /// The agent that asks, Implement's.
@@ -34,8 +45,13 @@ enum Answered {
   Approved(AnswerKind, Option<&'static str>),
   /// It came to the person for this reason, with what the card names.
   Came(PersonReason, Option<&'static str>),
+  /// The same, by Autopilot's rules.
+  CameInAutopilot(PersonReason, Option<&'static str>),
+  /// It came to the person as the reviewer could not judge it: its review failed so.
+  NotJudged(ReviewFailure),
 }
 
+/// A command, or an MCP call written `server::tool`.
 type Asked = (&'static str, Answered);
 
 const AUTOPILOT: [Asked; 7] = [
@@ -97,8 +113,28 @@ const REFS: [Asked; 1] = [(
   "git update-ref refs/heads/main 4e1c9d2",
   Answered::Came(PersonReason::Refs, Some("refs/heads/main")),
 )];
+const NOT_JUDGED: [Asked; 1] = [(
+  "curl -s https://staging.example.com/uploads/health",
+  Answered::NotJudged(ReviewFailure::CouldNotRun),
+)];
+const TIMED_OUT: [Asked; 1] = [(
+  "curl -s https://staging.example.com/downloads/health",
+  Answered::NotJudged(ReviewFailure::TimedOut),
+)];
+const UNREADABLE: [Asked; 1] = [(
+  "cargo update -p serde_json",
+  Answered::NotJudged(ReviewFailure::Unreadable),
+)];
+const AUTOPILOT_TOOL: [Asked; 1] = [(
+  "pencil::batch_design",
+  Answered::CameInAutopilot(
+    PersonReason::ReviewerUnsure,
+    Some("Can't tell which files the design tool writes."),
+  ),
+)];
+const MANUAL_TOOL: [Asked; 1] = [("pencil::batch_design", Answered::Came(PersonReason::NotAllowed, None))];
 
-const TASKS: [(&str, &[Asked], &str); 6] = [
+const TASKS: [(&str, &[Asked], &str); 11] = [
   (
     "Add retry to webhook sender",
     &AUTOPILOT,
@@ -113,11 +149,47 @@ const TASKS: [(&str, &[Asked], &str); 6] = [
   ("Read the deploy key", &NOT_ALLOWED, "a command not on the allowed list"),
   ("Publish the retry branch", &PUSH, "a push to a remote"),
   ("Move main to the fix", &REFS, "a change to another branch"),
+  (
+    "Retry uploads on 503",
+    &NOT_JUDGED,
+    "a command the reviewer could not judge: its account is at its weekly plan limit",
+  ),
+  (
+    "Retry downloads on 503",
+    &TIMED_OUT,
+    "a command the reviewer could not judge: it did not answer in time",
+  ),
+  (
+    "Bump the JSON parser",
+    &UNREADABLE,
+    "a command the reviewer could not judge: its answer could not be read",
+  ),
+  (
+    "Redraw the retry banner",
+    &AUTOPILOT_TOOL,
+    "an Autopilot step's MCP call the reviewer was not sure about",
+  ),
+  (
+    "Sketch the retry banner",
+    &MANUAL_TOOL,
+    "a Manual step's MCP call not on the allowed list",
+  ),
 ];
+
+/// When the reviewer's account's weekly limit resets: two days after the seed's now.
+const RESETS_IN_MINUTES: i64 = 2 * 24 * 60;
 
 pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
   let catalogue = kontur.catalogue()?;
   let pipeline = &catalogue.feature_delivery;
+  // The project's reviewer: a Claude Code connection on its CLI's Default account, recorded and never run.
+  let program = kontur.repo.join(".orchester").join("recorded").join("claude");
+  let published = kontur.ago(7 * 24 * 60);
+  recorded_connection(
+    &mut kontur.db,
+    ("Claude · Claude 2", AgentProvider::ClaudeCodeCli, &program),
+    published,
+  )?;
   for (index, (title, asked, state)) in TASKS.into_iter().enumerate() {
     let minutes = i64::try_from(TASKS.len() - index).expect("a short list") * 30;
     let (created, started) = (kontur.ago(minutes + 20), kontur.ago(minutes));
@@ -138,22 +210,22 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
   Ok(())
 }
 
-/// The `call`-th request of `invocation` to run `command`, asked at `at`.
-fn request(
-  (run, invocation): (&Run, &Invocation),
-  (call, command): (usize, &str),
-  at: Timestamp,
-) -> PendingToolApproval {
+/// The `call`-th request of `invocation` to run `asked`, a command or a `server::tool` call, asked at `at`.
+fn request((run, invocation): (&Run, &Invocation), (call, asked): (usize, &str), at: Timestamp) -> PendingToolApproval {
+  let (command, server, action) = match asked.split_once("::") {
+    Some((server, tool)) => (false, server, tool),
+    None => (true, "command", asked),
+  };
   PendingToolApproval {
     id: format!("{}:call_{}", invocation.id, call + 1),
     run: run.id(),
     execution: invocation.execution,
     invocation: invocation.id,
     agent: AGENT.to_owned(),
-    command: true,
+    command,
     scope: None,
-    server: "command".to_owned(),
-    action: command.to_owned(),
+    server: server.to_owned(),
+    action: action.to_owned(),
     target: None,
     requested_at: at,
     native: None,
@@ -163,7 +235,7 @@ fn request(
 /// Records how the run's mode answered `request`; whether it waits for the person.
 fn answer(kontur: &mut Kontur, request: &PendingToolApproval, answered: Answered) -> Result<bool, SeedError> {
   let run = request.run;
-  match answered {
+  let came = match answered {
     Answered::Approved(kind, reason) => {
       let decided_by = match kind {
         AnswerKind::Profile => DecidedBy::Permissions,
@@ -177,15 +249,60 @@ fn answer(kontur: &mut Kontur, request: &PendingToolApproval, answered: Answered
       kontur
         .db
         .delivered_tool_approval(run, &request.id, ToolApprovalDecision::Approved)?;
-      Ok(false)
+      return Ok(false);
     }
-    Answered::Came(reason, detail) => {
-      let came = CameToPerson {
-        reason,
-        detail: detail.map(str::to_owned),
-      };
-      kontur.db.record_came_to_person(run, &request.id, Some(&came))?;
-      Ok(true)
+    Answered::Came(reason, detail) => CameToPerson {
+      detail: detail.map(str::to_owned),
+      ..CameToPerson::because(reason)
+    },
+    Answered::CameInAutopilot(reason, detail) => CameToPerson {
+      detail: detail.map(str::to_owned),
+      ..CameToPerson::because(reason)
     }
+    .in_mode(true),
+    Answered::NotJudged(failure) => {
+      not_judged(kontur, request, failure)?;
+      CameToPerson::reviewer_failed(failure)
+    }
+  };
+  kontur.db.record_came_to_person(run, &request.id, Some(&came))?;
+  Ok(true)
+}
+
+/// The reviewer's review of `request` that failed so; for a CLI that failed, as one at its account's plan limit does,
+/// the account's weekly limit reached, as the CLI reported it then.
+fn not_judged(kontur: &mut Kontur, request: &PendingToolApproval, failure: ReviewFailure) -> Result<(), SeedError> {
+  let failed = Review::Failed {
+    failure,
+    model: Some("claude-haiku-4-5".to_owned()),
+    detail: Some("the reviewer could not run: the CLI exited with code 1".to_owned()),
+  };
+  kontur.db.record_review(request.run, &request.id, &failed)?;
+  if failure != ReviewFailure::CouldNotRun {
+    return Ok(());
   }
+  let (settings, connections) = (kontur.db.auto_mode_settings()?, kontur.db.connections()?);
+  let reviewer = resolve_reviewer(&settings, &connections).expect("the catalogue's connection reviews");
+  let provider = reviewer.kind.provider();
+  let week = LimitWindow::new(
+    7 * 24 * 60,
+    Some(100.0),
+    Some(kontur.ago(-RESETS_IN_MINUTES)),
+    LimitState::Reached,
+    false,
+  )
+  .expect("a whole week, used up");
+  let reading = LimitReading {
+    provider,
+    account: reviewer.connection.account().id(provider),
+    at: request.requested_at,
+    limits: PlanLimits {
+      windows: vec![week],
+      plan: None,
+      credits: None,
+      blocked: None,
+    },
+  };
+  kontur.db.save_limit_snapshot(request.run, &reading)?;
+  Ok(())
 }

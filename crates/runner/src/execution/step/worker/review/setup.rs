@@ -65,7 +65,7 @@ pub(super) enum ReviewerSetup {
     effort: Option<String>,
   },
   /// A reviewer that cannot be reached (its key could not be read): every review fails.
-  Unreachable { model: ModelId },
+  Unreachable { model: ModelId, connection: UsedProvider },
   /// The project has no reviewer.
   Missing,
 }
@@ -179,13 +179,26 @@ pub(super) fn hold_now(
 
 impl ReviewerSetup {
   /// Auto mode's handling of `job`'s request with this reviewer, from the blocking pool; what it cost goes
-  /// to `ledger` once it ends.
+  /// to `ledger` once it ends. A review that gave no verdict is logged with why.
   pub(super) fn review(self, job: ReviewJob, ledger: &ReviewLedger) -> Review {
     let started_at = Timestamp::now();
     let provider = self.provider();
+    let connection = self.connection().cloned();
     let done = self.judge(job);
     if let Some(spent) = provider {
       ledger.record(spent, started_at, &done);
+    }
+    if let Review::Failed { failure, model, detail } = &done.review {
+      tracing::warn!(
+        run = %ledger.run,
+        request = %ledger.approval,
+        connection = connection.as_ref().map_or("", |used| &*used.name),
+        connection_id = connection.as_ref().map(|used| used.id.to_string()).unwrap_or_default(),
+        model = model.as_deref().unwrap_or_default(),
+        ?failure,
+        detail = detail.as_deref().unwrap_or_default(),
+        "the reviewer gave no verdict"
+      );
     }
     done.review
   }
@@ -201,6 +214,16 @@ impl ReviewerSetup {
       } => Some((kind.provider(), *account, connection.clone())),
       Self::Native { connection, .. } => Some((AgentProvider::AnthropicApi, None, connection.clone())),
       Self::Unreachable { .. } | Self::Missing => None,
+    }
+  }
+
+  /// The connection this reviewer runs on; `None` when the project has none.
+  pub(super) const fn connection(&self) -> Option<&UsedProvider> {
+    match self {
+      Self::Cli { connection, .. } | Self::Native { connection, .. } | Self::Unreachable { connection, .. } => {
+        Some(connection)
+      }
+      Self::Missing => None,
     }
   }
 
@@ -235,7 +258,7 @@ impl ReviewerSetup {
     };
     match self {
       Self::Missing => ask(None),
-      Self::Unreachable { model } => ask(Some(&Unreachable { model })),
+      Self::Unreachable { model, .. } => ask(Some(&Unreachable { model })),
       Self::Native {
         client, model, effort, ..
       } => {
@@ -363,7 +386,7 @@ fn native(
 ) -> ReviewerSetup {
   let key = match api_key(db, keys, api.key()) {
     Some(key) => key,
-    None => return ReviewerSetup::Unreachable { model },
+    None => return ReviewerSetup::Unreachable { model, connection },
   };
   match client(api, key) {
     Ok(client) => ReviewerSetup::Native {
@@ -374,7 +397,7 @@ fn native(
     },
     Err(error) => {
       tracing::warn!(%error, "cannot make the native reviewer's client");
-      ReviewerSetup::Unreachable { model }
+      ReviewerSetup::Unreachable { model, connection }
     }
   }
 }

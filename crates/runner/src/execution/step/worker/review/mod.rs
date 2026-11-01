@@ -76,6 +76,7 @@ pub(super) async fn next(slot: &mut Option<Reviewing>) -> Reviewed {
     Review::Failed {
       failure: ReviewFailure::CouldNotRun,
       model: None,
+      detail: Some("the review did not finish".to_owned()),
     }
   });
   let reviewing = slot.take().expect("the review awaited above is under way");
@@ -223,7 +224,8 @@ impl Worker {
     (id, came): (&str, &CameToPerson),
     autopilot: bool,
   ) -> Result<(), StoreError> {
-    watch.db.record_came_to_person(watch.invocation.run, id, Some(came))?;
+    let came = came.clone().in_mode(autopilot);
+    watch.db.record_came_to_person(watch.invocation.run, id, Some(&came))?;
     watch.asked_in_autopilot = autopilot;
     watch.invocation.timing.wait_for_person(Timestamp::now());
     // A person's wait never holds one of the computer's QA slots.

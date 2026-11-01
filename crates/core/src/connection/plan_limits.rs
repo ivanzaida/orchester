@@ -148,11 +148,35 @@ impl LimitWindow {
   }
 }
 
+/// The credits Codex App Server reports beside the windows: what continues work once an included window is used up
+/// (<https://learn.chatgpt.com/docs/pricing>).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Credits {
   pub has_credits: bool,
   pub unlimited: bool,
   pub balance: Option<String>,
+  /// App Server said a spend control stops spending credits (`spendControlReached`); `false` when it said nothing.
+  #[serde(default)]
+  pub spend_control_reached: bool,
+}
+
+impl Credits {
+  /// Whether new work may spend credits: unlimited ones, or credits App Server says the account has, unless a spend
+  /// control stops spending them. A balance it reports at or below zero is none, whatever `has_credits` says; one it
+  /// leaves out or this version cannot read leaves `has_credits` to tell.
+  pub fn usable(&self) -> bool {
+    if self.spend_control_reached {
+      return false;
+    }
+    if self.unlimited {
+      return true;
+    }
+    let balance = self
+      .balance
+      .as_deref()
+      .and_then(|balance| balance.trim().parse::<f64>().ok());
+    self.has_credits && balance.is_none_or(|balance| balance > 0.0)
+  }
 }
 
 /// Why a CLI says it refuses new turns (Codex App Server's `rateLimitReachedType`; Claude Code's
@@ -280,7 +304,8 @@ impl LimitReading {
     self.resets_at(self.at)
   }
 
-  /// The account's state: a block no reset lifts holds; otherwise the limiting window decides.
+  /// The account's state: a block no reset lifts holds; otherwise the limiting window decides. It describes the
+  /// included windows; whether a new turn may start is [`Self::refuses_turns`].
   pub fn state(&self, now: Timestamp) -> LimitState {
     if self.block_beyond_reset().is_some() {
       return LimitState::Reached;
@@ -288,5 +313,21 @@ impl LimitReading {
     self
       .limiting(now)
       .map_or(LimitState::Normal, |window| self.window_state(window, now))
+  }
+
+  /// Whether the CLI would refuse a new turn on this account at `now`: its state is reached, and no usable credits of
+  /// the same report carry work past a used-up window. Credits lift only a window's block (`rate_limit_reached`, or a
+  /// full window), never depleted credits, a workspace's limit or a reason this version does not know. A report
+  /// without credits says nothing of them: its full window refuses as before.
+  pub fn refuses_turns(&self, now: Timestamp) -> bool {
+    if self.state(now) != LimitState::Reached {
+      return false;
+    }
+    let window_only = self
+      .limits
+      .blocked
+      .is_none_or(|blocked| blocked.reason == LimitBlock::Window);
+    let carried = window_only && self.limits.credits.as_ref().is_some_and(Credits::usable);
+    !carried
   }
 }

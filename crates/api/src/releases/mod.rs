@@ -1,7 +1,7 @@
 //! App releases between the desktop app, CI and Orchester Cloud (`docs/cloud-api.md`, "App releases"): the update
-//! check, downloads, CI's upload, the staff's admin, and the signed message that ties a file to its release. With the
-//! `release-signature` feature, the check of a file's signature against the accepted release keys; with
-//! `release-signing`, CI's signing of a file with a release key.
+//! check, the public Stable release, downloads, CI's upload, the staff's admin, and the signed message that ties a file
+//! to its release. With the `release-signature` feature, the check of a file's signature against the accepted release
+//! keys; with `release-signing`, CI's signing of a file with a release key.
 
 mod admin;
 mod check;
@@ -12,6 +12,7 @@ mod rollout;
 #[cfg(feature = "release-signing")]
 mod sign;
 mod signed;
+mod stable;
 mod upload;
 #[cfg(feature = "release-signature")]
 mod verify;
@@ -28,6 +29,7 @@ pub use rollout::{RolloutPercent, rollout_bucket};
 #[cfg(feature = "release-signing")]
 pub use sign::{ReleaseSigningKey, SigningKeyError};
 pub use signed::{FileDigest, FileSignature, ReleaseKeyId, SIGNED_MESSAGE_HEADER, SignedFile};
+pub use stable::{StableFile, StableRelease, StableReleaseAnswer, StableReleaseQuery};
 pub use upload::{DeclaredFile, FileResult, FileUpload, FileVerdict, NewRelease, Rejection, Verification};
 #[cfg(feature = "release-signature")]
 pub use verify::{AcceptedReleaseKeys, ReleasePublicKey, SignatureError};

@@ -187,27 +187,45 @@ fn auto_mode_records_the_reviewers_verdict_and_fails_closed() {
   }));
   assert_eq!(asked.reason(), Some("It is not needed for the task."));
   assert!(!asked.approves());
-  for (error, failure) in [
-    (ReviewError::TimedOut, ReviewFailure::TimedOut),
-    (ReviewError::Unparseable("prose".to_owned()), ReviewFailure::Unreadable),
+  for (error, failure, detail) in [
     (
-      ReviewError::CouldNotRun("not found".to_owned()),
+      ReviewError::TimedOut,
+      ReviewFailure::TimedOut,
+      "the reviewer did not answer in time",
+    ),
+    (
+      ReviewError::Unparseable("prose".to_owned()),
+      ReviewFailure::Unreadable,
+      "the reviewer's answer could not be read: prose",
+    ),
+    (
+      ReviewError::CouldNotRun("the CLI exited with code 1:\nNot logged in\t\u{b7} Please run /login".to_owned()),
       ReviewFailure::CouldNotRun,
+      "the reviewer could not run: the CLI exited with code 1: Not logged in \u{b7} Please run /login",
     ),
   ] {
     let failed = reviewed(Err(error));
     assert!(
-      matches!(failed, Review::Failed { failure: got, .. } if got == failure),
+      matches!(&failed, Review::Failed { failure: got, model: Some(_), detail: Some(why) } if *got == failure && why == detail),
       "{failed:?}"
     );
     assert!(!failed.approves());
   }
+  let long = reviewed(Err(ReviewError::CouldNotRun("why ".repeat(200))));
+  let Review::Failed {
+    detail: Some(detail), ..
+  } = &long
+  else {
+    panic!("{long:?}");
+  };
+  assert_eq!(detail.chars().count(), 300, "a detail is kept short");
   let without = review_request(None, (&subject, &rules(Some(&permissions))), Ok(input(&[]))).review;
   assert_eq!(
     without,
     Review::Failed {
       failure: ReviewFailure::NoReviewer,
-      model: None
+      model: None,
+      detail: None
     }
   );
 }

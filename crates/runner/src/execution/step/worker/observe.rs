@@ -6,7 +6,8 @@
 use orchester_core::{
   connection::{
     AgentProvider,
-    plan_limits::{LimitReading, LimitState, PlanLimits},
+    app_server::CodexFailure,
+    plan_limits::{LimitReading, PlanLimits},
     stream::{AgentEvent, InvocationOutcome},
   },
   run::RunLimit,
@@ -90,7 +91,7 @@ impl Worker {
       at: Timestamp::now(),
       limits,
     };
-    watch.plan_reached = reading.state(reading.at) == LimitState::Reached;
+    watch.plan_reached = reading.refuses_turns(reading.at);
     // The history only lacks this report, which its chart shows as a gap; the agent works on.
     if let Err(error) = watch.db.save_limit_snapshot(watch.invocation.run, &reading) {
       tracing::warn!(%error, "cannot store the plan limits the agent's CLI reported");
@@ -98,16 +99,21 @@ impl Worker {
     self.notifier.send(Event::PlanLimits(reading));
   }
 
-  /// Why the agent stopped: the run's own stop, or its account's plan limit when its turn failed while the CLI said
-  /// the limit is reached (`docs/design/agent-accounts.md`): the step then waits for the reset or another account
-  /// instead of failing. A running agent never moves to another account by itself.
+  /// Why the agent stopped: the run's own stop, or its account's plan limit when its turn failed at it
+  /// (`docs/design/agent-accounts.md`): the step then waits for the reset or another account instead of failing. A
+  /// running agent never moves to another account by itself. A failure Codex named decides: its usage limit stops
+  /// there, any other reason fails the step whatever the windows say. Only a failure nobody named stops at the limit
+  /// the CLI's last reading said refuses turns.
   pub(super) fn stopped(watch: &Watch, outcome: &InvocationOutcome) -> Option<StopCause> {
+    let at_limit = match watch.codex_failure {
+      Some(CodexFailure::UsageLimit) => true,
+      Some(CodexFailure::Other) => false,
+      None => watch.plan_reached,
+    };
     match (watch.stop, outcome) {
-      (None, InvocationOutcome::TurnFailed { .. }) if watch.plan_reached => {
-        Some(StopCause::Limit(RunLimit::PlanLimit {
-          execution: watch.invocation.execution,
-        }))
-      }
+      (None, InvocationOutcome::TurnFailed { .. }) if at_limit => Some(StopCause::Limit(RunLimit::PlanLimit {
+        execution: watch.invocation.execution,
+      })),
       (stop, _) => stop,
     }
   }

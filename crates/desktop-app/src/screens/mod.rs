@@ -28,6 +28,7 @@ mod placeholder;
 mod project_settings;
 mod pull_requests;
 mod review;
+mod reviewer_trouble;
 mod secrets;
 mod settings;
 mod shared_config;

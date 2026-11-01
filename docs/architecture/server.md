@@ -1,5 +1,8 @@
 # Orchester — shared server
 
+> New [S1 workspace role contracts](workspace-roles.md) are additive. The existing Owner/Member contracts described
+> here remain supported; the new workspace-authority types live separately in `orchester_api::v2`.
+
 > **Where the code is (2026-10-27).** The team server (`crates/server`), its web app (`web/server`), the shared web
 > kit (`web/ui`), `deploy/server`, `docs/server-hosting.md` and the end-to-end tests against a real server (its
 > `crates/e2e`) live in the private platform repository `ivanzaida/orchester-platform`; paths below under those

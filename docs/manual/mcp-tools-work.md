@@ -400,10 +400,12 @@ and the plans runs wait on (version, step, excerpt) with decisions on their earl
 links to its card on the task's Conversation. A request the reviewer still judges has `reviewing: true`: it
 waits for the reviewer, not for a person, until the review ends (`get_run`'s `awaiting.approvals` mark it the same).
 A request the run's approval mode brought to the person says why in `came_to_you`: `reason` is the card's code
-(`outside`, `notAllowed`, `reviewerUnsure`, `reviewerDenied`, `push`, `refs`) and `detail` what the card names with
-it (the path, the ref, or the reviewer's reason). `get_run`'s `requests` lists every request of the run, oldest first,
-with `answered` (`kind`: `autopilot`, `profile`, `reviewer` with its `reason`, `person`; absent while it waits) and
-`came_to_you`.
+(`outside`, `notAllowed`, `reviewerUnsure`, `reviewerCouldNotRun`, `reviewerDenied`, `push`, `refs`) and `detail` what
+the card names with it (the path, the ref, or the reviewer's reason); for `reviewerCouldNotRun`, `failure` says how the
+review failed (`could_not_run`, `timed_out`, `unreadable`; absent for a request recorded before it was kept, whose
+`auto_mode` still says it), and `autopilot: true` marks one that came by Autopilot's rules. `get_run`'s `requests`
+lists every request of the run, oldest first, with `answered` (`kind`: `autopilot`, `profile`, `reviewer` with its
+`reason`, `person`; absent while it waits) and `came_to_you`.
 
 Parameters: `project` (string | null), `run` (string | null — needs `project`).
 
