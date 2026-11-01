@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use super::{
+  decision_history::{DecisionCheck, DecisionTest},
   endpoint::{self, EndpointError, MAX_URL_CHARS},
   http_url::{self, ZoneId},
 };
@@ -152,6 +153,8 @@ pub struct DecisionConnection {
   base_url: DecisionServerUrl,
   key: Option<SecretId>,
   models: Vec<ModelId>,
+  last_check: Option<DecisionCheck>,
+  last_test: Option<DecisionTest>,
 }
 
 impl DecisionConnection {
@@ -163,6 +166,8 @@ impl DecisionConnection {
       base_url,
       key,
       models: Vec::new(),
+      last_check: None,
+      last_test: None,
     }
   }
 
@@ -195,6 +200,22 @@ impl DecisionConnection {
     &self.models
   }
 
+  pub const fn last_check(&self) -> Option<&DecisionCheck> {
+    self.last_check.as_ref()
+  }
+
+  pub const fn last_test(&self) -> Option<&DecisionTest> {
+    self.last_test.as_ref()
+  }
+
+  pub fn record_check(&mut self, check: DecisionCheck) {
+    self.last_check = Some(check);
+  }
+
+  pub fn record_test(&mut self, test: DecisionTest) {
+    self.last_test = Some(test);
+  }
+
   pub fn is_on_this_computer(&self) -> bool {
     self.base_url.is_on_this_computer()
   }
@@ -208,6 +229,8 @@ impl DecisionConnection {
   pub fn set_server(&mut self, base_url: DecisionServerUrl, key: Option<SecretId>) {
     if base_url != self.base_url || key != self.key {
       self.models.clear();
+      self.last_check = None;
+      self.last_test = None;
     }
     self.base_url = base_url;
     self.key = key;

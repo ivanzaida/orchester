@@ -2884,3 +2884,4 @@ project or server added with nobody signed in is this computer's (`owner` NULL, 
 projects; sharing, joining, invites and team servers offer the sign-in in place; MCP answers `sign_in_required` only for
 a named project an account holds while nobody is signed in. Open: the *Verify* step's design verification, macOS
 unchecked. The three-way start page stays ORC-293.
+ORC-556 · Decision model connections in the project database · branch `orchester/orc-556-run-1`: versioned settings keep the secret reference, listed models, last check and per-threshold test figures; transactional reviewer selection prevents deleting a connection in use.
