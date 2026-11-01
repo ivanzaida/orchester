@@ -6,8 +6,7 @@
 //! check found out about it. A native agent provider ([`AgentProvider::is_native`]) is reached at a model
 //! API instead ([`AgentEndpoint::Api`]), with its key in a project secret; this version stores and shows
 //! such connections but runs no agent on them. An agent CLI connection can instead run on an API provider
-//! ([`ApiProvider`]): a third-party model API reached with a key in a project secret. A decision model's server
-//! ([`DecisionConnection`]) is no agent connection and has its own id, so no agent profile can choose it.
+//! ([`ApiProvider`]): a third-party model API reached with a key in a project secret.
 
 mod account;
 mod adapter;
@@ -19,7 +18,6 @@ pub mod app_server_mcp;
 mod catalog;
 pub mod claude_approval;
 mod claude_catalog;
-mod decision;
 mod discovery;
 mod endpoint;
 mod github;
@@ -48,7 +46,6 @@ pub use self::{
   api_provider::{ApiProvider, ApiProviderError, CLAUDE_EFFORTS, ProviderEffortError, SessionOrigin, provider_effort},
   catalog::{CatalogModel, CatalogSource, ModelCatalog, ModelSupport, REASONING_EFFORT},
   claude_catalog::parse_claude_models,
-  decision::{DecisionConnection, DecisionServerUrl, DecisionServerUrlError, is_this_computer},
   discovery::{Installed, compare_versions, rank_installed},
   endpoint::{AgentEndpoint, ApiEndpoint, BaseUrl, EndpointError, EndpointPreset, offers_provider_fallback},
   github::{

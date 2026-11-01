@@ -158,6 +158,33 @@ pub enum Update {
     input_kept: bool,
     completed: bool,
   },
+  /// Codex named why a turn failed, or why a request of it failed for good (`codexErrorInfo`).
+  Failure(CodexFailure),
+}
+
+/// Why Codex says a turn failed, as far as the runner tells reasons apart: its `codexErrorInfo`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CodexFailure {
+  /// `usageLimitExceeded`: the account's plan refused the turn, credits included.
+  UsageLimit,
+  /// Any other reason it named.
+  Other,
+}
+
+impl CodexFailure {
+  /// What `error` (a `TurnError`) names in its `codexErrorInfo`; `None` when it names nothing. A reason with data comes
+  /// as an object keyed by its name.
+  fn of(error: &Value) -> Option<Self> {
+    let info = error.get("codexErrorInfo")?;
+    let name = info
+      .as_str()
+      .or_else(|| info.as_object().and_then(|info| info.keys().next()).map(String::as_str))?;
+    Some(if name == "usageLimitExceeded" {
+      Self::UsageLimit
+    } else {
+      Self::Other
+    })
+  }
 }
 
 /// Parses notifications and correlates a later approval request with its pending tool item.
@@ -397,9 +424,14 @@ impl AppServerStream {
         Vec::new()
       }
       "turn/completed" => self.turn_completed(params),
-      "error" => string(params.get("error").unwrap_or(&Value::Null), "message")
-        .map(|message| vec![Update::Activity(AgentEvent::Error { message })])
-        .unwrap_or_default(),
+      "error" => {
+        let error = params.get("error").unwrap_or(&Value::Null);
+        // An error Codex retries is no reason for the turn's end yet.
+        let final_error = params.get("willRetry").and_then(Value::as_bool) != Some(true);
+        let failure = CodexFailure::of(error).filter(|_| final_error).map(Update::Failure);
+        let message = string(error, "message").map(|message| Update::Activity(AgentEvent::Error { message }));
+        failure.into_iter().chain(message).collect()
+      }
       _ => Vec::new(),
     }
   }
@@ -493,10 +525,9 @@ impl AppServerStream {
     let mut updates = vec![Update::Activity(AgentEvent::TurnCompleted { usage: self.usage })];
     self.usage = TokenUsage::default();
     if status != Some("completed") {
-      let message = turn
-        .get("error")
-        .and_then(|error| string(error, "message"))
-        .unwrap_or_else(|| "Codex turn did not complete".to_owned());
+      let error = turn.get("error").unwrap_or(&Value::Null);
+      let message = string(error, "message").unwrap_or_else(|| "Codex turn did not complete".to_owned());
+      updates.extend(CodexFailure::of(error).map(Update::Failure));
       updates.push(Update::Activity(AgentEvent::TurnFailed { message }));
     }
     let input_kept = status != Some("interrupted");

@@ -216,7 +216,7 @@ fn log(session: &Session, (args, base): (&[String], Option<&str>), server: Optio
 }
 
 /// Appends `lines` to `<cwd>/.orchester/fake-chat.log`.
-fn append_log(session: &Session, lines: &[String]) {
+pub(super) fn append_log(session: &Session, lines: &[String]) {
   let folder = Path::new(&session.cwd).join(".orchester");
   let written = fs::create_dir_all(&folder).and_then(|()| {
     let mut file = fs::OpenOptions::new()

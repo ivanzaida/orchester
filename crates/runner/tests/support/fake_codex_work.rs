@@ -2,7 +2,8 @@
 //!
 //! - "Please fail": fails the turn as Codex did for an unsupported model, once the test releases it (see "Wait for
 //!   release") when the prompt also says "Wait for release";
-//! - "Report plan limits": first sends `account/rateLimits/updated`, then works as the rest of the prompt says;
+//! - "Report plan limits": first sends `account/rateLimits/updated`, then works as the rest of the prompt says; a full
+//!   window with or without credits, and failures at it, are `fake_codex_limits`';
 //! - "Use Orchester's tools": first lists and calls Orchester's tools (`fake_codex_tools`), then works as below;
 //! - "Keep working": starts a helper process of its own, reports its id (`helper pid: `) and waits until it is ended;
 //! - "Work slowly": waits a moment, then works as below;
@@ -170,6 +171,9 @@ pub fn work(session: &mut Session, prompt: &str, structured: bool) -> Step {
       Ok(limits) => emit(&limits),
       Err(error) => eprintln!("the limits fixture is not JSON: {error}"),
     }
+  }
+  if let Some(step) = super::fake_codex_limits::work(session, prompt) {
+    return step;
   }
   if TOOL_PROMPTS.iter().any(|words| prompt.contains(words)) {
     fake_codex_tools::report(session.orchester.as_mut(), &session.cwd, prompt);
