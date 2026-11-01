@@ -213,3 +213,68 @@ fn decision_review_settings_keep_threshold_and_connection_across_reopen_and_swit
   db.delete_decision_connection(connection.id())
     .expect("unused connection");
 }
+
+#[test]
+fn decision_reviewer_setting_migrates_the_previously_accepted_schema() {
+  use orchester_core::{
+    connection::{DecisionConnection, DecisionServerUrl},
+    name::Name,
+    run::review::Probability,
+  };
+  use orchester_store::ProjectDb;
+
+  let (repo, mut db, ..) = started_run();
+  let connection = DecisionConnection::new(
+    DecisionConnectionId::generate(),
+    Name::new("Decision").expect("name"),
+    DecisionServerUrl::new("http://localhost:8000").expect("URL"),
+    None,
+  );
+  db.create_decision_connection(&connection).expect("connection");
+  let settings = AutoModeSettings {
+    reviewer: Some(ReviewerChoice::decision(
+      connection.id(),
+      ModelId::new("jev").expect("model"),
+      Some(Probability::new(0.93).expect("threshold")),
+    )),
+  };
+  db.save_auto_mode_settings(&settings).expect("save decision");
+  drop(db);
+  let current = repo.path().join(".orchester/orchester.db");
+  let raw = rusqlite::Connection::open(&current).expect("current database");
+  let json: String = raw
+    .query_row("SELECT settings FROM decision_reviewer_connection", [], |row| {
+      row.get(0)
+    })
+    .expect("JSON settings");
+  drop(raw);
+
+  // a51326fe3 applied settings as migration 122, after the common prefix of 121 migrations.
+  let old = support::copied_at_version(&current, 121);
+  let raw = rusqlite::Connection::open(old.path().join(".orchester/orchester.db")).expect("old database");
+  raw
+    .execute_batch("ALTER TABLE decision_reviewer_connection ADD COLUMN settings TEXT; PRAGMA user_version = 122;")
+    .expect("previously accepted migration");
+  raw
+    .execute("UPDATE decision_reviewer_connection SET settings = ?1", [json])
+    .expect("previously selected reviewer");
+  drop(raw);
+
+  let mut db = ProjectDb::open(old.path()).expect("upgrade previously accepted database");
+  assert_eq!(db.auto_mode_settings().expect("preserved reviewer"), settings);
+  db.save_auto_mode_settings(&settings).expect("write new columns");
+  drop(db);
+  let raw = rusqlite::Connection::open(old.path().join(".orchester/orchester.db")).expect("upgraded database");
+  let stored: (String, f64) = raw
+    .query_row("SELECT model, threshold FROM decision_reviewer_connection", [], |row| {
+      Ok((row.get(0)?, row.get(1)?))
+    })
+    .expect("model and threshold columns migrated");
+  assert_eq!(stored, ("jev".to_owned(), 0.93));
+  raw
+    .prepare("SELECT decision_failure FROM reviewer_usage")
+    .expect("review failure column migrated");
+  drop(raw);
+  let db = ProjectDb::open(old.path()).expect("reopen upgraded database");
+  assert_eq!(db.auto_mode_settings().expect("reviewer after reopen"), settings);
+}
