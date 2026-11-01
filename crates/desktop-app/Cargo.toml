@@ -5,7 +5,7 @@ name = "orchester-app"
 description = "Orchester desktop app, in the orchester2 design."
 # The app's own version, apart from the workspace's (which the team server reports): bumping it on master releases
 # the app (.github/workflows/app-release.yml, docs/stable-build.md "Releases from CI").
-version = "0.4.0"
+version = "0.4.1"
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
