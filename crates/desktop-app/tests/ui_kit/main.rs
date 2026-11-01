@@ -21,5 +21,6 @@ mod markdown_code_scroll;
 mod markdown_link_layout;
 mod prompt_input;
 mod textarea_focus;
+mod todo_list;
 mod virtualized_list;
 mod virtualized_list_follow;

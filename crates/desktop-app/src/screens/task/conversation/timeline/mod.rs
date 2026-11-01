@@ -20,6 +20,7 @@ mod message;
 mod proposal;
 mod result;
 mod switched;
+mod todo;
 mod working;
 
 use std::{collections::HashMap, sync::Arc};
@@ -88,6 +89,8 @@ pub(super) struct Timeline {
   pub(super) decided: Arc<Vec<DecidedToolApproval>>,
   /// The Orchestrator chat's merge of the run, when it carried one out (ORC-69).
   pub(super) merged_by: Option<ChatMerge>,
+  /// The run goes on, so the lists of its steps at work are pinned over the composer, not on their dividers.
+  pub(super) pins: bool,
 }
 
 impl lurq::app::component::DevtoolsInspectable for Timeline {}

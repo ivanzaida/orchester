@@ -18,6 +18,7 @@ mod read;
 mod shared;
 mod states;
 mod timeline;
+mod todo;
 mod toolbar;
 
 use std::{path::PathBuf, sync::Arc};
@@ -124,6 +125,7 @@ impl Component for ConversationTab {
       }
     };
     let state = state.unwrap_or_else(|| RunState::of(&conversation, detail, false));
+    let plan = todo::pinned(ctx, detail.run.as_ref(), &conversation);
     Column::new()
       .id("conversation")
       .width(Dimension::Pct(100.0))
@@ -137,6 +139,7 @@ impl Component for ConversationTab {
           .min_height(Dimension::Px(0.0))
           .child(body),
       )
+      .with_children(plan)
       .child(composer)
   }
 }
@@ -195,6 +198,7 @@ impl ConversationTab {
       pending: loaded.pending.clone(),
       decided: loaded.decided.clone(),
       merged_by: merged_by(&loaded.orchestrated),
+      pins: todo::pins(conversation.state),
     });
     // Stale as applying would find it: what a message sent now meets, as the chat's own Apply reads the run.
     let offered = message_offer(&task.detail, run.id());

@@ -272,6 +272,7 @@ pub fn typography(palette: &ThemePalette) -> ThemeTypography {
       .chain(super::date_picker::typography(palette))
       .chain(super::browser::typography(palette))
       .chain(super::dialog::typography(palette))
+      .chain(super::todo_list::typography(palette))
       .collect(),
   }
 }

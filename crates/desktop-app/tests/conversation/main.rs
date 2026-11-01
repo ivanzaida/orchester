@@ -25,6 +25,7 @@ mod states;
 #[path = "../support/mod.rs"]
 mod support;
 mod theme;
+mod todo;
 
 use kontur::{SeedRequest, Seeded, scenarios};
 use lurq::{

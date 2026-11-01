@@ -71,6 +71,7 @@ pub mod status;
 pub mod table;
 pub mod tabs;
 pub mod tinted_note;
+pub mod todo_list;
 pub mod toggle;
 pub mod tool_row;
 pub mod tooltip;
