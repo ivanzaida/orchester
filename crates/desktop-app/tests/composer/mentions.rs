@@ -45,6 +45,24 @@ fn composer_mentions_open_with_the_own_task_first_and_insert_and_remove_it() {
   key(&mut window, ("Backspace", "Backspace"), (false, false));
   assert_eq!(draft(&mut window), "Ask ", "Backspace after the chip removes it whole");
 
+  type_on(&mut window, "@");
+  window.until("the menu with the focus on the own task", |window| {
+    window.tree.get_element_by_id(&own).is_some() && text(window, &own).contains("Enter")
+  });
+  key(&mut window, ("ArrowDown", "ArrowDown"), (false, false));
+  window.until("the focus drawn on the second row", |window| {
+    !text(window, &own).contains("Enter") && text(window, MENU).contains("Enter")
+  });
+  key(&mut window, ENTER, (false, false));
+  let inserted = draft(&mut window);
+  assert!(
+    inserted.starts_with("Ask @") && inserted != format!("Ask @{task} "),
+    "Enter inserts the row the focus is drawn on, not the first: {inserted}"
+  );
+  key(&mut window, ("Backspace", "Backspace"), (false, false));
+  key(&mut window, ("Backspace", "Backspace"), (false, false));
+  assert_eq!(draft(&mut window), "Ask ");
+
   type_on(&mut window, "@zzz");
   window.until("nothing to match", |window| {
     text(window, MENU).contains("Nothing matches “zzz”")

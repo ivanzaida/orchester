@@ -193,7 +193,7 @@ fn field(ctx: &Ctx, view: &View, composer: &ComposerBox<'_>, not_set_up: bool) -
   };
   let mention = view.mention.clone();
   let chips = view.draft.with(|text| MentionField::tokens(text));
-  TextInput::styled(view.draft.clone(), resolve(PaletteColor::TextPrimary))
+  let input = TextInput::styled(view.draft.clone(), resolve(PaletteColor::TextPrimary))
     .placeholder_style(resolve(placeholder))
     .caret_color(PaletteColor::TextPrimary)
     .id("orchestrator-input")
@@ -213,8 +213,10 @@ fn field(ctx: &Ctx, view: &View, composer: &ComposerBox<'_>, not_set_up: bool) -
         keys.down(&event);
       }
     })
-    .on_paste(view.attached.on_paste())
-    .into()
+    .on_paste(view.attached.on_paste());
+  view
+    .mention
+    .with_marker("orchestrator-field", input, OrchestratorText::Message.role())
 }
 
 /// What the field's keys do. lurq hands a key to every node that takes keys, from the window's root down, so each key

@@ -1,10 +1,11 @@
 //! The @ menu (`@ menu` `qhBhC` in 08 `gOs7u`, 08b `nUjD7`, 08c `GdUNZ`; `Am5KT`, `vnuo8`, `u7Q7h` in a run's
-//! Conversation): a `Menu` panel 560 wide that opens 8 over the composer's box at its start, as the composer sits at
-//! the bottom of the window. Its sections come in a fixed order — Tasks (`square-check`, the key in Geist Mono 12 in a
-//! 64 column, the title, the workflow status in 11 `text_muted`) and Runs (`play`, *KON-12 · #9* in a 96 column, the
-//! task's title in `text_muted`, the state as a status) — each under its title and count, 28 high rows with the focus
-//! on `hover` and *Enter* at the focused row's end; a separator between them, and the keys under them. With nothing
-//! that matches it says so (`search-x`) and keeps only *Esc Close*. The tasks and runs are read when it opens.
+//! Conversation): a `Menu` panel 560 wide that opens 8 over the composer's box with its left edge at the `@`, as the
+//! composer sits at the bottom of the window. Its sections come in a fixed order — Tasks (`square-check`, the key in
+//! Geist Mono 12 in a 64 column, the title, the workflow status in 11 `text_muted`) and Runs (`play`, *KON-12 · #9*
+//! in a 96 column, the task's title in `text_muted`, the state as a status) — each under its title and count, 28 high
+//! rows with the focus on `hover` and *Enter* at the focused row's end; a separator between them, and the keys under
+//! them. With nothing that matches it says so (`search-x`) and keeps only *Esc Close*. The tasks and runs are read
+//! when it opens.
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -46,8 +47,9 @@ const WIDTH: f32 = 560.0;
 const TASK_KEY_WIDTH: f32 = 64.0;
 const RUN_KEY_WIDTH: f32 = 96.0;
 
-/// The menu of the composer named `id`, over its box `anchor`, for the project at `root` called `project`; `own`, the
-/// task and run a run's Conversation shows, leads. `revision` moves when the project's tasks change.
+/// The menu of the composer named `id`, over its box `anchor` at the field's `@`, for the project at `root` called
+/// `project`; `own`, the task and run a run's Conversation shows, leads. `revision` moves when the project's tasks
+/// change.
 #[derive(Clone)]
 pub struct MenuProps {
   pub id: &'static str,
@@ -133,29 +135,36 @@ impl Component for MentionMenu {
     let panel = menu_panel(&format!("{}-mention-menu", props.id))
       .width(Dimension::Px(WIDTH))
       .with_children(content);
-    Popup::new(props.anchor.clone(), panel)
+    // Its left edge at the `@` (the field's marker), its bottom 8 over the box: the marker sits at the top of the
+    // field, as far under the box's top as the last layout put it.
+    let marker = field.marker();
+    let under_top = (marker.y() - props.anchor.y()).max(0.0);
+    let gap = ctx.theme().spacing_value(SpacingSize::Sm).to_px();
+    Popup::new(marker, panel)
       .open_when(true)
       .dismiss_on_outside_click(false)
       .dismiss_on_escape(false)
       .switch_on_anchor_press(false)
       .placement(Placement::TopStart)
-      .offset(0.0, -ctx.theme().spacing_value(SpacingSize::Sm).to_px())
+      .offset(0.0, gap + under_top)
       .into()
   }
 }
 
 impl MentionMenu {
-  /// The row with the focus among `rows` for what was typed after the `@` at `at`: the first once that changed.
+  /// The row with the focus among `rows` for what was typed after the `@` at `at`: the first once that changed. The
+  /// focus is read tracked on every path, so ↑ ↓ draw the menu again.
   fn focused(&self, field: &MentionField, (at, query): (usize, &str), rows: usize) -> usize {
+    let focus = field.focus.get();
     let mut last = self.last.lock();
     if last.as_ref().is_none_or(|(was_at, was)| *was_at != at || was != query) {
       *last = Some((at, query.to_owned()));
-      if field.focus.get_untracked() != 0 {
+      if focus != 0 {
         field.focus.set(0);
       }
       return 0;
     }
-    field.focus.get().min(rows.saturating_sub(1))
+    focus.min(rows.saturating_sub(1))
   }
 }
 

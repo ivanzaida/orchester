@@ -9,15 +9,21 @@ mod menu;
 use std::{ops::Range, sync::Arc};
 
 use lurq::{
-  app::{ctx::Ctx, events::KeyboardEvent},
-  components::{InputToken, InputTokens, TextInputController},
+  app::{
+    ctx::Ctx,
+    events::KeyboardEvent,
+    theme::{SpacingSize, TypographyStyle},
+  },
+  components::{InputToken, InputTokens, Row, Stack, Text, TextInputController},
   core::{ElementRef, Signal},
+  layout::Alignment,
+  node::{Element, HitTestBehavior, dimension::Dimension, padding::Padding},
 };
 use orchester_workspace::mentions::{Mention, Typed, ending_at, find, typed_at};
 use parking_lot::Mutex;
 
 pub use self::menu::{MenuProps, menu};
-use crate::theme::mention_chip;
+use crate::theme::{ExtraTypography, mention_chip};
 
 /// What the menu shows now, as the keys read it: what a choice replaces and the mentions of its rows, in order.
 #[derive(Clone, Debug)]
@@ -40,6 +46,8 @@ pub struct MentionField {
   closed: Signal<Option<usize>>,
   /// Set to put the focus back in the field after a choice.
   refocus: Signal<bool>,
+  /// Where the `@` being typed starts on its line, at the top of the field: the menu's left edge.
+  marker: ElementRef,
   shown: Arc<Mutex<Option<Shown>>>,
 }
 
@@ -59,6 +67,7 @@ impl MentionField {
       focus: ctx.signal(0),
       closed: ctx.signal(None),
       refocus: ctx.signal(false),
+      marker: ElementRef::new(),
       shown: Arc::default(),
     }
   }
@@ -80,6 +89,46 @@ impl MentionField {
       .map(|found| InputToken::new(found.range, mention_chip()))
       .collect();
     InputTokens::new(text, chips).expect("mentions are disjoint one-line ranges of the text they were found in")
+  }
+
+  /// `input`, the field drawn in `typography`, in `id`, with the marker the menu opens at: an unseen copy of the words
+  /// before the `@` being typed on its line (its chips as the field draws them), at the top of the field, ends at the
+  /// `@`. A line the field wraps is measured as one line. The `id` keeps the field (and its focus) when files are
+  /// attached over it.
+  pub fn with_marker(&self, id: &str, input: impl Into<Element>, typography: TypographyStyle) -> Element {
+    let pieces: Vec<Element> = self.draft.with(|text| {
+      self
+        .typed(text)
+        .map(|typed| before_on_line(text, typed.at))
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(range, chip)| piece(&text[range], chip, typography))
+        .collect()
+    });
+    let copy = Row::new()
+      .absolute_position(0.0, 0.0)
+      .opacity(0.0)
+      .hit_test(HitTestBehavior::None)
+      .align_items(Alignment::Start)
+      .with_children(pieces)
+      .child(
+        // A menu opens only at an anchor with a size.
+        Row::new()
+          .ref_element(self.marker.clone())
+          .size(Dimension::Px(1.0), Dimension::Px(1.0))
+          .flex_shrink(0.0),
+      );
+    Stack::new()
+      .id(id)
+      .width(Dimension::Pct(100.0))
+      .child(input)
+      .child(copy)
+      .into()
+  }
+
+  /// Where the menu opens: the marker [`Self::with_marker`] draws.
+  fn marker(&self) -> ElementRef {
+    self.marker.clone()
   }
 
   /// What the caret types for the menu in `text`, the field's value now: nothing while text is selected.
@@ -167,5 +216,43 @@ impl MentionField {
     *self.shown.lock() = None;
     self.focus.set(0);
     self.refocus.set(true);
+  }
+}
+
+/// The pieces of `text` from the start of the `@`'s line up to the `@` at `at`, in order, each saying whether it is a
+/// mention the field draws as a chip.
+fn before_on_line(text: &str, at: usize) -> Vec<(Range<usize>, bool)> {
+  let start = text[..at].rfind('\n').map_or(0, |line| line + 1);
+  let mut pieces = Vec::new();
+  let mut from = start;
+  for found in find(text) {
+    let range = found.range;
+    if range.start < from || range.end > at {
+      continue;
+    }
+    if range.start > from {
+      pieces.push((from..range.start, false));
+    }
+    from = range.end;
+    pieces.push((range, true));
+  }
+  if from < at {
+    pieces.push((from..at, false));
+  }
+  pieces
+}
+
+/// `words` as the field draws them: in its `typography`, or as a chip, Geist Mono 11 with 8 at its sides
+/// ([`mention_chip`]). Spaces are kept as no-break spaces, which a line keeps at its end.
+fn piece(words: &str, chip: bool, typography: TypographyStyle) -> Element {
+  let kept = words.replace([' ', '\t'], "\u{a0}");
+  if chip {
+    Row::new()
+      .flex_shrink(0.0)
+      .padding(Padding::horizontal(SpacingSize::Sm))
+      .child(Text::new(&kept).variant(ExtraTypography::MonoNote.role()).nowrap())
+      .into()
+  } else {
+    Text::new(&kept).variant(typography).nowrap().flex_shrink(0.0).into()
   }
 }

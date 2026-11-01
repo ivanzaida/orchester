@@ -87,10 +87,25 @@ fn orchestrator_mentions_open_filter_insert_and_remove_by_keyboard() {
 
   write(&mut screen, "Then @");
   screen.until("the menu", |screen| screen.exists(MENU));
+  let (first, second) = if screen.text(&row("task-KON-1")).contains("Enter") {
+    ("KON-1", "KON-2")
+  } else {
+    ("KON-2", "KON-1")
+  };
   screen.key(("ArrowDown", "ArrowDown"), false);
-  screen.until("the focus on the second row", |screen| {
-    screen.text(MENU).contains("Enter") && screen.exists(&row("task-KON-1"))
+  screen.until("the focus drawn on the second row", |screen| {
+    screen.text(&row(&format!("task-{second}"))).contains("Enter")
+      && !screen.text(&row(&format!("task-{first}"))).contains("Enter")
   });
+  screen.key(("Enter", "Enter"), false);
+  assert_eq!(
+    draft(&mut screen),
+    format!("Then @{second} "),
+    "Enter inserts the row the focus is drawn on"
+  );
+
+  write(&mut screen, "Then @");
+  screen.until("the menu", |screen| screen.exists(MENU));
   screen.key(("Tab", "Tab"), false);
   assert!(
     draft(&mut screen).starts_with("Then @KON-"),
@@ -105,6 +120,48 @@ fn orchestrator_mentions_open_filter_insert_and_remove_by_keyboard() {
   screen.key(("Escape", "Escape"), false);
   screen.until("the menu to close", |screen| !screen.exists(MENU));
   assert_eq!(draft(&mut screen), "Leave @payrol", "Esc keeps the text as typed");
+}
+
+/// The menu opens at the `@` (`gOs7u`): its left edge where the `@` starts, past the words before it, and its
+/// bottom 8 over the composer's box, not on it.
+#[test]
+fn orchestrator_mentions_menu_opens_at_the_at_over_the_box() {
+  let mut screen = kontur();
+  write(&mut screen, "@");
+  screen.until("the menu", |screen| screen.exists(MENU));
+  let at_start = bounds(&mut screen, MENU);
+  let field = bounds(&mut screen, INPUT);
+  let boxed = bounds(&mut screen, "orchestrator-composer");
+  assert!(
+    (at_start.0 - field.0).abs() < 1.0,
+    "an @ at the start opens the menu at the field's start: {at_start:?} {field:?}"
+  );
+  assert!(
+    (boxed.1 - (at_start.1 + at_start.3) - 8.0).abs() < 0.5,
+    "the menu's bottom is 8 over the box: {at_start:?} {boxed:?}"
+  );
+
+  write(&mut screen, "Compare the retries with @");
+  screen.until("the menu after the words", |screen| {
+    screen.exists(MENU) && bounds(screen, MENU).0 > at_start.0 + 40.0
+  });
+  let after = bounds(&mut screen, MENU);
+  let boxed = bounds(&mut screen, "orchestrator-composer");
+  assert!(
+    (boxed.1 - (after.1 + after.3) - 8.0).abs() < 0.5,
+    "still 8 over the box: {after:?} {boxed:?}"
+  );
+}
+
+/// `id`'s x, y, width and height as last laid out.
+fn bounds(screen: &mut Orchestrator, id: &str) -> (f32, f32, f32, f32) {
+  let bounds = screen
+    .window
+    .tree
+    .get_element_by_id_mut(id)
+    .and_then(|element| element.bounds())
+    .unwrap_or_else(|| panic!("{id} is laid out"));
+  (bounds.x, bounds.y, bounds.width, bounds.height)
 }
 
 #[test]

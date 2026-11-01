@@ -416,7 +416,7 @@ impl Composer {
     let mention = self.mention.clone();
     let draft = &props.composing.state.draft;
     let chips = draft.with(|text| MentionField::tokens(text));
-    TextInput::styled(draft.clone(), resolve(PaletteColor::TextPrimary))
+    let input = TextInput::styled(draft.clone(), resolve(PaletteColor::TextPrimary))
       .placeholder_style(resolve(PaletteColor::TextMuted))
       .caret_color(PaletteColor::TextPrimary)
       .id("composer-input")
@@ -436,8 +436,8 @@ impl Composer {
           keys(event);
         }
       })
-      .on_paste(props.composing.state.attached.on_paste())
-      .into()
+      .on_paste(props.composing.state.attached.on_paste());
+    self.mention.with_marker("composer-field", input, TypographyStyle::Body)
   }
 }
 
