@@ -174,7 +174,8 @@ autosaves; Publish vN); runs use only published versions.
   Any command in the worktree.
 - *Network access*: On or Off.
 - *MCP servers*: a switch per project server.
-- *Approvals*: *Approve automatically (don't ask me)*; *Ask before MCP actions that require approval*.
+- *Approvals*: Autopilot or Manual; under Manual, *Ask before MCP actions that require approval*. A profile from before
+  approval modes that had *Approve automatically (don't ask me)* on reads as Autopilot.
 
 Options the connection's CLI cannot enforce are disabled with the reason; there is no bypass mode.
 
@@ -268,7 +269,7 @@ Answers: *Approve once*, *Deny*, *Deny with a message*, and under *Or answer mor
 run*, *Approve everything in this run*, and (for Orchester's QA tool only) *Approve for every run of this project*.
 There is no time-out: the agent's active time stops while it waits.
 
-**Auto-approval.** Rule-based: per profile (*Approve automatically*) or per run (*Approve everything in this run*).
+**Auto-approval.** Rule-based, per run (*Approve everything in this run*); per profile, Autopilot.
 Orchester answers commands its classifier knows to read or stay in the worktree, and MCP tool calls; it never
 approves network, writes outside the worktree, credential reads, installs, history rewrites or unparsed commands.
 

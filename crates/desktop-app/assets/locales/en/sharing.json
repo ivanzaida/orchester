@@ -638,7 +638,6 @@
           "commands": "Commands it did not let run",
           "network": "Network on · was off",
           "toolCallsUnasked": "Tool calls no longer asked about",
-          "autoApprove": "Approving automatically · was asked",
           "autopilot": "Autopilot · was Manual",
           "browser": "The browser on · was off",
           "browserSite": "An allowed site of the browser it did not list",

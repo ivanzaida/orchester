@@ -47,7 +47,7 @@ pub(in crate::app_mcp::tools) fn prompt_allowed(
 
 /// Refused unless a person lets automation take what `profile` widens beyond the latest published version
 /// of profile `id` (before its first version: the most restrictive permissions `provider` enforces here and
-/// no MCP server). Approving automatically and Autopilot answer requests in a person's place, so they also need
+/// no MCP server). Autopilot answers requests in a person's place, so it also needs
 /// *Let automation answer approvals*, as auto mode does
 /// ([`answers_in_persons_place`](crate::agents::widening::answers_in_persons_place)).
 pub(super) fn check_profile(

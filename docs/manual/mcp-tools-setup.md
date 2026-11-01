@@ -337,9 +337,8 @@ project's.
 
 Narrowing is always accepted. Anything **broader than the latest published version** (for a new profile: broader
 than the most restrictive permissions its CLI enforces, with no MCP server) is `person_only` unless AP is on: write
-access, writable folders, broader commands, network on, MCP servers, no longer asking before tool calls, approving
-automatically and Autopilot (both answer requests in a person's place, so they additionally need AA, as the
-window's question does).
+access, writable folders, broader commands, network on, MCP servers, no longer asking before tool calls and
+Autopilot (it answers requests in a person's place, so it additionally needs AA, as the window's question does).
 
 | Parameter           | Type                   | Req. | Description                                                                                   |
 |---------------------|------------------------|------|-----------------------------------------------------------------------------------------------|
@@ -365,8 +364,7 @@ window's question does).
 | `network`               | `off` \| `on`                                 | yes  | Network access.                                                            |
 | `writable_folders`      | array<string>                                 | no   | Folders outside the worktree the agent may write (write access only).     |
 | `ask_before_tool_calls` | boolean                                       | no   | Ask a person before each MCP or app tool call.                             |
-| `approve_automatically` | boolean                                       | no   | *Approve automatically (don't ask me)*: Orchester answers what would ask a person. |
-| `approval_mode`         | `autopilot` \| `manual`                       | no   | Who answers tool requests. Default `manual`; `manual` → `autopilot` widens (gate AP, and AA as approving automatically), the reverse never asks. |
+| `approval_mode`         | `autopilot` \| `manual`                       | no   | Who answers tool requests. Default `manual`; `manual` → `autopilot` widens (gates AP and AA), the reverse never asks. A profile saved before approval modes with *Approve automatically* on reads as `autopilot`. |
 
 `get_profile` gives the same permissions object, `approval_mode` included. A profile set to Autopilot runs as Manual
 where its project does not allow Autopilot or its run was switched to Manual: `get_approvals` gives the mode each

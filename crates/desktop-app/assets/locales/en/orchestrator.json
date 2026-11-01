@@ -617,7 +617,6 @@
         "commands": "new commands",
         "network": "network: on",
         "toolCallsUnasked": "tool calls not asked about",
-        "autoApprove": "approves automatically",
         "account": "another account",
         "mcpServers": "new MCP servers",
         "variable": "variable {{name}}",
