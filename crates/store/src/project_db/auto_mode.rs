@@ -183,11 +183,9 @@ fn read_auto_mode(connection: &Connection) -> Result<AutoModeSettings, StoreErro
   let reviewer = ReviewerChoice {
     connection: connection
       .parse::<ConnectionId>()
-      .map_err(|_| corrupt("auto mode reviewer connection", connection))?
-      .into(),
+      .map_err(|_| corrupt("auto mode reviewer connection", connection))?,
     model: ModelId::new(&model).map_err(|_| corrupt("auto mode model", model))?,
     effort,
-    threshold: None,
   };
   Ok(AutoModeSettings {
     reviewer: Some(reviewer),
@@ -196,14 +194,6 @@ fn read_auto_mode(connection: &Connection) -> Result<AutoModeSettings, StoreErro
 
 fn write_auto_mode(connection: &Connection, settings: &AutoModeSettings) -> Result<(), StoreError> {
   let reviewer = settings.reviewer.as_ref();
-  if reviewer.is_some_and(|choice| {
-    matches!(
-      choice.connection,
-      orchester_core::run::review::ReviewerConnectionId::Decision { .. }
-    )
-  }) {
-    return Err(StoreError::Unrepresentable("decision reviewer settings"));
-  }
   connection.execute(
     "INSERT INTO project_auto_mode (id, model, connection, effort) VALUES (1, ?1, ?2, ?3) \
      ON CONFLICT (id) DO UPDATE SET model = excluded.model, connection = excluded.connection, effort = excluded.effort",

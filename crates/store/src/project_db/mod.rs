@@ -16,7 +16,6 @@ mod code_index;
 mod completions;
 mod connections;
 mod consistent;
-mod decision_connections;
 mod default_pipeline;
 mod disk_guard;
 mod environment;

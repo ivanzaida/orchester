@@ -261,11 +261,9 @@ pub fn reviewer(
       return Ok(None);
     }
     // Editing the default's model or effort pins the connection that default resolves to.
-    resolve_reviewer(&AutoModeSettings::default(), &settings.connections, &[])
+    resolve_reviewer(&AutoModeSettings::default(), &settings.connections)
       .map_err(|why| Message::new(unavailable_key(why)))?
       .connection
-      .language()
-      .expect("the default reviewer is a language reviewer")
   } else {
     settings
       .connections
@@ -288,10 +286,9 @@ pub fn reviewer(
     return Err(Message::new("errors.modelInvalid"));
   }
   Ok(Some(ReviewerChoice {
-    connection: selected.id().into(),
+    connection: selected.id(),
     model,
     effort: (!effort.is_empty()).then(|| effort.to_owned()),
-    threshold: None,
   }))
 }
 
@@ -314,7 +311,7 @@ pub fn save_auto_mode_in(
   let mut db = ProjectDb::open(root).map_err(|error| messages::store_error(&error))?;
   if widens {
     let connections = db.connections().map_err(|error| messages::store_error(&error))?;
-    resolve_reviewer(asked, &connections, &[]).map_err(|why| Message::new(unavailable_key(why)))?;
+    resolve_reviewer(asked, &connections).map_err(|why| Message::new(unavailable_key(why)))?;
   }
   use orchester_store::AutoModeSave;
   match db
@@ -342,7 +339,7 @@ pub struct ReviewOptions {
   pub resolved: Result<crate::tasks::run_approvals::ReviewerShown, Message>,
 }
 pub fn review_options(settings: &Settings, connection: &str, model: &str) -> ReviewOptions {
-  let resolved = resolve_reviewer(&settings.auto_mode, &settings.connections, &[])
+  let resolved = resolve_reviewer(&settings.auto_mode, &settings.connections)
     .map(|r| crate::tasks::run_approvals::ReviewerShown {
       connection: r.connection.name().as_str().into(),
       model: r.model,
@@ -355,9 +352,9 @@ pub fn review_options(settings: &Settings, connection: &str, model: &str) -> Rev
     .find(|c| c.id().to_string() == connection)
     .or_else(|| {
       // A missing reviewer has no selected option; its refusal is retained in `resolved` above.
-      resolve_reviewer(&settings.auto_mode, &settings.connections, &[])
+      resolve_reviewer(&settings.auto_mode, &settings.connections)
         .ok()
-        .and_then(|r| r.connection.language())
+        .map(|r| r.connection)
     });
   let mut models = Vec::new();
   let mut efforts = Vec::new();
@@ -373,7 +370,7 @@ pub fn review_options(settings: &Settings, connection: &str, model: &str) -> Rev
   }
   ReviewOptions {
     // No default caption when unavailable; the form retains the explicit refusal in resolved.
-    default_connection: resolve_reviewer(&AutoModeSettings::default(), &settings.connections, &[])
+    default_connection: resolve_reviewer(&AutoModeSettings::default(), &settings.connections)
       .ok()
       .map(|r| r.connection.name().as_str().to_owned()),
     connections: settings
@@ -396,7 +393,7 @@ pub fn review_options(settings: &Settings, connection: &str, model: &str) -> Rev
 
 pub fn default_model(settings: &Settings, connection: &str) -> String {
   if connection.is_empty() {
-    return resolve_reviewer(&AutoModeSettings::default(), &settings.connections, &[])
+    return resolve_reviewer(&AutoModeSettings::default(), &settings.connections)
       .map(|reviewer| reviewer.model.as_str().to_owned())
       .unwrap_or_default();
   }

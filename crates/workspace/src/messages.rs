@@ -122,8 +122,6 @@ pub fn store_error(error: &StoreError) -> Message {
     | StoreError::DuplicateSlug { .. }
     | StoreError::NoDraft(_)
     | StoreError::ConnectionNotFound(_)
-    | StoreError::DecisionConnectionNotFound(_)
-    | StoreError::DecisionConnectionInUse(_)
     | StoreError::NotAGitHubConnection(_)
     | StoreError::NotAnAgentCliConnection(_)
     | StoreError::InvocationNotFound(_)

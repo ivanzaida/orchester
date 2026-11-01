@@ -15,10 +15,9 @@ use super::TestProject;
 pub(super) fn none(db: &mut ProjectDb) {
   db.save_auto_mode_settings(&AutoModeSettings {
     reviewer: Some(ReviewerChoice {
-      connection: (ConnectionId::generate()).into(),
+      connection: ConnectionId::generate(),
       model: ModelId::new(DEFAULT_REVIEW_MODEL).expect("a valid model"),
       effort: None,
-      threshold: None,
     }),
   })
   .expect("no reviewer");

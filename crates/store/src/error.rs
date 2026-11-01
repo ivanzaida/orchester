@@ -137,10 +137,6 @@ pub enum StoreError {
   AlwaysAllow(#[from] AlwaysAllowError),
   #[error("a connection named `{0}` already exists")]
   DuplicateConnectionName(String),
-  #[error("decision connection {0} does not exist")]
-  DecisionConnectionNotFound(orchester_core::id::DecisionConnectionId),
-  #[error("decision connection {0} cannot be deleted: the reviewer uses it")]
-  DecisionConnectionInUse(orchester_core::id::DecisionConnectionId),
   #[error("connection {0} does not exist")]
   ConnectionNotFound(ConnectionId),
   #[error("connection {0} is not a GitHub connection")]

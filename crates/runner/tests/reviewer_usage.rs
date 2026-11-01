@@ -204,10 +204,9 @@ async fn reviewer_usage_of_codex_is_read_from_its_turn() {
     .create_connection(&codex)
     .expect("a Codex connection");
   let choice = ReviewerChoice {
-    connection: codex.id().into(),
+    connection: codex.id(),
     model: ModelId::new("gpt-5.5-codex").expect("model"),
     effort: None,
-    threshold: None,
   };
   let (run, db) = ended_run(&project, Some(choice)).await;
   let review = only_review(&db, run.id());
@@ -271,10 +270,9 @@ async fn reviewer_usage_of_a_reviewer_that_never_started_is_not_recorded() {
     .create_connection(&missing)
     .expect("a connection to a CLI that is not there");
   let choice = ReviewerChoice {
-    connection: missing.id().into(),
+    connection: missing.id(),
     model: ModelId::new(DEFAULT_REVIEW_MODEL).expect("model"),
     effort: None,
-    threshold: None,
   };
   let mut started = Started::new(&project, Some(choice)).await;
   let request = started

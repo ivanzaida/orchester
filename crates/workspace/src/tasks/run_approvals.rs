@@ -113,13 +113,11 @@ pub struct ReviewerShown {
 pub fn reviewer_of(db: &ProjectDb) -> Result<Result<ReviewerShown, ReviewerUnavailable>, StoreError> {
   let settings = db.auto_mode_settings()?;
   let connections = db.connections()?;
-  Ok(
-    resolve_reviewer(&settings, &connections, &[]).map(|resolved| ReviewerShown {
-      connection: resolved.connection.name().as_str().into(),
-      model: resolved.model,
-      effort: resolved.effort,
-    }),
-  )
+  Ok(resolve_reviewer(&settings, &connections).map(|resolved| ReviewerShown {
+    connection: resolved.connection.name().as_str().into(),
+    model: resolved.model,
+    effort: resolved.effort,
+  }))
 }
 
 /// Why the project has no reviewer, as the app says it.
@@ -127,8 +125,8 @@ pub const fn unavailable_key(why: ReviewerUnavailable) -> &'static str {
   match why {
     ReviewerUnavailable::NoConnection => "runs.autoMode.unavailable.noConnection",
     ReviewerUnavailable::ConnectionGone => "runs.autoMode.unavailable.connectionGone",
-    ReviewerUnavailable::Unsupported | ReviewerUnavailable::NotConnected => "runs.autoMode.unavailable.unsupported",
-    ReviewerUnavailable::NoModel | ReviewerUnavailable::ModelGone => "runs.autoMode.unavailable.noModel",
+    ReviewerUnavailable::Unsupported => "runs.autoMode.unavailable.unsupported",
+    ReviewerUnavailable::NoModel => "runs.autoMode.unavailable.noModel",
   }
 }
 

@@ -73,9 +73,13 @@ facts forbid (write when the step reads only, reach the network when it is off, 
 /// [`DATA_END`] on one line, and the step's facts again; then the verdict asked, or Autopilot's question
 /// ([`ROOTS_QUESTION`]).
 pub fn review_prompt(input: &ReviewInput) -> String {
-  let state = review_state(input);
-  let step = one_line(&state["step"]);
-  let task = one_line(&state["task"]);
+  let step = step_facts(input);
+  let task = input.task();
+  let task = one_line(&json!({
+    "title": task.title,
+    "brief": task.brief,
+    "criteria": task.criteria,
+  }));
   let asked = match input.roots_question() {
     Some(_) => ROOTS_QUESTION,
     None => "Give your verdict on the request above.",
@@ -87,23 +91,12 @@ pub fn review_prompt(input: &ReviewInput) -> String {
      {DATA_START}\n{}\n{DATA_END}\n\n\
      The step's facts again, from Orchester (trusted):\n{step}\n\n\
      {asked}",
-    one_line(&state["agent_data"]["data"])
+    agent_data(input)
   )
 }
 
-/// The same three parts as the language reviewer's prompt, with the agent's data kept apart and marked untrusted.
-/// The input has already been redacted as the approval card and cut to the review's context limits.
-pub fn review_state(input: &ReviewInput) -> Value {
-  let task = input.task();
-  json!({
-    "step": step_facts(input),
-    "task": { "title": task.title, "brief": task.brief, "criteria": task.criteria },
-    "agent_data": { "trusted": false, "data": agent_data(input) },
-  })
-}
-
-/// What Orchester knows about the step.
-fn step_facts(input: &ReviewInput) -> Value {
+/// What Orchester knows about the step, as one JSON line.
+fn step_facts(input: &ReviewInput) -> String {
   let step = input.step();
   let repository = match step.repository {
     RepositoryAccess::ReadOnly => {
@@ -142,11 +135,11 @@ fn step_facts(input: &ReviewInput) -> Value {
     facts["roots"] = json!(question.roots);
     facts["run_branch"] = json!(question.branch);
   }
-  facts
+  one_line(&facts)
 }
 
-/// The request and the agent's context.
-fn agent_data(input: &ReviewInput) -> Value {
+/// The request and the agent's context, as one JSON line.
+fn agent_data(input: &ReviewInput) -> String {
   let request = input.request();
   let asked = if request.command {
     json!({ "kind": "shell command", "command": request.action })
@@ -158,12 +151,12 @@ fn agent_data(input: &ReviewInput) -> Value {
       "arguments": request.arguments,
     })
   };
-  json!({
+  one_line(&json!({
     "request": asked,
     "working_folder": request.working_folder,
     "agent_note": request.note,
     "agent_last_messages": input.messages(),
-  })
+  }))
 }
 
 /// `value` as JSON on one line in plain ASCII: `<`, `>` and every character beyond ASCII (line and

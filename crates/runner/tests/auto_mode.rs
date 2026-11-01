@@ -385,10 +385,9 @@ async fn codex_escalating(repository: RepositoryAccess) -> Started {
     .expect("connections")
     .remove(0);
   let choice = ReviewerChoice {
-    connection: codex.id().into(),
+    connection: codex.id(),
     model: ModelId::new("gpt-5.5-codex").expect("model"),
     effort: None,
-    threshold: None,
   };
   Started::of(project, Some(choice)).await
 }
@@ -487,10 +486,9 @@ async fn reviewed_by_codex(brief: &'static str) -> Started {
   let mut db = ProjectDb::open(project.repo.path()).expect("open");
   db.create_connection(&codex).expect("a Codex connection");
   let choice = ReviewerChoice {
-    connection: codex.id().into(),
+    connection: codex.id(),
     model: ModelId::new("gpt-5.5-codex").expect("model"),
     effort: Some("low".to_owned()),
-    threshold: None,
   };
   Started::of(project, Some(choice)).await
 }

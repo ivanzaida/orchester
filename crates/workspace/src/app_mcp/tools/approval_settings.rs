@@ -213,12 +213,9 @@ fn reviewer_change(
 /// ([`moves_to_another_account`]): a person's decision, as for an agent profile.
 fn moves_reviewer_account(connections: &[Connection], current: &AutoModeSettings, next: &AutoModeSettings) -> bool {
   let account = |settings| {
-    resolve_reviewer(settings, connections, &[]).ok().and_then(|resolved| {
-      resolved
-        .connection
-        .language()
-        .map(|connection| connection.account().clone())
-    })
+    resolve_reviewer(settings, connections)
+      .ok()
+      .map(|resolved| resolved.connection.account().clone())
   };
   account(next).is_some_and(|after| moves_to_another_account(account(current).as_ref(), &after))
 }
@@ -250,10 +247,9 @@ fn chosen(connections: &[Connection], argument: &SetReviewer) -> Result<Option<R
     }
   }
   Ok(Some(ReviewerChoice {
-    connection: connection.id().into(),
+    connection: connection.id(),
     model,
     effort: argument.effort.clone(),
-    threshold: None,
   }))
 }
 
