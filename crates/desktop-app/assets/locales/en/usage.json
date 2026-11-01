@@ -214,7 +214,7 @@
         "points": "Each point is a snapshot a CLI reported during a run; snapshots are kept 90 days.",
         "dotted": "Dotted: no run reported limits, so use outside Orchester is unknown.",
         "hatched": "Hatched: {{gaps}}.",
-        "threshold": "Dashed across: your warning threshold (… menu).",
+        "threshold": "Dashed across: your warning threshold (Settings › General).",
         "byDay": "5-hour windows are drawn when grouped by hour.",
         "byHour": "Grouped by hour, 5-hour windows are drawn (dashed). A drop to a new window starts at its reset marker."
       },
@@ -230,11 +230,8 @@
       "sourceRead": "Read by Orchester"
     },
     "threshold": {
-      "title": "Warning threshold",
-      "unit": "% of a window used",
-      "hint": "Draws the dashed line in Plan limits. Limits belong to your accounts, so it is saved for Orchester and every project shows the same line. 1–100.",
-      "invalid": "Enter a whole number from 1 to 100.",
-      "saved": "Saved for all projects"
+      "open": "Set warning threshold in Settings",
+      "now": "Dashed at {{percent}} of a window used"
     },
     "breakdown": {
       "title": "Where tokens go",

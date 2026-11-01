@@ -1,8 +1,9 @@
 //! What the Usage page's controls do (`Usage · interactions` `p732q`): a filter's menu chooses and a chip lets
 //! go, a *Where tokens go* row filters by its profile, the period and *Group by* change the query, *Custom…*
-//! takes typed days and refuses a reversed range, and the warning threshold is saved for every project. Each
-//! change is the route's query, as a new entry of the tab's history.
+//! takes typed days and refuses a reversed range, and Plan limits' menu opens the warning threshold in Settings ›
+//! General, whose value the page then draws. Each change is the route's query, as a new entry of the tab's history.
 
+use orchester_app::routes::Route;
 use orchester_core::usage::{GroupBy, Period};
 use orchester_workspace::usage::UsageQuery;
 
@@ -87,14 +88,35 @@ fn usage_custom_range_refuses_a_reversed_range_and_shows_a_typed_one() {
 }
 
 #[test]
-fn usage_warning_threshold_is_saved_for_every_project() {
+fn usage_threshold_menu_opens_settings_and_draws_what_is_set_there() {
   let mut page = Seeded::usage("usage", UsageQuery::default());
   page.click("usage-limits-menu");
-  page.until("the threshold", |page| page.shows("usage-threshold"));
-  page.window.set("usage-threshold", "0");
-  page.until("the refusal", |page| page.shows("usage-threshold-error"));
-  page.window.set("usage-threshold", "70");
-  page.until("the save", |page| page.shows("usage-threshold-saved"));
-  let workspace = page.window.launch.workspace().expect("the session started");
-  assert_eq!(workspace.usage_warning_threshold().expect("read").percent(), 70);
+  page.until("the menu", |page| page.shows("usage-threshold-settings"));
+  assert!(
+    page.text("usage-threshold-settings").contains("Dashed at 80%"),
+    "the threshold the page drew, not a field"
+  );
+  assert!(!page.shows("usage-threshold"), "the threshold is not edited in place");
+  page.click("usage-threshold-settings");
+  assert_eq!(page.window.navigation().route_now(), Route::PlanLimits);
+  page.until("Plan limits", |page| page.shows("settings-plan-limits"));
+  page.until("the stored value", |page| {
+    page
+      .window
+      .texts("settings-threshold-value")
+      .is_some_and(|texts| texts.concat() == "80")
+  });
+  page.window.set("settings-threshold-value", "70");
+  let workspace = page.window.launch.workspace().expect("the session started").clone();
+  page.until("the save", |_| {
+    workspace
+      .usage_warning_threshold()
+      .is_ok_and(|threshold| threshold.percent() == 70)
+  });
+  page.window.navigation().back();
+  page.window.pass();
+  page.until("the usage again", |page| page.shows("usage-tokens-chart"));
+  page.click("usage-limits-menu");
+  page.until("the menu again", |page| page.shows("usage-threshold-settings"));
+  assert!(page.text("usage-threshold-settings").contains("Dashed at 70%"));
 }

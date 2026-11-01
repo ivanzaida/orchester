@@ -1,8 +1,8 @@
-//! *Warning threshold* (`Warning threshold` `t5qdp` in `01 · General`): the share of a plan window at which every
-//! project's Usage counts its limits as nearly used, a whole percentage from 1 to 100, kept for Orchester rather than a
-//! project because limits belong to accounts; the same setting Usage › Plan limits' menu changes. It is read when the
-//! row shows, and a value that is a percentage saves as it is typed, off the UI thread, one save at a time and the
-//! newest last.
+//! *Plan limits* and its *Warning threshold* (`Warning threshold` `t5qdp` in `01 · General`): the share of a plan
+//! window at which every project's Usage counts its limits as nearly used, a whole percentage from 1 to 100, kept for
+//! Orchester rather than a project because limits belong to accounts. This is its one place: Usage › Plan limits' menu
+//! opens it here, the group scrolled into view. It is read when the row shows, and a value that is a percentage saves
+//! as it is typed, off the UI thread, one save at a time and the newest last.
 
 use std::sync::Arc;
 
@@ -11,7 +11,8 @@ use lurq::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction, FutureState},
   },
-  core::Signal,
+  components::Column,
+  core::{ElementRef, Signal},
   node::{Element, dimension::Dimension},
 };
 use orchester_core::usage::limits::WarningThreshold;
@@ -27,16 +28,55 @@ use crate::{
   ui::{
     field::{FieldInput, field_error},
     message::message_text,
-    setting_rows::SettingRow,
+    setting_rows::{SettingGroup, SettingRow},
     skeleton::{self, Skeleton},
   },
 };
 
+const GROUP: &str = "settings-plan-limits";
 const ID: &str = "settings-threshold";
 /// The value's field and its unit (`Box` `C8WIQw` in `01 · General`).
 const FIELD_WIDTH: f32 = 120.0;
 /// The value's bone while it is read: a two-digit percentage.
 const VALUE_BONE: f32 = 14.0;
+
+/// Whether the route brings *Plan limits* into view.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct InView(pub bool);
+
+impl DevtoolsInspectable for InView {}
+
+/// *Plan limits* with its threshold, scrolled into view when a route newly asks for it.
+pub struct PlanLimitsGroup {
+  group: ElementRef,
+  /// What the route last asked, so each opening scrolls once.
+  followed: Mutex<bool>,
+}
+
+impl Component for PlanLimitsGroup {
+  type Props = InView;
+
+  fn create(_: &mut Ctx) -> Self {
+    Self {
+      group: ElementRef::new(),
+      followed: Mutex::new(false),
+    }
+  }
+
+  fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
+    let InView(asked) = *ctx.props::<InView>();
+    let followed = std::mem::replace(&mut *self.followed.lock(), asked);
+    if asked && !followed {
+      ctx.scroll_into_view(&self.group);
+    }
+    let group =
+      SettingGroup::new(GROUP, ctx.t("settings.general.planLimits")).row(ctx.mount_keyed::<ThresholdRow>(ID, ()));
+    Column::new()
+      .ref_element(self.group.clone())
+      .width(Dimension::Pct(100.0))
+      .child(group)
+  }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Read(WarningThreshold);
