@@ -9,12 +9,13 @@ use std::{
 };
 
 use orchester_core::{
-  id::{DecisionConnectionId, IdempotencyKey},
+  id::IdempotencyKey,
   resource::ModelId,
   run::review::{DecisionTestReport, DecisionTestStatus, Probability},
   secret::SecretVault,
   store::SecretStore,
 };
+use orchester_ipc::DecisionTestTarget;
 use orchester_store::{ProjectDb, StoreError};
 use progress::Progress;
 use thiserror::Error;
@@ -30,6 +31,8 @@ pub enum DecisionTestError {
   PersonOnly,
   #[error("a decision test is already running or this request has already been submitted")]
   AlreadySubmitted,
+  #[error("the decision connection changed since this test was submitted")]
+  ConnectionChanged,
   #[error("the decision connection's key is missing, archived or unavailable")]
   KeyUnavailable,
   #[error("the decision test worker stopped unexpectedly")]
@@ -41,15 +44,18 @@ pub async fn test_in(
   root: &Path,
   vault: &dyn SecretVault,
   id: IdempotencyKey,
-  connection: DecisionConnectionId,
+  target: DecisionTestTarget,
   model: ModelId,
   automation: bool,
 ) -> Result<DecisionTestReport, DecisionTestError> {
   let (reviewer, records, mut progress) = {
     let mut db = ProjectDb::open(root)?;
     let connection = db
-      .decision_connection(connection)?
-      .ok_or(StoreError::DecisionConnectionNotFound(connection))?;
+      .decision_connection(target.connection)?
+      .ok_or(StoreError::DecisionConnectionNotFound(target.connection))?;
+    if connection.base_url() != &target.base_url || connection.key() != target.key {
+      return Err(DecisionTestError::ConnectionChanged);
+    }
     if automation && !connection.base_url().is_on_this_computer() {
       return Err(DecisionTestError::PersonOnly);
     }

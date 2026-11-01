@@ -116,7 +116,7 @@ async fn decision_test_rebuilds_history_stores_figures_and_limits_concurrency() 
   assert!(server.bodies.lock().is_empty());
   assert!(db.latest_decision_test(connection.id()).expect("no tests").is_none());
   let id = IdempotencyKey::generate();
-  let report = test_in(repo.path(), vault.as_ref(), id, connection.id(), model(), false)
+  let report = test_in(repo.path(), vault.as_ref(), id, (&connection).into(), model(), false)
     .await
     .expect("test");
   assert_eq!(report.status, DecisionTestStatus::Completed);
@@ -132,7 +132,7 @@ async fn decision_test_rebuilds_history_stores_figures_and_limits_concurrency() 
   }
   assert_eq!(db.decision_test(id).expect("stored"), Some(report));
   assert_eq!(server.peak.load(Ordering::SeqCst), 8);
-  let replay = test_in(repo.path(), vault.as_ref(), id, connection.id(), model(), false).await;
+  let replay = test_in(repo.path(), vault.as_ref(), id, (&connection).into(), model(), false).await;
   assert!(matches!(replay, Err(DecisionTestError::AlreadySubmitted)));
   let bodies = server.bodies.lock();
   assert_eq!(bodies.len(), 17);
@@ -155,7 +155,7 @@ async fn decision_test_stop_keeps_progress_and_aborts_inflight_requests() {
   let connection = connection(&mut db, &server.url);
   let vault = vault::MemoryVault::with(vec![]);
   let id = IdempotencyKey::generate();
-  let work = test_in(repo.path(), vault.as_ref(), id, connection.id(), model(), false);
+  let work = test_in(repo.path(), vault.as_ref(), id, (&connection).into(), model(), false);
   let stop = async {
     loop {
       if db
@@ -188,7 +188,7 @@ async fn decision_test_remote_automation_is_refused_before_sending() {
     repo.path(),
     vault.as_ref(),
     IdempotencyKey::generate(),
-    connection.id(),
+    (&connection).into(),
     model(),
     true,
   )
@@ -207,7 +207,7 @@ async fn decision_test_missing_context_and_failed_answers_are_explicit() {
     repo.path(),
     vault.as_ref(),
     IdempotencyKey::generate(),
-    connection.id(),
+    (&connection).into(),
     model(),
     true,
   )
@@ -242,7 +242,7 @@ async fn decision_test_empty_project_finishes_without_sending() {
     repo.path(),
     vault.as_ref(),
     IdempotencyKey::generate(),
-    connection.id(),
+    (&connection).into(),
     model(),
     false,
   )
@@ -272,7 +272,7 @@ async fn decision_test_overlapping_submissions_are_refused_and_dropped_work_is_i
       repo.path(),
       vault.as_ref(),
       IdempotencyKey::generate(),
-      connection.id(),
+      (&connection).into(),
       model(),
       false,
     )
@@ -280,7 +280,7 @@ async fn decision_test_overlapping_submissions_are_refused_and_dropped_work_is_i
     assert!(matches!(other, Err(DecisionTestError::AlreadySubmitted)));
   };
   tokio::select! {
-    result = test_in(repo.path(), vault.as_ref(), id, connection.id(), model(), false) => panic!("ended before drop: {result:?}"),
+    result = test_in(repo.path(), vault.as_ref(), id, (&connection).into(), model(), false) => panic!("ended before drop: {result:?}"),
     () = observe => {}
   }
   let report = db.decision_test(id).expect("progress").expect("report");
@@ -312,7 +312,7 @@ async fn decision_test_legacy_task_is_omitted_instead_of_using_the_current_task(
     repo.path(),
     vault.as_ref(),
     IdempotencyKey::generate(),
-    connection.id(),
+    (&connection).into(),
     model(),
     false,
   )
@@ -320,4 +320,43 @@ async fn decision_test_legacy_task_is_omitted_instead_of_using_the_current_task(
   .expect("test");
   assert!(report.omitted_fields.contains(&"/task".to_owned()));
   assert!(server.bodies.lock()[0]["state"].get("task").is_none());
+}
+
+#[tokio::test]
+async fn decision_test_stale_endpoint_or_key_is_refused_before_sending() {
+  let original = server::Server::new(Duration::ZERO, false).await;
+  let replacement = server::Server::new(Duration::ZERO, false).await;
+  let (repo, mut db) = history(1, true);
+  let connection = connection(&mut db, &original.url);
+  let vault = vault::MemoryVault::with(vec![]);
+  for (url, key) in [
+    (replacement.url.as_str(), None),
+    (original.url.as_str(), Some(orchester_core::id::SecretId::generate())),
+  ] {
+    // Submit the displayed snapshot, then edit the stored connection before execution.
+    let command = orchester_ipc::Command::TestDecisionConnection {
+      test: IdempotencyKey::generate(),
+      connection: (&connection).into(),
+      model: model(),
+      automation: false,
+    };
+    let serialized = serde_json::to_vec(&command).expect("serialize submission");
+    let mut edited = connection.clone();
+    edited.set_server(DecisionServerUrl::new(url).expect("URL"), key);
+    db.save_decision_connection(&edited).expect("edit connection");
+    let orchester_ipc::Command::TestDecisionConnection {
+      test,
+      connection: target,
+      model,
+      automation,
+    } = serde_json::from_slice(&serialized).expect("receive submission")
+    else {
+      panic!("expected Test");
+    };
+    let result = test_in(repo.path(), vault.as_ref(), test, target, model, automation).await;
+    assert!(matches!(result, Err(DecisionTestError::ConnectionChanged)));
+    assert!(db.decision_test(test).expect("no report").is_none());
+    assert!(original.bodies.lock().is_empty());
+    assert!(replacement.bodies.lock().is_empty());
+  }
 }

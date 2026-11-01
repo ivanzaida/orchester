@@ -1,9 +1,5 @@
-use orchester_core::{
-  id::{DecisionConnectionId, IdempotencyKey},
-  resource::ModelId,
-  run::review::DecisionTestReport,
-};
-use orchester_ipc::Rejection;
+use orchester_core::{id::IdempotencyKey, resource::ModelId, run::review::DecisionTestReport};
+use orchester_ipc::{DecisionTestTarget, Rejection};
 
 use super::Scheduler;
 
@@ -11,7 +7,7 @@ impl Scheduler {
   pub async fn test_decision_connection(
     &self,
     id: IdempotencyKey,
-    connection: DecisionConnectionId,
+    connection: DecisionTestTarget,
     model: ModelId,
     automation: bool,
   ) -> Result<DecisionTestReport, Rejection> {

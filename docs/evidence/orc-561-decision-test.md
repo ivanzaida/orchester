@@ -4,9 +4,10 @@ Workspace/runner implementation against base `20bc6537217727bf804e4b5b114615ab35
 
 ## Invocation and progress
 
-- The explicit workspace action is `Runners::test_decision_connection(root, submission_id, connection, model, Writer)`.
-  It sends IPC `TestDecisionConnection` (protocol 40); the runner repeats the hosted-server authority check.
-  No connection save, check, agent invocation or project startup invokes a test.
+- The explicit workspace action is `Runners::test_decision_connection(root, submission_id, &connection, model, Writer)`.
+  It sends IPC `TestDecisionConnection` (protocol 41) with the displayed connection's ID, URL and key reference.
+  The runner rejects changed URL/key settings before reading history or resolving the key, then repeats the
+  hosted-server authority check. No connection save, check, agent invocation or project startup invokes a test.
 - `connections::decision::test::progress_in` reads the submission's durable progress while its IPC reply is pending.
   `latest_in` reads the latest result for the connection, hiding results from an edited server URL or key reference.
 - `stop_in` sets the durable stop flag. The runner polls it every 25 ms and before refilling the eight-request pool.
@@ -72,3 +73,35 @@ The final gate covers all saved Rust changes; only the Done entry and this verif
 Not run: unfiltered/full-suite tests, live inference, desktop QA/Pencil comparison (no visual changes), and macOS
 cross-check (no Apple SDK/C cross-compiler on this Windows machine). No platform-specific code changed.
 No app copies were started. No commits were made.
+
+## Review return: connection snapshot race
+
+The correction covers saved changes on top of `e7cf7a00ba0e4368c9df2b5f5fede832bd67de3a`.
+The workspace now requires the displayed `DecisionConnection` snapshot, and IPC protocol 41 carries its ID,
+base URL and key reference through the scheduler. The runner compares URL/key with the loaded connection before
+reading history, resolving credentials or sending requests. A mismatch returns typed `ConnectionChanged`;
+the reviewer uses the validated, owned connection settings for the whole test.
+
+The added `decision_test_stale_endpoint_or_key_is_refused_before_sending` regression serializes the submission,
+edits the stored endpoint or key reference, then processes the submission. Both edits are refused without a report
+or a request reaching either stand-in server. No desktop visual or platform-specific code changed.
+
+Commands for this correction (earlier command evidence above applies to the earlier candidate only):
+
+- `git status --short`: clean at start; final changes restricted to the correction and this evidence.
+- `git rev-parse HEAD`: `e7cf7a00ba0e4368c9df2b5f5fede832bd67de3a`.
+- `git diff`: self-reviewed; new IPC file read separately.
+- `git diff --stat`: inspected.
+- `git diff --check`: passed.
+- `powershell -ExecutionPolicy Bypass -File .tmp/decision-test/run.ps1 cargo test -p orchester-runner --test decision_test decision_test`: **8 passed**.
+- `cargo +nightly fmt -p orchester-ipc`: passed.
+- `cargo +nightly fmt -p orchester-runner`: passed.
+- `cargo +nightly fmt -p orchester-workspace`: passed. Formatting was repeated after the test completed.
+- `powershell -ExecutionPolicy Bypass -File .tmp/decision-test/run.ps1 powershell -ExecutionPolicy Bypass -File tools/check.ps1`: passed; all output read. Last line: **`check: OK`**.
+
+The gate covers all saved Rust changes for this correction. Only this evidence entry was appended afterward.
+Not run: full-suite tests, shared transport regression (transport unchanged), live inference, desktop QA/Pencil
+comparison (no visual change), or macOS checks (no Apple SDK/C cross-compiler); no `cfg(target_os)` code changed.
+No app copies were started and no commits were made.
+Unrelated observation left unchanged: `crates/ipc/tests/browser.rs:274` asserts protocol 38; the input revision
+already used protocol 40. That test was not run in this correction.

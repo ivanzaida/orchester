@@ -242,11 +242,11 @@ pub enum Command {
   /// [`Reply::ConnectionChecked`], or [`Rejection::Failed`] when the key cannot be read or the provider
   /// runs no agent in this version.
   CheckConnection { provider: AgentProvider, api: ApiEndpoint },
-  /// Explicit recorded-request comparison (protocol 40). Progress and results live in the project database.
+  /// Explicit recorded-request comparison (protocol 41). Progress and results live in the project database.
   /// Hosted servers refuse automation; the workspace supplies authority rather than accepting it as tool input.
   TestDecisionConnection {
     test: IdempotencyKey,
-    connection: orchester_core::id::DecisionConnectionId,
+    connection: crate::DecisionTestTarget,
     model: orchester_core::resource::ModelId,
     automation: bool,
   },
