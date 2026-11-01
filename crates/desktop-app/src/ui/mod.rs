@@ -21,6 +21,7 @@ pub mod code_editor;
 pub mod command_row;
 pub mod command_trigger;
 pub mod composer;
+pub mod context_meter;
 pub mod copied_value;
 pub mod date_picker;
 pub mod decision;

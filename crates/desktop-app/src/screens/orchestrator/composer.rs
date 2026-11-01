@@ -80,6 +80,8 @@ pub(super) struct ComposerBox<'a> {
   pub(super) stop: Option<Press>,
   /// The runs-on chip.
   pub(super) runs_on: Element,
+  /// The context meter of the conversation shown, between the free space and the keys (`Kp4IZ`).
+  pub(super) context: Option<Element>,
   /// *Set up the Orchestrator*, while it is not set up.
   pub(super) set_up: Option<Element>,
   /// The box starts a new conversation (`Composer` `QcfyZ` in `03 New conversation`): 12 over it and 28 between the
@@ -113,6 +115,7 @@ pub(super) fn composer(ctx: &mut Ctx, view: &View, composer: ComposerBox<'_>) ->
     .child(attach(ctx, view))
     .child(composer.runs_on)
     .child(Spacer::new().flex(1.0))
+    .with_children(composer.context)
     .with_children(end);
   let draft = view.draft.clone();
   let put_back: PutBack = Arc::new(move |text: String| draft.update(|words| tray::put_back_into(words, &text)));

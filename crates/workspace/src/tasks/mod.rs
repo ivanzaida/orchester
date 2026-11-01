@@ -18,7 +18,7 @@ pub mod checkout;
 pub mod close;
 pub mod completion;
 pub mod conflict;
-mod context_uses;
+pub mod context_uses;
 pub mod conversation;
 pub mod data;
 pub mod delete;
