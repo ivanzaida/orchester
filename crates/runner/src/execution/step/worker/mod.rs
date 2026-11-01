@@ -23,7 +23,10 @@ use std::{
 use orchester_core::{
   code_index::CodeIndexUse,
   command::SecretVariable,
-  connection::stream::{AgentEvent, ClaudeStream, InvocationOutcome, InvocationTracker},
+  connection::{
+    app_server::CodexFailure,
+    stream::{AgentEvent, ClaudeStream, InvocationOutcome, InvocationTracker},
+  },
   conversation::Message,
   id::{AgentAccountId, ResourceId, StepExecutionId, TaskId},
   native::session::StopMode,
@@ -259,9 +262,11 @@ pub(super) struct Watch {
   /// Continuations since a decision was settled or a call returned that Codex waited for after its turn
   /// (`process::MAX_IDLE_CONTINUATIONS`).
   pub(super) idle_continuations: u8,
-  /// The agent's account is at its plan limit, as its CLI's last plan reading said: a turn that fails now stops at
-  /// that limit instead of failing the step.
+  /// The agent's CLI would refuse turns, as its last plan reading said (credits that carry work past a full window
+  /// included): a turn that fails now, for no reason the CLI named, stops at that limit instead of failing the step.
   pub(super) plan_reached: bool,
+  /// Why Codex said a turn of this invocation failed; a usage limit, once named, stays.
+  pub(super) codex_failure: Option<CodexFailure>,
 }
 
 impl Watch {
@@ -294,6 +299,7 @@ impl Watch {
       returns_continued: 0,
       idle_continuations: 0,
       plan_reached: false,
+      codex_failure: None,
     })
   }
 

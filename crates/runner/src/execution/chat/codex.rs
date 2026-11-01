@@ -233,6 +233,8 @@ impl Turn {
           over = true;
           None
         }
+        // A chat turn that fails ends as failed whatever the reason; it waits for no plan limit.
+        Update::Failure(_) => None,
       };
       // A process that cannot take the answer is ending; its exit says how.
       if let Some(answer) = answer

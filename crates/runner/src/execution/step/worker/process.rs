@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use orchester_core::{
   connection::{
-    app_server::Update,
+    app_server::{CodexFailure, Update},
     mcp::McpServerProblem,
     stream::{AgentEvent, InvocationOutcome, OutputStream, RunnerProblem},
   },
@@ -299,6 +299,12 @@ impl Worker {
         Ok(())
       }
       Update::InputTaken(text) => self.input_taken(watch, &text, None),
+      Update::Failure(failure) => {
+        if watch.codex_failure != Some(CodexFailure::UsageLimit) {
+          watch.codex_failure = Some(failure);
+        }
+        Ok(())
+      }
       Update::TurnEnded { input_kept, completed } => {
         if input_kept {
           self.kept_at_turn_end(watch)?;

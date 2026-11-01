@@ -65,6 +65,8 @@ mod fake_codex_chat;
 mod fake_codex_check;
 #[path = "fake_codex_index.rs"]
 mod fake_codex_index;
+#[path = "fake_codex_limits.rs"]
+mod fake_codex_limits;
 #[path = "fake_codex_question.rs"]
 mod fake_codex_question;
 #[path = "fake_codex_relay.rs"]
