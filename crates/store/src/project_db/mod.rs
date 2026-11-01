@@ -40,6 +40,7 @@ mod orchestrator;
 mod orchestrator_queue;
 mod orchestrator_reports;
 mod orchestrator_sent;
+mod orchestrator_switches;
 mod orchestrator_usage;
 mod orchestrator_waits;
 mod organization;
@@ -117,6 +118,7 @@ pub use self::{
   orchestrator::{ChatListing, ChatTurn},
   orchestrator_queue::StartedQueued,
   orchestrator_reports::KeptReport,
+  orchestrator_switches::OrchestratorSwitch,
   orchestrator_waits::KeptWait,
   read_only::ReadOnlyProjectDb,
   reference_bindings::{Bound, BoundBy, BoundReference, ReferenceBinding},

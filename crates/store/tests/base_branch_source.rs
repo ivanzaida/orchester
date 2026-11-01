@@ -217,8 +217,9 @@ fn base_branch_source_a_shared_tasks_base_stays_outside_its_revision() {
 }
 
 /// The migrations appended after the base sources' (the server's admins, *Open my draft on vN*, the worktree
-/// removals' not-removed state, the disk guard): the schema before it is this many and one more under the latest.
-const AFTER_BASE_SOURCES: u32 = 4;
+/// removals' not-removed state, the disk guard, the Orchestrator's switches): the schema before it is this many and one
+/// more under the latest.
+const AFTER_BASE_SOURCES: u32 = 5;
 
 /// A project whose base branch was `set` (none: the checked-out branch) before tasks and modules had theirs, with
 /// open modules Webhooks and Billing, closed Legacy, and runs from a detached HEAD, `staging` and `main`, opened at
