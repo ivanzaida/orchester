@@ -16,6 +16,7 @@
 
 mod choice;
 mod decision;
+mod decision_usage;
 mod hold;
 mod input;
 mod prompt;
@@ -33,6 +34,7 @@ pub use self::{
     default_decision_threshold, default_review_model, resolve_reviewer, reviewer_kind,
   },
   decision::{DecisionVerdict, NotProbability, Probability, Risk, Risks},
+  decision_usage::DecisionReviewRecord,
   hold::{HoldRules, ReviewHold, StepLimit, review_hold, step_limit, unread_parts},
   input::{ReviewInput, ReviewedRequest, ReviewedStep, ReviewedTask, RootsQuestion, UnreadPart, UnreadWhy},
   prompt::{
@@ -61,6 +63,7 @@ const QUOTES: [char; 6] = ['"', '\u{201c}', '\u{201d}', '\u{201e}', '\u{ab}', '\
 pub enum ReviewVerdict {
   Approve { reason: String },
   AskPerson { reason: String },
+  Decision(DecisionVerdict),
 }
 
 /// Why a review gave no verdict.
@@ -72,6 +75,8 @@ pub enum ReviewError {
   Unparseable(String),
   #[error("the reviewer could not run: {0}")]
   CouldNotRun(String),
+  #[error("the decision review failed: {0:?}")]
+  Decision(ReviewFailure),
 }
 
 /// A model that judges a request in its context: a provider boundary, so the runner's reviewer (Claude
@@ -87,6 +92,10 @@ pub trait RequestReviewer {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ReviewFailure {
+  KeyRefused,
+  NothingAnswers,
+  NotSystemOneApi,
+  ModelGone,
   TimedOut,
   Unreadable,
   CouldNotRun,
@@ -127,11 +136,13 @@ impl Review {
         reason: one_plain_line(&reason),
         model,
       },
+      Ok(ReviewVerdict::Decision(decision)) => Self::Decided { decision },
       Err(error) => Self::Failed {
         failure: match error {
           ReviewError::TimedOut => ReviewFailure::TimedOut,
           ReviewError::Unparseable(_) => ReviewFailure::Unreadable,
           ReviewError::CouldNotRun(_) => ReviewFailure::CouldNotRun,
+          ReviewError::Decision(failure) => failure,
         },
         model: Some(model),
       },

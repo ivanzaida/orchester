@@ -159,3 +159,57 @@ fn auto_mode_decision_reviewer_round_trips_and_protects_connection_until_switchi
     .expect("no longer selected");
   assert_eq!(db.auto_mode_settings().expect("default"), default);
 }
+
+#[test]
+fn decision_review_settings_keep_threshold_and_connection_across_reopen_and_switches() {
+  use orchester_core::{
+    connection::{DecisionConnection, DecisionServerUrl},
+    name::Name,
+    run::review::Probability,
+  };
+  let (repo, mut db, ..) = started_run();
+  let connection = DecisionConnection::new(
+    DecisionConnectionId::generate(),
+    Name::new("Decision").expect("name"),
+    DecisionServerUrl::new("http://localhost:8000").expect("URL"),
+    None,
+  );
+  db.create_decision_connection(&connection).expect("connection");
+  let settings = AutoModeSettings {
+    reviewer: Some(ReviewerChoice::decision(
+      connection.id(),
+      ModelId::new("jev").expect("model"),
+      Some(Probability::new(0.93).expect("threshold")),
+    )),
+  };
+  db.save_auto_mode_settings(&settings).expect("save decision");
+  assert_eq!(
+    db.decision_reviewer_connection().expect("reference"),
+    Some(connection.id())
+  );
+  drop(db);
+  let raw = rusqlite::Connection::open(repo.path().join(".orchester/orchester.db")).expect("raw database");
+  let stored: (String, f64) = raw
+    .query_row("SELECT model, threshold FROM decision_reviewer_connection", [], |row| {
+      Ok((row.get(0)?, row.get(1)?))
+    })
+    .expect("column settings");
+  assert_eq!(stored, ("jev".to_owned(), 0.93));
+  // A database written by the base branch has columns but no JSON settings.
+  raw
+    .execute("UPDATE decision_reviewer_connection SET settings = NULL", [])
+    .expect("base settings");
+  drop(raw);
+  let mut db = orchester_store::ProjectDb::open(repo.path()).expect("reopen");
+  assert_eq!(db.auto_mode_settings().expect("read"), settings);
+  assert!(db.delete_decision_connection(connection.id()).is_err());
+  assert_eq!(
+    db.save_auto_mode_if_current(&settings, &AutoModeSettings::default())
+      .expect("switch"),
+    AutoModeSave::Saved
+  );
+  assert_eq!(db.decision_reviewer_connection().expect("reference cleared"), None);
+  assert_eq!(db.auto_mode_settings().expect("default"), AutoModeSettings::default());
+  db.delete_decision_connection(connection.id())
+    .expect("unused connection");
+}

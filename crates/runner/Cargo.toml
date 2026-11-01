@@ -355,6 +355,10 @@ required-features = ["test-agent"]
 name = "disk_guard"
 required-features = ["test-agent"]
 
+[[test]]
+name = "decision_review"
+required-features = ["test-agent"]
+
 [features]
 test-agent = []
 

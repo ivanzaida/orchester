@@ -22,6 +22,7 @@ mod conversation;
 mod creation_snapshots;
 mod decision_authors;
 mod decision_connections;
+mod decision_review;
 mod decision_reviewer;
 mod default_pipeline;
 mod denial_notes;

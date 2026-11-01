@@ -1001,6 +1001,15 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
+ORC-558 · Decision reviewer HTTP execution · branch `orchester/orc-558-run-1` (implemented 2026-11-01).
+The runner reviews requests on the explicitly chosen decision server, reading its project secret, checking the current
+model list and posting System One questions within a combined two-second deadline. Failures reach the person with
+typed reasons and never select a language fallback. Decision choices persist their threshold; reviewer_usage records
+the decision provider, resolved model/version and input-only tokens, including unknown usage on failures.
+Tests: `orchester-runner --features test-agent --test decision_review decision_review` (9 passed, live test ignored),
+`orchester-store --test auto_mode decision_review`, `--test auto_mode auto_mode`,
+`orchester-core --test decision_verdict decision`. Quality gate: `check: OK`. No visual or platform-specific changes.
+
 ORC-571 · Team reviewer API contract (implemented 2026-11-01). Existing `team_reviewer` resources use the shared
 create, publish, read and delta shapes; published versions carry the server-owned `widens` flag from ORC-570.
 Contract and access rules: `docs/cloud-api.md`. Tests: `orchester-api --test resources reviewer_resource`.

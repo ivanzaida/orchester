@@ -217,6 +217,11 @@ fn read_auto_mode(connection: &Connection) -> Result<AutoModeSettings, StoreErro
     }
     return Ok(AutoModeSettings { reviewer: Some(choice) });
   }
+  if let Some(reviewer) = read_decision_choice(connection)? {
+    return Ok(AutoModeSettings {
+      reviewer: Some(reviewer),
+    });
+  }
   let stored: Option<(String, Option<String>, Option<String>)> = connection
     .query_row(
       "SELECT model, connection, effort FROM project_auto_mode WHERE id = 1",
@@ -255,9 +260,15 @@ fn write_auto_mode(connection: &Connection, settings: &AutoModeSettings) -> Resu
       return Err(StoreError::DecisionConnectionNotFound(decision));
     }
     connection.execute(
-      "INSERT INTO decision_reviewer_connection (id, connection_id, settings) VALUES (1, ?1, ?2) \
-       ON CONFLICT(id) DO UPDATE SET connection_id = excluded.connection_id, settings = excluded.settings",
-      params![decision.to_string(), encode_json(DECISION_SETTING, 1, choice)?],
+      "INSERT INTO decision_reviewer_connection (id, connection_id, settings, model, threshold) VALUES (1, ?1, ?2, ?3, ?4) \
+       ON CONFLICT(id) DO UPDATE SET connection_id = excluded.connection_id, settings = excluded.settings,
+       model = excluded.model, threshold = excluded.threshold",
+      params![
+        decision.to_string(),
+        encode_json(DECISION_SETTING, 1, choice)?,
+        choice.model.as_str(),
+        choice.threshold.unwrap_or_else(orchester_core::run::review::default_decision_threshold).value(),
+      ],
     )?;
     return Ok(());
   }
@@ -272,4 +283,26 @@ fn write_auto_mode(connection: &Connection, settings: &AutoModeSettings) -> Resu
     ],
   )?;
   Ok(())
+}
+
+fn read_decision_choice(connection: &Connection) -> Result<Option<ReviewerChoice>, StoreError> {
+  let stored: Option<(String, String, f64)> = connection
+    .query_row(
+      "SELECT connection_id, model, threshold FROM decision_reviewer_connection WHERE id = 1 AND model IS NOT NULL",
+      [],
+      |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+    )
+    .optional()?;
+  stored
+    .map(|(id, model, threshold)| {
+      Ok(ReviewerChoice::decision(
+        crate::rows::parse("decision reviewer connection", &id)?,
+        ModelId::new(&model).map_err(|error| corrupt("decision reviewer model", error))?,
+        Some(
+          orchester_core::run::review::Probability::new(threshold)
+            .map_err(|error| corrupt("decision reviewer threshold", error))?,
+        ),
+      ))
+    })
+    .transpose()
 }

@@ -137,7 +137,8 @@ impl ProjectDb {
       transaction.execute(
         "INSERT INTO decision_reviewer_connection (id, connection_id) VALUES (1, ?1) \
          ON CONFLICT(id) DO UPDATE SET connection_id = excluded.connection_id, \
-         settings = CASE WHEN connection_id = excluded.connection_id THEN settings ELSE NULL END",
+         settings = CASE WHEN connection_id = excluded.connection_id THEN settings ELSE NULL END, \
+         model = CASE WHEN connection_id = excluded.connection_id THEN model ELSE NULL END",
         [id.to_string()],
       )?;
     } else {

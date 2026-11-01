@@ -129,6 +129,7 @@ const fn failure_of(error: &ReviewError) -> ReviewFailure {
     ReviewError::TimedOut => ReviewFailure::TimedOut,
     ReviewError::Unparseable(_) => ReviewFailure::Unreadable,
     ReviewError::CouldNotRun(_) => ReviewFailure::CouldNotRun,
+    ReviewError::Decision(failure) => *failure,
   }
 }
 
@@ -142,7 +143,7 @@ impl ReviewerSetup {
       spend: ReviewSpend::Nothing,
     };
     match self {
-      Self::Missing => None,
+      Self::Missing | Self::Decision(_) => None,
       Self::Unreachable { model } => Some((model, not_run("the reviewer cannot be reached".to_owned()))),
       Self::Native {
         client, model, effort, ..

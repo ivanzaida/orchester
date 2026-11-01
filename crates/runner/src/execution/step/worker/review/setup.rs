@@ -45,6 +45,7 @@ use crate::git::Git;
 
 /// The project's reviewer, before one review runs.
 pub(super) enum ReviewerSetup {
+  Decision(DecisionSetup),
   /// Claude Code or Codex, by its program.
   Cli {
     kind: ReviewerKind,
@@ -65,11 +66,19 @@ pub(super) enum ReviewerSetup {
     effort: Option<String>,
   },
   /// A reviewer that cannot be reached (its key could not be read): every review fails.
-  Unreachable { model: ModelId },
+  Unreachable {
+    model: ModelId,
+  },
   /// The project has no reviewer.
   Missing,
 }
 
+pub(super) struct DecisionSetup {
+  connection: orchester_core::connection::DecisionConnection,
+  model: ModelId,
+  threshold: orchester_core::run::review::Probability,
+  key: Option<SecretValue>,
+}
 /// What a review's usage is spent on: the reviewer's CLI, its account and its connection.
 pub(super) type SpentOn = (AgentProvider, Option<AgentAccountId>, UsedProvider);
 
@@ -183,7 +192,14 @@ impl ReviewerSetup {
   pub(super) fn review(self, job: ReviewJob, ledger: &ReviewLedger) -> Review {
     let started_at = Timestamp::now();
     let provider = self.provider();
+    let decision = match &self {
+      Self::Decision(setup) => Some((setup.connection.clone(), setup.model.clone())),
+      _ => None,
+    };
     let done = self.judge(job);
+    if let Some((connection, model)) = decision {
+      ledger.record_decision(&connection, &model, started_at, &done);
+    }
     if let Some(spent) = provider {
       ledger.record(spent, started_at, &done);
     }
@@ -200,7 +216,7 @@ impl ReviewerSetup {
         ..
       } => kind.provider().map(|provider| (provider, *account, connection.clone())),
       Self::Native { connection, .. } => Some((AgentProvider::AnthropicApi, None, connection.clone())),
-      Self::Unreachable { .. } | Self::Missing => None,
+      Self::Unreachable { .. } | Self::Missing | Self::Decision(_) => None,
     }
   }
 
@@ -235,6 +251,13 @@ impl ReviewerSetup {
     };
     match self {
       Self::Missing => ask(None),
+      Self::Decision(setup) => ask(Some(&crate::decision_review::DecisionReviewer::new(
+        runtime,
+        setup.connection,
+        setup.model,
+        setup.threshold,
+        setup.key,
+      ))),
       Self::Unreachable { model } => ask(Some(&Unreachable { model })),
       Self::Native {
         client, model, effort, ..
@@ -309,6 +332,11 @@ impl Worker {
 /// with `keys`; the story-point estimator runs on it too.
 pub(super) fn reviewer_setup(db: &ProjectDb, keys: &ReviewerKeys) -> Result<ReviewerSetup, StoreError> {
   let settings = db.auto_mode_settings()?;
+  if let Some(choice) = &settings.reviewer
+    && let orchester_core::run::review::ReviewerConnectionId::Decision { decision } = choice.connection
+  {
+    return decision_setup(db, keys, decision, choice);
+  }
   let connections = db.connections()?;
   let Ok(resolved) = resolve_reviewer(&settings, &connections, &[]) else {
     return Ok(ReviewerSetup::Missing);
@@ -412,4 +440,36 @@ fn api_key(db: &ProjectDb, keys: &ReviewerKeys, id: SecretId) -> Option<SecretVa
 pub(in crate::execution) struct ReviewerKeys {
   pub(in crate::execution) vault: std::sync::Arc<dyn SecretVault>,
   pub(in crate::execution) project: orchester_core::id::ProjectId,
+}
+
+/// An explicit decision choice keeps its model even when unavailable, so its failure reaches the person.
+fn decision_setup(
+  db: &ProjectDb,
+  keys: &ReviewerKeys,
+  id: orchester_core::id::DecisionConnectionId,
+  choice: &orchester_core::run::review::ReviewerChoice,
+) -> Result<ReviewerSetup, StoreError> {
+  let Some(connection) = db.decision_connection(id)? else {
+    return Ok(ReviewerSetup::Unreachable {
+      model: choice.model.clone(),
+    });
+  };
+  let key = match connection.key() {
+    Some(id) => match db.secret(id) {
+      Ok(Some(secret)) if !secret.is_archived() => {
+        // Vault diagnostics can contain private data. Missing keys are reported with a safe, typed failure.
+        keys.vault.read(&secret.vault_key(keys.project)).ok()
+      }
+      _ => None,
+    },
+    None => None,
+  };
+  Ok(ReviewerSetup::Decision(DecisionSetup {
+    connection,
+    model: choice.model.clone(),
+    threshold: choice
+      .threshold
+      .unwrap_or_else(orchester_core::run::review::default_decision_threshold),
+    key,
+  }))
 }
