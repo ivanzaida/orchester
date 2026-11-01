@@ -52,6 +52,7 @@ pub struct ProjectConnections {
   pub connections: Arc<Vec<AgentConnection>>,
   pub github: Arc<Vec<GitHubConnection>>,
   pub mcp: Arc<Vec<McpServer>>,
+  pub decisions: Arc<Vec<orchester_core::connection::DecisionConnection>>,
   /// The project's secrets that are not archived.
   pub secrets: Arc<Vec<Secret>>,
   /// The archived secrets a connection still names as its key, so a page can say which one went.
@@ -96,8 +97,13 @@ impl ProjectConnections {
       );
     }
     let secrets = store.secrets()?;
+    let decisions = store.decision_connections()?;
     let mut archived_keys = Vec::new();
-    for key in connections.iter().filter_map(Connection::key) {
+    for key in connections
+      .iter()
+      .filter_map(Connection::key)
+      .chain(decisions.iter().filter_map(|decision| decision.key()))
+    {
       if !secrets.iter().any(|secret| secret.id() == key)
         && let Some(secret) = store.secret(key)?
       {
@@ -108,6 +114,7 @@ impl ProjectConnections {
       github: Arc::new(github_connections(connections.clone())),
       connections: Arc::new(agent_connections(connections)),
       mcp: Arc::new(store.mcp_servers()?),
+      decisions: Arc::new(decisions),
       secrets: Arc::new(secrets),
       archived_keys: Arc::new(archived_keys),
       uses: Arc::new(uses),

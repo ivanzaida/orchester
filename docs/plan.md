@@ -1001,6 +1001,13 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
+ORC-559 · Decision model connections in the workspace · branch `orchester/orc-559-run-1` (implemented 2026-11-01).
+Workspace and MCP list, add/edit, delete and check decision servers; hosted saves are person-only for automation.
+Check sends only a bodyless GET of the model catalog, with bounded transport and secret-safe results. TypeSafe and
+Laya formats come from their primary references; all five check states and answer timestamps are stored.
+Tests: `orchester-workspace --test decision_connections decision_connections`.
+Contract and limitations: `docs/evidence/orc-559-decision-connections.md`. No visual changes.
+
 ORC-557 · Decision reviewer choice · branch `orchester/orc-557-run-1` (implemented 2026-11-01). Core resolves an
 explicitly chosen decision connection and model with a validated threshold (0.80 by default), distinguishes gone,
 disconnected and no-longer-listed choices without fallback, and exposes the person-only rule for hosted servers.

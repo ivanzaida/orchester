@@ -38,6 +38,9 @@ orchester-vault.workspace = true
 lurq = { workspace = true, optional = true }
 parking_lot.workspace = true
 # The tools of Orchester's own MCP server (`app_mcp`): their schemas and results.
+# Bodyless model-list checks of decision servers, using the existing TLS client and crypto provider.
+reqwest.workspace = true
+rustls.workspace = true
 rmcp.workspace = true
 serde.workspace = true
 serde_json.workspace = true
