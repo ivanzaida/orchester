@@ -1,8 +1,8 @@
 //! *Team servers* (`Team servers` `u68LmF` in `05 · Orchester Cloud`, the row's states in `z9Zzt` of `ZUuMT`, its words
 //! in `j7SbPk` and `xQQbr`): the heading with *Connect a server* at its end, and a row per server — its address, what
 //! is wrong or who is signed in there, how it is held and how many projects are on this computer, its state and a
-//! chevron: a press opens its page. Without servers the group is *No team servers yet* with *Connect a server*
-//! (`JY3WV`).
+//! chevron: a press opens its page. After them, a server the account joined in the browser, with *Connect*
+//! ([`super::browser_joined`]). Without servers the group is *No team servers yet* with *Connect a server* (`JY3WV`).
 
 use lurq::{
   app::{ctx::Ctx, theme::PaletteColor},
@@ -36,7 +36,14 @@ use crate::{
 /// The locale key of what a row says of how its server is held.
 pub(super) type How = fn(&ServerEntry) -> &'static str;
 
-pub(super) fn group(ctx: &mut Ctx, snapshot: &Snapshot, how: How) -> Element {
+/// The group, with the rows of the servers this computer has no entry of (`joined`, [`super::browser_joined`]) after
+/// its own servers and what was said about them (`below`) under it.
+pub(super) fn group(
+  ctx: &mut Ctx,
+  snapshot: &Snapshot,
+  how: How,
+  (joined, below): (Vec<Element>, Vec<Element>),
+) -> Element {
   let navigation = Navigation::of(ctx);
   let connect = ActionButton::new(
     "orchester-connect-server",
@@ -47,12 +54,14 @@ pub(super) fn group(ctx: &mut Ctx, snapshot: &Snapshot, how: How) -> Element {
   .small()
   .opens(navigation.to(Route::Orchester(OrchesterView::connect())));
   let group = SettingGroup::new("orchester-servers", ctx.t("cloud.list.teamServers")).end(connect);
-  if snapshot.servers.is_empty() {
-    return lurq::components::Column::new()
-      .width(lurq::node::dimension::Dimension::Pct(100.0))
-      .spacing(lurq::app::theme::SpacingSize::Sm)
+  let column = lurq::components::Column::new()
+    .width(lurq::node::dimension::Dimension::Pct(100.0))
+    .spacing(lurq::app::theme::SpacingSize::Sm);
+  if snapshot.servers.is_empty() && joined.is_empty() {
+    return column
       .child(group)
       .child(no_servers(ctx, &navigation))
+      .with_children(below)
       .into();
   }
   let rows: Vec<Element> = snapshot
@@ -60,8 +69,9 @@ pub(super) fn group(ctx: &mut Ctx, snapshot: &Snapshot, how: How) -> Element {
     .iter()
     .zip(&snapshot.linked)
     .map(|(entry, linked)| server_row(ctx, (entry, linked), (&navigation, how)))
+    .chain(joined)
     .collect();
-  group.rows(rows).into()
+  column.child(group.rows(rows)).with_children(below).into()
 }
 
 fn server_row(
