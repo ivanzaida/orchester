@@ -27,7 +27,7 @@ async fn call(services: &app_mcp::Services, name: &str, arguments: Value) -> Res
 }
 
 #[tokio::test]
-async fn decision_connections_tools_save_check_list_edit_delete_and_refuse_hosted() {
+async fn mcp_decision_reviewer_connections_save_check_list_edit_delete_and_refuse_hosted() {
   let (repo, _) = project();
   let workspace = Workspace::new(AppDb::open(&repo.path().join("app.db")).expect("application data"));
   workspace.open(repo.path()).expect("register project");
@@ -68,6 +68,8 @@ async fn decision_connections_tools_save_check_list_edit_delete_and_refuse_hoste
     .await
     .expect("list");
   assert_eq!(listed["decision_models"][0]["models"][0], "jev-latest");
+  assert_models(&services, id).await;
+  reject_key_values(&services, &args).await;
   args["connection"] = id.into();
   args["name"] = "Renamed".into();
   let renamed = call(&services, "save_decision_connection", args.clone())
@@ -79,6 +81,12 @@ async fn decision_connections_tools_save_check_list_edit_delete_and_refuse_hoste
     .await
     .expect_err("hosted is person only");
   assert!(matches!(error, ToolError::Refused { code, .. } if code == "person_only"));
+  let mut hosted_add = args.clone();
+  hosted_add.as_object_mut().expect("object").remove("connection");
+  assert!(matches!(
+    call(&services, "save_decision_connection", hosted_add).await,
+    Err(ToolError::Refused { code, .. }) if code == "person_only"
+  ));
   args["writer"] = "person".into();
   assert!(matches!(
     call(&services, "save_decision_connection", args).await,
@@ -95,4 +103,53 @@ async fn decision_connections_tools_save_check_list_edit_delete_and_refuse_hoste
     .await
     .expect("list");
   assert_eq!(listed["decision_models"], json!([]));
+}
+
+async fn assert_models(services: &app_mcp::Services, id: &str) {
+  for named in [id, "decision", "Decision"] {
+    let listed = call(
+      services,
+      "list_models",
+      json!({"project":"Decision checks","connection":named}),
+    )
+    .await
+    .expect("decision models by name or id");
+    assert_eq!(listed["source"], "decision");
+    assert_eq!(listed["checked"], true);
+    assert_eq!(listed["models"], json!([{"id":"jev-latest","efforts":[]}]));
+  }
+}
+
+async fn reject_key_values(services: &app_mcp::Services, args: &Value) {
+  for field in ["key", "key_value", "api_key"] {
+    let mut args = args.clone();
+    args[field] = "synthetic-rejected-value".into();
+    assert!(matches!(
+      call(services, "save_decision_connection", args).await,
+      Err(ToolError::InvalidArguments(_))
+    ));
+  }
+}
+
+#[test]
+fn mcp_decision_reviewer_schemas_only_accept_secret_references_and_offer_no_test() {
+  let tools: Vec<_> = app_mcp::listed().into_iter().chain(app_mcp::setup::listed()).collect();
+  for name in [
+    "save_decision_connection",
+    "check_decision_connection",
+    "remove_decision_connection",
+    "set_reviewer",
+  ] {
+    let tool = tools.iter().find(|tool| tool.name == name).expect("listed tool");
+    let properties = tool.input_schema["properties"].as_object().expect("properties");
+    for field in ["key", "key_value", "api_key", "writer"] {
+      assert!(!properties.contains_key(field), "{name} must not accept {field}");
+    }
+    assert_eq!(tool.input_schema["additionalProperties"], false);
+  }
+  assert!(
+    !tools
+      .iter()
+      .any(|tool| tool.name.contains("decision") && tool.name.contains("test"))
+  );
 }

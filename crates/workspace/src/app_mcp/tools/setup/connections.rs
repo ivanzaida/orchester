@@ -252,7 +252,24 @@ pub async fn list_models(services: &Services, args: InConnection) -> Result<Valu
   let services = services.clone();
   blocking(move || {
     let open = services.project(&args.project)?;
-    let connection = agent_named(&ProjectDb::open(&open.repo_root)?, &args.connection)?;
+    let db = ProjectDb::open(&open.repo_root)?;
+    if let Some(connection) = db.decision_connections()?.iter().find(|connection| {
+      connection.id().to_string() == args.connection
+        || connection.name().as_str().eq_ignore_ascii_case(&args.connection)
+    }) {
+      let models: Vec<Value> = connection
+        .models()
+        .iter()
+        .map(|model| json!({ "id": model.as_str(), "efforts": [] }))
+        .collect();
+      return Ok(json!({
+        "connection": connection.name().as_str(),
+        "checked": connection.last_check().is_some(),
+        "source": "decision",
+        "models": models,
+      }));
+    }
+    let connection = agent_named(&db, &args.connection)?;
     let models: Vec<Value> = listed_models(&connection)
       .iter()
       .map(|model| json!({ "id": model.as_str(), "efforts": effort_options(&connection, model) }))
