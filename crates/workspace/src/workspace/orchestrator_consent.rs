@@ -3,9 +3,9 @@
 //! Orchestrator merge runs*, *Let the Orchestrator merge finished runs on its own*, *Let the Orchestrator continue
 //! interrupted runs* and *Let the Orchestrator write with git* (decision 9). Each is the project's own
 //! (`docs/design/settings.md`, ORC-594), kept in its database: a project with none of its own takes the
-//! application-wide value it moved from, once, when it is first read. Each is off until a person turns it on in the
-//! window, no tool changes it, and it is off in its project from the moment a person turns it off there, whether or
-//! not that was saved.
+//! application-wide value it moved from, once, when it opens or is first read. Each is off until a person turns it on
+//! in the window, no tool changes it, and it is off in its project from the moment a person turns it off there,
+//! whether or not that was saved.
 //!
 //! Settings › What automation may do shows the application-wide values until its rows move to Project settings
 //! (ORC-599, ORC-600): the `app_wide_` methods are that screen's alone, and the Orchestrator never reads them.
@@ -43,6 +43,15 @@ pub enum OrchestratorConsent {
 }
 
 impl OrchestratorConsent {
+  pub const ALL: [Self; 6] = [
+    Self::PublishDrafts,
+    Self::AnswerAgents,
+    Self::MergeRuns,
+    Self::MergeFinished,
+    Self::ContinueInterrupted,
+    Self::WriteGit,
+  ];
+
   /// The application-wide value, in `app_settings`.
   fn read(self, db: &AppDb) -> Result<bool, StoreError> {
     match self {
@@ -101,10 +110,23 @@ impl Workspace {
   /// project without a value of its own takes the application-wide one now, and keeps it.
   pub fn orchestrator_allows(&self, repo_root: &Path, consent: OrchestratorConsent) -> Result<bool, StoreError> {
     let _projects = self.orchestrator.projects.lock();
-    let result = ProjectDb::open(repo_root).and_then(|mut db| {
-      db.copy_orchestrator_switch(consent.switch(), || consent.read(&self.db.lock()))
-    });
+    let result = ProjectDb::open(repo_root).and_then(|mut db| self.copy_switch(&mut db, consent));
     publish_read(&self.orchestrator.of(Some(repo_root), consent), result)
+  }
+
+  /// Copies into `db` each application-wide switch its project has no value of its own for, as [`Self::open`] does
+  /// before anything reads them: a read then only reads, and never writes the project's database while a merge holds
+  /// it (`orchester_exec::local_git::owned::StoreOwnership`).
+  pub(super) fn copy_orchestrator_switches(&self, db: &mut ProjectDb) -> Result<(), StoreError> {
+    let _projects = self.orchestrator.projects.lock();
+    OrchestratorConsent::ALL
+      .into_iter()
+      .try_for_each(|consent| self.copy_switch(db, consent).map(drop))
+  }
+
+  /// The project's `consent` in `db`, the application-wide value copied in first where it has none.
+  fn copy_switch(&self, db: &mut ProjectDb, consent: OrchestratorConsent) -> Result<bool, StoreError> {
+    db.copy_orchestrator_switch(consent.switch(), || consent.read(&self.db.lock()))
   }
 
   /// Saves the person's choice for `consent` in the project at `repo_root`. Only the window's switch, which takes a

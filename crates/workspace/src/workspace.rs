@@ -278,7 +278,8 @@ impl Workspace {
   /// Opens the project Orchester keeps in the folder `repo_root` and records it as the most
   /// recently used one; a folder whose project was removed from the list is added again. An account's project is
   /// refused to anyone else ([`StoreError::ProjectOfAnotherAccount`], [`StoreError::ProjectOfSignedOutAccount`]).
-  /// A project with no *Let Orchester estimate story points* of its own gets the application-wide value it moved from.
+  /// A project with no *Let Orchester estimate story points* or Orchestrator switch of its own gets the
+  /// application-wide value it moved from.
   pub fn open(&self, repo_root: &Path) -> Result<OpenProject, StoreError> {
     let mut db = ProjectDb::open(repo_root)?;
     let project = db.project().clone();
@@ -290,6 +291,10 @@ impl Workspace {
     // The project opens all the same, its estimates off; the copy is tried again the next time it opens.
     if let Err(error) = db.copy_estimates_story_points(|| self.db.lock().estimates_story_points()) {
       tracing::warn!(%error, "cannot copy the application-wide estimates setting into a project");
+    }
+    // The project opens all the same; a switch not copied now is copied when it is first read.
+    if let Err(error) = self.copy_orchestrator_switches(&mut db) {
+      tracing::warn!(%error, "cannot copy the application-wide Orchestrator switches into a project");
     }
     Ok(OpenProject {
       project,

@@ -162,6 +162,28 @@ fn orchestrator_switches_of_a_project_without_its_own_are_copied_once_from_the_a
 }
 
 #[test]
+fn orchestrator_switches_are_copied_once_when_the_project_opens() {
+  let dir = TempDir::new().expect("a folder");
+  application_wide(&dir, true);
+  let workspace = workspace(&dir);
+  let repo = add_project(&dir, &workspace, "KON");
+  workspace.open(&repo).expect("opened");
+  for (consent, switch) in CONSENTS {
+    assert_eq!(
+      stored(&repo, switch),
+      Some(true),
+      "{consent:?}: copied before anything reads it"
+    );
+  }
+  application_wide(&dir, false);
+  workspace.open(&repo).expect("opened again");
+  for (consent, switch) in CONSENTS {
+    assert_eq!(stored(&repo, switch), Some(true), "{consent:?}: the copy is made once");
+    assert!(workspace.orchestrator_allows(&repo, consent).expect("read"));
+  }
+}
+
+#[test]
 fn orchestrator_switches_a_project_set_itself_are_never_copied_over() {
   let dir = TempDir::new().expect("a folder");
   application_wide(&dir, true);
@@ -171,6 +193,7 @@ fn orchestrator_switches_a_project_set_itself_are_never_copied_over() {
     workspace
       .set_orchestrator_allows(&repo, consent, false)
       .expect("off for the project");
+    workspace.open(&repo).expect("opened");
     assert!(
       !workspace.orchestrator_allows(&repo, consent).expect("read"),
       "{consent:?}: the project's own value is not replaced"
