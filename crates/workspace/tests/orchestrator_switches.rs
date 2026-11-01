@@ -123,9 +123,7 @@ fn orchestrator_switches_of_two_projects_differ() {
   }
   for (consent, _) in CONSENTS {
     assert!(
-      !workspace
-        .app_wide_orchestrator_allows(consent)
-        .expect("read"),
+      !workspace.app_wide_orchestrator_allows(consent).expect("read"),
       "{consent:?}: a project's choice leaves the application-wide value as it was"
     );
   }
@@ -143,7 +141,11 @@ fn orchestrator_switches_of_a_project_without_its_own_are_copied_once_from_the_a
       workspace.orchestrator_allows(&repo, consent).expect("read"),
       "{consent:?}: the project keeps the application-wide choice it had"
     );
-    assert_eq!(stored(&repo, switch), Some(true), "{consent:?}: copied into the project");
+    assert_eq!(
+      stored(&repo, switch),
+      Some(true),
+      "{consent:?}: copied into the project"
+    );
   }
 
   application_wide(&dir, false);

@@ -88,14 +88,17 @@ impl OrchestratorConsent {
   }
 }
 
-/// Each switch's last verified state, by project (`None`: the application-wide one): a person's revocation holds from
-/// their click, before it is saved.
+/// A switch's last verified state, by its project's folder (`None`: the application-wide one) and the switch.
+type Cells = HashMap<(Option<PathBuf>, OrchestratorConsent), Arc<Mutex<Consent>>>;
+
+/// Each switch's last verified state, by project: a person's revocation holds from their click, before it is saved.
 #[derive(Clone, Default)]
 pub(super) struct Consents {
-  cells: Arc<Mutex<HashMap<(Option<PathBuf>, OrchestratorConsent), Arc<Mutex<Consent>>>>>,
-  /// Held around each read and save of a project's switch, as the application database's lock is around the
-  /// application-wide ones, so they publish in the order of their database work.
-  projects: Arc<Mutex<()>>,
+  cells: Arc<Mutex<Cells>>,
+  /// Held around each save of a project's switch, as the application database's lock is around the application-wide
+  /// ones, so the person's choices are stored in the order they were made. A project's switch is read without it:
+  /// only what a read returns counts, never what it published, and a card or a turn never waits for another's read.
+  saves: Arc<Mutex<()>>,
 }
 
 impl Consents {
@@ -109,22 +112,34 @@ impl Workspace {
   /// Whether the person lets the Orchestrator chat do what `consent` names itself in the project at `repo_root`. A
   /// project without a value of its own takes the application-wide one now, and keeps it.
   pub fn orchestrator_allows(&self, repo_root: &Path, consent: OrchestratorConsent) -> Result<bool, StoreError> {
-    let _projects = self.orchestrator.projects.lock();
-    let result = ProjectDb::open(repo_root).and_then(|mut db| self.copy_switch(&mut db, consent));
+    let result = self.project_switch(repo_root, consent);
     publish_read(&self.orchestrator.of(Some(repo_root), consent), result)
+  }
+
+  /// The project's `consent`, read through a connection that cannot write, as cards and turns read it often; only a
+  /// project with no value of its own yet, or not migrated yet, is opened to copy the application-wide one in.
+  fn project_switch(&self, repo_root: &Path, consent: OrchestratorConsent) -> Result<bool, StoreError> {
+    let read = ProjectDb::open_read_only(repo_root).and_then(|db| db.orchestrator_switch(consent.switch()));
+    match read {
+      Ok(Some(allowed)) => Ok(allowed),
+      Ok(None) | Err(StoreError::SchemaTooOld { .. }) => {
+        ProjectDb::open(repo_root).and_then(|mut db| self.copy_switch(&mut db, consent))
+      }
+      Err(error) => Err(error),
+    }
   }
 
   /// Copies into `db` each application-wide switch its project has no value of its own for, as [`Self::open`] does
   /// before anything reads them: a read then only reads, and never writes the project's database while a merge holds
   /// it (`orchester_exec::local_git::owned::StoreOwnership`).
   pub(super) fn copy_orchestrator_switches(&self, db: &mut ProjectDb) -> Result<(), StoreError> {
-    let _projects = self.orchestrator.projects.lock();
     OrchestratorConsent::ALL
       .into_iter()
       .try_for_each(|consent| self.copy_switch(db, consent).map(drop))
   }
 
-  /// The project's `consent` in `db`, the application-wide value copied in first where it has none.
+  /// The project's `consent` in `db`, the application-wide value copied in first where it has none; a copy never
+  /// replaces a value the project has.
   fn copy_switch(&self, db: &mut ProjectDb, consent: OrchestratorConsent) -> Result<bool, StoreError> {
     db.copy_orchestrator_switch(consent.switch(), || consent.read(&self.db.lock()))
   }
@@ -139,9 +154,9 @@ impl Workspace {
   ) -> Result<(), StoreError> {
     let cell = self.orchestrator.of(Some(repo_root), consent);
     save(&cell, allowed, || {
-      let projects = self.orchestrator.projects.lock();
+      let saves = self.orchestrator.saves.lock();
       let result = ProjectDb::open(repo_root).and_then(|mut db| db.set_orchestrator_switch(consent.switch(), allowed));
-      (projects, result)
+      (saves, result)
     })
   }
 
@@ -160,7 +175,11 @@ impl Workspace {
 
   /// Saves the person's application-wide choice for `consent`; only Settings › What automation may do calls it, and
   /// a project that has its own value keeps it.
-  pub fn set_app_wide_orchestrator_allows(&self, consent: OrchestratorConsent, allowed: bool) -> Result<(), StoreError> {
+  pub fn set_app_wide_orchestrator_allows(
+    &self,
+    consent: OrchestratorConsent,
+    allowed: bool,
+  ) -> Result<(), StoreError> {
     let cell = self.orchestrator.of(None, consent);
     save(&cell, allowed, || {
       let mut db = self.db.lock();
@@ -175,7 +194,7 @@ impl Workspace {
   }
 }
 
-/// Publishes in `cell` what a read found, while the caller still holds its database lock, and returns what it reports.
+/// Publishes in `cell` what a read found and returns what it reports: off while the person's revocation holds.
 fn publish_read(cell: &Mutex<Consent>, result: Result<bool, StoreError>) -> Result<bool, StoreError> {
   let allowed = cell.lock().read(matches!(&result, Ok(true)));
   result.map(|_| allowed)
