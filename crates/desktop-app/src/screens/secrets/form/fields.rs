@@ -1,5 +1,5 @@
-//! The fields and actions of New secret and Replace value: New secret is a page under Secrets with the crumb back to
-//! it, its fields a group of rows (name, kind, value, project, environment); Replace value is asked in place on the
+//! The fields and actions of New secret and Replace value: New secret is a page under Environment with the crumb back
+//! to it, its fields a group of rows (name, kind, value, project, environment); Replace value is asked in place on the
 //! secret's page, its new value in a box with the secret's uses. Each says what was found of the name and why it cannot
 //! be saved yet, and a write that failed.
 use lurq::{
@@ -35,7 +35,7 @@ use crate::{
   },
 };
 
-/// New secret's page: the crumb back to Secrets, its head, its fields and its actions.
+/// New secret's page: the crumb back to Environment, its head, its fields and its actions.
 pub(super) fn new_page(ctx: &Ctx, props: &Props, body: Element, footer: Element) -> Element {
   Column::new()
     .id("secret-form")
@@ -43,7 +43,10 @@ pub(super) fn new_page(ctx: &Ctx, props: &Props, body: Element, footer: Element)
     .spacing(ExtraSpacing::Roomy.role())
     .child(back(
       "secret-form-crumb",
-      (&ctx.t("project_settings.secrets"), Some(&ctx.t("secrets.form.title"))),
+      (
+        &ctx.t("project_settings.environment"),
+        Some(&ctx.t("secrets.form.title")),
+      ),
       props.view.list(),
     ))
     .child(page_head(

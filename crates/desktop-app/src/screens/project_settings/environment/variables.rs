@@ -1,7 +1,8 @@
-//! Environment (`Environment` `tDY4o` in `02 · Runs`): how many variables the project adds for its agents and command
-//! tools, the first names in the row's hint, and Edit, which opens today's editor under the row: the variables as
-//! `NAME=value` lines saved as a person leaves them, validated in place, a widening change asked in place under the
-//! group (person-only), and a change made outside the screen said there with Reload.
+//! Variables (`Variables` `LsACY` in `S06`): the variables the project adds for its agents and command tools, each a
+//! row with its name and its value in mono, their count in the heading with that they are plain text, and *Edit
+//! variables*, whose Edit opens today's editor under its row: the variables as `NAME=value` lines saved as a person
+//! leaves them, validated in place, a widening change asked in place under the group (person-only), and a change made
+//! outside the screen said there with Reload.
 use std::{path::PathBuf, sync::Arc};
 
 use lurq::{
@@ -25,7 +26,7 @@ use orchester_workspace::{
 
 use super::super::{
   Status, TabProps,
-  kit::{Group, SettingRow, value},
+  kit::{Group, SettingRow},
 };
 use crate::{
   screens::connections::widen::{WidenConfirm, WidenLook, WidenProps},
@@ -43,22 +44,36 @@ use crate::{
 
 /// The editor's height (`uSWRr`/`IBFli` in `O8o0l`).
 const ENVIRONMENT_HEIGHT: f32 = 132.0;
-/// How many names the row's hint shows before it counts the rest.
-const HINT_NAMES: usize = 2;
+/// The bones of the variables while they are read: each one's name and value.
+const READING: [(f32, f32); 2] = [(64.0, 40.0), (124.0, 16.0)];
 
-/// The Environment group while it is read (`10 · Project settings · Runs · loading` `lUFjj`): its heading and the
-/// Variables label real, the count and the names line bones, Edit a bone of its size.
+/// The Variables group while it is read (undrawn; as `10 · Project settings · Runs · loading` `lUFjj` reads a group):
+/// its heading, *Edit variables* and its hint real; the count, two variables and Edit bones of their size.
 pub(super) fn bones(ctx: &mut Ctx) -> Element {
-  let row = SettingRow::new("settings-environment-reading", ctx.t("project_settings.variablesLabel"))
-    .info(ctx.t("project_settings.environmentInfo"))
-    .hint_reading(264.0)
-    .control(skeleton::line(ctx, ExtraTypography::Lead.role(), 58.0))
-    .control(skeleton::button(72.0));
+  let variables: Vec<Element> = READING
+    .iter()
+    .enumerate()
+    .map(|(at, (name, value))| {
+      SettingRow::new(format!("settings-variable-reading-{at}"), "")
+        .mono_label()
+        .mono_hint()
+        .label_reading(*name)
+        .hint_reading(*value)
+        .render(ctx)
+    })
+    .collect();
+  let edit = SettingRow::new("settings-environment-reading", ctx.t("project_settings.editVariables"))
+    .hint(ctx.t("project_settings.editVariablesHint"))
+    .control(skeleton::button(66.0))
+    .render(ctx);
+  let count = skeleton::line(ctx, ExtraTypography::Note.role(), 196.0);
   Group::new(
     "settings-environment-reading-section",
-    ctx.t("project_settings.environment"),
+    ctx.t("project_settings.variablesLabel"),
   )
-  .row(row.render(ctx))
+  .end(count)
+  .rows(variables)
+  .row(edit)
   .into()
 }
 
@@ -82,7 +97,7 @@ impl DevtoolsInspectable for Asking {}
 type Save = FutureAction<(PathBuf, Requested), Stored, Message>;
 
 #[derive(Clone)]
-pub(super) struct Environment {
+pub(super) struct Variables {
   save: Save,
   text: Signal<String>,
   stored: Signal<Option<Stored>>,
@@ -92,7 +107,7 @@ pub(super) struct Environment {
   /// The editor is open under the row.
   editing: Signal<bool>,
 }
-impl Component for Environment {
+impl Component for Variables {
   type Props = TabProps;
   fn create(ctx: &mut Ctx) -> Self {
     let tab = Self {
@@ -158,10 +173,29 @@ impl Component for Environment {
       save.state().set(FutureState::idle());
     }
     self.status(&props, &save, &state, (parsed.is_err(), changed));
+    // The rows say what is stored, so typing in the editor under them never moves it.
+    let shown: Vec<(String, String)> = self
+      .stored
+      .get()
+      .map(|stored| {
+        stored
+          .0
+          .iter()
+          .map(|(name, value)| (name.to_string(), value.to_owned()))
+          .collect()
+      })
+      .unwrap_or_default();
     // An editor with a change, a mistake or a question in it stays open.
     let open = self.editing.get() || changed || parsed.is_err() || asking.is_some();
     let row = self.row(ctx, &props, &save, open);
-    let mut group = Group::new("settings-environment-section", ctx.t("project_settings.environment")).row(row);
+    let mut group = Group::new("settings-environment-section", ctx.t("project_settings.variablesLabel"))
+      .end(
+        Text::new(&count(ctx, shown.len()))
+          .id("settings-variable-count")
+          .variant(ExtraTypography::Note.role()),
+      )
+      .rows(variable_rows(ctx, &shown))
+      .row(row);
     if let Some(error) = save.state().get().error {
       group = group.after(field_error(
         "settings-environment-save-error",
@@ -179,7 +213,7 @@ impl Component for Environment {
     group.into()
   }
 }
-impl Environment {
+impl Variables {
   fn status(
     &self,
     props: &TabProps,
@@ -254,23 +288,8 @@ impl Environment {
       }
     }
   }
-  /// The row: the variables' count and Edit, and while open the editor under it.
+  /// *Edit variables* (`J0NdQ`) with its Edit, and while open the editor under it.
   fn row(&self, ctx: &mut Ctx, props: &TabProps, save: &Save, open: bool) -> Element {
-    let names: Vec<String> = parse_environment(&self.text.get())
-      .map(|variables| variables.iter().map(|(name, _)| name.to_string()).collect())
-      .unwrap_or_default();
-    let count = names.len();
-    let hint = match count {
-      0 => ctx.t("project_settings.environmentHintNone"),
-      count if count <= HINT_NAMES => ctx.t_args("project_settings.environmentHint", [("names", names.join(", "))]),
-      count => ctx.t_args(
-        "project_settings.environmentHintMore",
-        [
-          ("names", names[..HINT_NAMES].join(", ")),
-          ("more", (count - HINT_NAMES).to_string()),
-        ],
-      ),
-    };
     let editing = self.editing.clone();
     let edit = ActionButton::new(
       "settings-environment-edit",
@@ -286,14 +305,9 @@ impl Environment {
     .on_click(move || editing.update(|editing| *editing = !*editing));
     let row = SettingRow::new(
       "settings-environment-variables-row",
-      ctx.t("project_settings.variablesLabel"),
+      ctx.t("project_settings.editVariables"),
     )
-    .info(ctx.t("project_settings.environmentInfo"))
-    .hint(hint)
-    .control(value(
-      "settings-variable-count",
-      &ctx.t_args("project_settings.variableCount", [("count", count.to_string())]),
-    ))
+    .hint(ctx.t("project_settings.editVariablesHint"))
     .control(edit);
     if !open {
       return row.render(ctx);
@@ -324,7 +338,7 @@ impl Environment {
       .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Snug.role())
       .child(input.render(ctx))
-      .child(helper(ctx, props))
+      .child(helper(ctx))
       .into()
   }
   fn fill(&self, stored: Stored) {
@@ -429,10 +443,8 @@ impl Environment {
     })
   }
 }
-/// That the variables are plain text, with Open Secrets for keys and tokens.
-fn helper(ctx: &mut Ctx, props: &TabProps) -> Element {
-  let nav = crate::navigation::Navigation::of(ctx);
-  let project = props.project.open.project.id();
+/// That the variables are plain text, and keys and tokens belong in the secrets under them.
+fn helper(ctx: &Ctx) -> Element {
   Row::new()
     .id("settings-environment-helper")
     .width(Dimension::Pct(100.0))
@@ -449,21 +461,32 @@ fn helper(ctx: &mut Ctx, props: &TabProps) -> Element {
         .variant(crate::theme::ExtraTypography::Note.role())
         .flex(1.0),
     )
-    .child(
-      ActionButton::new(
-        "settings-open-secrets",
-        ButtonKind::Ghost,
-        ctx.t("project_settings.openSecrets"),
-      )
-      .icon(Icon::KeyRound)
-      .compact()
-      .in_form()
-      .opens(nav.to(crate::routes::Route::Project(
-        project,
-        crate::routes::ProjectPage::Secrets(crate::routes::SecretsView::default()),
-      ))),
-    )
     .into()
+}
+
+/// How many variables there are, and that they are plain text (`Note` `jrIf1`).
+fn count(ctx: &Ctx, count: usize) -> Arc<str> {
+  match count {
+    0 => ctx.t("project_settings.variablesNone"),
+    1 => ctx.t("project_settings.variablesOne"),
+    count => ctx.t_args("project_settings.variablesCount", [("count", count.to_string())]),
+  }
+}
+
+/// A row per variable, its name over its value, both in mono (`RUST_LOG` `cWwmK`); an empty value leaves no line.
+fn variable_rows(ctx: &mut Ctx, shown: &[(String, String)]) -> Vec<Element> {
+  shown
+    .iter()
+    .map(|(name, value)| {
+      let row = SettingRow::new(format!("settings-variable-{name}"), name.as_str()).mono_label();
+      let row = if value.is_empty() {
+        row
+      } else {
+        row.mono_hint().hint(value.as_str())
+      };
+      row.render(ctx)
+    })
+    .collect()
 }
 
 fn action(ctx: &mut Ctx) -> Save {

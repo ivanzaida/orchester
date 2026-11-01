@@ -1,6 +1,6 @@
 //! Project settings' own tabs (`Project settings · redesign` `XGtkg`), kept in its route
-//! (`/project/<id>/settings?tab=runs`). Connections and Secrets are tabs of the page too, with routes of their own
-//! (`/project/<id>/connections`, `/project/<id>/secrets`).
+//! (`/project/<id>/settings?tab=runs`). Connections and Environment are tabs of the page too, with routes of their own
+//! (`/project/<id>/connections`, and Environment the secrets' `/project/<id>/secrets`, the tab it was).
 
 use super::{RouteError, TAB, query::Params};
 
@@ -9,7 +9,7 @@ use super::{RouteError, TAB, query::Params};
 pub enum ProjectSettingsTab {
   #[default]
   General,
-  /// Auto mode, the limits and the environment of new runs.
+  /// Auto mode, the estimates and the limits of new runs.
   Runs,
   /// The sources agents may read without asking (`kmNiF`) and the code index.
   Context,
@@ -29,14 +29,20 @@ impl ProjectSettingsTab {
     }
   }
 
-  /// The tab `name` names; the names of the tabs Runs and Context took in (`limits`, `environment`, `sources`,
-  /// `code_index`) still lead to them, so a path kept from before they moved opens where its setting is now.
+  /// The tab `name` names; the names of the tabs Runs and Context took in (`limits`, `sources`, `code_index`) still
+  /// lead to them, so a path kept from before they moved opens where its setting is now.
   pub fn from_name(name: &str) -> Option<Self> {
     match name {
-      "limits" | "environment" => Some(Self::Runs),
+      "limits" => Some(Self::Runs),
       "sources" | "code_index" => Some(Self::Context),
       name => Self::ALL.into_iter().find(|tab| tab.name() == name),
     }
+  }
+
+  /// Whether `name` names the Environment tab (`S06` `EnL2D`), whose route is the secrets' own: its name, or
+  /// `secrets`, the tab it was.
+  pub fn is_environment(name: &str) -> bool {
+    matches!(name, "environment" | "secrets")
   }
 
   /// The query parameter of a tab other than the one Project settings opens on.
@@ -44,7 +50,20 @@ impl ProjectSettingsTab {
     (TAB, (self != Self::default()).then(|| self.name()))
   }
 
-  pub(super) fn take(params: &mut Params) -> Result<Self, RouteError> {
-    params.take_or_default(TAB, Self::from_name)
+  /// The tab the query names, General when it names none; `None` when it names Environment.
+  pub(super) fn take(params: &mut Params) -> Result<Option<Self>, RouteError> {
+    let Some(name) = params.take(TAB)? else {
+      return Ok(Some(Self::default()));
+    };
+    if Self::is_environment(&name) {
+      return Ok(None);
+    }
+    match Self::from_name(&name) {
+      Some(tab) => Ok(Some(tab)),
+      None => Err(RouteError::InvalidParam {
+        param: TAB.to_owned(),
+        value: name,
+      }),
+    }
   }
 }

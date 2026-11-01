@@ -69,7 +69,6 @@ fn project_settings_tabs_have_their_documented_paths() {
   }
   for (old, tab) in [
     ("limits", ProjectSettingsTab::Runs),
-    ("environment", ProjectSettingsTab::Runs),
     ("sources", ProjectSettingsTab::Context),
     ("code_index", ProjectSettingsTab::Context),
   ] {
@@ -79,4 +78,22 @@ fn project_settings_tabs_have_their_documented_paths() {
       "{old}"
     );
   }
+}
+
+/// Environment (`S06`), the Secrets tab it was, keeps the secrets' path; the settings' query naming it, or Secrets, or
+/// the environment Runs once held, opens it there.
+#[test]
+fn project_settings_environment_opens_the_secrets_route() {
+  let root = format!("/project/{PROJECT}/settings");
+  for name in ["environment", "secrets"] {
+    assert_eq!(
+      Route::parse(&format!("{root}?tab={name}")),
+      Ok(at(ProjectPage::Secrets(Default::default()))),
+      "{name}"
+    );
+  }
+  assert!(matches!(
+    Route::parse(&format!("{root}?tab=nowhere")),
+    Err(RouteError::InvalidParam { .. })
+  ));
 }
