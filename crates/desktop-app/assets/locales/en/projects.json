@@ -1,39 +1,66 @@
 {
   "projects": {
     "reading": "Reading your projects…",
-    "welcome": {
-      "eyebrow": "WELCOME TO ORCHESTER",
-      "title": "Build with a team\nof AI agents.",
-      "lead": "Connect a repository, assign models to roles, and guide each task from a plan to a reviewed pull request.",
-      "createFirst": "Create your first project",
-      "next": "Choose a local repository next.",
-      "stepsHeading": "THREE STEPS TO YOUR FIRST TASK",
-      "steps": {
-        "repository": "Connect a repository",
-        "repositorySummary": "Choose a project and its local git repository.",
-        "agents": "Assign your agents",
-        "agentsSummary": "Mix providers and models for each role.",
-        "task": "Start a task",
-        "taskSummary": "Approve the plan, then follow the work."
-      },
-      "scope": "Instructions, tools, secrets and connections stay within each project.",
-      "noProjects": "No projects yet"
-    },
     "title": "All projects",
     "description": "The projects Orchester knows on this computer. Each one keeps its tasks, pipelines and settings in its own .orchester folder.",
     "openFolder": "Open project folder…",
     "openFolderTitle": "Choose a folder with an Orchester project",
     "add": "Add project",
+    "header": {
+      "joinTeam": "Join a team",
+      "openShared": "Open shared project…",
+      "offer": {
+        "text": "{{team}} shares {{project}} with you. It isn't on this computer yet.",
+        "open": "Open {{project}}…",
+        "notNow": "Not now"
+      },
+      "teamHint": "Working with a team? Join it to see the projects it shares with you."
+    },
     "tabs": {
       "projects": "Projects",
       "usage": "Usage"
     },
     "columns": {
       "project": "PROJECT",
+      "where": "WHERE",
       "status": "STATUS",
       "activeRuns": "ACTIVE RUNS",
       "needsYou": "NEEDS YOU",
       "lastOpened": "LAST OPENED"
+    },
+    "where": {
+      "thisComputer": "This computer",
+      "account": "Your account",
+      "shared": "Shared · {{team}}",
+      "sharedUnknown": "Shared",
+      "unknown": "—"
+    },
+    "move": {
+      "toAccount": "Move to account",
+      "toComputer": "Move to this computer",
+      "keepOnComputer": "Keep on this computer",
+      "keepInAccount": "Keep in your account",
+      "accountTitle": "Move {{name}} to your account?",
+      "accountBody": "It then shows only while {{email}} is signed in here, and its runners keep working while you're signed out. Its folder and data stay on this computer. Not while it's shared.",
+      "computerTitle": "Move {{name}} to this computer?",
+      "computerBody": "It then shows to anyone signed in on this computer, and while nobody is. Its folder and data stay where they are. Not while it's shared.",
+      "shared": "A shared project stays where it is. Make it local first."
+    },
+    "waiting": {
+      "one": "1 project waits for your Orchester Cloud sign-in. Its runner keeps working.",
+      "many": "{{count}} projects wait for your Orchester Cloud sign-in. Their runners keep working.",
+      "revoked": {
+        "one": "Your sign-in ended at {{time}}, from another device or the cloud's account page. 1 project waits until you sign in again.",
+        "many": "Your sign-in ended at {{time}}, from another device or the cloud's account page. {{count}} projects wait until you sign in again."
+      },
+      "ended": {
+        "one": "Your sign-in ended at {{time}}. 1 project waits until you sign in again.",
+        "many": "Your sign-in ended at {{time}}. {{count}} projects wait until you sign in again."
+      },
+      "signIn": "Sign in",
+      "signInAgain": "Sign in again",
+      "nothingTitle": "No projects on this computer",
+      "nothingBody": "Add a project to work here without an account, or sign in to get to the ones that wait."
     },
     "status": {
       "notStarted": "Runner not started",

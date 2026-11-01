@@ -18,7 +18,9 @@ use thiserror::Error;
 
 pub use self::questions::{NO_OPTIONS_REFUSED, PendingQuestion, SECRET_REFUSED};
 use self::{
+  context::context_use,
   items::{command_finished, file_changed, mcp_tool_finished},
+  sandbox_setup::setup_failure,
   tool_calls::{AskedOwnCalls, ToolContext},
 };
 use super::{
@@ -28,8 +30,10 @@ use super::{
 };
 use crate::run::TokenUsage;
 
+mod context;
 mod items;
 mod questions;
+mod sandbox_setup;
 mod tool_calls;
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
@@ -157,6 +161,33 @@ pub enum Update {
     input_kept: bool,
     completed: bool,
   },
+  /// Codex named why a turn failed, or why a request of it failed for good (`codexErrorInfo`).
+  Failure(CodexFailure),
+}
+
+/// Why Codex says a turn failed, as far as the runner tells reasons apart: its `codexErrorInfo`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CodexFailure {
+  /// `usageLimitExceeded`: the account's plan refused the turn, credits included.
+  UsageLimit,
+  /// Any other reason it named.
+  Other,
+}
+
+impl CodexFailure {
+  /// What `error` (a `TurnError`) names in its `codexErrorInfo`; `None` when it names nothing. A reason with data comes
+  /// as an object keyed by its name.
+  fn of(error: &Value) -> Option<Self> {
+    let info = error.get("codexErrorInfo")?;
+    let name = info
+      .as_str()
+      .or_else(|| info.as_object().and_then(|info| info.keys().next()).map(String::as_str))?;
+    Some(if name == "usageLimitExceeded" {
+      Self::UsageLimit
+    } else {
+      Self::Other
+    })
+  }
 }
 
 /// Parses notifications and correlates a later approval request with its pending tool item.
@@ -177,6 +208,8 @@ pub struct AppServerStream {
   asked_own: AskedOwnCalls,
   /// How full the thread's context is after its latest model response ([`Self::context`]).
   context: Option<ContextUse>,
+  /// A command already reported that Codex's sandbox could not be set up ([`sandbox_setup`]).
+  sandbox_setup_failed: bool,
 }
 
 impl AppServerStream {
@@ -400,9 +433,14 @@ impl AppServerStream {
       "turn/plan/updated" => codex_plan(params)
         .map(|items| vec![Update::Activity(AgentEvent::TodoList { items })])
         .unwrap_or_default(),
-      "error" => string(params.get("error").unwrap_or(&Value::Null), "message")
-        .map(|message| vec![Update::Activity(AgentEvent::Error { message })])
-        .unwrap_or_default(),
+      "error" => {
+        let error = params.get("error").unwrap_or(&Value::Null);
+        // An error Codex retries is no reason for the turn's end yet.
+        let final_error = params.get("willRetry").and_then(Value::as_bool) != Some(true);
+        let failure = CodexFailure::of(error).filter(|_| final_error).map(Update::Failure);
+        let message = string(error, "message").map(|message| Update::Activity(AgentEvent::Error { message }));
+        failure.into_iter().chain(message).collect()
+      }
       _ => Vec::new(),
     }
   }
@@ -437,7 +475,7 @@ impl AppServerStream {
         .filter(|text| !text.is_empty())
         .map(|text| vec![Update::Activity(AgentEvent::Reasoning { text })])
         .unwrap_or_default(),
-      Some("commandExecution") => command_finished(item),
+      Some("commandExecution") => self.command_completed(item),
       Some("fileChange") => file_changed(item),
       Some("userMessage") => item
         .get("content")
@@ -453,6 +491,18 @@ impl AppServerStream {
         .unwrap_or_default(),
       _ => Vec::new(),
     }
+  }
+
+  /// A command's end, and the first time a command did not start because Codex's sandbox could not be set up.
+  fn command_completed(&mut self, item: &Value) -> Vec<Update> {
+    let mut updates = command_finished(item);
+    if !self.sandbox_setup_failed
+      && let Some(problem) = setup_failure(item)
+    {
+      self.sandbox_setup_failed = true;
+      updates.push(Update::Activity(AgentEvent::RunnerProblem { problem }));
+    }
+    updates
   }
 
   /// A turn takes several model responses; each reports its own usage as `last`, and the thread's
@@ -492,10 +542,9 @@ impl AppServerStream {
     let mut updates = vec![Update::Activity(AgentEvent::TurnCompleted { usage: self.usage })];
     self.usage = TokenUsage::default();
     if status != Some("completed") {
-      let message = turn
-        .get("error")
-        .and_then(|error| string(error, "message"))
-        .unwrap_or_else(|| "Codex turn did not complete".to_owned());
+      let error = turn.get("error").unwrap_or(&Value::Null);
+      let message = string(error, "message").unwrap_or_else(|| "Codex turn did not complete".to_owned());
+      updates.extend(CodexFailure::of(error).map(Update::Failure));
       updates.push(Update::Activity(AgentEvent::TurnFailed { message }));
     }
     let input_kept = status != Some("interrupted");
@@ -539,23 +588,6 @@ fn usage(value: &Value) -> TokenUsage {
     cached_input: value.get("cachedInputTokens").and_then(Value::as_u64).unwrap_or(0),
     output: value.get("outputTokens").and_then(Value::as_u64).unwrap_or(0),
   }
-}
-
-/// How full the context is after the response `last` reports: its `totalTokens` (input and output, else their sum),
-/// against `window`; `None` for a response that reports no tokens.
-fn context_use(last: &Value, window: Option<&Value>) -> Option<ContextUse> {
-  let spent = usage(last);
-  let used = last
-    .get("totalTokens")
-    .and_then(Value::as_u64)
-    .unwrap_or_else(|| spent.input.saturating_add(spent.output));
-  if used == 0 {
-    return None;
-  }
-  Some(match window.and_then(Value::as_u64).filter(|window| *window > 0) {
-    Some(window) => ContextUse::reported(used, window),
-    None => ContextUse::unknown_window(used),
-  })
 }
 
 fn string(value: &Value, key: &str) -> Option<String> {

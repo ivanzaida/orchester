@@ -1,12 +1,13 @@
 //! Add provider (`10 · Add provider · own sign-in` `LaTB4`, `10b · on an API provider` `hc1vS`): a page in the
 //! Connections tab, never a dialog. The person chooses the kind, names the connection, and for a CLI gets the program
 //! found on the search path, which Orchester checks at once (its version, sign-in and models); the check says what it
-//! found under the program. Only a copy found on the search path is offered: choosing another file is not built in
-//! this app. Save connection waits for a check that recognized the CLI; one that is not signed in may be saved and
-//! reads Sign-in required. The CLI runs on its own sign-in, on an account, or on an API provider with a key
-//! ([`super::provider_form`]), which only a person chooses. The Anthropic API's native kind has its own fields instead
-//! ([`native`]); the OpenAI API's is locked until the runner runs its agents. The first reason it cannot be saved
-//! stays before the actions, or what comes after saving once it can be.
+//! found under the program. A copy found on the search path is offered, and the file chosen on the start page
+//! (`screens::all_projects::agent_cli`); choosing another file here is not built in this app. Save connection waits for
+//! a check that recognized the CLI; one that is not signed in may be saved and reads Sign-in required. The CLI runs on
+//! its own sign-in, on an account, or on an API provider with a key ([`super::provider_form`]), which only a person
+//! chooses. The Anthropic API's native kind has its own fields instead ([`native`]); the OpenAI API's is locked until
+//! the runner runs its agents. The first reason it cannot be saved stays before the actions, or what comes after saving
+//! once it can be.
 
 mod check;
 mod kinds;
@@ -34,6 +35,7 @@ use orchester_workspace::{
   connections::{
     api_provider::{RunsOn, save_cli_in},
     data::{ConnectionDraft, ProjectConnections},
+    missing_cli::{KnownCopies, known_copies},
     probe,
   },
   messages::Message,
@@ -81,9 +83,9 @@ struct Kind(AgentProvider);
 
 impl DevtoolsInspectable for Kind {}
 
-/// The CLI's copies on the search path, as the page's future reads them.
+/// The CLI's copies a connection can run, as the page's future reads them.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-struct Copies(Arc<Vec<PathBuf>>);
+struct Copies(Arc<KnownCopies>);
 
 impl DevtoolsInspectable for Copies {}
 
@@ -175,7 +177,7 @@ impl Component for AddAgent {
     }
     let found = found(ctx, provider, self.recheck.get()).state().get();
     self.follow_sources(ctx, &props, provider, &listed, &found);
-    let program = self.chosen(found.data.as_ref().map(|copies| copies.0.as_slice()));
+    let program = self.chosen(found.data.as_ref().map(|copies| copies.0.copies.as_slice()));
     let accounts = accounts::listed(ctx);
     let account = super::account::chosen_account(&accounts, provider, &self.account.get())
       .map_or(ConnectionAccount::Default, ConnectionAccount::of);
@@ -211,11 +213,11 @@ impl AddAgent {
       let new = suggested_name(ctx.i18n(), listed, provider, project);
       suggest(&self.name, &self.suggested, new);
     }
-    if let Some(copies) = found.fulfilled_data() {
+    if let Some(found) = found.fulfilled_data() {
       let chosen = self.program.get_untracked();
-      if !copies.0.iter().any(|copy| copy.display().to_string() == chosen) {
+      let copies = &found.0.copies;
+      if !copies.iter().any(|copy| copy.display().to_string() == chosen) {
         let first = copies
-          .0
           .first()
           .map_or_else(String::new, |copy| copy.display().to_string());
         if chosen != first {
@@ -356,10 +358,13 @@ impl AddAgent {
   }
 }
 
-/// The CLI's copies found on the search path, newest first, looked for again at each Check.
+/// The CLI's copies found on the search path, newest first, then the file chosen on the start page; looked for again at
+/// each Check.
 fn found(ctx: &mut Ctx, provider: AgentProvider, recheck: u64) -> FutureHandle<Copies, Message> {
-  ctx.future((Kind(provider), recheck), |(Kind(provider), _)| async move {
-    background::run(move || Copies(Arc::new(probe::detect_agent(provider)))).await
+  let workspace = Services::of(ctx).workspace;
+  ctx.future((Kind(provider), recheck), move |(Kind(provider), _)| {
+    let workspace = workspace.clone();
+    async move { background::run(move || Copies(Arc::new(known_copies(&workspace, provider)))).await }
   })
 }
 

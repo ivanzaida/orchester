@@ -1,7 +1,7 @@
 //! Two-factor authentication as this computer sees it (`docs/cloud-api.md`, "Two-factor authentication"): whether the
 //! account has it on and whether this computer signed in with a code (`GET /me`), which accepting an invite needs;
-//! signing out to sign in again with a code when it did not (the design's *Sign in again*, `rPG8h`, which goes through
-//! the gate with its own reason, `Nq3Mf`); and how few recovery codes are left after a sign-in with one.
+//! signing out to sign in again with a code when it did not (the design's *Sign in again*, `rPG8h`, whose sign-in gives
+//! its own reason, `Nq3Mf`); and how few recovery codes are left after a sign-in with one.
 
 use orchester_api::cloud::TwoFactorStatus;
 use orchester_core::time::Timestamp;
@@ -20,8 +20,8 @@ impl Cloud {
       .await
   }
 
-  /// Signs this computer out, as *Sign out* does, so the person signs in again with a code: the gate says why, naming
-  /// `invite`, what the invite that needs it is to. The invite stays open at the cloud.
+  /// Signs this computer out, as *Sign out* does, so the person signs in again with a code: the sign-in says why,
+  /// naming `invite`, what the invite that needs it is to. The invite stays open at the cloud.
   pub async fn sign_out_for_code(&self, invite: Option<String>) -> Result<(), CloudError> {
     self.end_session().await;
     let forgotten = self

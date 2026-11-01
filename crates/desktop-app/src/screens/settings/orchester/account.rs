@@ -1,8 +1,7 @@
 //! The Orchester Cloud account at the top of the tab (`Account card` `f3tZy` in `05 · Orchester Cloud`): the person's
 //! initials, name and two-factor authentication, their email and the cloud's host, and *Sign out*, which asks in place
-//! under the card (`Sign out · in place under the account card` `Q38L6j` in `ZUuMT`); *Sign out and lock* is a
-//! person's. Then *This computer* (`W29jBR`): which device this is, when it signed in, and the other devices, which
-//! this app doesn't show yet.
+//! under the card (`xQQbr`), and answering it is a person's. Then *This computer* (`W29jBR`): which device this is,
+//! when it signed in, and the other devices, which this app doesn't show yet.
 
 use lurq::{
   app::{
@@ -18,7 +17,7 @@ use orchester_workspace::sharing::{cloud::CloudInUse, device};
 
 use super::{cloud::CloudPanel, words::day_and_time};
 use crate::{
-  theme::{ExtraRadius, ExtraSpacing, ExtraTypography, SettingsText},
+  theme::{ExtraRadius, ExtraSpacing, SettingsText},
   ui::{
     avatar::initials,
     button::{ActionButton, ButtonKind},
@@ -102,8 +101,7 @@ pub(super) fn card(
     .into()
 }
 
-/// *Sign out of Orchester Cloud on this computer?* in place, with what locking means for the window, its MCP tools and
-/// the work here.
+/// *Sign out of Orchester Cloud on this computer?* in place (`xQQbr`), with what waits and what keeps working.
 pub(super) fn sign_out_question(ctx: &Ctx, panel: &CloudPanel) -> Element {
   let (action, person) = (panel.sign_out.clone(), panel.person.clone());
   let confirm = ActionButton::new(
@@ -130,13 +128,7 @@ pub(super) fn sign_out_question(ctx: &Ctx, panel: &CloudPanel) -> Element {
   .on_click(move || asking.set(false));
   let notice = SettingNotice::new("orchester-cloud-sign-out-question", NoticeTone::Warning)
     .title(ctx.t("cloud.account.signOutConfirm.question"))
-    .body(ctx.t("cloud.account.signOutConfirm.locks"))
-    .part(
-      Text::new(&ctx.t("cloud.account.signOutConfirm.local"))
-        .id("orchester-cloud-sign-out-local")
-        .variant(ExtraTypography::Prose.role())
-        .width(Dimension::Pct(100.0)),
-    )
+    .body(ctx.t("cloud.account.signOutConfirm.body"))
     .action(confirm)
     .action(stay);
   match panel.person.reason(ctx, SIGN_OUT_CONFIRM) {

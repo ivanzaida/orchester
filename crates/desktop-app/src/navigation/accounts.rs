@@ -1,23 +1,28 @@
-//! The window's tabs per Orchester Cloud account (the person's decision, 2026-10-16: projects per account). The tabs
-//! stay as they were behind the sign-in gate, so the same account signing in again finds them as it left them. Another
-//! account signing in gets its own tabs instead: those it left in this window earlier, or one tab at All projects; the
-//! last account's tabs wait for it, so none of them shows a project to an account it is not its. The tabs a window
-//! opened with while no account was signed in are the first account's to sign in, as the projects added meanwhile are.
+//! The window's tabs per Orchester Cloud sign-in (the person's decisions, 2026-10-16 and 2026-10-30). Each account
+//! keeps the tabs it left, and so does being signed out, so signing in again finds them as they were, and none of them
+//! shows a project to someone it is not shown to. Everyone sees this computer's projects: the first sign-in with no
+//! tabs kept for it keeps the tabs that show, which are all still visible. A sign-out with no tabs of its own opens
+//! Settings › Orchester Cloud, which says why a sign-in ended and offers it again.
 
 use std::collections::HashMap;
 
 use orchester_core::id::CloudAccountId;
+use orchester_store::CloudSignInEnd;
+use orchester_workspace::sharing::cloud::SignIn;
 use parking_lot::Mutex;
 
 use super::{Navigation, tabs::TabSet};
-use crate::project::Projects;
+use crate::{
+  project::Projects,
+  routes::{OrchesterView, Route},
+};
 
-/// Whose tabs the window shows, and the tabs other accounts left in it.
+/// Whose tabs the window shows, and the tabs the others left in it.
 pub struct AccountTabs(Mutex<Shown>);
 
 struct Shown {
   account: Option<CloudAccountId>,
-  kept: HashMap<CloudAccountId, TabSet>,
+  kept: HashMap<Option<CloudAccountId>, TabSet>,
 }
 
 impl AccountTabs {
@@ -29,19 +34,44 @@ impl AccountTabs {
     }))
   }
 
-  /// `account` is signed in: the window shows its tabs. When they replace another account's, what the window knew of
-  /// that account's projects goes from `projects` too.
-  pub fn follow(&self, account: CloudAccountId, navigation: &Navigation, projects: &Projects) {
+  /// The sign-in is `sign_in` now: the window shows the tabs of its account, or of nobody. When they replace others,
+  /// what the window knew of the projects those showed goes from `projects` too.
+  pub fn follow(&self, sign_in: &SignIn, navigation: &Navigation, projects: &Projects) {
+    let account = sign_in.account();
     let mut shown = self.0.lock();
-    let Some(previous) = shown.account.replace(account) else {
-      return;
-    };
+    let previous = std::mem::replace(&mut shown.account, account);
     if previous == account {
       return;
     }
-    let tabs = shown.kept.remove(&account).unwrap_or_default();
+    let kept = shown.kept.remove(&account);
+    // Signed out to signed in with nothing kept: every tab that shows is of this computer's, and stays.
+    if previous.is_none() && kept.is_none() {
+      return;
+    }
+    let tabs = kept.unwrap_or_else(|| match account {
+      Some(_) => TabSet::default(),
+      // Signed out with no tabs of its own: Settings › Orchester Cloud says why, and signs in again.
+      None => TabSet::at(Route::Orchester(OrchesterView::default())),
+    });
+    let pressed_on = navigation.route_now();
     let left = navigation.swap_tabs(tabs);
     shown.kept.insert(previous, left);
     projects.forget_all();
+    // *Sign in again* goes on to the sign-in wherever it was pressed, whatever page the tabs kept show: in place on the
+    // invite landing, which asks for it there (`d1yW2I`), and in Settings › Orchester Cloud from anywhere else.
+    if signing_in_again(sign_in) {
+      navigation.go(match pressed_on {
+        Route::Invite(target) => Route::Invite(target),
+        _ => Route::Orchester(OrchesterView::default()),
+      });
+    }
   }
+}
+
+/// Whether the person signed out to sign in again with a code, as an invite asked.
+fn signing_in_again(sign_in: &SignIn) -> bool {
+  matches!(
+    sign_in,
+    SignIn::SignedOut { ended: Some(ended), .. } if ended.reason == CloudSignInEnd::TwoFactor
+  )
 }

@@ -126,18 +126,22 @@ fn reads_no_listed_project_again_when_the_list_changes_after_a_report() {
     &all.window.data.repo("repo-third"),
   );
   all.window.navigation().go(Route::AllProjects);
-  let remove = format!("project-remove-{}", third.project.id());
+  let (row, remove) = (
+    format!("project-row-{}", third.project.id()),
+    format!("project-remove-{}", third.project.id()),
+  );
   read_rows(&mut all, &[other.project.id(), third.project.id()]);
   all.settle();
   let services = all.window.launch.services().expect("the session started").clone();
   services.runners.ensure(&other.repo_root, "Other");
   assert_eq!(all.settle(), counts(&[("listed project", 1)]), "Other is read again");
   // Removing Third lists the projects again, and follows their runners anew.
+  all.window.hover(&row);
   all.window.press(&remove);
   all.window.press("remove-project-confirm");
-  all.window.until("Third removed", |window| {
-    window.tree.get_element_by_id(&remove).is_none()
-  });
+  all
+    .window
+    .until("Third removed", |window| window.tree.get_element_by_id(&row).is_none());
   let removed = all.settle();
   assert_eq!(
     removed.get("listed project"),

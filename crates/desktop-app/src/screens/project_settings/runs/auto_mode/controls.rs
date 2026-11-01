@@ -1,6 +1,7 @@
 //! Approvals' rows (`Auto mode` `WSQqT` in `02 · Runs`, as `m0eUB` redraws it): *Allow Autopilot for agents in this
 //! project*, Manual's reviewer's connection, model and effort as three selects with the domain's effective-reviewer
-//! read-back in the row's (i), and *Approved for every run*.
+//! read-back in the row's (i) and, in its hint's place in `warning` while the reviewer cannot run, why (ORC-611), and
+//! *Approved for every run*.
 use std::sync::Arc;
 
 use lurq::{
@@ -34,14 +35,20 @@ const CONNECTION_WIDTH: f32 = 130.0;
 const MODEL_WIDTH: f32 = 156.0;
 const EFFORT_WIDTH: f32 = 120.0;
 
-pub fn group(ctx: &mut Ctx, tab: &AutoMode, props: &Props, settings: &Settings, save: &Save) -> Group {
+/// The group, its Reviewer row saying why the reviewer cannot run (`cannot_run`) while it cannot.
+pub fn group(
+  ctx: &mut Ctx,
+  (tab, props): (&AutoMode, &Props),
+  (settings, cannot_run): (&Settings, Option<Arc<str>>),
+  save: &Save,
+) -> Group {
   let options = project_settings::review_options(settings, &tab.connection.get(), &tab.model.get());
   let busy = save.state().get().is_pending();
   let autopilot = super::autopilot::row(ctx, (tab, props), settings, (save, busy));
   let reviewer = if options.connections.is_empty() {
     unavailable_reviewer(ctx, props)
   } else {
-    reviewer_row(ctx, tab, options, busy)
+    reviewer_row(ctx, tab, (options, cannot_run), busy)
   };
   let rules = super::rules::row(ctx, props, settings);
   Group::new("settings-auto", ctx.t("project_settings.auto"))
@@ -69,7 +76,12 @@ fn unavailable_reviewer(ctx: &mut Ctx, props: &Props) -> Element {
     .control(open)
     .render(ctx)
 }
-fn reviewer_row(ctx: &mut Ctx, tab: &AutoMode, options: project_settings::ReviewOptions, busy: bool) -> Element {
+fn reviewer_row(
+  ctx: &mut Ctx,
+  tab: &AutoMode,
+  (options, cannot_run): (project_settings::ReviewOptions, Option<Arc<str>>),
+  busy: bool,
+) -> Element {
   let connection = connection_select(ctx, tab, &options, busy);
   // A model is named by the id its CLI takes, as its developer names it (the person's decision for ORC-103).
   let model = select(
@@ -108,10 +120,15 @@ fn reviewer_row(ctx: &mut Ctx, tab: &AutoMode, options: project_settings::Review
         "project_settings.reviewedBy",
         [("model", shown.model.as_str()), ("connection", &shown.connection)],
       );
-      row.hint(ctx.t("project_settings.reviewerHint")).info(ctx.t_args(
+      let row = row.info(ctx.t_args(
         "project_settings.reviewerInfo",
         [("detail", &*detail), ("readback", &*readback)],
-      ))
+      ));
+      // Why the reviewer cannot run, in the hint's place while it cannot.
+      match cannot_run {
+        Some(said) => row.toned(said, Tone::Warning),
+        None => row.hint(ctx.t("project_settings.reviewerHint")),
+      }
     }
     Err(why) => row.info(detail).toned(message_text(ctx, &why), Tone::Warning),
   };

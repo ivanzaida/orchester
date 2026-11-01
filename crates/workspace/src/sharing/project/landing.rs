@@ -22,7 +22,7 @@ use crate::{
   background,
   project_setup::NewProject,
   sharing::{RemoteMatch, ServerEntry, Servers, SharingError, remote_match},
-  workspace::OpenProject,
+  workspace::{OpenProject, Workspace},
 };
 
 /// A project an invite was to, and the local projects that could be linked to it.
@@ -105,11 +105,16 @@ impl Landing {
   }
 }
 
-/// `git clone https://<identity>.git`, only for an identity made of a plain host (letters, digits, dots and hyphens with
-/// an optional port, or a bracketed IPv6 address) and path segments of letters, digits, dots, underscores and hyphens.
-/// The hint is the server's word, and a person may paste the command into a shell: anything else (`$(…)`, backticks,
-/// `;`, `|`, quotes, control characters) gets no command, and the hint shows as plain text.
+/// `git clone` and [`clone_url`]: the command a person may paste into a shell, so no hint the address refuses gets one.
 pub fn clone_command(identity: &RepositoryIdentity) -> Option<String> {
+  clone_url(identity).map(|url| format!("git clone {url}"))
+}
+
+/// `https://<identity>.git`, only for an identity made of a plain host (letters, digits, dots and hyphens with an
+/// optional port, or a bracketed IPv6 address) and path segments of letters, digits, dots, underscores and hyphens.
+/// The hint is the server's word: anything else (`$(…)`, backticks, `;`, `|`, quotes, `@` and user info, control
+/// characters) gets no address, and the hint shows as plain text.
+pub fn clone_url(identity: &RepositoryIdentity) -> Option<String> {
   let (host, path) = identity.as_str().split_once('/')?;
   let segment = |part: &str| {
     !part.is_empty()
@@ -119,7 +124,7 @@ pub fn clone_command(identity: &RepositoryIdentity) -> Option<String> {
         .bytes()
         .all(|byte| byte.is_ascii_alphanumeric() || b"._-".contains(&byte))
   };
-  (plain_host(host) && path.split('/').all(segment)).then(|| format!("git clone https://{}.git", identity.as_str()))
+  (plain_host(host) && path.split('/').all(segment)).then(|| format!("https://{}.git", identity.as_str()))
 }
 
 /// A host name or IPv4 address with an optional port, or a bracketed IPv6 address with one.
@@ -188,26 +193,16 @@ impl Servers {
     })
   }
 
-  /// Adds the git checkout in `folder` as a local project, or opens the one it keeps: a new one is named after the
-  /// folder. Nothing in the folder changes but Orchester's own data.
-  pub async fn add_checkout(&self, folder: PathBuf) -> Result<OpenProject, CheckoutRefusal> {
+  /// Adds the git checkout in `folder` as a local project for a first link to `server`, or opens the one it keeps: a
+  /// new one is named after the folder and has the server's owner. Nothing in the folder changes but Orchester's own
+  /// data.
+  pub async fn add_checkout(&self, folder: PathBuf, server: ServerId) -> Result<OpenProject, CheckoutRefusal> {
     let workspace = self.inner.workspace.clone();
     background::run(move || {
       if !folder.join(".git").exists() {
         return Err(CheckoutRefusal::NotGit);
       }
-      match workspace.open(&folder) {
-        Ok(open) => Ok(open),
-        Err(StoreError::NotInitialized(_)) => {
-          let name = folder_name(&folder);
-          let project = Project::new(ProjectId::generate(), ProjectKey::suggest(&name), name);
-          Ok(workspace.create(NewProject {
-            project,
-            repo_root: folder,
-          })?)
-        }
-        Err(error) => Err(error.into()),
-      }
+      Ok(add_for_link(&workspace, folder, server)?)
     })
     .await?
   }
@@ -241,13 +236,7 @@ fn checkout(
   (server, project): (ServerId, &SharedProject),
 ) -> Result<Checkout, StoreError> {
   let db = ProjectDb::open(root)?;
-  let linked = db.sharing()?.map(|link| {
-    if link.server == server && link.project == project.id {
-      Linked::This
-    } else {
-      Linked::Other(link.address)
-    }
-  });
+  let linked = linked_to(&db, server, project.id)?;
   let mut tasks: Vec<TaskKey> = db.tasks()?.iter().map(|task| task.key().clone()).collect();
   tasks.sort_by_key(TaskKey::number);
   let origin = checkout_origin(programs, root);
@@ -259,6 +248,45 @@ fn checkout(
     tasks,
     linked,
   })
+}
+
+/// What the project in `db` is linked to, seen from `project` on `server`; `None` while it is local.
+pub(super) fn linked_to(db: &ProjectDb, server: ServerId, project: ProjectId) -> Result<Option<Linked>, StoreError> {
+  Ok(db.sharing()?.map(|link| {
+    if link.server == server && link.project == project {
+      Linked::This
+    } else {
+      Linked::Other(link.address)
+    }
+  }))
+}
+
+/// Opens the project `folder` keeps, or adds the folder as a local project named after it. Blocking.
+pub(super) fn open_or_add(workspace: &Workspace, folder: PathBuf) -> Result<OpenProject, StoreError> {
+  match workspace.open(&folder) {
+    Err(StoreError::NotInitialized(_)) => {
+      let name = folder_name(&folder);
+      let project = Project::new(ProjectId::generate(), ProjectKey::suggest(&name), name);
+      workspace.create(NewProject {
+        project,
+        repo_root: folder,
+      })
+    }
+    opened => opened,
+  }
+}
+/// [`open_or_add`] for a first link to `server`: a project added for it now has the server's owner. Blocking.
+pub(super) fn add_for_link(
+  workspace: &Workspace,
+  folder: PathBuf,
+  server: ServerId,
+) -> Result<OpenProject, StoreError> {
+  let known = folder.join(".orchester").exists();
+  let open = open_or_add(workspace, folder)?;
+  if !known {
+    workspace.give_new_project_to_server_owner(open.project.id(), server)?;
+  }
+  Ok(open)
 }
 
 /// The name a folder's new project takes: the folder's own, else a word anyone recognises.

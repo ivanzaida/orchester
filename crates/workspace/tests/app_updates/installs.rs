@@ -429,6 +429,7 @@ fn at_work(runners: &Runners, root: &Path, keys: &[&str]) {
   let work = WorkSummary {
     agent_slots: NonZeroU32::new(3).expect("slots"),
     runs,
+    slot_waits: Vec::new(),
   };
   runners.report_work_for_test(root, "Kontur", work);
 }

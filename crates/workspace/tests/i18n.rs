@@ -76,7 +76,9 @@ fn named_keys(sections: &BTreeSet<&str>) -> BTreeSet<String> {
       rest.find('"').map(|end| &rest[..end])
     });
     for literal in quoted {
+      // A literal ending in the dot is a prefix keys are told by, not a key.
       let dotted = literal.contains('.')
+        && !literal.ends_with('.')
         && literal
           .chars()
           .all(|character| character.is_ascii_alphanumeric() || character == '.' || character == '_');

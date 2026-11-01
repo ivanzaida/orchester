@@ -121,14 +121,10 @@ taken. Further person-only switches concern the Orchestrator chat (see [orchestr
 
 ### The input gate (applied to every call, in order)
 
-1. **Sign-in gate** — while this computer is signed out of Orchester Cloud, every tool answers
-   `{"code":"sign_in_required"}` except `sign_in_state`. (In QA and development builds, lurq's window-text tools and
-   `lurq_windows` still answer so the sign-in screen can be verified — never in the installed app.) Signing in is
-   possible only for a person in the window.
-2. **Token shown** — while a secret is visible in the window (the MCP token in Settings › Automation, or a pairing
+1. **Token shown** — while a secret is visible in the window (the MCP token in Settings › Automation, or a pairing
    code), `lurq_find*`, `lurq_inspect`, `lurq_read_tree`, `lurq_screenshot` and `lurq_wait` answer
    `{"code":"token_shown"}`.
-3. **Person-only controls** — any lurq input tool is refused `{"code":"person_only"}` while a protected control is
+2. **Person-only controls** — any lurq input tool is refused `{"code":"person_only"}` while a protected control is
    on screen: the person-only switches, the MCP server section, Accounts, or a *widening confirmation* (Connections,
    Agents, Tools, Secrets, Skills, Project settings, Pipelines, task form, Local integration). Synthetic input that
    decides on a person's behalf (approvals, questions, plans, retry/return/stop, *Accept … as it is*, raising or
@@ -171,7 +167,7 @@ A refusal is a tool error (`isError: true`) whose text is JSON:
 |---|---|
 | Domain tools | `{"code","message","reasons"}` |
 | App tools (`app_state`, `navigate`, …) | `{"code","message"}`, plus `known` (valid names) for `unknown_route`, `unknown_tab`, `unknown_theme` |
-| Input gate | `{"code","message"}` — `sign_in_required`, `token_shown`, `person_only` |
+| Input gate | `{"code","message"}` — `token_shown`, `person_only` |
 | lurq tools | Plain text |
 | HTTP guard | HTTP 401 / 403, plain text |
 
@@ -184,7 +180,7 @@ A refusal is a tool error (`isError: true`) whose text is JSON:
 | `project_ambiguous` | Several projects have that name; use the id. |
 | `person_only` | Only a person may do this (see gates). |
 | `automation_not_allowed` | *Let automation answer approvals* is off. |
-| `sign_in_required` | Orchester is signed out of Orchester Cloud. |
+| `sign_in_required` | The named project belongs to an Orchester Cloud account and nobody is signed in; a person signs in, in the window. |
 | `interrupted` | Background work did not finish (e.g. the app is closing). |
 | `runner_unavailable`, `runner_reply_lost` | The project's runner is not connected / its reply was lost. |
 | `stop_run_first` | Closing a task while its run has not ended. |

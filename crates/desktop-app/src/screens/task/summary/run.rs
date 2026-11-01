@@ -87,8 +87,14 @@ fn rail(ctx: &mut Ctx, task: &TaskContext, run: &RunView) -> Element {
     .then(|| run.stopped_step().or_else(|| run.current_step()))
     .flatten()
     .map(|step| Arc::from(step.key.as_str()));
+  let slot_waits = task.slot_waits();
   let now = Services::of(ctx).clock.now();
-  steps::rail(ctx, run, (lost, &waiting), current, now)
+  let live = steps::LiveSteps {
+    lost,
+    waiting: &waiting,
+    slot_waits: &slot_waits,
+  };
+  steps::rail(ctx, run, &live, current, now)
 }
 
 /// Where the task stands, as one line on the page's ground in a `border` stroke (`Last event` `TGEq8`); `here`: the run

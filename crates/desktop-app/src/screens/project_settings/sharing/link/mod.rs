@@ -38,7 +38,7 @@ use orchester_workspace::sharing::{
   },
 };
 
-pub(super) use self::parts::{join_sends, sends};
+pub(super) use self::parts::{join_sends, moves_to_account, sends};
 use super::{
   Facts,
   make_local::Made,
@@ -47,6 +47,7 @@ use super::{
 use crate::{
   navigation::Navigation,
   project::ShownProject,
+  root::follow_sign_in,
   routes::{JoinTarget, ProjectPage, Route},
   screens::{
     project_settings::kit::{back, page_head},
@@ -188,6 +189,8 @@ pub(super) struct Link {
   person: PersonOnly,
   /// *Share…* opened the page that links the project (`04c Share` `JeXKt`).
   sharing: Signal<bool>,
+  /// *Sign in* opened the sign-in under its row (`i5lddT`).
+  signing_in: Signal<bool>,
 }
 
 impl Component for Link {
@@ -231,13 +234,19 @@ impl Component for Link {
         props.facts.discovery,
         ProjectDiscovery::Project(_) | ProjectDiscovery::ServerOnly(_)
       )),
+      signing_in: ctx.signal(false),
     }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>().clone();
+    // First in every render: lurq keeps a component's futures by the order it asks for them.
+    let cloud = Services::of(ctx).cloud;
+    let signed_out = !follow_sign_in(ctx, &cloud).is_signed_in();
     if !self.sharing.get() {
       let sharing = self.sharing.clone();
+      // Nobody signed in and no server joined: sharing needs one or the other, and says so in place.
+      let signing_in = (signed_out && props.facts.servers.is_empty()).then_some(&self.signing_in);
       return Column::new()
         .id("project-settings-sharing")
         .width(Dimension::Pct(100.0))
@@ -247,7 +256,7 @@ impl Component for Link {
           &props.made_local,
           props.project.open.project.name().as_str(),
         ))
-        .child(parts::local(ctx, &props, move || sharing.set(true)));
+        .child(parts::local(ctx, &props, move || sharing.set(true), signing_in));
     }
     let listed = self.listed(ctx, &props);
     let sharing = self.sharing.clone();

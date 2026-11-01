@@ -1,19 +1,21 @@
 //! What a runner is working on, sent as [`crate::Event::WorkSummary`]: the status bar's Agents
-//! count and the rows of the close confirmation (02.C `Xz30C`, 02.D `a0tTV`).
+//! count and the rows of the close confirmation (02.C `Xz30C`, 02.D `a0tTV`), and the ready steps
+//! that wait for one of its agent slots.
 
 use std::num::NonZeroU32;
 
 use orchester_core::{
   connection::AgentProvider,
-  id::{RunId, TaskId},
+  id::{RunId, StepExecutionId, TaskId},
 };
 use serde::{Deserialize, Serialize};
 
-/// The runs a runner executes and its agent slots.
+/// The runs a runner executes, its agent slots and the steps waiting for one.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WorkSummary {
   pub agent_slots: NonZeroU32,
   pub runs: Vec<RunWork>,
+  pub slot_waits: Vec<SlotWait>,
 }
 
 impl WorkSummary {
@@ -30,6 +32,24 @@ impl WorkSummary {
   pub fn agents(&self) -> (usize, NonZeroU32) {
     (self.agents_working(), self.agent_slots)
   }
+
+  /// Whether `execution` is ready and held back only because every agent slot is in use.
+  pub fn waits_for_slot(&self, execution: StepExecutionId) -> bool {
+    self.slot_waits.iter().any(|wait| wait.execution == execution)
+  }
+
+  /// How many ready steps wait for an agent slot.
+  pub fn steps_waiting_for_slot(&self) -> usize {
+    self.slot_waits.len()
+  }
+}
+
+/// A ready agent step that only waits for a free agent slot. The runner knows this and nothing stores
+/// it: the step stays pending in the run's log.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SlotWait {
+  pub run: RunId,
+  pub execution: StepExecutionId,
 }
 
 /// A run with an agent at work, with what a person needs to recognize it. The display values

@@ -10,7 +10,7 @@ use orchester_core::{
   connection::AgentProvider,
   id::IdempotencyKey,
   resource::ModelId,
-  run::TokenUsage,
+  run::{TokenUsage, review::ReviewFailure},
   store::TaskStore,
   task::{
     TaskDetails, TaskUpdate,
@@ -138,6 +138,42 @@ fn story_points_estimator_usage_is_its_own_kind_and_remembers_what_was_asked() {
     "unknown usage counts as a request, not as tokens"
   );
   assert_eq!(db.estimates_between(at(12), at(20)).expect("later").1, 0);
+}
+
+/// Project settings › Runs › Estimates says when the estimator's last request on the reviewer gave no points (ORC-611).
+#[test]
+fn story_points_estimator_tells_why_its_last_request_gave_no_points() {
+  let (_repo, mut db, run, _) = started_run();
+  let task = db.task(run.task()).expect("read").expect("task");
+  let haiku = ModelId::new("claude-haiku-4-5").expect("model");
+  let reviewer = (AgentProvider::ClaudeCodeCli, &haiku);
+  assert_eq!(db.last_estimate_failure(reviewer).expect("none yet"), None);
+  let record = |ended: i64, model: &ModelId, failure| EstimateRecord {
+    task: task.id(),
+    basis: EstimateBasis::of(task.details()),
+    provider: AgentProvider::ClaudeCodeCli,
+    model: model.clone(),
+    started_at: at(ended - 1),
+    ended_at: at(ended),
+    usage: None,
+    failure,
+  };
+  let other = ModelId::new("claude-sonnet-4-5").expect("model");
+  db.record_estimate_usage(&record(10, &haiku, None)).expect("recorded");
+  db.record_estimate_usage(&record(20, &haiku, Some(ReviewFailure::CouldNotRun)))
+    .expect("recorded");
+  db.record_estimate_usage(&record(30, &other, None)).expect("recorded");
+  assert_eq!(
+    db.last_estimate_failure(reviewer).expect("read"),
+    Some(ReviewFailure::CouldNotRun),
+    "another model's later estimate does not count"
+  );
+  db.record_estimate_usage(&record(40, &haiku, None)).expect("recorded");
+  assert_eq!(
+    db.last_estimate_failure(reviewer).expect("read"),
+    None,
+    "it gave points since"
+  );
 }
 
 #[test]

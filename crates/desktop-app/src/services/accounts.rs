@@ -1,11 +1,16 @@
 //! The person's agent CLI accounts, for the screens that name a connection's account (Connections, agent profiles,
-//! pipeline steps, a run's summary). Read once when such a screen shows; Settings › Accounts reads its own.
+//! pipeline steps, a run's summary). Read once when such a screen shows; Settings › Accounts reads its own. What the
+//! window shows all the while (the status bar, the notifications) shares one reading ([`WindowAccounts`]).
 
 use std::sync::Arc;
 
-use lurq::app::{
-  component::DevtoolsInspectable,
-  ctx::{Ctx, StreamEmitter},
+use lurq::{
+  app::{
+    component::{Component, DevtoolsInspectable},
+    ctx::{Ctx, StreamEmitter},
+  },
+  core::Signal,
+  node::Element,
 };
 use orchester_core::{
   account::{AccountState, AgentAccount, same_sign_in},
@@ -95,6 +100,55 @@ pub fn changes(ctx: &mut Ctx, workspace: &Workspace) -> u64 {
     .get()
     .data
     .unwrap_or_else(|| *workspace.account_changes().borrow())
+}
+
+/// The accounts as the window's reader last read them ([`listed`]), for what the window shows all the while: the
+/// status bar and the notifications. The session's window provides it and mounts its [`AccountsReader`].
+#[derive(Clone)]
+pub struct WindowAccounts(Signal<Accounts>);
+
+impl PartialEq for WindowAccounts {
+  fn eq(&self, other: &Self) -> bool {
+    self.0.id() == other.0.id()
+  }
+}
+
+impl WindowAccounts {
+  pub fn new(accounts: Signal<Accounts>) -> Self {
+    Self(accounts)
+  }
+
+  /// The accounts the session's window provides.
+  pub fn of(ctx: &mut Ctx) -> Self {
+    ctx
+      .use_context::<Self>()
+      .expect("the session's window provides the accounts it reads")
+  }
+
+  /// The accounts; reading them in a render renders again when they change.
+  pub fn get(&self) -> Accounts {
+    self.0.get()
+  }
+}
+
+/// Reads the accounts into [`WindowAccounts`] when the window opens and again whenever one changed. It draws nothing.
+pub struct AccountsReader;
+
+impl Component for AccountsReader {
+  type Props = ();
+
+  fn create(_ctx: &mut Ctx) -> Self {
+    Self
+  }
+
+  fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
+    let read = listed(ctx);
+    let shared = WindowAccounts::of(ctx);
+    if shared.0.get_untracked() != read {
+      shared.0.set(read);
+    }
+    Element::new()
+  }
 }
 
 /// A week, in minutes: the window an account's use is read from.

@@ -10,6 +10,11 @@
 //! fill without a stroke, radius 6, 10 over and under and 12 at its sides, a 14 icon in its tone's color 10 from
 //! the text, the title, its explanation and its actions 6 apart.
 //!
+//! A raised notice ([`Notice::raised`], `Notice · danger` `b3htnP` in `Tasks cannot be read` `DNeq9`):
+//! `surface_raised` in its tone's stroke, radius 6, 12 over and under and 14 at its sides; a 15 icon in its
+//! tone's color 10 from the title, the explanation 4 under the title, and its actions 10 under the words at
+//! the notice's end.
+//!
 //! Handling notice (`Handling notice` `mERxM`): how something is handled, in one paragraph: a 15
 //! `text_secondary` icon and the words in 12/1.45 `text_secondary`, 10 apart; radius 8, 10 over and under and
 //! 12 at its sides, `surface_raised` in a `border` stroke.
@@ -19,7 +24,7 @@ use std::sync::Arc;
 use lurq::{
   app::theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   components::{Column, Row, Text},
-  layout::Alignment,
+  layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 
@@ -71,6 +76,7 @@ enum NoticeLayout {
   Inline,
   Inspector,
   Stacked,
+  Raised,
 }
 
 pub struct Notice {
@@ -143,6 +149,13 @@ impl Notice {
     self
   }
 
+  /// Drawn on `surface_raised` with its actions under its words at its end, as a failure to read is
+  /// (`Notice · danger` `b3htnP` in `DNeq9`).
+  pub fn raised(mut self) -> Self {
+    self.layout = NoticeLayout::Raised;
+    self
+  }
+
   /// `part` under the explanation, after the ones added before it: a command to run in a terminal
   /// (`Command` in `Account notice` `CWJuh`). Stacked actions follow the parts.
   pub fn part(mut self, part: impl Into<Element>) -> Self {
@@ -159,8 +172,10 @@ impl Notice {
 
 impl From<Notice> for Element {
   fn from(notice: Notice) -> Self {
-    if notice.layout == NoticeLayout::Inspector {
-      return inspector_notice(notice);
+    match notice.layout {
+      NoticeLayout::Inspector => return inspector_notice(notice),
+      NoticeLayout::Raised => return raised_notice(notice),
+      NoticeLayout::Inline | NoticeLayout::Stacked => {}
     }
     let (fill, stroke, mark) = notice.tone.colors();
     let flat = notice.flat;
@@ -273,6 +288,55 @@ fn inspector_notice(notice: Notice) -> Element {
     .with_children(
       (!notice.actions.is_empty()).then(|| Row::new().wrap().spacing(SpacingSize::Sm).with_children(notice.actions)),
     )
+    .into()
+}
+
+fn raised_notice(notice: Notice) -> Element {
+  let (_, stroke, mark) = notice.tone.colors();
+  let mark = notice.mark.unwrap_or(mark);
+  let words = Column::new()
+    .id(format!("{}-text", notice.id))
+    .flex(1.0)
+    .min_width(Dimension::Px(0.0))
+    .spacing(SpacingSize::Xs)
+    .child(
+      Text::new(&notice.title)
+        .id(format!("{}-title", notice.id))
+        .variant(ExtraTypography::Strong.role()),
+    )
+    .with_children(notice.body.as_deref().map(|body| {
+      Text::new(body)
+        .id(format!("{}-body", notice.id))
+        .variant(ExtraTypography::Prose.role())
+    }))
+    .with_children(notice.parts);
+  let actions = (!notice.actions.is_empty()).then(|| {
+    Row::new()
+      .id(format!("{}-actions", notice.id))
+      .width(Dimension::Pct(100.0))
+      .spacing(SpacingSize::Sm)
+      .align_items(Alignment::Center)
+      .justify(Justify::End)
+      .with_children(notice.actions)
+  });
+  Column::new()
+    .id(notice.id.clone())
+    .width(Dimension::Pct(100.0))
+    .padding(Padding::symmetric(ExtraSpacing::Inset.role(), SpacingSize::Md))
+    .spacing(ExtraSpacing::Loose.role())
+    .background(PaletteColor::SurfaceRaised)
+    .border(Border::inside(BorderSize::Sm, stroke))
+    .rounded(RadiusSize::Md)
+    .describe("tone", notice.tone.name())
+    .child(
+      Row::new()
+        .width(Dimension::Pct(100.0))
+        .spacing(ExtraSpacing::Loose.role())
+        .align_items(Alignment::Start)
+        .child(icon(notice.icon, IconSize::Nav, mark).id(format!("{}-icon", notice.id)))
+        .child(words),
+    )
+    .with_children(actions)
     .into()
 }
 

@@ -15,7 +15,7 @@ use orchester_core::{
   resource::{StepKey, VersionNumber},
   run::{
     ActiveClock, ActivityEntry, AttemptStart, Invocation, PauseReason, Plan, Run, RunLimit, RunStatus, RunnerFailure,
-    StepExecutor, StepFailure, StepOutput, StepStatus, TaskPhase, TokenUsage, active_time, execution_tokens,
+    StepFailure, StepOutput, StepStatus, TaskPhase, TokenUsage, active_time, execution_tokens,
     review::{ReviewRecord, reviews_usage},
   },
   store::{ActivityStore, ConversationStore, MergeStore, ResourceStore, RunStore, TaskStore, WorktreeStore},
@@ -30,13 +30,12 @@ use orchester_store::{ProjectDb, StoreError};
 pub use super::permissions::{ChangeState, RunPermissions};
 use super::{
   delivery::{self, Delivery},
-  engines,
   history::{self, RunRecord},
   index_use::IndexUses,
   requirements::LocalRuns,
   run_approvals::RunApprovals,
   run_times::{finished_at, paused_at, starts_of},
-  step_executors::{Reached, executed},
+  step_views::step_views,
   unreadable::Unreadable,
 };
 
@@ -450,15 +449,16 @@ impl TaskDetail {
   }
 }
 
-/// The keys of `task`'s unfinished blocking tasks.
+/// The keys of `task`'s unfinished blocking tasks that are in the project: a shared project's first download brings its
+/// tasks page by page, so a blocker may not have arrived yet. A run stays refused until it finished, arrived or not.
 fn blocking_keys(db: &ProjectDb, task: &Task) -> Result<Vec<String>, StoreError> {
-  db.unfinished_blocking_tasks(task.id())?
-    .into_iter()
-    .map(|id| {
-      let blocker = db.task(id)?.ok_or(StoreError::TaskNotFound(id))?;
-      Ok(blocker.key().to_string())
-    })
-    .collect()
+  let mut keys = Vec::new();
+  for blocker in db.unfinished_blocking_tasks(task.id())? {
+    if let Some(blocker) = db.task(blocker)? {
+      keys.push(blocker.key().to_string());
+    }
+  }
+  Ok(keys)
 }
 
 /// `run` with its steps and invocations, as the task page shows it.
@@ -498,65 +498,6 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
     steps,
     run,
   })
-}
-
-/// The steps of `run`'s pinned pipeline in order, each with its latest execution, executor, engine and context use.
-fn step_views(db: &ProjectDb, run: &Run, invocations: &[Invocation]) -> Result<Vec<StepView>, StoreError> {
-  let contexts = db.invocation_contexts(run.id())?;
-  let mut steps = Vec::new();
-  let stages = run.snapshot().body().stages();
-  let stage_of = |key: &StepKey| {
-    stages
-      .iter()
-      .position(|stage| stage.iter().any(|step| step.key == *key))
-      .unwrap_or_default()
-  };
-  for (index, step) in run.snapshot().body().steps().iter().enumerate() {
-    let executor = run.snapshot().step(&step.key).map(|pinned| pinned.executor());
-    let (agent, reached, model, permissions) = executed(db, (run, invocations), &step.key, executor)?;
-    let Reached {
-      provider,
-      endpoint,
-      vendor,
-    } = reached;
-    let latest = run.latest_execution(&step.key);
-    let attempt = latest.and_then(|execution| attempt_of(run, execution.id()));
-    steps.push(StepView {
-      number: index + 1,
-      key: step.key.clone(),
-      name: step.name.as_str().into(),
-      agent,
-      tool_step: matches!(executor, Some(StepExecutor::Tool { .. })),
-      provider,
-      endpoint,
-      vendor,
-      engine_recorded: false,
-      effort: None,
-      model,
-      permissions,
-      execution: latest.map(|execution| execution.id()),
-      status: latest.map(|execution| execution.status()),
-      attempt,
-      failure: latest.and_then(|execution| execution.failure()),
-      todo: latest
-        .map(|execution| db.step_todo(run.id(), execution.id()))
-        .transpose()?
-        .flatten(),
-      stage: stage_of(&step.key),
-      context: super::context_uses::of_execution(&contexts, invocations, latest.map(|execution| execution.id())),
-    });
-  }
-  engines::apply_recorded(db, &mut steps, invocations)?;
-  Ok(steps)
-}
-
-/// The number of `run`'s attempt that holds `execution`.
-fn attempt_of(run: &Run, execution: StepExecutionId) -> Option<NonZeroU32> {
-  run
-    .attempts()
-    .iter()
-    .find(|attempt| attempt.execution(execution).is_some())
-    .map(orchester_core::run::Attempt::number)
 }
 
 /// `run`'s agents' questions with suggested answers that wait for the person.

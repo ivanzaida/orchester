@@ -150,8 +150,8 @@ pub fn card(words: &CardWords) -> Element {
 }
 
 /// The panel of a card of facts (`oagTL`): 12 inside a `border_strong` stroke, its lines 8 apart; the state 12/500
-/// after a 6 dot, a label 11 `text_muted` 96 wide and 12 before its value in `text_secondary`; the note under a
-/// `border` line, 8 below it.
+/// after a 6 dot, a label 11 `text_muted` 96 wide and 12 before its value in `text_secondary`, which wraps when it is
+/// too long for its line (no frame draws that); the note under a `border` line, 8 below it.
 pub fn facts_card(ctx: &mut Ctx, card: &FactsCard) -> Element {
   let mut panel = padded_popover_panel(&card.id, FACTS_WIDTH, Padding::all(SpacingSize::Md))
     .spacing(SpacingSize::Sm)
@@ -182,6 +182,7 @@ pub fn facts_card(ctx: &mut Ctx, card: &FactsCard) -> Element {
         .id(format!("{id}-value"))
         .variant(TypographyStyle::Caption)
         .color(PaletteColor::TextSecondary)
+        .width(Dimension::Pct(100.0))
         .into(),
       FactValue::Clock(time) => clock(ctx, &format!("{id}-value"), *time),
     };

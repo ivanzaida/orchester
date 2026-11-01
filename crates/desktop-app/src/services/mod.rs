@@ -24,7 +24,7 @@ use orchester_workspace::{
   runner::Runners,
   secrets::Vault,
   session::AppSession,
-  sharing::{self, Servers, cloud::Cloud},
+  sharing::{self, Servers, cloud::Cloud, project::clone::Clones, team_join::TeamJoin},
   tasks::{integration_jobs::ProjectJobs, outside::OutsideChanges, resolve::Editor},
   workspace::Workspace,
 };
@@ -33,6 +33,7 @@ use tokio::{runtime::Handle, task::JoinHandle};
 pub mod accounts;
 pub mod attachment_picker;
 pub mod browser_lookup;
+pub mod cli_search;
 pub mod links;
 pub mod page_file_picker;
 pub mod path_picker;
@@ -60,6 +61,11 @@ pub struct Services {
   pub servers: Servers,
   /// This computer's Orchester Cloud account and its invites.
   pub cloud: Cloud,
+  /// Joining a team, by the Cloud account or by a server's address and a code, with no project open.
+  pub team_join: TeamJoin,
+  /// The shared projects' clones in a console window, from *Link a folder*; a test or a QA copy provides its own
+  /// in the context.
+  pub clones: Clones,
   /// Where web pages open: the browser, or a record in a test or a QA copy.
   pub links: Links,
   /// Where the Browser window looks for the browser agents use.
@@ -123,6 +129,7 @@ impl Services {
       &runtime,
     );
     let servers = Servers::new(workspace.clone(), vault.clone());
+    let cloud = Cloud::new(workspace.clone(), vault.clone(), servers.clone());
     let database = workspace
       .database_path()
       .expect("a session opens its database from a file in its data folder");
@@ -133,7 +140,9 @@ impl Services {
       recovery,
       plan_reads: PlanReads::new(workspace.clone(), runners.clone()),
       runners,
-      cloud: Cloud::new(workspace.clone(), vault.clone(), servers.clone()),
+      team_join: TeamJoin::new(servers.clone(), cloud.clone()),
+      clones: Clones::system(&workspace, programs.clone()),
+      cloud,
       links: Links::from_env(),
       browser: BrowserLookup::default(),
       page_files: PageFilePicker::default(),

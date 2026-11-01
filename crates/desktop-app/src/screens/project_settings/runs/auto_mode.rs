@@ -24,7 +24,7 @@ use lurq::{
   core::Signal,
   node::Element,
 };
-use orchester_core::run::review::AutoModeSettings;
+use orchester_core::{run::review::AutoModeSettings, time::Timestamp};
 use orchester_workspace::project_settings::{self, Settings};
 
 use super::super::{
@@ -33,6 +33,7 @@ use super::super::{
 };
 use crate::{
   mcp::input_gate::{Guarded, InputGate, input_may_decide},
+  screens::reviewer_trouble,
   ui::unavailable::reason_line,
 };
 
@@ -133,7 +134,8 @@ impl Component for AutoMode {
       self.commit(&props, &save);
     }
     let settings = self.stored.get().0;
-    let mut group = controls::group(ctx, self, &props, &settings, &save);
+    let cannot_run = cannot_run(ctx, &props, &settings);
+    let mut group = controls::group(ctx, (self, &props), (&settings, cannot_run), &save);
     if self.refused.get() {
       group = group.after(reason_line(
         "settings-auto-person-only",
@@ -292,6 +294,20 @@ impl AutoMode {
       Change::Auto { base, asked, confirmed },
     ));
   }
+}
+/// Why the stored reviewer cannot run, said in its row's hint's place (ORC-611): its account cannot, or its last
+/// review failed. Read again whenever the reviewer or the project's connections change.
+fn cannot_run(ctx: &mut Ctx, props: &Props, settings: &Settings) -> Option<Arc<str>> {
+  let root = props.tab.project.open.repo_root.clone();
+  let key = format!("{:?}|{:?}", settings.auto_mode, settings.connections);
+  let health = reviewer_trouble::health(ctx, root, key)?;
+  let now = Timestamp::now();
+  let (key, trouble) = match health.account.trouble(now) {
+    Some(trouble) => ("project_settings.reviewerCannotRun", trouble),
+    None => ("project_settings.reviewerLastFailed", health.reviews(now)?),
+  };
+  let reason = reviewer_trouble::reason(ctx, trouble, now);
+  Some(ctx.t_args(key, [("reason", &*reason)]))
 }
 fn values(settings: &Settings) -> (String, String, String) {
   match &settings.auto_mode.reviewer {

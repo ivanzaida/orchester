@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use orchester_core::{
   connection::{
-    app_server::Update,
+    app_server::{CodexFailure, Update},
     mcp::McpServerProblem,
     stream::{AgentEvent, InvocationOutcome, OutputStream, RunnerProblem},
   },
@@ -85,6 +85,26 @@ impl Worker {
     }
   }
 
+  pub(super) async fn poll_servers(&mut self, watch: &mut Watch) -> Result<(), StoreError> {
+    if watch.stop.is_some() {
+      return Ok(());
+    }
+    if let Driver::Process {
+      transport: Transport::AppServer(app),
+      process,
+    } = &mut self.driver
+      && let Err(error) = app.poll_servers(process).await
+    {
+      self.observe(
+        watch,
+        AgentEvent::TurnFailed {
+          message: error.to_string(),
+        },
+      )?;
+      self.driver.end();
+    }
+    Ok(())
+  }
   /// Carries out `stop`; when its turn now has [`TURN_GRACE`] to end on its own, `grace` ends it then. Whether it
   /// does.
   async fn stop_with_grace(
@@ -174,6 +194,10 @@ impl Worker {
   }
 
   async fn receive_output(&mut self, watch: &mut Watch, stream: OutputStream, line: &str) -> Result<(), StoreError> {
+    // A queued readiness reply after cancellation must never start a model turn.
+    if watch.stop.is_some() && self.app_server().is_some_and(AppServerSession::awaits_turn) {
+      return Ok(());
+    }
     let received = match &mut self.driver {
       Driver::Process {
         transport: Transport::AppServer(app),
@@ -299,6 +323,12 @@ impl Worker {
         Ok(())
       }
       Update::InputTaken(text) => self.input_taken(watch, &text, None),
+      Update::Failure(failure) => {
+        if watch.codex_failure != Some(CodexFailure::UsageLimit) {
+          watch.codex_failure = Some(failure);
+        }
+        Ok(())
+      }
       Update::TurnEnded { input_kept, completed } => {
         if input_kept {
           self.kept_at_turn_end(watch)?;

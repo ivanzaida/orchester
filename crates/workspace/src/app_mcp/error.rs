@@ -92,6 +92,11 @@ impl ToolError {
     Self::refused("interrupted", vec![messages::interrupted()])
   }
 
+  /// What is named waits for an Orchester Cloud sign-in, which only a person makes, in the window.
+  pub fn sign_in_required() -> Self {
+    Self::refused("sign_in_required", vec![Message::new("appMcp.errors.signInRequired")])
+  }
+
   /// The runner did not do what was asked: the rejection's own name, or why it was not asked.
   pub fn runner(error: &RunRequestError, reasons: Vec<Message>) -> Self {
     let code = match error {

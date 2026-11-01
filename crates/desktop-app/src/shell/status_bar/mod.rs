@@ -9,9 +9,10 @@
 //! tabs (`PwuEd`),
 //! whether agents may control the window and the MCP server unless the installed app's server listens, then the
 //! dot. The project's name, its counts and the waiting requests show elsewhere (the switcher, the health card,
-//! *Needs you* in the title bar), today's tokens on the sidebar's usage card. The sign-in gate has a bar of its own
-//! ([`gate()`]). Every item shows only measured data. A screen outside a project shows the activity and the app's
-//! items only, its events named by their project. A startup screen's bar has the version only.
+//! *Needs you* in the title bar), today's tokens on the sidebar's usage card. Being signed out of Orchester Cloud has
+//! no item: it is a normal state, told where a sign-in is asked. Every item shows only measured data. A screen outside
+//! a project shows the activity and the app's items only, its events named by their project. A startup screen's bar has
+//! the version only.
 //!
 //! [`StatusBar`] gathers what the bar shows from the window ([`BarFacts`]) and does what its items ask
 //! (`act`); [`StatusBarView`] draws it, so a test can hand it any state.
@@ -22,7 +23,6 @@ mod auto_approving;
 mod browser;
 mod cloud;
 mod facts;
-mod gate;
 mod health;
 mod item;
 mod mcp;
@@ -62,7 +62,6 @@ use self::{
 pub use self::{
   cloud::CloudFacts,
   facts::{AccountLimits, BarAction, BarFacts, Dispatch, ProjectFacts, ReadFailure, RunnerFacts, Stopping},
-  gate::gate,
   item::dot,
   mcp::from_scratch,
   server::{ServerFacts, ServerState, server_facts},
@@ -75,7 +74,7 @@ use crate::{
   routes::Route,
   services::{
     Services,
-    accounts::{self, Accounts},
+    accounts::{self, Accounts, WindowAccounts},
     plan_limits as readings,
   },
   ui::icon::Icon,
@@ -126,7 +125,7 @@ impl Component for StatusBar {
       self.stopper.stopping(&stop, &facts.repo_root, &runs)
     });
     let readings = readings::readings(ctx);
-    let listed = accounts::listed(ctx);
+    let listed = WindowAccounts::of(ctx).get();
     // Read again when the project's connections changed, or an account moved them (its removal, a new folder).
     let changed = (
       shown
@@ -371,9 +370,16 @@ impl Component for StatusBarView {
   }
 }
 
+/// *v0.3.0*: the app's version.
+fn version(ctx: &Ctx) -> String {
+  ctx
+    .t_args("shell.status.version", [("version", env!("CARGO_PKG_VERSION"))])
+    .to_string()
+}
+
 /// The status bar of a startup screen (`Status bar` `xmswq` of `N0Lpc`): the version only.
 pub fn version_only(ctx: &mut Ctx) -> Element {
-  let version = gate::version(ctx);
+  let version = version(ctx);
   Row::new()
     .id("status-bar")
     .width(Dimension::Pct(100.0))

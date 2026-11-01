@@ -1,5 +1,6 @@
 //! [`NotificationsHost`]: mounted once by the session's window. It reads every open project through a
-//! [`ProjectNotices`] each, and the accounts' plan limits itself; asks the notifier what is due whenever a reading,
+//! [`ProjectNotices`] each, and the accounts' plan limits itself, naming the accounts as the window read them
+//! (`WindowAccounts`); asks the notifier what is due whenever a reading,
 //! the window's focus, the active tab or the settings change, or the notifier's next moment comes; shows that
 //! through the system; opens the place of a clicked notification, in the tab that shows it or a new one, and brings
 //! the window to the front; and keeps the *Needs you* count on the app's icon.
@@ -37,7 +38,7 @@ use crate::{
   routes::Route,
   services::{
     Services,
-    accounts::{self, account_name},
+    accounts::{WindowAccounts, account_name},
     plan_limits,
   },
   ui::message::message_text,
@@ -180,10 +181,10 @@ impl NotificationsHost {
       .collect()
   }
 
-  /// The accounts' plan windows at 90 % or reset, by the accounts' names.
+  /// The accounts' plan windows at 90 % or reset, by the accounts' names as the window read them.
   fn read_accounts(&self, ctx: &mut Ctx) {
     let readings = plan_limits::readings(ctx);
-    let listed = accounts::listed(ctx);
+    let listed = WindowAccounts::of(ctx).get();
     let name = |reading: &LimitReading| -> Arc<str> {
       let account = reading.account_id().and_then(|id| listed.of(id));
       match account {

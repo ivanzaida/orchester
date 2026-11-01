@@ -172,8 +172,7 @@
     },
     "start": {
       "connect": {
-        "title": "Connect an agent CLI",
-        "none": "No agent connection signed in yet"
+        "title": "Connect an agent CLI"
       },
       "profile": {
         "title": "Publish an agent profile",
@@ -609,7 +608,11 @@
       "storageFailureAt": "Interrupted at {{step}} · database unavailable",
       "storageFailure": "Interrupted · database unavailable",
       "runnerErrorAt": "Interrupted at {{step}} · runner error",
-      "runnerError": "Interrupted · runner error"
+      "runnerError": "Interrupted · runner error",
+      "slotWait": {
+        "one": "{{detail}} · {{steps}} waits for an agent slot",
+        "other": "{{detail}} · {{steps}} wait for an agent slot"
+      }
     },
     "permissions": {
       "errors": {
@@ -1025,6 +1028,11 @@
     }
   },
   "connections": {
+    "errors": {
+      "notTheCli": "{{file}} did not answer as {{program}}. Choose the {{program}} program file.",
+      "notRepointed": "{{project}}'s connection could not be changed. The log has the details.",
+      "programNotStorable": "{{file}} has characters Orchester can't store. Move it or choose a link with a plain name."
+    },
     "native": {
       "preset": {
         "notOffered": "This preset is not offered on this provider."
@@ -1191,6 +1199,9 @@
     "alreadyInitialized": "This repository already contains an Orchester project.",
     "projectMissing": "The repository no longer contains its Orchester project. It may have been moved or deleted.",
     "anotherAccountsProject": "This folder's project belongs to another Orchester account on this computer. Sign in with that account to open it.",
+    "accountsProjectSignedOut": "This project belongs to an Orchester Cloud account. Sign in to open it.",
+    "moveSignedOut": "Nobody is signed in on this computer, so the project stays where it is.",
+    "moveShared": "A shared project stays where it is. Make it local first.",
     "newerSchema": "The data was written by a newer version of Orchester.",
     "unsupportedPath": "This folder path cannot be stored. Choose a folder whose path uses standard characters.",
     "unstorableValue": "A value is too large to be stored. The log has the details.",
@@ -1543,6 +1554,7 @@
       "noPlanWaiting": "No plan waits for a decision in run #{{run}}.",
       "noPlan": "Run #{{run}} has no plan: none of its steps proposed one.",
       "projectNotOpenedYet": "This version of Orchester has not opened {{project}} yet, so its data waits for an update. Open the project once in the app, then read it again.",
+      "signInRequired": "This project belongs to an Orchester Cloud account, and nobody is signed in on this computer. A person signs in from Settings › Orchester Cloud; until then it can't be reached.",
       "planApproved": "Plan v{{version}} of {{step}} was approved already; no plan waits for a decision.",
       "planChangesRequested": "Changes to plan v{{version}} of {{step}} were requested already; its agent revises it, and the revised plan waits for a decision of its own.",
       "planRunPaused": "Run #{{run}} is paused; plan v{{version}} of {{step}} takes a decision once the run is resumed (resume_run).",
@@ -1555,6 +1567,11 @@
       "folderNotAbsolute": "Name the project’s folder by its absolute path.",
       "invalidKeepFree": "Keep free is whole GB from {{min}} to {{max}}.",
       "cliNotFound": "No {{program}} was found on the search path. Give the CLI’s absolute path as the program.",
+      "cliNotFoundIn": "No {{program}} was found in the folders searched: {{folders}}. Give the CLI’s absolute path as the program.",
+      "programMissing": "There is no file at {{program}}.",
+      "programNotAFile": "{{program}} is not a file: give the program file itself, not a folder.",
+      "programNotExecutable": "{{program}} is not marked as a program that can run (chmod +x).",
+      "programUnreadable": "{{program}} cannot be read: {{reason}}",
       "notAnAgentConnection": "{{connection}} is not an agent connection; profiles run on agent connections only.",
       "checkFound": "The check found: {{status}}.",
       "connectionRunsNoAgents": "This profile’s connection does not run agents in this version, so it cannot be published. Choose another connection.",
@@ -1972,6 +1989,7 @@
       "offline": "{{server}} can't be reached, so nothing was sent. The list is read-only until it answers.",
       "notMember": "You are no longer a member of this project on the server, so nothing was sent.",
       "serverMissing": "The server this project is shared on is no longer in Settings › Orchester.",
+      "accountProject": "This project is in your account, and {{server}} was joined with a code. Move the project to this computer on All projects first.",
       "invalidAnswer": "The server answered with something Orchester can't use; nothing was changed here.",
       "keptChanging": "The task kept changing on the server while Orchester merged your change. Open it again and save once more.",
       "unavailable": "The server of this shared project can't be asked now.",
@@ -1989,6 +2007,18 @@
       "versionConflict": "Someone published v{{version}} from the same version meanwhile. Open your draft on v{{version}}, or publish yours as the next version.",
       "personOnly": "Only a person can do this in the window: it changes what agents may do on this computer. Nothing was changed."
     },
+    "folder": {
+      "matches": "Its origin is {{hint}}, the repository this project names.",
+      "noHint": "{{project}} names no repository, so this folder's origin isn't compared.",
+      "differs": "Its origin is {{origin}}, but {{project}} names {{hint}}. Link it anyway only if this folder holds that project's code.",
+      "noOrigin": "This repository has no origin on a server, so it can't be compared with {{hint}}. It can still be linked.",
+      "notAbsolute": "Give the folder's full path, from its drive or from /, or choose the folder.",
+      "notLocal": "This folder is on another computer or a network drive. Link a checkout on this computer.",
+      "notRepository": "This folder isn't the top of a git repository: it has no .git. Choose the folder of your checkout.",
+      "unreadable": "Orchester couldn't read this folder or its git remotes. Check that it exists and that you can open it.",
+      "linkedHere": "This folder is linked to {{project}} already, so it opens as it is.",
+      "linkedElsewhere": "This folder is linked to {{name}} already. A checkout links to one project, so choose another folder."
+    },
     "members": {
       "noSuchUser": "The server has no user with this username. Usernames are exact; an admin of the server creates accounts.",
       "alreadyMember": "This person is already a member. Change their role in their row.",
@@ -1996,6 +2026,14 @@
     },
     "notShared": {
       "readOnly": "This task is Not shared, so it is read-only. Share task on its page uploads it first."
+    }
+  },
+  "teamJoin": {
+    "refused": {
+      "wrongCode": "That code isn't right, or it was used or has expired: codes work once, for a limited time. Check it with whoever made it.",
+      "inviteEnded": "This invite has ended: it expired or was revoked. Ask for a new one; nothing was connected.",
+      "unreachable": "Nothing answered at {{address}}. Check the address, and that this computer is on your team's network.",
+      "noProjects": "{{server}} has no shared project you're invited to yet. Ask someone there to invite you to their project."
     }
   },
   "claims": {
@@ -2219,6 +2257,10 @@
       "recordsInvalid": "Enter a whole number of records from {{min}} to {{max}}.",
       "tokensInvalid": "Enter a whole number of tokens from {{min}} to {{max}}."
     }
+  },
+  "warmWorkspaces": {
+    "notRemoved": "The old worktree wasn't removed: its run is working, it has uncommitted changes, or Git refused.",
+    "notChanged": "The workspace wasn't changed. It may be in use, or the log has the details."
   },
   "mergeQueue": {
     "refused": {

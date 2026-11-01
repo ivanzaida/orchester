@@ -3,13 +3,14 @@ use orchester_store::CloudSignInEnd;
 use orchester_workspace::sharing::cloud::{Cloud, SignIn};
 use serde_json::{Value, json};
 
-/// The one tool that answers while this computer is signed out of Orchester Cloud.
+/// Whether this computer is signed in to Orchester Cloud, as a client asks it.
 pub const SIGN_IN_STATE: &str = "sign_in_state";
 
-const DESCRIPTION: &str = "Whether Orchester is signed in to Orchester Cloud on this computer. While it is not, the \
-  window shows only the sign-in and every other tool answers sign_in_required; only a person signs in, in the window, \
-  never over MCP. Answers `signed_in`, and while signed out `reason`: why the last sign-in here ended (revoked, \
-  password_reset, account_deleted, signed_out, two_factor to sign in again with a code, other), or null on a computer never signed in. No email, no token.";
+const DESCRIPTION: &str = "Whether Orchester is signed in to Orchester Cloud on this computer. The tools work without \
+  a sign-in, with this computer's projects; a project that belongs to an account answers sign_in_required while \
+  nobody is signed in. Only a person signs in, in the window, never over MCP. Answers `signed_in`, and while signed \
+  out `reason`: why the last sign-in here ended (revoked, password_reset, account_deleted, signed_out, two_factor to \
+  sign in again with a code, other), or null on a computer never signed in. No email, no token.";
 
 pub fn tool(cloud: Cloud) -> McpTool {
   McpTool::new(SIGN_IN_STATE)

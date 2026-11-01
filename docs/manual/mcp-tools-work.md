@@ -277,7 +277,8 @@ Parameters: `project`, `key` (both req.).
 Runs, newest first, as each task's Summary lists them: id, number, task (key, title), phase (`merged` also when git
 proves its work merged outside Orchester), state and why (with `runner_failure` as in `get_run`), `delivery` (merge
 queue state, `null` if it never joined), what happened, tokens used and budget, start and last change, link. A run
-that cannot be read has no phase/state/tokens; its detail says why.
+that cannot be read has no phase/state/tokens; its detail says why. While steps of a run wait for an agent slot, its
+detail ends by naming them (`… · Review waits for an agent slot`).
 
 | Parameter | Type            | Req. | Description                                   |
 |-----------|-----------------|------|-----------------------------------------------|
@@ -289,7 +290,10 @@ that cannot be read has no phase/state/tokens; its detail says why.
 
 The complete state of a run:
 
-- **Steps**, **state** and **tokens** (the reviewer's included and shown apart), **active time**.
+- **Steps**, **state** and **tokens** (the reviewer's included and shown apart), **active time**. A step's
+  `status` is its `state` and `waits_for`: while it is `waiting`, what for; `agent_slot` on a `pending` step that is
+  ready and held back only because every agent slot is in use (raising *Agents at once* starts it), which the online
+  runner reports and nothing stores; `null` on a step whose dependencies have not passed.
 - For a run the runner interrupted after its own failure: reason `runner_failed` with `runner_failure`
   (`storage_contention` — project database stayed busy; `storage_failure` — database unavailable; `other`; `null`).
 - **What it waits for** (`awaiting`): agents' waiting questions with their options; steps waiting for a message with
@@ -396,10 +400,12 @@ and the plans runs wait on (version, step, excerpt) with decisions on their earl
 links to its card on the task's Conversation. A request the reviewer still judges has `reviewing: true`: it
 waits for the reviewer, not for a person, until the review ends (`get_run`'s `awaiting.approvals` mark it the same).
 A request the run's approval mode brought to the person says why in `came_to_you`: `reason` is the card's code
-(`outside`, `notAllowed`, `reviewerUnsure`, `reviewerDenied`, `push`, `refs`) and `detail` what the card names with
-it (the path, the ref, or the reviewer's reason). `get_run`'s `requests` lists every request of the run, oldest first,
-with `answered` (`kind`: `autopilot`, `profile`, `reviewer` with its `reason`, `person`; absent while it waits) and
-`came_to_you`.
+(`outside`, `notAllowed`, `reviewerUnsure`, `reviewerCouldNotRun`, `reviewerDenied`, `push`, `refs`) and `detail` what
+the card names with it (the path, the ref, or the reviewer's reason); for `reviewerCouldNotRun`, `failure` says how the
+review failed (`could_not_run`, `timed_out`, `unreadable`; absent for a request recorded before it was kept, whose
+`auto_mode` still says it), and `autopilot: true` marks one that came by Autopilot's rules. `get_run`'s `requests`
+lists every request of the run, oldest first, with `answered` (`kind`: `autopilot`, `profile`, `reviewer` with its
+`reason`, `person`; absent while it waits) and `came_to_you`.
 
 Parameters: `project` (string | null), `run` (string | null — needs `project`).
 

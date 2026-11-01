@@ -27,18 +27,20 @@ pub enum Listing {
 }
 
 impl Workspace {
-  /// The projects All projects lists, or that it welcomes the person. Blocks on SQLite and the file
-  /// system.
+  /// The projects All projects lists, or that it welcomes the person: not while an account's projects wait for its
+  /// sign-in, which the list says. Blocks on SQLite and the file system.
   pub fn listing(&self) -> Result<Listing, StoreError> {
     let entries = self.entries()?;
     if !entries.is_empty() {
       self.listed.store(true, Ordering::Relaxed);
     }
-    Ok(if entries.is_empty() && !self.listed.load(Ordering::Relaxed) {
-      Listing::Welcome
-    } else {
-      Listing::Projects(entries)
-    })
+    Ok(
+      if entries.is_empty() && !self.listed.load(Ordering::Relaxed) && self.waiting_projects()?.is_empty() {
+        Listing::Welcome
+      } else {
+        Listing::Projects(entries)
+      },
+    )
   }
 }
 

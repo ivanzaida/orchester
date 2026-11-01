@@ -118,8 +118,7 @@ pub(super) fn first_match(landing: &Landing) -> Option<orchester_core::id::Proje
     .map(|checkout| checkout.id)
 }
 
-/// Project (by its name, `w2O9xk` in `q7dWu`), Server, Repository hint and Your role: setting rows in one box, each
-/// label at its start and its value in 12 `text_secondary` at its end (`Rows` `L10Nc4`).
+/// The facts of `landing`'s project: its name, its server, its repository hint and the person's role.
 fn facts(ctx: &mut Ctx, landing: &Landing) -> Element {
   let project = &landing.project;
   let server = ctx.t_args(
@@ -134,15 +133,28 @@ fn facts(ctx: &mut Ctx, landing: &Landing) -> Element {
     Some(MemberRole::Owner) => ctx.t("sharing.landing.owner"),
     Some(MemberRole::Member) | None => ctx.t("sharing.landing.member"),
   };
+  fact_rows(ctx, [project.name.as_str(), &*server, &*hint, &*role])
+}
+
+/// What this computer knows of the project while nobody is signed in (`zoihT`): `project` as the address names it, and
+/// `server` when it is in the list, not connected. Only the cloud or the server knows the rest, so it shows a dash.
+pub(super) fn known_facts(ctx: &mut Ctx, project: &str, server: Option<&str>) -> Element {
+  let unknown = ctx.t("sharing.landing.unknownFact");
+  let server = server.map_or_else(
+    || unknown.clone(),
+    |server| ctx.t_args("sharing.landing.notConnected", [("server", server)]),
+  );
+  fact_rows(ctx, [project, &*server, &*unknown, &*unknown])
+}
+
+/// Project (by its name, `w2O9xk` in `q7dWu`), Server, Repository hint and Your role: setting rows in one box, each
+/// label at its start and its value in 12 `text_secondary` at its end (`Rows` `L10Nc4`).
+fn fact_rows(ctx: &mut Ctx, [project, server, hint, role]: [&str; 4]) -> Element {
   let facts = [
-    (
-      "orchester-landing-project",
-      "sharing.landing.project",
-      project.name.as_str(),
-    ),
-    ("orchester-landing-server", "sharing.landing.server", &*server),
-    ("orchester-landing-hint", "sharing.landing.hint", &*hint),
-    ("orchester-landing-role", "sharing.landing.role", &*role),
+    ("orchester-landing-project", "sharing.landing.project", project),
+    ("orchester-landing-server", "sharing.landing.server", server),
+    ("orchester-landing-hint", "sharing.landing.hint", hint),
+    ("orchester-landing-role", "sharing.landing.role", role),
   ];
   let mut rows = Column::new()
     .id("orchester-landing-facts")

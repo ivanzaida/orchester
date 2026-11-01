@@ -7,7 +7,8 @@
 //! server stopped accepting the token (signed out). Every request reports how the server answered, so
 //! a refused token shows as signed out at once and a server that stopped answering is retried with
 //! the backoff. Shared projects (S2b) are in [`project`]. Each server is the Orchester Cloud account's that joined it
-//! ([`owners`]).
+//! ([`owners`]). All projects says where each project is ([`place`]) and offers a team's project not on this computer
+//! yet ([`offer`]).
 
 mod account;
 pub mod address;
@@ -20,12 +21,15 @@ mod error;
 mod joining;
 mod linked;
 mod monitor;
+mod offer;
 mod owners;
 mod password;
+mod place;
 pub mod project;
 mod server_key;
 pub mod sync;
 pub mod team;
+pub mod team_join;
 pub mod trust;
 
 use std::{
@@ -55,7 +59,9 @@ pub use self::{
   joining::{CloudIdentity, CloudJoined, CodeProof, CodeRequest},
   linked::{LinkedProject, ServerProject},
   monitor::run as monitor,
+  offer::OfferedProject,
   password::{PASSWORD_CHARS, PasswordProblem, password_problem},
+  place::{Place, Places},
   trust::{ConfirmedPin, PresentedCertificate, Trust},
 };
 use crate::{background, secrets::Vault, workspace::Workspace};
@@ -107,6 +113,8 @@ struct Inner {
   /// When work on each shared task last asked for its run claim this session, by this computer's clock: a claim
   /// asked for after its task's latest run ended is not that run's to end (`project::claim_ends`).
   work_asked: Mutex<HashMap<orchester_core::id::TaskId, Timestamp>>,
+  /// The checkouts whose first download after a join or a link is under way, failed or ended (`project::download`).
+  downloads: Mutex<HashMap<PathBuf, project::download::Mark>>,
 }
 
 /// One signed-in server's connection and when to ask it again.
@@ -146,6 +154,7 @@ impl Servers {
         sync_states: Mutex::new(HashMap::new()),
         sharing_now: Mutex::new(HashSet::new()),
         work_asked: Mutex::new(HashMap::new()),
+        downloads: Mutex::new(HashMap::new()),
       }),
     }
   }

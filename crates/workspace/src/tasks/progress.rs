@@ -5,6 +5,7 @@
 use std::{num::NonZeroU32, sync::Arc};
 
 use orchester_core::{
+  id::StepExecutionId,
   run::{ActiveClock, PauseReason, RunStatus, StepFailure, StepStatus},
   time::Timestamp,
 };
@@ -15,6 +16,8 @@ use super::detail::{RunView, StepView};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ProgressState {
   Waiting,
+  /// Ready, and held back only because every agent slot is in use.
+  WaitsForSlot,
   Working,
   /// Waiting for a person: an approval, a plan decision or a message.
   NeedsYou,
@@ -56,6 +59,11 @@ pub struct ProgressRow {
 
 /// The progress rows of `run` at `now`. `lost`: the run is recorded as running but has no runner.
 pub fn progress(run: &RunView, lost: bool, now: Timestamp) -> Vec<ProgressRow> {
+  progress_with_waits(run, lost, &[], now)
+}
+
+/// [`progress`], with the executions the runner says wait for an agent slot ([`super::slot_wait::slot_waits`]).
+pub fn progress_with_waits(run: &RunView, lost: bool, waits: &[StepExecutionId], now: Timestamp) -> Vec<ProgressRow> {
   let mut ordered: Vec<&StepView> = run.steps.iter().collect();
   ordered.sort_by_key(|step| (step.stage, step.number));
   ordered
@@ -64,16 +72,21 @@ pub fn progress(run: &RunView, lost: bool, now: Timestamp) -> Vec<ProgressRow> {
       id: step.key.as_str().into(),
       step: step.name.clone(),
       agent: step.agent.clone(),
-      state: state(run, step, lost),
+      state: state(run, step, lost, waits),
       usage: usage(run, step, now, lost),
     })
     .collect()
 }
 
-fn state(run: &RunView, step: &StepView, lost: bool) -> ProgressState {
+fn state(run: &RunView, step: &StepView, lost: bool, waits: &[StepExecutionId]) -> ProgressState {
   match (run.run.status(), step.status) {
     // Cancelled before its first attempt: no step will run, as if its executions were skipped.
     (RunStatus::Cancelled, None) => ProgressState::Cancelled,
+    (RunStatus::Running, Some(StepStatus::Pending))
+      if step.execution.is_some_and(|execution| waits.contains(&execution)) =>
+    {
+      ProgressState::WaitsForSlot
+    }
     (_, None | Some(StepStatus::Pending)) => ProgressState::Waiting,
     (RunStatus::Paused(PauseReason::Requested), Some(StepStatus::Running)) => ProgressState::Paused,
     (RunStatus::Paused(PauseReason::LimitReached(_)), Some(StepStatus::Running)) => ProgressState::StoppedAtLimit,

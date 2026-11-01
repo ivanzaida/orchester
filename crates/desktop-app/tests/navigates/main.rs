@@ -102,8 +102,13 @@ fn a_project_row_of_all_projects_opens_its_overview_by_browser_rules() {
 fn a_middle_click_on_an_action_inside_a_row_that_opens_opens_nothing() {
   let mut seeded = Seeded::overview("tasks", OverviewTab::Running);
   seeded.window.navigation().go(Route::AllProjects);
-  let remove = format!("project-remove-{}", seeded.project);
-  seeded.until("the project's row", |seeded| seeded.shows(&remove));
+  let (row, remove) = (
+    format!("project-row-{}", seeded.project),
+    format!("project-remove-{}", seeded.project),
+  );
+  seeded.until("the project's row", |seeded| seeded.shows(&row));
+  seeded.window.hover(&row);
+  seeded.until("its ×", |seeded| seeded.shows(&remove));
   let navigation = seeded.window.navigation();
   let before = navigation.tabs_now();
   for presser in [Presser::Person, Presser::Synthetic] {

@@ -206,6 +206,7 @@ impl Servers {
   ) -> Result<Shared, ShareError> {
     // Every first link goes through here: a checkout linked already uploads nothing into another project.
     super::join::still_local(repo_root).await?;
+    self.check_link_owner(entry, repo_root).await?;
     let address = ProjectAddress::reported(&project.address, &entry.address)?.to_text();
     let id = project.id;
     let on_server = self
@@ -254,7 +255,10 @@ impl Servers {
         .collect::<Result<Vec<_>, _>>()?;
       let mut db = ProjectDb::open(&root)?;
       db.adopt_shared_modules(&modules)?;
-      let changed = db.start_sharing(&stored, &tags, (&tasks, &uploaded))?;
+      let local = db.project().id();
+      let changed = servers.inner.workspace.link_with_owner(local, stored.server, || {
+        Ok(db.start_sharing(&stored, &tags, (&tasks, &uploaded))?)
+      })?;
       if let Err(error) = reapply(&servers, &root, changed) {
         tracing::error!(%error, "a run's change made while the project was shared was not sent");
       }

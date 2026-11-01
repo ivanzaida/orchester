@@ -16,7 +16,10 @@
 //! git whose `-C`, `--git-dir`, `--work-tree` or working folder lies outside the worktree and its writable folders
 //! is held as a write outside ([`super::CommandPart::writes_outside`]).
 
-use super::programs::{Judged, Kind, has_option, operands};
+use super::{
+  patterns,
+  programs::{Judged, Kind, has_option, operands},
+};
 use crate::permission::known_safe;
 
 /// Reading subcommands [`known_safe`] does not rule; their options that write a file or start a
@@ -140,6 +143,9 @@ pub(super) fn judge(args: &[String]) -> Judged {
   } else {
     judge_subcommand(sub, &args[at..])
   };
+  for searched in &mut judged.patterns {
+    *searched += at;
+  }
   if let [repository] = folders.as_slice() {
     judged.repository = Some(repository.clone());
   }
@@ -177,7 +183,8 @@ fn pointed_folders(args: &[String]) -> Vec<String> {
 fn judge_subcommand(sub: &str, with_sub: &[String]) -> Judged {
   let rest = &with_sub[1..];
   match sub {
-    "status" | "log" | "show" | "diff" | "rev-parse" | "ls-files" | "blame" | "grep" => known_read(with_sub),
+    "grep" => known_read(with_sub, patterns::git_grep(with_sub)),
+    "status" | "log" | "show" | "diff" | "rev-parse" | "ls-files" | "blame" => known_read(with_sub, Vec::new()),
     // Signing runs gpg or ssh-keygen with the user's key.
     "commit" | "merge" | "revert" | "cherry-pick" | "am" | "rebase" if has_option(rest, &["-S", "--gpg-sign"]) => {
       Judged::unknown()
@@ -226,12 +233,17 @@ fn argv(with_sub: &[String]) -> Vec<String> {
     .collect()
 }
 
-/// A subcommand [`known_safe`] rules: Read-only with the options it lists, else Unknown.
-fn known_read(with_sub: &[String]) -> Judged {
-  match known_safe::readable_arguments(&argv(with_sub)) {
+/// A subcommand [`known_safe`] rules: Read-only with the options it lists, else Unknown. The arguments at
+/// `searched` (among `with_sub`) are `git grep`'s pattern, which is no path ([`patterns`]).
+fn known_read(with_sub: &[String], searched: Vec<usize>) -> Judged {
+  if known_safe::readable_arguments(&argv(with_sub)).is_none() {
+    return Judged::unknown();
+  }
+  match known_safe::readable_arguments(&argv(&patterns::without(with_sub, &searched))) {
     Some(words) => Judged::of(Kind::ReadOnly)
       .known_safe()
-      .reading(words.into_iter().map(str::to_owned).collect()),
+      .reading(words.into_iter().map(str::to_owned).collect())
+      .searching(searched),
     None => Judged::unknown(),
   }
 }

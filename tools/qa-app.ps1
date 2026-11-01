@@ -1,17 +1,17 @@
 # Starts orchester-app on a seeded QA project, isolated from the user's data, for QA and design
 # verification (.claude/skills/design-verification/SKILL.md):
 #
-#   powershell -File tools/qa-app.ps1 -Name <task> -Scenario <scenario> [-FakeAgents] [-NoRunner] [-SignedOut]
+#   powershell -File tools/qa-app.ps1 -Name <task> -Scenario <scenario> [-FakeAgents] [-NoRunner] [-SignedIn]
 #       [-WindowX <x> -WindowY <y>] [-Editor <program>]
 #
 # <scenario> is one of the seed's (`cargo run -p orchester-app --example seed -- --list-scenarios` lists them). A new
 # scenario is added only to the seed's registry (crates/desktop-app/examples/seed/kontur/scenarios/mod.rs), never
 # here: the seed checks the name, and on an unknown one exits non-zero with the known ones before it writes anything.
 #
-# 1. Builds the QA app (examples/qa_app: the app's own window, signed in to a stand-in Orchester Cloud on loopback
-#    with its token in a keychain in memory, past the sign-in gate; -SignedOut stops at the gate, with that stand-in
-#    as the cloud; with lurq's `perf_profile`, for profile sessions), the seed example and orchester-runner
-#    (-FakeAgents: the runner with its `test-agent` binaries, orchester-fake-codex among them; -NoRunner: no runner).
+# 1. Builds the QA app (examples/qa_app: the app's own window, nobody signed in as on a first run, a stand-in Orchester
+#    Cloud on loopback set as the cloud; -SignedIn signs in to it, with its token in a keychain in memory; with lurq's
+#    `perf_profile`, for profile sessions), the seed example and orchester-runner (-FakeAgents: the runner with its
+#    `test-agent` binaries, orchester-fake-codex among them; -NoRunner: no runner).
 # 2. Copies the programs into .tmp/qa/<task>/bin/, which keeps its own orchester.db beside them; the QA app as
 #    orchester-app-qa.
 # 3. Seeds a new repository .tmp/qa/<task>/repo-<scenario> (examples/seed; -FakeAgents points the
@@ -36,7 +36,8 @@
 # Archive's folder missing), quiet hours 22:30-07:00 and the daily report at 18:30, and stand-in claude and codex in
 # bin/settings-qa/ that answer as those accounts stand: the QA app runs with them first on its PATH (folders that
 # hold a real claude or codex are left out) and its home, CLAUDE_CONFIG_DIR, CODEX_HOME and ORCHESTER_ACCOUNTS_DIR
-# there, so no real CLI or sign-in is read. The QA app (--settings) keeps two invites here (one waiting for approval,
+# there, so no real CLI or sign-in is read. The scenario asks for the sign-in itself, with or without -SignedIn, and the
+# QA app (--settings) keeps two invites here (one waiting for approval,
 # one that didn't finish) and shows the installed app's MCP rows: that server listens on a free port with a token in
 # memory, while the window's own server stays the QA copy's for the verifier. Team servers answering on loopback are
 # the private platform repository's (ivanzaida/orchester-platform, crates/e2e, the n1_qa example), where the team
@@ -46,6 +47,10 @@
 # secrets in three environments with uses, the MCP server figma); project-settings-shared is it linked to a team
 # server no one answers for (Sharing · shared).
 #
+# -Scenario join-team is `empty` with a stand-in team server on loopback (orchester-api's test support) that the
+# stand-in cloud names as the account's, with an invite to its project Billing, for Join a team (navigate to
+# join_team). The QA app (--join-team) prints the server's address and its codes to app.log: one joins, any other is
+# wrong; an address where nothing listens (http://127.0.0.1:9) does not answer.
 # -Scenario shared-config-here is Kontur seen by a member, with the team's cached versions and what they name here
 # (Shared configuration · redesign, UC5xk): Sharing › On this computer with every kind of row, the missing bars on Explorer,
 # Report crash and Feature delivery, Reviewer's v5 waiting for Use v5 here, Builder's Runs here use. A click opens the
@@ -54,15 +59,15 @@
 #
 # .tmp/qa/<task>/ is replaced on every start; a QA app still running from it is refused, not stopped,
 # and so is a folder on the way to it that is a junction or a link. Besides .tmp/qa/<task>/ it writes
-# only cargo's target folder: never the user's install (E:\Orchester, formerly E:\projects\orchester), the user's discovery
-# folder nor a real repository. The app's console output goes to .tmp/qa/<task>/app.log and app.err.log.
+# only cargo's target folder: never inside an installed Orchester (a folder with orchester.exe beside orchester.db),
+# the user's discovery folder nor a real repository. The app's console output goes to .tmp/qa/<task>/app.log and app.err.log.
 param(
     [Parameter(Mandatory = $true)][string]$Name,
     # The seed checks it against its registry (see the header); the app starts only when the seed succeeds.
     [Parameter(Mandatory = $true)][string]$Scenario,
     [switch]$FakeAgents,
     [switch]$NoRunner,
-    [switch]$SignedOut,
+    [switch]$SignedIn,
     [int]$WindowX,
     [int]$WindowY,
     [string]$Editor
@@ -96,17 +101,30 @@ $repo = Join-Path $qa "repo-$Scenario"
 # The QA copy's MCP discovery folder (ORCHESTER_APP_MCP_DISCOVERY).
 $mcp = Join-Path $qa "mcp"
 
-# Only .tmp/qa/<task>/ of this checkout, and never inside the user's install.
-$installs = @("E:\Orchester", "E:\projects\orchester") | ForEach-Object { [System.IO.Path]::GetFullPath($_) }
+# The installed Orchester folder that holds `path`, or $null. An install keeps its orchester.db beside its program,
+# wherever the person installed it; a checkout or a QA copy's bin/ (orchester-app-qa) holds no such pair.
+function Find-Install([string]$path) {
+    $folder = [System.IO.DirectoryInfo]::new($path)
+    while ($folder) {
+        $program = Join-Path $folder.FullName "orchester$exe"
+        $database = Join-Path $folder.FullName "orchester.db"
+        if ((Test-Path -LiteralPath $program -PathType Leaf) -and (Test-Path -LiteralPath $database -PathType Leaf)) {
+            return $folder.FullName
+        }
+        $folder = $folder.Parent
+    }
+    return $null
+}
+
+# Only .tmp/qa/<task>/ of this checkout, and never inside an installed Orchester.
 foreach ($path in @($qa, $bin, $repo, $mcp)) {
     $full = [System.IO.Path]::GetFullPath($path)
     if (-not $full.StartsWith($qaRoot + [System.IO.Path]::DirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase)) {
         throw "refusing ${full}: QA data stays under $qaRoot"
     }
-    foreach ($install in $installs) {
-        if ($full.StartsWith($install, [System.StringComparison]::OrdinalIgnoreCase)) {
-            throw "refusing ${full}: it is inside the user's install"
-        }
+    $install = Find-Install $full
+    if ($install) {
+        throw "refusing ${full}: it is inside the Orchester installed in $install"
     }
 }
 
@@ -199,8 +217,9 @@ if ($Scenario -eq "settings") {
 }
 $appProgram = Join-Path $bin "orchester-app-qa$exe"
 # Start-Process takes no empty argument list: an option that is always there leads the QA app's arguments.
-$appArguments = if ($SignedOut) { "--signed-out" } else { "--signed-in" }
+$appArguments = if ($SignedIn) { "--signed-in" } else { "--signed-out" }
 if ($Scenario -eq "settings") { $appArguments += " --settings" }
+if ($Scenario -eq "join-team") { $appArguments += " --join-team" }
 $appLog = Join-Path $qa "app.log"
 $appErrors = Join-Path $qa "app.err.log"
 if ($onWindows) {

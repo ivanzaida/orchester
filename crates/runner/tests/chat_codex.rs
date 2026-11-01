@@ -7,6 +7,8 @@
 //! approved; every skill of the project disabled, and no turn when a skill could be missed.
 //! Run with `cargo test -p orchester-runner --features test-agent --test chat_codex chat_codex`.
 
+#[path = "chat_codex/readiness.rs"]
+mod readiness;
 mod support;
 
 use std::{fs, path::Path, sync::Arc, time::Duration};

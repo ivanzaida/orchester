@@ -1,9 +1,9 @@
 //! Connections with nothing yet (`07` `WYCDL`): *Connect an agent*, then a row per way to connect one — each CLI as
-//! found on this computer's search path, with Add when it is, Check again when it is not (only a copy found there can
-//! be chosen), and a CLI on an API provider; GitHub not linked, unavailable with why; and no MCP server yet with its
-//! Add.
+//! found on this computer's search path or chosen on the start page, saying which, with Add when it is, Check again
+//! when it is not (only a copy found there, or that file, can be chosen), and a CLI on an API provider; GitHub not
+//! linked, unavailable with why; and no MCP server yet with its Add.
 
-use std::{path::PathBuf, sync::Arc};
+use std::sync::Arc;
 
 use lurq::{
   app::{component::DevtoolsInspectable, ctx::Ctx},
@@ -12,7 +12,10 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::connection::AgentProvider;
-use orchester_workspace::{background, connections::probe};
+use orchester_workspace::{
+  background,
+  connections::missing_cli::{KnownCopies, known_copies},
+};
 
 use crate::{
   navigation::{Navigation, link::Open},
@@ -22,6 +25,7 @@ use crate::{
     connections::words::provider_key,
     project_settings::kit::{EmptyRow, Glyph, Group, SettingRow, Tone, page_head, tile},
   },
+  services::Services,
   theme::ExtraSpacing,
   ui::{
     agent_mark::AgentMark,
@@ -31,9 +35,28 @@ use crate::{
   },
 };
 
-/// Which CLIs have a copy on the search path, as the page's future reads them.
+/// Where a CLI has a copy a new connection can run.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CliCopy {
+  OnSearchPath,
+  /// Only the file chosen on the start page, which is on no search path.
+  Chosen,
+  Absent,
+}
+
+impl CliCopy {
+  fn of(known: &KnownCopies) -> Self {
+    match (known.on_search_path, known.copies.len()) {
+      (0, 0) => Self::Absent,
+      (0, _) => Self::Chosen,
+      _ => Self::OnSearchPath,
+    }
+  }
+}
+
+/// Where each CLI has a copy, as the page's future reads them.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-struct Found(Arc<Vec<(AgentProvider, bool)>>);
+struct Found(Arc<Vec<(AgentProvider, CliCopy)>>);
 
 impl DevtoolsInspectable for Found {}
 
@@ -44,31 +67,32 @@ pub(super) fn page(ctx: &mut Ctx, project: &ShownProject, recheck: &Signal<u64>)
   let navigation = Navigation::of(ctx);
   let id = project.open.project.id();
   let add = |kind: NewConnection| navigation.to(Route::Project(id, ProjectPage::NewConnection(kind)));
+  let workspace = Services::of(ctx).workspace;
   let found = ctx
-    .future(recheck.get(), |_| async move {
-      background::run(|| {
-        Found(Arc::new(
-          CLIS
-            .into_iter()
-            .map(|cli| {
-              let copies: Vec<PathBuf> = probe::detect_agent(cli);
-              (cli, !copies.is_empty())
-            })
-            .collect(),
-        ))
-      })
-      .await
+    .future(recheck.get(), move |_| {
+      let workspace = workspace.clone();
+      async move {
+        background::run(move || {
+          Found(Arc::new(
+            CLIS
+              .into_iter()
+              .map(|cli| (cli, CliCopy::of(&known_copies(&workspace, cli))))
+              .collect(),
+          ))
+        })
+        .await
+      }
     })
     .state()
     .get();
   let mut rows: Vec<Element> = CLIS
     .into_iter()
     .map(|cli| {
-      let on_path = found
+      let copy = found
         .data
         .as_ref()
-        .and_then(|found| found.0.iter().find(|(listed, _)| *listed == cli).map(|(_, on)| *on));
-      cli_row(ctx, cli, on_path, (add(NewConnection::AgentProvider), recheck))
+        .and_then(|found| found.0.iter().find(|(listed, _)| *listed == cli).map(|(_, copy)| *copy));
+      cli_row(ctx, cli, copy, (add(NewConnection::AgentProvider), recheck))
     })
     .collect();
   rows.push(api_row(ctx, add(NewConnection::AgentProvider)));
@@ -141,9 +165,9 @@ fn mcp_group(ctx: &Ctx, add: Open) -> Group {
   )
 }
 
-/// A CLI as found, its maker's mark leading: Add when a copy is on the search path, Check again when none is, nothing
-/// while it is looked for.
-fn cli_row(ctx: &mut Ctx, cli: AgentProvider, on_path: Option<bool>, (add, recheck): (Open, &Signal<u64>)) -> Element {
+/// A CLI as found, its maker's mark leading: Add when it has a copy to run, saying where, Check again when it has none,
+/// nothing while it is looked for.
+fn cli_row(ctx: &mut Ctx, cli: AgentProvider, copy: Option<CliCopy>, (add, recheck): (Open, &Signal<u64>)) -> Element {
   let id = match cli {
     AgentProvider::ClaudeCodeCli => "connections-way-claude",
     _ => "connections-way-codex",
@@ -151,18 +175,24 @@ fn cli_row(ctx: &mut Ctx, cli: AgentProvider, on_path: Option<bool>, (add, reche
   let row = SettingRow::new(id, ctx.t(provider_key(cli)))
     .item()
     .lead(tile(ctx, Glyph::Mark(AgentMark::of(cli))));
-  let row = match on_path {
+  let add_button = |ctx: &Ctx| {
+    ActionButton::new(
+      format!("{id}-add"),
+      ButtonKind::Primary,
+      ctx.t("connections.groups.add"),
+    )
+    .icon(Icon::Plus)
+    .opens(add)
+  };
+  let row = match copy {
     None => row.hint(ctx.t("connections.empty.looking")),
-    Some(true) => row.toned(ctx.t("connections.empty.found"), Tone::Success).control(
-      ActionButton::new(
-        format!("{id}-add"),
-        ButtonKind::Primary,
-        ctx.t("connections.groups.add"),
-      )
-      .icon(Icon::Plus)
-      .opens(add),
-    ),
-    Some(false) => {
+    Some(CliCopy::OnSearchPath) => row
+      .toned(ctx.t("connections.empty.found"), Tone::Success)
+      .control(add_button(ctx)),
+    Some(CliCopy::Chosen) => row
+      .toned(ctx.t("connections.empty.foundChosen"), Tone::Success)
+      .control(add_button(ctx)),
+    Some(CliCopy::Absent) => {
       let recheck = recheck.clone();
       row.hint(ctx.t("connections.empty.notFound")).control(
         ActionButton::new(

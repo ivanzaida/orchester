@@ -7,6 +7,7 @@ mod admin;
 mod client;
 mod format;
 mod shapes;
+mod stable;
 mod stand;
 mod versions;
 

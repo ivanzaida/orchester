@@ -8,7 +8,7 @@
 //! what the reviewer denies or is unsure about to the person with the reviewer's reason.
 //!
 //! The reviewer's verdict is approve or ask: an ask on Manual's question reads as a denial, on Autopilot's question
-//! (where it means "yes, or not sure") as doubt, and a review that gave no verdict as doubt too.
+//! (where it means "yes, or not sure") as doubt; a review that gave no verdict says the reviewer could not run.
 
 use serde::{Deserialize, Serialize};
 
@@ -16,7 +16,7 @@ use super::{ApprovalSubject, DecidedBy, ToolReach};
 use crate::{
   orchester_tools::SERVER,
   permission::roots::{RootsCheck, RunRoots, ToolRequest},
-  run::review::{Review, ReviewHold, StepLimit},
+  run::review::{Review, ReviewFailure, ReviewHold, StepLimit},
 };
 
 /// Who answered a request by the run's approval mode, as each request records it.
@@ -83,8 +83,11 @@ pub enum PersonReason {
   Outside,
   /// It is not what the profile's permissions allow, and no reviewer could approve it.
   NotAllowed,
-  /// The reviewer was not sure, or gave no verdict.
+  /// The reviewer was not sure.
   ReviewerUnsure,
+  /// The reviewer could not judge it: its review failed, timed out or gave an answer that could not be read. The
+  /// card says why, from the recorded review and what Orchester knows of the reviewer's account.
+  ReviewerCouldNotRun,
   /// The reviewer denied it.
   ReviewerDenied,
   /// It pushes to a remote.
@@ -99,6 +102,7 @@ impl PersonReason {
       Self::Outside => "outside",
       Self::NotAllowed => "notAllowed",
       Self::ReviewerUnsure => "reviewerUnsure",
+      Self::ReviewerCouldNotRun => "reviewerCouldNotRun",
       Self::ReviewerDenied => "reviewerDenied",
       Self::Push => "push",
       Self::Refs => "refs",
@@ -113,18 +117,48 @@ pub struct CameToPerson {
   pub reason: PersonReason,
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub detail: Option<String>,
+  /// How the review failed, for [`PersonReason::ReviewerCouldNotRun`]; `None` for a record written before the kind
+  /// was kept.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub failure: Option<ReviewFailure>,
+  /// It came by Autopilot's rules, which have no allowed list for MCP tools; `false` by Manual's, and for a record
+  /// written before the mode was kept.
+  #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+  pub autopilot: bool,
 }
 
 impl CameToPerson {
   pub const fn because(reason: PersonReason) -> Self {
-    Self { reason, detail: None }
+    Self {
+      reason,
+      detail: None,
+      failure: None,
+      autopilot: false,
+    }
   }
 
   fn with(reason: PersonReason, detail: &str) -> Self {
     Self {
-      reason,
       detail: Some(detail.to_owned()),
+      ..Self::because(reason)
     }
+  }
+
+  /// Why a request whose review ended with `failure`, no verdict, comes to the person: the reviewer could not judge it.
+  pub const fn reviewer_failed(failure: ReviewFailure) -> Self {
+    Self {
+      reason: PersonReason::ReviewerCouldNotRun,
+      detail: None,
+      failure: Some(failure),
+      autopilot: false,
+    }
+  }
+
+  /// The same, as it came by Autopilot's rules (`autopilot`) or Manual's.
+  #[must_use]
+  pub fn in_mode(mut self, autopilot: bool) -> Self {
+    self.autopilot = autopilot;
+    self
   }
 
   /// Why a request a hard rule kept from the reviewer comes to the person.
@@ -195,7 +229,8 @@ pub fn autopilot_step(check: &RootsCheck, limit: StepLimit) -> ModeStep {
 }
 
 /// What the reviewer's `review` of a request it was asked `question` about brings: its approval, or the person with
-/// why.
+/// why. A review that gave no verdict says the reviewer could not judge it, with how it failed, not that it was
+/// unsure; one that never asked a reviewer, as the project had none, comes as [`without_reviewer`] says.
 pub fn after_review(question: ReviewQuestion, review: &Review) -> Result<RequestAnswer, CameToPerson> {
   match (review, question) {
     (Review::Approved { reason, .. }, _) => Ok(RequestAnswer::reviewer(reason)),
@@ -205,11 +240,14 @@ pub fn after_review(question: ReviewQuestion, review: &Review) -> Result<Request
     (Review::Asked { reason, .. }, ReviewQuestion::Roots) => {
       Err(CameToPerson::with(PersonReason::ReviewerUnsure, reason))
     }
-    (Review::Decided { decision }, _) if decision.approves() => Ok(RequestAnswer::by(AnswerKind::Reviewer)),
-    (Review::Decided { .. }, ReviewQuestion::Request) => Err(CameToPerson::because(PersonReason::ReviewerDenied)),
-    (Review::Decided { .. }, ReviewQuestion::Roots) | (Review::Failed { .. }, _) => {
-      Err(CameToPerson::because(PersonReason::ReviewerUnsure))
-    }
+    (
+      Review::Failed {
+        failure: ReviewFailure::NoReviewer,
+        ..
+      },
+      _,
+    ) => Err(without_reviewer(question)),
+    (Review::Failed { failure, .. }, _) => Err(CameToPerson::reviewer_failed(*failure)),
     (Review::Held { hold }, _) => Err(CameToPerson::held(*hold)),
   }
 }

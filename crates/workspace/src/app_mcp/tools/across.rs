@@ -15,7 +15,7 @@ use super::Translate;
 use crate::{
   app_mcp::{
     error::ToolError,
-    services::{Services, registered, there},
+    services::{Services, there},
   },
   messages::Message,
   workspace::OpenProject,
@@ -51,7 +51,7 @@ pub(super) fn across<T>(
     unreadable: Vec::new(),
   };
   if let Some(named) = named {
-    let found = read_one(registered(&projects, named)?, &mut read)?;
+    let found = read_one(services.shown(&projects, named)?, &mut read)?;
     across.read.push(found);
     return Ok(across);
   }

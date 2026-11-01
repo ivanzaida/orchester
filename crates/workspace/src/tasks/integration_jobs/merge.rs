@@ -170,9 +170,12 @@ fn preflight(policy: &LegacyPolicy) -> Result<(), IntegrationProblem> {
     Ok(Some(_)) => Err(IntegrationProblem::Store(Message::new(
       "localIntegration.externalResult",
     ))),
-    Err(_) => Err(IntegrationProblem::Store(Message::new(
-      "localIntegration.preflightFailed",
-    ))),
+    Err(error) => {
+      tracing::warn!(%error, "the preflight of a legacy merge failed");
+      Err(IntegrationProblem::Store(Message::new(
+        "localIntegration.preflightFailed",
+      )))
+    }
   }
 }
 

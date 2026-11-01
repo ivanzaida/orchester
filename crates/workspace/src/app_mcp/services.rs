@@ -155,13 +155,29 @@ impl Services {
   /// SQLite. It is not recorded as the most recently used project: only a person opening it is.
   pub(super) fn project(&self, named: &str) -> Result<OpenProject, ToolError> {
     let projects = self.workspace.projects()?;
-    let registered = registered(&projects, named)?;
+    let registered = self.shown(&projects, named)?;
     there(registered)?;
     let db = ProjectDb::open(&registered.repo_root)?;
     Ok(OpenProject {
       project: db.project().clone(),
       repo_root: registered.repo_root.clone(),
     })
+  }
+
+  /// [`registered`] among `projects`, the ones shown now. One an account holds while nobody is signed in answers
+  /// `sign_in_required`, not *not found*; signed in, another account's stays not found.
+  pub(super) fn shown<'a>(
+    &self,
+    projects: &'a [RegisteredProject],
+    named: &str,
+  ) -> Result<&'a RegisteredProject, ToolError> {
+    match registered(projects, named) {
+      Err(ToolError::NotFound {
+        missing: Missing::Project,
+        ..
+      }) if self.workspace.held_by_an_account(named)? => Err(ToolError::sign_in_required()),
+      found => found,
+    }
   }
 }
 

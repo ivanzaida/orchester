@@ -80,13 +80,21 @@ use crate::{
 /// still lists every event, each with an empty list, and the user's trust `state`, whether or not the
 /// override is given; without it `features` has no `hooks` key. The runner checks the flag before a thread
 /// starts (`crate::connection::app_server_mcp::refuse_user_hooks`).
-pub const ISOLATION: [&str; 6] = [
+///
+/// `features.computer_use=false` (on by default in 0.161.0) keeps computer use from the agent: it would drive the
+/// person's desktop, which an agent of a run never does. Issue #69: Codex 0.161.0's Windows sandbox helper failed its
+/// setup refresh in "runtime read/execute validation" of the Codex app's computer-use runtime (`cua_node`), whose
+/// `node_repl.exe` another process held open (os error 32), so no command of the step started
+/// (`docs/evidence/orc-588-codex-setup-refresh-2026-11-01.md`). Whether the override keeps that runtime out of the
+/// helper's validation is not yet checked live.
+pub const ISOLATION: [&str; 7] = [
   "notify=[]",
   "features.plugins=false",
   "features.apps=false",
   "features.exec_permission_approvals=false",
   "features.request_permissions_tool=false",
   "features.hooks=false",
+  "features.computer_use=false",
 ];
 
 /// Codex's own sub-agents (`multi_agent`, on by default in 0.159.2, and `multi_agent_v2`), turned off for a step:

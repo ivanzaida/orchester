@@ -77,6 +77,8 @@ struct State {
   checks: usize,
   /// How `GET /me` is answered instead of the account.
   check_answer: Option<CheckAnswer>,
+  /// How many connections arrived, whatever they asked.
+  requests: usize,
 }
 
 pub struct AccountCloud {
@@ -121,6 +123,11 @@ impl AccountCloud {
     format!("http://localhost:{}", self.address.port())
   }
 
+  /// How many connections reached it, answered or not: none for work that needs no cloud.
+  pub fn requests(&self) -> usize {
+    self.state.lock().requests
+  }
+
   /// Names the team server `audience` at `address`, trusting `fingerprint` (hex SHA-256) when it has its own
   /// certificate.
   pub fn name_server(&self, audience: &str, address: &str, fingerprint: Option<&str>) {
@@ -142,6 +149,14 @@ impl AccountCloud {
       "project": project, "role": project.as_ref().map(|_| "member"), "inviter_display_name": "Alice Moreau",
       "expires_at": now + 7 * DAY * 1000,
     }));
+  }
+
+  /// `invite` was accepted in the browser at `at` (milliseconds) and the team server's receipt has not come back: it
+  /// is still listed, with `accepted_at`, and still issues tokens that accept it.
+  pub fn accepted_in_browser(&self, invite: &str, at: i64) {
+    let mut state = self.state.lock();
+    let found = state.invites.iter_mut().find(|listed| listed["id"] == invite);
+    found.expect("the invite is made first")["accepted_at"] = json!(at);
   }
 
   pub fn declined(&self) -> Vec<String> {
@@ -262,6 +277,7 @@ impl AccountCloud {
 }
 
 fn serve(mut stream: TcpStream, state: &Mutex<State>, key_set: &str, signing: &SigningKey) {
+  state.lock().requests += 1;
   if state.lock().down {
     return;
   }

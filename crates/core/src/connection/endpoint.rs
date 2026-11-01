@@ -19,7 +19,7 @@ use super::{
 use crate::id::SecretId;
 
 /// Longest base URL, in characters.
-pub(super) const MAX_URL_CHARS: usize = 2048;
+const MAX_URL_CHARS: usize = 2048;
 /// Hosts a base URL may reach over plain `http://`: this computer only.
 const LOOPBACK_HOSTS: [&str; 3] = ["localhost", "127.0.0.1", "[::1]"];
 
@@ -248,9 +248,8 @@ impl BaseUrl {
 /// The host of `authority`, with its port checked. Stricter than an MCP server's URL
 /// ([`super::mcp::McpUrl`]), which must keep reading the URLs it stored before: native connections
 /// are new, so no stored base URL predates these rules. The host is a bracketed IPv6 address
-/// without a zone id or a name without percent-encodings, and a port, if any, is a number. A decision
-/// model's server URL ([`super::DecisionServerUrl`]) is read by the same rules.
-pub(super) fn host_of(authority: &str) -> Result<&str, EndpointError> {
+/// without a zone id or a name without percent-encodings, and a port, if any, is a number.
+fn host_of(authority: &str) -> Result<&str, EndpointError> {
   let (host, port) = http_url::split_host(authority, ZoneId::Refused).map_err(|error| match error {
     HostError::Missing => EndpointError::NoHost,
     HostError::Invalid => EndpointError::InvalidHost,

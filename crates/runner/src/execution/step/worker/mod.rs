@@ -24,6 +24,7 @@ use orchester_core::{
   code_index::CodeIndexUse,
   command::SecretVariable,
   connection::{
+    app_server::CodexFailure,
     context_use::ContextUse,
     stream::{AgentEvent, ClaudeStream, InvocationOutcome, InvocationTracker},
   },
@@ -277,11 +278,13 @@ pub(super) struct Watch {
   /// Continuations since a decision was settled or a call returned that Codex waited for after its turn
   /// (`process::MAX_IDLE_CONTINUATIONS`).
   pub(super) idle_continuations: u8,
-  /// The agent's account is at its plan limit, as its CLI's last plan reading said: a turn that fails now stops at
-  /// that limit instead of failing the step.
+  /// The agent's CLI would refuse turns, as its last plan reading said (credits that carry work past a full window
+  /// included): a turn that fails now, for no reason the CLI named, stops at that limit instead of failing the step.
   pub(super) plan_reached: bool,
   /// How full the agent's context is, as last stored for the invocation.
   context: Option<ContextUse>,
+  /// Why Codex said a turn of this invocation failed; a usage limit, once named, stays.
+  pub(super) codex_failure: Option<CodexFailure>,
 }
 
 impl Watch {
@@ -315,6 +318,7 @@ impl Watch {
       idle_continuations: 0,
       plan_reached: false,
       context: None,
+      codex_failure: None,
     })
   }
 
@@ -387,6 +391,7 @@ impl Worker {
   /// again should its run have dropped to Manual ([`Worker::recheck_mode`]).
   async fn tick(&mut self, watch: &mut Watch) -> Result<(), StoreError> {
     self.flush(watch)?;
+    self.poll_servers(watch).await?;
     self.recheck_mode(watch).await
   }
 

@@ -12,7 +12,7 @@ that.
   project folder. A connection on an API provider can be chosen; its key is passed only to the CLI process.
 - The app serves the chat's tools on a **loopback MCP server of their own, one per turn**, named `orchester` for the
   agent, with its own token handed only to the runner. It serves no window tool. Signed out of Orchester Cloud,
-  every call is refused.
+  a project an account holds answers `sign_in_required`; this computer's projects answer as usual.
 - The chat agent has **no shell and no edit tool**. Claude Code runs with `--strict-mcp-config`, only the tools
   `Read`, `Glob`, `Grep` and the `orchester` server, reads outside the project folder blocked; Codex runs without
   shell, image viewing, web search or hooks, with a read-only sandbox, the repository's agent files and skills left

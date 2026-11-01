@@ -38,17 +38,19 @@ pub use self::{
   native::{NATIVE_MAX_OUTPUT, NativeSpend, native_request, native_verdict},
 };
 use crate::{
-  command::{Command, CommandError, CommandRunner},
+  command::{Command, CommandError, CommandOutput, CommandRunner},
   connection::{invocation::without_auto_memory, plan_limits::claude_limits, stream::claude_usage},
   resource::ModelId,
   run::review::{
-    REVIEW_SCHEMA, RequestReviewer, ReviewError, ReviewInput, ReviewSpend, ReviewVerdict, Reviewed, parse_verdict,
-    review_prompt,
+    DetailRedaction, REVIEW_SCHEMA, RequestReviewer, ReviewError, ReviewInput, ReviewSpend, ReviewVerdict, Reviewed,
+    parse_verdict, review_prompt,
   },
 };
 
 /// Claude Code's switch for its nonessential traffic (update check, telemetry, error reports).
 pub const QUIET: (&str, &str) = ("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "1");
+/// The most lines of a failing CLI's error output kept as why it failed: its last ones.
+const ERROR_LINES: usize = 5;
 
 /// Where a CLI reviewer runs: an empty folder, and the files it reads beside it.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -115,9 +117,10 @@ impl<R: CommandRunner> RequestReviewer for ClaudeReviewer<R> {
 }
 
 /// `command`'s answer as `read` finds it in its standard output: the verdict once it exited successfully, and
-/// what it spent and the limits it reported also when it failed.
+/// what it spent and the limits it reported also when it failed. Why it gave no verdict holds none of the command's
+/// secrets and nothing of its prompt ([`DetailRedaction::of`]).
 fn run_review(runner: &impl CommandRunner, command: &Command, read: fn(&str) -> Reviewed) -> Reviewed {
-  match run_cli(runner, command) {
+  let mut answer = match run_cli(runner, command) {
     Ok((stdout, exited)) => {
       let mut answer = read(&stdout);
       if let Err(error) = exited {
@@ -126,7 +129,11 @@ fn run_review(runner: &impl CommandRunner, command: &Command, read: fn(&str) -> 
       answer
     }
     Err((error, spend)) => Reviewed::new(Err(error), spend),
-  }
+  };
+  answer.verdict = answer
+    .verdict
+    .map_err(|error| error.redacted(&DetailRedaction::of(command)));
+  answer
 }
 
 /// What a one-request CLI (a reviewer, the story-point estimator) printed, and whether it exited successfully; or
@@ -141,10 +148,7 @@ fn run_cli(runner: &impl CommandRunner, command: &Command) -> CliOutput {
       let exited = if output.success() {
         Ok(())
       } else {
-        Err(ReviewError::CouldNotRun(format!(
-          "the CLI exited with {:?}",
-          output.code
-        )))
+        Err(ReviewError::CouldNotRun(exit_detail(&output)))
       };
       Ok((output.stdout, exited))
     }
@@ -154,6 +158,47 @@ fn run_cli(runner: &impl CommandRunner, command: &Command) -> CliOutput {
     }
     Err(error @ CommandError::Failed(_)) => Err((ReviewError::CouldNotRun(error.to_string()), ReviewSpend::Unknown)),
   }
+}
+
+/// Why a CLI exited with a failure: its exit status, and below it the error it reported in its output
+/// ([`reported_error`]) or else the last lines of its error output.
+fn exit_detail(output: &CommandOutput) -> String {
+  let status = output.code.map_or_else(
+    || "the CLI was ended without an exit code".to_owned(),
+    |code| format!("the CLI exited with code {code}"),
+  );
+  let said = reported_error(&output.stdout).or_else(|| {
+    let lines: Vec<&str> = output
+      .stderr
+      .lines()
+      .map(str::trim)
+      .filter(|line| !line.is_empty())
+      .collect();
+    let last = &lines[lines.len().saturating_sub(ERROR_LINES)..];
+    (!last.is_empty()).then(|| last.join("\n"))
+  });
+  match said {
+    Some(said) => format!("{status}:\n{said}"),
+    None => status,
+  }
+}
+
+/// The last error a CLI reported in its output, in its own words: the text of Claude Code's error `result` (signed
+/// out: `Not logged in · Please run /login`; at its plan limit, the limit and when it resets), the message of Codex's
+/// `turn.failed` or `error` event.
+fn reported_error(stdout: &str) -> Option<String> {
+  let text = |value: Option<&Value>| value.and_then(Value::as_str).map(str::to_owned);
+  events(stdout)
+    .filter_map(|event| match kind(&event) {
+      Some("result") if event.get("is_error").and_then(Value::as_bool) == Some(true) => {
+        text(event.get("result")).or_else(|| text(event.pointer("/errors/0")))
+      }
+      Some("turn.failed") => text(event.pointer("/error/message")),
+      Some("error") => text(event.get("message")),
+      _ => None,
+    })
+    .filter(|said| !said.trim().is_empty())
+    .last()
 }
 
 /// Whether `word` may be passed as an effort: a plain word, nothing a CLI could read as more.
@@ -200,12 +245,15 @@ pub fn parse_review(stdout: &str) -> Result<ReviewVerdict, ReviewError> {
   claude_structured(stdout).and_then(parse_verdict)
 }
 
-/// The structured output of Claude Code's last `result` line, unless it is an error.
+/// The structured output of Claude Code's last `result` line, unless it is an error, which says why in its words.
 fn claude_structured(stdout: &str) -> Result<Value, ReviewError> {
   let unreadable = |detail: &str| ReviewError::Unparseable(detail.to_owned());
   let result = claude_result(stdout).ok_or_else(|| unreadable("no JSON result"))?;
   if result.get("is_error").and_then(Value::as_bool) != Some(false) {
-    return Err(unreadable("the result is an error"));
+    return Err(match reported_error(stdout) {
+      Some(said) => ReviewError::Unparseable(format!("the result is an error:\n{said}")),
+      None => unreadable("the result is an error"),
+    });
   }
   result
     .get("structured_output")

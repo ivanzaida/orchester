@@ -1,8 +1,9 @@
 //! The team servers in the list belong to the Orchester Cloud account that was signed in when this computer joined them
-//! (the person's decision, 2026-10-16: servers per account, as projects are). The list and every use of a server for
-//! the person or automation are the signed-in account's alone ([`Workspace::servers`]); another account's servers are
-//! not found. Only the work that keeps every server's connection and every shared project in step on this computer, and
-//! shows none of it, reads them all. Only this crate changes a server's row, after it checked whose the server is.
+//! (the person's decision, 2026-10-16: servers per account, as projects are), or to this computer when nobody was
+//! (2026-10-30: joined with a code, no account). The list and every use of a server for the person or automation are
+//! this computer's and the signed-in account's ([`Workspace::servers`]); another account's servers are not found. Only
+//! the work that keeps every server's connection and every shared project in step on this computer, and shows none of
+//! it, reads them all. Only this crate changes a server's row, after it checked whose the server is.
 
 use orchester_core::id::{CloudAccountId, ServerId};
 use orchester_store::{RegisteredProject, ServerAccount, StoreError, StoredServer};
@@ -10,14 +11,13 @@ use orchester_store::{RegisteredProject, ServerAccount, StoreError, StoredServer
 use super::{Workspace, owner};
 
 impl Workspace {
-  /// The signed-in account's team servers, in the order they were added; while none is signed in, those no account
-  /// took yet.
+  /// The team servers shown now, in the order they were added: this computer's, and the signed-in account's own.
   pub fn servers(&self) -> Result<Vec<StoredServer>, StoreError> {
     let db = self.db.lock();
-    db.servers_of(owner(&db)?.as_ref())
+    db.servers_visible_to(owner(&db)?.as_ref())
   }
 
-  /// The Orchester Cloud account signed in now, whose servers and projects are shown; `None` while none is.
+  /// The Orchester Cloud account signed in now; `None` while none is.
   pub(crate) fn signed_in_account(&self) -> Result<Option<CloudAccountId>, StoreError> {
     owner(&self.db.lock())
   }

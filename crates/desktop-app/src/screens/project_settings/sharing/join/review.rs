@@ -1,8 +1,9 @@
 //! The join review (`Join KTR · review page` `AiCwO`): over Project settings with its breadcrumb, *Join KTR on Kontur
-//! team?*, the local tasks all ticked to start with what each becomes ([`super::rows`]), how many go up, stay *Not
-//! shared* and go up claimed, what similar titles mean, and what joining sends. *Join and upload N*, which only a
-//! person presses, uploads the ticked tasks in one import; a join that failed says whether anything reached the server
-//! and keeps the ticks for *Try again*, which uploads nothing twice. Once joined, Sharing says what it did.
+//! team?*, that a project of this computer's moves into the account whose server it is, the local tasks all ticked to
+//! start with what each becomes ([`super::rows`]), how many go up, stay *Not shared* and go up claimed, what similar
+//! titles mean, and what joining sends. *Join and upload N*, which only a person presses, uploads the ticked tasks in
+//! one import; a join that failed says whether anything reached the server and keeps the ticks for *Try again*, which
+//! uploads nothing twice. Once joined, Sharing says what it did.
 
 use std::sync::Arc;
 
@@ -30,7 +31,10 @@ use crate::{
   project::{Projects, ShownProject},
   routes::{ProjectPage, ProjectSettingsTab, Route},
   screens::{
-    project_settings::{page, sharing::linked::joined},
+    project_settings::{
+      page,
+      sharing::{link::moves_to_account, linked::joined},
+    },
     settings::orchester::{PersonOnly, Said, sharing_said},
   },
   services::Services,
@@ -153,11 +157,16 @@ impl Component for Review {
     let header = self.header(ctx, &props, &plan);
     let key = props.reviewed.review.key.as_str().to_owned();
     let state = self.join.state().get();
+    let moves = props
+      .reviewed
+      .moves_to_account
+      .then(|| moves_to_account(ctx, props.project.open.project.name().as_str()));
     let content = Column::new()
       .id("sharing-join")
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Lg)
       .with_children(mismatch(ctx, &props))
+      .with_children(moves)
       .with_children(
         state
           .error

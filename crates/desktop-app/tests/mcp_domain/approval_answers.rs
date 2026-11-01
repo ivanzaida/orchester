@@ -22,8 +22,8 @@ fn approval_mode_answer_mcp_shows_how_and_why_requests_were_answered() {
     panic!("the cards wait on two requests at least: {waiting:?}");
   };
   let came = CameToPerson {
-    reason: PersonReason::Outside,
     detail: Some("/elsewhere/notes.md".to_owned()),
+    ..CameToPerson::because(PersonReason::Outside)
   };
   db.record_came_to_person(outside.run, &outside.id, Some(&came))
     .expect("came to the person");
@@ -87,4 +87,41 @@ fn approval_mode_answer_mcp_shows_how_and_why_requests_were_answered() {
     "{request}"
   );
   assert_eq!(request["came_to_you"], Value::Null, "{request}");
+}
+
+/// A request the reviewer could not judge keeps how its review failed, and one of an Autopilot step says so, in
+/// `list_approvals` and `get_run` (ORC-586).
+#[test]
+fn approval_mode_answer_mcp_keeps_how_the_review_failed() {
+  let (mut served, _) = Served::seeded("cards-approval-modes");
+  let approvals = served.ok("list_approvals", &json!({ "project": "Kontur" }));
+  let listed = approvals["approvals"].as_array().expect("approvals");
+  let came: Vec<&Value> = listed.iter().map(|approval| &approval["came_to_you"]).collect();
+  for kind in [
+    json!({ "reason": "reviewerCouldNotRun", "failure": "timed_out" }),
+    json!({ "reason": "reviewerCouldNotRun", "failure": "unreadable" }),
+    json!({ "reason": "reviewerCouldNotRun", "failure": "could_not_run" }),
+    json!({
+      "reason": "reviewerUnsure",
+      "detail": "Can't tell which files the design tool writes.",
+      "autopilot": true
+    }),
+  ] {
+    assert!(came.contains(&&kind), "{kind} in {approvals}");
+  }
+
+  let timed_out = listed
+    .iter()
+    .find(|approval| approval["came_to_you"]["failure"] == "timed_out")
+    .expect("the request whose review timed out");
+  let run = served.ok(
+    "get_run",
+    &json!({ "project": "Kontur", "run": timed_out["run"]["number"].to_string() }),
+  );
+  let requests = run["requests"].as_array().expect("the run's requests");
+  let request = requests
+    .iter()
+    .find(|request| request["id"] == timed_out["id"])
+    .unwrap_or_else(|| panic!("the waiting request: {run}"));
+  assert_eq!(request["came_to_you"]["failure"], "timed_out", "{request}");
 }

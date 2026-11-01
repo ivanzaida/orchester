@@ -59,6 +59,7 @@ fn entry(folder_missing: bool) -> ProjectEntry {
       name: Name::new("Kontur").expect("a name"),
       repo_root: PathBuf::from("kontur"),
       last_opened_at: Timestamp::from_unix_millis(0),
+      owner: None,
     },
     folder_missing,
   }

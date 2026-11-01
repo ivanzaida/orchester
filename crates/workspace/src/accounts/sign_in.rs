@@ -61,11 +61,7 @@ impl Workspace {
       .next()
       .ok_or(AccountsError::CliMissing)?;
     let connection = ConnectionAccount::of(&account);
-    let scratch = self
-      .account_root
-      .as_deref()
-      .and_then(|root| root.parent())
-      .map_or_else(env::temp_dir, |data| data.join("sign-in"));
+    let scratch = self.scratch("sign-in");
     let login = Login {
       program: &program,
       args: cli.login_args(),

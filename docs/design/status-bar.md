@@ -48,8 +48,8 @@ with its item slots overridden; actions are `Button/Size/Compact` (`SHKod`), dis
    Warning: auto-approving, interrupted runs, server offline or signed out. Muted: Cloud offline, window control.
 7. **Narrow window:** words give way first (time, run and server names), then labels; icons, counts and actions
    stay; the dot never gives way.
-8. **Sign-in gate:** only the locked MCP item; the version moves into that item's hover card. **Startup:** the
-   version only, unchanged.
+8. **Signed out of Orchester Cloud:** no item of its own; local work is a normal state (ORC-132, 2026-10-30). **Startup:**
+   the version only, unchanged.
 
 ## Before → after
 

@@ -101,6 +101,7 @@ fn plan_limit_reads_codex_reads_the_plan_bucket_without_a_turn() {
       has_credits: false,
       unlimited: false,
       balance: Some("0".to_owned()),
+      spend_control_reached: false,
     })
   );
   assert_eq!(limits.blocked, None);

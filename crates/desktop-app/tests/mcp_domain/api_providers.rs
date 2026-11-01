@@ -8,7 +8,7 @@ use orchester_core::secret::{Environment, NewSecret, SecretKind, SecretName, Sec
 use orchester_workspace::secrets::data::add_in;
 use serde_json::{Value, json};
 
-use super::{Served, vault::MemoryVault};
+use super::{Served, vault::MemoryVault, write_program};
 
 /// The key the vault holds; no result may hold it.
 const KEY: &str = "sk-fake-provider-domain-2b9c47e1";
@@ -143,6 +143,7 @@ fn domain_api_providers_are_checked_as_the_form_checks_them() {
 fn domain_api_providers_a_cli_added_on_a_provider_names_both_widenings() {
   let mut served = served();
   let program = served.folder.path().join("my-claude.exe");
+  write_program(&program, 0o755);
   let args = json!({
     "project": "Kontur",
     "kind": "claude",

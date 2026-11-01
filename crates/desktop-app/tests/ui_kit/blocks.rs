@@ -236,6 +236,19 @@ fn empty_loading_and_failed_states_never_look_alike() {
       "Reading the task list failed: database is locked.".to_owned()
     ]
   );
+  let (failed, words, again) = (
+    kit.bounds("failed"),
+    kit.bounds("failed-text"),
+    kit.bounds("failed-retry"),
+  );
+  assert_close(gap_under(words, again), 10.0, "Try again under the words");
+  assert_close(
+    failed.x + failed.width - again.x - again.width,
+    14.0,
+    "Try again at the end",
+  );
+  assert_close(failed.y + failed.height - again.y - again.height, 12.0, "failed bottom");
+  assert_close(kit.bounds("failed-icon").y - failed.y, 12.0, "failed top");
   kit.click("failed-retry");
   assert_eq!(retried.load(Ordering::SeqCst), 1, "Try again reads again");
 }

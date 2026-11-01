@@ -235,17 +235,30 @@ pub fn parse_codex_catalog(json: &str) -> Option<Vec<CatalogModel>> {
 }
 
 /// Where `program` (see [`super::ConnectionKind::program_name`]) would be found on `path` (the
-/// `PATH` variable), in search order. The caller keeps the ones that exist. A relative entry is left out:
-/// it would name a different folder from wherever the program is run, such as a run's worktree.
+/// `PATH` variable), in search order. The caller keeps the ones that exist. A folder that is not
+/// [`searched_folder`] is left out.
 pub fn executable_candidates(program: &str, path: Option<&OsStr>) -> Vec<PathBuf> {
   let Some(path) = path else {
     return Vec::new();
   };
-  let names = program_files(program);
   std::env::split_paths(path)
-    // A folder on another machine is passed over unread, as a program's (`CommandProgram::candidates`).
-    .filter(|directory| directory.is_absolute() && crate::permission::stays_local(directory).is_ok())
-    .flat_map(|directory| names.iter().map(move |name| directory.join(name)))
+    .filter(|directory| searched_folder(directory))
+    .flat_map(|directory| candidates_in(program, &directory))
+    .collect()
+}
+
+/// Whether a folder of the search path is looked in for programs. A relative one is not: it would
+/// name a different folder from wherever the program is run, such as a run's worktree. Nor is a
+/// folder on another machine, passed over unread as a program's (`CommandProgram::candidates`).
+pub fn searched_folder(directory: &Path) -> bool {
+  directory.is_absolute() && crate::permission::stays_local(directory).is_ok()
+}
+
+/// The files in `directory` that would be `program` (see [`super::ConnectionKind::program_name`]).
+pub fn candidates_in(program: &str, directory: &Path) -> Vec<PathBuf> {
+  program_files(program)
+    .into_iter()
+    .map(|name| directory.join(name))
     .collect()
 }
 

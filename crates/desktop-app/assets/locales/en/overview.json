@@ -50,6 +50,10 @@
         "one": "{{count}} of {{slots}} agent slot",
         "other": "{{count}} of {{slots}} agent slots"
       },
+      "slotWaits": {
+        "one": "{{count}} step waits for a slot · raise Agents at once to start it",
+        "other": "{{count}} steps wait for a slot · raise Agents at once to start them"
+      },
       "step": "{{number}} {{step}}",
       "agent": "{{account}} · {{model}}",
       "showAll": "Show all {{count}} in Tasks ↗"

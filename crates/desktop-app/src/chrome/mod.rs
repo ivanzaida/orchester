@@ -1,7 +1,6 @@
 //! The custom window chrome (`Title bar` `yZzwy` of `q9mf0k`): the title bar with the app menu and the
-//! tabs (the mark alone on the sign-in gate, `dd04F` in `Lpznn`), the window controls, and the window's frame. The
-//! operating system's title bar and border are not shown; the empty parts of the title bar drag the window and maximize
-//! it on a double-click.
+//! tabs, the window controls, and the window's frame. The operating system's title bar and border are not shown; the
+//! empty parts of the title bar drag the window and maximize it on a double-click.
 
 mod app_menu;
 pub mod tab_fit;
@@ -49,12 +48,6 @@ pub fn chrome(ctx: &mut Ctx, screen: Element, closing: bool) -> Element {
 /// (`Title bar` `bcDe3` of `N0Lpc`).
 pub fn bare(ctx: &mut Ctx, screen: Element) -> Element {
   window(ctx, screen, Bar::Menu, false)
-}
-
-/// The window around the sign-in gate: its title bar has the mark and the window controls only, no menu (`Title
-/// bar` `dd04F` of `Lpznn`); `closing` while the closing panel holds the window.
-pub fn gate(ctx: &mut Ctx, screen: Element, closing: bool) -> Element {
-  window(ctx, screen, Bar::Mark, closing)
 }
 
 fn window(ctx: &mut Ctx, screen: Element, kind: Bar, closing: bool) -> Element {

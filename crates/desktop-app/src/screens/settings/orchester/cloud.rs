@@ -1,8 +1,8 @@
-//! The tab's column (`05 · Orchester Cloud` `vPV73`): the account card with its two-factor authentication
+//! The tab's column (`05 Â· Orchester Cloud` `vPV73`): the account card with its two-factor authentication
 //! ([`super::two_factor`]) and *Sign out* asked in place ([`super::account`]); few recovery codes left, after a sign-in
 //! with one; *This computer*; the invites ([`super::invites`]); the team servers ([`super::list`]); *Advanced* with the
-//! cloud's address ([`super::advanced`]); and where the cloud token is kept. Signed out, the app shows only the gate
-//! (`crate::screens::gate`), so the column always has an account.
+//! cloud's address ([`super::advanced`]); and where the cloud token is kept. Signed out (`j7SbPk`), the sign-in takes
+//! the account card's place (`crate::screens::cloud_sign_in`) and *This computer* goes.
 
 use lurq::{
   app::{
@@ -17,17 +17,16 @@ use orchester_api::cloud::TwoFactorStatus;
 use orchester_core::id::InviteId;
 
 use super::{
-  Invites, Said, Snapshot, account,
-  advanced::{self, Place},
-  invites, list,
-  pointed::PointedInvite,
-  words::cloud_error,
+  Invites, Said, Snapshot, account, advanced, browser_joined, invites, list, pointed::PointedInvite, words::cloud_error,
 };
 use crate::{
   routes::OrchesterAsk,
-  screens::settings::frame,
+  screens::{
+    cloud_sign_in::{Place, SignInOffer},
+    settings::frame,
+  },
   services::Services,
-  ui::{field::field_error, icon::Icon, setting_notice::status_line},
+  ui::{field::field_error, setting_rows::group_note},
 };
 
 #[derive(Clone, PartialEq)]
@@ -36,6 +35,8 @@ pub(super) struct Props {
   pub invites: Invites,
   /// The invites accepted here whose join did not finish.
   pub accepted: super::Kept,
+  /// The account's team servers as the cloud lists them, those joined in the browser too.
+  pub listed: browser_joined::Listed,
   /// The account's two-factor authentication, once the cloud said.
   pub two_factor: Option<TwoFactorStatus>,
   /// The question the route asks in place: it opens once it does.
@@ -50,7 +51,7 @@ pub(super) struct CloudPanel {
   advanced: advanced::Advanced,
   invites: invites::Answers,
   pub(super) sign_out: FutureAction<(), (), Said>,
-  /// *Sign out* asks before it signs out and locks.
+  /// *Sign out* asks before it signs out.
   pub(super) asking: Signal<bool>,
   /// What the route asked when the column last rendered: each question opens once each time it is asked.
   asked: parking_lot::Mutex<Option<OrchesterAsk>>,
@@ -58,6 +59,8 @@ pub(super) struct CloudPanel {
   pointed: PointedInvite,
   /// Signing this computer out of the cloud is a person's (review 1, M1).
   pub(super) person: super::PersonOnly,
+  /// *Connect* on the servers joined in the browser.
+  connects: browser_joined::Connects,
   /// Counts the checks of joins that wait for approval ([`super::accepted::check`]).
   tick: Signal<u64>,
   checks: Interval,
@@ -82,6 +85,7 @@ impl Component for CloudPanel {
       asked: parking_lot::Mutex::new(None),
       pointed: PointedInvite::new(ctx),
       person: super::PersonOnly::new(ctx),
+      connects: browser_joined::Connects::new(ctx),
       tick,
       checks,
     }
@@ -94,13 +98,8 @@ impl Component for CloudPanel {
     self.checks.start();
     let pane = frame::pane("orchester-cloud-details");
     let snapshot = &props.snapshot;
-    // Only while the window turns to the sign-in gate after a sign-out.
     let Some(account) = &snapshot.account else {
-      return pane.child(status_line(
-        "orchester-cloud-reading",
-        Icon::LoaderCircle,
-        &ctx.t("cloud.reading"),
-      ));
+      return self.signed_out(ctx, pane, snapshot);
     };
     let cloud = Services::of(ctx).cloud;
     super::accepted::check(ctx, self.tick.get(), (&cloud, &self.invites));
@@ -125,8 +124,15 @@ impl Component for CloudPanel {
       (&props.invites, &props.accepted, props.two_factor.as_ref()),
       (&self.invites, &self.pointed),
     );
-    let servers = list::group(ctx, snapshot);
-    let advanced = advanced::section(ctx, &snapshot.address, &self.advanced, Place::Settings);
+    let joined: Vec<Element> = props
+      .listed
+      .not_here(&snapshot.servers)
+      .iter()
+      .map(|server| browser_joined::row(ctx, &self.connects, server))
+      .collect();
+    let answers = browser_joined::answers(ctx, &self.connects);
+    let servers = list::group(ctx, snapshot, list::trust_key, (joined, answers));
+    let advanced = advanced::section(ctx, &snapshot.address, &self.advanced);
     let top = Column::new()
       .width(lurq::node::dimension::Dimension::Pct(100.0))
       .spacing(lurq::app::theme::SpacingSize::Sm)
@@ -146,8 +152,25 @@ impl Component for CloudPanel {
 }
 
 impl CloudPanel {
+  /// The column with nobody signed in (`j7SbPk`): the sign-in in the account card's place, invites that need it, the
+  /// team servers joined with a code, *Advanced* and what the cloud is and is not for.
+  fn signed_out(&self, ctx: &mut Ctx, pane: Column, snapshot: &Snapshot) -> Column {
+    let sign_in = ctx.mount_keyed::<SignInOffer>("orchester-cloud-sign-in", Place::Card);
+    let invites = invites::signed_out(ctx);
+    let servers = list::group(ctx, snapshot, list::joined_key, (Vec::new(), Vec::new()));
+    let advanced = advanced::section(ctx, &snapshot.address, &self.advanced);
+    pane
+      .child(sign_in)
+      .child(invites)
+      .child(servers)
+      .child(advanced)
+      .child(group_note(
+        "orchester-cloud-signed-out-note",
+        &ctx.t("cloud.account.signedOutNote"),
+      ))
+  }
   /// Opens the question the route starts asking, as its button would: *Sign out of Orchester Cloud?* under the card,
-  /// or *Decline the invite to …?* in place of the invite's actions. Only a person's answer signs out or declines.
+  /// or *Decline the invite to â€¦?* in place of the invite's actions. Only a person's answer signs out or declines.
   fn follow_route(&self, ask: Option<OrchesterAsk>) {
     let mut asked = self.asked.lock();
     if ask != *asked {

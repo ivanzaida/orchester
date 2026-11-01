@@ -310,6 +310,19 @@ pub struct Tasks {
   pub tasks: Vec<SharedTask>,
   pub cursor: u64,
 }
+/// `GET …/tasks?after=`: the project's tasks numbered above `after`, lowest first, one page at a time. A server that
+/// does not know the parameter answers [`Tasks`], which reads as one page without `next` or `total`.
+#[derive(Serialize, Deserialize)]
+pub struct TasksPage {
+  pub tasks: Vec<SharedTask>,
+  pub cursor: u64,
+  /// The `after` of the following page, only when there is one.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub next: Option<u32>,
+  /// How many tasks the project has now.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub total: Option<usize>,
+}
 #[derive(Serialize, Deserialize)]
 pub struct TaskResponse {
   pub task: SharedTask,

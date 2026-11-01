@@ -524,7 +524,8 @@ async fn auto_mode_reviews_with_a_codex_connection_in_its_read_only_sandbox() {
   let mut failed = reviewed_by_codex("Run `cargo build`. Reviewer fails.").await;
   let (request, review) = failed.left_to_person().await;
   assert!(
-    matches!(&review, Review::Failed { failure: ReviewFailure::CouldNotRun, model: Some(model) } if model == "gpt-5.5-codex"),
+    matches!(&review, Review::Failed { failure: ReviewFailure::CouldNotRun, model: Some(model), detail: Some(detail) }
+      if model == "gpt-5.5-codex" && detail == "the reviewer could not run: the CLI exited with code 1: the fake model failed"),
     "{review:?}"
   );
   failed.deny(request).await;

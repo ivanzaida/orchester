@@ -16,7 +16,7 @@ use orchester_workspace::sharing::{
   Connection, RemoteMatch, ServerEntry, ServerProject, project::discovery::ProjectDiscovery, remote_match,
 };
 
-use super::{Chosen, Link, Listed, Picked, Problem, Props};
+use super::{Chosen, Link, Listed, Picked, Problem, Props, parts::moves_to_account};
 use crate::{
   navigation::Navigation,
   routes::{OrchesterView, Route},
@@ -56,6 +56,7 @@ impl Link {
     );
     parts.push(self.project_group(ctx, props, listed));
     parts.push(self.repository_line(ctx, props, listed));
+    parts.extend(self.moves_line(ctx, props));
     parts.push(self.link_row(ctx, props, listed));
     let resolving = self.resolve.state().get();
     let pending = resolving.is_pending();
@@ -338,6 +339,16 @@ impl Link {
       Some(fill) => line.background(fill).into(),
       None => line.border(Border::inside(BorderSize::Sm, PaletteColor::Border)).into(),
     }
+  }
+
+  /// That the project moves into the account, when the chosen server is the account's and the project this computer's.
+  fn moves_line(&self, ctx: &Ctx, props: &Props) -> Option<Element> {
+    let chosen = self.chosen_entry(props)?.stored.id;
+    props
+      .facts
+      .moves_on
+      .contains(&chosen)
+      .then(|| moves_to_account(ctx, props.project.open.project.name().as_str()))
   }
 
   pub(super) fn picked_project<'a>(&self, listed: Option<&'a Result<Listed, Said>>) -> Option<&'a SharedProject> {

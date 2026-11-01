@@ -13,7 +13,7 @@ use crate::{
   ClaimTake, Heartbeat, HeartbeatResponse, Member, MemberChanges, MemberCreate, MemberResponse, Members, ProjectCreate,
   ProjectCreated, ProjectLink, ProjectLinked, ProjectResponse, Projects, RunReport, SharedProject, SharedTag,
   SharedTask, TagMerge, TagName, TagResponse, Tags, TagsChanged, TaskPatch, TaskResponse, Tasks, TasksCreate,
-  TasksCreated, TasksImport,
+  TasksCreated, TasksImport, TasksPage,
 };
 
 impl Client {
@@ -109,6 +109,19 @@ impl Client {
   pub async fn tasks(&self, token: &SecretValue, project: ProjectId) -> Result<Tasks, ClientError> {
     let path = format!("/projects/{project}/tasks");
     self.call(bearer(self.request(Method::GET, &path)?, token)).await
+  }
+
+  /// `GET …/tasks?after=`: the tasks numbered above `after`, lowest first, one page at a time; `next` asks for the
+  /// following page. A server that does not know the parameter answers every task as one page.
+  pub async fn tasks_page(
+    &self,
+    token: &SecretValue,
+    project: ProjectId,
+    after: u32,
+  ) -> Result<TasksPage, ClientError> {
+    let mut url = self.address.endpoint(&format!("/projects/{project}/tasks"))?;
+    url.query_pairs_mut().append_pair("after", &after.to_string());
+    self.call(bearer(self.http.get(url), token)).await
   }
 
   /// `GET …/tasks/{task}`: one task as the server has it now, e.g. after a delta the cache could not take.

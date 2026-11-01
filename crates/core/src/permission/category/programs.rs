@@ -10,8 +10,8 @@
 //! credential location asks.
 
 use super::{
-  build_output::BuildWords, files, gh, git, install::InstallSource, interpreters, network, packages, powershell,
-  processes, scripts,
+  build_output::BuildWords, files, gh, git, install::InstallSource, interpreters, network, packages, patterns,
+  powershell, processes, scripts,
 };
 use crate::permission::known_safe;
 
@@ -62,6 +62,8 @@ pub(super) struct Judged {
   pub(super) known_safe: bool,
   /// The argument that is a script (`sed`'s, `awk`'s program) rather than a path.
   pub(super) script: Option<usize>,
+  /// The arguments that are a search's pattern rather than a path ([`patterns`]).
+  pub(super) patterns: Vec<usize>,
   /// It only creates, changes, copies, moves or removes the files it names, as an edit does (`sed -i`,
   /// `tee`, `mkdir`, `touch`, `cp`, `mv`, `rm`), and starts no other program.
   pub(super) edits: bool,
@@ -109,6 +111,7 @@ impl Judged {
       prefix_stays: false,
       known_safe: false,
       script: None,
+      patterns: Vec::new(),
       edits: false,
       sources: Vec::new(),
       runs: None,
@@ -228,6 +231,12 @@ impl Judged {
   /// Argument `at` is a script, not a path.
   pub(super) const fn with_script(mut self, at: Option<usize>) -> Self {
     self.script = at;
+    self
+  }
+
+  /// The arguments at `positions` are a search's pattern, not paths.
+  pub(super) fn searching(mut self, positions: Vec<usize>) -> Self {
+    self.patterns = positions;
     self
   }
 
@@ -388,15 +397,22 @@ fn judge_words(program: &str, args: &[String]) -> Judged {
 }
 
 /// A program [`known_safe`] rules: Read-only when every option is one it lists, else Unknown. The words
-/// that may name a file, attached option values included, are placed.
+/// that may name a file, attached option values included, are placed; a search's pattern is not ([`patterns`]).
 fn known_read(program: &str, args: &[String]) -> Judged {
-  let argv: Vec<String> = std::iter::once(program.to_owned())
-    .chain(args.iter().cloned())
-    .collect();
-  match known_safe::readable_arguments(&argv) {
+  let argv = |args: &[String]| -> Vec<String> {
+    std::iter::once(program.to_owned())
+      .chain(args.iter().cloned())
+      .collect()
+  };
+  if known_safe::readable_arguments(&argv(args)).is_none() {
+    return Judged::unknown();
+  }
+  let searched = patterns::positions(program, args);
+  match known_safe::readable_arguments(&argv(&patterns::without(args, &searched))) {
     Some(words) => Judged::of(Kind::ReadOnly)
       .known_safe()
-      .reading(words.into_iter().map(str::to_owned).collect()),
+      .reading(words.into_iter().map(str::to_owned).collect())
+      .searching(searched),
     None => Judged::unknown(),
   }
 }
@@ -435,7 +451,9 @@ fn plain_read(program: &str, args: &[String]) -> Judged {
   if refused {
     Judged::unknown()
   } else {
-    Judged::of(Kind::ReadOnly).known_safe()
+    Judged::of(Kind::ReadOnly)
+      .known_safe()
+      .searching(patterns::positions(program, args))
   }
 }
 

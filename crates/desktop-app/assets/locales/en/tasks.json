@@ -100,6 +100,7 @@
     "listSeparator": ", ",
     "newBadge": "New",
     "loading": "Reading {{project}}'s tasks…",
+    "downloading": "Downloading {{project}}'s tasks from {{server}}…",
     "layout": {
       "list": "List",
       "board": "Board"
@@ -286,6 +287,10 @@
     "loadError": {
       "title": "Tasks cannot be read",
       "body": "Reading the task list from the project database failed. {{reason}} No task was changed. The list appears once it can be read."
+    },
+    "downloadError": {
+      "title": "{{project}}'s tasks could not be downloaded",
+      "body": "Orchester joined {{server}}, but reading the shared project's tasks failed. {{reason}} Nothing was changed on this computer or on the server."
     },
     "empty": {
       "title": "No tasks yet",

@@ -11,6 +11,7 @@ mod accepted;
 mod account;
 mod advanced;
 mod answers;
+mod browser_joined;
 mod cloud;
 mod code;
 pub mod connect;
@@ -51,7 +52,6 @@ use orchester_workspace::{
   },
 };
 
-pub(crate) use self::advanced::{Advanced, Place, section as advanced_section};
 pub use self::{
   notice::InvitesNotice,
   person::PersonOnly,
@@ -184,8 +184,10 @@ impl Component for OrchesterTab {
       }
     };
     let invites = invites(ctx, revision, &services.cloud, snapshot.account.as_ref());
-    let two_factor = two_factor::read(ctx, revision, &services.cloud, snapshot.account.as_ref());
+    let signed_in = snapshot.account.as_ref().map(|account| account.account);
+    let two_factor = two_factor::read(ctx, revision, &services.cloud, signed_in);
     let accepted = kept(ctx, revision, &services.cloud, snapshot.account.as_ref());
+    let listed = browser_joined::listed(ctx, revision, &services.cloud, snapshot.account.as_ref());
     match view.server.and_then(|id| snapshot.server(id)) {
       Some((entry, linked)) => {
         let page = ctx.mount_keyed::<server::ServerPanel>(
@@ -206,6 +208,7 @@ impl Component for OrchesterTab {
             snapshot: snapshot.clone(),
             invites,
             accepted,
+            listed,
             two_factor,
             ask: view.ask,
             at: view.at,

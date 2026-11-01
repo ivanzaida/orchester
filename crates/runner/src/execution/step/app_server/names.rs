@@ -41,6 +41,10 @@ impl AppServerSession {
   pub(super) fn project_named(&self, error: McpInventoryError) -> McpInventoryError {
     match error {
       McpInventoryError::MissingSelected(name) => McpInventoryError::MissingSelected(self.project_name(name)),
+      McpInventoryError::ReadinessTimeout(mut server) => {
+        server.name = self.project_name(server.name);
+        McpInventoryError::ReadinessTimeout(server)
+      }
       McpInventoryError::UnavailableSelected(mut server) => {
         server.name = self.project_name(server.name);
         McpInventoryError::UnavailableSelected(server)

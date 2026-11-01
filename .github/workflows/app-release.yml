@@ -212,8 +212,8 @@ jobs:
             Copy-Item -LiteralPath (Join-Path $built $file) -Destination $files
           }
 
-          # Each PDB's debug ID, which its program names too: the upload fails unless it finds both. The loop's
-          # output is the upload's `--id` arguments, so its messages go to the log by Write-Host.
+          # Each PDB's debug ID, which its program names too. The loop's output is the IDs, so its messages go to
+          # the log by Write-Host.
           $ids = foreach ($pdb in "orchester.pdb", "orchester_runner.pdb") {
             $checked = & $cli debug-files check --json (Join-Path $files $pdb)
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -224,14 +224,28 @@ jobs:
             }
             $id = $checked.variants[0].debug_id
             Write-Host "$pdb has the debug ID $id ($($checked.features))."
-            "--id"
             $id
           }
+          $only = foreach ($id in $ids) { "--id"; $id }
 
-          & $cli debug-files upload --no-sources --require-all @ids --wait-for 600 $files
+          # No `--require-all`: sentry-cli asks for the IDs in a way GlitchTip does not answer, and fails though
+          # GlitchTip stored them. The check below asks GlitchTip's own list instead.
+          & $cli debug-files upload --no-sources @only --wait-for 600 $files
           if ($LASTEXITCODE -ne 0) {
             Write-Output "::error title=Debug files not uploaded::sentry-cli could not upload the PDBs to GlitchTip; nothing goes to Orchester Cloud."
             exit $LASTEXITCODE
+          }
+
+          # The project's debug files, newest first: each PDB's debug ID must be there, else nothing goes on.
+          $stored = Invoke-RestMethod -Headers @{ Authorization = "Bearer $env:SENTRY_AUTH_TOKEN" } `
+            -Uri "$env:SENTRY_URL/api/0/projects/$env:SENTRY_ORG/$env:SENTRY_PROJECT/files/dsyms/"
+          foreach ($id in $ids) {
+            $found = @($stored | Where-Object { $_.debugId -eq $id -and $_.objectName -like "*.pdb" })
+            if ($found.Count -eq 0) {
+              Write-Output "::error title=Debug files not stored::GlitchTip does not list the PDB with the debug ID $id; nothing goes to Orchester Cloud."
+              exit 1
+            }
+            Write-Output "GlitchTip has the PDB with the debug ID $id."
           }
       - name: Skip the uploads
         if: ${{ needs.prepare.outputs.release != 'true' }}

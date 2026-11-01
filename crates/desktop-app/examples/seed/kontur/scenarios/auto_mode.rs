@@ -119,6 +119,7 @@ fn request(
     Reviewed::TimedOut => Review::Failed {
       failure: ReviewFailure::TimedOut,
       model: Some(model),
+      detail: Some("the reviewer did not answer in time".to_owned()),
     },
     Reviewed::Approved => Review::Approved {
       reason: "It only reads a log the step's tests wrote.".to_owned(),

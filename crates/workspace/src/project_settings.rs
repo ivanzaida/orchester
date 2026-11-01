@@ -1,6 +1,7 @@
 //! Project settings shared by the window and automation. Blocking work belongs off the UI thread.
 
 mod repository;
+mod reviewer_health;
 use std::path::Path;
 
 use orchester_core::{
