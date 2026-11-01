@@ -1,12 +1,14 @@
 //! Settings › General showing its *Updates* (`wSMNG` in `Auto-updater · redesign` `acFkz`): what the status bar's
 //! update item and the ready notification open, `/settings?tab=general&show=updates`, or with the release notes open
-//! after an update, `&show=whats-new`.
+//! after an update, `&show=whats-new`. `&show=plan-limits` shows its *Plan limits* instead, as Usage › Plan limits'
+//! menu opens it.
 
-use super::query::Params;
 use crate::routes::RouteError;
 
 /// The query parameter that names what General shows.
 pub(super) const SHOW: &str = "show";
+/// What General shows when Usage › Plan limits' menu opens it: its *Plan limits*, where the warning threshold is set.
+pub(super) const PLAN_LIMITS: &str = "plan-limits";
 
 /// What Settings › General shows of its *Updates*.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -31,12 +33,9 @@ impl UpdatesShow {
     Self::ALL.into_iter().find(|show| show.name() == name)
   }
 
-  /// What `params` names, if anything.
-  pub(super) fn take(params: &mut Params) -> Result<Option<Self>, RouteError> {
-    let Some(name) = params.take(SHOW)? else {
-      return Ok(None);
-    };
-    Self::from_name(&name).map(Some).ok_or(RouteError::InvalidParam {
+  /// What `name`, the value of [`SHOW`], names of *Updates*.
+  pub(super) fn named(name: String) -> Result<Self, RouteError> {
+    Self::from_name(&name).ok_or(RouteError::InvalidParam {
       param: SHOW.to_owned(),
       value: name,
     })

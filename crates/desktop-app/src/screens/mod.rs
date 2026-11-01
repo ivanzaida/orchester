@@ -66,7 +66,14 @@ pub fn screen(ctx: &mut Ctx) -> Element {
     Ok(Route::Settings) => settings::screen(ctx, settings::SettingsTab::Automation),
     Ok(Route::RotateToken) => settings::asking_rotation(ctx),
     Ok(Route::General) => settings::screen(ctx, settings::SettingsTab::General(None)),
-    Ok(Route::Updates(show)) => settings::screen(ctx, settings::SettingsTab::General(Some(show))),
+    Ok(Route::Updates(show)) => settings::screen(
+      ctx,
+      settings::SettingsTab::General(Some(settings::GeneralShow::Updates(show))),
+    ),
+    Ok(Route::PlanLimits) => settings::screen(
+      ctx,
+      settings::SettingsTab::General(Some(settings::GeneralShow::PlanLimits)),
+    ),
     Ok(Route::Notifications) => settings::screen(ctx, settings::SettingsTab::Notifications),
     Ok(Route::Browser) => settings::screen(ctx, settings::SettingsTab::Browser),
     Ok(Route::Accounts(view)) => settings::screen(ctx, settings::SettingsTab::Accounts(view)),

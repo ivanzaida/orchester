@@ -112,8 +112,6 @@ impl DevtoolsInspectable for Views {}
 
 pub struct UsageScreen {
   views: Signal<Views>,
-  /// Counts saved warning thresholds, so the page reads the saved one.
-  saved: Signal<u64>,
   retry: Signal<u64>,
 }
 
@@ -123,16 +121,15 @@ impl Component for UsageScreen {
   fn create(ctx: &mut Ctx) -> Self {
     Self {
       views: ctx.signal(Views::default()),
-      saved: ctx.signal(0),
       retry: ctx.signal(0),
     }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let UsageProps { place, query } = ctx.props::<UsageProps>().clone();
-    // Again whenever the runs change, a read of an account's plan limits lands, a threshold is saved or Retry is
-    // pressed.
-    let deps = (place.changes(), last_read(ctx), self.saved.get(), self.retry.get());
+    // Again whenever the runs change, a read of an account's plan limits lands or Retry is pressed; the warning
+    // threshold, set in Settings, is read with them when the page opens.
+    let deps = (place.changes(), last_read(ctx), self.retry.get());
     let since = Dashboard::since(&query, Timestamp::now());
     let loaded = read::read(ctx, place.root(), since, deps);
     // While the page is shown the accounts' plan limits are read, at once and every few minutes.
@@ -204,17 +201,16 @@ fn last_read(ctx: &mut Ctx) -> Option<Timestamp> {
 impl UsageScreen {
   /// The sections, or, when there is nothing to chart, why and the plan limits last reported.
   fn sections(&self, ctx: &mut Ctx, dashboard: &Arc<Dashboard>, requery: &Requery) -> Vec<Element> {
-    let saved = self.saved.clone();
     let mut sections: Vec<Element> = states::unread_runs(ctx, dashboard).into_iter().collect();
     sections.push(summary::summary(ctx, dashboard));
     if let Some(empty) = states::empty(ctx, dashboard, requery) {
-      let menu = threshold::menu(ctx, dashboard, &saved);
+      let menu = threshold::menu(ctx, dashboard);
       let compact = limits_legend::compact(ctx, dashboard, menu);
       sections.push(states::beside(empty, compact));
       return sections;
     }
     let tokens = tokens::card(ctx, dashboard, &self.views);
-    let limits = limits::card(ctx, dashboard, &self.views, &saved);
+    let limits = limits::card(ctx, dashboard, &self.views);
     // More than three series' columns do not fit beside Plan limits, which then goes under the table (`FdC7Y`).
     let charts = if self.views.get().tokens_table && tokens_table::needs_row(dashboard) {
       vec![

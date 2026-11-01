@@ -55,11 +55,20 @@ struct Listed(Arc<Vec<AgentAccount>>);
 
 impl DevtoolsInspectable for Listed {}
 
+/// What a route brings into view on Settings › General.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GeneralShow {
+  /// *Plan limits*, as Usage › Plan limits' menu opens it.
+  PlanLimits,
+  /// *Updates* (`wSMNG`).
+  Updates(UpdatesShow),
+}
+
 /// The open tab of Settings.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SettingsTab {
-  /// Settings › General (`l838Ty`), with its *Updates* in view when a route says so (`wSMNG`).
-  General(Option<UpdatesShow>),
+  /// Settings › General (`l838Ty`), with *Plan limits* or *Updates* in view when a route says so.
+  General(Option<GeneralShow>),
   /// Settings › Notifications (`fQTFi`).
   Notifications,
   /// Settings › Automation (`aMkOw`).

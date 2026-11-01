@@ -36,7 +36,7 @@ const DESCRIPTION: &str = "Take the active tab of the Orchester window to a rout
   (the mouse's back button, or Alt+Left, Cmd+[ on macOS, returns). `route` is the screen's name: all_projects takes no \
   other argument; join_team takes `way` (cloud, the default: the account's teams and invites; code: the code page; \
   projects with `server`: a joined team's shared projects; folder with `server` and `project`: link one to a folder); \
-  settings takes `tab` (automation, general, updates or whats-new for General with its Updates in \n  view and, with whats-new, the release notes open, notifications, accounts, browser, orchester for Orchester \n  Cloud, connect for Connect a server, invite for an invite's landing) and what that tab opens on: accounts \n  `account` (an account's id or name, or claude-default / codex-default: its page) and `panel` (add for Add account \
+  settings takes `tab` (automation, general, plan-limits for General with its Plan limits in view, updates or \n  whats-new for General with its Updates in \n  view and, with whats-new, the release notes open, notifications, accounts, browser, orchester for Orchester \n  Cloud, connect for Connect a server, invite for an invite's landing) and what that tab opens on: accounts \n  `account` (an account's id or name, or claude-default / codex-default: its page) and `panel` (add for Add account \
   without `account`; sign_in, rename or remove for that account's step 2, name field or Remove question); orchester \
   `server` (a team server's id, name or host: its page) and `ask` (sign-out: Sign outÃ¢â‚¬Â¦? under the account card, or \
   on that server's page; decline with `invite`, an invite's id: Decline the invite?); connect `server` and `step` \
@@ -92,7 +92,7 @@ pub fn tool(link: WindowLink, lookup: Option<Lookup>) -> McpTool {
 fn schema() -> Value {
   let names: Vec<&str> = Screen::ALL.into_iter().map(Screen::name).collect();
   let tabs = format!(
-    "The screen's tab, the one it opens on when left out: settings automation, general, updates, whats-new, \n     notifications, accounts, browser, \n     orchester (Orchester Cloud), connect (Connect a server), invite (an invite's landing); overview {} (kept for old \n     links: the Overview shows every section on one page); tasks {}; \n     task {}; project_settings {}; pull_requests {}; memory {}; import_resources {}; modules {}, a module's page {}.",
+    "The screen's tab, the one it opens on when left out: settings automation, general, plan-limits, updates, \n     whats-new, notifications, accounts, browser, \n     orchester (Orchester Cloud), connect (Connect a server), invite (an invite's landing); overview {} (kept for old \n     links: the Overview shows every section on one page); tasks {}; \n     task {}; project_settings {}; pull_requests {}; memory {}; import_resources {}; modules {}, a module's page {}.",
     OverviewTab::ALL.map(OverviewTab::name).join(", "),
     TaskListTab::ALL.map(TaskListTab::name).join(", "),
     TaskTab::ALL.map(TaskTab::name).join(", "),

@@ -215,6 +215,16 @@ fn navigate_takes_the_parameters_each_screen_has_and_answers_them_back() {
 }
 
 #[test]
+fn navigate_opens_settings_general_at_plan_limits_and_answers_it_back() {
+  let window = Window::open();
+  let navigation = window.navigation();
+  let args = json!({ "route": "settings", "tab": "plan-limits" });
+  let answer = navigate(&navigation, &args).expect("a valid route");
+  assert_eq!(answer["route"]["path"], json!("/settings?tab=general&show=plan-limits"));
+  assert_eq!(answer["route"]["params"], json!({ "tab": "plan-limits" }));
+}
+
+#[test]
 fn navigate_opens_every_projects_usage_without_a_project() {
   let window = Window::open();
   let navigation = window.navigation();

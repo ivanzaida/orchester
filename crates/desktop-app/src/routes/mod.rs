@@ -5,7 +5,8 @@
 //! team (`?way=code` with a code, `?way=projects` a joined team's shared projects, `?way=folder` linking one to a
 //! folder, [`JoinWay`]), `/first-download?project=<id>` a shared project's first download and
 //! `/settings` the app's settings (`?tab=general`, with `&show=updates` or `whats-new` its *Updates* in view,
-//! [`UpdatesShow`]; `notifications`, `accounts` or `orchester` for Orchester Cloud; Automation without one, and
+//! [`UpdatesShow`], or `&show=plan-limits` its *Plan limits*; `notifications`, `accounts` or `orchester` for Orchester
+//! Cloud; Automation without one, and
 //! `?ask=rotate-token` asks *Rotate the token?* there). A project's screens start at
 //! `/project/<id>`, its Overview (`?tab=` the tab of its task list), and add the screen's segment, e.g.
 //! `/project/<id>/pipelines`. The Tasks list is `/project/<id>/tasks` (`?tab=`, `?q=` the search,
@@ -204,6 +205,9 @@ pub enum Route {
   General,
   /// Settings › General showing its *Updates* (`wSMNG`), as the status bar's update item opens it.
   Updates(UpdatesShow),
+  /// Settings › General showing its *Plan limits*, the warning threshold's one place, as Usage › Plan limits' menu
+  /// opens it.
+  PlanLimits,
   /// Settings › Notifications (`fQTFi`): what notifies, how, quiet hours and the daily report.
   Notifications,
   /// Settings › Browser (`j3Lre`): agents' browser, its profiles and the Browser window's switch.
@@ -251,6 +255,7 @@ impl Route {
       | Self::RotateToken
       | Self::General
       | Self::Updates(_)
+      | Self::PlanLimits
       | Self::Notifications
       | Self::Browser
       | Self::Accounts(_)
@@ -282,6 +287,7 @@ impl Route {
       | Self::RotateToken
       | Self::General
       | Self::Updates(_)
+      | Self::PlanLimits
       | Self::Notifications
       | Self::Browser
       | Self::Accounts(_)
@@ -320,6 +326,10 @@ impl Route {
       Self::Updates(show) => with_query(
         format!("/{SETTINGS}"),
         &[(TAB, Some(GENERAL)), (updates::SHOW, Some(show.name()))],
+      ),
+      Self::PlanLimits => with_query(
+        format!("/{SETTINGS}"),
+        &[(TAB, Some(GENERAL)), (updates::SHOW, Some(updates::PLAN_LIMITS))],
       ),
       Self::Notifications => with_query(format!("/{SETTINGS}"), &[(TAB, Some(NOTIFICATIONS))]),
       Self::Browser => with_query(format!("/{SETTINGS}"), &[(TAB, Some(BROWSER))]),
@@ -373,8 +383,8 @@ impl Route {
 }
 
 impl Route {
-  /// Settings at the tab its query names: Automation (asking *Rotate the token?* with `ask`), General,
-  /// Notifications, Accounts with the account it shows, Browser, or Orchester Cloud.
+  /// Settings at the tab its query names: Automation (asking *Rotate the token?* with `ask`), General (with what it
+  /// shows), Notifications, Accounts with the account it shows, Browser, or Orchester Cloud.
   fn settings(params: &mut Params) -> Result<Self, RouteError> {
     match params.take(TAB)?.as_deref() {
       None => match params.take(ASK)?.as_deref() {
@@ -385,7 +395,11 @@ impl Route {
           value: other.to_owned(),
         }),
       },
-      Some(GENERAL) => Ok(UpdatesShow::take(params)?.map_or(Self::General, Self::Updates)),
+      Some(GENERAL) => match params.take(updates::SHOW)? {
+        None => Ok(Self::General),
+        Some(show) if show == updates::PLAN_LIMITS => Ok(Self::PlanLimits),
+        Some(show) => UpdatesShow::named(show).map(Self::Updates),
+      },
       Some(NOTIFICATIONS) => Ok(Self::Notifications),
       Some(BROWSER) => Ok(Self::Browser),
       Some(ACCOUNTS) => AccountsView::take(params).map(Self::Accounts),
