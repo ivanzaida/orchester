@@ -13,9 +13,11 @@ use orchester_workspace::{
 use crate::mcp::DISCOVERY_VARIABLE;
 
 /// The Ed25519 public keys of the release keys this app accepts, as 64 lowercase hex characters: the current one and,
-/// while one replaces another, the one before. The private key lives only in CI's secret store. Until the first release
-/// key is made and listed here, every downloaded update is refused as signed with an unknown key and deleted.
-const RELEASE_KEYS: &[&str] = &[];
+/// while one replaces another, the one before. The private key lives only in CI's secret store.
+const RELEASE_KEYS: &[&str] = &[
+  // Key id 2837a6bf598bb9ba, made 2026-10-31.
+  "f8906c3a8c7c2c4ffbfb213e80f067120d1c97e29799866de25fc404a45a2e79",
+];
 
 /// The release keys built into the app.
 pub fn release_keys() -> AcceptedReleaseKeys {
