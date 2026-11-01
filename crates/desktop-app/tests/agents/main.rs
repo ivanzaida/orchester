@@ -17,3 +17,4 @@ mod support;
 mod usage;
 
 mod usage_navigation;
+mod writable_folders;
