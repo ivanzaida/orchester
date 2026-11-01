@@ -9,6 +9,7 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use orchester_core::{
   attachment::{Attachment, is_names_only},
+  connection::stream::TodoList,
   id::ChatMessageId,
   orchestrator::{AgentWait, ChatAction, ChatEntry, ChatEvent, DailyReport, EntryKind, TurnState, WaitTurn},
   time::Timestamp,
@@ -85,6 +86,8 @@ pub(super) struct Turn {
   /// A message the answer under way took follows it: that answer goes on, and ends, under that message.
   pub(super) continued: bool,
   pub(super) answer: Vec<Part>,
+  /// The todo list of the turn it started, as the agent's latest update left it; `None` when the agent keeps none.
+  pub(super) todo: Option<TodoList>,
 }
 
 impl Turn {
@@ -111,6 +114,7 @@ impl Turn {
       arrival,
       continued: false,
       answer: Vec::new(),
+      todo: None,
     }
   }
 
@@ -143,6 +147,7 @@ impl Turn {
       arrival: Arrival::Own,
       continued: false,
       answer: Vec::new(),
+      todo: None,
     }
   }
 
@@ -225,6 +230,13 @@ pub(super) fn turns(shown: &ChatView) -> Vec<Turn> {
     }
   }
   join_answers(&mut turns);
+  // A turn's list is the one its agent keeps for the message, wait or report that started it.
+  for turn in &mut turns {
+    turn.todo = turn
+      .message
+      .filter(|_| turn.arrival == Arrival::Own)
+      .and_then(|message| shown.todo_of(message).cloned());
+  }
   turns.extend(waiting);
   turns
 }
@@ -261,6 +273,7 @@ fn person(
     arrival,
     continued: false,
     answer: Vec::new(),
+    todo: None,
   }
 }
 

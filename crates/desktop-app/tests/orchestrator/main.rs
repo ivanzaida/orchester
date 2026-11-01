@@ -11,6 +11,7 @@ mod changes;
 mod chat;
 mod code_block;
 mod connections;
+mod context;
 mod continuation;
 mod decisions;
 mod drafts;
@@ -41,5 +42,6 @@ mod start;
 #[path = "../support/mod.rs"]
 mod support;
 mod tall_reply;
+mod todo;
 mod waits;
 mod while_answering;

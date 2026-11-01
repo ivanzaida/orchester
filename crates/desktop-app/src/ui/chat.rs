@@ -68,6 +68,16 @@ impl Avatar {
 
 /// The avatar, then `name` and `meta` with `body` under them; `id` names the row.
 pub fn chat_row(id: String, avatar: Avatar, (name, meta): (&str, &str), body: Vec<Element>) -> Element {
+  chat_row_marked(id, avatar, (name, meta, None), body)
+}
+
+/// [`chat_row`] with `mark` on the name line after `meta`: an ended answer's plan chip (09 g `OoT5k`).
+pub fn chat_row_marked(
+  id: String,
+  avatar: Avatar,
+  (name, meta, mark): (&str, &str, Option<Element>),
+  body: Vec<Element>,
+) -> Element {
   Row::new()
     .id(id)
     .width(Dimension::Pct(100.0))
@@ -104,7 +114,8 @@ pub fn chat_row(id: String, avatar: Avatar, (name, meta): (&str, &str), body: Ve
                 .id("conversation-message-meta")
                 .variant(TypographyStyle::Caption)
                 .nowrap(),
-            ),
+            )
+            .with_children(mark),
         )
         .with_children(body),
     )

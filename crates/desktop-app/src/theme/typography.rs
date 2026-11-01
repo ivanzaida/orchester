@@ -250,6 +250,7 @@ pub fn typography(palette: &ThemePalette) -> ThemeTypography {
       .chain(super::lifecycle::typography(palette))
       .chain(super::local_integration::typography(palette))
       .chain(super::connections::typography(palette))
+      .chain(super::context::typography(palette))
       .chain(super::secrets::typography(palette))
       .chain(super::projects::typography(palette))
       .chain(super::agents::typography(palette))
@@ -272,6 +273,7 @@ pub fn typography(palette: &ThemePalette) -> ThemeTypography {
       .chain(super::date_picker::typography(palette))
       .chain(super::browser::typography(palette))
       .chain(super::dialog::typography(palette))
+      .chain(super::todo_list::typography(palette))
       .collect(),
   }
 }

@@ -14,6 +14,7 @@ mod body;
 pub(in crate::screens) mod card;
 pub(in crate::screens) mod change;
 mod composer;
+mod context;
 pub(in crate::screens) mod data;
 mod decision;
 mod delivery;
@@ -71,6 +72,7 @@ use self::{
   draft::Conversation,
   header::Named,
   send::{QueuedAction, SendAction, Sending, Sent, StopAction},
+  timeline::OpenedPlans,
 };
 use crate::{
   navigation::Navigation,
@@ -141,6 +143,8 @@ struct View {
   links: LinkHandler,
   /// The turns open at their end and follow it; another conversation opens at its own end.
   follow: Follow,
+  /// The answers whose todo list the person opened under their name line.
+  plans: Signal<OpenedPlans>,
 }
 
 struct OrchestratorScreen {
@@ -174,6 +178,7 @@ impl Component for OrchestratorScreen {
       queued: send::queued_action(ctx),
       links: chat::links(ctx),
       follow: Follow::new(ctx),
+      plans: ctx.signal(OpenedPlans::default()),
     };
     let taker = view.clone();
     ctx.watch(&view.queued.state(), move |state| {

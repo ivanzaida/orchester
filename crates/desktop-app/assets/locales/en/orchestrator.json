@@ -86,6 +86,9 @@
       "steering": "Sending into this answer…",
       "joined": "Taken mid-answer · {{time}}"
     },
+    "plan": {
+      "owner": "Orchestrator · answering"
+    },
     "queued": {
       "edit": "Edit",
       "remove": "Remove",

@@ -54,6 +54,7 @@ use crate::{
     message::message_text,
     notice::{Notice, NoticeTone},
     state::load_error,
+    todo_list::{PinnedPlan, PinnedProps},
   },
 };
 
@@ -187,6 +188,7 @@ impl Foot<'_> {
         revision: project.feed.saves.get(),
       },
     );
+    let context = super::context::meter(ctx, project, self.reads, self.readiness);
     composer(
       ctx,
       view,
@@ -196,6 +198,7 @@ impl Foot<'_> {
         focused: &view.focused,
         stop,
         runs_on,
+        context,
         set_up,
         starts,
         mentions,
@@ -360,11 +363,13 @@ fn conversation(
   let boxed = foot.composer_with(ctx, view, (project, placeholder), (stop, false));
   // Until it is set up, the chat says under its last turn that it stays readable (`02 Not set up` `Wd5CL`).
   let readable = foot.not_set_up().then(|| ctx.t("orchestrator.composer.readable"));
+  let plan = shown.and_then(|shown| pinned_plan(ctx, shown));
   let below = Column::new()
     .width(Dimension::Pct(100.0))
     .max_width(Dimension::Px(COLUMN_WIDTH))
     .spacing(SpacingSize::Sm)
     .with_children(notices.into_iter().flatten())
+    .with_children(plan)
     .child(boxed);
   // The turns scroll across the whole chat area, so the thumb sits at its right edge; each turn, the notices and
   // the composer keep to the column, centred.
@@ -388,6 +393,22 @@ fn conversation(
     )
     .child(composer_area(below))
     .into()
+}
+
+/// While the Orchestrator answers, the todo list its agent keeps for the answer, over the composer (08 `lEQgI`); its
+/// fold is the answer's own.
+fn pinned_plan(ctx: &mut Ctx, shown: &ChatView) -> Option<Element> {
+  if !shown.thinking() {
+    return None;
+  }
+  let (message, _) = shown.last_turn()?;
+  let list = shown.todo_of(message)?.clone();
+  let props = PinnedProps {
+    id: "orchestrator-plan".into(),
+    list,
+    owner: ctx.t("orchestrator.plan.owner"),
+  };
+  Some(ctx.mount_keyed::<PinnedPlan>(&format!("orchestrator-plan-{message}"), props))
 }
 
 /// The composer's area: 8 over the composer, 16 under it, 40 at the chat's sides, the column centred.

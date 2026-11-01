@@ -303,6 +303,11 @@ impl Composer {
     let presses = presses::presses(&composing.state, &target, (&mode, recipient));
     let field = self.field(ctx, props, &mode, (&presses, leave.clone()));
     let attached = &composing.state.attached;
+    let context = composing
+      .detail
+      .run
+      .as_ref()
+      .and_then(|run| super::context::in_composer(ctx, &composing.project, run));
     let bar = controls::bar(
       ctx,
       &Bar {
@@ -314,6 +319,7 @@ impl Composer {
         anchor: &self.anchor,
         attached,
       },
+      context,
     );
     let stroke = if self.focused.get() {
       PaletteColor::BorderFocus

@@ -8,6 +8,7 @@
 mod agent_text;
 mod autopilot;
 mod code_block;
+mod context;
 mod denied;
 mod jump;
 #[allow(
@@ -25,6 +26,7 @@ mod states;
 #[path = "../support/mod.rs"]
 mod support;
 mod theme;
+mod todo;
 
 use kontur::{SeedRequest, Seeded, scenarios};
 use lurq::{

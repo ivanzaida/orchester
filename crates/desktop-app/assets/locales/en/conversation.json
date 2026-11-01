@@ -318,6 +318,18 @@
       "one": "{{steps}} did not start",
       "other": "{{steps}} did not start"
     },
+    "plan": {
+      "chip": "Plan · {{done}} of {{total}}",
+      "count": "{{done}} of {{total}}",
+      "doneFolded": "{{count}} done",
+      "more": "{{count}} more to do",
+      "notDone": "{{count}} not done when {{step}} stopped at {{time}}",
+      "owner": "{{agent}} · {{step}}",
+      "show": "Show",
+      "showAll": "Show all",
+      "showLess": "Show less",
+      "title": "Plan"
+    },
     "preset": {
       "custom": "Custom",
       "deepseek": "DeepSeek",

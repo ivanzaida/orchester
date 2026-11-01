@@ -20,6 +20,7 @@ mod message;
 mod proposal;
 mod result;
 mod switched;
+mod todo;
 mod working;
 
 use std::{collections::HashMap, sync::Arc};
@@ -59,6 +60,7 @@ pub(super) use self::{
 use super::shared::Shared;
 use crate::{
   navigation::{Navigation, link::Open},
+  project::ShownProject,
   routes::{ProjectPage, Route, TaskView},
   theme::ExtraSpacing,
   ui::chat::{
@@ -72,6 +74,8 @@ use crate::{
 #[derive(Clone, PartialEq)]
 pub(super) struct Timeline {
   pub(super) project: ProjectId,
+  /// The project as the window shows it, whose run changes move the context meter of the step at work.
+  pub(super) shown_project: ShownProject,
   /// The project as the Orchestrator chat's proposals are decided in it.
   pub(super) chat_project: ChatProject,
   /// The projects' names, for what a link to another project's place says.
@@ -88,6 +92,8 @@ pub(super) struct Timeline {
   pub(super) decided: Arc<Vec<DecidedToolApproval>>,
   /// The Orchestrator chat's merge of the run, when it carried one out (ORC-69).
   pub(super) merged_by: Option<ChatMerge>,
+  /// The run goes on, so the lists of its steps at work are pinned over the composer, not on their dividers.
+  pub(super) pins: bool,
 }
 
 impl lurq::app::component::DevtoolsInspectable for Timeline {}

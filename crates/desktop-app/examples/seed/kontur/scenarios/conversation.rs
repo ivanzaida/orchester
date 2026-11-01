@@ -5,7 +5,7 @@
 //! by the person, so nothing waits for them here. It still works: its last command has not ended. Near the
 //! end it writes a message with links (`Orchestrator · reply with links` `w262B`): a labelled link list,
 //! in-app links, a link into Atlas — a second project registered beside Kontur — and addresses it does not
-//! follow.
+//! follow. The Builder keeps a todo list ([`super::todo_lists`]).
 
 use std::fs;
 
@@ -22,7 +22,7 @@ use orchester_core::{
 };
 use orchester_store::AppDb;
 
-use super::tasks;
+use super::{tasks, todo_lists};
 use crate::kontur::{Kontur, SeedError};
 
 /// How far apart the transcript's events are.
@@ -82,6 +82,7 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
   );
   let events = transcript(decided, &approval.action, &links);
   kontur.db.append_activity(&invocation, &events)?;
+  todo_lists::seed(kontur, &invocation, events[2].0)?;
   let asked_at = events[10].0;
   let body = MessageBody::new(ASKED).map_err(|error| SeedError::Invalid(error.to_string()))?;
   let message = Message::from_person(

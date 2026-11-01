@@ -32,6 +32,15 @@ pub fn history_in(root: &Path) -> Result<History, Message> {
     .map_err(|error| messages::store_error(&error))
 }
 
+/// How full the context of the session conversation `chat`'s turns continue is, read alone: the Orchestrator's context
+/// meter reads it again as turns arrive, without the conversation's entries. `None` while no turn's CLI reported it.
+/// Blocks on SQLite.
+pub fn context_in(root: &Path, chat: ChatId) -> Result<Option<ContextUse>, Message> {
+  ProjectDb::open(root)
+    .and_then(|db| db.chat_context(chat))
+    .map_err(|error| messages::store_error(&error))
+}
+
 /// One conversation and its entries in the order they were kept.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ChatView {

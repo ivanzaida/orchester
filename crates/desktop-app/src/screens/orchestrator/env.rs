@@ -58,5 +58,6 @@ pub(super) fn env(
     }),
     links: view.links.clone(),
     names: names.clone(),
+    plans: view.plans.clone(),
   }
 }

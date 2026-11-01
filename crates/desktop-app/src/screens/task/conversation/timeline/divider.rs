@@ -58,8 +58,8 @@ fn rule() -> Row {
     .background(PaletteColor::Border)
 }
 
-/// `label` between the rules, `gap` from them.
-fn ruled(id: String, gap: SpacingSize, label: Element) -> Element {
+/// `label` between the rules, `gap` from them, and `end` after them: a finished step's plan chip (09 d `u5bz4S`).
+fn ruled(id: String, gap: SpacingSize, (label, end): (Element, Option<Element>)) -> Element {
   Row::new()
     .id(id)
     .width(Dimension::Pct(100.0))
@@ -68,6 +68,7 @@ fn ruled(id: String, gap: SpacingSize, label: Element) -> Element {
     .child(rule())
     .child(label)
     .child(rule())
+    .with_children(end)
     .into()
 }
 
@@ -100,7 +101,7 @@ pub(super) fn event(id: String, glyph: Icon, text: &str, link: Option<Link>) -> 
         .flex_shrink(1.0),
     )
     .with_children(link);
-  ruled(id, SpacingSize::Sm, label.into())
+  ruled(id, SpacingSize::Sm, (label.into(), None))
 }
 
 /// A divider drawn as a step's, for a phase that is no step of the run's pipeline: the queue's *07 Deliver · sync with
@@ -113,7 +114,7 @@ pub(super) fn phase(id: String, text: &str) -> Element {
     .text_overflow(TextOverflow::Elipsis)
     .min_width(Dimension::Px(0.0))
     .flex_shrink(1.0);
-  ruled(id, ExtraSpacing::Loose.role(), text.into())
+  ruled(id, ExtraSpacing::Loose.role(), (text.into(), None))
 }
 
 /// "03 Implement".
@@ -124,8 +125,10 @@ pub(crate) fn step_label(ctx: &Ctx, number: usize, step: &str) -> Arc<str> {
   )
 }
 
-/// A step's divider (`qfdli`); a finished one folds when pressed.
-pub(super) fn step(ctx: &Ctx, timeline: &Timeline, (head, key): (&StepHead, &Arc<str>), foldable: bool) -> Element {
+/// A step's divider (`qfdli`); a finished one folds when pressed. The step at work carries its context meter after
+/// its words, 5 from them (`bxHFm`). A finished step whose agent kept a todo list ends in its chip, and the list it
+/// opens shows under the divider (`super::todo`).
+pub(super) fn step(ctx: &mut Ctx, timeline: &Timeline, (head, key): (&StepHead, &Arc<str>), foldable: bool) -> Element {
   let text = Text::new(&step_text(ctx, head))
     .id("conversation-step-text")
     .variant(ConversationText::Divider.role())
@@ -133,20 +136,47 @@ pub(super) fn step(ctx: &Ctx, timeline: &Timeline, (head, key): (&StepHead, &Arc
     .text_overflow(TextOverflow::Elipsis)
     .min_width(Dimension::Px(0.0))
     .flex_shrink(1.0);
+  let meter = timeline
+    .detail
+    .run
+    .as_ref()
+    .and_then(|run| super::super::context::on_divider(ctx, &timeline.shown_project, run, head.execution));
+  let label: Element = match meter {
+    Some(meter) => Row::new()
+      .flex_shrink(1.0)
+      .min_width(Dimension::Px(0.0))
+      .spacing(ExtraSpacing::Pair.role())
+      .align_items(Alignment::Center)
+      .child(text)
+      .child(meter)
+      .into(),
+    None => text.into(),
+  };
+  let (chip, list) = super::todo::of_step(ctx, timeline, head).map_or((None, None), |(chip, list)| (Some(chip), list));
   let line = ruled(
     format!("conversation-step-{key}"),
     ExtraSpacing::Loose.role(),
-    text.into(),
+    (label, chip),
   );
-  if !foldable {
-    return line;
+  let line = if foldable {
+    let (toggles, key) = (timeline.toggles.clone(), key.clone());
+    pressable(move || toggles.flip(&key, true))
+      .id("conversation-step-fold")
+      .width(Dimension::Pct(100.0))
+      .child(line)
+      .into()
+  } else {
+    line
+  };
+  match list {
+    Some(list) => Column::new()
+      .width(Dimension::Pct(100.0))
+      .spacing(ExtraSpacing::Loose.role())
+      .child(line)
+      .child(list)
+      .into(),
+    None => line,
   }
-  let (toggles, key) = (timeline.toggles.clone(), key.clone());
-  pressable(move || toggles.flip(&key, true))
-    .id("conversation-step-fold")
-    .width(Dimension::Pct(100.0))
-    .child(line)
-    .into()
 }
 
 /// "05 Review · Reviewer · Claude / opus-4.1 · started 16:24 · 41k tokens", "04 Run checks · tool ·

@@ -13,7 +13,7 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
-  orchestrator::{ActionOutcome, ChatAction, ChatEvent, HeldWork, SessionChange},
+  orchestrator::{ActionOutcome, ChatAction, ChatEvent, HeldWork, SessionChange, TurnState},
   time::Timestamp,
 };
 use orchester_workspace::display;
@@ -29,20 +29,42 @@ use super::{
 };
 use crate::{
   theme::ExtraSpacing,
-  ui::chat::{Avatar, agent_text, chat_row},
+  ui::{
+    chat::{Avatar, agent_text, chat_row_marked},
+    todo_list::{chip, ended},
+  },
 };
 
-/// The answer under `row`'s opening, with the Orchestrator's avatar and name; `None` before its first part.
+/// The answer under `row`'s opening, with the Orchestrator's avatar and name; `None` before its first part. Once it
+/// ended, the todo list its agent kept folds into its name line as a chip, which opens the list under that line
+/// (09 g `OoT5k`); while it answers, the list is pinned over the composer instead (`super::body`).
 pub(super) fn answer(ctx: &mut Ctx, row: &TurnRow) -> Option<Element> {
   let first = row.turn.answer.first()?;
   let time = display::clock(first.at());
   let key = row.turn.key();
-  Some(chat_row(
+  let (mark, list) = ended_plan(ctx, row).map_or((None, None), |(chip, list)| (Some(chip), list));
+  let body = list.into_iter().chain([parts(ctx, row).into()]).collect();
+  Some(chat_row_marked(
     format!("orchestrator-answer-{key}"),
     Avatar::Orchestrator,
-    (&ctx.t("orchestrator.title"), &time),
-    vec![parts(ctx, row).into()],
+    (&ctx.t("orchestrator.title"), &time, mark),
+    body,
   ))
+}
+
+/// The chip of the list the agent kept for `row`'s turn once that turn ended, and the list while the person opened it.
+fn ended_plan(ctx: &Ctx, row: &TurnRow) -> Option<(Element, Option<Element>)> {
+  let list = row.turn.todo.as_ref()?;
+  let message = row.turn.message?;
+  if row.turn.state.as_ref().is_none_or(TurnState::is_thinking) {
+    return None;
+  }
+  let plans = row.env.plans.clone();
+  let open = plans.get().is_open(message);
+  let toggle = move || plans.update(|opened| opened.flip(message));
+  let chip = chip(ctx, &format!("orchestrator-plan-chip-{message}"), (list, open), toggle);
+  let list = open.then(|| ended(&format!("orchestrator-plan-list-{message}"), list, None));
+  Some((chip, list))
 }
 
 /// The answer of the turn a wait started by itself, nested under the wait's line as a quote; `None` before its first

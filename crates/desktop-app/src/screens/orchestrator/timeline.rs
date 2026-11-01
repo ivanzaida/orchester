@@ -8,7 +8,7 @@
 //! Waits for the person kept one after another, with no message of theirs between them, gather into one digest
 //! ([`super::digest`]).
 
-use std::{path::PathBuf, sync::Arc};
+use std::{collections::BTreeSet, path::PathBuf, sync::Arc};
 
 use lurq::{
   app::{
@@ -17,6 +17,7 @@ use lurq::{
     theme::{PaletteColor, TypographyStyle},
   },
   components::{Column, Stack, Text, VirtualizedList},
+  core::Signal,
   layout::StackAlignment,
   node::{Element, dimension::Dimension, padding::Padding},
 };
@@ -68,6 +69,26 @@ pub(super) struct TurnEnv {
   pub(super) links: LinkHandler,
   /// The projects' names, for what a link to another project's place says.
   pub(super) names: ProjectNames,
+  pub(super) plans: Signal<OpenedPlans>,
+}
+
+/// The answers whose todo list the person opened under their name line, by the message that started each.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(super) struct OpenedPlans(BTreeSet<ChatMessageId>);
+
+impl lurq::app::component::DevtoolsInspectable for OpenedPlans {}
+
+impl OpenedPlans {
+  pub(super) fn is_open(&self, message: ChatMessageId) -> bool {
+    self.0.contains(&message)
+  }
+
+  /// Opens the list of `message`'s answer, or folds it again.
+  pub(super) fn flip(&mut self, message: ChatMessageId) {
+    if !self.0.remove(&message) {
+      self.0.insert(message);
+    }
+  }
 }
 
 /// One row of the list.
