@@ -5,6 +5,8 @@
 //! Codex under another name. Needs `git`. Run with `cargo test -p orchester-runner
 //! --features test-agent --test mcp mcp`.
 
+#[path = "mcp/readiness.rs"]
+mod readiness;
 mod support;
 
 use std::{

@@ -55,6 +55,8 @@ pub enum McpInventoryError {
     .0.detail().unwrap_or_default()
   )]
   UnavailableSelected(UnavailableServer),
+  #[error("Timed out waiting for the MCP server `{}` selected by this agent profile in Codex App Server: {}", .0.name, .0.detail().unwrap_or_else(|| "no status response".to_owned()))]
+  ReadinessTimeout(UnavailableServer),
   #[error("Codex App Server did not report its configuration")]
   MissingConfiguration,
   #[error("Codex App Server runs the MCP server `{0}`, which this step does not choose")]
@@ -163,6 +165,25 @@ pub fn verify_selected_servers(
     Some(UnavailableServer { name, state: None, .. }) => Err(McpInventoryError::MissingSelected(name)),
     Some(server) => Err(McpInventoryError::UnavailableSelected(server)),
   }
+}
+/// Servers still starting, after refusing every missing or terminal selected server. A terminal failure
+/// takes precedence over starting servers, so a pending connection never hides another server's failure.
+pub fn starting_selected(
+  result: &Value,
+  selected: &BTreeSet<String>,
+  redact: impl Fn(&str) -> String,
+) -> Result<Vec<UnavailableServer>, McpInventoryError> {
+  let unavailable = unavailable_selected(result, selected, redact)?;
+  for server in &unavailable {
+    if server.state.is_none() {
+      return Err(McpInventoryError::MissingSelected(server.name.clone()));
+    }
+    // Discovery can finish with an error while the thread's separate connection is still starting.
+    if server.state.as_deref() != Some("starting") {
+      return Err(McpInventoryError::UnavailableSelected(server.clone()));
+    }
+  }
+  Ok(unavailable)
 }
 
 /// The selected servers of `result` (an `mcpServerStatus/list` result) that are not connected, the

@@ -2884,3 +2884,4 @@ project or server added with nobody signed in is this computer's (`owner` NULL, 
 projects; sharing, joining, invites and team servers offer the sign-in in place; MCP answers `sign_in_required` only for
 a named project an account holds while nobody is signed in. Open: the *Verify* step's design verification, macOS
 unchecked. The three-way start page stays ORC-293.
+ORC-613 · Wait for required Codex MCP servers · branch `orchester/orc-613-run-1`: bounded cancellable thread-scoped readiness on fresh start, quota resume and retry; missing/terminal/timeout errors retain redaction and server names. Evidence: `docs/evidence/orc-613-codex-mcp-readiness.md`.
