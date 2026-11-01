@@ -17,6 +17,7 @@ mod support;
 mod accounts;
 mod add_cli;
 mod api_provider;
+mod decision;
 mod entry;
 mod harness;
 mod layout;

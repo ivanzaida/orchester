@@ -15,6 +15,7 @@ mod cards;
 mod changes;
 mod connections;
 mod conversation;
+mod decision_connections;
 mod decisions;
 mod deliverables;
 mod delivery;
@@ -93,7 +94,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 101] = [
+pub const ALL: [Scenario; 103] = [
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-library", agents_library::seed),
   Scenario::of("agents-browser", agents_browser::seed),
@@ -144,6 +145,8 @@ pub const ALL: [Scenario; 101] = [
   Scenario::with_fake_codex("lifecycle", lifecycle::seed),
   Scenario::with_fake_codex("slot-wait", slot_wait::seed),
   Scenario::of("connections", connections::seed),
+  Scenario::of("decision-connections", decision_connections::seed),
+  Scenario::of("decision-connections-missing", decision_connections::missing),
   Scenario::of("api-providers", api_providers::seed),
   Scenario::of("native", native::seed),
   Scenario::of("project-settings", project_settings::seed),

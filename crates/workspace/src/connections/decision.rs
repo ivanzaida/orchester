@@ -46,6 +46,20 @@ pub enum DecisionError {
   ClientUnavailable,
 }
 
+impl DecisionError {
+  /// A secret-safe explanation for the window and background activity.
+  pub fn message(&self) -> crate::messages::Message {
+    use crate::messages::{self, Message};
+    match self {
+      Self::Store(error) => messages::store_error(error),
+      Self::PersonOnly => Message::new("appMcp.errors.personOnly"),
+      Self::CheckStale => Message::new("connections.errors.decisionCheckStale"),
+      Self::KeyUnavailable => Message::new("connections.errors.decisionKeyUnavailable"),
+      Self::ClientUnavailable => Message::new("connections.errors.decisionClientUnavailable"),
+    }
+  }
+}
+
 /// Adds or edits a decision connection. Even renaming a hosted connection is a person's write.
 /// A changed server/key clears the previous server's models and checks; a rename keeps them.
 pub fn save_in(root: &Path, draft: &DecisionDraft, writer: Writer) -> Result<DecisionConnectionId, DecisionError> {

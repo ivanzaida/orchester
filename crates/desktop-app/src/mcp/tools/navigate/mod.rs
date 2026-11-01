@@ -52,7 +52,7 @@ const DESCRIPTION: &str = "Take the active tab of the Orchester window to a rout
   from changes) and, on its changes tab, `file` with `from`; project_settings \
   `tab` (general, runs, context, connections, secrets or sharing) and, with tab runs, `view` rules (Approved for every \
   run). Connections and Secrets are tabs of Project settings with routes of their own: connections takes `selected` \
-  (the id of the connection whose page it opens); secrets opens the Secrets tab; new_connection takes `kind` (Add \
+  (the id of the connection whose page it opens), or decision (a decision connection id); secrets opens the Secrets tab; new_connection takes `kind` (Add \
   provider or Add MCP server); edit_connection `connection` (an MCP server's id, or an agent CLI connection's for its \
   account); each opens Project settings on that tab or page. agents, instructions, skills, tools and memory are the \
   five tabs of one Agents page (Profiles, Instructions, Skills, Tools, Memory), each its own route: agents takes \
@@ -122,6 +122,7 @@ fn schema() -> Value {
         "type": "string",
         "description": "task: the repository path of a changed file to show on the changes tab (the tab when left out). files: the path of the file to show (the tree alone when left out).",
       },
+      "decision": { "type": "string", "description": "connections: the decision connection id; mutually exclusive with selected." },
       "selected": { "type": "string", "description": "connections: the id of the connection whose page Project settings Ã¢â‚¬Âº Connections opens." },
       "kind": { "type": "string", "enum": kinds, "description": "new_connection: what it adds, on a page of Project settings Ã¢â‚¬Âº Connections." },
       "connection": { "type": "string", "description": "edit_connection: the connection's id: an MCP server's form, or an agent CLI connection's account, on a page of Project settings Ã¢â‚¬Âº Connections." },
@@ -264,7 +265,7 @@ const fn params(screen: Screen) -> &'static [&'static str] {
     Screen::Tasks => &["project", "tab", "q", "highlight"],
     Screen::EditTask => &["project", "key"],
     Screen::Task => &["project", "key", "tab", "view", "file", "from"],
-    Screen::Connections => &["project", "selected"],
+    Screen::Connections => &["project", "selected", "decision"],
     Screen::Memory => &["project", "tab"],
     Screen::Tools => &["project", "tool", "tab"],
     Screen::Skills => &["project", "skill"],

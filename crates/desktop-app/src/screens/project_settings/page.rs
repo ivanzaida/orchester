@@ -106,7 +106,7 @@ pub fn settings(
 const fn at_root(shown: Shown) -> bool {
   match shown {
     Shown::Tab(_) => true,
-    Shown::Connections(view) => view.selected().is_none(),
+    Shown::Connections(view) => view.is_root(),
     Shown::Secrets(view) => view.secret.is_none() && matches!(view.panel, crate::routes::SecretsPanel::Inspect),
     Shown::Rules | Shown::NewConnection(_) | Shown::EditConnection(_) => false,
   }
