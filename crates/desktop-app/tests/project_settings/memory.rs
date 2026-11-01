@@ -31,6 +31,7 @@ fn focus(page: &mut Settings, id: &str) {
 #[test]
 fn project_settings_context_memory_shows_its_group_after_the_code_index() {
   let mut page = context();
+  page.until("the code index", |p| p.exists("settings-index-section"));
   assert_eq!(page.text("settings-memory-title"), "Memory");
   assert_eq!(page.text("settings-memory-only-you"), "Only you, here in the window");
   assert!(page.text("settings-memory-task-row").contains("Task memory"));
@@ -116,5 +117,35 @@ fn project_settings_context_memory_refuses_an_mcp_clients_input() {
     stored(&page),
     before,
     "neither automatic saving nor a higher limit is stored"
+  );
+}
+
+/// A refused choice puts its select back, and that is no choice: it never saves what a limit field holds, an MCP
+/// client's typing here.
+#[test]
+fn project_settings_context_memory_refuses_a_limit_typed_before_a_refused_choice() {
+  let mut page = context();
+  let before = stored(&page);
+  with_synthetic_input(|| page.set("settings-memory-tokens-field", "20000"));
+  with_synthetic_input(|| page.choose("settings-memory-project-select", "Save automatically"));
+  page.until("the person-only note", |p| p.exists("settings-memory-person-only"));
+  page.until("the select put back", |p| {
+    p.text("settings-memory-project-select") == "Save after approval"
+  });
+  for _ in 0..5 {
+    page.window.pass();
+  }
+  assert!(page.exists("settings-memory-person-only"), "the note stays");
+  assert_eq!(page.text("project-settings-save-status"), "Changes not saved");
+  assert_eq!(stored(&page), before, "the typed limit is not stored");
+  // A person's choice after it saves its policy alone; saves run one at a time, so a save of the limit would be in.
+  page.choose("settings-memory-task-select", "Save after approval");
+  page.until("task memory saving after approval", |p| {
+    stored(p).task_writes == WritePolicy::AfterApproval
+  });
+  assert_eq!(
+    stored(&page).limits,
+    before.limits,
+    "the typed limit is still not stored"
   );
 }

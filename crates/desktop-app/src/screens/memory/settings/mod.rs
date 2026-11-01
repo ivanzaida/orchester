@@ -8,7 +8,13 @@
 
 mod form;
 
-use std::{path::PathBuf, sync::Arc};
+use std::{
+  path::PathBuf,
+  sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+  },
+};
 
 use lurq::{
   app::{
@@ -96,6 +102,8 @@ pub(crate) struct MemoryForm {
   submitted: Signal<Option<Kept>>,
   /// Synthetic input asked for the last save, which was not taken.
   pub(crate) refused: Signal<bool>,
+  /// The selects are being put back on settings, not chosen.
+  putting_back: Arc<AtomicBool>,
   pub(crate) save: Save,
   pub(crate) separator: Arc<str>,
   repo: PathBuf,
@@ -113,6 +121,7 @@ impl MemoryForm {
       seen: ctx.signal(None),
       submitted: ctx.signal(None),
       refused: ctx.signal(false),
+      putting_back: Arc::default(),
       save: action(ctx),
       separator: ctx.t("memory.groupSeparator"),
       repo: project.open.repo_root.clone(),
@@ -174,14 +183,16 @@ impl MemoryForm {
     self.choices(settings);
   }
 
-  /// The selects on `settings`' policies.
+  /// The selects on `settings`' policies, which their watchers do not take as a choice.
   fn choices(&self, settings: MemorySettings) {
+    self.putting_back.store(true, Ordering::Relaxed);
     for (scope, chosen) in [(Scope::Task, &self.task), (Scope::Project, &self.project)] {
       let name = scope.of(settings).name();
       if chosen.get_untracked() != name {
         chosen.set(name.to_owned());
       }
     }
+    self.putting_back.store(false, Ordering::Relaxed);
   }
 
   /// Takes what a save stored as the new base, and its value into each field still holding what it submitted.
@@ -251,12 +262,17 @@ impl MemoryForm {
     }
   }
 
-  /// Saves `policy` for `scope`'s records, with the limits the fields hold while they are values.
+  /// Saves `policy` for `scope`'s records over the base, and nothing else: the limits the fields hold are saved only
+  /// when a field is left, so a select put back on the base ([`Self::settle`], [`Self::fill`], [`Self::saved`]) asks
+  /// for nothing and never saves what a field holds.
   pub(crate) fn choose(&self, (scope, policy): (Scope, WritePolicy)) {
+    if self.putting_back.load(Ordering::Relaxed) {
+      return;
+    }
     let Some(Kept(base)) = self.base.get_untracked() else {
       return;
     };
-    let mut asked = self.with_limits(base).unwrap_or(base);
+    let mut asked = base;
     match scope {
       Scope::Task => asked.task_writes = policy,
       Scope::Project => asked.project_writes = policy,
