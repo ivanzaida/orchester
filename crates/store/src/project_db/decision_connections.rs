@@ -171,7 +171,11 @@ fn ensure_name_free(connection: &Connection, value: &DecisionConnection) -> Resu
   Ok(())
 }
 
-fn load(connection: &Connection, clause: &str, params: impl Params) -> Result<Vec<DecisionConnection>, StoreError> {
+pub(super) fn load(
+  connection: &Connection,
+  clause: &str,
+  params: impl Params,
+) -> Result<Vec<DecisionConnection>, StoreError> {
   let mut statement = connection.prepare(&format!("SELECT id, name, settings FROM decision_connections {clause}"))?;
   let rows = statement
     .query_map(params, |row| {

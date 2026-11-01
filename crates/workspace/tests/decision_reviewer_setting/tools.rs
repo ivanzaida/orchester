@@ -106,6 +106,40 @@ async fn decision_reviewer_setting_tools_hosted_is_person_only_but_threshold_and
     .await
     .expect("switch back with widening off");
 }
+#[tokio::test]
+async fn decision_reviewer_setting_tools_gate_connection_and_model_changes() {
+  let (repo, mut db) = project();
+  let (services, workspace) = services(repo.path());
+  let mut first = connection("http://localhost:8000/v1");
+  let other_model = orchester_core::resource::ModelId::new("other-model").expect("model");
+  first.record_models(vec![super::model(), other_model.clone()]);
+  let mut second = connection("http://localhost:8001/v1");
+  second.rename(orchester_core::name::Name::new("Second decision").expect("name"));
+  db.create_decision_connection(&first).expect("first");
+  db.create_decision_connection(&second).expect("second");
+  let base = settings(&first, "0.80");
+  db.save_auto_mode_settings(&base).expect("baseline");
+  workspace
+    .set_automation_changes_permissions(false)
+    .expect("permissions off");
+  for (connection, model) in [(second.id(), super::model()), (first.id(), other_model)] {
+    let args = json!({
+      "project": "Reviewer", "decision_connection": connection.to_string(), "model": model.as_str()
+    });
+    assert!(matches!(call(&services, "set_reviewer", args.clone()).await,
+        Err(ToolError::Refused { code, .. }) if code == "person_only"));
+    assert_eq!(db.auto_mode_settings().expect("unchanged"), base);
+    workspace
+      .set_automation_changes_permissions(true)
+      .expect("permissions on");
+    call(&services, "set_reviewer", args).await.expect("authorized change");
+    db.save_auto_mode_settings(&base).expect("reset");
+    workspace
+      .set_automation_changes_permissions(false)
+      .expect("permissions off");
+  }
+}
+
 struct NoVault;
 
 impl orchester_core::secret::SecretVault for NoVault {

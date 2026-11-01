@@ -168,8 +168,9 @@ pub async fn set_reviewer(services: &Services, args: SetReviewer) -> Result<Valu
     let open = services.project(&args.project)?;
     let mut db = ProjectDb::open(&open.repo_root)?;
     let current = db.auto_mode_settings()?;
-    let reviewer = reviewer_change(&services, &db, &current, &args)?;
-    if db.save_auto_mode_if_current(&current, &AutoModeSettings { reviewer })?
+    let decisions = db.decision_connections()?;
+    let reviewer = reviewer_change(&services, &db, &current, &args, &decisions)?;
+    if db.save_auto_mode_with_decision_if_current(&current, &AutoModeSettings { reviewer }, &decisions)?
       == orchester_store::AutoModeSave::ChangedOutside
     {
       return Err(ToolError::refused(
@@ -203,31 +204,39 @@ fn reviewer_change(
   db: &ProjectDb,
   current: &AutoModeSettings,
   argument: &SetReviewer,
+  decisions: &[orchester_core::connection::DecisionConnection],
 ) -> Result<Option<ReviewerChoice>, ToolError> {
   let connections = db.connections()?;
-  let decisions = db.decision_connections()?;
-  let reviewer = chosen_reviewer(&connections, &decisions, argument)?;
+  let reviewer = chosen_reviewer(&connections, decisions, argument)?;
   let next = AutoModeSettings {
     reviewer: reviewer.clone(),
   };
-  if decision_reviewer::choosing_hosted(current, &next, &decisions).is_some() {
+  if decision_reviewer::choosing_hosted(current, &next, decisions).is_some() {
     return Err(ToolError::refused(
       "person_only",
       vec![Message::new("appMcp.errors.personOnly")],
     ));
   }
   gate(services)?;
-  if crate::project_settings::reviewer_widens(current, &next)
-    || (current != &next
-      && current
-        .reviewer
-        .as_ref()
-        .is_none_or(|c| decision_reviewer::connection_id(c).is_none())
-      && next
-        .reviewer
-        .as_ref()
-        .is_some_and(|c| decision_reviewer::connection_id(c).is_some()))
-  {
+  let threshold_only = current
+    .reviewer
+    .as_ref()
+    .zip(next.reviewer.as_ref())
+    .is_some_and(|(old, new)| {
+      decision_reviewer::connection_id(old).is_some()
+        && old.connection == new.connection
+        && old.model == new.model
+        && old.effort == new.effort
+    });
+  let returns_to_language = current
+    .reviewer
+    .as_ref()
+    .is_some_and(|c| decision_reviewer::connection_id(c).is_some())
+    && next
+      .reviewer
+      .as_ref()
+      .is_none_or(|c| decision_reviewer::connection_id(c).is_none());
+  if current != &next && !threshold_only && !returns_to_language {
     let mut reasons = vec![Message::new("appMcp.widens.reviewer")];
     if moves_reviewer_account(&connections, current, &next) {
       reasons.push(Message::new("appMcp.widens.reviewerAccount"));

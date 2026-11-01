@@ -346,7 +346,7 @@ pub fn save_auto_mode_in(
   }
   use orchester_store::AutoModeSave;
   match db
-    .save_auto_mode_if_current(base, asked)
+    .save_auto_mode_with_decision_if_current(base, asked, &decisions)
     .map_err(|error| messages::store_error(&error))?
   {
     AutoModeSave::Saved => Ok(()),

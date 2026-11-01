@@ -198,3 +198,45 @@ fn decision_reviewer_setting_read_model_keeps_destination_figures_and_unavailabl
   assert_eq!(row.kind, Some(ReviewerKind::Decision));
   assert_eq!(row.model, Some(model()));
 }
+
+#[test]
+fn decision_reviewer_setting_refuses_destination_changes_after_validation() {
+  use orchester_store::AutoModeSave;
+
+  let (repo, mut db) = project();
+  let mut writer = ProjectDb::open(repo.path()).expect("other writer");
+  for original_url in ["http://localhost:8000/v1", "https://confirmed.example/v1"] {
+    let original = connection(original_url);
+    db.create_decision_connection(&original).expect("connection");
+    let base = db.auto_mode_settings().expect("baseline");
+    let asked = settings(&original, "0.80");
+    let validated = db.decision_connections().expect("validated snapshot");
+    let mut changed = original.clone();
+    changed.set_server(
+      DecisionServerUrl::new("https://different.example/v1").expect("url"),
+      None,
+    );
+    changed.record_models(vec![model()]);
+    changed.record_check(DecisionCheck {
+      at: Timestamp::now(),
+      result: DecisionCheckResult::Connected,
+    });
+    writer
+      .save_decision_connection(&changed)
+      .expect("concurrent destination edit");
+    assert_eq!(
+      db.save_auto_mode_with_decision_if_current(&base, &asked, &validated)
+        .expect("compare and save"),
+      AutoModeSave::ChangedOutside
+    );
+    assert_eq!(db.auto_mode_settings().expect("unchanged"), base);
+    writer
+      .save_decision_connection(&original)
+      .expect("restore validated destination");
+    assert_eq!(
+      db.save_auto_mode_with_decision_if_current(&base, &asked, &validated)
+        .expect("current destination"),
+      AutoModeSave::Saved
+    );
+  }
+}

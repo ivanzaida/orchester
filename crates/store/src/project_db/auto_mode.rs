@@ -69,6 +69,34 @@ impl ProjectDb {
     Ok(AutoModeSave::Saved)
   }
 
+  /// Compares the selected decision connection with the validated snapshot under the write lock.
+  /// A changed or missing connection requires validation and any confirmation again.
+  pub fn save_auto_mode_with_decision_if_current(
+    &mut self,
+    base: &AutoModeSettings,
+    asked: &AutoModeSettings,
+    decisions: &[orchester_core::connection::DecisionConnection],
+  ) -> Result<AutoModeSave, StoreError> {
+    let transaction = self.connection.transaction()?;
+    if read_auto_mode(&transaction)? != *base {
+      return Ok(AutoModeSave::ChangedOutside);
+    }
+    if let Some(ReviewerChoice {
+      connection: ReviewerConnectionId::Decision { decision },
+      ..
+    }) = asked.reviewer.as_ref()
+    {
+      let expected = decisions.iter().find(|c| c.id() == *decision);
+      let stored = super::decision_connections::load(&transaction, "WHERE id = ?1", [decision.to_string()])?;
+      if expected.is_none() || stored.first() != expected {
+        return Ok(AutoModeSave::ChangedOutside);
+      }
+    }
+    write_auto_mode(&transaction, asked)?;
+    transaction.commit()?;
+    Ok(AutoModeSave::Saved)
+  }
+
   /// Records the push URL of `origin` as `run` starts; `None` when the repository has no `origin`.
   pub fn record_run_origin(&mut self, run: RunId, url: Option<&str>) -> Result<(), StoreError> {
     self.connection.execute(
