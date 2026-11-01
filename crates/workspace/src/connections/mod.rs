@@ -5,6 +5,7 @@
 pub mod api_provider;
 pub mod choose_program;
 pub mod data;
+pub mod decision;
 pub mod github;
 pub mod mcp;
 pub mod missing_cli;

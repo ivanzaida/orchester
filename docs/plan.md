@@ -1007,6 +1007,13 @@ keep agent data apart as untrusted, substitute Autopilot's roots policy, and str
 into a decision verdict. Documentation-derived fixtures cover Jev and Laya shapes; no live calls were made.
 HTTP execution remains ORC-558. Tests: `orchester-runner --test system_one_request system_one_request`.
 
+ORC-559 · Decision model connections in the workspace · branch `orchester/orc-559-run-1` (implemented 2026-11-01).
+Workspace and MCP list, add/edit, delete and check decision servers; hosted saves are person-only for automation.
+Check sends only a bodyless GET of the model catalog, with bounded transport and secret-safe results. TypeSafe and
+Laya formats come from their primary references; all five check states and answer timestamps are stored.
+Tests: `orchester-workspace --test decision_connections decision_connections`.
+Contract and limitations: `docs/evidence/orc-559-decision-connections.md`. No visual changes.
+
 ORC-557 · Decision reviewer choice · branch `orchester/orc-557-run-1` (implemented 2026-11-01). Core resolves an
 explicitly chosen decision connection and model with a validated threshold (0.80 by default), distinguishes gone,
 disconnected and no-longer-listed choices without fallback, and exposes the person-only rule for hosted servers.

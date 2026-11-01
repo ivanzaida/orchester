@@ -180,3 +180,51 @@ fn decision_connections_reject_duplicate_names_missing_edits_and_corrupt_data() 
     .expect("damage");
   assert!(matches!(db.decision_connections(), Err(StoreError::Corrupt { .. })));
 }
+
+#[test]
+fn decision_connections_check_save_refuses_interleaved_edits() {
+  let (repo, mut db) = fixture();
+  let original = connection();
+  db.create_decision_connection(&original).expect("add");
+  let mut editor = ProjectDb::open(repo.path()).expect("other writer");
+  for change in 0..3 {
+    let loaded = db
+      .decision_connection(original.id())
+      .expect("read")
+      .expect("connection");
+    let mut checked = loaded.clone();
+    checked.record_check(DecisionCheck {
+      at: Timestamp::now(),
+      result: DecisionCheckResult::Connected,
+    });
+    let mut edited = loaded.clone();
+    match change {
+      0 => edited.rename(name("Concurrent rename")),
+      1 => edited.set_server(
+        DecisionServerUrl::new("https://changed.example/v1").expect("URL"),
+        loaded.key(),
+      ),
+      _ => edited.set_server(loaded.base_url().clone(), Some(SecretId::generate())),
+    }
+    editor.save_decision_connection(&edited).expect("edit after check read");
+    assert!(
+      !db
+        .save_decision_check_if_unchanged(&loaded, &checked)
+        .expect("conditional write")
+    );
+    assert_eq!(
+      db.decision_connection(original.id()).expect("read"),
+      Some(edited.clone())
+    );
+    let mut fresh = edited.clone();
+    fresh.record_check(DecisionCheck {
+      at: Timestamp::now(),
+      result: DecisionCheckResult::Connected,
+    });
+    assert!(
+      db.save_decision_check_if_unchanged(&edited, &fresh)
+        .expect("unchanged write")
+    );
+    assert_eq!(db.decision_connection(original.id()).expect("read"), Some(fresh));
+  }
+}

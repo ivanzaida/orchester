@@ -125,10 +125,18 @@ pub async fn list_connections(
       .collect()
   });
   let mcp = read.items(|open, listed| super::mcp_servers::servers_json(listed, open.project.id()));
+  let decisions = read.items(|_, listed| {
+    listed
+      .decisions
+      .iter()
+      .map(super::decision_connections::connection_json)
+      .collect()
+  });
   Ok(json!({
     "agents": agents,
     "github": github,
     "mcp_servers": mcp,
+    "decision_models": decisions,
     "unreadable_projects": read.unreadable(translate),
   }))
 }

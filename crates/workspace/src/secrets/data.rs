@@ -6,7 +6,7 @@ use std::{path::Path, sync::Arc};
 
 use orchester_core::{
   connection::mcp::McpEnvValue,
-  id::{ConnectionId, ResourceId, SecretId},
+  id::{ConnectionId, DecisionConnectionId, ResourceId, SecretId},
   resource::{ResourceKind, Tool},
   secret::{self, NewSecret, Secret, SecretError, SecretValue, SecretVault},
   store::{McpServerStore, ResourceStore, SecretStore},
@@ -47,6 +47,14 @@ impl UseCounts {
   }
 }
 
+/// A decision server referring to a secret, without reading the credential.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DecisionSecretUse {
+  pub secret: SecretId,
+  pub connection: DecisionConnectionId,
+  pub name: Arc<str>,
+}
+
 /// The project's secrets that are not archived, its archived ones, and their users, read together.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ProjectSecrets {
@@ -54,21 +62,16 @@ pub struct ProjectSecrets {
   /// The archived secrets, which the list shows after the active ones and nothing is given.
   pub archived: Arc<Vec<Secret>>,
   pub uses: Arc<Vec<SecretUse>>,
+  pub decision_uses: Arc<Vec<DecisionSecretUse>>,
 }
 
 impl ProjectSecrets {
-  pub fn load<S>(store: &S) -> Result<Self, StoreError>
-  where
-    S: SecretStore<Error = StoreError> + ResourceStore<Error = StoreError> + McpServerStore<Error = StoreError>,
-  {
+  pub fn load(store: &ProjectDb) -> Result<Self, StoreError> {
     Self::load_selected(store, None)
   }
 
   /// Also reads an explicitly inspected archived secret, without returning it to the active list.
-  pub fn load_selected<S>(store: &S, selected: Option<SecretId>) -> Result<Self, StoreError>
-  where
-    S: SecretStore<Error = StoreError> + ResourceStore<Error = StoreError> + McpServerStore<Error = StoreError>,
-  {
+  pub fn load_selected(store: &ProjectDb, selected: Option<SecretId>) -> Result<Self, StoreError> {
     let mut secrets = store.secrets()?;
     if let Some(id) = selected
       && !secrets.iter().any(|secret| secret.id() == id)
@@ -114,10 +117,22 @@ impl ProjectSecrets {
         tool_uses.chain(server_uses).collect::<Vec<_>>()
       })
       .collect();
+    let decision_uses = store
+      .decision_connections()?
+      .into_iter()
+      .filter_map(|connection| {
+        connection.key().map(|secret| DecisionSecretUse {
+          secret,
+          connection: connection.id(),
+          name: connection.name().as_str().into(),
+        })
+      })
+      .collect();
     Ok(Self {
       secrets: Arc::new(secrets),
       archived: Arc::new(archived),
       uses: Arc::new(uses),
+      decision_uses: Arc::new(decision_uses),
     })
   }
 
@@ -146,7 +161,7 @@ impl ProjectSecrets {
 
   /// Changing credentials selected by resources may widen their access to external systems.
   pub fn replacement_needs_person(&self, id: SecretId) -> bool {
-    self.used_by(id).next().is_some()
+    self.used_by(id).next().is_some() || self.decision_uses.iter().any(|used| used.secret == id)
   }
 
   pub fn secret(&self, id: SecretId) -> Option<&Secret> {

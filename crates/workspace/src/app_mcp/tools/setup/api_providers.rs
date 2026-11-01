@@ -119,7 +119,7 @@ pub(super) fn widens(
 }
 
 /// The project's secret that is not archived named by `named`: its id or, when only one secret has it, its name.
-fn secret_named(db: &ProjectDb, named: &str) -> Result<Secret, ToolError> {
+pub(super) fn secret_named(db: &ProjectDb, named: &str) -> Result<Secret, ToolError> {
   let active: Vec<Secret> = db
     .secrets()?
     .into_iter()
