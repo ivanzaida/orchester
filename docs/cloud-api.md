@@ -443,7 +443,8 @@ Added 2026-10-30 (ORC-411): how the desktop app learns of and fetches a new vers
 Orchester staff steer it. The types are in `orchester_api::releases`, the calls on `orchester_api::client::CloudClient`.
 Three kinds of caller:
 
-- **anonymous**: the update check and downloads need no sign-in, so an app used only locally updates too;
+- **anonymous**: the update check, the public Stable release and downloads need no sign-in, so an app used only
+  locally updates too and the website's download page reads the cloud directly;
 - **`releases:write`**: CI, with `Authorization: Bearer <release token>`, a cloud API token whose scopes include
   `releases:write`. The operator makes it (`docs/cloud-hosting.md` in `ivanzaida/orchester-platform`); it is not a
   device token and signs nobody in. A device token, or a token without the scope, is `403 forbidden`;
@@ -517,6 +518,7 @@ copy have databases, and so ids, of their own.
 | Method and path | Auth | Request | Response | Errors |
 | --- | --- | --- | --- | --- |
 | `GET /updates/check?version&platform&arch&channel&install_id` | anonymous | the query, every field required: the app's version, platform, architecture, channel and install id | `200 { update: null }` when nothing newer is offered; `200 { update: { version, channel, notes, critical, published_at, files: [{ name, platform, arch, url, size, sha256, key_id, signature }] } }` | `400 bad_request` (a field missing, unknown or repeated), `422 invalid` (a version, platform, architecture, channel or id that is not one), `429` |
+| `GET /releases/stable?platform&arch` | anonymous | the query, both fields required: a platform and an architecture | `200 { release: null }` when Stable offers everyone no release for them; `200 { release: { version, published_at, files: [{ name, platform, arch, size, sha256 }] } }`; both with `Cache-Control: public, max-age=60` | `400 bad_request` (a field missing, unknown or repeated, an `install_id` too), `422 invalid` (a platform or architecture that is not one), `429` |
 | `GET /releases/{version}/files/{name}` | anonymous | `Range: bytes=<start>-[<end>]` to resume, optional | `200` the whole file, or `206` with `Content-Range: bytes <start>-<end>/<size>`; both with `Content-Type: application/octet-stream`, `Content-Length`, `Accept-Ranges: bytes` and `ETag: "<sha256>"` | `404 not_found` (no such release or file, a draft, a withdrawn release, deleted files), `416 range_not_satisfiable`, `429` |
 | `POST /releases` | `releases:write` | `{ version, notes, critical?, ci_run? }`: notes in Markdown, at most 64 KiB; `ci_run` the CI run that uploads it, `{ number, url }` | `201 { release: ReleaseSummary }`, a draft | `403 forbidden`, `409 conflict` (the version exists, in any stage), `422 invalid` (also a `url` that is not `https://…`, over 2048 characters or with spaces or control characters) |
 | `POST /releases/{version}/files` | `releases:write` | `{ name, platform, arch, size, sha256, key_id, signature }` | `201 FileUpload` for a new file, `200 FileUpload` for the same declaration again (resume) | `403 forbidden`, `404` (no such draft), `409 conflict` (the release is not a draft, or another declaration under this name, or a second file for the same platform, architecture and name), `422 invalid` (size 0 or over 2 GiB) |
@@ -588,6 +590,20 @@ release's files for that platform and architecture; `url` is the absolute URL of
 address. An asked version the cloud does not know is still compared by order. Each check counts the install id toward
 `installs`, `adoption` and their `installs_by_channel` under the channel it names.
 
+**What the public Stable release answers.** Added 2026-11-01 (ORC-609) for the website's download page
+(`StableReleaseQuery`, `StableReleaseAnswer`). Among releases with a file for the asked platform and architecture, the
+newest in stage `stable` at 100 % that is not paused and whose files are not deleted; `null` when none is. So a
+newer Stable release still rolling out (under 100 %) or paused does not count, and the page keeps the previous one
+that passes: the release every Stable install outside the rollout runs, never one only some installs are offered, and
+never one staff stopped. A withdrawn release is in stage `withdrawn`, not `stable`, so it never counts. `files` are
+that release's files for the asked platform and architecture, each served at `GET /releases/{version}/files/{name}`;
+the answer carries no URL, notes, key id or signature, since the page links the file and the app checks the signature
+itself. The read takes no install id and counts nothing: no `installs`, `adoption` or `installs_by_channel`, no
+download. It reveals no draft, Beta-only (stage `beta`), withdrawn or deleted-files release, and no percentage or
+pause. `Cache-Control: public, max-age=60` lets the website and any cache in between keep an answer for a minute, so
+promoting to 100 %, pausing or withdrawing shows on the page within a minute. `stable` is not a version, so the path
+does not clash with `/releases/{version}/…`.
+
 **Uploading a release.** CI creates the draft, then declares each file with its size, SHA-256, key id and signature.
 The answer gives the cloud's `part_size` (8 MiB) and the number of parts (`size / part_size`, rounded up). CI sends
 each part with `PUT …/parts/{part}`, numbered from 0, part `i` holding bytes `i * part_size` on. These bodies are exempt
@@ -620,6 +636,7 @@ release's row, counts and activity stay.
 | Invite emails | 1 a day per server and invitee address, 3 a day per invitee address; separate from the emails above |
 | Linked servers | 5 per person (`409 too_many_servers`), ownerless ones they linked included; not a rate |
 | Update checks (`GET /updates/check`) | 12 an hour per install id, 600 an hour per client address and 3,000 per IPv6 /48 |
+| The public Stable release (`GET /releases/stable`) | 600 an hour per client address and 3,000 per IPv6 /48, apart from the update checks |
 | Downloads (`GET /releases/…/files/…`) | 60 an hour per client address and 300 per IPv6 /48, resumed ranges included |
 
 The counters are in memory, but for the daily cap on wrong two-factor codes. A restart clears them; the cloud runs as
