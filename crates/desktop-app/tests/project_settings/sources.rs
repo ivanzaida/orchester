@@ -1,4 +1,4 @@
-//! Project settings › Sources (`kmNiF`, `lOOY6`): the empty list, a path checked in place, adding one only once a
+//! Project settings › Context's Sources (`kmNiF`, `lOOY6`): the empty list, a path checked in place, adding one once a
 //! person confirms it in place (window input locked meanwhile), a source runs cannot read, and removing one.
 use std::path::Path;
 

@@ -365,9 +365,9 @@ fixed address instead (see *The new app's MCP server* below).
   rejection such as `run_not_running`, `shutting_down` or `runner_unavailable`), `list_pipelines`, `duplicate_pipeline` (copies a
   pipeline's latest published version under a new name, optionally with other published profiles on its
   agent steps, and publishes it as v1, as New pipeline, the editor and Publish do), `set_code_index`
-  (*Use code index* in Project settings, off until a person turns it on; `list_projects` shows each
+  (*Use code index* in Project settings › Context, off until a person turns it on; `list_projects` shows each
   project's setting) and
-  `update_project_limits` (Project settings › Limits: the token budgets, the default time limit,
+  `update_project_limits` (Project settings › Runs › Limits: the token budgets, the default time limit,
   *Agents working at once*, which the project's runner applies at once, and *QA apps at once*, which
   applies from the next `start_qa_app`; invalid limits are refused with `invalid_limits` and the tab's
   own words; `list_projects` shows each project's limits). A modal
@@ -624,7 +624,7 @@ Automatic approvals require the separate approvals opt-in too. Secret replacemen
 draft remain person-only, irrespective of the permission opt-in. Consent is re-read before forwarded input and
 checked again when a confirmation runs; unknown, pending, revoked or failed consent cannot authorize it.
 Narrowing is always taken. The setting is off by
-default and only a person changes it, in the window, in Settings › What automation may do. No domain tool
+default and only a person changes it, in the window, in Settings › Automation. No domain tool
 changes it, and window input cannot either: while its row is on screen, lurq denies its input tools when a
 call runs (also one queued earlier, or one whose answer timed out), the server refuses every window-input
 tool of lurq's (clicks and keys by element or by coordinates, values, resizing) with `person_only`, whatever
@@ -726,11 +726,11 @@ tracks nothing in) is no write and goes to the reviewer (2026-10-18); `cargo fmt
 target directory elsewhere still ask. The person accepted (2026-10-18) that such a build runs the worktree's
 build scripts, macros, tests and repository Cargo settings under the reviewer's approval alone. *Approve for every run of this
 project* on a `start_qa_app` card keeps a rule of the project, by the QA script's git blob, which answers the
-tool in every run until the script changes or the rule is revoked in Project settings › Auto mode; only a
+tool in every run until the script changes or the rule is revoked in Project settings › Runs › Approved for every run; only a
 person makes it.
 A reviewer that fails, takes longer than 60 seconds or
 answers with something unreadable asks the person too. The reviewer is any agent connection of the
-project with a model of it and an effort, chosen in Project settings › General › Auto mode (the same model
+project with a model of it and an effort, chosen in Project settings › Runs › Approvals (the same model
 list as an agent profile's) or through the MCP server; until a person chooses, it is the first Claude Code
 connection with `claude-haiku-4-5-20251001`, else the first connection a reviewer runs on with its default
 model. Claude Code runs in print mode with no tools, no MCP servers and no settings, its instructions as

@@ -25,7 +25,7 @@ use tokio::sync::mpsc;
 
 use super::{PATIENCE, Setup, StepSpec, TestProject, git, is_running, pending_approval, project, reported};
 
-/// Lets the project's runs have `count` QA apps open at once, as Project settings › Limits does.
+/// Lets the project's runs have `count` QA apps open at once, as Project settings › Runs › Limits does.
 pub fn allow_qa_apps(root: &Path, count: u64) {
   let mut db = ProjectDb::open(root).expect("open");
   let limits = db

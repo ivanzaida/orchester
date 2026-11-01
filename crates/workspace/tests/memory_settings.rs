@@ -1,4 +1,4 @@
-//! Project settings › Memory as Context's Memory group saves it: what a save changed is rebased onto the stored
+//! Project settings › Context's Memory group as it saves: what a save changed is rebased onto the stored
 //! settings, the limits are read as typed, and the Rejected tab lists the withdrawn proposals too. Run with
 //! `cargo test -p orchester-workspace --test memory_settings memory_settings`.
 

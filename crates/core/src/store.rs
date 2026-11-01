@@ -86,12 +86,12 @@ pub trait SettingsStore {
   fn save_project_environment(&mut self, environment: &CommandEnvironment) -> Result<(), Self::Error>;
 
   /// Whether the project's agents may load the repository's own agent files (Project settings ›
-  /// General); on until it was changed.
+  /// Context); on until it was changed.
   fn repository_agent_files(&self) -> Result<RepositoryAgentFiles, Self::Error>;
 
   fn save_repository_agent_files(&mut self, setting: RepositoryAgentFiles) -> Result<(), Self::Error>;
 
-  /// Whether the project's agents get the code index (Project settings › Code index); off until a
+  /// Whether the project's agents get the code index (Project settings › Context); off until a
   /// person turned it on.
   fn code_index(&self) -> Result<CodeIndexSetting, Self::Error>;
 

@@ -73,7 +73,7 @@ const SPECS: &[Spec] = &[
   Spec {
     name: "set_project_environment",
     description: "Replaces the environment variables the project adds to every agent CLI and command tool its runs \
-                  start, as Project settings › Runs › Environment does: names are letters, digits and _ (not starting with \
+                  start, as Project settings › Environment does: names are letters, digits and _ (not starting with \
                   a digit), each name once ignoring case. They are stored and shown in plain text, so never put a \
                   secret in one. Adding, changing or removing any variable but RUST_LOG, RUST_BACKTRACE, CI, \
                   NO_COLOR, FORCE_COLOR, TZ, LANG, LC_ALL, LC_CTYPE, LC_COLLATE, LC_MESSAGES, LC_MONETARY, \
@@ -87,7 +87,8 @@ const SPECS: &[Spec] = &[
   Spec {
     name: "set_repository_agent_files",
     description: "Turns on or off whether the project's agents load the repository's own agent files (AGENTS.md, \
-                  CLAUDE.md and the like), as Project settings › Context does. Runs that start from now on use it. \
+                  CLAUDE.md and the like), as Project settings › Context › Repository agent files does. Runs that \
+                  start from now on use it. \
                   Turning them off is always taken; turning them on puts what the repository says in every agent's \
                   prompt, so it is refused as person_only unless a person turned on Let automation change agent \
                   permissions.",
@@ -268,7 +269,7 @@ const SPECS: &[Spec] = &[
                   write access); MCP servers are the project's (list_connections). Narrowing is always taken. \
                   Anything broader than the profile's latest published version (a new profile: the most \
                   restrictive permissions its CLI enforces and no MCP server) is refused as person_only unless a \
-                  person turned on Let automation change agent permissions in Settings › What automation may do: write \
+                  person turned on Let automation change agent permissions in Settings › Automation: write \
                   access, writable folders, broader commands, network on, MCP servers, no longer asking before \
                   tool calls, Autopilot (which also needs Let automation answer approvals). Left \
                   out, a new profile gets the most restrictive permissions. With expected_revision, the revision \

@@ -5,22 +5,23 @@ Settings live in several places:
 | Where | What | Kept in |
 |---|---|---|
 | **Settings** (app menu, the switcher's menu, the ⚙ of the sidebar's usage card) › General · Notifications · Accounts · Automation · Browser · Orchester Cloud | Theme, plan-limit warning, this computer; notifications and the daily report; accounts; the MCP server and what automation may do; agents' browser; Orchester Cloud and team servers | Application database (secrets and tokens in the OS keychain) |
-| **Project settings** (the switcher's menu, Ctrl+, / ⌘,) › General · Runs · Context · Connections · Secrets · Sharing | Project, GitHub, base branch, base-moved notices, repository agent files; approvals (Allow Autopilot, reviewer), estimates, limits, environment; sources, code index; connections; secrets; sharing | Project database (base branch and Allow Autopilot per computer; secret values in the OS keychain) |
-| **Memory › Settings** | How task and project memory save; how much each agent gets | Project database |
+| **Project settings** (the switcher's menu, Ctrl+, / ⌘,) › General · Runs · Orchestrator · Context · Connections · Environment · Sharing | Project, GitHub, base branch, base-moved notices; approvals (Allow Autopilot, reviewer), estimates, limits; what the Orchestrator may do; sources, repository agent files, code index, memory; connections; variables and secrets; sharing | Project database (base branch and Allow Autopilot per computer; secret values in the OS keychain) |
 | **Orchestrator settings** | The chat's connection, model and effort (versioned) | Project database |
 | **Agent profile › Permissions** | Repository access, writable folders, commands, network, MCP servers, approvals | Project database |
 | **Pipeline page** (Settings tab, step column) | Sources, what a run delivers, Deliver step, step gates, budgets, failure routes, step permissions | Project database |
 | **New / Edit task** chips | Pipeline, delivers, limits, sources, module, priority, points, *Don't merge automatically* | Project database |
 
-**Person-only settings.** Settings › **Automation**, **Accounts** and **Orchester Cloud**, Project settings › Runs ›
-*Let Orchester estimate story points*, and the widening confirmations in Project settings (Allow Autopilot, environment,
+**Person-only settings.** Settings › **Automation**, **Accounts** and **Orchester Cloud**, Project settings ›
+**Orchestrator**, Project settings › Runs › *Let Orchester estimate story points*, Project settings › Context's
+*Memory*, and the widening confirmations in Project settings (Allow Autopilot, environment variables,
 adding a source, turning repository agent files on) take only a person's input. Input from an MCP client is refused
 visibly: "A change brought by automation was not taken: only you change this setting, here in the window." Turning a
 permission *off* is always taken. General, Notifications and Browser have no such gate.
 
 **Saving.** General, Notifications, Automation and Browser save as they change (the header shows "All changes saved",
-"Saving…" or "A change was not saved"). Project settings › General, Runs and Context save when a field is left or a
-switch flipped; Connections and Secrets save per action. While an autosaving tab has an unsaved or failed change, the
+"Saving…" or "A change was not saved"). Project settings › General, Runs, Orchestrator and Context save when a field is
+left or a switch flipped; Connections and Environment save per action. While an autosaving tab has an unsaved or failed
+change, the
 other tabs wait ("Save or fix the changes in this section before opening another."). A change made elsewhere shows
 "Changed outside this screen" with *Reload*.
 
@@ -34,7 +35,7 @@ Automation.
 | Group | Setting | Values | Notes |
 |---|---|---|---|
 | Appearance | **Theme** | Dark (default) · Light · System | *System* uses the OS appearance at app start; a later OS change is followed only after a restart. |
-| Plan limits | **Warning threshold** | 1–100 %, default 80 | The share of a 5-hour or weekly window at which plan limits count as nearly used. App-wide; also set from Usage › Plan limits. |
+| Plan limits | **Warning threshold** | 1–100 %, default 80 | The share of a 5-hour or weekly window at which plan limits count as nearly used. App-wide; the menu of Usage › Plan limits opens it here. |
 | This computer | Version, Application data, App log | — | Each with *Copy*. |
 
 ### 1.2 Notifications
@@ -86,7 +87,7 @@ For the installed app:
 A QA copy or development build shows a *Server* row instead: a new port and token on each start, published in a
 discovery file. See [mcp-server.md](mcp-server.md).
 
-#### The window, approvals and the Orchestrator
+#### The window, approvals and permissions
 
 Every row is off until a person turns it on (except as noted), and only a person can change it.
 
@@ -96,12 +97,9 @@ Every row is off until a person turns it on (except as noted), and only a person
 | | **Agents can control this window** | Off in release builds, on in development builds | Click and type, resize, change pages and the theme. Applies from the next start; `ORCHESTER_APP_MCP_WINDOW_CONTROL` overrides it for one run. |
 | Approvals and permissions | **Let automation answer approvals** | Off | Clients may approve a waiting tool request once or deny it, answer questions, decide plans, continue stopped runs with retry/return/accept, choose the reviewer — recorded as *automation's*. Wider answers stay yours; allowing Autopilot in a project is always a person's. |
 | | **Let automation change agent permissions** | Off | Clients may widen what agents may do: write access, network, commands, MCP servers, approving automatically, new CLI programs, environment variables, API providers, new tools and publications. Narrowing is always allowed. |
-| The Orchestrator may | **Publish drafts** | Off | The chat publishes pipelines, profiles, instructions, skills and tools it drafts without your click. Widening drafts still need *Let automation change agent permissions*. |
-| | **Answer agents** | Off | The chat answers agents' questions and messages a run's agents directly, and starts a turn by itself when an agent waits, a run ends, or the daily report arrives. Approvals and plan decisions stay yours. |
-| | **Merge runs** | Off | The chat merges a run you asked it to merge (latest succeeded run, no local integration needed). |
-| | **Merge finished runs on its own** | Off | Needs *Merge runs* and *Answer agents*. Merges a task's latest run whose every step passed, once, in finish order — never Blocked tasks, tasks with unfinished blockers, while starts are held, or tasks marked *Don't merge automatically*. Conflicts → it proposes sending the work back to an agent. |
-| | **Continue interrupted runs** | Off | The chat continues a run interrupted by a crash, runner loss or *Quit now* from its last checkpoint (once; not again within 10 minutes). Limit stops, canceled runs and runs without worktree stay yours. |
-| | **Write with git** | Off | The chat may commit, create/switch branches, pull, push (never force), merge, revert, tag and fetch when you ask. Reset, clean, branch/tag deletion, force push, discarding and rebase stay cards. |
+
+*The Orchestrator*: one row, *What the Orchestrator may do*, names the open project's switches that are on and opens
+Project settings › Orchestrator, where each project sets its own ([2.3](#23-orchestrator)).
 
 ### 1.5 Browser
 
@@ -150,7 +148,7 @@ While an account is signed in:
 
 ## 2. Project settings (`/project/<id>/settings`)
 
-Tabs: **General · Runs · Context · Connections · Secrets · Sharing**.
+Tabs: **General · Runs · Orchestrator · Context · Connections · Environment · Sharing**.
 
 ### 2.1 General
 
@@ -175,11 +173,29 @@ Tabs: **General · Runs · Context · Connections · Secrets · Sharing**.
 | | **Time limit** | No limit | Minutes of active agent time per run, prefilled in New task. |
 | | **Agents at once** | 4 (1–16) | Applies at once; lowering it stops no agent. Command steps use slots of their own. |
 | | **QA apps at once** | 2 (1–16) | Applies to the next QA app a run starts. |
-| Environment | **Variables** | None | *Edit* opens a `NAME=value` editor. Added to every agent CLI and command tool the project's runs start, on top of the cleaned environment (PATH, HOME, TEMP…); a command tool's own variables win. **Stored in plain text — never put secrets here** (use Secrets). Variables that can change how programs load need a person's confirmation; harmless ones (`RUST_LOG`, `RUST_BACKTRACE`, `CI`, `NO_COLOR`, `FORCE_COLOR`, `TZ`, `LANG`, `LC_*`) don't. |
 
-Runs already started keep their budget and time limit.
+A task can set its own run budget and time limit, a pipeline step its own budget; these are their defaults. Runs already
+started keep their budget and time limit.
 
-### 2.3 Context
+### 2.3 Orchestrator
+
+*The Orchestrator may*: what this project's Orchestrator chat does without your click. Each project has its own, and a
+new project starts with all off. Every row is off until a person turns it on, and only a person can change it, in the
+window.
+
+| Setting | Default | What it permits |
+|---|---|---|
+| **Publish drafts** | Off | The chat publishes pipelines, profiles, instructions, skills and tools it drafts without your click. Widening drafts still need *Let automation change agent permissions*. |
+| **Answer agents** | Off | The chat answers agents' questions and messages a run's agents directly, and starts a turn by itself when an agent waits, a run ends, or the daily report arrives. Approvals and plan decisions stay yours. |
+| **Merge runs** | Off | The chat merges a run you asked it to merge (latest succeeded run, no local integration needed). |
+| **Merge finished runs on its own** | Off | Needs *Merge runs* and *Answer agents*. Merges a task's latest run whose every step passed, once, in finish order — never Blocked tasks, tasks with unfinished blockers, while starts are held, or tasks marked *Don't merge automatically*. Conflicts → it proposes sending the work back to an agent. |
+| **Continue interrupted runs** | Off | The chat continues a run interrupted by a crash, runner loss or *Quit now* from its last checkpoint (once; not again within 10 minutes). Limit stops, canceled runs and runs without worktree stay yours. |
+| **Write with git** | Off | The chat may commit, create/switch branches, pull, push (never force), merge, revert, tag and fetch when you ask. Reset, clean, branch/tag deletion, force push, discarding and rebase stay cards. |
+
+*Also needed · set for this computer*: *Let automation answer approvals*, read-only here with its state and *Open*,
+which goes to Settings › Automation. *Answer agents* acts only while it is on too.
+
+### 2.4 Context
 
 - **Sources** — folders and files outside the worktree that every run's agents may **read and search without
   asking** (*Add a folder or file* → *Add* → "Let agents read this without asking?"). Anything else outside the
@@ -193,20 +209,34 @@ Runs already started keep their budget and time limit.
 - **Code index** — **Use code index** (off by default). On: agents get a built-in skill and `find_symbol` that search an
   index of the run's starting revision. *Index* rows (Ready, Building, Failed, Outdated) with *Rebuild* and *Retry*.
   **Search tool** shows ripgrep's version and source; *Install ripgrep* runs winget (Windows) or Homebrew (macOS).
+- **Memory** — *Records stay on the Memory page, whose* **Memory settings** *link opens this group.* Changes apply from
+  each agent's next invocation. Person-only.
 
-### 2.4 Connections
+  | Setting | Default | Range |
+  |---|---|---|
+  | **Task memory** | Save automatically | or *Save after approval* |
+  | **Project memory** | Save after approval | or *Save automatically* |
+  | **Records per invocation** | 8 | 1–50 |
+  | **Tokens per invocation** | 3,000 | 500–20,000 |
+
+### 2.5 Connections
 
 Agent providers (with **Add provider**), GitHub, and MCP servers (with **Add MCP server**; a switch per server turns it
 on or off). See [user-guide.md › Connections](user-guide.md#connections-project-settings--connections).
 
-### 2.5 Secrets
+### 2.6 Environment
 
-Environment segments *All · Development · Staging · Production*, **Add secret** (name, type, value, environment →
-*Save secret*), **Import from project** (explains that secrets are not imported). A secret's page has **Replace
-value**, **…** (*Copy name*, *Archive*), *Details* and *Used by*. Values live in the OS secret store and are never shown
-again after saving.
+- **Variables** — none by default. *Edit* opens a `NAME=value` editor. Added to every agent CLI and command tool the
+  project's runs start, on top of the cleaned environment (PATH, HOME, TEMP…); a command tool's own variables win.
+  **Stored in plain text — never put secrets here** (use Secrets, below). Variables that can change how programs load
+  need a person's confirmation; harmless ones (`RUST_LOG`, `RUST_BACKTRACE`, `CI`, `NO_COLOR`, `FORCE_COLOR`, `TZ`,
+  `LANG`, `LC_*`) don't.
+- **Secrets** — environment segments *All · Development · Staging · Production*, **Add secret** (name, type, value,
+  environment → *Save secret*), **Import from project** (explains that secrets are not imported). A secret's page has
+  **Replace value**, **…** (*Copy name*, *Archive*), *Details* and *Used by*. Values live in the OS secret store and are
+  never shown again after saving.
 
-### 2.6 Sharing
+### 2.7 Sharing
 
 - A **local** project: *Local project* and **Share on a team server › Share…** → choose the server and a project there
   (or its address) → *Link to this project…* → *Link and upload N tasks* (optionally *Write orchester.toml into the
@@ -216,18 +246,7 @@ again after saving.
   server), *Discovery file* (`orchester.toml`, *Write orchester.toml* — Orchester never commits it), and *Leave or make
   local* (**Leave…**, **Make local…**).
 
-## 3. Memory settings (Memory › Settings)
-
-| Setting | Default | Range |
-|---|---|---|
-| **Task memory** | Save automatically | or *Save after approval* |
-| **Project memory** | Save after approval | or *Save automatically* |
-| **Records per invocation** | 8 | 1–50 |
-| **Tokens per invocation** | 3,000 | 500–20,000 |
-
-Changes apply to the next agent invocation. Person-only.
-
-## 4. Orchestrator settings (`/project/<id>/orchestrator/settings`)
+## 3. Orchestrator settings (`/project/<id>/orchestrator/settings`)
 
 *Profile* tab: **Project connection** (Claude Code or Codex; an API-provider connection works), **Model** (or *Other
 model id…*), **Reasoning effort** (*CLI default*, Minimal … Max as the model lists). **Save draft**, **Publish vN** (a

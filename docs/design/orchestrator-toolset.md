@@ -36,8 +36,8 @@ give keeps the turn from starting, with the secret's name.
 2. **Drafts are free.** It saves drafts of tasks, pipelines, agent profiles, instructions, skills and tools without
    asking. A draft reaches no agent's prompt.
 3. **Publishing needs the person, or the person's switch.** Publishing a pipeline, profile, instruction, skill or
-   tool is proposed in the chat as a card the person applies with a click. A new person-only switch in Settings ›
-   What automation may do, *Let the Orchestrator publish drafts*, lets the chat publish directly. Synthetic input
+   tool is proposed in the chat as a card the person applies with a click. A person-only switch in Project settings ›
+   Orchestrator, *Let the Orchestrator publish drafts*, lets the chat publish directly. Synthetic input
    cannot flip it (the same rule as *Let automation change agent permissions*). Widening what agents may do stays
    behind *Let automation change agent permissions* in every case. This subsumes ORC-30 for the chat. For every
    other MCP client (ORC-30, `orchester_workspace::prompt_changes`): publishing an instruction or a skill (ORC-79), a
@@ -54,7 +54,7 @@ give keeps the turn from starting, with the secret's name.
 5. **Answering agents and merging: the person's click, or the person's switch** (changed 2026-10-17, ORC-42).
    - The chat may answer an agent's question (`answer_question`) and send a run's agents a message (`send_message`).
      Each is a proposal card the person applies by default; with the person-only switch *Let the Orchestrator answer
-     agents* (Settings › What automation may do) the chat sends it directly. Every answer is recorded as automation's
+     agents* (Project settings › Orchestrator) the chat sends it directly. Every answer is recorded as automation's
      (`decided_by` automation) and the task's Conversation shows it as sent by the Orchestrator. A message that would
      decide the plan a run waits on is refused: plan decisions stay the person's.
    - The chat follows the agents of its project: when an agent asks a question, waits for a message or its plan waits
@@ -78,7 +78,7 @@ give keeps the turn from starting, with the secret's name.
      `merge_failed` of the chat's merge names the next step: for a merge that stopped at conflicting files, proposing
      `continue_run` `resolve_conflicts` (below), naming the files; otherwise the Local integration page.
    - The chat merges a finished run on its own behind the person-only switch *Let the Orchestrator merge finished
-     runs on its own* (Settings › What automation may do; decided by the person on 2026-10-21, ORC-69). It needs *Let
+     runs on its own* (Project settings › Orchestrator; decided by the person on 2026-10-21, ORC-69). It needs *Let
      the Orchestrator merge runs* and *answer agents* on too, and the switch's row says so. With all three on, the turn
      a task's run success starts by itself (below) merges the run with `merge_run`, directly, only when all of these
      hold (one rule, `orchester_workspace::orchestrator::auto_merge`): it is the task's latest run and succeeded, and
@@ -139,7 +139,7 @@ give keeps the turn from starting, with the secret's name.
    - The chat resumes a run a pause stopped (`resume_run`). It continues a run interrupted for a reason that is
      neither a person's choice nor a limit — a crash, the runner going away, *Quit now*, or the runner stopping it
      because the project database stayed busy — only behind the person-only switch *Let the Orchestrator continue
-     interrupted runs* (Settings › What automation may do; off until a person turns it on, synthetic input cannot flip
+     interrupted runs* (Project settings › Orchestrator; off until a person turns it on, synthetic input cannot flip
      it; decided by the person on 2026-10-20, ORC-53, and for the busy database on 2026-10-21, ORC-75). With it on,
      `resume_run` continues such a run from its last checkpoint through the same path as the task page's *Continue*
      (`runners.continue_run_in`), and the continuation is kept in the conversation as the chat's own action. With it
@@ -232,7 +232,7 @@ give keeps the turn from starting, with the secret's name.
      work (worktrees, drafts, tasks).
 6. **Links everywhere.** Every object a tool returns carries an app `link`. The chat renders links and a click opens
    the place in the app.
-7. **The daily report (ORC-47).** At the time the person sets in Settings › What automation may do (off until they
+7. **The daily report (ORC-47).** At the time the person sets in Settings › Notifications (off until they
    turn it on), each open project's latest conversation (or one it opens) gets one *Daily report* entry per local day
    that had activity (a merge, a run that ended or stopped, an action of the Orchestrator, anything its conversations
    kept, tokens or agent time); a report whose time passed while the app was closed comes at the next start, labelled
@@ -322,11 +322,11 @@ Orchestrator answer agents* (decision 5).
 |---|---|---|
 | A. Chat MCP connection fix | `crates/desktop-app/src/mcp/chat.rs`, the shared protocol versions | — (in progress) |
 | B. Reads and links | `crates/workspace/src/app_mcp/tools/` new read tools except usage and PRs; `orchester_workspace::links`; `link` fields on existing results; cross-project reads; router parity test | — |
-| C. Chat rules | `crates/workspace/src/orchestrator/` (`TOOLS`, proposals for publish/cancel/merge, direct start in auto mode, cross-project read scope), the *Let the Orchestrator publish drafts* switch (store, Settings › What automation may do, person-only), proposal cards in the chat | B's tool names (this table), design frames |
+| C. Chat rules | `crates/workspace/src/orchestrator/` (`TOOLS`, proposals for publish/cancel/merge, direct start in auto mode, cross-project read scope), the *Let the Orchestrator publish drafts* switch (store, Project settings › Orchestrator, person-only), proposal cards in the chat | B's tool names (this table), design frames |
 | D. Links in the chat | the chat timeline's markdown links (`orchester:` and `https:`), navigation, external link presentation | B's link format (this document), design frames |
 | E. Usage page (ORC-15) | `crates/workspace` usage queries with the filters above, `get_usage`, the Usage page and its route with filters | — |
 | F. Pull requests page (ORC-13) | `crates/workspace` PR reads (gh), `list_pull_requests`, `get_pull_request`, the page and its routes | — |
-| G. Design | Pencil frames: chat replies with in-app and external links; proposal cards for publish, cancel and merge; the new switch in Settings › What automation may do | — |
+| G. Design | Pencil frames: chat replies with in-app and external links; proposal cards for publish, cancel and merge; the switch in Project settings › Orchestrator | — |
 
 Each stream keeps to the files it owns; a change another stream owns goes through the coordinator. Every stream
 follows AGENTS.md, keeps Windows and macOS equivalent, and ends with an independent review and, for visible changes,
@@ -340,7 +340,7 @@ which could not be told safe: what the chat is not offered it cannot do. They ru
 `run` (a run's id or number) in that run's worktree.
 
 - **Reading is open**, whatever the switches say. Long output is read only up to its cap (`truncated`).
-- **Writing needs the person's switch** *Let the Orchestrator write with git* (Settings › What automation may do, off
+- **Writing needs the person's switch** *Let the Orchestrator write with git* (Project settings › Orchestrator, off
   until a person turns it on, synthetic input and MCP cannot flip it: the same person-only row as decision 5's
   switches; `OrchestratorConsent::WriteGit`). Off, every write is refused `write_off`. Each write loses nothing: a
   switch is made only as git makes it, keeping local changes (else `would_lose_work`); a pull only fast-forwards unless

@@ -1,4 +1,4 @@
-//! Project settings › Memory, as the Memory group of Project settings › Context changes it: how agents' records are
+//! The Memory group of Project settings › Context: how agents' records are
 //! saved in task and in project memory, and how much memory each agent invocation gets ([`MemorySettings`]). Reading
 //! and saving block on SQLite; the UI calls them off the UI thread.
 

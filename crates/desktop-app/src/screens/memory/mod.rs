@@ -54,7 +54,7 @@ pub(crate) use self::{
   list::{ListInput, groups, new_record, row_failure},
   no_match::no_match,
   page::unreadable,
-  parts::{group_heading, unbuilt_link},
+  parts::{group_heading, settings_link},
   toolbar::{FilterBar, FiltersProps},
 };
 use self::{state::Made, tabs::Order};

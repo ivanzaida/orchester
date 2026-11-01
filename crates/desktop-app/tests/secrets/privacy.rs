@@ -132,7 +132,7 @@ fn secrets_mcp_tree_masks_values_and_refuses_automated_replacement_confirmation(
     let error: Value =
       serde_json::from_str(refused["content"][0]["text"].as_str().expect("error")).expect("JSON error");
     assert_eq!(error["code"], "person_only");
-    assert!(error["message"].as_str().expect("message").contains("Secrets page"));
+    assert!(error["message"].as_str().expect("message").contains("Environment tab"));
     s.click("secret-confirm-replacement-keep");
     assert!(!s.window.link.input_gate().protecting());
   }

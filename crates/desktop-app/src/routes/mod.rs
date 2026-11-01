@@ -22,8 +22,8 @@
 //! `?tab=runs&view=rules` its page *Approved for every run*). Its Connections tab is `/project/<id>/connections`
 //! (`?selected=` the connection whose page shows), Add provider `/project/<id>/connections/new`
 //! (`?kind=mcp_server` adds an MCP server) and `/project/<id>/connections/<connection id>/edit` edits an MCP server or
-//! an agent CLI connection's account; its Secrets tab is `/project/<id>/secrets` ([`SecretsView`]). The code viewer is
-//! `/project/<id>/files`, a file `/project/<id>/files/<path>` (`?at=` its version, `&line=` its lines; see
+//! an agent CLI connection's account; its Environment tab is `/project/<id>/secrets` ([`SecretsView`]). The code viewer
+//! is `/project/<id>/files`, a file `/project/<id>/files/<path>` (`?at=` its version, `&line=` its lines; see
 //! [`FilesView`]). Pull requests is `/project/<id>/pull-requests` (`?tab=`) and a pull request
 //! `/project/<id>/pull-requests/<number>` (`?file=` the file whose diff it shows). Import resources is
 //! `/project/<id>/import` (`?tab=` its kind tab, [`ImportTab`]). The Skills

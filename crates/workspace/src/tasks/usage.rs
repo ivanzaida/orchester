@@ -1,4 +1,4 @@
-//! The project's limits and today's token usage, for New task, Project settings › Limits and the
+//! The project's limits and today's token usage, for New task, Project settings › Runs › Limits and the
 //! status bar. Blocks on SQLite; the UI calls it off the UI thread.
 
 use std::path::Path;
@@ -36,7 +36,7 @@ pub fn limits_in(repo_root: &Path) -> Result<ProjectLimits, StoreError> {
   ProjectDb::open(repo_root)?.project_limits()
 }
 
-/// Stores the project's limits, as Project settings › Limits and Orchester's MCP server change them.
+/// Stores the project's limits, as Project settings › Runs › Limits and Orchester's MCP server change them.
 /// The budgets and the time limit apply to new tasks and runs; changed agent slots apply at once,
 /// handed to the project's runner once they are stored.
 pub fn save_limits(runners: &Runners, repo_root: &Path, limits: &ProjectLimits) -> Result<(), StoreError> {

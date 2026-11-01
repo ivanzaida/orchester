@@ -1,4 +1,4 @@
-//! Project settings › Code index (`i220W`, `h6yMk`, `NvR7K`): the setting, the indexes Orchester
+//! Project settings › Context › Code index (`i220W`, `h6yMk`, `NvR7K`): the setting, the indexes Orchester
 //! keeps with the runs that use them, rebuilding one, and ripgrep for agents, looked up the way the
 //! runner looks it up and installed only when a person asks. Read from the project's
 //! `.orchester/index` and database and from the file system; blocks, so the UI calls it off the UI

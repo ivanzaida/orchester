@@ -97,7 +97,7 @@ dialog (`on_close_requested` / `CloseRequest`), which is what the wait path need
 ### Step graphs
 
 The runner starts every step execution whose dependencies have passed, as far as the agent slots
-allow; the slots (the project setting *Agents working at once* in Project settings › Limits, 1 to 16, 4 by
+allow; the slots (the project setting *Agents at once* in Project settings › Runs › Limits, 1 to 16, 4 by
 default) are shared by all runs of the runner, and each agent at work takes one. The desktop sends them when
 the runner attaches and again whenever they change (`SetAgentSlots`): more slots start waiting work at once;
 fewer stop no agent, and new work waits until fewer agents work than the slots.

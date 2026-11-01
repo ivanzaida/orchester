@@ -1,5 +1,5 @@
-//! Project settings › Secrets (`06 Secrets` `bVh1e`): its groups by environment and the filter, a secret's page
-//! (`06b` `famwr`), nothing yet (`08` `aalCu`), New secret's validation, and reading and its failure.
+//! Project settings › Environment's secrets (`06 Secrets` `bVh1e`): groups by environment and the filter, a secret's
+//! page (`06b` `famwr`), nothing yet (`08` `aalCu`), New secret's validation, and reading and its failure.
 use std::sync::atomic::Ordering;
 
 use orchester_core::secret::Environment;

@@ -500,7 +500,7 @@
         "accept": "Publish v{{version}}",
         "openDraft": "Open draft",
         "open": "Open {{name}}",
-        "automation": "What automation may do"
+        "automation": "What the Orchestrator may do"
       },
       "cancel": {
         "waits": "Cancel run #{{run}} of {{task}}?",

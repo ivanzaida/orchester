@@ -241,12 +241,12 @@ is navigation; answering it stays a person's.
 | `pipelines` | `project` | The list; a pipeline's page opens from its row on its Steps, Settings and Versions tabs |
 | `agents` | `project` | |
 | `instructions` | `project` | |
-| `memory` | `project`, `tab` | `waiting`, `active`, `deprecated`, `superseded`, `rejected`, `settings`; omitted = the page chooses |
+| `memory` | `project`, `tab` | `waiting`, `active`, `deprecated`, `superseded`, `rejected`; omitted = the page chooses; `settings` opens Project settings › Context, where the memory settings are |
 | `skills` | `project`, `skill` | a skill id, `new` or `import`; omitted = library |
 | `tools` | `project`, `tool`, `tab` | `tool`: id or `new` (a command draft); omitted = library. With a tool id, tab `configuration` (default), `inputs_outputs`, `access`, `usage_log` |
-| `project_settings` | `project`, `tab`, `view` | tab `general` (default), `runs`, `context`, `connections`, `secrets`, `sharing`; with tab `runs`, `view: rules` opens *Approved for every run* |
+| `project_settings` | `project`, `tab`, `view` | tab `general` (default), `runs`, `orchestrator`, `context`, `connections`, `environment` (`secrets` too), `sharing`; with tab `runs`, `view: rules` opens *Approved for every run* |
 | `connections` | `project`, `selected` | Project settings › Connections; `selected` the id of the connection whose page opens |
-| `secrets` | `project` | Project settings › Secrets |
+| `secrets` | `project` | Project settings › Environment |
 | `new_connection` | `project`, `kind` | `agent_provider` (default, Add provider) or `mcp_server` (Add MCP server), as a page of Project settings › Connections |
 | `edit_connection` | `project`, `connection` (req.) | An MCP server's id (its form), or an agent CLI connection's id (its account) |
 | `files` | `project`, `file`, `at`, `line` | `file` a path in the project (the tree alone when omitted); `at` `checkout` (default), `base`, `run:<run id>`, `rev:<commit>`; `line` `12` or `12-20` |

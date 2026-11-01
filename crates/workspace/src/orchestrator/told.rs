@@ -49,7 +49,7 @@ const PROPOSE_CHANGE: &str = "In this chat it changes nothing itself: it checks 
 
 /// What the agent reads first of `merge_run`.
 const PROPOSE_MERGE: &str = "In this chat it checks the run and proposes the merge to the person, who applies or \
-  dismisses it in the conversation, unless the person turned on Let the Orchestrator merge runs in Settings: then it \
+  dismisses it in the conversation, unless the person turned on Let the Orchestrator merge runs in Project settings › Orchestrator: then it \
   merges at once, but never in a turn Orchester started by itself: there it only proposes. Call it only for a run \
   the person asked you in this chat to merge. One exception: when the person also turned on Let the Orchestrator \
   merge finished runs on its own and Orchester's message for a run's success tells you to merge it, it merges that \
@@ -94,7 +94,7 @@ const PROPOSE_CONTINUE: &str = "In this chat it takes only allow_retry, return_t
 
 /// What the agent reads first of `answer_question` and `send_message`.
 const PROPOSE_ANSWER: &str = "In this chat it checks the answer and proposes it to the person, who applies or \
-  dismisses it in the conversation, unless the person turned on Let the Orchestrator answer agents in Settings: then \
+  dismisses it in the conversation, unless the person turned on Let the Orchestrator answer agents in Project settings › Orchestrator: then \
   it is sent at once. Either way it is recorded as automation's and the task's conversation names you as its sender. \
   A message to a run none of whose agents waits or works, which would follow it up, continue or resume it, or run \
   the task again, is always proposed: moving a run is the person's. A message that would decide the plan a run waits \
@@ -102,6 +102,6 @@ const PROPOSE_ANSWER: &str = "In this chat it checks the answer and proposes it 
 
 /// What the agent reads first of a tool that publishes a draft.
 const PROPOSE_PUBLISH: &str = "In this chat it proposes the publication to the person, who applies or dismisses it \
-  in the conversation, unless the person turned on Let the Orchestrator publish drafts in Settings: then it \
+  in the conversation, unless the person turned on Let the Orchestrator publish drafts in Project settings › Orchestrator: then it \
   publishes at once, but never in a turn Orchester started by itself: there it only proposes. Either way it is done \
   as follows, and what widens what agents may do still needs Let automation change agent permissions.";

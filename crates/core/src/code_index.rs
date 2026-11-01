@@ -3,7 +3,7 @@
 //! that has none, which a new or resumed agent is pointed at together with the internal skill that
 //! explains how to search it with ripgrep.
 //!
-//! - Project settings › Code index › *Use code index* ([`CodeIndexSetting`]) is read when an agent starts: agents that
+//! - Project settings › Context › *Use code index* ([`CodeIndexSetting`]) is read when an agent starts: agents that
 //!   start after a change follow it. It is off until a person turns it on: measured with Claude Code and Orchester's
 //!   file tools, agents hardly used the index and runs with it cost more
 //!   (`docs/evidence/code-index-measurement-2026-10-07.md`). Off, nothing is built and no agent gets an index or the

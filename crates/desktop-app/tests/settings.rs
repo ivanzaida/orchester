@@ -1,4 +1,4 @@
-//! Settings › Automation's *What automation may do*: *Look at the window*, always on; *Agents can control this
+//! Settings › Automation's switches: *Look at the window*, always on; *Agents can control this
 //! window*, the build's default until a person chooses, applying from the next start; and *Let automation answer
 //! approvals* and *Let automation change agent permissions*: each off until a person turns it on in the window, where
 //! it reads the stored value and saves what the person chooses; synthetic input never flips one, and MCP clients'

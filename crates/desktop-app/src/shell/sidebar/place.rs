@@ -2,7 +2,7 @@
 //! the two hubs of the Configure section. Each opens one route and stays selected on every route that belongs to
 //! it (`Where each entry went` `j3WMs9`): a task and its forms are Tasks', a module's page and its forms Modules',
 //! the Merge queue and the Pull requests with a pull request's page the Review hub's, and Profiles, Instructions,
-//! Skills, Tools and Memory the Agents hub's. Usage, Project settings with its Connections and Secrets tabs, and
+//! Skills, Tools and Memory the Agents hub's. Usage, Project settings with its Connections and Environment tabs, and
 //! the app's Settings have no entry: the usage card and the switcher's menu open them.
 
 use orchester_core::id::ProjectId;

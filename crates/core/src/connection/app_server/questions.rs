@@ -18,7 +18,7 @@ use crate::{
 
 /// What the agent reads when its question asks for a secret.
 pub const SECRET_REFUSED: &str = "Orchester never passes secret values through questions, so this question was not \
-                                  shown. Ask the person to store the value in the project's Secrets and grant it to \
+                                  shown. Ask the person to store the value in Project settings › Environment and grant it to \
                                   this run; do not ask for it again.";
 /// What the agent reads when its question suggests no two different answers.
 pub const NO_OPTIONS_REFUSED: &str = "Orchester puts a question to the person only with at least two different \

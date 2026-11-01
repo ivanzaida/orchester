@@ -1,4 +1,4 @@
-//! `project_agent_files`: Project settings › General › Repository agent files, one row; a project
+//! `project_agent_files`: Project settings › Context › Repository agent files, one row; a project
 //! that never changed it has it on.
 
 use orchester_core::agent_files::RepositoryAgentFiles;

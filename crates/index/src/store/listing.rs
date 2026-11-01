@@ -1,4 +1,4 @@
-//! The indexes Orchester keeps, as Project settings › Code index lists them: each revision with an
+//! The indexes Orchester keeps, as Project settings › Context › Code index lists them: each revision with an
 //! index, a running build or a failed one, the runs that use it, and its state. A failed build
 //! leaves `.failures/<revision>` with its reason, removed by the next build that succeeds and with
 //! the revision's other records once no run uses it.

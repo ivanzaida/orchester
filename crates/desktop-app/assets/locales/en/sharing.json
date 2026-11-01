@@ -593,7 +593,7 @@
       "anotherRole": "another role",
       "addAccount": "Add an account…",
       "noneHere": "None on this computer",
-      "noneHereReason": "Add one in Connections or Secrets first",
+      "noneHereReason": "Add one in Connections or Environment first",
       "serverHere": "MCP server on this computer",
       "secretHere": "Secret on this computer",
       "personOnly": "Only you can confirm this; the Orchestrator and tools can't.",

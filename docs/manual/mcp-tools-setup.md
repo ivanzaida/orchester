@@ -630,7 +630,7 @@ A project's active secrets **by name and use only — never a value** (values st
 read). Each: id, name, kind, environment (a name is unique per environment, written `NAME@environment` where tools
 and MCP servers refer to it), `added_at`, `replaced_at`, and `used_by` (tools, MCP servers, agent connections whose
 API key it is, and the profiles whose draft or latest version chooses an MCP server using it, with that server),
-each with a link, plus the link to Secrets.
+each with a link, plus the link to Project settings › Environment.
 
 Adding, replacing and archiving secrets are done by a person in the app. Parameter: `project` (string | null).
 

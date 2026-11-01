@@ -66,7 +66,7 @@ const INSTRUCTIONS: &str = "Orchester is a desktop app that orchestrates coding 
   explanation in `reasons`. Answering approvals works only while a person turned on Let automation answer \
   approvals in the app; widening what agents may do (broader profile permissions or MCP servers, a CLI \
   program not found on the search path, environment variables that change program loading, running a CLI on an API provider's host or key, adding or widening   an MCP server or turning one on) is refused as \
-  person_only unless a person turned on Let automation change agent permissions in Settings › What automation may do. \
+  person_only unless a person turned on Let automation change agent permissions in Settings › Automation. \
   Narrowing is always allowed, and no tool takes or returns a secret's value. The tools work without an Orchester Cloud sign-in. Naming a project that belongs to an Orchester Cloud account while nobody is signed in answers sign_in_required; sign_in_state says whether a sign-in is there, and only a person signs in, in the window.";
 
 /// lurq's tools for `settings`, the app's tools on `link` and `appearance`, and, for a started session,

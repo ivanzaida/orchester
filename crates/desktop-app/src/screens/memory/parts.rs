@@ -16,7 +16,7 @@ use orchester_core::{id::ProjectId, memory::Memory, project::TaskKey};
 
 use crate::{
   navigation::{Navigation, link::Open},
-  routes::{ProjectPage, Route, TaskView},
+  routes::{ProjectPage, ProjectSettingsTab, Route, TaskView},
   theme::{ExtraRadius, ExtraSpacing, IconSize, MemoryText},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -137,13 +137,9 @@ pub fn conversation_button(ctx: &mut Ctx, (project, task): (ProjectId, &TaskKey)
     .into()
 }
 
-/// What a link to a page not built yet says, in place of the link (*Project settings › Memory* today).
-pub fn unbuilt_link(id: &str, words: &str, reason: &str) -> Element {
-  Text::new(words)
-    .id(id.to_owned())
-    .variant(MemoryText::Link.role())
-    .describe("state", "unavailable")
-    .describe("reason", reason.to_owned())
-    .opacity(crate::theme::DISABLED_OPACITY)
-    .into()
+/// *Change in Project settings › Context ↗*: `project`'s Context, which holds the Memory group.
+pub fn settings_link(ctx: &mut Ctx, project: ProjectId, id: &str) -> Element {
+  let navigation = Navigation::of(ctx);
+  let route = Route::Project(project, ProjectPage::Settings(ProjectSettingsTab::Context));
+  link(id, &ctx.t("memory.settingsLink"), navigation.to(route))
 }
