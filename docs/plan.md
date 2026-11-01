@@ -2890,3 +2890,4 @@ projects; sharing, joining, invites and team servers offer the sign-in in place;
 a named project an account holds while nobody is signed in. Open: the *Verify* step's design verification, macOS
 unchecked. The three-way start page stays ORC-293.
 ORC-556 · Decision model connections in the project database · branch `orchester/orc-556-run-1`: versioned settings keep the secret reference, listed models, last check and per-threshold test figures; transactional reviewer selection prevents deleting a connection in use.
+ORC-613 · Wait for required Codex MCP servers · branch `orchester/orc-613-run-1`: bounded cancellable thread-scoped readiness on fresh start, quota resume and retry; missing/terminal/timeout errors retain redaction and server names. Evidence: `docs/evidence/orc-613-codex-mcp-readiness.md`.

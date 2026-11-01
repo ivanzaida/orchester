@@ -69,6 +69,8 @@ mod fake_codex_index;
 mod fake_codex_limits;
 #[path = "fake_codex_question.rs"]
 mod fake_codex_question;
+#[path = "fake_codex_readiness.rs"]
+mod fake_codex_readiness;
 #[path = "fake_codex_relay.rs"]
 mod fake_codex_relay;
 #[path = "fake_codex_review.rs"]
@@ -172,6 +174,8 @@ pub struct Session {
   /// The running or last turn: `fake-turn-<n>` for the session's n-th turn, as each turn of Codex has an id of its
   /// own.
   pub turn: String,
+  status_reads: u32,
+  model: String,
   turns: u32,
   pub cell: Option<fake_codex_cell::Cell>,
   /// A command the yielded cell asked about (`fake_codex_cell`).
@@ -212,6 +216,8 @@ impl Session {
       argument_servers: false,
       orchester: None,
       turn: String::new(),
+      model: String::new(),
+      status_reads: 0,
       turns: 0,
       cell: None,
       cell_command: fake_codex_cell::Command::default(),
@@ -244,7 +250,7 @@ impl Session {
         emit(&json!({"id": 6, "result": {"config": self.configuration(), "layers": self.layers(&cwd)}}));
       }
       Some("mcpServerStatus/list") => {
-        emit(&json!({"id": 4, "result": {"data": self.servers(), "nextCursor": null}}));
+        fake_codex_readiness::status(self, message);
         if self.argument_servers && self.probe == fake_codex_relay::Probe::LateRelay {
           // The runner has taken the list's answer before the thread's relay comes.
           thread::sleep(Duration::from_millis(500));
@@ -291,6 +297,7 @@ impl Session {
     }
     self.user_off = fake_codex_user::turned_off(&self.user_servers, config);
     self.argument_servers = config.get("mcp_servers").is_none();
+    self.model = params["model"].as_str().unwrap_or_default().to_owned();
     self.probe = fake_codex_relay::Probe::of(params["model"].as_str().unwrap_or_default());
     self.approved_tools = approved_tools(&self.args);
     self.cwd = PathBuf::from(params["cwd"].as_str().unwrap_or_default());
@@ -424,7 +431,7 @@ impl Session {
     let mut servers: Vec<Value> = kept
       .into_iter()
       .map(|name| match name {
-        "Orchester" => orchester_status(&self.args),
+        "Orchester" => fake_codex_readiness::orchester_status(&self.args),
         "broken" if self.broken => json!({"name": name, "runtimeStatus": "failed", "toolsError": null}),
         _ => json!({"name": name, "runtimeStatus": "connected", "toolsError": null}),
       })
@@ -496,21 +503,6 @@ impl Session {
     }
     let structured = !params["outputSchema"].is_null();
     fake_codex_work::work(self, &prompt, structured)
-  }
-}
-
-/// Orchester's server in `mcpServerStatus/list`: started again, its tools listed, then closed.
-fn orchester_status(args: &[String]) -> Value {
-  match fake_codex_tools::start(args).map(|started| started.tools) {
-    Some(Ok(tools)) => {
-      let tools: serde_json::Map<String, Value> = tools
-        .into_iter()
-        .map(|tool| (tool.clone(), json!({"name": tool})))
-        .collect();
-      json!({"name": "Orchester", "runtimeStatus": "connected", "toolsError": null, "tools": tools})
-    }
-    Some(Err(error)) => json!({"name": "Orchester", "runtimeStatus": "connected", "toolsError": error}),
-    None => json!({"name": "Orchester", "runtimeStatus": "failed", "toolsError": "no command"}),
   }
 }
 

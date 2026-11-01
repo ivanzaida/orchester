@@ -2,8 +2,8 @@ use std::collections::BTreeSet;
 
 use orchester_core::{
   connection::app_server_mcp::{
-    McpInventoryError, UnavailableServer, refuse_user_hooks, servers_to_turn_off, thread_config, unavailable_selected,
-    verify_only_chosen_run, verify_selected_servers,
+    McpInventoryError, UnavailableServer, refuse_user_hooks, servers_to_turn_off, starting_selected, thread_config,
+    unavailable_selected, verify_only_chosen_run, verify_selected_servers,
   },
   orchester_tools::SERVER,
 };
@@ -14,6 +14,43 @@ fn kept(text: &str) -> String {
   text.to_owned()
 }
 
+#[test]
+fn selected_readiness_waits_only_for_starting_and_prioritizes_terminal_errors() {
+  let selected = BTreeSet::from(["a".to_owned(), "b".to_owned()]);
+  let mut inventory = json!({"data":[
+    {"name":"a","runtimeStatus":"starting"},
+    {"name":"b","runtimeStatus":"connected"}
+  ]});
+  assert_eq!(
+    starting_selected(&inventory, &selected, kept).expect("pending")[0].name,
+    "a"
+  );
+  inventory["data"][0]["toolsError"] = json!("discovery diagnostic with secret");
+  let pending =
+    starting_selected(&inventory, &selected, |text| text.replace("secret", "<redacted>")).expect("still starting");
+  assert_eq!(
+    pending[0].error.as_deref(),
+    Some("discovery diagnostic with <redacted>")
+  );
+  inventory["data"][0]["toolsError"] = json!(null);
+  inventory["data"][0]["runtimeStatus"] = json!("connected");
+  assert!(
+    starting_selected(&inventory, &selected, kept)
+      .expect("ready")
+      .is_empty()
+  );
+  inventory["data"][0]["runtimeStatus"] = json!("starting");
+  for state in ["failed", "disabled", "notStarted", "authenticationRequired", "unknown"] {
+    inventory["data"][1]["runtimeStatus"] = json!(state);
+    assert!(matches!(starting_selected(&inventory, &selected, kept),
+      Err(McpInventoryError::UnavailableSelected(server)) if server.name == "b"));
+  }
+  inventory["data"].as_array_mut().expect("list").pop();
+  assert_eq!(
+    starting_selected(&inventory, &selected, kept),
+    Err(McpInventoryError::MissingSelected("b".to_owned()))
+  );
+}
 #[test]
 fn selected_server_is_checked_and_extra_global_servers_remain_available() {
   let selected = BTreeSet::from(["project-pencil".to_owned()]);

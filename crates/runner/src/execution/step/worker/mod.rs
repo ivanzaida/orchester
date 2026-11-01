@@ -372,6 +372,7 @@ impl Worker {
   /// again should its run have dropped to Manual ([`Worker::recheck_mode`]).
   async fn tick(&mut self, watch: &mut Watch) -> Result<(), StoreError> {
     self.flush(watch)?;
+    self.poll_servers(watch).await?;
     self.recheck_mode(watch).await
   }
 
