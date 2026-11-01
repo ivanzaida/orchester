@@ -1001,6 +1001,10 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
+ORC-571 · Team reviewer API contract (implemented 2026-11-01). Existing `team_reviewer` resources use the shared
+create, publish, read and delta shapes; published versions carry the server-owned `widens` flag from ORC-570.
+Contract and access rules: `docs/cloud-api.md`. Tests: `orchester-api --test resources reviewer_resource`.
+
 ORC-555 · Decision reviewer request and answer · branch `orchester/orc-555-run-1` (implemented 2026-11-01).
 Runner pure functions build the six System One questions from core's shared, bounded and redacted review state,
 keep agent data apart as untrusted, substitute Autopilot's roots policy, and strictly parse choice/noul probabilities
