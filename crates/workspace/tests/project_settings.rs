@@ -134,9 +134,10 @@ fn project_settings_auto_mode_reviewer_needs_a_person_and_a_connection_and_refus
   let base = AutoModeSettings::default();
   let asked = AutoModeSettings {
     reviewer: Some(ReviewerChoice {
-      connection: ConnectionId::generate(),
+      connection: (ConnectionId::generate()).into(),
       model: ModelId::new("claude-haiku-4-5-20251001").expect("model"),
       effort: None,
+      threshold: None,
     }),
   };
   assert!(project_settings::reviewer_widens(&base, &asked));
@@ -242,12 +243,12 @@ fn project_settings_default_reviewer_keeps_model_and_effort_edits() {
   let choice = project_settings::reviewer(&settings, "", "gpt-5.5", "high")
     .expect("chosen effort")
     .expect("explicit reviewer");
-  assert_eq!(choice.connection, id);
+  assert_eq!(choice.connection, id.into());
   assert_eq!(choice.effort.as_deref(), Some("high"));
   let choice = project_settings::reviewer(&settings, "", "another-model", "")
     .expect("chosen model")
     .expect("explicit reviewer");
-  assert_eq!(choice.connection, id);
+  assert_eq!(choice.connection, id.into());
   assert_eq!(choice.model.as_str(), "another-model");
   assert!(project_settings::reviewer(&settings, "", "gpt-5.5", "invalid").is_err());
 }

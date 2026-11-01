@@ -5,7 +5,7 @@ mod support;
 
 use orchester_core::{
   connection::stream::AgentEvent,
-  id::ConnectionId,
+  id::{ConnectionId, DecisionConnectionId},
   resource::ModelId,
   run::review::{AutoModeSettings, ReviewerChoice},
   store::ActivityStore,
@@ -20,9 +20,10 @@ fn auto_mode_keeps_the_reviewer_a_person_chose_and_the_runs_origin() {
 
   let settings = AutoModeSettings {
     reviewer: Some(ReviewerChoice {
-      connection: ConnectionId::generate(),
+      connection: (ConnectionId::generate()).into(),
       model: ModelId::new("claude-sonnet-5-5").expect("model"),
       effort: Some("high".to_owned()),
+      threshold: None,
     }),
   };
   db.save_auto_mode_settings(&settings).expect("save");
@@ -69,9 +70,10 @@ fn auto_mode_reads_the_agents_last_messages_oldest_first() {
 fn auto_mode_update_and_compare_and_save_change_what_is_stored() {
   let (_repo, mut db, ..) = started_run();
   let reviewer = ReviewerChoice {
-    connection: ConnectionId::generate(),
+    connection: (ConnectionId::generate()).into(),
     model: ModelId::new("claude-sonnet-5-5").expect("model"),
     effort: Some("high".to_owned()),
+    threshold: None,
   };
   let chosen = AutoModeSettings {
     reviewer: Some(reviewer),
@@ -91,4 +93,23 @@ fn auto_mode_update_and_compare_and_save_change_what_is_stored() {
     AutoModeSave::Saved
   );
   assert_eq!(db.auto_mode_settings().expect("read"), default);
+}
+
+#[test]
+fn auto_mode_refuses_a_decision_choice_in_language_connection_columns() {
+  let (_repo, mut db, ..) = started_run();
+  let settings = AutoModeSettings {
+    reviewer: Some(ReviewerChoice::decision(
+      DecisionConnectionId::generate(),
+      ModelId::new("system-one").expect("model"),
+      None,
+    )),
+  };
+  assert!(matches!(
+    db.save_auto_mode_settings(&settings),
+    Err(orchester_store::StoreError::Unrepresentable(
+      "decision reviewer settings"
+    ))
+  ));
+  assert_eq!(db.auto_mode_settings().expect("unchanged"), AutoModeSettings::default());
 }
