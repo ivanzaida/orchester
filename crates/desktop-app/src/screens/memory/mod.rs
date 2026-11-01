@@ -24,7 +24,7 @@ mod proposal_side;
 mod queue_row;
 mod record_page;
 mod row;
-mod settings;
+pub(crate) mod settings;
 pub(crate) mod state;
 mod status_tab;
 mod tab_no_match;
