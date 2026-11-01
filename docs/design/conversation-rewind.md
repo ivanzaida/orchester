@@ -25,6 +25,11 @@ All on `Orchestrator · redesign` `hujxu` (dark), after the History rows (ORC-59
 Exports at scale 1: `.tmp/design/ORC-330/<node>.png` (not committed). Like other nested frames, they export light. The
 canvas shows them dark.
 
+Spacing: in the six frames every gap and padding that equals a spacing step uses its variable (`$spacing_sm` 8,
+`$spacing_md` 12, `$spacing_lg` 16), including the frame roots, the 09d sections (`['$spacing_md', 0, 0, 0]`) and the 09c
+dialog's head, list and footer. Values with no step (gaps 10, 14, 6, 5, 1; padding 28 and 20) stay as numbers, as in 07
+`GgXmd` and 08e `I4xzOf`. Those earlier frames still use raw numbers for on-step values; they were left as they are.
+
 Board moves (asked and approved by the person): `hujxu` grew by Rows 11 and 12, so the boards stacked below it at x 4840
 (`zuvUi`, `XGtkg`, `iUmo3`, `evQ4U`, `i5gEcb`, `ri5ru`, `acFkz`) moved down 1970 px, y only. Other runs moved the same boards
 again later for their own rows (ORC-336 Rows 13–14). The 200 px gap under `hujxu` is kept.
