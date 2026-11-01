@@ -153,10 +153,11 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "list_models",
-    description: "The models an agent connection offers, each with the reasoning efforts it takes, as the profile \
-                  editor offers them: its last check's, an API provider's or a native connection's own. A model it \
-                  does not list can still be given to save_profile_draft (it runs as not verified); an effort is \
-                  kept only where the model lists it. `link` is the connection's in the app.",
+    description: "The models an agent or decision connection offers, each with the reasoning efforts it takes \
+                  (none for decision models). Decision models come from the connection's last model-list check, \
+                  with source decision. Agent models are offered as in the profile editor: its last check's, an \
+                  API provider's or a native connection's own. An unlisted agent model can still be given to \
+                  save_profile_draft (not verified); effort is kept only where listed. Agent connections include link.",
     schema: schema_for_type::<connections::InConnection>,
     read_only: true,
   },

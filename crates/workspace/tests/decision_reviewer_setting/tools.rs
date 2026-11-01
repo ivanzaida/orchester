@@ -49,7 +49,7 @@ fn services(repo: &std::path::Path) -> (app_mcp::Services, Workspace) {
 }
 
 #[tokio::test]
-async fn decision_reviewer_setting_tools_hosted_is_person_only_but_threshold_and_language_are_not() {
+async fn mcp_decision_reviewer_hosted_is_person_only_but_threshold_and_language_are_not() {
   let (repo, mut db) = project();
   let (services, workspace) = services(repo.path());
   let local = connection("http://localhost:8000/v1");
@@ -64,11 +64,17 @@ async fn decision_reviewer_setting_tools_hosted_is_person_only_but_threshold_and
   assert_eq!(result["approvals"]["reviewer"]["kind"], "decision");
   assert_eq!(result["approvals"]["reviewer"]["threshold"], 0.85);
   assert_eq!(result["approvals"]["reviewer"]["destination"]["host"], "localhost");
+  let read = call(&services, "get_approvals", json!({"project":"Reviewer"}))
+    .await
+    .expect("read reviewer");
+  assert_eq!(read, result);
   let mut args = local_args;
   args["decision_connection"] = hosted.id().to_string().into();
-  assert!(
-    matches!(call(&services, "set_reviewer", args.clone()).await, Err(ToolError::Refused { code, .. }) if code == "person_only")
-  );
+  assert!(matches!(
+    call(&services, "set_reviewer", args.clone()).await,
+    Err(ToolError::Refused { code, reasons })
+      if code == "person_only" && reasons[0].key == "projectSettings.personOnly"
+  ));
   db.save_auto_mode_settings(&settings(&hosted, "0.85"))
     .expect("person's choice");
   workspace
@@ -107,7 +113,7 @@ async fn decision_reviewer_setting_tools_hosted_is_person_only_but_threshold_and
     .expect("switch back with widening off");
 }
 #[tokio::test]
-async fn decision_reviewer_setting_tools_gate_connection_and_model_changes() {
+async fn mcp_decision_reviewer_gate_connection_and_model_changes() {
   let (repo, mut db) = project();
   let (services, workspace) = services(repo.path());
   let mut first = connection("http://localhost:8000/v1");
@@ -137,6 +143,34 @@ async fn decision_reviewer_setting_tools_gate_connection_and_model_changes() {
     workspace
       .set_automation_changes_permissions(false)
       .expect("permissions off");
+  }
+}
+#[tokio::test]
+async fn mcp_decision_reviewer_default_threshold_and_invalid_arguments() {
+  let (repo, mut db) = project();
+  let (services, _) = services(repo.path());
+  let local = connection("http://localhost:8000/v1");
+  db.create_decision_connection(&local).expect("local");
+  let args = json!({"project":"Reviewer","decision_connection":local.id().to_string()});
+  let result = call(&services, "set_reviewer", args.clone())
+    .await
+    .expect("default threshold");
+  assert_eq!(result["approvals"]["reviewer"]["threshold"], 0.80);
+  for threshold in [0.0, 1.0, -0.1, 0.801] {
+    let mut invalid = args.clone();
+    invalid["threshold"] = threshold.into();
+    assert!(matches!(
+      call(&services, "set_reviewer", invalid).await,
+      Err(ToolError::InvalidArguments(_))
+    ));
+  }
+  for field in ["connection", "effort", "key", "key_value"] {
+    let mut invalid = args.clone();
+    invalid[field] = "rejected".into();
+    assert!(matches!(
+      call(&services, "set_reviewer", invalid).await,
+      Err(ToolError::InvalidArguments(_))
+    ));
   }
 }
 

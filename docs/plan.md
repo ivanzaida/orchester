@@ -1010,6 +1010,12 @@ Tests: `orchester-runner --test decision_test decision_test` (7 passed), existin
 decision_review decision_review` (9 passed, live test ignored). Quality gate: `check: OK`.
 API and limitations: `docs/evidence/orc-561-decision-test.md`.
 
+ORC-562 · Decision reviewer MCP connections and threshold (implemented 2026-11-01).
+Decision connections participate in list_models by id or name, with no reasoning efforts. Existing save, check,
+remove and reviewer tools are covered by the mcp_decision_reviewer filter, including local/hosted authority,
+threshold validation and secret-reference-only schemas. Hosted reviewer choices use the app's refusal reason.
+No decision test-start tool is exposed. No visual or platform-specific changes.
+
 ORC-558 · Decision reviewer HTTP execution · branch `orchester/orc-558-run-1` (implemented 2026-11-01).
 The runner reviews requests on the explicitly chosen decision server, reading its project secret, checking the current
 model list and posting System One questions within a combined two-second deadline. Failures reach the person with

@@ -214,7 +214,7 @@ fn reviewer_change(
   if decision_reviewer::choosing_hosted(current, &next, decisions).is_some() {
     return Err(ToolError::refused(
       "person_only",
-      vec![Message::new("appMcp.errors.personOnly")],
+      vec![Message::new("projectSettings.personOnly")],
     ));
   }
   gate(services)?;
