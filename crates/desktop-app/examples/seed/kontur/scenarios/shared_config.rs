@@ -38,7 +38,7 @@ struct Team {
 
 /// As dana-k, the project's owner: her draft, a version waiting for the server and one that met olha's.
 pub fn admin(kontur: &mut Kontur) -> Result<(), SeedError> {
-  let team = shared(kontur, MemberRole::Admin)?;
+  let team = shared(kontur, MemberRole::Owner)?;
   admin_states(kontur, &team)
 }
 
@@ -63,7 +63,7 @@ fn shared(kontur: &mut Kontur, role: MemberRole) -> Result<Team, SeedError> {
     olha: person("olha"),
     ivan: person("ivan"),
   };
-  let me = if role == MemberRole::Admin {
+  let me = if role == MemberRole::Owner {
     &team.dana
   } else {
     &team.ivan
@@ -83,7 +83,7 @@ fn shared(kontur: &mut Kontur, role: MemberRole) -> Result<Team, SeedError> {
   kontur.db.start_sharing(&link, &[], (&[], &HashMap::new()))?;
   let added = kontur.ago(30 * DAY);
   let members = [
-    (&team.dana, "Dana Kovalenko", MemberRole::Admin),
+    (&team.dana, "Dana Kovalenko", MemberRole::Owner),
     (&team.olha, "Olha", MemberRole::Member),
     (&team.ivan, "Ivan", MemberRole::Member),
   ]

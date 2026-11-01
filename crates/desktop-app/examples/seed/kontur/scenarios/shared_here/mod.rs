@@ -240,7 +240,7 @@ fn link(kontur: &mut Kontur) -> Result<(), SeedError> {
     added_at: added,
   };
   let members = [
-    member(UserId::generate(), ("Dana Kovalenko", "dana-k", MemberRole::Admin)),
+    member(UserId::generate(), ("Dana Kovalenko", "dana-k", MemberRole::Owner)),
     member(UserId::generate(), ("Olha", "olha", MemberRole::Member)),
     member(me, ("Ivan", "ivan", MemberRole::Member)),
   ];

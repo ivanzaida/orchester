@@ -47,7 +47,7 @@ impl Joining {
       server,
       project: Responder::project(),
       key: ProjectKey::new(KEY).expect("a key"),
-      role: Some(MemberRole::Admin),
+      role: Some(MemberRole::Owner),
       joined_at: Timestamp::now(),
       cursor: 0,
       last_synced_at: Timestamp::now(),

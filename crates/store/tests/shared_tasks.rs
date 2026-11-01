@@ -73,7 +73,7 @@ fn link(key: &str) -> SharingLink {
     server: ServerId::generate(),
     project: ProjectId::generate(),
     key: ProjectKey::new(key).expect("key"),
-    role: Some(MemberRole::Admin),
+    role: Some(MemberRole::Owner),
     joined_at: at(100),
     cursor: 7,
     last_synced_at: at(100),

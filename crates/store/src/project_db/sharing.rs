@@ -178,16 +178,15 @@ pub(super) fn ensure_local_task(connection: &Connection, task: TaskId) -> Result
 }
 
 pub(super) const fn role_text(role: MemberRole) -> &'static str {
-  // Existing local SQLite schemas encode workspace admins as `owner`. This is not a wire alias.
   match role {
-    MemberRole::Admin => "owner",
+    MemberRole::Owner => "owner",
     MemberRole::Member => "member",
   }
 }
 
 pub(super) fn parse_role(value: &str) -> Result<MemberRole, StoreError> {
   match value {
-    "owner" => Ok(MemberRole::Admin),
+    "owner" => Ok(MemberRole::Owner),
     "member" => Ok(MemberRole::Member),
     other => Err(corrupt("member role", other)),
   }

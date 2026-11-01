@@ -209,7 +209,7 @@ async fn live_updates_a_widening_version_waits_and_runs_keep_the_previous_one_un
 async fn live_updates_a_teammates_widening_version_waits_while_the_owners_own_version_waits_for_its_number() {
   let team = Team::publish();
   let builder_id = team.builder;
-  let alice = Computer::new(&team.server, ALICE, MemberRole::Admin);
+  let alice = Computer::new(&team.server, ALICE, MemberRole::Owner);
   let workspace = &alice.workspace;
   codex(&mut workspace.db(), &workspace.root, "Laptop");
   let stream = workspace.follow(Member::of(&team.server, ALICE));
@@ -292,7 +292,7 @@ async fn live_updates_a_teammates_widening_version_waits_while_the_owners_own_ve
 #[tokio::test(flavor = "multi_thread")]
 async fn live_updates_a_version_published_here_and_one_that_does_not_widen_apply_at_once() {
   let server = TeamServer::start(&[(ALICE, "Alice Moreau")], &[]);
-  let alice = Computer::new(&server, ALICE, MemberRole::Admin);
+  let alice = Computer::new(&server, ALICE, MemberRole::Owner);
   let workspace = &alice.workspace;
   let laptop = codex(&mut workspace.db(), &workspace.root, "Laptop");
   // Any command in the worktree: as a teammate's first version, this Builder would wait.

@@ -133,10 +133,10 @@ fn s1b_revision_rejects_invalid_and_overflow() {
   );
 }
 
-/// Row 72: only workspace or server admins change the team's configuration; a member reads it.
+/// Row 72: only the project's owner or the server's admin changes the team's configuration; a member reads it.
 #[test]
-fn configuration_is_changed_only_by_a_workspace_admin_or_the_server_admin() {
-  assert!(may_change_configuration(Some(MemberRole::Admin), false));
+fn configuration_is_changed_only_by_an_owner_or_the_server_admin() {
+  assert!(may_change_configuration(Some(MemberRole::Owner), false));
   assert!(may_change_configuration(Some(MemberRole::Member), true));
   assert!(may_change_configuration(None, true));
   assert!(!may_change_configuration(Some(MemberRole::Member), false));

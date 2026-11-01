@@ -81,7 +81,7 @@ pub(super) fn read(ctx: &mut Ctx, project: &ShownProject) -> Option<Shared> {
             .map(|(_, members)| {
               members
                 .into_iter()
-                .filter(|member| member.role == MemberRole::Admin)
+                .filter(|member| member.role == MemberRole::Owner)
                 .map(|member| member.display_name)
                 .collect()
             })
@@ -246,7 +246,7 @@ fn dot(color: PaletteColor) -> Row {
 fn role(ctx: &Ctx, sharing: &ProjectSharing) -> Row {
   let key = match (sharing.link.removed_at, sharing.link.role) {
     (Some(_), _) => "tasks.shared.wasMember",
-    (None, Some(MemberRole::Admin)) => "tasks.shared.owner",
+    (None, Some(MemberRole::Owner)) => "tasks.shared.owner",
     (None, Some(MemberRole::Member)) => "tasks.shared.member",
     (None, None) => "tasks.shared.admin",
   };
