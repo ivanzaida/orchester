@@ -1,10 +1,11 @@
 //! Estimates (`Estimates` `vLiTy` in `02 · Runs`, the Runs window `g406O`): *Let Orchester estimate story points*, the
-//! project's own setting since ORC-103 (a project a person has not set it for keeps the application-wide setting it
-//! moved from). Orchester's estimator then sizes new tasks, and tasks whose brief or criteria change, on auto mode's
-//! reviewer, never changing points a person set. It is read and saved off the UI thread, and its switch cannot be
-//! flipped while either runs. Only a person flips it: the switch refuses lurq's synthetic input, an MCP client's
-//! included, and says so under the row. Unlike the application-wide Automation section it moved from, the row does not
-//! close the whole window to MCP input while it shows, so Runs' other settings stay open to automation as before.
+//! project's own setting since ORC-103; opening a project that had none copied the application-wide value into it
+//! (ORC-595), and the row shows only the project's. Orchester's estimator then sizes new tasks, and tasks whose brief
+//! or criteria change, on auto mode's reviewer, never changing points a person set. It is read and saved off the UI
+//! thread, and its switch cannot be flipped while either runs. Only a person flips it: the switch refuses lurq's
+//! synthetic input, an MCP client's included, and says so under the row. Unlike the application-wide Automation
+//! section it moved from, the row does not close the whole window to MCP input while it shows, so Runs' other
+//! settings stay open to automation as before.
 
 use lurq::{
   app::{

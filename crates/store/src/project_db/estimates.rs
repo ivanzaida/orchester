@@ -28,17 +28,10 @@ pub enum AutomationPoints {
 }
 
 impl ProjectDb {
-  /// Whether the project lets Orchester estimate story points (*Let Orchester estimate story points*); `None` until a
-  /// person sets it for the project, when the application-wide setting it moved from holds.
-  pub fn estimates_story_points(&self) -> Result<Option<bool>, StoreError> {
-    Ok(
-      self
-        .connection
-        .query_row("SELECT allowed FROM project_estimates WHERE id = 1", [], |row| {
-          row.get(0)
-        })
-        .optional()?,
-    )
+  /// Whether the project lets Orchester estimate story points (*Let Orchester estimate story points*); off until a
+  /// person turns it on, or [`Self::copy_estimates_story_points`] copies the application-wide setting it moved from.
+  pub fn estimates_story_points(&self) -> Result<bool, StoreError> {
+    Ok(self.own_estimates_story_points()?.unwrap_or(false))
   }
 
   pub fn set_estimates_story_points(&mut self, allowed: bool) -> Result<(), StoreError> {
@@ -47,6 +40,34 @@ impl ProjectDb {
       params![allowed],
     )?;
     Ok(())
+  }
+
+  /// Gives a project that has no *Let Orchester estimate story points* of its own the application-wide value it
+  /// moved from (ORC-595), once: `application_wide` is read only then, and a project's own value always stays.
+  pub fn copy_estimates_story_points(
+    &mut self,
+    application_wide: impl FnOnce() -> Result<bool, StoreError>,
+  ) -> Result<(), StoreError> {
+    if self.own_estimates_story_points()?.is_some() {
+      return Ok(());
+    }
+    self.connection.execute(
+      "INSERT INTO project_estimates (id, allowed) VALUES (1, ?1) ON CONFLICT (id) DO NOTHING",
+      params![application_wide()?],
+    )?;
+    Ok(())
+  }
+
+  /// The project's stored setting; `None` while it has none.
+  fn own_estimates_story_points(&self) -> Result<Option<bool>, StoreError> {
+    Ok(
+      self
+        .connection
+        .query_row("SELECT allowed FROM project_estimates WHERE id = 1", [], |row| {
+          row.get(0)
+        })
+        .optional()?,
+    )
   }
 
   /// The story points of `task`; `None` while it has none.
