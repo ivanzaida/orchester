@@ -26,7 +26,7 @@ use super::{
   send::send_as,
 };
 use crate::{
-  attachments,
+  attachments, mentions,
   messages::{self, Message as UiMessage},
   tasks::{
     detail::{RunView, TaskDetail},
@@ -374,8 +374,11 @@ fn reached_providers(
 }
 
 /// *Request changes* with `text` as the changes the plan that waits needs, decided `by`: the command to
-/// tell the runner. `version`, where given, is the plan the person saw: another one waiting is refused.
+/// tell the runner, its note with the facts of the tasks and runs `text` mentions, as the project at `root` holds
+/// them. `version`, where given, is the plan the person saw: another one waiting is refused. Blocks on SQLite when
+/// `text` mentions something.
 pub fn plan_changes(
+  root: &Path,
   prepared: &Prepared,
   text: &str,
   (by, version): (Answerer, Option<PlanVersion>),
@@ -390,7 +393,13 @@ pub fn plan_changes(
   if version.is_some_and(|seen| seen != waiting.version) {
     return Err(OutgoingError::Changed);
   }
-  let note = ReviewNote::new(text).map_err(|_| OutgoingError::Send(SendError::Blank))?;
+  let text = if mentions::find(text).is_empty() {
+    text.to_owned()
+  } else {
+    let db = ProjectDb::open(root).map_err(OutgoingError::Store)?;
+    mentions::facts::with_facts_from(&db, text).map_err(OutgoingError::Store)?
+  };
+  let note = ReviewNote::new(&text).map_err(|_| OutgoingError::Send(SendError::Blank))?;
   Ok(Command::DecidePlan {
     run: review.run,
     execution: waiting.execution,

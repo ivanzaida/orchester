@@ -1,9 +1,9 @@
 //! @-mentions in a task Conversation's composer (ORC-312, `09` `Am5KT` … `09e` `y5fJD`): typing `@` opens the menu
 //! with the run's own task first, typing filters it, Enter inserts the mention as a chip, Backspace after the chip
 //! removes it whole, Esc closes the menu and keeps the text; a message sent with a mention is stored with the marked
-//! block of the task's facts that its agent reads, and the chat shows only the person's words.
+//! block of the task's or run's facts that its agent reads, and the chat shows only the person's words.
 
-use super::{click, draft, key, messages, open, seeded, text, type_on, write};
+use super::{click, detail, draft, key, messages, open, seeded, text, type_on, write};
 use crate::sending::{ENTER, until_stored};
 
 const MENU: &str = "composer-mention-menu";
@@ -85,5 +85,66 @@ fn composer_mentions_reach_the_agent_with_the_task_facts_and_show_as_a_link() {
   assert!(
     !shown.contains("orchester-mentions"),
     "the facts are the agent's: {shown}"
+  );
+}
+
+#[test]
+fn composer_mentions_insert_and_remove_a_run_and_reach_the_agent_with_its_facts() {
+  // Ready for review: its run #N leads the Runs, and a message is a follow-up stored for the runner.
+  let title = "Show the signed-in account";
+  let (mut window, seeded) = seeded();
+  let task = open(&mut window, &seeded, title);
+  let number = detail(&seeded, &task).run.expect("the task's run").run.number().get();
+  let run = format!("composer-mention-run-{task}-{number}");
+  let mention = format!("@{task}#{number}");
+  write(&mut window, "Ask @");
+  window.until("the run in the @ menu", |window| {
+    window.tree.get_element_by_id(&run).is_some()
+  });
+  type_on(&mut window, &format!("#{number}"));
+  window.until("the menu filtered to runs", |window| {
+    let own = format!("composer-mention-task-{task}");
+    window.tree.get_element_by_id(&run).is_some() && window.tree.get_element_by_id(&own).is_none()
+  });
+  key(&mut window, ENTER, (false, false));
+  window.until("the run's mention in the draft", |window| {
+    window.tree.get_element_by_id(MENU).is_none()
+  });
+  assert_eq!(draft(&mut window), format!("Ask {mention} "), "Enter inserts the run");
+  key(&mut window, ("Backspace", "Backspace"), (false, false));
+  key(&mut window, ("Backspace", "Backspace"), (false, false));
+  assert_eq!(
+    draft(&mut window),
+    "Ask ",
+    "Backspace after the run's chip removes it whole"
+  );
+
+  type_on(&mut window, "@");
+  window.until("the run in the @ menu", |window| {
+    window.tree.get_element_by_id(&run).is_some()
+  });
+  click(&mut window, &run);
+  window.until("the run's mention in the draft", |window| {
+    draft(window) == format!("Ask {mention} ")
+  });
+  type_on(&mut window, "again");
+  key(&mut window, ENTER, (false, false));
+  until_stored(&mut window, &seeded, title, 1);
+  let stored = messages(&seeded, &task).pop().expect("the message");
+  let body = stored.body().as_str();
+  assert!(body.starts_with(&format!("Ask {mention} again")), "{body}");
+  assert!(
+    body.contains(&format!(
+      "- {mention}: run #{number} of task {task} \"{title}\", state "
+    )),
+    "the run's facts: {body}"
+  );
+  assert!(body.contains(", branch "), "{body}");
+  let said = format!("conversation-message-{}-text", stored.id());
+  window.until("the message in the chat", |window| !text(window, &said).is_empty());
+  let shown = text(&mut window, &said);
+  assert!(
+    shown.contains(&format!("Ask {task} · #{number} again")),
+    "the run shows as a link: {shown}"
   );
 }

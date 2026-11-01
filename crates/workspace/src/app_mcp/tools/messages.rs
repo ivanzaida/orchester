@@ -110,7 +110,8 @@ pub async fn send_message(
     if !matches!(by, SentBy::Person(_)) {
       blocking(move || crate::decisions::DecisionKind::Plan.require(&workspace)).await?;
     }
-    let command = plan_changes(&prepared, &args.text, (by.answerer(), None)).map_err(refusal)?;
+    let (root, text, answerer) = (project.repo_root.clone(), args.text.clone(), by.answerer());
+    let command = blocking(move || plan_changes(&root, &prepared, &text, (answerer, None)).map_err(refusal)).await?;
     services
       .runners
       .control_run_in(&project, command)

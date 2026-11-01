@@ -7,6 +7,7 @@
 use std::{fmt::Write, path::Path};
 
 use orchester_core::{run::TaskPhase, task::organization::WorkflowStatus};
+use orchester_store::{ProjectDb, StoreError};
 
 use super::{
   Mention,
@@ -30,6 +31,16 @@ pub fn with_facts_in(root: &Path, text: &str) -> Result<String, Message> {
     return Ok(text.to_owned());
   }
   Ok(with_facts(&Catalog::read_in(root)?, text))
+}
+
+/// [`with_facts_in`] with the project's database open: what every path that keeps or sends a person's message calls
+/// (a task's conversation, a plan's changes, the Orchestrator chat), so a mention reaches the agent with the same
+/// facts however it was sent. Blocks on SQLite.
+pub fn with_facts_from(db: &ProjectDb, text: &str) -> Result<String, StoreError> {
+  if find(text).is_empty() {
+    return Ok(text.to_owned());
+  }
+  Ok(with_facts(&Catalog::read(db)?, text))
 }
 
 /// `text` with the block of what `catalog` knows of each mention in it, each mention once.
@@ -86,7 +97,7 @@ fn task_entry(block: &mut String, written: &str, task: &TaskChoice) -> std::fmt:
     block,
     "- {written}: task {} \"{}\", workflow status {}.",
     task.key,
-    task.title,
+    quoted(&task.title),
     workflow_words(task.status)
   )?;
   let lines: Vec<&str> = task
@@ -102,7 +113,7 @@ fn task_entry(block: &mut String, written: &str, task: &TaskChoice) -> std::fmt:
   for line in lines.iter().take(BRIEF_LINES) {
     let cut: String = line.chars().take(BRIEF_LINE_CHARS).collect();
     let more = if cut.len() < line.len() { " …" } else { "" };
-    writeln!(block, "  > {cut}{more}")?;
+    writeln!(block, "  > {}{more}", quoted(&cut))?;
   }
   if lines.len() > BRIEF_LINES {
     writeln!(block, "  (the brief goes on)")?;
@@ -116,10 +127,16 @@ fn run_entry(block: &mut String, written: &str, run: &RunChoice) -> std::fmt::Re
     "- {written}: run #{} of task {} \"{}\", state {}, branch {}.",
     run.number.get(),
     run.key,
-    run.title,
+    quoted(&run.title),
     phase_words(run.phase),
     run.branch
   )
+}
+
+/// `text`, a title or a brief's line someone wrote, quoted in the block so it can never pass for the block's own
+/// start or end tag.
+fn quoted(text: &str) -> String {
+  text.replace("orchester-mentions", "orchester mentions")
 }
 
 const fn workflow_words(status: WorkflowStatus) -> &'static str {

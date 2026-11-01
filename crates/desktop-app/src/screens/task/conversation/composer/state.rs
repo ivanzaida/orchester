@@ -26,7 +26,6 @@ use orchester_ipc::Command;
 use orchester_workspace::{
   background,
   decisions::DecisionKind,
-  mentions::facts::with_facts_in,
   messages::{self, Message},
   runner::AnswerMark,
   tasks::{
@@ -336,9 +335,8 @@ fn send_action(ctx: &mut Ctx) -> SendAction {
   })
 }
 
-/// Stores the message of `request` with its files as `prepared` offers, off the UI thread, with the facts of the tasks
-/// and runs it mentions after the person's words (`mentions::facts`): the task as read and what follows the stored
-/// message.
+/// Stores the message of `request` with its files as `prepared` offers, off the UI thread (the store adds the facts of
+/// the tasks and runs it mentions, `mentions::facts`): the task as read and what follows the stored message.
 async fn store(
   request: &Request,
   prepared: Prepared,
@@ -352,13 +350,12 @@ async fn store(
     request.way,
   );
   background::run(move || {
-    let stored =
-      with_facts_in(&root, &text).map(|text| store_answer_in(&root, &prepared, (key, way), (&text, &attachments), by));
+    let stored = store_answer_in(&root, &prepared, (key, way), (&text, &attachments), by);
     (prepared, stored)
   })
   .await
   .and_then(|(prepared, stored)| {
-    let stored = stored?.map_err(|error| {
+    let stored = stored.map_err(|error| {
       tracing::warn!(?error, "the message was not stored");
       error.message()
     })?;
@@ -413,7 +410,7 @@ async fn send(services: Services, request: Request) -> Result<Outcome, Message> 
   })
   .await??;
   if let ComposerMode::PlanChanges { version, .. } = prepared.mode {
-    return send_plan_changes(&services, request, &prepared, (by, version)).await;
+    return send_plan_changes(&services, request, prepared, (by, version)).await;
   }
   let mode = super::mode_name(&prepared.mode);
   let key = request.key;
@@ -467,15 +464,17 @@ async fn send(services: Services, request: Request) -> Result<Outcome, Message> 
 async fn send_plan_changes(
   services: &Services,
   request: Request,
-  prepared: &Prepared,
+  prepared: Prepared,
   (by, version): (Answerer, PlanVersion),
 ) -> Result<Outcome, Message> {
   if !request.attachments.is_empty() {
     return Err(orchester_workspace::attachments::plan_changes_refused());
   }
-  let (root, words) = (request.project.repo_root.clone(), request.text.clone());
-  let text = background::run(move || with_facts_in(&root, &words)).await??;
-  let command = plan_changes(prepared, &text, (by, Some(version))).map_err(|error| error.message())?;
+  let (root, text) = (request.project.repo_root.clone(), request.text.clone());
+  let command = background::run(move || {
+    plan_changes(&root, &prepared, &text, (by, Some(version))).map_err(|error| error.message())
+  })
+  .await??;
   services
     .runners
     .control_run_in(&request.project, command)

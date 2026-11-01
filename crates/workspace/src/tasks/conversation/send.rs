@@ -18,6 +18,7 @@ use super::outgoing::{after_turn_run, answers_question, conversation_of};
 use crate::{
   attachments::Refused,
   decisions::DecisionKind,
+  mentions,
   messages::{self, Message as UiMessage},
   tasks::detail::TaskDetail,
 };
@@ -88,8 +89,11 @@ pub(super) fn send_as(
   } else {
     text
   };
+  let mut db = ProjectDb::open(repo_root).map_err(SendError::Store)?;
+  // The agent reads the facts of the tasks and runs the person mentioned, however the message was sent.
+  let text = mentions::facts::with_facts_from(&db, text).map_err(SendError::Store)?;
   // A new message's text is only checked for being blank.
-  let body = MessageBody::new(text).map_err(|_: MessageError| SendError::Blank)?;
+  let body = MessageBody::new(&text).map_err(|_: MessageError| SendError::Blank)?;
   let message = Message::from_person(task, run, recipient, body, Timestamp::now())
     .sent(timing)
     .expect("a new message is a person's");
@@ -112,7 +116,6 @@ pub(super) fn send_as(
       .map_err(|_| SendError::InvalidRecovery)?,
     None => message,
   };
-  let mut db = ProjectDb::open(repo_root).map_err(SendError::Store)?;
   db.send_message_with(key, &message, attachments)
     .map_err(SendError::Store)
 }

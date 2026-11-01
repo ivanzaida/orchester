@@ -47,7 +47,7 @@ fn read_git(repo: &Path, args: &[&str]) -> String {
 
 /// A succeeded run of a new task on Delivery whose branch commits a file over `main`, ready to merge; the run and its
 /// task's key.
-fn ready_to_merge(screen: &Orchestrator) -> (Run, String) {
+pub(super) fn ready_to_merge(screen: &Orchestrator) -> (Run, String) {
   let delivery = screen.delivery();
   let key = screen.draft_on(delivery, "Merge me");
   let repo = screen.root.as_path();

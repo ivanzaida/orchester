@@ -19,7 +19,7 @@ use orchester_store::ProjectDb;
 
 use super::settings::OrchestratorSetup;
 use crate::{
-  attachments, background,
+  attachments, background, mentions,
   messages::{self, Message},
   runner::{RequestError, RunRequestError, Runners},
   workspace::OpenProject,
@@ -138,8 +138,9 @@ pub async fn stop(runners: &Runners, project: &OpenProject, chat: ChatId) -> Res
 
 /// Keeps `outgoing` in the project at `root`, with its attachments, starting its conversation when it is new;
 /// refused while the Orchestrator has nothing it can run on, and when its attachments break the message's limits or
-/// the Orchestrator's connection could not read one. A message of attachments only is kept with their names. Blocks
-/// on SQLite.
+/// the Orchestrator's connection could not read one. A message of attachments only is kept with their names; one that
+/// mentions tasks or runs with the facts of each (`mentions::facts`), which the conversation is not named after.
+/// Blocks on SQLite.
 pub fn keep_in(root: &Path, outgoing: &Outgoing) -> Result<(), Message> {
   keep_as_in(root, outgoing, &TurnState::Thinking)
 }
@@ -153,7 +154,7 @@ pub fn keep_as_in(root: &Path, outgoing: &Outgoing, state: &TurnState) -> Result
   } else {
     &outgoing.text
   };
-  let text = MessageBody::new(words).map_err(|_| Message::new("orchestrator.send.blank"))?;
+  let said = MessageBody::new(words).map_err(|_| Message::new("orchestrator.send.blank"))?;
   let setup = OrchestratorSetup::load_in(root)?;
   if !setup.readiness().is_ready() {
     return Err(Message::new("orchestrator.send.notReady"));
@@ -161,11 +162,13 @@ pub fn keep_as_in(root: &Path, outgoing: &Outgoing, state: &TurnState) -> Result
   let providers: Vec<_> = setup.provider().into_iter().collect();
   attachments::check_message(&providers, attached).map_err(|refused| refused.message())?;
   let mut db = ProjectDb::open(root).map_err(|error| messages::store_error(&error))?;
+  let facts = mentions::facts::with_facts_from(&db, words).map_err(|error| messages::store_error(&error))?;
+  let text = MessageBody::new(&facts).map_err(|_| Message::new("orchestrator.send.blank"))?;
   let now = Timestamp::now();
   let chat = db
     .chat(outgoing.chat)
     .map_err(|error| messages::store_error(&error))?
-    .unwrap_or_else(|| Chat::start(outgoing.chat, &text, now));
+    .unwrap_or_else(|| Chat::start(outgoing.chat, &said, now));
   db.keep_chat_message_as(
     &chat,
     (outgoing.message, &text),

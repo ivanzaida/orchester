@@ -179,10 +179,11 @@ fn read(ctx: &mut Ctx, (root, revision, open): (PathBuf, u64, bool)) -> Read {
     .state()
     .get();
   let pending = state.is_pending();
-  match (state.data.flatten(), state.error) {
-    (Some(catalog), _) => Read::Ready(catalog),
-    (None, Some(error)) if !pending => Read::Failed(error),
-    (None, _) => Read::Reading,
+  // A failed re-read keeps the last data; it must not stay answerable (rows to insert) as if current.
+  match (state.error, state.data.flatten()) {
+    (Some(error), _) if !pending => Read::Failed(error),
+    (None, Some(catalog)) => Read::Ready(catalog),
+    _ => Read::Reading,
   }
 }
 
