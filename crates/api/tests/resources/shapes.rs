@@ -12,7 +12,14 @@ use crate::fixtures::{hash, key, references, resource, round_trip, version};
 
 #[test]
 fn resources_a_resource_of_every_shared_kind_round_trips() {
-  for kind in ["pipeline", "agent_profile", "instruction", "skill", "tool"] {
+  for kind in [
+    "pipeline",
+    "agent_profile",
+    "instruction",
+    "skill",
+    "tool",
+    "team_reviewer",
+  ] {
     let shared: SharedResource = round_trip(&resource(ResourceId::generate(), kind));
     assert_eq!(SharedResourceKind::from_core(shared.kind.core()), Some(shared.kind));
   }

@@ -23,6 +23,7 @@ pub enum SharedResourceKind {
   Instruction,
   Skill,
   Tool,
+  TeamReviewer,
 }
 
 impl SharedResourceKind {
@@ -33,6 +34,7 @@ impl SharedResourceKind {
       Self::Instruction => ResourceKind::Instruction,
       Self::Skill => ResourceKind::Skill,
       Self::Tool => ResourceKind::Tool,
+      Self::TeamReviewer => ResourceKind::TeamReviewer,
     }
   }
 
@@ -44,6 +46,7 @@ impl SharedResourceKind {
       ResourceKind::Instruction => Some(Self::Instruction),
       ResourceKind::Skill => Some(Self::Skill),
       ResourceKind::Tool => Some(Self::Tool),
+      ResourceKind::TeamReviewer => Some(Self::TeamReviewer),
       ResourceKind::TestSuite | ResourceKind::Service | ResourceKind::Stack => None,
     }
   }

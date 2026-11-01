@@ -138,6 +138,7 @@ fn kept(
     ResourceKind::Instruction => kept_of::<Instruction>(db, resource),
     ResourceKind::Skill => kept_of::<Skill>(db, resource),
     ResourceKind::Tool => kept_of::<Tool>(db, resource),
+    ResourceKind::TeamReviewer => kept_of::<orchester_core::resource::TeamReviewer>(db, resource),
     // Agent testing's kinds are never the team's.
     ResourceKind::TestSuite | ResourceKind::Service | ResourceKind::Stack => Ok((Vec::new(), None)),
   }

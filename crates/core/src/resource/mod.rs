@@ -1,11 +1,10 @@
-//! Versioned configuration: agent profiles, instructions, pipelines, tools, skills, test suites,
-//! services and stacks share one lifecycle — one editable draft and immutable published versions
+//! Versioned configuration shares one lifecycle — one editable draft and immutable published versions
 //! `v1..vN`. Runs pin versions, so publishing affects new runs only.
 //!
-//! Bodies reference other resources, connections and secrets by id only, except a test suite, a
-//! service and a stack, which name their secrets and the services they need ([`TestSuite`],
-//! [`crate::service`]). Which published version of a referenced resource is used is decided when a
-//! run snapshots its configuration, not inside a body.
+//! Bodies reference other resources, connections and secrets by id, except a test suite, service and stack,
+//! which name their secrets and services ([`TestSuite`], [`crate::service`]), and the [`TeamReviewer`], which
+//! names its connection by kind, name and role. Which published version of a referenced resource is used is
+//! decided when a run snapshots its configuration, not inside a body.
 
 mod agent_profile;
 mod instruction;
@@ -14,6 +13,7 @@ mod pipeline;
 mod prompt;
 mod removal;
 mod skill;
+mod team_reviewer;
 mod test_suite;
 mod tool;
 mod variable;
@@ -37,6 +37,10 @@ pub use self::{
   prompt::{PromptError, PromptReference, PromptText, Rendered, prompt_references},
   removal::{Removal, RemoveMode, StepUser, StepVersion, pipeline_step_users, step_users},
   skill::{SKILL_FILE, Skill, SkillError, SkillFile, SkillFilePath},
+  team_reviewer::{
+    DecisionReviewerReference, DecisionReviewerRole, LanguageReviewerReference, ReviewerDestinations, ReviewerHost,
+    ReviewerHostError, TeamReviewer,
+  },
   test_suite::{
     ArtifactGlob, ReportFormat, ReportOutput, SuiteCommand, SuiteNeeds, SuitePath, SuiteVariable, SuiteVariables,
     TestFilter, TestLayer, TestReport, TestSuite, TestSuiteError,

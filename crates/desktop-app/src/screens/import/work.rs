@@ -98,7 +98,7 @@ pub(super) fn page_of(id: ResourceId, kind: ResourceKind, content: Option<&Conte
     ResourceKind::Tool => ProjectPage::Tool(id, Default::default()),
     ResourceKind::Skill => ProjectPage::Skill(id),
     // No import makes a test suite, service or stack, and they have no page yet: Project settings will list them.
-    ResourceKind::TestSuite | ResourceKind::Service | ResourceKind::Stack => {
+    ResourceKind::TestSuite | ResourceKind::Service | ResourceKind::Stack | ResourceKind::TeamReviewer => {
       ProjectPage::Settings(ProjectSettingsTab::default())
     }
   }
