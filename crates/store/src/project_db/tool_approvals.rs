@@ -18,7 +18,7 @@ use crate::{
 };
 
 /// The columns [`StoredApproval::read`] reads, in its order.
-const COLUMNS: &str = "id, run_id, step_execution_id, invocation_id, agent, server, action, target, requested_at, \
+pub(super) const COLUMNS: &str = "id, run_id, step_execution_id, invocation_id, agent, server, action, target, requested_at, \
                        command, scope, native_shell, native_time_limit";
 
 impl ProjectDb {
@@ -241,7 +241,7 @@ struct Decided {
 }
 
 /// A `tool_approvals` row as read, before its ids and native details are checked.
-struct StoredApproval {
+pub(super) struct StoredApproval {
   id: String,
   run: String,
   execution: String,
@@ -258,7 +258,7 @@ struct StoredApproval {
 }
 
 impl StoredApproval {
-  fn read(row: &rusqlite::Row<'_>) -> rusqlite::Result<Self> {
+  pub(super) fn read(row: &rusqlite::Row<'_>) -> rusqlite::Result<Self> {
     Ok(Self {
       id: row.get(0)?,
       run: row.get(1)?,
@@ -276,7 +276,7 @@ impl StoredApproval {
     })
   }
 
-  fn into_pending(self) -> Result<PendingToolApproval, StoreError> {
+  pub(super) fn into_pending(self) -> Result<PendingToolApproval, StoreError> {
     let shell = self
       .native_shell
       .as_deref()
