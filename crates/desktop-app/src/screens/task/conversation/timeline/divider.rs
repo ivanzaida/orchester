@@ -124,8 +124,9 @@ pub(crate) fn step_label(ctx: &Ctx, number: usize, step: &str) -> Arc<str> {
   )
 }
 
-/// A step's divider (`qfdli`); a finished one folds when pressed.
-pub(super) fn step(ctx: &Ctx, timeline: &Timeline, (head, key): (&StepHead, &Arc<str>), foldable: bool) -> Element {
+/// A step's divider (`qfdli`); a finished one folds when pressed. The step at work carries its context meter after
+/// its words, 5 from them (`bxHFm`).
+pub(super) fn step(ctx: &mut Ctx, timeline: &Timeline, (head, key): (&StepHead, &Arc<str>), foldable: bool) -> Element {
   let text = Text::new(&step_text(ctx, head))
     .id("conversation-step-text")
     .variant(ConversationText::Divider.role())
@@ -133,11 +134,23 @@ pub(super) fn step(ctx: &Ctx, timeline: &Timeline, (head, key): (&StepHead, &Arc
     .text_overflow(TextOverflow::Elipsis)
     .min_width(Dimension::Px(0.0))
     .flex_shrink(1.0);
-  let line = ruled(
-    format!("conversation-step-{key}"),
-    ExtraSpacing::Loose.role(),
-    text.into(),
-  );
+  let meter = timeline
+    .detail
+    .run
+    .as_ref()
+    .and_then(|run| super::super::context::on_divider(ctx, &timeline.shown_project, run, head.execution));
+  let label: Element = match meter {
+    Some(meter) => Row::new()
+      .flex_shrink(1.0)
+      .min_width(Dimension::Px(0.0))
+      .spacing(ExtraSpacing::Pair.role())
+      .align_items(Alignment::Center)
+      .child(text)
+      .child(meter)
+      .into(),
+    None => text.into(),
+  };
+  let line = ruled(format!("conversation-step-{key}"), ExtraSpacing::Loose.role(), label);
   if !foldable {
     return line;
   }

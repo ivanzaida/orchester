@@ -9,6 +9,7 @@ mod blocks;
 mod buttons;
 mod chat_links;
 mod choices;
+mod context_meter;
 mod date_picker;
 mod decision;
 mod failure;

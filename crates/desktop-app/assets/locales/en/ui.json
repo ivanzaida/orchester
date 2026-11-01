@@ -93,6 +93,25 @@
       "escKey": "Esc",
       "escCancels": "cancels"
     },
+    "contextMeter": {
+      "name": "Context",
+      "share": "{{share}}%",
+      "shareEstimate": "≈ {{share}}%",
+      "full": "Full",
+      "nearFull": "Near full",
+      "agentModel": "{{agent}} · {{model}}",
+      "used": "{{used}} of {{window}} tokens",
+      "usedEstimate": "≈ {{used}} of {{window}} tokens",
+      "usedOnly": "{{used}} tokens",
+      "estimateNote": "An estimate: the agent's CLI didn't report its context window, so Orchester takes the model's known limit.",
+      "notReported": "This agent's CLI doesn't report how full its context is, so there is no share to show.",
+      "windowNotReported": "This agent's CLI reports the tokens it used but not its context window, so there is no share to show.",
+      "tooltip": "Context {{share}}% · {{used}} of {{window}}",
+      "tooltipEstimate": "Context ≈ {{share}}% · {{used}} of {{window}}",
+      "tooltipFull": "Context full · {{used}} of {{window}}",
+      "tooltipUsedOnly": "Context {{used}} tokens · size not reported",
+      "tooltipUnknown": "Context size not reported"
+    },
     "datePicker": {
       "monthYear": "{{month}} {{year}}",
       "day": "{{month}} {{day}}, {{year}}",

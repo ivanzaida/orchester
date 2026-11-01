@@ -18,6 +18,7 @@ mod chat_links;
 mod code;
 mod composer;
 mod connections;
+mod context;
 mod conversation;
 mod date_picker;
 mod decisions;
@@ -75,6 +76,7 @@ pub use self::{
   code::{CodeText, token_color},
   composer::{ComposerColor, ComposerRadius},
   connections::{ConnectionsSpacing, ConnectionsText},
+  context::ContextText,
   conversation::{ConversationRadius, ConversationShadow, ConversationSpacing, ConversationText},
   date_picker::{DatePickerText, UNAVAILABLE_DAY_OPACITY},
   decisions::{DecisionSpacing, DecisionText},

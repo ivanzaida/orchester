@@ -75,7 +75,8 @@ pub(super) struct Bar<'a> {
   pub(super) attached: &'a DraftAttachments,
 }
 
-pub(super) fn bar(ctx: &mut Ctx, bar: &Bar<'_>) -> Element {
+/// The row, with the context meter of the step at work after the free space (`bhtch`), when one works.
+pub(super) fn bar(ctx: &mut Ctx, bar: &Bar<'_>, context: Option<Element>) -> Element {
   let fixed = match bar.mode {
     ComposerMode::Answer { .. } if bar.mode.fixed_recipient().is_some() => {
       Some(ctx.t("composer.recipient.fixed.answer"))
@@ -92,6 +93,7 @@ pub(super) fn bar(ctx: &mut Ctx, bar: &Bar<'_>) -> Element {
     .child(attach(ctx, bar.attached))
     .child(recipient_pill(ctx, (&recipient, recipient_icon(bar.mode)), fixed))
     .child(Spacer::new().flex(1.0))
+    .with_children(context)
     .child(send(ctx, bar))
     .into()
 }

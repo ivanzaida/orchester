@@ -14,6 +14,7 @@
 
 mod built;
 mod composer;
+mod context;
 mod read;
 mod shared;
 mod states;
@@ -182,6 +183,7 @@ impl ConversationTab {
     let open = &task.project.open;
     self.shown.set(Timeline {
       project: open.project.id(),
+      shown_project: task.project.clone(),
       chat_project: ChatProject {
         id: open.project.id(),
         name: open.project.name().as_str().into(),
