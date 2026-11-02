@@ -12,19 +12,24 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Text, TextOverflow},
+  components::{Button, Column, Row, Text, TextOverflow},
+  layout::Alignment,
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_workspace::tasks::{
   timeline::{
     ToolGroup,
+    find::call_key,
     group::{GroupSummary, ToolKind, tool_kind},
     view::Chip,
   },
   transcript::{Entry, EntryKind},
 };
 
-use super::{Timeline, entry};
+use super::{
+  super::search::marks::{count_badge, opened},
+  Timeline, entry,
+};
 use crate::{
   theme::{ConversationSpacing, ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
@@ -94,7 +99,7 @@ fn closed(ctx: &Ctx, timeline: &Timeline, chip: &Chip) -> Element {
   });
   let chevron = if chip.open { Icon::ChevronUp } else { Icon::ChevronDown };
   let (toggles, key) = (timeline.toggles.clone(), chip.key.clone());
-  pressable(move || toggles.flip(&key, false))
+  let pressed = pressable(move || toggles.flip(&key, false))
     .id(format!("conversation-group-{}", chip.key))
     .describe("open", chip.open.to_string())
     .max_width(Dimension::Pct(100.0))
@@ -116,7 +121,32 @@ fn closed(ctx: &Ctx, timeline: &Timeline, chip: &Chip) -> Element {
         .flex_shrink(1.0),
     )
     .with_children(failure)
-    .child(icon(chevron, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(chevron, IconSize::Sm, PaletteColor::TextMuted));
+  searched(ctx, timeline, chip, pressed)
+}
+
+/// `pressed`, the chip, with what the search says of its group after it: how many places a closed one holds
+/// (`Matches` `ohExY` in 13b), or that the search opened it (`f76I4` in 13d).
+fn searched(ctx: &Ctx, timeline: &Timeline, chip: &Chip, pressed: Button) -> Element {
+  let Some(marks) = &timeline.search else {
+    return pressed.into();
+  };
+  let found = if chip.open { 0 } else { marks.in_group(&chip.key) };
+  let badge = (found > 0).then(|| count_badge(ctx, &format!("conversation-group-{}-matches", chip.key), found));
+  let opened = timeline
+    .toggles
+    .opened_by_search(&chip.key)
+    .then(|| opened(ctx, &format!("conversation-group-{}-opened", chip.key)));
+  if badge.is_none() && opened.is_none() {
+    return pressed.into();
+  }
+  Row::new()
+    .max_width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .child(pressed)
+    .with_children(badge)
+    .with_children(opened)
     .into()
 }
 
@@ -138,10 +168,7 @@ fn rows(ctx: &mut Ctx, timeline: &Timeline, chip: &Chip) -> Element {
   };
   let mut rows: Vec<Element> = listed
     .iter()
-    .map(|entry| {
-      let key: Arc<str> = format!("entry-{}-{}", entry.sequence, entry.part).into();
-      entry::tool_row(ctx, timeline, &key, entry)
-    })
+    .map(|entry| entry::call_row(ctx, timeline, (&chip.key, &call_key(entry)), entry))
     .collect();
   if !rest.is_empty() {
     let label = ctx.t_args(

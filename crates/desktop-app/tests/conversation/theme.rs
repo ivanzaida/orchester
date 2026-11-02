@@ -59,4 +59,6 @@ fn timeline_theme_roles_follow_the_chat_components() {
     assert_eq!(theme.spacing_value(spacing.role()), Dimension::Px(value), "{spacing:?}");
   }
   assert_eq!(theme.radius_value(ConversationRadius::ProblemRow.role()), 8.0);
+  // A mark on the search's track (`XVrRm` in `z4lnO5`).
+  assert_eq!(theme.radius_value(ConversationRadius::TrackMark.role()), 1.0);
 }

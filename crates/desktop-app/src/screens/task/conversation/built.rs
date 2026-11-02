@@ -43,7 +43,8 @@ pub(super) struct BuiltTimeline(Mutex<Option<(Source, Built)>>);
 
 impl BuiltTimeline {
   /// The timeline of `run`, the latest run of `detail`'s task, from `loaded` with `conversation` and the rows the
-  /// person `open`ed or folded: the one built last when it was built from the same.
+  /// person `open`ed or folded: the one built last when it was built from the same. Rows opened or folded alone build
+  /// the rows again from the items built last, which stay the same: a search of them holds.
   pub(super) fn of(
     &self,
     (run, detail): (&RunView, &Arc<TaskDetail>),
@@ -51,26 +52,31 @@ impl BuiltTimeline {
     open: OpenRows,
   ) -> Built {
     let mut last = self.0.lock();
-    if let Some((source, built)) = &*last
-      && source.loaded == *loaded
-      && source.detail == *detail
-      && source.conversation == *conversation
-      && source.open == open
-    {
+    let same_items = last.as_ref().and_then(|(source, built)| {
+      (source.loaded == *loaded && source.detail == *detail && source.conversation == *conversation)
+        .then(|| (source.open == open, built))
+    });
+    if let Some((true, built)) = same_items {
       return built.clone();
     }
-    let mut items = items::build(&Sources {
-      run,
-      entries: &loaded.entries,
-      conversation,
-      pending: &loaded.pending,
-      reviewing: &loaded.reviewing,
-      decided: &loaded.decided,
-      answers: &loaded.answers,
-      questions: &loaded.questions,
-      merge: detail.merge.as_ref(),
-    });
-    continued(&mut items, &loaded.orchestrated);
+    let items = match same_items {
+      Some((_, built)) => built.items.clone(),
+      None => {
+        let mut items = items::build(&Sources {
+          run,
+          entries: &loaded.entries,
+          conversation,
+          pending: &loaded.pending,
+          reviewing: &loaded.reviewing,
+          decided: &loaded.decided,
+          answers: &loaded.answers,
+          questions: &loaded.questions,
+          merge: detail.merge.as_ref(),
+        });
+        continued(&mut items, &loaded.orchestrated);
+        Arc::new(items)
+      }
+    };
     let shown = without_usage(view::shown(
       &items,
       &Choice::default(),
@@ -89,7 +95,7 @@ impl BuiltTimeline {
       .zip(lines.into_iter().map(Arc::new))
       .collect();
     let built = Built {
-      items: Arc::new(items),
+      items,
       rows: Arc::new(rows),
       delivery: Arc::new(placed),
     };
