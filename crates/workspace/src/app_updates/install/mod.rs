@@ -1,12 +1,15 @@
-//! Installing a ready update on Windows (*Restart to update*): with no run at work it installs at once; with runs at
+//! Installing a ready update (*Restart to update*): with no run at work it installs at once; with runs at
 //! work the person waits for them (the default) or stops them, each paused at its next checkpoint so it goes on after
 //! the restart (design 03 `MGILm`); asked again while it waits, the person can still stop them (status bar S3
 //! `UCZt3`). Then the runners stop, the databases are copied aside ([`backup`]), the installer
-//! is started silently to wait for the app's exit and open Orchester again ([`handover`]), and the window closes. Every
+//! is started silently to wait for the app's exit and open Orchester again ([`handover`]; on macOS the new bundle is
+//! unpacked and checked, and a helper replaces the old one, `bundle`), and the window closes. Every
 //! failure before the installer took over leaves this version running, its runners started again, and the state
 //! [`UpdateState::InstallFailed`] with the reason; the next start tells how the installer did ([`outcome`]).
 
 mod backup;
+#[cfg(target_os = "macos")]
+pub(super) mod bundle;
 mod handover;
 mod outcome;
 
@@ -272,7 +275,11 @@ impl AppUpdates {
       log: record.log.clone(),
       result: data_folder.join(RESULT_FILE),
     };
-    let child = (installer.start)(&handover)
+    // On the blocking pool: on macOS starting it unpacks and checks the new bundle first.
+    let start = installer.start;
+    let child = background::run(move || start(&handover))
+      .await
+      .unwrap_or_else(|_| Err(io::Error::other("starting it did not finish")))
       .map_err(|error| failure(format!("cannot start the installer: {error}"), None, Some(&record.log)))?;
     let early = background::run(move || exited_early(child)).await.unwrap_or(Ok(None));
     match early {
