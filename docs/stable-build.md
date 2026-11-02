@@ -206,8 +206,18 @@ without signing in, once it is published, at
   a link to `/Applications` to drag it onto. The disk image and the app in it are signed, notarized
   and stapled.
 - `Orchester-<version>-macos-aarch64.zip`, the stapled `Orchester.app` packed with `ditto -c -k
-  --keepParent`: what the updater will download (ORC-416). Until that lands the app does not update
-  itself on macOS.
+  --keepParent`: what the app downloads to update itself on macOS (ORC-416). Once it passes its
+  size, SHA-256 and release signature, *Restart to update* copies the databases aside, unpacks it
+  with `ditto -x -k` into `.Orchester.app.partial` beside the installed bundle, checks it with
+  `codesign --verify --deep --strict` and that its Team ID is the running copy's, and starts a
+  helper (`crates/workspace/src/app_updates/install/bundle/replace.sh`) that waits for the app to
+  exit, renames the old bundle to `.Orchester.app.old` and the new one into its place, opens it and
+  removes the old one. On a failure it puts the old bundle back, opens it, and the next start shows
+  why; the helper logs to `logs/update-<version>.log` in the data folder. A copy that cannot be
+  replaced in place says so in Settings › Updates: one not in an `.app` bundle, one macOS runs
+  translocated (move it to Applications), one in a folder the person cannot write, one without a
+  Developer ID Team ID (built from source and signed ad hoc, as `tools/install-macos.sh` does), and a
+  development or QA copy.
 
 macOS is released for Apple silicon only for now. The cloud refuses a second file under a name a
 release already has, whatever its platform and architecture ([cloud-api.md](cloud-api.md), "App
