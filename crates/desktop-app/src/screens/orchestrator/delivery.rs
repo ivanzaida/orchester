@@ -39,7 +39,7 @@ pub(super) fn opening_message(ctx: &mut Ctx, row: &TurnRow, key: &str) -> Elemen
     .with_children(queued_actions(ctx, row));
   // The person's words, with their mentions as links and without the facts the Orchestrator got with them.
   let said = said(ctx, &id, (&row.turn.text, None), row.env.project);
-  own_bubble(&id, said, (attached, Some(under.into()))).into()
+  own_bubble(ctx, &id, said, (attached, Some(under.into()))).into()
 }
 
 /// Where the message stands: its glyph, its color and its words.

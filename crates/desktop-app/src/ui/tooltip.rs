@@ -131,6 +131,12 @@ impl Tooltip {
     ctx.mount_keyed_with::<TooltipHost>(&key, self, vec![anchor.into()])
   }
 
+  /// Its panel laid out in place, for a tooltip the design draws beside its anchor rather than under it (`Tooltip` in
+  /// `Message actions` `EXtmO`); its element id is `<id>-tooltip`.
+  pub fn beside(&self) -> Row {
+    self.panel(&self.text)
+  }
+
   /// What the tooltip says once the pointer rested on its anchor, if it shows at all: a cut text's own
   /// words only while it is cut; its hint's words either way.
   fn words(&self, fits: bool) -> Option<&Arc<str>> {

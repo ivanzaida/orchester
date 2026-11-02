@@ -30,26 +30,40 @@ use super::{
 use crate::{
   theme::ExtraSpacing,
   ui::{
-    chat::{Avatar, agent_text, chat_row_marked},
+    chat::{Avatar, agent_text, chat_row_marked, copyable_row},
     todo_list::{chip, ended},
   },
 };
 
 /// The answer under `row`'s opening, with the Orchestrator's avatar and name; `None` before its first part. Once it
 /// ended, the todo list its agent kept folds into its name line as a chip, which opens the list under that line
-/// (09 g `OoT5k`); while it answers, the list is pinned over the composer instead (`super::body`).
+/// (09 g `OoT5k`); while it answers, the list is pinned over the composer instead (`super::body`). An answer that
+/// wrote something has Copy at the end of its name line, which copies what it wrote (ORC-323).
 pub(super) fn answer(ctx: &mut Ctx, row: &TurnRow) -> Option<Element> {
   let first = row.turn.answer.first()?;
   let time = display::clock(first.at());
   let key = row.turn.key();
   let (mark, list) = ended_plan(ctx, row).map_or((None, None), |(chip, list)| (Some(chip), list));
   let body = list.into_iter().chain([parts(ctx, row).into()]).collect();
-  Some(chat_row_marked(
-    format!("orchestrator-answer-{key}"),
-    Avatar::Orchestrator,
-    (&ctx.t("orchestrator.title"), &time, mark),
-    body,
-  ))
+  let (id, title) = (format!("orchestrator-answer-{key}"), ctx.t("orchestrator.title"));
+  Some(match written(row) {
+    Some(markdown) => copyable_row(ctx, &id, (Avatar::Orchestrator, &markdown), (&title, &time, mark), body),
+    None => chat_row_marked(id, Avatar::Orchestrator, (&title, &time, mark), body),
+  })
+}
+
+/// What the answer of `row` wrote, its replies as Markdown one after another; `None` while it wrote nothing.
+fn written(row: &TurnRow) -> Option<Arc<str>> {
+  let replies: Vec<&str> = row
+    .turn
+    .answer
+    .iter()
+    .filter_map(|part| match part {
+      Part::Reply { text, .. } => Some(&**text),
+      _ => None,
+    })
+    .collect();
+  (!replies.is_empty()).then(|| Arc::from(replies.join("\n\n")))
 }
 
 /// The chip of the list the agent kept for `row`'s turn once that turn ended, and the list while the person opened it.

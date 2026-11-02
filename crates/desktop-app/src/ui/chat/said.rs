@@ -10,22 +10,22 @@ use std::sync::Arc;
 use lurq::{
   app::{ctx::Ctx, theme::TypographyStyle},
   components::Text,
-  node::Element,
 };
 use orchester_core::id::ProjectId;
 use orchester_workspace::mentions::{Found, Mention, facts, find};
 
-use super::{agent_text, found, links::APP_SCHEME, marked_words, names::ProjectNames};
+use super::{Said, agent_text, found, links::APP_SCHEME, marked_words, names::ProjectNames};
 use crate::routes::{ProjectPage, Route, TaskView};
 
-/// What `body`, a message a person sent in a chat of `project` as it was kept, shows: `None` when it says nothing.
-/// What a search found in it (`searched`) is filled behind its words. `id` names it, its words `{id}-text`.
+/// What `body`, a message a person sent in a chat of `project` as it was kept, shows, with their words as they wrote
+/// them for its Copy: `None` when it says nothing. What a search found in it (`searched`) is filled behind its words.
+/// `id` names it, its words `{id}-text`.
 pub fn said(
   ctx: &mut Ctx,
   id: &str,
   (body, searched): (&str, Option<&found::Found>),
   project: ProjectId,
-) -> Option<Element> {
+) -> Option<Said> {
   let words = facts::said(body);
   if words.trim().is_empty() {
     return None;
@@ -37,17 +37,18 @@ pub fn said(
       .id(text_id)
       .variant(TypographyStyle::Body)
       .selectable(true);
-    return Some(marked_words(ctx, text, words, searched));
+    return Some((marked_words(ctx, text, words, searched), Arc::from(words)));
   }
   let linked: Arc<str> = Arc::from(linked(words, &found, project));
   let links = super::links(ctx);
-  Some(agent_text(
+  let shown = agent_text(
     ctx,
     &text_id,
     &linked,
     (project, &ProjectNames::default()),
     (&links, searched),
-  ))
+  );
+  Some((shown, Arc::from(words)))
 }
 
 /// `words` as Markdown that shows them as written, with each mention `found` in them a link to its place in

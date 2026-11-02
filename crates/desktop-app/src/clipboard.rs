@@ -2,7 +2,8 @@
 //! the person can read, so Orchester takes it off again after a minute if the clipboard still holds what it put there
 //! (decided 2026-10-13), and when the app closes before then ([`clear_at_exit`]). What was copied last is kept in
 //! memory until then, wiped when dropped. It is kept for the process, as the clipboard is the process's: the window
-//! that copied it may be gone by the time the app closes.
+//! that copied it may be gone by the time the app closes. Other text the person copies, such as a chat's message or
+//! code block ([`copy`]), stays on the clipboard after the app closes (decided 2026-11-02).
 
 use std::time::Duration;
 
@@ -16,6 +17,16 @@ const KEEP: Duration = Duration::from_secs(60);
 
 /// The text copied last, until its minute is up or the app closes.
 static COPIED: Mutex<Option<Zeroizing<String>>> = const_mutex(None);
+
+/// Puts `text`, which holds no secret, on the clipboard to stay; `true` once it is there. A token copied before is no
+/// longer on the clipboard then, so it is no longer kept to be taken off.
+pub fn copy(text: &str) -> bool {
+  if !copy_to_clipboard(text) {
+    return false;
+  }
+  drop(COPIED.lock().take());
+  true
+}
 
 /// Puts `text` on the clipboard and takes it off again after [`KEEP`] on `runtime`, unless something else was
 /// copied meanwhile; `true` once it is there.

@@ -13,6 +13,7 @@ mod code_block;
 mod connections;
 mod context;
 mod continuation;
+mod copy;
 mod decisions;
 mod drafts;
 mod follow;

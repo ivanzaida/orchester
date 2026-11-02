@@ -6,6 +6,7 @@
 
 pub use orchester_app::test_support::*;
 
+pub mod clipboard;
 pub mod link_press;
 pub mod profile;
 pub mod reads;

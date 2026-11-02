@@ -37,14 +37,14 @@ pub(crate) use crate::ui::chat::links;
 use crate::ui::{
   attachments,
   chat::{
-    self, Avatar, agent_text, chat_row, delivery_line, found::Found, marked_words, person_message as bubble,
-    person_side_message,
+    self, Avatar, agent_text, chat_row, copyable_row, delivery_line, found::Found, marked_words,
+    person_message as bubble, person_side_message,
   },
   icon::Icon,
 };
 
-/// An agent's row: its message, if it wrote one, what the search found in it filled behind its words, then the tool
-/// groups after it at the chat's edge.
+/// An agent's row: its message with its Copy, if it wrote one, what the search found in it filled behind its words,
+/// then the tool groups after it at the chat's edge.
 pub(super) fn agent_row(ctx: &mut Ctx, timeline: &Timeline, row: &AgentRow) -> Element {
   let time = display::clock(row.at);
   let meta = match (timeline.step_of(ctx, row.execution), row.tool_step) {
@@ -63,10 +63,11 @@ pub(super) fn agent_row(ctx: &mut Ctx, timeline: &Timeline, row: &AgentRow) -> E
       (timeline.project, &timeline.names),
       (&on_link, found.as_ref()),
     )];
-    chat_row(
-      format!("conversation-agent-{}", row.key),
-      avatar,
-      (&row.agent, &meta),
+    copyable_row(
+      ctx,
+      &format!("conversation-agent-{}", row.key),
+      (avatar, said),
+      (&row.agent, &meta, None),
       body,
     )
   });
@@ -106,7 +107,7 @@ pub(in super::super) fn person_message(
     None if entry.by_automation => {
       let said = said();
       let author = ctx.t("conversation.byAutomation");
-      person_side_message(&id, (&author, said, Some(entry.at)), (attached, Some(delivery)))
+      person_side_message(ctx, &id, (&author, said, Some(entry.at)), (attached, Some(delivery)))
     }
     None => {
       let said = said();
@@ -140,8 +141,8 @@ fn orchestrator_message(
 }
 
 /// The Orchestrator's row `id`: its avatar and name with the time `at`, what it wrote (`said`) with what a search
-/// found in it filled behind its words (`found`), how that went out with the way back to the chat's conversation, and
-/// `after` under them.
+/// found in it filled behind its words (`found`) and its Copy, how that went out with the way back to the chat's
+/// conversation, and `after` under them.
 fn orchestrator_row(
   ctx: &mut Ctx,
   id: &str,
@@ -151,7 +152,7 @@ fn orchestrator_row(
 ) -> Column {
   let name = ctx.t("conversation.byOrchestrator");
   let time = at.map(display::clock).unwrap_or_default();
-  let said = said.map(|said| {
+  let shown = said.map(|said| {
     let words = Text::new(said)
       .id(format!("{id}-text"))
       .variant(TypographyStyle::Body)
@@ -159,21 +160,27 @@ fn orchestrator_row(
       .width(Dimension::Pct(100.0));
     marked_words(ctx, words, said, found)
   });
-  let body: Vec<Element> = said
+  let body: Vec<Element> = shown
     .into_iter()
     .chain(sent_line(ctx, id, (project, from)))
     .chain(after)
     .collect();
+  let row_id = format!("{id}-row");
+  let row = match said {
+    Some(said) => copyable_row(
+      ctx,
+      &row_id,
+      (Avatar::Orchestrator, &Arc::from(said)),
+      (&name, &time, None),
+      body,
+    ),
+    None => chat_row(row_id, Avatar::Orchestrator, (&name, &time), body),
+  };
   Column::new()
     .id(id.to_owned())
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Xs)
-    .child(chat_row(
-      format!("{id}-row"),
-      Avatar::Orchestrator,
-      (&name, &time),
-      body,
-    ))
+    .child(row)
 }
 
 /// A note the person returned the work with, as their message, without a delivery line; what a search found in it
@@ -188,7 +195,7 @@ pub(super) fn person_note(
   let said = chat::plain_said(ctx, id, note, found);
   if by == Some(orchester_core::run::Answerer::Automation) {
     let author = ctx.t("conversation.byAutomation");
-    return person_side_message(id, (&author, said, at), (None, None)).into();
+    return person_side_message(ctx, id, (&author, said, at), (None, None)).into();
   }
   bubble(ctx, id, (said, at), (None, None)).into()
 }

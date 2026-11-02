@@ -94,7 +94,7 @@ pub use self::{
   import::{ImportSpacing, ImportText},
   lifecycle::{CLOSING_TABS_OPACITY, LifecycleSpacing, LifecycleText},
   local_integration::LocalText,
-  markdown::blank_line_between_blocks,
+  markdown::{blank_line_between_blocks, code_lines},
   memory::{MemorySpacing, MemoryText},
   metrics::{ControlHeight, ExtraRadius, ExtraSpacing},
   modules::ModulesSpacing,
