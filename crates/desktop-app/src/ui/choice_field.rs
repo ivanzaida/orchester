@@ -20,6 +20,8 @@ use super::{
 use crate::theme::{ControlHeight, ExtraSpacing, ExtraTypography, IconSize};
 
 const MENU_MAX_HEIGHT: f32 = 280.0;
+/// The two reviewer kinds in `Aga8S`.
+const GROUPED_MENU_WIDTH: f32 = 330.0;
 
 #[derive(Clone, PartialEq)]
 pub struct Choice {
@@ -67,12 +69,25 @@ impl PartialEq for ChoiceField {
 impl DevtoolsInspectable for ChoiceField {}
 
 impl ChoiceField {
+  /// Group headings before the indexed choices (reviewer menu `04 a` `Aga8S`).
+  pub fn render_grouped(self, ctx: &mut Ctx, headings: Vec<(usize, Arc<str>)>) -> Element {
+    ctx.mount_keyed::<Picker>(
+      &self.id.clone(),
+      PickerProps {
+        field: self,
+        inline: false,
+        headings,
+      },
+    )
+  }
+
   pub fn render(self, ctx: &mut Ctx) -> Element {
     ctx.mount_keyed::<Picker>(
       &self.id.clone(),
       PickerProps {
         field: self,
         inline: false,
+        headings: Vec::new(),
       },
     )
   }
@@ -84,6 +99,7 @@ impl ChoiceField {
       PickerProps {
         field: self,
         inline: true,
+        headings: Vec::new(),
       },
     )
   }
@@ -93,6 +109,7 @@ impl ChoiceField {
 struct PickerProps {
   field: ChoiceField,
   inline: bool,
+  headings: Vec<(usize, Arc<str>)>,
 }
 impl DevtoolsInspectable for PickerProps {}
 
@@ -107,13 +124,25 @@ impl Component for Picker {
     }
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let PickerProps { field: props, inline } = ctx.props::<PickerProps>().clone();
+    let PickerProps {
+      field: props,
+      inline,
+      headings,
+    } = ctx.props::<PickerProps>().clone();
     let chosen = props.value.get();
     let trigger = self.trigger(&props, &chosen);
     let mut rows = Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Hair.role());
     for (index, choice) in props.choices.iter().enumerate() {
+      if let Some((_, heading)) = headings.iter().find(|(at, _)| *at == index) {
+        rows = rows.child(
+          Text::new(heading)
+            .variant(TypographyStyle::Caption)
+            .color(PaletteColor::TextMuted)
+            .padding(SpacingSize::Sm),
+        );
+      }
       if choice.separator {
         rows = rows.child(separator(ctx));
       }
@@ -135,6 +164,11 @@ impl Component for Picker {
       } else {
         item.icon(choice.icon)
       };
+      let item = if !headings.is_empty() && choice.unavailable.is_none() {
+        item.inline_detail()
+      } else {
+        item
+      };
       let mut item = item.chosen(choice.value == chosen).in_form();
       if let Some(detail) = &choice.detail {
         item = item.detail(detail.clone());
@@ -145,7 +179,11 @@ impl Component for Picker {
       rows = rows.child(item.render(ctx, &props.open));
     }
     let panel = menu_panel(&format!("{}-menu", props.id))
-      .width(Dimension::Px(props.width))
+      .width(Dimension::Px(if headings.is_empty() {
+        props.width
+      } else {
+        GROUPED_MENU_WIDTH
+      }))
       .child(ScrollVertical::new(rows).max_height(Dimension::Px(MENU_MAX_HEIGHT)));
     Row::new().width(Dimension::Px(props.width)).child(trigger).child(menu(
       self.anchor.clone(),

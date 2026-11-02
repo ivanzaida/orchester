@@ -86,6 +86,12 @@ impl Component for FieldBox {
           .filter(|_| !props.leading_while_empty || props.value.get().is_empty())
           .map(|glyph| icon(glyph, IconSize::Base, PaletteColor::TextMuted).id(format!("{}-icon", props.id))),
       )
+      .with_children(props.prefix.as_deref().map(|prefix| {
+        Text::new(prefix)
+          .variant(TypographyStyle::Description)
+          .color(PaletteColor::TextMuted)
+          .nowrap()
+      }))
       .child(input)
       .with_children(clear_button(&props))
       .with_children(
