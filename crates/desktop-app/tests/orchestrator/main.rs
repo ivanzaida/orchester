@@ -20,6 +20,7 @@ mod follow;
 mod git;
 mod harness;
 mod history;
+mod history_archive;
 mod history_rows;
 mod layout;
 mod lines;

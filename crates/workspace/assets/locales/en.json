@@ -2111,7 +2111,8 @@
     },
     "conversation": {
       "blankTitle": "A conversation's title can't be blank.",
-      "gone": "This conversation is no longer kept."
+      "gone": "This conversation is no longer kept.",
+      "busy": "The Orchestrator is still answering in it, or a message waits there for its turn. Stop it or let it finish, then delete it."
     },
     "queued": {
       "started": "Its turn had already started, so the message was left as it is."

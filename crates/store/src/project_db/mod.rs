@@ -123,6 +123,7 @@ pub use self::{
   orchestrator::{ChatListing, ChatTurn},
   orchestrator_queue::StartedQueued,
   orchestrator_reports::KeptReport,
+  orchestrator_titles::ChatDeletion,
   orchestrator_waits::KeptWait,
   read_only::ReadOnlyProjectDb,
   reference_bindings::{Bound, BoundBy, BoundReference, ReferenceBinding},

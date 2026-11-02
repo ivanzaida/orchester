@@ -77,7 +77,7 @@ pub(super) fn read(ctx: &mut Ctx, (root, saves): (&Path, u64), chat: Orchestrato
     OrchestratorChat::Chat(id) => Some(id),
     OrchestratorChat::Latest => history
       .ready()
-      .and_then(|history| history.chats.first())
+      .and_then(|history| history.listed().next())
       .map(|listing| listing.chat.id()),
   };
   // Read on every pass, a new conversation's too, so the screen's hooks keep their order.

@@ -65,6 +65,7 @@ use orchester_core::{
 use orchester_workspace::{
   display,
   orchestrator::{
+    chat::History,
     queue::{TakenBack, WhileAnswering},
     send::Outgoing,
   },
@@ -126,9 +127,9 @@ struct View {
   outgoing: Signal<Option<Outgoing>>,
   how: Signal<Option<WhileAnswering>>,
   history: Signal<bool>,
-  search: Signal<String>,
-  /// The conversation whose title History edits in place; Esc cancels that before it closes History.
-  renaming: Signal<history::Renaming>,
+  /// What History keeps while it shows: Esc ends the delete it asks about, then cancels a title edited in place,
+  /// before it closes History.
+  listing: history::HistoryState,
   /// The composer's runs-on picker is open.
   runs_on: Signal<bool>,
   /// Set to put the focus in the message field.
@@ -178,8 +179,7 @@ impl Component for OrchestratorScreen {
       outgoing: ctx.signal(None),
       how: ctx.signal(None),
       history: ctx.signal(false),
-      search: ctx.signal(String::new()),
-      renaming: ctx.signal(history::Renaming::default()),
+      listing: history::HistoryState::new(ctx),
       runs_on: ctx.signal(false),
       focus: ctx.signal(false),
       focused,
@@ -271,35 +271,24 @@ impl Component for OrchestratorScreen {
     // History opens over the chat's right edge, under the header.
     let panel = view.history.get().then(|| {
       // While the conversations are read the list is bones; a failed reading lists none.
-      let chats = match &reads.history {
+      let none = History::default();
+      let read = match &reads.history {
         data::Read::Loading => None,
-        data::Read::Failed(_) => Some(&[][..]),
-        data::Read::Ready(history) => Some(history.chats.as_slice()),
+        data::Read::Failed(_) => Some(&none),
+        data::Read::Ready(history) => Some(history),
       };
       let rows = history::Rows::new(
         props.project.open.project.id(),
         &props.project.open.repo_root,
-        view.renaming.clone(),
+        &view.listing,
       );
-      history::panel(ctx, &view.search, &rows, (chats, reads.target))
+      history::panel(ctx, &view.listing, &rows, (read, reads.target))
     });
-    let (history, renaming) = (view.history.clone(), view.renaming.clone());
     Column::new()
       .id("screen-orchestrator")
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
-      .on_key_down(move |event: KeyboardEvent| {
-        if event.key != "Escape" || !history.get_untracked() {
-          return;
-        }
-        // Esc first cancels a title edited in place, and only then closes History.
-        if renaming.get_untracked().0.is_some() {
-          renaming.set(history::Renaming::default());
-        } else {
-          history.set(false);
-        }
-        event.prevent_default();
-      })
+      .on_key_down(escape(view))
       .child(head)
       .child(
         Stack::new()
@@ -310,6 +299,28 @@ impl Component for OrchestratorScreen {
           .child(main)
           .with_children(panel),
       )
+  }
+}
+
+/// Esc while History shows: it first ends the delete History asks about, then cancels a title edited in place, and
+/// only then closes History, which opens on its list again.
+fn escape(view: &View) -> impl Fn(KeyboardEvent) + Send + Sync + 'static {
+  let (history, listing) = (view.history.clone(), view.listing.clone());
+  move |event: KeyboardEvent| {
+    if event.key != "Escape" || !history.get_untracked() {
+      return;
+    }
+    if listing.deleting.get_untracked().0.is_some() {
+      listing.deleting.set(history::Deleting::default());
+    } else if listing.renaming.get_untracked().0.is_some() {
+      listing.renaming.set(history::Renaming::default());
+    } else {
+      history.set(false);
+      if listing.archived.get_untracked() {
+        listing.archived.set(false);
+      }
+    }
+    event.prevent_default();
   }
 }
 

@@ -12,6 +12,8 @@ use super::typography::style;
 
 /// The dialog's width (`LVCxf`).
 pub const DIALOG_WIDTH: f32 = 500.0;
+/// A narrower dialog's width, which asks about one item (`Dialog` `YWXxi` in `08e · History · Delete confirmation`).
+pub const NARROW_DIALOG_WIDTH: f32 = 460.0;
 /// The tile beside its title (`Tile` `jdSYt`).
 pub const DIALOG_TILE: f32 = 32.0;
 

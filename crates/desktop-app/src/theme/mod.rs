@@ -85,7 +85,7 @@ pub use self::{
   date_picker::{DatePickerText, UNAVAILABLE_DAY_OPACITY},
   decisions::{DecisionSpacing, DecisionText},
   delivery::{DeliverySpacing, DeliveryText, LOCKED_SWITCH_OPACITY},
-  dialog::{DIALOG_TILE, DIALOG_WIDTH, DialogSpacing, DialogText},
+  dialog::{DIALOG_TILE, DIALOG_WIDTH, DialogSpacing, DialogText, NARROW_DIALOG_WIDTH},
   failure::{FailureSpacing, FailureText},
   files::{FilesRadius, FilesText},
   fonts::mono_space,
