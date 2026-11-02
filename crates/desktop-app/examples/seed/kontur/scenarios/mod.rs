@@ -16,6 +16,7 @@ mod changes;
 mod connections;
 mod conversation;
 mod decision_connections;
+mod decision_reviews;
 mod decisions;
 mod deliverables;
 mod delivery;

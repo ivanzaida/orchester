@@ -44,10 +44,14 @@ pub enum CardsText {
   /// Mono 12.5 `text_secondary`, 1.5: what a request that came to the person asks, on its card (`ZNwbH` in
   /// `vO7CW`).
   Action,
+  /// 12.5 secondary, 1.4: decision review line (`Y4l5E` in 05 `JFEPS`).
+  Review,
+  /// Mono 11.5 primary, 1.4: decision probability chips (`B0Cmn`, `QkBOi`).
+  Probability,
 }
 
 impl CardsText {
-  pub const ALL: [Self; 12] = [
+  pub const ALL: [Self; 14] = [
     Self::Title,
     Self::ApprovalTitle,
     Self::PlanLines,
@@ -60,6 +64,8 @@ impl CardsText {
     Self::Lead,
     Self::Chosen,
     Self::Action,
+    Self::Review,
+    Self::Probability,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -86,6 +92,8 @@ impl CardsText {
       Self::Lead => "cards_lead",
       Self::Chosen => "cards_chosen",
       Self::Action => "cards_action",
+      Self::Review => "cards_review",
+      Self::Probability => "cards_probability",
     }
   }
 
@@ -103,6 +111,8 @@ impl CardsText {
       Self::Lead => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
       Self::Chosen => style(12.0, FontWeight::Medium, 1.3, 0.0, palette.text_primary),
       Self::Action => mono(style(12.5, FontWeight::Normal, 1.5, 0.0, palette.text_secondary)),
+      Self::Review => style(12.5, FontWeight::Normal, 1.4, 0.0, palette.text_secondary),
+      Self::Probability => mono(style(11.5, FontWeight::Normal, 1.4, 0.0, palette.text_primary)),
     }
   }
 }
@@ -116,10 +126,12 @@ pub enum CardsSpacing {
   InlineEnds,
   /// 20: at the sides of the inside of an inline decision card (`yYTFc`).
   InlineSides,
+  /// 7: between decision review line items (`zrv45`, `STLJH`, `qfaGG`).
+  ReviewGap,
 }
 
 impl CardsSpacing {
-  pub const ALL: [Self; 3] = [Self::PlanHead, Self::InlineEnds, Self::InlineSides];
+  pub const ALL: [Self; 4] = [Self::PlanHead, Self::InlineEnds, Self::InlineSides, Self::ReviewGap];
 
   pub fn role(self) -> SpacingSize {
     SpacingSize::extra(self.name())
@@ -130,6 +142,7 @@ impl CardsSpacing {
       Self::PlanHead => "cards_plan_head",
       Self::InlineEnds => "cards_inline_ends",
       Self::InlineSides => "cards_inline_sides",
+      Self::ReviewGap => "cards_review_gap",
     }
   }
 
@@ -138,6 +151,7 @@ impl CardsSpacing {
       Self::PlanHead => 11.0,
       Self::InlineEnds => 18.0,
       Self::InlineSides => 20.0,
+      Self::ReviewGap => 7.0,
     }
   }
 }

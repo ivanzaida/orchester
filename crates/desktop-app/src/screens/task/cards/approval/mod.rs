@@ -17,6 +17,7 @@ mod decided;
 mod message;
 mod quiet;
 mod request;
+mod review;
 mod reviewing;
 mod words;
 
@@ -152,7 +153,7 @@ impl Component for ApprovalView {
         let step = request::step(&place, shown.as_ref());
         (
           came::head(ctx, &id, (request, step.as_deref()), came),
-          request::came_body(ctx, &id, (&place, request), (came, reviewing)),
+          request::came_body(ctx, &id, (&place, request), (came, reviewing), shown.as_ref()),
         )
       }
       None => (

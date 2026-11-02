@@ -81,7 +81,7 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
     request(kontur, (&run, &invocation), command, (reviewed, at))?;
     hold(kontur, run, (&invocation, !matches!(reviewed, Reviewed::Approved)))?;
   }
-  Ok(())
+  super::decision_reviews::seed(kontur, pipeline)
 }
 
 /// A request to run `command`, asked at `at`, as auto mode's review left it.

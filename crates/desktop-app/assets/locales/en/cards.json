@@ -171,6 +171,30 @@
         "push": "Pushes to a remote always come to you, in Autopilot too.",
         "refs": "Only the run's branch {{branch}} is the run's own; other refs come to you."
       },
+      "decision": {
+        "left": "{{model}} left it to you",
+        "under": "under {{threshold}} ·",
+        "noRisk": "under {{threshold}} · no risk above 0.5",
+        "reviewer": "The reviewer",
+        "settings": "· Project settings › Connections",
+        "risk": {
+          "outside": "may write outside the worktree",
+          "network": "may reach the network",
+          "credential": "may read a credential",
+          "discard": "may discard work in the worktree",
+          "task": "does not serve the task"
+        },
+        "failure": {
+          "key": "{{model}} did not answer: its key was refused, so it came to you",
+          "unreachable": "{{model}} did not answer: nothing answers at its address, so it came to you",
+          "api": "{{model}} did not answer: the address is not a System 1 API, so it came to you",
+          "model": "{{model}} did not answer: the model is no longer available, so it came to you",
+          "timeout": "{{model}} did not answer in time, so it came to you",
+          "unreadable": "{{model}} did not give a readable answer, so it came to you",
+          "run": "{{model}} could not run, so it came to you",
+          "missing": "{{model}} is unavailable, so it came to you"
+        }
+      },
       "quiet": {
         "autopilot": "Approved by autopilot",
         "profile": "Allowed by the profile",

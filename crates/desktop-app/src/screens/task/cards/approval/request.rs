@@ -27,7 +27,7 @@ use super::{
   },
   came,
   decided::asked,
-  words,
+  review, words,
 };
 use crate::{
   theme::{CardsText, ExtraSpacing, ExtraTypography, IconSize},
@@ -56,6 +56,7 @@ pub(super) fn came_body(
   id: &str,
   (place, request): (&Place, &PendingToolApproval),
   (came, reviewing): (&CameToPerson, bool),
+  shown: Option<&ShownApproval>,
 ) -> Vec<Element> {
   let action = (!place.in_panel).then(|| {
     Text::new(&asked(ctx, request))
@@ -67,7 +68,8 @@ pub(super) fn came_body(
   });
   action
     .into_iter()
-    .chain([came::line(ctx, id, (place, request.agent.as_str()), came)])
+    .chain([review::line(ctx, id, shown.and_then(|shown| shown.review.as_ref()))
+      .unwrap_or_else(|| came::line(ctx, id, (place, request.agent.as_str()), came))])
     .chain(reviewing.then(|| note(&format!("{id}-reviewing"), &ctx.t("cards.approval.reviewing")).into()))
     .collect()
 }
@@ -139,6 +141,7 @@ pub(super) fn body(
       .map(|cause| note(&format!("{id}-hold-cause"), &message_text(ctx, &cause)).into()),
   );
   body.extend(value_box(ctx, id, request));
+  body.extend(review::line(ctx, id, shown.and_then(|shown| shown.review.as_ref())));
   body.push(facts(ctx, id, (place, request), shown));
   if !editing {
     body.push(deny_tells(ctx, id, request, shown));

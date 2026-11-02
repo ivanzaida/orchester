@@ -10,6 +10,7 @@
 mod answering;
 mod approval_modes;
 mod auto_mode;
+mod decision_review;
 mod deny_message;
 #[allow(
   dead_code,

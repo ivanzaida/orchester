@@ -1001,6 +1001,15 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
+ORC-567 · Decision reviewer approval line (implemented 2026-11-02; Review and Verify follow).
+Command and tool approval cards show the recorded model, approval probability and threshold, core's named risk
+with its probability, the no-risk variant, or a typed failure reason. The rest of the existing card is unchanged.
+QA: `cards-auto-mode` includes Restore the reviewed files (05a), Merge the base branch (05b), Check the translations
+(05c), and Review the tool request. Tests: `orchester-app --test decision_cards card_decision_review`.
+Verify compares `JFEPS` (`zrv45`, `STLJH`, `qfaGG`) and checks the surrounding card against `iw7me`.
+The existing card still uses the older layout; `docs/design/decision-reviewer.md` is absent. Failure records do not
+carry a duration or reviewer kind, so timeout copy says "in time" without claiming a two-second limit.
+
 ORC-561 · Test a decision model on recorded project requests (implemented 2026-11-01).
 Workspace exposes an explicit test action, stored progress/results and Stop; the runner reconstructs historical
 review context, omits unavailable facts explicitly, runs eight requests at once and refuses hosted automation.
