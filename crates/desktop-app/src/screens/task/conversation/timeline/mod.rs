@@ -437,7 +437,7 @@ impl Component for RowView {
       }
     };
     let mark = match &props.line {
-      Line::Row(row) => Timeline::of(ctx).search.and_then(|marks| marks.row(&said(row))),
+      Line::Row(row) => Timeline::of(ctx).search.and_then(|marks| marks.row(&on_row(row))),
       _ => None,
     };
     // Half the chat's 12 between rows above and under each (`gap` of `RM1e7`).
@@ -451,15 +451,25 @@ impl Component for RowView {
   }
 }
 
-/// The items whose words `row` shows, which a search marks on the row: an agent's message, a person's, a card, a
-/// problem, a note.
-fn said(row: &Row) -> Vec<&str> {
+/// The items whose words `row` shows that a search marks on the row: a card, a problem, a notice. A message, an
+/// agent's, a person's or a note the work returned with, fills behind its matched words instead.
+fn on_row(row: &Row) -> Vec<&str> {
   match row {
-    Row::Agent(agent) if agent.text.is_some() => vec![&*agent.key],
-    Row::Item(item) | Row::Line(item) => vec![&*item.key],
+    Row::Item(item) | Row::Line(item) if !is_message(item) => vec![&*item.key],
     Row::Approvals { items, .. } => items.iter().map(|item| &*item.key).collect(),
-    Row::Agent(_) | Row::Step { .. } | Row::Folded { .. } | Row::NotStarted { .. } | Row::Entry { .. } => Vec::new(),
+    Row::Item(_)
+    | Row::Line(_)
+    | Row::Agent(_)
+    | Row::Step { .. }
+    | Row::Folded { .. }
+    | Row::NotStarted { .. }
+    | Row::Entry { .. } => Vec::new(),
   }
+}
+
+/// Whether `item` is a message, its words drawn as one text: a person's, or the note a return came with.
+const fn is_message(item: &Item) -> bool {
+  matches!(item.kind, ItemKind::Message(_) | ItemKind::Mark(_))
 }
 
 fn row_content(ctx: &mut Ctx, row: &Row) -> Element {
@@ -478,15 +488,20 @@ fn row_content(ctx: &mut Ctx, row: &Row) -> Element {
 }
 
 /// A person's message, a card, a problem, a return or restart, the run's switch to Manual, a step's result or the
-/// run's end.
+/// run's end. A message fills behind what the search found in it.
 fn item_row(ctx: &mut Ctx, timeline: &Timeline, item: &Item) -> Element {
+  let found = || timeline.search.as_ref().and_then(|marks| marks.in_said(&item.key));
   match &item.kind {
-    ItemKind::Message(entry) => person_message(ctx, ((timeline.project, &timeline.chat_project.root), entry)),
+    ItemKind::Message(entry) => person_message(
+      ctx,
+      ((timeline.project, &timeline.chat_project.root), entry),
+      found().as_ref(),
+    ),
     ItemKind::Question { .. } | ItemKind::Plan(_) | ItemKind::Approval(_) | ItemKind::Choice(_) => {
       cards::card(ctx, timeline, item)
     }
     ItemKind::Problem(entry) => entry::problem_row(ctx, timeline, &item.key, entry),
-    ItemKind::Mark(mark) => divider::mark(ctx, timeline, mark),
+    ItemKind::Mark(mark) => divider::mark(ctx, timeline, mark, found().as_ref()),
     ItemKind::BaseMoved(mark) => divider::base_moved(ctx, &item.key, mark),
     ItemKind::SwitchedToManual(switched) => switched::row(ctx, switched, item.at),
     ItemKind::Result(card) => result::card(ctx, timeline, card),

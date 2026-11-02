@@ -9,7 +9,10 @@
 use std::{borrow::Cow, ops::Range, sync::Arc};
 
 use super::{Item, ItemKind, mark::MarkKind, view::Rendered};
-use crate::tasks::transcript::{Entry, EntryKind, command_preview, in_worktree};
+use crate::{
+  mentions::facts,
+  tasks::transcript::{Entry, EntryKind, command_preview, in_worktree},
+};
 
 /// At most this many places are found in one run; a search that finds more says so.
 pub const MAX_HITS: usize = 10_000;
@@ -201,12 +204,14 @@ impl Search<'_> {
   }
 }
 
-/// What `item` says, as the chat shows it: Markdown as `rendered` shows it.
+/// What `item` says, as the chat shows it: Markdown as `rendered` shows it, a person's message without the block of
+/// facts Orchester added for the agent about what it mentions (`mentions::facts`), which the chat does not show.
 fn said<'a>(item: &'a Item, rendered: Rendered<'_>) -> Vec<Cow<'a, str>> {
   let shown = |text: &'a str| -> Cow<'a, str> { rendered(text).map_or(Cow::Borrowed(text), Cow::Owned) };
   let plain = |text: &'a str| Cow::Borrowed(text);
   match &item.kind {
     ItemKind::AgentMessage { text, .. } => vec![shown(text)],
+    ItemKind::Message(entry) if entry.orchestrator.is_none() => vec![shown(facts::said(&entry.body))],
     ItemKind::Message(entry) | ItemKind::Question { entry, .. } => vec![shown(&entry.body)],
     ItemKind::Plan(card) => vec![shown(&card.plan.text)],
     ItemKind::Approval(card) => [

@@ -2,10 +2,16 @@
 //! on macOS) opens the find bar beside the search button, the places are counted, the current one marked and brought
 //! into view, next and previous go round them, a place in a closed tool group opens the group and the call with its
 //! output around the place, nothing found says what was searched, Esc closes the bar and folds again what it opened,
-//! and the query stays. A transcript 2,000 entries longer is searched off the UI thread: no frame waits for it.
+//! and the query stays. A transcript 2,000 entries longer is searched off the UI thread: no frame waits for it. A
+//! message fills behind its matched words, its Markdown rendered as ever, and its row is not ruled (ORC-622).
 
 use std::time::{Duration, Instant};
 
+use lurq::{
+  app::theme::{PaletteColor, RadiusSize},
+  layout::quad::QuadContent,
+};
+use orchester_app::ui::chat::found::{CURRENT_CLASS, MARKED_CLASS};
 use orchester_core::{
   connection::stream::{AgentEvent, CommandStatus},
   store::ActivityStore,
@@ -13,7 +19,7 @@ use orchester_core::{
 };
 use orchester_store::ProjectDb;
 
-use super::{ids, key_of, long::at_work, open, retry_webhooks, seeded, support::Window};
+use super::{agent_text::agent_says, ids, key_of, long::at_work, open, retry_webhooks, seeded, support::Window};
 
 /// The find field and the count in it.
 const FIELD: &str = "conversation-search-field";
@@ -63,16 +69,135 @@ fn exists(window: &mut Window, id: &str) -> bool {
   window.tree.get_element_by_id(id).is_some()
 }
 
+/// The texts of the message words that carry `class`, one entry per such element.
+fn classed(window: &mut Window, class: &str) -> Vec<String> {
+  let mut texts = Vec::new();
+  for element in window.tree.get_elements_by_class_name(class) {
+    let mut words = Vec::new();
+    super::walk(element, &mut |inner| {
+      words.extend(inner.text_content().map(str::to_owned))
+    });
+    texts.push(words.join(" "));
+  }
+  texts
+}
+
+/// The fills drawn inside the element `id`, `warning` (the current place) and `warning_muted` (another), each with its
+/// corner radius: `(current, others)`.
+fn fills(window: &mut Window, id: &str) -> (Vec<f32>, Vec<f32>) {
+  window.pass();
+  let (current, other) = {
+    let theme = window.app.theme();
+    let palette = theme.palette();
+    (
+      palette.get(PaletteColor::Warning),
+      palette.get(PaletteColor::WarningMuted),
+    )
+  };
+  let bounds = window
+    .tree
+    .get_element_by_id_mut(id)
+    .and_then(|element| element.bounds())
+    .unwrap_or_else(|| panic!("{id} is laid out"));
+  let tree = &window.tree;
+  let (mut currents, mut others) = (Vec::new(), Vec::new());
+  for quad in tree.resolve_quads(tree.last_layout().expect("a layout")) {
+    let QuadContent::Rect { color, .. } = quad.content else {
+      continue;
+    };
+    let inside = quad.x >= bounds.x
+      && quad.y >= bounds.y
+      && quad.x + quad.width <= bounds.x + bounds.width + 0.5
+      && quad.y + quad.height <= bounds.y + bounds.height + 0.5;
+    if !inside {
+      continue;
+    }
+    let radius = quad.border_radius.map_or(0.0, |radius| radius.top_left);
+    if color == current {
+      currents.push(radius);
+    } else if color == other {
+      others.push(radius);
+    }
+  }
+  (currents, others)
+}
+
+/// The theme's `radius_sm`, a fill's corners.
+fn small_radius(window: &Window) -> f32 {
+  window.app.theme().radius_value(RadiusSize::Sm)
+}
+
 #[test]
-fn search_finds_a_message_and_marks_its_row() {
+fn search_fills_behind_the_matched_words_of_a_person_message() {
   let (mut window, _) = retry_webhooks();
   assert!(exists(&mut window, "task-search"), "the search button ends the tabs");
   search(&mut window, "CONFIGURABLE", "1 of 1");
-  window.until("the person's message marked as the current place", |window| {
-    window
-      .texts("conversation-search-current-row")
-      .is_some_and(|texts| texts.concat().contains("retry budget configurable"))
+  let mut current = Vec::new();
+  window.until("the person's message holds the current place", |window| {
+    current = classed(window, CURRENT_CLASS);
+    current.iter().any(|words| words.contains("retry budget configurable"))
   });
+  assert!(
+    !exists(&mut window, "conversation-search-current-row") && !exists(&mut window, "conversation-search-row"),
+    "a message's row is no longer ruled"
+  );
+  let message = super::with_text(&mut window, "conversation-message-", "retry budget configurable");
+  let (currents, others) = fills(&mut window, &format!("{message}-text"));
+  let radius = small_radius(&window);
+  assert_eq!(
+    currents,
+    vec![radius],
+    "one `warning` fill, `radius_sm`, behind the word"
+  );
+  assert!(others.is_empty(), "no other place in it: {others:?}");
+}
+
+#[test]
+fn search_fills_behind_the_matched_words_of_an_agent_markdown_message() {
+  let (mut window, seeded) = seeded("conversation");
+  let key = key_of(&seeded, "Add retry to webhook sender");
+  agent_says(
+    &seeded,
+    &key,
+    "Read the **zanzibar** notes in [Zanzibar guide](https://example.com/guide), then set `zanzibar_ms`:\n\n- one \
+     zanzibar item\n- two",
+  );
+  open(&mut window, &seeded, &key, "conversation-chat");
+  search(&mut window, "zanzibar", "1 of 4");
+  let message = super::with_text(&mut window, "conversation-text-", "Zanzibar guide");
+  window.until("the agent's message holds the current place", |window| {
+    classed(window, CURRENT_CLASS)
+      .iter()
+      .any(|words| words.contains("Zanzibar guide"))
+  });
+  let texts = window.text(&message);
+  assert!(
+    !texts.contains("**") && !texts.contains('`'),
+    "its Markdown still renders: {texts}"
+  );
+  assert!(
+    classed(&mut window, MARKED_CLASS)
+      .iter()
+      .any(|words| words.contains("one zanzibar item")),
+    "its list still renders, its item marked"
+  );
+  let radius = small_radius(&window);
+  let (currents, others) = fills(&mut window, &message);
+  assert_eq!(currents, vec![radius], "the current place on `warning`");
+  assert_eq!(
+    others,
+    vec![radius; 3],
+    "the bold word, the link's and the code's on `warning_muted`"
+  );
+  // The next place becomes the current one within the same message.
+  window.press("conversation-search-next");
+  window.until("the second place", |window| window.text(COUNT) == "2 of 4");
+  let (currents, others) = fills(&mut window, &message);
+  assert_eq!(
+    (currents.len(), others.len()),
+    (1, 3),
+    "the fills follow the current place"
+  );
 }
 
 #[test]

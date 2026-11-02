@@ -4,7 +4,8 @@
 //! presented as the chat follows it ([`super::presentation`]), a link to a place in a project with a tooltip that
 //! names it ([`super::place`]), and a list of labelled links drawn as their grid ([`super::grid`]). Every text goes
 //! through the presentation, which lurq runs on the exact destination a press opens: no link shows words from one
-//! destination and opens another.
+//! destination and opens another. What a search found in it is filled behind its words as the Markdown renders them
+//! ([`super::found`]); the words of a labelled links' grid, which the app draws itself, are not.
 
 use std::sync::Arc;
 
@@ -21,6 +22,7 @@ use lurq::{
 use orchester_core::id::ProjectId;
 
 use super::{
+  found::Found,
   grid,
   names::ProjectNames,
   place,
@@ -30,13 +32,14 @@ use super::{
 use crate::{routes::Route, theme::ChatLinkLooks, ui::markdown::LinkHandler};
 
 /// What an agent wrote, `text`, in a chat of `project`; `names` are the projects' names, for what a link to another
-/// project's place says, and a press on a link goes to `links`. `id` names it.
+/// project's place says, and a press on a link goes to `links`. What a search found in it (`found`) is filled behind
+/// its words. `id` names it.
 pub fn agent_text(
   ctx: &mut Ctx,
   id: &str,
   text: &Arc<str>,
   (project, names): (ProjectId, &ProjectNames),
-  links: &LinkHandler,
+  (links, found): (&LinkHandler, Option<&Found>),
 ) -> Element {
   ctx.mount_keyed::<AgentText>(
     &format!("agent-text-{id}"),
@@ -46,6 +49,7 @@ pub fn agent_text(
       project,
       names: names.clone(),
       links: links.clone(),
+      found: found.cloned(),
     },
   )
 }
@@ -57,6 +61,7 @@ struct AgentTextProps {
   project: ProjectId,
   names: ProjectNames,
   links: LinkHandler,
+  found: Option<Found>,
 }
 
 /// Compared by what it shows; the handler by identity, as the window keeps one.
@@ -67,6 +72,7 @@ impl PartialEq for AgentTextProps {
       && self.project == other.project
       && self.names == other.names
       && Arc::ptr_eq(&self.links, &other.links)
+      && self.found == other.found
   }
 }
 
@@ -110,6 +116,13 @@ impl Component for AgentText {
         presentation(link.destination(), link.text(), &looks, &words)
       })
       .list_view(grid::grid);
-    Markdown::mount(ctx, markdown).id(props.id.to_string())
+    let Some(found) = &props.found else {
+      return Markdown::mount(ctx, markdown).id(props.id.to_string());
+    };
+    // The places are searched in the words the document renders, the bytes its fills count in.
+    let highlights = found.highlights(ctx, &markdown.rendered_text());
+    let places = highlights.len();
+    let words = Markdown::mount(ctx, markdown.highlights(highlights)).id(props.id.to_string());
+    found.classed(words, places)
   }
 }

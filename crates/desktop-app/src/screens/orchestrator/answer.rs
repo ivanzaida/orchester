@@ -112,7 +112,7 @@ fn parts(ctx: &mut Ctx, row: &TurnRow) -> Column {
           &format!("orchestrator-reply-{key}-{index}"),
           said,
           (row.env.project, &row.env.names),
-          &row.env.links,
+          (&row.env.links, None),
         ));
       }
       Part::Event {

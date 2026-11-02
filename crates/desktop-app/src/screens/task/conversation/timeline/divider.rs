@@ -43,6 +43,7 @@ use crate::{
   routes::{ProjectPage, ProjectSettingsTab, Route},
   theme::{ConversationText, ExtraColor, ExtraSpacing, IconSize},
   ui::{
+    chat::found::Found,
     icon::{Icon, icon},
     pressable::{Press, pressable, pressed},
   },
@@ -378,8 +379,9 @@ fn list(ctx: &Ctx, labels: &[Arc<str>]) -> String {
 }
 
 /// A return or restart: what returned the work, to which step, in which attempt; a person's note is their
-/// message under it. One the Orchestrator chat decided has the Orchestrator's row under it instead, with its note.
-pub(super) fn mark(ctx: &mut Ctx, timeline: &Timeline, mark: &Mark) -> Element {
+/// message under it, what a search found in it (`found`) filled behind its words. One the Orchestrator chat decided
+/// has the Orchestrator's row under it instead, with its note.
+pub(super) fn mark(ctx: &mut Ctx, timeline: &Timeline, mark: &Mark, found: Option<&Found>) -> Element {
   let (glyph, text) = mark_line(ctx, timeline, mark);
   let line = event(format!("conversation-mark-{}", mark.attempt), glyph, &text, None);
   let note = match &mark.kind {
@@ -388,8 +390,8 @@ pub(super) fn mark(ctx: &mut Ctx, timeline: &Timeline, mark: &Mark) -> Element {
   };
   let id = format!("conversation-mark-note-{}", mark.attempt);
   let under = match (mark.orchestrator, note) {
-    (Some(from), note) => orchestrator_note(ctx, &id, (timeline.project, from), (note, mark.at)),
-    (None, Some(note)) => person_note(ctx, &id, note, mark.at, mark.by),
+    (Some(from), note) => orchestrator_note(ctx, &id, (timeline.project, from), (note, mark.at, found)),
+    (None, Some(note)) => person_note(ctx, &id, (note, found), mark.at, mark.by),
     (None, None) => return line,
   };
   Column::new()
@@ -554,7 +556,7 @@ pub(super) fn end(ctx: &mut Ctx, timeline: &Timeline, end: &RunEnd, at: Timestam
     ctx,
     "conversation-end-merged-by",
     (timeline.project, from),
-    (Some(&how), Some(at)),
+    (Some(&how), Some(at), None),
   );
   Column::new()
     .width(Dimension::Pct(100.0))
