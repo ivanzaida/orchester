@@ -21,8 +21,8 @@ pub mod wait;
 
 pub use self::{
   chat::{
-    ActionOutcome, Chat, ChatAction, ChatApproval, ChatEntry, ChatEvent, ChatSession, CompactionState, EntryKind,
-    HeldWork, Queued, SessionChange, TurnFailure, TurnState, WaitTurn,
+    ActionOutcome, BlankTitle, Chat, ChatAction, ChatApproval, ChatEntry, ChatEvent, ChatSession, ChatTitle,
+    CompactionState, EntryKind, HeldWork, Queued, SessionChange, TurnFailure, TurnState, WaitTurn,
   },
   merging::{MergeLeft, Merging},
   report::{DailyReport, ReportSchedule, ReportTime},

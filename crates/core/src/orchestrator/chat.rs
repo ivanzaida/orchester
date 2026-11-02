@@ -157,6 +157,30 @@ impl Chat {
   }
 }
 
+/// A title a person gave a conversation (*Rename* in History, ORC-328): its words without the whitespace around them,
+/// never blank. It wins over the one taken from the first message from then on.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ChatTitle(String);
+
+/// A conversation's title that says nothing.
+#[derive(Clone, Copy, Debug, thiserror::Error, PartialEq, Eq)]
+#[error("a conversation's title says something")]
+pub struct BlankTitle;
+
+impl ChatTitle {
+  pub fn new(text: &str) -> Result<Self, BlankTitle> {
+    let text = text.trim();
+    if text.is_empty() {
+      return Err(BlankTitle);
+    }
+    Ok(Self(text.to_owned()))
+  }
+
+  pub fn as_str(&self) -> &str {
+    &self.0
+  }
+}
+
 /// The first line of `text` that says something, cut to [`TITLE_CHARS`] characters with an ellipsis.
 pub fn title_of(text: &str) -> String {
   let line = text
