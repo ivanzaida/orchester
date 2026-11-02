@@ -96,7 +96,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 115] = [
+pub const ALL: [Scenario; 116] = [
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-library", agents_library::seed),
   Scenario::of("agents-browser", agents_browser::seed),
@@ -130,6 +130,7 @@ pub const ALL: [Scenario; 115] = [
   Scenario::of("conversation-model-changed", run_model::changed),
   Scenario::of("conversation-model-waits", run_model::waits),
   Scenario::of("conversation-model-fixed", run_model::fixed),
+  Scenario::of("conversation-model-back", run_model::back),
   Scenario::of("long-chats", long_chats::seed),
   Scenario::of("orchestrator", orchestrator::seed),
   Scenario::of("orchestrator-not-set-up", orchestrator::not_set_up),

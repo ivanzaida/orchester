@@ -19,6 +19,7 @@ use orchester_workspace::tasks::{
   detail::TaskDetail,
   run_model::{
     StepModel,
+    back::BackToProfile,
     change::{ModelAsked, ModelChangeError, cancel_model_change_in, change_model_in},
   },
 };
@@ -299,4 +300,54 @@ fn run_model_on_a_connection_with_one_model_and_no_effort_is_fixed() {
     change_model_in(fixture.repo.path(), run.id(), asked(ModelScope::Step), Answerer::Person),
     Err(ModelChangeError::NotOffered { .. })
   ));
+}
+
+/// Starts the agent of step `step` of `run` `after` milliseconds from now, later than any change made so far.
+fn start_later(fixture: &mut Fixture, run: &Run, step: &str, after: i64) -> orchester_core::id::StepExecutionId {
+  let execution = run
+    .current_attempt()
+    .expect("attempt")
+    .executions()
+    .iter()
+    .find(|execution| execution.step() == &key(step))
+    .expect("the step's execution")
+    .id();
+  let at = Timestamp::from_unix_millis(Timestamp::now().unix_millis() + after);
+  fixture
+    .db
+    .start_invocation(run.id(), execution, &model("gpt-5.5"), at)
+    .expect("its agent starts");
+  execution
+}
+
+fn back(fixture: &Fixture, run: &Run) -> Vec<BackToProfile> {
+  let detail = TaskDetail::load_in(fixture.repo.path(), run.task()).expect("detail");
+  detail.run.expect("the run").models.back
+}
+
+#[test]
+fn run_model_next_step_after_a_change_for_one_step_starts_on_its_profile() {
+  let (mut fixture, run) = started(Fixture::parallel(), two_models());
+  change_model_in(fixture.repo.path(), run.id(), asked(ModelScope::Step), Answerer::Person).expect("changed");
+  let research = start_later(&mut fixture, &run, "research", 1_000);
+  start_later(&mut fixture, &run, "docs", 2_000);
+  let lines = back(&fixture, &run);
+  assert_eq!(lines.len(), 1, "only the first later step to start: {lines:?}");
+  assert_eq!(
+    (
+      &lines[0].execution,
+      &lines[0].step,
+      &lines[0].changed,
+      &lines[0].profile
+    ),
+    (&research, &key("research"), &key("implement"), &choice("gpt-5.5", None))
+  );
+}
+
+#[test]
+fn run_model_later_step_a_change_for_the_rest_of_the_run_reached_says_nothing_of_its_profile() {
+  let (mut fixture, run) = started(Fixture::parallel(), two_models());
+  change_model_in(fixture.repo.path(), run.id(), asked(ModelScope::Run), Answerer::Person).expect("changed");
+  start_later(&mut fixture, &run, "research", 1_000);
+  assert_eq!(back(&fixture, &run), Vec::new());
 }

@@ -14,10 +14,14 @@ use lurq::{
   node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::{
+  resource::StepKey,
   run::{Answerer, ModelChoice, ModelEventKind, ModelScope},
   time::Timestamp,
 };
-use orchester_workspace::{display, tasks::timeline::model_events::ModelLine};
+use orchester_workspace::{
+  display,
+  tasks::{run_model::back::BackToProfile, timeline::model_events::ModelLine},
+};
 
 use super::Timeline;
 use crate::{
@@ -90,6 +94,49 @@ pub(super) fn row(ctx: &mut Ctx, timeline: &Timeline, (key, line, at): (&str, &M
         .min_width(Dimension::Px(0.0)),
     )
     .with_children(cancel)
+    .into()
+}
+
+/// *05 Verify starts on its profile*: a later step started on its own profile again after a change for one step only
+/// (`rotate-ccw`), its profile's model and effort in Geist Mono, then which step the change was for.
+pub(super) fn back_row(ctx: &mut Ctx, timeline: &Timeline, key: &str, back: &BackToProfile) -> Element {
+  let id = format!("conversation-model-{key}");
+  let name = |step: &StepKey| -> Arc<str> {
+    timeline
+      .detail
+      .run
+      .as_ref()
+      .map_or_else(|| step.as_str().into(), |run| step_name(ctx, run, step))
+  };
+  let (step, changed) = (name(&back.step), name(&back.changed));
+  Row::new()
+    .id(id.clone())
+    .describe("kind", "back-to-profile")
+    .width(Dimension::Pct(100.0))
+    .padding(Padding::new().left(ConversationSpacing::ApprovalRow.role()))
+    .spacing(ExtraSpacing::Loose.role())
+    .align_items(Alignment::Center)
+    .child(icon(Icon::RotateCcw, IconSize::Base, PaletteColor::TextMuted))
+    .child(
+      Text::new(&ctx.t_args("conversation.model.event.backToProfile", [("step", &*step)]))
+        .id(format!("{id}-text"))
+        .variant(ConversationText::ApprovalLead.role())
+        .nowrap(),
+    )
+    .child(
+      Text::new(&choice_words(ctx, &back.profile))
+        .id(format!("{id}-value"))
+        .variant(ExtraTypography::PropertyMono.role())
+        .color(PaletteColor::TextPrimary)
+        .nowrap(),
+    )
+    .child(
+      Text::new(&ctx.t_args("conversation.model.event.detail.backToProfile", [("step", &*changed)]))
+        .id(format!("{id}-detail"))
+        .variant(ConversationText::ApprovalDetail.role())
+        .flex(1.0)
+        .min_width(Dimension::Px(0.0)),
+    )
     .into()
 }
 

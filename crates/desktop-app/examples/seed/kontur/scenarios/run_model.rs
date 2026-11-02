@@ -4,7 +4,8 @@
 //! question. `conversation-model` lists three models with their efforts; `-changed` has a change for this step applied
 //! (its event line, the chip on the new model); `-waits` has a change made while Implement's turn runs, which waits for
 //! it (start the QA copy with no runner: a runner ends a turn left running when it attaches); `-fixed` lists one model
-//! without efforts, so nothing can change.
+//! without efforts, so nothing can change; `-back` has a change for the step before Implement only, made before
+//! Implement started, so Implement's line says it starts on its profile (08f `Yzb3F`).
 
 use orchester_core::{
   connection::{
@@ -42,6 +43,53 @@ pub fn waits(kontur: &mut Kontur) -> Result<(), SeedError> {
 
 pub fn fixed(kontur: &mut Kontur) -> Result<(), SeedError> {
   with_models(kontur, vec![CatalogModel::new(model(PROFILE_MODEL)?, Vec::new())]).map(|_| ())
+}
+
+/// A change for the step before Implement only, made before Implement's agent first started: Implement started on its
+/// own profile again, and its line says so (`08f` `Yzb3F`, the last event line).
+pub fn back(kontur: &mut Kontur) -> Result<(), SeedError> {
+  let run = with_models(kontur, three_models())?;
+  let implement = implement(&run)?;
+  let key = implement_key(&run)?;
+  let steps = run.snapshot().body().steps();
+  let at = steps
+    .iter()
+    .position(|step| step.key == key)
+    .and_then(|position| position.checked_sub(1))
+    .ok_or(SeedError::NotAtWork)?;
+  let earlier = steps[at].key.clone();
+  let started = kontur
+    .db
+    .invocations(run.id())?
+    .into_iter()
+    .filter(|invocation| invocation.execution == implement)
+    .map(|invocation| invocation.started_at)
+    .min()
+    .ok_or(SeedError::NotAtWork)?;
+  let to = ModelChoice {
+    model: model(CHOSEN_MODEL)?,
+    effort: Some("xhigh".to_owned()),
+  };
+  let event = ModelEvent {
+    at: orchester_core::time::Timestamp::from_unix_millis(started.unix_millis() - 60_000),
+    by: Answerer::Person,
+    step: earlier.clone(),
+    kind: ModelEventKind::Changed {
+      scope: ModelScope::Step,
+      to: to.clone(),
+      was: ModelChoice {
+        model: model(PROFILE_MODEL)?,
+        effort: None,
+      },
+      also: Vec::new(),
+      before: vec![StepBefore {
+        step: earlier.clone(),
+        choice: None,
+      }],
+    },
+  };
+  kontur.db.change_step_models(run.id(), &[(earlier, Some(to))], &event)?;
+  Ok(())
 }
 
 fn model(id: &str) -> Result<ModelId, SeedError> {

@@ -49,6 +49,7 @@ pub(super) fn matches(item: &Item, needle: &str, rendered: Rendered<'_>) -> bool
     | ItemKind::SwitchedToManual(_)
     | ItemKind::Permission(_)
     | ItemKind::Model(_)
+    | ItemKind::BackToProfile(_)
     | ItemKind::End(_) => false,
   }
 }

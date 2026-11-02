@@ -362,6 +362,38 @@ fn run_model_seeded_scenarios_reach_every_chip_state_for_qa() {
 }
 
 #[test]
+fn run_model_next_step_after_a_change_for_one_step_says_it_starts_on_its_profile() {
+  let mut page = Page::seeded("conversation-model-back");
+  let task = page.task("KON-13");
+  let run = ProjectDb::open(&page.repo)
+    .expect("the project")
+    .runs_of_task(task.id())
+    .expect("runs")
+    .into_iter()
+    .filter_map(Result::ok)
+    .last()
+    .expect("a run");
+  let implement = run
+    .current_attempt()
+    .and_then(|attempt| {
+      attempt
+        .executions()
+        .iter()
+        .find(|execution| matches!(execution.status(), orchester_core::run::StepStatus::Waiting(_)))
+    })
+    .expect("Implement waits")
+    .id();
+  let line = format!("conversation-model-model-back-{implement}");
+  page.open("KON-13", TaskTab::Conversation, &line);
+  assert_eq!(page.text(&format!("{line}-text")), "03 Implement starts on its profile");
+  assert_eq!(page.text(&format!("{line}-value")), PROFILE_MODEL);
+  assert_eq!(
+    page.text(&format!("{line}-detail")),
+    "· the change was for 02 Plan only"
+  );
+}
+
+#[test]
 fn run_model_roles_follow_the_design() {
   use lurq::{app::App, layout::text_style::FontWeight};
   use orchester_app::theme::{self, Mode, ModelText};

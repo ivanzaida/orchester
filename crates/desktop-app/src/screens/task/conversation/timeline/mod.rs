@@ -509,6 +509,7 @@ fn item_row(ctx: &mut Ctx, timeline: &Timeline, item: &Item) -> Element {
     ItemKind::SwitchedToManual(switched) => switched::row(ctx, switched, item.at),
     ItemKind::Permission(line) => permission::row(ctx, timeline, (&item.key, line, item.at)),
     ItemKind::Model(line) => model::row(ctx, timeline, (&item.key, line, item.at)),
+    ItemKind::BackToProfile(back) => model::back_row(ctx, timeline, &item.key, back),
     ItemKind::Result(card) => result::card(ctx, timeline, card),
     ItemKind::End(end) => divider::end(ctx, timeline, end, item.at),
     // An agent's message, a step and a tool group are rows of their own (`Row::Agent`, `Row::Step`).

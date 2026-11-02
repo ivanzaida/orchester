@@ -271,6 +271,7 @@
         "waits": "Model change waits for this turn to end",
         "canceled": "Model change canceled",
         "cancel": "Cancel change",
+        "backToProfile": "{{step}} starts on its profile",
         "detail": {
           "wasPerson": "· was {{was}} · by you · {{time}}",
           "wasAutomation": "· was {{was}} · by automation · {{time}}",
@@ -281,7 +282,8 @@
           "waitsRunPerson": "· by you · {{time}} · for the rest of the run · the turn finishes on {{was}}",
           "waitsRunAutomation": "· by automation · {{time}} · for the rest of the run · the turn finishes on {{was}}",
           "canceledPerson": "· by you · {{time}} · stays on {{stays}}",
-          "canceledAutomation": "· by automation · {{time}} · stays on {{stays}}"
+          "canceledAutomation": "· by automation · {{time}} · stays on {{stays}}",
+          "backToProfile": "· the change was for {{step}} only"
         }
       },
       "failed": "The change was not saved: {{reason}}",
