@@ -134,6 +134,14 @@ person applies (as MCP servers today), since a service runs a program.
 | Task › Services; service crashed card; approve services card | `cjvRr`, `FwHrv`, `hvQDS` |
 | Summary › Tests card | `qN2FK` |
 | States: no Docker, macOS permissions, readiness timeout, slots busy | `oXVuM` |
+| Settings › General › Services at once (the computer's total) | `UIVhQ` |
+| Service editor · native driver (desktop-native) | `izC7e` |
+| Editor states: database container, seed command, missing here, member read-only, delete modal, import again, Orchestrator proposal | `IWfVg` |
+| Task › Services: waiting for you, full log, none yet | `iUTSx`, `Kd8zD`, `E1zah` |
+| Conversation cards: run_tests, ui_* through mcp, approved by rule, denied, stopped | `C0dcl2` |
+| Tests card: running, passed, lint failed, report unreadable, timed out | `je8z3` |
+| Waiting for service slots in Tasks, the sidebar and the tab badge | `ewA0y` |
+| Loading versions of every screen | `Chf6V` |
 
 ## Phases
 
