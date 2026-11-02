@@ -20,7 +20,8 @@ fn press_until(page: &mut Settings, wanted: bool) {
 #[test]
 fn project_settings_estimates_are_the_projects_and_only_a_person_turns_them_on() {
   let mut page = Settings::new(false);
-  page.until("the estimates row", |p| p.exists(&format!("{SWITCH}-row")));
+  // The switch is a bone until the project's value is read; wait for the switch itself.
+  page.until("the estimates switch", |p| p.exists(SWITCH));
   assert!(page.text("settings-estimates").contains("Estimates"));
   assert!(
     page
@@ -47,7 +48,7 @@ fn project_settings_estimates_show_the_projects_value_not_the_application_settin
   let mut page = Settings::new(false);
   page.db().set_estimates_story_points(true).expect("on for the project");
   page.tab("general", "settings-project-name");
-  page.tab("runs", &format!("{SWITCH}-row"));
+  page.tab("runs", &format!("{SWITCH}-mark"));
   page.until("the project's value shown", |p| p.switch_on(SWITCH));
   assert!(
     !AppDb::open(&page.window.data.database())
