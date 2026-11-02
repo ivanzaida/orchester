@@ -261,6 +261,7 @@ fn said<'a>(item: &'a Item, rendered: Rendered<'_>) -> Vec<Cow<'a, str>> {
     | ItemKind::Step(_)
     | ItemKind::SwitchedToManual(_)
     | ItemKind::Permission(_)
+    | ItemKind::Model(_)
     | ItemKind::End(_) => Vec::new(),
   }
 }

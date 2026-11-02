@@ -135,6 +135,8 @@ pub struct RunView {
   pub attempt_starts: Vec<AttemptStart>,
   /// Its auto-approval, its rules from the wider answers and how its requests were answered.
   pub approvals: RunApprovals,
+  /// Its own model and effort: the changes from its Conversation and the model of its step at work.
+  pub models: super::run_model::RunModels,
   /// Its agents' questions with suggested answers that wait for the person.
   pub waiting_questions: Vec<AskedQuestions>,
   /// The notices that its base branch moved, oldest first (`orchester_core::base_move`).
@@ -474,11 +476,12 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
   let finished_at = finished_at(db, &run)?;
   let worktree_removed = db.worktree_removal(run.id())?;
   let attempt_starts = starts_of(db, &run)?;
-  Ok(RunView {
+  let mut view = RunView {
     attempt_starts,
     first_run,
     group_hold,
     approvals: RunApprovals::read(db, &run)?,
+    models: super::run_model::RunModels::default(),
     waiting_questions: waiting_questions(db, &run)?,
     base_notices: db.run_base_notices(run.id())?,
     accounts: db.invocation_accounts(run.id())?,
@@ -497,7 +500,9 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
     version: pinned.number,
     steps,
     run,
-  })
+  };
+  view.models = super::run_model::RunModels::read(db, &view.run, view.current_step(), &view.invocations)?;
+  Ok(view)
 }
 
 /// `run`'s agents' questions with suggested answers that wait for the person.

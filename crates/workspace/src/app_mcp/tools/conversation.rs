@@ -219,6 +219,7 @@ fn entry(item: &Item, run: Option<&RunView>, link: &str) -> Option<Value> {
     | ItemKind::Approval(_)
     | ItemKind::SwitchedToManual(_)
     | ItemKind::Permission(_)
+    | ItemKind::Model(_)
     | ItemKind::Tools(_)
     | ItemKind::Problem(_) => {
       return None;

@@ -28,6 +28,9 @@ pub(super) fn executed(
   Ok(match executor {
     Some(StepExecutor::Agent { profile, model, .. }) => {
       let (role, reached, permissions) = agent_step(db, run, key, *profile)?;
+      // The model in use now: the run's own for the step once a person chose one (ORC-322), else the profile's.
+      let chosen = db.step_model(run.0.id(), key)?.map(|chosen| chosen.model);
+      let model = chosen.as_ref().unwrap_or(model);
       (role, reached, Some(Arc::<str>::from(model.as_str())), permissions)
     }
     Some(StepExecutor::Tool { tool }) => {

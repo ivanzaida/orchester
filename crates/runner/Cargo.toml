@@ -77,6 +77,10 @@ name = "run_permissions"
 required-features = ["test-agent"]
 
 [[test]]
+name = "run_model"
+required-features = ["test-agent"]
+
+[[test]]
 name = "claude"
 required-features = ["test-agent"]
 

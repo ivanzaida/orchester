@@ -1,0 +1,83 @@
+//! What a run's model chip changed (ORC-322, the event lines of `08f · Model and effort on a run` `Yzb3F`): a quiet line
+//! for each change of the run's model or effort and each cancelation, among the items of the step it was made for —
+//! of its execution whose agent last started before it — or among the items that wait for a step when its agent had
+//! not started yet. A change made while the step's turn runs says it waits, and offers to cancel it, until that turn
+//! ends.
+
+use std::sync::Arc;
+
+use orchester_core::{
+  id::StepExecutionId,
+  resource::StepKey,
+  run::{Answerer, ModelEventKind},
+  time::Timestamp,
+};
+
+use super::{Item, ItemKind};
+use crate::tasks::{detail::RunView, run_model::waiting_change};
+
+/// One change of the run's model or effort, or its cancelation, as its line shows it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ModelLine {
+  pub by: Answerer,
+  /// The step it was made for.
+  pub step: StepKey,
+  pub kind: ModelEventKind,
+  /// The names of the later steps a change for the rest of the run reached too.
+  pub also: Vec<Arc<str>>,
+  /// The change waits for the turn that runs to end: its line offers *Cancel change*.
+  pub waits: bool,
+}
+
+/// The lines of `run`'s model events that belong to `execution` (`None`: to no step).
+pub(super) fn items(run: &RunView, execution: Option<StepExecutionId>) -> Vec<Item> {
+  let events = &run.models.events;
+  let waits = |index: usize, step: &StepKey| {
+    waiting_change(&run.run, &run.invocations, events, step).is_some_and(|(waiting, _)| waiting == index)
+  };
+  events
+    .iter()
+    .enumerate()
+    .filter(|(_, event)| made_in(run, &event.step, event.at) == execution)
+    .map(|(index, event)| Item {
+      key: format!("model-{index}").into(),
+      execution,
+      at: event.at,
+      kind: ItemKind::Model(ModelLine {
+        by: event.by,
+        step: event.step.clone(),
+        kind: event.kind.clone(),
+        also: also_names(run, &event.kind),
+        waits: waits(index, &event.step),
+      }),
+    })
+    .collect()
+}
+
+/// The execution of step `step` whose agent last started at or before `at`.
+fn made_in(run: &RunView, step: &StepKey, at: Timestamp) -> Option<StepExecutionId> {
+  run
+    .invocations
+    .iter()
+    .filter(|invocation| invocation.started_at <= at)
+    .filter(|invocation| {
+      run
+        .run
+        .execution(invocation.execution)
+        .is_some_and(|execution| execution.step() == step)
+    })
+    .max_by_key(|invocation| invocation.started_at)
+    .map(|invocation| invocation.execution)
+}
+
+/// The names of the later steps a change reached too, as the run's pipeline names them.
+fn also_names(run: &RunView, kind: &ModelEventKind) -> Vec<Arc<str>> {
+  let ModelEventKind::Changed { also, .. } = kind else {
+    return Vec::new();
+  };
+  also
+    .iter()
+    .filter_map(|key| run.steps.iter().find(|step| step.key == *key))
+    .map(|step| step.name.clone())
+    .collect()
+}
