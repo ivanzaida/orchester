@@ -5,6 +5,8 @@
 mod appearance;
 #[path = "theme/browser.rs"]
 mod browser;
+#[path = "theme/cards.rs"]
+mod cards;
 #[path = "theme/dialog.rs"]
 mod dialog;
 #[path = "theme/import.rs"]

@@ -14,7 +14,7 @@ use super::{
   super::Place,
   ApprovalView,
   answers::{self, Answering},
-  message, request, review,
+  message_inline, request, review,
 };
 use crate::{
   theme::{CardsSpacing, CardsText, ExtraColor, ExtraSpacing, IconSize},
@@ -55,7 +55,7 @@ pub(super) fn card(
       .into();
   }
   let actions = if editing {
-    message::editor(ctx, answering)
+    message_inline::editor(ctx, answering)
   } else {
     vec![answers::inline_answers(ctx, answering, &view.hint)]
   };

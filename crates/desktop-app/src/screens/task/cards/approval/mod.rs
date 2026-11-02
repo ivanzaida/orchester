@@ -16,6 +16,7 @@ mod answers;
 mod came;
 mod decided;
 mod message;
+mod message_inline;
 mod quiet;
 mod request;
 mod review;

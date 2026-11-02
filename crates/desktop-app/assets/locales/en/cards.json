@@ -157,7 +157,11 @@
         "similar": "Allow similar in this run",
         "everything": "Allow all in this run",
         "deny": "Deny and tell {{agent}}…",
-        "more": "More"
+        "more": "More",
+        "send": "Deny and send",
+        "told": "{{agent}} is told this and goes on; Deny never fails the step",
+        "escape": "Esc",
+        "enter": "Enter"
       },
       "approve": "Approve",
       "moreAnswers": "More answers",

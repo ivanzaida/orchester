@@ -50,10 +50,12 @@ pub enum CardsText {
   Review,
   /// Mono 11.5 primary, 1.4: decision probability chips (`B0Cmn`, `QkBOi`).
   Probability,
+  /// 13 primary, 1.5: the denial message in 06b (cxLoV).
+  DenialMessage,
 }
 
 impl CardsText {
-  pub const ALL: [Self; 15] = [
+  pub const ALL: [Self; 16] = [
     Self::Title,
     Self::ApprovalTitle,
     Self::PlanLines,
@@ -69,6 +71,7 @@ impl CardsText {
     Self::Command,
     Self::Review,
     Self::Probability,
+    Self::DenialMessage,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -98,6 +101,7 @@ impl CardsText {
       Self::Command => "cards_command",
       Self::Review => "cards_review",
       Self::Probability => "cards_probability",
+      Self::DenialMessage => "cards_denial_message",
     }
   }
 
@@ -118,6 +122,7 @@ impl CardsText {
       Self::Command => mono(style(12.0, FontWeight::Normal, 1.5, 0.0, palette.text_primary)),
       Self::Review => style(12.5, FontWeight::Normal, 1.4, 0.0, palette.text_secondary),
       Self::Probability => mono(style(11.5, FontWeight::Normal, 1.4, 0.0, palette.text_primary)),
+      Self::DenialMessage => style(13.0, FontWeight::Normal, 1.5, 0.0, palette.text_primary),
     }
   }
 }

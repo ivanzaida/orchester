@@ -61,7 +61,7 @@ pub(super) fn editor(ctx: &mut Ctx, answering: &Answering<'_>) -> Vec<Element> {
     .child(note_label(ctx, answering))
     .child(field(ctx, answering, note.as_ref().err()))
     .child(told(ctx, answering, note.as_ref().ok()))
-    .on_key_down(keys(answering, send.clone()));
+    .on_key_down(keys(answering, send.clone(), false));
   let back = {
     let button = ActionButton::new(
       format!("{id}-message-back"),
@@ -182,10 +182,11 @@ fn send_keys(ctx: &Ctx) -> std::sync::Arc<str> {
   })
 }
 
-/// In the field, Ctrl+Enter (or ⌘ Enter) sends while it can be sent and Esc goes back to the answers.
-fn keys(
+/// Esc returns to the answers; Enter sends in 06b, Ctrl+Enter (or ⌘ Enter) in the older editor.
+pub(super) fn keys(
   answering: &Answering<'_>,
   send: Option<impl Fn() + Send + Sync + 'static>,
+  plain_enter: bool,
 ) -> impl Fn(KeyboardEvent) + Send + Sync + 'static {
   let (field, editing) = (answering.field.clone(), answering.editing.clone());
   move |event: KeyboardEvent| {
@@ -197,7 +198,7 @@ fn keys(
       editing.set(false);
       return;
     }
-    if event.key != "Enter" || !(event.ctrl || event.meta) {
+    if event.key != "Enter" || !(plain_enter || event.ctrl || event.meta) || (plain_enter && event.shift) {
       return;
     }
     event.prevent_default();

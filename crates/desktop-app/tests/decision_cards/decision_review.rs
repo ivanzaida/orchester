@@ -228,3 +228,82 @@ fn card_decision_review_shortcuts_leave_typing_in_the_composer_alone() {
     assert!(window.tree.get_element_by_id(&format!("{card}-approve")).is_some());
   }
 }
+
+#[test]
+fn card_decision_review_denial_editor_keeps_controls_inside_the_compact_field() {
+  let (mut window, card, _) = opened_in("cards-auto-mode", "Merge the base branch", "cards-approval-");
+  window.until("review answers", |window| {
+    window.tree.get_element_by_id(&format!("{card}-deny-message")).is_some()
+  });
+  click(&mut window, &format!("{card}-deny-message"));
+  window.until("denial field", |window| {
+    window.tree.get_element_by_id(&format!("{card}-message")).is_some()
+  });
+  assert_eq!(text(&mut window, &format!("{card}-message-back")), "Back Esc");
+  assert_eq!(
+    text(&mut window, &format!("{card}-message-send")),
+    "Deny and send Enter"
+  );
+  assert_eq!(
+    text(&mut window, &format!("{card}-message-told")),
+    "Builder is told this and goes on; Deny never fails the step"
+  );
+  for absent in ["message-label", "message-keys", "approve"] {
+    assert!(window.tree.get_element_by_id(&format!("{card}-{absent}")).is_none());
+  }
+  let block = laid_out(&mut window, &format!("{card}-message-block"));
+  let input = laid_out(&mut window, &format!("{card}-message"));
+  let back = laid_out(&mut window, &format!("{card}-message-back"));
+  let send = laid_out(&mut window, &format!("{card}-message-send"));
+  assert!(block.height < 100.0, "one-line editor stays compact: {block:?}");
+  assert!(input.y < back.y && back.y == send.y);
+  assert!(send.y + send.height <= block.y + block.height);
+  window
+    .tree
+    .key_down("Escape".to_owned(), "Escape".to_owned(), false, false, false);
+  window.pass();
+  window.pass();
+  assert!(window.tree.get_element_by_id(&format!("{card}-message")).is_none());
+}
+
+#[test]
+fn card_decision_review_denial_enter_sends_but_preserves_the_person_only_guard() {
+  let (mut window, card, _) = opened_in("cards-auto-mode", "Merge the base branch", "cards-approval-");
+  window.until("review answers", |window| {
+    window.tree.get_element_by_id(&format!("{card}-deny-message")).is_some()
+  });
+  click(&mut window, &format!("{card}-deny-message"));
+  window.until("denial field", |window| {
+    window.tree.get_element_by_id(&format!("{card}-message")).is_some()
+  });
+  let words = "Keep the reviewed branch.";
+  window
+    .tree
+    .get_element_by_id_mut(&format!("{card}-message"))
+    .and_then(|element| element.as_text_input())
+    .expect("message field")
+    .set_value(words);
+  window.pass();
+  window.pass();
+  lurq::app::events::with_synthetic_input(|| {
+    window
+      .tree
+      .key_down("Enter".to_owned(), "Enter".to_owned(), false, false, false);
+  });
+  window.pass();
+  window.until("person-only refusal", |window| {
+    window.tree.get_element_by_id(&format!("{card}-refused")).is_some()
+  });
+  assert!(text(&mut window, &format!("{card}-refused")).contains("Only a person"));
+  assert_eq!(
+    window.texts(&format!("{card}-message")).unwrap_or_default().join(""),
+    words
+  );
+  window
+    .tree
+    .key_down("Enter".to_owned(), "Enter".to_owned(), false, false, false);
+  window.pass();
+  window.until("runner refusal", |window| {
+    !text(window, &format!("{card}-refused")).contains("Only a person")
+  });
+}
