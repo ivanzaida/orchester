@@ -1,5 +1,7 @@
 //! Edit uses the Connection fields of 01 XMNUP and 01b z3G09h, without the separate Add flow.
 mod actions;
+use std::sync::OnceLock;
+
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
@@ -36,7 +38,7 @@ impl DevtoolsInspectable for Props {}
 
 pub(super) struct DecisionEditor {
   fields: super::form::DecisionForm,
-  seeded: Signal<bool>,
+  original: OnceLock<DecisionConnection>,
   work: actions::Action,
   refused: Signal<bool>,
   checking: Signal<bool>,
@@ -53,7 +55,7 @@ impl Component for DecisionEditor {
     });
     Self {
       fields: super::form::DecisionForm::new(ctx),
-      seeded: ctx.signal(false),
+      original: OnceLock::new(),
       work,
       refused: ctx.signal(false),
       checking: ctx.signal(false),
@@ -61,10 +63,10 @@ impl Component for DecisionEditor {
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>().clone();
-    if !self.seeded.get_untracked() {
-      self.seeded.set(true);
+    self.original.get_or_init(|| {
       self.fields.seed(&props.connection);
-    }
+      props.connection.clone()
+    });
     let mut rows = self.fields.rows(ctx, &props.listed);
     rows.push(self.models(ctx, &props));
     let close = props.close.clone();

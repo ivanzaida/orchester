@@ -56,6 +56,7 @@ pub(super) struct DecisionPage {
   deleting: Signal<bool>,
   checking: Signal<bool>,
   editing: Signal<bool>,
+  read_failed: Signal<bool>,
 }
 
 impl Component for DecisionPage {
@@ -86,6 +87,7 @@ impl Component for DecisionPage {
       deleting: ctx.signal(false),
       checking: ctx.signal(false),
       editing: ctx.signal(false),
+      read_failed: ctx.signal(false),
     }
   }
 
@@ -94,14 +96,20 @@ impl Component for DecisionPage {
     let outside = props.project.feed.outside.get();
     let revision = self.revision.get() + outside.of(Outside::Connections) + outside.of(Outside::AutoMode);
     let loaded = read::load(ctx, props.project.open.repo_root.clone(), props.connection, revision);
+    if let Some(error) = &loaded.error {
+      if !self.read_failed.get_untracked() {
+        self.read_failed.set(true);
+      }
+      return kit::scroll(self.failed(ctx, error));
+    }
+    if self.read_failed.get() {
+      if !loaded.is_fulfilled() {
+        return kit::scroll(Text::new(&ctx.t("connections.reading")));
+      }
+      self.read_failed.set(false);
+    }
     let Some(read) = loaded.data else {
-      return kit::scroll(
-        if let Some(error) = loaded.error.as_ref().filter(|_| !loaded.is_pending()) {
-          self.failed(ctx, error)
-        } else {
-          Text::new(&ctx.t("connections.reading")).into()
-        },
-      );
+      return kit::scroll(Text::new(&ctx.t("connections.reading")));
     };
     let Some(connection) = &read.connection else {
       let open = Navigation::of(ctx).to(Route::Project(
@@ -130,11 +138,6 @@ impl Component for DecisionPage {
       );
     }
     let content = self.page(ctx, &props, &read, connection);
-    let content = if let Some(error) = &loaded.error {
-      Column::new().child(self.failed(ctx, error)).child(content).into()
-    } else {
-      content
-    };
     let dialog = self.delete_dialog(ctx, &props, &read, connection);
     Column::new()
       .width(Dimension::Pct(100.0))

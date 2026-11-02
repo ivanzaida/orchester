@@ -1030,6 +1030,7 @@
   "connections": {
     "errors": {
       "decisionCheckStale": "The server or key changed while the check ran. Check again to read the current server.",
+      "decisionEditStale": "This connection changed while you were editing it. Cancel and open Edit connection again to use the current settings.",
       "decisionKeyUnavailable": "The connection’s project secret is missing or archived. Edit the connection to choose an available key.",
       "decisionClientUnavailable": "Orchester could not start the connection check. Try again.",
       "decisionPersonOnly": "Only a person can save a hosted decision connection or check a changed server off this computer.",

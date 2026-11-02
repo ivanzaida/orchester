@@ -178,6 +178,7 @@ fn failure(error: DecisionError) -> ToolError {
     DecisionError::Store(error) => error.into(),
     DecisionError::PersonOnly => ToolError::refused("person_only", vec![Message::new("appMcp.errors.personOnly")]),
     DecisionError::CheckStale => invalid("check_stale"),
+    DecisionError::EditStale => invalid("edit_stale"),
     DecisionError::KeyUnavailable => invalid("secret_not_found"),
     DecisionError::ClientUnavailable => invalid("check_unavailable"),
   }

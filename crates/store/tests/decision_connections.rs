@@ -229,3 +229,46 @@ fn decision_connections_check_save_refuses_interleaved_edits() {
     assert_eq!(db.decision_connection(original.id()).expect("read"), Some(fresh));
   }
 }
+
+#[test]
+fn decision_connections_edit_save_atomically_refuses_interleaved_settings_and_name_changes() {
+  let (repo, mut db) = fixture();
+  let original = connection();
+  db.create_decision_connection(&original).expect("add");
+  let mut other = ProjectDb::open(repo.path()).expect("other writer");
+  for change in 0..4 {
+    let expected = db
+      .decision_connection(original.id())
+      .expect("read")
+      .expect("connection");
+    let mut edited = expected.clone();
+    edited.rename(name("My rename"));
+    let mut concurrent = expected.clone();
+    match change {
+      0 => concurrent.rename(name("Outside rename")),
+      1 => concurrent.set_server(
+        DecisionServerUrl::new("https://changed.example/v1").expect("url"),
+        expected.key(),
+      ),
+      2 => concurrent.set_server(expected.base_url().clone(), Some(SecretId::generate())),
+      _ => concurrent.record_models(vec![ModelId::new("new-model").expect("model")]),
+    }
+    other.save_decision_connection(&concurrent).expect("concurrent edit");
+    assert!(
+      !db
+        .save_decision_connection_if_unchanged(&expected, &edited)
+        .expect("conditional save")
+    );
+    assert_eq!(
+      db.decision_connection(original.id()).expect("read"),
+      Some(concurrent.clone())
+    );
+    let mut fresh = concurrent.clone();
+    fresh.rename(name("Fresh rename"));
+    assert!(
+      db.save_decision_connection_if_unchanged(&concurrent, &fresh)
+        .expect("fresh save")
+    );
+    assert_eq!(db.decision_connection(original.id()).expect("read"), Some(fresh));
+  }
+}

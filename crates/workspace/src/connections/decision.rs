@@ -43,6 +43,8 @@ pub enum DecisionError {
   PersonOnly,
   #[error("the decision connection changed while its check ran")]
   CheckStale,
+  #[error("the decision connection changed while it was being edited")]
+  EditStale,
   #[error("the decision connection's key is missing or archived")]
   KeyUnavailable,
   #[error("the model-list HTTP client could not be initialized")]
@@ -57,6 +59,7 @@ impl DecisionError {
       Self::Store(error) => messages::store_error(error),
       Self::PersonOnly => Message::new("connections.errors.decisionPersonOnly"),
       Self::CheckStale => Message::new("connections.errors.decisionCheckStale"),
+      Self::EditStale => Message::new("connections.errors.decisionEditStale"),
       Self::KeyUnavailable => Message::new("connections.errors.decisionKeyUnavailable"),
       Self::ClientUnavailable => Message::new("connections.errors.decisionClientUnavailable"),
     }

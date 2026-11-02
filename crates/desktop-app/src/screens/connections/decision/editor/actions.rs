@@ -38,6 +38,7 @@ pub(super) struct Start {
   writer: Writer,
   save: bool,
   revision: u64,
+  expected: Option<DecisionConnection>,
 }
 #[derive(Clone, PartialEq, Eq)]
 pub(super) enum Done {
@@ -72,6 +73,7 @@ pub(super) fn action(ctx: &mut Ctx) -> Action {
         writer,
         save,
         revision,
+        expected,
       } = start;
       let spec = if save {
         operations::connection_save(&open, draft.name.as_str())
@@ -83,7 +85,14 @@ pub(super) fn action(ctx: &mut Ctx) -> Action {
         .track(spec, async {
           if save {
             background::run(move || {
-              decision::save_with_key_in(&root, vault.get(), &draft, key.as_ref(), value, writer)
+              decision::save_with_key_in(
+                &root,
+                vault.get(),
+                &draft,
+                (key.as_ref(), value),
+                writer,
+                expected.as_ref(),
+              )
             })
             .await??;
             changes.record(open.project.id(), Outside::Connections);
@@ -144,6 +153,7 @@ impl DecisionEditor {
         },
         save: false,
         revision,
+        expected: None,
       })
     })
   }
@@ -180,6 +190,7 @@ impl DecisionEditor {
       );
       let gate = ctx.use_context::<InputGate>();
       let checking = self.checking.clone();
+      let expected = self.original.get().cloned();
       save.on_click(move || {
         let synthetic = lurq::app::events::is_synthetic_input();
         // Hosted decision connections are strictly person-only, even with automation consent.
@@ -199,6 +210,7 @@ impl DecisionEditor {
           writer: if synthetic { Writer::Automation } else { Writer::Person },
           save: true,
           revision: 0,
+          expected: expected.clone(),
         });
       })
     } else {

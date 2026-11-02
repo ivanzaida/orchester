@@ -61,9 +61,12 @@ fn decision_connections_edit_hosted_changes_are_person_only_before_secret_creati
       repo.path(),
       &Vault { available: true },
       &edit,
-      Some(&new_key()),
-      Some(SecretValue::new(TEST_KEY.to_owned()).expect("synthetic")),
-      Writer::Automation
+      (
+        Some(&new_key()),
+        Some(SecretValue::new(TEST_KEY.to_owned()).expect("synthetic"))
+      ),
+      Writer::Automation,
+      None
     )
     .is_err()
   );
@@ -72,9 +75,12 @@ fn decision_connections_edit_hosted_changes_are_person_only_before_secret_creati
     repo.path(),
     &Vault { available: true },
     &edit,
-    Some(&new_key()),
-    Some(SecretValue::new(TEST_KEY.to_owned()).expect("synthetic")),
+    (
+      Some(&new_key()),
+      Some(SecretValue::new(TEST_KEY.to_owned()).expect("synthetic")),
+    ),
     Writer::Person,
+    None,
   )
   .expect("person saves");
   assert_eq!(db.secrets().expect("secrets").len(), 1);
@@ -97,9 +103,12 @@ fn decision_connections_edit_secret_creation_rolls_back_on_connection_failure() 
       repo.path(),
       &Vault { available: true },
       &original,
-      Some(&new_key()),
-      Some(SecretValue::new(TEST_KEY.to_owned()).expect("synthetic")),
-      Writer::Person
+      (
+        Some(&new_key()),
+        Some(SecretValue::new(TEST_KEY.to_owned()).expect("synthetic"))
+      ),
+      Writer::Person,
+      None
     )
     .is_err()
   );
@@ -132,4 +141,45 @@ async fn decision_connections_edit_automation_cannot_send_a_key_to_an_unsaved_ho
       .as_str(),
     "http://127.0.0.1:1/v1"
   );
+}
+
+#[test]
+fn decision_connections_edit_rejects_stale_form_without_creating_secret_or_changing_new_settings() {
+  let (repo, mut db) = project();
+  let mut form = draft("http://127.0.0.1:1/v1");
+  let id = save_in(repo.path(), &form, Writer::Person).expect("original");
+  let expected = db.decision_connection(id).expect("read").expect("original");
+  form.id = Some(id);
+  form.name = Name::new("My rename").expect("name");
+  let mut concurrent = expected.clone();
+  concurrent.set_server(DecisionServerUrl::new("http://127.0.0.1:2/v1").expect("url"), None);
+  concurrent.record_models(vec![model("new-model")]);
+  db.save_decision_connection(&concurrent).expect("outside edit");
+  let result = save_with_key_in(
+    repo.path(),
+    &Vault { available: true },
+    &form,
+    (
+      Some(&new_key()),
+      Some(SecretValue::new(TEST_KEY.to_owned()).expect("synthetic")),
+    ),
+    Writer::Person,
+    Some(&expected),
+  );
+  assert_eq!(result, Err(DecisionError::EditStale.message()));
+  assert_eq!(db.decision_connection(id).expect("read"), Some(concurrent.clone()));
+  assert!(db.secrets().expect("secrets").is_empty());
+  form.base_url = concurrent.base_url().clone();
+  save_with_key_in(
+    repo.path(),
+    &Vault { available: true },
+    &form,
+    (None, None),
+    Writer::Person,
+    Some(&concurrent),
+  )
+  .expect("fresh edit saves");
+  let saved = db.decision_connection(id).expect("read").expect("saved");
+  assert_eq!(saved.name(), &form.name);
+  assert_eq!(saved.models(), concurrent.models());
 }

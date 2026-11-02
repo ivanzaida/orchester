@@ -102,6 +102,28 @@ impl ProjectDb {
     Ok(changed != 0)
   }
 
+  /// Saves an edit only while the displayed version still matches, under the same write lock.
+  pub fn save_decision_connection_if_unchanged(
+    &mut self,
+    expected: &DecisionConnection,
+    edited: &DecisionConnection,
+  ) -> Result<bool, StoreError> {
+    let transaction = self.connection.transaction()?;
+    ensure_name_free(&transaction, edited)?;
+    let changed = transaction.execute(
+      "UPDATE decision_connections SET name = ?1, settings = ?2 WHERE id = ?3 AND name = ?4 AND settings = ?5",
+      params![
+        edited.name().as_str(),
+        encode_json(WHAT, SCHEMA, &Settings::of(edited))?,
+        expected.id().to_string(),
+        expected.name().as_str(),
+        encode_json(WHAT, SCHEMA, &Settings::of(expected))?
+      ],
+    )?;
+    transaction.commit()?;
+    Ok(changed != 0)
+  }
+
   pub fn decision_connection(&self, id: DecisionConnectionId) -> Result<Option<DecisionConnection>, StoreError> {
     Ok(load(&self.connection, "WHERE id = ?1", [id.to_string()])?.pop())
   }

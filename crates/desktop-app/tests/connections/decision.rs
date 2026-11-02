@@ -177,3 +177,53 @@ fn connections_decision_route_roundtrips_and_rejects_two_selected_kinds() {
   .expect("navigate to a decision connection");
   assert_eq!(state["route"]["params"]["decision"], id.to_string());
 }
+
+#[test]
+fn connections_decision_rejected_reread_hides_stale_actions_until_successful_retry() {
+  let mut seeded = Seeded::new("connections");
+  let connection = connection(&seeded, DecisionCheckResult::Connected);
+  open(&mut seeded, connection.id());
+  seeded.click("decision-more");
+  seeded.click("decision-delete");
+  let raw = rusqlite::Connection::open(seeded.repo.join(".orchester/orchester.db")).expect("fixture");
+  let settings: String = raw
+    .query_row(
+      "SELECT settings FROM decision_connections WHERE id = ?1",
+      [connection.id().to_string()],
+      |row| row.get(0),
+    )
+    .expect("settings");
+  raw
+    .execute(
+      "UPDATE decision_connections SET settings = 'broken' WHERE id = ?1",
+      [connection.id().to_string()],
+    )
+    .expect("damage disposable fixture");
+  seeded
+    .window
+    .projects()
+    .feed(seeded.project)
+    .outside
+    .update(|counts| counts.connections += 1);
+  seeded.until("failed re-read", |s| s.exists("decision-load-error"));
+  for id in [
+    "decision-check",
+    "decision-more",
+    "decision-editor",
+    "decision-delete-confirm",
+    "decision-refresh",
+  ] {
+    assert!(!seeded.exists(id), "{id} must not act on unreadable data");
+  }
+  seeded.click("decision-load-error-retry");
+  assert!(!seeded.exists("decision-check"), "retry must not expose retained data");
+  seeded.until("failed retry", |s| s.exists("decision-load-error"));
+  raw
+    .execute(
+      "UPDATE decision_connections SET settings = ?1 WHERE id = ?2",
+      rusqlite::params![settings, connection.id().to_string()],
+    )
+    .expect("repair fixture");
+  seeded.click("decision-load-error-retry");
+  seeded.until("successful read", |s| s.exists("decision-check"));
+}

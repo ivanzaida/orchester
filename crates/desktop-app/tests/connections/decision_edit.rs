@@ -184,3 +184,46 @@ fn connections_decision_edit_draft_check_refuses_an_unsaved_hosted_destination()
     connection.base_url()
   );
 }
+
+#[test]
+fn connections_decision_edit_rejects_concurrent_server_changes_from_originally_displayed_version() {
+  let mut seeded = Seeded::new("connections");
+  let mut connection = connection(&seeded, orchester_core::connection::DecisionCheckResult::Connected);
+  open(&mut seeded, connection.id());
+  edit(&mut seeded);
+  seeded.set("decision-edit-name", "My rename");
+  connection.set_server(
+    orchester_core::connection::DecisionServerUrl::new("http://127.0.0.1:2/v1").expect("url"),
+    None,
+  );
+  connection.record_models(vec![
+    orchester_core::resource::ModelId::new("new-model").expect("model"),
+  ]);
+  seeded
+    .db()
+    .save_decision_connection(&connection)
+    .expect("concurrent edit");
+  seeded
+    .window
+    .projects()
+    .feed(seeded.project)
+    .outside
+    .update(|counts| counts.connections += 1);
+  seeded.until("updated props", |s| {
+    !s.text("decision-edit-models-row").contains("jev-latest")
+  });
+  seeded.click("decision-edit-save");
+  seeded.until("conflict shown", |s| {
+    s.text("decision-edit-actions")
+      .contains("changed while you were editing")
+  });
+  assert!(seeded.exists("decision-editor"));
+  assert_eq!(
+    seeded.db().decision_connection(connection.id()).expect("read"),
+    Some(connection)
+  );
+  seeded.click("decision-edit-cancel");
+  seeded.until("current page", |s| {
+    s.exists("decision-url-value") && s.text("decision-url-value").contains("127.0.0.1:2")
+  });
+}
