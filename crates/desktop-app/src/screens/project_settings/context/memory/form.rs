@@ -27,7 +27,13 @@ use orchester_workspace::{
   messages::{self, Message},
 };
 
-use crate::project::ShownProject;
+use crate::{
+  project::ShownProject,
+  queries::{
+    Session,
+    changes::{self, ProjectRead},
+  },
+};
 
 /// Settings a save asked for or stored.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -96,7 +102,7 @@ pub(crate) struct MemoryForm {
 }
 
 impl MemoryForm {
-  /// The form of `project`'s memory settings; each save the project's screens read again.
+  /// The form of `project`'s memory settings; each save the project's screens read again, and the settings' query.
   pub(crate) fn new(ctx: &mut Ctx, project: &ShownProject) -> Self {
     let form = Self {
       records: ctx.signal(String::new()),
@@ -113,6 +119,7 @@ impl MemoryForm {
       repo: project.open.repo_root.clone(),
     };
     let (after, feed) = (form.clone(), project.feed.clone());
+    let (client, session) = (ctx.query_client(), Session::of(ctx));
     ctx.watch(&form.save.state(), move |state| {
       if state.is_pending() || state.error.is_some() {
         return;
@@ -120,6 +127,7 @@ impl MemoryForm {
       if let Some(Kept(saved)) = state.data {
         after.saved(saved);
         feed.saved();
+        changes::invalidate(&client, &session, &after.repo, ProjectRead::Memory);
       }
     });
     // A select's choice is taken in its handler, so who chose is read while the input is delivered.

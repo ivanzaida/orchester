@@ -42,11 +42,13 @@ fn project_settings_estimates_are_the_projects_and_only_a_person_turns_them_on()
   );
 }
 
-/// The row shows the project's own value, whatever the application-wide setting it moved from says.
+/// The row shows the project's own value, whatever the application-wide setting it moved from says; a change counted
+/// for the project (as the workspace's writer counts one) reads it again.
 #[test]
 fn project_settings_estimates_show_the_projects_value_not_the_application_setting() {
   let mut page = Settings::new(false);
   page.db().set_estimates_story_points(true).expect("on for the project");
+  page.outside(orchester_workspace::tasks::outside::Outside::Estimates);
   page.tab("general", "settings-project-name");
   page.tab("runs", &format!("{SWITCH}-mark"));
   page.until("the project's value shown", |p| p.switch_on(SWITCH));

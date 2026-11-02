@@ -9,6 +9,8 @@
 mod confirm;
 mod rows;
 
+use std::path::PathBuf;
+
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
@@ -25,6 +27,7 @@ use orchester_workspace::{background, sharing::sync::Here};
 
 use crate::{
   project::ShownProject,
+  queries::{Again, Session},
   screens::{
     hub::parts::note,
     project_settings::kit::Group,
@@ -38,12 +41,6 @@ use crate::{
 
 /// A connection bound from a picker, which only a person chooses.
 const PICKED: &str = "sharing-bindings-picked";
-
-/// What this computer has of the project's references, as read.
-#[derive(Clone, Debug, PartialEq)]
-struct Read(Here);
-
-impl DevtoolsInspectable for Read {}
 
 /// An MCP server or a secret the person is asked to bind, unbound as it is now, with its name and who needs it.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -65,6 +62,7 @@ impl DevtoolsInspectable for Props {}
 pub(super) struct OnThisComputer {
   /// Counts the bindings made here, each of which reads the references again.
   done: Signal<u64>,
+  again: Again,
   bind: FutureAction<BoundReference, (), Said>,
   person: PersonOnly,
   asking: Signal<Option<Ask>>,
@@ -83,6 +81,7 @@ impl Component for OnThisComputer {
     Self {
       bind: bind_action(ctx, root, done.clone()),
       done,
+      again: Again::live(),
       person: PersonOnly::new(ctx),
       asking: ctx.signal(None),
       open: ctx.signal(false),
@@ -94,27 +93,30 @@ impl Component for OnThisComputer {
     let props = ctx.props::<Props>().clone();
     let services = Services::of(ctx);
     let revision = follow_shared(ctx, &services.servers) + self.done.get();
-    let state = ctx
-      .future((props.project.open.repo_root, revision), |(root, _)| async move {
-        background::run(move || Here::read(&root))
-          .await
-          .map_err(|_| Said::new("cloud.errors.local"))?
-          .map(Read)
-          .map_err(|error| crate::screens::settings::orchester::sharing_said(&error))
-      })
-      .state()
-      .get();
+    // Through its query: a visit after the first shows the last read at once, read again behind it, at each change of
+    // the shared projects and after each binding made here.
+    let query = ctx.query(references_here(Session(services), props.project.open.repo_root));
+    self.again.follow(revision, &query);
     let column = Column::new().id("sharing-bindings").width(Dimension::Pct(100.0));
     // A failed re-read keeps the last data; the section then says so instead of staying answerable as if current.
-    let shown: Element = match (state.data, state.error) {
+    let shown: Element = match (query.data(), query.error()) {
       (_, Some(reason)) => column
         .child(field_error("sharing-bindings-unread", &reason.text(ctx)))
         .into(),
-      (Some(Read(here)), None) if !here.references.is_empty() => self.section(ctx, &here),
+      (Some(here), None) if !here.references.is_empty() => self.section(ctx, &here),
       _ => column.into(),
     };
     shown
   }
+}
+
+/// What this computer has of the project's references at `root`: live, since the team's versions change on the server.
+#[lurq::query(stale_time = "0s", gc_time = "24h")]
+async fn references_here(_session: Session, root: PathBuf) -> Result<Here, Said> {
+  background::run(move || Here::read(&root))
+    .await
+    .map_err(|_| Said::new("cloud.errors.local"))?
+    .map_err(|error| crate::screens::settings::orchester::sharing_said(&error))
 }
 
 impl OnThisComputer {

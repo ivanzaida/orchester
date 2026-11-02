@@ -195,8 +195,10 @@ fn secrets_external_connection_edits_refresh_used_by_in_place() {
   });
 }
 
+/// A visit after the first shows the secrets read before at once, with no skeleton, while they are read again behind
+/// them; here that read is held, as QA holds reads, and released.
 #[test]
-fn secrets_loading_can_be_held_then_released() {
+fn secrets_a_visit_after_the_first_shows_the_list_while_it_is_read_again() {
   use orchester_app::routes::{ProjectPage, Route};
   let mut s = Secrets::new();
   s.list();
@@ -210,9 +212,16 @@ fn secrets_loading_can_be_held_then_released() {
     super::support::project_id(),
     ProjectPage::Secrets(Default::default()),
   ));
-  s.until("held read", |s| s.exists("secrets-loading"));
-  // While the secrets are read the toolbar works over their bones (`12 · Project settings · Secrets · loading`).
-  assert!(s.exists("secrets-add"), "Add secret works while the secrets are read");
+  s.window.pass();
+  assert!(
+    s.exists("secrets-empty"),
+    "the list read before shows in the first frame"
+  );
+  assert!(!s.exists("secrets-loading"), "no skeleton after the first read");
+  assert!(
+    s.exists("secrets-add"),
+    "Add secret works while the secrets are read again"
+  );
   hold.set(false);
   s.until("released read", |s| s.exists("secrets-empty"));
 }

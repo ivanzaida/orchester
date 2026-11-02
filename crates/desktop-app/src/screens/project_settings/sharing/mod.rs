@@ -15,6 +15,8 @@ mod make_local;
 mod members;
 mod upload;
 
+use std::path::PathBuf;
+
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
@@ -49,6 +51,7 @@ use super::{
   page,
 };
 use crate::{
+  queries::{Again, Session},
   screens::settings::orchester::{Said, follow, follow_shared},
   services::Services,
   theme::{ExtraSpacing, IconSize, ProjectSettingsText},
@@ -101,6 +104,7 @@ impl Facts {
 pub(super) struct Sharing {
   /// Counts *Try again*, a link and a leave, each of which reads the tab again.
   revision: Signal<u64>,
+  again: Again,
   /// What *Make local* did, said over the local page until the person dismisses it.
   made_local: Signal<make_local::Made>,
   /// Opened for *Make local*'s question, the page scrolls to it once it shows.
@@ -122,6 +126,7 @@ impl Component for Sharing {
     });
     Self {
       revision: ctx.signal(0),
+      again: Again::live(),
       made_local,
       scroll,
       scrolled: ctx.signal(false),
@@ -133,23 +138,15 @@ impl Component for Sharing {
     let services = Services::of(ctx);
     let revision =
       follow(ctx, (&services.servers, &services.cloud)) + follow_shared(ctx, &services.servers) + self.revision.get();
-    let root = props.project.open.repo_root.clone();
-    let workspace = services.workspace.clone();
-    let state = ctx
-      .future(
-        (revision, root, services.servers.clone(), services.programs.clone()),
-        move |(_, root, servers, programs)| {
-          let workspace = workspace.clone();
-          async move {
-            background::run(move || read((&servers, &workspace), &programs, &root))
-              .await
-              .map_err(|_| Said::new("cloud.errors.local"))?
-          }
-        },
-      )
-      .state()
-      .get();
-    let content = match (state.data, state.error) {
+    // Through its query: live, so a visit after the first shows the last read at once and reads it again behind it,
+    // as does each change of the servers, the cloud account and the shared projects, a link and a leave.
+    let query = ctx.query(facts(Session(services), props.project.open.repo_root.clone()));
+    self.again.follow(revision, &query);
+    let state = (
+      query.data().map(|facts| Facts::clone(&facts)),
+      query.error().map(|said| Said::clone(&said)),
+    );
+    let content = match state {
       (Some(facts), _) if facts.link.is_some() => {
         if props.make_local && !self.scrolled.get() {
           // Make local is the page's last part: its question is at the bottom.
@@ -213,6 +210,16 @@ fn bones(ctx: &mut Ctx) -> Element {
     .row(local)
     .row(share)
     .into()
+}
+
+/// What the tab shows of the project at `root`: live, since it asks the checkout's `origin` and the servers' list.
+#[lurq::query(stale_time = "0s", gc_time = "24h")]
+async fn facts(session: Session, root: PathBuf) -> Result<Facts, Said> {
+  let Session(services) = session;
+  let (servers, workspace, programs) = (services.servers, services.workspace, services.programs);
+  background::run(move || read((&servers, &workspace), &programs, &root))
+    .await
+    .map_err(|_| Said::new("cloud.errors.local"))?
 }
 
 fn read(

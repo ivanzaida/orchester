@@ -19,7 +19,7 @@
 use lurq::{
   app::{
     component::Component,
-    ctx::{Ctx, FutureAction, FutureState},
+    ctx::{Ctx, FutureAction},
     events::{InputSource, input_source},
   },
   components::Row,
@@ -43,7 +43,7 @@ use crate::{
     McpSettings,
     input_gate::{Guarded, InputGate, Protected},
   },
-  services::Services,
+  queries::{self, Session, app},
   ui::{
     field::field_error,
     icon::Icon,
@@ -56,7 +56,7 @@ use crate::{
 };
 
 /// A consent of what automation may do.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Consent {
   /// *Agents can control this window*: what the app takes when it starts next.
   WindowControl,
@@ -79,6 +79,7 @@ struct Words {
 }
 
 impl Consent {
+  pub(crate) const ALL: [Self; 3] = [Self::WindowControl, Self::AnswerApprovals, Self::ChangePermissions];
   /// The switch's element id, which its row's parts extend.
   const fn id(self) -> &'static str {
     match self {
@@ -118,7 +119,7 @@ impl Consent {
   }
 
   /// Its name in the developer log.
-  const fn logged(self) -> &'static str {
+  pub(crate) const fn logged(self) -> &'static str {
     match self {
       Self::WindowControl => "Agents can control this window",
       Self::AnswerApprovals => "Let automation answer approvals",
@@ -127,7 +128,7 @@ impl Consent {
   }
 
   /// Reads it: for window control, what the next start takes. Blocks on SQLite.
-  fn read(self, workspace: &Workspace) -> Result<bool, StoreError> {
+  pub(crate) fn read(self, workspace: &Workspace) -> Result<bool, StoreError> {
     match self {
       Self::WindowControl => workspace.mcp_window_control().map(McpSettings::next_start),
       Self::AnswerApprovals => workspace.automation_answers_approvals(),
@@ -205,13 +206,16 @@ impl Component for ConsentRow {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let consent = *ctx.props::<Consent>();
     let (id, words) = (consent.id(), consent.words());
-    let workspace = Services::of(ctx).workspace;
-    // Hooks in the same order on every render: the action, then the read, which follows each save.
-    let save = save_action(ctx, &workspace, consent);
+    let session = Session::of(ctx);
+    let workspace = session.0.workspace.clone();
+    // Hooks in the same order on every render: the action, then the read, which each save invalidates.
+    let save = save_action(ctx, &session, consent);
     let state = save.state().get();
-    let read = stored(ctx, &workspace, (consent, state.data));
+    let read = queries::state(&ctx.query(app::automation_consent(session, consent)));
     let fixed = state.is_pending() || read.is_pending();
-    // The person's choice once it saved; the stored value until then, or after a save failed.
+    // The person's choice until the stored value is it again; the stored value until they choose, or once a save
+    // failed.
+    queries::settle(&self.saved, read.data.as_ref(), state.is_pending());
     let shown = match (&state.error, self.saved.get()) {
       (None, Some(chosen)) => Some(chosen),
       _ => read.data,
@@ -229,7 +233,7 @@ impl Component for ConsentRow {
     let switch = Toggle::new(id, ToggleKind::Switch, shown.unwrap_or(false), title.clone()).hide_label();
     // Until the stored value is known, and while it is read or saved, the switch stays as it is.
     let switch = if shown.is_some() && !fixed && armed {
-      self.listen(switch, save, (workspace.clone(), consent))
+      self.listen(switch, save, (workspace, consent))
     } else {
       switch
     };
@@ -330,9 +334,9 @@ fn problem(ctx: &Ctx, consent: Consent, (read, save): (&Option<Message>, &Option
   ))
 }
 
-/// Saves the `consent` the person chose.
-fn save_action(ctx: &mut Ctx, workspace: &Workspace, consent: Consent) -> SaveAction {
-  let workspace = workspace.clone();
+/// Saves the `consent` the person chose; the workspace counts the change, which reads every consent again (`queries`).
+fn save_action(ctx: &mut Ctx, Session(services): &Session, consent: Consent) -> SaveAction {
+  let workspace = services.workspace.clone();
   ctx.future_action(move |allowed: bool| {
     let workspace = workspace.clone();
     async move {
@@ -345,26 +349,4 @@ fn save_action(ctx: &mut Ctx, workspace: &Workspace, consent: Consent) -> SaveAc
         })
     }
   })
-}
-
-/// The `consent` as stored, read when the row shows and again after each save (`saved`).
-fn stored(
-  ctx: &mut Ctx,
-  workspace: &Workspace,
-  (consent, saved): (Consent, Option<bool>),
-) -> FutureState<bool, Message> {
-  let (workspace, hold) = (workspace.clone(), Services::of(ctx).hold);
-  let read = ctx.future(saved, move |_| {
-    let (workspace, hold) = (workspace.clone(), hold.clone());
-    async move {
-      hold.released().await;
-      background::run(move || consent.read(&workspace))
-        .await?
-        .map_err(|error| {
-          tracing::error!(%error, setting = consent.logged(), "a person's setting cannot be read");
-          messages::store_error(&error)
-        })
-    }
-  });
-  read.state().get()
 }

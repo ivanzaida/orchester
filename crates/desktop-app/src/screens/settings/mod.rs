@@ -37,25 +37,16 @@ use lurq::{
   core::Signal,
   node::Element,
 };
-use orchester_core::account::AgentAccount;
-use orchester_workspace::{
-  background,
-  messages::{self, Message},
-};
+use orchester_workspace::messages::Message;
 use parking_lot::Mutex;
 
+pub(crate) use self::automation::Consent;
 use self::save_state::SaveState;
 use crate::{
+  queries::{self, Again, Session, app},
   routes::{AccountsView, JoinTarget, OrchesterView, UpdatesShow},
-  services::Services,
   ui::{message::message_text, state::load_error},
 };
-
-/// The accounts as read, shared with the tab.
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct Listed(Arc<Vec<AgentAccount>>);
-
-impl DevtoolsInspectable for Listed {}
 
 /// What a route brings into view on Settings › General.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -142,8 +133,10 @@ pub fn invite(ctx: &mut Ctx, target: JoinTarget) -> Element {
 }
 
 struct SettingsScreen {
-  /// Counts the changes to the accounts, each of which reads them again.
+  /// Counts the asks to read the accounts again (*Try again*, the tab's own changes), each of which invalidates their
+  /// query; a change of the accounts from anywhere reads them again through `queries`.
   revision: Signal<u64>,
+  again: Again,
   /// What the open tab's saves did, for the header.
   saves: SaveState,
   /// The tab the saves are of: another tab starts them again.
@@ -156,6 +149,7 @@ impl Component for SettingsScreen {
   fn create(ctx: &mut Ctx) -> Self {
     Self {
       revision: ctx.signal(0),
+      again: Again::default(),
       saves: SaveState::new(ctx),
       saves_of: Mutex::new(None),
     }
@@ -166,22 +160,11 @@ impl Component for SettingsScreen {
     self.follow_tab(tab);
     ctx.provide(self.saves.clone());
     ctx.provide(crate::ui::skeleton::FromFirstFrame);
-    let services = Services::of(ctx);
-    let (workspace, hold) = (services.workspace, services.hold);
-    let loaded = ctx
-      .future(self.revision.get(), move |_| {
-        let (workspace, hold) = (workspace.clone(), hold.clone());
-        async move {
-          hold.released().await;
-          background::run(move || workspace.agent_accounts())
-            .await?
-            .map(|accounts| Listed(Arc::new(accounts)))
-            .map_err(|error| messages::store_error(&error))
-        }
-      })
-      .state()
-      .get();
-    let count = loaded.data.as_ref().map(|accounts| accounts.0.len());
+    let session = Session::of(ctx);
+    let query = ctx.query(app::agent_accounts(session));
+    self.again.follow(self.revision.get(), &query);
+    let loaded = queries::state(&query);
+    let count = loaded.data.as_ref().map(|accounts| accounts.len());
     let body = match tab {
       SettingsTab::General(show) => general::tab(ctx, show),
       SettingsTab::Notifications => notifications::tab(ctx),
@@ -200,7 +183,7 @@ impl Component for SettingsScreen {
           "settings-accounts",
           accounts::Props {
             view,
-            accounts: Arc::clone(&accounts.0),
+            accounts: Arc::clone(accounts),
             revision: self.revision.clone(),
           },
         ),

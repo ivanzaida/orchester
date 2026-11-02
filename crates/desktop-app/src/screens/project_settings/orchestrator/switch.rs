@@ -1,15 +1,16 @@
 //! A switch of *The Orchestrator may* (`Publish drafts` `dPSKs` … `Write with git` `VOnlw` in `S03`): the project's
-//! own choice of what its Orchestrator chat does itself (ORC-594), read and saved off the UI thread; while either runs,
-//! the switch cannot be flipped. Only a person flips it: the row refuses lurq's synthetic input and says so under
-//! itself, and while it is mounted the app's MCP server refuses window input (`mcp::input_gate`). Off holds in the
-//! project from the person's click, before the save runs and if it fails.
+//! own choice of what its Orchestrator chat does itself (ORC-594), read through its query, which the project's loader
+//! read as the project opened, and saved off the UI thread; until it is first read and while it saves, the switch
+//! cannot be flipped. Only a person flips it: the row refuses lurq's synthetic input and says so under itself, and
+//! while it is mounted the app's MCP server refuses window input (`mcp::input_gate`). Off holds in the project from
+//! the person's click, before the save runs and if it fails.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
-    ctx::{Ctx, FutureAction, FutureState},
+    ctx::{Ctx, FutureAction},
     events::{InputSource, input_source},
   },
   core::Signal,
@@ -24,6 +25,7 @@ use orchester_workspace::{
 use super::super::{Status, TabProps, kit::SettingRow};
 use crate::{
   mcp::input_gate::{Guarded, InputGate, Protected},
+  queries::{self, Session, project},
   services::Services,
   ui::{
     field::field_error,
@@ -157,11 +159,14 @@ impl Component for Switch {
     let Props { tab, consent } = ctx.props::<Props>().clone();
     let (id, words) = (id(consent), words(consent));
     let root = tab.project.open.repo_root;
-    let workspace = Services::of(ctx).workspace;
+    let session = Session::of(ctx);
+    let workspace = session.0.workspace.clone();
     let state = self.save.state().get();
-    let read = stored(ctx, (&workspace, &root), (consent, state.data));
+    let read = queries::state(&ctx.query(project::orchestrator_allows(session, root.clone(), consent)));
     let fixed = state.is_pending() || read.is_pending();
-    // The person's choice once it saved; the stored value until then, or after a save failed.
+    // The person's choice until the stored value is it again; the stored value until they choose, or once a save
+    // failed.
+    queries::settle(&self.saved, read.data.as_ref(), state.is_pending());
     let shown = match (&state.error, self.saved.get()) {
       (None, Some(chosen)) => Some(chosen),
       _ => read.data,
@@ -253,7 +258,8 @@ impl Switch {
   }
 }
 
-/// Saves the `consent` the person chose for the project at `root`.
+/// Saves the `consent` the person chose for the project at `root`; the workspace counts the change, which reads the
+/// project's switches again (`queries`).
 fn save_action(ctx: &mut Ctx, root: PathBuf, consent: OrchestratorConsent) -> SaveAction {
   let workspace = Services::of(ctx).workspace;
   ctx.future_action(move |allowed: bool| {
@@ -268,28 +274,4 @@ fn save_action(ctx: &mut Ctx, root: PathBuf, consent: OrchestratorConsent) -> Sa
         })
     }
   })
-}
-
-/// The project's `consent` as stored, read when the row shows and again after each save (`saved`).
-fn stored(
-  ctx: &mut Ctx,
-  (workspace, root): (&Workspace, &Path),
-  (consent, saved): (OrchestratorConsent, Option<bool>),
-) -> FutureState<bool, Message> {
-  let (workspace, root, hold) = (workspace.clone(), root.to_path_buf(), Services::of(ctx).hold);
-  ctx
-    .future(saved, move |_| {
-      let (workspace, root, hold) = (workspace.clone(), root.clone(), hold.clone());
-      async move {
-        hold.released().await;
-        background::run(move || workspace.orchestrator_allows(&root, consent))
-          .await?
-          .map_err(|error| {
-            tracing::error!(%error, setting = logged(consent), "a person's setting cannot be read");
-            messages::store_error(&error)
-          })
-      }
-    })
-    .state()
-    .get()
 }

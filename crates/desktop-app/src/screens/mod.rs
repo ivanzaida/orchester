@@ -30,7 +30,7 @@ mod pull_requests;
 mod review;
 mod reviewer_trouble;
 mod secrets;
-mod settings;
+pub(crate) mod settings;
 mod shared_config;
 mod skills;
 pub(crate) mod task;

@@ -17,6 +17,7 @@ use orchester_store::{AppDb, OrchestratorSwitch, ProjectDb, StoreError};
 use parking_lot::Mutex;
 
 use super::{Consent, Workspace};
+use crate::tasks::outside::Outside;
 
 /// A switch over what the Orchestrator chat does itself.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -133,8 +134,8 @@ impl Workspace {
     db.copy_orchestrator_switch(consent.switch(), || consent.read(&self.db.lock()))
   }
 
-  /// Saves the person's choice for `consent` in the project at `repo_root`. Only the window's switch, which takes a
-  /// person's input alone, calls it.
+  /// Saves the person's choice for `consent` in the project at `repo_root`, and counts the change once it is published.
+  /// Only the window's switch, which takes a person's input alone, calls it.
   pub fn set_orchestrator_allows(
     &self,
     repo_root: &Path,
@@ -142,11 +143,19 @@ impl Workspace {
     allowed: bool,
   ) -> Result<(), StoreError> {
     let cell = self.orchestrator.of(repo_root, consent);
-    save(&cell, allowed, || {
+    let mut project = None;
+    let result = save(&cell, allowed, || {
       let saves = self.orchestrator.saves.lock();
-      let result = ProjectDb::open(repo_root).and_then(|mut db| db.set_orchestrator_switch(consent.switch(), allowed));
+      let result = ProjectDb::open(repo_root).and_then(|mut db| {
+        project = Some(db.project().id());
+        db.set_orchestrator_switch(consent.switch(), allowed)
+      });
       (saves, result)
-    })
+    });
+    if let (Ok(()), Some(project)) = (&result, project) {
+      self.changes.record(project, Outside::Orchestrator);
+    }
+    result
   }
 
   /// A person turned `consent` off in the project at `repo_root`: it holds there now, before the save runs or if it

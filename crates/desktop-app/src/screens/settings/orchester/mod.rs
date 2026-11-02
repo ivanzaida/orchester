@@ -65,6 +65,7 @@ pub struct Account(pub Option<StoredCloudAccount>);
 impl DevtoolsInspectable for Account {}
 use super::frame;
 use crate::{
+  queries::{Again, Session},
   routes::{OrchesterAsk, OrchesterPanel, OrchesterView},
   services::Services,
   ui::state::load_error,
@@ -146,13 +147,18 @@ impl DevtoolsInspectable for Props {}
 pub struct OrchesterTab {
   /// Counts *Try again* after the tab could not be read.
   retry: Signal<u64>,
+  /// Reads the snapshot again at each change and *Try again*.
+  again: Again,
 }
 
 impl Component for OrchesterTab {
   type Props = Props;
 
   fn create(ctx: &mut Ctx) -> Self {
-    Self { retry: ctx.signal(0) }
+    Self {
+      retry: ctx.signal(0),
+      again: Again::live(),
+    }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -169,7 +175,7 @@ impl Component for OrchesterTab {
     }
     let services = Services::of(ctx);
     let revision = follow(ctx, (&services.servers, &services.cloud)) + self.retry.get();
-    let loaded = snapshot(ctx, revision, (&services.servers, &services.cloud));
+    let loaded = snapshot(ctx, &self.again, revision);
     let snapshot = match loaded {
       Ok(Some(snapshot)) => snapshot,
       Ok(None) => {
@@ -258,27 +264,27 @@ pub fn follow_shared(ctx: &mut Ctx, servers: &Servers) -> u64 {
   stream.state().get().data.unwrap_or_default()
 }
 
-/// What the tab shows, read off the UI thread at `revision`; `None` until the first read finished.
-fn snapshot(ctx: &mut Ctx, revision: u64, (servers, cloud): (&Servers, &Cloud)) -> Result<Option<Snapshot>, Said> {
-  let hold = Services::of(ctx).hold;
-  let state = ctx
-    .future(
-      (revision, servers.clone(), cloud.clone()),
-      move |(_, servers, cloud)| {
-        let hold = hold.clone();
-        async move {
-          hold.released().await;
-          background::run(move || read(&servers, &cloud))
-            .await
-            .map_err(|_| Said::new("cloud.errors.local"))?
-        }
-      },
-    )
-    .state()
-    .get();
-  match (state.data, state.error) {
-    (Some(snapshot), _) => Ok(Some(snapshot)),
-    (None, Some(error)) => Err(error),
+/// What the tab shows, through its query, which the window read as the session started: live, so the last read shows
+/// at once and it is read again behind it whenever the tab shows, and at each change of the servers' connections or of
+/// the cloud account.
+#[lurq::query(stale_time = "0s", gc_time = "24h")]
+pub(crate) async fn cloud_snapshot(session: Session) -> Result<Snapshot, Said> {
+  let Session(services) = session;
+  services.hold.released().await;
+  let (servers, cloud) = (services.servers.clone(), services.cloud.clone());
+  background::run(move || read(&servers, &cloud))
+    .await
+    .map_err(|_| Said::new("cloud.errors.local"))?
+}
+
+/// The tab's snapshot, read again at each of `revision`'s moves; `None` until the first read ever finished.
+fn snapshot(ctx: &mut Ctx, again: &Again, revision: u64) -> Result<Option<Snapshot>, Said> {
+  let session = Session::of(ctx);
+  let query = ctx.query(cloud_snapshot(session));
+  again.follow(revision, &query);
+  match (query.data(), query.error()) {
+    (Some(snapshot), _) => Ok(Some(Snapshot::clone(&snapshot))),
+    (None, Some(error)) => Err(Said::clone(&error)),
     (None, None) => Ok(None),
   }
 }

@@ -16,10 +16,11 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_workspace::{project_settings::Settings, prompt_changes, tasks::outside::Outside};
+use orchester_workspace::{project_settings::Settings, prompt_changes};
 
 use crate::{
   mcp::input_gate::{Guarded, InputGate, input_may_decide},
+  queries::Kept,
   screens::project_settings::{
     TabProps,
     kit::{Group, SettingRow},
@@ -45,9 +46,8 @@ const AGENT_LABEL_WIDTH: f32 = 100.0;
 /// The group, saving its switch itself as Sources and Code index do.
 pub(super) struct AgentFiles {
   save: work::Save,
-  stored: Signal<Option<Read>>,
-  revision: Signal<u64>,
-  own: work::OwnSaves,
+  /// What the group's last save read back, until the settings' query has it.
+  kept: Kept<Read>,
   gate: Option<InputGate>,
   /// An MCP client's input asked to turn the repository's agent files on and was refused.
   refused: Signal<bool>,
@@ -62,9 +62,7 @@ impl Component for AgentFiles {
   fn create(ctx: &mut Ctx) -> Self {
     let section = Self {
       save: work::action(ctx, ctx.props::<TabProps>().project.open.project.id()),
-      stored: ctx.signal(None),
-      revision: ctx.signal(0),
-      own: work::OwnSaves::new(ctx, &[Outside::ProjectSettings]),
+      kept: Kept::new(ctx),
       gate: ctx.use_context::<InputGate>(),
       refused: ctx.signal(false),
       open: ctx.signal(false),
@@ -74,19 +72,17 @@ impl Component for AgentFiles {
       ctx,
       &section.save,
       ctx.props::<TabProps>().status.clone(),
-      (section.revision.clone(), section.stored.clone(), section.own.clone()),
+      section.kept.clone(),
     );
     section
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<TabProps>().clone();
-    let revision = self.revision.get() + self.own.count(&props.project.feed);
-    let state = work::load(ctx, props.project.open.repo_root.clone(), revision, &self.own);
-    let Some(read) = state.data.clone().or_else(|| self.stored.get()) else {
-      return work::pending(ctx, &state, &self.revision, bones);
+    let loaded = work::load(ctx, props.project.open.repo_root.clone());
+    let Some(read) = loaded.shown(&self.kept, self.save.state().get().is_pending()) else {
+      return work::pending(ctx, &loaded, bones);
     };
-    self.stored.set(Some(read.clone()));
     let row = row(
       ctx,
       (&props, &read.0, &self.save),
@@ -97,7 +93,7 @@ impl Component for AgentFiles {
     if let Some(error) = work::error(ctx, &self.save) {
       group = group.after(error);
     }
-    if let Some(error) = state.error {
+    if let Some(error) = loaded.state.error {
       group = group.after(field_error("settings-files-load-error", &message_text(ctx, &error)));
     }
     group.into()

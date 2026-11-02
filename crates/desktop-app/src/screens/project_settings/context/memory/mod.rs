@@ -2,43 +2,36 @@
 //! person's decision 3; the Memory page's *Memory settings* opens it, `S15` `BJQn0`): how agents' records are saved in
 //! task and in project memory, each a select whose default option says so, and how many records and tokens each agent
 //! invocation gets, each a number with its unit and what it reads back as; *Only you, here in the window* at the
-//! heading's right and a note under the box. It saves through its [`MemoryForm`]: a choice when it is made, a limit
-//! when its field is left. Only a person's input saves: an MCP client's is refused, and the group says so under its
-//! box.
+//! heading's right and a note under the box. It reads through its query, which the project's loader read as the
+//! project opened, and saves through its [`MemoryForm`]: a choice when it is made, a limit when its field is left.
+//! Only a person's input saves: an MCP client's is refused, and the group says so under its box.
 
 mod form;
 
 use std::sync::Arc;
 
 use lurq::{
-  app::{
-    component::Component,
-    ctx::{Ctx, FutureState},
-    theme::PaletteColor,
-  },
+  app::{component::Component, ctx::Ctx, theme::PaletteColor},
   components::{Row, SelectOption, Text},
   core::Signal,
   layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
+  query::QueryHandle,
 };
 use orchester_core::{
   memory::{MemoryLimits, MemorySettings, WritePolicy},
   tokens::compact_tokens,
 };
-use orchester_workspace::{
-  background,
-  memory::settings,
-  messages::{self, Message},
-};
+use orchester_workspace::messages::Message;
 
-use self::form::{Kept, MemoryForm, Scope, Status as FormStatus};
+use self::form::{MemoryForm, Scope, Status as FormStatus};
 use crate::{
   project::ShownProject,
+  queries::{self, Session, project},
   screens::project_settings::{
     Status, TabProps,
     kit::{Group, SettingRow},
   },
-  services::Services,
   theme::{ExtraSpacing, IconSize, ProjectSettingsText},
   ui::{
     field::{NumberField, SelectField, field_error},
@@ -63,8 +56,6 @@ const READ_BACK_BONE: f32 = 60.0;
 /// The group, saving each field itself.
 pub(super) struct Memory {
   form: MemoryForm,
-  /// Counts the person's Try again after a failed read.
-  retries: Signal<u64>,
 }
 
 impl Component for Memory {
@@ -74,15 +65,16 @@ impl Component for Memory {
     let project = ctx.props::<TabProps>().project.clone();
     Self {
       form: MemoryForm::new(ctx, &project),
-      retries: ctx.signal(0),
     }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<TabProps>().clone();
-    let state = stored(ctx, &props.project, self.retries.get());
-    let Some(Kept(stored)) = state.data else {
-      return reading(ctx, &props.project, state.error.as_ref(), &self.retries);
+    let session = Session::of(ctx);
+    let query = ctx.query(project::memory_settings(session, props.project.open.repo_root.clone()));
+    let state = queries::state(&query);
+    let Some(stored) = state.data else {
+      return reading(ctx, &props.project, state.error.as_ref(), &query);
     };
     self.form.follow(stored);
     let base = self.form.base(stored);
@@ -90,25 +82,6 @@ impl Component for Memory {
     say(&props.status, self.form.status(base));
     group(ctx, &self.form, &props.project)
   }
-}
-
-/// The settings as stored, read again whenever the project's screens saved, its own saves too.
-fn stored(ctx: &mut Ctx, project: &ShownProject, retries: u64) -> FutureState<Kept, Message> {
-  let hold = Services::of(ctx).hold;
-  let again = (project.open.repo_root.clone(), project.feed.revision.get(), retries);
-  ctx
-    .future(again, move |(repo, ..)| {
-      tracing::trace!(target: crate::app_log::READ_LOG, read = "memory settings");
-      let hold = hold.clone();
-      async move {
-        hold.released().await;
-        background::run(move || settings::load_in(&repo).map(Kept))
-          .await?
-          .map_err(|error| messages::store_error(&error))
-      }
-    })
-    .state()
-    .get()
 }
 
 /// The group's save state in the page's words, said at the title's right with the tab's other groups'.
@@ -288,16 +261,21 @@ fn note(ctx: &Ctx) -> Row {
     )
 }
 
-/// The group while the settings are read: its words real, a bone in each control; or why reading failed, with Try
-/// again.
-fn reading(ctx: &mut Ctx, project: &ShownProject, error: Option<&Message>, retries: &Signal<u64>) -> Element {
+/// The group before the settings were ever read: its words real, a bone in each control; or why reading failed, with
+/// Try again, which reads `query` again.
+fn reading(
+  ctx: &mut Ctx,
+  project: &ShownProject,
+  error: Option<&Message>,
+  query: &QueryHandle<MemorySettings, Message>,
+) -> Element {
   if let Some(error) = error {
-    let again = retries.clone();
+    let again = query.clone();
     let failure = load_error(
       ctx,
       "settings-memory-load-error",
       (&ctx.t("project_settings.memoryLoadFailed"), &message_text(ctx, error)),
-      move || again.update(|count| *count += 1),
+      move || again.refresh(),
     );
     return heading(ctx).after(failure).into();
   }

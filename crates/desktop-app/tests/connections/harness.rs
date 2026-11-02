@@ -29,6 +29,12 @@ pub struct Seeded {
 
 impl Seeded {
   pub fn new(scenario: &str) -> Self {
+    Self::changed(scenario, |_| {})
+  }
+
+  /// The window on `scenario` with the project's folder changed by `change` before the window opens: what the
+  /// project's loader reads first.
+  pub fn changed(scenario: &str, change: impl FnOnce(&std::path::Path)) -> Self {
     let data = Data::new();
     let seeded = kontur::seed(&SeedRequest {
       data_dir: data.dir.path().to_path_buf(),
@@ -38,6 +44,7 @@ impl Seeded {
       now: Timestamp::now(),
     })
     .expect("the scenario seeds");
+    change(&seeded.repo);
     let launch = data.launch();
     let mut window = Window::of(data, launch);
     window.tree.resize(SIZE.0, SIZE.1);

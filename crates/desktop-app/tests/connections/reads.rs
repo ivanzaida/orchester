@@ -1,5 +1,6 @@
-//! Work on a connection records the change as automation's are: the list reads the connections again once, and
-//! the status bar reads again the accounts the project uses.
+//! Work on a connection records the change as automation's are: the list reads the connections again through their
+//! query, off the window's thread (`queries`), and shows the change; the status bar reads again the accounts the
+//! project uses.
 
 use std::{
   thread,
@@ -19,7 +20,7 @@ fn settle(seeded: &mut Seeded) {
 }
 
 #[test]
-fn connections_work_reads_the_list_once_and_the_status_bar_again() {
+fn connections_work_reads_the_list_through_its_query_and_the_status_bar_again() {
   let mut seeded = Seeded::new("connections");
   seeded.list();
   let docs = seeded.server("kontur-docs").expect("kontur-docs");
@@ -33,7 +34,11 @@ fn connections_work_reads_the_list_once_and_the_status_bar_again() {
   });
   settle(&mut seeded);
   let counted = reads.take();
-  assert_eq!(counted.get("connections"), Some(&1), "the list reads once: {counted:?}");
+  assert_eq!(
+    counted.get("connections"),
+    None,
+    "the list is the query's, read off the window's thread: {counted:?}"
+  );
   assert_eq!(
     counted.get("used accounts"),
     Some(&1),

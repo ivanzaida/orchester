@@ -23,6 +23,7 @@ use super::{
   words::{t, ta},
 };
 use crate::{
+  queries::{Session, app},
   services::plan_limits,
   theme::ExtraSpacing,
   ui::{
@@ -129,33 +130,15 @@ fn check_now(ctx: &Ctx, work: &Work, account: &AgentAccount) -> ActionButton {
   }
 }
 
-/// The last reading kept of the account's plan limits, with where it came from, as read.
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct Stored(Option<(LimitReading, ReadingSource)>);
-
-impl lurq::app::component::DevtoolsInspectable for Stored {}
-
 /// The account's last plan reading and where it came from: this session's, or the last one kept (a project's turn or
-/// a read), whichever is newer.
+/// a read), whichever is newer. The one kept is read through its query: its last read at once, read again behind it.
 fn last_reading(ctx: &mut Ctx, account: &AgentAccount) -> Option<(LimitReading, ReadingSource)> {
   let id = account.id();
   let readings = plan_limits::readings(ctx);
   let session = readings.of_account(id).cloned().zip(readings.source_of(id));
-  let workspace = crate::services::Services::of(ctx).workspace;
-  let stored = ctx
-    .future(id, move |id| {
-      let workspace = workspace.clone();
-      async move {
-        orchester_workspace::background::run(move || workspace.last_plan_reading(id))
-          .await?
-          .map(Stored)
-          .map_err(|error| error.message())
-      }
-    })
-    .state()
-    .get()
-    .data
-    .and_then(|stored| stored.0);
+  let session_of = Session::of(ctx);
+  let query = ctx.query(app::plan_reading(session_of, id));
+  let stored = query.data().and_then(|stored| Option::clone(&stored));
   match (session, stored) {
     (Some(session), Some(stored)) if stored.0.at > session.0.at => Some(stored),
     (Some(session), _) => Some(session),

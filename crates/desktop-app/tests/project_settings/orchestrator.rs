@@ -133,10 +133,11 @@ fn project_settings_orchestrator_shows_answering_approvals_and_opens_automation(
     .set_automation_answers_approvals(true)
     .expect("on for this computer");
   page.tab("orchestrator", "settings-orchestrator-computer");
+  // The workspace counted the change, which reads Settings › Automation's query again.
   page.until("its state", |p| {
     p.exists("settings-orchestrator-answer-approvals-value")
+      && p.text("settings-orchestrator-answer-approvals-value") == "On"
   });
-  assert_eq!(page.text("settings-orchestrator-answer-approvals-value"), "On");
   assert!(
     page
       .text("settings-orchestrator-answer-approvals-hint")

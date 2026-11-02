@@ -1,8 +1,9 @@
 //! *The Orchestrator* in Settings › Automation (`The Orchestrator` `P3S8cC` in `S11` `V8aAj`): one row, *What the
 //! Orchestrator may do*, since each project sets its own switches in Project settings › Orchestrator (ORC-599). With a
-//! project open (the tab's, as the sidebar shows it) the row's hint names that project's switches that are on, read off
-//! the UI thread, and *Project settings →* at its end opens that project's Orchestrator tab; with none open the hint
-//! only says each project sets its own and the link is left out. The group's foot says where the switches are set.
+//! project open (the tab's, as the sidebar shows it) the row's hint names that project's switches that are on, read
+//! through the switches' queries, and *Project settings →* at its end opens that project's Orchestrator tab; with none
+//! open the hint only says each project sets its own and the link is left out. The group's foot says where the
+//! switches are set.
 
 use std::sync::Arc;
 
@@ -18,16 +19,15 @@ use lurq::{
 };
 use orchester_core::id::ProjectId;
 use orchester_workspace::{
-  background,
-  messages::{self, Message},
+  messages::Message,
   workspace::{OpenProject, OrchestratorConsent},
 };
 
 use crate::{
   navigation::Navigation,
   project::Projects,
+  queries::{self, Session, project},
   routes::{ProjectPage, ProjectSettingsTab, Route},
-  services::Services,
   theme::{ExtraColor, ExtraTypography, IconSize},
   ui::{
     field::field_error,
@@ -156,33 +156,30 @@ fn link(ctx: &mut Ctx, project: ProjectId) -> Element {
     .into()
 }
 
-/// The switches of the project `open` that are on, as stored.
+/// The switches of the project `open` that are on, as stored: Project settings › Orchestrator's queries, which the
+/// project's loader read as it opened. Pending until every switch was read; the first one that cannot be says why.
 fn allowed(ctx: &mut Ctx, open: &OpenProject) -> FutureState<Allowed, Message> {
-  let services = Services::of(ctx);
-  let (workspace, hold, root) = (services.workspace, services.hold, open.repo_root.clone());
-  ctx
-    .future((), move |()| {
-      let (workspace, hold, root) = (workspace.clone(), hold.clone(), root.clone());
-      async move {
-        hold.released().await;
-        background::run(move || {
-          OrchestratorConsent::ALL
-            .into_iter()
-            .map(|consent| {
-              workspace
-                .orchestrator_allows(&root, consent)
-                .map(|on| on.then_some(consent))
-            })
-            .collect::<Result<Vec<_>, _>>()
-            .map(|on| Allowed(on.into_iter().flatten().collect()))
-        })
-        .await?
-        .map_err(|error| {
-          tracing::error!(%error, "what a project's Orchestrator may do cannot be read");
-          messages::store_error(&error)
-        })
-      }
+  let session = Session::of(ctx);
+  let states: Vec<_> = OrchestratorConsent::ALL
+    .into_iter()
+    .map(|consent| {
+      let query = ctx.query(project::orchestrator_allows(
+        session.clone(),
+        open.repo_root.clone(),
+        consent,
+      ));
+      (consent, queries::state(&query))
     })
-    .state()
-    .get()
+    .collect();
+  if let Some(error) = states.iter().find_map(|(_, state)| state.error.clone()) {
+    return FutureState::rejected(error, None);
+  }
+  let on: Option<Vec<_>> = states
+    .into_iter()
+    .map(|(consent, state)| state.data.map(|on| on.then_some(consent)))
+    .collect();
+  match on {
+    Some(on) => FutureState::fulfilled(Allowed(on.into_iter().flatten().collect())),
+    None => FutureState::pending(None),
+  }
 }

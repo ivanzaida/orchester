@@ -234,7 +234,8 @@ fn project_settings_approval_mode_effective_off_names_the_profiles_set_to_autopi
   published_profile(&page, "Fixer", ApprovalMode::Autopilot);
   published_profile(&page, "Builder", ApprovalMode::Autopilot);
   published_profile(&page, "Reviewer", ApprovalMode::Manual);
-  // Runs reads the settings again when it opens.
+  // The profiles' screens count their publication, which reads the settings again.
+  page.outside(orchester_workspace::tasks::outside::Outside::Profiles);
   page.tab("general", "settings-project-name");
   page.tab("runs", "settings-auto-allow-autopilot-row");
   page.until("the profiles named", |p| {
@@ -291,7 +292,8 @@ fn project_settings_approved_for_every_run_opens_its_rules_and_revokes_one() {
     db.add_project_approval_rule(&scope, (run, "invocation:qa"), Timestamp::now())
       .expect("rule")
   };
-  // Runs reads the settings again when it opens.
+  // A rule comes with a run's request answered for every run: the runs' change reads the settings again.
+  page.outside(orchester_workspace::tasks::outside::Outside::Runs);
   page.tab("general", "settings-project-name");
   page.tab("runs", "settings-auto-rules-row");
   page.until("the rule counted", |p| {

@@ -11,11 +11,9 @@ mod limits;
 use lurq::{
   app::{component::Component, ctx::Ctx, theme::SpacingSize},
   components::{Column, Row},
-  core::Signal,
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_workspace::tasks::outside::Outside;
 
 use super::{
   SectionStatuses, TabProps,
@@ -24,6 +22,7 @@ use super::{
   work::{self, Read},
 };
 use crate::{
+  queries::Kept,
   theme::ExtraSpacing,
   ui::skeleton::{self, fading},
 };
@@ -32,9 +31,8 @@ use crate::{
 const REVIEWER: (f32, f32, f32) = (142.0, 116.0, 132.0);
 
 pub(super) struct Runs {
-  stored: Signal<Option<Read>>,
-  revision: Signal<u64>,
-  own: work::OwnSaves,
+  /// What auto mode's last save read back, until the settings' query moves on.
+  kept: Kept<Read>,
   /// Auto mode's and the limits' save statuses.
   sections: SectionStatuses,
 }
@@ -45,37 +43,24 @@ impl Component for Runs {
   fn create(ctx: &mut Ctx) -> Self {
     let page = ctx.props::<TabProps>().status.clone();
     Self {
-      stored: ctx.signal(None),
-      revision: ctx.signal(0),
-      own: work::OwnSaves::new(
-        ctx,
-        &[
-          Outside::AutoMode,
-          Outside::Runs,
-          Outside::Connections,
-          Outside::ProjectSettings,
-        ],
-      ),
+      kept: Kept::new(ctx),
       sections: SectionStatuses::new(ctx, 2, &page),
     }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<TabProps>().clone();
-    let revision = self.revision.get() + self.own.count(&props.project.feed);
-    let state = work::load(ctx, props.project.open.repo_root.clone(), revision, &self.own);
-    let Some(read) = state.data.clone().or_else(|| self.stored.get()) else {
-      return page::scroll(work::pending(ctx, &state, &self.revision, bones));
+    let loaded = work::load(ctx, props.project.open.repo_root.clone());
+    // Auto mode keeps what its save read once that save ended: nothing is kept while it saves.
+    let Some(read) = loaded.shown(&self.kept, false) else {
+      return page::scroll(work::pending(ctx, &loaded, bones));
     };
-    self.stored.set(Some(read.clone()));
     let auto = ctx.mount_keyed::<auto_mode::AutoMode>(
       "settings-auto-mode",
       auto_mode::Props {
         tab: self.sections.props(&props, 0),
         settings: read.0,
-        parent_read: self.stored.clone(),
-        refresh: self.revision.clone(),
-        own: self.own.clone(),
+        kept: self.kept.clone(),
       },
     );
     let estimates = ctx.mount_keyed::<estimates::Estimates>("project-settings-estimates", props.clone());

@@ -54,5 +54,8 @@ fn project_settings_tab_reselection_keeps_invalid_and_dirty_environment_truthful
   page.saved();
   page.tab("context", "settings-index-use-row");
   page.tab("environment", "settings-environment-variables");
-  assert_eq!(page.value("settings-environment-variables"), "RUST_LOG=debug");
+  // The save's change reads the variables' query again, which the tab shows once it lands.
+  page.until("the saved variables", |p| {
+    p.value("settings-environment-variables") == "RUST_LOG=debug"
+  });
 }

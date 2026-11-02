@@ -1,6 +1,6 @@
 //! *Also needed · set for this computer* (`PVOJl` in `S03`): *Let automation answer approvals*, which answering agents
 //! also needs, read-only with its state and *Open*, which goes to Settings › Automation where it is set once for every
-//! project. Read off the UI thread when the tab shows.
+//! project. Read through Settings › Automation's query, kept from the session's start.
 
 use lurq::{
   app::{
@@ -12,10 +12,7 @@ use lurq::{
   layout::Alignment,
   node::Element,
 };
-use orchester_workspace::{
-  background,
-  messages::{self, Message},
-};
+use orchester_workspace::messages::Message;
 
 use super::super::{
   TabProps,
@@ -23,8 +20,9 @@ use super::super::{
 };
 use crate::{
   navigation::Navigation,
+  queries::{self, Session, app},
   routes::Route,
-  services::Services,
+  screens::settings::Consent,
   theme::{ExtraSpacing, IconSize, ProjectSettingsText},
   ui::{
     field::field_error,
@@ -113,23 +111,8 @@ fn open(ctx: &mut Ctx) -> Element {
     .into()
 }
 
-/// Whether automation may answer approvals on this computer, as stored.
+/// Whether automation may answer approvals on this computer, as stored: Settings › Automation's own query.
 fn answers_approvals(ctx: &mut Ctx) -> FutureState<bool, Message> {
-  let services = Services::of(ctx);
-  let (workspace, hold) = (services.workspace, services.hold);
-  ctx
-    .future((), move |()| {
-      let (workspace, hold) = (workspace.clone(), hold.clone());
-      async move {
-        hold.released().await;
-        background::run(move || workspace.automation_answers_approvals())
-          .await?
-          .map_err(|error| {
-            tracing::error!(%error, "Let automation answer approvals cannot be read");
-            messages::store_error(&error)
-          })
-      }
-    })
-    .state()
-    .get()
+  let session = Session::of(ctx);
+  queries::state(&ctx.query(app::automation_consent(session, Consent::AnswerApprovals)))
 }

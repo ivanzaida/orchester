@@ -6,11 +6,10 @@ mod github;
 use lurq::{
   app::{component::Component, ctx::Ctx, theme::PaletteColor},
   components::Row,
-  core::Signal,
   layout::Alignment,
   node::Element,
 };
-use orchester_workspace::{project_settings::Settings, tasks::outside::Outside};
+use orchester_workspace::project_settings::Settings;
 
 use super::{
   TabProps,
@@ -19,6 +18,7 @@ use super::{
   work::{self, Change, Read},
 };
 use crate::{
+  queries::Kept,
   theme::{ExtraSpacing, IconSize, ProjectSettingsText},
   ui::{
     github_mark::github_mark,
@@ -31,40 +31,30 @@ use crate::{
 #[derive(Clone)]
 pub(super) struct General {
   save: work::Save,
-  stored: Signal<Option<Read>>,
-  revision: Signal<u64>,
-  own: work::OwnSaves,
+  /// What the tab's last save read back, until the settings' query has it.
+  kept: Kept<Read>,
 }
 impl Component for General {
   type Props = TabProps;
   fn create(ctx: &mut Ctx) -> Self {
     let tab = Self {
       save: work::action(ctx, ctx.props::<TabProps>().project.open.project.id()),
-      stored: ctx.signal(None),
-      revision: ctx.signal(0),
-      own: work::OwnSaves::new(ctx, &[Outside::Connections, Outside::ProjectSettings]),
+      kept: Kept::new(ctx),
     };
     let save = tab.save.clone();
-    work::follow(
-      ctx,
-      &save,
-      ctx.props::<TabProps>().status.clone(),
-      (tab.revision.clone(), tab.stored.clone(), tab.own.clone()),
-    );
+    work::follow(ctx, &save, ctx.props::<TabProps>().status.clone(), tab.kept.clone());
     tab
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<TabProps>().clone();
     let save = self.save.clone();
-    let revision = self.revision.get() + self.own.count(&props.project.feed);
-    let state = work::load(ctx, props.project.open.repo_root.clone(), revision, &self.own);
-    let Some(read) = state.data.clone().or_else(|| self.stored.get()) else {
-      return page::scroll(work::pending(ctx, &state, &self.revision, bones));
+    let loaded = work::load(ctx, props.project.open.repo_root.clone());
+    let Some(read) = loaded.shown(&self.kept, save.state().get().is_pending()) else {
+      return page::scroll(work::pending(ctx, &loaded, bones));
     };
-    self.stored.set(Some(read.clone()));
     let settings = read.0;
     let identity = identity(ctx, &props);
-    let mut rows = github::rows(ctx, &props, &settings, &save, self.revision.get());
+    let mut rows = github::rows(ctx, &props, &save);
     rows.push(base_notices(ctx, &props, &settings, &save));
     let repository = Group::new("settings-repository", ctx.t("project_settings.repository")).rows(rows);
     page::scroll(

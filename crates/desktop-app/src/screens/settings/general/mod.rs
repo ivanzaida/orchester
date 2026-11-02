@@ -15,19 +15,15 @@ mod updates;
 use std::path::PathBuf;
 
 use lurq::{
-  app::{
-    component::{Component, DevtoolsInspectable},
-    ctx::Ctx,
-  },
+  app::{component::Component, ctx::Ctx},
   clipboard::copy_to_clipboard,
   node::Element,
 };
 use orchester_core::app_update::Channel;
-use orchester_workspace::{app_paths, background};
 
 use super::{GeneralShow, frame};
 use crate::{
-  services::Services,
+  queries::{self, Session, app},
   theme::ExtraTypography,
   ui::{
     copied_value::CopiedValue,
@@ -62,15 +58,6 @@ pub fn tab(ctx: &mut Ctx, show: Option<GeneralShow>) -> Element {
   frame::column("settings-general-scroll", pane)
 }
 
-/// Where the application database and the log are, as read off the UI thread.
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct Places {
-  database: Option<PathBuf>,
-  log: Option<PathBuf>,
-}
-
-impl DevtoolsInspectable for Places {}
-
 /// *This computer*: the version, the application data and the app log.
 struct ThisComputer;
 
@@ -82,26 +69,13 @@ impl Component for ThisComputer {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let services = Services::of(ctx);
-    let (workspace, hold) = (services.workspace.clone(), services.hold.clone());
-    let places = ctx
-      .future((), move |()| {
-        let (workspace, hold) = (workspace.clone(), hold.clone());
-        async move {
-          hold.released().await;
-          background::run(move || Places {
-            database: workspace.database_path(),
-            log: app_paths::log_dir()
-              .inspect_err(|error| tracing::warn!(%error, "the application log folder is unknown"))
-              .ok(),
-          })
-          .await
-        }
-      })
-      .state()
-      .get()
-      .data;
-    let channel = channel(ctx, &services);
+    let session = Session::of(ctx);
+    let places = queries::state(&ctx.query(app::places(session.clone()))).data;
+    // The channel this copy follows, from *Updates*' query; `None` until it is read, or when it cannot be, which
+    // *Updates* says.
+    let channel = queries::state(&ctx.query(app::update_settings(session)))
+      .data
+      .map(|stored| stored.settings.channel);
     let data = PlaceKeys {
       id: "settings-data",
       title: "settings.general.data.title",
@@ -121,33 +95,6 @@ impl Component for ThisComputer {
     ];
     SettingGroup::new("settings-computer", ctx.t("settings.general.computer")).rows(rows)
   }
-}
-
-/// The channel as read.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct ReadChannel(Channel);
-
-impl DevtoolsInspectable for ReadChannel {}
-
-/// The channel this copy follows, read when the group shows and again after each save; `None` until it is read, or
-/// when it cannot be, which *Updates* says.
-fn channel(ctx: &mut Ctx, services: &Services) -> Option<Channel> {
-  let saved = updates::settings_saved(ctx, &services.updates);
-  let reader = services.updates.clone();
-  ctx
-    .future(saved, move |_| {
-      let updates = reader.clone();
-      async move {
-        background::run(move || updates.settings())
-          .await?
-          .map(|settings| ReadChannel(settings.channel))
-          .map_err(|error| orchester_workspace::messages::store_error(&error))
-      }
-    })
-    .state()
-    .get()
-    .data
-    .map(|read| read.0)
 }
 
 /// *Version*: the version, whether this build is a release or a development one, and the channel it follows once read
