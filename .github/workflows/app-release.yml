@@ -414,9 +414,16 @@ jobs:
           security unlock-keychain -p "$password" "$keychain"
           security import "$certificate" -k "$keychain" -f pkcs12 -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
           # The intermediate between the certificate and Apple's root, in case the .p12 lacks it; trust still ends at the
-          # root the system holds, so a wrong file here would only leave the identity invalid.
+          # root the system holds, so a wrong file here would only leave the identity invalid. A .p12 with its chain has
+          # it already, and `security` then refuses it as "already exists", which is no failure.
           curl -fsSL --retry 3 -o "$RUNNER_TEMP/DeveloperIDG2CA.cer" https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer
-          security import "$RUNNER_TEMP/DeveloperIDG2CA.cer" -k "$keychain"
+          if ! imported="$(security import "$RUNNER_TEMP/DeveloperIDG2CA.cer" -k "$keychain" 2>&1)"; then
+            if [[ "$imported" != *"already exists"* ]]; then
+              echo "$imported" >&2
+              exit 1
+            fi
+            echo "The certificate brought Apple's intermediate already."
+          fi
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain" > /dev/null
           existing="$(security list-keychains -d user | sed -e 's/^ *"//' -e 's/"$//')"
           # shellcheck disable=SC2086 # One path per word, as the runner's keychains have no spaces.
