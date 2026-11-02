@@ -194,7 +194,8 @@ impl Foot<'_> {
       },
     );
     let fresh = matches!(self.reads.shown, Shown::New);
-    let commands = super::commands::menu(ctx, view, project, (fresh, self.state.press()));
+    let provider = self.reads.setup.ready().and_then(|setup| setup.provider());
+    let commands = super::commands::menu(ctx, view, project, (fresh, self.state.press(), provider));
     let context = super::context::meter(ctx, view, project, (self.reads, self.readiness));
     composer(
       ctx,
@@ -276,9 +277,10 @@ fn queued_problem(ctx: &mut Ctx, view: &View) -> Option<Element> {
   )
 }
 
-/// What sending does now: nothing while the Orchestrator has nothing to run on, busy while a message or its files
-/// are on their way, and otherwise the draft goes to conversation `chat` (a new one when `None`) as a turn of its own,
-/// or, while the Orchestrator answers (`thinking`), after the answer, now or after stopping it.
+/// What sending does now: nothing while the Orchestrator has nothing to run on or the composer holds a skill chip, busy
+/// while a message or its files are on their way, and otherwise the draft goes to conversation `chat` (a new one when
+/// `None`) as a turn of its own, or, while the Orchestrator answers (`thinking`), after the answer, now or after
+/// stopping it.
 fn sending_state(
   ctx: &Ctx,
   view: &View,
@@ -291,6 +293,10 @@ fn sending_state(
   }
   if !readiness.is_some_and(Readiness::is_ready) {
     return Sending::Held(ctx.t("orchestrator.composer.notReady"));
+  }
+  // A skill cannot reach the agent yet: nothing is sent while the chip holds one.
+  if view.skill.get().is_some() {
+    return Sending::Held(ctx.t("composer.skill.sendHeld"));
   }
   let way = |how| view.send_draft(project, (chat, how));
   if view.draft.get().trim().is_empty() && view.attached.attached.get().0.is_empty() {

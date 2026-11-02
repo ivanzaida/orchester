@@ -1,5 +1,6 @@
-//! Values of a composer's slash menu (ORC-321; `Slash menu` `IQOLN` in `07 · Orchestrator · slash menu` `jAiyu`,
-//! `v7Xwo` in `06 · Conversation · slash menu` `yKWQx`, the rows in `06d · Slash menu · parts and rules` `lXQi1`).
+//! Values of a composer's slash menu (ORC-321, ORC-325; `Slash menu` `IQOLN` in `07 · Orchestrator · slash menu`
+//! `jAiyu`, `v7Xwo` in `06 · Conversation · slash menu` `yKWQx`, the rows and the skill chip in `06d · Slash menu ·
+//! parts and rules` `lXQi1`).
 
 use std::sync::Arc;
 
@@ -8,11 +9,11 @@ use lurq::{
   layout::text_style::{FontWeight, TextStyle},
 };
 
-use super::typography::style;
+use super::typography::{mono, style};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SlashText {
-  /// 11/500 `text_muted`, 1.3: a section's title, *Commands* (`WG5ZV`).
+  /// 11/500 `text_muted`, 1.3: a section's title, *Commands* (`WG5ZV`), *Skills* (`qLLLv`).
   Section,
   /// 11 `text_muted`, 1.3: what a section's head says at its end (`cvxZd`), the keys' words and the note in the
   /// footer (`rkDuL`, `VzkPa`).
@@ -24,10 +25,25 @@ pub enum SlashText {
   Match,
   /// 12 `text_muted`, 1.3: what a command does (`Bu9RV`); why one cannot run is in `text_secondary`.
   Detail,
+  /// Geist Mono 12 `text_primary`, 1.3: a skill's name (`cLPAs`); the rest of a filtered one in `text_secondary`.
+  SkillLabel,
+  /// Geist Mono 12/600 `text_primary`, 1.3: the letters of a skill's name that match what was typed (`zRg3n`).
+  SkillMatch,
+  /// Geist Mono 11 `text_secondary`, 1.3: a skill chip's name (`LTjMB` in `o6R6w`).
+  Chip,
 }
 
 impl SlashText {
-  pub const ALL: [Self; 5] = [Self::Section, Self::Note, Self::Label, Self::Match, Self::Detail];
+  pub const ALL: [Self; 8] = [
+    Self::Section,
+    Self::Note,
+    Self::Label,
+    Self::Match,
+    Self::Detail,
+    Self::SkillLabel,
+    Self::SkillMatch,
+    Self::Chip,
+  ];
 
   pub fn role(self) -> TypographyStyle {
     TypographyStyle::extra(self.name())
@@ -40,6 +56,9 @@ impl SlashText {
       Self::Label => "slash_label",
       Self::Match => "slash_match",
       Self::Detail => "slash_detail",
+      Self::SkillLabel => "slash_skill_label",
+      Self::SkillMatch => "slash_skill_match",
+      Self::Chip => "slash_chip",
     }
   }
 
@@ -50,6 +69,9 @@ impl SlashText {
       Self::Label => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_primary),
       Self::Match => style(12.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
       Self::Detail => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
+      Self::SkillLabel => mono(style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_primary)),
+      Self::SkillMatch => mono(style(12.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary)),
+      Self::Chip => mono(style(11.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary)),
     }
   }
 }

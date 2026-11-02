@@ -44,7 +44,7 @@ pub(super) struct Target {
 
 /// What sending does in `mode` while something is written or attached and no send is under way: the state's way,
 /// the second where it has one, and *Stop turn and send* where it offers it. Files still being read keep it busy:
-/// they go with the message.
+/// they go with the message. Nothing is sent while the chip holds a skill, which cannot reach the agent yet.
 pub(super) fn presses(state: &ComposerState, target: &Target, (mode, to): (&ComposerMode, Recipient)) -> Sending {
   if state.send.state().get().is_pending() || state.in_flight.get() || state.attached.reading.get() > 0 {
     return Sending::Busy;
@@ -52,6 +52,9 @@ pub(super) fn presses(state: &ComposerState, target: &Target, (mode, to): (&Comp
   let Some(primary) = Action::of(mode, Way::Primary, to) else {
     return Sending::Empty;
   };
+  if state.skill.get().is_some() {
+    return Sending::SkillHeld;
+  }
   if state.draft.get().trim().is_empty() && state.attached.attached.get().0.is_empty() {
     return Sending::Empty;
   }
@@ -118,7 +121,7 @@ pub(super) fn keys(
 ) -> impl Fn(KeyboardEvent) + Send + Sync + 'static {
   let (primary, second) = match presses {
     Sending::Ready { primary, second, .. } => (Some(primary.clone()), second.clone()),
-    Sending::Empty | Sending::Busy => (None, None),
+    Sending::Empty | Sending::Busy | Sending::SkillHeld => (None, None),
   };
   move |event: KeyboardEvent| {
     if event.key == "Escape" {

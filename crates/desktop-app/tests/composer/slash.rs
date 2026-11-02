@@ -5,8 +5,10 @@
 //! `composer_stop_turn`'s, on a live run.
 
 use orchester_app::ui::slash::{matched, query};
+use orchester_core::resource::{InstructionScope, Skill};
+use orchester_workspace::skills::editor;
 
-use super::{draft, key, messages, open, seeded, text, type_on, write};
+use super::{click, draft, key, messages, open, seeded, text, type_on, write};
 use crate::sending::ENTER;
 
 #[test]
@@ -78,4 +80,62 @@ fn composer_slash_inside_text_is_text() {
   window.pass();
   assert!(window.tree.get_element_by_id(MENU).is_none(), "a / inside text is text");
   assert_eq!(draft(&mut window), "Ask /stop");
+}
+
+const SKILL: &str = "composer-slash-skill-rust-change";
+const CHIP: &str = "composer-skill-chip";
+const HELD: &str = "composer-skill-held";
+
+/// The project's published skill `rust-change` (ORC-325), and `draft-only`, never published.
+fn publish_skills(repo: &std::path::Path) {
+  let skill = |description: &str| {
+    Skill::new(description.into(), "Body".into(), Vec::new(), InstructionScope::Project).expect("a skill")
+  };
+  let rust = editor::save_in(
+    repo,
+    None,
+    "rust-change",
+    &skill("Checks to run when a change touches Rust"),
+  )
+  .expect("a draft");
+  editor::publish_in(repo, &rust).expect("v1");
+  editor::save_in(repo, None, "draft-only", &skill("Never published")).expect("a draft");
+}
+
+/// The Skills section follows the run's commands (`06` `yKWQx`): the published skills, never a draft; with *Stop
+/// turn* greyed the focus starts on the skill, and Enter puts its chip before the message (`06c` `DunaJ`). While the
+/// chip holds it, Enter sends nothing and a line under the box says why; its `x` removes it.
+#[test]
+fn composer_slash_offers_published_skills_and_a_chosen_one_holds_sending() {
+  let (mut window, seeded) = seeded();
+  publish_skills(&seeded.repo);
+  let task = open(&mut window, &seeded, TITLE);
+  write(&mut window, "/");
+  window.until("the skills", |window| window.tree.get_element_by_id(SKILL).is_some());
+  let shown = text(&mut window, MENU);
+  assert!(shown.contains("Skills") && shown.contains("1 published"), "{shown}");
+  assert!(!shown.contains("draft-only"), "a draft never shows: {shown}");
+  assert!(
+    text(&mut window, SKILL).contains("Enter"),
+    "the focus skips the greyed command"
+  );
+
+  key(&mut window, ENTER, (false, false));
+  window.until("the chip", |window| {
+    window.tree.get_element_by_id(CHIP).is_some() && window.tree.get_element_by_id(MENU).is_none()
+  });
+  assert!(!draft(&mut window).starts_with('/'), "the typed / goes");
+  assert!(text(&mut window, CHIP).contains("rust-change"));
+  assert!(window.tree.get_element_by_id(HELD).is_some(), "why nothing is sent");
+
+  type_on(&mut window, "skip");
+  key(&mut window, ENTER, (false, false));
+  assert_eq!(draft(&mut window), "skip", "nothing was sent");
+  assert!(messages(&seeded, &task).is_empty());
+
+  click(&mut window, &format!("{CHIP}-remove"));
+  window.until("the chip to go", |window| {
+    window.tree.get_element_by_id(CHIP).is_none() && window.tree.get_element_by_id(HELD).is_none()
+  });
+  assert_eq!(draft(&mut window), "skip", "the words stay");
 }

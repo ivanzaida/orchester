@@ -2,10 +2,15 @@
 //! start of the draft opens the chat's own commands, typing filters them, ↑ ↓ and Enter or a click run one as its
 //! control does (*New conversation* as the header's *New*, *History* as its toggle), and the typed `/` goes; a command
 //! that cannot run is greyed with why; Esc closes the menu and keeps the text; a `/` inside text is just text. Compact
-//! and Model and effort are not offered until their controls exist.
+//! and Model and effort are not offered until their controls exist. The project's published skills follow the commands
+//! (ORC-325), and a chosen one becomes the composer's chip.
 
 use orchester_app::routes::{OrchestratorChat, ProjectPage, Route};
-use orchester_core::time::Timestamp;
+use orchester_core::{
+  resource::{InstructionScope, Skill},
+  time::Timestamp,
+};
+use orchester_workspace::skills::editor;
 
 use super::{
   harness::{Orchestrator, Setup},
@@ -16,6 +21,9 @@ const INPUT: &str = "orchestrator-input";
 const MENU: &str = "orchestrator-composer-slash-menu";
 const NEW: &str = "orchestrator-composer-slash-new-conversation";
 const HISTORY: &str = "orchestrator-composer-slash-history";
+const NOTES: &str = "orchestrator-composer-slash-skill-release-notes";
+const CHIP: &str = "orchestrator-composer-skill-chip";
+const HELD: &str = "orchestrator-composer-skill-held";
 
 /// The field with the focus, holding `text` with the caret at its end.
 fn write(screen: &mut Orchestrator, text: &str) {
@@ -138,7 +146,7 @@ fn orchestrator_slash_is_text_elsewhere_and_esc_keeps_it() {
   write(&mut screen, "");
   write(&mut screen, "/deploy");
   screen.until("nothing to match", |screen| {
-    screen.text(MENU).contains("No command matches /deploy")
+    screen.text(MENU).contains("No command or skill matches /deploy")
   });
   let shown = screen.text(MENU);
   assert!(shown.contains("Send as text"), "{shown}");
@@ -163,4 +171,61 @@ fn orchestrator_slash_menu_opens_over_the_box() {
     (boxed.y - (menu.y + menu.height) - 8.0).abs() < 0.5,
     "{menu:?} {boxed:?}"
   );
+}
+
+/// The project's skills (ORC-325): `release-notes` published, `draft-only` never published.
+fn publish_skills(screen: &Orchestrator) {
+  let skill = |description: &str| {
+    Skill::new(description.into(), "Body".into(), Vec::new(), InstructionScope::Project).expect("a skill")
+  };
+  let notes = editor::save_in(
+    &screen.root,
+    None,
+    "release-notes",
+    &skill("Release notes from the merged tasks"),
+  )
+  .expect("a draft");
+  editor::publish_in(&screen.root, &notes).expect("v1");
+  editor::save_in(&screen.root, None, "draft-only", &skill("Never published")).expect("a draft");
+}
+
+/// The Skills section (`IQOLN`, `OKWFL`) lists the published skills, never a draft; choosing one puts its chip before
+/// the message (`07c` `f0b717`), and while the chip holds it nothing is sent, as a line under the box says; its `x`
+/// removes it, and sending goes on.
+#[test]
+fn orchestrator_slash_offers_published_skills_and_a_chosen_one_becomes_a_chip() {
+  let mut screen = on_a_conversation();
+  publish_skills(&screen);
+  write(&mut screen, "/");
+  screen.until("the skills", |screen| screen.exists(NOTES));
+  let shown = screen.text(MENU);
+  assert!(shown.contains("Skills") && shown.contains("1 published"), "{shown}");
+  assert!(shown.contains("Release notes from the merged tasks"), "{shown}");
+  assert!(!shown.contains("draft-only"), "a draft never shows: {shown}");
+
+  write(&mut screen, "/rel");
+  screen.until("only the skill to match", |screen| {
+    screen.exists(NOTES) && !screen.exists(NEW) && !screen.exists(HISTORY)
+  });
+  assert!(screen.text(MENU).contains("1 of 1"), "{}", screen.text(MENU));
+  assert!(screen.text(NOTES).contains("Enter"), "the focus is on the skill");
+  screen.key(("Enter", "Enter"), false);
+  screen.until("the chip", |screen| screen.exists(CHIP) && !screen.exists(MENU));
+  assert_eq!(draft(&mut screen), "", "the typed / goes");
+  assert!(screen.text(CHIP).contains("release-notes"), "{}", screen.text(CHIP));
+  assert!(screen.exists(HELD), "why nothing is sent");
+
+  write(&mut screen, "for v0.4");
+  screen.key(("Enter", "Enter"), true);
+  screen.window.pass();
+  assert_eq!(draft(&mut screen), "for v0.4", "nothing was sent");
+  assert!(!screen.text("orchestrator-conversation").contains("for v0.4"));
+
+  screen.click(&format!("{CHIP}-remove"));
+  screen.until("the chip to go", |screen| !screen.exists(CHIP) && !screen.exists(HELD));
+  write(&mut screen, "for v0.4");
+  screen.key(("Enter", "Enter"), true);
+  screen.until("the message sent", |screen| {
+    screen.text("orchestrator-conversation").contains("Noted: for v0.4")
+  });
 }

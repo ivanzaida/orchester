@@ -139,6 +139,7 @@ macro_rules! markers {
     impl $inspect for crate::sharing::compare::ConflictComparison {}
     impl $inspect for crate::sharing::compare::HistoryEntry {}
     impl $inspect for crate::skills::data::ProjectSkills {}
+    impl $inspect for crate::skills::offered::OfferedSkill {}
     impl $inspect for crate::sources::project::Removed {}
     impl $inspect for crate::skills::repository::RepositoryScan {}
     impl $inspect for crate::skills::editor::EditorData {}

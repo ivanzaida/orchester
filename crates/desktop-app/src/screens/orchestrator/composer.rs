@@ -9,7 +9,8 @@
 //! chip reads *Not set up* and *Set up the Orchestrator* takes the keys' and the square's place. The files attached
 //! show as chips over the message (`ui::attachments::tray`); a paste of an image, files or long text attaches them,
 //! and so does a drop on the box; why the files last given were not attached shows under it. The draft and its files
-//! stay until its message is kept; a failed send keeps them.
+//! stay until its message is kept; a failed send keeps them. A skill chosen in the slash menu shows as a chip before
+//! the message (`07c` `f0b717`, `ui::slash`); while it does nothing is sent, and a line under the box says why.
 
 use std::sync::Arc;
 
@@ -41,6 +42,7 @@ use crate::{
     icon::{Icon, icon},
     mention::MentionField,
     pressable::{inert, pressable},
+    slash::{send_held, with_skill_chip},
     tooltip::Tooltip,
   },
 };
@@ -118,6 +120,7 @@ pub(super) fn composer(ctx: &mut Ctx, view: &View, composer: ComposerBox<'_>) ->
     (ExtraSpacing::Loose.role(), ExtraSpacing::Loose.role())
   };
   let field = field(ctx, view, &composer, not_set_up);
+  let field = with_skill_chip(ctx, "orchestrator-composer", &view.skill, field);
   let end: Vec<Element> = match composer.set_up {
     Some(set_up) => vec![set_up],
     None => vec![keys(ctx).into(), send(ctx, view, composer.sending)],
@@ -154,11 +157,13 @@ pub(super) fn composer(ctx: &mut Ctx, view: &View, composer: ComposerBox<'_>) ->
     .with_children(attached)
     .child(field)
     .child(bar);
+  let held = view.skill.get().map(|_| send_held(ctx, "orchestrator-composer"));
   Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .child(tray::drop_target(boxed, &view.attached))
     .with_children(tray::refusals(ctx, ATTACHMENTS, &view.attached))
+    .with_children(held)
     .with_children(composer.menus)
 }
 

@@ -49,6 +49,8 @@ const DIVIDER_HEIGHT: f32 = 16.0;
 pub(super) enum Sending {
   /// Nothing is written or attached yet.
   Empty,
+  /// The chip holds a skill, which cannot reach the agent with a message yet (ORC-325).
+  SkillHeld,
   /// The message is being sent, or the files given are still being read.
   Busy,
   /// Pressing sends: the primary way, the second where the state has one, and *Stop turn and send* while an agent
@@ -153,15 +155,16 @@ fn send(ctx: &mut Ctx, bar: &Bar<'_>) -> Element {
       .cursor(CursorIcon::Progress)
       .child(face)
       .into(),
-    Sending::Empty => inert(Button::empty())
+    Sending::Empty | Sending::SkillHeld => inert(Button::empty())
       .id("composer-send")
       .describe("state", "disabled")
       .child(face)
       .into(),
   };
-  // Faded while nothing is written: its tooltip says so.
+  // Faded while nothing is written, or while the chip holds a skill: its tooltip says so.
   let tip = match bar.sending {
     Sending::Empty => Tooltip::new("composer-send", ctx.t("composer.send.empty")),
+    Sending::SkillHeld => Tooltip::new("composer-send", ctx.t("composer.skill.sendHeld")),
     Sending::Busy | Sending::Ready { .. } => {
       Tooltip::new("composer-send", label.clone()).shortcut(ctx.t("composer.keys.enter"))
     }

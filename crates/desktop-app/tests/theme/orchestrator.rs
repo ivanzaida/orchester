@@ -190,19 +190,71 @@ fn context_meter_roles_follow_the_design() {
   );
 }
 
-/// A composer's slash menu (`Slash menu` `IQOLN`, filtered `OKWFL`): all in Geist, 1.3.
+/// A composer's slash menu (`Slash menu` `IQOLN`, filtered `OKWFL`) and its skill chip (`o6R6w`): all 1.3, a
+/// skill's name in Geist Mono.
 #[test]
 fn slash_menu_roles_follow_the_design() {
   let app = themed(Mode::Dark);
   let theme = app.theme();
-  for (role, size, weight, color) in [
+  for (role, size, weight, color, family) in [
     // *Commands* (`WG5ZV`), a head's or the footer's words (`cvxZd`, `VzkPa`), a name (`mSV2x`), its matched letters
-    // (`Match`), what it does (`Bu9RV`).
-    (SlashText::Section, 11.0, FontWeight::Medium, PaletteColor::TextMuted),
-    (SlashText::Note, 11.0, FontWeight::Normal, PaletteColor::TextMuted),
-    (SlashText::Label, 12.0, FontWeight::Normal, PaletteColor::TextPrimary),
-    (SlashText::Match, 12.0, FontWeight::SemiBold, PaletteColor::TextPrimary),
-    (SlashText::Detail, 12.0, FontWeight::Normal, PaletteColor::TextMuted),
+    // (`Match`), what it does (`Bu9RV`); a skill's name (`cLPAs`), its matched letters, and the chip's (`LTjMB`).
+    (
+      SlashText::Section,
+      11.0,
+      FontWeight::Medium,
+      PaletteColor::TextMuted,
+      "Geist",
+    ),
+    (
+      SlashText::Note,
+      11.0,
+      FontWeight::Normal,
+      PaletteColor::TextMuted,
+      "Geist",
+    ),
+    (
+      SlashText::Label,
+      12.0,
+      FontWeight::Normal,
+      PaletteColor::TextPrimary,
+      "Geist",
+    ),
+    (
+      SlashText::Match,
+      12.0,
+      FontWeight::SemiBold,
+      PaletteColor::TextPrimary,
+      "Geist",
+    ),
+    (
+      SlashText::Detail,
+      12.0,
+      FontWeight::Normal,
+      PaletteColor::TextMuted,
+      "Geist",
+    ),
+    (
+      SlashText::SkillLabel,
+      12.0,
+      FontWeight::Normal,
+      PaletteColor::TextPrimary,
+      "Geist Mono",
+    ),
+    (
+      SlashText::SkillMatch,
+      12.0,
+      FontWeight::SemiBold,
+      PaletteColor::TextPrimary,
+      "Geist Mono",
+    ),
+    (
+      SlashText::Chip,
+      11.0,
+      FontWeight::Normal,
+      PaletteColor::TextSecondary,
+      "Geist Mono",
+    ),
   ] {
     let style = theme.typography_style(role.role());
     assert_eq!(
@@ -213,7 +265,7 @@ fn slash_menu_roles_follow_the_design() {
         style.color,
         &*style.font_family
       ),
-      (size, 1.3, weight, theme.palette_color(color), "Geist"),
+      (size, 1.3, weight, theme.palette_color(color), family),
       "{role:?}"
     );
   }

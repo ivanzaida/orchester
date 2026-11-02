@@ -136,6 +136,12 @@
       "withoutContinuing": "Send without continuing",
       "withoutResuming": "Send without resuming"
     },
+    "skill": {
+      "notTaken": "The agent your message goes to can’t take a skill: its connection runs no agents in this version",
+      "remove": "Remove {{name}}",
+      "sendHeld": "Sending a skill with a message isn’t available yet. Remove the skill to send your words.",
+      "tooltip": "{{name}} · Published v{{version}}"
+    },
     "slash": {
       "agentStep": "{{agent}} · {{step}}",
       "command": {
@@ -160,8 +166,8 @@
       "commands": "Commands",
       "count": "{{shown}} of {{total}}",
       "empty": {
-        "hint": "Enter sends “/{{query}}” as a message.",
-        "title": "No command matches /{{query}}"
+        "hint": "Enter sends “/{{query}}” as a message. Skills are published in Agents › Skills.",
+        "title": "No command or skill matches /{{query}}"
       },
       "hint": {
         "choose": "Choose",
@@ -174,6 +180,9 @@
         "esc": "Esc",
         "move": "↑ ↓"
       },
+      "published": "{{count}} published",
+      "skills": "Skills",
+      "skillsUnreadable": "Couldn’t read them: {{reason}}",
       "typeToFilter": "Type to filter",
       "typed": "/{{query}}"
     },

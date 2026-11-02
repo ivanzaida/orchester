@@ -28,6 +28,7 @@ use orchester_workspace::{
   decisions::DecisionKind,
   messages::{self, Message},
   runner::AnswerMark,
+  skills::offered::OfferedSkill,
   tasks::{
     answering::Answered,
     conversation::{
@@ -139,6 +140,8 @@ pub struct ComposerState {
   pub(super) draft: Signal<String>,
   /// The files the draft holds, and why the last ones given were not taken.
   pub(super) attached: DraftAttachments,
+  /// The skill the composer's chip holds (`ui::slash`).
+  pub(super) skill: Signal<Option<OfferedSkill>>,
   /// Set to put the focus in the message field.
   pub(super) focus: Signal<bool>,
   /// The question's or the plan's mode the person left with its line's × or Esc: while the run's state
@@ -166,6 +169,7 @@ impl ComposerState {
       task,
       draft: ctx.signal(kept::draft(task)),
       attached: DraftAttachments::new(ctx, kept::attachments(task)),
+      skill: ctx.signal(None),
       focus: ctx.signal(false),
       left: ctx.signal(None),
       handled: ctx.signal(Handled(kept::handled(task))),

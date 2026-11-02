@@ -68,6 +68,7 @@ use orchester_workspace::{
     queue::{TakenBack, WhileAnswering},
     send::Outgoing,
   },
+  skills::offered::OfferedSkill,
 };
 
 use self::{
@@ -134,11 +135,12 @@ struct View {
   focus: Signal<bool>,
   /// The message field has the focus.
   focused: Signal<bool>,
-  /// The message field, the field's @ menu and its mentions (`ui::mention`), its slash menu (`ui::slash`), and the box
-  /// the menus open over.
+  /// The message field, the field's @ menu and its mentions (`ui::mention`), its slash menu (`ui::slash`) and the
+  /// skill its chip holds, and the box the menus open over.
   input: ElementRef,
   mention: MentionField,
   slash: SlashField,
+  skill: Signal<Option<OfferedSkill>>,
   mention_anchor: ElementRef,
   /// The send menu over the send button is open while the Orchestrator answers, and its chevron.
   menu: Signal<bool>,
@@ -166,8 +168,9 @@ impl Component for OrchestratorScreen {
 
   fn create(ctx: &mut Ctx) -> Self {
     let (draft, focused) = (ctx.signal(String::new()), ctx.signal(false));
+    let skill = ctx.signal(None);
     let mention = MentionField::new(ctx, draft.clone(), focused.clone());
-    let slash = SlashField::new(ctx, draft.clone(), focused.clone());
+    let slash = SlashField::new(ctx, draft.clone(), (focused.clone(), skill.clone()));
     let view = View {
       draft,
       attached: DraftAttachments::new(ctx, Vec::new()),
@@ -183,6 +186,7 @@ impl Component for OrchestratorScreen {
       input: mention.element(),
       mention,
       slash,
+      skill,
       mention_anchor: ElementRef::new(),
       menu: ctx.signal(false),
       menu_anchor: ElementRef::new(),

@@ -2,25 +2,31 @@
 //! the turn of the agent at work as the working line's *Stop turn* and Esc in the composer do, and says why it cannot
 //! while no turn runs or the turn cannot be stopped alone. The head names the run's agent and its step. Compact, Model
 //! and effort, and Permissions join it once their controls exist (ORC-309, ORC-319 and the run model switch); until
-//! then they are not offered.
+//! then they are not offered. The project's published skills follow them (ORC-325), greyed while an agent the message
+//! may reach cannot take one.
 
 use std::sync::Arc;
 
 use lurq::{app::ctx::Ctx, core::ElementRef, node::Element};
-use orchester_workspace::tasks::conversation::{WorkingAgent, composer::ComposerMode};
+use orchester_core::conversation::Recipient;
+use orchester_workspace::{
+  attachments::reachable_providers,
+  skills::offered::taken_by,
+  tasks::conversation::{WorkingAgent, composer::ComposerMode},
+};
 
 use super::{super::timeline::step_label, Composing};
 use crate::ui::{
   icon::Icon,
-  slash::{self, SlashCommand, SlashField, SlashMenuProps},
+  slash::{self, SkillsOffer, SlashCommand, SlashField, SlashMenuProps},
 };
 
-/// The slash menu over the box `anchor` for the run's state `mode`.
+/// The slash menu over the box `anchor` for the run's state `mode`, for a message to `recipient`.
 pub(super) fn menu(
   ctx: &mut Ctx,
   (field, anchor): (&SlashField, &ElementRef),
   composing: &Composing,
-  mode: &ComposerMode,
+  (mode, recipient): (&ComposerMode, Recipient),
 ) -> Element {
   let note = composing.detail.run.as_ref().and_then(|run| {
     let step = run.current_step()?;
@@ -28,6 +34,17 @@ pub(super) fn menu(
     let step = step_label(ctx, step.number, &step.name);
     Some(ctx.t_args("composer.slash.agentStep", [("agent", agent), ("step", &*step)]))
   });
+  let providers = composing
+    .detail
+    .run
+    .as_ref()
+    .map(|run| reachable_providers(run, recipient))
+    .unwrap_or_default();
+  let skills = SkillsOffer {
+    root: composing.project.open.repo_root.clone(),
+    revision: composing.project.feed.saves.get(),
+    refused: (!taken_by(&providers)).then(|| ctx.t("composer.skill.notTaken")),
+  };
   slash::menu(
     ctx,
     SlashMenuProps {
@@ -35,6 +52,7 @@ pub(super) fn menu(
       field: field.clone(),
       anchor: anchor.clone(),
       commands: vec![stop_turn(ctx, composing, mode)],
+      skills,
       note,
       send: None,
     },
