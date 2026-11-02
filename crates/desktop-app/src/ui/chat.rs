@@ -5,10 +5,11 @@
 //! a bubble that hugs it up to 80 % of the chat (`own_message` in a `border` stroke, radius 10, 8 by 12 inside) and,
 //! under it, where it stands. Where a link in what an agent wrote leads is [`links`]'; which places an agent names as
 //! plain text are links, [`references`]'; which of its lists are labelled links, [`labelled`]'s. Both chats open at
-//! their end and follow it ([`follow`]).
+//! their end and follow it ([`follow`]); what a search found in a message is filled behind its words ([`found`]).
 
 mod agent_text;
 pub mod follow;
+pub mod found;
 mod grid;
 pub mod labelled;
 pub mod links;
@@ -31,6 +32,7 @@ use orchester_core::time::Timestamp;
 use orchester_workspace::display;
 
 pub use self::agent_text::agent_text;
+use self::found::Found;
 use super::{
   icon::{Icon, icon},
   markdown::LinkHandler,
@@ -165,15 +167,26 @@ pub fn own_bubble(id: &str, said: Option<Element>, (attached, delivery): (Option
   message_column(id, None, said, (attached, delivery))
 }
 
-/// What `body` says as written, without links (a note the person returned the work with); `id` names the message.
-pub fn plain_said(id: &str, body: &str) -> Option<Element> {
+/// What `body` says as written, without links (a note the person returned the work with), what a search found in it
+/// filled behind its words (`found`); `id` names the message.
+pub fn plain_said(ctx: &Ctx, id: &str, body: &str, found: Option<&Found>) -> Option<Element> {
   (!body.trim().is_empty()).then(|| {
-    Text::new(body)
+    let words = Text::new(body)
       .id(format!("{id}-text"))
       .variant(TypographyStyle::Body)
-      .selectable(true)
-      .into()
+      .selectable(true);
+    marked_words(ctx, words, body, found)
   })
+}
+
+/// `words`, a message's words that show `text` as written, with what a search found in them filled behind them.
+pub fn marked_words(ctx: &Ctx, words: Text, text: &str, found: Option<&Found>) -> Element {
+  let Some(found) = found else {
+    return words.into();
+  };
+  let highlights = found.highlights(ctx, text);
+  let places = highlights.len();
+  found.classed(words.highlights(highlights).into(), places)
 }
 
 fn message_column(

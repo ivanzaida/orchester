@@ -6,8 +6,9 @@
 //! whole run, the current one brighter, a click goes to it (`Match marks` `z4lnO5`: a 6 wide `hover` track, radius
 //! full, 16 in from the chat's top, end and foot; a mark 2 high, the current one 4, `warning`, radius 1).
 //!
-//! What a message says is marked on its row, a 2 rule at its start, `warning` for the current place: lurq cannot fill
-//! behind part of a wrapping text yet (ivanzaida/lurq#75).
+//! A message, the person's, an agent's or the Orchestrator's, fills behind its matched words itself
+//! ([`Marks::in_said`], `ui::chat::found`). A card, a problem or a notice says several texts, and a place found in it
+//! does not say in which: its row is marked instead, a 2 rule at its start, `warning` for the current place.
 
 use std::{ops::Range, sync::Arc};
 
@@ -20,12 +21,13 @@ use lurq::{
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_workspace::tasks::timeline::find::{Hit, Spot};
+use orchester_workspace::tasks::timeline::find::{Hit, Needle, Spot};
 
 use super::run::Found;
 use crate::{
   theme::{ConversationRadius, ExtraColor, ExtraRadius, ExtraSpacing, IconSize, TRACK_MARK_OPACITY},
   ui::{
+    chat::found::Found as InMessage,
     icon::{Icon, icon},
     pressable::pressable,
   },
@@ -38,17 +40,18 @@ const CURRENT_MARK_HEIGHT: f32 = 4.0;
 /// The track's marks, at most: places closer than this share one.
 const TRACK_MARKS: usize = 200;
 
-/// What the chat's rows mark: the places found, and which is current. Rows compare it by the search that found the
-/// places and the current one.
+/// What the chat's rows mark: what the search looked for, the places it found, and which is current. Rows compare it
+/// by the search that found the places and the current one.
 #[derive(Clone, Debug)]
 pub(in super::super) struct Marks {
+  needle: Option<Needle>,
   found: Arc<Found>,
   current: Option<usize>,
 }
 
 impl PartialEq for Marks {
   fn eq(&self, other: &Self) -> bool {
-    Arc::ptr_eq(&self.found, &other.found) && self.current == other.current
+    self.needle == other.needle && Arc::ptr_eq(&self.found, &other.found) && self.current == other.current
   }
 }
 
@@ -56,12 +59,12 @@ impl PartialEq for Marks {
 pub(in super::super) type Place = (Range<usize>, bool);
 
 impl Marks {
-  pub(in super::super) const fn new(found: Arc<Found>, current: Option<usize>) -> Self {
-    Self { found, current }
+  pub(in super::super) const fn new(needle: Option<Needle>, found: Arc<Found>, current: Option<usize>) -> Self {
+    Self { needle, found, current }
   }
 
-  /// How a row that shows the items `items` is marked for what they say: `Some(true)` holding the current place,
-  /// `Some(false)` another, `None` none.
+  /// How a row that shows the cards or notices `items` is marked for what they say: `Some(true)` holding the current
+  /// place, `Some(false)` another, `None` none.
   pub(in super::super) fn row(&self, items: &[&str]) -> Option<bool> {
     let said = |item: &&str| self.found.said_in(item);
     let current = self
@@ -71,6 +74,24 @@ impl Marks {
     current
       .then_some(true)
       .or_else(|| items.iter().any(said).then_some(false))
+  }
+
+  /// What a message, the item `item`, fills behind its words: the needle, and the rank of the current place among
+  /// the places found in what it says. `None` when it says none.
+  pub(in super::super) fn in_said(&self, item: &str) -> Option<InMessage> {
+    let needle = self.needle.clone()?;
+    let said: Vec<usize> = self
+      .found
+      .in_item(item)
+      .iter()
+      .copied()
+      .filter(|&index| self.found.hits[index].spot == Spot::Said)
+      .collect();
+    if said.is_empty() {
+      return None;
+    }
+    let current = self.current.and_then(|at| said.iter().position(|&index| index == at));
+    Some(InMessage::new(needle, current))
   }
 
   /// How many places the folds of the steps `steps` hide.

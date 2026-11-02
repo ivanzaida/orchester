@@ -121,7 +121,7 @@ pub(in super::super) fn searching(
     .child(track)
     .into();
   Some(Searching {
-    marks: Marks::new(found, current),
+    marks: Marks::new(needle, found, current),
     reveal,
     bar,
     track,
