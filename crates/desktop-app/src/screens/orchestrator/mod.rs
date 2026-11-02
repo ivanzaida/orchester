@@ -14,6 +14,8 @@ mod body;
 pub(in crate::screens) mod card;
 pub(in crate::screens) mod change;
 mod commands;
+mod compact;
+mod compaction;
 mod composer;
 mod context;
 pub(in crate::screens) mod data;
@@ -141,6 +143,8 @@ struct View {
   menu_anchor: ElementRef,
   send: SendAction,
   stop: StopAction,
+  /// Compacts the conversation's session (ORC-309).
+  compact: compact::CompactAction,
   /// Takes a queued message's words back into the composer, or removes it.
   queued: QueuedAction,
   /// What a press on a link in a reply does; made once, so a reply is laid out again only when it changes.
@@ -181,6 +185,7 @@ impl Component for OrchestratorScreen {
       menu_anchor: ElementRef::new(),
       send: send::send_action(ctx),
       stop: send::stop_action(ctx),
+      compact: compact::compact_action(ctx),
       queued: send::queued_action(ctx),
       links: chat::links(ctx),
       follow: Follow::new(ctx),

@@ -133,6 +133,7 @@ icons! {
   Flag => '\u{e0d1}',
   FlaskConical => '\u{e0d5}',
   FoldHorizontal => '\u{e43b}',
+  FoldVertical => '\u{e43c}',
   Folder => '\u{e0d7}',
   FolderCheck => '\u{e32e}',
   FolderGit2 => '\u{e40a}',

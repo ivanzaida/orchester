@@ -4,12 +4,14 @@
 //! popover is open; on a step's divider it has no padding (`bxHFm`). Under 80 % the ring and share are `text_muted`,
 //! from 80 % `warning`, at the whole window the ring is `danger` and *Full* takes the share's place; a CLI that reports
 //! no window gets a dashed ring and no share. Resting on it shows its tooltip (*Context 86% · 172k of 200k*); a press
-//! opens its popover ([`popover`]). *Compact* beside it is not part of this build (ORC-309): its place stays empty.
+//! opens its popover ([`popover`]). Where the session can be compacted (ORC-309, [`Compact`]), *Compact* sits beside
+//! the bar's meter from 80 % (ghost, secondary when full) and closes its popover; while the session is compacted the
+//! meter is a `loader-circle` and *Compacting…* in `text_secondary` (`gY3Ku`).
 
 mod popover;
 mod ring;
 
-use std::sync::Arc;
+use std::{fmt, sync::Arc};
 
 use lurq::{
   app::{
@@ -29,6 +31,7 @@ use orchester_core::{
 
 use self::ring::{Ring, RingProps};
 use super::{
+  button::{ActionButton, ButtonKind},
   icon::{Icon, icon},
   pressable::pressable,
   tooltip::Tooltip,
@@ -44,6 +47,43 @@ pub enum MeterPlace {
   Divider,
 }
 
+/// What *Compact* can do for the meter's session (ORC-309).
+#[derive(Clone)]
+pub enum Compact {
+  /// The session cannot be compacted from here: no *Compact* is offered.
+  NotOffered,
+  /// Offered, but a turn is under way: it waits, disabled, and says so.
+  Waits,
+  /// A press compacts the session.
+  Ready(Arc<dyn Fn() + Send + Sync>),
+  /// The session is being compacted.
+  Running,
+}
+
+impl Compact {
+  const fn name(&self) -> &'static str {
+    match self {
+      Self::NotOffered => "not-offered",
+      Self::Waits => "waits",
+      Self::Ready(_) => "ready",
+      Self::Running => "running",
+    }
+  }
+}
+
+/// Compared by what it offers; the press is the screen's.
+impl PartialEq for Compact {
+  fn eq(&self, other: &Self) -> bool {
+    self.name() == other.name()
+  }
+}
+
+impl fmt::Debug for Compact {
+  fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    formatter.write_str(self.name())
+  }
+}
+
 /// What a meter shows.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ContextMeterProps {
@@ -55,6 +95,7 @@ pub struct ContextMeterProps {
   pub agent: Option<Arc<str>>,
   pub model: Option<Arc<str>>,
   pub place: MeterPlace,
+  pub compact: Compact,
 }
 
 impl DevtoolsInspectable for ContextMeterProps {}
@@ -107,6 +148,9 @@ impl Component for ContextMeter {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<ContextMeterProps>().clone();
+    if props.compact == Compact::Running {
+      return compacting(ctx, &props);
+    }
     let fullness = props.reading.map_or(Fullness::Unknown, |reading| reading.fullness());
     let open = self.open.get();
     let face = face(ctx, &props, fullness);
@@ -115,6 +159,7 @@ impl Component for ContextMeter {
       .id(props.id.to_string())
       .ref_element(self.anchor.clone())
       .describe("state", state_name(fullness))
+      .describe("compact", props.compact.name())
       .describe("a11y_name", ctx.t("ui.contextMeter.name"))
       .flex_shrink(0.0)
       .child(face);
@@ -140,17 +185,89 @@ impl Component for ContextMeter {
       MeterPlace::Bar => (Placement::TopEnd, ExtraSpacing::Snug.value()),
       MeterPlace::Divider => (Placement::BottomStart, ExtraSpacing::Snug.value()),
     };
-    let panel = popover::panel(ctx, &props, fullness);
+    let compact = closing(&props.compact, &self.open);
+    let panel = popover::panel(ctx, &props, fullness, &compact);
     let popup = Popup::new(self.anchor.clone(), panel)
       .open(self.open.clone())
       .placement(placement)
       // Away from the meter: lurq moves an overlay above its anchor up, and one under it down, by a positive offset.
       .offset(0.0, side);
-    Row::new()
-      .flex_shrink(0.0)
-      .align_items(Alignment::Center)
-      .child(tip)
-      .child(popup)
+    // From near full, *Compact* sits beside the bar's meter (`GENCC`): ghost, secondary once the window is full.
+    let beside = match (props.place, fullness) {
+      (MeterPlace::Bar, Fullness::NearFull) => compact_button(ctx, &props.id, (ButtonKind::Ghost, true), &compact),
+      (MeterPlace::Bar, Fullness::Full) => compact_button(ctx, &props.id, (ButtonKind::Secondary, true), &compact),
+      _ => None,
+    };
+    Element::from(
+      Row::new()
+        .flex_shrink(0.0)
+        .spacing(ExtraSpacing::Snug.role())
+        .align_items(Alignment::Center)
+        .child(tip)
+        .child(popup)
+        .with_children(beside),
+    )
+  }
+}
+
+/// `compact`, its press closing the popover `open` first.
+fn closing(compact: &Compact, open: &Signal<bool>) -> Compact {
+  match compact {
+    Compact::Ready(press) => {
+      let (press, open) = (press.clone(), open.clone());
+      Compact::Ready(Arc::new(move || {
+        open.set(false);
+        press();
+      }))
+    }
+    other => other.clone(),
+  }
+}
+
+/// *Compact* of `kind`, named after `id`, the bar's helper size `in_bar` (`GENCC`: a 12 icon, 11.5 words), else a
+/// button's own: a press compacts the session; while a turn is under way it waits, disabled, and its tooltip says so.
+/// `None` where nothing is offered.
+pub(super) fn compact_button(
+  ctx: &mut Ctx,
+  id: &str,
+  (kind, in_bar): (ButtonKind, bool),
+  compact: &Compact,
+) -> Option<Element> {
+  let button = ActionButton::new(format!("{id}-compact"), kind, ctx.t("ui.contextMeter.compact")).icon(Icon::FoldVertical);
+  let button = if in_bar { button.compact() } else { button };
+  match compact {
+    Compact::Ready(press) => {
+      let press = press.clone();
+      Some(button.on_click(move || press()).into())
+    }
+    Compact::Waits => Some(
+      Tooltip::new(format!("{id}-compact-waits"), ctx.t("ui.contextMeter.compactWaits")).wrap(ctx, button.disabled()),
+    ),
+    Compact::NotOffered | Compact::Running => None,
+  }
+}
+
+/// The meter while its session is compacted (`gY3Ku`): a `loader-circle` and *Compacting…* in `text_secondary`.
+fn compacting(ctx: &Ctx, props: &ContextMeterProps) -> Element {
+  let row = Row::new()
+    .id(props.id.to_string())
+    .describe("state", "compacting")
+    .flex_shrink(0.0)
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::Center)
+    .child(icon(Icon::LoaderCircle, IconSize::Sm, PaletteColor::TextSecondary))
+    .child(
+      Text::new(&ctx.t("ui.contextMeter.compacting"))
+        .id(format!("{}-share", props.id))
+        .variant(ContextText::Compacting.role())
+        .nowrap(),
+    );
+  match props.place {
+    MeterPlace::Bar => row
+      .height(Dimension::Px(ControlHeight::Sm.value()))
+      .padding(Padding::horizontal(SpacingSize::Sm))
+      .into(),
+    MeterPlace::Divider => row.into(),
   }
 }
 

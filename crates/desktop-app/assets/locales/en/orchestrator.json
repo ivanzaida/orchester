@@ -219,6 +219,19 @@
       "connection": "The Orchestrator runs on another connection now: this answer starts a new session and doesn't remember the earlier messages.",
       "account": "The Orchestrator's connection is on another account now: this answer starts a new session and doesn't remember the earlier messages."
     },
+    "context": {
+      "event": {
+        "compacting": "Compacting the conversation",
+        "compacted": "Compacted",
+        "notCompacted": "Not compacted",
+        "change": "{{before}} → {{after}}",
+        "after": "→ {{after}}",
+        "afterUnreported": "{{before}} → size comes with the next reply"
+      },
+      "placeholderCompacting": "Message the Orchestrator — send it once compacting ends…",
+      "sendWaits": "The conversation is being compacted: send once it's done.",
+      "notStarted": "The conversation wasn't compacted"
+    },
     "wait": {
       "what": {
         "question": "{{agent}} asks a question",

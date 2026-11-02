@@ -1,9 +1,15 @@
 //! The context meter (ORC-305, ORC-308): its four states in a composer's bar and on a divider, its tooltip and its
-//! popover with the tokens used of the window, an estimate marked as one, and a reading that changes while it shows.
+//! popover with the tokens used of the window, an estimate marked as one, and a reading that changes while it shows;
+//! *Compact* beside it and in its popover, waiting while a turn is under way, and the meter while it compacts (ORC-309).
+
+use std::sync::{
+  Arc,
+  atomic::{AtomicUsize, Ordering},
+};
 
 use lurq::{components::Column, core::Signal, node::Element};
 use orchester_app::ui::{
-  context_meter::{ContextMeterProps, MeterPlace, MeterReading, context_meter},
+  context_meter::{Compact, ContextMeterProps, MeterPlace, MeterReading, context_meter},
   icon::Icon,
 };
 use orchester_core::connection::context_use::ContextUse;
@@ -17,7 +23,43 @@ fn props(id: &str, reading: Option<ContextUse>, place: MeterPlace) -> ContextMet
     agent: None,
     model: Some("claude-opus-5-5".into()),
     place,
+    compact: Compact::NotOffered,
   }
+}
+
+#[test]
+fn context_meter_offers_compact_beside_it_from_near_full_and_in_its_popover() {
+  let pressed = Arc::new(AtomicUsize::new(0));
+  let counted = pressed.clone();
+  let mut kit = Kit::show(move |ctx| {
+    let counted = counted.clone();
+    let ready = Compact::Ready(Arc::new(move || {
+      counted.fetch_add(1, Ordering::SeqCst);
+    }));
+    let offered = |id, reading, compact: &Compact| ContextMeterProps {
+      compact: compact.clone(),
+      ..props(id, Some(reading), MeterPlace::Bar)
+    };
+    Column::new()
+      .child(context_meter(ctx, offered("plenty", ContextUse::reported(76_000, 200_000), &ready)))
+      .child(context_meter(ctx, offered("near", ContextUse::reported(172_000, 200_000), &ready)))
+      .child(context_meter(ctx, offered("busy", ContextUse::reported(172_000, 200_000), &Compact::Waits)))
+      .child(context_meter(ctx, offered("running", ContextUse::reported(172_000, 200_000), &Compact::Running)))
+      .into()
+  });
+  assert!(!kit.exists("plenty-compact"), "under 80% Compact is in the popover only");
+  assert!(kit.exists("near-compact"), "from 80% it sits beside the meter");
+  kit.click("near-compact");
+  assert_eq!(pressed.load(Ordering::SeqCst), 1, "a press compacts");
+  kit.click("plenty");
+  assert!(kit.texts("plenty-popover-hint")[0].starts_with("Compact replaces"));
+  kit.click("plenty-popover-compact");
+  assert_eq!(pressed.load(Ordering::SeqCst), 2, "the popover's Compact compacts");
+  assert!(!kit.exists("plenty-popover"), "and closes the popover");
+  kit.click("busy-compact");
+  assert_eq!(pressed.load(Ordering::SeqCst), 2, "it waits while a turn is under way");
+  assert_eq!(kit.texts("running-share"), ["Compacting…"], "the meter while it compacts");
+  assert!(!kit.exists("running-compact"), "and no Compact then");
 }
 
 /// A window showing one meter per reading, in a composer's bar.
@@ -96,7 +138,7 @@ fn context_meter_popover_shows_used_of_window_and_marks_an_estimate() {
   assert_eq!(kit.texts("near-popover-share"), ["86%"]);
   assert!(kit.exists("near-popover-bar"), "the share's bar");
   assert!(!kit.exists("near-popover-note"), "a reported window needs no note");
-  assert!(!kit.exists("near-popover-compact"), "Compact is not part of this build");
+  assert!(!kit.exists("near-popover-compact"), "Compact is offered only where the session can be compacted");
   kit.click("near");
   kit.click("estimate");
   assert_eq!(kit.texts("estimate-popover-tokens"), ["≈ 108k of 128k tokens"]);

@@ -126,6 +126,12 @@ fn parts(ctx: &mut Ctx, row: &TurnRow) -> Column {
         };
         shown.push(divider(&format!("orchestrator-event-{key}-{index}"), &words, None));
       }
+      // A compaction has a row of its own (`super::turns`); kept in an answer, it shows its line there.
+      Part::Event { event, at } => {
+        flush(&mut shown, &mut lines, index);
+        let id = format!("orchestrator-event-{key}-{index}");
+        shown.extend(super::compaction::line(ctx, &id, event, Some(*at)));
+      }
     }
   }
   flush(&mut shown, &mut lines, row.turn.answer.len());

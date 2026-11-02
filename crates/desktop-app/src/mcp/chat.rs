@@ -26,7 +26,10 @@ use lurq::{
     service::RequestContext,
   },
 };
-use orchester_core::{id::ChatMessageId, orchestrator::TurnState};
+use orchester_core::{
+  id::{ChatId, ChatMessageId},
+  orchestrator::TurnState,
+};
 use orchester_ipc::{ChatToken, ChatTools};
 use orchester_store::ProjectDb;
 use orchester_workspace::{
@@ -122,6 +125,22 @@ impl ChatServers {
   pub fn end(&self, message: ChatMessageId) {
     self.running.lock().remove(&message);
   }
+
+  /// Stops serving the compaction of `chat`'s session served under `key` once no compaction of it runs in the
+  /// project at `root` (ORC-309): its CLI is given the tools as a turn's is.
+  pub fn end_with_compaction(&self, services: &Services, root: PathBuf, (chat, key): (ChatId, ChatMessageId)) {
+    let (servers, runners) = (self.clone(), services.runners.clone());
+    services.runtime.spawn(async move {
+      let mut changes = runners.chats_of(&root);
+      while compacting(&root, chat).await {
+        match tokio::time::timeout(RECHECK, changes.changed()).await {
+          Ok(Ok(())) | Err(_) => {}
+          Ok(Err(_)) => tokio::time::sleep(RECHECK).await,
+        }
+      }
+      servers.end(key);
+    });
+  }
 }
 
 /// Whether the turn that answers `message` still thinks in the project at `root`. One that cannot be read is taken
@@ -136,6 +155,23 @@ async fn thinking(root: &Path, message: ChatMessageId) -> bool {
     }
     Err(error) => {
       tracing::warn!(%message, %error, "reading a turn of the Orchestrator chat did not finish; its tools stay served");
+      true
+    }
+  }
+}
+
+/// Whether a compaction of `chat` runs in the project at `root`. One that cannot be read is taken as running: it is
+/// read again later.
+async fn compacting(root: &Path, chat: ChatId) -> bool {
+  let root = root.to_path_buf();
+  match tokio::task::spawn_blocking(move || ProjectDb::open(&root)?.chat_compacting(chat)).await {
+    Ok(Ok(compacting)) => compacting,
+    Ok(Err(error)) => {
+      tracing::warn!(%chat, %error, "cannot read the chat's compaction; its tools stay served");
+      true
+    }
+    Err(error) => {
+      tracing::warn!(%chat, %error, "reading the chat's compaction did not finish; its tools stay served");
       true
     }
   }

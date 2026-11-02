@@ -145,6 +145,14 @@ fn update_install_icons_match_bundled_font_names() {
   }
 }
 
+/// The glyphs of *Compact* and the compaction's lines (ORC-309, `GENCC`, `dPq1I`, `l5YmWb`).
+#[test]
+fn compact_icons_match_bundled_font_names() {
+  let font = include_bytes!("../../assets/fonts/lucide.ttf");
+  for (icon, name) in [(Icon::FoldVertical, "fold-vertical"), (Icon::FoldHorizontal, "fold-horizontal")] {
+    assert_eq!(glyph_name(font, font_glyph(font, icon.glyph() as usize)), name);
+  }
+}
 /// The glyphs of the @ menu's rows and its empty state (`qhBhC`, `zzJ78`); the font names `square-check` by its
 /// former name `check-square-2`.
 #[test]

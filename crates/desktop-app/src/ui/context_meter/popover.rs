@@ -2,8 +2,9 @@
 //! `border_strong` stroke, radius 8, 12 inside and 10 between its parts, lifted by the menu's shadow. Its head says
 //! *Context*, the state's badge (*Near full*, *Full*) and, at its end, the model, or the agent and its model on a run;
 //! then a 4 high bar of the share, the tokens used of the window and the share. An estimated window marks both with
-//! ≈ and says why; an unknown share says so. What fills the window and *Compact* are not part of this build: no agent
-//! reports the first, and Compact comes with ORC-309.
+//! ≈ and says why; an unknown share says so. Where the session can be compacted, its foot holds a hint by the state
+//! and *Compact* (`IEyug`): secondary, primary when the window is full, 12 apart (ORC-309). What fills the window is
+//! not part of this build: no agent reports it.
 
 use std::sync::Arc;
 
@@ -21,10 +22,11 @@ use orchester_core::{
   tokens::compact_tokens,
 };
 
-use super::{ContextMeterProps, share_color};
+use super::{Compact, ContextMeterProps, compact_button, share_color};
 use crate::{
   theme::{ContextText, ExtraRadius, ExtraSpacing},
   ui::{
+    button::ButtonKind,
     chip::{BadgeTone, badge},
     meter::{MeterTone, meter},
   },
@@ -34,14 +36,16 @@ use crate::{
 const WIDTH: f32 = 300.0;
 const WIDE: f32 = 360.0;
 
-/// The popover's panel for `props`, whose reading is `fullness` full.
-pub(super) fn panel(ctx: &Ctx, props: &ContextMeterProps, fullness: Fullness) -> Element {
+/// The popover's panel for `props`, whose reading is `fullness` full, with what `compact` offers.
+pub(super) fn panel(ctx: &mut Ctx, props: &ContextMeterProps, fullness: Fullness, compact: &Compact) -> Element {
   let id = format!("{}-popover", props.id);
   let width = if props.agent.is_some() { WIDE } else { WIDTH };
   let parts: Vec<Element> = match props.reading {
     Some(reading) if reading.window().is_some() => known(ctx, &id, reading, fullness),
     reading => unknown(ctx, &id, reading),
   };
+  let head = head(ctx, &id, props, fullness);
+  let foot = foot(ctx, &id, (props, fullness), compact);
   Column::new()
     .id(id.clone())
     .describe("state", super::state_name(fullness))
@@ -52,9 +56,43 @@ pub(super) fn panel(ctx: &Ctx, props: &ContextMeterProps, fullness: Fullness) ->
     .background(PaletteColor::SurfaceRaised)
     .border_inside(BorderSize::Sm, PaletteColor::BorderStrong)
     .box_shadow(ShadowStyle::Md)
-    .child(head(ctx, &id, props, fullness))
+    .child(head)
     .with_children(parts)
+    .with_children(foot)
     .into()
+}
+
+/// The hint for the state and *Compact*; `None` where nothing is offered.
+fn foot(ctx: &mut Ctx, id: &str, (props, fullness): (&ContextMeterProps, Fullness), compact: &Compact) -> Option<Element> {
+  let kind = if fullness == Fullness::Full {
+    ButtonKind::Primary
+  } else {
+    ButtonKind::Secondary
+  };
+  let button = compact_button(ctx, id, (kind, false), compact)?;
+  let hint = match (fullness, &props.agent) {
+    (Fullness::Plenty, _) => ctx.t("ui.contextMeter.hintPlenty"),
+    (Fullness::NearFull, Some(agent)) => ctx.t_args("ui.contextMeter.hintNearFullAgent", [("agent", &**agent)]),
+    (Fullness::NearFull, None) => ctx.t("ui.contextMeter.hintNearFull"),
+    (Fullness::Full, _) => ctx.t("ui.contextMeter.hintFull"),
+    (Fullness::Unknown, _) => ctx.t("ui.contextMeter.hintUnknown"),
+  };
+  Some(
+    Row::new()
+      .id(format!("{id}-compact-row"))
+      .width(Dimension::Pct(100.0))
+      .spacing(SpacingSize::Md)
+      .align_items(Alignment::Center)
+      .child(
+        Text::new(&hint)
+          .id(format!("{id}-hint"))
+          .variant(ContextText::Note.role())
+          .flex(1.0)
+          .min_width(Dimension::Px(0.0)),
+      )
+      .child(button)
+      .into(),
+  )
 }
 
 /// *Context*, the state's badge, and the model at the end.

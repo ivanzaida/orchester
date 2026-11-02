@@ -18,19 +18,23 @@ use orchester_workspace::{
   orchestrator::{chat::context_in, settings::Readiness},
 };
 
-use super::data::{Reads, Shown, revision};
+use super::{
+  View,
+  data::{Reads, Shown, revision},
+};
 use crate::{
   project::ShownProject,
   services::Services,
-  ui::context_meter::{ContextMeterProps, MeterPlace, MeterReading, context_meter},
+  ui::context_meter::{Compact, ContextMeterProps, MeterPlace, MeterReading, context_meter},
 };
 
-/// The meter of the conversation `reads` shows, while the Orchestrator can answer in it; `None` for a new one.
+/// The meter of the conversation `reads` shows, while the Orchestrator can answer in it, with what *Compact* does
+/// there (`super::compact`); `None` for a new one.
 pub(super) fn meter(
   ctx: &mut Ctx,
+  view: &View,
   project: &ShownProject,
-  reads: &Reads,
-  readiness: Option<&Readiness>,
+  (reads, readiness): (&Reads, Option<&Readiness>),
 ) -> Option<Element> {
   let Shown::Chat(shown) = &reads.shown else {
     return None;
@@ -47,6 +51,7 @@ pub(super) fn meter(
       chat,
       model,
       read_with: shown.context,
+      compact: super::compact::offer(view, project, shown),
     },
   ))
 }
@@ -58,6 +63,7 @@ struct ChatContextProps {
   model: Option<Arc<str>>,
   /// The reading the conversation was read with.
   read_with: Option<ContextUse>,
+  compact: Compact,
 }
 
 impl DevtoolsInspectable for ChatContextProps {}
@@ -98,6 +104,7 @@ impl Component for ChatContext {
         agent: None,
         model: props.model,
         place: MeterPlace::Bar,
+        compact: props.compact,
       },
     )
   }

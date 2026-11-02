@@ -287,9 +287,14 @@ impl Component for TurnView {
   }
 }
 
-/// A turn's row: what opens it, the answer and how it ended.
+/// A turn's row: what opens it, the answer and how it ended; or a compaction's line.
 fn turn(ctx: &mut Ctx, row: &TurnRow, first: bool) -> Element {
   let key = row.turn.key();
+  if let Some(event) = &row.turn.compaction {
+    let id = format!("orchestrator-compaction-{key}");
+    let line = super::compaction::line(ctx, &id, event, row.turn.at);
+    return room(ctx, Column::new().width(Dimension::Pct(100.0)).with_children(line), first);
+  }
   // A wait of an agent, a run's end and a daily report open their row with their own line or card; a person's turn
   // with their message. What a wait's turn said nests under its line.
   let (opening, answer) = match (&row.turn.wait, &row.turn.report) {

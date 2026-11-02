@@ -66,7 +66,12 @@ pub(super) fn main(ctx: &mut Ctx, view: &View, (project, reads): (&ShownProject,
   let readiness = reads.setup.ready().map(|setup| setup.readiness());
   let sending = view.send.state().get();
   let thinking = matches!(&reads.shown, Shown::Chat(shown) if shown.thinking());
-  let state = sending_state(ctx, view, (project, reads.target), (readiness.as_ref(), thinking));
+  let state = if matches!(&reads.shown, Shown::Chat(shown) if shown.compacting()) {
+    // Nothing is sent while the session is compacted (`06b` `j7eSQO`).
+    Sending::Held(ctx.t("orchestrator.context.sendWaits"))
+  } else {
+    sending_state(ctx, view, (project, reads.target), (readiness.as_ref(), thinking))
+  };
   let problem = sending
     .error
     .as_ref()
@@ -104,7 +109,7 @@ pub(super) fn main(ctx: &mut Ctx, view: &View, (project, reads): (&ShownProject,
       (&foot, [problem, None, unread]),
     ),
     Shown::Chat(shown) => {
-      let queued = queued_problem(ctx, view);
+      let queued = queued_problem(ctx, view).or_else(|| super::compact::problem(ctx, view));
       conversation(
         ctx,
         view,
@@ -190,7 +195,7 @@ impl Foot<'_> {
     );
     let fresh = matches!(self.reads.shown, Shown::New);
     let commands = super::commands::menu(ctx, view, project, (fresh, self.state.press()));
-    let context = super::context::meter(ctx, project, self.reads, self.readiness);
+    let context = super::context::meter(ctx, view, project, (self.reads, self.readiness));
     composer(
       ctx,
       view,
@@ -361,7 +366,11 @@ fn conversation(
     })
     .collect();
   let stop = (answering && !stopping).then(|| env.stop.clone());
-  let placeholder = ctx.t("orchestrator.composer.placeholder");
+  let placeholder = if shown.is_some_and(ChatView::compacting) {
+    ctx.t("orchestrator.context.placeholderCompacting")
+  } else {
+    ctx.t("orchestrator.composer.placeholder")
+  };
   let boxed = foot.composer_with(ctx, view, (project, placeholder), (stop, false));
   // Until it is set up, the chat says under its last turn that it stays readable (`02 Not set up` `Wd5CL`).
   let readable = foot.not_set_up().then(|| ctx.t("orchestrator.composer.readable"));

@@ -73,6 +73,8 @@ pub(super) struct Turn {
   pub(super) moved: Option<EndMoved>,
   /// The daily report that opens the row instead of a person's message.
   pub(super) report: Option<Box<DailyReport>>,
+  /// A compaction of the session, which is the whole row (`super::compaction`).
+  pub(super) compaction: Option<ChatEvent>,
   /// Its entry in the conversation; `None` while it is being sent.
   seq: Option<i64>,
   /// When it was kept; `None` while it is being sent.
@@ -107,6 +109,7 @@ impl Turn {
       stands: false,
       moved: None,
       report: None,
+      compaction: None,
       seq: None,
       at: None,
       ended: None,
@@ -140,6 +143,7 @@ impl Turn {
       stands: false,
       moved: None,
       report: None,
+      compaction: None,
       seq: Some(entry.seq),
       at: Some(entry.at),
       ended: turn.and_then(|turn| turn.ended),
@@ -211,6 +215,14 @@ pub(super) fn turns(shown: &ChatView) -> Vec<Turn> {
         });
         continue;
       }
+      // A compaction is a row of its own between the turns (`06b` `j7eSQO`).
+      EntryKind::Event(event @ ChatEvent::Compaction { .. }) => {
+        turns.push(Turn {
+          compaction: Some(event.clone()),
+          ..Turn::opened(entry, None)
+        });
+        continue;
+      }
       EntryKind::Reply { text, .. } => Part::Reply {
         text: Arc::from(text.as_str()),
         at: entry.at,
@@ -266,6 +278,7 @@ fn person(
     stands: false,
     moved: None,
     report: None,
+    compaction: None,
     seq: Some(entry.seq),
     at: Some(entry.at),
     ended,

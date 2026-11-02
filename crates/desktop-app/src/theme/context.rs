@@ -24,18 +24,22 @@ pub enum ContextText {
   Model,
   /// 12 `text_primary`, 1.3: *76k of 200k tokens* (`DtYpM`).
   Tokens,
-  /// 11 `text_muted`, 1.45: what an estimate or an unknown share means (`ZHx3p`, `YwJOp`).
+  /// 11 `text_muted`, 1.45: what an estimate or an unknown share means (`ZHx3p`, `YwJOp`), and the hint beside the
+  /// popover's *Compact* (`ndDkY`).
   Note,
+  /// 11 `text_secondary`, 1.3: *Compacting…* in the meter's place while its session is compacted (`xD1op`).
+  Compacting,
 }
 
 impl ContextText {
-  pub const ALL: [Self; 6] = [
+  pub const ALL: [Self; 7] = [
     Self::Share,
     Self::Full,
     Self::Title,
     Self::Model,
     Self::Tokens,
     Self::Note,
+    Self::Compacting,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -50,6 +54,7 @@ impl ContextText {
       Self::Model => "context_model",
       Self::Tokens => "context_tokens",
       Self::Note => "context_note",
+      Self::Compacting => "context_compacting",
     }
   }
 
@@ -60,6 +65,7 @@ impl ContextText {
       Self::Title => style(12.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
       Self::Tokens => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_primary),
       Self::Note => style(11.0, FontWeight::Normal, 1.45, 0.0, palette.text_muted),
+      Self::Compacting => style(11.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
     }
   }
 }

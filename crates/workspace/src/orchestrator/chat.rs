@@ -11,7 +11,7 @@ use orchester_core::{
   attachment::Attachment,
   connection::{context_use::ContextUse, stream::TodoList},
   id::{ChatId, ChatMessageId},
-  orchestrator::{Chat, ChatEntry, TurnState},
+  orchestrator::{Chat, ChatEntry, EntryKind, TurnState},
   run::RunStatus,
 };
 use orchester_store::{ChatListing, ProjectDb};
@@ -147,5 +147,13 @@ impl ChatView {
   /// Whether the agent is answering the last message.
   pub fn thinking(&self) -> bool {
     self.last_turn().is_some_and(|(_, turn)| turn.is_thinking())
+  }
+
+  /// Whether the session is being compacted (ORC-309).
+  pub fn compacting(&self) -> bool {
+    self
+      .entries
+      .iter()
+      .any(|entry| matches!(&entry.kind, EntryKind::Event(event) if event.is_compacting()))
   }
 }

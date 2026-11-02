@@ -27,7 +27,7 @@ use orchester_workspace::{
 use crate::{
   project::ShownProject,
   services::Services,
-  ui::context_meter::{ContextMeterProps, MeterPlace, MeterReading, context_meter},
+  ui::context_meter::{Compact, ContextMeterProps, MeterPlace, MeterReading, context_meter},
 };
 
 /// The meter on the divider of `execution` of `run`, while it is its step's latest and that step's session is at work
@@ -71,6 +71,8 @@ fn meter(
       agent: step.agent.clone(),
       model: step.model.clone(),
       place,
+      // A run step's session is not compacted from here in this build.
+      compact: Compact::NotOffered,
     },
   };
   // Keyed by the execution it reads: another execution's meter (the next step's, a retry's) starts afresh from the

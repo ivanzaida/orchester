@@ -63,6 +63,22 @@ impl ProjectDb {
     Ok(true)
   }
 
+  /// Whether a compaction of `chat`'s session is running.
+  pub fn chat_compacting(&self, chat: ChatId) -> Result<bool, StoreError> {
+    let mut statement = self
+      .connection
+      .prepare("SELECT body FROM orchestrator_entries WHERE chat_id = ?1 AND kind = 'event'")?;
+    let bodies: Vec<String> = statement
+      .query_map([chat.to_string()], |row| row.get(0))?
+      .collect::<Result<_, _>>()?;
+    for body in bodies {
+      if event_of(&body)?.is_some_and(|event| event.is_compacting()) {
+        return Ok(true);
+      }
+    }
+    Ok(false)
+  }
+
   /// Ends every compaction still running as interrupted, but those of `held`, which a runner carries out, and, when
   /// `only` names a conversation, those of other conversations. Returns the conversations it changed.
   pub fn interrupt_chat_compactions(&mut self, held: &[i64], only: Option<ChatId>) -> Result<Vec<ChatId>, StoreError> {

@@ -11,6 +11,7 @@ pub mod auto_merge;
 mod blocked;
 mod change;
 pub mod chat;
+pub mod compact;
 mod duplicate;
 pub mod facts;
 pub mod git;

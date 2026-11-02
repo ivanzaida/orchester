@@ -110,7 +110,15 @@
       "tooltipEstimate": "Context ≈ {{share}}% · {{used}} of {{window}}",
       "tooltipFull": "Context full · {{used}} of {{window}}",
       "tooltipUsedOnly": "Context {{used}} tokens · size not reported",
-      "tooltipUnknown": "Context size not reported"
+      "tooltipUnknown": "Context size not reported",
+      "compact": "Compact",
+      "compacting": "Compacting…",
+      "compactWaits": "Compact once the turn under way has ended.",
+      "hintPlenty": "Compact replaces the conversation with a summary the agent continues from.",
+      "hintNearFull": "Compacts on its own before the next reply. Compact now to choose when.",
+      "hintNearFullAgent": "{{agent}} compacts on its own before its next reply. Compact now to choose when.",
+      "hintFull": "Full: compact the conversation so the agent has room to go on.",
+      "hintUnknown": "Compact still works: the agent writes a summary and continues from it."
     },
     "datePicker": {
       "monthYear": "{{month}} {{year}}",

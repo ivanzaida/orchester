@@ -2099,6 +2099,16 @@
     "stop": {
       "failed": "The answer couldn't be stopped: the runner didn't answer."
     },
+    "compact": {
+      "nothing": "Nothing to compact yet: this conversation has no session the Orchestrator can resume.",
+      "busy": "Not compacted · the Orchestrator is still answering. Compact once it's done.",
+      "notReady": "Choose a connection and model in Orchestrator settings and publish them before you compact.",
+      "dailyBudgetUsed": "Not compacted · today's token budget is used.",
+      "runnerUnavailable": "Not compacted · the runner didn't answer",
+      "shuttingDown": "Not compacted · the runner is stopping",
+      "toolsUnavailable": "Not compacted · the Orchestrator's tools couldn't be served on this computer",
+      "failed": "Not compacted · the runner refused it"
+    },
     "queued": {
       "started": "Its turn had already started, so the message was left as it is."
     },
