@@ -1,8 +1,7 @@
 //! General (`01 · General` `hz6eK`, its states `01b` `nHr9b`; `S01` `WHjIP`): the project's name, key and folder as
 //! plain values, and the repository: its GitHub repository with Check again, the GitHub account the project expects
-//! with how `gh` matches it, where base branches are set now (`Base branch · redesign`, `ri5ru`: on tasks and modules)
-//! and telling working agents when the base branch moves (ORC-54). The repository's agent files are under Context.
-pub(super) mod base_branch;
+//! with how `gh` matches it, and telling working agents when the base branch moves (ORC-54). The repository's agent
+//! files are under Context.
 mod github;
 use lurq::{
   app::{component::Component, ctx::Ctx, theme::PaletteColor},
@@ -66,7 +65,6 @@ impl Component for General {
     let settings = read.0;
     let identity = identity(ctx, &props);
     let mut rows = github::rows(ctx, &props, &settings, &save, self.revision.get());
-    rows.push(base_branch::row(ctx, &props, settings.base_moved.as_ref()));
     rows.push(base_notices(ctx, &props, &settings, &save));
     let repository = Group::new("settings-repository", ctx.t("project_settings.repository")).rows(rows);
     page::scroll(
@@ -135,8 +133,7 @@ fn identity(ctx: &mut Ctx, props: &TabProps) -> Element {
 }
 /// The General tab while its settings are read (`09 · Project settings · General · loading` `XvyXm`): the Project and
 /// Repository headings, every row label and its fixed help line stay; the name, key, folder, repository, signed-in
-/// account and the switch are bones in the value column, the lower rows fading. *Base branch* says where base
-/// branches are set, its link waiting for the read.
+/// account and the switch are bones in the value column, the lower rows fading.
 fn bones(ctx: &mut Ctx) -> lurq::components::Column {
   let mono = |ctx: &Ctx, width| skeleton::line(ctx, ProjectSettingsText::MonoValue.role(), width);
   let marked = |ctx: &Ctx, glyph: Element, width| {
@@ -177,8 +174,6 @@ fn bones(ctx: &mut Ctx) -> lurq::components::Column {
     .info(ctx.t("project_settings.githubAccountDetail"))
     .hint_reading(152.0)
     .control(mono(ctx, 42.0)),
-    SettingRow::new("settings-base-branch-reading", ctx.t("project_settings.baseBranch"))
-      .hint(ctx.t("project_settings.baseBranchHint")),
     SettingRow::new(
       "settings-base-moved-reading",
       ctx.t("project_settings.baseMovedSection"),

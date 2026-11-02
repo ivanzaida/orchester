@@ -18,6 +18,10 @@ fn project_settings_general_shows_project_identity_without_repository_agent_file
   );
   assert!(page.exists("settings-repository"));
   assert!(page.exists("settings-base-moved-row"));
+  assert!(
+    !page.exists("settings-base-branch-row"),
+    "a base branch is set on each task and module, not here"
+  );
   assert!(!page.exists("settings-agent-files"), "moved to Context");
   assert!(!page.exists("settings-files-row"));
 }

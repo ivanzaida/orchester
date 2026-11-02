@@ -111,7 +111,6 @@ pub use self::{
   attachments::{AttachmentOwner, attachment_file},
   auto_mode::AutoModeSave,
   automatic_status::{AutomaticStatus, NotSent, UnsentStatus},
-  base_branch::BaseBranchMove,
   chat_decisions::KeptAction,
   estimates::AutomationPoints,
   joining::{JoinedKey, ReturnedTask},
