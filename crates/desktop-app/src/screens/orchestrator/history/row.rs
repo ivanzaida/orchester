@@ -1,9 +1,12 @@
-//! A conversation's row in History and what a person does with it (ORC-328; `08 · History · row menu` `q30JYF`,
-//! `08b · rename in place` `sLeGr`, `08c · Pinned group · right-click` `r4DVU`). A press opens the conversation. Under
-//! the pointer the row ends in a `⋯` button (`More`, a small icon button, 6 from the row's end) that opens its menu
-//! (`Row menu` `Y5qr8`, 180 wide, under the button at its end), which a right-click opens at the pointer too: *Rename*
-//! and *Pin* or *Unpin*; the row whose menu is open stays on `hover`. *Rename*, F2 over the row or a double-click turn
-//! the title into a field (`Title field` `Ztw6Q`: the title in 12.5/500, 3 over it, 2 at its sides) over *Enter saves*
+//! A conversation's row in History and what a person does with it (ORC-328, ORC-329; `08 · History · row menu`
+//! `q30JYF`, `08b · rename in place` `sLeGr`, `08c · Pinned group · right-click` `r4DVU`, `08d · Archived` `qAfeu`). A
+//! press opens the conversation. Under the pointer the row ends in a `⋯` button (`More`, a small icon button, 6 from
+//! the row's end) that opens its menu (`Row menu` `Y5qr8`, 180 wide, under the button at its end), which a right-click
+//! opens at the pointer too: *Rename*, *Pin* or *Unpin*, *Archive*, and after a line *Delete…* in `danger`, which asks
+//! in a modal first ([`super::delete`]); the row whose menu is open stays on `hover`. An archived row says when it was
+//! archived, and under the pointer offers *Unarchive* (`Unarchive` `N8Rj0F`, a compact secondary button) before its
+//! `⋯`, whose menu holds *Rename*, *Unarchive* and *Delete…*. *Rename*, F2 over the row or a double-click turn the
+//! title into a field (`Title field` `Ztw6Q`: the title in 12.5/500, 3 over it, 2 at its sides) over *Enter saves*
 //! and *Esc cancels* in key caps and 11 `text_muted` (`Keys` `K2NgV`, 5 under them). Enter keeps the person's title,
 //! which wins over the automatic one from then on; a blank one is refused and the field says why. Esc, which the
 //! screen hears first, cancels.
@@ -12,7 +15,7 @@ use std::{path::Path, sync::Arc};
 
 use lurq::{
   app::{
-    component::Component,
+    component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction},
     events::{KeyboardEvent, MouseButton, mouse_event::MouseEvent},
     theme::{PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
@@ -27,21 +30,22 @@ use orchester_store::ChatListing;
 use orchester_workspace::{
   background, display,
   messages::Message,
-  orchestrator::chat::{pin_in, rename_in},
+  orchestrator::chat::{archive_in, pin_in, rename_in},
 };
 
-use super::{Item, ROW_HEIGHT, Renaming, Rows};
+use super::{Deleting, Item, ROW_HEIGHT, Renaming, Rows};
 use crate::{
   navigation::Navigation,
   routes::{OrchestratorChat, ProjectPage, Route},
   services::Services,
   theme::{ExtraColor, ExtraSpacing, OrchestratorText},
   ui::{
+    button::{ActionButton, ButtonKind},
     field::FieldInput,
     icon::Icon,
     icon_button::IconButton,
     kbd::key_cap,
-    menu::{MenuItem, menu_at_end, menu_panel},
+    menu::{MenuItem, menu_at_end, menu_panel, separator},
     message::message_text,
     pressable::opening,
   },
@@ -59,8 +63,50 @@ struct Renamed {
 }
 
 type RenameAction = FutureAction<Renamed, (), Message>;
-/// Pins a conversation of the project at the path as of the time, or unpins it (`None`).
-type PinAction = FutureAction<(Arc<Path>, ChatId, Option<Timestamp>), (), Message>;
+
+/// A change of a conversation's place in History that its menu or its *Unarchive* makes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Change {
+  Pin,
+  Unpin,
+  Archive,
+  Unarchive,
+}
+
+impl Change {
+  /// Makes the change to `chat` of the project at `root` now. Blocks on SQLite.
+  fn make(self, root: &Path, chat: ChatId) -> Result<(), Message> {
+    let now = Timestamp::now();
+    match self {
+      Self::Pin => pin_in(root, chat, Some(now)),
+      Self::Unpin => pin_in(root, chat, None),
+      Self::Archive => archive_in(root, chat, Some(now)),
+      Self::Unarchive => archive_in(root, chat, None),
+    }
+  }
+
+  /// What the row says when the change did not happen, with its reason.
+  const fn refused_key(self) -> &'static str {
+    match self {
+      Self::Pin => "orchestrator.historyPanel.notPinned",
+      Self::Unpin => "orchestrator.historyPanel.notUnpinned",
+      Self::Archive => "orchestrator.historyPanel.notArchived",
+      Self::Unarchive => "orchestrator.historyPanel.notUnarchived",
+    }
+  }
+}
+
+/// A change that did not happen, and why.
+#[derive(Clone, Debug, PartialEq)]
+struct Unchanged {
+  change: Change,
+  reason: Message,
+}
+
+impl DevtoolsInspectable for Unchanged {}
+
+/// Makes a change of a conversation of the project at the path.
+type ChangeAction = FutureAction<(Arc<Path>, ChatId, Change), (), Unchanged>;
 
 /// A row of the list: a group's heading, or a conversation with its menu and its title field.
 pub(super) struct ItemView {
@@ -80,9 +126,9 @@ pub(super) struct ItemView {
   rename: RenameAction,
   /// Why the last Enter kept no title, until the next edit.
   refused: Signal<Option<Message>>,
-  pin: PinAction,
-  /// Why the last *Pin* or *Unpin* did not change the pin.
-  unpinned: Signal<Option<Message>>,
+  change: ChangeAction,
+  /// Why the last *Pin*, *Unpin*, *Archive* or *Unarchive* did not happen.
+  unchanged: Signal<Option<Unchanged>>,
 }
 
 impl Component for ItemView {
@@ -108,22 +154,23 @@ impl Component for ItemView {
         Ok(())
       }
     });
-    let pin: PinAction = ctx.future_action(move |(root, chat, at): (Arc<Path>, ChatId, Option<Timestamp>)| {
+    let change: ChangeAction = ctx.future_action(move |(root, chat, change): (Arc<Path>, ChatId, Change)| {
       let runners = runners.clone();
       async move {
         let kept = root.clone();
-        background::run(move || pin_in(&kept, chat, at))
+        background::run(move || change.make(&kept, chat))
           .await
-          .and_then(|pinned| pinned)?;
+          .and_then(|made| made)
+          .map_err(|reason| Unchanged { change, reason })?;
         runners.chat_changed(&root);
         Ok(())
       }
     });
-    let (refused, unpinned) = (ctx.signal(None), ctx.signal(None));
+    let (refused, unchanged) = (ctx.signal(None), ctx.signal(None));
     let said = refused.clone();
     ctx.watch(&rename.state(), move |state| said.set(state.error.clone()));
-    let said = unpinned.clone();
-    ctx.watch(&pin.state(), move |state| said.set(state.error.clone()));
+    let said = unchanged.clone();
+    ctx.watch(&change.state(), move |state| said.set(state.error.clone()));
     Self {
       hovered: ctx.signal(false),
       menu: ctx.signal(false),
@@ -136,8 +183,8 @@ impl Component for ItemView {
       input: ElementRef::new(),
       rename,
       refused,
-      pin,
-      unpinned,
+      change,
+      unchanged,
     }
   }
 
@@ -231,6 +278,7 @@ impl ItemView {
     };
     let row = row
       .child(self.words(ctx, listing, (current, today)))
+      .with_children(more.then(|| self.unarchive(ctx, listing, rows)).flatten())
       .with_children(more.then(|| self.more(ctx, listing)));
     Column::new()
       .width(Dimension::Pct(100.0))
@@ -239,36 +287,18 @@ impl ItemView {
       .into()
   }
 
-  /// The title over when it last changed and how many messages it holds, or why its pin did not change.
+  /// The title over when it last changed, or was archived, and how many messages it holds, or why a change of its
+  /// place did not happen.
   fn words(&self, ctx: &Ctx, listing: &ChatListing, (current, today): (bool, bool)) -> Column {
-    let when: Arc<str> = if today {
-      display::clock(listing.last).into()
-    } else {
-      super::super::date(ctx, listing.last)
-    };
-    let count = listing.messages.to_string();
-    let messages = if listing.messages == 1 {
-      ctx.t("orchestrator.historyPanel.messages.one")
-    } else {
-      ctx.t_args("orchestrator.historyPanel.messages.other", [("count", count.as_str())])
-    };
-    let (meta, meta_color) = match self.unpinned.get() {
-      Some(reason) => {
-        let key = if listing.pinned.is_some() {
-          "orchestrator.historyPanel.notUnpinned"
-        } else {
-          "orchestrator.historyPanel.notPinned"
-        };
+    let (meta, meta_color) = match self.unchanged.get() {
+      Some(Unchanged { change, reason }) => {
         let reason = message_text(ctx, &reason);
-        (ctx.t_args(key, [("reason", &*reason)]), PaletteColor::Danger)
+        (
+          ctx.t_args(change.refused_key(), [("reason", &*reason)]),
+          PaletteColor::Danger,
+        )
       }
-      None => (
-        ctx.t_args(
-          "orchestrator.historyPanel.meta",
-          [("when", &*when), ("messages", &*messages)],
-        ),
-        PaletteColor::TextMuted,
-      ),
+      None => (meta(ctx, listing, today), PaletteColor::TextMuted),
     };
     Column::new()
       .flex(1.0)
@@ -318,17 +348,63 @@ impl ItemView {
     }
   }
 
-  /// The row's menu, *Rename* and *Pin* or *Unpin*: under the `⋯` button at its end, or at the pointer that opened it.
+  /// *Unarchive* before an archived row's `⋯` button under the pointer; nothing for a row History lists.
+  fn unarchive(&self, ctx: &Ctx, listing: &ChatListing, rows: &Rows) -> Option<Element> {
+    listing.archived?;
+    let make = self.changer(listing, rows, Change::Unarchive);
+    Some(
+      ActionButton::new(
+        format!("orchestrator-history-unarchive-{}", listing.chat.id()),
+        ButtonKind::Secondary,
+        ctx.t("orchestrator.historyPanel.unarchive"),
+      )
+      .icon(Icon::ArchiveRestore)
+      .compact()
+      .tight()
+      .on_click(make)
+      .into(),
+    )
+  }
+
+  /// Makes `change` to the conversation of `listing`, forgetting why the last change did not happen.
+  fn changer(&self, listing: &ChatListing, rows: &Rows, change: Change) -> impl Fn() + Send + Sync + 'static {
+    let (action, unchanged, root, id) = (
+      self.change.clone(),
+      self.unchanged.clone(),
+      rows.root.clone(),
+      listing.chat.id(),
+    );
+    move || {
+      unchanged.set(None);
+      action.run((root.clone(), id, change));
+    }
+  }
+
+  /// The row's menu: *Rename*, *Pin* or *Unpin* and *Archive* of a row History lists, *Unarchive* of an archived one,
+  /// and after a line *Delete…*; under the `⋯` button at its end, or at the pointer that opened it.
   fn menu(&self, ctx: &mut Ctx, listing: &ChatListing, rows: &Rows, rename: &Arc<dyn Fn() + Send + Sync>) -> Element {
     let id = listing.chat.id();
     let rename = rename.clone();
-    let (pin, unpinned, root) = (self.pin.clone(), self.unpinned.clone(), rows.root.clone());
-    let pinned = listing.pinned.is_some();
-    let (label, glyph) = if pinned {
-      ("orchestrator.historyPanel.unpin", Icon::PinOff)
-    } else {
-      ("orchestrator.historyPanel.pin", Icon::Pin)
+    let (place, label, glyph, change) = match (listing.archived, listing.pinned) {
+      (Some(_), _) => (
+        "restore",
+        "orchestrator.historyPanel.unarchive",
+        Icon::ArchiveRestore,
+        Change::Unarchive,
+      ),
+      (None, Some(_)) => ("pin", "orchestrator.historyPanel.unpin", Icon::PinOff, Change::Unpin),
+      (None, None) => ("pin", "orchestrator.historyPanel.pin", Icon::Pin, Change::Pin),
     };
+    let archive = listing.archived.is_none().then(|| {
+      MenuItem::new(
+        format!("orchestrator-history-archive-{id}"),
+        ctx.t("orchestrator.historyPanel.archive"),
+        self.changer(listing, rows, Change::Archive),
+      )
+      .icon(Icon::Archive)
+      .render(ctx, &self.menu)
+    });
+    let deleting = rows.deleting.clone();
     let panel = menu_panel(&format!("orchestrator-history-menu-{id}"))
       .width(Dimension::Px(MENU_WIDTH))
       .child(
@@ -341,12 +417,24 @@ impl ItemView {
         .render(ctx, &self.menu),
       )
       .child(
-        MenuItem::new(format!("orchestrator-history-pin-{id}"), ctx.t(label), move || {
-          unpinned.set(None);
-          let at = (!pinned).then(Timestamp::now);
-          pin.run((root.clone(), id, at));
-        })
+        MenuItem::new(
+          format!("orchestrator-history-{place}-{id}"),
+          ctx.t(label),
+          self.changer(listing, rows, change),
+        )
         .icon(glyph)
+        .render(ctx, &self.menu),
+      )
+      .with_children(archive)
+      .child(separator(ctx))
+      .child(
+        MenuItem::new(
+          format!("orchestrator-history-delete-{id}"),
+          ctx.t("orchestrator.historyPanel.delete.item"),
+          move || deleting.set(Deleting(Some(id))),
+        )
+        .icon(Icon::Trash2)
+        .danger()
         .render(ctx, &self.menu),
       );
     match self.pointer.get() {
@@ -425,6 +513,36 @@ impl ItemView {
       .child(keys(ctx, id))
       .into()
   }
+}
+
+/// When `listing` last changed (its time `today`, else its date) and how many messages it holds; of an archived one,
+/// when it was archived (*Archived today*, *Archived Oct 27*) instead.
+fn meta(ctx: &Ctx, listing: &ChatListing, today: bool) -> Arc<str> {
+  let count = listing.messages.to_string();
+  let messages = if listing.messages == 1 {
+    ctx.t("orchestrator.historyPanel.messages.one")
+  } else {
+    ctx.t_args("orchestrator.historyPanel.messages.other", [("count", count.as_str())])
+  };
+  let Some(archived) = listing.archived else {
+    let when: Arc<str> = if today {
+      display::clock(listing.last).into()
+    } else {
+      super::super::date(ctx, listing.last)
+    };
+    return ctx.t_args(
+      "orchestrator.historyPanel.meta",
+      [("when", &*when), ("messages", &*messages)],
+    );
+  };
+  if archived.local_day_start() == Timestamp::now().local_day_start() {
+    return ctx.t_args("orchestrator.historyPanel.archivedToday", [("messages", &*messages)]);
+  }
+  let date = super::super::date(ctx, archived);
+  ctx.t_args(
+    "orchestrator.historyPanel.archivedOn",
+    [("date", &*date), ("messages", &*messages)],
+  )
 }
 
 /// *Enter saves* and *Esc cancels* under the title field, each key in its cap.

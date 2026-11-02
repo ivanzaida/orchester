@@ -1,9 +1,11 @@
 //! The Orchestrator chat's conversations as the screen reads them: History's list and one conversation's entries,
 //! with the files the person attached to their messages, the todo list each turn's agent keeps, which of its waits
 //! still stand, what became of the runs whose ends no longer do, and how full its session's context is; and what a
-//! person changes of a conversation in History, its title and its pin (ORC-328).
+//! person changes of a conversation in History: its title and its pin (ORC-328), its archive and its deletion
+//! (ORC-329).
 
 use std::{
+  cmp::Reverse,
   collections::{BTreeMap, HashMap, HashSet},
   path::Path,
 };
@@ -16,14 +18,28 @@ use orchester_core::{
   run::RunStatus,
   time::Timestamp,
 };
-use orchester_store::{ChatListing, ProjectDb};
+use orchester_store::{ChatDeletion, ChatListing, ProjectDb};
 
 use crate::messages::{self, Message};
 
-/// The project's conversations as History lists them, the one with the latest entry first.
+/// The project's conversations, archived ones too, the one with the latest entry first.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct History {
   pub chats: Vec<ChatListing>,
+}
+
+impl History {
+  /// The conversations History lists: those not archived, the one with the latest entry first.
+  pub fn listed(&self) -> impl Iterator<Item = &ChatListing> {
+    self.chats.iter().filter(|listing| listing.archived.is_none())
+  }
+
+  /// The archived conversations, the one archived last first.
+  pub fn archived(&self) -> Vec<&ChatListing> {
+    let mut archived: Vec<&ChatListing> = self.chats.iter().filter(|listing| listing.archived.is_some()).collect();
+    archived.sort_by_key(|listing| Reverse(listing.archived));
+    archived
+  }
 }
 
 /// Every conversation of the project at `root`. Blocks on SQLite.
@@ -51,6 +67,29 @@ pub fn pin_in(root: &Path, chat: ChatId, at: Option<Timestamp>) -> Result<(), Me
     .and_then(|mut db| db.pin_chat(chat, at))
     .map_err(|error| messages::store_error(&error))
     .and_then(kept)
+}
+
+/// Archives conversation `chat` of the project at `root` as of `at`, which lists it under History's Archived and
+/// unpins it, or unarchives it (`None`), which lists it under its day again. Blocks on SQLite.
+pub fn archive_in(root: &Path, chat: ChatId, at: Option<Timestamp>) -> Result<(), Message> {
+  ProjectDb::open(root)
+    .and_then(|mut db| db.archive_chat(chat, at))
+    .map_err(|error| messages::store_error(&error))
+    .and_then(kept)
+}
+
+/// Deletes conversation `chat` of the project at `root` with its messages and the files attached to them, from the
+/// project's own database and folder; refused while the Orchestrator answers in it, compacts its session or a message
+/// waits there for its turn. Blocks on SQLite.
+pub fn delete_in(root: &Path, chat: ChatId) -> Result<(), Message> {
+  let deleted = ProjectDb::open(root)
+    .and_then(|mut db| db.delete_chat(chat))
+    .map_err(|error| messages::store_error(&error))?;
+  match deleted {
+    ChatDeletion::Deleted => Ok(()),
+    ChatDeletion::Gone => Err(Message::new("orchestrator.conversation.gone")),
+    ChatDeletion::Busy => Err(Message::new("orchestrator.conversation.busy")),
+  }
 }
 
 /// A change of a conversation the project no longer keeps did not happen.

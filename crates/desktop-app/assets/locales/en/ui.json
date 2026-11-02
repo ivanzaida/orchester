@@ -94,6 +94,7 @@
       "waiting": "Orchester tries again on its own; nothing was changed."
     },
     "dialog": {
+      "enterKey": "Enter",
       "escKey": "Esc",
       "escCancels": "cancels"
     },

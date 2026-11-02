@@ -13,7 +13,7 @@ use super::{
 };
 
 /// History open over the latest of two conversations: the older one's id and the newer one's.
-fn opened() -> (Orchestrator, ChatId, ChatId) {
+pub(super) fn opened() -> (Orchestrator, ChatId, ChatId) {
   let mut screen = Orchestrator::new(Setup::Ready);
   let week_ago = Timestamp::from_unix_millis(Timestamp::now().unix_millis() - 7 * 24 * 3_600_000);
   let older = kept(&screen, "Why did KON-11 fail?", week_ago, "Its token expired.");
@@ -28,7 +28,7 @@ fn opened() -> (Orchestrator, ChatId, ChatId) {
 }
 
 /// Moves the pointer over the middle of `id`.
-fn hover(screen: &mut Orchestrator, id: &str) -> (f32, f32) {
+pub(super) fn hover(screen: &mut Orchestrator, id: &str) -> (f32, f32) {
   let frame = screen.bounds(id);
   let (x, y) = (frame.x + frame.width / 2.0, frame.y + frame.height / 2.0);
   screen.window.tree.mouse_move(x, y);
@@ -60,7 +60,7 @@ fn history_rows_rename_in_place_keeps_the_title_refuses_a_blank_one_and_esc_canc
   hover(&mut screen, &row);
   screen.click(&format!("orchestrator-history-more-{older}"));
   let menu = screen.text(&format!("orchestrator-history-menu-{older}"));
-  assert_eq!(menu, "Rename Pin", "only what works: {menu}");
+  assert_eq!(menu, "Rename Pin Archive Delete…", "only what works: {menu}");
   screen.click(&format!("orchestrator-history-rename-{older}"));
   let field = format!("orchestrator-history-rename-field-{older}");
   screen.until("the title field", |screen| screen.exists(&field));

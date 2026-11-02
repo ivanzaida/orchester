@@ -300,10 +300,20 @@
       "empty": "No conversation yet. Your first message starts one.",
       "noMatch": "No conversation's title has these words.",
       "note": "Conversations stay in this project on this computer.",
+      "archived": "Archived",
+      "backToHistory": "Back to History",
+      "searchArchived": "Search archived",
+      "archivedEmpty": "No archived conversation.",
+      "archivedNoMatch": "No archived conversation's title has these words.",
+      "archivedNote": "Archived conversations keep every message. History and its search leave them out.",
+      "archivedToday": "Archived today · {{messages}}",
+      "archivedOn": "Archived {{date}} · {{messages}}",
       "more": "More for {{title}}",
       "rename": "Rename",
       "pin": "Pin",
       "unpin": "Unpin",
+      "archive": "Archive",
+      "unarchive": "Unarchive",
       "title": "Title",
       "enterKey": "Enter",
       "saves": "saves",
@@ -311,7 +321,24 @@
       "cancels": "cancels",
       "notSaved": "Not saved: {{reason}}",
       "notPinned": "Not pinned: {{reason}}",
-      "notUnpinned": "Not unpinned: {{reason}}"
+      "notUnpinned": "Not unpinned: {{reason}}",
+      "notArchived": "Not archived: {{reason}}",
+      "notUnarchived": "Not unarchived: {{reason}}",
+      "delete": {
+        "item": "Delete…",
+        "title": "Delete “{{title}}”?",
+        "messages": {
+          "none": "What it holds is removed from this computer.",
+          "one": "Its 1 message and the files attached to it are removed from this computer.",
+          "other": "Its {{count}} messages and the files attached to them are removed from this computer."
+        },
+        "stays": "Tasks, runs and decisions it started stay as they are.",
+        "final": "This can't be undone. Archive keeps it out of History instead.",
+        "enterDeletes": "deletes",
+        "cancel": "Cancel",
+        "confirm": "Delete conversation",
+        "failed": "Not deleted: {{reason}}"
+      }
     },
     "settings": {
       "crumb": "Settings",

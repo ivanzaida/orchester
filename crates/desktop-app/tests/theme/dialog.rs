@@ -1,6 +1,6 @@
 //! A confirmation modal's roles (`Dialog` `LVCxf` in `04d · Bind an MCP server` `z0iFy`, `Shared configuration ·
 //! redesign` `UC5xk`).
-use orchester_app::theme::{DIALOG_TILE, DIALOG_WIDTH, DialogSpacing, DialogText};
+use orchester_app::theme::{DIALOG_TILE, DIALOG_WIDTH, DialogSpacing, DialogText, NARROW_DIALOG_WIDTH};
 
 use super::*;
 
@@ -29,5 +29,6 @@ fn dialog_roles_follow_the_shared_configuration_modals() {
     "BuD1B"
   );
   assert!((DIALOG_WIDTH - 500.0).abs() < f32::EPSILON, "LVCxf");
+  assert!((NARROW_DIALOG_WIDTH - 460.0).abs() < f32::EPSILON, "YWXxi");
   assert!((DIALOG_TILE - 32.0).abs() < f32::EPSILON, "jdSYt");
 }

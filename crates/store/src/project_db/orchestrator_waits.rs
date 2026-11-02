@@ -126,12 +126,14 @@ impl ProjectDb {
     Ok(changed == 1)
   }
 
-  /// The conversation whose last entry is the newest; `None` while the project has none.
+  /// The conversation whose last entry is the newest, of those History lists (not archived); `None` while the project
+  /// has none.
   pub fn latest_chat(&self) -> Result<Option<ChatId>, StoreError> {
     let id = self
       .connection
       .query_row(
         "SELECT c.id FROM orchestrator_chats c LEFT JOIN orchestrator_entries e ON e.chat_id = c.id
+         WHERE c.archived_at IS NULL
          GROUP BY c.id ORDER BY COALESCE(MAX(e.at), c.started_at) DESC, c.id DESC LIMIT 1",
         [],
         |row| row.get::<_, String>(0),
