@@ -16,9 +16,9 @@ All frames are dark (the theme of their board). Board `Task page · redesign` `C
 | Row | Node | Frame | Shows |
 | --- | --- | --- | --- |
 | Row 13 · Search the transcript · run Conversation (ORC-620) `FXqBK` | `p3864h` | 13 · Conversation · search · closed | The way in: the tab row `WShMT` ends with the search button `NXwZN` (`Icon button/Small`, `search`) in hover, with tooltip `OBITa` *Search the conversation* `Ctrl F`. The transcript is the usual one (body `Fohfv`) |
-| | `c0CQp` | 13b · Conversation · search · open with a query | The button is pressed (`EGEVN`). The find bar `XeDdW` floats at the top right of the body: *retry*, *3 of 17*, previous, next, ✕. The current match `hR34z` (in your message) is filled; the other matches are marked in the agents' text. The folded tool line `kZSY8` shows a *4 matches* badge. Match marks `z4lnO5` sit on the scroll track |
+| | `c0CQp` | 13b · Conversation · search · open with a query | The button is pressed (`EGEVN`). The find bar `XeDdW` floats at the top right of the body: *retry*, *14 of 17*, previous, next, ✕. The transcript is the same moment as 13 and 13c. The count adds up: the folded *Earlier steps* chip shows *6 matches* (badge `OUbMr`), step 03's text has 3 (one is *Retry*-After, as case is ignored), the folded tool line `kZSY8` shows *4 matches* (badge `ohExY`), the current match `hR34z` (in your message) is the 14th, and 3 follow. The other matches are marked in the agents' text. Match marks `z4lnO5` sit on the scroll track, the current one (`sJi6q`) 14th from the top |
 | | `W60Jr6` | 13c · Conversation · search · no match | Find bar `qnJbO`: *jitter*, *No matches* in `danger`, a `danger` field border, previous and next unavailable, and under the field *Searched all 1,240 entries: messages, tool calls, output*. Nothing is marked and the transcript does not move |
-| | `yxLHS` | 13d · Conversation · search · match in a folded step and tool group | *Retry-After*, *2 of 6* (bar `O8cL1B`). The current match `G88Rjq` is in a command (`rg -n "Retry-After" src/`) inside step 02's tool group. Step 02 was folded under *Earlier steps* and its tool group was collapsed: both are open now. The step divider and the tool line `vBpdf` each carry *opened by search* (`f76I4`, `tD5xN`). Step 01 stays folded. The folded group in step 03 shows *3 matches* (`F5elbr`) |
+| | `yxLHS` | 13d · Conversation · search · match in a folded step and tool group | *Retry-After*, *2 of 6* (bar `O8cL1B`). The current match `G88Rjq` is in a command (`rg -n "Retry-After" src/`) inside step 02's tool group. Step 02 was folded under *Earlier steps* and its tool group was collapsed: both are open now. The step divider and the tool line `vBpdf` each carry *opened by search* (`f76I4`, `tD5xN`). Step 01 stays folded. The folded group in step 03 (`F5elbr`) shows *3 matches* (badge `VrLl0`) |
 | Row 14 · Search the transcript · output and parts (ORC-620) `jYfQb` | `z2ai2h` | 13e · Conversation · search · match in a tool call's output | *connection reset*, *1 of 2* (bar `MRkBK`). The tool line `jANoG` *Ran 2 commands* and the call `cargo test -p webhooks -- --nocapture` are opened by search. The output block `o9RdGz` (`code_bg`) shows *Output · 214 lines · lines 94–102, around the matches* with *Show all output*. Lines are numbered, the current match `q5kDov` is on line 97 and the other is marked on line 100 |
 | | `aoVlE` | 13f · Search the transcript · parts and rules | **Way in**: the button resting, hover and open, the tooltip, and `Ctrl F` / `⌘ F`, `Enter` / `Shift Enter` and `Esc`. **Find bar states**: empty, searching (*212 so far* with a loader), matches (*3 of 17*), many (*1 of 1,000+*), no match. **Marks**: current, other, folded with matches, opened by search, the scroll-track marks. **Rules** |
 
@@ -59,8 +59,9 @@ y 26825.
   of the transcript.
 - **Other matches**: a `warning_muted` fill, and the text keeps its own colour and font. That works in messages,
   agents' text, mono commands and paths, and output lines.
-- **Folded with matches**: a folded tool line, a folded step or the *Earlier steps* chip gets a badge, *{n} matches*
-  (`warning_muted` pill, 11/500 `warning`). Nothing opens until a match inside becomes current.
+- **Folded with matches**: a folded tool line, a folded step or the *Earlier steps* chip gets a badge, *{n} matches*:
+  a `Badge/Warning` instance with its dot off and padding 1 × 6, so it sits in a 12 px line. Nothing opens until a
+  match inside becomes current.
 - **Opened by search**: when the current match is inside something folded, the search opens it: a step under
   *Earlier steps*, a collapsed tool group, a call's output, or a long message folded at three lines. Each place it
   opened is tagged *opened by search* (a `search` icon in `warning`, 11 `text_muted`) on the step divider, tool line or
@@ -92,8 +93,8 @@ y 26825.
 
 ## Open
 
-- No components or variables were added or changed. The find bar, the match marks, the badge, the *opened by search*
-  tag and the output block are local frames, built from `Icon button/Small`, `Field/Focus`, `Tooltip`, `Kbd`,
+- No components or variables were added or changed. The find bar, the match marks, the *opened by search* tag and
+  the output block are local frames, built from `Icon button/Small`, `Field/Focus`, `Tooltip`, `Kbd`, `Badge/Warning`,
   `Button/Primary` and the theme roles. A shared `Find bar` component would need the person's approval, and it would
   also serve the Files find (`screens/files/find.rs`).
 - *Match case* is not offered here: the file viewer's find has it, and the transcript search ignores case. Whether to
