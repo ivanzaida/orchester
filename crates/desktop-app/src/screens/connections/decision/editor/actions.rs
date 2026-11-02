@@ -42,7 +42,7 @@ pub(super) struct Start {
 }
 #[derive(Clone, PartialEq, Eq)]
 pub(super) enum Done {
-  Saved,
+  Saved(orchester_core::id::DecisionConnectionId),
   Checked(Box<Checked>),
 }
 #[derive(Clone, PartialEq, Eq)]
@@ -84,7 +84,7 @@ pub(super) fn action(ctx: &mut Ctx) -> Action {
       activity
         .track(spec, async {
           if save {
-            background::run(move || {
+            let id = background::run(move || {
               decision::save_with_key_in(
                 &root,
                 vault.get(),
@@ -97,7 +97,7 @@ pub(super) fn action(ctx: &mut Ctx) -> Action {
             .await??;
             changes.record(open.project.id(), Outside::Connections);
             changes.record(open.project.id(), Outside::ProjectSettings);
-            Ok(Done::Saved)
+            Ok(Done::Saved(id))
           } else {
             let connection = decision::check_draft_in(&root, vault.get(), &draft, key.as_ref(), value, writer).await?;
             Ok(Done::Checked(Box::new(Checked {
@@ -159,7 +159,10 @@ impl DecisionEditor {
   }
 
   pub(super) fn bar(&self, ctx: &mut Ctx, props: &Props) -> Element {
-    let hosted = !props.connection.is_on_this_computer()
+    let hosted = props
+      .connection
+      .as_ref()
+      .is_some_and(|connection| !connection.is_on_this_computer())
       || orchester_core::connection::DecisionServerUrl::new(&self.fields.url.get())
         .is_ok_and(|url| !url.is_on_this_computer());
     let close = props.close.clone();

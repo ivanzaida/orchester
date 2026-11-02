@@ -13,6 +13,7 @@ use crate::{
 };
 
 pub(in super::super) struct DecisionForm {
+  pub(super) initialized: Signal<bool>,
   pub(super) name: Signal<String>,
   pub(super) url: Signal<String>,
   pub(super) key: ProviderForm,
@@ -20,6 +21,7 @@ pub(in super::super) struct DecisionForm {
 impl DecisionForm {
   pub(in super::super) fn new(ctx: &mut Ctx) -> Self {
     Self {
+      initialized: ctx.signal(false),
       name: ctx.signal(String::new()),
       url: ctx.signal(String::new()),
       key: ProviderForm::new(ctx),
@@ -50,7 +52,7 @@ impl DecisionForm {
     Some((draft, key))
   }
 
-  pub(in super::super) fn rows(&self, ctx: &mut Ctx, listed: &ProjectConnections) -> Vec<Element> {
+  pub(in super::super) fn rows(&self, ctx: &mut Ctx, listed: &ProjectConnections, local: bool) -> Vec<Element> {
     let name = FieldInput::new(
       "decision-edit-name",
       ctx.t("decision_connection.name"),
@@ -70,9 +72,13 @@ impl DecisionForm {
     vec![
       FormField::new("decision-name-field", ctx.t("decision_connection.name")).render(ctx, name),
       FormField::new("decision-url-field", ctx.t("decision_connection.baseUrl"))
-        .hint(ctx.t("decision_connection.urlHint"))
+        .hint(ctx.t(if local {
+          "decision_connection.localUrlHint"
+        } else {
+          "decision_connection.urlHint"
+        }))
         .render(ctx, url),
-      self.key.decision_key_row(ctx, listed),
+      self.key.decision_key_row(ctx, listed, local),
     ]
   }
 }

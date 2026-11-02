@@ -1,5 +1,6 @@
-//! Edit uses the Connection fields of 01 XMNUP and 01b z3G09h, without the separate Add flow.
+//! Add and Edit decision model, sharing draft checks and secret handling (01 XMNUP and 01b z3G09h).
 mod actions;
+mod add;
 use std::sync::OnceLock;
 
 use lurq::{
@@ -23,9 +24,9 @@ use crate::{
 };
 
 #[derive(Clone)]
-pub(super) struct Props {
+pub(in super::super) struct Props {
   pub project: ShownProject,
-  pub connection: DecisionConnection,
+  pub connection: Option<DecisionConnection>,
   pub listed: ProjectConnections,
   pub close: Signal<bool>,
 }
@@ -36,21 +37,34 @@ impl PartialEq for Props {
 }
 impl DevtoolsInspectable for Props {}
 
-pub(super) struct DecisionEditor {
+pub(in super::super) struct DecisionEditor {
   fields: super::form::DecisionForm,
   original: OnceLock<DecisionConnection>,
   work: actions::Action,
   refused: Signal<bool>,
   checking: Signal<bool>,
+  server: Signal<super::super::add_decision::Server>,
 }
 impl Component for DecisionEditor {
   type Props = Props;
   fn create(ctx: &mut Ctx) -> Self {
     let close = ctx.props::<Props>().close.clone();
+    let adding = ctx.props::<Props>().connection.is_none();
+    let project = ctx.props::<Props>().project.open.project.id();
+    let navigation = crate::navigation::Navigation::of(ctx);
     let work = actions::action(ctx);
     ctx.watch(&work.state(), move |state| {
-      if state.is_fulfilled() && matches!(state.data, Some(actions::Done::Saved)) {
-        close.set(false);
+      if state.is_fulfilled()
+        && let Some(actions::Done::Saved(id)) = state.data
+      {
+        if adding {
+          navigation.replace(crate::routes::Route::Project(
+            project,
+            crate::routes::ProjectPage::Connections(crate::routes::ConnectionsView::decision(id)),
+          ));
+        } else {
+          close.set(false);
+        }
       }
     });
     Self {
@@ -59,16 +73,28 @@ impl Component for DecisionEditor {
       work,
       refused: ctx.signal(false),
       checking: ctx.signal(false),
+      server: ctx.signal(super::super::add_decision::Server::TypeSafe),
     }
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>().clone();
-    self.original.get_or_init(|| {
-      self.fields.seed(&props.connection);
-      props.connection.clone()
-    });
-    let mut rows = self.fields.rows(ctx, &props.listed);
+    if let Some(connection) = &props.connection {
+      self.original.get_or_init(|| {
+        self.fields.seed(connection);
+        connection.clone()
+      });
+    } else if self.fields.url.get_untracked().is_empty() && !self.fields.initialized.get_untracked() {
+      self.fields.initialized.set(true);
+      self.fields.url.set("https://api.typesafe.ai/v1".to_owned());
+    }
+    let local_preset = props.connection.is_none()
+      && self.server.get() == super::super::add_decision::Server::Local
+      && DecisionServerUrl::new(&self.fields.url.get()).is_ok_and(|url| url.is_on_this_computer());
+    let mut rows = self.fields.rows(ctx, &props.listed, local_preset);
     rows.push(self.models(ctx, &props));
+    if props.connection.is_none() {
+      return self.add_page(ctx, &props, rows);
+    }
     let close = props.close.clone();
     let back = crate::ui::button::ActionButton::new(
       "decision-edit-back",
@@ -99,7 +125,9 @@ impl Component for DecisionEditor {
 
 impl DecisionEditor {
   fn draft(&self, props: &Props) -> Option<(DecisionDraft, Option<KeySecret>)> {
-    self.fields.draft(Some(props.connection.id()), &props.listed)
+    self
+      .fields
+      .draft(props.connection.as_ref().map(DecisionConnection::id), &props.listed)
   }
 
   fn models(&self, ctx: &mut Ctx, props: &Props) -> Element {
@@ -113,10 +141,12 @@ impl DecisionEditor {
       }
       _ => None,
     };
-    let unchanged = self.draft(props).is_some_and(|(draft, key)| {
-      draft.base_url == *props.connection.base_url() && key == props.connection.key().map(KeySecret::Existing)
+    let unchanged = props.connection.as_ref().filter(|connection| {
+      self.draft(props).is_some_and(|(draft, key)| {
+        draft.base_url == *connection.base_url() && key == connection.key().map(KeySecret::Existing)
+      })
     });
-    let shown = preview.or_else(|| unchanged.then_some(&props.connection));
+    let shown = preview.or(unchanged);
     let pills = shown
       .map(|connection| {
         connection
@@ -141,30 +171,41 @@ impl DecisionEditor {
       .with_children(pills);
     let check = self.check_button(ctx, props);
     let status = shown.map(|connection| super::words::line(ctx, connection, state.is_pending() && self.checking.get()));
-    FormField::new("decision-edit-models", ctx.t("decision_connection.models"))
-      .hint(ctx.t("decision_connection.modelsHint"))
-      .render(
-        ctx,
-        Column::new()
-          .width(Dimension::Pct(100.0))
-          .spacing(SpacingSize::Xs)
-          .child(
-            Row::new()
-              .width(Dimension::Pct(100.0))
-              .spacing(SpacingSize::Sm)
-              .align_items(lurq::layout::Alignment::Center)
-              .child(row)
-              .child(check),
-          )
-          .with_children(status),
-      )
+    FormField::new(
+      "decision-edit-models",
+      ctx.t(if props.connection.is_none() {
+        "decision_connection.model"
+      } else {
+        "decision_connection.models"
+      }),
+    )
+    .hint(ctx.t("decision_connection.modelsHint"))
+    .render(
+      ctx,
+      Column::new()
+        .width(Dimension::Pct(100.0))
+        .spacing(SpacingSize::Xs)
+        .child(
+          Row::new()
+            .width(Dimension::Pct(100.0))
+            .spacing(SpacingSize::Sm)
+            .align_items(lurq::layout::Alignment::Center)
+            .child(row)
+            .child(check),
+        )
+        .with_children(status),
+    )
   }
 
   fn destination(&self, ctx: &mut Ctx) -> Element {
     let url = DecisionServerUrl::new(&self.fields.url.get());
     let local = url.as_ref().is_ok_and(|url| url.is_on_this_computer());
     let text = if local {
-      ctx.t("decision_connection.editLocal")
+      ctx.t(if ctx.props::<Props>().connection.is_none() {
+        "decision_connection.addLocal"
+      } else {
+        "decision_connection.editLocal"
+      })
     } else {
       let host = url.map_or_else(
         |_| ctx.t("decision_connection.server").to_string(),

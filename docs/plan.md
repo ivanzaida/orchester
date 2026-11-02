@@ -1001,6 +1001,12 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
+ORC-563 · Connections › Add decision model (implemented 2026-11-02; pipeline Review and Verify follow).
+Frames 01 `XMNUP` and 01b `z3G09h`: four server presets, project-secret picker and masked New secret,
+unsaved catalog checks, destination disclosure, and person-only hosted saves through ORC-559. Add and Edit share
+one form and authority checks. Tests: `orchester-app --test connections connections_decision` and i18n filters.
+No platform-specific code. Design verification remains the separate Verify step.
+
 ORC-561 · Test a decision model on recorded project requests (implemented 2026-11-01).
 Workspace exposes an explicit test action, stored progress/results and Stop; the runner reconstructs historical
 review context, omits unavailable facts explicitly, runs eight requests at once and refuses hosted automation.

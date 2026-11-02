@@ -87,23 +87,25 @@ impl ConnectionsView {
   }
 }
 
-/// What Add connection adds (`Add connection` menu in `oK3aE`): an agent provider (`cEJy4`), the one it
-/// opens on, or an MCP server (`euVYY`).
+/// What Add connection adds: an agent provider (the default), an MCP server, or a decision model
+/// (01 XMNUP and 01b z3G09h), which agents cannot run on.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum NewConnection {
   #[default]
   AgentProvider,
   McpServer,
+  DecisionModel,
 }
 
 impl NewConnection {
-  pub const ALL: [Self; 2] = [Self::AgentProvider, Self::McpServer];
+  pub const ALL: [Self; 3] = [Self::AgentProvider, Self::McpServer, Self::DecisionModel];
 
   /// The kind's name in a path's query and in the app's MCP tools.
   pub const fn name(self) -> &'static str {
     match self {
       Self::AgentProvider => "agent_provider",
       Self::McpServer => "mcp_server",
+      Self::DecisionModel => "decision_model",
     }
   }
 
