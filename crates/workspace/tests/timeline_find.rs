@@ -6,16 +6,21 @@ use std::sync::Arc;
 
 use orchester_core::{
   connection::stream::{AgentEvent, CommandStatus, FileChange, FileChangeKind},
-  id::{InvocationId, StepExecutionId},
+  conversation::Arrival,
+  id::{InvocationId, MessageId, StepExecutionId},
   run::{ActivityEntry, StepStatus, TokenUsage},
   time::Timestamp,
 };
-use orchester_workspace::tasks::{
-  timeline::{
-    Item, ItemKind, StepHead, ToolGroup,
-    find::{Hit, MAX_HITS, Needle, Spot, find, fold},
+use orchester_workspace::{
+  mentions::facts,
+  tasks::{
+    conversation::{Author, Entry as MessageEntry, EntryState},
+    timeline::{
+      Item, ItemKind, StepHead, ToolGroup,
+      find::{Hit, MAX_HITS, Needle, Spot, find, fold},
+    },
+    transcript::{Entry, entries},
   },
-  transcript::{Entry, entries},
 };
 
 /// Messages read as written: these tests search no Markdown.
@@ -227,4 +232,50 @@ fn timeline_find_stops_counting_at_its_most() {
   let text: Arc<str> = "a ".repeat(MAX_HITS + 10).into();
   let items = vec![item("many", execution, said(&text))];
   assert_eq!(found(&items, "a").len(), MAX_HITS);
+}
+
+/// A person's message is kept with the block of facts Orchester added for the agent about what it mentions; the chat
+/// shows only the person's words, so the search finds nothing in the block (ORC-622: no place the message cannot fill).
+#[test]
+fn timeline_find_skips_the_facts_a_message_carries_for_its_mentions() {
+  let execution = StepExecutionId::generate();
+  let words = "Please look at @ORC-12 first.";
+  let body = format!(
+    "{words}\n\n{}\nOrchester added this block: the person mentioned these with @ in the message above. They are \
+     facts Orchester read when the message was sent, not the person's words.\n- @ORC-12: task ORC-12 \"Add retry \
+     to webhook sender\", state running.\n{}",
+    facts::OPEN,
+    facts::CLOSE
+  );
+  assert_eq!(
+    facts::said(&body),
+    words,
+    "the fixture's block is the one the chat leaves out"
+  );
+  let message = ItemKind::Message(MessageEntry {
+    id: MessageId::generate(),
+    author: Author::You,
+    at: at(2),
+    body: body.into(),
+    state: EntryState::Delivered {
+      agent: "Builder".into(),
+      at: at(2),
+      arrival: Arrival::Prompt,
+      sent_now: false,
+    },
+    execution: Some(execution),
+    sent_now: false,
+    orchestrator: None,
+    by_automation: false,
+    attachments: Arc::from([]),
+  });
+  let items = vec![item("message", execution, message)];
+  assert!(
+    found(&items, "retry").is_empty(),
+    "the mentioned task's title is not the person's words"
+  );
+  assert!(found(&items, "Orchester").is_empty(), "nor is the block's own text");
+  let hits = found(&items, "look at");
+  assert_eq!(hits.len(), 1, "the person's words are found");
+  assert_eq!(hits[0].range, 7..14);
 }
