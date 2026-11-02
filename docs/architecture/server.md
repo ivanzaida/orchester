@@ -298,6 +298,30 @@ published version, as Run again does today. Before row 30, a member who lacked t
 computer*; that state now applies only to what a version names and this computer lacks ([Shared
 configuration](#shared-configuration)).
 
+## Team authority S2 contract (ORC-625 / OP-145)
+
+The additive shared types are documented in [cloud-api.md](../cloud-api.md#team-authority-s2-shared-contracts).
+`server_admin::ServerSettings` reads `claim_staleness_seconds`; `SettingsChanges` accepts it optionally and
+continues to refuse unknown fields. Only server admins read or change this server-wide setting. Whole seconds
+are validated by core's `ClaimStalenessThreshold`: 300..=86400 inclusive, default 900 (15 minutes).
+`Claim::stale(now, threshold)` and `Claim::take_over(..., threshold)` use the execution claim's heartbeat;
+elapsed time equal to the threshold is stale. The legacy default constant derives from this type's default.
+
+On the separate v2 surface, `WorkspacePolicy` carries `revision` and `automatic_merge` (new workspace: off).
+`WorkspacePolicyResponse` includes that effective policy and caller `WorkspaceCapabilities` (`read_policy`,
+`change_policy`). Workspace members read; workspace Admins change; server admins inherit both. These are
+computed from authoritative records, not accepted from requests. `WorkspacePolicyChanges` requires the seen
+revision and desired automatic_merge value. Platform applies authorization, revision comparison, write and
+revision increment in one transaction; a mismatch returns HTTP 409 `policy_revision_conflict` with the current
+policy, represented by `WorkspacePolicyError`. No silent overwrite or per-member policy override is defined.
+
+The server threshold is not a workspace policy field. A compatible local Claude/Codex account choice is local
+execution metadata. Open items are **not in this contract**: other team-owned fields such as default pipeline,
+delivery and effort, admin drafts, module heartbeat source, and human-wait renewal. The task's referenced
+team-authority-plan.md §12 is absent in this checkout; this prerequisite does not decide those items.
+No v1 workspace contracts or /api/v1 client change. OP-145 implements routes, persistence and enforcement in
+the platform repository; these public types alone implement none of those server behaviors.
+
 ## Claims
 
 A claim says who has taken a task into work. A task has at most one; the server keeps it and its history.
