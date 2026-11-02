@@ -218,3 +218,42 @@ fn decision_reviewer_choice_preserves_language_settings_and_effort() {
     assert!(!resolved.default);
   }
 }
+
+#[test]
+fn estimates_decision_reviewer_uses_the_default_language_model_without_decision_server() {
+  use orchester_core::run::review::{DEFAULT_REVIEW_MODEL, resolve_estimator};
+  let choice = settings(&decision("http://localhost:8000"), None);
+  let languages = [
+    language(AgentProvider::CodexCli),
+    language(AgentProvider::ClaudeCodeCli),
+  ];
+  let estimator = resolve_estimator(&choice, &languages).expect("language estimator");
+  assert_eq!(estimator.connection, ReviewerConnection::Language(&languages[1]));
+  assert_eq!(estimator.model.as_str(), DEFAULT_REVIEW_MODEL);
+  assert_eq!(estimator.effort, None);
+  assert_eq!(estimator.threshold, None);
+}
+
+#[test]
+fn estimates_decision_reviewer_without_a_language_connection_is_unavailable() {
+  use orchester_core::run::review::resolve_estimator;
+  let choice = settings(&decision("http://localhost:8000"), None);
+  assert_eq!(resolve_estimator(&choice, &[]), Err(ReviewerUnavailable::NoConnection));
+}
+
+#[test]
+fn estimates_decision_reviewer_rule_keeps_an_explicit_language_reviewers_model_and_effort() {
+  use orchester_core::run::review::resolve_estimator;
+  let languages = [language(AgentProvider::ClaudeCodeCli)];
+  let choice = AutoModeSettings {
+    reviewer: Some(ReviewerChoice {
+      connection: languages[0].id().into(),
+      model: ModelId::new("sonnet").expect("model"),
+      effort: Some("high".into()),
+      threshold: None,
+    }),
+  };
+  let estimator = resolve_estimator(&choice, &languages).expect("chosen language reviewer");
+  assert_eq!(estimator.model.as_str(), "sonnet");
+  assert_eq!(estimator.effort.as_deref(), Some("high"));
+}

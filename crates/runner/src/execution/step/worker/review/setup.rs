@@ -329,7 +329,7 @@ impl Worker {
 }
 
 /// The reviewer of the project of `db`, as its auto mode settings resolve against its connections, its key read
-/// with `keys`; the story-point estimator runs on it too.
+/// with `keys`.
 pub(super) fn reviewer_setup(db: &ProjectDb, keys: &ReviewerKeys) -> Result<ReviewerSetup, StoreError> {
   let settings = db.auto_mode_settings()?;
   if let Some(choice) = &settings.reviewer
@@ -341,6 +341,24 @@ pub(super) fn reviewer_setup(db: &ProjectDb, keys: &ReviewerKeys) -> Result<Revi
   let Ok(resolved) = resolve_reviewer(&settings, &connections, &[]) else {
     return Ok(ReviewerSetup::Missing);
   };
+  language_setup(db, keys, resolved)
+}
+
+/// The estimator's language connection; decision reviewers use the project's default language reviewer.
+pub(super) fn estimator_setup(db: &ProjectDb, keys: &ReviewerKeys) -> Result<ReviewerSetup, StoreError> {
+  let settings = db.auto_mode_settings()?;
+  let connections = db.connections()?;
+  let Ok(resolved) = orchester_core::run::review::resolve_estimator(&settings, &connections) else {
+    return Ok(ReviewerSetup::Missing);
+  };
+  language_setup(db, keys, resolved)
+}
+
+fn language_setup(
+  db: &ProjectDb,
+  keys: &ReviewerKeys,
+  resolved: ResolvedReviewer<'_>,
+) -> Result<ReviewerSetup, StoreError> {
   let ResolvedReviewer {
     connection,
     kind,

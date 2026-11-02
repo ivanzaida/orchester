@@ -28,7 +28,7 @@ impl ProviderForm {
     }
   }
 
-  pub(in super::super) fn decision_key_row(&self, ctx: &mut Ctx, listed: &ProjectConnections) -> Element {
-    self.key_row_with(ctx, listed, true)
+  pub(in super::super) fn decision_key_row(&self, ctx: &mut Ctx, listed: &ProjectConnections, local: bool) -> Element {
+    self.key_row_with(ctx, listed, true, local)
   }
 }

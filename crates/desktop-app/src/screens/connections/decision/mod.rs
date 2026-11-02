@@ -1,5 +1,5 @@
 //! Decision model connection page: frame 02 GM4yE and frame 07 FJRFV.
-mod editor;
+pub(super) mod editor;
 pub(super) mod form;
 mod groups;
 mod read;
@@ -132,7 +132,7 @@ impl Component for DecisionPage {
         &format!("decision-editor-{}", connection.id()),
         editor::Props {
           project: props.project.clone(),
-          connection: connection.clone(),
+          connection: Some(connection.clone()),
           listed: read.listed.clone(),
           close: self.editing.clone(),
         },
@@ -371,11 +371,8 @@ fn glyph(connection: &DecisionConnection) -> Icon {
   }
 }
 
-/// Existing decision servers open from Connections; creating one belongs to the separate form task.
-pub(super) fn listed(ctx: &mut Ctx, project: &ShownProject, connections: &[DecisionConnection]) -> Option<Element> {
-  if connections.is_empty() {
-    return None;
-  }
+/// Decision servers and the entry to Add decision model.
+pub(super) fn listed(ctx: &mut Ctx, project: &ShownProject, connections: &[DecisionConnection]) -> Element {
   let navigation = Navigation::of(ctx);
   let rows = connections
     .iter()
@@ -397,9 +394,20 @@ pub(super) fn listed(ctx: &mut Ctx, project: &ShownProject, connections: &[Decis
         .render(ctx)
     })
     .collect::<Vec<_>>();
-  Some(
-    Group::new("connections-decisions", ctx.t("decision_connection.group"))
-      .rows(rows)
-      .into(),
-  )
+  Group::new("connections-decisions", ctx.t("decision_connection.group"))
+    .end(
+      ActionButton::new(
+        "connections-add-decision",
+        ButtonKind::Ghost,
+        ctx.t("decision_connection.add"),
+      )
+      .icon(Icon::Plus)
+      .compact()
+      .opens(navigation.to(Route::Project(
+        project.open.project.id(),
+        ProjectPage::NewConnection(crate::routes::NewConnection::DecisionModel),
+      ))),
+    )
+    .rows(rows)
+    .into()
 }
