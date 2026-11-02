@@ -85,7 +85,7 @@ fn connections_decision_test_last_results_mark_only_the_matching_reviewer_model(
   seeded
     .db()
     .save_auto_mode_settings(&AutoModeSettings {
-      reviewer: Some(ReviewerChoice::decision(connection.id(), report.model.clone(), None)),
+      reviewer: Some(ReviewerChoice::decision(connection.id(), report.model, None)),
     })
     .expect("reviewer");
   open(&mut seeded, connection.id());
