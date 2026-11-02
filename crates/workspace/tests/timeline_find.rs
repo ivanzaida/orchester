@@ -199,9 +199,8 @@ fn timeline_find_names_the_line_of_the_output() {
 
 #[test]
 fn timeline_find_keeps_a_place_through_a_read_again() {
-  let items = implement();
-  let before = found(&items, "retry");
-  let mut grown = items.clone();
+  let mut grown = implement();
+  let before = found(&grown, "retry");
   grown.push(item(
     "later",
     StepExecutionId::generate(),
