@@ -1,11 +1,12 @@
 //! The app's updates (`orchester_workspace::app_updates`) against a stand-in Orchester Cloud, with release files signed
 //! by a throwaway key: the settings, the anonymous check, the download with its resume and its checks, the states,
-//! which copies update themselves, installing a ready update (`installs`) and, on macOS, replacing the bundle
-//! (`bundles`).
+//! which copies update themselves, installing a ready update (`installs`) with the databases copied aside first
+//! (`backups`) and, on macOS, replacing the bundle (`bundles`).
 //!
 //! `cargo test -p orchester-workspace --test app_updates app_updates`
 //! `cargo test -p orchester-workspace --test app_updates update_install`
 
+mod backups;
 #[cfg(target_os = "macos")]
 mod bundles;
 mod checks;
