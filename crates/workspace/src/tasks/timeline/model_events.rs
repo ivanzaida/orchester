@@ -2,7 +2,7 @@
 //! line for each change of the run's model or effort and each cancelation, among the items of the step it was made for
 //! — of its execution whose agent last started before it — or among the items that wait for a step when its agent had
 //! not started yet. A change made while the step's turn runs says it waits, and offers to cancel it, until that turn
-//! ends.
+//! ends. After a change for one step only, the next step that starts on its own profile says so as it starts.
 
 use orchester_core::{
   id::StepExecutionId,
@@ -25,13 +25,14 @@ pub struct ModelLine {
   pub waits: bool,
 }
 
-/// The lines of `run`'s model events that belong to `execution` (`None`: to no step).
+/// The lines of `run`'s model events that belong to `execution` (`None`: to no step), and the line of a later step
+/// that started on its own profile again after a change for one step, at that start.
 pub(super) fn items(run: &RunView, execution: Option<StepExecutionId>) -> Vec<Item> {
   let events = &run.models.events;
   let waits = |index: usize, step: &StepKey| {
     waiting_change(&run.run, &run.invocations, events, step).is_some_and(|(waiting, _)| waiting == index)
   };
-  events
+  let mut items: Vec<Item> = events
     .iter()
     .enumerate()
     .filter(|(_, event)| made_in(run, &event.step, event.at) == execution)
@@ -46,7 +47,21 @@ pub(super) fn items(run: &RunView, execution: Option<StepExecutionId>) -> Vec<It
         waits: waits(index, &event.step),
       }),
     })
-    .collect()
+    .collect();
+  items.extend(
+    run
+      .models
+      .back
+      .iter()
+      .filter(|back| Some(back.execution) == execution)
+      .map(|back| Item {
+        key: format!("model-back-{}", back.execution).into(),
+        execution,
+        at: back.at,
+        kind: ItemKind::BackToProfile(back.clone()),
+      }),
+  );
+  items
 }
 
 /// The execution of step `step` whose agent last started at or before `at`.

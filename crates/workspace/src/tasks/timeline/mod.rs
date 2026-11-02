@@ -98,6 +98,8 @@ pub enum ItemKind {
   Permission(permission_events::PermissionLine),
   /// Its model chip changed the run's model or effort, or canceled a change ([`model_events`]).
   Model(model_events::ModelLine),
+  /// A later step started on its own profile again after a change for one step only ([`model_events`]).
+  BackToProfile(crate::tasks::run_model::back::BackToProfile),
   /// The run ended.
   End(RunEnd),
 }

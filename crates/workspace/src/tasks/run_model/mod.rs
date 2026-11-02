@@ -5,6 +5,7 @@
 //! runner reads the run's choice at each turn's start, so a change made while a turn runs waits for its end and can be
 //! canceled until then. The pipeline and the agent profile never change from it.
 
+pub mod back;
 pub mod change;
 
 use std::sync::Arc;
@@ -18,6 +19,7 @@ use orchester_core::{
 };
 use orchester_store::{ProjectDb, StoreError};
 
+use self::back::{BackToProfile, back_to_profile};
 use super::detail::StepView;
 use crate::agents::form::{effort_options, model_options, stored_effort};
 
@@ -80,11 +82,12 @@ impl StepModel {
   }
 }
 
-/// What a run keeps of its own model and effort: the changes and cancelations, oldest first, and the model of its step
-/// at work.
+/// What a run keeps of its own model and effort: the changes and cancelations, oldest first, the later steps that
+/// started on their own profile again after a change for one step, and the model of its step at work.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct RunModels {
   pub events: Vec<ModelEvent>,
+  pub back: Vec<BackToProfile>,
   pub step: Option<StepModel>,
 }
 
@@ -97,11 +100,12 @@ impl RunModels {
     invocations: &[Invocation],
   ) -> Result<Self, StoreError> {
     let events = db.model_events(run.id())?;
+    let back = back_to_profile(db, run, (invocations, &events))?;
     let step = match current.filter(|_| !run.status().is_terminal()) {
       Some(current) => step_model(db, run, current, (invocations, &events))?,
       None => None,
     };
-    Ok(Self { events, step })
+    Ok(Self { events, back, step })
   }
 }
 

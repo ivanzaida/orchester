@@ -220,6 +220,7 @@ fn entry(item: &Item, run: Option<&RunView>, link: &str) -> Option<Value> {
     | ItemKind::SwitchedToManual(_)
     | ItemKind::Permission(_)
     | ItemKind::Model(_)
+    | ItemKind::BackToProfile(_)
     | ItemKind::Tools(_)
     | ItemKind::Problem(_) => {
       return None;
