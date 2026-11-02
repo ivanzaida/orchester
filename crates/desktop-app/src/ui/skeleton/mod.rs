@@ -30,8 +30,8 @@ use lurq::{
 };
 
 pub use self::rows::{
-  BoneRow, Words, button, chevron, count, field, group, line, lines, list, outline, read_back, select, status, switch,
-  unit_field,
+  BoneRow, Words, button, chevron, count, count_in_room, field, group, line, lines, list, outline, read_back, select,
+  status, switch, unit_field,
 };
 use crate::theme::{ExtraRadius, SKELETON_DELAY, SKELETON_DIM, SKELETON_FADE, SKELETON_PULSE, SKELETON_STEPS};
 

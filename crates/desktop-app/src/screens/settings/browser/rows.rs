@@ -43,6 +43,9 @@ const NOT_FOUND: &str = "settings.browser.notFound.macos";
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]
 const NOT_FOUND: &str = "settings.browser.notFound.other";
 
+/// The room of the profiles' folder with Copy at the row's end (`Value` `z9JTEP` in `bVCKX`).
+pub(super) const PROFILES_VALUE: f32 = 184.0;
+
 /// What the rows' buttons do and how they stand.
 pub(super) struct Actions<'a> {
   pub(super) choose: &'a ChooseAction,
@@ -224,7 +227,9 @@ fn refused_path(reason: &NotABrowser) -> &Path {
   }
 }
 
-/// *Browser profiles*: their folder with Copy, or that it is unknown.
+/// *Browser profiles*: their folder with Copy, or that it is unknown. The folder and Copy keep the room the design
+/// gives them ([`PROFILES_VALUE`]), the folder cut with an ellipsis, so the hint keeps its one line and the row its
+/// skeleton's height.
 fn profiles_row(ctx: &mut Ctx, profiles: Option<&Path>) -> Element {
   let row = SettingRow::new("settings-browser-profiles", ctx.t("settings.browser.profiles.label"))
     .hint(ctx.t("settings.browser.profiles.hint"));
@@ -245,7 +250,12 @@ fn profiles_row(ctx: &mut Ctx, profiles: Option<&Path>) -> Element {
         },
       )
       .render(ctx);
-      row.control(copy)
+      row.control(
+        Row::new()
+          .width(Dimension::Px(PROFILES_VALUE))
+          .flex_shrink(0.0)
+          .child(copy),
+      )
     }
     None => row.toned_hint(ctx.t("settings.browser.profiles.unknown"), HintTone::Danger),
   };

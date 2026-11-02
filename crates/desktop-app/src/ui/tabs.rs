@@ -145,8 +145,8 @@ impl PageTab {
     self
   }
 
-  /// How many there are is still read: a count's bone after the label (`D · Bones` in `13 · Patterns` `AOQZ3`); its
-  /// element id is `<id>-count`.
+  /// How many there are is still read: a count's bone after the label (`D · Bones` in `13 · Patterns` `AOQZ3`), as
+  /// wide as one digit so a count of one digit moves no tab after it; its element id is `<id>-count`.
   #[must_use]
   pub const fn count_reading(mut self) -> Self {
     self.reading = true;
@@ -237,7 +237,8 @@ fn label_in_room(id: &str, label: &str, color: PaletteColor) -> Column {
 }
 
 /// A tab's label with its badge, its quiet count (in `warning` when it counts what waits for the person), or the
-/// count's bone while it is read.
+/// count's bone while it is read. The count and its bone stand in the room of one digit at least, so a count of one
+/// digit replaces the bone without moving the tabs after it.
 fn counted_label(
   id: &str,
   label: Element,
@@ -250,7 +251,7 @@ fn counted_label(
   match (badge, count) {
     (Some(count), _) => row.child(count_badge(&format!("{id}-badge"), count)).into(),
     (None, Some((count, waits))) => row
-      .child(
+      .child(digit_room(
         Text::new(&count.to_string())
           .id(format!("{id}-count"))
           .variant(TypographyStyle::Description)
@@ -260,11 +261,26 @@ fn counted_label(
             PaletteColor::TextMuted
           })
           .nowrap(),
-      )
+      ))
       .into(),
-    (None, None) if reading => row.child(skeleton::count().id(format!("{id}-count"))).into(),
+    (None, None) if reading => row
+      .child(digit_room(skeleton::count_in_room()).id(format!("{id}-count")))
+      .into(),
     (None, None) => row.into(),
   }
+}
+
+/// `count` in the room of one digit of a count at least: a copy of the widest digit no higher than nothing holds it.
+fn digit_room(count: impl Into<Element>) -> Column {
+  let room = Row::new()
+    .height(Dimension::Px(NO_ROOM))
+    .clip()
+    .child(Text::new(&0.to_string()).variant(TypographyStyle::Description).nowrap());
+  Column::new()
+    .flex_shrink(0.0)
+    .align_items(Alignment::Stretch)
+    .child(count)
+    .child(room)
 }
 
 /// A tab's count of what waits for the person (`CiYKk`).

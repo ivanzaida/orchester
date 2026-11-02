@@ -14,6 +14,7 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 
+use super::rows::PROFILES_VALUE;
 use crate::{
   theme::{ControlHeight, ExtraTypography, IconSize, SKELETON_FADE, SettingsSpacing},
   ui::{
@@ -73,9 +74,11 @@ fn program_group(ctx: &mut Ctx) -> Element {
     .justify(Justify::Center)
     .child(icon(Icon::Copy, IconSize::Md, PaletteColor::TextMuted));
   let folder = Row::new()
+    .width(Dimension::Px(PROFILES_VALUE))
     .flex_shrink(0.0)
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
+    .justify(Justify::End)
     .child(skeleton::line(ctx, ExtraTypography::PropertyMono.role(), PROFILES))
     .child(copy);
   let profiles = SettingRow::new(
