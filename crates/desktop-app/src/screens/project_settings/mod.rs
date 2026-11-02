@@ -248,6 +248,7 @@ impl Component for SettingsScreen {
     }
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
+    ctx.provide(crate::ui::skeleton::FromFirstFrame);
     let Props {
       project,
       shown,
@@ -275,7 +276,8 @@ impl Component for SettingsScreen {
       (Shown::EditConnection(id), _) => super::connections::edit_connection(ctx, &project, id),
       (Shown::Secrets(view), _) => environment::tab(ctx, props, view),
     };
-    page::settings(ctx, (&project, shown), &self.status, content)
+    let body = page::tab_body(shown.section().element(), content);
+    page::settings(ctx, (&project, shown), &self.status, body)
   }
 }
 

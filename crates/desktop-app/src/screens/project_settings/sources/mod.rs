@@ -33,13 +33,7 @@ use crate::{
   mcp::input_gate::Guarded,
   screens::connections::widen::{WidenConfirm, WidenLook, WidenProps},
   services::Services,
-  ui::{
-    add_source::Asked,
-    field::field_error,
-    message::message_text,
-    skeleton::{self, Skeleton},
-    state::load_error,
-  },
+  ui::{add_source::Asked, field::field_error, message::message_text, skeleton::Skeleton, state::load_error},
 };
 
 /// The project's sources as read, where a new one is checked, when they were read, and the *Try again* they were read
@@ -152,20 +146,25 @@ impl Sources {
   /// on screen meanwhile.
   fn read(&self, ctx: &mut Ctx, props: &TabProps) -> FutureState<Read, Message> {
     let revision = self.revision.get() + props.project.feed.outside.get().of(Outside::ProjectSettings);
+    let hold = Services::of(ctx).hold;
     ctx
       .future(
         (props.project.open.repo_root.clone(), revision, self.retried.get()),
-        |(root, _, retried)| async move {
-          background::run(move || {
-            let store = |error: orchester_store::StoreError| messages::store_error(&error);
-            Ok(Read {
-              listed: project::load_in(&root).map_err(store)?,
-              place: project::place_in(&root).map_err(store)?,
-              checked: display::clock(Timestamp::now()),
-              retried,
+        move |(root, _, retried)| {
+          let hold = hold.clone();
+          async move {
+            hold.released().await;
+            background::run(move || {
+              let store = |error: orchester_store::StoreError| messages::store_error(&error);
+              Ok(Read {
+                listed: project::load_in(&root).map_err(store)?,
+                place: project::place_in(&root).map_err(store)?,
+                checked: display::clock(Timestamp::now()),
+                retried,
+              })
             })
-          })
-          .await?
+            .await?
+          }
         },
       )
       .state()
@@ -187,9 +186,8 @@ impl Sources {
         )
       }
       None => {
-        // No loading frame draws the Context tab's sources: their rows' bones stand in the group's outline.
-        let bones = skeleton::list(ctx, "settings-sources-reading", &[(180.0, 260.0), (150.0, 220.0)]);
-        Skeleton::new("settings-loading", ctx.t("project_settings.sourcesTab.reading")).show(ctx, bones)
+        let bones = view::bones(ctx);
+        Skeleton::new("settings-sources-loading", ctx.t("project_settings.sourcesTab.reading")).show(ctx, bones)
       }
     }
   }

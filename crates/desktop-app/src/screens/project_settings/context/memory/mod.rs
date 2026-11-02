@@ -16,7 +16,7 @@ use lurq::{
     ctx::{Ctx, FutureState},
     theme::PaletteColor,
   },
-  components::{Column, Row, SelectOption, Text},
+  components::{Row, SelectOption, Text},
   core::Signal,
   layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
@@ -58,6 +58,7 @@ const NUMBER_WIDTH: f32 = 160.0;
 /// The bone of a select's and a box's value while the settings are read.
 const SELECT_BONE: f32 = 120.0;
 const NUMBER_BONE: f32 = 32.0;
+const READ_BACK_BONE: f32 = 60.0;
 
 /// The group, saving each field itself.
 pub(super) struct Memory {
@@ -300,10 +301,13 @@ fn reading(ctx: &mut Ctx, project: &ShownProject, error: Option<&Message>, retri
     );
     return heading(ctx).after(failure).into();
   }
-  let number = |ctx: &Ctx, unit: &str| skeleton::unit_field(ctx, NUMBER_WIDTH, NUMBER_BONE, unit);
-  let controls = [
-    skeleton::select(ctx, SELECT_WIDTH, SELECT_BONE),
-    skeleton::select(ctx, SELECT_WIDTH, SELECT_BONE),
+  let number = |ctx: &Ctx, unit: &str| {
+    let field = skeleton::unit_field(ctx, NUMBER_WIDTH, NUMBER_BONE, unit);
+    Element::from(skeleton::read_back(ctx, field, READ_BACK_BONE))
+  };
+  let controls: [Element; 4] = [
+    skeleton::select(ctx, SELECT_WIDTH, SELECT_BONE).into(),
+    skeleton::select(ctx, SELECT_WIDTH, SELECT_BONE).into(),
     number(ctx, &ctx.t("memory.settings.recordsUnit")),
     number(ctx, &ctx.t("memory.settings.tokensUnit")),
   ];
@@ -317,8 +321,6 @@ fn reading(ctx: &mut Ctx, project: &ShownProject, error: Option<&Message>, retri
         .render(ctx)
     })
     .collect::<Vec<_>>();
-  let bones = Column::new()
-    .width(Dimension::Pct(100.0))
-    .child(heading(ctx).rows(rows));
+  let bones = skeleton::lower_group(2, heading(ctx).rows(rows).after(note(ctx)));
   Skeleton::new("settings-memory-loading", ctx.t("project_settings.reading")).show(ctx, bones)
 }

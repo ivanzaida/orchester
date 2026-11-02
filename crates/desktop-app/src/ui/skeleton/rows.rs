@@ -82,6 +82,16 @@ pub fn unit_field(ctx: &Ctx, width: f32, value: f32, unit: &str) -> Row {
   )
 }
 
+/// A number's `field` with what it reads back as under it, a bone `width` long, as `ui::field::NumberField` lays it
+/// out.
+pub fn read_back(ctx: &Ctx, field: Row, width: f32) -> Column {
+  Column::new()
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::End)
+    .child(field)
+    .child(line(ctx, TypographyStyle::Caption, width))
+}
+
 /// [`field`] that opens a list: its chevron real at its end.
 pub fn select(ctx: &Ctx, width: f32, value: f32) -> Row {
   field(ctx, width, value).child(Spacer::new().flex(1.0)).child(icon(

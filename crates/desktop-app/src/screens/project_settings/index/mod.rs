@@ -18,7 +18,7 @@ use lurq::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction, FutureState},
   },
-  components::Text,
+  components::{Column, Text},
   core::Signal,
   node::Element,
 };
@@ -41,9 +41,16 @@ use crate::{
     field::field_error,
     icon::Icon,
     message::message_text,
+    skeleton,
     toggle::{Toggle, ToggleKind},
   },
 };
+
+/// How long the bones of what the group has not read yet are (`Code index` in `L04L` `dFXLk`).
+const INDEX_HINT_BONE: f32 = 150.0;
+const REBUILD_BONE: f32 = 84.0;
+const TOOL_HINT_BONE: f32 = 110.0;
+const TOOL_BONE: f32 = 44.0;
 
 #[derive(Clone, PartialEq)]
 struct Listed(IndexList);
@@ -119,9 +126,6 @@ impl Component for CodeIndex {
       self.stored.set(Some(read.clone()));
     }
     let Some(read) = self.stored.get() else {
-      // No loading frame draws this tab: its rows' bones stand in the same outline as the other tabs'.
-      let bones =
-        |ctx: &mut Ctx| crate::ui::skeleton::list(ctx, "settings-index-reading", &[(150.0, 260.0), (120.0, 220.0)]);
       return work::pending(ctx, &state, &self.revision, bones);
     };
     let on = read.0.code_index.is_on();
@@ -225,6 +229,32 @@ impl CodeIndex {
       .state()
       .get()
   }
+}
+
+/// The group while the setting is read (`L04L` `dFXLk`), the tab's third: *Use code index* with its switch's bone, the
+/// index's line, state and Rebuild as bones, the search tool's line and name as bones.
+fn bones(ctx: &mut Ctx) -> Column {
+  let setting = SettingRow::new("settings-index-use-reading", ctx.t("project_settings.useIndex"))
+    .info(ctx.t("project_settings.indexInfo"))
+    .hint(ctx.t("project_settings.indexOnHint"))
+    .control(skeleton::switch())
+    .render(ctx);
+  let index = SettingRow::new("settings-index-list-reading", ctx.t("project_settings.indexRow"))
+    .hint_reading(INDEX_HINT_BONE)
+    .control(skeleton::button(REBUILD_BONE))
+    .render(ctx);
+  let tool = SettingRow::new("settings-ripgrep-reading", ctx.t("project_settings.searchTool"))
+    .info(ctx.t("project_settings.ripgrepDetail"))
+    .hint_reading(TOOL_HINT_BONE)
+    .control(skeleton::line(ctx, ExtraTypography::Note.role(), TOOL_BONE))
+    .render(ctx);
+  skeleton::lower_group(
+    1,
+    Group::new("settings-index-section-reading", ctx.t("project_settings.indexHeading"))
+      .row(setting)
+      .row(index)
+      .row(tool),
+  )
 }
 
 /// *Use code index* (`Use code index` `LEaze`): its switch, saved at once.

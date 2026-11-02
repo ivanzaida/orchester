@@ -41,6 +41,8 @@ use crate::{
 
 /// A limit's box (`Box` `jJ4rP`).
 const FIELD_WIDTH: f32 = 160.0;
+/// The bone of what a budget reads back as while it is read.
+const READ_BACK_BONE: f32 = 60.0;
 
 #[derive(Clone)]
 pub(super) struct Limits {
@@ -133,16 +135,22 @@ impl Field {
     matches!(self, Self::Slots | Self::Qa)
   }
 }
-/// The Limits group while it is read (`10 · Project settings · Runs · loading` `lUFjj`): its heading, its note, its
-/// foot and every row's label, hint and unit real, each value a bone in its field.
+/// The Limits group while it is read (`L02L` `Nxa0L`): its heading, its note, its foot and every row's label, hint and
+/// unit real, each value a bone in its field, the daily budget's read-back a bone under it.
 pub(super) fn bones(ctx: &mut Ctx) -> Element {
   let rows = [Field::Default, Field::Daily, Field::Time, Field::Slots, Field::Qa].map(|kind| {
     let [label, hint, info, unit] = kind.keys();
     let value = if kind.counts() { 14.0 } else { 46.0 };
+    let field = skeleton::unit_field(ctx, FIELD_WIDTH, value, &ctx.t(unit));
+    let control: Element = if matches!(kind, Field::Daily) {
+      skeleton::read_back(ctx, field, READ_BACK_BONE).into()
+    } else {
+      field.into()
+    };
     SettingRow::new(format!("{}-reading", kind.row()), ctx.t(label))
       .hint(ctx.t(hint))
       .info(ctx.t(info))
-      .control(skeleton::unit_field(ctx, FIELD_WIDTH, value, &ctx.t(unit)))
+      .control(control)
       .render(ctx)
   });
   let note = Text::new(&ctx.t("project_settings.limitsNote")).variant(ExtraTypography::Note.role());

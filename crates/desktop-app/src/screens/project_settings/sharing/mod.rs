@@ -19,10 +19,11 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
+    theme::PaletteColor,
   },
-  components::Column,
+  components::{Column, Row},
   core::Signal,
-  layout::layout_kind::ScrollState,
+  layout::{Alignment, layout_kind::ScrollState},
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{repository::RepositoryIdentity, store::TaskStore};
@@ -42,15 +43,25 @@ pub(super) use self::{
   join::screen as join_screen,
   upload::{LinkPage, link_page},
 };
-use super::{TabProps, page};
+use super::{
+  TabProps,
+  kit::{Group, SettingRow},
+  page,
+};
 use crate::{
   screens::settings::orchester::{Said, follow, follow_shared},
   services::Services,
+  theme::{ExtraSpacing, IconSize, ProjectSettingsText},
   ui::{
+    icon::{Icon, icon},
     skeleton::{self, Skeleton},
     state::load_error,
   },
 };
+
+/// How long the words of what is not read yet are in the tab's bones (`Local project` in `L07L` `HVnhV`).
+const LOCAL_HINT_BONE: f32 = 260.0;
+const WHERE_BONE: f32 = 52.0;
 
 /// What the tab shows: the link, the servers this computer is signed in to, the checkout's `origin`, what
 /// `orchester.toml` names, and the local tasks a first link uploads.
@@ -175,14 +186,33 @@ impl Component for Sharing {
         )
       }
       (None, None) => {
-        // No loading frame draws the Sharing tab: its rows' bones stand in one outline until where the list lives
-        // is read.
-        let bones = skeleton::list(ctx, "project-settings-sharing-rows", &[(160.0, 300.0), (120.0, 260.0)]);
+        let bones = bones(ctx);
         Skeleton::new("project-settings-sharing-loading", ctx.t("sharing.reading")).show(ctx, bones)
       }
     };
     page::scroll_with(Column::new().width(Dimension::Pct(100.0)).child(content), &self.scroll)
   }
+}
+
+/// The tab while where the list lives is read (`L07L` `HVnhV`): the group and its two rows' labels real, whether the
+/// project is local or shared a bone, *Share…* waiting for it.
+fn bones(ctx: &mut Ctx) -> Element {
+  let local = Row::new()
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::Center)
+    .child(icon(Icon::Monitor, IconSize::Base, PaletteColor::TextMuted))
+    .child(skeleton::line(ctx, ProjectSettingsText::Value.role(), WHERE_BONE));
+  let local = SettingRow::new("sharing-task-list-reading", ctx.t("sharing.share.localProject"))
+    .hint_reading(LOCAL_HINT_BONE)
+    .control(local)
+    .render(ctx);
+  let share = SettingRow::new("sharing-share-reading", ctx.t("sharing.share.onServer"))
+    .hint(ctx.t("sharing.share.onServerHint"))
+    .render(ctx);
+  Group::new("project-settings-sharing-reading", ctx.t("project_settings.sharing"))
+    .row(local)
+    .row(share)
+    .into()
 }
 
 fn read(

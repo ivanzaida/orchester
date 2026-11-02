@@ -129,24 +129,24 @@ fn skeletons_instruction_import_shows_the_reviews_bones_after_a_moment() {
   );
 }
 #[test]
-fn skeletons_project_settings_shows_the_tabs_bones_after_a_moment() {
+fn skeletons_project_settings_shows_the_tabs_bones_from_the_first_frame() {
   let mut held = Held::new();
   held.page(ProjectPage::Settings(ProjectSettingsTab::General));
-  held.skeleton("settings-loading");
+  held.skeleton_at_once("settings-loading");
 }
 
 #[test]
-fn skeletons_app_settings_shows_the_accounts_bones_after_a_moment() {
+fn skeletons_app_settings_shows_the_accounts_bones_from_the_first_frame() {
   let mut held = Held::new();
   held.go(Route::Accounts(AccountsView::default()));
-  held.skeleton("settings-accounts-loading");
+  held.skeleton_at_once("settings-accounts-loading");
 }
 
 #[test]
 fn skeletons_app_settings_browser_shows_its_groups_bones_while_the_browser_is_looked_for() {
   let mut held = Held::new();
   held.go(Route::Browser);
-  held.skeleton("settings-browser-reading");
+  held.skeleton_at_once("settings-browser-reading");
   for real in [
     "settings-browser-program-reading-title",
     "settings-browser-found-reading-label",
@@ -175,7 +175,7 @@ fn skeletons_app_settings_browser_shows_its_groups_bones_while_the_browser_is_lo
 fn skeletons_app_settings_daily_report_shows_no_switch_before_its_setting_is_read() {
   let mut held = Held::new();
   held.go(Route::Notifications);
-  held.skeleton("settings-daily-report-reading");
+  held.skeleton_at_once("settings-daily-report-reading");
   assert!(held.exists("settings-daily-report-row"), "the row's label stays real");
   assert!(
     held.exists("settings-daily-report-at-reading"),

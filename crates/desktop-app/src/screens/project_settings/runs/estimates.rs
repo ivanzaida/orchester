@@ -35,6 +35,7 @@ use crate::{
   ui::{
     field::field_error,
     message::message_text,
+    skeleton::{self, Skeleton},
     toggle::{Toggle, ToggleKind},
   },
 };
@@ -123,9 +124,17 @@ impl Component for Estimates {
       Some(said) => row.toned(said, Tone::Warning),
       None => row.hint(ctx.t("project_settings.estimates.hint")),
     };
+    // Until the setting is read, the switch is a bone of its size: no state shows that may not be the stored one.
+    let control: Element = if shown.is_none() && read.is_pending() {
+      Skeleton::new(format!("{ID}-reading"), ctx.t("project_settings.reading"))
+        .inline()
+        .show(ctx, skeleton::switch())
+    } else {
+      switch.into()
+    };
     let row = row
       .info(ctx.t("project_settings.estimates.info"))
-      .control(switch)
+      .control(control)
       .under_all(problem)
       .under_all(blocked)
       .render(ctx);

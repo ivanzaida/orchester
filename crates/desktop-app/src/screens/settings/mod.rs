@@ -165,6 +165,7 @@ impl Component for SettingsScreen {
     let Props { tab, rotation, invite } = ctx.props::<Props>().clone();
     self.follow_tab(tab);
     ctx.provide(self.saves.clone());
+    ctx.provide(crate::ui::skeleton::FromFirstFrame);
     let services = Services::of(ctx);
     let (workspace, hold) = (services.workspace, services.hold);
     let loaded = ctx

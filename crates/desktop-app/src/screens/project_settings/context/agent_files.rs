@@ -104,18 +104,29 @@ impl Component for AgentFiles {
   }
 }
 
-/// The group while the settings are read: its heading, the row's label and hint, and a switch's bone.
-fn bones(ctx: &mut Ctx) -> Group {
+/// The group while the settings are read (`L04L` `dFXLk`), the tab's second: its heading, the row's label and hint,
+/// *What each CLI loads* and a switch's bone.
+fn bones(ctx: &mut Ctx) -> Column {
+  let loads = ActionButton::new(
+    "settings-files-loads-reading",
+    ButtonKind::Ghost,
+    ctx.t("project_settings.whatEachLoads"),
+  )
+  .compact();
   let row = SettingRow::new("settings-files-reading", ctx.t("project_settings.readAgentFiles"))
     .info(ctx.t("project_settings.agentFilesDetail"))
     .hint(ctx.t("project_settings.agentFilesHint"))
+    .control(loads)
     .control(skeleton::switch())
     .render(ctx);
-  Group::new(
-    "settings-repository-files-reading",
-    ctx.t("project_settings.agentFiles"),
+  skeleton::lower_group(
+    0,
+    Group::new(
+      "settings-repository-files-reading",
+      ctx.t("project_settings.agentFiles"),
+    )
+    .row(row),
   )
-  .row(row)
 }
 
 fn row(

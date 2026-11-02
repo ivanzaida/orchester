@@ -132,6 +132,18 @@ pub fn screen(header: Element, content: Element) -> Element {
     .child(content)
     .into()
 }
+/// What shows under the tabs for the tab `key`. lurq hands a scroll's offset to whichever scroll takes its place,
+/// whatever its id, so a tab opened in place of a scrolled one came up scrolled as far; keyed, each tab keeps only its
+/// own. The key goes on a node inside the returned one, as `settings::frame::column` does.
+pub fn tab_body(key: &str, body: Element) -> Element {
+  let room = || {
+    Column::new()
+      .width(Dimension::Pct(100.0))
+      .flex(1.0)
+      .min_height(Dimension::Px(0.0))
+  };
+  room().child(Element::from(room().child(body)).key(key)).into()
+}
 /// A tab's column of groups, scrolling under the tabs.
 pub fn scroll(content: impl Into<Element>) -> Element {
   column_scroll(content).into()
