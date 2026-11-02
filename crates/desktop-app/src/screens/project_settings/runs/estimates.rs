@@ -1,8 +1,9 @@
 //! Estimates (`Estimates` `vLiTy` in `02 · Runs`, the Runs window `g406O`): *Let Orchester estimate story points*, the
 //! project's own setting since ORC-103 (a project a person has not set it for keeps the application-wide setting it
-//! moved from). Orchester's estimator then sizes new tasks, and tasks whose brief or criteria change, on auto mode's
-//! reviewer, never changing points a person set. It is read and saved off the UI thread, and its switch cannot be
-//! flipped while either runs. Only a person flips it: the switch refuses lurq's synthetic input, an MCP client's
+//! moved from). Orchester sizes new tasks, and tasks whose brief or criteria change, on the reviewer's language model
+//! or the default language reviewer for a decision reviewer. It never changes a person's points. Its switch cannot be
+//! flipped while its value is read or saved, or when no language reviewer is available. Only a person flips it:
+//! the switch refuses lurq's synthetic input, an MCP client's
 //! included, and says so under the row. Unlike the application-wide Automation section it moved from, the row does not
 //! close the whole window to MCP input while it shows, so Runs' other settings stay open to automation as before.
 
@@ -38,6 +39,13 @@ const ID: &str = "settings-estimate-points";
 
 type SaveAction = FutureAction<bool, bool, Message>;
 
+#[derive(Clone, PartialEq)]
+pub(super) struct Props {
+  pub tab: TabProps,
+  pub settings: orchester_workspace::project_settings::Settings,
+}
+
+impl lurq::app::component::DevtoolsInspectable for Props {}
 pub(super) struct Estimates {
   /// What the person last chose; `None` until they do.
   saved: Signal<Option<bool>>,
@@ -47,11 +55,11 @@ pub(super) struct Estimates {
 }
 
 impl Component for Estimates {
-  type Props = TabProps;
+  type Props = Props;
 
   fn create(ctx: &mut Ctx) -> Self {
     let workspace = Services::of(ctx).workspace;
-    let root = ctx.props::<TabProps>().project.open.repo_root.clone();
+    let root = ctx.props::<Props>().tab.project.open.repo_root.clone();
     let save = ctx.future_action(move |allowed: bool| {
       let (workspace, root) = (workspace.clone(), root.clone());
       async move {
@@ -72,6 +80,7 @@ impl Component for Estimates {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
+    let (hint, info, available) = estimate_words(ctx, &ctx.props::<Props>().settings);
     let state = self.save.state().get();
     let read = self.stored(ctx, state.data);
     let fixed = state.is_pending() || read.is_pending();
@@ -87,7 +96,7 @@ impl Component for Estimates {
       ctx.t("project_settings.estimates.label"),
     )
     .hide_label();
-    let switch = if shown.is_some() && !fixed {
+    let switch = if shown.is_some() && !fixed && available {
       self.listen(switch)
     } else {
       switch
@@ -111,8 +120,8 @@ impl Component for Estimates {
       ))
     });
     let row = SettingRow::new(ID, ctx.t("project_settings.estimates.label"))
-      .hint(ctx.t("project_settings.estimates.hint"))
-      .info(ctx.t("project_settings.estimates.info"))
+      .hint(hint)
+      .info(info)
       .control(switch)
       .under_all(problem)
       .under_all(blocked)
@@ -140,7 +149,7 @@ impl Estimates {
   /// The project's setting as stored, read when the row shows and again after each save (`saved`).
   fn stored(&self, ctx: &mut Ctx, saved: Option<bool>) -> FutureState<bool, Message> {
     let workspace = Services::of(ctx).workspace;
-    let root = ctx.props::<TabProps>().project.open.repo_root.clone();
+    let root = ctx.props::<Props>().tab.project.open.repo_root.clone();
     ctx
       .future(saved, move |_| {
         let (workspace, root) = (workspace.clone(), root.clone());
@@ -155,5 +164,43 @@ impl Estimates {
       })
       .state()
       .get()
+  }
+}
+
+fn estimate_words(
+  ctx: &Ctx,
+  settings: &orchester_workspace::project_settings::Settings,
+) -> (std::sync::Arc<str>, std::sync::Arc<str>, bool) {
+  use orchester_core::run::review::{ReviewerConnectionId, resolve_estimator};
+  if !matches!(
+    settings.auto_mode.reviewer.as_ref().map(|choice| choice.connection),
+    Some(ReviewerConnectionId::Decision { .. })
+  ) {
+    return (
+      ctx.t("project_settings.estimates.hint"),
+      ctx.t("project_settings.estimates.info"),
+      true,
+    );
+  }
+  match resolve_estimator(&settings.auto_mode, &settings.connections) {
+    Ok(estimator) => (
+      ctx.t_args(
+        "project_settings.estimates.decisionHint",
+        [("connection", estimator.connection.name().as_str())],
+      ),
+      ctx.t_args(
+        "project_settings.estimates.decisionInfo",
+        [
+          ("connection", estimator.connection.name().as_str()),
+          ("model", estimator.model.as_str()),
+        ],
+      ),
+      true,
+    ),
+    Err(_) => (
+      ctx.t("project_settings.estimates.noLanguage"),
+      ctx.t("project_settings.estimates.noLanguage"),
+      false,
+    ),
   }
 }

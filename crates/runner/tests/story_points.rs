@@ -197,3 +197,43 @@ async fn story_points_of_a_merged_task_calibrate_later_estimates() {
     .unwrap_or_default();
   assert!(reason.contains("examples 1"), "the merged task is an example: {reason}");
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn estimates_decision_reviewer_runs_on_the_default_language_connection_with_a_reason() {
+  use orchester_core::{
+    connection::{DecisionConnection, DecisionServerUrl},
+    id::DecisionConnectionId,
+    resource::ModelId,
+    run::review::{AutoModeSettings, ReviewerChoice},
+  };
+  let project = claude("Small fix.");
+  let root = project.repo.path();
+  let mut db = ProjectDb::open(root).expect("open");
+  let model = ModelId::new("decision-only").expect("model");
+  let decision = DecisionConnection::new(
+    DecisionConnectionId::generate(),
+    Name::new("Decision reviewer").expect("name"),
+    DecisionServerUrl::new("http://localhost:8000").expect("URL"),
+    None,
+  )
+  .with_models(vec![model.clone()]);
+  db.create_decision_connection(&decision)
+    .expect("create decision connection");
+  db.save_auto_mode_settings(&AutoModeSettings {
+    reviewer: Some(ReviewerChoice::decision(decision.id(), model, None)),
+  })
+  .expect("decision reviewer");
+  let (scheduler, _events) = scheduler_with(root, project.vault.clone());
+  assert_eq!(
+    estimate(&scheduler, project.task).await,
+    EstimateOutcome::Estimated { points: points(3) },
+  );
+  let task = db.task(project.task).expect("read").expect("task");
+  assert!(
+    task
+      .estimate()
+      .and_then(|e| e.reason())
+      .is_some_and(|why| why.contains("fake estimator"))
+  );
+  assert_eq!(usage_of(&db).1, 1, "language estimate is counted");
+}

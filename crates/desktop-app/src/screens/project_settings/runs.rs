@@ -72,13 +72,19 @@ impl Component for Runs {
       "settings-auto-mode",
       auto_mode::Props {
         tab: self.sections.props(&props, 0),
-        settings: read.0,
+        settings: read.0.clone(),
         parent_read: self.stored.clone(),
         refresh: self.revision.clone(),
         own: self.own.clone(),
       },
     );
-    let estimates = ctx.mount_keyed::<estimates::Estimates>("project-settings-estimates", props.clone());
+    let estimates = ctx.mount_keyed::<estimates::Estimates>(
+      "project-settings-estimates",
+      estimates::Props {
+        tab: props.clone(),
+        settings: read.0,
+      },
+    );
     let limits = ctx.mount_keyed::<limits::Limits>("project-settings-limits", self.sections.props(&props, 1));
     let environment =
       ctx.mount_keyed::<environment::Environment>("project-settings-environment", self.sections.props(&props, 2));

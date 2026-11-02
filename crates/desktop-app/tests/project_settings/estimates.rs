@@ -60,3 +60,52 @@ fn project_settings_estimates_keep_the_application_setting_until_set_for_the_pro
     false
   });
 }
+
+fn choose_decision(page: &mut Settings) {
+  use orchester_core::{
+    connection::{DecisionConnection, DecisionServerUrl},
+    id::DecisionConnectionId,
+    name::Name,
+    resource::ModelId,
+    run::review::{AutoModeSettings, ReviewerChoice},
+  };
+  let model = ModelId::new("decision-only").expect("model");
+  let decision = DecisionConnection::new(
+    DecisionConnectionId::generate(),
+    Name::new("Decision reviewer").expect("name"),
+    DecisionServerUrl::new("http://localhost:8000").expect("URL"),
+    None,
+  )
+  .with_models(vec![model.clone()]);
+  let mut db = page.db();
+  db.create_decision_connection(&decision)
+    .expect("create decision connection");
+  db.save_auto_mode_settings(&AutoModeSettings {
+    reviewer: Some(ReviewerChoice::decision(decision.id(), model, None)),
+  })
+  .expect("decision reviewer");
+  page.tab("general", "settings-project-name");
+  page.tab("runs", &format!("{SWITCH}-row"));
+}
+
+#[test]
+fn estimates_decision_reviewer_row_names_the_default_language_connection() {
+  let mut page = Settings::new(true);
+  choose_decision(&mut page);
+  page.until("language estimator hint", |p| {
+    p.text(&format!("{SWITCH}-hint"))
+      .contains("on Claude Code, as the reviewer writes no reasons")
+  });
+}
+
+#[test]
+fn estimates_decision_reviewer_row_says_unavailable_without_a_language_connection() {
+  let mut page = Settings::new(false);
+  choose_decision(&mut page);
+  page.until("unavailable estimator reason", |p| {
+    p.text(&format!("{SWITCH}-hint")).contains("Estimates unavailable")
+  });
+  assert!(page.text(&format!("{SWITCH}-hint")).contains("no language reviewer"));
+  page.click(SWITCH);
+  assert_eq!(page.db().estimates_story_points().expect("read"), None);
+}

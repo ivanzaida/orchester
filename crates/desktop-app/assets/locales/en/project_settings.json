@@ -329,6 +329,9 @@
       "label": "Let Orchester estimate story points",
       "hint": "For tasks that have none, with a reason · uses the reviewer’s model and counts toward the daily budget",
       "info": "Orchester sizes each new task, and a task whose brief or criteria change, in story points (1, 2, 3, 5, 8, 13 or 21) with a short reason, from the brief, the criteria and the project's merged tasks. Each estimate asks the reviewer’s model under Approvals and spends tokens, which count toward the project's daily budget. Points you set are never changed. Only you can change this, here in the window.",
+      "decisionHint": "For tasks that have none · on {{connection}}, as the reviewer writes no reasons",
+      "decisionInfo": "Estimates use {{connection}} · {{model}}, the project's default language reviewer, because a decision model writes no reasons. Each estimate spends tokens that count toward the daily budget. Points you set are never changed. Only you can change this setting, here in the window.",
+      "noLanguage": "Estimates unavailable · no language reviewer is available in this project. Add a Claude Code connection to estimate story points with a reason.",
       "unreadable": "This setting can't be read: {{reason}}",
       "notSaved": "Not saved: {{reason}}",
       "blocked": "A change brought by automation was not taken: only you change this setting, here in the window."
