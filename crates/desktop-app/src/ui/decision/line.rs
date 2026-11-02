@@ -114,7 +114,7 @@ impl AnsweredLine {
   }
 
   /// The line `id` ending in `chevron`; a press runs `toggle`.
-  pub(super) fn render(&self, id: &str, chevron: Icon, toggle: impl Fn() + Send + Sync + 'static) -> Element {
+  pub fn render(&self, id: &str, chevron: Icon, toggle: impl Fn() + Send + Sync + 'static) -> Element {
     let (glyph, color) = self.mark.glyph();
     pressable(toggle)
       .id(id.to_owned())

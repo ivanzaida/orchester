@@ -149,6 +149,16 @@
       "denyTells": "Deny tells {{agent}}: “{{message}}”",
       "deny": "Deny",
       "approveOnce": "Approve once",
+      "inline": {
+        "command": "Allow {{agent}} to run this command?",
+        "tool": "Allow {{agent}} to call this tool?",
+        "once": "Allow once",
+        "onceCovers": "Allows this request once. The next request will be checked again.",
+        "similar": "Allow similar in this run",
+        "everything": "Allow all in this run",
+        "deny": "Deny and tell {{agent}}…",
+        "more": "More"
+      },
       "approve": "Approve",
       "moreAnswers": "More answers",
       "asks": {

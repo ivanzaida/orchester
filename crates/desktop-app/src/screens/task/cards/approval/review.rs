@@ -38,7 +38,12 @@ pub(super) fn line(ctx: &Ctx, id: &str, review: Option<&Review>) -> Option<Eleme
   })
 }
 
-/// The transparent cards of 05 sit on the panel; their raised probability chip must remain distinct.
+/// Whether the decision reviewer left this request to the person (05 a–c).
+pub(super) fn left_to_person(review: Option<&Review>) -> bool {
+  Content::of(review).is_some()
+}
+
+/// The older review card's surface, preserved outside the decision-model shell.
 pub(super) fn card(frame: Column, review: Option<&Review>) -> Column {
   if Content::of(review).is_some() {
     frame.background(PaletteColor::SurfacePanel)

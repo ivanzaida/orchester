@@ -44,6 +44,8 @@ pub enum CardsText {
   /// Mono 12.5 `text_secondary`, 1.5: what a request that came to the person asks, on its card (`ZNwbH` in
   /// `vO7CW`).
   Action,
+  /// Mono 12 primary, 1.5: the command or tool call in 06b (`G8YJb`).
+  Command,
   /// 12.5 secondary, 1.4: decision review line (`Y4l5E` in 05 `JFEPS`).
   Review,
   /// Mono 11.5 primary, 1.4: decision probability chips (`B0Cmn`, `QkBOi`).
@@ -51,7 +53,7 @@ pub enum CardsText {
 }
 
 impl CardsText {
-  pub const ALL: [Self; 14] = [
+  pub const ALL: [Self; 15] = [
     Self::Title,
     Self::ApprovalTitle,
     Self::PlanLines,
@@ -64,6 +66,7 @@ impl CardsText {
     Self::Lead,
     Self::Chosen,
     Self::Action,
+    Self::Command,
     Self::Review,
     Self::Probability,
   ];
@@ -92,6 +95,7 @@ impl CardsText {
       Self::Lead => "cards_lead",
       Self::Chosen => "cards_chosen",
       Self::Action => "cards_action",
+      Self::Command => "cards_command",
       Self::Review => "cards_review",
       Self::Probability => "cards_probability",
     }
@@ -111,6 +115,7 @@ impl CardsText {
       Self::Lead => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
       Self::Chosen => style(12.0, FontWeight::Medium, 1.3, 0.0, palette.text_primary),
       Self::Action => mono(style(12.5, FontWeight::Normal, 1.5, 0.0, palette.text_secondary)),
+      Self::Command => mono(style(12.0, FontWeight::Normal, 1.5, 0.0, palette.text_primary)),
       Self::Review => style(12.5, FontWeight::Normal, 1.4, 0.0, palette.text_secondary),
       Self::Probability => mono(style(11.5, FontWeight::Normal, 1.4, 0.0, palette.text_primary)),
     }
