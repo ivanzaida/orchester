@@ -64,6 +64,10 @@ impl Component for Runs {
     let props = ctx.props::<TabProps>().clone();
     let revision = self.revision.get() + self.own.count(&props.project.feed);
     let state = work::load(ctx, props.project.open.repo_root.clone(), revision, &self.own);
+    if state.error.is_some() {
+      self.stored.set(None);
+      return page::scroll(work::pending(ctx, &state, &self.revision, bones));
+    }
     let Some(read) = state.data.clone().or_else(|| self.stored.get()) else {
       return page::scroll(work::pending(ctx, &state, &self.revision, bones));
     };

@@ -153,3 +153,126 @@ fn decision_reviewer_row_hosted_question_refuses_automation_and_keeps_the_previo
     "earlier consent cannot answer a new choice"
   );
 }
+
+#[test]
+fn decision_reviewer_row_local_automation_requires_both_consents() {
+  for (approvals, permissions) in [(false, false), (true, false), (false, true), (true, true)] {
+    let mut page = Settings::new(true);
+    add(&mut page, false);
+    let workspace = page.window.launch.workspace().expect("workspace").clone();
+    workspace
+      .set_automation_answers_approvals(approvals)
+      .expect("approvals consent");
+    workspace
+      .set_automation_changes_permissions(permissions)
+      .expect("permission consent");
+    let before = page.db().auto_mode_settings().expect("baseline");
+    with_synthetic_input(|| page.choose("settings-reviewer-connection", "Local reviewer"));
+    if approvals && permissions {
+      page.until("authorized local reviewer", |p| p.reviewer_model() == "decision-model");
+    } else {
+      page.until("unauthorized reviewer refused", |p| {
+        p.exists("settings-auto-person-only")
+      });
+      assert_eq!(page.db().auto_mode_settings().expect("unchanged"), before);
+    }
+  }
+}
+
+#[test]
+fn decision_reviewer_row_hosted_confirmation_rejects_unseen_destination() {
+  let mut page = Settings::new(true);
+  let mut hosted = add(&mut page, true);
+  let before = page.db().auto_mode_settings().expect("baseline");
+  page.choose("settings-reviewer-connection", "Hosted reviewer");
+  page.until("destination question", |p| p.exists("settings-reviewer-hosted-confirm"));
+  hosted.set_server(DecisionServerUrl::new("https://other.example/v1").expect("url"), None);
+  hosted.record_models(vec![ModelId::new("decision-model").expect("model")]);
+  hosted.record_check(DecisionCheck {
+    at: Timestamp::now(),
+    result: DecisionCheckResult::Connected,
+  });
+  page
+    .db()
+    .save_decision_connection(&hosted)
+    .expect("unseen destination change");
+  page.click("settings-reviewer-hosted-confirm");
+  page.until("stale confirmation refused", |p| p.exists("settings-save-error"));
+  assert_eq!(page.db().auto_mode_settings().expect("unchanged"), before);
+}
+
+#[test]
+fn decision_reviewer_row_failed_reread_removes_hosted_confirmation_until_retry() {
+  let mut page = Settings::new(true);
+  add(&mut page, true);
+  let before = page.db().auto_mode_settings().expect("baseline");
+  page.choose("settings-reviewer-connection", "Hosted reviewer");
+  page.until("destination question", |p| p.exists("settings-reviewer-hosted-confirm"));
+  let sqlite = rusqlite::Connection::open(page.repo.join(".orchester/orchester.db")).expect("db");
+  let version: u32 = sqlite
+    .query_row("PRAGMA user_version", [], |r| r.get(0))
+    .expect("schema");
+  sqlite
+    .execute_batch("PRAGMA user_version = 99999")
+    .expect("reject reads");
+  page.outside(Outside::Connections);
+  page.window.until("settings read rejected", |w| {
+    w.tree.get_element_by_id("settings-load-error").is_some()
+  });
+  assert!(!page.exists("settings-reviewer-hosted-confirm"));
+  sqlite
+    .execute_batch(&format!("PRAGMA user_version = {version}"))
+    .expect("restore schema");
+  assert!(
+    !page.exists("settings-reviewer-hosted-confirm"),
+    "only a successful read can restore controls"
+  );
+  page.click("settings-load-error-retry");
+  page.until("fresh settings read", |p| p.exists("settings-reviewer-connection"));
+  assert_eq!(page.db().auto_mode_settings().expect("unchanged"), before);
+  assert!(
+    !page.exists("settings-reviewer-hosted-confirm"),
+    "discard old consent question"
+  );
+}
+
+#[test]
+fn decision_reviewer_row_threshold_and_return_require_approvals_but_not_permissions() {
+  let mut page = Settings::new(true);
+  add(&mut page, false);
+  page.choose("settings-reviewer-connection", "Local reviewer");
+  page.until("local reviewer saved", |p| p.reviewer_model() == "decision-model");
+  page.saved();
+  let workspace = page.window.launch.workspace().expect("workspace").clone();
+  workspace
+    .set_automation_changes_permissions(false)
+    .expect("permissions off");
+  workspace.set_automation_answers_approvals(true).expect("approvals on");
+  with_synthetic_input(|| {
+    page.set("settings-reviewer-threshold", "0.90");
+    page.leave();
+  });
+  page.until("threshold saved with approvals consent", |p| {
+    p.db()
+      .auto_mode_settings()
+      .expect("settings")
+      .reviewer
+      .expect("reviewer")
+      .threshold
+      == Some(threshold("0.90").expect("threshold"))
+  });
+  page.saved();
+  workspace
+    .set_automation_answers_approvals(false)
+    .expect("approvals off");
+  with_synthetic_input(|| page.choose("settings-reviewer-connection", "Claude Code"));
+  page.until("return without approvals refused", |p| {
+    p.exists("settings-auto-person-only")
+  });
+  assert_eq!(page.reviewer_model(), "decision-model");
+  workspace.set_automation_answers_approvals(true).expect("approvals on");
+  with_synthetic_input(|| page.choose("settings-reviewer-connection", "Claude Code"));
+  page.until("return to language with approvals consent", |p| {
+    p.reviewer_model() != "decision-model"
+  });
+}

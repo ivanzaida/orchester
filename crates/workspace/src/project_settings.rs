@@ -298,21 +298,27 @@ pub fn reviewer(
   }))
 }
 
-/// Language reviewer changes need confirmation, except when returning from a decision reviewer.
-/// Hosted decision choices additionally use decision_reviewer::choosing_hosted.
+/// A different reviewer needs permission consent; threshold edits and returning to language do not.
 pub fn reviewer_widens(base: &AutoModeSettings, asked: &AutoModeSettings) -> bool {
-  if base
+  let threshold_only = base
+    .reviewer
+    .as_ref()
+    .zip(asked.reviewer.as_ref())
+    .is_some_and(|(old, new)| {
+      decision_reviewer::connection_id(old).is_some()
+        && old.connection == new.connection
+        && old.model == new.model
+        && old.effort == new.effort
+    });
+  let returns_to_language = base
     .reviewer
     .as_ref()
     .is_some_and(|c| decision_reviewer::connection_id(c).is_some())
-  {
-    return false;
-  }
-  base.reviewer != asked.reviewer
     && asked
       .reviewer
       .as_ref()
-      .is_none_or(|c| decision_reviewer::connection_id(c).is_none())
+      .is_none_or(|c| decision_reviewer::connection_id(c).is_none());
+  base != asked && !threshold_only && !returns_to_language
 }
 
 pub fn save_auto_mode_in(
@@ -320,6 +326,7 @@ pub fn save_auto_mode_in(
   base: &AutoModeSettings,
   asked: &AutoModeSettings,
   confirmed: bool,
+  decision: Option<&DecisionConnection>,
 ) -> Result<(), Message> {
   let mut db = ProjectDb::open(root).map_err(|error| messages::store_error(&error))?;
   let decisions = db
@@ -328,6 +335,11 @@ pub fn save_auto_mode_in(
   let widens = reviewer_widens(base, asked) || decision_reviewer::choosing_hosted(base, asked, &decisions).is_some();
   if widens && !confirmed {
     return Err(Message::new("projectSettings.personOnly"));
+  }
+  if let Some(choice) = asked.reviewer.as_ref().and_then(decision_reviewer::connection_id)
+    && decisions.iter().find(|c| c.id() == choice) != decision
+  {
+    return Err(Message::new("projectSettings.changedOutside"));
   }
   if base != asked {
     if let Some(choice) = asked

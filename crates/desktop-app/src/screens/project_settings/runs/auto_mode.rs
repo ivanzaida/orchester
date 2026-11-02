@@ -81,6 +81,7 @@ pub struct AutoMode {
   autopilot_refused: Signal<bool>,
   /// Whether the input that made the last edit may choose another reviewer, read while it was delivered.
   may_widen: Arc<AtomicBool>,
+  may_review: Arc<AtomicBool>,
   /// A widening from input that may not make it was put back; said under the group until the next change.
   refused: Signal<bool>,
 }
@@ -106,6 +107,7 @@ impl Component for AutoMode {
       gate: ctx.use_context::<InputGate>(),
       autopilot_refused: ctx.signal(false),
       may_widen: Arc::new(AtomicBool::new(true)),
+      may_review: Arc::new(AtomicBool::new(true)),
       refused: ctx.signal(false),
     };
     let save = tab.save.clone();
@@ -190,6 +192,13 @@ impl AutoMode {
   fn note_input(&self) {
     let may = input_may_decide(self.gate.as_ref(), Guarded::ApprovalWidening);
     self.may_widen.store(may, Ordering::SeqCst);
+    self.may_review.store(
+      input_may_decide(
+        self.gate.as_ref(),
+        Guarded::Decision(orchester_workspace::decisions::DecisionKind::Approval),
+      ),
+      Ordering::SeqCst,
+    );
   }
   fn dirty(&self) -> bool {
     let stored = self.stored.get_untracked().0;
@@ -320,7 +329,7 @@ impl AutoMode {
     let confirmed = hosted || self.may_widen.load(Ordering::SeqCst);
     self.failed.set(false);
     self.refused.set(false);
-    if !confirmed && project_settings::reviewer_widens(&base, &asked) {
+    if !self.may_review.load(Ordering::SeqCst) || (!confirmed && project_settings::reviewer_widens(&base, &asked)) {
       tracing::warn!("input that may not choose another reviewer changed it; put back");
       self.attempted.set(Asked(None));
       self.fill(settings);
@@ -331,7 +340,14 @@ impl AutoMode {
     // The workspace refuses a widening it was not told a person (or automation under its opt-ins) made.
     save.run((
       props.tab.project.open.repo_root.clone(),
-      Change::Auto { base, asked, confirmed },
+      Change::Auto {
+        decision: self
+          .selected_decision(&settings)
+          .map(|connection| Box::new(connection.clone())),
+        base,
+        asked,
+        confirmed,
+      },
     ));
   }
 }

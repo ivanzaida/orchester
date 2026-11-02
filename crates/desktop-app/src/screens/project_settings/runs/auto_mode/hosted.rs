@@ -35,6 +35,7 @@ impl AutoMode {
       .connection
       .unwrap_or_else(|| ctx.t("project_settings.default").to_string());
     let name = connection.name().as_str();
+    let displayed = connection.clone();
     let (confirm, keep, props) = (self.clone(), self.clone(), props.clone());
     let threshold = format!("{:.2}", asked.reviewer.as_ref()?.threshold?.value());
     Some(
@@ -64,7 +65,10 @@ impl AutoMode {
               return;
             }
             // Bind consent to exactly the destination, model and threshold that the question showed.
-            if confirm.draft().is_some_and(|draft| draft == asked) {
+            if confirm.draft().is_some_and(|draft| draft == asked)
+              && confirm.selected_decision(&confirm.stored.get_untracked().0) == Some(&displayed)
+            {
+              confirm.note_input();
               confirm.hosted_confirmed.set(Asked(Some(asked.clone())));
               confirm.request(&props, &confirm.save, asked.clone());
             }
