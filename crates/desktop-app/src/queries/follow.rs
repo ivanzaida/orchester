@@ -33,6 +33,9 @@ struct AppSeen {
   outside: AppOutsideCounts,
   accounts: u64,
   updates: u64,
+  /// The changes of the servers' connections and of the cloud account.
+  cloud: u64,
+  focused: bool,
 }
 
 /// Reads the application's settings from the session's start and keeps them current. Mounted once by the session's
@@ -55,6 +58,8 @@ impl Component for AppReads {
       outside: app_outside(ctx, &services.changes),
       accounts: account_changes(ctx, &services.workspace),
       updates: update_changes(ctx, &services.updates),
+      cloud: orchester::follow(ctx, (&services.servers, &services.cloud)),
+      focused: ctx.window().info().is_focused,
     };
     let before = self.seen.lock().replace(now);
     if let Some(before) = before {
@@ -74,6 +79,14 @@ impl Component for AppReads {
       }
       if now.updates != before.updates {
         invalidate(changes::UPDATES);
+      }
+      // An invite accepted, declined, finished or set aside, a sign-in or sign-out, two-factor turned on: Orchester
+      // Cloud's reads, the All projects notice's and the invite landing's read again where one shows.
+      if now.cloud != before.cloud {
+        orchester::invalidate_cloud_reads(&client);
+      } else if now.focused != before.focused {
+        // Two-factor authentication is turned on in the browser: coming back shows it.
+        orchester::invalidate_two_factor(&client);
       }
     }
     prefetch_app(ctx, &session);

@@ -34,7 +34,7 @@ use orchester_workspace::{
 };
 use parking_lot::Mutex;
 
-use super::{Said, answers::Answers, sharing_said, two_factor};
+use super::{Said, answers::Answers, reads, sharing_said};
 use crate::{
   navigation::Navigation,
   root::follow_sign_in,
@@ -113,6 +113,8 @@ struct LandingPage {
   later: Signal<bool>,
   /// *Sign in again*, a person's, while accepting the invite needs a sign-in with a code.
   answers: Answers,
+  /// Whether the sign-in can accept: the account's two-factor authentication, through Orchester Cloud's query.
+  reads: reads::Reads,
 }
 
 impl Component for LandingPage {
@@ -153,6 +155,7 @@ impl Component for LandingPage {
       skipped: Mutex::new(false),
       later: ctx.signal(false),
       answers: Answers::new(ctx),
+      reads: reads::Reads::new(),
     }
   }
 
@@ -162,7 +165,7 @@ impl Component for LandingPage {
     // First in every render: lurq keeps a component's futures by the order it asks for them.
     let sign_in = follow_sign_in(ctx, &services.cloud);
     let known_server = known_server(ctx, target.server);
-    let factors = two_factor::settled(ctx, 0, &services.cloud, sign_in.account());
+    let factors = self.reads.two_factor(ctx, sign_in.account());
     let deps = (
       self.revision.get(),
       sign_in.account(),

@@ -4,8 +4,10 @@
 //! steps (`05b` `MrVql`, `05b2` `IBnMu`, [`connect`]), each with its crumb back. Member actions only: everything
 //! administrative is in a server's admin in the browser, which its page links to.
 //!
-//! What the tab shows is read again whenever a server's connection or the cloud account changes; the invites are read
-//! with it while an account is signed in.
+//! What the tab shows is read through lurq queries, so a visit after the first shows the last read in its first frame
+//! and reads again behind it: the snapshot ([`cloud_snapshot`]) and, while an account is signed in, its invites,
+//! two-factor authentication, team servers and accepted invites ([`reads`]), each read again whenever a server's
+//! connection or the cloud account changes.
 
 mod accepted;
 mod account;
@@ -24,6 +26,7 @@ mod parts;
 mod person;
 mod pointed;
 mod reading;
+mod reads;
 mod server;
 mod server_facts;
 mod server_parts;
@@ -52,6 +55,7 @@ use orchester_workspace::{
   },
 };
 
+pub(crate) use self::reads::{invalidate as invalidate_cloud_reads, invalidate_two_factor};
 pub use self::{
   notice::InvitesNotice,
   person::PersonOnly,
@@ -149,6 +153,8 @@ pub struct OrchesterTab {
   retry: Signal<u64>,
   /// Reads the snapshot again at each change and *Try again*.
   again: Again,
+  /// The invites, two-factor authentication, team servers and accepted invites, each read again as the tab mounts.
+  reads: reads::Reads,
 }
 
 impl Component for OrchesterTab {
@@ -158,6 +164,7 @@ impl Component for OrchesterTab {
     Self {
       retry: ctx.signal(0),
       again: Again::live(),
+      reads: reads::Reads::new(),
     }
   }
 
@@ -178,10 +185,7 @@ impl Component for OrchesterTab {
     let loaded = snapshot(ctx, &self.again, revision);
     let snapshot = match loaded {
       Ok(Some(snapshot)) => snapshot,
-      Ok(None) => {
-        let bones = reading::column(ctx);
-        return frame::column("orchester-scroll", frame::pane("orchester-tab").child(bones));
-      }
+      Ok(None) => return skeleton(ctx),
       Err(reason) => {
         let (text, retry) = (reason.text(ctx), self.retry.clone());
         let again = move || retry.update(|count| *count += 1);
@@ -189,11 +193,8 @@ impl Component for OrchesterTab {
         return frame::column("orchester-scroll", frame::pane("orchester-tab").child(failed));
       }
     };
-    let invites = invites(ctx, revision, &services.cloud, snapshot.account.as_ref());
     let signed_in = snapshot.account.as_ref().map(|account| account.account);
-    let two_factor = two_factor::read(ctx, revision, &services.cloud, signed_in);
-    let accepted = kept(ctx, revision, &services.cloud, snapshot.account.as_ref());
-    let listed = browser_joined::listed(ctx, revision, &services.cloud, snapshot.account.as_ref());
+    let shown = self.reads.shown(ctx, signed_in);
     match view.server.and_then(|id| snapshot.server(id)) {
       Some((entry, linked)) => {
         let page = ctx.mount_keyed::<server::ServerPanel>(
@@ -208,14 +209,18 @@ impl Component for OrchesterTab {
         frame::column("orchester-server-scroll", page)
       }
       None => {
+        // A part never read yet would pop in and push the column down: the skeleton shows until each was read once.
+        let Some(shown) = shown else {
+          return skeleton(ctx);
+        };
         let page = ctx.mount_keyed::<cloud::CloudPanel>(
           "orchester-cloud",
           cloud::Props {
             snapshot: snapshot.clone(),
-            invites,
-            accepted,
-            listed,
-            two_factor,
+            invites: shown.invites,
+            accepted: shown.accepted,
+            listed: shown.listed,
+            two_factor: shown.two_factor.0,
             ask: view.ask,
             at: view.at,
           },
@@ -224,6 +229,12 @@ impl Component for OrchesterTab {
       }
     }
   }
+}
+
+/// The tab's skeleton (`L13L` `oGxJZ`), while a part of it was never read.
+fn skeleton(ctx: &mut Ctx) -> Element {
+  let bones = reading::column(ctx);
+  frame::column("orchester-scroll", frame::pane("orchester-tab").child(bones))
 }
 
 /// Counts every change of the servers' connections and of the cloud account, so what reads them reads again.
@@ -307,55 +318,8 @@ fn read(servers: &Servers, cloud: &Cloud) -> Result<Snapshot, Said> {
   })
 }
 
-/// The invites waiting for `account`, read at `revision`.
-pub fn invites(ctx: &mut Ctx, revision: u64, cloud: &Cloud, account: Option<&StoredCloudAccount>) -> Invites {
-  let signed_in = account.map(|account| account.account);
-  let state = ctx
-    .future(
-      (revision, signed_in, cloud.clone()),
-      |(_, signed_in, cloud)| async move {
-        if signed_in.is_none() {
-          return Ok::<_, ()>(Invites::SignedOut);
-        }
-        Ok(match cloud.invites().await {
-          Ok(invites) => Invites::Listed(Arc::new(invites)),
-          Err(error) => {
-            tracing::warn!(%error, "the cloud's invites could not be read");
-            Invites::Failed(words::cloud_error(&error))
-          }
-        })
-      },
-    )
-    .state()
-    .get();
-  state.data.unwrap_or(Invites::SignedOut)
-}
-
 /// The invites accepted here whose join did not finish (N1 security review 1, M2).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Kept(pub Arc<Vec<orchester_store::AcceptedInvite>>);
 
 impl DevtoolsInspectable for Kept {}
-
-/// The invites accepted here by `account`, read at `revision`.
-fn kept(ctx: &mut Ctx, revision: u64, cloud: &Cloud, account: Option<&StoredCloudAccount>) -> Kept {
-  let signed_in = account.map(|account| account.account);
-  ctx
-    .future(
-      (revision, signed_in, cloud.clone()),
-      |(_, signed_in, cloud)| async move {
-        if signed_in.is_none() {
-          return Ok::<_, ()>(Kept::default());
-        }
-        let kept = cloud
-          .accepted_invites()
-          .await
-          .map_err(|error| tracing::warn!(%error, "the invites accepted here could not be read"))?;
-        Ok(Kept(Arc::new(kept)))
-      },
-    )
-    .state()
-    .get()
-    .data
-    .unwrap_or_default()
-}
