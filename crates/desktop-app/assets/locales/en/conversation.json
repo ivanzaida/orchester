@@ -428,6 +428,29 @@
       "unverified": "{{step}} could not check everything",
       "withReport": "{{reported}} · {{meta}}"
     },
+    "search": {
+      "button": "Search the conversation",
+      "close": "Close search",
+      "count": "{{at}} of {{count}}",
+      "countMany": "{{at}} of {{count}}+",
+      "field": "Search this run",
+      "groupSeparator": ",",
+      "keysCmd": "⌘ F",
+      "keysCtrl": "Ctrl F",
+      "matches": {
+        "one": "1 match",
+        "other": "{{count}} matches"
+      },
+      "next": "Next match",
+      "none": "No matches",
+      "opened": "opened by search",
+      "outputAround": "Output · {{total}} lines · lines {{first}}–{{last}}, around the matches",
+      "placeholder": "Search this run",
+      "previous": "Previous match",
+      "searched": "Searched all {{count}} entries: messages, tool calls, output",
+      "searching": "Searching…",
+      "showAllOutput": "Show all output"
+    },
     "separator": " · ",
     "span": "{{start}}–{{end}}",
     "staleTitle": "Conversation shown as last read",

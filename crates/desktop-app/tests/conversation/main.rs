@@ -1,9 +1,9 @@
 //! A task's Conversation tab, headless at 1440 × 900 on the QA seed's projects: the `conversation`
 //! scenario's long transcript (KON-12: chips and their summaries, a failed command, an open group's first
 //! seven rows and *Show N more*, folded steps, a return, a result card, a problem row, a person's message,
-//! following the end and *Jump to latest*) and `task-states` for what the tab shows instead of a timeline
-//! ([`states`]). The window's runner program does not exist, so a run recorded as running reads as
-//! interrupted: the working line and *Following live* need a live run (QA's `live` scenario). Needs `git`.
+//! following the end and *Jump to latest*, searching it with Ctrl F, [`search`]) and `task-states` for what the tab
+//! shows instead of a timeline ([`states`]). The window's runner program does not exist, so a run recorded as running
+//! reads as interrupted: the working line and *Following live* need a live run (QA's `live` scenario). Needs `git`.
 
 mod agent_text;
 mod autopilot;
@@ -22,6 +22,7 @@ mod long;
 mod open_long;
 mod qa_slot;
 mod references;
+mod search;
 mod states;
 #[path = "../support/mod.rs"]
 mod support;

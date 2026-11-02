@@ -23,7 +23,10 @@ mod switched;
 mod todo;
 mod working;
 
-use std::{collections::HashMap, sync::Arc};
+use std::{
+  collections::{HashMap, HashSet},
+  sync::Arc,
+};
 
 use lurq::{
   app::{component::Component, ctx::Ctx, theme::SpacingSize},
@@ -57,7 +60,10 @@ pub(super) use self::{
   proposal::ChatProject,
   working::{Wait, Working},
 };
-use super::shared::Shared;
+use super::{
+  search::marks::{Marks, row_mark},
+  shared::Shared,
+};
 use crate::{
   navigation::{Navigation, link::Open},
   project::ShownProject,
@@ -94,6 +100,8 @@ pub(super) struct Timeline {
   pub(super) merged_by: Option<ChatMerge>,
   /// The run goes on, so the lists of its steps at work are pinned over the composer, not on their dividers.
   pub(super) pins: bool,
+  /// What the open search marks.
+  pub(super) search: Option<Marks>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for Timeline {}
@@ -147,15 +155,24 @@ impl Timeline {
   }
 }
 
-/// Rows a person opened or folded, by row key: a step, a tool group, a tool row with output.
+/// Rows a person opened or folded, by row key: a step, a tool group, a tool row with output; and the rows a search
+/// opened to show its current match, which fold again when the search closes.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub(super) struct OpenRows(HashMap<Arc<str>, bool>);
+pub(super) struct OpenRows {
+  chosen: HashMap<Arc<str>, bool>,
+  searched: HashSet<Arc<str>>,
+}
 
 impl lurq::app::component::DevtoolsInspectable for OpenRows {}
 
 impl OpenRows {
   pub(super) fn is_open(&self, key: &str, default: bool) -> bool {
-    self.0.get(key).copied().unwrap_or(default)
+    self.searched.contains(key) || self.chosen.get(key).copied().unwrap_or(default)
+  }
+
+  /// Whether the search opened the row `key`.
+  pub(super) fn opened_by_search(&self, key: &str) -> bool {
+    self.searched.contains(key)
   }
 }
 
@@ -186,6 +203,11 @@ impl Toggles {
     self.rows.get().is_open(key, default)
   }
 
+  /// Whether the search opened the row `key`, to show its current match.
+  pub(super) fn opened_by_search(&self, key: &str) -> bool {
+    self.rows.get().opened_by_search(key)
+  }
+
   /// What the person opened or folded so far; reading it in a render re-renders it when they open or fold a row.
   pub(super) fn open_rows(&self) -> OpenRows {
     self.rows.get()
@@ -196,17 +218,36 @@ impl Toggles {
     self.follow.hold_in_place();
     self.rows.update(move |rows| {
       for key in keys {
-        rows.0.insert(key, true);
+        rows.chosen.insert(key, true);
       }
     });
   }
 
+  /// Opens the rows of `keys` for the search, until it closes ([`Toggles::fold_searched`]).
+  pub(super) fn open_for_search(&self, keys: Vec<Arc<str>>) {
+    if keys.iter().all(|key| self.rows.get_untracked().searched.contains(key)) {
+      return;
+    }
+    self.rows.update(move |rows| rows.searched.extend(keys));
+  }
+
+  /// Folds again what the search opened; the chat stays where it is.
+  pub(super) fn fold_searched(&self) {
+    if self.rows.get_untracked().searched.is_empty() {
+      return;
+    }
+    self.follow.hold_in_place();
+    self.rows.update(|rows| rows.searched.clear());
+  }
+
+  /// A press opens or folds the row; one the search opened becomes the person's to fold.
   fn flip(&self, key: &Arc<str>, default: bool) {
     self.follow.hold_in_place();
     let key = key.clone();
     self.rows.update(move |rows| {
-      let open = rows.0.get(&key).copied().unwrap_or(default);
-      rows.0.insert(key, !open);
+      let open = rows.is_open(&key, default);
+      rows.searched.remove(&key);
+      rows.chosen.insert(key, !open);
     });
   }
 }
@@ -278,13 +319,15 @@ fn with_delivery(rows: &[Arc<Row>], delivery: &[Placed]) -> Vec<Line> {
 /// Orchestrator chat's `proposals` for the run, then `working`, the working line while an agent works; *Jump to latest*
 /// under it while it does not follow the run, with what arrived since (`arrived` counts the transcript's entries, the
 /// conversation's messages and the proposals so far; the queue's lines count too). `autopilot`, whether Autopilot
-/// answers the run's requests, leads the rows with its line.
+/// answers the run's requests, leads the rows with its line. While the search is open, the row of its current place
+/// (`found`) is brought into view, and its `track` of marks floats over the chat's end.
 pub(super) fn chat(
   ctx: &mut Ctx,
   follow: &Follow,
   (rows, delivery, autopilot): (&[Arc<Row>], &[Placed], bool),
   (items, proposals): (&[Item], &[Proposal]),
   (working, arrived): (Option<Working>, usize),
+  (found, track): (Option<String>, Option<Element>),
 ) -> Element {
   let arrived = arrived + delivery.len();
   // Until the person scrolls, the first card that waits for them opens the chat instead of its end.
@@ -294,6 +337,7 @@ pub(super) fn chat(
     .map(|item| item.key.to_string());
   let lead = usize::from(autopilot);
   let reveal = follow.follow(rows.len() + delivery.len() + lead, arrived, waiting);
+  let reveal = found.or(reveal);
   let rows: Arc<Vec<RowProps>> = Arc::new(
     autopilot
       .then_some(Line::Autopilot)
@@ -324,6 +368,13 @@ pub(super) fn chat(
     .padding_bottom(SpacingSize::Xs)
     .child(list)
     .child(follow.end(ctx, "conversation-follow-end"));
+  let rows: Element = match track {
+    Some(track) => Stack::with(StackAlignment::TopEnd, [rows.into(), track])
+      .width(Dimension::Pct(100.0))
+      .height(Dimension::Pct(100.0))
+      .into(),
+    None => rows.into(),
+  };
   Stack::new()
     .id("conversation-chat")
     .width(Dimension::Pct(100.0))
@@ -385,13 +436,29 @@ impl Component for RowView {
         ctx.mount_keyed::<ProposalRow>(&props.proposal.key(), props)
       }
     };
+    let mark = match &props.line {
+      Line::Row(row) => Timeline::of(ctx).search.and_then(|marks| marks.row(&said(row))),
+      _ => None,
+    };
     // Half the chat's 12 between rows above and under each (`gap` of `RM1e7`).
-    Column::new()
+    let row = Column::new()
       .id(id)
       .width(Dimension::Pct(100.0))
       .padding_horizontal(SpacingSize::Section)
       .padding_vertical(ExtraSpacing::Snug.role())
-      .child(content)
+      .child(content);
+    row_mark(row, mark)
+  }
+}
+
+/// The items whose words `row` shows, which a search marks on the row: an agent's message, a person's, a card, a
+/// problem, a note.
+fn said(row: &Row) -> Vec<&str> {
+  match row {
+    Row::Agent(agent) if agent.text.is_some() => vec![&*agent.key],
+    Row::Item(item) | Row::Line(item) => vec![&*item.key],
+    Row::Approvals { items, .. } => items.iter().map(|item| &*item.key).collect(),
+    Row::Agent(_) | Row::Step { .. } | Row::Folded { .. } | Row::NotStarted { .. } | Row::Entry { .. } => Vec::new(),
   }
 }
 

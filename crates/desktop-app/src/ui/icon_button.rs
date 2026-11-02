@@ -70,6 +70,8 @@ pub struct IconButton {
   focus: Focus,
   active: bool,
   element: Option<ElementRef>,
+  /// The keys that do the same, in its tooltip after the label.
+  shortcut: Option<Arc<str>>,
 }
 
 impl IconButton {
@@ -85,7 +87,15 @@ impl IconButton {
       focus: Focus::Pointer,
       active: false,
       element: None,
+      shortcut: None,
     }
+  }
+
+  /// The keys that do the same, after the label in its tooltip (`Search the conversation  Ctrl F`, `EGEVN` in 13). The
+  /// longer tooltip lines up with the button's right edge, as it does for the search at the end of the page tabs.
+  pub fn shortcut(mut self, keys: impl Into<Arc<str>>) -> Self {
+    self.shortcut = Some(keys.into());
+    self
   }
 
   pub fn small(mut self) -> Self {
@@ -176,6 +186,10 @@ impl IconButton {
     if self.active {
       return button.into();
     }
-    Tooltip::new(self.id, self.label).wrap(ctx, button)
+    let tooltip = Tooltip::new(self.id, self.label);
+    match self.shortcut {
+      Some(keys) => tooltip.shortcut(keys).end().wrap(ctx, button),
+      None => tooltip.wrap(ctx, button),
+    }
   }
 }

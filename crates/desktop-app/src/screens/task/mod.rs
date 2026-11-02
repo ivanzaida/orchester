@@ -271,6 +271,9 @@ pub struct PageState {
   pub run_again_remove: Signal<bool>,
   /// A run the runner refused for want of a branch: the header's status line and Properties › Base say so.
   pub no_branch: Signal<Option<header::no_branch::NoBranch>>,
+  /// The search of the Conversation's transcript, which the search button at the end of the tabs opens; its query
+  /// stays while the page is open.
+  pub search: conversation::TranscriptSearch,
 }
 
 impl PageState {
@@ -325,6 +328,7 @@ impl Component for TaskFrame {
         run_again: ctx.signal(header::run_again::Confirming::default()),
         run_again_remove: ctx.signal(false),
         no_branch: ctx.signal(None),
+        search: conversation::TranscriptSearch::new(ctx),
       },
       requested: ctx.signal(None),
       live: ctx.signal(false),

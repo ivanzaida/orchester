@@ -79,7 +79,7 @@ pub use self::{
   composer::{ComposerColor, ComposerRadius, mention_chip},
   connections::{ConnectionsSpacing, ConnectionsText},
   context::ContextText,
-  conversation::{ConversationRadius, ConversationShadow, ConversationSpacing, ConversationText},
+  conversation::{ConversationRadius, ConversationShadow, ConversationSpacing, ConversationText, TRACK_MARK_OPACITY},
   date_picker::{DatePickerText, UNAVAILABLE_DAY_OPACITY},
   decisions::{DecisionSpacing, DecisionText},
   delivery::{DeliverySpacing, DeliveryText, LOCKED_SWITCH_OPACITY},

@@ -9,13 +9,14 @@
 //! The task page (P1) reads the task and hands it here ([`tab`]); the transcript and the run's requests are
 //! read here ([`read`]), again as the runner reports changes of the project's runs (the feed counts them per
 //! project, not per run). What the person opened and how far they scrolled are the run's: another run of
-//! the task starts the tab afresh. The step rail, *Show*, the search and Details are not part of this
-//! build (D4): the chat shows every step.
+//! the task starts the tab afresh. Ctrl F (⌘ F) searches the transcript ([`search`]). The step rail, *Show* and
+//! Details are not part of this build (D4): the chat shows every step.
 
 mod built;
 mod composer;
 mod context;
 mod read;
+mod search;
 mod shared;
 mod states;
 mod timeline;
@@ -26,8 +27,9 @@ use std::{path::PathBuf, sync::Arc};
 
 use lurq::{
   app::{component::Component, ctx::Ctx},
-  components::Column,
+  components::{Column, Stack},
   core::Signal,
+  layout::StackAlignment,
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{id::InvocationId, run::RunStatus};
@@ -43,18 +45,20 @@ use orchester_workspace::{
     transcript::{Entry, EntryKind},
   },
 };
+use parking_lot::Mutex;
 
-pub use self::composer::ComposerState;
 pub(crate) use self::timeline::{links, step_label};
 use self::{
   built::BuiltTimeline,
   composer::Composing,
   read::{Transcript, TranscriptRead, Waiting, with_requests},
+  search::view::{SearchHold, searching},
   shared::Shared,
   timeline::{ChatProject, Timeline, Toggles},
   toolbar::RunState,
 };
-use super::{super::orchestrator::data::revision as chat_revision, TaskContext, cards::Decisions};
+pub use self::{composer::ComposerState, search::TranscriptSearch};
+use super::{super::orchestrator::data::revision as chat_revision, PageState, TaskContext, cards::Decisions};
 use crate::{
   project::TasksState,
   services::Services,
@@ -83,6 +87,9 @@ struct ConversationTab {
   retry: Signal<u64>,
   transcript: TranscriptRead,
   timeline: BuiltTimeline,
+  /// The page's search of the transcript, and what the tab keeps of it.
+  search: TranscriptSearch,
+  found: SearchHold,
 }
 
 impl Component for ConversationTab {
@@ -101,6 +108,11 @@ impl Component for ConversationTab {
       retry: ctx.signal(0),
       transcript: TranscriptRead::default(),
       timeline: BuiltTimeline::default(),
+      search: PageState::of(ctx).search,
+      found: SearchHold {
+        outcome: ctx.signal(Default::default()),
+        current: Mutex::default(),
+      },
     }
   }
 
@@ -132,6 +144,7 @@ impl Component for ConversationTab {
       .width(Dimension::Pct(100.0))
       .flex(1.0)
       .min_height(Dimension::Px(0.0))
+      .on_key_down(search::keys(&self.search))
       .child(toolbar::toolbar(ctx, state))
       .child(
         Column::new()
@@ -183,6 +196,53 @@ impl ConversationTab {
         .find(|item| items::waits_for_you(item))
         .map(|item| item.key.clone()),
     );
+    let found = searching(
+      ctx,
+      &self.search,
+      (&self.toggles, &self.follow),
+      (&built, loaded.entries.len()),
+      &self.found,
+    );
+    self.share(task, (run, conversation, &loaded), names, found.as_ref());
+    // Stale as applying would find it: what a message sent now meets, as the chat's own Apply reads the run.
+    let offered = message_offer(&task.detail, run.id());
+    let proposed = proposals(&loaded.orchestrated, (offered.as_ref(), &loaded.questions));
+    let working = working_line(run, conversation, (items, &loaded.entries), asking);
+    let arrived = arrivals(items, &loaded.entries) + proposed.len();
+    let (reveal, track, bar) = found.map_or((None, None, None), |found| {
+      (found.reveal, Some(found.track), Some(found.bar))
+    });
+    let chat = timeline::chat(
+      ctx,
+      &self.follow,
+      (&built.rows, &built.delivery, run.approvals.approved_by_autopilot()),
+      (items, &proposed),
+      (working, arrived),
+      (reveal, track),
+    );
+    // The find bar floats over the chat's top end, taking no room from its rows.
+    let chat = match bar {
+      Some(bar) => Stack::with(StackAlignment::TopEnd, [chat, bar])
+        .width(Dimension::Pct(100.0))
+        .height(Dimension::Pct(100.0))
+        .into(),
+      None => chat,
+    };
+    (
+      states::shown_as_last_read(ctx, chat, stale.as_ref(), &self.retry),
+      Some(state),
+    )
+  }
+
+  /// Shares the timeline of `run` with the chat's rows: whose it is, what `loaded` holds besides its rows, and what the
+  /// open search marks (`found`).
+  fn share(
+    &self,
+    task: &TaskContext,
+    (run, conversation, loaded): (&RunView, &Conversation, &Loaded),
+    names: ProjectNames,
+    found: Option<&search::view::Searching>,
+  ) {
     let open = &task.project.open;
     self.shown.set(Timeline {
       project: open.project.id(),
@@ -196,28 +256,13 @@ impl ConversationTab {
       key: task.key.clone(),
       detail: task.detail.clone(),
       toggles: self.toggles.clone(),
-      working: working_invocations(run, live),
+      working: working_invocations(run, conversation.state == PanelState::Live),
       pending: loaded.pending.clone(),
       decided: loaded.decided.clone(),
       merged_by: merged_by(&loaded.orchestrated),
       pins: todo::pins(conversation.state),
+      search: found.map(|found| found.marks.clone()),
     });
-    // Stale as applying would find it: what a message sent now meets, as the chat's own Apply reads the run.
-    let offered = message_offer(&task.detail, run.id());
-    let proposed = proposals(&loaded.orchestrated, (offered.as_ref(), &loaded.questions));
-    let working = working_line(run, conversation, (items, &loaded.entries), asking);
-    let arrived = arrivals(items, &loaded.entries) + proposed.len();
-    let chat = timeline::chat(
-      ctx,
-      &self.follow,
-      (&built.rows, &built.delivery, run.approvals.approved_by_autopilot()),
-      (items, &proposed),
-      (working, arrived),
-    );
-    (
-      states::shown_as_last_read(ctx, chat, stale.as_ref(), &self.retry),
-      Some(state),
-    )
   }
 
   /// The run's transcript with its requests, and why reading them again failed while they show as last read;

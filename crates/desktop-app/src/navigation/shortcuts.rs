@@ -3,8 +3,9 @@
 //! Windows, Cmd+T / Cmd+W and Cmd+[ / Cmd+] on macOS. Alt+Left and Alt+Right are left to a focused text field,
 //! which moves by words with them. Ctrl+K (Cmd+K) opens or closes *Jump to* (`aDYAX`) and Ctrl+, (Cmd+,) opens
 //! the tab's project's settings (`NEHAB`), also while a text field has the focus: neither edits text. The page
-//! keeps its own: Files' Ctrl+P and Ctrl+F (`screens::files::keys`). The rest of the design's table
-//! (`docs/design/orchester-workspace.md`, "Tabs" › "Keyboard") is not built yet.
+//! keeps its own: Files' Ctrl+P and Ctrl+F (`screens::files::keys`), a task Conversation's Ctrl+F
+//! (`screens::task::conversation::search`). The rest of the design's table (`docs/design/orchester-workspace.md`,
+//! "Tabs" › "Keyboard") is not built yet.
 //!
 //! A shortcut is the key as typed: on AZERTY, Ctrl+Z (typed at the place of QWERTY's W) is not Ctrl+W,
 //! and on Dvorak Ctrl+, (typed there too) is not either. Only where the layout types no ASCII character

@@ -45,7 +45,11 @@ use crate::{
   screens::task_close::{self, Closer, Subject},
   services::Services,
   theme::{ExtraSpacing, TaskSpacing},
-  ui::tabs::{PageTab, page_tabs},
+  ui::{
+    icon::Icon,
+    icon_button::IconButton,
+    tabs::{PageTab, page_tabs, page_tabs_with_note},
+  },
 };
 
 #[derive(Clone, PartialEq)]
@@ -322,5 +326,26 @@ fn tabs(ctx: &mut Ctx, props: &HeaderProps) -> Element {
     tab(TaskTab::Conversation, ctx.t(TaskTab::Conversation.title_key())),
     tab(TaskTab::Changes, changes),
   ];
-  page_tabs(ctx, "task-tabs", tabs).into()
+  if props.view != TaskView::Conversation {
+    return page_tabs(ctx, "task-tabs", tabs).into();
+  }
+  let search = search_button(ctx);
+  page_tabs_with_note(ctx, "task-tabs", tabs, search).into()
+}
+
+/// The search of the transcript at the right end of the tabs, on the Conversation tab only (`Search` `E1gMr0` in 13):
+/// a small search button, `pressed` while the find bar is open, its tooltip with Ctrl F (⌘ F on macOS).
+fn search_button(ctx: &mut Ctx) -> Element {
+  let search = PageState::of(ctx).search;
+  let keys = if cfg!(target_os = "macos") {
+    ctx.t("conversation.search.keysCmd")
+  } else {
+    ctx.t("conversation.search.keysCtrl")
+  };
+  let open = search.is_open();
+  let button = IconButton::new("task-search", Icon::Search, ctx.t("conversation.search.button"))
+    .small()
+    .shortcut(keys)
+    .on_click(move || search.show());
+  if open { button.active() } else { button }.render(ctx)
 }

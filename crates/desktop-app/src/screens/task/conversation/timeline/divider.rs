@@ -34,6 +34,7 @@ use orchester_workspace::{
 };
 
 use super::{
+  super::search::marks::{count_badge, opened},
   Timeline,
   message::{orchestrator_note, person_note},
 };
@@ -77,6 +78,11 @@ pub(super) type Link = (Arc<str>, Press);
 
 /// An event divider: `glyph`, `text` and `link` (its words and what a press does).
 pub(super) fn event(id: String, glyph: Icon, text: &str, link: Option<Link>) -> Element {
+  event_with(id, glyph, text, (link, None))
+}
+
+/// An event divider with `badge` after its link: how many places a search found in a fold (`Matches` `OUbMr`).
+fn event_with(id: String, glyph: Icon, text: &str, (link, badge): (Option<Link>, Option<Element>)) -> Element {
   let link = link.map(|(words, press)| {
     pressed(press).id(format!("{id}-link")).child(
       Text::new(&words)
@@ -100,7 +106,8 @@ pub(super) fn event(id: String, glyph: Icon, text: &str, link: Option<Link>) -> 
         .min_width(Dimension::Px(0.0))
         .flex_shrink(1.0),
     )
-    .with_children(link);
+    .with_children(link)
+    .with_children(badge);
   ruled(id, SpacingSize::Sm, (label.into(), None))
 }
 
@@ -153,10 +160,26 @@ pub(super) fn step(ctx: &mut Ctx, timeline: &Timeline, (head, key): (&StepHead, 
     None => text.into(),
   };
   let (chip, list) = super::todo::of_step(ctx, timeline, head).map_or((None, None), |(chip, list)| (Some(chip), list));
+  // A step the search opened to show its current place says so after its rule (`f76I4` in 13d).
+  let opened = timeline
+    .toggles
+    .opened_by_search(key)
+    .then(|| opened(ctx, &format!("conversation-step-{key}-opened")));
+  let end = match (chip, opened) {
+    (Some(chip), Some(opened)) => Some(
+      Row::new()
+        .spacing(ExtraSpacing::Loose.role())
+        .align_items(Alignment::Center)
+        .child(chip)
+        .child(opened)
+        .into(),
+    ),
+    (chip, opened) => chip.or(opened),
+  };
   let line = ruled(
     format!("conversation-step-{key}"),
     ExtraSpacing::Loose.role(),
-    (label, chip),
+    (label, end),
   );
   let line = if foldable {
     let (toggles, key) = (timeline.toggles.clone(), key.clone());
@@ -293,12 +316,15 @@ pub(super) fn folded(ctx: &Ctx, timeline: &Timeline, key: &Arc<str>, steps: &[(A
     timeline.toggles.clone(),
     steps.iter().map(|(key, _)| key.clone()).collect::<Vec<_>>(),
   );
+  // While searching, how many places the fold hides (`Matches` `OUbMr` in 13b).
+  let found = timeline.search.as_ref().map_or(0, |marks| marks.in_steps(keys.iter()));
+  let badge = (found > 0).then(|| count_badge(ctx, &format!("conversation-{key}-matches"), found));
   let show = Press::run(move || toggles.open_all(keys.clone()));
-  event(
+  event_with(
     format!("conversation-{key}"),
     Icon::ListCollapse,
     &text,
-    Some((ctx.t(link_key), show)),
+    (Some((ctx.t(link_key), show)), badge),
   )
 }
 
