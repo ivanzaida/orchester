@@ -49,7 +49,8 @@ without the board's theme, so the label above each window renders without its ba
 ## The menu
 
 Surface as the model picker (`surface_raised`, `radius_lg`, `border_strong`, the menu shadows), 400 wide, padding 6,
-gap 2, anchored 8 px above the chip, left-aligned with it.
+gap 2, left-aligned with the chip, its bottom 8 px above the composer's top border (as ORC-590's model menu), so it
+never covers the composer. In 15b, 15d and 15e every menu ends at the same y (808 in the window, composer at 816).
 
 1. Heading: `shield`, *Run {run} · how {agent}'s requests are answered* (`text_muted` 11/500).
 2. One row per choice, narrow to wide: *Manual for this run*, *Autopilot*, *Approve everything in this run*. Each:
