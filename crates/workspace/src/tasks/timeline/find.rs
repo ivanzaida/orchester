@@ -252,7 +252,11 @@ fn said<'a>(item: &'a Item, rendered: Rendered<'_>) -> Vec<Cow<'a, str>> {
         .chain(notice.overlapping.iter().map(|path| plain(path)))
         .collect()
     }
-    ItemKind::Tools(_) | ItemKind::Step(_) | ItemKind::SwitchedToManual(_) | ItemKind::End(_) => Vec::new(),
+    ItemKind::Tools(_)
+    | ItemKind::Step(_)
+    | ItemKind::SwitchedToManual(_)
+    | ItemKind::Permission(_)
+    | ItemKind::End(_) => Vec::new(),
   }
 }
 

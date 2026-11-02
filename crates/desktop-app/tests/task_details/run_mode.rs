@@ -38,7 +38,7 @@ fn latest_run(page: &Page, key: &str) -> Run {
 }
 
 /// The running task, its run's latest agent launched in Autopilot, in a project that allows it.
-fn autopilot(page: &Page) -> (String, Run) {
+pub(super) fn autopilot(page: &Page) -> (String, Run) {
   let key = page.key("running");
   let run = latest_run(page, &key);
   let execution = run

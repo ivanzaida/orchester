@@ -315,6 +315,7 @@ impl Composer {
       .run
       .as_ref()
       .and_then(|run| super::context::in_composer(ctx, &composing.project, run));
+    let permissions = super::permissions::chip(ctx, (&composing.project, &composing.detail), &self.box_anchor);
     let bar = controls::bar(
       ctx,
       &Bar {
@@ -326,7 +327,7 @@ impl Composer {
         anchor: &self.anchor,
         attached,
       },
-      context,
+      (permissions, context),
     );
     let stroke = if self.focused.get() {
       PaletteColor::BorderFocus

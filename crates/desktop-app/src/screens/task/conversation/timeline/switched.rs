@@ -1,7 +1,8 @@
 //! The run's switch to Manual for itself (`Event · switched to Manual` `ARwiU` in 04c `vZcoN`, `wE0eF` in 04b
-//! `p6tXIO`): a quiet row 36 in, its 13 `hand` in `text_muted`, *Switched to Manual for this run* in 12
-//! `text_secondary`, then who switched it and when in 12 `text_muted` (*by you · 15:20*), with whose profile stays on
-//! Autopilot while the run is Manual for itself alone; 10 apart.
+//! `p6tXIO`; with the permissions chip's event lines, `C66FFU` in 15f `CimC4`): a quiet row 36 in, its 13 `shield` in
+//! `text_muted`, *Switched to Manual for this run* in 12 `text_secondary`, then who switched it and when in 12
+//! `text_muted` (*by you · 15:20*), with whose profile stays on Autopilot while the run is Manual for itself alone; 10
+//! apart.
 
 use lurq::{
   app::{ctx::Ctx, theme::PaletteColor},
@@ -39,7 +40,7 @@ pub(super) fn row(ctx: &Ctx, switched: &SwitchedToManual, at: Timestamp) -> Elem
     .padding(Padding::new().left(ConversationSpacing::ApprovalRow.role()))
     .spacing(ExtraSpacing::Loose.role())
     .align_items(Alignment::Center)
-    .child(icon(Icon::Hand, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::Shield, IconSize::Base, PaletteColor::TextMuted))
     .child(
       Text::new(&ctx.t("conversation.approval.switched"))
         .id("conversation-switched-to-manual-text")

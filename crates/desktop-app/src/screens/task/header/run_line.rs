@@ -1,8 +1,8 @@
 //! The status line under the title (`Status line` `g9ufW` in `j8DakG`): where the task's run stands, its 13 icon and
 //! its words in 12/500 in the status's tone (`Interrupted at 03 Implement`), then in 12 `text_muted` the run it is
 //! about (`Run 8 · attempt 2 · started 15:04`), 8 apart; the run's approval mode after them (`super::run_mode`, 04
-//! `H6kPd`); the task's story points last (ORC-49, no design frame yet: who set them and Orchester's reason in its
-//! tooltip).
+//! `H6kPd`) but on the Conversation, whose composer's permissions chip says it (15 `x55hWH`); the task's story points
+//! last (ORC-49, no design frame yet: who set them and Orchester's reason in its tooltip).
 
 use std::sync::Arc;
 
@@ -47,7 +47,8 @@ enum About {
   Reason(Arc<str>),
 }
 
-pub fn status_line(ctx: &mut Ctx, task: &TaskContext) -> Element {
+/// The line, with the run's approval mode while `mode`.
+pub fn status_line(ctx: &mut Ctx, task: &TaskContext, mode: bool) -> Element {
   let detail = &task.detail;
   let (status, about) = chip_words(ctx, task);
   let chip = StatusChip::new("task-status", status);
@@ -59,7 +60,7 @@ pub fn status_line(ctx: &mut Ctx, task: &TaskContext) -> Element {
     Some(About::Reason(reason)) => chip.detail(reason),
     None => chip,
   };
-  let mode = super::run_mode::mode(ctx, task);
+  let mode = if mode { super::run_mode::mode(ctx, task) } else { None };
   let points = detail.task.estimate().map(|estimate| points(ctx, estimate));
   Row::new()
     .id("task-status-row")

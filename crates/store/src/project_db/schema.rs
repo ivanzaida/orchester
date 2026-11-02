@@ -50,6 +50,7 @@ mod orchestrator_sent;
 mod orchestrator_todos;
 mod orchestrator_waits;
 mod organization;
+mod permission_events;
 mod permitted_decisions;
 mod plan_decided_by;
 mod plan_limits;

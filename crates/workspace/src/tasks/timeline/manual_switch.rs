@@ -45,7 +45,7 @@ pub(super) fn item(run: &RunView, execution: Option<StepExecutionId>) -> Option<
 }
 
 /// The step execution whose agent last started at or before `at`.
-fn switched_in(run: &RunView, at: Timestamp) -> Option<StepExecutionId> {
+pub(super) fn switched_in(run: &RunView, at: Timestamp) -> Option<StepExecutionId> {
   run
     .invocations
     .iter()

@@ -43,6 +43,7 @@ mod orchester;
 mod orchestrator;
 mod overview;
 mod palette;
+mod permissions;
 pub mod pipelines;
 mod project_settings;
 mod projects;
@@ -101,6 +102,7 @@ pub use self::{
   orchestrator::{OrchestratorShadow, OrchestratorSpacing, OrchestratorText, beside_chat_lane, chat_scrollbar},
   overview::{OverviewSpacing, OverviewText},
   palette::{ExtraColor, Mode},
+  permissions::{PermissionsSpacing, PermissionsText},
   pipelines::{PipelinesSpacing, PipelinesText},
   project_settings::{ProjectSettingsSpacing, ProjectSettingsText},
   projects::{ProjectsSpacing, ProjectsText},
@@ -182,6 +184,7 @@ pub fn install(app: &mut App, mode: Mode) {
   project_settings::install(theme);
   browser::install(theme);
   dialog::install(theme);
+  permissions::install(theme);
   theme.set_shadows(shadow::shadows());
   theme.set_form(form::form());
 }

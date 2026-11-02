@@ -33,6 +33,7 @@ use orchester_workspace::{
   },
 };
 
+pub(super) use self::mcp::subject_key;
 use self::{found::Places, shown::Shown};
 use super::{super::search::marks::opened, Timeline};
 use crate::{

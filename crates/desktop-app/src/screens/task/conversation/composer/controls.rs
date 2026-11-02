@@ -1,11 +1,11 @@
 //! The row inside the composer's box (`Bar` `keqaj` in `QQ2ZM`), 6 apart: *Attach* (a 15 plus in a 26 square,
 //! `hprBf`), which opens the system's picker and attaches the files chosen in it; the recipient as a pill
 //! (`Recipient` `AOjdU`, `ui::composer::recipient_pill`: a 12 `bot` and the words; a lock at its end while the
-//! recipient is fixed); and at the end the send button: `accent`, radius 6, 28 high, its icon in `on_accent` — alone
-//! in a 28 square while an agent works (`Send button/split` `wPMDa`), else with its words in 12/500, 10 in from its
-//! sides and 6 from the icon (`I4yc5z` in `YhiGC`). Where sending has two ways, a line and a chevron split the button
-//! (`KkfI8`, `ZFD5V`: 1 by 16, then 20 wide, a 12 chevron) and open the send menu over it. The permissions chip and
-//! the recipient menu are not part of this build (D4).
+//! recipient is fixed); the run's permissions chip (`super::super::permissions`, 15 `x55hWH`); and at the end the send
+//! button: `accent`, radius 6, 28 high, its icon in `on_accent` — alone in a 28 square while an agent works (`Send
+//! button/split` `wPMDa`), else with its words in 12/500, 10 in from its sides and 6 from the icon (`I4yc5z` in
+//! `YhiGC`). Where sending has two ways, a line and a chevron split the button (`KkfI8`, `ZFD5V`: 1 by 16, then 20
+//! wide, a 12 chevron) and open the send menu over it. The recipient menu is not part of this build (D4).
 
 use lurq::{
   app::{
@@ -75,8 +75,9 @@ pub(super) struct Bar<'a> {
   pub(super) attached: &'a DraftAttachments,
 }
 
-/// The row, with the context meter of the step at work after the free space (`bhtch`), when one works.
-pub(super) fn bar(ctx: &mut Ctx, bar: &Bar<'_>, context: Option<Element>) -> Element {
+/// The row, with the run's permissions chip after the recipient while the run goes on, and the context meter of the
+/// step at work after the free space (`bhtch`), when one works.
+pub(super) fn bar(ctx: &mut Ctx, bar: &Bar<'_>, (permissions, context): (Option<Element>, Option<Element>)) -> Element {
   let fixed = match bar.mode {
     ComposerMode::Answer { .. } if bar.mode.fixed_recipient().is_some() => {
       Some(ctx.t("composer.recipient.fixed.answer"))
@@ -92,6 +93,7 @@ pub(super) fn bar(ctx: &mut Ctx, bar: &Bar<'_>, context: Option<Element>) -> Ele
     .align_items(Alignment::Center)
     .child(attach(ctx, bar.attached))
     .child(recipient_pill(ctx, (&recipient, recipient_icon(bar.mode)), fixed))
+    .with_children(permissions)
     .child(Spacer::new().flex(1.0))
     .with_children(context)
     .child(send(ctx, bar))

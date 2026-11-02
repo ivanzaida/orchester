@@ -564,4 +564,5 @@ ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 
   super::disk_guard::MIGRATION,
   super::orchestrator_todos::MIGRATION,
   super::context_use::MIGRATION,
+  super::permission_events::MIGRATION,
 ];

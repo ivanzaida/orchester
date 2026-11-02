@@ -126,6 +126,101 @@
         "automationProfile": "by automation · {{time}} · {{agent}}’s profile stays on Autopilot"
       }
     },
+    "permissions": {
+      "chip": {
+        "manual": "Manual",
+        "autopilot": "Autopilot",
+        "everything": "Everything in this run",
+        "manualRun": "Manual · this run",
+        "manualProject": "Manual · project",
+        "profileManual": "· profile: Manual",
+        "profileAutopilot": "· profile: Autopilot",
+        "name": "Permissions of Run {{run}}",
+        "tip": {
+          "manual": "{{agent}}’s profile is Manual: requests off its allowed list go to the reviewer, then to you",
+          "autopilot": "{{agent}}’s profile is Autopilot and {{project}} allows it: requests inside the worktree are approved at once",
+          "projectOff": "{{agent}}’s profile is Autopilot, but {{project}} doesn’t allow Autopilot: requests off its allowed list go to the reviewer, then to you"
+        }
+      },
+      "menu": {
+        "heading": "Run {{run}} · how {{agent}}’s requests are answered"
+      },
+      "option": {
+        "manualRun": {
+          "name": "Manual for this run",
+          "sub": "Allowed commands run; the reviewer judges the rest, then you. Stays Manual until Run {{run}} ends.",
+          "subStop": "Stops approving everything: {{agent}}’s allowed list runs, the reviewer judges the rest, then you.",
+          "subCurrent": "Allowed commands run; the reviewer judges the rest, then you.",
+          "subSwitchedPerson": "Allowed commands run; the reviewer judges the rest, then you. Switched by you at {{time}}.",
+          "subSwitchedAutomation": "Allowed commands run; the reviewer judges the rest, then you. Switched by automation at {{time}}."
+        },
+        "autopilot": {
+          "name": "Autopilot",
+          "sub": "Approves requests inside the worktree at once. Work outside it, pushes and other branches ask you.",
+          "subStop": "Stops approving everything: requests inside the worktree are approved at once, the rest ask you."
+        },
+        "everything": {
+          "name": "Approve everything in this run",
+          "sub": "Run {{run}} answers its worktree commands and MCP calls itself. Network, outside writes, secrets, installs and destructive commands still ask you.",
+          "subOn": "On since {{time}}, by you. Network, outside writes, secrets, installs and destructive commands still ask you.",
+          "subOnUntimed": "On. Network, outside writes, secrets, installs and destructive commands still ask you.",
+          "confirmBody": "Network, outside writes, secrets, installs and destructive commands still ask you."
+        }
+      },
+      "tag": {
+        "narrows": "narrows",
+        "onlyYou": "only you"
+      },
+      "unavailable": {
+        "switched": "Not available: a run switched to Manual stays Manual until it ends. {{agent}}’s next run starts on Autopilot again.",
+        "profileManual": "Not available: {{agent}}’s profile is Manual.",
+        "projectOff": "Not available: {{project}} doesn’t allow Autopilot.",
+        "personOnly": "Only a person can choose this: the Orchestrator and MCP clients may only narrow a run."
+      },
+      "similar": {
+        "heading": "Approved similar in this run",
+        "revoke": "Revoke",
+        "empty": "None yet: Approve similar on a request’s card adds one here.",
+        "command": "· {{category}} · since {{time}}",
+        "tool": "· every call · since {{time}}",
+        "folder": "· reads in {{folder}} · since {{time}}",
+        "check": "· {{check}} · since {{time}}"
+      },
+      "foot": {
+        "manualAllows": "{{agent}}’s profile: Manual · {{project}} allows Autopilot. A change here is for Run {{run}} only.",
+        "manualOff": "{{agent}}’s profile: Manual · {{project}} doesn’t allow Autopilot. A change here is for Run {{run}} only.",
+        "autopilotAllows": "{{agent}}’s profile: Autopilot · {{project}} allows Autopilot. A change here is for Run {{run}} only.",
+        "autopilotOff": "{{agent}}’s profile: Autopilot · {{project}} doesn’t allow Autopilot. A change here is for Run {{run}} only.",
+        "nothingWider": {
+          "profileManual": "Nothing wider for Run {{run}}: {{agent}}’s profile is Manual.",
+          "profileManualProjectOff": "Nothing wider for Run {{run}}: {{agent}}’s profile is Manual and {{project}} doesn’t allow Autopilot.",
+          "projectOff": "Nothing wider for Run {{run}}: {{project}} doesn’t allow Autopilot.",
+          "switched": "Nothing wider for Run {{run}}: it was switched to Manual and stays so until it ends."
+        },
+        "personOnly": "Only a person widens a run: the Orchestrator and MCP clients may only narrow it.",
+        "profile": "{{agent}}’s profile"
+      },
+      "event": {
+        "everything": "Approving everything in this run",
+        "stopped": "Stopped approving everything in this run",
+        "revoked": "Similar rule revoked",
+        "refused": "Not changed: automation can’t widen a run",
+        "stop": "Stop",
+        "review": "Review…",
+        "detail": {
+          "everythingWasAutopilot": "· by you · {{time}} · was Autopilot · network, outside writes, secrets, installs and destructive commands still ask you",
+          "everythingWasManual": "· by you · {{time}} · was Manual · network, outside writes, secrets, installs and destructive commands still ask you",
+          "stoppedPersonAutopilot": "· by you · {{time}} · back to Autopilot",
+          "stoppedPersonManual": "· by you · {{time}} · back to Manual",
+          "stoppedAutomationAutopilot": "· by automation · {{time}} · back to Autopilot",
+          "stoppedAutomationManual": "· by automation · {{time}} · back to Manual",
+          "revokedPerson": "· by you · {{time}} · asks again",
+          "revokedAutomation": "· by automation · {{time}} · asks again",
+          "refused": "· automation asked to approve everything in this run · {{time}} · only a person widens a run’s approvals"
+        }
+      },
+      "failed": "The change was not saved: {{reason}}"
+    },
     "entry": {
       "agentMessage": "agent message",
       "awaitsApproval": "waiting for approval",

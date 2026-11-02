@@ -128,8 +128,10 @@ impl Component for TaskHeader {
     let run_controls = RunControls::of(ctx);
     let state = run_controls.action.state().get();
     let refused = self.refusals.shown(&state, run_controls.requested.get(), &detail);
+    // On the Conversation the composer's permissions chip says the run's approval mode instead (ORC-319, 15 `x55hWH`).
+    let mode = props.view.tab() != TaskTab::Conversation;
     let status_line = no_branch::status_line(ctx, &props.task, &self.no_branch, (&self.confirming, &self.remove))
-      .unwrap_or_else(|| run_line::status_line(ctx, &props.task));
+      .unwrap_or_else(|| run_line::status_line(ctx, &props.task, mode));
     Column::new()
       .id("task-header")
       .width(Dimension::Pct(100.0))

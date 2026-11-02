@@ -21,6 +21,7 @@ pub mod group;
 pub mod load;
 pub mod manual_switch;
 pub mod mark;
+pub mod permission_events;
 pub mod question;
 pub mod rail;
 pub mod step;
@@ -92,6 +93,8 @@ pub enum ItemKind {
   BaseMoved(base_moved::BaseMovedMark),
   /// The run was switched to Manual for itself ([`manual_switch`]).
   SwitchedToManual(manual_switch::SwitchedToManual),
+  /// Its permissions menu changed how the run answers its requests, or refused automation ([`permission_events`]).
+  Permission(permission_events::PermissionLine),
   /// The run ended.
   End(RunEnd),
 }
@@ -214,6 +217,7 @@ pub fn build(sources: &Sources<'_>) -> Vec<Item> {
     .collect();
   waiting.extend(base_moved::items(run, None));
   waiting.extend(manual_switch::item(run, None));
+  waiting.extend(permission_events::items(run, None));
   waiting.sort_by_key(|item| item.at);
   items.extend(waiting);
   items.extend(run_end(run, sources.merge));
@@ -266,6 +270,7 @@ fn execution_items(sources: &Sources<'_>, execution: StepExecutionId) -> Vec<Ite
   between.extend(approval::approval_items(sources, execution, &name));
   between.extend(base_moved::items(run, Some(execution)));
   between.extend(manual_switch::item(run, Some(execution)));
+  between.extend(permission_events::items(run, Some(execution)));
   let mut items = interleaved(sources.entries, execution, (&agent, &name), between);
   items.extend(result_item(run, sources.entries, execution));
   items

@@ -46,6 +46,7 @@ mod orchestrator_usage;
 mod orchestrator_waits;
 mod organization;
 mod organized_drafts;
+mod permission_events;
 mod plan_limits;
 mod plans;
 mod project_rules;

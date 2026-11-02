@@ -109,7 +109,10 @@ fn decided_text(ctx: &Ctx, mark: &DecidedMark) -> Arc<str> {
 
 /// What a command is called where its category shows: *Credential read* when it reads a credential
 /// location, else its category.
-pub(super) const fn subject_key(category: CommandCategory, secrets: bool) -> &'static str {
+pub(in crate::screens::task::conversation::timeline) const fn subject_key(
+  category: CommandCategory,
+  secrets: bool,
+) -> &'static str {
   if secrets {
     return "conversation.decision.category.credentialRead";
   }

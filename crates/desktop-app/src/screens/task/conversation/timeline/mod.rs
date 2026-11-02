@@ -17,6 +17,7 @@ mod delivery;
 mod divider;
 mod entry;
 mod message;
+mod permission;
 mod proposal;
 mod result;
 mod switched;
@@ -57,6 +58,7 @@ use self::proposal::{ProposalProps, ProposalRow};
 pub(crate) use self::{divider::step_label, message::links};
 pub(super) use self::{
   message::person_message,
+  permission::rule_text,
   proposal::ChatProject,
   working::{Wait, Working},
 };
@@ -477,8 +479,8 @@ fn row_content(ctx: &mut Ctx, row: &Row) -> Element {
   }
 }
 
-/// A person's message, a card, a problem, a return or restart, the run's switch to Manual, a step's result or the
-/// run's end.
+/// A person's message, a card, a problem, a return or restart, the run's switch to Manual, a change of its
+/// permissions, a step's result or the run's end.
 fn item_row(ctx: &mut Ctx, timeline: &Timeline, item: &Item) -> Element {
   match &item.kind {
     ItemKind::Message(entry) => person_message(ctx, ((timeline.project, &timeline.chat_project.root), entry)),
@@ -489,6 +491,7 @@ fn item_row(ctx: &mut Ctx, timeline: &Timeline, item: &Item) -> Element {
     ItemKind::Mark(mark) => divider::mark(ctx, timeline, mark),
     ItemKind::BaseMoved(mark) => divider::base_moved(ctx, &item.key, mark),
     ItemKind::SwitchedToManual(switched) => switched::row(ctx, switched, item.at),
+    ItemKind::Permission(line) => permission::row(ctx, timeline, (&item.key, line, item.at)),
     ItemKind::Result(card) => result::card(ctx, timeline, card),
     ItemKind::End(end) => divider::end(ctx, timeline, end, item.at),
     // An agent's message, a step and a tool group are rows of their own (`Row::Agent`, `Row::Step`).

@@ -13,6 +13,7 @@ mod base_branch;
 #[path = "../../examples/seed/kontur/mod.rs"]
 #[allow(dead_code, reason = "the seed's helpers the other scenarios use")]
 mod kontur;
+mod permissions;
 mod run_mode;
 mod shared;
 #[path = "../support/mod.rs"]
