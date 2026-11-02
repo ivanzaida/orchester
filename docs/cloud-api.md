@@ -113,6 +113,11 @@ A stale revision returns HTTP 409 with typed `WorkspacePolicyError::PolicyRevisi
 `PolicyRevision` accepts positive integers through i64::MAX and refuses overflow on increment.
 The effective policy returned is the persisted workspace policy, with no member override.
 
+A policy change is announced by the v2 `WorkspacePolicyEvent::Changed` delta, `kind` `policy.changed`:
+`{kind:"policy.changed",data:{id:7,by:{...},actor:"person",at:1,policy:{revision:2,automatic_merge:true}}}`.
+`policy` is the new effective policy; clients replace their cached policy and ignore a revision that is not
+newer than theirs. The server-wide claim staleness threshold has no change event (undecided).
+
 Thresholds belong to the server, never a workspace policy. A member's compatible local Claude/Codex account
 choice stays local execution metadata. Other team-owned defaults (pipeline, delivery, effort), admin drafts,
 module heartbeat source and human-wait renewal are **not covered**; no decisions for those open items are

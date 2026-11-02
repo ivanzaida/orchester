@@ -2,6 +2,8 @@ use orchester_core::sharing::{WorkspaceRole, may_administer_workspace, may_read_
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::Delta;
+
 /// Optimistic concurrency token for workspace policy, independent of task revisions.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "u64", into = "u64")]
@@ -97,4 +99,19 @@ pub struct WorkspacePolicyChanges {
 pub enum WorkspacePolicyError {
   #[error("workspace policy revision changed")]
   PolicyRevisionConflict { current: WorkspacePolicy },
+}
+
+/// The workspace's new effective policy after a change; a client replaces its cached policy with it, and ignores the
+/// event when `policy.revision` is not newer than the revision it holds.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PolicyChanged {
+  pub policy: WorkspacePolicy,
+}
+
+/// Workspace policy deltas on the new surface; the existing full event stream retains its original types.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(tag = "kind", content = "data")]
+pub enum WorkspacePolicyEvent {
+  #[serde(rename = "policy.changed")]
+  Changed(Delta<PolicyChanged>),
 }

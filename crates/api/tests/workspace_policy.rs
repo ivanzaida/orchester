@@ -1,10 +1,11 @@
 use orchester_api::{
   ServerSettings, SettingsChanges,
   v2::{
-    MemberRole, PolicyRevision, WorkspaceCapabilities, WorkspacePolicy, WorkspacePolicyChanges, WorkspacePolicyError,
-    WorkspacePolicyResponse,
+    MemberRole, MembershipEvent, PolicyRevision, WorkspaceCapabilities, WorkspacePolicy, WorkspacePolicyChanges,
+    WorkspacePolicyError, WorkspacePolicyEvent, WorkspacePolicyResponse,
   },
 };
+use orchester_core::id::UserId;
 use serde_json::json;
 
 #[test]
@@ -103,4 +104,34 @@ fn workspace_policy_revision_conflict_shape_and_revision_bounds() {
   assert!(PolicyRevision::try_from(0).is_err());
   assert!(PolicyRevision::try_from(u64::MAX).is_err());
   assert!(PolicyRevision::try_from(i64::MAX as u64).expect("max").next().is_err());
+}
+
+#[test]
+fn workspace_policy_changed_event_wire_shape_and_invalid_revision() {
+  let delta = json!({
+    "kind":"policy.changed",
+    "data":{
+      "id":7, "by":{"id":UserId::generate(), "display_name":"Workspace admin"}, "actor":"person", "at":1,
+      "policy":{"revision":2, "automatic_merge":true}
+    }
+  });
+  let event: WorkspacePolicyEvent = serde_json::from_value(delta.clone()).expect("policy event");
+  let WorkspacePolicyEvent::Changed(change) = &event;
+  assert_eq!(change.id, 7);
+  assert_eq!(
+    change.change.policy,
+    WorkspacePolicy {
+      revision: PolicyRevision::FIRST.next().expect("next"),
+      automatic_merge: true
+    }
+  );
+  assert_eq!(serde_json::to_value(&event).expect("serialize"), delta);
+  assert!(serde_json::from_value::<orchester_api::Event>(delta.clone()).is_err());
+  assert!(serde_json::from_value::<MembershipEvent>(delta.clone()).is_err());
+  let mut invalid = delta.clone();
+  invalid["data"]["policy"]["revision"] = json!(0);
+  assert!(serde_json::from_value::<WorkspacePolicyEvent>(invalid).is_err());
+  let mut missing = delta;
+  missing["data"]["policy"] = json!({"automatic_merge":true});
+  assert!(serde_json::from_value::<WorkspacePolicyEvent>(missing).is_err());
 }

@@ -42,7 +42,7 @@ membership. New workspaces must initially have an admin. An existing server proj
 - `InviteCreate`, `Invite`, `InviteCreated` and `Invites` use the new role; signed cloud-invite contracts remain
   unchanged and need explicit legacy-role adaptation at that boundary.
 - `MembershipEvent` covers membership added, removed and role-changed deltas with existing attribution metadata.
-  It does not replace the existing full event stream.
+  It does not replace the existing full event stream. `WorkspacePolicyEvent` adds `policy.changed` the same way.
 - `MembershipErrorCode::LastWorkspaceAdmin` serializes as `last_workspace_admin`.
   `MembershipErrorDetails::{Admins, Remote}` name workspace contacts with `admins`. Existing common errors,
   server-admin `last_admin` and v1 `last_owner` are unaffected.

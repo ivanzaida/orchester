@@ -315,6 +315,13 @@ revision and desired automatic_merge value. Platform applies authorization, revi
 revision increment in one transaction; a mismatch returns HTTP 409 `policy_revision_conflict` with the current
 policy, represented by `WorkspacePolicyError`. No silent overwrite or per-member policy override is defined.
 
+`WorkspacePolicyEvent::Changed` is the v2 `policy.changed` workspace delta (ORC-628), shaped like
+`MembershipEvent`: `{kind:"policy.changed",data:{id,by,actor,at,policy:{revision,automatic_merge}}}`. Its
+`PolicyChanged.policy` is the new effective policy, so a client replaces its cached policy without a second read
+and ignores an event whose revision is not newer than the one it holds; revision 0 is refused. It is not part of
+the v1 `EventKind`/`Event` stream. No event is defined for the server-wide claim staleness threshold: whether
+clients need one is an open question.
+
 The server threshold is not a workspace policy field. A compatible local Claude/Codex account choice is local
 execution metadata. Open items are **not in this contract**: other team-owned fields such as default pipeline,
 delivery and effort, admin drafts, module heartbeat source, and human-wait renewal. The task's referenced
