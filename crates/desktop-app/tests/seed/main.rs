@@ -8,6 +8,7 @@ mod browser;
 #[path = "../../examples/seed/cli.rs"]
 mod cli;
 mod command_line;
+mod context;
 #[path = "../../examples/seed/kontur/mod.rs"]
 mod kontur;
 mod live;

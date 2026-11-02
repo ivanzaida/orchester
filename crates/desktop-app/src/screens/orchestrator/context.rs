@@ -25,7 +25,7 @@ use super::{
 use crate::{
   project::ShownProject,
   services::Services,
-  ui::context_meter::{Compact, ContextMeterProps, MeterPlace, MeterReading, context_meter},
+  ui::context_meter::{Compact, ContextMeterProps, MeterPlace, MeterReading, Over, context_meter},
 };
 
 /// The meter of the conversation `reads` shows, while the Orchestrator can answer in it, with what *Compact* does
@@ -52,6 +52,7 @@ pub(super) fn meter(
       model,
       read_with: shown.context,
       compact: super::compact::offer(view, project, shown),
+      over: Over(view.mention_anchor.clone()),
     },
   ))
 }
@@ -64,6 +65,8 @@ struct ChatContextProps {
   /// The reading the conversation was read with.
   read_with: Option<ContextUse>,
   compact: Compact,
+  /// The composer's box, which the popover opens above.
+  over: Over,
 }
 
 impl DevtoolsInspectable for ChatContextProps {}
@@ -104,6 +107,7 @@ impl Component for ChatContext {
         agent: None,
         model: props.model,
         place: MeterPlace::Bar,
+        over: Some(props.over),
         compact: props.compact,
       },
     )

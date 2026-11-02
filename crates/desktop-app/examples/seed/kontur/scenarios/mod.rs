@@ -35,6 +35,7 @@ mod pipelines;
 mod project_settings;
 mod pull_requests;
 pub mod qa_app_asks;
+mod run_context;
 pub mod settings;
 mod shared_config;
 mod shared_here;
@@ -94,7 +95,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 101] = [
+pub const ALL: [Scenario; 111] = [
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-library", agents_library::seed),
   Scenario::of("agents-browser", agents_browser::seed),
@@ -121,9 +122,19 @@ pub const ALL: [Scenario; 101] = [
   Scenario::of("memory", memory::seed),
   Scenario::of("task-states", task_states::seed),
   Scenario::of("conversation", conversation::seed),
+  Scenario::of("conversation-context-plenty", run_context::plenty),
+  Scenario::of("conversation-context-near-full", run_context::near_full),
+  Scenario::of("conversation-context-full", run_context::full),
   Scenario::of("long-chats", long_chats::seed),
   Scenario::of("orchestrator", orchestrator::seed),
   Scenario::of("orchestrator-not-set-up", orchestrator::not_set_up),
+  Scenario::of("orchestrator-context-plenty", orchestrator::context::plenty),
+  Scenario::of("orchestrator-context-near-full", orchestrator::context::near_full),
+  Scenario::of("orchestrator-context-full", orchestrator::context::full),
+  Scenario::of("orchestrator-context-unknown", orchestrator::context::unknown),
+  Scenario::of("orchestrator-compacting", orchestrator::context::compacting),
+  Scenario::of("orchestrator-compacted", orchestrator::context::compacted),
+  Scenario::of("orchestrator-compact-failed", orchestrator::context::compact_failed),
   Scenario::of("changes", changes::seed),
   Scenario::of("cards", cards::seed),
   Scenario::of("cards-auto-mode", auto_mode::seed),
