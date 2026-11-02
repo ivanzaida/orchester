@@ -137,3 +137,94 @@ fn card_decision_review_wider_answer_keeps_confirmation_and_automation_guard() {
   assert!(window.tree.get_element_by_id(&format!("{card}-widen")).is_some());
   assert!(window.tree.get_element_by_id(&format!("{card}-refused")).is_none());
 }
+
+#[test]
+fn card_decision_review_shortcuts_only_answer_the_focused_card() {
+  for digit in ["1", "2", "3", "4", "5"] {
+    let (mut window, ..) = opened_in("cards-auto-mode", "Review two waiting commands", "cards-approval-");
+    window.until("both waiting cards", |window| {
+      super::cards(window, "cards-approval-")
+        .iter()
+        .filter(|id| id.ends_with("-approve"))
+        .count()
+        == 2
+    });
+    let mut cards: Vec<_> = super::cards(&mut window, "cards-approval-")
+      .into_iter()
+      .filter_map(|id| id.strip_suffix("-approve").map(str::to_owned))
+      .collect();
+    cards.sort();
+    // Focus the later card: the earlier handler receives the key first.
+    let (other, active) = (&cards[0], &cards[1]);
+    let control = match digit {
+      "1" => "approve",
+      "2" => "similar",
+      "3" => "everything",
+      "4" => "deny-message",
+      "5" => "more-answers",
+      _ => unreachable!(),
+    };
+    window
+      .tree
+      .get_element_by_id_mut(&format!("{active}-{control}"))
+      .expect("answer")
+      .focus();
+    window.pass();
+    window.pass();
+    lurq::app::events::with_synthetic_input(|| {
+      window
+        .tree
+        .key_down(digit.to_owned(), format!("Digit{digit}"), false, false, false);
+    });
+    window.pass();
+    window.pass();
+    let suffix = match digit {
+      "1" => "refused",
+      "2" | "3" => "widen",
+      "4" => "message",
+      "5" => "automation",
+      _ => unreachable!(),
+    };
+    assert!(
+      window.tree.get_element_by_id(&format!("{active}-{suffix}")).is_some(),
+      "active {digit}"
+    );
+    assert!(
+      window.tree.get_element_by_id(&format!("{other}-{suffix}")).is_none(),
+      "other {digit}"
+    );
+  }
+}
+
+#[test]
+fn card_decision_review_shortcuts_leave_typing_in_the_composer_alone() {
+  let (mut window, card, _) = opened_in("cards-auto-mode", "Merge the base branch", "cards-approval-");
+  window.until("review answers", |window| {
+    window.tree.get_element_by_id(&format!("{card}-similar")).is_some()
+  });
+  window.pass();
+  window.pass();
+  window
+    .tree
+    .get_element_by_id_mut("composer-input")
+    .expect("composer")
+    .focus();
+  window.pass();
+  assert_eq!(
+    window.tree.focused_element().and_then(|element| element.id()),
+    Some("composer-input")
+  );
+  for digit in ["1", "2", "3", "4", "5"] {
+    window
+      .tree
+      .key_down(digit.to_owned(), format!("Digit{digit}"), false, false, false);
+    window.pass();
+    for suffix in ["refused", "widen", "message", "automation"] {
+      assert!(
+        window.tree.get_element_by_id(&format!("{card}-{suffix}")).is_none(),
+        "{digit}: {suffix}"
+      );
+    }
+    assert!(window.tree.get_element_by_id(&format!("{card}-approve")).is_some());
+  }
+}

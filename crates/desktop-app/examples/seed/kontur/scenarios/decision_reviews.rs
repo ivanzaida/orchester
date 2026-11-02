@@ -31,6 +31,12 @@ pub fn seed(kontur: &mut Kontur, pipeline: &Published) -> Result<(), SeedError> 
       false,
     ),
     ("Review the tool request", "replace_files", verdict(0.41, 0.78), true),
+    (
+      "Review two waiting commands",
+      "git merge --no-ff master",
+      verdict(0.72, 0.49),
+      false,
+    ),
   ] {
     let mut task = kontur.task(
       (title, title, &["The request stays with the person."]),
@@ -57,6 +63,14 @@ pub fn seed(kontur: &mut Kontur, pipeline: &Published) -> Result<(), SeedError> 
     kontur.db.record_review(run.id(), &request.id, &review)?;
     let came = after_review(ReviewQuestion::Request, &review).expect_err("all fixtures ask the person");
     kontur.db.record_came_to_person(run.id(), &request.id, Some(&came))?;
+    if title == "Review two waiting commands" {
+      let mut second = request.clone();
+      second.id.push_str("-second");
+      second.action = "git merge --no-ff feature".to_owned();
+      kontur.db.request_tool_approval(&second)?;
+      kontur.db.record_review(run.id(), &second.id, &review)?;
+      kontur.db.record_came_to_person(run.id(), &second.id, Some(&came))?;
+    }
     hold(kontur, run, (&invocation, true))?;
   }
   Ok(())

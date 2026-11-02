@@ -9,6 +9,13 @@ pub(in super::super) fn answers(ctx: &mut Ctx, answering: &Answering<'_>, hint: 
   let run = answering.run.to_string();
   let similar = similar_covers(ctx, answering, &run);
   let everything = everything_covers(ctx, answering, &run);
+  let focus = [
+    answering.once.clone(),
+    ElementRef::new(),
+    ElementRef::new(),
+    ElementRef::new(),
+    ElementRef::new(),
+  ];
   let once = button(
     answering,
     Given::ApproveOnce,
@@ -23,12 +30,32 @@ pub(in super::super) fn answers(ctx: &mut Ctx, answering: &Answering<'_>, hint: 
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .child(once.on_focus(move || once_hint.set(Some(once_words.clone()))))
-    .with_children(wider_button(ctx, answering, Given::ApproveSimilar, similar, hint))
-    .with_children(wider_button(ctx, answering, Given::ApproveEverything, everything, hint));
-  actions(ctx, answering, hint, allow)
+    .with_children(wider_button(
+      ctx,
+      answering,
+      Given::ApproveSimilar,
+      similar,
+      hint,
+      &focus[1],
+    ))
+    .with_children(wider_button(
+      ctx,
+      answering,
+      Given::ApproveEverything,
+      everything,
+      hint,
+      &focus[2],
+    ));
+  actions(ctx, answering, hint, allow, focus)
 }
 
-fn actions(ctx: &mut Ctx, answering: &Answering<'_>, hint: &Signal<Option<Arc<str>>>, allow: Row) -> Element {
+fn actions(
+  ctx: &mut Ctx,
+  answering: &Answering<'_>,
+  hint: &Signal<Option<Arc<str>>>,
+  allow: Row,
+  focus: [ElementRef; 5],
+) -> Element {
   let id = answering.id;
   let label = ctx.t_args(
     "cards.approval.inline.deny",
@@ -40,7 +67,7 @@ fn actions(ctx: &mut Ctx, answering: &Answering<'_>, hint: &Signal<Option<Arc<st
     message_button(answering, label).key("4")
   };
   let deny_hint = hint.clone();
-  let deny = deny.on_focus(move || deny_hint.set(None));
+  let deny = deny.element_ref(focus[3].clone()).on_focus(move || deny_hint.set(None));
   let more_hint = hint.clone();
   let (more, toggle) = (answering.more.clone(), answering.more.clone());
   let open = more.get();
@@ -52,6 +79,7 @@ fn actions(ctx: &mut Ctx, answering: &Answering<'_>, hint: &Signal<Option<Arc<st
   .icon(if open { Icon::ChevronUp } else { Icon::ChevronDown })
   .key("5")
   .in_form()
+  .element_ref(focus[4].clone())
   .on_focus(move || more_hint.set(None))
   .on_click(move || toggle.update(|open| *open = !*open));
   let row = Row::new()
@@ -65,7 +93,11 @@ fn actions(ctx: &mut Ctx, answering: &Answering<'_>, hint: &Signal<Option<Arc<st
     .id(format!("{id}-answers"))
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
-    .on_key_down(move |event: KeyboardEvent| press_digit(&keys, &event))
+    .on_key_down(move |event: KeyboardEvent| {
+      if focus.iter().any(ElementRef::focused) {
+        press_digit(&keys, &event);
+      }
+    })
     .child(allow)
     .child(row)
     .with_children(hint.get().map(|words| note(&format!("{id}-consequence"), &words)))
@@ -139,6 +171,7 @@ fn wider_button(
   given: Given,
   covers: Result<Arc<str>, Arc<str>>,
   hint: &Signal<Option<Arc<str>>>,
+  focus: &ElementRef,
 ) -> Option<Element> {
   let covers = covers.ok()?;
   let (key, number) = if given == Given::ApproveSimilar {
@@ -150,6 +183,7 @@ fn wider_button(
   Some(
     button(answering, given, wider_name(given), ctx.t(key))
       .key(number)
+      .element_ref(focus.clone())
       .on_focus(move || hint.set(Some(covers.clone())))
       .into(),
   )
