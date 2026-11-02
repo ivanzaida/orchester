@@ -42,7 +42,8 @@ type SaveAction = FutureAction<bool, bool, Message>;
 #[derive(Clone, PartialEq)]
 pub(super) struct Props {
   pub tab: TabProps,
-  pub settings: orchester_workspace::project_settings::Settings,
+  pub settings: Option<orchester_workspace::project_settings::Settings>,
+  pub read_error: Option<Message>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for Props {}
@@ -80,7 +81,8 @@ impl Component for Estimates {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let (hint, info, available) = estimate_words(ctx, &ctx.props::<Props>().settings);
+    let props = ctx.props::<Props>().clone();
+    let (hint, info, available) = estimate_words(ctx, props.settings.as_ref());
     let state = self.save.state().get();
     let read = self.stored(ctx, state.data);
     let fixed = state.is_pending() || read.is_pending();
@@ -101,7 +103,7 @@ impl Component for Estimates {
     } else {
       switch
     };
-    let problem = match (&read.error, &state.error) {
+    let problem = match (props.read_error.as_ref().or(read.error.as_ref()), &state.error) {
       (Some(reason), _) => Some(("project_settings.estimates.unreadable", reason)),
       (None, Some(reason)) => Some(("project_settings.estimates.notSaved", reason)),
       (None, None) => None,
@@ -169,9 +171,16 @@ impl Estimates {
 
 fn estimate_words(
   ctx: &Ctx,
-  settings: &orchester_workspace::project_settings::Settings,
+  settings: Option<&orchester_workspace::project_settings::Settings>,
 ) -> (std::sync::Arc<str>, std::sync::Arc<str>, bool) {
   use orchester_core::run::review::{ReviewerConnectionId, resolve_estimator};
+  let Some(settings) = settings else {
+    return (
+      ctx.t("project_settings.estimates.hint"),
+      ctx.t("project_settings.estimates.info"),
+      false,
+    );
+  };
   if !matches!(
     settings.auto_mode.reviewer.as_ref().map(|choice| choice.connection),
     Some(ReviewerConnectionId::Decision { .. })
