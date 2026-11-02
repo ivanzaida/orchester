@@ -52,10 +52,9 @@ pub(super) fn line(ctx: &mut Ctx, id: &str, event: &ChatEvent, at: Option<Timest
       "orchestrator.context.event.after",
       [("after", compact_tokens(*after).as_str())],
     )),
-    (CompactionState::Done { after: None }, Some(before)) => Some(ctx.t_args(
-      "orchestrator.context.event.afterUnreported",
-      [("before", before)],
-    )),
+    (CompactionState::Done { after: None }, Some(before)) => {
+      Some(ctx.t_args("orchestrator.context.event.afterUnreported", [("before", before)]))
+    }
     (_, before) => before.map(Arc::from),
   };
   let detail = match state {
@@ -63,10 +62,10 @@ pub(super) fn line(ctx: &mut Ctx, id: &str, event: &ChatEvent, at: Option<Timest
     _ => None,
   };
   let line = Line::new(id, (glyph, tone), ctx.t(what))
-  .outcome("compaction")
-  .status(status)
-  .target(target)
-  .time(at.map(display::clock))
-  .detail(detail);
+    .outcome("compaction")
+    .status(status)
+    .target(target)
+    .time(at.map(display::clock))
+    .detail(detail);
   Some(line.render(ctx))
 }

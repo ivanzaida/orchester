@@ -1,6 +1,7 @@
 //! The context meter (ORC-305, ORC-308): its four states in a composer's bar and on a divider, its tooltip and its
 //! popover with the tokens used of the window, an estimate marked as one, and a reading that changes while it shows;
-//! *Compact* beside it and in its popover, waiting while a turn is under way, and the meter while it compacts (ORC-309).
+//! *Compact* beside it and in its popover, waiting while a turn is under way, and the meter while it compacts
+//! (ORC-309).
 
 use std::sync::{
   Arc,
@@ -41,13 +42,28 @@ fn context_meter_offers_compact_beside_it_from_near_full_and_in_its_popover() {
       ..props(id, Some(reading), MeterPlace::Bar)
     };
     Column::new()
-      .child(context_meter(ctx, offered("plenty", ContextUse::reported(76_000, 200_000), &ready)))
-      .child(context_meter(ctx, offered("near", ContextUse::reported(172_000, 200_000), &ready)))
-      .child(context_meter(ctx, offered("busy", ContextUse::reported(172_000, 200_000), &Compact::Waits)))
-      .child(context_meter(ctx, offered("running", ContextUse::reported(172_000, 200_000), &Compact::Running)))
+      .child(context_meter(
+        ctx,
+        offered("plenty", ContextUse::reported(76_000, 200_000), &ready),
+      ))
+      .child(context_meter(
+        ctx,
+        offered("near", ContextUse::reported(172_000, 200_000), &ready),
+      ))
+      .child(context_meter(
+        ctx,
+        offered("busy", ContextUse::reported(172_000, 200_000), &Compact::Waits),
+      ))
+      .child(context_meter(
+        ctx,
+        offered("running", ContextUse::reported(172_000, 200_000), &Compact::Running),
+      ))
       .into()
   });
-  assert!(!kit.exists("plenty-compact"), "under 80% Compact is in the popover only");
+  assert!(
+    !kit.exists("plenty-compact"),
+    "under 80% Compact is in the popover only"
+  );
   assert!(kit.exists("near-compact"), "from 80% it sits beside the meter");
   kit.click("near-compact");
   assert_eq!(pressed.load(Ordering::SeqCst), 1, "a press compacts");
@@ -58,7 +74,11 @@ fn context_meter_offers_compact_beside_it_from_near_full_and_in_its_popover() {
   assert!(!kit.exists("plenty-popover"), "and closes the popover");
   kit.click("busy-compact");
   assert_eq!(pressed.load(Ordering::SeqCst), 2, "it waits while a turn is under way");
-  assert_eq!(kit.texts("running-share"), ["Compacting…"], "the meter while it compacts");
+  assert_eq!(
+    kit.texts("running-share"),
+    ["Compacting…"],
+    "the meter while it compacts"
+  );
   assert!(!kit.exists("running-compact"), "and no Compact then");
 }
 
@@ -138,7 +158,10 @@ fn context_meter_popover_shows_used_of_window_and_marks_an_estimate() {
   assert_eq!(kit.texts("near-popover-share"), ["86%"]);
   assert!(kit.exists("near-popover-bar"), "the share's bar");
   assert!(!kit.exists("near-popover-note"), "a reported window needs no note");
-  assert!(!kit.exists("near-popover-compact"), "Compact is offered only where the session can be compacted");
+  assert!(
+    !kit.exists("near-popover-compact"),
+    "Compact is offered only where the session can be compacted"
+  );
   kit.click("near");
   kit.click("estimate");
   assert_eq!(kit.texts("estimate-popover-tokens"), ["≈ 108k of 128k tokens"]);

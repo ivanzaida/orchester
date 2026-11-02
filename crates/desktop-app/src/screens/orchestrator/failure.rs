@@ -190,10 +190,9 @@ pub(super) fn why(ctx: &Ctx, failure: &TurnFailure) -> Arc<str> {
     TurnFailure::CannotStart { .. } => ctx.t("orchestrator.failure.cannotStart"),
     TurnFailure::Failed { reason } => ctx.t_args("orchestrator.failure.failedBody", [("reason", reason.as_str())]),
     TurnFailure::Interrupted => ctx.t("orchestrator.interrupted"),
-    TurnFailure::TimeLimit { minutes } => ctx.t_args(
-      "orchestrator.failure.timeLimit",
-      [("minutes", minutes.to_string())],
-    ),
+    TurnFailure::TimeLimit { minutes } => {
+      ctx.t_args("orchestrator.failure.timeLimit", [("minutes", minutes.to_string())])
+    }
   }
 }
 

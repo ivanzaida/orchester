@@ -63,7 +63,12 @@ pub(super) fn panel(ctx: &mut Ctx, props: &ContextMeterProps, fullness: Fullness
 }
 
 /// The hint for the state and *Compact*; `None` where nothing is offered.
-fn foot(ctx: &mut Ctx, id: &str, (props, fullness): (&ContextMeterProps, Fullness), compact: &Compact) -> Option<Element> {
+fn foot(
+  ctx: &mut Ctx,
+  id: &str,
+  (props, fullness): (&ContextMeterProps, Fullness),
+  compact: &Compact,
+) -> Option<Element> {
   let kind = if fullness == Fullness::Full {
     ButtonKind::Primary
   } else {

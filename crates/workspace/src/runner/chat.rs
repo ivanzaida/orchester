@@ -57,11 +57,13 @@ impl Runners {
 
   /// Asks `project`'s runner to compact the session of `chat`, giving its CLI the domain tools at `tools` as a turn
   /// gets them, starting the runner if needed. `Ok` once the compaction is under way.
-  pub async fn compact_chat(&self, project: &OpenProject, chat: ChatId, tools: ChatTools) -> Result<(), RunRequestError> {
-    match self
-      .ask_project(project, Command::CompactChat { chat, tools })
-      .await?
-    {
+  pub async fn compact_chat(
+    &self,
+    project: &OpenProject,
+    chat: ChatId,
+    tools: ChatTools,
+  ) -> Result<(), RunRequestError> {
+    match self.ask_project(project, Command::CompactChat { chat, tools }).await? {
       Reply::ChatCompacting { .. } => Ok(()),
       Reply::Rejected(rejection) => Err(RunRequestError::Rejected(rejection)),
       other => {

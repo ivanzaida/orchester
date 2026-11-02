@@ -51,8 +51,12 @@ fn conversation(root: &Path, provider: AgentProvider, session: Option<&str>) -> 
   let chat = ChatId::generate();
   let body = MessageBody::new("What is running?").expect("text");
   let message = ChatMessageId::generate();
-  db.keep_chat_message(&Chat::start(chat, &body, Timestamp::now()), (message, &body), Timestamp::now())
-    .expect("kept");
+  db.keep_chat_message(
+    &Chat::start(chat, &body, Timestamp::now()),
+    (message, &body),
+    Timestamp::now(),
+  )
+  .expect("kept");
   db.end_chat_turn(message, &TurnState::Answered, Timestamp::now())
     .expect("answered");
   if let Some(session) = session {
@@ -96,10 +100,7 @@ async fn compactions(
 }
 
 fn context(root: &Path, chat: ChatId) -> Option<ContextUse> {
-  ProjectDb::open(root)
-    .expect("open")
-    .chat_context(chat)
-    .expect("read")
+  ProjectDb::open(root).expect("open").chat_context(chat).expect("read")
 }
 
 fn log(root: &Path) -> String {

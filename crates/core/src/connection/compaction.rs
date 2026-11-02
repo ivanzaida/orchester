@@ -24,11 +24,7 @@ pub fn claude_boundary(line: &str) -> Option<Option<u64>> {
   let value: Value = serde_json::from_str(line).ok()?;
   let boundary = value.get("type").and_then(Value::as_str) == Some("system")
     && value.get("subtype").and_then(Value::as_str) == Some("compact_boundary");
-  boundary.then(|| {
-    value
-      .pointer("/compact_metadata/pre_tokens")
-      .and_then(Value::as_u64)
-  })
+  boundary.then(|| value.pointer("/compact_metadata/pre_tokens").and_then(Value::as_u64))
 }
 
 /// The tokens a session holds after its compaction, from `reading`, the reading its CLI reported last, which

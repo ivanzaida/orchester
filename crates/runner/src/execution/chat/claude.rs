@@ -137,11 +137,11 @@ impl Turn {
     };
     let command = command
       .and_then(|command| on_account(command, prepared.connection.account(), AgentProvider::ClaudeCodeCli))
-    .map(|command| match &on_provider {
-      Some(on) => on.apply(command, AgentProvider::ClaudeCodeCli),
-      None => command,
-    })
-    .map_err(|error| cannot(error.to_string()))?;
+      .map(|command| match &on_provider {
+        Some(on) => on.apply(command, AgentProvider::ClaudeCodeCli),
+        None => command,
+      })
+      .map_err(|error| cannot(error.to_string()))?;
     Ok(Started {
       command,
       account: prepared.account,

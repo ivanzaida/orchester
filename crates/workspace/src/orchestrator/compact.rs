@@ -30,7 +30,9 @@ pub fn tools_unavailable() -> Message {
 /// What the person reads when the runner did not compact.
 fn not_compacted(error: &RunRequestError) -> Message {
   let key = match error {
-    RunRequestError::Request(RequestError::NotConnected | RequestError::Lost) => "orchestrator.compact.runnerUnavailable",
+    RunRequestError::Request(RequestError::NotConnected | RequestError::Lost) => {
+      "orchestrator.compact.runnerUnavailable"
+    }
     RunRequestError::Rejected(Rejection::NothingToCompact) => "orchestrator.compact.nothing",
     RunRequestError::Rejected(Rejection::ChatBusy) => "orchestrator.compact.busy",
     RunRequestError::Rejected(Rejection::NoOrchestrator) => "orchestrator.compact.notReady",

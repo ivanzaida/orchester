@@ -184,7 +184,13 @@ impl Turn {
     let reading = stream
       .context()
       .filter(|reading| compacted_to(before, None, Some(*reading)).is_some());
-    ended(seen, boundary, &exit, reading, "Claude Code ended without compacting the session")
+    ended(
+      seen,
+      boundary,
+      &exit,
+      reading,
+      "Claude Code ended without compacting the session",
+    )
   }
 
   /// Codex App Server's `thread/compact/start` on the thread it resumes.
@@ -246,7 +252,13 @@ impl Turn {
     let reading = session
       .context()
       .filter(|reading| compacted_to(before, None, Some(*reading)).is_some());
-    ended(seen, completed, &exit, reading, "Codex ended without compacting the session")
+    ended(
+      seen,
+      completed,
+      &exit,
+      reading,
+      "Codex ended without compacting the session",
+    )
   }
 
   /// Keeps what App Server said of the compaction's turn; whether it is over. Codex asks nothing in it: a decision it

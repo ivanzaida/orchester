@@ -20,12 +20,7 @@ use crate::{
 impl ProjectDb {
   /// Keeps a compaction of `chat`'s session, running, started at `at` when its context held `before` tokens; returns
   /// its entry (`seq`), by which it ends.
-  pub fn begin_chat_compaction(
-    &mut self,
-    chat: ChatId,
-    before: Option<u64>,
-    at: Timestamp,
-  ) -> Result<i64, StoreError> {
+  pub fn begin_chat_compaction(&mut self, chat: ChatId, before: Option<u64>, at: Timestamp) -> Result<i64, StoreError> {
     let event = ChatEvent::Compaction {
       before,
       state: CompactionState::Running,

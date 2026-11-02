@@ -293,7 +293,11 @@ fn turn(ctx: &mut Ctx, row: &TurnRow, first: bool) -> Element {
   if let Some(event) = &row.turn.compaction {
     let id = format!("orchestrator-compaction-{key}");
     let line = super::compaction::line(ctx, &id, event, row.turn.at);
-    return room(ctx, Column::new().width(Dimension::Pct(100.0)).with_children(line), first);
+    return room(
+      ctx,
+      Column::new().width(Dimension::Pct(100.0)).with_children(line),
+      first,
+    );
   }
   // A wait of an agent, a run's end and a daily report open their row with their own line or card; a person's turn
   // with their message. What a wait's turn said nests under its line.

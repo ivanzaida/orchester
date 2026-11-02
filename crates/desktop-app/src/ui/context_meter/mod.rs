@@ -233,7 +233,8 @@ pub(super) fn compact_button(
   (kind, in_bar): (ButtonKind, bool),
   compact: &Compact,
 ) -> Option<Element> {
-  let button = ActionButton::new(format!("{id}-compact"), kind, ctx.t("ui.contextMeter.compact")).icon(Icon::FoldVertical);
+  let button =
+    ActionButton::new(format!("{id}-compact"), kind, ctx.t("ui.contextMeter.compact")).icon(Icon::FoldVertical);
   let button = if in_bar { button.compact() } else { button };
   match compact {
     Compact::Ready(press) => {
