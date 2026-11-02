@@ -1001,6 +1001,11 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
+ORC-565 · Connection page Test section (implemented 2026-11-02).
+Frame 02 GM4yE: explicit Test/Test again, durable progress and Stop, threshold results with the reviewer's row
+marked, recorded timing/input tokens and destination note. Cost and earlier-ask totals are absent in ORC-561's
+report and are not invented. Covers empty, completed and stopped results; independent design verification follows.
+
 ORC-561 · Test a decision model on recorded project requests (implemented 2026-11-01).
 Workspace exposes an explicit test action, stored progress/results and Stop; the runner reconstructs historical
 review context, omits unavailable facts explicitly, runs eight requests at once and refuses hosted automation.

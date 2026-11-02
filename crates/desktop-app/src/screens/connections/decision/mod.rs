@@ -1,8 +1,9 @@
-//! Decision model connection page: frame 02 GM4yE (without Test) and frame 07 FJRFV.
+//! Decision model connection page: frame 02 GM4yE and frame 07 FJRFV.
 mod editor;
 pub(super) mod form;
 mod groups;
 mod read;
+mod test;
 mod words;
 mod work;
 
@@ -200,6 +201,14 @@ impl DecisionPage {
     let server = groups::server(ctx, read, connection);
     let models = groups::models(ctx, self, props, read, connection);
     let used = groups::used_by(ctx, props, read, connection);
+    let test = ctx.mount_keyed::<test::TestSection>(
+      &format!("decision-test-{}", connection.id()),
+      test::Props {
+        project: props.project.clone(),
+        connection: connection.clone(),
+        reviewer: read.reviewer.clone(),
+      },
+    );
     Column::new()
       .id("decision-connection-page")
       .describe("decision-connection", connection.id().to_string())
@@ -215,6 +224,7 @@ impl DecisionPage {
       .with_children(error)
       .child(server)
       .child(models)
+      .child(test)
       .child(used)
       .into()
   }

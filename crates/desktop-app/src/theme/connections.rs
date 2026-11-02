@@ -29,10 +29,14 @@ pub enum ConnectionsText {
   CompactStatus,
   /// 11.5 `text_muted`, 15 high a line: what a compact row's connection is (`What` `QqovE` in `a9O5lF`).
   CompactLine,
+  /// 12 muted, 1.45: Test lead D9rOj in GM4yE.
+  TestLead,
+  /// 12 secondary: Test table cells R5m5p in GM4yE.
+  TestCell,
 }
 
 impl ConnectionsText {
-  pub const ALL: [Self; 7] = [
+  pub const ALL: [Self; 9] = [
     Self::Lead,
     Self::ColumnHeading,
     Self::InspectorTitle,
@@ -40,6 +44,8 @@ impl ConnectionsText {
     Self::CompactName,
     Self::CompactStatus,
     Self::CompactLine,
+    Self::TestLead,
+    Self::TestCell,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -55,6 +61,8 @@ impl ConnectionsText {
       Self::CompactName => "connections_compact_name",
       Self::CompactStatus => "connections_compact_status",
       Self::CompactLine => "connections_compact_line",
+      Self::TestLead => "connections_test_lead",
+      Self::TestCell => "connections_test_cell",
     }
   }
 
@@ -66,6 +74,8 @@ impl ConnectionsText {
       Self::ConfirmTitle | Self::CompactName => style(12.5, FontWeight::Medium, 1.3, 0.0, palette.text_primary),
       Self::CompactStatus => style(11.5, FontWeight::Medium, 1.3, 0.0, palette.text_secondary),
       Self::CompactLine => style(11.5, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
+      Self::TestLead => style(12.0, FontWeight::Normal, 1.45, 0.0, palette.text_muted),
+      Self::TestCell => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
     }
   }
 }
