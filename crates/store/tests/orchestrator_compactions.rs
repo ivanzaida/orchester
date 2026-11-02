@@ -8,9 +8,7 @@ mod support;
 use orchester_core::{
   conversation::MessageBody,
   id::{ChatId, ChatMessageId, RunId},
-  orchestrator::{
-    AgentWait, Chat, ChatEvent, CompactionState, EntryKind, Queued, TurnFailure, TurnState, WaitKind,
-  },
+  orchestrator::{AgentWait, Chat, ChatEvent, CompactionState, EntryKind, Queued, TurnFailure, TurnState, WaitKind},
   run::Answerer,
 };
 use orchester_store::{ProjectDb, StartedQueued};
@@ -81,10 +79,7 @@ fn a_queued_message_waits_for_a_compaction_and_starts_once_it_ended() {
     ("Then the notes", &TurnState::Queued(Queued::AfterAnswer)),
     13,
   );
-  assert!(
-    !db.queued_chat_turn_ready().expect("read"),
-    "the compaction runs"
-  );
+  assert!(!db.queued_chat_turn_ready().expect("read"), "the compaction runs");
   assert_eq!(db.start_queued_chat_turn().expect("read"), None);
   assert!(
     db.end_chat_compaction(compaction, CompactionState::Done { after: None }, None)
@@ -135,18 +130,15 @@ fn a_compaction_no_runner_carries_out_ends_interrupted_but_held_ones_and_other_c
   let other = Chat::start(ChatId::generate(), &body("Elsewhere"), at(10));
   for (chat, seconds) in [(&chat, 10), (&other, 11)] {
     let message = keep(&mut db, chat, ("Hello", &TurnState::Thinking), seconds);
-    assert!(db.end_chat_turn(message, &TurnState::Answered, at(seconds)).expect("ended"));
+    assert!(
+      db.end_chat_turn(message, &TurnState::Answered, at(seconds))
+        .expect("ended")
+    );
   }
-  let held = db
-    .begin_chat_compaction(chat.id(), Some(1), at(12))
-    .expect("begun");
-  let elsewhere = db
-    .begin_chat_compaction(other.id(), Some(2), at(13))
-    .expect("begun");
+  let held = db.begin_chat_compaction(chat.id(), Some(1), at(12)).expect("begun");
+  let elsewhere = db.begin_chat_compaction(other.id(), Some(2), at(13)).expect("begun");
   assert!(
-    db.interrupt_chat_compactions(&[held], None)
-      .expect("interrupted")
-      == [other.id()],
+    db.interrupt_chat_compactions(&[held], None).expect("interrupted") == [other.id()],
     "the held one runs on"
   );
   assert_eq!(compactions(&db, chat.id()), [CompactionState::Running]);
@@ -157,7 +149,8 @@ fn a_compaction_no_runner_carries_out_ends_interrupted_but_held_ones_and_other_c
     }]
   );
   assert!(
-    !db.end_chat_compaction(elsewhere, CompactionState::Done { after: Some(1) }, None)
+    !db
+      .end_chat_compaction(elsewhere, CompactionState::Done { after: Some(1) }, None)
       .expect("read"),
     "one that ended stays as it ended"
   );
