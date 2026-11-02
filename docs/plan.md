@@ -1003,7 +1003,8 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ORC-567 · Decision reviewer approval line (implemented 2026-11-02; Review and Verify follow).
 Command and tool approval cards show the recorded model, approval probability and threshold, core's named risk
-with its probability, the no-risk variant, or a typed failure reason. The rest of the existing card is unchanged.
+with its probability, the no-risk variant, or a typed failure reason. Decision-review cards use the panel surface
+so the raised probability chip stays distinct; the existing layout and answers are unchanged.
 QA: `cards-auto-mode` includes Restore the reviewed files (05a), Merge the base branch (05b), Check the translations
 (05c), and Review the tool request. Tests: `orchester-app --test decision_cards card_decision_review`.
 Verify compares `JFEPS` (`zrv45`, `STLJH`, `qfaGG`) and checks the surrounding card against `iw7me`.

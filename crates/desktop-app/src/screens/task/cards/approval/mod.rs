@@ -176,13 +176,16 @@ impl Component for ApprovalView {
     } else {
       SpacingSize::Md
     };
-    waiting_frame(&place, id.clone(), padding, || head)
-      .spacing(gap)
-      .with_children(body)
-      .with_children(answers)
-      .with_children(failed)
-      .with_children(automation)
-      .into()
+    review::card(
+      waiting_frame(&place, id.clone(), padding, || head),
+      shown.as_ref().and_then(|shown| shown.review.as_ref()),
+    )
+    .spacing(gap)
+    .with_children(body)
+    .with_children(answers)
+    .with_children(failed)
+    .with_children(automation)
+    .into()
   }
 }
 

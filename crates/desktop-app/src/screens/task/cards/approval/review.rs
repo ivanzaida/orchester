@@ -5,7 +5,7 @@ use lurq::{
     ctx::Ctx,
     theme::{PaletteColor, RadiusSize},
   },
-  components::{Row, Text},
+  components::{Column, Row, Text},
   layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
 };
@@ -16,11 +16,34 @@ use crate::{
   ui::icon::{Icon, icon},
 };
 
+enum Content<'a> {
+  Verdict(&'a DecisionVerdict),
+  Failed(ReviewFailure, Option<&'a str>),
+}
+
+impl<'a> Content<'a> {
+  fn of(review: Option<&'a Review>) -> Option<Self> {
+    match review? {
+      Review::Decided { decision } if !decision.approves() => Some(Self::Verdict(decision)),
+      Review::Failed { failure, model } => Some(Self::Failed(*failure, model.as_deref())),
+      _ => None,
+    }
+  }
+}
+
 pub(super) fn line(ctx: &Ctx, id: &str, review: Option<&Review>) -> Option<Element> {
-  match review? {
-    Review::Decided { decision } if !decision.approves() => Some(verdict(ctx, id, decision)),
-    Review::Failed { failure, model } => Some(failed(ctx, id, *failure, model.as_deref())),
-    _ => None,
+  Some(match Content::of(review)? {
+    Content::Verdict(decision) => verdict(ctx, id, decision),
+    Content::Failed(failure, model) => failed(ctx, id, failure, model),
+  })
+}
+
+/// The transparent cards of 05 sit on the panel; their raised probability chip must remain distinct.
+pub(super) fn card(frame: Column, review: Option<&Review>) -> Column {
+  if Content::of(review).is_some() {
+    frame.background(PaletteColor::SurfacePanel)
+  } else {
+    frame
   }
 }
 
