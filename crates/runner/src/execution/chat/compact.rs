@@ -7,7 +7,8 @@
 //!
 //! - Claude Code: a turn of its own whose prompt is `/compact` ([`ClaudeChat::compaction_command`]). It is done once
 //!   the CLI printed its compaction boundary; Claude Code reports no size after it, so the session's reading is
-//!   forgotten until the next turn reports one, unless a message after the boundary reported it.
+//!   forgotten until the next turn reports one, unless a message of the turn reported one lower than before
+//!   ([`compacted_to`]): the compaction's own request, which reports the size before, is never taken as after.
 //! - Codex: App Server compacts the thread it resumes (`thread/compact/start`) in a turn of its own, and reports the
 //!   thread's size after it.
 
