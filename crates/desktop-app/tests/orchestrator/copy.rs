@@ -75,13 +75,24 @@ fn orchestrator_copy_an_answer_puts_what_it_wrote() {
   let actions = format!("{answer}-actions");
   assert!(!has_class(&mut screen, &actions, SHOWN_CLASS), "no Copy at rest");
   screen.window.hover(&answer);
-  assert!(has_class(&mut screen, &actions, SHOWN_CLASS), "the pointer on the answer shows Copy");
+  assert!(
+    has_class(&mut screen, &actions, SHOWN_CLASS),
+    "the pointer on the answer shows Copy"
+  );
   screen.press(&format!("{answer}-copy"));
   screen.window.pass();
   let copied = copied.lock().clone();
   assert_eq!(copied.len(), 1, "{copied:?}");
-  assert!(copied[0].starts_with("Noted: "), "what the answer wrote: {:?}", copied[0]);
-  assert!(copied[0].contains(&format!("```toml retry.toml\n{CODE}\n```")), "its Markdown: {:?}", copied[0]);
+  assert!(
+    copied[0].starts_with("Noted: "),
+    "what the answer wrote: {:?}",
+    copied[0]
+  );
+  assert!(
+    copied[0].contains(&format!("```toml retry.toml\n{CODE}\n```")),
+    "its Markdown: {:?}",
+    copied[0]
+  );
   assert!(has_class(&mut screen, &actions, COPIED_CLASS));
   assert_eq!(screen.text(&format!("{answer}-copy-tooltip")), "Copied");
 }

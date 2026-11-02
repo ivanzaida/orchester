@@ -211,11 +211,7 @@ fn lines(ctx: &mut Ctx, props: &CodeBlockProps) -> Element {
 
 /// `code` as a fenced block without a language, its fence longer than any run of backticks in it.
 fn fenced(code: &str) -> String {
-  let longest = code
-    .split(|ch| ch != '`')
-    .map(str::len)
-    .max()
-    .unwrap_or_default();
+  let longest = code.split(|ch| ch != '`').map(str::len).max().unwrap_or_default();
   let fence = "`".repeat(longest.max(2) + 1);
   format!("{fence}\n{code}\n{fence}")
 }

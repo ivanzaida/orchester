@@ -90,6 +90,9 @@ fn conversation_context_meter_of_the_step_at_work_follows_each_turn() {
   open(&mut window, &seeded, &key, COMPOSER);
   let step = expected_meter(&seeded);
   // The step's divider sits above its messages: the chat, at its end, may have to scroll up to build it.
+  window.until("the chat's rows", |window| {
+    !ids(window, "conversation-row:").is_empty() && window.tree.get_element_by_id("conversation-chat").is_some()
+  });
   for _ in 0..20 {
     window.tree.tick_futures();
     window.pass();

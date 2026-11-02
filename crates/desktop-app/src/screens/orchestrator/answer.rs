@@ -47,13 +47,7 @@ pub(super) fn answer(ctx: &mut Ctx, row: &TurnRow) -> Option<Element> {
   let body = list.into_iter().chain([parts(ctx, row).into()]).collect();
   let (id, title) = (format!("orchestrator-answer-{key}"), ctx.t("orchestrator.title"));
   Some(match written(row) {
-    Some(markdown) => copyable_row(
-      ctx,
-      id,
-      (Avatar::Orchestrator, &markdown),
-      (&title, &time, mark),
-      body,
-    ),
+    Some(markdown) => copyable_row(ctx, &id, (Avatar::Orchestrator, &markdown), (&title, &time, mark), body),
     None => chat_row_marked(id, Avatar::Orchestrator, (&title, &time, mark), body),
   })
 }

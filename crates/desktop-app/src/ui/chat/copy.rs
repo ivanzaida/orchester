@@ -149,7 +149,11 @@ impl Component for MessageActions {
           .rounded(RadiusSize::Md)
           .child(self.button(&props, (glyph, color), &words)),
       );
-    if shown { toolbar.class(SHOWN_CLASS) } else { toolbar.opacity(0.0) }
+    if shown {
+      toolbar.class(SHOWN_CLASS)
+    } else {
+      toolbar.opacity(0.0)
+    }
   }
 }
 

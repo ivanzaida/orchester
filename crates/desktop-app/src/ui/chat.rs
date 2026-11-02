@@ -38,8 +38,8 @@ use lurq::{
 use orchester_core::time::Timestamp;
 use orchester_workspace::display;
 
-pub use self::agent_text::agent_text;
 use self::found::Found;
+pub use self::{agent_text::agent_text, copyable::row as copyable_row};
 use super::{
   icon::{Icon, icon},
   markdown::LinkHandler,
@@ -92,18 +92,6 @@ pub fn chat_row_marked(
   body: Vec<Element>,
 ) -> Element {
   message_row(id, avatar, head((name, meta, mark)), body).into()
-}
-
-/// [`chat_row_marked`] of a message whose Markdown is `markdown`, with Copy at the end of its name line while the
-/// pointer is on it ([`copy`]); that line is `control_height_sm` high, with or without Copy.
-pub fn copyable_row(
-  ctx: &mut Ctx,
-  id: String,
-  (avatar, markdown): (Avatar, &Arc<str>),
-  (name, meta, mark): (&str, &str, Option<Element>),
-  body: Vec<Element>,
-) -> Element {
-  copyable::row(ctx, id, (avatar, markdown), (name, meta, mark), body)
 }
 
 /// Who wrote a message, `name`, then `meta` and `mark`.

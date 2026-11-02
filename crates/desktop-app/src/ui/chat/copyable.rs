@@ -1,6 +1,6 @@
 //! Messages of a chat with Copy ([`super::copy`]), which shows while the pointer is on the message. An agent's or the
-//! Orchestrator's row has it at the end of its name line, which is `control_height_sm` high so the message does not move
-//! when it shows (`Name` `GXvO5` in 07 `GgXmd`). A person's message, which the ORC-323 frames do not draw, has it
+//! Orchestrator's row has it at the end of its name line, which is `control_height_sm` high so the message does not
+//! move when it shows (`Name` `GXvO5` in 07 `GgXmd`). A person's message, which the ORC-323 frames do not draw, has it
 //! beside its bubble, at the bubble's start and bottom, 8 from it.
 
 use std::sync::Arc;
@@ -20,17 +20,18 @@ use lurq::{
 use super::{Avatar, copy::message_actions, head, message_row};
 use crate::theme::ControlHeight;
 
-/// The row `id` of a message whose Markdown is `markdown`: the avatar, its name line with `name`, `meta`, `mark` and
-/// Copy, and `body` under it.
-pub(super) fn row(
+/// The row `id` of a message whose Markdown is `markdown`, as `super::chat_row_marked` draws a message, with Copy at
+/// the end of its name line while the pointer is on it ([`super::copy`]); that line is `control_height_sm` high, with
+/// or without Copy.
+pub fn row(
   ctx: &mut Ctx,
-  id: String,
+  id: &str,
   (avatar, markdown): (Avatar, &Arc<str>),
   (name, meta, mark): (&str, &str, Option<Element>),
   body: Vec<Element>,
 ) -> Element {
   let props = RowProps {
-    id: Arc::from(id.as_str()),
+    id: Arc::from(id),
     avatar,
     name: Arc::from(name),
     meta: Arc::from(meta),

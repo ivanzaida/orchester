@@ -15,7 +15,9 @@ use orchester_core::{
 };
 
 use super::{
-  Window, agent_text::agent_says, ids, key_of, open, seeded,
+  Window,
+  agent_text::agent_says,
+  ids, key_of, open, seeded,
   support::clipboard::{Copied, own_clipboard},
 };
 
@@ -74,7 +76,11 @@ fn conversation_copy_shows_on_hover_and_puts_the_messages_markdown() {
   );
   window.press(&format!("{row}-copy"));
   window.pass();
-  assert_eq!(*copied.lock(), vec![message()], "the message's Markdown, as it was kept");
+  assert_eq!(
+    *copied.lock(),
+    vec![message()],
+    "the message's Markdown, as it was kept"
+  );
   assert!(has_class(&mut window, &actions, COPIED_CLASS));
   assert_eq!(window.text(&format!("{row}-copy-tooltip")), "Copied");
 }
@@ -127,7 +133,10 @@ fn conversation_copy_keeps_redacted_secrets_redacted() {
   assert_eq!(copied.len(), 2, "{copied:?}");
   for text in &copied {
     assert!(!text.contains(SECRET), "no secret value is copied: {text}");
-    assert!(text.contains("<redacted>"), "the redaction is copied as it shows: {text}");
+    assert!(
+      text.contains("<redacted>"),
+      "the redaction is copied as it shows: {text}"
+    );
   }
   assert_eq!(copied[1], "curl -H 'Authorization: Bearer <redacted>'");
 }

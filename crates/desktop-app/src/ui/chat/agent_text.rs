@@ -95,7 +95,9 @@ impl Component for AgentText {
     let props = ctx.props::<AgentTextProps>().clone();
     let pieces = fences::pieces(&props.text);
     if !pieces.iter().any(|piece| matches!(piece, Piece::Code(_))) {
-      return markdown(ctx, &props, &props.text, props.found.as_ref()).0.id(props.id.to_string());
+      return markdown(ctx, &props, &props.text, props.found.as_ref())
+        .0
+        .id(props.id.to_string());
     }
     // Each part marks its own places, the current one at its rank among the places of the parts before it.
     let mut before = 0;

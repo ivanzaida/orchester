@@ -65,7 +65,7 @@ pub(super) fn agent_row(ctx: &mut Ctx, timeline: &Timeline, row: &AgentRow) -> E
     )];
     copyable_row(
       ctx,
-      format!("conversation-agent-{}", row.key),
+      &format!("conversation-agent-{}", row.key),
       (avatar, said),
       (&row.agent, &meta, None),
       body,
@@ -169,7 +169,7 @@ fn orchestrator_row(
   let row = match said {
     Some(said) => copyable_row(
       ctx,
-      row_id,
+      &row_id,
       (Avatar::Orchestrator, &Arc::from(said)),
       (&name, &time, None),
       body,

@@ -67,7 +67,9 @@ pub fn own_clipboard(window: &mut Window, takes: bool) -> Copied {
     mcp: McpLink::without_server(McpStatus::unavailable(McpKind::Installation, McpSettings::of_build())),
     start: window.launch.start(),
   };
-  window.tree.mount_root::<Host>(&mut window.app, HostProps { root, clipboard });
+  window
+    .tree
+    .mount_root::<Host>(&mut window.app, HostProps { root, clipboard });
   window.pass();
   copied
 }
