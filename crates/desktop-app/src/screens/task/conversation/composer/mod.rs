@@ -314,7 +314,7 @@ impl Composer {
       .detail
       .run
       .as_ref()
-      .and_then(|run| super::context::in_composer(ctx, &composing.project, run));
+      .and_then(|run| super::context::in_composer(ctx, &composing.project, run, &self.box_anchor));
     let permissions = super::permissions::chip(ctx, (&composing.project, &composing.detail), &self.box_anchor);
     let bar = controls::bar(
       ctx,

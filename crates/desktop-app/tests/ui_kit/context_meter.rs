@@ -8,9 +8,13 @@ use std::sync::{
   atomic::{AtomicUsize, Ordering},
 };
 
-use lurq::{components::Column, core::Signal, node::Element};
+use lurq::{
+  components::{Column, Row, Spacer, Text},
+  core::{ElementRef, Signal},
+  node::{Element, dimension::Dimension, padding::Padding},
+};
 use orchester_app::ui::{
-  context_meter::{Compact, ContextMeterProps, MeterPlace, MeterReading, context_meter},
+  context_meter::{Compact, ContextMeterProps, MeterPlace, MeterReading, Over, context_meter},
   icon::Icon,
 };
 use orchester_core::connection::context_use::ContextUse;
@@ -24,8 +28,55 @@ fn props(id: &str, reading: Option<ContextUse>, place: MeterPlace) -> ContextMet
     agent: None,
     model: Some("claude-opus-5-5".into()),
     place,
+    over: None,
     compact: Compact::NotOffered,
   }
+}
+
+#[test]
+fn context_meter_popover_opens_above_the_composer_box_at_its_right_edge() {
+  let mut kit = Kit::show(|ctx| {
+    let composer = ElementRef::new();
+    let meter = context_meter(
+      ctx,
+      ContextMeterProps {
+        over: Some(Over(composer.clone())),
+        ..props("near", Some(ContextUse::reported(172_000, 200_000)), MeterPlace::Bar)
+      },
+    );
+    let bar = Row::new()
+      .width(Dimension::Pct(100.0))
+      .child(Spacer::new().flex(1.0))
+      .child(meter)
+      .child(Text::new("Ctrl Enter").id("keys"));
+    Column::new()
+      .width(Dimension::Pct(100.0))
+      .padding_top(Dimension::Px(400.0))
+      .child(
+        Column::new()
+          .id("box")
+          .ref_element(composer)
+          .width(Dimension::Px(760.0))
+          .padding(Padding::all(Dimension::Px(16.0)))
+          .child(Text::new("Message the Orchestrator…"))
+          .child(bar),
+      )
+      .into()
+  });
+  kit.click("near");
+  let (popover, composer) = (kit.bounds("near-popover"), kit.bounds("box"));
+  assert_close(
+    popover.x + popover.width,
+    composer.x + composer.width,
+    "its right edge on the box's",
+  );
+  assert_close(
+    popover.y + popover.height,
+    composer.y - 6.0,
+    "its bottom 6 over the box's top",
+  );
+  kit.click("near");
+  assert!(!kit.exists("near-popover"), "the meter closes it again");
 }
 
 #[test]

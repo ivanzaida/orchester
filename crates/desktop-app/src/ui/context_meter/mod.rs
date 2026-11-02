@@ -4,7 +4,8 @@
 //! popover is open; on a step's divider it has no padding (`bxHFm`). Under 80 % the ring and share are `text_muted`,
 //! from 80 % `warning`, at the whole window the ring is `danger` and *Full* takes the share's place; a CLI that reports
 //! no window gets a dashed ring and no share. Resting on it shows its tooltip (*Context 86% · 172k of 200k*); a press
-//! opens its popover ([`popover`]). Where the session can be compacted (ORC-309, [`Compact`]), *Compact* sits beside
+//! opens its popover ([`popover`]), above the composer's box in a bar ([`Over`]). Where the session can be compacted
+//! (ORC-309, [`Compact`]), *Compact* sits beside
 //! the bar's meter from 80 % (ghost, secondary when full) and closes its popover; while the session is compacted the
 //! meter is a `loader-circle` and *Compacting…* in `text_secondary` (`gY3Ku`).
 
@@ -41,10 +42,29 @@ use crate::theme::{ContextText, ControlHeight, ExtraColor, ExtraSpacing, IconSiz
 /// Where the meter sits.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MeterPlace {
-  /// In a composer's bar: a padded hit area; the popover opens over it, from its end.
+  /// In a composer's bar: a padded hit area; the popover opens above the composer's box ([`Over`]), else over the
+  /// meter, from its end.
   Bar,
   /// On the divider of the step at work: no padding; the popover opens under it, from its start.
   Divider,
+}
+
+/// The composer's box a bar meter's popover opens above (`Z2dtIW`'s `n34Doh`): its bottom 6 over the box's top, its
+/// right edge on the box's, clear of the box's words and controls.
+#[derive(Clone)]
+pub struct Over(pub ElementRef);
+
+/// Compared as equal: the box is its composer's for as long as the meter is shown.
+impl PartialEq for Over {
+  fn eq(&self, _other: &Self) -> bool {
+    true
+  }
+}
+
+impl fmt::Debug for Over {
+  fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    formatter.write_str("composer box")
+  }
 }
 
 /// What *Compact* can do for the meter's session (ORC-309).
@@ -95,6 +115,8 @@ pub struct ContextMeterProps {
   pub agent: Option<Arc<str>>,
   pub model: Option<Arc<str>>,
   pub place: MeterPlace,
+  /// In a bar, the composer's box its popover opens above; `None` opens it over the meter.
+  pub over: Option<Over>,
   pub compact: Compact,
 }
 
@@ -181,17 +203,9 @@ impl Component for ContextMeter {
     let tip = Tooltip::new(props.id.clone(), tooltip(ctx, props.reading, fullness))
       .silent(open)
       .wrap(ctx, button);
-    let (placement, side) = match props.place {
-      MeterPlace::Bar => (Placement::TopEnd, ExtraSpacing::Snug.value()),
-      MeterPlace::Divider => (Placement::BottomStart, ExtraSpacing::Snug.value()),
-    };
     let compact = closing(&props.compact, &self.open);
     let panel = popover::panel(ctx, &props, fullness, &compact);
-    let popup = Popup::new(self.anchor.clone(), panel)
-      .open(self.open.clone())
-      .placement(placement)
-      // Away from the meter: lurq moves an overlay above its anchor up, and one under it down, by a positive offset.
-      .offset(0.0, side);
+    let popup = self.popup(&props, panel);
     // From near full, *Compact* sits beside the bar's meter (`GENCC`): ghost, secondary once the window is full.
     let beside = match (props.place, fullness) {
       (MeterPlace::Bar, Fullness::NearFull) => compact_button(ctx, &props.id, (ButtonKind::Ghost, true), &compact),
@@ -207,6 +221,25 @@ impl Component for ContextMeter {
         .child(popup)
         .with_children(beside),
     )
+  }
+}
+
+impl ContextMeter {
+  /// The popover holding `panel`: above the composer's box in a bar that names it, else over the meter from its end
+  /// in a bar and under it from its start on a divider; 6 away from what it opens at either way.
+  fn popup(&self, props: &ContextMeterProps, panel: Element) -> Popup {
+    let (anchor, placement, trigger) = match (props.place, &props.over) {
+      // The box is no trigger: a press on the meter in it opens and closes the popover, one on the field leaves it.
+      (MeterPlace::Bar, Some(Over(composer))) => (composer.clone(), Placement::TopEnd, false),
+      (MeterPlace::Bar, None) => (self.anchor.clone(), Placement::TopEnd, true),
+      (MeterPlace::Divider, _) => (self.anchor.clone(), Placement::BottomStart, true),
+    };
+    Popup::new(anchor, panel)
+      .open(self.open.clone())
+      .switch_on_anchor_press(trigger)
+      .placement(placement)
+      // Away from its anchor: lurq moves an overlay above its anchor up, and one under it down, by a positive offset.
+      .offset(0.0, ExtraSpacing::Snug.value())
   }
 }
 

@@ -11,9 +11,10 @@
 //! go on behind *Show details*, [`proposals`], with an answer and a release), decided ones folded into lines, a hold
 //! of new starts, a daily report, a stopped turn and a failed one.
 //! `orchestrator-not-set-up` is the same project with nothing chosen for the Orchestrator (`02 Not set up`): its
-//! conversations stay readable.
+//! conversations stay readable. The context meter's and *Compact*'s scenarios are [`context`]'s.
 
 mod accounts;
+pub mod context;
 mod live;
 mod proposals;
 

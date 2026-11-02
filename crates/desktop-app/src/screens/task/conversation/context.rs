@@ -10,6 +10,7 @@ use lurq::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
   },
+  core::ElementRef,
   node::Element,
 };
 use orchester_core::{
@@ -27,7 +28,7 @@ use orchester_workspace::{
 use crate::{
   project::ShownProject,
   services::Services,
-  ui::context_meter::{Compact, ContextMeterProps, MeterPlace, MeterReading, context_meter},
+  ui::context_meter::{Compact, ContextMeterProps, MeterPlace, MeterReading, Over, context_meter},
 };
 
 /// The meter on the divider of `execution` of `run`, while it is its step's latest and that step's session is at work
@@ -40,25 +41,26 @@ pub(super) fn on_divider(
 ) -> Option<Element> {
   let step = run.session_at_work(execution?)?;
   let id = format!("conversation-context-step-{:02}", step.number);
-  meter(ctx, project, (run, step), (id, MeterPlace::Divider))
+  meter(ctx, project, (run, step), (id, MeterPlace::Divider, None))
 }
 
-/// The meter in the composer's bar, of the first step of `run` whose session is at work.
-pub(super) fn in_composer(ctx: &mut Ctx, project: &ShownProject, run: &RunView) -> Option<Element> {
+/// The meter in the composer's bar, of the first step of `run` whose session is at work; its popover opens above the
+/// composer's box `over`.
+pub(super) fn in_composer(ctx: &mut Ctx, project: &ShownProject, run: &RunView, over: &ElementRef) -> Option<Element> {
   let step = run.sessions_at_work().next()?;
-  meter(
-    ctx,
-    project,
-    (run, step),
-    ("conversation-context-composer".to_owned(), MeterPlace::Bar),
-  )
+  let place = (
+    "conversation-context-composer".to_owned(),
+    MeterPlace::Bar,
+    Some(Over(over.clone())),
+  );
+  meter(ctx, project, (run, step), place)
 }
 
 fn meter(
   ctx: &mut Ctx,
   project: &ShownProject,
   (run, step): (&RunView, &StepView),
-  (id, place): (String, MeterPlace),
+  (id, place, over): (String, MeterPlace, Option<Over>),
 ) -> Option<Element> {
   let execution = step.execution?;
   let props = StepContextProps {
@@ -71,6 +73,7 @@ fn meter(
       agent: step.agent.clone(),
       model: step.model.clone(),
       place,
+      over,
       // A run step's session is not compacted from here in this build.
       compact: Compact::NotOffered,
     },

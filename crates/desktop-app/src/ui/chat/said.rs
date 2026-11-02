@@ -2,7 +2,8 @@
 //! words they wrote, without the block of facts Orchester added for the agent (`orchester_workspace::mentions::facts`),
 //! and each of their @-mentions a link the chat follows (`links`): a task to its page, a run to its task's
 //! Conversation. A message without mentions is its words as written; one with mentions is lurq's Markdown, the
-//! person's words escaped so that they show as written, line by line.
+//! person's words escaped so that they show as written, line by line. What a search found in it is filled behind its
+//! words ([`super::found`]).
 
 use std::sync::Arc;
 
@@ -14,12 +15,17 @@ use lurq::{
 use orchester_core::id::ProjectId;
 use orchester_workspace::mentions::{Found, Mention, facts, find};
 
-use super::{agent_text, links::APP_SCHEME, names::ProjectNames};
+use super::{agent_text, found, links::APP_SCHEME, marked_words, names::ProjectNames};
 use crate::routes::{ProjectPage, Route, TaskView};
 
 /// What `body`, a message a person sent in a chat of `project` as it was kept, shows: `None` when it says nothing.
-/// `id` names it, its words `{id}-text`.
-pub fn said(ctx: &mut Ctx, id: &str, body: &str, project: ProjectId) -> Option<Element> {
+/// What a search found in it (`searched`) is filled behind its words. `id` names it, its words `{id}-text`.
+pub fn said(
+  ctx: &mut Ctx,
+  id: &str,
+  (body, searched): (&str, Option<&found::Found>),
+  project: ProjectId,
+) -> Option<Element> {
   let words = facts::said(body);
   if words.trim().is_empty() {
     return None;
@@ -27,13 +33,11 @@ pub fn said(ctx: &mut Ctx, id: &str, body: &str, project: ProjectId) -> Option<E
   let text_id = format!("{id}-text");
   let found = find(words);
   if found.is_empty() {
-    return Some(
-      Text::new(words)
-        .id(text_id)
-        .variant(TypographyStyle::Body)
-        .selectable(true)
-        .into(),
-    );
+    let text = Text::new(words)
+      .id(text_id)
+      .variant(TypographyStyle::Body)
+      .selectable(true);
+    return Some(marked_words(ctx, text, words, searched));
   }
   let linked: Arc<str> = Arc::from(linked(words, &found, project));
   let links = super::links(ctx);
@@ -42,7 +46,7 @@ pub fn said(ctx: &mut Ctx, id: &str, body: &str, project: ProjectId) -> Option<E
     &text_id,
     &linked,
     (project, &ProjectNames::default()),
-    &links,
+    (&links, searched),
   ))
 }
 

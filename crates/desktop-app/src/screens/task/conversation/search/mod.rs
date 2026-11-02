@@ -10,8 +10,9 @@
 //! stays where the current place was. While the run goes on, new places add to the count and the current one stays
 //! where it is. The query stays while the task page is open.
 //!
-//! What a message says has no fill behind the matched words yet: lurq cannot fill behind part of a wrapping text
-//! (ivanzaida/lurq#75), so the message's row is marked instead ([`marks::row_mark`]).
+//! A message fills behind its matched words, one fill per laid-out line, with its Markdown rendered as ever (ORC-622,
+//! lurq's `TextHighlight`, `ui::chat::found`); a card, a problem or a notice, which says several texts, is marked on
+//! its row instead ([`marks::row_mark`]).
 
 mod bar;
 pub(super) mod marks;
