@@ -37,6 +37,8 @@ pub struct ChatListing {
   pub last: Timestamp,
   /// The person's messages and the agent's replies in it.
   pub messages: u32,
+  /// When a person pinned it to History's top; `None` while it is not pinned.
+  pub pinned: Option<Timestamp>,
 }
 
 /// A turn's prompt, as the runner reads it to start the turn: a person's message, or what a wait of an agent that
@@ -327,13 +329,13 @@ impl ProjectDb {
     Ok(())
   }
 
-  /// The conversation `chat`; `None` when it is not kept.
+  /// The conversation `chat`, titled as a person renamed it if they did; `None` when it is not kept.
   pub fn chat(&self, chat: ChatId) -> Result<Option<Chat>, StoreError> {
     self
       .connection
       .query_row(
-        "SELECT id, title, started_at, session, session_connection_id, session_account_id FROM orchestrator_chats
-         WHERE id = ?1",
+        "SELECT id, COALESCE(person_title, title), started_at, session, session_connection_id, session_account_id
+         FROM orchestrator_chats WHERE id = ?1",
         [chat.to_string()],
         raw_chat,
       )
@@ -342,24 +344,31 @@ impl ProjectDb {
       .transpose()
   }
 
-  /// Every conversation, the one with the latest entry first.
+  /// Every conversation, titled as [`Self::chat`] titles it, the one with the latest entry first.
   pub fn chats(&self) -> Result<Vec<ChatListing>, StoreError> {
     let mut statement = self.connection.prepare(
-      "SELECT c.id, c.title, c.started_at, c.session, c.session_connection_id, c.session_account_id,
-         COALESCE(MAX(e.at), c.started_at), COUNT(e.seq) FILTER (WHERE e.kind IN ('person', 'reply'))
+      "SELECT c.id, COALESCE(c.person_title, c.title), c.started_at, c.session, c.session_connection_id,
+         c.session_account_id, COALESCE(MAX(e.at), c.started_at),
+         COUNT(e.seq) FILTER (WHERE e.kind IN ('person', 'reply')), c.pinned_at
        FROM orchestrator_chats c LEFT JOIN orchestrator_entries e ON e.chat_id = c.id
        GROUP BY c.id ORDER BY 7 DESC, c.id DESC",
     )?;
     let rows = statement.query_map([], |row| {
-      Ok((raw_chat(row)?, row.get::<_, i64>(6)?, row.get::<_, i64>(7)?))
+      Ok((
+        raw_chat(row)?,
+        row.get::<_, i64>(6)?,
+        row.get::<_, i64>(7)?,
+        row.get::<_, Option<i64>>(8)?,
+      ))
     })?;
     rows
       .map(|row| {
-        let (chat, last, messages) = row?;
+        let (chat, last, messages, pinned) = row?;
         Ok(ChatListing {
           chat: chat.into_chat()?,
           last: Timestamp::from_unix_millis(last),
           messages: u32::try_from(messages).map_err(|error| corrupt("chat message count", error))?,
+          pinned: pinned.map(Timestamp::from_unix_millis),
         })
       })
       .collect()

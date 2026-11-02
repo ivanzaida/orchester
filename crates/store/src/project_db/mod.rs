@@ -42,6 +42,7 @@ mod orchestrator_compactions;
 mod orchestrator_queue;
 mod orchestrator_reports;
 mod orchestrator_sent;
+mod orchestrator_titles;
 mod orchestrator_usage;
 mod orchestrator_waits;
 mod organization;

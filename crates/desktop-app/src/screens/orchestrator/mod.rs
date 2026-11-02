@@ -126,6 +126,8 @@ struct View {
   how: Signal<Option<WhileAnswering>>,
   history: Signal<bool>,
   search: Signal<String>,
+  /// The conversation whose title History edits in place; Esc cancels that before it closes History.
+  renaming: Signal<history::Renaming>,
   /// The composer's runs-on picker is open.
   runs_on: Signal<bool>,
   /// Set to put the focus in the message field.
@@ -174,6 +176,7 @@ impl Component for OrchestratorScreen {
       how: ctx.signal(None),
       history: ctx.signal(false),
       search: ctx.signal(String::new()),
+      renaming: ctx.signal(history::Renaming::default()),
       runs_on: ctx.signal(false),
       focus: ctx.signal(false),
       focused,
@@ -269,23 +272,29 @@ impl Component for OrchestratorScreen {
         data::Read::Failed(_) => Some(&[][..]),
         data::Read::Ready(history) => Some(history.chats.as_slice()),
       };
-      history::panel(
-        ctx,
-        &view.search,
+      let rows = history::Rows::new(
         props.project.open.project.id(),
-        (chats, reads.target),
-      )
+        &props.project.open.repo_root,
+        view.renaming.clone(),
+      );
+      history::panel(ctx, &view.search, &rows, (chats, reads.target))
     });
-    let history = view.history.clone();
+    let (history, renaming) = (view.history.clone(), view.renaming.clone());
     Column::new()
       .id("screen-orchestrator")
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
       .on_key_down(move |event: KeyboardEvent| {
-        if event.key == "Escape" && history.get_untracked() {
-          history.set(false);
-          event.prevent_default();
+        if event.key != "Escape" || !history.get_untracked() {
+          return;
         }
+        // Esc first cancels a title edited in place, and only then closes History.
+        if renaming.get_untracked().0.is_some() {
+          renaming.set(history::Renaming::default());
+        } else {
+          history.set(false);
+        }
+        event.prevent_default();
       })
       .child(head)
       .child(
