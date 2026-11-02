@@ -37,6 +37,10 @@ pub struct DecisionTestReport {
   pub status: DecisionTestStatus,
   pub requests: u64,
   pub tested: u64,
+  /// Requests in this test's source snapshot that the earlier reviewer left to the person.
+  /// Older reports did not record this denominator.
+  #[serde(default)]
+  pub previously_asked: Option<u64>,
   pub in_flight: u64,
   pub failed: u64,
   pub too_long: u64,

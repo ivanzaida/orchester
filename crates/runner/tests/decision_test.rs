@@ -122,6 +122,7 @@ async fn decision_test_rebuilds_history_stores_figures_and_limits_concurrency() 
   assert_eq!(report.status, DecisionTestStatus::Completed);
   assert_eq!((report.requests, report.tested, report.failed), (17, 17, 0));
   assert_eq!(report.input_tokens, 17 * 120);
+  assert_eq!(report.previously_asked, Some(9));
   assert_eq!(report.unknown_usage, 0);
   assert!(report.median_ms.is_some_and(|ms| ms >= 90));
   for figures in &report.thresholds {
@@ -173,6 +174,7 @@ async fn decision_test_stop_keeps_progress_and_aborts_inflight_requests() {
   let report = report.expect("stopped");
   assert_eq!(report.status, DecisionTestStatus::Stopped);
   assert!(report.tested > 0 && report.tested < 40);
+  assert_eq!(report.previously_asked, Some(20));
   let sent = server.bodies.lock().len();
   tokio::time::sleep(Duration::from_millis(350)).await;
   assert_eq!(server.bodies.lock().len(), sent);

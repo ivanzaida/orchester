@@ -24,6 +24,7 @@ fn report(connection: &DecisionConnection, status: DecisionTestStatus) -> Decisi
     status,
     requests: 100,
     tested: 90,
+    previously_asked: Some(9),
     in_flight: 0,
     failed: 0,
     too_long: 0,
@@ -97,6 +98,13 @@ fn connections_decision_test_last_results_mark_only_the_matching_reviewer_model(
   );
   assert!(!seeded.text("decision-test-threshold-0.50").contains("used by"));
   assert!(seeded.text("decision-test-threshold-0.80").contains("90.0%"));
+  for threshold in ["0.50", "0.80", "0.90", "0.95"] {
+    assert!(
+      seeded
+        .text(&format!("decision-test-threshold-{threshold}"))
+        .contains("3 of 9")
+    );
+  }
   for words in ["182 ms", "21000", "90 of 100", "jev-latest"] {
     assert!(seeded.text("decision-test-meta").contains(words), "{words}");
   }
@@ -122,6 +130,13 @@ fn connections_decision_test_stop_targets_the_running_report_and_keeps_partial_r
   let mut seeded = Seeded::new("connections");
   let connection = connection(&seeded, DecisionCheckResult::Connected);
   let mut report = report(&connection, DecisionTestStatus::Running);
+  let mut legacy = serde_json::to_value(&report).expect("serialize legacy report");
+  legacy
+    .as_object_mut()
+    .expect("report object")
+    .remove("previously_asked");
+  report = serde_json::from_value(legacy).expect("read report without denominator");
+  assert_eq!(report.previously_asked, None);
   report.in_flight = 8;
   store(&seeded, &report);
   open(&mut seeded, connection.id());
@@ -138,6 +153,6 @@ fn connections_decision_test_stop_targets_the_running_report_and_keeps_partial_r
     .save_decision_test(&report)
     .expect("runner finished stopping");
   seeded.until("stopped", |s| s.text("decision-test-meta").contains("Stopped"));
-  assert!(seeded.exists("decision-test-threshold-0.80"));
+  assert!(seeded.text("decision-test-threshold-0.80").contains("3 of —"));
   assert!(seeded.exists("decision-test-start"));
 }

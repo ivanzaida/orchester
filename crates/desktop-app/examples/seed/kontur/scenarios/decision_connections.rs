@@ -107,6 +107,7 @@ fn test_result(kontur: &mut Kontur, connection: &DecisionConnection) -> Result<(
     status: DecisionTestStatus::Completed,
     requests: 9803,
     tested: 9803,
+    previously_asked: Some(107),
     in_flight: 0,
     failed: 0,
     too_long: 0,

@@ -38,13 +38,11 @@ pub(super) fn render(ctx: &Ctx, report: Option<&DecisionTestReport>, reviewer: O
           ),
         ],
       );
-      let earlier = ctx.t_args(
-        if selected {
-          "decision_connection.testEarlierUsed"
-        } else {
-          "decision_connection.testEarlierCount"
-        },
-        [("count", figures.previously_asked_now_approved.to_string())],
+      let earlier = earlier_count(
+        ctx,
+        figures.previously_asked_now_approved,
+        report.previously_asked,
+        selected,
       );
       let row = line()
         .id(format!("decision-test-threshold-{:.2}", figures.threshold.value()))
@@ -88,6 +86,26 @@ pub(super) fn render(ctx: &Ctx, report: Option<&DecisionTestReport>, reviewer: O
     .child(header)
     .with_children(rows)
     .into()
+}
+
+fn earlier_count(ctx: &Ctx, count: u64, total: Option<u64>, selected: bool) -> std::sync::Arc<str> {
+  ctx.t_args(
+    if selected {
+      "decision_connection.testEarlierUsed"
+    } else {
+      "decision_connection.testEarlierCount"
+    },
+    [
+      ("count", count.to_string()),
+      (
+        "total",
+        total.map_or_else(
+          || ctx.t("decision_connection.testUnknown").to_string(),
+          |n| n.to_string(),
+        ),
+      ),
+    ],
+  )
 }
 
 fn header(ctx: &Ctx) -> Row {
