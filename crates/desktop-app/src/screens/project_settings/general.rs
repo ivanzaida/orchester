@@ -31,7 +31,7 @@ use crate::{
 #[derive(Clone)]
 pub(super) struct General {
   save: work::Save,
-  /// What the tab's last save read back, until the settings' query has it.
+  /// What the page's last save read back, until the settings' query has it.
   kept: Kept<Read>,
 }
 impl Component for General {
@@ -39,7 +39,7 @@ impl Component for General {
   fn create(ctx: &mut Ctx) -> Self {
     let tab = Self {
       save: work::action(ctx, ctx.props::<TabProps>().project.open.project.id()),
-      kept: Kept::new(ctx),
+      kept: ctx.props::<TabProps>().kept.clone(),
     };
     let save = tab.save.clone();
     work::follow(ctx, &save, ctx.props::<TabProps>().status.clone(), tab.kept.clone());

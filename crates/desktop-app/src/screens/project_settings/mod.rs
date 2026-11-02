@@ -30,6 +30,7 @@ use orchester_core::id::ConnectionId;
 
 use crate::{
   project::ShownProject,
+  queries::Kept,
   routes::{ConnectionsView, NewConnection, ProjectPage, ProjectSettingsTab as Tab, SecretsView},
 };
 
@@ -164,6 +165,9 @@ impl DevtoolsInspectable for Props {}
 pub(super) struct TabProps {
   pub project: ShownProject,
   pub status: Signal<Status>,
+  /// What the page's last save of the project's settings read back, until their query has it: the page's, not a
+  /// tab's, so a tab opened right after another's save shows the save, not the read before it.
+  pub kept: Kept<work::Read>,
   /// The first link's page, which Sharing opens under its tab.
   pub link_page: Signal<sharing::LinkPage>,
   /// Sharing opens with *Make local*'s question.
@@ -231,6 +235,7 @@ impl SectionStatuses {
 }
 struct SettingsScreen {
   status: Signal<Status>,
+  kept: Kept<work::Read>,
   link_page: Signal<sharing::LinkPage>,
 }
 impl Component for SettingsScreen {
@@ -238,6 +243,7 @@ impl Component for SettingsScreen {
   fn create(ctx: &mut Ctx) -> Self {
     Self {
       status: ctx.signal(Status::Saved),
+      kept: Kept::new(ctx),
       link_page: ctx.signal(sharing::LinkPage::default()),
     }
   }
@@ -251,6 +257,7 @@ impl Component for SettingsScreen {
     let props = TabProps {
       project: project.clone(),
       status: self.status.clone(),
+      kept: self.kept.clone(),
       link_page: self.link_page.clone(),
       make_local,
     };

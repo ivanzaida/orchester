@@ -31,6 +31,8 @@ pub enum ProjectRead {
   /// The secrets, whichever one their page shows.
   Secrets,
   Sources,
+  /// The code index's builds, which a run's start builds and its end may remove.
+  IndexBuilds,
 }
 
 /// An application query, by what it reads.
@@ -47,9 +49,9 @@ pub enum AppRead {
 }
 
 /// What a project's runs starting, ending or changing state touches: the project's settings, whose rules *Approve for
-/// every run* adds as a run's request is answered. The code index's builds are live state its tab reads again on the
-/// runs' changes itself, as it shows them.
-pub const RUNS: &[ProjectRead] = &[ProjectRead::Settings];
+/// every run* adds as a run's request is answered, and the code index's builds, which the runner makes as a run starts.
+/// The project's loader follows the runs' state as it is published, so a move no tab rendered still reads them again.
+pub const RUNS: &[ProjectRead] = &[ProjectRead::Settings, ProjectRead::IndexBuilds];
 /// What a change of the person's accounts touches.
 pub const ACCOUNTS: &[AppRead] = &[AppRead::Accounts];
 /// What an update setting saved, or the update's state turning to another kind (a check's end), touches.
@@ -139,6 +141,7 @@ pub fn invalidate(client: &QueryClient, session: &Session, root: &Path, read: Pr
     // Keyed by the secret a page shows too, so every project's are read again: only shown ones read.
     ProjectRead::Secrets => client.invalidate(project::secrets::all()),
     ProjectRead::Sources => client.invalidate(project::project_sources(session, root)),
+    ProjectRead::IndexBuilds => client.invalidate(project::index_builds(session, root)),
   }
 }
 

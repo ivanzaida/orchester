@@ -110,8 +110,8 @@ fn settings_queries_each_application_setting_reads_its_own_query() {
 fn settings_queries_accounts_updates_and_runs_read_what_they_change() {
   assert_eq!(ACCOUNTS, &[AppRead::Accounts]);
   assert_eq!(UPDATES, &[AppRead::Updates]);
-  // A run's request answered *for every run* adds a rule to the project's settings.
-  assert_eq!(RUNS, &[ProjectRead::Settings]);
+  // A run's request answered *for every run* adds a rule to the project's settings; a run's start builds its index.
+  assert_eq!(RUNS, &[ProjectRead::Settings, ProjectRead::IndexBuilds]);
 }
 
 #[test]

@@ -47,7 +47,7 @@ impl Component for Rules {
   fn create(ctx: &mut Ctx) -> Self {
     let tab = Self {
       save: work::action(ctx, ctx.props::<TabProps>().project.open.project.id()),
-      kept: Kept::new(ctx),
+      kept: ctx.props::<TabProps>().kept.clone(),
     };
     work::follow(ctx, &tab.save, ctx.props::<TabProps>().status.clone(), tab.kept.clone());
     tab

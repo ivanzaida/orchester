@@ -1,6 +1,6 @@
-//! What a tab's own save read back or stored, shown at once and until its query moves on: the query has it, or read
-//! again after it (a change made meanwhile is then what shows). A failed save keeps nothing, so the query's value
-//! shows.
+//! What a page's or a tab's own save read back or stored, shown at once and until its query moves on: the query has
+//! it, or read again after it (a change made meanwhile is then what shows). A failed save keeps nothing, so the query's
+//! value shows.
 
 use std::sync::Arc;
 

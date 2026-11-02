@@ -55,7 +55,7 @@ pub(super) struct Limits {
   qa: Signal<String>,
   /// The settings the fields were filled from or last saved as: the base of the next save.
   stored: Signal<Option<Read>>,
-  /// What the group's last save read back, until the settings' query has it.
+  /// What the page's last save read back, until the settings' query has it.
   kept: Kept<Read>,
   separator: Arc<str>,
   submitted: Signal<Submitted>,
@@ -173,7 +173,7 @@ impl Component for Limits {
       slots: ctx.signal(String::new()),
       qa: ctx.signal(String::new()),
       stored: ctx.signal(None),
-      kept: Kept::new(ctx),
+      kept: ctx.props::<TabProps>().kept.clone(),
       separator: ctx.t("project_settings.groupSeparator"),
       submitted: ctx.signal(Submitted(None)),
       queued: ctx.signal(None),

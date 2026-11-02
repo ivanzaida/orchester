@@ -226,10 +226,15 @@ impl Component for ProjectReads {
   }
 }
 
-/// Observes every setting of the project a Project settings tab shows.
+/// Observes every setting of the project a Project settings tab shows: the project's settings first, which most tabs
+/// and the page a project opens on need, and the rest once they are read, so the first read a window waits for does
+/// not queue behind the others on the project's database.
 fn prefetch_project(ctx: &mut Ctx, session: &Session, open: &OpenProject) {
   let (s, r) = (session, &open.repo_root);
-  ctx.query(project::project_settings(s.clone(), r.clone()));
+  let settings = ctx.query(project::project_settings(s.clone(), r.clone()));
+  if settings.data().is_none() && settings.error().is_none() {
+    return;
+  }
   ctx.query(project::repository(s.clone(), r.clone()));
   ctx.query(project::estimates(s.clone(), r.clone()));
   for consent in OrchestratorConsent::ALL {

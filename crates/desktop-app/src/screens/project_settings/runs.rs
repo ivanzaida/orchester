@@ -31,7 +31,7 @@ use crate::{
 const REVIEWER: (f32, f32, f32) = (142.0, 116.0, 132.0);
 
 pub(super) struct Runs {
-  /// What auto mode's last save read back, until the settings' query moves on.
+  /// What the page's last save read back, until the settings' query moves on.
   kept: Kept<Read>,
   /// Auto mode's and the limits' save statuses.
   sections: SectionStatuses,
@@ -43,7 +43,7 @@ impl Component for Runs {
   fn create(ctx: &mut Ctx) -> Self {
     let page = ctx.props::<TabProps>().status.clone();
     Self {
-      kept: Kept::new(ctx),
+      kept: ctx.props::<TabProps>().kept.clone(),
       sections: SectionStatuses::new(ctx, 2, &page),
     }
   }

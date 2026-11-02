@@ -46,7 +46,7 @@ const AGENT_LABEL_WIDTH: f32 = 100.0;
 /// The group, saving its switch itself as Sources and Code index do.
 pub(super) struct AgentFiles {
   save: work::Save,
-  /// What the group's last save read back, until the settings' query has it.
+  /// What the page's last save read back, until the settings' query has it.
   kept: Kept<Read>,
   gate: Option<InputGate>,
   /// An MCP client's input asked to turn the repository's agent files on and was refused.
@@ -62,7 +62,7 @@ impl Component for AgentFiles {
   fn create(ctx: &mut Ctx) -> Self {
     let section = Self {
       save: work::action(ctx, ctx.props::<TabProps>().project.open.project.id()),
-      kept: Kept::new(ctx),
+      kept: ctx.props::<TabProps>().kept.clone(),
       gate: ctx.use_context::<InputGate>(),
       refused: ctx.signal(false),
       open: ctx.signal(false),

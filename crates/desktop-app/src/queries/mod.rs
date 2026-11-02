@@ -86,6 +86,14 @@ where
   }
 }
 
+/// What a tab asks to read again, as one number for [`Again::follow`]: the hash of the counts it follows, so two
+/// counts moving apart never cancel out as a sum of them would.
+pub fn asked(counts: &impl Hash) -> u64 {
+  let mut hasher = std::collections::hash_map::DefaultHasher::new();
+  counts.hash(&mut hasher);
+  hasher.finish()
+}
+
 /// A tab's own count of the times it asks to read again (*Try again*, *Check again*, a poll while something runs), each
 /// of which invalidates its query once a render sees it move. For a stored setting the first render only takes it; for
 /// live state ([`Again::live`]) it reads again too, so each visit shows the last value and reads it again behind it,

@@ -65,7 +65,7 @@ type Rebuild = FutureAction<(PathBuf, Revision), (), Message>;
 pub(super) struct CodeIndex {
   save: Save,
   rebuild: Rebuild,
-  /// What the group's last save read back, until the settings' query has it.
+  /// What the page's last save read back, until the settings' query has it.
   kept: Kept<Read>,
   list_revision: Signal<u64>,
   check_revision: Signal<u64>,
@@ -82,7 +82,7 @@ impl Component for CodeIndex {
     let tab = Self {
       save: work::action(ctx, ctx.props::<TabProps>().project.open.project.id()),
       rebuild: rebuild_action(ctx),
-      kept: Kept::new(ctx),
+      kept: ctx.props::<TabProps>().kept.clone(),
       list_revision: ctx.signal(0),
       check_revision: ctx.signal(0),
       list_again: Again::live(),
@@ -190,13 +190,16 @@ impl CodeIndex {
   /// The index's builds through their query, its last read at once and read again behind it when the tab opens; read
   /// again at the tab's poll, a rebuild, the project's screens' saves, a change of the setting and the runs' state,
   /// and, while a run runs and no build is followed, each of the runs' changes (a transcript line may be the runner
-  /// starting one). Each read the tab asks for is logged on the window's thread, as it asks.
+  /// starting one). The project's loader reads them again on the runs' state too (`queries::changes::RUNS`). Each read
+  /// the tab asks for is logged on the window's thread, as it asks.
   fn list(&self, ctx: &mut Ctx, props: &TabProps) -> FutureState<Listed, Message> {
     let feed = &props.project.feed;
-    let asked = self.list_revision.get()
-      + feed.run_changes(feed.running.get() && !self.watching.load(Ordering::Relaxed))
-      + feed.revision.get()
-      + feed.outside.get().of(Outside::CodeIndex);
+    let asked = queries::asked(&(
+      self.list_revision.get(),
+      feed.run_changes(feed.running.get() && !self.watching.load(Ordering::Relaxed)),
+      feed.revision.get(),
+      feed.outside.get().of(Outside::CodeIndex),
+    ));
     let session = Session::of(ctx);
     let query = ctx.query(project::index_builds(session, props.project.open.repo_root.clone()));
     if self.list_again.follow(asked, &query) {
