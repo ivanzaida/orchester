@@ -92,6 +92,34 @@ whose pages the app opens in the browser.
   `ORCHESTER_CLOUD_URL` and, for its API address, `ORCHESTER_CLOUD_API_URL` at build time.
 - Team servers keep `<server URL>/api/v1` ([architecture/server.md](architecture/server.md), "API").
 
+## Team authority S2 shared contracts
+
+The public prerequisite for platform OP-145 is in core and `orchester-api`; it does not add cloud endpoints.
+Team server admins alone read/change `server_admin::ServerSettings.claim_staleness_seconds` and
+`SettingsChanges.claim_staleness_seconds` (optional in changes). Core's `ClaimStalenessThreshold` is a JSON
+integer in whole seconds, defaults to 900, and accepts 300..=86400 inclusive. Missing read fields from older
+servers use the default; invalid supplied values are refused. Unknown settings-change fields remain refused.
+
+The separate `orchester_api::v2` surface adds `WorkspacePolicyResponse`:
+`{policy:{revision:1,automatic_merge:false},capabilities:{read_policy:true,change_policy:false}}`.
+New workspaces default to automatic merge off at revision 1. Members read policy; workspace Admins change it;
+server admins inherit both capabilities even without membership. Capabilities are computed from authoritative
+records for this workspace and are response metadata, never authorization supplied by a caller.
+
+`WorkspacePolicyChanges` is `{revision,automatic_merge}`; both fields are required, unknown fields refused.
+Platform must authorize, compare the revision, persist the change and increment the revision atomically.
+A stale revision returns HTTP 409 with typed `WorkspacePolicyError::PolicyRevisionConflict`:
+`{error:"policy_revision_conflict",current:{revision:2,automatic_merge:true}}`.
+`PolicyRevision` accepts positive integers through i64::MAX and refuses overflow on increment.
+The effective policy returned is the persisted workspace policy, with no member override.
+
+Thresholds belong to the server, never a workspace policy. A member's compatible local Claude/Codex account
+choice stays local execution metadata. Other team-owned defaults (pipeline, delivery, effort), admin drafts,
+module heartbeat source and human-wait renewal are **not covered**; no decisions for those open items are
+introduced here. The referenced team-authority-plan.md §12 is not present in this public checkout.
+Existing v1 workspace contracts, events and the /api/v1 client are unchanged. Routes, persistence and server
+enforcement belong to OP-145 in `ivanzaida/orchester-platform`; publishing these types does not enable routes.
+
 ## Conventions
 
 - JSON bodies in UTF-8. Requests are limited to 1 MiB and must arrive within 10 seconds.

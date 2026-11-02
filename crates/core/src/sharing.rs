@@ -2,6 +2,7 @@
 
 mod cached;
 mod catalog;
+mod claim_threshold;
 mod delta;
 mod membership;
 mod references;
@@ -14,6 +15,7 @@ use thiserror::Error;
 pub use self::{
   cached::{CachedClaim, CachedRunStatus, CachedTask, SharedPerson},
   catalog::{CATALOG_MODELS_PER_ROLE, CATALOG_REFERENCES, CatalogEntry, CatalogEntryKind, LocalCatalog, catalog},
+  claim_threshold::{ClaimStalenessThreshold, ClaimStalenessThresholdError},
   delta::{DeltaOutcome, RunProgress, TagRemap, TaskChange, TaskDelta, TaskDeltaKind, remap_tags},
   membership::{
     MembershipChangeError, WorkspaceRole, check_workspace_admin_change, may_administer_workspace, may_read_workspace,
@@ -31,7 +33,7 @@ use crate::{
   time::Timestamp,
 };
 
-pub const CLAIM_STALE_MS: i64 = 15 * 60 * 1000;
+pub const CLAIM_STALE_MS: i64 = ClaimStalenessThreshold::DEFAULT.millis();
 
 /// A member's role in a server project: owners (and the server's admins) manage its members.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -136,11 +138,18 @@ impl Claim {
     Ok(())
   }
 
-  pub fn take_over(&self, seen: ClaimId, new_id: ClaimId, holder: UserId, now: Timestamp) -> Result<Self, ClaimError> {
+  pub fn take_over(
+    &self,
+    seen: ClaimId,
+    new_id: ClaimId,
+    holder: UserId,
+    now: Timestamp,
+    threshold: ClaimStalenessThreshold,
+  ) -> Result<Self, ClaimError> {
     if self.id != seen {
       return Err(ClaimError::Changed);
     }
-    if !self.stale(now) {
+    if !self.stale(now, threshold) {
       return Err(ClaimError::NotStale);
     }
     Ok(Self {
@@ -163,8 +172,8 @@ impl Claim {
     Ok(())
   }
 
-  pub fn stale(&self, now: Timestamp) -> bool {
-    now.unix_millis().saturating_sub(self.heartbeat_at.unix_millis()) >= CLAIM_STALE_MS
+  pub fn stale(&self, now: Timestamp, threshold: ClaimStalenessThreshold) -> bool {
+    now.unix_millis().saturating_sub(self.heartbeat_at.unix_millis()) >= threshold.millis()
   }
 
   pub const fn id(&self) -> ClaimId {

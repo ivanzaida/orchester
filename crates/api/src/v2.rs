@@ -3,9 +3,11 @@
 
 mod invites;
 mod membership;
+mod policy;
 mod projects;
 
 pub use invites::*;
 pub use membership::*;
 pub use orchester_core::sharing::WorkspaceRole as MemberRole;
+pub use policy::*;
 pub use projects::*;

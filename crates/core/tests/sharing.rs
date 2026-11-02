@@ -2,8 +2,8 @@ use orchester_core::{
   id::{ClaimId, UserId},
   run::TaskPhase,
   sharing::{
-    CLAIM_STALE_MS, Claim, ClaimEnd, ClaimError, ClaimKind, MemberRole, TaskRevision, claim_end,
-    may_change_configuration,
+    CLAIM_STALE_MS, Claim, ClaimEnd, ClaimError, ClaimKind, ClaimStalenessThreshold, MemberRole, TaskRevision,
+    claim_end, may_change_configuration,
   },
   time::Timestamp,
 };
@@ -13,12 +13,13 @@ fn at(ms: i64) -> Timestamp {
 
 #[test]
 fn s1b_claim_transitions_and_explicit_stale_boundary() {
+  let threshold = ClaimStalenessThreshold::default();
   let alice = UserId::generate();
   let bob = UserId::generate();
   let id = ClaimId::generate();
   let manual = Claim::take(None, id, alice, ClaimKind::Manual, at(100), false).expect("free claim");
-  assert!(!manual.stale(at(100 + CLAIM_STALE_MS - 1)));
-  assert!(manual.stale(at(100 + CLAIM_STALE_MS)));
+  assert!(!manual.stale(at(100 + CLAIM_STALE_MS - 1), threshold));
+  assert!(manual.stale(at(100 + CLAIM_STALE_MS), threshold));
   assert_eq!(
     Claim::take(Some(&manual), ClaimId::generate(), bob, ClaimKind::Run, at(200), false),
     Err(ClaimError::Held)
@@ -49,16 +50,16 @@ fn s1b_claim_transitions_and_explicit_stale_boundary() {
   assert_eq!(refreshed.kind(), ClaimKind::Run);
   assert_eq!(refreshed.heartbeat_at(), at(300));
   assert_eq!(
-    upgraded.take_over(id, ClaimId::generate(), bob, at(200 + CLAIM_STALE_MS - 1)),
+    upgraded.take_over(id, ClaimId::generate(), bob, at(200 + CLAIM_STALE_MS - 1), threshold),
     Err(ClaimError::NotStale)
   );
   let takeover = upgraded
-    .take_over(id, ClaimId::generate(), bob, at(200 + CLAIM_STALE_MS))
+    .take_over(id, ClaimId::generate(), bob, at(200 + CLAIM_STALE_MS), threshold)
     .expect("stale takeover");
   assert_ne!(takeover.id(), id);
   assert_eq!(takeover.taken_over_from(), Some(alice));
   assert_eq!(
-    takeover.take_over(id, ClaimId::generate(), alice, at(100 + 2 * CLAIM_STALE_MS)),
+    takeover.take_over(id, ClaimId::generate(), alice, at(100 + 2 * CLAIM_STALE_MS), threshold),
     Err(ClaimError::Changed)
   );
   let mut refreshed = takeover;
@@ -66,7 +67,7 @@ fn s1b_claim_transitions_and_explicit_stale_boundary() {
   refreshed
     .heartbeat(bob, at(100 + 2 * CLAIM_STALE_MS))
     .expect("heartbeat");
-  assert!(!refreshed.stale(at(100 + 2 * CLAIM_STALE_MS)));
+  assert!(!refreshed.stale(at(100 + 2 * CLAIM_STALE_MS), threshold));
 }
 
 #[test]
