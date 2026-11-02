@@ -71,7 +71,10 @@ loopback URL, and keeps the discovery credential inside the host. It reads `.tmp
 1024 entries, else it refuses and names the folder) and in each task folder only these exact files: for the
 new app, the `mcp/<pid>.json` that `tools/qa-app.ps1` makes; for a QA profile (a copy whose user data folder is
 `.tmp/qa/<task>/profile/`), `profile/orchester-app-mcp/<pid>.json`, or the deprecated desktop's
-`profile/orchester-mcp/<pid>.json` and `profile/lurq/mcp/<pid>.json`. The rest of `.tmp/` (build output,
+`profile/orchester-mcp/<pid>.json` and `profile/lurq/mcp/<pid>.json`. A copy `tools/qa-app.ps1` started
+(`orchester-app-qa`, which the agent may have started with the script itself, inside its sandbox) is reached by its
+pid only while it runs from `.tmp/qa/<task>/bin/` of this worktree, and only through that task folder's
+`mcp/<pid>.json`; a copy of that name anywhere else is refused. The rest of `.tmp/` (build output,
 scratch checkouts) is never searched, and a file reached through a link is not used. Text and structured
 content are returned with the token redacted. PNG images are saved under `.tmp/run-app/`; open the relative
 path returned by the tool with Orchester's `read_file`, which shows PNG, JPEG and WebP images on Claude Code
