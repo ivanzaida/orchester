@@ -38,6 +38,7 @@ mod messages;
 mod modules;
 mod native;
 mod orchestrator;
+mod orchestrator_compactions;
 mod orchestrator_queue;
 mod orchestrator_reports;
 mod orchestrator_sent;

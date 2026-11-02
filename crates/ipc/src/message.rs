@@ -253,6 +253,13 @@ pub enum Command {
   /// Stops the answer under way in conversation `chat`: its agent CLI ends, and what it did until then stays.
   /// Answered with [`Reply::ChatStopped`], whether an answer was under way or not.
   StopChat { chat: ChatId },
+  /// Compacts the session of conversation `chat` (*Compact*, protocol 40): the CLI summarizes it and goes on from the
+  /// summary, with the domain tools at `tools` given as for a turn. The compaction is kept as an event of the
+  /// conversation, running until it ends, which [`Event::ChatChanged`] tells. Answered with [`Reply::ChatCompacting`]
+  /// once it is under way; [`Rejection::ChatBusy`] while a turn of the conversation is, [`Rejection::NothingToCompact`]
+  /// when it has no session the Orchestrator can resume, [`Rejection::NoOrchestrator`] when nothing was chosen to run
+  /// it on.
+  CompactChat { chat: ChatId, tools: ChatTools },
   /// Gives the person's message `message`, which the desktop kept as sent now (*Send now*, protocol 32), to the answer
   /// under way in its conversation: its CLI takes it at its next tool call, and the message joins that turn. A turn
   /// that refuses it or ends before taking it, or no turn under way, leaves it for a turn of its own after the answer.
@@ -451,6 +458,10 @@ pub enum Reply {
   },
   /// The answer to [`Command::StopChat`].
   ChatStopped {
+    chat: ChatId,
+  },
+  /// The answer to [`Command::CompactChat`]: the compaction of `chat`'s session is under way.
+  ChatCompacting {
     chat: ChatId,
   },
   /// The answer to [`Command::SteerChat`]: the message was handed to the turn under way, or left for a turn of its

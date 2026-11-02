@@ -43,6 +43,8 @@ pub(in crate::execution) struct AppServerSetup {
   /// Instructions in place of Codex's own, given with the thread's start and resume (`baseInstructions`): the
   /// Orchestrator chat's system prompt; `None` for a step, which keeps Codex's.
   pub base_instructions: Option<String>,
+  /// The session compacts the thread it resumes (`thread/compact/start`, ORC-309) in place of a turn of the prompt.
+  pub compact: bool,
 }
 
 impl AppServerSetup {

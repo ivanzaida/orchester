@@ -45,6 +45,9 @@ pub fn answer(args: &[String], session: &str, message: &str) -> ExitCode {
     r#"{{"type":"system","subtype":"init","cwd":"project","session_id":"{session}","tools":[],"mcp_servers":[{{"name":"orchester","status":"connected"}}],"model":"claude-haiku-4-5","permissionMode":"default","apiKeySource":"none","claude_code_version":"2.1.89"}}"#
   );
   replay(session, message);
+  if message.trim() == "/compact" && !args.iter().any(|arg| arg == "--disable-slash-commands") {
+    return compact(session);
+  }
   if message.contains("Keep thinking") {
     reply(session, "msg_wait", "Let me look at the queue.");
     loop {
@@ -79,6 +82,21 @@ pub fn answer(args: &[String], session: &str, message: &str) -> ExitCode {
   };
   reply(session, "msg_answer", &text);
   result(session, false, &text);
+  ExitCode::SUCCESS
+}
+
+/// `/compact` with slash commands on, as Claude Code compacts a session: its boundary with the tokens the context held,
+/// then a result that says nothing and reports what the summary cost. A session named `cannot-compact` fails as Claude
+/// Code does when there is nothing to compact.
+fn compact(session: &str) -> ExitCode {
+  if session == "cannot-compact" {
+    result(session, true, "Error: No messages to compact");
+    return ExitCode::from(1);
+  }
+  let boundary = json!({"type": "system", "subtype": "compact_boundary", "session_id": session,
+    "compact_metadata": {"trigger": "manual", "pre_tokens": 182_000}});
+  println!("{boundary}");
+  result(session, false, "");
   ExitCode::SUCCESS
 }
 

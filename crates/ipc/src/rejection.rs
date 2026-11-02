@@ -141,6 +141,9 @@ pub enum Rejection {
   ChatBusy,
   /// No connection and model were chosen for the project's Orchestrator.
   NoOrchestrator,
+  /// The session has nothing to compact (protocol 40): the conversation has no session yet, or none the
+  /// Orchestrator's connection and account can resume.
+  NothingToCompact,
   /// *Stop turn* needs an agent of the run at work in a turn: none works now (a command tool runs, the step waits
   /// for a person, the run is paused or stopping).
   NoTurnToStop,

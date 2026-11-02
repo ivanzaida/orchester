@@ -258,6 +258,7 @@ impl Session {
         }
       }
       Some("turn/start") => return self.turn(&message["id"], params),
+      Some("thread/compact/start") => return fake_codex_chat::compacted(self, &message["id"]),
       Some("turn/steer") if fake_codex_chat::is_chat(&self.args) => {
         return fake_codex_chat::steered(self, &message["id"], params);
       }

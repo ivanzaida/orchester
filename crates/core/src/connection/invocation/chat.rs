@@ -30,6 +30,8 @@
 //!   command, no MCP server but its own, no auto memory ([`super::without_auto_memory`]).
 //! - The system prompt (`crate::orchestrator::instructions`) is a file given on every turn, a resumed one too.
 //! - Sessions are kept on disk so that the next turn resumes them; no step result schema is asked for.
+//! - A person's *Compact* (ORC-309) is a turn of its own that resumes the session with `/compact` as its only prompt:
+//!   the same arguments, but without `--disable-slash-commands`, since `/compact` is a slash command.
 
 use std::{
   ffi::OsString,
@@ -40,6 +42,7 @@ use super::{ClaudeSession, InvocationError, agent_environment, first_line, witho
 use crate::{
   attachment::input::AttachedFile,
   command::Command,
+  connection::compaction::COMPACT_COMMAND,
   orchestrator::{MAX_TURNS, instructions::SERVER},
   permission::claude::{read_file_rule, read_rule},
   resource::CommandEnvironment,
@@ -74,6 +77,16 @@ pub struct ClaudeChat<'a> {
 impl ClaudeChat<'_> {
   /// Arguments after the program, in order; the same on Windows and macOS.
   pub fn args(&self) -> Vec<String> {
+    self.arguments(false)
+  }
+
+  /// The arguments of a turn that compacts the session it resumes (ORC-309): those of a turn, but slash commands stay
+  /// on, since `/compact` is one; the prompt is that command alone, so the agent is given no other.
+  pub fn compaction_args(&self) -> Vec<String> {
+    self.arguments(true)
+  }
+
+  fn arguments(&self, compaction: bool) -> Vec<String> {
     let mut args: Vec<String> = [
       "-p",
       "--input-format",
@@ -90,15 +103,10 @@ impl ClaudeChat<'_> {
     if let Some(effort) = self.effort {
       args.extend(["--effort".to_owned(), effort.to_owned()]);
     }
-    args.extend(
-      [
-        "--strict-mcp-config",
-        "--setting-sources",
-        "",
-        "--disable-slash-commands",
-      ]
-      .map(str::to_owned),
-    );
+    args.extend(["--strict-mcp-config", "--setting-sources", ""].map(str::to_owned));
+    if !compaction {
+      args.push("--disable-slash-commands".to_owned());
+    }
     args.extend(["--system-prompt-file".to_owned(), path_text(self.system_prompt)]);
     args.extend(["--mcp-config".to_owned(), path_text(self.mcp_config)]);
     args.extend(["--settings".to_owned(), BLOCK_OUTSIDE_READS.to_owned()]);
@@ -131,6 +139,26 @@ impl ClaudeChat<'_> {
     environment: impl IntoIterator<Item = (OsString, OsString)>,
     project: &CommandEnvironment,
   ) -> Result<Command, InvocationError> {
+    self.started(self.args(), first_line(message, attached)?, environment, project)
+  }
+
+  /// The command of the turn that compacts the session it resumes with [`COMPACT_COMMAND`] ([`Self::compaction_args`]).
+  pub fn compaction_command(
+    &self,
+    environment: impl IntoIterator<Item = (OsString, OsString)>,
+    project: &CommandEnvironment,
+  ) -> Result<Command, InvocationError> {
+    let prompt = first_line(COMPACT_COMMAND, &[])?;
+    self.started(self.compaction_args(), prompt, environment, project)
+  }
+
+  fn started(
+    &self,
+    args: Vec<String>,
+    input: String,
+    environment: impl IntoIterator<Item = (OsString, OsString)>,
+    project: &CommandEnvironment,
+  ) -> Result<Command, InvocationError> {
     for path in [self.folder, self.system_prompt, self.mcp_config] {
       if path.to_str().is_none() {
         return Err(InvocationError::NotUnicode(path.to_path_buf()));
@@ -138,10 +166,10 @@ impl ClaudeChat<'_> {
     }
     let mut variables = agent_environment(environment);
     project.add_to(&mut variables);
-    let command = Command::new(self.executable, self.args())
+    let command = Command::new(self.executable, args)
       .with_current_dir(self.folder)
       .with_environment(variables)
-      .with_interactive_input(first_line(message, attached)?);
+      .with_interactive_input(input);
     Ok(without_auto_memory(command))
   }
 }

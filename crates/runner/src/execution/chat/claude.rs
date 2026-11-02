@@ -37,10 +37,10 @@ use crate::{
 
 /// The CLI's command and the files it reads, which must outlive it, the account it runs on and the secrets kept out
 /// of what the turn keeps: the API provider's key.
-struct Started {
-  command: Command,
+pub(super) struct Started {
+  pub(super) command: Command,
   account: AgentAccountId,
-  secrets: Vec<SecretVariable>,
+  pub(super) secrets: Vec<SecretVariable>,
   _files: [PrivateFile; 2],
 }
 
@@ -83,14 +83,15 @@ impl Turn {
     prepared: Prepared,
     (stop, steers): (oneshot::Receiver<()>, &mut mpsc::UnboundedReceiver<ChatMessageId>),
   ) -> TurnState {
-    match self.start_claude(&prepared) {
+    match self.start_claude(&prepared, false) {
       Ok(started) => self.drive_claude(started, (stop, steers)).await,
       Err(failure) => TurnState::Failed(failure),
     }
   }
 
-  /// The command that answers the message, or why none can start.
-  fn start_claude(&self, prepared: &Prepared) -> Result<Started, TurnFailure> {
+  /// The command that answers the message, or that compacts the session (`compaction`, `super::compact`), or why none
+  /// can start.
+  pub(super) fn start_claude(&self, prepared: &Prepared, compaction: bool) -> Result<Started, TurnFailure> {
     let name = self.message.to_string();
     let prompt = PrivateFile::write(
       self.project,
@@ -114,7 +115,7 @@ impl Turn {
         model: self.settings.model(),
         key,
       });
-    let command = ClaudeChat {
+    let chat = ClaudeChat {
       executable: &prepared.executable,
       model: self.settings.model().as_str(),
       effort: self.settings.effort(),
@@ -124,13 +125,18 @@ impl Turn {
       mcp_config: mcp.path(),
       denied: &denied,
       denied_files: &denied_files,
-    }
-    .command(
-      (self.text.as_str(), &self.attached),
-      std::env::vars_os(),
-      &prepared.environment,
-    )
-    .and_then(|command| on_account(command, prepared.connection.account(), AgentProvider::ClaudeCodeCli))
+    };
+    let command = if compaction {
+      chat.compaction_command(std::env::vars_os(), &prepared.environment)
+    } else {
+      chat.command(
+        (self.text.as_str(), &self.attached),
+        std::env::vars_os(),
+        &prepared.environment,
+      )
+    };
+    let command = command
+      .and_then(|command| on_account(command, prepared.connection.account(), AgentProvider::ClaudeCodeCli))
     .map(|command| match &on_provider {
       Some(on) => on.apply(command, AgentProvider::ClaudeCodeCli),
       None => command,

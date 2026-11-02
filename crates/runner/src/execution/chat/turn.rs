@@ -69,7 +69,7 @@ impl Turn {
   /// Runs the turn to its end, or until `stop` says so, giving it the messages sent now that `steers` hands over,
   /// and records how it ended; what it had of them and did not take is left for turns of their own.
   pub(super) async fn run(self, stop: oneshot::Receiver<()>, mut steers: mpsc::UnboundedReceiver<ChatMessageId>) {
-    let state = match self.prepare() {
+    let state = match self.prepare(false) {
       Ok(prepared) if prepared.connection.provider() == AgentProvider::CodexCli => {
         self.run_codex(prepared, (stop, &mut steers)).await
       }
@@ -85,8 +85,8 @@ impl Turn {
   }
 
   /// What the turn starts from, or why it cannot start. A session the turn cannot resume, on another connection or
-  /// account, is said in the conversation.
-  fn prepare(&self) -> Result<Prepared, TurnFailure> {
+  /// account, is said in the conversation, but by a compaction (`compaction`), which starts no session.
+  pub(super) fn prepare(&self, compaction: bool) -> Result<Prepared, TurnFailure> {
     let mut db = ProjectDb::open(&self.root).map_err(|error| cannot(error.to_string()))?;
     let stored = db
       .connection(self.settings.connection())
@@ -124,7 +124,11 @@ impl Turn {
       .chat
       .resumes_on(self.settings.connection(), account)
       .map(str::to_owned);
-    if let Some(because) = self.chat.session_change(self.settings.connection(), account) {
+    if let Some(because) = self
+      .chat
+      .session_change(self.settings.connection(), account)
+      .filter(|_| !compaction)
+    {
       // The session lives in another CLI folder: the agent starts afresh, and the conversation says so.
       db.add_chat_event(self.chat.id(), &ChatEvent::NewSession { because }, Timestamp::now())
         .map_err(|error| cannot(error.to_string()))?;

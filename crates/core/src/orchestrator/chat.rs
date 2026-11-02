@@ -43,6 +43,42 @@ pub enum SessionChange {
 pub enum ChatEvent {
   /// The turn after it started a new session: the agent does not remember what was said before.
   NewSession { because: SessionChange },
+  /// A person compacted the conversation's session (*Compact*, ORC-309): the tokens its context held when it started,
+  /// as last reported (`None` while nothing reported them), and how it went. It is kept running and changed in place
+  /// once it ended.
+  Compaction {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    before: Option<u64>,
+    state: CompactionState,
+  },
+}
+
+/// Where a compaction of an agent session stands.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum CompactionState {
+  /// The CLI compacts the session now.
+  Running,
+  /// The CLI compacted it: the tokens its context holds now, as it reported them; `None` when it reported none.
+  Done {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    after: Option<u64>,
+  },
+  /// It did not compact, for `reason`; the session is as it was.
+  Failed { reason: TurnFailure },
+}
+
+impl ChatEvent {
+  /// Whether it is a compaction still running.
+  pub const fn is_compacting(&self) -> bool {
+    matches!(
+      self,
+      Self::Compaction {
+        state: CompactionState::Running,
+        ..
+      }
+    )
+  }
 }
 
 /// One conversation of a project's Orchestrator chat.

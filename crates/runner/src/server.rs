@@ -355,6 +355,10 @@ async fn answer(
     Command::CheckConnection { provider, ref api } => return answer_check(&later, handle, provider, api.clone()),
     Command::AnswerInChat { message, ref tools } => chat_answering(scheduler, message, tools.clone()).await,
     Command::StopChat { chat } => chat_stopped(scheduler, chat),
+    Command::CompactChat { chat, ref tools } => match scheduler.compact_chat(chat, tools.clone()).await {
+      Ok(()) => Reply::ChatCompacting { chat },
+      Err(rejection) => Reply::Rejected(rejection),
+    },
     Command::SteerChat { message } => match scheduler.steer_chat(message) {
       Ok(()) => Reply::ChatSteered { message },
       Err(rejection) => Reply::Rejected(rejection),
