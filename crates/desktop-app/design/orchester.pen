@@ -910746,50 +910746,50 @@
                           "height": 1
                         },
                         {
-                          "id": "bvhZU",
-                          "type": "ref",
-                          "ref": "FK4CS",
+                          "type": "frame",
+                          "id": "QzNeH",
                           "name": "Plan chip · Plan · 7 of 7",
+                          "fill": "$surface_raised",
+                          "cornerRadius": "$radius_full",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "gap": "$spacing_xs",
+                          "padding": [
+                            2,
+                            8
+                          ],
+                          "alignItems": "center",
                           "children": [
                             {
-                              "type": "frame",
-                              "id": "SnFRB",
-                              "name": "Content",
-                              "gap": "$spacing_xs",
-                              "alignItems": "center",
-                              "children": [
-                                {
-                                  "type": "icon",
-                                  "id": "UZHVi",
-                                  "name": "Icon list-checks",
-                                  "width": 12,
-                                  "height": 12,
-                                  "icon": "list-checks",
-                                  "library": "lucide",
-                                  "fill": "$text_muted"
-                                },
-                                {
-                                  "type": "text",
-                                  "id": "h2VkQT",
-                                  "name": "Label",
-                                  "fill": "$text_secondary",
-                                  "content": "Plan · 7 of 7",
-                                  "lineHeight": 1.3,
-                                  "fontFamily": "$font_sans",
-                                  "fontSize": 11,
-                                  "fontWeight": "500"
-                                },
-                                {
-                                  "type": "icon",
-                                  "id": "u2bp9Z",
-                                  "name": "Icon chevron",
-                                  "width": 12,
-                                  "height": 12,
-                                  "icon": "chevron-down",
-                                  "library": "lucide",
-                                  "fill": "$text_muted"
-                                }
-                              ]
+                              "type": "icon",
+                              "id": "R7JCPs",
+                              "name": "Icon list-checks",
+                              "width": 12,
+                              "height": 12,
+                              "icon": "list-checks",
+                              "library": "lucide",
+                              "fill": "$text_muted"
+                            },
+                            {
+                              "type": "text",
+                              "id": "s50lmb",
+                              "name": "Label",
+                              "fill": "$text_secondary",
+                              "content": "Plan · 7 of 7",
+                              "lineHeight": 1.3,
+                              "fontFamily": "$font_sans",
+                              "fontSize": 11,
+                              "fontWeight": "500"
+                            },
+                            {
+                              "type": "icon",
+                              "id": "D8bbBV",
+                              "name": "Icon chevron",
+                              "width": 12,
+                              "height": 12,
+                              "icon": "chevron-down",
+                              "library": "lucide",
+                              "fill": "$text_muted"
                             }
                           ]
                         }
@@ -910844,50 +910844,50 @@
                           "height": 1
                         },
                         {
-                          "id": "RnKV7",
-                          "type": "ref",
-                          "ref": "FK4CS",
+                          "type": "frame",
+                          "id": "XlgNE",
                           "name": "Plan chip · Plan · 7 of 7",
+                          "fill": "$surface_raised",
+                          "cornerRadius": "$radius_full",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "gap": "$spacing_xs",
+                          "padding": [
+                            2,
+                            8
+                          ],
+                          "alignItems": "center",
                           "children": [
                             {
-                              "type": "frame",
-                              "id": "gkUYt",
-                              "name": "Content",
-                              "gap": "$spacing_xs",
-                              "alignItems": "center",
-                              "children": [
-                                {
-                                  "type": "icon",
-                                  "id": "JxEqw",
-                                  "name": "Icon list-checks",
-                                  "width": 12,
-                                  "height": 12,
-                                  "icon": "list-checks",
-                                  "library": "lucide",
-                                  "fill": "$text_muted"
-                                },
-                                {
-                                  "type": "text",
-                                  "id": "s5kQUK",
-                                  "name": "Label",
-                                  "fill": "$text_secondary",
-                                  "content": "Plan · 7 of 7",
-                                  "lineHeight": 1.3,
-                                  "fontFamily": "$font_sans",
-                                  "fontSize": 11,
-                                  "fontWeight": "500"
-                                },
-                                {
-                                  "type": "icon",
-                                  "id": "lQDdz",
-                                  "name": "Icon chevron",
-                                  "width": 12,
-                                  "height": 12,
-                                  "icon": "chevron-up",
-                                  "library": "lucide",
-                                  "fill": "$text_muted"
-                                }
-                              ]
+                              "type": "icon",
+                              "id": "plRZi",
+                              "name": "Icon list-checks",
+                              "width": 12,
+                              "height": 12,
+                              "icon": "list-checks",
+                              "library": "lucide",
+                              "fill": "$text_muted"
+                            },
+                            {
+                              "type": "text",
+                              "id": "CVsXk",
+                              "name": "Label",
+                              "fill": "$text_secondary",
+                              "content": "Plan · 7 of 7",
+                              "lineHeight": 1.3,
+                              "fontFamily": "$font_sans",
+                              "fontSize": 11,
+                              "fontWeight": "500"
+                            },
+                            {
+                              "type": "icon",
+                              "id": "S3H6YZ",
+                              "name": "Icon chevron",
+                              "width": 12,
+                              "height": 12,
+                              "icon": "chevron-up",
+                              "library": "lucide",
+                              "fill": "$text_muted"
                             }
                           ]
                         }
@@ -911224,50 +911224,50 @@
                           "height": 1
                         },
                         {
-                          "id": "sS3zf",
-                          "type": "ref",
-                          "ref": "FK4CS",
+                          "type": "frame",
+                          "id": "tUbrL",
                           "name": "Plan chip · Plan · 5 of 7",
+                          "fill": "$surface_raised",
+                          "cornerRadius": "$radius_full",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "gap": "$spacing_xs",
+                          "padding": [
+                            2,
+                            8
+                          ],
+                          "alignItems": "center",
                           "children": [
                             {
-                              "type": "frame",
-                              "id": "neAJA",
-                              "name": "Content",
-                              "gap": "$spacing_xs",
-                              "alignItems": "center",
-                              "children": [
-                                {
-                                  "type": "icon",
-                                  "id": "B1pGB",
-                                  "name": "Icon list-checks",
-                                  "width": 12,
-                                  "height": 12,
-                                  "icon": "list-checks",
-                                  "library": "lucide",
-                                  "fill": "$text_muted"
-                                },
-                                {
-                                  "type": "text",
-                                  "id": "cNH6D",
-                                  "name": "Label",
-                                  "fill": "$text_secondary",
-                                  "content": "Plan · 5 of 7",
-                                  "lineHeight": 1.3,
-                                  "fontFamily": "$font_sans",
-                                  "fontSize": 11,
-                                  "fontWeight": "500"
-                                },
-                                {
-                                  "type": "icon",
-                                  "id": "zvmXn",
-                                  "name": "Icon chevron",
-                                  "width": 12,
-                                  "height": 12,
-                                  "icon": "chevron-up",
-                                  "library": "lucide",
-                                  "fill": "$text_muted"
-                                }
-                              ]
+                              "type": "icon",
+                              "id": "vzuba",
+                              "name": "Icon list-checks",
+                              "width": 12,
+                              "height": 12,
+                              "icon": "list-checks",
+                              "library": "lucide",
+                              "fill": "$text_muted"
+                            },
+                            {
+                              "type": "text",
+                              "id": "FrlsE",
+                              "name": "Label",
+                              "fill": "$text_secondary",
+                              "content": "Plan · 5 of 7",
+                              "lineHeight": 1.3,
+                              "fontFamily": "$font_sans",
+                              "fontSize": 11,
+                              "fontWeight": "500"
+                            },
+                            {
+                              "type": "icon",
+                              "id": "S6ylWo",
+                              "name": "Icon chevron",
+                              "width": 12,
+                              "height": 12,
+                              "icon": "chevron-up",
+                              "library": "lucide",
+                              "fill": "$text_muted"
                             }
                           ]
                         }
@@ -911630,50 +911630,50 @@
                           "fontWeight": "normal"
                         },
                         {
-                          "id": "zOBfI",
-                          "type": "ref",
-                          "ref": "FK4CS",
+                          "type": "frame",
+                          "id": "c8dJY",
                           "name": "Plan chip · Plan · 4 of 4",
+                          "fill": "$surface_raised",
+                          "cornerRadius": "$radius_full",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "gap": "$spacing_xs",
+                          "padding": [
+                            2,
+                            8
+                          ],
+                          "alignItems": "center",
                           "children": [
                             {
-                              "type": "frame",
-                              "id": "O4rb1",
-                              "name": "Content",
-                              "gap": "$spacing_xs",
-                              "alignItems": "center",
-                              "children": [
-                                {
-                                  "type": "icon",
-                                  "id": "J0mm1H",
-                                  "name": "Icon list-checks",
-                                  "width": 12,
-                                  "height": 12,
-                                  "icon": "list-checks",
-                                  "library": "lucide",
-                                  "fill": "$text_muted"
-                                },
-                                {
-                                  "type": "text",
-                                  "id": "BZQ4l",
-                                  "name": "Label",
-                                  "fill": "$text_secondary",
-                                  "content": "Plan · 4 of 4",
-                                  "lineHeight": 1.3,
-                                  "fontFamily": "$font_sans",
-                                  "fontSize": 11,
-                                  "fontWeight": "500"
-                                },
-                                {
-                                  "type": "icon",
-                                  "id": "zfuVl",
-                                  "name": "Icon chevron",
-                                  "width": 12,
-                                  "height": 12,
-                                  "icon": "chevron-down",
-                                  "library": "lucide",
-                                  "fill": "$text_muted"
-                                }
-                              ]
+                              "type": "icon",
+                              "id": "HKjah",
+                              "name": "Icon list-checks",
+                              "width": 12,
+                              "height": 12,
+                              "icon": "list-checks",
+                              "library": "lucide",
+                              "fill": "$text_muted"
+                            },
+                            {
+                              "type": "text",
+                              "id": "RJs3Z",
+                              "name": "Label",
+                              "fill": "$text_secondary",
+                              "content": "Plan · 4 of 4",
+                              "lineHeight": 1.3,
+                              "fontFamily": "$font_sans",
+                              "fontSize": 11,
+                              "fontWeight": "500"
+                            },
+                            {
+                              "type": "icon",
+                              "id": "p3JC3i",
+                              "name": "Icon chevron",
+                              "width": 12,
+                              "height": 12,
+                              "icon": "chevron-down",
+                              "library": "lucide",
+                              "fill": "$text_muted"
                             }
                           ]
                         }

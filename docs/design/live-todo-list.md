@@ -52,10 +52,13 @@ KON-12, Builder, Checker), never shipped data. Exports at scale 1: `.tmp/design/
   existing instances (`Window/Project` `qlXhJ`, `Task header` `j8DakG`, `Button/Primary` `iBDdP`, `Icon button/Small`
   `RvKML`, `Tag chip` `FK4CS`), and their texts keep those components' own styles. Font sizes 12.5 and 11.5 follow the
   existing Conversation and Orchestrator frames (the file has no font-size variables).
-- **Plan chip node ids** (the `Tag chip` instances, since the design check of attempt 1): 07a `y1fuE`, 07b `ftkpq`,
-  09 d `bvhZU`, 09 e `RnKV7`, 09 f `sS3zf`, 09 g `zOBfI`. They replace the hand-built chips `bPENV`, `rZKcP`,
-  `Vj7HD`, `x0Ef9`, `AaQlx` and `j3epg`. Pencil's visitor needs `resolveInstances: true` to walk these instances,
-  because their label child was replaced.
+- **Plan chip node ids**: 07a `y1fuE` and 07b `ftkpq` are `Tag chip` instances (since the design check of attempt 1);
+  Pencil's visitor needs `resolveInstances: true` to walk them, because their label child was replaced. 09 d `QzNeH`,
+  09 e `XlgNE`, 09 f `tUbrL` and 09 g `c8dJY` sit inside the Window instances' overrides, where a visitor over the
+  whole board failed on such instances, so they are plain frames in the Tag chip's look (fill `$surface_raised`,
+  `$radius_full`, `$border`, padding 2 8) with the same icon, label and chevron. They were the instances `bvhZU`,
+  `RnKV7`, `sS3zf` and `zOBfI`, which replaced the hand-built chips `bPENV`, `rZKcP`, `Vj7HD`, `x0Ef9`, `AaQlx` and
+  `j3epg`.
 
 ## Frames
 
