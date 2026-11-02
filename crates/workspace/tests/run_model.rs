@@ -6,7 +6,9 @@
 mod support;
 
 use orchester_core::{
-  connection::{AgentConnection, AgentProvider, CatalogModel, CatalogSource, CheckResult, ConnectionCheck, ModelCatalog, SignIn},
+  connection::{
+    AgentConnection, AgentProvider, CatalogModel, CatalogSource, CheckResult, ConnectionCheck, ModelCatalog, SignIn,
+  },
   name::Name,
   resource::{AgentProfile, ModelId, ResourceKind, StepKey},
   run::{Answerer, ModelChoice, ModelEventKind, ModelScope, Run, StepExecutor},
@@ -117,7 +119,11 @@ fn run_model_change_for_the_step_holds_for_it_alone_and_is_recorded() {
   let before = shown(&fixture, &run);
   assert_eq!(before.now, choice("gpt-5.5", None));
   assert!(!before.changed() && !before.fixed());
-  assert_eq!(before.later.changing.len(), 2, "Research and Docs run on Builder's connection");
+  assert_eq!(
+    before.later.changing.len(),
+    2,
+    "Research and Docs run on Builder's connection"
+  );
 
   change_model_in(fixture.repo.path(), run.id(), asked(ModelScope::Step), Answerer::Person).expect("changed");
 
@@ -129,12 +135,20 @@ fn run_model_change_for_the_step_holds_for_it_alone_and_is_recorded() {
   let events = fixture.db.model_events(run.id()).expect("events");
   assert_eq!(events.len(), 1);
   assert_eq!(events[0].by, Answerer::Person);
-  let ModelEventKind::Changed { scope, to, was, also, .. } = &events[0].kind else {
+  let ModelEventKind::Changed {
+    scope, to, was, also, ..
+  } = &events[0].kind
+  else {
     panic!("a change: {events:?}");
   };
   assert_eq!(
     (scope, to, was, also.len()),
-    (&ModelScope::Step, &choice("gpt-5.5-codex", Some("high")), &choice("gpt-5.5", None), 0)
+    (
+      &ModelScope::Step,
+      &choice("gpt-5.5-codex", Some("high")),
+      &choice("gpt-5.5", None),
+      0
+    )
   );
   let after = shown(&fixture, &run);
   assert_eq!(after.now, choice("gpt-5.5-codex", Some("high")));
@@ -142,7 +156,10 @@ fn run_model_change_for_the_step_holds_for_it_alone_and_is_recorded() {
   assert!(after.changed());
   assert_eq!(after.waiting, None, "no turn runs: it applies from the next");
   let detail = TaskDetail::load_in(fixture.repo.path(), run.task()).expect("detail");
-  assert_eq!(detail.run.expect("run").steps[0].model.as_deref(), Some("gpt-5.5-codex"));
+  assert_eq!(
+    detail.run.expect("run").steps[0].model.as_deref(),
+    Some("gpt-5.5-codex")
+  );
   let StepExecutor::Agent { profile, .. } = run.snapshot().steps()[0].executor() else {
     panic!("an agent step");
   };
@@ -151,7 +168,11 @@ fn run_model_change_for_the_step_holds_for_it_alone_and_is_recorded() {
     .version::<AgentProfile>(profile.resource, profile.number)
     .expect("read")
     .expect("kept");
-  assert_eq!(pinned.body().model(), &model("gpt-5.5"), "the profile's model is untouched");
+  assert_eq!(
+    pinned.body().model(),
+    &model("gpt-5.5"),
+    "the profile's model is untouched"
+  );
 }
 
 #[test]
@@ -196,7 +217,11 @@ fn run_model_change_while_a_turn_runs_waits_for_its_end_and_can_be_canceled() {
   change_model_in(&root, run.id(), asked(ModelScope::Step), Answerer::Person).expect("changed");
   let waiting = shown(&fixture, &run);
   assert_eq!(waiting.waiting, Some(choice("gpt-5.5-codex", Some("high"))));
-  assert_eq!(waiting.now, choice("gpt-5.5-codex", Some("high")), "what the next turn runs on");
+  assert_eq!(
+    waiting.now,
+    choice("gpt-5.5-codex", Some("high")),
+    "what the next turn runs on"
+  );
 
   cancel_model_change_in(&root, run.id(), &key("implement"), Answerer::Person).expect("canceled");
   assert_eq!(fixture.db.step_model(run.id(), &key("implement")).expect("read"), None);

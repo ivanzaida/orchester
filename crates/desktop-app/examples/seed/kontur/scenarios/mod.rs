@@ -36,6 +36,7 @@ mod project_settings;
 mod pull_requests;
 pub mod qa_app_asks;
 mod run_context;
+mod run_model;
 pub mod settings;
 mod shared_config;
 mod shared_here;
@@ -95,7 +96,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 111] = [
+pub const ALL: [Scenario; 115] = [
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-library", agents_library::seed),
   Scenario::of("agents-browser", agents_browser::seed),
@@ -125,6 +126,10 @@ pub const ALL: [Scenario; 111] = [
   Scenario::of("conversation-context-plenty", run_context::plenty),
   Scenario::of("conversation-context-near-full", run_context::near_full),
   Scenario::of("conversation-context-full", run_context::full),
+  Scenario::of("conversation-model", run_model::seed),
+  Scenario::of("conversation-model-changed", run_model::changed),
+  Scenario::of("conversation-model-waits", run_model::waits),
+  Scenario::of("conversation-model-fixed", run_model::fixed),
   Scenario::of("long-chats", long_chats::seed),
   Scenario::of("orchestrator", orchestrator::seed),
   Scenario::of("orchestrator-not-set-up", orchestrator::not_set_up),

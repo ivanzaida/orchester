@@ -163,7 +163,9 @@ impl Page {
     self.window.press("conversation-model-effort-option-4");
     self.window.press(scope);
     self.window.press("conversation-model-apply");
-    self.window.until("the picker closes", |window| window.texts(PICKER).is_none());
+    self
+      .window
+      .until("the picker closes", |window| window.texts(PICKER).is_none());
   }
 }
 
@@ -173,24 +175,40 @@ fn run_model_chip_shows_the_profiles_model_and_the_picker_the_connections_models
   let (key, ..) = prepared(&page, two_models(), false);
   page.open(&key, TaskTab::Conversation, CHIP);
   assert_eq!(page.text(LABEL), PROFILE_MODEL, "the profile names no effort");
-  assert_eq!(page.glyph("conversation-model-icon"), Some(Icon::Cpu.glyph().to_string()));
+  assert_eq!(
+    page.glyph("conversation-model-icon"),
+    Some(Icon::Cpu.glyph().to_string())
+  );
   page.window.press(CHIP);
   page.window.until("the picker", |window| window.texts(PICKER).is_some());
-  assert_eq!(page.text("conversation-model-heading"), "Builder · Codex · Work · its models");
+  assert_eq!(
+    page.text("conversation-model-heading"),
+    "Builder · Codex · Work · its models"
+  );
   let profile = page.text("conversation-model-option-0");
   assert!(
     profile.starts_with(PROFILE_MODEL) && profile.contains("The profile’s model"),
     "{profile}"
   );
   assert!(page.text("conversation-model-option-1").starts_with(OTHER_MODEL));
-  assert!(page.text("conversation-model-scope-step").starts_with("From the next turn of this step"));
-  assert!(page.text("conversation-model-scope-run").starts_with("For this step and the rest of the run"));
+  assert!(
+    page
+      .text("conversation-model-scope-step")
+      .starts_with("From the next turn of this step")
+  );
+  assert!(
+    page
+      .text("conversation-model-scope-run")
+      .starts_with("For this step and the rest of the run")
+  );
   assert_eq!(
     page.text("conversation-model-foot-note"),
     format!("Builder’s profile stays on {PROFILE_MODEL}.")
   );
   page.window.press("conversation-model-cancel");
-  page.window.until("the picker closes", |window| window.texts(PICKER).is_none());
+  page
+    .window
+    .until("the picker closes", |window| window.texts(PICKER).is_none());
 }
 
 #[test]
@@ -218,7 +236,9 @@ fn run_model_change_for_this_step_applies_from_the_next_turn_with_an_event_line(
     }]
   ));
   let line = "conversation-model-model-0";
-  page.window.until("the event line", |window| window.texts(line).is_some());
+  page
+    .window
+    .until("the event line", |window| window.texts(line).is_some());
   assert_eq!(page.text(&format!("{line}-text")), "Model changed for this step");
   assert_eq!(page.text(&format!("{line}-value")), expected);
   let detail = page.text(&format!("{line}-detail"));
@@ -236,8 +256,13 @@ fn run_model_change_for_the_rest_of_the_run_is_recorded_so() {
   page.open(&key, TaskTab::Conversation, CHIP);
   page.apply_other("conversation-model-scope-run");
   let line = "conversation-model-model-0";
-  page.window.until("the event line", |window| window.texts(line).is_some());
-  assert_eq!(page.text(&format!("{line}-text")), "Model changed for the rest of the run");
+  page
+    .window
+    .until("the event line", |window| window.texts(line).is_some());
+  assert_eq!(
+    page.text(&format!("{line}-text")),
+    "Model changed for the rest of the run"
+  );
   assert!(matches!(
     events(&page, &run).as_slice(),
     [ModelEventKind::Changed {
@@ -257,10 +282,18 @@ fn run_model_change_during_a_turn_waits_and_cancel_change_gives_the_step_back_it
     window.texts("conversation-model-after").is_some()
   });
   assert_eq!(page.text("conversation-model-after"), "after this turn");
-  assert_eq!(page.glyph("conversation-model-icon"), Some(Icon::Hourglass.glyph().to_string()));
+  assert_eq!(
+    page.glyph("conversation-model-icon"),
+    Some(Icon::Hourglass.glyph().to_string())
+  );
   let line = "conversation-model-model-0";
-  page.window.until("the waiting line", |window| window.texts(line).is_some());
-  assert_eq!(page.text(&format!("{line}-text")), "Model change waits for this turn to end");
+  page
+    .window
+    .until("the waiting line", |window| window.texts(line).is_some());
+  assert_eq!(
+    page.text(&format!("{line}-text")),
+    "Model change waits for this turn to end"
+  );
   assert_eq!(page.text(&format!("{line}-cancel")), "Cancel change");
   page.window.press(&format!("{line}-cancel"));
   page.window.until("the change canceled", |window| {
@@ -278,11 +311,17 @@ fn run_model_connection_with_one_model_is_fixed_and_offers_no_apply() {
   let mut page = Page::seeded("task-states");
   let (key, ..) = prepared(&page, vec![CatalogModel::new(model(PROFILE_MODEL), Vec::new())], false);
   page.open(&key, TaskTab::Conversation, CHIP);
-  assert_eq!(page.glyph("conversation-model-icon"), Some(Icon::Lock.glyph().to_string()));
+  assert_eq!(
+    page.glyph("conversation-model-icon"),
+    Some(Icon::Lock.glyph().to_string())
+  );
   page.window.press(CHIP);
   page.window.until("the picker", |window| window.texts(PICKER).is_some());
   assert!(page.text("conversation-model-locked").starts_with(PROFILE_MODEL));
-  assert_eq!(page.text("conversation-model-effort-none"), "Not offered by this connection");
+  assert_eq!(
+    page.text("conversation-model-effort-none"),
+    "Not offered by this connection"
+  );
   assert!(!page.has("conversation-model-apply"));
   assert!(page.text("conversation-model-connections").starts_with("Connections"));
 }
@@ -293,6 +332,33 @@ fn run_model_chip_is_gone_once_the_run_ended() {
   let key = page.key("failed");
   page.open(&key, TaskTab::Conversation, "conversation");
   assert!(!page.has(CHIP));
+}
+
+#[test]
+fn run_model_seeded_scenarios_reach_every_chip_state_for_qa() {
+  for (scenario, glyph, label) in [
+    ("conversation-model", Icon::Cpu, PROFILE_MODEL.to_owned()),
+    (
+      "conversation-model-changed",
+      Icon::Cpu,
+      format!("{OTHER_MODEL} · Extra high"),
+    ),
+    (
+      "conversation-model-waits",
+      Icon::Hourglass,
+      format!("{OTHER_MODEL} · Extra high"),
+    ),
+    ("conversation-model-fixed", Icon::Lock, PROFILE_MODEL.to_owned()),
+  ] {
+    let mut page = Page::seeded(scenario);
+    page.open("KON-13", TaskTab::Conversation, CHIP);
+    assert_eq!(page.text(LABEL), label, "{scenario}");
+    assert_eq!(
+      page.glyph("conversation-model-icon"),
+      Some(glyph.glyph().to_string()),
+      "{scenario}"
+    );
+  }
 }
 
 #[test]

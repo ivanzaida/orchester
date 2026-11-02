@@ -109,7 +109,10 @@ pub fn cancel_model_change_in(
   by: Answerer,
 ) -> Result<(), ModelChangeError> {
   let mut db = ProjectDb::open(repo_root)?;
-  let run = db.run(run).map_err(run_store_error)?.ok_or(ModelChangeError::Unavailable)?;
+  let run = db
+    .run(run)
+    .map_err(run_store_error)?
+    .ok_or(ModelChangeError::Unavailable)?;
   let events = db.model_events(run.id())?;
   let invocations = db.invocations(run.id())?;
   let (index, _) = waiting_change(&run, &invocations, &events, step).ok_or(ModelChangeError::NotWaiting)?;

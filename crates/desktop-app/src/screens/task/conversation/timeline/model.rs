@@ -45,7 +45,12 @@ pub(super) fn row(ctx: &mut Ctx, timeline: &Timeline, (key, line, at): (&str, &M
         (false, ModelScope::Run) => (Icon::Cpu, "conversation.model.event.changedRun"),
         (false, ModelScope::Step) => (Icon::Cpu, "conversation.model.event.changedStep"),
       };
-      (glyph, lead, Some(value_words(ctx, &line.kind)), changed_detail(ctx, timeline, line, &time))
+      (
+        glyph,
+        lead,
+        Some(value_words(ctx, &line.kind)),
+        changed_detail(ctx, timeline, line, &time),
+      )
     }
     ModelEventKind::Canceled { stays } => (
       Icon::CircleSlash,
@@ -111,10 +116,10 @@ fn value_words(ctx: &Ctx, kind: &ModelEventKind) -> Arc<str> {
 
 /// A choice's effort as the line says it: its word, or the CLI's default.
 fn effort_of(ctx: &Ctx, choice: &ModelChoice) -> Arc<str> {
-  choice
-    .effort
-    .as_deref()
-    .map_or_else(|| ctx.t("conversation.model.effortDefault"), |effort| effort_word(ctx, effort))
+  choice.effort.as_deref().map_or_else(
+    || ctx.t("conversation.model.effortDefault"),
+    |effort| effort_word(ctx, effort),
+  )
 }
 
 fn changed_detail(ctx: &Ctx, timeline: &Timeline, line: &ModelLine, time: &str) -> Arc<str> {
@@ -197,7 +202,9 @@ fn kind_name(line: &ModelLine) -> &'static str {
   match &line.kind {
     ModelEventKind::Changed { .. } if line.waits => "waits",
     ModelEventKind::Changed { .. } if effort_line(&line.kind) => "effort",
-    ModelEventKind::Changed { scope: ModelScope::Run, .. } => "changed-run",
+    ModelEventKind::Changed {
+      scope: ModelScope::Run, ..
+    } => "changed-run",
     ModelEventKind::Changed { .. } => "changed-step",
     ModelEventKind::Canceled { .. } => "canceled",
   }

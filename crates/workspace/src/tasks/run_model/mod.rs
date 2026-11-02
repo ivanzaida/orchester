@@ -119,7 +119,9 @@ fn step_model(
   let Some(connection) = db.step_agent_connection(run, &current.key)? else {
     return Ok(None);
   };
-  let now = db.step_model(run.id(), &current.key)?.unwrap_or_else(|| profile.clone());
+  let now = db
+    .step_model(run.id(), &current.key)?
+    .unwrap_or_else(|| profile.clone());
   let waiting = waiting_change(run, invocations, events, &current.key).map(|(_, to)| to.clone());
   Ok(Some(StepModel {
     step: current.key.clone(),
@@ -169,7 +171,10 @@ pub(crate) fn later_on(
   connection: &AgentConnection,
 ) -> Result<LaterSteps, StoreError> {
   let steps = run.snapshot().body().steps();
-  let start = steps.iter().position(|step| step.key == *current).map_or(steps.len(), |at| at + 1);
+  let start = steps
+    .iter()
+    .position(|step| step.key == *current)
+    .map_or(steps.len(), |at| at + 1);
   let mut later = LaterSteps::default();
   for step in &steps[start..] {
     let agent = matches!(

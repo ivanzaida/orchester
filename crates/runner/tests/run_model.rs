@@ -83,8 +83,16 @@ async fn run_model_chosen_for_claude_starts_its_next_turn_with_the_model_and_eff
   let db = ProjectDb::open(root).expect("open");
   let argv = reported(&db, id, "argv: ");
   assert_eq!(argv.len(), 2);
-  assert!(argv[0].contains(" --model claude-opus-5-5 --effort low "), "{}", argv[0]);
-  assert!(argv[1].contains(" --model claude-fable-5-1 --effort high "), "{}", argv[1]);
+  assert!(
+    argv[0].contains(" --model claude-opus-5-5 --effort low "),
+    "{}",
+    argv[0]
+  );
+  assert!(
+    argv[1].contains(" --model claude-fable-5-1 --effort high "),
+    "{}",
+    argv[1]
+  );
   let session = db.invocations(id).expect("invocations")[0]
     .session
     .clone()

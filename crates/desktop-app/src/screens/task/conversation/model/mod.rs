@@ -236,13 +236,40 @@ impl PartialEq for ChipProps {
 
 impl DevtoolsInspectable for ChipProps {}
 
-/// What the picker holds until *Apply*: the model and effort chosen, which steps they hold for, and whether the
-/// effort's options show.
+/// The model and effort chosen in the picker; `None` until one is, while it shows what the step runs on now.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct Chosen(Option<ModelChoice>);
+
+impl DevtoolsInspectable for Chosen {}
+
+/// What the picker holds until *Apply*: the model and effort chosen, whether they hold for the rest of the run, and
+/// whether the effort's options show.
 #[derive(Clone)]
 struct Draft {
-  chosen: Signal<Option<ModelChoice>>,
-  scope: Signal<ModelScope>,
+  chosen: Signal<Chosen>,
+  for_run: Signal<bool>,
   efforts: Signal<bool>,
+}
+
+impl Draft {
+  fn chosen(&self) -> Option<ModelChoice> {
+    self.chosen.get().0
+  }
+
+  fn scope(&self) -> ModelScope {
+    if self.for_run.get() {
+      ModelScope::Run
+    } else {
+      ModelScope::Step
+    }
+  }
+
+  /// Forgets what was chosen: the picker opens again on what the step runs on now.
+  fn forget(&self) {
+    self.chosen.set(Chosen::default());
+    self.for_run.set(false);
+    self.efforts.set(false);
+  }
 }
 
 struct ModelChip {
@@ -257,8 +284,8 @@ impl Component for ModelChip {
     Self {
       anchor: ElementRef::new(),
       draft: Draft {
-        chosen: ctx.signal(None),
-        scope: ctx.signal(ModelScope::Step),
+        chosen: ctx.signal(Chosen::default()),
+        for_run: ctx.signal(false),
         efforts: ctx.signal(false),
       },
     }
@@ -268,11 +295,8 @@ impl Component for ModelChip {
     let props = ctx.props::<ChipProps>().clone();
     let model = RunModel::of(ctx);
     let open = model.open.get();
-    // A closed picker forgets what was chosen in it: it opens on what the step runs on now.
-    if !open && self.draft.chosen.get_untracked().is_some() {
-      self.draft.chosen.set(None);
-      self.draft.scope.set(ModelScope::Step);
-      self.draft.efforts.set(false);
+    if !open && (self.draft.chosen.get_untracked().0.is_some() || self.draft.for_run.get_untracked()) {
+      self.draft.forget();
     }
     let toggle = model.open.clone();
     let chip = pressable(move || toggle.update(|open| *open = !*open))

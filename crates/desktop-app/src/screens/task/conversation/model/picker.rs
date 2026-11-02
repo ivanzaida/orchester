@@ -23,7 +23,7 @@ use lurq::{
 use orchester_core::run::{ModelChoice, ModelScope};
 use orchester_workspace::tasks::run_model::{OfferedModel, StepModel, change::ModelAsked};
 
-use super::{Asked, ChipProps, Draft, Failed, RunModel, choice_words, effort_word};
+use super::{Asked, ChipProps, Chosen, Draft, Failed, RunModel, choice_words, effort_word};
 use crate::{
   navigation::Navigation,
   routes::{ConnectionsView, ProjectPage, Route},
@@ -83,7 +83,7 @@ pub(super) fn panel(ctx: &mut Ctx, props: &ChipProps, (model, draft): (&RunModel
 /// The models, the effort, *Applies*, why the last change failed and the foot.
 fn choosing(ctx: &mut Ctx, props: &ChipProps, (model, draft): (&RunModel, &Draft)) -> Vec<Element> {
   let step = &props.step;
-  let chosen = draft.chosen.get().unwrap_or_else(|| step.now.clone());
+  let chosen = draft.chosen().unwrap_or_else(|| step.now.clone());
   let mut rows: Vec<Element> = step
     .offered
     .iter()
@@ -95,7 +95,7 @@ fn choosing(ctx: &mut Ctx, props: &ChipProps, (model, draft): (&RunModel, &Draft
     rows.extend(effort(ctx, step, &chosen, draft));
   }
   rows.push(separator(ctx));
-  rows.push(heading(ctx.t("conversation.model.applies")));
+  rows.push(heading(&ctx.t("conversation.model.applies")));
   rows.push(scope_row(ctx, props, ModelScope::Step, draft));
   rows.push(scope_row(ctx, props, ModelScope::Run, draft));
   rows.extend(model.failure().map(|failed| failure(ctx, step, &failed)));
@@ -103,13 +103,13 @@ fn choosing(ctx: &mut Ctx, props: &ChipProps, (model, draft): (&RunModel, &Draft
   rows
 }
 
-fn heading(words: Arc<str>) -> Element {
+fn heading(words: &str) -> Element {
   Row::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(HEADING_HEIGHT))
     .padding_horizontal(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(Text::new(&words).variant(ModelText::Heading.role()).nowrap())
+    .child(Text::new(words).variant(ModelText::Heading.role()).nowrap())
     .into()
 }
 
@@ -140,10 +140,14 @@ fn model_row(
   let end: Option<Element> = if picked {
     Some(icon(Icon::Check, IconSize::Md, PaletteColor::TextPrimary).into())
   } else {
-    (offered.id == step.now.model)
-      .then(|| Text::new(&ctx.t("conversation.model.now")).variant(ModelText::Tag.role()).nowrap().into())
+    (offered.id == step.now.model).then(|| {
+      Text::new(&ctx.t("conversation.model.now"))
+        .variant(ModelText::Tag.role())
+        .nowrap()
+        .into()
+    })
   };
-  let row = pressable(move || set.set(Some(choice.clone())))
+  let row = pressable(move || set.set(Chosen(Some(choice.clone()))))
     .id(format!("conversation-model-option-{index}"))
     .describe("model", offered.id.as_str().to_owned())
     .describe("chosen", picked.to_string())
@@ -164,17 +168,19 @@ fn model_row(
   if picked {
     row.background(ExtraColor::Hover.role()).into()
   } else {
-    row.hovered_style(Style::new().background(ExtraColor::Hover.role())).into()
+    row
+      .hovered_style(Style::new().background(ExtraColor::Hover.role()))
+      .into()
   }
 }
 
 /// The effort's row and, while it is open, its options: the CLI's default, then each effort the chosen model offers.
 fn effort(ctx: &mut Ctx, step: &StepModel, chosen: &ModelChoice, draft: &Draft) -> Vec<Element> {
   let shown = draft.efforts.get();
-  let words = chosen
-    .effort
-    .as_deref()
-    .map_or_else(|| ctx.t("conversation.model.effortDefault"), |effort| effort_word(ctx, effort));
+  let words = chosen.effort.as_deref().map_or_else(
+    || ctx.t("conversation.model.effortDefault"),
+    |effort| effort_word(ctx, effort),
+  );
   let now = step.now.effort.as_deref().map(|effort| {
     let effort = effort_word(ctx, effort);
     Text::new(&ctx.t_args("conversation.model.effortNow", [("effort", &*effort)]))
@@ -195,7 +201,11 @@ fn effort(ctx: &mut Ctx, step: &StepModel, chosen: &ModelChoice, draft: &Draft) 
     .background(PaletteColor::SurfaceInput)
     .border(Border::inside(
       BorderSize::Sm,
-      if shown { PaletteColor::BorderFocus } else { PaletteColor::Border },
+      if shown {
+        PaletteColor::BorderFocus
+      } else {
+        PaletteColor::Border
+      },
     ))
     .child(
       Text::new(&words)
@@ -231,9 +241,10 @@ fn effort_options(ctx: &mut Ctx, step: &StepModel, chosen: &ModelChoice, draft: 
   let items: Vec<Element> = options
     .enumerate()
     .map(|(index, effort)| {
-      let label = effort
-        .as_deref()
-        .map_or_else(|| ctx.t("conversation.model.effortDefault"), |effort| effort_word(ctx, effort));
+      let label = effort.as_deref().map_or_else(
+        || ctx.t("conversation.model.effortDefault"),
+        |effort| effort_word(ctx, effort),
+      );
       let picked = effort == chosen.effort;
       let choice = ModelChoice {
         model: chosen.model.clone(),
@@ -241,7 +252,7 @@ fn effort_options(ctx: &mut Ctx, step: &StepModel, chosen: &ModelChoice, draft: 
       };
       let set = draft.chosen.clone();
       MenuItem::new(format!("conversation-model-effort-option-{index}"), label, move || {
-        set.set(Some(choice.clone()));
+        set.set(Chosen(Some(choice.clone())));
       })
       .chosen(picked)
       .render(ctx, &draft.efforts)
@@ -258,14 +269,22 @@ fn effort_options(ctx: &mut Ctx, step: &StepModel, chosen: &ModelChoice, draft: 
 
 /// An option of *Applies*: a radio and its words, what it reaches under them; the chosen one on `hover`.
 fn scope_row(ctx: &Ctx, props: &ChipProps, scope: ModelScope, draft: &Draft) -> Element {
-  let on = draft.scope.get() == scope;
+  let on = draft.scope() == scope;
   let (id, name, note) = match scope {
-    ModelScope::Step => ("conversation-model-scope-step", "conversation.model.scope.step", step_note(ctx, props)),
-    ModelScope::Run => ("conversation-model-scope-run", "conversation.model.scope.run", run_note(ctx, props)),
+    ModelScope::Step => (
+      "conversation-model-scope-step",
+      "conversation.model.scope.step",
+      step_note(ctx, props),
+    ),
+    ModelScope::Run => (
+      "conversation-model-scope-run",
+      "conversation.model.scope.run",
+      run_note(ctx, props),
+    ),
   };
   let name = ctx.t(name);
-  let set = draft.scope.clone();
-  let row = pressable(move || set.set(scope))
+  let set = draft.for_run.clone();
+  let row = pressable(move || set.set(scope == ModelScope::Run))
     .id(id)
     .describe("chosen", on.to_string())
     .describe("a11y_name", name.clone())
@@ -304,13 +323,20 @@ fn scope_row(ctx: &Ctx, props: &ChipProps, scope: ModelScope, draft: &Draft) -> 
   if on {
     row.background(ExtraColor::Hover.role()).into()
   } else {
-    row.hovered_style(Style::new().background(ExtraColor::Hover.role())).into()
+    row
+      .hovered_style(Style::new().background(ExtraColor::Hover.role()))
+      .into()
   }
 }
 
 fn step_note(ctx: &Ctx, props: &ChipProps) -> Arc<str> {
   let names = &props.names;
-  let later: Vec<&str> = names.changing.iter().chain(&names.keeping).map(|name| &**name).collect();
+  let later: Vec<&str> = names
+    .changing
+    .iter()
+    .chain(&names.keeping)
+    .map(|name| &**name)
+    .collect();
   if later.is_empty() {
     return ctx.t_args("conversation.model.scope.stepNoteAlone", [("step", &*names.step)]);
   }
@@ -365,10 +391,18 @@ fn foot(ctx: &mut Ctx, props: &ChipProps, (model, draft): (&RunModel, &Draft), c
   );
   let cancel = {
     let open = model.open.clone();
-    ActionButton::new("conversation-model-cancel", ButtonKind::Ghost, ctx.t("conversation.model.cancel"))
-      .on_click(move || open.set(false))
+    ActionButton::new(
+      "conversation-model-cancel",
+      ButtonKind::Ghost,
+      ctx.t("conversation.model.cancel"),
+    )
+    .on_click(move || open.set(false))
   };
-  let apply = ActionButton::new("conversation-model-apply", ButtonKind::Primary, ctx.t("conversation.model.apply"));
+  let apply = ActionButton::new(
+    "conversation-model-apply",
+    ButtonKind::Primary,
+    ctx.t("conversation.model.apply"),
+  );
   let apply = if *chosen == step.now {
     apply.disabled()
   } else {
@@ -376,7 +410,7 @@ fn foot(ctx: &mut Ctx, props: &ChipProps, (model, draft): (&RunModel, &Draft), c
     let asked = ModelAsked {
       step: step.step.clone(),
       to: chosen.clone(),
-      scope: draft.scope.get(),
+      scope: draft.scope(),
     };
     apply.on_click(move || {
       model.open.set(false);
@@ -435,7 +469,11 @@ fn fixed(ctx: &mut Ctx, props: &ChipProps) -> Vec<Element> {
     .rounded(RadiusSize::Md)
     .background(PaletteColor::SurfacePanel)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(Text::new(step.now.model.as_str()).variant(ModelText::Name.role()).nowrap())
+    .child(
+      Text::new(step.now.model.as_str())
+        .variant(ModelText::Name.role())
+        .nowrap(),
+    )
     .child(Spacer::new().flex(1.0))
     .child(icon(Icon::Lock, IconSize::Sm, PaletteColor::TextMuted));
   let model = line(label(ctx.t("conversation.model.fixed.model")).into()).child(locked);
@@ -459,7 +497,13 @@ fn fixed(ctx: &mut Ctx, props: &ChipProps) -> Vec<Element> {
   let foot = Row::new()
     .id("conversation-model-foot")
     .width(Dimension::Pct(100.0))
-    .padding(Padding::new().top(SpacingSize::Sm).left(SpacingSize::Sm).right(SpacingSize::Sm).bottom(SpacingSize::Xs))
+    .padding(
+      Padding::new()
+        .top(SpacingSize::Sm)
+        .left(SpacingSize::Sm)
+        .right(SpacingSize::Sm)
+        .bottom(SpacingSize::Xs),
+    )
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::End)
     .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))

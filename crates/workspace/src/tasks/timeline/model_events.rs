@@ -1,6 +1,6 @@
-//! What a run's model chip changed (ORC-322, the event lines of `08f · Model and effort on a run` `Yzb3F`): a quiet line
-//! for each change of the run's model or effort and each cancelation, among the items of the step it was made for —
-//! of its execution whose agent last started before it — or among the items that wait for a step when its agent had
+//! What a run's model chip changed (ORC-322, the event lines of `08f · Model and effort on a run` `Yzb3F`): a quiet
+//! line for each change of the run's model or effort and each cancelation, among the items of the step it was made for
+//! — of its execution whose agent last started before it — or among the items that wait for a step when its agent had
 //! not started yet. A change made while the step's turn runs says it waits, and offers to cancel it, until that turn
 //! ends.
 
