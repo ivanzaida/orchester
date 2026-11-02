@@ -143,20 +143,20 @@ fn project_settings_auto_mode_reviewer_needs_a_person_and_a_connection_and_refus
   assert!(project_settings::reviewer_widens(&base, &asked));
   assert!(!project_settings::reviewer_widens(&base, &base));
   assert_eq!(
-    project_settings::save_auto_mode_in(repo.path(), &base, &asked, false)
+    project_settings::save_auto_mode_in(repo.path(), &base, &asked, false, None)
       .expect_err("person")
       .key,
     "projectSettings.personOnly"
   );
   assert!(
-    project_settings::save_auto_mode_in(repo.path(), &base, &asked, true).is_err(),
+    project_settings::save_auto_mode_in(repo.path(), &base, &asked, true, None).is_err(),
     "the chosen connection is not in the project"
   );
   assert_eq!(db.auto_mode_settings().expect("unchanged"), base);
   // A narrow change still cannot overwrite a baseline that changed outside the page.
   db.save_auto_mode_settings(&asked).expect("outside writer");
   assert_eq!(
-    project_settings::save_auto_mode_in(repo.path(), &base, &base, false)
+    project_settings::save_auto_mode_in(repo.path(), &base, &base, false, None)
       .expect_err("stale")
       .key,
     "projectSettings.changedOutside"

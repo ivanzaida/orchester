@@ -84,10 +84,16 @@ fn decision_reviewer_setting_saves_local_and_requires_hosted_confirmation_only_w
   db.create_decision_connection(&hosted).expect("hosted");
   let base = AutoModeSettings::default();
   let local_choice = settings(&local, "0.80");
-  project_settings::save_auto_mode_in(repo.path(), &base, &local_choice, false).expect("local");
+  assert_eq!(
+    project_settings::save_auto_mode_in(repo.path(), &base, &local_choice, false, Some(&local))
+      .expect_err("new local reviewer needs permission consent")
+      .key,
+    "projectSettings.personOnly"
+  );
+  project_settings::save_auto_mode_in(repo.path(), &base, &local_choice, true, Some(&local)).expect("local");
   let hosted_choice = settings(&hosted, "0.80");
   assert_eq!(
-    project_settings::save_auto_mode_in(repo.path(), &local_choice, &hosted_choice, false)
+    project_settings::save_auto_mode_in(repo.path(), &local_choice, &hosted_choice, false, Some(&hosted))
       .expect_err("confirmation")
       .key,
     "projectSettings.personOnly"
@@ -97,12 +103,13 @@ fn decision_reviewer_setting_saves_local_and_requires_hosted_confirmation_only_w
   assert_eq!(question.host, "review.example");
   assert!(!question.on_this_computer);
   assert_eq!(question.sends.len(), 4);
-  project_settings::save_auto_mode_in(repo.path(), &local_choice, &hosted_choice, true).expect("person confirms");
+  project_settings::save_auto_mode_in(repo.path(), &local_choice, &hosted_choice, true, Some(&hosted))
+    .expect("person confirms");
   for value in ["0.90", "0.80", "0.10"] {
     let current = db.auto_mode_settings().expect("current");
     let asked = settings(&hosted, value);
     assert!(reviewer::choosing_hosted(&current, &asked, std::slice::from_ref(&hosted)).is_none());
-    project_settings::save_auto_mode_in(repo.path(), &current, &asked, false).expect("threshold edit");
+    project_settings::save_auto_mode_in(repo.path(), &current, &asked, false, Some(&hosted)).expect("threshold edit");
   }
   let language = AgentConnection::new(
     ConnectionId::generate(),
@@ -114,10 +121,10 @@ fn decision_reviewer_setting_saves_local_and_requires_hosted_confirmation_only_w
   .expect("agent");
   db.create_connection(&language.into_connection()).expect("language");
   let current = db.auto_mode_settings().expect("current");
-  project_settings::save_auto_mode_in(repo.path(), &current, &base, false).expect("back to language");
+  project_settings::save_auto_mode_in(repo.path(), &current, &base, false, None).expect("back to language");
   assert_eq!(db.auto_mode_settings().expect("saved"), base);
   assert!(
-    project_settings::save_auto_mode_in(repo.path(), &current, &hosted_choice, true).is_err(),
+    project_settings::save_auto_mode_in(repo.path(), &current, &hosted_choice, true, Some(&hosted)).is_err(),
     "stale baseline"
   );
 }
@@ -238,5 +245,34 @@ fn decision_reviewer_setting_refuses_destination_changes_after_validation() {
         .expect("current destination"),
       AutoModeSave::Saved
     );
+  }
+}
+
+#[test]
+fn decision_reviewer_setting_confirmation_is_bound_to_displayed_url_and_key() {
+  let (repo, mut db) = project();
+  let original = connection("https://shown.example/v1");
+  db.create_decision_connection(&original).expect("connection");
+  let base = db.auto_mode_settings().expect("baseline");
+  let asked = settings(&original, "0.80");
+  for (url, key) in [
+    ("https://different.example/v1", None),
+    (
+      "https://shown.example/v1",
+      Some(orchester_core::id::SecretId::generate()),
+    ),
+  ] {
+    let mut changed = original.clone();
+    changed.set_server(DecisionServerUrl::new(url).expect("url"), key);
+    changed.record_models(vec![model()]);
+    changed.record_check(original.last_check().expect("checked connection").clone());
+    db.save_decision_connection(&changed).expect("changed destination");
+    assert_eq!(
+      project_settings::save_auto_mode_in(repo.path(), &base, &asked, true, Some(&original))
+        .expect_err("stale displayed connection")
+        .key,
+      "projectSettings.changedOutside"
+    );
+    assert_eq!(db.auto_mode_settings().expect("unchanged"), base);
   }
 }

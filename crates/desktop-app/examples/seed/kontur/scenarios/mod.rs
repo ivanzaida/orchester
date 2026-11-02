@@ -37,6 +37,7 @@ mod pipelines;
 mod project_settings;
 mod pull_requests;
 pub mod qa_app_asks;
+mod reviewer_rows;
 pub mod settings;
 mod shared_config;
 mod shared_here;
@@ -95,7 +96,10 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 103] = [
+pub const ALL: [Scenario; 106] = [
+  Scenario::of("reviewer-row", reviewer_rows::seed),
+  Scenario::of("reviewer-row-local", reviewer_rows::local),
+  Scenario::of("reviewer-row-unavailable", reviewer_rows::unavailable),
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-library", agents_library::seed),
   Scenario::of("agents-browser", agents_browser::seed),

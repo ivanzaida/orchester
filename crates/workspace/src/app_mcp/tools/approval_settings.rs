@@ -218,25 +218,7 @@ fn reviewer_change(
     ));
   }
   gate(services)?;
-  let threshold_only = current
-    .reviewer
-    .as_ref()
-    .zip(next.reviewer.as_ref())
-    .is_some_and(|(old, new)| {
-      decision_reviewer::connection_id(old).is_some()
-        && old.connection == new.connection
-        && old.model == new.model
-        && old.effort == new.effort
-    });
-  let returns_to_language = current
-    .reviewer
-    .as_ref()
-    .is_some_and(|c| decision_reviewer::connection_id(c).is_some())
-    && next
-      .reviewer
-      .as_ref()
-      .is_none_or(|c| decision_reviewer::connection_id(c).is_none());
-  if current != &next && !threshold_only && !returns_to_language {
+  if crate::project_settings::reviewer_widens(current, &next) {
     let mut reasons = vec![Message::new("appMcp.widens.reviewer")];
     if moves_reviewer_account(&connections, current, &next) {
       reasons.push(Message::new("appMcp.widens.reviewerAccount"));

@@ -33,6 +33,7 @@ const REVIEWER: (f32, f32, f32) = (142.0, 116.0, 132.0);
 
 pub(super) struct Runs {
   stored: Signal<Option<Read>>,
+  read_failed: Signal<bool>,
   revision: Signal<u64>,
   own: work::OwnSaves,
   /// Auto mode's, the limits' and the environment's save statuses.
@@ -46,6 +47,7 @@ impl Component for Runs {
     let page = ctx.props::<TabProps>().status.clone();
     Self {
       stored: ctx.signal(None),
+      read_failed: ctx.signal(false),
       revision: ctx.signal(0),
       own: work::OwnSaves::new(
         ctx,
@@ -64,20 +66,29 @@ impl Component for Runs {
     let props = ctx.props::<TabProps>().clone();
     let revision = self.revision.get() + self.own.count(&props.project.feed);
     let state = work::load(ctx, props.project.open.repo_root.clone(), revision, &self.own);
+    if state.error.is_some() {
+      self.read_failed.set(true);
+    } else if state.data.is_some() {
+      self.read_failed.set(false);
+    }
     let Some(read) = state.data.clone().or_else(|| self.stored.get()) else {
       return page::scroll(work::pending(ctx, &state, &self.revision, bones));
     };
     self.stored.set(Some(read.clone()));
-    let auto = ctx.mount_keyed::<auto_mode::AutoMode>(
-      "settings-auto-mode",
-      auto_mode::Props {
-        tab: self.sections.props(&props, 0),
-        settings: read.0,
-        parent_read: self.stored.clone(),
-        refresh: self.revision.clone(),
-        own: self.own.clone(),
-      },
-    );
+    let auto = if self.read_failed.get() {
+      work::pending(ctx, &state, &self.revision, approval_bones)
+    } else {
+      ctx.mount_keyed::<auto_mode::AutoMode>(
+        "settings-auto-mode",
+        auto_mode::Props {
+          tab: self.sections.props(&props, 0),
+          settings: read.0,
+          parent_read: self.stored.clone(),
+          refresh: self.revision.clone(),
+          own: self.own.clone(),
+        },
+      )
+    };
     let estimates = ctx.mount_keyed::<estimates::Estimates>(
       "project-settings-estimates",
       estimates::Props {
@@ -101,10 +112,8 @@ impl Component for Runs {
   }
 }
 
-/// The Runs tab while its settings are read (`10 · Project settings · Runs · loading` `lUFjj`): every group heading,
-/// row label, help line and unit stays; the switches, the reviewer's connection, model and effort, the approved-rules
-/// count, the budgets and limits and the variables line are bones in their own fields, the lower groups fading.
-fn bones(ctx: &mut Ctx) -> Column {
+/// Approvals' loading controls, also used while recovering from a rejected settings read.
+fn approval_bones(ctx: &mut Ctx) -> Element {
   let reviewer = Row::new()
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
@@ -131,7 +140,16 @@ fn bones(ctx: &mut Ctx) -> Column {
       .control(skeleton::chevron()),
   ]
   .map(|row| row.render(ctx));
-  let auto = Group::new("settings-auto-reading", ctx.t("project_settings.auto")).rows(rows);
+  Group::new("settings-auto-reading", ctx.t("project_settings.auto"))
+    .rows(rows)
+    .into()
+}
+
+/// The Runs tab while its settings are read (`10 · Project settings · Runs · loading` `lUFjj`): every group heading,
+/// row label, help line and unit stays; the switches, the reviewer's connection, model and effort, the approved-rules
+/// count, the budgets and limits and the variables line are bones in their own fields, the lower groups fading.
+fn bones(ctx: &mut Ctx) -> Column {
+  let auto = approval_bones(ctx);
   let row = SettingRow::new(
     "settings-estimates-reading-row",
     ctx.t("project_settings.estimates.label"),
