@@ -337,7 +337,8 @@
         "enterDeletes": "deletes",
         "cancel": "Cancel",
         "confirm": "Delete conversation",
-        "failed": "Not deleted: {{reason}}"
+        "failed": "Not deleted: {{reason}}",
+        "personOnly": "Only a person deletes a conversation: input from an MCP client is not taken here."
       }
     },
     "settings": {

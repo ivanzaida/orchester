@@ -1,8 +1,10 @@
 //! Archiving and deleting a conversation in History (ORC-329, `08` `q30JYF`, `08d` `qAfeu`, `08e` `I4xzOf`): *Archive*
 //! takes it out of History's list into the Archived view at its foot, where *Unarchive* brings it back; *Delete…* asks
 //! in a modal, which Esc cancels, and deleting the conversation shown falls back to a new one; a delete that failed
-//! says why in the modal. Run with `cargo test -p orchester-app --test orchestrator history_archive`.
+//! says why in the modal; only a person deletes, an MCP client's press or Enter is refused. Run with `cargo test -p
+//! orchester-app --test orchestrator history_archive`.
 
+use lurq::app::events::with_synthetic_input;
 use orchester_app::routes::{OrchestratorChat, ProjectPage, Route};
 use orchester_core::id::ChatId;
 
@@ -128,4 +130,33 @@ fn history_delete_that_failed_says_why_in_the_modal() {
     "Not deleted: This conversation is no longer kept."
   );
   assert!(screen.exists("orchestrator-history-delete"), "the question stays");
+}
+
+#[test]
+fn history_delete_is_a_persons_alone() {
+  let (mut screen, older, _) = opened();
+  choose(&mut screen, older, "delete");
+  screen.until("the question", |screen| {
+    screen.exists("orchestrator-history-delete-confirm")
+  });
+  assert!(!screen.exists("orchestrator-history-delete-person-only"));
+  with_synthetic_input(|| screen.click("orchestrator-history-delete-confirm"));
+  screen.until("the refusal", |screen| {
+    screen.exists("orchestrator-history-delete-person-only")
+  });
+  assert_eq!(
+    screen.text("orchestrator-history-delete-person-only"),
+    "Only a person deletes a conversation: input from an MCP client is not taken here."
+  );
+  with_synthetic_input(|| screen.key(("Enter", "Enter"), false));
+  // A delete that started would be under way by now: its background work had time to run and was polled.
+  std::thread::sleep(std::time::Duration::from_millis(200));
+  screen.until("a pass", |_| true);
+  assert!(screen.db().chat(older).expect("read").is_some(), "nothing deleted");
+  assert!(screen.exists("orchestrator-history-delete"), "the question stays");
+  screen.click("orchestrator-history-delete-confirm");
+  screen.until("the person's delete", |screen| {
+    !screen.exists("orchestrator-history-delete")
+  });
+  assert_eq!(screen.db().chat(older).expect("read"), None);
 }

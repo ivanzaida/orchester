@@ -3,7 +3,8 @@
 //! to them are removed from this computer, the tasks, runs and decisions it started stay, and it cannot be undone while
 //! *Archive* keeps it out of History instead — then *Enter deletes* and *Esc cancels*, *Cancel* and *Delete
 //! conversation*. A delete that failed says why under those lines and the dialog stays; one that succeeded closes it,
-//! and the conversation the screen showed falls back to a new one.
+//! and the conversation the screen showed falls back to a new one. Only a person deletes: an MCP client's press or
+//! Enter is refused, and the dialog says so.
 
 use std::{path::Path, sync::Arc};
 
@@ -11,6 +12,7 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction},
+    events::is_synthetic_input,
   },
   core::Signal,
   node::Element,
@@ -61,6 +63,8 @@ type DeleteAction = FutureAction<(Arc<Path>, ChatId), (), Message>;
 struct DeleteView {
   /// The dialog shows; *Cancel*, Esc and the scrim end the question.
   open: Signal<bool>,
+  /// Synthetic input (an MCP client's) asked to delete and was refused: the dialog says only a person deletes.
+  refused: Signal<bool>,
   delete: DeleteAction,
 }
 
@@ -70,6 +74,7 @@ impl Component for DeleteView {
   fn create(ctx: &mut Ctx) -> Self {
     let props = ctx.props::<DeleteProps>().clone();
     let open = ctx.signal(true);
+    let refused = ctx.signal(false);
     let asked = props.rows.deleting.clone();
     ctx.watch(&open, move |open| {
       if !*open {
@@ -101,7 +106,7 @@ impl Component for DeleteView {
       }
       asked.set(Deleting(None));
     });
-    Self { open, delete }
+    Self { open, refused, delete }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -133,12 +138,7 @@ impl Component for DeleteView {
         ),
       ],
     );
-    let (delete, root, chat) = (self.delete.clone(), props.rows.root.clone(), listing.chat.id());
-    let confirm = move || {
-      if !delete.state().get_untracked().is_pending() {
-        delete.run((root.clone(), chat));
-      }
-    };
+    let confirm = self.confirm(props.rows.root.clone(), listing.chat.id());
     let button = ActionButton::new(
       "orchestrator-history-delete-confirm",
       ButtonKind::Danger,
@@ -158,7 +158,7 @@ impl Component for DeleteView {
       )
       .into()
     });
-    Dialog::new(
+    let dialog = Dialog::new(
       "orchestrator-history-delete",
       Icon::Trash2,
       ctx.t_args(
@@ -169,10 +169,35 @@ impl Component for DeleteView {
     )
     .tone(Tone::Danger)
     .width(NARROW_DIALOG_WIDTH)
-    .part(does)
-    .on_enter(ctx.t("orchestrator.historyPanel.delete.enterDeletes"), confirm)
-    .action(button)
-    .under(failure)
-    .render(ctx, &self.open)
+    .part(does);
+    let dialog = if self.refused.get() {
+      dialog.person_only(ctx.t("orchestrator.historyPanel.delete.personOnly"))
+    } else {
+      dialog
+    };
+    dialog
+      .on_enter(ctx.t("orchestrator.historyPanel.delete.enterDeletes"), confirm)
+      .action(button)
+      .under(failure)
+      .render(ctx, &self.open)
+  }
+}
+
+impl DeleteView {
+  /// Deletes `chat` of the project at `root`, a person's press or Enter only: what goes cannot be brought back, and no
+  /// MCP tool deletes a conversation either, so synthetic input (an MCP client's) is refused and the dialog says so.
+  fn confirm(&self, root: Arc<Path>, chat: ChatId) -> impl Fn() + Clone + Send + Sync + 'static {
+    let (delete, refused) = (self.delete.clone(), self.refused.clone());
+    move || {
+      if is_synthetic_input() {
+        tracing::warn!("synthetic input asked to delete a conversation; not taken");
+        refused.set(true);
+        return;
+      }
+      refused.set(false);
+      if !delete.state().get_untracked().is_pending() {
+        delete.run((root.clone(), chat));
+      }
+    }
   }
 }
