@@ -13,6 +13,7 @@ mod answer;
 mod body;
 pub(in crate::screens) mod card;
 pub(in crate::screens) mod change;
+mod commands;
 mod composer;
 mod context;
 pub(in crate::screens) mod data;
@@ -83,6 +84,7 @@ use crate::{
     chat::{self, follow::Follow},
     markdown::LinkHandler,
     mention::MentionField,
+    slash::SlashField,
   },
 };
 
@@ -128,9 +130,11 @@ struct View {
   focus: Signal<bool>,
   /// The message field has the focus.
   focused: Signal<bool>,
-  /// The message field, the field's @ menu and its mentions (`ui::mention`), and the box the menu opens over.
+  /// The message field, the field's @ menu and its mentions (`ui::mention`), its slash menu (`ui::slash`), and the box
+  /// the menus open over.
   input: ElementRef,
   mention: MentionField,
+  slash: SlashField,
   mention_anchor: ElementRef,
   /// The send menu over the send button is open while the Orchestrator answers, and its chevron.
   menu: Signal<bool>,
@@ -157,6 +161,7 @@ impl Component for OrchestratorScreen {
   fn create(ctx: &mut Ctx) -> Self {
     let (draft, focused) = (ctx.signal(String::new()), ctx.signal(false));
     let mention = MentionField::new(ctx, draft.clone(), focused.clone());
+    let slash = SlashField::new(ctx, draft.clone(), focused.clone());
     let view = View {
       draft,
       attached: DraftAttachments::new(ctx, Vec::new()),
@@ -170,6 +175,7 @@ impl Component for OrchestratorScreen {
       focused,
       input: mention.element(),
       mention,
+      slash,
       mention_anchor: ElementRef::new(),
       menu: ctx.signal(false),
       menu_anchor: ElementRef::new(),

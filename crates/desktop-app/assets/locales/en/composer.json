@@ -136,6 +136,47 @@
       "withoutContinuing": "Send without continuing",
       "withoutResuming": "Send without resuming"
     },
+    "slash": {
+      "agentStep": "{{agent}} · {{step}}",
+      "command": {
+        "history": {
+          "detail": "Open an earlier conversation",
+          "label": "History"
+        },
+        "newConversation": {
+          "already": "This is a new conversation already",
+          "detail": "Start fresh; this one stays in History",
+          "label": "New conversation"
+        },
+        "stopTurn": {
+          "cannot": "{{agent}}’s turn can’t be stopped on its own: it runs as a native agent",
+          "detail": "Stop {{agent}}’s current turn; the run then waits for you",
+          "noTurn": "No turn is running",
+          "noTurnAnswer": "No turn is running: {{agent}} waits for your answer",
+          "label": "Stop turn",
+          "stopping": "{{agent}}’s turn is being stopped"
+        }
+      },
+      "commands": "Commands",
+      "count": "{{shown}} of {{total}}",
+      "empty": {
+        "hint": "Enter sends “/{{query}}” as a message.",
+        "title": "No command matches /{{query}}"
+      },
+      "hint": {
+        "choose": "Choose",
+        "close": "Close",
+        "move": "Move",
+        "sendAsText": "Send as text"
+      },
+      "keys": {
+        "enter": "Enter",
+        "esc": "Esc",
+        "move": "↑ ↓"
+      },
+      "typeToFilter": "Type to filter",
+      "typed": "/{{query}}"
+    },
     "stopFailed": "The turn was not stopped: {{reason}}",
     "undelivered": {
       "afterTurn": "Send after this turn",

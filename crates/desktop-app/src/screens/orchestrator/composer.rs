@@ -72,6 +72,18 @@ pub(super) enum Sending {
   WhileAnswering(Arc<Ways>),
 }
 
+impl Sending {
+  /// What the keys that send do now: send the draft, after the answer while the Orchestrator answers; nothing while
+  /// nothing can be sent or a send is under way.
+  pub(super) fn press(&self) -> Option<Press> {
+    match self {
+      Self::Ready(press) | Self::Empty { press, .. } => Some(press.clone()),
+      Self::WhileAnswering(ways) => Some(ways.after_answer.clone()),
+      Self::Held(_) | Self::Busy => None,
+    }
+  }
+}
+
 /// The box as a screen shows it.
 pub(super) struct ComposerBox<'a> {
   pub(super) placeholder: Arc<str>,
@@ -88,8 +100,8 @@ pub(super) struct ComposerBox<'a> {
   /// The box starts a new conversation (`Composer` `QcfyZ` in `03 New conversation`): 12 over it and 28 between the
   /// message and its bar.
   pub(super) starts: bool,
-  /// The @ menu over the box (`ui::mention`).
-  pub(super) mentions: Element,
+  /// The @ menu and the slash menu over the box (`ui::mention`, `ui::slash`).
+  pub(super) menus: [Element; 2],
 }
 
 /// The box, and why the files last given were not attached under it.
@@ -147,7 +159,7 @@ pub(super) fn composer(ctx: &mut Ctx, view: &View, composer: ComposerBox<'_>) ->
     .spacing(SpacingSize::Sm)
     .child(tray::drop_target(boxed, &view.attached))
     .with_children(tray::refusals(ctx, ATTACHMENTS, &view.attached))
-    .child(composer.mentions)
+    .with_children(composer.menus)
 }
 
 /// *Ctrl Enter* (*⌘ Enter* on macOS), the keys that send.
@@ -175,13 +187,8 @@ fn field(ctx: &Ctx, view: &View, composer: &ComposerBox<'_>, not_set_up: bool) -
     .resolve(&theme.typography(), &theme.palette())
   };
   let (gained, lost) = (composer.focused.clone(), composer.focused.clone());
-  let press = match composer.sending {
-    Sending::Ready(press) | Sending::Empty { press, .. } => Some(press.clone()),
-    Sending::WhileAnswering(ways) => Some(ways.after_answer.clone()),
-    Sending::Held(_) | Sending::Busy => None,
-  };
   let keys = Keys {
-    press,
+    press: composer.sending.press(),
     stop: composer.stop.clone(),
     menu: view.menu.clone(),
     focused: composer.focused.clone(),
@@ -191,7 +198,7 @@ fn field(ctx: &Ctx, view: &View, composer: &ComposerBox<'_>, not_set_up: bool) -
   } else {
     PaletteColor::TextMuted
   };
-  let mention = view.mention.clone();
+  let (slash, mention) = (view.slash.clone(), view.mention.clone());
   let chips = view.draft.with(|text| MentionField::tokens(text));
   let input = TextInput::styled(view.draft.clone(), resolve(PaletteColor::TextPrimary))
     .placeholder_style(resolve(placeholder))
@@ -208,8 +215,8 @@ fn field(ctx: &Ctx, view: &View, composer: &ComposerBox<'_>, not_set_up: bool) -
     .on_focus(move || gained.set(true))
     .on_blur(move || lost.set(false))
     .on_key_down(move |event: KeyboardEvent| {
-      // The @ menu and the chips take their keys first: Enter inserts while the menu is open, Esc closes it.
-      if !mention.key(&event) {
+      // The slash and @ menus and the chips take their keys first: Enter chooses while a menu is open, Esc closes it.
+      if !slash.key(&event) && !mention.key(&event) {
         keys.down(&event);
       }
     })

@@ -207,6 +207,7 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | a rail step that has not started, at 70 % (`r27KI` in `K4AOD`) | `theme::NOT_STARTED_OPACITY` |
 | Browser window (`lcNez`): switcher initial 10.5/600, address mono 12, a page dialog's message 13/1.5, the agent's name on its mark 11/500 `text_inverse`, the file dialog's hint 13/500 and 12 `text_secondary` (`FCera` in `03b` `TWpyp`); switcher gap 7, activity line sides 14, dialog padding 20, the hint's sides 18; the dots' and the agent ring's 1.5 stroke; the tab strip's fade to clear `surface_base` | `BrowserText::*` / `BrowserSpacing::*` / `BrowserBorder::Ring` / `BrowserColor::FadeClear` (`theme/browser.rs`) |
 | Context meter (`Kp4IZ`, `bxHFm`, ORC-305): the share and the model mono 11 `text_muted`, *Full* 11 `danger`, the popover's *Context* 12/600, its tokens 12, its note 11/1.45 `text_muted`; the ring and the popover's bar `text_muted` / `warning` / `danger` | `ContextText::*` (`theme/context.rs`), `ui::context_meter`, `MeterTone::Quiet` / `Full` |
+| Slash menu (`IQOLN`, `OKWFL`, ORC-321): *Commands* 11/500 `text_muted`, a head's and the footer's words 11 `text_muted`, a name 12 `text_primary` (the rest of a filtered one `text_secondary`), its matched letters 12/600, what it does 12 `text_muted` (why it cannot run `text_secondary`), all 1.3; an unavailable row at half | `SlashText::*` (`theme/slash.rs`), `ui::slash`, `DISABLED_OPACITY` |
 
 | `TypographyStyle` | Size/weight | Used for |
 | --- | --- | --- |

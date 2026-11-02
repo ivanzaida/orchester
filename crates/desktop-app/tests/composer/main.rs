@@ -17,6 +17,7 @@ mod keeping;
 mod kontur;
 mod mentions;
 mod sending;
+mod slash;
 mod states;
 #[path = "../support/mod.rs"]
 mod support;

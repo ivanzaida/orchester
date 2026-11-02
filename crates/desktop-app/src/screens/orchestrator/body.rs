@@ -188,6 +188,8 @@ impl Foot<'_> {
         revision: project.feed.saves.get(),
       },
     );
+    let fresh = matches!(self.reads.shown, Shown::New);
+    let commands = super::commands::menu(ctx, view, project, (fresh, self.state.press()));
     let context = super::context::meter(ctx, project, self.reads, self.readiness);
     composer(
       ctx,
@@ -201,7 +203,7 @@ impl Foot<'_> {
         context,
         set_up,
         starts,
-        mentions,
+        menus: [mentions, commands],
       },
     )
   }

@@ -53,6 +53,7 @@ mod shadow;
 mod shell;
 mod sign_in;
 pub mod skills;
+mod slash;
 mod sources;
 mod startup;
 mod task;
@@ -109,6 +110,7 @@ pub use self::{
   shadow::ExtraShadow,
   shell::{ShellSpacing, ShellText},
   sign_in::{SignInSpacing, SignInText},
+  slash::SlashText,
   sources::{SourcesSpacing, SourcesText},
   startup::{StartupSpacing, StartupText},
   task::{TaskSpacing, TaskText},

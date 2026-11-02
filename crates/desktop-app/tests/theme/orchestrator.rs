@@ -1,6 +1,6 @@
 //! The Orchestrator's own type roles and spacing (`hujxu`, `zuvUi` in the new orchester.pen; `Xir64`), its replies'
-//! links (`agv8r`), and the context meter in its composer.
-use orchester_app::theme::ContextText;
+//! links (`agv8r`), and the context meter and the slash menu in its composer.
+use orchester_app::theme::{ContextText, SlashText};
 
 use super::*;
 
@@ -188,4 +188,33 @@ fn context_meter_roles_follow_the_design() {
     theme.palette_color(PaletteColor::Danger),
     "kqwKb"
   );
+}
+
+/// A composer's slash menu (`Slash menu` `IQOLN`, filtered `OKWFL`): all in Geist, 1.3.
+#[test]
+fn slash_menu_roles_follow_the_design() {
+  let app = themed(Mode::Dark);
+  let theme = app.theme();
+  for (role, size, weight, color) in [
+    // *Commands* (`WG5ZV`), a head's or the footer's words (`cvxZd`, `VzkPa`), a name (`mSV2x`), its matched letters
+    // (`Match`), what it does (`Bu9RV`).
+    (SlashText::Section, 11.0, FontWeight::Medium, PaletteColor::TextMuted),
+    (SlashText::Note, 11.0, FontWeight::Normal, PaletteColor::TextMuted),
+    (SlashText::Label, 12.0, FontWeight::Normal, PaletteColor::TextPrimary),
+    (SlashText::Match, 12.0, FontWeight::SemiBold, PaletteColor::TextPrimary),
+    (SlashText::Detail, 12.0, FontWeight::Normal, PaletteColor::TextMuted),
+  ] {
+    let style = theme.typography_style(role.role());
+    assert_eq!(
+      (
+        style.font_size,
+        style.line_height,
+        style.weight,
+        style.color,
+        &*style.font_family
+      ),
+      (size, 1.3, weight, theme.palette_color(color), "Geist"),
+      "{role:?}"
+    );
+  }
 }
