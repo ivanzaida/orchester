@@ -1,6 +1,7 @@
 //! The Orchestrator chat's conversations as the screen reads them: History's list and one conversation's entries,
 //! with the files the person attached to their messages, the todo list each turn's agent keeps, which of its waits
-//! still stand, what became of the runs whose ends no longer do, and how full its session's context is.
+//! still stand, what became of the runs whose ends no longer do, and how full its session's context is; and what a
+//! person changes of a conversation in History, its title and its pin (ORC-328).
 
 use std::{
   collections::{BTreeMap, HashMap, HashSet},
@@ -11,8 +12,9 @@ use orchester_core::{
   attachment::Attachment,
   connection::{context_use::ContextUse, stream::TodoList},
   id::{ChatId, ChatMessageId},
-  orchestrator::{Chat, ChatEntry, EntryKind, TurnState},
+  orchestrator::{BlankTitle, Chat, ChatEntry, ChatTitle, EntryKind, TurnState},
   run::RunStatus,
+  time::Timestamp,
 };
 use orchester_store::{ChatListing, ProjectDb};
 
@@ -30,6 +32,34 @@ pub fn history_in(root: &Path) -> Result<History, Message> {
     .and_then(|db| db.chats())
     .map(|chats| History { chats })
     .map_err(|error| messages::store_error(&error))
+}
+
+/// Titles conversation `chat` of the project at `root` `title`, as a person named it in History; it keeps that title
+/// from then on. A blank title is refused. Blocks on SQLite.
+pub fn rename_in(root: &Path, chat: ChatId, title: &str) -> Result<(), Message> {
+  let title = ChatTitle::new(title).map_err(|BlankTitle| Message::new("orchestrator.conversation.blankTitle"))?;
+  ProjectDb::open(root)
+    .and_then(|mut db| db.rename_chat(chat, &title))
+    .map_err(|error| messages::store_error(&error))
+    .and_then(kept)
+}
+
+/// Pins conversation `chat` of the project at `root` to History's top as of `at`, which lists the latest pin first, or
+/// unpins it (`None`). Blocks on SQLite.
+pub fn pin_in(root: &Path, chat: ChatId, at: Option<Timestamp>) -> Result<(), Message> {
+  ProjectDb::open(root)
+    .and_then(|mut db| db.pin_chat(chat, at))
+    .map_err(|error| messages::store_error(&error))
+    .and_then(kept)
+}
+
+/// A change of a conversation the project no longer keeps did not happen.
+fn kept(changed: bool) -> Result<(), Message> {
+  if changed {
+    Ok(())
+  } else {
+    Err(Message::new("orchestrator.conversation.gone"))
+  }
 }
 
 /// How full the context of the session conversation `chat`'s turns continue is, read alone: the Orchestrator's context

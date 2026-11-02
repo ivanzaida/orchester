@@ -2109,6 +2109,10 @@
       "toolsUnavailable": "Not compacted · the Orchestrator's tools couldn't be served on this computer",
       "failed": "Not compacted · the runner refused it"
     },
+    "conversation": {
+      "blankTitle": "A conversation's title can't be blank.",
+      "gone": "This conversation is no longer kept."
+    },
     "queued": {
       "started": "Its turn had already started, so the message was left as it is."
     },

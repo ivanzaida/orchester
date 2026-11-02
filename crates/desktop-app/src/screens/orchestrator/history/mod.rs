@@ -1,38 +1,38 @@
 //! History (`History panel` `eFI39` in `04 History open` `l1ET7x`): the project's conversations in a 300-wide panel
 //! over the chat's right edge, under the header, on `surface_panel` after a `border` line, its shadow cast to its
-//! left. A search field at its top (12 in, 8 under it); the list, 8 in at its sides, its rows 2 apart, by when each
-//! conversation last changed (*Today*, *Yesterday*, *Earlier*: Geist Mono 10.5 `text_muted`, 10 over and 4 under),
-//! each a row (radius 6, 7 by 10 inside) with its title (12.5/500, `text_primary` for the one shown, else
-//! `text_secondary`) over when and how many messages (11 `text_muted`), the one shown on `hover`; and a note at its
-//! foot over a `border` line. Opening one keeps the draft; Esc or the header's toggle closes it.
+//! left. A search field at its top (12 in, 8 under it); the list, 8 in at its sides, its rows 2 apart: first the
+//! conversations a person pinned, the latest pin first, under *Pinned* with an 11 pin 6 before it (`Pinned` `X981B` in
+//! `08c` `r4DVU`), then the others by when each last changed (*Today*, *Yesterday*, *Earlier*: Geist Mono 10.5
+//! `text_muted`, 10 over and 4 under), each a row ([`row`]) with its title (12.5/500, `text_primary` for the one shown,
+//! else `text_secondary`) over when and how many messages (11 `text_muted`), the one shown on `hover`; and a note at
+//! its foot over a `border` line. Opening one keeps the draft; Esc or the header's toggle closes it.
 
-use std::sync::Arc;
+mod row;
+
+use std::{cmp::Reverse, path::Path, sync::Arc};
 
 use lurq::{
   app::{
-    component::Component,
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Text, TextOverflow, VirtualizedList},
+  components::{Column, Row, Text, VirtualizedList},
   core::Signal,
   layout::Alignment,
-  node::{Element, Style, border::Border, dimension::Dimension, padding::Padding},
+  node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_core::{
   id::{ChatId, ProjectId},
   time::Timestamp,
 };
 use orchester_store::ChatListing;
-use orchester_workspace::display;
 
+use self::row::ItemView;
 use crate::{
-  navigation::Navigation,
-  routes::{OrchestratorChat, ProjectPage, Route},
-  theme::{ExtraColor, ExtraSpacing, ExtraTypography, OrchestratorShadow, OrchestratorText},
+  theme::{ExtraSpacing, ExtraTypography, IconSize, OrchestratorShadow, OrchestratorText},
   ui::{
     field::FieldInput,
-    pressable::opening,
+    icon::{Icon, icon},
     skeleton::{self, Skeleton, fading},
   },
 };
@@ -61,25 +61,69 @@ impl Day {
       Self::Earlier
     }
   }
+}
 
+/// The heading of a group of the list.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Heading {
+  /// The conversations a person pinned.
+  Pinned,
+  /// The others, by when each last changed.
+  Day(Day),
+}
+
+impl Heading {
   const fn key(self) -> &'static str {
     match self {
-      Self::Today => "orchestrator.historyPanel.today",
-      Self::Yesterday => "orchestrator.historyPanel.yesterday",
-      Self::Earlier => "orchestrator.historyPanel.earlier",
+      Self::Pinned => "orchestrator.historyPanel.pinned",
+      Self::Day(Day::Today) => "orchestrator.historyPanel.today",
+      Self::Day(Day::Yesterday) => "orchestrator.historyPanel.yesterday",
+      Self::Day(Day::Earlier) => "orchestrator.historyPanel.earlier",
     }
   }
 }
 
-/// A row of the list: a day's heading or a conversation.
+/// The conversation whose title History edits in place; `None` while none is.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) struct Renaming(pub(super) Option<ChatId>);
+
+impl lurq::app::component::DevtoolsInspectable for Renaming {}
+
+/// What every conversation's row shares: the project, its folder, where *Rename* and *Pin* keep what they change, and
+/// which conversation's title is edited in place, the screen's, which Esc cancels.
+#[derive(Clone)]
+pub(super) struct Rows {
+  project: ProjectId,
+  root: Arc<Path>,
+  renaming: Signal<Renaming>,
+}
+
+impl Rows {
+  pub(super) fn new(project: ProjectId, root: &Path, renaming: Signal<Renaming>) -> Self {
+    Self {
+      project,
+      root: Arc::from(root),
+      renaming,
+    }
+  }
+}
+
+/// Compared by what it names; the signal by which one it is.
+impl PartialEq for Rows {
+  fn eq(&self, other: &Self) -> bool {
+    (self.project, &self.root, self.renaming.id()) == (other.project, &other.root, other.renaming.id())
+  }
+}
+
+/// A row of the list: a group's heading or a conversation.
 #[derive(Clone, PartialEq)]
 enum Item {
-  Day(Day),
+  Heading(Heading),
   Chat {
     listing: ChatListing,
     current: bool,
     today: bool,
-    project: ProjectId,
+    rows: Rows,
   },
 }
 
@@ -88,18 +132,18 @@ impl lurq::app::component::DevtoolsInspectable for Item {}
 impl Item {
   fn key(&self) -> String {
     match self {
-      Self::Day(day) => format!("day-{day:?}"),
+      Self::Heading(heading) => format!("heading-{heading:?}"),
       Self::Chat { listing, .. } => listing.chat.id().to_string(),
     }
   }
 }
 
-/// The panel over `chats` of the project, `current` the one shown; `search` filters it by title. While the
-/// conversations are read (`chats` none), the list is bones (`06 Orchestrator · History reading` `ipw6U`).
+/// The panel over `chats` of the project `rows` name, `current` the one shown; `search` filters it by title. While
+/// the conversations are read (`chats` none), the list is bones (`06 Orchestrator · History reading` `ipw6U`).
 pub(super) fn panel(
   ctx: &mut Ctx,
   search: &Signal<String>,
-  project: ProjectId,
+  rows: &Rows,
   (chats, current): (Option<&[ChatListing]>, Option<ChatId>),
 ) -> Element {
   let label = ctx.t("orchestrator.historyPanel.search");
@@ -109,7 +153,7 @@ pub(super) fn panel(
     .render(ctx);
   let list: Element = match chats {
     None => reading(ctx),
-    Some(chats) => list(ctx, chats, (current, project), &search.get()),
+    Some(chats) => list(ctx, chats, (current, rows), &search.get()),
   };
   Column::new()
     .id("orchestrator-history-panel")
@@ -142,14 +186,9 @@ pub(super) fn panel(
     .into()
 }
 
-/// The conversations the search finds, under their days, or why there are none.
-fn list(
-  ctx: &mut Ctx,
-  chats: &[ChatListing],
-  (current, project): (Option<ChatId>, ProjectId),
-  search: &str,
-) -> Element {
-  let items = items(chats, (current, project), search);
+/// The conversations the search finds, the pinned ones and the others under their days, or why there are none.
+fn list(ctx: &mut Ctx, chats: &[ChatListing], (current, rows): (Option<ChatId>, &Rows), search: &str) -> Element {
+  let items = items(chats, (current, rows), search);
   if items.is_empty() {
     let words = if chats.is_empty() {
       "orchestrator.historyPanel.empty"
@@ -241,125 +280,59 @@ fn foot(ctx: &Ctx) -> Column {
     )
 }
 
-/// The list's rows: `chats` whose title has every word of `search`, under the day each last changed.
-fn items(chats: &[ChatListing], (current, project): (Option<ChatId>, ProjectId), search: &str) -> Vec<Item> {
+/// The list's rows: `chats` whose title has every word of `search`, the pinned ones first, the latest pin first, and
+/// then the others under the day each last changed.
+fn items(chats: &[ChatListing], (current, rows): (Option<ChatId>, &Rows), search: &str) -> Vec<Item> {
   let words: Vec<String> = search.split_whitespace().map(str::to_lowercase).collect();
-  let today = Timestamp::now().local_day_start();
-  let mut items = Vec::new();
-  let mut last_day = None;
-  for listing in chats {
+  let found = |listing: &&ChatListing| {
     let title = listing.chat.title().to_lowercase();
-    if !words.iter().all(|word| title.contains(word.as_str())) {
-      continue;
-    }
+    words.iter().all(|word| title.contains(word.as_str()))
+  };
+  let today = Timestamp::now().local_day_start();
+  let item = |listing: &ChatListing| Item::Chat {
+    listing: listing.clone(),
+    current: current == Some(listing.chat.id()),
+    today: Day::of(listing.last, today) == Day::Today,
+    rows: rows.clone(),
+  };
+  let mut pinned: Vec<&ChatListing> = chats
+    .iter()
+    .filter(found)
+    .filter(|listing| listing.pinned.is_some())
+    .collect();
+  pinned.sort_by_key(|listing| Reverse(listing.pinned));
+  let mut items = Vec::new();
+  if !pinned.is_empty() {
+    items.push(Item::Heading(Heading::Pinned));
+    items.extend(pinned.into_iter().map(item));
+  }
+  let mut last_day = None;
+  for listing in chats.iter().filter(found).filter(|listing| listing.pinned.is_none()) {
     let day = Day::of(listing.last, today);
     if last_day != Some(day) {
-      items.push(Item::Day(day));
+      items.push(Item::Heading(Heading::Day(day)));
       last_day = Some(day);
     }
-    items.push(Item::Chat {
-      listing: listing.clone(),
-      current: current == Some(listing.chat.id()),
-      today: day == Day::Today,
-      project,
-    });
+    items.push(item(listing));
   }
   items
 }
 
-struct ItemView;
-
-impl Component for ItemView {
-  type Props = Item;
-
-  fn create(_ctx: &mut Ctx) -> Self {
-    Self
-  }
-
-  fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    match ctx.props::<Item>().clone() {
-      Item::Day(day) => Row::new()
-        .width(Dimension::Pct(100.0))
-        .padding(
-          Padding::new()
-            .left(SpacingSize::Sm)
-            .right(SpacingSize::Sm)
-            .top(ExtraSpacing::Loose.role())
-            .bottom(SpacingSize::Xs),
-        )
-        .child(Text::new(&ctx.t(day.key())).variant(OrchestratorText::Eyebrow.role()))
-        .into(),
-      Item::Chat {
-        listing,
-        current,
-        today,
-        project,
-      } => chat_row(ctx, &listing, (current, today), project),
-    }
-  }
-}
-
-/// A conversation's row; pressing it opens the conversation.
-fn chat_row(ctx: &mut Ctx, listing: &ChatListing, (current, today): (bool, bool), project: ProjectId) -> Element {
-  let id = listing.chat.id();
-  let when: Arc<str> = if today {
-    display::clock(listing.last).into()
-  } else {
-    super::date(ctx, listing.last)
-  };
-  let count = listing.messages.to_string();
-  let messages = if listing.messages == 1 {
-    ctx.t("orchestrator.historyPanel.messages.one")
-  } else {
-    ctx.t_args("orchestrator.historyPanel.messages.other", [("count", count.as_str())])
-  };
-  let meta = ctx.t_args(
-    "orchestrator.historyPanel.meta",
-    [("when", &*when), ("messages", &*messages)],
-  );
-  let navigation = Navigation::of(ctx);
-  let route = Route::Project(project, ProjectPage::Orchestrator(OrchestratorChat::Chat(id)));
-  let row = opening(navigation.to(route))
-    .id(format!("orchestrator-history-{id}"))
-    .describe("current", current.to_string())
+/// A group's heading: *Pinned* after its pin, or a day.
+fn heading(ctx: &Ctx, heading: Heading) -> Element {
+  Row::new()
+    .id(format!("orchestrator-history-heading-{heading:?}"))
     .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(ROW_HEIGHT))
-    .padding(Padding::symmetric(
-      ExtraSpacing::Loose.role(),
-      ExtraSpacing::TextArea.role(),
-    ))
-    .align_items(Alignment::Center)
-    .rounded(RadiusSize::Md)
-    .hovered_style(Style::new().background(ExtraColor::Hover.role()));
-  let row = if current {
-    row.background(ExtraColor::Hover.role())
-  } else {
-    row
-  };
-  let title_color = if current {
-    PaletteColor::TextPrimary
-  } else {
-    PaletteColor::TextSecondary
-  };
-  row
-    .child(
-      Column::new()
-        .width(Dimension::Pct(100.0))
-        .spacing(ExtraSpacing::Tight.role())
-        .child(
-          Text::new(listing.chat.title())
-            .variant(OrchestratorText::Emphasis.role())
-            .color(title_color)
-            .width(Dimension::Pct(100.0))
-            .nowrap()
-            .text_overflow(TextOverflow::Elipsis),
-        )
-        .child(
-          Text::new(&meta)
-            .variant(OrchestratorText::HistoryMeta.role())
-            .nowrap()
-            .text_overflow(TextOverflow::Elipsis),
-        ),
+    .padding(
+      Padding::new()
+        .left(SpacingSize::Sm)
+        .right(SpacingSize::Sm)
+        .top(ExtraSpacing::Loose.role())
+        .bottom(SpacingSize::Xs),
     )
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::Center)
+    .with_children((heading == Heading::Pinned).then(|| icon(Icon::Pin, IconSize::Xs, PaletteColor::TextMuted)))
+    .child(Text::new(&ctx.t(heading.key())).variant(OrchestratorText::Eyebrow.role()))
     .into()
 }
