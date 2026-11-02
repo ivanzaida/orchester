@@ -1,6 +1,7 @@
 //! The team server's own settings for its admins (`docs/architecture/server.md`, "The server admin", "Identity tokens
 //! and keys"): the cloud link and join approval.
 
+use orchester_core::sharing::ClaimStalenessThreshold;
 use serde::{Deserialize, Serialize};
 
 use crate::{CertificateInfo, Credential, UserRef};
@@ -74,6 +75,9 @@ pub struct ServerSettings {
   /// The server's name, shown to everyone it invites; `name` in `server.toml` until an admin changes it.
   #[serde(default)]
   pub name: String,
+  /// Server-admin-only setting, in whole seconds; absent on older servers.
+  #[serde(default)]
+  pub claim_staleness_seconds: ClaimStalenessThreshold,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -81,6 +85,7 @@ pub struct ServerSettings {
 pub struct SettingsChanges {
   pub join_approval: Option<bool>,
   pub name: Option<String>,
+  pub claim_staleness_seconds: Option<ClaimStalenessThreshold>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
