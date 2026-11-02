@@ -49,7 +49,7 @@ use crate::{
     icon::Icon,
     notice::{Notice, NoticeTone},
     skeleton::{self, Skeleton},
-    state::{load_error, loading},
+    state::load_error,
   },
 };
 
@@ -184,7 +184,7 @@ impl Component for LandingPage {
         (SignIn::SignedOut { .. }, _) => return sign_in::signed_out(ctx, invite),
         // Whether the sign-in can accept is not read yet: the page waits rather than say the server can't be read.
         (SignIn::SignedIn { .. }, None) => {
-          let body = loading("orchester-landing-loading", &ctx.t("sharing.landing.reading")).into();
+          let body = reading(ctx, "orchester-landing-loading", "sharing.landing.reading");
           return page(ctx, None, &target, body);
         }
         (SignIn::SignedIn { email, .. }, Some(Some(status))) if status.enabled && !status.this_session => {
@@ -196,7 +196,7 @@ impl Component for LandingPage {
     let body = match (state.data, state.error) {
       (Some(Read(landing)), _) => {
         if self.open_at_once(ctx, &landing, &target) {
-          loading("orchester-landing-opening", &ctx.t("sharing.landing.opening")).into()
+          reading(ctx, "orchester-landing-opening", "sharing.landing.opening")
         } else {
           let body = if self.later.get() {
             self.waits(ctx, &landing)
@@ -216,11 +216,7 @@ impl Component for LandingPage {
           move || revision.update(|count| *count += 1),
         )
       }
-      (None, None) => {
-        // No loading frame draws the invite's landing: its choices' rows are bones in one outline until read.
-        let bones = skeleton::list(ctx, "orchester-landing-rows", &[(160.0, 280.0), (140.0, 240.0)]);
-        Skeleton::new("orchester-landing-loading", ctx.t("sharing.landing.reading")).show(ctx, bones)
-      }
+      (None, None) => reading(ctx, "orchester-landing-loading", "sharing.landing.reading"),
     };
     page(ctx, None, &target, body)
   }
@@ -359,6 +355,14 @@ fn page(ctx: &mut Ctx, landing: Option<&Landing>, target: &JoinTarget, body: Ele
     .child(frame::head("orchester-landing-head", None, (&title, lead), Vec::new()))
     .child(body);
   frame::column("orchester-landing-scroll", pane)
+}
+
+/// The landing's skeleton under `id`, named by `label`'s words: while it is read, while whether the sign-in can accept
+/// is read, and while the review it opens at once comes. No loading frame draws the invite's landing: its choices' rows
+/// are bones in one outline.
+fn reading(ctx: &mut Ctx, id: &str, label: &str) -> Element {
+  let bones = skeleton::list(ctx, "orchester-landing-rows", &[(160.0, 280.0), (140.0, 240.0)]);
+  Skeleton::new(id, ctx.t(label)).show(ctx, bones)
 }
 
 /// The name of the server the target names, as this computer keeps it, read once off the UI thread; `None` until it is

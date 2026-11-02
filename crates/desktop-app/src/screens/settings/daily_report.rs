@@ -1,8 +1,8 @@
 //! *Daily report* (ORC-47, `Daily report` `Uqsxx` in `02 · Notifications`): *Daily report from the Orchestrator* with
 //! its switch, off until a person turns it on, and while it is on, *Deliver at* with the time of day the report comes
 //! at, in the quiet hours' time select (`super::notifications`). The setting is read once when the group opens and
-//! saved off the UI thread at each change; until it is read the switch stays as it is, and a setting that cannot be
-//! read or was not saved says why under the row.
+//! saved off the UI thread at each change; until it is read the switch and the time are bones (`L09L` `UjuJA`), and a
+//! setting that cannot be read or was not saved says why under the row.
 
 use lurq::{
   app::{
@@ -28,12 +28,15 @@ use crate::{
     field::{SelectField, field_error},
     message::message_text,
     setting_rows::{SettingGroup, SettingRow},
+    skeleton::{self, Skeleton},
     toggle::{Toggle, ToggleKind},
   },
 };
 
 /// The switch's element id, which the row's parts extend.
 const ID: &str = "settings-daily-report";
+/// The time's bone in its field while the setting is read (`Text bone` `kpAov`).
+const TIME_BONE: f32 = 40.0;
 
 type SaveAction = FutureAction<Option<ReportTime>, (), Message>;
 
@@ -80,10 +83,19 @@ impl Component for DailyReportSection {
     let title = ctx.t("settings.dailyReport.title");
     let description = ctx.t("settings.dailyReport.description");
     let on = matches!(shown, Some(Some(_)));
-    let switch = Toggle::new(ID, ToggleKind::Switch, on, title.clone()).hide_label();
-    let switch = match shown {
-      Some(_) => self.listen(switch, save),
-      None => switch,
+    // Until the setting is read, the switch and the time are bones of their size (`L09L` `UjuJA`), so no state shows
+    // that may not be the stored one.
+    let reading = shown.is_none() && read.is_pending();
+    let switch: Element = if reading {
+      Skeleton::new(format!("{ID}-reading"), ctx.t("settings.reading"))
+        .inline()
+        .show(ctx, skeleton::switch())
+    } else {
+      let switch = Toggle::new(ID, ToggleKind::Switch, on, title.clone()).hide_label();
+      match shown {
+        Some(_) => self.listen(switch, save).into(),
+        None => switch.into(),
+      }
     };
     let problem = match (&read.error, &failed) {
       (Some(reason), _) => Some(("settings.dailyReport.unreadable", reason)),
@@ -100,7 +112,11 @@ impl Component for DailyReportSection {
       .control(switch)
       .below_all(problem)
       .render(ctx);
-    let at = on.then(|| self.time_row(ctx));
+    let at = if reading {
+      Some(time_reading(ctx))
+    } else {
+      on.then(|| self.time_row(ctx))
+    };
     SettingGroup::new(format!("{ID}-section"), ctx.t("settings.dailyReport.group"))
       .row(report)
       .rows(at)
@@ -152,6 +168,17 @@ impl DailyReportSection {
   }
 }
 
+/// *Deliver at* while the setting is read: the time's field with a bone in it (`At` `IPVO6` in `L09L`).
+fn time_reading(ctx: &mut Ctx) -> Element {
+  let field = skeleton::field(ctx, TIME_WIDTH, TIME_BONE);
+  let field = Skeleton::new(format!("{ID}-at-reading"), ctx.t("settings.reading"))
+    .inline()
+    .show(ctx, field);
+  SettingRow::new(format!("{ID}-at"), ctx.t("settings.dailyReport.at"))
+    .control(field)
+    .render(ctx)
+}
+
 /// Saves the time the person chose, or that the report is off.
 fn save_action(ctx: &mut Ctx) -> SaveAction {
   let workspace = Services::of(ctx).workspace;
@@ -168,13 +195,14 @@ fn save_action(ctx: &mut Ctx) -> SaveAction {
   })
 }
 
-/// The setting as stored, read when the section opens.
+/// The setting as stored, read when the section opens; it waits while reads are held (`hold_reads`).
 fn stored(ctx: &mut Ctx) -> FutureState<Setting, Message> {
-  let workspace = Services::of(ctx).workspace;
+  let Services { workspace, hold, .. } = Services::of(ctx);
   ctx
     .future((), move |()| {
-      let workspace = workspace.clone();
+      let (workspace, hold) = (workspace.clone(), hold.clone());
       async move {
+        hold.released().await;
         background::run(move || workspace.daily_report_schedule())
           .await?
           .map(|schedule| Setting(schedule.map(|schedule| schedule.time)))

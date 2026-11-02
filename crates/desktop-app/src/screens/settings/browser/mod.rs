@@ -8,9 +8,10 @@
 //! browsing*, on until a person turns it off.
 //!
 //! What it shows is read off the UI thread (finding the browser reads the registry on Windows), again after each
-//! choice and at *Look again*; the runner starts a project's browser by the same rule. The header's save state
-//! follows the choice and the switch.
+//! choice and at *Look again*; the runner starts a project's browser by the same rule. Until the first read ends the
+//! groups are a skeleton ([`reading`], `L12L` `vC4Jf`). The header's save state follows the choice and the switch.
 
+mod reading;
 mod rows;
 mod window;
 
@@ -42,10 +43,7 @@ use crate::{
     path_picker::{PathKind, PathPicker},
   },
   theme::SettingsSpacing,
-  ui::{
-    message::message_text,
-    state::{load_error, loading},
-  },
+  ui::{message::message_text, state::load_error},
 };
 
 /// The tab, scrolling under the header.
@@ -105,7 +103,7 @@ impl Component for BrowserSection {
     let settings = match (&read.data, &read.error) {
       (_, Some(error)) if !read.is_pending() => return failed(ctx, error, again),
       (Some(settings), _) => Arc::clone(&settings.0),
-      _ => return loading("settings-browser-reading", &ctx.t("settings.browser.reading")).into(),
+      _ => return reading::skeleton(ctx),
     };
     let actions = rows::Actions {
       choose: &choose,
@@ -162,13 +160,15 @@ fn choose_action(ctx: &mut Ctx, workspace: &Workspace) -> ChooseAction {
   })
 }
 
-/// What Settings › Browser shows, read again at each of `deps`: *Look again* and each choice.
+/// What Settings › Browser shows, read again at each of `deps`: *Look again* and each choice; it waits while reads
+/// are held (`hold_reads`), so its skeleton can be looked at.
 fn read(ctx: &mut Ctx, workspace: &Workspace, deps: (u64, Option<Choice>)) -> FutureState<Read, Message> {
-  let workspace = workspace.clone();
+  let (workspace, hold) = (workspace.clone(), Services::of(ctx).hold);
   ctx
     .future(deps, move |_| {
-      let workspace = workspace.clone();
+      let (workspace, hold) = (workspace.clone(), hold.clone());
       async move {
+        hold.released().await;
         background::run(move || workspace.browser_settings())
           .await?
           .map(|settings| Read(Arc::new(settings)))
