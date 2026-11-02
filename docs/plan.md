@@ -1007,6 +1007,11 @@ unsaved catalog checks, destination disclosure, and person-only hosted saves thr
 one form and authority checks. Tests: `orchester-app --test connections connections_decision` and i18n filters.
 No platform-specific code. Design verification remains the separate Verify step.
 
+ORC-569 · Story-point estimates with a decision reviewer · branch `orchester/orc-569-run-2` (implemented 2026-11-02).
+Estimates resolve the project's default language reviewer when a decision model is selected, keeping the language
+model's reason and token accounting. The Estimates row names that connection, or explains that estimates are
+unavailable without one. Explicit language reviewer choices keep their model and effort.
+
 ORC-561 · Test a decision model on recorded project requests (implemented 2026-11-01).
 Workspace exposes an explicit test action, stored progress/results and Stop; the runner reconstructs historical
 review context, omits unavailable facts explicitly, runs eight requests at once and refuses hosted automation.
