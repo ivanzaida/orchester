@@ -16,6 +16,7 @@
 //! stored once under their key, so a retry never sends twice. A message its agent's CLI did not take offers
 //! *Send after this turn* and *Edit in composer* under it ([`undelivered`]).
 
+mod commands;
 mod context;
 mod controls;
 mod feedback;
@@ -73,6 +74,7 @@ use crate::{
     icon::{Icon, icon},
     mention::{self, MentionField, MenuProps},
     message::message_text,
+    slash::SlashField,
   },
 };
 
@@ -204,9 +206,11 @@ impl lurq::app::component::DevtoolsInspectable for DockProps {}
 struct Composer {
   menu: Signal<bool>,
   focused: Signal<bool>,
-  /// The message field, its @ menu and mentions (`ui::mention`), and the box the menu opens over.
+  /// The message field, its @ menu and mentions (`ui::mention`), its slash menu (`ui::slash`), and the box the menus
+  /// open over.
   input: ElementRef,
   mention: MentionField,
+  slash: SlashField,
   box_anchor: ElementRef,
   anchor: ElementRef,
   /// The question the field last took the focus for: once per question.
@@ -226,12 +230,15 @@ impl Component for Composer {
       }
     });
     let focused = ctx.signal(false);
-    let mention = MentionField::new(ctx, props.composing.state.draft, focused.clone());
+    let draft = props.composing.state.draft;
+    let mention = MentionField::new(ctx, draft.clone(), focused.clone());
+    let slash = SlashField::new(ctx, draft, focused.clone());
     Self {
       menu: ctx.signal(false),
       focused,
       input: mention.element(),
       mention,
+      slash,
       box_anchor: ElementRef::new(),
       anchor: ElementRef::new(),
       answering: Mutex::new(None),
@@ -347,13 +354,14 @@ impl Composer {
     let feedback = feedback::line(ctx, &composing.state, (&props.conversation, mode_name(&mode)), &presses);
     let note = words::note(ctx, &mode, &props.conversation).map(|note| quiet(&note));
     let mentions = self.mentions(ctx, composing);
+    let commands = commands::menu(ctx, (&self.slash, &self.box_anchor), composing, &mode);
     context::line(ctx, composing, (&mode, recipient), leave)
       .into_iter()
       .chain(std::iter::once(tray::drop_target(composer, attached).into()))
       .chain(refused)
       .chain(feedback)
       .chain(note)
-      .chain(std::iter::once(mentions))
+      .chain([mentions, commands])
       .collect()
   }
 
@@ -413,7 +421,7 @@ impl Composer {
       _ => None,
     };
     let keys = presses::keys(presses, (leave, self.input.clone(), stop), self.menu.clone());
-    let mention = self.mention.clone();
+    let (slash, mention) = (self.slash.clone(), self.mention.clone());
     let draft = &props.composing.state.draft;
     let chips = draft.with(|text| MentionField::tokens(text));
     let input = TextInput::styled(draft.clone(), resolve(PaletteColor::TextPrimary))
@@ -431,8 +439,9 @@ impl Composer {
       .on_focus(move || gained.set(true))
       .on_blur(move || lost.set(false))
       .on_key_down(move |event: KeyboardEvent| {
-        // The @ menu and the chips take their keys first: Enter inserts while the menu is open, Esc closes it.
-        if !mention.key(&event) {
+        // The slash and @ menus and the chips take their keys first: Enter chooses while a menu is open, Esc closes
+        // it.
+        if !slash.key(&event) && !mention.key(&event) {
           keys(event);
         }
       })

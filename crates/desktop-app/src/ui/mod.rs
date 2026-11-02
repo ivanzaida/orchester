@@ -66,6 +66,7 @@ pub mod setting_rows;
 pub mod settings_page;
 pub mod skeleton;
 pub mod skill_row;
+pub mod slash;
 pub mod source_box;
 pub mod source_row;
 pub mod state;
