@@ -228,6 +228,22 @@ pub fn resolve_reviewer<'a>(
   })
 }
 
+/// Story-point estimates need a language model that can write a reason. A decision reviewer uses the
+/// project's default language reviewer, independently of the decision server's availability.
+pub fn resolve_estimator<'a>(
+  settings: &AutoModeSettings,
+  connections: &'a [Connection],
+) -> Result<ResolvedReviewer<'a>, ReviewerUnavailable> {
+  if matches!(
+    settings.reviewer.as_ref().map(|choice| choice.connection),
+    Some(ReviewerConnectionId::Decision { .. })
+  ) {
+    resolve_reviewer(&AutoModeSettings::default(), connections, &[])
+  } else {
+    resolve_reviewer(settings, connections, &[])
+  }
+}
+
 fn resolve_decision<'a>(
   choice: &ReviewerChoice,
   id: DecisionConnectionId,

@@ -32,7 +32,7 @@ pub use self::{
   choice::{
     AutoModeSettings, DEFAULT_REVIEW_MODEL, DecisionReviewerConnection, ResolvedReviewer, ReviewerChoice,
     ReviewerConnection, ReviewerConnectionId, ReviewerKind, ReviewerUnavailable, decision_reviewer_person_only,
-    default_decision_threshold, default_review_model, resolve_reviewer, reviewer_kind,
+    default_decision_threshold, default_review_model, resolve_estimator, resolve_reviewer, reviewer_kind,
   },
   decision::{DecisionVerdict, NotProbability, Probability, Risk, Risks},
   decision_usage::DecisionReviewRecord,
