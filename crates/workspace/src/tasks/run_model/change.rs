@@ -73,11 +73,7 @@ pub fn change_model_in(repo_root: &Path, run: RunId, asked: ModelAsked, by: Answ
   }
   let also: Vec<StepKey> = match asked.scope {
     ModelScope::Step => Vec::new(),
-    ModelScope::Run => later_on(&db, &run, &asked.step, &connection)?
-      .into_iter()
-      .filter(|step| step.same_connection)
-      .map(|step| step.key)
-      .collect(),
+    ModelScope::Run => later_on(&db, &run, &asked.step, &connection)?.changing,
   };
   let mut before = Vec::new();
   let mut changes = Vec::new();

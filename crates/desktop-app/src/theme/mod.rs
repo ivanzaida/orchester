@@ -48,6 +48,7 @@ pub mod pipelines;
 mod project_settings;
 mod projects;
 mod pull_requests;
+mod run_model;
 mod secrets;
 mod settings;
 mod shadow;
@@ -103,6 +104,7 @@ pub use self::{
   overview::{OverviewSpacing, OverviewText},
   palette::{ExtraColor, Mode},
   permissions::{PermissionsSpacing, PermissionsText},
+  run_model::ModelText,
   pipelines::{PipelinesSpacing, PipelinesText},
   project_settings::{ProjectSettingsSpacing, ProjectSettingsText},
   projects::{ProjectsSpacing, ProjectsText},

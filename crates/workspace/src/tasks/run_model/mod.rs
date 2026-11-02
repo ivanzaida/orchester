@@ -28,13 +28,13 @@ pub struct OfferedModel {
   pub efforts: Vec<String>,
 }
 
-/// The later steps a change for the rest of the run reaches, and those that keep their model, by name.
+/// The later steps a change for the rest of the run reaches, and those that keep their model, in pipeline order.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct LaterSteps {
   /// Later steps not started whose agent runs on the same connection.
-  pub changing: Vec<Arc<str>>,
+  pub changing: Vec<StepKey>,
   /// Later agent steps not started that run on another connection.
-  pub keeping: Vec<Arc<str>>,
+  pub keeping: Vec<StepKey>,
 }
 
 /// The model of the step at work, as the chip and its picker show it.
@@ -127,7 +127,7 @@ fn step_model(
     connection: connection.name().as_str().into(),
     provider: connection.provider(),
     offered: offered(&connection, &profile.model),
-    later: later_steps(db, run, &current.key, &connection)?,
+    later: later_on(db, run, &current.key, &connection)?,
     profile,
     now,
     waiting,
@@ -160,25 +160,17 @@ pub(crate) fn profile_choice(db: &ProjectDb, run: &Run, key: &StepKey) -> Result
   }))
 }
 
-/// An agent step after the step at work that has not started.
-pub(crate) struct LaterStep {
-  pub(crate) key: StepKey,
-  pub(crate) name: Arc<str>,
-  /// Its agent runs on the same connection as the step at work.
-  pub(crate) same_connection: bool,
-}
-
-/// The agent steps after `current` in `run`'s pipeline that have not started, in its order, each with whether its agent
-/// runs on `connection`.
+/// The agent steps after `current` in `run`'s pipeline that have not started, in its order, split by whether their
+/// agent runs on `connection`.
 pub(crate) fn later_on(
   db: &ProjectDb,
   run: &Run,
   current: &StepKey,
   connection: &AgentConnection,
-) -> Result<Vec<LaterStep>, StoreError> {
+) -> Result<LaterSteps, StoreError> {
   let steps = run.snapshot().body().steps();
   let start = steps.iter().position(|step| step.key == *current).map_or(steps.len(), |at| at + 1);
-  let mut later = Vec::new();
+  let mut later = LaterSteps::default();
   for step in &steps[start..] {
     let agent = matches!(
       run.snapshot().step(&step.key).map(|pinned| pinned.executor()),
@@ -191,23 +183,13 @@ pub(crate) fn later_on(
       continue;
     }
     let on = db.step_agent_connection(run, &step.key)?;
-    later.push(LaterStep {
-      key: step.key.clone(),
-      name: step.name.as_str().into(),
-      same_connection: on.is_some_and(|on| on.id() == connection.id()),
-    });
+    if on.is_some_and(|on| on.id() == connection.id()) {
+      later.changing.push(step.key.clone());
+    } else {
+      later.keeping.push(step.key.clone());
+    }
   }
   Ok(later)
-}
-
-fn later_steps(db: &ProjectDb, run: &Run, current: &StepKey, connection: &AgentConnection) -> Result<LaterSteps, StoreError> {
-  let (changing, keeping): (Vec<_>, Vec<_>) = later_on(db, run, current, connection)?
-    .into_iter()
-    .partition(|step| step.same_connection);
-  Ok(LaterSteps {
-    changing: changing.into_iter().map(|step| step.name).collect(),
-    keeping: keeping.into_iter().map(|step| step.name).collect(),
-  })
 }
 
 /// The latest change for step `key` among `events` while it still waits: no cancelation followed it, and the step's

@@ -15,6 +15,7 @@
 mod built;
 mod composer;
 mod context;
+mod model;
 mod permissions;
 mod read;
 mod search;
@@ -101,7 +102,8 @@ impl Component for ConversationTab {
     let decisions = Decisions::new(ctx);
     ctx.provide(decisions.clone());
     let feed = ctx.props::<TaskContext>().project.feed.clone();
-    permissions::Permissions::provide(ctx, feed);
+    permissions::Permissions::provide(ctx, feed.clone());
+    model::RunModel::provide(ctx, feed);
     Self {
       decisions,
       composing: Shared::provide(ctx),

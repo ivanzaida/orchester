@@ -221,6 +221,74 @@
       },
       "failed": "The change was not saved: {{reason}}"
     },
+    "model": {
+      "chip": {
+        "name": "Model and effort of {{step}}",
+        "tip": "Profile: {{choice}}",
+        "afterTurn": "after this turn"
+      },
+      "choice": "{{model}} · {{effort}}",
+      "menu": {
+        "heading": "{{agent}} · {{connection}} · its models"
+      },
+      "profileModel": "The profile’s model",
+      "now": "now",
+      "effort": "Effort",
+      "effortNow": "now {{effort}}",
+      "effortDefault": "CLI default",
+      "efforts": {
+        "minimal": "Minimal",
+        "low": "Low",
+        "medium": "Medium",
+        "high": "High",
+        "xhigh": "Extra high",
+        "max": "Max"
+      },
+      "applies": "Applies",
+      "scope": {
+        "step": "From the next turn of this step",
+        "stepNote": "{{step}} only. {{later}} start on their own profiles again.",
+        "stepNoteAlone": "{{step}} only.",
+        "run": "For this step and the rest of the run",
+        "runNote": "Also {{changing}}, where {{agent}} runs on {{connection}}. {{keeping}} run on another connection and keep their models.",
+        "runNoteChanging": "Also {{changing}}, where {{agent}} runs on {{connection}}.",
+        "runNoteKeeping": "No later step runs on {{connection}}: {{keeping}} run on another connection and keep their models.",
+        "runNoteAlone": "No later step runs on {{connection}}."
+      },
+      "profileStays": "{{agent}}’s profile stays on {{choice}}.",
+      "apply": "Apply",
+      "cancel": "Cancel",
+      "fixed": {
+        "model": "Model",
+        "effortNone": "Not offered by this connection",
+        "note": "This connection serves one model, so this step can’t switch. To escalate, give {{agent}}’s profile another connection and restart the step.",
+        "link": "Connections"
+      },
+      "event": {
+        "changedStep": "Model changed for this step",
+        "changedRun": "Model changed for the rest of the run",
+        "effort": "Effort changed for this step",
+        "waits": "Model change waits for this turn to end",
+        "canceled": "Model change canceled",
+        "cancel": "Cancel change",
+        "detail": {
+          "wasPerson": "· was {{was}} · by you · {{time}}",
+          "wasAutomation": "· was {{was}} · by automation · {{time}}",
+          "alsoPerson": "· also {{steps}} · was {{was}} · by you · {{time}}",
+          "alsoAutomation": "· also {{steps}} · was {{was}} · by automation · {{time}}",
+          "waitsPerson": "· by you · {{time}} · this step only · the turn finishes on {{was}}",
+          "waitsAutomation": "· by automation · {{time}} · this step only · the turn finishes on {{was}}",
+          "waitsRunPerson": "· by you · {{time}} · for the rest of the run · the turn finishes on {{was}}",
+          "waitsRunAutomation": "· by automation · {{time}} · for the rest of the run · the turn finishes on {{was}}",
+          "canceledPerson": "· by you · {{time}} · stays on {{stays}}",
+          "canceledAutomation": "· by automation · {{time}} · stays on {{stays}}"
+        }
+      },
+      "failed": "The change was not saved: {{reason}}",
+      "notOffered": "{{connection}} doesn’t offer this model or effort any more.",
+      "notWaiting": "The turn ended first: the change applies from the next turn.",
+      "unavailable": "The step’s model can’t be changed now: the run ended, or its profile or connection is gone."
+    },
     "entry": {
       "agentMessage": "agent message",
       "awaitsApproval": "waiting for approval",

@@ -4,8 +4,6 @@
 //! not started yet. A change made while the step's turn runs says it waits, and offers to cancel it, until that turn
 //! ends.
 
-use std::sync::Arc;
-
 use orchester_core::{
   id::StepExecutionId,
   resource::StepKey,
@@ -23,8 +21,6 @@ pub struct ModelLine {
   /// The step it was made for.
   pub step: StepKey,
   pub kind: ModelEventKind,
-  /// The names of the later steps a change for the rest of the run reached too.
-  pub also: Vec<Arc<str>>,
   /// The change waits for the turn that runs to end: its line offers *Cancel change*.
   pub waits: bool,
 }
@@ -47,7 +43,6 @@ pub(super) fn items(run: &RunView, execution: Option<StepExecutionId>) -> Vec<It
         by: event.by,
         step: event.step.clone(),
         kind: event.kind.clone(),
-        also: also_names(run, &event.kind),
         waits: waits(index, &event.step),
       }),
     })
@@ -68,16 +63,4 @@ fn made_in(run: &RunView, step: &StepKey, at: Timestamp) -> Option<StepExecution
     })
     .max_by_key(|invocation| invocation.started_at)
     .map(|invocation| invocation.execution)
-}
-
-/// The names of the later steps a change reached too, as the run's pipeline names them.
-fn also_names(run: &RunView, kind: &ModelEventKind) -> Vec<Arc<str>> {
-  let ModelEventKind::Changed { also, .. } = kind else {
-    return Vec::new();
-  };
-  also
-    .iter()
-    .filter_map(|key| run.steps.iter().find(|step| step.key == *key))
-    .map(|step| step.name.clone())
-    .collect()
 }

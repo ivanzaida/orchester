@@ -178,7 +178,7 @@ fn run_model_change_for_the_rest_of_the_run_keeps_a_step_on_another_connection()
   let (fixture, run) = started(Fixture::reviewed(), two_models());
   let before = shown(&fixture, &run);
   assert_eq!(before.later.changing.len(), 0);
-  assert_eq!(before.later.keeping.iter().map(|name| &**name).collect::<Vec<_>>(), ["Review"]);
+  assert_eq!(before.later.keeping, [key("review")]);
   change_model_in(fixture.repo.path(), run.id(), asked(ModelScope::Run), Answerer::Person).expect("changed");
   assert_eq!(fixture.db.step_model(run.id(), &key("review")).expect("read"), None);
 }

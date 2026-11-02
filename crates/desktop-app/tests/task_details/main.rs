@@ -15,6 +15,7 @@ mod base_branch;
 mod kontur;
 mod permissions;
 mod run_mode;
+mod run_model;
 mod shared;
 #[path = "../support/mod.rs"]
 mod support;
