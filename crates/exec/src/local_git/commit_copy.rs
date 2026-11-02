@@ -44,7 +44,7 @@ impl LocalGit {
     let directory = tempfile::Builder::new()
       .prefix("commit-")
       .tempdir_in(&self.scratch)
-      .map_err(|_| LocalGitError::Io)?;
+      .map_err(LocalGitError::io_at(&self.scratch))?;
     let copied = self.scoped_raw(
       &["checkout-index", "--all", "--force"],
       None,
@@ -52,7 +52,7 @@ impl LocalGit {
       Some(directory.path()),
     )?;
     if copied.code != Some(0) {
-      return Err(LocalGitError::Refused);
+      return Err(copied.refused());
     }
     Ok(directory)
   }
@@ -66,7 +66,7 @@ impl LocalGit {
     let directory = tempfile::Builder::new()
       .prefix("commit-")
       .tempdir_in(&self.scratch)
-      .map_err(|_| LocalGitError::Io)?;
+      .map_err(LocalGitError::io_at(&self.scratch))?;
     if paths.is_empty() {
       return Ok(directory);
     }
@@ -82,13 +82,13 @@ impl LocalGit {
       Some(directory.path()),
     )?;
     if copied.code != Some(0) {
-      return Err(LocalGitError::Refused);
+      return Err(copied.refused());
     }
     Ok(directory)
   }
 
   pub(super) fn in_commit_copy(&self, command: &Command, worktree: &Path) -> Result<Command, LocalGitError> {
-    let worktree = worktree.canonicalize().map_err(|_| LocalGitError::Io)?;
+    let worktree = worktree.canonicalize().map_err(LocalGitError::io_at(worktree))?;
     if !worktree.starts_with(&self.scratch) {
       return Err(LocalError::Unsupported.into());
     }
@@ -154,7 +154,7 @@ impl LocalGit {
           self.root.join(path)
         })
       }
-      _ => Err(LocalGitError::Refused),
+      _ => Err(output.refused()),
     }
   }
 }

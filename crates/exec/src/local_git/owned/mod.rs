@@ -70,8 +70,15 @@ impl OwnedFile {
   }
 
   pub fn create(root: &Path, path: &LocalPath) -> Result<Self, LocalGitError> {
-    let (parent, name) = parent(root, path, true)?.ok_or(LocalGitError::Io)?;
-    Self::at(parent, name, true, true)?.ok_or(LocalGitError::Io)
+    let missing = || LocalGitError::missing(&root.join(path.as_str()));
+    let (parent, name) = parent(root, path, true)?.ok_or_else(missing)?;
+    Self::at(parent, name, true, true)?.ok_or_else(missing)
+  }
+
+  /// An OS error reading or changing the held file, with its path.
+  fn failed(&self) -> impl FnOnce(std::io::Error) -> LocalGitError + use<> {
+    let path = self.parent.path().join(&self.name);
+    move |error| LocalGitError::io_at(&path)(error)
   }
 
   fn at(parent: Arc<Directory>, name: OsString, writing: bool, create: bool) -> Result<Option<Self>, LocalGitError> {
@@ -93,12 +100,12 @@ impl OwnedFile {
 
   pub fn read(&mut self) -> Result<Vec<u8>, LocalGitError> {
     self.ensure_current()?;
-    self.file.seek(SeekFrom::Start(0)).map_err(|_| LocalGitError::Io)?;
+    self.file.seek(SeekFrom::Start(0)).map_err(self.failed())?;
     let mut bytes = Vec::new();
     Read::by_ref(&mut self.file)
       .take(MAX_BYTES + 1)
       .read_to_end(&mut bytes)
-      .map_err(|_| LocalGitError::Io)?;
+      .map_err(self.failed())?;
     if bytes.len() as u64 > MAX_BYTES {
       return Err(LocalError::Unsupported.into());
     }
@@ -109,8 +116,8 @@ impl OwnedFile {
   /// The content's digest, read in chunks so a file of any size can be identified without holding it.
   pub fn digest(&mut self) -> Result<ContentHash, LocalGitError> {
     self.ensure_current()?;
-    self.file.seek(SeekFrom::Start(0)).map_err(|_| LocalGitError::Io)?;
-    let hash = super::digest_reader(&mut self.file).map_err(|_| LocalGitError::Io)?;
+    self.file.seek(SeekFrom::Start(0)).map_err(self.failed())?;
+    let hash = super::digest_reader(&mut self.file).map_err(self.failed())?;
     self.ensure_current()?;
     Ok(hash)
   }
@@ -118,13 +125,13 @@ impl OwnedFile {
   /// The content's size and its first `limit` bytes.
   pub fn probe(&mut self, limit: u64) -> Result<(u64, Vec<u8>), LocalGitError> {
     self.ensure_current()?;
-    let size = self.file.metadata().map_err(|_| LocalGitError::Io)?.len();
-    self.file.seek(SeekFrom::Start(0)).map_err(|_| LocalGitError::Io)?;
+    let size = self.file.metadata().map_err(self.failed())?.len();
+    self.file.seek(SeekFrom::Start(0)).map_err(self.failed())?;
     let mut head = Vec::new();
     Read::by_ref(&mut self.file)
       .take(limit)
       .read_to_end(&mut head)
-      .map_err(|_| LocalGitError::Io)?;
+      .map_err(self.failed())?;
     self.ensure_current()?;
     Ok((size, head))
   }
@@ -146,10 +153,10 @@ impl OwnedFile {
     }
     self.compare(expected)?;
     // In-place on the held object: an entry swapped in cannot become the write target.
-    self.file.seek(SeekFrom::Start(0)).map_err(|_| LocalGitError::Io)?;
-    self.file.write_all(content).map_err(|_| LocalGitError::Io)?;
-    self.file.set_len(content.len() as u64).map_err(|_| LocalGitError::Io)?;
-    self.file.sync_all().map_err(|_| LocalGitError::Io)?;
+    self.file.seek(SeekFrom::Start(0)).map_err(self.failed())?;
+    self.file.write_all(content).map_err(self.failed())?;
+    self.file.set_len(content.len() as u64).map_err(self.failed())?;
+    self.file.sync_all().map_err(self.failed())?;
     self.ensure_current()
   }
 

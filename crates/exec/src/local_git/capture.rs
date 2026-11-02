@@ -42,7 +42,7 @@ impl LocalGit {
       Freshness::Verified => self.rebuilt_status(&stage)?,
     };
     if output.code != Some(0) {
-      return Err(LocalGitError::Refused);
+      return Err(output.refused());
     }
     let status = Status::parse(&output.bytes)?;
     let unmerged_heads = if status.unmerged.is_empty() {
@@ -82,7 +82,7 @@ impl LocalGit {
   pub fn status_fingerprint(&self) -> Result<ContentHash, LocalGitError> {
     let output = self.raw(STATUS, None, None)?;
     if output.code != Some(0) {
-      return Err(LocalGitError::Refused);
+      return Err(output.refused());
     }
     let status = Status::parse(&output.bytes)?;
     let mut bytes = output.bytes;
@@ -102,14 +102,14 @@ impl LocalGit {
     let scope = tempfile::Builder::new()
       .prefix("inspect-")
       .tempdir_in(&self.scratch)
-      .map_err(|_| LocalGitError::Io)?;
+      .map_err(LocalGitError::io_at(&self.scratch))?;
     let index = scope.path().join("index");
     #[cfg(windows)]
     let _scope_owner = super::owned::ExecutionOwnership::private_copy(scope.path(), &self.scratch)?;
     self.index_command(&["read-tree", "--empty"], None, &index)?;
     let copied = self.quiet_index(&["update-index", "-z", "--index-info"], Some(stage), &index)?;
     if copied.code != Some(0) {
-      return Err(LocalGitError::Refused);
+      return Err(copied.refused());
     }
     self.quiet_index(STATUS, None, &index)
   }
@@ -119,7 +119,7 @@ impl LocalGit {
   fn listed_index(&self) -> Result<(Vec<u8>, BTreeMap<LocalPath, IndexEntry>), LocalGitError> {
     let output = self.raw(&["ls-files", "--stage", "-v", "-z"], None, None)?;
     if output.code != Some(0) {
-      return Err(LocalGitError::Refused);
+      return Err(output.refused());
     }
     let mut stage = Vec::with_capacity(output.bytes.len());
     for entry in output.bytes.split(|byte| *byte == 0).filter(|entry| !entry.is_empty()) {
@@ -151,7 +151,7 @@ impl LocalGit {
         }
         Ok(_) => return Ok(Some(marker.to_owned())),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(_) => return Err(LocalGitError::Io),
+        Err(error) => return Err(LocalGitError::io_at(path)(error)),
       }
     }
     Ok(None)
@@ -165,7 +165,7 @@ impl LocalGit {
   pub fn index_fingerprint_excluding(&self, paths: &[LocalPath]) -> Result<ContentHash, LocalGitError> {
     let output = self.raw(&["ls-files", "--stage", "-z"], None, None)?;
     if output.code != Some(0) {
-      return Err(LocalGitError::Refused);
+      return Err(output.refused());
     }
     let mut retained = Vec::new();
     for entry in output.bytes.split(|byte| *byte == 0).filter(|entry| !entry.is_empty()) {
@@ -182,7 +182,7 @@ impl LocalGit {
   pub fn tree_entries(&self, tree: &str) -> Result<BTreeMap<LocalPath, IndexEntry>, LocalGitError> {
     let output = self.raw(&["ls-tree", "-r", "-z", tree], None, None)?;
     if output.code != Some(0) {
-      return Err(LocalGitError::Refused);
+      return Err(output.refused());
     }
     parse_entries(&output.bytes, false)
   }
@@ -196,7 +196,7 @@ impl LocalGit {
     args.extend(paths.iter().map(LocalPath::as_str));
     let output = self.raw(&args, None, None)?;
     if output.code != Some(0) {
-      return Err(LocalGitError::Refused);
+      return Err(output.refused());
     }
     parse_entries(&output.bytes, false)
   }
@@ -253,10 +253,14 @@ impl Status {
     for line in text.split('\0').filter(|line| !line.is_empty()) {
       status.line(line)?;
     }
-    // An unborn branch or a detached HEAD has no reviewed base to integrate into.
+    // An unborn branch or a detached HEAD has no reviewed base to integrate into. Git's status succeeded; the words
+    // are Orchester's.
     if status.head.is_empty() || status.head == "(initial)" || status.branch.is_empty() || status.branch == "(detached)"
     {
-      return Err(LocalGitError::Refused);
+      return Err(LocalGitError::Refused(orchester_core::integration::GitCause::new(
+        Some(0),
+        b"no branch is checked out, or it has no commit",
+      )));
     }
     super::validate_object(&status.head)?;
     Ok(status)

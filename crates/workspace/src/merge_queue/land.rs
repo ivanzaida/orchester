@@ -10,7 +10,7 @@ use std::path::Path;
 
 use orchester_core::{
   integration::{
-    DeliveredAs, Delivering, MergeError, MergeKind,
+    DeliveredAs, Delivering, MergeError, MergeKind, PreflightCause, PreflightStage,
     base::Landing,
     branch_head,
     delivery::{self, Checkout},
@@ -31,10 +31,6 @@ use crate::tasks::{
 
 /// Characters of the task's brief the squash commit's body keeps.
 const SUMMARY_CHARS: usize = 200;
-
-/// What `merge_in_as` says when the checkout's integration lease or its metadata cannot be taken now: another merge or
-/// local integration has them.
-const PREFLIGHT_FAILED: &str = "localIntegration.preflightFailed";
 
 /// How landing a run went.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -151,7 +147,12 @@ fn not_landed(problem: IntegrationProblem) -> Landed {
     }
     // Another merge or local integration holds the checkout's integration lease now: the run waits for it, and
     // delivery goes on by itself once it is free.
-    IntegrationProblem::Store(message) if message.key == PREFLIGHT_FAILED => Landed::Blocked(Blocked::HeldLocally),
+    IntegrationProblem::Preflight {
+      stage: PreflightStage::IntegrationLock,
+      cause: PreflightCause::Held,
+    } => Landed::Blocked(Blocked::HeldLocally),
+    // Any other refusal lasts until someone acts on its cause: waiting would hold the queue without saying why.
+    IntegrationProblem::Preflight { stage, cause } => Landed::Stopped(format!("{}: {cause}", stage.name())),
     IntegrationProblem::Merge(MergeError::BaseMoved { .. } | MergeError::BranchMoved { .. }) => Landed::Moved,
     IntegrationProblem::Merge(error) => Landed::Stopped(error.to_string()),
     IntegrationProblem::Cleanup(error) => Landed::Stopped(error.to_string()),

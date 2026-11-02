@@ -164,14 +164,15 @@ impl LocalGit {
     let Some(index) = index else {
       let output = self.quiet_plumbing(&args, Some(data.as_bytes()), None)?;
       if output.code != Some(0) {
-        return Err(LocalGitError::Refused);
+        return Err(output.refused());
       }
       // An entry written without stat data reads as "not uptodate" to Git's own merge and abort, in the app and in
       // the person's terminal alike.
       return self.refresh_index();
     };
-    if self.quiet_index(&args, Some(data.as_bytes()), index)?.code != Some(0) {
-      return Err(LocalGitError::Refused);
+    let output = self.quiet_index(&args, Some(data.as_bytes()), index)?;
+    if output.code != Some(0) {
+      return Err(output.refused());
     }
     Ok(())
   }
@@ -184,7 +185,7 @@ impl LocalGit {
   ) -> Result<String, LocalGitError> {
     let output = self.quiet_index(args, input, index)?;
     if output.code != Some(0) {
-      return Err(LocalGitError::Refused);
+      return Err(output.refused());
     }
     String::from_utf8(output.bytes)
       .map(|text| text.trim().to_owned())

@@ -32,6 +32,8 @@ mod merged_outside;
 mod metadata;
 #[path = "local_integration/moved_base.rs"]
 mod moved_base;
+#[path = "local_integration/preflight_stage.rs"]
+mod preflight_stage;
 #[path = "local_integration/privacy.rs"]
 mod privacy;
 #[path = "local_integration/rebase.rs"]

@@ -11,7 +11,17 @@
   },
   "localIntegration": {
     "sensitiveOutcome": "Integration details are unavailable under the current sensitive-data policy. Inspect the actual recorded outcome before continuing.",
-    "preflightFailed": "Local integration could not prove the current checkout and result identities. Nothing was merged.",
+    "preflight": {
+      "stage": "The merge's preflight refused at its {{stage}} stage. Nothing was merged; the branch and the checkout are unchanged.",
+      "integrationLockHeld": "Another merge or local integration held this project's checkout, so Orchester refused before Git ran: nothing was merged, and the branch and the checkout are unchanged. Merge again once it has finished.",
+      "integrationLock": "Orchester could not take this project's integration lock ({{cause}}), so it refused before Git ran: nothing was merged, and the branch and the checkout are unchanged.",
+      "projectDatabase": "Orchester could not hold this project's database and SQLite's files beside it ({{cause}}), so it refused before Git ran: nothing was merged, and the branch and the checkout are unchanged.",
+      "scratchFolder": "Orchester could not prepare its local integration folder under .orchester ({{cause}}), so it refused before Git ran: nothing was merged, and the branch and the checkout are unchanged.",
+      "checkoutIdentity": "Orchester could not prove which checkout and Git directory the merge would change ({{cause}}), so it refused before Git ran: nothing was merged, and the branch and the checkout are unchanged.",
+      "gitMetadata": "Orchester could not hold this repository's Git metadata while Git runs ({{cause}}), so it refused before Git ran: nothing was merged, and the branch and the checkout are unchanged.",
+      "existingResult": "Orchester could not tell whether Git already holds this run's work ({{cause}}), so it refused before Git ran: nothing was merged, and the branch and the checkout are unchanged.",
+      "policy": "The policy an automation's merge goes through could not check this merge ({{cause}}), so Orchester refused before Git ran: nothing was merged, and the branch and the checkout are unchanged."
+    },
     "externalResult": "Git contains all or part of this result already. Review the evidence in Local integration; no historical merge was recorded or repeated.",
     "personRequired": "A person reviews and approves the exact checked result in Local integration.",
     "running": "Integrating the local checkout for {{task}}"

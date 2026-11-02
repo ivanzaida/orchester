@@ -59,7 +59,9 @@ impl Family {
   }
   pub(in crate::local_git) fn spawn(&self, command: &mut Command) -> Result<Child, LocalGitError> {
     command.creation_flags(CREATE_SUSPENDED | CREATE_NO_WINDOW);
-    let mut child = command.spawn().map_err(|_| LocalGitError::Process)?;
+    let mut child = command
+      .spawn()
+      .map_err(|error| LocalGitError::Process(orchester_core::integration::IoCause::new(&error)))?;
     // SAFETY: both retained handles are live; the suspended process has not run or created descendants.
     if unsafe { AssignProcessToJobObject(self.handle.as_raw_handle(), child.as_raw_handle()) } == 0 {
       child.kill().map_err(|_| LocalError::ProcessUncertain)?;
@@ -98,7 +100,9 @@ impl Family {
         }
         // SAFETY: this handle belongs to the suspended primary thread of our retained child.
         if unsafe { ResumeThread(thread.as_raw_handle()) } == u32::MAX {
-          return Err(LocalGitError::Process);
+          return Err(LocalGitError::Process(orchester_core::integration::IoCause::new(
+            &std::io::Error::last_os_error(),
+          )));
         }
         return Ok(());
       }

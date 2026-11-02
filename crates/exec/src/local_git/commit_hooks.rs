@@ -26,18 +26,18 @@ impl LocalGit {
     self.ensure_hooks_kept(index, tree, false)?;
     let cleaned = self.raw(&["stripspace"], Some(message.as_bytes()), None)?;
     if cleaned.code != Some(0) {
-      return Err(LocalGitError::Refused);
+      return Err(cleaned.refused());
     }
     let scope = tempfile::Builder::new()
       .prefix("message-")
       .tempdir_in(&self.scratch)
-      .map_err(|_| LocalGitError::Io)?;
+      .map_err(LocalGitError::io_at(&self.scratch))?;
     let path = scope.path().join("COMMIT_EDITMSG");
-    std::fs::write(&path, &cleaned.bytes).map_err(|_| LocalGitError::Io)?;
+    std::fs::write(&path, &cleaned.bytes).map_err(LocalGitError::io_at(&path))?;
     let file = git_name(&path)?;
     self.hook(index, copy, &["prepare-commit-msg", "--", &file, "message"])?;
     self.hook(index, copy, &["commit-msg", "--", &file])?;
-    let hooked = std::fs::read(&path).map_err(|_| LocalGitError::Io)?;
+    let hooked = std::fs::read(&path).map_err(LocalGitError::io_at(&path))?;
     self.ensure_hooks_kept(index, tree, hooked != cleaned.bytes)?;
     Ok(HookedMessage { _scope: scope, file })
   }
@@ -59,7 +59,7 @@ impl LocalGit {
     args.extend_from_slice(hook);
     let output = self.scoped_raw(&args, None, Some(index), Some(copy))?;
     if output.code != Some(0) {
-      return Err(LocalGitError::Refused);
+      return Err(output.refused());
     }
     Ok(())
   }

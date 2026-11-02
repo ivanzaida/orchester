@@ -18,6 +18,7 @@ pub mod local;
 mod log;
 mod merge;
 mod merged;
+mod preflight;
 mod recorded;
 pub mod resolve;
 mod sweep;
@@ -42,6 +43,7 @@ pub use self::{
     merge_run_at,
   },
   merged::{Branches, Delivered, RunWork},
+  preflight::{GitCause, IoCause, PreflightCause, PreflightStage},
   recorded::{RecordedCleanupError, RemovalStart, clean_up_recorded, clean_up_recorded_as_seen},
   sweep::{SweepError, Swept, sweep},
 };

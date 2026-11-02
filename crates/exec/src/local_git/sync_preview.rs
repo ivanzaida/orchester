@@ -26,7 +26,7 @@ impl LocalGit {
       None,
     )?;
     if !matches!(output.code, Some(0 | 1)) {
-      return Err(LocalGitError::Refused);
+      return Err(output.refused());
     }
     let text = std::str::from_utf8(&output.bytes).map_err(|_| LocalGitError::Data)?;
     let mut parts = text.split('\0');

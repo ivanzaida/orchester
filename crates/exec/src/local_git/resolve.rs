@@ -6,7 +6,7 @@ impl LocalGit {
   pub fn conflicts(&self) -> Result<Vec<LocalConflict>, LocalGitError> {
     let output = self.raw(&["ls-files", "--unmerged", "-z"], None, None)?;
     if output.code != Some(0) {
-      return Err(LocalGitError::Refused);
+      return Err(output.refused());
     }
     let text = std::str::from_utf8(&output.bytes).map_err(|_| LocalGitError::Data)?;
     let mut files = std::collections::BTreeMap::<LocalPath, LocalConflict>::new();
@@ -165,9 +165,9 @@ impl LocalGit {
     use std::io::Write;
     let mut versions = Vec::new();
     for bytes in [current, base, incoming] {
-      let mut file = tempfile::NamedTempFile::new_in(&self.scratch).map_err(|_| LocalGitError::Io)?;
-      file.write_all(bytes).map_err(|_| LocalGitError::Io)?;
-      file.as_file().sync_all().map_err(|_| LocalGitError::Io)?;
+      let mut file = tempfile::NamedTempFile::new_in(&self.scratch).map_err(LocalGitError::io_at(&self.scratch))?;
+      file.write_all(bytes).map_err(LocalGitError::io_at(&self.scratch))?;
+      file.as_file().sync_all().map_err(LocalGitError::io_at(&self.scratch))?;
       let path = file.into_temp_path();
       let name = path
         .file_name()

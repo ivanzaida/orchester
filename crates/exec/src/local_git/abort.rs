@@ -9,14 +9,14 @@ impl LocalGit {
     let scope = tempfile::Builder::new()
       .prefix("abort-preview-")
       .tempdir_in(&self.scratch)
-      .map_err(|_| LocalGitError::Io)?;
+      .map_err(LocalGitError::io_at(&self.scratch))?;
     #[cfg(windows)]
     let _scope_owner = super::owned::ExecutionOwnership::private_copy(scope.path(), &self.scratch)?;
     let index = scope.path().join("index");
     self.index_command(&["read-tree", &before.head], None, &index)?;
     let entries = self.quiet_index(&["ls-files", "--stage", "-z"], None, &index)?;
     if entries.code != Some(0) {
-      return Err(LocalGitError::Refused);
+      return Err(entries.refused());
     }
     let ignored = self.preview_ignored(&before.head)?;
     self.ensure_task_abort(before)?;

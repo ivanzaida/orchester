@@ -15,7 +15,7 @@ impl LocalGit {
   pub(super) fn preview_ignored(&self, tree: &str) -> Result<ContentHash, LocalGitError> {
     let output = self.raw(super::capture::STATUS, None, None)?;
     if output.code != Some(0) {
-      return Err(LocalGitError::Refused);
+      return Err(output.refused());
     }
     let status = Status::parse(&output.bytes)?;
     let retained = status
@@ -64,7 +64,7 @@ impl LocalGit {
     let scope = tempfile::Builder::new()
       .prefix("ignore-preview-")
       .tempdir_in(&self.scratch)
-      .map_err(|_| LocalGitError::Io)?;
+      .map_err(LocalGitError::io_at(&self.scratch))?;
     #[cfg(windows)]
     let _scope_owner = super::owned::ExecutionOwnership::private_copy(scope.path(), &self.scratch)?;
     let index = scope.path().join("index");
@@ -102,7 +102,7 @@ impl LocalGit {
       Some(copy.path()),
     )?;
     if !matches!(classified.code, Some(0 | 1)) {
-      return Err(LocalGitError::Refused);
+      return Err(classified.refused());
     }
     let text = std::str::from_utf8(&classified.bytes).map_err(|_| LocalGitError::Data)?;
     Ok(

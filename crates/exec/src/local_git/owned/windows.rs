@@ -48,10 +48,12 @@ impl Directory {
         }
         Component::Normal(name) => {
           let previous = directory.ok_or(LocalError::Unsupported)?;
-          directory = previous.child(name, false)?;
-          if directory.is_none() {
-            return Err(LocalGitError::Io);
-          }
+          let path = previous.path.join(name);
+          directory = Some(
+            previous
+              .child(name, false)?
+              .ok_or_else(|| LocalGitError::missing(&path))?,
+          );
         }
         Component::CurDir => {}
         Component::ParentDir => {
@@ -72,8 +74,8 @@ impl Directory {
       .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE)
       .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS)
       .open(path)
-      .map_err(map)?;
-    let metadata = file.metadata().map_err(map)?;
+      .map_err(LocalGitError::io_at(path))?;
+    let metadata = file.metadata().map_err(LocalGitError::io_at(path))?;
     if !metadata.is_dir() || metadata.file_attributes() & 0x400 != 0 {
       return Err(LocalError::Unsupported.into());
     }
@@ -99,15 +101,15 @@ impl Directory {
     let path = self.path.join(name);
     match Self::at(&path, Some(self.clone())) {
       Ok(directory) => Ok(Some(directory)),
-      Err(LocalGitError::Io) if create => {
+      Err(LocalGitError::Io(_)) if create => {
         match std::fs::create_dir(&path) {
           Ok(()) => {}
           Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
-          Err(error) => return Err(map(error)),
+          Err(error) => return Err(LocalGitError::io_at(&path)(error)),
         }
         Self::at(&path, Some(self.clone())).map(Some)
       }
-      Err(LocalGitError::Io) if !path.exists() => Ok(None),
+      Err(LocalGitError::Io(_)) if !path.exists() => Ok(None),
       Err(error) => Err(error),
     }
   }
@@ -119,9 +121,9 @@ impl Directory {
       .share_mode(FILE_SHARE_READ)
       .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS)
       .open(&self.path)
-      .map_err(map)?;
+      .map_err(LocalGitError::io_at(&self.path))?;
     ensure_location(&file, &self.path)?;
-    let metadata = file.metadata().map_err(map)?;
+    let metadata = file.metadata().map_err(LocalGitError::io_at(&self.path))?;
     if !metadata.is_dir() || metadata.file_attributes() & 0x400 != 0 {
       return Err(LocalError::Unsupported.into());
     }
@@ -136,7 +138,7 @@ impl Directory {
       parent.ensure_current()?;
     }
     ensure_location(&self.file, &self.path)?;
-    let metadata = self.file.metadata().map_err(map)?;
+    let metadata = self.file.metadata().map_err(LocalGitError::io_at(&self.path))?;
     if !metadata.is_dir() || metadata.file_attributes() & 0x400 != 0 {
       return Err(LocalError::Unsupported.into());
     }
@@ -146,7 +148,7 @@ impl Directory {
   /// Only execution metadata calls this after retaining a nonempty anchor and the complete parent chain.
   /// No-delete sharing prevents rename; the held child prevents empty-directory reparse conversion.
   pub(super) fn ensure_pinned(&self) -> Result<(), LocalGitError> {
-    let metadata = self.file.metadata().map_err(map)?;
+    let metadata = self.file.metadata().map_err(LocalGitError::io_at(&self.path))?;
     if !metadata.is_dir() || metadata.file_attributes() & 0x400 != 0 {
       return Err(LocalError::Unsupported.into());
     }
@@ -154,18 +156,19 @@ impl Directory {
   }
 
   pub(crate) fn aliases(&self, left: &OsStr, right: &OsStr) -> Result<bool, LocalGitError> {
-    let Some(left) = self.open_regular(left, false, false)? else {
+    let Some(left_file) = self.open_regular(left, false, false)? else {
       return Ok(false);
     };
-    let Some(right) = self.open_regular(right, false, false)? else {
+    let Some(right_file) = self.open_regular(right, false, false)? else {
       return Ok(false);
     };
-    for file in [&left, &right] {
-      if file.metadata().map_err(map)?.file_attributes() & 0x400 != 0 {
+    for (file, name) in [(&left_file, left), (&right_file, right)] {
+      let metadata = file.metadata().map_err(LocalGitError::io_at(&self.path.join(name)))?;
+      if metadata.file_attributes() & 0x400 != 0 {
         return Err(LocalError::Unsupported.into());
       }
     }
-    Ok(object_identity(&left)? == object_identity(&right)?)
+    Ok(object_identity(&left_file)? == object_identity(&right_file)?)
   }
 
   pub(super) fn same_entry(&self, _name: &OsStr, _file: &File) -> Result<(), LocalGitError> {
@@ -186,20 +189,17 @@ impl Directory {
     if create {
       options.create_new(true);
     }
-    match options.open(self.path.join(name)) {
+    let path = self.path.join(name);
+    match options.open(&path) {
       Ok(file) => {
-        ensure_location(&file, &self.path.join(name))?;
+        ensure_location(&file, &path)?;
         Ok(Some(file))
       }
       Err(error) if error.kind() == io::ErrorKind::NotFound && !create => Ok(None),
       Err(error) if error.kind() == io::ErrorKind::AlreadyExists => Err(LocalError::Collision.into()),
-      Err(error) => Err(map(error)),
+      Err(error) => Err(LocalGitError::io_at(&path)(error)),
     }
   }
-}
-
-fn map(_error: io::Error) -> LocalGitError {
-  LocalGitError::Io
 }
 
 pub(super) fn validate_regular(file: &File) -> Result<(), LocalGitError> {
@@ -218,7 +218,7 @@ pub(super) fn set_executable(_file: &File, _value: bool) -> Result<(), LocalGitE
   Ok(())
 }
 /// Deletes the held `file` through its handle, which cannot reach another entry of its name.
-pub(super) fn remove(_directory: &Directory, _name: &OsStr, file: &File) -> Result<(), LocalGitError> {
+pub(super) fn remove(directory: &Directory, name: &OsStr, file: &File) -> Result<(), LocalGitError> {
   let disposition = FILE_DISPOSITION_INFO { DeleteFile: true };
   let size = mem::size_of::<FILE_DISPOSITION_INFO>() as u32;
   // SAFETY: the owned regular handle was opened with DELETE and without sharing deletion/writes.
@@ -231,7 +231,9 @@ pub(super) fn remove(_directory: &Directory, _name: &OsStr, file: &File) -> Resu
     )
   } == 0
   {
-    return Err(LocalGitError::Io);
+    return Err(LocalGitError::io_at(&directory.path.join(name))(
+      io::Error::last_os_error(),
+    ));
   }
   Ok(())
 }
@@ -260,14 +262,17 @@ pub(super) fn pin_store_entry(directory: &Arc<Directory>, name: &OsStr, pin: Pin
   let _freeze = directory.freeze()?;
   let path = directory.path.join(name);
   let deadline = std::time::Instant::now() + SIDECAR_WAIT;
+  // What kept the entry from being pinned until the wait ran out.
+  let mut last = io::Error::from(io::ErrorKind::TimedOut);
   while std::time::Instant::now() < deadline {
     let file = match open_store_entry(&path, pin) {
       // SQLite is deleting the sidecar while one of its handles is still open: the name is free once it closes.
       Err(error) if pin == Pin::Sidecar && error.kind() == io::ErrorKind::PermissionDenied => {
+        last = error;
         std::thread::sleep(SIDECAR_PAUSE);
         continue;
       }
-      opened => opened.map_err(map)?,
+      opened => opened.map_err(LocalGitError::io_at(&path))?,
     };
     match validate_regular(&file).and_then(|()| ensure_location(&file, &path)) {
       // SQLite's last connection deleted the sidecar since it was opened here: its name is free again and the
@@ -278,7 +283,7 @@ pub(super) fn pin_store_entry(directory: &Arc<Directory>, name: &OsStr, pin: Pin
     directory.ensure_current()?;
     return Ok(file);
   }
-  Err(LocalGitError::Io)
+  Err(LocalGitError::io_at(&path)(last))
 }
 
 /// Opens the entry at `path`, creating it first if `pin` allows that.
@@ -342,7 +347,7 @@ fn information(file: &File) -> Result<BY_HANDLE_FILE_INFORMATION, LocalGitError>
   let mut info: BY_HANDLE_FILE_INFORMATION = unsafe { mem::zeroed() };
   // SAFETY: file owns a live handle and info is a correctly-sized writable C record.
   if unsafe { GetFileInformationByHandle(file.as_raw_handle(), &raw mut info) } == 0 {
-    return Err(LocalGitError::Io);
+    return Err(LocalGitError::io(&io::Error::last_os_error()));
   }
   Ok(info)
 }

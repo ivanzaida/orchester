@@ -230,7 +230,7 @@ fn local_integration_sync_refusal_git_signature_refusal_returns_to_preparation_a
   let mut session = fixture.open();
   assert!(matches!(
     session.sync(),
-    Err(IntegrationError::Git(LocalGitError::Refused))
+    Err(IntegrationError::Git(LocalGitError::Refused(_)))
   ));
   assert_eq!(session.operation().phase(), LocalPhase::Prepared);
   assert!(session.operation().sync_result().is_none());

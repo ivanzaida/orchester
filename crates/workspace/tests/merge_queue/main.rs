@@ -11,6 +11,7 @@ mod conversation;
 mod decisions;
 mod harness;
 mod lanes;
+mod preflight;
 
 use std::{fs, sync::Arc};
 

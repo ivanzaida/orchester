@@ -40,6 +40,10 @@ fn local_policy_legacy_sensitive_filename_is_refused_before_job_and_never_reache
   let args = serde_json::json!({"project":db.project().id().to_string(),"run":page.run().to_string()});
   let result = client.call(&mut page, "merge_run", &args);
   assert_eq!(value(&result)["code"], "integration_preflight_failed");
+  assert!(
+    result.to_string().contains("refused at its policy stage"),
+    "the refusal names the preflight's stage: {result}"
+  );
   assert!(!result.to_string().contains(PRIVATE_VALUE));
   let policy = orchester_workspace::tasks::local_integration::LegacyPolicy::new(
     page.root(),

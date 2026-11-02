@@ -32,7 +32,9 @@ impl Family {
     if self.group.get().is_some() {
       return Err(LocalError::ProcessUncertain.into());
     }
-    let mut child = command.spawn().map_err(|_| LocalGitError::Process)?;
+    let mut child = command
+      .spawn()
+      .map_err(|error| LocalGitError::Process(orchester_core::integration::IoCause::new(&error)))?;
     let Some(group) = ProcessGroup::led_by(child.id()) else {
       child.kill().map_err(|_| LocalError::ProcessUncertain)?;
       child.wait().map_err(|_| LocalError::ProcessUncertain)?;

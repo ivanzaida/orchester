@@ -1,12 +1,21 @@
 use std::{path::Path, time::Duration};
 
-use orchester_core::command::Command;
+use orchester_core::{command::Command, integration::GitCause};
 
 use super::{LocalGit, LocalGitError};
 
 pub(super) struct GitOutput {
   pub code: Option<i32>,
   pub bytes: Vec<u8>,
+  /// The end of Git's error output, bounded.
+  pub errors: Vec<u8>,
+}
+
+impl GitOutput {
+  /// Git refused, as its exit code and the end of its error output say.
+  pub fn refused(&self) -> LocalGitError {
+    LocalGitError::Refused(GitCause::new(self.code, &self.errors))
+  }
 }
 
 impl LocalGit {

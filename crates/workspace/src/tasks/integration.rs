@@ -6,6 +6,8 @@
 //! they need. The codebase indexes only removed worktrees used are removed with them
 //! (`orchester_index`). Blocks on SQLite and git; the UI calls it off the UI thread.
 
+mod preflight;
+
 use std::{path::Path, sync::Arc};
 
 use orchester_core::{
@@ -13,8 +15,8 @@ use orchester_core::{
   id::{RunId, StepExecutionId},
   integration::{
     Cleanup, CleanupError, Delivering, FolderListing, GitError, KeepReason, LeftWorktree, Leftovers, MergeError,
-    RecordedCleanupError, RunMerge, TemporaryLeft, base::Landing, clean_up_recorded_as_seen, finish_removal,
-    leftovers_of, merge_run_as,
+    PreflightCause, PreflightStage, RecordedCleanupError, RunMerge, TemporaryLeft, base::Landing,
+    clean_up_recorded_as_seen, finish_removal, leftovers_of, merge_run_as,
   },
   revision::Revision,
   run::{BranchName, Run},
@@ -24,6 +26,8 @@ use orchester_core::{
 use orchester_exec::{programs::Programs, run_processes::RunProcesses};
 use orchester_index::CodebaseIndexes;
 use orchester_store::{ProjectDb, StoreError};
+pub(crate) use preflight::integration_refusal;
+pub use preflight::stage_message;
 
 use super::{changes::GIT, detail::run_store_error, local_integration::CheckoutHolder};
 use crate::{
@@ -64,6 +68,12 @@ pub enum IntegrationProblem {
     merge: RunMerge,
     problem: Message,
   },
+  /// The merge's preflight refused at `stage` before Git ran: nothing was merged, and the branch and checkout are
+  /// unchanged.
+  Preflight {
+    stage: PreflightStage,
+    cause: PreflightCause,
+  },
 }
 
 /// Why a removal automation asked for did not happen: what a person reads, and whether the run changed since
@@ -102,6 +112,7 @@ impl IntegrationProblem {
       self,
       Self::Store(_)
         | Self::NotRecorded { .. }
+        | Self::Preflight { .. }
         | Self::Read(_)
         | Self::Merge(MergeError::Git(_))
         | Self::Cleanup(CleanupError::Git(_))
@@ -112,6 +123,7 @@ impl IntegrationProblem {
     }
     let reason = match self {
       Self::Store(message) | Self::NotRecorded { problem: message, .. } => message.clone(),
+      Self::Preflight { stage, cause } => preflight::message(*stage, cause),
       Self::Read(GitError::Run(CommandError::NotFound))
       | Self::Merge(MergeError::Git(GitError::Run(CommandError::NotFound)))
       | Self::Cleanup(CleanupError::Git(GitError::Run(CommandError::NotFound))) => {
@@ -155,6 +167,7 @@ impl IntegrationProblem {
       Self::NotRemoved { path, detail } => Message::new("runs.worktree.failure.notRemoved")
         .with("path", short_path(path))
         .with("detail", short_reason(detail, path)),
+      Self::Preflight { stage, cause } => preflight::message(*stage, cause),
     }
   }
 }
@@ -332,17 +345,7 @@ pub fn merge_in_as(
   programs: &Programs,
   (run, expected, delivering): (RunId, Option<&Revision>, Option<Delivering<'_>>),
 ) -> Result<Merged, IntegrationProblem> {
-  let _lease = orchester_exec::local_git::IntegrationLease::acquire(repo_root)
-    .map_err(|_| IntegrationProblem::Store(Message::new("localIntegration.preflightFailed")))?;
-  let _store_owner = orchester_exec::local_git::owned::StoreOwnership::acquire(repo_root)
-    .map_err(|_| IntegrationProblem::Store(Message::new("localIntegration.preflightFailed")))?;
-  let scratch = orchester_exec::local_git::prepare_scratch(repo_root, &[".orchester", "local-integration", "legacy"])
-    .map_err(|_| IntegrationProblem::Store(Message::new("localIntegration.preflightFailed")))?;
-  let mut git_owner = orchester_exec::local_git::LocalGit::new(repo_root, &scratch)
-    .map_err(|_| IntegrationProblem::Store(Message::new("localIntegration.preflightFailed")))?;
-  git_owner
-    .own_metadata()
-    .map_err(|_| IntegrationProblem::Store(Message::new("localIntegration.preflightFailed")))?;
+  let _held = preflight::hold(repo_root)?;
   let mut db = ProjectDb::open(repo_root)?;
   // Runs are never deleted: a run the task page read is there.
   let run = db
@@ -355,7 +358,7 @@ pub fn merge_in_as(
     return Err(IntegrationProblem::HeldLocally(holder));
   }
   if super::local_integration::external_integration(repo_root, run.id())
-    .map_err(|_| IntegrationProblem::Store(Message::new("localIntegration.preflightFailed")))?
+    .map_err(integration_refusal(repo_root, PreflightStage::ExistingResult))?
     .is_some()
   {
     return Err(IntegrationProblem::Store(Message::new(

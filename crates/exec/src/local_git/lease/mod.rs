@@ -11,29 +11,50 @@ use super::{
   owned::{Directory, OwnedFile},
 };
 
+/// The lease's file in the project's `.orchester` folder.
+const LOCK: &str = "local-integration.lock";
+
 pub struct IntegrationLease {
   _file: File,
   _directory: Arc<Directory>,
 }
 
 impl IntegrationLease {
+  /// Takes the project's integration lease. [`LocalError::ForeignOperation`] says another operation holds it; any
+  /// other error, with its cause, that it could not be taken.
   pub fn acquire(root: &Path) -> Result<Self, LocalGitError> {
-    let directory = super::files::hold_directory(root, &[".orchester"], true)?.ok_or(LocalGitError::Io)?;
+    let directory = super::files::held_directory(root, &[".orchester"])?;
     super::files::owned_store(root)?;
-    let path = LocalPath::new("local-integration.lock")?;
+    let path = LocalPath::new(LOCK)?;
     let opened = match OwnedFile::open(directory.path(), &path, true) {
       Ok(Some(file)) => file,
-      Ok(None) => OwnedFile::create(directory.path(), &path).map_err(|_| LocalError::ForeignOperation)?,
-      Err(_) => return Err(LocalError::ForeignOperation.into()),
+      Ok(None) => match OwnedFile::create(directory.path(), &path) {
+        Ok(file) => file,
+        // Another operation created it since it was found missing.
+        Err(LocalGitError::State(LocalError::Collision)) => return Err(LocalError::ForeignOperation.into()),
+        Err(error) => return Err(error),
+      },
+      #[cfg(windows)]
+      Err(error) if held(&error) => return Err(LocalError::ForeignOperation.into()),
+      Err(error) => return Err(error),
     };
     let file = opened.into_file();
     #[cfg(unix)]
-    lock(&file)?;
+    lock(&file, &directory.path().join(LOCK))?;
     Ok(Self {
       _file: file,
       _directory: directory,
     })
   }
+}
+
+/// Whether opening the lease's file failed because another operation has it open: the lease is the open file itself,
+/// shared for reading only, so a second opening for writing is a sharing or lock violation.
+#[cfg(windows)]
+fn held(error: &LocalGitError) -> bool {
+  const ERROR_SHARING_VIOLATION: i32 = 32;
+  const ERROR_LOCK_VIOLATION: i32 = 33;
+  matches!(error, LocalGitError::Io(cause) if matches!(cause.code(), Some(ERROR_SHARING_VIOLATION | ERROR_LOCK_VIOLATION)))
 }
 
 /// How long the lease waits for a lock held only for a moment: a program started by `fork` and `exec` in another
@@ -42,8 +63,9 @@ impl IntegrationLease {
 #[cfg(unix)]
 const MOMENT: Duration = Duration::from_millis(500);
 
+/// Locks `file`, the lease's file at `path`.
 #[cfg(unix)]
-fn lock(file: &File) -> Result<(), LocalGitError> {
+fn lock(file: &File, path: &Path) -> Result<(), LocalGitError> {
   let deadline = Instant::now() + MOMENT;
   loop {
     match rustix::fs::flock(file, rustix::fs::FlockOperation::NonBlockingLockExclusive) {
@@ -51,7 +73,8 @@ fn lock(file: &File) -> Result<(), LocalGitError> {
       Err(rustix::io::Errno::WOULDBLOCK) if Instant::now() < deadline => {
         std::thread::sleep(Duration::from_millis(5));
       }
-      Err(_) => return Err(LocalError::ForeignOperation.into()),
+      Err(rustix::io::Errno::WOULDBLOCK) => return Err(LocalError::ForeignOperation.into()),
+      Err(error) => return Err(LocalGitError::io_at(path)(std::io::Error::from(error))),
     }
   }
 }

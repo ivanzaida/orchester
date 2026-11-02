@@ -30,7 +30,7 @@ pub fn problem(error: IntegrationError) -> Problem {
       LocalError::HookChanged => "hookChanged",
     },
     IntegrationError::Git(LocalGitError::HookChanged(_)) => "hookChanged",
-    IntegrationError::Git(LocalGitError::Refused) => "git",
+    IntegrationError::Git(LocalGitError::Refused(_)) => "git",
     IntegrationError::Git(_) => "io",
     IntegrationError::Store(_) => "storage",
     IntegrationError::Run => "run",

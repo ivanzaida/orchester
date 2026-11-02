@@ -72,7 +72,7 @@ fn run_probe(mode: &str) {
     .expect("stop only the independently owned fixture child by its retained handle");
   control.wait().expect("reap own control");
   if mode == "waiting-parent" {
-    assert!(matches!(result, Err(LocalGitError::Process)));
+    assert!(matches!(result, Err(LocalGitError::Process(_))));
   } else {
     assert!(matches!(
       result,
