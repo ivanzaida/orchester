@@ -474,7 +474,8 @@ store. The installed app refuses `ORCHESTER_APP_MCP_DISCOVERY`: started with it,
 the log says why, so a program that starts it cannot get a token for your data in a file it can read.
 
 A discovery file holds `url` (`http://127.0.0.1:<port>/mcp`), `port` and `token`, with the same rules as the
-deprecated desktop's above: only you can read it, a `<pid>.lock` beside it, removed when the app closes.
+deprecated desktop's above: only you (and the account the app runs as, when that is another one, such as a sandbox's
+user) can read it, a `<pid>.lock` beside it, removed when the app closes.
 `tools/qa-app.ps1` sets the variable to `.tmp/qa/<task>/mcp/` in the worktree and prints that folder. Other builds
 therefore never take the installed app's port, and they can run beside it. The runs' `call_run_app` relay drives
 only an app whose program is inside the run's worktree, whatever discovery file it finds.

@@ -2,13 +2,14 @@
 //! writes its file to the folder `ORCHESTER_APP_MCP_DISCOVERY` names, which `tools/qa-app.ps1` sets to
 //! `.tmp/qa/<task>/mcp/`; a QA profile, a copy whose user data folder is `.tmp/qa/<task>/profile/`, keeps it in that
 //! folder's `orchester-app-mcp/`. Only those exact paths are read: agents keep build output and scratch checkouts in
-//! `.tmp/`, so it is never walked.
+//! `.tmp/`, so it is never walked. A QA copy the script named `orchester-app-qa` is reached through its own task
+//! folder's file only ([`qa_copy`]).
 
 use std::{
   fs,
   io::Read,
   num::NonZeroU32,
-  path::{Path, PathBuf},
+  path::{Component, Path, PathBuf},
 };
 
 use orchester_core::orchester_tools::AppDiscovery;
@@ -43,6 +44,36 @@ pub(super) fn find(worktree: &Path, pid: NonZeroU32) -> Result<AppDiscovery, App
     [] => Err(AppError::Missing),
     _ => Err(AppError::Ambiguous),
   }
+}
+
+/// The discovery of the QA copy `executable` (pid `pid`) that `tools/qa-app.ps1` started from the worktree: it runs
+/// from `.tmp/qa/<task>/bin/` there, and its file is that task folder's `mcp/<pid>.json`, never one of another folder.
+/// Refused when the copy runs from anywhere else. Both paths are compared with links resolved.
+pub(super) fn qa_copy(worktree: &Path, executable: &Path, pid: NonZeroU32) -> Result<AppDiscovery, AppError> {
+  let root = fs::canonicalize(worktree).map_err(|_| AppError::ReadDiscovery)?;
+  let executable = fs::canonicalize(executable).map_err(|_| AppError::QaCopyPlace)?;
+  let place: Vec<_> = executable
+    .strip_prefix(&root)
+    .map_err(|_| AppError::QaCopyPlace)?
+    .components()
+    .collect();
+  let task = match place.as_slice() {
+    [
+      Component::Normal(tmp),
+      Component::Normal(qa),
+      Component::Normal(task),
+      Component::Normal(bin),
+      _,
+    ] if tmp.eq_ignore_ascii_case(".tmp") && qa.eq_ignore_ascii_case("qa") && bin.eq_ignore_ascii_case("bin") => task,
+    _ => return Err(AppError::QaCopyPlace),
+  };
+  let file = root
+    .join(".tmp")
+    .join("qa")
+    .join(task)
+    .join("mcp")
+    .join(format!("{pid}.json"));
+  read(&qa_file(&file)?.ok_or(AppError::Missing)?, pid)
 }
 
 /// The user's data folder, which holds the apps' discovery folders and the QA slots.
