@@ -27,6 +27,13 @@ use crate::{
   },
 };
 
+fn affix(text: &str) -> Text {
+  Text::new(text)
+    .variant(TypographyStyle::Description)
+    .color(PaletteColor::TextMuted)
+    .nowrap()
+}
+
 pub(super) struct FieldBox {
   focused: Signal<bool>,
 }
@@ -86,12 +93,7 @@ impl Component for FieldBox {
           .filter(|_| !props.leading_while_empty || props.value.get().is_empty())
           .map(|glyph| icon(glyph, IconSize::Base, PaletteColor::TextMuted).id(format!("{}-icon", props.id))),
       )
-      .with_children(props.prefix.as_deref().map(|prefix| {
-        Text::new(prefix)
-          .variant(TypographyStyle::Description)
-          .color(PaletteColor::TextMuted)
-          .nowrap()
-      }))
+      .with_children(props.prefix.as_deref().map(affix))
       .child(input)
       .with_children(clear_button(&props))
       .with_children(
@@ -101,12 +103,7 @@ impl Component for FieldBox {
           .filter(|_| props.value.get().is_empty())
           .map(|keys| key_cap(&format!("{}-keys", props.id), keys)),
       )
-      .with_children(props.unit.as_deref().map(|unit| {
-        Text::new(unit)
-          .variant(TypographyStyle::Description)
-          .color(PaletteColor::TextMuted)
-          .nowrap()
-      }))
+      .with_children(props.unit.as_deref().map(affix))
       .with_children(props.trailing.map(|glyph| {
         icon(
           glyph,

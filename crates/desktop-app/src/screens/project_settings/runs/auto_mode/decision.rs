@@ -61,8 +61,12 @@ pub(super) fn check_action(ctx: &mut Ctx) -> Check {
                 open.project.id(),
                 orchester_workspace::tasks::outside::Outside::Connections,
               );
-              background::run(move || project_settings::load_in(&open.repo_root).map(Stored).map_err(|e| messages::store_error(&e)))
-                .await?
+              background::run(move || {
+                project_settings::load_in(&open.repo_root)
+                  .map(Stored)
+                  .map_err(|e| messages::store_error(&e))
+              })
+              .await?
             },
           )
           .await
@@ -216,11 +220,11 @@ fn destination_text(
   editing: bool,
 ) -> std::sync::Arc<str> {
   if let Some(figure) = figure {
-    let percent = if figure.requests_tested == 0 {
-      0
-    } else {
-      figure.approves_on_its_own.saturating_mul(100) / figure.requests_tested
-    };
+    let percent = figure
+      .approves_on_its_own
+      .saturating_mul(100)
+      .checked_div(figure.requests_tested)
+      .unwrap_or(0);
     if !editing {
       let key = if connection.is_on_this_computer() {
         "project_settings.decision.localTested"
