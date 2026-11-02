@@ -33,6 +33,21 @@ impl Found {
     Self { needle, current }
   }
 
+  /// What it marks in the part of a message after its first `places` places, as when the chat draws the message in
+  /// parts (`super::fences`): the current place is at its rank among the part's places.
+  #[must_use]
+  pub fn after(&self, places: usize) -> Self {
+    Self {
+      needle: self.needle.clone(),
+      current: self.current.and_then(|rank| rank.checked_sub(places)),
+    }
+  }
+
+  /// How many places of the needle `text` holds.
+  pub fn count(&self, text: &str) -> usize {
+    self.needle.places(text).len()
+  }
+
   /// The fills behind the places of the needle in `text`, the words a message shows.
   pub fn highlights(&self, ctx: &Ctx, text: &str) -> Vec<TextHighlight> {
     let radius = ctx.theme().radius_value(RadiusSize::Sm);

@@ -11,7 +11,7 @@ use orchester_core::{
 use orchester_store::ProjectDb;
 use orchester_workspace::tasks::detail::TaskDetail;
 
-use super::{Seeded, Window, click, ids, key_of, open, seeded};
+use super::{Seeded, Window, click, ids, key_of, open, seeded, wheel};
 
 const TASK: &str = "Add retry to webhook sender";
 const COMPOSER: &str = "conversation-context-composer";
@@ -89,6 +89,15 @@ fn conversation_context_meter_of_the_step_at_work_follows_each_turn() {
   let key = key_of(&seeded, TASK);
   open(&mut window, &seeded, &key, COMPOSER);
   let step = expected_meter(&seeded);
+  // The step's divider sits above its messages: the chat, at its end, may have to scroll up to build it.
+  for _ in 0..20 {
+    window.tree.tick_futures();
+    window.pass();
+    if !step_meters(&mut window).is_empty() {
+      break;
+    }
+    wheel(&mut window, 120.0);
+  }
   window.until("the step's meter", |window| !step_meters(window).is_empty());
   assert_eq!(
     step_meters(&mut window),
