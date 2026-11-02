@@ -1,3 +1,4 @@
+mod support;
 use orchester_core::{
   connection::{
     DecisionCheck, DecisionCheckResult, DecisionConnection, DecisionServerUrl, DecisionTest, DecisionThresholdFigures,
@@ -112,18 +113,8 @@ fn decision_connections_round_trip_and_edit_keep_checks_tests_and_secret_referen
 fn decision_connections_migrate_database_without_table() {
   let (repo, db) = fixture();
   drop(db);
-  let raw = Sqlite::open(repo.path().join(".orchester/orchester.db")).expect("raw database");
-  let version: u32 = raw
-    .pragma_query_value(None, "user_version", |row| row.get(0))
-    .expect("version");
-  raw
-    .execute_batch("DROP TABLE decision_reviewer_connection; DROP TABLE decision_connections; ALTER TABLE reviewer_usage DROP COLUMN decision_failure;")
-    .expect("previous schema");
-  raw
-    // Decision connections precede team reviewers and both reviewer settings migrations.
-    .pragma_update(None, "user_version", version - 4)
-    .expect("previous version");
-  drop(raw);
+  // Migration 120 introduces decision connections; build its actual predecessor schema.
+  let repo = support::copied_at_version(&repo.path().join(".orchester/orchester.db"), 119);
   let mut reopened = ProjectDb::open(repo.path()).expect("migrate");
   assert!(reopened.decision_connections().expect("empty").is_empty());
   assert_eq!(reopened.project().name(), &name("Project"));
