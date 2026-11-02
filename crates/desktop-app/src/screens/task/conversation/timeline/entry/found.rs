@@ -94,7 +94,14 @@ pub(super) fn output(
   if timeline.toggles.is_open(&all, false) || shown.output.is_empty() {
     return None;
   }
-  let start = first.saturating_sub(BEFORE);
+  // At most `OUTPUT_LINES` show: when the places spread wider, the window holds the current one, or else the first.
+  let anchor = lines
+    .iter()
+    .find(|(_, (_, current))| *current)
+    .map_or(first, |(line, _)| *line);
+  let start = first
+    .saturating_sub(BEFORE)
+    .max((anchor + AFTER + 1).saturating_sub(OUTPUT_LINES));
   let end = (last + AFTER + 1).min(shown.output.len()).min(start + OUTPUT_LINES);
   let head = head(ctx, (id, &all, timeline), (shown.output.len(), start, end));
   let rows = (start..end).map(|at| {

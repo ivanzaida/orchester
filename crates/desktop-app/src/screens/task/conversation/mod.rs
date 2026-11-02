@@ -111,7 +111,7 @@ impl Component for ConversationTab {
       search: PageState::of(ctx).search,
       found: SearchHold {
         outcome: ctx.signal(Default::default()),
-        current: Mutex::new(None),
+        current: Mutex::default(),
       },
     }
   }

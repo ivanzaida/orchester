@@ -2,7 +2,10 @@
 //! current place, the find bar over the chat with the search run under it, and the track of marks at the chat's end.
 //! A closed search folds again what it opened, and leaves the chat where it is.
 
-use std::{collections::HashMap, sync::Arc};
+use std::{
+  collections::{HashMap, HashSet},
+  sync::Arc,
+};
 
 use lurq::{
   app::{ctx::Ctx, theme::SpacingSize},
@@ -44,7 +47,14 @@ pub(in super::super) struct Searching {
 /// What the tab keeps of its search: what the search run found, and the place last made current.
 pub(in super::super) struct SearchHold {
   pub(in super::super) outcome: Signal<Outcome>,
-  pub(in super::super) current: Mutex<Option<Hit>>,
+  pub(in super::super) current: Mutex<Current>,
+}
+
+/// The place last made current, and the rows the search opened to show it.
+#[derive(Default)]
+pub(in super::super) struct Current {
+  hit: Option<Hit>,
+  opened: HashSet<Arc<str>>,
 }
 
 /// The search of `built`, the tab's timeline of a transcript of `entries` entries, while it is open; `toggles` open
@@ -59,7 +69,7 @@ pub(in super::super) fn searching(
 ) -> Option<Searching> {
   if !search.is_open() {
     toggles.fold_searched();
-    *hold.current.lock() = None;
+    *hold.current.lock() = Current::default();
     return None;
   }
   let needle = Needle::new(&search.query.get());
@@ -119,21 +129,25 @@ pub(in super::super) fn searching(
 }
 
 /// Opens what hides `hit`, the current place, and the key of the row that shows it. A place made current anew stops
-/// the chat from following, so the chat goes to it and stays.
+/// the chat from following, so the chat goes to it and stays. Each row is opened once for the place: one the person
+/// folds again stays folded until another place is made current.
 fn show(
   hit: &Hit,
   rows: &[Arc<Row>],
   (toggles, follow): (&Toggles, &Follow),
-  shown: &Mutex<Option<Hit>>,
+  shown: &Mutex<Current>,
 ) -> Option<String> {
-  {
-    let mut shown = shown.lock();
-    if shown.as_ref() != Some(hit) {
-      *shown = Some(hit.clone());
-      follow.hold_in_place();
-    }
+  let mut shown = shown.lock();
+  if shown.hit.as_ref() != Some(hit) {
+    shown.hit = Some(hit.clone());
+    shown.opened.clear();
+    follow.hold_in_place();
   }
-  let keys = to_open(hit, rows, toggles);
+  // Opening a step can bring up rows that hide the place too, so what is still to open is asked at each render.
+  let keys: Vec<Arc<str>> = to_open(hit, rows, toggles)
+    .into_iter()
+    .filter(|key| shown.opened.insert(key.clone()))
+    .collect();
   if !keys.is_empty() {
     toggles.open_for_search(keys);
   }

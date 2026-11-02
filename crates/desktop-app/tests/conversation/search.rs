@@ -141,6 +141,98 @@ fn search_goes_round_its_places_and_closing_folds_what_it_opened() {
 }
 
 #[test]
+fn search_leaves_folded_what_the_person_folds() {
+  let (mut window, _) = retry_webhooks();
+  search(&mut window, "jitter_bound", "1 of 1");
+  let mut opened = String::new();
+  window.until("a group opened for the place", |window| {
+    opened = ids(window, "conversation-group-")
+      .into_iter()
+      .find(|id| id.ends_with("-opened"))
+      .unwrap_or_default();
+    !opened.is_empty()
+  });
+  let group = opened.trim_end_matches("-opened").to_owned();
+  window.press(&group);
+  for _ in 0..5 {
+    window.pass();
+  }
+  assert!(
+    !exists(&mut window, &opened),
+    "the group the person folded is theirs now"
+  );
+  assert!(
+    exists(&mut window, &format!("{group}-matches")),
+    "the folded group stays folded and counts its place"
+  );
+  assert!(
+    !exists(&mut window, "conversation-search-current"),
+    "the place stays hidden in the folded group"
+  );
+}
+
+/// Lines of the call's output whose matches lie far apart, and the two lines that match.
+const FAR_LINES: usize = 520;
+const NEAR_MATCH: usize = 10;
+const FAR_MATCH: usize = 500;
+
+#[test]
+fn search_shows_a_place_far_down_a_long_output() {
+  let (mut window, seeded) = seeded("conversation");
+  let key = key_of(&seeded, "Add retry to webhook sender");
+  let mut db = ProjectDb::open(&seeded.repo).expect("the project database");
+  let invocation = at_work(&db, &key);
+  let output: Vec<String> = (1..=FAR_LINES)
+    .map(|line| {
+      if line == NEAR_MATCH || line == FAR_MATCH {
+        format!("line {line} needle_far")
+      } else {
+        format!("line {line}")
+      }
+    })
+    .collect();
+  let (item, command) = ("far-output".to_owned(), "cargo test far_output".to_owned());
+  let at = Timestamp::now();
+  let events = [
+    (
+      at,
+      AgentEvent::CommandStarted {
+        item: item.clone(),
+        command: command.clone(),
+      },
+    ),
+    (
+      at,
+      AgentEvent::CommandFinished {
+        item,
+        command,
+        output: output.join("\n"),
+        exit_code: Some(0),
+        status: CommandStatus::Completed,
+      },
+    ),
+  ];
+  db.append_activity(&invocation, &events).expect("the call is added");
+  open(&mut window, &seeded, &key, "conversation-chat");
+  search(&mut window, "needle_far", "1 of 2");
+  window.press("conversation-search-next");
+  window.until("the far place current", |window| window.text(COUNT) == "2 of 2");
+  let mut head = String::new();
+  window.until("the output around the far place", |window| {
+    head = ids(window, "conversation-entry-")
+      .into_iter()
+      .find(|id| id.ends_with("-output"))
+      .map(|id| window.text(&id))
+      .unwrap_or_default();
+    head.contains("lines 303–502")
+  });
+  assert!(
+    exists(&mut window, "conversation-search-current"),
+    "the far place is drawn as the current one: {head}"
+  );
+}
+
+#[test]
 fn search_says_what_it_searched_when_nothing_matches() {
   let (mut window, _) = retry_webhooks();
   search(&mut window, "zebra crossing", "No matches");
