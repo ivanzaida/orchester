@@ -156,10 +156,16 @@ impl ProviderForm {
   /// The key's secret: the project's, the archived one the connection still names, or a new one with its name and
   /// key under the select.
   pub(in super::super) fn key_row(&self, ctx: &mut Ctx, listed: &ProjectConnections) -> Element {
-    self.key_row_with(ctx, listed, false)
+    self.key_row_with(ctx, listed, false, false)
   }
 
-  pub(super) fn key_row_with(&self, ctx: &mut Ctx, listed: &ProjectConnections, decision: bool) -> Element {
+  pub(super) fn key_row_with(
+    &self,
+    ctx: &mut Ctx,
+    listed: &ProjectConnections,
+    decision: bool,
+    local: bool,
+  ) -> Element {
     let archived = match self.key.get() {
       KeyChoice::Existing(id) if active(listed, id).is_none() => listed.archived_keys.iter().find(|key| key.id() == id),
       _ => None,
@@ -176,7 +182,7 @@ impl ProviderForm {
       select = select.invalid();
     }
     // *or New secret…* under the select (`Note` `Z6Pq8I`) chooses a new secret, as its last option does.
-    let new_secret = (self.key.get() != KeyChoice::New).then(|| {
+    let new_secret = (self.key.get() != KeyChoice::New && !local).then(|| {
       let key = self.key.clone();
       form_link(
         "connection-provider-new-secret",
@@ -206,7 +212,9 @@ impl ProviderForm {
       ),
     };
     FormField::new("connection-provider-key", ctx.t("connections.apiProvider.key"))
-      .hint(ctx.t(if decision {
+      .hint(ctx.t(if local {
+        "decision_connection.localKeyHint"
+      } else if decision {
         "decision_connection.editKeyHint"
       } else {
         hint

@@ -78,7 +78,14 @@ impl Component for Runs {
         own: self.own.clone(),
       },
     );
-    let estimates = ctx.mount_keyed::<estimates::Estimates>("project-settings-estimates", props.clone());
+    let estimates = ctx.mount_keyed::<estimates::Estimates>(
+      "project-settings-estimates",
+      estimates::Props {
+        tab: props.clone(),
+        settings: state.data.map(|read| read.0),
+        read_error: state.error,
+      },
+    );
     let limits = ctx.mount_keyed::<limits::Limits>("project-settings-limits", self.sections.props(&props, 1));
     let environment =
       ctx.mount_keyed::<environment::Environment>("project-settings-environment", self.sections.props(&props, 2));

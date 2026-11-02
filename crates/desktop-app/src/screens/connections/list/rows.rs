@@ -76,7 +76,7 @@ pub(super) fn groups(
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Roomy.role())
     .child(agents)
-    .with_children(super::super::decision::listed(ctx, project, &listed.decisions))
+    .child(super::super::decision::listed(ctx, project, &listed.decisions))
     .child(github)
     .child(mcp)
     .into()

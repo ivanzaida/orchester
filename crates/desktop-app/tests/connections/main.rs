@@ -18,6 +18,7 @@ mod accounts;
 mod add_cli;
 mod api_provider;
 mod decision;
+mod decision_add;
 mod decision_edit;
 mod entry;
 mod harness;
