@@ -54,7 +54,10 @@ orchester.exe (desktop, UI)
   the group does not end with the desktop, and a process that leaves it (`setsid`) is neither observed nor stopped.
   Windows also holds `.orchester`, its database and its SQLite sidecars against rename and replacement while an
   integration works; macOS cannot hold a name, so it checks them instead (reached without a link, regular files of
-  one link) and does not prevent a substitution after that check. A file the integration removes is deleted through
+  one link) and does not prevent a substitution after that check. It reads their directory entries and never opens
+  them: closing any descriptor of a file drops every POSIX record lock the process holds on it, those of its own
+  SQLite connections too, and another process then deleted or cut the shared memory the app still had mapped, which
+  crashed it with SIGBUS (ORC-630). A file the integration removes is deleted through
   its handle on Windows; on macOS it is first moved, without replacing anything, to a private name and deleted only
   once it proves to be the file that was checked. The lease of a checkout (`flock` on macOS) waits up to half a
   second for a lock held only by a program another thread is starting with `fork`.

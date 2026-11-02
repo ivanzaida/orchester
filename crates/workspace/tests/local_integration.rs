@@ -48,6 +48,8 @@ mod schema;
 mod selection;
 #[path = "local_integration/snapshots.rs"]
 mod snapshots;
+#[path = "local_integration/sqlite_locks.rs"]
+mod sqlite_locks;
 #[path = "local_integration/stat_cache.rs"]
 mod stat_cache;
 #[path = "local_integration/store_contention.rs"]
