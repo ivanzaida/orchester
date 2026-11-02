@@ -168,8 +168,6 @@ pub(super) struct TabProps {
   pub link_page: Signal<sharing::LinkPage>,
   /// Sharing opens with *Make local*'s question.
   pub make_local: bool,
-  /// Whether General said how the base branch moved, forgotten once the settings close.
-  pub moved_seen: general::base_branch::MovedSeen,
 }
 impl PartialEq for TabProps {
   fn eq(&self, other: &Self) -> bool {
@@ -234,17 +232,13 @@ impl SectionStatuses {
 struct SettingsScreen {
   status: Signal<Status>,
   link_page: Signal<sharing::LinkPage>,
-  /// Dropped as the settings close.
-  moved_seen: general::base_branch::MovedSeen,
 }
 impl Component for SettingsScreen {
   type Props = Props;
   fn create(ctx: &mut Ctx) -> Self {
-    let root = ctx.props::<Props>().project.open.repo_root.clone();
     Self {
       status: ctx.signal(Status::Saved),
       link_page: ctx.signal(sharing::LinkPage::default()),
-      moved_seen: general::base_branch::MovedSeen::new(root, crate::services::Services::of(ctx).runtime),
     }
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -258,7 +252,6 @@ impl Component for SettingsScreen {
       status: self.status.clone(),
       link_page: self.link_page.clone(),
       make_local,
-      moved_seen: self.moved_seen.clone(),
     };
     let content = match (shown, self.link_page.get().0) {
       (Shown::Tab(Tab::Sharing), Some(upload)) => sharing::link_page(ctx, &project, upload, &self.link_page),

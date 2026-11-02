@@ -104,10 +104,10 @@ Work after the last checkpoint is never claimed as done.
 is not touched*. A worktree stays after the run ends until a person removes it, a merge cleans it up, or *Run again*
 is told to remove it.
 
-**Base branch.** The branch a run starts from and delivers into. Project settings › General › Repository › *Base branch*:
-*Checked-out branch* (default — the run starts at the checkout's HEAD) or a named branch (every run starts from its
-tip). Each run records its own base, and merge, merge queue, local integration, pull requests and base-moved notices
-follow that record. The setting is kept per computer. A chosen branch that no longer exists refuses new runs.
+**Base branch.** The branch a run starts from and delivers into. Set on each task and module: a task without one takes
+its module's; without either, the branch checked out when its run starts. Each run records its own base, and merge,
+merge queue, local integration, pull requests and base-moved notices follow that record. It is kept per computer. A
+chosen branch that no longer exists refuses new runs.
 
 **Base moved notice.** When a run's base branch moves while the run is unfinished, the run's next writing agent is
 told to merge the base into its worktree after its turn (never mid-edit). Moves within two minutes coalesce. Can be

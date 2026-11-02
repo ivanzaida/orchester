@@ -173,10 +173,6 @@ fn rekey(transaction: &Transaction<'_>, local: ModuleId, shared: ModuleId) -> Re
        WHERE id = ?2",
       ids,
     )?;
-    transaction.execute(
-      "UPDATE OR IGNORE base_branch_move_modules SET module_id = ?2 WHERE module_id = ?1",
-      ids,
-    )?;
     transaction.execute("DELETE FROM modules WHERE id = ?1", [local.to_string()])?;
   } else {
     transaction.execute("UPDATE modules SET id = ?2 WHERE id = ?1", ids)?;

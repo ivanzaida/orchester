@@ -161,7 +161,6 @@ Tabs: **General · Runs · Orchestrator · Context · Connections · Environment
 | Project | Name, Key (prefix of task keys), Folder | — | Read-only in this version. |
 | Repository | **GitHub repository** | detected | From the folder's `origin`; *Check again*. |
 | | **GitHub account** | the account detected at setup | Pull requests are created only while `gh` is signed in as it; *Use <account>*. Orchester never switches `gh` accounts. |
-| | **Base branch** | Checked-out branch | Or a named local/remote branch. Kept on this computer only. A branch that's gone refuses new runs. |
 | | **When the base branch moves** | On | The next writing agent merges the moved base after its turn; moves within two minutes are one notice. |
 
 ### 2.2 Runs

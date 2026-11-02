@@ -1,7 +1,7 @@
 //! Base branches of tasks and modules (`orchester_core::integration::base`): `tasks.base_choice`/`tasks.base_branch`,
-//! `modules.base_branch`, where each run's came from (`runs.base_source`), and the move of the project's base branch
-//! to its open modules (`base_branch_move`). Kept on this computer: a shared task's or module's base branch is never
-//! sent and leaves its server revision alone, while a local task's raises its revision as any edit does.
+//! `modules.base_branch` and where each run's came from (`runs.base_source`). Kept on this computer: a shared task's
+//! or module's base branch is never sent and leaves its server revision alone, while a local task's raises its
+//! revision as any edit does.
 
 use orchester_core::{
   id::{ModuleId, TaskId},
@@ -10,24 +10,14 @@ use orchester_core::{
   run::BranchName,
   sharing::TaskRevision,
   task::{Task, TaskUpdate},
-  time::Timestamp,
 };
-use rusqlite::{OptionalExtension, params};
+use rusqlite::params;
 
 use super::{ProjectDb, modules, tasks};
 use crate::{
   StoreError,
   rows::{corrupt, parse},
 };
-
-/// The project's base branch as it moved to its open modules that had none (Project settings › General, `NDTCw`).
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct BaseBranchMove {
-  pub branch: BranchName,
-  pub at: Timestamp,
-  /// The modules that took it, in no order.
-  pub modules: Vec<ModuleId>,
-}
 
 impl ProjectDb {
   /// The base branch a new run of `task` takes and where it came from: the task's, else its module's as stored now,
@@ -86,41 +76,6 @@ impl ProjectDb {
     )?;
     transaction.commit()?;
     Ok(module.with_base(after))
-  }
-
-  /// How the project's base branch moved to its open modules; `None` for a project that had none set.
-  pub fn base_branch_move(&self) -> Result<Option<BaseBranchMove>, StoreError> {
-    let moved: Option<(String, i64)> = self
-      .connection
-      .query_row("SELECT branch, moved_at FROM base_branch_move", [], |row| {
-        Ok((row.get(0)?, row.get(1)?))
-      })
-      .optional()?;
-    let Some((branch, at)) = moved else {
-      return Ok(None);
-    };
-    let mut statement = self
-      .connection
-      .prepare("SELECT module_id FROM base_branch_move_modules")?;
-    let modules = statement
-      .query_map([], |row| row.get::<_, String>(0))?
-      .map(|id| parse("module id", &id?))
-      .collect::<Result<Vec<_>, _>>()?;
-    Ok(Some(BaseBranchMove {
-      branch: BranchName::new(&branch).map_err(|error| corrupt("moved base branch", error))?,
-      at: Timestamp::from_unix_millis(at),
-      modules,
-    }))
-  }
-
-  /// Forgets how the project's base branch moved, once Project settings › General said so and the settings closed:
-  /// the line shows once (`NDTCw`).
-  pub fn forget_base_branch_move(&mut self) -> Result<(), StoreError> {
-    let transaction = self.connection.transaction()?;
-    transaction.execute("DELETE FROM base_branch_move_modules", [])?;
-    transaction.execute("DELETE FROM base_branch_move", [])?;
-    transaction.commit()?;
-    Ok(())
   }
 
   /// How many runs still deliver into the base branch they recorded: those that have not ended, and each task's
