@@ -8,7 +8,7 @@ use orchester_core::{
   connection::invocation::Platform,
   permission::{
     category::{ClassifiedCommand, CommandScope},
-    roots::{RootsCheck, RunRoots, ToolRequest},
+    roots::{RootPath, RootsCheck, RunRoots, ToolRequest},
   },
 };
 use tempfile::TempDir;
@@ -27,6 +27,11 @@ impl Fixture {
     let dir = tempfile::tempdir().expect("temporary folder");
     let root = std::fs::canonicalize(dir.path()).expect("canonical");
     let root = PathBuf::from(root.to_string_lossy().trim_start_matches(r"\\?\"));
+    // As the roots show it: on macOS `/var/…`, not the `/private/var/…` it resolves to.
+    let root = RootPath::new(Platform::current(), &root.to_string_lossy(), None)
+      .expect("absolute")
+      .path()
+      .to_path_buf();
     let worktree = root.join("w1");
     let elsewhere = root.join("elsewhere");
     for folder in [&worktree.join("src"), &elsewhere, &root.join("temp")] {
