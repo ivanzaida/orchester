@@ -42,6 +42,10 @@ pub enum LocalEffect {
   Stop {
     work_id: WorkId,
   },
+  /// The runner may merge the work's module branch into base on its computer ([`super::DeliveryRead`]).
+  Deliver {
+    work_id: WorkId,
+  },
   /// Braced so serde refuses unknown fields on it too; a unit variant would ignore them.
   None {},
 }

@@ -53,6 +53,10 @@ fn authority_operations_subject_and_local_effect_shapes() {
       json!({"kind":"pause","work_id":work_id}),
     ),
     (LocalEffect::Stop { work_id }, json!({"kind":"stop","work_id":work_id})),
+    (
+      LocalEffect::Deliver { work_id },
+      json!({"kind":"deliver","work_id":work_id}),
+    ),
     (LocalEffect::None {}, json!({"kind":"none"})),
   ] {
     roundtrip(&effect, &wire);
@@ -62,6 +66,8 @@ fn authority_operations_subject_and_local_effect_shapes() {
     json!({"kind":"pause","work_id":work_id,"bundle":null}),
     json!({"kind":"start","work_id":work_id,"bundle":{"sha256":sha256,"schema_version":2,"url":"x"}}),
     json!({"kind":"resume","work_id":work_id}),
+    json!({"kind":"deliver"}),
+    json!({"kind":"deliver","work_id":work_id,"branch":"module/x"}),
   ] {
     assert!(serde_json::from_value::<LocalEffect>(invalid).is_err());
   }

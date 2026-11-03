@@ -141,7 +141,8 @@ are refused in every shape below.
   `effects:[LocalEffect]` (empty when no local effect is authorized). `cursor` is an opaque, non-empty
   `EventCursor` string.
 - `LocalEffect`: `{kind:"start",work_id,bundle:{sha256,schema_version}}`, `{kind:"pause",work_id}`,
-  `{kind:"stop",work_id}` or `{kind:"none"}`; `sha256` is a 64-digit lowercase hex `ContentHash`.
+  `{kind:"stop",work_id}`, `{kind:"deliver",work_id}` (S7, below) or `{kind:"none"}`; `sha256` is a 64-digit
+  lowercase hex `ContentHash`.
 - `OperationRead`: `{operation_id,state:"committed",response:CommandResult}` or
   `{operation_id,state:"rejected",error:AuthorityError}`.
 - `AuthorityError`: `{operation_id?,code,details}`; `operation_id` is left out when the refusal came before the
@@ -222,11 +223,13 @@ core (`orchester_core::run::bundle`) and `orchester_api::v2`; it adds no endpoin
 starts work under a claim and never accepts one a client wrote. Unknown fields are refused in every shape below.
 
 - `ExecutionBundle`, in this field order:
-  `{schema_version,project_id,subject,claim_id,definition_revision,task,pipeline,profiles,permissions,limits,delivery,resources,files,skill_files,bindings,inputs}`.
-  `schema_version` is `EXECUTION_BUNDLE_SCHEMA` (1), as `BundleRef.schema_version` names it. `definition_revision` is
-  the task's revision when the work started; `task` (`TaskAtStart`) is `{title,brief,criteria}` at that revision.
-  `limits` is a `SharedLimits` (`{}` for none) and `delivery` what the run delivers (`changes`, `report`, `outside`
-  or `changes_or_report`: the task's own choice, else its pipeline's).
+  `{schema_version,project_id,subject,claim_id,module_id,branch,base_commit,definition_revision,task,pipeline,profiles,permissions,limits,delivery,resources,files,skill_files,bindings,inputs}`.
+  `schema_version` is `EXECUTION_BUNDLE_SCHEMA` (1), as `BundleRef.schema_version` names it. `module_id`, `branch`
+  and `base_commit` are S7's (below): the module the work is under, its module branch (`BranchName`) and the base
+  branch's commit the work starts from (`CommitId`). `definition_revision` is the task's revision when the work
+  started; `task` (`TaskAtStart`) is `{title,brief,criteria}` at that revision. `limits` is a `SharedLimits` (`{}` for
+  none) and `delivery` what the run delivers (`changes`, `report`, `outside` or `changes_or_report`: the task's own
+  choice, else its pipeline's).
 - Derived from `inputs`, and refused on read when they differ: `pipeline` `{resource_id,version}`; `profiles`
   `[{role,resource_id,version}]`; `permissions` `[{step,permissions}]`, each agent step's profile permissions
   narrowed by the step, in pipeline step order; `resources` `[{resource_id,version}]`, the pinned instructions, tools
@@ -251,9 +254,40 @@ starts work under a claim and never accepts one a client wrote. Unknown fields a
   at most `MAX_BUNDLE_FILE_BYTES` (8 MiB; a run whose skills have a larger file makes no bundle), which the desktop
   checks against the bundle (`ExecutionBundle::check_file`). There is no confirmation command.
 
-Left out until the S7 contract (decision D3 is open): `module_id`, `branch` and `base_commit`, and the work; a bundle
-binds to its claim, and S7's `work.start` attaches the work. Existing v1 contracts, the /api/v1 client and earlier v2
-types are unchanged.
+The work is not in the bundle: a bundle binds to its claim, and S7's `work.start` attaches the work. Existing v1
+contracts, the /api/v1 client and earlier v2 types are unchanged.
+
+## Team authority S7 delivery contract
+
+The public prerequisite for platform OP-150 (mandatory modules, module branches and authorized delivery) is in core
+and `orchester_api::v2`; it adds no endpoints. Unknown fields are refused in every shape below.
+
+- `CommitId` (`orchester_core::run`): a full Git object id, 40 lowercase hex digits (SHA-1) or 64 (SHA-256), sent as
+  a string. Abbreviated ids, uppercase and ref names are refused (`CommitIdError`). Branches are `BranchName`.
+- The execution bundle gains `module_id:ModuleId`, `branch:BranchName` and `base_commit:CommitId` after `claim_id`
+  (above). This changes the canonical bytes, so a bundle with these fields hashes differently from the same bundle
+  in ORC-651's shape; nothing stored that shape yet, and `schema_version` stays 1.
+- `DeliveryRead`:
+  `{work_id,claim_id,authorization_operation_id:OperationId?,source_commit,base_commit,bundle:BundleRef,state,revision}`.
+  `authorization_operation_id` is always sent, `null` when no `delivery.authorize` allowed the delivery; leaving it
+  out is refused. `source_commit` and `base_commit` are `CommitId`s, `revision` is 1..=i64::MAX.
+- `DeliveryState`: `authorized`, `requested`, `delivered` or `failed`. The server reports `delivered` only after the
+  runner reported the merge commit.
+- `LocalEffect` gains `{kind:"deliver",work_id}`: the runner may merge the work's module branch into base on its
+  computer.
+- Commands, instantiated by the server on the S4 envelopes rather than defined here: `delivery.authorize`
+  `{work_id,claim_id,source_commit,base_commit,bundle}` (Admin) and `delivery.request`
+  `{authority,authorization_operation_id,source_commit,base_commit,bundle}`, each answering
+  `{kind:"delivery",delivery:DeliveryRead,effects}`.
+
+Decided for S7 (the orchestrator's D3 and D7, 2026-11-03, revisable by the person): the automatic module branch is
+`module/<name-slug>` (with `-<8 hex of the module id>` on collision), fixed at first assignment and created by the
+runner from its checkout's base at the first task start; task run branches merge into it, and only delivery takes it
+to base. A manually assigned branch is unique in the workspace, may be an existing Git branch, and cannot change while
+work under the module runs. With the workspace's `automatic_merge` on, a delivery request from the current effective
+claim on current unfenced work counts as Admin-authorized; off, it needs an explicit `delivery.authorize`. Report and
+outside deliverables have no base merge (D4 open). Existing v1 contracts, the /api/v1 client and earlier v2 types are
+unchanged, apart from the bundle fields above.
 
 ## Conventions
 
