@@ -4,6 +4,7 @@ mod cached;
 mod catalog;
 mod claim_threshold;
 mod delta;
+mod expected;
 mod membership;
 mod references;
 mod similar;
@@ -17,6 +18,7 @@ pub use self::{
   catalog::{CATALOG_MODELS_PER_ROLE, CATALOG_REFERENCES, CatalogEntry, CatalogEntryKind, LocalCatalog, catalog},
   claim_threshold::{ClaimStalenessThreshold, ClaimStalenessThresholdError},
   delta::{DeltaOutcome, RunProgress, TagRemap, TaskChange, TaskDelta, TaskDeltaKind, remap_tags},
+  expected::{ExpectedRevision, ExpectedRevisionError, ExpectedRevisions, RevisionTarget},
   membership::{
     MembershipChangeError, WorkspaceRole, check_workspace_admin_change, may_administer_workspace, may_read_workspace,
   },
