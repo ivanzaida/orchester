@@ -16,7 +16,7 @@ use lurq::{
   node::Element,
 };
 use orchester_core::orchestrator::{Queued, TurnState};
-use orchester_workspace::display;
+use orchester_workspace::{display, files::Version};
 
 use super::{send::QueuedChange, timeline::TurnRow, turns::Arrival};
 use crate::ui::{
@@ -37,8 +37,9 @@ pub(super) fn opening_message(ctx: &mut Ctx, row: &TurnRow, key: &str) -> Elemen
     .align_items(Alignment::End)
     .child(delivery)
     .with_children(queued_actions(ctx, row));
-  // The person's words, with their mentions as links and without the facts the Orchestrator got with them.
-  let said = said(ctx, &id, (&row.turn.text, None), row.env.project);
+  // The person's words, with their mentions as links and without the facts the Orchestrator got with them; the files
+  // they mention are the project's checkout's.
+  let said = said(ctx, &id, (&row.turn.text, None), (row.env.project, &Version::Checkout));
   own_bubble(ctx, &id, said, (attached, Some(under.into()))).into()
 }
 

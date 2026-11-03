@@ -195,6 +195,57 @@ fn orchestrator_mentions_insert_by_pointer_and_reach_the_agent_with_facts() {
   );
 }
 
+/// The project's checkout's files (ORC-316): tracked and untracked ones, never ignored ones; a file inserts as a chip,
+/// and the agent gets its path in the block while the conversation links it by its name.
+#[test]
+fn orchestrator_mentions_offer_the_checkout_files_and_send_the_path() {
+  let mut screen = kontur();
+  for (path, words) in [
+    (".gitignore", "target/\n"),
+    ("crates/webhooks/src/sender.rs", "pub fn send() {}\n"),
+    ("target/sender.log", "built\n"),
+  ] {
+    let file = screen.root.join(path);
+    std::fs::create_dir_all(file.parent().expect("a folder")).expect("its folder");
+    std::fs::write(file, words).expect("the file");
+  }
+  let sender = row("file-crates/webhooks/src/sender.rs");
+  write(&mut screen, "Check @sender");
+  screen.until("the untracked file in the @ menu", |screen| screen.exists(&sender));
+  assert!(
+    !screen.exists(&row("file-target/sender.log")),
+    "an ignored file never appears: {}",
+    screen.text(MENU)
+  );
+  assert!(screen.text(MENU).contains("Files"), "{}", screen.text(MENU));
+  write(&mut screen, "Check @README");
+  screen.until("the tracked file", |screen| screen.exists(&row("file-README.md")));
+
+  write(&mut screen, "Check @wbsend");
+  screen.until("the file by the letters of its path in order", |screen| {
+    screen.exists(&sender)
+  });
+  screen.key(("Enter", "Enter"), false);
+  screen.until("the file's mention in the draft", |screen| !screen.exists(MENU));
+  assert_eq!(draft(&mut screen), "Check @`crates/webhooks/src/sender.rs` ");
+
+  screen.key(("Enter", "Enter"), true);
+  screen.until("the answer", |screen| {
+    screen.text("orchestrator-conversation").contains("Noted: Check") && !screen.exists("orchestrator-thinking")
+  });
+  let sent = only_sent(&screen);
+  assert!(
+    sent.contains("- @`crates/webhooks/src/sender.rs`: the file crates/webhooks/src/sender.rs, its path relative"),
+    "the agent gets the path: {sent}"
+  );
+  assert!(!sent.contains("pub fn send"), "never the file's content: {sent}");
+  let shown = screen.text("orchestrator-conversation");
+  assert!(
+    shown.contains("Check sender.rs"),
+    "the file shows by its name as a link: {shown}"
+  );
+}
+
 #[test]
 fn orchestrator_mentions_insert_and_remove_a_run_and_reach_the_agent_with_its_facts() {
   let mut screen = Orchestrator::new(Setup::Ready);

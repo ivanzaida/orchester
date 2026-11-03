@@ -26,6 +26,7 @@ use orchester_core::{
 };
 use orchester_workspace::{
   display,
+  files::Version,
   tasks::{
     conversation::{Entry, EntryState, Queue},
     timeline::view::AgentRow,
@@ -81,12 +82,13 @@ pub(super) fn agent_row(ctx: &mut Ctx, timeline: &Timeline, row: &AgentRow) -> E
 }
 
 /// A person's message (`mr4lC`) at the right: *You* (or *Automation*, for one automation wrote), its time, the bubble,
-/// the files attached to it (`ui::attachments::sent`, kept in the project at `root`) and its delivery line. One the
-/// project's Orchestrator chat sent is the Orchestrator's instead ([`orchestrator_message`]); the chat attaches no
-/// files. What a search found in it (`found`) is filled behind its words.
+/// the files attached to it (`ui::attachments::sent`, kept in the project at `root`) and its delivery line; a file it
+/// mentions opens at `files_at`. One the project's Orchestrator chat sent is the Orchestrator's instead
+/// ([`orchestrator_message`]); the chat attaches no files. What a search found in it (`found`) is filled behind its
+/// words.
 pub(in super::super) fn person_message(
   ctx: &mut Ctx,
-  ((project, root), entry): ((ProjectId, &Path), &Entry),
+  ((project, root, files_at), entry): ((ProjectId, &Path, &Version), &Entry),
   found: Option<&Found>,
 ) -> Element {
   let (glyph, color, words) = delivery(ctx, &entry.state);
@@ -99,7 +101,7 @@ pub(in super::super) fn person_message(
     if entry.attachments_only() {
       None
     } else {
-      chat::said::said(ctx, &id, (&entry.body, found), project)
+      chat::said::said(ctx, &id, (&entry.body, found), (project, files_at))
     }
   };
   let message = match entry.orchestrator {

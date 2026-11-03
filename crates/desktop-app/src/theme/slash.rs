@@ -27,7 +27,8 @@ pub enum SlashText {
   Detail,
   /// Geist Mono 12 `text_primary`, 1.3: a skill's name (`cLPAs`); the rest of a filtered one in `text_secondary`.
   SkillLabel,
-  /// Geist Mono 12/600 `text_primary`, 1.3: the letters of a skill's name that match what was typed (`zRg3n`).
+  /// Geist Mono 12/600 `text_primary`, 1.3: the letters of a skill's name that match what was typed (`zRg3n`); in the
+  /// @ menu, those of a file's path (`Match` `O0RYH` in `nUjD7`).
   SkillMatch,
   /// Geist Mono 11 `text_secondary`, 1.3: a skill chip's name (`LTjMB` in `o6R6w`).
   Chip,

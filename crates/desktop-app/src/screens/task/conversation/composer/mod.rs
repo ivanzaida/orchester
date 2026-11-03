@@ -370,12 +370,11 @@ impl Composer {
       .collect()
   }
 
-  /// The @ menu over the box: the task's own task and its latest run lead it.
+  /// The @ menu over the box: the task's own task and its latest run lead it, and it offers the files of that run's
+  /// worktree.
   fn mentions(&self, ctx: &mut Ctx, composing: &Composing) -> Element {
-    let own = (
-      composing.key.clone(),
-      composing.detail.run.as_ref().map(|run| run.run.number()),
-    );
+    let run = composing.detail.run.as_ref().map(|run| &run.run);
+    let own = (composing.key.clone(), run.map(|run| run.number()));
     mention::menu(
       ctx,
       MenuProps {
@@ -385,6 +384,7 @@ impl Composer {
         root: composing.project.open.repo_root.clone(),
         project: Arc::from(composing.project.open.project.name().as_str()),
         own: Some(own),
+        run: run.map(|run| run.id()),
         revision: composing.project.feed.saves.get(),
       },
     )

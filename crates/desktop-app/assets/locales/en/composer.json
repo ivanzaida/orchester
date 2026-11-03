@@ -23,10 +23,15 @@
       "enter": "Enter"
     },
     "mention": {
+      "changedInRun": "changed in this run",
       "count": "{{shown}} of {{total}}",
       "empty": {
-        "hint": "Tasks and runs of {{project}} are found by key, title and run number. Keep typing, or press Esc and the text stays as typed.",
+        "hint": "Tasks, runs and files of {{project}} are found by key, title, run number and path. Keep typing, or press Esc and the text stays as typed.",
         "title": "Nothing matches “{{query}}”"
+      },
+      "files": {
+        "reading": "Listing the repository’s files…",
+        "unreadable": "The repository’s files could not be listed: {{reason}}"
       },
       "hint": {
         "close": "Close",
@@ -45,6 +50,7 @@
       },
       "run": "{{key}} · #{{number}}",
       "section": {
+        "files": "Files",
         "runs": "Runs",
         "tasks": "Tasks"
       },

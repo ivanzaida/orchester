@@ -1,13 +1,79 @@
-//! @-mentions in a task Conversation's composer (ORC-312, `09` `Am5KT` … `09e` `y5fJD`): typing `@` opens the menu
-//! with the run's own task first, typing filters it, Enter inserts the mention as a chip, Backspace after the chip
-//! removes it whole, Esc closes the menu and keeps the text; a message sent with a mention is stored with the marked
-//! block of the task's or run's facts that its agent reads, and the chat shows only the person's words.
+//! @-mentions in a task Conversation's composer (ORC-312, ORC-316, `09` `Am5KT` … `09e` `y5fJD`): typing `@` opens
+//! the menu with the run's own task first and the files of the run's worktree, typing filters it, Enter inserts the
+//! mention as a chip, Backspace after the chip removes it whole, Esc closes the menu and keeps the text; a message sent
+//! with a mention is stored with the marked block of the task's or run's facts, or the file's path, that its agent
+//! reads, and the chat shows only the person's words.
+
+use std::fs;
+
+use orchester_store::ProjectDb;
+use orchester_workspace::tasks::changes::run_folder;
 
 use super::{click, detail, draft, key, messages, open, seeded, text, type_on, write};
 use crate::sending::{ENTER, until_stored};
 
 const MENU: &str = "composer-mention-menu";
 const TITLE: &str = "Localize the invoice emails";
+
+#[test]
+fn composer_mentions_offer_the_run_worktree_files_and_send_the_path() {
+  // Ready for review: a message is a follow-up stored for the runner, and the menu lists its run's folder.
+  let title = "Show the signed-in account";
+  let (mut window, seeded) = seeded();
+  let task = open(&mut window, &seeded, title);
+  let run = detail(&seeded, &task).run.expect("the task's run").run.id();
+  let db = ProjectDb::open(&seeded.repo).expect("the project database opens");
+  let folder = run_folder(&db, &seeded.repo, run).unwrap_or_else(|| seeded.repo.clone());
+  fs::create_dir_all(folder.join("src")).expect("its folder");
+  fs::write(folder.join("src/backoff_policy.rs"), "pub fn backoff() {}\n").expect("a file of the run");
+  let file = "composer-mention-file-src/backoff_policy.rs";
+  write(&mut window, "Use @backoff");
+  window.until("the run's file in the @ menu", |window| {
+    window.tree.get_element_by_id(file).is_some()
+  });
+  assert!(
+    text(&mut window, "mention-section-files").starts_with("Files"),
+    "{}",
+    text(&mut window, MENU)
+  );
+  key(&mut window, ENTER, (false, false));
+  window.until("the file's mention in the draft", |window| {
+    window.tree.get_element_by_id(MENU).is_none()
+  });
+  assert_eq!(draft(&mut window), "Use @`src/backoff_policy.rs` ");
+  key(&mut window, ("Backspace", "Backspace"), (false, false));
+  key(&mut window, ("Backspace", "Backspace"), (false, false));
+  assert_eq!(
+    draft(&mut window),
+    "Use ",
+    "Backspace after the file's chip removes it whole"
+  );
+
+  type_on(&mut window, "@backoff");
+  window.until("the file again", |window| window.tree.get_element_by_id(file).is_some());
+  click(&mut window, file);
+  window.until("the file's mention in the draft", |window| {
+    draft(window) == "Use @`src/backoff_policy.rs` "
+  });
+  type_on(&mut window, "here");
+  key(&mut window, ENTER, (false, false));
+  until_stored(&mut window, &seeded, title, 1);
+  let stored = messages(&seeded, &task).pop().expect("the message");
+  let body = stored.body().as_str();
+  assert!(body.starts_with("Use @`src/backoff_policy.rs` here"), "{body}");
+  assert!(
+    body.contains("- @`src/backoff_policy.rs`: the file src/backoff_policy.rs, its path relative to the root"),
+    "the agent gets the path: {body}"
+  );
+  assert!(!body.contains("pub fn backoff"), "never the file's content: {body}");
+  let said = format!("conversation-message-{}-text", stored.id());
+  window.until("the message in the chat", |window| !text(window, &said).is_empty());
+  let shown = text(&mut window, &said);
+  assert!(
+    shown.contains("Use backoff_policy.rs here"),
+    "the file shows by its name as a link: {shown}"
+  );
+}
 
 #[test]
 fn composer_mentions_open_with_the_own_task_first_and_insert_and_remove_it() {

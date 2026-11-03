@@ -1,10 +1,12 @@
-//! @-mentions in a composer (ORC-312; `Mentions · redesign` `z8cUk`, `docs/design/mentions.md`), shared by the
-//! Orchestrator's and a task Conversation's: typing `@` where a word starts opens the menu of the project's tasks and
-//! runs ([`menu`]), and typing filters it; ↑ ↓ move, Enter, Tab or a click inserts, Esc closes it and leaves the text.
-//! A mention is plain text in the draft (`@KON-12`, `@KON-12#9`, `orchester_workspace::mentions`) that the field draws
-//! as a chip, and Backspace right after it removes it whole.
+//! @-mentions in a composer (ORC-312, ORC-316; `Mentions · redesign` `z8cUk`, `docs/design/mentions.md`), shared by
+//! the Orchestrator's and a task Conversation's: typing `@` where a word starts opens the menu of the project's tasks,
+//! runs and repository files ([`menu`]), and typing filters it; ↑ ↓ move, Enter, Tab or a click inserts, Esc closes it
+//! and leaves the text. A mention is plain text in the draft (`@KON-12`, `@KON-12#9`, ``@`src/lib.rs` ``,
+//! `orchester_workspace::mentions`) that the field draws as a chip, and Backspace right after it removes it whole.
+//! lurq draws a chip as the text it decorates, so a file's chip shows its whole path, not only its name.
 
 mod menu;
+mod rows;
 
 use std::{ops::Range, sync::Arc};
 

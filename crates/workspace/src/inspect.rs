@@ -58,6 +58,7 @@ macro_rules! markers {
     impl $inspect for crate::instructions::preview::PreviewChoice {}
     impl $inspect for crate::memory::draft::RecordDraft {}
     impl $inspect for crate::mentions::catalog::Catalog {}
+    impl $inspect for crate::mentions::files::FileIndex {}
     impl $inspect for crate::memory::listing::Filters {}
     impl $inspect for crate::memory::read::GivenTo {}
     impl $inspect for crate::memory::read::ProjectMemory {}

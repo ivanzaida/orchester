@@ -42,17 +42,20 @@ use orchester_core::{
   project::TaskKey,
   run::{DecidedBy, DecidedToolApproval, PendingToolApproval, ToolApprovalDecision},
 };
-use orchester_workspace::tasks::{
-  conversation::orchestrator::{ChatMerge, Proposal},
-  detail::TaskDetail,
-  timeline::{
-    Item, ItemKind,
-    delivery::DeliveryLine,
-    group::unwrapped,
-    view::{Row, Shown},
-    waits_for_you,
+use orchester_workspace::{
+  files::Version,
+  tasks::{
+    conversation::orchestrator::{ChatMerge, Proposal},
+    detail::TaskDetail,
+    timeline::{
+      Item, ItemKind,
+      delivery::DeliveryLine,
+      group::unwrapped,
+      view::{Row, Shown},
+      waits_for_you,
+    },
+    transcript::{Entry, EntryKind},
   },
-  transcript::{Entry, EntryKind},
 };
 
 use self::proposal::{ProposalProps, ProposalRow};
@@ -155,6 +158,15 @@ impl Timeline {
   /// The run's number in the project.
   fn run_number(&self) -> u32 {
     self.detail.run.as_ref().map_or(0, |run| run.run.number().get())
+  }
+
+  /// Where the files a person's message mentions are: the run's worktree, or the project's checkout before a run.
+  fn files_at(&self) -> Version {
+    self
+      .detail
+      .run
+      .as_ref()
+      .map_or(Version::Checkout, |run| Version::Run(run.run.id()))
   }
 }
 
@@ -497,7 +509,10 @@ fn item_row(ctx: &mut Ctx, timeline: &Timeline, item: &Item) -> Element {
   match &item.kind {
     ItemKind::Message(entry) => person_message(
       ctx,
-      ((timeline.project, &timeline.chat_project.root), entry),
+      (
+        (timeline.project, &timeline.chat_project.root, &timeline.files_at()),
+        entry,
+      ),
       found().as_ref(),
     ),
     ItemKind::Question { .. } | ItemKind::Plan(_) | ItemKind::Approval(_) | ItemKind::Choice(_) => {

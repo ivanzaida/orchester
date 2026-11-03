@@ -190,6 +190,7 @@ impl Foot<'_> {
         root: project.open.repo_root.clone(),
         project: Arc::from(project.open.project.name().as_str()),
         own: None,
+        run: None,
         revision: project.feed.saves.get(),
       },
     );

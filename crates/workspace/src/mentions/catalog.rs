@@ -1,6 +1,7 @@
 //! What the @ menu offers (`docs/design/mentions.md`, "Order" and "Filter"): the project's tasks with their workflow
 //! status and its runs with their state, most recent first, and how what the person typed after the `@` filters them,
-//! by key, title or run number, ignoring case. In a run's Conversation its own task and run lead.
+//! by key, title or run number, ignoring case. In a run's Conversation its own task and run lead. The repository's
+//! files come from their own index ([`super::files`]).
 
 use std::{path::Path, sync::Arc};
 
@@ -13,7 +14,7 @@ use orchester_core::{
 };
 use orchester_store::{ProjectDb, StoreError};
 
-use super::Mention;
+use super::{Mention, files::FileChoice};
 use crate::{
   messages::{self, Message},
   tasks::detail::run_store_error,
@@ -23,6 +24,11 @@ use crate::{
 pub const BEFORE_TYPING: usize = 3;
 /// How many matching rows of a section the menu shows once something is typed.
 pub const MATCHING: usize = 5;
+
+/// How many rows of a section the menu shows for `query`, what was typed after the `@`.
+pub const fn limit(query: &str) -> usize {
+  if query.is_empty() { BEFORE_TYPING } else { MATCHING }
+}
 
 /// A task the menu offers, with what a mention of it tells the agent.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -65,28 +71,49 @@ pub struct Section<T> {
   pub total: usize,
 }
 
-/// What the menu shows for what was typed.
+impl<T> Default for Section<T> {
+  fn default() -> Self {
+    Self {
+      shown: Vec::new(),
+      total: 0,
+    }
+  }
+}
+
+/// What the menu shows for what was typed: tasks, runs and, once the repository's files are listed
+/// ([`Offer::with_files`]), files.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Offer {
   pub tasks: Section<TaskChoice>,
   pub runs: Section<RunChoice>,
+  pub files: Section<FileChoice>,
 }
 
 impl Offer {
+  /// The offer with `files`, the repository's files that match.
+  #[must_use]
+  pub fn with_files(self, files: Section<FileChoice>) -> Self {
+    Self { files, ..self }
+  }
+
   /// Whether nothing matches.
   pub fn is_empty(&self) -> bool {
-    self.tasks.shown.is_empty() && self.runs.shown.is_empty()
+    self.tasks.shown.is_empty() && self.runs.shown.is_empty() && self.files.shown.is_empty()
   }
 
   /// How many rows match in all.
   pub const fn matches(&self) -> usize {
-    self.tasks.total + self.runs.total
+    self.tasks.total + self.runs.total + self.files.total
   }
 
   /// The mentions of the rows shown, in the menu's order: what the arrow keys move through.
   pub fn mentions(&self) -> Vec<Mention> {
     let tasks = self.tasks.shown.iter().map(TaskChoice::mention);
-    tasks.chain(self.runs.shown.iter().map(RunChoice::mention)).collect()
+    let runs = self.runs.shown.iter().map(RunChoice::mention);
+    tasks
+      .chain(runs)
+      .chain(self.files.shown.iter().map(FileChoice::mention))
+      .collect()
   }
 }
 
@@ -154,7 +181,7 @@ impl Catalog {
   /// leads its sections.
   pub fn offer(&self, query: &str, own: Option<(&TaskKey, Option<RunNumber>)>) -> Offer {
     let query = query.to_lowercase();
-    let limit = if query.is_empty() { BEFORE_TYPING } else { MATCHING };
+    let shown = limit(&query);
     let own_task = |key: &TaskKey| own.is_some_and(|(own, _)| own == key);
     let own_run = |run: &RunChoice| own.is_some_and(|(key, number)| key == &run.key && number == Some(run.number));
     let tasks = self
@@ -166,8 +193,9 @@ impl Catalog {
       matches(&query, &[&run.mention().written()[1..], &run.title, &number])
     });
     Offer {
-      tasks: section(tasks, limit, |task| own_task(&task.key)),
-      runs: section(runs, limit, own_run),
+      tasks: section(tasks, shown, |task| own_task(&task.key)),
+      runs: section(runs, shown, own_run),
+      files: Section::default(),
     }
   }
 }

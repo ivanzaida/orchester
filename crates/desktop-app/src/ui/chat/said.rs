@@ -1,9 +1,10 @@
-//! What a person's message says in a chat (ORC-312, `08e` `dJyUv` and `09e` `y5fJD` in `Mentions · redesign`): the
-//! words they wrote, without the block of facts Orchester added for the agent (`orchester_workspace::mentions::facts`),
-//! and each of their @-mentions a link the chat follows (`links`): a task to its page, a run to its task's
-//! Conversation. A message without mentions is its words as written; one with mentions is lurq's Markdown, the
-//! person's words escaped so that they show as written, line by line. What a search found in it is filled behind its
-//! words ([`super::found`]).
+//! What a person's message says in a chat (ORC-312, ORC-316, `08e` `dJyUv` and `09e` `y5fJD` in `Mentions ·
+//! redesign`): the words they wrote, without the block of facts Orchester added for the agent
+//! (`orchester_workspace::mentions::facts`), and each of their @-mentions a link the chat follows (`links`): a task to
+//! its page, a run to its task's Conversation, a file, by its name, to the Files screen at the version the chat's
+//! files are in (the project's checkout, a run's worktree). A message without mentions is its words as written; one
+//! with mentions is lurq's Markdown, the person's words escaped so that they show as written, line by line. What a
+//! search found in it is filled behind its words ([`super::found`]).
 
 use std::sync::Arc;
 
@@ -12,19 +13,22 @@ use lurq::{
   components::Text,
 };
 use orchester_core::id::ProjectId;
-use orchester_workspace::mentions::{Found, Mention, facts, find};
+use orchester_workspace::{
+  files::Version,
+  mentions::{Found, Mention, facts, find},
+};
 
 use super::{Said, agent_text, found, links::APP_SCHEME, marked_words, names::ProjectNames};
-use crate::routes::{ProjectPage, Route, TaskView};
+use crate::routes::{FilesView, ProjectPage, Route, TaskView};
 
 /// What `body`, a message a person sent in a chat of `project` as it was kept, shows, with their words as they wrote
-/// them for its Copy: `None` when it says nothing. What a search found in it (`searched`) is filled behind its words.
-/// `id` names it, its words `{id}-text`.
+/// them for its Copy: `None` when it says nothing. A file it mentions opens at `files_at`. What a search found in it
+/// (`searched`) is filled behind its words. `id` names it, its words `{id}-text`.
 pub fn said(
   ctx: &mut Ctx,
   id: &str,
   (body, searched): (&str, Option<&found::Found>),
-  project: ProjectId,
+  (project, files_at): (ProjectId, &Version),
 ) -> Option<Said> {
   let words = facts::said(body);
   if words.trim().is_empty() {
@@ -39,7 +43,7 @@ pub fn said(
       .selectable(true);
     return Some((marked_words(ctx, text, words, searched), Arc::from(words)));
   }
-  let linked: Arc<str> = Arc::from(linked(words, &found, project));
+  let linked: Arc<str> = Arc::from(linked(words, &found, (project, files_at)));
   let links = super::links(ctx);
   let shown = agent_text(
     ctx,
@@ -52,22 +56,28 @@ pub fn said(
 }
 
 /// `words` as Markdown that shows them as written, with each mention `found` in them a link to its place in
-/// `project`.
-pub fn linked(words: &str, found: &[Found], project: ProjectId) -> String {
+/// `project`; a file's to the Files screen at `files_at`.
+pub fn linked(words: &str, found: &[Found], (project, files_at): (ProjectId, &Version)) -> String {
   let mut linked = String::with_capacity(words.len() * 2);
   let mut at = 0;
   for mention in found {
     escape_into(&mut linked, &words[at..mention.range.start]);
-    let (shown, view) = match &mention.mention {
-      Mention::Task(key) => (key.to_string(), TaskView::Summary),
-      Mention::Run(key, number) => (format!("{key} · #{}", number.get()), TaskView::Conversation),
+    let (shown, page) = match &mention.mention {
+      Mention::Task(key) => (key.to_string(), ProjectPage::Task(key.clone(), TaskView::Summary)),
+      Mention::Run(key, number) => (
+        format!("{key} · #{}", number.get()),
+        ProjectPage::Task(key.clone(), TaskView::Conversation),
+      ),
+      Mention::File(path) => (
+        path.name().to_owned(),
+        ProjectPage::Files(FilesView::new(Some(path.as_str()), files_at.clone())),
+      ),
     };
     linked.push('[');
     escape_into(&mut linked, &shown);
     linked.push_str("](");
     linked.push_str(APP_SCHEME);
-    let route = Route::Project(project, ProjectPage::Task(mention.mention.task().clone(), view));
-    linked.push_str(&route.path());
+    linked.push_str(&Route::Project(project, page).path());
     linked.push(')');
     at = mention.range.end;
   }

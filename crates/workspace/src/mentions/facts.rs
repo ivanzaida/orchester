@@ -1,8 +1,9 @@
-//! What the agent receives with a message that mentions tasks or runs (ORC-312): after the person's words, a block
-//! between [`OPEN`] and [`CLOSE`] that says it is Orchester's, not the person's, with one entry per mention — a task's
-//! key, title, workflow status and the first lines of its brief; a run's task key, number, state and branch. The
-//! message is kept with the block, as the agent reads it; a conversation shows the person's words only ([`said`]).
-//! The words are the agent's, in English, as every prompt Orchester writes.
+//! What the agent receives with a message that mentions tasks, runs or files (ORC-312, ORC-316): after the person's
+//! words, a block between [`OPEN`] and [`CLOSE`] that says it is Orchester's, not the person's, with one entry per
+//! mention — a task's key, title, workflow status and the first lines of its brief; a run's task key, number, state
+//! and branch; a file's path relative to the repository, never its content, which the agent reads itself within its
+//! permissions. The message is kept with the block, as the agent reads it; a conversation shows the person's words
+//! only ([`said`]). The words are the agent's, in English, as every prompt Orchester writes.
 
 use std::{fmt::Write, path::Path};
 
@@ -78,7 +79,7 @@ pub fn said(stored: &str) -> &str {
 }
 
 fn entry(block: &mut String, catalog: &Catalog, mention: &Mention) {
-  let written = mention.written();
+  let written = quoted(&mention.written());
   // Writing to a String does not fail.
   let _ = match mention {
     Mention::Task(key) => match catalog.task(key) {
@@ -89,6 +90,12 @@ fn entry(block: &mut String, catalog: &Catalog, mention: &Mention) {
       Some(run) => run_entry(block, &written, run),
       None => writeln!(block, "- {written}: no run #{} of {key} in this project.", number.get()),
     },
+    Mention::File(path) => writeln!(
+      block,
+      "- {written}: the file {}, its path relative to the root of the repository you work in. Its content is not \
+       included: read it yourself if you need it.",
+      quoted(path.as_str())
+    ),
   };
 }
 
@@ -133,10 +140,11 @@ fn run_entry(block: &mut String, written: &str, run: &RunChoice) -> std::fmt::Re
   )
 }
 
-/// `text`, a title or a brief's line someone wrote, quoted in the block so it can never pass for the block's own
-/// start or end tag.
+/// `text`, a title, a brief's line or a file's path someone wrote, quoted in the block so it can never pass for the
+/// block's own start or end tag; only a tag's name followed by its `>` changes, so a path that merely holds the name
+/// (`docs/orchester-mentions.md`) stays the file's.
 fn quoted(text: &str) -> String {
-  text.replace("orchester-mentions", "orchester mentions")
+  text.replace("orchester-mentions>", "orchester mentions>")
 }
 
 const fn workflow_words(status: WorkflowStatus) -> &'static str {

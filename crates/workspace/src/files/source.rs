@@ -76,7 +76,7 @@ pub(super) fn git_error(error: GitError) -> FilesError {
 }
 
 /// The standard output of `git <args>` in `directory`, which must succeed.
-pub(super) fn git_output(runner: &dyn CommandRunner, directory: &Path, args: &[&str]) -> Result<String, FilesError> {
+pub(crate) fn git_output(runner: &dyn CommandRunner, directory: &Path, args: &[&str]) -> Result<String, FilesError> {
   let output = runner.run(&git_command(Path::new(GIT), directory, args.iter().copied()))?;
   if output.success() {
     Ok(output.stdout)

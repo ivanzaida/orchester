@@ -1,5 +1,6 @@
-//! @-mentions of tasks and runs (ORC-312): how a draft holds them, what the @ menu offers and filters, and the
-//! marked block of facts the agent receives with a message, which the conversation leaves out of what it shows.
+//! @-mentions of tasks, runs and files (ORC-312, ORC-316): how a draft holds them, what the @ menu offers and filters,
+//! and the marked block of facts the agent receives with a message, which the conversation leaves out of what it
+//! shows. The files the menu offers are `mention_files`'.
 
 mod support;
 
@@ -11,7 +12,55 @@ use orchester_core::{
   store::TaskStore,
   task::{TaskDetails, organization::WorkflowStatus},
 };
-use orchester_workspace::mentions::{Mention, catalog::Catalog, ending_at, facts, find, typed_at};
+use orchester_workspace::{
+  files::FilePath,
+  mentions::{Mention, catalog::Catalog, ending_at, facts, find, typed_at},
+};
+
+fn file(path: &str) -> Mention {
+  Mention::File(FilePath::new(path).expect("a project path"))
+}
+
+#[test]
+fn mentions_of_files_are_paths_between_backticks() {
+  let text = "Check @`crates/webhooks/src/sender.rs` and @`docs/My notes.md`, (@`Makefile`) not @`../x` or @`a\nb` or \
+              @`src/a`b` or @`./src/lib.rs`";
+  let found: Vec<(Mention, &str)> = find(text)
+    .into_iter()
+    .map(|found| (found.mention, &text[found.range]))
+    .collect();
+  assert_eq!(
+    found,
+    vec![
+      (
+        file("crates/webhooks/src/sender.rs"),
+        "@`crates/webhooks/src/sender.rs`"
+      ),
+      (file("docs/My notes.md"), "@`docs/My notes.md`"),
+      (file("Makefile"), "@`Makefile`"),
+    ],
+    "a path that steps out, spans lines, runs on or is not written as it reads is no mention"
+  );
+  assert_eq!(file("src/lib.rs").written(), "@`src/lib.rs`");
+  assert_eq!(file("src/lib.rs").task(), None);
+  let draft = "See @`src/lib.rs`";
+  assert_eq!(
+    ending_at(draft, draft.len()).map(|found| found.range),
+    Some(4..draft.len())
+  );
+  assert_eq!(
+    typed_at(draft, draft.len()),
+    None,
+    "a whole file mention is a chip already"
+  );
+  assert_eq!(
+    typed_at("See @sender.r", 13).map(|typed| typed.query),
+    Some("sender.r"),
+    "a name being typed keeps the menu open"
+  );
+  let inside = "@`a @ORC-1`";
+  assert_eq!(find(inside).len(), 1, "no mention inside a file's path");
+}
 
 fn key(text: &str) -> TaskKey {
   text.parse().expect("a task key")
@@ -159,6 +208,28 @@ fn mentions_facts_follow_the_message_in_a_marked_block() {
     "{stored}"
   );
   assert!(stored.contains("Brief: none."), "{stored}");
+}
+
+#[test]
+fn mentions_of_files_give_the_agent_the_path_not_the_content() {
+  let catalog = Catalog::default();
+  let text = "Compare @`crates/webhooks/src/sender.rs` with @`docs/orchester-mentions.md`";
+  let sent = facts::with_facts(&catalog, text);
+  let (said, block) = sent.split_once(facts::OPEN).expect("the block");
+  assert_eq!(said.trim_end(), text);
+  assert!(
+    block.contains(
+      "- @`crates/webhooks/src/sender.rs`: the file crates/webhooks/src/sender.rs, its path relative to the root of \
+       the repository you work in. Its content is not included: read it yourself if you need it."
+    ),
+    "{block}"
+  );
+  assert_eq!(
+    sent.matches(facts::CLOSE).count(),
+    1,
+    "a path cannot pass for the block's end: {sent}"
+  );
+  assert_eq!(facts::said(&sent), text);
 }
 
 #[test]
