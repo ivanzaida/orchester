@@ -13,6 +13,7 @@ pub mod base_move;
 pub mod blob;
 pub mod code_index;
 pub mod command;
+pub mod computer;
 pub mod connection;
 pub mod conversation;
 pub mod diff;

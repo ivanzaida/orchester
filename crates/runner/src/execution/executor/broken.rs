@@ -28,6 +28,7 @@ impl ExecutionError {
       Self::Store(error) | Self::Workspace(PoolError::Store(error)) => error.runner_failure(),
       Self::Record(RecordError::Store(error)) => error.runner_failure(),
       Self::Record(RecordError::Run(_))
+      | Self::Computer(_)
       | Self::NotAnAgentStep(_)
       | Self::Stalled
       | Self::Conversation(_)

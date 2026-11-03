@@ -2,11 +2,7 @@
 //! agent role, provider and model, read from the run's pinned configuration.
 
 use orchester_core::{
-  connection::ConnectionKind,
-  id::StepExecutionId,
-  resource::AgentProfile,
-  run::StepExecutor,
-  store::{ConnectionStore, ResourceStore},
+  connection::ConnectionKind, id::StepExecutionId, resource::AgentProfile, run::StepExecutor, store::ResourceStore,
 };
 use orchester_ipc::{RunWork, WorkState};
 
@@ -48,8 +44,9 @@ impl RunTask {
     let Some(version) = self.db.version::<AgentProfile>(profile.resource, profile.number)? else {
       return Ok(None);
     };
-    let connection = self.db.connection(version.body().connection())?;
-    let Some(ConnectionKind::Agent(provider)) = connection.as_ref().map(|connection| connection.kind()) else {
+    let connection = self.computer.connection(version.body().connection())?;
+    let Some(ConnectionKind::Agent(provider)) = connection.as_ref().map(|connection| connection.connection().kind())
+    else {
       return Ok(None);
     };
     Ok(Some(RunWork {

@@ -13,7 +13,7 @@ use orchester_core::{
   permission::AgentPermissions,
   resource::AgentProfile,
   run::{PermissionsApply, Run, RunError, StepExecutor},
-  store::{ConnectionStore, ResourceStore},
+  store::ResourceStore,
 };
 use orchester_ipc::Rejection;
 use orchester_store::ProjectDb;
@@ -25,7 +25,7 @@ use super::{
   run::{ExecutionError, RunTask},
   step::worker::{Stop, StopCause},
 };
-use crate::execution::coordinator::idle;
+use crate::{computer::ComputerResources, execution::coordinator::idle};
 
 /// A person's change of one profile's permissions for a run.
 #[derive(Clone, Debug)]
@@ -38,7 +38,7 @@ pub(in crate::execution) struct PermissionsChange {
 impl RunTask {
   /// Records `change`; for Apply now, tells the profile's agents to stop after their command.
   pub(super) fn change_permissions(&mut self, change: PermissionsChange, ack: Ack) -> Result<(), ExecutionError> {
-    let provider = match provider_of(&self.db, &self.run, change.profile) {
+    let provider = match provider_of((&self.db, &*self.computer), &self.run, change.profile) {
       Ok(provider) => provider,
       Err(rejection) => {
         answer(ack, Err(rejection));
@@ -110,9 +110,9 @@ impl RunTask {
   }
 }
 
-/// The agent CLI of `profile`'s connection, as the run pinned the profile.
+/// The agent CLI of `profile`'s connection, as the run pinned the profile, read on `computer`.
 pub(in crate::execution) fn provider_of(
-  db: &ProjectDb,
+  (db, computer): (&ProjectDb, &dyn ComputerResources),
   run: &Run,
   profile: ResourceId,
 ) -> Result<AgentProvider, Rejection> {
@@ -129,10 +129,10 @@ pub(in crate::execution) fn provider_of(
     .version::<AgentProfile>(pinned.resource, pinned.number)
     .map_err(|error| failed("cannot read the agent profile", &error))?
     .ok_or(Rejection::ProfileNotInRun)?;
-  let connection = db
+  let connection = computer
     .connection(version.body().connection())
     .map_err(|error| failed("cannot read the profile's connection", &error))?;
-  match connection.as_ref().map(|connection| connection.kind()) {
+  match connection.as_ref().map(|connection| connection.connection().kind()) {
     Some(ConnectionKind::Agent(provider)) => Ok(*provider),
     _ => Err(Rejection::Failed {
       detail: "the agent profile's connection is not an agent CLI".to_owned(),
