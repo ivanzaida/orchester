@@ -163,9 +163,17 @@ fn orchestrator_plan_is_approved_by_a_person_only_and_carried_out() {
     screen.text(&format!("{card}-title")) == "Plan approved · 2 steps"
   });
   assert!(!screen.exists(&approve), "nothing is left to decide");
+  // The fake agent echoes the message it takes as `Noted: <message>`, so the hidden message's words
+  // appear once, inside the carry-out turn's answer, and never as a message row of their own.
+  let approved = "[Orchester] The person approved your plan";
+  let noted = format!("Noted: {approved}");
+  screen.until("the carry-out turn's answer", |screen| {
+    screen.text("orchestrator-conversation").contains(&noted)
+  });
   let shown = screen.text("orchestrator-conversation");
-  assert!(
-    !shown.contains("[Orchester] The person approved your plan"),
+  assert_eq!(
+    shown.matches(approved).count(),
+    shown.matches(&noted).count(),
     "the turn that carries it out shows no message of its own: {shown}"
   );
   screen.click(&format!("{card}-show"));
