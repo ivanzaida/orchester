@@ -6,6 +6,7 @@ pub use orchester_core::sharing::{ExpectedRevision, ExpectedRevisionError, Expec
 use orchester_core::{
   blob::ContentHash,
   id::{ModuleId, OperationId, TaskId, WorkId},
+  run::{BranchName, CommitId},
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -45,6 +46,14 @@ pub enum LocalEffect {
   /// The runner may merge the work's module branch into base on its computer ([`super::DeliveryRead`]).
   Deliver {
     work_id: WorkId,
+  },
+  /// The runner may merge `branch` at `source_commit` into base at `base_commit` on its computer
+  /// ([`super::ModuleDeliveryRead`]). It names no path: the runner finds the module's checkout itself.
+  DeliverModule {
+    module_id: ModuleId,
+    branch: BranchName,
+    source_commit: CommitId,
+    base_commit: CommitId,
   },
   /// Braced so serde refuses unknown fields on it too; a unit variant would ignore them.
   None {},

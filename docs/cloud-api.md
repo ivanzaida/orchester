@@ -141,8 +141,8 @@ are refused in every shape below.
   `effects:[LocalEffect]` (empty when no local effect is authorized). `cursor` is an opaque, non-empty
   `EventCursor` string.
 - `LocalEffect`: `{kind:"start",work_id,bundle:{sha256,schema_version}}`, `{kind:"pause",work_id}`,
-  `{kind:"stop",work_id}`, `{kind:"deliver",work_id}` (S7, below) or `{kind:"none"}`; `sha256` is a 64-digit
-  lowercase hex `ContentHash`.
+  `{kind:"stop",work_id}`, `{kind:"deliver",work_id}`, `{kind:"deliver_module",module_id,branch,source_commit,base_commit}`
+  (S7, below) or `{kind:"none"}`; `sha256` is a 64-digit lowercase hex `ContentHash`.
 - `OperationRead`: `{operation_id,state:"committed",response:CommandResult}` or
   `{operation_id,state:"rejected",error:AuthorityError}`.
 - `AuthorityError`: `{operation_id?,code,details}`; `operation_id` is left out when the refusal came before the
@@ -279,6 +279,15 @@ and `orchester_api::v2`; it adds no endpoints. Unknown fields are refused in eve
   `{work_id,claim_id,source_commit,base_commit,bundle}` (Admin) and `delivery.request`
   `{authority,authorization_operation_id,source_commit,base_commit,bundle}`, each answering
   `{kind:"delivery",delivery:DeliveryRead,effects}`.
+- Module delivery (S7c, ORC-656): base delivery is a module's, and task works reach base only through their module
+  (the run branch merges into the module branch locally; work reports tell the server). `ModuleDeliveryRead`:
+  `{subject:{kind:"module",id},claim_id,authorization_operation_id:OperationId?,branch,source_commit,base_commit,state,revision}`,
+  with the module's claim and branch and no `work_id` or `bundle`; a task `subject` is refused. It is a separate type,
+  not a tagged `DeliveryRead`, so the task form above keeps its wire; the field sets are disjoint, so a body reads as
+  one form only. `LocalEffect` gains `{kind:"deliver_module",module_id,branch,source_commit,base_commit}`: the runner
+  may merge that module branch head into base at `base_commit` on its computer; no local path is sent. Authorized by
+  an Admin's `delivery.authorize`, or by the workspace's `automatic_merge` for a request from the module's current
+  effective claim (D7).
 
 Decided for S7 (the orchestrator's D3 and D7, 2026-11-03, revisable by the person): the automatic module branch is
 `module/<name-slug>` (with `-<8 hex of the module id>` on collision), fixed at first assignment and created by the
