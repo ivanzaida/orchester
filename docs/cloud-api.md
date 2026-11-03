@@ -332,6 +332,33 @@ The public prerequisite for platform OP-152's S9b (`work.report`) is in core (`o
 No D4/D8 completion or human-wait variant is added. Existing v1 contracts, the /api/v1 client and earlier v2 types are
 unchanged, apart from the new error codes.
 
+## Team authority S11 subscriptions
+
+The public prerequisite for platform OP-154 (scoped invalidation subscriptions without replica snapshots) is in
+`orchester_api::v2::subscription`, re-exported from `orchester_api::v2`; it defines no route. Unknown fields are refused
+in every shape below.
+
+- Route, the server's: `GET /api/v2/projects/{project}/subscription`, a server-sent event stream, with an optional
+  `Last-Event-ID` header carrying the last cursor the client saw. Each event's SSE `event:` name is its `kind`, its
+  `id:` its `cursor` (`revoked` has none), and its `data:` the JSON below.
+- `QueryScope`, a family of cached reads, tagged by `kind`: `{kind:"workspace"}` (project, policy, capabilities,
+  members), `{kind:"task_list"}` (task list and task counts), `{kind:"task",task:TaskId}`,
+  `{kind:"task_comments",task:TaskId}`, `{kind:"module_list"}`, `{kind:"module",module:ModuleId}` (summary, progress,
+  burndown, history), `{kind:"library"}` (library and pickers) and `{kind:"resource",resource:ResourceId}` (its
+  version list). Scopes compare by value and are totally ordered, so a set of them is stable.
+- `SubscriptionEvent`, tagged by `kind`:
+  - `{kind:"ready",cursor:EventCursor}`: sent first; the stream's position, with no snapshot.
+  - `{kind:"invalidated",cursor,scopes:[QueryScope]}`: one per committed batch; `cursor` is the batch's last entry and
+    `scopes` name each scope once.
+  - `{kind:"reset",cursor}`: the resume point is below the server's replay floor; the client drops every cached query
+    and reads again at or after `cursor`.
+  - `{kind:"revoked"}`: the caller lost access; the stream then closes.
+- Client race rule: a cached read taken at cursor `R` (a page's or command's `EventCursor`) is stale only when an
+  `invalidated` event with a cursor after `R` names its scope. Events at or before `R` are already in the read, so a
+  client may subscribe before or after reading without missing a change. A `reset` drops everything.
+
+Existing v1 contracts, the /api/v1 client and earlier v2 types are unchanged.
+
 ## Conventions
 
 - JSON bodies in UTF-8. Requests are limited to 1 MiB and must arrive within 10 seconds.
