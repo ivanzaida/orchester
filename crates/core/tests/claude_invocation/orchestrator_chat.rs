@@ -1,16 +1,18 @@
 //! The Orchestrator chat's turn (`ClaudeChat`): read-only and only inside the project folder, with its own MCP
-//! server's tools allowed and the folders that hold secrets denied by rule; and what its system prompt tells it about
-//! links.
+//! server's tools allowed and the folders that hold secrets denied by rule; a turn that loads the skill its message
+//! carries (ORC-634); and what its system prompt tells it about links.
 
 use std::path::{Path, PathBuf};
 
 use orchester_core::{
-  connection::invocation::{ClaudeChat, ClaudeSession},
+  command::Command,
+  connection::invocation::{ChatSkill, ClaudeChat, ClaudeSession},
   id::ProjectId,
   orchestrator::{
     MAX_TURNS,
     instructions::{ProjectReads, system_prompt},
   },
+  resource::{CommandEnvironment, Slug},
 };
 
 use super::SESSION;
@@ -20,6 +22,10 @@ fn chat_args(denied: &[PathBuf]) -> Vec<String> {
 }
 
 fn chat_args_with(denied: &[PathBuf], denied_files: &[PathBuf]) -> Vec<String> {
+  chat(denied, denied_files, None).args()
+}
+
+fn chat<'a>(denied: &'a [PathBuf], denied_files: &'a [PathBuf], skill: Option<ChatSkill<'a>>) -> ClaudeChat<'a> {
   ClaudeChat {
     executable: Path::new("C:/tools/claude.exe"),
     model: "haiku",
@@ -30,8 +36,8 @@ fn chat_args_with(denied: &[PathBuf], denied_files: &[PathBuf]) -> Vec<String> {
     mcp_config: Path::new("C:/tmp/mcp.json"),
     denied,
     denied_files,
+    skill,
   }
-  .args()
 }
 
 /// The values after `flag`, up to the next flag.
@@ -43,6 +49,71 @@ fn after<'a>(args: &'a [String], flag: &str) -> Vec<&'a str> {
     .take_while(|arg| !arg.starts_with("--"))
     .map(String::as_str)
     .collect()
+}
+
+/// The text of the first user message `command` gives the CLI.
+fn first_message(command: &Command) -> String {
+  let line = command.stdin().expect("the prompt goes on the input");
+  let message: serde_json::Value = serde_json::from_str(line.trim()).expect("one stream-json line");
+  message["message"]["content"][0]["text"]
+    .as_str()
+    .expect("a text block")
+    .to_owned()
+}
+
+/// ORC-634: a message that carries a skill loads it as the CLI's own, from a plugin of that skill alone, and keeps
+/// every other part of the isolation: no setting source (the person's own skills, plugins and hooks), no MCP server but
+/// its own. Slash commands stay on, since `--disable-slash-commands` turns the plugin's skill off too.
+#[test]
+fn orchestrator_chat_loads_a_chosen_skill_from_its_plugin_and_keeps_the_isolation() {
+  let slug = Slug::new("release-notes").expect("a slug");
+  let skill = ChatSkill {
+    plugin: Path::new("C:/work/kontur/.orchester/chat-skills/m1"),
+    slug: &slug,
+  };
+  let with = chat(&[], &[], Some(skill));
+  let args = with.args();
+  assert_eq!(
+    after(&args, "--plugin-dir"),
+    ["C:/work/kontur/.orchester/chat-skills/m1"]
+  );
+  assert!(!args.iter().any(|arg| arg == "--disable-slash-commands"), "{args:?}");
+  let at = args
+    .iter()
+    .position(|arg| arg == "--setting-sources")
+    .expect("setting sources");
+  assert_eq!(
+    args[at + 1],
+    "",
+    "no settings file, so none of the person's own skills: {args:?}"
+  );
+  assert!(args.iter().any(|arg| arg == "--strict-mcp-config"));
+  let command = with
+    .command(("for v0.4", &[]), Vec::new(), &CommandEnvironment::default())
+    .expect("a command");
+  assert_eq!(first_message(&command), "/orchester:release-notes for v0.4");
+
+  let without = chat(&[], &[], None);
+  let args = without.args();
+  assert!(args.iter().any(|arg| arg == "--disable-slash-commands"));
+  assert!(!args.iter().any(|arg| arg == "--plugin-dir"));
+  let command = without
+    .command(("for v0.4", &[]), Vec::new(), &CommandEnvironment::default())
+    .expect("a command");
+  assert_eq!(first_message(&command), "for v0.4");
+}
+
+/// A compaction of a turn whose message carried a skill loads none: `/compact` is its only prompt.
+#[test]
+fn orchestrator_compaction_loads_no_skill() {
+  let slug = Slug::new("release-notes").expect("a slug");
+  let skill = ChatSkill {
+    plugin: Path::new("C:/work/kontur/.orchester/chat-skills/m1"),
+    slug: &slug,
+  };
+  let args = chat(&[], &[], Some(skill)).compaction_args();
+  assert!(!args.iter().any(|arg| arg == "--plugin-dir"), "{args:?}");
+  assert!(!args.iter().any(|arg| arg == "--disable-slash-commands"), "{args:?}");
 }
 
 #[test]

@@ -9,6 +9,7 @@
 mod claude;
 mod codex;
 mod compact;
+mod skill;
 mod steer;
 mod turn;
 

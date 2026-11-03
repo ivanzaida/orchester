@@ -124,7 +124,7 @@ pub async fn send_message(
   let (prepared, then, message) = blocking(move || {
     // An MCP client and the Orchester chat attach no files: they only read the ones people attached.
     let stored = match by.chat() {
-      None => store_answer_in(&root, &prepared, (key, way), (&text, &[]), by.answerer()),
+      None => store_answer_in(&root, &prepared, (key, way), (&text, &[], None), by.answerer()),
       Some(chat) => store_by_orchestrator_in(&root, &prepared, (key, way), (&text, chat, by.answerer())),
     };
     let (then, message) = stored.map_err(refusal)?;
@@ -166,9 +166,9 @@ pub fn refusal(error: OutgoingError) -> ToolError {
     OutgoingError::Changed
     | OutgoingError::NoSecondWay
     | OutgoingError::NoPlan
-    | OutgoingError::Send(SendError::InvalidRecovery | SendError::NotUndelivered | SendError::NotReadable) => {
-      ToolError::refused("not_sent", vec![reason])
-    }
+    | OutgoingError::Send(
+      SendError::InvalidRecovery | SendError::NotUndelivered | SendError::NotReadable | SendError::Skill(_),
+    ) => ToolError::refused("not_sent", vec![reason]),
   }
 }
 

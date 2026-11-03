@@ -144,8 +144,13 @@
     },
     "skill": {
       "notTaken": "The agent your message goes to can’t take a skill: its connection runs no agents in this version",
+      "planHeld": "A plan’s changes can’t carry a skill. Remove the skill to send them.",
+      "reach": {
+        "claude": "{{name}} · Published v{{version}}. Claude Code loads it as its own skill for this message; sent into an answer under way, its text goes in a marked block instead.",
+        "codex": "{{name}} · Published v{{version}}. Codex gets the skill’s text in a marked block with your message; Codex’s own $skill isn’t used yet.",
+        "text": "{{name}} · Published v{{version}}. The agent gets the skill’s text in a marked block with your message."
+      },
       "remove": "Remove {{name}}",
-      "sendHeld": "Sending a skill with a message isn’t available yet. Remove the skill to send your words.",
       "tooltip": "{{name}} · Published v{{version}}"
     },
     "slash": {

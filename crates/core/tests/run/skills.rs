@@ -1,17 +1,23 @@
 //! Skills in a run: the snapshot pins the published skills whose scope reaches an agent of the
-//! pipeline, and a new session's prompt lists the skills its agent gets before the task part.
+//! pipeline, and a new session's prompt lists the skills its agent gets before the task part. A skill a person chose
+//! for a message (ORC-634) reaches the agent in its block with the message.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+  collections::{BTreeMap, BTreeSet},
+  num::NonZeroU32,
+};
 
 use orchester_core::{
-  id::ResourceId,
+  connection::invocation::Platform,
+  conversation::{Message, MessageBody, Recipient, skill::ChosenSkill},
+  id::{ResourceId, TaskId},
   name::Name,
-  resource::{InjectionEvent, InstructionScope, Skill},
-  run::{PublishedVersions, RunSnapshot, SkillListing},
+  resource::{InjectionEvent, InstructionScope, Skill, Slug, VersionNumber},
+  run::{DeliveredMessages, MessageOccasion, NativeSetting, PromptInput, PublishedVersions, RunSnapshot, SkillListing},
 };
 
 use crate::{
-  fixture::{Config, key, task, version},
+  fixture::{Config, at, key, task, version},
   prompt::{Prompt, builder, step_with},
 };
 
@@ -157,4 +163,63 @@ fn prompt_without_skills_has_no_skills_part() {
     .expect("assembles")
     .text;
   assert!(!text.contains("# Skills"));
+}
+
+/// A person's message kept with the skill `release-notes` they chose for it, as the conversation keeps it.
+fn message_with_skill() -> Message {
+  let chosen = ChosenSkill {
+    resource: ResourceId::generate(),
+    slug: Slug::new("release-notes").expect("a slug"),
+    version: VersionNumber::new(NonZeroU32::new(2).expect("not zero")),
+  };
+  let skill = Skill::new(
+    "Release notes from the merged tasks.".into(),
+    "List the tasks merged since the last tag.".into(),
+    Vec::new(),
+    InstructionScope::Project,
+  )
+  .expect("a skill");
+  let body = MessageBody::new(&chosen.kept_with(&skill, "for v0.4")).expect("a message");
+  Message::from_person(TaskId::generate(), None, Recipient::Orchestrator, body, at(40))
+}
+
+/// ORC-634: a native agent reads the skill a person chose for a message in its block, with the message, in the first
+/// user item of its conversation, and so does an agent CLI in its prompt: the skill's text is Orchester's, marked.
+#[test]
+fn a_chosen_skill_reaches_a_native_agent_and_a_cli_in_its_block_with_the_message() {
+  let prompt = Prompt::new(builder("Fine."), step_with("Implement it."), task("Brief.", &[]));
+  let messages = [message_with_skill()];
+  let input = PromptInput {
+    messages: Some(DeliveredMessages {
+      occasion: MessageOccasion::Written,
+      messages: &messages,
+    }),
+    ..prompt.input(&[], &[], true)
+  };
+  let native = input
+    .assemble_native(NativeSetting {
+      platform: Platform::Windows,
+      shell: None,
+      repository_instructions: None,
+    })
+    .expect("assembles");
+  for (agent, text) in [
+    ("native", native.task),
+    ("cli", input.assemble(InjectionEvent::Start).expect("assembles").text),
+  ] {
+    let heading = text.find("# Messages from the person").expect("the messages");
+    let block = text[heading..]
+      .find("<orchester-skill name=\"release-notes\" version=\"2\"")
+      .unwrap_or_else(|| panic!("{agent}: the skill's block: {text}"));
+    let words = &text[heading + block..];
+    assert!(
+      words.contains("Orchester added this block: the person chose the skill release-notes"),
+      "{agent}: {text}"
+    );
+    assert!(
+      words.contains("List the tasks merged since the last tag."),
+      "{agent}: {text}"
+    );
+    assert!(words.contains("</orchester-skill>\n\nfor v0.4"), "{agent}: {text}");
+  }
 }

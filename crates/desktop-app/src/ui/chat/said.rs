@@ -4,26 +4,35 @@
 //! its page, a run to its task's Conversation, a file, by its name, to the Files screen at the version the chat's
 //! files are in (the project's checkout, a run's worktree). A message without mentions is its words as written; one
 //! with mentions is lurq's Markdown, the person's words escaped so that they show as written, line by line. What a
-//! search found in it is filled behind its words ([`super::found`]).
+//! search found in it is filled behind its words ([`super::found`]). A message sent with a skill (ORC-634) shows the
+//! skill's chip, without its `x`, 6 over its words (`r78GAg` in `OKzZ6`, `07c` `f0b717`), instead of the skill's block.
 
 use std::sync::Arc;
 
 use lurq::{
   app::{ctx::Ctx, theme::TypographyStyle},
-  components::Text,
+  components::{Column, Text},
+  layout::Alignment,
+  node::Element,
 };
 use orchester_core::id::ProjectId;
 use orchester_workspace::{
   files::Version,
   mentions::{Found, Mention, facts, find},
+  skills::offered::OfferedSkill,
 };
 
 use super::{Said, agent_text, found, links::APP_SCHEME, marked_words, names::ProjectNames};
-use crate::routes::{FilesView, ProjectPage, Route, TaskView};
+use crate::{
+  routes::{FilesView, ProjectPage, Route, TaskView},
+  theme::ExtraSpacing,
+  ui::slash::sent_skill_chip,
+};
 
 /// What `body`, a message a person sent in a chat of `project` as it was kept, shows, with their words as they wrote
 /// them for its Copy: `None` when it says nothing. A file it mentions opens at `files_at`. What a search found in it
-/// (`searched`) is filled behind its words. `id` names it, its words `{id}-text`.
+/// (`searched`) is filled behind its words. `id` names it, its words `{id}-text`, the chip of its skill
+/// `{id}-skill-chip`.
 pub fn said(
   ctx: &mut Ctx,
   id: &str,
@@ -31,9 +40,28 @@ pub fn said(
   (project, files_at): (ProjectId, &Version),
 ) -> Option<Said> {
   let words = facts::said(body);
-  if words.trim().is_empty() {
-    return None;
-  }
+  let chip = OfferedSkill::carried_by(body).map(|skill| sent_skill_chip(ctx, id, &skill));
+  let shown = (!words.trim().is_empty()).then(|| shown_words(ctx, id, (words, searched), (project, files_at)));
+  let shown = match (chip, shown) {
+    (None, None) => return None,
+    (None, Some(shown)) => shown,
+    (Some(chip), shown) => Column::new()
+      .spacing(ExtraSpacing::Snug.role())
+      .align_items(Alignment::Start)
+      .child(chip)
+      .with_children(shown)
+      .into(),
+  };
+  Some((shown, Arc::from(words)))
+}
+
+/// `words`, as the person wrote them: as written without mentions, else lurq's Markdown with their links.
+fn shown_words(
+  ctx: &mut Ctx,
+  id: &str,
+  (words, searched): (&str, Option<&found::Found>),
+  (project, files_at): (ProjectId, &Version),
+) -> Element {
   let text_id = format!("{id}-text");
   let found = find(words);
   if found.is_empty() {
@@ -41,18 +69,17 @@ pub fn said(
       .id(text_id)
       .variant(TypographyStyle::Body)
       .selectable(true);
-    return Some((marked_words(ctx, text, words, searched), Arc::from(words)));
+    return marked_words(ctx, text, words, searched);
   }
   let linked: Arc<str> = Arc::from(linked(words, &found, (project, files_at)));
   let links = super::links(ctx);
-  let shown = agent_text(
+  agent_text(
     ctx,
     &text_id,
     &linked,
     (project, &ProjectNames::default()),
     (&links, searched),
-  );
-  Some((shown, Arc::from(words)))
+  )
 }
 
 /// `words` as Markdown that shows them as written, with each mention `found` in them a link to its place in

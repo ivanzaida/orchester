@@ -13,7 +13,9 @@ use orchester_core::{
   command::{Command, SecretVariable, redact_secrets},
   connection::{
     AgentProvider, ConnectionAccount,
-    invocation::{ClaudeChat, ClaudeMcpConfig, ClaudeSession, HttpAuthorization, McpLaunch, OnProvider, on_account},
+    invocation::{
+      ChatSkill, ClaudeChat, ClaudeMcpConfig, ClaudeSession, HttpAuthorization, McpLaunch, OnProvider, on_account,
+    },
     mcp::{McpServerName, McpUrl},
     stream::ClaudeStream,
   },
@@ -27,6 +29,7 @@ use orchester_core::{
 use tokio::sync::{mpsc, oneshot};
 
 use super::{
+  skill::SkillPlugin,
   steer::Steering,
   turn::{Prepared, Seen, Turn, cannot},
 };
@@ -35,13 +38,14 @@ use crate::{
   supervisor::{ProcessEvent, ProcessExit, Supervised},
 };
 
-/// The CLI's command and the files it reads, which must outlive it, the account it runs on and the secrets kept out
-/// of what the turn keeps: the API provider's key.
+/// The CLI's command and the files it reads, which must outlive it (the skill's plugin, when the message carries one),
+/// the account it runs on and the secrets kept out of what the turn keeps: the API provider's key.
 pub(super) struct Started {
   pub(super) command: Command,
   account: AgentAccountId,
   pub(super) secrets: Vec<SecretVariable>,
   _files: [PrivateFile; 2],
+  _skill: Option<SkillPlugin>,
 }
 
 /// The places that hold secrets the chat's agent must not read, as folders and files: the runner's private files
@@ -115,6 +119,12 @@ impl Turn {
         model: self.settings.model(),
         key,
       });
+    // A skill the message carries is the CLI's own for this turn; a compaction takes none.
+    let placed = if compaction { None } else { self.place_skill() };
+    let (skill, words) = match placed {
+      Some((plugin, words)) => (Some(plugin), words),
+      None => (None, self.text.as_str()),
+    };
     let chat = ClaudeChat {
       executable: &prepared.executable,
       model: self.settings.model().as_str(),
@@ -125,15 +135,15 @@ impl Turn {
       mcp_config: mcp.path(),
       denied: &denied,
       denied_files: &denied_files,
+      skill: skill.as_ref().map(|placed| ChatSkill {
+        plugin: &placed.folder,
+        slug: &placed.slug,
+      }),
     };
     let command = if compaction {
       chat.compaction_command(std::env::vars_os(), &prepared.environment)
     } else {
-      chat.command(
-        (self.text.as_str(), &self.attached),
-        std::env::vars_os(),
-        &prepared.environment,
-      )
+      chat.command((words, &self.attached), std::env::vars_os(), &prepared.environment)
     };
     let command = command
       .and_then(|command| on_account(command, prepared.connection.account(), AgentProvider::ClaudeCodeCli))
@@ -150,6 +160,7 @@ impl Turn {
         .map(|on| on.key_variable(AgentProvider::ClaudeCodeCli))
         .collect(),
       _files: [prompt, mcp],
+      _skill: skill,
     })
   }
 
