@@ -15,7 +15,7 @@ use lurq::{
   layout::Alignment,
   node::Element,
 };
-use orchester_core::orchestrator::{Queued, TurnState};
+use orchester_core::orchestrator::{Queued, TurnMode, TurnState};
 use orchester_workspace::{display, files::Version};
 
 use super::{send::QueuedChange, timeline::TurnRow, turns::Arrival};
@@ -67,11 +67,19 @@ fn delivery(ctx: &Ctx, row: &TurnRow) -> Element {
       (Icon::LoaderCircle, PaletteColor::TextMuted),
       &ctx.t("orchestrator.delivery.sending"),
     ),
-    (Arrival::Own, _, Some(_)) => delivery_line(
-      id,
-      (Icon::CheckCheck, PaletteColor::Success),
-      &ctx.t_args("orchestrator.delivery.delivered", [("time", time.as_str())]),
-    ),
+    (Arrival::Own, _, Some(_)) => {
+      // A message sent in plan-only mode says so (`12b` `X7BYz`).
+      let key = if row.turn.mode == TurnMode::Plans {
+        "orchestrator.plan.delivered"
+      } else {
+        "orchestrator.delivery.delivered"
+      };
+      delivery_line(
+        id,
+        (Icon::CheckCheck, PaletteColor::Success),
+        &ctx.t_args(key, [("time", time.as_str())]),
+      )
+    }
   }
 }
 

@@ -8,7 +8,8 @@ use orchester_core::{
   conversation::MessageBody,
   id::{AgentAccountId, ChatId, ChatMessageId, ConnectionId},
   orchestrator::{
-    ActionOutcome, Chat, ChatAction, ChatEvent, EntryKind, OrchestratorSettings, SessionChange, TurnFailure, TurnState,
+    ActionOutcome, Chat, ChatAction, ChatEvent, EntryKind, OrchestratorSettings, SessionChange, TurnFailure, TurnMode,
+    TurnState,
   },
   run::{Answerer, TokenUsage},
 };
@@ -170,6 +171,7 @@ fn a_turn_ends_once_and_its_chat_keeps_replies_actions_and_session_in_order() {
         turn: TurnState::Answered,
         ended: Some(at(35)),
         sent_by: Answerer::Person,
+        mode: TurnMode::Acts,
       },
       EntryKind::Reply {
         text: "Two runs.".to_owned(),

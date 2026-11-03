@@ -31,6 +31,7 @@ mod held;
 mod history;
 mod line;
 mod page;
+mod plan_only;
 mod proposal;
 mod reading;
 mod report;
@@ -158,6 +159,8 @@ struct View {
   follow: Follow,
   /// The answers whose todo list the person opened under their name line.
   plans: Signal<OpenedPlans>,
+  /// The *Plan only* switch and the plan being changed (ORC-646).
+  plan_only: plan_only::PlanOnly,
 }
 
 struct OrchestratorScreen {
@@ -197,6 +200,7 @@ impl Component for OrchestratorScreen {
       links: chat::links(ctx),
       follow: Follow::new(ctx),
       plans: ctx.signal(OpenedPlans::default()),
+      plan_only: plan_only::PlanOnly::new(ctx),
     };
     let taker = view.clone();
     ctx.watch(&view.queued.state(), move |state| {
@@ -257,6 +261,9 @@ impl Component for OrchestratorScreen {
     if reads.target.is_some() || reads.shown != Shown::Loading {
       view.hold_draft_of(props.project.open.project.id(), reads.target.into());
     }
+    view
+      .plan_only
+      .hold(matches!(&reads.shown, Shown::Chat(shown) if shown.chat.plan_only()));
     let chat = match &reads.shown {
       Shown::Chat(shown) => Named::Chat(&shown.chat),
       Shown::Loading => Named::Opening(reads.target.and_then(|target| {
@@ -340,6 +347,7 @@ impl View {
     let typed = unknown.then(|| self.draft.get_untracked());
     let given = unknown.then(|| self.attached.held());
     self.of.set(Some(of));
+    self.plan_only.stop_changing();
     if self.runs_on.get_untracked() {
       self.runs_on.set(false);
     }
@@ -380,6 +388,8 @@ impl View {
     if !sent.from_draft {
       return false;
     }
+    // The change of a plan went with it.
+    self.plan_only.stop_changing();
     let Some(from) = draft::sent(project, (sent.chat, sent.message)) else {
       return false;
     };
@@ -417,7 +427,9 @@ impl View {
       }
       view.menu.set(false);
       let to = chat.unwrap_or_else(ChatId::generate);
-      let outgoing = draft::sending(project.project.id(), from, (to, text, attachments), sender());
+      let on = view.plan_only.on_now(Some(from));
+      let sent_as = (sender(), view.plan_only.mode(on), on);
+      let outgoing = draft::sending(project.project.id(), from, (to, text, attachments), sent_as);
       view.outgoing.set(Some(outgoing.clone()));
       view.how.set(how);
       view.follow.follow_again();
@@ -440,6 +452,7 @@ impl View {
       }
       view.how.set(None);
       view.follow.follow_again();
+      let on = view.plan_only.on_now(Some(Conversation::Chat(chat)));
       view.send.run(Sending {
         project: project.clone(),
         outgoing: Outgoing {
@@ -448,10 +461,21 @@ impl View {
           text: text.to_string(),
           attachments: Vec::new(),
           sent_by: sender(),
+          mode: view.plan_only.mode(on),
+          plan_only: on,
         },
         from_draft: false,
         how: None,
       });
+    })
+  }
+
+  /// *Change it* on a plan: the composer holds the plan as a chip, and the focus goes there; what is sent next plans.
+  fn change_plan(&self) -> Arc<dyn Fn(plan_only::Changing) + Send + Sync> {
+    let view = self.clone();
+    Arc::new(move |changing| {
+      view.plan_only.changing.set(Some(changing));
+      view.focus.set(true);
     })
   }
 

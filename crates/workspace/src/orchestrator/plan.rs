@@ -12,7 +12,7 @@ use std::path::Path;
 
 use orchester_core::{
   id::{ChatId, ChatMessageId},
-  orchestrator::{ActionOutcome, ChatAction, ChatEntry, ChatPlan, EntryKind, PlanStep, StepKind, TurnMode},
+  orchestrator::{ChatAction, ChatEntry, ChatPlan, EntryKind, PlanStep, StepKind, TurnMode},
   run::Answerer,
   time::Timestamp,
 };
@@ -140,10 +140,12 @@ pub(super) async fn carrying_out(scope: &ChatScope) -> Result<bool, ToolError> {
   let (root, chat) = (scope.root.clone(), scope.chat);
   blocking(move || {
     let entries = ProjectDb::open(&root)?.chat_entries(chat)?;
-    Ok(entries.iter().rev().find_map(|entry| match &entry.kind {
-      EntryKind::Person { mode, turn, .. } if turn.is_thinking() => Some(*mode == TurnMode::CarriesOut),
-      _ => None,
-    }) == Some(true))
+    Ok(
+      entries.iter().rev().find_map(|entry| match &entry.kind {
+        EntryKind::Person { mode, turn, .. } if turn.is_thinking() => Some(*mode == TurnMode::CarriesOut),
+        _ => None,
+      }) == Some(true),
+    )
   })
   .await
 }
@@ -178,12 +180,8 @@ pub(super) async fn call(
     .iter()
     .filter_map(|step| PlanStep::new(step.kind.into(), &step.action, step.target.as_deref()))
     .collect();
-  let plan = ChatPlan::new(steps, asked.left_out.as_deref(), asked.uses.as_deref()).map_err(|_| {
-    ToolError::refused(
-      "invalid_plan",
-      vec![Message::new("orchestrator.tools.invalidPlan")],
-    )
-  })?;
+  let plan = ChatPlan::new(steps, asked.left_out.as_deref(), asked.uses.as_deref())
+    .map_err(|_| ToolError::refused("invalid_plan", vec![Message::new("orchestrator.tools.invalidPlan")]))?;
   let count = plan.steps().len();
   let (root, chat) = (scope.root.clone(), scope.chat);
   let seq = blocking(move || Ok(ProjectDb::open(&root)?.add_chat_plan(chat, &plan, Timestamp::now())?)).await?;
@@ -253,17 +251,16 @@ pub async fn approve(
     return Err(SendError::Unconfirmed(Message::new("orchestrator.send.lost")));
   }
   let root = project.repo_root.clone();
-  let reopened = background::run(move || ProjectDb::open(&root).and_then(|mut db| db.reopen_chat_plan(seq, message))).await;
+  let reopened =
+    background::run(move || ProjectDb::open(&root).and_then(|mut db| db.reopen_chat_plan(seq, message))).await;
   match reopened {
     Ok(Ok(_)) => {}
     Ok(Err(error)) => tracing::warn!(%error, "cannot take back the approval of a plan the runner did not carry out"),
-    Err(error) => tracing::warn!(?error, "cannot take back the approval of a plan the runner did not carry out"),
+    Err(error) => tracing::warn!(
+      ?error,
+      "cannot take back the approval of a plan the runner did not carry out"
+    ),
   }
   runners.chat_changed(&project.repo_root);
   Err(SendError::NotSent(not_sent(&error)))
-}
-
-/// Whether `action` is the refusal of a tool in a turn that plans.
-pub fn refused_for_planning(action: &ChatAction) -> bool {
-  matches!(&action.outcome, ActionOutcome::Refused { code, .. } if code == "plan_only")
 }

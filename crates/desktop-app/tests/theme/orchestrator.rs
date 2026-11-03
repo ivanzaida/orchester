@@ -25,6 +25,8 @@ fn orchestrator_roles_follow_the_design() {
     // A History row's meta (`r9TeH`), the composer's message (`lB97V`).
     (OrchestratorText::HistoryMeta, 11.0, 1.3, FontWeight::Normal, "Geist"),
     (OrchestratorText::Message, 13.0, 1.3, FontWeight::Normal, "Geist"),
+    // *Plan only* on the composer's Mode line (`xptH1` in `y51fw9`).
+    (OrchestratorText::Mode, 12.0, 1.3, FontWeight::Medium, "Geist"),
   ] {
     let style = theme.typography_style(role.role());
     assert_eq!(

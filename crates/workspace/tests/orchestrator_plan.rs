@@ -247,7 +247,10 @@ fn ordinary_turn_acts_as_before() {
   let desktop = Desktop::new();
   desktop.says("Draft a task", TurnMode::Acts);
   desktop
-    .chat("create_task", json!({ "project": "Kontur", "title": "Per-endpoint retry settings" }))
+    .chat(
+      "create_task",
+      json!({ "project": "Kontur", "title": "Per-endpoint retry settings" }),
+    )
     .expect("an ordinary turn creates the draft");
   assert_eq!(desktop.db().tasks().expect("tasks").len(), 1);
 }
@@ -285,7 +288,10 @@ fn propose_plan_is_refused_outside_a_turn_that_plans_and_for_an_empty_plan() {
   assert_eq!(code(&refused), "not_plan_only");
   desktop.says("Plan it", TurnMode::Plans);
   let empty = desktop
-    .chat(PROPOSE_PLAN, json!({ "project": "Kontur", "steps": [{ "kind": "other", "action": "  " }] }))
+    .chat(
+      PROPOSE_PLAN,
+      json!({ "project": "Kontur", "steps": [{ "kind": "other", "action": "  " }] }),
+    )
     .expect_err("a plan says what will happen");
   assert_eq!(code(&empty), "invalid_plan");
   assert!(desktop.plans().is_empty());
@@ -322,7 +328,12 @@ fn approving_a_plan_carries_it_out_as_an_ordinary_turn_that_approves_no_card() {
   assert!(matches!(desktop.plans()[0].1.state(), PlanState::Approved { .. }));
   let turn = db.chat_turn(carrying).expect("read").expect("kept");
   assert!(turn.turn.is_thinking());
-  assert!(turn.text.as_str().contains("1. Continue run #8 (KON-12 · from its last checkpoint)"));
+  assert!(
+    turn
+      .text
+      .as_str()
+      .contains("1. Continue run #8 (KON-12 · from its last checkpoint)")
+  );
   assert!(turn.text.as_str().contains("Left out: Run #11"));
   let entries = db.chat_entries(desktop.scope.chat).expect("entries");
   assert!(entries.iter().any(|entry| matches!(
@@ -330,7 +341,10 @@ fn approving_a_plan_carries_it_out_as_an_ordinary_turn_that_approves_no_card() {
     EntryKind::Person { message, mode: TurnMode::CarriesOut, .. } if *message == carrying
   )));
   desktop
-    .chat("create_task", json!({ "project": "Kontur", "title": "Per-endpoint retry settings" }))
+    .chat(
+      "create_task",
+      json!({ "project": "Kontur", "title": "Per-endpoint retry settings" }),
+    )
     .expect("the approved plan acts");
   let refused = desktop
     .chat("apply_proposal", json!({ "project": "Kontur" }))
@@ -381,12 +395,25 @@ fn the_switch_is_the_conversations_and_survives_a_restart() {
   .expect("kept");
   drop(db);
   let reopened = desktop.db().chat(desktop.scope.chat).expect("read").expect("kept");
-  assert!(reopened.plan_only(), "a conversation started with the switch on keeps it");
+  assert!(
+    reopened.plan_only(),
+    "a conversation started with the switch on keeps it"
+  );
   plan::set_plan_only_in(desktop.repo.path(), desktop.scope.chat, false).expect("switched off");
-  assert!(!desktop.db().chat(desktop.scope.chat).expect("read").expect("kept").plan_only());
+  assert!(
+    !desktop
+      .db()
+      .chat(desktop.scope.chat)
+      .expect("read")
+      .expect("kept")
+      .plan_only()
+  );
   plan::set_plan_only_in(desktop.repo.path(), desktop.scope.chat, true).expect("switched on");
   let listed = desktop.db().chats().expect("history");
   assert!(listed[0].chat.plan_only());
   let other = ChatId::generate();
-  assert!(plan::set_plan_only_in(desktop.repo.path(), other, true).is_err(), "no such conversation");
+  assert!(
+    plan::set_plan_only_in(desktop.repo.path(), other, true).is_err(),
+    "no such conversation"
+  );
 }

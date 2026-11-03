@@ -59,5 +59,8 @@ pub(super) fn env(
     links: view.links.clone(),
     names: names.clone(),
     plans: view.plans.clone(),
+    open: project.open.clone(),
+    change_plan: view.change_plan(),
+    changing: view.plan_only.changing.get().map(|changing| changing.seq),
   }
 }

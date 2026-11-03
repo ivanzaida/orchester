@@ -7,7 +7,7 @@ use orchester_core::{
   conversation::MessageBody,
   id::{ChatId, ChatMessageId, ProjectId, RunId},
   orchestrator::{
-    ActionOutcome, AgentWait, ChatAction, ChatEntry, EntryKind, TurnState, WaitKind,
+    ActionOutcome, AgentWait, ChatAction, ChatEntry, EntryKind, TurnMode, TurnState, WaitKind,
     change::{Change, ProposedChange},
     instructions::{ProjectReads, system_prompt, wait_prompt},
     wait::{dealt_with, raised_by_own},
@@ -133,6 +133,7 @@ fn person(text: &str) -> EntryKind {
     turn: TurnState::Answered,
     ended: None,
     sent_by: Answerer::Person,
+    mode: TurnMode::Acts,
   }
 }
 

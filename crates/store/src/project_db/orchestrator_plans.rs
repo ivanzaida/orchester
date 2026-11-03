@@ -6,10 +6,7 @@
 use orchester_core::{
   conversation::MessageBody,
   id::{ChatId, ChatMessageId},
-  orchestrator::{
-    ChatPlan, PlanState, TurnMode, TurnState,
-    plan::carry_out_prompt,
-  },
+  orchestrator::{ChatPlan, PlanState, TurnMode, TurnState, plan::carry_out_prompt},
   run::Answerer,
   time::Timestamp,
 };
@@ -137,7 +134,8 @@ impl ProjectDb {
   /// carried it out, `message`, is forgotten and the plan waits again. Whether it was approved.
   pub fn reopen_chat_plan(&mut self, seq: i64, message: ChatMessageId) -> Result<bool, StoreError> {
     let transaction = self.connection.transaction()?;
-    let Some((_, plan)) = plan_at(&transaction, seq)?.filter(|(_, plan)| matches!(plan.state(), PlanState::Approved { .. }))
+    let Some((_, plan)) =
+      plan_at(&transaction, seq)?.filter(|(_, plan)| matches!(plan.state(), PlanState::Approved { .. }))
     else {
       return Ok(false);
     };

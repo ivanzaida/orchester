@@ -16,6 +16,7 @@ mod loading_states;
 mod native;
 mod orchestrator;
 mod pipelines;
+mod plan_only;
 mod refusals;
 mod scenario_names;
 mod settings;

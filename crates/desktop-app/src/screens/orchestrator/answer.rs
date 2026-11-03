@@ -13,7 +13,7 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
-  orchestrator::{ActionOutcome, ChatAction, ChatEvent, HeldWork, SessionChange, TurnState},
+  orchestrator::{ActionOutcome, ChatAction, ChatEvent, ChatPlan, HeldWork, SessionChange, TurnState},
   time::Timestamp,
 };
 use orchester_workspace::display;
@@ -23,6 +23,7 @@ use super::{
   ending::divider,
   held::{HeldCard, HeldProps},
   line::{list, nested as quoted},
+  plan_only::card::{Deciding, PlanCard, PlanProps},
   proposal::{ProposalProps, StartProposal},
   timeline::TurnRow,
   turns::Part,
@@ -146,6 +147,10 @@ fn parts(ctx: &mut Ctx, row: &TurnRow) -> Column {
         let id = format!("orchestrator-event-{key}-{index}");
         shown.extend(super::compaction::line(ctx, &id, event, Some(*at)));
       }
+      Part::Plan { plan, at, seq, number } => {
+        flush(&mut shown, &mut lines, index);
+        shown.push(plan_card(ctx, row, (plan, *at), (*seq, *number)));
+      }
     }
   }
   flush(&mut shown, &mut lines, row.turn.answer.len());
@@ -154,6 +159,30 @@ fn parts(ctx: &mut Ctx, row: &TurnRow) -> Column {
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Loose.role())
     .with_children(shown)
+}
+
+/// The card of `plan`, proposed at `at` as entry `seq`, the conversation's plan `number` (`super::plan_only::card`);
+/// it is decided once the conversation is kept.
+fn plan_card(ctx: &mut Ctx, row: &TurnRow, (plan, at): (&ChatPlan, Timestamp), (seq, number): (i64, usize)) -> Element {
+  let id = format!("orchestrator-plan-{seq}");
+  let env = &row.env;
+  let deciding = env.scope.as_ref().map(|scope| Deciding {
+    project: env.open.clone(),
+    chat: scope.chat,
+    change: env.change_plan.clone(),
+  });
+  ctx.mount_keyed::<PlanCard>(
+    &id,
+    PlanProps {
+      id: id.clone(),
+      plan: plan.clone(),
+      seq,
+      number,
+      at,
+      changing: env.changing == Some(seq),
+      deciding,
+    },
+  )
 }
 
 /// Whether `action` shows as an event line, which joins the lines around it in one list: everything but what waits

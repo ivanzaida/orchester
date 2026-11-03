@@ -183,7 +183,10 @@ impl ChatPlan {
 
 /// `words` without the whitespace around them; `None` when they say nothing.
 fn said(words: Option<&str>) -> Option<String> {
-  words.map(str::trim).filter(|words| !words.is_empty()).map(str::to_owned)
+  words
+    .map(str::trim)
+    .filter(|words| !words.is_empty())
+    .map(str::to_owned)
 }
 
 /// The prompt of a turn that plans, for the person's message `words`: take no action, and answer with a plan.

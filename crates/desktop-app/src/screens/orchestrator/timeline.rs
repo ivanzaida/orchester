@@ -25,10 +25,11 @@ use orchester_core::{
   id::{ChatMessageId, ProjectId},
   orchestrator::{Queued, TurnState, WaitKind},
 };
-use orchester_workspace::orchestrator::tools::ChatScope;
+use orchester_workspace::{orchestrator::tools::ChatScope, workspace::OpenProject};
 
 use super::{
   digest::{Digest, DigestProps, Waited, for_the_person},
+  plan_only::Changing,
   report::{ReportCard, ReportProps},
   send::QueuedChange,
   turns::{Arrival, Turn},
@@ -70,6 +71,11 @@ pub(super) struct TurnEnv {
   /// The projects' names, for what a link to another project's place says.
   pub(super) names: ProjectNames,
   pub(super) plans: Signal<OpenedPlans>,
+  /// The project, which a plan's approval asks the runner of; what *Change it* does with a plan; and the plan the
+  /// composer changes, by its entry (`super::plan_only`).
+  pub(super) open: OpenProject,
+  pub(super) change_plan: Arc<dyn Fn(Changing) + Send + Sync>,
+  pub(super) changing: Option<i64>,
 }
 
 /// The answers whose todo list the person opened under their name line, by the message that started each.
@@ -116,6 +122,7 @@ impl PartialEq for TurnRow {
       && self.env.connection == other.env.connection
       && self.env.scope == other.env.scope
       && self.env.names == other.env.names
+      && self.env.changing == other.env.changing
   }
 }
 

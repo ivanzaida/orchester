@@ -165,8 +165,11 @@ impl Foot<'_> {
     (stop, starts): (Option<super::send_menu::Press>, bool),
   ) -> Column {
     let not_set_up = self.not_set_up();
+    let plan = (!not_set_up).then(|| super::plan_only::composer::parts(ctx, view, &project.open.repo_root));
     let placeholder = if not_set_up {
       ctx.t("orchestrator.composer.notSetUp")
+    } else if view.plan_only.on(view.of.get()) {
+      ctx.t("orchestrator.plan.placeholder")
     } else {
       placeholder
     };
@@ -211,6 +214,7 @@ impl Foot<'_> {
         set_up,
         starts,
         menus: [mentions, commands],
+        plan,
       },
     )
   }

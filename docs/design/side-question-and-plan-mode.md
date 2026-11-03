@@ -150,7 +150,9 @@ nothing to read (*Run {n} has no transcript yet*).
 ## Open
 
 - Which connection and model the side agent uses: a project setting, or the run's own connection with a smaller model.
-- Whether `Shift Tab` conflicts with focus movement in the composer. The Orchestrator composer uses it nowhere today.
+- Whether `Shift Tab` conflicts with focus movement in the composer. Decided (ORC-646, the person): it does, since
+  Shift+Tab moves the focus back to the replies' links, so the switch flips with `Alt P` (`⌥ P` on macOS) instead,
+  and its tooltip says so.
 - No components were added or changed. The pane, the Mode line and the plan card are local frames, built from existing
   components and variables, as the decision card is. If the run composer's side button and the plan card should become
   shared components, the person needs to approve that.

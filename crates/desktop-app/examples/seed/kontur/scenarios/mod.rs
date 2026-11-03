@@ -29,6 +29,7 @@ mod memory;
 mod modules;
 mod native;
 mod orchestrator;
+mod orchestrator_plan;
 mod overview_states;
 mod ownership;
 mod pipelines;
@@ -96,7 +97,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 116] = [
+pub const ALL: [Scenario; 120] = [
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-library", agents_library::seed),
   Scenario::of("agents-browser", agents_browser::seed),
@@ -141,6 +142,10 @@ pub const ALL: [Scenario; 116] = [
   Scenario::of("orchestrator-compacting", orchestrator::context::compacting),
   Scenario::of("orchestrator-compacted", orchestrator::context::compacted),
   Scenario::of("orchestrator-compact-failed", orchestrator::context::compact_failed),
+  Scenario::of("orchestrator-plan-only", orchestrator_plan::plan_only),
+  Scenario::of("orchestrator-plan-answer", orchestrator_plan::answer),
+  Scenario::of("orchestrator-plan-approved", orchestrator_plan::approved),
+  Scenario::of("orchestrator-plan-changed", orchestrator_plan::changed),
   Scenario::of("changes", changes::seed),
   Scenario::of("cards", cards::seed),
   Scenario::of("cards-auto-mode", auto_mode::seed),

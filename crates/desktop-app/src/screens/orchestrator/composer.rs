@@ -104,10 +104,20 @@ pub(super) struct ComposerBox<'a> {
   pub(super) starts: bool,
   /// The @ menu and the slash menu over the box (`ui::mention`, `ui::slash`).
   pub(super) menus: [Element; 2],
+  /// Plan-only mode's parts, once the Orchestrator is set up (`super::plan_only::composer`).
+  pub(super) plan: Option<PlanParts>,
+}
+
+/// What the composer shows of plan-only mode: the switch after the runs-on chip, the *Mode* line and the chip of the
+/// plan being changed on top of the box while they show, and what Alt+P in the message does.
+pub(super) struct PlanParts {
+  pub(super) switch: Element,
+  pub(super) over: Vec<Element>,
+  pub(super) flip: Press,
 }
 
 /// The box, and why the files last given were not attached under it.
-pub(super) fn composer(ctx: &mut Ctx, view: &View, composer: ComposerBox<'_>) -> Column {
+pub(super) fn composer(ctx: &mut Ctx, view: &View, mut composer: ComposerBox<'_>) -> Column {
   let not_set_up = composer.set_up.is_some();
   let (fill, stroke) = match (not_set_up, composer.focused.get()) {
     (true, _) => (PaletteColor::SurfacePanel, PaletteColor::Border),
@@ -119,7 +129,12 @@ pub(super) fn composer(ctx: &mut Ctx, view: &View, composer: ComposerBox<'_>) ->
   } else {
     (ExtraSpacing::Loose.role(), ExtraSpacing::Loose.role())
   };
-  let field = field(ctx, view, &composer, not_set_up);
+  let flip = composer.plan.as_ref().map(|plan| plan.flip.clone());
+  let (switch, over) = composer
+    .plan
+    .take()
+    .map_or((None, Vec::new()), |plan| (Some(plan.switch), plan.over));
+  let field = field(ctx, view, &composer, (not_set_up, flip));
   let field = with_skill_chip(ctx, "orchestrator-composer", &view.skill, field);
   let end: Vec<Element> = match composer.set_up {
     Some(set_up) => vec![set_up],
@@ -132,6 +147,7 @@ pub(super) fn composer(ctx: &mut Ctx, view: &View, composer: ComposerBox<'_>) ->
     .align_items(Alignment::Center)
     .child(attach(ctx, view))
     .child(composer.runs_on)
+    .with_children(switch)
     .child(Spacer::new().flex(1.0))
     .with_children(composer.context)
     .with_children(end);
@@ -154,6 +170,7 @@ pub(super) fn composer(ctx: &mut Ctx, view: &View, composer: ComposerBox<'_>) ->
     .background(fill)
     .border(Border::inside(BorderSize::Sm, stroke))
     .rounded(RadiusSize::Lg)
+    .with_children(over)
     .with_children(attached)
     .child(field)
     .child(bar);
@@ -181,8 +198,8 @@ fn keys(ctx: &Ctx) -> Text {
 
 /// The message field, in 13 on 17 lines: it grows with its lines up to [`MAX_LINES`]; a paste of an image, files or
 /// long text attaches them instead of pasting words. Until the Orchestrator is set up its placeholder, saying so, is in
-/// `text_secondary`.
-fn field(ctx: &Ctx, view: &View, composer: &ComposerBox<'_>, not_set_up: bool) -> Element {
+/// `text_secondary`. Alt+P in it flips the *Plan only* switch as `flip` does, once it is set up.
+fn field(ctx: &Ctx, view: &View, composer: &ComposerBox<'_>, (not_set_up, flip): (bool, Option<Press>)) -> Element {
   let theme = ctx.theme();
   let resolve = |color| {
     FormTextRole {
@@ -195,6 +212,7 @@ fn field(ctx: &Ctx, view: &View, composer: &ComposerBox<'_>, not_set_up: bool) -
   let keys = Keys {
     press: composer.sending.press(),
     stop: composer.stop.clone(),
+    flip,
     menu: view.menu.clone(),
     focused: composer.focused.clone(),
   };
@@ -236,13 +254,16 @@ fn field(ctx: &Ctx, view: &View, composer: &ComposerBox<'_>, not_set_up: bool) -
 struct Keys {
   press: Option<Press>,
   stop: Option<Press>,
+  /// Flips the *Plan only* switch (Alt+P, ⌥P on macOS).
+  flip: Option<Press>,
   menu: Signal<bool>,
   focused: Signal<bool>,
 }
 
 impl Keys {
   /// Ctrl+Enter (Cmd+Enter) sends; Enter alone adds a line, as the field does by itself. Esc closes the send menu,
-  /// else stops the answer under way.
+  /// else stops the answer under way. Alt+P flips the *Plan only* switch: the design's Shift Tab moves the focus back
+  /// to the replies' links here, so the person chose Alt+P instead (ORC-646).
   fn down(&self, event: &KeyboardEvent) {
     if event.key == "Escape" {
       if event.default_prevented() || !self.focused.get_untracked() {
@@ -254,6 +275,19 @@ impl Keys {
       } else if let Some(stop) = &self.stop {
         stop();
         event.prevent_default();
+      }
+      return;
+    }
+    // ⌥P types a letter of its own on macOS: the key's place tells it.
+    let plan_keys = event.alt && !event.ctrl && !event.meta && !event.shift;
+    if plan_keys && (event.key.eq_ignore_ascii_case("p") || event.code == "KeyP") {
+      if let Some(flip) = self
+        .flip
+        .as_ref()
+        .filter(|_| self.focused.get_untracked() && !event.composing)
+      {
+        event.prevent_default();
+        flip();
       }
       return;
     }

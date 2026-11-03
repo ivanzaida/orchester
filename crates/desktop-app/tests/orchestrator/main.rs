@@ -29,6 +29,7 @@ mod mcp_servers;
 mod mentions;
 mod open_long;
 mod paste;
+mod plan_only;
 mod proposal;
 mod queue;
 mod reading;

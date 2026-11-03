@@ -72,10 +72,12 @@ pub enum OrchestratorText {
   HistoryMeta,
   /// 13 `text_primary`, 1.3: the message in the composer (`lB97V` in `QcfyZ`, a 17 line).
   Message,
+  /// 12/500 `text_primary`, 1.3: *Plan only* on the composer's *Mode* line (`xptH1` in `y51fw9`).
+  Mode,
 }
 
 impl OrchestratorText {
-  pub const ALL: [Self; 25] = [
+  pub const ALL: [Self; 26] = [
     Self::HeaderTitle,
     Self::StartTitle,
     Self::Emphasis,
@@ -101,6 +103,7 @@ impl OrchestratorText {
     Self::ReportMeta,
     Self::HistoryMeta,
     Self::Message,
+    Self::Mode,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -134,6 +137,7 @@ impl OrchestratorText {
       Self::ReportMeta => "orchestrator_report_meta",
       Self::HistoryMeta => "orchestrator_history_meta",
       Self::Message => "orchestrator_message",
+      Self::Mode => "orchestrator_mode",
     }
   }
 
@@ -170,6 +174,7 @@ impl OrchestratorText {
       Self::ReportMeta => style(11.5, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
       Self::HistoryMeta => style(11.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
       Self::Message => style(13.0, FontWeight::Normal, 1.3, 0.0, palette.text_primary),
+      Self::Mode => style(12.0, FontWeight::Medium, 1.3, 0.0, palette.text_primary),
     }
   }
 }
