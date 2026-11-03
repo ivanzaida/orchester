@@ -4,6 +4,7 @@
 //! is kept apart from agent readiness, which comes with runs.
 
 mod checks;
+pub mod ci;
 mod create;
 mod detail;
 pub mod feedback;

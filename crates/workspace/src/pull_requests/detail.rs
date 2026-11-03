@@ -228,7 +228,7 @@ pub(super) fn refresh_found_in(
 
 /// Records a rate limit that refused a read of one pull request as the repository's latest sync, so the list's
 /// syncs, its page and every other read wait for the reset too. Any other failure concerns this read alone.
-fn hold_if_rate_limited(
+pub(super) fn hold_if_rate_limited(
   db: &mut ProjectDb,
   repo: &GitHubRepo,
   failure: &SyncFailure,

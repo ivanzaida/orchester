@@ -13,6 +13,7 @@ use serde_json::{Value, json};
 use super::{
   Translate,
   across::{across, needs_project},
+  ci_wire,
   pull_request_reads::ReadOne,
   pull_request_wire::{item, repository},
 };
@@ -140,7 +141,7 @@ pub async fn list_pull_requests(
 pub async fn get_pull_request(services: &Services, args: GetPullRequest) -> Result<Value, ToolError> {
   let services = services.clone();
   let number = args.number;
-  let (project, list, listed) = blocking(move || {
+  let (project, list, listed, ci) = blocking(move || {
     let project = services.project(&args.project)?;
     let list = if args.refresh {
       refreshed(&services, &project)?
@@ -158,11 +159,16 @@ pub async fn get_pull_request(services: &Services, args: GetPullRequest) -> Resu
         },
       },
     };
-    Ok((project, list, listed))
+    let ci = ci_wire::of_pull_request(&services, (project.project.id(), &project.repo_root), number)?;
+    Ok((project, list, listed, ci))
   })
   .await?;
   let mut found = item(&project, project.project.id(), &listed);
   found["repository"] = repository(&project, &list);
+  // The CI read now joins the counts the last sync stored.
+  if let (Some(checks), Value::Object(read)) = (found["checks"].as_object_mut(), ci) {
+    checks.extend(read);
+  }
   Ok(found)
 }
 
