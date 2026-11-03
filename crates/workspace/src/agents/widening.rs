@@ -10,8 +10,9 @@ use orchester_store::{ProjectDb, StoreError};
 
 use crate::messages::Message;
 
-/// Compared with the latest published version, never an unapproved draft. A profile whose connection now runs on
-/// another account than the latest version's widens too ([`moves_to_another_account`]).
+/// Compared with the latest published version, never an unapproved draft, or with what a new profile starts with
+/// ([`AgentPermissions::for_new_profile`]) when none was published. A profile whose connection now runs on another
+/// account than the latest version's widens too ([`moves_to_another_account`]).
 pub fn reasons(
   db: &ProjectDb,
   id: Option<ResourceId>,
@@ -23,7 +24,7 @@ pub fn reasons(
     .transpose()?
     .flatten();
   let base = latest.as_ref().map_or_else(
-    || AgentPermissions::most_restrictive(provider, Platform::current()),
+    || AgentPermissions::for_new_profile(provider, Platform::current()),
     |version| version.body().permissions().clone(),
   );
   let mut reasons: Vec<_> = profile

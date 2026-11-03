@@ -336,7 +336,7 @@ editor checks it: role, an agent connection of the project and a model are requi
 project's.
 
 Narrowing is always accepted. Anything **broader than the latest published version** (for a new profile: broader
-than the most restrictive permissions its CLI enforces, with no MCP server) is `person_only` unless AP is on: write
+than what it gets without `permissions`, with no MCP server) is `person_only` unless AP is on: write
 access, writable folders, broader commands, network on, MCP servers, no longer asking before tool calls, approving
 automatically and Autopilot (both answer requests in a person's place, so they additionally need AA, as the
 window's question does).
@@ -351,7 +351,7 @@ window's question does).
 | `effort`            | string \| null         | no   | A reasoning effort the model lists; left out = the CLI's default.                             |
 | `responsibilities`  | string                 | no   | What the agent is responsible for, a sentence or two. Default `""`.                           |
 | `instructions`      | string                 | no   | Role instructions carried by every prompt; may use `{{variables}}`. Default `""`.            |
-| `permissions`       | Permissions \| null    | no   | Left out: new profile = most restrictive its CLI enforces; existing = keeps its own.          |
+| `permissions`       | Permissions \| null    | no   | Left out: new profile = most restrictive its CLI enforces with `approve_automatically` on (off on a native connection); existing = keeps its own. |
 | `mcp_servers`       | array<string>          | no   | Project MCP servers its agents get, by id or name. Default `[]`.                              |
 | `expected_revision` | string \| null         | no   | Optimistic lock: save only if the draft is still at this revision, else `draft_changed`.      |
 
@@ -365,7 +365,7 @@ window's question does).
 | `network`               | `off` \| `on`                                 | yes  | Network access.                                                            |
 | `writable_folders`      | array<string>                                 | no   | Folders outside the worktree the agent may write (write access only).     |
 | `ask_before_tool_calls` | boolean                                       | no   | Ask a person before each MCP or app tool call.                             |
-| `approve_automatically` | boolean                                       | no   | *Approve automatically (don't ask me)*: Orchester answers what would ask a person. |
+| `approve_automatically` | boolean                                       | no   | *Approve automatically (don't ask me)*: Orchester answers what would ask a person. Default `false`. |
 | `approval_mode`         | `autopilot` \| `manual`                       | no   | Who answers tool requests. Default `manual`; `manual` → `autopilot` widens (gate AP, and AA as approving automatically), the reverse never asks. |
 
 `get_profile` gives the same permissions object, `approval_mode` included. A profile set to Autopilot runs as Manual
