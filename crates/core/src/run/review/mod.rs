@@ -114,7 +114,7 @@ pub enum Review {
   /// The reviewer left it to the person, for this reason.
   Asked { reason: String, model: String },
   /// A decision model judged it: approved at or above the threshold, left to the person below it.
-  Decided { decision: DecisionVerdict },
+  Decided { decision: Box<DecisionVerdict> },
   /// A hard rule left it to the person without a review.
   Held { hold: ReviewHold },
   /// The review gave no verdict, so the person decides.
@@ -138,7 +138,9 @@ impl Review {
         reason: one_plain_line(&reason),
         model,
       },
-      Ok(ReviewVerdict::Decision(decision)) => Self::Decided { decision },
+      Ok(ReviewVerdict::Decision(decision)) => Self::Decided {
+        decision: Box::new(decision),
+      },
       Err(error) => Self::Failed {
         failure: match error {
           ReviewError::TimedOut => ReviewFailure::TimedOut,

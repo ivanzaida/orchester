@@ -17,6 +17,7 @@ mod came;
 mod decided;
 mod message;
 mod message_inline;
+mod model_approved;
 mod quiet;
 mod request;
 mod review;
@@ -61,6 +62,12 @@ struct ApprovalProps {
 impl lurq::app::component::DevtoolsInspectable for ApprovalProps {}
 
 pub(super) fn card(ctx: &mut Ctx, place: Place, card: &ApprovalCard) -> Element {
+  if model_approved::verdict(card).is_some() {
+    return ctx.mount_keyed::<model_approved::ModelApproved>(
+      &format!("cards-approval-{}", card.request.id),
+      model_approved::Props { card: card.clone() },
+    );
+  }
   if card.quiet().is_some() {
     return quiet::line(ctx, &format!("cards-approval-{}", card.request.id), card, None);
   }

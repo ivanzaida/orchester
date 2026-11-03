@@ -14,6 +14,8 @@ use super::typography::{mono, style};
 
 /// The answers an answered card did not choose, dimmed (`AAgL1`, `F0nR9` in `hm5wE`).
 pub const NOT_CHOSEN_OPACITY: f32 = 0.5;
+/// Risk track height in 06 (`INogI`).
+pub const RISK_TRACK_HEIGHT: f32 = 4.0;
 
 /// Text of the cards.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -52,10 +54,14 @@ pub enum CardsText {
   Probability,
   /// 13 primary, 1.5: the denial message in 06b (cxLoV).
   DenialMessage,
+  /// Mono 12 primary, 1.3: answered command and verdict in 06 (`Z0eJOB`, `x0FgN1`).
+  AnsweredCommand,
+  /// Mono 12 secondary, 1.3: the five risk values in 06 (`P1jHk`).
+  RiskValue,
 }
 
 impl CardsText {
-  pub const ALL: [Self; 16] = [
+  pub const ALL: [Self; 18] = [
     Self::Title,
     Self::ApprovalTitle,
     Self::PlanLines,
@@ -72,6 +78,8 @@ impl CardsText {
     Self::Review,
     Self::Probability,
     Self::DenialMessage,
+    Self::AnsweredCommand,
+    Self::RiskValue,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -102,6 +110,8 @@ impl CardsText {
       Self::Review => "cards_review",
       Self::Probability => "cards_probability",
       Self::DenialMessage => "cards_denial_message",
+      Self::AnsweredCommand => "cards_answered_command",
+      Self::RiskValue => "cards_risk_value",
     }
   }
 
@@ -123,6 +133,8 @@ impl CardsText {
       Self::Review => style(12.5, FontWeight::Normal, 1.4, 0.0, palette.text_secondary),
       Self::Probability => mono(style(11.5, FontWeight::Normal, 1.4, 0.0, palette.text_primary)),
       Self::DenialMessage => style(13.0, FontWeight::Normal, 1.5, 0.0, palette.text_primary),
+      Self::AnsweredCommand => mono(style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_primary)),
+      Self::RiskValue => mono(style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary)),
     }
   }
 }

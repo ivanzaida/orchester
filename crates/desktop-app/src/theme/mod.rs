@@ -70,7 +70,7 @@ use lurq::{
 pub use self::{
   accounts::{AccountsSpacing, AccountsText},
   browser::{BrowserBorder, BrowserColor, BrowserSpacing, BrowserText},
-  cards::{CardsSpacing, CardsText, NOT_CHOSEN_OPACITY},
+  cards::{CardsSpacing, CardsText, NOT_CHOSEN_OPACITY, RISK_TRACK_HEIGHT},
   chat_links::ChatLinkLooks,
   code::{CodeText, token_color},
   composer::{ComposerColor, ComposerRadius},

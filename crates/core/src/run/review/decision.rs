@@ -114,6 +114,9 @@ pub struct DecisionVerdict {
   /// The model's version, as its server reported it; `None` when it reported none.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub version: Option<String>,
+  /// Wall time of the review in milliseconds; absent in older records.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub elapsed_ms: Option<u64>,
   /// The probability that the request should be approved.
   pub approve: Probability,
   /// The reviewer's threshold when it judged.

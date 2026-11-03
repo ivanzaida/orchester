@@ -52,10 +52,15 @@ impl DecisionReviewer {
 
   /// Recorded tests share the live transport, limits, parsing and secret handling.
   pub(crate) async fn review_body(&self, body: Value) -> Reviewed {
-    match tokio::time::timeout(TIMEOUT, self.request(body)).await {
+    let started = std::time::Instant::now();
+    let mut reviewed = match tokio::time::timeout(TIMEOUT, self.request(body)).await {
       Ok(reviewed) => reviewed,
       Err(_) => Reviewed::new(Err(ReviewError::TimedOut), ReviewSpend::Unknown),
+    };
+    if let Ok(ReviewVerdict::Decision(decision)) = &mut reviewed.verdict {
+      decision.elapsed_ms = Some(u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX));
     }
+    reviewed
   }
 
   async fn request(&self, body: Value) -> Reviewed {

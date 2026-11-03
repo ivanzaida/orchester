@@ -24,6 +24,7 @@ fn verdict(approve: f64, threshold: f64) -> DecisionVerdict {
   DecisionVerdict {
     model: "jev".to_owned(),
     version: Some("2026-10".to_owned()),
+    elapsed_ms: None,
     approve: p(approve),
     threshold: p(threshold),
     risks: risks([0.02, 0.1, 0.0, 0.78, 0.3]),
@@ -34,7 +35,7 @@ fn verdict(approve: f64, threshold: f64) -> DecisionVerdict {
 fn decision_verdict_approves_at_and_above_the_threshold() {
   for approve in [0.8, 0.97, 1.0] {
     let review = Review::Decided {
-      decision: verdict(approve, 0.8),
+      decision: verdict(approve, 0.8).into(),
     };
     assert!(review.approves(), "{approve}");
     assert_eq!(ReviewEnd::of(&review), Some(ReviewEnd::Approved));
@@ -47,7 +48,7 @@ fn decision_verdict_approves_at_and_above_the_threshold() {
 #[test]
 fn decision_verdict_asks_below_the_threshold() {
   let review = Review::Decided {
-    decision: verdict(0.41, 0.8),
+    decision: verdict(0.41, 0.8).into(),
   };
   assert!(!review.approves());
   assert_eq!(review.reason(), None);
@@ -58,7 +59,7 @@ fn decision_verdict_asks_below_the_threshold() {
   assert_eq!(unsure.reason, PersonReason::ReviewerUnsure);
   assert!(
     !Review::Decided {
-      decision: verdict(0.799, 0.8)
+      decision: verdict(0.799, 0.8).into()
     }
     .approves()
   );
@@ -110,7 +111,7 @@ fn decision_verdict_refuses_numbers_that_are_not_probabilities() {
 #[test]
 fn decision_verdict_record_round_trips() {
   let review = Review::Decided {
-    decision: verdict(0.41, 0.8),
+    decision: verdict(0.41, 0.8).into(),
   };
   let json = serde_json::to_value(&review).expect("serializes");
   assert_eq!(
@@ -138,7 +139,8 @@ fn decision_verdict_record_round_trips() {
     decision: DecisionVerdict {
       version: None,
       ..verdict(0.97, 0.8)
-    },
+    }
+    .into(),
   };
   let text = serde_json::to_string(&unversioned).expect("serializes");
   assert!(!text.contains("version"), "{text}");
@@ -168,4 +170,24 @@ fn decision_verdict_leaves_old_records_as_they_read() {
     assert_eq!(review, expected);
     assert_eq!(serde_json::to_string(&review).expect("serializes"), stored);
   }
+}
+
+#[test]
+fn decision_verdict_elapsed_time_round_trips_without_inventing_old_timing() {
+  let mut decision = verdict(0.97, 0.8);
+  let old = serde_json::to_value(&decision).expect("serializes");
+  assert!(old.get("elapsed_ms").is_none());
+  assert_eq!(
+    serde_json::from_value::<DecisionVerdict>(old)
+      .expect("old record")
+      .elapsed_ms,
+    None
+  );
+  decision.elapsed_ms = Some(183);
+  let saved = serde_json::to_value(&decision).expect("serializes");
+  assert_eq!(saved["elapsed_ms"], 183);
+  assert_eq!(
+    serde_json::from_value::<DecisionVerdict>(saved).expect("new record"),
+    decision
+  );
 }

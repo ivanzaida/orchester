@@ -1001,6 +1001,13 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
+ORC-568 · Quiet decision-model approval and details (implemented 2026-11-03; Review and Verify follow).
+06 `xJ4Rf` a–b: the answered line names the recorded model, command, probability and time; opens Model,
+Verdict and five proportional risk bars. HTTP reviews retain optional elapsed milliseconds; old records show
+unavailable metadata. More run details counts these with language-reviewer approvals. QA: `cards-auto-mode`,
+*Check the app with jev* and *Review an approved tool request*. Verify `O1XJ6` / `sOxzW` and
+`lpfYV` / `On9Jp`, with `DtXld` for the quiet-line context. The run-count row has no dedicated design frame.
+
 ORC-565 · Connection page Test section (implemented 2026-11-02).
 Frame 02 GM4yE: explicit Test/Test again, durable progress and Stop, threshold results with the reviewer's row
 marked, recorded timing/input tokens and destination note. Cost and earlier-ask totals are absent in ORC-561's

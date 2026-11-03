@@ -18,6 +18,7 @@ mod deny_message;
 )]
 #[path = "../../examples/seed/kontur/mod.rs"]
 mod kontur;
+mod model_approved;
 mod project;
 #[path = "../support/mod.rs"]
 mod support;

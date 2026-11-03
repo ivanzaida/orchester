@@ -83,6 +83,7 @@ pub fn parse_system_one_answer(
   Ok(DecisionVerdict {
     model: model.as_str().to_owned(),
     version: Some(response.model),
+    elapsed_ms: None,
     approve: answers.verdict.probabilities.approve,
     threshold,
     risks: Risks {

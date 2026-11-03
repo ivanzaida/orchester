@@ -172,6 +172,15 @@ fn rest(ctx: &mut Ctx, task: &TaskContext, run: &RunView) -> Vec<Element> {
       value("task-fact-agents", &list, Look::Secondary),
     ));
   }
+  let approvals = ctx.t_args(
+    "summary.facts.approvalsValue",
+    [("count", run.approvals.counts.by_reviewer.to_string())],
+  );
+  rows.push(fact(
+    "task-fact-approvals",
+    &ctx.t("summary.facts.approvals"),
+    value("task-fact-approvals-value", &approvals, Look::Secondary),
+  ));
   rows.extend(permissions(ctx, run));
   rows.extend(delivery_rows(ctx, task.detail.queue.as_ref()));
   rows

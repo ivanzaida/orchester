@@ -91,7 +91,7 @@ async fn decision_review_threshold_and_input_only_usage() {
     assert_eq!((usage.input, usage.cached_input, usage.output), (120, 0, 0));
     let review = Review::of(reviewed.verdict, &model());
     assert_eq!(review.approves(), approved);
-    assert!(matches!(review, Review::Decided { .. }));
+    assert!(matches!(review, Review::Decided { decision } if decision.elapsed_ms.is_some()));
     let requests = server.requests.lock();
     assert_eq!(requests.len(), 2);
     assert!(requests[1].starts_with("POST /systemone "));

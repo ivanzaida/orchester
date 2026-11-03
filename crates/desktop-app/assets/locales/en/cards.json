@@ -209,6 +209,22 @@
           "missing": "{{model}} is unavailable, so it came to you"
         }
       },
+      "modelApproved": {
+        "lead": "Approved by {{model}}",
+        "at": "· {{probability}} · {{time}}",
+        "model": "Model",
+        "modelValue": "{{model}} · {{version}} · {{ms}} ms",
+        "verdict": "Verdict",
+        "verdictValue": "approve {{approve}} · threshold {{threshold}}",
+        "unknown": "—",
+        "risk": {
+          "outside": "Writes outside the worktree",
+          "network": "Reaches the network",
+          "credential": "Reads a credential",
+          "discard": "Discards work",
+          "task": "Does not serve the task"
+        }
+      },
       "quiet": {
         "autopilot": "Approved by autopilot",
         "profile": "Allowed by the profile",
