@@ -116,6 +116,7 @@
       "task": "Task",
       "mergeQueue": "Merge queue",
       "pullRequests": "Pull requests",
+      "merges": "Merges",
       "review": "Review",
       "usage": "Usage",
       "pipelines": "Pipelines",

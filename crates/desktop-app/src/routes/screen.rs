@@ -24,6 +24,8 @@ pub enum Screen {
   Modules,
   MergeQueue,
   PullRequests,
+  /// The Review hub's Merges: every merge attempt into the project's base branches (ORC-362).
+  Merges,
   Usage,
   Pipelines,
   Agents,
@@ -43,7 +45,7 @@ pub enum Screen {
 }
 
 impl Screen {
-  pub const ALL: [Self; 29] = [
+  pub const ALL: [Self; 30] = [
     Self::AllProjects,
     Self::AddProject,
     Self::JoinTeam,
@@ -59,6 +61,7 @@ impl Screen {
     Self::Modules,
     Self::MergeQueue,
     Self::PullRequests,
+    Self::Merges,
     Self::Usage,
     Self::Pipelines,
     Self::Agents,
@@ -114,6 +117,7 @@ impl Screen {
       Self::Modules => "modules",
       Self::MergeQueue => "merge_queue",
       Self::PullRequests => "pull_requests",
+      Self::Merges => "merges",
       Self::Usage => "usage",
       Self::Pipelines => "pipelines",
       Self::Agents => "agents",
@@ -153,6 +157,7 @@ impl Screen {
       Self::Modules => "shell.screens.modules",
       Self::MergeQueue => "shell.screens.mergeQueue",
       Self::PullRequests => "shell.screens.pullRequests",
+      Self::Merges => "shell.screens.merges",
       Self::Usage => "shell.screens.usage",
       Self::Pipelines => "shell.screens.pipelines",
       Self::Agents => "shell.screens.agents",
@@ -191,6 +196,7 @@ impl Screen {
       Self::Modules => Some(MODULES),
       Self::MergeQueue => Some("merge-queue"),
       Self::PullRequests => Some(PULL_REQUESTS),
+      Self::Merges => Some("merges"),
       Self::Usage => Some("usage"),
       Self::Pipelines => Some("pipelines"),
       Self::Agents => Some("agents"),

@@ -1,0 +1,97 @@
+{
+  "merges": {
+    "lead": "Every merge into {{branch}}: from a task page, from automation or from the merge queue, with who asked and what happened.",
+    "leadNoBranch": "Every merge: from a task page, from automation or from the merge queue, with who asked and what happened.",
+    "base": "Base",
+    "reading": "Reading the merges…",
+    "readingMore": "Reading earlier merges…",
+    "readFailed": "The merges cannot be read",
+    "readFailedBody": "Orchester could not read this project's merges: {{reason}}",
+    "notDone": "Not done: {{reason}}",
+    "empty": {
+      "title": "No merges yet",
+      "body": "Every merge into {{branch}} shows here once it is tried: from a task page, by automation or by the merge queue, with why when it did not land.",
+      "bodyNoBranch": "Every merge shows here once it is tried: from a task page, by automation or by the merge queue, with why when it did not land."
+    },
+    "section": {
+      "notMerged": "Not merged",
+      "waiting": "Waiting for your review",
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "day": "{{weekday}}, {{month}} {{day}}"
+    },
+    "run": "run #{{run}}",
+    "separator": " · ",
+    "stage": {
+      "policy": "Policy",
+      "projectDatabase": "Project database",
+      "integrationLock": "Integration lock",
+      "scratchFolder": "Scratch folder",
+      "checkoutIdentity": "Checkout identity",
+      "gitMetadata": "Git metadata",
+      "existingResult": "Existing result",
+      "merge": "Merge",
+      "record": "Record"
+    },
+    "outcome": {
+      "refusedBeforeGit": "Refused before Git at {{stage}}: {{cause}}. Nothing changed.",
+      "stoppedInQueue": "Stopped in the merge queue at {{stage}}: {{cause}}",
+      "refusedAt": "Refused at {{stage}}: {{cause}}",
+      "queueStopped": "Stopped in the merge queue: {{cause}}",
+      "conflictsOne": "Conflicts with {{branch}} in 1 file.",
+      "conflictsOther": "Conflicts with {{branch}} in {{count}} files.",
+      "notRecorded": "Merged by Git as {{revision}}, not recorded: {{cause}}",
+      "gitStopped": "Git stopped answering at {{stage}}: {{cause}}",
+      "leftChangedOne": "Stopped while bringing the merge in · 1 file left changed · {{branch}} did not move",
+      "leftChangedOther": "Stopped while bringing the merge in · {{count}} files left changed · {{branch}} did not move",
+      "interrupted": "Ended with the app or the runner at {{stage}}: {{cause}}",
+      "moved": "{{branch}} or the run's branch moved since the run was checked: {{cause}}",
+      "movedBefore": "{{branch}} or the run's branch moved since the run was checked; nothing was merged.",
+      "noCause": "no more was said",
+      "retrying": "Retrying by itself · attempt {{attempt}} of {{of}} in {{seconds}} s · {{cause}}",
+      "retryingNow": "Retrying by itself · attempt {{attempt}} of {{of}} now · {{cause}}",
+      "queueRetries": "The merge queue tries again when it gets to the run · {{cause}}"
+    },
+    "who": {
+      "person": "You",
+      "automation": "Automation",
+      "mergeQueue": "Merge queue",
+      "orchester": "Orchester"
+    },
+    "attempts": "{{count}} attempts",
+    "waiting": {
+      "passed": "Every step passed",
+      "sizeOne": "1 file, +{{added}} −{{removed}}",
+      "sizeOther": "{{files}} files, +{{added}} −{{removed}}",
+      "mergesInto": "merges into {{branch}} once you approve",
+      "mergesOnce": "merges once you approve",
+      "unsentOne": "1 comment not sent",
+      "unsentOther": "{{count}} comments not sent",
+      "changed": "Changed since your review · nothing merged · review again",
+      "inQueue": "Merge queue · since {{time}}",
+      "onTaskPage": "Task page · since {{time}}"
+    },
+    "merged": {
+      "mergeCommit": "Merge commit {{revision}}",
+      "squash": "Squashed as {{revision}}",
+      "fastForward": "Fast-forward to {{revision}}",
+      "alreadyMerged": "Already in {{branch}} at {{revision}}",
+      "worktreeRemoved": "worktree removed",
+      "afterOne": "after 1 refused attempt",
+      "afterOther": "after {{count}} refused attempts"
+    },
+    "action": {
+      "tryAgain": "Try again",
+      "tryNow": "Try now",
+      "resolve": "Resolve",
+      "recordMerge": "Record merge",
+      "recordMergeUnavailable": "Recording the merge Git made comes with the run's attempt page; until then, open the task.",
+      "putFilesBack": "Put files back",
+      "reviewChanges": "Review changes",
+      "reviewAgain": "Review again",
+      "openRun": "Open the run's task",
+      "noBranch": "The run did not record the branch it merges into.",
+      "anotherMerge": "Another run of this project is merging."
+    }
+  }
+}

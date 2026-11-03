@@ -47,6 +47,15 @@ fn skeletons_review_shows_the_merge_queues_and_the_pull_requests_bones_after_a_m
 }
 
 #[test]
+fn skeletons_review_merges_shows_its_bones_after_a_moment() {
+  let mut held = Held::new();
+  held.page(ProjectPage::Merges);
+  held.skeleton("merges-loading");
+  assert!(held.exists("review-hub-title"), "the hub's title stays real");
+  assert!(held.exists("merges-info"), "the info line stands in its bones");
+}
+
+#[test]
 fn skeletons_files_shows_the_trees_bones_after_a_moment() {
   let mut held = Held::new();
   held.page(ProjectPage::Files(FilesView::default()));

@@ -19,6 +19,7 @@ pub(crate) mod join_team;
 mod kept;
 pub(crate) mod memory;
 pub(crate) mod merge_queue;
+mod merges;
 pub(crate) mod modules;
 mod not_found;
 mod orchestrator;
@@ -124,6 +125,10 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::PullRequests(tab) => {
       let body = pull_requests::screen(ctx, project, *tab);
       review::page(ctx, project, review::ReviewTab::PullRequests, body)
+    }
+    ProjectPage::Merges => {
+      let body = merges::screen(ctx, project);
+      review::page(ctx, project, review::ReviewTab::Merges, body)
     }
     ProjectPage::PullRequest(number, file) => pull_requests::pull_request(
       ctx,

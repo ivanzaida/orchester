@@ -205,6 +205,7 @@ fn screen_route(screen: Screen, args: &Map<String, Value>, lookup: Option<&Looku
     Screen::Modules => module_page(args)?,
     Screen::MergeQueue => ProjectPage::MergeQueue,
     Screen::PullRequests => pull_requests_page(args)?,
+    Screen::Merges => ProjectPage::Merges,
     Screen::Usage => return usage_route(args),
     Screen::Pipelines => ProjectPage::Pipelines,
     Screen::Agents => agent_page(args)?,
@@ -278,9 +279,12 @@ const fn params(screen: Screen) -> &'static [&'static str] {
     Screen::NewTask => &["project", "module"],
     Screen::ProjectSettings => &["project", "tab", "view"],
     Screen::Agents => &["project", "agent"],
-    Screen::MergeQueue | Screen::Pipelines | Screen::Instructions | Screen::Secrets | Screen::OrchestratorSettings => {
-      &["project"]
-    }
+    Screen::MergeQueue
+    | Screen::Merges
+    | Screen::Pipelines
+    | Screen::Instructions
+    | Screen::Secrets
+    | Screen::OrchestratorSettings => &["project"],
   }
 }
 

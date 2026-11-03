@@ -67,6 +67,7 @@ macro_rules! markers {
     impl $inspect for crate::merge_queue::QueueRefusal {}
     impl $inspect for crate::merge_queue::QueueRow {}
     impl $inspect for crate::merge_queue::RunDelivery {}
+    impl $inspect for crate::tasks::merge_attempts::merges::Merges {}
     impl $inspect for crate::messages::Message {}
     impl $inspect for crate::modules::ModuleChoice {}
     impl $inspect for crate::modules::ModuleFilter {}

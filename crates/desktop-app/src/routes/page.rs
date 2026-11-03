@@ -60,6 +60,8 @@ pub enum ProjectPage {
   MergeQueue,
   /// The Pull requests page on its tab.
   PullRequests(PullRequestTab),
+  /// The Review hub's Merges: the runs not merged, those waiting for review and the merged ones by day.
+  Merges,
   /// A pull request of the project's repository, by its number, with the path of the file whose diff it
   /// shows (`None`: the first).
   PullRequest(NonZeroU64, Option<String>),
@@ -155,6 +157,7 @@ impl ProjectPage {
       Screen::Modules => Self::Modules(ModuleListTab::default()),
       Screen::MergeQueue => Self::MergeQueue,
       Screen::PullRequests => Self::PullRequests(PullRequestTab::default()),
+      Screen::Merges => Self::Merges,
       Screen::Usage => Self::Usage(Box::default()),
       Screen::Pipelines => Self::Pipelines,
       Screen::Agents => Self::Agents,
@@ -182,6 +185,7 @@ impl ProjectPage {
       Self::Task(..) | Self::KeptTask(..) => Screen::Task,
       Self::Modules(_) | Self::NewModule | Self::Module(..) | Self::EditModule(_) => Screen::Modules,
       Self::MergeQueue => Screen::MergeQueue,
+      Self::Merges => Screen::Merges,
       Self::PullRequests(_) | Self::PullRequest(..) | Self::PullRequestFeedback(..) => Screen::PullRequests,
       Self::Usage(_) | Self::Delivery(_) => Screen::Usage,
       Self::Pipelines

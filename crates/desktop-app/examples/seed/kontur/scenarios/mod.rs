@@ -26,6 +26,7 @@ mod live;
 mod loading_states;
 mod long_chats;
 mod memory;
+mod merges;
 mod modules;
 mod native;
 mod orchestrator;
@@ -93,7 +94,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 101] = [
+pub const ALL: [Scenario; 105] = [
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-library", agents_library::seed),
   Scenario::of("agents-browser", agents_browser::seed),
@@ -135,6 +136,10 @@ pub const ALL: [Scenario; 101] = [
   Scenario::of("delivery-blocked", delivery::blocked),
   Scenario::of("delivery-lanes", delivery::lanes),
   Scenario::of("delivery-empty", delivery::empty),
+  Scenario::of("merges", merges::seed),
+  Scenario::of("merges-outcomes", merges::outcomes),
+  Scenario::of("merges-empty", merges::empty),
+  Scenario::of("merges-many", merges::many),
   Scenario::of("overview-quiet", delivery::quiet),
   Scenario::of("overview-states", overview_states::seed),
   Scenario::of("interrupted", interrupted::seed),

@@ -365,6 +365,13 @@ impl<'k> Drive<'k> {
     Ok(self)
   }
 
+  /// Commits `files` on the run's branch with no checkpoint: the branch moves past the head a person reviewed.
+  pub fn commit_past_review(&mut self, files: &[(&str, String)]) -> Result<&mut Self, SeedError> {
+    let worktree = self.worktree.as_ref().ok_or(SeedError::WorktreeRemoved)?;
+    worktree.commit(files, &format!("{}: after the review", self.task.key()))?;
+    Ok(self)
+  }
+
   /// `step`'s agent proposes `text` as its next plan, and the step waits for a decision on it.
   pub fn propose(&mut self, step: &str, text: &str) -> Result<Plan, SeedError> {
     if !self.open.contains_key(&Self::key(step)) {
