@@ -1,15 +1,15 @@
 //! How delivery goes in a project (ORC-50), as the Delivery view beside Usage and `get_delivery` read it: throughput,
 //! cycle and lead time, where agent time goes, cumulative flow ([`series`]) over a range of local days, and when the
-//! open work of the project's queued tasks and of each open module is likely delivered ([`forecast`]). Everything is
-//! built from what the project's store holds ([`facts`]); nothing is estimated, and nothing is money.
+//! open work of the project's queued tasks and of each open module is likely delivered ([`forecast`], core's rule).
+//! Everything is built from what the project's store holds ([`facts`]); nothing is estimated, and nothing is money.
 
 pub mod facts;
-pub mod forecast;
 pub mod series;
 
 use std::sync::Arc;
 
 use chrono::{Days, NaiveDate};
+pub use orchester_core::forecast;
 use orchester_core::{
   id::ModuleId,
   module::ModuleState,

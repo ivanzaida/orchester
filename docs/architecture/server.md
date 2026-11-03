@@ -347,6 +347,36 @@ project, authenticated account and operation id; the same id with another reques
 models (pages, task and module reads, capabilities) belong to the S10 contract. OP-147 implements routes, receipts
 and enforcement in the platform repository; these types alone implement none of them.
 
+## Team authority S10 contract (ORC-650 / OP-153)
+
+Bounded direct reads and server-side summaries. The wire shapes are in
+[cloud-api.md](../cloud-api.md#team-authority-s10-read-contract). Every listing is paged: a `PageRequest` asks for
+at most 200 items (50 when it does not say), and each `Page<T>` carries the listing's snapshot `EventCursor`, the same
+on every page, with an opaque `PageCursor` to the next page that is bound to the workspace, the filters, the sort and
+that snapshot. Entities are ordered by ascending (creation sequence, id), histories by ascending sequence.
+
+**Cursor retention.** A server keeps a listing's snapshot for at least **15 minutes after it served the last page
+from it** (`v2::PAGE_CURSOR_RETENTION_SECONDS` = 900); each page served renews it. A page cursor used after that, or
+whose snapshot the server dropped for any other reason, is answered `cursor_expired` (HTTP 410), never with a page of
+another snapshot; the client then reads the listing again from its first page. A cursor sent with other filters or
+another sort than it was made for is `invalid`.
+
+Module progress, burndown and the delivery forecast moved from `orchester-workspace` to core
+(`module::progress`, `module::measure`, `module::burndown`, `forecast`), which the workspace re-exports unchanged, so a
+server's module summaries (`ModuleSummary`, `ModuleBurndownRead`, `ForecastRead`) count by the desktop's rules:
+Canceled tasks are out of scope, Done counts as done, and each move of a task into or out of a module counts on its
+day. On the v2 surface this lets a server serve the summaries that row 69 keeps on each desktop for `/api/v1`.
+`Capabilities` list what the caller may do, each denial with its `DenialReason`; they are advisory and commands check
+again. `TaskRead` and `ModuleRead` add the assignee, the work (`WorkRead` with its `ExecutionState`), the effective
+claim (`ClaimRead`) and the capabilities to the existing shared task and module fields; a task's workflow status stays
+apart from its work's execution state.
+
+Flagged, not decided by this contract (open decisions among D1–D9, or later stages): human waits beyond the proposed
+`awaiting_human` state, so the *Needs you* and *Active* views and their counts; the full set of command kinds an
+`Action` names (any dotted lowercase kind is accepted until the commands are published); the time zone a server counts
+burndown and forecast days in (core counts the computer's local days); and what `Capabilities.revision` counts.
+OP-153 implements routes, snapshots and enforcement in the platform repository; these types alone implement none.
+
 ## Claims
 
 A claim says who has taken a task into work. A task has at most one; the server keeps it and its history.
