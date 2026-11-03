@@ -427,6 +427,27 @@ current effective claim on current unfenced work counts as Admin-authorized; off
 `delivery.authorize`. Report and outside deliverables have no base merge (D4 open). OP-150 implements routes and
 enforcement in the platform repository; these types alone implement none.
 
+### Module delivery (ORC-656, S7c)
+
+Task works reach base only through their module. A task's run branch merges into its module branch by the runner's
+local merge, which the work's reports tell the server about (S9); no task delivery goes to base. Base delivery is the
+module's: a module has no pipeline, criteria or deliverable, so it has no work and no execution bundle (making one
+would need a default pipeline, open decision D6), and delivering a branch executes nothing.
+
+`v2::ModuleDeliveryRead` is one delivery of a module branch: `subject` (always `{kind:"module",id}`; a task subject is
+refused), the module's `claim_id`, the authorizing operation or `null`, the module `branch`, `source_commit` (the
+module branch's head being delivered), `base_commit`, `state` and `revision`, with no `work_id` and no `bundle`. It is
+a type of its own rather than a `kind`-tagged form of `DeliveryRead`: tagging would add a field to the task form's
+wire and change ORC-654's shape, while the two field sets are disjoint (`work_id`/`bundle` against
+`subject`/`branch`), so with unknown fields refused a body reads as exactly one of them. `DeliveryRead` is unchanged.
+`LocalEffect::DeliverModule {module_id, branch, source_commit, base_commit}` (`{kind:"deliver_module",...}`)
+authorizes the runner to merge that branch head into base at that commit on its computer; it names no local path,
+and the runner finds the module's checkout itself.
+
+A module delivery is authorized either by an Admin's `delivery.authorize` on the module, or, with the workspace's
+`automatic_merge` on, by the request itself coming from the module's current effective claim (D7, as decided above).
+OP-150 implements the commands and enforcement in the platform repository; these types alone implement none.
+
 ## Team authority S9 contract (ORC-655 / OP-152)
 
 Work reports, execution outcomes and work events. The wire shapes are in
