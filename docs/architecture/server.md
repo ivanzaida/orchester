@@ -377,6 +377,30 @@ Flagged, not decided by this contract (open decisions among D1–D9, or later st
 burndown and forecast days in (core counts the computer's local days); and what `Capabilities.revision` counts.
 OP-153 implements routes, snapshots and enforcement in the platform repository; these types alone implement none.
 
+## Team authority S8 contract (ORC-651 / OP-151)
+
+Consistent immutable execution bundles. The wire shapes are in
+[cloud-api.md](../cloud-api.md#team-authority-s8-execution-bundle). Core's `run::bundle` defines
+`CanonicalExecutionInputs` on the run's `RunSnapshot`: the pinned pipeline and its body, each step's executor, and
+the published bodies of the pinned profile, instruction, tool and skill versions, so a run executes and recovers
+without reading the mutable current definitions. Everything that binds a run to one computer stays out: the run's
+and the pipeline's sources (`RunSources`), a profile's connection, MCP servers and writable folders
+(`ExecutionProfile`), and a command tool that starts a program by an absolute path, which makes no bundle. Bodies
+name secrets by id; credentials stay in the local credential store.
+
+**Canonical bytes and hash.** `run::bundle::canonical` states the rule server and desktop share: the value's compact
+`serde_json` JSON, fields in declared order, maps in key order, no `HashMap`, and collections whose order means
+nothing sorted by their constructors and again when read; the hash is the SHA-256 of those bytes (`bundle_sha256`),
+a file's the SHA-256 of its bytes (`file_sha256`). The server hashes the bundle it built and never accepts one a
+client wrote.
+
+`v2::ExecutionBundle` adds what the server decides when it starts the work (project, subject, `claim_id`, the task's
+revision and content at start, limits, delivery) and the local bindings (profile → CLI kind and model, no account or
+path) to the inputs; its refs, permissions, file and skill file manifests are derived from the inputs and checked
+when read. A bundle file read answers raw bytes by hash, at most `MAX_BUNDLE_FILE_BYTES` (8 MiB). `module_id`,
+`branch`, `base_commit` and the work are left to the S7 contract (decision D3 is open): a bundle binds to its claim.
+OP-151 implements routes, storage and enforcement in the platform repository; these types alone implement none.
+
 ## Claims
 
 A claim says who has taken a task into work. A task has at most one; the server keeps it and its history.

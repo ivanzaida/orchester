@@ -25,6 +25,9 @@ roxmltree.workspace = true
 serde.workspace = true
 # Reads the JSON the agent CLIs print (model catalog, sign-in status).
 serde_json.workspace = true
+# The hash of an execution bundle's canonical bytes and of its files (`run::bundle`), which server and desktop share;
+# already built for the API contract and the store.
+sha2.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
 zeroize.workspace = true

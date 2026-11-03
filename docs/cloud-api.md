@@ -215,6 +215,46 @@ Left open, not invented here (they rest on the open decisions D1–D9 or on late
 them, the full set of command kinds behind `action`, which time zone a server counts days in, and what `revision` in
 `Capabilities` counts. Existing v1 contracts, the /api/v1 client and earlier v2 types are unchanged.
 
+## Team authority S8 execution bundle
+
+The public prerequisite for platform OP-151 (consistent immutable execution bundles and pinned skill assets) is in
+core (`orchester_core::run::bundle`) and `orchester_api::v2`; it adds no endpoints. The server builds a bundle when it
+starts work under a claim and never accepts one a client wrote. Unknown fields are refused in every shape below.
+
+- `ExecutionBundle`, in this field order:
+  `{schema_version,project_id,subject,claim_id,definition_revision,task,pipeline,profiles,permissions,limits,delivery,resources,files,skill_files,bindings,inputs}`.
+  `schema_version` is `EXECUTION_BUNDLE_SCHEMA` (1), as `BundleRef.schema_version` names it. `definition_revision` is
+  the task's revision when the work started; `task` (`TaskAtStart`) is `{title,brief,criteria}` at that revision.
+  `limits` is a `SharedLimits` (`{}` for none) and `delivery` what the run delivers (`changes`, `report`, `outside`
+  or `changes_or_report`: the task's own choice, else its pipeline's).
+- Derived from `inputs`, and refused on read when they differ: `pipeline` `{resource_id,version}`; `profiles`
+  `[{role,resource_id,version}]`; `permissions` `[{step,permissions}]`, each agent step's profile permissions
+  narrowed by the step, in pipeline step order; `resources` `[{resource_id,version}]`, the pinned instructions, tools
+  and skills; `files` `[{sha256,size_bytes}]`, every file once; `skill_files`
+  `[{resource_id,files:[{path,sha256,size_bytes}]}]`. `version` is the published version number.
+- `bindings` `[{resource_id,role,cli,model}]`: one per pinned profile, with its role and model; `cli` is the agent
+  provider (`codex_cli`, `claude_code_cli`, …) the executing computer runs it with. Which account or connection runs it,
+  and every path, stays on that computer.
+- `inputs` (`CanonicalExecutionInputs`): `{pipeline,steps,profiles,instructions,tools,skills}`, each pinned version
+  `{resource,version,number,body}` with its published body. `steps` are the run snapshot's `[{key,executor}]` in
+  pipeline order. The pipeline body lists no sources, a profile body is
+  `{role,responsibilities,instructions,model,settings,permissions}` without its connection, MCP servers or writable
+  folders, and a command tool never starts a program by an absolute path; such inputs are refused. Bodies name
+  secrets by id only.
+- Order: `steps` and `permissions` keep pipeline order; `profiles`, `bindings`, `resources`, `skill_files` and the
+  pinned versions are read in any order and kept in resource id order, `files` in hash order, a skill's files in path
+  order.
+- Hash: the lowercase hex SHA-256 of the bundle's canonical bytes, its compact JSON as `serde_json` writes it with the
+  fields in the order above and collections in the order just given (`run::bundle::canonical`). The same bundle always
+  hashes the same, whichever order its collections were read in; any field change changes it.
+- Reads: the bundle read answers `ExecutionBundle`. A bundle file read answers one file's raw bytes by its `sha256`,
+  at most `MAX_BUNDLE_FILE_BYTES` (8 MiB; a run whose skills have a larger file makes no bundle), which the desktop
+  checks against the bundle (`ExecutionBundle::check_file`). There is no confirmation command.
+
+Left out until the S7 contract (decision D3 is open): `module_id`, `branch` and `base_commit`, and the work; a bundle
+binds to its claim, and S7's `work.start` attaches the work. Existing v1 contracts, the /api/v1 client and earlier v2
+types are unchanged.
+
 ## Conventions
 
 - JSON bodies in UTF-8. Requests are limited to 1 MiB and must arrive within 10 seconds.

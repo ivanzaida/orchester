@@ -2,6 +2,8 @@
 //! Servers adopt these models on a separate versioned surface; publishing them does not expose HTTP routes.
 
 mod authority_error;
+mod bundle;
+mod bundle_wire;
 mod capabilities;
 mod execution;
 mod invites;
@@ -17,6 +19,7 @@ mod task_list;
 mod task_read;
 
 pub use authority_error::*;
+pub use bundle::*;
 pub use capabilities::*;
 pub use execution::*;
 pub use invites::*;
