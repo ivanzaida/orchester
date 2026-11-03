@@ -2,7 +2,10 @@
 //! Servers adopt these models on a separate versioned surface; publishing them does not expose HTTP routes.
 
 mod authority_error;
+mod bundle;
+mod bundle_wire;
 mod capabilities;
+mod delivery;
 mod execution;
 mod invites;
 mod library;
@@ -15,9 +18,12 @@ mod policy;
 mod projects;
 mod task_list;
 mod task_read;
+mod work_report;
 
 pub use authority_error::*;
+pub use bundle::*;
 pub use capabilities::*;
+pub use delivery::*;
 pub use execution::*;
 pub use invites::*;
 pub use library::*;
@@ -34,3 +40,4 @@ pub use policy::*;
 pub use projects::*;
 pub use task_list::*;
 pub use task_read::*;
+pub use work_report::*;

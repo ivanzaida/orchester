@@ -16,6 +16,8 @@ pub enum AuthorityErrorCode {
   /// The operation id was used before with another request.
   OperationMismatch,
   ClaimConflict,
+  /// The claim or work the request names is no longer the effective one: it was released, taken over or fenced by a
+  /// newer generation. A delayed work report gets this, never a write over the new holder's state.
   ClaimLost,
   ModuleRequired,
   ModuleClaimConflict,
@@ -24,6 +26,13 @@ pub enum AuthorityErrorCode {
   DecisionRequired,
   BundleMissing,
   DeliveryNotAuthorized,
+  /// The claim is the caller's, but held by another of their sessions than the one that sent the request.
+  SessionMismatch,
+  /// A work report whose sequence is not after the last one accepted for its run (`orchester_core::run::order_report`).
+  /// A duplicate of the last accepted report is not refused: it is answered with the original result.
+  SequenceRegressed,
+  /// The caller is no longer a member of the workspace.
+  MembershipRevoked,
   CursorExpired,
   UnsupportedContract,
   RateLimited,
@@ -36,7 +45,7 @@ impl AuthorityErrorCode {
     match self {
       Self::Unauthenticated => 401,
       Self::NotFound => 404,
-      Self::Forbidden | Self::DeliveryNotAuthorized => 403,
+      Self::Forbidden | Self::DeliveryNotAuthorized | Self::MembershipRevoked => 403,
       Self::Invalid => 422,
       Self::RevisionConflict
       | Self::OperationMismatch
@@ -46,7 +55,9 @@ impl AuthorityErrorCode {
       | Self::ModuleClaimConflict
       | Self::TransitionDenied
       | Self::DecisionRequired
-      | Self::BundleMissing => 409,
+      | Self::BundleMissing
+      | Self::SessionMismatch
+      | Self::SequenceRegressed => 409,
       Self::CursorExpired => 410,
       Self::UnsupportedContract => 426,
       Self::RateLimited => 429,
