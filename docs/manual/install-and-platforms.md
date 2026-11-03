@@ -5,8 +5,8 @@
 ### Windows — release installer
 
 Raising `version` in `crates/desktop-app/Cargo.toml` on `master` signs and uploads a release to Orchester Cloud, where
-it is published on Beta, and tags the commit `app-v<version>` (no GitHub Release since 2026-10-31;
-`docs/stable-build.md`, "Releases from CI"). For Windows it has, at
+it is published on Beta, tags the commit `app-v<version>` and publishes the same files as the GitHub Release
+`app-v<version>` (`docs/stable-build.md`, "Releases from CI"). For Windows it has, at
 `https://api.orchester.cloud/v1/releases/<version>/files/<name>`:
 
 - `Orchester-<version>-setup.exe` — an installer for the current user, no admin rights. Installs into

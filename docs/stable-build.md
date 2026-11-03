@@ -162,10 +162,21 @@ login shell is not asked then.
 GitHub Actions builds the app for Windows and for macOS (Apple silicon, signed with the Developer ID
 and notarized), signs the four files with the release key and uploads them to Orchester Cloud as
 one release, which the cloud publishes on Beta; then it tags the commit `app-v<version>`
-(`.github/workflows/app-release.yml`). The files live in the cloud (*Orchester Cloud upload*
-below), not on GitHub: since ORC-412 (2026-10-31) the workflow makes no GitHub Release, not even
-one with notes only, since the notes are the cloud release's and the app shows them with its
-update offer. The GitHub Releases of earlier versions stay as they are.
+(`.github/workflows/app-release.yml`). The app updates from the cloud only (*Orchester Cloud
+upload* below).
+
+Once the cloud has accepted the release, the workflow's `tag` job also publishes the GitHub Release
+`app-v<version>` in `ivanzaida/orchester` (again since ORC-653, 2026-11-03, after ORC-412 had
+dropped it on 2026-10-31), titled `Orchester <version>`: the four files, the checksums as
+`SHA256SUMS-windows.txt` and `SHA256SUMS-macos.txt` (each job's `SHA256SUMS.txt`), and as its body
+the notes the cloud job wrote and uploaded, passed on as the run's artifact
+`orchester-<version>-notes`. A version with a suffix (`0.5.0-rc.1`) is a GitHub pre-release. It
+reuses the artifacts the Windows, macOS and cloud jobs uploaded, with `gh release` and the
+workflow's own token (`GH_TOKEN: github.token`); no secret reaches a command line or the log. A
+run again for a version whose GitHub Release exists makes no second one: it uploads the files again
+with `--clobber`, which replaces each file of the same name. When the cloud rejects the release,
+neither the tag nor the GitHub Release is made. The GitHub Releases of earlier versions stay as they
+are.
 
 **To release**, raise `version` in `[package]` of `crates/desktop-app/Cargo.toml` (the app's own
 version, e.g. `0.2.0` to `0.2.1`; a version with a suffix such as `0.3.0-rc.1` is a pre-release)
@@ -224,7 +235,8 @@ release already has, whatever its platform and architecture ([cloud-api.md](clou
 releases"), so a later universal or Intel build needs a name per architecture.
 
 Their SHA-256 checksums are in the run's log (*Pack the zip and the installer*, *Write the
-checksums*) and in the cloud, which serves each file with `ETag: "<sha256>"`.
+checksums*), on the GitHub Release (`SHA256SUMS-windows.txt`, `SHA256SUMS-macos.txt`) and in the
+cloud, which serves each file with `ETag: "<sha256>"`.
 
 **Its Orchester Cloud** has its web pages at `https://orchester.cloud` and its API at
 `https://api.orchester.cloud/v1`, built in (`BUILD_ADDRESS` and `BUILD_API_ADDRESS` in
