@@ -67,6 +67,12 @@ pub enum ChatEvent {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     done: Vec<ChatAction>,
   },
+  /// The conversation is a fork of conversation `from` (ORC-334, [`super::fork`]), titled `title` then, made from the
+  /// message or answer of `at`: the first entry of the fork, before the copies of what came up to that point.
+  Forked { from: ChatId, title: String, at: Timestamp },
+  /// What the agent did in the original after the point the fork was made from, which stays as it is there: the fork
+  /// starts without it. Kept after the copies, only when the original had done something.
+  MadeInOriginal { made: Vec<ChatAction> },
 }
 
 /// Where a compaction of an agent session stands.

@@ -18,6 +18,7 @@ mod decisions;
 mod drafts;
 mod export;
 mod follow;
+mod fork;
 mod git;
 mod harness;
 mod history;

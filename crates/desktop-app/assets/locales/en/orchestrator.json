@@ -10,7 +10,9 @@
     "newConversation": "New conversation",
     "meta": {
       "today": "· today {{time}}",
-      "on": "· {{date}}"
+      "on": "· {{date}}",
+      "forkedToday": "· forked today {{time}}",
+      "forkedOn": "· forked {{date}}"
     },
     "export": {
       "what": "{{title}} · {{messages}} · {{when}}",
@@ -137,8 +139,22 @@
       "edit": "Edit",
       "more": "More actions",
       "rewind": "Rewind to here",
+      "fork": "Fork from here",
       "busy": "Stop the answer to edit or rewind",
       "nothingAfter": "Nothing comes after this answer"
+    },
+    "fork": {
+      "title": "{{title}} · fork",
+      "line": "Forked from {{title}} at {{time}} · the original stays as it was",
+      "openOriginal": "Open original ↗",
+      "made": {
+        "title": "Made after this point in the original",
+        "body": "{{list}} stay as they are. This conversation starts without them: mention them if you need them."
+      },
+      "making": "Making the fork…",
+      "failed": "The conversation wasn't forked",
+      "failedBody": "{{why}} The original is as it was.",
+      "dismiss": "Dismiss"
     },
     "edit": {
       "field": "Edit your message",

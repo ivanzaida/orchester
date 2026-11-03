@@ -14,6 +14,7 @@ pub mod chat;
 pub mod compact;
 mod duplicate;
 pub mod facts;
+pub mod fork;
 pub mod git;
 mod guard;
 mod keep;

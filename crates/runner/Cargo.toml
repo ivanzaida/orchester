@@ -101,6 +101,10 @@ name = "chat_rewind"
 required-features = ["test-agent"]
 
 [[test]]
+name = "chat_fork"
+required-features = ["test-agent"]
+
+[[test]]
 name = "chat_api_provider"
 required-features = ["test-agent"]
 

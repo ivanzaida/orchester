@@ -2,8 +2,9 @@
 //! its states in 09d `Pe6Di`): *Edit* with its label before Copy on the person's own message (a 12 `pencil` and
 //! 11.5 `text_primary`, 5 apart, 8 at its sides), and `…` after it, which opens the message's menu (`Message menu`
 //! `N8Eh1I`, 200 wide) under its end, `pressed` while it is open. Each is 22 high in the toolbar, the `hover` fill
-//! under the pointer. One that cannot be used now is at half and says why in its tooltip (*Stop the answer to edit or
-//! rewind*); Copy still works.
+//! under the pointer. *Edit* while it cannot be used now is at half and says why in its tooltip (*Stop the answer to
+//! edit or rewind*); so does a row of the menu, while `…` still opens it for the rows that can (*Fork from here*,
+//! ORC-334, works while the Orchestrator answers). Copy still works.
 
 use std::sync::Arc;
 
@@ -52,13 +53,11 @@ pub struct ToolbarChoice {
   pub choose: Choice,
 }
 
-/// The `…` button, named `label` for tools and its tooltip, and the rows of its menu; `held` says why it cannot be
-/// pressed now, if it cannot.
+/// The `…` button, named `label` for tools and its tooltip, and the rows of its menu.
 #[derive(Clone)]
 pub struct MoreActions {
   pub label: Arc<str>,
   pub rows: Vec<MoreRow>,
-  pub held: Option<Arc<str>>,
 }
 
 /// A row of the message's menu: its element id is the toolbar's id and `-<key>`.
@@ -86,7 +85,6 @@ impl PartialEq for MessageExtras {
     let mores = match (&self.more, &other.more) {
       (Some(one), Some(two)) => {
         one.label == two.label
-          && one.held == two.held
           && one.rows.len() == two.rows.len()
           && one.rows.iter().zip(&two.rows).all(|(one, two)| {
             one.key == two.key && one.label == two.label && one.icon == two.icon && choice(&one.choose, &two.choose)
@@ -146,9 +144,6 @@ pub(super) fn more_button(
     .describe("a11y_name", more.label.clone())
     .describe("open", if shown { "true" } else { "false" })
     .child(icon(Icon::Ellipsis, IconSize::Md, PaletteColor::TextPrimary));
-  if let Some(why) = &more.held {
-    return held(ctx, &button_id, button, why);
-  }
   let button = if shown {
     button.background(ExtraColor::Pressed.role())
   } else {

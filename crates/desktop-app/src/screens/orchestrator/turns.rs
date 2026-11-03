@@ -255,9 +255,14 @@ pub(super) fn turns(shown: &ChatView) -> Vec<Turn> {
         });
         continue;
       }
-      // A compaction is a row of its own between the turns (`06b` `j7eSQO`), and so is where a rewind went back to
-      // (`10` `Zm7kq`).
-      EntryKind::Event(event @ (ChatEvent::Compaction { .. } | ChatEvent::Rewound { .. })) => {
+      // A compaction is a row of its own between the turns (`06b` `j7eSQO`), and so are where a rewind went back to
+      // (`10` `Zm7kq`), a fork's first line and what its original made after it (`11` `RT5T7`).
+      EntryKind::Event(
+        event @ (ChatEvent::Compaction { .. }
+        | ChatEvent::Rewound { .. }
+        | ChatEvent::Forked { .. }
+        | ChatEvent::MadeInOriginal { .. }),
+      ) => {
         turns.push(Turn {
           compaction: Some(event.clone()),
           ..Turn::opened(entry, None)

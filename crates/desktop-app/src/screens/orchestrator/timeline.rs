@@ -314,15 +314,17 @@ fn turn(ctx: &mut Ctx, row: &TurnRow, first: bool) -> Element {
   let dropped = row.env.rewind.drops(&row.turn);
   if let Some(event) = &row.turn.compaction {
     let id = format!("orchestrator-compaction-{key}");
-    let line = super::compaction::line(ctx, &id, event, row.turn.at).or_else(|| {
-      let at = row.turn.at?;
-      super::rewind::line::line(
-        ctx,
-        &format!("orchestrator-rewound-{key}"),
-        event,
-        (at, row.env.project),
-      )
-    });
+    let line = super::compaction::line(ctx, &id, event, row.turn.at)
+      .or_else(|| {
+        let at = row.turn.at?;
+        super::rewind::line::line(
+          ctx,
+          &format!("orchestrator-rewound-{key}"),
+          event,
+          (at, row.env.project),
+        )
+      })
+      .or_else(|| super::rewind::forked::line(ctx, &format!("orchestrator-forked-{key}"), event, row.env.project));
     let column = Column::new().width(Dimension::Pct(100.0)).with_children(line);
     return room(ctx, dimmed(column, dropped), first);
   }

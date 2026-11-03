@@ -3,7 +3,7 @@
 use crate::kontur::scenarios;
 
 /// The scenarios, in the order the seed lists them.
-const NAMES: [&str; 124] = [
+const NAMES: [&str; 125] = [
   "agents",
   "agents-library",
   "agents-browser",
@@ -56,6 +56,7 @@ const NAMES: [&str; 124] = [
   "orchestrator-plan-changed",
   "orchestrator-rewind",
   "orchestrator-rewound",
+  "orchestrator-forked",
   "changes",
   "cards",
   "cards-auto-mode",

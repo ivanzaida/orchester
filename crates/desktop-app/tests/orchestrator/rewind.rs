@@ -266,10 +266,22 @@ fn orchestrator_edit_and_rewind_wait_while_the_orchestrator_answers() {
       .is_some_and(|element| element.has_class(HELD_CLASS))
   };
   assert!(held(&mut screen, "edit"), "Edit waits for the answer");
-  assert!(held(&mut screen, "more"), "and so does …");
+  assert!(
+    !held(&mut screen, "more"),
+    "… still opens, for Fork from here (ORC-334)"
+  );
   screen.press(&format!("{id}-edit"));
   assert!(!screen.exists(&format!("{id}-input")), "a press edits nothing");
   screen.press(&format!("{id}-more"));
-  assert!(!screen.exists(&format!("{id}-menu")), "nor opens the menu");
+  assert!(screen.exists(&format!("{id}-menu")));
+  assert_eq!(
+    screen.text(&format!("{id}-rewind-detail")),
+    "Stop the answer to edit or rewind",
+    "Rewind to here waits for the answer"
+  );
+  let before = entries(&screen);
+  screen.press(&format!("{id}-rewind"));
+  assert!(!screen.exists("orchestrator-rewind"), "and asks nothing");
+  assert_eq!(entries(&screen), before);
   screen.click("orchestrator-stop");
 }

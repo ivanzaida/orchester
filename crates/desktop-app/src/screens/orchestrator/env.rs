@@ -38,7 +38,12 @@ pub(super) fn env(
   // An edit goes as the composer would send a message to the conversation now.
   let on = view.plan_only.on_now(Some(Conversation::from(chat)));
   let sending = view.send.state().get().is_pending();
-  let rewind = RewindEnv::new(ctx, &view.rewind, (view.plan_only.mode(on), on), sending);
+  let rewind = RewindEnv::new(
+    ctx,
+    (&view.rewind, &project.open),
+    (view.plan_only.mode(on), on),
+    sending,
+  );
   TurnEnv {
     project: open.project.id(),
     name: Arc::from(open.project.name().as_str()),

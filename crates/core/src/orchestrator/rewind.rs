@@ -92,17 +92,26 @@ impl Dropped {
   }
 }
 
-/// Whether the conversation that holds `kept` was rewound: its next turn without a session to resume is told the
-/// conversation as it was kept ([`primed_prompt`]).
+/// Whether the conversation that holds `kept` was rewound, or is a fork ([`super::fork`]): its next turn without a
+/// session to resume is told the conversation as it was kept ([`primed_prompt`]).
 pub fn primes(kept: &[ChatEntry]) -> bool {
-  kept
-    .iter()
-    .any(|entry| matches!(entry.kind, EntryKind::Event(ChatEvent::Rewound { .. })))
+  kept.iter().any(|entry| primer(entry).is_some())
 }
 
-/// The prompt of the first turn after a rewind: the conversation as it was kept (`kept`, oldest first), what stays done
-/// of what was dropped, then the turn's own `prompt`. Only what was kept reaches the new session.
+/// Whether `entry` is a rewind's line (`Some(false)`) or a fork's (`Some(true)`).
+const fn primer(entry: &ChatEntry) -> Option<bool> {
+  match entry.kind {
+    EntryKind::Event(ChatEvent::Rewound { .. }) => Some(false),
+    EntryKind::Event(ChatEvent::Forked { .. }) => Some(true),
+    _ => None,
+  }
+}
+
+/// The prompt of the first turn after a rewind, or of a fork: the conversation as it was kept (`kept`, oldest first),
+/// what stays done of what was dropped, then the turn's own `prompt`. Only what was kept reaches the new session; a
+/// fork's is not told what the original did after the point it was made from.
 pub fn primed_prompt(kept: &[ChatEntry], prompt: &str) -> String {
+  let forked = kept.iter().rev().find_map(primer).unwrap_or_default();
   let said: Vec<String> = kept.iter().filter_map(said).collect();
   let done: Vec<String> = kept
     .iter()
@@ -127,9 +136,16 @@ pub fn primed_prompt(kept: &[ChatEntry], prompt: &str) -> String {
       done.join("\n- ")
     )
   };
-  format!(
+  let why = if forked {
+    "[Orchester] The person forked an earlier conversation into this new one, copying it up to a point, and this is a \
+     new session. What was said after that point in the original is not part of this conversation: go on from the \
+     conversation below as if nothing else had been said."
+  } else {
     "[Orchester] The person rewound this conversation to an earlier point, and this is a new session. Everything said \
-     after that point is gone: go on from the conversation below as if nothing else had been said.\n\
+     after that point is gone: go on from the conversation below as if nothing else had been said."
+  };
+  format!(
+    "{why}\n\
      \n\
      The conversation so far, oldest first:\n\
      <conversation>\n{conversation}\n</conversation>{stays}\n\
@@ -162,6 +178,10 @@ fn said(entry: &ChatEntry) -> Option<String> {
     EntryKind::Report { report, .. } => first_line(&report_prompt(report)),
     EntryKind::Event(ChatEvent::Rewound { dropped, .. }) => Some(format!(
       "Orchester: the person rewound the conversation here earlier; {dropped} messages were dropped."
+    )),
+    EntryKind::Event(ChatEvent::Forked { title, .. }) => Some(format!(
+      "Orchester: the person forked this conversation from the conversation \"{title}\"; what follows was copied from \
+       it."
     )),
     EntryKind::Event(_) => None,
   }

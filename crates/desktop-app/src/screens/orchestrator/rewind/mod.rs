@@ -1,17 +1,21 @@
 //! *Edit* and *Rewind to here* on an earlier message of the Orchestrator chat (ORC-333; ORC-330's `GYAPg`, `Pe6Di`,
 //! `QJb0b`, `z7sgJ`, `Zm7kq`, `docs/design/conversation-rewind.md`). The person's message's toolbar offers *Edit*,
-//! Copy and `…`, an answer's Copy and `…`, whose menu holds *Rewind to here* ([`toolbar`]). *Edit* turns the bubble
-//! into a field in place ([`editing`]), the messages sending would drop dimmed under a line that counts them; *Rewind
-//! to here* and an edit that drops messages ask first in a modal ([`dialog`]). The conversation then shows where it
-//! went back to and what the Orchestrator did after it, which stays ([`line`]); a rewind before the person's message
-//! puts its words back in the composer. None of it while the Orchestrator answers, compacts its session or a message
-//! waits: the person stops the answer first. A rewind that failed changes nothing and the dialog, or the edit field
-//! when the edit went without it, says why; an edit the conversation went back for but that was not sent is back in
-//! the composer, and the chat says so (`orchester_workspace::orchestrator::rewind`). Only a person goes back: synthetic
-//! input (an MCP client's) is refused, and the dialog or the edit field says so.
+//! Copy and `…`, an answer's Copy and `…`, whose menu holds *Rewind to here* and *Fork from here* ([`toolbar`]).
+//! *Edit* turns the bubble into a field in place ([`editing`]), the messages sending would drop dimmed under a line
+//! that counts them; *Rewind to here* and an edit that drops messages ask first in a modal ([`dialog`]). The
+//! conversation then shows where it went back to and what the Orchestrator did after it, which stays ([`line`]); a
+//! rewind before the person's message puts its words back in the composer. None of it while the Orchestrator answers,
+//! compacts its session or a message waits: the person stops the answer first. A rewind that failed changes nothing
+//! and the dialog, or the edit field when the edit went without it, says why; an edit the conversation went back for
+//! but that was not sent is back in the composer, and the chat says so (`orchester_workspace::orchestrator::rewind`).
+//! Only a person goes back: synthetic input (an MCP client's) is refused, and the dialog or the edit field says so.
+//! *Fork from here* (ORC-334, [`fork`]) drops nothing: it opens a new conversation with the messages up to the point,
+//! at once and while the Orchestrator answers too, and the fork shows where it came from ([`forked`]).
 
 mod dialog;
 pub(super) mod editing;
+mod fork;
+pub(super) mod forked;
 pub(super) mod line;
 pub(super) mod toolbar;
 
@@ -111,11 +115,17 @@ impl DevtoolsInspectable for Failed {}
 
 pub(super) type RewindAction = FutureAction<Rewind, Went, Failed>;
 
-/// The entries of the conversation shown, as the screen last read them: a question's counts are taken from them when
-/// it is asked.
-type Held = Arc<Mutex<Option<(ChatId, Arc<[ChatEntry]>)>>>;
+/// The conversation shown, as the screen last read it: its title, which a fork is named after, and its entries, from
+/// which a question's counts are taken when it is asked.
+struct Holding {
+  chat: ChatId,
+  title: Arc<str>,
+  entries: Arc<[ChatEntry]>,
+}
 
-/// What the screen keeps for Edit and *Rewind to here*.
+type Held = Arc<Mutex<Option<Holding>>>;
+
+/// What the screen keeps for Edit, *Rewind to here* and *Fork from here*.
 #[derive(Clone)]
 pub(super) struct Rewinding {
   held: Held,
@@ -129,6 +139,8 @@ pub(super) struct Rewinding {
   /// person does.
   pub(super) refused: Signal<bool>,
   pub(super) action: RewindAction,
+  /// Keeps a fork ([`fork`]).
+  pub(super) fork: fork::ForkAction,
 }
 
 impl Rewinding {
@@ -171,19 +183,25 @@ impl Rewinding {
       open: ctx.signal(false),
       refused: ctx.signal(false),
       action,
+      fork: fork::action(ctx),
     }
   }
 
-  /// Keeps the entries of the conversation `shown`, or that none is shown; an edit of another conversation's message
-  /// ends.
+  /// Keeps the title and entries of the conversation `shown`, or that none is shown; an edit of another
+  /// conversation's message ends.
   pub(super) fn hold(&self, shown: Option<&ChatView>) {
     let chat = shown.map(|shown| shown.chat.id());
     {
       let mut held = self.held.lock();
-      let same = matches!((&*held, shown), (Some((kept, entries)), Some(shown))
-        if *kept == shown.chat.id() && **entries == *shown.entries);
+      let same = matches!((&*held, shown), (Some(holding), Some(shown))
+        if holding.chat == shown.chat.id() && *holding.title == *shown.chat.title()
+          && *holding.entries == *shown.entries);
       if !same {
-        *held = shown.map(|shown| (shown.chat.id(), Arc::from(shown.entries.as_slice())));
+        *held = shown.map(|shown| Holding {
+          chat: shown.chat.id(),
+          title: Arc::from(shown.chat.title()),
+          entries: Arc::from(shown.entries.as_slice()),
+        });
       }
     }
     let editing = self.editing.get_untracked();
@@ -198,8 +216,8 @@ impl Rewinding {
   /// held.
   fn dropped(&self, from: i64) -> Option<(ChatId, Dropped)> {
     let held = self.held.lock();
-    let (chat, entries) = held.as_ref()?;
-    Some((*chat, Dropped::of(entries, from)))
+    let holding = held.as_ref()?;
+    Some((holding.chat, Dropped::of(&holding.entries, from)))
   }
 
   /// How many messages sending the edit of the message kept as entry `seq` drops after it.
@@ -333,8 +351,9 @@ fn outgoing(chat: ChatId, words: String, (mode, plan_only): (TurnMode, bool)) ->
 }
 
 /// Once a rewind went back, the question and the edit end, the chat follows its end again, and the words it gave back
-/// go to the composer; an edit that was not sent goes there too.
+/// go to the composer; an edit that was not sent goes there too. A fork kept opens ([`fork::watch`]).
 pub(super) fn watch(ctx: &mut Ctx, view: &View) {
+  fork::watch(ctx, view);
   let view = view.clone();
   ctx.watch(&view.rewind.action.state(), move |state| {
     let words = match (&state.data, &state.error) {
@@ -355,11 +374,11 @@ pub(super) fn watch(ctx: &mut Ctx, view: &View) {
 }
 
 /// An edit that the conversation went back for but that was not sent: why, and that its words are in the composer,
-/// until the person dismisses it or goes back again.
+/// until the person dismisses it or goes back again; else a fork that failed ([`fork::problem`]).
 pub(super) fn problem(ctx: &mut Ctx, view: &View) -> Option<Element> {
   let state = view.rewind.action.state();
   let Some(Failed::NotSent { why, .. }) = state.get().error else {
-    return None;
+    return fork::problem(ctx, view);
   };
   let dismiss = ActionButton::new(
     "orchestrator-edit-dismiss",
