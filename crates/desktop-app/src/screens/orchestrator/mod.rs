@@ -241,6 +241,9 @@ impl Component for OrchestratorScreen {
         ));
       }
     });
+    // A result of History's search opens its conversation at the match, the one shown too.
+    let follow = view.follow.clone();
+    ctx.watch(&view.listing.opened_at, move |_| follow.open_anew());
     Self { view }
   }
 

@@ -176,6 +176,20 @@ impl Turn {
   }
 }
 
+/// The key of the row of `turns` that shows entry `seq`: the row it opens, or the latest row before it whose answer
+/// it is part of; a message that waits shows only itself.
+pub(super) fn row_of(turns: &[Turn], seq: i64) -> Option<String> {
+  turns
+    .iter()
+    .filter(|turn| {
+      turn
+        .seq
+        .is_some_and(|at| at == seq || (at < seq && turn.arrival != Arrival::Waiting))
+    })
+    .max_by_key(|turn| turn.seq)
+    .map(Turn::key)
+}
+
 /// The turns of conversation `shown`, oldest first, and after them the messages that wait for the answer to end; its
 /// waits stand as it read them. What comes before the first message or wait belongs to no turn and is left out; a
 /// reply, action or event belongs to the newest row that takes it.

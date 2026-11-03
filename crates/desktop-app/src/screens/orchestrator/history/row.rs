@@ -28,14 +28,18 @@ use lurq::{
 use orchester_core::{id::ChatId, time::Timestamp};
 use orchester_store::ChatListing;
 use orchester_workspace::{
-  background, display,
+  background,
   messages::Message,
   orchestrator::chat::{archive_in, pin_in, rename_in},
 };
 
-use super::{Deleting, Item, ROW_HEIGHT, Renaming, Rows};
+use super::{
+  Deleting, FOUND_ROW_HEIGHT, Item, OpenedAt, ROW_HEIGHT, Renaming, Rows,
+  meta::{meta, when},
+  search::{Matched, marks},
+};
 use crate::{
-  navigation::Navigation,
+  navigation::{Navigation, link::Open},
   routes::{OrchestratorChat, ProjectPage, Route},
   services::Services,
   theme::{ExtraColor, ExtraSpacing, OrchestratorText},
@@ -195,6 +199,7 @@ impl Component for ItemView {
         listing,
         current,
         today,
+        matched,
         rows,
       } => {
         if rows.renaming.get().0 == Some(listing.chat.id()) {
@@ -203,7 +208,7 @@ impl Component for ItemView {
           if self.seeded.get_untracked() {
             self.seeded.set(false);
           }
-          self.chat(ctx, &listing, (current, today), &rows)
+          self.chat(ctx, (&listing, matched.as_ref()), (current, today), &rows)
         }
       }
     }
@@ -229,8 +234,15 @@ impl ItemView {
     })
   }
 
-  /// The conversation's row: a press opens it, a right-click or its `⋯` button opens its menu.
-  fn chat(&self, ctx: &mut Ctx, listing: &ChatListing, (current, today): (bool, bool), rows: &Rows) -> Element {
+  /// The conversation's row: a press opens it, at the first match while the search `matched` its messages; a
+  /// right-click or its `⋯` button opens its menu.
+  fn chat(
+    &self,
+    ctx: &mut Ctx,
+    (listing, matched): (&ChatListing, Option<&Matched>),
+    (current, today): (bool, bool),
+    rows: &Rows,
+  ) -> Element {
     let id = listing.chat.id();
     let open = self.menu.get();
     let more = self.hovered.get() || open;
@@ -240,13 +252,26 @@ impl ItemView {
     let (enter, leave, over) = (self.hovered.clone(), self.hovered.clone(), self.hovered.clone());
     let (twice, by_key) = (rename.clone(), rename.clone());
     let (pointer, menu) = (self.pointer.clone(), self.menu.clone());
-    let row = opening(navigation.to(route))
+    let (to, opened_at) = (navigation.to(route), rows.opened_at.clone());
+    let at = matched
+      .and_then(Matched::opens_at)
+      .map(|seq| OpenedAt { chat: id, seq });
+    let press: Open = Arc::new(move |place| {
+      opened_at.set(at);
+      to(place);
+    });
+    let height = if matched.is_some_and(|matched| matched.messages.is_some()) {
+      FOUND_ROW_HEIGHT
+    } else {
+      ROW_HEIGHT
+    };
+    let row = opening(press)
       .id(format!("orchestrator-history-{id}"))
       .describe("current", current.to_string())
       .describe("pinned", listing.pinned.is_some().to_string())
       .ref_element(self.row.clone())
       .width(Dimension::Pct(100.0))
-      .height(Dimension::Px(ROW_HEIGHT))
+      .height(Dimension::Px(height))
       .padding(
         Padding::symmetric(ExtraSpacing::Loose.role(), ExtraSpacing::TextArea.role()).right(if more {
           ExtraSpacing::Snug.role()
@@ -277,7 +302,7 @@ impl ItemView {
       row
     };
     let row = row
-      .child(self.words(ctx, listing, (current, today)))
+      .child(self.words(ctx, (listing, matched), (current, today)))
       .with_children(more.then(|| self.unarchive(ctx, listing, rows)).flatten())
       .with_children(more.then(|| self.more(ctx, listing)));
     Column::new()
@@ -288,37 +313,50 @@ impl ItemView {
   }
 
   /// The title over when it last changed, or was archived, and how many messages it holds, or why a change of its
-  /// place did not happen.
-  fn words(&self, ctx: &Ctx, listing: &ChatListing, (current, today): (bool, bool)) -> Column {
-    let (meta, meta_color) = match self.unchanged.get() {
-      Some(Unchanged { change, reason }) => {
+  /// place did not happen; while the search `matched` it, the places in the title marked, the line of its messages
+  /// under it and where the matches are.
+  fn words(
+    &self,
+    ctx: &Ctx,
+    (listing, matched): (&ChatListing, Option<&Matched>),
+    (current, today): (bool, bool),
+  ) -> Column {
+    let (meta, meta_color) = match (self.unchanged.get(), matched) {
+      (Some(Unchanged { change, reason }), _) => {
         let reason = message_text(ctx, &reason);
         (
           ctx.t_args(change.refused_key(), [("reason", &*reason)]),
           PaletteColor::Danger,
         )
       }
-      None => (meta(ctx, listing, today), PaletteColor::TextMuted),
+      (None, Some(matched)) => (matched.meta(ctx, &when(ctx, listing, today)), PaletteColor::TextMuted),
+      (None, None) => (meta(ctx, listing, today), PaletteColor::TextMuted),
+    };
+    let id = listing.chat.id();
+    let title = Text::new(listing.chat.title())
+      .id(format!("orchestrator-history-title-{id}"))
+      .variant(OrchestratorText::Emphasis.role())
+      .color(if current {
+        PaletteColor::TextPrimary
+      } else {
+        PaletteColor::TextSecondary
+      })
+      .width(Dimension::Pct(100.0))
+      .nowrap()
+      .text_overflow(TextOverflow::Elipsis);
+    let title = match matched {
+      Some(matched) if !matched.title.is_empty() => title.highlights(marks(ctx, &matched.title)),
+      _ => title,
     };
     Column::new()
       .flex(1.0)
       .min_width(Dimension::Px(0.0))
       .spacing(ExtraSpacing::Tight.role())
-      .child(
-        Text::new(listing.chat.title())
-          .id(format!("orchestrator-history-title-{}", listing.chat.id()))
-          .variant(OrchestratorText::Emphasis.role())
-          .color(if current {
-            PaletteColor::TextPrimary
-          } else {
-            PaletteColor::TextSecondary
-          })
-          .width(Dimension::Pct(100.0))
-          .nowrap()
-          .text_overflow(TextOverflow::Elipsis),
-      )
+      .child(title)
+      .with_children(matched.and_then(|matched| matched.line(ctx, id)))
       .child(
         Text::new(&meta)
+          .id(format!("orchestrator-history-meta-{id}"))
           .variant(OrchestratorText::HistoryMeta.role())
           .color(meta_color)
           .width(Dimension::Pct(100.0))
@@ -513,36 +551,6 @@ impl ItemView {
       .child(keys(ctx, id))
       .into()
   }
-}
-
-/// When `listing` last changed (its time `today`, else its date) and how many messages it holds; of an archived one,
-/// when it was archived (*Archived today*, *Archived Oct 27*) instead.
-fn meta(ctx: &Ctx, listing: &ChatListing, today: bool) -> Arc<str> {
-  let count = listing.messages.to_string();
-  let messages = if listing.messages == 1 {
-    ctx.t("orchestrator.historyPanel.messages.one")
-  } else {
-    ctx.t_args("orchestrator.historyPanel.messages.other", [("count", count.as_str())])
-  };
-  let Some(archived) = listing.archived else {
-    let when: Arc<str> = if today {
-      display::clock(listing.last).into()
-    } else {
-      super::super::date(ctx, listing.last)
-    };
-    return ctx.t_args(
-      "orchestrator.historyPanel.meta",
-      [("when", &*when), ("messages", &*messages)],
-    );
-  };
-  if archived.local_day_start() == Timestamp::now().local_day_start() {
-    return ctx.t_args("orchestrator.historyPanel.archivedToday", [("messages", &*messages)]);
-  }
-  let date = super::super::date(ctx, archived);
-  ctx.t_args(
-    "orchestrator.historyPanel.archivedOn",
-    [("date", &*date), ("messages", &*messages)],
-  )
 }
 
 /// *Enter saves* and *Esc cancels* under the title field, each key in its cap.

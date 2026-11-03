@@ -134,6 +134,12 @@ impl Follow {
     }
   }
 
+  /// The conversation it shows is opened again, from History's search: at the next render it opens as another one
+  /// would ([`Follow::shows`]), at the row it reveals.
+  pub fn open_anew(&self) {
+    *self.shows.lock() = None;
+  }
+
   /// A row the person opens or folds: the chat stays where it is, its scroll held over the content changing
   /// under it, and stops following, so nothing moves under the pointer.
   pub fn hold_in_place(&self) {
