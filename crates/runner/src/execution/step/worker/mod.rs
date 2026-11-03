@@ -42,7 +42,7 @@ use orchester_core::{
 use orchester_store::{ProjectDb, StoreError};
 use tokio::sync::mpsc;
 
-pub(in crate::execution) use self::review::{ReviewerKeys, estimate_task};
+pub(in crate::execution) use self::review::{ReviewerKeys, answer_side, estimate_task};
 use super::{
   super::{Notifier, control::Ack, tool::CommandFinished},
   app_server::AppServerSession,

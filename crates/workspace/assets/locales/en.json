@@ -2293,5 +2293,29 @@
       "personOnly": "Only a person approves a merge from the merge queue. Press Merge into the base branch yourself.",
       "resolve": "The run's worktree could not be merged: {{detail}}"
     }
+  },
+  "sideQuestion": {
+    "errors": {
+      "blank": "Write a question first.",
+      "tooLong": "The question is too long: keep it under 4,000 characters.",
+      "notFound": "This side question is no longer kept.",
+      "notAnswered": "Only an answered side question can be sent.",
+      "alreadySent": "This answer was sent already.",
+      "notLatestRun": "This run is no longer the task's latest: nothing was sent.",
+      "runEnded": "Nothing was sent: no agent of this run reads messages any more."
+    },
+    "failure": {
+      "noOrchestrator": "Couldn't answer: choose a connection and model in Orchestrator settings first.",
+      "signedOut": "Couldn't answer: the Orchestrator's connection is signed out. Sign in, or pick another connection in Settings.",
+      "dailyBudgetUsed": "Couldn't answer: today's token budget is used.",
+      "secretsUnreadable": "Couldn't answer: the project's secrets couldn't be read to keep them out of what the side agent reads.",
+      "timedOut": "Couldn't answer in time.",
+      "failed": "Couldn't answer: {{detail}}",
+      "stopped": "You stopped this answer.",
+      "interrupted": "Couldn't answer: the app or its runner stopped meanwhile."
+    },
+    "stop": {
+      "failed": "The answer couldn't be stopped: the runner didn't answer."
+    }
   }
 }

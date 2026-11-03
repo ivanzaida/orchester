@@ -58,6 +58,7 @@ pub mod run_approvals;
 pub mod run_model;
 pub mod run_permissions;
 pub(crate) mod run_times;
+pub mod side_question;
 pub mod slot_wait;
 pub mod standing;
 mod step_executors;

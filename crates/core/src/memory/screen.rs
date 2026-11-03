@@ -96,6 +96,48 @@ impl SecretScreen {
     }
     Ok(ScreenedContent(content))
   }
+
+  /// `text` with every secret's value replaced by `<redacted>`: a value without the white space around it, as it is
+  /// written; one shorter than [`Self::SHORT`] characters only as a whole token. What a side agent reads is masked so
+  /// (`crate::run::side_question`).
+  pub fn mask(&self, text: &str) -> String {
+    let mut masked = text.to_owned();
+    for (_, value) in &self.values {
+      let value = Zeroizing::new(value.expose().trim().to_owned());
+      if value.is_empty() {
+        continue;
+      }
+      let whole_token = value.chars().count() < Self::SHORT;
+      masked = replace_held(&masked, &value, whole_token);
+    }
+    masked
+  }
+}
+
+/// What replaces a secret's value.
+const REDACTED: &str = "<redacted>";
+
+/// `text` with `value` replaced where it [`holds`] it.
+fn replace_held(text: &str, value: &str, whole_token: bool) -> String {
+  let mut out = String::with_capacity(text.len());
+  let mut rest = 0;
+  for (start, _) in text.match_indices(value) {
+    if start < rest || (whole_token && !alone(text, start, value.len())) {
+      continue;
+    }
+    out.push_str(&text[rest..start]);
+    out.push_str(REDACTED);
+    rest = start + value.len();
+  }
+  out.push_str(&text[rest..]);
+  out
+}
+
+/// Whether the `length` bytes of `field` from `start` are a whole token: no letter or digit right before or after.
+fn alone(field: &str, start: usize, length: usize) -> bool {
+  let before = field[..start].chars().next_back();
+  let after = field[start + length..].chars().next();
+  !before.is_some_and(char::is_alphanumeric) && !after.is_some_and(char::is_alphanumeric)
 }
 
 /// Whether `field` holds `value`, as a whole token only when `whole_token` says so.
@@ -103,11 +145,9 @@ fn holds(field: &str, value: &str, whole_token: bool) -> bool {
   if !whole_token {
     return field.contains(value);
   }
-  field.match_indices(value).any(|(start, _)| {
-    let before = field[..start].chars().next_back();
-    let after = field[start + value.len()..].chars().next();
-    !before.is_some_and(char::is_alphanumeric) && !after.is_some_and(char::is_alphanumeric)
-  })
+  field
+    .match_indices(value)
+    .any(|(start, _)| alone(field, start, value.len()))
 }
 
 impl std::fmt::Debug for SecretScreen {

@@ -33,6 +33,7 @@ pub mod review;
 mod run_model;
 mod run_permissions;
 mod schedule;
+pub mod side_question;
 mod snapshot;
 mod state;
 mod status;

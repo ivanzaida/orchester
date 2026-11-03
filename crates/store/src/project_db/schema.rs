@@ -78,6 +78,7 @@ mod shared_configuration;
 mod shared_members;
 mod shared_publishes;
 mod sharing;
+mod side_questions;
 mod sources;
 mod steering;
 mod step_progress;

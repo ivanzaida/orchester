@@ -85,6 +85,7 @@ mod shared_standing;
 mod shared_tasks;
 mod shared_versions;
 mod sharing;
+mod side_questions;
 mod sources;
 mod step_outputs;
 mod step_progress;

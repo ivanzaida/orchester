@@ -368,6 +368,17 @@ async fn answer(
         }
       });
     }
+    Command::AnswerSideQuestion { question, ref input } => {
+      let input = (**input).clone();
+      return later.reply(async move {
+        let outcome = handle.answer_side_question(question, input).await;
+        Reply::SideAnswered { question, outcome }
+      });
+    }
+    Command::StopSideQuestion { question } => {
+      scheduler.stop_side_question(question);
+      Reply::SideStopped { question }
+    }
     Command::SetErrorReports { ref reports } => return Answer::ErrorReports(id, reports.clone()),
   };
   Answer::Reply(Event::Reply { id, reply })

@@ -8,7 +8,9 @@ use std::{fmt, num::NonZeroU32};
 
 use orchester_core::{
   connection::{AgentProvider, ApiEndpoint, CheckResult, NativeModel},
-  id::{ChatId, ChatMessageId, ConnectionId, IdempotencyKey, ResourceId, RunId, StepExecutionId, TaskId},
+  id::{
+    ChatId, ChatMessageId, ConnectionId, IdempotencyKey, ResourceId, RunId, SideQuestionId, StepExecutionId, TaskId,
+  },
   integration::Leftovers,
   permission::AgentPermissions,
   question::GivenAnswer,
@@ -16,6 +18,7 @@ use orchester_core::{
   run::{
     Answerer, ApprovalAnswer, EventSequence, InterruptCause, MergeConflicts, PermissionsApply, PlanDecision,
     PlanVersion, ReviewNote, RunNumber, StuckDecision,
+    side_question::{SideInput, SideOutcome},
   },
   tokens::TokenBudget,
 };
@@ -276,6 +279,17 @@ pub enum Command {
   /// person set them or they were estimated or asked from its brief and criteria as they are; what it spent is kept.
   /// Answered with [`Reply::TaskEstimated`] once it ended, [`Rejection::TaskNotFound`] for no such task.
   EstimateTask { task: TaskId },
+  /// Answers side question `question` about a run (ORC-337, protocol 41) with a separate agent on the Orchestrator's
+  /// connection and model, from `input` alone: it is given no tools, so it writes nothing and runs nothing, and nothing
+  /// reaches the run's agent. The runner masks the project's secret values in `input` and in the answer. Answered with
+  /// [`Reply::SideAnswered`] once it ended, answered or not; the desktop keeps the question and its answer.
+  AnswerSideQuestion {
+    question: SideQuestionId,
+    input: Box<SideInput>,
+  },
+  /// Stops the side agent answering `question`: its answer ends as stopped. Answered with [`Reply::SideStopped`],
+  /// whether one was answering or not.
+  StopSideQuestion { question: SideQuestionId },
   /// The person turned error reports on, with the app's environment and release, or off (`None`), while this runner
   /// runs (protocol 33): it applies at once. Off drops the reports still waiting to leave, and the runner sends none
   /// until they are turned on again; a runner started later is told when it starts
@@ -474,6 +488,13 @@ pub enum Reply {
     task: TaskId,
     outcome: orchester_core::task::estimate::EstimateOutcome,
   },
+  /// The answer to [`Command::AnswerSideQuestion`]: how the side agent's work on `question` ended.
+  SideAnswered {
+    question: SideQuestionId,
+    outcome: SideOutcome,
+  },
+  /// The answer to [`Command::StopSideQuestion`].
+  SideStopped { question: SideQuestionId },
   /// The answer to [`Command::SetErrorReports`]: the runner sends reports as it says from now on.
   ErrorReportsSet,
   /// The answer to [`Command::Browser`].

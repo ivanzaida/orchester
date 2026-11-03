@@ -43,6 +43,7 @@ mod record;
 mod recovery;
 mod returned;
 mod run;
+mod side_question;
 mod step;
 mod stuck;
 mod task_groups;
@@ -147,8 +148,9 @@ struct Inner {
   blocked_runs: blocked_runs::BlockedRuns,
   /// Runs stopped at their account's plan limit that a timer continues at its reset.
   plan_waits: plan_limit::PlanWaits,
-  /// The turns of the Orchestrator chat under way.
+  /// The turns of the Orchestrator chat under way, and the side questions being answered.
   chats: chat::Chats,
+  side_agents: side_question::SideAgents,
   /// The disk guard's reading of free space (ORC-114), and its watch over runs paused for low disk space.
   disks: low_disk::DiskGuard,
   disk_watch: low_disk::DiskWatch,
@@ -184,6 +186,7 @@ impl Scheduler {
         blocked_runs: blocked_runs::BlockedRuns::default(),
         plan_waits: plan_limit::PlanWaits::default(),
         chats: chat::Chats::default(),
+        side_agents: side_question::SideAgents::default(),
         disks: low_disk::DiskGuard::local(),
         disk_watch: low_disk::DiskWatch::default(),
       }),

@@ -16,6 +16,7 @@ mod ledger;
 mod native;
 mod process;
 mod setup;
+mod side;
 
 use std::time::Duration;
 
@@ -37,7 +38,7 @@ use orchester_ipc::Event;
 use orchester_store::StoreError;
 use tokio::{runtime::Handle, task::JoinHandle};
 
-pub(in crate::execution) use self::{estimate::estimate_task, setup::ReviewerKeys};
+pub(in crate::execution) use self::{estimate::estimate_task, setup::ReviewerKeys, side::answer_side};
 use self::{
   ledger::ReviewLedger,
   process::{StopReview, stop_review},
