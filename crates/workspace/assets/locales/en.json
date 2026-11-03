@@ -2321,5 +2321,50 @@
     "stop": {
       "failed": "The answer couldn't be stopped: the runner didn't answer."
     }
+  },
+  "export": {
+    "size": "≈ {{count}} KB",
+    "markdown": {
+      "fact": "**{{label}}:** {{value}}",
+      "date": "Exported",
+      "conversation": "Conversation",
+      "conversationOf": "{{title}}, started {{started}}",
+      "task": "Task",
+      "run": "Run",
+      "runNumber": "Run {{number}}",
+      "you": "You",
+      "youTo": "You to {{agent}}",
+      "orchestrator": "Orchestrator",
+      "attachments": "Attached: {{names}}",
+      "toolCall": "Tool call",
+      "toolCallOn": "Tool call ({{task}})",
+      "outcome": {
+        "done": "Done",
+        "refused": "Refused: {{reason}}",
+        "proposed": "Proposed, waiting for a person",
+        "applied": "Applied by a person",
+        "dismissed": "Dismissed"
+      },
+      "tool": {
+        "command": "Command",
+        "declined": "Declined command",
+        "failed": "Failed command",
+        "exited": "{{what}}, exit {{code}}",
+        "added": "Added",
+        "edited": "Edited",
+        "deleted": "Deleted",
+        "mcp": "MCP call to {{server}}",
+        "error": "Error"
+      }
+    },
+    "errors": {
+      "secretsUnreadable": "Nothing was exported: the project's secrets couldn't be read to keep them out of the file.",
+      "denied": "Couldn't save {{path}}: this folder doesn't allow writing there.",
+      "noFolder": "Couldn't save {{path}}: its folder no longer exists.",
+      "full": "Couldn't save {{path}}: the disk is full.",
+      "readOnly": "Couldn't save {{path}}: the disk is read-only.",
+      "folder": "Couldn't save {{path}}: a folder has that name.",
+      "failed": "Couldn't save {{path}}: the file couldn't be written."
+    }
   }
 }
