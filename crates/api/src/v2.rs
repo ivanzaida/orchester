@@ -16,6 +16,7 @@ mod operations;
 mod page;
 mod policy;
 mod projects;
+pub mod subscription;
 mod task_list;
 mod task_read;
 mod work_report;
@@ -38,6 +39,7 @@ pub use page::{
 };
 pub use policy::*;
 pub use projects::*;
+pub use subscription::*;
 pub use task_list::*;
 pub use task_read::*;
 pub use work_report::*;

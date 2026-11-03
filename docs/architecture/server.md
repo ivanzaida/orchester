@@ -466,6 +466,23 @@ success is not permission to mark the task Done: no human-wait or task-completio
 are decided. OP-152 implements routes, fencing and storage in the platform repository; these types alone implement
 none.
 
+## Team authority S11 contract (ORC-660 / OP-154)
+
+Scoped invalidation subscriptions without replica snapshots. The wire shapes are in
+[cloud-api.md](../cloud-api.md#team-authority-s11-subscriptions). The server provides
+`GET /api/v2/projects/{project}/subscription`, a server-sent event stream that a client resumes with an optional
+`Last-Event-ID`; each event is named by its `kind` and carries its cursor as the SSE `id:`. `v2::subscription` defines
+the `QueryScope`s a change can make stale (workspace, task list, task, task comments, module list, module, library,
+resource) and the `SubscriptionEvent`s: `ready` first with the stream's cursor and no snapshot, one `invalidated` per
+committed batch with its last cursor and its de-duplicated scopes, `reset` when the resume point is below the replay
+floor, and `revoked` before the stream closes. `QueryScope` is `Eq`, `Hash` and `Ord`, so a set of scopes is stable.
+
+**Client race rule.** Reads stay on the ordinary routes, each answering the `EventCursor` it was taken at. A cached
+read taken at cursor `R` is stale only when an `invalidated` event with a cursor after `R` names its scope; events at
+or before `R` are already in it. A client may therefore subscribe before or after reading without missing a change. A
+`reset` drops every cached read, which is read again at or after its cursor. OP-154 implements the route, replay and
+enforcement in the platform repository; these types alone implement none.
+
 ## Claims
 
 A claim says who has taken a task into work. A task has at most one; the server keeps it and its history.
