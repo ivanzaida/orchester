@@ -61,8 +61,8 @@ use self::{
     step::QaApps,
   },
 };
-use crate::browser::ProjectBrowser;
 pub use crate::notify::Notifier;
+use crate::{browser::ProjectBrowser, execution_root::ExecutionRoot};
 
 /// How long stopping waits for each run to end its agent and record the interruption.
 const STOP_TIMEOUT: Duration = Duration::from_secs(10);
@@ -526,6 +526,7 @@ impl Scheduler {
     let settled = Arc::new(AtomicBool::new(false));
     let context = TaskContext {
       root: self.inner.project_root.clone(),
+      execution: ExecutionRoot::local(&self.inner.project_root),
       notifier: self.inner.notifier.clone(),
       vault: self.inner.vault.clone(),
       relay: self.inner.relay.clone(),
