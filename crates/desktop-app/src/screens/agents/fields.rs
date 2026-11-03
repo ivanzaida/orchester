@@ -55,7 +55,7 @@ impl Fields {
     let permissions = profile.map_or_else(
       || {
         connection.map_or_else(AgentPermissions::before_permissions, |c| {
-          AgentPermissions::most_restrictive(c.provider(), Platform::current())
+          AgentPermissions::for_new_profile(c.provider(), Platform::current())
         })
       },
       |p| p.permissions().clone(),

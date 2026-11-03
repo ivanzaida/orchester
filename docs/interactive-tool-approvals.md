@@ -513,7 +513,9 @@ activity (`AgentEvent::ToolDecided`):
 **Auto-approval** (user decisions 2026-10-02 and 2026-10-03) is a run's own choice (*Approve everything in this run*, the switch in
 the run's Summary, *Stop* there, under the task heading or in the status bar) or, while the run has none, the
 profile setting *Approve automatically (don't ask me)* (`AgentPermissions::auto_approve`, part of the profile
-version). It approves only commands it knows to read or stay in the worktree, and MCP tool calls, and never what
+version; on for every new profile on a CLI connection since 2026-11-03, `AgentPermissions::for_new_profile`, while
+existing profiles keep theirs). It approves only commands it knows to read or stay in the worktree, and MCP tool
+calls, and never what
 `run::auto_verdict` leaves to a person: a command that reaches the network, a write, move or delete outside the worktree and its writable folders (the
 temporary folder too: Run temp is not told apart yet), a read of a credential location (dot files and folders of
 the home folder such as `~/.claude.json`, `~/.codex`, `~/.ssh`, everything under `AppData` and `Library` but

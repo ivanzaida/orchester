@@ -3,8 +3,9 @@
 //! what the editor offers is taken: permissions the connection's CLI enforces on this computer, the
 //! project's MCP servers (adding only one that is turned on), an effort the model lists, and no approval switches or
 //! MCP servers on a connection whose agents Orchester runs itself. Permissions and MCP servers broader than the
-//! profile's latest published version (before its first: the most restrictive its CLI enforces, no server) are a
-//! person's decision ([`widening`]); narrowing them is always taken.
+//! profile's latest published version (before its first: what a new profile starts with,
+//! [`AgentPermissions::for_new_profile`], and no server) are a person's decision ([`widening`]); narrowing them is
+//! always taken.
 
 use std::path::Path;
 
@@ -71,8 +72,8 @@ pub struct SaveProfileDraft {
   pub model: String,
   /// A reasoning effort the model lists; left out, the CLI's default.
   pub effort: Option<String>,
-  /// Left out: a new profile gets the most restrictive permissions its CLI enforces, a profile being
-  /// changed keeps its own.
+  /// Left out: a new profile gets the most restrictive permissions its CLI enforces with Approve automatically on
+  /// (off on a connection whose agents Orchester runs), a profile being changed keeps its own.
   pub permissions: Option<Permissions>,
   /// MCP servers of the project its agents get, by id or name.
   #[serde(default)]
@@ -98,7 +99,7 @@ pub struct Permissions {
   /// Ask a person before each MCP or app tool call.
   #[serde(default)]
   pub ask_before_tool_calls: bool,
-  /// Approve automatically (don't ask me): Orchester answers what would ask a person.
+  /// Approve automatically (don't ask me): Orchester answers what would ask a person. Left out, off.
   #[serde(default)]
   pub approve_automatically: bool,
   /// Who answers tool requests; left out, manual. Switching to autopilot is a person's decision.
@@ -199,7 +200,7 @@ pub async fn save_profile_draft(services: &Services, args: SaveProfileDraft) -> 
         permissions(given, &root, kept)?
       }
       None => existing.map_or_else(
-        || AgentPermissions::most_restrictive(connection.provider(), Platform::current()),
+        || AgentPermissions::for_new_profile(connection.provider(), Platform::current()),
         |entry| entry.profile.permissions().clone(),
       ),
     };

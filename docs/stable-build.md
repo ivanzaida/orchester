@@ -681,8 +681,9 @@ Orchester's does not.
 **Let automation change agent permissions.** Any client with the token may set a project up, so the setup
 tools only narrow what agents may do unless a person allows more. Widening it is refused with
 `person_only` and the reasons while this application setting is off: a profile's permissions or MCP
-servers broader than its latest published version (a new profile: the most restrictive permissions its
-CLI enforces and no MCP server) on save or publish, which covers write access, writable folders, broader
+servers broader than its latest published version (a new profile: what it starts with, the most restrictive
+permissions its CLI enforces with *Approve automatically* on, and no MCP server) on save or publish, which covers
+write access, writable folders, broader
 commands, network access, no longer asking before tool calls and approving automatically; an agent CLI
 whose program is not a copy found on the search path, refused before it runs; any change to the project's
 environment variables, removals included, but to `RUST_LOG`, `RUST_BACKTRACE`, `CI`, `NO_COLOR`,

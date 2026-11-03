@@ -7,6 +7,8 @@ mod approval_mode;
 mod browser;
 #[path = "agents/concurrency.rs"]
 mod concurrency;
+#[path = "agents/new_profile.rs"]
+mod new_profile;
 #[path = "agents/servers.rs"]
 mod servers;
 use std::{fs, num::NonZeroU32};

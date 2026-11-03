@@ -266,12 +266,14 @@ const SPECS: &[Spec] = &[
                   enforces on this computer (repository read_only or write; commands ask_before, allowed with a \
                   list of command prefixes, or any_in_worktree; network off or on; extra writable folders only with \
                   write access); MCP servers are the project's (list_connections). Narrowing is always taken. \
-                  Anything broader than the profile's latest published version (a new profile: the most \
-                  restrictive permissions its CLI enforces and no MCP server) is refused as person_only unless a \
+                  Anything broader than the profile's latest published version (a new profile: what one gets \
+                  without `permissions`, and no MCP server) is refused as person_only unless a \
                   person turned on Let automation change agent permissions in Settings › What automation may do: write \
                   access, writable folders, broader commands, network on, MCP servers, no longer asking before \
                   tool calls, approving automatically (which also needs Let automation answer approvals). Left \
-                  out, a new profile gets the most restrictive permissions. With expected_revision, the revision \
+                  out, a new profile gets the most restrictive permissions its CLI enforces with \
+                  approve_automatically on (off on a connection whose agents Orchester runs). With \
+                  expected_revision, the revision \
                   get_profile or the last save returned, the draft is saved only while it is unchanged, else \
                   refused as draft_changed; without it the save goes over a change a person or another agent \
                   saved meanwhile. Publish it with publish_profile.",

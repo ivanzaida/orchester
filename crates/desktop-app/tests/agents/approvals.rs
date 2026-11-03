@@ -62,6 +62,33 @@ fn agents_approvals_shows_approving_automatically_while_it_is_on() {
   assert!(!screen.exists("agent-auto-row"), "gone once off");
 }
 
+/// A new profile starts approving automatically; turned off before it is created, it stays off through publishing.
+#[test]
+fn agents_approvals_new_profile_turned_off_keeps_it_off() {
+  let mut screen = Agents::new(true);
+  screen.go();
+  screen.click("agents-new");
+  screen.until("the new profile's editor", |s| s.exists("agent-auto-row"));
+  screen.click("agent-auto");
+  screen.until("turned off", |s| !s.exists("agent-auto-row"));
+  screen.set("agent-role", "Reviewer");
+  screen.set("agent-instructions", "Review the implementation.");
+  screen.set("agent-custom-model", "test-model");
+  screen.click("agent-create");
+  screen.until("created", |s| {
+    s.listed().profiles.len() == 1 && s.exists("agent-publish")
+  });
+  screen.click("agent-publish");
+  screen.until("first version", |s| {
+    matches!(
+      s.listed().profiles[0].state,
+      orchester_workspace::agents::data::VersionState::Published(_)
+    )
+  });
+  assert!(!screen.listed().profiles[0].profile.permissions().auto_approve());
+  assert!(!screen.exists("agent-auto-row"));
+}
+
 #[test]
 fn agents_turning_autopilot_on_is_asked_in_place_and_named_in_the_draft_bar() {
   let mut screen = Agents::new(true);
