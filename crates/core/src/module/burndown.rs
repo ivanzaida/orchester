@@ -4,18 +4,18 @@
 //! What counts is read from each task's history ([`TaskTrack`]): a task is in scope while it is in the module and not
 //! Canceled, and done while its workflow status is Done. Merging its run sets Done (in Orchester, or found merged
 //! outside it by git: `orchester_store`'s `save_run_merge`), and so does a person; a person who moves it away from
-//! Done reopens it, and it counts as remaining again.
+//! Done reopens it, and it counts as remaining again. The desktop and a team server chart a module by these rules.
 
 use chrono::{Days, NaiveDate};
-use orchester_core::{
+
+use super::measure::WorkUnit;
+use crate::{
+  forecast::{Forecast, Outlook},
   id::TaskId,
   task::organization::WorkflowStatus,
   time::Timestamp,
   usage::{DayRange, day_start, local_date},
 };
-
-use super::measure::WorkUnit;
-use crate::delivery::{Forecast, Outlook};
 
 /// What one task did over time, as far as one module is concerned.
 #[derive(Clone, Debug, PartialEq, Eq)]

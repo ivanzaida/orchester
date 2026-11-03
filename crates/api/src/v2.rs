@@ -2,16 +2,35 @@
 //! Servers adopt these models on a separate versioned surface; publishing them does not expose HTTP routes.
 
 mod authority_error;
+mod capabilities;
+mod execution;
 mod invites;
+mod library;
 mod membership;
+mod module_read;
+mod module_summary;
 mod operations;
+mod page;
 mod policy;
 mod projects;
+mod task_list;
+mod task_read;
 
 pub use authority_error::*;
+pub use capabilities::*;
+pub use execution::*;
 pub use invites::*;
+pub use library::*;
 pub use membership::*;
+pub use module_read::*;
+pub use module_summary::*;
 pub use operations::*;
 pub use orchester_core::sharing::WorkspaceRole as MemberRole;
+pub use page::{
+  DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT, PAGE_CURSOR_RETENTION_SECONDS, Page, PageCursor, PageCursorError, PageRequest,
+  PageRequestError,
+};
 pub use policy::*;
 pub use projects::*;
+pub use task_list::*;
+pub use task_read::*;

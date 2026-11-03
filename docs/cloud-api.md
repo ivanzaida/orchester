@@ -166,6 +166,55 @@ The server keys a receipt by project, authenticated account and `operation_id`; 
 (pages, task and module reads, capabilities) are the S10 contract's. Existing v1 contracts, the /api/v1 client and
 earlier v2 types are unchanged.
 
+## Team authority S10 read contract
+
+The public prerequisite for platform OP-153 (bounded direct reads and server-side summaries) is in core and
+`orchester_api::v2`; it adds no endpoints. It reuses S4's `EventCursor`, `Subject`, `DecisionId` and
+`cursor_expired`. In the read models every field is sent: `?` below means `null`, never left out, and a missing or
+unknown field is refused. Times are milliseconds since the Unix epoch; days are `YYYY-MM-DD`.
+
+- `PageRequest`: `{after:PageCursor?,limit}`; `limit` may be left out for 50 and is 1..=200 (`PageRequestError`).
+  `PageCursor` is an opaque, non-empty string, bound to the workspace, the filters, the sort and the snapshot.
+- `Page<T>`: `{items:[T],next:PageCursor?,cursor:EventCursor}`; `next` is `null` on the last page, and every page of
+  one listing carries the same snapshot `cursor`. Entities come in ascending (creation sequence, id) order, histories
+  in ascending sequence. A snapshot is kept at least 15 minutes (`PAGE_CURSOR_RETENTION_SECONDS`, 900) after the last
+  page served from it; a later cursor may answer `cursor_expired` (410), and the client reads from the first page again.
+- `Capabilities`: `{project_id,revision,role:"member"|"admin"|"server_admin",actions:[ActionCapability],unresolved:[DecisionId]}`.
+  `ActionCapability`: `{action,subject:Subject?,allowed,reason:DenialReason?}`; `reason` is `null` exactly when
+  `allowed`. `action` is a command kind (dotted lowercase words, e.g. `claim.acquire`; `CommandKind`), `read`,
+  `export.shared` or `server.admin`. `DenialReason`: `role_required`, `claim_required`, `claim_lost`,
+  `module_required`, `decision_required`, `configuration_invalid`. Capabilities are advisory; commands check again.
+- `ClaimRead`: `{subject,id,holder:UserRef,acquired_at,last_execution_heartbeat_at,stale_at,stale,parent_module_claim_id?}`.
+- `WorkRead`: `{id,subject,claim_id,revision,state,runs:[RunId],bundle:BundleRef,created_at,updated_at}`;
+  `ExecutionState` is `running`, `paused`, `awaiting_human`, `succeeded`, `failed` or `cancelled` (proposed).
+- `TaskRead`: every `SharedTask` field (the content's fields inline) and `assignee:UserRef?`, `work:WorkRead?`,
+  `effective_claim:ClaimRead?`, `capabilities`. `workflow` stays apart from `work.state`.
+- `ModuleRead`: every `SharedModule` field (its fields inline) and `branch`, `assignee?`, `work?`, `effective_claim?`,
+  `capabilities`. A module's tasks are read with the task list's `modules` filter.
+- Task list: `TaskListRequest` `{filters,sort,page}`, each defaulted. `TaskFilters`
+  `{statuses,priorities,tags,all_tags,pipelines,modules,search}`: each facet keeps tasks with any of its values, `null`
+  among `pipelines` (slugs) or `modules` is a task without one, `all_tags` keeps tasks with every tag. `search`
+  (`SearchText`, trimmed, 1..=200 characters) matches title, key, former key, id or brief, ignoring case. `TaskSort`:
+  `created` (default), `newest`, `title`, `status`, `priority`, each ending on creation sequence and id.
+  `TaskBoardCounts`: `{backlog,todo,in_progress,in_review,done,canceled,cursor}` for a `TaskFilters`.
+- Modules: `ModuleListRequest` `{state?:"open"|"closed",page}` answers `Page<ModuleSummary>`, a summary being
+  `{module:ModuleRead,progress:{unit:"tasks",scope,done},tasks,forecast:ForecastRead}`. `ForecastRead`:
+  `{remaining,history_days,history_delivered,outlook}`, `outlook` `{kind:"done"}`, `{kind:"not_enough_history"}` or
+  `{kind:"dates",likely,safe,past_horizon}`. `ModuleBurndownRead`: `{module,unit,start_scope,days,forecast,cursor}`,
+  a day `{date,scope?,remaining?,ideal?,added,removed}`. `ModuleHistoryPage` is `Page<SharedModuleChange>`. All are
+  counted by core's rules (`orchester_core::module::{progress, burndown}`, `orchester_core::forecast`): Canceled tasks
+  are out of scope, Done counts as done, and every move into or out of the module counts on its day.
+- Configuration: `ResourceLibraryRequest` `{kind?,archived,search?,page}` answers `ResourceLibraryPage`
+  (`Page<SharedResource>`); a resource's versions are `ResourceVersionsPage` (`Page<SharedVersion>`, oldest first);
+  `ResourcePickerRequest` `{kind,search?,page}` answers `ResourcePickerPage` of `ResourceChoice`
+  `{id,kind,slug,name,latest}`, resources not archived with a published version.
+- `WorkspaceMetadata`: `{project:SharedProject,policy:WorkspacePolicy,capabilities,cursor}`.
+
+Left open, not invented here (they rest on the open decisions D1–D9 or on later stages): human waits beyond
+`awaiting_human` (questions, plans, approvals), the *Needs you* and *Active* list views and their counts that rest on
+them, the full set of command kinds behind `action`, which time zone a server counts days in, and what `revision` in
+`Capabilities` counts. Existing v1 contracts, the /api/v1 client and earlier v2 types are unchanged.
+
 ## Conventions
 
 - JSON bodies in UTF-8. Requests are limited to 1 MiB and must arrive within 10 seconds.
