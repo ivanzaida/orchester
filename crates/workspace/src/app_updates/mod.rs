@@ -53,8 +53,9 @@ use crate::{
   workspace::Workspace,
 };
 
-/// How often the app asks for a newer release while it runs.
-pub const CHECK_EVERY: Duration = Duration::from_secs(6 * 60 * 60);
+/// How often the app asks for a newer release while it runs: 3 checks an hour, with the one at the start and *Check
+/// now* well under the cloud's 12 an hour per install id (`docs/cloud-api.md`, "Rate limits").
+pub const CHECK_EVERY: Duration = Duration::from_secs(20 * 60);
 /// The folder of the data folder downloads go to.
 pub const UPDATES_FOLDER: &str = "updates";
 /// How the release's installer is named, `Orchester-<version>-setup.exe` (`.github/workflows/app-release.yml`).

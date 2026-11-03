@@ -352,8 +352,8 @@
         },
         "unreachable": {
           "label": "Couldn't reach Orchester Cloud",
-          "hint": "Last checked {{ago}} · Orchester tries again in 6 hours",
-          "neverHint": "It hasn't answered from here yet · Orchester tries again in 6 hours"
+          "hint": "Last checked {{ago}} · Orchester tries again in 20 minutes",
+          "neverHint": "It hasn't answered from here yet · Orchester tries again in 20 minutes"
         },
         "notThisCopy": {
           "label": "This copy doesn't update itself",
@@ -386,7 +386,7 @@
         },
         "automatic": {
           "title": "Update automatically",
-          "hint": "Checks at start and every 6 hours, downloads in the background, installs when no run is at work"
+          "hint": "Checks at start and every 20 minutes, downloads in the background, installs when no run is at work"
         },
         "lastChecked": {
           "title": "Last checked",
