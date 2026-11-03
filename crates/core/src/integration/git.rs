@@ -6,7 +6,7 @@ use std::path::Path;
 
 use super::GitError;
 use crate::{
-  command::{CommandOutput, CommandRunner},
+  command::{CommandError, CommandOutput, CommandRunner},
   diff::git::local_git_command,
   repository::redact_userinfo,
   run::BranchName,
@@ -33,9 +33,16 @@ impl<'a, R: CommandRunner> Git<'a, R> {
     self.dir
   }
 
+  /// The command's output; one that stopped answering names itself ([`GitError::Unanswered`]).
   pub(super) fn output(&self, args: &[&str]) -> Result<CommandOutput, GitError> {
     let command = local_git_command(self.program, self.dir, args.iter().copied());
-    Ok(self.runner.run(&command)?)
+    self.runner.run(&command).map_err(|error| match error {
+      CommandError::Silent { after } => GitError::Unanswered {
+        command: args.join(" "),
+        after,
+      },
+      error => error.into(),
+    })
   }
 
   /// Whether the command exits with 0, for queries whose every failure means "no".

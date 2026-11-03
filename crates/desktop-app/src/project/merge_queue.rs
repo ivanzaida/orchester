@@ -2,7 +2,8 @@
 //! window follows the project: whenever its runs change state or the queue changes (a person approved, moved or
 //! resolved a run), and again after a while when a blocked delivery waits for the person's checkout to be clean.
 //! The Integrate step's return goes to the project's runner from here. Mounted with the project's feed, so delivery
-//! goes on while the project's tabs are inactive. Renders nothing.
+//! goes on while the project's tabs are inactive. Renders nothing. First, the merges the app or the runner ended part
+//! way are found and cleared (`orchester_workspace::tasks::merge_left::recover_interrupted`).
 
 use std::{path::Path, time::Duration};
 
@@ -12,7 +13,7 @@ use orchester_workspace::{
   background,
   merge_queue::{self, Advance},
   runner::Runners,
-  tasks::run::control_message,
+  tasks::{merge_left, run::control_message},
   workspace::OpenProject,
 };
 
@@ -30,11 +31,24 @@ pub(super) fn follow(ctx: &mut Ctx, open: &OpenProject) {
   ctx.stream(
     deps,
     |(open, runners, programs), emitter: StreamEmitter<(), ()>| async move {
+      recover(&open.repo_root, &programs).await;
       drive(open, runners, programs).await;
       // The stream lives while its emitter does: lurq stops a stream whose emitter is gone.
       drop(emitter);
     },
   );
+}
+
+/// Clears the merges in the project at `root` that the app or the runner ended part way, and records them interrupted.
+/// One that cannot be cleared now, e.g. while another merge holds the project, is cleared by the next merge.
+async fn recover(root: &Path, programs: &Programs) {
+  let (root, programs) = (root.to_path_buf(), programs.clone());
+  match background::run(move || merge_left::recover_interrupted(&root, &programs)).await {
+    Ok(Ok(runs)) if !runs.is_empty() => tracing::warn!(count = runs.len(), "found merges that ended part way"),
+    Ok(Ok(_)) => {}
+    Ok(Err(problem)) => tracing::info!(?problem, "the merges that ended part way are cleared by the next merge"),
+    Err(error) => tracing::warn!(key = error.key, "cannot look for merges that ended part way"),
+  }
 }
 
 async fn drive(open: OpenProject, runners: Runners, programs: Programs) {

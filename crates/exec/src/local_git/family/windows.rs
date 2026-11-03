@@ -30,12 +30,12 @@ use windows_sys::Win32::{
 
 use super::super::{LocalError, LocalGitError, digest};
 
-pub(in crate::local_git) struct Family {
+pub(crate) struct Family {
   handle: OwnedHandle,
   token: ContentHash,
 }
 impl Family {
-  pub(in crate::local_git) fn create() -> Result<Self, LocalGitError> {
+  pub(crate) fn create() -> Result<Self, LocalGitError> {
     let token = digest(IdempotencyKey::generate().to_string().as_bytes());
     let name = name(&token);
     // SAFETY: name is NUL-terminated; default security and no preexisting object is expected for a fresh token.
@@ -57,7 +57,7 @@ impl Family {
     }
     Ok(Self { handle, token })
   }
-  pub(in crate::local_git) fn spawn(&self, command: &mut Command) -> Result<Child, LocalGitError> {
+  pub(crate) fn spawn(&self, command: &mut Command) -> Result<Child, LocalGitError> {
     command.creation_flags(CREATE_SUSPENDED | CREATE_NO_WINDOW);
     let mut child = command
       .spawn()
@@ -76,7 +76,7 @@ impl Family {
       .ok_or(LocalError::ProcessUncertain)?;
     super::record(&self.token, identity)
   }
-  pub(in crate::local_git) fn resume(&self, child: &Child) -> Result<(), LocalGitError> {
+  pub(crate) fn resume(&self, child: &Child) -> Result<(), LocalGitError> {
     // SAFETY: the flags request a thread snapshot and the PID argument is ignored.
     let snapshot = owned(unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0) })?;
     // SAFETY: the C record permits zero initialization; dwSize identifies its size to ToolHelp.
@@ -111,10 +111,10 @@ impl Family {
     }
     Err(LocalError::ProcessUncertain.into())
   }
-  pub(in crate::local_git) fn empty(&self) -> Result<bool, LocalGitError> {
+  pub(crate) fn empty(&self) -> Result<bool, LocalGitError> {
     empty(&self.handle)
   }
-  pub(in crate::local_git) fn stop(&self) -> Result<(), LocalGitError> {
+  pub(crate) fn stop(&self) -> Result<(), LocalGitError> {
     // SAFETY: only the private job assigned by this executor is terminated; no foreign PID is signalled.
     if unsafe { TerminateJobObject(self.handle.as_raw_handle(), 1) } == 0 {
       return Err(LocalError::ProcessUncertain.into());

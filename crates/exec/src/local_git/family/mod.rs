@@ -1,14 +1,15 @@
 //! Local integration never treats parent exit as proof that its writers have stopped: each program it runs is held
-//! with everything it starts, in a private job on Windows and in a process group of its own on macOS.
+//! with everything it starts, in a private job on Windows and in a process group of its own on macOS. A merge's git
+//! commands are held the same way, so a git that stops answering is stopped with them ([`crate::watched`]).
 #[cfg(unix)]
 mod unix;
 #[cfg(windows)]
 mod windows;
 use orchester_core::{blob::ContentHash, integration::local::ProcessIdentity};
 #[cfg(unix)]
-pub(super) use unix::Family;
+pub(crate) use unix::Family;
 #[cfg(windows)]
-pub(super) use windows::Family;
+pub(crate) use windows::Family;
 
 use super::{LocalError, LocalGitError};
 

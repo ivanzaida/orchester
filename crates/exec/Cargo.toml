@@ -32,6 +32,10 @@ name = "local_process_containment"
 required-features = ["test-program"]
 
 [[test]]
+name = "merge_watchdog"
+required-features = ["test-program"]
+
+[[test]]
 name = "launcher_program"
 required-features = ["test-program"]
 

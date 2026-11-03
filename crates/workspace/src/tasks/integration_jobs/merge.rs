@@ -23,9 +23,10 @@ use crate::{
   messages::{self, Message},
   secrets::Vault,
   tasks::{
-    integration::{IntegrationProblem, integration_refusal, merge_in_as, stage_message},
+    integration::{IntegrationProblem, integration_refusal, stage_message},
     local_integration::LegacyPolicy,
     merge_attempts::{self, Asked},
+    merge_retry::merge_retrying,
   },
   workspace::OpenProject,
 };
@@ -106,7 +107,7 @@ impl RunJobs {
         merge_attempts::record_refused(&open.repo_root, run, asked, (AttemptStage::Policy, &problem));
         return Err(problem);
       }
-      merge_in_as(&open.repo_root, &programs, (run, expected, None), asked)
+      merge_retrying(&open.repo_root, &programs, (run, expected, None), asked)
     }));
     let policy = made_policy.ok().flatten();
     let continues_locally = matches!(&result, Ok(Err(problem)) if problem.continues_locally());

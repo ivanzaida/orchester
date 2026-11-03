@@ -22,6 +22,7 @@ mod merged;
 mod preflight;
 mod recorded;
 pub mod resolve;
+pub mod retry;
 mod sweep;
 pub mod workspace;
 
@@ -40,8 +41,8 @@ pub use self::{
   held::{NotRemoved, finish_removal, retry_held},
   log::{LoggedCommit, MAX_LISTED, own_commits},
   merge::{
-    DeliveredAs, Delivering, MergeError, MergeKind, MergeOutcome, RunMerge, TemporaryLeft, merge_run, merge_run_as,
-    merge_run_at,
+    DeliveredAs, Delivering, Interrupted, MergeError, MergeKind, MergeOutcome, MergeStep, RunMerge, TemporaryLeft,
+    clear_interrupted, left_by_bring_in, merge_run, merge_run_as, merge_run_at, put_back,
   },
   merged::{Branches, Delivered, RunWork},
   preflight::{GitCause, IoCause, PreflightCause, PreflightStage},
@@ -62,6 +63,13 @@ pub enum GitError {
   Failed(String),
   #[error("git printed something that is not {expected}: {detail}")]
   Unrecognized { expected: &'static str, detail: String },
+  /// `git <command>` wrote nothing for `after` and was stopped with everything it started
+  /// ([`CommandError::Silent`]).
+  #[error("git stopped answering: `git {command}` wrote nothing for {} s and was stopped", after.as_secs())]
+  Unanswered {
+    command: String,
+    after: std::time::Duration,
+  },
 }
 
 /// The branch checked out in the repository at `repo`, read with the `git` program; `None` on a

@@ -7,6 +7,7 @@
 //! (`orchester_index`). Blocks on SQLite and git; the UI calls it off the UI thread.
 
 mod preflight;
+mod words;
 
 use std::{path::Path, sync::Arc};
 
@@ -14,8 +15,8 @@ use orchester_core::{
   command::CommandError,
   id::{RunId, StepExecutionId},
   integration::{
-    Cleanup, CleanupError, Delivering, FolderListing, GitError, KeepReason, LeftWorktree, Leftovers, MergeError,
-    PreflightCause, PreflightStage, RecordedCleanupError, RunMerge, TemporaryLeft,
+    Cleanup, CleanupError, Delivering, GitError, KeepReason, Leftovers, MergeError, PreflightCause, PreflightStage,
+    RecordedCleanupError, RunMerge, TemporaryLeft,
     attempt::{AttemptStage, MergeAsker, MergeVia},
     base::Landing,
     clean_up_recorded_as_seen, finish_removal, leftovers_of, merge_run_as,
@@ -28,8 +29,11 @@ use orchester_core::{
 use orchester_exec::{programs::Programs, run_processes::RunProcesses};
 use orchester_index::CodebaseIndexes;
 use orchester_store::{ProjectDb, StoreError};
-pub(crate) use preflight::integration_refusal;
 pub use preflight::stage_message;
+pub(crate) use preflight::{hold, integration_refusal};
+pub(crate) use words::git_message;
+pub use words::{file_list, unread_entry};
+use words::{merge_message, short_path, short_reason};
 
 use super::{
   changes::GIT,
@@ -42,9 +46,6 @@ use crate::{
   messages::Message,
   workspace::OpenProject,
 };
-
-/// Names shown of a longer list of files, which then ends in an ellipsis.
-const SHOWN_FILES: usize = 5;
 
 /// Why integrating did not happen.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -121,7 +122,7 @@ impl IntegrationProblem {
         | Self::NotRecorded { .. }
         | Self::Preflight { .. }
         | Self::Read(_)
-        | Self::Merge(MergeError::Git(_))
+        | Self::Merge(MergeError::Git(_) | MergeError::Unanswered { .. })
         | Self::Cleanup(CleanupError::Git(_))
     );
     if !could_not_run {
@@ -153,6 +154,18 @@ impl IntegrationProblem {
     )
   }
 
+  /// Whether the merge stopped for a cause that passes by itself, which Orchester tries again
+  /// ([`orchester_core::integration::retry`]): the project's integration lease another operation holds, a file
+  /// another program holds open, the project database busy.
+  pub fn passes(&self) -> bool {
+    match self {
+      Self::Preflight { cause, .. } => cause.passes(),
+      Self::Merge(error) => error.passes(),
+      Self::Store(message) => crate::messages::failure_kind(message) == crate::messages::FailureKind::Busy,
+      _ => false,
+    }
+  }
+
   /// What to tell the user; `separator` joins file names ("a.rs, b.rs").
   pub fn message(&self, separator: &str) -> Message {
     match self {
@@ -177,120 +190,6 @@ impl IntegrationProblem {
       Self::Preflight { stage, cause } => preflight::message(*stage, cause),
     }
   }
-}
-
-fn merge_message(error: &MergeError, separator: &str) -> Message {
-  let with_files = |key, files: &[String]| Message::new(key).with("files", file_list(files, separator));
-  match error {
-    MergeError::NotSucceeded => Message::new("runs.merge.failure.notSucceeded"),
-    MergeError::NoBaseBranch => Message::new("runs.merge.failure.noBaseBranch"),
-    MergeError::WrongBranch {
-      expected,
-      current: Some(current),
-    } => Message::new("runs.merge.failure.wrongBranch")
-      .with("branch", expected.to_string())
-      .with("current", current.to_string()),
-    MergeError::WrongBranch {
-      expected,
-      current: None,
-    } => Message::new("runs.merge.failure.detached").with("branch", expected.to_string()),
-    MergeError::UncommittedInTheWay { files } => with_files("runs.merge.failure.uncommitted", files),
-    MergeError::InProgress => Message::new("runs.merge.failure.inProgress"),
-    MergeError::BaseMoved { branch } => Message::new("runs.merge.failure.baseMoved").with("branch", branch.to_string()),
-    MergeError::LeftChanged { files, detail } => {
-      with_files("runs.merge.failure.leftChanged", files).with("detail", detail.clone())
-    }
-    MergeError::BranchMissing(branch) => {
-      Message::new("runs.merge.failure.branchMissing").with("branch", branch.to_string())
-    }
-    MergeError::BaseMissing(branch) => {
-      Message::new("runs.merge.failure.baseMissing").with("branch", branch.to_string())
-    }
-    MergeError::CheckedOutIn { branch, path } => Message::new("runs.merge.failure.checkedOutIn")
-      .with("branch", branch.to_string())
-      .with("path", path.clone()),
-    MergeError::BranchMoved { branch, expected } => Message::new("runs.merge.failure.branchMoved")
-      .with("branch", branch.to_string())
-      .with("revision", crate::display::short_revision(expected.as_str()).to_owned()),
-    MergeError::Conflict { files } => with_files("runs.merge.failure.conflict", files),
-    MergeError::Refused(said) => Message::new("runs.merge.failure.refused").with("detail", said.clone()),
-    MergeError::Git(error) => git_message(error),
-  }
-}
-
-pub(crate) fn git_message(error: &GitError) -> Message {
-  match error {
-    GitError::Run(CommandError::NotFound) => Message::new("runs.changes.failure.gitMissing"),
-    GitError::Run(_) | GitError::Unrecognized { .. } => Message::new("runs.merge.failure.gitStopped"),
-    GitError::Failed(said) => Message::new("runs.merge.failure.git").with("detail", said.clone()),
-  }
-}
-
-/// Why the listing of a worktree folder git forgot stopped at an entry that could not be read, for
-/// its run's row and the removal's dialog; `None` when it was read.
-pub fn unread_entry(worktree: &LeftWorktree) -> Option<Message> {
-  let FolderListing::Unreadable { path, detail } = &worktree.listing else {
-    return None;
-  };
-  Some(
-    Message::new("runs.worktree.failure.folderUnreadable")
-      .with("path", short_path(path))
-      .with("detail", short_reason(detail, path)),
-  )
-}
-
-/// Characters of git's reason shown under a row or in a dialog; the log keeps all of it.
-const REASON_CHARS: usize = 160;
-
-/// A worktree's path as the app names it elsewhere, from `.orchester/worktrees/` on.
-fn short_path(path: &str) -> String {
-  let path = path.replace('\\', "/");
-  path
-    .find(".orchester/")
-    .map_or_else(|| path.clone(), |start| path[start..].to_owned())
-}
-
-/// Git's reason for not removing the worktree at `path`, on one line: its first line without
-/// git's `error:` or `fatal:`, the path shortened as [`short_path`] does, at most [`REASON_CHARS`].
-fn short_reason(detail: &str, path: &str) -> String {
-  let line = detail
-    .replace('\\', "/")
-    .replace(&path.replace('\\', "/"), &short_path(path))
-    .lines()
-    .map(str::trim)
-    .find(|line| !line.is_empty())
-    .unwrap_or_default()
-    .to_owned();
-  let line = ["error: ", "fatal: "]
-    .iter()
-    .find_map(|prefix| line.strip_prefix(prefix))
-    .unwrap_or(&line)
-    .to_owned();
-  // "failed to delete '<path>': Invalid argument": the message names the path already.
-  let line = match line.rsplit_once(": ") {
-    Some((before, reason)) if before.contains(&short_path(path)) => reason.to_owned(),
-    _ => line,
-  };
-  if line.chars().count() <= REASON_CHARS {
-    return line;
-  }
-  let mut short: String = line.chars().take(REASON_CHARS).collect();
-  short.push('…');
-  short
-}
-
-/// At most [`SHOWN_FILES`] of `files`, joined with `separator`.
-pub fn file_list(files: &[String], separator: &str) -> String {
-  let mut list = files
-    .iter()
-    .take(SHOWN_FILES)
-    .cloned()
-    .collect::<Vec<_>>()
-    .join(separator);
-  if files.len() > SHOWN_FILES {
-    list.push('…');
-  }
-  list
 }
 
 /// A merged run and what clearing up after it did.
@@ -361,7 +260,7 @@ pub fn merge_in_as(
 ) -> Result<Merged, IntegrationProblem> {
   // Held until the attempt is recorded, so that no other merge takes its open attempt for one the app left.
   let held = preflight::hold(repo_root);
-  let mut attempt = Attempt::begin(repo_root, run, asked);
+  let mut attempt = Attempt::begin((repo_root, programs), run, asked);
   let merged = match &held {
     Ok(_) => merge_held(repo_root, programs, (run, expected, delivering), &mut attempt),
     Err(problem) => Err(problem.clone()),
@@ -386,7 +285,7 @@ fn merge_held(
     .ok_or(IntegrationProblem::Store(Message::new("errors.storage")))?;
   let task = mergeable(repo_root, &db, &run)?;
   attempt.reach(&mut db, AttemptStage::Merge);
-  let git = programs.git_work();
+  let git = programs.merge_git();
   let landing = Landing::of(run.base_source());
   let outcome = merge_run_as(
     &git,

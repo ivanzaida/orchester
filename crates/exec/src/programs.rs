@@ -9,7 +9,7 @@ use orchester_core::{
   orchester_tools::OutputKept,
 };
 
-use crate::{ProcessRunner, run_capped};
+use crate::{ProcessRunner, WatchedRunner, run_capped};
 
 /// A `gh` that does not answer within this time counts as not running, as for connection checks.
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(30);
@@ -17,6 +17,9 @@ const COMMAND_TIMEOUT: Duration = Duration::from_secs(30);
 /// full of build output) gets far longer: stopping git halfway would leave the repository half
 /// changed.
 const GIT_WORK_TIMEOUT: Duration = Duration::from_secs(60 * 60);
+/// A git command of a merge that writes nothing for this long has stopped answering, e.g. on a disk that hangs: it is
+/// stopped with everything it started, and the merge says so instead of running for ever.
+pub const MERGE_SILENCE: Duration = Duration::from_secs(120);
 
 type Runner = Arc<dyn CommandRunner + Send + Sync>;
 
@@ -24,6 +27,7 @@ type Runner = Arc<dyn CommandRunner + Send + Sync>;
 pub struct Programs {
   quick: Runner,
   git_work: Runner,
+  merge: Runner,
   /// Whether these are real child processes, which [`Programs::timed`] stops after a time of its own.
   processes: bool,
 }
@@ -34,6 +38,7 @@ impl Programs {
     Self {
       quick: Arc::new(ProcessRunner::new(COMMAND_TIMEOUT)),
       git_work: Arc::new(ProcessRunner::new(GIT_WORK_TIMEOUT)),
+      merge: Arc::new(WatchedRunner::new(GIT_WORK_TIMEOUT, MERGE_SILENCE)),
       processes: true,
     }
   }
@@ -42,7 +47,8 @@ impl Programs {
   pub fn with_runner(runner: Runner) -> Self {
     Self {
       quick: runner.clone(),
-      git_work: runner,
+      git_work: runner.clone(),
+      merge: runner,
       processes: false,
     }
   }
@@ -51,9 +57,15 @@ impl Programs {
     &*self.quick
   }
 
-  /// The runner for git work that changes the repository: merging a run, removing its worktrees.
+  /// The runner for git work that changes the repository: removing a run's worktrees.
   pub fn git_work(&self) -> &(dyn CommandRunner + Send + Sync) {
     &*self.git_work
+  }
+
+  /// The runner for the git commands of a merge, each stopped with everything it started once it writes nothing for
+  /// [`MERGE_SILENCE`].
+  pub fn merge_git(&self) -> &(dyn CommandRunner + Send + Sync) {
+    &*self.merge
   }
 
   /// A runner for a program with a time of its own, e.g. a command tool's: real processes stopped after `timeout`,

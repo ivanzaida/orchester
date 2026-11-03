@@ -289,13 +289,22 @@ pub struct OpenAttempt {
 }
 
 impl OpenAttempt {
-  /// This attempt, interrupted at its stage.
-  pub fn interrupted(&self) -> MergeAttempt {
+  /// This attempt, interrupted at its stage, its bring-in having left `left_changed` changed in the checkout.
+  pub fn interrupted(&self, left_changed: &[String]) -> MergeAttempt {
+    let ended = "the app or the runner ended during the merge";
+    let cause = if left_changed.is_empty() {
+      ended.to_owned()
+    } else {
+      format!(
+        "{ended} while bringing it in, and left changed: {}",
+        left_changed.join(", ")
+      )
+    };
     MergeAttempt::new(
       (self.run, self.at),
       (self.asked_by, self.via),
       AttemptOutcome::Interrupted { stage: self.stage },
-      Some("the app or the runner ended during the merge"),
+      Some(&cause),
     )
   }
 }

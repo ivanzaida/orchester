@@ -1,8 +1,9 @@
 //! Recording every merge attempt into a run's base branch (`orchester_core::integration::attempt`): from the task page,
 //! `merge_run` and the merge queue, landed or not, with how far it got. A record that cannot be written is logged and
 //! changes nothing of the merge: a merge that landed stands. An attempt that passed its preflight is kept open while
-//! it goes on, and the next merge, holding the project's integration lease so that no other one goes on, records one
-//! left open as interrupted.
+//! it goes on; one left open, by an app or a runner that ended during it, is recorded as interrupted once what its
+//! merge left is cleared — when the app starts again ([`super::merge_left::recover_interrupted`]), or by the next
+//! merge, either holding the project's integration lease so that no other one goes on.
 
 pub mod read;
 
@@ -14,12 +15,17 @@ use orchester_core::{
   integration::{
     GitError, MergeError,
     attempt::{AttemptOutcome, AttemptStage, MergeAsker, MergeAttempt, MergeVia, OpenAttempt, cause_text},
+    clear_interrupted,
   },
   time::Timestamp,
 };
+use orchester_exec::programs::Programs;
 use orchester_store::{ProjectDb, StoreError};
 
-use super::integration::{IntegrationProblem, Merged};
+use super::{
+  changes::GIT,
+  integration::{IntegrationProblem, Merged},
+};
 
 /// Who asked for a merge, and from where.
 pub type Asked = (MergeAsker, MergeVia);
@@ -28,6 +34,7 @@ pub type Asked = (MergeAsker, MergeVia);
 /// recorded interrupted at its stage.
 pub(crate) struct Attempt<'a> {
   root: &'a Path,
+  programs: &'a Programs,
   run: RunId,
   asked: Asked,
   at: Timestamp,
@@ -37,10 +44,12 @@ pub(crate) struct Attempt<'a> {
 }
 
 impl<'a> Attempt<'a> {
-  /// The attempt of `run` in the project at `root` that `asked` asked for, at the first stage of a merge in it.
-  pub(crate) fn begin(root: &'a Path, run: RunId, asked: Asked) -> Self {
+  /// The attempt of `run` in the project at `root` that `asked` asked for, at the first stage of a merge in it, its git
+  /// run by `programs`.
+  pub(crate) fn begin((root, programs): (&'a Path, &'a Programs), run: RunId, asked: Asked) -> Self {
     Self {
       root,
+      programs,
       run,
       asked,
       at: Timestamp::now(),
@@ -56,7 +65,7 @@ impl<'a> Attempt<'a> {
     self.stage = stage;
     if !self.open {
       self.open = true;
-      if let Err(error) = settle_interrupted(db) {
+      if let Err(error) = settle_interrupted(db, (self.root, self.programs)) {
         tracing::warn!(%error, "cannot record the merge attempts the app or the runner left");
       }
     }
@@ -142,13 +151,33 @@ fn repeats_last(db: &ProjectDb, attempt: &MergeAttempt) -> Result<bool, StoreErr
   }))
 }
 
-/// Records each attempt left open in `db` as interrupted.
-fn settle_interrupted(db: &mut ProjectDb) -> Result<(), StoreError> {
+/// Records each attempt left open in `db` as interrupted at its stage, once what its merge left in the checkout at
+/// `root` is cleared with `programs`: its temporary worktree removed, and the files its bring-in left changed named,
+/// to be put back ([`super::merge_left`]). The caller holds the project's integration lease. The run of each attempt it
+/// recorded.
+pub(crate) fn settle_interrupted(
+  db: &mut ProjectDb,
+  (root, programs): (&Path, &Programs),
+) -> Result<Vec<RunId>, StoreError> {
+  let mut settled = Vec::new();
   for open in db.open_merge_attempts()? {
     tracing::warn!(run = %open.run, stage = open.stage.name(), "a merge attempt ended with the app or the runner");
-    db.record_merge_attempt(&open.interrupted())?;
+    let left_changed = match clear_interrupted(&programs.merge_git(), (Path::new(GIT), root), open.run) {
+      Ok(cleared) => {
+        if let Some(left) = &cleared.temporary {
+          tracing::warn!(path = %left.path, detail = %left.detail, "the temporary worktree of an interrupted merge stays");
+        }
+        cleared.left_changed
+      }
+      Err(error) => {
+        tracing::warn!(%error, run = %open.run, "cannot clear what an interrupted merge left");
+        Vec::new()
+      }
+    };
+    db.record_merge_attempt(&open.interrupted(&left_changed))?;
+    settled.push(open.run);
   }
-  Ok(())
+  Ok(settled)
 }
 
 /// What `problem`, which ended an attempt at `stage` unless it names its own, makes of it, with its cause.
@@ -188,7 +217,9 @@ fn merge_outcome(error: &MergeError, stage: AttemptStage) -> (AttemptOutcome, Op
     MergeError::Git(GitError::Run(CommandError::NotFound | CommandError::UnsafeScriptArgument { .. })) => {
       AttemptOutcome::Refused { stage }
     }
-    MergeError::Git(GitError::Run(_) | GitError::Unrecognized { .. }) => AttemptOutcome::GitStopped { stage },
+    // The cause names the step, the command and how long it wrote nothing.
+    MergeError::Git(GitError::Run(_) | GitError::Unrecognized { .. } | GitError::Unanswered { .. })
+    | MergeError::Unanswered { .. } => AttemptOutcome::GitStopped { stage },
     MergeError::BaseMoved { .. } | MergeError::BranchMoved { .. } => AttemptOutcome::Moved { stage: Some(stage) },
     _ => AttemptOutcome::Refused { stage },
   };

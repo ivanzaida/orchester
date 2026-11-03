@@ -39,13 +39,18 @@ pub struct Retrying {
 }
 
 /// The runs of the project at `root` whose last merge attempt did not land and that were not merged since, newest
-/// first, each with whether Orchester tries again.
+/// first, each with whether Orchester tries again: its own retry of a cause that passes, at a set time
+/// ([`crate::tasks::merge_retry`]), or the merge queue's.
 pub fn not_merged(root: &Path) -> Result<Vec<NotMerged>, StoreError> {
   let db = ProjectDb::open(root)?;
   db.unlanded_merge_attempts()?
     .into_iter()
     .map(|attempt| {
-      let retrying = queue_retries(&db, attempt.attempt.run())?.then_some(Retrying { next: None });
+      let run = attempt.attempt.run();
+      let retrying = match crate::tasks::merge_retry::waiting(run) {
+        Some(wait) => Some(Retrying { next: Some(wait.at) }),
+        None => queue_retries(&db, run)?.then_some(Retrying { next: None }),
+      };
       Ok(NotMerged { attempt, retrying })
     })
     .collect()

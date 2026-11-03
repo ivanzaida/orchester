@@ -133,6 +133,7 @@ pub fn check_github(executable: &Path, host: &GitHubHost, runner: &impl CommandR
     Err(CommandError::NotFound) => GitHubCheckResult::ExecutableMissing,
     Err(
       CommandError::TimedOut
+      | CommandError::Silent { .. }
       | CommandError::Failed(_)
       | CommandError::NotStarted(_)
       | CommandError::UnsafeScriptArgument { .. },

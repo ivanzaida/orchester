@@ -12,7 +12,7 @@ use crate::{messages::Message, tasks::local_integration::IntegrationError};
 
 /// What a merge holds from its preflight until it ends: the checkout with its Git metadata, the project's integration
 /// lease, and the project database against substitution; let go in that order, the reverse of taking them.
-pub(super) struct Held {
+pub(crate) struct Held {
   _git: LocalGit,
   _lease: IntegrationLease,
   _store: Arc<StoreOwnership>,
@@ -20,7 +20,8 @@ pub(super) struct Held {
 
 /// Takes what a merge in the project at `root` holds, each stage refusing with its cause. The database is checked
 /// first, as local integration does, so a file beside it that is not as SQLite left it is told as the database's.
-pub(super) fn hold(root: &Path) -> Result<Held, IntegrationProblem> {
+/// Putting back what a merge left, and clearing a merge the app ended, hold the same.
+pub(crate) fn hold(root: &Path) -> Result<Held, IntegrationProblem> {
   let store = StoreOwnership::acquire(root).map_err(git_refusal(root, PreflightStage::ProjectDatabase))?;
   let lease = IntegrationLease::acquire(root).map_err(git_refusal(root, PreflightStage::IntegrationLock))?;
   let scratch = prepare_scratch(root, &[".orchester", "local-integration", "legacy"])

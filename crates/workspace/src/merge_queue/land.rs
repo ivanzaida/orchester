@@ -31,6 +31,7 @@ use crate::tasks::{
   integration::{IntegrationProblem, merge_in_as},
   local_integration::CheckoutHolder,
   merge_attempts::{self, Asked},
+  merge_retry::retried,
 };
 
 /// Characters of the task's brief the squash commit's body keeps.
@@ -87,10 +88,30 @@ pub(super) fn land(
     as_delivered,
     base: &base_head,
   };
-  match merge_in_as(root, programs, (run.id(), Some(&tip), Some(delivering)), BY_QUEUE) {
+  let landing = (run.id(), Some(&tip), Some(delivering));
+  let first = merge_in_as(root, programs, landing, BY_QUEUE);
+  // The queue waits for a lease another operation holds itself, for as long as that holds it ([`not_landed`]);
+  // Orchester tries again any other cause that passes.
+  let merged = if matches!(&first, Err(problem) if lease_held(problem)) {
+    first
+  } else {
+    retried(root, programs, landing, BY_QUEUE, first)
+  };
+  match merged {
     Ok(merged) => Landed::Merged(cleared(programs, (root, run), &merged)),
     Err(problem) => not_landed(problem),
   }
+}
+
+/// Another merge or local integration holds the checkout's integration lease.
+fn lease_held(problem: &IntegrationProblem) -> bool {
+  matches!(
+    problem,
+    IntegrationProblem::Preflight {
+      stage: PreflightStage::IntegrationLock,
+      cause: PreflightCause::Held,
+    }
+  )
 }
 
 /// The queue asks for its merges itself.

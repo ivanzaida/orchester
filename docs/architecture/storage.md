@@ -345,6 +345,20 @@ locks (`orchester_core::integration`).
   work. Should git still stop part way, e.g. at a file another program holds open, the files it
   wrote are put back; any it could not put back are named. A branch that already holds every
   commit of the run is recorded as merged without a change.
+- **When a merge fails for another reason than the code (ORC-365).** Every git command of a merge
+  runs in a job (Windows) or process group (macOS) of its own and is stopped with everything it
+  started once it writes nothing for 120 s (`orchester_exec::WatchedRunner`): the attempt ends as
+  *Git stopped answering* at its step, with the command and the wait, the temporary worktree
+  removed and what a bring-in wrote put back. What a bring-in changes is kept beside the checkout
+  while it runs, in `<the checkout's git dir>/orchester-bring-in-<run id>.json`, removed once the
+  merge is in or put back. While files it could not put back still differ from the base, no merge
+  reaches the checkout (*Put files back* runs the put-back again, never touching a file the person
+  changed since); a record whose checkout moved off its base is dropped. A cause that passes by
+  itself — the integration lease another operation holds, a file another program holds, the
+  project database busy — is tried again by Orchester up to 3 times, 10 s then 30 s apart, each
+  recorded as its retry; the merge queue waits for a held lease on its own. A merge the app or the
+  runner ended part way is found when the project is followed again: its temporary worktree goes,
+  the files its bring-in left changed are named, and its attempt is recorded as interrupted.
 - **Rebased runs.** A run keeps the base it started from, so after its branch was rebased onto
   newer commits of the branch it merges into, the commits between the two would read as the run's
   own work already integrated. When git proves the rebase, the base its own commits sit on now is

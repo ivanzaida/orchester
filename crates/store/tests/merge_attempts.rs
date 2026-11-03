@@ -140,7 +140,7 @@ fn merge_attempts_open_one_ends_with_its_record() {
   let left = db.open_merge_attempts().expect("read");
   assert_eq!(left.len(), 1);
   assert_eq!(left[0].stage, AttemptStage::Merge);
-  let interrupted = left[0].interrupted();
+  let interrupted = left[0].interrupted(&[]);
   assert_eq!(
     interrupted.outcome(),
     &AttemptOutcome::Interrupted {
