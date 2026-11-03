@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 
-use orchester_core::{id::TaskId, task::Task};
+use crate::{id::TaskId, task::Task};
 
 /// The unit a module's work is counted in, which its chart names.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

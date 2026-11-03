@@ -57,12 +57,16 @@ const FAILURES: [UpdateFailure; 6] = [
   UpdateFailure::BadSignature,
   UpdateFailure::NotSaved,
 ];
-const REASONS: [CopyReason; 5] = [
+const REASONS: [CopyReason; 9] = [
   CopyReason::Development,
   CopyReason::Qa,
   CopyReason::ScriptInstall,
   CopyReason::Portable,
   CopyReason::ProgramFolderUnknown,
+  CopyReason::NotInBundle,
+  CopyReason::Translocated,
+  CopyReason::BundleNotWritable,
+  CopyReason::NoTeamId,
 ];
 
 pub fn tool(updates: AppUpdates) -> McpTool {

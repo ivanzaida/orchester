@@ -4,7 +4,8 @@
 //! hundred of the trials were done. The history is the project's last [`HISTORY_DAYS`] whole days before today, not
 //! before its first task was made; with fewer than [`MIN_HISTORY_DAYS`] of them or fewer than [`MIN_DELIVERED`] tasks
 //! delivered in them there is no forecast, only how much history there is. Work is counted in tasks, the unit of the
-//! modules' burndown. Nothing here is money (`docs/architecture/native-agent.md` decision 8).
+//! modules' burndown ([`crate::module::burndown`]). Nothing here is money (`docs/architecture/native-agent.md`
+//! decision 8). The desktop and a team server forecast with these same rules.
 
 use chrono::{Days, NaiveDate};
 

@@ -366,12 +366,15 @@
           "portable": "It wasn't installed by the installer (a portable zip).",
           "portableNewest": "It wasn't installed by the installer (a portable zip). Orchester {{version}} is out.",
           "programFolderUnknown": "Orchester can't tell which folder it runs from.",
-          "programFolderUnknownNewest": "Orchester can't tell which folder it runs from. Orchester {{version}} is out."
-        },
-        "macos": {
-          "label": "Updates aren't automatic on macOS yet",
-          "hint": "Download new releases and install them by hand",
-          "newestHint": "Orchester {{version}} is out; download and install it by hand"
+          "programFolderUnknownNewest": "Orchester can't tell which folder it runs from. Orchester {{version}} is out.",
+          "notInBundle": "It doesn't run from an Orchester.app bundle.",
+          "notInBundleNewest": "It doesn't run from an Orchester.app bundle. Orchester {{version}} is out.",
+          "translocated": "macOS runs it from a temporary copy. Move Orchester to Applications and open it from there to get updates.",
+          "translocatedNewest": "macOS runs it from a temporary copy. Move Orchester to Applications and open it from there to get {{version}}.",
+          "bundleNotWritable": "You can't change the folder Orchester.app is in, so it can't be replaced.",
+          "bundleNotWritableNewest": "You can't change the folder Orchester.app is in, so it can't be replaced. Orchester {{version}} is out.",
+          "noTeamId": "It isn't signed with a Developer ID, as Orchester's releases are (a build from source).",
+          "noTeamIdNewest": "It isn't signed with a Developer ID, as Orchester's releases are (a build from source). Orchester {{version}} is out."
         },
         "otherPlatform": {
           "label": "Orchester isn't released for this computer",

@@ -40,6 +40,129 @@ whose pages the app opens in the browser.
   `ORCHESTER_CLOUD_URL` and, for its API address, `ORCHESTER_CLOUD_API_URL` at build time.
 - Team servers keep `<server URL>/api/v1` ([architecture/server.md](architecture/server.md), "API").
 
+## Team authority S2 shared contracts
+
+The public prerequisite for platform OP-145 is in core and `orchester-api`; it does not add cloud endpoints.
+Team server admins alone read/change `server_admin::ServerSettings.claim_staleness_seconds` and
+`SettingsChanges.claim_staleness_seconds` (optional in changes). Core's `ClaimStalenessThreshold` is a JSON
+integer in whole seconds, defaults to 900, and accepts 300..=86400 inclusive. Missing read fields from older
+servers use the default; invalid supplied values are refused. Unknown settings-change fields remain refused.
+
+The separate `orchester_api::v2` surface adds `WorkspacePolicyResponse`:
+`{policy:{revision:1,automatic_merge:false},capabilities:{read_policy:true,change_policy:false}}`.
+New workspaces default to automatic merge off at revision 1. Members read policy; workspace Admins change it;
+server admins inherit both capabilities even without membership. Capabilities are computed from authoritative
+records for this workspace and are response metadata, never authorization supplied by a caller.
+
+`WorkspacePolicyChanges` is `{revision,automatic_merge}`; both fields are required, unknown fields refused.
+Platform must authorize, compare the revision, persist the change and increment the revision atomically.
+A stale revision returns HTTP 409 with typed `WorkspacePolicyError::PolicyRevisionConflict`:
+`{error:"policy_revision_conflict",current:{revision:2,automatic_merge:true}}`.
+`PolicyRevision` accepts positive integers through i64::MAX and refuses overflow on increment.
+The effective policy returned is the persisted workspace policy, with no member override.
+
+A policy change is announced by the v2 `WorkspacePolicyEvent::Changed` delta, `kind` `policy.changed`:
+`{kind:"policy.changed",data:{id:7,by:{...},actor:"person",at:1,policy:{revision:2,automatic_merge:true}}}`.
+`policy` is the new effective policy; clients replace their cached policy and ignore a revision that is not
+newer than theirs. The server-wide claim staleness threshold has no change event (undecided).
+
+Thresholds belong to the server, never a workspace policy. A member's compatible local Claude/Codex account
+choice stays local execution metadata. Other team-owned defaults (pipeline, delivery, effort), admin drafts,
+module heartbeat source and human-wait renewal are **not covered**; no decisions for those open items are
+introduced here. The referenced team-authority-plan.md §12 is not present in this public checkout.
+Existing v1 workspace contracts, events and the /api/v1 client are unchanged. Routes, persistence and server
+enforcement belong to OP-145 in `ivanzaida/orchester-platform`; publishing these types does not enable routes.
+
+## Team authority S4 command envelopes
+
+The public prerequisite for platform OP-147 (idempotent action receipts) is in core and `orchester_api::v2`; it adds
+no endpoints. Ids are UUID strings; `OperationId` (made by the client once per intent, repeated on every retry) and
+`WorkId` (made by the server) are distinct core types, never a task id or a client-local run number. Unknown fields
+are refused in every shape below.
+
+- `Subject`: `{kind:"task",id}` or `{kind:"module",id}`.
+- `ExpectedRevision`: `{kind:"project"|"task"|"module"|"tag"|"resource"|"work",id,revision}`, the id of that kind;
+  `revision` is 1..=i64::MAX. A set naming one kind and id twice is refused.
+- `CommandRequest`: `{operation_id,expected:[ExpectedRevision],command}`; `command` is internally tagged by `kind`
+  (e.g. `{kind:"claim.acquire",subject}`).
+- `CommandResult`: `{operation_id,state:"committed",result,cursor}`; `result` is the command's value, which carries
+  `effects:[LocalEffect]` (empty when no local effect is authorized). `cursor` is an opaque, non-empty
+  `EventCursor` string.
+- `LocalEffect`: `{kind:"start",work_id,bundle:{sha256,schema_version}}`, `{kind:"pause",work_id}`,
+  `{kind:"stop",work_id}` or `{kind:"none"}`; `sha256` is a 64-digit lowercase hex `ContentHash`.
+- `OperationRead`: `{operation_id,state:"committed",response:CommandResult}` or
+  `{operation_id,state:"rejected",error:AuthorityError}`.
+- `AuthorityError`: `{operation_id?,code,details}`; `operation_id` is left out when the refusal came before the
+  operation was read. `details` is `{}` for every code but `decision_required`, whose details are
+  `{decisions:["D1".."D9"]}` with at least one decision. Details never echo the request or carry credentials.
+
+| Code | Status |
+| --- | --- |
+| `unauthenticated` | 401 |
+| `forbidden`, `delivery_not_authorized` | 403 |
+| `not_found` | 404 |
+| `revision_conflict`, `operation_mismatch`, `claim_conflict`, `claim_lost`, `module_required`, `module_claim_conflict`, `transition_denied`, `decision_required`, `bundle_missing` | 409 |
+| `cursor_expired` | 410 |
+| `invalid` | 422 |
+| `unsupported_contract` | 426 |
+| `rate_limited` | 429 |
+| `unavailable` | 503 |
+
+The server keys a receipt by project, authenticated account and `operation_id`; the same id with another request is
+`operation_mismatch`. No command or command value has a public payload type yet: the envelopes are generic over them
+(`CommandRequest<C>`, `CommandResult<V>`, `OperationRead<V>`), and each later stage adds its own. Read models
+(pages, task and module reads, capabilities) are the S10 contract's. Existing v1 contracts, the /api/v1 client and
+earlier v2 types are unchanged.
+
+## Team authority S10 read contract
+
+The public prerequisite for platform OP-153 (bounded direct reads and server-side summaries) is in core and
+`orchester_api::v2`; it adds no endpoints. It reuses S4's `EventCursor`, `Subject`, `DecisionId` and
+`cursor_expired`. In the read models every field is sent: `?` below means `null`, never left out, and a missing or
+unknown field is refused. Times are milliseconds since the Unix epoch; days are `YYYY-MM-DD`.
+
+- `PageRequest`: `{after:PageCursor?,limit}`; `limit` may be left out for 50 and is 1..=200 (`PageRequestError`).
+  `PageCursor` is an opaque, non-empty string, bound to the workspace, the filters, the sort and the snapshot.
+- `Page<T>`: `{items:[T],next:PageCursor?,cursor:EventCursor}`; `next` is `null` on the last page, and every page of
+  one listing carries the same snapshot `cursor`. Entities come in ascending (creation sequence, id) order, histories
+  in ascending sequence. A snapshot is kept at least 15 minutes (`PAGE_CURSOR_RETENTION_SECONDS`, 900) after the last
+  page served from it; a later cursor may answer `cursor_expired` (410), and the client reads from the first page again.
+- `Capabilities`: `{project_id,revision,role:"member"|"admin"|"server_admin",actions:[ActionCapability],unresolved:[DecisionId]}`.
+  `ActionCapability`: `{action,subject:Subject?,allowed,reason:DenialReason?}`; `reason` is `null` exactly when
+  `allowed`. `action` is a command kind (dotted lowercase words, e.g. `claim.acquire`; `CommandKind`), `read`,
+  `export.shared` or `server.admin`. `DenialReason`: `role_required`, `claim_required`, `claim_lost`,
+  `module_required`, `decision_required`, `configuration_invalid`. Capabilities are advisory; commands check again.
+- `ClaimRead`: `{subject,id,holder:UserRef,acquired_at,last_execution_heartbeat_at,stale_at,stale,parent_module_claim_id?}`.
+- `WorkRead`: `{id,subject,claim_id,revision,state,runs:[RunId],bundle:BundleRef,created_at,updated_at}`;
+  `ExecutionState` is `running`, `paused`, `awaiting_human`, `succeeded`, `failed` or `cancelled` (proposed).
+- `TaskRead`: every `SharedTask` field (the content's fields inline) and `assignee:UserRef?`, `work:WorkRead?`,
+  `effective_claim:ClaimRead?`, `capabilities`. `workflow` stays apart from `work.state`.
+- `ModuleRead`: every `SharedModule` field (its fields inline) and `branch`, `assignee?`, `work?`, `effective_claim?`,
+  `capabilities`. A module's tasks are read with the task list's `modules` filter.
+- Task list: `TaskListRequest` `{filters,sort,page}`, each defaulted. `TaskFilters`
+  `{statuses,priorities,tags,all_tags,pipelines,modules,search}`: each facet keeps tasks with any of its values, `null`
+  among `pipelines` (slugs) or `modules` is a task without one, `all_tags` keeps tasks with every tag. `search`
+  (`SearchText`, trimmed, 1..=200 characters) matches title, key, former key, id or brief, ignoring case. `TaskSort`:
+  `created` (default), `newest`, `title`, `status`, `priority`, each ending on creation sequence and id.
+  `TaskBoardCounts`: `{backlog,todo,in_progress,in_review,done,canceled,cursor}` for a `TaskFilters`.
+- Modules: `ModuleListRequest` `{state?:"open"|"closed",page}` answers `Page<ModuleSummary>`, a summary being
+  `{module:ModuleRead,progress:{unit:"tasks",scope,done},tasks,forecast:ForecastRead}`. `ForecastRead`:
+  `{remaining,history_days,history_delivered,outlook}`, `outlook` `{kind:"done"}`, `{kind:"not_enough_history"}` or
+  `{kind:"dates",likely,safe,past_horizon}`. `ModuleBurndownRead`: `{module,unit,start_scope,days,forecast,cursor}`,
+  a day `{date,scope?,remaining?,ideal?,added,removed}`. `ModuleHistoryPage` is `Page<SharedModuleChange>`. All are
+  counted by core's rules (`orchester_core::module::{progress, burndown}`, `orchester_core::forecast`): Canceled tasks
+  are out of scope, Done counts as done, and every move into or out of the module counts on its day.
+- Configuration: `ResourceLibraryRequest` `{kind?,archived,search?,page}` answers `ResourceLibraryPage`
+  (`Page<SharedResource>`); a resource's versions are `ResourceVersionsPage` (`Page<SharedVersion>`, oldest first);
+  `ResourcePickerRequest` `{kind,search?,page}` answers `ResourcePickerPage` of `ResourceChoice`
+  `{id,kind,slug,name,latest}`, resources not archived with a published version.
+- `WorkspaceMetadata`: `{project:SharedProject,policy:WorkspacePolicy,capabilities,cursor}`.
+
+Left open, not invented here (they rest on the open decisions D1–D9 or on later stages): human waits beyond
+`awaiting_human` (questions, plans, approvals), the *Needs you* and *Active* list views and their counts that rest on
+them, the full set of command kinds behind `action`, which time zone a server counts days in, and what `revision` in
+`Capabilities` counts. Existing v1 contracts, the /api/v1 client and earlier v2 types are unchanged.
+
 ## Conventions
 
 - JSON bodies in UTF-8. Requests are limited to 1 MiB and must arrive within 10 seconds.

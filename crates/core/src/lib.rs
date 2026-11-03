@@ -17,6 +17,7 @@ pub mod connection;
 pub mod conversation;
 pub mod diff;
 pub mod docs;
+pub mod forecast;
 pub mod github;
 pub mod id;
 pub mod import;

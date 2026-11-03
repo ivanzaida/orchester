@@ -298,6 +298,85 @@ published version, as Run again does today. Before row 30, a member who lacked t
 computer*; that state now applies only to what a version names and this computer lacks ([Shared
 configuration](#shared-configuration)).
 
+## Team authority S2 contract (ORC-625 / OP-145)
+
+The additive shared types are documented in [cloud-api.md](../cloud-api.md#team-authority-s2-shared-contracts).
+`server_admin::ServerSettings` reads `claim_staleness_seconds`; `SettingsChanges` accepts it optionally and
+continues to refuse unknown fields. Only server admins read or change this server-wide setting. Whole seconds
+are validated by core's `ClaimStalenessThreshold`: 300..=86400 inclusive, default 900 (15 minutes).
+`Claim::stale(now, threshold)` and `Claim::take_over(..., threshold)` use the execution claim's heartbeat;
+elapsed time equal to the threshold is stale. The legacy default constant derives from this type's default.
+
+On the separate v2 surface, `WorkspacePolicy` carries `revision` and `automatic_merge` (new workspace: off).
+`WorkspacePolicyResponse` includes that effective policy and caller `WorkspaceCapabilities` (`read_policy`,
+`change_policy`). Workspace members read; workspace Admins change; server admins inherit both. These are
+computed from authoritative records, not accepted from requests. `WorkspacePolicyChanges` requires the seen
+revision and desired automatic_merge value. Platform applies authorization, revision comparison, write and
+revision increment in one transaction; a mismatch returns HTTP 409 `policy_revision_conflict` with the current
+policy, represented by `WorkspacePolicyError`. No silent overwrite or per-member policy override is defined.
+
+`WorkspacePolicyEvent::Changed` is the v2 `policy.changed` workspace delta (ORC-628), shaped like
+`MembershipEvent`: `{kind:"policy.changed",data:{id,by,actor,at,policy:{revision,automatic_merge}}}`. Its
+`PolicyChanged.policy` is the new effective policy, so a client replaces its cached policy without a second read
+and ignores an event whose revision is not newer than the one it holds; revision 0 is refused. It is not part of
+the v1 `EventKind`/`Event` stream. No event is defined for the server-wide claim staleness threshold: whether
+clients need one is an open question.
+
+The server threshold is not a workspace policy field. A compatible local Claude/Codex account choice is local
+execution metadata. Open items are **not in this contract**: other team-owned fields such as default pipeline,
+delivery and effort, admin drafts, module heartbeat source, and human-wait renewal. The task's referenced
+team-authority-plan.md §12 is absent in this checkout; this prerequisite does not decide those items.
+No v1 workspace contracts or /api/v1 client change. OP-145 implements routes, persistence and enforcement in
+the platform repository; these public types alone implement none of those server behaviors.
+
+## Team authority S4 contract (ORC-649 / OP-147)
+
+Idempotent action receipts. The wire shapes are in [cloud-api.md](../cloud-api.md#team-authority-s4-command-envelopes).
+Core adds `id::OperationId` and `id::WorkId`, distinct UUID newtypes: the client makes an operation id once per
+intent and repeats it on every retry; the server makes work ids. Neither is ever a task id or a client-local run
+number. Core's `sharing::ExpectedRevisions` is the validated expected-revision set of a command: each
+`ExpectedRevision` names a `RevisionTarget` (project, task, module, tag, resource or work, each with its own id type,
+so a kind and id cannot mismatch) and a revision between 1 and `i64::MAX`; a record named twice is refused
+(`ExpectedRevisionError::Duplicate`, `OutOfRange`).
+
+The v2 surface adds `Subject`, `BundleRef`, `LocalEffect`, `EventCursor`, `CommandRequest<C>`, `CommandResult<V>`,
+`OperationRead<V>`, `AuthorityError` with `AuthorityErrorCode` (and its HTTP status), `ErrorDetails` and the closed
+`DecisionId` set D1–D9. No command has a public payload type yet, so the envelopes take the command (`C`) and its
+value (`V`) as type parameters; each later stage adds its commands and values. The server keys a receipt by
+project, authenticated account and operation id; the same id with another request is `operation_mismatch`. Read
+models (pages, task and module reads, capabilities) belong to the S10 contract. OP-147 implements routes, receipts
+and enforcement in the platform repository; these types alone implement none of them.
+
+## Team authority S10 contract (ORC-650 / OP-153)
+
+Bounded direct reads and server-side summaries. The wire shapes are in
+[cloud-api.md](../cloud-api.md#team-authority-s10-read-contract). Every listing is paged: a `PageRequest` asks for
+at most 200 items (50 when it does not say), and each `Page<T>` carries the listing's snapshot `EventCursor`, the same
+on every page, with an opaque `PageCursor` to the next page that is bound to the workspace, the filters, the sort and
+that snapshot. Entities are ordered by ascending (creation sequence, id), histories by ascending sequence.
+
+**Cursor retention.** A server keeps a listing's snapshot for at least **15 minutes after it served the last page
+from it** (`v2::PAGE_CURSOR_RETENTION_SECONDS` = 900); each page served renews it. A page cursor used after that, or
+whose snapshot the server dropped for any other reason, is answered `cursor_expired` (HTTP 410), never with a page of
+another snapshot; the client then reads the listing again from its first page. A cursor sent with other filters or
+another sort than it was made for is `invalid`.
+
+Module progress, burndown and the delivery forecast moved from `orchester-workspace` to core
+(`module::progress`, `module::measure`, `module::burndown`, `forecast`), which the workspace re-exports unchanged, so a
+server's module summaries (`ModuleSummary`, `ModuleBurndownRead`, `ForecastRead`) count by the desktop's rules:
+Canceled tasks are out of scope, Done counts as done, and each move of a task into or out of a module counts on its
+day. On the v2 surface this lets a server serve the summaries that row 69 keeps on each desktop for `/api/v1`.
+`Capabilities` list what the caller may do, each denial with its `DenialReason`; they are advisory and commands check
+again. `TaskRead` and `ModuleRead` add the assignee, the work (`WorkRead` with its `ExecutionState`), the effective
+claim (`ClaimRead`) and the capabilities to the existing shared task and module fields; a task's workflow status stays
+apart from its work's execution state.
+
+Flagged, not decided by this contract (open decisions among D1–D9, or later stages): human waits beyond the proposed
+`awaiting_human` state, so the *Needs you* and *Active* views and their counts; the full set of command kinds an
+`Action` names (any dotted lowercase kind is accepted until the commands are published); the time zone a server counts
+burndown and forecast days in (core counts the computer's local days); and what `Capabilities.revision` counts.
+OP-153 implements routes, snapshots and enforcement in the platform repository; these types alone implement none.
+
 ## Claims
 
 A claim says who has taken a task into work. A task has at most one; the server keeps it and its history.
