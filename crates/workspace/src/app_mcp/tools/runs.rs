@@ -26,6 +26,7 @@ use super::{
   Translate,
   approvals::approval,
   base_branch, base_moved,
+  merge_attempts::Attempts,
   message_waits::message_waits,
   orchestrated, plans, wire,
   worktree::{worktree_left, worktree_state},
@@ -67,20 +68,26 @@ pub enum Control {
   Cancel,
 }
 
-/// The run as its task page shows it; its waiting requests in the app's words (`translate`), as `list_approvals`
-/// gives them.
+/// The run as its task page shows it; its waiting requests and its merge attempts' causes in the app's words
+/// (`translate`), as `list_approvals` and `merge_run` give them.
 pub async fn get_run(services: &Services, args: InRun, translate: &Translate) -> Result<Value, ToolError> {
   let services = services.clone();
-  let (mut read, waiting, project) = blocking(move || read_run(&services, &args)).await?;
+  let (mut read, (waiting, attempts), project) = blocking(move || read_run(&services, &args)).await?;
   read["awaiting"]["approvals"] = waiting
     .iter()
     .map(|shown| approval(shown, project, translate))
     .collect();
+  read["merge_attempts"] = attempts.told(translate);
   Ok(read)
 }
 
-/// The run `args` names as its task page shows it but for its waiting requests, which come apart with its project.
-fn read_run(services: &Services, args: &InRun) -> Result<(Value, Vec<ShownApproval>, ProjectId), ToolError> {
+/// What [`read_run`] reads apart from the run as its task page shows it: its waiting requests and its merge attempts,
+/// whose words come from the app.
+type Apart = (Vec<ShownApproval>, Attempts);
+
+/// The run `args` names as its task page shows it but for its waiting requests and its merge attempts, which come
+/// apart with its project.
+fn read_run(services: &Services, args: &InRun) -> Result<(Value, Apart, ProjectId), ToolError> {
   let open = services.project(&args.project)?;
   let (project, root) = (open.project.id(), open.repo_root);
   let db = ProjectDb::open(&root)?;
@@ -98,6 +105,7 @@ fn read_run(services: &Services, args: &InRun) -> Result<(Value, Vec<ShownApprov
   let messages = message_waits(&db, &run, &asked, Some(&conversation))?;
   let approval_mode = db.run_approval_mode(run.id())?;
   let merge = merge_state(&db, (&root, &services.programs), &run)?;
+  let attempts = Attempts::of_run(&db, (&root, run.id()), &services.vault)?;
   let view = run_view(&db, run)?;
   let plan = PlanReview::of(&view).map(|review| {
     let mut plan = plans::waiting(&review, true);
@@ -147,7 +155,7 @@ fn read_run(services: &Services, args: &InRun) -> Result<(Value, Vec<ShownApprov
     "finished_at": view.finished_at.map(wire::time),
     "link": Link::Task(project, task.key().clone(), TaskPage::Summary).path(),
   });
-  Ok((read, waiting, project))
+  Ok((read, (waiting, attempts), project))
 }
 
 /// The run's token totals, with the reviewer's use apart and unknown output reported explicitly.

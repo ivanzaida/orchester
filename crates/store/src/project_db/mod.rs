@@ -31,6 +31,7 @@ mod limits;
 mod local_integration;
 mod mcp_servers;
 mod memory;
+mod merge_attempts;
 mod merge_queue;
 mod merges;
 mod messages;

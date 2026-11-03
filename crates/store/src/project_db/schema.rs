@@ -33,6 +33,7 @@ mod list;
 mod local_integration;
 mod mcp;
 mod memory;
+mod merge_attempts;
 mod merge_queue;
 mod modules;
 mod native_commands;

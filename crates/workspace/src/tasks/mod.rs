@@ -37,6 +37,7 @@ pub mod integration_jobs;
 pub mod last_words;
 pub mod list;
 pub mod local_integration;
+pub mod merge_attempts;
 pub mod moves;
 pub mod needs_you;
 pub mod outside;

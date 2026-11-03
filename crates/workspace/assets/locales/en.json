@@ -1535,6 +1535,7 @@
     }
   },
   "appMcp": {
+    "mergeAttemptCause": "{{cause}}",
     "errors": {
       "noCommits": "The repository has no commit yet, and runs branch from one. Make a first commit, or create the project in Orchester’s project setup, which offers to make it.",
       "gitNotFound": "git is not installed on this computer. Orchester runs git to read the folder and runs work in git worktrees. Install git, then try again.",

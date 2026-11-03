@@ -6,6 +6,7 @@
 //! [`CommandRunner`](crate::command::CommandRunner); none of it stashes, resets or discards uncommitted work a
 //! person did not confirm discarding.
 
+pub mod attempt;
 pub mod base;
 mod cleanup;
 pub mod delivery;

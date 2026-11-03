@@ -9,7 +9,10 @@ use std::{
 
 use orchester_core::{
   id::RunId,
-  integration::{MergeError, PreflightStage},
+  integration::{
+    MergeError, PreflightStage,
+    attempt::{AttemptStage, MergeAsker, MergeVia},
+  },
   revision::Revision,
 };
 use orchester_exec::programs::Programs;
@@ -20,8 +23,9 @@ use crate::{
   messages::{self, Message},
   secrets::Vault,
   tasks::{
-    integration::{IntegrationProblem, integration_refusal, merge_in, stage_message},
+    integration::{IntegrationProblem, integration_refusal, merge_in_as, stage_message},
     local_integration::LegacyPolicy,
+    merge_attempts::{self, Asked},
   },
   workspace::OpenProject,
 };
@@ -90,14 +94,19 @@ impl RunJobs {
       .with("task", key.clone())
       .with("run", number.to_string());
     let automated = !matches!(telling, Telling::Person);
+    let asked = telling.asked();
     let made_policy = telling.policy(&open.repo_root, run);
     let result = catch_unwind(AssertUnwindSafe(|| {
-      made_policy
-        .as_ref()
-        .map_err(Clone::clone)?
-        .as_ref()
-        .map_or(Ok(()), |policy| preflight(&open.repo_root, policy))?;
-      merge_in(&open.repo_root, &programs, (run, expected))
+      let allowed = made_policy.as_ref().map_err(Clone::clone).and_then(|policy| {
+        policy
+          .as_ref()
+          .map_or(Ok(()), |policy| preflight(&open.repo_root, policy))
+      });
+      if let Err(problem) = allowed {
+        merge_attempts::record_refused(&open.repo_root, run, asked, (AttemptStage::Policy, &problem));
+        return Err(problem);
+      }
+      merge_in_as(&open.repo_root, &programs, (run, expected, None), asked)
     }));
     let policy = made_policy.ok().flatten();
     let continues_locally = matches!(&result, Ok(Err(problem)) if problem.continues_locally());
@@ -156,6 +165,15 @@ enum Telling {
 }
 
 impl Telling {
+  /// Who asked for the merge, and from where: a person or an MCP client pressing *Merge into <base>*, or `merge_run`.
+  const fn asked(&self) -> Asked {
+    match self {
+      Self::Person => (MergeAsker::Person, MergeVia::TaskPage),
+      Self::Client(_) => (MergeAsker::Automation, MergeVia::TaskPage),
+      Self::Policy(_) => (MergeAsker::Automation, MergeVia::MergeRun),
+    }
+  }
+
   /// The policy the merge goes through, none for a person; a policy that cannot be made refuses the merge.
   fn policy(self, root: &Path, run: RunId) -> Result<Option<LegacyPolicy>, IntegrationProblem> {
     match self {

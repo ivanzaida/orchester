@@ -24,6 +24,8 @@ mod git_untouched;
 mod hooks;
 #[path = "local_integration/ignore_transitions.rs"]
 mod ignore_transitions;
+#[path = "local_integration/merge_attempts.rs"]
+mod merge_attempts;
 #[path = "local_integration/merged_in.rs"]
 mod merged_in;
 #[path = "local_integration/merged_outside.rs"]

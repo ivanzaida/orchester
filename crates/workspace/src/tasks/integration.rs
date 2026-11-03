@@ -15,7 +15,9 @@ use orchester_core::{
   id::{RunId, StepExecutionId},
   integration::{
     Cleanup, CleanupError, Delivering, FolderListing, GitError, KeepReason, LeftWorktree, Leftovers, MergeError,
-    PreflightCause, PreflightStage, RecordedCleanupError, RunMerge, TemporaryLeft, base::Landing,
+    PreflightCause, PreflightStage, RecordedCleanupError, RunMerge, TemporaryLeft,
+    attempt::{AttemptStage, MergeAsker, MergeVia},
+    base::Landing,
     clean_up_recorded_as_seen, finish_removal, leftovers_of, merge_run_as,
   },
   revision::Revision,
@@ -29,7 +31,12 @@ use orchester_store::{ProjectDb, StoreError};
 pub(crate) use preflight::integration_refusal;
 pub use preflight::stage_message;
 
-use super::{changes::GIT, detail::run_store_error, local_integration::CheckoutHolder};
+use super::{
+  changes::GIT,
+  detail::run_store_error,
+  local_integration::CheckoutHolder,
+  merge_attempts::{Asked, Attempt},
+};
 use crate::{
   activity::{Activity, Running, run_operations},
   messages::Message,
@@ -328,33 +335,104 @@ fn not_merged_or_held(db: &ProjectDb, run: RunId) -> Result<(), IntegrationProbl
   Ok(())
 }
 
-/// Merges run `run` of the project at `repo_root`, records the merge and removes what the run left
-/// that is safe to remove: its clean worktrees and its merged branches. With `expected`, only while the run's
-/// branch is at that commit (the one a person reviewed); a branch that moved since merges nothing.
+/// Merges run `run` of the project at `repo_root` as a person asks on its task page, records the merge and removes
+/// what the run left that is safe to remove: its clean worktrees and its merged branches. With `expected`, only while
+/// the run's branch is at that commit (the one a person reviewed); a branch that moved since merges nothing.
 pub fn merge_in(
   repo_root: &Path,
   programs: &Programs,
   (run, expected): (RunId, Option<&Revision>),
 ) -> Result<Merged, IntegrationProblem> {
-  merge_in_as(repo_root, programs, (run, expected, None))
+  merge_in_as(
+    repo_root,
+    programs,
+    (run, expected, None),
+    (MergeAsker::Person, MergeVia::TaskPage),
+  )
 }
 
-/// [`merge_in`], landed as `delivering` says when the merge queue delivers the run (`None`: as the task page merges).
+/// [`merge_in`] as `asked` asks for it, landed as `delivering` says when the merge queue delivers the run (`None`: as
+/// the task page merges). The attempt is recorded however it ends ([`Attempt`]).
 pub fn merge_in_as(
   repo_root: &Path,
   programs: &Programs,
   (run, expected, delivering): (RunId, Option<&Revision>, Option<Delivering<'_>>),
+  asked: Asked,
 ) -> Result<Merged, IntegrationProblem> {
-  let _held = preflight::hold(repo_root)?;
+  // Held until the attempt is recorded, so that no other merge takes its open attempt for one the app left.
+  let held = preflight::hold(repo_root);
+  let mut attempt = Attempt::begin(repo_root, run, asked);
+  let merged = match &held {
+    Ok(_) => merge_held(repo_root, programs, (run, expected, delivering), &mut attempt),
+    Err(problem) => Err(problem.clone()),
+  };
+  attempt.end(&merged);
+  merged
+}
+
+/// [`merge_in_as`] once its preflight holds the checkout, the stages it reaches told to `attempt`.
+fn merge_held(
+  repo_root: &Path,
+  programs: &Programs,
+  (run, expected, delivering): (RunId, Option<&Revision>, Option<Delivering<'_>>),
+  attempt: &mut Attempt<'_>,
+) -> Result<Merged, IntegrationProblem> {
   let mut db = ProjectDb::open(repo_root)?;
+  attempt.reach(&mut db, AttemptStage::ExistingResult);
   // Runs are never deleted: a run the task page read is there.
   let run = db
     .run(run)
     .map_err(run_store_error)?
     .ok_or(IntegrationProblem::Store(Message::new("errors.storage")))?;
-  not_merged_or_held(&db, run.id())?;
+  let task = mergeable(repo_root, &db, &run)?;
+  attempt.reach(&mut db, AttemptStage::Merge);
+  let git = programs.git_work();
+  let landing = Landing::of(run.base_source());
+  let outcome = merge_run_as(
+    &git,
+    (Path::new(GIT), repo_root),
+    (&run, task.key()),
+    (expected, delivering, landing),
+    Timestamp::now(),
+  )
+  .map_err(IntegrationProblem::Merge)?;
+  if let Some(left) = &outcome.left {
+    tracing::warn!(path = %left.path, detail = %left.detail, "merged, but the temporary worktree of the merge commit stayed");
+  }
+  let (merge, temporary) = (outcome.merge, outcome.left);
+  if merge.kind == orchester_core::integration::MergeKind::AlreadyMerged {
+    return Err(IntegrationProblem::Store(Message::new(
+      "localIntegration.externalResult",
+    )));
+  }
+  attempt.reach(&mut db, AttemptStage::Record);
+  // An unrecorded completed merge remains external evidence on retry; ancestry cannot invent its historical event.
+  if let Err(error) = db.save_run_merge(&merge) {
+    return Err(match IntegrationProblem::from(error) {
+      IntegrationProblem::Store(problem) => IntegrationProblem::NotRecorded { merge, problem },
+      // Another window recorded the merge first: it stands as recorded.
+      other => other,
+    });
+  }
+  super::local_integration::settle_review(&mut db, &merge);
+  crate::base_moved::after_merge(repo_root, programs);
+  let cleanup = clear(&mut db, programs, repo_root, &run, None);
+  if cleanup.is_err() {
+    tracing::warn!("the run was merged, but what it left could not be cleared");
+  }
+  Ok(Merged {
+    merge,
+    temporary,
+    cleanup,
+  })
+}
+
+/// Refuses `run` unless it may merge: not merged already nor held back by a merge waiting in its worktree, no local
+/// integration holding the checkout, its result not in Git already, and its task's latest run; its task.
+fn mergeable(repo_root: &Path, db: &ProjectDb, run: &Run) -> Result<orchester_core::task::Task, IntegrationProblem> {
+  not_merged_or_held(db, run.id())?;
   let task = db.task(run.task())?.ok_or(StoreError::TaskNotFound(run.task()))?;
-  if let Some(holder) = super::local_integration::checkout_holder(&db, run.id())? {
+  if let Some(holder) = super::local_integration::checkout_holder(db, run.id())? {
     return Err(IntegrationProblem::HeldLocally(holder));
   }
   if super::local_integration::external_integration(repo_root, run.id())
@@ -378,44 +456,7 @@ pub fn merge_in_as(
   if latest != Some(run.number().get()) {
     return Err(IntegrationProblem::Store(Message::new("appMcp.errors.notLatestRun")));
   }
-  let git = programs.git_work();
-  let landing = Landing::of(run.base_source());
-  let outcome = merge_run_as(
-    &git,
-    (Path::new(GIT), repo_root),
-    (&run, task.key()),
-    (expected, delivering, landing),
-    Timestamp::now(),
-  )
-  .map_err(IntegrationProblem::Merge)?;
-  if let Some(left) = &outcome.left {
-    tracing::warn!(path = %left.path, detail = %left.detail, "merged, but the temporary worktree of the merge commit stayed");
-  }
-  let (merge, temporary) = (outcome.merge, outcome.left);
-  if merge.kind == orchester_core::integration::MergeKind::AlreadyMerged {
-    return Err(IntegrationProblem::Store(Message::new(
-      "localIntegration.externalResult",
-    )));
-  }
-  // An unrecorded completed merge remains external evidence on retry; ancestry cannot invent its historical event.
-  if let Err(error) = db.save_run_merge(&merge) {
-    return Err(match IntegrationProblem::from(error) {
-      IntegrationProblem::Store(problem) => IntegrationProblem::NotRecorded { merge, problem },
-      // Another window recorded the merge first: it stands as recorded.
-      other => other,
-    });
-  }
-  super::local_integration::settle_review(&mut db, &merge);
-  crate::base_moved::after_merge(repo_root, programs);
-  let cleanup = clear(&mut db, programs, repo_root, &run, None);
-  if cleanup.is_err() {
-    tracing::warn!("the run was merged, but what it left could not be cleared");
-  }
-  Ok(Merged {
-    merge,
-    temporary,
-    cleanup,
-  })
+  Ok(task)
 }
 
 /// What the task's runs left in the repository, by run, as the task page holds it.

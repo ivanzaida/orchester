@@ -5,7 +5,10 @@
 use std::fs;
 
 use orchester_core::{
-  integration::{DeliveredAs, Delivering, MergeError},
+  integration::{
+    DeliveredAs, Delivering, MergeError,
+    attempt::{MergeAsker, MergeVia},
+  },
   merge_queue::{Left, QueueState},
   revision::Revision,
   run::Answerer,
@@ -150,7 +153,12 @@ fn merge_queue_merge_refuses_a_base_that_moved_after_the_queue_read_it() {
     as_delivered: DeliveredAs::MergeCommit,
     base: &checked,
   };
-  let merged = merge_in_as(repo.root(), &repo.programs(), (run.id(), Some(&tip), Some(delivering)));
+  let merged = merge_in_as(
+    repo.root(),
+    &repo.programs(),
+    (run.id(), Some(&tip), Some(delivering)),
+    (MergeAsker::MergeQueue, MergeVia::MergeQueue),
+  );
   assert!(
     matches!(merged, Err(IntegrationProblem::Merge(MergeError::BaseMoved { .. }))),
     "{merged:?}"
