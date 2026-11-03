@@ -265,7 +265,7 @@ pub fn store_fix_in(
     .expect("Fix CI is offered for failing checks only");
   let key = IdempotencyKey::generate();
   let (then, message) =
-    store_answer_in(root, &prepared, (key, way), (&text, &[]), answerer).map_err(FixError::Outgoing)?;
+    store_answer_in(root, &prepared, (key, way), (&text, &[], None), answerer).map_err(FixError::Outgoing)?;
   let event = FixEvent {
     at: message.created_at(),
     number: read.number,
