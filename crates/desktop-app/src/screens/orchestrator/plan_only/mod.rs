@@ -8,7 +8,11 @@
 pub(super) mod card;
 pub(super) mod composer;
 
-use std::path::PathBuf;
+use std::{
+  collections::HashMap,
+  path::{Path, PathBuf},
+  sync::Arc,
+};
 
 use lurq::{
   app::{
@@ -33,6 +37,7 @@ use orchester_workspace::{
   },
   workspace::OpenProject,
 };
+use parking_lot::Mutex;
 
 use super::draft::Conversation;
 use crate::services::Services;
@@ -55,14 +60,33 @@ pub(super) struct PlanOnly {
   kept: Signal<bool>,
   pub(super) changing: Signal<Option<Changing>>,
   set: SetAction,
+  /// The switch each conversation was last set to, which every save keeps: a save the next flip replaced still
+  /// finishes its write, so the writes keep the newest switch whatever order they end in.
+  wanted: Arc<Wanted>,
 }
 
-/// A switch of conversation `chat` of the project at `root`, kept.
+/// The switches the person last set, by conversation, and the lock one save holds while it writes; the screen only
+/// takes the first, for as long as it sets one.
+#[derive(Default)]
+struct Wanted {
+  switches: Mutex<HashMap<ChatId, bool>>,
+  writing: Mutex<()>,
+}
+
+impl Wanted {
+  /// Keeps conversation `chat`'s newest switch in the project at `root`. Blocks on SQLite.
+  fn write(&self, root: &Path, chat: ChatId) -> Result<(), Message> {
+    let _writing = self.writing.lock();
+    let on = self.switches.lock().get(&chat).copied();
+    on.map_or(Ok(()), |on| plan::set_plan_only_in(root, chat, on))
+  }
+}
+
+/// A switch of conversation `chat` of the project at `root`, kept as the person last set it.
 #[derive(Clone)]
 struct Switching {
   root: PathBuf,
   chat: ChatId,
-  on: bool,
 }
 
 impl DevtoolsInspectable for Switching {}
@@ -72,14 +96,18 @@ type SetAction = FutureAction<Switching, (), Message>;
 impl PlanOnly {
   pub(super) fn new(ctx: &mut Ctx) -> Self {
     let runners = Services::of(ctx).runners;
-    let set = ctx.future_action(move |switching: Switching| {
-      let runners = runners.clone();
-      async move {
-        let Switching { root, chat, on } = switching;
-        let at = root.clone();
-        background::run(move || plan::set_plan_only_in(&at, chat, on)).await??;
-        runners.chat_changed(&root);
-        Ok(())
+    let wanted = Arc::new(Wanted::default());
+    let set = ctx.future_action({
+      let wanted = wanted.clone();
+      move |switching: Switching| {
+        let (runners, wanted) = (runners.clone(), wanted.clone());
+        async move {
+          let Switching { root, chat } = switching;
+          let at = root.clone();
+          background::run(move || wanted.write(&at, chat)).await??;
+          runners.chat_changed(&root);
+          Ok(())
+        }
       }
     });
     Self {
@@ -87,6 +115,7 @@ impl PlanOnly {
       kept: ctx.signal(false),
       changing: ctx.signal(None),
       set,
+      wanted,
     }
   }
 
@@ -97,30 +126,44 @@ impl PlanOnly {
     }
   }
 
-  /// Whether the switch is on for `of`: as the person last set it there, else as the conversation keeps it.
+  /// Whether the switch is on for `of`: as the person last set it there, else as the conversation keeps it, which a
+  /// save that failed leaves it as.
   pub(super) fn on(&self, of: Option<Conversation>) -> bool {
+    let failed = self.set.state().get().error.is_some();
     match (self.switched.get(), of) {
-      (Some((switched, on)), Some(of)) if switched == of => on,
+      (Some((switched, on)), Some(of)) if switched == of && !failed => on,
       _ => self.kept.get(),
     }
   }
 
   /// [`Self::on`] in a handler, which no change of the switch renders again.
   pub(super) fn on_now(&self, of: Option<Conversation>) -> bool {
+    let failed = self.set.state().get_untracked().error.is_some();
     match (self.switched.get_untracked(), of) {
-      (Some((switched, on)), Some(of)) if switched == of => on,
+      (Some((switched, on)), Some(of)) if switched == of && !failed => on,
       _ => self.kept.get_untracked(),
     }
   }
 
+  /// Why `of`'s switch could not be kept, the last time the person flipped it.
+  pub(super) fn failed(&self, of: Option<Conversation>) -> Option<Message> {
+    let switched = self.switched.get().map(|(switched, _)| switched);
+    self
+      .set
+      .state()
+      .get()
+      .error
+      .filter(|_| switched.is_some() && switched == of)
+  }
+
   /// Flips it for `of`, where it is `on` now; a kept conversation of the project at `root` keeps it.
-  pub(super) fn flip(&self, of: Conversation, on: bool, root: &std::path::Path) {
+  pub(super) fn flip(&self, of: Conversation, on: bool, root: &Path) {
     self.switched.set(Some((of, !on)));
     if let Conversation::Chat(chat) = of {
+      self.wanted.switches.lock().insert(chat, !on);
       self.set.run(Switching {
         root: root.to_path_buf(),
         chat,
-        on: !on,
       });
     }
   }

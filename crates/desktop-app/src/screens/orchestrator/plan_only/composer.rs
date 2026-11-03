@@ -26,6 +26,8 @@ use crate::{
   ui::{
     chip::TagChip,
     icon::{Icon, icon},
+    message::message_text,
+    tinted_note::tinted_note,
     toggle::{Toggle, ToggleKind},
     tooltip::Tooltip,
   },
@@ -46,6 +48,17 @@ pub(in crate::screens::orchestrator) fn parts(ctx: &mut Ctx, view: &View, root: 
   let mut over = Vec::new();
   if on {
     over.push(mode_line(ctx));
+  }
+  // A switch that could not be kept shows as the conversation keeps it, and says why.
+  if let Some(why) = plan.failed(view.of.get()) {
+    over.push(
+      tinted_note(
+        "orchestrator-plan-only-error",
+        (Icon::CircleAlert, PaletteColor::Danger),
+        &message_text(ctx, &why),
+      )
+      .into(),
+    );
   }
   if let Some(changing) = plan.changing.get() {
     let stop = plan.clone();

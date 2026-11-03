@@ -180,6 +180,7 @@ fn plan_card(ctx: &mut Ctx, row: &TurnRow, (plan, at): (&ChatPlan, Timestamp), (
       number,
       at,
       changing: env.changing == Some(seq),
+      answering: env.answering,
       deciding,
     },
   )

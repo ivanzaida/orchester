@@ -2100,7 +2100,8 @@
       "failed": "The answer couldn't be stopped: the runner didn't answer."
     },
     "plan": {
-      "taken": "This plan no longer waits: it was approved, replaced or dismissed meanwhile."
+      "taken": "This plan no longer waits: it was approved, replaced or dismissed meanwhile.",
+      "busy": "Not approved yet · the Orchestrator is still answering. Approve the plan once its answer ends."
     },
     "compact": {
       "nothing": "Nothing to compact yet: this conversation has no session the Orchestrator can resume.",

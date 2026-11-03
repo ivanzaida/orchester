@@ -134,6 +134,22 @@ impl Desktop {
     message
   }
 
+  /// A message of the conversation, `text`, sent as `mode` while the turn under way thinks, which reaches that turn as
+  /// `state` says (steering, or joined): the turns before it go on.
+  fn hands(&self, text: &str, mode: TurnMode, state: &TurnState) {
+    let mut db = self.db();
+    let body = MessageBody::new(text).expect("text");
+    let chat = db.chat(self.scope.chat).expect("read").expect("kept");
+    db.keep_chat_message_in(
+      &chat,
+      (ChatMessageId::generate(), &body),
+      (&[], Answerer::Person),
+      (state, Timestamp::now()),
+      mode,
+    )
+    .expect("kept");
+  }
+
   fn end_turns(&self, db: &mut ProjectDb) {
     for entry in db.chat_entries(self.scope.chat).expect("entries") {
       if let EntryKind::Person { message, .. } = entry.kind {
@@ -416,4 +432,95 @@ fn the_switch_is_the_conversations_and_survives_a_restart() {
     plan::set_plan_only_in(desktop.repo.path(), other, true).is_err(),
     "no such conversation"
   );
+}
+
+#[test]
+fn a_plan_only_message_sent_now_into_a_turn_that_acts_refuses_its_changes() {
+  for turn in [TurnMode::Acts, TurnMode::CarriesOut] {
+    for state in [TurnState::Steering, TurnState::Joined] {
+      let desktop = Desktop::new();
+      desktop.says("Carry on with the runs", turn);
+      desktop
+        .chat("create_task", json!({ "project": "Kontur", "title": "Before" }))
+        .expect("the turn acts before the message reaches it");
+      desktop.hands("Also draft the follow-up", TurnMode::Plans, &state);
+      let refused = desktop
+        .chat("create_task", json!({ "project": "Kontur", "title": "After" }))
+        .expect_err(&format!(
+          "a {turn:?} turn that took a plan-only message as {state:?} plans"
+        ));
+      assert_eq!(code(&refused), "plan_only", "{turn:?} {state:?}");
+      assert_eq!(desktop.refusals(), [("create_task".to_owned(), "plan_only".to_owned())]);
+      assert_eq!(desktop.db().tasks().expect("tasks").len(), 1, "only the first draft");
+      desktop
+        .chat(PROPOSE_PLAN, plan_arguments("Continue run #8"))
+        .expect("it answers the message with a plan");
+    }
+  }
+}
+
+#[test]
+fn an_ordinary_message_sent_now_into_a_turn_that_acts_still_acts() {
+  let desktop = Desktop::new();
+  desktop.says("Carry on with the runs", TurnMode::Acts);
+  desktop.hands("Also draft the follow-up", TurnMode::Acts, &TurnState::Joined);
+  desktop
+    .chat("create_task", json!({ "project": "Kontur", "title": "Follow-up" }))
+    .expect("nothing asked for a plan");
+  // A plan-only message an earlier turn took has no say in the next one.
+  let desktop = Desktop::new();
+  desktop.says("Plan it", TurnMode::Acts);
+  desktop.hands("Only plan this", TurnMode::Plans, &TurnState::Joined);
+  desktop.says("Now draft it", TurnMode::Acts);
+  desktop
+    .chat("create_task", json!({ "project": "Kontur", "title": "Follow-up" }))
+    .expect("the turn under way acts");
+}
+
+#[test]
+fn a_plan_is_not_approved_while_its_turn_still_thinks_nor_lets_that_turn_act() {
+  let desktop = Desktop::new();
+  desktop.says("Draft the follow-up", TurnMode::Plans);
+  desktop
+    .chat(PROPOSE_PLAN, plan_arguments("Continue run #8"))
+    .expect("the plan is kept");
+  let seq = desktop.plans()[0].0;
+  let carrying = ChatMessageId::generate();
+  assert_eq!(
+    plan::approve_in(desktop.repo.path(), seq, (carrying, Answerer::Person)),
+    Err(plan::busy()),
+    "the turn that proposed it still thinks"
+  );
+  assert!(desktop.plans()[0].1.waits());
+  assert!(desktop.db().chat_turn(carrying).expect("read").is_none());
+  // Approved meanwhile by another way in, the turn that planned still changes nothing.
+  desktop
+    .db()
+    .approve_chat_plan(seq, (carrying, Answerer::Person), Timestamp::now())
+    .expect("approved")
+    .expect("it waited");
+  let refused = desktop
+    .chat(
+      "create_task",
+      json!({ "project": "Kontur", "title": "Per-endpoint retry settings" }),
+    )
+    .expect_err("the planning turn still thinks");
+  assert_eq!(code(&refused), "plan_only");
+  assert!(desktop.db().tasks().expect("tasks").is_empty());
+  // Once it ended, the plan is approved, and its turn acts.
+  let desktop = Desktop::new();
+  desktop.says("Draft the follow-up", TurnMode::Plans);
+  desktop
+    .chat(PROPOSE_PLAN, plan_arguments("Continue run #8"))
+    .expect("the plan is kept");
+  let seq = desktop.plans()[0].0;
+  let mut db = desktop.db();
+  desktop.end_turns(&mut db);
+  plan::approve_in(desktop.repo.path(), seq, (carrying, Answerer::Person)).expect("approved");
+  desktop
+    .chat(
+      "create_task",
+      json!({ "project": "Kontur", "title": "Per-endpoint retry settings" }),
+    )
+    .expect("the approved plan acts");
 }

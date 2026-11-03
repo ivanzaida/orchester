@@ -12,7 +12,7 @@ use std::path::Path;
 
 use orchester_core::{
   id::{ChatId, ChatMessageId},
-  orchestrator::{ChatAction, ChatEntry, ChatPlan, EntryKind, PlanStep, StepKind, TurnMode},
+  orchestrator::{ChatAction, ChatEntry, ChatPlan, EntryKind, PlanStep, StepKind, TurnMode, TurnState},
   run::Answerer,
   time::Timestamp,
 };
@@ -111,7 +111,8 @@ impl From<ProposedKind> for StepKind {
 }
 
 /// Whether the turn under way in `scope`'s conversation plans: its person's message was sent in plan-only mode, or a
-/// wait, a run's end or a day's report started it while the conversation's switch is on.
+/// wait, a run's end or a day's report started it while the conversation's switch is on, or the person handed it a
+/// message sent in plan-only mode (*Send now*).
 pub(super) async fn planning(scope: &ChatScope) -> Result<bool, ToolError> {
   let (root, chat) = (scope.root.clone(), scope.chat);
   blocking(move || {
@@ -122,17 +123,35 @@ pub(super) async fn planning(scope: &ChatScope) -> Result<bool, ToolError> {
   .await
 }
 
-/// Whether the turn that thinks now among a conversation's `entries` plans, its switch `switched` as it is.
+/// Whether the turn under way among a conversation's `entries` plans, its switch `switched` as it is. Any turn that
+/// thinks and plans makes it plan, so a turn kept to carry out a plan approved while the planning turn still thought
+/// lets none of that turn's changes through; so does a message sent in plan-only mode that was handed to the turn
+/// under way (steering, or joined), whatever that turn's own mode: from the oldest turn that thinks on, each such
+/// message is the turn's.
 fn turn_plans(entries: &[ChatEntry], switched: bool) -> bool {
-  let thinking = entries
+  let Some(first) = entries
     .iter()
-    .rev()
-    .find(|entry| entry.kind.turn().is_some_and(|(_, state)| state.is_thinking()));
-  match thinking.map(|entry| &entry.kind) {
-    Some(EntryKind::Person { mode, .. }) => *mode == TurnMode::Plans,
-    Some(EntryKind::Wait { .. } | EntryKind::Report { .. }) => switched,
+    .position(|entry| entry.kind.turn().is_some_and(|(_, state)| state.is_thinking()))
+  else {
+    return false;
+  };
+  entries[first..].iter().any(|entry| match &entry.kind {
+    EntryKind::Person { mode, turn, .. } => {
+      *mode == TurnMode::Plans && matches!(turn, TurnState::Thinking | TurnState::Steering | TurnState::Joined)
+    }
+    EntryKind::Wait { .. } | EntryKind::Report { .. } => {
+      switched && entry.kind.turn().is_some_and(|(_, state)| state.is_thinking())
+    }
     _ => false,
-  }
+  })
+}
+
+/// Whether a turn thinks among a conversation's `entries`: a plan is approved only once none does, so the turn that
+/// carries it out is the one the runner takes next.
+fn any_thinking(entries: &[ChatEntry]) -> bool {
+  entries
+    .iter()
+    .any(|entry| entry.kind.turn().is_some_and(|(_, state)| state.is_thinking()))
 }
 
 /// Whether the turn under way in `scope`'s conversation carries out a plan the person approved: it approves no card.
@@ -219,6 +238,29 @@ pub fn taken() -> Message {
   Message::new("orchestrator.plan.taken")
 }
 
+/// A turn of the plan's conversation still thinks: the plan is approved once it ended.
+pub fn busy() -> Message {
+  Message::new("orchestrator.plan.busy")
+}
+
+/// Approves the plan kept as entry `seq` in the project at `root`, sent `by` the person, keeping `message` as the one
+/// whose turn carries it out; refused ([`busy`]) while a turn of its conversation still thinks, and [`taken`] once it
+/// no longer waits. Blocks on SQLite.
+pub fn approve_in(root: &Path, seq: i64, (message, by): (ChatMessageId, Answerer)) -> Result<(), Message> {
+  let approve = || -> Result<Result<(), Message>, orchester_store::StoreError> {
+    let mut db = ProjectDb::open(root)?;
+    let Some((chat, _)) = db.chat_plan(seq)? else {
+      return Ok(Err(taken()));
+    };
+    if any_thinking(&db.chat_entries(chat)?) {
+      return Ok(Err(busy()));
+    }
+    let approved = db.approve_chat_plan(seq, (message, by), Timestamp::now())?;
+    Ok(approved.map(drop).ok_or_else(taken))
+  };
+  approve().map_err(|error| messages::store_error(&error))?
+}
+
 /// Approves the plan kept as entry `seq` of `project`, sent `by` the person, and asks the runner for the turn that
 /// carries it out under `message`, with the domain tools at `tools`. A turn the runner did not take is taken back: the
 /// plan waits again.
@@ -232,17 +274,10 @@ pub async fn approve(
     return Err(SendError::NotSent(not_sent(&RunRequestError::Request(error))));
   }
   let root = project.repo_root.clone();
-  let approved = background::run(move || {
-    ProjectDb::open(&root)
-      .and_then(|mut db| db.approve_chat_plan(seq, (message, by), Timestamp::now()))
-      .map_err(|error| messages::store_error(&error))
-  })
-  .await
-  .and_then(|approved| approved)
-  .map_err(SendError::NotSent)?;
-  if approved.is_none() {
-    return Err(SendError::NotSent(taken()));
-  }
+  background::run(move || approve_in(&root, seq, (message, by)))
+    .await
+    .and_then(|approved| approved)
+    .map_err(SendError::NotSent)?;
   runners.chat_changed(&project.repo_root);
   let Err(error) = runners.answer_in_chat(project, message, tools).await else {
     return Ok(());

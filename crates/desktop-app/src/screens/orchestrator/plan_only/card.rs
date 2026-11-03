@@ -73,6 +73,8 @@ pub(in crate::screens::orchestrator) struct PlanProps {
   pub(in crate::screens::orchestrator) at: Timestamp,
   /// The composer is changing it.
   pub(in crate::screens::orchestrator) changing: bool,
+  /// A turn of the conversation still thinks: *Approve and do it* waits for it to end.
+  pub(in crate::screens::orchestrator) answering: bool,
   /// `None` while the conversation is not kept: nothing is decided then.
   pub(in crate::screens::orchestrator) deciding: Option<Deciding>,
 }
@@ -80,15 +82,10 @@ pub(in crate::screens::orchestrator) struct PlanProps {
 /// Compared by what it shows; *Change it* is the screen's.
 impl PartialEq for PlanProps {
   fn eq(&self, other: &Self) -> bool {
-    (&self.id, &self.plan, self.seq, self.number, self.at, self.changing)
-      == (
-        &other.id,
-        &other.plan,
-        other.seq,
-        other.number,
-        other.at,
-        other.changing,
-      )
+    self.id == other.id
+      && self.plan == other.plan
+      && (self.seq, self.number, self.at) == (other.seq, other.number, other.at)
+      && (self.changing, self.answering) == (other.changing, other.answering)
       && self.deciding.as_ref().map(|deciding| deciding.chat) == other.deciding.as_ref().map(|deciding| deciding.chat)
   }
 }
@@ -178,7 +175,8 @@ impl PlanCard {
   }
 
   /// *Approve and do it*, *Change it* and *Dismiss*, then a lock and *Only you can approve*; none takes a press while
-  /// a decision is under way, or before the conversation is kept.
+  /// a decision is under way, or before the conversation is kept, and *Approve and do it* none while a turn of the
+  /// conversation still thinks.
   fn actions(&self, ctx: &mut Ctx, props: &PlanProps) -> Row {
     let id = props.id.as_str();
     let approve = ActionButton::new(
@@ -203,7 +201,14 @@ impl PlanCard {
     let buttons: [ActionButton; 3] = match props.deciding.clone().filter(|_| !pending) {
       None if approving => [approve.loading(), change.disabled(), dismiss.disabled()],
       None => [approve.disabled(), change.disabled(), dismiss.disabled()],
-      Some(deciding) => self.pressable([approve, change, dismiss], props, deciding),
+      Some(deciding) => {
+        let [approve, change, dismiss] = self.pressable([approve, change, dismiss], props, deciding);
+        [
+          if props.answering { approve.disabled() } else { approve },
+          change,
+          dismiss,
+        ]
+      }
     };
     Row::new()
       .id(format!("{id}-actions"))

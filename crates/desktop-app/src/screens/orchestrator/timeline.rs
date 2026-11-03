@@ -76,6 +76,8 @@ pub(super) struct TurnEnv {
   pub(super) open: OpenProject,
   pub(super) change_plan: Arc<dyn Fn(Changing) + Send + Sync>,
   pub(super) changing: Option<i64>,
+  /// A turn of the conversation still thinks: a plan is approved once it ended.
+  pub(super) answering: bool,
 }
 
 /// The answers whose todo list the person opened under their name line, by the message that started each.

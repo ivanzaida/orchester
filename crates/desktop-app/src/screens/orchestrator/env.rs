@@ -10,11 +10,11 @@ use super::{View, send::ChangeQueued, timeline::TurnEnv};
 use crate::{project::ShownProject, ui::chat::names::ProjectNames};
 
 /// The rows' environment for conversation `chat` of `project`, on `connection` (its name) when the Orchestrator has
-/// one.
+/// one, `answering` while a turn of it thinks.
 pub(super) fn env(
   view: &View,
   project: &ShownProject,
-  (chat, connection): (Option<ChatId>, Option<Arc<str>>),
+  (chat, connection, answering): (Option<ChatId>, Option<Arc<str>>, bool),
   names: &ProjectNames,
 ) -> TurnEnv {
   let open = project.open.clone();
@@ -62,5 +62,6 @@ pub(super) fn env(
     open: project.open.clone(),
     change_plan: view.change_plan(),
     changing: view.plan_only.changing.get().map(|changing| changing.seq),
+    answering,
   }
 }
