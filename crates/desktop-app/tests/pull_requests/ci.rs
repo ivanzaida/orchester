@@ -41,6 +41,11 @@ fn ci_a_failed_check_shows_on_the_summary_and_fix_ci_sends_it() {
   assert!(seeded.text("task-ci-passed").starts_with("4 passed · check 1"));
   assert_eq!(seeded.text("task-status"), "CI failed on #137");
   assert_eq!(seeded.text("task-ci-auto-hint"), "Off · CI waits for you when it fails");
+  // The run ended at its review: Fix CI goes to the agent of the step that wrote the code.
+  assert_eq!(
+    seeded.text("task-ci-fix-hint"),
+    "Sends the failing check's name and last 40 log lines to Builder"
+  );
   seeded.window.press("task-ci-fix");
   let repo = seeded.repo.clone();
   let task = ProjectDb::open(&repo)

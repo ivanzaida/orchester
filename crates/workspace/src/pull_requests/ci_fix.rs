@@ -10,12 +10,13 @@
 use std::path::Path;
 
 use orchester_core::{
+  conversation::Recipient,
   id::{IdempotencyKey, MessageId, RunId, TaskId},
   pull_request::ci::{
     fix::{AutoFix, AutoStep, FixEvent, FixEventKind, FixedBy, failure_of, is_failing},
     fix_text,
   },
-  run::Answerer,
+  run::{Answerer, StepExecutor},
   store::RunStore,
   time::Timestamp,
 };
@@ -32,9 +33,10 @@ use crate::{
   sharing::Servers,
   tasks::{
     conversation::{
+      Conversation,
       composer::{ComposerMode, Queued, Then},
       follow::{RunnerOf, Sent, Stored, follow},
-      outgoing::{OutgoingError, Way, conversation_of, offer as mode_of, prepare_in, store_answer_in},
+      outgoing::{OutgoingError, Prepared, Way, conversation_of, offer as mode_of, prepare_in, store_answer_in},
     },
     detail::{RunView, TaskDetail, run_store_error},
   },
@@ -123,7 +125,7 @@ pub fn offer(detail: &TaskDetail, lost: bool, ci: &PullRequestCi) -> FixOffer {
   if waiting(detail, run) {
     return unavailable("fixCi.unavailable.waiting");
   }
-  let (mode, _) = mode_of(&conversation_of(detail, lost), Some(run), None);
+  let (mode, _) = fix_mode(&conversation_of(detail, lost), run);
   match mode {
     ComposerMode::Answer { .. }
     | ComposerMode::PlanChanges { .. }
@@ -131,6 +133,27 @@ pub fn offer(detail: &TaskDetail, lost: bool, ci: &PullRequestCi) -> FixOffer {
     ComposerMode::RaiseLimit | ComposerMode::Queue(Queued::SharedBudget(_)) => unavailable("fixCi.unavailable.limit"),
     ComposerMode::Closed => unavailable("fixCi.unavailable.closed"),
     _ => FixOffer::Available,
+  }
+}
+
+/// The step that wrote the code: the run's last step in pipeline order whose agent may write in its worktree. A Fix
+/// CI goes to its agent, so a run that ended continues there (`docs/design/pr-ci-status.md`, "Fix CI").
+pub fn writing_step(run: &RunView) -> Option<&crate::tasks::detail::StepView> {
+  run.steps.iter().rev().find(|step| !step.tool_step && step.writes())
+}
+
+/// The agent a Fix CI goes to and what sending to it does in `conversation`: the writing step's agent
+/// ([`writing_step`]), else the one the run's state addresses.
+fn fix_mode(conversation: &Conversation, run: &RunView) -> (ComposerMode, Recipient) {
+  let writer = writing_step(run)
+    .and_then(|step| run.run.snapshot().step(&step.key))
+    .and_then(|step| match step.executor() {
+      StepExecutor::Agent { profile, .. } => Some(Recipient::Agent(profile.resource)),
+      StepExecutor::Tool { .. } => None,
+    });
+  match writer {
+    Some(recipient) => (ComposerMode::of(conversation, Some(run), recipient), recipient),
+    None => mode_of(conversation, Some(run), None),
   }
 }
 
@@ -160,6 +183,26 @@ pub fn set_auto_fix_in(root: &Path, run: RunId, auto: AutoFix) -> Result<(), Sto
   ProjectDb::open(root)?.set_auto_fix(run, auto, Timestamp::now())
 }
 
+/// The run `prepared` is for: the task's latest.
+fn latest_run(prepared: &Prepared) -> &RunView {
+  prepared
+    .detail
+    .run
+    .as_ref()
+    .expect("prepared for the task's latest run")
+}
+
+/// The failing checks' names of `read`, in `gh`'s order.
+fn failing_names(read: &ReadCi) -> Vec<String> {
+  read
+    .checks
+    .checks
+    .iter()
+    .filter(|check| is_failing(check.state))
+    .map(|check| check.name.clone())
+    .collect()
+}
+
 /// Stores the Fix CI of `read`, the checks of `task`'s latest run `run`'s pull request, sent by `fixer`, and records
 /// it; or, for *Fix CI automatically*, records that it stopped at its limit, or does nothing. `lost` as in [`offer`].
 /// Blocks on SQLite.
@@ -169,12 +212,9 @@ pub fn store_fix_in(
   (read, lost): (&ReadCi, bool),
   fixer: Fixer,
 ) -> Result<FixDone, FixError> {
-  let prepared = prepare_in(root, (task, Some(run)), (lost, None)).map_err(FixError::Outgoing)?;
-  let view = prepared
-    .detail
-    .run
-    .as_ref()
-    .expect("prepared for the task's latest run");
+  let mut prepared = prepare_in(root, (task, Some(run)), (lost, None)).map_err(FixError::Outgoing)?;
+  (prepared.mode, prepared.recipient) = fix_mode(&prepared.conversation, latest_run(&prepared));
+  let view = latest_run(&prepared);
   let ci = PullRequestCi::Read(read.clone());
   if let FixOffer::Unavailable(reason) = offer(&prepared.detail, lost, &ci) {
     return match fixer {
@@ -183,13 +223,7 @@ pub fn store_fix_in(
     };
   }
   let failure = failure_of(&read.checks).expect("Fix CI is offered for failing checks only");
-  let failing: Vec<String> = read
-    .checks
-    .checks
-    .iter()
-    .filter(|check| is_failing(check.state))
-    .map(|check| check.name.clone())
-    .collect();
+  let failing = failing_names(read);
   let way = way_in(&prepared.mode);
   let mut db = ProjectDb::open(root)?;
   // Automation never decides for the person: a run that would take the message as a decision waits for them.

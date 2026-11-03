@@ -121,7 +121,8 @@ impl TaskSummary {
   /// The column's sections, in the design's order.
   fn parts(&self, ctx: &mut Ctx, task: &TaskContext) -> Vec<Element> {
     let detail = &task.detail;
-    // The run's pull request and its CI (ORC-335) take the place of the card of a run ready to merge: GitHub merges it.
+    // The run's pull request and its CI (ORC-335) take the place of the card of a run ready to merge and of returning
+    // its work to a step: GitHub merges it, and Fix CI sends the work back.
     let ci = detail
       .run
       .as_ref()
@@ -129,7 +130,7 @@ impl TaskSummary {
       .map(|(run, shown)| super::ci::card::card(ctx, task, (run, shown)));
     let ready = waiting(task) == Some(Waiting::Ready);
     let decision = decisions(ctx, task).filter(|_| !(ready && ci.is_some()));
-    let ended = detail.run.as_ref().is_some_and(|run| run.run.status().is_terminal());
+    let ended = detail.run.as_ref().is_some_and(|run| run.run.status().is_terminal()) && ci.is_none();
     let returning = ended.then(|| decisions::return_card(ctx, task)).flatten();
     // A run a teammate holds of a shared task is said even though this computer does not have it.
     let run = run::section(ctx, task, detail.run.as_ref());

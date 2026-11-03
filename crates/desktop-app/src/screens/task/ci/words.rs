@@ -6,7 +6,7 @@ use std::sync::Arc;
 use lurq::app::ctx::Ctx;
 use orchester_core::pull_request::ci::{CiChecks, CiState, fix::is_failing};
 use orchester_workspace::{
-  pull_requests::ci::PullRequestCi,
+  pull_requests::{ci::PullRequestCi, ci_fix::writing_step},
   tasks::{
     conversation::outgoing::{conversation_of, offer},
     detail::TaskDetail,
@@ -96,8 +96,17 @@ pub fn why_not_read(ci: &PullRequestCi) -> &'static str {
   }
 }
 
-/// The agent a Fix CI goes to now: the one the run's state addresses, as the composer would send to it.
+/// The agent a Fix CI goes to: the one of the step that wrote the code (`ci_fix::writing_step`), else the one the run's
+/// state addresses, as the composer would send to it.
 pub fn agent(ctx: &Ctx, detail: &TaskDetail, lost: bool) -> Arc<str> {
+  if let Some(agent) = detail
+    .run
+    .as_ref()
+    .and_then(writing_step)
+    .and_then(|step| step.agent.clone())
+  {
+    return agent;
+  }
   let conversation = conversation_of(detail, lost);
   let (_, recipient) = offer(&conversation, detail.run.as_ref(), None);
   conversation
