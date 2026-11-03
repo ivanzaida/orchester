@@ -5,6 +5,7 @@
 //! merge left is cleared — when the app starts again ([`super::merge_left::recover_interrupted`]), or by the next
 //! merge, either holding the project's integration lease so that no other one goes on.
 
+pub mod merges;
 pub mod read;
 
 use std::{path::Path, thread};

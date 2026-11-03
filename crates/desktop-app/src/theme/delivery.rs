@@ -94,21 +94,28 @@ pub enum DeliverySpacing {
   Sections,
   /// 26: a file under the check that found it, in from the check's glyph (`File line` `mjqx2` in `e7geY3`).
   FileIndent,
-  /// 14: the Merge queue's info line, its lanes and its note apart, and under the hub's tabs (`YfZEw` in `S1pTL`).
+  /// 14: the Merge queue's info line, its lanes and its note apart, and under the hub's tabs (`YfZEw` in `S1pTL`); the
+  /// parts of Review › Merges apart (`Review` `ZPIfX` in 09 `Os7b3`).
   Lanes,
   /// 10: above a lane's head, and between its glyph, *Into*, its branch, its count and how it lands (`BBL6x`).
   LaneHead,
-  /// 14: between a lane row's place, glyph, words, time and actions (`mTyPp`).
+  /// 14: between a lane row's place, glyph, words, time and actions (`mTyPp`), and a Merges row's (`y6btZh`).
   LaneRow,
+  /// 10: above a section's heading in Review › Merges (`Section · Not merged` `g7qwcU` in 09 `Os7b3`).
+  MergesSection,
+  /// 56: Review › Merges' empty state under its info line, past the parts' gap (09c `jhPCL`).
+  MergesEmpty,
 }
 
 impl DeliverySpacing {
-  pub const ALL: [Self; 5] = [
+  pub const ALL: [Self; 7] = [
     Self::Sections,
     Self::FileIndent,
     Self::Lanes,
     Self::LaneHead,
     Self::LaneRow,
+    Self::MergesSection,
+    Self::MergesEmpty,
   ];
 
   pub fn role(self) -> SpacingSize {
@@ -122,6 +129,8 @@ impl DeliverySpacing {
       Self::Lanes => "delivery_lanes",
       Self::LaneHead => "delivery_lane_head",
       Self::LaneRow => "delivery_lane_row",
+      Self::MergesSection => "delivery_merges_section",
+      Self::MergesEmpty => "delivery_merges_empty",
     }
   }
 
@@ -130,7 +139,8 @@ impl DeliverySpacing {
       Self::Sections => 20.0,
       Self::FileIndent => 26.0,
       Self::Lanes | Self::LaneRow => 14.0,
-      Self::LaneHead => 10.0,
+      Self::LaneHead | Self::MergesSection => 10.0,
+      Self::MergesEmpty => 56.0,
     }
   }
 }

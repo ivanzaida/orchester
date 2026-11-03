@@ -40,7 +40,7 @@ const RELEASE: &str = "release/2.0";
 
 /// How a run's work was made, and what became of it before the queue had it.
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Work {
+pub(super) enum Work {
   Clean,
   /// It writes the webhook retry, which `main` changes too after it started.
   Conflicting,
@@ -230,7 +230,7 @@ pub fn quiet(kontur: &mut Kontur) -> Result<(), SeedError> {
 
 /// A run of a new task titled `title` that passed every step, started `ago` minutes before now, its work made as
 /// `work` says.
-fn passed(
+pub(super) fn passed(
   kontur: &mut Kontur,
   pipeline: &Published,
   (title, state): (&str, &'static str),
@@ -317,7 +317,7 @@ fn merged_by_queue(kontur: &mut Kontur, run: &Run) -> Result<(), SeedError> {
 }
 
 /// What the queue recorded of a run synced with `main` at `base` and checked there.
-fn checked_events(base: &Revision) -> Vec<QueueEvent> {
+pub(super) fn checked_events(base: &Revision) -> Vec<QueueEvent> {
   vec![
     QueueEvent::Synced {
       base: base.clone(),
@@ -333,7 +333,7 @@ fn checked_events(base: &Revision) -> Vec<QueueEvent> {
 
 /// `run` joins the queue as the queue's driver joins it once every step passed, and is left in `state` since `at`,
 /// `shaped`, with `events` recorded.
-fn enter(
+pub(super) fn enter(
   kontur: &mut Kontur,
   run: &Run,
   (state, at): (QueueState, Timestamp),
