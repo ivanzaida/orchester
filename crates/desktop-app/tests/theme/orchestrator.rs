@@ -22,8 +22,9 @@ fn orchestrator_roles_follow_the_design() {
     // A plan's use in the runs-on picker (`qSIt9`).
     (OrchestratorText::PlanUse, 10.5, 1.3, FontWeight::Normal, "Geist Mono"),
     (OrchestratorText::FactKey, 12.0, 1.3, FontWeight::Normal, "Geist"),
-    // A History row's meta (`r9TeH`), the composer's message (`lB97V`).
+    // A History row's meta (`r9TeH`) and a result's matching line (`srL91`), the composer's message (`lB97V`).
     (OrchestratorText::HistoryMeta, 11.0, 1.3, FontWeight::Normal, "Geist"),
+    (OrchestratorText::HistoryLine, 11.5, 1.4, FontWeight::Normal, "Geist"),
     (OrchestratorText::Message, 13.0, 1.3, FontWeight::Normal, "Geist"),
     // *Plan only* on the composer's Mode line (`xptH1` in `y51fw9`).
     (OrchestratorText::Mode, 12.0, 1.3, FontWeight::Medium, "Geist"),

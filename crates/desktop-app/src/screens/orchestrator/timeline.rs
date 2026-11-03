@@ -161,10 +161,16 @@ impl Line {
 
 /// The list of `rows`, as `follow` follows it (`ui::chat::follow`), with `note` under the last turn: it opens at the
 /// very end of the newest turn and keeps it in view as turns come and replies grow, until the person scrolls up; then
-/// *Jump to latest* floats over its foot.
-pub(super) fn list(ctx: &mut Ctx, follow: &Follow, rows: Vec<TurnRow>, note: Option<Arc<str>>) -> Element {
+/// *Jump to latest* floats over its foot. Opened from History's search at a match, it opens at the row `found` (its
+/// key) instead, until the person scrolls.
+pub(super) fn list(
+  ctx: &mut Ctx,
+  follow: &Follow,
+  (rows, found): (Vec<TurnRow>, Option<String>),
+  note: Option<Arc<str>>,
+) -> Element {
   let arrived = arrivals(&rows);
-  let reveal = follow.follow(rows.len(), arrived, None);
+  let reveal = follow.follow(rows.len(), arrived, found);
   let following = follow.following.get();
   let mut lines = gathered(rows);
   lines.extend(note.map(Line::Note));

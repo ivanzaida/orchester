@@ -36,7 +36,7 @@ use super::{
   send_menu::Ways,
   start::start,
   timeline::{TurnRow, list},
-  turns::{Arrival, Turn, turns},
+  turns::{Arrival, Turn, row_of, turns},
 };
 use crate::{
   navigation::Navigation,
@@ -349,10 +349,13 @@ fn conversation(
   let all = all_turns(view, shown, pending);
   let chat = shown.map(|shown| shown.chat.id());
   let answering = shown.is_some_and(ChatView::thinking);
-  // Another conversation opens at its own end.
+  // Another conversation opens at its own end, or at the match History's search opened it at.
   view
     .follow
     .shows(&chat.map_or_else(|| "new".to_owned(), |chat| chat.to_string()));
+  let found = (view.listing.opened_at.get())
+    .filter(|at| Some(at.chat) == chat)
+    .and_then(|at| row_of(&all, at.seq));
   let connection = match foot.readiness {
     Some(Readiness::Ready { connection, .. }) => Some(connection.clone()),
     _ => None,
@@ -410,7 +413,7 @@ fn conversation(
             .id("orchestrator-scroll")
             .width(Dimension::Pct(100.0))
             .height(Dimension::Pct(100.0))
-            .child(list(ctx, &view.follow, rows, readable)),
+            .child(list(ctx, &view.follow, (rows, found), readable)),
         ),
     )
     .child(composer_area(below))

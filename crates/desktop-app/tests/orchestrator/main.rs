@@ -22,6 +22,7 @@ mod harness;
 mod history;
 mod history_archive;
 mod history_rows;
+mod history_search;
 mod layout;
 mod lines;
 mod links;

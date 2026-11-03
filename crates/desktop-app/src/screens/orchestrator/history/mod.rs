@@ -8,11 +8,14 @@
 //! over a `border` line, the way to the archived conversations while there are some (`Archived entry` `Z6bee` in `08`
 //! `q30JYF`: an archive glyph, *Archived* and their count, a chevron at its end) over a note. The archived ones are a
 //! view of their own ([`archived`], `08d` `qAfeu`); deleting one asks in a modal first ([`delete`], `08e` `I4xzOf`).
-//! Opening one keeps the draft; Esc or the header's toggle closes it.
+//! The search finds the words in the titles and in the messages ([`search`]); a result found in its messages opens
+//! at the first of them. Opening one keeps the draft; Esc or the header's toggle closes it.
 
 mod archived;
 mod delete;
+mod meta;
 mod row;
+mod search;
 
 use std::{cmp::Reverse, path::Path, sync::Arc};
 
@@ -31,9 +34,12 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_store::ChatListing;
-use orchester_workspace::orchestrator::chat::History;
+use orchester_workspace::{orchestrator::chat::History, tasks::timeline::find::Needle};
 
-use self::row::ItemView;
+use self::{
+  row::ItemView,
+  search::{Matched, Outcome, RunProps, Search, SearchRun, Searched},
+};
 use crate::{
   theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize, OrchestratorShadow, OrchestratorText},
   ui::{
@@ -44,9 +50,11 @@ use crate::{
   },
 };
 
-/// The panel's width (`eFI39`) and a conversation's row's height (`aowsX`), and a day heading's bone (`ipw6U`).
+/// The panel's width (`eFI39`) and a conversation's row's height (`aowsX`), a result's with its matching line (`qFCmX`
+/// in 13 `SZ6QY`), and a day heading's bone (`ipw6U`).
 const WIDTH: f32 = 300.0;
 const ROW_HEIGHT: f32 = 46.0;
+const FOUND_ROW_HEIGHT: f32 = 66.0;
 const DAY_BONE: f32 = 36.0;
 
 /// When a conversation last changed, as the list groups it.
@@ -102,8 +110,19 @@ pub(super) struct Deleting(pub(super) Option<ChatId>);
 
 impl lurq::app::component::DevtoolsInspectable for Deleting {}
 
+/// A conversation opened from a result of History's search found in its messages: it opens at entry `seq`, the one
+/// its first matching line is in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct OpenedAt {
+  pub(super) chat: ChatId,
+  pub(super) seq: i64,
+}
+
+impl lurq::app::component::DevtoolsInspectable for OpenedAt {}
+
 /// What History keeps while the screen shows it, the screen's, as Esc goes back through it: the delete asked about,
-/// the title edited in place, whether it shows the archived conversations, and the words each list is searched by.
+/// the title edited in place, whether it shows the archived conversations, the words each list is searched by, what
+/// the search found in the messages so far, and the conversation last opened at a match.
 #[derive(Clone)]
 pub(super) struct HistoryState {
   pub(super) deleting: Signal<Deleting>,
@@ -111,6 +130,8 @@ pub(super) struct HistoryState {
   pub(super) archived: Signal<bool>,
   pub(super) search: Signal<String>,
   pub(super) archived_search: Signal<String>,
+  outcome: Signal<Outcome>,
+  pub(super) opened_at: Signal<Option<OpenedAt>>,
 }
 
 impl HistoryState {
@@ -121,12 +142,14 @@ impl HistoryState {
       archived: ctx.signal(false),
       search: ctx.signal(String::new()),
       archived_search: ctx.signal(String::new()),
+      outcome: ctx.signal(Outcome::default()),
+      opened_at: ctx.signal(None),
     }
   }
 }
 
 /// What every conversation's row shares: the project, its folder, where *Rename*, *Pin*, *Archive* and *Delete* keep
-/// what they change, and History's state, the screen's.
+/// what they change and where a result opened at a match says so, and History's state, the screen's.
 #[derive(Clone)]
 pub(super) struct Rows {
   project: ProjectId,
@@ -134,6 +157,7 @@ pub(super) struct Rows {
   renaming: Signal<Renaming>,
   deleting: Signal<Deleting>,
   archived: Signal<bool>,
+  opened_at: Signal<Option<OpenedAt>>,
 }
 
 impl Rows {
@@ -144,6 +168,7 @@ impl Rows {
       renaming: state.renaming.clone(),
       deleting: state.deleting.clone(),
       archived: state.archived.clone(),
+      opened_at: state.opened_at.clone(),
     }
   }
 }
@@ -151,12 +176,19 @@ impl Rows {
 /// Compared by what it names; the signals by which ones they are.
 impl PartialEq for Rows {
   fn eq(&self, other: &Self) -> bool {
-    let signals = |rows: &Self| (rows.renaming.id(), rows.deleting.id(), rows.archived.id());
+    let signals = |rows: &Self| {
+      (
+        rows.renaming.id(),
+        rows.deleting.id(),
+        rows.archived.id(),
+        rows.opened_at.id(),
+      )
+    };
     (self.project, &self.root, signals(self)) == (other.project, &other.root, signals(other))
   }
 }
 
-/// A row of the list: a group's heading or a conversation.
+/// A row of the list: a group's heading or a conversation, with what the search found in it while it searches.
 #[derive(Clone, PartialEq)]
 enum Item {
   Heading(Heading),
@@ -164,6 +196,7 @@ enum Item {
     listing: Box<ChatListing>,
     current: bool,
     today: bool,
+    matched: Option<Matched>,
     rows: Rows,
   },
 }
@@ -200,7 +233,7 @@ pub(super) fn panel(
     archived::parts(ctx, state, rows, (&archived, current))
   } else {
     let listed: Option<Vec<&ChatListing>> = history.map(|history| history.listed().collect());
-    main_parts(ctx, &state.search, rows, (listed.as_deref(), current), archived.len())
+    main_parts(ctx, state, rows, (listed.as_deref(), current), archived.len())
   };
   Column::new()
     .id("orchestrator-history-panel")
@@ -223,42 +256,72 @@ pub(super) fn panel(
     .into()
 }
 
-/// History's list: its search field, the conversations it lists (`chats`, none while they are read) and its foot, the
-/// way to the `archived` ones while there are some over the note.
+/// History's list: its search field, and under it while it searches what it found, the conversations it lists
+/// (`chats`, none while they are read) and its foot, the way to the `archived` ones while there are some over the
+/// note. The messages of the conversations it lists are searched as the words in the field change.
 fn main_parts(
   ctx: &mut Ctx,
-  search: &Signal<String>,
+  state: &HistoryState,
   rows: &Rows,
   (chats, current): (Option<&[&ChatListing]>, Option<ChatId>),
   archived: usize,
 ) -> (Element, Element, Element) {
   let label = ctx.t("orchestrator.historyPanel.search");
-  let field = FieldInput::new("orchestrator-history-search", label.clone(), search.clone())
+  let field = FieldInput::new("orchestrator-history-search", label.clone(), state.search.clone())
     .search()
     .placeholder(label)
     .render(ctx);
-  let head = Row::new()
+  let needle = Needle::new(&state.search.get());
+  let searched: Option<Searched> =
+    chats.map(|chats| chats.iter().map(|listing| (listing.chat.id(), listing.last)).collect());
+  let run = searched.clone().map(|chats| {
+    let props = RunProps {
+      root: rows.root.clone(),
+      chats,
+      needle: needle.clone(),
+      outcome: state.outcome.clone(),
+    };
+    ctx.mount_keyed::<SearchRun>("orchestrator-history-search-run", props)
+  });
+  let search = needle
+    .zip(searched)
+    .map(|(needle, chats)| Search::of(needle, &chats, &state.outcome.get()));
+  let (list, status) = match chats {
+    None => (reading(ctx), None),
+    Some(chats) => {
+      let items = items(chats, (current, rows), search.as_ref());
+      let results = items.iter().filter(|item| matches!(item, Item::Chat { .. })).count();
+      let status = search.as_ref().map(|search| search.status(ctx, results));
+      let words = if chats.is_empty() {
+        "orchestrator.historyPanel.empty"
+      } else {
+        "orchestrator.historyPanel.noMatch"
+      };
+      (list(ctx, items, ("orchestrator-history-list", words)), status)
+    }
+  };
+  let bottom = if status.is_some() {
+    SpacingSize::Xs
+  } else {
+    SpacingSize::Sm
+  };
+  let head = Column::new()
     .width(Dimension::Pct(100.0))
     .padding(
       Padding::new()
         .top(SpacingSize::Md)
         .left(SpacingSize::Md)
         .right(SpacingSize::Md)
-        .bottom(SpacingSize::Sm),
+        .bottom(bottom),
     )
-    .child(field);
-  let list = match chats {
-    None => reading(ctx),
-    Some(chats) => {
-      let items = items(chats, (current, rows), &search.get());
-      let words = if chats.is_empty() {
-        "orchestrator.historyPanel.empty"
-      } else {
-        "orchestrator.historyPanel.noMatch"
-      };
-      list(ctx, items, ("orchestrator-history-list", words))
-    }
-  };
+    .spacing(ExtraSpacing::Snug.role())
+    .child(
+      Column::new()
+        .width(Dimension::Pct(100.0))
+        .child(field)
+        .with_children(run),
+    )
+    .with_children(status);
   (head.into(), list, foot(ctx, rows, archived).into())
 }
 
@@ -402,40 +465,54 @@ fn search_words(search: &str) -> Vec<String> {
 
 /// The row of `listing` of the project `rows` name, `current` the one shown.
 fn chat_item(listing: &ChatListing, (current, rows): (Option<ChatId>, &Rows), today: Timestamp) -> Item {
+  found_item(listing, (current, rows), today, None)
+}
+
+/// [`chat_item`] with what the search `matched` in it.
+fn found_item(
+  listing: &ChatListing,
+  (current, rows): (Option<ChatId>, &Rows),
+  today: Timestamp,
+  matched: Option<Matched>,
+) -> Item {
   Item::Chat {
     listing: Box::new(listing.clone()),
     current: current == Some(listing.chat.id()),
     today: Day::of(listing.last, today) == Day::Today,
+    matched,
     rows: rows.clone(),
   }
 }
 
-/// The list's rows: `chats` whose title has every word of `search`, the pinned ones first, the latest pin first, and
-/// then the others under the day each last changed.
-fn items(chats: &[&ChatListing], shown: (Option<ChatId>, &Rows), search: &str) -> Vec<Item> {
-  let words = search_words(search);
-  let chats: Vec<&ChatListing> = chats.iter().copied().filter(|listing| found(listing, &words)).collect();
-  let today = Timestamp::now().local_day_start();
-  let item = |listing: &ChatListing| chat_item(listing, shown, today);
-  let mut pinned: Vec<&ChatListing> = chats
+/// The list's rows: `chats`, or while it searches those `search` found in their title or their messages, the pinned
+/// ones first, the latest pin first, and then the others under the day each last changed.
+fn items(chats: &[&ChatListing], shown: (Option<ChatId>, &Rows), search: Option<&Search>) -> Vec<Item> {
+  let chats: Vec<(&ChatListing, Option<Matched>)> = chats
     .iter()
-    .copied()
-    .filter(|listing| listing.pinned.is_some())
+    .filter_map(|&listing| match search {
+      None => Some((listing, None)),
+      Some(search) => search
+        .matched(listing.chat.id(), listing.chat.title())
+        .map(|matched| (listing, Some(matched))),
+    })
     .collect();
-  pinned.sort_by_key(|listing| Reverse(listing.pinned));
+  let today = Timestamp::now().local_day_start();
+  let item = |(listing, matched): (&ChatListing, Option<Matched>)| found_item(listing, shown, today, matched);
+  let (mut pinned, others): (Vec<_>, Vec<_>) = chats.into_iter().partition(|(listing, _)| listing.pinned.is_some());
+  pinned.sort_by_key(|(listing, _)| Reverse(listing.pinned));
   let mut items = Vec::new();
   if !pinned.is_empty() {
     items.push(Item::Heading(Heading::Pinned));
     items.extend(pinned.into_iter().map(item));
   }
   let mut last_day = None;
-  for listing in chats.into_iter().filter(|listing| listing.pinned.is_none()) {
-    let day = Day::of(listing.last, today);
+  for chat in others {
+    let day = Day::of(chat.0.last, today);
     if last_day != Some(day) {
       items.push(Item::Heading(Heading::Day(day)));
       last_day = Some(day);
     }
-    items.push(item(listing));
+    items.push(item(chat));
   }
   items
 }
