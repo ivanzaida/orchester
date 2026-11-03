@@ -136,6 +136,11 @@ define_id!(
   /// One unit of work a team server authorized; the server makes it, never the client.
   WorkId
 );
+define_id!(
+  /// One execution event a runner reports for authorized work (S9 `work.report`): made once per event and repeated on
+  /// every retry, so the server answers a retried report with its original result.
+  WorkEventId
+);
 
 impl TaskId {
   /// Reopening a queued task must retry its first run with the same key. Later runs use

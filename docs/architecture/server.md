@@ -427,6 +427,24 @@ current effective claim on current unfenced work counts as Admin-authorized; off
 `delivery.authorize`. Report and outside deliverables have no base merge (D4 open). OP-150 implements routes and
 enforcement in the platform repository; these types alone implement none.
 
+## Team authority S9 contract (ORC-655 / OP-152)
+
+Work reports, execution outcomes and work events. The wire shapes are in
+[cloud-api.md](../cloud-api.md#team-authority-s9-work-reports). Core's `run::ExecutionOutcome` is what a run reports
+about the work it carries out (`progress`, `succeeded`, `failed` with a closed `ExecutionFailure`, `cancelled`); the
+failure kinds are the desktop's own (`RunFailure`'s kinds map with `From`, plus a reached limit and a failed runner)
+and carry no text, path or local id. Core's `run::order_report` is the pure per-run sequence rule: a report is
+accepted only after the last accepted sequence of its run, the same sequence with the same report is a duplicate, and
+anything else is `SequenceRegressed`. Core adds `id::WorkEventId`, the event id a report repeats on retry.
+
+`v2::WorkReport` is the `work.report` payload (`AuthorityRef`, `run_id`, `event_id`, `sequence`, `outcome`,
+`ArtifactRef`s with an `ArtifactKind` of `report`, `patch` or `log`); `v2::WorkEvent::Changed` is the `work.changed`
+delta with `{work:WorkRead}`. Refusals reuse `claim_lost` for a stale generation and add `session_mismatch`,
+`sequence_regressed` and `membership_revoked`; a duplicate is answered with the original result. An execution
+success is not permission to mark the task Done: no human-wait or task-completion outcome exists until D1, D4 and D8
+are decided. OP-152 implements routes, fencing and storage in the platform repository; these types alone implement
+none.
+
 ## Claims
 
 A claim says who has taken a task into work. A task has at most one; the server keeps it and its history.

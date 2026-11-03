@@ -18,6 +18,7 @@ mod policy;
 mod projects;
 mod task_list;
 mod task_read;
+mod work_report;
 
 pub use authority_error::*;
 pub use bundle::*;
@@ -39,3 +40,4 @@ pub use policy::*;
 pub use projects::*;
 pub use task_list::*;
 pub use task_read::*;
+pub use work_report::*;

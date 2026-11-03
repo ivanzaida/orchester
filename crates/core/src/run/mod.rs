@@ -22,6 +22,7 @@ mod index_search;
 mod invocation;
 mod not_started;
 mod number;
+mod outcome;
 mod permissions;
 mod phase;
 mod plan;
@@ -70,6 +71,7 @@ pub use self::{
   },
   not_started::{GitMessage, WorktreeFailure},
   number::RunNumber,
+  outcome::{ExecutionFailure, ExecutionOutcome, ReportOrder, SequenceRegressed, order_report},
   permissions::{AppliedPermissions, PermissionsApply, PermissionsChangedBy, RunPermissions},
   phase::TaskPhase,
   plan::{Plan, PlanDecision, PlanReview, PlanVersion, ReviewNote, ReviewNoteError},

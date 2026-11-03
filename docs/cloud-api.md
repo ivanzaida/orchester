@@ -152,9 +152,9 @@ are refused in every shape below.
 | Code | Status |
 | --- | --- |
 | `unauthenticated` | 401 |
-| `forbidden`, `delivery_not_authorized` | 403 |
+| `forbidden`, `delivery_not_authorized`, `membership_revoked` | 403 |
 | `not_found` | 404 |
-| `revision_conflict`, `operation_mismatch`, `claim_conflict`, `claim_lost`, `module_required`, `module_claim_conflict`, `transition_denied`, `decision_required`, `bundle_missing` | 409 |
+| `revision_conflict`, `operation_mismatch`, `claim_conflict`, `claim_lost`, `module_required`, `module_claim_conflict`, `transition_denied`, `decision_required`, `bundle_missing`, `session_mismatch`, `sequence_regressed` | 409 |
 | `cursor_expired` | 410 |
 | `invalid` | 422 |
 | `unsupported_contract` | 426 |
@@ -288,6 +288,40 @@ work under the module runs. With the workspace's `automatic_merge` on, a deliver
 claim on current unfenced work counts as Admin-authorized; off, it needs an explicit `delivery.authorize`. Report and
 outside deliverables have no base merge (D4 open). Existing v1 contracts, the /api/v1 client and earlier v2 types are
 unchanged, apart from the bundle fields above.
+
+## Team authority S9 work reports
+
+The public prerequisite for platform OP-152's S9b (`work.report`) is in core (`orchester_core::run`) and
+`orchester_api::v2`; it adds no endpoints. Unknown fields are refused in every shape below.
+
+- `ExecutionOutcome` (core): `{kind:"progress"}`, `{kind:"succeeded"}`, `{kind:"failed",reason}` or
+  `{kind:"cancelled"}`. `reason` is an `ExecutionFailure`, a closed set without text, paths or local ids, named as the
+  desktop's run states name them: `step_failed`, `retries_exhausted`, `worktree_not_created`, `limit_reached` or
+  `runner_failed`. An execution success is not permission to mark the task Done; human-wait entry and exit and the
+  task-completion effects have no outcome until D1, D4 and D8 are decided.
+- `ArtifactRef`: `{sha256:ContentHash,kind,size_bytes}`, a secret-free shared artifact by the hash of its bytes, never
+  a local path. `ArtifactKind` is `report` (a completed run's report), `patch` (the run's changes) or `log` (a step's
+  captured output). The set is closed, so a reader refuses a kind it does not know: a new kind is a new variant in
+  `v2::ArtifactKind` and in this list, published before any runner reports it.
+- `AuthorityRef`: `{subject,claim_id,work_id:WorkId?}`; `work_id` is always sent, `null` before the claim has work.
+- `WorkReport`, the payload of the command `work.report`:
+  `{authority:AuthorityRef,run_id:RunId,event_id:WorkEventId,sequence:u64,outcome:ExecutionOutcome,artifacts:[ArtifactRef]}`.
+  `run_id` is the reporting computer's run, `event_id` (a UUID) is made once per event and repeated on every retry,
+  and `sequence` is monotonic per run. It answers `{kind:"work",work:WorkRead,bundle:BundleRef,effects}`, instantiated
+  by the server on the S4 envelopes.
+- Order (`run::order_report`): a report is accepted only with a sequence greater than the last one accepted for its
+  run. The same sequence with the same report is a duplicate, answered with the original result, not an error; any
+  other equal or lower sequence is refused with `sequence_regressed`.
+- Fencing, as `AuthorityError` codes: a stale claim generation or fenced work is `claim_lost`; the claim held by
+  another session of the same account is `session_mismatch` (409); a regressed sequence `sequence_regressed` (409); a
+  caller no longer a member `membership_revoked` (403). A delayed report never overwrites the state of the work's new
+  holder.
+- `WorkEvent::Changed`, `kind` `work.changed`, a delta with `{work:WorkRead}`:
+  `{kind:"work.changed",data:{id,by,actor,at,work}}`. A client replaces its cached work and ignores one whose
+  `work.revision` is not newer than its own.
+
+No D4/D8 completion or human-wait variant is added. Existing v1 contracts, the /api/v1 client and earlier v2 types are
+unchanged, apart from the new error codes.
 
 ## Conventions
 
