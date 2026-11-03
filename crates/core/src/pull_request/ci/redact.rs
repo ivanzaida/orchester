@@ -99,13 +99,38 @@ pub fn redact(text: &str) -> String {
     .into_owned()
 }
 
-/// A run is told from a path or a name by holding only hex digits, or upper and lower case letters and digits.
+/// The lengths of base64 secrets and of the lines they are wrapped at: an AWS secret access key (40), a PEM body line
+/// (64), a MIME line (76).
+const BASE64_SECRET_LENGTHS: [usize; 3] = [40, 64, 76];
+
+/// A run is told from a path or a name by holding only hex digits, or upper and lower case letters and digits. A run
+/// with `/` is a path unless it reads as base64: a `/`-free segment of 20 or more such characters, or a run of base64
+/// characters only, not starting at a root, that is padded, holds a `+` or is as long as a base64 secret or its line.
 fn is_secret_run(run: &str) -> bool {
   let body = run.trim_end_matches('=');
-  let hex = body.bytes().all(|byte| byte.is_ascii_hexdigit());
-  let mixed = body.bytes().any(|byte| byte.is_ascii_uppercase())
-    && body.bytes().any(|byte| byte.is_ascii_lowercase())
-    && body.bytes().any(|byte| byte.is_ascii_digit())
-    && !body.contains('/');
-  hex || mixed
+  if body.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+    return true;
+  }
+  if !is_mixed(body) {
+    return false;
+  }
+  if !body.contains('/') {
+    return true;
+  }
+  let random_segment = body
+    .split('/')
+    .any(|segment| segment.len() >= 20 && is_mixed(segment));
+  let base64 = body
+    .bytes()
+    .all(|byte| byte.is_ascii_alphanumeric() || byte == b'+' || byte == b'/');
+  let shaped =
+    body.len() < run.len() || body.contains('+') || BASE64_SECRET_LENGTHS.contains(&run.len());
+  random_segment || (base64 && !body.starts_with('/') && shaped)
+}
+
+/// `text` holds upper and lower case letters and digits.
+fn is_mixed(text: &str) -> bool {
+  text.bytes().any(|byte| byte.is_ascii_uppercase())
+    && text.bytes().any(|byte| byte.is_ascii_lowercase())
+    && text.bytes().any(|byte| byte.is_ascii_digit())
 }

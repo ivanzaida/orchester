@@ -427,6 +427,7 @@ fn turn_off(ctx: &mut Ctx, (share, run): (&CiShare, &RunView), id: &str) -> Elem
         root: root.clone(),
         run: run_id,
         auto: AutoFix { on: false, ..auto },
+        by: super::actions::pressed_by(),
       });
     })
     .into()

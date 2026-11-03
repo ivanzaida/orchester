@@ -1,9 +1,10 @@
 //! A run's pull request CI on its task's page (ORC-335), through the seed's fake `gh`: *Typed errors per module*'s
 //! run succeeded with pull request #137, one of its five checks failed; *Add retry to webhook sender* runs with #142,
 //! one of its checks still running. The Summary's card says how CI stands, *Fix CI* sends the failing check to the
-//! run's agent as one message and records it, the Conversation shows it among its rows, and a `gh` that is not signed
-//! in shows the callout with its command and the switch locked.
+//! run's agent as one message and records it, the Conversation shows it among its rows, only a person sets *Fix CI
+//! automatically*, and a `gh` that is not signed in shows the callout with its command and the switch locked.
 
+use lurq::app::events::with_synthetic_input;
 use orchester_app::routes::{ProjectPage, Route, TaskTab, TaskView};
 use orchester_core::{
   pull_request::ci::fix::{FixEventKind, FixedBy},
@@ -100,6 +101,47 @@ fn ci_a_failed_check_shows_on_the_summary_and_fix_ci_sends_it() {
       .starts_with("CI failed on #137 · check 5 · Fix CI sent to "),
     "the Fix CI's line"
   );
+}
+
+/// The *Fix CI automatically* switch of the latest run of the task titled `title`, as stored.
+fn auto_on(seeded: &Seeded, title: &str) -> bool {
+  let db = ProjectDb::open(&seeded.repo).expect("the project");
+  let task = db
+    .tasks()
+    .expect("tasks")
+    .into_iter()
+    .find(|task| task.details().title.as_str() == title)
+    .expect("the task")
+    .id();
+  let run = db
+    .runs_of_task(task)
+    .expect("runs")
+    .pop()
+    .expect("a run")
+    .expect("readable");
+  db.ci_fixes(run.id()).expect("the run's Fix CI").auto.on
+}
+
+#[test]
+fn ci_fix_automatically_is_set_by_a_person_only() {
+  let mut seeded = Seeded::answering("ok");
+  let title = "Typed errors per module";
+  open(&mut seeded, title, TaskTab::Summary, "task-ci-auto-switch");
+  let off = "Off · CI waits for you when it fails";
+  // Window automation flipping the switch would restart its count and so lift the run's limit: it is refused.
+  with_synthetic_input(|| seeded.window.press("task-ci-auto-switch"));
+  for _ in 0..40 {
+    seeded.window.tree.tick_futures();
+    seeded.window.pass();
+    std::thread::sleep(std::time::Duration::from_millis(5));
+  }
+  assert!(!auto_on(&seeded, title), "automation did not turn Fix CI automatically on");
+  assert_eq!(seeded.text("task-ci-auto-hint"), off);
+  seeded.window.press("task-ci-auto-switch");
+  seeded.window.until("the person's switch saved", |window| {
+    window.texts("task-ci-auto-hint").is_some_and(|hint| hint != [off])
+  });
+  assert!(auto_on(&seeded, title), "the person turned Fix CI automatically on");
 }
 
 #[test]

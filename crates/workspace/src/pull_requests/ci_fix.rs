@@ -178,9 +178,16 @@ fn way_in(mode: &ComposerMode) -> Way {
   }
 }
 
-/// Sets `run`'s *Fix CI automatically* as the person set it, which restarts its count. Blocks on SQLite.
-pub fn set_auto_fix_in(root: &Path, run: RunId, auto: AutoFix) -> Result<(), StoreError> {
-  ProjectDb::open(root)?.set_auto_fix(run, auto, Timestamp::now())
+/// Sets `run`'s *Fix CI automatically* as the person set it `by`, which restarts its count. Only a person sets it:
+/// automation driving the window is refused, as a change by it would restart the count and so lift the run's limit.
+/// Blocks on SQLite.
+pub fn set_auto_fix_in(root: &Path, run: RunId, auto: AutoFix, by: Answerer) -> Result<(), FixError> {
+  if by == Answerer::Automation {
+    return Err(FixError::Unavailable(Message::new(
+      "appMcp.errors.automationNotAllowed",
+    )));
+  }
+  Ok(ProjectDb::open(root)?.set_auto_fix(run, auto, Timestamp::now())?)
 }
 
 /// The run `prepared` is for: the task's latest.

@@ -40,12 +40,13 @@ pub struct FixRequest {
 
 impl lurq::app::component::DevtoolsInspectable for FixRequest {}
 
-/// *Fix CI automatically* of `run` set to `auto`.
+/// *Fix CI automatically* of `run` set to `auto` by `by`, which the workspace refuses unless a person.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AutoRequest {
   pub root: PathBuf,
   pub run: RunId,
   pub auto: AutoFix,
+  pub by: Answerer,
 }
 
 impl lurq::app::component::DevtoolsInspectable for AutoRequest {}
@@ -141,11 +142,11 @@ fn fix_action(ctx: &mut Ctx) -> FutureAction<FixRequest, (), Message> {
 
 fn auto_action(ctx: &mut Ctx) -> FutureAction<AutoRequest, (), Message> {
   ctx.future_action(move |request: AutoRequest| async move {
-    background::run(move || set_auto_fix_in(&request.root, request.run, request.auto))
+    background::run(move || set_auto_fix_in(&request.root, request.run, request.auto, request.by))
       .await?
       .map_err(|error| {
-        tracing::warn!(%error, "Fix CI automatically was not set");
-        messages::store_error(&error)
+        tracing::warn!(?error, "Fix CI automatically was not set");
+        error.message()
       })
   })
 }

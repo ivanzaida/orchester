@@ -2,7 +2,7 @@
 //! log tails, colour codes stripped and secret-shaped text redacted; passed checks are left out. Fix CI waits while
 //! nothing failed, CI was not read or an earlier Fix CI waits for its agent. *Fix CI automatically* sends a failure on
 //! its own up to its limit, records each send and then that it stopped; a send by hand does not count, and changing the
-//! limit restarts the count.
+//! limit restarts the count. Only a person changes the switch: automation driving the window is refused.
 
 use orchester_core::{
   conversation::{Arrival, Message},
@@ -205,6 +205,25 @@ fn fix_ci_redacts_secret_shaped_text_in_log_tails() {
   assert!(text.contains("git.example.com/repo.git"), "{text}");
   let private = "-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA\n-----END RSA PRIVATE KEY-----\nnext";
   assert_eq!(agent_log_tail(private), format!("{REDACTED}\nnext"));
+  // A key's body whose BEGIN line fell outside the tail: 64-character lines holding '/', short segments or long.
+  let body = ["MIIEowIBAAKCAQ/EAu1SU1LfVLPHC/ozMxH2Mo4lgOEeP/zNm0tRgeLezV6f/fAt",
+    "u1SU1LfVLPHCozMxH2Mo4lgOEePzNm0tRgeLezV6ffAt0gunVTLw7onLRnrq0/Ia"];
+  for line in body {
+    assert_eq!(line.len(), 64, "{line}");
+    assert_eq!(agent_log_tail(line), REDACTED, "a PEM body line is redacted");
+  }
+  let aws = "aws configure set aws_secret wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY";
+  assert_eq!(
+    agent_log_tail(aws),
+    format!("aws configure set aws_secret {REDACTED}"),
+    "a standalone AWS secret access key is redacted"
+  );
+  for path in [
+    "at /home/runner/work/Kontur2/Kontur2/src/main/Webhooks.kt",
+    "in crates/desktop-app/src/screens/Task2View/Summary",
+  ] {
+    assert_eq!(agent_log_tail(path), path, "a path is kept");
+  }
   let long: String = (0..60).map(|line| format!("line {line}\n")).collect();
   let tail = agent_log_tail(&long);
   assert_eq!(tail.lines().count(), 40, "the tail is trimmed to its last 40 lines");
@@ -267,7 +286,7 @@ fn fix_ci_automatically_sends_up_to_its_limit_and_records_each_send() {
     on: true,
     limit: FixLimit::Two,
   };
-  set_auto_fix_in(&root, run.id(), two).expect("set");
+  set_auto_fix_in(&root, run.id(), two, Answerer::Person).expect("set");
   let first = fix(&fixture, &run, &failure("test", 10), Fixer::Automatic).expect("sent");
   assert!(
     matches!(first, FixDone::Stored(ref fix) if fix.by == FixedBy::Automatically { count: 1, limit: FixLimit::Two }),
@@ -326,7 +345,19 @@ fn fix_ci_automatically_sends_up_to_its_limit_and_records_each_send() {
     "Fix CI by hand still works at the limit"
   );
   std::thread::sleep(std::time::Duration::from_millis(5));
-  set_auto_fix_in(&root, run.id(), AutoFix { on: true, ..two }).expect("set");
+  for auto in [AutoFix { on: true, ..two }, AutoFix { on: false, ..two }] {
+    assert!(
+      matches!(
+        set_auto_fix_in(&root, run.id(), auto, Answerer::Automation),
+        Err(FixError::Unavailable(reason)) if reason == UiMessage::new("appMcp.errors.automationNotAllowed")
+      ),
+      "automation driving the window does not set the switch: {auto:?}"
+    );
+  }
+  let fixes = detail(&fixture, &run).run.expect("the run").ci_fixes;
+  assert_eq!(fixes.auto, two, "the refused changes left the switch as the person set it");
+  assert!(fixes.limit_reached(), "automation cannot restart the count");
+  set_auto_fix_in(&root, run.id(), AutoFix { on: true, ..two }, Answerer::Person).expect("set");
   let fixes = detail(&fixture, &run).run.expect("the run").ci_fixes;
   assert_eq!(fixes.used(), 0, "changing the switch restarts the count");
   assert!(!fixes.limit_reached());

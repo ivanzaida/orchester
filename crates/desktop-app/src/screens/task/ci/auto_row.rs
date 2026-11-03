@@ -3,7 +3,8 @@
 //! at the row's end how far it got (*none used*, *1 of 3 automatic fixes used on this run*, `Badge/Warning` *Limit
 //! reached* with *3 of 3 used*) or why it waits (*Off · CI waits for you when it fails*). While CI cannot be read the
 //! switch and *up to* are off and faded to half and the select is locked, with *Needs gh to read checks*. Flipping the
-//! switch or choosing another limit sets it for this run only, which restarts its count.
+//! switch or choosing another limit sets it for this run only, which restarts its count; only a person sets it, so
+//! automation driving the window is refused and cannot lift the run's limit.
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -24,7 +25,7 @@ use orchester_core::{
 };
 use parking_lot::Mutex;
 
-use super::actions::{AutoRequest, CiActions};
+use super::actions::{AutoRequest, CiActions, pressed_by};
 use crate::{
   theme::DISABLED_OPACITY,
   ui::{
@@ -68,6 +69,8 @@ impl Component for AutoRow {
       stored: Arc::new(Mutex::new(Some((props.run, props.fixes.auto)))),
     };
     let (stored, actions, root) = (row.stored.clone(), CiActions::of(ctx), props.root);
+    // Signals change while lurq delivers the input that changed them, so a client's choice is told from a person's.
+    let auto_action = actions.auto.clone();
     ctx.watch(&row.limit, move |count: &u32| {
       let Some(limit) = FixLimit::of(*count) else {
         return;
@@ -76,11 +79,21 @@ impl Component for AutoRow {
         return;
       };
       if auto.limit != limit {
-        actions.auto.run(AutoRequest {
+        auto_action.run(AutoRequest {
           root: root.clone(),
           run,
           auto: AutoFix { limit, ..auto },
+          by: pressed_by(),
         });
+      }
+    });
+    // A refused choice (automation driving the window) leaves the select on the stored limit.
+    let (stored, limit) = (row.stored.clone(), row.limit.clone());
+    ctx.watch(&actions.auto.state(), move |result| {
+      if result.is_rejected()
+        && let Some((_, auto)) = *stored.lock()
+      {
+        limit.set(auto.limit.get());
       }
     });
     row
@@ -109,6 +122,7 @@ impl Component for AutoRow {
           root: root.clone(),
           run,
           auto: AutoFix { on, ..auto },
+          by: pressed_by(),
         });
       })
     } else {
