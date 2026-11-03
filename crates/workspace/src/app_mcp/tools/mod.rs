@@ -7,6 +7,7 @@ mod approval_settings;
 mod approvals;
 mod base_branch;
 mod base_moved;
+mod ci_wire;
 mod continue_run;
 mod conversation;
 mod daily_report;
@@ -200,8 +201,11 @@ const SPECS: &[Spec] = &[
                   conflicts with files, check_failed, base_keeps_moving with heads, stopped, later_run), merged \
                   (revision, kind merge_commit or squash, worktree_removed, branch_deleted) or removed; since, \
                   resyncs, approved_at and checked_on (the base the last passed check ran on). A run the merge queue \
-                  delivers is not merged by merge_run. The run's link is its task's page; the waiting approvals, \
-                  questions, messages and plans link to their cards on the task's Conversation.",
+                  delivers is not merged by merge_run. checks is the CI of the pull request of the run's branch, as \
+                  get_pull_request's checks reads it (no_pull_request when the last sync stored none, not_linked \
+                  without a linked GitHub repository). The run's \
+                  link is its task's page; the waiting approvals, questions, messages and plans link to their cards \
+                  on the task's Conversation.",
     schema: schema_for_type::<runs::InRun>,
     read_only: true,
   },
@@ -375,7 +379,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "get_pull_request",
-    description: "One pull request of a project's linked GitHub repository, as list_pull_requests gives it, with how the repository's latest sync went. One the last sync did not read (an older closed one) is refused as pull_request_not_synced; with refresh it is read from GitHub on its own, and a refresh of the same number within 30 s answers what that read found. A read GitHub refuses says why: github_rate_limited (until paused_until), github_unreachable, or pull_request_not_read; pull_request_not_found when GitHub has no such pull request.",
+    description: "One pull request of a project's linked GitHub repository, as list_pull_requests gives it, with how the repository's latest sync went. One the last sync did not read (an older closed one) is refused as pull_request_not_synced; with refresh it is read from GitHub on its own, and a refresh of the same number within 30 s answers what that read found. A read GitHub refuses says why: github_rate_limited (until paused_until), github_unreachable, or pull_request_not_read; pull_request_not_found when GitHub has no such pull request. checks adds to the last sync's counts its CI read now through gh (gh pr checks), at most once in 30 s: state (passed, failed, running, no_checks; or why it was not read: no_pull_request, gh_missing, not_signed_in, wrong_account, missing_scope, gh_unavailable, rate_limited with resets_at, github_unreachable, github_server_error, not_read, never passed when unread), read_at, next_read_at (when to read again while a check is queued or running, else null), counts by state, and runs: each check's name, workflow, state (queued, running, passed, failed, cancelled, skipped), url and, for a failed GitHub Actions job, log_tail (the last 40 lines of its failed steps' log, null when gh gave none).",
     schema: schema_for_type::<pull_requests::GetPullRequest>,
     read_only: true,
   },

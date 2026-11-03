@@ -1,0 +1,43 @@
+clippy	Run cargo clippy	2026-11-03T10:15:01.1000000Z ##[group]Run cargo clippy --all-targets -- -D warnings
+clippy	Run cargo clippy	2026-11-03T10:15:01.2000000Z cargo clippy --all-targets -- -D warnings
+clippy	Run cargo clippy	2026-11-03T10:15:01.3000000Z shell: /usr/bin/bash -e {0}
+clippy	Run cargo clippy	2026-11-03T10:15:01.4000000Z ##[endgroup]
+clippy	Run cargo clippy	2026-11-03T10:15:02.0000000Z     Checking anyhow v1.0.99 (/home/runner/work/anyhow/anyhow)
+clippy	Run cargo clippy	2026-11-03T10:15:03.0000000Z line 06
+clippy	Run cargo clippy	2026-11-03T10:15:03.0000000Z line 07
+clippy	Run cargo clippy	2026-11-03T10:15:03.0000000Z line 08
+clippy	Run cargo clippy	2026-11-03T10:15:03.0000000Z line 09
+clippy	Run cargo clippy	2026-11-03T10:15:03.0000000Z line 10
+clippy	Run cargo clippy	2026-11-03T10:15:03.0000000Z line 11
+clippy	Run cargo clippy	2026-11-03T10:15:03.0000000Z line 12
+clippy	Run cargo clippy	2026-11-03T10:15:03.0000000Z line 13
+clippy	Run cargo clippy	2026-11-03T10:15:03.0000000Z line 14
+clippy	Run cargo clippy	2026-11-03T10:15:03.0000000Z line 15
+clippy	Run cargo clippy	2026-11-03T10:15:03.0000000Z line 16
+clippy	Run cargo clippy	2026-11-03T10:15:03.0000000Z line 17
+clippy	Run cargo clippy	2026-11-03T10:15:03.0000000Z line 18
+clippy	Run cargo clippy	2026-11-03T10:15:03.0000000Z line 19
+clippy	Run cargo clippy	2026-11-03T10:15:03.0000000Z line 20
+clippy	Run cargo clippy	2026-11-03T10:15:03.0000000Z line 21
+clippy	Run cargo clippy	2026-11-03T10:15:03.0000000Z line 22
+clippy	Run cargo clippy	2026-11-03T10:15:03.0000000Z line 23
+clippy	Run cargo clippy	2026-11-03T10:15:03.0000000Z line 24
+clippy	Run cargo clippy	2026-11-03T10:15:03.0000000Z line 25
+clippy	Run cargo clippy	2026-11-03T10:15:03.0000000Z line 26
+clippy	Run cargo clippy	2026-11-03T10:15:03.0000000Z line 27
+clippy	Run cargo clippy	2026-11-03T10:15:03.0000000Z line 28
+clippy	Run cargo clippy	2026-11-03T10:15:03.0000000Z line 29
+clippy	Run cargo clippy	2026-11-03T10:15:03.0000000Z line 30
+clippy	Run cargo clippy	2026-11-03T10:15:03.0000000Z line 31
+clippy	Run cargo clippy	2026-11-03T10:15:03.0000000Z line 32
+clippy	Run cargo clippy	2026-11-03T10:15:03.0000000Z line 33
+clippy	Run cargo clippy	2026-11-03T10:15:03.0000000Z line 34
+clippy	Run cargo clippy	2026-11-03T10:15:03.0000000Z line 35
+clippy	Run cargo clippy	2026-11-03T10:15:03.0000000Z line 36
+clippy	Run cargo clippy	2026-11-03T10:15:03.0000000Z line 37
+clippy	Run cargo clippy	2026-11-03T10:15:03.0000000Z line 38
+clippy	Run cargo clippy	2026-11-03T10:15:03.0000000Z line 39
+clippy	Run cargo clippy	2026-11-03T10:15:04.0000000Z error: this `if` has identical blocks
+clippy	Run cargo clippy	2026-11-03T10:15:04.1000000Z   --> src/error.rs:812:9
+clippy	Run cargo clippy	2026-11-03T10:15:04.2000000Z error: could not compile `anyhow` (lib) due to 1 previous error
+clippy	Run cargo clippy	2026-11-03T10:15:04.3000000Z ##[error]Process completed with exit code 101.
