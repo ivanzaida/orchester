@@ -5,6 +5,7 @@
 //! shows the agent no longer knows what was dropped. An edit asks before it drops what follows, then sends the edited
 //! words in the message's place. Neither works while the Orchestrator answers.
 
+use lurq::app::events::with_synthetic_input;
 use orchester_app::{routes::OrchestratorChat, ui::chat::toolbar::HELD_CLASS};
 use orchester_core::{
   id::ChatMessageId,
@@ -71,6 +72,20 @@ fn message(screen: &Orchestrator, text: &str) -> ChatMessageId {
     .unwrap_or_else(|| panic!("the message {text:?}"))
 }
 
+/// Moves the pointer onto the bubble of the message `id` once it is laid out, which shows its toolbar.
+fn hover(screen: &mut Orchestrator, id: &str) {
+  let bubble = format!("{id}-bubble");
+  screen.until("the message laid out", |screen| {
+    screen
+      .window
+      .tree
+      .get_element_by_id_mut(&bubble)
+      .and_then(|element| element.bounds())
+      .is_some()
+  });
+  screen.window.hover(&bubble);
+}
+
 /// What the Orchestrator answered, in order.
 fn replies(screen: &Orchestrator) -> Vec<String> {
   entries(screen)
@@ -86,7 +101,7 @@ fn replies(screen: &Orchestrator) -> Vec<String> {
 fn orchestrator_rewind_to_before_a_message_drops_it_and_the_next_answer_does_not_know_it() {
   let mut screen = two_turns();
   let id = format!("orchestrator-message-{}", message(&screen, SECOND));
-  screen.window.hover(&format!("{id}-bubble"));
+  hover(&mut screen, &id);
   screen.press(&format!("{id}-more"));
   assert!(screen.exists(&format!("{id}-menu")), "… opens the message's menu");
   screen.press(&format!("{id}-rewind"));
@@ -133,7 +148,7 @@ fn orchestrator_rewind_to_before_a_message_drops_it_and_the_next_answer_does_not
 fn orchestrator_edit_an_earlier_message_asks_then_sends_it_in_its_place() {
   let mut screen = two_turns();
   let id = format!("orchestrator-message-{}", message(&screen, FIRST));
-  screen.window.hover(&format!("{id}-bubble"));
+  hover(&mut screen, &id);
   screen.press(&format!("{id}-edit"));
   assert!(screen.exists(&format!("{id}-input")), "the bubble is a field");
   assert_eq!(
@@ -173,12 +188,62 @@ fn orchestrator_edit_cancels_with_esc_and_changes_nothing() {
   let mut screen = two_turns();
   let id = format!("orchestrator-message-{}", message(&screen, FIRST));
   let before = entries(&screen);
-  screen.window.hover(&format!("{id}-bubble"));
+  hover(&mut screen, &id);
   screen.press(&format!("{id}-edit"));
   screen.key(("Escape", "Escape"), false);
   assert!(!screen.exists(&format!("{id}-input")), "Esc ends the edit");
   assert!(screen.exists(&format!("{id}-bubble")));
   assert_eq!(entries(&screen), before);
+}
+
+#[test]
+fn orchestrator_rewind_is_a_persons_alone() {
+  let mut screen = two_turns();
+  let id = format!("orchestrator-message-{}", message(&screen, SECOND));
+  let before = entries(&screen);
+  hover(&mut screen, &id);
+  screen.press(&format!("{id}-more"));
+  screen.press(&format!("{id}-rewind"));
+  screen.until("the question", |screen| screen.exists("orchestrator-rewind-confirm"));
+  assert!(!screen.exists("orchestrator-rewind-person-only"));
+  with_synthetic_input(|| screen.click("orchestrator-rewind-confirm"));
+  screen.until("the refusal", |screen| screen.exists("orchestrator-rewind-person-only"));
+  assert_eq!(
+    screen.text("orchestrator-rewind-person-only"),
+    "Only a person edits or rewinds the conversation: input from an MCP client is not taken here."
+  );
+  with_synthetic_input(|| screen.key(("Enter", "Enter"), false));
+  // A rewind that started would be under way by now: its background work had time to run and was polled.
+  std::thread::sleep(std::time::Duration::from_millis(200));
+  screen.until("a pass", |_| true);
+  assert_eq!(entries(&screen), before, "nothing dropped");
+  assert!(screen.exists("orchestrator-rewind"), "the question stays");
+  screen.click("orchestrator-rewind-confirm");
+  screen.until("the person's rewind", |screen| {
+    !screen.exists("orchestrator-rewind") && screen.text("screen-orchestrator").contains("2 messages dropped")
+  });
+}
+
+#[test]
+fn orchestrator_rewind_that_failed_changes_nothing_and_says_why() {
+  let mut screen = two_turns();
+  let id = format!("orchestrator-message-{}", message(&screen, SECOND));
+  hover(&mut screen, &id);
+  screen.press(&format!("{id}-more"));
+  screen.press(&format!("{id}-rewind"));
+  screen.until("the question", |screen| screen.exists("orchestrator-rewind-confirm"));
+  let chat = screen.db().chats().expect("chats")[0].chat.id();
+  screen.db().delete_chat(chat).expect("deleted elsewhere first");
+  screen.click("orchestrator-rewind-confirm");
+  screen.until("why it failed", |screen| screen.exists("orchestrator-rewind-error"));
+  assert!(
+    screen
+      .text("orchestrator-rewind-error")
+      .starts_with("Nothing was dropped: "),
+    "{}",
+    screen.text("orchestrator-rewind-error")
+  );
+  assert!(screen.exists("orchestrator-rewind"), "the question stays");
 }
 
 #[test]
@@ -192,7 +257,7 @@ fn orchestrator_edit_and_rewind_wait_while_the_orchestrator_answers() {
     message(&screen, "Keep thinking about the queue.")
   );
   screen.until("the message's toolbar", |screen| screen.exists(&format!("{id}-edit")));
-  screen.window.hover(&format!("{id}-bubble"));
+  hover(&mut screen, &id);
   let held = |screen: &mut Orchestrator, part: &str| {
     screen
       .window

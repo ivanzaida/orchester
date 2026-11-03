@@ -179,6 +179,7 @@
       "staysNone": "The Orchestrator made no task, run or change after {{time}}: nothing is left behind.",
       "staysItem": "{{what}} {{task}}",
       "failed": "Nothing was dropped: {{reason}}",
+      "personOnly": "Only a person edits or rewinds the conversation: input from an MCP client is not taken here.",
       "lineBefore": {
         "one": "Rewound to before your message of {{time}} · 1 message dropped",
         "other": "Rewound to before your message of {{time}} · {{count}} messages dropped"

@@ -5,9 +5,10 @@
 //! to here* and an edit that drops messages ask first in a modal ([`dialog`]). The conversation then shows where it
 //! went back to and what the Orchestrator did after it, which stays ([`line`]); a rewind before the person's message
 //! puts its words back in the composer. None of it while the Orchestrator answers, compacts its session or a message
-//! waits: the person stops the answer first. A rewind that failed changes nothing and the dialog says why; an edit
-//! the conversation went back for but that was not sent is back in the composer, and the chat says so
-//! (`orchester_workspace::orchestrator::rewind`).
+//! waits: the person stops the answer first. A rewind that failed changes nothing and the dialog, or the edit field
+//! when the edit went without it, says why; an edit the conversation went back for but that was not sent is back in
+//! the composer, and the chat says so (`orchester_workspace::orchestrator::rewind`). Only a person goes back: synthetic
+//! input (an MCP client's) is refused, and the dialog or the edit field says so.
 
 mod dialog;
 pub(super) mod editing;
@@ -20,6 +21,7 @@ use lurq::{
   app::{
     component::DevtoolsInspectable,
     ctx::{Ctx, FutureAction, FutureState},
+    events::is_synthetic_input,
   },
   core::Signal,
   node::Element,
@@ -123,6 +125,9 @@ pub(super) struct Rewinding {
   pub(super) asked: Signal<Option<Asked>>,
   /// The dialog shows; *Cancel*, Esc and the scrim end the question.
   pub(super) open: Signal<bool>,
+  /// Synthetic input (an MCP client's) asked to go back and was refused: the dialog or the edit field says only a
+  /// person does.
+  pub(super) refused: Signal<bool>,
   pub(super) action: RewindAction,
 }
 
@@ -164,6 +169,7 @@ impl Rewinding {
       words: ctx.signal(String::new()),
       asked: ctx.signal(None),
       open: ctx.signal(false),
+      refused: ctx.signal(false),
       action,
     }
   }
@@ -204,11 +210,16 @@ impl Rewinding {
   }
 
   /// Asks whether to go back to `point`, which drops the entries from `from` on, from the message or answer of `at`.
+  /// Nothing while a rewind is under way.
   pub(super) fn ask(&self, point: RewindPoint, from: i64, at: Timestamp) {
+    if self.pending() {
+      return;
+    }
     let Some((chat, dropped)) = self.dropped(from) else {
       return;
     };
     self.action.state().set(FutureState::idle());
+    self.refused.set(false);
     self.asked.set(Some(Asked {
       chat,
       point,
@@ -219,8 +230,16 @@ impl Rewinding {
     self.open.set(true);
   }
 
-  /// Starts editing the person's message `editing` in place, which says `words`.
+  /// Starts editing the person's message `editing` in place, which says `words`; why an earlier rewind changed nothing
+  /// is no longer shown.
   pub(super) fn edit(&self, editing: Editing, words: &str) {
+    if self.pending() {
+      return;
+    }
+    if matches!(self.action.state().get_untracked().error, Some(Failed::Unchanged(_))) {
+      self.action.state().set(FutureState::idle());
+    }
+    self.refused.set(false);
     self
       .words
       .set(orchester_workspace::mentions::facts::said(words).to_owned());
@@ -228,8 +247,12 @@ impl Rewinding {
   }
 
   /// Sends the edit of the message being edited, as a new message of `project` that goes `(mode, plan_only)`: at
-  /// once when nothing follows it, else once the person confirmed what it drops. Nothing while its words say nothing.
+  /// once when nothing follows it, else once the person confirmed what it drops. Nothing while its words say nothing
+  /// or a rewind is under way; synthetic input is refused, as it is in the dialog, since what an edit drops is gone.
   pub(super) fn send_edit(&self, project: &OpenProject, (mode, plan_only): (TurnMode, bool)) {
+    if self.pending() {
+      return;
+    }
     let words = self.words.get_untracked();
     let Some(editing) = self.editing.get_untracked().filter(|_| !words.trim().is_empty()) else {
       return;
@@ -240,9 +263,13 @@ impl Rewinding {
     self.action.state().set(FutureState::idle());
     let point = RewindPoint::Before(editing.message);
     if dropped.count() <= 1 {
+      if self.refuse() {
+        return;
+      }
       self.run(project, (chat, point), Some(outgoing(chat, words, (mode, plan_only))));
       return;
     }
+    self.refused.set(false);
     self.asked.set(Some(Asked {
       chat,
       point,
@@ -253,16 +280,36 @@ impl Rewinding {
     self.open.set(true);
   }
 
-  /// Goes back as `asked` says, the edit sent as `mode` says.
+  /// Goes back as `asked` says, the edit sent as `mode` says: a person's press or Enter only.
   fn confirm(&self, project: &OpenProject, asked: &Asked, mode: (TurnMode, bool)) {
-    if self.action.state().get_untracked().is_pending() {
+    if self.pending() || self.refuse() {
       return;
     }
     let edit = asked.edit.clone().map(|words| outgoing(asked.chat, words, mode));
     self.run(project, (asked.chat, asked.point), edit);
   }
 
+  /// Whether a rewind is under way.
+  fn pending(&self) -> bool {
+    self.action.state().get_untracked().is_pending()
+  }
+
+  /// Refuses synthetic input (an MCP client's): what a rewind drops cannot be brought back and no MCP tool rewinds
+  /// either, so only a person goes back, and the screen says so. Whether it refused.
+  fn refuse(&self) -> bool {
+    let synthetic = is_synthetic_input();
+    if synthetic {
+      tracing::warn!("synthetic input asked to rewind a conversation; not taken");
+    }
+    self.refused.set(synthetic);
+    synthetic
+  }
+
+  /// Goes back, unless a rewind is already under way: a second Send or Enter never replaces the first.
   fn run(&self, project: &OpenProject, (chat, point): (ChatId, RewindPoint), edit: Option<Outgoing>) {
+    if self.pending() {
+      return;
+    }
     self.action.run(Rewind {
       project: project.clone(),
       chat,

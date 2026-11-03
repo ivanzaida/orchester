@@ -22,14 +22,17 @@ use lurq::{
 };
 use orchester_workspace::workspace::OpenProject;
 
-use super::toolbar::RewindEnv;
+use super::{Failed, toolbar::RewindEnv};
 use crate::{
   screens::task_form::brief::text_styles,
   theme::{ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
+    field::field_error,
     icon::{Icon, icon},
     kbd::key_cap,
+    message::message_text,
+    tinted_note::person_only,
   },
 };
 
@@ -147,8 +150,40 @@ impl Component for EditField {
       .spacing(ExtraSpacing::Snug.role())
       .align_items(Alignment::End)
       .child(editor)
+      .with_children(why_not(ctx, &props))
       .child(keys(ctx, &props.id))
   }
+}
+
+/// Why sending the edit without the dialog did nothing, while the dialog does not say it: `{id}-person-only` once
+/// synthetic input sent it, `{id}-error` once the conversation could not go back.
+fn why_not(ctx: &mut Ctx, props: &FieldProps) -> Option<Element> {
+  let state = &props.env.state;
+  if state.open.get() {
+    return None;
+  }
+  if state.refused.get() {
+    return Some(
+      person_only(
+        format!("{}-person-only", props.id),
+        &ctx.t("orchestrator.rewind.personOnly"),
+      )
+      .into(),
+    );
+  }
+  let action = state.action.state().get();
+  let rejected = action.is_rejected();
+  let Some(Failed::Unchanged(why)) = action.error.filter(|_| rejected) else {
+    return None;
+  };
+  let reason = message_text(ctx, &why);
+  Some(
+    field_error(
+      &format!("{}-error", props.id),
+      &ctx.t_args("orchestrator.rewind.failed", [("reason", &*reason)]),
+    )
+    .into(),
+  )
 }
 
 impl EditField {

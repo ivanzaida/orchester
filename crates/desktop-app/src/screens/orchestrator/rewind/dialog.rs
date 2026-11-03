@@ -78,20 +78,26 @@ pub(in crate::screens::orchestrator) fn dialog(ctx: &mut Ctx, view: &View, proje
   } else {
     ctx.t("orchestrator.rewind.confirm.enterRewinds")
   };
+  let dialog = Dialog::new(
+    "orchestrator-rewind",
+    Icon::MessageSquareX,
+    title(ctx, &asked, &time, count),
+    ctx.t("orchestrator.edit.cancel"),
+  )
+  .tone(Tone::Warning)
+  .width(WIDTH)
+  .part(what(ctx, &asked, (&time, count)));
+  let dialog = if state.refused.get() {
+    dialog.person_only(ctx.t("orchestrator.rewind.personOnly"))
+  } else {
+    dialog
+  };
   Some(
-    Dialog::new(
-      "orchestrator-rewind",
-      Icon::MessageSquareX,
-      title(ctx, &asked, &time, count),
-      ctx.t("orchestrator.edit.cancel"),
-    )
-    .tone(Tone::Warning)
-    .width(WIDTH)
-    .part(what(ctx, &asked, (&time, count)))
-    .on_enter(enter, confirm)
-    .action(button)
-    .under(failure)
-    .render(ctx, &state.open),
+    dialog
+      .on_enter(enter, confirm)
+      .action(button)
+      .under(failure)
+      .render(ctx, &state.open),
   )
 }
 
