@@ -56,6 +56,7 @@ mod permission_events;
 mod permitted_decisions;
 mod plan_decided_by;
 mod plan_limits;
+mod plan_only;
 mod project_approval_rules;
 mod pull_request_syncs;
 mod qa_slots;

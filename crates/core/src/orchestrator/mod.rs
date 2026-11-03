@@ -13,6 +13,7 @@ pub mod git;
 pub mod instructions;
 pub mod mcp;
 pub mod merging;
+pub mod plan;
 pub mod proposal;
 pub mod report;
 pub mod resume;
@@ -26,6 +27,7 @@ pub use self::{
     CompactionState, EntryKind, HeldWork, Queued, SessionChange, TurnFailure, TurnState, WaitTurn,
   },
   merging::{MergeLeft, Merging},
+  plan::{ChatPlan, PlanState, PlanStep, StepKind, TurnMode},
   report::{DailyReport, ReportSchedule, ReportTime},
   resume::{ChatResume, Continuing, PersonsStop},
   sent::{FromOrchestrator, SentWay},

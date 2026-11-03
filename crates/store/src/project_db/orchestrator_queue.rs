@@ -9,7 +9,7 @@ use orchester_core::{
   attachment::NewAttachment,
   conversation::MessageBody,
   id::{ChatId, ChatMessageId},
-  orchestrator::{Chat, Queued, TurnState},
+  orchestrator::{Chat, Queued, TurnMode, TurnState},
   run::Answerer,
   time::Timestamp,
 };
@@ -40,18 +40,37 @@ impl ProjectDb {
   pub fn keep_chat_message_as(
     &mut self,
     chat: &Chat,
+    message: (ChatMessageId, &MessageBody),
+    sent: (&[NewAttachment], Answerer),
+    turn: (&TurnState, Timestamp),
+  ) -> Result<bool, StoreError> {
+    self.keep_chat_message_in(chat, message, sent, turn, TurnMode::Acts)
+  }
+
+  /// [`Self::keep_chat_message_as`] with its turn going as `mode` says (ORC-646); a conversation it starts keeps
+  /// `chat`'s *Plan only* switch.
+  pub fn keep_chat_message_in(
+    &mut self,
+    chat: &Chat,
     (message, text): (ChatMessageId, &MessageBody),
     (attachments, by): (&[NewAttachment], Answerer),
     (state, at): (&TurnState, Timestamp),
+    mode: TurnMode,
   ) -> Result<bool, StoreError> {
     let transaction = self.connection.transaction()?;
     transaction.execute(
-      "INSERT OR IGNORE INTO orchestrator_chats (id, title, started_at) VALUES (?1, ?2, ?3)",
-      params![chat.id().to_string(), chat.title(), chat.started().unix_millis()],
+      "INSERT OR IGNORE INTO orchestrator_chats (id, title, started_at, plan_only) VALUES (?1, ?2, ?3, ?4)",
+      params![
+        chat.id().to_string(),
+        chat.title(),
+        chat.started().unix_millis(),
+        chat.plan_only()
+      ],
     )?;
     let kept = transaction.execute(
-      "INSERT OR IGNORE INTO orchestrator_entries (chat_id, kind, at, body, message_id, turn, failure, by_automation)
-       VALUES (?1, 'person', ?2, ?3, ?4, ?5, ?6, ?7)",
+      "INSERT OR IGNORE INTO orchestrator_entries
+         (chat_id, kind, at, body, message_id, turn, failure, by_automation, mode)
+       VALUES (?1, 'person', ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
       params![
         chat.id().to_string(),
         at.unix_millis(),
@@ -59,7 +78,8 @@ impl ProjectDb {
         message.to_string(),
         state.word(),
         failure_column(state)?,
-        by == Answerer::Automation
+        by == Answerer::Automation,
+        mode.word()
       ],
     )?;
     if kept == 0 {

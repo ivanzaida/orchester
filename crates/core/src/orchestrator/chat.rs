@@ -4,7 +4,13 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::{change::ProposedChange, proposal::ProposedStart, report::DailyReport, wait::AgentWait};
+use super::{
+  change::ProposedChange,
+  plan::{ChatPlan, TurnMode},
+  proposal::ProposedStart,
+  report::DailyReport,
+  wait::AgentWait,
+};
 use crate::{
   connection::AccountStartProblem,
   conversation::MessageBody,
@@ -88,6 +94,8 @@ pub struct Chat {
   title: String,
   started: Timestamp,
   session: Option<ChatSession>,
+  /// Its *Plan only* switch is on ([`super::plan`]): each message plans, until the person switches it off.
+  plan_only: bool,
 }
 
 impl Chat {
@@ -104,6 +112,7 @@ impl Chat {
       title: title_of(title),
       started: at,
       session: None,
+      plan_only: false,
     }
   }
 
@@ -114,7 +123,15 @@ impl Chat {
       title,
       started,
       session,
+      plan_only: false,
     }
+  }
+
+  /// The conversation with its *Plan only* switch `on` or off.
+  #[must_use]
+  pub const fn with_plan_only(mut self, on: bool) -> Self {
+    self.plan_only = on;
+    self
   }
 
   pub const fn id(&self) -> ChatId {
@@ -131,6 +148,11 @@ impl Chat {
 
   pub const fn session(&self) -> Option<&ChatSession> {
     self.session.as_ref()
+  }
+
+  /// Whether its *Plan only* switch is on.
+  pub const fn plan_only(&self) -> bool {
+    self.plan_only
   }
 
   /// The session a turn on `connection` and its `account` resumes; `None` starts a new one, as the first turn does
@@ -409,6 +431,8 @@ pub enum EntryKind {
     /// Who sent it: the person, or automation driving the window (lurq's synthetic input), whose message never
     /// approves a proposal for the person (ORC-96).
     sent_by: Answerer,
+    /// How its turn goes: as any, planning only, or carrying out a plan the person approved.
+    mode: TurnMode,
   },
   Reply {
     text: String,
@@ -427,6 +451,8 @@ pub enum EntryKind {
     report: Box<DailyReport>,
     turn: Option<WaitTurn>,
   },
+  /// A plan the Orchestrator answered with in a turn that plans, and where it stands ([`super::plan`]).
+  Plan(Box<ChatPlan>),
 }
 
 /// The Orchestrator turn a wait or a daily report started by itself: under the id its prompt was kept by, where it

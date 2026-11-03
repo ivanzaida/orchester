@@ -208,6 +208,10 @@ fn is_about(kind: &EntryKind, wait: &AgentWait) -> bool {
         || action.started == Some(wait.run)
         || action.change.as_ref().and_then(|change| change.change.run()) == Some(wait.run)
     }
-    EntryKind::Person { .. } | EntryKind::Reply { .. } | EntryKind::Event(_) | EntryKind::Report { .. } => false,
+    EntryKind::Person { .. }
+    | EntryKind::Reply { .. }
+    | EntryKind::Event(_)
+    | EntryKind::Report { .. }
+    | EntryKind::Plan(_) => false,
   }
 }

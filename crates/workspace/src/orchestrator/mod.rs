@@ -19,6 +19,7 @@ mod guard;
 mod keep;
 mod mcp_servers;
 mod own_project;
+pub mod plan;
 pub mod proposal;
 pub mod queue;
 pub mod recover;

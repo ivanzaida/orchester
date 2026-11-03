@@ -10,7 +10,7 @@ use orchester_core::{
   attachment::{NewAttachment, names_text},
   conversation::MessageBody,
   id::{ChatId, ChatMessageId},
-  orchestrator::{Chat, TurnFailure, TurnState},
+  orchestrator::{Chat, TurnFailure, TurnMode, TurnState},
   run::Answerer,
   time::Timestamp,
 };
@@ -27,7 +27,8 @@ use crate::{
 
 /// A message the person sends: the conversation it goes to (a new one gets its id here too), its own id, given once
 /// for the draft, its text, the files the person attached, and who sent it: the person, or automation driving the
-/// window, whose message never approves a proposal for the person.
+/// window, whose message never approves a proposal for the person; how its turn goes (it plans while the *Plan only*
+/// switch is on, ORC-646), and that switch as the person left it, which a conversation the message starts keeps.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Outgoing {
   pub chat: ChatId,
@@ -35,6 +36,8 @@ pub struct Outgoing {
   pub text: String,
   pub attachments: Vec<NewAttachment>,
   pub sent_by: Answerer,
+  pub mode: TurnMode,
+  pub plan_only: bool,
 }
 
 /// Why a message did not reach the Orchester's agent.
@@ -168,19 +171,20 @@ pub fn keep_as_in(root: &Path, outgoing: &Outgoing, state: &TurnState) -> Result
   let chat = db
     .chat(outgoing.chat)
     .map_err(|error| messages::store_error(&error))?
-    .unwrap_or_else(|| Chat::start(outgoing.chat, &said, now));
-  db.keep_chat_message_as(
+    .unwrap_or_else(|| Chat::start(outgoing.chat, &said, now).with_plan_only(outgoing.plan_only));
+  db.keep_chat_message_in(
     &chat,
     (outgoing.message, &text),
     (attached, outgoing.sent_by),
     (state, now),
+    outgoing.mode,
   )
   .map(drop)
   .map_err(|error| messages::store_error(&error))
 }
 
 /// What the person reads when the runner did not take a message.
-fn not_sent(error: &RunRequestError) -> Message {
+pub(super) fn not_sent(error: &RunRequestError) -> Message {
   match error {
     RunRequestError::Request(RequestError::NotConnected) => Message::new("orchestrator.send.runnerUnavailable"),
     RunRequestError::Request(RequestError::Lost) => Message::new("orchestrator.send.lost"),

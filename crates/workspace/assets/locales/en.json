@@ -2099,6 +2099,9 @@
     "stop": {
       "failed": "The answer couldn't be stopped: the runner didn't answer."
     },
+    "plan": {
+      "taken": "This plan no longer waits: it was approved, replaced or dismissed meanwhile."
+    },
     "compact": {
       "nothing": "Nothing to compact yet: this conversation has no session the Orchestrator can resume.",
       "busy": "Not compacted · the Orchestrator is still answering. Compact once it's done.",
@@ -2182,6 +2185,10 @@
         "deliveredByQueue": "Run #{{run}} was not merged on its own: its pipeline ends in a Deliver step, so the merge queue delivers it, after the person's approval when the step asks for one."
       },
       "reportChangesNothing": "A turn the daily report started changes nothing, and this change is not one the person can apply from a card. Nothing was changed: put it in your recommendations instead.",
+      "planOnly": "Plan only is on: this turn takes no action. Nothing was changed: put it in your plan with propose_plan instead.",
+      "notPlanOnly": "This turn does not plan: propose_plan works only for a message sent in plan-only mode. Nothing was kept.",
+      "invalidPlan": "A plan has at least one step that says what will happen, and at most 20. Nothing was kept.",
+      "planProposed": "The plan waits for the person: nothing has been done. Tell them they can approve it, change it or dismiss it.",
       "releaseNothing": {
         "project": "New starts in {{project}} are not held: there is nothing to release. Nothing was changed.",
         "group": "New starts of {{task}}'s group are not held: there is nothing to release. Nothing was changed.",
@@ -2202,6 +2209,7 @@
     "approval": {
       "applied": "Applied for the person, as their decision in this conversation: its card says so. Tell them what it did, with its link.",
       "notPersonsTurn": "Nobody asked you in this turn: Orchester started it by itself. Only the person's own message approves a proposal; nothing was applied. Tell them it waits for them.",
+      "approvedPlan": "This turn carries out a plan the person approved, which approves none of the cards it makes: what only the person decides stays theirs to apply. Nothing was applied. Tell them it waits for them.",
       "automationInput": "The message of this turn was sent by automation driving the window, not typed by the person: it never approves a proposal. Nothing was applied; the person applies it on its card.",
       "notPending": "Proposal {{proposal}} does not wait for the person in this conversation, or was made after their message, which so cannot approve it. Nothing was applied: call apply_proposal without proposal to list those that wait.",
       "clickOnly": {
