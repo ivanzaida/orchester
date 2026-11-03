@@ -477,11 +477,15 @@ resource) and the `SubscriptionEvent`s: `ready` first with the stream's cursor a
 committed batch with its last cursor and its de-duplicated scopes, `reset` when the resume point is below the replay
 floor, and `revoked` before the stream closes. `QueryScope` is `Eq`, `Hash` and `Ord`, so a set of scopes is stable.
 
-**Client race rule.** Reads stay on the ordinary routes, each answering the `EventCursor` it was taken at. A cached
-read taken at cursor `R` is stale only when an `invalidated` event with a cursor after `R` names its scope; events at
-or before `R` are already in it. A client may therefore subscribe before or after reading without missing a change. A
-`reset` drops every cached read, which is read again at or after its cursor. OP-154 implements the route, replay and
-enforcement in the platform repository; these types alone implement none.
+**Client race rule.** Reads stay on the ordinary routes, each answering the `EventCursor` it was taken at. An
+`EventCursor` is the server's committed event sequence position: on the wire a string holding the canonical decimal of
+a positive integer (no sign, no leading zeros, refused otherwise), ordered by that integer and never by string order,
+so `"9"` < `"10"`. Cursors of the same project compare; cursors of different projects are not comparable. A cached
+read taken at cursor `R` is stale only when an `invalidated` event with a cursor greater than `R` names its scope;
+events at or below `R` are already in it. A client may therefore subscribe before or after reading without missing a
+change. A `reset` drops every cached read, which is read again at or after its cursor. `PageCursor` stays opaque: page
+cursors are not ordered. OP-154 implements the route, replay and enforcement in the platform repository; these types
+alone implement none.
 
 ## Claims
 

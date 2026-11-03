@@ -11,7 +11,7 @@ use orchester_core::id::{ModuleId, ResourceId, TaskId};
 use serde_json::{Value, json};
 
 fn cursor(position: &str) -> EventCursor {
-  EventCursor::new(position.to_owned()).expect("cursor")
+  EventCursor::new(position).expect("cursor")
 }
 
 fn scopes_with_wire() -> Vec<(QueryScope, Value)> {
@@ -41,23 +41,23 @@ fn events_with_wire() -> Vec<(SubscriptionEvent, Value)> {
   let task = TaskId::generate();
   vec![
     (
-      SubscriptionEvent::Ready { cursor: cursor("c-1") },
-      json!({"kind": "ready", "cursor": "c-1"}),
+      SubscriptionEvent::Ready { cursor: cursor("1") },
+      json!({"kind": "ready", "cursor": "1"}),
     ),
     (
       SubscriptionEvent::Invalidated {
-        cursor: cursor("c-2"),
+        cursor: cursor("2"),
         scopes: vec![QueryScope::TaskList {}, QueryScope::Task { task }],
       },
       json!({
         "kind": "invalidated",
-        "cursor": "c-2",
+        "cursor": "2",
         "scopes": [{"kind": "task_list"}, {"kind": "task", "task": task}]
       }),
     ),
     (
-      SubscriptionEvent::Reset { cursor: cursor("c-3") },
-      json!({"kind": "reset", "cursor": "c-3"}),
+      SubscriptionEvent::Reset { cursor: cursor("3") },
+      json!({"kind": "reset", "cursor": "3"}),
     ),
     (SubscriptionEvent::Revoked {}, json!({"kind": "revoked"})),
   ]
@@ -95,7 +95,7 @@ fn subscription_refuses_unknown_and_malformed_fields() {
     let refused = serde_json::from_value::<SubscriptionEvent>(unknown).expect_err("refused");
     assert!(refused.to_string().contains("unknown field"), "{wire}: {refused}");
   }
-  let mut nested = json!({"kind": "invalidated", "cursor": "c-2", "scopes": [{"kind": "library", "id": "x"}]});
+  let mut nested = json!({"kind": "invalidated", "cursor": "2", "scopes": [{"kind": "library", "id": "x"}]});
   assert!(serde_json::from_value::<SubscriptionEvent>(nested.clone()).is_err());
   nested["scopes"] = json!([{"kind": "project"}]);
   assert!(serde_json::from_value::<SubscriptionEvent>(nested).is_err());
@@ -103,8 +103,9 @@ fn subscription_refuses_unknown_and_malformed_fields() {
   for malformed in [
     json!({"kind": "ready"}),
     json!({"kind": "ready", "cursor": ""}),
-    json!({"kind": "reset", "cursor": "c-3", "scopes": []}),
-    json!({"kind": "invalidated", "cursor": "c-2"}),
+    json!({"kind": "ready", "cursor": "c-1"}),
+    json!({"kind": "reset", "cursor": "3", "scopes": []}),
+    json!({"kind": "invalidated", "cursor": "2"}),
     json!({"kind": "task"}),
     json!({"kind": "module", "task": TaskId::generate()}),
   ] {

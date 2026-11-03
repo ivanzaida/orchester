@@ -138,8 +138,13 @@ are refused in every shape below.
 - `CommandRequest`: `{operation_id,expected:[ExpectedRevision],command}`; `command` is internally tagged by `kind`
   (e.g. `{kind:"claim.acquire",subject}`).
 - `CommandResult`: `{operation_id,state:"committed",result,cursor}`; `result` is the command's value, which carries
-  `effects:[LocalEffect]` (empty when no local effect is authorized). `cursor` is an opaque, non-empty
-  `EventCursor` string.
+  `effects:[LocalEffect]` (empty when no local effect is authorized). `cursor` is the `EventCursor` just after the
+  command's events.
+- `EventCursor`: the server's committed event sequence position in one project's event stream. Its wire form is a
+  string holding the canonical decimal of a positive integer that fits in 64 bits: digits only, no sign, no leading
+  zeros (`"1"`, `"10"`; never `""`, `"0"`, `"-1"`, `"+1"`, `"007"` or `"c1"`), and anything else is refused
+  (`EventCursorError`). Cursors order by that integer, never by string order (`"9"` < `"10"`; `EventCursor` is `Ord`).
+  Clients may compare two cursors of the same project; cursors of different projects are not comparable.
 - `LocalEffect`: `{kind:"start",work_id,bundle:{sha256,schema_version}}`, `{kind:"pause",work_id}`,
   `{kind:"stop",work_id}`, `{kind:"deliver",work_id}`, `{kind:"deliver_module",module_id,branch,source_commit,base_commit}`
   (S7, below) or `{kind:"none"}`; `sha256` is a 64-digit lowercase hex `ContentHash`.
@@ -175,7 +180,8 @@ The public prerequisite for platform OP-153 (bounded direct reads and server-sid
 unknown field is refused. Times are milliseconds since the Unix epoch; days are `YYYY-MM-DD`.
 
 - `PageRequest`: `{after:PageCursor?,limit}`; `limit` may be left out for 50 and is 1..=200 (`PageRequestError`).
-  `PageCursor` is an opaque, non-empty string, bound to the workspace, the filters, the sort and the snapshot.
+  `PageCursor` is an opaque, non-empty string, bound to the workspace, the filters, the sort and the snapshot; unlike
+  `EventCursor` it is not ordered, and clients never read or compare it.
 - `Page<T>`: `{items:[T],next:PageCursor?,cursor:EventCursor}`; `next` is `null` on the last page, and every page of
   one listing carries the same snapshot `cursor`. Entities come in ascending (creation sequence, id) order, histories
   in ascending sequence. A snapshot is kept at least 15 minutes (`PAGE_CURSOR_RETENTION_SECONDS`, 900) after the last
@@ -354,8 +360,10 @@ in every shape below.
     and reads again at or after `cursor`.
   - `{kind:"revoked"}`: the caller lost access; the stream then closes.
 - Client race rule: a cached read taken at cursor `R` (a page's or command's `EventCursor`) is stale only when an
-  `invalidated` event with a cursor after `R` names its scope. Events at or before `R` are already in the read, so a
-  client may subscribe before or after reading without missing a change. A `reset` drops everything.
+  `invalidated` event with a cursor greater than `R` names its scope, "greater" in the `EventCursor` ordering above
+  (by integer, never by string). Events with a cursor at or below `R` are already in the read, so a client may
+  subscribe before or after reading without missing a change. The rule compares cursors of the same project only. A
+  `reset` drops everything.
 
 Existing v1 contracts, the /api/v1 client and earlier v2 types are unchanged.
 
