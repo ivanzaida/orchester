@@ -30,6 +30,7 @@ const USER: u32 = 501;
 /// find-identity` among its allowed commands.
 struct Fixture {
   _root: TempDir,
+  main: PathBuf,
   worktree: PathBuf,
   elsewhere: PathBuf,
   roots: RunRoots,
@@ -65,7 +66,8 @@ impl Fixture {
           user: Some(USER),
         },
       );
-    let scope = CommandScope::new(&worktree, &[], Some(&root.join("home")), Some(&root.join("temp")));
+    let scope =
+      CommandScope::new(&worktree, &[], Some(&root.join("home")), Some(&root.join("temp"))).with_main_checkout(&main);
     let allowed = AllowedCommands::new(vec![CommandPrefix::new("security find-identity").expect("prefix")])
       .expect("allowed commands");
     let permissions = AgentPermissions::new(
@@ -75,6 +77,7 @@ impl Fixture {
     );
     Self {
       _root: dir,
+      main,
       worktree,
       elsewhere,
       roots,
@@ -317,5 +320,88 @@ fn approval_agent_requests_repository_check_script_runs() {
     assert_eq!(auto_verdict(&subject), AutoVerdict::Ask(AutoAsk::Unknown), "{line}");
     assert_eq!(permitted(&subject, &builder), None, "{line}");
     assert_eq!(step_limit(&subject, Some(&builder), &[]), StepLimit::Unread, "{line}");
+  }
+}
+
+/// ORC-280's Builder read the project's main checkout with git on 2026-11-04 and automation could not approve it
+/// (ORC-695): git anywhere but the worktree loads that folder's settings and code, but the run's worktree is a
+/// worktree of the main checkout's repository and loads the same `.git` settings and hooks. Git that only reads
+/// there is a read outside the worktree: Autopilot asks, as it touches the main checkout, and Approve automatically
+/// may approve it. Its global options, options and subcommand name no path there; an option's value still may.
+#[test]
+fn approval_agent_requests_git_reads_main_checkout() {
+  let fixture = Fixture::new();
+  let main = slashed(&fixture.main);
+  for (line, values) in [
+    (
+      format!(
+        r#"git -C "{main}" status --porcelain=v2 --branch --no-renames -z --untracked-files=all --ignored=matching"#
+      ),
+      &["v2", "all", "matching"][..],
+    ),
+    (format!(r#"git -C "{main}" ls-files --stage -z"#), &[]),
+    (format!(r#"git -C "{main}" log --oneline -5"#), &[]),
+    ("git -C ../../.. rev-parse HEAD".to_owned(), &["HEAD"]),
+  ] {
+    let command = fixture.command(&line);
+    assert_eq!(command.category(), CommandCategory::ReadOnly, "{line}");
+    let part = &command.parts()[0];
+    assert!(part.reaches_outside() && !part.writes_outside(), "{line}");
+    let touches = part.touches();
+    assert!(touches.contains(&fixture.main), "{line}: {touches:?}");
+    assert!(
+      touches.iter().all(|path| *path == fixture.main
+        || *path == fixture.worktree
+        || values.iter().any(|value| *path == fixture.main.join(value))),
+      "{line}: {touches:?}"
+    );
+    assert!(
+      matches!(
+        autopilot_check(&fixture.roots, &fixture.subject(&line)),
+        RootsCheck::MainCheckout { .. }
+      ),
+      "{line}"
+    );
+    assert_ne!(
+      fixture.autopilot(&line),
+      ModeStep::Approve(RequestAnswer::by(AnswerKind::Autopilot)),
+      "{line}"
+    );
+    assert_eq!(
+      auto_verdict(&fixture.subject(&line)),
+      AutoVerdict::Approve(Some(CommandCategory::ReadOnly)),
+      "{line}"
+    );
+  }
+  // As before the fix, without a `-C`.
+  for line in [
+    "git status --porcelain=v2 --branch --no-renames -z --untracked-files=all --ignored=matching",
+    "git ls-files --stage -z",
+  ] {
+    fixture.assert_answered(line);
+  }
+  // Another repository loads its own settings and code.
+  let elsewhere = slashed(&fixture.elsewhere);
+  for line in [
+    format!("git -C {elsewhere} status"),
+    format!(r#"git -C "{main}/crates" status"#),
+    format!(r#"git -C "{main}" -C crates status"#),
+  ] {
+    let subject = fixture.subject(&line);
+    assert_eq!(fixture.command(&line).category(), CommandCategory::Unknown, "{line}");
+    assert_eq!(auto_verdict(&subject), AutoVerdict::Ask(AutoAsk::Unknown), "{line}");
+  }
+  // A write in the main checkout is judged as before: a write outside the worktree, or Unknown.
+  for (line, category) in [
+    (format!(r#"git -C "{main}" add -A"#), CommandCategory::Unknown),
+    (format!(r#"git -C "{main}" commit -m x"#), CommandCategory::Unknown),
+    (
+      format!(r#"git -C "{main}" reset --hard HEAD"#),
+      CommandCategory::HistoryDestructive,
+    ),
+  ] {
+    let command = fixture.command(&line);
+    assert_eq!(command.category(), category, "{line}");
+    assert!(command.parts()[0].writes_outside(), "{line}");
   }
 }

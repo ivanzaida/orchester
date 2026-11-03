@@ -5,7 +5,14 @@
 
 use std::path::{Path, PathBuf};
 
-use super::{CommandCategory, CommandScope, part::CommandPart, paths::Place, toolchains, variables::is_assignment};
+use super::{
+  CommandCategory, CommandScope,
+  part::CommandPart,
+  paths::Place,
+  programs::{Judged, Kind},
+  toolchains,
+  variables::is_assignment,
+};
 
 /// The folders a part may run in; `None` when one cannot be told.
 pub(super) type Folders = Option<Vec<PathBuf>>;
@@ -254,6 +261,23 @@ impl<'a> Placing<'a> {
       part.at_least(CommandCategory::Unknown);
     }
     inside
+  }
+
+  /// Whether `word` is the one `-C` folder of git that only reads, as `judged`, and names the repository's main
+  /// checkout from every folder the part may run in ([`CommandScope::with_main_checkout`]): git there loads the
+  /// settings and hooks the worktree's own git loads (ORC-695), and reads outside the worktree.
+  pub(super) fn reads_main_checkout(&self, part: &CommandPart, judged: &Judged, word: &str) -> bool {
+    part.program() == Some("git")
+      && judged.kind == Kind::ReadOnly
+      && judged.repository.as_deref() == Some(word)
+      && self.folders.is_some_and(|folders| {
+        folders.iter().all(|folder| {
+          self
+            .scope
+            .folder(folder, word)
+            .is_some_and(|path| self.scope.is_main_checkout(&path))
+        })
+      })
   }
 }
 
