@@ -1001,6 +1001,11 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
+ORC-565 · Connection page Test section (implemented 2026-11-02).
+Frame 02 GM4yE: explicit Test/Test again, durable progress and Stop, threshold results with the reviewer's row
+marked, recorded timing/input tokens and destination note. Cost and earlier-ask totals are absent in ORC-561's
+report and are not invented. Covers empty, completed and stopped results; independent design verification follows.
+
 ORC-563 · Connections › Add decision model (implemented 2026-11-02; pipeline Review and Verify follow).
 Frames 01 `XMNUP` and 01b `z3G09h`: four server presets, project-secret picker and masked New secret,
 unsaved catalog checks, destination disclosure, and person-only hosted saves through ORC-559. Add and Edit share

@@ -1,4 +1,4 @@
-//! Frame 02's grouped Server, Models and Used by rows; the Test area is deliberately absent.
+//! Frame 02's grouped Server, Models and Used by rows.
 use lurq::{
   app::{
     ctx::Ctx,

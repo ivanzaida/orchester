@@ -68,6 +68,7 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
           None,
         )),
       })?;
+      test_result(kontur, &connection)?;
     }
   }
   Ok(())
@@ -88,5 +89,49 @@ pub fn missing(kontur: &mut Kontur) -> Result<(), SeedError> {
       None,
     )),
   })?;
+  Ok(())
+}
+
+fn test_result(kontur: &mut Kontur, connection: &DecisionConnection) -> Result<(), SeedError> {
+  use orchester_core::{
+    id::IdempotencyKey,
+    run::review::{DecisionTestReport, DecisionTestStatus, Probability, ThresholdFigures},
+  };
+  let report = DecisionTestReport {
+    id: IdempotencyKey::generate(),
+    connection: connection.id(),
+    base_url: connection.base_url().clone(),
+    key: connection.key(),
+    model: connection.models()[0].clone(),
+    started_at: kontur.now,
+    status: DecisionTestStatus::Completed,
+    requests: 9803,
+    tested: 9803,
+    previously_asked: Some(107),
+    in_flight: 0,
+    failed: 0,
+    too_long: 0,
+    median_ms: Some(182),
+    input_tokens: 21_000_000,
+    unknown_usage: 0,
+    omitted_fields: vec![],
+    thresholds: [
+      (0.5, 9621, 182, 61),
+      (0.8, 8852, 951, 29),
+      (0.9, 8141, 1662, 19),
+      (0.95, 7017, 2786, 10),
+    ]
+    .into_iter()
+    .map(
+      |(threshold, approves, asks_person, previously_asked_now_approved)| ThresholdFigures {
+        threshold: Probability::new(threshold).expect("fixture threshold"),
+        approves,
+        asks_person,
+        previously_asked_now_approved,
+      },
+    )
+    .collect(),
+  };
+  kontur.db.begin_decision_test(&report)?;
   Ok(())
 }
