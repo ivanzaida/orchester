@@ -15,8 +15,8 @@ use orchester_core::{
     roots::{AgentHomes, RootsCheck, RunRoots, ToolRequest},
   },
   run::{
-    AnswerKind, ApprovalSubject, AutoVerdict, ModeStep, RequestAnswer, auto_verdict, autopilot_check, autopilot_step,
-    permitted,
+    AnswerKind, ApprovalSubject, AutoAsk, AutoVerdict, ModeStep, RequestAnswer, auto_verdict, autopilot_check,
+    autopilot_step, permitted,
     review::{StepLimit, step_limit},
   },
 };
@@ -30,6 +30,7 @@ const USER: u32 = 501;
 /// find-identity` among its allowed commands.
 struct Fixture {
   _root: TempDir,
+  main: PathBuf,
   worktree: PathBuf,
   elsewhere: PathBuf,
   roots: RunRoots,
@@ -65,7 +66,8 @@ impl Fixture {
           user: Some(USER),
         },
       );
-    let scope = CommandScope::new(&worktree, &[], Some(&root.join("home")), Some(&root.join("temp")));
+    let scope =
+      CommandScope::new(&worktree, &[], Some(&root.join("home")), Some(&root.join("temp"))).with_main_checkout(&main);
     let allowed = AllowedCommands::new(vec![CommandPrefix::new("security find-identity").expect("prefix")])
       .expect("allowed commands");
     let permissions = AgentPermissions::new(
@@ -75,6 +77,7 @@ impl Fixture {
     );
     Self {
       _root: dir,
+      main,
       worktree,
       elsewhere,
       roots,
@@ -237,5 +240,168 @@ fn approval_agent_requests_listing_installs_nothing() {
     "rustup toolchain install nightly",
   ] {
     assert!(fixture.command(line).installs(), "{line}");
+  }
+}
+
+/// Permissions with `repository` access and `prefixes` as the allowed commands, the network off.
+fn allowing(repository: RepositoryAccess, prefixes: &[&str]) -> AgentPermissions {
+  let prefixes = prefixes
+    .iter()
+    .map(|prefix| CommandPrefix::new(prefix).expect("prefix"))
+    .collect();
+  AgentPermissions::new(
+    repository,
+    CommandPermission::Allowed(AllowedCommands::new(prefixes).expect("allowed commands")),
+    NetworkAccess::Off,
+  )
+}
+
+/// The repository's own check, which a Review step asked to run in ORC-658 and ORC-647, was read as a script
+/// Orchester cannot read to the end (ORC-662): `pwsh -File` without `-NoProfile` runs the person's own profile
+/// first, not code from elsewhere. A script of the worktree's `tools/` runs as the step's allowed commands judge
+/// it, `pwsh` listed or the step editing; one outside the worktree is not read.
+#[test]
+fn approval_agent_requests_repository_check_script_runs() {
+  let fixture = Fixture::new();
+  let tools = fixture.worktree.join("tools");
+  std::fs::create_dir_all(&tools).expect("folder");
+  for script in ["check.ps1", "check.sh"] {
+    std::fs::write(tools.join(script), "").expect("file");
+    std::fs::write(fixture.elsewhere.join(script), "").expect("file");
+  }
+  let builder = allowing(RepositoryAccess::Write, &["pwsh", "tools/"]);
+  let editing = allowing(RepositoryAccess::Write, &["tools/"]);
+  let reviewer = allowing(RepositoryAccess::ReadOnly, &["pwsh"]);
+  for line in ["pwsh -File tools/check.ps1", "pwsh -NoProfile -File tools/check.ps1"] {
+    let subject = fixture.subject(line);
+    assert_eq!(fixture.command(line).category(), CommandCategory::Worktree, "{line}");
+    assert_eq!(
+      auto_verdict(&subject),
+      AutoVerdict::Approve(Some(CommandCategory::Worktree)),
+      "{line}"
+    );
+    for permissions in [&builder, &editing, &reviewer] {
+      assert_eq!(
+        permitted(&subject, permissions),
+        Some(CommandCategory::Worktree),
+        "{line} with {permissions:?}"
+      );
+    }
+    // In Autopilot too, with `pwsh` listed; a step that lists no program for it leaves it to the reviewer.
+    for permissions in [&builder, &reviewer] {
+      let limit = step_limit(&subject, Some(permissions), &[]);
+      assert_eq!(limit, StepLimit::Within, "{line} with {permissions:?}");
+      assert_eq!(
+        autopilot_step(&autopilot_check(&fixture.roots, &subject), limit),
+        ModeStep::Approve(RequestAnswer::by(AnswerKind::Autopilot)),
+        "{line}"
+      );
+    }
+    assert_eq!(step_limit(&subject, Some(&editing), &[]), StepLimit::Unread, "{line}");
+  }
+  let bash = allowing(RepositoryAccess::ReadOnly, &["bash", "sh"]);
+  for line in ["bash tools/check.sh", "sh tools/check.sh"] {
+    let subject = fixture.subject(line);
+    assert_eq!(fixture.command(line).category(), CommandCategory::Worktree, "{line}");
+    assert_eq!(permitted(&subject, &editing), Some(CommandCategory::Worktree), "{line}");
+    assert_eq!(permitted(&subject, &bash), Some(CommandCategory::Worktree), "{line}");
+  }
+
+  // A script outside the worktree, absolute or relative, is code from elsewhere.
+  let outside = slashed(&fixture.elsewhere);
+  for line in [
+    format!("pwsh -File {outside}/check.ps1"),
+    format!("pwsh -NoProfile -File {outside}/check.ps1"),
+    "pwsh -File ../../../../../elsewhere/check.ps1".to_owned(),
+    format!("bash {outside}/check.sh"),
+  ] {
+    let subject = fixture.subject(&line);
+    assert_eq!(fixture.command(&line).category(), CommandCategory::Unknown, "{line}");
+    assert_eq!(auto_verdict(&subject), AutoVerdict::Ask(AutoAsk::Unknown), "{line}");
+    assert_eq!(permitted(&subject, &builder), None, "{line}");
+    assert_eq!(step_limit(&subject, Some(&builder), &[]), StepLimit::Unread, "{line}");
+  }
+}
+
+/// ORC-280's Builder read the project's main checkout with git on 2026-11-04 and automation could not approve it
+/// (ORC-695): git anywhere but the worktree loads that folder's settings and code, but the run's worktree is a
+/// worktree of the main checkout's repository and loads the same `.git` settings and hooks. Git that only reads
+/// there is a read outside the worktree: Autopilot asks, as it touches the main checkout, and Approve automatically
+/// may approve it. Its global options, options and subcommand name no path there; an option's value still may.
+#[test]
+fn approval_agent_requests_git_reads_main_checkout() {
+  let fixture = Fixture::new();
+  let main = slashed(&fixture.main);
+  for (line, values) in [
+    (
+      format!(
+        r#"git -C "{main}" status --porcelain=v2 --branch --no-renames -z --untracked-files=all --ignored=matching"#
+      ),
+      &["v2", "all", "matching"][..],
+    ),
+    (format!(r#"git -C "{main}" ls-files --stage -z"#), &[]),
+    (format!(r#"git -C "{main}" log --oneline -5"#), &[]),
+    ("git -C ../../.. rev-parse HEAD".to_owned(), &["HEAD"]),
+  ] {
+    let command = fixture.command(&line);
+    assert_eq!(command.category(), CommandCategory::ReadOnly, "{line}");
+    let part = &command.parts()[0];
+    assert!(part.reaches_outside() && !part.writes_outside(), "{line}");
+    let touches = part.touches();
+    assert!(touches.contains(&fixture.main), "{line}: {touches:?}");
+    assert!(
+      touches.iter().all(|path| *path == fixture.main
+        || *path == fixture.worktree
+        || values.iter().any(|value| *path == fixture.main.join(value))),
+      "{line}: {touches:?}"
+    );
+    assert!(
+      matches!(
+        autopilot_check(&fixture.roots, &fixture.subject(&line)),
+        RootsCheck::MainCheckout { .. }
+      ),
+      "{line}"
+    );
+    assert_ne!(
+      fixture.autopilot(&line),
+      ModeStep::Approve(RequestAnswer::by(AnswerKind::Autopilot)),
+      "{line}"
+    );
+    assert_eq!(
+      auto_verdict(&fixture.subject(&line)),
+      AutoVerdict::Approve(Some(CommandCategory::ReadOnly)),
+      "{line}"
+    );
+  }
+  // As before the fix, without a `-C`.
+  for line in [
+    "git status --porcelain=v2 --branch --no-renames -z --untracked-files=all --ignored=matching",
+    "git ls-files --stage -z",
+  ] {
+    fixture.assert_answered(line);
+  }
+  // Another repository loads its own settings and code.
+  let elsewhere = slashed(&fixture.elsewhere);
+  for line in [
+    format!("git -C {elsewhere} status"),
+    format!(r#"git -C "{main}/crates" status"#),
+    format!(r#"git -C "{main}" -C crates status"#),
+  ] {
+    let subject = fixture.subject(&line);
+    assert_eq!(fixture.command(&line).category(), CommandCategory::Unknown, "{line}");
+    assert_eq!(auto_verdict(&subject), AutoVerdict::Ask(AutoAsk::Unknown), "{line}");
+  }
+  // A write in the main checkout is judged as before: a write outside the worktree, or Unknown.
+  for (line, category) in [
+    (format!(r#"git -C "{main}" add -A"#), CommandCategory::Unknown),
+    (format!(r#"git -C "{main}" commit -m x"#), CommandCategory::Unknown),
+    (
+      format!(r#"git -C "{main}" reset --hard HEAD"#),
+      CommandCategory::HistoryDestructive,
+    ),
+  ] {
+    let command = fixture.command(&line);
+    assert_eq!(command.category(), category, "{line}");
+    assert!(command.parts()[0].writes_outside(), "{line}");
   }
 }

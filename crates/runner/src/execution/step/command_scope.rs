@@ -8,8 +8,8 @@ use orchester_core::{
 };
 
 /// Where the commands of an agent working in `worktree` with `launch` permissions run and may write: the worktree
-/// and the extra writable folders it was given, as written (relative to the repository `root`), for the host's user
-/// whose agent gets the project's `environment` too.
+/// and the extra writable folders it was given, as written (relative to the repository `root`, the main checkout
+/// the worktree belongs to), for the host's user whose agent gets the project's `environment` too.
 pub(super) fn command_scope(
   root: &Path,
   worktree: &Path,
@@ -27,5 +27,7 @@ pub(super) fn command_scope(
         .collect()
     })
     .unwrap_or_default();
-  CommandScope::on_host(worktree, &writable).with_project_environment(environment)
+  CommandScope::on_host(worktree, &writable)
+    .with_project_environment(environment)
+    .with_main_checkout(root)
 }

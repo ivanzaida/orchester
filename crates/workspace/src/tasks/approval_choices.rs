@@ -108,16 +108,17 @@ pub struct ApprovalChoices {
 
 impl ApprovalChoices {
   /// The choices of `approval`, made in step profile `profile` (pinned at `pinned`) whose agent works in
-  /// `worktree` and may also write to `writable`; `codex` when Codex asks. A command is classified as the
-  /// runner classifies it: in that worktree, from the working folder the request reports.
+  /// `worktree` of the repository whose main checkout is `main` and may also write to `writable`; `codex` when
+  /// Codex asks. A command is classified as the runner classifies it: in that worktree, from the working folder the
+  /// request reports.
   pub fn read(
     db: &ProjectDb,
     approval: &PendingToolApproval,
     (profile, pinned): (Option<ResourceId>, Option<VersionNumber>),
-    (worktree, writable, codex): (&Path, &[PathBuf], bool),
+    (worktree, main, writable, codex): (&Path, &Path, &[PathBuf], bool),
   ) -> Self {
-    let subject =
-      ApprovalSubject::of(approval, &CommandScope::on_host(worktree, writable)).with_checks(&run_checks(db, approval));
+    let scope = CommandScope::on_host(worktree, writable).with_main_checkout(main);
+    let subject = ApprovalSubject::of(approval, &scope).with_checks(&run_checks(db, approval));
     let similar = RuleScope::similar(&subject).and_then(|scope| match scope {
       RuleScope::SimilarCommand { command } => Ok(SimilarShown::Command {
         words: command.words().into(),
