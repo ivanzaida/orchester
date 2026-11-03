@@ -3,7 +3,7 @@
 use crate::kontur::scenarios;
 
 /// The scenarios, in the order the seed lists them.
-const NAMES: [&str; 117] = [
+const NAMES: [&str; 124] = [
   "agents",
   "agents-library",
   "agents-browser",
@@ -33,6 +33,13 @@ const NAMES: [&str; 117] = [
   "conversation-context-plenty",
   "conversation-context-near-full",
   "conversation-context-full",
+  "conversation-model",
+  "conversation-model-changed",
+  "conversation-model-waits",
+  "conversation-model-fixed",
+  "conversation-model-back",
+  "side-question",
+  "side-question-sent",
   "long-chats",
   "orchestrator",
   "orchestrator-not-set-up",
