@@ -8,7 +8,7 @@ use orchester_core::{
   integration::local::{Checkout, IndexEntry, LocalFile, LocalPath},
 };
 
-use super::{LocalError, LocalGit, LocalGitError, digest, files::executable};
+use super::{LocalError, LocalGit, LocalGitError, digest, files::executable, stamps::Proof};
 
 /// One status read answers HEAD, the branch, every changed path with its HEAD entry, and the ignored boundary:
 /// a folder an ignore rule matches is one entry and its content is never listed (`--ignored=matching`), so a
@@ -29,22 +29,29 @@ pub(super) enum Freshness {
   /// The checkout's own index and its stat cache, read without writing it (`GIT_OPTIONAL_LOCKS=0`): what the
   /// review shows and re-reads.
   Cached,
-  /// An owned index rebuilt from the entries without stat data, so every tracked file is hashed: what a mutation
-  /// verifies right before it changes anything, so an edit that kept its timestamp and size cannot hide.
+  /// An owned index rebuilt from the entries without stat data, so Git hashes every tracked file except those an
+  /// earlier verified read proved and whose stamp, change time included, is still the same ([`Proof`]): what a
+  /// mutation verifies right before it changes anything, so an edit that kept its timestamp and size cannot hide.
   Verified,
 }
 
 impl LocalGit {
   pub(super) fn capture(&self, freshness: Freshness) -> Result<Checkout, LocalGitError> {
     let (stage, staged) = self.listed_index()?;
-    let output = match freshness {
-      Freshness::Cached => self.raw(STATUS, None, None)?,
-      Freshness::Verified => self.rebuilt_status(&stage)?,
+    let (output, proof) = match freshness {
+      Freshness::Cached => (self.raw(STATUS, None, None)?, None),
+      Freshness::Verified => {
+        let proof = Proof::read(&self.root, &staged)?;
+        (self.rebuilt_status(&stage, &proof.unchanged())?, Some(proof))
+      }
     };
     if output.code != Some(0) {
       return Err(output.refused());
     }
     let status = Status::parse(&output.bytes)?;
+    if let Some(proof) = proof {
+      proof.keep(|path| status.changed.get(path).is_none_or(|change| !change.unstaged));
+    }
     let unmerged_heads = if status.unmerged.is_empty() {
       BTreeMap::new()
     } else {
@@ -97,8 +104,9 @@ impl LocalGit {
     Ok(digest(&bytes))
   }
 
-  /// Status against an owned index rebuilt from `stage` without cache metadata.
-  fn rebuilt_status(&self, stage: &[u8]) -> Result<super::process::GitOutput, LocalGitError> {
+  /// Status against an owned index rebuilt from `stage` without cache metadata, in which Git takes the `unchanged`
+  /// paths as they are (`--assume-unchanged`) and hashes every other tracked file.
+  fn rebuilt_status(&self, stage: &[u8], unchanged: &[&LocalPath]) -> Result<super::process::GitOutput, LocalGitError> {
     let scope = tempfile::Builder::new()
       .prefix("inspect-")
       .tempdir_in(&self.scratch)
@@ -110,6 +118,21 @@ impl LocalGit {
     let copied = self.quiet_index(&["update-index", "-z", "--index-info"], Some(stage), &index)?;
     if copied.code != Some(0) {
       return Err(copied.refused());
+    }
+    if !unchanged.is_empty() {
+      let mut paths = Vec::new();
+      for path in unchanged {
+        paths.extend_from_slice(path.as_str().as_bytes());
+        paths.push(0);
+      }
+      let marked = self.quiet_index(
+        &["update-index", "-z", "--assume-unchanged", "--stdin"],
+        Some(&paths),
+        &index,
+      )?;
+      if marked.code != Some(0) {
+        return Err(marked.refused());
+      }
     }
     self.quiet_index(STATUS, None, &index)
   }

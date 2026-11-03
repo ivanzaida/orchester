@@ -19,6 +19,7 @@ pub mod owned;
 mod path_collision;
 mod process;
 mod resolve;
+mod stamps;
 mod sync_preview;
 
 use std::{
@@ -203,7 +204,8 @@ impl LocalGit {
     self.capture(capture::Freshness::Cached)
   }
 
-  /// The checkout with every tracked file hashed: taken right before Git or Orchester changes it.
+  /// The checkout with every tracked file hashed, or proven unchanged since it was by its stamp: taken right before
+  /// Git or Orchester changes it.
   pub fn verified_snapshot(&self) -> Result<Checkout, LocalGitError> {
     self.capture(capture::Freshness::Verified)
   }
@@ -286,7 +288,7 @@ impl LocalGit {
     Ok(())
   }
 
-  /// Whether the checkout is still exactly `reviewed`, every tracked file hashed.
+  /// Whether the checkout is still exactly `reviewed`, read as [`Self::verified_snapshot`] reads it.
   pub fn ensure(&self, reviewed: &Checkout) -> Result<(), LocalGitError> {
     reviewed.ensure_current(&self.verified_snapshot()?)?;
     Ok(())
