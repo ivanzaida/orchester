@@ -122,7 +122,7 @@ pub enum Rejection {
   /// Automation gave a wider answer than approving once or denying, which only a person gives.
   AutomationWider,
   /// The question request does not wait any more: its agent can no longer take an answer, or there is no
-  /// such request.
+  /// such request. Also a person's review question that is not kept asked (protocol 40).
   QuestionNotAwaited,
   /// The question request was answered already.
   QuestionAnswered,

@@ -62,6 +62,7 @@ mod repository_import;
 mod request_answers;
 mod resolutions;
 mod resources;
+mod review_threads;
 mod reviewer_usage;
 mod revision_diffs;
 mod run_connections;

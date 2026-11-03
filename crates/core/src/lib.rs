@@ -37,6 +37,7 @@ pub mod pull_request;
 pub mod question;
 pub mod repository;
 pub mod resource;
+pub mod review;
 pub mod revision;
 pub mod run;
 pub mod secret;

@@ -42,6 +42,7 @@ mod question;
 mod record;
 mod recovery;
 mod returned;
+mod review;
 mod run;
 mod step;
 mod stuck;
@@ -149,6 +150,8 @@ struct Inner {
   plan_waits: plan_limit::PlanWaits,
   /// The turns of the Orchestrator chat under way.
   chats: chat::Chats,
+  /// The review answers under way.
+  reviews: review::Reviews,
   /// The disk guard's reading of free space (ORC-114), and its watch over runs paused for low disk space.
   disks: low_disk::DiskGuard,
   disk_watch: low_disk::DiskWatch,
@@ -184,6 +187,7 @@ impl Scheduler {
         blocked_runs: blocked_runs::BlockedRuns::default(),
         plan_waits: plan_limit::PlanWaits::default(),
         chats: chat::Chats::default(),
+        reviews: review::Reviews::default(),
         disks: low_disk::DiskGuard::local(),
         disk_watch: low_disk::DiskWatch::default(),
       }),
@@ -226,7 +230,7 @@ impl Scheduler {
   /// request is changing a run under the scheduler lock. The server separately tracks requests
   /// awaiting a task's answer.
   pub fn is_idle(&self) -> bool {
-    if !self.active_runs().is_empty() || self.inner.continuing.try_lock().is_err() || !self.inner.chats.idle() {
+    if !self.active_runs().is_empty() || self.inner.continuing.try_lock().is_err() || !self.turns_idle() {
       return false;
     }
     match self

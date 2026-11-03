@@ -46,8 +46,9 @@ impl Scheduler {
     if matches!(session, AttachSession::Fresh { .. }) {
       self.hold_groups_after_session_end(&db)?;
     }
-    // A turn this runner answers is under way; any other still thinking was cut short.
+    // A turn this runner answers is under way; any other still thinking was cut short, as was a review answer.
     self.interrupt_chat_turns(&mut db, None)?;
+    self.interrupt_review_answers(&mut db)?;
     self.inner.board.set_slots(slots);
     // Workspaces held by work of a runner that is gone are free again; what it left in them waits for a person.
     if self.active_runs().is_empty() {

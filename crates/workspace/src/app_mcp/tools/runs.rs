@@ -28,7 +28,9 @@ use super::{
   base_branch, base_moved,
   merge_attempts::Attempts,
   message_waits::message_waits,
-  orchestrated, plans, wire,
+  orchestrated, plans,
+  review::Reviewed,
+  wire,
   worktree::{worktree_left, worktree_state},
 };
 use crate::{
@@ -68,25 +70,26 @@ pub enum Control {
   Cancel,
 }
 
-/// The run as its task page shows it; its waiting requests and its merge attempts' causes in the app's words
-/// (`translate`), as `list_approvals` and `merge_run` give them.
+/// The run as its task page shows it; its waiting requests, its merge attempts' causes and its review's reasons in the
+/// app's words (`translate`), as `list_approvals` and `merge_run` give them.
 pub async fn get_run(services: &Services, args: InRun, translate: &Translate) -> Result<Value, ToolError> {
   let services = services.clone();
-  let (mut read, (waiting, attempts), project) = blocking(move || read_run(&services, &args)).await?;
+  let (mut read, (waiting, attempts, review), project) = blocking(move || read_run(&services, &args)).await?;
   read["awaiting"]["approvals"] = waiting
     .iter()
     .map(|shown| approval(shown, project, translate))
     .collect();
   read["merge_attempts"] = attempts.told(translate);
+  read["review"] = review.told(translate);
   Ok(read)
 }
 
-/// What [`read_run`] reads apart from the run as its task page shows it: its waiting requests and its merge attempts,
-/// whose words come from the app.
-type Apart = (Vec<ShownApproval>, Attempts);
+/// What [`read_run`] reads apart from the run as its task page shows it: its waiting requests, its merge attempts and
+/// its review, whose words come from the app.
+type Apart = (Vec<ShownApproval>, Attempts, Reviewed);
 
-/// The run `args` names as its task page shows it but for its waiting requests and its merge attempts, which come
-/// apart with its project.
+/// The run `args` names as its task page shows it but for its waiting requests, its merge attempts and its review,
+/// which come apart with its project.
 fn read_run(services: &Services, args: &InRun) -> Result<(Value, Apart, ProjectId), ToolError> {
   let open = services.project(&args.project)?;
   let (project, root) = (open.project.id(), open.repo_root);
@@ -106,6 +109,7 @@ fn read_run(services: &Services, args: &InRun) -> Result<(Value, Apart, ProjectI
   let approval_mode = db.run_approval_mode(run.id())?;
   let merge = merge_state(&db, (&root, &services.programs), &run)?;
   let attempts = Attempts::of_run(&db, (&root, run.id()), &services.vault)?;
+  let review = Reviewed::of_run(&root, &services.programs, run.id())?;
   let view = run_view(&db, run)?;
   let plan = PlanReview::of(&view).map(|review| {
     let mut plan = plans::waiting(&review, true);
@@ -155,7 +159,7 @@ fn read_run(services: &Services, args: &InRun) -> Result<(Value, Apart, ProjectI
     "finished_at": view.finished_at.map(wire::time),
     "link": Link::Task(project, task.key().clone(), TaskPage::Summary).path(),
   });
-  Ok((read, (waiting, attempts), project))
+  Ok((read, (waiting, attempts, review), project))
 }
 
 /// The run's token totals, with the reviewer's use apart and unknown output reported explicitly.
