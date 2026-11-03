@@ -184,6 +184,9 @@ const MANAGERS: [Manager; 11] = [
 /// Programs that fetch a package and run it: they always install.
 const FETCH_AND_RUN: [&str; 4] = ["npx", "pnpx", "bunx", "uvx"];
 
+/// rustup's subcommands whose own `list` only prints.
+const RUSTUP_GROUPS: [&str; 3] = ["target", "toolchain", "component"];
+
 /// The verdict for package manager or toolchain `program` with `args`; `None` for any other program.
 pub(super) fn judge(program: &str, args: &[String]) -> Option<Judged> {
   if FETCH_AND_RUN.contains(&program) {
@@ -206,6 +209,14 @@ pub(super) fn judge(program: &str, args: &[String]) -> Option<Judged> {
     });
   };
   let rest = &args[at + 1..];
+  // `rustup target list` (or `toolchain`'s, `component`'s) prints what is there or could be added, installing nothing.
+  if program == "rustup" && RUSTUP_GROUPS.contains(&sub) && rest.first().is_some_and(|word| word == "list") {
+    return Some(
+      Judged::of(Kind::ReadOnly)
+        .inside_all(&rest[1..])
+        .subcommand(at, format!("{sub} list")),
+    );
+  }
   // A Cargo setting given on the command line can name a program it starts (`build.rustc-wrapper`).
   if program == "cargo"
     && args

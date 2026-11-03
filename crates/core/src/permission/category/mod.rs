@@ -47,6 +47,7 @@ mod reason;
 mod scripts;
 mod sed_script;
 mod shells;
+mod signing;
 mod toolchains;
 mod variables;
 mod words;

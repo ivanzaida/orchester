@@ -40,6 +40,7 @@ impl RunTask {
         AgentHomes {
           temp: &temp,
           config: &config,
+          user: orchester_exec::user::user_id(),
         },
       ),
       None => roots,

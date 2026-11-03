@@ -184,7 +184,14 @@ fn judge_subcommand(sub: &str, with_sub: &[String]) -> Judged {
   let rest = &with_sub[1..];
   match sub {
     "grep" => known_read(with_sub, patterns::git_grep(with_sub)),
-    "status" | "log" | "show" | "diff" | "rev-parse" | "ls-files" | "blame" => known_read(with_sub, Vec::new()),
+    "log" => {
+      let mut judged = known_read(with_sub, Vec::new());
+      if judged.known_safe {
+        judged.patterns.extend(line_ranges(with_sub));
+      }
+      judged
+    }
+    "status" | "show" | "diff" | "rev-parse" | "ls-files" | "blame" => known_read(with_sub, Vec::new()),
     // Signing runs gpg or ssh-keygen with the user's key.
     "commit" | "merge" | "revert" | "cherry-pick" | "am" | "rebase" if has_option(rest, &["-S", "--gpg-sign"]) => {
       Judged::unknown()
@@ -246,6 +253,29 @@ fn known_read(with_sub: &[String], searched: Vec<usize>) -> Judged {
       .searching(searched),
     None => Judged::unknown(),
   }
+}
+
+/// Where `git log`'s line ranges are among `with_sub` (`-L <range>:<file>`, or the range attached): a range is no
+/// path. Its file, after the last colon, is read as [`known_safe`] reads it.
+fn line_ranges(with_sub: &[String]) -> Vec<usize> {
+  let mut ranges = Vec::new();
+  let mut at = 1;
+  while let Some(arg) = with_sub.get(at) {
+    match arg.as_str() {
+      "--" => break,
+      "-L" => {
+        ranges.push(at + 1);
+        at += 2;
+      }
+      arg => {
+        if arg.starts_with("-L") {
+          ranges.push(at);
+        }
+        at += 1;
+      }
+    }
+  }
+  ranges
 }
 
 /// The first operand, or the folder the command runs in.

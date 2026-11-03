@@ -68,6 +68,7 @@ impl Fixture {
         AgentHomes {
           temp: &temp,
           config: &config,
+          user: None,
         },
       );
     let scope = CommandScope::new(&worktree, &[], Some(&root.join("home")), Some(&temp));
@@ -410,6 +411,7 @@ fn approval_roots_agent_temp_folder() {
   let homes = AgentHomes {
     temp: &fixture.temp,
     config: &fixture.config,
+    user: Some(501),
   };
   assert_eq!(
     agent_temp_folders(AgentProvider::CodexCli, Platform::current(), &fixture.worktree, homes),
@@ -483,6 +485,7 @@ fn approval_roots_macos_normalization() {
     AgentHomes {
       temp,
       config: Path::new("/Users/ana/.claude"),
+      user: Some(501),
     },
   );
   let check = |path: &str| roots.check(&ToolRequest::Files(&[path.to_owned()]));
@@ -494,8 +497,19 @@ fn approval_roots_macos_normalization() {
     &format!("/var/folders/ab/T/claude/{folder}/tasks/b1.output"),
     &format!("/private/var/folders/ab/T/claude/{folder}/tasks/b1.output"),
     &format!("/Users/ana/.claude/projects/{folder}/s1.jsonl"),
+    // Claude Code's own temporary folder on macOS (ORC-627), by the user's number.
+    &format!("/tmp/claude-501/{folder}/0e5c/tasks/b1.output"),
+    &format!("/private/tmp/claude-501/{folder}/0e5c/tasks/b1.output"),
   ] {
     assert_eq!(check(path), RootsCheck::Inside, "{path}");
+  }
+  // Another worktree's, or another user's, is not the run's.
+  for path in [
+    "/tmp/claude-501/-Users-ana-kontur/0e5c/tasks/b1.output",
+    &format!("/tmp/claude-502/{folder}/0e5c/tasks/b1.output"),
+    "/tmp/claude-501/cache-break-state.json",
+  ] {
+    assert!(matches!(check(path), RootsCheck::Outside { .. }), "{path}");
   }
   assert_eq!(
     check("/Users/ana/kontur/.orchester/worktrees/w1/../w2/x"),

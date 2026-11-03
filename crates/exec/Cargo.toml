@@ -56,7 +56,7 @@ thiserror.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
 
-# Signals the process group of each program on macOS (see `process_group`).
+# Signals the process group of each program on macOS (see `process_group`), and reads the user's number (`user`).
 [target.'cfg(unix)'.dependencies]
 rustix = { workspace = true, features = ["fs"] }
 
