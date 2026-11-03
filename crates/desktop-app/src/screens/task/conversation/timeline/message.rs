@@ -86,8 +86,8 @@ pub(super) fn agent_row(ctx: &mut Ctx, timeline: &Timeline, row: &AgentRow) -> E
 /// the files attached to it (`ui::attachments::sent`, kept in the project at `root`) and its delivery line; a file it
 /// mentions opens at `files_at`. One the project's Orchestrator chat sent is the Orchestrator's instead
 /// ([`orchestrator_message`]); the chat attaches no files. What a search found in it (`found`) is filled behind its
-/// words. A message a Fix CI sent (`fixed`, ORC-335) says so once its agent took it: *Fix CI · sent 15:44*, or
-/// *Sent automatically · Fix CI 2 of 3* with `repeat`.
+/// words. A message a Fix CI sent (`fixed`, ORC-335) is its Markdown, each log tail a code block, and says so once its
+/// agent took it: *Fix CI · sent 15:44*, or *Sent automatically · Fix CI 2 of 3* with `repeat`.
 pub(in super::super) fn person_message(
   ctx: &mut Ctx,
   ((project, root, files_at), entry): ((ProjectId, &Path, &Version), &Entry),
@@ -101,10 +101,13 @@ pub(in super::super) fn person_message(
   let undelivered = super::super::composer::undelivered(ctx, entry);
   let id = format!("conversation-message-{}", entry.id);
   let attached = attachments::sent::sent(ctx, &id, root, &entry.attachments);
-  // The person's words, with their mentions as links and without the facts the agent got with them.
+  // The person's words, with their mentions as links and without the facts the agent got with them; a Fix CI's
+  // Markdown as the chat draws an agent's, its log tails code blocks (`11b` `X8xYZ`).
   let mut said = || {
     if entry.attachments_only() {
       None
+    } else if fixed.is_some() {
+      chat::said::composed(ctx, &id, (&entry.body, found), project)
     } else {
       chat::said::said(ctx, &id, (&entry.body, found), (project, files_at))
     }

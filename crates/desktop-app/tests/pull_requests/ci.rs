@@ -67,12 +67,15 @@ fn ci_a_failed_check_shows_on_the_summary_and_fix_ci_sends_it() {
   });
   let db = ProjectDb::open(&repo).expect("the project");
   let messages = db.messages(task).expect("messages");
-  let text = messages.last().expect("the message").body().as_str().to_owned();
-  assert!(text.contains("check 5 · failed · last lines of the log"), "{text}");
+  let sent = messages.last().expect("the message");
+  let text = sent.body().as_str().to_owned();
   assert!(
-    text.contains("Details: https://github.com/ivanzaida/kontur/actions/runs/137/job/13704"),
+    text.contains(
+      "[check 5](https://github.com/ivanzaida/kontur/actions/runs/137/job/13704) · failed · last lines of the log"
+    ),
     "{text}"
   );
+  let shown = format!("conversation-message-{}-text", sent.id());
   assert!(!text.contains("check 1"), "passed checks are left out: {text}");
   let run = db
     .runs_of_task(task)
@@ -89,8 +92,14 @@ fn ci_a_failed_check_shows_on_the_summary_and_fix_ci_sends_it() {
   seeded.window.until("the task read again", |window| {
     window.texts("task-ci-badge").is_some_and(|badge| badge == ["Fixing"])
   });
+  sent_in_the_conversation(&mut seeded, &shown);
+}
+
+/// The Conversation's Fix CI line, and its message, whose words are element `shown`, drawn as Markdown: its log tail a
+/// code block, no fence shown as text (`11b` `X8xYZ`).
+fn sent_in_the_conversation(seeded: &mut Seeded, shown: &str) {
   open(
-    &mut seeded,
+    seeded,
     "Typed errors per module",
     TaskTab::Conversation,
     "conversation-ci-fix-0",
@@ -101,6 +110,13 @@ fn ci_a_failed_check_shows_on_the_summary_and_fix_ci_sends_it() {
       .starts_with("CI failed on #137 · check 5 · Fix CI sent to "),
     "the Fix CI's line"
   );
+  let tail = format!("{shown}-code-1");
+  seeded.window.until("the Fix CI message's log tail", |window| {
+    window.tree.get_element_by_id(&tail).is_some()
+  });
+  let words = seeded.window.texts(shown).unwrap_or_default().concat();
+  assert!(!words.contains("```"), "no fence shows: {words}");
+  assert!(words.contains("test webhook_retry_137 ... FAILED"), "{words}");
 }
 
 /// The *Fix CI automatically* switch of the latest run of the task titled `title`, as stored.

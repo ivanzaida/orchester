@@ -148,15 +148,18 @@ fn fix_ci_sends_the_failing_checks_as_one_message() {
     text.starts_with("CI failed on pull request #142. 2 of 5 checks failed:"),
     "{text}"
   );
-  assert!(text.contains("lint · failed · last lines of the log"), "{text}");
+  // Each failing check's name links to its page, its log tail in a fenced block (`11b` `X8xYZ`).
   assert!(
-    text.contains("Details: https://github.com/ivanzaida/kontur/actions/runs/900/job/9002"),
+    text.contains(
+      "[lint](https://github.com/ivanzaida/kontur/actions/runs/900/job/9002) · failed · last lines of the log\n```\n"
+    ),
     "{text}"
   );
   assert!(
-    text.contains("test (ubuntu-latest) · failed · no log could be read"),
+    text.contains("[test (ubuntu-latest)](https://github.com/ivanzaida/kontur/actions/runs/900/job/9003) · failed · no log could be read"),
     "{text}"
   );
+  assert!(!text.contains("Details:"), "the link is the check's name: {text}");
   assert!(text.contains("error: could not compile `webhooks`"), "{text}");
   assert!(
     text.ends_with(&format!(

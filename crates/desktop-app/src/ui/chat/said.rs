@@ -55,6 +55,30 @@ pub fn said(
   Some((shown, Arc::from(words)))
 }
 
+/// What `body`, a message Orchester composed as Markdown for the person to send (a Fix CI, ORC-335), shows: its
+/// Markdown as the chat draws an agent's, each fenced block a code block, with its words for its Copy; `None` when it
+/// says nothing. What a search found in it (`searched`) is filled behind its words. Its words are `{id}-text`.
+pub fn composed(
+  ctx: &mut Ctx,
+  id: &str,
+  (body, searched): (&str, Option<&found::Found>),
+  project: ProjectId,
+) -> Option<Said> {
+  if body.trim().is_empty() {
+    return None;
+  }
+  let words: Arc<str> = Arc::from(body);
+  let links = super::links(ctx);
+  let shown = agent_text(
+    ctx,
+    &format!("{id}-text"),
+    &words,
+    (project, &ProjectNames::default()),
+    (&links, searched),
+  );
+  Some((shown, words))
+}
+
 /// `words`, as the person wrote them: as written without mentions, else lurq's Markdown with their links.
 fn shown_words(
   ctx: &mut Ctx,
