@@ -258,16 +258,16 @@ impl TurnState {
   }
 }
 
-/// Why a turn ended without its answer.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
+/// Why a turn ended without its answer. It is kept as JSON tagged by `kind` (`super::failure`), which also reads the
+/// account problems kept before they had a key of their own.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TurnFailure {
   /// The CLI is not signed in on the connection's account.
   NotSignedIn,
   /// The Orchestrator's connection is gone, or is not one it runs on.
   ConnectionGone,
-  /// The connection's account cannot start its CLI.
-  Account(AccountStartProblem),
+  /// The connection's account cannot start its CLI, for `problem`.
+  Account { problem: AccountStartProblem },
   /// The CLI could not be started, as `reason` tells the runner's log.
   CannotStart { reason: String },
   /// The CLI started and failed: what it or the runner said.
