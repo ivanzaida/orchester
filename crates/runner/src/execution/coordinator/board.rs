@@ -1,0 +1,255 @@
+//! What the runner works on, for the desktop's status bar and close confirmation, and the agent
+//! slots it shares between runs: each agent at work — a step execution of an executing run, with
+//! its task, step, agent and model — takes one slot, so a run's parallel steps and other runs
+//! compete for the same slots. Every change is announced as an [`Event::WorkSummary`] once the
+//! desktop has said how many slots there are. The desktop may change the count at any time: more
+//! slots wake the runs waiting for one; fewer take none away, so agents at work finish and new ones
+//! wait until fewer work than there are slots. Each run says which of its ready steps wait for a
+//! slot, so a person can tell them from steps whose dependencies have not passed.
+//!
+//! Tool steps running a command tool take no agent slot: a command is no agent and uses no
+//! tokens. They take one of [`COMMAND_SLOTS`] command slots instead, shared by all runs, since a
+//! check such as a test suite can use every core of the machine. They are not part of the work
+//! summary, which lists agents.
+
+use std::num::NonZeroU32;
+
+use orchester_core::{
+  id::{RunId, StepExecutionId},
+  run::{Run, RunStatus},
+};
+use orchester_ipc::{Event, RunWork, SlotWait, WorkState, WorkSummary};
+use parking_lot::Mutex;
+use tokio::sync::Notify;
+
+use super::Notifier;
+
+/// Command tools that may run at once across the runner's runs.
+pub(in crate::execution) const COMMAND_SLOTS: usize = 2;
+
+pub(in crate::execution) struct Board {
+  notifier: Notifier,
+  state: Mutex<State>,
+  /// Executions whose command tool runs, each holding a command slot.
+  commands: Mutex<Vec<StepExecutionId>>,
+  /// Wakes the runs waiting for an agent slot when the count changes.
+  resized: Notify,
+}
+
+#[derive(Default)]
+struct State {
+  /// Unknown until the desktop attaches; no summary is sent and slots are not bounded before that.
+  slots: Option<NonZeroU32>,
+  stop: StopMode,
+  agents: Vec<Agent>,
+  /// Ready agent steps held back only because every slot is in use, as their runs last said.
+  slot_waits: Vec<SlotWait>,
+}
+
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+enum StopMode {
+  #[default]
+  Working,
+  Checkpoints,
+  Immediate,
+}
+
+/// One slot in use. `work` is `None` for an agent whose profile or connection is gone: it still
+/// holds its slot until its step fails, but has nothing to show.
+struct Agent {
+  run: RunId,
+  execution: Option<StepExecutionId>,
+  work: Option<RunWork>,
+}
+
+impl Board {
+  pub(in crate::execution) fn new(notifier: Notifier) -> Self {
+    Self {
+      notifier,
+      state: Mutex::new(State::default()),
+      commands: Mutex::new(Vec::new()),
+      resized: Notify::new(),
+    }
+  }
+
+  pub(in crate::execution) fn slots(&self) -> Option<NonZeroU32> {
+    self.state.lock().slots
+  }
+
+  pub(in crate::execution) fn set_slots(&self, slots: NonZeroU32) {
+    self.change(|state| state.slots = Some(slots));
+    self.resized.notify_waiters();
+  }
+
+  /// Completes once the slot count changes; a run waiting for a slot then looks again.
+  pub(in crate::execution) async fn resized(&self) {
+    self.resized.notified().await;
+  }
+
+  /// Whether an agent slot is free.
+  pub(in crate::execution) fn has_free_slot(&self) -> bool {
+    self.state.lock().free() > 0
+  }
+
+  pub(in crate::execution) fn is_stopping(&self) -> bool {
+    self.state.lock().stop != StopMode::Working
+  }
+
+  /// The runner stops at checkpoints: every listed agent is saving from now on.
+  pub(in crate::execution) fn stop_at_checkpoints(&self) {
+    self.change(|state| {
+      if state.stop != StopMode::Working {
+        return;
+      }
+      state.stop = StopMode::Checkpoints;
+      for work in state.agents.iter_mut().filter_map(|agent| agent.work.as_mut()) {
+        work.state = WorkState::Saving;
+      }
+    });
+  }
+
+  /// Refuses new work while the runner ends its agents immediately.
+  pub(in crate::execution) fn stop_immediately(&self) {
+    self.change(|state| {
+      state.stop = StopMode::Immediate;
+      state.agents.retain(|agent| agent.execution.is_some());
+    });
+  }
+
+  /// Takes a slot for `execution` of `run`, which shows as `work`; `false` when none is free. Nothing changed then, so
+  /// nothing is announced: a run waiting for a slot asks again every second.
+  pub(in crate::execution) fn take(&self, run: RunId, execution: StepExecutionId, mut work: Option<RunWork>) -> bool {
+    if !self.has_free_slot() {
+      return false;
+    }
+    let mut taken = false;
+    self.change(|state| {
+      if state.free() == 0 {
+        return;
+      }
+      if let Some(work) = &mut work
+        && state.stop == StopMode::Checkpoints
+      {
+        work.state = WorkState::Saving;
+      }
+      state.agents.push(Agent {
+        run,
+        execution: Some(execution),
+        work,
+      });
+      taken = true;
+    });
+    taken
+  }
+
+  /// Takes a command slot for `execution`'s command tool; `false` when none is free.
+  pub(in crate::execution) fn take_command(&self, execution: StepExecutionId) -> bool {
+    let mut commands = self.commands.lock();
+    if commands.contains(&execution) {
+      return true;
+    }
+    if commands.len() >= COMMAND_SLOTS {
+      return false;
+    }
+    commands.push(execution);
+    true
+  }
+
+  /// `execution`'s agent or command ended: its slot is free again. While the runner stops at
+  /// checkpoints an agent stays listed until its run settles, which shows it as saved.
+  pub(in crate::execution) fn release(&self, execution: StepExecutionId) {
+    self.commands.lock().retain(|command| *command != execution);
+    self.change(|state| {
+      if state.stop == StopMode::Checkpoints {
+        for agent in state
+          .agents
+          .iter_mut()
+          .filter(|agent| agent.execution == Some(execution))
+        {
+          agent.execution = None;
+        }
+      } else {
+        state.agents.retain(|agent| agent.execution != Some(execution));
+      }
+    });
+  }
+
+  /// `run` no longer executes. While the runner stops at checkpoints a run that settled stays
+  /// listed as saved, at its last checkpoint, without holding a slot; otherwise it leaves the
+  /// list. A run still recorded as running did not settle (its task failed), so it is never shown
+  /// as saved.
+  pub(in crate::execution) fn settled(&self, run: &Run) {
+    self.change(|state| {
+      state.slot_waits.retain(|wait| wait.run != run.id());
+      let listed: Vec<Agent> = state.agents.extract_if(.., |agent| agent.run == run.id()).collect();
+      if state.stop != StopMode::Checkpoints || run.status() == &RunStatus::Running {
+        return;
+      }
+      let checkpoint = run
+        .last_checkpoint()
+        .map(|checkpoint| checkpoint.revision().as_str().to_owned());
+      let saved = listed.into_iter().filter_map(|agent| agent.work).map(|mut work| {
+        work.state = WorkState::Saved {
+          checkpoint: checkpoint.clone(),
+        };
+        Agent {
+          run: run.id(),
+          execution: None,
+          work: Some(work),
+        }
+      });
+      state.agents.extend(saved);
+    });
+  }
+
+  /// `executions` of `run` are ready and wait for an agent slot, in place of those it named before. Only a change is
+  /// announced: a run waiting for a slot looks again every second.
+  pub(in crate::execution) fn waiting_for_slot(&self, run: RunId, executions: Vec<StepExecutionId>) {
+    let unchanged = self
+      .state
+      .lock()
+      .slot_waits
+      .iter()
+      .filter(|wait| wait.run == run)
+      .map(|wait| wait.execution)
+      .eq(executions.iter().copied());
+    if unchanged {
+      return;
+    }
+    self.change(|state| {
+      state.slot_waits.retain(|wait| wait.run != run);
+      let waits = executions.into_iter().map(|execution| SlotWait { run, execution });
+      state.slot_waits.extend(waits);
+    });
+  }
+
+  /// Announces the current summary again, e.g. right after attaching.
+  pub(in crate::execution) fn announce(&self) {
+    self.change(|_| {});
+  }
+
+  fn change(&self, change: impl FnOnce(&mut State)) {
+    let summary = {
+      let mut state = self.state.lock();
+      change(&mut state);
+      state.slots.map(|agent_slots| WorkSummary {
+        agent_slots,
+        runs: state.agents.iter().filter_map(|agent| agent.work.clone()).collect(),
+        slot_waits: state.slot_waits.clone(),
+      })
+    };
+    if let Some(summary) = summary {
+      self.notifier.send(Event::WorkSummary(summary));
+    }
+  }
+}
+
+impl State {
+  fn free(&self) -> usize {
+    let Some(slots) = self.slots else {
+      return usize::MAX;
+    };
+    let busy = self.agents.iter().filter(|agent| agent.execution.is_some()).count();
+    (slots.get() as usize).saturating_sub(busy)
+  }
+}

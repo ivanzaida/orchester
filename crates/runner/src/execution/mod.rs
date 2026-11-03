@@ -12,46 +12,13 @@
 //! all runs share, and every command one of the runner's command slots; the project's daily token
 //! budget holds new and continued work back once
 //! today's runs used it.
+//!
+//! The work is split as `docs/architecture/remote-runners.md` ("The split") describes: `coordinator` holds what is
+//! done once for the project, `executor` what is done for one run. This module holds the scheduler, the handle both
+//! use.
 
-mod again;
-mod attach;
-mod blocked_runs;
-mod board;
-mod broken;
-mod browser;
-mod chat;
-mod checkpoint;
-mod codebase_index;
-mod connection_check;
-mod control;
-mod conversation;
-mod environment;
-mod estimate;
-mod halt;
-mod handoff;
-mod held;
-mod idle;
-mod low_disk;
-mod missing_checkpoints;
-mod permissions;
-mod plan;
-mod plan_limit;
-mod pool;
-mod prepare;
-mod question;
-mod record;
-mod recovery;
-mod returned;
-mod run;
-mod step;
-mod stuck;
-mod task_groups;
-mod tool;
-mod tool_approval;
-mod turn_stop;
-mod work;
-mod workspace;
-mod worktree_sweep;
+mod coordinator;
+mod executor;
 
 use std::{
   collections::HashMap,
@@ -79,15 +46,20 @@ use tokio::{
 };
 
 pub use self::{
-  attach::Attached,
-  step::{QaSlots, outside_read_refusals},
+  coordinator::attach::Attached,
+  executor::step::{QaSlots, outside_read_refusals},
 };
+// The coordinator's modules are named by their full path here, never imported: an import would make them reachable
+// from the executor as `crate::execution::<module>`, past the check of `crates/runner/tests/execution_split.rs`.
 use self::{
-  board::Board,
-  control::Control,
-  prepare::Prepared,
-  run::{RunTask, TaskContext},
-  step::QaApps,
+  coordinator::board::Board,
+  executor::{
+    control::Control,
+    disk_guard::DiskGuard,
+    prepared::Prepared,
+    run::{RunTask, TaskContext},
+    step::QaApps,
+  },
 };
 use crate::browser::ProjectBrowser;
 pub use crate::notify::Notifier;
@@ -141,17 +113,17 @@ struct Inner {
   /// Serializes requests that start a task or change a run while its task may end. A fallback
   /// must not change a stored run after another request has started its next task.
   continuing: tokio::sync::Mutex<()>,
-  group_retries: task_groups::GroupRetries,
+  group_retries: coordinator::task_groups::GroupRetries,
   /// Read when the scheduler is made, as the runner starts, before the desktop connects.
-  earlier_groups: task_groups::EarlierGroups,
-  blocked_runs: blocked_runs::BlockedRuns,
+  earlier_groups: coordinator::task_groups::EarlierGroups,
+  blocked_runs: coordinator::blocked_runs::BlockedRuns,
   /// Runs stopped at their account's plan limit that a timer continues at its reset.
-  plan_waits: plan_limit::PlanWaits,
+  plan_waits: coordinator::plan_limit::PlanWaits,
   /// The turns of the Orchestrator chat under way.
-  chats: chat::Chats,
+  chats: coordinator::chat::Chats,
   /// The disk guard's reading of free space (ORC-114), and its watch over runs paused for low disk space.
-  disks: low_disk::DiskGuard,
-  disk_watch: low_disk::DiskWatch,
+  disks: DiskGuard,
+  disk_watch: coordinator::low_disk::DiskWatch,
 }
 
 impl Scheduler {
@@ -166,8 +138,8 @@ impl Scheduler {
     // Every statement of the process that waits for a database lock pauses off the runtime's async workers.
     orchester_store::pause_lock_waits_with(crate::lock_pause::pause_off_async_workers);
     // Before the desktop connects and reads the runs.
-    missing_checkpoints::record(project_root);
-    worktree_sweep::sweep_in_background(project_root.to_path_buf());
+    coordinator::missing_checkpoints::record(project_root);
+    coordinator::worktree_sweep::sweep_in_background(project_root.to_path_buf());
     Self {
       inner: Arc::new(Inner {
         project_root: project_root.to_path_buf(),
@@ -179,18 +151,18 @@ impl Scheduler {
         notifier,
         active: Mutex::new(HashMap::new()),
         continuing: tokio::sync::Mutex::new(()),
-        group_retries: task_groups::GroupRetries::default(),
-        earlier_groups: task_groups::EarlierGroups::read(project_root),
-        blocked_runs: blocked_runs::BlockedRuns::default(),
-        plan_waits: plan_limit::PlanWaits::default(),
-        chats: chat::Chats::default(),
-        disks: low_disk::DiskGuard::local(),
-        disk_watch: low_disk::DiskWatch::default(),
+        group_retries: coordinator::task_groups::GroupRetries::default(),
+        earlier_groups: coordinator::task_groups::EarlierGroups::read(project_root),
+        blocked_runs: coordinator::blocked_runs::BlockedRuns::default(),
+        plan_waits: coordinator::plan_limit::PlanWaits::default(),
+        chats: coordinator::chat::Chats::default(),
+        disks: DiskGuard::local(),
+        disk_watch: coordinator::low_disk::DiskWatch::default(),
       }),
     }
   }
 
-  fn plan_waits(&self) -> &plan_limit::PlanWaits {
+  fn plan_waits(&self) -> &coordinator::plan_limit::PlanWaits {
     &self.inner.plan_waits
   }
 
@@ -256,12 +228,12 @@ impl Scheduler {
         self.check_group_start(&db, task, Some(&recorded))?;
         self.admit(&db)?;
       }
-      let prepared = prepare::resume_recorded(&mut db, root, task, recorded);
+      let prepared = coordinator::prepare::resume_recorded(&mut db, root, task, recorded);
       return self.begin(db, task, prepared);
     }
     self.check_group_start(&db, task, None)?;
     self.admit(&db)?;
-    let prepared = prepare::prepare_first(&mut db, root, key, task);
+    let prepared = coordinator::prepare::prepare_first(&mut db, root, key, task);
     self.begin(db, task, prepared)
   }
 
@@ -299,7 +271,7 @@ impl Scheduler {
         }
         continue;
       }
-      if let Some(paused) = idle::pause(&mut self.open()?, run)? {
+      if let Some(paused) = coordinator::idle::pause(&mut self.open()?, run)? {
         self.inner.notifier.send(Event::RunChanged {
           run,
           task: paused.task(),
@@ -332,7 +304,7 @@ impl Scheduler {
         continue;
       }
       // Without an answer the run's task ended before it read the request: the run is idle now.
-      let cancelled = idle::cancel(&mut self.open()?, run)?;
+      let cancelled = coordinator::idle::cancel(&mut self.open()?, run)?;
       self.inner.notifier.send(Event::RunChanged {
         run,
         task: cancelled.task(),
@@ -345,7 +317,9 @@ impl Scheduler {
   /// Continues paused run `run`; a step it stopped in continues the agent's CLI session.
   pub async fn resume_run(&self, run: RunId) -> Result<(), Rejection> {
     self.plan_waits().clear(run);
-    let resumed = self.continue_settled(run, |db, root| idle::resume(db, root, run)).await;
+    let resumed = self
+      .continue_settled(run, |db, root| coordinator::idle::resume(db, root, run))
+      .await;
     self.wait_again_if_refused(&resumed);
     resumed
   }
@@ -362,7 +336,9 @@ impl Scheduler {
   pub async fn continue_on_connection(&self, run: RunId, connection: ConnectionId) -> Result<(), Rejection> {
     self.plan_waits().clear(run);
     let continued = self
-      .continue_settled(run, |db, root| plan_limit::continue_on(db, root, run, connection))
+      .continue_settled(run, |db, root| {
+        coordinator::plan_limit::continue_on(db, root, run, connection)
+      })
       .await;
     self.wait_again_if_refused(&continued);
     continued
@@ -373,7 +349,7 @@ impl Scheduler {
   pub async fn try_at_plan_limit(&self, run: RunId) -> Result<(), Rejection> {
     self.plan_waits().clear(run);
     let tried = self
-      .continue_settled(run, |db, root| plan_limit::try_now(db, root, run))
+      .continue_settled(run, |db, root| coordinator::plan_limit::try_now(db, root, run))
       .await;
     self.wait_again_if_refused(&tried);
     tried
@@ -382,7 +358,7 @@ impl Scheduler {
   /// Raises the limits of `run`, stopped at a limit, and continues it.
   pub async fn raise_limit(&self, run: RunId, limits: RaisedLimits) -> Result<(), Rejection> {
     self
-      .continue_settled(run, |db, root| idle::raise(db, root, run, limits))
+      .continue_settled(run, |db, root| coordinator::idle::raise(db, root, run, limits))
       .await
   }
 
@@ -390,7 +366,9 @@ impl Scheduler {
   /// stopped agent's CLI session continues.
   pub async fn raise_step_budget(&self, run: RunId, budget: Option<TokenBudget>) -> Result<(), Rejection> {
     self
-      .continue_settled(run, |db, root| idle::raise_step_budget(db, root, run, budget))
+      .continue_settled(run, |db, root| {
+        coordinator::idle::raise_step_budget(db, root, run, budget)
+      })
       .await
   }
 
@@ -478,7 +456,7 @@ impl Scheduler {
       return Err(Rejection::NoAgentSlot { slots });
     }
     self.check_disk(db)?;
-    idle::check_daily_budget(db)
+    coordinator::idle::check_daily_budget(db)
   }
 
   /// Applies `transition` to idle run `run` and executes it again.
