@@ -26,9 +26,11 @@ use lurq::{
 };
 use orchester_core::{
   id::{RunId, SideQuestionId, TaskId},
+  run::Answerer,
   time::Timestamp,
 };
 use orchester_workspace::{
+  decisions::DecisionKind,
   messages::{self, Message},
   tasks::{
     conversation::follow::Sent,
@@ -70,12 +72,13 @@ pub(super) struct StopRequest {
 
 impl lurq::app::component::DevtoolsInspectable for StopRequest {}
 
-/// The answered side question `question` of `task` in `project`, to send on to the run's agent.
+/// The answered side question `question` of `task` in `project`, to send on to the run's agent, pressed `by`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct SendRequest {
   project: OpenProject,
   task: TaskId,
   question: SideQuestionId,
+  by: Answerer,
 }
 
 impl lurq::app::component::DevtoolsInspectable for SendRequest {}
@@ -195,8 +198,8 @@ impl SideQuestions {
     });
   }
 
-  /// Sends the answer of `question` of `task` on to the run's agent.
-  pub(super) fn send(&self, project: &OpenProject, task: TaskId, question: SideQuestionId) {
+  /// Sends the answer of `question` of `task` on to the run's agent, pressed `by`.
+  pub(super) fn send(&self, project: &OpenProject, (task, question): (TaskId, SideQuestionId), by: Answerer) {
     if self.send.state().get_untracked().is_pending() {
       return;
     }
@@ -204,6 +207,7 @@ impl SideQuestions {
       project: project.clone(),
       task,
       question,
+      by,
     });
   }
 
@@ -264,10 +268,14 @@ fn send_action(ctx: &mut Ctx) -> SendAction {
     let runtime = services.runtime.clone();
     async move {
       let sending = async move {
+        // Automation's send that would answer a waiting question needs the same consent as its answer.
+        let workspace = services.workspace.clone();
+        let allowed = move |kind: DecisionKind| kind.read_consent(&workspace);
         let sent = side_question::send_on(
           (&services.runners, &services.servers),
           &request.project,
           (request.task, request.question),
+          (request.by, allowed),
         )
         .await;
         // The conversation shows the message the send stored.

@@ -29,7 +29,7 @@ use orchester_core::{
 };
 use orchester_exec::programs::Programs;
 use orchester_workspace::tasks::side_question::{
-  Asking, end_in, keep_in, send_on_in, side_input_in, side_questions_in,
+  Asking, end_in, keep_in, send_on_as, send_on_in, side_input_in, side_questions_in,
 };
 
 use self::support::{Fixture, at};
@@ -161,6 +161,75 @@ fn side_question_of_an_ended_run_is_not_sent() {
   let refused = send_on_in(&root, (task, asked.id)).err().expect("nobody would read it");
   assert_eq!(refused.key, "sideQuestion.errors.runEnded");
   assert!(fixture.db.messages(task).expect("messages").is_empty());
+}
+
+#[test]
+fn side_question_sent_by_automation_to_a_waiting_question_needs_its_consent() {
+  use orchester_core::run::{Answerer, WaitReason};
+  use orchester_workspace::decisions::DecisionKind;
+
+  let mut fixture = Fixture::new();
+  let task = fixture.task("Add retry to webhook sender", at(10));
+  let mut run = fixture.started_run(task, at(20));
+  work(&mut fixture, &run, at(30));
+  let execution = run.current_attempt().expect("attempt").executions()[0].id();
+  let events = run
+    .wait_step(execution, WaitReason::Message, at(35))
+    .expect("waits on a free-text question");
+  fixture.record(&run, &events);
+  let root = fixture.repo.path().to_path_buf();
+  let asked = asking(task, &run, "What failed?");
+  keep_in(&root, &asked).expect("kept");
+  end_in(&root, asked.id, &answer("The retry test.")).expect("ended");
+
+  let mut checked = None;
+  let refused = send_on_as(
+    &root,
+    (task, asked.id),
+    (Answerer::Automation, |kind| {
+      checked = Some(kind);
+      Ok(false)
+    }),
+  )
+  .err()
+  .expect("automation may not answer the waiting question");
+  assert_eq!(refused.key, "appMcp.errors.automationNotAllowed");
+  assert_eq!(checked, Some(DecisionKind::Question), "its answer's consent is asked");
+  assert!(
+    fixture.db.messages(task).expect("messages").is_empty(),
+    "nothing is kept"
+  );
+  assert!(!side_questions_in(&root, task).expect("read")[0].sent());
+
+  send_on_as(&root, (task, asked.id), (Answerer::Automation, |_| Ok(true))).expect("allowed");
+  let messages = fixture.db.messages(task).expect("messages");
+  assert_eq!(messages.len(), 1);
+  assert_eq!(
+    messages[0].answerer(),
+    Some(Answerer::Automation),
+    "automation's message is recorded as automation's"
+  );
+}
+
+#[test]
+fn side_question_sent_by_the_person_is_the_persons_message() {
+  use orchester_core::run::Answerer;
+
+  let mut fixture = Fixture::new();
+  let task = fixture.task("Add retry to webhook sender", at(10));
+  let run = fixture.started_run(task, at(20));
+  let root = fixture.repo.path().to_path_buf();
+  let asked = asking(task, &run, "What failed?");
+  keep_in(&root, &asked).expect("kept");
+  end_in(&root, asked.id, &answer("The retry test.")).expect("ended");
+  send_on_as(
+    &root,
+    (task, asked.id),
+    (Answerer::Person, |_| panic!("a person's send asks no consent")),
+  )
+  .expect("sent");
+  let messages = fixture.db.messages(task).expect("messages");
+  assert_eq!(messages[0].answerer(), Some(Answerer::Person));
 }
 
 #[test]

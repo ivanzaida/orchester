@@ -8,19 +8,23 @@ use std::path::Path;
 
 use orchester_core::{
   id::{IdempotencyKey, RunId, SideQuestionId, TaskId},
-  run::side_question::{SideState, sent_on_text},
+  run::{
+    Answerer,
+    side_question::{SideState, sent_on_text},
+  },
   time::Timestamp,
 };
-use orchester_store::ProjectDb;
+use orchester_store::{ProjectDb, StoreError};
 
 use crate::{
+  decisions::DecisionKind,
   messages::{self, Message},
   runner::Runners,
   sharing::Servers,
   tasks::conversation::{
     composer::{ComposerMode, Then},
     follow::{RunnerOf, Sent, Stored, follow},
-    outgoing::{Context, OutgoingError, Way, prepare_in, store_in},
+    outgoing::{Context, OutgoingError, Way, prepare_in, store_answer_in},
   },
   workspace::OpenProject,
 };
@@ -55,9 +59,20 @@ pub struct SentOn {
 }
 
 /// Stores the answer of side question `id` of `task` in the project at `root` as one ordinary message to its run's
-/// agent, and marks it sent. Refused when it was not answered, was sent already, is about a run that is no longer the
-/// task's latest, or no agent of the run reads messages any more. Blocks on SQLite.
+/// agent, sent by the person, and marks it sent ([`send_on_as`]). Blocks on SQLite.
 pub fn send_on_in(root: &Path, (task, id): (TaskId, SideQuestionId)) -> Result<SentOn, Message> {
+  send_on_as(root, (task, id), (Answerer::Person, |_| Ok(true)))
+}
+
+/// [`send_on_in`], pressed `by`. Refused when it was not answered, was sent already, is about a run that is no longer
+/// the task's latest, or no agent of the run reads messages any more. A message that would answer a free-text question
+/// an agent waits on is that question's answer (`Prepared::decision_kind`): automation sends it only where `allowed`
+/// says automation may decide that kind, and automation's message is recorded as automation's. Blocks on SQLite.
+pub fn send_on_as(
+  root: &Path,
+  (task, id): (TaskId, SideQuestionId),
+  (by, allowed): (Answerer, impl FnOnce(DecisionKind) -> Result<bool, StoreError>),
+) -> Result<SentOn, Message> {
   let db = ProjectDb::open(root).map_err(|error| messages::store_error(&error))?;
   let asked = db
     .side_question(id)
@@ -79,9 +94,14 @@ pub fn send_on_in(root: &Path, (task, id): (TaskId, SideQuestionId)) -> Result<S
     prepared = prepare_in(root, (task, Some(asked.run)), (false, Some(context))).map_err(refused)?;
   }
   let way = send_way(&prepared.mode).ok_or_else(|| Message::new("sideQuestion.errors.runEnded"))?;
+  if let Some(kind) = prepared.decision_kind(way).filter(|_| by == Answerer::Automation)
+    && !allowed(kind).map_err(|error| messages::store_error(&error))?
+  {
+    return Err(Message::new("appMcp.errors.automationNotAllowed"));
+  }
   let key = IdempotencyKey::from_uuid(id.as_uuid());
   let text = sent_on_text(&asked.question, reply);
-  let (then, _) = store_in(root, &prepared, (key, way), &text).map_err(refused)?;
+  let (then, _) = store_answer_in(root, &prepared, (key, way), (&text, &[]), by).map_err(refused)?;
   let mut db = ProjectDb::open(root).map_err(|error| messages::store_error(&error))?;
   db.mark_side_question_sent(id, Timestamp::now())
     .map_err(|error| messages::store_error(&error))?;
@@ -99,15 +119,19 @@ pub fn send_on_in(root: &Path, (task, id): (TaskId, SideQuestionId)) -> Result<S
   })
 }
 
-/// *Send to {agent}*: stores the answer of side question `id` of `task` as a message ([`send_on_in`]) and lets
-/// `project`'s runner deliver it.
+/// *Send to {agent}*, pressed `by`: stores the answer of side question `id` of `task` as a message ([`send_on_as`],
+/// automation's under `allowed`) and lets `project`'s runner deliver it.
 pub async fn send_on(
   (runners, servers): (&Runners, &Servers),
   project: &OpenProject,
   (task, id): (TaskId, SideQuestionId),
+  (by, allowed): (
+    Answerer,
+    impl FnOnce(DecisionKind) -> Result<bool, StoreError> + Send + 'static,
+  ),
 ) -> Result<Sent, Message> {
   let root = project.repo_root.clone();
-  let sent = crate::background::run(move || send_on_in(&root, (task, id))).await??;
+  let sent = crate::background::run(move || send_on_as(&root, (task, id), (by, allowed))).await??;
   let stored = Stored {
     root: &project.repo_root,
     task,

@@ -16,7 +16,10 @@ use lurq::{
 };
 use orchester_core::{
   id::SideQuestionId,
-  run::side_question::{SideQuestion, SideReply, SideSource, SideState, SourceKind},
+  run::{
+    Answerer,
+    side_question::{SideQuestion, SideReply, SideSource, SideState, SourceKind},
+  },
   time::Timestamp,
 };
 use orchester_workspace::{display::clock, tasks::side_question::failure_message};
@@ -304,7 +307,17 @@ fn actions(
         button.loading().into()
       } else {
         let (state, project, task) = (state.clone(), props.project.open.clone(), props.task);
-        button.on_click(move || state.send(&project, task, question)).into()
+        button
+          .on_click(move || {
+            // Who pressed is read while the press is delivered, as the run composer reads it.
+            let by = if lurq::app::events::is_synthetic_input() {
+              Answerer::Automation
+            } else {
+              Answerer::Person
+            };
+            state.send(&project, (task, question), by);
+          })
+          .into()
       }
     }
   };
