@@ -11,6 +11,7 @@ mod apply;
 mod approval_mode;
 mod attempt;
 mod branch;
+pub mod bundle;
 mod completion;
 mod error;
 mod event;
