@@ -43,7 +43,8 @@ pub(in crate::execution) async fn answer_side(
   stop: watch::Receiver<()>,
 ) -> SideOutcome {
   let runtime = Handle::current();
-  let answered = tokio::task::spawn_blocking(move || side_blocking(&root, vault.as_ref(), input, (stop, runtime))).await;
+  let answered =
+    tokio::task::spawn_blocking(move || side_blocking(&root, vault.as_ref(), input, (stop, runtime))).await;
   match answered {
     Ok(outcome) => outcome,
     Err(error) => failed(error.to_string()),

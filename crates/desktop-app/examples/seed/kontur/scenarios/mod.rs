@@ -41,6 +41,7 @@ mod run_model;
 pub mod settings;
 mod shared_config;
 mod shared_here;
+mod side_question;
 mod slot_wait;
 mod sources;
 mod task_states;
@@ -97,7 +98,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 120] = [
+pub const ALL: [Scenario; 122] = [
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-library", agents_library::seed),
   Scenario::of("agents-browser", agents_browser::seed),
@@ -132,6 +133,8 @@ pub const ALL: [Scenario; 120] = [
   Scenario::of("conversation-model-waits", run_model::waits),
   Scenario::of("conversation-model-fixed", run_model::fixed),
   Scenario::of("conversation-model-back", run_model::back),
+  Scenario::of("side-question", side_question::seed),
+  Scenario::of("side-question-sent", side_question::sent),
   Scenario::of("long-chats", long_chats::seed),
   Scenario::of("orchestrator", orchestrator::seed),
   Scenario::of("orchestrator-not-set-up", orchestrator::not_set_up),

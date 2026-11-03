@@ -99,12 +99,23 @@ fn side_question_is_answered_from_the_run_and_reaches_its_agent_only_when_sent()
   let input = side_input_in(&root, &Programs::processes(), (task, run.id()), &question.question).expect("read");
   let read = input.transcript().join("\n");
   assert!(read.contains("I added a 30 s retry case"), "{read}");
-  assert!(read.contains("cargo test -p webhooks retry") && read.contains("failed"), "{read}");
+  assert!(
+    read.contains("cargo test -p webhooks retry") && read.contains("failed"),
+    "{read}"
+  );
   assert_eq!(input.about().agent.as_deref(), Some("Builder"));
   let prompt = side_prompt(&input);
-  assert!(prompt.contains("Why did Builder change"), "the question is in what the side agent reads");
+  assert!(
+    prompt.contains("Why did Builder change"),
+    "the question is in what the side agent reads"
+  );
 
-  end_in(&root, asked.id, &answer("The third test run failed without a 30 s case.")).expect("ended");
+  end_in(
+    &root,
+    asked.id,
+    &answer("The third test run failed without a 30 s case."),
+  )
+  .expect("ended");
   let kept = side_questions_in(&root, task).expect("read");
   assert_eq!(kept.len(), 1);
   assert!(matches!(&kept[0].state, SideState::Answered { sent: None, model, .. } if model == "claude-haiku-5-5"));
@@ -119,8 +130,14 @@ fn side_question_is_answered_from_the_run_and_reaches_its_agent_only_when_sent()
   assert_eq!(messages.len(), 1, "one ordinary message");
   let body = messages[0].body().as_str();
   assert!(body.starts_with("From a side question"), "{body}");
-  assert!(body.contains("Why did Builder change src/fixtures/retry.json?"), "{body}");
-  assert!(body.contains("The third test run failed without a 30 s case."), "{body}");
+  assert!(
+    body.contains("Why did Builder change src/fixtures/retry.json?"),
+    "{body}"
+  );
+  assert!(
+    body.contains("The third test run failed without a 30 s case."),
+    "{body}"
+  );
   assert_eq!(messages[0].run(), Some(run.id()));
   assert_eq!(messages[0].timing(), Timing::AfterTurn, "it waits for the agent's turn");
   assert!(side_questions_in(&root, task).expect("read")[0].sent());
@@ -170,11 +187,20 @@ fn side_question_a_long_transcript_keeps_its_latest_entries_with_a_note() {
   let input = SideInput::new(about, &question, (&entries, &diff), &[]);
   assert!(input.left_out() > 0);
   assert!(input.transcript().join("").chars().count() <= TRANSCRIPT_MAX_CHARS);
-  assert!(input.transcript().last().expect("kept").starts_with("entry 99 "), "the latest stay");
+  assert!(
+    input.transcript().last().expect("kept").starts_with("entry 99 "),
+    "the latest stay"
+  );
   assert!(input.diff_cut());
   let notes = input.notes().join(" ");
-  assert!(notes.contains("earliest entries were left out") && notes.contains("diff is long"), "{notes}");
-  assert!(side_prompt(&input).contains("earliest entries were left out"), "the side agent is told");
+  assert!(
+    notes.contains("earliest entries were left out") && notes.contains("diff is long"),
+    "{notes}"
+  );
+  assert!(
+    side_prompt(&input).contains("earliest entries were left out"),
+    "the side agent is told"
+  );
 }
 
 /// The side agent's command on `provider`.
@@ -211,19 +237,44 @@ fn after<'a>(args: &'a [String], flag: &str) -> Option<&'a str> {
 fn side_question_agent_has_no_write_access_and_runs_no_commands() {
   let claude = side_command(AgentProvider::ClaudeCodeCli);
   let args = claude.args();
-  assert_eq!(after(args, "--tools"), Some(""), "Claude Code is offered no tool at all: {args:?}");
+  assert_eq!(
+    after(args, "--tools"),
+    Some(""),
+    "Claude Code is offered no tool at all: {args:?}"
+  );
   assert!(args.iter().any(|arg| arg == "--strict-mcp-config"), "{args:?}");
-  for granting in ["--mcp-config", "--allowedTools", "--permission-mode", "--add-dir", "--dangerously-skip-permissions"] {
-    assert!(!args.iter().any(|arg| arg == granting), "{granting} gives it something: {args:?}");
+  for granting in [
+    "--mcp-config",
+    "--allowedTools",
+    "--permission-mode",
+    "--add-dir",
+    "--dangerously-skip-permissions",
+  ] {
+    assert!(
+      !args.iter().any(|arg| arg == granting),
+      "{granting} gives it something: {args:?}"
+    );
   }
   assert!(args.iter().any(|arg| arg == "--no-session-persistence"), "{args:?}");
-  assert_eq!(claude.current_dir(), Some(std::path::Path::new("C:/side/work")), "an empty folder");
+  assert_eq!(
+    claude.current_dir(),
+    Some(std::path::Path::new("C:/side/work")),
+    "an empty folder"
+  );
 
   let codex = side_command(AgentProvider::CodexCli);
   let args = codex.args();
   assert_eq!(after(args, "--sandbox"), Some("read-only"), "{args:?}");
   assert_eq!(after(args, "-a"), Some("never"), "{args:?}");
-  assert!(args.iter().any(|arg| arg == "features.shell_tool=false"), "no shell: {args:?}");
+  assert!(
+    args.iter().any(|arg| arg == "features.shell_tool=false"),
+    "no shell: {args:?}"
+  );
   assert!(args.iter().any(|arg| arg == "tools.web_search=false"), "{args:?}");
-  assert!(!args.iter().any(|arg| arg.contains("danger-full-access") || arg == "workspace-write"), "{args:?}");
+  assert!(
+    !args
+      .iter()
+      .any(|arg| arg.contains("danger-full-access") || arg == "workspace-write"),
+    "{args:?}"
+  );
 }

@@ -88,16 +88,20 @@ pub fn end_in(root: &Path, id: SideQuestionId, outcome: &SideOutcome) -> Result<
     .map_err(|error| messages::store_error(&error))
 }
 
-/// Asks the question `asking` says about a run of `project`: keeps it, reads what the side agent answers from and has
-/// the project's runner answer it, then keeps how that ended. Nothing reaches the run's agent. A question that cannot
-/// be kept is not asked; once kept, it always ends, answered or with why not.
-pub async fn ask(runners: &Runners, project: &OpenProject, asking: Asking) -> Result<(), Message> {
+/// Asks the question `asking` says about a run of `project`: keeps it, reads what the side agent answers from (git
+/// runs through `programs`) and has the project's runner answer it, then keeps how that ended. Nothing reaches the
+/// run's agent. A question that cannot be kept is not asked; once kept, it always ends, answered or with why not.
+pub async fn ask(
+  (runners, programs): (&Runners, &Programs),
+  project: &OpenProject,
+  asking: Asking,
+) -> Result<(), Message> {
   let root = project.repo_root.clone();
   let kept = asking.clone();
   let question = background::run(move || keep_in(&root, &kept)).await??;
-  let root = project.repo_root.clone();
+  let (root, programs) = (project.repo_root.clone(), programs.clone());
   let (task, run, text) = (asking.task, asking.run, question.question.clone());
-  let input = background::run(move || side_input_in(&root, &Programs::processes(), (task, run), &text)).await;
+  let input = background::run(move || side_input_in(&root, &programs, (task, run), &text)).await;
   let outcome = match input.and_then(|input| input) {
     Ok(input) => runners
       .answer_side_question_in(project, asking.id, input)

@@ -38,7 +38,10 @@ impl Runners {
     project: &OpenProject,
     question: SideQuestionId,
   ) -> Result<(), RunRequestError> {
-    match self.ask_project(project, Command::StopSideQuestion { question }).await? {
+    match self
+      .ask_project(project, Command::StopSideQuestion { question })
+      .await?
+    {
       Reply::SideStopped { .. } => Ok(()),
       Reply::Rejected(rejection) => Err(RunRequestError::Rejected(rejection)),
       other => {

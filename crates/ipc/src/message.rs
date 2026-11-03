@@ -494,7 +494,9 @@ pub enum Reply {
     outcome: SideOutcome,
   },
   /// The answer to [`Command::StopSideQuestion`].
-  SideStopped { question: SideQuestionId },
+  SideStopped {
+    question: SideQuestionId,
+  },
   /// The answer to [`Command::SetErrorReports`]: the runner sends reports as it says from now on.
   ErrorReportsSet,
   /// The answer to [`Command::Browser`].

@@ -77,12 +77,13 @@ pub(super) struct Bar<'a> {
   pub(super) attached: &'a DraftAttachments,
 }
 
-/// The row, with the step's model chip and the run's permissions chip after the recipient while the run goes on, and
-/// the context meter of the step at work after the free space (`bhtch`), when one works.
+/// The row, with the *Side question* button after *Attach* once the task has a run (ORC-337, `b4mI1D`), the step's
+/// model chip and the run's permissions chip after the recipient while the run goes on, and the context meter of the
+/// step at work after the free space (`bhtch`), when one works.
 pub(super) fn bar(
   ctx: &mut Ctx,
   bar: &Bar<'_>,
-  (model, permissions, context): (Option<Element>, Option<Element>, Option<Element>),
+  (side, model, permissions, context): (Option<Element>, Option<Element>, Option<Element>, Option<Element>),
 ) -> Element {
   let fixed = match bar.mode {
     ComposerMode::Answer { .. } if bar.mode.fixed_recipient().is_some() => {
@@ -98,6 +99,7 @@ pub(super) fn bar(
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
     .child(attach(ctx, bar.attached))
+    .with_children(side)
     .child(recipient_pill(ctx, (&recipient, recipient_icon(bar.mode)), fixed))
     .with_children(model)
     .with_children(permissions)

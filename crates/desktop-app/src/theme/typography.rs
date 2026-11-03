@@ -277,6 +277,7 @@ pub fn typography(palette: &ThemePalette) -> ThemeTypography {
       .chain(super::slash::typography(palette))
       .chain(super::permissions::typography(palette))
       .chain(super::run_model::typography(palette))
+      .chain(super::side_question::typography(palette))
       .collect(),
   }
 }

@@ -4,6 +4,7 @@
 
 mod browser;
 mod chat;
+mod side;
 
 use std::{
   future::Future,
@@ -360,28 +361,23 @@ async fn answer(
     Command::SteerChat { message } => chat::steered(scheduler, message),
     Command::StopTurn { run } => return later.answer(run, async move { handle.stop_turn(run).await }),
     Command::Browser(ref command) => return later.browser(handle, command.clone()),
-    Command::EstimateTask { task } => {
-      return later.reply(async move {
-        match handle.estimate_task(task).await {
-          Ok(outcome) => Reply::TaskEstimated { task, outcome },
-          Err(rejection) => Reply::Rejected(rejection),
-        }
-      });
-    }
-    Command::AnswerSideQuestion { question, ref input } => {
-      let input = (**input).clone();
-      return later.reply(async move {
-        let outcome = handle.answer_side_question(question, input).await;
-        Reply::SideAnswered { question, outcome }
-      });
-    }
-    Command::StopSideQuestion { question } => {
-      scheduler.stop_side_question(question);
-      Reply::SideStopped { question }
+    Command::EstimateTask { task } => return estimated(&later, handle, task),
+    ref side @ (Command::AnswerSideQuestion { .. } | Command::StopSideQuestion { .. }) => {
+      return side::answer_side(&later, handle, side);
     }
     Command::SetErrorReports { ref reports } => return Answer::ErrorReports(id, reports.clone()),
   };
   Answer::Reply(Event::Reply { id, reply })
+}
+
+/// Estimates the story points of `task` without holding up the runner's other requests.
+fn estimated(later: &Later<'_>, handle: Scheduler, task: TaskId) -> Answer {
+  later.reply(async move {
+    match handle.estimate_task(task).await {
+      Ok(outcome) => Reply::TaskEstimated { task, outcome },
+      Err(rejection) => Reply::Rejected(rejection),
+    }
+  })
 }
 
 /// Routes the decision commands without holding up the runner's other requests.

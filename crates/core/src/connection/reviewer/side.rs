@@ -52,11 +52,14 @@ impl CliSideAgent {
         .with_environment(self.environment.clone())
         .with_stdin(format!("{SIDE_INSTRUCTIONS}\n\n{}", side_prompt(input))),
       _ => without_auto_memory(
-        Command::new(&self.executable, claude_side_args((model, effort), &self.folder.instructions))
-          .with_current_dir(&self.folder.work)
-          .with_environment(self.environment.clone())
-          .with_env(QUIET.0, QUIET.1)
-          .with_stdin(side_prompt(input)),
+        Command::new(
+          &self.executable,
+          claude_side_args((model, effort), &self.folder.instructions),
+        )
+        .with_current_dir(&self.folder.work)
+        .with_environment(self.environment.clone())
+        .with_env(QUIET.0, QUIET.1)
+        .with_stdin(side_prompt(input)),
       ),
     }
   }

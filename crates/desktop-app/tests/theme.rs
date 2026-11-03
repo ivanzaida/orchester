@@ -23,6 +23,8 @@ mod orchestrator;
 mod pipelines;
 #[path = "theme/projects.rs"]
 mod projects;
+#[path = "theme/side_question.rs"]
+mod side_question;
 #[path = "theme/skills.rs"]
 mod skills;
 #[path = "theme/startup.rs"]

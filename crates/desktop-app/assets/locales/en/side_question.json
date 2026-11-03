@@ -1,0 +1,38 @@
+{
+  "side_question": {
+    "button": {
+      "tip": "Side question · {{agent}} won't see it",
+      "label": "Side question"
+    },
+    "title": "Side question",
+    "run": "{{task}} · run {{run}}",
+    "close": "Close the side question",
+    "scope": "{{agent}} doesn't see this, and its turn goes on. A separate agent answers from run {{run}}'s transcript and changes, read-only.",
+    "asked": "Asked {{time}} · only you see it",
+    "answering": "answering",
+    "reading": "Reading run {{run}}'s transcript and changes…",
+    "model": "{{model}} · {{time}}",
+    "send": "Send to {{agent}}",
+    "sent": "Sent to {{agent}} · {{time}}",
+    "notSent": "Not sent",
+    "copy": "Copy",
+    "copied": "Copied",
+    "retry": "Retry",
+    "open": "Open",
+    "runEnded": "Run {{run}} ended · nobody would read it",
+    "nothingToRead": "Run {{run}} has no transcript yet · ask once {{agent}} has started",
+    "theAgent": "the agent",
+    "source": {
+      "file": "Changed file",
+      "command": "Command",
+      "message": "Message"
+    },
+    "composer": {
+      "placeholder": "Ask about run {{run}}…",
+      "followUp": "Ask a follow-up about run {{run}}…",
+      "readOnly": "Reads only · changes nothing"
+    },
+    "ask": "Ask",
+    "stop": "Stop"
+  }
+}

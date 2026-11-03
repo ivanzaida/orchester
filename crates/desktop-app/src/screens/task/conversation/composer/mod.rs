@@ -318,6 +318,7 @@ impl Composer {
       .and_then(|run| super::context::in_composer(ctx, &composing.project, run, &self.box_anchor));
     let model = super::model::chip(ctx, (&composing.project, &composing.detail), &self.box_anchor);
     let permissions = super::permissions::chip(ctx, (&composing.project, &composing.detail), &self.box_anchor);
+    let side = side_button(ctx, composing);
     let bar = controls::bar(
       ctx,
       &Bar {
@@ -329,7 +330,7 @@ impl Composer {
         anchor: &self.anchor,
         attached,
       },
-      (model, permissions, context),
+      (side, model, permissions, context),
     );
     let stroke = if self.focused.get() {
       PaletteColor::BorderFocus
@@ -453,6 +454,12 @@ impl Composer {
       .on_paste(props.composing.state.attached.on_paste());
     self.mention.with_marker("composer-field", input, TypographyStyle::Body)
   }
+}
+
+/// The *Side question* button for the task's latest run: there is none to ask about before the task has one.
+fn side_button(ctx: &mut Ctx, composing: &Composing) -> Option<Element> {
+  let agent = super::side_agent(ctx, composing.detail.run.as_ref()?);
+  super::side::button(ctx, &agent)
 }
 
 /// The quiet line under the box (`SpaXX`): 11.5 `text_muted`.

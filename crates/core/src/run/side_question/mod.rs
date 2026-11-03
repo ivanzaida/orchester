@@ -133,8 +133,13 @@ pub enum SideFailure {
 #[serde(tag = "outcome", rename_all = "snake_case")]
 pub enum SideOutcome {
   /// It answered with `reply`, on `model`.
-  Answered { reply: SideReply, model: String },
-  Failed { failure: SideFailure },
+  Answered {
+    reply: SideReply,
+    model: String,
+  },
+  Failed {
+    failure: SideFailure,
+  },
 }
 
 /// Where a side question stands.

@@ -24,6 +24,7 @@ mod open_long;
 mod qa_slot;
 mod references;
 mod search;
+mod side_question;
 mod states;
 #[path = "../support/mod.rs"]
 mod support;

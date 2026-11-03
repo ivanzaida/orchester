@@ -53,6 +53,7 @@ mod secrets;
 mod settings;
 mod shadow;
 mod shell;
+mod side_question;
 mod sign_in;
 pub mod skills;
 mod slash;
@@ -113,6 +114,7 @@ pub use self::{
   settings::{SettingsSpacing, SettingsText},
   shadow::ExtraShadow,
   shell::{ShellSpacing, ShellText},
+  side_question::{SideSpacing, SideText},
   sign_in::{SignInSpacing, SignInText},
   slash::SlashText,
   sources::{SourcesSpacing, SourcesText},
@@ -187,6 +189,7 @@ pub fn install(app: &mut App, mode: Mode) {
   browser::install(theme);
   dialog::install(theme);
   permissions::install(theme);
+  side_question::install(theme);
   theme.set_shadows(shadow::shadows());
   theme.set_form(form::form());
 }

@@ -20,6 +20,7 @@ mod permissions;
 mod read;
 mod search;
 mod shared;
+mod side;
 mod states;
 mod timeline;
 mod todo;
@@ -29,7 +30,7 @@ use std::{path::PathBuf, sync::Arc};
 
 use lurq::{
   app::{component::Component, ctx::Ctx},
-  components::{Column, Stack},
+  components::{Column, Row, Stack},
   core::Signal,
   layout::StackAlignment,
   node::{Element, dimension::Dimension},
@@ -41,8 +42,10 @@ use orchester_workspace::{
     conversation::{
       Conversation, PanelState,
       orchestrator::{merged_by, message_offer, proposals},
+      outgoing::offer,
     },
     detail::RunView,
+    side_question::send_way,
     timeline::{self as items, Item, ItemKind, load::Loaded},
     transcript::{Entry, EntryKind},
   },
@@ -104,6 +107,7 @@ impl Component for ConversationTab {
     let feed = ctx.props::<TaskContext>().project.feed.clone();
     permissions::Permissions::provide(ctx, feed.clone());
     model::RunModel::provide(ctx, feed);
+    side::SideQuestions::provide(ctx);
     Self {
       decisions,
       composing: Shared::provide(ctx),
@@ -144,9 +148,8 @@ impl Component for ConversationTab {
     };
     let state = state.unwrap_or_else(|| RunState::of(&conversation, detail, false));
     let plan = todo::pinned(ctx, detail.run.as_ref(), &conversation);
-    Column::new()
+    let column = Column::new()
       .id("conversation")
-      .width(Dimension::Pct(100.0))
       .flex(1.0)
       .min_height(Dimension::Px(0.0))
       .on_key_down(search::keys(&self.search))
@@ -159,8 +162,48 @@ impl Component for ConversationTab {
           .child(body),
       )
       .with_children(plan)
-      .child(composer)
+      .child(composer);
+    let Some(pane) = side_pane(ctx, &task, &conversation) else {
+      return Element::from(column.width(Dimension::Pct(100.0)));
+    };
+    // The pane opens to the right of the transcript and its composer, which keep working beside it (12 `j8r9z`).
+    Element::from(
+      Row::new()
+        .id("conversation-with-side-question")
+        .width(Dimension::Pct(100.0))
+        .flex(1.0)
+        .min_height(Dimension::Px(0.0))
+        .child(column.min_width(Dimension::Px(0.0)).height(Dimension::Pct(100.0)))
+        .child(pane),
+    )
   }
+}
+
+/// The side question pane beside the latest run's conversation, while the person keeps it open.
+fn side_pane(ctx: &mut Ctx, task: &TaskContext, conversation: &Conversation) -> Option<Element> {
+  let state = side::SideQuestions::of(ctx)?;
+  let run = task.detail.run.as_ref().filter(|_| state.open.get())?;
+  let mode = offer(conversation, Some(run), None).0;
+  let props = side::PaneProps {
+    project: task.project.clone(),
+    task: task.detail.task.id(),
+    key: task.key.clone(),
+    run: run.id(),
+    number: run.run.number().get(),
+    agent: side_agent(ctx, run),
+    sendable: send_way(&mode).is_some(),
+    running: run.run.status() == &RunStatus::Running,
+    not_shared: task.detail.not_shared(),
+  };
+  Some(side::pane(ctx, props))
+}
+
+/// The agent of `run` the side question is about: its agent at work, else the one that worked last.
+fn side_agent(ctx: &Ctx, run: &RunView) -> Arc<str> {
+  run
+    .current_step()
+    .and_then(|step| step.agent.clone())
+    .unwrap_or_else(|| ctx.t("side_question.theAgent"))
 }
 
 impl ConversationTab {

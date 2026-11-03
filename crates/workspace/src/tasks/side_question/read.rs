@@ -17,6 +17,7 @@ use orchester_exec::programs::Programs;
 use orchester_store::ProjectDb;
 
 use crate::{
+  display::clock,
   messages::{self, Message},
   tasks::{
     changes::{Checkpointed, NotCheckpointed, RunRange, RunStage, not_checkpointed_in, run_changes_in},
@@ -54,7 +55,9 @@ pub fn side_input_in(
     task_key: detail.task.key().to_string(),
     title: detail.task.details().title.as_str().to_owned(),
     run: view.run.number().get(),
-    agent: view.current_step().and_then(|step| step.agent.as_deref().map(str::to_owned)),
+    agent: view
+      .current_step()
+      .and_then(|step| step.agent.as_deref().map(str::to_owned)),
   };
   Ok(SideInput::new(about, question, (&lines, &diff), &earlier))
 }
@@ -111,14 +114,19 @@ fn entry_text(kind: &EntryKind) -> Option<String> {
         Some(CommandStatus::Failed) => "failed",
         Some(CommandStatus::Declined) => "declined",
       };
-      let exit = command.exit_code.map(|code| format!(", exit code {code}")).unwrap_or_default();
+      let exit = command
+        .exit_code
+        .map(|code| format!(", exit code {code}"))
+        .unwrap_or_default();
       format!(
         "ran `{}` ({status}{exit}); output ends: {}",
         command.command,
         tail(&command.output)
       )
     }
-    EntryKind::ToolCommand(command) => format!("tool ran `{}`; output ends: {}", command.command, tail(&command.output)),
+    EntryKind::ToolCommand(command) => {
+      format!("tool ran `{}`; output ends: {}", command.command, tail(&command.output))
+    }
     EntryKind::FileChange(change) => {
       let how = match change.kind {
         FileChangeKind::Added => "added",
@@ -147,7 +155,10 @@ fn person_lines(detail: &TaskDetail, run: RunId) -> Vec<(Timestamp, String)> {
     .filter(|message| message.run() == Some(run) && matches!(message.sender(), Sender::Person { .. }))
     .map(|message| {
       let at = message.created_at();
-      (at, format!("[{}] person: message: {}", clock(at), message.body().as_str()))
+      (
+        at,
+        format!("[{}] person: message: {}", clock(at), message.body().as_str()),
+      )
     })
     .collect()
 }
@@ -156,13 +167,6 @@ fn person_lines(detail: &TaskDetail, run: RunId) -> Vec<(Timestamp, String)> {
 fn tail(output: &str) -> String {
   let count = output.chars().count();
   output.chars().skip(count.saturating_sub(OUTPUT_TAIL_CHARS)).collect()
-}
-
-/// `at` as the time of day here, as the task page shows it.
-fn clock(at: Timestamp) -> String {
-  chrono::DateTime::from_timestamp_millis(at.unix_millis())
-    .map(|utc| utc.with_timezone(&chrono::Local).format("%H:%M").to_string())
-    .unwrap_or_default()
 }
 
 /// `view`'s changes as a unified diff: from where its work starts to its latest checkpoint, then what its worktree

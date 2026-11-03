@@ -33,9 +33,10 @@ pub const fn send_way(mode: &ComposerMode) -> Option<Way> {
   match mode {
     ComposerMode::Steer(working) if working.mid_turn => Some(Way::Second),
     ComposerMode::Resume { .. } => Some(Way::Second),
-    ComposerMode::Steer(_) | ComposerMode::Queue(_) | ComposerMode::Answer { .. } | ComposerMode::PlanChanges { .. } => {
-      Some(Way::Primary)
-    }
+    ComposerMode::Steer(_)
+    | ComposerMode::Queue(_)
+    | ComposerMode::Answer { .. }
+    | ComposerMode::PlanChanges { .. } => Some(Way::Primary),
     ComposerMode::FollowUp
     | ComposerMode::Continue
     | ComposerMode::RaiseLimit
