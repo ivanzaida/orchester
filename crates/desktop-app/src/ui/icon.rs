@@ -230,6 +230,7 @@ icons! {
   RadioTower => '\u{e404}',
   RectangleEllipsis => '\u{e21f}',
   RefreshCw => '\u{e145}',
+  Repeat => '\u{e146}',
   Replace => '\u{e3db}',
   Reply => '\u{e22a}',
   Rocket => '\u{e286}',

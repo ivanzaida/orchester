@@ -194,3 +194,16 @@ fn fork_icons_match_bundled_font_names() {
     "git-fork"
   );
 }
+
+/// The glyphs of a run's pull request CI and of *Fix CI* (ORC-335, 10b `mxt1S`, 11c `NMHzc`).
+#[test]
+fn ci_icons_match_bundled_font_names() {
+  let font = include_bytes!("../../assets/fonts/lucide.ttf");
+  for (icon, name) in [
+    (Icon::Repeat, "repeat"),
+    (Icon::Wrench, "wrench"),
+    (Icon::GitPullRequest, "git-pull-request"),
+  ] {
+    assert_eq!(glyph_name(font, font_glyph(font, icon.glyph() as usize)), name);
+  }
+}

@@ -206,6 +206,28 @@ fn side_agent(ctx: &Ctx, run: &RunView) -> Arc<str> {
     .unwrap_or_else(|| ctx.t("side_question.theAgent"))
 }
 
+/// The merge queue's lines with what `run`'s pull request's CI did among them, each before the row its time places it
+/// (ORC-335), in the order of the rows.
+fn with_ci(
+  ctx: &mut Ctx,
+  task: &TaskContext,
+  run: &RunView,
+  (rows, delivery): (
+    &[Arc<orchester_workspace::tasks::timeline::view::Row>],
+    &Arc<Vec<timeline::Placed>>,
+  ),
+) -> Arc<Vec<timeline::Placed>> {
+  let Some(shown) = &task.ci else {
+    return delivery.clone();
+  };
+  let lines = super::ci::timeline::lines(run, shown, Services::of(ctx).clock.now());
+  let places = orchester_workspace::tasks::timeline::delivery::places(rows, &lines);
+  let mut placed: Vec<timeline::Placed> = delivery.iter().cloned().collect();
+  placed.extend(places.into_iter().zip(lines.into_iter().map(Arc::new)));
+  placed.sort_by_key(|(before, line)| (*before, line.at));
+  Arc::new(placed)
+}
+
 impl ConversationTab {
   /// The chat of `run`, or why it cannot be shown yet; and the toolbar's state while it follows the run. `names` are
   /// the projects', for what a link to another project's place says.
@@ -262,10 +284,11 @@ impl ConversationTab {
     let (reveal, track, bar) = found.map_or((None, None, None), |found| {
       (found.reveal, Some(found.track), Some(found.bar))
     });
+    let delivery = with_ci(ctx, task, run, (&built.rows, &built.delivery));
     let chat = timeline::chat(
       ctx,
       &self.follow,
-      (&built.rows, &built.delivery, run.approvals.approved_by_autopilot()),
+      (&built.rows, &delivery, run.approvals.approved_by_autopilot()),
       (items, &proposed),
       (working, arrived),
       (reveal, track),
@@ -312,6 +335,11 @@ impl ConversationTab {
       merged_by: merged_by(&loaded.orchestrated),
       pins: todo::pins(conversation.state),
       search: found.map(|found| found.marks.clone()),
+      ci: task.ci.clone().map(|shown| super::ci::timeline::CiShare {
+        shown,
+        project: open.clone(),
+        lost: task.lost(),
+      }),
     });
   }
 

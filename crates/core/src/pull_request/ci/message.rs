@@ -14,11 +14,7 @@ use super::{
 /// The Fix CI message for the failing checks of pull request `number`, whose head is `branch`, sent `by`; `None` when
 /// no check fails.
 pub fn fix_text(checks: &CiChecks, (number, branch): (u64, &str), by: FixedBy) -> Option<String> {
-  let failing: Vec<_> = checks
-    .checks
-    .iter()
-    .filter(|check| is_failing(check.state))
-    .collect();
+  let failing: Vec<_> = checks.checks.iter().filter(|check| is_failing(check.state)).collect();
   if failing.is_empty() {
     return None;
   }
@@ -35,7 +31,11 @@ pub fn fix_text(checks: &CiChecks, (number, branch): (u64, &str), by: FixedBy) -
     ),
   };
   for check in failing {
-    let state = if check.state == CiState::Cancelled { "cancelled" } else { "failed" };
+    let state = if check.state == CiState::Cancelled {
+      "cancelled"
+    } else {
+      "failed"
+    };
     text.push('\n');
     match &check.log_tail {
       Some(_) => writeln!(text, "{} · {state} · last lines of the log", check.name),
@@ -62,10 +62,6 @@ pub fn fix_text(checks: &CiChecks, (number, branch): (u64, &str), by: FixedBy) -
 
 /// A code fence longer than any run of backticks in `text`, so the tail cannot end its block.
 fn fence_for(text: &str) -> String {
-  let longest = text
-    .split(|c| c != '`')
-    .map(str::len)
-    .max()
-    .unwrap_or(0);
+  let longest = text.split(|c| c != '`').map(str::len).max().unwrap_or(0);
   "`".repeat(longest.max(2) + 1)
 }

@@ -13,12 +13,12 @@ use orchester_core::{
   github::GhCli,
   id::ProjectId,
   pull_request::{
-    PullRequestState, SyncFailure,
+    PullRequest, PullRequestState, SyncFailure,
     ci::{CiChecks, POLL_INTERVAL, read_ci},
   },
   repository::RepositoryError,
   run::Run,
-  store::{ConnectionStore, PullRequestStore, RepositoryStore},
+  store::{ConnectionStore, PullRequestStore, RepositoryStore, RunStore},
   time::Timestamp,
 };
 use orchester_exec::programs::Programs;
@@ -128,9 +128,14 @@ pub fn read_ci_in(
   }
 }
 
+/// The number of the pull request of `run`'s branch the last sync stored ([`stored_run_pull_request`]).
+pub fn run_pull_request(db: &ProjectDb, run: &Run) -> Result<Option<u64>, InboxError> {
+  Ok(stored_run_pull_request(db, run)?.map(|pull_request| pull_request.number()))
+}
+
 /// The pull request of `run`'s branch the last sync stored: its open one, else the most recently updated one.
 /// `None` without a link or such a pull request.
-pub fn run_pull_request(db: &ProjectDb, run: &Run) -> Result<Option<u64>, InboxError> {
+pub fn stored_run_pull_request(db: &ProjectDb, run: &Run) -> Result<Option<PullRequest>, InboxError> {
   let Some(link) = db.repository_link()? else {
     return Ok(None);
   };
@@ -138,19 +143,45 @@ pub fn run_pull_request(db: &ProjectDb, run: &Run) -> Result<Option<u64>, InboxE
     return Ok(None);
   };
   // A fork's branch of the same name is not the run's.
-  let of_run: Vec<_> = synced
+  let mut of_run: Vec<PullRequest> = synced
     .pull_requests
-    .iter()
+    .into_iter()
     .filter(|pull_request| pull_request.head() == run.branch() && !pull_request.is_cross_repository())
     .collect();
   let open = of_run
     .iter()
-    .find(|pull_request| matches!(pull_request.state(), PullRequestState::Open | PullRequestState::Draft));
-  Ok(
-    open
-      .or_else(|| of_run.first())
-      .map(|pull_request| pull_request.number()),
-  )
+    .position(|pull_request| matches!(pull_request.state(), PullRequestState::Open | PullRequestState::Draft));
+  Ok(match open {
+    Some(at) => Some(of_run.swap_remove(at)),
+    None => of_run.into_iter().next(),
+  })
+}
+
+/// A run's pull request as the last sync stored it, with its CI as [`CiReads`] gives it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RunCi {
+  pub pull_request: PullRequest,
+  pub ci: PullRequestCi,
+}
+
+/// The pull request of run `run` of `project`, at `root`, with its CI read through `reads` at `now`; `None` while the
+/// run's branch has no pull request the last sync stored. Blocks on SQLite and `gh`.
+pub fn run_ci_in(
+  reads: &CiReads,
+  (project, root): (ProjectId, &Path),
+  programs: &Programs,
+  (run, now): (orchester_core::id::RunId, Timestamp),
+) -> Result<Option<RunCi>, InboxError> {
+  let db = ProjectDb::open(root)?;
+  let Some(run) = db.run(run).map_err(crate::tasks::detail::run_store_error)? else {
+    return Ok(None);
+  };
+  let Some(pull_request) = stored_run_pull_request(&db, &run)? else {
+    return Ok(None);
+  };
+  drop(db);
+  let ci = reads.read((project, root), programs, pull_request.number(), now)?;
+  Ok(Some(RunCi { pull_request, ci }))
 }
 
 /// Pull request `number` of a project.

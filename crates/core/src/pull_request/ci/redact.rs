@@ -90,7 +90,11 @@ pub fn redact(text: &str) -> String {
   LONG_RUN
     .replace_all(&text, |captures: &regex::Captures<'_>| {
       let run = &captures[0];
-      if is_secret_run(run) { REDACTED.to_owned() } else { run.to_owned() }
+      if is_secret_run(run) {
+        REDACTED.to_owned()
+      } else {
+        run.to_owned()
+      }
     })
     .into_owned()
 }

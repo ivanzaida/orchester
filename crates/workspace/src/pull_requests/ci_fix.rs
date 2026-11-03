@@ -160,8 +160,8 @@ pub fn set_auto_fix_in(root: &Path, run: RunId, auto: AutoFix) -> Result<(), Sto
   ProjectDb::open(root)?.set_auto_fix(run, auto, Timestamp::now())
 }
 
-/// Stores the Fix CI of `read`, the checks of `task`'s latest run `run`'s pull request, sent by `fixer`, and records it;
-/// or, for *Fix CI automatically*, records that it stopped at its limit, or does nothing. `lost` as in [`offer`].
+/// Stores the Fix CI of `read`, the checks of `task`'s latest run `run`'s pull request, sent by `fixer`, and records
+/// it; or, for *Fix CI automatically*, records that it stopped at its limit, or does nothing. `lost` as in [`offer`].
 /// Blocks on SQLite.
 pub fn store_fix_in(
   root: &Path,
@@ -170,7 +170,11 @@ pub fn store_fix_in(
   fixer: Fixer,
 ) -> Result<FixDone, FixError> {
   let prepared = prepare_in(root, (task, Some(run)), (lost, None)).map_err(FixError::Outgoing)?;
-  let view = prepared.detail.run.as_ref().expect("prepared for the task's latest run");
+  let view = prepared
+    .detail
+    .run
+    .as_ref()
+    .expect("prepared for the task's latest run");
   let ci = PullRequestCi::Read(read.clone());
   if let FixOffer::Unavailable(reason) = offer(&prepared.detail, lost, &ci) {
     return match fixer {
@@ -191,8 +195,12 @@ pub fn store_fix_in(
   // Automation never decides for the person: a run that would take the message as a decision waits for them.
   let decides = prepared.decision_kind(way).is_some();
   let (by, answerer) = match fixer {
-    Fixer::Hand { by: Answerer::Automation } if decides => {
-      return Err(FixError::Unavailable(Message::new("appMcp.errors.automationNotAllowed")));
+    Fixer::Hand {
+      by: Answerer::Automation,
+    } if decides => {
+      return Err(FixError::Unavailable(Message::new(
+        "appMcp.errors.automationNotAllowed",
+      )));
     }
     Fixer::Hand { by } => (FixedBy::Hand, by),
     Fixer::Automatic if decides => return Ok(FixDone::Nothing),

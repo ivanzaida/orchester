@@ -1,0 +1,112 @@
+{
+  "ci": {
+    "title": "Pull request #{{number}}",
+    "branches": "{{head}} → {{base}}",
+    "branchesBy": "{{head}} → {{base}} · opened by {{author}}",
+    "openGithub": "Open on GitHub",
+    "openPullRequest": "Open pull request",
+    "state": {
+      "running": "Running",
+      "passed": "Passed",
+      "failed": "Failed",
+      "unknown": "Unknown",
+      "fixing": "Fixing",
+      "limitReached": "Limit reached"
+    },
+    "summary": {
+      "running": "CI · {{done}} of {{total}} checks done",
+      "passed": "CI · {{passed}} of {{total}} checks passed",
+      "failed": "CI · {{failed}} of {{total}} checks failed",
+      "none": "CI · no checks on this pull request",
+      "notRead": "CI · checks not read",
+      "fixing": "CI · Fix CI sent {{time}}"
+    },
+    "check": {
+      "failed": "failed",
+      "cancelled": "cancelled",
+      "queued": "queued",
+      "noLog": "No log could be read for this check."
+    },
+    "passedFold": "{{count}} passed · {{names}}",
+    "details": "Details",
+    "fix": "Fix CI",
+    "fixHint": {
+      "one": "Sends the failing check's name and last 40 log lines to {{agent}}",
+      "other": "Sends the {{count}} failing checks' names and last 40 log lines to {{agent}}"
+    },
+    "theAgent": "the run's agent",
+    "openChecks": "Open checks on GitHub",
+    "checkAgain": "Check again",
+    "auto": {
+      "label": "Fix CI automatically",
+      "upTo": "up to",
+      "fixes": {
+        "one": "1 fix",
+        "other": "{{count}} fixes"
+      },
+      "noneUsed": "Sends the failing checks to {{agent}} when CI fails · none used",
+      "used": "{{used}} of {{limit}} automatic fixes used on this run",
+      "offHint": "Off · CI waits for you when it fails",
+      "needsGh": "Needs gh to read checks",
+      "limitReached": "{{used}} of {{limit}} used",
+      "turnOff": "Turn off for this run",
+      "off": "Fix CI automatically is off for this run",
+      "failed": "Fix CI automatically could not be changed."
+    },
+    "gh": {
+      "notFoundTitle": "GitHub CLI not found",
+      "notFound": "Orchester reads CI with gh. Install it from cli.github.com, sign in with this command, then check again.",
+      "notSignedInTitle": "GitHub CLI isn't signed in",
+      "notSignedIn": "Orchester reads the pull request's checks with gh. Sign in to gh in a terminal with this command, then check again. The pull request itself is fine.",
+      "command": "gh auth login",
+      "readFailedTitle": "Couldn't read CI",
+      "readFailed": "GitHub didn't give the checks. Orchester tries again in 30 seconds; Check again tries now.",
+      "unreachable": "Couldn't reach GitHub. Orchester tries again in 30 seconds; Check again tries now.",
+      "rateLimited": "GitHub limits requests for now. Orchester tries again once the limit resets; Check again tries now.",
+      "unavailable": "gh can't act as the account this project expects. Check the GitHub connection, then check again."
+    },
+    "header": {
+      "running": "CI running on #{{number}}",
+      "passed": "CI passed on #{{number}}",
+      "failed": "CI failed on #{{number}}",
+      "fixing": "Fixing CI on #{{number}}",
+      "fixingAuto": "Fixing CI on #{{number}} · {{count}} of {{limit}}",
+      "notRead": "Pull request #{{number}} · CI not read"
+    },
+    "event": {
+      "running": "CI running on #{{number}} · {{count}} checks",
+      "passed": "CI passed on #{{number}} · {{passed}} of {{total}} checks",
+      "none": "No checks ran on #{{number}}",
+      "failed": "CI failed on #{{number}} · {{names}}",
+      "sent": "{{failed}} · Fix CI sent to {{agent}} at {{time}}",
+      "sentAuto": "{{failed}} · sent Fix CI {{count}} of {{limit}} automatically",
+      "autoStopped": "Fix CI automatically stopped at {{count}} of {{limit}} · CI still fails on #{{number}} · needs you",
+      "notRead": "CI not read on #{{number}} · {{why}}",
+      "whyNotFound": "GitHub CLI not found",
+      "whyNotSignedIn": "GitHub CLI isn't signed in",
+      "whyFailed": "GitHub didn't give the checks"
+    },
+    "card": {
+      "failed": "CI failed on #{{number}}",
+      "failedAgain": "CI failed again on #{{number}}",
+      "count": "{{failed}} of {{total}} checks failed",
+      "summary": "Summary",
+      "sentAuto": "Fix CI {{count}} of {{limit}} · sent automatically to {{agent}} at {{time}}"
+    },
+    "message": {
+      "sent": "Fix CI · sent {{time}}",
+      "sentAuto": "Sent automatically · Fix CI {{count}} of {{limit}} · {{time}}"
+    },
+    "runEvent": {
+      "running": "CI runs on pull request #{{number}}. CI decides what happens next.",
+      "passed": "CI passed on pull request #{{number}}. Review and merge it on GitHub.",
+      "failed": "CI failed on pull request #{{number}}: {{names}}. Fix CI sends them to {{agent}}.",
+      "fixing": "Fix CI sent the failing checks of pull request #{{number}} to {{agent}}.",
+      "notRead": "Orchester can't read CI for pull request #{{number}}: {{why}}."
+    },
+    "errors": {
+      "fixFailed": "Fix CI didn't send: {{reason}}",
+      "openFailed": "The page couldn't be opened in the browser."
+    }
+  }
+}

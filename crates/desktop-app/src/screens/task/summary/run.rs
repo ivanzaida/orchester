@@ -98,13 +98,17 @@ fn rail(ctx: &mut Ctx, task: &TaskContext, run: &RunView) -> Element {
 }
 
 /// Where the task stands, as one line on the page's ground in a `border` stroke (`Last event` `TGEq8`); `here`: the run
-/// is on this computer, so its conversation is too.
+/// is on this computer, so its conversation is too. Once the run ended with a pull request, or while its agent works on
+/// a Fix CI, the line says how its CI stands (ORC-335).
 fn last_event(ctx: &mut Ctx, task: &TaskContext, here: bool) -> Element {
   let said = decisions::said(ctx, task);
-  let text = ctx.t_args(
-    "summary.run.event",
-    [("title", said.title.clone()), ("body", said.body.clone())],
-  );
+  let (glyph, text) = crate::screens::task::ci::header::event(ctx, task).unwrap_or_else(|| {
+    let text = ctx.t_args(
+      "summary.run.event",
+      [("title", said.title.clone()), ("body", said.body.clone())],
+    );
+    (said.icon, text)
+  });
   let link = here.then(|| {
     let navigation = Navigation::of(ctx);
     let route = Route::Project(
@@ -130,7 +134,7 @@ fn last_event(ctx: &mut Ctx, task: &TaskContext, here: bool) -> Element {
     .align_items(Alignment::Start)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Md)
-    .child(icon(said.icon, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(glyph, IconSize::Base, PaletteColor::TextMuted))
     .child(
       Text::new(&text)
         .id("task-event-text")

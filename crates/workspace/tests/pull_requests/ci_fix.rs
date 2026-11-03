@@ -51,7 +51,9 @@ fn check(name: &str, state: CiState, job: u64, tail: Option<&str>) -> CiCheck {
     name: name.to_owned(),
     workflow: Some("CI".to_owned()),
     state,
-    url: Some(format!("https://github.com/ivanzaida/kontur/actions/runs/900/job/{job}")),
+    url: Some(format!(
+      "https://github.com/ivanzaida/kontur/actions/runs/900/job/{job}"
+    )),
     job: Some(job),
     log_tail: tail.map(str::to_owned),
   }
@@ -82,7 +84,13 @@ fn project() -> (Fixture, Run) {
   let task = fixture.task("Add retry to webhook sender", at(10));
   let run = fixture.started_run(task, at(20));
   link(&mut fixture);
-  let stored = [pull_request(142, run.branch().as_str(), PullRequestState::Open, None, 900)];
+  let stored = [pull_request(
+    142,
+    run.branch().as_str(),
+    PullRequestState::Open,
+    None,
+    900,
+  )];
   fixture
     .db
     .replace_pull_requests(&repo(), &stored, at(1_000))
@@ -127,19 +135,28 @@ fn deliver_all(fixture: &mut Fixture, run: &Run, at_millis: i64) {
 fn fix_ci_sends_the_failing_checks_as_one_message() {
   let (fixture, run) = project();
   let done = fix(&fixture, &run, &failed(), HAND).expect("sent");
-  assert!(matches!(done, FixDone::Stored(ref fix) if fix.by == FixedBy::Hand), "{done:?}");
+  assert!(
+    matches!(done, FixDone::Stored(ref fix) if fix.by == FixedBy::Hand),
+    "{done:?}"
+  );
   let stored = messages(&fixture, &run);
   let [message] = stored.as_slice() else {
     panic!("one message: {stored:?}");
   };
   let text = message.body().as_str();
-  assert!(text.starts_with("CI failed on pull request #142. 2 of 5 checks failed:"), "{text}");
+  assert!(
+    text.starts_with("CI failed on pull request #142. 2 of 5 checks failed:"),
+    "{text}"
+  );
   assert!(text.contains("lint · failed · last lines of the log"), "{text}");
   assert!(
     text.contains("Details: https://github.com/ivanzaida/kontur/actions/runs/900/job/9002"),
     "{text}"
   );
-  assert!(text.contains("test (ubuntu-latest) · failed · no log could be read"), "{text}");
+  assert!(
+    text.contains("test (ubuntu-latest) · failed · no log could be read"),
+    "{text}"
+  );
   assert!(text.contains("error: could not compile `webhooks`"), "{text}");
   assert!(
     text.ends_with(&format!(
@@ -257,7 +274,10 @@ fn fix_ci_automatically_sends_up_to_its_limit_and_records_each_send() {
     "{first:?}"
   );
   let text = messages(&fixture, &run)[0].body().as_str().to_owned();
-  assert!(text.starts_with("CI failed on pull request #142. This is Fix CI 1 of 2"), "{text}");
+  assert!(
+    text.starts_with("CI failed on pull request #142. This is Fix CI 1 of 2"),
+    "{text}"
+  );
   assert!(text.contains("Fix it on"), "one failing check: {text}");
   deliver_all(&mut fixture, &run, 40);
   assert_eq!(
@@ -268,7 +288,10 @@ fn fix_ci_automatically_sends_up_to_its_limit_and_records_each_send() {
   let second = fix(&fixture, &run, &failure("test", 11), Fixer::Automatic).expect("sent");
   assert!(matches!(second, FixDone::Stored(_)), "{second:?}");
   let text = messages(&fixture, &run)[1].body().as_str().to_owned();
-  assert!(text.starts_with("CI failed on pull request #142 again. This is Fix CI 2 of 2"), "{text}");
+  assert!(
+    text.starts_with("CI failed on pull request #142 again. This is Fix CI 2 of 2"),
+    "{text}"
+  );
   deliver_all(&mut fixture, &run, 50);
   assert_eq!(
     fix(&fixture, &run, &failure("test", 12), Fixer::Automatic).expect("read"),

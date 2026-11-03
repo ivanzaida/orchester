@@ -16,7 +16,16 @@ use crate::{
 };
 
 /// A `run_ci_fix_events` row as stored, before its columns are read back.
-type EventRow = (i64, i64, String, String, String, Option<String>, Option<i64>, Option<i64>);
+type EventRow = (
+  i64,
+  i64,
+  String,
+  String,
+  String,
+  Option<String>,
+  Option<i64>,
+  Option<i64>,
+);
 
 impl ProjectDb {
   /// Sets `run`'s *Fix CI automatically* switch as the person set it at `at`, which restarts its count.

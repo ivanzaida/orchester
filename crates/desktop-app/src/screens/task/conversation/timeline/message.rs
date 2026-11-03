@@ -22,6 +22,7 @@ use orchester_core::{
   conversation::{Arrival, Undelivered},
   id::ProjectId,
   orchestrator::FromOrchestrator,
+  pull_request::ci::fix::FixedBy,
   time::Timestamp,
 };
 use orchester_workspace::{
@@ -85,13 +86,17 @@ pub(super) fn agent_row(ctx: &mut Ctx, timeline: &Timeline, row: &AgentRow) -> E
 /// the files attached to it (`ui::attachments::sent`, kept in the project at `root`) and its delivery line; a file it
 /// mentions opens at `files_at`. One the project's Orchestrator chat sent is the Orchestrator's instead
 /// ([`orchestrator_message`]); the chat attaches no files. What a search found in it (`found`) is filled behind its
-/// words.
+/// words. A message a Fix CI sent (`fixed`, ORC-335) says so once its agent took it: *Fix CI · sent 15:44*, or
+/// *Sent automatically · Fix CI 2 of 3* with `repeat`.
 pub(in super::super) fn person_message(
   ctx: &mut Ctx,
   ((project, root, files_at), entry): ((ProjectId, &Path, &Version), &Entry),
-  found: Option<&Found>,
+  (found, fixed): (Option<&Found>, Option<FixedBy>),
 ) -> Element {
-  let (glyph, color, words) = delivery(ctx, &entry.state);
+  let (glyph, color, words) = match (fixed, &entry.state) {
+    (Some(by), EntryState::Delivered { .. }) => fix_delivery(ctx, by, entry.at),
+    _ => delivery(ctx, &entry.state),
+  };
   let delivery = delivery_line("conversation-delivery", (glyph, color), &words);
   let undelivered = super::super::composer::undelivered(ctx, entry);
   let id = format!("conversation-message-{}", entry.id);
@@ -223,6 +228,30 @@ const fn delivery_name(state: &EntryState) -> &'static str {
     EntryState::NotDelivered { .. } => "not-delivered",
     EntryState::Reply { .. } => "reply",
     EntryState::Question { .. } => "question",
+  }
+}
+
+/// The delivery line of a message a Fix CI sent `by` at `at`, once its agent took it.
+fn fix_delivery(ctx: &Ctx, by: FixedBy, at: Timestamp) -> (Icon, PaletteColor, Arc<str>) {
+  let time = display::clock(at);
+  match by {
+    FixedBy::Hand => (
+      Icon::CheckCheck,
+      PaletteColor::TextMuted,
+      ctx.t_args("ci.message.sent", [("time", time)]),
+    ),
+    FixedBy::Automatically { count, limit } => (
+      Icon::Repeat,
+      PaletteColor::TextMuted,
+      ctx.t_args(
+        "ci.message.sentAuto",
+        [
+          ("count", count.to_string()),
+          ("limit", limit.get().to_string()),
+          ("time", time),
+        ],
+      ),
+    ),
   }
 }
 

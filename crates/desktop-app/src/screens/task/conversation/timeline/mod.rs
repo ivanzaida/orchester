@@ -108,6 +108,8 @@ pub(super) struct Timeline {
   pub(super) pins: bool,
   /// What the open search marks.
   pub(super) search: Option<Marks>,
+  /// The run's pull request with its CI, for its lines among the rows (ORC-335).
+  pub(super) ci: Option<crate::screens::task::ci::timeline::CiShare>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for Timeline {}
@@ -158,6 +160,22 @@ impl Timeline {
   /// The run's number in the project.
   fn run_number(&self) -> u32 {
     self.detail.run.as_ref().map_or(0, |run| run.run.number().get())
+  }
+
+  /// Who sent message `id` as a Fix CI, if one did (ORC-335).
+  fn fixed_by(&self, id: orchester_core::id::MessageId) -> Option<orchester_core::pull_request::ci::fix::FixedBy> {
+    use orchester_core::pull_request::ci::fix::FixEventKind;
+    self
+      .detail
+      .run
+      .as_ref()?
+      .ci_fixes
+      .events
+      .iter()
+      .find_map(|event| match event.kind {
+        FixEventKind::Sent { message, by } if message == id => Some(by),
+        _ => None,
+      })
   }
 
   /// Where the files a person's message mentions are: the run's worktree, or the project's checkout before a run.
@@ -513,7 +531,7 @@ fn item_row(ctx: &mut Ctx, timeline: &Timeline, item: &Item) -> Element {
         (timeline.project, &timeline.chat_project.root, &timeline.files_at()),
         entry,
       ),
-      found().as_ref(),
+      (found().as_ref(), timeline.fixed_by(entry.id)),
     ),
     ItemKind::Question { .. } | ItemKind::Plan(_) | ItemKind::Approval(_) | ItemKind::Choice(_) => {
       cards::card(ctx, timeline, item)

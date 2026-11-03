@@ -15,6 +15,7 @@ pub mod badge;
 mod browser;
 mod cards;
 mod chat_links;
+mod ci;
 mod code;
 mod composer;
 mod connections;
@@ -78,6 +79,7 @@ pub use self::{
   browser::{BrowserBorder, BrowserColor, BrowserSpacing, BrowserText},
   cards::{CardsSpacing, CardsText, NOT_CHOSEN_OPACITY},
   chat_links::ChatLinkLooks,
+  ci::CiText,
   code::{CodeText, token_color},
   composer::{ComposerColor, ComposerRadius, mention_chip},
   connections::{ConnectionsSpacing, ConnectionsText},

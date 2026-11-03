@@ -251,7 +251,7 @@ pub(super) fn without_run(
   let messages: Vec<Element> = conversation
     .entries
     .iter()
-    .map(|entry| person_message(ctx, ((id, root, &Version::Checkout), entry), None))
+    .map(|entry| person_message(ctx, ((id, root, &Version::Checkout), entry), (None, None)))
     .collect();
   Column::new()
     .id("conversation-waiting")
