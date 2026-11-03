@@ -1,6 +1,13 @@
 //! Permissions › Approvals (07, 07b): Autopilot or Manual with what each shows under it, turning Autopilot on asked in
 //! place as a widening and named in the draft bar, switching back to Manual without a question.
-use orchester_core::permission::ApprovalMode;
+use orchester_core::{
+  connection::{AgentConnection, AgentProvider, ApiEndpoint, BaseUrl, EndpointPreset},
+  id::{ConnectionId, SecretId},
+  name::Name,
+  permission::ApprovalMode,
+  store::ConnectionStore,
+  time::Timestamp,
+};
 
 use super::harness::Agents;
 
@@ -87,6 +94,64 @@ fn agents_approvals_new_profile_turned_off_keeps_it_off() {
   });
   assert!(!screen.listed().profiles[0].profile.permissions().auto_approve());
   assert!(!screen.exists("agent-auto-row"));
+}
+
+/// A new profile on a native connection, which does not offer *Approve automatically*, takes the default when the
+/// person picks a CLI connection: they never chose it off.
+#[test]
+fn agents_approvals_new_profile_moving_from_native_to_cli_approves_automatically() {
+  let mut screen = Agents::new(true);
+  let native = AgentConnection::native(
+    ConnectionId::generate(),
+    Name::new("Anthropic API").expect("name"),
+    AgentProvider::AnthropicApi,
+    ApiEndpoint::new(
+      EndpointPreset::Official,
+      BaseUrl::new("https://api.anthropic.com").expect("url"),
+      SecretId::generate(),
+    ),
+    Timestamp::now(),
+  )
+  .expect("native");
+  orchester_store::ProjectDb::open(&screen.root)
+    .expect("database")
+    .create_connection(&native)
+    .expect("store native");
+  screen.go();
+  screen.click("agents-new");
+  screen.until("the new profile's editor", |s| s.exists("agent-role-row"));
+  let pick = |screen: &mut Agents, name: &str| {
+    screen.click("agent-connection");
+    screen.until("the connections", |s| s.exists("agent-connection-option-0"));
+    let option = (0..8)
+      .map(|index| format!("agent-connection-option-{index}"))
+      .find(|id| screen.exists(id) && screen.text(&format!("{id}-label")).contains(name))
+      .unwrap_or_else(|| panic!("{name} option"));
+    screen.click(&option);
+  };
+  pick(&mut screen, "Anthropic API");
+  screen.until("native, without the switch", |s| !s.exists("agent-auto-row"));
+  pick(&mut screen, "Test Codex");
+  screen.until("Codex, approving automatically", |s| s.exists("agent-auto-row"));
+  screen.set("agent-role", "Reviewer");
+  screen.set("agent-instructions", "Review the implementation.");
+  screen.click("agent-create");
+  screen.until("created or asked", |s| {
+    s.listed().profiles.len() == 1 || s.exists("agent-confirm-confirm")
+  });
+  // The native connection may leave the network broader than Codex's start, which is asked; approving automatically,
+  // the default, never is.
+  if screen.exists("agent-confirm-confirm") {
+    let asked = screen.text("agent-confirm");
+    assert!(!asked.contains("Approving automatically"), "{asked}");
+    screen.window.tree.tick_futures();
+    screen.window.pass();
+    screen.click("agent-confirm-confirm");
+  }
+  screen.until("created", |s| s.listed().profiles.len() == 1);
+  let saved = &screen.listed().profiles[0].profile;
+  assert_ne!(saved.connection(), native.id());
+  assert!(saved.permissions().auto_approve());
 }
 
 #[test]

@@ -14,6 +14,7 @@ use orchester_workspace::agents::{
   data::{ProfileEntry, ProjectAgents},
   form::{ModelSelection, ProfileErrors, ProfileForm, access_for_connection, first_model, stored_effort},
 };
+use parking_lot::Mutex;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Permissions(pub AgentPermissions);
@@ -38,6 +39,8 @@ pub struct Fields {
   pub servers: Signal<Servers>,
   /// The connection changed on this page: what it cannot enforce was reset, which the page says.
   pub changed_connection: Signal<bool>,
+  /// The page makes a new profile, not one already saved.
+  new_profile: bool,
 }
 
 impl Fields {
@@ -76,28 +79,38 @@ impl Fields {
       servers: ctx.signal(Servers(
         profile.map_or_else(McpServerSelection::default, |p| p.mcp_servers().clone()),
       )),
+      new_profile: profile.is_none(),
     }
   }
 
   /// Keeps the fields consistent as the person edits them: a new connection takes its first model and resets what it
-  /// cannot enforce, and a new model starts at the default effort.
+  /// cannot enforce, and a new model starts at the default effort. A new profile moving to a connection that offers
+  /// *Approve automatically* from one that did not takes its default, which the person could not choose before.
   pub fn follow(&self, ctx: &mut Ctx, listed: ProjectAgents) {
     let fields = self.clone();
+    let connection_of = move |id: &str| listed.connections.iter().find(|c| c.id().to_string() == id).cloned();
+    let previous = Mutex::new(connection_of(&self.connection.get_untracked()).map(|c| c.provider()));
     ctx.watch(&self.connection, move |id| {
-      let connection = listed.connections.iter().find(|c| c.id().to_string() == *id);
+      let connection = connection_of(id);
       fields.model.set(
         connection
+          .as_ref()
           .and_then(first_model)
           .map_or_else(String::new, |model| model.as_str().to_owned()),
       );
       fields.changed_connection.set(true);
-      if let Some(connection) = connection {
-        let (permissions, servers) = access_for_connection(
+      let provider = connection.as_ref().map(AgentConnection::provider);
+      let offered_before = std::mem::replace(&mut *previous.lock(), provider).is_some_and(|p| !p.is_native());
+      if let Some(provider) = provider {
+        let (mut permissions, servers) = access_for_connection(
           &fields.permissions.get_untracked().0,
           &fields.servers.get_untracked().0,
-          connection.provider(),
+          provider,
           Platform::current(),
         );
+        if fields.new_profile && !offered_before {
+          permissions.set_auto_approve(AgentPermissions::for_new_profile(provider, Platform::current()).auto_approve());
+        }
         fields.permissions.set(Permissions(permissions));
         fields.servers.set(Servers(servers));
       }
