@@ -7,7 +7,10 @@
 
 use std::{ops::Range, path::Path};
 
-use orchester_core::{id::ChatId, orchestrator::EntryKind};
+use orchester_core::{
+  id::ChatId,
+  orchestrator::{EntryKind, TurnMode},
+};
 use orchester_store::ProjectDb;
 
 use crate::{
@@ -86,6 +89,15 @@ fn in_messages<'a>(
   let (mut places, mut messages, mut line) = (0, 0, None);
   for (seq, kind) in entries {
     let (who, text) = match kind {
+      // The message that carries out an approved plan holds the plan as the agent is told it, which the chat does not
+      // show: it is no words of the person's (ORC-646).
+      EntryKind::Person {
+        mode: TurnMode::CarriesOut,
+        ..
+      } => {
+        answering = Speaker::Orchestrator;
+        continue;
+      }
       EntryKind::Person { text, .. } => {
         answering = Speaker::Orchestrator;
         (Speaker::Person, facts::said(text.as_str()))
@@ -99,7 +111,7 @@ fn in_messages<'a>(
         answering = Speaker::Orchestrator;
         continue;
       }
-      EntryKind::Action(_) | EntryKind::Event(_) => continue,
+      EntryKind::Action(_) | EntryKind::Event(_) | EntryKind::Plan(_) => continue,
     };
     let shown = rendered(text).unwrap_or_else(|| text.to_owned());
     let flat = one_line(&shown);

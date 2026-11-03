@@ -80,7 +80,7 @@ pub enum OrchestratorText {
 }
 
 impl OrchestratorText {
-  pub const ALL: [Self; 26] = [
+  pub const ALL: [Self; 27] = [
     Self::HeaderTitle,
     Self::StartTitle,
     Self::Emphasis,
