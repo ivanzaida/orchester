@@ -1,20 +1,19 @@
 //! What a run keeps of its approvals, as the task page and the status bar show it: whether Orchester
 //! auto-approves its requests (the run's own choice — *Approve everything in this run*, the run's switch,
-//! *Stop* — else whether a profile one of its steps pinned approves automatically, or the run is in Autopilot,
-//! `orchester_core::run::auto_approves`), its mode, its rules from Approve similar and Always allow, and how its
-//! requests were answered. The desktop writes the run's choice, switches it to Manual and revokes rules; the runner
-//! reads them at each request, so a change applies from the next one.
+//! *Stop* — else whether the run is in Autopilot, `orchester_core::run::auto_approves`), its mode, its rules from
+//! Approve similar and Always allow, and how its requests were answered. The desktop writes the run's choice, switches
+//! it to Manual and revokes rules; the runner reads them at each request, so a change applies from the next one.
 
 use std::{path::Path, sync::Arc};
 
 use orchester_core::{
   id::RunId,
-  resource::{AgentProfile, ModelId},
+  resource::ModelId,
   run::{
-    Answerer, ApprovalRule, ApprovalRuleId, EffectiveMode, ManualSwitch, Run, StepExecutor, TaskPhase, auto_approves,
+    Answerer, ApprovalRule, ApprovalRuleId, EffectiveMode, ManualSwitch, Run, TaskPhase, auto_approves,
     review::{ReviewerUnavailable, resolve_reviewer},
   },
-  store::{ConnectionStore, ResourceStore, RunStore, TaskStore},
+  store::{ConnectionStore, RunStore, TaskStore},
   task::Task,
   time::Timestamp,
 };
@@ -26,7 +25,7 @@ use super::detail::run_store_error;
 pub fn auto_approving(db: &ProjectDb, run: &Run) -> Result<bool, StoreError> {
   Ok(auto_approves(
     db.run_auto_approve(run.id())?,
-    profile_approves(db, run) || db.run_approval_mode(run.id())?.is_autopilot(),
+    db.run_approval_mode(run.id())?.is_autopilot(),
   ))
 }
 
@@ -56,20 +55,6 @@ fn auto_approving_runs(db: &ProjectDb) -> Result<Vec<RunId>, StoreError> {
     }
   }
   Ok(runs)
-}
-
-/// Whether a profile version one of `run`'s steps pinned approves automatically. A version that can no
-/// longer be read does not.
-pub fn profile_approves(db: &ProjectDb, run: &Run) -> bool {
-  run.snapshot().steps().iter().any(|step| match step.executor() {
-    // `.ok()`: an unreadable version is taken as not approving automatically, which only asks more.
-    StepExecutor::Agent { profile, .. } => db
-      .version::<AgentProfile>(profile.resource, profile.number)
-      .ok()
-      .flatten()
-      .is_some_and(|version| version.body().permissions().auto_approve()),
-    StepExecutor::Tool { .. } => false,
-  })
 }
 
 /// A person's change to what a run keeps of its approvals.
@@ -149,10 +134,8 @@ pub fn run_mode_in(repo_root: &Path, run: RunId) -> Result<RunModeState, StoreEr
 /// What a run keeps of its approvals.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct RunApprovals {
-  /// The run's own auto-approval choice; `None` follows its profiles and its mode.
+  /// The run's own auto-approval choice; `None` follows its mode.
   pub chosen: Option<bool>,
-  /// A profile one of its steps pinned approves automatically.
-  pub profile: bool,
   /// The mode the run answers its agents' requests in now.
   pub mode: EffectiveMode,
   /// When and by whom the run was switched to Manual for itself, once it was and that was recorded.
@@ -165,7 +148,6 @@ impl RunApprovals {
   pub fn read(db: &ProjectDb, run: &Run) -> Result<Self, StoreError> {
     Ok(Self {
       chosen: db.run_auto_approve(run.id())?,
-      profile: profile_approves(db, run),
       mode: db.run_approval_mode(run.id())?,
       switched: db.run_manual_switch(run.id())?,
       rules: db.approval_rules(run.id())?,
@@ -180,7 +162,7 @@ impl RunApprovals {
 
   /// Whether Orchester auto-approves the run's requests now.
   pub const fn auto_approving(&self) -> bool {
-    auto_approves(self.chosen, self.profile || self.mode.is_autopilot())
+    auto_approves(self.chosen, self.mode.is_autopilot())
   }
 
   /// Whether Autopilot answers the run's requests: the run is in it, and its own choice (*Stop*) did not take it back.

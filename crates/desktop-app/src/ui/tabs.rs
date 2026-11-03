@@ -1,6 +1,7 @@
 //! Page tabs (`Page tab/active` `loUWZ`, `Page tab/default` `NspMt`): 34 high, 2 at their sides, 20
 //! apart, on a 1 `border` line (`Workflow tabs` `bxhee`). The current tab's label is 13/500
-//! `text_primary` over a 2 `accent` underline, the others' 13 `text_secondary`; a count follows the label
+//! `text_primary` over a 2 `accent` underline, the others' 13 `text_secondary`, each in the box the current one needs,
+//! so a switch moves no tab (`L00 · The tab row never moves` `g5mqSl`); a count follows the label
 //! in its words (`All 24`), or as a 12 `text_muted` number after it (Settings' *Accounts 3*), or, for what waits for
 //! the person, in a badge 6 after it: mono 11/500 `warning` on a `warning_muted` pill, 1 over and under and 6 at its
 //! sides (`Count badge` `CiYKk`). A tab not built yet is its
@@ -20,7 +21,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, TypographyStyle},
   },
-  components::{Button, Row, Spacer, Stack, Text},
+  components::{Button, Column, Row, Spacer, Stack, Text},
   core::ElementRef,
   layout::{Alignment, StackAlignment, layout_kind::Justify},
   node::{Element, Style, border::Border, dimension::Dimension, padding::Padding},
@@ -45,6 +46,8 @@ const COMPACT_TAB_HEIGHT: f32 = 32.0;
 const SEGMENTED_HEIGHT: f32 = 26.0;
 const TEXT_SEGMENT_HEIGHT: f32 = 22.0;
 const ICON_SEGMENT_WIDTH: f32 = 28.0;
+/// The height of what only holds a width.
+const NO_ROOM: f32 = 0.0;
 
 #[derive(Clone)]
 enum TabState {
@@ -142,8 +145,8 @@ impl PageTab {
     self
   }
 
-  /// How many there are is still read: a count's bone after the label (`D · Bones` in `13 · Patterns` `AOQZ3`); its
-  /// element id is `<id>-count`.
+  /// How many there are is still read: a count's bone after the label (`D · Bones` in `13 · Patterns` `AOQZ3`), as
+  /// wide as one digit so a count of one digit moves no tab after it; its element id is `<id>-count`.
   #[must_use]
   pub const fn count_reading(mut self) -> Self {
     self.reading = true;
@@ -175,16 +178,11 @@ impl PageTab {
       TabState::Open(open) => Some(open),
       TabState::Here => None,
     };
-    let (typography, color) = if self.current {
-      (ExtraTypography::Strong.role(), PaletteColor::TextPrimary)
+    let label: Element = if self.current {
+      current_label(&self.label).id(format!("{}-label", self.id)).into()
     } else {
-      (TypographyStyle::Body, PaletteColor::TextSecondary)
+      label_in_room(&self.id, &self.label, PaletteColor::TextSecondary).into()
     };
-    let label = Text::new(&self.label)
-      .id(format!("{}-label", self.id))
-      .variant(typography)
-      .color(color)
-      .nowrap();
     let button = open
       .map_or_else(|| Button::empty().focusable(false), Press::button)
       .id(self.id.clone())
@@ -214,11 +212,36 @@ impl PageTab {
   }
 }
 
+/// The current tab's label.
+fn current_label(label: &str) -> Text {
+  Text::new(label).variant(ExtraTypography::TabCurrent.role()).nowrap()
+}
+
+/// A tab's label in `color`, its element `<id>-label` in the box it has as the current tab: the current label's width
+/// is held by a copy no higher than nothing, so a switch moves no tab.
+fn label_in_room(id: &str, label: &str, color: PaletteColor) -> Column {
+  let room = Row::new()
+    .height(Dimension::Px(NO_ROOM))
+    .clip()
+    .child(current_label(label));
+  Column::new()
+    .align_items(Alignment::Stretch)
+    .child(
+      Text::new(label)
+        .id(format!("{id}-label"))
+        .variant(TypographyStyle::Body)
+        .color(color)
+        .nowrap(),
+    )
+    .child(room)
+}
+
 /// A tab's label with its badge, its quiet count (in `warning` when it counts what waits for the person), or the
-/// count's bone while it is read.
+/// count's bone while it is read. The count and its bone stand in the room of one digit at least, so a count of one
+/// digit replaces the bone without moving the tabs after it.
 fn counted_label(
   id: &str,
-  label: Text,
+  label: Element,
   (badge, count, reading): (Option<usize>, Option<(usize, bool)>, bool),
 ) -> Element {
   let row = Row::new()
@@ -228,7 +251,7 @@ fn counted_label(
   match (badge, count) {
     (Some(count), _) => row.child(count_badge(&format!("{id}-badge"), count)).into(),
     (None, Some((count, waits))) => row
-      .child(
+      .child(digit_room(
         Text::new(&count.to_string())
           .id(format!("{id}-count"))
           .variant(TypographyStyle::Description)
@@ -238,11 +261,26 @@ fn counted_label(
             PaletteColor::TextMuted
           })
           .nowrap(),
-      )
+      ))
       .into(),
-    (None, None) if reading => row.child(skeleton::count().id(format!("{id}-count"))).into(),
+    (None, None) if reading => row
+      .child(digit_room(skeleton::count_in_room()).id(format!("{id}-count")))
+      .into(),
     (None, None) => row.into(),
   }
+}
+
+/// `count` in the room of one digit of a count at least: a copy of the widest digit no higher than nothing holds it.
+fn digit_room(count: impl Into<Element>) -> Column {
+  let room = Row::new()
+    .height(Dimension::Px(NO_ROOM))
+    .clip()
+    .child(Text::new(&0.to_string()).variant(TypographyStyle::Description).nowrap());
+  Column::new()
+    .flex_shrink(0.0)
+    .align_items(Alignment::Stretch)
+    .child(count)
+    .child(room)
 }
 
 /// A tab's count of what waits for the person (`CiYKk`).

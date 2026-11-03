@@ -1,7 +1,8 @@
 //! A group (`Project` `nvlrw`, `Auto mode` `WSQqT`): its heading in 12/600 `text_secondary` with a count or an action
 //! at its right (`Head` `o3JUr`, `CDSyw`) or a count right after it (`Head` `I5nZS`), 8 over its rows in a box with a 1
-//! `border` stroke and radius 10, each row after the first under a 1 `border` line (`Rows` `V1Fos`). What a group says
-//! under its box (a question asked in place, a note) follows the box, 8 under it.
+//! `border` stroke and radius 10, each row after the first under a 1 `border` line (`Rows` `V1Fos`). A toolbar may sit
+//! between the heading and the box, 8 from each (`Toolbar` `jSvl2` in `S06`). What a group says under its box (its
+//! foot, then a question asked in place or a note) follows the box, 8 under it.
 
 use std::sync::Arc;
 
@@ -9,17 +10,22 @@ use lurq::{
   app::theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   components::{Column, Row, Spacer, Text},
   layout::Alignment,
-  node::{Element, border::Border, dimension::Dimension},
+  node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 
-use crate::theme::ProjectSettingsText;
+use crate::{
+  theme::{ExtraSpacing, IconSize, ProjectSettingsText},
+  ui::icon::{Icon, icon},
+};
 
 pub(crate) struct Group {
   id: Arc<str>,
   title: Arc<str>,
   beside: Vec<Element>,
   end: Vec<Element>,
+  over: Vec<Element>,
   rows: Vec<Element>,
+  foot: Option<Element>,
   after: Vec<Element>,
 }
 
@@ -31,9 +37,17 @@ impl Group {
       title: title.into(),
       beside: Vec::new(),
       end: Vec::new(),
+      over: Vec::new(),
       rows: Vec::new(),
+      foot: None,
       after: Vec::new(),
     }
+  }
+
+  /// What sits between the heading and the box: a toolbar over the rows.
+  pub(crate) fn over(mut self, over: impl Into<Element>) -> Self {
+    self.over.push(over.into());
+    self
   }
 
   /// What sits right after the heading, 8 from it: a count (`4 secrets` in `06`).
@@ -58,11 +72,36 @@ impl Group {
     self
   }
 
+  /// The group's foot (`Foot` `VTUGP` in `S02`): an `info` glyph and `words` right under the box, before whatever
+  /// else the group says there; its id is `<id>-foot`, its words' `<id>-foot-text`.
+  pub(crate) fn foot(mut self, words: &str) -> Self {
+    self.foot = Some(foot(&format!("{}-foot", self.id), words).into());
+    self
+  }
+
   /// What the group says under its box.
   pub(crate) fn after(mut self, after: impl Into<Element>) -> Self {
     self.after.push(after.into());
     self
   }
+}
+
+/// A group's foot: a 12 `info` glyph and the words in 12 `text_muted`, 6 apart, 2 around them (`Foot` `VTUGP`).
+fn foot(id: &str, words: &str) -> Row {
+  Row::new()
+    .id(id.to_owned())
+    .width(Dimension::Pct(100.0))
+    .padding(Padding::all(ExtraSpacing::Tight.role()))
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::Center)
+    .child(icon(Icon::Info, IconSize::Sm, PaletteColor::TextMuted))
+    .child(
+      Text::new(words)
+        .id(format!("{id}-text"))
+        .variant(ProjectSettingsText::Hint.role())
+        .flex(1.0)
+        .min_width(Dimension::Px(0.0)),
+    )
 }
 
 impl From<Group> for Element {
@@ -106,7 +145,9 @@ impl From<Group> for Element {
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)
       .child(heading)
+      .with_children(group.over)
       .with_children(boxed)
+      .with_children(group.foot)
       .with_children(group.after)
       .into()
   }

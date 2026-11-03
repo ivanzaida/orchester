@@ -66,6 +66,7 @@ pub struct SettingGroup {
   end: Option<Element>,
   notice: Option<Element>,
   rows: Vec<Element>,
+  foot: Option<Element>,
   note: Option<Arc<str>>,
 }
 
@@ -80,6 +81,7 @@ impl SettingGroup {
       end: None,
       notice: None,
       rows: Vec::new(),
+      foot: None,
       note: None,
     }
   }
@@ -122,6 +124,30 @@ impl SettingGroup {
   /// What the whole group means, under its box in 12 `text_muted` (`Note` `XLcsr`).
   pub fn note(mut self, note: impl Into<Arc<str>>) -> Self {
     self.note = Some(note.into());
+    self
+  }
+
+  /// Where the group's settings are set instead, under its box after a 12 `info` glyph, 6 apart, 2 around them
+  /// (`Foot` `dV4CW` in `S11`); its id is `<id>-foot`, its words' `<id>-foot-text`.
+  pub fn foot(mut self, foot: &str) -> Self {
+    let id = format!("{}-foot", self.id);
+    let words = Text::new(foot)
+      .id(format!("{id}-text"))
+      .variant(TypographyStyle::Description)
+      .color(PaletteColor::TextMuted)
+      .flex(1.0)
+      .min_width(Dimension::Px(0.0));
+    self.foot = Some(
+      Row::new()
+        .id(id)
+        .width(Dimension::Pct(100.0))
+        .padding(Padding::all(ExtraSpacing::Tight.role()))
+        .spacing(ExtraSpacing::Snug.role())
+        .align_items(Alignment::Center)
+        .child(icon(Icon::Info, IconSize::Sm, PaletteColor::TextMuted))
+        .child(words)
+        .into(),
+    );
     self
   }
 }
@@ -186,6 +212,7 @@ impl From<SettingGroup> for Element {
       .child(heading)
       .with_children(notice)
       .with_children(rows)
+      .with_children(group.foot)
       .with_children(group.note.map(|note| group_note(&format!("{}-note", group.id), &note)))
       .into()
   }

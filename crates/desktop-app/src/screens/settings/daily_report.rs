@@ -1,8 +1,9 @@
 //! *Daily report* (ORC-47, `Daily report` `Uqsxx` in `02 · Notifications`): *Daily report from the Orchestrator* with
 //! its switch, off until a person turns it on, and while it is on, *Deliver at* with the time of day the report comes
-//! at, in the quiet hours' time select (`super::notifications`). The setting is read once when the group opens and
-//! saved off the UI thread at each change; until it is read the switch stays as it is, and a setting that cannot be
-//! read or was not saved says why under the row.
+//! at, in the quiet hours' time select (`super::notifications`). The setting is read through its query, which the
+//! window read as the session started, and saved off the UI thread at each change; until it was ever read the switch
+//! and the time are bones (`L09L` `UjuJA`), a change from elsewhere shows in place, and a setting that cannot be read
+//! or was not saved says why under the row, a failed save showing the stored setting again.
 
 use lurq::{
   app::{
@@ -17,23 +18,28 @@ use orchester_workspace::{
   background,
   messages::{self, Message},
 };
+use parking_lot::Mutex;
 
 use super::{
   notifications::{TIME_WIDTH, clock, minute, show, time_options},
   save_state::{Outcome, SaveState},
 };
 use crate::{
+  queries::{self, Session, app},
   services::Services,
   ui::{
     field::{SelectField, field_error},
     message::message_text,
     setting_rows::{SettingGroup, SettingRow},
+    skeleton::{self, Skeleton},
     toggle::{Toggle, ToggleKind},
   },
 };
 
 /// The switch's element id, which the row's parts extend.
 const ID: &str = "settings-daily-report";
+/// The time's bone in its field while the setting is read (`Text bone` `kpAov`).
+const TIME_BONE: f32 = 40.0;
 
 type SaveAction = FutureAction<Option<ReportTime>, (), Message>;
 
@@ -49,6 +55,8 @@ pub struct DailyReportSection {
   shown: Signal<Option<Setting>>,
   /// The time's select, `HH:MM`.
   time: Signal<String>,
+  /// The stored setting the section last took, so a change from elsewhere, or a failed save, shows it again.
+  seen: Mutex<Option<Setting>>,
 }
 
 impl Component for DailyReportSection {
@@ -58,6 +66,7 @@ impl Component for DailyReportSection {
     Self {
       shown: ctx.signal(None),
       time: ctx.signal(clock(ReportTime::DEFAULT.minute())),
+      seen: Mutex::new(None),
     }
   }
 
@@ -67,23 +76,28 @@ impl Component for DailyReportSection {
     if let Some(saves) = SaveState::of(ctx) {
       saves.report(ID, Outcome::of(&state));
     }
+    let session = Session::of(ctx);
+    let read = queries::state(&ctx.query(app::daily_report(session)));
+    self.take(read.data.map(Setting), &state);
     let failed = state.error;
-    let read = stored(ctx);
-    if self.shown.get_untracked().is_none()
-      && let Some(Setting(stored)) = read.data
-    {
-      self.shown.set(Some(Setting(stored)));
-      show(&self.time, clock(stored.unwrap_or(ReportTime::DEFAULT).minute()));
-    }
     let shown = self.shown.get().map(|Setting(time)| time);
     self.follow_time(shown, &save);
     let title = ctx.t("settings.dailyReport.title");
     let description = ctx.t("settings.dailyReport.description");
     let on = matches!(shown, Some(Some(_)));
-    let switch = Toggle::new(ID, ToggleKind::Switch, on, title.clone()).hide_label();
-    let switch = match shown {
-      Some(_) => self.listen(switch, save),
-      None => switch,
+    // Until the setting is read, the switch and the time are bones of their size (`L09L` `UjuJA`), so no state shows
+    // that may not be the stored one.
+    let reading = shown.is_none() && read.is_pending();
+    let switch: Element = if reading {
+      Skeleton::new(format!("{ID}-reading"), ctx.t("settings.reading"))
+        .inline()
+        .show(ctx, skeleton::switch())
+    } else {
+      let switch = Toggle::new(ID, ToggleKind::Switch, on, title.clone()).hide_label();
+      match shown {
+        Some(_) => self.listen(switch, save).into(),
+        None => switch.into(),
+      }
     };
     let problem = match (&read.error, &failed) {
       (Some(reason), _) => Some(("settings.dailyReport.unreadable", reason)),
@@ -100,7 +114,11 @@ impl Component for DailyReportSection {
       .control(switch)
       .below_all(problem)
       .render(ctx);
-    let at = on.then(|| self.time_row(ctx));
+    let at = if reading {
+      Some(time_reading(ctx))
+    } else {
+      on.then(|| self.time_row(ctx))
+    };
     SettingGroup::new(format!("{ID}-section"), ctx.t("settings.dailyReport.group"))
       .row(report)
       .rows(at)
@@ -108,6 +126,22 @@ impl Component for DailyReportSection {
 }
 
 impl DailyReportSection {
+  /// Shows the stored setting once it is first read, and again, while no save runs, when it changed elsewhere or a
+  /// save failed; what the person chose shows from their choice on.
+  fn take(&self, stored: Option<Setting>, state: &FutureState<(), Message>) {
+    let Some(stored) = stored else {
+      return;
+    };
+    let moved = self.seen.lock().replace(stored) != Some(stored);
+    let shown = self.shown.get_untracked();
+    let first = shown.is_none();
+    let settled = !state.is_pending() && (moved || state.is_rejected());
+    if shown != Some(stored) && (first || settled) {
+      self.shown.set(Some(stored));
+      show(&self.time, clock(stored.0.unwrap_or(ReportTime::DEFAULT).minute()));
+    }
+  }
+
   /// `switch`, turning the report on at the time the select shows, or off, and saving that.
   fn listen(&self, switch: Toggle, save: SaveAction) -> Toggle {
     let (shown, time) = (self.shown.clone(), self.time.clone());
@@ -152,7 +186,19 @@ impl DailyReportSection {
   }
 }
 
-/// Saves the time the person chose, or that the report is off.
+/// *Deliver at* while the setting is read: the time's field with a bone in it (`At` `IPVO6` in `L09L`).
+fn time_reading(ctx: &mut Ctx) -> Element {
+  let field = skeleton::field(ctx, TIME_WIDTH, TIME_BONE);
+  let field = Skeleton::new(format!("{ID}-at-reading"), ctx.t("settings.reading"))
+    .inline()
+    .show(ctx, field);
+  SettingRow::new(format!("{ID}-at"), ctx.t("settings.dailyReport.at"))
+    .control(field)
+    .render(ctx)
+}
+
+/// Saves the time the person chose, or that the report is off; the workspace counts the change, which reads the
+/// setting again (`queries`).
 fn save_action(ctx: &mut Ctx) -> SaveAction {
   let workspace = Services::of(ctx).workspace;
   ctx.future_action(move |time: Option<ReportTime>| {
@@ -166,24 +212,4 @@ fn save_action(ctx: &mut Ctx) -> SaveAction {
         })
     }
   })
-}
-
-/// The setting as stored, read when the section opens.
-fn stored(ctx: &mut Ctx) -> FutureState<Setting, Message> {
-  let workspace = Services::of(ctx).workspace;
-  ctx
-    .future((), move |()| {
-      let workspace = workspace.clone();
-      async move {
-        background::run(move || workspace.daily_report_schedule())
-          .await?
-          .map(|schedule| Setting(schedule.map(|schedule| schedule.time)))
-          .map_err(|error| {
-            tracing::error!(%error, "the daily report setting cannot be read");
-            messages::store_error(&error)
-          })
-      }
-    })
-    .state()
-    .get()
 }

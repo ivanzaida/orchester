@@ -163,8 +163,7 @@ fn reading(ctx: &Ctx, dashboard: &Dashboard, window: &CurrentLimit) -> (Arc<str>
   }
 }
 
-/// The card without its chart: the windows last reported and when; `menu` keeps the warning threshold
-/// within reach.
+/// The card without its chart: the windows last reported and when; `menu` opens where the warning threshold is set.
 pub fn compact(ctx: &Ctx, dashboard: &Dashboard, menu: Element) -> Element {
   let card = Card::new("usage-limits", ctx.t("usage.limits.title"))
     .note(ctx.t("usage.limits.note"))

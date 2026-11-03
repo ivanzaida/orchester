@@ -1,5 +1,5 @@
 //! Task and project memory in the project database: `memories` with its two full-text indexes,
-//! `memory_settings` (Project settings › Memory) and `invocation_memories`, what each invocation's
+//! `memory_settings` (Project settings › Context › Memory) and `invocation_memories`, what each invocation's
 //! prompt was given. A record's key names one active record of its scope; deleting a record deletes
 //! the earlier versions it superseded with it. The bundled SQLite is built with FTS5 (rusqlite's `bundled` feature
 //! compiles it with `SQLITE_ENABLE_FTS5`), and its trigram tokenizer exists since SQLite 3.34.

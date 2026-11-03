@@ -1,10 +1,9 @@
 //! A module's base branch (`Base branch · redesign` `ri5ru`): the Base branch chip of Edit module and its menu (02
-//! `eyrnI`), and Project settings › General saying where base branches are set now, once with how the project's
-//! base branch moved (04 `rBSzW`, 04b `NDTCw`). `cargo test -p orchester-app --test modules module_base_branch`.
+//! `eyrnI`). `cargo test -p orchester-app --test modules module_base_branch`.
 
 use std::{path::Path, process::Command};
 
-use orchester_app::routes::{ModuleListTab, ProjectPage, ProjectSettingsTab, Route};
+use orchester_app::routes::ProjectPage;
 use orchester_core::{integration::base::BaseChoice, run::BranchName, task::organization::WorkflowStatus};
 
 use super::harness::{Seeded, details, module_with};
@@ -111,36 +110,4 @@ fn module_base_branch_found_by_name_and_a_remote_one_made_local() {
     "origin/hotfix-1.9",
     "the choice made the local branch, tracking the remote one"
   );
-}
-
-#[test]
-fn module_base_branch_general_says_where_it_is_set_and_once_how_it_moved() {
-  let mut seeded = Seeded::new("modules-base-branch", |_| {});
-  let general = ProjectPage::Settings(ProjectSettingsTab::General);
-  seeded.open(general.clone(), "settings-base-branch-moved-text");
-  assert_eq!(
-    seeded.text("settings-base-branch-hint"),
-    "Set on each task and module. A task without one takes its module's; without either, the branch checked out \
-     when its run starts."
-  );
-  let moved = seeded.text("settings-base-branch-moved-text");
-  assert!(moved.starts_with("Moved on "), "{moved}");
-  assert!(
-    moved.ends_with(
-      ": main went to Billing exports and API rate limits, which had none. Webhooks v2 keeps its own; runs under \
-       way keep theirs."
-    ),
-    "{moved}"
-  );
-  seeded.click("settings-base-branch-modules");
-  assert_eq!(
-    seeded.route(),
-    Route::Project(seeded.project, ProjectPage::Modules(ModuleListTab::default()))
-  );
-  seeded.until("the settings closed forget the move", |seeded| {
-    seeded.db().base_branch_move().expect("read").is_none()
-  });
-  seeded.open(general, "settings-base-branch-row");
-  assert!(!seeded.shows("settings-base-branch-moved"), "the line shows once");
-  assert!(seeded.shows("settings-base-branch-modules"));
 }

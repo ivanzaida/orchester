@@ -143,6 +143,25 @@ fn automation_policy_an_answer_uses_the_shared_per_kind_grant() {
 }
 
 #[test]
+fn automation_policy_refusal_names_where_the_person_only_switches_are() {
+  let gate = InputGate::default();
+  let _setting = gate.protect(Guarded::PermissionsSetting);
+  let refusal = gate.refusal();
+  assert!(
+    refusal.contains("Settings shows Let automation change agent permissions"),
+    "{refusal}"
+  );
+  assert!(
+    refusal.contains("Project settings' Orchestrator tab shows what the Orchestrator may do"),
+    "{refusal}"
+  );
+  assert!(
+    !refusal.contains("Let the Orchestrator publish drafts"),
+    "the Orchestrator's switches moved out of Settings: {refusal}"
+  );
+}
+
+#[test]
 fn local_integration_decisions_remain_person_only_with_all_automation_grants() {
   let scratch = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/orc-24-tests");
   std::fs::create_dir_all(&scratch).expect("scratch");

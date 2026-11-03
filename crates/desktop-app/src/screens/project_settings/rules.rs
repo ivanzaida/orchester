@@ -10,12 +10,11 @@ use lurq::{
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
   components::{Column, Row, Text},
-  core::Signal,
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_core::run::ProjectRule;
-use orchester_workspace::{display, messages::Message, tasks::outside::Outside};
+use orchester_workspace::{display, messages::Message};
 
 use super::{
   TabProps,
@@ -25,6 +24,7 @@ use super::{
 };
 use crate::{
   navigation::Navigation,
+  queries::Kept,
   routes::{ProjectPage, ProjectSettingsTab, Route},
   theme::{ExtraSpacing, ExtraTypography, IconSize},
   ui::{
@@ -37,9 +37,8 @@ use crate::{
 
 pub(super) struct Rules {
   save: Save,
-  stored: Signal<Option<Read>>,
-  revision: Signal<u64>,
-  own: work::OwnSaves,
+  /// What the page's last save read back, until the settings' query has it.
+  kept: Kept<Read>,
 }
 
 impl Component for Rules {
@@ -48,23 +47,15 @@ impl Component for Rules {
   fn create(ctx: &mut Ctx) -> Self {
     let tab = Self {
       save: work::action(ctx, ctx.props::<TabProps>().project.open.project.id()),
-      stored: ctx.signal(None),
-      revision: ctx.signal(0),
-      own: work::OwnSaves::new(ctx, &[Outside::AutoMode]),
+      kept: ctx.props::<TabProps>().kept.clone(),
     };
-    work::follow(
-      ctx,
-      &tab.save,
-      ctx.props::<TabProps>().status.clone(),
-      (tab.revision.clone(), tab.stored.clone(), tab.own.clone()),
-    );
+    work::follow(ctx, &tab.save, ctx.props::<TabProps>().status.clone(), tab.kept.clone());
     tab
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<TabProps>().clone();
-    let revision = self.revision.get() + self.own.count(&props.project.feed);
-    let state = work::load(ctx, props.project.open.repo_root.clone(), revision, &self.own);
+    let loaded = work::load(ctx, props.project.open.repo_root.clone());
     let crumb = back(
       "settings-rules-crumb",
       (
@@ -86,13 +77,12 @@ impl Component for Rules {
       .spacing(ExtraSpacing::Roomy.role())
       .child(crumb)
       .child(head);
-    let Some(read) = state.data.clone().or_else(|| self.stored.get()) else {
+    let Some(read) = loaded.shown(&self.kept, self.save.state().get().is_pending()) else {
       // No loading frame draws the rules' page: their rows' bones stand in the outline the rules take.
       let bones =
         |ctx: &mut Ctx| crate::ui::skeleton::list(ctx, "settings-rules-reading", &[(180.0, 240.0), (150.0, 210.0)]);
-      return page::scroll(content.child(work::pending(ctx, &state, &self.revision, bones)));
+      return page::scroll(content.child(work::pending(ctx, &loaded, bones)));
     };
-    self.stored.set(Some(read.clone()));
     let rules = self.rules(ctx, &props, &read.0.approval_rules);
     page::scroll(content.child(rules).child(how_added(ctx)))
   }

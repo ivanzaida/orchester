@@ -93,6 +93,9 @@ pub fn route_json(route: &Route) -> Value {
     Route::Updates(show) => {
       params.insert("tab".to_owned(), json!(show.name()));
     }
+    Route::PlanLimits => {
+      params.insert("tab".to_owned(), json!("plan-limits"));
+    }
     Route::Notifications => {
       params.insert("tab".to_owned(), json!("notifications"));
     }

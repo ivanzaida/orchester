@@ -236,7 +236,7 @@ by `read_external_file` and `search_external_file`.
   to the person's installed app, another run or arbitrary network endpoints.
 - **QA apps.** `start_qa_app(scenario)` replaces agents starting `tools/qa-app.ps1` themselves and negotiating a
   shared QA slot in notes. The runner takes one of the computer's QA slots (OS file locks in the user's data folder
-  that every runner takes; as many as the project's *QA apps at once* in Project settings › Limits, 1 to 16,
+  that every runner takes; as many as the project's *QA apps at once* in Project settings › Runs › Limits, 1 to 16,
   default 2, read at each start; a start while all of them are held waits and the transcript says *Waiting for a QA
   slot*, naming the runs that hold them when their slot records read), runs the worktree's
   `tools/qa-app.ps1 -Name run-<number>-<step> -Scenario <scenario>` (Windows PowerShell; `pwsh`
@@ -325,7 +325,7 @@ by `read_external_file` and `search_external_file`.
   `search_external_file` whose resolved file or folder is a source or lies in one runs without asking: the runner
   answers Claude Code's permission prompt itself, and runs a Codex call at once; what the tools refuse anywhere stays
   refused in a source too. The *# Orchester tools* paragraph names the run's sources. In `orchester-app` (ORC-8;
-  `data/orchester2.pen`, layers *Sources* and *Pipeline settings*) Project settings › Sources lists the project's, New
+  `data/orchester2.pen`, layers *Sources* and *Pipeline settings*) Project settings › Context › Sources lists the project's, New
   task and Edit task list the task's under Context beside what it inherits, and Pipeline settings and the step
   inspector list the draft's. A typed or picked path is checked in place before it can be added
   (`orchester_workspace::sources::check`: it must exist and be readable, lie outside the project's folder and every
@@ -511,9 +511,9 @@ activity (`AgentEvent::ToolDecided`):
   them (*Your message: “…”*). `decide_approval` takes them as `message`, with `deny` only, where automation may deny.
 
 **Auto-approval** (user decisions 2026-10-02 and 2026-10-03) is a run's own choice (*Approve everything in this run*, the switch in
-the run's Summary, *Stop* there, under the task heading or in the status bar) or, while the run has none, the
-profile setting *Approve automatically (don't ask me)* (`AgentPermissions::auto_approve`, part of the profile
-version). It approves only commands it knows to read or stay in the worktree, and MCP tool calls, and never what
+the run's Summary, *Stop* there, under the task heading or in the status bar). The profile setting *Approve
+automatically (don't ask me)* from before approval modes is gone (ORC-596): a stored or shared profile version with it
+on reads as Autopilot. It approves only commands it knows to read or stay in the worktree, and MCP tool calls, and never what
 `run::auto_verdict` leaves to a person: a command that reaches the network, a write, move or delete outside the worktree and its writable folders (the
 temporary folder too: Run temp is not told apart yet), a read of a credential location (dot files and folders of
 the home folder such as `~/.claude.json`, `~/.codex`, `~/.ssh`, everything under `AppData` and `Library` but

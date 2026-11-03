@@ -1,5 +1,6 @@
-//! A save reads the settings once, right after writing them, and the tab shows that reading; a change made outside
-//! the tab still reads them again.
+//! A save reads the settings back right after writing them, on the window's thread, and the tab shows that reading at
+//! once; the change it records reads the settings' query again off the window's thread (`queries`), so a change made
+//! meanwhile is what the tab shows in the end. Switching tabs starts no read on the window's thread.
 
 use std::{
   thread,
@@ -7,7 +8,7 @@ use std::{
 };
 
 use orchester_app::routes::{ProjectPage, Route, TaskList};
-use orchester_core::store::SettingsStore;
+use orchester_core::{agent_files::RepositoryAgentFiles, store::SettingsStore};
 use orchester_workspace::tasks::outside::Outside;
 
 use super::{
@@ -26,9 +27,9 @@ fn settle(page: &mut Settings) {
 }
 
 #[test]
-fn project_settings_save_reads_the_settings_once() {
+fn project_settings_save_reads_the_settings_back_once_and_switching_tabs_reads_nothing() {
   let mut page = Settings::new(false);
-  page.tab("general", "settings-agent-files");
+  page.tab("context", "settings-agent-files");
   settle(&mut page);
   let reads = Reads::count();
   let before = page.db().repository_agent_files().expect("setting").is_on();
@@ -40,11 +41,12 @@ fn project_settings_save_reads_the_settings_once() {
   settle(&mut page);
   let saved = reads.take();
   assert_eq!(saved.get("project settings"), Some(&1), "{saved:?}");
-  page.outside(Outside::ProjectSettings);
-  page.until("the change read", |_| reads.total() > 0);
+  // Back to a tab shown before: its settings show from the session's cache.
+  page.tab("general", "settings-project-name");
+  page.tab("context", "settings-agent-files");
   settle(&mut page);
-  let outside = reads.take();
-  assert_eq!(outside.get("project settings"), Some(&1), "{outside:?}");
+  let switched = reads.take();
+  assert_eq!(switched.get("project settings"), None, "{switched:?}");
 }
 
 /// How often the project's settings changed, as the session counts it.
@@ -65,7 +67,7 @@ fn recorded_off_the_window(page: &Settings) {
 #[test]
 fn project_settings_save_is_recorded_when_the_tab_leaves_before_it_ends() {
   let mut page = Settings::new(false);
-  page.tab("general", "settings-agent-files");
+  page.tab("context", "settings-agent-files");
   settle(&mut page);
   let before = page.db().repository_agent_files().expect("setting").is_on();
   page.click("settings-agent-files");
@@ -86,20 +88,27 @@ fn project_settings_save_is_recorded_when_the_tab_leaves_before_it_ends() {
 #[test]
 fn project_settings_save_does_not_take_a_change_made_while_it_ran() {
   let mut page = Settings::new(false);
-  page.tab("general", "settings-agent-files");
+  page.tab("context", "settings-agent-files");
   settle(&mut page);
-  let reads = Reads::count();
+  let before = page.db().repository_agent_files().expect("setting").is_on();
   page.click("settings-agent-files");
   recorded_off_the_window(&page);
-  // Automation changes the settings after the save recorded its change, before the tab took the save.
+  // Automation puts the setting back after the save recorded its change, before the tab took the save.
+  let back = if before {
+    RepositoryAgentFiles::On
+  } else {
+    RepositoryAgentFiles::Off
+  };
+  page.db().save_repository_agent_files(back).expect("automation's write");
   page.outside(Outside::ProjectSettings);
   page.saved();
-  page.until("the later change read", |_| reads.total() >= 2);
+  page.until("the later change shown", |p| {
+    p.switch_on("settings-agent-files") == before
+  });
   settle(&mut page);
-  let counted = reads.take();
   assert_eq!(
-    counted.get("project settings"),
-    Some(&2),
-    "the save's own read, and one for the later change: {counted:?}"
+    page.switch_on("settings-agent-files"),
+    before,
+    "the save's read did not stay"
   );
 }

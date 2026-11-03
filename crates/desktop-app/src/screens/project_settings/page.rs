@@ -39,7 +39,7 @@ pub fn settings(
   let section = shown.section();
   let navigation = Navigation::of(ctx);
   let id = project.open.project.id();
-  let saved = !section.autosaves() || status.get() == Status::Saved;
+  let saved = !shown.autosaves() || status.get() == Status::Saved;
   let tabs = Section::ALL
     .into_iter()
     .map(|choice| {
@@ -66,7 +66,7 @@ pub fn settings(
       (Icon::CircleDashed, PaletteColor::TextMuted),
       "project_settings.notSavedYet",
     )),
-    _ => section.autosaves().then(|| save_status(ctx, status)),
+    _ => shown.autosaves().then(|| save_status(ctx, status)),
   };
   let header = Row::new()
     .id("project-settings-header")
@@ -131,6 +131,18 @@ pub fn screen(header: Element, content: Element) -> Element {
     .child(header)
     .child(content)
     .into()
+}
+/// What shows under the tabs for the tab `key`. lurq hands a scroll's offset to whichever scroll takes its place,
+/// whatever its id, so a tab opened in place of a scrolled one came up scrolled as far; keyed, each tab keeps only its
+/// own. The key goes on a node inside the returned one, as `settings::frame::column` does.
+pub fn tab_body(key: &str, body: Element) -> Element {
+  let room = || {
+    Column::new()
+      .width(Dimension::Pct(100.0))
+      .flex(1.0)
+      .min_height(Dimension::Px(0.0))
+  };
+  room().child(Element::from(room().child(body)).key(key)).into()
 }
 /// A tab's column of groups, scrolling under the tabs.
 pub fn scroll(content: impl Into<Element>) -> Element {

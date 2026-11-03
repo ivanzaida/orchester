@@ -1,9 +1,10 @@
-//! The Secrets list (`06 Secrets` `bVh1e`, nothing yet `08` `aalCu`): the environments as segments with Import from
-//! project and Add secret at their end (`Environments` `JBh7t`), then a group per environment the filter shows, its
-//! count after its title, each secret a row with its kind's glyph, its name, what uses it, its masked value with when
-//! it was set, and the … that opens it (`DEEPSEEK_API_KEY` `JElwG`); an archived secret says so. A project with no
-//! secret, or an environment the filter shows with none, says so in a quiet row. How values are kept is said under the
-//! groups.
+//! The secrets (`Secrets` `PQJo1` in `S06` `EnL2D`; `06 Secrets` `bVh1e`, nothing yet `08` `aalCu`): one group, its
+//! count at its heading's right, the environments as segments with Import from project and Add secret at their end
+//! over its rows (`Toolbar` `jSvl2`). With an environment chosen its secrets are the group's rows; with All each
+//! environment that has any is a group of its own under the toolbar, its count after its title. Each secret is a row
+//! with its kind's glyph, its name, what uses it, its masked value with when it was set, and the … that opens it
+//! (`DEEPSEEK_API_KEY` `qqgOs`); an archived secret says so. A project with no secret, or an environment the filter
+//! shows with none, says so in a quiet row. How values are kept is said under them (`Foot` `ecaFg`).
 use std::sync::Arc;
 
 use lurq::{
@@ -14,7 +15,7 @@ use lurq::{
   },
   components::{Column, Row, Spacer, Text},
   layout::{Alignment, layout_kind::Justify},
-  node::{Element, dimension::Dimension},
+  node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::secret::{Environment, Secret};
 use orchester_workspace::secrets::data::{ProjectSecrets, SecretUseKind};
@@ -38,36 +39,77 @@ use crate::{
 
 pub(super) fn list(ctx: &mut Ctx, listed: &ProjectSecrets, view: &View) -> Element {
   let chosen = view.environment.get().0;
-  let mut column = Column::new()
-    .id("secrets-list")
-    .width(Dimension::Pct(100.0))
-    .spacing(ExtraSpacing::Roomy.role())
-    .child(toolbar(ctx, view, chosen));
   let any = |environment| {
     listed.in_environment(environment).next().is_some() || listed.archived_in(environment).next().is_some()
   };
+  let group = Group::new("secrets-group", ctx.t("secrets.title")).over(toolbar(ctx, view, chosen));
   if !any(None) {
-    column = column.child(project_empty(ctx, view, chosen));
-  } else {
-    let shown: Vec<Environment> = match chosen {
-      Some(environment) => vec![environment],
-      None => Environment::ALL
+    return listing(group.row(project_empty(ctx, view)).after(footer(ctx)));
+  }
+  let group = group.end(total(ctx, listed, chosen));
+  let group = match chosen {
+    Some(environment) => group.rows(rows(ctx, listed, view, environment)),
+    None => {
+      let groups: Vec<Element> = Environment::ALL
         .into_iter()
         .filter(|environment| any(Some(*environment)))
-        .collect(),
-    };
-    for environment in shown {
-      column = column.child(group(ctx, listed, view, environment));
+        .map(|environment| environment_group(ctx, listed, view, environment))
+        .collect();
+      group.after(
+        Column::new()
+          .width(Dimension::Pct(100.0))
+          .spacing(ExtraSpacing::Roomy.role())
+          .with_children(groups),
+      )
     }
-  }
-  column
+  };
+  listing(group.after(footer(ctx)))
+}
+
+/// How many secrets the filter shows, at the group heading's right (`3 in Development`, `zcVz7`).
+fn total(ctx: &Ctx, listed: &ProjectSecrets, chosen: Option<Environment>) -> Text {
+  let count = listed.in_environment(chosen).count() + listed.archived_in(chosen).count();
+  let words = match chosen {
+    Some(environment) => ctx.t_args(
+      "secrets.countIn",
+      [
+        ("count", count.to_string()),
+        ("environment", ctx.t(words::environment_key(environment)).to_string()),
+      ],
+    ),
+    None => count_words(ctx, count),
+  };
+  Text::new(&words)
+    .id("secrets-total")
+    .variant(ExtraTypography::Note.role())
+}
+
+fn count_words(ctx: &Ctx, count: usize) -> Arc<str> {
+  ctx.t_args(
+    if count == 1 {
+      "secrets.countOne"
+    } else {
+      "secrets.count"
+    },
+    [("count", count.to_string())],
+  )
+}
+
+/// How values are kept, after a 12 info glyph, under the secrets (`Foot` `ecaFg`).
+fn footer(ctx: &Ctx) -> Row {
+  Row::new()
+    .id("secrets-foot")
+    .width(Dimension::Pct(100.0))
+    .padding(ExtraSpacing::Tight.role())
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::Center)
+    .child(icon(Icon::Info, IconSize::Sm, PaletteColor::TextMuted))
     .child(
       Text::new(&ctx.t("secrets.footer"))
         .id("secrets-handling")
         .variant(ProjectSettingsText::Hint.role())
-        .width(Dimension::Pct(100.0)),
+        .flex(1.0),
     )
-    .into()
 }
 
 /// Each secret's bones while they are read: its name, what uses it and its masked value with when it was set.
@@ -78,9 +120,10 @@ const READING: [(f32, f32, f32); 4] = [
   (96.0, 222.0, 0.0),
 ];
 
-/// The list while the secrets are read (`12 · Project settings · Secrets · loading` `IHhqs`): the environments, Import
-/// from project and Add secret work, the key glyph and the note stay; the group's name and count and each secret's
-/// name, use line and set date are bones, the lower rows fading. *Reading the secrets…* (`secrets.reading`) names it.
+/// The list while the secrets are read (`12 · Project settings · Secrets · loading` `IHhqs`): the heading, the
+/// environments, Import from project and Add secret work, the key glyph and the note stay; an environment's name and
+/// count and each secret's name, use line and set date are bones, the lower rows fading. *Reading the secrets…*
+/// (`secrets.reading`) names it.
 pub(super) fn reading(ctx: &mut Ctx, view: &View) -> Element {
   let chosen = view.environment.get().0;
   let rows: Vec<Element> = fading(
@@ -111,26 +154,27 @@ pub(super) fn reading(ctx: &mut Ctx, view: &View) -> Element {
     .align_items(Alignment::Center)
     .child(skeleton::line(ctx, ProjectSettingsText::GroupTitle.role(), 70.0))
     .child(skeleton::line(ctx, ExtraTypography::Note.role(), 50.0));
-  let group = Group::new("secrets-reading-group", "").beside(title).rows(rows);
   let bones = Column::new()
     .width(Dimension::Pct(100.0))
-    .spacing(ExtraSpacing::Roomy.role())
-    .child(group)
-    .child(
-      Text::new(&ctx.t("secrets.footer"))
-        .variant(ProjectSettingsText::Hint.role())
-        .width(Dimension::Pct(100.0)),
-    );
+    .spacing(SpacingSize::Sm)
+    .child(Group::new("secrets-reading-group", "").beside(title).rows(rows))
+    .child(footer(ctx));
+  let group = Group::new("secrets-group", ctx.t("secrets.title"))
+    .over(toolbar(ctx, view, chosen))
+    .after(Skeleton::new("secrets-loading", ctx.t("secrets.reading")).show(ctx, bones));
+  listing(group)
+}
+
+/// The secrets' group as the list's own element.
+fn listing(group: Group) -> Element {
   Column::new()
     .id("secrets-list")
     .width(Dimension::Pct(100.0))
-    .spacing(ExtraSpacing::Roomy.role())
-    .child(toolbar(ctx, view, chosen))
-    .child(Skeleton::new("secrets-loading", ctx.t("secrets.reading")).show(ctx, bones))
+    .child(group)
     .into()
 }
 
-/// The environments as segments, then Import from project and Add secret.
+/// The environments as segments, then Import from project and Add secret; 12 over the rows under it (`jSvl2`).
 fn toolbar(ctx: &Ctx, view: &View, chosen: Option<Environment>) -> Row {
   let segment = |environment: Option<Environment>, id: &str, label: Arc<str>| {
     let choice = view.environment.clone();
@@ -153,7 +197,8 @@ fn toolbar(ctx: &Ctx, view: &View, chosen: Option<Environment>) -> Row {
   Row::new()
     .id("secrets-filter")
     .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Sm)
+    .padding(Padding::new().bottom(SpacingSize::Xs))
+    .spacing(SpacingSize::Md)
     .align_items(Alignment::Center)
     .child(segmented("secrets-environment", segments, Focus::Pointer))
     .child(Spacer::new().flex(1.0))
@@ -170,64 +215,54 @@ fn toolbar(ctx: &Ctx, view: &View, chosen: Option<Environment>) -> Row {
     )
 }
 
-/// No secret at all (`Empty · No secrets yet` `MSVAy`), under the environment the filter shows.
-fn project_empty(ctx: &Ctx, view: &View, chosen: Option<Environment>) -> Element {
+/// No secret at all (`Empty · No secrets yet` `MSVAy`): one quiet row with Add secret and Import.
+fn project_empty(ctx: &Ctx, view: &View) -> EmptyRow {
   let add = view.clone();
-  let title = chosen.map_or_else(
-    || ctx.t("secrets.allEnvironments"),
-    |environment| ctx.t(words::environment_key(environment)),
-  );
-  Group::new("secrets-group", title)
-    .row(
-      EmptyRow::new(
-        "secrets-empty",
-        Icon::KeyRound,
-        ctx.t("secrets.emptyTitle"),
-        ctx.t("secrets.emptyDetail"),
-      )
-      .action(
-        ActionButton::new("secrets-empty-add", ButtonKind::Primary, ctx.t("secrets.add"))
-          .icon(Icon::Plus)
-          .on_click(move || add.open(SecretsPanel::Add, None)),
-      )
-      .action(
-        ActionButton::new("secrets-empty-import", ButtonKind::Ghost, ctx.t("secrets.import"))
-          .icon(Icon::Download)
-          .compact()
-          .opens(view.import()),
-      ),
-    )
-    .into()
+  EmptyRow::new(
+    "secrets-empty",
+    Icon::KeyRound,
+    ctx.t("secrets.emptyTitle"),
+    ctx.t("secrets.emptyDetail"),
+  )
+  .action(
+    ActionButton::new("secrets-empty-add", ButtonKind::Primary, ctx.t("secrets.add"))
+      .icon(Icon::Plus)
+      .on_click(move || add.open(SecretsPanel::Add, None)),
+  )
+  .action(
+    ActionButton::new("secrets-empty-import", ButtonKind::Ghost, ctx.t("secrets.import"))
+      .icon(Icon::Download)
+      .compact()
+      .opens(view.import()),
+  )
 }
 
-/// An environment's group: its secrets, then its archived ones (`OLD_FIGMA_TOKEN` in `06`), or that the filter's
-/// environment has none.
-fn group(ctx: &mut Ctx, listed: &ProjectSecrets, view: &View, environment: Environment) -> Element {
+/// An environment's own group under All, its count after its title.
+fn environment_group(ctx: &mut Ctx, listed: &ProjectSecrets, view: &View, environment: Environment) -> Element {
+  let count = listed.in_environment(Some(environment)).count() + listed.archived_in(Some(environment)).count();
+  Group::new(
+    &format!("secrets-group-{}", environment.as_str()),
+    ctx.t(words::environment_key(environment)),
+  )
+  .beside(
+    Text::new(&count_words(ctx, count))
+      .id("secrets-count")
+      .variant(ExtraTypography::Note.role()),
+  )
+  .rows(rows(ctx, listed, view, environment))
+  .into()
+}
+
+/// An environment's secrets, then its archived ones (`OLD_FIGMA_TOKEN` in `06`), or that it has none.
+fn rows(ctx: &mut Ctx, listed: &ProjectSecrets, view: &View, environment: Environment) -> Vec<Element> {
   let secrets: Vec<Secret> = listed
     .in_environment(Some(environment))
     .chain(listed.archived_in(Some(environment)))
     .cloned()
     .collect();
-  let count = ctx.t_args(
-    if secrets.len() == 1 {
-      "secrets.countOne"
-    } else {
-      "secrets.count"
-    },
-    [("count", secrets.len().to_string())],
-  );
-  let group = Group::new(
-    &format!("secrets-group-{}", environment.as_str()),
-    ctx.t(words::environment_key(environment)),
-  )
-  .beside(
-    Text::new(&count)
-      .id("secrets-count")
-      .variant(ExtraTypography::Note.role()),
-  );
   if secrets.is_empty() {
-    return group
-      .row(EmptyRow::new(
+    return vec![
+      EmptyRow::new(
         "secrets-environment-empty",
         Icon::KeyRound,
         ctx.t_args(
@@ -235,10 +270,11 @@ fn group(ctx: &mut Ctx, listed: &ProjectSecrets, view: &View, environment: Envir
           [("environment", ctx.t(words::environment_key(environment)))],
         ),
         ctx.t("secrets.environmentEmptyDetail"),
-      ))
-      .into();
+      )
+      .into(),
+    ];
   }
-  let rows = secrets
+  secrets
     .into_iter()
     .map(|secret| {
       let props = RowProps {
@@ -249,8 +285,7 @@ fn group(ctx: &mut Ctx, listed: &ProjectSecrets, view: &View, environment: Envir
       };
       ctx.mount_keyed::<SecretRow>(&format!("secret-row-{}", props.secret.id()), props)
     })
-    .collect::<Vec<_>>();
-  group.rows(rows).into()
+    .collect()
 }
 
 /// What uses a secret, as its row says it: the one tool or MCP server by name, how many, or none; an archived one says

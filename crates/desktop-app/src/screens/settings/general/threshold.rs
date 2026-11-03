@@ -1,8 +1,10 @@
-//! *Warning threshold* (`Warning threshold` `t5qdp` in `01 · General`): the share of a plan window at which every
-//! project's Usage counts its limits as nearly used, a whole percentage from 1 to 100, kept for Orchester rather than a
-//! project because limits belong to accounts; the same setting Usage › Plan limits' menu changes. It is read when the
-//! row shows, and a value that is a percentage saves as it is typed, off the UI thread, one save at a time and the
-//! newest last.
+//! *Plan limits* and its *Warning threshold* (`Warning threshold` `t5qdp` in `01 · General`): the share of a plan
+//! window at which every project's Usage counts its limits as nearly used, a whole percentage from 1 to 100, kept for
+//! Orchester rather than a project because limits belong to accounts. This is its one place: Usage › Plan limits' menu
+//! opens it here, the group scrolled into view. It is read through its query, which the window read as the session
+//! started; a value that is a percentage saves as it is typed, off the UI thread, one save at a time and the newest
+//! last, and a change from elsewhere fills the field while none runs. A save that failed keeps what was typed and says
+//! why under the row.
 
 use std::sync::Arc;
 
@@ -11,7 +13,8 @@ use lurq::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction, FutureState},
   },
-  core::Signal,
+  components::Column,
+  core::{ElementRef, Signal},
   node::{Element, dimension::Dimension},
 };
 use orchester_core::usage::limits::WarningThreshold;
@@ -22,26 +25,61 @@ use orchester_workspace::{
 use parking_lot::Mutex;
 
 use crate::{
+  queries::{self, Session, app},
   screens::settings::{save_state::SaveState, serial::Serial},
   services::Services,
   ui::{
     field::{FieldInput, field_error},
     message::message_text,
-    setting_rows::SettingRow,
+    setting_rows::{SettingGroup, SettingRow},
     skeleton::{self, Skeleton},
   },
 };
 
+const GROUP: &str = "settings-plan-limits";
 const ID: &str = "settings-threshold";
 /// The value's field and its unit (`Box` `C8WIQw` in `01 · General`).
 const FIELD_WIDTH: f32 = 120.0;
 /// The value's bone while it is read: a two-digit percentage.
 const VALUE_BONE: f32 = 14.0;
 
+/// Whether the route brings *Plan limits* into view.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct Read(WarningThreshold);
+pub struct InView(pub bool);
 
-impl DevtoolsInspectable for Read {}
+impl DevtoolsInspectable for InView {}
+
+/// *Plan limits* with its threshold, scrolled into view when a route newly asks for it.
+pub struct PlanLimitsGroup {
+  group: ElementRef,
+  /// What the route last asked, so each opening scrolls once.
+  followed: Mutex<bool>,
+}
+
+impl Component for PlanLimitsGroup {
+  type Props = InView;
+
+  fn create(_: &mut Ctx) -> Self {
+    Self {
+      group: ElementRef::new(),
+      followed: Mutex::new(false),
+    }
+  }
+
+  fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
+    let InView(asked) = *ctx.props::<InView>();
+    let followed = std::mem::replace(&mut *self.followed.lock(), asked);
+    if asked && !followed {
+      ctx.scroll_into_view(&self.group);
+    }
+    let group =
+      SettingGroup::new(GROUP, ctx.t("settings.general.planLimits")).row(ctx.mount_keyed::<ThresholdRow>(ID, ()));
+    Column::new()
+      .ref_element(self.group.clone())
+      .width(Dimension::Pct(100.0))
+      .child(group)
+  }
+}
 
 type Saves = Serial<WarningThreshold, (), Message>;
 
@@ -61,6 +99,8 @@ pub struct ThresholdRow {
   /// A typed value that is not a whole percentage.
   invalid: Signal<bool>,
   known: Arc<Mutex<Known>>,
+  /// The stored threshold the field last took, so a change from elsewhere fills it again.
+  seen: Mutex<Option<WarningThreshold>>,
   saves: Saves,
 }
 
@@ -69,6 +109,7 @@ impl Component for ThresholdRow {
 
   fn create(ctx: &mut Ctx) -> Self {
     let workspace = Services::of(ctx).workspace;
+    // The workspace counts the change once saved, which reads the threshold again (`queries`).
     let action: FutureAction<WarningThreshold, (), Message> = ctx.future_action(move |threshold: WarningThreshold| {
       let workspace = workspace.clone();
       async move {
@@ -85,6 +126,7 @@ impl Component for ThresholdRow {
       text: ctx.signal(String::new()),
       invalid: ctx.signal(false),
       known: Arc::new(Mutex::new(Known::Unread)),
+      seen: Mutex::new(None),
       saves: saves.clone(),
     };
     // Saves on change, whatever changed the field's text; a value already asked for is not saved again.
@@ -115,15 +157,9 @@ impl Component for ThresholdRow {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let read = self.stored(ctx);
-    if let Some(Read(threshold)) = read.data {
-      let mut known = self.known.lock();
-      if *known == Known::Unread {
-        *known = Known::Asked(threshold);
-        drop(known);
-        self.text.set(threshold.percent().to_string());
-      }
-    }
+    let session = Session::of(ctx);
+    let read = queries::state(&ctx.query(app::usage_threshold(session)));
+    self.take(read.data);
     let state = self.saves.state().get();
     if let Some(saves) = SaveState::of(ctx) {
       saves.report(ID, self.saves.outcome(&state));
@@ -177,25 +213,23 @@ impl Component for ThresholdRow {
 }
 
 impl ThresholdRow {
-  /// The threshold as stored, read when the row shows.
-  fn stored(&self, ctx: &mut Ctx) -> lurq::app::ctx::FutureState<Read, Message> {
-    let services = Services::of(ctx);
-    let (workspace, hold) = (services.workspace, services.hold);
-    ctx
-      .future((), move |()| {
-        let (workspace, hold) = (workspace.clone(), hold.clone());
-        async move {
-          hold.released().await;
-          background::run(move || workspace.usage_warning_threshold())
-            .await?
-            .map(Read)
-            .map_err(|error| {
-              tracing::error!(%error, "the usage warning threshold cannot be read");
-              messages::store_error(&error)
-            })
-        }
-      })
-      .state()
-      .get()
+  /// Fills the field with the stored threshold when it is first read, and again when it changed elsewhere while no save
+  /// of the row's runs; a threshold the row asked for itself is in the field already.
+  fn take(&self, stored: Option<WarningThreshold>) {
+    let Some(threshold) = stored else {
+      return;
+    };
+    if self.seen.lock().replace(threshold) == Some(threshold) {
+      return;
+    }
+    let mut known = self.known.lock();
+    let first = *known == Known::Unread;
+    if *known == Known::Asked(threshold) || (!first && self.saves.state().get_untracked().is_pending()) {
+      return;
+    }
+    *known = Known::Asked(threshold);
+    drop(known);
+    self.invalid.set(false);
+    self.text.set(threshold.percent().to_string());
   }
 }

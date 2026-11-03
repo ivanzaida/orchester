@@ -1,9 +1,10 @@
 //! Permissions › Approvals (07 `J1ixkr`, 07b `VOpn8`, `docs/design/approval-modes.md`): Autopilot and Manual as radio
 //! rows with one line each; under Manual its allowed commands and *Ask before MCP actions that require approval*, under
-//! Autopilot what still asks the person; *Approve automatically* while a profile from before approval modes has it on;
-//! a question about a widening of the group as its last row, and the decisions note under the box. Turning Autopilot
-//! on widens and is asked about in place; switching to Manual never asks. Set to Autopilot in a project that doesn't
-//! allow it, the profile keeps its choice and says that its runs there use Manual, with the way to the setting (02e).
+//! Autopilot what still asks the person; a question about a widening of the group as its last row, and the decisions
+//! note under the box. A profile that approved automatically before approval modes reads as Autopilot. Turning
+//! Autopilot on widens and is asked about in place; switching to Manual never asks. Set to Autopilot in a project that
+//! doesn't allow it, the profile keeps its choice and says that its runs there use Manual, with the way to the setting
+//! (02e).
 use std::sync::Arc;
 
 use lurq::{
@@ -63,11 +64,6 @@ pub(super) fn group(
     if provider.is_some_and(|p| !p.is_native()) {
       rows.push(ask_tools(ctx, fields));
     }
-  }
-  // Runs still approve everything automatically for a profile set so before approval modes (or over MCP): it shows
-  // while it is on, so the person sees it and can turn it off.
-  if fields.permissions.get().0.auto_approve() {
-    rows.push(auto_approve(ctx, fields));
   }
   rows.extend(asked);
   let settings = refused.is_some().then(|| open_settings(ctx, context));
@@ -293,25 +289,6 @@ fn ask_tools(ctx: &Ctx, fields: &Fields) -> Element {
     .on_change(move |on| value.update(|p| p.0.set_interactive_tool_approvals(on)));
   nested("agent-ask-tools-row")
     .child(text(&title, &ctx.t("agents.toolCallsHint")))
-    .child(toggle)
-    .into()
-}
-
-/// *Approve automatically (don't ask me)*, a profile's setting from before approval modes that answers every request,
-/// what Autopilot still asks too; only turned off here.
-fn auto_approve(ctx: &Ctx, fields: &Fields) -> Element {
-  let title = ctx.t("agents.permissions.approvals.autoApprove.title");
-  let value = fields.permissions.clone();
-  let toggle = Toggle::new("agent-auto", ToggleKind::Switch, true, title.clone())
-    .hide_label()
-    .on_change(move |on| value.update(|p| p.0.set_auto_approve(on)));
-  Row::new()
-    .id("agent-auto-row")
-    .width(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(HubSpacing::Row.role(), HubSpacing::FieldY.role()))
-    .spacing(HubSpacing::FieldGap.role())
-    .align_items(Alignment::Center)
-    .child(text(&title, &ctx.t("agents.permissions.approvals.autoApprove.hint")))
     .child(toggle)
     .into()
 }

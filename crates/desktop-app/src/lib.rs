@@ -22,6 +22,7 @@ pub mod navigation;
 pub mod notifications;
 pub mod open_link;
 pub mod project;
+pub mod queries;
 pub mod root;
 pub mod routes;
 mod screens;

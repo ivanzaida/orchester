@@ -1,4 +1,4 @@
-//! The project's sources (Project settings › Sources `kmNiF`): every run of the project reads them. Adding one lets
+//! The project's sources (Project settings › Context `kmNiF`): every run of the project reads them. Adding one lets
 //! agents read more without asking, so it is a person's to confirm ([`add_in`] refuses it unconfirmed); removing one
 //! only narrows, and the runs that started with it keep it until they end ([`Removed`]). Blocks on SQLite and reads
 //! the file system; the UI calls it off the UI thread.

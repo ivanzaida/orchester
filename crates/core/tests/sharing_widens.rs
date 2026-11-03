@@ -93,7 +93,7 @@ fn sharing_widens_nothing_for_the_same_a_renamed_or_a_narrower_profile() {
     CommandPermission::AnyInWorktree,
     NetworkAccess::On,
   );
-  wide.set_auto_approve(true);
+  wide.set_approval_mode(orchester_core::permission::ApprovalMode::Autopilot);
   let previous = profile("Builder", wide, &[server]);
   assert!(widens(Some(&previous), &previous).is_empty(), "the same version");
   let renamed = profile("Implementer", previous.permissions().clone(), &[server]);

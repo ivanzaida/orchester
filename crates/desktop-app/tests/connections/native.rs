@@ -170,6 +170,11 @@ fn connections_native_edit_keeps_listed_models_and_sets_the_default_effort() {
     .db()
     .create_connection(&connection.into_connection())
     .expect("created");
+  // As the screens and tools that add a connection do, the change is counted: the connections are read again.
+  seeded.window.launch.services().expect("services").changes.record(
+    seeded.project,
+    orchester_workspace::tasks::outside::Outside::Connections,
+  );
   seeded.open(id);
   assert!(
     seeded
@@ -197,7 +202,8 @@ fn connections_native_edit_keeps_listed_models_and_sets_the_default_effort() {
     ),
     "the listed model keeps where it came from"
   );
+  // The save's change reads the connections again: the page shows the default once that read lands.
   seeded.until("the default on the page", |seeded| {
-    seeded.text("connection-model-0-default") == "Default · high"
+    seeded.exists("connection-model-0-default") && seeded.text("connection-model-0-default") == "Default · high"
   });
 }

@@ -83,13 +83,13 @@ fn chat_merges_the_run_whose_success_started_the_turn_on_its_own_once() {
   let own = own_turn(&served, &mut db);
   let (task, run) = task_run(&db, READY);
   turn_of_success(&mut db, &own, (&seeded, &run));
-  allow(&served, OrchestratorConsent::MergeRuns);
-  allow(&served, OrchestratorConsent::AnswerAgents);
+  allow(&served, &seeded.repo, OrchestratorConsent::MergeRuns);
+  allow(&served, &seeded.repo, OrchestratorConsent::AnswerAgents);
   let told = chat_call(&mut served, &own, "merge_run", merge(&run)).expect("proposed");
   assert_eq!(told["waits_for_person"], true, "the switch is off: {told}");
   assert!(db.run_merge(run.id()).expect("read").is_none(), "nothing merged");
 
-  allow(&served, OrchestratorConsent::MergeFinished);
+  allow(&served, &seeded.repo, OrchestratorConsent::MergeFinished);
   let merged = chat_call(&mut served, &own, "merge_run", merge(&run)).expect("merged on its own");
   assert_eq!(merged["merge"]["run"], run.id().to_string(), "{merged}");
   assert!(db.run_merge(run.id()).expect("read").is_some(), "the run is merged");
@@ -142,7 +142,7 @@ fn chat_leaves_a_success_its_rule_does_not_let_it_merge_to_the_person() {
     OrchestratorConsent::AnswerAgents,
     OrchestratorConsent::MergeFinished,
   ] {
-    allow(&served, consent);
+    allow(&served, &seeded.repo, consent);
   }
   db.update_task_organization(task.id(), ChangeActor::Person, Timestamp::now(), |value| {
     value.with_no_automatic_merge(true)
@@ -174,7 +174,7 @@ fn chat_merge_on_its_own_that_conflicts_is_the_one_try_and_proposes_the_resoluti
     OrchestratorConsent::AnswerAgents,
     OrchestratorConsent::MergeFinished,
   ] {
-    allow(&served, consent);
+    allow(&served, &seeded.repo, consent);
   }
   let refused = chat_call(&mut served, &own, "merge_run", merge(&run)).expect_err("the merge conflicts");
   let ToolError::Refused { code, reasons } = &refused else {

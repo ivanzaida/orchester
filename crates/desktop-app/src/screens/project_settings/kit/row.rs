@@ -58,13 +58,13 @@ pub(crate) struct SettingRow {
   cut_label: bool,
   info: Option<Arc<str>>,
   hint: Option<(Arc<str>, Tone)>,
-  /// Lines under the hint, in the words' column.
-  lines: Vec<Element>,
+  hint_style: TypographyStyle,
   lead: Option<Element>,
   controls: Vec<Element>,
   under: Vec<Element>,
   open: Option<Open>,
   item: bool,
+  dependent: bool,
   /// The label's and the hint's bones, while they are read.
   bones: (Option<f32>, Option<f32>),
 }
@@ -80,20 +80,26 @@ impl SettingRow {
       cut_label: false,
       info: None,
       hint: None,
-      lines: Vec::new(),
+      hint_style: ProjectSettingsText::Hint.role(),
       lead: None,
       controls: Vec::new(),
       under: Vec::new(),
       open: None,
       item: false,
+      dependent: false,
       bones: (None, None),
     }
   }
 
-  /// Lines of their own under the hint, in the words' column beside the control, the words then 4 apart (`Moved`
-  /// `HcizH` in 04b `NDTCw`).
-  pub(crate) fn lines(mut self, lines: impl IntoIterator<Item = Element>) -> Self {
-    self.lines.extend(lines);
+  /// A setting that needs the one above it: it starts further in (`k1WWv` in `S03`).
+  pub(crate) fn dependent(mut self) -> Self {
+    self.dependent = true;
+    self
+  }
+
+  /// The hint line is a value as written (a variable's): in Geist Mono 12.
+  pub(crate) fn mono_hint(mut self) -> Self {
+    self.hint_style = ProjectSettingsText::MonoHint.role();
     self
   }
 
@@ -221,7 +227,7 @@ impl SettingRow {
       return Some(
         Text::new(hint)
           .id(format!("{}-hint", self.id))
-          .variant(ProjectSettingsText::Hint.role())
+          .variant(self.hint_style)
           .color(tone.color())
           .width(Dimension::Pct(100.0))
           .into(),
@@ -230,7 +236,7 @@ impl SettingRow {
     self
       .bones
       .1
-      .map(|width| skeleton::line(ctx, ProjectSettingsText::Hint.role(), width).into())
+      .map(|width| skeleton::line(ctx, self.hint_style, width).into())
   }
 
   pub(crate) fn render(self, ctx: &mut Ctx) -> Element {
@@ -253,14 +259,9 @@ impl SettingRow {
     let words = Column::new()
       .flex(1.0)
       .min_width(Dimension::Px(0.0))
-      .spacing(if self.lines.is_empty() {
-        ExtraSpacing::Tight.role()
-      } else {
-        SpacingSize::Xs
-      })
+      .spacing(ExtraSpacing::Tight.role())
       .child(heading)
-      .with_children(hint)
-      .with_children(self.lines);
+      .with_children(hint);
     let line = Row::new()
       .width(Dimension::Pct(100.0))
       .spacing(if self.item { SpacingSize::Md } else { SpacingSize::Lg })
@@ -279,9 +280,20 @@ impl SettingRow {
     } else {
       ProjectSettingsSpacing::RowY.role()
     };
+    let start = if self.dependent {
+      ProjectSettingsSpacing::Dependent
+    } else {
+      ProjectSettingsSpacing::RowX
+    };
     let frame = Column::new()
       .width(Dimension::Pct(100.0))
-      .padding(Padding::symmetric(ProjectSettingsSpacing::RowX.role(), over))
+      .padding(
+        Padding::new()
+          .top(over)
+          .bottom(over)
+          .left(start.role())
+          .right(ProjectSettingsSpacing::RowX.role()),
+      )
       .spacing(SpacingSize::Sm)
       .child(line)
       .with_children(self.under);

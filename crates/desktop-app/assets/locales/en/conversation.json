@@ -374,7 +374,7 @@
       "runnerFailed": "The runner could not record this run, so it was interrupted",
       "runnerFailedDetail": "Nothing after the last checkpoint counts as done. Continue the run from it, or cancel it.",
       "secretQuestion": "Asked for a secret: {{question}}",
-      "secretQuestionDetail": "Orchester never passes secret values through questions, so the question was declined and the agent was told why. Store the value in Secrets and grant it to this run; the agent can then use it without seeing it in the chat.",
+      "secretQuestionDetail": "Orchester never passes secret values through questions, so the question was declined and the agent was told why. Store the value in Project settings › Environment and grant it to this run; the agent can then use it without seeing it in the chat.",
       "stderrLeftOut": {
         "one": "{{count}} more line of the agent’s standard error left out",
         "other": "{{count}} more lines of the agent’s standard error left out"

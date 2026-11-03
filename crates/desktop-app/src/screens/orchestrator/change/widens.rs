@@ -24,7 +24,6 @@ fn short_key(key: &str) -> Option<&'static str> {
     "appMcp.widens.commands" => "orchestrator.change.widens.commands",
     "appMcp.widens.network" => "orchestrator.change.widens.network",
     "appMcp.widens.toolCallsUnasked" => "orchestrator.change.widens.toolCallsUnasked",
-    "appMcp.widens.autoApprove" => "orchestrator.change.widens.autoApprove",
     "appMcp.widens.account" => "orchestrator.change.widens.account",
     "appMcp.widens.mcpServers" => "orchestrator.change.widens.mcpServers",
     "appMcp.widens.variable" => "orchestrator.change.widens.variable",

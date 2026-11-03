@@ -18,8 +18,8 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_api::cloud::{CloudInvite, TwoFactorStatus};
-use orchester_core::id::{CloudAccountId, InviteId};
-use orchester_workspace::sharing::cloud::{Cloud, FEW_RECOVERY_CODES, WebPage};
+use orchester_core::id::InviteId;
+use orchester_workspace::sharing::cloud::{FEW_RECOVERY_CODES, WebPage};
 
 use super::{
   invites::{Answers, Asked},
@@ -40,43 +40,12 @@ use crate::{
   },
 };
 
-/// The account's two-factor authentication as the cloud reported it, for a future's answer.
+/// The account's two-factor authentication as the cloud reported it (`GET /me`, read by [`super::reads`]); `None`
+/// while nobody is signed in or when the cloud cannot say.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TwoFactor(pub Option<TwoFactorStatus>);
 
 impl DevtoolsInspectable for TwoFactor {}
-
-/// The two-factor authentication of the account `signed_in`, read at `revision` (`GET /me`) and again whenever the
-/// window gains or loses the focus, so turning it on in the browser shows on coming back; `None` while nobody is signed
-/// in, until it is read, or when the cloud cannot say (logged).
-pub fn read(ctx: &mut Ctx, revision: u64, cloud: &Cloud, signed_in: Option<CloudAccountId>) -> Option<TwoFactorStatus> {
-  settled(ctx, revision, cloud, signed_in).and_then(|read| read.0)
-}
-
-/// What [`read`] reads, `None` until the first answer: a page that waits on it tells *not read yet* from *the cloud
-/// cannot say*.
-pub fn settled(ctx: &mut Ctx, revision: u64, cloud: &Cloud, signed_in: Option<CloudAccountId>) -> Option<TwoFactor> {
-  let focused = ctx.window().info().is_focused;
-  ctx
-    .future(
-      (revision, focused, signed_in, cloud.clone()),
-      |(_, _, signed_in, cloud)| async move {
-        if signed_in.is_none() {
-          return Ok::<_, ()>(TwoFactor(None));
-        }
-        Ok(TwoFactor(cloud.two_factor().await.map_or_else(
-          |error| {
-            tracing::warn!(%error, "the account's two-factor authentication could not be read");
-            None
-          },
-          Some,
-        )))
-      },
-    )
-    .state()
-    .get()
-    .data
-}
 
 /// What an invite needs before it can be accepted.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

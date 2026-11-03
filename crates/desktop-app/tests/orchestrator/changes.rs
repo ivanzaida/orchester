@@ -9,7 +9,10 @@
 use std::time::{Duration, Instant};
 
 use lurq::app::events::with_synthetic_input;
-use orchester_app::{routes::OrchestratorChat, ui::tooltip::TOOLTIP_DELAY};
+use orchester_app::{
+  routes::{OrchestratorChat, ProjectPage, ProjectSettingsTab, Route},
+  ui::tooltip::TOOLTIP_DELAY,
+};
 use orchester_core::{
   id::ResourceId,
   orchestrator::{ActionOutcome, ChatAction, EntryKind, change::Change},
@@ -296,6 +299,16 @@ fn orchestrator_publishes_itself_once_the_person_lets_it() {
     screen
       .text(&format!("{card}-reason"))
       .contains("so the chat published it without asking")
+  });
+  // The switch that let it is the project's own: the line's other link opens its tab.
+  let link = format!("{card}-more-0");
+  screen.until("the switch's link", |screen| {
+    screen.text(&link).contains("What the Orchestrator may do")
+  });
+  screen.click(&link);
+  let orchestrator = Route::Project(screen.project, ProjectPage::Settings(ProjectSettingsTab::Orchestrator));
+  screen.until("Project settings › Orchestrator", |screen| {
+    screen.route() == orchestrator
   });
 }
 

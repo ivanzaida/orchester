@@ -4,7 +4,7 @@ use orchester_core::{
   connection::mcp::{ExemptTools, McpToolName},
   id::{InvocationId, RunId, StepExecutionId},
   permission::{
-    AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess,
+    AgentPermissions, AllowedCommands, ApprovalMode, CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess,
     category::{CommandCategory, CommandScope},
   },
   run::{
@@ -305,22 +305,36 @@ fn approval_answers_auto_approval_never_approves_what_is_dangerous() {
 }
 
 #[test]
-fn approval_answers_run_choice_wins_over_profile() {
+fn approval_answers_run_choice_wins_over_autopilot() {
   assert!(auto_approves(None, true));
   assert!(!auto_approves(None, false));
   assert!(auto_approves(Some(true), false));
   assert!(!auto_approves(Some(false), true));
-  let mut profile = listing(&[]);
-  assert!(!profile.auto_approve());
-  profile.set_auto_approve(true);
-  let stored = serde_json::to_string(&profile).expect("stored");
-  let read: AgentPermissions = serde_json::from_str(&stored).expect("read");
-  assert!(read.auto_approve());
+}
+
+/// A profile version stored before approval modes with *Approve automatically (don't ask me)* on reads as Autopilot,
+/// whatever mode it names, and is stored again without the old switch; one without it reads as it was.
+#[test]
+fn approval_answers_old_approve_automatically_reads_as_autopilot() {
+  let mut stored = serde_json::to_value(listing(&[])).expect("stored");
+  let manual: AgentPermissions = serde_json::from_value(stored.clone()).expect("read without the switch");
+  assert_eq!(manual.approval_mode(), ApprovalMode::Manual);
+  stored["auto_approve"] = serde_json::json!(true);
+  let read: AgentPermissions = serde_json::from_value(stored.clone()).expect("read with the switch");
+  assert_eq!(read.approval_mode(), ApprovalMode::Autopilot);
+  assert_eq!(read.commands(), listing(&[]).commands(), "nothing else changes");
+  let again = serde_json::to_value(&read).expect("stored again");
+  assert!(again.get("auto_approve").is_none(), "{again}");
+  assert_eq!(again["approval_mode"], "autopilot", "{again}");
+  stored["auto_approve"] = serde_json::json!(false);
+  let off: AgentPermissions = serde_json::from_value(stored).expect("read with the switch off");
+  assert_eq!(off.approval_mode(), ApprovalMode::Manual);
   let narrowed = read.narrowed(RepositoryAccess::ReadOnly, &Default::default());
-  assert!(narrowed.auto_approve());
-  let before: AgentPermissions =
-    serde_json::from_str(&serde_json::to_string(&listing(&[])).expect("stored")).expect("read without the setting");
-  assert!(!before.auto_approve());
+  assert_eq!(
+    narrowed.approval_mode(),
+    ApprovalMode::Autopilot,
+    "a step keeps who answers"
+  );
 }
 
 #[test]

@@ -1,19 +1,20 @@
 //! Estimates (`Estimates` `vLiTy` in `02 · Runs`, the Runs window `g406O`): *Let Orchester estimate story points*, the
-//! project's own setting since ORC-103 (a project a person has not set it for keeps the application-wide setting it
-//! moved from). Orchester's estimator then sizes new tasks, and tasks whose brief or criteria change, on auto mode's
-//! reviewer, never changing points a person set. It is read and saved off the UI thread, and its switch cannot be
-//! flipped while either runs. Only a person flips it: the switch refuses lurq's synthetic input, an MCP client's
-//! included, and says so under the row. Unlike the application-wide Automation section it moved from, the row does not
-//! close the whole window to MCP input while it shows, so Runs' other settings stay open to automation as before.
-//! While estimates are on and the estimator's last request could not run, the row says why in its hint's place, in
-//! `warning` (ORC-611), instead of only in the log.
+//! project's own setting since ORC-103; opening a project that had none copied the application-wide value into it
+//! (ORC-595), and the row shows only the project's. Orchester's estimator then sizes new tasks, and tasks whose brief
+//! or criteria change, on auto mode's reviewer, never changing points a person set. It is read through its query,
+//! which the project's loader read as the project opened, and saved off the UI thread; until it is first read and
+//! while it saves, its switch cannot be flipped. Only a person flips it: the switch refuses lurq's synthetic input, an
+//! MCP client's included, and says so under the row. Unlike the application-wide Automation section it moved from, the
+//! row does not close the whole window to MCP input while it shows, so Runs' other settings stay open to automation
+//! as before. While estimates are on and the estimator's last request could not run, the row says why in its hint's
+//! place, in `warning` (ORC-611), instead of only in the log.
 
 use std::{path::Path, sync::Arc};
 
 use lurq::{
   app::{
     component::Component,
-    ctx::{Ctx, FutureAction, FutureState},
+    ctx::{Ctx, FutureAction},
     events::{InputSource, input_source},
   },
   core::Signal,
@@ -30,11 +31,13 @@ use super::super::{
   kit::{Group, SettingRow, Tone},
 };
 use crate::{
+  queries::{self, Session, project},
   screens::reviewer_trouble,
   services::Services,
   ui::{
     field::field_error,
     message::message_text,
+    skeleton::{self, Skeleton},
     toggle::{Toggle, ToggleKind},
   },
 };
@@ -58,6 +61,7 @@ impl Component for Estimates {
   fn create(ctx: &mut Ctx) -> Self {
     let workspace = Services::of(ctx).workspace;
     let root = ctx.props::<TabProps>().project.open.repo_root.clone();
+    // The workspace counts the change once saved, which reads the setting again (`queries`).
     let save = ctx.future_action(move |allowed: bool| {
       let (workspace, root) = (workspace.clone(), root.clone());
       async move {
@@ -79,10 +83,13 @@ impl Component for Estimates {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let state = self.save.state().get();
-    let read = self.stored(ctx, state.data);
     let root = ctx.props::<TabProps>().project.open.repo_root.clone();
+    let session = Session::of(ctx);
+    let read = queries::state(&ctx.query(project::estimates(session, root.clone())));
     let fixed = state.is_pending() || read.is_pending();
-    // The person's choice once it saved; the stored value until then, or after a save failed.
+    // The person's choice until the stored value is it again; the stored value until they choose, or once a save
+    // failed.
+    queries::settle(&self.saved, read.data.as_ref(), state.is_pending());
     let shown = match (&state.error, self.saved.get()) {
       (None, Some(chosen)) => Some(chosen),
       _ => read.data,
@@ -123,9 +130,17 @@ impl Component for Estimates {
       Some(said) => row.toned(said, Tone::Warning),
       None => row.hint(ctx.t("project_settings.estimates.hint")),
     };
+    // Until the setting is read, the switch is a bone of its size: no state shows that may not be the stored one.
+    let control: Element = if shown.is_none() && read.is_pending() {
+      Skeleton::new(format!("{ID}-reading"), ctx.t("project_settings.reading"))
+        .inline()
+        .show(ctx, skeleton::switch())
+    } else {
+      switch.into()
+    };
     let row = row
       .info(ctx.t("project_settings.estimates.info"))
-      .control(switch)
+      .control(control)
       .under_all(problem)
       .under_all(blocked)
       .render(ctx);
@@ -147,26 +162,6 @@ impl Estimates {
       saved.set(Some(chosen));
       save.run(chosen);
     })
-  }
-
-  /// The project's setting as stored, read when the row shows and again after each save (`saved`).
-  fn stored(&self, ctx: &mut Ctx, saved: Option<bool>) -> FutureState<bool, Message> {
-    let workspace = Services::of(ctx).workspace;
-    let root = ctx.props::<TabProps>().project.open.repo_root.clone();
-    ctx
-      .future(saved, move |_| {
-        let (workspace, root) = (workspace.clone(), root.clone());
-        async move {
-          background::run(move || workspace.estimates_story_points(&root))
-            .await?
-            .map_err(|error| {
-              tracing::error!(%error, "Let Orchester estimate story points cannot be read");
-              messages::store_error(&error)
-            })
-        }
-      })
-      .state()
-      .get()
   }
 }
 

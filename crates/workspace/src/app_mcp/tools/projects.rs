@@ -1,5 +1,5 @@
 //! `list_projects`, `set_code_index` and `list_pipelines`: the projects of the workspace with whether
-//! each uses the code index and its limits, that setting changed as Project settings › Code index changes it, and the
+//! each uses the code index and its limits, that setting changed as Project settings › Context changes it, and the
 //! published pipeline versions a project's tasks can run with, as All projects and the task form list
 //! them.
 

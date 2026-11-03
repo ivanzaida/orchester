@@ -1,7 +1,7 @@
 //! A repository's own agent files (ORC-15, `docs/design/orchester-workspace.md`, "Instructions"):
 //! `AGENTS.md`, `.agents/skills` and `.codex/skills` for Codex, `CLAUDE.md` and `.claude/skills` for Claude Code.
 //!
-//! - Project settings › General › *Repository agent files* ([`RepositoryAgentFiles`]) decides whether the agent CLIs
+//! - Project settings › Context › *Repository agent files* ([`RepositoryAgentFiles`]) decides whether the agent CLIs
 //!   may load them besides Orchester's own instructions and skills. It is set per project, read when an agent starts (a
 //!   change applies to agents that start after it), and on by default, which keeps what the CLIs did before the setting
 //!   existed. Off, the CLIs do not load them; an agent can still open them as ordinary files of its worktree.

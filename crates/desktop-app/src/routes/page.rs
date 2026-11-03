@@ -334,7 +334,7 @@ impl ProjectPage {
       ["instructions"] => InstructionsView::take(params).map(Self::Instructions),
       ["secrets"] => SecretsView::take(params).map(Self::Secrets),
       [IMPORT] => ImportTab::take(params).map(Self::Import),
-      ["memory"] => MemoryTab::take(params).map(Self::Memory),
+      ["memory"] => MemoryTab::take(params),
       [SETTINGS] => settings(params),
       [PULL_REQUESTS] => Ok(Self::PullRequests(
         params.take_or_default(TAB, PullRequestTab::from_name)?,
@@ -444,9 +444,12 @@ fn tools(params: &mut Params) -> Result<ProjectPage, RouteError> {
 }
 
 /// Project settings on the tab the query names, *Make local*'s question on Sharing (`ask=make-local`), the join
-/// review there (`view=join` with the project), or *Approved for every run* under Runs (`view=rules`).
+/// review there (`view=join` with the project), or *Approved for every run* under Runs (`view=rules`); Environment
+/// (`tab=environment`, or `secrets` from before it was renamed) is the secrets' route.
 fn settings(params: &mut Params) -> Result<ProjectPage, RouteError> {
-  let tab = ProjectSettingsTab::take(params)?;
+  let Some(tab) = ProjectSettingsTab::take(params)? else {
+    return Ok(ProjectPage::Secrets(SecretsView::default()));
+  };
   match (tab, params.take(VIEW)?) {
     (_, None) => {}
     (ProjectSettingsTab::Sharing, Some(view)) if view == JOIN => {

@@ -1,12 +1,13 @@
-//! *Repository agent files* (`T8iJ99` in `01 · General`): whether agents may read the repository's own AGENTS.md,
-//! CLAUDE.md and skills folders, with *What each CLI loads* in a popover (what Codex and Claude Code load from the
-//! repository, that the files are not versioned with the run, and Import from repository, not built yet). Turning them
-//! on puts what the repository says in every agent's prompt (ORC-30): an MCP client's input turns them on only under
-//! *Let automation change agent permissions*, as `set_repository_agent_files` does; turning them off stays open. A
-//! refused press says so under the row.
+//! Context › *Repository agent files* (`gY4HX` in `S04 · Context` `oTBHM`, between Sources and Code index): whether
+//! agents may read the repository's own AGENTS.md, CLAUDE.md and skills folders, with *What each CLI loads* in a
+//! popover (what Codex and Claude Code load from the repository, that the files are not versioned with the run, and
+//! Import from repository, not built yet). Turning them on puts what the repository says in every agent's prompt
+//! (ORC-30): an MCP client's input turns them on only under *Let automation change agent permissions*, as
+//! `set_repository_agent_files` does; turning them off stays open. A refused press says so under the row.
 
 use lurq::{
   app::{
+    component::Component,
     ctx::Ctx,
     theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
@@ -19,17 +20,20 @@ use orchester_workspace::{project_settings::Settings, prompt_changes};
 
 use crate::{
   mcp::input_gate::{Guarded, InputGate, input_may_decide},
+  queries::Kept,
   screens::project_settings::{
     TabProps,
-    kit::SettingRow,
-    work::{self, Change},
+    kit::{Group, SettingRow},
+    work::{self, Change, Read},
   },
   theme::ExtraTypography,
   ui::{
     button::{ActionButton, ButtonKind},
+    field::field_error,
     form_section::not_built,
     message::message_text,
     popover::{PopoverSide, popover, popover_panel},
+    skeleton,
     tinted_note::person_only,
     toggle::{Toggle, ToggleKind},
   },
@@ -39,7 +43,89 @@ use crate::{
 const POPOVER_WIDTH: f32 = 420.0;
 const AGENT_LABEL_WIDTH: f32 = 100.0;
 
-pub(super) fn row(
+/// The group, saving its switch itself as Sources and Code index do.
+pub(super) struct AgentFiles {
+  save: work::Save,
+  /// What the page's last save read back, until the settings' query has it.
+  kept: Kept<Read>,
+  gate: Option<InputGate>,
+  /// An MCP client's input asked to turn the repository's agent files on and was refused.
+  refused: Signal<bool>,
+  /// *What each CLI loads*' popover, and its link.
+  open: Signal<bool>,
+  anchor: ElementRef,
+}
+
+impl Component for AgentFiles {
+  type Props = TabProps;
+
+  fn create(ctx: &mut Ctx) -> Self {
+    let section = Self {
+      save: work::action(ctx, ctx.props::<TabProps>().project.open.project.id()),
+      kept: ctx.props::<TabProps>().kept.clone(),
+      gate: ctx.use_context::<InputGate>(),
+      refused: ctx.signal(false),
+      open: ctx.signal(false),
+      anchor: ctx.element_ref(),
+    };
+    work::follow(
+      ctx,
+      &section.save,
+      ctx.props::<TabProps>().status.clone(),
+      section.kept.clone(),
+    );
+    section
+  }
+
+  fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
+    let props = ctx.props::<TabProps>().clone();
+    let loaded = work::load(ctx, props.project.open.repo_root.clone());
+    let Some(read) = loaded.shown(&self.kept, self.save.state().get().is_pending()) else {
+      return work::pending(ctx, &loaded, bones);
+    };
+    let row = row(
+      ctx,
+      (&props, &read.0, &self.save),
+      (self.gate.clone(), &self.refused),
+      (&self.open, &self.anchor),
+    );
+    let mut group = Group::new("settings-repository-files", ctx.t("project_settings.agentFiles")).row(row);
+    if let Some(error) = work::error(ctx, &self.save) {
+      group = group.after(error);
+    }
+    if let Some(error) = loaded.state.error {
+      group = group.after(field_error("settings-files-load-error", &message_text(ctx, &error)));
+    }
+    group.into()
+  }
+}
+
+/// The group while the settings are read (`L04L` `dFXLk`), the tab's second: its heading, the row's label and hint,
+/// *What each CLI loads* and a switch's bone.
+fn bones(ctx: &mut Ctx) -> Column {
+  let loads = ActionButton::new(
+    "settings-files-loads-reading",
+    ButtonKind::Ghost,
+    ctx.t("project_settings.whatEachLoads"),
+  )
+  .compact();
+  let row = SettingRow::new("settings-files-reading", ctx.t("project_settings.readAgentFiles"))
+    .info(ctx.t("project_settings.agentFilesDetail"))
+    .hint(ctx.t("project_settings.agentFilesHint"))
+    .control(loads)
+    .control(skeleton::switch())
+    .render(ctx);
+  skeleton::lower_group(
+    0,
+    Group::new(
+      "settings-repository-files-reading",
+      ctx.t("project_settings.agentFiles"),
+    )
+    .row(row),
+  )
+}
+
+fn row(
   ctx: &mut Ctx,
   (props, settings, save): (&TabProps, &Settings, &work::Save),
   (gate, refused): (Option<InputGate>, &Signal<bool>),
@@ -89,7 +175,7 @@ pub(super) fn row(
       &message_text(ctx, &prompt_changes::agent_files_person_only()),
     )
   });
-  SettingRow::new("settings-files", ctx.t("project_settings.agentFiles"))
+  SettingRow::new("settings-files", ctx.t("project_settings.readAgentFiles"))
     .info(ctx.t("project_settings.agentFilesDetail"))
     .hint(ctx.t("project_settings.agentFilesHint"))
     .control(Row::new().child(link).child(panel))

@@ -1,5 +1,5 @@
 //! Token budgets and time limits as people enter and read them (`docs/design/orchester-workspace.md`,
-//! "Token budgets", "Stopped at limit"): field errors, the Project settings › Limits form,
+//! "Token budgets", "Stopped at limit"): field errors, the Project settings › Runs › Limits form,
 //! whole-minute time limits of active agent time, how many agents work at once and how many QA apps
 //! are open at once. A run budget and a time limit are optional with no maximum: an empty field is no
 //! limit (user decision 2026-10-09).
@@ -119,7 +119,7 @@ pub fn minutes_text(limit: Option<Duration>) -> String {
   limit.map(|limit| whole_minutes(limit).to_string()).unwrap_or_default()
 }
 
-/// Default time limits offered by Project settings › Limits (`bPPG9`, open in `u5Vn2`), in
+/// Default time limits offered by Project settings › Runs › Limits (`bPPG9`, open in `u5Vn2`), in
 /// minutes of active agent time: eight choices, the menu's height without scrolling (`u0ByM`).
 /// The select offers *No limit* besides them, the default (user decision 2026-10-09).
 pub const TIME_LIMIT_CHOICES: [u64; 8] = [15, 30, 45, 60, 90, 120, 180, 240];

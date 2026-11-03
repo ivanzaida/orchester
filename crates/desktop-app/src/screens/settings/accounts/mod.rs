@@ -28,7 +28,7 @@ use lurq::{
   node::Element,
 };
 use orchester_core::{account::AgentAccount, id::AgentAccountId, time::Timestamp};
-use orchester_workspace::{accounts::AccountUses, background, messages::Message};
+use orchester_workspace::{accounts::AccountUses, messages::Message};
 
 pub(super) use self::list::reading;
 use self::work::{ChangeAction, Changed, CheckAction, SignInAction};
@@ -36,8 +36,8 @@ use super::frame;
 use crate::{
   mcp::input_gate::{Guarded, InputGate, Protected},
   navigation::Navigation,
+  queries::{Again, Session, app},
   routes::{AccountsPanel, AccountsView, Route},
-  services::Services,
 };
 
 #[derive(Clone)]
@@ -195,6 +195,8 @@ pub struct AccountsTab {
   work: Work,
   /// Whether the tab asked every account's CLI once since it opened.
   started: Signal<bool>,
+  /// Reads what uses the shown account again after each change.
+  again: Again,
   _protected: Protected,
 }
 
@@ -223,6 +225,7 @@ impl Component for AccountsTab {
     Self {
       work,
       started: ctx.signal(false),
+      again: Again::live(),
       _protected: gate.protect(Guarded::Accounts),
     }
   }
@@ -255,7 +258,7 @@ impl Component for AccountsTab {
         .then(|| self.work.opened.get().0.map(|(account, _)| account))
         .flatten(),
     };
-    let (uses, reading) = uses(ctx, selected, props.revision.get());
+    let (uses, reading) = uses(ctx, (selected, &self.again), props.revision.get());
     let (scroll, pane) = match (props.view.panel, selected) {
       (AccountsPanel::Add, _) => ("settings-accounts-add-scroll", add::page(ctx, &self.work)),
       (AccountsPanel::SignIn, Some(_)) => (
@@ -272,26 +275,20 @@ impl Component for AccountsTab {
   }
 }
 
-/// What uses the shown account, read again after every change, and whether that read is still running.
-fn uses(ctx: &mut Ctx, account: Option<AgentAccountId>, revision: u64) -> (Option<AccountUses>, bool) {
-  let workspace = Services::of(ctx).workspace;
-  let state = ctx
-    .future((account, revision), move |(account, _)| {
-      let workspace = workspace.clone();
-      async move {
-        let Some(account) = account else {
-          return Ok(None);
-        };
-        background::run(move || workspace.agent_account_uses(account))
-          .await?
-          .map(Some)
-          .map_err(|error| error.message())
-      }
-    })
-    .state()
-    .get();
-  let reading = state.is_pending();
-  (state.data.flatten(), reading)
+/// What uses the shown account through its query, read again behind its last read each time the page shows and after
+/// every change (`revision`), and whether that read is still running.
+fn uses(
+  ctx: &mut Ctx,
+  (account, again): (Option<AgentAccountId>, &Again),
+  revision: u64,
+) -> (Option<AccountUses>, bool) {
+  let Some(account) = account else {
+    return (None, false);
+  };
+  let session = Session::of(ctx);
+  let query = ctx.query(app::account_uses(session, account));
+  again.follow(revision, &query);
+  (query.data().map(|uses| AccountUses::clone(&uses)), query.fetching())
 }
 
 /// After a change the accounts are read again and the tab shows what it changed; a new account in a folder

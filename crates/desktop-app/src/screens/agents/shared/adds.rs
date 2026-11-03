@@ -87,7 +87,6 @@ fn adds_key(add: &VersionWidening) -> &'static str {
       Widening::Commands => "sharing.config.widens.adds.commands",
       Widening::Network => "sharing.config.widens.adds.network",
       Widening::ToolCallsUnasked => "sharing.config.widens.adds.toolCallsUnasked",
-      Widening::AutoApprove => "sharing.config.widens.adds.autoApprove",
       Widening::Autopilot => "sharing.config.widens.adds.autopilot",
       Widening::Browser => "sharing.config.widens.adds.browser",
       Widening::BrowserSite => "sharing.config.widens.adds.browserSite",

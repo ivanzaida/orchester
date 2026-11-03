@@ -144,3 +144,13 @@ fn update_install_icons_match_bundled_font_names() {
     assert_eq!(glyph_name(font, font_glyph(font, icon.glyph() as usize)), name);
   }
 }
+
+/// The glyph of the Memory page's *Memory settings* (`YHyk4` in `S15` `BJQn0`).
+#[test]
+fn memory_settings_icon_matches_bundled_font_name() {
+  let font = include_bytes!("../../assets/fonts/lucide.ttf");
+  assert_eq!(
+    glyph_name(font, font_glyph(font, Icon::Settings2.glyph() as usize)),
+    "settings-2"
+  );
+}

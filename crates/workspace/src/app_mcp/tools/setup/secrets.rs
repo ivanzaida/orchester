@@ -34,7 +34,7 @@ pub(super) const SPECS: &[Spec] = &[Spec {
                 and MCP servers refer to it), when it was added and its value last replaced, what uses it (tools, \
                 MCP servers, agent connections whose API key it is, and the agent profiles whose draft or latest \
                 version chooses an MCP server that uses it, with that server), each with its link, and the link \
-                to Secrets. Adding, replacing and archiving secrets are a person's, in the app.",
+                to Project settings › Environment. Adding, replacing and archiving secrets are a person's, in the app.",
   schema: schema_for_type::<InProjects>,
   read_only: true,
 }];

@@ -7,10 +7,13 @@
 //! browser profiles with Copy. *Browser window* ([`window`]) holds *Open the Browser window when an agent starts
 //! browsing*, on until a person turns it off.
 //!
-//! What it shows is read off the UI thread (finding the browser reads the registry on Windows), again after each
-//! choice and at *Look again*; the runner starts a project's browser by the same rule. The header's save state
-//! follows the choice and the switch.
+//! What it shows is read off the UI thread through its query (finding the browser reads the registry on Windows),
+//! which the window read as the session started: the last read shows at once and the browser is looked for again
+//! behind it each time the tab shows, after each choice and at *Look again*; the runner starts a project's browser by
+//! the same rule. Until the first read ever ends the groups are a skeleton ([`reading`], `L12L` `vC4Jf`). The header's
+//! save state follows the choice and the switch.
 
+mod reading;
 mod rows;
 mod window;
 
@@ -19,7 +22,7 @@ use std::sync::Arc;
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
-    ctx::{Ctx, FutureAction, FutureState},
+    ctx::{Ctx, FutureAction},
   },
   components::Column,
   core::Signal,
@@ -29,7 +32,7 @@ use orchester_exec::browser::{BrowserProgram, NotABrowser};
 use orchester_workspace::{
   background,
   messages::{self, Message},
-  workspace::{BrowserSettings, ChooseBrowserError, Workspace},
+  workspace::ChooseBrowserError,
 };
 
 use super::{
@@ -37,15 +40,10 @@ use super::{
   save_state::{Outcome, SaveState},
 };
 use crate::{
-  services::{
-    Services,
-    path_picker::{PathKind, PathPicker},
-  },
+  queries::{self, Again, Session, app},
+  services::path_picker::{PathKind, PathPicker},
   theme::SettingsSpacing,
-  ui::{
-    message::message_text,
-    state::{load_error, loading},
-  },
+  ui::{message::message_text, state::load_error},
 };
 
 /// The tab, scrolling under the header.
@@ -54,14 +52,7 @@ pub fn tab(ctx: &mut Ctx) -> Element {
   frame::column("settings-browser-scroll", pane)
 }
 
-/// What Settings › Browser shows, as read.
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct Read(Arc<BrowserSettings>);
-
-impl DevtoolsInspectable for Read {}
-
-/// What came of *Choose another program…*. Each program taken is a different choice, so the section is read again
-/// after each, the second of two in a row too.
+/// What came of *Choose another program…*.
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Choice {
   /// The picker closed without a program.
@@ -76,10 +67,11 @@ impl DevtoolsInspectable for Choice {}
 
 type ChooseAction = FutureAction<(), Choice, Message>;
 
-/// Both groups, once what they show is read.
+/// Both groups, once what they show was ever read.
 struct BrowserSection {
   /// Counts the times *Look again* (or *Try again*) asked for a new read.
   revision: Signal<u64>,
+  again: Again,
 }
 
 impl Component for BrowserSection {
@@ -88,29 +80,34 @@ impl Component for BrowserSection {
   fn create(ctx: &mut Ctx) -> Self {
     Self {
       revision: ctx.signal(0),
+      again: Again::live(),
     }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let workspace = Services::of(ctx).workspace;
-    // Hooks in the same order on every render: the choice, then the read, which follows each choice.
-    let choose = choose_action(ctx, &workspace);
+    let session = Session::of(ctx);
+    // Hooks in the same order on every render: the choice, then the read, which each choice reads again.
+    let choose = choose_action(ctx, &session);
     let chosen = choose.state().get();
     if let Some(saves) = SaveState::of(ctx) {
       saves.report("settings-browser-program", Outcome::of(&chosen));
     }
-    let read = read(ctx, &workspace, (self.revision.get(), chosen.data.clone()));
+    // Through its query, which the window read as the session started: the last read at once, and the browser looked
+    // for again behind it each time the tab shows, at *Look again* and after each choice (`queries`).
+    let query = ctx.query(app::browser_settings(session));
+    self.again.follow(self.revision.get(), &query);
+    let read = queries::state(&query);
     let revision = self.revision.clone();
     let again = move || revision.update(|revision| *revision += 1);
     let settings = match (&read.data, &read.error) {
-      (_, Some(error)) if !read.is_pending() => return failed(ctx, error, again),
-      (Some(settings), _) => Arc::clone(&settings.0),
-      _ => return loading("settings-browser-reading", &ctx.t("settings.browser.reading")).into(),
+      (_, Some(error)) => return failed(ctx, error, again),
+      (Some(settings), _) => Arc::clone(settings),
+      _ => return reading::skeleton(ctx),
     };
     let actions = rows::Actions {
       choose: &choose,
       chosen: &chosen,
-      looking: read.is_pending(),
+      looking: query.fetching(),
       again: Arc::new(again),
     };
     Column::new()
@@ -139,11 +136,12 @@ fn failed(ctx: &Ctx, error: &Message, again: impl Fn() + Send + Sync + 'static) 
   )
 }
 
-/// Asks for a program with the system's picker and keeps it when it is a Chromium-based browser's.
-fn choose_action(ctx: &mut Ctx, workspace: &Workspace) -> ChooseAction {
+/// Asks for a program with the system's picker and keeps it when it is a Chromium-based browser's; the workspace
+/// counts a program kept as a change, which reads Settings › Browser again (`queries`).
+fn choose_action(ctx: &mut Ctx, Session(services): &Session) -> ChooseAction {
   let picker = PathPicker::of(ctx);
   let title = ctx.t("settings.browser.program.pickerTitle");
-  let workspace = workspace.clone();
+  let workspace = services.workspace.clone();
   ctx.future_action(move |()| {
     let (picker, title, workspace) = (picker.clone(), title.clone(), workspace.clone());
     async move {
@@ -160,24 +158,4 @@ fn choose_action(ctx: &mut Ctx, workspace: &Workspace) -> ChooseAction {
       }
     }
   })
-}
-
-/// What Settings › Browser shows, read again at each of `deps`: *Look again* and each choice.
-fn read(ctx: &mut Ctx, workspace: &Workspace, deps: (u64, Option<Choice>)) -> FutureState<Read, Message> {
-  let workspace = workspace.clone();
-  ctx
-    .future(deps, move |_| {
-      let workspace = workspace.clone();
-      async move {
-        background::run(move || workspace.browser_settings())
-          .await?
-          .map(|settings| Read(Arc::new(settings)))
-          .map_err(|error| {
-            tracing::error!(%error, "Settings › Browser cannot be read");
-            messages::store_error(&error)
-          })
-      }
-    })
-    .state()
-    .get()
 }

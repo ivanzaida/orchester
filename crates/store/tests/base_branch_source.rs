@@ -1,8 +1,7 @@
 //! Base branches of tasks and modules in the project database (`Base branch · redesign`, `ri5ru`): a local task's
 //! is versioned with its revision, a shared task's stays outside it; a module's is kept, a stale change refused; a run
 //! records where its base came from and keeps it whatever its task and module say later; and the project's base
-//! branch moves to its open modules that had none, its runs migrating without losing their branch, and the move is
-//! forgotten once General said so.
+//! branch moves to its open modules that had none, its runs migrating without losing their branch.
 //! `cargo test -p orchester-store --test base_branch_source base_branch_source`.
 
 mod support;
@@ -217,8 +216,9 @@ fn base_branch_source_a_shared_tasks_base_stays_outside_its_revision() {
 }
 
 /// The migrations appended after the base sources' (the server's admins, *Open my draft on vN*, the worktree
-/// removals' not-removed state, the disk guard): the schema before it is this many and one more under the latest.
-const AFTER_BASE_SOURCES: u32 = 4;
+/// removals' not-removed state, the disk guard, the Orchestrator's switches): the schema before it is this many and one
+/// more under the latest.
+const AFTER_BASE_SOURCES: u32 = 5;
 
 /// A project whose base branch was `set` (none: the checked-out branch) before tasks and modules had theirs, with
 /// open modules Webhooks and Billing, closed Legacy, and runs from a detached HEAD, `staging` and `main`, opened at
@@ -264,14 +264,6 @@ fn base_branch_source_the_projects_base_branch_moves_to_its_open_modules() {
   let base = |id| db.module(id).expect("read").expect("module").base().clone();
   assert_eq!((base(webhooks), base(billing)), (staging.clone(), staging));
   assert_eq!(base(legacy), BaseChoice::CheckedOut, "a closed module is not changed");
-  let moved = db.base_branch_move().expect("read").expect("moved");
-  assert_eq!(moved.branch, branch("staging"));
-  let mut took = moved.modules.clone();
-  took.sort();
-  let mut open = vec![webhooks, billing];
-  open.sort();
-  assert_eq!(took, open);
-  assert!(moved.at.unix_millis() > 0);
   let records: Vec<_> = runs
     .iter()
     .map(|run| (run.base_branch().map(BranchName::as_str), run.base_source()))
@@ -288,22 +280,8 @@ fn base_branch_source_the_projects_base_branch_moves_to_its_open_modules() {
 }
 
 #[test]
-fn base_branch_source_the_move_is_forgotten_once_said_and_the_modules_keep_it() {
-  let (_repo, mut db, [webhooks, ..], _) = migrated(Some("staging"));
-  db.forget_base_branch_move().expect("forget");
-  assert_eq!(db.base_branch_move().expect("read"), None);
-  assert_eq!(
-    db.module(webhooks).expect("read").expect("module").base(),
-    &BaseChoice::Branch(branch("staging")),
-    "a module keeps the branch it took"
-  );
-  db.forget_base_branch_move().expect("forgetting again changes nothing");
-}
-
-#[test]
 fn base_branch_source_a_project_without_a_base_branch_moves_nothing() {
   let (_repo, db, modules, runs) = migrated(None);
-  assert_eq!(db.base_branch_move().expect("read"), None);
   for id in modules {
     assert_eq!(
       db.module(id).expect("read").expect("module").base(),

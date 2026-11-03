@@ -17,7 +17,11 @@ use super::{
   feed::{FeedLoader, FeedProps},
   resolve,
 };
-use crate::{navigation::Navigation, services::Services};
+use crate::{
+  navigation::Navigation,
+  queries::{ProjectReads, follow::ProjectProps},
+  services::Services,
+};
 
 /// Follows the projects the tabs show: opens each one once ([`ProjectLoader`]), keeps the runner of
 /// every open one running and shows the active tab's project's (`Runners::keep_open`, `Runners::show`),
@@ -156,7 +160,17 @@ impl Component for ProjectLoader {
       (None, None) => {}
     }
     match projects.state(project) {
-      Some(ProjectState::Open(open)) => ctx.mount_keyed::<FeedLoader>("feed", FeedProps { open, active }),
+      // Its settings are read as it opens, so Project settings opens on them.
+      Some(ProjectState::Open(open)) => Column::new()
+        .child(ctx.mount_keyed::<FeedLoader>(
+          "feed",
+          FeedProps {
+            open: open.clone(),
+            active,
+          },
+        ))
+        .child(ctx.mount_keyed::<ProjectReads>("settings-reads", ProjectProps(open)))
+        .into(),
       Some(ProjectState::Unavailable(_)) | None => Element::new(),
     }
   }

@@ -1,6 +1,7 @@
 //! Context › Code index (`Code index` `EORXu` in `03 · Context`; empty in `09` `mE5oU`): the workspace's setting with
 //! its switch, a row per revision's index with its state and Rebuild or Retry, and the search tool with the ripgrep
-//! install.
+//! install. The setting, the builds and the search tool are read through their queries: each shows its last read when
+//! the tab opens, the builds and the search tool read again behind it.
 mod list;
 mod search;
 
@@ -18,7 +19,7 @@ use lurq::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction, FutureState},
   },
-  components::Text,
+  components::{Column, Text},
   core::Signal,
   node::Element,
 };
@@ -36,14 +37,22 @@ use super::{
   work::{self, Change, Read, Save},
 };
 use crate::{
+  queries::{self, Again, Kept, Session, project},
   theme::ExtraTypography,
   ui::{
     field::field_error,
     icon::Icon,
     message::message_text,
+    skeleton,
     toggle::{Toggle, ToggleKind},
   },
 };
+
+/// How long the bones of what the group has not read yet are (`Code index` in `L04L` `dFXLk`).
+const INDEX_HINT_BONE: f32 = 150.0;
+const REBUILD_BONE: f32 = 84.0;
+const TOOL_HINT_BONE: f32 = 110.0;
+const TOOL_BONE: f32 = 44.0;
 
 #[derive(Clone, PartialEq)]
 struct Listed(IndexList);
@@ -56,11 +65,13 @@ type Rebuild = FutureAction<(PathBuf, Revision), (), Message>;
 pub(super) struct CodeIndex {
   save: Save,
   rebuild: Rebuild,
-  stored: Signal<Option<Read>>,
-  revision: Signal<u64>,
-  own: work::OwnSaves,
+  /// What the page's last save read back, until the settings' query has it.
+  kept: Kept<Read>,
   list_revision: Signal<u64>,
   check_revision: Signal<u64>,
+  /// The builds' and the search tool's asks to read again, each of which invalidates its query.
+  list_again: Again,
+  check_again: Again,
   tick: Signal<u64>,
   watching: Arc<AtomicBool>,
   after_install: Arc<AtomicBool>,
@@ -71,23 +82,18 @@ impl Component for CodeIndex {
     let tab = Self {
       save: work::action(ctx, ctx.props::<TabProps>().project.open.project.id()),
       rebuild: rebuild_action(ctx),
-      stored: ctx.signal(None),
-      revision: ctx.signal(0),
-      own: work::OwnSaves::new(ctx, &[Outside::CodeIndex]),
+      kept: ctx.props::<TabProps>().kept.clone(),
       list_revision: ctx.signal(0),
       check_revision: ctx.signal(0),
+      list_again: Again::live(),
+      check_again: Again::live(),
       tick: ctx.signal(0),
       watching: Arc::new(AtomicBool::new(false)),
       after_install: Arc::new(AtomicBool::new(false)),
     };
     let save = tab.save.clone();
     let rebuild = tab.rebuild.clone();
-    work::follow(
-      ctx,
-      &save,
-      ctx.props::<TabProps>().status.clone(),
-      (tab.revision.clone(), tab.stored.clone(), tab.own.clone()),
-    );
+    work::follow(ctx, &save, ctx.props::<TabProps>().status.clone(), tab.kept.clone());
     let revision = tab.list_revision.clone();
     ctx.watch(&rebuild.state(), move |_| revision.update(|r| *r += 1));
     tab.watch(ctx);
@@ -98,12 +104,7 @@ impl Component for CodeIndex {
     let save = self.save.clone();
     let rebuild = self.rebuild.clone();
     self.tick.get();
-    let state = work::load(
-      ctx,
-      props.project.open.repo_root.clone(),
-      self.revision.get() + self.own.count(&props.project.feed),
-      &self.own,
-    );
+    let loaded = work::load(ctx, props.project.open.repo_root.clone());
     let list = self.list(ctx, &props);
     let check = self.check(ctx, &props);
     let install = code_index::install_state();
@@ -113,16 +114,8 @@ impl Component for CodeIndex {
         || matches!(install, Some(code_index::Install::Running { .. })),
       Ordering::Relaxed,
     );
-    if !state.is_pending()
-      && let Some(read) = &state.data
-    {
-      self.stored.set(Some(read.clone()));
-    }
-    let Some(read) = self.stored.get() else {
-      // No loading frame draws this tab: its rows' bones stand in the same outline as the other tabs'.
-      let bones =
-        |ctx: &mut Ctx| crate::ui::skeleton::list(ctx, "settings-index-reading", &[(150.0, 260.0), (120.0, 220.0)]);
-      return work::pending(ctx, &state, &self.revision, bones);
+    let Some(read) = loaded.shown(&self.kept, save.state().get().is_pending()) else {
+      return work::pending(ctx, &loaded, bones);
     };
     let on = read.0.code_index.is_on();
     let mut group =
@@ -153,7 +146,8 @@ impl Component for CodeIndex {
     }
     let errors = [
       work::error(ctx, &save),
-      state
+      loaded
+        .state
         .error
         .map(|e| field_error("settings-index-load-error", &message_text(ctx, &e)).into()),
       rebuild
@@ -193,38 +187,69 @@ impl CodeIndex {
       })
       .start();
   }
+  /// The index's builds through their query, its last read at once and read again behind it when the tab opens; read
+  /// again at the tab's poll, a rebuild, the project's screens' saves, a change of the setting and the runs' state,
+  /// and, while a run runs and no build is followed, each of the runs' changes (a transcript line may be the runner
+  /// starting one). The project's loader reads them again on the runs' state too (`queries::changes::RUNS`). Each read
+  /// the tab asks for is logged on the window's thread, as it asks.
   fn list(&self, ctx: &mut Ctx, props: &TabProps) -> FutureState<Listed, Message> {
-    ctx
-      .future(
-        (
-          props.project.open.repo_root.clone(),
-          self.list_revision.get(),
-          // The runs an index is used by start and end. A build the tab knows of is followed by its poll; while a
-          // run runs and none is, a transcript line may be the runner starting one.
-          props
-            .project
-            .feed
-            .run_changes(props.project.feed.running.get() && !self.watching.load(Ordering::Relaxed)),
-          props.project.feed.revision.get(),
-          props.project.feed.outside.get().of(Outside::CodeIndex),
-        ),
-        |(root, ..)| {
-          tracing::trace!(target: crate::app_log::READ_LOG, read = "code index");
-          async move { background::run(move || code_index::list_in(&root).map(Listed)).await? }
-        },
-      )
-      .state()
-      .get()
+    let feed = &props.project.feed;
+    let asked = queries::asked(&(
+      self.list_revision.get(),
+      feed.run_changes(feed.running.get() && !self.watching.load(Ordering::Relaxed)),
+      feed.revision.get(),
+      feed.outside.get().of(Outside::CodeIndex),
+    ));
+    let session = Session::of(ctx);
+    let query = ctx.query(project::index_builds(session, props.project.open.repo_root.clone()));
+    if self.list_again.follow(asked, &query) {
+      tracing::trace!(target: crate::app_log::READ_LOG, read = "code index");
+    }
+    let FutureState { status, data, error } = queries::state(&query);
+    FutureState {
+      status,
+      data: data.map(Listed),
+      error,
+    }
   }
+  /// Whether ripgrep is there, through its query; read again after an install and at *Check again*.
   fn check(&self, ctx: &mut Ctx, props: &TabProps) -> FutureState<Checked, Message> {
-    ctx
-      .future(
-        (props.project.open.repo_root.clone(), self.check_revision.get()),
-        |(root, _)| async move { background::run(move || code_index::check_ripgrep(&root).map(Checked)).await? },
-      )
-      .state()
-      .get()
+    let session = Session::of(ctx);
+    let query = ctx.query(project::ripgrep(session, props.project.open.repo_root.clone()));
+    self.check_again.follow(self.check_revision.get(), &query);
+    let FutureState { status, data, error } = queries::state(&query);
+    FutureState {
+      status,
+      data: data.map(Checked),
+      error,
+    }
   }
+}
+
+/// The group while the setting is read (`L04L` `dFXLk`), the tab's third: *Use code index* with its switch's bone, the
+/// index's line, state and Rebuild as bones, the search tool's line and name as bones.
+fn bones(ctx: &mut Ctx) -> Column {
+  let setting = SettingRow::new("settings-index-use-reading", ctx.t("project_settings.useIndex"))
+    .info(ctx.t("project_settings.indexInfo"))
+    .hint(ctx.t("project_settings.indexOnHint"))
+    .control(skeleton::switch())
+    .render(ctx);
+  let index = SettingRow::new("settings-index-list-reading", ctx.t("project_settings.indexRow"))
+    .hint_reading(INDEX_HINT_BONE)
+    .control(skeleton::button(REBUILD_BONE))
+    .render(ctx);
+  let tool = SettingRow::new("settings-ripgrep-reading", ctx.t("project_settings.searchTool"))
+    .info(ctx.t("project_settings.ripgrepDetail"))
+    .hint_reading(TOOL_HINT_BONE)
+    .control(skeleton::line(ctx, ExtraTypography::Note.role(), TOOL_BONE))
+    .render(ctx);
+  skeleton::lower_group(
+    1,
+    Group::new("settings-index-section-reading", ctx.t("project_settings.indexHeading"))
+      .row(setting)
+      .row(index)
+      .row(tool),
+  )
 }
 
 /// *Use code index* (`Use code index` `LEaze`): its switch, saved at once.

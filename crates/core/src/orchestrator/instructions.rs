@@ -44,7 +44,7 @@ const MCP_SERVERS: &str = "- The project's MCP servers (list_connections lists t
   one no profile chooses or dropping exempt tools is made at once only while the person turned on Let automation \
   change agent permissions, otherwise it is a card too. A secret is only ever named, NAME@environment from \
   list_secrets; never type, ask for or repeat a secret's value: when the server needs one the project has not, tell \
-  the person to add it in Secrets first. Propose a program or URL only from what you read: the project's files or the \
+  the person to add it in Project settings › Environment first. Propose a program or URL only from what you read: the project's files or the \
   tool's own documentation (such as the command a desktop app's MCP settings show), and tell the person where it \
   came from; never guess a path. When the card warns that the program is not on this computer's search path, say so. \
   Once the server exists, giving it to agents is a change of their profile (save_profile_draft, then \

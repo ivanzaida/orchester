@@ -1,6 +1,6 @@
 //! The end-of-day report of the work done (ORC-47, `orchester_core::orchestrator::report`): built from what the
 //! project's database holds ([`facts`]) by the rules of [`rules`], delivered once a day at the time the person set
-//! (Settings › What automation may do; off until they turn it on) as an entry of the project's latest Orchestrator
+//! (Settings › Notifications; off until they turn it on) as an entry of the project's latest Orchestrator
 //! conversation, or of one it opens while the project has none. A day without activity gets none; a report whose time
 //! passed while the app was closed comes at its next start, labelled with its day ([`rules::due_days`]). With *Let the
 //! Orchestrator answer agents* on, the report starts one Orchestrator turn by itself, which adds a summary and only

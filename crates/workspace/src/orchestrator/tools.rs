@@ -361,7 +361,7 @@ async fn switched(
   (name, arguments): (&str, &JsonObject),
   consent: OrchestratorConsent,
 ) -> Result<Acted, ToolError> {
-  if !allows(services, consent).await? {
+  if !allows(services, scope, consent).await? {
     return propose_change((services, translate), scope, name, arguments).await;
   }
   let (change, task) = change::subject((scope, services), name, arguments).await?;
@@ -389,9 +389,9 @@ async fn merge_on_its_own(
   scope: &ChatScope,
   arguments: &JsonObject,
 ) -> Result<Acted, ToolError> {
-  let switched_on = allows(services, OrchestratorConsent::MergeFinished).await?
-    && allows(services, OrchestratorConsent::MergeRuns).await?
-    && allows(services, OrchestratorConsent::AnswerAgents).await?;
+  let switched_on = allows(services, scope, OrchestratorConsent::MergeFinished).await?
+    && allows(services, scope, OrchestratorConsent::MergeRuns).await?
+    && allows(services, scope, OrchestratorConsent::AnswerAgents).await?;
   if auto_merge::merge_as(scope, arguments, switched_on).await? == MergeAs::Propose {
     return propose_change((services, translate), scope, MERGE_RUN, arguments).await;
   }
@@ -457,8 +457,8 @@ async fn resume(
   arguments: &JsonObject,
 ) -> Result<Acted, ToolError> {
   let switches = guard::ResumeSwitches {
-    continues: allows(services, OrchestratorConsent::ContinueInterrupted).await?,
-    answers: allows(services, OrchestratorConsent::AnswerAgents).await?,
+    continues: allows(services, scope, OrchestratorConsent::ContinueInterrupted).await?,
+    answers: allows(services, scope, OrchestratorConsent::AnswerAgents).await?,
   };
   let run = match guard::resume_as(scope, arguments, switches).await? {
     guard::Resume::Propose => return propose_change((services, translate), scope, RESUME_RUN, arguments).await,
@@ -508,7 +508,7 @@ async fn publish(
   name: &str,
   arguments: &JsonObject,
 ) -> Result<Acted, ToolError> {
-  if !allows(services, OrchestratorConsent::PublishDrafts).await? {
+  if !allows(services, scope, OrchestratorConsent::PublishDrafts).await? {
     return propose_change((services, translate), scope, name, arguments).await;
   }
   let (change, _) = change::subject((scope, services), name, arguments).await?;
@@ -534,10 +534,10 @@ async fn allows_autopilot(scope: &ChatScope) -> Result<bool, ToolError> {
   blocking(move || Ok(ProjectDb::open(&root)?.allow_autopilot()?.is_on())).await
 }
 
-/// Whether the person lets the Orchestrator chat do what `consent` names itself.
-async fn allows(services: &Services, consent: OrchestratorConsent) -> Result<bool, ToolError> {
-  let workspace = services.workspace().clone();
-  blocking(move || Ok(workspace.orchestrator_allows(consent)?)).await
+/// Whether the person lets the Orchestrator chat do what `consent` names itself in `scope`'s project.
+async fn allows(services: &Services, scope: &ChatScope, consent: OrchestratorConsent) -> Result<bool, ToolError> {
+  let (workspace, root) = (services.workspace().clone(), scope.root.clone());
+  blocking(move || Ok(workspace.orchestrator_allows(&root, consent)?)).await
 }
 
 /// Whether the person lets automation widen what agents may do.

@@ -81,7 +81,7 @@ pub fn repository_import(open: &OpenProject, count: usize) -> OperationSpec {
   .project(open.project.name().as_str())
 }
 
-/// Saving Project settings › General › Repository agent files; only its outcome is listed.
+/// Saving Project settings › Context › Repository agent files; only its outcome is listed.
 pub fn agent_files_setting(open: &OpenProject) -> OperationSpec {
   Wording {
     running: "statusBar.operations.agentFiles.running",

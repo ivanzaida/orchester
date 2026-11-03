@@ -1,4 +1,4 @@
-//! `update_project_limits`: Project settings › Limits through Orchester's MCP server, saved with the
+//! `update_project_limits`: Project settings › Runs › Limits through Orchester's MCP server, saved with the
 //! Limits tab's checks and through its service, so a changed agent count reaches the project's
 //! runner at once. `list_projects` shows each project's limits as [`limits_json`] writes them.
 //! Limits answer no tool request in a person's place, so, like the code index, changing them needs

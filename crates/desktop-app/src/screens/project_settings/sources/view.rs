@@ -29,12 +29,56 @@ use crate::{
     icon::{Icon, icon},
     icon_button::IconButton,
     message::message_text,
+    skeleton,
     tooltip::Tooltip,
   },
 };
 
 type Remove = Arc<dyn Fn(SourcePath) + Send + Sync>;
 type CheckAgain = Arc<dyn Fn() + Send + Sync>;
+
+/// How long the count's and two sources' bones are in the Sources group while it is read (`L04L` `dFXLk`).
+const COUNT_BONE: f32 = 54.0;
+const SOURCE_BONES: [(f32, &str); 2] = [
+  (88.0, "project_settings.sourcesTab.folder"),
+  (132.0, "project_settings.sourcesTab.file"),
+];
+
+/// The group while it is read (`L04L` `dFXLk`): its heading and *Add a folder or file* real, the count and each
+/// source's path bones.
+pub(super) fn bones(ctx: &mut Ctx) -> Group {
+  let sources: Vec<Element> = SOURCE_BONES
+    .iter()
+    .enumerate()
+    .map(|(index, (path, kind))| {
+      SettingRow::new(format!("settings-source-reading-{index}"), "")
+        .small_label()
+        .label_reading(*path)
+        .hint(ctx.t(kind))
+        .render(ctx)
+    })
+    .collect();
+  let add = ActionButton::new(
+    "settings-sources-add-reading",
+    ButtonKind::Secondary,
+    ctx.t("project_settings.sourcesTab.addShort"),
+  )
+  .icon(Icon::Plus)
+  .in_form();
+  let add = SettingRow::new(
+    "settings-sources-add-row-reading",
+    ctx.t("project_settings.sourcesTab.addTitle"),
+  )
+  .hint(ctx.t("project_settings.sourcesTab.addHint"))
+  .info(ctx.t("project_settings.sourcesTab.addInfo"))
+  .control(add)
+  .render(ctx);
+  let count = skeleton::line(ctx, crate::theme::ExtraTypography::Note.role(), COUNT_BONE);
+  Group::new("settings-sources-reading", ctx.t("project_settings.sourcesTab.title"))
+    .end(count)
+    .rows(sources)
+    .row(add)
+}
 
 /// The group's heading, with how many sources there are and how many runs cannot read.
 pub(super) fn heading(ctx: &Ctx, read: &Read) -> Group {

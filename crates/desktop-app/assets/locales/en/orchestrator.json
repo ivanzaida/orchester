@@ -500,7 +500,7 @@
         "accept": "Publish v{{version}}",
         "openDraft": "Open draft",
         "open": "Open {{name}}",
-        "automation": "What automation may do"
+        "automation": "What the Orchestrator may do"
       },
       "cancel": {
         "waits": "Cancel run #{{run}} of {{task}}?",
@@ -617,7 +617,6 @@
         "commands": "new commands",
         "network": "network: on",
         "toolCallsUnasked": "tool calls not asked about",
-        "autoApprove": "approves automatically",
         "account": "another account",
         "mcpServers": "new MCP servers",
         "variable": "variable {{name}}",

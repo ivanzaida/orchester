@@ -1,5 +1,5 @@
 //! The project's daily report (ORC-47, `orchester_workspace::orchestrator::report`): while the project is open, when
-//! it opens and once a minute after, reads when the person wants the report (Settings › What automation may do; off
+//! it opens and once a minute after, reads when the person wants the report (Settings › Notifications; off
 //! until they turn it on) and delivers the report of each due day the project's conversations do not hold yet, also
 //! one whose time passed while the app was closed. A day that had its report, or had no activity, is not read again
 //! while the app runs. A delivered report that starts a turn by itself gets it from the waits' follower
@@ -60,11 +60,11 @@ pub(super) fn deliver(ctx: &mut Ctx, open: &OpenProject) {
 /// Delivers each report due now that this run of the app did not settle; how many it kept. The conversations are told
 /// when it kept one.
 async fn deliver_due(services: &Services, i18n: &I18n, open: &OpenProject) -> Result<u64, Message> {
-  let workspace = services.workspace.clone();
+  let (workspace, root) = (services.workspace.clone(), open.repo_root.clone());
   let read = background::run(move || {
     Ok::<_, StoreError>((
       workspace.daily_report_schedule()?,
-      workspace.orchestrator_allows(OrchestratorConsent::AnswerAgents)?,
+      workspace.orchestrator_allows(&root, OrchestratorConsent::AnswerAgents)?,
     ))
   })
   .await?

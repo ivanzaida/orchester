@@ -94,6 +94,17 @@ fn memory_task_tab_says_what_the_next_agent_receives() {
     !page.text("memory-next").contains("per endpoint"),
     "a waiting proposal is never given"
   );
+  assert_eq!(
+    page.text("memory-next-settings"),
+    "Change in Project settings › Context ↗"
+  );
+  let context = orchester_app::routes::Route::Project(
+    page.project,
+    orchester_app::routes::ProjectPage::Settings(orchester_app::routes::ProjectSettingsTab::Context),
+  );
+  page.press_until("memory-next-settings", "Project settings › Context", |window| {
+    window.navigation().route_now() == context
+  });
 }
 
 #[test]
