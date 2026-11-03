@@ -12,6 +12,7 @@ mod base_notices;
 mod blobs;
 mod chat_decisions;
 mod checks;
+mod ci_fixes;
 mod code_index;
 mod completions;
 mod connections;

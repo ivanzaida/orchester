@@ -2325,6 +2325,17 @@
       "failed": "The answer couldn't be stopped: the runner didn't answer."
     }
   },
+  "fixCi": {
+    "unavailable": {
+      "notRead": "Fix CI needs the checks: Orchester couldn't read them.",
+      "running": "Nothing failed yet: CI is still running.",
+      "nothingFailed": "Nothing failed: Fix CI sends failing checks only.",
+      "waiting": "A Fix CI already waits for the agent to read it.",
+      "decision": "The run waits for your decision first: a message now would answer it.",
+      "limit": "The run stopped at its limit: raise it first.",
+      "closed": "No agent of this run reads messages any more."
+    }
+  },
   "export": {
     "size": "≈ {{count}} KB",
     "markdown": {

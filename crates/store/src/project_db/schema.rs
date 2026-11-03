@@ -16,6 +16,7 @@ mod base_branch;
 mod base_notice_merges;
 mod base_notices;
 mod base_sources;
+mod ci_fixes;
 mod code_index;
 mod command_approvals;
 mod context_use;

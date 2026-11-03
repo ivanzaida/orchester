@@ -141,6 +141,8 @@ pub struct RunView {
   pub waiting_questions: Vec<AskedQuestions>,
   /// The notices that its base branch moved, oldest first (`orchester_core::base_move`).
   pub base_notices: Vec<orchester_core::base_move::BaseNotice>,
+  /// Its *Fix CI automatically* switch and the Fix CI it sent or stopped at (`crate::pull_requests::ci_fix`).
+  pub ci_fixes: orchester_core::pull_request::ci::fix::RunFixes,
 }
 
 impl RunView {
@@ -484,6 +486,7 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
     models: super::run_model::RunModels::default(),
     waiting_questions: waiting_questions(db, &run)?,
     base_notices: db.run_base_notices(run.id())?,
+    ci_fixes: db.ci_fixes(run.id())?,
     accounts: db.invocation_accounts(run.id())?,
     index: IndexUses::read(db, &invocations)?,
     invocations,

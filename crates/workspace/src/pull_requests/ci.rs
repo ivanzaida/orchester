@@ -183,4 +183,9 @@ impl CiReads {
     self.0.lock().insert(key, (now, read.clone()));
     Ok(read)
   }
+
+  /// Forgets the read of pull request `number` of `project`, so the next one asks GitHub: *Check again*.
+  pub fn forget(&self, project: ProjectId, number: u64) {
+    self.0.lock().remove(&(project, number));
+  }
 }

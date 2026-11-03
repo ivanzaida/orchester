@@ -2,11 +2,17 @@
 //! failed GitHub Actions job the tail of its failed steps' log. Orchester only reads; how often it asks is the
 //! caller's ([`POLL_INTERVAL`]), GitHub rate-limits.
 
+pub mod fix;
 mod gh;
+mod message;
+pub mod redact;
 
 use std::time::Duration;
 
-pub use self::gh::{LOG_TAIL_LINES, gh_job_log_command, gh_pr_checks_command, parse_gh_job_log, parse_gh_pr_checks};
+pub use self::{
+  gh::{LOG_TAIL_LINES, gh_job_log_command, gh_pr_checks_command, parse_gh_job_log, parse_gh_pr_checks},
+  message::fix_text,
+};
 use super::{SyncFailure, sync::sync_failure};
 use crate::{
   connection::{GitHubCheck, GitHubState},
