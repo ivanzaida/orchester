@@ -129,15 +129,66 @@ fn skeletons_instruction_import_shows_the_reviews_bones_after_a_moment() {
   );
 }
 #[test]
-fn skeletons_project_settings_shows_the_tabs_bones_after_a_moment() {
+fn skeletons_project_settings_shows_the_tabs_bones_from_the_first_frame() {
   let mut held = Held::new();
   held.page(ProjectPage::Settings(ProjectSettingsTab::General));
-  held.skeleton("settings-loading");
+  held.skeleton_at_once("settings-loading");
 }
 
 #[test]
-fn skeletons_app_settings_shows_the_accounts_bones_after_a_moment() {
+fn skeletons_app_settings_shows_the_accounts_bones_from_the_first_frame() {
   let mut held = Held::new();
   held.go(Route::Accounts(AccountsView::default()));
-  held.skeleton("settings-accounts-loading");
+  held.skeleton_at_once("settings-accounts-loading");
+}
+
+#[test]
+fn skeletons_app_settings_browser_shows_its_groups_bones_while_the_browser_is_looked_for() {
+  let mut held = Held::new();
+  held.go(Route::Browser);
+  held.skeleton_at_once("settings-browser-reading");
+  for real in [
+    "settings-browser-program-reading-title",
+    "settings-browser-found-reading-label",
+    "settings-browser-found-reading-hint",
+    "settings-browser-program-reading-hint",
+    "settings-browser-profiles-reading-hint",
+    "settings-browser-window-reading-label",
+  ] {
+    assert!(held.exists(real), "{real}: headings, labels and help lines stay real");
+  }
+  for later in [
+    "settings-browser-choose",
+    "settings-browser-window",
+    "settings-browser-groups",
+  ] {
+    assert!(!held.exists(later), "{later} comes with what is read");
+  }
+  held.release("settings-browser-groups");
+  assert!(
+    !held.exists("settings-browser-reading"),
+    "the groups take the bones' place"
+  );
+}
+
+#[test]
+fn skeletons_app_settings_daily_report_shows_no_switch_before_its_setting_is_read() {
+  let mut held = Held::new();
+  held.go(Route::Notifications);
+  held.skeleton_at_once("settings-daily-report-reading");
+  assert!(held.exists("settings-daily-report-row"), "the row's label stays real");
+  assert!(
+    held.exists("settings-daily-report-at-reading"),
+    "the time is a bone too"
+  );
+  assert!(
+    !held.exists("settings-daily-report"),
+    "no switch before the setting is read"
+  );
+  held.release("settings-daily-report");
+  assert!(!held.exists("settings-daily-report-reading"));
+  assert!(
+    !held.exists("settings-daily-report-at-row"),
+    "off until turned on: no time once it is read"
+  );
 }

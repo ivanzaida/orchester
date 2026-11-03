@@ -51,7 +51,7 @@ pub(super) fn page(ctx: &mut Ctx, parts: &Parts) -> Column {
       group = group.end(
         ActionButton::new("settings-add-account", ButtonKind::Ghost, t(ctx, "accounts.addAccount"))
           .icon(Icon::Plus)
-          .small()
+          .in_heading()
           .opens(navigation.to(Route::Accounts(AccountsView {
             account: None,
             panel: AccountsPanel::Add,
@@ -103,7 +103,7 @@ pub(in crate::screens::settings) fn reading(ctx: &mut Ctx) -> Element {
         group = group.end(
           ActionButton::new("settings-add-account", ButtonKind::Ghost, t(ctx, "accounts.addAccount"))
             .icon(Icon::Plus)
-            .small()
+            .in_heading()
             .opens(navigation.to(Route::Accounts(AccountsView {
               account: None,
               panel: AccountsPanel::Add,

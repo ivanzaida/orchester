@@ -1,8 +1,8 @@
 //! The approval choices of 2026-10-02, end to end with `orchester-fake-claude` and `orchester-fake-codex`:
 //! Approve similar and Always allow answer a later call of the same invocation at once, Always allow also
 //! publishes the prefix in a new profile version or lists the tool on its server, Approve everything in this
-//! run and a profile that approves automatically answer what auto-approval may, and leave a write outside the
-//! worktree to a person. Needs `git`. Run with
+//! run answers what auto-approval may, and a profile stored before approval modes that approved automatically runs
+//! in Autopilot; both leave a write outside the worktree to a person. Needs `git`. Run with
 //! `cargo test -p orchester-runner --features test-agent --test approval_choices approval_choices`.
 
 mod support;
@@ -16,9 +16,14 @@ use orchester_core::{
     stream::AgentEvent,
   },
   id::{ConnectionId, IdempotencyKey, RunId},
-  permission::{AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess},
+  permission::{
+    AgentPermissions, AllowedCommands, ApprovalMode, CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess,
+  },
   resource::{AgentProfile, CommandArg, CommandProgram, StepKey},
-  run::{Answerer, ApprovalAnswer, AutoAsk, DecidedBy, PendingToolApproval, Run, RunStatus},
+  run::{
+    AllowAutopilot, AnswerKind, Answerer, ApprovalAnswer, AutoAsk, DecidedBy, PendingToolApproval, RequestAnswer, Run,
+    RunStatus,
+  },
   store::{ActivityStore, McpServerStore, ResourceStore, RunStore},
   time::Timestamp,
 };
@@ -62,24 +67,42 @@ fn designer(provider: AgentProvider, brief: &'static str) -> TestProject {
   })
 }
 
-/// A Claude Code Builder that runs `listed` commands and asks about others; approves automatically when
-/// `auto`.
-fn builder(brief: &'static str, listed: &[&str], auto: bool) -> TestProject {
+/// A Claude Code Builder that runs `listed` commands and asks about others.
+fn builder(brief: &'static str, listed: &[&str]) -> TestProject {
+  project(&Setup {
+    provider: AgentProvider::ClaudeCodeCli,
+    permissions: Some(listing(listed)),
+    ..Setup::new(brief)
+  })
+}
+
+fn listing(listed: &[&str]) -> AgentPermissions {
   let entries = listed
     .iter()
     .map(|entry| CommandPrefix::new(entry).expect("prefix"))
     .collect();
-  let mut permissions = AgentPermissions::new(
+  AgentPermissions::new(
     RepositoryAccess::Write,
     CommandPermission::Allowed(AllowedCommands::new(entries).expect("list")),
     NetworkAccess::On,
-  );
-  permissions.set_auto_approve(auto);
-  project(&Setup {
+  )
+}
+
+/// The Builder as stored before approval modes with *Approve automatically (don't ask me)* on, which reads as
+/// Autopilot, in a project that allows it.
+fn approving_automatically(brief: &'static str) -> TestProject {
+  let mut stored = serde_json::to_value(listing(&["git"])).expect("stored");
+  stored["auto_approve"] = serde_json::json!(true);
+  let permissions: AgentPermissions = serde_json::from_value(stored).expect("read");
+  assert_eq!(permissions.approval_mode(), ApprovalMode::Autopilot);
+  let project = project(&Setup {
     provider: AgentProvider::ClaudeCodeCli,
     permissions: Some(permissions),
     ..Setup::new(brief)
-  })
+  });
+  let mut db = ProjectDb::open(project.repo.path()).expect("open");
+  db.save_allow_autopilot(AllowAutopilot::ON).expect("allow autopilot");
+  project
 }
 
 struct Started {
@@ -223,7 +246,7 @@ async fn approval_choices_always_lists_the_tool_and_applies_at_once() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn approval_choices_always_publishes_the_command_prefix() {
-  let mut started = Started::new(builder("Run `cargo add serde` twice.", &["git"], false)).await;
+  let mut started = Started::new(builder("Run `cargo add serde` twice.", &["git"])).await;
   let request = started.pending().await;
   assert_eq!(request.action, "cargo add serde");
   let prefix = CommandPrefix::new("cargo add").expect("prefix");
@@ -265,7 +288,7 @@ async fn approval_choices_always_publishes_the_command_prefix() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn approval_choices_approve_run_answers_later_requests() {
-  let mut started = Started::new(builder("Run `cargo test -p core` twice.", &["git"], false)).await;
+  let mut started = Started::new(builder("Run `cargo test -p core` twice.", &["git"])).await;
   let run = started.answer_first(ApprovalAnswer::ApproveRun).await;
   assert_eq!(run.status(), &RunStatus::Succeeded);
   assert_eq!(approvals(&started.readme()), 2);
@@ -278,8 +301,8 @@ async fn approval_choices_approve_run_answers_later_requests() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn approval_choices_profile_auto_approval_applies_to_a_new_run() {
-  let mut started = Started::new(builder("Run `cargo test`.", &["git"], true)).await;
+async fn approval_choices_old_profile_approving_automatically_runs_in_autopilot() {
+  let mut started = Started::new(approving_automatically("Run `cargo test`.")).await;
   let run = started.ended().await;
   assert_eq!(run.status(), &RunStatus::Succeeded);
   assert!(started.readme().contains("approved"));
@@ -291,11 +314,17 @@ async fn approval_choices_profile_auto_approval_applies_to_a_new_run() {
       .expect("requests")
       .is_empty()
   );
+  let answers = started.db().request_answers(started.id).expect("answers");
+  assert_eq!(
+    answers[0].answer,
+    Some(RequestAnswer::by(AnswerKind::Autopilot)),
+    "{answers:?}"
+  );
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn approval_choices_auto_approval_still_asks_about_a_write_outside() {
-  let mut started = Started::new(builder("Run `cp README.md ../outside.md`.", &["git"], true)).await;
+async fn approval_choices_old_profile_approving_automatically_still_asks_about_a_write_outside() {
+  let mut started = Started::new(approving_automatically("Run `cp README.md ../outside.md`.")).await;
   let request = started.pending().await;
   assert_eq!(request.action, "cp README.md ../outside.md");
   assert!(started.decisions().is_empty());
@@ -313,7 +342,7 @@ async fn approval_choices_auto_approval_still_asks_about_a_write_outside() {
 /// recorded as its own answers; it cannot give a wider answer.
 #[tokio::test(flavor = "multi_thread")]
 async fn approval_choices_automation_answers_once_or_denies_and_never_wider() {
-  let mut started = Started::new(builder("Run `cargo test -p core` twice.", &["git"], false)).await;
+  let mut started = Started::new(builder("Run `cargo test -p core` twice.", &["git"])).await;
   let first = started.pending().await;
   let wider = started
     .scheduler
@@ -351,7 +380,7 @@ async fn approval_choices_automation_answers_once_or_denies_and_never_wider() {
 /// A credential read, which auto-approval leaves to a person: automation cannot approve it, only deny it.
 #[tokio::test(flavor = "multi_thread")]
 async fn approval_choices_automation_cannot_approve_a_credential_read() {
-  let mut started = Started::new(builder("Run `cp ~/.orchester-test-token token.txt`.", &["git"], false)).await;
+  let mut started = Started::new(builder("Run `cp ~/.orchester-test-token token.txt`.", &["git"])).await;
   let request = started.pending().await;
   let refused = started
     .scheduler
@@ -381,7 +410,7 @@ async fn approval_choices_automation_cannot_approve_a_credential_read() {
 #[tokio::test(flavor = "multi_thread")]
 async fn approval_choices_a_credential_read_is_marked_as_one() {
   // A dot file of the home folder that does not exist: a credential location by where it lies.
-  let mut started = Started::new(builder("Run `cp ~/.orchester-test-token token.txt`.", &["git"], false)).await;
+  let mut started = Started::new(builder("Run `cp ~/.orchester-test-token token.txt`.", &["git"])).await;
   let run = started.answer_first(ApprovalAnswer::Once).await;
   assert_eq!(run.status(), &RunStatus::Succeeded);
   let secrets: Vec<bool> = started
@@ -401,7 +430,7 @@ async fn approval_choices_a_credential_read_is_marked_as_one() {
 async fn approval_choices_a_line_whose_parts_run_alone_runs_unasked() {
   // The fake CLI asks about any `$`; each part runs on its own: a known-safe read and a listed test.
   let brief = "Run `f=README.md; cat $f && cargo test -p core`.";
-  let mut started = Started::new(builder(brief, &["cargo test"], false)).await;
+  let mut started = Started::new(builder(brief, &["cargo test"])).await;
   let run = started.ended().await;
   assert_eq!(run.status(), &RunStatus::Succeeded);
   assert_eq!(approvals(&started.readme()), 1);

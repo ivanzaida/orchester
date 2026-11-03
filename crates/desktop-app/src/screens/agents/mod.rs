@@ -13,6 +13,7 @@ mod model;
 mod page_head;
 mod permissions;
 mod policy_panel;
+mod project_sets;
 mod prompts;
 mod questions;
 mod reading;

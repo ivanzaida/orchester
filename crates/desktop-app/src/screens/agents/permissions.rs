@@ -62,10 +62,7 @@ impl Section {
       "appMcp.widens.network" => Self::Network,
       "appMcp.widens.browser" | "appMcp.widens.browserSite" => Self::Browser,
       "appMcp.widens.mcpServers" => Self::Mcp,
-      "appMcp.widens.commands"
-      | "appMcp.widens.toolCallsUnasked"
-      | "appMcp.widens.autoApprove"
-      | "appMcp.widens.autopilot" => Self::Approvals,
+      "appMcp.widens.commands" | "appMcp.widens.toolCallsUnasked" | "appMcp.widens.autopilot" => Self::Approvals,
       _ => Self::Connection,
     }
   }

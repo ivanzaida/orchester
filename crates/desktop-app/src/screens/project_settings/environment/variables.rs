@@ -1,7 +1,9 @@
-//! Environment (`Environment` `tDY4o` in `02 · Runs`): how many variables the project adds for its agents and command
-//! tools, the first names in the row's hint, and Edit, which opens today's editor under the row: the variables as
-//! `NAME=value` lines saved as a person leaves them, validated in place, a widening change asked in place under the
-//! group (person-only), and a change made outside the screen said there with Reload.
+//! Variables (`Variables` `LsACY` in `S06`): the variables the project adds for its agents and command tools, each a
+//! row with its name and its value in mono, their count in the heading with that they are plain text, and *Edit
+//! variables*, whose Edit opens today's editor under its row: the variables as `NAME=value` lines saved as a person
+//! leaves them, validated in place, and a widening change asked in place under the group (person-only). They are read
+//! through their query, which the project's loader read as the project opened; a change made elsewhere fills the
+//! editor in place, and only while it holds an edit not saved yet is the change said there, with Reload.
 use std::{path::PathBuf, sync::Arc};
 
 use lurq::{
@@ -17,7 +19,7 @@ use lurq::{
 use orchester_core::resource::CommandEnvironment;
 use orchester_workspace::{
   background,
-  environment::{self, load_in, save_checked_in},
+  environment::{self, save_checked_in},
   messages::{self, Message},
   tasks::outside::Outside,
   tools::form::{environment_text, parse_environment},
@@ -25,9 +27,10 @@ use orchester_workspace::{
 
 use super::super::{
   Status, TabProps,
-  kit::{Group, SettingRow, value},
+  kit::{Group, SettingRow},
 };
 use crate::{
+  queries::{self, Again, Kept, Session, project},
   screens::connections::widen::{WidenConfirm, WidenLook, WidenProps},
   theme::{ExtraSpacing, ExtraTypography},
   ui::{
@@ -43,32 +46,41 @@ use crate::{
 
 /// The editor's height (`uSWRr`/`IBFli` in `O8o0l`).
 const ENVIRONMENT_HEIGHT: f32 = 132.0;
-/// How many names the row's hint shows before it counts the rest.
-const HINT_NAMES: usize = 2;
+/// The bones of the variables while they are read: each one's name and value.
+const READING: [(f32, f32); 2] = [(64.0, 40.0), (124.0, 16.0)];
 
-/// The Environment group while it is read (`10 · Project settings · Runs · loading` `lUFjj`): its heading and the
-/// Variables label real, the count and the names line bones, Edit a bone of its size.
+/// The Variables group while it is read (undrawn; as `10 · Project settings · Runs · loading` `lUFjj` reads a group):
+/// its heading, *Edit variables* and its hint real; the count, two variables and Edit bones of their size.
 pub(super) fn bones(ctx: &mut Ctx) -> Element {
-  let row = SettingRow::new("settings-environment-reading", ctx.t("project_settings.variablesLabel"))
-    .info(ctx.t("project_settings.environmentInfo"))
-    .hint_reading(264.0)
-    .control(skeleton::line(ctx, ExtraTypography::Lead.role(), 58.0))
-    .control(skeleton::button(72.0));
+  let variables: Vec<Element> = READING
+    .iter()
+    .enumerate()
+    .map(|(at, (name, value))| {
+      SettingRow::new(format!("settings-variable-reading-{at}"), "")
+        .mono_label()
+        .mono_hint()
+        .label_reading(*name)
+        .hint_reading(*value)
+        .render(ctx)
+    })
+    .collect();
+  let edit = SettingRow::new("settings-environment-reading", ctx.t("project_settings.editVariables"))
+    .hint(ctx.t("project_settings.editVariablesHint"))
+    .control(skeleton::button(66.0))
+    .render(ctx);
+  let count = skeleton::line(ctx, ExtraTypography::Note.role(), 196.0);
   Group::new(
     "settings-environment-reading-section",
-    ctx.t("project_settings.environment"),
+    ctx.t("project_settings.variablesLabel"),
   )
-  .row(row.render(ctx))
+  .end(count)
+  .rows(variables)
+  .row(edit)
   .into()
 }
 
-#[derive(Clone, Eq)]
-struct Stored(CommandEnvironment, u64);
-impl PartialEq for Stored {
-  fn eq(&self, other: &Self) -> bool {
-    self.0 == other.0
-  }
-}
+#[derive(Clone, PartialEq, Eq)]
+struct Stored(CommandEnvironment);
 impl DevtoolsInspectable for Stored {}
 #[derive(Clone, PartialEq, Eq)]
 struct Requested {
@@ -82,26 +94,31 @@ impl DevtoolsInspectable for Asking {}
 type Save = FutureAction<(PathBuf, Requested), Stored, Message>;
 
 #[derive(Clone)]
-pub(super) struct Environment {
+pub(super) struct Variables {
   save: Save,
   text: Signal<String>,
+  /// The variables the editor was filled from or last saved as: the base of the next save, which the rows show.
   stored: Signal<Option<Stored>>,
+  /// What the last save stored, until the variables' query moves on.
+  kept: Kept<Stored>,
   asking: Signal<Asking>,
-  revision: Signal<u64>,
-  reloading: Signal<bool>,
+  /// Counts *Try again* after a failed read, each of which reads the variables again.
+  retries: Signal<u64>,
+  again: Arc<Again>,
   /// The editor is open under the row.
   editing: Signal<bool>,
 }
-impl Component for Environment {
+impl Component for Variables {
   type Props = TabProps;
   fn create(ctx: &mut Ctx) -> Self {
     let tab = Self {
       save: action(ctx),
       text: ctx.signal(String::new()),
       stored: ctx.signal(None),
+      kept: Kept::new(ctx),
       asking: ctx.signal(Asking(None)),
-      revision: ctx.signal(0),
-      reloading: ctx.signal(false),
+      retries: ctx.signal(0),
+      again: Arc::default(),
       editing: ctx.signal(false),
     };
     let save = tab.save.clone();
@@ -119,9 +136,9 @@ impl Component for Environment {
         status.set(Status::Failed);
       } else if let Some(stored) = &state.data {
         after.stored.set(Some(stored.clone()));
+        after.kept.keep(stored.clone());
         after.asking.set(Asking(None));
         status.set(Status::Saved);
-        after.revision.update(|r| *r += 1);
         feed.saved();
       }
     });
@@ -131,10 +148,6 @@ impl Component for Environment {
     let props = ctx.props::<TabProps>().clone();
     let save = self.save.clone();
     let state = self.read(ctx, &props);
-    self.finish_reload(&state, &save);
-    if self.stored.get_untracked().is_none() && state.is_pending() {
-      return self.pending(ctx, &state);
-    }
     let Some(read) = state.data.clone().or_else(|| self.stored.get()) else {
       return self.pending(ctx, &state);
     };
@@ -144,24 +157,38 @@ impl Component for Environment {
     let parsed = parse_environment(&self.text.get());
     let changed = self.stored.get().is_some_and(|s| parsed.as_ref() != Ok(&s.0));
     let asking = self.asking.get().0;
-    let outside =
-      !state.is_pending() && self.stored.get().is_some_and(|s| s != read) && !save.state().get().is_pending();
+    // A change made elsewhere (`set_project_environment`): the variables' query has others than the editor's base.
+    let outside = self.stored.get().is_some_and(|s| s != read) && !save.state().get().is_pending();
     if outside && !changed && asking.is_none() {
-      self.fill(read);
+      self.fill(read.clone());
     }
-    if !changed
-      && asking.is_none()
-      && !self.reloading.get()
-      && !save.state().get().is_pending()
-      && save.state().get().error.is_some()
-    {
+    if !changed && asking.is_none() && !save.state().get().is_pending() && save.state().get().error.is_some() {
       save.state().set(FutureState::idle());
     }
     self.status(&props, &save, &state, (parsed.is_err(), changed));
+    // The rows say what is stored, so typing in the editor under them never moves it.
+    let shown: Vec<(String, String)> = self
+      .stored
+      .get()
+      .map(|stored| {
+        stored
+          .0
+          .iter()
+          .map(|(name, value)| (name.to_string(), value.to_owned()))
+          .collect()
+      })
+      .unwrap_or_default();
     // An editor with a change, a mistake or a question in it stays open.
     let open = self.editing.get() || changed || parsed.is_err() || asking.is_some();
     let row = self.row(ctx, &props, &save, open);
-    let mut group = Group::new("settings-environment-section", ctx.t("project_settings.environment")).row(row);
+    let mut group = Group::new("settings-environment-section", ctx.t("project_settings.variablesLabel"))
+      .end(
+        Text::new(&count(ctx, shown.len()))
+          .id("settings-variable-count")
+          .variant(ExtraTypography::Note.role()),
+      )
+      .rows(variable_rows(ctx, &shown))
+      .row(row);
     if let Some(error) = save.state().get().error {
       group = group.after(field_error(
         "settings-environment-save-error",
@@ -169,9 +196,9 @@ impl Component for Environment {
       ));
     }
     if let Some(error) = &state.error {
-      group = group.after(self.read_error(ctx, &save, error));
-    } else if self.reloading.get() || (outside && changed) {
-      group = group.after(self.outside(ctx, &save));
+      group = group.after(self.read_error(ctx, error));
+    } else if outside && changed {
+      group = group.after(self.outside(ctx, &save, read));
     }
     if let Some(request) = asking {
       group = group.after(self.question(ctx, &props, &save, request));
@@ -179,7 +206,7 @@ impl Component for Environment {
     group.into()
   }
 }
-impl Environment {
+impl Variables {
   fn status(
     &self,
     props: &TabProps,
@@ -187,9 +214,7 @@ impl Environment {
     state: &FutureState<Stored, Message>,
     (invalid, changed): (bool, bool),
   ) {
-    if self.reloading.get() {
-      props.status.set(Status::Saving);
-    } else if state.error.is_some() {
+    if state.error.is_some() {
       props.status.set(Status::Failed);
     } else if !save.state().get().is_pending() && save.state().get().error.is_none() {
       props.status.set(if invalid {
@@ -201,51 +226,29 @@ impl Environment {
       });
     }
   }
-  fn finish_reload(&self, state: &FutureState<Stored, Message>, save: &Save) {
-    if !self.reloading.get() || state.is_pending() {
-      return;
-    }
-    self.reloading.set(false);
-    if state.error.is_none()
-      && let Some(read) = &state.data
-    {
-      self.fill(read.clone());
-      self.asking.set(Asking(None));
-      save.state().set(FutureState::idle());
-    }
-  }
+  /// The variables through their query, which the project's loader read as the project opened: what the last save
+  /// stored until the query moves on, else the query's last read. *Try again* reads them again.
   fn read(&self, ctx: &mut Ctx, props: &TabProps) -> FutureState<Stored, Message> {
-    let revision = self.revision.get() + props.project.feed.outside.get().of(Outside::ProjectSettings);
-    let hold = crate::services::Services::of(ctx).hold;
-    let mut state = ctx
-      .future(
-        (props.project.open.repo_root.clone(), revision),
-        move |(root, revision)| {
-          let hold = hold.clone();
-          async move {
-            hold.released().await;
-            background::run(move || load_in(&root).map(|environment| Stored(environment, revision)))
-              .await?
-              .map_err(|e| messages::store_error(&e))
-          }
-        },
-      )
-      .state()
-      .get();
-    if state.data.as_ref().is_some_and(|read| read.1 != revision) {
-      state.data = None;
+    let session = Session::of(ctx);
+    let query = ctx.query(project::variables(session, props.project.open.repo_root.clone()));
+    self.again.follow(self.retries.get(), &query);
+    let FutureState { status, data, error } = queries::state(&query);
+    let saving = self.save.state().get().is_pending();
+    FutureState {
+      status,
+      data: self.kept.over((data.map(Stored), &query), saving),
+      error,
     }
-    state
   }
   fn pending(&self, ctx: &mut Ctx, state: &FutureState<Stored, Message>) -> Element {
     match &state.error {
       Some(e) => {
-        let revision = self.revision.clone();
+        let retries = self.retries.clone();
         load_error(
           ctx,
           "settings-environment-load-error",
           (&ctx.t("project_settings.loadFailed"), &message_text(ctx, e)),
-          move || revision.update(|r| *r += 1),
+          move || retries.update(|r| *r += 1),
         )
       }
       None => {
@@ -254,23 +257,8 @@ impl Environment {
       }
     }
   }
-  /// The row: the variables' count and Edit, and while open the editor under it.
+  /// *Edit variables* (`J0NdQ`) with its Edit, and while open the editor under it.
   fn row(&self, ctx: &mut Ctx, props: &TabProps, save: &Save, open: bool) -> Element {
-    let names: Vec<String> = parse_environment(&self.text.get())
-      .map(|variables| variables.iter().map(|(name, _)| name.to_string()).collect())
-      .unwrap_or_default();
-    let count = names.len();
-    let hint = match count {
-      0 => ctx.t("project_settings.environmentHintNone"),
-      count if count <= HINT_NAMES => ctx.t_args("project_settings.environmentHint", [("names", names.join(", "))]),
-      count => ctx.t_args(
-        "project_settings.environmentHintMore",
-        [
-          ("names", names[..HINT_NAMES].join(", ")),
-          ("more", (count - HINT_NAMES).to_string()),
-        ],
-      ),
-    };
     let editing = self.editing.clone();
     let edit = ActionButton::new(
       "settings-environment-edit",
@@ -286,14 +274,9 @@ impl Environment {
     .on_click(move || editing.update(|editing| *editing = !*editing));
     let row = SettingRow::new(
       "settings-environment-variables-row",
-      ctx.t("project_settings.variablesLabel"),
+      ctx.t("project_settings.editVariables"),
     )
-    .info(ctx.t("project_settings.environmentInfo"))
-    .hint(hint)
-    .control(value(
-      "settings-variable-count",
-      &ctx.t_args("project_settings.variableCount", [("count", count.to_string())]),
-    ))
+    .hint(ctx.t("project_settings.editVariablesHint"))
     .control(edit);
     if !open {
       return row.render(ctx);
@@ -313,7 +296,7 @@ impl Environment {
     .text_style(crate::theme::ExtraTypography::MonoArea.role())
     .width(Dimension::Pct(100.0))
     .on_leave(move || commit());
-    if self.asking.get().0.is_some() || self.reloading.get() || save.state().get().is_pending() {
+    if self.asking.get().0.is_some() || save.state().get().is_pending() {
       input = input.locked();
     }
     if let Err(error) = parse_environment(&self.text.get()) {
@@ -324,7 +307,7 @@ impl Environment {
       .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Snug.role())
       .child(input.render(ctx))
-      .child(helper(ctx, props))
+      .child(helper(ctx))
       .into()
   }
   fn fill(&self, stored: Stored) {
@@ -334,10 +317,7 @@ impl Environment {
   fn commit(&self, props: &TabProps, save: &Save) -> Arc<dyn Fn() + Send + Sync> {
     let (tab, save, root) = (self.clone(), save.clone(), props.project.open.repo_root.clone());
     Arc::new(move || {
-      if tab.reloading.get_untracked()
-        || save.state().get_untracked().is_pending()
-        || tab.asking.get_untracked().0.is_some()
-      {
+      if save.state().get_untracked().is_pending() || tab.asking.get_untracked().0.is_some() {
         return;
       }
       let (Some(base), Ok(asked)) = (tab.stored.get_untracked(), parse_environment(&tab.text.get_untracked())) else {
@@ -364,12 +344,7 @@ impl Environment {
       .map(|m| message_text(ctx, m))
       .collect::<Vec<_>>();
     request.confirmed = true;
-    let (save, root, asking, reloading) = (
-      save.clone(),
-      props.project.open.repo_root.clone(),
-      self.asking.clone(),
-      self.reloading.clone(),
-    );
+    let (save, root, asking) = (save.clone(), props.project.open.repo_root.clone(), self.asking.clone());
     ctx.mount_keyed::<WidenConfirm>(
       "settings-environment-confirm",
       WidenProps {
@@ -383,56 +358,61 @@ impl Environment {
         confirm: ctx.t("project_settings.confirm"),
         on_keep: Arc::new(move || asking.set(Asking(None))),
         on_confirm: Arc::new(move || {
-          if !reloading.get_untracked() && !save.state().get_untracked().is_pending() {
+          if !save.state().get_untracked().is_pending() {
             save.run((root.clone(), request.clone()));
           }
         }),
       },
     )
   }
-  fn read_error(&self, ctx: &Ctx, save: &Save, error: &Message) -> Element {
+  /// Why the variables could not be read again, with *Try again*, over what was read before.
+  fn read_error(&self, ctx: &Ctx, error: &Message) -> Element {
+    let retries = self.retries.clone();
+    let button = ActionButton::new(
+      "settings-environment-reload",
+      ButtonKind::Secondary,
+      ctx.t("project_settings.retry"),
+    )
+    .on_click(move || retries.update(|retries| *retries += 1));
     Notice::new(
       "settings-environment-read-error",
       NoticeTone::Danger,
       ctx.t("project_settings.loadFailed"),
     )
     .body(message_text(ctx, error))
-    .action(self.reload_button(ctx, save, "project_settings.retry"))
+    .action(button)
     .into()
   }
-  fn outside(&self, ctx: &Ctx, save: &Save) -> Element {
-    let title = if self.reloading.get() {
-      "project_settings.reading"
-    } else {
-      "project_settings.outsideTitle"
-    };
-    Notice::new("settings-environment-outside", NoticeTone::Warning, ctx.t(title))
-      .body(ctx.t("project_settings.outsideDetail"))
-      .action(self.reload_button(ctx, save, "project_settings.reload"))
-      .into()
-  }
-  fn reload_button(&self, ctx: &Ctx, save: &Save, label: &str) -> ActionButton {
+  /// That the variables changed elsewhere while the editor holds an edit, with Reload, which drops the edit for what
+  /// is stored now: the variables' query has it already.
+  fn outside(&self, ctx: &Ctx, save: &Save, read: Stored) -> Element {
     let (tab, save) = (self.clone(), save.clone());
-    let button = ActionButton::new("settings-environment-reload", ButtonKind::Secondary, ctx.t(label));
-    if self.reloading.get() {
-      return button.loading();
-    }
-    if save.state().get().is_pending() {
-      return button.disabled();
-    }
-    button.on_click(move || {
-      if tab.reloading.get_untracked() || save.state().get_untracked().is_pending() {
-        return;
-      }
-      tab.reloading.set(true);
-      tab.revision.update(|revision| *revision += 1);
-    })
+    let button = ActionButton::new(
+      "settings-environment-reload",
+      ButtonKind::Secondary,
+      ctx.t("project_settings.reload"),
+    );
+    let button = if save.state().get().is_pending() {
+      button.disabled()
+    } else {
+      button.on_click(move || {
+        tab.fill(read.clone());
+        tab.asking.set(Asking(None));
+        save.state().set(FutureState::idle());
+      })
+    };
+    Notice::new(
+      "settings-environment-outside",
+      NoticeTone::Warning,
+      ctx.t("project_settings.outsideTitle"),
+    )
+    .body(ctx.t("project_settings.outsideDetail"))
+    .action(button)
+    .into()
   }
 }
-/// That the variables are plain text, with Open Secrets for keys and tokens.
-fn helper(ctx: &mut Ctx, props: &TabProps) -> Element {
-  let nav = crate::navigation::Navigation::of(ctx);
-  let project = props.project.open.project.id();
+/// That the variables are plain text, and keys and tokens belong in the secrets under them.
+fn helper(ctx: &Ctx) -> Element {
   Row::new()
     .id("settings-environment-helper")
     .width(Dimension::Pct(100.0))
@@ -449,23 +429,35 @@ fn helper(ctx: &mut Ctx, props: &TabProps) -> Element {
         .variant(crate::theme::ExtraTypography::Note.role())
         .flex(1.0),
     )
-    .child(
-      ActionButton::new(
-        "settings-open-secrets",
-        ButtonKind::Ghost,
-        ctx.t("project_settings.openSecrets"),
-      )
-      .icon(Icon::KeyRound)
-      .compact()
-      .in_form()
-      .opens(nav.to(crate::routes::Route::Project(
-        project,
-        crate::routes::ProjectPage::Secrets(crate::routes::SecretsView::default()),
-      ))),
-    )
     .into()
 }
 
+/// How many variables there are, and that they are plain text (`Note` `jrIf1`).
+fn count(ctx: &Ctx, count: usize) -> Arc<str> {
+  match count {
+    0 => ctx.t("project_settings.variablesNone"),
+    1 => ctx.t("project_settings.variablesOne"),
+    count => ctx.t_args("project_settings.variablesCount", [("count", count.to_string())]),
+  }
+}
+
+/// A row per variable, its name over its value, both in mono (`RUST_LOG` `cWwmK`); an empty value leaves no line.
+fn variable_rows(ctx: &mut Ctx, shown: &[(String, String)]) -> Vec<Element> {
+  shown
+    .iter()
+    .map(|(name, value)| {
+      let row = SettingRow::new(format!("settings-variable-{name}"), name.as_str()).mono_label();
+      let row = if value.is_empty() {
+        row
+      } else {
+        row.mono_hint().hint(value.as_str())
+      };
+      row.render(ctx)
+    })
+    .collect()
+}
+
+/// Saves the variables asked for, then records the change, which reads the variables' query again (`queries`).
 fn action(ctx: &mut Ctx) -> Save {
   let changes = crate::services::Services::of(ctx).changes;
   ctx.future_action(move |(root, request): (PathBuf, Requested)| {
@@ -475,7 +467,7 @@ fn action(ctx: &mut Ctx) -> Save {
         save_checked_in(&root, &request.base, &request.asked, request.confirmed)?;
         let db = orchester_store::ProjectDb::open(&root).map_err(|e| messages::store_error(&e))?;
         changes.record(db.project().id(), Outside::ProjectSettings);
-        Ok(Stored(request.asked, u64::MAX))
+        Ok(Stored(request.asked))
       })
       .await?
     }

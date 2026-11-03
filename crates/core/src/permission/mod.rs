@@ -24,6 +24,7 @@ mod network;
 #[cfg(windows)]
 pub(crate) mod remote_drive;
 pub mod roots;
+mod stored;
 pub mod widening;
 pub mod writable;
 
@@ -226,29 +227,27 @@ pub enum CommandPermission {
   AnyInWorktree,
 }
 
-/// The permissions of an agent profile version, or the effective permissions of a step.
+/// The permissions of an agent profile version, or the effective permissions of a step. Read through `stored`, which
+/// also takes the stored form from before approval modes.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(from = "stored::StoredPermissions")]
 pub struct AgentPermissions {
   repository: RepositoryAccess,
   /// Apply only with [`RepositoryAccess::Write`]; kept while the access is read-only so that
   /// switching back restores them. Left out of the stored form while empty, as before they existed.
-  #[serde(default, skip_serializing_if = "WritableFolders::is_empty")]
+  #[serde(skip_serializing_if = "WritableFolders::is_empty")]
   writable_folders: WritableFolders,
   commands: CommandPermission,
   network: NetworkAccess,
-  #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+  #[serde(skip_serializing_if = "std::ops::Not::not")]
   interactive_tool_approvals: bool,
-  /// *Approve automatically (don't ask me)*: Orchester answers what would ask a person itself, but for
-  /// what auto-approval never approves ([`crate::run::auto_verdict`]). Left out of the stored form while
-  /// off, as before it existed.
-  #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-  auto_approve: bool,
   /// The *Browser* permission. Left out of the stored form while off with no site, as before it existed.
-  #[serde(default, skip_serializing_if = "BrowserPermission::is_unset")]
+  #[serde(skip_serializing_if = "BrowserPermission::is_unset")]
   browser: BrowserPermission,
   /// Left out of the stored form while Manual, so every profile saved before approval modes existed reads as
-  /// Manual with its commands as they were ([`crate::resource::AgentProfile`]'s schema 5).
-  #[serde(default, skip_serializing_if = "ApprovalMode::is_manual")]
+  /// Manual with its commands as they were ([`crate::resource::AgentProfile`]'s schema 5), but for one that
+  /// approved automatically: that reads as Autopilot.
+  #[serde(skip_serializing_if = "ApprovalMode::is_manual")]
   approval_mode: ApprovalMode,
 }
 
@@ -261,7 +260,6 @@ impl AgentPermissions {
       commands,
       network,
       interactive_tool_approvals: false,
-      auto_approve: false,
       browser: BrowserPermission::off(),
       approval_mode: ApprovalMode::Manual,
     }
@@ -317,14 +315,6 @@ impl AgentPermissions {
 
   pub const fn set_interactive_tool_approvals(&mut self, enabled: bool) {
     self.interactive_tool_approvals = enabled;
-  }
-
-  pub const fn auto_approve(&self) -> bool {
-    self.auto_approve
-  }
-
-  pub const fn set_auto_approve(&mut self, enabled: bool) {
-    self.auto_approve = enabled;
   }
 
   pub const fn approval_mode(&self) -> ApprovalMode {

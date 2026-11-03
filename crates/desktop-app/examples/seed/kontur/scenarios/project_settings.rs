@@ -5,7 +5,7 @@
 //! `FIGMA_TOKEN` rotated and used by the MCP server `figma`, `GITHUB_APP_KEY` used by nothing, and `OLD_FIGMA_TOKEN`
 //! archived (`06b` opens `FIGMA_TOKEN`). The server `figma` (`13`) is a program that is on, with `FIGMA_API_KEY` from
 //! `FIGMA_TOKEN`, tools that run without asking, and the profile Design reviewer using it. Every secret is a record
-//! only: no value is in any keychain.
+//! only: no value is in any keychain. Environment's variables are `S06`'s: `RUST_LOG`, `CARGO_BUILD_JOBS`, `QA_PORT`.
 //!
 //! `project-settings-shared` is the same project linked to a team server project at `orchester.example.com/kontur`
 //! (`04b`), as owner, with four members as last read; no server answers, and this computer's list of servers doesn't
@@ -24,13 +24,14 @@ use orchester_core::{
   project::ProjectKey,
   repository::{GitHubRepo, RemoteName, RepoPermission, RepositoryLink, RepositoryView},
   resource::{
-    AccessPolicy, AccessWindow, AgentProfile, ApprovalMode, CommandArg, CommandProgram, DeniedBehavior, HttpAuth,
-    HttpMethod, HttpRequest, ModelId, PromptText, ProviderSettings, Slug, Tool, ToolAction, VariableName,
+    AccessPolicy, AccessWindow, AgentProfile, ApprovalMode, CommandArg, CommandEnvironment, CommandProgram,
+    DeniedBehavior, HttpAuth, HttpMethod, HttpRequest, ModelId, PromptText, ProviderSettings, Slug, Tool, ToolAction,
+    VariableName,
   },
   run::BranchName,
   secret::{Environment, NewSecret, Secret, SecretKind, SecretName},
   sharing::MemberRole,
-  store::{McpServerStore, RepositoryStore, ResourceStore, SecretStore},
+  store::{McpServerStore, RepositoryStore, ResourceStore, SecretStore, SettingsStore},
 };
 use orchester_store::{SharedMember, SharingLink};
 
@@ -44,10 +45,22 @@ const DAY: i64 = 24 * 60;
 pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
   let connections = connections::seeded(kontur)?;
   link_repository(kontur, connections.github)?;
+  variables(kontur)?;
   let secrets = secrets(kontur)?;
   deploy_preview(kontur, secrets.deepseek)?;
   let figma = figma(kontur, secrets.figma)?;
   design_reviewer(kontur, (connections.codex, figma))
+}
+
+/// The project's variables as `S06` (`EnL2D`) draws them; plain text.
+fn variables(kontur: &mut Kontur) -> Result<(), SeedError> {
+  let mut variables = BTreeMap::new();
+  for (named, value) in [("RUST_LOG", "debug"), ("CARGO_BUILD_JOBS", "4"), ("QA_PORT", "47900")] {
+    variables.insert(VariableName::new(named).map_err(invalid)?, value.to_owned());
+  }
+  let environment = CommandEnvironment::new(variables).map_err(invalid)?;
+  kontur.db.save_project_environment(&environment)?;
+  Ok(())
 }
 
 /// `project-settings`, linked to a team server project that no server here answers for.

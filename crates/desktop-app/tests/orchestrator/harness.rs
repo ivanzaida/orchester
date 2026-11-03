@@ -459,14 +459,14 @@ the agent logged: {agent}"
       .get()
   }
 
-  /// The person's *Let the Orchestrator publish drafts*, *answer agents* or *merge runs* (`consent`).
+  /// The person's *Let the Orchestrator publish drafts*, *answer agents* or *merge runs* (`consent`) in the project.
   pub fn let_orchestrator(&self, consent: OrchestratorConsent, allowed: bool) {
     self
       .window
       .launch
       .workspace()
       .expect("the session started")
-      .set_orchestrator_allows(consent, allowed)
+      .set_orchestrator_allows(&self.root, consent, allowed)
       .expect("the person's choice is kept");
   }
 

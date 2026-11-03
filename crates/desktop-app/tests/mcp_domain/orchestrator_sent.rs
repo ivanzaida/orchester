@@ -112,7 +112,7 @@ fn sent_directly_names_the_orchestrator_and_how_it_went_out() {
   let mut db = ProjectDb::open(&seeded.repo).expect("the project's data");
   let (task, run) = task_run(&db, ASKING);
   let scope = chat(&served, &mut db);
-  allow(&served, OrchestratorConsent::AnswerAgents);
+  allow(&served, &seeded.repo, OrchestratorConsent::AnswerAgents);
   // The message answers the agent's question: automation decides it only with the person's consent.
   served
     .services()

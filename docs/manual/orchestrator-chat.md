@@ -78,10 +78,11 @@ Every change, proposal and refusal is kept in the conversation. A proposal card'
 (`changed_since_proposed`); automation's synthetic click on *Apply* is refused `person_only`. A turn the Orchestrator
 started itself is marked `[Orchester]`.
 
-## Person-only switches (Settings › Automation › The Orchestrator may)
+## Person-only switches (Project settings › Orchestrator › The Orchestrator may)
 
-All off until a person turns them on; no tool and no synthetic input can change them. The window labels them
-shortly (*Publish drafts*, *Answer agents*, …); their full names, used below and in the logs, are *Let the
+Each project has its own. All off until a person turns them on; no tool and no synthetic input can change them.
+Settings › Automation › *The Orchestrator* names the open project's switches that are on and links to them. The window
+labels them shortly (*Publish drafts*, *Answer agents*, …); their full names, used below and in the logs, are *Let the
 Orchestrator …*.
 
 | Switch | What it enables |

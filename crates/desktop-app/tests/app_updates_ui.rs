@@ -299,7 +299,7 @@ fn app_updates_ui_an_unreachable_cloud_says_when_it_last_answered() {
     row(&mut section),
     (
       "Couldn't reach Orchester Cloud".to_owned(),
-      "It hasn't answered from here yet · Orchester tries again in 6 hours".to_owned(),
+      "It hasn't answered from here yet · Orchester tries again in 20 minutes".to_owned(),
       vec!["Check now".to_owned()]
     )
   );
@@ -309,7 +309,7 @@ fn app_updates_ui_an_unreachable_cloud_says_when_it_last_answered() {
   }));
   let hint = section.text("settings-update-hint");
   assert!(hint.starts_with("Last checked 2"), "{hint}");
-  assert!(hint.ends_with("· Orchester tries again in 6 hours"), "{hint}");
+  assert!(hint.ends_with("· Orchester tries again in 20 minutes"), "{hint}");
 }
 
 #[test]
@@ -335,6 +335,15 @@ fn app_updates_ui_a_copy_that_does_not_update_itself_links_the_newest_release() 
   }));
   assert_eq!(row(&mut alone).1, "It's a development build, not the installer's copy.");
   assert_eq!(alone.texts("settings-update-download"), None);
+
+  let mut translocated = Section::of(facts(UpdateState::NotThisCopy {
+    reason: CopyReason::Translocated,
+    newest: Some(newest()),
+  }));
+  assert_eq!(
+    row(&mut translocated).1,
+    "macOS runs it from a temporary copy. Move Orchester to Applications and open it from there to get 0.4.0."
+  );
 }
 
 #[test]

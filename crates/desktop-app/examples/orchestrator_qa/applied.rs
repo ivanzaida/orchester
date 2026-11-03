@@ -2,7 +2,7 @@
 //! them, through the chat's own tool path ([`tools::call`]) and the window's Apply ([`proposal::decide`]), before the
 //! window opens: a follow-up of the seed's run ready for review (`ExRt1` `gOzsF`), and, after the person applied the
 //! chat's cancel of a run at work, a message that ran that task again, whose card shows the run it started. The
-//! project's daily budget is lifted first, as Project settings › Limits does, so the runner takes both. The waits and
+//! project's daily budget is lifted first, as Runs › Limits does, so the runner takes both. The waits and
 //! run ends that follow land in another conversation ([`super::proposals::elsewhere`]).
 
 use std::error::Error;

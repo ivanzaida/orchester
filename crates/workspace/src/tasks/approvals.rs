@@ -17,7 +17,7 @@ use orchester_core::{
   permission::{CommandPermission, LaunchPermissions, RepositoryAccess},
   resource::{AgentProfile, ModelId, VersionNumber},
   run::{
-    CameToPerson, PendingToolApproval, PinnedVersion, Run, RunNumber, StepExecutor, auto_approves,
+    CameToPerson, PendingToolApproval, PinnedVersion, Run, RunNumber, StepExecutor,
     review::{Review, ReviewHold},
   },
   store::{ActivityStore, ConnectionStore, ResourceStore, RunStore, TaskStore},
@@ -86,7 +86,8 @@ pub struct ShownApproval {
   pub choices: ApprovalChoices,
   /// What made the request ask, while the asking profile version can be read.
   pub asking: Option<AskingPolicy>,
-  /// The run already answers its requests itself; this one asks as auto-approval leaves it to a person.
+  /// The run already answers its requests itself (*Approve everything in this run*); this one asks as auto-approval
+  /// leaves it to a person.
   pub auto_approving: bool,
   /// What auto mode did with it, when the run uses auto mode: why it is left to the person.
   pub review: Option<Review>,
@@ -172,12 +173,7 @@ fn shown(db: &ProjectDb, repo_root: &Path, (approval, reviewing): (PendingToolAp
     version: version.number(),
   });
   // `.ok()`: an unreadable choice only shows Approve everything in this run as still to be chosen.
-  let auto_approving = auto_approves(
-    db.run_auto_approve(approval.run).ok().flatten(),
-    launch
-      .as_ref()
-      .is_some_and(|launch| launch.permissions().auto_approve()),
-  );
+  let auto_approving = db.run_auto_approve(approval.run).ok().flatten() == Some(true);
   let read_only = launch
     .as_ref()
     .is_some_and(|launch| launch.permissions().repository() == RepositoryAccess::ReadOnly);

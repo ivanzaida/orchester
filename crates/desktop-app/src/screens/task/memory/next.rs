@@ -13,7 +13,10 @@ use lurq::{
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_core::memory::{InjectionReason, MemoryScope, MemorySettings, WritePolicy};
+use orchester_core::{
+  id::ProjectId,
+  memory::{InjectionReason, MemoryScope, MemorySettings, WritePolicy},
+};
 use orchester_workspace::memory::{
   handoff::HandoffParts,
   next::{Given, NextAgent},
@@ -33,8 +36,8 @@ use crate::{
 pub const PANEL_WIDTH: f32 = 320.0;
 const SAVING_LABEL_WIDTH: f32 = 110.0;
 
-/// The panel, as `memory` says it; `None` while task memory cannot be read.
-pub fn panel(ctx: &mut Ctx, memory: Option<&TaskMemory>) -> Element {
+/// The panel of `project`, as `memory` says it; `None` while task memory cannot be read.
+pub fn panel(ctx: &mut Ctx, project: ProjectId, memory: Option<&TaskMemory>) -> Element {
   let mut panel = Column::new()
     .id("memory-next")
     .width(Dimension::Px(PANEL_WIDTH))
@@ -59,10 +62,10 @@ pub fn panel(ctx: &mut Ctx, memory: Option<&TaskMemory>) -> Element {
   }
   panel
     .child(saving(ctx, &memory.settings))
-    .child(crate::screens::memory::unbuilt_link(
+    .child(crate::screens::memory::settings_link(
+      ctx,
+      project,
       "memory-next-settings",
-      &ctx.t("memory.settingsLink"),
-      &ctx.t("memory.settingsUnbuilt"),
     ))
     .child(
       Text::new(&ctx.t("memory.next.footnote"))

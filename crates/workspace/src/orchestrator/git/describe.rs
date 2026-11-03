@@ -1,7 +1,7 @@
 //! What the chat's agent reads of each git tool.
 
 /// What every write says of the person's switch and of the run worktrees.
-const WRITE: &str = "Only while the person turned on Let the Orchestrator write with git in Settings; off, it is \
+const WRITE: &str = "Only while the person turned on Let the Orchestrator write with git in Project settings › Orchestrator; off, it is \
   refused (write_off) and you tell the person. Never in a turn Orchester started by itself (person_only). It works in \
   the project's checkout, or with run in that run's worktree once the run ended (run_active while it has not). \
   Refused while local integration holds the checkout or a run's conflicts wait to be resolved (checkout_reserved), \

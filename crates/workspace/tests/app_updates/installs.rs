@@ -1,5 +1,5 @@
-//! Installing a ready update (`app_updates::install`): the databases copied aside with the last two backups kept,
-//! what *Restart to update* does with and without runs at work, the installer's silent arguments, the handover and
+//! Installing a ready update (`app_updates::install`): what *Restart to update* does with and without runs at work,
+//! the backup it takes first (the copies themselves are `backups`), the installer's silent arguments, the handover and
 //! every failure before it, which leaves this version running with the reason, and what the next start reads.
 //!
 //! `cargo test -p orchester-workspace --test app_updates update_install`
@@ -23,8 +23,8 @@ use orchester_workspace::{
   app_updates::{
     AppUpdates, ReadyUpdate, ThisApp, ThisCopy, UpdateState,
     install::{
-      AfterInstall, BACKUPS_FOLDER, Databases, Handover, InstallRecord, InstallStep, Installer, JustUpdated,
-      RECORD_FILE, RESULT_FILE, RestartPlan, RunsAtWork, after_install, back_up, backups,
+      AfterInstall, Handover, InstallRecord, InstallStep, Installer, JustUpdated, RECORD_FILE, RESULT_FILE,
+      RestartPlan, RunsAtWork, after_install, backups,
     },
   },
   runner::Runners,
@@ -94,74 +94,6 @@ fn ends_at_once(_: &Handover) -> io::Result<Child> {
 
 fn cannot_start(_: &Handover) -> io::Result<Child> {
   Err(io::Error::new(io::ErrorKind::NotFound, "no installer here"))
-}
-
-/// A project repository with a database and its write-ahead log.
-fn project(root: &Path, name: &str, bytes: &[u8]) -> PathBuf {
-  let repo = root.join(name);
-  written(&repo.join(".orchester").join("orchester.db"), bytes);
-  written(&repo.join(".orchester").join("orchester.db-wal"), b"project wal");
-  repo
-}
-
-#[test]
-fn update_install_copies_the_databases_aside_and_keeps_the_last_two_backups() {
-  let data = tempfile::tempdir().expect("a folder");
-  let app = data.path().join("orchester.db");
-  written(&app, b"app database");
-  written(&data.path().join("orchester.db-wal"), b"app wal");
-  let repos = tempfile::tempdir().expect("a folder");
-  let first = project(repos.path(), "kontur", b"kontur database");
-  let empty = repos.path().join("no-database");
-  fs::create_dir_all(&empty).expect("a folder");
-  let databases = Databases {
-    app: Some(app),
-    projects: vec![first.clone(), empty],
-  };
-
-  for running in ["0.1.0", "0.2.0", "0.3.0"] {
-    back_up(data.path(), &version(running), &databases).expect("backed up");
-  }
-
-  assert_eq!(
-    backups(data.path()).expect("the backups"),
-    [version("0.2.0"), version("0.3.0")],
-    "the last two backups stay"
-  );
-  let folder = data.path().join(BACKUPS_FOLDER).join("0.3.0");
-  assert_eq!(fs::read(folder.join("orchester.db")).expect("app"), b"app database");
-  assert_eq!(fs::read(folder.join("orchester.db-wal")).expect("wal"), b"app wal");
-  let kontur = folder.join("projects").join("1-kontur");
-  assert_eq!(
-    fs::read(kontur.join("orchester.db")).expect("project"),
-    b"kontur database"
-  );
-  assert_eq!(fs::read(kontur.join("orchester.db-wal")).expect("wal"), b"project wal");
-  let list = fs::read_to_string(folder.join("projects.txt")).expect("the list");
-  assert_eq!(
-    list,
-    format!("1-kontur\t{}\n", first.display()),
-    "a project without a database is left out"
-  );
-}
-
-#[test]
-fn update_install_a_second_backup_of_one_version_replaces_the_first() {
-  let data = tempfile::tempdir().expect("a folder");
-  let app = data.path().join("orchester.db");
-  let databases = Databases {
-    app: Some(app.clone()),
-    projects: Vec::new(),
-  };
-  written(&app, b"before");
-  back_up(data.path(), &version(RUNNING), &databases).expect("backed up");
-  written(&app, b"after");
-  fs::remove_file(data.path().join("orchester.db-wal")).ok();
-
-  let folder = back_up(data.path(), &version(RUNNING), &databases).expect("backed up again");
-
-  assert_eq!(fs::read(folder.join("orchester.db")).expect("app"), b"after");
-  assert!(!folder.join("projects.txt").exists());
 }
 
 #[test]
@@ -299,7 +231,6 @@ fn update_install_a_new_start_shows_updated_to_or_the_failure() {
 #[tokio::test]
 async fn update_install_with_no_run_at_work_installs_at_once() {
   let (copy, _stand) = ready_copy().await;
-  written(&copy.dir.path().join("orchester.db-wal"), b"");
   let runners = no_runners();
   assert!(matches!(
     copy.updates.restart_plan(&runners),

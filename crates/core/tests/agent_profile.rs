@@ -4,7 +4,7 @@ use orchester_core::{
   connection::mcp::{McpSelectionError, McpServerSelection},
   id::ConnectionId,
   name::Name,
-  permission::{AgentPermissions, CommandPermission, NetworkAccess, RepositoryAccess},
+  permission::{AgentPermissions, ApprovalMode, CommandPermission, NetworkAccess, RepositoryAccess},
   resource::{AgentProfile, ModelId, PromptText, ProviderSettings, ProviderSettingsError, ResourceBody},
 };
 
@@ -108,6 +108,27 @@ fn agent_profile_schema_2_bodies_get_no_mcp_servers() {
   let profile: AgentProfile = serde_json::from_value(upgraded).unwrap();
   assert_eq!(profile, original);
   assert!(profile.mcp_servers().is_empty());
+}
+
+/// A stored or shared version from before approval modes, *Approve automatically (don't ask me)* on, reads as
+/// Autopilot.
+#[test]
+fn agent_profile_old_approve_automatically_reads_as_autopilot() {
+  let original = builder();
+  let mut body = serde_json::to_value(&original).unwrap();
+  body["permissions"]["auto_approve"] = serde_json::json!(true);
+  let older = [3, 4].map(|schema| AgentProfile::upgrade(schema, body.clone()).expect("upgrades"));
+  for (schema, body) in [(3, &older[0]), (4, &older[1]), (AgentProfile::SCHEMA, &body)] {
+    let profile: AgentProfile = serde_json::from_value(body.clone()).unwrap();
+    assert_eq!(
+      profile.permissions().approval_mode(),
+      ApprovalMode::Autopilot,
+      "schema {schema}"
+    );
+    assert_eq!(profile.permissions().commands(), original.permissions().commands());
+    let stored = serde_json::to_value(&profile).unwrap();
+    assert!(stored["permissions"].get("auto_approve").is_none(), "{stored}");
+  }
 }
 
 #[test]

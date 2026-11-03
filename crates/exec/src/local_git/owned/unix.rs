@@ -8,7 +8,7 @@ use std::{
 };
 
 use orchester_core::id::IdempotencyKey;
-use rustix::fs::{AtFlags, CWD, Mode, OFlags, RenameFlags, mkdirat, openat, renameat_with, statat, unlinkat};
+use rustix::fs::{AtFlags, CWD, FileType, Mode, OFlags, RenameFlags, mkdirat, openat, renameat_with, statat, unlinkat};
 
 use super::super::{LocalError, LocalGitError};
 
@@ -103,6 +103,21 @@ impl Directory {
       return Err(LocalError::Stale.into());
     }
     Ok(())
+  }
+
+  /// Whether `name` is in this directory, read from its entry without following a link and without opening it:
+  /// closing any descriptor of a file drops every lock this process holds on it, those of SQLite's connections to it
+  /// too. Refused unless it is a regular file of one link.
+  pub(super) fn regular_entry(&self, name: &OsStr) -> Result<bool, LocalGitError> {
+    let stat = match statat(&self.file, name, AtFlags::SYMLINK_NOFOLLOW) {
+      Ok(stat) => stat,
+      Err(rustix::io::Errno::NOENT) => return Ok(false),
+      Err(error) => return Err(map(error)),
+    };
+    if FileType::from_raw_mode(stat.st_mode) != FileType::RegularFile || stat.st_nlink != 1 {
+      return Err(LocalError::Unsupported.into());
+    }
+    Ok(true)
   }
 
   pub(super) fn open_regular(&self, name: &OsStr, writing: bool, create: bool) -> Result<Option<File>, LocalGitError> {

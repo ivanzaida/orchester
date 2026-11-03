@@ -59,9 +59,7 @@ pub fn apply(root: &Path, request: &Request) -> Result<Outcome, Message> {
     .enforced_on(connection.provider(), Platform::current())
     .map_err(|problem| super::permissions::not_enforceable(&problem))?;
   if connection.provider().is_native()
-    && (request.profile.permissions().interactive_tool_approvals()
-      || request.profile.permissions().auto_approve()
-      || !request.profile.mcp_servers().ids().is_empty())
+    && (request.profile.permissions().interactive_tool_approvals() || !request.profile.mcp_servers().ids().is_empty())
   {
     return Err(Message::new("appMcp.errors.nativeNoSwitches"));
   }

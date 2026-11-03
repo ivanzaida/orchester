@@ -1,4 +1,4 @@
-//! A secret's page (`06b` `famwr`): the crumb back to Secrets; its head with its kind's tile, its name, its
+//! A secret's page (`06b` `famwr`): the crumb back to Environment; its head with its kind's tile, its name, its
 //! environment, how many use it and when its value was set, Replace value and the … menu (Copy name, Archive);
 //! *Replace value* asked in place under the head (`form`); *Details* (project, environment and when it was last
 //! rotated), *Used by* (each tool and MCP server, as links, with the variable a server is given it in), *Recent access*
@@ -99,7 +99,7 @@ impl Component for Inspector {
     let props = ctx.props::<Props>().clone();
     let crumb = back(
       "secret-crumb",
-      (&ctx.t("project_settings.secrets"), None),
+      (&ctx.t("project_settings.environment"), None),
       props.view.list(),
     );
     let head = self.head(ctx, &props);

@@ -49,6 +49,7 @@ mod orchestrator_reports;
 mod orchestrator_run_ends;
 mod orchestrator_senders;
 mod orchestrator_sent;
+mod orchestrator_switches;
 mod orchestrator_titles;
 mod orchestrator_todos;
 mod orchestrator_waits;

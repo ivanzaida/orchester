@@ -436,6 +436,22 @@ fn not_this_copy(ctx: &Ctx, reason: CopyReason, newest: Option<&NewestRelease>, 
       "settings.general.updates.notThisCopy.programFolderUnknown",
       "settings.general.updates.notThisCopy.programFolderUnknownNewest",
     ),
+    CopyReason::NotInBundle => (
+      "settings.general.updates.notThisCopy.notInBundle",
+      "settings.general.updates.notThisCopy.notInBundleNewest",
+    ),
+    CopyReason::Translocated => (
+      "settings.general.updates.notThisCopy.translocated",
+      "settings.general.updates.notThisCopy.translocatedNewest",
+    ),
+    CopyReason::BundleNotWritable => (
+      "settings.general.updates.notThisCopy.bundleNotWritable",
+      "settings.general.updates.notThisCopy.bundleNotWritableNewest",
+    ),
+    CopyReason::NoTeamId => (
+      "settings.general.updates.notThisCopy.noTeamId",
+      "settings.general.updates.notThisCopy.noTeamIdNewest",
+    ),
   };
   let hint = match newest {
     Some(newest) => ctx.t_args(with_newest, [("version", newest.version.to_string())]),
@@ -450,28 +466,13 @@ fn not_this_copy(ctx: &Ctx, reason: CopyReason, newest: Option<&NewestRelease>, 
   with_download(ctx, said, newest, parts)
 }
 
-/// macOS, which does not update itself yet; elsewhere a platform no release ships for.
+/// A platform no release ships for.
 fn not_on_this_platform(ctx: &Ctx, newest: Option<&NewestRelease>, parts: &Parts) -> Said {
-  let (label, hint) = if cfg!(target_os = "macos") {
-    let hint = match newest {
-      Some(newest) => ctx.t_args(
-        "settings.general.updates.macos.newestHint",
-        [("version", newest.version.to_string())],
-      ),
-      None => ctx.t("settings.general.updates.macos.hint"),
-    };
-    (ctx.t("settings.general.updates.macos.label"), hint)
-  } else {
-    (
-      ctx.t("settings.general.updates.otherPlatform.label"),
-      ctx.t("settings.general.updates.otherPlatform.hint"),
-    )
-  };
   let said = Said::new(
     "not-on-this-platform",
     (Icon::Info, PaletteColor::TextMuted),
-    label.to_string(),
-    hint.to_string(),
+    ctx.t("settings.general.updates.otherPlatform.label").to_string(),
+    ctx.t("settings.general.updates.otherPlatform.hint").to_string(),
   );
   with_download(ctx, said, newest, parts)
 }

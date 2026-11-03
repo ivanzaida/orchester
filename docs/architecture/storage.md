@@ -54,7 +54,10 @@ orchester.exe (desktop, UI)
   the group does not end with the desktop, and a process that leaves it (`setsid`) is neither observed nor stopped.
   Windows also holds `.orchester`, its database and its SQLite sidecars against rename and replacement while an
   integration works; macOS cannot hold a name, so it checks them instead (reached without a link, regular files of
-  one link) and does not prevent a substitution after that check. A file the integration removes is deleted through
+  one link) and does not prevent a substitution after that check. It reads their directory entries and never opens
+  them: closing any descriptor of a file drops every POSIX record lock the process holds on it, those of its own
+  SQLite connections too, and another process then deleted or cut the shared memory the app still had mapped, which
+  crashed it with SIGBUS (ORC-630). A file the integration removes is deleted through
   its handle on Windows; on macOS it is first moved, without replacing anything, to a private name and deleted only
   once it proves to be the file that was checked. The lease of a checkout (`flock` on macOS) waits up to half a
   second for a lock held only by a program another thread is starting with `fork`.
@@ -97,7 +100,7 @@ dialog (`on_close_requested` / `CloseRequest`), which is what the wait path need
 ### Step graphs
 
 The runner starts every step execution whose dependencies have passed, as far as the agent slots
-allow; the slots (the project setting *Agents working at once* in Project settings › Limits, 1 to 16, 4 by
+allow; the slots (the project setting *Agents at once* in Project settings › Runs › Limits, 1 to 16, 4 by
 default) are shared by all runs of the runner, and each agent at work takes one. The desktop sends them when
 the runner attaches and again whenever they change (`SetAgentSlots`): more slots start waiting work at once;
 fewer stop no agent, and new work waits until fewer agents work than the slots.
@@ -487,7 +490,7 @@ open at the next start means the previous session crashed.
 | `money_budgets_before_tokens` | the money budgets tasks and runs had before budgets became tokens, kept by the migration that replaced them with the default run budget |
 | `money_step_budgets_before_tokens` | the money step budgets of published pipeline versions and drafts from before step budgets became tokens, per version or draft and step |
 | `repository_link` | at most one row: GitHub connection, git remote, host / owner / name, default branch, permission, expected login, checked at |
-| `base_branch_move`, `base_branch_move_modules` | ORC-404: the project's former base branch (`project_base_branch`, dropped) and when it moved to the open modules that had none, and which modules took it, for Project settings › General's one-time line; ORC-409 deletes both once General showed the line and the settings closed. A task's base branch is `tasks.base_choice`/`tasks.base_branch`, a module's `modules.base_branch`; both kept on this computer only, outside a shared task's or module's revision (see [Integration](#integration)) |
+| `base_branch_move`, `base_branch_move_modules` | ORC-404: the project's former base branch (`project_base_branch`, dropped) and when it moved to the open modules that had none, and which modules took it. Nothing reads or writes them since ORC-616 removed Project settings › General's one-time line; the tables stay so the schema does not change. A task's base branch is `tasks.base_choice`/`tasks.base_branch`, a module's `modules.base_branch`; both kept on this computer only, outside a shared task's or module's revision (see [Integration](#integration)) |
 
 ### Versioned configuration
 

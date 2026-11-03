@@ -44,7 +44,7 @@ pub(super) fn groups(ctx: &mut Ctx, project: &ShownProject) -> Element {
   let add_button = |ctx: &Ctx, id: &str, key: &str, kind| {
     ActionButton::new(id.to_owned(), ButtonKind::Ghost, ctx.t(key))
       .icon(Icon::Plus)
-      .compact()
+      .in_heading()
       .opens(add(kind))
   };
   let providers = PROVIDERS

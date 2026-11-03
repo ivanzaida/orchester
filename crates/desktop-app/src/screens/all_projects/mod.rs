@@ -151,7 +151,7 @@ impl Component for AllProjects {
     let work = reports.total();
     let data = read_data(ctx, (&services, &self.read), Entries(entries.clone(), reports));
     folder::follow(ctx, &open, &self.followed);
-    let invites = InvitesNotice::read(ctx);
+    let invites = self.invites.read(ctx);
     let teams = self.teams.read(ctx, &services.servers, shown);
     let heading = page::Heading {
       open: &open,

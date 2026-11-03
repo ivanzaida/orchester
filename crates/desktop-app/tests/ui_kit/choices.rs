@@ -116,6 +116,33 @@ fn page_tabs_are_34_high_20_apart_with_counts_and_a_locked_tab_that_cannot_open(
   );
 }
 
+/// Each tab's label as it stands, with `current` the current tab.
+fn tab_labels(current: &'static str) -> Vec<(f32, f32, f32, f32)> {
+  let names = ["tab-one", "tab-two", "tab-three"];
+  let mut kit = Kit::show(move |ctx| {
+    let tabs = names.map(|name| PageTab::new(name, "A label to measure", name == current, || {}));
+    page_tabs(ctx, "tabs", tabs).into()
+  });
+  names
+    .map(|name| {
+      let label = kit.bounds(&format!("{name}-label"));
+      (label.x, label.y, label.width, label.height)
+    })
+    .into()
+}
+
+#[test]
+fn page_tabs_keep_every_label_where_it_is_whichever_tab_is_current() {
+  let first = tab_labels("tab-one");
+  assert!(first[0].2 > 0.0, "the label has its width");
+  assert_eq!(first, tab_labels("tab-two"), "only colour, weight and underline change");
+  assert_eq!(
+    first,
+    tab_labels("tab-three"),
+    "only colour, weight and underline change"
+  );
+}
+
 #[test]
 fn a_segmented_control_is_26_high_2_inside_its_segments_22_high() {
   let chosen = Signal::new("dark");

@@ -124,7 +124,6 @@ fn agents_cli_to_native_transition_can_save_without_hidden_cli_values() {
   db.create_connection(&native).expect("store native");
   let mut profile = screen.listed().profile(id).expect("profile").profile.clone();
   let mut permissions = profile.permissions().clone();
-  permissions.set_auto_approve(true);
   permissions.set_interactive_tool_approvals(true);
   profile = profile
     .with_permissions(permissions)
@@ -146,7 +145,6 @@ fn agents_cli_to_native_transition_can_save_without_hidden_cli_values() {
   });
   let saved = screen.listed().profile(id).expect("profile").profile.clone();
   assert_eq!(saved.connection(), native.id());
-  assert!(!saved.permissions().auto_approve());
   assert!(!saved.permissions().interactive_tool_approvals());
   assert!(saved.mcp_servers().ids().is_empty());
 }

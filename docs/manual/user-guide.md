@@ -277,12 +277,13 @@ starts with, marked *Default*). Header: **Import from project**, **New pipeline*
   environment variables. A tool's page has tabs *Configuration*, *Access*, *Inputs & outputs* and *Usage log*.
   Drafts autosave; **Publish vN**. HTTP, database, MCP-import and *Create pull request* tool kinds are locked.
 - **Memory** — status pills **Waiting** (first, and where the tab opens while proposals wait), **Active**,
-  **Deprecated**, **Superseded**, **Rejected** (with the withdrawn ones), then **Settings**. Search and filter by type,
-  author and tag. Approve, edit or reject proposals on their review page; a row's hover actions edit, pin, deprecate,
-  restore or delete records; a record opens as its own page; **New record**. *Settings* chooses how task and project
-  memory save and how much each agent gets. Memory changes are person-only.
+  **Deprecated**, **Superseded**, **Rejected** (with the withdrawn ones), then the link **Memory settings**, which opens
+  Project settings › Context, where you choose how task and project memory save and how much each agent gets. Search and
+  filter by type, author and tag. Approve, edit or reject proposals on their review page; a row's hover actions edit,
+  pin, deprecate, restore or delete records; a record opens as its own page; **New record**. Memory changes are
+  person-only.
 
-### Secrets (Project settings › Secrets)
+### Secrets (Project settings › Environment)
 
 `/project/<id>/secrets` — a tab of Project settings. Segments **All · Development · Staging · Production**; secrets are
 grouped by environment, each row with its name, what uses it and a masked value with the date it was set.
@@ -301,10 +302,10 @@ Connections and secrets are never copied; importing never grants access.
 
 ### Project settings
 
-**General** (project, GitHub, base branch, base-moved notices, repository agent files), **Runs** (approvals: Allow
-Autopilot and the reviewer, approved-for-every-run rules, story-point estimates, limits, environment), **Context**
-(sources, code index),
-**Connections**, **Secrets**, **Sharing** — see [settings.md](settings.md#2-project-settings-projectidsettings).
+**General** (project, GitHub, base branch, base-moved notices), **Runs** (approvals: Allow Autopilot and the reviewer,
+approved-for-every-run rules, story-point estimates, limits), **Orchestrator** (what the chat may do on its own),
+**Context** (sources, repository agent files, code index, memory), **Connections**, **Environment** (variables and
+secrets), **Sharing** — see [settings.md](settings.md#2-project-settings-projectidsettings).
 
 ## 5. Tasks
 
@@ -509,7 +510,7 @@ projects.
    the run's facts; **Changes** shows the diff.
 2. **Approvals** — the header's **Approve** opens the card. Answer there or in the Needs you panel: *Approve once*,
    *Deny*, *Deny with a message*, or more widely (*Approve similar in this run*, *Approve everything in this run*). To
-   be asked less: the profile's *Approve automatically*, or its approval mode set to Autopilot while the project
+   be asked less: the profile's approval mode set to Autopilot while the project
    allows Autopilot (Project settings › Runs). Under Manual the project's reviewer answers before you. A run's
    *Switch to Manual for this run* takes it out of Autopilot for good.
 3. **Questions** — the header's **Answer** opens the card; pick options or write your own answer, then *Send answer*.
@@ -603,8 +604,8 @@ the turns in one column, and the composer at the foot.
    You can also approve a waiting proposal in words ("run it"), except click-only ones.
 4. **New** starts a conversation ("What should we plan?" with four suggestions); **History** lists earlier ones (search,
    *Today*, *Yesterday*, *Earlier*).
-5. More autonomy: the person-only switches in Settings › Automation (*The Orchestrator may*); the daily report in
-   Settings › Notifications.
+5. More autonomy: the project's person-only switches in Project settings › Orchestrator (*The Orchestrator may*); the
+   daily report in Settings › Notifications.
 
 Details: [orchestrator-chat.md](orchestrator-chat.md).
 
@@ -658,5 +659,6 @@ returned), **Cumulative flow**.
 ## 11. Automating Orchester
 
 Every screen's work is also available to your own agents through Orchester's MCP server. Register it from Settings ›
-Automation › *Connect an agent*, then decide what connected agents may do under *What automation may do*. See
+Automation › *Connect an agent*, then decide what connected agents may do under *The window* and *Approvals and
+permissions* there. See
 [mcp-server.md](mcp-server.md).

@@ -97,7 +97,6 @@ pub fn access_for_connection(
 ) -> (AgentPermissions, McpServerSelection) {
   let (mut permissions, _) = permissions.fitted_to(provider, platform);
   let servers = if provider.is_native() {
-    permissions.set_auto_approve(false);
     permissions.set_interactive_tool_approvals(false);
     McpServerSelection::none()
   } else {

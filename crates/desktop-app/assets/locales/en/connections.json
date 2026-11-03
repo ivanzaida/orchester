@@ -233,7 +233,7 @@
       "editDescription": "Its endpoint, key secret and models. A model an agent profile or a pipeline step runs on stays; rename the connection from its page in Connections.",
       "detail": {
         "notTested": "Not tested yet. Test connection asks the API for its models with the key, which spends no tokens.",
-        "keyMissing": "The secret holding the key is archived or gone, so runs on this connection don’t start. Choose another secret in Edit connection, or restore it in Secrets.",
+        "keyMissing": "The secret holding the key is archived or gone, so runs on this connection don’t start. Choose another secret in Edit connection, or restore it in Environment.",
         "keyRejected": "The API refused the key. Put a valid key in its secret, then test again.",
         "billing": "The API took the key, but its account cannot pay for requests. Check billing with the provider, then test again.",
         "unreachable": "The API could not be reached. Check the network and the base URL, then test again."
@@ -422,7 +422,7 @@
       "secretGone": "a secret this project no longer has",
       "secretMissing": {
         "title": "A secret this server needs is archived or gone",
-        "detail": "Agents start without this server until it has its secret again. Edit the server to choose another secret, or restore the secret on the Secrets page."
+        "detail": "Agents start without this server until it has its secret again. Edit the server to choose another secret, or restore the secret in Environment."
       },
       "variables": "Variables",
       "exemptTools": "Tools that run without asking",
@@ -643,7 +643,7 @@
       "keyArchived": "Key secret missing: {{secret}} was archived. Choose a secret, or New secret….",
       "planLimits": "Not read on an API provider",
       "detailConnected": "The CLI answers. Orchester starts it on the API provider with the key from {{secret}}; the CLI’s own sign-in is not used.",
-      "detailKeyMissing": "The key’s secret is archived or gone, so runs on this connection don’t start. Choose another secret in Edit connection, or restore it in Secrets.",
+      "detailKeyMissing": "The key’s secret is archived or gone, so runs on this connection don’t start. Choose another secret in Edit connection, or restore it in Environment.",
       "offProvider": "Saving takes {{name}} off the API provider",
       "offProviderDetail": "Its base URL and models are removed; agents start {{cli}} on the Default account’s sign-in. {{secret}} stays in Secrets.",
       "offProviderDetailNoSecret": "Its base URL and models are removed; agents start {{cli}} on the Default account’s sign-in.",

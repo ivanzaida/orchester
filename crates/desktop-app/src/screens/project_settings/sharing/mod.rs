@@ -15,14 +15,17 @@ mod make_local;
 mod members;
 mod upload;
 
+use std::path::PathBuf;
+
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
+    theme::PaletteColor,
   },
-  components::Column,
+  components::{Column, Row},
   core::Signal,
-  layout::layout_kind::ScrollState,
+  layout::{Alignment, layout_kind::ScrollState},
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{repository::RepositoryIdentity, store::TaskStore};
@@ -42,15 +45,26 @@ pub(super) use self::{
   join::screen as join_screen,
   upload::{LinkPage, link_page},
 };
-use super::{TabProps, page};
+use super::{
+  TabProps,
+  kit::{Group, SettingRow},
+  page,
+};
 use crate::{
+  queries::{Again, Session},
   screens::settings::orchester::{Said, follow, follow_shared},
   services::Services,
+  theme::{ExtraSpacing, IconSize, ProjectSettingsText},
   ui::{
+    icon::{Icon, icon},
     skeleton::{self, Skeleton},
     state::load_error,
   },
 };
+
+/// How long the words of what is not read yet are in the tab's bones (`Local project` in `L07L` `HVnhV`).
+const LOCAL_HINT_BONE: f32 = 260.0;
+const WHERE_BONE: f32 = 52.0;
 
 /// What the tab shows: the link, the servers this computer is signed in to, the checkout's `origin`, what
 /// `orchester.toml` names, and the local tasks a first link uploads.
@@ -90,6 +104,7 @@ impl Facts {
 pub(super) struct Sharing {
   /// Counts *Try again*, a link and a leave, each of which reads the tab again.
   revision: Signal<u64>,
+  again: Again,
   /// What *Make local* did, said over the local page until the person dismisses it.
   made_local: Signal<make_local::Made>,
   /// Opened for *Make local*'s question, the page scrolls to it once it shows.
@@ -111,6 +126,7 @@ impl Component for Sharing {
     });
     Self {
       revision: ctx.signal(0),
+      again: Again::live(),
       made_local,
       scroll,
       scrolled: ctx.signal(false),
@@ -122,23 +138,15 @@ impl Component for Sharing {
     let services = Services::of(ctx);
     let revision =
       follow(ctx, (&services.servers, &services.cloud)) + follow_shared(ctx, &services.servers) + self.revision.get();
-    let root = props.project.open.repo_root.clone();
-    let workspace = services.workspace.clone();
-    let state = ctx
-      .future(
-        (revision, root, services.servers.clone(), services.programs.clone()),
-        move |(_, root, servers, programs)| {
-          let workspace = workspace.clone();
-          async move {
-            background::run(move || read((&servers, &workspace), &programs, &root))
-              .await
-              .map_err(|_| Said::new("cloud.errors.local"))?
-          }
-        },
-      )
-      .state()
-      .get();
-    let content = match (state.data, state.error) {
+    // Through its query: live, so a visit after the first shows the last read at once and reads it again behind it,
+    // as does each change of the servers, the cloud account and the shared projects, a link and a leave.
+    let query = ctx.query(facts(Session(services), props.project.open.repo_root.clone()));
+    self.again.follow(revision, &query);
+    let state = (
+      query.data().map(|facts| Facts::clone(&facts)),
+      query.error().map(|said| Said::clone(&said)),
+    );
+    let content = match state {
       (Some(facts), _) if facts.link.is_some() => {
         if props.make_local && !self.scrolled.get() {
           // Make local is the page's last part: its question is at the bottom.
@@ -175,14 +183,43 @@ impl Component for Sharing {
         )
       }
       (None, None) => {
-        // No loading frame draws the Sharing tab: its rows' bones stand in one outline until where the list lives
-        // is read.
-        let bones = skeleton::list(ctx, "project-settings-sharing-rows", &[(160.0, 300.0), (120.0, 260.0)]);
+        let bones = bones(ctx);
         Skeleton::new("project-settings-sharing-loading", ctx.t("sharing.reading")).show(ctx, bones)
       }
     };
     page::scroll_with(Column::new().width(Dimension::Pct(100.0)).child(content), &self.scroll)
   }
+}
+
+/// The tab while where the list lives is read (`L07L` `HVnhV`): the group and its two rows' labels real, whether the
+/// project is local or shared a bone, *Share…* waiting for it.
+fn bones(ctx: &mut Ctx) -> Element {
+  let local = Row::new()
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::Center)
+    .child(icon(Icon::Monitor, IconSize::Base, PaletteColor::TextMuted))
+    .child(skeleton::line(ctx, ProjectSettingsText::Value.role(), WHERE_BONE));
+  let local = SettingRow::new("sharing-task-list-reading", ctx.t("sharing.share.localProject"))
+    .hint_reading(LOCAL_HINT_BONE)
+    .control(local)
+    .render(ctx);
+  let share = SettingRow::new("sharing-share-reading", ctx.t("sharing.share.onServer"))
+    .hint(ctx.t("sharing.share.onServerHint"))
+    .render(ctx);
+  Group::new("project-settings-sharing-reading", ctx.t("project_settings.sharing"))
+    .row(local)
+    .row(share)
+    .into()
+}
+
+/// What the tab shows of the project at `root`: live, since it asks the checkout's `origin` and the servers' list.
+#[lurq::query(stale_time = "0s", gc_time = "24h")]
+async fn facts(session: Session, root: PathBuf) -> Result<Facts, Said> {
+  let Session(services) = session;
+  let (servers, workspace, programs) = (services.servers, services.workspace, services.programs);
+  background::run(move || read((&servers, &workspace), &programs, &root))
+    .await
+    .map_err(|_| Said::new("cloud.errors.local"))?
 }
 
 fn read(

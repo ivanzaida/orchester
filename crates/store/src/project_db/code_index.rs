@@ -1,4 +1,4 @@
-//! The code index (ORC-38): `project_code_index`, Project settings › Code index, one row, written
+//! The code index (ORC-38): `project_code_index`, Project settings › Context › Code index, one row, written
 //! only when a person sets it; a project without the row has it off (ORC-69 made off the default; a
 //! project turned on before keeps its `on` row, so nobody's choice changes). `invocation_code_index`
 //! and `invocation_edit_progress`, what each agent invocation got of the index and used before its

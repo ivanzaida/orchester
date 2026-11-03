@@ -266,7 +266,7 @@ impl Supervisor {
 
 /// The project's *Agents working at once*, read each time a runner attaches, so a change made while
 /// no runner was connected applies too. Unreadable limits leave the runner the default: it still
-/// serves the project, and Project settings › Limits shows why they cannot be read.
+/// serves the project, and Project settings › Runs › Limits shows why they cannot be read.
 async fn attach_slots(project: &Path) -> NonZeroU32 {
   let root = project.to_path_buf();
   let read = tokio::task::spawn_blocking(move || crate::tasks::usage::limits_in(&root)).await;

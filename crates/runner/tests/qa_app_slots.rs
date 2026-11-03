@@ -1,4 +1,4 @@
-//! Several QA apps at once (`start_qa_app`, Project settings › Limits › *QA apps at once*): with two allowed, two
+//! Several QA apps at once (`start_qa_app`, Project settings › Runs › *QA apps at once*): with two allowed, two
 //! runs' apps run together, each from its own QA folder with its own discovery file, and a third run's start waits,
 //! noted in its transcript with the runs that hold the slots, until one of them stops. A slot's leftover cleanup
 //! leaves alone the app another slot holds, even when its own record names that app's QA folder.

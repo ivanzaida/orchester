@@ -1,4 +1,4 @@
-//! A ripgrep install a person started from Project settings › Code index. It runs on a thread of
+//! A ripgrep install a person started from Project settings › Context › Code index. It runs on a thread of
 //! its own, so it goes on when they leave the page, one at a time, until it ends, is cancelled or
 //! runs out of time ([`INSTALL_TIMEOUT`]). On Windows the installer and what it starts are held in a
 //! kill-on-close Job Object, so closing Orchester stops them; on macOS they go on after Orchester
