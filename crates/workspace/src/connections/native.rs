@@ -157,8 +157,8 @@ pub async fn test_in(runners: &Runners, repo_root: PathBuf, id: ConnectionId) ->
 }
 
 /// Why a test through the runner did not happen.
-fn test_failure(error: &RunRequestError) -> Message {
-  tracing::warn!(%error, "the runner did not test the native connection");
+pub fn test_failure(error: &RunRequestError) -> Message {
+  tracing::warn!(%error, "the runner did not test the connection");
   match error {
     RunRequestError::Request(RequestError::NotConnected) => Message::new("connections.native.testNoRunner"),
     RunRequestError::Request(RequestError::Lost) | RunRequestError::Rejected(_) => {

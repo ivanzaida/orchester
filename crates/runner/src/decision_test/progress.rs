@@ -29,7 +29,7 @@ impl Progress {
     id: IdempotencyKey,
     connection: &DecisionConnection,
     model: ModelId,
-    requests: usize,
+    records: &[orchester_store::RecordedDecisionReview],
   ) -> Result<Self, DecisionTestError> {
     let report = DecisionTestReport {
       id,
@@ -39,8 +39,9 @@ impl Progress {
       model,
       started_at: Timestamp::now(),
       status: DecisionTestStatus::Running,
-      requests: requests as u64,
+      requests: records.len() as u64,
       tested: 0,
+      previously_asked: Some(records.iter().filter(|record| record.previously_asked).count() as u64),
       in_flight: 0,
       failed: 0,
       too_long: 0,

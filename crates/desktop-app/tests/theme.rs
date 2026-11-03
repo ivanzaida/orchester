@@ -7,6 +7,8 @@ mod appearance;
 mod browser;
 #[path = "theme/cards.rs"]
 mod cards;
+#[path = "theme/decision_test.rs"]
+mod decision_test;
 #[path = "theme/dialog.rs"]
 mod dialog;
 #[path = "theme/import.rs"]

@@ -74,7 +74,7 @@ pub async fn test_in(
       None => None,
     };
     let records = db.recorded_decision_reviews()?;
-    let progress = Progress::begin(root, &mut db, id, &connection, model.clone(), records.len())?;
+    let progress = Progress::begin(root, &mut db, id, &connection, model.clone(), &records)?;
     let reviewer = Arc::new(DecisionReviewer::new(
       tokio::runtime::Handle::current(),
       connection,

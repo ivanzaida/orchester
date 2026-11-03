@@ -20,6 +20,7 @@ mod api_provider;
 mod decision;
 mod decision_add;
 mod decision_edit;
+mod decision_test;
 mod entry;
 mod harness;
 mod layout;
