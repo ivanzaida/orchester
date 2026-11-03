@@ -110,8 +110,9 @@ pub enum QuestionState {
 pub enum CommentState {
   /// Waits in the tray for *Send to Implement*; editable and deletable. `failure`: the last send did not go, and why.
   NotSent { failure: Option<ReviewFailure> },
-  /// *Send to Implement* is under way.
-  Sending,
+  /// *Send to Implement* is under way since `since`, while the run had `attempts` attempts: a later one returned to
+  /// Implement tells that the runner took it, when the hand-off was cut off before its answer.
+  Sending { since: Timestamp, attempts: usize },
   /// Sent at `at`: Implement works on it.
   Sent { at: Timestamp },
   /// Implement's work after it ended: `commit` changed the comment's lines (`None`: none did), with Implement's words

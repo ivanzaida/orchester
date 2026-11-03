@@ -5,7 +5,9 @@
 
 use orchester_core::{
   orchestrator::TurnFailure,
-  review::{AgentWords, QuestionState, ReviewError, ReviewFailure, ReviewMessage, Said, ThreadState},
+  review::{
+    AgentWords, QuestionState, ReviewError, ReviewFailure, ReviewMessage, ReviewThread, Said, ThreadKind, ThreadState,
+  },
   run::RunStatus,
 };
 use orchester_exec::programs::Programs;
@@ -48,7 +50,6 @@ fn review_threads_a_question_is_asked_at_once_and_its_answer_streams_in() {
     }
   );
   assert_eq!(asking.step.as_str(), "implement");
-  ask::sent(repo.root(), &asking, Ok(())).expect("the runner took it");
   assert_eq!(state(&repo), ThreadState::Asked, "nothing from Implement yet");
 
   turn(
@@ -57,6 +58,8 @@ fn review_threads_a_question_is_asked_at_once_and_its_answer_streams_in() {
     &Said::Question(QuestionState::Asked),
     QuestionState::Answering,
   );
+  ask::sent(repo.root(), &asking, Ok(())).expect("the runner took it");
+  assert_eq!(state(&repo), ThreadState::Answering, "the runner keeps it answering");
   let words = ReviewMessage::agent(String::new(), true, at(21));
   let mut db = repo.db();
   db.add_review_message(asking.thread, &words).expect("words");
@@ -181,6 +184,32 @@ fn review_threads_a_question_the_runner_does_not_take_is_not_asked_with_why() {
   );
   assert_eq!(state(&repo), ThreadState::NotAsked(interrupted.clone()));
   assert_eq!(failure_message(&interrupted).key, "review.failure.interrupted");
+}
+
+#[test]
+fn review_threads_a_question_whose_hand_off_was_cut_off_is_not_asked_and_may_be_asked_again() {
+  let repo = Repo::new();
+  // Kept asked by an app that ended before the runner took it: no hand-off of this process holds it.
+  let (anchor, head) = repo.anchor(2, 2);
+  let thread = ReviewThread::start(
+    repo.run,
+    (ThreadKind::Question, anchor, head),
+    &body("Why two?"),
+    at(20),
+  );
+  repo.db().add_review_thread(&thread).expect("kept");
+  assert_eq!(state(&repo), ThreadState::NotAsked(ReviewFailure::Lost));
+
+  let again = ask::again(repo.root(), thread.id(), &body("Why two?"), at(21)).expect("asked again");
+  assert_eq!(state(&repo), ThreadState::Asked, "its own hand-off is under way");
+  turn(
+    &repo,
+    &again,
+    &Said::Question(QuestionState::Asked),
+    QuestionState::Answering,
+  );
+  ask::sent(repo.root(), &again, Ok(())).expect("the runner took it");
+  assert_eq!(state(&repo), ThreadState::Answering);
 }
 
 #[test]

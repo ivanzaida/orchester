@@ -12,7 +12,7 @@ use orchester_core::{
 use orchester_exec::programs::Programs;
 use orchester_store::ProjectDb;
 
-use super::{ReviewRefusal, implement_at_work, waiting};
+use super::{ReviewRefusal, implement_at_work, recover, waiting};
 use crate::{
   merge_queue,
   tasks::{
@@ -38,8 +38,8 @@ pub fn approve_and_merge(
   (run, reviewed): (RunId, &Revision),
   now: Timestamp,
 ) -> Result<Approved, ReviewRefusal> {
-  let db = ProjectDb::open(root)?;
-  let threads = db.review_threads(run)?;
+  let mut db = ProjectDb::open(root)?;
+  let threads = recover::threads(&mut db, run)?;
   let stored = match waiting(&db, run) {
     Ok(stored) => stored,
     Err(ReviewRefusal::NotWaiting) if threads.iter().any(|thread| thread.sent().is_some()) => {

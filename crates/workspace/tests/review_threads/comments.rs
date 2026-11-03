@@ -1,11 +1,12 @@
 //! Comments wait unsent in the tray (editable, deletable) until *Send to Implement*, which sends every one of them
 //! and no question in one return of the run's work quoting each; they are sent while Implement works, addressed in the
 //! commit that changed their lines with Implement's words once its work ended, and *Reply* reopens an addressed one
-//! as a new unsent comment. A send the runner does not take keeps every comment unsent with why.
+//! as a new unsent comment. A send the runner does not take keeps every comment unsent with why, and a send cut off
+//! part-way is recovered: sent when the run went back to Implement, else unsent again.
 
 use orchester_core::{
-  review::{ReviewFailure, ReviewMessage, Said, ThreadState},
-  run::Answerer,
+  review::{CommentState, ReviewFailure, ReviewMessage, ReviewThread, Said, ThreadState},
+  run::{Answerer, ReviewNote},
   time::Timestamp,
 };
 use orchester_exec::programs::Programs;
@@ -158,6 +159,64 @@ fn review_threads_a_send_the_runner_does_not_take_keeps_every_comment_unsent_wit
       .comments
       .len(),
     2
+  );
+}
+
+/// Keeps `comment` sending since `since` with the run's attempts so far, as an app that ended before the runner
+/// answered left it: no hand-off of this process holds it.
+fn cut_off(repo: &Repo, comment: &ReviewThread, since: Timestamp) {
+  let sending = Said::Comment(CommentState::Sending {
+    since,
+    attempts: repo.stored().attempts().len(),
+  });
+  let changed = repo
+    .db()
+    .change_review_message(comment.latest_ask().id(), |_| Some(sending.clone()))
+    .expect("kept");
+  assert!(changed);
+}
+
+#[test]
+fn review_threads_a_send_cut_off_before_the_runner_took_it_waits_unsent_again() {
+  let repo = Repo::new();
+  let comment =
+    review_threads::comment(repo.root(), repo.run, repo.anchor(1, 1), &body("Rename one."), at(20)).expect("kept");
+  cut_off(&repo, &comment, at(30));
+  let read = review(&repo);
+  assert_eq!(states(&read), vec![ThreadState::CouldNotSend(ReviewFailure::Lost)]);
+  assert_eq!(read.unsent(), 1, "nothing is lost");
+  assert!(!read.implement_at_work, "approval is open again");
+  review_threads::edit(repo.root(), comment.latest_ask().id(), &body("Rename one to first.")).expect("editable");
+  assert_eq!(
+    send::begin(repo.root(), &Programs::processes(), repo.run)
+      .expect("sent again")
+      .comments,
+    vec![comment.latest_ask().id()]
+  );
+  assert_eq!(
+    review(&repo).threads[0].state,
+    ThreadState::Sending,
+    "its own hand-off is under way"
+  );
+}
+
+#[test]
+fn review_threads_a_send_cut_off_after_the_runner_took_it_is_sent_and_then_addressed() {
+  let repo = Repo::new();
+  let comment =
+    review_threads::comment(repo.root(), repo.run, repo.anchor(1, 1), &body("Rename one."), at(20)).expect("kept");
+  cut_off(&repo, &comment, at(30));
+  repo.return_to_implement(&ReviewNote::new("Rename one.").expect("note"), at(31));
+  let read = review(&repo);
+  assert_eq!(states(&read), vec![ThreadState::Sent]);
+  assert!(read.implement_at_work);
+
+  let commit = repo.implement("fn first() {}\nfn two() {}\nfn three() {}\n", "Renamed one.", at(40));
+  let read = review(&repo);
+  assert_eq!(states(&read), vec![ThreadState::Addressed { commit: Some(commit) }]);
+  assert_eq!(
+    read.threads[0].thread.messages().last().map(ReviewMessage::body),
+    Some("Renamed one.")
   );
 }
 

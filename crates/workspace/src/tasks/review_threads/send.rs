@@ -18,7 +18,11 @@ use orchester_exec::programs::Programs;
 use orchester_ipc::Command;
 use orchester_store::ProjectDb;
 
-use super::{ReviewRefusal, waiting};
+use super::{
+  ReviewRefusal,
+  recover::{self, Holding},
+  waiting,
+};
 use crate::{
   runner::{RequestError, RunRequestError, Runners},
   tasks::{detail::TaskDetail, resolve, return_work},
@@ -34,12 +38,12 @@ pub struct Sending {
 }
 
 /// Keeps every comment waiting unsent on `run` of the project at `root` sending, and gives the command that returns the
-/// run's work to its implementing step with them. Refused while no comment waits, and as a return of the run's work is
-/// refused. `programs` read the run's worktree.
+/// run's work to its implementing step with them, to be handed to the runner with [`send`]. Refused while no comment
+/// waits, and as a return of the run's work is refused. `programs` read the run's worktree.
 pub fn begin(root: &Path, programs: &Programs, run: RunId) -> Result<Sending, ReviewRefusal> {
   let mut db = ProjectDb::open(root)?;
   let stored = waiting(&db, run)?;
-  let threads = db.review_threads(run)?;
+  let threads = recover::threads(&mut db, run)?;
   let unsent: Vec<(&ReviewThread, &ReviewMessage)> = threads
     .iter()
     .filter(|thread| thread.resolved_at().is_none())
@@ -58,21 +62,28 @@ pub fn begin(root: &Path, programs: &Programs, run: RunId) -> Result<Sending, Re
     return Err(ReviewRefusal::Returned(refusal));
   }
   let command = return_work::command(view, step, (note, None), Answerer::Person);
+  let holding = Holding::hold(unsent.iter().map(|(_, comment)| comment.id()).collect());
+  let sending = Said::Comment(CommentState::Sending {
+    since: Timestamp::now(),
+    attempts: stored.attempts().len(),
+  });
   let mut comments = Vec::new();
   for (_, comment) in unsent {
     let changed = db.change_review_message(comment.id(), |said| {
-      matches!(said, Said::Comment(CommentState::NotSent { .. })).then_some(Said::Comment(CommentState::Sending))
+      matches!(said, Said::Comment(CommentState::NotSent { .. })).then(|| sending.clone())
     })?;
     if changed {
       comments.push(comment.id());
     }
   }
+  holding.keep(&comments);
   Ok(Sending { run, comments, command })
 }
 
 /// Hands `sending` to the runner of `open`, starting it when the project has none, and keeps how that went. Blocks on
-/// SQLite once the runner answered.
+/// SQLite once the runner answered. Cut off part-way, the comments are recovered when the run's review is read next.
 pub async fn send(runners: &Runners, open: &OpenProject, sending: &Sending) -> Result<(), ReviewRefusal> {
+  let _holding = Holding::held(sending.comments.clone());
   let result = runners.control_run_in(open, sending.command.clone()).await;
   sent(&open.repo_root, sending, result, Timestamp::now())
 }
@@ -85,6 +96,7 @@ pub fn sent(
   result: Result<(), RunRequestError>,
   now: Timestamp,
 ) -> Result<(), ReviewRefusal> {
+  let _holding = Holding::held(sending.comments.clone());
   let mut db = ProjectDb::open(root)?;
   let (after, refusal) = match result {
     Ok(()) => (CommentState::Sent { at: now }, None),
@@ -101,7 +113,7 @@ pub fn sent(
   };
   for comment in &sending.comments {
     db.change_review_message(*comment, |said| {
-      matches!(said, Said::Comment(CommentState::Sending)).then(|| Said::Comment(after.clone()))
+      matches!(said, Said::Comment(CommentState::Sending { .. })).then(|| Said::Comment(after.clone()))
     })?;
   }
   refusal.map_or(Ok(()), Err)

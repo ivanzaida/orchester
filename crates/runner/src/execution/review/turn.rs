@@ -72,24 +72,22 @@ pub(super) struct Answer {
 }
 
 impl ReviewTurn {
-  /// Runs the turn to its end, or until `stop` says so, and keeps how it ended.
+  /// Runs the turn to its end, or until `stop` says so, and keeps how it ended. The question was kept answering when
+  /// the runner took it.
   pub(super) async fn run(self, stop: oneshot::Receiver<()>) {
     let prepared = match self.prepare() {
       Ok(prepared) => prepared,
       Err(failure) => {
         tracing::warn!(run = %self.run.id(), ?failure, "a review question could not be asked");
         let state = QuestionState::NotAsked { failure };
-        self.record(|db| self.settle(db, &Said::Question(QuestionState::Asked), &state));
+        self.record(|db| self.settle(db, &Said::Question(QuestionState::Answering), &state));
         return;
       }
     };
     let words = ReviewMessage::agent(String::new(), true, Timestamp::now());
     self.record(|db| {
-      let began = self.settle(db, &Said::Question(QuestionState::Asked), &QuestionState::Answering)?;
-      if began {
-        db.add_review_message(self.thread.id(), &words)?;
-      }
-      Ok(began)
+      db.add_review_message(self.thread.id(), &words)?;
+      Ok(true)
     });
     let mut answer = Answer {
       words: words.id(),

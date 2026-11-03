@@ -55,7 +55,7 @@ impl ThreadState {
       Said::Question(QuestionState::NotAsked { failure }) => Self::NotAsked(failure.clone()),
       Said::Comment(CommentState::NotSent { failure: None }) => Self::NotSent,
       Said::Comment(CommentState::NotSent { failure: Some(failure) }) => Self::CouldNotSend(failure.clone()),
-      Said::Comment(CommentState::Sending) => Self::Sending,
+      Said::Comment(CommentState::Sending { .. }) => Self::Sending,
       Said::Comment(CommentState::Sent { .. }) => Self::Sent,
       Said::Comment(CommentState::Addressed { commit }) => Self::Addressed { commit: commit.clone() },
       Said::Agent(_) => unreachable!("the latest ask is the person's"),

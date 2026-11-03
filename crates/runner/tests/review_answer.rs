@@ -103,6 +103,18 @@ async fn review_answer_the_implementing_steps_agent_answers_read_only_and_the_ru
     .answer_review_question(run.id(), StepKey::new("implement").expect("key"), asked)
     .await
     .expect("the turn starts");
+  let taken = ProjectDb::open(root)
+    .expect("open")
+    .review_thread_of(asked)
+    .expect("read")
+    .expect("kept");
+  assert!(
+    !matches!(
+      taken.message(asked).map(|question| question.said()),
+      Some(Said::Question(QuestionState::Asked))
+    ),
+    "a question the runner took is never asked any more: the desktop recovers one still asked"
+  );
   let thread = question(root, &mut events, (run.id(), asked), |state, _| {
     *state == QuestionState::Answered
   })

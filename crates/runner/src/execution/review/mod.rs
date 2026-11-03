@@ -1,9 +1,10 @@
 //! Answering a person's review question on a run that waits for review (`orchester_core::review`, protocol 40): one
 //! read-only turn of the agent of the run's implementing step, in the run's worktree, on the step's connection and
-//! model ([`turn`]), Claude Code ([`claude`]) or Codex App Server ([`codex`]). Its words and live activity are kept in
-//! the thread as they come, and how it ends with the question; the run itself never changes. A thread answers one
-//! question at a time. Stopping a turn ends its CLI, and what it wrote stays. An answer this runner does not drive,
-//! when a desktop attaches, was cut short by the runner before it, and is kept as interrupted.
+//! model ([`turn`]), Claude Code ([`claude`]) or Codex App Server ([`codex`]). A question this runner takes is kept
+//! answering at once, so one still asked was never taken (the desktop recovers it). Its words and live activity are
+//! kept in the thread as they come, and how it ends with the question; the run itself never changes. A thread answers
+//! one question at a time. Stopping a turn ends its CLI, and what it wrote stays. An answer this runner does not drive,
+//! when a desktop attaches, was cut short by the runner before it, and is kept as interrupted, its words as written.
 
 mod claude;
 mod codex;
@@ -15,11 +16,11 @@ use orchester_core::{
   id::{ReviewMessageId, ReviewThreadId, RunId},
   orchestrator::{TIME_LIMIT, TurnFailure},
   resource::StepKey,
-  review::{QuestionState, ReviewFailure, Said},
+  review::{AgentWords, QuestionState, ReviewFailure, Said},
   store::RunStore,
 };
 use orchester_ipc::{Event, Rejection};
-use orchester_store::ProjectDb;
+use orchester_store::{ProjectDb, StoreError};
 use parking_lot::Mutex;
 use tokio::{sync::oneshot, task::JoinHandle};
 
@@ -55,7 +56,8 @@ impl Scheduler {
   }
 
   /// Answers review question `message` on `run` with a turn of the agent of its implementing step `step`; nothing when
-  /// its answer is under way or ended already.
+  /// its answer is under way or ended already. The question is answering once this returns: one the desktop still
+  /// finds asked was never taken.
   pub async fn answer_review_question(
     &self,
     run: RunId,
@@ -65,7 +67,7 @@ impl Scheduler {
     if self.inner.board.is_stopping() {
       return Err(Rejection::ShuttingDown);
     }
-    let db = self.open()?;
+    let mut db = self.open()?;
     let thread = db
       .review_thread_of(message)
       .map_err(|error| failed("cannot read the review thread", &error))?
@@ -91,6 +93,16 @@ impl Scheduler {
         Err(Rejection::QuestionNotAwaited)
       };
     }
+    let answering = Said::Question(QuestionState::Answering);
+    let taken = db
+      .change_review_message(message, |said| {
+        matches!(said, Said::Question(QuestionState::Asked)).then(|| answering.clone())
+      })
+      .map_err(|error| failed("cannot keep the review question answering", &error))?;
+    if !taken {
+      return Err(Rejection::QuestionNotAwaited);
+    }
+    self.review_changed(&db, run);
     let (stop, stopped) = oneshot::channel();
     let id = thread.id();
     let turn = ReviewTurn {
@@ -139,10 +151,14 @@ impl Scheduler {
     };
     if let Some(question) = stored.asking().map(|question| question.id()) {
       let stopped = Said::Question(QuestionState::Stopped);
-      db.change_review_message(question, |said| {
-        matches!(said, Said::Question(QuestionState::Answering)).then(|| stopped.clone())
-      })
-      .map_err(|error| failed("cannot keep the stopped review answer", &error))?;
+      let changed = db
+        .change_review_message(question, |said| {
+          matches!(said, Said::Question(QuestionState::Answering)).then(|| stopped.clone())
+        })
+        .map_err(|error| failed("cannot keep the stopped review answer", &error))?;
+      if changed {
+        end_words(&mut db, question).map_err(|error| failed("cannot keep the stopped review answer", &error))?;
+      }
       self.review_changed(&db, run);
     }
     Ok(())
@@ -158,11 +174,16 @@ impl Scheduler {
     let interrupted = Said::Question(QuestionState::NotAsked {
       failure: ReviewFailure::Turn(TurnFailure::Interrupted),
     });
+    let store = |error: &StoreError| failed("cannot keep an interrupted review answer", error);
     for (run, question) in answering.into_iter().filter(|(_, question)| !held.contains(question)) {
-      db.change_review_message(question, |said| {
-        matches!(said, Said::Question(QuestionState::Answering)).then(|| interrupted.clone())
-      })
-      .map_err(|error| failed("cannot keep an interrupted review answer", &error))?;
+      let changed = db
+        .change_review_message(question, |said| {
+          matches!(said, Said::Question(QuestionState::Answering)).then(|| interrupted.clone())
+        })
+        .map_err(|error| store(&error))?;
+      if changed {
+        end_words(db, question).map_err(|error| store(&error))?;
+      }
       self.review_changed(db, run);
     }
     Ok(())
@@ -179,4 +200,24 @@ impl Scheduler {
       Err(error) => tracing::warn!(%run, %error, "cannot read the run whose review changed"),
     }
   }
+}
+
+/// Keeps Implement's words after `question` as written, without what it did last: no turn writes them any more.
+fn end_words(db: &mut ProjectDb, question: ReviewMessageId) -> Result<(), StoreError> {
+  let Some(thread) = db.review_thread_of(question)? else {
+    return Ok(());
+  };
+  let ended = Said::Agent(AgentWords {
+    writing: false,
+    activity: None,
+  });
+  let writing = thread
+    .messages()
+    .iter()
+    .skip_while(|message| message.id() != question)
+    .filter(|message| matches!(message.said(), Said::Agent(words) if words.writing));
+  for words in writing {
+    db.write_review_words(words.id(), words.body(), &ended)?;
+  }
+  Ok(())
 }

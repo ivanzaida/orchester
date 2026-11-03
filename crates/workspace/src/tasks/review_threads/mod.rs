@@ -2,12 +2,14 @@
 //! the thread and tray states of `RBR9O`) and automation read and change it (`orchester_core::review`): threads
 //! anchored to lines of the run's diff at the head the person read, *Viewed* marks per head, questions that go to
 //! Implement at once ([`ask`]), comments that wait unsent until *Send to Implement* ([`send`]), and *Approve and merge*
-//! at the reviewed head ([`approve`]). Reading the threads settles the comments Implement addressed and tells which
-//! threads a later head made outdated ([`read`]). Blocks on SQLite and git.
+//! at the reviewed head ([`approve`]). Reading the threads recovers hand-offs to the runner cut off part-way
+//! (`recover`), settles the comments Implement addressed and tells which threads a later head made outdated
+//! ([`read`]). Blocks on SQLite and git.
 
 pub mod approve;
 pub mod ask;
 pub mod read;
+mod recover;
 pub mod send;
 mod words;
 
@@ -202,7 +204,7 @@ fn implement_at_work(threads: &[ReviewThread], run: &Run) -> bool {
     .iter()
     .flat_map(ReviewThread::messages)
     .any(|message| match message.said() {
-      Said::Comment(CommentState::Sending) => true,
+      Said::Comment(CommentState::Sending { .. }) => true,
       Said::Comment(CommentState::Sent { .. }) => !run.status().is_terminal(),
       _ => false,
     })

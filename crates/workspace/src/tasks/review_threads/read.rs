@@ -21,7 +21,7 @@ use orchester_core::{
 use orchester_exec::programs::Programs;
 use orchester_store::ProjectDb;
 
-use super::{ReviewRefusal, implement_at_work};
+use super::{ReviewRefusal, implement_at_work, recover};
 use crate::tasks::{
   changes::{Checkpointed, GIT, RunRange, checkpointed_in, own_start},
   detail::run_store_error,
@@ -79,7 +79,7 @@ pub fn review_of(root: &Path, programs: &Programs, run: RunId) -> Result<Review,
     range: &range,
     head: head.as_ref(),
   };
-  let mut threads = db.review_threads(run)?;
+  let mut threads = recover::threads(&mut db, run)?;
   if stored.status().is_terminal() && threads.iter().any(|thread| thread.sent().is_some()) {
     settle_addressed(&mut db, &lines, &stored, &threads)?;
     threads = db.review_threads(run)?;
