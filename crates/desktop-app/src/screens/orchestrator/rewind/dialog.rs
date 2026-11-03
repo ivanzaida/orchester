@@ -8,7 +8,7 @@
 use std::sync::Arc;
 
 use lurq::{app::ctx::Ctx, node::Element};
-use orchester_core::orchestrator::RewindPoint;
+use orchester_core::orchestrator::{ChatAction, RewindPoint};
 use orchester_workspace::display;
 
 use super::{Asked, Failed};
@@ -142,8 +142,26 @@ fn what(ctx: &Ctx, asked: &Asked, (time, count): (&str, u32)) -> lurq::component
     (false, RewindPoint::Before(_), _) => ctx.t_args("orchestrator.rewind.confirm.whatBefore", args.clone()),
     (false, RewindPoint::After { .. }, _) => ctx.t_args("orchestrator.rewind.confirm.whatAfter", args.clone()),
   };
-  let done: Vec<String> = dropped
-    .done
+  let stays = if dropped.done.is_empty() {
+    ctx.t_args("orchestrator.rewind.staysNone", [("time", time)])
+  } else {
+    ctx.t_args(
+      "orchestrator.rewind.stays",
+      [("time", time.to_owned()), ("list", done_list(ctx, &dropped.done))],
+    )
+  };
+  lines(
+    "orchestrator-rewind-does",
+    [
+      line("orchestrator-rewind-goes", Icon::MessagesSquare, &goes),
+      line("orchestrator-rewind-stays", Icon::ListChecks, &stays),
+    ],
+  )
+}
+
+/// What `done` did, each as its line says it, after one another: *Created task KON-31, Started run KON-31*.
+pub(super) fn done_list(ctx: &Ctx, done: &[ChatAction]) -> String {
+  let items: Vec<String> = done
     .iter()
     .map(|action| {
       let task = action.task.as_deref().unwrap_or_default();
@@ -157,21 +175,7 @@ fn what(ctx: &Ctx, asked: &Asked, (time, count): (&str, u32)) -> lurq::component
         .to_owned()
     })
     .collect();
-  let stays = if done.is_empty() {
-    ctx.t_args("orchestrator.rewind.staysNone", [("time", time)])
-  } else {
-    ctx.t_args(
-      "orchestrator.rewind.stays",
-      [("time", time.to_owned()), ("list", done.join(", "))],
-    )
-  };
-  lines(
-    "orchestrator-rewind-does",
-    [
-      line("orchestrator-rewind-goes", Icon::MessagesSquare, &goes),
-      line("orchestrator-rewind-stays", Icon::ListChecks, &stays),
-    ],
-  )
+  items.join(", ")
 }
 
 /// The words of the key for one or for `count` other than one, with `args`.

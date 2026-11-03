@@ -39,7 +39,8 @@ pub(super) enum Named<'a> {
   New,
   /// One being opened, with its title when History has it: loading never looks like a new conversation.
   Opening(Option<&'a str>),
-  Chat(&'a Chat),
+  /// A kept one, and whether it is a fork (ORC-334), which says when it was forked (11 `RT5T7`).
+  Chat(&'a Chat, bool),
 }
 
 pub(super) fn header(ctx: &mut Ctx, view: &View, (project, chat): (&ShownProject, Named<'_>)) -> Element {
@@ -47,12 +48,12 @@ pub(super) fn header(ctx: &mut Ctx, view: &View, (project, chat): (&ShownProject
     Named::New => ctx.t("orchestrator.newTitle"),
     Named::Opening(Some(title)) => title.into(),
     Named::Opening(None) => ctx.t("orchestrator.loading.title"),
-    Named::Chat(chat) => chat.title().into(),
+    Named::Chat(chat, _) => chat.title().into(),
   };
   let meta = match chat {
     Named::New => None,
     Named::Opening(_) => Some(ctx.t("orchestrator.loading.meta")),
-    Named::Chat(chat) => Some(started(ctx, chat.started())),
+    Named::Chat(chat, forked) => Some(started(ctx, chat.started(), forked)),
   };
   let history = view.history.clone();
   let mut toggle = IconButton::new("orchestrator-history", Icon::PanelRight, ctx.t("orchestrator.history"))
@@ -97,7 +98,7 @@ fn new_conversation(ctx: &mut Ctx, project: &ShownProject, chat: Named<'_>) -> A
   let button =
     ActionButton::new("orchestrator-new", ButtonKind::Ghost, ctx.t("orchestrator.new")).icon(Icon::SquarePen);
   match chat {
-    Named::Opening(_) | Named::Chat(_) => {
+    Named::Opening(_) | Named::Chat(..) => {
       let navigation = Navigation::of(ctx);
       button.opens(navigation.to(Route::Project(
         project.open.project.id(),
@@ -108,11 +109,16 @@ fn new_conversation(ctx: &mut Ctx, project: &ShownProject, chat: Named<'_>) -> A
   }
 }
 
-/// *· today 16:02*, or *· Oct 8* for an earlier day.
-fn started(ctx: &Ctx, at: Timestamp) -> std::sync::Arc<str> {
-  if at.local_day_start() == Timestamp::now().local_day_start() {
-    ctx.t_args("orchestrator.meta.today", [("time", display::clock(at).as_str())])
+/// *· today 16:02*, or *· Oct 8* for an earlier day; *· forked today 16:24* for a fork.
+fn started(ctx: &Ctx, at: Timestamp, forked: bool) -> std::sync::Arc<str> {
+  let (today, on) = if forked {
+    ("orchestrator.meta.forkedToday", "orchestrator.meta.forkedOn")
   } else {
-    ctx.t_args("orchestrator.meta.on", [("date", &*super::date(ctx, at))])
+    ("orchestrator.meta.today", "orchestrator.meta.on")
+  };
+  if at.local_day_start() == Timestamp::now().local_day_start() {
+    ctx.t_args(today, [("time", display::clock(at).as_str())])
+  } else {
+    ctx.t_args(on, [("date", &*super::date(ctx, at))])
   }
 }

@@ -277,7 +277,7 @@ impl Component for OrchestratorScreen {
       _ => None,
     });
     let chat = match &reads.shown {
-      Shown::Chat(shown) => Named::Chat(&shown.chat),
+      Shown::Chat(shown) => Named::Chat(&shown.chat, rewind::forked::is_fork(&shown.entries)),
       Shown::Loading => Named::Opening(reads.target.and_then(|target| {
         let chats = &reads.history.ready()?.chats;
         let listing = chats.iter().find(|listing| listing.chat.id() == target)?;

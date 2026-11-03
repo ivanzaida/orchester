@@ -184,3 +184,13 @@ fn rewind_icons_match_bundled_font_names() {
     assert_eq!(glyph_name(font, font_glyph(font, icon.glyph() as usize)), name);
   }
 }
+
+/// The glyph of *Fork from here* and the fork's line (ORC-330's `GYAPg`, `RT5T7`).
+#[test]
+fn fork_icons_match_bundled_font_names() {
+  let font = include_bytes!("../../assets/fonts/lucide.ttf");
+  assert_eq!(
+    glyph_name(font, font_glyph(font, Icon::GitFork.glyph() as usize)),
+    "git-fork"
+  );
+}

@@ -1,10 +1,14 @@
 //! The `orchestrator` scenario with *Webhook retries*, the conversation of ORC-330's frames, as the one the
-//! Orchestrator opens on (`Orchestrator · redesign` `hujxu`, ORC-333):
+//! Orchestrator opens on (`Orchestrator · redesign` `hujxu`, ORC-333, ORC-334):
 //! - `orchestrator-rewind`: three answered turns, the second of which drafted KON-31 and started its run and the third
 //!   drafted KON-32: hovering the second message shows *Edit*, Copy and `…` (`09` `GYAPg`), *Edit* turns it into a
-//!   field (`09b` `QJb0b`), its *Send* and *Rewind to here* ask first (`09c` `z7sgJ`);
+//!   field (`09b` `QJb0b`), its *Send* and *Rewind to here* ask first (`09c` `z7sgJ`), its *Fork from here* opens the
+//!   fork with the message's words in its composer (`11` `RT5T7`);
 //! - `orchestrator-rewound`: that conversation rewound to before its second message, which dropped four messages: the
-//!   rewound line and what the Orchestrator did after it, which stays (`10` `Zm7kq`).
+//!   rewound line and what the Orchestrator did after it, which stays (`10` `Zm7kq`);
+//! - `orchestrator-forked`: that conversation forked from before its second message, a minute ago, as *Webhook retries
+//!   · fork*, which the Orchestrator opens on: the fork's line, the copied turn and what the original made after it
+//!   (`11` `RT5T7`; its composer is empty, since a draft lives only while the app runs).
 
 use orchester_core::{
   conversation::MessageBody,
@@ -13,7 +17,7 @@ use orchester_core::{
   resource::ModelId,
   time::Timestamp,
 };
-use orchester_store::ChatRewind;
+use orchester_store::{ChatFork, ChatRewind};
 
 use super::orchestrator;
 use crate::kontur::{Kontur, SeedError};
@@ -32,6 +36,18 @@ pub fn rewound(kontur: &mut Kontur) -> Result<(), SeedError> {
   match kontur.db.rewind_chat(chat, RewindPoint::Before(draft), kontur.ago(1))? {
     ChatRewind::Rewound { .. } => Ok(()),
     other => Err(SeedError::Invalid(format!("the rewind went {other:?}"))),
+  }
+}
+
+pub fn forked(kontur: &mut Kontur) -> Result<(), SeedError> {
+  let (chat, draft) = webhook_retries(kontur)?;
+  let fork = (ChatId::generate(), "Webhook retries · fork");
+  match kontur
+    .db
+    .fork_chat((chat, RewindPoint::Before(draft)), fork, kontur.ago(1))?
+  {
+    ChatFork::Forked { .. } => Ok(()),
+    other => Err(SeedError::Invalid(format!("the fork went {other:?}"))),
   }
 }
 

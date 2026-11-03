@@ -84,6 +84,21 @@ task on its page.).
 `open_original` (Open original ↗), `made.title` (Made after this point in the original), `made.body` ({list} stay as they
 are. This conversation starts without them: mention them if you need them.).
 
+## Fork as built (ORC-334)
+
+- **Engine.** A fork is a new conversation without a session, as after a rewind: its first turn starts a new Claude
+  Code session or Codex thread, primed with the copied conversation (`orchester_core::orchestrator::rewind::
+  primed_prompt`, opened by the fork's own line). It is not told what the original did after the point, as *Made
+  after this point in the original* says. The original keeps its session and goes on as it was.
+- **While the Orchestrator answers**, *Fork from here* stays available, unlike 09d's third row (the task's rule wins):
+  `…` opens, *Rewind to here* in its menu is unavailable with *Stop the answer to edit or rewind*, and the fork takes
+  what was kept so far. A turn still under way is copied as stopped; a message still waiting for its turn is not
+  copied.
+- **Attachments are shared**: each copied message gets attachment rows of its own (a row belongs to one message), and
+  each new copy file is a hard link to the original's, so the content is not written again and deleting either
+  conversation leaves the other's file. Where the file system has no hard links, the file is copied.
+- A copy of a wait or a daily report never starts a turn by itself, and keeps a key of its own.
+
 ## Open
 
 - No component or variable was added or changed. The message toolbar, the editing field and the marker lines are local

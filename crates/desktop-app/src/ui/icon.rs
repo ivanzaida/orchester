@@ -150,6 +150,7 @@ icons! {
   GitCommitHorizontal => '\u{e0e3}',
   GitCompare => '\u{e359}',
   GitCompareArrows => '\u{e553}',
+  GitFork => '\u{e28d}',
   GitMerge => '\u{e0e4}',
   GitPullRequest => '\u{e0e5}',
   GitPullRequestClosed => '\u{e35a}',

@@ -39,6 +39,7 @@ mod modules;
 mod native;
 mod orchestrator;
 mod orchestrator_compactions;
+mod orchestrator_fork;
 mod orchestrator_plans;
 mod orchestrator_queue;
 mod orchestrator_reports;
@@ -125,6 +126,7 @@ pub use self::{
   estimates::AutomationPoints,
   joining::{JoinedKey, ReturnedTask},
   orchestrator::{ChatListing, ChatTurn},
+  orchestrator_fork::ChatFork,
   orchestrator_plans::ApprovedPlan,
   orchestrator_queue::StartedQueued,
   orchestrator_reports::KeptReport,
