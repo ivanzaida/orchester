@@ -33,6 +33,18 @@ pub(crate) fn repo_with_leftovers(ending: Ending) -> (Repo, Run) {
 }
 
 #[test]
+fn storage_cleanup_removes_worktrees_but_preserves_merged_and_unmerged_branches() {
+  let (repo, run) = repo_with_leftovers(Ending::Succeeded);
+  merge_run(&Processes, &git_program(), &repo.root, (&run, &task()), now()).expect("merge");
+  let cleanup = orchester_core::integration::clean_up_worktrees(&Processes, &git_program(), &repo.root, &run, None)
+    .expect("remove");
+  assert_eq!(cleanup.removed.len(), 2);
+  assert!(cleanup.deleted.is_empty());
+  assert!(repo.branch_exists(RUN_BRANCH));
+  assert!(repo.branch_exists(STEP_BRANCH));
+}
+
+#[test]
 fn leftovers_list_the_worktrees_their_changes_and_which_branches_are_merged() {
   let (repo, run) = repo_with_leftovers(Ending::Succeeded);
   // A worktree of someone else's is not the run's.

@@ -16,6 +16,7 @@ mod rules;
 mod runs;
 mod sharing;
 mod sources;
+mod storage;
 mod work;
 
 use lurq::{
@@ -41,6 +42,7 @@ pub enum Shown {
   Tab(Tab),
   /// *Approved for every run*, under Runs.
   Rules,
+  Storage,
   Connections(ConnectionsView),
   NewConnection(NewConnection),
   EditConnection(ConnectionId),
@@ -51,7 +53,7 @@ impl Shown {
   const fn section(self) -> Section {
     match self {
       Self::Tab(Tab::General) => Section::General,
-      Self::Tab(Tab::Runs) | Self::Rules => Section::Runs,
+      Self::Tab(Tab::Runs) | Self::Rules | Self::Storage => Section::Runs,
       Self::Tab(Tab::Orchestrator) => Section::Orchestrator,
       Self::Tab(Tab::Context) => Section::Context,
       Self::Tab(Tab::Sharing) => Section::Sharing,
@@ -74,6 +76,7 @@ impl Shown {
     match self {
       Self::Tab(tab) => ProjectPage::Settings(tab),
       Self::Rules => ProjectPage::ProjectRules,
+      Self::Storage => ProjectPage::Storage,
       Self::Connections(view) => ProjectPage::Connections(view),
       Self::NewConnection(kind) => ProjectPage::NewConnection(kind),
       Self::EditConnection(id) => ProjectPage::EditConnection(id),
@@ -271,6 +274,7 @@ impl Component for SettingsScreen {
       (Shown::Tab(Tab::Context), _) => ctx.mount_keyed::<context::Context>("project-settings-context", props),
       (Shown::Tab(Tab::Sharing), _) => ctx.mount_keyed::<sharing::Sharing>("project-settings-sharing", props),
       (Shown::Rules, _) => ctx.mount_keyed::<rules::Rules>("project-settings-rules", props),
+      (Shown::Storage, _) => ctx.mount_keyed::<storage::StoragePage>("project-settings-storage", props),
       (Shown::Connections(view), _) => super::connections::screen(ctx, &project, view),
       (Shown::NewConnection(kind), _) => super::connections::new_connection(ctx, &project, kind),
       (Shown::EditConnection(id), _) => super::connections::edit_connection(ctx, &project, id),

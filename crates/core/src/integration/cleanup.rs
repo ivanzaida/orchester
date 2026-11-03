@@ -128,6 +128,8 @@ pub enum KeepReason {
   NotMerged,
   /// The branch is checked out in a worktree that was kept.
   InKeptWorktree,
+  /// Kept by a storage cleanup, which removes worktrees only.
+  Preserved,
   /// Git refused; its message.
   Failed(String),
 }
@@ -228,6 +230,16 @@ pub fn clean_up(
   clear(runner, (git, repo), run, Discard::Seen(confirmed))
 }
 
+/// Removes only worktrees, preserving every branch (Project settings › Runs › Storage).
+pub fn clean_up_worktrees(
+  runner: &impl CommandRunner,
+  git: &Path,
+  repo: &Path,
+  run: &Run,
+  confirmed: Option<&Leftovers>,
+) -> Result<Cleanup, CleanupError> {
+  clear(runner, (git, repo), run, Discard::Worktrees(confirmed))
+}
 /// Removes every worktree of `run`, which ended, uncommitted changes and all, and deletes every branch of it, merged
 /// or not: what a person who deletes the run's task chose to lose with it (ORC-91). Commits merged elsewhere stay
 /// on the branches they were merged into. Errors and refusals come as [`clean_up`]'s do.
@@ -239,6 +251,7 @@ pub fn clean_up_all(runner: &impl CommandRunner, git: &Path, repo: &Path, run: &
 #[derive(Clone, Copy)]
 enum Discard<'a> {
   Seen(Option<&'a Leftovers>),
+  Worktrees(Option<&'a Leftovers>),
   Everything,
 }
 
@@ -267,6 +280,10 @@ fn clear(
   }
   let unmerged_too = matches!(discard, Discard::Everything);
   for branch in current.branches {
+    if matches!(discard, Discard::Worktrees(_)) {
+      cleanup.kept_branches.push((branch.name, KeepReason::Preserved));
+      continue;
+    }
     let kept = cleanup
       .kept_worktrees
       .iter()
@@ -294,7 +311,7 @@ fn remove<R: CommandRunner>(git: &Git<'_, R>, mut worktree: LeftWorktree, discar
   }
   let agreed = match discard {
     Discard::Everything => true,
-    Discard::Seen(confirmed) => confirmed.is_some_and(|confirmed| {
+    Discard::Seen(confirmed) | Discard::Worktrees(confirmed) => confirmed.is_some_and(|confirmed| {
       confirmed.worktrees.iter().any(|seen| {
         seen.path == worktree.path && seen.uncommitted == worktree.uncommitted && seen.listing == worktree.listing
       })

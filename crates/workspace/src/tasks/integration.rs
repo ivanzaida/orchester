@@ -404,7 +404,7 @@ pub fn merge_in_as(
   }
   super::local_integration::settle_review(&mut db, &merge);
   crate::base_moved::after_merge(repo_root, programs);
-  let cleanup = clear(&mut db, programs, repo_root, &run, None);
+  let cleanup = clear(&mut db, programs, repo_root, &run, None, false);
   if cleanup.is_err() {
     tracing::warn!("the run was merged, but what it left could not be cleared");
   }
@@ -450,13 +450,43 @@ pub fn remove_in(
   run: &Run,
   confirmed: &Leftovers,
 ) -> Result<(), IntegrationProblem> {
+  remove_as(repo_root, programs, run, confirmed, false)
+}
+
+/// Storage cleanup keeps all branches and refuses runs that have not ended.
+pub fn remove_storage_in(
+  repo_root: &Path,
+  programs: &Programs,
+  run: &Run,
+  confirmed: &Leftovers,
+) -> Result<(), IntegrationProblem> {
+  if !run.status().is_terminal() {
+    return Err(IntegrationProblem::Cleanup(CleanupError::LiveWork));
+  }
+  remove_as(repo_root, programs, run, confirmed, true)
+}
+
+fn remove_as(
+  repo_root: &Path,
+  programs: &Programs,
+  run: &Run,
+  confirmed: &Leftovers,
+  preserve_branches: bool,
+) -> Result<(), IntegrationProblem> {
   let mut db = ProjectDb::open(repo_root)?;
   let stored = db
     .run(run.id())
     .map_err(run_store_error)?
     .filter(|stored| worktree_owners(stored) == worktree_owners(run))
     .ok_or(IntegrationProblem::RunChanged)?;
-  let cleanup = clear(&mut db, programs, repo_root, &stored, Some(confirmed))?;
+  let cleanup = clear(
+    &mut db,
+    programs,
+    repo_root,
+    &stored,
+    Some(confirmed),
+    preserve_branches,
+  )?;
   match cleanup.kept_worktrees.into_iter().next() {
     None => Ok(()),
     Some((worktree, KeepReason::Failed(detail))) => Err(IntegrationProblem::NotRemoved {
@@ -490,22 +520,35 @@ fn clear(
   repo_root: &Path,
   run: &Run,
   confirmed: Option<&Leftovers>,
+  preserve_branches: bool,
 ) -> Result<Cleanup, IntegrationProblem> {
   let git = programs.git_work();
   let unchanged = |db: &ProjectDb| {
     let stored = db.run(run.id()).map_err(run_store_error)?;
-    Ok(stored.is_some_and(|stored| worktree_owners(&stored) == worktree_owners(run)))
+    Ok(stored.is_some_and(|stored| {
+      worktree_owners(&stored) == worktree_owners(run) && (!preserve_branches || stored.status().is_terminal())
+    }))
   };
   let git = (&git, Path::new(GIT), repo_root);
-  let mut cleanup =
-    clean_up_recorded_as_seen(db, git, run, confirmed, (Timestamp::now(), unchanged)).map_err(|error| {
-      tracing::warn!("cannot remove what the run left");
-      match error {
-        RecordedCleanupError::Cleanup(error) => IntegrationProblem::Cleanup(error),
-        RecordedCleanupError::Store(error) => IntegrationProblem::from(error),
-        RecordedCleanupError::RunChanged => IntegrationProblem::RunChanged,
-      }
-    })?;
+  let removed = if preserve_branches {
+    orchester_core::integration::clean_up_recorded_worktrees_as_seen(
+      db,
+      git,
+      run,
+      confirmed,
+      (Timestamp::now(), unchanged),
+    )
+  } else {
+    clean_up_recorded_as_seen(db, git, run, confirmed, (Timestamp::now(), unchanged))
+  };
+  let mut cleanup = removed.map_err(|error| {
+    tracing::warn!("cannot remove what the run left");
+    match error {
+      RecordedCleanupError::Cleanup(error) => IntegrationProblem::Cleanup(error),
+      RecordedCleanupError::Store(error) => IntegrationProblem::from(error),
+      RecordedCleanupError::RunChanged => IntegrationProblem::RunChanged,
+    }
+  })?;
   let stop = |folder: &Path| RunProcesses::stop_in(folder, run.created_at());
   if let Err(error) = finish_removal(db, git, (run.id(), Timestamp::now()), &mut cleanup, stop) {
     // The worktrees are as the clean-up says either way; only the record of what stayed is missing.
@@ -514,7 +557,9 @@ fn clear(
   if let Some(left) = cleanup.not_removed() {
     tracing::warn!(run = %run.id(), path = %left.path, reason = ?left.reason, "a worktree of the run was not removed");
   }
-  super::worktree_sweep::sweep_in_background(programs, repo_root);
+  if !preserve_branches {
+    super::worktree_sweep::sweep_in_background(programs, repo_root);
+  }
   prune_indexes(repo_root);
   Ok(cleanup)
 }

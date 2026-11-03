@@ -87,3 +87,45 @@ fn storage_lists_what_could_be_cleaned_only_while_the_disk_guard_holds() {
   let kept_less = storage::read(&root, &Disk(32)).expect("read");
   assert!(!kept_less.guard.holds(), "a changed keep-free applies at once");
 }
+
+#[test]
+fn storage_inventory_lists_all_folders_without_the_guard_and_sorts_measured_sizes() {
+  let mut fixture = Fixture::new();
+  let root = fixture.repo.path().to_path_buf();
+  let task = fixture.task("Ship it", at(1));
+  let mut ended = fixture.started_run(task, at(2));
+  fixture.succeed(&mut ended, at(3));
+  let working = fixture.started_run(task, at(4));
+  fill(&run_worktree(&root, ended.id()), 1_000);
+  fill(&run_worktree(&root, working.id()), 50_000);
+  let mut rows = storage::inventory(&root).expect("inventory");
+  assert_eq!(rows.len(), 2);
+  assert!(rows.iter().all(|row| row.bytes.is_none()), "sizing is a separate pass");
+  assert_eq!(
+    rows
+      .iter()
+      .filter_map(storage::KeptRow::removable_run)
+      .collect::<Vec<_>>(),
+    [ended.id()]
+  );
+  for row in &mut rows {
+    storage::measure(row);
+  }
+  storage::largest_first(&mut rows);
+  assert_eq!(rows[0].run, Some(working.id()));
+  assert!(rows[0].in_use);
+  assert_eq!(rows[0].bytes, Some(50_000));
+  assert_eq!(storage::paused_runs(&root).expect("paused"), 0);
+}
+
+#[test]
+fn storage_save_keep_free_is_read_by_the_next_guard_check() {
+  let fixture = Fixture::new();
+  let root = fixture.repo.path();
+  storage::save_keep_free(root, KeepFree::from_gigabytes(1).expect("minimum")).expect("save");
+  assert!(!storage::read(root, &Disk(32)).expect("read").guard.holds());
+  storage::save_keep_free(root, KeepFree::from_gigabytes(1048576).expect("maximum")).expect("save");
+  assert!(storage::read(root, &Disk(32)).expect("read").guard.holds());
+  assert!(KeepFree::from_gigabytes(0).is_err());
+  assert!(KeepFree::from_gigabytes(1048577).is_err());
+}

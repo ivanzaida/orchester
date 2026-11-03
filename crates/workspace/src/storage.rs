@@ -3,16 +3,16 @@
 //! off — and, while it does, what could be cleaned to make room, in the order to clean
 //! ([`orchester_core::workspaces::cleanable_order`]). The runner holds and resumes the work itself.
 
+mod inventory;
 use std::path::Path;
 
+pub use inventory::{KeptKind, KeptRow, inventory, largest_first, measure, paused_runs};
 use orchester_core::{
-  store::{SettingsStore, WorkspaceStore},
-  workspaces::{Cleanable, CleanableKind, DiskSpace, DiskUsage, KeepFree, cleanable_order},
+  store::SettingsStore,
+  workspaces::{Cleanable, DiskSpace, DiskUsage, KeepFree, cleanable_order},
 };
-use orchester_exec::disk_space::{LocalDisks, folder_size};
+use orchester_exec::disk_space::LocalDisks;
 use orchester_store::{ProjectDb, StoreError};
-
-use crate::{tasks::changes::run_worktree, warm_workspaces::old_worktrees};
 
 /// The disk guard of a project as it stands now.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -59,10 +59,10 @@ pub struct CleanableRow {
 /// The storage of the project at `repo_root`, its disk read by `disks`. While the guard holds it walks the folders
 /// that could be cleaned to size them, so it blocks: callers read it off the UI thread.
 pub fn read(repo_root: &Path, disks: &dyn DiskSpace) -> Result<Storage, StoreError> {
-  let db = ProjectDb::open(repo_root)?;
+  let db = ProjectDb::open_read_only(repo_root)?;
   let guard = DiskGuard::read(&db, repo_root, disks)?;
   let cleanable = if guard.holds() {
-    cleanable(&db, repo_root)?
+    cleanable(repo_root)?
   } else {
     Vec::new()
   };
@@ -74,48 +74,69 @@ pub fn read_local(repo_root: &Path) -> Result<Storage, StoreError> {
   read(repo_root, &LocalDisks)
 }
 
-/// The worktrees of ended runs and the idle warm workspaces, sized, in the order to clean.
-fn cleanable(db: &ProjectDb, repo_root: &Path) -> Result<Vec<CleanableRow>, StoreError> {
-  let worktrees: Vec<_> = old_worktrees(db, repo_root)?
-    .into_iter()
-    .filter(|worktree| worktree.ended_at.is_some())
-    .collect();
-  let workspaces = db
-    .workspaces()?
-    .into_iter()
-    .filter(|record| record.holder.is_none() && record.stranded.is_none())
-    .map(|record| {
-      let path = record.number.path(repo_root);
-      Cleanable {
-        kind: CleanableKind::IdleWorkspace { number: record.number },
-        bytes: folder_size(&path).ok(),
-        path,
-      }
-    });
+/// The worktrees of ended runs and idle warm workspaces, with the inventory's same rules.
+fn cleanable(repo_root: &Path) -> Result<Vec<CleanableRow>, StoreError> {
+  let mut rows = inventory(repo_root)?;
+  rows.retain(|row| row.cleanable.is_some());
+  for row in &mut rows {
+    measure(row);
+  }
   let ordered = cleanable_order(
-    worktrees
+    rows
       .iter()
-      .map(|worktree| Cleanable {
-        kind: CleanableKind::EndedRunWorktree { run: worktree.run },
-        path: run_worktree(repo_root, worktree.run),
-        bytes: worktree.bytes,
+      .filter_map(|row| {
+        row.cleanable.map(|kind| Cleanable {
+          kind,
+          path: row.path.clone(),
+          bytes: row.bytes,
+        })
       })
-      .chain(workspaces)
       .collect(),
   );
   Ok(
     ordered
       .into_iter()
       .map(|cleanable| {
-        let run = match cleanable.kind {
-          CleanableKind::EndedRunWorktree { run } => worktrees
-            .iter()
-            .find(|worktree| worktree.run == run)
-            .map(|worktree| (worktree.task_key.clone(), worktree.number)),
-          CleanableKind::IdleWorkspace { .. } => None,
-        };
+        let run = rows
+          .iter()
+          .find(|row| row.path == cleanable.path)
+          .and_then(|row| row.task.as_ref().map(|(key, _, number)| (key.clone(), *number)));
         CleanableRow { cleanable, run }
       })
       .collect(),
   )
+}
+
+/// Saving a validated KeepFree is the same operation for the window and MCP.
+pub fn save_keep_free(repo_root: &Path, keep: KeepFree) -> Result<(), StoreError> {
+  ProjectDb::open(repo_root)?.save_keep_free(keep)
+}
+
+/// The shared activity message while Storage removes confirmed worktrees.
+pub fn cleanup_running() -> crate::messages::Message {
+  crate::messages::Message::new("settings.project.runs.storage.clean_up.running")
+}
+
+/// Summarizes only worktrees actually removed; unreadable sizes stay explicitly unknown.
+pub fn cleanup_outcome(failed: usize, removed: usize, freed: Option<u64>) -> crate::messages::Message {
+  let key = match (failed == 0, freed.is_some()) {
+    (true, true) => "settings.project.runs.storage.clean_up.done",
+    (false, true) => "settings.project.runs.storage.clean_up.partial",
+    (true, false) => "settings.project.runs.storage.clean_up.doneUnknown",
+    (false, false) => "settings.project.runs.storage.clean_up.partialUnknown",
+  };
+  crate::messages::Message::new(key)
+    .with("count", if failed == 0 { removed } else { failed }.to_string())
+    .with(
+      "size",
+      freed.map_or_else(String::new, |n| {
+        format!("{:.1}", n as f64 / orchester_core::workspaces::GIGABYTE as f64)
+      }),
+    )
+}
+
+/// A cheap, read-only guard read, suitable for the status bar; it never sizes folders.
+pub fn guard_local(repo_root: &Path) -> Result<DiskGuard, StoreError> {
+  let db = ProjectDb::open_read_only(repo_root)?;
+  DiskGuard::read(&db, repo_root, &LocalDisks)
 }

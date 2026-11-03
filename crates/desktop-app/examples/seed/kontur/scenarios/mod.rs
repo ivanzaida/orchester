@@ -40,6 +40,7 @@ mod shared_config;
 mod shared_here;
 mod slot_wait;
 mod sources;
+mod storage;
 mod task_states;
 mod tasks;
 mod tasks_memory;
@@ -93,7 +94,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 101] = [
+pub const ALL: [Scenario; 103] = [
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-library", agents_library::seed),
   Scenario::of("agents-browser", agents_browser::seed),
@@ -148,6 +149,8 @@ pub const ALL: [Scenario; 101] = [
   Scenario::of("native", native::seed),
   Scenario::of("project-settings", project_settings::seed),
   Scenario::of("project-settings-shared", project_settings::shared),
+  Scenario::of("storage-low-disk", storage::low_disk),
+  Scenario::of("storage-empty", storage::nothing),
   Scenario::of("shared-config", shared_config::admin),
   Scenario::of("shared-config-member", shared_config::member),
   Scenario::of("shared-config-here", shared_here::seed),

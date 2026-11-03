@@ -34,6 +34,10 @@ fn connections_and_secrets_routes_are_project_settings_tabs() {
       format!("/project/{PROJECT}/secrets"),
     ),
     (
+      ProjectPage::Storage,
+      format!("/project/{PROJECT}/settings?tab=runs&view=storage"),
+    ),
+    (
       ProjectPage::ProjectRules,
       format!("/project/{PROJECT}/settings?tab=runs&view=rules"),
     ),

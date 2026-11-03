@@ -1107,6 +1107,19 @@
     }
   },
   "settings": {
+    "project": {
+      "runs": {
+        "storage": {
+          "clean_up": {
+            "running": "Cleaning up ended runs' worktrees",
+            "done": "Clean up freed about {{size}} GB · {{count}} ended runs' worktrees removed",
+            "partial": "Clean up freed about {{size}} GB · {{count}} ended runs could not be removed",
+            "doneUnknown": "Clean up removed {{count}} ended runs' worktrees · sizes were unavailable",
+            "partialUnknown": "Clean up finished · {{count}} ended runs could not be removed; freed space is unknown"
+          }
+        }
+      }
+    },
     "codeIndex": {
       "listFailed": "Couldn’t read the kept indexes",
       "rebuildFailed": "The index was not rebuilt: {{reason}}",

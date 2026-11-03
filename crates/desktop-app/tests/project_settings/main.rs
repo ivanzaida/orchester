@@ -21,5 +21,7 @@ mod reviewer_authority;
 mod reviewer_refresh;
 mod run_fixture;
 mod sources;
+mod storage;
+mod storage_cleanup;
 #[path = "../support/mod.rs"]
 mod support;

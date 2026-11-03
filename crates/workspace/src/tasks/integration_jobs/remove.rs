@@ -26,6 +26,15 @@ impl RunJobs {
   /// only its caller: the person's dialog stays open and shows the worktree removed, and a failure
   /// touches neither what the person sees nor the status bar's failures.
   pub fn start_remove(&self, args: RemoveArgs) {
+    self.start_remove_as(args, false);
+  }
+
+  /// Storage's removal uses the same job lock but preserves all branches.
+  pub fn start_storage_remove(&self, args: RemoveArgs) {
+    self.start_remove_as(args, true);
+  }
+
+  fn start_remove_as(&self, args: RemoveArgs, storage: bool) {
     if !self.begin(Active::Remove) {
       return;
     }
@@ -41,7 +50,7 @@ impl RunJobs {
     let job = self.clone();
     if let Err(error) = thread::Builder::new()
       .name("run-cleanup".into())
-      .spawn(move || job.remove_now(args))
+      .spawn(move || job.remove_now(args, storage))
     {
       tracing::error!(%error, "cannot start run cleanup thread");
       match automation {
@@ -52,7 +61,7 @@ impl RunJobs {
     }
   }
 
-  fn remove_now(&self, args: RemoveArgs) {
+  fn remove_now(&self, args: RemoveArgs, storage: bool) {
     let RemoveArgs {
       open,
       task,
@@ -71,7 +80,11 @@ impl RunJobs {
       .with("task", key)
       .with("run", number.to_string());
     let result = catch_unwind(AssertUnwindSafe(|| {
-      remove_in(&open.repo_root, &programs, &run, &confirmed)
+      if storage {
+        super::super::integration::remove_storage_in(&open.repo_root, &programs, &run, &confirmed)
+      } else {
+        remove_in(&open.repo_root, &programs, &run, &confirmed)
+      }
     }));
     let run_changed = matches!(result, Ok(Err(IntegrationProblem::RunChanged)));
     let outcome = match (result, &by) {

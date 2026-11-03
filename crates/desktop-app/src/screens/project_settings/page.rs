@@ -108,7 +108,7 @@ const fn at_root(shown: Shown) -> bool {
     Shown::Tab(_) => true,
     Shown::Connections(view) => view.selected().is_none(),
     Shown::Secrets(view) => view.secret.is_none() && matches!(view.panel, crate::routes::SecretsPanel::Inspect),
-    Shown::Rules | Shown::NewConnection(_) | Shown::EditConnection(_) => false,
+    Shown::Rules | Shown::Storage | Shown::NewConnection(_) | Shown::EditConnection(_) => false,
   }
 }
 
@@ -153,6 +153,10 @@ pub fn scroll_with(content: impl Into<Element>, state: &ScrollState) -> Element 
   column_scroll(content).with_scroll_state(state.clone()).into()
 }
 fn column_scroll(content: impl Into<Element>) -> ScrollVertical {
+  column_scroll_wide(content, WIDTH)
+}
+/// Storage's left-aligned pane (E7GqFt), wider to leave room for its size columns.
+pub fn column_scroll_wide(content: impl Into<Element>, width: f32) -> ScrollVertical {
   ScrollVertical::new(
     Column::new()
       .id("settings-form")
@@ -167,7 +171,7 @@ fn column_scroll(content: impl Into<Element>) -> ScrollVertical {
       .child(
         Column::new()
           .width(Dimension::Pct(100.0))
-          .max_width(Dimension::Px(WIDTH))
+          .max_width(Dimension::Px(width))
           .spacing(ExtraSpacing::Roomy.role())
           .child(content),
       ),
