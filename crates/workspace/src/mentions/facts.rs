@@ -7,7 +7,7 @@
 
 use std::{fmt::Write, path::Path};
 
-use orchester_core::{run::TaskPhase, task::organization::WorkflowStatus};
+use orchester_core::{conversation::skill::without_skill, run::TaskPhase, task::organization::WorkflowStatus};
 use orchester_store::{ProjectDb, StoreError};
 
 use super::{
@@ -67,8 +67,10 @@ pub fn with_facts(catalog: &Catalog, text: &str) -> String {
   block
 }
 
-/// What the person wrote of `stored`, a message as it was kept: without the block of its mentions.
+/// What the person wrote of `stored`, a message as it was kept: without the block of its mentions, nor that of the
+/// skill they chose for it (`orchester_core::conversation::skill`), which its chip shows.
 pub fn said(stored: &str) -> &str {
+  let stored = without_skill(stored);
   let Some(body) = stored.trim_end().strip_suffix(CLOSE) else {
     return stored;
   };

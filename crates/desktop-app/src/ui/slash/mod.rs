@@ -24,7 +24,7 @@ use orchester_workspace::skills::offered::OfferedSkill;
 use parking_lot::Mutex;
 
 pub use self::{
-  chip::{send_held, with_skill_chip},
+  chip::{SkillReach, plan_held, sent_skill_chip, with_skill_chip},
   menu::{SlashMenuProps, menu},
   skills::SkillsOffer,
 };

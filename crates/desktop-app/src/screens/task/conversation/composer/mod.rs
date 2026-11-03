@@ -74,7 +74,7 @@ use crate::{
     icon::{Icon, icon},
     mention::{self, MentionField, MenuProps},
     message::message_text,
-    slash::{SlashField, send_held, with_skill_chip},
+    slash::{SkillReach, SlashField, plan_held, with_skill_chip},
   },
 };
 
@@ -309,7 +309,8 @@ impl Composer {
     };
     let presses = presses::presses(&composing.state, &target, (&mode, recipient));
     let field = self.field(ctx, props, &mode, (&presses, leave.clone()));
-    let field = with_skill_chip(ctx, "composer", &composing.state.skill, field);
+    // A run's agents read the skill in its block with the message, whatever their engine (ORC-634).
+    let field = with_skill_chip(ctx, ("composer", SkillReach::Text), &composing.state.skill, field);
     let attached = &composing.state.attached;
     let context = composing
       .detail
@@ -359,7 +360,7 @@ impl Composer {
     let note = words::note(ctx, &mode, &props.conversation).map(|note| quiet(&note));
     let mentions = self.mentions(ctx, composing);
     let commands = commands::menu(ctx, (&self.slash, &self.box_anchor), composing, (&mode, recipient));
-    let held = composing.state.skill.get().map(|_| send_held(ctx, "composer"));
+    let held = matches!(presses, Sending::SkillHeld).then(|| plan_held(ctx, "composer"));
     context::line(ctx, composing, (&mode, recipient), leave)
       .into_iter()
       .chain(std::iter::once(tray::drop_target(composer, attached).into()))

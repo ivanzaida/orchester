@@ -3,10 +3,13 @@
 //! control does (*New conversation* as the header's *New*, *History* as its toggle), and the typed `/` goes; a command
 //! that cannot run is greyed with why; Esc closes the menu and keeps the text; a `/` inside text is just text. Compact
 //! and Model and effort are not offered until their controls exist. The project's published skills follow the commands
-//! (ORC-325), and a chosen one becomes the composer's chip.
+//! (ORC-325), a chosen one becomes the composer's chip, and it goes with the message (ORC-634).
+
+use std::fs;
 
 use orchester_app::routes::{OrchestratorChat, ProjectPage, Route};
 use orchester_core::{
+  orchestrator::EntryKind,
   resource::{InstructionScope, Skill},
   time::Timestamp,
 };
@@ -190,8 +193,7 @@ fn publish_skills(screen: &Orchestrator) {
 }
 
 /// The Skills section (`IQOLN`, `OKWFL`) lists the published skills, never a draft; choosing one puts its chip before
-/// the message (`07c` `f0b717`), and while the chip holds it nothing is sent, as a line under the box says; its `x`
-/// removes it, and sending goes on.
+/// the message (`07c` `f0b717`), whose `x` removes it.
 #[test]
 fn orchestrator_slash_offers_published_skills_and_a_chosen_one_becomes_a_chip() {
   let mut screen = on_a_conversation();
@@ -213,19 +215,67 @@ fn orchestrator_slash_offers_published_skills_and_a_chosen_one_becomes_a_chip() 
   screen.until("the chip", |screen| screen.exists(CHIP) && !screen.exists(MENU));
   assert_eq!(draft(&mut screen), "", "the typed / goes");
   assert!(screen.text(CHIP).contains("release-notes"), "{}", screen.text(CHIP));
-  assert!(screen.exists(HELD), "why nothing is sent");
-
-  write(&mut screen, "for v0.4");
-  screen.key(("Enter", "Enter"), true);
-  screen.window.pass();
-  assert_eq!(draft(&mut screen), "for v0.4", "nothing was sent");
-  assert!(!screen.text("orchestrator-conversation").contains("for v0.4"));
+  assert!(!screen.exists(HELD), "a skill holds no message back");
 
   screen.click(&format!("{CHIP}-remove"));
-  screen.until("the chip to go", |screen| !screen.exists(CHIP) && !screen.exists(HELD));
+  screen.until("the chip to go", |screen| !screen.exists(CHIP));
+  assert_eq!(draft(&mut screen), "", "the draft stays as it was");
+}
+
+/// ORC-634: a message with a chosen skill is kept with the skill's block before the words, and goes to the
+/// Orchestrator on Claude Code as the CLI's own skill: the runner starts it with the skill's plugin and slash commands
+/// on, but still no setting source, and gives it the plugin's command with the words after it (the fake CLI answers
+/// `Noted: <prompt>`). The conversation shows the skill's chip over the person's words, never the block, and the
+/// composer's chip empties once the message is kept.
+#[test]
+fn orchestrator_sends_a_chosen_skill_as_claude_codes_own_and_shows_its_chip_on_the_message() {
+  let mut screen = on_a_conversation();
+  publish_skills(&screen);
+  write(&mut screen, "/rel");
+  screen.until("the skill", |screen| screen.exists(NOTES));
+  screen.key(("Enter", "Enter"), false);
+  screen.until("the chip", |screen| screen.exists(CHIP));
+
   write(&mut screen, "for v0.4");
   screen.key(("Enter", "Enter"), true);
-  screen.until("the message sent", |screen| {
-    screen.text("orchestrator-conversation").contains("Noted: for v0.4")
+  screen.until("the answer", |screen| {
+    screen
+      .text("orchestrator-conversation")
+      .contains("Noted: /orchester:release-notes for v0.4")
   });
+  screen.until("the chip to go", |screen| !screen.exists(CHIP));
+  let started = fs::read_to_string(screen.root.join(".orchester").join("fake-chat.log")).expect("the agent's log");
+  let argv = started
+    .lines()
+    .rfind(|line| line.starts_with("argv: "))
+    .expect("how the turn started");
+  assert!(argv.contains("--plugin-dir "), "{argv}");
+  assert!(argv.contains(".orchester") && argv.contains("chat-skills"), "{argv}");
+  assert!(!argv.contains("--disable-slash-commands"), "{argv}");
+  assert!(argv.contains("--setting-sources  "), "no setting source: {argv}");
+
+  let db = screen.db();
+  let chat = db.chats().expect("chats")[0].chat.id();
+  let message = db
+    .chat_entries(chat)
+    .expect("entries")
+    .into_iter()
+    .find_map(|entry| match entry.kind {
+      EntryKind::Person { message, text, .. } if text.as_str().ends_with("for v0.4") => Some((message, text)),
+      _ => None,
+    })
+    .expect("the message kept");
+  assert!(
+    message
+      .1
+      .as_str()
+      .starts_with("<orchester-skill name=\"release-notes\" version=\"1\""),
+    "{}",
+    message.1.as_str()
+  );
+  let sent = format!("orchestrator-message-{}-skill-chip", message.0);
+  screen.until("the sent message's chip", |screen| screen.exists(&sent));
+  assert!(screen.text(&sent).contains("release-notes"));
+  let shown = screen.text("orchestrator-conversation");
+  assert!(!shown.contains("orchester-skill"), "the block never shows: {shown}");
 }
