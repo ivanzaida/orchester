@@ -15,6 +15,7 @@ pub(super) mod chat;
 pub(super) mod conversation;
 pub(super) mod estimate;
 pub(super) mod idle;
+pub(super) mod link;
 pub(super) mod low_disk;
 pub(super) mod missing_checkpoints;
 pub(super) mod permissions;

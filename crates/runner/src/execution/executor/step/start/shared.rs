@@ -10,10 +10,13 @@ use orchester_core::{
   permission::{EffectiveApprovalMode, FolderBounds, ManualReason, ResolvedFolder, capability::EnforcedPermissions},
   resource::{AgentProfile, ModelId, Step, StepKey, StepKind},
   run::{PinnedVersion, StepExecutor},
-  store::{ActivityStore, ConnectionStore, ResourceStore},
+  store::{ActivityStore, ConnectionStore},
 };
 
-use super::{super::super::run::RunTask, problem};
+use super::{
+  super::super::{link::resources::pinned_version, run::RunTask},
+  problem,
+};
 
 impl RunTask {
   /// A step whose agent never started waits for its account's reset before it takes an agent slot: it opens, and
@@ -165,13 +168,9 @@ impl RunTask {
     profile: &PinnedVersion,
     step: &StepKey,
   ) -> Result<(AgentProfile, AgentConnection), RunnerProblem> {
-    let body: AgentProfile = self
-      .db
-      .version::<AgentProfile>(profile.resource, profile.number)
+    let body = pinned_version::<AgentProfile>(&*self.link, profile)
       .map_err(|error| problem(error.to_string()))?
-      .ok_or_else(|| problem(format!("agent profile version {} is missing", profile.number)))?
-      .body()
-      .clone();
+      .ok_or_else(|| problem(format!("agent profile version {} is missing", profile.number)))?;
     let chosen = self
       .db
       .step_connection(self.run.id(), step)

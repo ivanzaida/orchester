@@ -35,6 +35,7 @@ use super::{
   codebase_index::{self, IndexBuild, IndexState},
   control::{Ack, Control, answer},
   disk_guard::DiskGuard,
+  link::{CoordinatorLink, LinkError},
   pool::PoolError,
   prepared::{Prepared, RunFolder},
   record::{RecordError, announce_ready, record},
@@ -57,6 +58,8 @@ pub(super) enum ExecutionError {
   Record(#[from] RecordError),
   #[error(transparent)]
   Store(#[from] StoreError),
+  #[error(transparent)]
+  Link(#[from] LinkError),
   #[error("step execution {0} is not an agent step of the run")]
   NotAnAgentStep(StepExecutionId),
   #[error("the run has steps left but none can run")]
@@ -71,6 +74,7 @@ pub(super) enum ExecutionError {
 /// requests arrive and where it tells the scheduler that it no longer executes the run.
 pub(in crate::execution) struct TaskContext {
   pub(in crate::execution) root: PathBuf,
+  pub(in crate::execution) link: Box<dyn CoordinatorLink + Send>,
   pub(in crate::execution) notifier: Notifier,
   pub(in crate::execution) vault: Arc<dyn SecretVault>,
   pub(in crate::execution) relay: Option<PathBuf>,
@@ -97,6 +101,8 @@ pub(in crate::execution) struct RunTask {
   /// A step a person asked to start on its account now ([`Prepared::try_at_plan_limit`]), taken when it starts.
   pub(super) try_at_plan_limit: Option<orchester_core::id::StepExecutionId>,
   pub(super) root: PathBuf,
+  /// Where the run's task asks for the project's data it reads through the link ([`super::link`]).
+  pub(super) link: Box<dyn CoordinatorLink + Send>,
   pub(super) db: ProjectDb,
   pub(super) run: Run,
   pub(super) task: Task,
@@ -150,6 +156,7 @@ impl RunTask {
     let (worker_events, events) = mpsc::unbounded_channel();
     Self {
       root: context.root,
+      link: context.link,
       db,
       run: prepared.run,
       task: prepared.task,

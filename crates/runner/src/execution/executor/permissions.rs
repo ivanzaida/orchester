@@ -13,7 +13,7 @@ use orchester_core::{
   permission::AgentPermissions,
   resource::AgentProfile,
   run::{PermissionsApply, Run, RunError, StepExecutor},
-  store::{ConnectionStore, ResourceStore},
+  store::ConnectionStore,
 };
 use orchester_ipc::Rejection;
 use orchester_store::ProjectDb;
@@ -21,6 +21,7 @@ use orchester_store::ProjectDb;
 use super::{
   control::{Ack, answer},
   failed,
+  link::resources::{ResourceLink, pinned_version},
   record::{RecordError, record},
   run::{ExecutionError, RunTask},
   step::worker::{Stop, StopCause},
@@ -38,7 +39,7 @@ pub(in crate::execution) struct PermissionsChange {
 impl RunTask {
   /// Records `change`; for Apply now, tells the profile's agents to stop after their command.
   pub(super) fn change_permissions(&mut self, change: PermissionsChange, ack: Ack) -> Result<(), ExecutionError> {
-    let provider = match provider_of(&self.db, &self.run, change.profile) {
+    let provider = match provider_of((&*self.link, &self.db), &self.run, change.profile) {
       Ok(provider) => provider,
       Err(rejection) => {
         answer(ack, Err(rejection));
@@ -110,9 +111,10 @@ impl RunTask {
   }
 }
 
-/// The agent CLI of `profile`'s connection, as the run pinned the profile.
+/// The agent CLI of `profile`'s connection, as the run pinned the profile: the profile version asked through `link`,
+/// its connection read in `db`.
 pub(in crate::execution) fn provider_of(
-  db: &ProjectDb,
+  (link, db): (&(impl ResourceLink + ?Sized), &ProjectDb),
   run: &Run,
   profile: ResourceId,
 ) -> Result<AgentProvider, Rejection> {
@@ -125,12 +127,11 @@ pub(in crate::execution) fn provider_of(
       _ => None,
     })
     .ok_or(Rejection::ProfileNotInRun)?;
-  let version = db
-    .version::<AgentProfile>(pinned.resource, pinned.number)
+  let body = pinned_version::<AgentProfile>(link, &pinned)
     .map_err(|error| failed("cannot read the agent profile", &error))?
     .ok_or(Rejection::ProfileNotInRun)?;
   let connection = db
-    .connection(version.body().connection())
+    .connection(body.connection())
     .map_err(|error| failed("cannot read the profile's connection", &error))?;
   match connection.as_ref().map(|connection| connection.kind()) {
     Some(ConnectionKind::Agent(provider)) => Ok(*provider),

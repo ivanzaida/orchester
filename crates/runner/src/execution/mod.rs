@@ -47,7 +47,10 @@ use tokio::{
 
 pub use self::{
   coordinator::attach::Attached,
-  executor::step::{QaSlots, outside_read_refusals},
+  executor::{
+    link,
+    step::{QaSlots, outside_read_refusals},
+  },
 };
 // The coordinator's modules are named by their full path here, never imported: an import would make them reachable
 // from the executor as `crate::execution::<module>`, past the check of `crates/runner/tests/execution_split.rs`.
@@ -522,10 +525,13 @@ impl Scheduler {
         detail: format!("another task still executes run {run}"),
       });
     }
+    let link = coordinator::link::LocalLink::open(&self.inner.project_root)
+      .map_err(|error| failed("cannot open the project database", &error))?;
     let (control, controls) = mpsc::unbounded_channel();
     let settled = Arc::new(AtomicBool::new(false));
     let context = TaskContext {
       root: self.inner.project_root.clone(),
+      link: Box::new(link),
       notifier: self.inner.notifier.clone(),
       vault: self.inner.vault.clone(),
       relay: self.inner.relay.clone(),
