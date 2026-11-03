@@ -169,3 +169,18 @@ fn mention_menu_icons_match_bundled_font_names() {
     assert_eq!(glyph_name(font, font_glyph(font, icon.glyph() as usize)), name);
   }
 }
+
+/// The glyphs of Edit and *Rewind to here* on an earlier message (ORC-330's `GYAPg`, `QJb0b`, `Zm7kq`).
+#[test]
+fn rewind_icons_match_bundled_font_names() {
+  let font = include_bytes!("../../assets/fonts/lucide.ttf");
+  for (icon, name) in [
+    (Icon::MessageSquareX, "message-square-x"),
+    (Icon::History, "history"),
+    (Icon::Ellipsis, "ellipsis"),
+    (Icon::ArrowDown, "arrow-down"),
+    (Icon::ListChecks, "list-checks"),
+  ] {
+    assert_eq!(glyph_name(font, font_glyph(font, icon.glyph() as usize)), name);
+  }
+}

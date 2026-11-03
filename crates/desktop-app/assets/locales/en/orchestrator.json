@@ -121,6 +121,77 @@
       "failed": "The queued message wasn't changed",
       "dismiss": "Dismiss"
     },
+    "message": {
+      "edit": "Edit",
+      "more": "More actions",
+      "rewind": "Rewind to here",
+      "busy": "Stop the answer to edit or rewind",
+      "nothingAfter": "Nothing comes after this answer"
+    },
+    "edit": {
+      "field": "Edit your message",
+      "drops": {
+        "one": "Sending drops the message after this one",
+        "other": "Sending drops the {{count}} messages after this one"
+      },
+      "dropLine": {
+        "one": "This message goes when you send",
+        "other": "These {{count}} messages go when you send"
+      },
+      "send": "Send",
+      "cancel": "Cancel",
+      "keySend": "sends",
+      "keyCancel": "cancels",
+      "blank": "Write the message first",
+      "confirm": {
+        "title": {
+          "one": "Send the edit and drop 1 message?",
+          "other": "Send the edit and drop {{count}} messages?"
+        },
+        "what": "Your edit replaces the message from {{time}}. The {{count}} messages after it leave this conversation: {{mine}} from you and {{theirs}} from the Orchestrator.",
+        "whatOne": "Your edit replaces the message from {{time}}. The message after it leaves this conversation.",
+        "send": {
+          "one": "Drop 1 and send",
+          "other": "Drop {{count}} and send"
+        },
+        "enterSends": "sends"
+      },
+      "notSent": "The conversation went back, but your edit wasn't sent",
+      "notSentBody": "{{why}} Your edit is in the composer: send it from there.",
+      "dismiss": "Dismiss"
+    },
+    "rewind": {
+      "confirm": {
+        "before": {
+          "one": "Rewind to before {{time}} and drop 1 message?",
+          "other": "Rewind to before {{time}} and drop {{count}} messages?"
+        },
+        "after": {
+          "one": "Rewind to after the answer of {{time}} and drop 1 message?",
+          "other": "Rewind to after the answer of {{time}} and drop {{count}} messages?"
+        },
+        "whatBefore": "Your message from {{time}} and everything after it leave this conversation: {{mine}} from you and {{theirs}} from the Orchestrator. Its text goes back to the composer.",
+        "whatAfter": "Everything after the answer of {{time}} leaves this conversation: {{mine}} from you and {{theirs}} from the Orchestrator.",
+        "go": "Rewind",
+        "enterRewinds": "rewinds"
+      },
+      "stays": "What the Orchestrator did after {{time}} stays: {{list}}. The Orchestrator is told they exist.",
+      "staysNone": "The Orchestrator made no task, run or change after {{time}}: nothing is left behind.",
+      "staysItem": "{{what}} {{task}}",
+      "failed": "Nothing was dropped: {{reason}}",
+      "lineBefore": {
+        "one": "Rewound to before your message of {{time}} · 1 message dropped",
+        "other": "Rewound to before your message of {{time}} · {{count}} messages dropped"
+      },
+      "lineAfter": {
+        "one": "Rewound to after the answer of {{time}} · 1 message dropped",
+        "other": "Rewound to after the answer of {{time}} · {{count}} messages dropped"
+      },
+      "kept": {
+        "title": "What the Orchestrator did after this point stays",
+        "body": "The Orchestrator still knows about them. To undo one, cancel the run or delete the task on its page."
+      }
+    },
     "thinking": "Orchestrator is thinking",
     "stop": "Stop",
     "stopNote": "Stop ends this answer only. Tasks, runs and the queue are not touched.",

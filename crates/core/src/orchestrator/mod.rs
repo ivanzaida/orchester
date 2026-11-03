@@ -17,6 +17,7 @@ pub mod plan;
 pub mod proposal;
 pub mod report;
 pub mod resume;
+pub mod rewind;
 pub mod sent;
 pub mod settings;
 pub mod wait;
@@ -30,6 +31,7 @@ pub use self::{
   plan::{ChatPlan, PlanState, PlanStep, StepKind, TurnMode},
   report::{DailyReport, ReportSchedule, ReportTime},
   resume::{ChatResume, Continuing, PersonsStop},
+  rewind::{Dropped, RewindPoint, RewoundTo},
   sent::{FromOrchestrator, SentWay},
   settings::{OrchestratorSettings, runs_orchestrator},
   wait::{AgentWait, RunEnd, StopReason, WaitKind},

@@ -31,7 +31,7 @@ use super::{
 use crate::{
   theme::ExtraSpacing,
   ui::{
-    chat::{Avatar, agent_text, chat_row_marked, copyable_row},
+    chat::{Avatar, agent_text, chat_row_marked, copyable_row_with},
     todo_list::{chip, ended},
   },
 };
@@ -39,7 +39,8 @@ use crate::{
 /// The answer under `row`'s opening, with the Orchestrator's avatar and name; `None` before its first part. Once it
 /// ended, the todo list its agent kept folds into its name line as a chip, which opens the list under that line
 /// (09 g `OoT5k`); while it answers, the list is pinned over the composer instead (`super::body`). An answer that
-/// wrote something has Copy at the end of its name line, which copies what it wrote (ORC-323).
+/// wrote something has Copy at the end of its name line, which copies what it wrote (ORC-323), and `…` after it,
+/// whose menu rewinds to just after it (ORC-333, `super::rewind::toolbar`).
 pub(super) fn answer(ctx: &mut Ctx, row: &TurnRow) -> Option<Element> {
   let first = row.turn.answer.first()?;
   let time = display::clock(first.at());
@@ -48,7 +49,16 @@ pub(super) fn answer(ctx: &mut Ctx, row: &TurnRow) -> Option<Element> {
   let body = list.into_iter().chain([parts(ctx, row).into()]).collect();
   let (id, title) = (format!("orchestrator-answer-{key}"), ctx.t("orchestrator.title"));
   Some(match written(row) {
-    Some(markdown) => copyable_row(ctx, &id, (Avatar::Orchestrator, &markdown), (&title, &time, mark), body),
+    Some(markdown) => {
+      let extras = row.env.rewind.on_answer(ctx, &row.turn);
+      copyable_row_with(
+        ctx,
+        &id,
+        (Avatar::Orchestrator, &markdown, extras),
+        (&title, &time, mark),
+        body,
+      )
+    }
     None => chat_row_marked(id, Avatar::Orchestrator, (&title, &time, mark), body),
   })
 }

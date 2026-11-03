@@ -120,12 +120,13 @@ impl ProjectDb {
   }
 
   /// The turn of `message`: its prompt, its conversation and where it stands; `None` when it is not kept. A turn that
-  /// plans tells the agent so before the person's words ([`plan_prompt`]).
+  /// plans tells the agent so before the person's words ([`plan_prompt`]); the first turn after a rewind is told the
+  /// conversation as it was kept ([`Self::primed`]).
   pub fn chat_turn(&self, message: ChatMessageId) -> Result<Option<ChatTurn>, StoreError> {
     let row = self
       .connection
       .query_row(
-        "SELECT chat_id, kind, body, turn, failure, mode FROM orchestrator_entries WHERE message_id = ?1",
+        "SELECT chat_id, kind, body, turn, failure, mode, seq FROM orchestrator_entries WHERE message_id = ?1",
         [message.to_string()],
         |row| {
           Ok((
@@ -135,13 +136,13 @@ impl ProjectDb {
               row.get::<_, String>(2)?,
             ],
             row.get::<_, String>(3)?,
-            row.get::<_, Option<String>>(4)?,
-            row.get::<_, Option<String>>(5)?,
+            [row.get::<_, Option<String>>(4)?, row.get::<_, Option<String>>(5)?],
+            row.get::<_, i64>(6)?,
           ))
         },
       )
       .optional()?;
-    let Some(([chat, kind, body], turn, failure, mode)) = row else {
+    let Some(([chat, kind, body], turn, [failure, mode], seq)) = row else {
       return Ok(None);
     };
     let chat = self
@@ -154,10 +155,17 @@ impl ProjectDb {
       (_, TurnMode::Plans) => plan_prompt(&body),
       _ => body,
     };
+    let turn = turn_state(&turn, failure.as_deref())?;
+    // A message handed to a turn under way is not a turn's prompt of its own.
+    let prompt = if turn.has_turn() {
+      self.primed(&chat, seq, prompt)?
+    } else {
+      prompt
+    };
     Ok(Some(ChatTurn {
       chat,
       text: MessageBody::new(&prompt).map_err(|error| corrupt("chat message", error))?,
-      turn: turn_state(&turn, failure.as_deref())?,
+      turn,
     }))
   }
 

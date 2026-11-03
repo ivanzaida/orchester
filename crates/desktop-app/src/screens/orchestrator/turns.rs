@@ -90,10 +90,13 @@ pub(super) struct Turn {
   pub(super) moved: Option<EndMoved>,
   /// The daily report that opens the row instead of a person's message.
   pub(super) report: Option<Box<DailyReport>>,
-  /// A compaction of the session, which is the whole row (`super::compaction`).
+  /// An event that is the whole row: a compaction of the session (`super::compaction`), or where a rewind went back
+  /// to (`super::rewind::line`).
   pub(super) compaction: Option<ChatEvent>,
   /// Its entry in the conversation; `None` while it is being sent.
   seq: Option<i64>,
+  /// The entry of the last part of its answer; `None` before its answer said or did anything.
+  last: Option<i64>,
   /// When it was kept; `None` while it is being sent.
   pub(super) at: Option<Timestamp>,
   /// When its turn ended, when the runner said.
@@ -130,6 +133,7 @@ impl Turn {
       report: None,
       compaction: None,
       seq: None,
+      last: None,
       at: None,
       ended: None,
       state: Some(state),
@@ -165,6 +169,7 @@ impl Turn {
       report: None,
       compaction: None,
       seq: Some(entry.seq),
+      last: None,
       at: Some(entry.at),
       ended: turn.and_then(|turn| turn.ended),
       state: turn.map(|turn| turn.state.clone()),
@@ -194,6 +199,16 @@ impl Turn {
       (None, Some(seq)) => format!("wait-{seq}"),
       (None, None) => "sending".to_owned(),
     }
+  }
+
+  /// Its entry in the conversation; `None` while it is being sent.
+  pub(super) const fn seq(&self) -> Option<i64> {
+    self.seq
+  }
+
+  /// The entry of the last part of its answer; `None` before its answer said or did anything.
+  pub(super) const fn last(&self) -> Option<i64> {
+    self.last
   }
 }
 
@@ -240,8 +255,9 @@ pub(super) fn turns(shown: &ChatView) -> Vec<Turn> {
         });
         continue;
       }
-      // A compaction is a row of its own between the turns (`06b` `j7eSQO`).
-      EntryKind::Event(event @ ChatEvent::Compaction { .. }) => {
+      // A compaction is a row of its own between the turns (`06b` `j7eSQO`), and so is where a rewind went back to
+      // (`10` `Zm7kq`).
+      EntryKind::Event(event @ (ChatEvent::Compaction { .. } | ChatEvent::Rewound { .. })) => {
         turns.push(Turn {
           compaction: Some(event.clone()),
           ..Turn::opened(entry, None)
@@ -273,6 +289,7 @@ pub(super) fn turns(shown: &ChatView) -> Vec<Turn> {
     };
     if let Some(turn) = turns.iter_mut().rev().find(|turn| turn.takes_parts()) {
       turn.answer.push(part);
+      turn.last = Some(entry.seq);
     }
   }
   join_answers(&mut turns);
@@ -357,6 +374,7 @@ fn person(
     report: None,
     compaction: None,
     seq: Some(entry.seq),
+    last: None,
     at: Some(entry.at),
     ended,
     state: Some(turn.clone()),

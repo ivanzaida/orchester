@@ -6,7 +6,8 @@
 //! under it, where it stands. Where a link in what an agent wrote leads is [`links`]'; which places an agent names as
 //! plain text are links, [`references`]'; which of its lists are labelled links, [`labelled`]'s. Both chats open at
 //! their end and follow it ([`follow`]); what a search found in a message is filled behind its words ([`found`]).
-//! A message and a code block in it can be copied ([`copy`], [`code_block`]).
+//! A message and a code block in it can be copied ([`copy`], [`code_block`]); a message's toolbar can offer *Edit* and
+//! a menu of more besides ([`toolbar`]).
 
 mod agent_text;
 pub mod code_block;
@@ -23,6 +24,7 @@ mod place;
 pub mod presentation;
 pub mod references;
 pub mod said;
+pub mod toolbar;
 
 use std::sync::Arc;
 
@@ -39,7 +41,10 @@ use orchester_core::time::Timestamp;
 use orchester_workspace::display;
 
 use self::found::Found;
-pub use self::{agent_text::agent_text, copyable::row as copyable_row};
+pub use self::{
+  agent_text::agent_text,
+  copyable::{row as copyable_row, row_with as copyable_row_with},
+};
 use super::{
   icon::{Icon, icon},
   markdown::LinkHandler,
@@ -192,6 +197,22 @@ pub fn own_bubble(
   message_column(ctx, id, None, said, (attached, delivery))
 }
 
+/// [`own_bubble`] whose toolbar holds `extras` around Copy ([`toolbar`]), at the start of the line under the message,
+/// before `delivery` (09 `GYAPg`).
+pub fn own_bubble_with(
+  ctx: &mut Ctx,
+  id: &str,
+  said: Option<Said>,
+  (attached, delivery): (Option<Element>, Element),
+  extras: toolbar::MessageExtras,
+) -> Element {
+  let (bubble, words) = said.map_or((None, Arc::from("")), |(said, words)| {
+    (Some(bubble_box(id, said).into()), words)
+  });
+  let attached = attached.map(|attached| attached_row(attached).into());
+  copyable::acted(ctx, id, (&words, extras), [bubble, attached], delivery)
+}
+
 /// What `body` says as written, without links (a note the person returned the work with), what a search found in it
 /// filled behind its words (`found`); `id` names the message.
 pub fn plain_said(ctx: &Ctx, id: &str, body: &str, found: Option<&Found>) -> Option<Said> {
@@ -214,6 +235,27 @@ pub fn marked_words(ctx: &Ctx, words: Text, text: &str, found: Option<&Found>) -
   found.classed(words.highlights(highlights).into(), places)
 }
 
+/// The bubble of the person's message `id` that holds `said`. Words as the person wrote them hug it up to its widest
+/// (`pCzqz`); words with mentions are lurq's Markdown ([`said::said`]), which fills it.
+fn bubble_box(id: &str, said: Element) -> Column {
+  Column::new()
+    .id(format!("{id}-bubble"))
+    .max_width(Dimension::Pct(BUBBLE_WIDTH))
+    .padding(Padding::symmetric(SpacingSize::Md, SpacingSize::Sm))
+    .background(ExtraColor::OwnMessage.role())
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .rounded(RadiusSize::Lg)
+    .child(said)
+}
+
+/// The files of a message, at its end, as wide as the bubble may grow.
+fn attached_row(attached: Element) -> Row {
+  Row::new()
+    .max_width(Dimension::Pct(BUBBLE_WIDTH))
+    .justify(Justify::End)
+    .child(attached)
+}
+
 fn message_column(
   ctx: &mut Ctx,
   id: &str,
@@ -221,26 +263,8 @@ fn message_column(
   said: Option<Said>,
   (attached, delivery): (Option<Element>, Option<Element>),
 ) -> Column {
-  // Words as the person wrote them hug the bubble up to its widest (`pCzqz`); words with mentions are lurq's
-  // Markdown ([`said::said`]), which fills it.
-  let bubble = said.map(|(said, words)| {
-    let bubble = Column::new()
-      .id(format!("{id}-bubble"))
-      .max_width(Dimension::Pct(BUBBLE_WIDTH))
-      .padding(Padding::symmetric(SpacingSize::Md, SpacingSize::Sm))
-      .background(ExtraColor::OwnMessage.role())
-      .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-      .rounded(RadiusSize::Lg)
-      .child(said);
-    copyable::bubble(ctx, id, &words, bubble.into())
-  });
-  // The files sit at the message's end, as wide as the bubble may grow.
-  let attached = attached.map(|attached| {
-    Row::new()
-      .max_width(Dimension::Pct(BUBBLE_WIDTH))
-      .justify(Justify::End)
-      .child(attached)
-  });
+  let bubble = said.map(|(said, words)| copyable::bubble(ctx, id, &words, bubble_box(id, said).into()));
+  let attached = attached.map(attached_row);
   Column::new()
     .id(id.to_owned())
     .width(Dimension::Pct(100.0))

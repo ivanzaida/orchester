@@ -31,12 +31,13 @@ use super::{
   digest::{Digest, DigestProps, Waited, for_the_person},
   plan_only::Changing,
   report::{ReportCard, ReportProps},
+  rewind::toolbar::RewindEnv,
   send::QueuedChange,
   turns::{Arrival, Turn},
   wait::Status,
 };
 use crate::{
-  theme::{OrchestratorSpacing, chat_scrollbar},
+  theme::{DROPPED_OPACITY, OrchestratorSpacing, chat_scrollbar},
   ui::{
     chat::{
       follow::{Follow, jump_room},
@@ -78,6 +79,8 @@ pub(super) struct TurnEnv {
   pub(super) changing: Option<i64>,
   /// A turn of the conversation still thinks: a plan is approved once it ended.
   pub(super) answering: bool,
+  /// Edit and *Rewind to here* (`super::rewind`).
+  pub(super) rewind: RewindEnv,
 }
 
 /// The answers whose todo list the person opened under their name line, by the message that started each.
@@ -125,6 +128,7 @@ impl PartialEq for TurnRow {
       && self.env.scope == other.env.scope
       && self.env.names == other.env.names
       && self.env.changing == other.env.changing
+      && self.env.rewind.shows() == other.env.rewind.shows()
   }
 }
 
@@ -302,21 +306,65 @@ impl Component for TurnView {
   }
 }
 
-/// A turn's row: what opens it, the answer and how it ended; or a compaction's line.
+/// A turn's row: what opens it, the answer and how it ended; or a compaction's or a rewind's line. While a message is
+/// edited in place, what sending it drops is dimmed: its own answer under the line that counts them, and every row
+/// after it (`super::rewind::editing`).
 fn turn(ctx: &mut Ctx, row: &TurnRow, first: bool) -> Element {
   let key = row.turn.key();
+  let dropped = row.env.rewind.drops(&row.turn);
   if let Some(event) = &row.turn.compaction {
     let id = format!("orchestrator-compaction-{key}");
-    let line = super::compaction::line(ctx, &id, event, row.turn.at);
-    return room(
-      ctx,
-      Column::new().width(Dimension::Pct(100.0)).with_children(line),
-      first,
-    );
+    let line = super::compaction::line(ctx, &id, event, row.turn.at).or_else(|| {
+      let at = row.turn.at?;
+      super::rewind::line::line(
+        ctx,
+        &format!("orchestrator-rewound-{key}"),
+        event,
+        (at, row.env.project),
+      )
+    });
+    let column = Column::new().width(Dimension::Pct(100.0)).with_children(line);
+    return room(ctx, dimmed(column, dropped), first);
   }
-  // A wait of an agent, a run's end and a daily report open their row with their own line or card; a person's turn
-  // with their message. What a wait's turn said nests under its line.
-  let (opening, answer) = match (&row.turn.wait, &row.turn.report) {
+  let (opening, answer) = opening(ctx, row, &key);
+  // A message that waits has no answer yet, and an answer a message took mid-way ends under that message.
+  let end = if row.turn.message.is_some() && row.turn.arrival != Arrival::Waiting && !row.turn.continued {
+    super::ending::ending(ctx, row)
+  } else {
+    Vec::new()
+  };
+  let edited = row
+    .env
+    .rewind
+    .editing()
+    .filter(|(editing, _)| Some(editing.message) == row.turn.message);
+  let column = Column::new()
+    .id(format!("orchestrator-turn-{key}"))
+    .describe("turn", turn_name(row.turn.state.as_ref()))
+    .describe("arrival", arrival_name(row.turn.arrival))
+    .width(Dimension::Pct(100.0))
+    .spacing(OrchestratorSpacing::Items.role())
+    .child(opening);
+  let column = match edited {
+    Some((_, after)) if answer.is_some() || !end.is_empty() => column
+      .with_children((after > 0).then(|| super::rewind::editing::drop_line(ctx, after)))
+      .child(
+        Column::new()
+          .width(Dimension::Pct(100.0))
+          .spacing(OrchestratorSpacing::Items.role())
+          .opacity(DROPPED_OPACITY)
+          .with_children(answer)
+          .with_children(end),
+      ),
+    _ => column.with_children(answer).with_children(end),
+  };
+  room(ctx, dimmed(column, dropped), first)
+}
+
+/// What opens `row`, keyed `key`, and its answer. A wait of an agent, a run's end and a daily report open their row
+/// with their own line or card; a person's turn with their message. What a wait's turn said nests under its line.
+fn opening(ctx: &mut Ctx, row: &TurnRow, key: &str) -> (Element, Option<Element>) {
+  match (&row.turn.wait, &row.turn.report) {
     (Some(wait), _) => {
       let id = format!("orchestrator-wait-{key}");
       let turned = row.turn.state.is_some();
@@ -345,29 +393,19 @@ fn turn(ctx: &mut Ctx, row: &TurnRow, first: bool) -> Element {
       (card, super::answer::answer(ctx, row))
     }
     (None, None) => (
-      super::delivery::opening_message(ctx, row, &key),
+      super::delivery::opening_message(ctx, row, key),
       super::answer::answer(ctx, row),
     ),
-  };
-  // A message that waits has no answer yet, and an answer a message took mid-way ends under that message.
-  let end = if row.turn.message.is_some() && row.turn.arrival != Arrival::Waiting && !row.turn.continued {
-    super::ending::ending(ctx, row)
+  }
+}
+
+/// `column`, dimmed while sending the edit of an earlier message drops it.
+fn dimmed(column: Column, dropped: bool) -> Column {
+  if dropped {
+    column.opacity(DROPPED_OPACITY).describe("dropped", "true")
   } else {
-    Vec::new()
-  };
-  room(
-    ctx,
-    Column::new()
-      .id(format!("orchestrator-turn-{key}"))
-      .describe("turn", turn_name(row.turn.state.as_ref()))
-      .describe("arrival", arrival_name(row.turn.arrival))
-      .width(Dimension::Pct(100.0))
-      .spacing(OrchestratorSpacing::Items.role())
-      .child(opening)
-      .with_children(answer)
-      .with_children(end),
-    first,
-  )
+    column
+  }
 }
 
 /// A row's room in the scrolling turns: the chat's column, centred, 18 under it, and the chat's top room over the

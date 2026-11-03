@@ -199,6 +199,7 @@ icons! {
   MessageSquarePlus => '\u{e40c}',
   MessageSquareReply => '\u{e573}',
   MessageSquareText => '\u{e575}',
+  MessageSquareX => '\u{e577}',
   MessagesSquare => '\u{e40d}',
   Minus => '\u{e11c}',
   Monitor => '\u{e11d}',

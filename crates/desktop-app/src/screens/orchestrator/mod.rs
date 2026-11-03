@@ -35,6 +35,7 @@ mod plan_only;
 mod proposal;
 mod reading;
 mod report;
+mod rewind;
 mod run_end;
 mod runs_on;
 mod send;
@@ -161,6 +162,8 @@ struct View {
   plans: Signal<OpenedPlans>,
   /// The *Plan only* switch and the plan being changed (ORC-646).
   plan_only: plan_only::PlanOnly,
+  /// Edit and *Rewind to here* on an earlier message (ORC-333).
+  rewind: rewind::Rewinding,
 }
 
 struct OrchestratorScreen {
@@ -201,7 +204,9 @@ impl Component for OrchestratorScreen {
       follow: Follow::new(ctx),
       plans: ctx.signal(OpenedPlans::default()),
       plan_only: plan_only::PlanOnly::new(ctx),
+      rewind: rewind::Rewinding::new(ctx),
     };
+    rewind::watch(ctx, &view);
     let taker = view.clone();
     ctx.watch(&view.queued.state(), move |state| {
       if let Some(taken) = state
@@ -267,6 +272,10 @@ impl Component for OrchestratorScreen {
     view
       .plan_only
       .hold(matches!(&reads.shown, Shown::Chat(shown) if shown.chat.plan_only()));
+    view.rewind.hold(match &reads.shown {
+      Shown::Chat(shown) => Some(&**shown),
+      _ => None,
+    });
     let chat = match &reads.shown {
       Shown::Chat(shown) => Named::Chat(&shown.chat),
       Shown::Loading => Named::Opening(reads.target.and_then(|target| {
@@ -294,6 +303,8 @@ impl Component for OrchestratorScreen {
       );
       history::panel(ctx, &view.listing, &rows, (read, reads.target))
     });
+    // The question before going back is a modal over the window.
+    let asked = rewind::dialog(ctx, view, &props.project);
     Column::new()
       .id("screen-orchestrator")
       .width(Dimension::Pct(100.0))
@@ -309,6 +320,7 @@ impl Component for OrchestratorScreen {
           .child(main)
           .with_children(panel),
       )
+      .with_children(asked)
   }
 }
 

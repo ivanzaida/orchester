@@ -42,6 +42,7 @@ mod orchestrator_compactions;
 mod orchestrator_plans;
 mod orchestrator_queue;
 mod orchestrator_reports;
+mod orchestrator_rewind;
 mod orchestrator_sent;
 mod orchestrator_settings;
 mod orchestrator_titles;
@@ -126,6 +127,7 @@ pub use self::{
   orchestrator_plans::ApprovedPlan,
   orchestrator_queue::StartedQueued,
   orchestrator_reports::KeptReport,
+  orchestrator_rewind::ChatRewind,
   orchestrator_titles::ChatDeletion,
   orchestrator_waits::KeptWait,
   read_only::ReadOnlyProjectDb,

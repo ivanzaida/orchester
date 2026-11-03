@@ -8,12 +8,14 @@
 //! id, so the rows found by the conversation's messages and their copies are the ones it alone held. What its turns
 //! spent stays counted, and the tasks, runs and decisions it started stay as they are.
 
+use std::path::{Path, PathBuf};
+
 use orchester_core::{
   id::{ChatId, ChatMessageId},
   orchestrator::ChatTitle,
   time::Timestamp,
 };
-use rusqlite::{OptionalExtension, params};
+use rusqlite::{Connection, OptionalExtension, params};
 
 use super::{
   ProjectDb,
@@ -68,39 +70,57 @@ impl ProjectDb {
   pub fn delete_chat(&mut self, chat: ChatId) -> Result<ChatDeletion, StoreError> {
     let id = chat.to_string();
     let transaction = self.connection.transaction()?;
-    let kept: Option<i64> = transaction
-      .query_row(
-        "SELECT EXISTS (SELECT 1 FROM orchestrator_entries WHERE chat_id = ?1
-           AND (turn IN ('thinking', 'steering', 'queued', 'queued_next', 'not_taken')
-             OR (kind = 'event' AND json_extract(body, '$.kind') = 'compaction'
-               AND json_extract(body, '$.state.state') = 'running')))
-         FROM orchestrator_chats WHERE id = ?1",
-        [&id],
-        |row| row.get(0),
-      )
-      .optional()?;
-    match kept {
+    match busy(&transaction, chat)? {
       None => return Ok(ChatDeletion::Gone),
-      Some(busy) if busy != 0 => return Ok(ChatDeletion::Busy),
-      Some(_) => {}
+      Some(true) => return Ok(ChatDeletion::Busy),
+      Some(false) => {}
     }
-    let messages: Vec<String> = transaction
-      .prepare("SELECT message_id FROM orchestrator_entries WHERE chat_id = ?1 AND message_id IS NOT NULL")?
-      .query_map([&id], |row| row.get(0))?
-      .collect::<Result<_, _>>()?;
-    let mut copies = Vec::new();
-    for message in messages {
-      let message: ChatMessageId = parse("chat message id", &message)?;
-      copies.extend(attachments::forget(
-        &transaction,
-        &self.directory,
-        AttachmentOwner::ChatMessage(message),
-      )?);
-    }
+    let copies = forget_attachments(&transaction, &self.directory, chat, 0)?;
     transaction.execute("DELETE FROM orchestrator_entries WHERE chat_id = ?1", [&id])?;
     transaction.execute("DELETE FROM orchestrator_chats WHERE id = ?1", [&id])?;
     transaction.commit()?;
     attachments::remove_copies(&copies);
     Ok(ChatDeletion::Deleted)
   }
+}
+
+/// Whether conversation `chat` is busy: the Orchestrator answers in it, compacts its session, or a message waits there
+/// for its turn; `None` when the project does not keep it.
+pub(super) fn busy(connection: &Connection, chat: ChatId) -> Result<Option<bool>, StoreError> {
+  let busy: Option<i64> = connection
+    .query_row(
+      "SELECT EXISTS (SELECT 1 FROM orchestrator_entries WHERE chat_id = ?1
+         AND (turn IN ('thinking', 'steering', 'queued', 'queued_next', 'not_taken')
+           OR (kind = 'event' AND json_extract(body, '$.kind') = 'compaction'
+             AND json_extract(body, '$.state.state') = 'running')))
+       FROM orchestrator_chats WHERE id = ?1",
+      [chat.to_string()],
+      |row| row.get(0),
+    )
+    .optional()?;
+  Ok(busy.map(|busy| busy != 0))
+}
+
+/// Forgets the attachments of the messages of `chat` kept as entry `from` or after it, whose copies in `directory`
+/// are returned to be removed once the change is committed.
+pub(super) fn forget_attachments(
+  connection: &Connection,
+  directory: &Path,
+  chat: ChatId,
+  from: i64,
+) -> Result<Vec<PathBuf>, StoreError> {
+  let messages: Vec<String> = connection
+    .prepare("SELECT message_id FROM orchestrator_entries WHERE chat_id = ?1 AND seq >= ?2 AND message_id IS NOT NULL")?
+    .query_map(params![chat.to_string(), from], |row| row.get(0))?
+    .collect::<Result<_, _>>()?;
+  let mut copies = Vec::new();
+  for message in messages {
+    let message: ChatMessageId = parse("chat message id", &message)?;
+    copies.extend(attachments::forget(
+      connection,
+      directory,
+      AttachmentOwner::ChatMessage(message),
+    )?);
+  }
+  Ok(copies)
 }

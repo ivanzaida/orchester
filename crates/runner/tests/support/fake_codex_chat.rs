@@ -2,7 +2,8 @@
 //! domain tools as the HTTP server `orchester` (`-c mcp_servers.orchester.url="…"`, its bearer token under the
 //! variable `bearer_token_env_var` names). It appends how it was started to `.orchester/fake-chat.log` in its working
 //! directory (`codex-argv: `, `system-prompt: ` with the first line of the thread's `baseInstructions`, `thread: `
-//! with `new` or the thread it resumed, `mcp-url: `, `mcp-token: present`, and `prompt: ` with the turn's first line),
+//! with `new` or the thread it resumed, `mcp-url: `, `mcp-token: present`, `prompt: ` with the turn's first line, and
+//! `prompt-words: ` with its whole prompt on one line),
 //! then answers by the message, the prompt's last line:
 //!
 //! - "Call <tool> <JSON arguments>": calls that tool with the token and replies `Tool said: <result text>`;
@@ -241,6 +242,10 @@ fn log(session: &Session, (args, base): (&[String], Option<&str>), server: Optio
       lines.push("mcp-token: present".to_owned());
     }
   }
+  lines.push(format!(
+    "prompt-words: {}",
+    prompt.split_whitespace().collect::<Vec<_>>().join(" ")
+  ));
   append_log(session, &lines);
 }
 
