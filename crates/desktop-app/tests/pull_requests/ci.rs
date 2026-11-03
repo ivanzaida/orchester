@@ -135,7 +135,10 @@ fn ci_fix_automatically_is_set_by_a_person_only() {
     seeded.window.pass();
     std::thread::sleep(std::time::Duration::from_millis(5));
   }
-  assert!(!auto_on(&seeded, title), "automation did not turn Fix CI automatically on");
+  assert!(
+    !auto_on(&seeded, title),
+    "automation did not turn Fix CI automatically on"
+  );
   assert_eq!(seeded.text("task-ci-auto-hint"), off);
   seeded.window.press("task-ci-auto-switch");
   seeded.window.until("the person's switch saved", |window| {

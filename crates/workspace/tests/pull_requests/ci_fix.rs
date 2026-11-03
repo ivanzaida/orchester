@@ -206,8 +206,10 @@ fn fix_ci_redacts_secret_shaped_text_in_log_tails() {
   let private = "-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA\n-----END RSA PRIVATE KEY-----\nnext";
   assert_eq!(agent_log_tail(private), format!("{REDACTED}\nnext"));
   // A key's body whose BEGIN line fell outside the tail: 64-character lines holding '/', short segments or long.
-  let body = ["MIIEowIBAAKCAQ/EAu1SU1LfVLPHC/ozMxH2Mo4lgOEeP/zNm0tRgeLezV6f/fAt",
-    "u1SU1LfVLPHCozMxH2Mo4lgOEePzNm0tRgeLezV6ffAt0gunVTLw7onLRnrq0/Ia"];
+  let body = [
+    "MIIEowIBAAKCAQ/EAu1SU1LfVLPHC/ozMxH2Mo4lgOEeP/zNm0tRgeLezV6f/fAt",
+    "u1SU1LfVLPHCozMxH2Mo4lgOEePzNm0tRgeLezV6ffAt0gunVTLw7onLRnrq0/Ia",
+  ];
   for line in body {
     assert_eq!(line.len(), 64, "{line}");
     assert_eq!(agent_log_tail(line), REDACTED, "a PEM body line is redacted");
@@ -344,21 +346,51 @@ fn fix_ci_automatically_sends_up_to_its_limit_and_records_each_send() {
     matches!(fix(&fixture, &run, &failure("test", 12), HAND), Ok(FixDone::Stored(_))),
     "Fix CI by hand still works at the limit"
   );
+}
+
+#[test]
+fn fix_ci_automatically_is_set_by_a_person_only_and_automation_cannot_restart_its_count() {
+  let (fixture, run) = project();
+  let root = fixture.repo.path().to_owned();
+  let one = AutoFix {
+    on: true,
+    limit: FixLimit::One,
+  };
+  set_auto_fix_in(&root, run.id(), one, Answerer::Person).expect("set");
+  let sent = fix(&fixture, &run, &failure("test", 10), Fixer::Automatic).expect("sent");
+  assert!(matches!(sent, FixDone::Stored(_)), "{sent:?}");
   std::thread::sleep(std::time::Duration::from_millis(5));
-  for auto in [AutoFix { on: true, ..two }, AutoFix { on: false, ..two }] {
+  let refused = UiMessage::new("appMcp.errors.automationNotAllowed");
+  for auto in [
+    one,
+    AutoFix { on: false, ..one },
+    AutoFix {
+      limit: FixLimit::Five,
+      ..one
+    },
+  ] {
     assert!(
       matches!(
         set_auto_fix_in(&root, run.id(), auto, Answerer::Automation),
-        Err(FixError::Unavailable(reason)) if reason == UiMessage::new("appMcp.errors.automationNotAllowed")
+        Err(FixError::Unavailable(ref reason)) if *reason == refused
       ),
       "automation driving the window does not set the switch: {auto:?}"
     );
   }
   let fixes = detail(&fixture, &run).run.expect("the run").ci_fixes;
-  assert_eq!(fixes.auto, two, "the refused changes left the switch as the person set it");
-  assert!(fixes.limit_reached(), "automation cannot restart the count");
-  set_auto_fix_in(&root, run.id(), AutoFix { on: true, ..two }, Answerer::Person).expect("set");
+  assert_eq!(
+    fixes.auto, one,
+    "the refused changes left the switch as the person set it"
+  );
+  assert_eq!(fixes.used(), 1, "automation cannot restart the count");
+  assert!(
+    matches!(
+      fixes.auto_step("another failure"),
+      orchester_core::pull_request::ci::fix::AutoStep::Stop { .. }
+    ),
+    "the next failure stops at the limit"
+  );
+  set_auto_fix_in(&root, run.id(), one, Answerer::Person).expect("set");
   let fixes = detail(&fixture, &run).run.expect("the run").ci_fixes;
-  assert_eq!(fixes.used(), 0, "changing the switch restarts the count");
-  assert!(!fixes.limit_reached());
+  assert_eq!(fixes.used(), 0, "the person changing the switch restarts the count");
 }

@@ -117,14 +117,11 @@ fn is_secret_run(run: &str) -> bool {
   if !body.contains('/') {
     return true;
   }
-  let random_segment = body
-    .split('/')
-    .any(|segment| segment.len() >= 20 && is_mixed(segment));
+  let random_segment = body.split('/').any(|segment| segment.len() >= 20 && is_mixed(segment));
   let base64 = body
     .bytes()
     .all(|byte| byte.is_ascii_alphanumeric() || byte == b'+' || byte == b'/');
-  let shaped =
-    body.len() < run.len() || body.contains('+') || BASE64_SECRET_LENGTHS.contains(&run.len());
+  let shaped = body.len() < run.len() || body.contains('+') || BASE64_SECRET_LENGTHS.contains(&run.len());
   random_segment || (base64 && !body.starts_with('/') && shaped)
 }
 

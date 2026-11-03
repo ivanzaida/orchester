@@ -87,13 +87,18 @@ impl Component for AutoRow {
         });
       }
     });
-    // A refused choice (automation driving the window) leaves the select on the stored limit.
+    // A refused choice (automation driving the window) leaves the select on the stored limit. The lock is let go
+    // before the select changes, as the select's watch takes it again.
     let (stored, limit) = (row.stored.clone(), row.limit.clone());
     ctx.watch(&actions.auto.state(), move |result| {
-      if result.is_rejected()
-        && let Some((_, auto)) = *stored.lock()
+      if !result.is_rejected() {
+        return;
+      }
+      let kept = stored.lock().map(|(_, auto)| auto.limit.get());
+      if let Some(kept) = kept
+        && limit.get_untracked() != kept
       {
-        limit.set(auto.limit.get());
+        limit.set(kept);
       }
     });
     row
