@@ -35,6 +35,8 @@ impl Fixture {
     let dir = tempfile::tempdir().expect("temporary folder");
     let root = std::fs::canonicalize(dir.path()).expect("canonical");
     let root = PathBuf::from(root.to_string_lossy().trim_start_matches(r"\\?\"));
+    // As the roots show it: on macOS `/var/…`, not the `/private/var/…` it resolves to.
+    let root = shown(&root);
     let main = root.join("repo");
     let worktree = main.join(".orchester").join("worktrees").join("w1");
     let elsewhere = root.join("elsewhere");
@@ -131,6 +133,14 @@ fn link_folder(link: &Path, target: &Path) {
 
 fn slashed(path: &Path) -> String {
   path.to_string_lossy().replace('\\', "/")
+}
+
+/// The existing folder `path` as the roots show a path in it.
+fn shown(path: &Path) -> PathBuf {
+  RootPath::new(Platform::current(), &path.to_string_lossy(), None)
+    .expect("absolute")
+    .path()
+    .to_path_buf()
 }
 
 #[test]

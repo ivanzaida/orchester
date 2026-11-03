@@ -12,7 +12,7 @@ use orchester_core::{
   permission::{
     AgentPermissions, AllowedCommands, CommandPermission, NetworkAccess, RepositoryAccess,
     category::CommandScope,
-    roots::{RootsCheck, RunRoots},
+    roots::{RootPath, RootsCheck, RunRoots},
   },
   resource::ModelId,
   run::{
@@ -337,6 +337,11 @@ impl Fixture {
     let dir = tempfile::tempdir().expect("temporary folder");
     let root = std::fs::canonicalize(dir.path()).expect("canonical");
     let root = PathBuf::from(root.to_string_lossy().trim_start_matches(r"\\?\"));
+    // As the roots show it: on macOS `/var/…`, not the `/private/var/…` it resolves to.
+    let root = RootPath::new(Platform::current(), &root.to_string_lossy(), None)
+      .expect("absolute")
+      .path()
+      .to_path_buf();
     let main = root.join("repo");
     let worktree = main.join(".orchester").join("worktrees").join("w1");
     let elsewhere = root.join("elsewhere");

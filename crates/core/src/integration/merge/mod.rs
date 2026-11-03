@@ -177,7 +177,8 @@ pub enum MergeError {
   #[error("git did not merge: {0}")]
   Refused(String),
   /// Git stopped part way through bringing the merge in, and these files it had written could not be
-  /// put back: they hold the run's version. `detail` says why they could not. [`put_back`] tries again.
+  /// put back: they do not hold the base's version, or, when a put-back that failed could not read which do, they are
+  /// every file git may have written. `detail` says why they could not. [`put_back`] tries again.
   #[error("git stopped part way and {files:?} could not be put back: {detail}")]
   LeftChanged { files: Vec<String>, detail: String },
   /// `git <command>` wrote nothing for `after` while the merge was at `step`, and was stopped with everything it

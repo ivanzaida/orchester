@@ -164,6 +164,11 @@ impl Touched {
     &self.base
   }
 
+  /// Every path the fast-forward may have written.
+  pub(super) fn paths(&self) -> Vec<String> {
+    self.clean.iter().map(|entry| entry.path.clone()).collect()
+  }
+
   /// The paths that do not hold the base's version now, in the index or in the files: what a
   /// fast-forward that stopped part way left changed and was not put back.
   pub(super) fn still_changed<R: CommandRunner>(&self, git: &Git<'_, R>) -> Result<Vec<String>, GitError> {

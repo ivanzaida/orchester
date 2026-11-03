@@ -4,6 +4,7 @@
 //! what a merge the app ended part way left is cleared. `cargo test -p orchester-core --test integration merge_`.
 
 use std::{
+  cell::Cell,
   fs,
   panic::{AssertUnwindSafe, catch_unwind},
   time::Duration,
@@ -206,6 +207,70 @@ fn merge_put_back_names_the_files_and_keeps_every_merge_out_until_they_are_back(
   assert_eq!(left_by_bring_in(&Processes, git, finished.id()), Ok(Vec::new()));
   let merged = merge_with(&Processes, &repo, &finished).expect("merged once the files are back");
   assert_eq!(merged.merge.kind, MergeKind::FastForward);
+}
+
+#[test]
+fn merge_put_back_that_fails_with_a_git_error_keeps_the_files_named_until_they_are_back() {
+  let (repo, base, finished) = repo_with_two_files();
+  let listed = Cell::new(false);
+  let stops = Faked(|args: &[String]| {
+    if has(args, &["merge", "--ff-only"]) {
+      wrote_part_way(&repo, &["a.txt", "b.txt"]);
+      return failed("error: unable to write new.txt: Input/output error");
+    }
+    // The put-back's first read of the index fails; what it left changed is read after it.
+    (has(args, &["ls-files"]) && !listed.replace(true)).then(|| failed("fatal: index file corrupt").expect("an answer"))
+  });
+  let refused = merge_with(&stops, &repo, &finished);
+  let Err(MergeError::LeftChanged { files, detail }) = &refused else {
+    panic!("files were left changed: {refused:?}");
+  };
+  assert_eq!(files, &["a.txt", "b.txt"]);
+  assert!(detail.contains("index file corrupt"), "{detail}");
+  let git = (git_program(), repo.root.clone());
+  let git = (git.0.as_path(), git.1.as_path());
+  assert_eq!(
+    left_by_bring_in(&Processes, git, finished.id()),
+    Ok(vec!["a.txt".to_owned(), "b.txt".to_owned()])
+  );
+  assert_eq!(
+    merge_with(&Processes, &repo, &finished),
+    Err(MergeError::NotPutBack {
+      run: finished.id(),
+      files: vec!["a.txt".to_owned(), "b.txt".to_owned()],
+    }),
+    "Try again is refused until the files are back"
+  );
+  assert_eq!(repo.head(), base);
+
+  assert_eq!(put_back(&Processes, git, finished.id()), Ok(()));
+  assert!(repo.is_clean());
+  merge_with(&Processes, &repo, &finished).expect("merged once the files are back");
+}
+
+#[test]
+fn merge_put_back_that_cannot_read_the_checkout_names_every_file_the_merge_may_have_written() {
+  let (repo, _, finished) = repo_with_two_files();
+  let stops = Faked(|args: &[String]| {
+    if has(args, &["merge", "--ff-only"]) {
+      wrote_part_way(&repo, &["a.txt", "b.txt"]);
+      return failed("error: unable to write new.txt: Input/output error");
+    }
+    has(args, &["ls-files"]).then(|| failed("fatal: index file corrupt").expect("an answer"))
+  });
+  let refused = merge_with(&stops, &repo, &finished);
+  let Err(MergeError::LeftChanged { files, detail }) = &refused else {
+    panic!("files were left changed: {refused:?}");
+  };
+  assert_eq!(files, &["a.txt", "b.txt", "new.txt"]);
+  assert!(detail.contains("unknown"), "{detail}");
+  let git = (git_program(), repo.root.clone());
+  let git = (git.0.as_path(), git.1.as_path());
+  assert_eq!(
+    left_by_bring_in(&Processes, git, finished.id()),
+    Ok(vec!["a.txt".to_owned(), "b.txt".to_owned()]),
+    "the record stays"
+  );
 }
 
 #[test]
