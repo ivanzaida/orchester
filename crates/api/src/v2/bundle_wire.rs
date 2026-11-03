@@ -1,12 +1,16 @@
 //! The bundle's wire shape, in the field order of its canonical bytes:
-//! `{schema_version, project_id, subject, claim_id, definition_revision, task, pipeline, profiles, permissions, limits,
-//! delivery, resources, files, skill_files, bindings, inputs}`. The refs, permissions, files and skill file manifests
-//! are what the inputs decide; collections whose order means nothing are read in any order and kept sorted.
+//! `{schema_version, project_id, subject, claim_id, module_id, branch, base_commit, definition_revision, task,
+//! pipeline, profiles, permissions, limits, delivery, resources, files, skill_files, bindings, inputs}`. The refs,
+//! permissions, files and skill file manifests are what the inputs decide; collections whose order means nothing are
+//! read in any order and kept sorted.
 
 use orchester_core::{
-  id::{ClaimId, ProjectId},
+  id::{ClaimId, ModuleId, ProjectId},
   resource::Deliverable,
-  run::bundle::{BundleFile, CanonicalExecutionInputs, PinnedBody, ResolvedStepPermissions, SkillFiles},
+  run::{
+    BranchName, CommitId,
+    bundle::{BundleFile, CanonicalExecutionInputs, PinnedBody, ResolvedStepPermissions, SkillFiles},
+  },
   sharing::TaskRevision,
 };
 use serde::{Deserialize, Serialize};
@@ -24,6 +28,9 @@ pub(super) struct ExecutionBundleWire {
   project_id: ProjectId,
   subject: Subject,
   claim_id: ClaimId,
+  module_id: ModuleId,
+  branch: BranchName,
+  base_commit: CommitId,
   definition_revision: TaskRevision,
   task: TaskAtStart,
   pipeline: ResourceVersionRef,
@@ -90,6 +97,9 @@ impl From<ExecutionBundle> for ExecutionBundleWire {
       project_id: start.project_id,
       subject: start.subject,
       claim_id: start.claim_id,
+      module_id: start.module_id,
+      branch: start.branch,
+      base_commit: start.base_commit,
       definition_revision: start.definition_revision,
       task: start.task,
       pipeline: derived.pipeline,
@@ -136,6 +146,9 @@ impl TryFrom<ExecutionBundleWire> for ExecutionBundle {
         project_id: wire.project_id,
         subject: wire.subject,
         claim_id: wire.claim_id,
+        module_id: wire.module_id,
+        branch: wire.branch,
+        base_commit: wire.base_commit,
         definition_revision: wire.definition_revision,
         task: wire.task,
         limits: wire.limits,

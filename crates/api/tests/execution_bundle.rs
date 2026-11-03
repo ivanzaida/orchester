@@ -1,5 +1,6 @@
-//! The execution bundle's wire shape (S8): its fields in canonical order, derived from its inputs and refused when they
-//! do not match, unknown fields refused, no credential, path or S7 field, and its hash the same for the same bundle.
+//! The execution bundle's wire shape (S8, with S7's module, branch and base commit): its fields in canonical order,
+//! derived from its inputs and refused when they do not match, unknown fields refused, no credential, path or work,
+//! and its hash the same for the same bundle.
 
 use std::{
   collections::{BTreeMap, BTreeSet},
@@ -15,7 +16,7 @@ use orchester_api::{
 use orchester_core::{
   blob::ContentHash,
   connection::AgentProvider,
-  id::{ClaimId, ConnectionId, ProjectId, ResourceId, TaskId, VersionId},
+  id::{ClaimId, ConnectionId, ModuleId, ProjectId, ResourceId, TaskId, VersionId},
   name::Name,
   permission::StepPermissions,
   resource::{
@@ -24,7 +25,7 @@ use orchester_core::{
     SkillFilePath, Step, StepKey, StepKind, Tool, Version, VersionNumber,
   },
   run::{
-    PublishedVersions, RunSnapshot,
+    BranchName, CommitId, PublishedVersions, RunSnapshot,
     bundle::{CanonicalExecutionInputs, PinnedBodies, bundle_sha256, canonical_bytes, file_sha256},
   },
   sharing::TaskRevision,
@@ -122,11 +123,16 @@ fn fixture() -> Fixture {
   Fixture { builder, inputs }
 }
 
+const BASE_COMMIT: &str = "0123456789abcdef0123456789abcdef01234567";
+
 fn start() -> BundleStart {
   BundleStart {
     project_id: ProjectId::generate(),
     subject: Subject::Task { id: TaskId::generate() },
     claim_id: ClaimId::generate(),
+    module_id: ModuleId::generate(),
+    branch: BranchName::new("module/github-sign-in").expect("branch"),
+    base_commit: CommitId::new(BASE_COMMIT).expect("commit"),
     definition_revision: TaskRevision::try_from(7).expect("revision"),
     task: TaskAtStart {
       title: "Add GitHub sign-in".into(),
@@ -160,6 +166,9 @@ fn execution_bundle_wire_shape_lists_its_fields_in_canonical_order() {
     "project_id",
     "subject",
     "claim_id",
+    "module_id",
+    "branch",
+    "base_commit",
     "definition_revision",
     "task",
     "pipeline",
@@ -183,6 +192,13 @@ fn execution_bundle_wire_shape_lists_its_fields_in_canonical_order() {
     .collect();
   assert!(places.windows(2).all(|pair| pair[0] < pair[1]), "{bytes}");
   assert!(bytes.starts_with("{\"schema_version\":1,"), "{bytes}");
+  let s7 = format!(
+    "\"claim_id\":{},\"module_id\":{},\"branch\":\"module/github-sign-in\",\"base_commit\":\"{BASE_COMMIT}\",\
+     \"definition_revision\":7,",
+    serde_json::to_string(&bundle.start().claim_id).expect("an id serializes"),
+    serde_json::to_string(&bundle.start().module_id).expect("an id serializes"),
+  );
+  assert!(bytes.contains(&s7), "{bytes}");
 
   let value = serde_json::to_value(&bundle).expect("serializes");
   let keys: BTreeSet<&str> = value
@@ -246,8 +262,11 @@ fn execution_bundle_wire_shape_hashes_the_same_bundle_the_same() {
     .reverse();
   assert_eq!(read(reordered).expect("reads").sha256().expect("hashes"), hash);
 
-  let changes: [(&str, Value); 5] = [
+  let changes: [(&str, Value); 8] = [
     ("/claim_id", json!(ClaimId::generate())),
+    ("/module_id", json!(ModuleId::generate())),
+    ("/branch", json!("module/github-sign-in-1a2b3c4d")),
+    ("/base_commit", json!("f".repeat(64))),
     ("/definition_revision", json!(8)),
     ("/task/title", json!("Add GitLab sign-in")),
     ("/limits", json!({})),
@@ -307,9 +326,34 @@ fn execution_bundle_wire_shape_refuses_fields_its_inputs_do_not_decide() {
   }
 }
 
-/// Neither a credential, an account, a connection nor a path of one computer, and none of the fields S7 adds.
 #[test]
-fn execution_bundle_wire_shape_has_no_credential_path_or_s7_field() {
+fn execution_bundle_wire_shape_refuses_an_invalid_branch_or_base_commit() {
+  let value = serde_json::to_value(bundle().0).expect("serializes");
+  let changes: [(&str, Value, &str); 5] = [
+    ("/base_commit", json!(BASE_COMMIT.to_uppercase()), "commit id"),
+    ("/base_commit", json!(&BASE_COMMIT[..7]), "commit id"),
+    ("/base_commit", json!("main"), "commit id"),
+    ("/branch", json!("module/a..b"), "branch name"),
+    ("/module_id", json!(1), "invalid type"),
+  ];
+  for (pointer, changed, error) in changes {
+    let mut value = value.clone();
+    *value.pointer_mut(pointer).unwrap_or_else(|| panic!("{pointer} exists")) = changed;
+    let refused = read(value).expect_err("refused").to_string();
+    assert!(refused.contains(error), "{pointer}: {refused}");
+  }
+  for field in ["module_id", "branch", "base_commit"] {
+    let mut value = value.clone();
+    value.as_object_mut().expect("an object").remove(field);
+    let refused = read(value).expect_err("refused").to_string();
+    assert!(refused.contains("missing field"), "{field}: {refused}");
+  }
+}
+
+/// Neither a credential, an account, a connection nor a path of one computer, and not the work: S7's `work.start`
+/// attaches it to the bundle.
+#[test]
+fn execution_bundle_wire_shape_has_no_credential_path_or_work() {
   let value = serde_json::to_value(bundle().0).expect("serializes");
   let mut keys = BTreeSet::new();
   collect_keys(&value, &mut keys);
@@ -326,9 +370,6 @@ fn execution_bundle_wire_shape_has_no_credential_path_or_s7_field() {
     "writable_folders",
     "sources",
     "worktree",
-    "module_id",
-    "branch",
-    "base_commit",
     "work_id",
   ];
   for key in forbidden {

@@ -394,12 +394,38 @@ nothing sorted by their constructors and again when read; the hash is the SHA-25
 a file's the SHA-256 of its bytes (`file_sha256`). The server hashes the bundle it built and never accepts one a
 client wrote.
 
-`v2::ExecutionBundle` adds what the server decides when it starts the work (project, subject, `claim_id`, the task's
-revision and content at start, limits, delivery) and the local bindings (profile → CLI kind and model, no account or
-path) to the inputs; its refs, permissions, file and skill file manifests are derived from the inputs and checked
-when read. A bundle file read answers raw bytes by hash, at most `MAX_BUNDLE_FILE_BYTES` (8 MiB). `module_id`,
-`branch`, `base_commit` and the work are left to the S7 contract (decision D3 is open): a bundle binds to its claim.
-OP-151 implements routes, storage and enforcement in the platform repository; these types alone implement none.
+`v2::ExecutionBundle` adds what the server decides when it starts the work (project, subject, `claim_id`, S7's
+`module_id`, `branch` and `base_commit`, the task's revision and content at start, limits, delivery) and the local
+bindings (profile → CLI kind and model, no account or path) to the inputs; its refs, permissions, file and skill file
+manifests are derived from the inputs and checked when read. A bundle file read answers raw bytes by hash, at most
+`MAX_BUNDLE_FILE_BYTES` (8 MiB). The work is not in the bundle: a bundle binds to its claim, and S7's `work.start`
+attaches the work. OP-151 implements routes, storage and enforcement in the platform repository; these types alone
+implement none.
+
+## Team authority S7 contract (ORC-654 / OP-150)
+
+Mandatory modules, module branches and authorized delivery. The wire shapes are in
+[cloud-api.md](../cloud-api.md#team-authority-s7-delivery-contract). Core's `run::CommitId` is a full Git object id,
+40 (SHA-1) or 64 (SHA-256) lowercase hex digits, refusing anything else with `CommitIdError`; branches are
+`run::BranchName`. The execution bundle carries the work's `module_id`, its module `branch` and the `base_commit` it
+starts from, right after `claim_id` in its canonical bytes. That changes the hash of every bundle against ORC-651's
+shape; no bundle was stored in that shape, and the schema version stays 1.
+
+`v2::DeliveryRead` is one delivery of authorized work (`work_id`, `claim_id`, the authorizing operation or `null`,
+`source_commit`, `base_commit`, `bundle`, `state`, `revision`); `DeliveryState` is `authorized`, `requested`,
+`delivered` or `failed`, and the server reports `delivered` only after the runner reported the merge commit.
+`LocalEffect::Deliver {work_id}` authorizes the runner's local merge of the module branch into base. The commands
+`delivery.authorize` (Admin) and `delivery.request` are the server's, each answering
+`{kind:"delivery",delivery,effects}`.
+
+Decided for S7 (D3, D7; the orchestrator's, 2026-11-03, revisable by the person): the automatic module branch is
+`module/<name-slug>`, with `-<8 hex of the module id>` on collision, fixed at first assignment; the runner creates it
+from its checkout's base at the first task start. Task run branches merge into the module branch, and only delivery
+takes it to base. A manually assigned branch is unique in the workspace, may be an existing Git branch, and cannot
+change while work under the module runs. With the workspace's `automatic_merge` on, a delivery request from the
+current effective claim on current unfenced work counts as Admin-authorized; off, it needs an explicit
+`delivery.authorize`. Report and outside deliverables have no base merge (D4 open). OP-150 implements routes and
+enforcement in the platform repository; these types alone implement none.
 
 ## Claims
 

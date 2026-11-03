@@ -5,9 +5,9 @@
 //! store, and each profile's CLI is bound on the executing computer from [`LocalBinding`].
 //!
 //! Its hash is the SHA-256 of its canonical bytes ([`orchester_core::run::bundle::canonical`]). The server hashes the
-//! bundle it built and never accepts one a client wrote. The fields S7 owns, `module_id`, `branch` and `base_commit`,
-//! are added by the S7 contract, and so is the work: a bundle binds to its claim, and S7's `work.start` attaches the
-//! work to it.
+//! bundle it built and never accepts one a client wrote. The work's module, its branch and the base commit it starts
+//! from are S7's (`module_id`, `branch`, `base_commit`); the work itself is not in the bundle: a bundle binds to its
+//! claim, and S7's `work.start` attaches the work to it.
 //!
 //! Reads: the bundle read answers an `ExecutionBundle`; a bundle file read answers one file's raw bytes by its
 //! `sha256`, at most [`MAX_BUNDLE_FILE_BYTES`], which the desktop checks with [`ExecutionBundle::check_file`].
@@ -16,10 +16,13 @@ pub use orchester_core::run::bundle::{MAX_BUNDLE_FILE_BYTES, ResolvedStepPermiss
 use orchester_core::{
   blob::ContentHash,
   connection::AgentProvider,
-  id::{ClaimId, ProjectId, ResourceId},
+  id::{ClaimId, ModuleId, ProjectId, ResourceId},
   name::Name,
   resource::{Deliverable, ModelId, VersionNumber},
-  run::bundle::{BundleFile, CanonicalError, CanonicalExecutionInputs, bundle_sha256},
+  run::{
+    BranchName, CommitId,
+    bundle::{BundleFile, CanonicalError, CanonicalExecutionInputs, bundle_sha256},
+  },
   sharing::TaskRevision,
 };
 use serde::{Deserialize, Serialize};
@@ -74,6 +77,12 @@ pub struct BundleStart {
   pub project_id: ProjectId,
   pub subject: Subject,
   pub claim_id: ClaimId,
+  /// The module the work is under.
+  pub module_id: ModuleId,
+  /// The module's branch, which the work's runs merge into and only delivery takes to base.
+  pub branch: BranchName,
+  /// The commit of the base branch the work starts from.
+  pub base_commit: CommitId,
   /// The task's revision when the work started.
   pub definition_revision: TaskRevision,
   pub task: TaskAtStart,
