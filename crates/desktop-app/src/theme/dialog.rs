@@ -27,10 +27,22 @@ pub enum DialogText {
   Line,
   /// 11.5 `text_muted`: what Esc does, beside its key (`Esc does` `lESYn`).
   Keys,
+  /// 11.5 `text_muted`, 1.4: what the dialog is about under its title, a group's caption, what an option does under
+  /// it and a file's format (`What` `eoJka`, `Caption` `HLDpk`, `Text` `xB8x8`, `Format` `hFlVW` of `hysCz`).
+  Detail,
+  /// 12/500 `text_primary`: an option's name beside its radio (`Label` `W1xIs3` of `Toggle/Radio on`).
+  Option,
 }
 
 impl DialogText {
-  pub const ALL: [Self; 4] = [Self::Title, Self::ChoiceLabel, Self::Line, Self::Keys];
+  pub const ALL: [Self; 6] = [
+    Self::Title,
+    Self::ChoiceLabel,
+    Self::Line,
+    Self::Keys,
+    Self::Detail,
+    Self::Option,
+  ];
 
   pub fn role(self) -> TypographyStyle {
     TypographyStyle::extra(self.name())
@@ -42,6 +54,8 @@ impl DialogText {
       Self::ChoiceLabel => "dialog_choice_label",
       Self::Line => "dialog_line",
       Self::Keys => "dialog_keys",
+      Self::Detail => "dialog_detail",
+      Self::Option => "dialog_option",
     }
   }
 
@@ -50,7 +64,8 @@ impl DialogText {
       Self::Title => style(15.0, FontWeight::SemiBold, 1.35, 0.0, palette.text_primary),
       Self::ChoiceLabel => style(11.0, FontWeight::Medium, 1.4, 0.0, palette.text_secondary),
       Self::Line => style(12.5, FontWeight::Normal, 1.45, 0.0, palette.text_secondary),
-      Self::Keys => style(11.5, FontWeight::Normal, 1.4, 0.0, palette.text_muted),
+      Self::Keys | Self::Detail => style(11.5, FontWeight::Normal, 1.4, 0.0, palette.text_muted),
+      Self::Option => style(12.0, FontWeight::Medium, 1.3, 0.0, palette.text_primary),
     }
   }
 }

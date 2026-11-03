@@ -1,8 +1,8 @@
 //! The Orchestrator's header (`Header` `s9sEw6` in `01 Conversation` `wRSL4`): one 52-high line over a `border` line,
 //! 24 in at its start and 16 at its end, 8 apart: the conversation's title (14/600) and, in 12 `text_muted`, when it
-//! started (*· today 16:02*); at its end *New* (a ghost with `square-pen`) and the History toggle (a `panel-right`
-//! icon button, on the `pressed` fill while History is open). Orchestrator settings open from the composer's runs-on
-//! chip and its picker.
+//! started (*· today 16:02*); at its end *New* (a ghost with `square-pen`), the History toggle (a `panel-right`
+//! icon button, on the `pressed` fill while History is open) and, for a kept conversation, its … with Copy and Export
+//! (07c `ovxpJ`, `super::export`). Orchestrator settings open from the composer's runs-on chip and its picker.
 
 use lurq::{
   app::{
@@ -42,7 +42,13 @@ pub(super) enum Named<'a> {
   Chat(&'a Chat),
 }
 
-pub(super) fn header(ctx: &mut Ctx, view: &View, (project, chat): (&ShownProject, Named<'_>)) -> Element {
+/// The header of conversation `chat`; `more` is its … (`export`), once the conversation is kept.
+pub(super) fn header(
+  ctx: &mut Ctx,
+  view: &View,
+  (project, chat): (&ShownProject, Named<'_>),
+  more: Option<Element>,
+) -> Element {
   let title = match chat {
     Named::New => ctx.t("orchestrator.newTitle"),
     Named::Opening(Some(title)) => title.into(),
@@ -89,6 +95,7 @@ pub(super) fn header(ctx: &mut Ctx, view: &View, (project, chat): (&ShownProject
     )
     .child(new_conversation(ctx, project, chat))
     .child(toggle.render(ctx))
+    .with_children(more)
     .into()
 }
 

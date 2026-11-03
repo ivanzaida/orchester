@@ -80,22 +80,43 @@ fn conversation() -> ChatView {
   };
   let text = "Write the brief for KON-31. Include the config shape.";
   let entries = vec![
-    entry(1, 0, EntryKind::Person {
-      message: asked,
-      text: MessageBody::new(text).expect("words"),
-      turn: TurnState::Answered,
-      ended: Some(at(2)),
-      sent_by: Answerer::Person,
-      mode: TurnMode::Acts,
-    }),
-    entry(2, 1, EntryKind::Action(ChatAction::new("read_task", Some("KON-31".to_owned()), ActionOutcome::Done))),
-    entry(3, 2, EntryKind::Reply {
-      text: format!("Here is the brief.\n\n```toml\napi_key = \"<redacted>\"\nother = \"{KEY}\"\n```"),
-      model: ModelId::new("claude-opus-5-5").expect("a model"),
-    }),
+    entry(
+      1,
+      0,
+      EntryKind::Person {
+        message: asked,
+        text: MessageBody::new(text).expect("words"),
+        turn: TurnState::Answered,
+        ended: Some(at(2)),
+        sent_by: Answerer::Person,
+        mode: TurnMode::Acts,
+      },
+    ),
+    entry(
+      2,
+      1,
+      EntryKind::Action(ChatAction::new(
+        "read_task",
+        Some("KON-31".to_owned()),
+        ActionOutcome::Done,
+      )),
+    ),
+    entry(
+      3,
+      2,
+      EntryKind::Reply {
+        text: format!("Here is the brief.\n\n```toml\napi_key = \"<redacted>\"\nother = \"{KEY}\"\n```"),
+        model: ModelId::new("claude-opus-5-5").expect("a model"),
+      },
+    ),
   ];
   ChatView {
-    chat: Chat::restore(ChatId::generate(), "Brief for per-endpoint retries".to_owned(), at(0), None),
+    chat: Chat::restore(
+      ChatId::generate(),
+      "Brief for per-endpoint retries".to_owned(),
+      at(0),
+      None,
+    ),
     entries,
     attachments: BTreeMap::from([(asked, vec![attachment("config.toml")])]),
     todos: BTreeMap::new(),
@@ -110,13 +131,31 @@ fn export_writes_an_orchestrator_conversation_with_who_said_what_and_when() {
   let view = conversation();
   let markdown = chat::markdown(&view, Include::Messages, (&words, &screen()), at(30));
   assert!(markdown.starts_with("# Brief for per-endpoint retries\n"), "{markdown}");
-  assert!(markdown.contains(&format!("- **Exported:** {}", export::stamp(at(30)))), "{markdown}");
-  assert!(markdown.contains("- **Conversation:** Brief for per-endpoint retries, started"), "{markdown}");
-  assert!(markdown.contains(&format!("### You · {}", export::stamp(at(0)))), "{markdown}");
-  assert!(markdown.contains(&format!("### Orchestrator · {}", export::stamp(at(2)))), "{markdown}");
+  assert!(
+    markdown.contains(&format!("- **Exported:** {}", export::stamp(at(30)))),
+    "{markdown}"
+  );
+  assert!(
+    markdown.contains("- **Conversation:** Brief for per-endpoint retries, started"),
+    "{markdown}"
+  );
+  assert!(
+    markdown.contains(&format!("### You · {}", export::stamp(at(0)))),
+    "{markdown}"
+  );
+  assert!(
+    markdown.contains(&format!("### Orchestrator · {}", export::stamp(at(2)))),
+    "{markdown}"
+  );
   assert!(markdown.contains("Write the brief for KON-31."), "{markdown}");
-  assert!(markdown.contains("```toml\napi_key"), "the code block stays one: {markdown}");
-  assert!(markdown.contains("_Attached: `config.toml`_"), "named, not embedded: {markdown}");
+  assert!(
+    markdown.contains("```toml\napi_key"),
+    "the code block stays one: {markdown}"
+  );
+  assert!(
+    markdown.contains("_Attached: `config.toml`_"),
+    "named, not embedded: {markdown}"
+  );
   assert!(!markdown.contains("read_task"), "messages only: {markdown}");
   assert_eq!(
     chat::span(&view),
@@ -190,10 +229,8 @@ fn item(key: &str, execution: StepExecutionId, minute: i64, kind: ItemKind) -> I
   }
 }
 
-/// A run of two steps: Implement wrote, ran a command that printed a key and edited a file; the person wrote to the
-/// Reviewer with a file, and the Reviewer answered.
-fn run_items() -> Vec<Item> {
-  let (implement, review) = (StepExecutionId::generate(), StepExecutionId::generate());
+/// What Implement ran: a command that printed a key, then an edit.
+fn implement_tools(implement: StepExecutionId) -> ToolGroup {
   let invocation = InvocationId::generate();
   let events = [
     AgentEvent::CommandStarted {
@@ -226,6 +263,13 @@ fn run_items() -> Vec<Item> {
       event,
     })
     .collect();
+  ToolGroup::new(entries(&stored))
+}
+
+/// A run of two steps: Implement wrote, ran a command and edited a file ([`implement_tools`]); the person wrote to the
+/// Reviewer with a file, and the Reviewer answered.
+fn run_items() -> Vec<Item> {
+  let (implement, review) = (StepExecutionId::generate(), StepExecutionId::generate());
   let message = MessageEntry {
     id: MessageId::generate(),
     author: Author::YouTo("Reviewer".into()),
@@ -244,12 +288,32 @@ fn run_items() -> Vec<Item> {
     text: text.into(),
   };
   vec![
-    item("step-1", implement, 1, ItemKind::Step(head(implement, 3, "Implement", "Builder"))),
-    item("said-1", implement, 2, said("Builder", "I'll read Retry-After in sender.rs.")),
-    item("tools-1", implement, 3, ItemKind::Tools(ToolGroup::new(entries(&stored)))),
-    item("step-2", review, 9, ItemKind::Step(head(review, 5, "Review", "Reviewer"))),
+    item(
+      "step-1",
+      implement,
+      1,
+      ItemKind::Step(head(implement, 3, "Implement", "Builder")),
+    ),
+    item(
+      "said-1",
+      implement,
+      2,
+      said("Builder", "I'll read Retry-After in sender.rs."),
+    ),
+    item("tools-1", implement, 3, ItemKind::Tools(implement_tools(implement))),
+    item(
+      "step-2",
+      review,
+      9,
+      ItemKind::Step(head(review, 5, "Review", "Reviewer")),
+    ),
     item("message-1", review, 10, ItemKind::Message(message)),
-    item("said-2", review, 11, said("Reviewer", "Criterion 02 is not covered yet.")),
+    item(
+      "said-2",
+      review,
+      11,
+      said("Reviewer", "Criterion 02 is not covered yet."),
+    ),
   ]
 }
 
@@ -257,8 +321,14 @@ fn run_items() -> Vec<Item> {
 fn export_writes_a_run_with_its_steps_as_headings() {
   let items = run_items();
   let markdown = run::markdown(&facts(), &items, Include::Messages, (&words, &screen()), at(30));
-  assert!(markdown.starts_with("# KON-12 · Add retry to webhook sender\n"), "{markdown}");
-  assert!(markdown.contains("- **Task:** KON-12 · Add retry to webhook sender"), "{markdown}");
+  assert!(
+    markdown.starts_with("# KON-12 · Add retry to webhook sender\n"),
+    "{markdown}"
+  );
+  assert!(
+    markdown.contains("- **Task:** KON-12 · Add retry to webhook sender"),
+    "{markdown}"
+  );
   assert!(markdown.contains("- **Run:** Run 8"), "{markdown}");
   let implement = markdown.find("## 03 Implement · Builder").expect("the first step");
   let review = markdown.find("## 05 Review · Reviewer").expect("the second step");
@@ -266,7 +336,10 @@ fn export_writes_a_run_with_its_steps_as_headings() {
     .find(&format!("### You to Reviewer · {}", export::stamp(at(10))))
     .expect("the person's message");
   assert!(implement < review && review < person, "{markdown}");
-  assert!(markdown.contains(&format!("### Builder · {}", export::stamp(at(2)))), "{markdown}");
+  assert!(
+    markdown.contains(&format!("### Builder · {}", export::stamp(at(2)))),
+    "{markdown}"
+  );
   assert!(markdown.contains("_Attached: `trace.log`_"), "{markdown}");
   assert!(!markdown.contains("cargo test"), "messages only: {markdown}");
   assert_eq!(run::span(&items), run::RunSpan { steps: 2, messages: 3 });
@@ -276,7 +349,10 @@ fn export_writes_a_run_with_its_steps_as_headings() {
 #[test]
 fn export_adds_a_runs_commands_and_edits_when_asked() {
   let markdown = run::markdown(&facts(), &run_items(), Include::WithTools, (&words, &screen()), at(30));
-  assert!(markdown.contains("- Command, exit 0 `cargo test -p webhooks`"), "{markdown}");
+  assert!(
+    markdown.contains("- Command, exit 0 `cargo test -p webhooks`"),
+    "{markdown}"
+  );
   assert!(markdown.contains("test result: ok"), "with a short result: {markdown}");
   assert!(markdown.contains("- Edited `src/webhooks/retry.rs`"), "{markdown}");
   let tools = markdown.find("cargo test").expect("the command");
@@ -286,7 +362,10 @@ fn export_adds_a_runs_commands_and_edits_when_asked() {
 
 #[test]
 fn export_names_its_file_after_the_title() {
-  assert_eq!(export::file_name("Brief for per-endpoint retries"), "brief-for-per-endpoint-retries.md");
+  assert_eq!(
+    export::file_name("Brief for per-endpoint retries"),
+    "brief-for-per-endpoint-retries.md"
+  );
   assert_eq!(export::file_name("  ¿?  "), "conversation.md");
   assert_eq!(words(&export::size(9_100)), "≈ 10 KB");
   assert_eq!(words(&export::size(12)), "≈ 1 KB");
@@ -301,7 +380,11 @@ fn export_says_why_a_write_failed_and_writes_what_it_reports() {
   let missing = folder.path().join("gone").join("brief.md");
   let error = export::write_to(&missing, "# Brief\n").expect_err("no such folder");
   assert_eq!(error.key, "export.errors.noFolder");
-  assert!(words(&error).contains(&missing.display().to_string()), "{}", words(&error));
+  assert!(
+    words(&error).contains(&missing.display().to_string()),
+    "{}",
+    words(&error)
+  );
   assert!(!missing.exists());
   let error = export::write_to(folder.path(), "# Brief\n").expect_err("a folder is there");
   assert_ne!(error.key, "export.errors.noFolder", "{error:?}");

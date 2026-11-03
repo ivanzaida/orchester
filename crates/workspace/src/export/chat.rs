@@ -36,7 +36,12 @@ pub fn span(view: &ChatView) -> ChatSpan {
 
 /// Conversation `view` as Markdown with what `include` says, exported at `now`, its words in `words` and the values
 /// of the project's secrets masked by `screen`.
-pub fn markdown(view: &ChatView, include: Include, (words, screen): (Words<'_>, &SecretScreen), now: Timestamp) -> String {
+pub fn markdown(
+  view: &ChatView,
+  include: Include,
+  (words, screen): (Words<'_>, &SecretScreen),
+  now: Timestamp,
+) -> String {
   let title = view.chat.title();
   let mut file = Document::new(title, words);
   file.fact("export.markdown.date", &stamp(now));

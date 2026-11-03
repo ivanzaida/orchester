@@ -229,6 +229,8 @@ impl ConversationTab {
       .timeline
       .of((run, &task.detail), (&loaded, conversation), self.toggles.open_rows());
     let items = &built.items;
+    // *More actions* exports the timeline the chat shows (ORC-327).
+    PageState::of(ctx).export.publish(run.id(), items);
     // An agent that waits for the person (its question in its turn, C·15, a tool request or a plan decision)
     // does not work: the run waits for the person, so the line under the chat and the chip say so.
     let asking = live && items.iter().any(items::waits_for_you);

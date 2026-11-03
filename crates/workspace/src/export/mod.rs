@@ -54,15 +54,14 @@ pub fn file_name(title: &str) -> String {
   let slug = words.join("-");
   let slug: String = slug.chars().take(FILE_NAME_CHARS).collect();
   let slug = slug.trim_end_matches('-');
-  if slug.is_empty() {
-    "conversation.md".to_owned()
-  } else {
-    format!("{slug}.md")
-  }
+  let slug = if slug.is_empty() { UNTITLED } else { slug };
+  format!("{slug}.md")
 }
 
 /// Characters of a title its file's name keeps.
 const FILE_NAME_CHARS: usize = 80;
+/// The file's name, without `.md`, for a title of no letters or digits.
+const UNTITLED: &str = "conversation";
 
 /// How big the file is, as the dialog says it (*≈ 9 KB*): whole kilobytes, at least one.
 pub fn size(bytes: usize) -> Message {

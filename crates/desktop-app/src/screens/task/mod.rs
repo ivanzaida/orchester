@@ -274,6 +274,8 @@ pub struct PageState {
   /// The search of the Conversation's transcript, which the search button at the end of the tabs opens; its query
   /// stays while the page is open.
   pub search: conversation::TranscriptSearch,
+  /// The Conversation's export from *More actions* (ORC-327): the tab hands it the timeline it shows.
+  pub export: header::export::RunExport,
 }
 
 impl PageState {
@@ -329,6 +331,7 @@ impl Component for TaskFrame {
         run_again_remove: ctx.signal(false),
         no_branch: ctx.signal(None),
         search: conversation::TranscriptSearch::new(ctx),
+        export: header::export::RunExport::new(ctx),
       },
       requested: ctx.signal(None),
       live: ctx.signal(false),

@@ -25,6 +25,7 @@ mod digest;
 mod draft;
 mod ending;
 mod env;
+mod export;
 mod failure;
 mod header;
 mod held;
@@ -164,6 +165,8 @@ struct View {
   plan_only: plan_only::PlanOnly,
   /// Edit and *Rewind to here* on an earlier message (ORC-333).
   rewind: rewind::Rewinding,
+  /// The header's … with *Copy conversation as Markdown* and *Export conversation…* (ORC-327).
+  export: export::ChatExport,
 }
 
 struct OrchestratorScreen {
@@ -205,6 +208,7 @@ impl Component for OrchestratorScreen {
       plans: ctx.signal(OpenedPlans::default()),
       plan_only: plan_only::PlanOnly::new(ctx),
       rewind: rewind::Rewinding::new(ctx),
+      export: export::ChatExport::new(ctx),
     };
     rewind::watch(ctx, &view);
     let taker = view.clone();
@@ -285,7 +289,13 @@ impl Component for OrchestratorScreen {
       })),
       Shown::New | Shown::Failed(_) | Shown::Missing => Named::New,
     };
-    let head = header::header(ctx, view, (&props.project, chat));
+    // A conversation that is kept can be copied and exported.
+    let kept = match &reads.shown {
+      Shown::Chat(shown) => Some(&**shown),
+      _ => None,
+    };
+    let more = kept.map(|shown| view.export.more(ctx, (&props.project, shown)));
+    let head = header::header(ctx, view, (&props.project, chat), more);
     let main = body::main(ctx, view, (&props.project, &reads));
     // History opens over the chat's right edge, under the header.
     let panel = view.history.get().then(|| {
@@ -303,8 +313,9 @@ impl Component for OrchestratorScreen {
       );
       history::panel(ctx, &view.listing, &rows, (read, reads.target))
     });
-    // The question before going back is a modal over the window.
+    // The question before going back, and the export, are modals over the window.
     let asked = rewind::dialog(ctx, view, &props.project);
+    let exported = kept.and_then(|shown| view.export.dialog(ctx, (&props.project, shown)));
     Column::new()
       .id("screen-orchestrator")
       .width(Dimension::Pct(100.0))
@@ -321,6 +332,7 @@ impl Component for OrchestratorScreen {
           .with_children(panel),
       )
       .with_children(asked)
+      .with_children(exported)
   }
 }
 

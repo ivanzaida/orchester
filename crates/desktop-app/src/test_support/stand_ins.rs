@@ -1,8 +1,9 @@
 //! The window with the system's pickers, clipboard, CLI search and clone console replaced: a picker that hands over
-//! the path a test chose, an *Attach* picker that hands over the files a test chose, a copier that keeps what was
-//! copied, a search for agent CLIs in folders a test names, in none until it does, and a clone console that does what
-//! a test scripts ([`ConsoleScript`]), so no native dialog or console window opens, the person's clipboard is left
-//! alone and what is installed on the machine does not change what a test sees.
+//! the path a test chose, an *Attach* picker that hands over the files a test chose, a save dialog that hands over the
+//! file a test chose and keeps what it was asked, a copier that keeps what was copied, a search for agent CLIs in
+//! folders a test names, in none until it does, and a clone console that does what a test scripts ([`ConsoleScript`]),
+//! so no native dialog or console window opens, the person's clipboard is left alone and what is installed on the
+//! machine does not change what a test sees.
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -22,17 +23,25 @@ use super::{Data, Window};
 use crate::{
   mcp::{McpKind, McpLink, McpSettings, McpStatus},
   root::{Root, RootProps},
-  services::{attachment_picker::AttachmentPicker, cli_search::CliSearch, path_picker::PathPicker},
+  services::{
+    attachment_picker::AttachmentPicker,
+    cli_search::CliSearch,
+    path_picker::PathPicker,
+    save_picker::{SaveAsk, SavePicker},
+  },
   startup::Launch,
   ui::code_box::Copier,
 };
 
-/// What the stand-in pickers hand over next, what the stand-in copier was given, where the stand-in search looks, how
-/// often it was asked to read the login shell again, and what the stand-in clone console does and was given.
+/// What the stand-in pickers hand over next, what the stand-in save dialog was asked, what the stand-in copier was
+/// given, where the stand-in search looks, how often it was asked to read the login shell again, and what the stand-in
+/// clone console does and was given.
 #[derive(Clone)]
 pub struct StandIns {
   pub next: Arc<Mutex<Option<PathBuf>>>,
   pub attach: Arc<Mutex<Vec<PathBuf>>>,
+  pub save_at: Arc<Mutex<Option<PathBuf>>>,
+  pub asked_to_save: Arc<Mutex<Vec<SaveAsk>>>,
   pub copied: Arc<Mutex<Vec<String>>>,
   pub searched: Arc<Mutex<(SearchPath, SearchBasis)>>,
   pub shell_reads: Arc<Mutex<u32>>,
@@ -44,6 +53,8 @@ impl Default for StandIns {
     Self {
       next: Arc::default(),
       attach: Arc::default(),
+      save_at: Arc::default(),
+      asked_to_save: Arc::default(),
       copied: Arc::default(),
       searched: Arc::new(Mutex::new((SearchPath::default(), SearchBasis::Path))),
       shell_reads: Arc::default(),
@@ -104,6 +115,20 @@ impl StandIns {
     })
   }
 
+  /// The save dialog hands over `path` the next times it is opened; `None` closes it without a choice.
+  pub fn save_at(&self, path: Option<PathBuf>) {
+    *self.save_at.lock() = path;
+  }
+
+  fn save_picker(&self) -> SavePicker {
+    let (next, asked) = (self.save_at.clone(), self.asked_to_save.clone());
+    SavePicker::new(move |ask| {
+      asked.lock().push(ask);
+      let chosen = next.lock().clone();
+      Box::pin(async move { chosen })
+    })
+  }
+
   fn copier(&self) -> Copier {
     let copied = self.copied.clone();
     Copier::other(move |text| {
@@ -128,6 +153,7 @@ struct HostProps {
   root: RootProps,
   picker: PathPicker,
   attach: AttachmentPicker,
+  save: SavePicker,
   copier: Copier,
   cli_search: CliSearch,
   clones: Clones,
@@ -155,6 +181,7 @@ impl Component for Host {
     let props = ctx.props::<HostProps>().clone();
     ctx.provide(props.picker);
     ctx.provide(props.attach);
+    ctx.provide(props.save);
     ctx.provide(props.copier);
     ctx.provide(props.cli_search);
     ctx.provide(props.clones);
@@ -181,6 +208,7 @@ impl Window {
       },
       picker: stand_ins.picker(),
       attach: stand_ins.attach_picker(),
+      save: stand_ins.save_picker(),
       copier: stand_ins.copier(),
       cli_search: stand_ins.cli_search(),
       clones: stand_ins.clones(),

@@ -13,6 +13,7 @@ mod agent_text;
 pub mod code_block;
 pub mod copy;
 mod copyable;
+pub mod export;
 pub mod fences;
 pub mod follow;
 pub mod found;

@@ -30,6 +30,7 @@ macro_rules! markers {
     impl $inspect for crate::connections::missing_cli::MissingCli {}
     impl $inspect for crate::connections::mcp::TransportChoice {}
     impl $inspect for crate::connections::native::NativeDraft {}
+    impl $inspect for crate::export::Include {}
     impl $inspect for crate::files::FileFacts {}
     impl $inspect for crate::files::Follow {}
     impl $inspect for crate::files::FileList {}

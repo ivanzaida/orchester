@@ -5,7 +5,24 @@
     "tabCount": "{{label}} {{count}}",
     "chat": {
       "copyMessage": "Copy message",
-      "codeLanguageFile": "{{language}} · {{file}}"
+      "codeLanguageFile": "{{language}} · {{file}}",
+      "export": {
+        "menu": "Export conversation…",
+        "copyAll": "Copy conversation as Markdown",
+        "more": "More",
+        "title": "Export conversation",
+        "include": "Include",
+        "messagesOnly": "Messages only",
+        "withTools": "Messages and tool calls",
+        "savesAs": "Saves as",
+        "format": "Markdown · {{size}}",
+        "save": "Save…",
+        "copyMarkdown": "Copy Markdown",
+        "cancel": "Cancel",
+        "enterSaves": "saves",
+        "pickerTitle": "Export conversation",
+        "fileKind": "Markdown"
+      }
     },
     "addSource": {
       "path": "Folder or file path",

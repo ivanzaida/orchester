@@ -12,6 +12,18 @@
       "today": "· today {{time}}",
       "on": "· {{date}}"
     },
+    "export": {
+      "what": "{{title}} · {{messages}} · {{when}}",
+      "whatEmpty": "{{title}} · {{messages}}",
+      "messages": {
+        "one": "{{count}} message",
+        "other": "{{count}} messages"
+      },
+      "spanToday": "today {{from}}–{{to}}",
+      "spanOn": "{{date}} {{from}}–{{to}}",
+      "messagesOnlyHint": "Your messages and the Orchestrator's answers, with their code blocks",
+      "withToolsHint": "Adds each tool the Orchestrator called — tasks read, runs continued, drafts made — with its input and a short result"
+    },
     "start": {
       "title": "What should we plan?",
       "description": "The Orchestrator reads the project and acts through Orchester with your project's permissions: it creates tasks, starts and continues runs, and answers agents when you let it."

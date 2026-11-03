@@ -47,6 +47,9 @@ pub enum Tone {
   Info,
   /// `danger_muted` with the glyph in `danger`: the action destroys (`Tile` `ZVuxg` of `I4xzOf`).
   Danger,
+  /// `hover` with the glyph in `text_secondary`: the action changes nothing, e.g. an export (`Tile` `C907Pu` of
+  /// `hysCz`).
+  Neutral,
 }
 
 impl Tone {
@@ -55,6 +58,7 @@ impl Tone {
       Self::Warning => (PaletteColor::WarningMuted, PaletteColor::Warning),
       Self::Info => (PaletteColor::InfoMuted, PaletteColor::Info),
       Self::Danger => (PaletteColor::DangerMuted, PaletteColor::Danger),
+      Self::Neutral => (PaletteColor::AccentMuted, PaletteColor::TextSecondary),
     }
   }
 }
@@ -68,6 +72,8 @@ pub struct Dialog {
   tone: Tone,
   width: f32,
   title: Arc<str>,
+  /// What the dialog is about, under its title.
+  what: Option<Arc<str>>,
   parts: Vec<Element>,
   person_only: Option<Arc<str>>,
   cancel: Arc<str>,
@@ -87,6 +93,7 @@ impl Dialog {
       tone: Tone::default(),
       width: DIALOG_WIDTH,
       title: title.into(),
+      what: None,
       parts: Vec::new(),
       person_only: None,
       cancel: cancel.into(),
@@ -106,6 +113,12 @@ impl Dialog {
   /// `width` wide instead of the dialog's own 500, a structural size its caller names with its design node.
   pub fn width(mut self, width: f32) -> Self {
     self.width = width;
+    self
+  }
+
+  /// What the dialog is about, in 11.5 `text_muted` 2 under its title (`<id>-what`; `What` `eoJka` of `hysCz`).
+  pub fn what(mut self, what: impl Into<Arc<str>>) -> Self {
+    self.what = Some(what.into());
     self
   }
 
@@ -210,17 +223,28 @@ impl Dialog {
       .rounded(ExtraRadius::Tile.role())
       .background(fill)
       .child(icon(self.glyph, IconSize::Lg, glyph));
+    let what = self.what.as_ref().map(|what| {
+      Text::new(what)
+        .id(format!("{id}-what"))
+        .variant(DialogText::Detail.role())
+    });
     let head = Row::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Md)
       .align_items(Alignment::Center)
       .child(tile)
       .child(
-        Text::new(&self.title)
-          .id(format!("{id}-title"))
-          .variant(DialogText::Title.role())
+        Column::new()
           .flex(1.0)
-          .min_width(Dimension::Px(0.0)),
+          .min_width(Dimension::Px(0.0))
+          .spacing(ExtraSpacing::Tight.role())
+          .child(
+            Text::new(&self.title)
+              .id(format!("{id}-title"))
+              .variant(DialogText::Title.role())
+              .width(Dimension::Pct(100.0)),
+          )
+          .with_children(what),
       );
     let person = self.person_only.as_ref().map(|words| {
       Row::new()

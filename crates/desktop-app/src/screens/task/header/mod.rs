@@ -9,6 +9,7 @@
 mod actions;
 mod back;
 pub(super) mod controls;
+pub(super) mod export;
 mod module;
 mod more;
 pub(super) mod no_branch;
@@ -155,6 +156,7 @@ impl Component for TaskHeader {
         ("task-close", task_close::StopLook::Primary),
       ))
       .with_children(removal(ctx, &props))
+      .with_children(PageState::of(ctx).export.dialog(ctx, &props.task))
       .child(
         Column::new()
           .width(Dimension::Pct(100.0))
@@ -213,7 +215,8 @@ impl TaskHeader {
         closing: Some((self.closer.clone(), subject(&props.task))),
       }
     };
-    let more = more::more(ctx, &props.task, &self.menu, held);
+    let conversation = props.view.tab() == TaskTab::Conversation;
+    let more = more::more(ctx, (&props.task, conversation), &self.menu, held);
     (primary, more)
   }
 

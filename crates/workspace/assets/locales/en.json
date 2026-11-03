@@ -2345,6 +2345,11 @@
         "applied": "Applied by a person",
         "dismissed": "Dismissed"
       },
+      "mark": {
+        "returned": "Returned the work to {{to}} after {{failed}} failed",
+        "restarted": "Restarted {{step}} as a fresh session",
+        "returnedWithNote": "Returned the work to {{to}} with a note"
+      },
       "tool": {
         "command": "Command",
         "declined": "Declined command",

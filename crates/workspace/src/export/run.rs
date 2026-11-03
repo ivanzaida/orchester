@@ -1,7 +1,8 @@
 //! A run's Conversation as Markdown, the whole run with every step: the task's key and title, the date, the task and
 //! the run, then under a heading for each step that ran the messages of its agent and the person's, in the order the
 //! timeline holds them, each file attached to a message by its name. With tool calls, each command, file edit and MCP
-//! call too, with its input and a short result, and the problems the transcript recorded.
+//! call too, with its input and a short result, the problems the transcript recorded, and the step markers: where a
+//! return or a restart started an attempt.
 
 use orchester_core::{
   connection::stream::{CommandStatus, FileChangeKind},
@@ -14,7 +15,7 @@ use crate::{
   messages::Message,
   tasks::{
     conversation::{Author, Entry as MessageEntry},
-    timeline::{Item, ItemKind, StepHead},
+    timeline::{Item, ItemKind, StepHead, mark::MarkKind},
     transcript::{Entry, EntryKind},
   },
 };
@@ -122,7 +123,11 @@ fn message_said(entry: &MessageEntry) -> Said<'_> {
     (author, None) => Writer::Person(author),
   };
   // A message of files alone says nothing but their names, which follow it.
-  let body = if entry.attachments_only() { String::new() } else { entry.body.to_string() };
+  let body = if entry.attachments_only() {
+    String::new()
+  } else {
+    entry.body.to_string()
+  };
   (writer, body, names)
 }
 
@@ -137,7 +142,8 @@ fn author_words(file: &Document<'_>, writer: &Writer<'_>) -> String {
   }
 }
 
-/// The tool calls of a tool group, and a problem the transcript recorded, each with its input and a short result.
+/// The tool calls of a tool group, and a problem the transcript recorded, each with its input and a short result; and
+/// the marks of the attempts a return or a restart started.
 fn tools(file: &mut Document<'_>, item: &Item) {
   match &item.kind {
     ItemKind::Tools(group) => {
@@ -146,6 +152,28 @@ fn tools(file: &mut Document<'_>, item: &Item) {
       }
     }
     ItemKind::Problem(entry) => tool(file, entry),
+    ItemKind::Mark(mark) => {
+      let (what, note) = match &mark.kind {
+        MarkKind::Returned { to, failed, .. } => (
+          Message::new("export.markdown.mark.returned")
+            .with("to", to.to_string())
+            .with("failed", failed.to_string()),
+          "",
+        ),
+        MarkKind::Restarted { step } => (
+          Message::new("export.markdown.mark.restarted").with("step", step.to_string()),
+          "",
+        ),
+        MarkKind::ReturnedWithNote { to, note, .. } => (
+          Message::new("export.markdown.mark.returnedWithNote").with("to", to.to_string()),
+          &**note,
+        ),
+      };
+      let what = file.say(&what);
+      file.end_tools();
+      file.tool(&what, "", note);
+      file.end_tools();
+    }
     _ => {}
   }
 }

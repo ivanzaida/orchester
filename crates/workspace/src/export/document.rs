@@ -36,7 +36,11 @@ impl<'a> Document<'a> {
   /// One fact under the title: `label` (a key) and its `value`.
   pub(super) fn fact(&mut self, label: &'static str, value: &str) {
     let label = self.say(&Message::new(label));
-    let line = self.say(&Message::new("export.markdown.fact").with("label", label).with("value", one_line(value)));
+    let line = self.say(
+      &Message::new("export.markdown.fact")
+        .with("label", label)
+        .with("value", one_line(value)),
+    );
     self.text.push_str(&format!("- {line}\n"));
   }
 
@@ -52,7 +56,9 @@ impl<'a> Document<'a> {
 
   /// A message `body` that `author` wrote at `at`, with the names of the files attached to it.
   pub(super) fn message(&mut self, author: &str, at: Timestamp, body: &str, attachments: &[&str]) {
-    self.text.push_str(&format!("### {} · {}\n\n", one_line(author), stamp(at)));
+    self
+      .text
+      .push_str(&format!("### {} · {}\n\n", one_line(author), stamp(at)));
     let body = body.trim();
     if !body.is_empty() {
       self.text.push_str(body);
@@ -70,11 +76,15 @@ impl<'a> Document<'a> {
   pub(super) fn tool(&mut self, what: &str, input: &str, result: &str) {
     let input = input.trim();
     if input.contains('\n') {
-      self.text.push_str(&format!("- {}\n\n{}\n", one_line(what), fenced(input, "  ")));
+      self
+        .text
+        .push_str(&format!("- {}\n\n{}\n", one_line(what), fenced(input, "  ")));
     } else if input.is_empty() {
       self.text.push_str(&format!("- {}\n", one_line(what)));
     } else {
-      self.text.push_str(&format!("- {} {}\n", one_line(what), code_span(input)));
+      self
+        .text
+        .push_str(&format!("- {} {}\n", one_line(what), code_span(input)));
     }
     let result = short(result);
     if !result.is_empty() {
@@ -118,17 +128,17 @@ fn short(result: &str) -> String {
 
 /// The longest run of backticks in `text`.
 fn longest_ticks(text: &str) -> usize {
-  text
-    .split(|c| c != '`')
-    .map(str::len)
-    .max()
-    .unwrap_or_default()
+  text.split(|c| c != '`').map(str::len).max().unwrap_or_default()
 }
 
 /// `text` as inline code, between more backticks than it holds in a row.
 fn code_span(text: &str) -> String {
   let ticks = "`".repeat(longest_ticks(text) + 1);
-  let pad = if text.starts_with('`') || text.ends_with('`') { " " } else { "" };
+  let pad = if text.starts_with('`') || text.ends_with('`') {
+    " "
+  } else {
+    ""
+  };
   format!("{ticks}{pad}{text}{pad}{ticks}")
 }
 
