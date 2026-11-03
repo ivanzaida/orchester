@@ -101,7 +101,7 @@ pub fn send_on_as(
   }
   let key = IdempotencyKey::from_uuid(id.as_uuid());
   let text = sent_on_text(&asked.question, reply);
-  let (then, _) = store_answer_in(root, &prepared, (key, way), (&text, &[]), by).map_err(refused)?;
+  let (then, _) = store_answer_in(root, &prepared, (key, way), (&text, &[], None), by).map_err(refused)?;
   let mut db = ProjectDb::open(root).map_err(|error| messages::store_error(&error))?;
   db.mark_side_question_sent(id, Timestamp::now())
     .map_err(|error| messages::store_error(&error))?;

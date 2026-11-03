@@ -344,6 +344,7 @@ fn outgoing(chat: ChatId, words: String, (mode, plan_only): (TurnMode, bool)) ->
     message: ChatMessageId::generate(),
     text: words,
     attachments: Vec::new(),
+    skill: None,
     sent_by: super::sender(),
     mode,
     plan_only,

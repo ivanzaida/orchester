@@ -1446,6 +1446,7 @@
     }
   },
   "skills": {
+    "chosenGone": "The project no longer has the version of the skill you chose. Remove its chip and choose it again.",
     "errors": {
       "blankDescription": "Write a description first: agents choose a skill by it",
       "blankBody": "Write the body first: it is what an agent loads"

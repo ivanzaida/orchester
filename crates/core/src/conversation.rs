@@ -22,6 +22,7 @@
 //! runner (`docs/architecture/storage.md`, "Write ownership").
 
 mod body;
+pub mod skill;
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;

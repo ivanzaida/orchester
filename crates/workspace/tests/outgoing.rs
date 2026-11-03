@@ -187,7 +187,7 @@ fn outgoing_before_a_run_a_file_its_agent_cannot_read_is_refused_with_why() {
     &root,
     &prepared,
     (IdempotencyKey::generate(), Way::Primary),
-    ("Read the spec.", &[pdf]),
+    ("Read the spec.", &[pdf], None),
     Answerer::Person,
   );
   let Err(OutgoingError::Send(SendError::Attachments(why))) = refused else {
@@ -207,7 +207,7 @@ fn outgoing_before_a_run_a_file_its_agent_cannot_read_is_refused_with_why() {
     &root,
     &prepared,
     (IdempotencyKey::generate(), Way::Primary),
-    ("Read the notes.", &[notes]),
+    ("Read the notes.", &[notes], None),
     Answerer::Person,
   )
   .expect("text goes to Codex");

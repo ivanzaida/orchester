@@ -403,20 +403,25 @@ impl View {
 
   /// `sent` was kept. The draft it was sent from empties while it still holds the words sent: what the person wrote
   /// since stays, and goes with the conversation when it was a new one's first message and the route still says a
-  /// new or the latest conversation (`fresh`). Whether it started a conversation so.
+  /// new or the latest conversation (`fresh`). The chip empties while it still holds the skill sent. Whether it started
+  /// a conversation so.
   fn sent(&self, project: ProjectId, sent: Sent, fresh: bool) -> bool {
-    if self
+    let outgoing = self
       .outgoing
       .get_untracked()
-      .is_some_and(|outgoing| outgoing.message == sent.message)
-    {
+      .filter(|outgoing| outgoing.message == sent.message);
+    if outgoing.is_some() {
       self.outgoing.set(None);
     }
     if !sent.from_draft {
       return false;
     }
-    // The change of a plan went with it.
+    // The change of a plan went with it, and so did the skill.
     self.plan_only.stop_changing();
+    let skill = outgoing.and_then(|outgoing| outgoing.skill);
+    if skill.is_some() && self.skill.get_untracked().and_then(|held| held.chosen()) == skill {
+      self.skill.set(None);
+    }
     let Some(from) = draft::sent(project, (sent.chat, sent.message)) else {
       return false;
     };
@@ -456,7 +461,8 @@ impl View {
       let to = chat.unwrap_or_else(ChatId::generate);
       let on = view.plan_only.on_now(Some(from));
       let sent_as = (sender(), view.plan_only.mode(on), on);
-      let outgoing = draft::sending(project.project.id(), from, (to, text, attachments), sent_as);
+      let skill = view.skill.get_untracked().and_then(|skill| skill.chosen());
+      let outgoing = draft::sending(project.project.id(), from, (to, text, attachments, skill), sent_as);
       view.outgoing.set(Some(outgoing.clone()));
       view.how.set(how);
       view.follow.follow_again();
@@ -487,6 +493,7 @@ impl View {
           message: ChatMessageId::generate(),
           text: text.to_string(),
           attachments: Vec::new(),
+          skill: None,
           sent_by: sender(),
           mode: view.plan_only.mode(on),
           plan_only: on,
@@ -507,8 +514,12 @@ impl View {
   }
 
   /// A queued message taken back: its words go into the composer after what is written there, its files after the
-  /// draft's, with the focus there. The facts its mentions carried are read again when it is sent again.
+  /// draft's, its skill into the chip, with the focus there. The facts its mentions carried are read again when it is
+  /// sent again.
   fn take_back(&self, taken: &TakenBack) {
+    if let Some(skill) = OfferedSkill::carried_by(&taken.words) {
+      self.skill.set(Some(skill));
+    }
     let words = orchester_workspace::mentions::facts::said(&taken.words);
     let draft = self.draft.get_untracked();
     let text = if draft.trim().is_empty() {

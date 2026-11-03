@@ -2,7 +2,7 @@
 //! draft opens the run's own commands; *Stop turn* is greyed with why while no turn of an agent runs, and Enter then
 //! neither runs it nor sends; Esc closes the menu and keeps the text; a `/` inside text is just text. Compact, Model
 //! and effort, and Permissions are not offered until their controls exist. That *Stop turn* stops a running turn is
-//! `composer_stop_turn`'s, on a live run.
+//! `composer_stop_turn`'s, on a live run. A chosen skill goes with the message in its block (ORC-634).
 
 use orchester_app::ui::slash::{matched, query};
 use orchester_core::resource::{InstructionScope, Skill};
@@ -103,13 +103,13 @@ fn publish_skills(repo: &std::path::Path) {
 }
 
 /// The Skills section follows the run's commands (`06` `yKWQx`): the published skills, never a draft; with *Stop
-/// turn* greyed the focus starts on the skill, and Enter puts its chip before the message (`06c` `DunaJ`). While the
-/// chip holds it, Enter sends nothing and a line under the box says why; its `x` removes it.
+/// turn* greyed the focus starts on the skill, and Enter puts its chip before the message (`06c` `DunaJ`); its `x`
+/// removes it, and the words stay.
 #[test]
-fn composer_slash_offers_published_skills_and_a_chosen_one_holds_sending() {
+fn composer_slash_offers_published_skills_and_a_chosen_one_becomes_a_chip() {
   let (mut window, seeded) = seeded();
   publish_skills(&seeded.repo);
-  let task = open(&mut window, &seeded, TITLE);
+  open(&mut window, &seeded, TITLE);
   write(&mut window, "/");
   window.until("the skills", |window| window.tree.get_element_by_id(SKILL).is_some());
   let shown = text(&mut window, MENU);
@@ -126,16 +126,49 @@ fn composer_slash_offers_published_skills_and_a_chosen_one_holds_sending() {
   });
   assert!(!draft(&mut window).starts_with('/'), "the typed / goes");
   assert!(text(&mut window, CHIP).contains("rust-change"));
-  assert!(window.tree.get_element_by_id(HELD).is_some(), "why nothing is sent");
+  assert!(
+    window.tree.get_element_by_id(HELD).is_none(),
+    "a message is not held back"
+  );
 
   type_on(&mut window, "skip");
-  key(&mut window, ENTER, (false, false));
-  assert_eq!(draft(&mut window), "skip", "nothing was sent");
-  assert!(messages(&seeded, &task).is_empty());
-
   click(&mut window, &format!("{CHIP}-remove"));
-  window.until("the chip to go", |window| {
-    window.tree.get_element_by_id(CHIP).is_none() && window.tree.get_element_by_id(HELD).is_none()
-  });
+  window.until("the chip to go", |window| window.tree.get_element_by_id(CHIP).is_none());
   assert_eq!(draft(&mut window), "skip", "the words stay");
+}
+
+/// ORC-634: a message with a chosen skill is kept with the skill's block before the words, as every agent of the run
+/// reads it, whatever its engine; the composer's chip empties, and the conversation shows the skill's chip over the
+/// person's words, never the block.
+#[test]
+fn composer_sends_a_chosen_skill_in_its_block_and_shows_its_chip_on_the_message() {
+  let (mut window, seeded) = seeded();
+  publish_skills(&seeded.repo);
+  let task = open(&mut window, &seeded, TITLE);
+  write(&mut window, "/rust");
+  window.until("the skill", |window| window.tree.get_element_by_id(SKILL).is_some());
+  key(&mut window, ENTER, (false, false));
+  window.until("the chip", |window| window.tree.get_element_by_id(CHIP).is_some());
+  type_on(&mut window, "skip");
+  key(&mut window, ENTER, (false, false));
+  window.until("the message stored", |window| {
+    window.tree.get_element_by_id(CHIP).is_none() && !messages(&seeded, &task).is_empty()
+  });
+  let stored = messages(&seeded, &task).remove(0);
+  let body = stored.body().as_str();
+  assert!(
+    body.starts_with("<orchester-skill name=\"rust-change\" version=\"1\""),
+    "{body}"
+  );
+  assert!(body.contains("Checks to run when a change touches Rust"), "{body}");
+  assert!(body.ends_with("</orchester-skill>\n\nskip"), "{body}");
+  assert!(!draft(&mut window).contains("skip"), "the draft went with it");
+
+  let sent = format!("conversation-message-{}-skill-chip", stored.id());
+  window.until("the sent message's chip", |window| {
+    window.tree.get_element_by_id(&sent).is_some()
+  });
+  assert!(text(&mut window, &sent).contains("rust-change"));
+  let shown = text(&mut window, &format!("conversation-message-{}", stored.id()));
+  assert!(shown.contains("skip") && !shown.contains("orchester-skill"), "{shown}");
 }
