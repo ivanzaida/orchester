@@ -103,16 +103,15 @@ impl Turn {
       return Err(TurnFailure::ConnectionGone);
     }
     if let Some(problem) = connection.account().start_problem(Path::is_dir) {
-      return Err(TurnFailure::Account(problem));
+      return Err(TurnFailure::Account { problem });
     }
     let executable = connection
       .executable()
       .ok_or_else(|| cannot("the connection has no CLI program".to_owned()))?
       .to_path_buf();
-    let account = connection
-      .account()
-      .id(provider)
-      .ok_or(TurnFailure::Account(AccountStartProblem::NoAccount))?;
+    let account = connection.account().id(provider).ok_or(TurnFailure::Account {
+      problem: AccountStartProblem::NoAccount,
+    })?;
     // A key secret that is archived, gone or not given by the keychain keeps the turn from starting, as it keeps a
     // step's agent; the reason names the secret, never its value.
     let key = connection
