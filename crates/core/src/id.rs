@@ -127,6 +127,15 @@ define_id!(
   /// Client-generated key that makes a create/queue/send action safe to retry.
   IdempotencyKey
 );
+define_id!(
+  /// One intent of a team-authority command: the client makes it once and repeats it on every retry, and the server
+  /// keys its receipt by project, account and this id. Never a task id or a client-local run number.
+  OperationId
+);
+define_id!(
+  /// One unit of work a team server authorized; the server makes it, never the client.
+  WorkId
+);
 
 impl TaskId {
   /// Reopening a queued task must retry its first run with the same key. Later runs use

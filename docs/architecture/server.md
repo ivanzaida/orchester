@@ -329,6 +329,24 @@ team-authority-plan.md §12 is absent in this checkout; this prerequisite does n
 No v1 workspace contracts or /api/v1 client change. OP-145 implements routes, persistence and enforcement in
 the platform repository; these public types alone implement none of those server behaviors.
 
+## Team authority S4 contract (ORC-649 / OP-147)
+
+Idempotent action receipts. The wire shapes are in [cloud-api.md](../cloud-api.md#team-authority-s4-command-envelopes).
+Core adds `id::OperationId` and `id::WorkId`, distinct UUID newtypes: the client makes an operation id once per
+intent and repeats it on every retry; the server makes work ids. Neither is ever a task id or a client-local run
+number. Core's `sharing::ExpectedRevisions` is the validated expected-revision set of a command: each
+`ExpectedRevision` names a `RevisionTarget` (project, task, module, tag, resource or work, each with its own id type,
+so a kind and id cannot mismatch) and a revision between 1 and `i64::MAX`; a record named twice is refused
+(`ExpectedRevisionError::Duplicate`, `OutOfRange`).
+
+The v2 surface adds `Subject`, `BundleRef`, `LocalEffect`, `EventCursor`, `CommandRequest<C>`, `CommandResult<V>`,
+`OperationRead<V>`, `AuthorityError` with `AuthorityErrorCode` (and its HTTP status), `ErrorDetails` and the closed
+`DecisionId` set D1–D9. No command has a public payload type yet, so the envelopes take the command (`C`) and its
+value (`V`) as type parameters; each later stage adds its commands and values. The server keys a receipt by
+project, authenticated account and operation id; the same id with another request is `operation_mismatch`. Read
+models (pages, task and module reads, capabilities) belong to the S10 contract. OP-147 implements routes, receipts
+and enforcement in the platform repository; these types alone implement none of them.
+
 ## Claims
 
 A claim says who has taken a task into work. A task has at most one; the server keeps it and its history.

@@ -125,6 +125,47 @@ introduced here. The referenced team-authority-plan.md §12 is not present in th
 Existing v1 workspace contracts, events and the /api/v1 client are unchanged. Routes, persistence and server
 enforcement belong to OP-145 in `ivanzaida/orchester-platform`; publishing these types does not enable routes.
 
+## Team authority S4 command envelopes
+
+The public prerequisite for platform OP-147 (idempotent action receipts) is in core and `orchester_api::v2`; it adds
+no endpoints. Ids are UUID strings; `OperationId` (made by the client once per intent, repeated on every retry) and
+`WorkId` (made by the server) are distinct core types, never a task id or a client-local run number. Unknown fields
+are refused in every shape below.
+
+- `Subject`: `{kind:"task",id}` or `{kind:"module",id}`.
+- `ExpectedRevision`: `{kind:"project"|"task"|"module"|"tag"|"resource"|"work",id,revision}`, the id of that kind;
+  `revision` is 1..=i64::MAX. A set naming one kind and id twice is refused.
+- `CommandRequest`: `{operation_id,expected:[ExpectedRevision],command}`; `command` is internally tagged by `kind`
+  (e.g. `{kind:"claim.acquire",subject}`).
+- `CommandResult`: `{operation_id,state:"committed",result,cursor}`; `result` is the command's value, which carries
+  `effects:[LocalEffect]` (empty when no local effect is authorized). `cursor` is an opaque, non-empty
+  `EventCursor` string.
+- `LocalEffect`: `{kind:"start",work_id,bundle:{sha256,schema_version}}`, `{kind:"pause",work_id}`,
+  `{kind:"stop",work_id}` or `{kind:"none"}`; `sha256` is a 64-digit lowercase hex `ContentHash`.
+- `OperationRead`: `{operation_id,state:"committed",response:CommandResult}` or
+  `{operation_id,state:"rejected",error:AuthorityError}`.
+- `AuthorityError`: `{operation_id?,code,details}`; `operation_id` is left out when the refusal came before the
+  operation was read. `details` is `{}` for every code but `decision_required`, whose details are
+  `{decisions:["D1".."D9"]}` with at least one decision. Details never echo the request or carry credentials.
+
+| Code | Status |
+| --- | --- |
+| `unauthenticated` | 401 |
+| `forbidden`, `delivery_not_authorized` | 403 |
+| `not_found` | 404 |
+| `revision_conflict`, `operation_mismatch`, `claim_conflict`, `claim_lost`, `module_required`, `module_claim_conflict`, `transition_denied`, `decision_required`, `bundle_missing` | 409 |
+| `cursor_expired` | 410 |
+| `invalid` | 422 |
+| `unsupported_contract` | 426 |
+| `rate_limited` | 429 |
+| `unavailable` | 503 |
+
+The server keys a receipt by project, authenticated account and `operation_id`; the same id with another request is
+`operation_mismatch`. No command or command value has a public payload type yet: the envelopes are generic over them
+(`CommandRequest<C>`, `CommandResult<V>`, `OperationRead<V>`), and each later stage adds its own. Read models
+(pages, task and module reads, capabilities) are the S10 contract's. Existing v1 contracts, the /api/v1 client and
+earlier v2 types are unchanged.
+
 ## Conventions
 
 - JSON bodies in UTF-8. Requests are limited to 1 MiB and must arrive within 10 seconds.
