@@ -15,8 +15,8 @@ use orchester_core::{
     roots::{AgentHomes, RootsCheck, RunRoots, ToolRequest},
   },
   run::{
-    AnswerKind, ApprovalSubject, AutoVerdict, ModeStep, RequestAnswer, auto_verdict, autopilot_check, autopilot_step,
-    permitted,
+    AnswerKind, ApprovalSubject, AutoAsk, AutoVerdict, ModeStep, RequestAnswer, auto_verdict, autopilot_check,
+    autopilot_step, permitted,
     review::{StepLimit, step_limit},
   },
 };
@@ -237,5 +237,85 @@ fn approval_agent_requests_listing_installs_nothing() {
     "rustup toolchain install nightly",
   ] {
     assert!(fixture.command(line).installs(), "{line}");
+  }
+}
+
+/// Permissions with `repository` access and `prefixes` as the allowed commands, the network off.
+fn allowing(repository: RepositoryAccess, prefixes: &[&str]) -> AgentPermissions {
+  let prefixes = prefixes
+    .iter()
+    .map(|prefix| CommandPrefix::new(prefix).expect("prefix"))
+    .collect();
+  AgentPermissions::new(
+    repository,
+    CommandPermission::Allowed(AllowedCommands::new(prefixes).expect("allowed commands")),
+    NetworkAccess::Off,
+  )
+}
+
+/// The repository's own check, which a Review step asked to run in ORC-658 and ORC-647, was read as a script
+/// Orchester cannot read to the end (ORC-662): `pwsh -File` without `-NoProfile` runs the person's own profile
+/// first, not code from elsewhere. A script of the worktree's `tools/` runs as the step's allowed commands judge
+/// it, `pwsh` listed or the step editing; one outside the worktree is not read.
+#[test]
+fn approval_agent_requests_repository_check_script_runs() {
+  let fixture = Fixture::new();
+  let tools = fixture.worktree.join("tools");
+  std::fs::create_dir_all(&tools).expect("folder");
+  for script in ["check.ps1", "check.sh"] {
+    std::fs::write(tools.join(script), "").expect("file");
+    std::fs::write(fixture.elsewhere.join(script), "").expect("file");
+  }
+  let builder = allowing(RepositoryAccess::Write, &["pwsh", "tools/"]);
+  let editing = allowing(RepositoryAccess::Write, &["tools/"]);
+  let reviewer = allowing(RepositoryAccess::ReadOnly, &["pwsh"]);
+  for line in ["pwsh -File tools/check.ps1", "pwsh -NoProfile -File tools/check.ps1"] {
+    let subject = fixture.subject(line);
+    assert_eq!(fixture.command(line).category(), CommandCategory::Worktree, "{line}");
+    assert_eq!(
+      auto_verdict(&subject),
+      AutoVerdict::Approve(Some(CommandCategory::Worktree)),
+      "{line}"
+    );
+    for permissions in [&builder, &editing, &reviewer] {
+      assert_eq!(
+        permitted(&subject, permissions),
+        Some(CommandCategory::Worktree),
+        "{line} with {permissions:?}"
+      );
+    }
+    // In Autopilot too, with `pwsh` listed; a step that lists no program for it leaves it to the reviewer.
+    for permissions in [&builder, &reviewer] {
+      let limit = step_limit(&subject, Some(permissions), &[]);
+      assert_eq!(limit, StepLimit::Within, "{line} with {permissions:?}");
+      assert_eq!(
+        autopilot_step(&autopilot_check(&fixture.roots, &subject), limit),
+        ModeStep::Approve(RequestAnswer::by(AnswerKind::Autopilot)),
+        "{line}"
+      );
+    }
+    assert_eq!(step_limit(&subject, Some(&editing), &[]), StepLimit::Unread, "{line}");
+  }
+  let bash = allowing(RepositoryAccess::ReadOnly, &["bash", "sh"]);
+  for line in ["bash tools/check.sh", "sh tools/check.sh"] {
+    let subject = fixture.subject(line);
+    assert_eq!(fixture.command(line).category(), CommandCategory::Worktree, "{line}");
+    assert_eq!(permitted(&subject, &editing), Some(CommandCategory::Worktree), "{line}");
+    assert_eq!(permitted(&subject, &bash), Some(CommandCategory::Worktree), "{line}");
+  }
+
+  // A script outside the worktree, absolute or relative, is code from elsewhere.
+  let outside = slashed(&fixture.elsewhere);
+  for line in [
+    format!("pwsh -File {outside}/check.ps1"),
+    format!("pwsh -NoProfile -File {outside}/check.ps1"),
+    "pwsh -File ../../../../../elsewhere/check.ps1".to_owned(),
+    format!("bash {outside}/check.sh"),
+  ] {
+    let subject = fixture.subject(&line);
+    assert_eq!(fixture.command(&line).category(), CommandCategory::Unknown, "{line}");
+    assert_eq!(auto_verdict(&subject), AutoVerdict::Ask(AutoAsk::Unknown), "{line}");
+    assert_eq!(permitted(&subject, &builder), None, "{line}");
+    assert_eq!(step_limit(&subject, Some(&builder), &[]), StepLimit::Unread, "{line}");
   }
 }

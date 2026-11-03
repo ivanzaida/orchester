@@ -42,6 +42,8 @@
 //! Autopilot keeps the step's own limits of these rules ([`step_limit`]): a credential read, a write in a read-only
 //! step, the network or an install while it is off, and permissions not recorded come to the person; a part
 //! Orchester could not read in a step so limited goes to the reviewer's question about the roots and the step's facts.
+//! A script of the worktree whose words the step's allowed commands list (`pwsh -File tools/check.ps1` with `pwsh`
+//! listed) is no such part (ORC-662): the person let the step run it, as Manual's [`crate::run::permitted`] does.
 
 use std::path::PathBuf;
 
@@ -54,7 +56,7 @@ use super::{
 use crate::{
   orchester_tools::{SERVER, auto_approvable, browser::BrowserTool},
   permission::{
-    AgentPermissions, NetworkAccess, RepositoryAccess,
+    AgentPermissions, CommandPermission, NetworkAccess, RepositoryAccess,
     category::{CommandCategory, CommandPart},
     known_safe::program_name,
   },
@@ -206,11 +208,23 @@ pub fn step_limit(
     return StepLimit::Held(hold);
   }
   let limited = permissions.repository() == RepositoryAccess::ReadOnly || *permissions.network() != NetworkAccess::On;
-  if limited && (parts.is_empty() || parts.iter().any(unread)) {
+  let unlisted = parts
+    .iter()
+    .any(|part| unread(part) && !listed_script(part, permissions));
+  if limited && (parts.is_empty() || unlisted) {
     StepLimit::Unread
   } else {
     StepLimit::Within
   }
+}
+
+/// Whether `part` runs a script of the worktree with a program the step's allowed commands list, whatever its
+/// arguments (`pwsh -File tools/check.ps1` with `pwsh` listed): the person let the step run it (ORC-662).
+fn listed_script(part: &CommandPart, permissions: &AgentPermissions) -> bool {
+  part.runs_script()
+    && part.category() != CommandCategory::Unknown
+    && !part.through_path()
+    && matches!(permissions.commands(), CommandPermission::Allowed(list) if list.allows_argv(part.words()))
 }
 
 /// Whether `part` may write in a read-only step as far as Orchester can tell: a part it read that writes anything
