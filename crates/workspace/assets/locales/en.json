@@ -2118,6 +2118,10 @@
       "gone": "This conversation is no longer kept.",
       "busy": "The Orchestrator is still answering in it, or a message waits there for its turn. Stop it or let it finish, then delete it."
     },
+    "rewind": {
+      "busy": "Nothing was dropped · the Orchestrator is answering in this conversation, or a message waits there for its turn. Stop the answer or let it finish, then try again.",
+      "notThere": "Nothing was dropped · this message is no longer in the conversation, or nothing follows it."
+    },
     "queued": {
       "started": "Its turn had already started, so the message was left as it is."
     },

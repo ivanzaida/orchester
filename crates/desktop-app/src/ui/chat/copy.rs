@@ -17,11 +17,12 @@ use lurq::{
     theme::{BorderSize, PaletteColor, RadiusSize},
   },
   components::{Button, Row},
-  core::Signal,
+  core::{ElementRef, Signal},
   layout::{Alignment, layout_kind::Justify},
   node::{CursorIcon, Element, Style, border::Border, dimension::Dimension},
 };
 
+use super::toolbar::MessageExtras;
 use crate::{
   theme::{ControlHeight, ExtraColor, ExtraSpacing, IconSize},
   ui::{
@@ -72,6 +73,17 @@ pub const SHOWN_CLASS: &str = "copy-shown";
 /// The toolbar of the message `id` that copies `markdown`; `hovered` while the pointer is on the message. Its element
 /// id is `<id>-actions`, its button's `<id>-copy`.
 pub fn message_actions(ctx: &mut Ctx, id: &str, markdown: &Arc<str>, hovered: bool) -> Element {
+  message_actions_with(ctx, id, (markdown, None), hovered)
+}
+
+/// [`message_actions`] with `extras` around Copy ([`super::toolbar`]): *Edit* before it and `…` after it. It also
+/// shows while the `…` menu is open.
+pub fn message_actions_with(
+  ctx: &mut Ctx,
+  id: &str,
+  (markdown, extras): (&Arc<str>, Option<MessageExtras>),
+  hovered: bool,
+) -> Element {
   let clipboard = Clipboard::of(ctx);
   ctx.mount_keyed::<MessageActions>(
     &format!("message-actions-{id}"),
@@ -80,6 +92,7 @@ pub fn message_actions(ctx: &mut Ctx, id: &str, markdown: &Arc<str>, hovered: bo
       markdown: markdown.clone(),
       hovered,
       clipboard,
+      extras,
     },
   )
 }
@@ -90,6 +103,7 @@ struct MessageActionsProps {
   markdown: Arc<str>,
   hovered: bool,
   clipboard: Clipboard,
+  extras: Option<MessageExtras>,
 }
 
 impl DevtoolsInspectable for MessageActionsProps {}
@@ -101,6 +115,9 @@ struct MessageActions {
   pointed: Signal<bool>,
   /// The keyboard is on the button.
   focused: Signal<bool>,
+  /// The `…` menu is open, under its button.
+  menu: Signal<bool>,
+  more: ElementRef,
 }
 
 impl Component for MessageActions {
@@ -115,6 +132,8 @@ impl Component for MessageActions {
       reset,
       pointed: ctx.signal(false),
       focused: ctx.signal(false),
+      menu: ctx.signal(false),
+      more: ElementRef::new(),
     }
   }
 
@@ -129,26 +148,18 @@ impl Component for MessageActions {
     let words = ctx.t(key);
     let near = self.pointed.get() || self.focused.get();
     let said = near || copied != Copied::Not;
-    let shown = props.hovered || said;
+    let shown = props.hovered || said || self.menu.get();
     // The tooltip is always laid out, unseen until it says something: a press under the pointer reaches the button
     // it began on even when the pointer's arrival redraws the toolbar in the same frame.
     let tip = Tooltip::new(format!("{}-copy", props.id), words.clone()).beside();
+    let copy = self.button(&props, (glyph, color), &words);
     let toolbar = Row::new()
       .id(format!("{}-actions", props.id))
       .spacing(ExtraSpacing::Snug.role())
       .align_items(Alignment::Center)
       .class(copied.class())
       .child(if said { tip } else { tip.opacity(0.0) })
-      .child(
-        Row::new()
-          .width(Dimension::Px(ControlHeight::Sm.value()))
-          .height(Dimension::Px(ControlHeight::Sm.value()))
-          .padding(ExtraSpacing::Hair.role())
-          .background(PaletteColor::SurfaceRaised)
-          .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
-          .rounded(RadiusSize::Md)
-          .child(self.button(&props, (glyph, color), &words)),
-      );
+      .child(self.toolbox(ctx, &props, copy));
     if shown {
       toolbar.class(SHOWN_CLASS)
     } else {
@@ -158,6 +169,33 @@ impl Component for MessageActions {
 }
 
 impl MessageActions {
+  /// The toolbar's box (`Fh2UW`): Copy alone in its square, or with the extras around it, 1 apart.
+  fn toolbox(&self, ctx: &mut Ctx, props: &MessageActionsProps, copy: Button) -> Row {
+    let body = Row::new()
+      .height(Dimension::Px(ControlHeight::Sm.value()))
+      .padding(ExtraSpacing::Hair.role())
+      .spacing(ExtraSpacing::Hair.role())
+      .align_items(Alignment::Center)
+      .background(PaletteColor::SurfaceRaised)
+      .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+      .rounded(RadiusSize::Md);
+    let Some(extras) = &props.extras else {
+      return body.width(Dimension::Px(ControlHeight::Sm.value())).child(copy);
+    };
+    let edit = extras
+      .edit
+      .as_ref()
+      .map(|edit| super::toolbar::edit_button(ctx, &props.id, edit));
+    let more = extras
+      .more
+      .as_ref()
+      .map(|more| super::toolbar::more_button(ctx, &props.id, more, (&self.menu, &self.more)));
+    body
+      .with_children(edit)
+      .child(copy.width(Dimension::Px(ControlHeight::Helper.value())))
+      .with_children(more)
+  }
+
   fn button(&self, props: &MessageActionsProps, (glyph, color): (Icon, PaletteColor), words: &Arc<str>) -> Button {
     let (copied, reset) = (self.copied.clone(), self.reset.clone());
     let (clipboard, markdown) = (props.clipboard.clone(), props.markdown.clone());

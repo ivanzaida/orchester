@@ -30,6 +30,7 @@ mod modules;
 mod native;
 mod orchestrator;
 mod orchestrator_plan;
+mod orchestrator_rewind;
 mod overview_states;
 mod ownership;
 mod pipelines;
@@ -149,6 +150,8 @@ pub const ALL: [Scenario; 122] = [
   Scenario::of("orchestrator-plan-answer", orchestrator_plan::answer),
   Scenario::of("orchestrator-plan-approved", orchestrator_plan::approved),
   Scenario::of("orchestrator-plan-changed", orchestrator_plan::changed),
+  Scenario::of("orchestrator-rewind", orchestrator_rewind::seed),
+  Scenario::of("orchestrator-rewound", orchestrator_rewind::rewound),
   Scenario::of("changes", changes::seed),
   Scenario::of("cards", cards::seed),
   Scenario::of("cards-auto-mode", auto_mode::seed),

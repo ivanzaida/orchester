@@ -38,6 +38,7 @@ mod references;
 mod report;
 mod repository;
 mod review;
+mod rewind;
 mod runs_on;
 mod scroll;
 mod settings;

@@ -9,6 +9,7 @@ use super::{
   plan::{ChatPlan, TurnMode},
   proposal::ProposedStart,
   report::DailyReport,
+  rewind::RewoundTo,
   wait::AgentWait,
 };
 use crate::{
@@ -56,6 +57,15 @@ pub enum ChatEvent {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     before: Option<u64>,
     state: CompactionState,
+  },
+  /// A person rewound the conversation, or edited an earlier message (ORC-333, [`super::rewind`]): where it went back
+  /// to, how many messages it dropped, and what the agent did in them, which stays done. The session that heard them
+  /// is not resumed again.
+  Rewound {
+    to: RewoundTo,
+    dropped: u32,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    done: Vec<ChatAction>,
   },
 }
 

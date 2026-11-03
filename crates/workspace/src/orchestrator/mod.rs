@@ -25,6 +25,7 @@ pub mod queue;
 pub mod recover;
 pub mod report;
 pub mod repository;
+pub mod rewind;
 mod run_ends;
 pub mod runs_on;
 pub mod search;

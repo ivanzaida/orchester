@@ -133,6 +133,8 @@ pub use self::{
 /// A control that cannot be used, faded as a whole: a button that is unavailable or disabled (`Create
 /// multiple` `Q9aeZ`, `Attach context` `p6caAv`).
 pub const DISABLED_OPACITY: f32 = 0.5;
+/// The messages sending an edit of an earlier message drops, while it is edited in place (09b `QJb0b`).
+pub const DROPPED_OPACITY: f32 = 0.4;
 /// The split between a menu button's label and its chevron (`Split` `gsHDM` in `Bm2gp`).
 pub const MENU_SPLIT_OPACITY: f32 = 0.25;
 /// A shortcut beside a tooltip's label (`n75PTn` in `b6q3OZ`).

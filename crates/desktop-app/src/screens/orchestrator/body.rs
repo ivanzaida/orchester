@@ -109,7 +109,9 @@ pub(super) fn main(ctx: &mut Ctx, view: &View, (project, reads): (&ShownProject,
       (&foot, [problem, None, unread]),
     ),
     Shown::Chat(shown) => {
-      let queued = queued_problem(ctx, view).or_else(|| super::compact::problem(ctx, view));
+      let queued = queued_problem(ctx, view)
+        .or_else(|| super::compact::problem(ctx, view))
+        .or_else(|| super::rewind::problem(ctx, view));
       conversation(
         ctx,
         view,
@@ -360,7 +362,13 @@ fn conversation(
     Some(Readiness::Ready { connection, .. }) => Some(connection.clone()),
     _ => None,
   };
-  let env = Arc::new(env(view, project, (chat, connection, answering), &foot.reads.names));
+  let env = Arc::new(env(
+    ctx,
+    view,
+    project,
+    (chat, connection, answering),
+    &foot.reads.names,
+  ));
   let can_ask = matches!(foot.state, Sending::Ready(_) | Sending::Held(_) | Sending::Empty { .. }) && chat.is_some();
   let stopping = view.stop.state().get().is_pending();
   // The newest turn, which can be stopped or asked again: a wait that started none, kept after it, is no turn, and

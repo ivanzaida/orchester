@@ -24,7 +24,7 @@ use crate::{
 };
 
 /// What the line says of a tool, by its name: the keys of what it did and of its refusal.
-fn words(tool: &str) -> (&'static str, &'static str) {
+pub(super) fn words(tool: &str) -> (&'static str, &'static str) {
   match tool {
     "create_task" => (
       "orchestrator.action.createTask.done",
