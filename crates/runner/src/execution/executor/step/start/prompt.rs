@@ -17,11 +17,17 @@ use orchester_core::{
     PinnedVersion, PipelineInfo, Plan, PlanRevision, PromptAssemblyError, PromptInput, ReturnedWork, Run, RunContext,
     StepOutput, run_delivers,
   },
-  store::{ActivityStore, ResourceStore, RunStore},
+  store::{ActivityStore, RunStore},
 };
 
 use super::{
-  super::{super::run::RunTask, Continuation, Occasion},
+  super::{
+    super::{
+      link::resources::{pinned_version, resource_names},
+      run::RunTask,
+    },
+    Continuation, Occasion,
+  },
   PromptParts, problem,
   retry::LoadedReport,
 };
@@ -155,11 +161,9 @@ impl RunTask {
 
   /// The name of the run's pipeline, as prompts name it.
   fn pipeline_name(&self) -> Result<String, RunnerProblem> {
-    self
-      .db
-      .resource(self.run.snapshot().pipeline().resource)
+    resource_names(&*self.link, self.run.snapshot().pipeline().resource)
       .map_err(|error| problem(error.to_string()))?
-      .map(|resource| resource.name().as_str().to_owned())
+      .map(|resource| resource.name)
       .ok_or_else(|| problem("the run's pipeline no longer exists".to_owned()))
   }
 
@@ -167,20 +171,13 @@ impl RunTask {
   fn pinned_instructions(&self) -> Result<Vec<(PinnedVersion, String, Instruction)>, RunnerProblem> {
     let mut pinned = Vec::new();
     for pin in self.run.snapshot().instructions() {
-      let resource = self
-        .db
-        .resource(pin.resource)
+      let resource = resource_names(&*self.link, pin.resource)
         .map_err(|error| problem(error.to_string()))?
         .ok_or_else(|| problem(format!("instruction {} no longer exists", pin.resource)))?;
-      let version = self
-        .db
-        .version::<Instruction>(pin.resource, pin.number)
+      let instruction = pinned_version::<Instruction>(&*self.link, pin)
         .map_err(|error| problem(error.to_string()))?
         .ok_or_else(|| problem(format!("instruction version {} is missing", pin.number)))?;
-      pinned.push((
-        resource.slug().clone(),
-        (*pin, resource.name().as_str().to_owned(), version.body().clone()),
-      ));
+      pinned.push((resource.slug, (*pin, resource.name, instruction)));
     }
     pinned.sort_by(|(left, _), (right, _)| left.cmp(right));
     Ok(pinned.into_iter().map(|(_, instruction)| instruction).collect())
