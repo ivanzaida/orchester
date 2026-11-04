@@ -64,30 +64,34 @@ impl Component for ServicesTab {
       })
       .state()
       .get();
-    // What was read stays while it is read again.
+    // A failed read shows with Try again; what was read before stays under it, so the list is never passed off as
+    // current after reading it again failed.
+    let failure = read.error.as_ref().filter(|_| !read.is_pending()).map(|error| {
+      let retry = self.retry.clone();
+      load_error(
+        ctx,
+        "settings-services-load-error",
+        (
+          &ctx.t("project_settings.services.loadFailed"),
+          &message_text(ctx, error),
+        ),
+        move || retry.update(|count| *count += 1),
+      )
+    });
+    let failed = failure.is_some();
+    let mut shown = Column::new()
+      .width(Dimension::Pct(100.0))
+      .spacing(ExtraSpacing::Roomy.role())
+      .with_children(failure);
     if let Some(listed) = &read.data {
-      return page::scroll(groups::groups(ctx, &props, listed));
+      // What was read stays while it is read again.
+      shown = shown.child(groups::groups(ctx, &props, listed));
+    } else if !failed {
+      shown = shown.child(loading(
+        "settings-services-loading",
+        &ctx.t("project_settings.services.reading"),
+      ));
     }
-    let shown = match &read.error {
-      Some(error) => {
-        let retry = self.retry.clone();
-        load_error(
-          ctx,
-          "settings-services-load-error",
-          (
-            &ctx.t("project_settings.services.loadFailed"),
-            &message_text(ctx, error),
-          ),
-          move || retry.update(|count| *count += 1),
-        )
-      }
-      None => loading("settings-services-loading", &ctx.t("project_settings.services.reading")).into(),
-    };
-    page::scroll(
-      Column::new()
-        .width(Dimension::Pct(100.0))
-        .spacing(ExtraSpacing::Roomy.role())
-        .child(shown),
-    )
+    page::scroll(shown)
   }
 }

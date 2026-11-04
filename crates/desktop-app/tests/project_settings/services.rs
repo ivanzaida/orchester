@@ -138,6 +138,44 @@ fn services_tab_lists_services_stacks_and_suites() {
   assert_eq!(settings.text("settings-services-page-title"), "Stack");
 }
 
+/// A read again that fails after one that worked says so with Try again above what was read before, rather than passing
+/// the old list off as current; Try again once the store reads again clears it.
+#[test]
+fn services_tab_shows_a_failed_read_again_above_the_list_it_kept() {
+  let mut settings = Settings::new(false);
+  seed(&settings);
+  settings.tab("services", "settings-service-postgres-row");
+  assert!(!settings.exists("settings-services-load-error"));
+  let db = rusqlite::Connection::open(settings.repo.join(".orchester/orchester.db")).expect("fixture db");
+  let saved: Vec<(String, String)> = db
+    .prepare("SELECT resource_id, body FROM resource_drafts")
+    .expect("drafts")
+    .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+    .expect("drafts")
+    .collect::<Result<_, _>>()
+    .expect("drafts");
+  db.execute("UPDATE resource_drafts SET body = 'broken'", [])
+    .expect("break the drafts");
+  let feed = settings.window.projects().feed(project_id());
+  feed.revision.update(|revision| *revision += 1);
+  settings.until("the failed read", |s| s.exists("settings-services-load-error"));
+  assert!(
+    settings.exists("settings-service-postgres-row"),
+    "what was read stays under the failure"
+  );
+
+  for (id, body) in &saved {
+    db.execute(
+      "UPDATE resource_drafts SET body = ?2 WHERE resource_id = ?1",
+      [id, body],
+    )
+    .expect("repair the drafts");
+  }
+  settings.click("settings-services-load-error-retry");
+  settings.until("the read again", |s| !s.exists("settings-services-load-error"));
+  assert_eq!(settings.text("settings-services-count"), "3");
+}
+
 /// `navigate` opens the tab and its pages by name, a service's with its id, and answers their parameters back; an
 /// item's page without its id, or a page of the tab under another, is refused.
 #[test]
