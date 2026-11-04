@@ -187,15 +187,21 @@ fn person_message(ctx: &mut Ctx, env: &Env, (id, message): (&str, &ReviewMessage
   frame(id, you(ctx, id, meta), body, None)
 }
 
-/// *In the Conversation · run #4, step 03 Implement ↗*: the task's Conversation, where Implement works on the comment.
+/// *In the Conversation · run #4, step 03 Implement ↗*: the task's Conversation, where Implement works on the comment;
+/// *In the Conversation · run #4 ↗* while the implementing step is not known.
 fn conversation_link(ctx: &Ctx, env: &Env, id: &str) -> Element {
-  let step = env.page.implement.as_ref().map_or_else(String::new, |implement| {
-    format!("{:02} {}", implement.number, implement.name)
-  });
-  let words = ctx.t_args(
-    "review_page.thread.inConversation",
-    [("run", env.page.run.number.get().to_string()), ("step", step)],
-  );
+  let run = ("run", env.page.run.number.get().to_string());
+  let words = match &env.page.implement {
+    Some(implement) => ctx.t_args(
+      "review_page.thread.inConversation",
+      [
+        run,
+        ("number", format!("{:02}", implement.number)),
+        ("step", implement.name.to_string()),
+      ],
+    ),
+    None => ctx.t_args("review_page.thread.inConversationRun", [run]),
+  };
   let (navigation, route) = (
     env.navigation.clone(),
     Route::Project(
@@ -317,7 +323,7 @@ fn stop_row(ctx: &Ctx, env: &Env, (id, view): (&str, &ThreadView)) -> Element {
     ctx.t("review_page.thread.stop"),
   )
   .icon(Icon::CircleStop)
-  .small()
+  .snug()
   .on_click(move || writes.run(Write::Stop(thread)));
   Row::new()
     .id(format!("{id}-stop-row"))

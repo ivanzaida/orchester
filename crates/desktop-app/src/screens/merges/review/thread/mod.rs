@@ -170,7 +170,7 @@ fn actions(ctx: &mut Ctx, env: &Env, view: &ThreadView) -> Vec<Element> {
         ctx.t("review_page.thread.reply"),
       )
       .icon(Icon::Reply)
-      .small()
+      .snug()
       .on_click(move || state.open_in_thread(InThread::FollowUp(thread), String::new()));
       vec![reply.into(), resolve(ctx, env, (&id, thread), true)]
     }
@@ -209,7 +209,7 @@ fn resolve(ctx: &Ctx, env: &Env, (id, thread): (&str, orchester_core::id::Review
   let writes = env.writes.clone();
   ActionButton::new(format!("{id}-{name}"), ButtonKind::Ghost, ctx.t(key))
     .icon(glyph)
-    .small()
+    .snug()
     .on_click(move || writes.run(Write::Keep(Kept::Resolve(thread, resolve))))
     .into()
 }
@@ -224,7 +224,7 @@ fn ask_again(ctx: &Ctx, env: &Env, view: &ThreadView, (id, kind): (&str, ButtonK
     } else {
       Icon::CornerDownRight
     })
-    .small();
+    .snug();
   match words {
     Some(words) => button
       .on_click(move || writes.run(Write::AskAgain(thread, words.clone())))

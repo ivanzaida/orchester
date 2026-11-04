@@ -81,7 +81,8 @@
       "reply": "Reply",
       "edit": "Edit",
       "delete": "Delete",
-      "inConversation": "In the Conversation · run #{{run}}, step {{step}}",
+      "inConversation": "In the Conversation · run #{{run}}, step {{number}} {{step}}",
+      "inConversationRun": "In the Conversation · run #{{run}}",
       "outdatedFold": "{{count}} outdated: a later commit changed their lines. Show them",
       "resolvedFold": "Resolved · {{kind}} {{lines}} · {{words}}"
     },

@@ -9,7 +9,8 @@
 //!   addressed comment (10) and a resolved comment; on `settings.rs`, a comment a later checkpoint outdated. The
 //!   migration is marked *Viewed*, so it shows folded.
 //! - *Per-endpoint secrets*, waiting for review: two comments whose send the runner did not take (the tray failed).
-//! - *Delivery log per endpoint*: a run returned to Implement with a comment sent, Implement at work on it (9).
+//! - *Delivery log per endpoint*: a run returned to Implement with a comment sent, Implement at work on it (9); its
+//!   Implement step wrote the run's last checkpoint, so the comment's Conversation link names it (*step 03 Implement*).
 
 use std::num::NonZeroU32;
 

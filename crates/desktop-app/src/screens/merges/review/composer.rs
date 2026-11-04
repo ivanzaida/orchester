@@ -1,10 +1,11 @@
 //! The comment box under the chosen lines (`State · 1 · Writing a comment` `zl5Ld`, `2 · Writing a question` `zRVag`):
 //! a box on `surface_raised` in the `border_focus` stroke, radius 6. Its head, 30 high on `surface_panel`: *Comment* /
 //! *Question* segmented (a comment by default), the lines, and *New* at its end; the words in 13, 8 over and under
-//! and 14 at the sides; then what the kind does, *Cancel*, and *Add comment* or *Ask Implement*. Ctrl Enter (Cmd Enter
-//! on macOS) does the same, Esc cancels and keeps the words. A comment waits unsent in the tray; a question goes to
-//! Implement at once. Inside a thread, the same field changes a comment not sent yet (*Save*) or writes a reply to an
-//! addressed comment (*Add comment*), which waits unsent too.
+//! and 14 at the sides (`Field` `YUYFQ`), which take the focus as the box opens or takes other lines; then what the
+//! kind does, *Cancel*, and *Add comment* or *Ask Implement*, 26 high. Ctrl Enter (Cmd Enter on macOS) does the same,
+//! Esc cancels and keeps the words. A comment waits unsent in the tray; a question goes to Implement at once. Inside a
+//! thread, the same field changes a comment not sent yet (*Save*) or writes a reply to an addressed comment (*Add
+//! comment*), which waits unsent too; it takes the focus as it opens.
 
 use std::sync::Arc;
 
@@ -30,7 +31,7 @@ use orchester_workspace::tasks::review_threads::read::ThreadView;
 use super::{
   Env,
   actions::{Closes, Kept, Write},
-  state::{Composing, Held, InThread},
+  state::{BoxField, Composing, Held, InThread},
   words::lines,
 };
 use crate::{
@@ -98,7 +99,7 @@ pub(super) fn new_box(ctx: &mut Ctx, env: &Env) -> Element {
     .child(head(ctx, env, &composing, kind))
     .child(field(
       ctx,
-      "review-composer-text",
+      ("review-composer-text", &env.state.field),
       &env.state.text,
       &placeholder(ctx, kind),
     ))
@@ -137,7 +138,7 @@ pub(super) fn in_thread_box(ctx: &mut Ctx, env: &Env, view: &ThreadView, what: I
     }))
     .child(field(
       ctx,
-      &format!("{id}-text"),
+      (&format!("{id}-text"), &env.state.in_thread_field),
       &env.state.in_thread_text,
       &ctx.t("review_page.composer.commentPlaceholder"),
     ))
@@ -207,8 +208,9 @@ fn placeholder(ctx: &Ctx, kind: ThreadKind) -> Arc<str> {
   }
 }
 
-/// The words, 8 over and under and 14 at the sides, growing with their lines.
-fn field(ctx: &Ctx, id: &str, value: &Signal<String>, placeholder: &Arc<str>) -> Element {
+/// The words, 8 over and under and 14 at the sides, growing with their lines; the field takes the focus when its box
+/// opened since it was drawn last.
+fn field(ctx: &Ctx, (id, at): (&str, &BoxField), value: &Signal<String>, placeholder: &Arc<str>) -> Element {
   let theme = ctx.theme();
   let resolve = |color| {
     FormTextRole {
@@ -217,6 +219,7 @@ fn field(ctx: &Ctx, id: &str, value: &Signal<String>, placeholder: &Arc<str>) ->
     }
     .resolve(&theme.typography(), &theme.palette())
   };
+  at.focus_once(ctx);
   Row::new()
     .width(Dimension::Pct(100.0))
     .padding(Padding::symmetric(ExtraSpacing::Inset.role(), SpacingSize::Sm))
@@ -229,7 +232,8 @@ fn field(ctx: &Ctx, id: &str, value: &Signal<String>, placeholder: &Arc<str>) ->
         .describe("a11y_name", placeholder.clone())
         .width(Dimension::Pct(100.0))
         .multiline()
-        .rows(1, MAX_LINES),
+        .rows(1, MAX_LINES)
+        .ref_element(at.field.clone()),
     )
     .into()
 }
@@ -266,10 +270,10 @@ fn foot(
         ctx.t("review_page.composer.cancel"),
       )
       .icon(Icon::X)
-      .small()
+      .snug()
       .on_click(cancel),
     )
-    .child(submit.small())
+    .child(submit.snug())
 }
 
 /// The send button: under way while a change runs, pressed when the words can go, disabled otherwise.

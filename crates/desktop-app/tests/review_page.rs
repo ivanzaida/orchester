@@ -1,8 +1,10 @@
 //! A run's review page (ORC-697, `Review · redesign` 09i `wLyFt` and the states of `RBR9O`) in the app's real window,
 //! on the QA seed's `review-page` scenario (`examples/seed`): opened from its *Waiting for your review* row at the
 //! run's route under Merges, with the run's real diff, its files and *Viewed* marks, every thread state, the comment
-//! box that adds a comment to the tray, a send the runner did not take kept with why, and *Approve and merge*
-//! unavailable while Implement works on a comment sent; on `review-changed`, a branch that moved after the review
+//! box that adds a comment to the tray and whose field takes the focus as it opens, the **+** only on the line under
+//! the pointer and never over its numbers (ORC-702), a send the runner did not take kept with why, and *Approve and
+//! merge* unavailable while Implement works on a comment sent, whose link names the step at work; on
+//! `review-changed`, a branch that moved after the review
 //! (ORC-699) told with its new commits, and *Approve and merge* unavailable until they are taken in. Needs `git`, as
 //! the seed does.
 //! `cargo test -p orchester-app --test review_page review_page`.
@@ -243,7 +245,46 @@ fn review_page_approve_is_unavailable_while_implement_works_on_a_comment_sent() 
   assert!(reason.contains("Implement is at work"), "{reason}");
   let diff = page.diff_text();
   assert!(diff.contains("Sent · Implement is changing the code"), "{diff}");
-  assert!(diff.contains("In the Conversation · run #3, step "), "{diff}");
+  assert!(
+    diff.contains("In the Conversation · run #3, step 03 Implement"),
+    "the step Implement works in: {diff}"
+  );
+}
+
+#[test]
+fn review_page_comment_box_field_takes_the_focus_as_it_opens() {
+  let mut page = Page::new();
+  page.open(("Sign webhook payloads", 1));
+  page.window.press("review-line-1-new-11");
+  page
+    .window
+    .until("the comment box", |window| window.texts("review-composer").is_some());
+  page.window.pass();
+  assert_eq!(
+    page.window.tree.focused_element().and_then(|element| element.id()),
+    Some("review-composer-text"),
+    "what is typed next goes into the box"
+  );
+}
+
+#[test]
+fn review_page_shows_the_plus_only_on_the_line_under_the_pointer_beside_its_numbers() {
+  let mut page = Page::new();
+  page.open(("Sign webhook payloads", 1));
+  // An added line has no old number: the + stands in its column.
+  page.window.hover("review-line-1-new-11");
+  assert_eq!(count(&mut page, "review-diff", "review-line-add"), 1);
+  assert_eq!(count(&mut page, "review-line-1-new-11", "review-line-add"), 1);
+  // An unchanged line keeps both its numbers, the + in its sign's place; the line before lets go of its +.
+  page.window.hover("review-line-1-new-8");
+  assert_eq!(count(&mut page, "review-diff", "review-line-add"), 1);
+  assert_eq!(count(&mut page, "review-line-1-new-8", "review-line-add"), 1);
+  let numbers = page.window.texts("review-line-1-new-8").expect("the line");
+  assert_eq!(
+    numbers.get(..2),
+    Some(&["8".to_owned(), "8".to_owned()][..]),
+    "{numbers:?}"
+  );
 }
 
 #[test]
@@ -282,4 +323,23 @@ fn first_line(page: &mut Page, prefix: &str) -> String {
     stack.extend(children);
   }
   found.unwrap_or_else(|| panic!("a line {prefix}…"))
+}
+
+/// How many elements inside the element `within` have the id `id`.
+fn count(page: &mut Page, within: &str, id: &str) -> usize {
+  let mut found = 0;
+  let mut stack = vec![
+    page
+      .window
+      .tree
+      .get_element_by_id(within)
+      .unwrap_or_else(|| panic!("{within} is shown")),
+  ];
+  while let Some(element) = stack.pop() {
+    if element.id() == Some(id) {
+      found += 1;
+    }
+    stack.extend(element.children());
+  }
+  found
 }

@@ -26,7 +26,7 @@ use super::{
 use crate::tasks::{
   changes::{Checkpointed, RunRange, checkpointed_in, own_start},
   data::ProjectTasks,
-  detail::{TaskDetail, run_store_error},
+  detail::{RunView, TaskDetail, run_store_error},
   merge_attempts::{
     merges::MergeRun,
     read::{ReviewIn, commits_after, reviewed_head},
@@ -123,7 +123,7 @@ pub fn review_page(
   let detail = TaskDetail::load_in(root, task.id())?;
   let view = detail.run.as_ref().filter(|view| view.id() == run.id());
   let implement = view.and_then(|view| {
-    let key = return_work::implementing_step(view)?;
+    let key = return_work::implementing_step(view).or_else(|| at_work(view))?;
     let step = view.steps.iter().find(|step| step.key == key)?;
     Some(Implement {
       key,
@@ -162,6 +162,24 @@ pub fn review_page(
     implement,
     steps,
   }))
+}
+
+/// The writing step at work on `view`'s run, which has not ended, so no step is one its work can go back to: the
+/// one whose work its last checkpoint holds, else the one that runs now.
+fn at_work(view: &RunView) -> Option<StepKey> {
+  let checkpointed = view
+    .run
+    .last_checkpoint()
+    .and_then(|checkpoint| view.run.execution(checkpoint.execution()))
+    .map(|execution| execution.step().clone());
+  let writing = || view.steps.iter().filter(|step| step.writes());
+  checkpointed
+    .filter(|key| writing().any(|step| step.key == *key))
+    .or_else(|| {
+      writing()
+        .find(|step| step.status.is_some_and(StepStatus::is_open))
+        .map(|step| step.key.clone())
+    })
 }
 
 /// `run`'s diff from where its own work starts to `head`, where its branch is.
