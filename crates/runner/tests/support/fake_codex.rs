@@ -361,7 +361,9 @@ impl Session {
       .map(|name| (name.to_owned(), json!({"enabled": true})))
       .collect();
     for name in &self.user_servers {
-      servers.insert(name.clone(), json!({"enabled": true, "command": "user-tool"}));
+      let mut table = fake_codex_user::table(name);
+      table["enabled"] = json!(true);
+      servers.insert(name.clone(), table);
     }
     let hooks = json!({
       "PreToolUse": [], "PermissionRequest": [], "PostToolUse": [], "SessionStart": [], "UserPromptSubmit": [],
@@ -384,7 +386,7 @@ impl Session {
     let servers: serde_json::Map<String, Value> = self
       .user_servers
       .iter()
-      .map(|name| (name.clone(), json!({"command": "user-tool"})))
+      .map(|name| (name.clone(), fake_codex_user::table(name)))
       .collect();
     let mut user = json!({"mcp_servers": servers});
     if fake_provider::clashes(&self.args) {

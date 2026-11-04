@@ -10,6 +10,15 @@
 //! declined; a question of Codex's gets no answers. Once the turn is over the runner ends App Server, which otherwise
 //! waits for more. A stopped or timed-out turn keeps what Codex reported it spent so far. On the connection's API
 //! provider App Server starts with the provider's overrides and key as a step's does ([`OnProvider`]).
+//!
+//! The person's own Codex configuration may have a server named `orchester` too: Settings › Automation › Connect an
+//! agent registers the app's MCP server under that name. Before each turn the names Codex's configuration has are
+//! read with an App Server started for that alone, as for a step (`orchester_core::connection::app_server_config`),
+//! and when `orchester` is taken the chat's server gets a name apart in that session (`CodexMcp::named_apart`:
+//! `orchester-orchester`, numbered on while taken), the person's server is turned off for the thread, and the system
+//! prompt tells the agent the name (`renamed_server`). What Codex says of the server (its tool calls, its approval
+//! requests) the session names `orchester` again, so the chat's approvals still match it. The person's configuration
+//! file is only read, never written.
 
 use std::{
   collections::{BTreeMap, BTreeSet},
@@ -22,6 +31,7 @@ use orchester_core::{
   connection::{
     AgentProvider,
     app_server::Update,
+    app_server_config::{names_read_command, read_configured_names},
     invocation::{CODEX_PROVIDER_ID, CodexChat, CodexMcp, OnProvider, Platform, on_account},
     mcp::InvocationExemptions,
     stream::AgentEvent,
@@ -29,13 +39,19 @@ use orchester_core::{
   id::{AgentAccountId, ChatMessageId},
   orchestrator::{
     TurnFailure, TurnState,
-    instructions::{ProjectReads, SERVER, system_prompt},
+    instructions::{ProjectReads, SERVER, renamed_server, system_prompt},
   },
   permission::NetworkAccess,
   resource::RepositoryAccess,
   run::TokenUsage,
 };
+use orchester_exec::ProcessRunner;
 use tokio::sync::{mpsc, oneshot};
+
+/// How long the read of the MCP server names of Codex's configuration may take, as for a step
+/// (`crate::execution::step::start::cli`): App Server answers it in a fraction of a second once it runs, but its first
+/// start on a machine is slower.
+const NAMES_TIMEOUT: Duration = Duration::from_secs(20);
 
 use super::{
   steer::Steering,
@@ -53,6 +69,16 @@ pub(super) struct Started {
   pub(super) account: AgentAccountId,
 }
 
+/// What follows from the name Codex gets the chat's server by.
+struct ServerNames {
+  /// That name: [`SERVER`], or a name apart.
+  server: String,
+  /// The name apart, then [`SERVER`], when it has one.
+  renamed: BTreeMap<String, String>,
+  /// The system prompt, which tells the agent a name apart.
+  instructions: String,
+}
+
 /// Why a turn on App Server failed, as App Server's `failure` says.
 pub(super) fn turn_failure(failure: AppServerFailure) -> TurnFailure {
   match failure {
@@ -67,14 +93,14 @@ impl Turn {
     prepared: Prepared,
     (stop, steers): (oneshot::Receiver<()>, &mut mpsc::UnboundedReceiver<ChatMessageId>),
   ) -> TurnState {
-    match self.start_codex(prepared) {
+    match self.start_codex(prepared).await {
       Ok(started) => self.drive_codex(started, (stop, steers)).await,
       Err(failure) => TurnState::Failed(failure),
     }
   }
 
   /// App Server's command and the session's setup, or why none can start.
-  pub(super) fn start_codex(&self, prepared: Prepared) -> Result<Started, TurnFailure> {
+  pub(super) async fn start_codex(&self, prepared: Prepared) -> Result<Started, TurnFailure> {
     let (mcp, left_out) = CodexMcp::new(&[self.tools_launch()?]);
     if !left_out.is_empty() {
       return Err(cannot("the tools' server was left out".to_owned()));
@@ -98,6 +124,7 @@ impl Turn {
         ))
       })?
       .codex_paths();
+    let mcp = self.named_apart(&prepared, &skills, mcp).await;
     let command = CodexChat {
       executable: &prepared.executable,
       folder: &self.root,
@@ -114,6 +141,11 @@ impl Turn {
     .map_err(|error| cannot(error.to_string()))?;
     let mut secrets = mcp.secrets().to_vec();
     secrets.extend(on_provider.as_ref().map(|on| on.key_variable(AgentProvider::CodexCli)));
+    let ServerNames {
+      server,
+      renamed,
+      instructions,
+    } = self.server_names(&mcp, &prepared.project_name);
     let setup = AppServerSetup {
       prompt: self.text.as_str().to_owned(),
       attached: self.attached.clone(),
@@ -127,17 +159,13 @@ impl Turn {
       network: NetworkAccess::Off,
       writable_roots: Vec::new(),
       resume: prepared.resumed,
-      expected_servers: BTreeSet::from([SERVER.to_owned()]),
-      renamed: BTreeMap::new(),
+      expected_servers: BTreeSet::from([server]),
+      renamed,
       exemptions: InvocationExemptions::default(),
       output_schema: None,
       secrets,
       model_provider: on_provider.as_ref().map(|_| CODEX_PROVIDER_ID.to_owned()),
-      base_instructions: Some(system_prompt(
-        &prepared.project_name,
-        self.project,
-        ProjectReads::GitTools,
-      )),
+      base_instructions: Some(instructions),
       compact: false,
     };
     Ok(Started {
@@ -145,6 +173,64 @@ impl Turn {
       setup,
       account: prepared.account,
     })
+  }
+
+  /// The name Codex gets the chat's server of `mcp` by, the project's name of each server Codex gets by another, and
+  /// the system prompt of project `project_name`, which tells the agent a name apart.
+  fn server_names(&self, mcp: &CodexMcp, project_name: &str) -> ServerNames {
+    let server = mcp
+      .servers()
+      .first()
+      .map_or(SERVER, |server| mcp.codex_name(server))
+      .to_owned();
+    let renamed = mcp
+      .renamed()
+      .iter()
+      .map(|(server, name)| (name.clone(), server.to_string()))
+      .collect();
+    let mut instructions = system_prompt(project_name, self.project, ProjectReads::GitTools);
+    if server != SERVER {
+      instructions.push('\n');
+      instructions.push_str(&renamed_server(&server));
+    }
+    ServerNames {
+      server,
+      renamed,
+      instructions,
+    }
+  }
+
+  /// `mcp` with a name apart in Codex for the chat's server when Codex's own configuration has a server of its name
+  /// (`CodexMcp::named_apart`), read with an App Server started for that alone, confined as the turn's and without its
+  /// server, on the connection's account but not its API provider, whose key the read does not need. Unchanged when
+  /// the read fails: the turn's own App Server reads its configuration again and refuses a name that is taken.
+  async fn named_apart(&self, prepared: &Prepared, skills: &[std::path::PathBuf], mcp: CodexMcp) -> CodexMcp {
+    let none = CodexMcp::default();
+    let command = CodexChat {
+      executable: &prepared.executable,
+      folder: &self.root,
+      platform: Platform::current(),
+      mcp: &none,
+      skills,
+    }
+    .command(std::env::vars_os(), &prepared.environment)
+    .and_then(|command| on_account(command, prepared.connection.account(), AgentProvider::CodexCli))
+    .map(|command| names_read_command(command, &self.root));
+    let read = match command {
+      Ok(command) => tokio::task::spawn_blocking(move || {
+        read_configured_names(&ProcessRunner::new(NAMES_TIMEOUT), &command).map_err(|error| error.to_string())
+      })
+      .await
+      .unwrap_or_else(|error| Err(error.to_string())),
+      Err(error) => Err(error.to_string()),
+    };
+    match read {
+      Ok(taken) => mcp.named_apart(&taken),
+      Err(error) => {
+        tracing::warn!(%error, "cannot read the MCP server names of Codex's configuration for the Orchestrator");
+        mcp
+      }
+    }
   }
 
   /// Runs App Server, keeping what it reports and giving its turn the messages sent now that `steers` hands over, until

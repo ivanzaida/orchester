@@ -1,8 +1,10 @@
 //! `orchester-fake-codex` as a turn of the Orchestrator chat: an App Server whose arguments give it the chat's
 //! domain tools as the HTTP server `orchester` (`-c mcp_servers.orchester.url="…"`, its bearer token under the
-//! variable `bearer_token_env_var` names). It appends how it was started to `.orchester/fake-chat.log` in its working
-//! directory (`codex-argv: `, `system-prompt: ` with the first line of the thread's `baseInstructions`, `thread: `
-//! with `new` or the thread it resumed, `mcp-url: `, `mcp-token: present`, `prompt: ` with the turn's first line, and
+//! variable `bearer_token_env_var` names), or as `orchester-orchester` when the user's own configuration has a server
+//! named `orchester` (`fake_codex_user`). It appends how it was started to `.orchester/fake-chat.log` in its working
+//! directory (`codex-argv: `, `system-prompt: ` with the first line of the thread's `baseInstructions`,
+//! `system-prompt-end: ` with its last line, `thread: ` with `new` or the thread it resumed, `mcp-server: ` with the
+//! chat's server's name, `mcp-url: `, `mcp-token: present`, `prompt: ` with the turn's first line, and
 //! `prompt-words: ` with its whole prompt on one line),
 //! then answers by the message, the prompt's last line:
 //!
@@ -14,8 +16,8 @@
 //!   refuses the steer instead ("steering is not available for this turn") and replies `Noted: <prompt>`;
 //! - "Fail now": the turn fails;
 //! - "Run a command": asks to run `cat secrets.txt`, and runs nothing until it is answered;
-//! - "Ask for tools": asks to call a tool of another MCP server (`pencil`), then one of the chat's own (`orchester`),
-//!   logging each answer (`answer <what>: <result>`), then replies `Asked.`;
+//! - "Ask for tools": asks to call a tool of another MCP server (`pencil`), then one of the chat's own (by the name its
+//!   arguments give it), logging each answer (`answer <what>: <result>`), then replies `Asked.`;
 //! - anything else: replies `Noted: <message>`.
 //!
 //! Each turn reports usage and completes, as Codex does; App Server then waits for the runner to end it.
@@ -26,20 +28,30 @@ use std::{fs, io::Write, path::Path};
 
 use serde_json::{Value, json};
 
-use super::{Session, Step, complete, fake_codex_work::message, notify, request};
+use super::{Session, Step, complete, fake_codex_user::argument_name, fake_codex_work::message, notify, request};
 use crate::fake_chat_mcp::ChatServer;
 
-/// The override that names the chat's server.
-const URL: &str = "mcp_servers.orchester.url=";
-const BEARER: &str = "mcp_servers.orchester.bearer_token_env_var=";
+/// The project's name of the chat's server.
+const SERVER: &str = "orchester";
 /// The ids of the requests: the command, the other server's call, the chat's own.
 const COMMAND: u64 = 910;
 const OTHER_SERVER: u64 = 911;
 const OWN_SERVER: u64 = 912;
 
+/// The name the arguments give the chat's server: `orchester`, or the name apart Codex gets it by.
+fn server_name(args: &[String]) -> String {
+  argument_name(args, SERVER)
+}
+
+/// The override of the chat's server's `field`.
+fn key(args: &[String], field: &str) -> String {
+  format!("mcp_servers.{}.{field}=", server_name(args))
+}
+
 /// Whether `args` start a turn of the Orchestrator chat.
 pub fn is_chat(args: &[String]) -> bool {
-  args.iter().any(|arg| arg.starts_with(URL))
+  let url = key(args, "url");
+  args.iter().any(|arg| arg.starts_with(&url))
 }
 
 /// Whether `answer` answers one of the chat's requests.
@@ -55,11 +67,11 @@ pub fn answered(session: &Session, answer: &Value) -> Step {
   let what = match id {
     COMMAND => "command",
     OTHER_SERVER => "pencil",
-    _ => "orchester",
+    _ => SERVER,
   };
   append_log(session, &[format!("answer {what}: {}", answer["result"])]);
   if id == OTHER_SERVER {
-    tool_request(session, OWN_SERVER, "orchester");
+    tool_request(session, OWN_SERVER, &server_name(&session.args));
   } else {
     message(session, "item_chat", "Asked.");
     complete(session, None);
@@ -109,8 +121,8 @@ fn setting<'a>(args: &'a [String], key: &str) -> Option<&'a str> {
 }
 
 fn server(args: &[String]) -> Option<ChatServer> {
-  let url = setting(args, URL)?.to_owned();
-  let token = setting(args, BEARER)
+  let url = setting(args, &key(args, "url"))?.to_owned();
+  let token = setting(args, &key(args, "bearer_token_env_var"))
     .and_then(std::env::var_os)
     .map(|token| format!("Bearer {}", token.to_string_lossy()));
   Some(ChatServer { url, token })
@@ -233,10 +245,15 @@ fn log(session: &Session, (args, base): (&[String], Option<&str>), server: Optio
       "system-prompt: {}",
       base.and_then(|base| base.lines().next()).unwrap_or_default()
     ),
+    format!(
+      "system-prompt-end: {}",
+      base.and_then(|base| base.lines().last()).unwrap_or_default()
+    ),
     format!("thread: {thread}"),
     format!("prompt: {}", prompt.lines().next().unwrap_or_default()),
   ];
   if let Some(server) = server {
+    lines.push(format!("mcp-server: {}", server_name(args)));
     lines.push(format!("mcp-url: {}", server.url));
     if server.token.is_some() {
       lines.push("mcp-token: present".to_owned());

@@ -30,8 +30,10 @@ pub enum ConfigReadError {
   MissingLayers,
   #[error("Codex loaded the repository's own Codex settings in {0}, which Orchester never gives an agent")]
   RepositorySettingsLoaded(String),
-  /// Orchester's own server, which keeps its name, or a server the step chooses whose name the configuration did not
-  /// have when the step's servers were named ([`read_configured_names`]).
+  /// The runs' relay of Orchester's tools (`Orchester`), which keeps its name, or a server Orchester names apart (a
+  /// step's chosen one, the Orchestrator chat's `orchester`) whose name the configuration did not have when the
+  /// servers were named ([`read_configured_names`]). Connect an agent registers the app's server as `orchester`, never
+  /// as `Orchester` (`docs/design/app-mcp-connection.md`, "The server name").
   #[error(
     "Your own Codex configuration has an MCP server named `{0}`, the name a server Orchester gives this agent has in \
      Codex; Codex would merge them. Retry the step if the step chose that server, as its servers get names apart \

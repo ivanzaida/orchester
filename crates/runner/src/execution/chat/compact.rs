@@ -196,7 +196,7 @@ impl Turn {
 
   /// Codex App Server's `thread/compact/start` on the thread it resumes.
   async fn compact_codex(&self, prepared: Prepared, before: Option<u64>) -> Compacted {
-    let mut started = match self.start_codex(prepared) {
+    let mut started = match self.start_codex(prepared).await {
       Ok(started) => started,
       Err(reason) => return failed_with(reason),
     };
