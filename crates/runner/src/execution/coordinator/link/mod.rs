@@ -3,6 +3,7 @@
 //! module of its own.
 
 mod environment;
+mod memory;
 mod messages;
 mod resources;
 
@@ -53,6 +54,26 @@ impl LocalLink<RunReader> {
 impl CoordinatorLink for LocalLink<RunReader> {
   fn another(&self) -> Result<Box<dyn CoordinatorLink + Send>, LinkError> {
     let link = Self::open(&self.0.root).map_err(|error| read_failed(&error))?;
+    Ok(Box::new(link))
+  }
+}
+
+/// Opens local links of the project at a root, each over a read-only connection of its own ([`LocalLink::open`]).
+pub struct LocalLinks {
+  root: PathBuf,
+}
+
+impl LocalLinks {
+  /// The links of the project whose database is at `root`.
+  pub fn new(root: &Path) -> Self {
+    Self {
+      root: root.to_path_buf(),
+    }
+  }
+
+  /// A new link to the coordinator; the link opens more of its own with [`CoordinatorLink::another`].
+  pub fn open(&self) -> Result<Box<dyn CoordinatorLink + Send>, LinkError> {
+    let link = LocalLink::open(&self.root).map_err(|error| read_failed(&error))?;
     Ok(Box::new(link))
   }
 }
