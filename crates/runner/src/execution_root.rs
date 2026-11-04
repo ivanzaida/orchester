@@ -1,14 +1,17 @@
 //! The executor's own folders, all derived here from its execution root (`docs/architecture/remote-runners.md`,
 //! rule 6): the run worktrees and step worktrees, the warm workspaces, the runs' own storage, the step executions'
-//! skills, the tools given to agents and the codebase indexes. Locally the execution root is the project's
-//! repository, so each folder is where it always was, under its `.orchester/`.
+//! skills, the tools given to agents, the codebase indexes and the copies of the files attached to messages that its
+//! agents are given. Locally the execution root is the project's repository, so each folder is where it always was,
+//! under its `.orchester/`.
 //!
 //! The executor's folders outside the repository belong to the computer it runs on, the same for every execution
 //! root there: the private files with secret values and the user's data folder that holds the apps' discovery
 //! folders and the QA slots.
 //!
 //! The folders of the person's checkout — `runner.lock`, the logs, the project database, attachments and blobs — are
-//! the coordinator's and stay joined to the project root.
+//! the coordinator's and stay joined to the project root. The executor gets an attachment's content through the
+//! coordinator link and keeps its own copy ([`ExecutionRoot::attachments`]): locally that is the project's own
+//! attachments folder, where the copy already is.
 
 use std::path::{Path, PathBuf};
 
@@ -80,6 +83,12 @@ impl ExecutionRoot {
   /// The codebase indexes, in `.orchester/index/`.
   pub fn code_indexes(&self) -> CodebaseIndexes {
     CodebaseIndexes::new(&self.repository)
+  }
+
+  /// The copies of the files attached to messages that the executor gives its agents, `.orchester/attachments/`:
+  /// locally the project's own copies.
+  pub fn attachments(&self) -> PathBuf {
+    self.repository.join(STATE_DIR).join("attachments")
   }
 }
 
