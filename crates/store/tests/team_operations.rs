@@ -67,6 +67,41 @@ fn team_operations_bind_one_id_to_one_request() {
 }
 
 #[test]
+fn team_operations_stay_with_the_server_project_they_were_recorded_for() {
+  let (repo, mut db) = linked();
+  let first = db.sharing().expect("read").expect("linked");
+  let hash = digest('d');
+  let new = NewTeamOperation {
+    id: OperationId::generate(),
+    kind: "task.create",
+    digest: &hash,
+    request: "{}",
+  };
+  let recorded = db.begin_team_operation(new, at(1)).expect("recorded");
+  assert_eq!((recorded.server, recorded.project), (first.server, first.project));
+  let connection = rusqlite::Connection::open(repo.path().join(".orchester").join("orchester.db")).expect("open");
+  connection.execute("DELETE FROM sharing", []).expect("make local");
+  assert!(db.open_team_operations().expect("open").is_empty(), "none while local");
+  connection
+    .execute(
+      "INSERT INTO sharing (only_row, server_id, project_id, project_key, role, joined_at, event_cursor, \
+       last_synced_at) VALUES (1, ?1, ?2, 'ORC', 'member', 1, 0, 1)",
+      [ServerId::generate().to_string(), ProjectId::generate().to_string()],
+    )
+    .expect("link elsewhere");
+  assert!(db.open_team_operations().expect("open").is_empty(), "another project's");
+  assert!(matches!(
+    db.begin_team_operation(new, at(2)),
+    Err(StoreError::OtherServerProject)
+  ));
+  assert_eq!(
+    db.team_operation(new.id).expect("read"),
+    Some(recorded),
+    "kept as it was"
+  );
+}
+
+#[test]
 fn team_operations_keep_a_settled_outcome() {
   let (_repo, mut db) = linked();
   let id = OperationId::generate();

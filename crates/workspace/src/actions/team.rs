@@ -63,9 +63,13 @@ impl Operations<'_> {
     self.send(&body).await
   }
 
-  /// Carries on with the recorded operation `record` from where it stands.
+  /// Carries on with the recorded operation `record` from where it stands; one recorded for another server project
+  /// than this link's is [`ActionError::OperationOfOtherProject`].
   pub(super) async fn resume(&mut self, record: TeamOperation) -> Result<TeamOutcome, ActionError> {
     let operation = record.id;
+    if record.server != self.link.server || record.project != self.link.project {
+      return Err(ActionError::OperationOfOtherProject(operation));
+    }
     match record.state {
       TeamOperationState::Sent => self.look_up(&record).await,
       TeamOperationState::Committed | TeamOperationState::EffectFailed => {

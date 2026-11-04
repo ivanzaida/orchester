@@ -1,12 +1,15 @@
 //! The workspace's action dispatcher (`orchester_workspace::actions`, team authority P2) against a fake team server on
 //! loopback ([`server`]): a lost response is looked up and never commits twice, also after a restart; an operation id
-//! reused with other inputs is refused here and by the server; a revision conflict comes with the current value; a
-//! member's definition write is refused and changes nothing here; a claim's start stays pending; a receipt whose
-//! identity cannot be recorded fails its local effect only; and a local project's actions run as they always did.
+//! reused with other inputs is refused here and by the server; an operation never goes to another server project than
+//! the one it was recorded for; a revision conflict comes with the current value; a member's definition write is
+//! refused and changes nothing here; a claim's start stays pending; a receipt whose identity cannot be recorded fails
+//! its local effect only; and a local project's actions run as they always did ([`organize`]).
 //!
 //! `cargo test -p orchester-workspace --test actions actions_`
 
 mod http;
+mod organize;
+mod run;
 mod server;
 
 use std::{fs, path::PathBuf, sync::Arc};
@@ -107,6 +110,15 @@ impl Checkout {
         [ServerId::generate().to_string(), server.project.to_string()],
       )
       .expect("link the project");
+    self
+  }
+
+  /// The project made local again, as Make local does: its link is gone, its recorded operations stay.
+  fn unlink(self) -> Self {
+    rusqlite::Connection::open(self.dir.path().join(".orchester/orchester.db"))
+      .expect("open")
+      .execute("DELETE FROM sharing", [])
+      .expect("make the project local");
     self
   }
 
@@ -248,6 +260,40 @@ async fn actions_an_operation_id_reused_with_other_inputs_is_refused() {
     (AuthorityErrorCode::OperationMismatch, false)
   );
   assert_eq!(server.task(task.id).title, "Sign in with email");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn actions_an_operation_never_goes_to_another_server_project() {
+  let first = TeamServer::start();
+  let checkout = Checkout::linked(&first);
+  let (dispatcher, _generation) = checkout.team(&first, ADMIN);
+  first.lose_next_response();
+  let intent = Intent::new(create("Sign in"));
+  let lost = team(dispatcher.dispatch(&intent).await.expect("dispatched"));
+  assert!(matches!(lost, TeamOutcome::AcceptanceUnknown { .. }), "{lost:?}");
+
+  // Made local, then joined to another server project: the open operation is the first project's.
+  let second = TeamServer::start();
+  let checkout = checkout.unlink().link(&second);
+  let (dispatcher, _generation) = checkout.team(&second, ADMIN);
+  assert!(dispatcher.open_operations().expect("open").is_empty());
+  let recovered = dispatcher.recover(intent.operation()).await.map(ActionOutcome::Team);
+  for refused in [recovered, dispatcher.dispatch(&intent).await] {
+    assert!(
+      matches!(refused, Err(ActionError::OperationOfOtherProject(operation)) if operation == intent.operation()),
+      "{refused:?}"
+    );
+  }
+  assert_eq!(second.counts(), (0, 0), "nothing sent to the other project");
+  let record = checkout
+    .db()
+    .team_operation(intent.operation())
+    .expect("read")
+    .expect("kept");
+  assert_eq!(
+    (record.state, record.project),
+    (TeamOperationState::Sent, first.project)
+  );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

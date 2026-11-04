@@ -102,8 +102,8 @@ impl Dispatcher {
     operations.resume(record).await
   }
 
-  /// The team operations whose outcome or local effects are still open, oldest first: what [`Self::recover`] carries
-  /// on with.
+  /// The team operations of the server project linked now whose outcome or local effects are still open, oldest
+  /// first: what [`Self::recover`] carries on with.
   pub fn open_operations(&self) -> Result<Vec<OperationId>, ActionError> {
     let db = ProjectDb::open(&self.root)?;
     Ok(

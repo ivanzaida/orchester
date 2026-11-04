@@ -4,7 +4,11 @@
 //! them as they are and holds the rules that make an operation one intent: its request never changes, and a settled
 //! outcome never changes.
 
-use orchester_core::{blob::ContentHash, id::OperationId, time::Timestamp};
+use orchester_core::{
+  blob::ContentHash,
+  id::{OperationId, ProjectId, ServerId},
+  time::Timestamp,
+};
 use rusqlite::{Connection, OptionalExtension, Row, params};
 
 use super::{ProjectDb, sharing};
@@ -64,6 +68,10 @@ pub struct NewTeamOperation<'a> {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TeamOperation {
   pub id: OperationId,
+  /// The server and its project the operation was recorded for: the project's link when it was sent, which a project
+  /// made local and linked again elsewhere no longer has.
+  pub server: ServerId,
+  pub project: ProjectId,
   pub kind: String,
   pub digest: ContentHash,
   pub request: String,
@@ -85,21 +93,25 @@ pub enum TeamSettlement<'a> {
 
 impl ProjectDb {
   /// Records `new` before it is sent and returns it. The same id recorded before with the same digest returns that
-  /// record, whatever became of it; with another digest it is [`StoreError::OperationMismatch`]. The project must be
-  /// linked to a team server.
+  /// record, whatever became of it; with another digest it is [`StoreError::OperationMismatch`], and recorded for
+  /// another server project than the one linked now [`StoreError::OtherServerProject`]. The project must be linked to
+  /// a team server.
   pub fn begin_team_operation(
     &mut self,
     new: NewTeamOperation<'_>,
     at: Timestamp,
   ) -> Result<TeamOperation, StoreError> {
     let transaction = self.connection.transaction()?;
+    let link = sharing::link(&transaction)?.ok_or(StoreError::NotShared)?;
     if let Some(known) = load(&transaction, new.id)? {
       if known.digest != *new.digest {
         return Err(StoreError::OperationMismatch(new.id));
       }
+      if known.server != link.server || known.project != link.project {
+        return Err(StoreError::OtherServerProject);
+      }
       return Ok(known);
     }
-    let link = sharing::link(&transaction)?.ok_or(StoreError::NotShared)?;
     transaction.execute(
       "INSERT INTO team_operations (id, server_id, team_project_id, kind, digest, request, state, created_at, \
        updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'sent', ?7, ?7)",
@@ -122,10 +134,13 @@ impl ProjectDb {
     load(&self.connection, id)
   }
 
-  /// The operations whose outcome or local effects are still to be learned or made, oldest first.
+  /// The operations of the server project the project is linked to now whose outcome or local effects are still to be
+  /// learned or made, oldest first; none while the project is local. Those of a link the project no longer has are
+  /// left as they are: they are another server project's, never to be sent to this one.
   pub fn open_team_operations(&self) -> Result<Vec<TeamOperation>, StoreError> {
     let mut statement = self.connection.prepare(&format!(
-      "{SELECT} WHERE state IN ('sent', 'committed', 'effect_failed') ORDER BY created_at, id"
+      "{SELECT} WHERE state IN ('sent', 'committed', 'effect_failed') AND server_id = (SELECT server_id FROM \
+       sharing) AND team_project_id = (SELECT project_id FROM sharing) ORDER BY created_at, id"
     ))?;
     let rows = statement.query_map([], read)?;
     rows.map(|row| row?).collect()
@@ -155,7 +170,8 @@ impl ProjectDb {
   }
 }
 
-const SELECT: &str = "SELECT id, kind, digest, request, state, receipt, rejection FROM team_operations";
+const SELECT: &str = "SELECT id, server_id, team_project_id, kind, digest, request, state, receipt, rejection FROM \
+                      team_operations";
 
 fn load(connection: &Connection, id: OperationId) -> Result<Option<TeamOperation>, StoreError> {
   connection
@@ -166,26 +182,20 @@ fn load(connection: &Connection, id: OperationId) -> Result<Option<TeamOperation
 
 /// A row as an operation; a value that breaks the rules is [`StoreError::Corrupt`].
 fn read(row: &Row<'_>) -> rusqlite::Result<Result<TeamOperation, StoreError>> {
-  let (id, kind, digest, request, state, receipt, rejection): (
-    String,
-    String,
-    String,
-    String,
-    String,
-    Option<String>,
-    Option<String>,
-  ) = (
+  let (id, server, project, kind, digest, request): (String, String, String, String, String, String) = (
     row.get(0)?,
     row.get(1)?,
     row.get(2)?,
     row.get(3)?,
     row.get(4)?,
     row.get(5)?,
-    row.get(6)?,
   );
+  let (state, receipt, rejection): (String, Option<String>, Option<String>) = (row.get(6)?, row.get(7)?, row.get(8)?);
   Ok((|| {
     Ok(TeamOperation {
       id: parse("team operation id", &id)?,
+      server: parse("team operation server", &server)?,
+      project: parse("team operation project", &project)?,
       kind,
       digest: ContentHash::new(&digest).map_err(|error| corrupt("team operation digest", error))?,
       request,

@@ -2,7 +2,7 @@
 //! A new task's batch key is the intent's operation id, so sending the same intent again saves it once.
 
 use orchester_core::{
-  id::{IdempotencyKey, OperationId},
+  id::{IdempotencyKey, OperationId, TaskId},
   store::TaskStore,
   task::organization::{ChangeActor, TaskOrganization},
   time::Timestamp,
@@ -44,15 +44,35 @@ fn task(writer: &mut TaskWriter, operation: OperationId, action: &TaskAction) ->
     TaskAction::Edit { task, read, edited, .. } => {
       LocalResult::Task(Box::new(writer.update_task(*task, *read, edited.clone())?))
     }
-    TaskAction::Organize { task, edited, .. } => {
-      let edited = edited.clone();
-      LocalResult::Changed(writer.update_organization_by(*task, ChangeActor::Person, |_| edited)?)
-    }
+    TaskAction::Organize { task, base, edited, .. } => LocalResult::Changed(organize(writer, *task, base, edited)?),
     TaskAction::Move { task, module, .. } => {
       LocalResult::Changed(writer.set_task_module(*task, *module, ChangeActor::Person)?)
     }
   };
   Ok(result)
+}
+
+/// The person's changes from `base` to `edited`, made over what `task` has stored now
+/// ([`TaskOrganization::rebase`]), so what changed meanwhile, e.g. the Orchestrator moving it to In progress, stays.
+/// Closing it goes first and through the writer's close, refused while a run of it has not ended, so a refusal
+/// changes nothing. Whether it changed the task.
+fn organize(
+  writer: &mut TaskWriter,
+  task: TaskId,
+  base: &TaskOrganization,
+  edited: &TaskOrganization,
+) -> Result<bool, ActionError> {
+  let status = edited.status();
+  let closing = status != base.status() && status.is_closed();
+  let closed = closing && writer.close(task, status, ChangeActor::Person)?;
+  // Once closed, the status stays as the close set it: the rest is rebased with the status unchanged from `base`.
+  let rest = if closing {
+    edited.clone().with_status(base.status())
+  } else {
+    edited.clone()
+  };
+  let changed = writer.update_organization_by(task, ChangeActor::Person, |current| rest.rebase(base, &current))?;
+  Ok(closed || changed)
 }
 
 fn module(writer: &mut TaskWriter, action: &ModuleAction) -> Result<LocalResult, ActionError> {

@@ -37,6 +37,10 @@ pub enum ActionError {
   /// The operation id was used for another action: one id is one intent.
   #[error("operation {0} was used for another action")]
   OperationMismatch(OperationId),
+  /// The operation was recorded for another server project than the one the project is linked to now, e.g. before it
+  /// was made local and joined elsewhere: it is neither looked up nor sent here.
+  #[error("operation {0} was recorded for another server project")]
+  OperationOfOtherProject(OperationId),
   /// The server answered with another operation's receipt; nothing of it was taken.
   #[error("the server answered operation {0} with another operation's receipt")]
   ReceiptMismatch(OperationId),
