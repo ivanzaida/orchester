@@ -11,7 +11,7 @@ impl RunTask {
   pub(super) fn offered_checks(&self, step: &StepKey) -> Result<Vec<ProjectTool>, RunnerProblem> {
     self
       .db
-      .run_checks(self.run.snapshot(), step)
+      .run_checks(&self.run, step)
       .map_err(|error| problem(format!("cannot read the run's checks: {error}")))
   }
 }

@@ -19,10 +19,12 @@ use orchester_core::{
     VersionId, WorkId,
   },
   name::Name,
+  orchester_tools::ProjectTool,
   permission::{AgentPermissions, CommandPermission, NetworkAccess, StepPermissions},
   resource::{
-    AgentProfile, Deliverable, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Slug, Step, StepKey,
-    StepKind, Version, VersionNumber,
+    AccessPolicy, AccessWindow, AgentProfile, AllowedSteps, ApprovalMode, CommandAction, CommandArg, CommandProgram,
+    Deliverable, DeniedBehavior, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Slug, Step,
+    StepKey, StepKind, Tool, ToolAction, Version, VersionNumber,
   },
   run::{
     BranchName, CommitId, PauseReason, PreflightProblem, PublishedVersions, RunSnapshot, RunStatus, StepStatus,
@@ -53,6 +55,7 @@ struct Team {
   team_task: TeamTaskRef,
   profile: ResourceId,
   pipeline: ResourceId,
+  tool: ResourceId,
   canonical: CanonicalExecutionInputs,
 }
 
@@ -122,19 +125,42 @@ fn delivery(profile: ResourceId) -> Version<Pipeline> {
   )
 }
 
-/// The team's Builder profile and its two-step pipeline (Implement, then Review), published on the server only: no
-/// resource row of either is on this computer.
+/// The team's check, version 1: a command tool its access rules offer to the pipeline's Implement step only.
+fn check(pipeline: ResourceId) -> Version<Tool> {
+  let action = CommandAction::new(
+    CommandProgram::new("git").expect("program"),
+    vec![CommandArg::new("status").expect("argument")],
+  );
+  let access = AccessPolicy::new(
+    BTreeMap::from([(
+      pipeline,
+      AllowedSteps::Only(BTreeSet::from([StepKey::new("implement").expect("key")])),
+    )]),
+    name("Worktree"),
+    ApprovalMode::OncePerRun,
+    AccessWindow::UntilStepEnds,
+    DeniedBehavior::FailStep,
+  )
+  .expect("access");
+  let body = Tool::new("Shows the worktree.", ToolAction::Command(action), Some(access)).expect("tool");
+  Version::new(VersionId::generate(), VersionNumber::FIRST, body, Timestamp::now())
+}
+
+/// The team's Builder profile, its two-step pipeline (Implement, then Review) and a check, published on the server
+/// only: no resource row of any is on this computer.
 fn team(setup: &Setup) -> Team {
   let project = project(setup);
   let root = project.repo.path();
   let (server, server_project) = link(root);
-  let (profile, pipeline) = (ResourceId::generate(), ResourceId::generate());
+  let (profile, pipeline, tool) = (ResourceId::generate(), ResourceId::generate(), ResourceId::generate());
   let profile_version = builder();
   let pipeline_version = delivery(profile);
+  let tool_version = check(pipeline);
   let profiles = BTreeMap::from([(profile, profile_version.clone())]);
+  let tools = BTreeMap::from([(tool, tool_version.clone())]);
   let published = PublishedVersions {
     profiles: &profiles,
-    tools: &BTreeMap::new(),
+    tools: &tools,
     instructions: &BTreeMap::new(),
     skills: &BTreeMap::new(),
   };
@@ -142,7 +168,7 @@ fn team(setup: &Setup) -> Team {
   let bodies = PinnedBodies {
     profiles: &[profile_version],
     instructions: &[],
-    tools: &[],
+    tools: &[tool_version],
     skills: &[],
   };
   let canonical = CanonicalExecutionInputs::pin(&snapshot, bodies).expect("inputs");
@@ -161,6 +187,7 @@ fn team(setup: &Setup) -> Team {
     team_task,
     profile,
     pipeline,
+    tool,
     canonical,
   }
 }
@@ -205,6 +232,7 @@ impl Team {
       vec![
         label(self.profile, "builder", "Builder"),
         label(self.pipeline, "delivery", "Delivery"),
+        label(self.tool, "worktree-status", "Worktree status"),
       ],
       (TaskLimits::NONE, Deliverable::default()),
       self.canonical.clone(),
@@ -301,6 +329,28 @@ async fn start_and_pause(team: &Team, operation: OperationId) -> RunId {
   id
 }
 
+/// The checks the paused run `id` offers and the connection its steps continue on after a plan limit, read from its
+/// inputs alone: the pinned check by its accepted slug for Implement only, and the profile's bound connection.
+fn assert_resolved_from_inputs(team: &Team, id: RunId) {
+  let db = ProjectDb::open(team.root()).expect("open");
+  assert_eq!(db.resource(team.tool).expect("read"), None, "no team tool row");
+  let run = db.run(id).expect("read").expect("the run");
+  let implement = StepKey::new("implement").expect("key");
+  let checks = db.run_checks(&run, &implement).expect("the checks");
+  let names: Vec<&str> = checks.iter().map(ProjectTool::name).collect();
+  assert_eq!(names, ["worktree-status"], "the accepted check by its accepted slug");
+  assert_eq!(checks[0].approval(), ApprovalMode::OncePerRun);
+  let review = StepKey::new("review").expect("key");
+  assert!(db.run_checks(&run, &review).expect("the checks").is_empty());
+  for step in [&implement, &review] {
+    let connection = db
+      .step_agent_connection(&run, step)
+      .expect("read")
+      .expect("the bound connection");
+    assert_eq!(connection.id(), team.connection(), "the profile's bound connection");
+  }
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn team_inputs_a_team_run_executes_and_restarts_without_team_task_or_resource_rows() {
   let team = team(&Setup::new("Work slowly."));
@@ -313,7 +363,9 @@ async fn team_inputs_a_team_run_executes_and_restarts_without_team_task_or_resou
   assert_eq!(db.resource(team.pipeline).expect("read"), None, "no team pipeline row");
 
   let id = start_and_pause(&team, operation).await;
+  assert_resolved_from_inputs(&team, id);
   publish_changed_profile(root, team.profile);
+  assert_resolved_from_inputs(&team, id);
 
   // A runner started again goes on from the run's inputs.
   let (scheduler, mut events) = scheduler(root);
