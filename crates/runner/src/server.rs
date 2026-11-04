@@ -421,7 +421,6 @@ async fn chat_answering(scheduler: &Scheduler, message: ChatMessageId, tools: Ch
   }
 }
 
-/// The reply to [`Command::StopChat`].
 /// Starts the next run of `task` after `after` (Run again), removing `remove_worktrees` first, only for the task at
 /// `revision` when it names one.
 async fn run_again(
