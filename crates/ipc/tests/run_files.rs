@@ -50,7 +50,7 @@ fn reply(id: u64, reply: RunFilesReply) -> Event {
 
 #[test]
 fn run_files_requests_round_trip_under_a_raised_protocol() {
-  assert_eq!(PROTOCOL_VERSION, 44);
+  assert_eq!(PROTOCOL_VERSION, 45);
   let run = RunId::generate();
   for request in [
     RunFilesRequest::Present,

@@ -23,7 +23,7 @@ use orchester_core::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-  ErrorReports,
+  ErrorReports, FolderState,
   browser::{BrowserCommand, BrowserEvent, BrowserReply, ScreencastFrame},
   chat::ChatTools,
   folders::{FoldersCommand, FoldersReply},
@@ -298,7 +298,12 @@ pub enum Command {
   /// it is built, [`Rejection::CodeIndexInUse`] while it is in use, or [`Rejection::Failed`] with why it could not be
   /// built.
   RebuildCodeIndex { revision: Revision },
-  /// The code viewer reads the worktree of run `run` (protocol 44, [`crate::run_files`]): the runner's executor side
+  /// What run `run`'s folder holds beyond its last commit, for the start-up recovery (protocol 44): its own
+  /// worktree, else the workspace it holds or worked in last. The runner reads it with git in the folder; the desktop
+  /// never does. Answered with [`Reply::RunFolderState`], [`FolderState::Unknown`] when the run has no folder any more
+  /// or git cannot tell.
+  RunFolderState { run: RunId },
+  /// The code viewer reads the worktree of run `run` (protocol 45, [`crate::run_files`]): the runner's executor side
   /// reads it where the worktree is. Answered with [`Reply::RunFiles`].
   RunFiles { run: RunId, request: RunFilesRequest },
 }
@@ -502,6 +507,11 @@ pub enum Reply {
   /// The answer to [`Command::RebuildCodeIndex`]: the index of `revision` is built again.
   CodeIndexRebuilt {
     revision: Revision,
+  },
+  /// The answer to [`Command::RunFolderState`].
+  RunFolderState {
+    run: RunId,
+    state: FolderState,
   },
   /// The answer to [`Command::RunFiles`]; a file's bytes travel after it in a binary frame.
   RunFiles(RunFilesReply),

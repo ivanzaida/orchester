@@ -7,6 +7,7 @@ mod code_index;
 mod estimate;
 mod folders;
 mod merge_queue;
+mod run_folder;
 
 use std::{
   future::Future,
@@ -368,6 +369,7 @@ async fn answer(
     Command::Folders(ref command) => return later.folders(handle, command.clone()),
     Command::MergeQueue(ref command) => return later.merge_queue(handle, command.clone()),
     Command::EstimateTask { task } => return later.estimate(handle, task),
+    Command::RunFolderState { run } => return later.run_folder_state(handle, run),
     Command::SetErrorReports { ref reports } => return Answer::ErrorReports(id, reports.clone()),
     Command::ReadWorktreeChanges { run } => return later.reply(handle.worktree_changes(run)),
     Command::RebuildCodeIndex { ref revision } => return later.rebuild_code_index(handle, revision.clone()),
