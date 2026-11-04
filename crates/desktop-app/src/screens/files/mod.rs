@@ -264,15 +264,15 @@ impl Component for FilesScreen {
     }
     self.open_folders_of(path.as_ref().and_then(|path| path.as_ref().ok()));
     self.close_menus_on_move(&props.route);
-    let root = props.project.open.repo_root.clone();
+    let open = props.project.open.clone();
     let wake = self
       .following
       .wake(ctx, &props.project, (props.route.at(), view.retry.get()));
     let file = path.as_ref().and_then(|path| path.as_ref().ok());
-    let choices = reads::choices(ctx, &root, (props.route.at(), run, file), wake);
+    let choices = reads::choices(ctx, &open, (props.route.at(), run, file), wake);
     // A future belongs to its place among the render's futures: the tree's comes before those read only with a
     // file, so selecting the first file does not read the tree again.
-    let list = reads::list(ctx, &root, props.route.at(), (wake, &self.following.list));
+    let list = reads::list(ctx, &open, props.route.at(), (wake, &self.following.list));
     let following = (
       wake,
       &self.following.file,
@@ -280,7 +280,7 @@ impl Component for FilesScreen {
       self.following.follows_runs(),
     );
     let (read, stale) = file
-      .map(|file| reads::file(ctx, &root, (props.route.at(), file), following))
+      .map(|file| reads::file(ctx, &open, (props.route.at(), file), following))
       .unzip();
     let page = Page {
       project: &props.project,

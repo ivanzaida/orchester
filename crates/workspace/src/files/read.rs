@@ -1,6 +1,7 @@
 //! Reading one file of a version for the code viewer. A folder's file is checked with the file scope
 //! agents' file tools use (`FileScope::repository_readable`): a link or junction that leads out of the
-//! folder, and `.git` and `.orchester`, are refused. A commit's file is read with `git ls-tree` and
+//! folder, and `.git` and `.orchester`, are refused. A run's worktree is read the same way by the project's
+//! runner, which sends the file's bytes (`super::runs`). A commit's file is read with `git ls-tree` and
 //! `git cat-file`; what it stores is what git holds, so no link is followed. Files above
 //! [`MAX_VIEW_BYTES`] are measured but not read, and a NUL byte in the first 8 KiB makes a file binary,
 //! as for agents' `read_file`.
@@ -14,13 +15,13 @@ use orchester_core::{
 };
 
 use super::{
-  Digest, FilePath, FilesError, PathError, Version,
+  Digest, FilePath, FilesError, PathError, RunFiles, Version, runs,
   source::{LITERAL_PATHS, Source, git_output, source},
   text::FileText,
 };
 
-/// The largest file the viewer shows.
-pub const MAX_VIEW_BYTES: u64 = 5 * 1024 * 1024;
+/// The largest file the viewer shows; a run's runner reads its worktree with the same limit.
+pub const MAX_VIEW_BYTES: u64 = orchester_ipc::run_files::MAX_VIEW_BYTES;
 /// Bytes looked at for a NUL to tell a binary file.
 const BINARY_PROBE: usize = 8 * 1024;
 /// The mode git gives a symbolic link.
@@ -46,15 +47,17 @@ impl FileView {
   }
 }
 
-/// The file `path` in `version` of the project at `repo_root`. Blocks on the file system and git.
+/// The file `path` in `version` of the project at `repo_root`; a run's file as its runner (`runs`) reads it.
+/// Blocks on the file system, git and the runner.
 pub fn read_file(
-  runner: &dyn CommandRunner,
+  (runner, runs): (&dyn CommandRunner, &dyn RunFiles),
   repo_root: &Path,
   version: &Version,
   path: &FilePath,
 ) -> Result<FileView, FilesError> {
   match source(runner, repo_root, version)? {
     Source::Folder(folder) => read_in_folder(&folder, path),
+    Source::Run(run) => runs::read(runs, run, path),
     Source::Commit { repo, commit, .. } => read_in_commit(runner, &repo, &commit, path),
   }
 }
@@ -160,7 +163,7 @@ fn ls_tree_entry(entry: &str) -> Option<(&str, &str, &str, &str)> {
 }
 
 /// What `bytes`, read whole, show as.
-fn view(bytes: &[u8]) -> FileView {
+pub(super) fn view(bytes: &[u8]) -> FileView {
   if bytes.iter().take(BINARY_PROBE).any(|byte| *byte == 0) {
     return FileView::Binary {
       size: u64::try_from(bytes.len()).unwrap_or(u64::MAX),
