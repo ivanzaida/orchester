@@ -34,3 +34,10 @@ CREATE TABLE merge_attempts_open (
   stage TEXT NOT NULL
 ) STRICT;
 ";
+
+/// What kind of cause ended an attempt (`orchester_core::integration::attempt::CauseKind`, JSON), so the attempt page
+/// names it, with the OS's error number or how long Git wrote nothing; `NULL` for attempts recorded before it was kept,
+/// and for those that landed or ended for Orchester's own reason.
+pub(super) const CAUSE_KIND_MIGRATION: &str = r"
+ALTER TABLE merge_attempts ADD COLUMN cause_kind TEXT;
+";

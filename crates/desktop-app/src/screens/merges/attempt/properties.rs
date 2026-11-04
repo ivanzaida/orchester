@@ -10,7 +10,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Text, TextOverflow},
+  components::{Column, Row, Text},
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
@@ -163,7 +163,8 @@ fn checkout(ctx: &Ctx, base: Option<&BaseState>) -> Arc<str> {
   }
 }
 
-/// A property's row: its key, and its value cut to the column with an ellipsis.
+/// A property's row: its key, and its value, which wraps in the column rather than lose its end: a branch or a folder
+/// is read whole.
 fn property(id: &str, key: &str, value: &str, kind: Value) -> Element {
   let style = match kind {
     Value::Words => ExtraTypography::Property.role(),
@@ -174,7 +175,7 @@ fn property(id: &str, key: &str, value: &str, kind: Value) -> Element {
     .width(Dimension::Pct(100.0))
     .padding(Padding::vertical(AttemptSpacing::CompactY.role()))
     .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
+    .align_items(Alignment::Start)
     .child(
       Text::new(key)
         .variant(TypographyStyle::Description)
@@ -188,9 +189,7 @@ fn property(id: &str, key: &str, value: &str, kind: Value) -> Element {
         .variant(style)
         .color(PaletteColor::TextSecondary)
         .flex(1.0)
-        .min_width(Dimension::Px(0.0))
-        .nowrap()
-        .text_overflow(TextOverflow::Elipsis),
+        .min_width(Dimension::Px(0.0)),
     )
     .into()
 }

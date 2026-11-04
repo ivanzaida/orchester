@@ -187,33 +187,33 @@ fn merge_attempt_page_checks_list_the_stages_with_the_refused_cause_and_fold_the
   assert_eq!(
     names,
     [
-      "Integration lock",
       "Project database",
+      "Integration lock",
       "Scratch folder",
       "Checkout identity",
       "Git metadata",
       "Result already in Git",
       "Merge",
       "Record"
-    ]
+    ],
+    "the checks in the order they run: the project database is held before the integration lock is taken"
   );
+  assert_eq!(page.window.text("merge-attempt-checks-1-result"), "Passed");
   assert_eq!(
-    page.window.text("merge-attempt-checks-1-result"),
+    page.window.text("merge-attempt-checks-2-result"),
     "Held by another operation"
   );
   assert_eq!(
-    page.window.text("merge-attempt-checks-1-cause-text"),
+    page.window.text("merge-attempt-checks-2-cause-text"),
     "held by another operation"
   );
-  // The project database is held before the integration lock is taken: it passed, though listed after it.
-  assert_eq!(page.window.text("merge-attempt-checks-2-result"), "Passed");
   for stage in 3..=8 {
     assert_eq!(
       page.window.text(&format!("merge-attempt-checks-{stage}-result")),
       "Not reached"
     );
   }
-  assert!(!page.shows("merge-attempt-checks-passed"), "nothing passed before it");
+  assert!(!page.shows("merge-attempt-checks-passed"), "one check passed before it");
 
   page.open("merges-not-merged", "Rate limit per endpoint");
   let passed = page.window.text("merge-attempt-checks-passed");
@@ -221,8 +221,18 @@ fn merge_attempt_page_checks_list_the_stages_with_the_refused_cause_and_fold_the
     passed.contains("01–06") && passed.contains("6 checks passed") && passed.contains("Show"),
     "{passed}"
   );
+  let parts = page
+    .window
+    .tree
+    .get_element_by_id("merge-attempt-checks-passed")
+    .map(|row| row.children().len());
+  assert_eq!(
+    parts,
+    Some(5),
+    "numbers, glyph, count, names and Show: no chevron beside Show"
+  );
   assert!(!page.shows("merge-attempt-checks-1"), "the passed checks are folded");
-  assert_eq!(page.window.text("merge-attempt-checks-7-result"), "No answer");
+  assert_eq!(page.window.text("merge-attempt-checks-7-result"), "No answer for 2 min");
   let cause = page.window.text("merge-attempt-checks-7-cause-text");
   assert!(cause.contains("wrote nothing for 120 s"), "{cause}");
   assert_eq!(page.window.text("merge-attempt-checks-8-result"), "Not reached");
@@ -232,6 +242,71 @@ fn merge_attempt_page_checks_list_the_stages_with_the_refused_cause_and_fold_the
   });
   assert_eq!(page.window.text("merge-attempt-checks-1-result"), "Passed");
   assert!(page.window.text("merge-attempt-checks-passed").contains("Hide"));
+}
+
+#[test]
+fn merge_attempt_page_refused_stage_names_its_cause_category_and_the_row_its_os_error() {
+  let mut page = Page::new();
+  page.open("merges-not-merged", "Per-endpoint rate limits");
+  assert_eq!(page.window.text("merge-attempt-checks-1-name"), "Project database");
+  assert_eq!(
+    page.window.text("merge-attempt-checks-1-result"),
+    "Used by another program"
+  );
+  let cause = page.window.text("merge-attempt-checks-1-cause-text");
+  assert!(cause.contains("being used by another process"), "{cause}");
+  let below: Vec<String> = (2..=8)
+    .map(|stage| page.window.text(&format!("merge-attempt-checks-{stage}-result")))
+    .collect();
+  assert!(
+    below.iter().all(|result| result == "Not reached"),
+    "every check after the refused one, and none above it, is not reached: {below:?}"
+  );
+  assert_eq!(page.window.text("merge-attempt-checks-2-name"), "Integration lock");
+  assert_eq!(
+    page.window.text("merge-attempt-1-outcome"),
+    "Refused at Project database · os error 32"
+  );
+}
+
+#[test]
+fn merge_attempt_page_git_that_stopped_answering_is_told_once_with_its_time() {
+  let mut page = Page::new();
+  page.open("merges-not-merged", "Rate limit per endpoint");
+  let explanation = page.window.text("merge-attempt-explanation");
+  assert!(
+    explanation.starts_with("Git wrote nothing for 2 minutes at Merge"),
+    "{explanation}"
+  );
+  assert_eq!(
+    explanation.matches("wrote nothing").count(),
+    1,
+    "what stopped it is said once: {explanation}"
+  );
+  assert!(!explanation.contains("Git stopped answering"), "{explanation}");
+}
+
+#[test]
+fn merge_attempt_page_properties_wrap_rather_than_cut_the_folder() {
+  let mut page = Page::new();
+  page.open("merges-not-merged", "Add retry to webhook sender");
+  let folder = page.window.text("merge-attempt-property-folder-value");
+  assert_eq!(folder, page.repo.display().to_string(), "the whole folder");
+  let height = |page: &mut Page, id: &str| {
+    page
+      .window
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|element| element.bounds())
+      .unwrap_or_else(|| panic!("{id} is laid out"))
+      .height
+  };
+  let run = height(&mut page, "merge-attempt-property-run-value");
+  let long = height(&mut page, "merge-attempt-property-folder-value");
+  assert!(
+    long > run,
+    "a folder longer than the column wraps onto more lines: {long} against {run}"
+  );
 }
 
 #[test]
@@ -265,7 +340,7 @@ fn merge_attempt_page_attempts_newest_first_expand_into_their_checks() {
     window.texts("merge-attempt-2-checks").is_some()
   });
   assert_eq!(
-    page.window.text("merge-attempt-2-checks-1-result"),
+    page.window.text("merge-attempt-2-checks-2-result"),
     "Held by another operation"
   );
   page.window.press("merge-attempt-2");

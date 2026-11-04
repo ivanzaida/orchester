@@ -7,7 +7,8 @@ use std::num::NonZeroU32;
 use orchester_core::{
   id::RunId,
   integration::attempt::{
-    AttemptOutcome, AttemptStage, MergeAsker, MergeAttempt, MergeVia, OpenAttempt, RecordedAttempt, StageResult,
+    AttemptOutcome, AttemptStage, CauseKind, MergeAsker, MergeAttempt, MergeVia, OpenAttempt, RecordedAttempt,
+    StageResult,
   },
   time::Timestamp,
 };
@@ -21,8 +22,9 @@ use crate::{
 
 const OUTCOME: (&str, u32) = ("merge attempt outcome", 1);
 const STAGES: (&str, u32) = ("merge attempt stages", 1);
+const CAUSE_KIND: (&str, u32) = ("merge attempt cause kind", 1);
 
-const COLUMNS: &str = "task_id, sequence, run_id, at, asked_by, retry, via, detail, cause, stages";
+const COLUMNS: &str = "task_id, sequence, run_id, at, asked_by, retry, via, detail, cause, stages, cause_kind";
 
 impl ProjectDb {
   /// Records `attempt` after its run's others and ends its open attempt, if it has one; its place among them.
@@ -36,9 +38,14 @@ impl ProjectDb {
     )?;
     let sequence = last.unwrap_or(0) + 1;
     let (asked_by, retry) = asker_text(attempt.asked_by());
+    let kind = attempt
+      .kind()
+      .map(|kind| encode_json(CAUSE_KIND.0, CAUSE_KIND.1, &kind))
+      .transpose()?;
     let inserted = transaction.execute(
-      "INSERT INTO merge_attempts (run_id, sequence, task_id, at, asked_by, retry, via, outcome, detail, cause, stages)
-       SELECT id, ?2, task_id, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10 FROM runs WHERE id = ?1",
+      "INSERT INTO merge_attempts
+         (run_id, sequence, task_id, at, asked_by, retry, via, outcome, detail, cause, stages, cause_kind)
+       SELECT id, ?2, task_id, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11 FROM runs WHERE id = ?1",
       params![
         run,
         sequence,
@@ -50,6 +57,7 @@ impl ProjectDb {
         encode_json(OUTCOME.0, OUTCOME.1, attempt.outcome())?,
         attempt.cause(),
         encode_json(STAGES.0, STAGES.1, &attempt.stages())?,
+        kind,
       ],
     )?;
     if inserted == 0 {
@@ -150,6 +158,7 @@ type Stored = (
   String,
   Option<String>,
   String,
+  Option<String>,
 );
 
 fn read_row(row: &Row<'_>) -> rusqlite::Result<Stored> {
@@ -164,21 +173,25 @@ fn read_row(row: &Row<'_>) -> rusqlite::Result<Stored> {
     row.get(7)?,
     row.get(8)?,
     row.get(9)?,
+    row.get(10)?,
   ))
 }
 
 fn recorded(
-  (task, sequence, run, at, asked_by, retry, via_name, detail, cause, stages): Stored,
+  (task, sequence, run, at, asked_by, retry, via_name, detail, cause, stages, kind): Stored,
 ) -> Result<RecordedAttempt, StoreError> {
   let outcome: AttemptOutcome = decode_json(OUTCOME.0, OUTCOME.1, &detail)?;
   let stages: Vec<(AttemptStage, StageResult)> = decode_json(STAGES.0, STAGES.1, &stages)?;
+  let kind: Option<CauseKind> = kind
+    .map(|kind| decode_json(CAUSE_KIND.0, CAUSE_KIND.1, &kind))
+    .transpose()?;
   Ok(RecordedAttempt {
     task: parse("task id", &task)?,
     sequence,
     attempt: MergeAttempt::recorded(
       (parse("run id", &run)?, Timestamp::from_unix_millis(at)),
       (asker(&asked_by, retry)?, via(&via_name)?),
-      (outcome, cause),
+      (outcome, cause, kind),
       stages,
     ),
   })

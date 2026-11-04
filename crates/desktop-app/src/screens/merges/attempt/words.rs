@@ -7,7 +7,7 @@ use lurq::app::{ctx::Ctx, theme::PaletteColor};
 use orchester_core::{
   integration::{
     MergeKind,
-    attempt::{AttemptOutcome, AttemptStage, MergeAsker, MergeAttempt, MergeVia, StageResult},
+    attempt::{AttemptOutcome, AttemptStage, CauseKind, MergeAsker, MergeAttempt, MergeVia, OsCause, StageResult},
     retry::RETRIES,
   },
   revision::Revision,
@@ -65,19 +65,75 @@ pub(super) fn stage_result(
 
 fn refused_result(ctx: &Ctx, attempt: &MergeAttempt) -> Arc<str> {
   match attempt.outcome() {
-    AttemptOutcome::Refused { .. } if attempt.cause() == Some(HELD) => ctx.t("merges.page.result.held"),
+    AttemptOutcome::Refused { .. } => category(ctx, attempt).unwrap_or_else(|| ctx.t("merges.page.result.refused")),
     AttemptOutcome::Conflicts { files } if files.len() == 1 => ctx.t("merges.page.result.conflictsOne"),
     AttemptOutcome::Conflicts { files } => ctx.t_args(
       "merges.page.result.conflictsOther",
       [("count", files.len().to_string())],
     ),
     AttemptOutcome::NotRecorded { .. } => ctx.t("merges.page.result.notRecorded"),
-    AttemptOutcome::GitStopped { .. } => ctx.t("merges.page.result.noAnswer"),
+    AttemptOutcome::GitStopped { .. } => match silent_for(attempt) {
+      Some(seconds) => ctx.t_args("merges.page.result.noAnswerFor", [("time", silent_short(ctx, seconds))]),
+      None => ctx.t("merges.page.result.noAnswer"),
+    },
     AttemptOutcome::LeftChanged { .. } => ctx.t("merges.page.result.stoppedPartWay"),
     AttemptOutcome::Interrupted { .. } => ctx.t("merges.page.result.interrupted"),
     AttemptOutcome::Moved { .. } => ctx.t("merges.page.result.moved"),
     _ => ctx.t("merges.page.result.refused"),
   }
+}
+
+/// The category of what refused `attempt`, as its record keeps it: *Used by another program*. An attempt recorded
+/// before the category was kept names only the integration lock another operation held, by its cause's words.
+fn category(ctx: &Ctx, attempt: &MergeAttempt) -> Option<Arc<str>> {
+  let key = match attempt.kind() {
+    Some(CauseKind::HeldByOperation) => "merges.page.result.held",
+    Some(CauseKind::Os { what, .. }) => match what {
+      OsCause::UsedByAnotherProgram => "merges.page.result.usedByAnotherProgram",
+      OsCause::AccessDenied => "merges.page.result.accessDenied",
+      OsCause::NotFound => "merges.page.result.notFound",
+      OsCause::Other => "merges.page.result.osRefused",
+    },
+    Some(CauseKind::Git) => "merges.page.result.gitRefused",
+    Some(CauseKind::Checkout) => "merges.page.result.checkout",
+    Some(CauseKind::Unanswered { .. }) => return None,
+    None if attempt.cause() == Some(HELD) => "merges.page.result.held",
+    None => return None,
+  };
+  Some(ctx.t(key))
+}
+
+/// How long Git wrote nothing before it was stopped, when the attempt's record keeps it.
+pub(super) fn silent_for(attempt: &MergeAttempt) -> Option<u64> {
+  match attempt.kind() {
+    Some(CauseKind::Unanswered { seconds }) => Some(seconds),
+    _ => None,
+  }
+}
+
+/// `seconds` as whole minutes, when they are.
+fn whole_minutes(seconds: u64) -> Option<u64> {
+  (seconds >= 60 && seconds.is_multiple_of(60)).then_some(seconds / 60)
+}
+
+/// *2 min*, or *45 s* for a time that is not whole minutes.
+fn silent_short(ctx: &Ctx, seconds: u64) -> String {
+  let (key, count) = match whole_minutes(seconds) {
+    Some(minutes) => ("merges.page.silent.minutes", minutes),
+    None => ("merges.page.silent.seconds", seconds),
+  };
+  ctx.t_args(key, [("count", count.to_string())]).to_string()
+}
+
+/// *2 minutes*, *1 second*: how long Git wrote nothing, as a sentence says it.
+pub(super) fn silent_long(ctx: &Ctx, seconds: u64) -> String {
+  let (key, count) = match (whole_minutes(seconds), seconds) {
+    (Some(1), _) => ("merges.page.silent.minuteOne", 1),
+    (Some(minutes), _) => ("merges.page.silent.minutesOther", minutes),
+    (None, 1) => ("merges.page.silent.secondOne", 1),
+    (None, _) => ("merges.page.silent.secondsOther", seconds),
+  };
+  ctx.t_args(key, [("count", count.to_string())]).to_string()
 }
 
 /// A stage that passed; the merge says the commit it made, the record that it is recorded.
@@ -100,9 +156,9 @@ pub(super) fn made(ctx: &Ctx, revision: &Revision, kind: MergeKind) -> Arc<str> 
   ctx.t_args(key, [("revision", short_revision(revision.as_str()))])
 }
 
-/// An attempt's row says how it ended, in its color: landed in `success`, else in `warning`.
+/// An attempt's row says how it ended, in its color: landed in `success`, else in `warning`. A refusal names its stage
+/// and the OS's error number, else its category, as its record keeps them; else its cause.
 pub(super) fn attempt_outcome(ctx: &Ctx, attempt: &MergeAttempt, branch: &str) -> (Arc<str>, PaletteColor) {
-  let why = cause(ctx, attempt.cause()).to_string();
   let stage = |at: &AttemptStage| stage_name(ctx, *at).to_string();
   let text = match attempt.outcome() {
     AttemptOutcome::Merged { revision, .. } => {
@@ -112,9 +168,19 @@ pub(super) fn attempt_outcome(ctx: &Ctx, attempt: &MergeAttempt, branch: &str) -
       );
       return (text, PaletteColor::Success);
     }
-    AttemptOutcome::Refused { stage: at } => {
-      ctx.t_args("merges.page.attempt.refusedAt", [("stage", stage(at)), ("cause", why)])
-    }
+    AttemptOutcome::Refused { stage: at } => match attempt.kind() {
+      Some(CauseKind::Os { code: Some(code), .. }) => ctx.t_args(
+        "merges.page.attempt.osError",
+        [("stage", stage(at)), ("code", code.to_string())],
+      ),
+      _ => {
+        let why = category(ctx, attempt).unwrap_or_else(|| cause(ctx, attempt.cause()));
+        ctx.t_args(
+          "merges.page.attempt.refusedAt",
+          [("stage", stage(at)), ("cause", why.to_string())],
+        )
+      }
+    },
     AttemptOutcome::Stopped { words } => ctx.t_args("merges.page.attempt.queueStopped", [("cause", words.as_str())]),
     AttemptOutcome::Conflicts { files } if files.len() == 1 => ctx.t("merges.page.attempt.conflictsOne"),
     AttemptOutcome::Conflicts { files } => ctx.t_args(

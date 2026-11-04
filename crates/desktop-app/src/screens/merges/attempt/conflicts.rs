@@ -318,8 +318,12 @@ impl Conflicts<'_> {
       .map(|step| {
         let agent = step.agent.clone().unwrap_or_else(|| ctx.t("decisions.theAgent"));
         let label = ctx.t_args(
-          "decisions.ready.resolve.stepOption",
-          [("step", step.name.as_ref()), ("agent", agent.as_ref())],
+          "merges.page.stepOption",
+          [
+            ("number", format!("{:02}", step.number)),
+            ("step", step.name.to_string()),
+            ("agent", agent.to_string()),
+          ],
         );
         SelectOption::new(StepChoice(Some(step.key.clone())), label)
       })

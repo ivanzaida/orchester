@@ -11,7 +11,10 @@ use orchester_workspace::{
   tasks::merge_attempts::{page::AttemptPage, read::Retrying},
 };
 
-use super::{super::words::cause, words::stage_name};
+use super::{
+  super::words::cause,
+  words::{silent_for, silent_long, stage_name},
+};
 use crate::ui::icon::Icon;
 
 /// The cause a preflight's integration lock gives when another operation holds it.
@@ -141,7 +144,19 @@ pub(super) fn explanation(ctx: &Ctx, page: &AttemptPage, standing: Standing, bra
     (_, AttemptOutcome::Conflicts { files }) => return counted(ctx, "conflicts", files.len(), branch),
     (_, AttemptOutcome::LeftChanged { files }) => return counted(ctx, "leftChanged", files.len().max(1), branch),
     (_, AttemptOutcome::NotRecorded { revision }) => ("merges.page.explain.notRecorded", None, Some(revision)),
-    (_, AttemptOutcome::GitStopped { stage }) => ("merges.page.explain.gitStopped", Some(*stage), None),
+    (_, AttemptOutcome::GitStopped { stage }) => {
+      if let Some(seconds) = silent_for(attempt) {
+        return ctx.t_args(
+          "merges.page.explain.gitSilent",
+          [
+            ("time", silent_long(ctx, seconds)),
+            ("stage", stage_name(ctx, *stage).to_string()),
+            ("branch", branch.to_owned()),
+          ],
+        );
+      }
+      ("merges.page.explain.gitStopped", Some(*stage), None)
+    }
     (_, AttemptOutcome::Interrupted { stage }) => ("merges.page.explain.interrupted", Some(*stage), None),
     (_, AttemptOutcome::Moved { stage: Some(_) }) => ("merges.page.explain.moved", None, None),
     (_, AttemptOutcome::Moved { stage: None }) => ("merges.page.explain.movedBefore", None, None),

@@ -227,7 +227,6 @@
         "noEditor": "No editor was found on this computer: install VS Code's code command, or name your editor in ORCHESTER_EDITOR.",
         "askAgent": "Ask an agent to resolve",
         "step": "Step",
-        "stepOption": "{{step}} · {{agent}}",
         "noWritingStep": "No agent step of this run may write in its worktree, so no agent can resolve the conflicts."
       },
       "resolving": {

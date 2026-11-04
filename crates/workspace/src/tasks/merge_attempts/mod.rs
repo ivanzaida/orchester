@@ -16,7 +16,7 @@ use orchester_core::{
   id::RunId,
   integration::{
     GitError, MergeError,
-    attempt::{AttemptOutcome, AttemptStage, MergeAsker, MergeAttempt, MergeVia, OpenAttempt, cause_text},
+    attempt::{AttemptOutcome, AttemptStage, CauseKind, MergeAsker, MergeAttempt, MergeVia, OpenAttempt, cause_text},
     clear_interrupted,
   },
   time::Timestamp,
@@ -96,7 +96,8 @@ impl<'a> Attempt<'a> {
       ),
       Err(problem) => outcome_of(problem, self.stage),
     };
-    let attempt = MergeAttempt::new((self.run, self.at), self.asked, outcome, cause.as_deref());
+    let kind = merged.as_ref().err().and_then(kind_of);
+    let attempt = MergeAttempt::new((self.run, self.at), self.asked, outcome, cause.as_deref()).with_kind(kind);
     record(self.root, &attempt);
   }
 }
@@ -126,7 +127,7 @@ pub(crate) fn record_refused(
   let (outcome, cause) = outcome_of(problem, stage);
   record(
     root,
-    &MergeAttempt::new((run, Timestamp::now()), asked, outcome, cause.as_deref()),
+    &MergeAttempt::new((run, Timestamp::now()), asked, outcome, cause.as_deref()).with_kind(kind_of(problem)),
   );
 }
 
@@ -180,6 +181,15 @@ pub(crate) fn settle_interrupted(
     settled.push(open.run);
   }
   Ok(settled)
+}
+
+/// What kind of cause `problem` is.
+fn kind_of(problem: &IntegrationProblem) -> Option<CauseKind> {
+  match problem {
+    IntegrationProblem::Preflight { cause, .. } => CauseKind::of(cause),
+    IntegrationProblem::Merge(error) => CauseKind::of_merge(error),
+    _ => None,
+  }
 }
 
 /// What `problem`, which ended an attempt at `stage` unless it names its own, makes of it, with its cause.

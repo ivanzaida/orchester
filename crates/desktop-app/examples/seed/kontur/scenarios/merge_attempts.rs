@@ -19,14 +19,18 @@
 use std::num::NonZeroU32;
 
 use orchester_core::{
-  integration::attempt::{AttemptOutcome, AttemptStage, MergeAsker, MergeVia},
+  integration::attempt::{AttemptOutcome, AttemptStage, CauseKind, MergeAsker, MergeVia, OsCause},
   merge_queue::{Left, QueueState},
+  run::Run,
   time::Timestamp,
 };
 
 use super::{
   delivery::{Work, checked_events, enter, passed},
-  merges::{AUTOMATION, PERSON, QUEUE, left_changed, minutes_into_today, ready, record, record_landed, refused},
+  merges::{
+    AUTOMATION, Asked, Ended, PERSON, QUEUE, left_changed, minutes_into_today, ready, record_kind, record_landed,
+    refused,
+  },
 };
 use crate::kontur::{Kontur, SeedError, catalogue::Published};
 
@@ -35,6 +39,25 @@ const HELD: &str = "held by another operation";
 /// What the OS said of the project database's write-ahead log another program held open.
 const IN_USE: &str = ".orchester/orchester.db-wal: The process cannot access the file because it is being used by another process. (OS error 32)";
 const GIT_STOPPED: &str = "Git stopped answering while it merged: `git merge --no-ff --no-edit orchester/kon-run` wrote nothing for 120 s and was stopped, and the temporary worktree was removed";
+/// How long Git wrote nothing in [`GIT_STOPPED`].
+const SILENT_SECONDS: u64 = 120;
+
+/// Records the attempt of `run` at `at` that `asked` asked for, ended as `ended`, with the kind of its cause as the app
+/// keeps it.
+fn record(kontur: &mut Kontur, run: &Run, at: (Timestamp, Asked), ended: Ended<'_>) -> Result<(), SeedError> {
+  let kind = match ended.1 {
+    Some(HELD) => Some(CauseKind::HeldByOperation),
+    Some(IN_USE) => Some(CauseKind::Os {
+      what: OsCause::UsedByAnotherProgram,
+      code: Some(32),
+    }),
+    Some(GIT_STOPPED) => Some(CauseKind::Unanswered {
+      seconds: SILENT_SECONDS,
+    }),
+    _ => None,
+  };
+  record_kind(kontur, run, at, ended, kind)
+}
 
 pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
   let catalogue = kontur.delivering_catalogue()?;

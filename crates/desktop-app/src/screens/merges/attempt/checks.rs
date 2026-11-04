@@ -107,10 +107,10 @@ fn fold(
     .iter()
     .map(|(stage, _)| stage_name(ctx, *stage).to_string())
     .collect();
-  let (label, chevron) = if unfolded {
-    (ctx.t("merges.page.hide"), Icon::ChevronUp)
+  let label = if unfolded {
+    ctx.t("merges.page.hide")
   } else {
-    (ctx.t("merges.page.show"), Icon::ChevronDown)
+    ctx.t("merges.page.show")
   };
   let shown = shown.cloned();
   pressable(move || {
@@ -144,11 +144,11 @@ fn fold(
   )
   .child(
     Text::new(&label)
+      .id(format!("{id}-passed-toggle"))
       .variant(ExtraTypography::Property.role())
       .color(PaletteColor::TextMuted)
       .nowrap(),
   )
-  .child(icon(chevron, IconSize::Md, PaletteColor::TextMuted))
   .into()
 }
 

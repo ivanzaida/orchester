@@ -3,11 +3,11 @@
 //! of it, why it did not land, and how far it got through the merge's stages. Every attempt is recorded once, landed or
 //! not; the record never changes.
 
-use std::num::NonZeroU32;
+use std::{io, num::NonZeroU32};
 
 use serde::{Deserialize, Serialize};
 
-use super::{MergeKind, PreflightCause, PreflightStage};
+use super::{GitError, MergeError, MergeKind, PreflightCause, PreflightStage, retry::held_by_another_program};
 use crate::{id::RunId, revision::Revision, time::Timestamp};
 
 /// The most characters of a cause an attempt keeps.
@@ -58,24 +58,12 @@ pub enum AttemptStage {
 }
 
 impl AttemptStage {
-  /// The stages in the order a merge passes them.
+  /// The stages in the order a merge passes them, which is the order an attempt lists them in: the preflight takes
+  /// the project database before the integration lock, so no stage is listed not reached above the one that refused.
   const PASSED_IN_ORDER: [Self; 9] = [
     Self::Policy,
     Self::ProjectDatabase,
     Self::IntegrationLock,
-    Self::ScratchFolder,
-    Self::CheckoutIdentity,
-    Self::GitMetadata,
-    Self::ExistingResult,
-    Self::Merge,
-    Self::Record,
-  ];
-
-  /// The stages in the order an attempt lists them.
-  const LISTED: [Self; 9] = [
-    Self::Policy,
-    Self::IntegrationLock,
-    Self::ProjectDatabase,
     Self::ScratchFolder,
     Self::CheckoutIdentity,
     Self::GitMetadata,
@@ -187,6 +175,72 @@ impl AttemptOutcome {
   }
 }
 
+/// What kind of cause ended an attempt, kept beside its words so the attempt page can name it (09e) and tell what the
+/// OS or Git gave: the OS's error number, or how long Git wrote nothing before it was stopped (09k).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum CauseKind {
+  /// Another merge or local integration holds the project's integration lease.
+  HeldByOperation,
+  /// The OS refused; `code` is its own error number, when it gave one.
+  Os { what: OsCause, code: Option<i32> },
+  /// Git refused.
+  Git,
+  /// The checkout or a file in it is not as local integration requires.
+  Checkout,
+  /// Git wrote nothing for `seconds` and was stopped.
+  Unanswered { seconds: u64 },
+}
+
+/// What the OS's refusal means.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OsCause {
+  /// Another program holds the file open.
+  UsedByAnotherProgram,
+  AccessDenied,
+  NotFound,
+  Other,
+}
+
+impl CauseKind {
+  /// The kind of a preflight's `cause`; `None` for Orchester's own reason, whose words say it.
+  pub fn of(cause: &PreflightCause) -> Option<Self> {
+    Some(match cause {
+      PreflightCause::Held => Self::HeldByOperation,
+      PreflightCause::Io { kind, code, .. } => Self::Os {
+        what: os_cause(*kind, *code),
+        code: *code,
+      },
+      PreflightCause::Git(_) => Self::Git,
+      PreflightCause::State(_) => Self::Checkout,
+      PreflightCause::Reason(_) => return None,
+    })
+  }
+
+  /// The kind of a merge's `error`: Git that wrote nothing for a while; `None` for any other, whose words say it.
+  pub fn of_merge(error: &MergeError) -> Option<Self> {
+    match error {
+      MergeError::Unanswered { after, .. } | MergeError::Git(GitError::Unanswered { after, .. }) => {
+        Some(Self::Unanswered {
+          seconds: after.as_secs(),
+        })
+      }
+      _ => None,
+    }
+  }
+}
+
+fn os_cause(kind: io::ErrorKind, code: Option<i32>) -> OsCause {
+  match kind {
+    _ if code.is_some_and(held_by_another_program) => OsCause::UsedByAnotherProgram,
+    io::ErrorKind::ResourceBusy => OsCause::UsedByAnotherProgram,
+    io::ErrorKind::PermissionDenied => OsCause::AccessDenied,
+    io::ErrorKind::NotFound => OsCause::NotFound,
+    _ => OsCause::Other,
+  }
+}
+
 /// One merge attempt of a run.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MergeAttempt {
@@ -196,6 +250,7 @@ pub struct MergeAttempt {
   via: MergeVia,
   outcome: AttemptOutcome,
   cause: Option<String>,
+  kind: Option<CauseKind>,
   stages: Vec<(AttemptStage, StageResult)>,
 }
 
@@ -216,17 +271,27 @@ impl MergeAttempt {
       via,
       outcome,
       cause: cause.map(bounded),
+      kind: None,
       stages,
     }
   }
 
-  /// An attempt as it was recorded, with the stages it recorded.
+  /// This attempt, its cause of `kind`.
+  #[must_use]
+  pub const fn with_kind(mut self, kind: Option<CauseKind>) -> Self {
+    self.kind = kind;
+    self
+  }
+
+  /// An attempt as it was recorded, with the stages it recorded in the order a merge passes them: attempts recorded
+  /// before that order was kept listed the integration lock first.
   pub fn recorded(
     (run, at): (RunId, Timestamp),
     (asked_by, via): (MergeAsker, MergeVia),
-    (outcome, cause): (AttemptOutcome, Option<String>),
-    stages: Vec<(AttemptStage, StageResult)>,
+    (outcome, cause, kind): (AttemptOutcome, Option<String>, Option<CauseKind>),
+    mut stages: Vec<(AttemptStage, StageResult)>,
   ) -> Self {
+    stages.sort_by_key(|(stage, _)| stage.order());
     Self {
       run,
       at,
@@ -234,6 +299,7 @@ impl MergeAttempt {
       via,
       outcome,
       cause,
+      kind,
       stages,
     }
   }
@@ -261,6 +327,12 @@ impl MergeAttempt {
   /// Why it did not land, in the words of the OS, Git or Orchester; `None` when it landed or nothing more was said.
   pub fn cause(&self) -> Option<&str> {
     self.cause.as_deref()
+  }
+
+  /// What kind of cause it was; `None` when it landed, for Orchester's own reasons, and for attempts recorded before
+  /// the kind was kept.
+  pub const fn kind(&self) -> Option<CauseKind> {
+    self.kind
   }
 
   /// Each stage the attempt lists, in order, with how it went.
@@ -319,7 +391,7 @@ fn bounded(text: &str) -> String {
   text.chars().take(CAUSE_CHARS).collect()
 }
 
-/// How each stage went for an attempt of `asked_by` that ended as `outcome`, as listed: the stages before the one it
+/// How each stage went for an attempt of `asked_by` that ended as `outcome`, in order: the stages before the one it
 /// ended at passed, that one refused, the others were not reached.
 fn stages_of(asked_by: MergeAsker, outcome: &AttemptOutcome) -> Vec<(AttemptStage, StageResult)> {
   let ended = outcome.stage().map(AttemptStage::order);
@@ -327,7 +399,7 @@ fn stages_of(asked_by: MergeAsker, outcome: &AttemptOutcome) -> Vec<(AttemptStag
     outcome,
     AttemptOutcome::Stopped { .. } | AttemptOutcome::Moved { stage: None }
   );
-  AttemptStage::LISTED
+  AttemptStage::PASSED_IN_ORDER
     .into_iter()
     .filter(|stage| *stage != AttemptStage::Policy || asked_by == MergeAsker::Automation)
     .map(|stage| {

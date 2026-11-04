@@ -8,7 +8,7 @@ use orchester_core::{
   command::{Command, CommandError, CommandOutput, CommandRunner},
   integration::{
     MergeError, MergeKind,
-    attempt::{AttemptOutcome, AttemptStage, MergeAsker, MergeVia, OpenAttempt, StageResult},
+    attempt::{AttemptOutcome, AttemptStage, CauseKind, MergeAsker, MergeVia, OpenAttempt, StageResult},
   },
   store::MergeStore,
   time::Timestamp,
@@ -57,8 +57,8 @@ fn merge_attempts_task_page_merge_records_who_where_and_every_stage_passed() {
   assert_eq!(
     stages,
     [
-      AttemptStage::IntegrationLock,
       AttemptStage::ProjectDatabase,
+      AttemptStage::IntegrationLock,
       AttemptStage::ScratchFolder,
       AttemptStage::CheckoutIdentity,
       AttemptStage::GitMetadata,
@@ -66,7 +66,7 @@ fn merge_attempts_task_page_merge_records_who_where_and_every_stage_passed() {
       AttemptStage::Merge,
       AttemptStage::Record,
     ],
-    "a person's attempt passes no policy"
+    "a person's attempt passes no policy, and lists the stages in the order they run"
   );
   assert!(
     attempt
@@ -95,6 +95,7 @@ fn merge_attempts_refused_at_a_preflight_stage_keep_the_cause_until_a_merge_land
     }
   );
   assert_eq!(refused.cause(), Some("held by another operation"));
+  assert_eq!(refused.kind(), Some(CauseKind::HeldByOperation));
   let stages = refused.stages();
   assert_eq!(result_of(stages, AttemptStage::ProjectDatabase), StageResult::Passed);
   assert_eq!(result_of(stages, AttemptStage::IntegrationLock), StageResult::Refused);
@@ -167,6 +168,30 @@ fn merge_attempts_git_that_stops_answering_is_told_at_its_stage() {
       .is_some_and(|cause| cause.contains("did not finish in time")),
     "{attempt:?}"
   );
+}
+
+/// Git that writes nothing until it is stopped, after two minutes.
+struct Quiet;
+
+impl CommandRunner for Quiet {
+  fn run(&self, _: &Command) -> Result<CommandOutput, CommandError> {
+    Err(CommandError::Silent {
+      after: Duration::from_secs(120),
+    })
+  }
+}
+
+#[test]
+fn merge_attempts_git_that_wrote_nothing_keeps_how_long_it_was_given() {
+  let fixture = Fixture::new(false);
+  let programs = Programs::with_runner(Arc::new(Quiet));
+  merge_in(fixture.root(), &programs, (fixture.run, None)).expect_err("git wrote nothing");
+  let attempt = &attempts(&fixture)[0].attempt;
+  assert!(
+    matches!(attempt.outcome(), AttemptOutcome::GitStopped { .. }),
+    "{attempt:?}"
+  );
+  assert_eq!(attempt.kind(), Some(CauseKind::Unanswered { seconds: 120 }));
 }
 
 /// Git that stops part way through bringing the merge in, after writing the run's `task.txt`, and that then cannot

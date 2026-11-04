@@ -24,7 +24,7 @@ use orchester_core::{
   conversation::MessageBody,
   integration::{
     MergeError,
-    attempt::{AttemptOutcome, AttemptStage, MergeAsker, MergeAttempt, MergeVia},
+    attempt::{AttemptOutcome, AttemptStage, CauseKind, MergeAsker, MergeAttempt, MergeVia},
   },
   merge_queue::{CheckedOn, QueueState},
   pull_request::feedback::{DiffSide, LineAnchor, LineSpan},
@@ -189,10 +189,21 @@ pub fn many(kontur: &mut Kontur) -> Result<(), SeedError> {
 pub(super) fn record(
   kontur: &mut Kontur,
   run: &Run,
+  at: (Timestamp, Asked),
+  ended: Ended<'_>,
+) -> Result<(), SeedError> {
+  record_kind(kontur, run, at, ended, None)
+}
+
+/// [`record`], its cause of `kind`.
+pub(super) fn record_kind(
+  kontur: &mut Kontur,
+  run: &Run,
   (at, asked): (Timestamp, Asked),
   (outcome, cause): Ended<'_>,
+  kind: Option<CauseKind>,
 ) -> Result<(), SeedError> {
-  let attempt = MergeAttempt::new((run.id(), at), asked, outcome, cause);
+  let attempt = MergeAttempt::new((run.id(), at), asked, outcome, cause).with_kind(kind);
   kontur.db.record_merge_attempt(&attempt)?;
   Ok(())
 }

@@ -10,7 +10,9 @@ use orchester_core::{
   id::RunId,
   integration::{
     MergeKind, RunMerge,
-    attempt::{AttemptOutcome, AttemptStage, MergeAsker, MergeAttempt, MergeVia, OpenAttempt, StageResult},
+    attempt::{
+      AttemptOutcome, AttemptStage, CauseKind, MergeAsker, MergeAttempt, MergeVia, OpenAttempt, OsCause, StageResult,
+    },
   },
   revision::Revision,
   run::BranchName,
@@ -70,11 +72,11 @@ fn merge_attempts_are_recorded_in_order_and_read_newest_first() {
   assert_eq!(
     read[1].attempt.stages()[..3],
     [
-      (AttemptStage::IntegrationLock, StageResult::Refused),
       (AttemptStage::ProjectDatabase, StageResult::Passed),
+      (AttemptStage::IntegrationLock, StageResult::Refused),
       (AttemptStage::ScratchFolder, StageResult::NotReached),
     ],
-    "the database is held first, then the lease that refused"
+    "listed as they run: the database is held first, then the lease that refused"
   );
   assert!(
     read[0]
@@ -82,6 +84,89 @@ fn merge_attempts_are_recorded_in_order_and_read_newest_first() {
       .stages()
       .iter()
       .all(|(_, result)| *result == StageResult::Passed)
+  );
+}
+
+#[test]
+fn merge_attempts_keep_the_kind_of_their_cause() {
+  let (repo, mut db, run, _) = started_run();
+  let in_use = CauseKind::Os {
+    what: OsCause::UsedByAnotherProgram,
+    code: Some(32),
+  };
+  let refused = attempt(
+    run.id(),
+    10,
+    PERSON,
+    AttemptOutcome::Refused {
+      stage: AttemptStage::ProjectDatabase,
+    },
+  )
+  .with_kind(Some(in_use));
+  let silent = attempt(
+    run.id(),
+    20,
+    PERSON,
+    AttemptOutcome::GitStopped {
+      stage: AttemptStage::Merge,
+    },
+  )
+  .with_kind(Some(CauseKind::Unanswered { seconds: 120 }));
+  let unknown = attempt(
+    run.id(),
+    30,
+    PERSON,
+    AttemptOutcome::Refused {
+      stage: AttemptStage::Policy,
+    },
+  );
+  for recorded in [&refused, &silent, &unknown] {
+    db.record_merge_attempt(recorded).expect("recorded");
+  }
+  let read = ProjectDb::open(repo.path())
+    .expect("open")
+    .merge_attempts(run.id())
+    .expect("read");
+  let kinds: Vec<_> = read.iter().map(|recorded| recorded.attempt.kind()).collect();
+  assert_eq!(
+    kinds,
+    [None, Some(CauseKind::Unanswered { seconds: 120 }), Some(in_use)]
+  );
+}
+
+#[test]
+fn merge_attempts_recorded_with_the_lock_listed_first_are_read_in_the_order_the_stages_run() {
+  let (repo, mut db, run, _) = started_run();
+  let refused = attempt(
+    run.id(),
+    10,
+    PERSON,
+    AttemptOutcome::Refused {
+      stage: AttemptStage::ProjectDatabase,
+    },
+  );
+  db.record_merge_attempt(&refused).expect("recorded");
+  // How an attempt recorded before the stages were listed as they run kept them: the lock first.
+  let earlier = r#"{"schema":1,"body":[["integration_lock","not_reached"],["project_database","refused"],
+    ["scratch_folder","not_reached"],["checkout_identity","not_reached"],["git_metadata","not_reached"],
+    ["existing_result","not_reached"],["merge","not_reached"],["record","not_reached"]]}"#;
+  let raw = Connection::open(repo.path().join(".orchester/orchester.db")).expect("open raw database");
+  raw
+    .execute_batch("DROP TRIGGER merge_attempts_no_update")
+    .expect("the record may be rewritten here");
+  raw
+    .execute("UPDATE merge_attempts SET stages = ?1", [earlier])
+    .expect("an earlier record's listing");
+  let read = ProjectDb::open(repo.path())
+    .expect("open")
+    .merge_attempts(run.id())
+    .expect("read");
+  assert_eq!(
+    read[0].attempt.stages()[..2],
+    [
+      (AttemptStage::ProjectDatabase, StageResult::Refused),
+      (AttemptStage::IntegrationLock, StageResult::NotReached),
+    ]
   );
 }
 
