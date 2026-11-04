@@ -11,12 +11,15 @@ use std::{
 
 /// Executor code that names a coordinator module today, as `(file under executor/, module)`: the run's task reads the
 /// project's daily budget and maps refusals through `idle`, and takes and gives back agent slots on the `board` the
-/// scheduler shares with it.
+/// scheduler shares with it. The merge queue and the story-point estimate, which run outside a run's task, open the
+/// local `link` over their own database connection to ask the project's environment (ORC-674).
 const KNOWN: &[(&str, &str)] = &[
   ("halt.rs", "idle"),
+  ("merge_queue.rs", "link"),
   ("permissions.rs", "idle"),
   ("plan.rs", "idle"),
   ("run.rs", "board"),
+  ("step/worker/review/estimate.rs", "link"),
 ];
 
 fn execution() -> PathBuf {
