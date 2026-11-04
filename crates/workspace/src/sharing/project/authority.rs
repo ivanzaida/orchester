@@ -37,7 +37,11 @@ impl ProjectServer {
   pub async fn team_session(&self, generation: watch::Receiver<u64>) -> Result<TeamSession, SharingError> {
     let (client, _) = Servers::client(&self.entry)?;
     let token = self.servers.token(self.link.server).await?;
-    Ok(TeamSession::new(client, token, self.link.project, generation))
+    Ok(TeamSession::new(
+      (client, token),
+      (self.link.server, self.link.project),
+      generation,
+    ))
   }
 
   /// The project's Admins and the server's admins, as the server lists its members now.
