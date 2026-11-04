@@ -271,7 +271,8 @@ async fn round_trip(sent: &[Event]) -> Vec<Event> {
 /// with each kind of field, and each answer the window gives it.
 #[tokio::test]
 async fn browser_file_chooser_round_trips_under_a_raised_protocol() {
-  assert_eq!(PROTOCOL_VERSION, 38);
+  // Raised since: a run's worktree changes read through the runner came with 40, the merge queue's work with 41.
+  assert_eq!(PROTOCOL_VERSION, 41);
   let opened = |chooser| {
     Event::Browser(BrowserEvent::FileChooserOpened {
       tab: tab("P1"),
