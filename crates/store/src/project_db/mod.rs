@@ -2,6 +2,7 @@ mod activity;
 mod agent_files;
 mod always_allow;
 mod approval_modes;
+mod approval_records;
 mod approval_rules;
 mod attachments;
 mod auto_mode;
@@ -34,6 +35,7 @@ mod mcp_servers;
 mod memory;
 mod merge_queue;
 mod merges;
+mod message_records;
 mod messages;
 mod modules;
 mod native;
@@ -52,6 +54,7 @@ mod project_rules;
 mod pull_request_attempts;
 mod pull_request_diffs;
 mod pull_requests;
+mod question_records;
 mod questions;
 mod queue_holds;
 mod read_only;
@@ -108,6 +111,7 @@ use orchester_core::{
 use rusqlite::{Connection, params};
 
 pub use self::{
+  approval_records::ApprovalRecord,
   approval_rules::DecisionCounts,
   attachments::{AttachmentOwner, attachment_file},
   auto_mode::AutoModeSave,
@@ -116,11 +120,13 @@ pub use self::{
   estimates::AutomationPoints,
   invocation_records::{ActivityRecord, InvocationRecord, InvocationStart},
   joining::{JoinedKey, ReturnedTask},
+  message_records::MessageRecord,
   orchestrator::{ChatListing, ChatTurn},
   orchestrator_queue::StartedQueued,
   orchestrator_reports::KeptReport,
   orchestrator_switches::OrchestratorSwitch,
   orchestrator_waits::KeptWait,
+  question_records::QuestionRecord,
   read_only::ReadOnlyProjectDb,
   reference_bindings::{Bound, BoundBy, BoundReference, ReferenceBinding},
   resolutions::ResolutionStart,

@@ -14,7 +14,7 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_ipc::Event;
-use orchester_store::StoreError;
+use orchester_store::{ApprovalRecord, StoreError};
 use tokio::time::{Instant, sleep};
 
 use super::{
@@ -453,16 +453,15 @@ impl Worker {
     self.check_prompt_reached(&mut watch)?;
     self.note_tool_relays_missing(&mut watch)?;
     self.note_stderr_left_out(&mut watch)?;
-    self.interrupt_questions(&mut watch)?;
+    self.interrupt_waiting_question(&mut watch)?;
     let waiting = watch.approval.take();
     // A request the run's own stop ended (a pause at the decision, a cancel) needs no naming.
     if let Some((approval, _)) = waiting.as_ref().filter(|_| watch.stop.is_none()) {
       self.report_interrupted(&mut watch, approval)?;
     }
     if waiting.is_some() || !watch.approved_calls.is_empty() || self.app_server().is_some_and(|app| !app.complete()) {
-      approval_interrupted = watch
-        .db
-        .interrupt_tool_approvals(watch.invocation.run, watch.invocation.id)?;
+      let interrupted = ApprovalRecord::interrupted(watch.invocation.run, watch.invocation.id);
+      approval_interrupted = watch.sink.approval(interrupted)?;
       watch.invocation.timing.resume(Timestamp::now());
       self.notifier.send(Event::ToolApprovalChanged {
         run: watch.invocation.run,

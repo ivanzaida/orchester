@@ -225,8 +225,9 @@ enum RelayClosed {
 
 pub(super) struct Watch {
   pub(super) db: ProjectDb,
-  /// Where the invocation's transcript and the changes to its rows are recorded.
-  sink: Box<dyn Sink>,
+  /// Where the invocation's transcript and the changes to its rows, its messages, questions and tool requests are
+  /// recorded.
+  pub(super) sink: Box<dyn Sink>,
   pub(super) invocation: Invocation,
   pub(super) tracker: InvocationTracker,
   edits: FirstEditTracker,

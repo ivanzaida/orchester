@@ -15,7 +15,7 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_ipc::Event;
-use orchester_store::StoreError;
+use orchester_store::{ApprovalRecord, QuestionRecord, StoreError};
 
 use super::{
   super::{
@@ -101,9 +101,8 @@ impl Worker {
     };
     let approval_interrupted = watch.approval.is_some();
     if approval_interrupted {
-      watch
-        .db
-        .interrupt_tool_approvals(watch.invocation.run, watch.invocation.id)?;
+      let interrupted = ApprovalRecord::interrupted(watch.invocation.run, watch.invocation.id);
+      watch.sink.approval(interrupted)?;
       watch.invocation.timing.resume(Timestamp::now());
       self.notifier.send(Event::ToolApprovalChanged {
         run: watch.invocation.run,
@@ -192,7 +191,7 @@ impl Worker {
       (Timestamp::now(), QuestionTurn::StepEnd),
     )
     .expect("one question is asked");
-    watch.db.ask_questions(&request)?;
+    watch.sink.question(QuestionRecord::asked(&request))?;
     self.notifier.send(Event::QuestionChanged {
       run: invocation.run,
       task: self.task,

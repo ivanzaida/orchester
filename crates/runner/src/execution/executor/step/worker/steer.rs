@@ -31,7 +31,7 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_ipc::Event;
-use orchester_store::{AttachmentOwner, StoreError};
+use orchester_store::{AttachmentOwner, MessageRecord, StoreError};
 
 use super::{
   super::app_server::{AppServerSession, DENIAL_STEER, STEER_REQUEST, SteerAnswer},
@@ -333,7 +333,10 @@ impl Worker {
     };
     // The person may send it after the turn meanwhile; whoever writes first wins, and the other
     // change is left out.
-    if !watch.db.change_delivery(&before, &message)? {
+    if !watch
+      .sink
+      .message(MessageRecord::delivery_change(&before, &message)?)?
+    {
       tracing::info!(message = %id, "the message changed meanwhile; its delivery is left as it is");
       return Ok(None);
     }

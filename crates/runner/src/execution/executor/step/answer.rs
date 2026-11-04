@@ -33,7 +33,7 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_ipc::{Event, Rejection};
-use orchester_store::StoreError;
+use orchester_store::{ApprovalRecord, StoreError};
 
 use super::{
   super::tool_approval::refusal,
@@ -373,8 +373,9 @@ impl Worker {
     let item = awaiting.item().to_owned();
     // The answer settled: a QA start it lets run keeps its app, unless another wait for a person remains.
     self.resume_qa(watch, Some(&approval.id));
+    let interrupted = ApprovalRecord::interrupted(run, watch.invocation.id);
     if let Err(error) = self.deliver(watch, awaiting, &settled).await {
-      watch.db.interrupt_tool_approvals(run, watch.invocation.id)?;
+      watch.sink.approval(interrupted)?;
       self.end_approval_wait(watch)?;
       self.observe(
         watch,
@@ -392,8 +393,11 @@ impl Worker {
     } else {
       ToolApprovalDecision::Denied
     };
-    if !watch.db.delivered_tool_approval(run, &approval.id, kind)? {
-      watch.db.interrupt_tool_approvals(run, watch.invocation.id)?;
+    if !watch
+      .sink
+      .approval(ApprovalRecord::delivered(run, &approval.id, kind))?
+    {
+      watch.sink.approval(interrupted)?;
       self.end_approval_wait(watch)?;
       self.observe(
         watch,
@@ -439,21 +443,25 @@ impl Worker {
 /// Takes `approval` from the waiting as `settled` answers it, with how the run's mode answered it, the rule that did
 /// and a denial's words; whether it still waited.
 fn claim(watch: &mut Watch, approval: &PendingToolApproval, settled: &Settled) -> Result<bool, StoreError> {
-  let run = approval.run;
-  if !watch
-    .db
-    .claim_tool_approval(run, &approval.id, settled.decided_by, Timestamp::now())?
-  {
+  let (run, id) = (approval.run, approval.id.as_str());
+  let claimed = ApprovalRecord::claimed(run, id, settled.decided_by, Timestamp::now());
+  if !watch.sink.approval(claimed)? {
     return Ok(false);
   }
-  watch.db.record_request_answer(run, &approval.id, &settled.answer)?;
+  watch
+    .sink
+    .approval(ApprovalRecord::answer(run, id, &settled.answer))?;
   match settled.rule {
-    Some(Answering::Run(rule)) => watch.db.rule_answered(run, rule, &approval.id)?,
+    Some(Answering::Run(rule)) => {
+      watch.sink.approval(ApprovalRecord::rule(run, id, rule))?;
+    }
+    // The project's rules are rows the desktop owns, which only the coordinator is to write
+    // (`docs/architecture/remote-runners.md`, rule 3); they do not go through the sink yet.
     Some(Answering::Project(rule)) => watch.db.project_rule_answered(rule)?,
     None => {}
   }
   if let Some(note) = &settled.note {
-    watch.db.record_denial_note(run, &approval.id, note)?;
+    watch.sink.approval(ApprovalRecord::denial_note(run, id, note))?;
   }
   Ok(true)
 }
