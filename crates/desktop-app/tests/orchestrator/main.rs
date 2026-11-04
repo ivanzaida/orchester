@@ -7,6 +7,7 @@
 //! `cargo test -p orchester-app --test orchestrator <filter>`; the first test builds the runner with its fakes.
 
 mod attachments;
+mod autoscroll;
 mod changes;
 mod chat;
 mod code_block;

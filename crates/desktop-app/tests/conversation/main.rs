@@ -7,6 +7,7 @@
 
 mod agent_text;
 mod autopilot;
+mod autoscroll;
 mod code_block;
 mod context;
 mod copy;
