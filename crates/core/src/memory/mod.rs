@@ -24,6 +24,8 @@ mod store;
 
 use std::fmt;
 
+use serde::{Deserialize, Serialize};
+
 pub use self::{
   approval::approval,
   content::{Confidence, Importance, MemoryContent, MemoryContentError, MemoryKey, MemoryKind, Tags},
@@ -39,8 +41,6 @@ pub use self::{
   settings::{MemoryLimits, MemoryLimitsError, MemorySettings, WritePolicy},
   store::{GivenMemory, InjectedMemory, MemoryFilter, MemoryMatch, MemoryStore, ScopeFilter, UnreadableMemory},
 };
-use serde::{Deserialize, Serialize};
-
 use crate::{
   id::{ResourceId, RunId, StepExecutionId, TaskId},
   resource::StepKey,

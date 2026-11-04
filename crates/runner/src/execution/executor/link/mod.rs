@@ -7,29 +7,26 @@
 //! one or a closure. Reads keep their timing: what an agent start read before, it asks the link at each start.
 //!
 //! Each area of the project's data has a trait and a module of its own, which [`CoordinatorLink`] gathers, so an area
-//! added later (messages, approvals, settings) adds its trait and module without touching another's:
+//! added later (approvals, settings) adds its trait and module without touching another's:
 //! - [`resources`]: the resource versions a run pinned, read by id, and the blobs they refer to.
+//! - [`messages`]: the task's conversation, and the files people attached to its messages with their content.
 //! - [`memory`]: the task and project memory a prompt gets, the records that cannot be read back, the Memory setting.
 
 pub mod memory;
+pub mod messages;
 pub mod resources;
 
 use orchester_core::run::RunnerFailure;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-pub use self::{memory::MemoryLink, resources::ResourceLink};
+pub use self::{memory::MemoryLink, messages::MessageLink, resources::ResourceLink};
 
 /// Everything the executor asks its coordinator: one trait per area.
-pub trait CoordinatorLink: ResourceLink + MemoryLink {}
-
-impl<T: ResourceLink + MemoryLink + ?Sized> CoordinatorLink for T {}
-
-/// Where the executor gets links to its coordinator: the run's task keeps one, and a call that runs beside the task
-/// (an agent's tool call) opens one of its own, as it opened its own database connection before.
-pub trait LinkOpener: Send + Sync {
-  /// A new link to the coordinator.
-  fn open(&self) -> Result<Box<dyn CoordinatorLink + Send>, LinkError>;
+pub trait CoordinatorLink: ResourceLink + MessageLink + MemoryLink {
+  /// Another link to the same coordinator, for a task of the run's own: an agent's worker, which reads the messages
+  /// sent to its agent while its turn runs, and an agent's tool calls, which read the run's records.
+  fn another(&self) -> Result<Box<dyn CoordinatorLink + Send>, LinkError>;
 }
 
 /// Why the coordinator could not answer a request: what reading failed with, as text, and what kind of failure it is

@@ -22,10 +22,7 @@ use orchester_core::{
 };
 use orchester_runner::execution::{
   LocalLinks,
-  link::{
-    LinkOpener,
-    memory::{RecallRequest, SettingsRequest, UnreadableMemories, UnreadableRequest},
-  },
+  link::memory::{RecallRequest, SettingsRequest, UnreadableMemories, UnreadableRequest},
 };
 use orchester_store::ProjectDb;
 use serde::{Serialize, de::DeserializeOwned};

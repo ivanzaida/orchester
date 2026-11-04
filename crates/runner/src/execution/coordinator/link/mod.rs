@@ -3,6 +3,7 @@
 //! module of its own.
 
 mod memory;
+mod messages;
 mod resources;
 
 use std::{
@@ -12,7 +13,7 @@ use std::{
 
 use orchester_store::{ProjectDb, ReadOnlyProjectDb, StoreError};
 
-use crate::execution::executor::link::{CoordinatorLink, LinkError, LinkOpener};
+use crate::execution::executor::link::{CoordinatorLink, LinkError};
 
 /// The coordinator link of an executor in the coordinator's own process, over the project database `D` holds.
 pub(in crate::execution) struct LocalLink<D>(D);
@@ -24,10 +25,35 @@ impl<D: Deref<Target = ProjectDb>> LocalLink<D> {
   }
 }
 
-impl LocalLink<ReadOnlyProjectDb> {
+/// A connection of a run's task's own that only reads the project database, and the project root it is in.
+pub(in crate::execution) struct RunReader {
+  db: ReadOnlyProjectDb,
+  root: PathBuf,
+}
+
+impl Deref for RunReader {
+  type Target = ProjectDb;
+
+  fn deref(&self) -> &ProjectDb {
+    &self.db
+  }
+}
+
+impl LocalLink<RunReader> {
   /// The link of a run's task, over a connection of its own that only reads the project database at `root`.
   pub(in crate::execution) fn open(root: &Path) -> Result<Self, StoreError> {
-    ProjectDb::open_read_only(root).map(Self)
+    let db = ProjectDb::open_read_only(root)?;
+    Ok(Self(RunReader {
+      db,
+      root: root.to_path_buf(),
+    }))
+  }
+}
+
+impl CoordinatorLink for LocalLink<RunReader> {
+  fn another(&self) -> Result<Box<dyn CoordinatorLink + Send>, LinkError> {
+    let link = Self::open(&self.0.root).map_err(|error| read_failed(&error))?;
+    Ok(Box::new(link))
   }
 }
 
@@ -43,10 +69,9 @@ impl LocalLinks {
       root: root.to_path_buf(),
     }
   }
-}
 
-impl LinkOpener for LocalLinks {
-  fn open(&self) -> Result<Box<dyn CoordinatorLink + Send>, LinkError> {
+  /// A new link to the coordinator; the link opens more of its own with [`CoordinatorLink::another`].
+  pub fn open(&self) -> Result<Box<dyn CoordinatorLink + Send>, LinkError> {
     let link = LocalLink::open(&self.root).map_err(|error| read_failed(&error))?;
     Ok(Box::new(link))
   }

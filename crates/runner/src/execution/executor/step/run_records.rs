@@ -3,7 +3,7 @@
 //! record, active or proposed as the project's memory setting says, refused when it holds a secret's value;
 //! `report_progress` keeps the step's progress line, the invocation's secret values removed. Each call opens a
 //! connection of its own to the project database (the run's task loop owns the runner's) and blocks on it, off the
-//! async workers; the memory setting it reads through a coordinator link of its own.
+//! async workers; the task's messages and the memory setting are asked through the invocation's own coordinator link.
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -17,18 +17,20 @@ use orchester_core::{
   orchester_tools::{TaskView, ToolResult},
   run::StepProgress,
   secret::SecretVault,
-  store::{ConversationStore, RunStore, SecretStore},
+  store::{RunStore, SecretStore},
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
+use parking_lot::Mutex;
 
-use super::super::link::{LinkOpener, memory::SettingsRequest};
+use super::super::link::{CoordinatorLink, memory::SettingsRequest, messages as message_link};
 
 /// The run, task and step execution an invocation's agent works on, and where their records are.
 pub(super) struct RunRecords {
   pub(super) root: PathBuf,
-  /// Where the project's memory is read.
-  pub(super) links: Arc<dyn LinkOpener>,
+  /// Where the task's messages and the project's memory setting are asked for: a link of the invocation's own, which
+  /// its tool calls share.
+  pub(super) link: Mutex<Box<dyn CoordinatorLink + Send>>,
   pub(super) run: RunId,
   pub(super) task: TaskId,
   pub(super) execution: StepExecutionId,
@@ -58,7 +60,7 @@ impl RunRecords {
       .ok_or_else(|| ToolResult::unavailable("the run's task no longer exists"))?;
     let plans = db.plans(self.run).map_err(|error| unreadable(&error))?;
     let questions = db.questions(self.run).map_err(|error| unreadable(&error))?;
-    let messages = db.messages(self.task).map_err(|error| unreadable(&error))?;
+    let messages = message_link::messages(&**self.link.lock(), self.task).map_err(|error| unreadable(&error))?;
     let view = TaskView {
       run: self.run,
       task: &task,
@@ -83,9 +85,9 @@ impl RunRecords {
     let unreadable =
       |error: &dyn std::error::Error| ToolResult::unavailable(&format!("memory cannot be kept: {error}"));
     let settings = self
-      .links
-      .open()
-      .and_then(|link| link.settings(&SettingsRequest))
+      .link
+      .lock()
+      .settings(&SettingsRequest)
       .map_err(|error| unreadable(&error))?;
     let secrets = db.secrets().map_err(|error| unreadable(&error))?;
     let screen =
