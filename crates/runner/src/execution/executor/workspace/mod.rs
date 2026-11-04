@@ -62,9 +62,15 @@ impl RunTask {
   /// cannot work anywhere, otherwise.
   pub(super) fn workspace(&mut self, execution: StepExecutionId, start: Start) -> Result<Option<Workspace>, String> {
     match self.folder {
-      RunFolder::Own(_) => Workspace::of(&self.root, &self.run, self.worktree(), execution, start)
-        .map(Some)
-        .map_err(|error| error.to_string()),
+      RunFolder::Own(_) => Workspace::of(
+        self.execution.repository(),
+        &self.run,
+        self.worktree(),
+        execution,
+        start,
+      )
+      .map(Some)
+      .map_err(|error| error.to_string()),
       RunFolder::Borrowed => self.borrowed_workspace(execution, start),
     }
   }
@@ -75,7 +81,9 @@ impl RunTask {
     accepted: &StepExecution,
   ) -> Result<Result<Workspace, AcceptRefusal>, WorktreeError> {
     match self.folder {
-      RunFolder::Own(_) => Workspace::accepted_work(&self.root, (&self.run, self.worktree()), accepted),
+      RunFolder::Own(_) => {
+        Workspace::accepted_work(self.execution.repository(), (&self.run, self.worktree()), accepted)
+      }
       RunFolder::Borrowed => self.borrowed_accepted_work(accepted),
     }
   }

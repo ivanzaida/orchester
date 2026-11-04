@@ -3,23 +3,21 @@
 //! (`docs/architecture/remote-runners.md`), never by the desktop.
 
 use orchester_core::revision::Revision;
-use orchester_index::{CodebaseIndexes, IndexError};
+use orchester_index::IndexError;
 use orchester_ipc::Rejection;
 
-use crate::execution::Scheduler;
+use crate::{execution::Scheduler, execution_root::ExecutionRoot};
 
 impl Scheduler {
-  /// Builds the index of `revision` again, off the runtime's workers; why it was not built otherwise.
+  /// Builds the index of `revision` again in the executor's indexes folder (its execution root's), off the runtime's
+  /// workers; why it was not built otherwise.
   pub async fn rebuild_code_index(&self, revision: Revision) -> Result<(), Rejection> {
-    let root = self.inner.project_root.clone();
+    let indexes = ExecutionRoot::local(&self.inner.project_root).code_indexes();
     let built = tokio::task::spawn_blocking(move || {
-      CodebaseIndexes::new(&root)
-        .rebuild(&revision)
-        .map(drop)
-        .map_err(|error| {
-          tracing::warn!(%error, %revision, "the codebase index could not be rebuilt");
-          rejection(error)
-        })
+      indexes.rebuild(&revision).map(drop).map_err(|error| {
+        tracing::warn!(%error, %revision, "the codebase index could not be rebuilt");
+        rejection(error)
+      })
     })
     .await;
     built.unwrap_or_else(|error| {

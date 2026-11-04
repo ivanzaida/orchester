@@ -195,7 +195,7 @@ impl RunTask {
     if !self.run.snapshot().body().takes_base_moves(&step.key) {
       return false;
     }
-    let Ok((body, _)) = self.profile_and_connection(profile, &step.key) else {
+    let Ok((body, ..)) = self.profile_and_connection(profile, &step.key) else {
       return false;
     };
     self

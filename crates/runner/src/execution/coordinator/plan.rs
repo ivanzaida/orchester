@@ -7,7 +7,7 @@ use orchester_core::{
 };
 use orchester_ipc::Rejection;
 
-use super::{Scheduler, idle, prepare::Prepared};
+use super::{Scheduler, idle, prepare::Prepared, sink::LocalSink};
 use crate::execution::executor::{
   control::Control,
   handoff::Keeper,
@@ -60,7 +60,8 @@ impl Scheduler {
       notifier: &self.inner.notifier,
       vault: self.inner.vault.as_ref(),
     };
-    record(keeper, &mut prepared.run, request)?;
+    let mut sink = LocalSink::new(&self.inner.project_root);
+    record(keeper, &mut sink, &mut prepared.run, request)?;
     self.spawn(db, prepared)
   }
 }

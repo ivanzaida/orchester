@@ -1,6 +1,7 @@
 //! The split of `src/execution/` (`docs/architecture/remote-runners.md`, "The split"): the coordinator's modules sit
 //! under `coordinator/`, one run's work under `executor/`, and the executor does not name the coordinator. The
-//! places that still do are listed in [`KNOWN`]; a new one fails, and so does one that is gone and still listed.
+//! places that still do are listed in [`KNOWN`]; a new one fails, and so does one that is gone and still listed. Only
+//! the coordinator creates runs from the person's checkout, and only the executor adds or removes run worktrees.
 
 use std::{
   collections::BTreeSet,
@@ -100,6 +101,91 @@ fn executor_names_no_coordinator_module_beyond_the_known_places() {
   );
   let gone: Vec<_> = known.difference(&named).collect();
   assert!(gone.is_empty(), "no longer named; remove them from KNOWN: {gone:?}");
+}
+
+/// The project database's writes of the run log: the executor sends its records to the coordinator's sink instead
+/// (`docs/architecture/remote-runners.md`, rule 2).
+const RUN_LOG_WRITES: &[&str] = &[
+  "append_events",
+  "append_events_with_plan",
+  "append_runner_failure",
+  "write_run_log",
+];
+
+#[test]
+fn executor_writes_the_run_log_only_through_the_sink() {
+  let executor = execution().join("executor");
+  let mut files = Vec::new();
+  rust_files(&executor, &mut files);
+  let mut writes = Vec::new();
+  for file in &files {
+    let text = fs::read_to_string(file).unwrap_or_else(|error| panic!("cannot read {}: {error}", file.display()));
+    for line in text.lines() {
+      let code = line.split("//").next().unwrap_or_default();
+      for write in RUN_LOG_WRITES {
+        let named = code.match_indices(write).any(|(at, _)| {
+          let after = code[at + write.len()..].chars().next();
+          !after.is_some_and(|c| c.is_alphanumeric() || c == '_')
+        });
+        if named {
+          writes.push(format!("{}: {write}", file.display()));
+        }
+      }
+    }
+  }
+  assert!(writes.is_empty(), "executor code writes the run log itself: {writes:?}");
+}
+/// The lines of the Rust files under `src/execution/<side>` that name any of `names` outside comments, as
+/// `file: line`.
+fn lines_naming(side: &str, names: &[&str]) -> Vec<String> {
+  let folder = execution().join(side);
+  let mut files = Vec::new();
+  rust_files(&folder, &mut files);
+  assert!(!files.is_empty(), "no Rust file under {}", folder.display());
+  let mut found = Vec::new();
+  for file in &files {
+    let text = fs::read_to_string(file).unwrap_or_else(|error| panic!("cannot read {}: {error}", file.display()));
+    let code_lines = text.lines().map(|line| line.split("//").next().unwrap_or_default());
+    for line in code_lines.filter(|code| names.iter().any(|name| code.contains(name))) {
+      found.push(format!("{}: {}", file.display(), line.trim()));
+    }
+  }
+  found
+}
+
+#[test]
+fn only_the_coordinator_reads_the_checkout_for_a_new_run_and_numbers_it() {
+  let found = lines_naming(
+    "executor",
+    &[
+      "create_run_of_queued_task",
+      "next_run_base",
+      "checked_out_branch",
+      "set_branch_tip",
+      "for_next_run",
+    ],
+  );
+  assert!(
+    found.is_empty(),
+    "executor code creates runs or reads the person's checkout for one; the coordinator does: {found:#?}"
+  );
+}
+
+#[test]
+fn only_the_executor_adds_or_removes_run_worktrees() {
+  let found = lines_naming(
+    "coordinator",
+    &[
+      "Worktrees",
+      "clean_up_recorded",
+      "finish_removal",
+      "sweep_worktree_folders",
+    ],
+  );
+  assert!(
+    found.is_empty(),
+    "coordinator code adds or removes run worktrees; it hands the executor a start order or a removal instead: {found:#?}"
+  );
 }
 
 #[test]

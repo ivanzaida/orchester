@@ -35,15 +35,20 @@ use super::{
   codebase_index::{self, IndexBuild, IndexState},
   control::{Ack, Control, answer},
   disk_guard::DiskGuard,
+  link::{CoordinatorLink, LinkError},
   pool::PoolError,
   prepared::{Prepared, RunFolder},
   record::{RecordError, announce_ready, record},
+  sink::Sink,
   step::{
     Active, QaApps,
     worker::{Stop, StopCause, WorkerEvent},
   },
 };
-use crate::{browser::ProjectBrowser, execution::coordinator::board::Board};
+use crate::{
+  browser::ProjectBrowser, computer::ComputerResources, execution::coordinator::board::Board,
+  execution_root::ExecutionRoot,
+};
 
 /// How long a run waiting for a free agent slot waits before it looks again, in case the slot
 /// was freed by another run in a way it was not woken for. More slots wake it at once.
@@ -57,6 +62,10 @@ pub(super) enum ExecutionError {
   Record(#[from] RecordError),
   #[error(transparent)]
   Store(#[from] StoreError),
+  #[error(transparent)]
+  Computer(#[from] orchester_core::computer::ComputerError),
+  #[error(transparent)]
+  Link(#[from] LinkError),
   #[error("step execution {0} is not an agent step of the run")]
   NotAnAgentStep(StepExecutionId),
   #[error("the run has steps left but none can run")]
@@ -67,12 +76,16 @@ pub(super) enum ExecutionError {
   Workspace(#[from] PoolError),
 }
 
-/// What the task of a run is given besides the run: where it announces changes, where its
-/// requests arrive and where it tells the scheduler that it no longer executes the run.
+/// What the task of a run is given besides the run: where it records the run's log and announces
+/// changes, where its requests arrive and where it tells the scheduler that it no longer executes the run.
 pub(in crate::execution) struct TaskContext {
   pub(in crate::execution) root: PathBuf,
+  pub(in crate::execution) link: Box<dyn CoordinatorLink + Send>,
+  pub(in crate::execution) execution: ExecutionRoot,
+  pub(in crate::execution) sink: Box<dyn Sink>,
   pub(in crate::execution) notifier: Notifier,
   pub(in crate::execution) vault: Arc<dyn SecretVault>,
+  pub(in crate::execution) computer: Arc<dyn ComputerResources>,
   pub(in crate::execution) relay: Option<PathBuf>,
   pub(in crate::execution) board: Arc<Board>,
   pub(in crate::execution) qa: Arc<QaApps>,
@@ -96,8 +109,15 @@ pub(super) struct Pending {
 pub(in crate::execution) struct RunTask {
   /// A step a person asked to start on its account now ([`Prepared::try_at_plan_limit`]), taken when it starts.
   pub(super) try_at_plan_limit: Option<orchester_core::id::StepExecutionId>,
+  /// The project root: the person's checkout, which holds the project database.
   pub(super) root: PathBuf,
+  /// Where the run's task asks for the project's data it reads through the link ([`super::link`]).
+  pub(super) link: Box<dyn CoordinatorLink + Send>,
+  /// Where the executor keeps its own folders.
+  pub(super) execution: ExecutionRoot,
   pub(super) db: ProjectDb,
+  /// The coordinator's sink, which the run's log is written to.
+  pub(super) sink: Box<dyn Sink>,
   pub(super) run: Run,
   pub(super) task: Task,
   pub(super) project: Project,
@@ -108,6 +128,8 @@ pub(in crate::execution) struct RunTask {
   pub(super) worktree: Option<PathBuf>,
   pub(super) notifier: Notifier,
   pub(super) vault: Arc<dyn SecretVault>,
+  /// The computer the run executes on: its connections are read there, never in the project database.
+  pub(super) computer: Arc<dyn ComputerResources>,
   /// The program Claude Code starts as its permission prompt ([`crate::approval_relay`]).
   pub(super) relay: Option<PathBuf>,
   pub(super) board: Arc<Board>,
@@ -150,7 +172,10 @@ impl RunTask {
     let (worker_events, events) = mpsc::unbounded_channel();
     Self {
       root: context.root,
+      link: context.link,
+      execution: context.execution,
       db,
+      sink: context.sink,
       run: prepared.run,
       task: prepared.task,
       project,
@@ -161,6 +186,7 @@ impl RunTask {
       folder: prepared.folder,
       notifier: context.notifier,
       vault: context.vault,
+      computer: context.computer,
       relay: context.relay,
       board: context.board,
       qa: context.qa,
@@ -388,7 +414,7 @@ impl RunTask {
       Ok(events)
     };
     let was_ready = self.run.status() == &RunStatus::Succeeded;
-    record(&mut self.db, &self.notifier, &mut self.run, settling)?;
+    record(self.sink.as_mut(), &self.notifier, &mut self.run, settling)?;
     if !was_ready {
       announce_ready(&self.notifier, &self.run);
     }

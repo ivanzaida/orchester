@@ -7,11 +7,14 @@ use orchester_ipc::Reply;
 use super::{Answer, Later};
 use crate::execution::Scheduler;
 
-pub(super) fn rebuild(later: &Later<'_>, scheduler: Scheduler, revision: Revision) -> Answer {
-  later.reply(async move {
-    match scheduler.rebuild_code_index(revision.clone()).await {
-      Ok(()) => Reply::CodeIndexRebuilt { revision },
-      Err(rejection) => Reply::Rejected(rejection),
-    }
-  })
+impl Later<'_> {
+  /// Answers once the index of `revision` is built again, or with why it was not.
+  pub(super) fn rebuild_code_index(&self, scheduler: Scheduler, revision: Revision) -> Answer {
+    self.reply(async move {
+      match scheduler.rebuild_code_index(revision.clone()).await {
+        Ok(()) => Reply::CodeIndexRebuilt { revision },
+        Err(rejection) => Reply::Rejected(rejection),
+      }
+    })
+  }
 }

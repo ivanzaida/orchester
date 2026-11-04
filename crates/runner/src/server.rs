@@ -5,6 +5,7 @@
 mod browser;
 mod code_index;
 mod estimate;
+mod merge_queue;
 
 use std::{
   future::Future,
@@ -363,9 +364,11 @@ async fn answer(
     },
     Command::StopTurn { run } => return later.answer(run, async move { handle.stop_turn(run).await }),
     Command::Browser(ref command) => return later.browser(handle, command.clone()),
-    Command::EstimateTask { task } => return estimate::estimate(&later, handle, task),
+    Command::MergeQueue(ref command) => return later.merge_queue(handle, command.clone()),
+    Command::EstimateTask { task } => return later.estimate(handle, task),
     Command::SetErrorReports { ref reports } => return Answer::ErrorReports(id, reports.clone()),
-    Command::RebuildCodeIndex { ref revision } => return code_index::rebuild(&later, handle, revision.clone()),
+    Command::ReadWorktreeChanges { run } => return later.reply(handle.worktree_changes(run)),
+    Command::RebuildCodeIndex { ref revision } => return later.rebuild_code_index(handle, revision.clone()),
   };
   Answer::Reply(Event::Reply { id, reply })
 }

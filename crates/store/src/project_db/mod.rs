@@ -124,7 +124,7 @@ pub use self::{
   resolutions::ResolutionStart,
   resources::ResourceUpdate,
   run_ends::EndedRun,
-  runs::RunBranch,
+  runs::{RunBranch, RunLogRecord},
   shared_events::{SharedEvent, SharedSnapshot},
   shared_members::{ServerAdmin, SharedMember},
   shared_modules::{CachedModule, CachedModuleChange},
