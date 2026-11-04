@@ -1,7 +1,7 @@
 //! Settings › Browser (`docs/design/browser.md`, "Finding the browser"): the program the person chose for agents'
-//! browser, instead of the one Orchester finds installed (none until a person chooses one). The runner reads it as it
-//! starts a project's browser ([`AppDb::open_read_only`]). Whether the Browser window opens when an agent starts
-//! browsing is [`AppDb::browser_window_opens_itself`].
+//! browser, instead of the one Orchester finds installed (none until a person chooses one). The desktop reads it and
+//! passes it to the runners, which start the projects' browsers with it. Whether the Browser window opens when an
+//! agent starts browsing is [`AppDb::browser_window_opens_itself`].
 
 use std::path::{Path, PathBuf};
 

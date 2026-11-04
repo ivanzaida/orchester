@@ -36,9 +36,12 @@ use orchester_ipc::{Event, Rejection};
 use orchester_store::{ApprovalRecord, StoreError};
 
 use super::{
-  super::tool_approval::refusal,
+  super::{
+    link::approvals::{approval_review, approval_rules, project_approval_rules, run_auto_approve},
+    tool_approval::refusal,
+  },
   approval::Awaiting,
-  worker::{Watch, Worker},
+  worker::{Watch, Worker, WorkerError},
 };
 
 /// The rule that gives an answer: one of the run's, or one of the project's.
@@ -108,10 +111,10 @@ impl Worker {
     watch: &Watch,
     approval: &PendingToolApproval,
     autopilot: bool,
-  ) -> Result<Itself, StoreError> {
+  ) -> Result<Itself, WorkerError> {
     let subject = ApprovalSubject::of(approval, &self.scope).with_checks(&self.checks);
     let category = category_of(&subject);
-    let rules = watch.db.approval_rules(approval.run)?;
+    let rules = approval_rules(&*watch.link, approval.run)?;
     if let Some(rule) = answering(&rules, &subject) {
       let decided_by = if rule.scope.revocable() {
         DecidedBy::SimilarRule
@@ -159,20 +162,20 @@ impl Worker {
     watch: &Watch,
     approval: &PendingToolApproval,
     (subject, category): (&ApprovalSubject, Option<CommandCategory>),
-  ) -> Result<Itself, StoreError> {
+  ) -> Result<Itself, WorkerError> {
     if let Some(launch) = &watch.invocation.permissions
       && let Some(category) = permitted(subject, launch.permissions())
     {
       return Ok(Itself::Settled(Settled::by(DecidedBy::Permissions, Some(category))));
     }
-    if let Some(rule) = answering_in_project(&watch.db.project_approval_rules()?, subject) {
+    if let Some(rule) = answering_in_project(&project_approval_rules(&*watch.link)?, subject) {
       return Ok(Itself::Settled(Settled {
         rule: Some(Answering::Project(rule.id)),
         ..Settled::by(DecidedBy::SimilarRule, category)
       }));
     }
     // Manual is not Autopilot: only the run's own *Approve everything in this run*, a person's answer, approves here.
-    if auto_approves(watch.db.run_auto_approve(approval.run)?, false)
+    if auto_approves(run_auto_approve(&*watch.link, approval.run)?, false)
       && (approval.command || auto_approvable(&approval.server, &approval.action))
       && let AutoVerdict::Approve(category) = auto_verdict(subject)
     {
@@ -213,7 +216,7 @@ impl Worker {
     watch: &mut Watch,
     (approval, awaiting): (&PendingToolApproval, &Awaiting),
     (answer, by): (&ApprovalAnswer, Answerer),
-  ) -> Result<Result<Settled, Rejection>, StoreError> {
+  ) -> Result<Result<Settled, Rejection>, WorkerError> {
     let subject = ApprovalSubject::of(approval, &self.scope).with_checks(&self.checks);
     let decided_by = match answer.given_by(by, &subject) {
       Ok(decided_by) => decided_by,
@@ -222,7 +225,7 @@ impl Worker {
     };
     let settled = Settled {
       secrets: matches!(&subject, ApprovalSubject::Command(command) if command.reads_secrets()),
-      review: watch.db.tool_approval_review(approval.run, &approval.id)?,
+      review: approval_review(&*watch.link, approval.run, &approval.id)?,
       ..Settled::by(decided_by, category_of(&subject))
     };
     let now = Timestamp::now();
@@ -360,12 +363,12 @@ impl Worker {
     approval: &PendingToolApproval,
     awaiting: Awaiting,
     settled: Settled,
-  ) -> Result<Result<(), Rejection>, StoreError> {
+  ) -> Result<Result<(), Rejection>, WorkerError> {
     let run = approval.run;
     // A review still under way is no longer wanted: dropping it stops the reviewer.
     self.reviewing = None;
     if !claim(watch, approval, &settled)? {
-      return Ok(Err(refusal(&watch.db, run, &approval.id)?));
+      return Ok(Err(refusal(&*watch.link, run, &approval.id)?));
     }
     if settled.decided_by.answered_waiting() {
       self.notifier.send(Event::ToolApprovalChanged { run, task: self.task });
