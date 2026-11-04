@@ -162,6 +162,8 @@ orchester-app = { workspace = true, features = ["test-support"] }
 # Counts a runner's reports in tests of what follows them, which run no runner.
 orchester-workspace = { workspace = true, features = ["devtools-inspect", "test-support"] }
 orchester-api = { workspace = true, features = ["client", "identity"] }
+# Builds the code indexes a runner would have built, as fixtures of the Code index tab (`tests/project_settings`).
+orchester-index.workspace = true
 # The handles of lurq's `RenderEngine`, for a stand-in engine that captures without a GPU
 # (`tests/browser_window/inspection.rs`); already built through lurq.
 raw-window-handle.workspace = true

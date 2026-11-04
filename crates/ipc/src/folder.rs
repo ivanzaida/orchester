@@ -1,5 +1,5 @@
 //! What a run's folder holds beyond its last commit, as the runner reads it for the desktop's start-up recovery
-//! ([`crate::Command::RunFolderState`], protocol 43): the desktop reaches a run's worktree only through the runner
+//! ([`crate::Command::RunFolderState`], protocol 44): the desktop reaches a run's worktree only through the runner
 //! (`docs/architecture/remote-runners.md`, rule 5).
 
 use serde::{Deserialize, Serialize};

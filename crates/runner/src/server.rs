@@ -3,6 +3,7 @@
 //! shows.
 
 mod browser;
+mod code_index;
 mod estimate;
 mod folders;
 mod merge_queue;
@@ -371,6 +372,7 @@ async fn answer(
     Command::RunFolderState { run } => return later.run_folder_state(handle, run),
     Command::SetErrorReports { ref reports } => return Answer::ErrorReports(id, reports.clone()),
     Command::ReadWorktreeChanges { run } => return later.reply(handle.worktree_changes(run)),
+    Command::RebuildCodeIndex { ref revision } => return later.rebuild_code_index(handle, revision.clone()),
   };
   Answer::Reply(Event::Reply { id, reply })
 }

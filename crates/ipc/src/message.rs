@@ -13,6 +13,7 @@ use orchester_core::{
   permission::AgentPermissions,
   question::GivenAnswer,
   resource::StepKey,
+  revision::Revision,
   run::{
     Answerer, ApprovalAnswer, EventSequence, InterruptCause, MergeConflicts, PermissionsApply, PlanDecision,
     PlanVersion, ReviewNote, RunNumber, StuckDecision,
@@ -291,7 +292,12 @@ pub enum Command {
   /// A request about the folders the project's runs leave with their executor (protocol 42, [`crate::folders`]).
   /// Answered with [`Reply::Folders`] once carried out, or [`Rejection::Failed`].
   Folders(FoldersCommand),
-  /// What run `run`'s folder holds beyond its last commit, for the start-up recovery (protocol 43): its own
+  /// Builds the code index of `revision` again where the runner keeps the indexes (*Rebuild*, *Retry* in Project
+  /// settings › Context, protocol 43); the desktop builds none itself. Answered with [`Reply::CodeIndexRebuilt`] once
+  /// it is built, [`Rejection::CodeIndexInUse`] while it is in use, or [`Rejection::Failed`] with why it could not be
+  /// built.
+  RebuildCodeIndex { revision: Revision },
+  /// What run `run`'s folder holds beyond its last commit, for the start-up recovery (protocol 44): its own
   /// worktree, else the workspace it holds or worked in last. The runner reads it with git in the folder; the desktop
   /// never does. Answered with [`Reply::RunFolderState`], [`FolderState::Unknown`] when the run has no folder any more
   /// or git cannot tell.
@@ -494,6 +500,10 @@ pub enum Reply {
   MergeQueue(MergeQueueReply),
   /// The answer to [`Command::Folders`].
   Folders(FoldersReply),
+  /// The answer to [`Command::RebuildCodeIndex`]: the index of `revision` is built again.
+  CodeIndexRebuilt {
+    revision: Revision,
+  },
   /// The answer to [`Command::RunFolderState`].
   RunFolderState {
     run: RunId,
