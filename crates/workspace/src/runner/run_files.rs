@@ -56,11 +56,11 @@ impl RunFiles for ProjectRunFiles {
       return Ok(stand_in(&self.project.repo_root, run, request));
     }
     let (runners, project) = (self.runners.clone(), self.project.clone());
-    let asked = self.runners.inner.runtime.block_on(async move {
-      runners
-        .ask_project(&project, Command::RunFiles { run, request })
-        .await
-    });
+    let asked = self
+      .runners
+      .inner
+      .runtime
+      .block_on(async move { runners.ask_project(&project, Command::RunFiles { run, request }).await });
     match asked {
       Ok(Reply::RunFiles(reply)) => Ok(reply),
       Ok(Reply::Rejected(rejection)) => Err(FilesError::Runner(format!("{rejection:?}"))),

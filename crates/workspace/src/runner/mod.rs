@@ -61,8 +61,7 @@ use self::{
 };
 use crate::{activity::Activity, browser::BrowserWindow, workspace::OpenProject};
 
-/// How long a close without active work waits for the runner to stop and exit before
-/// terminating it.
+/// How long a close without active work waits for the runner to stop and exit before terminating it.
 pub const QUIET_STOP_TIMEOUT: Duration = Duration::from_secs(6);
 
 /// How asking the runners to stop ended.

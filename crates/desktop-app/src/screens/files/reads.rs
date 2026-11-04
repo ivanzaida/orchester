@@ -189,19 +189,16 @@ pub fn list(
   let runs = services.runners.run_files(project);
   let key = at.clone();
   let state = ctx
-    .future(
-      (project.repo_root.clone(), key.clone(), wake),
-      move |(root, at, _)| {
-        let (programs, hold, runs) = (programs.clone(), hold.clone(), runs.clone());
-        async move {
-          hold.released().await;
-          let read = at.clone();
-          let value = run(move || list_files((programs.runner(), &runs), &root, &read)).await?;
-          let digest = value.digest();
-          Ok(Found::new(at, value, Some(digest)))
-        }
-      },
-    )
+    .future((project.repo_root.clone(), key.clone(), wake), move |(root, at, _)| {
+      let (programs, hold, runs) = (programs.clone(), hold.clone(), runs.clone());
+      async move {
+        hold.released().await;
+        let read = at.clone();
+        let value = run(move || list_files((programs.runner(), &runs), &root, &read)).await?;
+        let digest = value.digest();
+        Ok(Found::new(at, value, Some(digest)))
+      }
+    })
     .state()
     .get();
   kept.keep(shown(&key, &state))
@@ -255,23 +252,20 @@ pub fn file(
   let key = (at.clone(), path.clone());
   let counted = reads.clone();
   let state = ctx
-    .future(
-      (project.repo_root.clone(), key.clone(), wake),
-      move |(root, key, _)| {
-        let (programs, hold, runs) = (programs.clone(), hold.clone(), runs.clone());
-        let reads = counted.clone();
-        reads.started.fetch_add(1, Ordering::Relaxed);
-        async move {
-          hold.released().await;
-          let (at, path) = key.clone();
-          let read = run(move || read_steadily((programs.runner(), &runs), &root, (&at, &path))).await;
-          reads.settled(&read);
-          let value = read?;
-          let digest = value.digest();
-          Ok(Found::new(key, value, Some(digest)))
-        }
-      },
-    )
+    .future((project.repo_root.clone(), key.clone(), wake), move |(root, key, _)| {
+      let (programs, hold, runs) = (programs.clone(), hold.clone(), runs.clone());
+      let reads = counted.clone();
+      reads.started.fetch_add(1, Ordering::Relaxed);
+      async move {
+        hold.released().await;
+        let (at, path) = key.clone();
+        let read = run(move || read_steadily((programs.runner(), &runs), &root, (&at, &path))).await;
+        reads.settled(&read);
+        let value = read?;
+        let digest = value.digest();
+        Ok(Found::new(key, value, Some(digest)))
+      }
+    })
     .state()
     .get();
   let shown = kept.keep(shown(&key, &state));
@@ -300,8 +294,7 @@ pub fn choices(
         let (programs, runs) = (programs.clone(), runs.clone());
         async move {
           let (at, run_id, path) = key.clone();
-          let value =
-            run(move || versions((programs.runner(), &runs), &root, (&at, run_id), path.as_ref())).await?;
+          let value = run(move || versions((programs.runner(), &runs), &root, (&at, run_id), path.as_ref())).await?;
           Ok(Found::new(key, Arc::new(value), None))
         }
       },

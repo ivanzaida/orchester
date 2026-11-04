@@ -494,7 +494,10 @@ fn assert_runs_files_read(repo: &Path, runs: &ProjectRunFiles, run: RunId) {
   let programs = runner();
   let in_run = Version::Run(run);
   let read = |file: &str| read_file((programs.runner(), runs), repo, &in_run, &path(file));
-  assert_eq!(lines(&read("src/main.rs").expect("in the run")), ["fn main() { run(); }"]);
+  assert_eq!(
+    lines(&read("src/main.rs").expect("in the run")),
+    ["fn main() { run(); }"]
+  );
   assert_eq!(read("data.bin"), Ok(FileView::Binary { size: 3 }));
   assert_eq!(read("src"), Err(FilesError::Folder(path("src"))));
   assert_eq!(read("gone.md"), Err(FilesError::Missing(path("gone.md"))));
@@ -562,17 +565,8 @@ fn files_a_runs_worktree_is_a_version_while_it_exists() {
   .expect("versions");
   assert_eq!(choices.choices[0].file, Some(FileFacts::Absent));
   git(repo, &["worktree", "remove", "--force", &shown]);
-  assert_eq!(
-    read(&in_run, "README.md"),
-    Err(FilesError::VersionGone(in_run.clone()))
-  );
-  let choices = versions(
-    (programs.runner(), runs),
-    repo,
-    (&Version::Checkout, Some(run)),
-    None,
-  )
-  .expect("versions");
+  assert_eq!(read(&in_run, "README.md"), Err(FilesError::VersionGone(in_run.clone())));
+  let choices = versions((programs.runner(), runs), repo, (&Version::Checkout, Some(run)), None).expect("versions");
   let listed: Vec<&Version> = choices.choices.iter().map(|choice| &choice.version).collect();
   assert_eq!(listed, [&Version::Checkout, &Version::Base]);
   assert_eq!(

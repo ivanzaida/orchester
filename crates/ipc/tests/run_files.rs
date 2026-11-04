@@ -83,7 +83,12 @@ async fn run_files_replies_round_trip_and_a_files_bytes_travel_raw() {
     ),
     reply(4, RunFilesReply::Read(RunFileRead::Bytes(FileBytes { bytes: largest }))),
     reply(5, RunFilesReply::Read(RunFileRead::Bytes(FileBytes::default()))),
-    reply(6, RunFilesReply::Read(RunFileRead::TooLarge { size: MAX_VIEW_BYTES + 1 })),
+    reply(
+      6,
+      RunFilesReply::Read(RunFileRead::TooLarge {
+        size: MAX_VIEW_BYTES + 1,
+      }),
+    ),
     reply(7, RunFilesReply::Failed(RunFileFailure::Missing)),
     reply(
       8,
@@ -98,7 +103,10 @@ async fn run_files_replies_round_trip_and_a_files_bytes_travel_raw() {
       }),
     ),
   ];
-  assert!(MAX_VIEW_BYTES < u64::from(MAX_FRAME_LEN), "the largest file fits a frame");
+  assert!(
+    MAX_VIEW_BYTES < u64::from(MAX_FRAME_LEN),
+    "the largest file fits a frame"
+  );
   assert_eq!(round_trip(&sent).await, sent);
 }
 
