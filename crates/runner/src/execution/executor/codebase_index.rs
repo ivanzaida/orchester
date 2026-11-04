@@ -170,7 +170,7 @@ impl RunTask {
   }
 
   fn build_code_index(&mut self, holds_starts: bool) {
-    let indexes = CodebaseIndexes::new(&self.root);
+    let indexes = self.execution.code_indexes();
     let handle = tokio::spawn(ensure(indexes, self.run.base().clone(), self.run.id()));
     self.index_build = Some(IndexBuild { handle, holds_starts });
   }
@@ -230,7 +230,7 @@ impl RunTask {
       return Err(CodeIndexUnavailable::Building);
     }
     if let IndexState::Failed { .. } | IndexState::NotBuilt = self.code_index
-      && let Some(folder) = CodebaseIndexes::new(&self.root).existing(self.run.base())
+      && let Some(folder) = self.execution.code_indexes().existing(self.run.base())
     {
       self.code_index = IndexState::Ready { folder };
     }
@@ -277,14 +277,12 @@ impl RunTask {
     let Some(found) = ripgrep::locate(path.as_deref(), local_app_data.as_deref(), &clis) else {
       return Ok(Err(RipgrepMissing::NotFound));
     };
-    Ok(
-      ripgrep::provide(&found, &self.root.join(".orchester").join("tools")).map_err(|error| {
-        tracing::warn!(%error, found = %found.path.display(), "ripgrep cannot be given to agents");
-        RipgrepMissing::Unavailable {
-          detail: error.to_string(),
-        }
-      }),
-    )
+    Ok(ripgrep::provide(&found, &self.execution.tools()).map_err(|error| {
+      tracing::warn!(%error, found = %found.path.display(), "ripgrep cannot be given to agents");
+      RipgrepMissing::Unavailable {
+        detail: error.to_string(),
+      }
+    }))
   }
 }
 

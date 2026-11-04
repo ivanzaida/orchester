@@ -65,6 +65,7 @@ pub use crate::notify::Notifier;
 use crate::{
   browser::ProjectBrowser,
   computer::{ComputerResources, LocalComputer},
+  execution_root::ExecutionRoot,
 };
 
 /// How long stopping waits for each run to end its agent and record the interruption.
@@ -144,7 +145,7 @@ impl Scheduler {
     orchester_store::pause_lock_waits_with(crate::lock_pause::pause_off_async_workers);
     // Before the desktop connects and reads the runs.
     coordinator::missing_checkpoints::record(project_root);
-    coordinator::worktree_sweep::sweep_in_background(project_root.to_path_buf());
+    executor::worktree_sweep::sweep_in_background(project_root.to_path_buf());
     Self {
       inner: Arc::new(Inner {
         project_root: project_root.to_path_buf(),
@@ -532,6 +533,7 @@ impl Scheduler {
     let settled = Arc::new(AtomicBool::new(false));
     let context = TaskContext {
       root: self.inner.project_root.clone(),
+      execution: ExecutionRoot::local(&self.inner.project_root),
       notifier: self.inner.notifier.clone(),
       vault: self.inner.vault.clone(),
       computer: self.inner.computer.clone(),
