@@ -6,7 +6,7 @@
 //! nothing. A base branch checked out in a worktree, the checkout's own included, is refused: moving it there would
 //! leave that worktree's files behind its branch.
 
-use super::{Delivering, MergeError, MergeKind, Merged, revision, temporary};
+use super::{Delivering, MergeError, MergeKind, Merged, Source, revision, temporary};
 use crate::{
   command::CommandRunner,
   integration::{
@@ -14,17 +14,17 @@ use crate::{
     git::{Git, message},
     parse_worktree_list,
   },
-  project::TaskKey,
-  run::{BranchName, Run},
+  run::BranchName,
 };
 
-/// Merges `head`, the tip of `run`'s branch, into `into` beside the checkout `git` runs in.
+/// Merges `head`, the tip of `source`'s branch, into its base branch beside the checkout `git` runs in.
 pub(super) fn merge<R: CommandRunner>(
   git: &Git<'_, R>,
-  (run, task): (&Run, &TaskKey),
-  (into, head): (&BranchName, &str),
+  source: &Source<'_>,
+  head: &str,
   delivering: Option<Delivering<'_>>,
 ) -> Result<Merged, MergeError> {
+  let (into, title) = (source.into, source.title.as_str());
   not_checked_out(git, into)?;
   let base = git
     .commit(&format!("refs/heads/{into}"))?
@@ -37,16 +37,15 @@ pub(super) fn merge<R: CommandRunner>(
   if git.is_ancestor(head, &base)? {
     return Ok((revision(&base)?, MergeKind::AlreadyMerged, None));
   }
-  let title = super::title(run, task);
   if delivering.is_none() && git.is_ancestor(&base, head)? {
-    move_branch(git, (into, &title), (&base, head))?;
+    move_branch(git, (into, title), (&base, head))?;
     return Ok((revision(head)?, MergeKind::FastForward, None));
   }
-  let (made, kind) = super::made(&title, delivering);
-  let (merged, left) = temporary::merge_commit(git, run.id(), (&base, head), made)?;
+  let (made, kind) = super::made(title, delivering);
+  let (merged, left) = temporary::merge_commit(git, &source.scratch, (&base, head), made)?;
   // Someone may have checked the base branch out while the merge commit was made.
   not_checked_out(git, into)?;
-  move_branch(git, (into, &title), (&base, &merged))?;
+  move_branch(git, (into, title), (&base, &merged))?;
   Ok((revision(&merged)?, kind, left))
 }
 

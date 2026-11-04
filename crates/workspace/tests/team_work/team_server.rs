@@ -4,9 +4,10 @@
 //! their receipts are in [`crate::team_commands`]; a work start names a schema-2 bundle, which carries the task's
 //! number and the pinned versions' labels. Reads: `GET …/bundles/{sha256}` and `GET …/bundles/{sha256}/files/{file}`
 //! for the claim's holder in its session (`409 claim_lost` otherwise), and `POST …/heartbeat` with D1's renewal rule.
-//! Each token is one member's session. A test can take the server down (every connection closed unanswered), make it
-//! lose the next write's answer or drop the next bundle file read, and put the work in a wait for a person. A test
-//! binary may add routes of its own ([`Extra`]), e.g. the reads its tools make.
+//! Each token is one member's session, [`ADMIN`] a workspace Admin's. A test can take the server down (every
+//! connection closed unanswered), make it lose the next write's answer or drop the next bundle file read, put the work
+//! in a wait for a person, and turn the workspace's automatic merge on. A test binary may add routes of its own
+//! ([`Extra`]), e.g. the reads its tools make.
 
 #![allow(dead_code, reason = "each test binary uses some of the server")]
 
@@ -32,6 +33,10 @@ use crate::{
 pub const MEMBER: &str = "member-token";
 /// Another member's session, which takes the claim over.
 pub const OTHER: &str = "other-token";
+/// A workspace Admin's session, on their own computer.
+pub const ADMIN: &str = "admin-token";
+/// The module's branch, as the server assigned it (D3).
+pub const MODULE_BRANCH: &str = "module/payments";
 
 #[derive(Clone)]
 pub struct TeamServer {
@@ -43,7 +48,7 @@ pub struct TeamServer {
   state: Arc<Mutex<State>>,
 }
 
-/// The task's current claim: its id and the session that holds it.
+/// A subject's current claim: its id and the session that holds it.
 #[derive(Clone)]
 pub struct Claim {
   pub id: ClaimId,
@@ -61,12 +66,27 @@ pub struct Work {
   pub runs: Vec<String>,
 }
 
+/// A delivery of the module's branch, as the server keeps it (`deliveries`): bound to the module's claim, its branch
+/// and both commits, with the Admin's authorization or none (the automatic merge).
+#[derive(Clone)]
+pub struct Delivery {
+  pub authorization: Option<String>,
+  pub claim: ClaimId,
+  pub branch: String,
+  pub source_commit: String,
+  pub base_commit: String,
+  pub state: String,
+  pub revision: u64,
+  pub merge_commit: Option<String>,
+}
+
 pub struct State {
   pub config: Config,
   pub project: ProjectId,
   pub task: TaskId,
   pub module: ModuleId,
   pub claim: Option<Claim>,
+  pub module_claim: Option<Claim>,
   pub works: Vec<Work>,
   /// By hash: the bundle as JSON, and the claim it was built for.
   pub bundles: HashMap<String, (Value, ClaimId)>,
@@ -78,6 +98,10 @@ pub struct State {
   pub sequences: HashMap<(WorkId, String), u64>,
   /// Every accepted report's sequence and outcome kind, in the order the server accepted them.
   pub accepted: Vec<(u64, String)>,
+  /// The module's deliveries, oldest first.
+  pub deliveries: Vec<Delivery>,
+  /// The workspace's Admin-owned automatic merge (D7).
+  pub automatic_merge: bool,
   pub cursor: u64,
   pub down: bool,
   pub lose_next: bool,
@@ -87,6 +111,9 @@ pub struct State {
   pub works_made: usize,
   pub heartbeats: usize,
   pub reports_sent: usize,
+  /// The `delivery.request` and `delivery.report` commands carried out, not their repeats.
+  pub delivery_requests: usize,
+  pub delivery_reports: usize,
 }
 
 /// Routes a test binary adds to the server's own: asked first, without the state's lock, for every request of a known
@@ -111,12 +138,15 @@ impl TeamServer {
       task,
       module,
       claim: None,
+      module_claim: None,
       works: Vec::new(),
       bundles: HashMap::new(),
       operations: HashMap::new(),
       events: HashMap::new(),
       sequences: HashMap::new(),
       accepted: Vec::new(),
+      deliveries: Vec::new(),
+      automatic_merge: false,
       cursor: 10,
       down: false,
       lose_next: false,
@@ -125,6 +155,8 @@ impl TeamServer {
       works_made: 0,
       heartbeats: 0,
       reports_sent: 0,
+      delivery_requests: 0,
+      delivery_reports: 0,
     }));
     let serving = state.clone();
     thread::spawn(move || {
@@ -174,7 +206,7 @@ fn answer(shared: &Mutex<State>, extra: Option<&Extra>, mut stream: TcpStream) {
   if shared.lock().down {
     return;
   }
-  if request.token != MEMBER && request.token != OTHER {
+  if ![MEMBER, OTHER, ADMIN].contains(&request.token.as_str()) {
     return respond(
       &mut stream,
       401,
@@ -225,16 +257,29 @@ pub fn person() -> Value {
   json!({"id": UserId::generate(), "display_name": "Ivan"})
 }
 
-/// The claim `id` as `ClaimRead` is.
+/// The task's claim `id` as `ClaimRead` is.
 pub fn claim_read(state: &State, id: ClaimId) -> Value {
-  json!({"subject": {"kind": "task", "id": state.task}, "id": id, "holder": person(), "acquired_at": 1,
+  subject_claim_read(&json!({"kind": "task", "id": state.task}), id)
+}
+
+/// The claim `id` of `subject` as `ClaimRead` is.
+pub fn subject_claim_read(subject: &Value, id: ClaimId) -> Value {
+  json!({"subject": subject, "id": id, "holder": person(), "acquired_at": 1,
     "last_execution_heartbeat_at": 1, "stale_at": 900_001, "stale": false, "parent_module_claim_id": null})
 }
 
-/// Whether `token` holds claim `claim` now, in its session.
+/// Whether `token` holds the task's claim `claim` now, in its session.
 pub fn holds(state: &State, token: &str, claim: ClaimId) -> bool {
   state
     .claim
+    .as_ref()
+    .is_some_and(|current| current.id == claim && current.token == token)
+}
+
+/// Whether `token` holds the module's claim `claim` now, in its session.
+pub fn holds_module(state: &State, token: &str, claim: ClaimId) -> bool {
+  state
+    .module_claim
     .as_ref()
     .is_some_and(|current| current.id == claim && current.token == token)
 }

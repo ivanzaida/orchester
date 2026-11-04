@@ -17,10 +17,15 @@
 //! - **Heartbeat** ([`heartbeat`]). Only runs at work renew their claims (D1): a run that waits for a person, is paused
 //!   or ended renews nothing, and the server's `decision_required` is an outcome, not a failure to retry.
 //!
+//! - **Module delivery** ([`delivery`]). The module's holder requests the delivery of the module branch to base; this
+//!   computer merges only on the receipt's `deliver_module` effect and reports the merge, persisted first and retried
+//!   in order ([`ModuleDeliveries`]).
+//!
 //! A run's local status and its server acceptance (the work as the server last answered its reports) are kept apart
 //! ([`TeamRunState`]). The MCP tool `run_task` starts a team task's work through it (P7); the screens adopt it in P6.
 
 mod bundle;
+pub mod delivery;
 mod error;
 mod heartbeat;
 mod reports;
@@ -36,6 +41,9 @@ use orchester_store::{ProjectDb, TeamFence, WorkReportState};
 
 pub use self::{
   bundle::StartChoices,
+  delivery::{
+    DeliveryProgress, DeliveryStatus, ModuleDeliveries, RecoveredDeliveries, TeamDeliveryRequest, TeamDeliveryState,
+  },
   error::TeamWorkError,
   heartbeat::Heartbeat,
   reports::Reported,

@@ -3,14 +3,15 @@ use orchester_core::{
   blob::ContentHash,
   connection::AgentProvider,
   id::{OperationId, ResourceId, RunId},
+  integration::GitError,
   run::inputs::InputsError,
 };
 use orchester_store::{RunStoreError, StoreError};
 
 use crate::actions::ActionError;
 
-/// Why a team start, its reports or its heartbeat could not go on. A server that cannot be reached or refuses for now
-/// is no error: the outcome says so, and the work goes on from where it stands.
+/// Why a team start, its reports, its heartbeat or a module delivery could not go on. A server that cannot be reached
+/// or refuses for now is no error: the outcome says so, and the work goes on from where it stands.
 #[derive(Debug, thiserror::Error)]
 pub enum TeamWorkError {
   #[error(transparent)]
@@ -46,4 +47,17 @@ pub enum TeamWorkError {
   /// A report the run queued, or the work the server accepted of it, cannot be read back.
   #[error("the reports of team run {0} cannot be read")]
   UnreadableRun(RunId),
+  /// The delivery action asks for an Admin's authorization: only the module holder's request is delivered here.
+  #[error("only a delivery request is delivered here")]
+  NotADeliveryRequest,
+  /// The server answered the delivery's request or report with no delivery, or without the `deliver_module` effect of
+  /// exactly the requested branch and commits: nothing is merged on it.
+  #[error("the server answered team delivery {0} with no delivery this computer may merge")]
+  NotADelivery(OperationId),
+  /// The recorded request, delivery, refusal or report of the delivery cannot be read back.
+  #[error("the record of team delivery {0} cannot be read")]
+  UnreadableDelivery(OperationId),
+  /// Git could not tell whether the delivery was merged.
+  #[error(transparent)]
+  DeliveryGit(GitError),
 }

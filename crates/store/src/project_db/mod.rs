@@ -93,6 +93,7 @@ mod task_groups;
 mod task_identities;
 mod task_snapshots;
 mod tasks;
+mod team_deliveries;
 mod team_operations;
 mod team_runs;
 mod team_starts;
@@ -144,6 +145,7 @@ pub use self::{
   shared_versions::{CachedVersion, NamingVersion, ReferenceTarget, ResourceSharing, VersionReference},
   sharing::SharingLink,
   task_deletion::TaskDeletionFacts,
+  team_deliveries::{DeliveryMerge, DeliveryReport, TeamDelivery, TeamDeliveryStage},
   team_operations::{NewTeamOperation, TeamOperation, TeamOperationState, TeamSettlement},
   team_runs::{AcceptedWork, NewWorkReport, TeamFence, TeamRun, WorkReportEntry, WorkReportState},
   team_starts::{TeamStart, TeamStartStage},

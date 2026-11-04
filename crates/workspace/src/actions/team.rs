@@ -264,6 +264,8 @@ const fn readable(command: &TeamCommand) -> Option<Readable> {
     | TeamCommand::ClaimTakeOver { .. }
     | TeamCommand::ClaimRelease { .. }
     | TeamCommand::DeliveryAuthorize { .. }
+    | TeamCommand::DeliveryRequest { .. }
+    | TeamCommand::DeliveryReport { .. }
     | TeamCommand::WorkReport(_) => None,
   }
 }

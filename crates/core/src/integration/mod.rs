@@ -38,8 +38,8 @@ pub use self::{
   held::{NotRemoved, finish_removal, retry_held},
   log::{LoggedCommit, MAX_LISTED, own_commits},
   merge::{
-    DeliveredAs, Delivering, MergeError, MergeKind, MergeOutcome, RunMerge, TemporaryLeft, merge_run, merge_run_as,
-    merge_run_at,
+    DeliveredAs, Delivering, MergeError, MergeKind, MergeOutcome, ModuleDelivery, ModuleMerge, RunMerge, TemporaryLeft,
+    merge_module, merge_run, merge_run_as, merge_run_at, module_merged,
   },
   merged::{Branches, Delivered, RunWork},
   recorded::{RecordedCleanupError, RemovalStart, clean_up_recorded, clean_up_recorded_as_seen},

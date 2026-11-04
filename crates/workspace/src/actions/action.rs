@@ -153,8 +153,8 @@ pub struct WorkAction {
   pub module_read: TaskRevision,
 }
 
-/// Authorizes the delivery of `module`'s `branch` under the module's claim `claim`, from `source_commit` onto the base
-/// at `base_commit` (Admin).
+/// The delivery of `module`'s `branch` under the module's claim `claim`, from `source_commit` onto the base at
+/// `base_commit`: an Admin's authorization of it, or the module holder's request.
 #[derive(Clone, Debug)]
 pub struct DeliveryAction {
   pub module: ModuleId,
@@ -162,6 +162,17 @@ pub struct DeliveryAction {
   pub branch: BranchName,
   pub source_commit: CommitId,
   pub base_commit: CommitId,
+  pub step: DeliveryStep,
+}
+
+/// What a delivery action asks of the server.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DeliveryStep {
+  /// `delivery.authorize`: the Admin authorizes exactly this delivery; their computer merges nothing.
+  Authorize,
+  /// `delivery.request`: the module's holder asks to deliver it, on the Admin's authorization `authorization` or, with
+  /// `None`, the workspace's automatic merge; the receipt lets the holder's computer merge.
+  Request { authorization: Option<OperationId> },
 }
 
 /// How an action is carried out (`docs/architecture/team-authority-plan.md` §4, "Distinguish action classes").
@@ -171,7 +182,8 @@ pub enum ActionClass {
   LocalOnly,
   /// The team server commits it; this computer only learns of it.
   ServerOnly,
-  /// The team server commits it and its receipt allows this computer to start work: `work.start`.
+  /// The team server commits it and its receipt allows this computer to start work or merge: `work.start`,
+  /// `delivery.request`.
   ServerThenLocalExecution,
   /// Pausing, stopping or answering within work already authorized, reported afterwards. No P2 action is of this
   /// class: the work commands join it in P4.
@@ -197,11 +209,18 @@ impl Action {
   }
 
   /// The class of the action on a project that is a team's when `team` is set. A claim allows no local effect on the
-  /// team server: only the work it starts does.
+  /// team server: only the work it starts and the delivery its holder requests do.
   pub const fn class(&self, team: bool) -> ActionClass {
     match (team, self) {
       (false, _) => ActionClass::LocalOnly,
-      (true, Self::Work(_)) => ActionClass::ServerThenLocalExecution,
+      (
+        true,
+        Self::Work(_)
+        | Self::Delivery(DeliveryAction {
+          step: DeliveryStep::Request { .. },
+          ..
+        }),
+      ) => ActionClass::ServerThenLocalExecution,
       (true, _) => ActionClass::ServerOnly,
     }
   }

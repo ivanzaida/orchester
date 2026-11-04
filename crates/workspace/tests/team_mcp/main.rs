@@ -12,6 +12,8 @@ mod fixture;
 mod http;
 #[path = "../team_work/team_commands.rs"]
 mod team_commands;
+#[path = "../team_work/team_deliveries.rs"]
+mod team_deliveries;
 #[path = "../team_work/team_server.rs"]
 mod team_server;
 
