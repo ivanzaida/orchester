@@ -198,11 +198,12 @@ pub(super) fn joined(ctx: &Ctx, parts: &[Arc<str>]) -> Arc<str> {
   Arc::from(parts.iter().map(|part| &**part).collect::<Vec<_>>().join(&separator))
 }
 
-/// *You · 12:41 · 2 attempts*: who asked for the last attempt, when, and how many there were.
+/// *You · 12:41 · 2 attempts*: who asked for the last attempt, when, and how many there were; while Orchester tries
+/// again by itself, without the count, which its line already says (*attempt N of 3*, `Cjprb`).
 pub(super) fn not_merged_meta(ctx: &Ctx, run: &NotMergedRun) -> Arc<str> {
   let recorded = &run.not_merged.attempt;
   let mut parts = vec![who(ctx, recorded.attempt.asked_by()), when(ctx, recorded.attempt.at())];
-  if recorded.sequence > 1 {
+  if recorded.sequence > 1 && run.not_merged.retrying.is_none() {
     parts.push(ctx.t_args("merges.attempts", [("count", recorded.sequence.to_string())]));
   }
   joined(ctx, &parts)

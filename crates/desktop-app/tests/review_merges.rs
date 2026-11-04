@@ -186,9 +186,11 @@ fn review_merges_lists_not_merged_waiting_for_review_and_merged_runs_by_day() {
     ),
     "{text}"
   );
+  assert!(text.contains("Try again"), "{text}");
+  let meta = seeded.window.text(&format!("{held}-meta"));
   assert!(
-    text.contains("You · ") && text.contains("2 attempts") && text.contains("Try again"),
-    "{text}"
+    meta.starts_with("You · ") && meta.ends_with(" · 2 attempts"),
+    "a refused row counts its attempts: {meta}"
   );
   assert_eq!(seeded.rows("merges-waiting").len(), 2);
   let queued = seeded.row("merges-waiting", "Sign webhook payloads");
@@ -324,13 +326,14 @@ fn review_merges_try_again_merges_as_the_task_page_does() {
 /// While Orchester waits to try a merge again, no job state changes: the list watches the run that merges once a
 /// second, the window's timers firing meanwhile, so its row turns to *Retrying by itself* with *Try now* as the wait
 /// begins, and counts the next attempt as each try is refused again; once the lease is let go, *Try now* tries at once
-/// and the row tells how that try ended.
+/// and the row tells how that try ended. While Orchester retries, the meta says only who and when (`Cjprb`), its
+/// attempts counted by the line.
 #[test]
 fn review_merges_follows_orchesters_retry_live() {
   let mut seeded = Seeded::new("merges-outcomes");
   seeded.merges();
   let row = seeded.row("merges-not-merged", "Add retry to webhook sender");
-  let action = format!("{row}-action");
+  let (action, meta) = (format!("{row}-action"), format!("{row}-meta"));
   let held = IntegrationLease::acquire(&seeded.repo).expect("another operation's lease");
   seeded.window.press(&action);
   let retrying = |attempt: &'static str| {
@@ -347,6 +350,11 @@ fn review_merges_follows_orchesters_retry_live() {
   seeded.window.until_within(GIT_WORK, "the row to retry", retrying("1"));
   seeded.window.press(&action);
   seeded.window.until_within(GIT_WORK, "the next attempt", retrying("2"));
+  let retried = seeded.window.text(&meta);
+  assert!(
+    retried.starts_with("Orchester · ") && !retried.contains("attempt"),
+    "a retrying row's meta is who · when alone: {retried}"
+  );
   drop(held);
   seeded.window.press(&action);
   seeded.window.until_within(GIT_WORK, "the try to end", |window| {
