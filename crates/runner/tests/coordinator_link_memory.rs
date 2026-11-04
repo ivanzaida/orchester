@@ -103,7 +103,11 @@ fn fixture(root: &Path) -> (ProjectDb, Task) {
     .status()
     .expect("run git");
   assert!(status.success(), "git init: {status}");
-  let project = Project::new(ProjectId::generate(), ProjectKey::new("ORC").expect("a key"), name("Kontur"));
+  let project = Project::new(
+    ProjectId::generate(),
+    ProjectKey::new("ORC").expect("a key"),
+    name("Kontur"),
+  );
   let mut db = ProjectDb::create(root, project).expect("create the project");
   let details = TaskDetails {
     title: name("Billing schema migration"),
@@ -156,7 +160,10 @@ fn records(scope: MemoryScope, profile: Option<ResourceId>, handoff_lines: usize
     pinned,
     person(
       scope,
-      content(MemoryKind::Decision, "Keep the old billing tables readable until the release."),
+      content(
+        MemoryKind::Decision,
+        "Keep the old billing tables readable until the release.",
+      ),
       6,
     ),
     person(
@@ -171,13 +178,20 @@ fn records(scope: MemoryScope, profile: Option<ResourceId>, handoff_lines: usize
         .with_tags(tags),
       8,
     ),
-    written(content(MemoryKind::Observation, "The billing importer retries twice."), 9),
+    written(
+      content(MemoryKind::Observation, "The billing importer retries twice."),
+      9,
+    ),
     person(
       MemoryScope::Project,
       content(MemoryKind::Fact, "Invoices are numbered per year.").with_importance(Importance::Low),
       10,
     ),
-    person(MemoryScope::Project, content(MemoryKind::Fact, "Deploys run on Fridays."), 11),
+    person(
+      MemoryScope::Project,
+      content(MemoryKind::Fact, "Deploys run on Fridays."),
+      11,
+    ),
   ]
 }
 
@@ -215,7 +229,11 @@ fn coordinator_link_memory_requests_and_answers_round_trip() {
     limits: limits().limits,
     now: at(86_400_000),
   };
-  let recalled = recall(&request, records(MemoryScope::Task(task), Some(profile), 120), Vec::new());
+  let recalled = recall(
+    &request,
+    records(MemoryScope::Task(task), Some(profile), 120),
+    Vec::new(),
+  );
   assert!(recalled.entries().iter().any(|entry| entry.truncated));
   assert!(!recalled.left_out().is_empty());
   round_trip(&recalled);

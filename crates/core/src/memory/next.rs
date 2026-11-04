@@ -68,7 +68,11 @@ pub fn next_invocation_memory<S: MemoryStore + ?Sized>(
 /// The records the next invocation of `step` gets at `now`: the task's active records, the project's
 /// pinned ones and those matching the step's name and instructions and the task's title and brief,
 /// ranked and capped by the project's Memory setting as it is now.
-pub fn step_memory<S: MemoryStore + ?Sized>(store: &S, step: &StepRecall, now: Timestamp) -> Result<Recalled, S::Error> {
+pub fn step_memory<S: MemoryStore + ?Sized>(
+  store: &S,
+  step: &StepRecall,
+  now: Timestamp,
+) -> Result<Recalled, S::Error> {
   let settings = store.memory_settings()?;
   let task = step.task;
   let active = |scope| MemoryFilter {
