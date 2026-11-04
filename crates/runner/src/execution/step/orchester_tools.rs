@@ -140,7 +140,8 @@ pub(in super::super) struct ToolHost {
   qa_scripts: Mutex<Vec<(QaAppStart, String)>>,
   /// The invocation's QA app (`start_qa_app`); `None` while the host is being made.
   qa: Option<StepQa>,
-  /// The invocation's services (`start_service`, `stop_service`); `None` while the host is being made.
+  /// The invocation's services (`start_service`, `stop_service`, `service_status`, `service_logs`); `None` while the
+  /// host is being made.
   services: Option<StepServices>,
   /// The browser tools, for a step that is offered them ([`StepTools::offers_browser`]).
   browser: Option<StepBrowser>,
@@ -314,6 +315,14 @@ impl ToolHost {
         .services
         .as_ref()
         .map_or_else(no_services, |services| services.stop(&name)),
+      Ok(ToolWork::ServiceStatus(name)) => self
+        .services
+        .as_ref()
+        .map_or_else(no_services, |services| services.status(&name)),
+      Ok(ToolWork::ServiceLogs { name, tail, since }) => self
+        .services
+        .as_ref()
+        .map_or_else(no_services, |services| services.logs(&name, tail, since)),
       Ok(ToolWork::Processes(call)) => self.processes.run(call),
       Ok(ToolWork::Run(program)) => program.finished(run_capped(program.command(), program.timeout(), program.cap())),
       Err(error) => ToolResult::refused(&error),
@@ -368,7 +377,7 @@ fn called_with(arguments: &Value) -> Value {
 }
 
 fn no_services() -> ToolResult {
-  ToolResult::unavailable("this step cannot start or stop services")
+  ToolResult::unavailable("this step has no services")
 }
 
 /// The relay Codex starts as Orchester's server, with its tools approved, and the listener it reaches.

@@ -179,19 +179,41 @@ pub fn report(server: Option<&mut Prompt>, worktree: &Path, prompt: &str) {
 }
 
 /// "Start the service <name>.": calls `start_service`; with "Then read outside" it then reads `deps-a/notes.txt` of
-/// the repository, which asks, and with "Then stop the service" it calls `stop_service`.
+/// the repository, which asks; with "Then wait for it to end" it calls `service_status` until the service is no longer
+/// ready; with "Then look at the service" it calls `service_status` and `service_logs`; and with "Then stop the
+/// service" it calls `stop_service`, then `service_status` again when it also looks.
 fn services(server: &mut Prompt, worktree: &Path, prompt: &str) {
   let name = prompt
     .split("Start the service ")
     .nth(1)
     .and_then(|rest| rest.split('.').next())
     .unwrap_or("web");
-  report_call(server, "start_service", &json!({"name": name}));
+  let named = json!({"name": name});
+  let look = prompt.contains("Then look at the service");
+  report_call(server, "start_service", &named);
   if prompt.contains("Then read outside") {
     read_outside(server, worktree);
   }
+  if prompt.contains("Then wait for it to end") {
+    for _ in 0..80 {
+      let ready = server
+        .call("service_status", &named)
+        .is_some_and(|(text, _)| text.contains(r#""state":"ready""#));
+      if !ready {
+        break;
+      }
+      thread::sleep(Duration::from_millis(250));
+    }
+  }
+  if look {
+    report_call(server, "service_status", &named);
+    report_call(server, "service_logs", &json!({"name": name, "tail": 50}));
+  }
   if prompt.contains("Then stop the service") {
-    report_call(server, "stop_service", &json!({"name": name}));
+    report_call(server, "stop_service", &named);
+    if look {
+      report_call(server, "service_status", &named);
+    }
   }
 }
 

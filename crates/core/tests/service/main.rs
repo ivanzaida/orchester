@@ -1,11 +1,13 @@
 //! Services and stacks: the invariants their constructors keep, how needs resolve into start steps, how
-//! placeholders are checked and filled, and the process a service starts as.
+//! placeholders are checked and filled, the process a service starts as, its log and its status.
 
 mod definition;
 mod launch;
+mod log;
 mod needs;
 mod placeholder;
 mod seed;
+mod status;
 
 use orchester_core::{
   resource::CommandProgram,

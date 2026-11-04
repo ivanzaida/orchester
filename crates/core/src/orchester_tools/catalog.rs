@@ -9,7 +9,10 @@ use super::{
   files::{DEFAULT_LIMIT_FILES, MAX_LIMIT_FILES, MAX_TERM_CHARS},
   input::{DEFAULT_READ_LINES, MAX_READ_LINES},
 };
-use crate::native::tools::ToolName as NativeTool;
+use crate::{
+  native::tools::ToolName as NativeTool,
+  service::{DEFAULT_TAIL, MAX_TAIL},
+};
 
 const FIND_SYMBOL: &str = r#"{"type":"object","properties":{
   "name":{"type":"string","description":"The item's name, or part of it; any case."},
@@ -74,6 +77,12 @@ const STARTS_SERVICE: &str = "Start one of the project's services by name in thi
 /// What `stop_service` does.
 const STOPS_SERVICE: &str = "Stop a service start_service started in this step, with everything it started, without asking. Stopping one that is not running says so.";
 
+/// What `service_status` does.
+const SERVICE_STATUS: &str = "The status of a service start_service started in this step, without asking: {state, port, url}, state being starting, ready, crashed (with exit_code) or stopped, and uptime_secs while it runs. Use this instead of shell commands to see whether it runs.";
+
+/// What `service_logs` does.
+const SERVICE_LOGS: &str = "The latest lines of standard output and error of a service start_service started in this step, without asking, its secret values redacted; Orchester keeps a bounded number of them. Each line is numbered: pass the last number you read as since to get only later lines. Use this instead of reading its output by shell.";
+
 impl OrchesterTool {
   /// What the agent is told the tool does.
   pub const fn description(self) -> &'static str {
@@ -87,6 +96,8 @@ impl OrchesterTool {
       Self::StartQaApp => STARTS_QA_APP,
       Self::StartService => STARTS_SERVICE,
       Self::StopService => STOPS_SERVICE,
+      Self::ServiceStatus => SERVICE_STATUS,
+      Self::ServiceLogs => SERVICE_LOGS,
       Self::CallRunApp => {
         "Call one embedded MCP tool of an app started inside this run's worktree, without asking. Leave out pid to call the QA app start_qa_app started in this step. Other executables and mismatched discovery files are refused. The relay keeps the token private; PNG images are saved in the run's own storage (.orchester/runs/<run>/screenshots/, kept with the run and listed on its task page under Artifacts) and returned as absolute paths: open one with read_file to see it. Use this instead of tools/lurq-mcp-client.py."
       }
@@ -177,7 +188,7 @@ impl OrchesterTool {
 }
 
 /// The input schema of `tool`; `projects` are the names and descriptions of the checks `run_check` may run, `services`
-/// the names of the services `start_service` and `stop_service` take.
+/// the names of the services the service tools take.
 pub(super) fn input_schema(tool: OrchesterTool, projects: &[(String, String, bool)], services: &[String]) -> Value {
   let fixed = |text: &str| serde_json::from_str::<Value>(text).expect("the static tool schemas are valid JSON");
   let read_lines = |path: &str| {
@@ -222,6 +233,14 @@ pub(super) fn input_schema(tool: OrchesterTool, projects: &[(String, String, boo
     OrchesterTool::StartQaApp => fixed(START_QA_APP),
     OrchesterTool::StartService => service("The service to start, as the project names it."),
     OrchesterTool::StopService => service("The service to stop."),
+    OrchesterTool::ServiceStatus => service("The service to look at."),
+    OrchesterTool::ServiceLogs => json!({"type":"object","properties":{
+      "name":{"type":"string","enum":services,"description":"The service whose output to read."},
+      "tail":{"type":["integer","null"],"minimum":1,"maximum":MAX_TAIL,
+        "description":format!("The most lines to return, the latest ones; null for {DEFAULT_TAIL}.")},
+      "since":{"type":["integer","null"],"minimum":0,
+        "description":"Only lines numbered after this one, the last number an earlier call returned; null for any."}
+    },"required":["name"],"additionalProperties":false}),
     OrchesterTool::SaveMemory => fixed(SAVE_MEMORY),
     OrchesterTool::ReportProgress => fixed(REPORT_PROGRESS),
     OrchesterTool::FindSymbol => fixed(FIND_SYMBOL),

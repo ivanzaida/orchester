@@ -14,7 +14,7 @@ use crate::{
   memory::{Importance, MemoryContent, MemoryKey, MemoryKind, MemoryNote, NoteScope, Tags},
   resource::{SKILL_FILE, SkillFilePath},
   run::StepProgress,
-  service::ServiceName,
+  service::{DEFAULT_TAIL, MAX_TAIL, ServiceName},
 };
 
 /// Lines a read returns when the call gives no `length` or `limit`.
@@ -81,6 +81,14 @@ pub enum ToolCall {
   StartService(ServiceName),
   /// `stop_service`: a service the step started.
   StopService(ServiceName),
+  /// `service_status`: where a service the step started is.
+  ServiceStatus(ServiceName),
+  /// `service_logs`: the last `tail` kept lines of a service the step started, numbered after `since`.
+  ServiceLogs {
+    name: ServiceName,
+    tail: u32,
+    since: u64,
+  },
   GetTask,
   SaveMemory(Box<MemoryNote>),
   ReportProgress(StepProgress),
@@ -117,6 +125,16 @@ struct ExternalSearchInput {
 #[serde(deny_unknown_fields)]
 struct NameInput {
   name: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ServiceLogsInput {
+  name: String,
+  #[serde(default)]
+  tail: Option<NonZeroU32>,
+  #[serde(default)]
+  since: Option<u64>,
 }
 
 #[derive(Deserialize)]
@@ -168,7 +186,12 @@ impl ToolCall {
     let call = read(tool, arguments).map_err(|message| ToolCallError::Invalid { tool, message })?;
     match &call {
       Self::RunCheck { name } if !step.offers_check(name) => Err(ToolCallError::UnknownCheck(name.clone())),
-      Self::StartService(name) | Self::StopService(name) if !step.offers_service(name) => {
+      Self::StartService(name)
+      | Self::StopService(name)
+      | Self::ServiceStatus(name)
+      | Self::ServiceLogs { name, .. }
+        if !step.offers_service(name) =>
+      {
         Err(ToolCallError::UnknownService(name.to_string()))
       }
       _ => Ok(call),
@@ -192,6 +215,8 @@ impl ToolCall {
       Self::StartQaApp(_) => OrchesterTool::StartQaApp,
       Self::StartService(_) => OrchesterTool::StartService,
       Self::StopService(_) => OrchesterTool::StopService,
+      Self::ServiceStatus(_) => OrchesterTool::ServiceStatus,
+      Self::ServiceLogs { .. } => OrchesterTool::ServiceLogs,
       Self::SaveMemory(_) => OrchesterTool::SaveMemory,
       Self::ReportProgress(_) => OrchesterTool::ReportProgress,
     }
@@ -218,6 +243,8 @@ fn read(tool: OrchesterTool, arguments: Value) -> Result<ToolCall, String> {
     OrchesterTool::StartQaApp => ToolCall::StartQaApp(QaAppStart::parse(arguments)?),
     OrchesterTool::StartService => ToolCall::StartService(service(arguments)?),
     OrchesterTool::StopService => ToolCall::StopService(service(arguments)?),
+    OrchesterTool::ServiceStatus => ToolCall::ServiceStatus(service(arguments)?),
+    OrchesterTool::ServiceLogs => service_logs(&serde_json::from_value(arguments).map_err(invalid)?)?,
     OrchesterTool::FindSymbol => {
       let query: FindSymbol = serde_json::from_value(arguments).map_err(invalid)?;
       if query.name().trim().is_empty() {
@@ -275,6 +302,20 @@ fn read(tool: OrchesterTool, arguments: Value) -> Result<ToolCall, String> {
         .unwrap_or_else(|| Err(format!("{} has no file input Orchester reads", tool.as_str())))?;
       ToolCall::File(Box::new(file))
     }
+  })
+}
+
+/// A `service_logs` call: [`DEFAULT_TAIL`] lines when it gives no `tail`, at most [`MAX_TAIL`], after line 0 when it
+/// gives no `since`.
+fn service_logs(input: &ServiceLogsInput) -> Result<ToolCall, String> {
+  let tail = input.tail.map_or(DEFAULT_TAIL, NonZeroU32::get);
+  if tail > MAX_TAIL {
+    return Err(format!("tail is at most {MAX_TAIL}"));
+  }
+  Ok(ToolCall::ServiceLogs {
+    name: ServiceName::new(&input.name).map_err(|error| error.to_string())?,
+    tail,
+    since: input.since.unwrap_or(0),
   })
 }
 

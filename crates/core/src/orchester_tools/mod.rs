@@ -83,6 +83,8 @@ pub enum OrchesterTool {
   StartQaApp,
   StartService,
   StopService,
+  ServiceStatus,
+  ServiceLogs,
   ListSkills,
   ReadSkill,
   GetTask,
@@ -101,13 +103,13 @@ pub enum AccessClass {
   Outside,
   /// Keeps something with the run or the project (memory, the step's progress line); changes no file.
   Records,
-  /// Lists, stops or drives app processes whose resolved executable stays in this run's worktree, or stops what the
-  /// step itself started.
+  /// Lists, stops or drives app processes whose resolved executable stays in this run's worktree, or looks at or
+  /// stops what the step itself started.
   RunProcesses,
 }
 
 impl OrchesterTool {
-  pub const ALL: [Self; 23] = [
+  pub const ALL: [Self; 25] = [
     Self::ReadFile,
     Self::ListFiles,
     Self::SearchFile,
@@ -126,6 +128,8 @@ impl OrchesterTool {
     Self::StartQaApp,
     Self::StartService,
     Self::StopService,
+    Self::ServiceStatus,
+    Self::ServiceLogs,
     Self::ListSkills,
     Self::ReadSkill,
     Self::GetTask,
@@ -154,6 +158,8 @@ impl OrchesterTool {
       Self::StartQaApp => "start_qa_app",
       Self::StartService => "start_service",
       Self::StopService => "stop_service",
+      Self::ServiceStatus => "service_status",
+      Self::ServiceLogs => "service_logs",
       Self::ListSkills => "list_skills",
       Self::ReadSkill => "read_skill",
       Self::GetTask => "get_task",
@@ -254,7 +260,12 @@ impl OrchesterTool {
         AccessClass::Outside
       }
       Self::SaveMemory | Self::ReportProgress => AccessClass::Records,
-      Self::ListRunProcesses | Self::StopRunProcess | Self::CallRunApp | Self::StopService => AccessClass::RunProcesses,
+      Self::ListRunProcesses
+      | Self::StopRunProcess
+      | Self::CallRunApp
+      | Self::StopService
+      | Self::ServiceStatus
+      | Self::ServiceLogs => AccessClass::RunProcesses,
     }
   }
 }
