@@ -10,6 +10,7 @@
 
 pub(super) mod broken;
 pub(super) mod checkpoint;
+pub(super) mod code_index_rebuild;
 pub(super) mod codebase_index;
 pub(super) mod connection_check;
 pub(super) mod control;

@@ -6,7 +6,6 @@ mod list;
 mod search;
 
 use std::{
-  path::PathBuf,
   sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
@@ -25,7 +24,6 @@ use lurq::{
 };
 use orchester_core::revision::Revision;
 use orchester_workspace::{
-  background,
   code_index::{self, IndexList, RipgrepCheck},
   messages::Message,
   tasks::outside::Outside,
@@ -38,6 +36,7 @@ use super::{
 };
 use crate::{
   queries::{self, Again, Kept, Session, project},
+  services::Services,
   theme::ExtraTypography,
   ui::{
     field::field_error,
@@ -60,7 +59,8 @@ impl DevtoolsInspectable for Listed {}
 #[derive(Clone, PartialEq)]
 struct Checked(RipgrepCheck);
 impl DevtoolsInspectable for Checked {}
-type Rebuild = FutureAction<(PathBuf, Revision), (), Message>;
+/// *Rebuild* or *Retry* of the index of a revision, which the project's runner carries out.
+type Rebuild = FutureAction<Revision, (), Message>;
 
 pub(super) struct CodeIndex {
   save: Save,
@@ -128,14 +128,12 @@ impl Component for CodeIndex {
             .variant(ExtraTypography::Note.role()),
         );
       }
-      group = group
-        .rows(list::rows(ctx, &list, &rebuild, &props.project.open.repo_root))
-        .rows(search::rows(
-          ctx,
-          &check,
-          code_index::install_state().as_ref(),
-          (&self.check_revision, &self.tick, &self.after_install),
-        ));
+      group = group.rows(list::rows(ctx, &list, &rebuild)).rows(search::rows(
+        ctx,
+        &check,
+        code_index::install_state().as_ref(),
+        (&self.check_revision, &self.tick, &self.after_install),
+      ));
     } else {
       group = group.row(EmptyRow::new(
         "settings-index-off",
@@ -281,8 +279,11 @@ fn setting(ctx: &mut Ctx, props: &TabProps, on: bool, save: &Save) -> Element {
     .control(toggle)
     .render(ctx)
 }
+/// *Rebuild* and *Retry*, which the project's runner carries out.
 fn rebuild_action(ctx: &mut Ctx) -> Rebuild {
-  ctx.future_action(|(root, revision): (PathBuf, Revision)| async move {
-    background::run(move || code_index::rebuild_in(&root, &revision)).await?
+  let (runners, open) = (Services::of(ctx).runners, ctx.props::<TabProps>().project.open.clone());
+  ctx.future_action(move |revision: Revision| {
+    let (runners, open) = (runners.clone(), open.clone());
+    async move { code_index::rebuild(&runners, &open, revision).await }
   })
 }
