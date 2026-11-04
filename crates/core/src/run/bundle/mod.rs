@@ -13,6 +13,6 @@ pub use self::{
   canonical::{CanonicalError, bundle_sha256, canonical_bytes, file_sha256},
   error::BundleError,
   files::{BundleFile, MAX_BUNDLE_FILE_BYTES, SkillFileEntry, SkillFiles},
-  inputs::{CanonicalExecutionInputs, PinnedBodies, PinnedBody, ResolvedStepPermissions},
+  inputs::{CanonicalExecutionInputs, PinnedBodies, PinnedBody, ResolvedStepPermissions, ResourceLabel},
   profile::ExecutionProfile,
 };
