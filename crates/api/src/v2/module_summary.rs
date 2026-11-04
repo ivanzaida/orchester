@@ -43,6 +43,15 @@ impl ModuleProgressRead {
       done: progress.done,
     }
   }
+
+  /// Core's progress, whose percent and remaining work a reader shows.
+  pub const fn to_core(self) -> Progress {
+    Progress {
+      unit: self.unit,
+      scope: self.scope,
+      done: self.done,
+    }
+  }
 }
 
 /// What a forecast says: nothing left, too little history, or the 50% (`likely`) and 85% (`safe`) days.

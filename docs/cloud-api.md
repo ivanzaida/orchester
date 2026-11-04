@@ -367,6 +367,39 @@ in every shape below.
 
 Existing v1 contracts, the /api/v1 client and earlier v2 types are unchanged.
 
+## Team authority S10/S11 routes
+
+The desktop's client of the S10 reads and the S11 subscription (`orchester_api::client::Authority`, through
+`Client::authority(token, project)`; ORC-713, milestone P5) calls these routes under `/api/v2/projects/{project}`, each
+with the device token as `Authorization: Bearer`. A listing that takes filters and a page is a `POST` of its request
+body to `…/query`, so filters never travel in a URL. A refusal is an `AuthorityError` body
+(`AuthorityCallError::Refused`); a `{error,message}` body or one that is not the answer's shape reads as not an
+Orchester server. The routes are this client's; the team server implements them in the platform repository (OP-153,
+OP-154), which must match them before the desktop uses them.
+
+| Method and path | Request | Answer |
+| --- | --- | --- |
+| `GET …/workspace` | | `WorkspaceMetadata` |
+| `GET …/capabilities` | | `Capabilities` |
+| `POST …/tasks/query` | `TaskListRequest` | `Page<TaskRead>` |
+| `POST …/tasks/counts` | `TaskFilters` | `TaskBoardCounts` |
+| `GET …/tasks/{task}` | | `TaskRead` |
+| `POST …/modules/query` | `ModuleListRequest` | `Page<ModuleSummary>` |
+| `GET …/modules/{module}` | | `ModuleSummary` |
+| `GET …/modules/{module}/burndown` | | `ModuleBurndownRead` |
+| `POST …/modules/{module}/history` | `PageRequest` | `ModuleHistoryPage` |
+| `POST …/resources/query` | `ResourceLibraryRequest` | `ResourceLibraryPage` |
+| `POST …/resources/picker` | `ResourcePickerRequest` | `ResourcePickerPage` |
+| `POST …/resources/{resource}/versions/query` | `PageRequest` | `ResourceVersionsPage` |
+| `GET …/resources/{resource}/versions/{number}` | | `SharedVersion` |
+| `GET …/subscription` | optional `Last-Event-ID` | the S11 event stream |
+
+The workspace's reads (`orchester_workspace::team_reads`) follow the race rule above: they wait for the
+subscription's `ready`, are stamped with the cursor they answer at (a page's or count's snapshot, or the position the
+read was issued at for a model without one), read again when an `invalidated` event of their scope arrives while they
+are in flight, and treat every reconnect like a `reset`. A `401`, a `403`, `revoked` or `membership_revoked`, and a
+changed session end them for good.
+
 ## Conventions
 
 - JSON bodies in UTF-8. Requests are limited to 1 MiB and must arrive within 10 seconds.

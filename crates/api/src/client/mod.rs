@@ -6,6 +6,7 @@
 //! error or `Debug` output.
 
 mod address;
+mod authority;
 mod catalog;
 mod cloud;
 mod cloud_address;
@@ -37,6 +38,7 @@ use zeroize::Zeroize;
 pub use self::recorded::trust_for_tests;
 pub use self::{
   address::{AddressError, PlainHttp, ServerAddress},
+  authority::{Authority, AuthorityCallError, Subscription, SubscriptionEnd},
   cloud::{CloudClient, SignInAnswer},
   cloud_address::CloudAddress,
   error::ClientError,
@@ -315,23 +317,33 @@ async fn answered(request: RequestBuilder) -> Result<Response, ClientError> {
     return Ok(response);
   }
   if status.is_redirection() {
-    let location = response
-      .headers()
-      .get(LOCATION)
-      .and_then(|value| value.to_str().ok())
-      .map(str::to_owned);
-    return Err(ClientError::Redirect { location });
+    return Err(redirect(&response));
   }
   Err(refusal(response, status).await)
 }
 
-/// The error of an answer that is neither a success nor a redirect.
-async fn refusal(response: Response, status: StatusCode) -> ClientError {
-  let retry_after = response
+/// The error of a redirect, which is never followed.
+fn redirect(response: &Response) -> ClientError {
+  let location = response
+    .headers()
+    .get(LOCATION)
+    .and_then(|value| value.to_str().ok())
+    .map(str::to_owned);
+  ClientError::Redirect { location }
+}
+
+/// The `Retry-After` of a refusal, in seconds.
+fn retry_after(response: &Response) -> Option<u64> {
+  response
     .headers()
     .get(RETRY_AFTER)
     .and_then(|value| value.to_str().ok())
-    .and_then(|value| value.trim().parse().ok());
+    .and_then(|value| value.trim().parse().ok())
+}
+
+/// The error of an answer that is neither a success nor a redirect.
+async fn refusal(response: Response, status: StatusCode) -> ClientError {
+  let retry_after = retry_after(&response);
   let status = status.as_u16();
   let Ok(bytes) = response.bytes().await else {
     return ClientError::NotOrchester { status };

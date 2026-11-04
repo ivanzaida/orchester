@@ -74,5 +74,9 @@ name = "events_client"
 required-features = ["client"]
 
 [[test]]
+name = "authority_client"
+required-features = ["client"]
+
+[[test]]
 name = "releases"
 required-features = ["client", "release-signature"]

@@ -20,9 +20,9 @@ use crate::{
 pub(super) const STREAM_IDLE: Duration = Duration::from_secs(45);
 /// A stream has no deadline as a whole (tokio takes the longest duration as its far future); [`STREAM_IDLE`] ends one
 /// on which nothing arrives.
-const STREAM_DEADLINE: Duration = Duration::MAX;
-const LAST_EVENT_ID: &str = "Last-Event-ID";
-const EVENT_STREAM: &str = "text/event-stream";
+pub(super) const STREAM_DEADLINE: Duration = Duration::MAX;
+pub(super) const LAST_EVENT_ID: &str = "Last-Event-ID";
+pub(super) const EVENT_STREAM: &str = "text/event-stream";
 
 /// Why a project's event stream ended.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -138,7 +138,7 @@ fn refused(error: ClientError) -> StreamEnd {
   }
 }
 
-fn is_event_stream(response: &Response) -> bool {
+pub(super) fn is_event_stream(response: &Response) -> bool {
   response
     .headers()
     .get(CONTENT_TYPE)
