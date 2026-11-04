@@ -39,11 +39,19 @@ use orchester_core::{
   tokens::TokensUsed,
 };
 use orchester_store::{ActivityRecord, InvocationRecord, ProjectDb, StoreError};
+use thiserror::Error;
 use tokio::sync::mpsc;
 
 pub(in crate::execution) use self::review::estimate_task;
 use super::{
-  super::{Notifier, control::Ack, sink::Sink, tool::CommandFinished},
+  super::{
+    Notifier,
+    control::Ack,
+    link::{CoordinatorLink, LinkError},
+    run::ExecutionError,
+    sink::Sink,
+    tool::CommandFinished,
+  },
   app_server::AppServerSession,
   approval::Awaiting,
   claude_approval::ClaudeApprovals,
@@ -104,16 +112,35 @@ pub(in super::super) enum WorkerEvent {
     execution: StepExecutionId,
     tokens: TokensUsed,
   },
-  /// The CLI exited; `Err` when recording what it did failed.
+  /// The CLI exited; `Err` when recording what it did, or reading what it was sent, failed.
   Ended {
     execution: StepExecutionId,
-    end: Result<Finished, StoreError>,
+    end: Result<Finished, WorkerError>,
   },
   /// A command tool's program ended; `Err` when recording what it did failed.
   CommandEnded {
     execution: StepExecutionId,
     end: Result<CommandFinished, StoreError>,
   },
+}
+
+/// Why following an agent failed: the project database, or the coordinator link that answers the messages sent to the
+/// agent while its turn runs.
+#[derive(Debug, Error)]
+pub(in super::super) enum WorkerError {
+  #[error(transparent)]
+  Store(#[from] StoreError),
+  #[error(transparent)]
+  Link(#[from] LinkError),
+}
+
+impl From<WorkerError> for ExecutionError {
+  fn from(error: WorkerError) -> Self {
+    match error {
+      WorkerError::Store(error) => Self::Store(error),
+      WorkerError::Link(error) => Self::Link(error),
+    }
+  }
 }
 
 pub(in super::super) struct ApprovalDecision {
@@ -206,6 +233,8 @@ pub(in super::super) struct Worker {
   pub(in super::super) checks: Vec<ProjectTool>,
   /// People's messages sent now, for the running turn.
   pub(in super::super) steers: mpsc::UnboundedReceiver<Vec<Message>>,
+  /// Where the executor keeps the copies of the files attached to them that the agent is given.
+  pub(in super::super) attachments: PathBuf,
   /// Auto mode's review of the waiting approval, while it is under way.
   pub(super) reviewing: Option<review::Reviewing>,
   /// Where the reviewer's connection and a native reviewer's API key are read.
@@ -223,11 +252,16 @@ enum RelayClosed {
   Question,
 }
 
+/// The coordinator's ends a worker gets: its sink, and a link of the worker's own.
+pub(in super::super) type Coordinator = (Box<dyn Sink>, Box<dyn CoordinatorLink + Send>);
+
 pub(super) struct Watch {
   pub(super) db: ProjectDb,
   /// Where the invocation's transcript and the changes to its rows, its messages, questions and tool requests are
   /// recorded.
   pub(super) sink: Box<dyn Sink>,
+  /// Where the messages sent to the agent while its turn runs, and the files attached to them, are asked for.
+  pub(super) link: Box<dyn CoordinatorLink + Send>,
   pub(super) invocation: Invocation,
   pub(super) tracker: InvocationTracker,
   edits: FirstEditTracker,
@@ -274,8 +308,8 @@ pub(super) struct Watch {
 
 impl Watch {
   /// Follows `invocation`, whose searches of the code index count when it got the index, as recorded before it
-  /// started, and records what it does in `sink`.
-  fn open(root: &Path, invocation: &Invocation, sink: Box<dyn Sink>) -> Result<Self, StoreError> {
+  /// started, records what it does in the coordinator's sink and asks its link.
+  fn open(root: &Path, invocation: &Invocation, (sink, link): Coordinator) -> Result<Self, StoreError> {
     let db = ProjectDb::open(root)?;
     let index_given = matches!(
       db.invocation_code_index(invocation.id)?,
@@ -284,6 +318,7 @@ impl Watch {
     Ok(Self {
       db,
       sink,
+      link,
       invocation: invocation.clone(),
       tracker: InvocationTracker::default(),
       edits: FirstEditTracker::new(index_given),
@@ -395,16 +430,16 @@ impl Worker {
   /// ended: the agent's end stops a review still under way, which then records what it cost and hands its
   /// tokens to the run before the run hears of the end. So the run, still listening, counts them toward
   /// its budget and the step's, once, before another invocation of the step reads what the step used.
-  /// `reviews_ended` is the other end of [`Worker::reviews_held`]. What the agent does is recorded in `sink`, the
-  /// coordinator's.
-  pub(in super::super) async fn work(mut self, mut reviews_ended: mpsc::Receiver<Infallible>, sink: Box<dyn Sink>) {
+  /// `reviews_ended` is the other end of [`Worker::reviews_held`]. What the agent does is recorded in the sink of
+  /// `ends`, the coordinator's, and what is sent to it is asked through its link.
+  pub(in super::super) async fn work(mut self, mut reviews_ended: mpsc::Receiver<Infallible>, ends: Coordinator) {
     let execution = self.invocation.execution;
     let events = self.events.clone();
     let mcp_file = self.mcp_file.take();
     let end = if self.is_native() {
-      self.follow_native(sink).await
+      self.follow_native(ends).await.map_err(WorkerError::from)
     } else {
-      self.follow(sink).await
+      self.follow(ends).await
     };
     // The worker, its own holder and the review under way are gone; this ends once every review has.
     if let Some(never) = reviews_ended.recv().await {

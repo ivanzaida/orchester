@@ -19,13 +19,13 @@ use tokio::time::{Instant, sleep};
 
 use super::{
   super::{
-    super::sink::Sink,
     app_server::{AppServerFailure, AppServerSession},
     approval::Awaiting,
     claude_approval::ClaudeApprovals,
     relay::{CODEX_RELAYS, Listening, Relayed},
   },
-  Driver, FLUSH_INTERVAL, Finished, RelayClosed, Stop, StopCause, TURN_GRACE, Transport, Watch, Worker, review,
+  Coordinator, Driver, FLUSH_INTERVAL, Finished, RelayClosed, Stop, StopCause, TURN_GRACE, Transport, Watch, Worker,
+  WorkerError, review,
 };
 use crate::supervisor::{ProcessEvent, ProcessExit};
 
@@ -42,8 +42,8 @@ async fn next_event(driver: &mut Driver) -> Option<ProcessEvent> {
 }
 
 impl Worker {
-  pub(super) async fn follow(mut self, sink: Box<dyn Sink>) -> Result<Finished, StoreError> {
-    let mut watch = Watch::open(&self.root, &self.invocation, sink)?;
+  pub(super) async fn follow(mut self, ends: Coordinator) -> Result<Finished, WorkerError> {
+    let mut watch = Watch::open(&self.root, &self.invocation, ends)?;
     self.initialize_app_server(&mut watch).await?;
     let mut flush = tokio::time::interval(FLUSH_INTERVAL);
     let grace = sleep(Duration::ZERO);
@@ -55,8 +55,8 @@ impl Worker {
       tokio::select! {
         event = next_event(&mut self.driver) => match event {
           Some(ProcessEvent::Output { stream, line }) => self.output(&mut watch, stream, &line).await?,
-          Some(ProcessEvent::Exited(exit)) => return self.finish(watch, &exit),
-          None => return self.finish(watch, &ProcessExit::WaitFailed { reason: String::new() }),
+          Some(ProcessEvent::Exited(exit)) => return Ok(self.finish(watch, &exit)?),
+          None => return Ok(self.finish(watch, &ProcessExit::WaitFailed { reason: String::new() })?),
         },
         _ = flush.tick() => self.tick(&mut watch).await?,
         decision = self.decisions.recv(), if deciding => match decision {
@@ -121,7 +121,7 @@ impl Worker {
   }
 
   /// A line the CLI wrote: what it says, the messages sent now it can take, and a stop that waited for it.
-  async fn output(&mut self, watch: &mut Watch, stream: OutputStream, line: &str) -> Result<(), StoreError> {
+  async fn output(&mut self, watch: &mut Watch, stream: OutputStream, line: &str) -> Result<(), WorkerError> {
     let commands = watch.commands.len();
     self.receive_output(watch, stream, line).await?;
     self.steer_early(watch).await?;
@@ -193,7 +193,7 @@ impl Worker {
     Ok(false)
   }
 
-  async fn receive_output(&mut self, watch: &mut Watch, stream: OutputStream, line: &str) -> Result<(), StoreError> {
+  async fn receive_output(&mut self, watch: &mut Watch, stream: OutputStream, line: &str) -> Result<(), WorkerError> {
     // A queued readiness reply after cancellation must never start a model turn.
     if watch.stop.is_some() && self.app_server().is_some_and(AppServerSession::awaits_turn) {
       return Ok(());
@@ -255,7 +255,7 @@ impl Worker {
 
   /// What the CLI said of the messages sent now: Codex's answers to them and the ones Claude Code
   /// took. A turn Claude Code ended closes its input: it exits once it has read what it was given.
-  fn took_input(&mut self, watch: &mut Watch) -> Result<(), StoreError> {
+  fn took_input(&mut self, watch: &mut Watch) -> Result<(), WorkerError> {
     match &mut self.driver {
       Driver::Process {
         transport: Transport::AppServer(app),
@@ -303,16 +303,16 @@ impl Worker {
     watch.commands.is_empty() && !self.app_server().is_some_and(AppServerSession::has_active_tools)
   }
 
-  async fn app_update(&mut self, watch: &mut Watch, update: Update) -> Result<(), StoreError> {
+  async fn app_update(&mut self, watch: &mut Watch, update: Update) -> Result<(), WorkerError> {
     match update {
-      Update::Activity(event) => self.observe(watch, event),
-      Update::Approval(request) => self.request_approval(watch, request).await,
-      Update::Question(pending) => self.request_codex_question(watch, pending),
+      Update::Activity(event) => Ok(self.observe(watch, event)?),
+      Update::Approval(request) => Ok(self.request_approval(watch, request).await?),
+      Update::Question(pending) => Ok(self.request_codex_question(watch, pending)?),
       Update::QuestionRefused {
         response,
         question,
         reason,
-      } => self.refuse_question(watch, response, (question, reason)).await,
+      } => Ok(self.refuse_question(watch, response, (question, reason)).await?),
       Update::Declined(response) => {
         // A process that cannot take the answer is ending; its exit says how.
         if let Some(process) = self.driver.process()

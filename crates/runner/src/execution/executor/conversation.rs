@@ -11,14 +11,15 @@ use orchester_core::{
   conversation::{self, AgentMessage, Arrival, Delivery, Message, MessageBody},
   id::{ResourceId, StepExecutionId},
   run::{Invocation, RunStatus, StepExecutor, StepFailure, StepOutcome, StepOutput},
-  store::ConversationStore,
   time::Timestamp,
 };
 use orchester_ipc::Event;
-use orchester_store::{AttachmentOwner, MessageRecord, StoreError};
+use orchester_store::MessageRecord;
 
 use super::{
+  attached::{self, AttachedError},
   control::{Ack, answer},
+  link::messages as message_link,
   question::held_by_question,
   run::{ExecutionError, RunTask},
   step::Active,
@@ -44,7 +45,7 @@ impl RunTask {
       return Ok(());
     }
     executions.sort_unstable();
-    let messages = self.db.messages(self.run.task())?;
+    let messages = message_link::messages(&*self.link, self.run.task())?;
     for execution in executions {
       let Some(profile) = self.profile_of(execution) else {
         continue;
@@ -89,7 +90,7 @@ impl RunTask {
     let Some(profile) = self.profile_of(execution) else {
       return Ok(Vec::new());
     };
-    let messages = self.db.messages(self.run.task())?;
+    let messages = message_link::messages(&*self.link, self.run.task())?;
     Ok(
       messages
         .into_iter()
@@ -104,13 +105,16 @@ impl RunTask {
     self.steered.retain(|_, holder| *holder != execution);
   }
 
-  /// The files people attached to `messages`, in their order, as an agent that reads them is given them.
-  pub(super) fn attached_to(&self, messages: &[Message]) -> Result<Vec<AttachedFile>, StoreError> {
-    let mut attached = Vec::new();
+  /// The files people attached to `messages`, in their order, as an agent that reads them is given them: asked
+  /// through the link and kept in the executor's attachments folder ([`attached`]).
+  pub(super) fn attached_to(&self, messages: &[Message]) -> Result<Vec<AttachedFile>, AttachedError> {
+    let folder = self.execution.attachments();
+    let mut files = Vec::new();
     for message in messages {
-      attached.extend(self.db.attached_files(AttachmentOwner::Message(message.id()))?);
+      let contents = message_link::attached(&*self.link, message.id())?;
+      files.extend(attached::kept_in(&folder, contents)?);
     }
-    Ok(attached)
+    Ok(files)
   }
 
   /// `messages` went to `execution`'s agent with `invocation`, which started with them, as
@@ -150,9 +154,7 @@ impl RunTask {
     output: &StepOutput,
   ) -> Result<(), ExecutionError> {
     let now = Timestamp::now();
-    let mut acknowledged: Vec<Message> = self
-      .db
-      .messages(self.run.task())?
+    let mut acknowledged: Vec<Message> = message_link::messages(&*self.link, self.run.task())?
       .into_iter()
       .filter(
         |message| matches!(message.delivery(), Some(Delivery::Delivered { execution: to, .. }) if to == execution),
@@ -242,7 +244,7 @@ impl RunTask {
     if !succeeded || self.board.is_stopping() {
       return Ok(false);
     }
-    let messages = self.db.messages(self.run.task())?;
+    let messages = message_link::messages(&*self.link, self.run.task())?;
     let Some(step) = conversation::follow_up_step(&self.run, &messages) else {
       return Ok(false);
     };

@@ -128,7 +128,7 @@ fn orchestrator_git_reads_refuse_a_folder_that_is_no_repository() {
   let plain = scratch.dir.path().join("plain");
   std::fs::create_dir_all(&plain).expect("a plain folder");
   let called = orchester_workspace::orchestrator::git::call(
-    &scratch.programs,
+    (&scratch.programs, &super::scratch::NoRuns),
     &plain,
     ("git_status", &serde_json::Map::new()),
     (false, orchester_workspace::orchestrator::git::Timeouts::STANDARD),

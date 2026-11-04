@@ -10,6 +10,7 @@ use orchester_core::{
   connection::{AgentProvider, ApiEndpoint, CheckResult, NativeModel},
   id::{ChatId, ChatMessageId, ConnectionId, IdempotencyKey, ResourceId, RunId, StepExecutionId, TaskId},
   integration::Leftovers,
+  orchestrator::run_git::{RunGitAnswer, RunGitRequest},
   permission::AgentPermissions,
   question::GivenAnswer,
   resource::StepKey,
@@ -302,6 +303,11 @@ pub enum Command {
   /// never does. Answered with [`Reply::RunFolderState`], [`FolderState::Unknown`] when the run has no folder any more
   /// or git cannot tell.
   RunFolderState { run: RunId },
+  /// git of the Orchestrator chat in a run's worktree, which the runner runs there (protocol 45,
+  /// `docs/architecture/remote-runners.md` rule 5). Answered with [`Reply::RunGit`]; [`Rejection::RunNotFound`] for no
+  /// such run, [`Rejection::RunNotEnded`] for a write, or git that does not only read, before the run ended, and
+  /// [`Rejection::WorktreeRemoved`] when its worktree is gone.
+  RunGit(RunGitRequest),
 }
 
 /// Which session a runner serves, from the desktop's side.
@@ -509,6 +515,8 @@ pub enum Reply {
     run: RunId,
     state: FolderState,
   },
+  /// The answer to [`Command::RunGit`].
+  RunGit(RunGitAnswer),
   Rejected(Rejection),
 }
 

@@ -27,15 +27,17 @@ use orchester_core::{
   connection::app_server::PendingApproval,
   conversation::{Arrival, Delivery, Message, NotTaken, Undelivered},
   id::MessageId,
-  store::ConversationStore,
   time::Timestamp,
 };
 use orchester_ipc::Event;
-use orchester_store::{AttachmentOwner, MessageRecord, StoreError};
+use orchester_store::MessageRecord;
 
 use super::{
-  super::app_server::{AppServerSession, DENIAL_STEER, STEER_REQUEST, SteerAnswer},
-  Driver, Transport, Watch, Worker,
+  super::{
+    super::{attached::kept_in, link::messages as message_link},
+    app_server::{AppServerSession, DENIAL_STEER, STEER_REQUEST, SteerAnswer},
+  },
+  Driver, Transport, Watch, Worker, WorkerError,
 };
 use crate::supervisor::Supervised;
 
@@ -107,19 +109,20 @@ impl Steering {
 impl Worker {
   /// Hands `messages`, with the files attached to them, to the CLI for its running turn. One that cannot be written
   /// in time, or whose attached files cannot be read, is not delivered; one for a turn that already ended stays
-  /// queued.
-  pub(super) async fn steer(&mut self, watch: &mut Watch, messages: Vec<Message>) -> Result<(), StoreError> {
+  /// queued. The files are asked through the worker's link and kept in the executor's attachments folder.
+  pub(super) async fn steer(&mut self, watch: &mut Watch, messages: Vec<Message>) -> Result<(), WorkerError> {
     for message in messages {
       if self.app_server().is_some_and(AppServerSession::awaits_turn) {
         watch.steering.early.push(message);
         continue;
       }
-      let attached = watch.db.attached_files(AttachmentOwner::Message(message.id()))?;
+      let contents = message_link::attached(&*watch.link, message.id())?;
+      let attached = kept_in(&self.attachments, contents);
       let Some(Written {
         written,
         results_before,
         taken,
-      }) = self.write(&message, &attached).await
+      }) = self.write(&message, attached).await
       else {
         tracing::info!(message = %message.id(), "the turn ended before the message; it is read at its end");
         continue;
@@ -141,7 +144,7 @@ impl Worker {
   }
 
   /// Gives Codex's turn, once it has started, the messages that came before it.
-  pub(super) async fn steer_early(&mut self, watch: &mut Watch) -> Result<(), StoreError> {
+  pub(super) async fn steer_early(&mut self, watch: &mut Watch) -> Result<(), WorkerError> {
     if watch.steering.early.is_empty() || !self.app_server().is_some_and(AppServerSession::turn_working) {
       return Ok(());
     }
@@ -150,8 +153,9 @@ impl Worker {
   }
 
   /// Writes `message` and its `attached` files to the CLI for its running turn: Codex gets them as `turn/steer`
-  /// input items, Claude Code as one stream-json user message; `None` when no turn runs that could take it.
-  async fn write(&self, message: &Message, attached: &[AttachedFile]) -> Option<Written> {
+  /// input items, Claude Code as one stream-json user message; `None` when no turn runs that could take it. Files
+  /// whose copies could not be kept are written as files that cannot be read are: not at all.
+  async fn write(&self, message: &Message, attached: io::Result<Vec<AttachedFile>>) -> Option<Written> {
     let text = message.body().as_str();
     let Driver::Process { transport, process } = &self.driver else {
       return None;
@@ -164,7 +168,7 @@ impl Worker {
     match transport {
       Transport::AppServer(app) if app.turn_working() => {
         let id = format!("{STEER_REQUEST}{}", message.id());
-        let input = match codex_items(text, attached) {
+        let input = match attached.and_then(|attached| codex_items(text, &attached)) {
           Ok(input) => input,
           Err(error) => return Some(unread(error)),
         };
@@ -176,7 +180,7 @@ impl Worker {
         })
       }
       Transport::Claude(claude) if process.takes_input() => {
-        let content = match claude_content(text, attached) {
+        let content = match attached.and_then(|attached| claude_content(text, &attached)) {
           Ok(content) => content,
           Err(error) => return Some(unread(error)),
         };
@@ -217,7 +221,7 @@ impl Worker {
   /// Codex's answers to `turn/steer`: an accepted message waits for its turn to take it, at the latest
   /// as the turn ends; one refused because the turn ended stays queued, any other refusal is not
   /// delivered. A denial's message is only logged when refused.
-  pub(super) fn steer_answered(&self, watch: &mut Watch, answers: Vec<SteerAnswer>) -> Result<(), StoreError> {
+  pub(super) fn steer_answered(&self, watch: &mut Watch, answers: Vec<SteerAnswer>) -> Result<(), WorkerError> {
     for answer in answers {
       if answer.id.starts_with(DENIAL_STEER) {
         if let Some(reason) = &answer.refused {
@@ -259,7 +263,7 @@ impl Worker {
 
   /// The CLI took `text` into its conversation: the message sent with it is delivered, mid-turn, or
   /// at a turn's end when Claude Code ended a turn since it was written (`results`).
-  pub(super) fn input_taken(&self, watch: &mut Watch, text: &str, results: Option<usize>) -> Result<(), StoreError> {
+  pub(super) fn input_taken(&self, watch: &mut Watch, text: &str, results: Option<usize>) -> Result<(), WorkerError> {
     let Some(sent) = watch.steering.take_text(text) else {
       return Ok(());
     };
@@ -276,7 +280,7 @@ impl Worker {
 
   /// Codex's turn ended and kept the messages it accepted but did not show it took: they are
   /// delivered at the turn's end, and not queued for the next turn as well.
-  pub(super) fn kept_at_turn_end(&self, watch: &mut Watch) -> Result<(), StoreError> {
+  pub(super) fn kept_at_turn_end(&self, watch: &mut Watch) -> Result<(), WorkerError> {
     watch.steering.kept_at_end = true;
     let (run, execution, invocation) = (watch.invocation.run, watch.invocation.execution, watch.invocation.id);
     for sent in watch.steering.take_accepted() {
@@ -289,7 +293,7 @@ impl Worker {
 
   /// The CLI did not take message `id` for `reason`: a person's is kept, not delivered; automation's waits for the
   /// turn's end ([`Message::not_taken`]), where the step reads it as it reads any message queued meanwhile.
-  fn not_delivered(&self, watch: &mut Watch, id: MessageId, reason: Undelivered) -> Result<(), StoreError> {
+  fn not_delivered(&self, watch: &mut Watch, id: MessageId, reason: Undelivered) -> Result<(), WorkerError> {
     let (run, execution) = (watch.invocation.run, watch.invocation.execution);
     let became = self.record(watch, id, |message| {
       message.not_taken(run, execution, Timestamp::now(), reason)
@@ -307,10 +311,8 @@ impl Worker {
     watch: &mut Watch,
     id: MessageId,
     change: impl FnOnce(&mut Message) -> Result<T, orchester_core::conversation::MessageError>,
-  ) -> Result<Option<T>, StoreError> {
-    let stored = watch
-      .db
-      .messages(self.task)?
+  ) -> Result<Option<T>, WorkerError> {
+    let stored = message_link::messages(&*watch.link, self.task)?
       .into_iter()
       .find(|message| message.id() == id);
     let pending = |message: &Message| {
