@@ -4,6 +4,7 @@
 
 mod browser;
 mod estimate;
+mod folders;
 mod merge_queue;
 mod run_folder;
 
@@ -364,6 +365,7 @@ async fn answer(
     },
     Command::StopTurn { run } => return later.answer(run, async move { handle.stop_turn(run).await }),
     Command::Browser(ref command) => return later.browser(handle, command.clone()),
+    Command::Folders(ref command) => return later.folders(handle, command.clone()),
     Command::MergeQueue(ref command) => return later.merge_queue(handle, command.clone()),
     Command::EstimateTask { task } => return later.estimate(handle, task),
     Command::RunFolderState { run } => return later.run_folder_state(handle, run),

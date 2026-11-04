@@ -15,6 +15,7 @@ mod chat;
 mod check;
 mod connection;
 mod estimate;
+mod folders;
 mod idle;
 mod lifetime;
 mod merge_queue;
@@ -42,6 +43,7 @@ use tokio::{runtime::Handle, sync::watch, task::JoinSet};
 
 pub use self::{
   answers::AnswerMark,
+  folders::ExecutorFolders,
   idle::ForgetRefusal,
   merge_queue::RunnerWorktrees,
   report::RunnerStatus,
