@@ -19,6 +19,7 @@ mod event;
 mod first_edit;
 mod follow_up;
 mod index_search;
+pub mod inputs;
 mod invocation;
 mod not_started;
 mod number;
