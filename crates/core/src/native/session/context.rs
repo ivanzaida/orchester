@@ -7,7 +7,10 @@ use super::{
   Continuation, LoopAction, LoopEnd, LoopError, LoopFailure, LoopSettings, MAX_COMPACTIONS, NOT_RUN, NativeLoop, Phase,
 };
 use crate::{
-  connection::stream::{AgentEvent, RunnerProblem},
+  connection::{
+    context_use::ContextUse,
+    stream::{AgentEvent, RunnerProblem},
+  },
   native::{
     item::{Item, ToolCallId, UserOrigin},
     model::ModelResponse,
@@ -80,6 +83,17 @@ impl ContextEstimate {
 }
 
 impl NativeLoop {
+  /// How full the conversation's context is after its latest response: the input the provider counted for it, against
+  /// the model's window, an estimate when nobody named one. `None` before a response of the current segment counted
+  /// any.
+  pub fn context_use(&self) -> Option<ContextUse> {
+    let used = self.context.last_input.filter(|used| *used > 0)?;
+    Some(ContextUse::new(
+      used,
+      self.settings.context_window,
+      self.settings.context_window_estimated,
+    ))
+  }
   /// Asks the model for a summary of the segment, with the same system prompt and tools so that the
   /// provider's cache still applies.
   pub(super) fn compact(&mut self, actions: &mut Vec<LoopAction>) {

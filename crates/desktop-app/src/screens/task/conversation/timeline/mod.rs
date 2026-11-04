@@ -17,12 +17,18 @@ mod delivery;
 mod divider;
 mod entry;
 mod message;
+mod model;
+mod permission;
 mod proposal;
 mod result;
 mod switched;
+mod todo;
 mod working;
 
-use std::{collections::HashMap, sync::Arc};
+use std::{
+  collections::{HashMap, HashSet},
+  sync::Arc,
+};
 
 use lurq::{
   app::{component::Component, ctx::Ctx, theme::SpacingSize},
@@ -36,29 +42,37 @@ use orchester_core::{
   project::TaskKey,
   run::{DecidedBy, DecidedToolApproval, PendingToolApproval, ToolApprovalDecision},
 };
-use orchester_workspace::tasks::{
-  conversation::orchestrator::{ChatMerge, Proposal},
-  detail::TaskDetail,
-  timeline::{
-    Item, ItemKind,
-    delivery::DeliveryLine,
-    group::unwrapped,
-    view::{Row, Shown},
-    waits_for_you,
+use orchester_workspace::{
+  files::Version,
+  tasks::{
+    conversation::orchestrator::{ChatMerge, Proposal},
+    detail::TaskDetail,
+    timeline::{
+      Item, ItemKind,
+      delivery::DeliveryLine,
+      group::unwrapped,
+      view::{Row, Shown},
+      waits_for_you,
+    },
+    transcript::{Entry, EntryKind},
   },
-  transcript::{Entry, EntryKind},
 };
 
 use self::proposal::{ProposalProps, ProposalRow};
 pub(crate) use self::{divider::step_label, message::links};
 pub(super) use self::{
   message::person_message,
+  permission::rule_text,
   proposal::ChatProject,
   working::{Wait, Working},
 };
-use super::shared::Shared;
+use super::{
+  search::marks::{Marks, row_mark},
+  shared::Shared,
+};
 use crate::{
   navigation::{Navigation, link::Open},
+  project::ShownProject,
   routes::{ProjectPage, Route, TaskView},
   theme::ExtraSpacing,
   ui::chat::{
@@ -72,6 +86,8 @@ use crate::{
 #[derive(Clone, PartialEq)]
 pub(super) struct Timeline {
   pub(super) project: ProjectId,
+  /// The project as the window shows it, whose run changes move the context meter of the step at work.
+  pub(super) shown_project: ShownProject,
   /// The project as the Orchestrator chat's proposals are decided in it.
   pub(super) chat_project: ChatProject,
   /// The projects' names, for what a link to another project's place says.
@@ -88,6 +104,12 @@ pub(super) struct Timeline {
   pub(super) decided: Arc<Vec<DecidedToolApproval>>,
   /// The Orchestrator chat's merge of the run, when it carried one out (ORC-69).
   pub(super) merged_by: Option<ChatMerge>,
+  /// The run goes on, so the lists of its steps at work are pinned over the composer, not on their dividers.
+  pub(super) pins: bool,
+  /// What the open search marks.
+  pub(super) search: Option<Marks>,
+  /// The run's pull request with its CI, for its lines among the rows (ORC-335).
+  pub(super) ci: Option<crate::screens::task::ci::timeline::CiShare>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for Timeline {}
@@ -139,17 +161,51 @@ impl Timeline {
   fn run_number(&self) -> u32 {
     self.detail.run.as_ref().map_or(0, |run| run.run.number().get())
   }
+
+  /// Who sent message `id` as a Fix CI, if one did (ORC-335).
+  fn fixed_by(&self, id: orchester_core::id::MessageId) -> Option<orchester_core::pull_request::ci::fix::FixedBy> {
+    use orchester_core::pull_request::ci::fix::FixEventKind;
+    self
+      .detail
+      .run
+      .as_ref()?
+      .ci_fixes
+      .events
+      .iter()
+      .find_map(|event| match event.kind {
+        FixEventKind::Sent { message, by } if message == id => Some(by),
+        _ => None,
+      })
+  }
+
+  /// Where the files a person's message mentions are: the run's worktree, or the project's checkout before a run.
+  fn files_at(&self) -> Version {
+    self
+      .detail
+      .run
+      .as_ref()
+      .map_or(Version::Checkout, |run| Version::Run(run.run.id()))
+  }
 }
 
-/// Rows a person opened or folded, by row key: a step, a tool group, a tool row with output.
+/// Rows a person opened or folded, by row key: a step, a tool group, a tool row with output; and the rows a search
+/// opened to show its current match, which fold again when the search closes.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub(super) struct OpenRows(HashMap<Arc<str>, bool>);
+pub(super) struct OpenRows {
+  chosen: HashMap<Arc<str>, bool>,
+  searched: HashSet<Arc<str>>,
+}
 
 impl lurq::app::component::DevtoolsInspectable for OpenRows {}
 
 impl OpenRows {
   pub(super) fn is_open(&self, key: &str, default: bool) -> bool {
-    self.0.get(key).copied().unwrap_or(default)
+    self.searched.contains(key) || self.chosen.get(key).copied().unwrap_or(default)
+  }
+
+  /// Whether the search opened the row `key`.
+  pub(super) fn opened_by_search(&self, key: &str) -> bool {
+    self.searched.contains(key)
   }
 }
 
@@ -180,6 +236,11 @@ impl Toggles {
     self.rows.get().is_open(key, default)
   }
 
+  /// Whether the search opened the row `key`, to show its current match.
+  pub(super) fn opened_by_search(&self, key: &str) -> bool {
+    self.rows.get().opened_by_search(key)
+  }
+
   /// What the person opened or folded so far; reading it in a render re-renders it when they open or fold a row.
   pub(super) fn open_rows(&self) -> OpenRows {
     self.rows.get()
@@ -190,17 +251,36 @@ impl Toggles {
     self.follow.hold_in_place();
     self.rows.update(move |rows| {
       for key in keys {
-        rows.0.insert(key, true);
+        rows.chosen.insert(key, true);
       }
     });
   }
 
+  /// Opens the rows of `keys` for the search, until it closes ([`Toggles::fold_searched`]).
+  pub(super) fn open_for_search(&self, keys: Vec<Arc<str>>) {
+    if keys.iter().all(|key| self.rows.get_untracked().searched.contains(key)) {
+      return;
+    }
+    self.rows.update(move |rows| rows.searched.extend(keys));
+  }
+
+  /// Folds again what the search opened; the chat stays where it is.
+  pub(super) fn fold_searched(&self) {
+    if self.rows.get_untracked().searched.is_empty() {
+      return;
+    }
+    self.follow.hold_in_place();
+    self.rows.update(|rows| rows.searched.clear());
+  }
+
+  /// A press opens or folds the row; one the search opened becomes the person's to fold.
   fn flip(&self, key: &Arc<str>, default: bool) {
     self.follow.hold_in_place();
     let key = key.clone();
     self.rows.update(move |rows| {
-      let open = rows.0.get(&key).copied().unwrap_or(default);
-      rows.0.insert(key, !open);
+      let open = rows.is_open(&key, default);
+      rows.searched.remove(&key);
+      rows.chosen.insert(key, !open);
     });
   }
 }
@@ -272,13 +352,15 @@ fn with_delivery(rows: &[Arc<Row>], delivery: &[Placed]) -> Vec<Line> {
 /// Orchestrator chat's `proposals` for the run, then `working`, the working line while an agent works; *Jump to latest*
 /// under it while it does not follow the run, with what arrived since (`arrived` counts the transcript's entries, the
 /// conversation's messages and the proposals so far; the queue's lines count too). `autopilot`, whether Autopilot
-/// answers the run's requests, leads the rows with its line.
+/// answers the run's requests, leads the rows with its line. While the search is open, the row of its current place
+/// (`found`) is brought into view, and its `track` of marks floats over the chat's end.
 pub(super) fn chat(
   ctx: &mut Ctx,
   follow: &Follow,
   (rows, delivery, autopilot): (&[Arc<Row>], &[Placed], bool),
   (items, proposals): (&[Item], &[Proposal]),
   (working, arrived): (Option<Working>, usize),
+  (found, track): (Option<String>, Option<Element>),
 ) -> Element {
   let arrived = arrived + delivery.len();
   // Until the person scrolls, the first card that waits for them opens the chat instead of its end.
@@ -288,6 +370,7 @@ pub(super) fn chat(
     .map(|item| item.key.to_string());
   let lead = usize::from(autopilot);
   let reveal = follow.follow(rows.len() + delivery.len() + lead, arrived, waiting);
+  let reveal = found.or(reveal);
   let rows: Arc<Vec<RowProps>> = Arc::new(
     autopilot
       .then_some(Line::Autopilot)
@@ -318,6 +401,13 @@ pub(super) fn chat(
     .padding_bottom(SpacingSize::Xs)
     .child(list)
     .child(follow.end(ctx, "conversation-follow-end"));
+  let rows: Element = match track {
+    Some(track) => Stack::with(StackAlignment::TopEnd, [rows.into(), track])
+      .width(Dimension::Pct(100.0))
+      .height(Dimension::Pct(100.0))
+      .into(),
+    None => rows.into(),
+  };
   Stack::new()
     .id("conversation-chat")
     .width(Dimension::Pct(100.0))
@@ -379,14 +469,40 @@ impl Component for RowView {
         ctx.mount_keyed::<ProposalRow>(&props.proposal.key(), props)
       }
     };
+    let mark = match &props.line {
+      Line::Row(row) => Timeline::of(ctx).search.and_then(|marks| marks.row(&on_row(row))),
+      _ => None,
+    };
     // Half the chat's 12 between rows above and under each (`gap` of `RM1e7`).
-    Column::new()
+    let row = Column::new()
       .id(id)
       .width(Dimension::Pct(100.0))
       .padding_horizontal(SpacingSize::Section)
       .padding_vertical(ExtraSpacing::Snug.role())
-      .child(content)
+      .child(content);
+    row_mark(row, mark)
   }
+}
+
+/// The items whose words `row` shows that a search marks on the row: a card, a problem, a notice. A message, an
+/// agent's, a person's or a note the work returned with, fills behind its matched words instead.
+fn on_row(row: &Row) -> Vec<&str> {
+  match row {
+    Row::Item(item) | Row::Line(item) if !is_message(item) => vec![&*item.key],
+    Row::Approvals { items, .. } => items.iter().map(|item| &*item.key).collect(),
+    Row::Item(_)
+    | Row::Line(_)
+    | Row::Agent(_)
+    | Row::Step { .. }
+    | Row::Folded { .. }
+    | Row::NotStarted { .. }
+    | Row::Entry { .. } => Vec::new(),
+  }
+}
+
+/// Whether `item` is a message, its words drawn as one text: a person's, or the note a return came with.
+const fn is_message(item: &Item) -> bool {
+  matches!(item.kind, ItemKind::Message(_) | ItemKind::Mark(_))
 }
 
 fn row_content(ctx: &mut Ctx, row: &Row) -> Element {
@@ -404,18 +520,29 @@ fn row_content(ctx: &mut Ctx, row: &Row) -> Element {
   }
 }
 
-/// A person's message, a card, a problem, a return or restart, the run's switch to Manual, a step's result or the
-/// run's end.
+/// A person's message, a card, a problem, a return or restart, the run's switch to Manual, a change of its
+/// permissions, a step's result or the run's end. A message fills behind what the search found in it.
 fn item_row(ctx: &mut Ctx, timeline: &Timeline, item: &Item) -> Element {
+  let found = || timeline.search.as_ref().and_then(|marks| marks.in_said(&item.key));
   match &item.kind {
-    ItemKind::Message(entry) => person_message(ctx, ((timeline.project, &timeline.chat_project.root), entry)),
+    ItemKind::Message(entry) => person_message(
+      ctx,
+      (
+        (timeline.project, &timeline.chat_project.root, &timeline.files_at()),
+        entry,
+      ),
+      (found().as_ref(), timeline.fixed_by(entry.id)),
+    ),
     ItemKind::Question { .. } | ItemKind::Plan(_) | ItemKind::Approval(_) | ItemKind::Choice(_) => {
       cards::card(ctx, timeline, item)
     }
     ItemKind::Problem(entry) => entry::problem_row(ctx, timeline, &item.key, entry),
-    ItemKind::Mark(mark) => divider::mark(ctx, timeline, mark),
+    ItemKind::Mark(mark) => divider::mark(ctx, timeline, mark, found().as_ref()),
     ItemKind::BaseMoved(mark) => divider::base_moved(ctx, &item.key, mark),
     ItemKind::SwitchedToManual(switched) => switched::row(ctx, switched, item.at),
+    ItemKind::Permission(line) => permission::row(ctx, timeline, (&item.key, line, item.at)),
+    ItemKind::Model(line) => model::row(ctx, timeline, (&item.key, line, item.at)),
+    ItemKind::BackToProfile(back) => model::back_row(ctx, timeline, &item.key, back),
     ItemKind::Result(card) => result::card(ctx, timeline, card),
     ItemKind::End(end) => divider::end(ctx, timeline, end, item.at),
     // An agent's message, a step and a tool group are rows of their own (`Row::Agent`, `Row::Step`).

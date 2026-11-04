@@ -30,6 +30,13 @@
 //!   command, no MCP server but its own, no auto memory ([`super::without_auto_memory`]).
 //! - The system prompt (`crate::orchestrator::instructions`) is a file given on every turn, a resumed one too.
 //! - Sessions are kept on disk so that the next turn resumes them; no step result schema is asked for.
+//! - A person's *Compact* (ORC-309) is a turn of its own that resumes the session with `/compact` as its only prompt:
+//!   the same arguments, but without `--disable-slash-commands`, since `/compact` is a slash command.
+//! - A message that carries a skill the person chose (ORC-634, [`crate::conversation::skill`]) starts its turn with a
+//!   session-only plugin that holds that skill alone (`--plugin-dir <folder>`) and without `--disable-slash-commands`,
+//!   which would turn the plugin's skill off too; the prompt is the skill's command with the person's words after it.
+//!   `--setting-sources ""` stays, so the person's own skills, plugins and hooks still do not load: what such a turn
+//!   gets besides the chosen skill are the CLI's bundled ones (2.1.316: `code-review`, `debug`, `simplify`, …).
 
 use std::{
   ffi::OsString,
@@ -40,9 +47,11 @@ use super::{ClaudeSession, InvocationError, agent_environment, first_line, witho
 use crate::{
   attachment::input::AttachedFile,
   command::Command,
+  connection::compaction::COMPACT_COMMAND,
+  conversation::skill::claude_prompt,
   orchestrator::{MAX_TURNS, instructions::SERVER},
   permission::claude::{read_file_rule, read_rule},
-  resource::CommandEnvironment,
+  resource::{CommandEnvironment, Slug},
 };
 
 /// Settings that keep the built-in reading tools in the working folder.
@@ -69,11 +78,32 @@ pub struct ClaudeChat<'a> {
   pub denied: &'a [PathBuf],
   /// Files the agent must not read either.
   pub denied_files: &'a [PathBuf],
+  /// The skill the message carries, when the turn loads it as the CLI's own.
+  pub skill: Option<ChatSkill<'a>>,
+}
+
+/// A skill a turn loads as Claude Code's own (ORC-634): the folder of the session-only plugin that holds it
+/// ([`crate::conversation::skill::CLAUDE_PLUGIN`]) and its name there.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ChatSkill<'a> {
+  pub plugin: &'a Path,
+  pub slug: &'a Slug,
 }
 
 impl ClaudeChat<'_> {
   /// Arguments after the program, in order; the same on Windows and macOS.
   pub fn args(&self) -> Vec<String> {
+    self.arguments(false)
+  }
+
+  /// The arguments of a turn that compacts the session it resumes (ORC-309): those of a turn, but slash commands stay
+  /// on, since `/compact` is one; the prompt is that command alone, so the agent is given no other. A compaction loads
+  /// no skill.
+  pub fn compaction_args(&self) -> Vec<String> {
+    self.arguments(true)
+  }
+
+  fn arguments(&self, compaction: bool) -> Vec<String> {
     let mut args: Vec<String> = [
       "-p",
       "--input-format",
@@ -90,15 +120,12 @@ impl ClaudeChat<'_> {
     if let Some(effort) = self.effort {
       args.extend(["--effort".to_owned(), effort.to_owned()]);
     }
-    args.extend(
-      [
-        "--strict-mcp-config",
-        "--setting-sources",
-        "",
-        "--disable-slash-commands",
-      ]
-      .map(str::to_owned),
-    );
+    args.extend(["--strict-mcp-config", "--setting-sources", ""].map(str::to_owned));
+    match self.skill.filter(|_| !compaction) {
+      Some(skill) => args.extend(["--plugin-dir".to_owned(), path_text(skill.plugin)]),
+      None if !compaction => args.push("--disable-slash-commands".to_owned()),
+      None => {}
+    }
     args.extend(["--system-prompt-file".to_owned(), path_text(self.system_prompt)]);
     args.extend(["--mcp-config".to_owned(), path_text(self.mcp_config)]);
     args.extend(["--settings".to_owned(), BLOCK_OUTSIDE_READS.to_owned()]);
@@ -124,24 +151,54 @@ impl ClaudeChat<'_> {
   }
 
   /// The command of the turn that answers `message` with the files the person attached to it (`attached`): in the
-  /// project folder, with the allowed part of `environment` and the variables the project adds (`project`).
+  /// project folder, with the allowed part of `environment` and the variables the project adds (`project`). A turn
+  /// that loads a skill gets the skill's command with `message`, the person's words without the skill's block, after
+  /// it.
   pub fn command(
     &self,
     (message, attached): (&str, &[AttachedFile]),
     environment: impl IntoIterator<Item = (OsString, OsString)>,
     project: &CommandEnvironment,
   ) -> Result<Command, InvocationError> {
-    for path in [self.folder, self.system_prompt, self.mcp_config] {
+    let prompt = match self.skill {
+      Some(skill) => first_line(&claude_prompt(skill.slug, message), attached)?,
+      None => first_line(message, attached)?,
+    };
+    self.started(self.args(), prompt, environment, project)
+  }
+
+  /// The command of the turn that compacts the session it resumes with [`COMPACT_COMMAND`] ([`Self::compaction_args`]).
+  pub fn compaction_command(
+    &self,
+    environment: impl IntoIterator<Item = (OsString, OsString)>,
+    project: &CommandEnvironment,
+  ) -> Result<Command, InvocationError> {
+    let prompt = first_line(COMPACT_COMMAND, &[])?;
+    self.started(self.compaction_args(), prompt, environment, project)
+  }
+
+  fn started(
+    &self,
+    args: Vec<String>,
+    input: String,
+    environment: impl IntoIterator<Item = (OsString, OsString)>,
+    project: &CommandEnvironment,
+  ) -> Result<Command, InvocationError> {
+    let plugin = self.skill.map(|skill| skill.plugin);
+    for path in [self.folder, self.system_prompt, self.mcp_config]
+      .into_iter()
+      .chain(plugin)
+    {
       if path.to_str().is_none() {
         return Err(InvocationError::NotUnicode(path.to_path_buf()));
       }
     }
     let mut variables = agent_environment(environment);
     project.add_to(&mut variables);
-    let command = Command::new(self.executable, self.args())
+    let command = Command::new(self.executable, args)
       .with_current_dir(self.folder)
       .with_environment(variables)
-      .with_interactive_input(first_line(message, attached)?);
+      .with_interactive_input(input);
     Ok(without_auto_memory(command))
   }
 }

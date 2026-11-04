@@ -127,10 +127,12 @@ impl ConversationSpacing {
 pub enum ConversationRadius {
   /// 8: a problem row (`IxIMv`).
   ProblemRow,
+  /// 1: a mark on the search's track (`Mark` `XVrRm` in `Match marks` `z4lnO5`).
+  TrackMark,
 }
 
 impl ConversationRadius {
-  pub const ALL: [Self; 1] = [Self::ProblemRow];
+  pub const ALL: [Self; 2] = [Self::ProblemRow, Self::TrackMark];
 
   pub fn role(self) -> RadiusSize {
     RadiusSize::extra(self.name())
@@ -139,15 +141,21 @@ impl ConversationRadius {
   const fn name(self) -> &'static str {
     match self {
       Self::ProblemRow => "conversation_problem_row",
+      Self::TrackMark => "conversation_track_mark",
     }
   }
 
   pub const fn value(self) -> f32 {
     match self {
       Self::ProblemRow => 8.0,
+      Self::TrackMark => 1.0,
     }
   }
 }
+
+/// A mark on the search's track for a place that is not the current one, at 55 % (`z4lnO5`,
+/// `docs/design/transcript-search.md` › *Scroll track*); the current one is whole.
+pub const TRACK_MARK_OPACITY: f32 = 0.55;
 
 /// Shadows of the conversation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

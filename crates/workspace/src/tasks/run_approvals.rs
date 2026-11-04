@@ -1,8 +1,11 @@
 //! What a run keeps of its approvals, as the task page and the status bar show it: whether Orchester
 //! auto-approves its requests (the run's own choice — *Approve everything in this run*, the run's switch,
 //! *Stop* — else whether the run is in Autopilot, `orchester_core::run::auto_approves`), its mode, its rules from
-//! Approve similar and Always allow, and how its requests were answered. The desktop writes the run's choice, switches
-//! it to Manual and revokes rules; the runner reads them at each request, so a change applies from the next one.
+//! Approve similar and Always allow, and how its requests were answered. The desktop writes the run's choice,
+//! switches it to Manual and revokes rules; the runner reads them at each request, so a change applies from the next
+//! one. A change from the run's permissions menu
+//! ([`change_permissions_in`]) is recorded as a permission event for its Conversation, and so is automation's refused
+//! asking to widen the run.
 
 use std::{path::Path, sync::Arc};
 
@@ -10,7 +13,8 @@ use orchester_core::{
   id::RunId,
   resource::ModelId,
   run::{
-    Answerer, ApprovalRule, ApprovalRuleId, EffectiveMode, ManualSwitch, Run, TaskPhase, auto_approves,
+    AllowAutopilot, Answerer, ApprovalRule, ApprovalRuleId, EffectiveMode, ManualSwitch, PermissionEvent,
+    PermissionEventKind, Run, RunPermissionChange, TaskPhase, WideningPersonOnly, auto_approves,
     review::{ReviewerUnavailable, resolve_reviewer},
   },
   store::{ConnectionStore, RunStore, TaskStore},
@@ -18,6 +22,7 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_store::{DecisionCounts, ProjectDb, StoreError};
+use thiserror::Error;
 
 use super::detail::run_store_error;
 
@@ -86,6 +91,80 @@ pub fn apply_in(repo_root: &Path, run: RunId, change: RunApprovalChange) -> Resu
   }
 }
 
+/// Why a change from a run's permissions menu was not made.
+#[derive(Debug, Error)]
+pub enum PermissionChangeError {
+  /// Automation asked to widen the run: refused, and the refusal recorded.
+  #[error(transparent)]
+  PersonOnly(#[from] WideningPersonOnly),
+  #[error(transparent)]
+  Store(#[from] StoreError),
+}
+
+/// Applies `change`, asked `by` a person or automation from the permissions menu of run `run` of the project at
+/// `repo_root`, and records it for the run's Conversation; a change that changes nothing records nothing. Widening is
+/// a person's alone: automation's asking for it is refused, and the refusal is recorded.
+pub fn change_permissions_in(
+  repo_root: &Path,
+  run: RunId,
+  change: RunPermissionChange,
+  by: Answerer,
+) -> Result<(), PermissionChangeError> {
+  let mut db = ProjectDb::open(repo_root)?;
+  let at = Timestamp::now();
+  let event = |kind| PermissionEvent { at, by, kind };
+  let change = match change.asked_by(by) {
+    Ok(change) => change,
+    Err(refused) => {
+      db.record_permission_event(run, &event(PermissionEventKind::Refused))?;
+      return Err(refused.into());
+    }
+  };
+  let mode = db.run_approval_mode(run)?;
+  let everything = db.run_auto_approve(run)? == Some(true);
+  let recorded = match change {
+    RunPermissionChange::ManualForRun => {
+      db.switch_run_to_manual(run, ManualSwitch { at, by })?;
+      // The switch is the run's own record; approving everything stops with it, as Manual narrows.
+      if everything {
+        Some(stop_everything(&mut db, run)?)
+      } else {
+        None
+      }
+    }
+    RunPermissionChange::ApproveEverything if !everything => {
+      db.set_run_auto_approve(run, Some(true))?;
+      Some(PermissionEventKind::Everything { was: mode })
+    }
+    RunPermissionChange::StopApprovingEverything if everything => Some(stop_everything(&mut db, run)?),
+    RunPermissionChange::ApproveEverything | RunPermissionChange::StopApprovingEverything => None,
+    RunPermissionChange::Revoke(rule) => {
+      let scope = db
+        .approval_rules(run)?
+        .into_iter()
+        .find(|stored| stored.id == rule)
+        .map(|stored| stored.scope);
+      match scope {
+        Some(scope) if db.revoke_approval_rule(run, rule, at)? => Some(PermissionEventKind::Revoked { scope }),
+        _ => None,
+      }
+    }
+  };
+  if let Some(kind) = recorded {
+    db.record_permission_event(run, &event(kind))?;
+  }
+  Ok(())
+}
+
+/// Stops `run` approving everything, back to its mode: in Autopilot it follows the mode again, in Manual nothing
+/// approves automatically. The event that records it.
+fn stop_everything(db: &mut ProjectDb, run: RunId) -> Result<PermissionEventKind, StoreError> {
+  let back_to = db.run_approval_mode(run)?;
+  let chosen = if back_to.is_autopilot() { None } else { Some(false) };
+  db.set_run_auto_approve(run, chosen)?;
+  Ok(PermissionEventKind::Stopped { back_to })
+}
+
 /// The reviewer Manual asks, as the app names it: the connection and the model.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ReviewerShown {
@@ -138,10 +217,14 @@ pub struct RunApprovals {
   pub chosen: Option<bool>,
   /// The mode the run answers its agents' requests in now.
   pub mode: EffectiveMode,
+  /// The project's *Allow Autopilot for agents in this project*.
+  pub allow_autopilot: AllowAutopilot,
   /// When and by whom the run was switched to Manual for itself, once it was and that was recorded.
   pub switched: Option<ManualSwitch>,
   pub rules: Vec<ApprovalRule>,
   pub counts: DecisionCounts,
+  /// What its permissions menu changed, and automation's refused asking to widen it, oldest first.
+  pub events: Vec<PermissionEvent>,
 }
 
 impl RunApprovals {
@@ -149,10 +232,17 @@ impl RunApprovals {
     Ok(Self {
       chosen: db.run_auto_approve(run.id())?,
       mode: db.run_approval_mode(run.id())?,
+      allow_autopilot: db.allow_autopilot()?,
       switched: db.run_manual_switch(run.id())?,
       rules: db.approval_rules(run.id())?,
       counts: db.decision_counts(run.id())?,
+      events: db.permission_events(run.id())?,
     })
+  }
+
+  /// Whether the run approves everything: a person chose *Approve everything in this run* and nobody stopped it.
+  pub const fn approves_everything(&self) -> bool {
+    matches!(self.chosen, Some(true))
   }
 
   /// Whether the run may still be switched to Manual for itself: it is in Autopilot and has not ended.

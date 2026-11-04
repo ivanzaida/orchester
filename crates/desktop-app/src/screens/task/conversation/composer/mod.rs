@@ -16,6 +16,7 @@
 //! stored once under their key, so a retry never sends twice. A message its agent's CLI did not take offers
 //! *Send after this turn* and *Edit in composer* under it ([`undelivered`]).
 
+mod commands;
 mod context;
 mod controls;
 mod feedback;
@@ -31,6 +32,7 @@ use lurq::{
   app::{
     component::Component,
     ctx::Ctx,
+    events::KeyboardEvent,
     theme::{BorderSize, FormTextRole, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text, TextInput},
@@ -70,7 +72,9 @@ use crate::{
     chat::follow::Follow,
     composer::message_scrollbar,
     icon::{Icon, icon},
+    mention::{self, MentionField, MenuProps},
     message::message_text,
+    slash::{SkillReach, SlashField, plan_held, with_skill_chip},
   },
 };
 
@@ -202,7 +206,12 @@ impl lurq::app::component::DevtoolsInspectable for DockProps {}
 struct Composer {
   menu: Signal<bool>,
   focused: Signal<bool>,
+  /// The message field, its @ menu and mentions (`ui::mention`), its slash menu (`ui::slash`), and the box the menus
+  /// open over.
   input: ElementRef,
+  mention: MentionField,
+  slash: SlashField,
+  box_anchor: ElementRef,
   anchor: ElementRef,
   /// The question the field last took the focus for: once per question.
   answering: Mutex<Option<MessageId>>,
@@ -220,10 +229,17 @@ impl Component for Composer {
         follow.follow_again();
       }
     });
+    let focused = ctx.signal(false);
+    let (draft, skill) = (props.composing.state.draft, props.composing.state.skill);
+    let mention = MentionField::new(ctx, draft.clone(), focused.clone());
+    let slash = SlashField::new(ctx, draft, (focused.clone(), skill));
     Self {
       menu: ctx.signal(false),
-      focused: ctx.signal(false),
-      input: ElementRef::new(),
+      focused,
+      input: mention.element(),
+      mention,
+      slash,
+      box_anchor: ElementRef::new(),
       anchor: ElementRef::new(),
       answering: Mutex::new(None),
     }
@@ -293,7 +309,17 @@ impl Composer {
     };
     let presses = presses::presses(&composing.state, &target, (&mode, recipient));
     let field = self.field(ctx, props, &mode, (&presses, leave.clone()));
+    // A run's agents read the skill in its block with the message, whatever their engine (ORC-634).
+    let field = with_skill_chip(ctx, ("composer", SkillReach::Text), &composing.state.skill, field);
     let attached = &composing.state.attached;
+    let context = composing
+      .detail
+      .run
+      .as_ref()
+      .and_then(|run| super::context::in_composer(ctx, &composing.project, run, &self.box_anchor));
+    let model = super::model::chip(ctx, (&composing.project, &composing.detail), &self.box_anchor);
+    let permissions = super::permissions::chip(ctx, (&composing.project, &composing.detail), &self.box_anchor);
+    let side = side_button(ctx, composing);
     let bar = controls::bar(
       ctx,
       &Bar {
@@ -305,6 +331,7 @@ impl Composer {
         anchor: &self.anchor,
         attached,
       },
+      (side, model, permissions, context),
     );
     let stroke = if self.focused.get() {
       PaletteColor::BorderFocus
@@ -317,6 +344,7 @@ impl Composer {
     let composer = Column::new()
       .id("composer-box")
       .describe("mode", mode_name(&mode))
+      .ref_element(self.box_anchor.clone())
       .width(Dimension::Pct(100.0))
       .padding_vertical(ExtraSpacing::Loose.role())
       .padding_horizontal(SpacingSize::Md)
@@ -330,13 +358,38 @@ impl Composer {
     let refused = tray::refusals(ctx, ATTACHMENTS, attached);
     let feedback = feedback::line(ctx, &composing.state, (&props.conversation, mode_name(&mode)), &presses);
     let note = words::note(ctx, &mode, &props.conversation).map(|note| quiet(&note));
+    let mentions = self.mentions(ctx, composing);
+    let commands = commands::menu(ctx, (&self.slash, &self.box_anchor), composing, (&mode, recipient));
+    let held = matches!(presses, Sending::SkillHeld).then(|| plan_held(ctx, "composer"));
     context::line(ctx, composing, (&mode, recipient), leave)
       .into_iter()
       .chain(std::iter::once(tray::drop_target(composer, attached).into()))
       .chain(refused)
       .chain(feedback)
+      .chain(held)
       .chain(note)
+      .chain([mentions, commands])
       .collect()
+  }
+
+  /// The @ menu over the box: the task's own task and its latest run lead it, and it offers the files of that run's
+  /// worktree.
+  fn mentions(&self, ctx: &mut Ctx, composing: &Composing) -> Element {
+    let run = composing.detail.run.as_ref().map(|run| &run.run);
+    let own = (composing.key.clone(), run.map(|run| run.number()));
+    mention::menu(
+      ctx,
+      MenuProps {
+        id: "composer",
+        field: self.mention.clone(),
+        anchor: self.box_anchor.clone(),
+        root: composing.project.open.repo_root.clone(),
+        project: Arc::from(composing.project.open.project.name().as_str()),
+        own: Some(own),
+        run: run.map(|run| run.id()),
+        revision: composing.project.feed.saves.get(),
+      },
+    )
   }
 
   /// The field takes the focus once for each question that waits.
@@ -375,7 +428,10 @@ impl Composer {
       _ => None,
     };
     let keys = presses::keys(presses, (leave, self.input.clone(), stop), self.menu.clone());
-    TextInput::styled(props.composing.state.draft.clone(), resolve(PaletteColor::TextPrimary))
+    let (slash, mention) = (self.slash.clone(), self.mention.clone());
+    let draft = &props.composing.state.draft;
+    let chips = draft.with(|text| MentionField::tokens(text));
+    let input = TextInput::styled(draft.clone(), resolve(PaletteColor::TextPrimary))
       .placeholder_style(resolve(PaletteColor::TextMuted))
       .caret_color(PaletteColor::TextPrimary)
       .id("composer-input")
@@ -385,13 +441,26 @@ impl Composer {
       .scrollbar(message_scrollbar(ctx))
       .width(Dimension::Pct(100.0))
       .placeholder(&placeholder)
-      .ref_element(self.input.clone())
+      .controller(self.mention.controller())
+      .tokens(chips)
       .on_focus(move || gained.set(true))
       .on_blur(move || lost.set(false))
-      .on_key_down(keys)
-      .on_paste(props.composing.state.attached.on_paste())
-      .into()
+      .on_key_down(move |event: KeyboardEvent| {
+        // The slash and @ menus and the chips take their keys first: Enter chooses while a menu is open, Esc closes
+        // it.
+        if !slash.key(&event) && !mention.key(&event) {
+          keys(event);
+        }
+      })
+      .on_paste(props.composing.state.attached.on_paste());
+    self.mention.with_marker("composer-field", input, TypographyStyle::Body)
   }
+}
+
+/// The *Side question* button for the task's latest run: there is none to ask about before the task has one.
+fn side_button(ctx: &mut Ctx, composing: &Composing) -> Option<Element> {
+  let agent = super::side_agent(ctx, composing.detail.run.as_ref()?);
+  super::side::button(ctx, &agent)
 }
 
 /// The quiet line under the box (`SpaXX`): 11.5 `text_muted`.

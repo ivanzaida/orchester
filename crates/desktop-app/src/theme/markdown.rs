@@ -18,6 +18,8 @@ use super::{ExtraColor, fonts::MONO};
 
 const CODE_RADIUS: f32 = 6.0;
 const CODE_PADDING: f32 = 8.0;
+/// The sides of a chat's code block's lines (`PHied`).
+const CODE_LINES_SIDES: f32 = 12.0;
 const BLOCK_SPACING: f32 = 8.0;
 const ITEM_SPACING: f32 = 2.0;
 /// The room before a list item's text: a numeral with its period, a bullet.
@@ -162,6 +164,18 @@ pub fn markdown(palette: &ThemePalette) -> ThemeMarkdown {
 pub fn blank_line_between_blocks(markdown: &ThemeMarkdown, body: &TextStyle) -> ThemeMarkdown {
   ThemeMarkdown {
     document_spacing: body.font_size * body.line_height,
+    ..markdown.clone()
+  }
+}
+
+/// The lines of a chat's code block under its head (`Code` `PHied` in `PqqIK`): `markdown`'s code without a box of
+/// its own, inside the block's, 8 over and under them and 12 at their sides.
+pub fn code_lines(markdown: &ThemeMarkdown) -> ThemeMarkdown {
+  ThemeMarkdown {
+    code_block_box: MarkdownBlockStyle {
+      padding: Some(Padding::symmetric(CODE_LINES_SIDES, CODE_PADDING)),
+      ..MarkdownBlockStyle::new()
+    },
     ..markdown.clone()
   }
 }

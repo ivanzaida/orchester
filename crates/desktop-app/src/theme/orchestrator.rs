@@ -70,12 +70,17 @@ pub enum OrchestratorText {
   /// 11 `text_muted`, 1.3: when a conversation in History last changed and how many messages it has (`r9TeH` in
   /// `eFI39`).
   HistoryMeta,
+  /// 11.5 `text_secondary`, 1.4: the line under a History result's title where its messages say what was searched for
+  /// (`Matching line` `srL91` in 13 `SZ6QY`); who said it in `text_muted`.
+  HistoryLine,
   /// 13 `text_primary`, 1.3: the message in the composer (`lB97V` in `QcfyZ`, a 17 line).
   Message,
+  /// 12/500 `text_primary`, 1.3: *Plan only* on the composer's *Mode* line (`xptH1` in `y51fw9`).
+  Mode,
 }
 
 impl OrchestratorText {
-  pub const ALL: [Self; 25] = [
+  pub const ALL: [Self; 27] = [
     Self::HeaderTitle,
     Self::StartTitle,
     Self::Emphasis,
@@ -100,7 +105,9 @@ impl OrchestratorText {
     Self::ReportHeading,
     Self::ReportMeta,
     Self::HistoryMeta,
+    Self::HistoryLine,
     Self::Message,
+    Self::Mode,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -133,7 +140,9 @@ impl OrchestratorText {
       Self::ReportHeading => "orchestrator_report_heading",
       Self::ReportMeta => "orchestrator_report_meta",
       Self::HistoryMeta => "orchestrator_history_meta",
+      Self::HistoryLine => "orchestrator_history_line",
       Self::Message => "orchestrator_message",
+      Self::Mode => "orchestrator_mode",
     }
   }
 
@@ -169,7 +178,9 @@ impl OrchestratorText {
       Self::ReportHeading => style(12.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_secondary),
       Self::ReportMeta => style(11.5, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
       Self::HistoryMeta => style(11.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
+      Self::HistoryLine => style(11.5, FontWeight::Normal, 1.4, 0.0, palette.text_secondary),
       Self::Message => style(13.0, FontWeight::Normal, 1.3, 0.0, palette.text_primary),
+      Self::Mode => style(12.0, FontWeight::Medium, 1.3, 0.0, palette.text_primary),
     }
   }
 }

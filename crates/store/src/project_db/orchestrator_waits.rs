@@ -111,25 +111,29 @@ impl ProjectDb {
   }
 
   /// Gives wait or daily report `seq` of `chat` its turn, thinking, under `message`; only while it has none, no other
-  /// turn of the conversation thinks and no message of the person's waits for one there (theirs go first). Whether it
-  /// was given.
+  /// turn of the conversation thinks, no compaction of its session runs and no message of the person's waits for one
+  /// there (theirs go first). Whether it was given.
   pub fn start_wait_turn(&mut self, (chat, seq): (ChatId, i64), message: ChatMessageId) -> Result<bool, StoreError> {
     let changed = self.connection.execute(
       "UPDATE orchestrator_entries SET message_id = ?3, turn = 'thinking'
        WHERE seq = ?2 AND chat_id = ?1 AND kind IN ('wait', 'report') AND message_id IS NULL
          AND NOT EXISTS (SELECT 1 FROM orchestrator_entries WHERE chat_id = ?1
-           AND turn IN ('thinking', 'steering', 'queued', 'queued_next', 'not_taken'))",
+           AND (turn IN ('thinking', 'steering', 'queued', 'queued_next', 'not_taken')
+             OR (kind = 'event' AND json_extract(body, '$.kind') = 'compaction'
+               AND json_extract(body, '$.state.state') = 'running')))",
       params![chat.to_string(), seq, message.to_string()],
     )?;
     Ok(changed == 1)
   }
 
-  /// The conversation whose last entry is the newest; `None` while the project has none.
+  /// The conversation whose last entry is the newest, of those History lists (not archived); `None` while the project
+  /// has none.
   pub fn latest_chat(&self) -> Result<Option<ChatId>, StoreError> {
     let id = self
       .connection
       .query_row(
         "SELECT c.id FROM orchestrator_chats c LEFT JOIN orchestrator_entries e ON e.chat_id = c.id
+         WHERE c.archived_at IS NULL
          GROUP BY c.id ORDER BY COALESCE(MAX(e.at), c.started_at) DESC, c.id DESC LIMIT 1",
         [],
         |row| row.get::<_, String>(0),

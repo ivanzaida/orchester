@@ -13,7 +13,7 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
-  orchestrator::{ActionOutcome, ChatAction, ChatEvent, HeldWork, SessionChange},
+  orchestrator::{ActionOutcome, ChatAction, ChatEvent, ChatPlan, HeldWork, SessionChange, TurnState},
   time::Timestamp,
 };
 use orchester_workspace::display;
@@ -23,26 +23,73 @@ use super::{
   ending::divider,
   held::{HeldCard, HeldProps},
   line::{list, nested as quoted},
+  plan_only::card::{Deciding, PlanCard, PlanProps},
   proposal::{ProposalProps, StartProposal},
   timeline::TurnRow,
   turns::Part,
 };
 use crate::{
   theme::ExtraSpacing,
-  ui::chat::{Avatar, agent_text, chat_row},
+  ui::{
+    chat::{Avatar, agent_text, chat_row_marked, copyable_row_with},
+    todo_list::{chip, ended},
+  },
 };
 
-/// The answer under `row`'s opening, with the Orchestrator's avatar and name; `None` before its first part.
+/// The answer under `row`'s opening, with the Orchestrator's avatar and name; `None` before its first part. Once it
+/// ended, the todo list its agent kept folds into its name line as a chip, which opens the list under that line
+/// (09 g `OoT5k`); while it answers, the list is pinned over the composer instead (`super::body`). An answer that
+/// wrote something has Copy at the end of its name line, which copies what it wrote (ORC-323), and `…` after it,
+/// whose menu rewinds to just after it (ORC-333, `super::rewind::toolbar`).
 pub(super) fn answer(ctx: &mut Ctx, row: &TurnRow) -> Option<Element> {
   let first = row.turn.answer.first()?;
   let time = display::clock(first.at());
   let key = row.turn.key();
-  Some(chat_row(
-    format!("orchestrator-answer-{key}"),
-    Avatar::Orchestrator,
-    (&ctx.t("orchestrator.title"), &time),
-    vec![parts(ctx, row).into()],
-  ))
+  let (mark, list) = ended_plan(ctx, row).map_or((None, None), |(chip, list)| (Some(chip), list));
+  let body = list.into_iter().chain([parts(ctx, row).into()]).collect();
+  let (id, title) = (format!("orchestrator-answer-{key}"), ctx.t("orchestrator.title"));
+  Some(match written(row) {
+    Some(markdown) => {
+      let extras = row.env.rewind.on_answer(ctx, &row.turn);
+      copyable_row_with(
+        ctx,
+        &id,
+        (Avatar::Orchestrator, &markdown, extras),
+        (&title, &time, mark),
+        body,
+      )
+    }
+    None => chat_row_marked(id, Avatar::Orchestrator, (&title, &time, mark), body),
+  })
+}
+
+/// What the answer of `row` wrote, its replies as Markdown one after another; `None` while it wrote nothing.
+fn written(row: &TurnRow) -> Option<Arc<str>> {
+  let replies: Vec<&str> = row
+    .turn
+    .answer
+    .iter()
+    .filter_map(|part| match part {
+      Part::Reply { text, .. } => Some(&**text),
+      _ => None,
+    })
+    .collect();
+  (!replies.is_empty()).then(|| Arc::from(replies.join("\n\n")))
+}
+
+/// The chip of the list the agent kept for `row`'s turn once that turn ended, and the list while the person opened it.
+fn ended_plan(ctx: &Ctx, row: &TurnRow) -> Option<(Element, Option<Element>)> {
+  let list = row.turn.todo.as_ref()?;
+  let message = row.turn.message?;
+  if row.turn.state.as_ref().is_none_or(TurnState::is_thinking) {
+    return None;
+  }
+  let plans = row.env.plans.clone();
+  let open = plans.get().is_open(message);
+  let toggle = move || plans.update(|opened| opened.flip(message));
+  let chip = chip(ctx, &format!("orchestrator-plan-chip-{message}"), (list, open), toggle);
+  let list = open.then(|| ended(&format!("orchestrator-plan-list-{message}"), list, None));
+  Some((chip, list))
 }
 
 /// The answer of the turn a wait started by itself, nested under the wait's line as a quote; `None` before its first
@@ -90,7 +137,7 @@ fn parts(ctx: &mut Ctx, row: &TurnRow) -> Column {
           &format!("orchestrator-reply-{key}-{index}"),
           said,
           (row.env.project, &row.env.names),
-          &row.env.links,
+          (&row.env.links, None),
         ));
       }
       Part::Event {
@@ -104,6 +151,16 @@ fn parts(ctx: &mut Ctx, row: &TurnRow) -> Column {
         };
         shown.push(divider(&format!("orchestrator-event-{key}-{index}"), &words, None));
       }
+      // A compaction has a row of its own (`super::turns`); kept in an answer, it shows its line there.
+      Part::Event { event, at } => {
+        flush(&mut shown, &mut lines, index);
+        let id = format!("orchestrator-event-{key}-{index}");
+        shown.extend(super::compaction::line(ctx, &id, event, Some(*at)));
+      }
+      Part::Plan { plan, at, seq, number } => {
+        flush(&mut shown, &mut lines, index);
+        shown.push(plan_card(ctx, row, (plan, *at), (*seq, *number)));
+      }
     }
   }
   flush(&mut shown, &mut lines, row.turn.answer.len());
@@ -112,6 +169,31 @@ fn parts(ctx: &mut Ctx, row: &TurnRow) -> Column {
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Loose.role())
     .with_children(shown)
+}
+
+/// The card of `plan`, proposed at `at` as entry `seq`, the conversation's plan `number` (`super::plan_only::card`);
+/// it is decided once the conversation is kept.
+fn plan_card(ctx: &mut Ctx, row: &TurnRow, (plan, at): (&ChatPlan, Timestamp), (seq, number): (i64, usize)) -> Element {
+  let id = format!("orchestrator-plan-{seq}");
+  let env = &row.env;
+  let deciding = env.scope.as_ref().map(|scope| Deciding {
+    project: env.open.clone(),
+    chat: scope.chat,
+    change: env.change_plan.clone(),
+  });
+  ctx.mount_keyed::<PlanCard>(
+    &id,
+    PlanProps {
+      id: id.clone(),
+      plan: plan.clone(),
+      seq,
+      number,
+      at,
+      changing: env.changing == Some(seq),
+      answering: env.answering,
+      deciding,
+    },
+  )
 }
 
 /// Whether `action` shows as an event line, which joins the lines around it in one list: everything but what waits

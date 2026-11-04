@@ -45,13 +45,12 @@ struct Reveal {
   scrolled: bool,
 }
 
-/// A turn of the wheel over the chat, until the layout after it shows whether it moved the chat: a wheel over a
-/// box that scrolls inside a row (an attached file's text) moves that box and leaves the chat where it is.
+/// A scroll of the person's over the chat, a turn of the wheel or a middle-button autoscroll's step, until the
+/// layout after it shows whether it moved the chat and which way: a wheel over a box that scrolls inside a row (an
+/// attached file's text) moves that box and leaves the chat where it is.
 #[derive(Clone, Copy)]
 struct Wheel {
-  /// Toward the start.
-  up: bool,
-  /// The chat's scroll before it.
+  /// The chat's scroll at the layout before it.
   from: f32,
   /// What had arrived then, for *N new*.
   arrived: usize,
@@ -59,9 +58,9 @@ struct Wheel {
 
 /// Whether the chat follows, and what it needs to: its scroll, what had arrived when it stopped following (for
 /// *N new*) and at the last render, whether it has shown rows yet, whether it is going to the end after something
-/// arrived, how tall its content was at the last layout, the card it reveals instead of its end, and which
-/// conversation it shows when one chat shows several, and the turn of the wheel the next layout settles. Only
-/// arrivals move a following chat: a row the person opens or folds leaves it where it is.
+/// arrived, how tall its content was and where it was scrolled at the last layout, the card it reveals instead of
+/// its end, and which conversation it shows when one chat shows several, and the person's scroll the next layout
+/// settles. Only arrivals move a following chat: a row the person opens or folds leaves it where it is.
 #[derive(Clone)]
 pub struct Follow {
   pub following: Signal<bool>,
@@ -72,6 +71,7 @@ pub struct Follow {
   /// Set when it goes to the end, until a layout no longer grows its content.
   to_end: Arc<Mutex<bool>>,
   height: Arc<Mutex<f32>>,
+  laid: Arc<Mutex<f32>>,
   reveal: Arc<Mutex<Reveal>>,
   shows: Arc<Mutex<Option<String>>>,
   wheel: Arc<Mutex<Option<Wheel>>>,
@@ -96,6 +96,7 @@ impl Follow {
       started: Arc::default(),
       to_end: Arc::default(),
       height: Arc::default(),
+      laid: Arc::default(),
       reveal: Arc::default(),
       shows: Arc::default(),
       wheel: Arc::default(),
@@ -132,6 +133,12 @@ impl Follow {
     if !self.following.get_untracked() {
       self.following.set(true);
     }
+  }
+
+  /// The conversation it shows is opened again, from History's search: at the next render it opens as another one
+  /// would ([`Follow::shows`]), at the row it reveals.
+  pub fn open_anew(&self) {
+    *self.shows.lock() = None;
   }
 
   /// A row the person opens or folds: the chat stays where it is, its scroll held over the content changing
@@ -177,31 +184,31 @@ impl Follow {
 
   /// `list`, scrolled as it follows: any scroll up stops following, a scroll down back to the end follows again.
   /// `arrived` counts what the chat has brought so far, for *N new*; `reveal` is what [`Follow::follow`] reveals.
+  /// Holding the middle button over it and moving the pointer away scrolls it (lurq's middle-button autoscroll),
+  /// on in the chats alone.
   pub fn list<'a, T>(
     &self,
     list: VirtualizedList<'a, T>,
     arrived: usize,
     reveal: Option<String>,
   ) -> VirtualizedList<'a, T> {
-    let (scroll, wheel) = (self.scroll.clone(), self.wheel.clone());
+    let (laid, wheel) = (self.laid.clone(), self.wheel.clone());
     list
       .with_scroll_state(self.scroll.clone())
       .reveal_key(reveal)
-      .on_scroll(move |event: ScrollEvent| {
-        // The handler runs before the wheel moves anything, also for a wheel over a box that scrolls inside a row,
-        // which moves that box instead: the layout after it tells (`settle_wheel`). The list moves by the opposite
-        // of the delta: a positive delta scrolls toward the start.
+      .middle_button_autoscroll(true)
+      .on_scroll(move |_: ScrollEvent| {
+        // A wheel's handler runs before the wheel moves anything, also for a wheel over a box that scrolls inside a
+        // row, which moves that box instead; an autoscroll's runs after its step moved the chat, with no delta. So
+        // the layout after it tells, from where the last layout left the chat, whether and which way it moved
+        // (`settle_wheel`).
         let mut wheel = wheel.lock();
-        let from = wheel.map_or_else(|| scroll.scroll_y(), |earlier| earlier.from);
-        *wheel = Some(Wheel {
-          up: event.delta_y > 0.0,
-          from,
-          arrived,
-        });
+        let from = wheel.map_or_else(|| *laid.lock(), |earlier| earlier.from);
+        *wheel = Some(Wheel { from, arrived });
       })
   }
 
-  /// A turn of the wheel that moved the chat: the card the chat opened at no longer holds it, a move up stops
+  /// A scroll of the person's that moved the chat: the card the chat opened at no longer holds it, a move up stops
   /// following, and a move down to the end follows again. One that moved only a box inside a row changes nothing.
   fn settle_wheel(&self) {
     let Some(wheel) = self.wheel.lock().take() else {
@@ -216,7 +223,7 @@ impl Follow {
       scrolled: true,
     };
     let end = (self.scroll.content_height() - self.scroll.viewport_height()).max(0.0);
-    let at_end = !wheel.up && now >= end - FOLLOW_SLACK;
+    let at_end = now > wheel.from && now >= end - FOLLOW_SLACK;
     if at_end != self.following.get_untracked() {
       *self.left_at.lock() = (!at_end).then_some(wheel.arrived);
       self.following.set(at_end);
@@ -308,6 +315,8 @@ impl Component for FollowEnd {
   fn after_layout(&self) {
     if let Some(follow) = &*self.follow.lock() {
       follow.keep_at_end();
+      // Where the person's next scroll starts from (`Follow::list`).
+      *follow.laid.lock() = follow.scroll.scroll_y();
     }
   }
 

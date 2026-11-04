@@ -5,6 +5,8 @@
 mod appearance;
 #[path = "theme/browser.rs"]
 mod browser;
+#[path = "theme/ci.rs"]
+mod ci;
 #[path = "theme/dialog.rs"]
 mod dialog;
 #[path = "theme/import.rs"]
@@ -23,6 +25,8 @@ mod orchestrator;
 mod pipelines;
 #[path = "theme/projects.rs"]
 mod projects;
+#[path = "theme/side_question.rs"]
+mod side_question;
 #[path = "theme/skills.rs"]
 mod skills;
 #[path = "theme/startup.rs"]

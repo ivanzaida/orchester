@@ -119,6 +119,7 @@ impl Worker {
   }
 
   pub(in super::super) fn flush(&self, watch: &mut Watch) -> Result<(), StoreError> {
+    self.keep_context(watch)?;
     if watch.pending.is_empty() {
       return Ok(());
     }
@@ -145,6 +146,18 @@ impl Worker {
       run: watch.invocation.run,
       sequence,
     });
+    Ok(())
+  }
+
+  /// Stores how full the CLI's context is now, when its output changed it since it was stored.
+  fn keep_context(&self, watch: &mut Watch) -> Result<(), StoreError> {
+    let Some(reading) = self.driver.context().filter(|reading| watch.context != Some(*reading)) else {
+      return Ok(());
+    };
+    watch
+      .db
+      .save_invocation_context(watch.invocation.id, &reading, Timestamp::now())?;
+    watch.context = Some(reading);
     Ok(())
   }
 }

@@ -8,16 +8,18 @@ mod call_input;
 mod claude;
 mod native;
 mod redaction;
+mod todo;
 
 use serde::{Deserialize, Serialize};
 
-pub(crate) use self::claude::usage as claude_usage;
 pub use self::{
   call_change::{Breaks, CallChange, ChangeHunk, ChangeLine, FinalBreak, MAX_CHANGE_LINES},
   call_input::{CallInput, EditText, Requested},
   claude::ClaudeStream,
   native::{CallDetail, Declined, DeclinedBy, NativeCall},
+  todo::{TodoItem, TodoList, TodoState},
 };
+pub(crate) use self::{claude::usage as claude_usage, todo::codex_plan};
 use crate::{code_index::RipgrepFallback, connection::mcp::McpServerProblem, run::TokenUsage};
 
 /// Which output of the CLI a line came from.
@@ -73,6 +75,10 @@ pub enum AgentEvent {
   /// A reasoning summary, as far as the CLI emits one.
   Reasoning {
     text: String,
+  },
+  /// The agent's todo list is now `items`, in place of the one before ([`TodoList`]); none when it emptied it.
+  TodoList {
+    items: Vec<TodoItem>,
   },
   CommandStarted {
     item: String,
@@ -343,6 +349,7 @@ impl AgentEvent {
       Self::TurnStarted => "turn_started",
       Self::Message { .. } => "message",
       Self::Reasoning { .. } => "reasoning",
+      Self::TodoList { .. } => "todo_list",
       Self::CommandStarted { .. } => "command_started",
       Self::CommandFinished { .. } => "command_finished",
       Self::FileChanged { .. } => "file_changed",

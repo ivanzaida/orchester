@@ -10,6 +10,7 @@ use std::path::PathBuf;
 use lurq::app::{
   component::DevtoolsInspectable,
   ctx::{Ctx, FutureAction},
+  i18n::I18n,
 };
 use orchester_core::id::{ChatId, ChatMessageId};
 use orchester_workspace::{
@@ -99,33 +100,44 @@ pub(super) fn send_action(ctx: &mut Ctx) -> SendAction {
         queue::send_while_answering(&services.runners, &project, &outgoing, how).await?;
         return Ok(sent);
       }
-      let scope = ChatScope {
-        project: project.project.id(),
-        name: project.project.name().as_str().to_owned(),
-        root: project.repo_root.clone(),
-        chat: outgoing.chat,
-        on_its_own: false,
-      };
-      let served = services
-        .chat_tools
-        .serve_turn(&services, i18n, (scope, outgoing.message));
-      let tools = served.map_err(|error| {
-        tracing::error!(%error, "the Orchestrator's tools could not be served");
-        send::tools_unavailable()
-      })?;
-      let result = send::send(&services.runners, &project, &outgoing, tools).await;
-      match &result {
-        Err(SendError::NotSent(_)) => services.chat_tools.end(outgoing.message),
-        Ok(()) | Err(SendError::Unconfirmed(_)) => {
-          services
-            .chat_tools
-            .end_with_turn(&services, project.repo_root.clone(), outgoing.message);
-        }
-      }
-      result?;
+      deliver(&services, i18n, &project, &outgoing).await?;
       Ok(sent)
     }
   })
+}
+
+/// Sends `outgoing` to `project`'s Orchestrator as a turn of its own, its tools served for the turn first and stopped
+/// again when the runner never took it.
+pub(super) async fn deliver(
+  services: &Services,
+  i18n: I18n,
+  project: &OpenProject,
+  outgoing: &Outgoing,
+) -> Result<(), SendError> {
+  let scope = ChatScope {
+    project: project.project.id(),
+    name: project.project.name().as_str().to_owned(),
+    root: project.repo_root.clone(),
+    chat: outgoing.chat,
+    on_its_own: false,
+  };
+  let served = services
+    .chat_tools
+    .serve_turn(services, i18n, (scope, outgoing.message));
+  let tools = served.map_err(|error| {
+    tracing::error!(%error, "the Orchestrator's tools could not be served");
+    send::tools_unavailable()
+  })?;
+  let result = send::send(&services.runners, project, outgoing, tools).await;
+  match &result {
+    Err(SendError::NotSent(_)) => services.chat_tools.end(outgoing.message),
+    Ok(()) | Err(SendError::Unconfirmed(_)) => {
+      services
+        .chat_tools
+        .end_with_turn(services, project.repo_root.clone(), outgoing.message);
+    }
+  }
+  result
 }
 
 pub(super) fn stop_action(ctx: &mut Ctx) -> StopAction {

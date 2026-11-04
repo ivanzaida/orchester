@@ -142,6 +142,7 @@ pub fn settings(access: RepositoryAccess, context_window: u64) -> LoopSettings {
     effort: None,
     max_output: 1000,
     context_window,
+    context_window_estimated: false,
     system: "You are a native agent.".to_owned(),
     tools: ToolSet::for_access(access),
     shell: None,

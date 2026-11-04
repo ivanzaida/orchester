@@ -309,6 +309,9 @@ impl Component for FeedLoader {
     let runner = status(ctx, &runners, &root);
     // Held pull request feedback goes once the runs' state lets it (ORC-14).
     super::feedback::follow(ctx, (&open, states), runner.as_ref());
+    // Failed CI goes to the runs whose *Fix CI automatically* is on (ORC-335).
+    let online = !super::feedback_holds(runner.as_ref(), &root).1;
+    super::ci_fix::follow(ctx, (&open, &self.feed), online);
     // Runs of pipelines with a Deliver step are delivered one at a time (ORC-19).
     super::merge_queue::follow(ctx, &open);
     publish(&self.feed.status, runner);

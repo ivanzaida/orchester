@@ -264,6 +264,17 @@ impl Attachment {
     }
   }
 
+  /// The attachment as another message keeps it, a fork's copy of its message (ORC-334): the same file under an id of
+  /// its own, so each message's row and copy go with that message alone. The store links the new copy to this one's
+  /// content instead of writing it again.
+  #[must_use]
+  pub fn shared(&self) -> Self {
+    Self {
+      id: AttachmentId::generate(),
+      ..self.clone()
+    }
+  }
+
   /// Rebuilds a kept attachment.
   pub fn restore(
     id: AttachmentId,

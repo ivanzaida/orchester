@@ -20,6 +20,7 @@ use orchester_workspace::{
   clock::Clock,
   close::CloseFlow,
   plan_limits::reads::PlanReads,
+  pull_requests::ci::CiReads,
   recovery::Recovery,
   runner::Runners,
   secrets::Vault,
@@ -39,6 +40,7 @@ pub mod page_file_picker;
 pub mod path_picker;
 pub mod plan_limits;
 pub mod reference_picker;
+pub mod save_picker;
 pub mod updates;
 
 use self::{browser_lookup::BrowserLookup, links::Links, page_file_picker::PageFilePicker};
@@ -102,6 +104,8 @@ pub struct Services {
   /// The `orchester://` links the window opens: the one the program started with and those other programs hand over,
   /// once the app's own program takes them (`Launch::take_links`); a test puts its own in.
   pub opened_links: LinkInbox,
+  /// The pull requests' checks the task pages and *Fix CI automatically* read in the last 30 s.
+  pub ci_reads: CiReads,
 }
 
 /// Services are the session's: two are equal when they share its workspace.
@@ -162,6 +166,7 @@ impl Services {
       chat_tools: ChatServers::default(),
       editor: Editor::find(),
       opened_links: LinkInbox::default(),
+      ci_reads: CiReads::default(),
     }
   }
 

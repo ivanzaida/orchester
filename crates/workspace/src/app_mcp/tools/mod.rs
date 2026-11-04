@@ -7,6 +7,7 @@ mod approval_settings;
 mod approvals;
 mod base_branch;
 mod base_moved;
+mod ci_wire;
 mod continue_run;
 mod conversation;
 mod daily_report;
@@ -161,7 +162,12 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "get_run",
-    description: "A run: its steps, state (for one the runner interrupted after its own failure, reason \
+    description: "A run: its steps (each with context: how full its latest execution's agent session is, as \
+                  {used, window, estimated}: the tokens its latest model response took in, the context window, null \
+                  when nobody reported one and no model limit is known, and estimated when the window is a model \
+                  limit Orchester assumes rather than one the CLI or provider reported; context is null while the \
+                  session's CLI reported nothing: unknown, not 0%), state (for one the runner interrupted after its \
+                  own failure, reason \
                   runner_failed with runner_failure: storage_contention when the project database stayed busy, \
                   storage_failure when it was unavailable, other, or null when not recorded), tokens (auto mode's \
                   reviewer included, and its part apart; output_unreported counts its agent invocations whose CLI \
@@ -195,8 +201,11 @@ const SPECS: &[Spec] = &[
                   conflicts with files, check_failed, base_keeps_moving with heads, stopped, later_run), merged \
                   (revision, kind merge_commit or squash, worktree_removed, branch_deleted) or removed; since, \
                   resyncs, approved_at and checked_on (the base the last passed check ran on). A run the merge queue \
-                  delivers is not merged by merge_run. The run's link is its task's page; the waiting approvals, \
-                  questions, messages and plans link to their cards on the task's Conversation.",
+                  delivers is not merged by merge_run. checks is the CI of the pull request of the run's branch, as \
+                  get_pull_request's checks reads it (no_pull_request when the last sync stored none, not_linked \
+                  without a linked GitHub repository). The run's \
+                  link is its task's page; the waiting approvals, questions, messages and plans link to their cards \
+                  on the task's Conversation.",
     schema: schema_for_type::<runs::InRun>,
     read_only: true,
   },
@@ -214,7 +223,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "get_conversation",
-    description: "A task's conversation as its Conversation tab shows it for the task's latest run, oldest first and newest last: what the person and the Orchestrator chat wrote to the agents (with whom to and whether it was delivered), what the agents wrote, the questions they wrote in the conversation (open while their step waits for the answer), their questions with suggested answers (options, state, answers, answered_by: person, automation or orchestrator), their plans (whole text, whether it waits for a decision, the decision), how a decision went on with a run that stopped (run_continued: returned, returned_with_note or restarted, to which step, the note, the attempt; its author the person, automation or the orchestrator), Orchester's notices that the base branch moved (kind base_moved: branch, revision, tasks and commits that landed, overlapping_files, state and delivered_to) and how each step ended; each with its author, step, run, time, `cursor` and the link to its card on the task's Conversation. At most `limit` entries, the newest (50 when left out, 200 at most); `before` (an entry's cursor) reads the entries older than it, and `more` says whether older ones are left. Texts are as stored, secrets redacted; tool calls and approvals have their own tools.",
+    description: "A task's conversation as its Conversation tab shows it for the task's latest run, oldest first and newest last: what the person and the Orchestrator chat wrote to the agents (with whom to and whether it was delivered), what the agents wrote, the questions they wrote in the conversation (open while their step waits for the answer), their questions with suggested answers (options, state, answers, answered_by: person, automation or orchestrator), their plans (whole text, whether it waits for a decision, the decision), how a decision went on with a run that stopped (run_continued: returned, returned_with_note or restarted, to which step, the note, the attempt; its author the person, automation or the orchestrator), Orchester's notices that the base branch moved (kind base_moved: branch, revision, tasks and commits that landed, overlapping_files, state and delivered_to) and how each step ended; each with its author, step, run, time, `cursor` and the link to its card on the task's Conversation. At most `limit` entries, the newest (50 when left out, 200 at most); `before` (an entry's cursor) reads the entries older than it, and `more` says whether older ones are left. context is how full the agent session of the run's current step (context_step, its key) is, as get_run gives each step's: {used, window, estimated}, or null while its CLI reported nothing or the task has no run. Texts are as stored, secrets redacted; tool calls and approvals have their own tools.",
     schema: schema_for_type::<conversation::GetConversation>,
     read_only: true,
   },
@@ -370,7 +379,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "get_pull_request",
-    description: "One pull request of a project's linked GitHub repository, as list_pull_requests gives it, with how the repository's latest sync went. One the last sync did not read (an older closed one) is refused as pull_request_not_synced; with refresh it is read from GitHub on its own, and a refresh of the same number within 30 s answers what that read found. A read GitHub refuses says why: github_rate_limited (until paused_until), github_unreachable, or pull_request_not_read; pull_request_not_found when GitHub has no such pull request.",
+    description: "One pull request of a project's linked GitHub repository, as list_pull_requests gives it, with how the repository's latest sync went. One the last sync did not read (an older closed one) is refused as pull_request_not_synced; with refresh it is read from GitHub on its own, and a refresh of the same number within 30 s answers what that read found. A read GitHub refuses says why: github_rate_limited (until paused_until), github_unreachable, or pull_request_not_read; pull_request_not_found when GitHub has no such pull request. checks adds to the last sync's counts its CI read now through gh (gh pr checks), at most once in 30 s: state (passed, failed, running, no_checks; or why it was not read: no_pull_request, gh_missing, not_signed_in, wrong_account, missing_scope, gh_unavailable, rate_limited with resets_at, github_unreachable, github_server_error, not_read, never passed when unread), read_at, next_read_at (when to read again while a check is queued or running, else null), counts by state, and runs: each check's name, workflow, state (queued, running, passed, failed, cancelled, skipped), url and, for a failed GitHub Actions job, log_tail (the last 40 lines of its failed steps' log, null when gh gave none).",
     schema: schema_for_type::<pull_requests::GetPullRequest>,
     read_only: true,
   },

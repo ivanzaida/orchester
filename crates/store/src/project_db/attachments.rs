@@ -191,6 +191,27 @@ pub(super) fn write(orchester: &Path, attachments: &[NewAttachment]) -> Result<(
   Ok((written, kept))
 }
 
+/// Shares the copies of `attachments` with a message about to be kept (a fork's copy of their message): each gets an
+/// id of its own ([`Attachment::shared`]) and a copy that is a hard link to the one kept, so its content is not
+/// written again; where the file system has no hard links, the copy is written. They are removed again unless the
+/// message is kept, and removing one copy later leaves the other's content in place.
+pub(super) fn share(orchester: &Path, attachments: &[Attachment]) -> Result<(Written, Vec<Attachment>), StoreError> {
+  let mut written = Written { paths: Vec::new() };
+  let mut shared = Vec::with_capacity(attachments.len());
+  for attachment in attachments {
+    let (from, copy) = (path(orchester, attachment), attachment.shared());
+    let target = path(orchester, &copy);
+    // A file system without hard links (FAT, some network drives) refuses the link: the copy is written instead, and
+    // its error, if it fails too, is the one that says what went wrong.
+    if fs::hard_link(&from, &target).is_err() {
+      fs::copy(&from, &target).map_err(StoreError::io(&target))?;
+    }
+    written.paths.push(target);
+    shared.push(copy);
+  }
+  Ok((written, shared))
+}
+
 /// Keeps the rows of `attachments`, whose copies are written, for `owner` at `at`.
 pub(super) fn insert(
   connection: &Connection,
