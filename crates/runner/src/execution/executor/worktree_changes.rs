@@ -16,7 +16,7 @@ use orchester_core::{
 use orchester_exec::ProcessRunner;
 use orchester_ipc::{Reply, WorktreeChangesRead, WorktreeReadFailure, frame::MAX_FRAME_LEN};
 
-use crate::{execution::Scheduler, worktree::Worktrees};
+use crate::{execution::Scheduler, execution_root::ExecutionRoot};
 
 /// A git that does not answer within this time counts as failed, as the desktop's own reads did.
 const GIT_TIMEOUT: Duration = Duration::from_secs(30);
@@ -27,8 +27,8 @@ const MAX_DIFF_LEN: usize = MAX_FRAME_LEN as usize / 4;
 impl Scheduler {
   /// The answer to [`orchester_ipc::Command::ReadWorktreeChanges`] for `run`; git runs off the runner's tasks.
   pub async fn worktree_changes(self, run: RunId) -> Reply {
-    let root = self.inner.project_root.clone();
-    let read = tokio::task::spawn_blocking(move || read(&root, run))
+    let execution = ExecutionRoot::local(&self.inner.project_root);
+    let read = tokio::task::spawn_blocking(move || read(&execution, run))
       .await
       .unwrap_or_else(|error| {
         tracing::error!(%error, %run, "reading the run's worktree ended unexpectedly");
@@ -40,12 +40,9 @@ impl Scheduler {
   }
 }
 
-/// What the worktree of `run` in the repository at `root` holds beyond its commit.
-fn read(root: &Path, run: RunId) -> WorktreeChangesRead {
-  let worktree = match Worktrees::new(root) {
-    Ok(worktrees) => worktrees.path(run),
-    Err(error) => return failed(run, &error.to_string()),
-  };
+/// What the worktree of `run` in `execution` holds beyond its commit.
+fn read(execution: &ExecutionRoot, run: RunId) -> WorktreeChangesRead {
+  let worktree = execution.run_worktree(run);
   if !worktree.is_dir() {
     return WorktreeChangesRead::NoWorktree;
   }

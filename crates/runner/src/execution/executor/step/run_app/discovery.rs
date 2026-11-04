@@ -14,18 +14,17 @@ use std::{
 use orchester_core::orchester_tools::AppDiscovery;
 
 use super::AppError;
+use crate::execution_root::{APP_DISCOVERY, app_discovery};
 
 const MAX_DISCOVERY_BYTES: u64 = 16 * 1024;
 pub(super) const MAX_QA_ENTRIES: usize = 1024;
 /// The app's name in its discovery file (`orchester-app`'s `mcp::APP_NAME`).
 const APP: &str = "orchester-app";
-/// The app's discovery folder in a user data folder.
-const FOLDER: &str = "orchester-app-mcp";
 
 pub(super) fn find(worktree: &Path, pid: NonZeroU32) -> Result<AppDiscovery, AppError> {
   let name = format!("{pid}.json");
-  if let Some(user) = user_data() {
-    let path = user.join(FOLDER).join(&name);
+  if let Some(folder) = app_discovery() {
+    let path = folder.join(&name);
     match fs::symlink_metadata(&path) {
       Ok(_) => return read(&path, pid),
       Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
@@ -34,7 +33,7 @@ pub(super) fn find(worktree: &Path, pid: NonZeroU32) -> Result<AppDiscovery, App
   }
   let root = fs::canonicalize(worktree).map_err(|_| AppError::ReadDiscovery)?;
   let layouts = [
-    Path::new("profile").join(FOLDER).join(&name),
+    Path::new("profile").join(APP_DISCOVERY).join(&name),
     Path::new("mcp").join(&name),
   ];
   let matches = qa_files(&root, &layouts)?;
@@ -43,22 +42,6 @@ pub(super) fn find(worktree: &Path, pid: NonZeroU32) -> Result<AppDiscovery, App
     [] => Err(AppError::Missing),
     _ => Err(AppError::Ambiguous),
   }
-}
-
-/// The user's data folder, which holds the apps' discovery folders and the QA slots.
-#[cfg(windows)]
-pub(in crate::execution::executor::step) fn user_data() -> Option<PathBuf> {
-  std::env::var_os("LOCALAPPDATA").map(PathBuf::from)
-}
-
-#[cfg(target_os = "macos")]
-pub(in crate::execution::executor::step) fn user_data() -> Option<PathBuf> {
-  std::env::var_os("HOME").map(|home| PathBuf::from(home).join("Library/Application Support"))
-}
-
-#[cfg(not(any(windows, target_os = "macos")))]
-pub(in crate::execution::executor::step) fn user_data() -> Option<PathBuf> {
-  None
 }
 
 pub(super) fn read(path: &Path, pid: NonZeroU32) -> Result<AppDiscovery, AppError> {
