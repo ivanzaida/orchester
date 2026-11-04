@@ -533,6 +533,7 @@ impl Scheduler {
       root: self.inner.project_root.clone(),
       link: Box::new(link),
       execution: ExecutionRoot::local(&self.inner.project_root),
+      sink: Box::new(coordinator::sink::LocalSink::new(&self.inner.project_root)),
       notifier: self.inner.notifier.clone(),
       vault: self.inner.vault.clone(),
       relay: self.inner.relay.clone(),

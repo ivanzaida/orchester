@@ -46,7 +46,7 @@ impl RunTask {
         return Ok(());
       }
     };
-    let recorded = record(&mut self.db, &self.notifier, &mut self.run, |run, now| {
+    let recorded = record(self.sink.as_mut(), &self.notifier, &mut self.run, |run, now| {
       run.change_permissions(
         change.profile,
         change.permissions,
@@ -73,7 +73,7 @@ impl RunTask {
       .changed_permissions(profile)
       .map(|changed| changed.restarts().iter().copied().collect())
       .unwrap_or_default();
-    let recorded = record(&mut self.db, &self.notifier, &mut self.run, |run, now| {
+    let recorded = record(self.sink.as_mut(), &self.notifier, &mut self.run, |run, now| {
       run.keep_permissions_for_next_invocation(profile, now)
     });
     if self.answered(recorded, ack)? {

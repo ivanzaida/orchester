@@ -4,12 +4,12 @@
 
 use orchester_core::{
   id::RunId,
-  run::{EventSequence, InterruptCause, Run, RunEvent, RunEventKind, RunnerFailure},
+  run::{EventSequence, Run, RunEvent, RunnerFailure},
   time::Timestamp,
 };
 use rusqlite::{OptionalExtension, Transaction, params};
 
-use super::{ProjectDb, runs::With};
+use super::{ProjectDb, runs::RunLogRecord};
 use crate::{RunStoreError, StoreError, rows::corrupt};
 
 const STORAGE_CONTENTION: &str = "storage_contention";
@@ -24,20 +24,7 @@ impl ProjectDb {
     events: &[RunEvent],
     failure: RunnerFailure,
   ) -> Result<(), RunStoreError> {
-    let interruption = events.last().filter(|event| {
-      matches!(
-        event.kind(),
-        RunEventKind::Interrupted {
-          cause: InterruptCause::RunnerFailed
-        }
-      )
-    });
-    let Some(interruption) = interruption else {
-      return Err(RunStoreError::EventsMismatch(
-        "the runner's failure is kept only with its interruption",
-      ));
-    };
-    self.append(run, events, With::RunnerFailure(interruption.sequence(), failure))
+    self.write_run_log(&RunLogRecord::runner_failure(run, events, failure)?)
   }
   /// Why the runner failed when it last interrupted `run`; `None` when its last interruption was for another cause,
   /// recorded before the kind was kept, or when it was never interrupted.
