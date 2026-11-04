@@ -257,8 +257,9 @@ pub(in super::super) type Coordinator = (Box<dyn Sink>, Box<dyn CoordinatorLink 
 
 pub(super) struct Watch {
   pub(super) db: ProjectDb,
-  /// Where the invocation's transcript and the changes to its rows are recorded.
-  sink: Box<dyn Sink>,
+  /// Where the invocation's transcript and the changes to its rows, its messages, questions and tool requests are
+  /// recorded.
+  pub(super) sink: Box<dyn Sink>,
   /// Where the messages sent to the agent while its turn runs, and the files attached to them, are asked for, and what
   /// its requests and questions are answered by: the rules, the run's auto-approval and the requests as recorded.
   pub(super) link: Box<dyn CoordinatorLink + Send>,

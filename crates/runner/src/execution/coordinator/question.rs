@@ -12,12 +12,13 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_ipc::{Event, Rejection};
-use orchester_store::{ProjectDb, StoreError};
+use orchester_store::{ProjectDb, QuestionRecord, StoreError};
 
-use super::{Notifier, Scheduler, failed, idle, link::LocalLink};
+use super::{Notifier, Scheduler, failed, idle, link::LocalLink, sink::LocalSink};
 use crate::execution::executor::{
   control::Control,
   question::{refusal, unheld_refusal},
+  sink::Sink,
 };
 
 impl Scheduler {
@@ -66,7 +67,8 @@ impl Scheduler {
   /// still waits, and the answer is refused.
   fn end_unheld_question(&self, db: &mut ProjectDb, run: RunId, id: &str) -> Rejection {
     let failure = |error: &dyn std::error::Error| failed("cannot end a question no agent holds", error);
-    let ended = match db.end_waiting_question(run, id) {
+    let mut sink = LocalSink::new(&self.inner.project_root);
+    let ended = match sink.question(QuestionRecord::ended(run, id)) {
       Ok(ended) => ended,
       Err(error) => return failure(&error),
     };

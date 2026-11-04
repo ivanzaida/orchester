@@ -18,7 +18,7 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_ipc::{Event, Rejection};
-use orchester_store::StoreError;
+use orchester_store::{ApprovalRecord, StoreError};
 use tokio::sync::oneshot;
 
 use super::{
@@ -215,9 +215,8 @@ impl Worker {
   /// asks the person (`Finished::closed_after_result`).
   pub(super) fn prompt_closed(&mut self, watch: &mut Watch) -> Result<(), StoreError> {
     let pending = watch.approval.take();
-    watch
-      .db
-      .interrupt_tool_approvals(watch.invocation.run, watch.invocation.id)?;
+    let (run, invocation) = (watch.invocation.run, watch.invocation.id);
+    watch.sink.approval(ApprovalRecord::interrupted(run, invocation))?;
     self.end_approval_wait(watch)?;
     if let Some((approval, _)) = &pending {
       self.report_interrupted(watch, approval)?;
@@ -293,7 +292,7 @@ impl Worker {
     // project again as they arrive, never finds the request between its recording and its mark as under review,
     // when it would wait for the person.
     self.flush(watch)?;
-    watch.db.request_tool_approval(&approval)?;
+    watch.sink.approval(ApprovalRecord::requested(&approval))?;
     let since = approval.requested_at;
     self.route(watch, (approval, awaiting), since).await
   }
@@ -334,9 +333,8 @@ impl Worker {
     watch.asked_in_autopilot = autopilot && came.is_some();
     if let Some(came) = came {
       let came = came.in_mode(autopilot);
-      watch
-        .db
-        .record_came_to_person(approval.run, &approval.id, Some(&came))?;
+      let record = ApprovalRecord::came_to_person(approval.run, &approval.id, Some(&came));
+      watch.sink.approval(record)?;
       watch.invocation.timing.wait_for_person(since);
       // A person's wait never holds one of the computer's QA slots.
       self.qa.release(watch.invocation.id);
@@ -365,7 +363,8 @@ impl Worker {
     }
     let (approval, awaiting) = watch.approval.take().expect("a waiting request was found above");
     watch.asked_in_autopilot = false;
-    watch.db.record_came_to_person(approval.run, &approval.id, None)?;
+    let record = ApprovalRecord::came_to_person(approval.run, &approval.id, None);
+    watch.sink.approval(record)?;
     let now = Timestamp::now();
     watch.invocation.timing.resume(now);
     watch.record_invocation()?;
@@ -407,7 +406,7 @@ impl Worker {
       // Not the call this agent waits on (one of an earlier invocation, or recorded without one): no
       // agent can take its answer, so it ends, unless it was answered already.
       let run = watch.invocation.run;
-      let (ended, refusal) = end_unheld::<WorkerError>(&mut watch.db, &*watch.link, run, &decision.id)?;
+      let (ended, refusal) = end_unheld::<WorkerError>(watch.sink.as_mut(), &*watch.link, run, &decision.id)?;
       if ended {
         self.notifier.send(Event::ToolApprovalChanged { run, task: self.task });
       }

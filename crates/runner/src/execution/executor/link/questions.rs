@@ -35,6 +35,10 @@ pub fn questions(link: &(impl QuestionLink + ?Sized), run: RunId) -> Result<Vec<
 }
 
 /// Request `id` of `run`, asked through `link`.
-pub fn question(link: &(impl QuestionLink + ?Sized), run: RunId, id: &str) -> Result<Option<AskedQuestions>, LinkError> {
+pub fn question(
+  link: &(impl QuestionLink + ?Sized),
+  run: RunId,
+  id: &str,
+) -> Result<Option<AskedQuestions>, LinkError> {
   link.question(&QuestionRequestById { run, id: id.to_owned() })
 }

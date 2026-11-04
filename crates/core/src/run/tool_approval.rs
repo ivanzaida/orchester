@@ -149,7 +149,8 @@ pub struct DecidedToolApproval {
   pub note: Option<super::DenialNote>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ToolApprovalDecision {
   Approved,
   Denied,

@@ -19,9 +19,7 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_runner::execution::link::{
-  approvals::{
-    ApprovalRequest, AutoApproveRequest, PendingApprovalsRequest, ProjectRulesRequest, RunRulesRequest,
-  },
+  approvals::{ApprovalRequest, AutoApproveRequest, PendingApprovalsRequest, ProjectRulesRequest, RunRulesRequest},
   questions::{QuestionRequestById, QuestionsRequest},
 };
 use serde::{Serialize, de::DeserializeOwned};

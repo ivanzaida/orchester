@@ -8,11 +8,12 @@ use orchester_core::{
   store::RunStore,
 };
 use orchester_ipc::Rejection;
-use orchester_store::ProjectDb;
+use orchester_store::{ApprovalRecord, ProjectDb};
 
-use super::{Notifier, Scheduler, failed, link::LocalLink};
+use super::{Notifier, Scheduler, failed, link::LocalLink, sink::LocalSink};
 use crate::execution::executor::{
   control::Control,
+  sink::Sink,
   tool_approval::{notify, unheld_refusal},
 };
 
@@ -41,8 +42,11 @@ impl Scheduler {
   /// and the answer is refused.
   fn end_unheld(&self, run: RunId, id: &str) -> Rejection {
     let failure = |error: &dyn std::error::Error| failed("cannot end a tool request no agent holds", error);
-    let refused = self.open().and_then(|mut db| {
-      let ended = db.end_waiting_tool_approval(run, id).map_err(|error| failure(&error))?;
+    let refused = self.open().and_then(|db| {
+      let mut sink = LocalSink::new(&self.inner.project_root);
+      let ended = sink
+        .approval(ApprovalRecord::ended(run, id))
+        .map_err(|error| failure(&error))?;
       if ended {
         announce_ended(&db, &self.inner.notifier, run);
       }

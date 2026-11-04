@@ -207,7 +207,7 @@ impl RunTask {
     if let Some(waiting_for_slot) = self.held_back()? {
       return Ok(waiting_for_slot);
     }
-    self.answer_questions()?;
+    self.resume_answered_steps()?;
     // An agent stopped to take changed permissions while a pause was asked for waits for it.
     let continuing: Vec<StepExecutionId> = self
       .run

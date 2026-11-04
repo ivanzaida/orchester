@@ -12,7 +12,7 @@ use orchester_core::{
   run::Answerer,
 };
 use orchester_ipc::{Event, Rejection};
-use orchester_store::{ProjectDb, StoreError};
+use orchester_store::{QuestionRecord, StoreError};
 use tokio::sync::mpsc::error::SendError;
 
 use super::{
@@ -22,6 +22,7 @@ use super::{
     questions::{question, questions},
   },
   run::{ExecutionError, RunTask},
+  sink::Sink,
   step::question::QuestionAnswer,
 };
 
@@ -37,15 +38,15 @@ pub(in crate::execution) fn held_by_question(
   }))
 }
 
-/// Ends request `id` of `run`, which no live agent holds, if it still waits, in `db`: whether it did, and why its
-/// answer is refused, asked through `link` ([`unheld_refusal`]).
+/// Ends request `id` of `run`, which no live agent holds, through `sink` if it still waits: whether it did, and why
+/// its answer is refused, asked through `link` ([`unheld_refusal`]).
 pub(in crate::execution) fn end_unheld<E: From<StoreError> + From<LinkError>>(
-  db: &mut ProjectDb,
+  sink: &mut dyn Sink,
   link: &(impl QuestionLink + ?Sized),
   run: RunId,
   id: &str,
 ) -> Result<(bool, Rejection), E> {
-  let ended = db.end_waiting_question(run, id)?;
+  let ended = sink.question(QuestionRecord::ended(run, id))?;
   Ok((ended, unheld_refusal(ended, link, run, id)?))
 }
 
@@ -107,7 +108,7 @@ impl RunTask {
   }
 
   fn end_unheld_question(&mut self, id: &str, ack: Ack) -> Result<(), ExecutionError> {
-    let (ended, refusal) = end_unheld::<ExecutionError>(&mut self.db, &*self.link, self.run.id(), id)?;
+    let (ended, refusal) = end_unheld::<ExecutionError>(self.sink.as_mut(), &*self.link, self.run.id(), id)?;
     if ended {
       self.notifier.send(Event::QuestionChanged {
         run: self.run.id(),
@@ -129,7 +130,7 @@ impl RunTask {
           .iter()
           .filter(|asked| asked.waits() && asked.request.turn() == QuestionTurn::InTurn)
           .try_fold(false, |ended, asked| {
-            Ok(self.db.end_waiting_question(run, asked.request.id())? || ended)
+            Ok(self.sink.question(QuestionRecord::ended(run, asked.request.id()))? || ended)
           })
       });
     match ended {

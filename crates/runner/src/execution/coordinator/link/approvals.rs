@@ -24,7 +24,10 @@ impl<D: Deref<Target = ProjectDb>> ApprovalLink for LocalLink<D> {
   }
 
   fn run_auto_approve(&self, request: &AutoApproveRequest) -> Result<Option<bool>, LinkError> {
-    self.0.run_auto_approve(request.run).map_err(|error| read_failed(&error))
+    self
+      .0
+      .run_auto_approve(request.run)
+      .map_err(|error| read_failed(&error))
   }
 
   fn pending_approvals(&self, request: &PendingApprovalsRequest) -> Result<Vec<PendingToolApproval>, LinkError> {

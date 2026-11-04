@@ -166,7 +166,9 @@ fn deliver_idle(db: &mut ProjectDb, root: &Path, run: RunId) -> Result<Option<Pr
 fn answerable(db: &ProjectDb, run: &Run) -> Result<bool, Rejection> {
   let link = LocalLink::over(db);
   for execution in run.awaiting_answer() {
-    if !held_by_question(&link, run.id(), execution).map_err(|error| failed("cannot read the run's questions", &error))? {
+    if !held_by_question(&link, run.id(), execution)
+      .map_err(|error| failed("cannot read the run's questions", &error))?
+    {
       return Ok(true);
     }
   }

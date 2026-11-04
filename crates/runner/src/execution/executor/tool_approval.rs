@@ -8,7 +8,7 @@ use orchester_core::{
   run::{Answerer, ApprovalAnswer},
 };
 use orchester_ipc::{Event, Rejection};
-use orchester_store::{ProjectDb, StoreError};
+use orchester_store::{ApprovalRecord, StoreError};
 use tokio::sync::mpsc::error::SendError;
 
 use super::{
@@ -19,18 +19,19 @@ use super::{
     approvals::{approval_answered, pending_approvals},
   },
   run::{ExecutionError, RunTask},
+  sink::Sink,
   step::worker::ApprovalDecision,
 };
 
-/// Ends request `id` of `run`, which no live agent holds, if it still waits, in `db`: whether it did, and why its
-/// answer is refused, asked through `link` ([`unheld_refusal`]).
+/// Ends request `id` of `run`, which no live agent holds, through `sink` if it still waits: whether it did, and why
+/// its answer is refused, asked through `link` ([`unheld_refusal`]).
 pub(in crate::execution) fn end_unheld<E: From<StoreError> + From<LinkError>>(
-  db: &mut ProjectDb,
+  sink: &mut dyn Sink,
   link: &(impl ApprovalLink + ?Sized),
   run: RunId,
   id: &str,
 ) -> Result<(bool, Rejection), E> {
-  let ended = db.end_waiting_tool_approval(run, id)?;
+  let ended = sink.approval(ApprovalRecord::ended(run, id))?;
   Ok((ended, unheld_refusal(ended, link, run, id)?))
 }
 
@@ -101,7 +102,7 @@ impl RunTask {
 
   /// No agent of the run holds request `id`: it ends if it still waits, and the answer is refused.
   fn end_unheld(&mut self, id: &str, ack: Ack) -> Result<(), ExecutionError> {
-    let (ended, refusal) = end_unheld::<ExecutionError>(&mut self.db, &*self.link, self.run.id(), id)?;
+    let (ended, refusal) = end_unheld::<ExecutionError>(self.sink.as_mut(), &*self.link, self.run.id(), id)?;
     if ended {
       notify(&self.notifier, self.run.id(), self.task.id());
     }
@@ -117,7 +118,7 @@ impl RunTask {
       .map_err(ExecutionError::from)
       .and_then(|waiting| {
         waiting.iter().try_fold(false, |ended, approval| {
-          Ok(self.db.end_waiting_tool_approval(run, &approval.id)? || ended)
+          Ok(self.sink.approval(ApprovalRecord::ended(run, &approval.id))? || ended)
         })
       });
     match ended {
