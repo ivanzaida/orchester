@@ -1,5 +1,6 @@
 //! One memory record and its transitions.
 
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use super::{
@@ -49,7 +50,7 @@ pub enum StoredMemoryError {
 }
 
 /// The columns of a stored record, for the store to read one back with [`Memory::from_stored`].
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StoredMemory {
   pub id: MemoryId,
   pub scope: MemoryScope,
@@ -66,8 +67,10 @@ pub struct StoredMemory {
   pub revision: u32,
 }
 
-/// One memory record.
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// One memory record. It serializes as its [`StoredMemory`] and is read back through
+/// [`Memory::from_stored`], under the same rules as a record a store reads.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "StoredMemory", into = "StoredMemory")]
 pub struct Memory {
   id: MemoryId,
   scope: MemoryScope,
@@ -391,5 +394,33 @@ impl Memory {
   /// When a person last edited what it says; `None` while it says what its author wrote.
   pub const fn edited_at(&self) -> Option<Timestamp> {
     self.edited_at
+  }
+}
+
+impl TryFrom<StoredMemory> for Memory {
+  type Error = StoredMemoryError;
+
+  fn try_from(stored: StoredMemory) -> Result<Self, Self::Error> {
+    Self::from_stored(stored)
+  }
+}
+
+impl From<Memory> for StoredMemory {
+  fn from(memory: Memory) -> Self {
+    Self {
+      id: memory.id,
+      scope: memory.scope,
+      author: memory.author,
+      content: memory.content,
+      confidence: memory.confidence,
+      status: memory.status,
+      pinned: memory.pinned,
+      supersedes: memory.supersedes,
+      sources: memory.sources,
+      created_at: memory.created_at,
+      updated_at: memory.updated_at,
+      edited_at: memory.edited_at,
+      revision: memory.revision,
+    }
   }
 }

@@ -1,22 +1,27 @@
 //! Task memory around an agent step: the records its invocation's prompt gets, recalled as it
 //! starts with the project's Memory setting of that moment, and the handoff it leaves once its fate
-//! is known ([`super::super::handoff`]).
+//! is known ([`super::super::handoff`]). Memory is read through the coordinator link
+//! ([`super::super::link::memory`]), which searches and chooses the records where they are kept.
 
 use orchester_core::{
   connection::stream::RunnerProblem,
   id::StepExecutionId,
-  memory::{MemoryStore, Recalled, StepContext, StepFate, next_invocation_memory},
+  memory::{Recalled, StepContext, StepFate},
   resource::Step,
   run::{Invocation, ProfileInfo},
   time::Timestamp,
 };
 
 use super::{super::run::RunTask, start::problem};
-use crate::execution::executor::{handoff::Keeper, run::ExecutionError};
+use crate::execution::executor::{
+  handoff::Keeper,
+  link::memory::{RecallRequest, UnreadableRequest},
+  run::ExecutionError,
+};
 
 impl RunTask {
-  /// The records the next invocation of `step`, run by `profile`, gets
-  /// ([`next_invocation_memory`]).
+  /// The records the next invocation of `step`, run by `profile`, gets, as the coordinator chooses them
+  /// ([`orchester_core::memory::next_invocation_memory`]).
   pub(super) fn recall_memory(&self, step: &Step, profile: ProfileInfo<'_>) -> Result<Recalled, RunnerProblem> {
     let context = StepContext {
       task: &self.task,
@@ -24,7 +29,9 @@ impl RunTask {
       profile: profile.id,
       role: profile.body.role().as_str(),
     };
-    next_invocation_memory(&self.db, context, Timestamp::now())
+    self
+      .link
+      .recall(&RecallRequest::for_step(context, Timestamp::now()))
       .map_err(|error| problem(format!("cannot read task memory: {error}")))
   }
 
@@ -36,8 +43,8 @@ impl RunTask {
     }
     self.memory_scanned = true;
     // The agent starts either way: a scan that fails is reported, never a reason to stop.
-    let unreadable = match self.db.unreadable_memories() {
-      Ok(unreadable) => unreadable,
+    let unreadable = match self.link.unreadable(&UnreadableRequest) {
+      Ok(unreadable) => unreadable.records,
       Err(error) => {
         tracing::error!(run = %self.run.id(), %error, "memory could not be checked for unreadable records");
         let problem = RunnerProblem::MemoryScanFailed {
@@ -67,6 +74,7 @@ impl RunTask {
   pub(in super::super) fn keep_handoff(&mut self, execution: StepExecutionId, fate: StepFate) {
     let mut keeper = Keeper {
       db: &mut self.db,
+      link: &*self.link,
       sink: self.sink.as_mut(),
       notifier: &self.notifier,
       vault: self.vault.as_ref(),
