@@ -26,7 +26,7 @@ use super::{
   answer::{Itself, Settled},
   claude_approval::{Asked, AskedBy, PromptAnswer},
   native::NativeAsk,
-  worker::{ApprovalDecision, Driver, Transport, Watch, Worker},
+  worker::{ApprovalDecision, Driver, Transport, Watch, Worker, WorkerError},
 };
 
 /// Who answers a native agent's command request, as its approval records it.
@@ -84,7 +84,7 @@ impl Worker {
 
   /// A native agent's command that a person decides: its shell, full string, working folder and time
   /// limit are what the person sees (04.H9).
-  pub(super) async fn request_native_approval(&mut self, watch: &mut Watch, ask: NativeAsk) -> Result<(), StoreError> {
+  pub(super) async fn request_native_approval(&mut self, watch: &mut Watch, ask: NativeAsk) -> Result<(), WorkerError> {
     let NativeAsk { call, command, shell } = ask;
     let shown = Shown {
       command: true,
@@ -105,7 +105,7 @@ impl Worker {
     &mut self,
     watch: &mut Watch,
     request: PendingApproval,
-  ) -> Result<(), StoreError> {
+  ) -> Result<(), WorkerError> {
     let shown = Shown {
       command: request.is_command(),
       server: request.server.clone(),
@@ -122,7 +122,7 @@ impl Worker {
 
   /// A permission prompt call of Claude Code, or a call of Orchester's tools the relay holds, that a person
   /// decides. A prompt call asked about before is denied without asking again.
-  pub(super) async fn request_claude_approval(&mut self, watch: &mut Watch, asked: Asked) -> Result<(), StoreError> {
+  pub(super) async fn request_claude_approval(&mut self, watch: &mut Watch, asked: Asked) -> Result<(), WorkerError> {
     let Asked {
       request,
       reply,
@@ -263,7 +263,7 @@ impl Worker {
     key: &str,
     shown: Shown,
     awaiting: Awaiting,
-  ) -> Result<(), StoreError> {
+  ) -> Result<(), WorkerError> {
     if watch.approval.is_some() {
       self.observe(
         watch,
@@ -304,7 +304,7 @@ impl Worker {
     watch: &mut Watch,
     (approval, awaiting): (PendingToolApproval, Awaiting),
     since: Timestamp,
-  ) -> Result<(), StoreError> {
+  ) -> Result<(), WorkerError> {
     // Read again at each request: disallowing Autopilot, or switching the run to Manual, stops it from the next one.
     let autopilot = watch.in_autopilot()?;
     let came = match self.answer_itself(watch, &approval, autopilot)? {
@@ -350,7 +350,7 @@ impl Worker {
 
   /// The run dropped to Manual while its waiting request had come to the person by Autopilot's rules: Manual's rules
   /// look at it again, the profile's permissions first, then the reviewer, which keeps it from the person meanwhile.
-  pub(super) async fn recheck_mode(&mut self, watch: &mut Watch) -> Result<(), StoreError> {
+  pub(super) async fn recheck_mode(&mut self, watch: &mut Watch) -> Result<(), WorkerError> {
     if !watch.asked_in_autopilot || watch.stop.is_some() || self.reviewing.is_some() {
       return Ok(());
     }
@@ -375,7 +375,7 @@ impl Worker {
     Ok(())
   }
 
-  pub(super) async fn decide(&mut self, watch: &mut Watch, decision: ApprovalDecision) -> Result<(), StoreError> {
+  pub(super) async fn decide(&mut self, watch: &mut Watch, decision: ApprovalDecision) -> Result<(), WorkerError> {
     let result = self.apply_decision(watch, &decision).await;
     match result {
       Ok(reply) => answer(decision.ack, reply),
@@ -397,7 +397,7 @@ impl Worker {
     &mut self,
     watch: &mut Watch,
     decision: &ApprovalDecision,
-  ) -> Result<Result<(), Rejection>, StoreError> {
+  ) -> Result<Result<(), Rejection>, WorkerError> {
     let held = watch
       .approval
       .as_ref()
@@ -406,7 +406,7 @@ impl Worker {
       // Not the call this agent waits on (one of an earlier invocation, or recorded without one): no
       // agent can take its answer, so it ends, unless it was answered already.
       let run = watch.invocation.run;
-      let (ended, refusal) = end_unheld((&watch.db, watch.sink.as_mut()), run, &decision.id)?;
+      let (ended, refusal) = end_unheld::<WorkerError>(watch.sink.as_mut(), &*watch.link, run, &decision.id)?;
       if ended {
         self.notifier.send(Event::ToolApprovalChanged { run, task: self.task });
       }

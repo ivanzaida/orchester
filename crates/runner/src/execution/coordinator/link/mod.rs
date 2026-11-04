@@ -2,9 +2,11 @@
 //! requests by reading the project database, as the executor did before it asked. Each area of the link answers in a
 //! module of its own.
 
+mod approvals;
 mod environment;
 mod memory;
 mod messages;
+mod questions;
 mod resources;
 
 use std::{
