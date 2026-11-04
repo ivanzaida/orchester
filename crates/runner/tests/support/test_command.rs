@@ -2,11 +2,15 @@
 //! carries them out in order:
 //!
 //! - `print <n>`: prints `line 1` … `line <n>` on standard output;
+//! - `say <text>`: prints `<text>` on standard output at once;
 //! - `stderr <text>`: prints `<text>` on standard error;
 //! - `env <name>`: prints `<name>=<value>` of its environment, or `<name> is not set`;
 //! - `write <file> <text>`: writes `<text>` to `<file>` in its working directory;
+//! - `pid-file <file>`: writes its own pid to `<file>`; `env-file <file> <name>` the value of `<name>`, or `<not set>`;
 //! - `fail-once <file>`: exits with 1 after creating `<file>` in its working directory, unless the file exists;
 //! - `spawn-sleeper`: starts a copy of itself that sleeps for ten minutes and prints `child pid: <pid>`;
+//!   `spawn-sleeper-into <file>` writes the copy's pid to `<file>` instead;
+//! - `listen <port>`: a stand-in web server on `127.0.0.1:<port>` until it is ended (`fake_server`);
 //! - `sleep <seconds>`: sleeps;
 //! - `exit <code>`: exits with `<code>`.
 //!
@@ -19,6 +23,7 @@
 )]
 
 mod fake_run_app_server;
+mod fake_server;
 
 use std::{fs, io::Write, process::ExitCode, thread, time::Duration};
 
@@ -36,11 +41,18 @@ fn main() -> ExitCode {
   while let Some(action) = rest.next() {
     let result = match action {
       "print" => print(rest.next()),
+      "say" => say(rest.next()),
       "stderr" => {
         eprintln!("{}", rest.next().unwrap_or_default());
         Ok(())
       }
       "write" => write(rest.next(), rest.next()),
+      "pid-file" => write(rest.next(), Some(&std::process::id().to_string())),
+      "env-file" => {
+        let file = rest.next();
+        let value = std::env::var(rest.next().unwrap_or_default()).unwrap_or_else(|_| "<not set>".to_owned());
+        write(file, Some(&value))
+      }
       "env" => {
         let name = rest.next().unwrap_or_default();
         match std::env::var(name) {
@@ -54,8 +66,10 @@ fn main() -> ExitCode {
         Ok(false) => Ok(()),
         Err(error) => Err(error),
       },
-      "spawn-sleeper" => spawn_sleeper(),
+      "spawn-sleeper" => spawn_sleeper(None),
+      "spawn-sleeper-into" => spawn_sleeper(rest.next()),
       "serve-app" => fake_run_app_server::serve(rest.next().unwrap_or_default()),
+      "listen" => fake_server::listen(rest.next()),
       "sleep" => sleep(rest.next()),
       "exit" => return ExitCode::from(rest.next().and_then(|code| code.parse().ok()).unwrap_or(2)),
       other => Err(format!("unknown action {other}")),
@@ -66,6 +80,12 @@ fn main() -> ExitCode {
     }
   }
   ExitCode::SUCCESS
+}
+
+fn say(text: Option<&str>) -> Result<(), String> {
+  let mut out = std::io::stdout().lock();
+  writeln!(out, "{}", text.unwrap_or_default()).map_err(|error| error.to_string())?;
+  out.flush().map_err(|error| error.to_string())
 }
 
 fn print(count: Option<&str>) -> Result<(), String> {
@@ -95,7 +115,8 @@ fn fail_once(file: Option<&str>) -> Result<bool, String> {
   Ok(true)
 }
 
-fn spawn_sleeper() -> Result<(), String> {
+/// Starts the sleeping copy; its pid is printed, or written to `file` when one is named.
+fn spawn_sleeper(file: Option<&str>) -> Result<(), String> {
   let program = std::env::current_exe().map_err(|error| error.to_string())?;
   let mut command = std::process::Command::new(program);
   command.env(SLEEPER, "1");
@@ -105,6 +126,9 @@ fn spawn_sleeper() -> Result<(), String> {
     command.creation_flags(0x0000_0008);
   }
   let child = command.spawn().map_err(|error| error.to_string())?;
+  if let Some(file) = file {
+    return write(Some(file), Some(&child.id().to_string()));
+  }
   println!("child pid: {}", child.id());
   std::io::stdout().flush().map_err(|error| error.to_string())
 }

@@ -161,12 +161,7 @@ pub fn report(server: Option<&mut Prompt>, worktree: &Path, prompt: &str) {
     report_call(server, "start_qa_app", &json!({"scenario": scenario}));
     report_call(server, "call_run_app", &json!({"tool": "app_state", "arguments": {}}));
     if prompt.contains("Then read outside") {
-      let notes = fake_tool_calls::repository_folder(worktree, "deps-a").join("notes.txt");
-      report_call(
-        server,
-        "read_external_file",
-        &json!({"filename": notes.to_string_lossy()}),
-      );
+      read_outside(server, worktree);
       report_call(server, "call_run_app", &json!({"tool": "app_state", "arguments": {}}));
       if prompt.contains("Then start again") {
         report_call(server, "start_qa_app", &json!({"scenario": scenario}));
@@ -174,9 +169,40 @@ pub fn report(server: Option<&mut Prompt>, worktree: &Path, prompt: &str) {
     }
     return;
   }
+  if prompt.contains("Start the service ") {
+    services(server, worktree, prompt);
+    return;
+  }
   for (tool, arguments) in calls(prompt, worktree) {
     report_call(server, tool, &arguments);
   }
+}
+
+/// "Start the service <name>.": calls `start_service`; with "Then read outside" it then reads `deps-a/notes.txt` of
+/// the repository, which asks, and with "Then stop the service" it calls `stop_service`.
+fn services(server: &mut Prompt, worktree: &Path, prompt: &str) {
+  let name = prompt
+    .split("Start the service ")
+    .nth(1)
+    .and_then(|rest| rest.split('.').next())
+    .unwrap_or("web");
+  report_call(server, "start_service", &json!({"name": name}));
+  if prompt.contains("Then read outside") {
+    read_outside(server, worktree);
+  }
+  if prompt.contains("Then stop the service") {
+    report_call(server, "stop_service", &json!({"name": name}));
+  }
+}
+
+/// Reads `deps-a/notes.txt` of the repository, outside the worktree, which asks.
+fn read_outside(server: &mut Prompt, worktree: &Path) {
+  let notes = fake_tool_calls::repository_folder(worktree, "deps-a").join("notes.txt");
+  report_call(
+    server,
+    "read_external_file",
+    &json!({"filename": notes.to_string_lossy()}),
+  );
 }
 
 fn report_call(server: &mut Prompt, tool: &str, arguments: &Value) {

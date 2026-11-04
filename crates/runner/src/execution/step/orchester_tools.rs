@@ -49,6 +49,7 @@ use super::{
   qa_app::{StepQa, script_blob},
   relay::{Listening, Served, bind},
   run_records::RunRecords,
+  service::StepServices,
   start::problem,
   tool_files::ToolFiles,
 };
@@ -139,6 +140,8 @@ pub(in super::super) struct ToolHost {
   qa_scripts: Mutex<Vec<(QaAppStart, String)>>,
   /// The invocation's QA app (`start_qa_app`); `None` while the host is being made.
   qa: Option<StepQa>,
+  /// The invocation's services (`start_service`, `stop_service`); `None` while the host is being made.
+  services: Option<StepServices>,
   /// The browser tools, for a step that is offered them ([`StepTools::offers_browser`]).
   browser: Option<StepBrowser>,
 }
@@ -220,6 +223,7 @@ impl ToolHost {
         self.qa_scripts.lock().push((start.clone(), approval.script.clone()));
         Some(approval.target())
       }
+      (ToolCall::StartService(name), None) => Some(name.to_string()),
       _ => None,
     };
     Ok(Looked {
@@ -302,6 +306,14 @@ impl ToolHost {
         }
         None => ToolResult::unavailable("this step cannot start a QA app"),
       },
+      Ok(ToolWork::StartService(name)) => self
+        .services
+        .as_ref()
+        .map_or_else(no_services, |services| services.start(&name)),
+      Ok(ToolWork::StopService(name)) => self
+        .services
+        .as_ref()
+        .map_or_else(no_services, |services| services.stop(&name)),
       Ok(ToolWork::Processes(call)) => self.processes.run(call),
       Ok(ToolWork::Run(program)) => program.finished(run_capped(program.command(), program.timeout(), program.cap())),
       Err(error) => ToolResult::refused(&error),
@@ -355,6 +367,10 @@ fn called_with(arguments: &Value) -> Value {
   }
 }
 
+fn no_services() -> ToolResult {
+  ToolResult::unavailable("this step cannot start or stop services")
+}
+
 /// The relay Codex starts as Orchester's server, with its tools approved, and the listener it reaches.
 pub(in super::super) struct CodexTools {
   pub(in super::super) server: CodexOrchester,
@@ -390,6 +406,9 @@ impl RunTask {
       host.browser = Some(if claude { browser.with_images() } else { browser });
     }
     let qa = self.step_qa(execution, invocation, worktree)?;
+    if host.tools.policy(OrchesterTool::StartService).is_some() {
+      host.services = Some(self.step_services(invocation, worktree, environment));
+    }
     let secrets = setup.secrets().into_iter().chain(provider_key).collect();
     let tools = Arc::new(host.with_secrets(secrets).with_qa(qa));
     let approvals = self.claude_approvals((permissions, setup, &tools), (invocation, worktree))?;
@@ -430,7 +449,9 @@ impl RunTask {
       .map(|execution| execution.step().clone())
       .ok_or_else(|| problem("the step execution is not the run's".to_owned()))?;
     let checks = self.offered_checks(&step)?;
-    let mut tools = StepTools::for_step(permissions, &checks).with_sources(sources);
+    let mut tools = StepTools::for_step(permissions, &checks)
+      .with_sources(sources)
+      .with_services(permissions, &self.service_names()?);
     if files.indexed() {
       tools = tools.with_code_index();
     }
@@ -465,6 +486,7 @@ impl RunTask {
       grants: Mutex::new(Vec::new()),
       qa_scripts: Mutex::new(Vec::new()),
       qa: None,
+      services: None,
       browser: None,
     })
   }

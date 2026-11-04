@@ -60,6 +60,8 @@ rustix = { workspace = true, features = ["fs"] }
 libc.workspace = true
 
 [target.'cfg(windows)'.dependencies]
+# The kill-on-close Job Object that holds a service's process tree (`process_tree`), as the runner's own jobs do.
+win32job.workspace = true
 windows-sys = { workspace = true, features = ["Win32_Storage_FileSystem", "Win32_System_IO", "Win32_System_Ioctl", "Win32_System_JobObjects", "Win32_Security", "Win32_System_Diagnostics_ToolHelp", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging", "Win32_UI_Shell", "Win32_System_Registry", "Win32_System_Com"] }
 
 [dev-dependencies]

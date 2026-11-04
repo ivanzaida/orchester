@@ -40,7 +40,7 @@ use super::{
   prepare::{Prepared, RunFolder},
   record::{RecordError, announce_ready, record},
   step::{
-    Active, QaApps,
+    Active, QaApps, Services,
     worker::{Stop, StopCause, WorkerEvent},
   },
 };
@@ -77,6 +77,7 @@ pub(super) struct TaskContext {
   pub(super) relay: Option<PathBuf>,
   pub(super) board: Arc<Board>,
   pub(super) qa: Arc<QaApps>,
+  pub(super) services: Arc<Services>,
   pub(super) browser: Arc<ProjectBrowser>,
   pub(super) disks: DiskGuard,
   pub(super) controls: mpsc::UnboundedReceiver<Control>,
@@ -114,6 +115,8 @@ pub(super) struct RunTask {
   pub(super) board: Arc<Board>,
   /// The QA apps the run's agents started ([`QaApps`]), shared with the runner's other runs for the QA slots.
   pub(super) qa: Arc<QaApps>,
+  /// The services the run's agents started ([`Services`]), shared with the runner's other runs for their ports.
+  pub(super) services: Arc<Services>,
   /// The project's browser, whose tabs the run's browser tools open and drive.
   pub(super) browser: Arc<ProjectBrowser>,
   /// The disk guard's reading of free space, and how often it looks while agents work.
@@ -165,6 +168,7 @@ impl RunTask {
       relay: context.relay,
       board: context.board,
       qa: context.qa,
+      services: context.services,
       browser: context.browser,
       // Every step starts only once the guard looked (`held_back`); the first look while agents work is an interval on.
       next_disk_check: Instant::now() + context.disks.every,
@@ -363,12 +367,13 @@ impl RunTask {
 
   /// An end event is sent only once, even when recording it failed. Retire its worker before
   /// propagating that error so cleanup never waits for a second event from the same worker.
-  /// Its invocation is over, whatever ended it: its QA app stops and frees its QA slot.
+  /// Its invocation is over, whatever ended it: its QA app stops and frees its QA slot, and its services stop.
   pub(super) fn retire_worker(&mut self, execution: StepExecutionId) -> Option<Active> {
     let active = self.agents.remove(&execution)?;
     self.board.release(execution);
     self.release_steered(execution);
     self.qa.end(active.invocation.id);
+    self.services.end(active.invocation.id);
     self.ended_since_disk_look = true;
     Some(active)
   }

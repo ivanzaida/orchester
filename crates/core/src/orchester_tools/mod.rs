@@ -81,6 +81,8 @@ pub enum OrchesterTool {
   StopRunProcess,
   CallRunApp,
   StartQaApp,
+  StartService,
+  StopService,
   ListSkills,
   ReadSkill,
   GetTask,
@@ -99,12 +101,13 @@ pub enum AccessClass {
   Outside,
   /// Keeps something with the run or the project (memory, the step's progress line); changes no file.
   Records,
-  /// Lists, stops or drives app processes whose resolved executable stays in this run's worktree.
+  /// Lists, stops or drives app processes whose resolved executable stays in this run's worktree, or stops what the
+  /// step itself started.
   RunProcesses,
 }
 
 impl OrchesterTool {
-  pub const ALL: [Self; 21] = [
+  pub const ALL: [Self; 23] = [
     Self::ReadFile,
     Self::ListFiles,
     Self::SearchFile,
@@ -121,6 +124,8 @@ impl OrchesterTool {
     Self::StopRunProcess,
     Self::CallRunApp,
     Self::StartQaApp,
+    Self::StartService,
+    Self::StopService,
     Self::ListSkills,
     Self::ReadSkill,
     Self::GetTask,
@@ -147,6 +152,8 @@ impl OrchesterTool {
       Self::StopRunProcess => "stop_run_process",
       Self::CallRunApp => "call_run_app",
       Self::StartQaApp => "start_qa_app",
+      Self::StartService => "start_service",
+      Self::StopService => "stop_service",
       Self::ListSkills => "list_skills",
       Self::ReadSkill => "read_skill",
       Self::GetTask => "get_task",
@@ -243,9 +250,11 @@ impl OrchesterTool {
       Self::ListSkills | Self::ReadSkill | Self::GetTask => AccessClass::ReadOnly,
       Self::EditFile | Self::CreateFile | Self::DeleteFile | Self::MoveFile => AccessClass::WritesWorktree,
       // Builds and runs the worktree's code outside every sandbox, as a check runs a program outside it.
-      Self::SearchExternalFile | Self::ReadExternalFile | Self::RunCheck | Self::StartQaApp => AccessClass::Outside,
+      Self::SearchExternalFile | Self::ReadExternalFile | Self::RunCheck | Self::StartQaApp | Self::StartService => {
+        AccessClass::Outside
+      }
       Self::SaveMemory | Self::ReportProgress => AccessClass::Records,
-      Self::ListRunProcesses | Self::StopRunProcess | Self::CallRunApp => AccessClass::RunProcesses,
+      Self::ListRunProcesses | Self::StopRunProcess | Self::CallRunApp | Self::StopService => AccessClass::RunProcesses,
     }
   }
 }
@@ -261,6 +270,8 @@ pub enum ToolCallError {
   Invalid { tool: OrchesterTool, message: String },
   #[error("the project offers no check named `{0}` to this step")]
   UnknownCheck(String),
+  #[error("the project publishes no service named `{0}`")]
+  UnknownService(String),
   #[error("the program `{0}` of the check was not found")]
   ProgramNotFound(String),
   #[error(

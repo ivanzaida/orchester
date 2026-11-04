@@ -25,6 +25,7 @@ mod relay_calls;
 mod roots;
 mod run_app;
 mod run_records;
+mod service;
 mod skills;
 mod start;
 mod stderr;
@@ -47,7 +48,6 @@ use orchester_core::{
 use orchester_ipc::Event;
 use tokio::sync::mpsc;
 
-pub(super) use self::qa_app::QaApps;
 use self::{
   command_scope::command_scope,
   end::Taken,
@@ -55,6 +55,7 @@ use self::{
   worker::{Stop, Worker},
 };
 pub use self::{orchester_tools::outside_read_refusals, qa_app::QaSlots};
+pub(super) use self::{qa_app::QaApps, service::Services};
 use super::{
   record::RecordError,
   run::{ExecutionError, RunTask},
@@ -438,6 +439,7 @@ impl RunTask {
       },
       reviews_held,
       qa: std::sync::Arc::clone(&self.qa),
+      services: std::sync::Arc::clone(&self.services),
     };
     tokio::spawn(worker.work(reviews_ended));
     // The budget in force: one raised for the run after it stopped at the step's limit, else the

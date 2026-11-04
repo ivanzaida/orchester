@@ -65,6 +65,15 @@ const CREATE_FILE: &str = r#"{"type":"object","properties":{
   "content":{"type":"string","description":"The file's whole content."}
 },"required":["filename","content"],"additionalProperties":false}"#;
 
+/// What `start_qa_app` does.
+const STARTS_QA_APP: &str = "Build and start a QA copy of the app from this worktree on a seeded scenario (tools/qa-app.ps1), off-screen and without focus, and make it the app call_run_app calls when you leave out its pid. As many QA apps run on this computer at once as the project's setting QA apps at once allows: while other runs' QA apps hold every slot, the call waits until one is free. Starting again replaces this step's QA app; Orchester stops it when your turn ends or waits for a person. A person may be asked first. Never start tools/qa-app.ps1 yourself.";
+
+/// What `start_service` does.
+const STARTS_SERVICE: &str = "Start one of the project's services by name in this run's worktree, on a free loopback port of this run, and wait until it is ready as the service defines (its port open, an HTTP answer, or a log line). Returns {url, port}. A service already running in this step is returned as it is. Orchester stops it with everything it started when your turn ends or waits for a person. A person may be asked first. Use this instead of starting servers by shell.";
+
+/// What `stop_service` does.
+const STOPS_SERVICE: &str = "Stop a service start_service started in this step, with everything it started, without asking. Stopping one that is not running says so.";
+
 impl OrchesterTool {
   /// What the agent is told the tool does.
   pub const fn description(self) -> &'static str {
@@ -75,9 +84,9 @@ impl OrchesterTool {
       Self::StopRunProcess => {
         "Stop a process and its children inside this run's worktree without asking: request close, wait briefly, then end survivors. Outside executables, the runner and agent CLIs are refused. Reports closed, ended or already gone."
       }
-      Self::StartQaApp => {
-        "Build and start a QA copy of the app from this worktree on a seeded scenario (tools/qa-app.ps1), off-screen and without focus, and make it the app call_run_app calls when you leave out its pid. As many QA apps run on this computer at once as the project's setting QA apps at once allows: while other runs' QA apps hold every slot, the call waits until one is free. Starting again replaces this step's QA app; Orchester stops it when your turn ends or waits for a person. A person may be asked first. Never start tools/qa-app.ps1 yourself."
-      }
+      Self::StartQaApp => STARTS_QA_APP,
+      Self::StartService => STARTS_SERVICE,
+      Self::StopService => STOPS_SERVICE,
       Self::CallRunApp => {
         "Call one embedded MCP tool of an app started inside this run's worktree, without asking. Leave out pid to call the QA app start_qa_app started in this step. Other executables and mismatched discovery files are refused. The relay keeps the token private; PNG images are saved in the run's own storage (.orchester/runs/<run>/screenshots/, kept with the run and listed on its task page under Artifacts) and returned as absolute paths: open one with read_file to see it. Use this instead of tools/lurq-mcp-client.py."
       }
@@ -158,6 +167,8 @@ impl OrchesterTool {
         | Self::StopRunProcess
         | Self::CallRunApp
         | Self::StartQaApp
+        | Self::StartService
+        | Self::StopService
         | Self::RunCheck
         | Self::SaveMemory
         | Self::ReportProgress
@@ -165,8 +176,9 @@ impl OrchesterTool {
   }
 }
 
-/// The input schema of `tool`; `projects` are the names and descriptions of the checks `run_check` may run.
-pub(super) fn input_schema(tool: OrchesterTool, projects: &[(String, String, bool)]) -> Value {
+/// The input schema of `tool`; `projects` are the names and descriptions of the checks `run_check` may run, `services`
+/// the names of the services `start_service` and `stop_service` take.
+pub(super) fn input_schema(tool: OrchesterTool, projects: &[(String, String, bool)], services: &[String]) -> Value {
   let fixed = |text: &str| serde_json::from_str::<Value>(text).expect("the static tool schemas are valid JSON");
   let read_lines = |path: &str| {
     json!({"type":"object","properties":{
@@ -178,6 +190,11 @@ pub(super) fn input_schema(tool: OrchesterTool, projects: &[(String, String, boo
   };
   let term = json!({"type":"string","maxLength":MAX_TERM_CHARS,
     "description":"Literal text on one line, not a pattern; matched ignoring case when it is all lower case."});
+  let service = |description: &str| {
+    json!({"type":"object","properties":{
+      "name":{"type":"string","enum":services,"description":description}
+    },"required":["name"],"additionalProperties":false})
+  };
   match tool {
     OrchesterTool::ReadFile => read_lines("File path, relative to the worktree root."),
     OrchesterTool::ListFiles => fixed(NativeTool::ListFiles.input_schema()),
@@ -203,6 +220,8 @@ pub(super) fn input_schema(tool: OrchesterTool, projects: &[(String, String, boo
       "arguments":{"type":"object","description":"That tool's arguments; use {} for none. Never a discovery token."}
     },"required":["tool","arguments"],"additionalProperties":false}),
     OrchesterTool::StartQaApp => fixed(START_QA_APP),
+    OrchesterTool::StartService => service("The service to start, as the project names it."),
+    OrchesterTool::StopService => service("The service to stop."),
     OrchesterTool::SaveMemory => fixed(SAVE_MEMORY),
     OrchesterTool::ReportProgress => fixed(REPORT_PROGRESS),
     OrchesterTool::FindSymbol => fixed(FIND_SYMBOL),

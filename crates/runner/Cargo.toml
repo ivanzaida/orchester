@@ -356,6 +356,10 @@ name = "qa_app_slots"
 required-features = ["test-agent"]
 
 [[test]]
+name = "services"
+required-features = ["test-agent"]
+
+[[test]]
 name = "db_contention"
 required-features = ["test-agent"]
 
@@ -396,6 +400,8 @@ orchester-store.workspace = true
 orchester-vault.workspace = true
 parking_lot.workspace = true
 serde_json.workspace = true
+# The log line a service's readiness waits for (`execution::step::service`), as core checks the pattern.
+regex.workspace = true
 # The run app relay uses a bounded loopback HTTP client and decodes/re-encodes PNGs without metadata.
 reqwest = { workspace = true, features = ["blocking"] }
 # Also the ring crypto provider the error reports' reqwest client takes (`error_reports`).

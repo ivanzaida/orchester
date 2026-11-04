@@ -9,6 +9,7 @@
 mod definition;
 mod error;
 mod folder;
+mod launch;
 mod name;
 mod needs;
 mod placeholder;
@@ -23,6 +24,7 @@ pub use self::{
   definition::{RunData, Service, UiDriver, UiStart},
   error::ServiceError,
   folder::{OwnedPath, RelativeFolder, RunFolder},
+  launch::ServiceProcess,
   name::{ServiceName, StackName},
   needs::{NeedsError, StartPlan},
   placeholder::{FilledSeedRequest, Placeholder, PlaceholderError, PlaceholderPlace, RunValues, check_placeholders},

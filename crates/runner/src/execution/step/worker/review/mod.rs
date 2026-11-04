@@ -229,8 +229,7 @@ impl Worker {
     watch.db.record_came_to_person(watch.invocation.run, id, Some(&came))?;
     watch.asked_in_autopilot = autopilot;
     watch.invocation.timing.wait_for_person(Timestamp::now());
-    // A person's wait never holds one of the computer's QA slots.
-    self.qa.release(watch.invocation.id);
+    self.release_for_person(watch);
     watch.db.save_invocation(&watch.invocation)?;
     self.notifier.send(Event::ToolApprovalChanged {
       run: watch.invocation.run,

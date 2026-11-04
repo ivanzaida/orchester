@@ -230,6 +230,8 @@ pub(in super::super) struct Worker {
   pub(in crate::execution::step) reviews_held: mpsc::Sender<Infallible>,
   /// The run's QA apps: the invocation's stops while it waits for a person.
   pub(in crate::execution::step) qa: std::sync::Arc<super::QaApps>,
+  /// The run's services: the invocation's stop while it waits for a person.
+  pub(in crate::execution::step) services: std::sync::Arc<super::Services>,
 }
 
 /// Which call the relay held when it closed.

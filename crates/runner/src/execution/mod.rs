@@ -41,6 +41,7 @@ mod prepare;
 mod question;
 mod record;
 mod recovery;
+mod rejection;
 mod returned;
 mod run;
 mod side_question;
@@ -72,7 +73,7 @@ use orchester_core::{
   tokens::TokenBudget,
 };
 use orchester_ipc::{Event, Rejection};
-use orchester_store::{ProjectDb, RunStoreError};
+use orchester_store::ProjectDb;
 use parking_lot::Mutex;
 use tokio::{
   sync::{mpsc, oneshot},
@@ -87,8 +88,9 @@ use self::{
   board::Board,
   control::Control,
   prepare::Prepared,
+  rejection::{failed, read_failed},
   run::{RunTask, TaskContext},
-  step::QaApps,
+  step::{QaApps, Services},
 };
 use crate::browser::ProjectBrowser;
 pub use crate::notify::Notifier;
@@ -136,6 +138,8 @@ struct Inner {
   board: Arc<Board>,
   /// The QA apps the runs' agents started, and the computer's QA slots they take.
   qa: Arc<QaApps>,
+  /// The services the runs' agents started, and the ports they hold.
+  services: Arc<Services>,
   /// The project's browser, started at its runs' first use (`browser`).
   browser: Arc<ProjectBrowser>,
   active: Mutex<HashMap<RunId, ActiveRun>>,
@@ -177,6 +181,7 @@ impl Scheduler {
         relay,
         board: Arc::new(Board::new(notifier.clone())),
         qa: Arc::new(QaApps::new(qa_slots)),
+        services: Arc::default(),
         browser: Arc::new(ProjectBrowser::of_project(project_root)),
         notifier,
         active: Mutex::new(HashMap::new()),
@@ -556,6 +561,7 @@ impl Scheduler {
       relay: self.inner.relay.clone(),
       board: self.inner.board.clone(),
       qa: self.inner.qa.clone(),
+      services: self.inner.services.clone(),
       browser: self.inner.browser.clone(),
       disks: self.inner.disks.clone(),
       controls,
@@ -573,26 +579,5 @@ impl Scheduler {
     });
     active.insert(run, ActiveRun { control, task, settled });
     Ok(())
-  }
-}
-
-fn failed(what: &str, error: &dyn std::error::Error) -> Rejection {
-  tracing::error!("{what}: {error}");
-  Rejection::Failed {
-    detail: format!("{what}: {error}"),
-  }
-}
-
-/// A run that could not be read: its record cannot be read back, which rejects the request for it
-/// and leaves the record as it is, or reading failed.
-fn read_failed(what: &str, error: RunStoreError) -> Rejection {
-  match error {
-    RunStoreError::Unreadable { run, source } => {
-      tracing::warn!(%run, error = %source, "a request names a run that cannot be read");
-      Rejection::RunUnreadable {
-        detail: source.to_string(),
-      }
-    }
-    other => failed(what, &other),
   }
 }

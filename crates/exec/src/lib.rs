@@ -17,6 +17,7 @@ pub mod local_git;
 pub mod priority;
 #[cfg(unix)]
 pub mod process_group;
+pub mod process_tree;
 pub mod programs;
 pub mod ripgrep;
 pub mod run_processes;

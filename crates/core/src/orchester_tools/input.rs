@@ -14,6 +14,7 @@ use crate::{
   memory::{Importance, MemoryContent, MemoryKey, MemoryKind, MemoryNote, NoteScope, Tags},
   resource::{SKILL_FILE, SkillFilePath},
   run::StepProgress,
+  service::ServiceName,
 };
 
 /// Lines a read returns when the call gives no `length` or `limit`.
@@ -76,6 +77,10 @@ pub enum ToolCall {
   Processes(ProcessCall),
   App(AppCall),
   StartQaApp(QaAppStart),
+  /// `start_service`: one of the project's published services, started for the step.
+  StartService(ServiceName),
+  /// `stop_service`: a service the step started.
+  StopService(ServiceName),
   GetTask,
   SaveMemory(Box<MemoryNote>),
   ReportProgress(StepProgress),
@@ -161,12 +166,13 @@ impl ToolCall {
       arguments.clone()
     };
     let call = read(tool, arguments).map_err(|message| ToolCallError::Invalid { tool, message })?;
-    if let Self::RunCheck { name } = &call
-      && !step.offers_check(name)
-    {
-      return Err(ToolCallError::UnknownCheck(name.clone()));
+    match &call {
+      Self::RunCheck { name } if !step.offers_check(name) => Err(ToolCallError::UnknownCheck(name.clone())),
+      Self::StartService(name) | Self::StopService(name) if !step.offers_service(name) => {
+        Err(ToolCallError::UnknownService(name.to_string()))
+      }
+      _ => Ok(call),
     }
-    Ok(call)
   }
 
   pub fn tool(&self) -> OrchesterTool {
@@ -184,6 +190,8 @@ impl ToolCall {
       Self::Processes(ProcessCall::Stop { .. }) => OrchesterTool::StopRunProcess,
       Self::App(_) => OrchesterTool::CallRunApp,
       Self::StartQaApp(_) => OrchesterTool::StartQaApp,
+      Self::StartService(_) => OrchesterTool::StartService,
+      Self::StopService(_) => OrchesterTool::StopService,
       Self::SaveMemory(_) => OrchesterTool::SaveMemory,
       Self::ReportProgress(_) => OrchesterTool::ReportProgress,
     }
@@ -193,6 +201,10 @@ impl ToolCall {
 /// `arguments` read as `tool`'s input, or why they are not.
 fn read(tool: OrchesterTool, arguments: Value) -> Result<ToolCall, String> {
   let invalid = |error: serde_json::Error| error.to_string();
+  let service = |arguments: Value| {
+    let input: NameInput = serde_json::from_value(arguments).map_err(invalid)?;
+    ServiceName::new(&input.name).map_err(|error| error.to_string())
+  };
   Ok(match tool {
     OrchesterTool::ListRunProcesses => {
       serde_json::from_value::<NoInput>(arguments).map_err(invalid)?;
@@ -204,6 +216,8 @@ fn read(tool: OrchesterTool, arguments: Value) -> Result<ToolCall, String> {
     }
     OrchesterTool::CallRunApp => ToolCall::App(AppCall::parse(arguments)?),
     OrchesterTool::StartQaApp => ToolCall::StartQaApp(QaAppStart::parse(arguments)?),
+    OrchesterTool::StartService => ToolCall::StartService(service(arguments)?),
+    OrchesterTool::StopService => ToolCall::StopService(service(arguments)?),
     OrchesterTool::FindSymbol => {
       let query: FindSymbol = serde_json::from_value(arguments).map_err(invalid)?;
       if query.name().trim().is_empty() {

@@ -11,6 +11,9 @@
 //! | the checks, network off | not offered | not offered |
 //! | a QA copy of the app, built from the worktree (`start_qa_app`), network on | asks; Approve similar is kept to the script's content | not offered |
 //! | a QA copy of the app, network off | not offered | not offered |
+//! | one of the project's published services (`start_service`), network on | asks | asks |
+//! | stopping a service the step started (`stop_service`), with `start_service` | runs | runs |
+//! | the service tools, network off or no published service | not offered | not offered |
 //! | the browser tools (`browser_*`), the profile's Browser and network on | runs or asks per call, by the page's site ([`browser::decide`]) | the same |
 //! | the browser tools, Browser or network off | not offered | not offered |
 //!
@@ -36,6 +39,7 @@ use super::{
 use crate::{
   permission::{AgentPermissions, NetworkAccess, browser::AllowedSites},
   resource::RepositoryAccess,
+  service::ServiceName,
   source::{RunSources, SourcePath},
 };
 
@@ -52,14 +56,15 @@ pub enum ToolPolicy {
 /// every sandbox, where no host list holds, so a step without network on gets none; [`StepTools::for_step`] lets the
 /// checks that ask no person run.
 pub fn decide(tool: OrchesterTool, permissions: &AgentPermissions) -> Option<ToolPolicy> {
+  let online = *permissions.network() == NetworkAccess::On;
   match tool.access() {
     AccessClass::ReadOnly | AccessClass::Records | AccessClass::RunProcesses => Some(ToolPolicy::Runs),
     AccessClass::WritesWorktree => (permissions.repository() == RepositoryAccess::Write).then_some(ToolPolicy::Runs),
-    AccessClass::Outside if tool == OrchesterTool::RunCheck && *permissions.network() != NetworkAccess::On => None,
+    // A check or a service runs a program outside every sandbox, where no host list holds.
+    AccessClass::Outside if matches!(tool, OrchesterTool::RunCheck | OrchesterTool::StartService) && !online => None,
     // A QA copy builds the worktree's code: a step that may not write it or reach any host gets none.
     AccessClass::Outside
-      if tool == OrchesterTool::StartQaApp
-        && (*permissions.network() != NetworkAccess::On || permissions.repository() != RepositoryAccess::Write) =>
+      if tool == OrchesterTool::StartQaApp && (!online || permissions.repository() != RepositoryAccess::Write) =>
     {
       None
     }
@@ -68,22 +73,25 @@ pub fn decide(tool: OrchesterTool, permissions: &AgentPermissions) -> Option<Too
 }
 
 /// Whether auto-approval may answer a call of `tool` of MCP server `server`: any call but one of Orchester's
-/// `run_check` or `start_qa_app`, which run programs outside every sandbox, or of its browser tools
+/// `run_check`, `start_qa_app` or `start_service`, which run programs outside every sandbox, or of its browser tools
 /// ([`super::browser`]), which can send anything to any site.
 pub fn auto_approvable(server: &str, tool: &str) -> bool {
   server != SERVER
     || (tool != OrchesterTool::RunCheck.as_str()
       && tool != OrchesterTool::StartQaApp.as_str()
+      && tool != OrchesterTool::StartService.as_str()
       && BrowserTool::from_name(tool).is_none())
 }
 
-/// The tools one step is offered, with their policy, the checks `run_check` runs, and the run's sources, which the
-/// calls outside the worktree read without asking.
+/// The tools one step is offered, with their policy, the checks `run_check` runs, the services `start_service`
+/// starts, and the run's sources, which the calls outside the worktree read without asking.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct StepTools {
   offered: Vec<(OrchesterTool, ToolPolicy)>,
   /// Name, description and whether a call asks, of each check, in library order.
   checks: Vec<(String, String, bool)>,
+  /// The names of the project's published services, when the service tools are offered ([`Self::with_services`]).
+  services: Vec<String>,
   sources: Vec<SourcePath>,
   /// The allowed sites, the prompt names them, when the browser tools are offered ([`super::browser::offered`]).
   /// Whether a call of one asks depends on the page it acts on, so the runner decides each call itself
@@ -102,7 +110,11 @@ impl StepTools {
       .filter(|tool| {
         !matches!(
           tool,
-          OrchesterTool::FindSymbol | OrchesterTool::ListSkills | OrchesterTool::ReadSkill
+          OrchesterTool::FindSymbol
+            | OrchesterTool::ListSkills
+            | OrchesterTool::ReadSkill
+            | OrchesterTool::StartService
+            | OrchesterTool::StopService
         )
       })
       .filter_map(|tool| decide(tool, permissions).map(|policy| (tool, policy)))
@@ -117,9 +129,40 @@ impl StepTools {
         .iter()
         .map(|check| (check.name().to_owned(), check.description().to_owned(), check.asks()))
         .collect(),
+      services: Vec::new(),
       sources: Vec::new(),
       browser: browser::offered(permissions).then(|| permissions.browser().sites().clone()),
     }
+  }
+
+  /// These tools and `start_service` and `stop_service`, for a step with `permissions` of a project that publishes
+  /// `services`: none without a service, or when the step may not start one ([`decide`]). A start asks; a stop of what
+  /// the step started never does.
+  #[must_use]
+  pub fn with_services(mut self, permissions: &AgentPermissions, services: &[ServiceName]) -> Self {
+    let Some(policy) = decide(OrchesterTool::StartService, permissions).filter(|_| !services.is_empty()) else {
+      return self;
+    };
+    // Beside the other tools that run programs, before the run's records.
+    let at = self
+      .offered
+      .iter()
+      .position(|(tool, _)| matches!(tool, OrchesterTool::ListSkills | OrchesterTool::GetTask))
+      .unwrap_or(self.offered.len());
+    self.offered.splice(
+      at..at,
+      [
+        (OrchesterTool::StartService, policy),
+        (OrchesterTool::StopService, ToolPolicy::Runs),
+      ],
+    );
+    self.services = services.iter().map(|name| name.as_str().to_owned()).collect();
+    self
+  }
+
+  /// Whether `name` is one of the services the step's service tools take.
+  pub(super) fn offers_service(&self, name: &ServiceName) -> bool {
+    self.services.iter().any(|service| service == name.as_str())
   }
 
   /// Whether the step is offered the browser tools.
@@ -234,10 +277,10 @@ impl StepTools {
         json!({
           "name": tool.as_str(),
           "description": tool.description(),
-          "inputSchema": input_schema(*tool, &self.checks),
+          "inputSchema": input_schema(*tool, &self.checks, &self.services),
           "annotations": {
             "readOnlyHint": tool.read_only(),
-            "destructiveHint": *tool == OrchesterTool::StopRunProcess,
+            "destructiveHint": matches!(tool, OrchesterTool::StopRunProcess | OrchesterTool::StopService),
             "openWorldHint": tool.access() == AccessClass::Outside,
           },
         })
@@ -293,6 +336,16 @@ impl StepTools {
          it, and Orchester stops it when your turn ends or waits for a person.",
         OrchesterTool::StartQaApp.called(claude),
         OrchesterTool::CallRunApp.called(claude),
+      ));
+    }
+    if self.policy(OrchesterTool::StartService).is_some() {
+      text.push_str(&format!(
+        " Never start the project's servers by shell: start one with {}(name) ({}), which waits until it is ready \
+         and returns its url and port, and stop it with {}(name). Orchester stops them when your turn ends or waits \
+         for a person.",
+        OrchesterTool::StartService.called(claude),
+        self.services.join(", "),
+        OrchesterTool::StopService.called(claude),
       ));
     }
     if let Some(sites) = &self.browser {

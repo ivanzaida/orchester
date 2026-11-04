@@ -1,7 +1,8 @@
-//! Services and stacks: the invariants their constructors keep, how needs resolve into start steps, and how
-//! placeholders are checked and filled.
+//! Services and stacks: the invariants their constructors keep, how needs resolve into start steps, how
+//! placeholders are checked and filled, and the process a service starts as.
 
 mod definition;
+mod launch;
 mod needs;
 mod placeholder;
 mod seed;
