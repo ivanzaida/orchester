@@ -86,6 +86,11 @@ struct Checkout {
 
 impl Checkout {
   fn new(server: Option<&team_server::TeamServer>, drafts: &[&str]) -> Self {
+    Self::prepared(server, drafts, |_| {})
+  }
+
+  /// [`Self::new`], with what `prepare` keeps in the project's database before it is linked.
+  fn prepared(server: Option<&team_server::TeamServer>, drafts: &[&str], prepare: impl FnOnce(&mut ProjectDb)) -> Self {
     let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/team-mcp-tests");
     fs::create_dir_all(&scratch).expect("scratch");
     let dir = tempfile::Builder::new()
@@ -114,6 +119,7 @@ impl Checkout {
       db.create_tasks(IdempotencyKey::generate(), details, Timestamp::now())
         .expect("the drafts");
     }
+    prepare(&mut db);
     drop(db);
     let data = tempfile::Builder::new()
       .prefix("data-")

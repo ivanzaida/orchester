@@ -4,6 +4,11 @@
 //! workflow status change wait for team-authority decisions (D6, D4) and are refused before anything is sent; what
 //! the server does not hold of a team task (story points, tags and blocking tasks by name, Don't merge automatically,
 //! delivers, the base branch) is refused rather than kept on this computer.
+//!
+//! The server takes a task's details, its organization and its module on separate routes, so one call may send up to
+//! three changes, each on the revision the one before it left. Once one is saved, a later refusal does not undo it:
+//! the tool answers the task as saved, with the changes `not_saved` and why, so a client never sends the saved part
+//! again (a second task, for a create).
 
 use orchester_api::{
   SharedTask,
@@ -39,6 +44,50 @@ use crate::{
   tasks::form::title_error,
 };
 
+/// One change of a team task, sent on its own route.
+enum Change {
+  Details(TaskDetails, TaskDetails),
+  Organization(TaskOrganization, TaskOrganization),
+  Module(Option<ModuleId>),
+}
+
+impl Change {
+  /// The action that makes this change of `task` as it was last saved.
+  fn action(self, task: &SharedTask) -> TaskAction {
+    let (task, read) = (task.id, task.revision);
+    match self {
+      Self::Details(base, edited) => TaskAction::Edit {
+        task,
+        read,
+        base,
+        edited,
+      },
+      Self::Organization(base, edited) => TaskAction::Organize {
+        task,
+        read,
+        base,
+        edited,
+      },
+      Self::Module(module) => TaskAction::Move { task, read, module },
+    }
+  }
+
+  /// What the result names this change, when it was not saved.
+  const fn name(&self) -> &'static str {
+    match self {
+      Self::Details(..) => "details",
+      Self::Organization(..) => "organization",
+      Self::Module(_) => "module",
+    }
+  }
+}
+
+/// The changes of a call the server did not save after an earlier one was, and why.
+struct NotSaved {
+  changes: Vec<&'static str>,
+  error: ToolError,
+}
+
 pub(in crate::app_mcp::tools) async fn create_task(
   services: &Services,
   team: &Team,
@@ -57,6 +106,10 @@ pub(in crate::app_mcp::tools) async fn create_task(
   if args.pipeline.is_some() || limited {
     return Err(action_refused(ActionError::DecisionRequired(DecisionId::D6)));
   }
+  let status = args.workflow_status.map_or_else(WorkflowStatus::default, Into::into);
+  if status != WorkflowStatus::default() {
+    return Err(action_refused(ActionError::DecisionRequired(DecisionId::D4)));
+  }
   let details = TaskDetails {
     title: title(&args.title)?,
     brief: args.brief.clone().unwrap_or_default(),
@@ -65,7 +118,7 @@ pub(in crate::app_mcp::tools) async fn create_task(
     limits: TaskLimits::NONE,
   };
   let organization = TaskOrganization::new(
-    args.workflow_status.map_or_else(WorkflowStatus::default, Into::into),
+    status,
     args.priority.map(Into::into).unwrap_or_default(),
     args.blocked_reason.clone(),
     Vec::new(),
@@ -74,7 +127,7 @@ pub(in crate::app_mcp::tools) async fn create_task(
   .map_err(organization_refused)?;
   let module = args.module.as_deref().map(module_id).transpose()?;
   let dispatcher = team.dispatcher(services).await?;
-  let task = on_worker(move || async move {
+  let (task, not_saved) = on_worker(move || async move {
     let created = match carry_out(&dispatcher, TaskAction::Create { details, organization }).await? {
       Accepted::Command(receipt) => match receipt.result {
         TeamCommandValue::Task { task, .. } => *task,
@@ -82,13 +135,11 @@ pub(in crate::app_mcp::tools) async fn create_task(
       },
       Accepted::Definition(_) => return Err(not_a_task()),
     };
-    match module {
-      Some(module) => moved(&dispatcher, &created, Some(module)).await,
-      None => Ok(created),
-    }
+    let moves = module.map(|module| Change::Module(Some(module)));
+    apply(&dispatcher, (created, true), moves.into_iter().collect()).await
   })
   .await?;
-  Ok(json!({ "task": saved(&task) }))
+  Ok(answer(&task, not_saved))
 }
 
 pub(in crate::app_mcp::tools) async fn update_task(
@@ -114,37 +165,54 @@ pub(in crate::app_mcp::tools) async fn update_task(
     None => None,
   };
   let task = find(&team.reads(services).await?, &args.key).await?.task;
-  // Editing the details leaves the organization as it was read.
-  let (details, organization) = (edited_details(&task, args)?, organized(&task, args)?);
+  // Everything refused in advance is refused here, before the first change is sent.
+  let mut changes = Vec::new();
+  if let Some((base, edited)) = edited_details(&task, args)? {
+    changes.push(Change::Details(base, edited));
+  }
+  if let Some((base, edited)) = organized(&task, args)? {
+    changes.push(Change::Organization(base, edited));
+  }
+  if let Some(module) = module.filter(|module| *module != task.content.module) {
+    changes.push(Change::Module(module));
+  }
   let dispatcher = team.dispatcher(services).await?;
-  let task = on_worker(move || async move {
-    let mut task = task;
-    // Each change is decided on the revision the one before it left.
-    if let Some((base, edited)) = details {
-      let action = TaskAction::Edit {
-        task: task.id,
-        read: task.revision,
-        base,
-        edited,
-      };
-      task = edit(&dispatcher, action).await?;
+  let (task, not_saved) = on_worker(move || async move { apply(&dispatcher, (task, false), changes).await }).await?;
+  Ok(answer(&task, not_saved))
+}
+
+/// `changes` of `task`, in order, each on the revision the one before it left; `saved` when `task` itself was just
+/// saved (created). A refusal before anything was saved is the call's error; after, the task as saved and what was not.
+async fn apply(
+  dispatcher: &Dispatcher,
+  (mut task, mut saved): (SharedTask, bool),
+  changes: Vec<Change>,
+) -> Result<(SharedTask, Option<NotSaved>), ToolError> {
+  let mut changes = changes.into_iter();
+  while let Some(change) = changes.next() {
+    let name = change.name();
+    match edit(dispatcher, change.action(&task)).await {
+      Ok(next) => (task, saved) = (next, true),
+      Err(error) if saved => {
+        let changes = std::iter::once(name)
+          .chain(changes.map(|change| change.name()))
+          .collect();
+        return Ok((task, Some(NotSaved { changes, error })));
+      }
+      Err(error) => return Err(error),
     }
-    if let Some((base, edited)) = organization {
-      let action = TaskAction::Organize {
-        task: task.id,
-        read: task.revision,
-        base,
-        edited,
-      };
-      task = edit(&dispatcher, action).await?;
-    }
-    match module.filter(|module| *module != task.content.module) {
-      Some(module) => moved(&dispatcher, &task, module).await,
-      None => Ok(task),
-    }
-  })
-  .await?;
-  Ok(json!({ "task": saved(&task) }))
+  }
+  Ok((task, None))
+}
+
+/// The result: the task as the server saved it, and the changes it did not save after it, with why.
+fn answer(task: &SharedTask, not_saved: Option<NotSaved>) -> Value {
+  let mut result = json!({ "task": saved(task) });
+  if let Some(NotSaved { changes, error }) = not_saved {
+    tracing::warn!(code = error.code(), "a team task was saved in part");
+    result["not_saved"] = json!({ "changes": changes, "code": error.code() });
+  }
+  result
 }
 
 /// The details read of `task` and as `args` change them; `None` when they change none.
@@ -174,14 +242,19 @@ fn edited_details(task: &SharedTask, args: &UpdateTask) -> Result<Option<(TaskDe
   Ok((edited != base).then_some((base, edited)))
 }
 
-/// The organization read of `task` and as `args` change it; `None` when they change nothing of it.
+/// The organization read of `task` and as `args` change it; `None` when they change nothing of it. A workflow status
+/// change is refused (D4) before any change of the call is sent.
 fn organized(task: &SharedTask, args: &UpdateTask) -> Result<Option<(TaskOrganization, TaskOrganization)>, ToolError> {
   if args.workflow_status.is_none() && args.priority.is_none() && args.blocked_reason.is_none() {
     return Ok(None);
   }
   let base = task.content.organization().core().map_err(organization_refused)?;
+  let status = args.workflow_status.map_or(base.status(), Into::into);
+  if status != base.status() {
+    return Err(action_refused(ActionError::DecisionRequired(DecisionId::D4)));
+  }
   let edited = TaskOrganization::new(
-    args.workflow_status.map_or(base.status(), Into::into),
+    status,
     args.priority.map_or(base.priority(), Into::into),
     match &args.blocked_reason {
       Some(reason) => reason.clone(),
@@ -200,16 +273,6 @@ async fn edit(dispatcher: &Dispatcher, action: TaskAction) -> Result<SharedTask,
     Accepted::Definition(Definition::Task(task)) => Ok(*task),
     _ => Err(not_a_task()),
   }
-}
-
-/// `task` moved into `module`, or out of its module.
-async fn moved(dispatcher: &Dispatcher, task: &SharedTask, module: Option<ModuleId>) -> Result<SharedTask, ToolError> {
-  let action = TaskAction::Move {
-    task: task.id,
-    read: task.revision,
-    module,
-  };
-  edit(dispatcher, action).await
 }
 
 async fn carry_out(dispatcher: &Dispatcher, action: TaskAction) -> Result<Accepted, ToolError> {

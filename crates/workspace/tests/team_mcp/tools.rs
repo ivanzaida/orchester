@@ -1,12 +1,22 @@
 //! The tools on a team project and on a local one.
 
+use std::collections::BTreeMap;
+
 use orchester_core::{
   connection::{AgentConnection, AgentProvider},
-  id::ConnectionId,
+  id::{ConnectionId, IdempotencyKey},
+  integration::base::RunBaseSource,
   name::Name,
-  store::{ConnectionStore, TaskStore},
+  resource::{AgentProfile, Pipeline, Slug},
+  revision::Revision,
+  run::{BranchName, NewRun, PublishedVersions, RunSnapshot},
+  store::{ConnectionStore, ConversationStore, ResourceStore, RunStore, TaskStore},
   time::Timestamp,
 };
+
+fn name(value: &str) -> Name {
+  Name::new(value).expect("name")
+}
 use orchester_store::TeamStartStage;
 use serde_json::json;
 
@@ -105,6 +115,90 @@ fn team_mcp_member_edit_is_refused_as_not_admin_and_changes_nothing() {
   assert_eq!(seen.lock().task_edits, 1, "none of them reached the server");
   let draft = json!({"project": "Kontur", "key": "KON-7"});
   assert_eq!(checkout.refused("return_to_draft", &draft), "decision_required");
+}
+
+#[test]
+fn team_mcp_an_update_with_a_refused_change_sends_nothing() {
+  let (server, seen) = server();
+  let checkout = Checkout::new(Some(&server), &[]);
+
+  // The title alone would go to the server; the workflow status waits for D4, so neither is sent.
+  let edit = json!({"project": "Kontur", "key": "KON-7", "title": "Say goodbye", "workflow_status": "done"});
+  assert_eq!(checkout.refused("update_task", &edit), "decision_required");
+  let create = json!({"project": "Kontur", "title": "Say goodbye", "workflow_status": "in_progress"});
+  assert_eq!(checkout.refused("create_task", &create), "decision_required");
+  let seen = seen.lock();
+  assert_eq!(seen.task_edits, 0, "no edit reached the server");
+  assert_eq!(seen.task_creates, 0, "no task was created");
+}
+
+#[test]
+fn team_mcp_a_message_does_not_run_a_team_task_again() {
+  let (server, _seen) = server();
+  // A task with a canceled run, kept from before the project was linked: a message would run it again.
+  let checkout = Checkout::prepared(Some(&server), &["Say hello"], canceled_run);
+
+  let message = json!({"project": "Kontur", "run": "1", "text": "Try again."});
+  let error = checkout.call("send_message", &message).expect_err("refused");
+  assert_eq!(error["error"]["code"], "team_run_again_unsupported", "{error}");
+  assert_eq!(server.state().works_made, 0, "nothing started");
+  let task = checkout.db().tasks().expect("tasks")[0].id();
+  assert!(
+    checkout.db().messages(task).expect("conversation").is_empty(),
+    "the message was not kept"
+  );
+}
+
+/// A run of the project's first task with a one-step pipeline published here, started and canceled.
+fn canceled_run(db: &mut orchester_store::ProjectDb) {
+  let now = Timestamp::now();
+  let task = db.tasks().expect("tasks")[0].id();
+  let builder = crate::fixture::builder();
+  let profile = db
+    .create_resource(
+      Slug::new("builder").expect("slug"),
+      name("Builder"),
+      builder.body(),
+      now,
+    )
+    .expect("profile")
+    .id();
+  let profiles = BTreeMap::from([(
+    profile,
+    db.publish_draft::<AgentProfile>(profile, now).expect("publish profile"),
+  )]);
+  let pipeline = crate::fixture::one_step(profile, "Say hello.");
+  let id = db
+    .create_resource(
+      Slug::new("delivery").expect("slug"),
+      name("Delivery"),
+      pipeline.body(),
+      now,
+    )
+    .expect("pipeline")
+    .id();
+  let version = db.publish_draft::<Pipeline>(id, now).expect("publish pipeline");
+  let published = PublishedVersions {
+    profiles: &profiles,
+    tools: &BTreeMap::new(),
+    instructions: &BTreeMap::new(),
+    skills: &BTreeMap::new(),
+  };
+  let new = NewRun {
+    task,
+    snapshot: RunSnapshot::build(id, &version, published).expect("snapshot"),
+    branch: BranchName::new("orchester/kon-1-run-1").expect("branch"),
+    base: Revision::new(&"a".repeat(40)).expect("revision"),
+    base_branch: None,
+    base_source: RunBaseSource::CheckedOut,
+    budget: None,
+    max_duration: None,
+  };
+  let mut run = db.create_run(IdempotencyKey::generate(), new, now).expect("run");
+  let events = run.start(now).expect("started");
+  db.append_events(&run, &events).expect("started run");
+  let events = run.cancel(now).expect("canceled");
+  db.append_events(&run, &events).expect("canceled run");
 }
 
 #[test]
