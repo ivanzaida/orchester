@@ -370,7 +370,7 @@ fn card_qa_start_offers_approval_for_every_run_of_the_project_to_a_person_only()
     text(&mut window, &project),
     "Approve for every run of this project Orchester start_qa_app in every run of this project while \
      tools/qa-app.ps1 is unchanged (git blob 3f2a1b9). A changed script asks again; revoke the rule in Project \
-     settings › Auto mode. Approves this one too."
+     settings › Runs › Approved for every run. Approves this one too."
   );
   assert!(!locked(&mut window, &project));
   // An MCP client's press does not make the rule, even with both opt-ins on.

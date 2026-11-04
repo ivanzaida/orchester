@@ -40,6 +40,7 @@ use super::{
   keep::{self, HOLD_QUEUE, Named},
   mcp_servers,
   own_project::{in_own_project, own_project_by_id},
+  plan::{self, PROPOSE_PLAN},
   proposal,
   repository::{self, INIT_REPOSITORY},
   told,
@@ -122,11 +123,13 @@ pub const TOOLS: [&str; 60] = [
 
 /// The chat's own tools, which no client of the app has: making the project's folder a git repository, always a card
 /// the person applies ([`super::repository`]), working with git in it ([`super::git`]), changing the project's
-/// MCP servers, a card the person applies for whatever widens ([`super::mcp_servers`]), and applying a proposal the
-/// person approved in their own words ([`super::approval`]).
-pub const CHAT_TOOLS: [&str; 23] = [
+/// MCP servers, a card the person applies for whatever widens ([`super::mcp_servers`]), applying a proposal the
+/// person approved in their own words ([`super::approval`]), and answering with a plan in plan-only mode
+/// ([`super::plan`]).
+pub const CHAT_TOOLS: [&str; 24] = [
   INIT_REPOSITORY,
   APPLY_PROPOSAL,
+  PROPOSE_PLAN,
   git::NAMES[0],
   git::NAMES[1],
   git::NAMES[2],
@@ -178,10 +181,20 @@ pub fn listed() -> Vec<Tool> {
       }
       tool
     })
-    .chain([repository::tool(), approval::tool()])
+    .chain([repository::tool(), approval::tool(), plan::tool()])
     .chain(git::tools())
     .chain(mcp_servers::tools())
     .collect()
+}
+
+/// Whether the chat's tool `name` only reads, as its listing says; one the chat does not have changes something.
+fn reads_only(tools: &[Tool], name: &str) -> bool {
+  tools
+    .iter()
+    .find(|tool| tool.name == name)
+    .and_then(|tool| tool.annotations.as_ref())
+    .and_then(|hints| hints.read_only_hint)
+    == Some(true)
 }
 
 /// Whose tools they are: the project's, for one conversation.
@@ -198,13 +211,26 @@ pub struct ChatScope {
 }
 
 /// Calls the chat's tool `name` with `arguments` in `scope`; a change it made, proposed or refused is kept in the
-/// conversation (a proposal it applied for the person, on its card), and `runners` tell the chat it changed.
+/// conversation (a proposal it applied for the person, on its card), and `runners` tell the chat it changed. In a turn
+/// that plans, every tool that changes something is refused before it is reached, and the refusal kept
+/// ([`super::plan`]).
 pub async fn call(
   (services, translate, runners): (&Services, &Translate, &Runners),
   scope: &ChatScope,
   name: &str,
   mut arguments: JsonObject,
 ) -> Result<Value, ToolError> {
+  let tools = listed();
+  if !tools.iter().any(|tool| tool.name == name) {
+    return Err(no_tool(name));
+  }
+  if name == PROPOSE_PLAN {
+    return plan::call((translate, runners), scope, arguments).await;
+  }
+  let read_only = reads_only(&tools, name);
+  if !read_only && plan::planning(scope).await? {
+    return Err(plan::refuse((translate, runners), scope, name).await);
+  }
   if let Some(kind) = git::kind(name) {
     return git::chat::call((services, translate, runners), scope, (name, kind), arguments).await;
   }
@@ -214,10 +240,6 @@ pub async fn call(
   if name == APPLY_PROPOSAL {
     return approval::call((services, translate, runners), scope, arguments).await;
   }
-  let Some(tool) = listed().into_iter().find(|tool| tool.name == name) else {
-    return Err(no_tool(name));
-  };
-  let read_only = tool.annotations.and_then(|hints| hints.read_only_hint) == Some(true);
   if read_only {
     own_project_by_id(scope, &mut arguments);
     return app_tool((services, translate), name, arguments).await;
@@ -361,7 +383,7 @@ async fn switched(
   (name, arguments): (&str, &JsonObject),
   consent: OrchestratorConsent,
 ) -> Result<Acted, ToolError> {
-  if !allows(services, consent).await? {
+  if !allows(services, scope, consent).await? {
     return propose_change((services, translate), scope, name, arguments).await;
   }
   let (change, task) = change::subject((scope, services), name, arguments).await?;
@@ -389,9 +411,9 @@ async fn merge_on_its_own(
   scope: &ChatScope,
   arguments: &JsonObject,
 ) -> Result<Acted, ToolError> {
-  let switched_on = allows(services, OrchestratorConsent::MergeFinished).await?
-    && allows(services, OrchestratorConsent::MergeRuns).await?
-    && allows(services, OrchestratorConsent::AnswerAgents).await?;
+  let switched_on = allows(services, scope, OrchestratorConsent::MergeFinished).await?
+    && allows(services, scope, OrchestratorConsent::MergeRuns).await?
+    && allows(services, scope, OrchestratorConsent::AnswerAgents).await?;
   if auto_merge::merge_as(scope, arguments, switched_on).await? == MergeAs::Propose {
     return propose_change((services, translate), scope, MERGE_RUN, arguments).await;
   }
@@ -457,8 +479,8 @@ async fn resume(
   arguments: &JsonObject,
 ) -> Result<Acted, ToolError> {
   let switches = guard::ResumeSwitches {
-    continues: allows(services, OrchestratorConsent::ContinueInterrupted).await?,
-    answers: allows(services, OrchestratorConsent::AnswerAgents).await?,
+    continues: allows(services, scope, OrchestratorConsent::ContinueInterrupted).await?,
+    answers: allows(services, scope, OrchestratorConsent::AnswerAgents).await?,
   };
   let run = match guard::resume_as(scope, arguments, switches).await? {
     guard::Resume::Propose => return propose_change((services, translate), scope, RESUME_RUN, arguments).await,
@@ -508,7 +530,7 @@ async fn publish(
   name: &str,
   arguments: &JsonObject,
 ) -> Result<Acted, ToolError> {
-  if !allows(services, OrchestratorConsent::PublishDrafts).await? {
+  if !allows(services, scope, OrchestratorConsent::PublishDrafts).await? {
     return propose_change((services, translate), scope, name, arguments).await;
   }
   let (change, _) = change::subject((scope, services), name, arguments).await?;
@@ -534,10 +556,10 @@ async fn allows_autopilot(scope: &ChatScope) -> Result<bool, ToolError> {
   blocking(move || Ok(ProjectDb::open(&root)?.allow_autopilot()?.is_on())).await
 }
 
-/// Whether the person lets the Orchestrator chat do what `consent` names itself.
-async fn allows(services: &Services, consent: OrchestratorConsent) -> Result<bool, ToolError> {
-  let workspace = services.workspace().clone();
-  blocking(move || Ok(workspace.orchestrator_allows(consent)?)).await
+/// Whether the person lets the Orchestrator chat do what `consent` names itself in `scope`'s project.
+async fn allows(services: &Services, scope: &ChatScope, consent: OrchestratorConsent) -> Result<bool, ToolError> {
+  let (workspace, root) = (services.workspace().clone(), scope.root.clone());
+  blocking(move || Ok(workspace.orchestrator_allows(&root, consent)?)).await
 }
 
 /// Whether the person lets automation widen what agents may do.

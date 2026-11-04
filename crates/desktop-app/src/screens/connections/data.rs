@@ -1,42 +1,25 @@
-//! The project's connections as the screen reads them: all of them together (`ProjectConnections`), off the
-//! UI thread, again whenever the screen's revision moves; and each of them, in the order the tab's groups show
-//! them: agent providers, GitHub, MCP servers.
+//! The project's connections as the screen reads them: all of them together (`ProjectConnections`) through their
+//! query, which the project's loader read as the project opened, and which a change of them, the screen's own work
+//! included, reads again (`queries`); and each of them, in the order the tab's groups show them: agent providers,
+//! GitHub, MCP servers.
 
 use std::path::PathBuf;
 
-use lurq::app::ctx::{Ctx, FutureHandle, FutureState};
+use lurq::{app::ctx::Ctx, query::QueryHandle};
 use orchester_core::{
   connection::{AgentConnection, GitHubConnection, GitHubState, mcp::McpServer},
   id::ConnectionId,
   time::Timestamp,
 };
-use orchester_workspace::{
-  background,
-  connections::data::ProjectConnections,
-  messages::{self, Message},
-};
+use orchester_workspace::{connections::data::ProjectConnections, messages::Message};
 
-/// The project's connections at `repo_root`, read when the screen shows and again for each `revision`.
-pub(super) fn load(ctx: &mut Ctx, repo_root: PathBuf, revision: u64) -> FutureState<ProjectConnections, Message> {
-  reading(ctx, repo_root, revision).state().get()
-}
+use crate::queries::{Session, project};
 
-/// [`load`]'s reading itself, for a page that follows its outcome.
-pub(super) fn reading(ctx: &mut Ctx, repo_root: PathBuf, revision: u64) -> FutureHandle<ProjectConnections, Message> {
-  let hold = crate::services::Services::of(ctx).hold;
-  ctx.future((repo_root, revision), move |(repo_root, _)| {
-    tracing::trace!(target: crate::app_log::READ_LOG, read = "connections");
-    let hold = hold.clone();
-    async move {
-      hold.released().await;
-      background::run(move || ProjectConnections::load_in(&repo_root))
-        .await?
-        .map_err(|error| {
-          tracing::error!(%error, "the project's connections cannot be read");
-          messages::store_error(&error)
-        })
-    }
-  })
+/// The project's connections at `repo_root`: their last read in the first frame, read again behind it when a change
+/// invalidated them.
+pub(super) fn load(ctx: &mut Ctx, repo_root: PathBuf) -> QueryHandle<ProjectConnections, Message> {
+  let session = Session::of(ctx);
+  ctx.query(project::connections(session, repo_root))
 }
 
 /// The connection a form saved.

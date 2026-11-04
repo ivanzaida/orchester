@@ -36,7 +36,7 @@ const DESCRIPTION: &str = "Take the active tab of the Orchester window to a rout
   (the mouse's back button, or Alt+Left, Cmd+[ on macOS, returns). `route` is the screen's name: all_projects takes no \
   other argument; join_team takes `way` (cloud, the default: the account's teams and invites; code: the code page; \
   projects with `server`: a joined team's shared projects; folder with `server` and `project`: link one to a folder); \
-  settings takes `tab` (automation, general, updates or whats-new for General with its Updates in \n  view and, with whats-new, the release notes open, notifications, accounts, browser, orchester for Orchester \n  Cloud, connect for Connect a server, invite for an invite's landing) and what that tab opens on: accounts \n  `account` (an account's id or name, or claude-default / codex-default: its page) and `panel` (add for Add account \
+  settings takes `tab` (automation, general, plan-limits for General with its Plan limits in view, updates or \n  whats-new for General with its Updates in \n  view and, with whats-new, the release notes open, notifications, accounts, browser, orchester for Orchester \n  Cloud, connect for Connect a server, invite for an invite's landing) and what that tab opens on: accounts \n  `account` (an account's id or name, or claude-default / codex-default: its page) and `panel` (add for Add account \
   without `account`; sign_in, rename or remove for that account's step 2, name field or Remove question); orchester \
   `server` (a team server's id, name or host: its page) and `ask` (sign-out: Sign outÃ¢â‚¬Â¦? under the account card, or \
   on that server's page; decline with `invite`, an invite's id: Decline the invite?); connect `server` and `step` \
@@ -50,9 +50,11 @@ const DESCRIPTION: &str = "Take the active tab of the Orchester window to a rout
   conversation or changes), `view` for what a tab opens in \
   its place (memory: the task's memory, from summary; local-integration: Local integration, which Try locally opens \
   from changes) and, on its changes tab, `file` with `from`; project_settings \
-  `tab` (general, runs, context, connections, secrets or sharing) and, with tab runs, `view` rules (Approved for every \
-  run). Connections and Secrets are tabs of Project settings with routes of their own: connections takes `selected` \
-  (the id of the connection whose page it opens), or decision (a decision connection id); secrets opens the Secrets tab; new_connection takes `kind` (Add \
+  `tab` (general, runs, orchestrator, context, connections, environment or sharing; secrets, the tab Environment was, still opens \
+  it) and, with tab runs, `view` rules (Approved for every run). Connections and Environment are tabs of Project \
+  settings with routes of their own: connections takes `selected` (the id of the connection whose page it opens), \
+  or decision (a decision connection id); secrets opens the Environment tab, the project's variables and secrets; \
+  new_connection takes `kind` (Add \
   provider or Add MCP server); edit_connection `connection` (an MCP server's id, or an agent CLI connection's for its \
   account); each opens Project settings on that tab or page. agents, instructions, skills, tools and memory are the \
   five tabs of one Agents page (Profiles, Instructions, Skills, Tools, Memory), each its own route: agents takes \
@@ -92,7 +94,7 @@ pub fn tool(link: WindowLink, lookup: Option<Lookup>) -> McpTool {
 fn schema() -> Value {
   let names: Vec<&str> = Screen::ALL.into_iter().map(Screen::name).collect();
   let tabs = format!(
-    "The screen's tab, the one it opens on when left out: settings automation, general, updates, whats-new, \n     notifications, accounts, browser, \n     orchester (Orchester Cloud), connect (Connect a server), invite (an invite's landing); overview {} (kept for old \n     links: the Overview shows every section on one page); tasks {}; \n     task {}; project_settings {}; pull_requests {}; memory {}; import_resources {}; modules {}, a module's page {}.",
+    "The screen's tab, the one it opens on when left out: settings automation, general, plan-limits, updates, \n     whats-new, notifications, accounts, browser, \n     orchester (Orchester Cloud), connect (Connect a server), invite (an invite's landing); overview {} (kept for old \n     links: the Overview shows every section on one page); tasks {}; \n     task {}; project_settings {}; pull_requests {}; memory {}; import_resources {}; modules {}, a module's page {}.",
     OverviewTab::ALL.map(OverviewTab::name).join(", "),
     TaskListTab::ALL.map(TaskListTab::name).join(", "),
     TaskTab::ALL.map(TaskTab::name).join(", "),
@@ -210,7 +212,7 @@ fn screen_route(screen: Screen, args: &Map<String, Value>, lookup: Option<&Looku
     Screen::Pipelines => ProjectPage::Pipelines,
     Screen::Agents => agent_page(args)?,
     Screen::Instructions => ProjectPage::Instructions(InstructionsView::default()),
-    Screen::Memory => ProjectPage::Memory(memory_tab(args)?),
+    Screen::Memory => memory_page(args)?,
     Screen::Skills => skills_page(args)?,
     Screen::Tools => tools_page(args)?,
     Screen::Secrets => ProjectPage::Secrets(SecretsView::default()),
@@ -285,16 +287,14 @@ const fn params(screen: Screen) -> &'static [&'static str] {
   }
 }
 
-/// Memory's tab, or none when left out: the page opens on the one it chooses.
-fn memory_tab(args: &Map<String, Value>) -> Result<Option<MemoryTab>, ToolError> {
-  string(args, "tab")?
-    .map(|name| {
-      MemoryTab::from_name(name).ok_or_else(|| ToolError::UnknownTab {
-        name: name.to_owned(),
-        known: MemoryTab::ALL.map(MemoryTab::name).to_vec(),
-      })
-    })
-    .transpose()
+/// Memory on its tab, or on the one it chooses when left out; `settings`, the tab it had, opens Project settings ›
+/// Context.
+fn memory_page(args: &Map<String, Value>) -> Result<ProjectPage, ToolError> {
+  let name = string(args, "tab")?;
+  MemoryTab::page(name).ok_or_else(|| ToolError::UnknownTab {
+    name: name.unwrap_or_default().to_owned(),
+    known: MemoryTab::ALL.map(MemoryTab::name).to_vec(),
+  })
 }
 
 fn files_view(args: &Map<String, Value>) -> Result<FilesView, ToolError> {

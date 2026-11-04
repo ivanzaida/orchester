@@ -88,10 +88,8 @@ impl AutoMode {
     ctx.watch(&self.check.state(), move |state| {
       if let Some(Stored(settings)) = state.data.as_ref().filter(|_| state.is_fulfilled()) {
         tab.refresh(settings, false);
-        props
-          .parent_read
-          .set(Some(super::work::Read(settings.clone(), u64::MAX)));
-        props.refresh.update(|revision| *revision += 1);
+        // Runs shows what the check read until the settings' query has it, as after a save.
+        props.kept.keep(super::work::Read(settings.clone()));
         props.tab.project.feed.saved();
       }
     });

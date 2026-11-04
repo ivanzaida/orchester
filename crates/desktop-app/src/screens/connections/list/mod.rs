@@ -19,9 +19,7 @@ use lurq::{
   node::Element,
 };
 use orchester_core::{id::ConnectionId, time::Timestamp};
-use orchester_workspace::{
-  activity::operations, connections::data::ProjectConnections, messages::Message, tasks::outside::Outside,
-};
+use orchester_workspace::{activity::operations, connections::data::ProjectConnections, messages::Message};
 use parking_lot::Mutex;
 
 use super::{
@@ -32,6 +30,7 @@ use super::{
 use crate::{
   navigation::Navigation,
   project::ShownProject,
+  queries::{self, Again},
   routes::{ConnectionsView, ProjectPage, Route},
   screens::project_settings::kit,
   services::{
@@ -67,9 +66,10 @@ struct Asking(Option<(ConnectionId, Confirm)>);
 impl DevtoolsInspectable for Asking {}
 
 pub struct ConnectionsScreen {
-  /// Counts the readings asked for: each piece of work done, and Try again.
   work: WorkAction,
+  /// Counts the readings asked for: failed work, and Try again; each reads the connections again.
   revision: Signal<u64>,
+  again: Again,
   running: Signal<Running>,
   /// The connection the last work ran on, whose failure its page says.
   last: Signal<LastOn>,
@@ -93,6 +93,7 @@ impl Component for ConnectionsScreen {
     let screen = Self {
       work: work::action(ctx),
       revision: ctx.signal(0),
+      again: Again::default(),
       running: ctx.signal(Running(None)),
       last: ctx.signal(LastOn(None)),
       asking: ctx.signal(Asking(None)),
@@ -116,9 +117,11 @@ impl Component for ConnectionsScreen {
       self.more.0.set(false);
     }
     let work = self.work.clone();
-    // Read again after a Try again press, and when automation changed the project's connections.
-    let revision = self.revision.get() + project.feed.outside.get().of(Outside::Connections);
-    let loaded = data::load(ctx, project.open.repo_root.clone(), revision);
+    // Read again after a Try again press and failed work; a change of the project's connections, the screen's own
+    // work and automation's, reads them again through `queries`.
+    let query = data::load(ctx, project.open.repo_root.clone());
+    self.again.follow(self.revision.get(), &query);
+    let loaded = queries::state(&query);
     let accounts = accounts::listed(ctx);
     let Some(listed) = loaded.data else {
       return kit::scroll(match loaded.error {

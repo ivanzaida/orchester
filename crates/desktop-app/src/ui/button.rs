@@ -10,6 +10,8 @@
 //! one with a consequence is as wide as its parent, its label and the consequence under it at its start, 8 over and
 //! under and 12 at its sides, the cap 12 after them (`Option · Skip the exports` `wWuSM`).
 
+mod kind;
+
 use std::sync::Arc;
 
 use lurq::{
@@ -17,9 +19,10 @@ use lurq::{
   components::{Button, Column, Row, Text},
   core::ElementRef,
   layout::{Alignment, layout_kind::Justify},
-  node::{CursorIcon, Element, Style, border::Border, dimension::Dimension, padding::Padding},
+  node::{CursorIcon, Element, border::Border, dimension::Dimension, padding::Padding},
 };
 
+pub use self::kind::ButtonKind;
 use super::{
   icon::{Icon, icon},
   kbd::key_cap,
@@ -31,80 +34,6 @@ use crate::{
     CONSEQUENCE_ON_ACCENT_OPACITY, ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraSpacing, ExtraTypography, IconSize,
   },
 };
-
-/// The look of a button.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ButtonKind {
-  /// The one action a screen or card is about: `accent`, its content `on_accent`.
-  Primary,
-  /// `surface_raised` inside a `border_strong` stroke, its content `text_primary`.
-  Secondary,
-  /// No fill: its content `text_secondary`, the `hover` fill under the pointer.
-  Ghost,
-  /// `danger_muted`, its content `danger`.
-  Danger,
-  /// Destructive text on the ghost button (Secrets inspector, Emd0h).
-  DangerGhost,
-  /// A field-like menu trigger with a trailing chevron (LWah7, Runs after).
-  Select,
-}
-
-impl ButtonKind {
-  const fn name(self) -> &'static str {
-    match self {
-      Self::Primary => "primary",
-      Self::Secondary => "secondary",
-      Self::Ghost => "ghost",
-      Self::Danger => "danger",
-      Self::DangerGhost => "danger-ghost",
-      Self::Select => "select",
-    }
-  }
-
-  /// The color of the icon and the label.
-  fn content(self) -> PaletteColor {
-    match self {
-      Self::Primary => ExtraColor::OnAccent.role(),
-      Self::Secondary | Self::Select => PaletteColor::TextPrimary,
-      Self::Ghost => PaletteColor::TextSecondary,
-      Self::Danger | Self::DangerGhost => PaletteColor::Danger,
-    }
-  }
-
-  fn dressed(self, button: Button) -> Button {
-    match self {
-      Self::Primary => button.background(PaletteColor::Accent),
-      Self::Secondary => button
-        .background(PaletteColor::SurfaceRaised)
-        .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong)),
-      Self::Ghost | Self::DangerGhost => button,
-      Self::Select => button
-        .background(PaletteColor::SurfaceInput)
-        .border(Border::inside(BorderSize::Sm, PaletteColor::Border)),
-      Self::Danger => button.background(PaletteColor::DangerMuted),
-    }
-  }
-
-  /// Under the pointer and while pressed. The design draws neither; they follow the shell's `hover` and
-  /// `pressed` overlays and the accent's own hover.
-  fn interactive(self, button: Button) -> Button {
-    let fill = |color: PaletteColor| Style::new().background(color);
-    match self {
-      Self::Primary => button
-        .hovered_style(fill(PaletteColor::AccentHover))
-        .active_style(fill(PaletteColor::AccentHover)),
-      Self::Secondary | Self::Select => button
-        .hovered_style(fill(PaletteColor::Border))
-        .active_style(fill(PaletteColor::BorderStrong)),
-      Self::Ghost | Self::DangerGhost => button
-        .hovered_style(fill(ExtraColor::Hover.role()))
-        .active_style(fill(ExtraColor::Pressed.role())),
-      Self::Danger => button
-        .hovered_style(Style::new().border(Border::inside(BorderSize::Sm, PaletteColor::Danger)))
-        .active_style(Style::new().border(Border::inside(BorderSize::Sm, PaletteColor::Danger))),
-    }
-  }
-}
 
 /// Why a button cannot be pressed now. It wins over a handler given in any order.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -135,6 +64,8 @@ pub struct ActionButton {
   compact: bool,
   /// 10 at each side instead of 12 (`SHKod`).
   tight: bool,
+  /// On a group's heading line (`Hfjkt`).
+  in_heading: bool,
   /// 24 high instead of 28, as a Copy inside a command row (`PEnj5`).
   small: bool,
   /// 36 high with a 13/500 label.
@@ -173,6 +104,7 @@ impl ActionButton {
       fill: false,
       compact: false,
       tight: false,
+      in_heading: false,
       small: false,
       large: false,
       roomy: false,
@@ -301,6 +233,13 @@ impl ActionButton {
     self
   }
 
+  /// As high as a heading's line, with a 12 icon: an action on a group's heading line, so a heading with one starts and
+  /// ends where any other does (`Add provider` in `Head` `Hfjkt`).
+  pub fn in_heading(mut self) -> Self {
+    self.in_heading = true;
+    self
+  }
+
   /// 24 high, its icon and label as a button's: an action inside a command row (`Command row` `PEnj5`).
   pub fn small(mut self) -> Self {
     self.small = true;
@@ -382,7 +321,9 @@ impl ActionButton {
 impl ActionButton {
   /// Its height, and the sizes of its icon and label.
   fn metrics(&self) -> (ControlHeight, IconSize, TypographyStyle) {
-    if self.compact {
+    if self.in_heading {
+      (ControlHeight::Heading, IconSize::Sm, TypographyStyle::Button)
+    } else if self.compact {
       (
         ControlHeight::Helper,
         IconSize::Sm,

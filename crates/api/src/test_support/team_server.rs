@@ -42,6 +42,8 @@ struct State {
   projects: Vec<Value>,
   /// `POST /auth/cloud` answers `not_invited`.
   not_invited: bool,
+  /// `POST /auth/cloud` waits for approval (`202`).
+  approval: bool,
   /// [`LATER_CODE`] has expired.
   later_expired: bool,
   /// Connections are closed without an answer, as when the server cannot be reached.
@@ -78,6 +80,7 @@ impl TeamServer {
       name: name.to_owned(),
       projects: Vec::new(),
       not_invited: false,
+      approval: false,
       later_expired: false,
       down: false,
       refuses_links: false,
@@ -128,6 +131,11 @@ impl TeamServer {
 
   pub fn not_invited(&self) {
     self.state.lock().not_invited = true;
+  }
+
+  /// A cloud join waits for approval from now on, as with join approval on for an account with no computer yet.
+  pub fn hold_for_approval(&self) {
+    self.state.lock().approval = true;
   }
 
   pub fn expire_later_code(&self) {
@@ -222,6 +230,8 @@ fn route((path, query): (&str, &str), (headers, body): (&str, &str), state: &Mut
       state.cloud_joins += 1;
       if state.not_invited {
         ("403 Forbidden", error("not_invited"))
+      } else if state.approval {
+        ("202 Accepted", waiting())
       } else {
         ("201 Created", joined("cloud"))
       }
@@ -247,6 +257,12 @@ fn joined(via: &str) -> Value {
     "user": user(via == "cloud"),
     "joined": null,
   })
+}
+
+/// The `202` of a cloud join that waits for approval.
+fn waiting() -> Value {
+  json!({"approval": {"id": "0191c7c0-0000-7000-8000-00000000a991", "user": {"id": USER, "display_name": "Bohdan Koval"},
+    "device": "Bohdan's laptop", "address": "127.0.0.1", "state": "waiting", "requested_at": 1, "expires_at": 2}})
 }
 
 /// Bohdan's account.

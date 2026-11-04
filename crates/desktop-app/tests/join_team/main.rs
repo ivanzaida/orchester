@@ -7,6 +7,7 @@
 //!
 //! `cargo test -p orchester-app --test join_team join_team_`
 
+mod browser_joined;
 mod roles;
 #[path = "../support/mod.rs"]
 mod support;

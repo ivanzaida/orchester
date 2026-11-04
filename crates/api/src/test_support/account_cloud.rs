@@ -151,6 +151,14 @@ impl AccountCloud {
     }));
   }
 
+  /// `invite` was accepted in the browser at `at` (milliseconds) and the team server's receipt has not come back: it
+  /// is still listed, with `accepted_at`, and still issues tokens that accept it.
+  pub fn accepted_in_browser(&self, invite: &str, at: i64) {
+    let mut state = self.state.lock();
+    let found = state.invites.iter_mut().find(|listed| listed["id"] == invite);
+    found.expect("the invite is made first")["accepted_at"] = json!(at);
+  }
+
   pub fn declined(&self) -> Vec<String> {
     self.state.lock().declined.clone()
   }

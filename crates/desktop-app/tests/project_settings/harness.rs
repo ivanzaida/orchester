@@ -38,11 +38,11 @@ impl Settings {
       editing: String::new(),
     }
   }
-  /// The tab that holds what `name` names, once `ready` shows: Limits and Environment are on Runs, Sources and the code
-  /// index on Context. The environment's variables show once its row's Edit opens them.
+  /// The tab that holds what `name` names, once `ready` shows: Limits are on Runs, Sources and the code index on
+  /// Context. The environment's variables editor shows once *Edit variables*' Edit opens it.
   pub fn tab(&mut self, name: &str, ready: &str) {
     let tab = match name {
-      "limits" | "environment" => "runs",
+      "limits" => "runs",
       "sources" | "codeIndex" | "code_index" => "context",
       tab => tab,
     };
@@ -126,7 +126,7 @@ impl Settings {
   pub fn leave(&mut self) {
     // Move to another focusable control, as clicking out of the edited field does.
     let target = if self.editing == "settings-environment-variables" {
-      "settings-open-secrets"
+      "settings-environment-edit"
     } else if self.editing == "settings-agent-slots" {
       "settings-time-limit"
     } else {
@@ -150,15 +150,20 @@ impl Settings {
       return;
     }
     self.click(id);
-    let option = (0..)
-      .map(|index| format!("{id}-option-{index}"))
-      .map_while(|option| {
-        let first = self.window.texts(&option)?.first().cloned()?;
-        Some((option, first))
-      })
-      .find(|(_, first)| first == label)
-      .map(|(option, _)| option)
-      .unwrap_or_else(|| panic!("{id} offers {label}"));
+    // The open menu shows the choices of the settings as read; a change just counted may still be reading.
+    let mut option = None;
+    self.until(&format!("{id} offering {label}"), |s| {
+      option = (0..)
+        .map(|index| format!("{id}-option-{index}"))
+        .map_while(|option| {
+          let first = s.window.texts(&option)?.first().cloned()?;
+          Some((option, first))
+        })
+        .find(|(_, first)| first == label)
+        .map(|(option, _)| option);
+      option.is_some()
+    });
+    let option = option.expect("found above");
     self.click(&option);
   }
   pub fn saved(&mut self) {

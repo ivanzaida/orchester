@@ -28,8 +28,9 @@ mod placeholder;
 mod project_settings;
 mod pull_requests;
 mod review;
+mod reviewer_trouble;
 mod secrets;
-mod settings;
+pub(crate) mod settings;
 mod shared_config;
 mod skills;
 pub(crate) mod task;
@@ -38,7 +39,7 @@ mod task_form;
 pub(crate) mod tasks;
 mod tools;
 mod unavailable_project;
-mod usage;
+pub(crate) mod usage;
 
 use std::sync::Arc;
 
@@ -66,7 +67,14 @@ pub fn screen(ctx: &mut Ctx) -> Element {
     Ok(Route::Settings) => settings::screen(ctx, settings::SettingsTab::Automation),
     Ok(Route::RotateToken) => settings::asking_rotation(ctx),
     Ok(Route::General) => settings::screen(ctx, settings::SettingsTab::General(None)),
-    Ok(Route::Updates(show)) => settings::screen(ctx, settings::SettingsTab::General(Some(show))),
+    Ok(Route::Updates(show)) => settings::screen(
+      ctx,
+      settings::SettingsTab::General(Some(settings::GeneralShow::Updates(show))),
+    ),
+    Ok(Route::PlanLimits) => settings::screen(
+      ctx,
+      settings::SettingsTab::General(Some(settings::GeneralShow::PlanLimits)),
+    ),
     Ok(Route::Notifications) => settings::screen(ctx, settings::SettingsTab::Notifications),
     Ok(Route::Browser) => settings::screen(ctx, settings::SettingsTab::Browser),
     Ok(Route::Accounts(view)) => settings::screen(ctx, settings::SettingsTab::Accounts(view)),

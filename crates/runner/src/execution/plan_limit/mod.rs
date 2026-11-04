@@ -21,7 +21,7 @@ use orchester_store::ProjectDb;
 pub(super) use waits::PlanWaits;
 
 use super::{
-  failed,
+  Scheduler, failed,
   idle::{load, rejection, store_continuation},
   prepare::Prepared,
 };
@@ -70,4 +70,26 @@ pub(super) fn try_now(db: &mut ProjectDb, root: &Path, run: RunId) -> Result<Pre
     return Err(Rejection::RunNotPaused);
   };
   super::idle::resume(db, root, run).map(|prepared| prepared.trying_at_plan_limit(execution))
+}
+
+impl Scheduler {
+  /// Continues `run`, stopped at its account's plan limit, now on `connection`, another account's connection of
+  /// the same CLI, as a new session for the stopped step and this run only.
+  pub async fn continue_on_connection(&self, run: RunId, connection: ConnectionId) -> Result<(), Rejection> {
+    self.plan_waits().clear(run);
+    let continued = self
+      .continue_settled(run, |db, root| continue_on(db, root, run, connection))
+      .await;
+    self.wait_again_if_refused(&continued);
+    continued
+  }
+
+  /// Continues `run`, stopped at its account's plan limit, on the same account now, as a person asked; it stops there
+  /// again if the CLI still refuses.
+  pub async fn try_at_plan_limit(&self, run: RunId) -> Result<(), Rejection> {
+    self.plan_waits().clear(run);
+    let tried = self.continue_settled(run, |db, root| try_now(db, root, run)).await;
+    self.wait_again_if_refused(&tried);
+    tried
+  }
 }

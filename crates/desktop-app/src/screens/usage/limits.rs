@@ -1,6 +1,7 @@
 //! *Plan limits* (`Card · Plan limits` `CPuK9`): % used per window as lines, account-wide (limits belong to
 //! the CLI account, so the page draws every project's reports), with the windows' legend over the chart,
-//! the warning threshold in the card's menu, a footnote on what is recorded and where nothing is known, and
+//! the warning threshold dashed across, its menu opening Settings › General where it is set, a footnote on what is
+//! recorded and where nothing is known, and
 //! the newest readings as a table (`Table` `CFzvr`). Plan limits follow the CLI filter only. Without any report
 //! the card says *No plan limits recorded yet* (`No plan limits reported yet` in `cK32U`).
 
@@ -42,8 +43,8 @@ pub fn limits_view_switch(ctx: &Ctx, views: &Signal<Views>) -> Element {
   )
 }
 
-pub fn card(ctx: &mut Ctx, dashboard: &Arc<Dashboard>, views: &Signal<Views>, saved: &Signal<u64>) -> Element {
-  let menu = threshold::menu(ctx, dashboard, saved);
+pub fn card(ctx: &mut Ctx, dashboard: &Arc<Dashboard>, views: &Signal<Views>) -> Element {
+  let menu = threshold::menu(ctx, dashboard);
   let card = Card::new("usage-limits", ctx.t("usage.limits.title"))
     .note(ctx.t("usage.limits.note"))
     .trailing(limits_view_switch(ctx, views))

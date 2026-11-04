@@ -17,12 +17,14 @@
 mod choice;
 mod decision;
 mod decision_usage;
+mod detail;
 mod hold;
 mod input;
 mod prompt;
 mod push;
 mod spend;
 mod test;
+mod trouble;
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -36,6 +38,7 @@ pub use self::{
   },
   decision::{DecisionVerdict, NotProbability, Probability, Risk, Risks},
   decision_usage::DecisionReviewRecord,
+  detail::DetailRedaction,
   hold::{HoldRules, ReviewHold, StepLimit, review_hold, step_limit, unread_parts},
   input::{ReviewInput, ReviewedRequest, ReviewedStep, ReviewedTask, RootsQuestion, UnreadPart, UnreadWhy},
   prompt::{
@@ -45,6 +48,7 @@ pub use self::{
   push::PushFacts,
   spend::{AutoReview, ReviewCost, ReviewEnd, ReviewRecord, ReviewSpend, Reviewed, reviews_usage},
   test::{DecisionTestReport, DecisionTestStatus, ThresholdFigures},
+  trouble::{ReviewerAccount, ReviewerHealth, ReviewerTrouble},
 };
 use super::answer::ApprovalSubject;
 use crate::resource::ModelId;
@@ -105,6 +109,17 @@ pub enum ReviewFailure {
   NoReviewer,
 }
 
+impl ReviewFailure {
+  /// Whether only a decision model's review ends so: its key refused, nothing answering, not a System One API, or its
+  /// model gone.
+  pub const fn is_decision_only(self) -> bool {
+    matches!(
+      self,
+      Self::KeyRefused | Self::NothingAnswers | Self::NotSystemOneApi | Self::ModelGone
+    )
+  }
+}
+
 /// How auto mode handled a request, as it is recorded with the request.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "outcome", rename_all = "snake_case")]
@@ -122,6 +137,14 @@ pub enum Review {
     failure: ReviewFailure,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     model: Option<String>,
+    /// Why, in the reviewer's own words with its secrets and prompt kept out ([`ReviewError::detail`]); none without
+    /// a reviewer, and in records kept before it was.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    detail: Option<String>,
+    /// A decision model reviewed it ([`Review::by_decision_model`]), so the card says its failure in the decision
+    /// line; false in records kept before it was, where only a decision-only failure tells.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    decision: bool,
   },
 }
 
@@ -142,14 +165,36 @@ impl Review {
         decision: Box::new(decision),
       },
       Err(error) => Self::Failed {
-        failure: match error {
-          ReviewError::TimedOut => ReviewFailure::TimedOut,
-          ReviewError::Unparseable(_) => ReviewFailure::Unreadable,
-          ReviewError::CouldNotRun(_) => ReviewFailure::CouldNotRun,
-          ReviewError::Decision(failure) => failure,
-        },
+        failure: error.failure(),
         model: Some(model),
+        detail: Some(error.detail()),
+        decision: false,
       },
+    }
+  }
+
+  /// This review, marked as a decision model's when it failed: a timeout or a refusal reads the same from any
+  /// reviewer, and the card names a decision model's failure in its own line.
+  #[must_use]
+  pub fn by_decision_model(self) -> Self {
+    match self {
+      Self::Failed {
+        failure, model, detail, ..
+      } => Self::Failed {
+        failure,
+        model,
+        detail,
+        decision: true,
+      },
+      review => review,
+    }
+  }
+
+  /// Whether a decision model's review failed: marked so, or ended in a failure only a decision model has.
+  pub const fn decision_failed(&self) -> bool {
+    match self {
+      Self::Failed { failure, decision, .. } => *decision || failure.is_decision_only(),
+      _ => false,
     }
   }
 
@@ -175,7 +220,12 @@ impl Review {
 /// spaces one, double quotation marks single ones (the app quotes it), cut to [`REASON_MAX_CHARS`] with an ellipsis.
 /// The reviewer's reasons and the story-point estimator's are kept so.
 pub fn one_plain_line(reason: &str) -> String {
-  let plain: String = reason
+  plain_line(reason, REASON_MAX_CHARS)
+}
+
+/// `text` as one plain line ([`one_plain_line`]), cut to `max_chars`.
+fn plain_line(text: &str, max_chars: usize) -> String {
+  let plain: String = text
     .chars()
     .map(|c| match c {
       c if QUOTES.contains(&c) => '\'',
@@ -185,10 +235,10 @@ pub fn one_plain_line(reason: &str) -> String {
     .filter(|c| !INVISIBLE.contains(c))
     .collect();
   let line = plain.split_whitespace().collect::<Vec<_>>().join(" ");
-  if line.chars().count() <= REASON_MAX_CHARS {
+  if line.chars().count() <= max_chars {
     return line;
   }
-  let mut cut: String = line.chars().take(REASON_MAX_CHARS - 1).collect();
+  let mut cut: String = line.chars().take(max_chars - 1).collect();
   cut.push('\u{2026}');
   cut
 }
@@ -244,6 +294,8 @@ fn ask(reviewer: Option<&dyn RequestReviewer>, input: &ReviewInput) -> AutoRevie
       review: Review::Failed {
         failure: ReviewFailure::NoReviewer,
         model: None,
+        detail: None,
+        decision: false,
       },
       cost: None,
     };

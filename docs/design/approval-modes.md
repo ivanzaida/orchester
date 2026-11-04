@@ -22,12 +22,12 @@ design source is `crates/desktop-app/design/orchester.pen`, read and changed onl
   | Decision | Who answers it without a person | Setting that allows it |
   |---|---|---|
   | An agent's question | An MCP client: `answer_question`, the question card, the composer (window input) | Settings › Automation › *Let automation answer approvals* (`DecisionKind::Question`) |
-  | An agent's question or message | The Orchestrator chat: `answer_question`, `send_message` (`answered_by_orchestrator`) | *Let the Orchestrator answer agents* **and** *Let automation answer approvals*; otherwise a proposal the person applies |
+  | An agent's question or message | The Orchestrator chat: `answer_question`, `send_message` (`answered_by_orchestrator`) | *Let the Orchestrator answer agents* (Project settings › Orchestrator) **and** *Let automation answer approvals*; otherwise a proposal the person applies |
   | A plan | An MCP client: `decide_plan`, the plan card and bar, the composer's changes | *Let automation answer approvals* (`DecisionKind::Plan`); the Orchestrator chat never decides plans |
   | A step that used up its retries, broke again, waits unverified or unchanged | An MCP client: `continue_run`'s `allow_retry`, `return_to`, `accept`, the Summary's retry, return, stop and *Accept … as it is*, `complete_run` with `anyway` | *Let automation answer approvals* (`DecisionKind::Stuck`); the Orchestrator chat only proposes |
   | A finished run's work returned to a step | An MCP client: `continue_run`'s `return_to`, the Summary's *Return to … with note* | *Let automation answer approvals* (`DecisionKind::Stuck`) |
   | A limit (token budget, time limit, a step's budget) | An MCP client: `continue_run`'s `raise_limits`, `raise_step_budget`, the Summary's *Continue with …* and *Remove the limit* | *Let automation answer approvals* (`DecisionKind::Limit`, new in ORC-348: before, nothing gated them); the Orchestrator chat refuses them (`person_only`) |
-  | The daily budget | An MCP client raising or removing it: `update_project_limits`'s `daily_budget`, Project settings › Limits' *Daily budget* (window input); then `continue_run`'s `resume` and `resume_run`, which raise nothing and go on only once the runner finds today's budget free again | *Let automation answer approvals* (`DecisionKind::Limit`, new in ORC-348: before, nothing gated it); lowering it takes no consent; the Orchestrator chat has no `update_project_limits` |
+  | The daily budget | An MCP client raising or removing it: `update_project_limits`'s `daily_budget`, Project settings › Runs › Limits' *Daily budget* (window input); then `continue_run`'s `resume` and `resume_run`, which raise nothing and go on only once the runner finds today's budget free again | *Let automation answer approvals* (`DecisionKind::Limit`, new in ORC-348: before, nothing gated it); lowering it takes no consent; the Orchestrator chat has no `update_project_limits` |
   | An account's plan limit | Waiting for the reset resumes by itself, as the person's default; continuing on another account by window input | *Let automation change agent permissions* |
   | Merge conflicts | The Deliver step's Integrate step sends them to its integrator agent (`merge_queue::integrate`); an MCP client: `continue_run`'s `resolve_conflicts`, the Summary's *Ask an agent to resolve* and *Resolve myself* | The pipeline's Deliver step (its integrator; none, and they go to the person); *Let automation answer approvals* (`DecisionKind::Stuck`) |
   | A merge waiting for approval | Only a person (`merge_queue::approve` refuses automation) | — |
@@ -89,31 +89,44 @@ Claude Code this refuses *Any command in the worktree* in Autopilot too, as in M
 
 Built in ORC-346 (`orchester_core::run::{autopilot_step, after_review, RequestAnswer, CameToPerson}`, the runner's
 `step::answer` and `step::approval::route`). A rule a person made in the run (Approve similar, Always allow) answers in
-both modes. Then:
+both modes, and so does a tool its MCP server lists to run without asking (`always allowed`, recorded as `profile`;
+ORC-610): Autopilot's CLI hands even those calls to Orchester, which approves them without the reviewer. Then:
 
 - **Autopilot** places the request against the run's roots (`autopilot_check`: a command's parts, the folder a call of
   Orchester's tools reads in, Orchester's other tools as inside; a call of another MCP server's tool is `Unknown`, as
   its arguments may name any path and its tool may act on a remote service): `Inside` is approved by the rule, without
   the reviewer and without a card; `Outside` and `MainCheckout` come to the person as `outside` (with the path), `Push`
   as `push`, `OtherRef` as `refs` (with the ref); `Unknown` asks the reviewer one question (`ROOTS_QUESTION`, with the
-  roots and the run's branch): its approval answers, anything else brings it to the person as `reviewerUnsure` with the
-  reviewer's reason. The step's own limits hold in Autopilot too (`review::step_limit`, the profile's permissions kept
-  beside the mode): a credential read, a write in a read-only step, the network or an install while it is off, and
-  permissions not recorded come to the person as `notAllowed` without the reviewer, inside the roots or not, Codex
-  escalations included; a part Orchester could not read in a step that only reads or whose network is off goes to the
-  reviewer's question, which also asks whether it does what the step's facts forbid. The run's own *Stop* of
+  roots and the run's branch): its approval answers, its ask brings it to the person as `reviewerUnsure` with the
+  reviewer's reason, and a review without a verdict as `reviewerCouldNotRun`. The step's own limits hold in Autopilot
+  too (`review::step_limit`, the profile's permissions kept beside the mode): a credential read, a write in a read-only
+  step, the network or an install while it is off, and permissions not recorded come to the person as `notAllowed`
+  without the reviewer, inside the roots or not, Codex escalations included; a part Orchester could not read in a step
+  that only reads or whose network is off goes to the reviewer's question, which also asks whether it does what the
+  step's facts forbid. The run's own *Stop* of
   auto-approval takes Autopilot back to Manual's rules, as the status bar counts it.
-- **Manual** approves what the profile allows (a tool its server lists to run without asking, a command whose every
-  part the permissions run), then a project rule (*Approved for every run*), then the run's or the profile's
+- **Manual** approves what the profile allows (a command whose every part the permissions run), then a project rule
+  (*Approved for every run*), then the run's or the profile's
   auto-approval; the rest goes to the reviewer after its hard rules. A hard rule brings it to the person at once (`push`,
   `outside` for a write outside the folders, else `notAllowed`), as does a project without a reviewer (`notAllowed`);
-  the reviewer's ask is `reviewerDenied`, a review without a verdict `reviewerUnsure`.
+  the reviewer's ask is `reviewerDenied`, a review without a verdict `reviewerCouldNotRun`.
+- A review without a verdict (its CLI failed, it timed out, its answer could not be read) says the reviewer couldn't
+  run, never that it was unsure (ORC-611), and keeps how it failed with the reason (`failure`: `could_not_run`,
+  `timed_out`, `unreadable`; ORC-586). The card says it in plain words — *The reviewer didn't answer in time.*, *The
+  reviewer's answer couldn't be read.*, or, for a CLI that failed, what Orchester knows of the reviewer's account (its
+  plan limit reached, with when it resets; nobody signed in), else that the CLI failed — with *Reviewer settings*,
+  which opens Project settings › Runs. A reason recorded before the kind was kept takes it from the recorded review.
+  There the Reviewer row says, in its hint's place, when the reviewer's account cannot run or its last review failed,
+  and the Estimates row when the estimator's last request could not run (`run::review::ReviewerHealth`, read by
+  `Workspace::reviewer_health`).
 - The reviewer's verdict stays *approve* or *ask*: on Manual's question an ask reads as a denial, on Autopilot's as
   doubt.
 - Each request records how it was answered (`autopilot`, `profile`, `reviewer` with its reason, `person`, which
   includes automation answering in the person's place and the person's own rules) and, while it waits for the person
-  and after, why it came (`tool_approvals.answered_as`, `came_to_person`); `get_run`'s `requests` and `list_approvals`'
-  `came_to_you` show them.
+  and after, why it came (`tool_approvals.answered_as`, `came_to_person`), with `autopilot: true` when it came by
+  Autopilot's rules; `get_run`'s `requests` and `list_approvals`' `came_to_you` show them. An Autopilot step has no
+  allowed list for MCP tools, so the card of its MCP call that came by the reviewer or the step's limits says what was
+  asked (*Builder asks to call batch_design*); Manual's says *asks to call a tool not on its allowed list*.
 - A request that came to the person by Autopilot's rules is looked at again by Manual's rules once its run drops to
   Manual (the worker reads the mode at its regular beat while such a request waits): it is no longer waiting for the
   person while the reviewer judges it. A review whose run changed mode meanwhile is dropped, and the request is answered

@@ -45,7 +45,7 @@ Workspace layout:
   change it, build it or port anything to it.
 - `crates/desktop-app` (`orchester-app`, binary `orchester`; `orchester-app` before 2026-10-24): the lurq app in the
   `crates/desktop-app/design/orchester.pen` design. Its own `version` in its `Cargo.toml` is the app's release version: raising it on `master`
-  releases the Windows app (`.github/workflows/app-release.yml`, `docs/stable-build.md` "Releases from CI").
+  releases the app for Windows and macOS (`.github/workflows/app-release.yml`, `docs/stable-build.md` "Releases from CI").
   Theme roles live in `crates/desktop-app/src/theme/`, strings in `crates/desktop-app/assets/locales/`. It keeps its
   settings in the application database (`orchester.db`, located by `orchester_store::location`) and runs one MCP
   server of its own that hosts lurq's window tools and the app's tools. The installed app listens on the fixed
@@ -93,8 +93,9 @@ Hard requirements:
    kill-on-close Job Object), and the same holds for the Git programs of local integration, whose database and
    `.orchester` folder macOS checks instead of holding (`docs/architecture/storage.md`); a login shell that does not
    take `-l -i -c` (csh, tcsh) gives no `PATH`, so CLIs and tools outside the usual install folders are not found when
-   the app is started from Finder with such a shell; the login-shell read has not been run on a Mac yet; the `.app` is
-   signed ad hoc and not notarized.
+   the app is started from Finder with such a shell; the login-shell read has not been run on a Mac yet; a `.app` built
+   from source is signed ad hoc and not notarized unless `tools/package-macos.sh` is given a Developer ID and the
+   notary's key, as the release workflow does; releases are for Apple silicon only.
 1. Before writing or reviewing Rust code, read `.claude/skills/rust-code-quality/SKILL.md` and follow it.
 2. Before touching the visual layer (screen, panel, row, field, dialog, control, interaction, user-facing text,
    layout/text/scroll defect), read `.claude/skills/lurq-ui/SKILL.md` with its `references/`, and

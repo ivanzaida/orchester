@@ -26,7 +26,7 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
-use super::{ReviewFolder, events, kind, plain_word, run_review};
+use super::{ReviewFolder, events, kind, plain_word, reported_error, run_review};
 use crate::{
   command::{Command, CommandRunner},
   connection::invocation::CODEX_ISOLATION as ISOLATION,
@@ -147,10 +147,11 @@ pub(super) fn codex_final_text(stdout: &str) -> Result<String, ReviewError> {
     .iter()
     .find(|event| matches!(kind(event), Some("turn.failed" | "error")))
   {
-    return Err(ReviewError::CouldNotRun(format!(
-      "Codex reported {}",
-      kind(failed).unwrap_or_default()
-    )));
+    let reported = format!("Codex reported {}", kind(failed).unwrap_or_default());
+    return Err(ReviewError::CouldNotRun(match reported_error(stdout) {
+      Some(said) => format!("{reported}:\n{said}"),
+      None => reported,
+    }));
   }
   events
     .iter()

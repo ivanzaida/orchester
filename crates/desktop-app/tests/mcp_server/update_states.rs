@@ -75,6 +75,10 @@ fn every_state() -> Vec<Value> {
     "script_install",
     "portable",
     "program_folder_unknown",
+    "not_in_bundle",
+    "translocated",
+    "bundle_not_writable",
+    "no_team_id",
   ] {
     states.push(json!({ "state": "not_this_copy", "reason": reason, "newest": null }));
     states.push(json!({ "state": "not_this_copy", "reason": reason, "newest": newest() }));

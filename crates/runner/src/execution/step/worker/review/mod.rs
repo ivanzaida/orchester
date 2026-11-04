@@ -16,6 +16,7 @@ mod ledger;
 mod native;
 mod process;
 mod setup;
+mod side;
 
 use std::time::Duration;
 
@@ -37,7 +38,7 @@ use orchester_ipc::Event;
 use orchester_store::StoreError;
 use tokio::{runtime::Handle, task::JoinHandle};
 
-pub(in crate::execution) use self::{estimate::estimate_task, setup::ReviewerKeys};
+pub(in crate::execution) use self::{estimate::estimate_task, setup::ReviewerKeys, side::answer_side};
 use self::{
   ledger::ReviewLedger,
   process::{StopReview, stop_review},
@@ -76,6 +77,8 @@ pub(super) async fn next(slot: &mut Option<Reviewing>) -> Reviewed {
     Review::Failed {
       failure: ReviewFailure::CouldNotRun,
       model: None,
+      detail: Some("the review did not finish".to_owned()),
+      decision: false,
     }
   });
   let reviewing = slot.take().expect("the review awaited above is under way");
@@ -223,7 +226,8 @@ impl Worker {
     (id, came): (&str, &CameToPerson),
     autopilot: bool,
   ) -> Result<(), StoreError> {
-    watch.db.record_came_to_person(watch.invocation.run, id, Some(came))?;
+    let came = came.clone().in_mode(autopilot);
+    watch.db.record_came_to_person(watch.invocation.run, id, Some(&came))?;
     watch.asked_in_autopilot = autopilot;
     watch.invocation.timing.wait_for_person(Timestamp::now());
     // A person's wait never holds one of the computer's QA slots.

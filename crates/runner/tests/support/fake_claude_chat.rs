@@ -6,7 +6,8 @@
 //! the names of every `ANTHROPIC_*` variable), then answers by the message:
 //!
 //! - "Call <tool> <JSON arguments>": calls that tool of the configured server over streamable HTTP with the bearer
-//!   token and replies with what it answered (`Tool said: <result text>`);
+//!   token and replies with what it answered (`Tool said: <result text>`); in a turn that plans, the person's words
+//!   after the plan-only rule;
 //! - "Keep thinking": writes the start of a reply and waits until it is ended, reading nothing more of its input;
 //! - "Wait for a message": writes the start of a reply, then waits until a message sent now arrives on its input
 //!   (`fake_claude_input`), prints it back as it takes it and replies `Noted: <message>`, as Claude Code takes a
@@ -45,6 +46,9 @@ pub fn answer(args: &[String], session: &str, message: &str) -> ExitCode {
     r#"{{"type":"system","subtype":"init","cwd":"project","session_id":"{session}","tools":[],"mcp_servers":[{{"name":"orchester","status":"connected"}}],"model":"claude-haiku-4-5","permissionMode":"default","apiKeySource":"none","claude_code_version":"2.1.89"}}"#
   );
   replay(session, message);
+  if message.trim() == "/compact" && !args.iter().any(|arg| arg == "--disable-slash-commands") {
+    return compact(session);
+  }
   if message.contains("Keep thinking") {
     reply(session, "msg_wait", "Let me look at the queue.");
     loop {
@@ -69,7 +73,11 @@ pub fn answer(args: &[String], session: &str, message: &str) -> ExitCode {
     result(session, false, &text);
     return ExitCode::SUCCESS;
   }
-  let text = match message.strip_prefix("Call ") {
+  // A turn that plans gives the person's words after what plan-only mode tells the agent.
+  let said = message
+    .rsplit_once("The person's message:\n")
+    .map_or(message, |(_, said)| said);
+  let text = match said.strip_prefix("Call ") {
     Some(call) => match server.as_ref().map(|server| server.call(call)) {
       Some(Ok(said)) => format!("Tool said: {said}"),
       Some(Err(error)) => format!("The call failed: {error}"),
@@ -79,6 +87,21 @@ pub fn answer(args: &[String], session: &str, message: &str) -> ExitCode {
   };
   reply(session, "msg_answer", &text);
   result(session, false, &text);
+  ExitCode::SUCCESS
+}
+
+/// `/compact` with slash commands on, as Claude Code compacts a session: its boundary with the tokens the context held,
+/// then a result that says nothing and reports what the summary cost. A session named `cannot-compact` fails as Claude
+/// Code does when there is nothing to compact.
+fn compact(session: &str) -> ExitCode {
+  if session == "cannot-compact" {
+    result(session, true, "Error: No messages to compact");
+    return ExitCode::from(1);
+  }
+  let boundary = json!({"type": "system", "subtype": "compact_boundary", "session_id": session,
+    "compact_metadata": {"trigger": "manual", "pre_tokens": 182_000}});
+  println!("{boundary}");
+  result(session, false, "");
   ExitCode::SUCCESS
 }
 

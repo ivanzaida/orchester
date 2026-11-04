@@ -127,6 +127,20 @@ define_id!(
   /// Client-generated key that makes a create/queue/send action safe to retry.
   IdempotencyKey
 );
+define_id!(
+  /// One intent of a team-authority command: the client makes it once and repeats it on every retry, and the server
+  /// keys its receipt by project, account and this id. Never a task id or a client-local run number.
+  OperationId
+);
+define_id!(
+  /// One unit of work a team server authorized; the server makes it, never the client.
+  WorkId
+);
+define_id!(
+  /// One execution event a runner reports for authorized work (S9 `work.report`): made once per event and repeated on
+  /// every retry, so the server answers a retried report with its original result.
+  WorkEventId
+);
 
 impl TaskId {
   /// Reopening a queued task must retry its first run with the same key. Later runs use
@@ -178,6 +192,10 @@ define_id!(
 define_id!(
   /// One file a person attached to a message (`crate::attachment`).
   AttachmentId
+);
+define_id!(
+  /// One side question a person asked about a run (`crate::run::side_question`).
+  SideQuestionId
 );
 define_id!(
   /// One thread of agent feedback on a pull request (`crate::pull_request::feedback`).

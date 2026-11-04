@@ -44,6 +44,7 @@ mod record;
 mod recovery;
 mod returned;
 mod run;
+mod side_question;
 mod step;
 mod stuck;
 mod task_groups;
@@ -65,7 +66,7 @@ use std::{
 };
 
 use orchester_core::{
-  id::{ConnectionId, IdempotencyKey, RunId, TaskId},
+  id::{IdempotencyKey, RunId, TaskId},
   run::{InterruptCause, RaisedLimits, RunStatus},
   secret::SecretVault,
   store::RunStore,
@@ -148,8 +149,9 @@ struct Inner {
   blocked_runs: blocked_runs::BlockedRuns,
   /// Runs stopped at their account's plan limit that a timer continues at its reset.
   plan_waits: plan_limit::PlanWaits,
-  /// The turns of the Orchestrator chat under way.
+  /// The turns of the Orchestrator chat under way, and the side questions being answered.
   chats: chat::Chats,
+  side_agents: side_question::SideAgents,
   /// The disk guard's reading of free space (ORC-114), and its watch over runs paused for low disk space.
   disks: low_disk::DiskGuard,
   disk_watch: low_disk::DiskWatch,
@@ -186,6 +188,7 @@ impl Scheduler {
         blocked_runs: blocked_runs::BlockedRuns::default(),
         plan_waits: plan_limit::PlanWaits::default(),
         chats: chat::Chats::default(),
+        side_agents: side_question::SideAgents::default(),
         disks: low_disk::DiskGuard::local(),
         disk_watch: low_disk::DiskWatch::default(),
       }),
@@ -357,28 +360,6 @@ impl Scheduler {
     if result.is_err() {
       self.wait_for_plan_resets();
     }
-  }
-
-  /// Continues `run`, stopped at its account's plan limit, now on `connection`, another account's connection of
-  /// the same CLI, as a new session for the stopped step and this run only.
-  pub async fn continue_on_connection(&self, run: RunId, connection: ConnectionId) -> Result<(), Rejection> {
-    self.plan_waits().clear(run);
-    let continued = self
-      .continue_settled(run, |db, root| plan_limit::continue_on(db, root, run, connection))
-      .await;
-    self.wait_again_if_refused(&continued);
-    continued
-  }
-
-  /// Continues `run`, stopped at its account's plan limit, on the same account now, as a person asked; it stops there
-  /// again if the CLI still refuses.
-  pub async fn try_at_plan_limit(&self, run: RunId) -> Result<(), Rejection> {
-    self.plan_waits().clear(run);
-    let tried = self
-      .continue_settled(run, |db, root| plan_limit::try_now(db, root, run))
-      .await;
-    self.wait_again_if_refused(&tried);
-    tried
   }
 
   /// Raises the limits of `run`, stopped at a limit, and continues it.

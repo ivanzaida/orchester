@@ -17,9 +17,9 @@ use lurq::{
 };
 use orchester_core::tokens::regroup;
 
-use super::{COMPACT_AREA_HEIGHT, FieldInput, Lines, TEXT_AREA_MAX_LINES};
+use super::{COMPACT_AREA_HEIGHT, FieldInput, Lines, TEXT_AREA_MAX_LINES, UnitLook};
 use crate::{
-  theme::{ExtraSpacing, IconSize, SecretsText},
+  theme::{ExtraSpacing, ExtraTypography, IconSize, SecretsText},
   ui::{
     field::field_error,
     icon::{Icon, icon},
@@ -103,7 +103,7 @@ impl Component for FieldBox {
           .filter(|_| props.value.get().is_empty())
           .map(|keys| key_cap(&format!("{}-keys", props.id), keys)),
       )
-      .with_children(props.unit.as_deref().map(affix))
+      .with_children(unit_text(&props))
       .with_children(props.trailing.map(|glyph| {
         icon(
           glyph,
@@ -162,7 +162,9 @@ impl FieldBox {
     if props.masked {
       input = input.mask();
     }
-    if let Some(element) = &props.element {
+    if let Some(controller) = &props.controller {
+      input = input.controller(controller.clone());
+    } else if let Some(element) = &props.element {
       input = input.ref_element(element.clone());
     }
     if let Some(position) = props.tab_first {
@@ -207,6 +209,28 @@ impl FieldBox {
         )),
     }
   }
+}
+
+/// The unit after the value of the field `props`, as its unit look has it read; its text's element id is `<id>-unit`.
+fn unit_text(props: &FieldInput) -> Option<Row> {
+  let (id, unit, look) = (&props.id, props.unit.as_deref()?, props.unit_look);
+  let (style, color) = match look {
+    UnitLook::Quiet => (TypographyStyle::Description, PaletteColor::TextMuted),
+    UnitLook::Count | UnitLook::Busy => (ExtraTypography::Note.role(), PaletteColor::TextMuted),
+    UnitLook::Refused => (ExtraTypography::Note.role(), PaletteColor::Danger),
+  };
+  let row = Row::new()
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::Center)
+    .with_children((look == UnitLook::Busy).then(|| icon(Icon::LoaderCircle, IconSize::Sm, PaletteColor::TextMuted)))
+    .child(
+      Text::new(unit)
+        .id(format!("{id}-unit"))
+        .variant(style)
+        .color(color)
+        .nowrap(),
+    );
+  Some(row)
 }
 
 /// A locked value as a text that ends in an ellipsis where the box is narrower, with the input's element id; the

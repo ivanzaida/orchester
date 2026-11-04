@@ -2078,9 +2078,9 @@ checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
 
 [[package]]
 name = "lurq"
-version = "0.53.0"
+version = "0.56.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "968f9fc2910f69f42057744a78a5e6d534ba779b544ad96cfb3c34dc0c689812"
+checksum = "3b47e2b555639070e6d036fbeb32645382b395b8f6f08e56790c8740a466d409"
 dependencies = [
  "arboard",
  "base64 0.22.1",
@@ -2865,7 +2865,7 @@ dependencies = [
 
 [[package]]
 name = "orchester-app"
-version = "0.4.0"
+version = "0.4.2"
 dependencies = [
  "axum",
  "base64 0.22.1",
@@ -2920,6 +2920,7 @@ dependencies = [
  "roxmltree",
  "serde",
  "serde_json",
+ "sha2",
  "tempfile",
  "thiserror 2.0.20",
  "uuid",

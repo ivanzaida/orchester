@@ -1,5 +1,5 @@
 //! Runs › Estimates (the Runs window `g406O`): *Let Orchester estimate story points* is the project's own setting,
-//! which only a person flips; a project nobody set it for keeps the application-wide setting it moved from.
+//! which only a person flips; the application-wide setting it moved from is no longer read (ORC-595).
 use orchester_store::AppDb;
 
 use super::harness::Settings;
@@ -9,7 +9,7 @@ const SWITCH: &str = "settings-estimate-points";
 /// A person's presses on the switch until the project stores `wanted`: the switch takes none before its value is read.
 fn press_until(page: &mut Settings, wanted: bool) {
   page.until("saved for the project", |p| {
-    if p.db().estimates_story_points().expect("read") == Some(wanted) {
+    if p.db().estimates_story_points().expect("read") == wanted {
       return true;
     }
     p.click(SWITCH);
@@ -20,7 +20,8 @@ fn press_until(page: &mut Settings, wanted: bool) {
 #[test]
 fn project_settings_estimates_are_the_projects_and_only_a_person_turns_them_on() {
   let mut page = Settings::new(false);
-  page.until("the estimates row", |p| p.exists(&format!("{SWITCH}-row")));
+  // The switch is a bone until the project's value is read; wait for the switch itself.
+  page.until("the estimates switch", |p| p.exists(SWITCH));
   assert!(page.text("settings-estimates").contains("Estimates"));
   assert!(
     page
@@ -31,7 +32,7 @@ fn project_settings_estimates_are_the_projects_and_only_a_person_turns_them_on()
     lurq::app::events::with_synthetic_input(|| p.click(SWITCH));
     p.exists(&format!("{SWITCH}-blocked"))
   });
-  assert_eq!(page.db().estimates_story_points().expect("read"), None);
+  assert!(!page.db().estimates_story_points().expect("read"));
   press_until(&mut page, true);
   assert!(!page.exists(&format!("{SWITCH}-blocked")));
   let app = AppDb::open(&page.window.data.database()).expect("the application database");
@@ -41,24 +42,23 @@ fn project_settings_estimates_are_the_projects_and_only_a_person_turns_them_on()
   );
 }
 
-/// A project nobody set it for shows the application-wide value it moved from: on, so a person's press turns it off.
+/// The row shows the project's own value, whatever the application-wide setting it moved from says; a change counted
+/// for the project (as the workspace's writer counts one) reads it again.
 #[test]
-fn project_settings_estimates_keep_the_application_setting_until_set_for_the_project() {
+fn project_settings_estimates_show_the_projects_value_not_the_application_setting() {
   let mut page = Settings::new(false);
-  AppDb::open(&page.window.data.database())
-    .expect("the application database")
-    .set_estimates_story_points(true)
-    .expect("on for every project before ORC-103");
+  page.db().set_estimates_story_points(true).expect("on for the project");
+  page.outside(orchester_workspace::tasks::outside::Outside::Estimates);
   page.tab("general", "settings-project-name");
-  page.tab("runs", &format!("{SWITCH}-row"));
-  page.until("turned off for the project", |p| {
-    match p.db().estimates_story_points().expect("read") {
-      Some(false) => return true,
-      Some(true) => panic!("the switch showed off: the application's setting was not the project's"),
-      None => p.click(SWITCH),
-    }
-    false
-  });
+  page.tab("runs", &format!("{SWITCH}-mark"));
+  page.until("the project's value shown", |p| p.switch_on(SWITCH));
+  assert!(
+    !AppDb::open(&page.window.data.database())
+      .expect("the application database")
+      .estimates_story_points()
+      .expect("read"),
+    "the application-wide setting is off"
+  );
 }
 
 fn choose_decision(page: &mut Settings) {
@@ -84,6 +84,8 @@ fn choose_decision(page: &mut Settings) {
     reviewer: Some(ReviewerChoice::decision(decision.id(), model, None)),
   })
   .expect("decision reviewer");
+  // Counted as the workspace's writer counts a reviewer's change, which reads the settings again.
+  page.outside(orchester_workspace::tasks::outside::Outside::AutoMode);
   page.tab("general", "settings-project-name");
   page.tab("runs", &format!("{SWITCH}-row"));
 }
@@ -107,7 +109,8 @@ fn estimates_decision_reviewer_row_says_unavailable_without_a_language_connectio
   });
   assert!(page.text(&format!("{SWITCH}-hint")).contains("no language reviewer"));
   page.click(SWITCH);
-  assert_eq!(page.db().estimates_story_points().expect("read"), None);
+  // A project without the setting reads off; the switch saved nothing.
+  assert!(!page.db().estimates_story_points().expect("read"));
 }
 
 #[test]
@@ -117,6 +120,8 @@ fn estimates_decision_reviewer_failed_refresh_disables_until_successful_reread()
 
   let mut page = Settings::new(true);
   choose_decision(&mut page);
+  // The switch is a bone until the project's value is read.
+  page.until("the estimates switch", |p| p.exists(SWITCH));
   press_until(&mut page, true);
   let connection = page.db().connections().expect("connections").remove(0);
   let sqlite = rusqlite::Connection::open(page.repo.join(".orchester/orchester.db")).expect("fixture DB");
@@ -136,7 +141,7 @@ fn estimates_decision_reviewer_failed_refresh_disables_until_successful_reread()
   );
   assert!(!page.text(&format!("{SWITCH}-hint")).contains("on Claude Code"));
   page.click(SWITCH);
-  assert_eq!(page.db().estimates_story_points().expect("unchanged"), Some(true));
+  assert!(page.db().estimates_story_points().expect("unchanged"));
 
   sqlite
     .execute("ALTER TABLE held_reviewer RENAME TO decision_reviewer_connection", [])
@@ -147,10 +152,7 @@ fn estimates_decision_reviewer_failed_refresh_disables_until_successful_reread()
   });
   assert!(!page.exists(&format!("{SWITCH}-error")));
   page.click(SWITCH);
-  assert_eq!(
-    page.db().estimates_story_points().expect("still unavailable"),
-    Some(true)
-  );
+  assert!(page.db().estimates_story_points().expect("still unavailable"));
 
   page
     .db()

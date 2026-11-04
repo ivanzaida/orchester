@@ -1,12 +1,13 @@
 //! How a request is answered (`orchester_core::run::ApprovalAnswer`, "Approval choices and waiting
 //! requests", `docs/design/approval-modes.md`): Orchester answers it itself by the run's approval mode. A rule of the
-//! run covers it in both modes (Approve similar, or a command Always allowed during the run). Autopilot approves what
-//! lies in the run's roots within the step's own limits (`orchester_core::run::autopilot_step`), asks the reviewer
-//! about what it could not place, and brings the rest to the person. Manual approves what the profile's permissions
-//! allow (a tool its server lists to run without asking since the agent started, a command whose every part the step's
+//! run covers it in both modes (Approve similar, or a command Always allowed during the run), and so does a tool its
+//! MCP server lists to run without asking (always allowed): Autopilot's CLI hands even those to Orchester, Manual's
+//! did not know one listed since the agent started. Autopilot approves what lies in the run's roots within the step's
+//! own limits (`orchester_core::run::autopilot_step`), asks the reviewer about what it could not place, and brings the
+//! rest to the person. Manual approves what the profile's permissions allow (a command whose every part the step's
 //! permissions run on their own,
 //! `orchester_core::run::permitted`), then a rule of the project (Approve for every run of this project,
-//! `start_qa_app` only) and the run's own auto-approval or a profile's; the rest goes to the reviewer. Otherwise a
+//! `start_qa_app` only) and the run's own auto-approval; the rest goes to the reviewer. Otherwise a
 //! person answers, and a wider answer first leaves what it promises: a rule, a profile version or a server setting, or
 //! the run's auto-approval. Each answer is recorded with who gave it and how by the mode
 //! (`orchester_core::run::RequestAnswer`), delivered to the one call that asked, and marked in the activity; Deny
@@ -100,7 +101,8 @@ pub(super) enum Itself {
 
 impl Worker {
   /// Orchester's own handling of `approval` in Autopilot (`autopilot`) or Manual: a rule a person made in the run
-  /// answers in both; then the mode's own rules answer, ask the reviewer, or bring it to the person.
+  /// and a tool its server lists to run without asking answer in both; then the mode's own rules answer, ask the
+  /// reviewer, or bring it to the person.
   pub(super) fn answer_itself(
     &self,
     watch: &Watch,
@@ -119,6 +121,12 @@ impl Worker {
       return Ok(Itself::Settled(Settled {
         rule: Some(Answering::Run(rule.id)),
         ..Settled::by(decided_by, category)
+      }));
+    }
+    if self.listed(watch, approval)? {
+      return Ok(Itself::Settled(Settled {
+        answer: RequestAnswer::by(AnswerKind::Profile),
+        ..Settled::by(DecidedBy::AlwaysAllowed, None)
       }));
     }
     if autopilot {
@@ -145,19 +153,13 @@ impl Worker {
   }
 
   /// Manual's rules for `approval` about `subject`: what the profile's permissions allow, a rule of the project (only
-  /// in Manual), the run's own auto-approval or the profile's; else the reviewer.
+  /// in Manual), the run's own auto-approval; else the reviewer.
   fn manual(
     &self,
     watch: &Watch,
     approval: &PendingToolApproval,
     (subject, category): (&ApprovalSubject, Option<CommandCategory>),
   ) -> Result<Itself, StoreError> {
-    if self.listed_since_start(watch, approval)? {
-      return Ok(Itself::Settled(Settled {
-        answer: RequestAnswer::by(AnswerKind::Profile),
-        ..Settled::by(DecidedBy::AlwaysAllowed, None)
-      }));
-    }
     if let Some(launch) = &watch.invocation.permissions
       && let Some(category) = permitted(subject, launch.permissions())
     {
@@ -169,34 +171,24 @@ impl Worker {
         ..Settled::by(DecidedBy::SimilarRule, category)
       }));
     }
-    let chosen = watch.db.run_auto_approve(approval.run)?;
-    let profile = watch
-      .invocation
-      .permissions
-      .as_ref()
-      .is_some_and(|launch| launch.permissions().auto_approve());
-    if auto_approves(chosen, profile)
+    // Manual is not Autopilot: only the run's own *Approve everything in this run*, a person's answer, approves here.
+    if auto_approves(watch.db.run_auto_approve(approval.run)?, false)
       && (approval.command || auto_approvable(&approval.server, &approval.action))
       && let AutoVerdict::Approve(category) = auto_verdict(subject)
     {
-      // The run's own *Approve everything in this run* is a person's answer; else the profile's setting answered.
-      let kind = if chosen == Some(true) {
-        AnswerKind::Person
-      } else {
-        AnswerKind::Profile
-      };
       return Ok(Itself::Settled(Settled {
-        answer: RequestAnswer::by(kind),
+        answer: RequestAnswer::by(AnswerKind::Person),
         ..Settled::by(DecidedBy::AutoApproved, category)
       }));
     }
     Ok(Itself::Review(ReviewQuestion::Request))
   }
 
-  /// Whether `approval`'s MCP tool is listed to run without asking now, although the agent's CLI did not
-  /// know it when it started: Always allow answered for the rest of the invocation. A Claude Code tool
-  /// whose name another server of the project could have is not, as its CLI would not run it unasked.
-  fn listed_since_start(&self, watch: &Watch, approval: &PendingToolApproval) -> Result<bool, StoreError> {
+  /// Whether `approval`'s MCP tool is listed to run without asking now: in Manual, although the agent's CLI did not
+  /// know it when it started (Always allow answered for the rest of the invocation); in Autopilot, whose CLI hands
+  /// every call to Orchester, at all. A Claude Code tool whose name another server of the project could have is not,
+  /// as its CLI would not run it unasked.
+  fn listed(&self, watch: &Watch, approval: &PendingToolApproval) -> Result<bool, StoreError> {
     if approval.command {
       return Ok(false);
     }

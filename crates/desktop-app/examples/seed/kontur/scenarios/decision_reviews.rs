@@ -103,6 +103,8 @@ fn requests() -> [(&'static str, &'static str, Review, bool); 7] {
       Review::Failed {
         failure: ReviewFailure::TimedOut,
         model: Some("jev".to_owned()),
+        detail: None,
+        decision: true,
       },
       false,
     ),

@@ -3,9 +3,11 @@
 //! shows.
 
 mod browser;
+mod chat;
 mod check;
 mod decision_test;
 mod estimate;
+mod side;
 
 use std::{
   future::Future,
@@ -19,7 +21,7 @@ use std::{
 };
 
 use orchester_core::{
-  id::{ChatId, ChatMessageId, IdempotencyKey, RunId, StepExecutionId, TaskId},
+  id::{IdempotencyKey, RunId, StepExecutionId, TaskId},
   integration::Leftovers,
   question::GivenAnswer,
   run::{Answerer, ApprovalAnswer, InterruptCause, PlanDecision, PlanVersion, RaisedLimits, StuckDecision},
@@ -27,8 +29,8 @@ use orchester_core::{
   tokens::TokenBudget,
 };
 use orchester_ipc::{
-  AttachSession, ChatTools, Command, Endpoint, ErrorReports, Event, IpcError, Rejection, Reply, Request, RequestId,
-  ShutdownMode, WorkReturn,
+  AttachSession, Command, Endpoint, ErrorReports, Event, IpcError, Rejection, Reply, Request, RequestId, ShutdownMode,
+  WorkReturn,
   frame::{FrameReader, FrameWriter},
   handshake,
 };
@@ -356,15 +358,16 @@ async fn answer(
     Command::StopIfIdle => return Answer::StopIfIdle(id),
     Command::CheckConnection { provider, ref api } => return check::answer(&later, handle, provider, api.clone()),
     ref command @ Command::TestDecisionConnection { .. } => return decision_test::answer(&later, handle, command),
-    Command::AnswerInChat { message, ref tools } => chat_answering(scheduler, message, tools.clone()).await,
-    Command::StopChat { chat } => chat_stopped(scheduler, chat),
-    Command::SteerChat { message } => match scheduler.steer_chat(message) {
-      Ok(()) => Reply::ChatSteered { message },
-      Err(rejection) => Reply::Rejected(rejection),
-    },
+    Command::AnswerInChat { message, ref tools } => chat::answering(scheduler, message, tools.clone()).await,
+    Command::StopChat { chat } => chat::stopped(scheduler, chat),
+    Command::CompactChat { chat, ref tools } => chat::compacting(scheduler, chat, tools.clone()).await,
+    Command::SteerChat { message } => chat::steered(scheduler, message),
     Command::StopTurn { run } => return later.answer(run, async move { handle.stop_turn(run).await }),
     Command::Browser(ref command) => return later.browser(handle, command.clone()),
     Command::EstimateTask { task } => return estimate::answer(&later, handle, task),
+    ref side @ (Command::AnswerSideQuestion { .. } | Command::StopSideQuestion { .. }) => {
+      return side::answer_side(&later, handle, side);
+    }
     Command::SetErrorReports { ref reports } => return Answer::ErrorReports(id, reports.clone()),
   };
   Answer::Reply(Event::Reply { id, reply })
@@ -403,15 +406,6 @@ fn answer_decision(later: &Later<'_>, handle: Scheduler, command: &Command) -> A
   }
 }
 
-/// The reply to [`Command::AnswerInChat`].
-async fn chat_answering(scheduler: &Scheduler, message: ChatMessageId, tools: ChatTools) -> Reply {
-  match scheduler.answer_in_chat(message, tools).await {
-    Ok(()) => Reply::ChatAnswering { message },
-    Err(rejection) => Reply::Rejected(rejection),
-  }
-}
-
-/// The reply to [`Command::StopChat`].
 /// Starts the next run of `task` after `after` (Run again), removing `remove_worktrees` first, only for the task at
 /// `revision` when it names one.
 async fn run_again(
@@ -424,13 +418,6 @@ async fn run_again(
       .run_again_as(key, (task, after), remove_worktrees.clone(), revision)
       .await,
   )
-}
-
-fn chat_stopped(scheduler: &Scheduler, chat: ChatId) -> Reply {
-  match scheduler.stop_chat(chat) {
-    Ok(()) => Reply::ChatStopped { chat },
-    Err(rejection) => Reply::Rejected(rejection),
-  }
 }
 
 /// Continues `run`, stopped at its account's plan limit: on `connection`, another account's

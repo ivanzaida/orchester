@@ -2,6 +2,7 @@
 
 use orchester_core::{
   attachment::Attachment,
+  connection::context_use::ContextUse,
   id::ProjectId,
   project::TaskKey,
   resource::Deliverable,
@@ -236,6 +237,16 @@ pub fn attachments(attachments: &[Attachment], link: &str) -> Value {
     })
     .collect();
   Value::Array(attachments)
+}
+
+/// How full an agent session's context is: `{used, window, estimated}`, `window` `null` when nobody reported one and
+/// no model limit is known, `estimated` when it is the table's limit for the model; `null` for a session whose CLI
+/// reported nothing (unknown, not 0%).
+pub fn context(context: Option<&ContextUse>) -> Value {
+  context.map_or(
+    Value::Null,
+    |context| json!({ "used": context.used(), "window": context.window(), "estimated": context.estimated() }),
+  )
 }
 
 /// Plain data of core (reasons, causes), as its own serde form writes it.

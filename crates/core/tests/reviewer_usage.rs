@@ -274,6 +274,8 @@ fn reviewer_usage_costs_only_a_review_that_asked_a_model() {
   let failed = Review::Failed {
     failure: ReviewFailure::TimedOut,
     model: None,
+    detail: None,
+    decision: false,
   };
   assert_eq!(ReviewEnd::of(&failed), Some(ReviewEnd::Failed(ReviewFailure::TimedOut)));
 }

@@ -43,8 +43,9 @@ pub(super) fn open(job: &CloneJob<'_>, files: &Scratch) -> Result<Running, Conso
 }
 
 pub(super) fn wait(running: Running, _files: &Scratch) -> Result<ConsoleEnd, ConsoleError> {
-  let pid = started(&running.pid_file)?;
-  follow(&running.result, || Ok(alive(pid)))
+  let Running { pid_file, result } = running;
+  let pid = started(&pid_file)?;
+  follow(&result, || Ok(alive(pid)))
 }
 
 /// The script's process id, once it wrote it; [`ConsoleError::NotStarted`] when Terminal never ran it.

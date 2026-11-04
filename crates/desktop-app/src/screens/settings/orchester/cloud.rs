@@ -16,7 +16,9 @@ use lurq::{
 use orchester_api::cloud::TwoFactorStatus;
 use orchester_core::id::InviteId;
 
-use super::{Invites, Said, Snapshot, account, advanced, invites, list, pointed::PointedInvite, words::cloud_error};
+use super::{
+  Invites, Said, Snapshot, account, advanced, browser_joined, invites, list, pointed::PointedInvite, words::cloud_error,
+};
 use crate::{
   routes::OrchesterAsk,
   screens::{
@@ -33,6 +35,8 @@ pub(super) struct Props {
   pub invites: Invites,
   /// The invites accepted here whose join did not finish.
   pub accepted: super::Kept,
+  /// The account's team servers as the cloud lists them, those joined in the browser too.
+  pub listed: browser_joined::Listed,
   /// The account's two-factor authentication, once the cloud said.
   pub two_factor: Option<TwoFactorStatus>,
   /// The question the route asks in place: it opens once it does.
@@ -55,6 +59,8 @@ pub(super) struct CloudPanel {
   pointed: PointedInvite,
   /// Signing this computer out of the cloud is a person's (review 1, M1).
   pub(super) person: super::PersonOnly,
+  /// *Connect* on the servers joined in the browser.
+  connects: browser_joined::Connects,
   /// Counts the checks of joins that wait for approval ([`super::accepted::check`]).
   tick: Signal<u64>,
   checks: Interval,
@@ -79,6 +85,7 @@ impl Component for CloudPanel {
       asked: parking_lot::Mutex::new(None),
       pointed: PointedInvite::new(ctx),
       person: super::PersonOnly::new(ctx),
+      connects: browser_joined::Connects::new(ctx),
       tick,
       checks,
     }
@@ -117,7 +124,14 @@ impl Component for CloudPanel {
       (&props.invites, &props.accepted, props.two_factor.as_ref()),
       (&self.invites, &self.pointed),
     );
-    let servers = list::group(ctx, snapshot, list::trust_key);
+    let joined: Vec<Element> = props
+      .listed
+      .not_here(&snapshot.servers)
+      .iter()
+      .map(|server| browser_joined::row(ctx, &self.connects, server))
+      .collect();
+    let answers = browser_joined::answers(ctx, &self.connects);
+    let servers = list::group(ctx, snapshot, list::trust_key, (joined, answers));
     let advanced = advanced::section(ctx, &snapshot.address, &self.advanced);
     let top = Column::new()
       .width(lurq::node::dimension::Dimension::Pct(100.0))
@@ -143,7 +157,7 @@ impl CloudPanel {
   fn signed_out(&self, ctx: &mut Ctx, pane: Column, snapshot: &Snapshot) -> Column {
     let sign_in = ctx.mount_keyed::<SignInOffer>("orchester-cloud-sign-in", Place::Card);
     let invites = invites::signed_out(ctx);
-    let servers = list::group(ctx, snapshot, list::joined_key);
+    let servers = list::group(ctx, snapshot, list::joined_key, (Vec::new(), Vec::new()));
     let advanced = advanced::section(ctx, &snapshot.address, &self.advanced);
     pane
       .child(sign_in)

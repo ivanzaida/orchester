@@ -65,9 +65,11 @@ pub(super) enum ReviewerSetup {
     model: ModelId,
     effort: Option<String>,
   },
-  /// A reviewer that cannot be reached (its key could not be read): every review fails.
+  /// A reviewer that cannot be reached (its key could not be read, its decision connection is gone): every review
+  /// fails. `connection` is the agent connection it would have run on; a decision model has none.
   Unreachable {
     model: ModelId,
+    connection: Option<UsedProvider>,
   },
   /// The project has no reviewer.
   Missing,
@@ -188,7 +190,7 @@ pub(super) fn hold_now(
 
 impl ReviewerSetup {
   /// Auto mode's handling of `job`'s request with this reviewer, from the blocking pool; what it cost goes
-  /// to `ledger` once it ends.
+  /// to `ledger` once it ends. A review that gave no verdict is logged with why.
   pub(super) fn review(self, job: ReviewJob, ledger: &ReviewLedger) -> Review {
     let started_at = Timestamp::now();
     let provider = self.provider();
@@ -196,14 +198,35 @@ impl ReviewerSetup {
       Self::Decision(setup) => Some((setup.connection.clone(), setup.model.clone())),
       _ => None,
     };
+    let connection = self.connection().cloned();
     let done = self.judge(job);
+    let by_decision = decision.is_some();
     if let Some((connection, model)) = decision {
       ledger.record_decision(&connection, &model, started_at, &done);
     }
     if let Some(spent) = provider {
       ledger.record(spent, started_at, &done);
     }
-    done.review
+    if let Review::Failed {
+      failure, model, detail, ..
+    } = &done.review
+    {
+      tracing::warn!(
+        run = %ledger.run,
+        request = %ledger.approval,
+        connection = connection.as_ref().map_or("", |used| &*used.name),
+        connection_id = connection.as_ref().map(|used| used.id.to_string()).unwrap_or_default(),
+        model = model.as_deref().unwrap_or_default(),
+        ?failure,
+        detail = detail.as_deref().unwrap_or_default(),
+        "the reviewer gave no verdict"
+      );
+    }
+    if by_decision {
+      done.review.by_decision_model()
+    } else {
+      done.review
+    }
   }
 
   /// The provider, account and connection a review with this reviewer is spent on; `None` when it asks no model.
@@ -217,6 +240,15 @@ impl ReviewerSetup {
       } => kind.provider().map(|provider| (provider, *account, connection.clone())),
       Self::Native { connection, .. } => Some((AgentProvider::AnthropicApi, None, connection.clone())),
       Self::Unreachable { .. } | Self::Missing | Self::Decision(_) => None,
+    }
+  }
+
+  /// The connection this reviewer runs on; `None` when the project has none.
+  pub(super) const fn connection(&self) -> Option<&UsedProvider> {
+    match self {
+      Self::Cli { connection, .. } | Self::Native { connection, .. } => Some(connection),
+      Self::Unreachable { connection, .. } => connection.as_ref(),
+      Self::Missing | Self::Decision(_) => None,
     }
   }
 
@@ -258,7 +290,7 @@ impl ReviewerSetup {
         setup.threshold,
         setup.key,
       ))),
-      Self::Unreachable { model } => ask(Some(&Unreachable { model })),
+      Self::Unreachable { model, .. } => ask(Some(&Unreachable { model })),
       Self::Native {
         client, model, effort, ..
       } => {
@@ -416,7 +448,12 @@ fn native(
 ) -> ReviewerSetup {
   let key = match api_key(db, keys, api.key()) {
     Some(key) => key,
-    None => return ReviewerSetup::Unreachable { model },
+    None => {
+      return ReviewerSetup::Unreachable {
+        model,
+        connection: Some(connection),
+      };
+    }
   };
   match client(api, key) {
     Ok(client) => ReviewerSetup::Native {
@@ -427,7 +464,10 @@ fn native(
     },
     Err(error) => {
       tracing::warn!(%error, "cannot make the native reviewer's client");
-      ReviewerSetup::Unreachable { model }
+      ReviewerSetup::Unreachable {
+        model,
+        connection: Some(connection),
+      }
     }
   }
 }
@@ -470,6 +510,7 @@ fn decision_setup(
   let Some(connection) = db.decision_connection(id)? else {
     return Ok(ReviewerSetup::Unreachable {
       model: choice.model.clone(),
+      connection: None,
     });
   };
   let key = match connection.key() {

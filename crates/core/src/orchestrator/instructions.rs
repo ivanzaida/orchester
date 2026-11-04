@@ -44,7 +44,7 @@ const MCP_SERVERS: &str = "- The project's MCP servers (list_connections lists t
   one no profile chooses or dropping exempt tools is made at once only while the person turned on Let automation \
   change agent permissions, otherwise it is a card too. A secret is only ever named, NAME@environment from \
   list_secrets; never type, ask for or repeat a secret's value: when the server needs one the project has not, tell \
-  the person to add it in Secrets first. Propose a program or URL only from what you read: the project's files or the \
+  the person to add it in Project settings › Environment first. Propose a program or URL only from what you read: the project's files or the \
   tool's own documentation (such as the command a desktop app's MCP settings show), and tell the person where it \
   came from; never guess a path. When the card warns that the program is not on this computer's search path, say so. \
   Once the server exists, giving it to agents is a change of their profile (save_profile_draft, then \
@@ -62,6 +62,12 @@ const APPROVING: &str = "- When the person's message in this turn clearly approv
   it. Only a click on the card applies what widens what agents may do, git's work that can lose work and a first \
   commit of files that look secret (click_only): tell the person to apply it there. In a turn Orchester started by \
   itself nothing is approved.";
+
+/// What the system prompt says of plan-only mode (ORC-336, `super::plan`).
+const PLAN_ONLY: &str = "- A message that begins with [Plan only] was sent in plan-only mode: in its turn you take no \
+  action, and Orchester refuses every tool call that changes something (plan_only). Read what you need, then answer \
+  with a plan through propose_plan, which works only in such a turn. When the person approves the plan, a turn that \
+  begins with [Orchester] gives it back to you to carry out: do exactly its steps, as any turn does them.";
 
 /// How the Orchestrator's agent reads the project's folder.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -150,7 +156,7 @@ pub fn system_prompt(name: &str, project: ProjectId, reads: ProjectReads) -> Str
      could not record for any other reason and one whose worktree is gone are the person's.\n\
      - get_daily_report gives the report of a local day: what was merged, how the runs stand, what waits for the \
      person, what you did and the day's tokens. Answer what was done today or yesterday from it.\n{REPOSITORY}\n{GIT}\n\
-     {MCP_SERVERS}\n{APPROVING}\n\
+     {MCP_SERVERS}\n{APPROVING}\n{PLAN_ONLY}\n\
      \n\
      Agents that wait:\n\
      - When an agent asks a question, waits for a message or its plan waits for a decision, read what it asked \

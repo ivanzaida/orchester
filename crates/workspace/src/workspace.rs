@@ -13,6 +13,7 @@ mod browser;
 mod orchestrator_consent;
 mod owners;
 mod servers;
+mod settings;
 
 use std::{
   collections::{HashMap, HashSet},
@@ -22,13 +23,9 @@ use std::{
 
 use orchester_core::{
   app_mcp::McpPort,
-  appearance::ThemeSetting,
   id::{CloudAccountId, InstallationId, ProjectId},
-  notification::NotificationSettings,
-  orchestrator::{ReportSchedule, ReportTime},
   project::Project,
   time::Timestamp,
-  usage::limits::WarningThreshold,
 };
 use orchester_exec::programs::Programs;
 use orchester_store::{AppDb, PreviousSession, ProjectDb, RegisteredProject, SessionEnd, SessionId, StoreError};
@@ -43,7 +40,10 @@ use crate::{
   accounts::folders::found,
   messages::{self, Message},
   project_setup::NewProject,
-  tasks::data::ProjectTasks,
+  tasks::{
+    data::ProjectTasks,
+    outside::{AppOutside, OutsideChanges},
+  },
 };
 
 /// A project whose database is open and readable.
@@ -167,6 +167,8 @@ pub struct Workspace {
   pub(crate) account_changes: Arc<tokio::sync::watch::Sender<u64>>,
   /// Where Settings â€º Browser looks for an installed browser ([`browser`]).
   browser_folders: browser::BrowserFolders,
+  /// The changes made to settings and project data, which this workspace's setting writers count themselves.
+  pub(crate) changes: OutsideChanges,
 }
 
 impl PartialEq for Workspace {
@@ -187,7 +189,13 @@ impl Workspace {
       listed: Arc::default(),
       account_changes: Arc::new(tokio::sync::watch::Sender::new(0)),
       browser_folders: browser::BrowserFolders::default(),
+      changes: OutsideChanges::default(),
     }
+  }
+
+  /// The changes this workspace's setting writers count, which the session's screens and MCP tools count theirs in.
+  pub fn outside_changes(&self) -> OutsideChanges {
+    self.changes.clone()
   }
 
   /// Gives this workspace and its clones `trash` for removed accounts' folders: the system's in the app's window
@@ -278,13 +286,23 @@ impl Workspace {
   /// Opens the project Orchester keeps in the folder `repo_root` and records it as the most
   /// recently used one; a folder whose project was removed from the list is added again. An account's project is
   /// refused to anyone else ([`StoreError::ProjectOfAnotherAccount`], [`StoreError::ProjectOfSignedOutAccount`]).
+  /// A project with no *Let Orchester estimate story points* or Orchestrator switch of its own gets the
+  /// application-wide value it moved from.
   pub fn open(&self, repo_root: &Path) -> Result<OpenProject, StoreError> {
-    let db = ProjectDb::open(repo_root)?;
+    let mut db = ProjectDb::open(repo_root)?;
     let project = db.project().clone();
     self.register(&project, repo_root)?;
     // The project opens all the same; its connections follow the removal the next time it opens.
     if let Err(error) = self.follow_accounts(repo_root) {
       tracing::warn!(%error, "cannot move a project's connections off removed accounts");
+    }
+    // The project opens all the same, its estimates off; the copy is tried again the next time it opens.
+    if let Err(error) = db.copy_estimates_story_points(|| self.db.lock().estimates_story_points()) {
+      tracing::warn!(%error, "cannot copy the application-wide estimates setting into a project");
+    }
+    // The project opens all the same; a switch not copied now is copied when it is first read.
+    if let Err(error) = self.copy_orchestrator_switches(&mut db) {
+      tracing::warn!(%error, "cannot copy the application-wide Orchestrator switches into a project");
     }
     Ok(OpenProject {
       project,
@@ -354,6 +372,9 @@ impl Workspace {
       consent.revoked = !allowed;
     }
     consent.finish_save(allowed && result.is_ok());
+    if result.is_ok() {
+      self.changes.record_app(AppOutside::Automation);
+    }
     result
   }
 
@@ -382,6 +403,9 @@ impl Workspace {
       consent.revoked = !allowed;
     }
     consent.finish_save(allowed && result.is_ok());
+    if result.is_ok() {
+      self.changes.record_app(AppOutside::Automation);
+    }
     result
   }
 
@@ -419,84 +443,6 @@ impl Workspace {
   pub fn invalidate_automation_consent(&self) {
     self.permission_consent.lock().allowed = false;
     self.approval_consent.lock().allowed = false;
-  }
-
-  /// Whether Orchester estimates the story points of the tasks of the project at `repo_root` that have no person's
-  /// value (*Let Orchester estimate story points*, Project settings â€º Runs): the project's own setting once a person
-  /// set it there, else the application-wide one it moved from, which was off until a person turned it on.
-  pub fn estimates_story_points(&self, repo_root: &Path) -> Result<bool, StoreError> {
-    match ProjectDb::open(repo_root)?.estimates_story_points()? {
-      Some(allowed) => Ok(allowed),
-      None => self.db.lock().estimates_story_points(),
-    }
-  }
-
-  /// Sets *Let Orchester estimate story points* for the project at `repo_root`; only a person does, in the window.
-  pub fn set_estimates_story_points(&self, repo_root: &Path, allowed: bool) -> Result<(), StoreError> {
-    ProjectDb::open(repo_root)?.set_estimates_story_points(allowed)
-  }
-
-  /// Where Usage â€º Plan limits draws its warning line, for every project; 80 % until it is changed.
-  pub fn usage_warning_threshold(&self) -> Result<WarningThreshold, StoreError> {
-    self.db.lock().usage_warning_threshold()
-  }
-
-  pub fn set_usage_warning_threshold(&self, threshold: WarningThreshold) -> Result<(), StoreError> {
-    self.db.lock().set_usage_warning_threshold(threshold)
-  }
-
-  /// The colors the window uses (`orchester-app`); [`ThemeSetting::default`] until one is chosen.
-  pub fn theme(&self) -> Result<ThemeSetting, StoreError> {
-    self.db.lock().theme()
-  }
-
-  pub fn set_theme(&self, theme: ThemeSetting) -> Result<(), StoreError> {
-    self.db.lock().set_theme(theme)
-  }
-
-  /// Which OS notifications `orchester-app` shows ([`NotificationSettings::default`] until changed).
-  pub fn notification_settings(&self) -> Result<NotificationSettings, StoreError> {
-    self.db.lock().notification_settings()
-  }
-
-  pub fn set_notification_settings(&self, settings: NotificationSettings) -> Result<(), StoreError> {
-    self.db.lock().set_notification_settings(settings)
-  }
-
-  /// Whether the app sends its error reports to GlitchTip (`orchester_app::error_reports`); on until a person turns
-  /// it off.
-  pub fn sends_error_reports(&self) -> Result<bool, StoreError> {
-    self.db.lock().sends_error_reports()
-  }
-
-  /// Keeps a person's choice of *Send error reports* (Settings â€º General); the app's client and its runners follow it
-  /// at once (`orchester_app::error_reports::turn`), not through this.
-  pub fn set_sends_error_reports(&self, allowed: bool) -> Result<(), StoreError> {
-    self.db.lock().set_sends_error_reports(allowed)
-  }
-
-  /// When the Orchestrator's daily report comes; `None` while it is off, as it is until a person turns it on.
-  pub fn daily_report_schedule(&self) -> Result<Option<ReportSchedule>, StoreError> {
-    self.db.lock().daily_report_schedule()
-  }
-
-  /// Turns the daily report on at `time`, or off with `None`; only the window's setting, which a person changes, calls
-  /// it.
-  pub fn set_daily_report(&self, time: Option<ReportTime>) -> Result<(), StoreError> {
-    self.db.lock().set_daily_report(time, Timestamp::now())
-  }
-
-  /// Whether agents may control `orchester-app`'s window through its MCP server; `None` until it is
-  /// set, when the build decides.
-  pub fn mcp_window_control(&self) -> Result<Option<bool>, StoreError> {
-    self.db.lock().mcp_window_control()
-  }
-
-  /// Keeps a person's choice of window control (*Agents can control this window*), which the app reads when it
-  /// starts: a run keeps what it started with, so the choice applies from the next start. Only the window's setting,
-  /// which a person changes, calls it.
-  pub fn set_mcp_window_control(&self, allowed: bool) -> Result<(), StoreError> {
-    self.db.lock().set_mcp_window_control(Some(allowed))
   }
 
   /// The application database's file (Settings â€º General â€º *Application data*); `None` for one only in memory.

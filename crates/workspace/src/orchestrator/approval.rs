@@ -46,8 +46,9 @@ const DESCRIPTION: &str = "Applies a proposal of yours that waits for the person
   and applies nothing; then call it again with the number the person's message approves. When several wait and the \
   message does not say which, ask the person which one; never guess. When the message also changes the proposal (\"run \
   it, but without the tests\"), do not apply it: make a new proposal instead. Only in a turn the person's own message \
-  started: refused in a turn Orchester started by itself (not_persons_turn) and for a message automation sent \
-  (automation_input). Refused for a proposal made after the person's message or that no longer waits (not_pending), and \
+  started: refused in a turn Orchester started by itself (not_persons_turn), for a message automation sent \
+  (automation_input) and in a turn that carries out a plan the person approved (approved_plan): the cards it makes \
+  stay the person's. Refused for a proposal made after the person's message or that no longer waits (not_pending), and \
   for what only a click on its card applies (click_only): anything that widens what agents may do (adding or widening \
   an MCP server, a publication that widens), git's work that can lose work (git_propose), and a first commit that adds \
   files that look as if they hold secrets; tell the person to click Apply on the card then. Refused as the card's \
@@ -85,6 +86,10 @@ pub(super) async fn call(
     serde_json::from_value(Value::Object(arguments)).map_err(|error| ToolError::InvalidArguments(error.to_string()))?;
   if scope.on_its_own {
     return Err(refused("not_persons_turn", "orchestrator.approval.notPersonsTurn"));
+  }
+  // An approved plan approves no card: what only the person decides stays theirs to apply (ORC-646).
+  if super::plan::carrying_out(scope).await? {
+    return Err(refused("approved_plan", "orchestrator.approval.approvedPlan"));
   }
   let (root, chat) = (scope.root.clone(), scope.chat);
   let entries = blocking(move || Ok(ProjectDb::open(&root)?.chat_entries(chat)?)).await?;

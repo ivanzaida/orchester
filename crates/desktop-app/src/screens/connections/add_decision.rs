@@ -34,7 +34,6 @@ impl DevtoolsInspectable for Props {}
 
 pub(super) struct AddDecision {
   open: Signal<bool>,
-  revision: Signal<u64>,
 }
 impl Component for AddDecision {
   type Props = Props;
@@ -50,27 +49,18 @@ impl Component for AddDecision {
         ));
       }
     });
-    Self {
-      open,
-      revision: ctx.signal(0),
-    }
+    Self { open }
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let project = ctx.props::<Props>().project.clone();
-    let revision = self.revision.get()
-      + project
-        .feed
-        .outside
-        .get()
-        .of(orchester_workspace::tasks::outside::Outside::Connections);
-    let read = super::data::load(ctx, project.open.repo_root.clone(), revision);
+    let query = super::data::load(ctx, project.open.repo_root.clone());
+    let read = crate::queries::state(&query);
     if let Some(error) = read.error {
-      let retry = self.revision.clone();
       let error = load_error(
         ctx,
         "decision-add-load-error",
         (&ctx.t("connections.loadFailed"), &message_text(ctx, &error)),
-        move || retry.update(|revision| *revision += 1),
+        move || query.refresh(),
       );
       return kit::scroll(error);
     }

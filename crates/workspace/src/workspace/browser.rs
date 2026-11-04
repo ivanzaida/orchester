@@ -15,6 +15,7 @@ use parking_lot::Mutex;
 use thiserror::Error;
 
 use super::Workspace;
+use crate::tasks::outside::AppOutside;
 
 /// Where this workspace looks for an installed browser: the computer's own places, or only the folders a test or a QA
 /// copy gave ([`Workspace::look_for_browsers_in`]).
@@ -61,8 +62,11 @@ impl Workspace {
     self.db.lock().browser_window_opens_itself()
   }
 
+  /// Keeps whether the *Browser* window opens by itself, and counts the change (`OutsideChanges::record_app`).
   pub fn set_browser_window_opens_itself(&self, opens: bool) -> Result<(), StoreError> {
-    self.db.lock().set_browser_window_opens_itself(opens)
+    self.db.lock().set_browser_window_opens_itself(opens)?;
+    self.changes.record_app(AppOutside::Browser);
+    Ok(())
   }
 
   /// What Settings › Browser shows. Blocks on SQLite and, finding the browser on Windows, on the registry.
@@ -84,11 +88,12 @@ impl Workspace {
     })
   }
 
-  /// Keeps `program`, which the person chose, as agents' browser once it is a Chromium-based browser's; refused, with
-  /// the reason, and nothing kept, otherwise.
+  /// Keeps `program`, which the person chose, as agents' browser once it is a Chromium-based browser's, and counts the
+  /// change; refused, with the reason, and nothing kept, otherwise.
   pub fn choose_browser_program(&self, program: &Path) -> Result<BrowserProgram, ChooseBrowserError> {
     let taken = browser::chosen(program)?;
     self.db.lock().set_browser_program(Some(taken.path()))?;
+    self.changes.record_app(AppOutside::Browser);
     Ok(taken)
   }
 

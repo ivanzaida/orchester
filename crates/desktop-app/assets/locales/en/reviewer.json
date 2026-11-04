@@ -1,0 +1,13 @@
+{
+  "reviewer": {
+    "trouble": {
+      "planLimit": "its account reached its plan limit, which resets {{time}}.",
+      "planLimitNoReset": "its account reached its plan limit.",
+      "notSignedIn": "nobody is signed in to its account.",
+      "cliFailed": "its CLI failed.",
+      "timedOut": "it didn't answer in time.",
+      "unreadable": "its answer couldn't be read."
+    },
+    "day": "{{weekday}} {{time}}"
+  }
+}

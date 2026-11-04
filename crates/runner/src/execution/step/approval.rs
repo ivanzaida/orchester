@@ -333,8 +333,11 @@ impl Worker {
       Itself::Person(came) => Some(came),
     };
     watch.asked_in_autopilot = autopilot && came.is_some();
-    if let Some(came) = &came {
-      watch.db.record_came_to_person(approval.run, &approval.id, Some(came))?;
+    if let Some(came) = came {
+      let came = came.in_mode(autopilot);
+      watch
+        .db
+        .record_came_to_person(approval.run, &approval.id, Some(&came))?;
       watch.invocation.timing.wait_for_person(since);
       // A person's wait never holds one of the computer's QA slots.
       self.qa.release(watch.invocation.id);

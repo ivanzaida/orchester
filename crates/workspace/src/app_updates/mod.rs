@@ -1,12 +1,13 @@
 //! The desktop app's own updates (`docs/cloud-api.md`, "App releases"): Settings › Updates in the application
 //! database ([`UpdateSettings`]), the check at the start, every [`CHECK_EVERY`] and on *Check now* — Orchester Cloud's
 //! anonymous update check with this copy's version, platform, architecture, channel and install id, no sign-in — and
-//! the download of an offered installer into the data folder's [`UPDATES_FOLDER`], resumed after an interruption and
-//! kept only once its SHA-256 and its signature by a release key built into the app check out ([`download`]). Only a
-//! copy the installer installed on Windows downloads ([`ThisCopy`]); every other copy still asks, to name the newest
-//! release and its download. What the window and the app's MCP server show is one [`UpdateState`], or in a debug
-//! build's QA a state set for testing in its place ([`testing`]). A ready update installs when the person says so
-//! ([`install`]): the databases are copied aside and the installer takes over.
+//! the download of an offered installer (on macOS the zip of the release's bundle) into the data folder's
+//! [`UPDATES_FOLDER`], resumed after an interruption and kept only once its SHA-256 and its signature by a release key
+//! built into the app check out ([`download`]). Only a copy the installer installed on Windows and a release's
+//! `Orchester.app` on macOS download ([`ThisCopy`]); every other copy still asks, to name the newest release and its
+//! download. What the window and the app's MCP server show is one [`UpdateState`], or in a debug build's QA a state
+//! set for testing in its place ([`testing`]). A ready update installs when the person says so ([`install`]): the
+//! databases are copied aside and the installer, or on macOS a helper that replaces the bundle, takes over.
 
 mod copy;
 mod download;
@@ -52,8 +53,9 @@ use crate::{
   workspace::Workspace,
 };
 
-/// How often the app asks for a newer release while it runs.
-pub const CHECK_EVERY: Duration = Duration::from_secs(6 * 60 * 60);
+/// How often the app asks for a newer release while it runs: 3 checks an hour, with the one at the start and *Check
+/// now* well under the cloud's 12 an hour per install id (`docs/cloud-api.md`, "Rate limits").
+pub const CHECK_EVERY: Duration = Duration::from_secs(20 * 60);
 /// The folder of the data folder downloads go to.
 pub const UPDATES_FOLDER: &str = "updates";
 /// How the release's installer is named, `Orchester-<version>-setup.exe` (`.github/workflows/app-release.yml`).
@@ -70,16 +72,20 @@ pub struct ThisApp {
 }
 
 impl ThisApp {
-  /// This program at `version`, started as a QA copy or not.
+  /// This program at `version`, started as a QA copy or not. On macOS a bundle that would update itself is asked
+  /// for its Team ID with `codesign`.
   pub fn detect(version: ReleaseVersion, qa: bool) -> Self {
     let target = copy::this_platform().zip(ReleaseArch::parse(env::consts::ARCH));
     let program = env::current_exe()
       .map_err(|error| tracing::warn!(%error, "this program cannot tell where it is; it does not update itself"))
       .ok();
+    let folder = program.as_deref().and_then(Path::parent);
     let copy = match target {
-      Some((platform, _)) => ThisCopy::of(Build::this(), qa, platform, program.as_deref().and_then(Path::parent)),
+      Some((platform, _)) => ThisCopy::of(Build::this(), qa, platform, folder),
       None => ThisCopy::NotOnThisPlatform,
     };
+    #[cfg(target_os = "macos")]
+    let copy = install::bundle::signed_copy(copy, folder);
     Self { version, target, copy }
   }
 }
@@ -149,7 +155,7 @@ impl AppUpdates {
         failure: failure.clone(),
       },
       // The app checks as it starts ([`keep_checking`]).
-      (ThisCopy::Installer, _) => UpdateState::Checking,
+      (copy, _) if copy.updates_itself() => UpdateState::Checking,
       (copy, _) => not_updating(copy, None),
     };
     let just_updated = match after {
@@ -251,7 +257,7 @@ impl AppUpdates {
 
   async fn check(&self) {
     match (self.inner.app.copy, self.inner.app.target) {
-      (ThisCopy::Installer, Some(target)) => self.update(target).await,
+      (copy, Some(target)) if copy.updates_itself() => self.update(target).await,
       (copy, Some(target)) => self.look_for_newest(copy, target).await,
       // No release ships for this platform: there is nothing to ask for.
       (_, None) => {}
@@ -482,17 +488,22 @@ pub async fn follow_runs(updates: AppUpdates, runners: Runners) {
 fn not_updating(copy: ThisCopy, newest: Option<NewestRelease>) -> UpdateState {
   match copy {
     ThisCopy::NotThisCopy(reason) => UpdateState::NotThisCopy { reason, newest },
-    // An installer's copy updates itself and never gets here.
-    ThisCopy::Installer | ThisCopy::NotOnThisPlatform => UpdateState::NotOnThisPlatform { newest },
+    // A copy that updates itself never gets here.
+    ThisCopy::Installer | ThisCopy::Bundle | ThisCopy::NotOnThisPlatform => UpdateState::NotOnThisPlatform { newest },
   }
 }
 
-/// The release's installer for `target`.
+/// The release's file a copy on `target` updates from: the installer on Windows; on macOS the `ditto` zip of the
+/// notarized bundle, `Orchester-<version>-macos-<arch>.zip` (`tools/package-macos.sh`), not the disk image.
 fn installer(release: &OfferedRelease, (platform, arch): (ReleasePlatform, ReleaseArch)) -> Option<&OfferedFile> {
+  let suffix = match platform {
+    ReleasePlatform::Windows => INSTALLER_SUFFIX.to_owned(),
+    ReleasePlatform::Macos => format!("-macos-{}.zip", arch.as_str()),
+  };
   release
     .files
     .iter()
-    .find(|file| file.platform == platform && file.arch == arch && file.name.as_str().ends_with(INSTALLER_SUFFIX))
+    .find(|file| file.platform == platform && file.arch == arch && file.name.as_str().ends_with(&suffix))
 }
 
 /// `release` for a copy updated by hand: its installer's download, or any file of it for `target`.

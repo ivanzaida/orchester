@@ -1,6 +1,7 @@
 //! Approvals' rows (`Auto mode` `WSQqT` in `02 · Runs`, as `m0eUB` redraws it): *Allow Autopilot for agents in this
 //! project*, Manual's reviewer's connection, model and effort as three selects with the domain's effective-reviewer
-//! read-back in the row's (i), and *Approved for every run*.
+//! read-back in the row's (i) and, in its hint's place in `warning` while the reviewer cannot run, why (ORC-611), and
+//! *Approved for every run*.
 use std::sync::Arc;
 
 use lurq::{
@@ -37,20 +38,28 @@ const LOCAL_MODEL_WIDTH: f32 = 206.0;
 const MODEL_WIDTH: f32 = 156.0;
 const EFFORT_WIDTH: f32 = 120.0;
 
-pub fn group(ctx: &mut Ctx, tab: &AutoMode, props: &Props, settings: &Settings, save: &Save) -> Group {
+/// The group, its Reviewer row saying why the reviewer cannot run (`cannot_run`) while it cannot.
+pub fn group(
+  ctx: &mut Ctx,
+  (tab, props): (&AutoMode, &Props),
+  (settings, cannot_run): (&Settings, Option<Arc<str>>),
+  save: &Save,
+) -> Group {
   let options = project_settings::review_options(settings, &tab.connection.get(), &tab.model.get());
   let busy = save.state().get().is_pending();
   let autopilot = super::autopilot::row(ctx, (tab, props), settings, (save, busy));
   let reviewer = if options.connections.is_empty() && options.decisions.is_empty() {
     unavailable_reviewer(ctx, props)
   } else {
-    reviewer_row(ctx, tab, props, options, busy || tab.check.state().get().is_pending())
+    let busy = busy || tab.check.state().get().is_pending();
+    reviewer_row(ctx, (tab, props), (options, cannot_run), busy)
   };
   let rules = super::rules::row(ctx, props, settings);
   Group::new("settings-auto", ctx.t("project_settings.auto"))
     .row(autopilot)
     .row(reviewer)
     .row(rules)
+    .foot(&ctx.t("project_settings.approvalsFoot"))
 }
 fn unavailable_reviewer(ctx: &mut Ctx, props: &Props) -> Element {
   let nav = crate::navigation::Navigation::of(ctx);
@@ -74,15 +83,14 @@ fn unavailable_reviewer(ctx: &mut Ctx, props: &Props) -> Element {
 }
 fn reviewer_row(
   ctx: &mut Ctx,
-  tab: &AutoMode,
-  props: &Props,
-  options: project_settings::ReviewOptions,
+  (tab, props): (&AutoMode, &Props),
+  (options, cannot_run): (project_settings::ReviewOptions, Option<Arc<str>>),
   busy: bool,
 ) -> Element {
   let settings = tab.stored.get().0;
   let decision = tab.selected_decision(&settings);
   let connection = connection_select(ctx, tab, &options, busy);
-  let row = reviewer_label(ctx, &options, decision.is_some());
+  let row = reviewer_label(ctx, (&options, cannot_run), decision.is_some());
   // A model is named by the id its CLI takes, as its developer names it (the person's decision for ORC-103).
   let model = select(
     ctx,
@@ -256,7 +264,11 @@ fn select(
   }
 }
 
-fn reviewer_label(ctx: &Ctx, options: &project_settings::ReviewOptions, decision: bool) -> SettingRow {
+fn reviewer_label(
+  ctx: &Ctx,
+  (options, cannot_run): (&project_settings::ReviewOptions, Option<Arc<str>>),
+  decision: bool,
+) -> SettingRow {
   let row = SettingRow::new("settings-auto-reviewer", ctx.t("project_settings.reviewer"));
   if decision {
     return row.hint(ctx.t("project_settings.reviewerHint"));
@@ -268,10 +280,15 @@ fn reviewer_label(ctx: &Ctx, options: &project_settings::ReviewOptions, decision
         "project_settings.reviewedBy",
         [("model", shown.model.as_str()), ("connection", &shown.connection)],
       );
-      row.hint(ctx.t("project_settings.reviewerHint")).info(ctx.t_args(
+      let row = row.info(ctx.t_args(
         "project_settings.reviewerInfo",
         [("detail", &*detail), ("readback", &*readback)],
-      ))
+      ));
+      // Why the reviewer cannot run, in the hint's place while it cannot.
+      match cannot_run {
+        Some(said) => row.toned(said, Tone::Warning),
+        None => row.hint(ctx.t("project_settings.reviewerHint")),
+      }
     }
     Err(why) => row.info(detail).toned(message_text(ctx, why), Tone::Warning),
   }

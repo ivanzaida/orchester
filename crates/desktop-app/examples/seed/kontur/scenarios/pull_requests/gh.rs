@@ -1,6 +1,7 @@
 //! The fake `gh` of the `pull-requests` scenario: a command script (`gh.cmd` on Windows, a shell script
 //! elsewhere) in `.orchester/qa-bin` that answers the read-only commands a sync runs from files beside it,
-//! as the real `gh` 2.97 answers them (`crates/core/tests/fixtures/github`), and opens a pull request with the
+//! as the real `gh` 2.97 answers them (`crates/core/tests/fixtures/github`), a pull request's checks one by one
+//! (`gh pr checks`) with the log of each failed job (`gh run view --log-failed`), and opens a pull request with the
 //! next number when asked to. `gh-mode.txt` picks the answer. The answers are in `gh-answers`, not a folder named
 //! `gh`, which the program itself is called on macOS and Linux.
 
@@ -67,6 +68,16 @@ pub fn install(kontur: &Kontur, pull_requests: &[PullRequest]) -> Result<PathBuf
     )?;
     let diff = diffs::diff(pull_request.number());
     write(&answers.join(format!("diff-{}.diff", pull_request.head_sha())), &diff)?;
+    if pull_request.checks().total() > 0 {
+      let number = pull_request.number();
+      write(
+        &answers.join(format!("pr-checks-{number}.json")),
+        &pr_checks(pull_request),
+      )?;
+      for job in failed_jobs(pull_request) {
+        write(&answers.join(format!("log-{job}.txt")), &job_log(number))?;
+      }
+    }
   }
   write(&bin.join("gh-mode.txt"), "ok\n")?;
   let first_open = open
@@ -144,6 +155,61 @@ fn view(pull_request: &PullRequest) -> String {
   viewed["statusCheckRollup"] = Value::Array(rollup);
   viewed["baseRefOid"] = json!(diffs::base(pull_request.number()));
   viewed.to_string()
+}
+
+/// `gh pr checks --json name,state,bucket,link,workflow` of `pull_request`: its passed checks, then the running
+/// ones, then the failed ones, each a GitHub Actions job of `CI` whose number is [`job`]'s.
+fn pr_checks(pull_request: &PullRequest) -> String {
+  let counts = pull_request.checks();
+  let (number, repository) = (pull_request.number(), repository_of(pull_request));
+  let states = std::iter::repeat_n(("SUCCESS", "pass"), counts.passed as usize)
+    .chain(std::iter::repeat_n(("IN_PROGRESS", "pending"), counts.pending as usize))
+    .chain(std::iter::repeat_n(("FAILURE", "fail"), counts.failed as usize));
+  let checks: Vec<Value> = states
+    .enumerate()
+    .map(|(index, (state, bucket))| {
+      json!({
+        "name": format!("check {}", index + 1),
+        "state": state,
+        "bucket": bucket,
+        "link": format!("{repository}/actions/runs/{number}/job/{}", job(number, index)),
+        "workflow": "CI",
+      })
+    })
+    .collect();
+  Value::Array(checks).to_string()
+}
+
+/// The GitHub Actions job of check `index` (from 0) of pull request `number`.
+fn job(number: u64, index: usize) -> u64 {
+  number * 100 + u64::try_from(index).expect("a pull request has few checks")
+}
+
+/// The jobs of `pull_request`'s failed checks, which [`pr_checks`] lists last.
+fn failed_jobs(pull_request: &PullRequest) -> impl Iterator<Item = u64> {
+  let counts = pull_request.checks();
+  let first = (counts.passed + counts.pending) as usize;
+  let number = pull_request.number();
+  (first..first + counts.failed as usize).map(move |index| job(number, index))
+}
+
+/// What `gh run view --job <id> --log-failed` writes of a failed job of pull request `number`.
+fn job_log(number: u64) -> String {
+  [
+    "Run cargo test\t2026-11-03T10:15:02.0000000Z running 12 tests".to_owned(),
+    format!("Run cargo test\t2026-11-03T10:15:03.0000000Z test webhook_retry_{number} ... FAILED"),
+    "Run cargo test\t2026-11-03T10:15:03.1000000Z ##[error]Process completed with exit code 101.".to_owned(),
+  ]
+  .map(|line| format!("check\t{line}\n"))
+  .concat()
+}
+
+/// `https://github.com/<owner>/<name>` of `pull_request`.
+fn repository_of(pull_request: &PullRequest) -> &str {
+  pull_request
+    .url()
+    .rsplit_once("/pull/")
+    .map_or("https://github.com/ivanzaida/kontur", |(repository, _)| repository)
 }
 
 const fn review(decision: ReviewDecision) -> &'static str {
@@ -230,10 +296,17 @@ mod program {
        if \"%~1\"==\"--version\" (type \"%A%version.txt\" & exit /b 0)\r\n\
        if \"%~1\"==\"auth\" goto auth\r\nif \"%~1 %~2\"==\"pr list\" goto list\r\n\
        if \"%~1 %~2\"==\"pr view\" goto view\r\nif \"%~2\"==\"--allow-escape-sequences\" goto compare\r\n\
+       if \"%~1 %~2\"==\"pr checks\" goto prchecks\r\nif \"%~1 %~2\"==\"run view\" goto joblog\r\n\
        if \"%~1 %~2\"==\"api graphql\" goto checks\r\nif \"%~1 %~2\"==\"api --method\" goto create\r\n\
        if \"%~1\"==\"api\" (type \"%A%rate.json\" & exit /b 0)\r\n\
        exit /b 1\r\n\
        :create\r\nfindstr \"^\" >nul\r\ntype \"%A%created.json\" & exit /b 0\r\n\
+       :prchecks\r\nif \"%MODE%\"==\"unreachable\" (type \"%A%network.err\" 1>&2 & exit /b 1)\r\n\
+       if \"%MODE%\"==\"rate-limited\" (type \"%A%rate-limited.err\" 1>&2 & exit /b 1)\r\n\
+       if exist \"%A%pr-checks-%~3.json\" (type \"%A%pr-checks-%~3.json\" & exit /b 0)\r\n\
+       echo no checks reported on the branch of #%~3 1>&2\r\nexit /b 1\r\n\
+       :joblog\r\nif exist \"%A%log-%~4.txt\" (type \"%A%log-%~4.txt\" & exit /b 0)\r\n\
+       echo log not found 1>&2\r\nexit /b 1\r\n\
        :view\r\nif \"%MODE%\"==\"slow\" ping -n 4 127.0.0.1 >nul\r\n\
        if \"%MODE%\"==\"unreachable\" (type \"%A%network.err\" 1>&2 & exit /b 1)\r\n\
        if \"%MODE%\"==\"server-error\" (type \"%A%server.err\" 1>&2 & exit /b 1)\r\n\
@@ -299,6 +372,14 @@ mod program {
        if [ -f \"$a/view-$3.json\" ]; then cat \"$a/view-$3.json\"; exit 0; fi\n\
        echo \"GraphQL: Could not resolve to a PullRequest with the number of $3. (repository.pullRequest)\" >&2; \
        exit 1;;\n\
+       \"pr checks\") case \"$mode\" in\n\
+         unreachable) cat \"$a/network.err\" >&2; exit 1;;\n\
+         rate-limited) cat \"$a/rate-limited.err\" >&2; exit 1;;\n\
+       esac\n\
+       if [ -f \"$a/pr-checks-$3.json\" ]; then cat \"$a/pr-checks-$3.json\"; exit 0; fi\n\
+       echo \"no checks reported on the branch of #$3\" >&2; exit 1;;\n\
+       \"run view\") if [ -f \"$a/log-$4.txt\" ]; then cat \"$a/log-$4.txt\"; exit 0; fi\n\
+       echo \"log not found\" >&2; exit 1;;\n\
        \"api --allow-escape-sequences\") h=\"${{7##*...}}\"; cat \"$a/diff-$h.diff\"; exit 0;;\n\
        \"api graphql\") if grep -q \"{first_open}\"; then cat \"$a/checks-open.json\"; \
        else cat \"$a/checks-closed.json\"; fi; exit 0;;\n\

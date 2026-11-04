@@ -170,7 +170,7 @@ impl Component for AddAgent {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<AddAgentProps>().clone();
     let save = self.save.clone();
-    let listed = data::load(ctx, props.project.open.repo_root.clone(), 0);
+    let listed = crate::queries::state(&data::load(ctx, props.project.open.repo_root.clone()));
     let provider = self.kind.get().0;
     if provider.is_native() {
       return self.native_page(ctx, &props, &listed);

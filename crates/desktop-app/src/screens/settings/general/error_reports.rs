@@ -1,8 +1,9 @@
 //! *Send error reports* (`Send error reports` `tMyiy` in `01b · General · error reports on` `Z322E`, off in `01c`
 //! `mWn0J`): whether the app and its runners send their errors and crashes to Orchester's error tracker
-//! (`crate::error_reports`), on until a person turns it off. The switch shows the stored setting; a flip takes effect
-//! at once for the app's client and the running runners (`error_reports::turn`), then saves off the UI thread, and the
-//! header's save state follows it. *What a report carries* opens `docs/error-reports.md`
+//! (`crate::error_reports`), on until a person turns it off. The switch shows the stored setting, read through its
+//! query, which the window read as the session started; a flip takes effect at once for the app's client and the
+//! running runners (`error_reports::turn`), then saves off the UI thread, and the header's save state follows it; a
+//! failed save puts the stored setting back. *What a report carries* opens `docs/error-reports.md`
 //! (`error_reports::WHAT_A_REPORT_CARRIES`).
 
 use lurq::{
@@ -19,11 +20,11 @@ use lurq::{
 use orchester_workspace::{
   background,
   messages::{self, Message},
-  workspace::Workspace,
 };
 
 use crate::{
   error_reports,
+  queries::{self, Session, app},
   screens::settings::save_state::{Outcome, SaveState},
   services::Services,
   theme::{ExtraColor, IconSize},
@@ -61,12 +62,14 @@ impl Component for ErrorReportsRow {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let services = Services::of(ctx);
-    // Hooks in the same order on every render: the action, then the read, which follows each save.
-    let save = save_action(ctx, &services.workspace);
+    // Hooks in the same order on every render: the action, then the read, which each save invalidates.
+    let save = save_action(ctx, &services);
     let state = save.state().get();
-    let read = stored(ctx, &services, state.data);
-    // The person's choice took effect at once, kept or not (a failed save says so under the row); the stored value
-    // until they choose.
+    let read = queries::state(&ctx.query(app::error_reports(Session(services.clone()))));
+    self.restore(&state, read.data, &services);
+    // The person's choice took effect at once and shows until the stored value is it; the stored value until they
+    // choose, and again once a save failed (which says so under the row).
+    queries::settle(&self.chosen, read.data.as_ref(), state.is_pending());
     let shown = self.chosen.get().or(read.data);
     if let Some(saves) = SaveState::of(ctx) {
       saves.report(ID, Outcome::of(&state));
@@ -114,6 +117,17 @@ impl ErrorReportsRow {
     })
   }
 
+  /// Once a save failed, puts back what is stored: the switch shows it and the reports follow it again.
+  fn restore(&self, state: &FutureState<bool, Message>, stored: Option<bool>, services: &Services) {
+    if !state.is_rejected() || self.chosen.get_untracked().is_none() {
+      return;
+    }
+    self.chosen.set(None);
+    if let Some(stored) = stored {
+      error_reports::turn(stored, &services.runners);
+    }
+  }
+
   /// *What a report carries ↗* in `accent_text` 12/500 (`Link` `ngNFb`), opening the page in the browser.
   fn link(&self, ctx: &mut Ctx) -> Element {
     let words = ctx.t("settings.general.privacy.errorReports.link");
@@ -153,9 +167,9 @@ fn problem(ctx: &Ctx, (read, save): (&Option<Message>, &Option<Message>)) -> Opt
   Some(field_error(&format!("{ID}-error"), &ctx.t_args(key, [("reason", &*reason)])).into())
 }
 
-/// Saves the person's choice.
-fn save_action(ctx: &mut Ctx, workspace: &Workspace) -> SaveAction {
-  let workspace = workspace.clone();
+/// Saves the person's choice; the workspace counts the change, which reads the setting again (`queries`).
+fn save_action(ctx: &mut Ctx, services: &Services) -> SaveAction {
+  let workspace = services.workspace.clone();
   ctx.future_action(move |on: bool| {
     let workspace = workspace.clone();
     async move {
@@ -168,24 +182,4 @@ fn save_action(ctx: &mut Ctx, workspace: &Workspace) -> SaveAction {
         })
     }
   })
-}
-
-/// The setting as stored, read when the row shows and again after each save (`saved`).
-fn stored(ctx: &mut Ctx, services: &Services, saved: Option<bool>) -> FutureState<bool, Message> {
-  let (workspace, hold) = (services.workspace.clone(), services.hold.clone());
-  ctx
-    .future(saved, move |_| {
-      let (workspace, hold) = (workspace.clone(), hold.clone());
-      async move {
-        hold.released().await;
-        background::run(move || workspace.sends_error_reports())
-          .await?
-          .map_err(|error| {
-            tracing::error!(%error, "whether to send error reports cannot be read");
-            messages::store_error(&error)
-          })
-      }
-    })
-    .state()
-    .get()
 }

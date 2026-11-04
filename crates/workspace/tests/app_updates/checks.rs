@@ -164,7 +164,7 @@ async fn app_updates_keep_checking_asks_at_the_start_and_again_after_each_wait()
   assert!(later >= 3, "checked again after each wait: {later}");
   assert_eq!(
     orchester_workspace::app_updates::CHECK_EVERY,
-    Duration::from_secs(6 * 60 * 60)
+    Duration::from_secs(20 * 60)
   );
 }
 

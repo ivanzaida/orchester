@@ -336,7 +336,10 @@ async fn decision_review_worker_asks_person_without_language_fallback() {
     .expect("request comes to person");
     assert!(!review.approves());
     match failure {
-      Some(failure) => assert!(matches!(review, Review::Failed { failure: actual, .. } if actual == failure)),
+      Some(failure) => assert!(
+        matches!(review, Review::Failed { failure: actual, decision: true, .. } if actual == failure),
+        "a decision model's failure is marked as its: {review:?}"
+      ),
       None => assert!(matches!(review, Review::Decided { .. })),
     }
     scheduler

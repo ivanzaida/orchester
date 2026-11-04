@@ -113,12 +113,15 @@ fn agents_group(
   (open, add): (&impl Fn(ConnectionId) -> Open, Open),
   project: &str,
 ) -> Element {
-  let group = Group::new("connections-agents", ctx.t("connections.groups.agentProviders")).end(add_button(
-    ctx,
-    "connections-add-agent",
-    "connections.groups.addProvider",
-    add.clone(),
-  ));
+  let group = Group::new("connections-agents", ctx.t("connections.groups.agentProviders")).end(
+    add_button(
+      ctx,
+      "connections-add-agent",
+      "connections.groups.addProvider",
+      add.clone(),
+    )
+    .in_heading(),
+  );
   if listed.connections.is_empty() {
     return group
       .row(
@@ -228,12 +231,8 @@ fn mcp_group(
   (asks, open, add): (&ListAsks, &impl Fn(ConnectionId) -> Open, Open),
   (running, asking): ServerStates,
 ) -> Element {
-  let mut group = Group::new("connections-mcp", ctx.t("connections.groups.mcpServers")).end(add_button(
-    ctx,
-    "connections-add-mcp",
-    "connections.groups.addMcp",
-    add.clone(),
-  ));
+  let mut group = Group::new("connections-mcp", ctx.t("connections.groups.mcpServers"))
+    .end(add_button(ctx, "connections-add-mcp", "connections.groups.addMcp", add.clone()).in_heading());
   if listed.mcp.is_empty() {
     return group
       .row(

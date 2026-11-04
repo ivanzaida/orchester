@@ -41,12 +41,7 @@ fn card_auto_mode_left_to_the_person_shows_the_whole_card() {
       window.tree.get_element_by_id(&format!("{card}-approve")).is_some()
     });
     let shown = text(&mut window, &card);
-    let question = if title == "List the duplicate crates" {
-      "Allow Builder to run this command?"
-    } else {
-      "Approve command?"
-    };
-    assert!(shown.contains(question), "{title}: {shown}");
+    assert!(shown.contains("Approve command?"), "{title}: {shown}");
     assert!(!shown.contains("Auto mode is reviewing"), "{title}: {shown}");
     assert!(
       window.tree.get_element_by_id(&format!("{card}-checking")).is_none(),

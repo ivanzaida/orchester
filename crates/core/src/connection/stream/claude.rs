@@ -12,6 +12,9 @@
 //! from `input_tokens`: reads are cached input, which does not count; writes count as input
 //! (`docs/design/orchester-workspace.md`, "Token budgets"). `total_cost_usd` is ignored.
 //!
+//! How full the context is ([`ClaudeStream::context`]) is what the latest message of the main conversation took in,
+//! against the `contextWindow` the result's `modelUsage` reports for its model.
+//!
 //! The step result ([`StepResult`]) is the result's `structured_output`, which the CLI fills when it
 //! was given the result schema (`--json-schema`); else the one that closes the final message
 //! ([`StepResult::at_end`]). Either becomes the invocation's last message, as a JSON document. A
@@ -39,9 +42,12 @@ use std::collections::HashMap;
 
 use serde_json::Value;
 
-use super::{AgentEvent, CommandStatus, FileChange, FileChangeKind, OutputStream};
+use super::{AgentEvent, CommandStatus, FileChange, FileChangeKind, OutputStream, todo::claude_todos};
 use crate::{
-  connection::mcp::{InvocationExemptions, McpServerProblem},
+  connection::{
+    context_use::ContextUse,
+    mcp::{InvocationExemptions, McpServerProblem},
+  },
   orchester_tools::OrchesterTool,
   run::{StepResult, TokenUsage},
 };
@@ -55,6 +61,8 @@ const KNOWN_BLOCKS: [&str; 4] = ["text", "thinking", "redacted_thinking", "tool_
 const NO_RESULT: &str = "Claude Code ended its turn without the step result: a JSON object with outcome and summary";
 /// Claude Code's tools that change the file named in their input.
 const EDIT_TOOLS: [&str; 4] = ["Edit", "MultiEdit", "Write", "NotebookEdit"];
+/// Claude Code's tool that writes the agent's whole todo list.
+const TODO_WRITE: &str = "TodoWrite";
 
 /// Follows one invocation's output: tool calls wait for their results, and usage is counted once.
 #[derive(Clone, Debug, Default)]
@@ -78,6 +86,11 @@ pub struct ClaudeStream {
   prompt_taken: bool,
   /// A turn of the Orchestrator chat, which asks for no step result.
   chat: bool,
+  /// The tokens the latest message of the main conversation took in (input, cache reads and cache writes), with
+  /// its model: how full the context is ([`Self::context`]).
+  prompt: Option<(u64, String)>,
+  /// The context window of each model, as a result's `modelUsage` reported it.
+  windows: HashMap<String, u64>,
 }
 
 #[derive(Clone, Debug)]
@@ -161,6 +174,47 @@ impl ClaudeStream {
     self.results
   }
 
+  /// How full the session's context is after its latest message, against the window a result reported for its model
+  /// (the only one reported, when the result names it otherwise); before any result did, the table's estimate.
+  /// `None` while no message of the main conversation reported its tokens.
+  pub fn context(&self) -> Option<ContextUse> {
+    let (used, model) = self.prompt.as_ref()?;
+    let reported = self.windows.get(model).or_else(|| match self.windows.len() {
+      1 => self.windows.values().next(),
+      _ => None,
+    });
+    Some(reported.map_or_else(
+      || ContextUse::of_model(*used, model),
+      |window| ContextUse::reported(*used, *window),
+    ))
+  }
+
+  /// The tokens a message of the main conversation took in; a subagent's messages fill a context of their own, and a
+  /// message without tokens (the CLI's own, when it is not signed in) tells nothing.
+  fn note_prompt(&mut self, value: &Value, message: &Value) {
+    if value.get("parent_tool_use_id").is_some_and(|parent| !parent.is_null()) {
+      return;
+    }
+    let Some(used) = message.get("usage").and_then(prompt_tokens).filter(|used| *used > 0) else {
+      return;
+    };
+    self.prompt = Some((used, text(message, "model").unwrap_or_default()));
+  }
+
+  /// The context windows a result's `modelUsage` reports, by model.
+  fn note_windows(&mut self, value: &Value) {
+    let models = value.get("modelUsage").and_then(Value::as_object).into_iter().flatten();
+    for (model, used) in models {
+      if let Some(window) = used
+        .get("contextWindow")
+        .and_then(Value::as_u64)
+        .filter(|window| *window > 0)
+      {
+        self.windows.insert(model.clone(), window);
+      }
+    }
+  }
+
   /// The message's events, and whether every content block was understood.
   fn assistant(&mut self, value: &Value) -> Option<(Vec<AgentEvent>, bool)> {
     let message = value.get("message")?;
@@ -180,6 +234,7 @@ impl ClaudeStream {
       if kind == "tool_use" {
         events.extend(orchester_call(block));
         events.extend(self.not_asked(block));
+        events.extend(todo_list(value, block));
       }
     }
     let usage = message.get("usage").and_then(usage).unwrap_or_default();
@@ -190,6 +245,7 @@ impl ClaudeStream {
       events.push(AgentEvent::TurnCompleted { usage: grown });
     }
     self.messages.insert(id, seen);
+    self.note_prompt(value, message);
     Some((events, understood))
   }
 
@@ -318,6 +374,7 @@ impl ClaudeStream {
 
   fn result(&mut self, value: &Value) -> Option<Vec<AgentEvent>> {
     let is_error = value.get("is_error")?.as_bool()?;
+    self.note_windows(value);
     let said = text(value, "result").filter(|result| !result.trim().is_empty());
     let own_turn = !is_error && !self.prompt_taken && said.is_none() && value.get("structured_output").is_none();
     let mut events = Vec::new();
@@ -410,6 +467,17 @@ fn failed_server(server: &Value) -> Option<AgentEvent> {
   })
 }
 
+/// The todo list a `TodoWrite` call of the agent itself writes, told right after the call's start. A subagent's call
+/// (its line names the `Task` call it runs under, `parent_tool_use_id`) keeps a list of its own, not the agent's.
+fn todo_list(line: &Value, block: &Value) -> Option<AgentEvent> {
+  if block.get("name")?.as_str()? != TODO_WRITE || line.get("parent_tool_use_id").is_some_and(|id| !id.is_null()) {
+    return None;
+  }
+  Some(AgentEvent::TodoList {
+    items: claude_todos(block.get("input")?)?,
+  })
+}
+
 /// What a call of one of Orchester's file tools asked, told right after its start so that its row reads as the native
 /// agent's call of the tool.
 fn orchester_call(block: &Value) -> Option<AgentEvent> {
@@ -498,6 +566,17 @@ pub(crate) fn usage(usage: &Value) -> Option<TokenUsage> {
   })
 }
 
+/// What a message's request took in, as a `usage` object reports it: input, cache writes and cache reads.
+fn prompt_tokens(usage: &Value) -> Option<u64> {
+  let count = |name| usage.get(name).and_then(Value::as_u64).unwrap_or(0);
+  Some(
+    usage
+      .get("input_tokens")?
+      .as_u64()?
+      .saturating_add(count("cache_creation_input_tokens"))
+      .saturating_add(count("cache_read_input_tokens")),
+  )
+}
 /// What `now` holds beyond `before`, part by part; `None` when nothing grew.
 fn growth(now: TokenUsage, before: TokenUsage) -> Option<TokenUsage> {
   let grown = TokenUsage {

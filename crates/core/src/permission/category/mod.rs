@@ -37,6 +37,7 @@ mod packages;
 mod packages_sources;
 mod part;
 mod paths;
+mod patterns;
 mod place;
 mod powershell;
 mod prefixes;
@@ -473,7 +474,7 @@ fn in_worktree_root(judged: &Judged, placing: Placing<'_>, folders: Option<&[Pat
   })
 }
 /// Places the arguments of `part` that may name a file, and the files `judged` says it reads, from the
-/// `folders` it runs in, or for `git -C <folder>` from that folder.
+/// `folders` it runs in, or for `git -C <folder>` from that folder. A script or a search's pattern names none.
 fn place_arguments(
   part: &mut CommandPart,
   judged: &Judged,
@@ -484,7 +485,7 @@ fn place_arguments(
   let named: Vec<String> = args
     .iter()
     .enumerate()
-    .filter(|(at, _)| !judged.no_paths && judged.script != Some(*at))
+    .filter(|(at, _)| !judged.no_paths && judged.script != Some(*at) && !judged.patterns.contains(at))
     .map(|(_, arg)| arg.clone())
     .collect();
   let shifted: Option<Vec<PathBuf>> = judged.repository.as_ref().and_then(|repository| {

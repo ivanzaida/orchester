@@ -98,9 +98,6 @@ pub struct Permissions {
   /// Ask a person before each MCP or app tool call.
   #[serde(default)]
   pub ask_before_tool_calls: bool,
-  /// Approve automatically (don't ask me): Orchester answers what would ask a person.
-  #[serde(default)]
-  pub approve_automatically: bool,
   /// Who answers tool requests; left out, manual. Switching to autopilot is a person's decision.
   #[serde(default)]
   pub approval_mode: Approvals,
@@ -313,7 +310,6 @@ fn permissions(given: &Permissions, root: &Path, kept: BrowserPermission) -> Res
   let mut permissions =
     AgentPermissions::new(given.repository.into(), commands, network).with_writable_folders(folders);
   permissions.set_interactive_tool_approvals(given.ask_before_tool_calls);
-  permissions.set_auto_approve(given.approve_automatically);
   permissions.set_browser(browser);
   permissions.set_approval_mode(given.approval_mode.into());
   Ok(permissions)
@@ -346,7 +342,7 @@ fn offered(
   if let Err(problem) = permissions.enforced_on(provider, Platform::current()) {
     return Err(refused("permissions_not_enforced", not_enforceable(&problem)));
   }
-  let switches = permissions.interactive_tool_approvals() || permissions.auto_approve() || !args.mcp_servers.is_empty();
+  let switches = permissions.interactive_tool_approvals() || !args.mcp_servers.is_empty();
   if provider.is_native() && switches {
     return Err(refused("not_offered", Message::new("appMcp.errors.nativeNoSwitches")));
   }

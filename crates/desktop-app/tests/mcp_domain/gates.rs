@@ -71,7 +71,7 @@ fn domain_widening_a_profile_needs_a_person_and_narrowing_never_does() {
   same["profile"] = json!("Builder 2");
   served.ok("save_profile_draft", &same);
   let mut automatic = permissions(&base, "write", "any_in_worktree");
-  automatic["approve_automatically"] = json!(true);
+  automatic["approval_mode"] = json!("autopilot");
   let mut auto = profile("Builder 2", Some(automatic));
   auto["profile"] = json!("Builder 2");
   assert_person_only(&served.refused("save_profile_draft", &auto));
@@ -79,7 +79,7 @@ fn domain_widening_a_profile_needs_a_person_and_narrowing_never_does() {
   let answers = served.refused("save_profile_draft", &auto);
   assert_eq!(
     answers["code"], "automation_not_allowed",
-    "approving automatically needs both switches"
+    "Autopilot needs both switches"
   );
   served
     .services()

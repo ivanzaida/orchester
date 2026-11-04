@@ -1,10 +1,14 @@
 //! The app's updates (`orchester_workspace::app_updates`) against a stand-in Orchester Cloud, with release files signed
 //! by a throwaway key: the settings, the anonymous check, the download with its resume and its checks, the states,
-//! which copies update themselves, and installing a ready update (`installs`).
+//! which copies update themselves, installing a ready update (`installs`) with the databases copied aside first
+//! (`backups`) and, on macOS, replacing the bundle (`bundles`).
 //!
 //! `cargo test -p orchester-workspace --test app_updates app_updates`
 //! `cargo test -p orchester-workspace --test app_updates update_install`
 
+mod backups;
+#[cfg(target_os = "macos")]
+mod bundles;
 mod checks;
 mod copies;
 mod downloads;
@@ -72,6 +76,8 @@ struct Offer {
   /// Signs another name than the file's, so the signature does not verify.
   sign_other_name: bool,
   critical: bool,
+  /// The file's name and the target it is for.
+  file: (&'static str, ReleasePlatform, ReleaseArch),
 }
 
 impl Offer {
@@ -81,22 +87,24 @@ impl Offer {
       seed: RELEASE_SEED,
       sign_other_name: false,
       critical: false,
+      file: (INSTALLER, ReleasePlatform::Windows, ReleaseArch::X86_64),
     }
   }
 
   /// The update check's answer, offering [`NEWER`] with this file.
   fn answer(&self) -> Value {
+    let (name, platform, arch) = self.file;
     let sha256 = FileDigest::of(&self.bytes);
     let size = u64::try_from(self.bytes.len()).expect("a small file");
     let signed_name = if self.sign_other_name {
       "Orchester-0.4.0-other.exe"
     } else {
-      INSTALLER
+      name
     };
     let signed = SignedFile {
       version: version(NEWER),
-      platform: ReleasePlatform::Windows,
-      arch: ReleaseArch::X86_64,
+      platform,
+      arch,
       name: ReleaseFileName::parse(signed_name).expect("a file name"),
       size,
       sha256,
@@ -113,10 +121,10 @@ impl Offer {
       "critical": self.critical,
       "published_at": 1_790_000_000_000_i64,
       "files": [{
-        "name": INSTALLER,
-        "platform": "windows",
-        "arch": "x86_64",
-        "url": DOWNLOAD,
+        "name": name,
+        "platform": platform.as_str(),
+        "arch": arch.as_str(),
+        "url": format!("https://api.orchester.cloud/v1/releases/0.4.0/files/{name}"),
         "size": size,
         "sha256": sha256.to_hex(),
         "key_id": public(self.seed).id().to_hex(),
@@ -154,6 +162,10 @@ impl Copy {
   }
 
   fn new(api: &str, copy: ThisCopy) -> Self {
+    Self::on(api, copy, (ReleasePlatform::Windows, ReleaseArch::X86_64))
+  }
+
+  fn on(api: &str, copy: ThisCopy, target: (ReleasePlatform, ReleaseArch)) -> Self {
     let dir = tempfile::tempdir().expect("a folder");
     let mut db = AppDb::open(&dir.path().join("orchester.db")).expect("a database");
     let address = StoredCloudAddress {
@@ -164,7 +176,7 @@ impl Copy {
     let workspace = Workspace::new(db);
     let app = ThisApp {
       version: version(RUNNING),
-      target: Some((ReleasePlatform::Windows, ReleaseArch::X86_64)),
+      target: Some(target),
       copy,
     };
     let updates = AppUpdates::new(workspace.clone(), app, keys(), dir.path());

@@ -7,6 +7,8 @@ mod appearance;
 mod browser;
 #[path = "theme/cards.rs"]
 mod cards;
+#[path = "theme/ci.rs"]
+mod ci;
 #[path = "theme/decision_test.rs"]
 mod decision_test;
 #[path = "theme/dialog.rs"]
@@ -27,6 +29,8 @@ mod orchestrator;
 mod pipelines;
 #[path = "theme/projects.rs"]
 mod projects;
+#[path = "theme/side_question.rs"]
+mod side_question;
 #[path = "theme/skills.rs"]
 mod skills;
 #[path = "theme/startup.rs"]
@@ -362,6 +366,19 @@ fn theme_kit_type_roles_follow_the_design_in_both_modes() {
       );
     }
   }
+}
+
+/// The current page tab differs from the others in color and weight, on the same line (`g5mqSl`).
+#[test]
+fn theme_the_current_page_tab_stands_on_the_other_tabs_line() {
+  let app = themed(Mode::Dark);
+  let current = app.theme().typography_style(ExtraTypography::TabCurrent.role());
+  let other = app.theme().typography_style(TypographyStyle::Body);
+  assert_eq!(current.weight, FontWeight::Medium);
+  assert_eq!(
+    (current.font_size, current.line_height),
+    (other.font_size, other.line_height)
+  );
 }
 
 /// The kit's gaps, paddings, radii, control heights and icon sizes.

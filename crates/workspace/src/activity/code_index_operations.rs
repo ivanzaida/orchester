@@ -1,4 +1,4 @@
-//! The background operations of Project settings › Code index, as [`super::operations`] describes
+//! The background operations of Project settings › Context › Code index, as [`super::operations`] describes
 //! the others.
 
 use super::{

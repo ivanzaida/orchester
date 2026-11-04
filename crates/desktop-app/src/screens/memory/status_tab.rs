@@ -58,9 +58,7 @@ pub fn body(ctx: &mut Ctx, state: &MemoryState, shown: Shown<'_>) -> Column {
   if memory.unreadable > 0 {
     column = column.child(super::unreadable(ctx, memory.unreadable));
   }
-  let Some(statuses) = tabs::statuses(tab) else {
-    return column;
-  };
+  let statuses = tabs::statuses(tab);
   let listed: Vec<Memory> = memory
     .pool(statuses)
     .iter()
@@ -69,7 +67,7 @@ pub fn body(ctx: &mut Ctx, state: &MemoryState, shown: Shown<'_>) -> Column {
     .collect();
   if listed.is_empty() {
     keep_bar(state, None);
-    return column.with_children(empty(ctx, state, tab));
+    return column.child(empty(ctx, state, tab));
   }
   if tab == MemoryTab::Waiting {
     keep_bar(state, None);
@@ -218,14 +216,13 @@ fn records(
 
 /// A status tab without records: one quiet row in its box, Active's with *New record* (`KVUQx`, `Och5l` in 06b
 /// `VcE5a`).
-fn empty(ctx: &Ctx, state: &MemoryState, tab: MemoryTab) -> Option<Element> {
+fn empty(ctx: &Ctx, state: &MemoryState, tab: MemoryTab) -> Element {
   let (title, body) = match tab {
     MemoryTab::Waiting => ("memory.tabs.empty.waitingTitle", "memory.tabs.empty.waitingBody"),
     MemoryTab::Active => ("memory.tabs.empty.activeTitle", "memory.tabs.empty.activeBody"),
     MemoryTab::Deprecated => ("memory.tabs.empty.deprecatedTitle", "memory.tabs.empty.deprecatedBody"),
     MemoryTab::Superseded => ("memory.tabs.empty.supersededTitle", "memory.tabs.empty.supersededBody"),
     MemoryTab::Rejected => ("memory.tabs.empty.rejectedTitle", "memory.tabs.empty.rejectedBody"),
-    MemoryTab::Settings => return None,
   };
   let mut row = Entry::new("memory-empty", ctx.t(title))
     .tile(tabs::glyph(tab))
@@ -238,5 +235,5 @@ fn empty(ctx: &Ctx, state: &MemoryState, tab: MemoryTab) -> Option<Element> {
         .on_click(move || open.open(Opened::New)),
     );
   }
-  Some(boxed("memory-empty-rows", [row.into()]).into())
+  boxed("memory-empty-rows", [row.into()]).into()
 }

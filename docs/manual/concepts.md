@@ -104,10 +104,10 @@ Work after the last checkpoint is never claimed as done.
 is not touched*. A worktree stays after the run ends until a person removes it, a merge cleans it up, or *Run again*
 is told to remove it.
 
-**Base branch.** The branch a run starts from and delivers into. Project settings › General › Repository › *Base branch*:
-*Checked-out branch* (default — the run starts at the checkout's HEAD) or a named branch (every run starts from its
-tip). Each run records its own base, and merge, merge queue, local integration, pull requests and base-moved notices
-follow that record. The setting is kept per computer. A chosen branch that no longer exists refuses new runs.
+**Base branch.** The branch a run starts from and delivers into. Set on each task and module: a task without one takes
+its module's; without either, the branch checked out when its run starts. Each run records its own base, and merge,
+merge queue, local integration, pull requests and base-moved notices follow that record. It is kept per computer. A
+chosen branch that no longer exists refuses new runs.
 
 **Base moved notice.** When a run's base branch moves while the run is unfinished, the run's next writing agent is
 told to merge the base into its worktree after its turn (never mid-edit). Moves within two minutes coalesce. Can be
@@ -174,7 +174,8 @@ autosaves; Publish vN); runs use only published versions.
   Any command in the worktree.
 - *Network access*: On or Off.
 - *MCP servers*: a switch per project server.
-- *Approvals*: *Approve automatically (don't ask me)*; *Ask before MCP actions that require approval*.
+- *Approvals*: Autopilot or Manual; under Manual, *Ask before MCP actions that require approval*. A profile from before
+  approval modes that had *Approve automatically (don't ask me)* on reads as Autopilot.
 
 Options the connection's CLI cannot enforce are disabled with the reason; there is no bypass mode.
 
@@ -268,7 +269,7 @@ Answers: *Approve once*, *Deny*, *Deny with a message*, and under *Or answer mor
 run*, *Approve everything in this run*, and (for Orchester's QA tool only) *Approve for every run of this project*.
 There is no time-out: the agent's active time stops while it waits.
 
-**Auto-approval.** Rule-based: per profile (*Approve automatically*) or per run (*Approve everything in this run*).
+**Auto-approval.** Rule-based, per run (*Approve everything in this run*); per profile, Autopilot.
 Orchester answers commands its classifier knows to read or stay in the worktree, and MCP tool calls; it never
 approves network, writes outside the worktree, credential reads, installs, history rewrites or unparsed commands.
 

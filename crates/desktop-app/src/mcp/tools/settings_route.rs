@@ -17,10 +17,12 @@ use crate::routes::{
 pub const PARAMS: &[&str] = &["tab", "account", "panel", "server", "step", "ask", "invite", "project"];
 
 /// Each tab, and how a refusal names it: `settings tab accounts` takes no `step`. `updates` and `whats-new` are General
-/// with its *Updates* in view, the release notes open with `whats-new`.
-const TABS: [(&str, &str); 10] = [
+/// with its *Updates* in view, the release notes open with `whats-new`; `plan-limits` is General with its *Plan limits*
+/// in view, as Usage › Plan limits' menu opens it.
+const TABS: [(&str, &str); 11] = [
   ("automation", "settings tab automation"),
   ("general", "settings tab general"),
+  ("plan-limits", "settings tab plan-limits"),
   ("updates", "settings tab updates"),
   ("whats-new", "settings tab whats-new"),
   ("notifications", "settings tab notifications"),
@@ -115,6 +117,7 @@ pub fn route(args: &Map<String, Value>, lookup: Option<&Lookup>) -> Result<Route
   match tab {
     "automation" => automation(args),
     "general" => Ok(Route::General),
+    "plan-limits" => Ok(Route::PlanLimits),
     "updates" => Ok(Route::Updates(UpdatesShow::Section)),
     "whats-new" => Ok(Route::Updates(UpdatesShow::WhatsNew)),
     "notifications" => Ok(Route::Notifications),

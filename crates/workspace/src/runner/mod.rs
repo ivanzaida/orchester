@@ -20,6 +20,7 @@ mod idle;
 mod lifetime;
 mod report;
 mod requests;
+mod side_question;
 pub mod state;
 mod work;
 

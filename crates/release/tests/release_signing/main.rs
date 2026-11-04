@@ -3,6 +3,7 @@
 //!
 //! `cargo test -p orchester-release --test release_signing release_signing`
 
+mod publish;
 mod stand;
 mod upload;
 

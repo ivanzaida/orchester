@@ -16,9 +16,11 @@ use super::{
 pub enum ExtraTypography {
   /// `type/display` 28/600, tracking -0.5: the largest headline of a screen.
   Display,
-  /// 13/500 `text_primary`, 1.3 (the design's own line, 17): an active page tab (`loUWZ`), a notice's
-  /// title (`OswfE`), a table row's title (`LJ8gd`).
+  /// 13/500 `text_primary`, 1.3 (the design's own line, 17): a notice's title (`OswfE`), a table row's title
+  /// (`LJ8gd`).
   Strong,
+  /// 13/500 `text_primary` on the body's line: the current page tab (`loUWZ`), whose box is the others' (`g5mqSl`).
+  TabCurrent,
   /// 11.5 `text_muted`, 1.4: why a control is unavailable (`Cvxzc` in `QR1ER`), a field's error
   /// (`rCoJS`, in `danger`), a run line (`v9xIKo`).
   Note,
@@ -64,9 +66,10 @@ pub enum ExtraTypography {
 }
 
 impl ExtraTypography {
-  pub const ALL: [Self; 21] = [
+  pub const ALL: [Self; 22] = [
     Self::Display,
     Self::Strong,
+    Self::TabCurrent,
     Self::Note,
     Self::NoteStrong,
     Self::Prose,
@@ -96,6 +99,7 @@ impl ExtraTypography {
     match self {
       Self::Display => "display",
       Self::Strong => "strong",
+      Self::TabCurrent => "tab_current",
       Self::Note => "note",
       Self::NoteStrong => "note_strong",
       Self::Prose => "prose",
@@ -124,6 +128,7 @@ impl ExtraTypography {
     match self {
       Self::Display => style(28.0, FontWeight::SemiBold, 1.15, -0.5, palette.text_primary),
       Self::Strong => sans(13.0, FontWeight::Medium, 1.3, palette.text_primary),
+      Self::TabCurrent => sans(13.0, FontWeight::Medium, 1.5, palette.text_primary),
       Self::Note => sans(11.5, FontWeight::Normal, 1.4, palette.text_muted),
       Self::NoteStrong => sans(11.5, FontWeight::Medium, 1.4, palette.text_primary),
       Self::Prose => sans(12.0, FontWeight::Normal, 1.45, palette.text_secondary),
@@ -250,6 +255,7 @@ pub fn typography(palette: &ThemePalette) -> ThemeTypography {
       .chain(super::lifecycle::typography(palette))
       .chain(super::local_integration::typography(palette))
       .chain(super::connections::typography(palette))
+      .chain(super::context::typography(palette))
       .chain(super::secrets::typography(palette))
       .chain(super::projects::typography(palette))
       .chain(super::agents::typography(palette))
@@ -272,6 +278,12 @@ pub fn typography(palette: &ThemePalette) -> ThemeTypography {
       .chain(super::date_picker::typography(palette))
       .chain(super::browser::typography(palette))
       .chain(super::dialog::typography(palette))
+      .chain(super::todo_list::typography(palette))
+      .chain(super::slash::typography(palette))
+      .chain(super::permissions::typography(palette))
+      .chain(super::run_model::typography(palette))
+      .chain(super::side_question::typography(palette))
+      .chain(super::ci::typography(palette))
       .collect(),
   }
 }

@@ -15,7 +15,10 @@ use orchester_core::{
   },
   native::model::ModelClient,
   resource::ModelId,
-  run::review::{RequestReviewer, ReviewError, ReviewInput, ReviewSpend, Reviewed},
+  run::review::{
+    DetailRedaction, REVIEW_INSTRUCTIONS, RequestReviewer, ReviewError, ReviewInput, ReviewSpend, Reviewed,
+    review_prompt,
+  },
   secret::SecretValue,
 };
 use tokio::{runtime::Handle, sync::watch};
@@ -41,9 +44,10 @@ impl RequestReviewer for NativeReviewer {
     &self.model
   }
 
+  /// Why it gave no verdict holds nothing of the prompt; the client masks its key in its errors itself.
   fn review(&self, input: &ReviewInput) -> Reviewed {
     let request = native_request(input, &self.model, self.effort.clone());
-    self.runtime.block_on(async {
+    let mut reviewed = self.runtime.block_on(async {
       let mut stop = self.stop.clone();
       let mut spend = NativeSpend::default();
       // Nothing of the answer is shown while it streams; only what dropped responses spent is kept.
@@ -60,6 +64,11 @@ impl RequestReviewer for NativeReviewer {
         Ok(Err(error)) => spend.unanswered(&error),
         Err(_) => unknown(ReviewError::TimedOut),
       }
-    })
+    });
+    let prompt = format!("{REVIEW_INSTRUCTIONS}\n{}", review_prompt(input));
+    reviewed.verdict = reviewed
+      .verdict
+      .map_err(|error| error.redacted(&DetailRedaction::new(Vec::new(), &prompt)));
+    reviewed
   }
 }

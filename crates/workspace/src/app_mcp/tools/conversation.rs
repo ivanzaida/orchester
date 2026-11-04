@@ -91,11 +91,15 @@ pub async fn get_conversation(services: &Services, args: GetConversation) -> Res
           .map(|proposal| orchestrated::proposal(proposal, number, &link)),
       );
     }
+    // The session the conversation's messages go to: its current step's.
+    let current = run.and_then(RunView::current_step);
     Ok(json!({
       "task": { "key": task.key().to_string(), "title": task.details().title.as_str() },
       "run": run.map(|run| json!({ "id": run.id().to_string(), "number": run.run.number().get() })),
       "entries": entries,
       "more": start > 0,
+      "context_step": current.map(|step| step.key.to_string()),
+      "context": wire::context(current.and_then(|step| step.context.as_ref())),
       "link": link,
     }))
   })
@@ -214,6 +218,9 @@ fn entry(item: &Item, run: Option<&RunView>, link: &str) -> Option<Value> {
     | ItemKind::Mark(_)
     | ItemKind::Approval(_)
     | ItemKind::SwitchedToManual(_)
+    | ItemKind::Permission(_)
+    | ItemKind::Model(_)
+    | ItemKind::BackToProfile(_)
     | ItemKind::Tools(_)
     | ItemKind::Problem(_) => {
       return None;

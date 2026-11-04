@@ -129,7 +129,7 @@ impl Component for EditConnection {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<EditProps>().clone();
-    let listed = data::load(ctx, props.project.open.repo_root.clone(), 0).data;
+    let listed = crate::queries::state(&data::load(ctx, props.project.open.repo_root.clone())).data;
     let Some(listed) = listed else {
       return kit::scroll(
         lurq::components::Column::new()

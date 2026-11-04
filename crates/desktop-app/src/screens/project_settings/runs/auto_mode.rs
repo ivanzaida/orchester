@@ -26,7 +26,7 @@ use lurq::{
   core::Signal,
   node::Element,
 };
-use orchester_core::run::review::AutoModeSettings;
+use orchester_core::{run::review::AutoModeSettings, time::Timestamp};
 use orchester_workspace::project_settings::{self, Settings};
 
 use super::super::{
@@ -35,6 +35,7 @@ use super::super::{
 };
 use crate::{
   mcp::input_gate::{Guarded, InputGate, input_may_decide},
+  screens::reviewer_trouble,
   ui::unavailable::reason_line,
 };
 
@@ -42,10 +43,8 @@ use crate::{
 pub struct Props {
   pub tab: TabProps,
   pub settings: Settings,
-  pub parent_read: Signal<Option<work::Read>>,
-  pub refresh: Signal<u64>,
-  /// General's own saves, which a reviewer saved here is one of.
-  pub own: work::OwnSaves,
+  /// What Runs shows of its saves' reads until the settings' query moves on; a save here is one of them.
+  pub kept: crate::queries::Kept<work::Read>,
 }
 impl PartialEq for Props {
   fn eq(&self, other: &Self) -> bool {
@@ -153,7 +152,8 @@ impl Component for AutoMode {
       self.commit(&props, &save);
     }
     let settings = self.stored.get().0;
-    let mut group = controls::group(ctx, self, &props, &settings, &save);
+    let cannot_run = cannot_run(ctx, &props, &settings);
+    let mut group = controls::group(ctx, (self, &props), (&settings, cannot_run), &save);
     if self.refused.get() {
       group = group.after(reason_line(
         "settings-auto-person-only",
@@ -250,10 +250,8 @@ impl AutoMode {
       ctx.props::<Props>().tab.status.clone(),
       ctx.props::<Props>().tab.project.feed.clone(),
     );
-    let props = ctx.props::<Props>().clone();
-    let begun = std::sync::atomic::AtomicBool::new(false);
+    let kept = ctx.props::<Props>().kept.clone();
     ctx.watch(&save.state(), move |state| {
-      props.own.saving(state.is_pending(), &begun);
       if state.is_pending() {
         status.set(Status::Saving);
       } else if state.error.is_some() {
@@ -261,10 +259,8 @@ impl AutoMode {
         status.set(Status::Failed);
       } else if let Some(saved) = &state.data {
         tab.fill(saved.0.clone());
-        // Invalidate older parent reads before they can replace this saved reviewer or a new edit.
-        props.parent_read.set(Some(work::Read(saved.0.clone(), u64::MAX)));
-        props.own.took(saved);
-        props.refresh.update(|revision| *revision += 1);
+        // Runs shows what the save read until the settings' query has it, not an older read over this reviewer.
+        kept.keep(work::Read(saved.0.clone()));
         tab.failed.set(false);
         status.set(Status::Saved);
         feed.saved();
@@ -350,6 +346,20 @@ impl AutoMode {
       },
     ));
   }
+}
+/// Why the stored reviewer cannot run, said in its row's hint's place (ORC-611): its account cannot, or its last
+/// review failed. Read again whenever the reviewer or the project's connections change.
+fn cannot_run(ctx: &mut Ctx, props: &Props, settings: &Settings) -> Option<Arc<str>> {
+  let root = props.tab.project.open.repo_root.clone();
+  let key = format!("{:?}|{:?}", settings.auto_mode, settings.connections);
+  let health = reviewer_trouble::health(ctx, root, key)?;
+  let now = Timestamp::now();
+  let (key, trouble) = match health.account.trouble(now) {
+    Some(trouble) => ("project_settings.reviewerCannotRun", trouble),
+    None => ("project_settings.reviewerLastFailed", health.reviews(now)?),
+  };
+  let reason = reviewer_trouble::reason(ctx, trouble, now);
+  Some(ctx.t_args(key, [("reason", &*reason)]))
 }
 fn values(settings: &Settings) -> (String, String, String, String) {
   match &settings.auto_mode.reviewer {

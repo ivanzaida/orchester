@@ -1,21 +1,19 @@
-//! Runs (`02 · Runs` `b7Ya1u`, the Runs window `g406O`): Auto mode (whether new runs use it, its reviewer, and
-//! *Approved for every run* with a count that opens the project's rules, [`super::rules`]), Estimates (*Let Orchester
-//! estimate story points*, a person's switch), Limits (the run and daily budgets, the time limit and how many agents
-//! and QA apps work at once) and Environment (its variables' count and Edit, which opens today's editor with its
-//! confirmation), each saving as a person leaves a field.
+//! Runs (`02 · Runs` `b7Ya1u`, the Runs window `g406O`, `S02` `Ekiul`): Approvals (whether Autopilot is allowed, its
+//! reviewer, and *Approved for every run* with a count that opens the project's rules, [`super::rules`]), Estimates
+//! (*Let Orchester estimate story points*, a person's switch) and Limits (the run and daily budgets, the time limit and
+//! how many agents and QA apps work at once), each saving as a person leaves a field. Approvals' foot says where a
+//! profile chooses its approval mode, Limits' that a task and a pipeline step set their own. The variables moved to
+//! Environment.
 mod auto_mode;
-mod environment;
 mod estimates;
 mod limits;
 
 use lurq::{
   app::{component::Component, ctx::Ctx, theme::SpacingSize},
   components::{Column, Row},
-  core::Signal,
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_workspace::tasks::outside::Outside;
 
 use super::{
   SectionStatuses, TabProps,
@@ -24,6 +22,7 @@ use super::{
   work::{self, Read},
 };
 use crate::{
+  queries::Kept,
   theme::ExtraSpacing,
   ui::skeleton::{self, fading},
 };
@@ -32,11 +31,9 @@ use crate::{
 const REVIEWER: (f32, f32, f32) = (142.0, 116.0, 132.0);
 
 pub(super) struct Runs {
-  stored: Signal<Option<Read>>,
-  read_failed: Signal<bool>,
-  revision: Signal<u64>,
-  own: work::OwnSaves,
-  /// Auto mode's, the limits' and the environment's save statuses.
+  /// What the page's last save read back, until the settings' query moves on.
+  kept: Kept<Read>,
+  /// Auto mode's and the limits' save statuses.
   sections: SectionStatuses,
 }
 
@@ -46,46 +43,30 @@ impl Component for Runs {
   fn create(ctx: &mut Ctx) -> Self {
     let page = ctx.props::<TabProps>().status.clone();
     Self {
-      stored: ctx.signal(None),
-      read_failed: ctx.signal(false),
-      revision: ctx.signal(0),
-      own: work::OwnSaves::new(
-        ctx,
-        &[
-          Outside::AutoMode,
-          Outside::Runs,
-          Outside::Connections,
-          Outside::ProjectSettings,
-        ],
-      ),
-      sections: SectionStatuses::new(ctx, 3, &page),
+      kept: ctx.props::<TabProps>().kept.clone(),
+      sections: SectionStatuses::new(ctx, 2, &page),
     }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<TabProps>().clone();
-    let revision = self.revision.get() + self.own.count(&props.project.feed);
-    let state = work::load(ctx, props.project.open.repo_root.clone(), revision, &self.own);
-    if state.error.is_some() {
-      self.read_failed.set(true);
-    } else if state.data.is_some() {
-      self.read_failed.set(false);
-    }
-    let Some(read) = state.data.clone().or_else(|| self.stored.get()) else {
-      return page::scroll(work::pending(ctx, &state, &self.revision, bones));
+    let loaded = work::load(ctx, props.project.open.repo_root.clone());
+    // Auto mode keeps what its save read once that save ended: nothing is kept while it saves.
+    let Some(read) = loaded.shown(&self.kept, false) else {
+      return page::scroll(work::pending(ctx, &loaded, bones));
     };
-    self.stored.set(Some(read.clone()));
-    let auto = if self.read_failed.get() {
-      work::pending(ctx, &state, &self.revision, approval_bones)
+    // What Estimates names its estimator after: what the page shows, nothing while the settings cannot be read.
+    let shown = loaded.state.error.is_none().then(|| read.0.clone());
+    // A read that failed shows why with Try again in Auto mode's place, not the reviewer it last read.
+    let auto = if loaded.state.error.is_some() {
+      work::pending(ctx, &loaded, approval_bones)
     } else {
       ctx.mount_keyed::<auto_mode::AutoMode>(
         "settings-auto-mode",
         auto_mode::Props {
           tab: self.sections.props(&props, 0),
           settings: read.0,
-          parent_read: self.stored.clone(),
-          refresh: self.revision.clone(),
-          own: self.own.clone(),
+          kept: self.kept.clone(),
         },
       )
     };
@@ -93,21 +74,18 @@ impl Component for Runs {
       "project-settings-estimates",
       estimates::Props {
         tab: props.clone(),
-        settings: state.data.map(|read| read.0),
-        read_error: state.error,
+        settings: shown,
+        read_error: loaded.state.error.clone(),
       },
     );
     let limits = ctx.mount_keyed::<limits::Limits>("project-settings-limits", self.sections.props(&props, 1));
-    let environment =
-      ctx.mount_keyed::<environment::Environment>("project-settings-environment", self.sections.props(&props, 2));
     page::scroll(
       Column::new()
         .width(Dimension::Pct(100.0))
         .spacing(ExtraSpacing::Roomy.role())
         .child(auto)
         .child(estimates)
-        .child(limits)
-        .child(environment),
+        .child(limits),
     )
   }
 }
@@ -142,12 +120,13 @@ fn approval_bones(ctx: &mut Ctx) -> Element {
   .map(|row| row.render(ctx));
   Group::new("settings-auto-reading", ctx.t("project_settings.auto"))
     .rows(rows)
+    .foot(&ctx.t("project_settings.approvalsFoot"))
     .into()
 }
 
 /// The Runs tab while its settings are read (`10 · Project settings · Runs · loading` `lUFjj`): every group heading,
 /// row label, help line and unit stays; the switches, the reviewer's connection, model and effort, the approved-rules
-/// count, the budgets and limits and the variables line are bones in their own fields, the lower groups fading.
+/// count and the budgets and limits are bones in their own fields, the lower groups fading.
 fn bones(ctx: &mut Ctx) -> Column {
   let auto = approval_bones(ctx);
   let row = SettingRow::new(
@@ -163,9 +142,6 @@ fn bones(ctx: &mut Ctx) -> Column {
     Column::new().width(Dimension::Pct(100.0)).child(auto),
     Column::new().width(Dimension::Pct(100.0)).child(estimates),
     Column::new().width(Dimension::Pct(100.0)).child(limits::bones(ctx)),
-    Column::new()
-      .width(Dimension::Pct(100.0))
-      .child(environment::bones(ctx)),
   ];
   Column::new()
     .width(Dimension::Pct(100.0))

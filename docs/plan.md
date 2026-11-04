@@ -1001,6 +1001,18 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
+ORC-625 · Team authority S2 public contract · branch `orchester/orc-625-run-1`: validated server claim threshold
+in seconds, explicit heartbeat-edge staleness/takeover, server-admin settings, and separate v2 workspace policy,
+capabilities and optimistic revision conflict. Platform routes and persistence remain OP-145; open policy items
+remain excluded. See `docs/cloud-api.md`, “Team authority S2 shared contracts”.
+
+OP-144 / S1 public prerequisite · Additive `WorkspaceRole::Admin` / `Member`, inherited server-admin capabilities
+and a last-workspace-admin invariant guard in core; separate role-bearing DTOs in `orchester_api::v2`. Existing
+Owner/Member contracts, API clients, events, SQLite and desktop presentation remain unchanged. Server enforcement,
+versioned routes and dependency pins remain OP-144 in `ivanzaida/orchester-platform`. Twenty-three focused
+core/API/store tests and `tools/check.ps1` passed. Contract:
+`docs/architecture/workspace-roles.md`.
+
 ORC-568 · Quiet decision-model approval and details (implemented 2026-11-03; Review and Verify follow).
 06 `xJ4Rf` a–b: the answered line names the recorded model, command, probability and time; opens Model,
 Verdict and five proportional risk bars. HTTP reviews retain optional elapsed milliseconds; old records show

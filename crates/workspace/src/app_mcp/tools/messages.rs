@@ -110,7 +110,8 @@ pub async fn send_message(
     if !matches!(by, SentBy::Person(_)) {
       blocking(move || crate::decisions::DecisionKind::Plan.require(&workspace)).await?;
     }
-    let command = plan_changes(&prepared, &args.text, (by.answerer(), None)).map_err(refusal)?;
+    let (root, text, answerer) = (project.repo_root.clone(), args.text.clone(), by.answerer());
+    let command = blocking(move || plan_changes(&root, &prepared, &text, (answerer, None)).map_err(refusal)).await?;
     services
       .runners
       .control_run_in(&project, command)
@@ -123,7 +124,7 @@ pub async fn send_message(
   let (prepared, then, message) = blocking(move || {
     // An MCP client and the Orchester chat attach no files: they only read the ones people attached.
     let stored = match by.chat() {
-      None => store_answer_in(&root, &prepared, (key, way), (&text, &[]), by.answerer()),
+      None => store_answer_in(&root, &prepared, (key, way), (&text, &[], None), by.answerer()),
       Some(chat) => store_by_orchestrator_in(&root, &prepared, (key, way), (&text, chat, by.answerer())),
     };
     let (then, message) = stored.map_err(refusal)?;
@@ -165,9 +166,9 @@ pub fn refusal(error: OutgoingError) -> ToolError {
     OutgoingError::Changed
     | OutgoingError::NoSecondWay
     | OutgoingError::NoPlan
-    | OutgoingError::Send(SendError::InvalidRecovery | SendError::NotUndelivered | SendError::NotReadable) => {
-      ToolError::refused("not_sent", vec![reason])
-    }
+    | OutgoingError::Send(
+      SendError::InvalidRecovery | SendError::NotUndelivered | SendError::NotReadable | SendError::Skill(_),
+    ) => ToolError::refused("not_sent", vec![reason]),
   }
 }
 

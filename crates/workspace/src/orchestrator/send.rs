@@ -8,9 +8,9 @@ use std::path::Path;
 
 use orchester_core::{
   attachment::{NewAttachment, names_text},
-  conversation::MessageBody,
+  conversation::{MessageBody, skill::ChosenSkill},
   id::{ChatId, ChatMessageId},
-  orchestrator::{Chat, TurnFailure, TurnState},
+  orchestrator::{Chat, TurnFailure, TurnMode, TurnState},
   run::Answerer,
   time::Timestamp,
 };
@@ -19,22 +19,28 @@ use orchester_store::ProjectDb;
 
 use super::settings::OrchestratorSetup;
 use crate::{
-  attachments, background,
+  attachments, background, mentions,
   messages::{self, Message},
   runner::{RequestError, RunRequestError, Runners},
+  skills::offered,
   workspace::OpenProject,
 };
 
 /// A message the person sends: the conversation it goes to (a new one gets its id here too), its own id, given once
-/// for the draft, its text, the files the person attached, and who sent it: the person, or automation driving the
-/// window, whose message never approves a proposal for the person.
+/// for the draft, its text, the files the person attached, the skill they chose for it (ORC-634), and who sent it: the
+/// person, or automation driving the window, whose message never approves a proposal for the person; how its turn
+/// goes (it plans while the *Plan only* switch is on, ORC-646), and that switch as the person left it, which a
+/// conversation the message starts keeps.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Outgoing {
   pub chat: ChatId,
   pub message: ChatMessageId,
   pub text: String,
   pub attachments: Vec<NewAttachment>,
+  pub skill: Option<ChosenSkill>,
   pub sent_by: Answerer,
+  pub mode: TurnMode,
+  pub plan_only: bool,
 }
 
 /// Why a message did not reach the Orchester's agent.
@@ -138,8 +144,9 @@ pub async fn stop(runners: &Runners, project: &OpenProject, chat: ChatId) -> Res
 
 /// Keeps `outgoing` in the project at `root`, with its attachments, starting its conversation when it is new;
 /// refused while the Orchestrator has nothing it can run on, and when its attachments break the message's limits or
-/// the Orchestrator's connection could not read one. A message of attachments only is kept with their names. Blocks
-/// on SQLite.
+/// the Orchestrator's connection could not read one. A message of attachments only is kept with their names; one that
+/// mentions tasks or runs with the facts of each (`mentions::facts`), which the conversation is not named after; one
+/// with a skill with the skill's block before its words (`skills::offered::kept_with`). Blocks on SQLite.
 pub fn keep_in(root: &Path, outgoing: &Outgoing) -> Result<(), Message> {
   keep_as_in(root, outgoing, &TurnState::Thinking)
 }
@@ -153,7 +160,7 @@ pub fn keep_as_in(root: &Path, outgoing: &Outgoing, state: &TurnState) -> Result
   } else {
     &outgoing.text
   };
-  let text = MessageBody::new(words).map_err(|_| Message::new("orchestrator.send.blank"))?;
+  let said = MessageBody::new(words).map_err(|_| Message::new("orchestrator.send.blank"))?;
   let setup = OrchestratorSetup::load_in(root)?;
   if !setup.readiness().is_ready() {
     return Err(Message::new("orchestrator.send.notReady"));
@@ -161,23 +168,30 @@ pub fn keep_as_in(root: &Path, outgoing: &Outgoing, state: &TurnState) -> Result
   let providers: Vec<_> = setup.provider().into_iter().collect();
   attachments::check_message(&providers, attached).map_err(|refused| refused.message())?;
   let mut db = ProjectDb::open(root).map_err(|error| messages::store_error(&error))?;
+  let facts = mentions::facts::with_facts_from(&db, words).map_err(|error| messages::store_error(&error))?;
+  let facts = match &outgoing.skill {
+    Some(chosen) => offered::kept_with(&db, chosen, &facts)?,
+    None => facts,
+  };
+  let text = MessageBody::new(&facts).map_err(|_| Message::new("orchestrator.send.blank"))?;
   let now = Timestamp::now();
   let chat = db
     .chat(outgoing.chat)
     .map_err(|error| messages::store_error(&error))?
-    .unwrap_or_else(|| Chat::start(outgoing.chat, &text, now));
-  db.keep_chat_message_as(
+    .unwrap_or_else(|| Chat::start(outgoing.chat, &said, now).with_plan_only(outgoing.plan_only));
+  db.keep_chat_message_in(
     &chat,
     (outgoing.message, &text),
     (attached, outgoing.sent_by),
     (state, now),
+    outgoing.mode,
   )
   .map(drop)
   .map_err(|error| messages::store_error(&error))
 }
 
 /// What the person reads when the runner did not take a message.
-fn not_sent(error: &RunRequestError) -> Message {
+pub(super) fn not_sent(error: &RunRequestError) -> Message {
   match error {
     RunRequestError::Request(RequestError::NotConnected) => Message::new("orchestrator.send.runnerUnavailable"),
     RunRequestError::Request(RequestError::Lost) => Message::new("orchestrator.send.lost"),

@@ -25,7 +25,10 @@ impl<'a> Content<'a> {
   fn of(review: Option<&'a Review>) -> Option<Self> {
     match review? {
       Review::Decided { decision } if !decision.approves() => Some(Self::Verdict(decision)),
-      Review::Failed { failure, model } => Some(Self::Failed(*failure, model.as_deref())),
+      // A language reviewer's failure is said by the could-not-run line (ORC-611).
+      failed @ Review::Failed { failure, model, .. } if failed.decision_failed() => {
+        Some(Self::Failed(*failure, model.as_deref()))
+      }
       _ => None,
     }
   }

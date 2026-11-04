@@ -46,6 +46,17 @@
         "title": "No team servers yet",
         "body": "Accept an invite, or connect a server by its address. Projects you share live on a server your team runs."
       },
+      "browser": {
+        "line": "Joined · this computer isn't connected",
+        "connect": "Connect",
+        "connecting": "Connecting…",
+        "joined": {
+          "title": "Connected to {{server}} as {{username}}",
+          "body": "This computer has its own sign-in there now. The server's page lists your projects; Link a checkout… opens a project's join review.",
+          "open": "See your projects there"
+        },
+        "waiting": "{{server}} asks an admin to approve new computers, and your account has no computer there yet. Ask an admin of {{server}} to approve this one. Nothing has been uploaded."
+      },
       "note": "Orchester Cloud keeps your account and invites; your projects never pass through it. This computer connects to each team server once, and each project you link uses that connection.",
       "serverNote": "Members, invites and devices of a team server are managed in its server admin, in the browser. Orchester keeps your connection and your projects' links."
     },

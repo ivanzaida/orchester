@@ -7,7 +7,7 @@ use std::{collections::BTreeMap, num::NonZeroU32, path::Path, sync::Arc};
 
 use orchester_core::{
   attachment::Attachment,
-  connection::{AgentProvider, Effort, EngineVendor},
+  connection::{AgentProvider, Effort, EngineVendor, context_use::ContextUse, stream::TodoList},
   conversation::Message,
   id::{InvocationId, MessageId, RunId, StepExecutionId, TaskId},
   integration::RunMerge,
@@ -15,7 +15,7 @@ use orchester_core::{
   resource::{StepKey, VersionNumber},
   run::{
     ActiveClock, ActivityEntry, AttemptStart, Invocation, PauseReason, Plan, Run, RunLimit, RunStatus, RunnerFailure,
-    StepExecutor, StepFailure, StepOutput, StepStatus, TaskPhase, TokenUsage, active_time, execution_tokens,
+    StepFailure, StepOutput, StepStatus, TaskPhase, TokenUsage, active_time, execution_tokens,
     review::{ReviewRecord, reviews_usage},
   },
   store::{ActivityStore, ConversationStore, MergeStore, ResourceStore, RunStore, TaskStore, WorktreeStore},
@@ -30,13 +30,12 @@ use orchester_store::{ProjectDb, StoreError};
 pub use super::permissions::{ChangeState, RunPermissions};
 use super::{
   delivery::{self, Delivery},
-  engines,
   history::{self, RunRecord},
   index_use::IndexUses,
   requirements::LocalRuns,
   run_approvals::RunApprovals,
   run_times::{finished_at, paused_at, starts_of},
-  step_executors::{Reached, executed},
+  step_views::step_views,
   unreadable::Unreadable,
 };
 
@@ -78,8 +77,12 @@ pub struct StepView {
   pub attempt: Option<NonZeroU32>,
   /// Why the latest execution failed, when it did and its log says.
   pub failure: Option<StepFailure>,
+  /// The todo list the latest execution's agent keeps, as its latest update left it; `None` when it keeps none.
+  pub todo: Option<TodoList>,
   /// The step's stage in the pipeline graph, from 0: steps of one stage run beside each other.
   pub stage: usize,
+  /// How full its latest execution's agent session is; `None` while its CLI reported nothing (unknown, not empty).
+  pub context: Option<ContextUse>,
 }
 
 impl StepView {
@@ -132,10 +135,14 @@ pub struct RunView {
   pub attempt_starts: Vec<AttemptStart>,
   /// Its auto-approval, its rules from the wider answers and how its requests were answered.
   pub approvals: RunApprovals,
+  /// Its own model and effort: the changes from its Conversation and the model of its step at work.
+  pub models: super::run_model::RunModels,
   /// Its agents' questions with suggested answers that wait for the person.
   pub waiting_questions: Vec<AskedQuestions>,
   /// The notices that its base branch moved, oldest first (`orchester_core::base_move`).
   pub base_notices: Vec<orchester_core::base_move::BaseNotice>,
+  /// Its *Fix CI automatically* switch and the Fix CI it sent or stopped at (`crate::pull_requests::ci_fix`).
+  pub ci_fixes: orchester_core::pull_request::ci::fix::RunFixes,
 }
 
 impl RunView {
@@ -466,62 +473,20 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
     .resource(pinned.resource)?
     .map_or_else(|| Arc::from(""), |resource| resource.name().as_str().into());
   let invocations = db.invocations(run.id())?;
-  let mut steps = Vec::new();
-  let stages = run.snapshot().body().stages();
-  let stage_of = |key: &StepKey| {
-    stages
-      .iter()
-      .position(|stage| stage.iter().any(|step| step.key == *key))
-      .unwrap_or_default()
-  };
-  for (index, step) in run.snapshot().body().steps().iter().enumerate() {
-    let executor = run.snapshot().step(&step.key).map(|pinned| pinned.executor());
-    let (agent, reached, model, permissions) = executed(db, (&run, &invocations), &step.key, executor)?;
-    let Reached {
-      provider,
-      endpoint,
-      vendor,
-    } = reached;
-    let latest = run.latest_execution(&step.key);
-    let attempt = latest.and_then(|execution| {
-      run
-        .attempts()
-        .iter()
-        .find(|attempt| attempt.execution(execution.id()).is_some())
-        .map(orchester_core::run::Attempt::number)
-    });
-    steps.push(StepView {
-      number: index + 1,
-      key: step.key.clone(),
-      name: step.name.as_str().into(),
-      agent,
-      tool_step: matches!(executor, Some(StepExecutor::Tool { .. })),
-      provider,
-      endpoint,
-      vendor,
-      engine_recorded: false,
-      effort: None,
-      model,
-      permissions,
-      execution: latest.map(|execution| execution.id()),
-      status: latest.map(|execution| execution.status()),
-      attempt,
-      failure: latest.and_then(|execution| execution.failure()),
-      stage: stage_of(&step.key),
-    });
-  }
-  engines::apply_recorded(db, &mut steps, &invocations)?;
+  let steps = step_views(db, &run, &invocations)?;
   let (paused_at, saved_at_pause) = paused_at(db, &run)?;
   let finished_at = finished_at(db, &run)?;
   let worktree_removed = db.worktree_removal(run.id())?;
   let attempt_starts = starts_of(db, &run)?;
-  Ok(RunView {
+  let mut view = RunView {
     attempt_starts,
     first_run,
     group_hold,
     approvals: RunApprovals::read(db, &run)?,
+    models: super::run_model::RunModels::default(),
     waiting_questions: waiting_questions(db, &run)?,
     base_notices: db.run_base_notices(run.id())?,
+    ci_fixes: db.ci_fixes(run.id())?,
     accounts: db.invocation_accounts(run.id())?,
     index: IndexUses::read(db, &invocations)?,
     invocations,
@@ -538,7 +503,9 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
     version: pinned.number,
     steps,
     run,
-  })
+  };
+  view.models = super::run_model::RunModels::read(db, &view.run, view.current_step(), &view.invocations)?;
+  Ok(view)
 }
 
 /// `run`'s agents' questions with suggested answers that wait for the person.

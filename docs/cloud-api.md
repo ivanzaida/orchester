@@ -92,6 +92,281 @@ whose pages the app opens in the browser.
   `ORCHESTER_CLOUD_URL` and, for its API address, `ORCHESTER_CLOUD_API_URL` at build time.
 - Team servers keep `<server URL>/api/v1` ([architecture/server.md](architecture/server.md), "API").
 
+## Team authority S2 shared contracts
+
+The public prerequisite for platform OP-145 is in core and `orchester-api`; it does not add cloud endpoints.
+Team server admins alone read/change `server_admin::ServerSettings.claim_staleness_seconds` and
+`SettingsChanges.claim_staleness_seconds` (optional in changes). Core's `ClaimStalenessThreshold` is a JSON
+integer in whole seconds, defaults to 900, and accepts 300..=86400 inclusive. Missing read fields from older
+servers use the default; invalid supplied values are refused. Unknown settings-change fields remain refused.
+
+The separate `orchester_api::v2` surface adds `WorkspacePolicyResponse`:
+`{policy:{revision:1,automatic_merge:false},capabilities:{read_policy:true,change_policy:false}}`.
+New workspaces default to automatic merge off at revision 1. Members read policy; workspace Admins change it;
+server admins inherit both capabilities even without membership. Capabilities are computed from authoritative
+records for this workspace and are response metadata, never authorization supplied by a caller.
+
+`WorkspacePolicyChanges` is `{revision,automatic_merge}`; both fields are required, unknown fields refused.
+Platform must authorize, compare the revision, persist the change and increment the revision atomically.
+A stale revision returns HTTP 409 with typed `WorkspacePolicyError::PolicyRevisionConflict`:
+`{error:"policy_revision_conflict",current:{revision:2,automatic_merge:true}}`.
+`PolicyRevision` accepts positive integers through i64::MAX and refuses overflow on increment.
+The effective policy returned is the persisted workspace policy, with no member override.
+
+A policy change is announced by the v2 `WorkspacePolicyEvent::Changed` delta, `kind` `policy.changed`:
+`{kind:"policy.changed",data:{id:7,by:{...},actor:"person",at:1,policy:{revision:2,automatic_merge:true}}}`.
+`policy` is the new effective policy; clients replace their cached policy and ignore a revision that is not
+newer than theirs. The server-wide claim staleness threshold has no change event (undecided).
+
+Thresholds belong to the server, never a workspace policy. A member's compatible local Claude/Codex account
+choice stays local execution metadata. Other team-owned defaults (pipeline, delivery, effort), admin drafts,
+module heartbeat source and human-wait renewal are **not covered**; no decisions for those open items are
+introduced here. The referenced team-authority-plan.md §12 is not present in this public checkout.
+Existing v1 workspace contracts, events and the /api/v1 client are unchanged. Routes, persistence and server
+enforcement belong to OP-145 in `ivanzaida/orchester-platform`; publishing these types does not enable routes.
+
+## Team authority S4 command envelopes
+
+The public prerequisite for platform OP-147 (idempotent action receipts) is in core and `orchester_api::v2`; it adds
+no endpoints. Ids are UUID strings; `OperationId` (made by the client once per intent, repeated on every retry) and
+`WorkId` (made by the server) are distinct core types, never a task id or a client-local run number. Unknown fields
+are refused in every shape below.
+
+- `Subject`: `{kind:"task",id}` or `{kind:"module",id}`.
+- `ExpectedRevision`: `{kind:"project"|"task"|"module"|"tag"|"resource"|"work",id,revision}`, the id of that kind;
+  `revision` is 1..=i64::MAX. A set naming one kind and id twice is refused.
+- `CommandRequest`: `{operation_id,expected:[ExpectedRevision],command}`; `command` is internally tagged by `kind`
+  (e.g. `{kind:"claim.acquire",subject}`).
+- `CommandResult`: `{operation_id,state:"committed",result,cursor}`; `result` is the command's value, which carries
+  `effects:[LocalEffect]` (empty when no local effect is authorized). `cursor` is the `EventCursor` just after the
+  command's events.
+- `EventCursor`: the server's committed event sequence position in one project's event stream. Its wire form is a
+  string holding the canonical decimal of a positive integer that fits in 64 bits: digits only, no sign, no leading
+  zeros (`"1"`, `"10"`; never `""`, `"0"`, `"-1"`, `"+1"`, `"007"` or `"c1"`), and anything else is refused
+  (`EventCursorError`). Cursors order by that integer, never by string order (`"9"` < `"10"`; `EventCursor` is `Ord`).
+  Clients may compare two cursors of the same project; cursors of different projects are not comparable.
+- `LocalEffect`: `{kind:"start",work_id,bundle:{sha256,schema_version}}`, `{kind:"pause",work_id}`,
+  `{kind:"stop",work_id}`, `{kind:"deliver",work_id}`, `{kind:"deliver_module",module_id,branch,source_commit,base_commit}`
+  (S7, below) or `{kind:"none"}`; `sha256` is a 64-digit lowercase hex `ContentHash`.
+- `OperationRead`: `{operation_id,state:"committed",response:CommandResult}` or
+  `{operation_id,state:"rejected",error:AuthorityError}`.
+- `AuthorityError`: `{operation_id?,code,details}`; `operation_id` is left out when the refusal came before the
+  operation was read. `details` is `{}` for every code but `decision_required`, whose details are
+  `{decisions:["D1".."D9"]}` with at least one decision. Details never echo the request or carry credentials.
+
+| Code | Status |
+| --- | --- |
+| `unauthenticated` | 401 |
+| `forbidden`, `delivery_not_authorized`, `membership_revoked` | 403 |
+| `not_found` | 404 |
+| `revision_conflict`, `operation_mismatch`, `claim_conflict`, `claim_lost`, `module_required`, `module_claim_conflict`, `transition_denied`, `decision_required`, `bundle_missing`, `session_mismatch`, `sequence_regressed` | 409 |
+| `cursor_expired` | 410 |
+| `invalid` | 422 |
+| `unsupported_contract` | 426 |
+| `rate_limited` | 429 |
+| `unavailable` | 503 |
+
+The server keys a receipt by project, authenticated account and `operation_id`; the same id with another request is
+`operation_mismatch`. No command or command value has a public payload type yet: the envelopes are generic over them
+(`CommandRequest<C>`, `CommandResult<V>`, `OperationRead<V>`), and each later stage adds its own. Read models
+(pages, task and module reads, capabilities) are the S10 contract's. Existing v1 contracts, the /api/v1 client and
+earlier v2 types are unchanged.
+
+## Team authority S10 read contract
+
+The public prerequisite for platform OP-153 (bounded direct reads and server-side summaries) is in core and
+`orchester_api::v2`; it adds no endpoints. It reuses S4's `EventCursor`, `Subject`, `DecisionId` and
+`cursor_expired`. In the read models every field is sent: `?` below means `null`, never left out, and a missing or
+unknown field is refused. Times are milliseconds since the Unix epoch; days are `YYYY-MM-DD`.
+
+- `PageRequest`: `{after:PageCursor?,limit}`; `limit` may be left out for 50 and is 1..=200 (`PageRequestError`).
+  `PageCursor` is an opaque, non-empty string, bound to the workspace, the filters, the sort and the snapshot; unlike
+  `EventCursor` it is not ordered, and clients never read or compare it.
+- `Page<T>`: `{items:[T],next:PageCursor?,cursor:EventCursor}`; `next` is `null` on the last page, and every page of
+  one listing carries the same snapshot `cursor`. Entities come in ascending (creation sequence, id) order, histories
+  in ascending sequence. A snapshot is kept at least 15 minutes (`PAGE_CURSOR_RETENTION_SECONDS`, 900) after the last
+  page served from it; a later cursor may answer `cursor_expired` (410), and the client reads from the first page again.
+- `Capabilities`: `{project_id,revision,role:"member"|"admin"|"server_admin",actions:[ActionCapability],unresolved:[DecisionId]}`.
+  `ActionCapability`: `{action,subject:Subject?,allowed,reason:DenialReason?}`; `reason` is `null` exactly when
+  `allowed`. `action` is a command kind (dotted lowercase words, e.g. `claim.acquire`; `CommandKind`), `read`,
+  `export.shared` or `server.admin`. `DenialReason`: `role_required`, `claim_required`, `claim_lost`,
+  `module_required`, `decision_required`, `configuration_invalid`. Capabilities are advisory; commands check again.
+- `ClaimRead`: `{subject,id,holder:UserRef,acquired_at,last_execution_heartbeat_at,stale_at,stale,parent_module_claim_id?}`.
+- `WorkRead`: `{id,subject,claim_id,revision,state,runs:[RunId],bundle:BundleRef,created_at,updated_at}`;
+  `ExecutionState` is `running`, `paused`, `awaiting_human`, `succeeded`, `failed` or `cancelled` (proposed).
+- `TaskRead`: every `SharedTask` field (the content's fields inline) and `assignee:UserRef?`, `work:WorkRead?`,
+  `effective_claim:ClaimRead?`, `capabilities`. `workflow` stays apart from `work.state`.
+- `ModuleRead`: every `SharedModule` field (its fields inline) and `branch`, `assignee?`, `work?`, `effective_claim?`,
+  `capabilities`. A module's tasks are read with the task list's `modules` filter.
+- Task list: `TaskListRequest` `{filters,sort,page}`, each defaulted. `TaskFilters`
+  `{statuses,priorities,tags,all_tags,pipelines,modules,search}`: each facet keeps tasks with any of its values, `null`
+  among `pipelines` (slugs) or `modules` is a task without one, `all_tags` keeps tasks with every tag. `search`
+  (`SearchText`, trimmed, 1..=200 characters) matches title, key, former key, id or brief, ignoring case. `TaskSort`:
+  `created` (default), `newest`, `title`, `status`, `priority`, each ending on creation sequence and id.
+  `TaskBoardCounts`: `{backlog,todo,in_progress,in_review,done,canceled,cursor}` for a `TaskFilters`.
+- Modules: `ModuleListRequest` `{state?:"open"|"closed",page}` answers `Page<ModuleSummary>`, a summary being
+  `{module:ModuleRead,progress:{unit:"tasks",scope,done},tasks,forecast:ForecastRead}`. `ForecastRead`:
+  `{remaining,history_days,history_delivered,outlook}`, `outlook` `{kind:"done"}`, `{kind:"not_enough_history"}` or
+  `{kind:"dates",likely,safe,past_horizon}`. `ModuleBurndownRead`: `{module,unit,start_scope,days,forecast,cursor}`,
+  a day `{date,scope?,remaining?,ideal?,added,removed}`. `ModuleHistoryPage` is `Page<SharedModuleChange>`. All are
+  counted by core's rules (`orchester_core::module::{progress, burndown}`, `orchester_core::forecast`): Canceled tasks
+  are out of scope, Done counts as done, and every move into or out of the module counts on its day.
+- Configuration: `ResourceLibraryRequest` `{kind?,archived,search?,page}` answers `ResourceLibraryPage`
+  (`Page<SharedResource>`); a resource's versions are `ResourceVersionsPage` (`Page<SharedVersion>`, oldest first);
+  `ResourcePickerRequest` `{kind,search?,page}` answers `ResourcePickerPage` of `ResourceChoice`
+  `{id,kind,slug,name,latest}`, resources not archived with a published version.
+- `WorkspaceMetadata`: `{project:SharedProject,policy:WorkspacePolicy,capabilities,cursor}`.
+
+Left open, not invented here (they rest on the open decisions D1–D9 or on later stages): human waits beyond
+`awaiting_human` (questions, plans, approvals), the *Needs you* and *Active* list views and their counts that rest on
+them, the full set of command kinds behind `action`, which time zone a server counts days in, and what `revision` in
+`Capabilities` counts. Existing v1 contracts, the /api/v1 client and earlier v2 types are unchanged.
+
+## Team authority S8 execution bundle
+
+The public prerequisite for platform OP-151 (consistent immutable execution bundles and pinned skill assets) is in
+core (`orchester_core::run::bundle`) and `orchester_api::v2`; it adds no endpoints. The server builds a bundle when it
+starts work under a claim and never accepts one a client wrote. Unknown fields are refused in every shape below.
+
+- `ExecutionBundle`, in this field order:
+  `{schema_version,project_id,subject,claim_id,module_id,branch,base_commit,definition_revision,task,pipeline,profiles,permissions,limits,delivery,resources,files,skill_files,bindings,inputs}`.
+  `schema_version` is `EXECUTION_BUNDLE_SCHEMA` (1), as `BundleRef.schema_version` names it. `module_id`, `branch`
+  and `base_commit` are S7's (below): the module the work is under, its module branch (`BranchName`) and the base
+  branch's commit the work starts from (`CommitId`). `definition_revision` is the task's revision when the work
+  started; `task` (`TaskAtStart`) is `{title,brief,criteria}` at that revision. `limits` is a `SharedLimits` (`{}` for
+  none) and `delivery` what the run delivers (`changes`, `report`, `outside` or `changes_or_report`: the task's own
+  choice, else its pipeline's).
+- Derived from `inputs`, and refused on read when they differ: `pipeline` `{resource_id,version}`; `profiles`
+  `[{role,resource_id,version}]`; `permissions` `[{step,permissions}]`, each agent step's profile permissions
+  narrowed by the step, in pipeline step order; `resources` `[{resource_id,version}]`, the pinned instructions, tools
+  and skills; `files` `[{sha256,size_bytes}]`, every file once; `skill_files`
+  `[{resource_id,files:[{path,sha256,size_bytes}]}]`. `version` is the published version number.
+- `bindings` `[{resource_id,role,cli,model}]`: one per pinned profile, with its role and model; `cli` is the agent
+  provider (`codex_cli`, `claude_code_cli`, …) the executing computer runs it with. Which account or connection runs it,
+  and every path, stays on that computer.
+- `inputs` (`CanonicalExecutionInputs`): `{pipeline,steps,profiles,instructions,tools,skills}`, each pinned version
+  `{resource,version,number,body}` with its published body. `steps` are the run snapshot's `[{key,executor}]` in
+  pipeline order. The pipeline body lists no sources, a profile body is
+  `{role,responsibilities,instructions,model,settings,permissions}` without its connection, MCP servers or writable
+  folders, and a command tool never starts a program by an absolute path; such inputs are refused. Bodies name
+  secrets by id only.
+- Order: `steps` and `permissions` keep pipeline order; `profiles`, `bindings`, `resources`, `skill_files` and the
+  pinned versions are read in any order and kept in resource id order, `files` in hash order, a skill's files in path
+  order.
+- Hash: the lowercase hex SHA-256 of the bundle's canonical bytes, its compact JSON as `serde_json` writes it with the
+  fields in the order above and collections in the order just given (`run::bundle::canonical`). The same bundle always
+  hashes the same, whichever order its collections were read in; any field change changes it.
+- Reads: the bundle read answers `ExecutionBundle`. A bundle file read answers one file's raw bytes by its `sha256`,
+  at most `MAX_BUNDLE_FILE_BYTES` (8 MiB; a run whose skills have a larger file makes no bundle), which the desktop
+  checks against the bundle (`ExecutionBundle::check_file`). There is no confirmation command.
+
+The work is not in the bundle: a bundle binds to its claim, and S7's `work.start` attaches the work. Existing v1
+contracts, the /api/v1 client and earlier v2 types are unchanged.
+
+## Team authority S7 delivery contract
+
+The public prerequisite for platform OP-150 (mandatory modules, module branches and authorized delivery) is in core
+and `orchester_api::v2`; it adds no endpoints. Unknown fields are refused in every shape below.
+
+- `CommitId` (`orchester_core::run`): a full Git object id, 40 lowercase hex digits (SHA-1) or 64 (SHA-256), sent as
+  a string. Abbreviated ids, uppercase and ref names are refused (`CommitIdError`). Branches are `BranchName`.
+- The execution bundle gains `module_id:ModuleId`, `branch:BranchName` and `base_commit:CommitId` after `claim_id`
+  (above). This changes the canonical bytes, so a bundle with these fields hashes differently from the same bundle
+  in ORC-651's shape; nothing stored that shape yet, and `schema_version` stays 1.
+- `DeliveryRead`:
+  `{work_id,claim_id,authorization_operation_id:OperationId?,source_commit,base_commit,bundle:BundleRef,state,revision}`.
+  `authorization_operation_id` is always sent, `null` when no `delivery.authorize` allowed the delivery; leaving it
+  out is refused. `source_commit` and `base_commit` are `CommitId`s, `revision` is 1..=i64::MAX.
+- `DeliveryState`: `authorized`, `requested`, `delivered` or `failed`. The server reports `delivered` only after the
+  runner reported the merge commit.
+- `LocalEffect` gains `{kind:"deliver",work_id}`: the runner may merge the work's module branch into base on its
+  computer.
+- Commands, instantiated by the server on the S4 envelopes rather than defined here: `delivery.authorize`
+  `{work_id,claim_id,source_commit,base_commit,bundle}` (Admin) and `delivery.request`
+  `{authority,authorization_operation_id,source_commit,base_commit,bundle}`, each answering
+  `{kind:"delivery",delivery:DeliveryRead,effects}`.
+- Module delivery (S7c, ORC-656): base delivery is a module's, and task works reach base only through their module
+  (the run branch merges into the module branch locally; work reports tell the server). `ModuleDeliveryRead`:
+  `{subject:{kind:"module",id},claim_id,authorization_operation_id:OperationId?,branch,source_commit,base_commit,state,revision}`,
+  with the module's claim and branch and no `work_id` or `bundle`; a task `subject` is refused. It is a separate type,
+  not a tagged `DeliveryRead`, so the task form above keeps its wire; the field sets are disjoint, so a body reads as
+  one form only. `LocalEffect` gains `{kind:"deliver_module",module_id,branch,source_commit,base_commit}`: the runner
+  may merge that module branch head into base at `base_commit` on its computer; no local path is sent. Authorized by
+  an Admin's `delivery.authorize`, or by the workspace's `automatic_merge` for a request from the module's current
+  effective claim (D7).
+
+Decided for S7 (the orchestrator's D3 and D7, 2026-11-03, revisable by the person): the automatic module branch is
+`module/<name-slug>` (with `-<8 hex of the module id>` on collision), fixed at first assignment and created by the
+runner from its checkout's base at the first task start; task run branches merge into it, and only delivery takes it
+to base. A manually assigned branch is unique in the workspace, may be an existing Git branch, and cannot change while
+work under the module runs. With the workspace's `automatic_merge` on, a delivery request from the current effective
+claim on current unfenced work counts as Admin-authorized; off, it needs an explicit `delivery.authorize`. Report and
+outside deliverables have no base merge (D4 open). Existing v1 contracts, the /api/v1 client and earlier v2 types are
+unchanged, apart from the bundle fields above.
+
+## Team authority S9 work reports
+
+The public prerequisite for platform OP-152's S9b (`work.report`) is in core (`orchester_core::run`) and
+`orchester_api::v2`; it adds no endpoints. Unknown fields are refused in every shape below.
+
+- `ExecutionOutcome` (core): `{kind:"progress"}`, `{kind:"succeeded"}`, `{kind:"failed",reason}` or
+  `{kind:"cancelled"}`. `reason` is an `ExecutionFailure`, a closed set without text, paths or local ids, named as the
+  desktop's run states name them: `step_failed`, `retries_exhausted`, `worktree_not_created`, `limit_reached` or
+  `runner_failed`. An execution success is not permission to mark the task Done; human-wait entry and exit and the
+  task-completion effects have no outcome until D1, D4 and D8 are decided.
+- `ArtifactRef`: `{sha256:ContentHash,kind,size_bytes}`, a secret-free shared artifact by the hash of its bytes, never
+  a local path. `ArtifactKind` is `report` (a completed run's report), `patch` (the run's changes) or `log` (a step's
+  captured output). The set is closed, so a reader refuses a kind it does not know: a new kind is a new variant in
+  `v2::ArtifactKind` and in this list, published before any runner reports it.
+- `AuthorityRef`: `{subject,claim_id,work_id:WorkId?}`; `work_id` is always sent, `null` before the claim has work.
+- `WorkReport`, the payload of the command `work.report`:
+  `{authority:AuthorityRef,run_id:RunId,event_id:WorkEventId,sequence:u64,outcome:ExecutionOutcome,artifacts:[ArtifactRef]}`.
+  `run_id` is the reporting computer's run, `event_id` (a UUID) is made once per event and repeated on every retry,
+  and `sequence` is monotonic per run. It answers `{kind:"work",work:WorkRead,bundle:BundleRef,effects}`, instantiated
+  by the server on the S4 envelopes.
+- Order (`run::order_report`): a report is accepted only with a sequence greater than the last one accepted for its
+  run. The same sequence with the same report is a duplicate, answered with the original result, not an error; any
+  other equal or lower sequence is refused with `sequence_regressed`.
+- Fencing, as `AuthorityError` codes: a stale claim generation or fenced work is `claim_lost`; the claim held by
+  another session of the same account is `session_mismatch` (409); a regressed sequence `sequence_regressed` (409); a
+  caller no longer a member `membership_revoked` (403). A delayed report never overwrites the state of the work's new
+  holder.
+- `WorkEvent::Changed`, `kind` `work.changed`, a delta with `{work:WorkRead}`:
+  `{kind:"work.changed",data:{id,by,actor,at,work}}`. A client replaces its cached work and ignores one whose
+  `work.revision` is not newer than its own.
+
+No D4/D8 completion or human-wait variant is added. Existing v1 contracts, the /api/v1 client and earlier v2 types are
+unchanged, apart from the new error codes.
+
+## Team authority S11 subscriptions
+
+The public prerequisite for platform OP-154 (scoped invalidation subscriptions without replica snapshots) is in
+`orchester_api::v2::subscription`, re-exported from `orchester_api::v2`; it defines no route. Unknown fields are refused
+in every shape below.
+
+- Route, the server's: `GET /api/v2/projects/{project}/subscription`, a server-sent event stream, with an optional
+  `Last-Event-ID` header carrying the last cursor the client saw. Each event's SSE `event:` name is its `kind`, its
+  `id:` its `cursor` (`revoked` has none), and its `data:` the JSON below.
+- `QueryScope`, a family of cached reads, tagged by `kind`: `{kind:"workspace"}` (project, policy, capabilities,
+  members), `{kind:"task_list"}` (task list and task counts), `{kind:"task",task:TaskId}`,
+  `{kind:"task_comments",task:TaskId}`, `{kind:"module_list"}`, `{kind:"module",module:ModuleId}` (summary, progress,
+  burndown, history), `{kind:"library"}` (library and pickers) and `{kind:"resource",resource:ResourceId}` (its
+  version list). Scopes compare by value and are totally ordered, so a set of them is stable.
+- `SubscriptionEvent`, tagged by `kind`:
+  - `{kind:"ready",cursor:EventCursor}`: sent first; the stream's position, with no snapshot.
+  - `{kind:"invalidated",cursor,scopes:[QueryScope]}`: one per committed batch; `cursor` is the batch's last entry and
+    `scopes` name each scope once.
+  - `{kind:"reset",cursor}`: the resume point is below the server's replay floor; the client drops every cached query
+    and reads again at or after `cursor`.
+  - `{kind:"revoked"}`: the caller lost access; the stream then closes.
+- Client race rule: a cached read taken at cursor `R` (a page's or command's `EventCursor`) is stale only when an
+  `invalidated` event with a cursor greater than `R` names its scope, "greater" in the `EventCursor` ordering above
+  (by integer, never by string). Events with a cursor at or below `R` are already in the read, so a client may
+  subscribe before or after reading without missing a change. The rule compares cursors of the same project only. A
+  `reset` drops everything.
+
+Existing v1 contracts, the /api/v1 client and earlier v2 types are unchanged.
+
 ## Conventions
 
 - JSON bodies in UTF-8. Requests are limited to 1 MiB and must arrive within 10 seconds.
@@ -495,7 +770,8 @@ Added 2026-10-30 (ORC-411): how the desktop app learns of and fetches a new vers
 Orchester staff steer it. The types are in `orchester_api::releases`, the calls on `orchester_api::client::CloudClient`.
 Three kinds of caller:
 
-- **anonymous**: the update check and downloads need no sign-in, so an app used only locally updates too;
+- **anonymous**: the update check, the public Stable release and downloads need no sign-in, so an app used only
+  locally updates too and the website's download page reads the cloud directly;
 - **`releases:write`**: CI, with `Authorization: Bearer <release token>`, a cloud API token whose scopes include
   `releases:write`. The operator makes it (`docs/cloud-hosting.md` in `ivanzaida/orchester-platform`); it is not a
   device token and signs nobody in. A device token, or a token without the scope, is `403 forbidden`;
@@ -569,6 +845,7 @@ copy have databases, and so ids, of their own.
 | Method and path | Auth | Request | Response | Errors |
 | --- | --- | --- | --- | --- |
 | `GET /updates/check?version&platform&arch&channel&install_id` | anonymous | the query, every field required: the app's version, platform, architecture, channel and install id | `200 { update: null }` when nothing newer is offered; `200 { update: { version, channel, notes, critical, published_at, files: [{ name, platform, arch, url, size, sha256, key_id, signature }] } }` | `400 bad_request` (a field missing, unknown or repeated), `422 invalid` (a version, platform, architecture, channel or id that is not one), `429` |
+| `GET /releases/stable?platform&arch` | anonymous | the query, both fields required: a platform and an architecture | `200 { release: null }` when Stable offers everyone no release for them; `200 { release: { version, published_at, files: [{ name, platform, arch, size, sha256 }] } }`; both with `Cache-Control: public, max-age=60` | `400 bad_request` (a field missing, unknown or repeated, an `install_id` too), `422 invalid` (a platform or architecture that is not one), `429` |
 | `GET /releases/{version}/files/{name}` | anonymous | `Range: bytes=<start>-[<end>]` to resume, optional | `200` the whole file, or `206` with `Content-Range: bytes <start>-<end>/<size>`; both with `Content-Type: application/octet-stream`, `Content-Length`, `Accept-Ranges: bytes` and `ETag: "<sha256>"` | `404 not_found` (no such release or file, a draft, a withdrawn release, deleted files), `416 range_not_satisfiable`, `429` |
 | `POST /releases` | `releases:write` | `{ version, notes, critical?, ci_run? }`: notes in Markdown, at most 64 KiB; `ci_run` the CI run that uploads it, `{ number, url }` | `201 { release: ReleaseSummary }`, a draft | `403 forbidden`, `409 conflict` (the version exists, in any stage), `422 invalid` (also a `url` that is not `https://…`, over 2048 characters or with spaces or control characters) |
 | `POST /releases/{version}/files` | `releases:write` | `{ name, platform, arch, size, sha256, key_id, signature }` | `201 FileUpload` for a new file, `200 FileUpload` for the same declaration again (resume) | `403 forbidden`, `404` (no such draft), `409 conflict` (the release is not a draft, or another declaration under this name, or a second file for the same platform, architecture and name), `422 invalid` (size 0 or over 2 GiB) |
@@ -640,6 +917,20 @@ release's files for that platform and architecture; `url` is the absolute URL of
 address. An asked version the cloud does not know is still compared by order. Each check counts the install id toward
 `installs`, `adoption` and their `installs_by_channel` under the channel it names.
 
+**What the public Stable release answers.** Added 2026-11-01 (ORC-609) for the website's download page
+(`StableReleaseQuery`, `StableReleaseAnswer`). Among releases with a file for the asked platform and architecture, the
+newest in stage `stable` at 100 % that is not paused and whose files are not deleted; `null` when none is. So a
+newer Stable release still rolling out (under 100 %) or paused does not count, and the page keeps the previous one
+that passes: the release every Stable install outside the rollout runs, never one only some installs are offered, and
+never one staff stopped. A withdrawn release is in stage `withdrawn`, not `stable`, so it never counts. `files` are
+that release's files for the asked platform and architecture, each served at `GET /releases/{version}/files/{name}`;
+the answer carries no URL, notes, key id or signature, since the page links the file and the app checks the signature
+itself. The read takes no install id and counts nothing: no `installs`, `adoption` or `installs_by_channel`, no
+download. It reveals no draft, Beta-only (stage `beta`), withdrawn or deleted-files release, and no percentage or
+pause. `Cache-Control: public, max-age=60` lets the website and any cache in between keep an answer for a minute, so
+promoting to 100 %, pausing or withdrawing shows on the page within a minute. `stable` is not a version, so the path
+does not clash with `/releases/{version}/…`.
+
 **Uploading a release.** CI creates the draft, then declares each file with its size, SHA-256, key id and signature.
 The answer gives the cloud's `part_size` (8 MiB) and the number of parts (`size / part_size`, rounded up). CI sends
 each part with `PUT …/parts/{part}`, numbered from 0, part `i` holding bytes `i * part_size` on. These bodies are exempt
@@ -672,6 +963,7 @@ release's row, counts and activity stay.
 | Invite emails | 1 a day per server and invitee address, 3 a day per invitee address; separate from the emails above |
 | Linked servers | 5 per person (`409 too_many_servers`), ownerless ones they linked included; not a rate |
 | Update checks (`GET /updates/check`) | 12 an hour per install id, 600 an hour per client address and 3,000 per IPv6 /48 |
+| The public Stable release (`GET /releases/stable`) | 600 an hour per client address and 3,000 per IPv6 /48, apart from the update checks |
 | Downloads (`GET /releases/…/files/…`) | 60 an hour per client address and 300 per IPv6 /48, resumed ranges included |
 
 The counters are in memory, but for the daily cap on wrong two-factor codes. A restart clears them; the cloud runs as

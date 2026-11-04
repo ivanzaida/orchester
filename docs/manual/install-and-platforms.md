@@ -5,8 +5,9 @@
 ### Windows — release installer
 
 Raising `version` in `crates/desktop-app/Cargo.toml` on `master` signs and uploads a release to Orchester Cloud, where
-it is published on Beta, and tags the commit `app-v<version>` (no GitHub Release since 2026-10-31;
-`docs/stable-build.md`, "Releases from CI"). It has, at `https://api.orchester.cloud/v1/releases/<version>/files/<name>`:
+it is published on Beta, tags the commit `app-v<version>` and publishes the same files as the GitHub Release
+`app-v<version>` (`docs/stable-build.md`, "Releases from CI"). For Windows it has, at
+`https://api.orchester.cloud/v1/releases/<version>/files/<name>`:
 
 - `Orchester-<version>-setup.exe` — an installer for the current user, no admin rights. Installs into
   `%LOCALAPPDATA%\Programs\Orchester` by default (another folder can be chosen on the first install), adds a Start menu
@@ -36,9 +37,13 @@ tools/install-macos.sh
 
 Builds `Orchester.app` into `~/Applications` (options `--install-dir`, `--build-dir`, `--universal`,
 `--import-dev-data`). The bundle holds `Contents/MacOS/orchester` and `orchester-runner`, identifier
-`dev.orchester.app`, macOS 11 or later. It is **signed ad hoc and not notarized**: build on the Mac itself (a copy
-from another Mac is quarantined). After an update macOS may ask again before the app reads the keychain — choose
-*Always Allow*. CI does not build macOS yet.
+`dev.orchester.app`, macOS 11 or later. Built this way it is **signed ad hoc and not notarized**: build on the Mac
+itself (a copy from another Mac is quarantined). After an update macOS may ask again before the app reads the
+keychain — choose *Always Allow*.
+
+A release from CI needs none of this: `Orchester-<version>-macos-aarch64.dmg` (Apple silicon) holds the app, signed
+with a Developer ID and notarized, so it opens without a warning; drag it to Applications. Its signature stays the same
+from version to version, so an update does not ask for the keychain again.
 
 ### Development
 
@@ -100,8 +105,8 @@ project's runner holds `.orchester/runner.lock`, so one app runs a project at a 
 ## 5. Known gaps
 
 - **macOS**: a process group does not hold what leaves it on purpose (`setsid`); agents can outlive a runner killed
-  with SIGKILL; CLIs outside the usual folders aren't found when started from Finder; the `.app` is signed ad hoc and
-  not notarized.
+  with SIGKILL; CLIs outside the usual folders aren't found when started from Finder; a build from source is signed
+  ad hoc and not notarized, unlike a release; releases are for Apple silicon only.
 - **Windows**: programs and the installer are not code-signed.
 - **Fixed MCP port**: a port taken by another program is reported, not avoided.
 - **Single window**, no background mode: closing the window stops every runner and agent.

@@ -58,6 +58,7 @@ pub(crate) struct SettingRow {
   cut_label: bool,
   info: Option<Arc<str>>,
   hint: Option<(Arc<str>, Tone)>,
+  hint_style: TypographyStyle,
   /// Lines under the hint, in the words' column.
   lines: Vec<Element>,
   lead: Option<Element>,
@@ -65,6 +66,7 @@ pub(crate) struct SettingRow {
   under: Vec<Element>,
   open: Option<Open>,
   item: bool,
+  dependent: bool,
   /// The label's and the hint's bones, while they are read.
   bones: (Option<f32>, Option<f32>),
 }
@@ -80,18 +82,32 @@ impl SettingRow {
       cut_label: false,
       info: None,
       hint: None,
+      hint_style: ProjectSettingsText::Hint.role(),
       lines: Vec::new(),
       lead: None,
       controls: Vec::new(),
       under: Vec::new(),
       open: None,
       item: false,
+      dependent: false,
       bones: (None, None),
     }
   }
 
-  /// Lines of their own under the hint, in the words' column beside the control, the words then 4 apart (`Moved`
-  /// `HcizH` in 04b `NDTCw`).
+  /// A setting that needs the one above it: it starts further in (`k1WWv` in `S03`).
+  pub(crate) fn dependent(mut self) -> Self {
+    self.dependent = true;
+    self
+  }
+
+  /// The hint line is a value as written (a variable's): in Geist Mono 12.
+  pub(crate) fn mono_hint(mut self) -> Self {
+    self.hint_style = ProjectSettingsText::MonoHint.role();
+    self
+  }
+
+  /// Lines of their own under the hint, in the words' column beside the control, the words then 4 apart (a decision
+  /// connection's model no longer listed, under *Used by*).
   pub(crate) fn lines(mut self, lines: impl IntoIterator<Item = Element>) -> Self {
     self.lines.extend(lines);
     self
@@ -221,7 +237,7 @@ impl SettingRow {
       return Some(
         Text::new(hint)
           .id(format!("{}-hint", self.id))
-          .variant(ProjectSettingsText::Hint.role())
+          .variant(self.hint_style)
           .color(tone.color())
           .width(Dimension::Pct(100.0))
           .into(),
@@ -230,7 +246,7 @@ impl SettingRow {
     self
       .bones
       .1
-      .map(|width| skeleton::line(ctx, ProjectSettingsText::Hint.role(), width).into())
+      .map(|width| skeleton::line(ctx, self.hint_style, width).into())
   }
 
   pub(crate) fn render(self, ctx: &mut Ctx) -> Element {
@@ -279,9 +295,20 @@ impl SettingRow {
     } else {
       ProjectSettingsSpacing::RowY.role()
     };
+    let start = if self.dependent {
+      ProjectSettingsSpacing::Dependent
+    } else {
+      ProjectSettingsSpacing::RowX
+    };
     let frame = Column::new()
       .width(Dimension::Pct(100.0))
-      .padding(Padding::symmetric(ProjectSettingsSpacing::RowX.role(), over))
+      .padding(
+        Padding::new()
+          .top(over)
+          .bottom(over)
+          .left(start.role())
+          .right(ProjectSettingsSpacing::RowX.role()),
+      )
       .spacing(SpacingSize::Sm)
       .child(line)
       .with_children(self.under);

@@ -2,7 +2,8 @@
 //! `Loading states · configure screens` `psFv5`, first built for Tasks in `05 · Loading` `R1nQlx` and `Reading ·
 //! skeleton` `UWoGx`). A bone is a `border` block, radius 4, as large as the part it stands for and where it will
 //! stand, so the content replaces it in place. A [`Skeleton`] shows its bones only after
-//! [`SKELETON_DELAY`](crate::theme::SKELETON_DELAY), so a fast reading never flashes them; they pulse gently unless
+//! [`SKELETON_DELAY`](crate::theme::SKELETON_DELAY), so a fast reading never flashes them, or under a page's
+//! [`FromFirstFrame`] at once; they pulse gently unless
 //! the operating system asks for reduced motion (`appearance::motion`), when they stay still, and lower rows fade
 //! ([`fading`]). The screen's reading words stay its accessible name. lurq plays the pulse on its animation clock and
 //! asks for frames only while a pulsing skeleton is in the window's tree. `rows` holds the shapes screens share: lines
@@ -12,7 +13,7 @@ mod rows;
 
 use std::{
   sync::{Arc, OnceLock},
-  time::Instant,
+  time::{Duration, Instant},
 };
 
 use lurq::{
@@ -29,7 +30,8 @@ use lurq::{
 };
 
 pub use self::rows::{
-  BoneRow, Words, button, chevron, count, field, group, line, lines, list, outline, select, status, switch, unit_field,
+  BoneRow, Words, button, chevron, count, count_in_room, field, group, line, lines, list, outline, read_back, select,
+  status, switch, unit_field,
 };
 use crate::theme::{ExtraRadius, SKELETON_DELAY, SKELETON_DIM, SKELETON_FADE, SKELETON_PULSE, SKELETON_STEPS};
 
@@ -108,6 +110,11 @@ struct SkeletonProps {
 
 impl DevtoolsInspectable for SkeletonProps {}
 
+/// Provided by a page whose tabs switch in place, so the content under them never comes up empty: its skeletons show
+/// their bones from the first frame, without [`SKELETON_DELAY`] (`Settings loading · redesign` `iDl7k`).
+#[derive(Clone, Copy, Debug)]
+pub struct FromFirstFrame;
+
 struct Delayed {
   shown: Signal<bool>,
   /// Shows the bones once the reading took [`SKELETON_DELAY`]; none when it already had.
@@ -119,9 +126,13 @@ impl Component for Delayed {
 
   fn create(ctx: &mut Ctx) -> Self {
     let since = ctx.props::<SkeletonProps>().since;
-    let left = since.map_or(SKELETON_DELAY, |started| {
-      SKELETON_DELAY.saturating_sub(started.elapsed())
-    });
+    let left = if ctx.use_context::<FromFirstFrame>().is_some() {
+      Duration::ZERO
+    } else {
+      since.map_or(SKELETON_DELAY, |started| {
+        SKELETON_DELAY.saturating_sub(started.elapsed())
+      })
+    };
     let shown = ctx.signal(left.is_zero());
     if left.is_zero() {
       return Self { shown, _delay: None };
@@ -198,6 +209,14 @@ pub fn fading<T: Fades>(lines: Vec<T>) -> Vec<T> {
       None => line,
     })
     .collect()
+}
+
+/// A lower group of a column whose groups read on their own, as faded as [`SKELETON_FADE`]'s `step` says.
+pub fn lower_group(step: usize, group: impl Into<Element>) -> Column {
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .opacity(SKELETON_FADE[step])
+    .child(group)
 }
 
 /// `lines` over a composer, the upper ones fading away: older entries lie above them.

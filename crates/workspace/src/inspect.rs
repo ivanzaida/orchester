@@ -30,6 +30,7 @@ macro_rules! markers {
     impl $inspect for crate::connections::missing_cli::MissingCli {}
     impl $inspect for crate::connections::mcp::TransportChoice {}
     impl $inspect for crate::connections::native::NativeDraft {}
+    impl $inspect for crate::export::Include {}
     impl $inspect for crate::files::FileFacts {}
     impl $inspect for crate::files::Follow {}
     impl $inspect for crate::files::FileList {}
@@ -57,6 +58,8 @@ macro_rules! markers {
     impl $inspect for crate::instructions::preview::PreviewCatalog {}
     impl $inspect for crate::instructions::preview::PreviewChoice {}
     impl $inspect for crate::memory::draft::RecordDraft {}
+    impl $inspect for crate::mentions::catalog::Catalog {}
+    impl $inspect for crate::mentions::files::FileIndex {}
     impl $inspect for crate::memory::listing::Filters {}
     impl $inspect for crate::memory::read::GivenTo {}
     impl $inspect for crate::memory::read::ProjectMemory {}
@@ -138,6 +141,7 @@ macro_rules! markers {
     impl $inspect for crate::sharing::compare::ConflictComparison {}
     impl $inspect for crate::sharing::compare::HistoryEntry {}
     impl $inspect for crate::skills::data::ProjectSkills {}
+    impl $inspect for crate::skills::offered::OfferedSkill {}
     impl $inspect for crate::sources::project::Removed {}
     impl $inspect for crate::skills::repository::RepositoryScan {}
     impl $inspect for crate::skills::editor::EditorData {}
@@ -168,6 +172,7 @@ macro_rules! markers {
     impl $inspect for crate::tasks::list::TaskTab {}
     impl $inspect for crate::tasks::outside::OutsideChanges {}
     impl $inspect for crate::tasks::outside::OutsideCounts {}
+    impl $inspect for crate::tasks::outside::AppOutsideCounts {}
     impl $inspect for crate::tasks::overview::OverviewTab {}
     impl $inspect for crate::overview::delivery::OverviewDelivery {}
     impl $inspect for crate::tasks::plan::PlanReview {}

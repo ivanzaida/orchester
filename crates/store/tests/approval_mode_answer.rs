@@ -7,7 +7,7 @@ mod support;
 use orchester_core::{
   run::{
     AnswerKind, AnswerRecord, CameToPerson, DecidedBy, PendingToolApproval, PersonReason, RequestAnswer,
-    ToolApprovalDecision,
+    ToolApprovalDecision, review::ReviewFailure,
   },
   store::ActivityStore,
 };
@@ -50,8 +50,8 @@ fn approval_mode_answer_keeps_how_and_why_each_request_was_answered() {
   db.record_request_answer(run.id(), &inside.id, &autopilot)
     .expect("answer");
   let came = CameToPerson {
-    reason: PersonReason::Outside,
     detail: Some("/repo/README.md".to_owned()),
+    ..CameToPerson::because(PersonReason::Outside)
   };
   db.record_came_to_person(run.id(), &outside.id, Some(&came))
     .expect("came to the person");
@@ -126,4 +126,51 @@ fn approval_mode_answer_reason_of_a_waiting_request_is_cleared_when_its_run_drop
   db.record_came_to_person(run.id(), &waiting.id, None)
     .expect("looked at again");
   assert_eq!(db.came_to_person(run.id(), &waiting.id).expect("read"), None);
+}
+
+/// How the reviewer's review failed and the mode a request came by are kept with why it came (ORC-586), and given
+/// back by the run's answers; a reason written before they were kept, which is what one without them is written as,
+/// reads back without them.
+#[test]
+fn approval_mode_answer_keeps_how_the_review_failed() {
+  let (_repo, mut db, run, execution) = started_run();
+  let invocation = db
+    .start_invocation(run.id(), execution, &model(), at(10))
+    .expect("invocation");
+  let kinds = [
+    CameToPerson::reviewer_failed(ReviewFailure::TimedOut).in_mode(true),
+    CameToPerson::reviewer_failed(ReviewFailure::Unreadable),
+    CameToPerson::reviewer_failed(ReviewFailure::CouldNotRun).in_mode(true),
+    CameToPerson::because(PersonReason::ReviewerCouldNotRun),
+  ];
+  for (number, came) in kinds.iter().enumerate() {
+    let waiting = PendingToolApproval {
+      id: format!("{}:{number}", invocation.id),
+      run: run.id(),
+      execution,
+      invocation: invocation.id,
+      agent: "Builder".to_owned(),
+      command: false,
+      scope: None,
+      server: "pencil".to_owned(),
+      action: "batch_design".to_owned(),
+      target: None,
+      requested_at: at(20 + i64::try_from(number).expect("a short list")),
+      native: None,
+    };
+    db.request_tool_approval(&waiting).expect("recorded");
+    db.record_came_to_person(run.id(), &waiting.id, Some(came))
+      .expect("came to the person");
+    assert_eq!(
+      db.came_to_person(run.id(), &waiting.id).expect("read").as_ref(),
+      Some(came)
+    );
+  }
+  let kept: Vec<Option<CameToPerson>> = db
+    .request_answers(run.id())
+    .expect("answers")
+    .into_iter()
+    .map(|record| record.came_to_person)
+    .collect();
+  assert_eq!(kept, kinds.map(Some));
 }

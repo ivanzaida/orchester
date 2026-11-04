@@ -1,6 +1,7 @@
 //! Answering a tool request by the run's approval mode end to end (`docs/design/approval-modes.md`), with
 //! `orchester-fake-claude` as the agent and the reviewer: Autopilot approves what lies in the run's roots by its rule
-//! without the reviewer, brings a path outside them, a push, another ref and what the step's limits forbid to the
+//! and a tool its MCP server lists to run without asking as always allowed, both without the reviewer, brings a path
+//! outside them, a push, another ref and what the step's limits forbid to the
 //! person with that reason, and asks the reviewer one question about what it cannot place; Manual approves what the
 //! profile allows, asks the reviewer
 //! about the rest and brings what it denies, or everything when there is no reviewer, to the person; a request waiting
@@ -13,17 +14,21 @@ mod support;
 use std::collections::BTreeMap;
 
 use orchester_core::{
-  connection::AgentProvider,
-  id::{IdempotencyKey, RunId},
+  connection::{
+    AgentProvider,
+    mcp::{ExemptTools, McpEnvironment, McpServer, McpServerName, McpTransport, StdioServer},
+    stream::AgentEvent,
+  },
+  id::{ConnectionId, IdempotencyKey, RunId},
   permission::{
     AgentPermissions, AllowedCommands, ApprovalMode, CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess,
   },
-  resource::{CommandEnvironment, VariableName},
+  resource::{CommandArg, CommandEnvironment, CommandProgram, VariableName},
   run::{
-    AllowAutopilot, AnswerKind, AnswerRecord, Answerer, ApprovalAnswer, CameToPerson, ManualSwitch,
+    AllowAutopilot, AnswerKind, AnswerRecord, Answerer, ApprovalAnswer, CameToPerson, DecidedBy, ManualSwitch,
     PendingToolApproval, PersonReason, RequestAnswer, Run,
   },
-  store::SettingsStore,
+  store::{ActivityStore, SettingsStore},
   time::Timestamp,
 };
 use orchester_ipc::Event;
@@ -32,7 +37,9 @@ use orchester_store::ProjectDb;
 use tempfile::TempDir;
 use tokio::sync::mpsc;
 
-use self::support::{PATIENCE, Setup, TestProject, project, reviewer::with_default_reviewer, scheduler_with, wait_for};
+use self::support::{
+  PATIENCE, Setup, TestProject, project, reviewer::with_default_reviewer, scheduler_with, tools::TEST_COMMAND, wait_for,
+};
 
 /// What the fake reviewer answers when it approves.
 const APPROVES: &str = "The fake reviewer finds it serves the task.";
@@ -202,6 +209,7 @@ async fn approval_mode_answer_autopilot_asks_the_reviewer_one_question_about_wha
   let (request, came) = unsure.came_to_person().await;
   assert_eq!(came.reason, PersonReason::ReviewerUnsure);
   assert_eq!(came.detail.as_deref(), Some(ASKS));
+  assert!(came.autopilot, "it came by Autopilot's rules");
   unsure.deny(request).await;
   unsure.ended().await;
   assert_eq!(unsure.logged("roots"), ["true"]);
@@ -219,7 +227,7 @@ async fn approval_mode_answer_autopilot_keeps_the_step_limits() {
   }
   let mut started = Started::new(with_default_reviewer(project(&setup))).await;
   let (request, came) = started.came_to_person().await;
-  assert_eq!(came, CameToPerson::because(PersonReason::NotAllowed));
+  assert_eq!(came, CameToPerson::because(PersonReason::NotAllowed).in_mode(true));
   started.deny(request).await;
   started.ended().await;
   assert_eq!(
@@ -227,6 +235,72 @@ async fn approval_mode_answer_autopilot_keeps_the_step_limits() {
     Some(&RequestAnswer::by(AnswerKind::Person))
   );
   assert!(started.logged("pid").is_empty(), "no reviewer ran");
+}
+
+/// `pencil`, whose `get_screenshot` runs without asking.
+fn pencil() -> McpServer {
+  let mut server = McpServer::new(
+    ConnectionId::generate(),
+    McpServerName::new("pencil").expect("valid name"),
+    McpTransport::Stdio(StdioServer::new(
+      CommandProgram::new(TEST_COMMAND).expect("valid program"),
+      vec![CommandArg::new("--stdio").expect("valid argument")],
+      None,
+    )),
+    McpEnvironment::default(),
+    Timestamp::now(),
+  )
+  .expect("a valid server");
+  server.set_exempt_tools(ExemptTools::parse("get_screenshot").expect("valid tools"));
+  server
+}
+
+/// How each tool request of `started`'s run was decided, from its activity.
+fn decisions(started: &Started) -> Vec<DecidedBy> {
+  started
+    .db()
+    .activity(started.id, 0)
+    .expect("activity")
+    .into_iter()
+    .filter_map(|entry| match entry.event {
+      AgentEvent::ToolDecided { decision, .. } => Some(decision.decided_by),
+      _ => None,
+    })
+    .collect()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn approval_mode_answer_autopilot_exempt_mcp_tool_is_always_allowed() {
+  // Autopilot's CLI hands even a listed tool to Orchester, which approves it as Manual does, without the reviewer; a
+  // tool the server does not list is still the reviewer's question.
+  for (brief, decided_by, answer, roots) in [
+    (
+      "Read the design.",
+      DecidedBy::AlwaysAllowed,
+      RequestAnswer::by(AnswerKind::Profile),
+      None,
+    ),
+    (
+      "Change the design.",
+      DecidedBy::Reviewer,
+      RequestAnswer::reviewer(APPROVES),
+      Some("true"),
+    ),
+  ] {
+    let setup = Setup {
+      mcp: vec![pencil()],
+      ..builder(brief, ApprovalMode::Autopilot, CommandPermission::AskBefore)
+    };
+    let mut started = Started::new(with_default_reviewer(project(&setup))).await;
+    started.ended().await;
+    let answers = started.answers();
+    assert_eq!(answers.len(), 1, "{brief}: {answers:?}");
+    assert_eq!(answered(&answers[0]), Some(&answer), "{brief}");
+    assert_eq!(answers[0].came_to_person, None, "{brief}: no card");
+    assert_eq!(decisions(&started), [decided_by], "{brief}");
+    let asked: Vec<String> = roots.into_iter().map(str::to_owned).collect();
+    assert_eq!(started.logged("roots"), asked, "{brief}");
+  }
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -259,6 +333,7 @@ async fn approval_mode_answer_manual_sends_the_rest_to_the_reviewer_then_the_per
   let (request, came) = denied.came_to_person().await;
   assert_eq!(came.reason, PersonReason::ReviewerDenied);
   assert_eq!(came.detail.as_deref(), Some(ASKS));
+  assert!(!came.autopilot, "it came by Manual's rules");
   denied.deny(request).await;
   denied.ended().await;
   assert_eq!(

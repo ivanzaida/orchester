@@ -14,6 +14,7 @@
 
 mod answers;
 mod came;
+mod could_not_run;
 mod decided;
 mod message;
 mod message_inline;
@@ -183,7 +184,7 @@ fn legacy(
       let step = request::step(place, shown);
       (
         came::head(ctx, id, (request, step.as_deref()), came),
-        request::came_body(ctx, id, (place, request), (came, reviewing), shown),
+        request::came_body(ctx, id, (place, request, shown), (came, reviewing)),
       )
     }
     None => (

@@ -27,6 +27,7 @@ mod tasks;
 pub mod test_support;
 #[cfg(feature = "identity")]
 pub mod totp;
+pub mod v2;
 pub mod wire;
 
 pub use accounts::*;

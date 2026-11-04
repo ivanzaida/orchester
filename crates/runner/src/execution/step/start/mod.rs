@@ -168,13 +168,18 @@ pub(super) struct CliLaunch {
   pub(super) claude_exemptions: InvocationExemptions,
 }
 
-/// The agent step an invocation runs: its step, the profile version that runs it and the model, and the
+/// The agent step an invocation runs: its step, the profile version that runs it, the model and effort, and the
 /// connection it runs on.
 #[derive(Clone, Copy)]
 struct StepAgent<'a> {
   step: &'a Step,
   profile: &'a PinnedVersion,
+  /// The run's own model for the step if a person chose one (ORC-322), else the profile's as the run pinned it.
   model: &'a ModelId,
+  /// The run's own effort for the step if a person chose a model or effort, else the profile's.
+  effort: Option<&'a str>,
+  /// Whether the run chose the model and effort, in place of the profile's.
+  chosen: bool,
   body: &'a AgentProfile,
   connection: &'a AgentConnection,
 }
@@ -244,12 +249,18 @@ impl RunTask {
     (invocation, worktree): (InvocationId, &Path),
     index: AgentIndex,
   ) -> Result<AgentStart, RunnerProblem> {
-    let (step, profile, model) = self.agent_step(execution)?;
+    let (step, profile, pinned) = self.agent_step(execution)?;
     let (body, connection) = self.profile_and_connection(profile, &step.key)?;
+    let chosen = self.chosen_model(&step.key)?;
     let agent = StepAgent {
       step,
       profile,
-      model,
+      model: chosen.as_ref().map_or(pinned, |chosen| &chosen.model),
+      effort: match &chosen {
+        Some(chosen) => chosen.effort.as_deref(),
+        None => reasoning_effort(&body),
+      },
+      chosen: chosen.is_some(),
       body: &body,
       connection: &connection,
     };
@@ -319,7 +330,7 @@ impl RunTask {
       account: connection.account(),
       provider: on_provider.as_ref(),
       model,
-      effort: reasoning_effort(body),
+      effort: agent.effort,
       enforced: &enforced,
       writable_roots: &writable_roots,
       worktree,
