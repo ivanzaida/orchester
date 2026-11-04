@@ -19,7 +19,7 @@ use super::{DeliveryProgress, KeptDelivery, ModuleDeliveries};
 use crate::{
   actions::{Accepted, Action, ActionOutcome, Intent, Refusal, TeamOutcome},
   tasks::module_delivery::{ModuleMergeError, merge_module_in, module_merged_in},
-  team_work::{Answer, TeamWorkError, answer, start::complete_operation},
+  team_work::{Answer, TeamWorkError, answer},
 };
 
 /// The record a step leaves the delivery at, or the outcome it stops with.
@@ -57,7 +57,7 @@ impl ModuleDeliveries {
     }
   }
 
-  fn reload(&self, operation: OperationId) -> Result<TeamDelivery, TeamWorkError> {
+  pub(super) fn reload(&self, operation: OperationId) -> Result<TeamDelivery, TeamWorkError> {
     Ok(
       self
         .db()?
@@ -106,8 +106,9 @@ impl ModuleDeliveries {
     )?))
   }
 
-  /// Takes a merge found made, else makes it, and keeps its outcome with the report of it; then the request's
-  /// operation is completed, its effect carried out. A busy checkout leaves the merge to try again.
+  /// Takes a merge found made, else makes it, and keeps its outcome with the report of it and the request's operation
+  /// settled by it, in one write: completed once merged, its effect failed otherwise. A busy checkout leaves the merge
+  /// to try again.
   fn merge(&self, operation: OperationId, kept: &KeptDelivery) -> Result<Step, TeamWorkError> {
     let (head, base) = (revision(&kept.source_commit)?, revision(&kept.base_commit)?);
     let delivery = ModuleDelivery {
@@ -133,13 +134,14 @@ impl ModuleDeliveries {
         Err(ModuleMergeError::Merge(error)) => DeliveryMerge::Failed {
           failure: error.to_string(),
         },
+        Err(ModuleMergeError::Hold(error)) => return Err(TeamWorkError::DeliveryHold(error)),
         Err(ModuleMergeError::Store(error)) => return Err(error.into()),
       },
     };
     let report = report(kept, &merge);
-    let mut db = self.db()?;
-    db.queue_team_delivery_report(operation, &merge, &report, Timestamp::now())?;
-    complete_operation(&mut db, operation)?;
+    self
+      .db()?
+      .queue_team_delivery_report(operation, &merge, &report, Timestamp::now())?;
     Ok(Ok(self.reload(operation)?))
   }
 

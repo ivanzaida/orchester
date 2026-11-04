@@ -25,7 +25,7 @@ use crate::{
   team_server::{ADMIN, MEMBER, MODULE_BRANCH, TeamServer},
 };
 
-fn git(root: &Path, args: &[&str]) -> String {
+pub(crate) fn git(root: &Path, args: &[&str]) -> String {
   let output = Command::new("git").args(args).current_dir(root).output().expect("git");
   assert!(
     output.status.success(),
@@ -35,13 +35,13 @@ fn git(root: &Path, args: &[&str]) -> String {
   String::from_utf8(output.stdout).expect("text").trim().to_owned()
 }
 
-fn commit(sha: &str) -> CommitId {
+pub(crate) fn commit(sha: &str) -> CommitId {
   CommitId::new(sha).expect("a full commit id")
 }
 
 /// The checkout made a repository on `main`, with the module's branch one commit ahead of it, as a task run merged
 /// into it left it (D3): the base commit and the module branch's head.
-fn repository(checkout: &Checkout) -> (CommitId, CommitId) {
+pub(crate) fn repository(checkout: &Checkout) -> (CommitId, CommitId) {
   let root = checkout.root();
   fs::remove_dir_all(root.join(".git")).expect("the placeholder");
   git(root, &["init", "-b", "main"]);
@@ -63,7 +63,7 @@ fn repository(checkout: &Checkout) -> (CommitId, CommitId) {
 }
 
 /// The module's claim, acquired in the person's session.
-async fn claim_module(checkout: &Checkout, server: &TeamServer) -> ClaimId {
+pub(crate) async fn claim_module(checkout: &Checkout, server: &TeamServer) -> ClaimId {
   let (dispatcher, _generation) = checkout.dispatcher(server, MEMBER);
   let acquire = Action::Claim(ClaimAction::Acquire {
     subject: Subject::Module { id: server.module },
@@ -79,7 +79,7 @@ async fn claim_module(checkout: &Checkout, server: &TeamServer) -> ClaimId {
 }
 
 /// The person's module deliveries, and the session's generation they keep.
-fn person_deliveries(checkout: &Checkout, server: &TeamServer) -> (ModuleDeliveries, watch::Sender<u64>) {
+pub(crate) fn person_deliveries(checkout: &Checkout, server: &TeamServer) -> (ModuleDeliveries, watch::Sender<u64>) {
   let (dispatcher, generation) = checkout.dispatcher(server, MEMBER);
   (ModuleDeliveries::new(dispatcher, Programs::processes()), generation)
 }
@@ -101,7 +101,7 @@ fn delivery(
 }
 
 /// The holder's request of the module branch's head onto `main` at `base`.
-fn request(
+pub(crate) fn request(
   server: &TeamServer,
   claim: ClaimId,
   commits: (&CommitId, &CommitId),
@@ -136,12 +136,12 @@ async fn authorize(server: &TeamServer, claim: ClaimId, commits: (&CommitId, &Co
   intent.operation()
 }
 
-fn state(deliveries: &ModuleDeliveries, operation: OperationId) -> TeamDeliveryState {
+pub(crate) fn state(deliveries: &ModuleDeliveries, operation: OperationId) -> TeamDeliveryState {
   deliveries.delivery_state(operation).expect("read").expect("a delivery")
 }
 
 /// The merge commits on `main`.
-fn merges(root: &Path) -> Vec<String> {
+pub(crate) fn merges(root: &Path) -> Vec<String> {
   git(root, &["rev-list", "--merges", "main"])
     .lines()
     .map(str::to_owned)
@@ -149,7 +149,7 @@ fn merges(root: &Path) -> Vec<String> {
 }
 
 /// `main`'s tip, which must be one merge commit of exactly `base` and `head`.
-fn merged_tip(root: &Path, (base, head): (&CommitId, &CommitId)) -> String {
+pub(crate) fn merged_tip(root: &Path, (base, head): (&CommitId, &CommitId)) -> String {
   let tip = git(root, &["rev-parse", "main"]);
   assert_eq!(
     git(root, &["rev-list", "--parents", "-n", "1", &tip]),
@@ -160,7 +160,7 @@ fn merged_tip(root: &Path, (base, head): (&CommitId, &CommitId)) -> String {
   tip
 }
 
-fn delivered(progress: DeliveryProgress) -> orchester_api::v2::ModuleDeliveryRead {
+pub(crate) fn delivered(progress: DeliveryProgress) -> orchester_api::v2::ModuleDeliveryRead {
   let DeliveryProgress::Reported(delivery) = progress else {
     panic!("not reported: {progress:?}");
   };

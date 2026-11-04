@@ -55,9 +55,9 @@ pub fn merge_module(
   Ok(ModuleMerge { revision, kind, left })
 }
 
-/// The merge commit an earlier [`merge_module`] of `delivery` left: the base branch's tip while it is a merge commit
-/// of exactly the base and the head, in that order; `None` when the tip is anything else. A merge whose record was
-/// lost is found by it, so it is never made twice.
+/// The merge commit an earlier [`merge_module`] of `delivery` left: a merge commit of exactly the base and the head, in
+/// that order, that the base branch contains, even when commits landed on it since; `None` when it contains none. A
+/// merge whose record was lost is found by it, so it is never made twice.
 pub fn module_merged(
   runner: &impl CommandRunner,
   (git, repo): (&Path, &Path),
@@ -67,10 +67,15 @@ pub fn module_merged(
   let Some(tip) = git.commit(&format!("refs/heads/{}", delivery.into))? else {
     return Ok(None);
   };
-  let listed = git.stdout(&["rev-list", "--parents", "-n", "1", &tip])?;
-  let expected = format!("{tip} {} {}", delivery.base.as_str(), delivery.head.as_str());
-  if listed != expected {
+  // A base this repository does not have was never merged into: git refuses to list the commits since it.
+  if git.commit(delivery.base.as_str())?.is_none() {
     return Ok(None);
   }
-  revision(&tip).map(Some)
+  let since = format!("^{}", delivery.base.as_str());
+  let listed = git.stdout(&["rev-list", "--merges", "--parents", &tip, &since])?;
+  let parents = format!("{} {}", delivery.base.as_str(), delivery.head.as_str());
+  let found = listed
+    .lines()
+    .find_map(|line| line.split_once(' ').filter(|(_, listed)| *listed == parents));
+  found.map(|(commit, _)| revision(commit)).transpose()
 }

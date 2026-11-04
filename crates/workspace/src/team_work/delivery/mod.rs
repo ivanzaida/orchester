@@ -31,7 +31,7 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_exec::programs::Programs;
-use orchester_store::{ProjectDb, TeamDeliveryStage};
+use orchester_store::{ProjectDb, TeamDelivery, TeamDeliveryStage};
 use serde::{Deserialize, Serialize};
 
 pub use self::state::{DeliveryStatus, TeamDeliveryState};
@@ -111,8 +111,9 @@ impl ModuleDeliveries {
     Ok(ProjectDb::open(self.dispatcher.root())?)
   }
 
-  /// Requests the delivery `request` asks for: recorded here first, then carried on as far as it goes now. Sending
-  /// the same request again carries on the recorded delivery; the same operation with another request is refused.
+  /// Requests the delivery `request` asks for: recorded here first, then carried on as far as it goes now, after the
+  /// reports of earlier deliveries that wait for the server are sent. Sending the same request again carries on the
+  /// recorded delivery; the same operation with another request is refused.
   pub async fn request(&self, request: TeamDeliveryRequest) -> Result<DeliveryProgress, TeamWorkError> {
     let DeliveryStep::Request { authorization } = request.delivery.step else {
       return Err(TeamWorkError::NotADeliveryRequest);
@@ -136,7 +137,22 @@ impl ModuleDeliveries {
     // The kept request holds ids, names and commits only: it serializes to JSON without fail.
     let text = serde_json::to_string(&kept).expect("a team delivery serializes");
     let record = db.begin_team_delivery(request.operation, &text, Timestamp::now())?;
-    self.carry_on(record, false).await
+    let earlier: Vec<_> = db
+      .team_deliveries()?
+      .into_iter()
+      .take_while(|delivery| delivery.operation != record.operation)
+      .filter(|delivery| delivery.stage == TeamDeliveryStage::Reporting)
+      .collect();
+    let mut reports_wait = false;
+    for delivery in earlier {
+      let operation = delivery.operation;
+      // The earlier delivery's outcome is kept in its record, where its own caller reads it; here it only decides
+      // whether this delivery's report waits behind it.
+      if let Err(error) = self.carry_on_in_order(delivery, &mut reports_wait).await {
+        tracing::warn!(%operation, %error, "the report of an earlier team delivery was not sent");
+      }
+    }
+    self.carry_on_in_order(record, &mut reports_wait).await
   }
 
   /// Carries on every delivery not settled yet, oldest first, e.g. after a restart. Each goes on its own, but reports
@@ -152,11 +168,25 @@ impl ModuleDeliveries {
     let mut reports_wait = false;
     for delivery in open {
       let operation = delivery.operation;
-      let outcome = self.carry_on(delivery, reports_wait).await;
-      reports_wait |= matches!(outcome, Ok(DeliveryProgress::Waiting(TeamDeliveryStage::Reporting)));
-      outcomes.push((operation, outcome));
+      outcomes.push((operation, self.carry_on_in_order(delivery, &mut reports_wait).await));
     }
     Ok(outcomes)
+  }
+
+  /// Carries `delivery` on, its report held back while `reports_wait`; then `reports_wait` holds the later reports back
+  /// too while this one's still waits for the server.
+  async fn carry_on_in_order(
+    &self,
+    delivery: TeamDelivery,
+    reports_wait: &mut bool,
+  ) -> Result<DeliveryProgress, TeamWorkError> {
+    let operation = delivery.operation;
+    let outcome = self.carry_on(delivery, *reports_wait).await;
+    // A record that cannot be read back may still wait to report: the later reports wait rather than overtake it.
+    *reports_wait |= self
+      .reload(operation)
+      .map_or(true, |record| record.stage == TeamDeliveryStage::Reporting);
+    outcome
   }
 }
 

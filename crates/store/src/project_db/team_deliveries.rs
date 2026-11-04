@@ -7,7 +7,7 @@
 use orchester_core::{id::OperationId, run::CommitId, time::Timestamp};
 use rusqlite::{Connection, OptionalExtension, Row, params};
 
-use super::ProjectDb;
+use super::{ProjectDb, TeamOperationState};
 use crate::{
   StoreError,
   rows::{corrupt, parse},
@@ -184,7 +184,9 @@ impl ProjectDb {
     ensure_updated(&self.connection, operation, updated)
   }
 
-  /// Keeps how the merge of the delivery under `operation` went with the `report` made of it, in one transaction.
+  /// Keeps how the merge of the delivery under `operation` went with the `report` made of it, and settles the team
+  /// operation of its request by it, in one transaction: completed once merged, its local effect failed otherwise. An
+  /// operation not recorded here, or settled for good already, stays as it is.
   pub fn queue_team_delivery_report(
     &mut self,
     operation: OperationId,
@@ -192,11 +194,12 @@ impl ProjectDb {
     report: &DeliveryReport,
     at: Timestamp,
   ) -> Result<(), StoreError> {
-    let (commit, failure) = match merge {
-      DeliveryMerge::Merged { commit } => (Some(commit.as_str()), None),
-      DeliveryMerge::Failed { failure } => (None, Some(failure.as_str())),
+    let (commit, failure, settled) = match merge {
+      DeliveryMerge::Merged { commit } => (Some(commit.as_str()), None, TeamOperationState::Completed),
+      DeliveryMerge::Failed { failure } => (None, Some(failure.as_str()), TeamOperationState::EffectFailed),
     };
-    let updated = self.connection.execute(
+    let transaction = self.connection.transaction()?;
+    let updated = transaction.execute(
       "UPDATE team_deliveries SET stage = 'reporting', merge_commit = ?2, failure = ?3, report_operation_id = ?4, \
        report_request = ?5, updated_at = ?6 WHERE operation_id = ?1 AND stage = 'merging'",
       params![
@@ -208,7 +211,14 @@ impl ProjectDb {
         at.unix_millis()
       ],
     )?;
-    ensure_updated(&self.connection, operation, updated)
+    ensure_updated(&transaction, operation, updated)?;
+    transaction.execute(
+      "UPDATE team_operations SET state = ?2, updated_at = ?3 WHERE id = ?1 AND state IN ('committed', \
+       'effect_failed')",
+      params![operation.to_string(), settled.text(), at.unix_millis()],
+    )?;
+    transaction.commit()?;
+    Ok(())
   }
 
   /// Records the server's answer to the report of the delivery under `operation`: the delivery as it is now.

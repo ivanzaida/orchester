@@ -4,8 +4,9 @@
 //! reports wait in order across an outage and a restart, with the outcomes as decided and local success apart from
 //! server acceptance ([`reports`]); a takeover fences the run and keeps its output here; the heartbeat renews only
 //! running work ([`heartbeat`]); and a module's delivery merges only on the receipt's effect and reports it once,
-//! across lost answers, outages and a crash ([`delivery`], P4c). Runs are recorded by a stand-in for the runner that
-//! keeps them as the runner does; the runner's own tests start the real one (`crates/runner/tests/team_start.rs`).
+//! across lost answers, outages and a crash ([`delivery`], P4c), and recovers from its edge cases
+//! ([`delivery_recovery`]). Runs are recorded by a stand-in for the runner that keeps them as the runner does; the
+//! runner's own tests start the real one (`crates/runner/tests/team_start.rs`).
 //!
 //! `cargo test -p orchester-workspace --test team_work team_work_`
 
@@ -13,6 +14,7 @@
 mod http;
 
 mod delivery;
+mod delivery_recovery;
 mod fixture;
 mod heartbeat;
 mod reports;

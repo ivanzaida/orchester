@@ -6,6 +6,7 @@ use orchester_core::{
   integration::GitError,
   run::inputs::InputsError,
 };
+use orchester_exec::local_git::LocalGitError;
 use orchester_store::{RunStoreError, StoreError};
 
 use crate::actions::ActionError;
@@ -60,4 +61,8 @@ pub enum TeamWorkError {
   /// Git could not tell whether the delivery was merged.
   #[error(transparent)]
   DeliveryGit(GitError),
+  /// The checkout cannot be held for the delivery's merge, and not because another merge holds it: the merge waits
+  /// at its stage until the fault is fixed.
+  #[error("the checkout cannot be held for the delivery's merge: {0}")]
+  DeliveryHold(LocalGitError),
 }

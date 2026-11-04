@@ -7,10 +7,10 @@
 use std::path::Path;
 
 use orchester_core::{
-  integration::{GitError, MergeError, ModuleDelivery, ModuleMerge, merge_module, module_merged},
+  integration::{GitError, MergeError, ModuleDelivery, ModuleMerge, local::LocalError, merge_module, module_merged},
   revision::Revision,
 };
-use orchester_exec::programs::Programs;
+use orchester_exec::{local_git::LocalGitError, programs::Programs};
 use orchester_store::{ProjectDb, StoreError};
 
 use super::{changes::GIT, integration::MergeHold, local_integration::checkout_held};
@@ -21,6 +21,10 @@ pub enum ModuleMergeError {
   /// Another merge or a local integration holds the checkout now: nothing was merged, and the merge is tried again.
   #[error("another merge or a local integration holds the checkout")]
   Busy,
+  /// The checkout cannot be held for the merge for another reason, e.g. its lock or its project data is not what
+  /// Orchester made: nothing was merged, and trying again changes nothing until it is fixed.
+  #[error("the checkout cannot be held for the merge: {0}")]
+  Hold(LocalGitError),
   /// Git did not merge it: the branch or the base moved, the checkout stood in the way, or the merge conflicted.
   #[error(transparent)]
   Merge(#[from] MergeError),
@@ -34,9 +38,10 @@ pub fn merge_module_in(
   programs: &Programs,
   delivery: &ModuleDelivery<'_>,
 ) -> Result<ModuleMerge, ModuleMergeError> {
-  let Ok(_hold) = MergeHold::acquire(repo_root) else {
-    return Err(ModuleMergeError::Busy);
-  };
+  let _hold = MergeHold::acquire(repo_root).map_err(|error| match error {
+    LocalGitError::State(LocalError::ForeignOperation) => ModuleMergeError::Busy,
+    error => ModuleMergeError::Hold(error),
+  })?;
   if checkout_held(&ProjectDb::open(repo_root)?)? {
     return Err(ModuleMergeError::Busy);
   }
@@ -48,7 +53,7 @@ pub fn merge_module_in(
   Ok(merged)
 }
 
-/// The merge commit an earlier [`merge_module_in`] of `delivery` left on its base branch, if it is still its tip.
+/// The merge commit an earlier [`merge_module_in`] of `delivery` left on its base branch, if the branch contains it.
 pub fn module_merged_in(
   repo_root: &Path,
   programs: &Programs,
