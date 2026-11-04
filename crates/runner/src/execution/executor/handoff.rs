@@ -7,25 +7,37 @@
 //! (`docs/architecture/remote-runners.md`, rule 3).
 
 use orchester_core::{
+  computer::ComputerError,
   connection::stream::{AgentEvent, MemoryNotSavedReason, RunnerProblem},
   id::StepExecutionId,
-  memory::{AgentProvenance, Handoff, SecretScreen, StepFate},
+  memory::{AgentProvenance, Handoff, StepFate},
   run::{Run, StepExecutor, StepResult},
-  secret::SecretVault,
-  store::{ActivityStore, SecretStore},
+  store::ActivityStore,
   time::Timestamp,
 };
 use orchester_ipc::Event;
 use orchester_store::{ActivityRecord, MemoryRecord, ProjectDb, StoreError};
+use thiserror::Error;
 
 use super::{Notifier, sink::Sink};
+use crate::computer::ComputerResources;
 
-/// Where a handoff is kept and its problems are reported: the transcript through the coordinator's sink.
+/// Where a handoff is kept and its problems are reported: the transcript through the coordinator's sink. The secrets it
+/// is screened against are read on the run's computer.
 pub(in crate::execution) struct Keeper<'a> {
   pub(in crate::execution) db: &'a mut ProjectDb,
   pub(in crate::execution) sink: &'a mut dyn Sink,
   pub(in crate::execution) notifier: &'a Notifier,
-  pub(in crate::execution) vault: &'a dyn SecretVault,
+  pub(in crate::execution) computer: &'a dyn ComputerResources,
+}
+
+/// Why a handoff was not kept: the project database failed, or the computer's secrets could not be read.
+#[derive(Debug, Error)]
+enum KeepError {
+  #[error(transparent)]
+  Store(#[from] StoreError),
+  #[error(transparent)]
+  Computer(#[from] ComputerError),
 }
 
 impl Keeper<'_> {
@@ -46,7 +58,7 @@ impl Keeper<'_> {
     }
   }
 
-  fn keep(&mut self, run: &Run, execution: StepExecutionId, fate: StepFate) -> Result<(), StoreError> {
+  fn keep(&mut self, run: &Run, execution: StepExecutionId, fate: StepFate) -> Result<(), KeepError> {
     if run.is_follow_up(execution) {
       return Ok(());
     }
@@ -59,21 +71,21 @@ impl Keeper<'_> {
     let Some(provenance) = provenance(run, execution) else {
       return Ok(());
     };
-    let secrets = self.db.secrets()?;
-    let screen = match SecretScreen::load(self.db.project().id(), &secrets, self.vault) {
+    let secrets = self.computer.secrets()?;
+    let screen = match self.computer.secret_screen(self.db.project().id(), &secrets) {
       Ok(screen) => screen,
       Err(error) => {
         let reason = MemoryNotSavedReason::KeychainUnavailable {
           secret: error.secret.to_string(),
         };
-        return self.report(run, execution, reason);
+        return Ok(self.report(run, execution, reason)?);
       }
     };
     if let Err(error) = handoff.screen(fate, &screen) {
       let reason = MemoryNotSavedReason::ContainsSecret {
         secret: error.secret.to_string(),
       };
-      return self.report(run, execution, reason);
+      return Ok(self.report(run, execution, reason)?);
     }
     // The coordinator reads the task's records and changes them in one transaction: no person's decision on them
     // comes between.

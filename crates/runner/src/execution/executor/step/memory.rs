@@ -76,7 +76,7 @@ impl RunTask {
       db: &mut self.db,
       sink: self.sink.as_mut(),
       notifier: &self.notifier,
-      vault: self.vault.as_ref(),
+      computer: self.computer.as_ref(),
     };
     keeper.keep_or_report(&self.run, execution, fate);
   }

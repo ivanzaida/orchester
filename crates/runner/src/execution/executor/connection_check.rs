@@ -8,15 +8,14 @@ use std::sync::Arc;
 use orchester_agent::{Endpoint, WireQuirks, check_anthropic};
 use orchester_core::{
   connection::{AgentProvider, ApiEndpoint, CheckResult, NativeModel},
-  id::SecretId,
-  secret::{SecretValue, SecretVault},
-  store::SecretStore,
+  id::{ProjectId, SecretId},
+  secret::SecretValue,
   time::Timestamp,
 };
 use orchester_ipc::Rejection;
 use orchester_store::ProjectDb;
 
-use crate::execution::Scheduler;
+use crate::{computer::ComputerResources, execution::Scheduler};
 
 impl Scheduler {
   /// Tests `api`, a model API of `provider`, with its key: what the test found, and the models it
@@ -33,7 +32,7 @@ impl Scheduler {
       ));
     }
     let db = ProjectDb::open(&self.inner.project_root).map_err(|error| failed(error.to_string()))?;
-    let key = api_key(&db, self.inner.vault.as_ref(), api.key()).map_err(failed)?;
+    let key = api_key(self.inner.computer.as_ref(), db.project().id(), api.key()).map_err(failed)?;
     let endpoint = Endpoint::new(api.base_url().clone(), key, WireQuirks::anthropic(&api))
       .with_provider_fallback(api.provider_fallback());
     let checked = check_anthropic(endpoint).await;
@@ -50,23 +49,20 @@ impl Scheduler {
   }
 }
 
-/// The API key in project secret `key`, a native connection's or an API provider's, read from `vault`; an archived
-/// or missing secret, or one the keychain does not give, is refused, named, never with its value.
+/// The API key in secret `key` of `project`, a native connection's or an API provider's, read through `computer`'s
+/// keychain; an archived or missing secret, or one the keychain does not give, is refused, named, never with its value.
 pub(in crate::execution) fn api_key(
-  db: &ProjectDb,
-  vault: &dyn SecretVault,
+  computer: &dyn ComputerResources,
+  project: ProjectId,
   key: SecretId,
 ) -> Result<Arc<SecretValue>, String> {
-  let secret = db
+  let secret = computer
     .secret(key)
     .map_err(|error| error.to_string())?
     .filter(|secret| !secret.is_archived())
     .ok_or_else(|| "the connection's API key secret is missing or archived".to_owned())?;
-  vault
-    .read(&secret.vault_key(db.project().id()))
-    .map(Arc::new)
-    .map_err(|error| {
-      tracing::warn!(secret = %secret.name(), %error, "the keychain did not give a connection's API key");
-      format!("the keychain did not give the API key {}", secret.name())
-    })
+  computer.secret_value(project, &secret).map(Arc::new).map_err(|error| {
+    tracing::warn!(secret = %secret.name(), %error, "the keychain did not give a connection's API key");
+    format!("the keychain did not give the API key {}", secret.name())
+  })
 }

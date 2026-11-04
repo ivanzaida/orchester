@@ -18,6 +18,10 @@
 //! - [`settings`]: the project settings an agent's start, its tools and its worker read.
 //! - [`usage`]: the tokens a run's steps used toward their budgets.
 //! - [`base_notices`]: whether the project tells its agents that the base moved, and the run's pending notice.
+//!
+//! No secret value is part of any message: the executor reads values on its own computer (`crate::computer`). In the
+//! runner's own tests every area above (resources, messages, approvals, questions, environment, memory, settings,
+//! usage, base notices) sends each request and answer through [`sent`], so a test can check that none holds a value.
 
 pub mod approvals;
 pub mod base_notices;
@@ -26,6 +30,8 @@ pub mod memory;
 pub mod messages;
 pub mod questions;
 pub mod resources;
+#[cfg(feature = "test-agent")]
+pub mod sent;
 pub mod settings;
 pub mod usage;
 

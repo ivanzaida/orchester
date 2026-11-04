@@ -60,7 +60,7 @@ impl Scheduler {
       db: &mut db,
       sink: &mut sink,
       notifier: &self.inner.notifier,
-      vault: self.inner.vault.as_ref(),
+      computer: self.inner.computer.as_ref(),
     };
     record(keeper, &mut prepared.run, request)?;
     self.spawn(db, prepared)
