@@ -273,9 +273,10 @@ async fn round_trip(sent: &[Event]) -> Vec<Event> {
 async fn browser_file_chooser_round_trips_under_a_raised_protocol() {
   // Raised since: a run's worktree changes read through the runner came with 40, the merge queue's work with 41, the
   // executor's folders with 42, the code index rebuilt by the runner with 43, a run folder's recovery state with 44,
-  // the chat's git in a run's worktree with 45, resolving by hand through the runner with 46, the removal of a run's
-  // worktrees through the runner with 47.
-  assert_eq!(PROTOCOL_VERSION, 47);
+  // the chat's git in a run's worktree with 45, resolving by hand through the runner with 46, the computer's
+  // Settings › Browser passed by the desktop with 47, a run's files read through the runner with 48, the removal of a
+  // run's worktrees through the runner with 49.
+  assert_eq!(PROTOCOL_VERSION, 49);
   let opened = |chooser| {
     Event::Browser(BrowserEvent::FileChooserOpened {
       tab: tab("P1"),

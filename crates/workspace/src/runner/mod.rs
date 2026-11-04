@@ -25,7 +25,9 @@ mod outcome;
 mod report;
 mod requests;
 mod resolve;
+mod run_files;
 mod run_git;
+mod settings;
 pub mod state;
 mod work;
 mod worktree_changes;
@@ -42,7 +44,7 @@ use std::{
 };
 
 use orchester_core::id::RunId;
-use orchester_ipc::{AttachSession, Command, ErrorReports, Reply, SessionEnd, WorkState};
+use orchester_ipc::{AttachSession, ErrorReports, SessionEnd, WorkState, browser::ComputerBrowser};
 use parking_lot::Mutex;
 use tokio::{runtime::Handle, sync::watch, task::JoinSet};
 
@@ -54,6 +56,7 @@ pub use self::{
   outcome::{Continued, QUIET_STOP_TIMEOUT, RunRequestError, ShutdownOutcome},
   report::RunnerStatus,
   requests::RequestError,
+  run_files::ProjectRunFiles,
   run_git::ThroughRunner,
   work::{ActiveWork, ActiveWorkFields, SaveState},
 };
@@ -73,11 +76,14 @@ pub struct Runners {
 
 struct Inner {
   runner_exe: PathBuf,
-  /// Whether the runners send error reports, and in which environment and release; each runner reads it when it
-  /// starts.
+  /// Whether the runners send error reports, in which environment and release; each runner reads it as it starts.
   reports: Arc<Mutex<Option<ErrorReports>>>,
   /// Held while the setting is stored and handed to the running runners ([`Runners::set_error_reports`]).
   report_updates: Mutex<()>,
+  /// This computer's Settings › Browser, which each runner attaches with; `None` until [`Runners::set_browser`].
+  browser: Arc<Mutex<Option<ComputerBrowser>>>,
+  /// Held while the settings are stored and handed to the attached runners ([`Runners::set_browser`]).
+  browser_updates: Mutex<()>,
   runtime: Handle,
   /// How the previous session ended: each project's first runner attaches with it.
   previous_end: SessionEnd,
@@ -87,11 +93,13 @@ struct Inner {
   tabbed: Mutex<HashSet<PathBuf>>,
   /// Set once the application closes; no runner starts after that.
   closing: AtomicBool,
-  /// Held while a project's limits are stored and changed agent slots are handed to its runner, so
-  /// the runner gets them in the order they were stored ([`Runners::store_agent_slots`]).
+  /// Held while a project's limits are stored and changed agent slots are handed to its runner, so the runner gets
+  /// them in the order they were stored ([`Runners::store_agent_slots`]).
   slot_updates: Mutex<()>,
   /// Hands out the generations of the projects' runners.
   generations: AtomicU64,
+  /// What answers for a runner about runs' files in tests that start none (`run_files`).
+  run_files_stand_in: run_files::StandIn,
   /// The programs a test without a runner carries out requests about runs' worktrees with, in its own process.
   #[cfg(feature = "test-support")]
   worktrees_here: Mutex<Option<orchester_exec::programs::Programs>>,
@@ -125,14 +133,15 @@ impl Runners {
     self.inner.shared.limits.subscribe()
   }
 
-  /// The runners of the program `runner_exe`. They send no error reports until
-  /// [`Self::set_error_reports`] says so.
+  /// The runners of the program `runner_exe`. They send no error reports until [`Self::set_error_reports`] says so.
   pub fn new(runner_exe: PathBuf, runtime: Handle, activity: Activity, previous_end: SessionEnd) -> Self {
     Self {
       inner: Arc::new(Inner {
         runner_exe,
         reports: Arc::new(Mutex::new(None)),
         report_updates: Mutex::new(()),
+        browser: Arc::new(Mutex::new(None)),
+        browser_updates: Mutex::new(()),
         runtime,
         previous_end,
         shared: Arc::new(Shared {
@@ -151,6 +160,7 @@ impl Runners {
         closing: AtomicBool::new(false),
         slot_updates: Mutex::new(()),
         generations: AtomicU64::new(0),
+        run_files_stand_in: run_files::StandIn::default(),
         #[cfg(feature = "test-support")]
         worktrees_here: Mutex::new(None),
       }),
@@ -287,48 +297,11 @@ impl Runners {
     Connection::spawn(
       &self.inner.runtime,
       self.inner.runner_exe.clone(),
-      self.inner.reports.clone(),
+      (self.inner.reports.clone(), self.inner.browser.clone()),
       root.to_path_buf(),
       Reporter::new(generation, name.clone(), status.clone(), self.inner.shared.clone()),
       session,
     )
-  }
-
-  /// The runners send their panics and ERROR lines as error reports with `reports`, or none with `None`
-  /// (`orchester_ipc::error_reports`): every runner running now is told at once
-  /// (`Command::SetErrorReports`), without waiting for its answer, and every runner started from now on starts so.
-  /// A runner that is starting is told once it is connected; one that cannot be reached misses nothing, since it
-  /// starts with the setting the next time.
-  pub fn set_error_reports(&self, reports: Option<&ErrorReports>) {
-    let reports = reports.cloned();
-    // Held while storing and telling the runners, so they end with the setting stored last.
-    let _in_order = self.inner.report_updates.lock();
-    *self.inner.reports.lock() = reports.clone();
-    let answers: Vec<_> = self
-      .inner
-      .projects
-      .lock()
-      .iter()
-      .filter_map(|(root, entry)| {
-        let connection = entry.connection.as_ref()?;
-        let command = Command::SetErrorReports {
-          reports: reports.clone(),
-        };
-        Some((root.clone(), connection.request(command)))
-      })
-      .collect();
-    for (root, answer) in answers {
-      self.inner.runtime.spawn(async move {
-        // The task ended without answering, e.g. when the runner stopped meanwhile.
-        match answer.await.unwrap_or(Err(RequestError::Lost)) {
-          Ok(Reply::ErrorReportsSet) => {}
-          Ok(other) => tracing::error!(?other, "unexpected reply to SetErrorReports"),
-          Err(error) => {
-            tracing::info!(project = %root.display(), %error, "no runner took the error reports setting now");
-          }
-        }
-      });
-    }
   }
 
   fn displayed(&self) -> Option<PathBuf> {

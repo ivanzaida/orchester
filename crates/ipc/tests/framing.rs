@@ -1,4 +1,4 @@
-use std::num::NonZeroU32;
+use std::{num::NonZeroU32, path::PathBuf};
 
 use orchester_core::{
   connection::AgentProvider,
@@ -15,6 +15,7 @@ use orchester_core::{
 use orchester_ipc::{
   AttachSession, Command, ErrorReports, Event, FrameError, Handshake, IpcError, PROTOCOL_VERSION, RefusedRun,
   Rejection, Reply, Request, RequestId, RunWork, SessionEnd, ShutdownMode, SlotWait, WorkState, WorkSummary,
+  browser::ComputerBrowser,
   frame::{FrameReader, FrameWriter, MAX_FRAME_LEN},
   handshake,
 };
@@ -33,88 +34,101 @@ fn connection() -> ((Reader, Writer), (Reader, Writer)) {
   (framed(left), framed(right))
 }
 
-/// One request of every command.
-fn requests(run: RunId, task: TaskId) -> Vec<Request> {
+/// Attaching fresh with the browser installed, and again after a reconnect with a program chosen and no profiles'
+/// folder (protocol 47).
+fn attach_commands() -> [Command; 2] {
   [
     Command::Attach {
       session: AttachSession::Fresh {
         previous_end: SessionEnd::QuitNow,
       },
       agent_slots: NonZeroU32::new(4).expect("above zero"),
+      browser: ComputerBrowser::installed(PathBuf::from("data").join("browser")),
     },
     Command::Attach {
       session: AttachSession::Reconnect,
       agent_slots: NonZeroU32::new(1).expect("above zero"),
-    },
-    Command::SetAgentSlots {
-      agent_slots: NonZeroU32::new(16).expect("above zero"),
-    },
-    Command::ContinueRuns { runs: vec![run] },
-    Command::Ping { nonce: 42 },
-    Command::StartRun {
-      key: IdempotencyKey::generate(),
-      task,
-    },
-    Command::PauseRun { run },
-    Command::ResumeRun { run },
-    Command::CancelRun { run },
-    Command::RaiseLimit {
-      run,
-      budget: Some(TokenBudget::new(2_000_000).expect("above zero")),
-      max_duration_ms: Some(1_800_000),
-    },
-    Command::RaiseLimit {
-      run,
-      budget: None,
-      max_duration_ms: None,
-    },
-    Command::RaiseStepBudget {
-      run,
-      budget: Some(TokenBudget::new(600_000).expect("above zero")),
-    },
-    Command::RaiseStepBudget { run, budget: None },
-    Command::ChangeRunPermissions {
-      run,
-      profile: ResourceId::generate(),
-      permissions: AgentPermissions::new(
-        RepositoryAccess::Write,
-        CommandPermission::Allowed(
-          AllowedCommands::new(vec![
-            CommandPrefix::new("pnpm test").expect("command"),
-            CommandPrefix::new("pnpm build").expect("command"),
-          ])
-          .expect("list"),
-        ),
-        NetworkAccess::Off,
-      ),
-      apply: PermissionsApply::Now,
-    },
-    Command::ChangeRunPermissions {
-      run,
-      profile: ResourceId::generate(),
-      permissions: AgentPermissions::before_permissions(),
-      apply: PermissionsApply::NextInvocation,
-    },
-    Command::KeepPermissionsForNextInvocation {
-      run,
-      profile: ResourceId::generate(),
-    },
-    Command::Shutdown {
-      mode: ShutdownMode::FinishAtCheckpoints,
-    },
-    Command::Shutdown {
-      mode: ShutdownMode::Immediate,
+      browser: ComputerBrowser {
+        program: Ok(Some(PathBuf::from("Chromium").join("chrome.exe"))),
+        profiles: Err("the application database has no folder".to_owned()),
+      },
     },
   ]
-  .into_iter()
-  .chain(decision_commands(run))
-  .chain([Command::DeliverMessages { run }, Command::RunFolderState { run }])
-  .enumerate()
-  .map(|(index, command)| Request {
-    id: RequestId::new(index as u64 + 1),
-    command,
-  })
-  .collect()
+}
+
+/// One request of every command.
+fn requests(run: RunId, task: TaskId) -> Vec<Request> {
+  attach_commands()
+    .into_iter()
+    .chain([
+      Command::SetAgentSlots {
+        agent_slots: NonZeroU32::new(16).expect("above zero"),
+      },
+      Command::ContinueRuns { runs: vec![run] },
+      Command::Ping { nonce: 42 },
+      Command::StartRun {
+        key: IdempotencyKey::generate(),
+        task,
+      },
+      Command::PauseRun { run },
+      Command::ResumeRun { run },
+      Command::CancelRun { run },
+      Command::RaiseLimit {
+        run,
+        budget: Some(TokenBudget::new(2_000_000).expect("above zero")),
+        max_duration_ms: Some(1_800_000),
+      },
+      Command::RaiseLimit {
+        run,
+        budget: None,
+        max_duration_ms: None,
+      },
+      Command::RaiseStepBudget {
+        run,
+        budget: Some(TokenBudget::new(600_000).expect("above zero")),
+      },
+      Command::RaiseStepBudget { run, budget: None },
+      Command::ChangeRunPermissions {
+        run,
+        profile: ResourceId::generate(),
+        permissions: AgentPermissions::new(
+          RepositoryAccess::Write,
+          CommandPermission::Allowed(
+            AllowedCommands::new(vec![
+              CommandPrefix::new("pnpm test").expect("command"),
+              CommandPrefix::new("pnpm build").expect("command"),
+            ])
+            .expect("list"),
+          ),
+          NetworkAccess::Off,
+        ),
+        apply: PermissionsApply::Now,
+      },
+      Command::ChangeRunPermissions {
+        run,
+        profile: ResourceId::generate(),
+        permissions: AgentPermissions::before_permissions(),
+        apply: PermissionsApply::NextInvocation,
+      },
+      Command::KeepPermissionsForNextInvocation {
+        run,
+        profile: ResourceId::generate(),
+      },
+      Command::Shutdown {
+        mode: ShutdownMode::FinishAtCheckpoints,
+      },
+      Command::Shutdown {
+        mode: ShutdownMode::Immediate,
+      },
+    ])
+    .chain(decision_commands(run))
+    .chain([Command::DeliverMessages { run }, Command::RunFolderState { run }])
+    .enumerate()
+    .map(|(index, command)| Request {
+      id: RequestId::new(index as u64 + 1),
+      command,
+    })
+    .collect()
 }
 
 /// Decisions on plans: automation's approval, and a person's request for changes with a note (protocol 20);

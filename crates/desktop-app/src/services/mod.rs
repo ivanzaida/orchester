@@ -125,6 +125,9 @@ impl Services {
     let activity = Activity::new();
     let workspace = session.workspace().clone();
     let runners = Runners::new(runner, runtime.clone(), activity.clone(), session.previous_end());
+    // Before any runner starts: each attaches with this computer's Settings › Browser, and gets every change of them
+    // while the background runs (`run_background`).
+    runners.set_browser(&workspace.computer_browser());
     let programs = Programs::processes();
     let jobs = ProjectJobs::default();
     let recovery = Recovery::start(
@@ -183,9 +186,9 @@ impl Services {
   }
 
   /// Starts the shared servers' connection monitor, the shared projects' sync and live event streams, the check of the
-  /// cloud sign-in (`sharing::cloud::keep_checking`), the activity's following of the account signed in and the
-  /// update's following of the runs at work (`app_updates::follow_runs`); they run until the returned [`Background`]
-  /// is dropped.
+  /// cloud sign-in (`sharing::cloud::keep_checking`), the activity's following of the account signed in, the
+  /// update's following of the runs at work (`app_updates::follow_runs`) and the runners' following of Settings ›
+  /// Browser (`Runners::follow_browser_settings`); they run until the returned [`Background`] is dropped.
   pub fn run_background(&self) -> Background {
     Background(vec![
       self.runtime.spawn(sharing::monitor(self.servers.clone())),
@@ -204,6 +207,9 @@ impl Services {
         self.updates.clone(),
         self.runners.clone(),
       )),
+      self
+        .runtime
+        .spawn(self.runners.clone().follow_browser_settings(self.workspace.clone())),
     ])
   }
 

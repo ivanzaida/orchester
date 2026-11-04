@@ -225,7 +225,7 @@ impl RunTask {
       return Ok(());
     }
     for execution in self.run.awaiting_answer() {
-      if !self.queued_for(execution)?.is_empty() && !held_by_question(&self.db, self.run.id(), execution)? {
+      if !self.queued_for(execution)?.is_empty() && !held_by_question(&*self.link, self.run.id(), execution)? {
         self.transition(|run, now| run.resume_step(execution, now))?;
       }
     }

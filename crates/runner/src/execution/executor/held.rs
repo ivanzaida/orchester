@@ -73,7 +73,7 @@ impl RunTask {
     let branch = self.run.branch().clone();
     let base = self.run.base().as_str().to_owned();
     match pool::borrow(
-      &mut self.db,
+      (&mut self.db, &*self.link),
       &self.execution,
       holder,
       (SwitchTo::Branch(&branch), &base),

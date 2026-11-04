@@ -18,12 +18,10 @@ use orchester_ipc::{
   Rejection,
   merge_queue::{MergeQueueCommand, MergeQueueReply},
 };
-use orchester_store::ProjectDb;
 use tokio::time::sleep;
 
 use super::{super::Scheduler, environment::run_environment, failed};
 use crate::{
-  execution::coordinator::link::LocalLink,
   execution_root::ExecutionRoot,
   supervisor::{ProcessEvent, ProcessExit, Supervised},
 };
@@ -59,11 +57,13 @@ impl Scheduler {
       }
       MergeQueueCommand::Recheck { run, tools } => {
         let worktree = execution.run_worktree(run);
-        // The project's variables as the coordinator gives them, made the environment of this computer; the database
-        // is closed before the tools run.
+        // The project's variables as the coordinator gives them, made the environment of this computer; the link is
+        // closed before the tools run.
         let environment = {
-          let db = ProjectDb::open(&root).map_err(|error| failed("cannot open the project database", &error))?;
-          run_environment((&LocalLink::over(&db), &*self.inner.computer), &execution, run)
+          let link = self
+            .open_link()
+            .map_err(|error| failed("cannot open the project database", &error))?;
+          run_environment((&*link, &*self.inner.computer), &execution, run)
             .map_err(|detail| Rejection::Failed { detail })?
         };
         Ok(MergeQueueReply::Rechecked(

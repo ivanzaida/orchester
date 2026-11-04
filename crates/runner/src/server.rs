@@ -1,7 +1,7 @@
-//! Serves the desktop over the project's IPC endpoint: answers its requests and forwards the
-//! scheduler's change notifications, the project's browser's events and the frames of the tab the *Browser* window
-//! shows.
+//! Serves the desktop over the project's IPC endpoint: answers its requests and forwards the scheduler's change
+//! notifications, the project's browser's events and the frames of the tab the *Browser* window shows.
 
+mod attach;
 mod browser;
 mod code_index;
 mod decisions;
@@ -13,7 +13,6 @@ mod run_folder;
 
 use std::{
   future::Future,
-  num::NonZeroU32,
   path::Path,
   sync::{
     Arc,
@@ -24,15 +23,15 @@ use std::{
 
 use orchester_core::{
   connection::{AgentProvider, ApiEndpoint},
-  id::{ChatId, ChatMessageId, IdempotencyKey, RunId, TaskId},
+  id::{ChatId, ChatMessageId, IdempotencyKey, ResourceId, RunId, TaskId},
   integration::Leftovers,
   run::{InterruptCause, RaisedLimits},
   sharing::TaskRevision,
   tokens::TokenBudget,
 };
 use orchester_ipc::{
-  AttachSession, ChatTools, Command, Endpoint, ErrorReports, Event, IpcError, Rejection, Reply, Request, RequestId,
-  ShutdownMode, WorkReturn,
+  ChatTools, Command, Endpoint, ErrorReports, Event, IpcError, Rejection, Reply, Request, RequestId, ShutdownMode,
+  WorkReturn,
   frame::{FrameReader, FrameWriter},
   handshake,
 };
@@ -304,12 +303,14 @@ async fn answer(
   let handle = scheduler.clone();
   let later = Later { replies, in_flight, id };
   let reply = match request.command {
-    Command::Attach { session, agent_slots } => attached(scheduler, session, agent_slots).await,
-    Command::SetAgentSlots { agent_slots } => slots_set(scheduler, agent_slots).await,
-    Command::ContinueRuns { ref runs } => {
-      let (continued, refused) = scheduler.continue_runs(runs).await;
-      Reply::Continued { continued, refused }
-    }
+    Command::Attach {
+      session,
+      agent_slots,
+      ref browser,
+    } => attach::attached(scheduler, session, agent_slots, browser.clone()).await,
+    Command::SetAgentSlots { agent_slots } => attach::slots_set(scheduler, agent_slots).await,
+    Command::SetBrowser { ref browser } => attach::browser_set(scheduler, browser.clone()),
+    Command::ContinueRuns { ref runs } => attach::continued(scheduler, runs).await,
     Command::Ping { nonce } => Reply::Pong { nonce },
     Command::StartRun { key, task } => started(scheduler.start_requested_run(key, task).await),
     Command::RunAgain {
@@ -345,9 +346,7 @@ async fn answer(
       });
     }
     Command::KeepPermissionsForNextInvocation { run, profile } => {
-      return later.answer(run, async move {
-        handle.keep_permissions_for_next_invocation(run, profile).await
-      });
+      return keep_permissions(&later, handle, run, profile);
     }
     Command::ReturnRun(ref returned) => return answer_return(&later, handle, returned.clone()),
     ref decision @ (Command::DecidePlan { .. }
@@ -373,6 +372,7 @@ async fn answer(
     Command::SetErrorReports { ref reports } => return Answer::ErrorReports(id, reports.clone()),
     Command::ReadWorktreeChanges { run } => return later.reply(handle.worktree_changes(run)),
     Command::RebuildCodeIndex { ref revision } => return later.rebuild_code_index(handle, revision.clone()),
+    Command::RunFiles { run, ref request } => return later.reply(handle.run_files(run, request.clone())),
     Command::RemoveWorktrees { run, ref request } => return later.reply(handle.remove_worktrees(run, request.clone())),
   };
   Answer::Reply(Event::Reply { id, reply })
@@ -429,18 +429,13 @@ fn at_plan_limit(
   }
 }
 
-/// The reply to [`Command::Attach`].
-async fn attached(scheduler: &Scheduler, session: AttachSession, agent_slots: NonZeroU32) -> Reply {
-  match scheduler.attach(session, agent_slots).await {
-    Ok(attached) => Reply::Attached {
-      active_runs: scheduler.active_runs(),
-      interrupted: attached.interrupted,
-      continued: attached.continued,
-    },
-    Err(rejection) => Reply::Rejected(rejection),
-  }
+/// Keeps the permissions of `profile` that `run`'s agent asked for for its next invocation
+/// ([`Command::KeepPermissionsForNextInvocation`]).
+fn keep_permissions(later: &Later<'_>, handle: Scheduler, run: RunId, profile: ResourceId) -> Answer {
+  later.answer(run, async move {
+    handle.keep_permissions_for_next_invocation(run, profile).await
+  })
 }
-
 fn raise_limit(
   later: &Later<'_>,
   scheduler: Scheduler,
@@ -452,14 +447,6 @@ fn raise_limit(
     max_duration: max_duration_ms.map(Duration::from_millis),
   };
   later.answer(run, async move { scheduler.raise_limit(run, limits).await })
-}
-
-/// The reply to [`Command::SetAgentSlots`].
-async fn slots_set(scheduler: &Scheduler, agent_slots: NonZeroU32) -> Reply {
-  match scheduler.set_agent_slots(agent_slots).await {
-    Ok(()) => Reply::AgentSlotsSet { agent_slots },
-    Err(rejection) => Reply::Rejected(rejection),
-  }
 }
 
 fn answer_check(later: &Later<'_>, scheduler: Scheduler, provider: AgentProvider, api: ApiEndpoint) -> Answer {

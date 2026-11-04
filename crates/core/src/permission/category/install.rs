@@ -55,7 +55,7 @@ fn host_of(registry: &str) -> Option<String> {
 }
 
 /// Where an install comes from.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub(super) struct InstallSource {
   pub(super) registry: String,
   pub(super) package: Option<String>,

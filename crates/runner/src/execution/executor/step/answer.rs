@@ -25,20 +25,23 @@ use orchester_core::{
   run::{
     AnswerKind, Answerer, ApprovalAnswer, ApprovalRuleId, ApprovalSubject, AutoVerdict, AutomationAnswerError,
     CameToPerson, DecidedBy, DenialNote, ModeStep, PendingToolApproval, ProjectRuleId, ProjectScope, RequestAnswer,
-    ReviewQuestion, RuleScope, ToolApprovalDecision, ToolDecision, ToolReach, allowing_tool, answering,
-    answering_in_project, auto_approves, auto_verdict, autopilot_check, autopilot_step, codex_denial, denial_message,
-    denial_with_message, permitted, review::Review,
+    ReviewQuestion, RuleScope, ToolApprovalDecision, ToolDecision, ToolReach, answering, answering_in_project,
+    auto_approves, auto_verdict, autopilot_check, autopilot_step, codex_denial, denial_message, denial_with_message,
+    permitted, review::Review,
   },
   store::McpServerStore,
   time::Timestamp,
 };
 use orchester_ipc::{Event, Rejection};
-use orchester_store::{ApprovalRecord, StoreError};
+use orchester_store::{AlwaysAllowAnswer, AlwaysAllowRecord, ApprovalRecord, RuleRecord, StoreError};
 
 use super::{
-  super::tool_approval::refusal,
+  super::{
+    link::approvals::{approval_review, approval_rules, project_approval_rules, run_auto_approve},
+    tool_approval::refusal,
+  },
   approval::Awaiting,
-  worker::{Watch, Worker},
+  worker::{Watch, Worker, WorkerError},
 };
 
 /// The rule that gives an answer: one of the run's, or one of the project's.
@@ -108,10 +111,10 @@ impl Worker {
     watch: &Watch,
     approval: &PendingToolApproval,
     autopilot: bool,
-  ) -> Result<Itself, StoreError> {
+  ) -> Result<Itself, WorkerError> {
     let subject = ApprovalSubject::of(approval, &self.scope).with_checks(&self.checks);
     let category = category_of(&subject);
-    let rules = watch.db.approval_rules(approval.run)?;
+    let rules = approval_rules(&*watch.link, approval.run)?;
     if let Some(rule) = answering(&rules, &subject) {
       let decided_by = if rule.scope.revocable() {
         DecidedBy::SimilarRule
@@ -159,20 +162,20 @@ impl Worker {
     watch: &Watch,
     approval: &PendingToolApproval,
     (subject, category): (&ApprovalSubject, Option<CommandCategory>),
-  ) -> Result<Itself, StoreError> {
+  ) -> Result<Itself, WorkerError> {
     if let Some(launch) = &watch.invocation.permissions
       && let Some(category) = permitted(subject, launch.permissions())
     {
       return Ok(Itself::Settled(Settled::by(DecidedBy::Permissions, Some(category))));
     }
-    if let Some(rule) = answering_in_project(&watch.db.project_approval_rules()?, subject) {
+    if let Some(rule) = answering_in_project(&project_approval_rules(&*watch.link)?, subject) {
       return Ok(Itself::Settled(Settled {
         rule: Some(Answering::Project(rule.id)),
         ..Settled::by(DecidedBy::SimilarRule, category)
       }));
     }
     // Manual is not Autopilot: only the run's own *Approve everything in this run*, a person's answer, approves here.
-    if auto_approves(watch.db.run_auto_approve(approval.run)?, false)
+    if auto_approves(run_auto_approve(&*watch.link, approval.run)?, false)
       && (approval.command || auto_approvable(&approval.server, &approval.action))
       && let AutoVerdict::Approve(category) = auto_verdict(subject)
     {
@@ -213,7 +216,7 @@ impl Worker {
     watch: &mut Watch,
     (approval, awaiting): (&PendingToolApproval, &Awaiting),
     (answer, by): (&ApprovalAnswer, Answerer),
-  ) -> Result<Result<Settled, Rejection>, StoreError> {
+  ) -> Result<Result<Settled, Rejection>, WorkerError> {
     let subject = ApprovalSubject::of(approval, &self.scope).with_checks(&self.checks);
     let decided_by = match answer.given_by(by, &subject) {
       Ok(decided_by) => decided_by,
@@ -222,15 +225,15 @@ impl Worker {
     };
     let settled = Settled {
       secrets: matches!(&subject, ApprovalSubject::Command(command) if command.reads_secrets()),
-      review: watch.db.tool_approval_review(approval.run, &approval.id)?,
+      review: approval_review(&*watch.link, approval.run, &approval.id)?,
       ..Settled::by(decided_by, category_of(&subject))
     };
-    let now = Timestamp::now();
+    let (run, at) = (approval.run, Timestamp::now());
     match answer {
       // A check its access rules approve once per run: this approval covers its later calls in the run.
       ApprovalAnswer::Once if self.once_per_run(&subject) => {
         if let Ok(scope) = RuleScope::similar(&subject) {
-          watch.db.add_approval_rule(approval.run, &scope, now)?;
+          watch.sink.rule(RuleRecord::Run { run, scope, at })?;
         }
       }
       ApprovalAnswer::Once => {}
@@ -251,15 +254,19 @@ impl Worker {
         let Ok(scope) = RuleScope::similar(&subject) else {
           return Ok(Err(unavailable("Approve similar")));
         };
-        watch.db.add_approval_rule(approval.run, &scope, now)?;
+        watch.sink.rule(RuleRecord::Run { run, scope, at })?;
       }
       ApprovalAnswer::SimilarProject => {
         let Some(scope) = ProjectScope::of(&subject) else {
           return Ok(Err(unavailable("Approve for every run of this project")));
         };
-        watch
-          .db
-          .add_project_approval_rule(&scope, (approval.run, &approval.id), now)?;
+        let request = approval.id.clone();
+        watch.sink.rule(RuleRecord::Project {
+          scope,
+          run,
+          request,
+          at,
+        })?;
       }
       ApprovalAnswer::Always { prefix } => {
         if let Err(rejection) = self.always_allow(watch, approval, &subject, prefix.as_ref())? {
@@ -315,7 +322,7 @@ impl Worker {
   }
 
   /// Always allow: a command's prefix is published in its profile and kept by the run; an MCP tool is
-  /// listed on its server.
+  /// listed on its server. The coordinator leaves both, or says Always allow is not available.
   fn always_allow(
     &self,
     watch: &mut Watch,
@@ -323,33 +330,24 @@ impl Worker {
     subject: &ApprovalSubject,
     prefix: Option<&orchester_core::permission::CommandPrefix>,
   ) -> Result<Result<(), Rejection>, StoreError> {
-    match (subject, prefix, self.profile) {
-      (ApprovalSubject::Command(command), Some(prefix), Some(profile)) => {
-        match watch
-          .db
-          .publish_allowed_command(profile, command, prefix, Timestamp::now())
-        {
-          Ok(_) => {}
-          Err(StoreError::AlwaysAllow(_)) => return Ok(Err(unavailable("Always allow"))),
-          Err(error) => return Err(error),
-        }
-        let scope = RuleScope::AlwaysCommand { prefix: prefix.clone() };
-        watch.db.add_approval_rule(approval.run, &scope, Timestamp::now())?;
-      }
-      (ApprovalSubject::McpTool { server, tool, .. }, None, _) => {
-        let mut servers = watch.db.mcp_servers()?;
-        let Some(stored) = servers.iter_mut().find(|stored| stored.name().as_str() == server) else {
-          return Ok(Err(unavailable("Always allow")));
-        };
-        let Ok(tools) = allowing_tool(stored.exempt_tools(), tool) else {
-          return Ok(Err(unavailable("Always allow")));
-        };
-        stored.set_exempt_tools(tools);
-        watch.db.save_mcp_server(stored)?;
-      }
+    let record = match (subject, prefix, self.profile) {
+      (ApprovalSubject::Command(command), Some(prefix), Some(profile)) => AlwaysAllowRecord::Command {
+        run: approval.run,
+        profile,
+        command: command.clone(),
+        prefix: prefix.clone(),
+        at: Timestamp::now(),
+      },
+      (ApprovalSubject::McpTool { server, tool, .. }, None, _) => AlwaysAllowRecord::McpTool {
+        server: server.clone(),
+        tool: tool.clone(),
+      },
       _ => return Ok(Err(unavailable("Always allow"))),
-    }
-    Ok(Ok(()))
+    };
+    Ok(match watch.sink.always_allow(record)? {
+      AlwaysAllowAnswer::Allowed => Ok(()),
+      AlwaysAllowAnswer::Unavailable => Err(unavailable("Always allow")),
+    })
   }
 
   /// Records `settled` as the answer to `approval`, hands it to the call waiting in `awaiting` and marks
@@ -360,12 +358,12 @@ impl Worker {
     approval: &PendingToolApproval,
     awaiting: Awaiting,
     settled: Settled,
-  ) -> Result<Result<(), Rejection>, StoreError> {
+  ) -> Result<Result<(), Rejection>, WorkerError> {
     let run = approval.run;
     // A review still under way is no longer wanted: dropping it stops the reviewer.
     self.reviewing = None;
     if !claim(watch, approval, &settled)? {
-      return Ok(Err(refusal(&watch.db, run, &approval.id)?));
+      return Ok(Err(refusal(&*watch.link, run, &approval.id)?));
     }
     if settled.decided_by.answered_waiting() {
       self.notifier.send(Event::ToolApprovalChanged { run, task: self.task });
@@ -453,9 +451,9 @@ fn claim(watch: &mut Watch, approval: &PendingToolApproval, settled: &Settled) -
     Some(Answering::Run(rule)) => {
       watch.sink.approval(ApprovalRecord::rule(run, id, rule))?;
     }
-    // The project's rules are rows the desktop owns, which only the coordinator is to write
-    // (`docs/architecture/remote-runners.md`, rule 3); they do not go through the sink yet.
-    Some(Answering::Project(rule)) => watch.db.project_rule_answered(rule)?,
+    Some(Answering::Project(rule)) => {
+      watch.sink.rule(RuleRecord::ProjectAnswered { rule })?;
+    }
     None => {}
   }
   if let Some(note) = &settled.note {

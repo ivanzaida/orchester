@@ -399,7 +399,7 @@ locks (`orchester_core::integration`).
   (`run_worktrees_not_removed`, its path and why), and the task page and `get_run` say *not removed*, never
   *removed*, while it is on disk. Remove worktree finishes it later. The runner removes every run worktree, stops the
   run's processes in a held folder and prunes the codebase indexes; the desktop asks it to (`Command::RemoveWorktrees`,
-  protocol 47) and records the removal before and after (ORC-686). The runner at its start and after each removal
+  protocol 49) and records the removal before and after (ORC-686). The runner at its start and after each removal
   sweeps `.orchester/worktrees/`: a folder no git worktree lists and whose run (by its own or a step execution's id)
   ended — succeeded, failed, cancelled, or interrupted with its removal recorded — is deleted and logged; a folder of a
   run that has not ended, and one no run has, is never touched.

@@ -28,8 +28,9 @@ pub struct ReviewerChoice {
 
 /// The reviewer Manual asks before the person (`docs/design/approval-modes.md`): the one a person chose in the project
 /// (`None`: the default, [`resolve_reviewer`]).
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AutoModeSettings {
+  #[serde(default, skip_serializing_if = "Option::is_none")]
   pub reviewer: Option<ReviewerChoice>,
 }
 

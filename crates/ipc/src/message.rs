@@ -29,11 +29,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
   ErrorReports, FolderState,
-  browser::{BrowserCommand, BrowserEvent, BrowserReply, ScreencastFrame},
+  browser::{BrowserCommand, BrowserEvent, BrowserReply, ComputerBrowser, ScreencastFrame},
   chat::ChatTools,
   folders::{FoldersCommand, FoldersReply},
   merge_queue::{MergeQueueCommand, MergeQueueReply},
   rejection::Rejection,
+  run_files::{RunFilesReply, RunFilesRequest},
   work::WorkSummary,
   worktree::WorktreeChangesRead,
 };
@@ -84,17 +85,22 @@ pub struct Request {
 pub enum Command {
   /// The first request of a connection: the desktop starts listening to notifications, says
   /// which session this runner serves, which decides what happens to runs still recorded as
-  /// running (`docs/architecture/storage.md`, "Lifecycle"), and how many agents may work at
-  /// once. Answered with [`Reply::Attached`], followed by an [`Event::WorkSummary`].
+  /// running (`docs/architecture/storage.md`, "Lifecycle"), how many agents may work at
+  /// once, and this computer's Settings › Browser (protocol 47). Answered with [`Reply::Attached`], followed by an
+  /// [`Event::WorkSummary`].
   Attach {
     session: AttachSession,
     agent_slots: NonZeroU32,
+    browser: ComputerBrowser,
   },
   /// The project's *Agents working at once* changed to `agent_slots` (protocol 18): it applies at
   /// once. More slots let queued work start now; fewer stop no agent at work, and new work waits
   /// until fewer agents work than there are slots. Answered with [`Reply::AgentSlotsSet`], followed
   /// by an [`Event::WorkSummary`].
   SetAgentSlots { agent_slots: NonZeroU32 },
+  /// This computer's Settings › Browser changed to `browser` (protocol 47): the project's browser starts with it from
+  /// its next start; a browser running now keeps its program. Answered with [`Reply::BrowserSet`].
+  SetBrowser { browser: ComputerBrowser },
   /// Liveness check, answered with [`Reply::Pong`] carrying the same nonce.
   Ping { nonce: u64 },
   /// Starts a run of the queued task `task`. Idempotent by `key`: repeating it (a retry after
@@ -316,8 +322,11 @@ pub enum Command {
   /// (protocol 46): the desktop keeps the project's record of the resolution and runs no git there itself. Answered
   /// with [`Reply::Resolved`], or [`Reply::ResolveFailed`] with why it did not go on.
   Resolve { run: RunId, request: ResolveRequest },
+  /// The code viewer reads the worktree of run `run` (protocol 48, [`crate::run_files`]): the runner's executor side
+  /// reads it where the worktree is. Answered with [`Reply::RunFiles`].
+  RunFiles { run: RunId, request: RunFilesRequest },
   /// Removes what run `run`, which ended, left, as `request` allows: its worktrees and branches, with the run's own
-  /// processes in a held folder stopped first when asked (protocol 47). The desktop records the removal in the
+  /// processes in a held folder stopped first when asked (protocol 49). The desktop records the removal in the
   /// project's database before and after; the runner removes, then removes the codebase indexes only removed worktrees
   /// used and sweeps the worktree folders. Answered with [`Reply::WorktreesRemoved`], or [`Reply::RemovalFailed`] when
   /// nothing was removed.
@@ -509,6 +518,8 @@ pub enum Reply {
   },
   /// The answer to [`Command::SetErrorReports`]: the runner sends reports as it says from now on.
   ErrorReportsSet,
+  /// The answer to [`Command::SetBrowser`]: the project's browser starts with it from its next start.
+  BrowserSet,
   /// The answer to [`Command::Browser`].
   Browser(BrowserReply),
   /// The answer to [`Command::ReadWorktreeChanges`]: what the worktree of `run` holds beyond its commit.
@@ -539,6 +550,8 @@ pub enum Reply {
   Resolved(ResolveAnswer),
   /// The answer to [`Command::Resolve`] that did not go on, and why.
   ResolveFailed(ResolveFailure),
+  /// The answer to [`Command::RunFiles`]; a file's bytes travel after it in a binary frame.
+  RunFiles(RunFilesReply),
   Rejected(Rejection),
 }
 

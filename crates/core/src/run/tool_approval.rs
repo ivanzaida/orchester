@@ -42,6 +42,7 @@ pub fn cut_arguments(recorded: &str) -> Option<&str> {
   recorded.strip_suffix(cut_mark().as_str())
 }
 
+/// A request as it waits; it travels as it is to a run's executor (the coordinator link).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PendingToolApproval {
   pub id: String,

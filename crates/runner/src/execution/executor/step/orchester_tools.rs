@@ -94,13 +94,14 @@ impl<'a> ToolFolders<'a> {
 const NO_HOOKS: &str = "no-hooks";
 
 /// The folders of Orchester's own files that `read_external_file` and `search_external_file` never reach, `relay`
-/// being the runner's program: every project's private files, the folder of Orchester's programs, and every project's
-/// browser profile with its cookies and sign-ins.
-pub fn outside_read_refusals(relay: Option<&Path>) -> Vec<PathBuf> {
+/// being the runner's program: every project's private files, the folder of Orchester's programs, and `profiles`, the
+/// folder of every project's browser profile with its cookies and sign-ins.
+pub fn outside_read_refusals(relay: Option<&Path>, profiles: Option<&Path>) -> Vec<PathBuf> {
   let mut refused = vec![crate::execution_root::private_files()];
   refused.extend(relay.and_then(Path::parent).map(Path::to_path_buf));
-  // Unknown only with the application data, and then no browser has a profile either ([`crate::browser::profile_of`]).
-  refused.extend(crate::browser::profiles_folder().ok());
+  // Unknown only when the app could not tell it, and then no project's browser has a profile there either
+  // ([`crate::browser::ProjectBrowser::profile`]).
+  refused.extend(profiles.map(Path::to_path_buf));
   refused
 }
 
@@ -416,7 +417,7 @@ impl RunTask {
         "cannot make the empty hooks folder of Orchester's tools: {error}"
       ))
     })?;
-    let refused = outside_read_refusals(self.relay.as_deref());
+    let refused = outside_read_refusals(self.relay.as_deref(), self.browser.profiles_folder().as_deref());
     let files = ToolFiles::new(permissions.repository(), folders, self.run.base().as_str())?;
     let processes = RunProcesses::new(worktree, self.run.created_at()).map_err(|error| problem(error.to_string()))?;
     let runner = std::env::current_exe().map_err(|error| problem(error.to_string()))?;
@@ -461,6 +462,7 @@ impl RunTask {
             .another()
             .map_err(|error| problem(format!("cannot reach the run's records: {error}")))?,
         ),
+        sink: Mutex::new(self.sink.another()),
         run: self.run.id(),
         task: self.run.task(),
         execution,

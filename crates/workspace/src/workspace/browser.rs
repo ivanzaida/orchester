@@ -1,8 +1,9 @@
 //! Settings › Browser (`docs/design/browser.md`, "Finding the browser"): which Chromium-based browser agents' pages
 //! open in (the program the person chose, else the one installed, else none, saying what was looked for), the folder
 //! of the projects' browser profiles beside the application database, and whether the Browser window opens when an
-//! agent starts browsing. The runner starts a project's browser by the same rule (`orchester_runner::browser`), so
-//! what Settings shows is what agents get.
+//! agent starts browsing. The runner starts a project's browser by the same rule (`orchester_runner::browser`), with
+//! the program and the profiles' folder the desktop passes it ([`Workspace::computer_browser`]), so what Settings
+//! shows is what agents get.
 
 use std::{
   path::{Path, PathBuf},
@@ -10,7 +11,8 @@ use std::{
 };
 
 use orchester_exec::browser::{self, BrowserProgram, BrowserUnavailable, NotABrowser};
-use orchester_store::{StoreError, location::browser_profiles_beside};
+use orchester_ipc::browser::ComputerBrowser;
+use orchester_store::{AppDb, StoreError, location::browser_profiles_beside};
 use parking_lot::Mutex;
 use thiserror::Error;
 
@@ -110,4 +112,42 @@ impl Workspace {
       None => browser::find(),
     }
   }
+
+  /// This computer's Settings › Browser as the runners get them (`docs/architecture/remote-runners.md`, the computer's
+  /// resources): the program the person chose, if any, and the folder of the projects' browser profiles beside this
+  /// workspace's database, each with why it cannot be told instead. Blocks on SQLite.
+  pub fn computer_browser(&self) -> ComputerBrowser {
+    let program = self.db.lock().browser_program();
+    ComputerBrowser {
+      program: program.map_err(|error| unreadable(&error)),
+      profiles: profiles_of(self.database_path().as_deref()),
+    }
+  }
+}
+
+/// The computer's Settings › Browser in the application database `database` beside this program, the one a runner
+/// read before the desktop passed them: no program chosen while there is no database yet. Blocks on SQLite.
+pub(crate) fn computer_browser_beside(database: &Path) -> ComputerBrowser {
+  let program = if database.is_file() {
+    AppDb::open_read_only(database)
+      .and_then(|settings| settings.browser_program())
+      .map_err(|error| unreadable(&error))
+  } else {
+    Ok(None)
+  };
+  ComputerBrowser {
+    program,
+    profiles: profiles_of(Some(database)),
+  }
+}
+
+/// The projects' browser profiles beside the application database `database`; why not, when it has no folder.
+fn profiles_of(database: Option<&Path>) -> Result<PathBuf, String> {
+  database
+    .and_then(browser_profiles_beside)
+    .ok_or_else(|| "the application database has no folder".to_owned())
+}
+
+fn unreadable(error: &StoreError) -> String {
+  format!("Settings › Browser cannot be read: {error}")
 }

@@ -47,7 +47,12 @@ on another computer is decided with the transport.
    and the transaction stay the same.
 3. Rows the desktop owns are written only by the coordinator: *Always allow* (`mcp_servers`, `resource_versions`,
    `resource_drafts`, `step/answer.rs`), the model requirement of a connection (`connections`, `step/cli_version.rs`),
-   new memories and their changes.
+   new memories and their changes. Done (ORC-680): the executor sends them through the sink as requests
+   (`orchester_store::{RuleRecord, AlwaysAllowRecord, ModelRequirement, MemoryRecord}`), and the coordinator applies
+   them with the store's own functions and answers what the executor needs to go on (the rule's id, Always allow
+   unavailable, the kept note's id and status). Approval rules and their counts (`approval_rules`,
+   `project_approval_rules`) go the same way. The executor screens memory content against its own computer's secret
+   values before it sends it.
 4. Every value that crosses the boundary is serializable (serde), and the tests run the local executor through a
    channel that serializes every message, so nothing that only works in one process slips in.
 5. The desktop reaches a run's worktree only through the runner: reading its uncommitted changes and files, resolving
@@ -67,15 +72,15 @@ What the executor side reads today, and through which interface it will:
 | --- | --- | --- |
 | Pinned resource versions by id, skill blobs | `permissions.rs`, `step/skills.rs`, `step/start/{prompt,shared}.rs`, `tool/mod.rs`, `work.rs` | coordinator link |
 | `messages`, `attachments` and their files | `step/mod.rs`, `step/worker/steer.rs`, `recovery.rs` | coordinator link: done (ORC-667, `executor/link/messages.rs`), with `conversation.rs` and `get_task` (`step/run_records.rs`); the files' content travels in the answer and the executor keeps its copies in its execution root's `attachments/` (`executor/attached.rs`). Delivery state is still written to the database (ORC-680) |
-| `memories` | `step/memory.rs`, `handoff.rs`, `step/run_records.rs` | coordinator link: **done** (ORC-668, `executor/link/memory.rs`): the recall, the unreadable records and the Memory setting; new records and their changes still write the database until the write tasks |
-| `approval_rules`, `project_approval_rules`, `tool_approvals`, `run_auto_approve`, `questions` | `step/answer.rs`, `step/approval.rs`, `question.rs` | coordinator link |
+| `memories` | `step/memory.rs`, `handoff.rs`, `step/run_records.rs` | coordinator link: **done** (ORC-668, `executor/link/memory.rs`): the recall and the unreadable records. New records and their changes go through the sink (ORC-680, rule 3); the coordinator reads the Memory setting itself when it applies them, so the executor no longer asks the link's `settings` for them |
+| `approval_rules`, `project_approval_rules`, `tool_approvals`, `run_auto_approve`, `questions` | `step/answer.rs`, `step/approval.rs`, `question.rs` | coordinator link: done (ORC-669, `executor/link/{approvals,questions}.rs`), with `tool_approval.rs`, `step/question.rs`, `step/worker/` (`in_autopilot`), `conversation.rs` and `get_task`; matching against the rules stays the executor's. Writes of approvals and questions go through the sink (ORC-679), rules and their counts too (ORC-680). The coordinator's own reads (`coordinator/attach.rs` interrupting a cut-off run's requests) stay on the database |
 | Project settings an agent start reads (`code_index`, `repository_agent_files`, `memory_settings`, `approval_mode`, `auto_mode_settings`, `tells_base_moves`) | `step/start/*`, `step/skills.rs`, `handoff.rs`, `step/worker/review/setup.rs`, `step/base_notice.rs` | coordinator link |
 | Step usage (`invocations` tokens, `reviewer_usage`) | `step/mod.rs`, `step/start/shared.rs` | coordinator link |
 | `base_notices` | `step/base_notice.rs` | coordinator link |
 | `connections`, account folders, CLI config folders | `step/start/{shared,cli}.rs`, `permissions.rs`, `step/worker/review/*`, `codebase_index.rs`, `step/roots.rs` | computer's resources |
 | `mcp_servers`, secret metadata and values (`KeychainVault`, `server.rs:66`) | `step/mcp.rs`, `connection_check.rs`, `step/run_records.rs`, `plan.rs`, `step/memory.rs`, `handoff.rs`, `step/worker/review/*` | computer's resources |
 | `project_environment` | `environment.rs`, `step/mod.rs`, `codebase_index.rs`, `merge_queue.rs`, `step/worker/review/*` | computer's resources: done (ORC-674). The project's variables come through the coordinator link (`executor/link/environment.rs`), at each use as before, and `ComputerResources::environment` makes the environment of that computer of them (locally the project's, unchanged); secret values never take this path. The Orchestrator chat's read (`coordinator/chat/turn.rs`) stays the coordinator's |
-| Settings › Browser from `orchester.db` (`runner/src/browser/mod.rs:403`) | browser | computer's resources (passed by the desktop) |
+| Settings › Browser from `orchester.db` (`runner/src/browser/mod.rs:403`) | browser | computer's resources: done (ORC-675). The desktop reads the chosen program and the folder of the browser profiles (`Workspace::computer_browser`) and passes them as `ComputerBrowser` with `Command::Attach` and again with `Command::SetBrowser` when Settings › Browser changes (protocol 47, `Runners::set_browser`, `follow_browser_settings`); the runner keeps them in its `ProjectBrowser` (`set_computer`) and uses what it was passed last at each browser start. The runner no longer opens `AppDb` or reads its application data location |
 
 Where the desktop touches a run's worktree today (`crates/workspace/src/`):
 
@@ -86,9 +91,10 @@ Where the desktop touches a run's worktree today (`crates/workspace/src/`):
 | Conflict resolution in the worktree (resolve by hand, a resolved finish, an abort, the worktree's head): **through the runner** since protocol 46 (`Command::Resolve`, ORC-683); the desktop keeps the resolution's record | `tasks/resolve/mod.rs`, `tasks/integration_jobs/resolve.rs`, `merge_queue/approve.rs`; the runner serves core's `integration::resolve::request::serve` |
 | Base synced into the worktree, Check tools run in it | `merge_queue/drive.rs:211`, `merge_queue/check.rs` |
 | Local integration reading the worktree as a second repository | `tasks/local_integration/{mod,poll,view}.rs`, see [Local integration](#local-integration) |
-| Removal, stopping its processes, index prune, sweep: **through the runner** since protocol 47 (`Command::RemoveWorktrees`, ORC-686); the desktop records the removal before and after, and its own sweep is gone (the runner's covers the same folders) | `tasks/worktree_removal.rs` (`WorktreeRemover`), `tasks/integration.rs` (`clear`), `tasks/delete.rs`, `runner/worktree_removal.rs`; the runner's `execution/executor/worktree_removal.rs` |
+| Removal, stopping its processes, index prune, sweep: **through the runner** since protocol 49 (`Command::RemoveWorktrees`, ORC-686); the desktop records the removal before and after, and its own sweep is gone (the runner's covers the same folders) | `tasks/worktree_removal.rs` (`WorktreeRemover`), `tasks/integration.rs` (`clear`), `tasks/delete.rs`, `runner/worktree_removal.rs`; the runner's `execution/executor/worktree_removal.rs` |
 | Whether a run's worktree folder is there, for `get_task`/`get_run` and the missing-worktree note | `app_mcp/tools/worktree.rs` (`worktree_state`), `tasks/history.rs` (`note_missing_worktrees`): still local reads, so read-only tools start no runner |
-| Files of the run's version, Open in editor, copy path | `files/source.rs:39`, `files/open.rs`, `desktop-app/src/screens/task/changes/open_file.rs`, `run_facts.rs:329` |
+| Files of the run's version: **through the runner** since protocol 48 (`Command::RunFiles`, ORC-696; a listing travels in pages that each fit a frame) | `files/runs.rs`, `runner/run_files.rs`; the runner's `execution/executor/run_files.rs` |
+| Open in editor, copy path of a run's file: still the local path, marked for a run on another computer | `files/open.rs` (`open_target`), `run_facts.rs:329` |
 | Recovery state of a run's folder: **through the runner** since protocol 44 (`Command::RunFolderState`, ORC-688) | `recovery/mod.rs` (`read_folder_states`), `runner/ask.rs`; the runner's `execution/coordinator/run_folder.rs`, `execution/executor/folder_state.rs` |
 | Warm workspaces' folders and sizes, ended worktrees' sizes | through the runner since ORC-689 (`Command::Folders`, `runner/folders.rs`); the desktop keeps the database's reservations |
 | Code index rebuild | Done (ORC-690): the runner builds it on `Command::RebuildCodeIndex` (protocol 43); `code_index::rebuild` asks it |
