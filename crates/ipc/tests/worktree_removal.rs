@@ -1,4 +1,4 @@
-//! A removal of a run's worktrees asked of the runner and its answers (protocol 43) travel as frames unchanged: each
+//! A removal of a run's worktrees asked of the runner and its answers (protocol 44) travel as frames unchanged: each
 //! kind of request, what a removal did with every reason a worktree or branch stays, and every reason it removed
 //! nothing.
 
@@ -33,8 +33,8 @@ fn worktree(path: &str, owner: WorktreeOwner) -> LeftWorktree {
 #[tokio::test]
 async fn frames_round_trip_a_worktree_removal_and_every_answer() {
   const _: () = assert!(
-    PROTOCOL_VERSION >= 43,
-    "the removal through the runner came with protocol 43"
+    PROTOCOL_VERSION >= 44,
+    "the removal through the runner came with protocol 44"
   );
   let (near, far) = tokio::io::duplex(64 * 1024);
   let (mut reader, mut writer) = (FrameReader::new(far), FrameWriter::new(near));

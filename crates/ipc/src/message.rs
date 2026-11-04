@@ -16,6 +16,7 @@ use orchester_core::{
   permission::AgentPermissions,
   question::GivenAnswer,
   resource::StepKey,
+  revision::Revision,
   run::{
     Answerer, ApprovalAnswer, EventSequence, InterruptCause, MergeConflicts, PermissionsApply, PlanDecision,
     PlanVersion, ReviewNote, RunNumber, StuckDecision,
@@ -294,8 +295,13 @@ pub enum Command {
   /// A request about the folders the project's runs leave with their executor (protocol 42, [`crate::folders`]).
   /// Answered with [`Reply::Folders`] once carried out, or [`Rejection::Failed`].
   Folders(FoldersCommand),
+  /// Builds the code index of `revision` again where the runner keeps the indexes (*Rebuild*, *Retry* in Project
+  /// settings › Context, protocol 43); the desktop builds none itself. Answered with [`Reply::CodeIndexRebuilt`] once
+  /// it is built, [`Rejection::CodeIndexInUse`] while it is in use, or [`Rejection::Failed`] with why it could not be
+  /// built.
+  RebuildCodeIndex { revision: Revision },
   /// Removes what run `run`, which ended, left, as `request` allows: its worktrees and branches, with the run's own
-  /// processes in a held folder stopped first when asked (protocol 43). The desktop records the removal in the
+  /// processes in a held folder stopped first when asked (protocol 44). The desktop records the removal in the
   /// project's database before and after; the runner removes, then removes the codebase indexes only removed worktrees
   /// used and sweeps the worktree folders. Answered with [`Reply::WorktreesRemoved`], or [`Reply::RemovalFailed`] when
   /// nothing was removed.
@@ -498,6 +504,10 @@ pub enum Reply {
   MergeQueue(MergeQueueReply),
   /// The answer to [`Command::Folders`].
   Folders(FoldersReply),
+  /// The answer to [`Command::RebuildCodeIndex`]: the index of `revision` is built again.
+  CodeIndexRebuilt {
+    revision: Revision,
+  },
   /// The answer to [`Command::RemoveWorktrees`] that removed: what it removed, and what stays and why.
   WorktreesRemoved(Cleanup),
   /// The answer to [`Command::RemoveWorktrees`] that removed nothing, and why.
