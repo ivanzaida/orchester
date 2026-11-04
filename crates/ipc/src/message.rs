@@ -28,6 +28,7 @@ use crate::{
   ErrorReports,
   browser::{BrowserCommand, BrowserEvent, BrowserReply, ScreencastFrame},
   chat::ChatTools,
+  folders::{FoldersCommand, FoldersReply},
   merge_queue::{MergeQueueCommand, MergeQueueReply},
   rejection::Rejection,
   work::WorkSummary,
@@ -290,8 +291,11 @@ pub enum Command {
   /// The merge queue's work in a run's worktree: syncing its base in, or running Check again on the merged result
   /// (protocol 41). Answered with [`Reply::MergeQueue`] once done.
   MergeQueue(MergeQueueCommand),
+  /// A request about the folders the project's runs leave with their executor (protocol 42, [`crate::folders`]).
+  /// Answered with [`Reply::Folders`] once carried out, or [`Rejection::Failed`].
+  Folders(FoldersCommand),
   /// `request` about the merge a person resolves by hand in run `run`'s worktree, carried out where the worktree is
-  /// (protocol 42): the desktop keeps the project's record of the resolution and runs no git there itself. Answered
+  /// (protocol 43): the desktop keeps the project's record of the resolution and runs no git there itself. Answered
   /// with [`Reply::Resolved`], or [`Reply::ResolveFailed`] with why it did not go on.
   Resolve { run: RunId, request: ResolveRequest },
 }
@@ -490,6 +494,8 @@ pub enum Reply {
   },
   /// The answer to [`Command::MergeQueue`].
   MergeQueue(MergeQueueReply),
+  /// The answer to [`Command::Folders`].
+  Folders(FoldersReply),
   /// The answer to [`Command::Resolve`] that was carried out.
   Resolved(ResolveAnswer),
   /// The answer to [`Command::Resolve`] that did not go on, and why.

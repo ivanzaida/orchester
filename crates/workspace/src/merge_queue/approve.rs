@@ -155,9 +155,7 @@ pub fn resolved(root: &Path, worktrees: &RunWorktrees, run: RunId) -> Result<Opt
   };
   if worktrees.in_merge(run).map_err(|error| refusal(&error))? {
     let tip = worktrees.head(run).map_err(|error| refusal(&error))?;
-    worktrees
-      .finish(run, (&base, &tip))
-      .map_err(|error| refusal(&error))?;
+    worktrees.finish(run, (&base, &tip)).map_err(|error| refusal(&error))?;
     db.end_resolution(run)?;
   } else if let QueueState::Left(Left::Conflicts { files }) = &entry.state {
     let marked = worktrees.marked(run, files).map_err(|error| refusal(&error))?;
@@ -245,7 +243,9 @@ fn refusal(error: &Unresolved) -> QueueRefusal {
   };
   QueueRefusal::Resolve(match &failure.reason {
     FailureReason::MarkersLeft(files) => return QueueRefusal::MarkersLeft(files.clone()),
-    FailureReason::Uncommitted(files) => Message::new("tasks.resolve.uncommitted").with("files", file_list(files, ", ")),
+    FailureReason::Uncommitted(files) => {
+      Message::new("tasks.resolve.uncommitted").with("files", file_list(files, ", "))
+    }
     _ => Message::new("mergeQueue.refused.resolve").with("detail", failure.detail.clone()),
   })
 }

@@ -17,6 +17,7 @@ pub mod daily_log;
 mod error;
 pub mod error_reports;
 mod exit_code;
+pub mod folders;
 pub mod frame;
 mod handshake;
 #[cfg(windows)]

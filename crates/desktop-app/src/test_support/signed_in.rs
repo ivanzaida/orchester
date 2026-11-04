@@ -72,7 +72,9 @@ pub fn launch(database: &Path, runner: PathBuf, runtime: &Handle) -> Launch {
   let no_runner = !runner.exists();
   let launch = Launch::begin_with_vault(database, runner, runtime, (None, keychain()));
   if let Some(services) = launch.services().filter(|_| no_runner) {
-    services.runners.serve_worktrees_here_for_test(services.programs.clone());
+    services
+      .runners
+      .serve_worktrees_here_for_test(services.programs.clone());
   }
   launch
 }
