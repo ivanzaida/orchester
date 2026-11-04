@@ -121,9 +121,10 @@ worktree gets `.orchester/local-integration`. Snapshots build their index there 
 and so do sync previews, abort previews and resolution merges. It has to be inside the opened root because
 `LocalGit::new` refuses any other place, and on Windows `ExecutionOwnership` holds the root and the scratch folder
 together and allows private copies only under that scratch folder. Proposal, not done here: once the runner serves
-the worktree requests above, the scratch folder belongs to the executor. Put it under its execution root as
-`.orchester/runs/<run>/local-integration` (rule 6), beside the run's other executor files and out of the folder the
-agents and Check work in. That needs `LocalGit::new` to accept a scratch folder its caller holds outside the root,
+the worktree requests above, the scratch folder belongs to the executor. Put it in the run's storage under its
+execution root, `.orchester/runs/<run>/local-integration` (rule 6, `ExecutionRoot::run_storage`). That keeps it with
+the run's other executor files and out of the folder the agents and Check work in. It needs `LocalGit::new` to
+accept a scratch folder its caller holds outside the root,
 with `ExecutionOwnership` holding both the same way. On the main computer, local integration then keeps only the
 checkout's own `.orchester/local-integration/<run>`.
 
