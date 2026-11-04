@@ -70,10 +70,11 @@ impl Page {
       .window
       .navigation()
       .go(Route::Project(self.project, ProjectPage::Merges));
+    let rows = format!("{section}-rows");
+    // The info line shows while the merges are read too: wait for the section's rows.
     self
       .window
-      .until_within(GIT_WORK, "the merges", |window| window.texts("merges-info").is_some());
-    let rows = format!("{section}-rows");
+      .until_within(GIT_WORK, "the merges", |window| window.texts(&rows).is_some());
     let ids: Vec<String> = self.window.tree.get_element_by_id(&rows).map_or_else(Vec::new, |rows| {
       rows
         .children()
