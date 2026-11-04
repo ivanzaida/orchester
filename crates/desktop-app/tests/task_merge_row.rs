@@ -156,6 +156,30 @@ fn task_merge_row_sits_under_branch_and_is_absent_before_a_merge() {
 }
 
 #[test]
+fn task_merge_row_keeps_the_open_arrow_apart_from_long_words() {
+  let mut page = Page::new();
+  page.open("Webhook replay endpoint");
+  page.until_row("Waits for your review");
+  // `Value` in `Cjprb`: the words, a spacer that takes the room left, and the arrow, 6 apart: 12 at the least. The
+  // narrow window gives the words less room than they take.
+  for width in [1440, 900] {
+    page.window.tree.resize(width, 1400);
+    page.window.pass();
+    let mut bounds = |id: &str| {
+      page
+        .window
+        .tree
+        .get_element_by_id_mut(id)
+        .and_then(|element| element.bounds())
+        .unwrap_or_else(|| panic!("{id} is laid out"))
+    };
+    let (label, arrow) = (bounds("task-property-merge-label"), bounds("task-property-merge-open"));
+    let gap = arrow.x - (label.x + label.width);
+    assert!(gap >= 12.0 - 0.5, "{width}: the arrow is {gap} after the words");
+  }
+}
+
+#[test]
 fn task_merge_row_keeps_the_ready_card_and_opens_the_attempt_page() {
   let mut page = Page::new();
   for title in [

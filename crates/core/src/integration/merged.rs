@@ -78,6 +78,11 @@ impl<'a, R: CommandRunner> Branches<'a, R> {
     })
   }
 
+  /// Whether the repository has the local branch `branch`.
+  pub fn has(&self, branch: &BranchName) -> bool {
+    self.tips.contains_key(branch.as_str())
+  }
+
   /// What became of `work`. Only a run git finds commits of in its base branch reads as merged; a branch
   /// whose tip is the revision its run started from, or one the run's start already holds, has nothing to
   /// merge. An error is about `work.into`, the one base branch git was asked about then.

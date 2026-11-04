@@ -1,8 +1,9 @@
 //! What Review › Merges shows in place of its sections. Empty (09c `jhPCL`): the State/Empty card, 440 wide and
 //! centered under the info line, with the git-merge tile, *No merges yet* and what will show here; the tab has no
-//! count. While the merges are read (09d `Zlk49`), after the skeleton's delay as the other Review tabs: the info line
-//! with its bones, a section heading's bones and one box of row bones in the rows' own geometry (glyph, title and line,
-//! who and when, action); which sections exist is data. *Reading the merges…* (`merges.reading`) names it.
+//! count. While the merges are read (09d `Zlk49`): the info line, its lead naming the checkout's branch and its values
+//! bones, and after the skeleton's delay as the other Review tabs, a section heading's bones and one box of row bones
+//! in the rows' own geometry (glyph, title and line, who and when, action); which sections exist is data. *Reading the
+//! merges…* (`merges.reading`) names it.
 
 use lurq::{
   app::{
@@ -49,8 +50,9 @@ pub(super) fn empty(ctx: &Ctx, branch: Option<&str>) -> Element {
     .into()
 }
 
-/// The page while the merges are read.
-pub(super) fn reading(ctx: &mut Ctx) -> Element {
+/// The page while the merges are read; `branch`, the one the checkout has, once git named it. The info line stands
+/// outside the pulse, its lead at full colour, only its values' bones in it.
+pub(super) fn reading(ctx: &mut Ctx, branch: Option<&str>) -> Element {
   let rows = ROWS.iter().map(|widths| row(ctx, *widths)).collect();
   let heading = Row::new()
     .padding(Padding::new().top(DeliverySpacing::MergesSection.role()))
@@ -61,7 +63,6 @@ pub(super) fn reading(ctx: &mut Ctx) -> Element {
   let bones = Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(DeliverySpacing::Lanes.role())
-    .child(header::reading(ctx))
     .child(heading)
     .child(
       Column::new()
@@ -70,7 +71,13 @@ pub(super) fn reading(ctx: &mut Ctx) -> Element {
         .rounded(RadiusSize::Md)
         .with_children(fading(rows)),
     );
-  Skeleton::new("merges-loading", ctx.t("merges.reading")).show(ctx, bones)
+  let info = header::reading(ctx, branch);
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(DeliverySpacing::Lanes.role())
+    .child(info)
+    .child(Skeleton::new("merges-loading", ctx.t("merges.reading")).show(ctx, bones))
+    .into()
 }
 
 /// A row's bones.

@@ -192,10 +192,14 @@ fn open_pull_requests(ctx: &mut Ctx, project: &ShownProject) -> (Option<usize>, 
   (open, reading)
 }
 
-/// The runs that need the person in Merges ([`merges::needing_you`]), and whether they are counted for the first time.
+/// The runs that need the person in Merges ([`merges::needing_you`]), and whether they are counted for the first time,
+/// the project's tasks still read too.
 fn merges_needing_you(ctx: &mut Ctx, project: &ShownProject) -> (Option<usize>, bool) {
   let feed = &project.feed;
   let tasks = feed.tasks.with(|tasks| tasks.ready().cloned());
+  let tasks_reading = feed
+    .tasks
+    .with(|tasks| matches!(tasks, crate::project::TasksState::Loading));
   let deps = (project.open.repo_root.clone(), tasks, feed.saves.get());
   let hold = crate::services::Services::of(ctx).hold;
   let counted = ctx
@@ -217,6 +221,6 @@ fn merges_needing_you(ctx: &mut Ctx, project: &ShownProject) -> (Option<usize>, 
     })
     .state()
     .get();
-  let reading = counted.is_pending() && counted.data.is_none();
+  let reading = tasks_reading || (counted.is_pending() && counted.data.is_none());
   (counted.data.flatten(), reading)
 }

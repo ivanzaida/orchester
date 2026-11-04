@@ -1,8 +1,8 @@
 //! What Review › Merges shows of the project's merges (`crates/desktop-app/design/orchester.pen`, board `Review ·
 //! redesign`, 09 `Os7b3`): each run [`super::read`] finds, with its task's key and title, its number and the branch it
 //! merges into; a run waiting for review with what it changes and the review comments not sent yet; a merged run with
-//! who asked for the merge that landed, the attempts before it, and whether its worktree was removed. Blocks on SQLite
-//! and git.
+//! who asked for the merge that landed, the attempts before it, and whether its worktree was removed and its branch
+//! deleted. Blocks on SQLite and git.
 
 use std::{
   collections::{HashMap, HashSet},
@@ -11,10 +11,11 @@ use std::{
 };
 
 use orchester_core::{
+  command::CommandRunner,
   diff::Changes,
   id::{RunId, TaskId},
   integration::{
-    RunMerge,
+    Branches, RunMerge,
     attempt::{AttemptOutcome, MergeAsker},
   },
   project::TaskKey,
@@ -30,7 +31,7 @@ use super::read::{self, NotMerged, WaitingReview};
 use crate::{
   merge_queue::{BaseState, checkout_base},
   tasks::{
-    changes::{Checkpointed, RunRange, run_changes_in},
+    changes::{Checkpointed, GIT, RunRange, run_changes_in},
     data::ProjectTasks,
     detail::run_store_error,
     needs_you::WaitingKind,
@@ -80,6 +81,8 @@ pub struct MergedRun {
   /// The attempts before the one that landed, which did not.
   pub refused_before: usize,
   pub worktree_removed: bool,
+  /// The run's branch is no longer in the repository; `false` when git could not tell (the log says why).
+  pub branch_deleted: bool,
 }
 
 /// The runs merged on one local day, newest first.
@@ -142,7 +145,7 @@ pub fn merges(tasks: &ProjectTasks, (root, programs): (&Path, &Programs), merged
       waiting.push(waiting_run(&db, (root, programs), run, review)?);
     }
   }
-  let (merged, more) = merged_days(root, &runs, merged)?;
+  let (merged, more) = merged_days((root, programs), &runs, merged)?;
   Ok(Merges {
     base: checkout_base(root, programs),
     not_merged,
@@ -199,14 +202,27 @@ fn named(tasks: &ProjectTasks) -> HashMap<TaskId, &Task> {
 }
 
 /// The `limit` runs merged last in the project at `root`, by local day, and whether more were merged before them.
-fn merged_days(root: &Path, runs: &Runs<'_>, limit: usize) -> Result<(Vec<MergedRunsDay>, bool), StoreError> {
+/// `programs` read once which of their branches are left.
+fn merged_days(
+  (root, programs): (&Path, &Programs),
+  runs: &Runs<'_>,
+  limit: usize,
+) -> Result<(Vec<MergedRunsDay>, bool), StoreError> {
   let page = read::merged_by_day(root, None, limit)?;
+  let runner = programs.runner();
+  let branches = if page.days.is_empty() {
+    None
+  } else {
+    Branches::read(&runner, Path::new(GIT), root)
+      .inspect_err(|error| tracing::warn!(%error, "cannot read which merged runs' branches are left"))
+      .ok()
+  };
   let mut days = Vec::with_capacity(page.days.len());
   for day in page.days {
     let mut shown = Vec::with_capacity(day.runs.len());
     for (task, merge) in day.runs {
       if let Some(run) = runs.of(task, merge.run)? {
-        shown.push(merged_run(runs.db, run, merge)?);
+        shown.push(merged_run(runs.db, branches.as_ref(), run, merge)?);
       }
     }
     if !shown.is_empty() {
@@ -283,15 +299,29 @@ fn waiting_run(
   })
 }
 
-fn merged_run(db: &ProjectDb, run: MergeRun, merge: RunMerge) -> Result<MergedRun, StoreError> {
+/// `run`, merged as `merge`; its branch is told deleted when `branches`, the repository's, no longer hold it.
+fn merged_run<R: CommandRunner>(
+  db: &ProjectDb,
+  branches: Option<&Branches<'_, R>>,
+  run: MergeRun,
+  merge: RunMerge,
+) -> Result<MergedRun, StoreError> {
   let attempts = db.merge_attempts(run.run)?;
   let landed = attempts.iter().position(|recorded| recorded.attempt.outcome().landed());
   let (asked_by, refused_before) = match landed {
     Some(at) => (Some(attempts[at].attempt.asked_by()), attempts.len() - at - 1),
     None => (None, 0),
   };
+  let branch_deleted = match branches {
+    Some(branches) => db
+      .run(run.run)
+      .map_err(run_store_error)?
+      .is_some_and(|stored| !branches.has(stored.branch())),
+    None => false,
+  };
   Ok(MergedRun {
     worktree_removed: db.worktree_removal(run.run)?.is_some(),
+    branch_deleted,
     run,
     merge,
     asked_by,
