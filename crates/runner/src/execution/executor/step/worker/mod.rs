@@ -47,7 +47,7 @@ use super::{
   super::{
     Notifier,
     control::Ack,
-    link::{CoordinatorLink, LinkError, approvals},
+    link::{CoordinatorLink, LinkError, approvals, settings::ApprovalModeRequest},
     run::ExecutionError,
     sink::Sink,
     tool::CommandFinished,
@@ -355,14 +355,18 @@ impl Watch {
   }
 
   /// The mode this agent's requests are answered in now (`docs/design/approval-modes.md`): by its profile's approval
-  /// mode as it started, the project's *Allow Autopilot* and its run's switch to Manual, read again at each request.
-  pub(super) fn approval_mode(&self) -> Result<EffectiveMode, StoreError> {
+  /// mode as it started, the project's *Allow Autopilot* and its run's switch to Manual, asked through the worker's
+  /// link again at each request.
+  pub(super) fn approval_mode(&self) -> Result<EffectiveMode, LinkError> {
     let profile = self
       .invocation
       .permissions
       .as_ref()
       .map_or(ApprovalMode::Manual, |launch| launch.permissions().approval_mode());
-    self.db.approval_mode(self.invocation.run, profile)
+    self.link.approval_mode(&ApprovalModeRequest {
+      run: self.invocation.run,
+      profile,
+    })
   }
 
   /// Whether Autopilot answers this agent's requests now: the run is in it, and its own *Stop* did not take it back.

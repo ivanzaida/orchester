@@ -3,11 +3,14 @@
 //! module of its own.
 
 mod approvals;
+mod base_notices;
 mod environment;
 mod memory;
 mod messages;
 mod questions;
 mod resources;
+mod settings;
+mod usage;
 
 use std::{
   ops::Deref,
@@ -87,4 +90,20 @@ fn read_failed(error: &StoreError) -> LinkError {
     detail: error.to_string(),
     failure: error.runner_failure(),
   }
+}
+
+/// `request` and the answer `read` gives it, each sent as JSON in the runner's own tests (`executor::link::sent`).
+fn answered<R, T>(request: &R, read: impl FnOnce() -> Result<T, LinkError>) -> Result<T, LinkError>
+where
+  R: serde::Serialize + serde::de::DeserializeOwned,
+  T: serde::Serialize + serde::de::DeserializeOwned,
+{
+  #[cfg(feature = "test-agent")]
+  crate::execution::executor::link::sent::sending(request);
+  #[cfg(not(feature = "test-agent"))]
+  let _ = request;
+  let answer = read();
+  #[cfg(feature = "test-agent")]
+  crate::execution::executor::link::sent::sending(&answer);
+  answer
 }

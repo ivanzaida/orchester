@@ -32,7 +32,7 @@ use orchester_core::{
   resource::{AgentProfile, ModelId},
   run::{InvocationEngine, InvocationPrompt, NativeSetting, ResultDelivery},
   secret::SecretValue,
-  store::{ActivityStore, SettingsStore},
+  store::ActivityStore,
   time::Timestamp,
 };
 use orchester_exec::ripgrep;
@@ -40,7 +40,7 @@ use orchester_store::ProjectDb;
 
 use super::{
   super::{
-    super::{codebase_index::IndexTold, connection_check, run::RunTask},
+    super::{codebase_index::IndexTold, connection_check, link::settings::agent_files, run::RunTask},
     Continuation, Occasion,
     native::{CommandHost, NativeSession},
     skills::PlacedSkill,
@@ -225,10 +225,7 @@ impl RunTask {
     worktree: &Path,
     skills: &mut Vec<PlacedSkill>,
   ) -> Result<Option<String>, RunnerProblem> {
-    let setting = self
-      .db
-      .repository_agent_files()
-      .map_err(|error| problem(error.to_string()))?;
+    let setting = agent_files(&*self.link).map_err(|error| problem(error.to_string()))?;
     if setting.mechanism(connection.provider()) != AgentFilesMechanism::OrchesterLoads {
       return Ok(None);
     }

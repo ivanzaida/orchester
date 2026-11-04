@@ -74,7 +74,6 @@ impl RunTask {
   pub(in super::super) fn keep_handoff(&mut self, execution: StepExecutionId, fate: StepFate) {
     let mut keeper = Keeper {
       db: &mut self.db,
-      link: &*self.link,
       sink: self.sink.as_mut(),
       notifier: &self.notifier,
       computer: self.computer.as_ref(),

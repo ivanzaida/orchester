@@ -1,7 +1,7 @@
 //! A turn the provider's API refused because the CLI is too old for the step's model
 //! (`orchester_core::connection::parse_cli_too_old`): the run says so instead of a bare failure,
 //! and the connection records the version the model needs, so its settings and the models picked
-//! for it can warn before the next run.
+//! for it can warn before the next run. The coordinator records it (`docs/architecture/remote-runners.md`, rule 3).
 
 use orchester_core::{
   connection::{
@@ -10,9 +10,8 @@ use orchester_core::{
   },
   id::StepExecutionId,
   run::StepExecutor,
-  store::ConnectionStore,
 };
-use orchester_store::StoreError;
+use orchester_store::{ModelRequirement, StoreError};
 
 use super::{
   super::run::{ExecutionError, RunTask},
@@ -64,7 +63,8 @@ impl RunTask {
         return Ok(());
       }
     };
-    match self.db.record_model_requirement(connection, model, &refusal.required) {
+    let requirement = ModelRequirement::new(connection, model, &refusal.required);
+    match self.sink.model_requirement(requirement) {
       Ok(()) => Ok(()),
       Err(StoreError::ConnectionNotFound(_)) => {
         tracing::warn!(%connection, "the connection was removed before the CLI version a model needs was recorded");

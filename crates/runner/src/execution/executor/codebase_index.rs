@@ -28,16 +28,17 @@ use orchester_core::{
   id::RunId,
   revision::Revision,
   run::CodeIndexPrompt,
-  store::SettingsStore,
 };
 use orchester_exec::{
   ripgrep::{self, LOCAL_APP_DATA},
   search_path::search_path,
 };
 use orchester_index::{CodebaseIndexes, IndexError, Outcome};
-use orchester_store::StoreError;
 
-use super::run::RunTask;
+use super::{
+  link::{LinkError, settings::code_index},
+  run::RunTask,
+};
 
 /// The code index of the run's base revision, as the run's task knows it.
 #[derive(Clone, Debug)]
@@ -160,10 +161,10 @@ fn state(run: RunId, result: Result<orchester_index::Ensured, IndexError>) -> In
 }
 
 impl RunTask {
-  /// Begins building the index in the background when the project has the code index on; no agent
-  /// starts until the build ends.
-  pub(super) fn begin_code_index(&mut self) -> Result<(), StoreError> {
-    if self.db.code_index()?.is_on() {
+  /// Begins building the index in the background when the project has the code index on, as the coordinator link
+  /// says; no agent starts until the build ends.
+  pub(super) fn begin_code_index(&mut self) -> Result<(), LinkError> {
+    if code_index(&*self.link)?.is_on() {
       self.build_code_index(true);
     }
     Ok(())
@@ -186,10 +187,10 @@ impl RunTask {
     self.code_index = state;
   }
 
-  /// What an agent starting now gets of the code index. When the setting was turned on while the
-  /// run executed, the build begins now and the agent gets no index.
+  /// What an agent starting now gets of the code index, by the setting asked through the coordinator link. When the
+  /// setting was turned on while the run executed, the build begins now and the agent gets no index.
   pub(super) fn agent_index(&mut self) -> Result<AgentIndex, String> {
-    if !self.db.code_index().map_err(|error| error.to_string())?.is_on() {
+    if !code_index(&*self.link).map_err(|error| error.to_string())?.is_on() {
       return Ok(AgentIndex::off());
     }
     let index = self.index_folder();

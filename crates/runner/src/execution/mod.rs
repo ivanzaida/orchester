@@ -530,8 +530,8 @@ impl Scheduler {
         detail: format!("another task still executes run {run}"),
       });
     }
-    let link = LocalLinks::new(&self.inner.project_root)
-      .open()
+    let link = self
+      .open_link()
       .map_err(|error| failed("cannot open the project database", &error))?;
     let (control, controls) = mpsc::unbounded_channel();
     let settled = Arc::new(AtomicBool::new(false));
@@ -562,6 +562,13 @@ impl Scheduler {
     });
     active.insert(run, ActiveRun { control, task, settled });
     Ok(())
+  }
+
+  /// A new link of the project's executor to its coordinator, which a run's task and the executor's work outside one
+  /// ask the project's data through: here the local link, over a read-only connection of its own. The one place the
+  /// executor is handed its coordinator's link.
+  pub(in crate::execution) fn open_link(&self) -> Result<Box<dyn link::CoordinatorLink + Send>, link::LinkError> {
+    LocalLinks::new(&self.inner.project_root).open()
   }
 }
 

@@ -57,7 +57,7 @@ impl SimilarCommand {
 }
 
 /// One simple command of a command line, classified.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CommandPart {
   /// The program and its arguments as written.
   pub(super) words: Vec<String>,

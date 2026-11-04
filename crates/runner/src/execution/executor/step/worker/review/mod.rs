@@ -96,7 +96,7 @@ impl Worker {
     watch: &mut Watch,
     approval: &PendingToolApproval,
     (question, escalation): (ReviewQuestion, bool),
-  ) -> Result<Result<Reviewing, CameToPerson>, StoreError> {
+  ) -> Result<Result<Reviewing, CameToPerson>, WorkerError> {
     let setup = self.reviewer(watch)?;
     if matches!(setup, ReviewerSetup::Missing) {
       return Ok(Err(without_reviewer(question)));

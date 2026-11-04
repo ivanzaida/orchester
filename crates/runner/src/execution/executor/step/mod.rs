@@ -40,7 +40,7 @@ use orchester_core::{
   permission::LaunchPermissions,
   resource::ModelId,
   revision::Revision,
-  run::{Invocation, MessageOccasion, Plan, StepExecutor, StepFailure, StepStatus, execution_tokens},
+  run::{Invocation, MessageOccasion, Plan, StepExecutor, StepFailure, StepStatus},
   store::{ActivityStore, RunStore},
   time::Timestamp,
   tokens::{TokenBudget, TokensUsed},
@@ -57,7 +57,7 @@ use self::{
 };
 pub use self::{orchester_tools::outside_read_refusals, qa_app::QaSlots};
 use super::{
-  link::messages as message_link,
+  link::{messages as message_link, usage as usage_link},
   record::RecordError,
   run::{ExecutionError, RunTask},
   workspace::{Start, Workspace},
@@ -353,11 +353,7 @@ impl RunTask {
     (driven, (permissions, secrets, (agent, account))): (Driven, AgentParts),
     (workspace, judged): (Workspace, Option<Revision>),
   ) -> Result<(), ExecutionError> {
-    let (invocations, reviews) = (
-      self.db.invocations(self.run.id())?,
-      self.db.reviewer_usage(self.run.id())?,
-    );
-    let used = execution_tokens(&invocations, &reviews, execution);
+    let used = usage_link::step_usage(&*self.link, self.run.id(), vec![execution])?.of(execution);
     let (stops, stopped) = mpsc::unbounded_channel();
     let (approvals, decisions) = mpsc::unbounded_channel();
     let (questions, answers) = mpsc::unbounded_channel();

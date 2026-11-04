@@ -35,7 +35,8 @@ impl Worker {
           Some(NativeUpdate::Approval(ask)) => self.request_native_approval(&mut watch, ask).await?,
           Some(NativeUpdate::Ended(end)) => return Ok(self.finish_native(watch, end)?),
           None => {
-            return Ok(self.finish_native(watch, Err("the native agent ended without saying how".to_owned()))?);
+            let end = Err("the native agent ended without saying how".to_owned());
+            return Ok(self.finish_native(watch, end)?);
           }
         },
         _ = flush.tick() => self.tick(&mut watch).await?,

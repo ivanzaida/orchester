@@ -33,13 +33,17 @@ use orchester_core::{
   time::Timestamp,
   usage::UsedProvider,
 };
-use orchester_store::{ProjectDb, StoreError};
+use orchester_store::StoreError;
 use tokio::{runtime::Handle, sync::watch};
 
 use super::{
   super::{
-    super::super::{environment::computer_environment, link::EnvironmentLink, run::RunTask},
-    Watch, Worker,
+    super::super::{
+      environment::computer_environment,
+      link::{EnvironmentLink, SettingsLink, settings::auto_mode},
+      run::RunTask,
+    },
+    Watch, Worker, WorkerError,
   },
   ledger::ReviewLedger,
   native::{NativeReviewer, client},
@@ -324,8 +328,8 @@ impl RequestReviewer for Unreachable {
 
 impl Worker {
   /// The project's reviewer, as its auto mode settings resolve against its connections.
-  pub(super) fn reviewer(&self, watch: &Watch) -> Result<ReviewerSetup, StoreError> {
-    reviewer_setup((&watch.db, &*watch.link), &self.reviewer_sources)
+  pub(super) fn reviewer(&self, watch: &Watch) -> Result<ReviewerSetup, WorkerError> {
+    reviewer_setup(&*watch.link, &self.reviewer_sources)
   }
 }
 
@@ -342,14 +346,14 @@ pub(super) fn reviewer_variables(
   })
 }
 
-/// The reviewer of the project of `db`, as its auto mode settings resolve against its connections on the computer,
-/// its key read from `sources` and a CLI's variables asked through `link`; the story-point estimator runs on it too.
-/// Without the computer's connections there is no reviewer to ask, and the person decides.
+/// The project's reviewer, as its auto mode settings, asked through `link`, resolve against its connections on the
+/// computer, its key read from `sources` and a CLI's variables asked through `link`; the story-point estimator runs on
+/// it too. Without the computer's connections there is no reviewer to ask, and the person decides.
 pub(super) fn reviewer_setup(
-  (db, link): (&ProjectDb, &(impl EnvironmentLink + ?Sized)),
+  link: &(impl EnvironmentLink + SettingsLink + ?Sized),
   sources: &ReviewerSources,
-) -> Result<ReviewerSetup, StoreError> {
-  let settings = db.auto_mode_settings()?;
+) -> Result<ReviewerSetup, WorkerError> {
+  let settings = auto_mode(link)?;
   let listed = match sources.computer.connections() {
     Ok(listed) => listed,
     Err(error) => {

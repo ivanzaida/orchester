@@ -11,15 +11,12 @@ use std::{
 
 /// Executor code that names a coordinator module today, as `(file under executor/, module)`: the run's task reads the
 /// project's daily budget and maps refusals through `idle`, and takes and gives back agent slots on the `board` the
-/// scheduler shares with it. The merge queue and the story-point estimate, which run outside a run's task, open the
-/// local `link` over their own database connection to ask the project's environment (ORC-674).
+/// scheduler shares with it.
 const KNOWN: &[(&str, &str)] = &[
   ("halt.rs", "idle"),
-  ("merge_queue.rs", "link"),
   ("permissions.rs", "idle"),
   ("plan.rs", "idle"),
   ("run.rs", "board"),
-  ("step/worker/review/estimate.rs", "link"),
 ];
 
 fn execution() -> PathBuf {
@@ -309,6 +306,33 @@ fn the_executor_reads_memory_only_through_the_coordinator_link() {
   assert!(
     found.is_empty(),
     "executor code reads memory from the project database; ask the coordinator link instead: {found:#?}"
+  );
+}
+
+/// The executor reads the project settings an agent start reads, its steps' usage and the run's base notices only
+/// through the coordinator link (ORC-670): never from the project database itself. The project-level gates (the daily
+/// budget, agent slots, the disk guard's free space) stay the coordinator's and are not listed.
+#[test]
+fn the_executor_reads_settings_usage_and_base_notices_only_through_the_coordinator_link() {
+  let found = lines_naming(
+    "executor",
+    &[
+      ".code_index()",
+      "repository_agent_files",
+      "auto_mode_settings",
+      "db.approval_mode",
+      "workspace_settings",
+      ".qa_slots()",
+      ".tells_base_moves()",
+      "pending_base_notice",
+      ".reviewer_usage(",
+      "execution_tokens",
+    ],
+  );
+  assert!(
+    found.is_empty(),
+    "executor code reads settings, usage or base notices from the project database; ask the coordinator link instead: \
+     {found:#?}"
   );
 }
 

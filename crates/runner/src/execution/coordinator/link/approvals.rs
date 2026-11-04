@@ -7,31 +7,13 @@ use std::ops::Deref;
 use orchester_core::run::{ApprovalRule, PendingToolApproval, ProjectRule, review::Review};
 use orchester_store::ProjectDb;
 
-use super::{LocalLink, read_failed};
-#[cfg(feature = "test-agent")]
-use crate::execution::executor::link::sent;
+use super::{LocalLink, answered, read_failed};
 use crate::execution::executor::link::{
   LinkError,
   approvals::{
     ApprovalLink, ApprovalRequest, AutoApproveRequest, PendingApprovalsRequest, ProjectRulesRequest, RunRulesRequest,
   },
 };
-
-/// `request` and the answer `read` gives it, each sent as JSON in the runner's own tests.
-fn answered<R, T>(request: &R, read: impl FnOnce() -> Result<T, LinkError>) -> Result<T, LinkError>
-where
-  R: serde::Serialize + serde::de::DeserializeOwned,
-  T: serde::Serialize + serde::de::DeserializeOwned,
-{
-  #[cfg(feature = "test-agent")]
-  sent::sending(request);
-  #[cfg(not(feature = "test-agent"))]
-  let _ = request;
-  let answer = read();
-  #[cfg(feature = "test-agent")]
-  sent::sending(&answer);
-  answer
-}
 
 impl<D: Deref<Target = ProjectDb>> ApprovalLink for LocalLink<D> {
   fn approval_rules(&self, request: &RunRulesRequest) -> Result<Vec<ApprovalRule>, LinkError> {
