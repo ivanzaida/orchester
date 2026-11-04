@@ -1,15 +1,19 @@
 //! What the review page keeps while it shows: the comment box's lines, kind and words, the line a drag over lines
-//! started on, the thread whose follow-up or edit is open, the files folded or unfolded by hand, the folds opened, the
-//! file the list scrolls to, the head the person took in after it moved, and why the latest change was not made.
+//! started on, the line under the pointer, the thread whose follow-up or edit is open, the fields that take the focus
+//! when their box opens, the files folded or unfolded by hand, the folds opened, the file the list scrolls to, the head
+//! the person took in after it moved, and why the latest change was not made.
 
 use std::{
   collections::{BTreeMap, BTreeSet},
-  sync::Arc,
+  sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+  },
 };
 
 use lurq::{
   app::{component::DevtoolsInspectable, ctx::Ctx},
-  core::Signal,
+  core::{ElementRef, Signal},
 };
 use orchester_core::{
   id::{ReviewMessageId, ReviewThreadId},
@@ -31,6 +35,30 @@ impl<T> DevtoolsInspectable for Held<T> {}
 
 /// The line a drag over lines started on, in the file at its path.
 type DragStart = Option<(Arc<str>, LineKey)>;
+
+/// The line under the pointer, in the file at its path, and the signal its row shows its **+** by.
+type Hovered = Option<(Arc<str>, LineKey, Signal<bool>)>;
+
+/// A box's field and whether it opened since it was drawn last, when it takes the focus.
+#[derive(Clone, Default)]
+pub(super) struct BoxField {
+  pub field: ElementRef,
+  opened: Arc<AtomicBool>,
+}
+
+impl BoxField {
+  /// The box opened: its field takes the focus once it is drawn.
+  fn open(&self) {
+    self.opened.store(true, Ordering::Relaxed);
+  }
+
+  /// The field takes the focus when its box opened since it was drawn last.
+  pub fn focus_once(&self, ctx: &Ctx) {
+    if self.opened.swap(false, Ordering::Relaxed) {
+      ctx.focus(&self.field);
+    }
+  }
+}
 
 /// The lines the comment box is open under, chosen in the diff of `head`.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -69,10 +97,16 @@ pub(super) struct ReviewState {
   pub composing: Signal<Held<Option<Composing>>>,
   pub kind: Signal<Held<ThreadKind>>,
   pub text: Signal<String>,
+  /// The comment box's field, which takes the focus when the box opens or takes other lines.
+  pub field: BoxField,
   /// The line a press started a drag on, in the file at its path; `None` once the button is up.
   pub drag: Arc<Mutex<DragStart>>,
+  /// The line under the pointer: only its row shows the **+**.
+  pub hovered: Arc<Mutex<Hovered>>,
   pub in_thread: Signal<Held<Option<InThread>>>,
   pub in_thread_text: Signal<String>,
+  /// The field of the box inside a thread, which takes the focus when the box opens.
+  pub in_thread_field: BoxField,
   /// Files folded or unfolded by hand, by path; the others fold once they are marked *Viewed*.
   pub folded: Signal<Held<BTreeMap<Arc<str>, bool>>>,
   /// The folds of outdated and resolved threads opened, by their keys.
@@ -104,9 +138,12 @@ impl ReviewState {
       composing: ctx.signal(Held(None)),
       kind: ctx.signal(Held(ThreadKind::Comment)),
       text: ctx.signal(String::new()),
+      field: BoxField::default(),
       drag: Arc::default(),
+      hovered: Arc::default(),
       in_thread: ctx.signal(Held(None)),
       in_thread_text: ctx.signal(String::new()),
+      in_thread_field: BoxField::default(),
       folded: ctx.signal(Held(BTreeMap::new())),
       opened: ctx.signal(Held(BTreeSet::new())),
       chosen: ctx.signal(Held(None)),
@@ -117,10 +154,15 @@ impl ReviewState {
     }
   }
 
-  /// Opens the comment box under `composing`, a comment unless the person chose otherwise for the words kept.
+  /// Opens the comment box under `composing`, a comment unless the person chose otherwise for the words kept; its
+  /// field takes the focus whenever the box opens or takes other lines.
   pub fn compose(&self, composing: Composing) {
-    if self.composing.get_untracked().0.is_none() {
+    let was = self.composing.get_untracked().0;
+    if was.is_none() {
       self.kind.set(Held(ThreadKind::Comment));
+    }
+    if was.as_ref() != Some(&composing) {
+      self.field.open();
     }
     self.composing.set(Held(Some(composing)));
   }
@@ -133,9 +175,10 @@ impl ReviewState {
     }
   }
 
-  /// Opens a box inside a thread with `text`.
+  /// Opens a box inside a thread with `text`; its field takes the focus.
   pub fn open_in_thread(&self, what: InThread, text: String) {
     self.in_thread_text.set(text);
+    self.in_thread_field.open();
     self.in_thread.set(Held(Some(what)));
   }
 
@@ -184,6 +227,39 @@ impl ReviewState {
   /// The button is up: the drag ends where it is.
   pub fn release(&self) {
     *self.drag.lock() = None;
+  }
+
+  /// The pointer entered `line` of the file at `path`, whose row shows its **+** by `shown`: the line it was over
+  /// before lets go of its own, should its row not have heard the pointer leave.
+  pub fn hover(&self, (path, line): (Arc<str>, LineKey), shown: &Signal<bool>) {
+    let was = self.hovered.lock().replace((path, line, shown.clone()));
+    if let Some((_, _, was)) = was
+      && was.id() != shown.id()
+    {
+      was.set(false);
+    }
+    shown.set(true);
+  }
+
+  /// The pointer left the row that shows its **+** by `shown`.
+  pub fn leave(&self, shown: &Signal<bool>) {
+    {
+      let mut hovered = self.hovered.lock();
+      if hovered.as_ref().is_some_and(|(_, _, held)| held.id() == shown.id()) {
+        *hovered = None;
+      }
+    }
+    shown.set(false);
+  }
+
+  /// Whether the pointer is over `line` of the file at `path`: a row the list mounts again for another line keeps its
+  /// signal, which then tells nothing of this one.
+  pub fn hovers(&self, path: &str, line: LineKey) -> bool {
+    self
+      .hovered
+      .lock()
+      .as_ref()
+      .is_some_and(|(over, key, _)| **over == *path && *key == line)
   }
 
   /// Whether the file at `path` shows folded: as the person folded it, else once it is marked *Viewed*.

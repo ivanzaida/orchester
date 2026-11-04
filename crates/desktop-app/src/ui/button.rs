@@ -137,6 +137,8 @@ pub struct ActionButton {
   tight: bool,
   /// 24 high instead of 28, as a Copy inside a command row (`PEnj5`).
   small: bool,
+  /// 26 high instead of 28, as an action of a review thread (`SYiTG`).
+  snug: bool,
   /// 36 high with a 13/500 label.
   large: bool,
   /// Large and not primary, with a primary's room at each side.
@@ -173,6 +175,7 @@ impl ActionButton {
       compact: false,
       tight: false,
       small: false,
+      snug: false,
       large: false,
       roomy: false,
       bounded: false,
@@ -299,6 +302,13 @@ impl ActionButton {
     self
   }
 
+  /// 26 high, its icon and label as a button's: an action in a review thread's head or the comment box (`Ask again`
+  /// `SYiTG`, `Add comment` `Z0RVD` in `Review · redesign`).
+  pub fn snug(mut self) -> Self {
+    self.snug = true;
+    self
+  }
+
   /// 36 high, its label 13/500: the welcome's actions (`rDzhV`, `fZDtO`).
   pub fn large(mut self) -> Self {
     self.large = true;
@@ -382,6 +392,8 @@ impl ActionButton {
       )
     } else if self.small {
       (ControlHeight::Sm, IconSize::Md, TypographyStyle::Button)
+    } else if self.snug {
+      (ControlHeight::Snug, IconSize::Md, TypographyStyle::Button)
     } else if self.large {
       (
         ControlHeight::Lg,
