@@ -7,7 +7,7 @@ mod support;
 use std::{fs, num::NonZeroU32, path::Path};
 
 use orchester_core::{
-  store::{SettingsStore, WorkspaceStore},
+  store::{SettingsStore, WorkspaceStore, WorktreeStore},
   workspaces::{CleanableKind, DiskSpace, DiskSpaceError, DiskUsage, GIGABYTE, Holder, KeepFree, WorkspaceNumber},
 };
 use orchester_workspace::{storage, tasks::changes::run_worktree};
@@ -128,4 +128,59 @@ fn storage_save_keep_free_is_read_by_the_next_guard_check() {
   assert!(storage::read(root, &Disk(32)).expect("read").guard.holds());
   assert!(KeepFree::from_gigabytes(0).is_err());
   assert!(KeepFree::from_gigabytes(1048577).is_err());
+}
+
+#[test]
+fn storage_inventory_measures_step_worktrees_and_keeps_failed_steps_without_the_main_folder() {
+  let mut fixture = Fixture::new();
+  let root = fixture.repo.path().to_path_buf();
+  let task = fixture.task("Ship it", at(1));
+  let mut ended = fixture.started_run(task, at(2));
+  fixture.succeed(&mut ended, at(3));
+  let working = fixture.started_run(task, at(4));
+  let step_path = |run: &orchester_core::run::Run| {
+    root
+      .join(orchester_core::integration::WORKTREES_DIR)
+      .join(run.current_attempt().expect("attempt").executions()[0].id().to_string())
+  };
+  let main = run_worktree(&root, ended.id());
+  let step = step_path(&ended);
+  let active_step = step_path(&working);
+  fill(&main, 1_000);
+  fill(&step, 50_000);
+  fill(&active_step, 90_000);
+  let mut rows = storage::inventory(&root).expect("inventory");
+  for row in &mut rows {
+    storage::measure(row);
+  }
+  assert_eq!(rows.len(), 3);
+  assert_eq!(rows.iter().filter_map(|row| row.bytes).sum::<u64>(), 141_000);
+  let active = rows.iter().find(|row| row.path == active_step).expect("active step");
+  assert!(active.in_use);
+  assert_eq!(active.removable_run(), None);
+  let cleanable = storage::read(&root, &Disk(32)).expect("MCP inventory").cleanable;
+  assert_eq!(cleanable.len(), 2);
+  assert_eq!(
+    cleanable.iter().filter_map(|row| row.cleanable.bytes).sum::<u64>(),
+    51_000
+  );
+
+  fs::remove_dir_all(&main).expect("main removal succeeded");
+  let left = orchester_core::integration::NotRemoved {
+    path: step.to_string_lossy().replace('\\', "/"),
+    reason: Some("held by a process".into()),
+  };
+  fixture
+    .db
+    .save_worktree_not_removed(ended.id(), &left, at(5))
+    .expect("record failure");
+  let rows = storage::inventory(&root).expect("refreshed inventory");
+  let failed = rows
+    .iter()
+    .find(|row| row.path == step)
+    .expect("failed step stays visible");
+  assert_eq!(failed.run, Some(ended.id()));
+  assert_eq!(failed.removable_run(), Some(ended.id()));
+  assert_eq!(failed.removal.as_ref(), Some(&left));
+  assert_eq!(rows.len(), 2);
 }

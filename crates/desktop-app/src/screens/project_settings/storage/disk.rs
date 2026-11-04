@@ -166,6 +166,8 @@ fn cleanup(ctx: &mut Ctx, page: &StoragePage, inventory: Option<&Inventory>) -> 
       r.rows
         .iter()
         .filter_map(orchester_workspace::storage::KeptRow::removable_run)
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
         .collect::<Vec<_>>()
     })
     .unwrap_or_default();

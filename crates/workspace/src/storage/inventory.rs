@@ -14,7 +14,7 @@ use orchester_core::{
 use orchester_exec::disk_space::folder_size;
 use orchester_store::{ProjectDb, StoreError};
 
-use crate::tasks::{changes::run_worktree, detail::run_store_error};
+use crate::tasks::detail::run_store_error;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum KeptKind {
@@ -57,15 +57,20 @@ pub fn inventory(repo_root: &Path) -> Result<Vec<KeptRow>, StoreError> {
     Err(source) => return Err(StoreError::Io { path: folder, source }),
   };
   if let Some(entries) = entries {
+    let owners = db.worktree_folder_runs()?;
     for entry in entries {
       let entry = entry.map_err(|source| StoreError::Io {
         path: folder.clone(),
         source,
       })?;
-      let Some(run) = entry.file_name().to_str().and_then(|s| s.parse::<RunId>().ok()) else {
+      let name = entry.file_name();
+      let Some(run) = name.to_str().and_then(|name| owners.get(name)).copied() else {
         continue;
       };
-      if let Some(row) = run_row(&db, run, run_worktree(repo_root, run))? {
+      let path = entry.path();
+      if path.is_dir()
+        && let Some(row) = run_row(&db, run, path)?
+      {
         rows.push(row);
       }
     }
@@ -114,6 +119,9 @@ fn run_row(db: &ProjectDb, run: RunId, path: PathBuf) -> Result<Option<KeptRow>,
     .map_err(run_store_error)?
     .last()
     .map(orchester_core::run::RunEvent::at);
+  let removal = db
+    .worktree_not_removed(run)?
+    .filter(|left| Path::new(&left.path) == path);
   Ok(Some(KeptRow {
     kind: KeptKind::Worktree(run),
     path,
@@ -122,9 +130,7 @@ fn run_row(db: &ProjectDb, run: RunId, path: PathBuf) -> Result<Option<KeptRow>,
     status: Some(stored.status().clone()),
     last_used,
     bytes: None,
-    removal: db
-      .worktree_not_removed(run)?
-      .filter(|left| Path::new(&left.path).exists()),
+    removal,
     in_use: stored.status().has_live_work(),
     cleanable: stored
       .status()

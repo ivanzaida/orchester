@@ -55,6 +55,22 @@ impl ProjectDb {
     Ok(rows.collect::<Result<_, _>>()?)
   }
 
+  /// Each run and step execution folder's owning run, independent of which folders still exist.
+  pub fn worktree_folder_runs(&self) -> Result<HashMap<String, RunId>, StoreError> {
+    let mut statement = self.connection.prepare(
+      "SELECT id, id FROM runs UNION ALL \
+       SELECT executions.id, attempts.run_id FROM step_executions AS executions \
+       JOIN attempts ON attempts.id = executions.attempt_id",
+    )?;
+    let rows = statement
+      .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))?
+      .collect::<Result<Vec<_>, _>>()?;
+    rows
+      .into_iter()
+      .map(|(name, run)| Ok((name, parse("run id", &run)?)))
+      .collect()
+  }
+
   /// Sweeps the worktree folders of the repository at `repo` ([`sweep`]) that no git worktree, as the `git` program
   /// run by `runner` lists them, and no run here that has not ended owns, each deletion logged. It only frees space:
   /// what cannot be read or deleted is logged, and the next sweep tries again. The runner sweeps at its start, and

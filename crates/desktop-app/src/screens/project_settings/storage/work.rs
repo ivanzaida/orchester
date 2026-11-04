@@ -12,7 +12,7 @@ use orchester_core::{
   id::RunId,
   integration::Leftovers,
   run::Run,
-  store::{RunStore, TaskStore},
+  store::{RunStore, TaskStore, WorktreeStore},
 };
 use orchester_store::ProjectDb;
 use orchester_workspace::{
@@ -36,6 +36,7 @@ pub struct Candidate {
   pub title: String,
   pub left: Leftovers,
   pub sizes: Vec<Option<u64>>,
+  pub person_only: bool,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Plan(pub Vec<Candidate>);
@@ -54,7 +55,8 @@ pub fn prepare(ctx: &mut Ctx, root: PathBuf) -> Prepare {
       background::run(move || {
         let db = ProjectDb::open_read_only(&root).map_err(|e| messages::store_error(&e))?;
         let mut plan = Vec::new();
-        for id in runs {
+        let mut seen = std::collections::HashSet::new();
+        for id in runs.into_iter().filter(|id| seen.insert(*id)) {
           let run = db
             .run(id)
             .map_err(|e| messages::store_error(&run_store_error(e)))?
@@ -82,7 +84,14 @@ pub fn prepare(ctx: &mut Ctx, root: PathBuf) -> Prepare {
                 .ok()
             })
             .collect();
+          let finishing = db
+            .worktree_removal(id)
+            .map_err(|e| messages::store_error(&e))?
+            .is_some();
+          let only_forgotten = left.worktrees.iter().all(|tree| tree.forgotten);
+          let person_only = left.loses_files() && !(finishing && only_forgotten);
           plan.push(Candidate {
+            person_only,
             run,
             title,
             left,

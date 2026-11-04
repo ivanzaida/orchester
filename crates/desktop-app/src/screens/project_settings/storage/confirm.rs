@@ -1,6 +1,6 @@
 //! Clean up's one modal (X9BwMn): the exact snapshot to discard, its estimated space, and what stays.
 use lurq::{
-  app::{ctx::Ctx, theme::SpacingSize},
+  app::{ctx::Ctx, events::is_synthetic_input, theme::SpacingSize},
   components::{Column, Row, ScrollVertical, Text},
   node::{Element, dimension::Dimension},
 };
@@ -27,7 +27,11 @@ pub fn dialog(ctx: &mut Ctx, page: &StoragePage, disk: Option<&Disk>) -> Option<
   let list = candidates(ctx, &plan);
   let open = page.modal.clone();
   let remove = page.remove.clone();
+  let person_only = plan.0.iter().any(|candidate| candidate.person_only);
   let run = move || {
+    if person_only && is_synthetic_input() {
+      return;
+    }
     if open.get_untracked() && !remove.state().get_untracked().is_pending() {
       open.set(false);
       remove.run(plan.clone());
@@ -48,7 +52,7 @@ pub fn dialog(ctx: &mut Ctx, page: &StoragePage, disk: Option<&Disk>) -> Option<
     .and_then(|disk| disk.guard.disk)
     .and_then(|d| size.map(|size| d.free.saturating_add(size)));
   let count = page.prepare.state().get().data.as_ref().map_or(0, |p| p.0.len());
-  let modal = Dialog::new(
+  let mut modal = Dialog::new(
     "storage-confirm",
     Icon::Trash2,
     ctx.t_args(
@@ -74,8 +78,14 @@ pub fn dialog(ctx: &mut Ctx, page: &StoragePage, disk: Option<&Disk>) -> Option<
     Icon::ShieldCheck,
     &ctx.t("settings.project.runs.storage.clean_up.confirm.untouched"),
   ))
-  .action(action)
-  .render(ctx, &page.modal);
+  .action(action);
+  if person_only {
+    modal = modal.person_only(crate::ui::message::message_text(
+      ctx,
+      &orchester_workspace::messages::Message::new("appMcp.errors.uncommittedChanges"),
+    ));
+  }
+  let modal = modal.render(ctx, &page.modal);
   let open = page.modal.clone();
   Some(
     Column::new()
