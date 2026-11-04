@@ -23,6 +23,7 @@ use tokio::time::sleep;
 
 use super::{super::Scheduler, environment::run_environment, failed};
 use crate::{
+  execution::coordinator::link::LocalLink,
   execution_root::ExecutionRoot,
   supervisor::{ProcessEvent, ProcessExit, Supervised},
 };
@@ -58,9 +59,13 @@ impl Scheduler {
       }
       MergeQueueCommand::Recheck { run, tools } => {
         let worktree = execution.run_worktree(run);
-        let db = ProjectDb::open(&root).map_err(|error| failed("cannot open the project database", &error))?;
-        let environment = run_environment(&db, &execution, run).map_err(|detail| Rejection::Failed { detail })?;
-        drop(db);
+        // The project's variables as the coordinator gives them, made the environment of this computer; the database
+        // is closed before the tools run.
+        let environment = {
+          let db = ProjectDb::open(&root).map_err(|error| failed("cannot open the project database", &error))?;
+          run_environment((&LocalLink::over(&db), &*self.inner.computer), &execution, run)
+            .map_err(|detail| Rejection::Failed { detail })?
+        };
         Ok(MergeQueueReply::Rechecked(
           recheck((execution.repository(), &worktree), &tools, &environment).await,
         ))

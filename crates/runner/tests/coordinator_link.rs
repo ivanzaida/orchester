@@ -14,14 +14,16 @@ use orchester_core::{
   id::{ConnectionId, ResourceId, RunId, TaskId, VersionId},
   name::Name,
   resource::{
-    AgentProfile, AgentTargets, CommandAction, CommandProgram, InjectionEvent, Instruction, InstructionScope, ModelId,
-    PromptText, ProviderSettings, Skill, SkillFile, SkillFilePath, Tool, VersionNumber,
+    AgentProfile, AgentTargets, CommandAction, CommandEnvironment, CommandProgram, InjectionEvent, Instruction,
+    InstructionScope, ModelId, PromptText, ProviderSettings, Skill, SkillFile, SkillFilePath, Tool, VariableName,
+    VersionNumber,
   },
   run::{PinnedVersion, RunnerFailure},
   time::Timestamp,
 };
 use orchester_runner::execution::link::{
   LinkError,
+  environment::EnvironmentRequest,
   messages::{AttachedContent, AttachedRequest, MessagesRequest},
   resources::{
     Blob, BlobRequest, PinnedBody, PinnedKind, ResourceLink, ResourceNames, ResourceRequest, VersionRequest,
@@ -162,6 +164,23 @@ fn coordinator_link_a_message_with_an_attachment_round_trips() {
     shown.contains("shot.png") && !shown.contains("137, 80, 78, 71"),
     "{shown}"
   );
+}
+
+#[test]
+fn coordinator_link_the_project_environment_round_trips() {
+  round_trip(&EnvironmentRequest {});
+  let variables = BTreeMap::from([
+    (
+      VariableName::new("RUSTC_WRAPPER").expect("a name"),
+      "sccache".to_owned(),
+    ),
+    (
+      VariableName::new("SCCACHE_DIR").expect("a name"),
+      r"E:\sccache".to_owned(),
+    ),
+  ]);
+  round_trip(&CommandEnvironment::new(variables).expect("valid variables"));
+  round_trip(&CommandEnvironment::default());
 }
 
 #[test]

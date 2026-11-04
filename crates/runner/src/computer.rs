@@ -1,14 +1,16 @@
 //! The computer's resources (`docs/architecture/remote-runners.md`, rule 1): what belongs to the computer a run's
 //! executor runs on, which the executor asks for here instead of reading the project database and the home folder
 //! itself. It asks for a connection by the id its pinned profile (or the run's choice for a step) names, and gets back
-//! what starting the CLI or native agent on this computer needs ([`ComputerConnection`]). Every answer is a
-//! serializable value, so a remote implementation can answer for another computer later.
+//! what starting the CLI or native agent on this computer needs ([`ComputerConnection`]). The project's variables,
+//! which come through the coordinator link, become the environment there ([`ComputerResources::environment`]). Every
+//! answer is a serializable value, so a remote implementation can answer for another computer later.
 
 use std::path::{Path, PathBuf};
 
 use orchester_core::{
   computer::{CliHomes, ComputerConnection, ComputerError},
   id::ConnectionId,
+  resource::CommandEnvironment,
   store::ConnectionStore,
 };
 use orchester_store::{ProjectDb, StoreError};
@@ -23,6 +25,11 @@ pub(crate) trait ComputerResources: Send + Sync {
 
   /// This computer's home folder, which bounds the folders a step may be given; `None` when it cannot be told.
   fn home_folder(&self) -> Option<PathBuf>;
+
+  /// The variables agents and command tools start with on this computer, made of `project`'s, the ones Project
+  /// settings › Environment sets: a computer that sets its own value for a name gives that one instead. No secret
+  /// value is among them.
+  fn environment(&self, project: CommandEnvironment) -> Result<CommandEnvironment, ComputerError>;
 }
 
 /// This computer, read where the runner read it before the executor asked: the connections in the project's
@@ -65,6 +72,11 @@ impl ComputerResources for LocalComputer {
 
   fn home_folder(&self) -> Option<PathBuf> {
     std::env::home_dir()
+  }
+
+  /// This computer sets no values of its own: the project's variables, exactly.
+  fn environment(&self, project: CommandEnvironment) -> Result<CommandEnvironment, ComputerError> {
+    Ok(project)
   }
 }
 

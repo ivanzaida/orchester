@@ -74,7 +74,7 @@ What the executor side reads today, and through which interface it will:
 | `base_notices` | `step/base_notice.rs` | coordinator link |
 | `connections`, account folders, CLI config folders | `step/start/{shared,cli}.rs`, `permissions.rs`, `step/worker/review/*`, `codebase_index.rs`, `step/roots.rs` | computer's resources |
 | `mcp_servers`, secret metadata and values (`KeychainVault`, `server.rs:66`) | `step/mcp.rs`, `connection_check.rs`, `step/run_records.rs`, `plan.rs`, `step/memory.rs`, `handoff.rs`, `step/worker/review/*` | computer's resources |
-| `project_environment` | `environment.rs`, `step/mod.rs`, `codebase_index.rs` | computer's resources |
+| `project_environment` | `environment.rs`, `step/mod.rs`, `codebase_index.rs`, `merge_queue.rs`, `step/worker/review/*` | computer's resources: done (ORC-674). The project's variables come through the coordinator link (`executor/link/environment.rs`), at each use as before, and `ComputerResources::environment` makes the environment of that computer of them (locally the project's, unchanged); secret values never take this path. The Orchestrator chat's read (`coordinator/chat/turn.rs`) stays the coordinator's |
 | Settings › Browser from `orchester.db` (`runner/src/browser/mod.rs:403`) | browser | computer's resources (passed by the desktop) |
 
 Where the desktop touches a run's worktree today (`crates/workspace/src/`):
