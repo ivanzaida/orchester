@@ -15,8 +15,8 @@ mod details;
 mod head;
 mod left;
 mod properties;
-mod read;
-mod standing;
+pub(crate) mod read;
+pub(crate) mod standing;
 mod watch;
 mod words;
 

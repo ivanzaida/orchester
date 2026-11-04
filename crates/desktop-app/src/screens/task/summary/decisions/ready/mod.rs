@@ -3,17 +3,17 @@
 //! of the Summary with *Merge into main*, *Create pull request* ([`pull_request`]), *Ask agent* and *Review PR*, then
 //! what changed and what verified it ([`changed`]). Merging and creating a pull request run on the project's shared
 //! operations (`ProjectJobs`, which Orchester's MCP server uses too), so they go on when the page closes: the buttons
-//! show them under way. A merge that did not happen says why in place of the Ready card, with the files that
-//! conflicted, how to resolve them — in the person's editor or by an agent of the run ([`resolve`]) — and offers to
-//! merge again; while a merge waits in the run's worktree for the person to resolve it, that is shown instead
-//! ([`resolving`]); a merged run says where its work went and what was cleared after it.
+//! show them under way. A merge that did not land keeps the Ready card, whose *Merge into main* tries again: how it
+//! ended, its conflicts and how to resolve them are on the run's attempt page under Review › Merges (ORC-363), which
+//! the properties' Merge row opens (01h `fUHdZ`). While a merge of the base branch waits in the run's worktree for the
+//! person to finish it, that is shown instead ([`resolving`]); a merged run says where its work went and what was
+//! cleared after it.
 
 mod card;
 pub(super) mod changed;
 mod external;
 mod local;
 mod pull_request;
-mod resolve;
 mod resolving;
 mod unpushed;
 
@@ -38,13 +38,9 @@ use orchester_workspace::{
 };
 
 pub(super) use self::card::frame;
-use self::{
-  pull_request::PullRequestRead,
-  resolve::{Asking, Offer, StepChoice},
-  unpushed::Refused,
-};
+use self::{pull_request::PullRequestRead, unpushed::Refused};
 use super::{TaskContext, arranged};
-use crate::{mcp::input_gate::InputGate, services::Services};
+use crate::services::Services;
 
 /// How often a merge waiting in the run's worktree is read again while the person resolves it.
 const LOOK: Duration = Duration::from_secs(2);
@@ -59,13 +55,6 @@ pub struct ReadyForReview {
   look: Signal<u64>,
   /// Ticks [`Self::look`]; it runs only while a merge waits in the worktree.
   looking: Interval,
-  /// The step *Ask an agent to resolve* returns the run to.
-  step: Signal<StepChoice>,
-  /// The return under way.
-  asked: Signal<Option<Asking>>,
-  /// Window input asked an agent to resolve without a person's leave.
-  person_only: Signal<bool>,
-  gate: Option<InputGate>,
 }
 
 impl Component for ReadyForReview {
@@ -80,10 +69,6 @@ impl Component for ReadyForReview {
       pull_person_only: ctx.signal(None),
       look,
       looking,
-      step: ctx.signal(StepChoice(None)),
-      asked: ctx.signal(None),
-      person_only: ctx.signal(false),
-      gate: ctx.use_context::<InputGate>(),
     }
   }
 
@@ -110,34 +95,19 @@ impl Component for ReadyForReview {
     } else {
       self.looking.stop();
     }
-    let action = resolve::ask_action(ctx, &props, run.id());
     let job = props.jobs.run(run.id());
-    // A merge git made shows as soon as it is made, also while the task is not read again with it.
-    let made = props.detail.merge.as_ref().or(job.merged.as_ref());
-    let mut parts: Vec<Element> = match (made, &job.merge) {
-      (None, _) if let Some(resolution) = in_merge => resolving::resolving(ctx, &props, run, (resolution, &pull)),
-      (Some(merge), JobState::Failed(problem)) if props.detail.merge.is_none() => {
-        card::not_merged(ctx, &props, run, (problem, Some(merge)), (&job.conflicts, &pull), None)
-      }
-      (Some(merge), _) => vec![card::merged(ctx, &props, merge)],
-      (None, JobState::Failed(problem)) => {
-        let offer = (!job.conflicts.is_empty()).then(|| {
-          Offer {
-            task: &props,
-            run,
-            worktree: worktree.as_ref(),
-            conflicts: &job.conflicts,
-            step: &self.step,
-            asked: &self.asked,
-            action: &action,
-            person_only: &self.person_only,
-            gate: self.gate.as_ref(),
-          }
-          .render(ctx)
-        });
-        card::not_merged(ctx, &props, run, (problem, None), (&job.conflicts, &pull), offer)
-      }
-      (None, _) => vec![
+    // A merge git made shows as soon as it is made, also while the task is not read again with it; one it could not
+    // record is not merged yet, and the Ready card's merge records it.
+    let unrecorded = props.detail.merge.is_none() && matches!(job.merge, JobState::Failed(_));
+    let made = props
+      .detail
+      .merge
+      .as_ref()
+      .or(job.merged.as_ref().filter(|_| !unrecorded));
+    let mut parts: Vec<Element> = match made {
+      None if let Some(resolution) = in_merge => resolving::resolving(ctx, &props, run, (resolution, &pull)),
+      Some(merge) => vec![card::merged(ctx, &props, merge)],
+      None => vec![
         external.unwrap_or_else(|| card::ready(ctx, &props, run, &pull)),
         changed::columns(ctx, &props, read.as_ref(), (Vec::new(), None)),
       ],

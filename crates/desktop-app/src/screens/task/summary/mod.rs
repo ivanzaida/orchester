@@ -13,6 +13,7 @@ mod browser_line;
 mod decisions;
 mod empty;
 mod live;
+mod merge_row;
 mod notice;
 mod output;
 mod properties;

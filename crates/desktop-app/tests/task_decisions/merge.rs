@@ -183,7 +183,7 @@ fn decision_merge_merges_a_run_whose_local_integration_paused_at_review() {
 }
 
 #[test]
-fn decision_merge_at_a_dirty_path_says_why_and_offers_local_integration() {
+fn decision_merge_at_a_dirty_path_keeps_the_ready_card_and_the_merge_row_says_not_merged() {
   let _checkout = checkout_page();
   let mut page = Page::seeded("decisions");
   let run = latest_run(&page, "ready for review, merges cleanly");
@@ -195,38 +195,34 @@ fn decision_merge_at_a_dirty_path_says_why_and_offers_local_integration() {
   let tip = tip(&page, &run);
   let head = git_out(&page, &["rev-parse", "HEAD"]);
   page.open("ready for review, merges cleanly", "task-merge");
-  page.merge_until(("task-merge", "task-notice-title"), "Not merged into main");
-  assert!(
-    page
-      .text("task-notice")
-      .contains("uncommitted changes the merge would overwrite"),
-    "{}",
-    page.text("task-notice")
+  page.merge_until(("task-merge", "task-property-merge-label"), "Not merged · ");
+  assert_eq!(
+    page.text("task-notice-title"),
+    "Ready for your review",
+    "no card says the merge did not land"
   );
   assert_eq!(git_out(&page, &["rev-parse", "HEAD"]), head);
   unchanged(&page, &work);
   assert!(!merged(&page, (&run, &tip)));
   assert!(page.has("task-merge"), "Merge into main stays for another try");
-  page.click("task-open-local-integration");
-  page.window.until("Local integration", |window| {
-    window.tree.get_element_by_id("task-local-integration").is_some()
-  });
-  let path = page.window.navigation().route_now().path();
-  assert!(path.ends_with("/changes?view=local-integration"), "{path}");
+  assert!(!page.has("task-open-local-integration"));
 }
 
 #[test]
-fn decision_merge_conflict_lists_the_files_and_offers_local_integration() {
+fn decision_merge_conflict_keeps_the_ready_card_and_the_merge_row_counts_the_files() {
   let _checkout = checkout_page();
   let mut page = Page::seeded("decisions");
   let run = latest_run(&page, "ready for review, conflicts with main");
   let tip = tip(&page, &run);
   let head = git_out(&page, &["rev-parse", "HEAD"]);
   page.open("ready for review, conflicts with main", "task-merge");
-  page.merge_until(("task-merge", "task-notice-title"), "Not merged into main");
-  page.until_says("task-merge-conflicts", "src/webhooks/sender.rs");
-  assert!(page.text("task-merge-conflicts").contains("src/webhooks/settings.rs"));
-  assert!(page.has("task-open-local-integration"));
+  page.merge_until(("task-merge", "task-property-merge-label"), "Conflicts · 2 files");
+  assert_eq!(page.text("task-notice-title"), "Ready for your review");
+  assert!(
+    !page.has("task-merge-conflicts"),
+    "the files are on the run's attempt page"
+  );
+  assert!(!page.has("task-resolve"));
   assert_eq!(git_out(&page, &["rev-parse", "HEAD"]), head, "the merge was undone");
   assert!(!merged(&page, (&run, &tip)));
 }

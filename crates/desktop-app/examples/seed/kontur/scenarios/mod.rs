@@ -42,6 +42,7 @@ mod shared_config;
 mod shared_here;
 mod slot_wait;
 mod sources;
+mod task_merge_row;
 mod task_states;
 mod tasks;
 mod tasks_memory;
@@ -95,7 +96,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 106] = [
+pub const ALL: [Scenario; 107] = [
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-library", agents_library::seed),
   Scenario::of("agents-browser", agents_browser::seed),
@@ -142,6 +143,7 @@ pub const ALL: [Scenario; 106] = [
   Scenario::of("merges-empty", merges::empty),
   Scenario::of("merges-many", merges::many),
   Scenario::of("merge-attempts", merge_attempts::seed),
+  Scenario::of("task-merge-row", task_merge_row::seed),
   Scenario::of("overview-quiet", delivery::quiet),
   Scenario::of("overview-states", overview_states::seed),
   Scenario::of("interrupted", interrupted::seed),

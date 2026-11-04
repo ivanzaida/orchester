@@ -15,7 +15,7 @@ use crate::{project::ShownProject, services::Services};
 
 /// What the page shows of the run.
 #[derive(Clone, Debug, PartialEq)]
-pub(super) enum Read {
+pub(crate) enum Read {
   Reading,
   /// No such task or run in the project.
   Missing,
@@ -23,8 +23,8 @@ pub(super) enum Read {
   Failed(Message),
 }
 
-/// Run `number` of the task `key` in `project`, as last read.
-pub(super) fn read(ctx: &mut Ctx, project: &ShownProject, (key, number): (&TaskKey, RunNumber), again: u64) -> Read {
+/// Run `number` of the task `key` in `project`, as last read; the task page's Merge row reads it too.
+pub(crate) fn read(ctx: &mut Ctx, project: &ShownProject, (key, number): (&TaskKey, RunNumber), again: u64) -> Read {
   let feed = &project.feed;
   let Some(tasks) = feed.tasks.with(|tasks| tasks.ready().cloned()) else {
     return Read::Reading;

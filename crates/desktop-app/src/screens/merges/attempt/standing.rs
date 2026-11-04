@@ -17,9 +17,9 @@ use crate::ui::icon::Icon;
 /// The cause a preflight's integration lock gives when another operation holds it.
 const HELD: &str = "held by another operation";
 
-/// How the run stands after its last attempt.
+/// How the run stands after its last attempt, as its page and its task page's Merge row tell it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum Standing {
+pub(crate) enum Standing {
   Merged,
   Retrying(Retrying),
   Conflicts,
@@ -37,7 +37,7 @@ pub(super) enum Standing {
 
 impl Standing {
   /// How `page`'s run stands; `None` while no merge was tried.
-  pub(super) fn of(page: &AttemptPage) -> Option<Self> {
+  pub(crate) fn of(page: &AttemptPage) -> Option<Self> {
     if page.merge.is_some() {
       return Some(Self::Merged);
     }
@@ -63,7 +63,7 @@ impl Standing {
   }
 
   /// The status line's glyph and color.
-  pub(super) const fn glyph(self) -> (Icon, PaletteColor) {
+  pub(crate) const fn glyph(self) -> (Icon, PaletteColor) {
     match self {
       Self::Merged => (Icon::CircleCheck, PaletteColor::Success),
       Self::Retrying(_) => (Icon::RefreshCw, PaletteColor::Info),

@@ -1,6 +1,6 @@
 //! A merge that stopped on conflicts (09f `Q6yPN8`): *Conflicting files*, *Ask an agent to resolve* with the writing
-//! step it returns the run to, and the line that says what *Resolve in editor*, the page's primary action, does. The
-//! task page's resolve flow, with the same rules and jobs (`screens::task::summary::decisions::ready::resolve`):
+//! step it returns the run to, and the line that says what *Resolve in editor*, the page's primary action, does. On the
+//! run's resolve jobs, which the task page continues (`screens::task::summary::decisions::ready::resolving`):
 //! *Resolve in editor* merges the base branch into the run's worktree and opens it in the person's editor
 //! (`orchester_workspace::tasks::resolve`); *Ask an agent to resolve* returns the run to the chosen step with the
 //! conflict's note (`return_work::resolve_command`), an MCP client's press only while a person lets automation decide.

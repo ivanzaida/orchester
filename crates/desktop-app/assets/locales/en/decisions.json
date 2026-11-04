@@ -220,17 +220,10 @@
         "worktreeOne": "Its worktree stays: it has changes that are not committed.",
         "worktreeOther": "{{count}} of its worktrees stay: they have changes that are not committed."
       },
-      "notMergedTitle": "Not merged into {{branch}}",
-      "notMergedNoBranch": "Not merged",
-      "notRecordedTitle": "Merged into {{branch}} · not recorded",
       "anotherMerge": "Merge waits until another run's merge in this project is done.",
       "conflicts": "Conflicting files",
       "resolve": {
-        "title": "Resolve the conflicts",
         "inEditor": "Resolve in editor",
-        "opensNamed": "Merges {{branch}} into the run's worktree and opens it with its conflicting files in {{program}}.",
-        "opensVsCode": "Merges {{branch}} into the run's worktree and opens it with its conflicting files in VS Code.",
-        "opensFolder": "Merges {{branch}} into the run's worktree and opens its folder. VS Code was not found, so the conflicting files are not opened in an editor.",
         "noEditor": "No editor was found on this computer: install VS Code's code command, or name your editor in ORCHESTER_EDITOR.",
         "askAgent": "Ask an agent to resolve",
         "step": "Step",

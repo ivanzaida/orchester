@@ -1,17 +1,16 @@
 //! Where the run's work stands and what can be done with it. The Ready card (`Ready card` `hyzq2`): ready
 //! for review, *Merge into main*, *Create pull request* ([`super::pull_request`]), *Ask agent* and *Review PR*,
 //! and why the ones that cannot be used are unavailable (`Unavailable reason` `QR1ER`). *Merge into main* merges the
-//! run into the checkout's branch beside the person's uncommitted work, on the job `merge_run` uses. *Merged into
-//! main* (`nqp68`): where the work went and what was cleared after it. *Not merged into main* (`D3kggY`): why, the
-//! files that conflicted (`Conflicts` `IBx7h`), *Local integration* where it carries on (uncommitted files the merge
-//! would overwrite, a conflict, this run's local integration holding work), and the same actions to merge again.
+//! run into the checkout's branch beside the person's uncommitted work, on the job `merge_run` uses, and after a merge
+//! that did not land tries again (the attempt is on the run's attempt page, ORC-363). *Merged into main* (`nqp68`):
+//! where the work went and what was cleared after it.
 
 use std::{num::NonZeroU64, sync::Arc};
 
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
   components::{Column, Row, Text},
   layout::Alignment,
@@ -20,7 +19,6 @@ use lurq::{
 use orchester_core::integration::{Leftovers, MergeKind, RunMerge};
 use orchester_workspace::{
   display,
-  messages::Message,
   tasks::{
     detail::RunView,
     integration_jobs::{JobState, MergeArgs},
@@ -28,25 +26,21 @@ use orchester_workspace::{
 };
 
 use super::{
-  super::{super::section_head, TaskContext},
+  super::TaskContext,
   pull_request::{self, PullRequestRead},
 };
 use crate::{
-  navigation::Navigation,
-  routes::{Route, TaskView},
   services::Services,
   theme::{ExtraSpacing, ExtraTypography, IconSize, TaskText},
   ui::{
     button::{ActionButton, ButtonKind},
-    card::{CardSurface, card},
     icon::{Icon, icon},
-    message::message_text,
     notice::{Notice, NoticeTone},
     unavailable::reason_line,
   },
 };
 
-/// A conflicting file's row (`Q2ISvw`).
+/// A conflicting file's row (`Q2ISvw`), in the merge waiting in the run's worktree.
 pub(super) const FILE_ROW_HEIGHT: f32 = 30.0;
 
 /// The Ready card of a run that is not merged.
@@ -155,40 +149,8 @@ fn left_behind(ctx: &Ctx, left: &Leftovers) -> Arc<str> {
   }
 }
 
-/// Why the last merge did not stand: *Not merged into main* with why and the files that conflicted, or
-/// that git merged the run (`made`) but the merge could not be recorded; on a conflict how to `resolve` it
-/// ([`super::resolve`]); then the actions to merge again, which records a merge git made.
-pub fn not_merged(
-  ctx: &mut Ctx,
-  task: &TaskContext,
-  run: &RunView,
-  (problem, made): (&Message, Option<&RunMerge>),
-  (conflicts, pull): (&[String], &PullRequestRead),
-  resolve: Option<Element>,
-) -> Vec<Element> {
-  let title = match (made, run.run.base_branch()) {
-    (Some(made), _) => ctx.t_args("decisions.ready.notRecordedTitle", [("branch", made.into.as_str())]),
-    (None, Some(branch)) => ctx.t_args("decisions.ready.notMergedTitle", [("branch", branch.as_str())]),
-    (None, None) => ctx.t("decisions.ready.notMergedNoBranch"),
-  };
-  let notice = Notice::new("task-notice", NoticeTone::Warning, title)
-    .icon(Icon::TriangleAlert)
-    .body(message_text(ctx, problem));
-  let notice = if task.jobs.run(run.id()).continues_locally {
-    notice.action(local_integration(ctx, task))
-  } else {
-    notice
-  };
-  let files = (!conflicts.is_empty()).then(|| conflicting(ctx, conflicts));
-  std::iter::once(notice.into())
-    .chain(files)
-    .chain(resolve)
-    .chain(std::iter::once(merge_actions(ctx, task, run, (pull, false))))
-    .collect()
-}
-
-/// The actions to merge again with why those that cannot be used now are unavailable; *Merge into main* waits
-/// while a merge waits `in_worktree` for the person to resolve it.
+/// The actions to merge after a merge waiting `in_worktree` for the person to resolve it, with why those that cannot
+/// be used now are unavailable; *Merge into main* waits while that merge does.
 pub fn merge_actions(
   ctx: &mut Ctx,
   task: &TaskContext,
@@ -201,45 +163,6 @@ pub fn merge_actions(
     .spacing(ExtraSpacing::Snug.role())
     .child(actions)
     .with_children(reasons)
-    .into()
-}
-
-/// Opens the task's Local integration, which carries on where the merge stopped.
-fn local_integration(ctx: &mut Ctx, task: &TaskContext) -> ActionButton {
-  let route = Route::Project(task.project.open.project.id(), task.page(TaskView::LocalIntegration));
-  ActionButton::new(
-    "task-open-local-integration",
-    ButtonKind::Secondary,
-    ctx.t("local_integration.title"),
-  )
-  .opens(Navigation::of(ctx).to(route))
-}
-
-/// *Conflicting files* with their count, a row per file.
-fn conflicting(ctx: &mut Ctx, files: &[String]) -> Element {
-  let rows = files.iter().map(|file| {
-    Row::new()
-      .width(Dimension::Pct(100.0))
-      .height(Dimension::Px(FILE_ROW_HEIGHT))
-      .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
-      .spacing(SpacingSize::Sm)
-      .align_items(Alignment::Center)
-      .child(icon(Icon::GitCompareArrows, IconSize::Base, PaletteColor::Warning))
-      .child(Text::new(file).variant(TypographyStyle::Mono).flex(1.0).nowrap())
-  });
-  let list = card("task-merge-conflicts", CardSurface::Outline)
-    .padding(Padding::symmetric(ExtraSpacing::Snug.role(), ExtraSpacing::Hair.role()))
-    .with_children(rows);
-  Column::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(ExtraSpacing::Loose.role())
-    .child(section_head(
-      ctx,
-      "task-merge-conflicts-head",
-      "decisions.ready.conflicts",
-      Some(files.len()),
-    ))
-    .child(list)
     .into()
 }
 
