@@ -1,4 +1,4 @@
-//! The files of a run's worktree on the wire (protocol 47): the requests and every reply round-trip, a file's bytes
+//! The files of a run's worktree on the wire (protocol 48): the requests and every reply round-trip, a file's bytes
 //! travel raw after the reply in a binary frame, the largest file the viewer shows and a listing's page fit a frame,
 //! and a file's reply without its bytes is refused.
 
@@ -52,7 +52,7 @@ fn reply(id: u64, reply: RunFilesReply) -> Event {
 
 #[test]
 fn run_files_requests_round_trip_under_a_raised_protocol() {
-  assert_eq!(PROTOCOL_VERSION, 47);
+  assert_eq!(PROTOCOL_VERSION, 48);
   let run = RunId::generate();
   for request in [
     RunFilesRequest::Present,

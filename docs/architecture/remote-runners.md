@@ -75,7 +75,7 @@ What the executor side reads today, and through which interface it will:
 | `connections`, account folders, CLI config folders | `step/start/{shared,cli}.rs`, `permissions.rs`, `step/worker/review/*`, `codebase_index.rs`, `step/roots.rs` | computer's resources |
 | `mcp_servers`, secret metadata and values (`KeychainVault`, `server.rs:66`) | `step/mcp.rs`, `connection_check.rs`, `step/run_records.rs`, `plan.rs`, `step/memory.rs`, `handoff.rs`, `step/worker/review/*` | computer's resources |
 | `project_environment` | `environment.rs`, `step/mod.rs`, `codebase_index.rs`, `merge_queue.rs`, `step/worker/review/*` | computer's resources: done (ORC-674). The project's variables come through the coordinator link (`executor/link/environment.rs`), at each use as before, and `ComputerResources::environment` makes the environment of that computer of them (locally the project's, unchanged); secret values never take this path. The Orchestrator chat's read (`coordinator/chat/turn.rs`) stays the coordinator's |
-| Settings › Browser from `orchester.db` (`runner/src/browser/mod.rs:403`) | browser | computer's resources (passed by the desktop) |
+| Settings › Browser from `orchester.db` (`runner/src/browser/mod.rs:403`) | browser | computer's resources: done (ORC-675). The desktop reads the chosen program and the folder of the browser profiles (`Workspace::computer_browser`) and passes them as `ComputerBrowser` with `Command::Attach` and again with `Command::SetBrowser` when Settings › Browser changes (protocol 47, `Runners::set_browser`, `follow_browser_settings`); the runner keeps them in its `ProjectBrowser` (`set_computer`) and uses what it was passed last at each browser start. The runner no longer opens `AppDb` or reads its application data location |
 
 Where the desktop touches a run's worktree today (`crates/workspace/src/`):
 
@@ -87,7 +87,7 @@ Where the desktop touches a run's worktree today (`crates/workspace/src/`):
 | Base synced into the worktree, Check tools run in it | `merge_queue/drive.rs:211`, `merge_queue/check.rs` |
 | Local integration reading the worktree as a second repository | `tasks/local_integration/{mod,poll,view}.rs`, see [Local integration](#local-integration) |
 | Removal, stopping its processes, index prune, sweep | `tasks/integration.rs:487`, `tasks/delete.rs`, `tasks/history.rs`, `app_mcp/tools/worktree.rs`, `tasks/worktree_sweep.rs` |
-| Files of the run's version: **through the runner** since protocol 47 (`Command::RunFiles`, ORC-696; a listing travels in pages that each fit a frame) | `files/runs.rs`, `runner/run_files.rs`; the runner's `execution/executor/run_files.rs` |
+| Files of the run's version: **through the runner** since protocol 48 (`Command::RunFiles`, ORC-696; a listing travels in pages that each fit a frame) | `files/runs.rs`, `runner/run_files.rs`; the runner's `execution/executor/run_files.rs` |
 | Open in editor, copy path of a run's file: still the local path, marked for a run on another computer | `files/open.rs` (`open_target`), `run_facts.rs:329` |
 | Recovery state of a run's folder: **through the runner** since protocol 44 (`Command::RunFolderState`, ORC-688) | `recovery/mod.rs` (`read_folder_states`), `runner/ask.rs`; the runner's `execution/coordinator/run_folder.rs`, `execution/executor/folder_state.rs` |
 | Warm workspaces' folders and sizes, ended worktrees' sizes | through the runner since ORC-689 (`Command::Folders`, `runner/folders.rs`); the desktop keeps the database's reservations |
