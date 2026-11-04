@@ -1,7 +1,8 @@
 //! `run_task`: runs a task as the app lets a person run it. A draft is queued with its pipeline's
 //! latest published version and started (Create & run); a queued task without a run starts its first
 //! run (Start); a task whose latest run ended runs again when core's rule allows it (Run again,
-//! keeping what the latest run left). A shared task is claimed first, as on the screens.
+//! keeping what the latest run left). A shared task is claimed first, as on the screens. A team task's work
+//! starts through its team server (`work.start`, [`super::team`]), never from this computer's queue.
 
 use orchester_core::{
   id::{IdempotencyKey, RunId, TaskId},
@@ -17,7 +18,7 @@ use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::{Translate, task_write::write_error, tasks::find_task};
+use super::{Translate, task_write::write_error, tasks::find_task, team};
 use crate::{
   app_mcp::{
     error::ToolError,
@@ -44,6 +45,10 @@ pub struct RunTask {
   pub project: String,
   /// The task's key, e.g. `KON-12`, or its id.
   pub key: String,
+  /// A team task only: the local connection each agent profile of its pipeline runs on. A profile left out runs on
+  /// the only local agent connection of its CLI.
+  #[serde(default)]
+  pub bindings: Vec<team::Binding>,
 }
 
 /// How the task runs, decided from what is stored.
@@ -60,17 +65,34 @@ enum Start {
 }
 
 pub async fn run_task(services: &Services, args: RunTask) -> Result<Value, ToolError> {
+  if let Some(team) = team::of(services, &args.project).await? {
+    return team::run_task(services, &team, &args.key, &args.bindings).await;
+  }
+  if !args.bindings.is_empty() {
+    return Err(ToolError::InvalidArguments(
+      "`bindings` choose connections for a team task only".to_owned(),
+    ));
+  }
   run_checked(services, args, None).await
 }
 
 /// Runs task `key` of `project` as [`run_task`] does, only as it was proposed: a task changed since, or a pipeline
-/// published anew, is refused (`changed_since_proposed`) and starts nothing.
+/// published anew, is refused (`changed_since_proposed`) and starts nothing. A team task's start is not proposed:
+/// it goes through `run_task` and its team server.
 pub async fn run_proposed(
   services: &Services,
   (project, key): (String, String),
   basis: StartBasis,
 ) -> Result<Value, ToolError> {
-  run_checked(services, RunTask { project, key }, Some(basis)).await
+  if team::of(services, &project).await?.is_some() {
+    return Err(team::team_only_on_server("run_task"));
+  }
+  let args = RunTask {
+    project,
+    key,
+    bindings: Vec::new(),
+  };
+  run_checked(services, args, Some(basis)).await
 }
 
 async fn run_checked(services: &Services, args: RunTask, expected: Option<StartBasis>) -> Result<Value, ToolError> {
@@ -216,7 +238,7 @@ fn basis(
 
 /// Checks that task `key` of `project` could run now as [`run_task`] would run it, without queuing or starting
 /// anything: the Orchestrator's agent proposes the start and a person takes it. The pipeline is named in the words
-/// of `translate`.
+/// of `translate`. A team task's start is not proposed from this computer's copy of it: it is refused.
 pub async fn propose_run(
   services: &Services,
   translate: &Translate,
@@ -226,6 +248,9 @@ pub async fn propose_run(
   let (task, basis, label) = blocking(move || {
     let project = services.project(&project)?;
     let db = ProjectDb::open(&project.repo_root)?;
+    if team::linked(&db)? {
+      return Err(team::team_only_on_server("run_task"));
+    }
     let task = find_task(&db, &key)?;
     let runs = db.runs_of_task(task.id()).map_err(run_store_error)?;
     let basis = basis(&services, (&project, &db), &task, runs.last())?;

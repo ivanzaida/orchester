@@ -16,7 +16,7 @@ use serde_json::{Value, json};
 use super::{
   Translate,
   across::across,
-  base_branch,
+  base_branch, team,
   wire::{self, Delivers, Rank, Workflow, task_link},
   worktree::worktree_state,
 };
@@ -114,12 +114,29 @@ pub async fn get_calibration(services: &Services, args: GetCalibration) -> Resul
 }
 
 pub async fn list_tasks(services: &Services, args: ListTasks, translate: &Translate) -> Result<Value, ToolError> {
+  if let Some(named) = &args.project
+    && let Some(team) = team::of(services, named).await?
+  {
+    let filters = orchester_api::v2::TaskFilters {
+      statuses: args.status.into_iter().map(Into::into).collect(),
+      search: args
+        .search
+        .as_deref()
+        .and_then(|text| orchester_api::v2::SearchText::new(text).ok()),
+      ..orchester_api::v2::TaskFilters::default()
+    };
+    return team::list_tasks(services, &team, filters).await;
+  }
   let services = services.clone();
   let project = args.project.clone();
   let read = blocking(move || {
     // Git tells the runs merged outside Orchester for the project named; across projects the stored read suffices.
     let programs = project.is_some().then_some(&services.programs);
     across(&services, project.as_deref(), |open, db| {
+      // A team project's tasks are its server's: they are read there when the project is named, never from here.
+      if team::linked(db)? {
+        return Err(team::team_only_on_server("list_tasks"));
+      }
       Ok(ProjectTasks::read(db, &open.repo_root, programs)?)
     })
   })
@@ -165,6 +182,9 @@ pub async fn list_tasks(services: &Services, args: ListTasks, translate: &Transl
 }
 
 pub async fn get_task(services: &Services, args: GetTask, translate: &Translate) -> Result<Value, ToolError> {
+  if let Some(team) = team::of(services, &args.project).await? {
+    return team::get_task(services, &team, &args.key).await;
+  }
   let services = services.clone();
   let (project, detail, (tags, pipeline, base_branch), worktrees) = blocking(move || {
     let open = services.project(&args.project)?;

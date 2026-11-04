@@ -22,7 +22,7 @@
 //!   in order ([`ModuleDeliveries`]).
 //!
 //! A run's local status and its server acceptance (the work as the server last answered its reports) are kept apart
-//! ([`TeamRunState`]). Nothing calls this yet: the screens adopt it in P6 and automation in P7.
+//! ([`TeamRunState`]). The MCP tool `run_task` starts a team task's work through it (P7); the screens adopt it in P6.
 
 mod bundle;
 pub mod delivery;

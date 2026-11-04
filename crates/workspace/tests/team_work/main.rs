@@ -13,6 +13,7 @@
 #[path = "../actions/http.rs"]
 mod http;
 
+mod completion;
 mod delivery;
 mod delivery_recovery;
 mod fixture;

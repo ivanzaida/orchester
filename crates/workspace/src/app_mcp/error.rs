@@ -107,26 +107,31 @@ impl ToolError {
     Self::refused(code, reasons)
   }
 
+  /// The stable code a client matches on.
+  pub fn code(&self) -> &str {
+    match self {
+      Self::InvalidArguments(_) => "invalid_arguments",
+      Self::NotFound { missing, .. } => missing.code(),
+      Self::AmbiguousProject(_) => "project_ambiguous",
+      Self::Refused { code, .. } => code,
+    }
+  }
+
   /// The error as the tool result carries it, its reasons in `translate`d words.
   pub fn to_json(&self, translate: impl Fn(&Message) -> String) -> Value {
-    let (code, message, reasons) = match self {
-      Self::InvalidArguments(detail) => ("invalid_arguments".to_owned(), detail.clone(), Vec::new()),
-      Self::NotFound { missing, named } => (
-        missing.code().to_owned(),
-        format!("nothing answers to {named:?}"),
-        Vec::new(),
-      ),
+    let (message, reasons) = match self {
+      Self::InvalidArguments(detail) => (detail.clone(), Vec::new()),
+      Self::NotFound { named, .. } => (format!("nothing answers to {named:?}"), Vec::new()),
       Self::AmbiguousProject(named) => (
-        "project_ambiguous".to_owned(),
         format!("more than one project is named {named:?}; name it by id"),
         Vec::new(),
       ),
-      Self::Refused { code, reasons } => {
+      Self::Refused { reasons, .. } => {
         let reasons: Vec<String> = reasons.iter().map(&translate).collect();
-        (code.clone(), reasons.join("\n"), reasons)
+        (reasons.join("\n"), reasons)
       }
     };
-    json!({ "error": { "code": code, "message": message, "reasons": reasons } })
+    json!({ "error": { "code": self.code(), "message": message, "reasons": reasons } })
   }
 }
 
