@@ -270,9 +270,11 @@ fn append_in(
       found,
     });
   }
-  // A team task whose definition is kept only on its server has no readiness or workflow status here: its run goes on
+  // A team task whose definition is kept only on its server has no readiness or workflow status here, and a run of
+  // inputs the team server accepted never changes its task here, even one with a cached definition: its run goes on
   // from its inputs, and the server keeps the task's status.
-  let defined = super::task_identities::has_definition(transaction, run.task())?;
+  let defined = super::task_identities::has_definition(transaction, run.task())?
+    && !super::run_inputs::is_team_run(transaction, run.id())?;
   if continues && defined {
     super::organization::check_readiness(transaction, run.task())?;
   }

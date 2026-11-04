@@ -359,6 +359,10 @@ required-features = ["test-agent"]
 name = "decision_review"
 required-features = ["test-agent"]
 
+[[test]]
+name = "team_inputs"
+required-features = ["test-agent"]
+
 [features]
 test-agent = []
 

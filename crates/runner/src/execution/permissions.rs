@@ -10,9 +10,8 @@ use orchester_core::{
   connection::{AgentProvider, ConnectionKind, invocation::Platform},
   id::{ResourceId, RunId},
   permission::AgentPermissions,
-  resource::AgentProfile,
   run::{PermissionsApply, Run, RunError, StepExecutor},
-  store::{ConnectionStore, ResourceStore},
+  store::ConnectionStore,
   time::Timestamp,
 };
 use orchester_ipc::Rejection;
@@ -23,6 +22,7 @@ use super::{
   control::{Ack, Control, answer},
   failed, idle,
   record::{RecordError, record},
+  resolver::{ResolveError, RunResolver},
   run::{ExecutionError, RunTask},
   step::worker::{Stop, StopCause},
 };
@@ -90,7 +90,7 @@ impl Scheduler {
 impl RunTask {
   /// Records `change`; for Apply now, tells the profile's agents to stop after their command.
   pub(super) fn change_permissions(&mut self, change: PermissionsChange, ack: Ack) -> Result<(), ExecutionError> {
-    let provider = match provider_of(&self.db, &self.run, change.profile) {
+    let provider = match provider_of(&self.db, (&self.resolver, &self.run), change.profile) {
       Ok(provider) => provider,
       Err(rejection) => {
         answer(ack, Err(rejection));
@@ -165,7 +165,8 @@ impl RunTask {
 /// A change for a run no task executes: it applies from its next invocations.
 fn change_idle(db: &mut ProjectDb, run: RunId, change: &PermissionsChange) -> Result<(), Rejection> {
   let mut run = idle::load(db, run)?;
-  let provider = provider_of(db, &run, change.profile)?;
+  let resolver = RunResolver::load(db, run.id()).map_err(|error| failed("cannot read the run's inputs", &error))?;
+  let provider = provider_of(db, (&resolver, &run), change.profile)?;
   let events = run
     .change_permissions(
       change.profile,
@@ -186,8 +187,12 @@ fn keep_idle(db: &mut ProjectDb, run: RunId, profile: ResourceId) -> Result<(), 
   idle::store(db, &run, &events)
 }
 
-/// The agent CLI of `profile`'s connection, as the run pinned the profile.
-fn provider_of(db: &ProjectDb, run: &Run, profile: ResourceId) -> Result<AgentProvider, Rejection> {
+/// The agent CLI of `profile`'s connection, as the run pinned the profile and `resolver` reads it.
+fn provider_of(
+  db: &ProjectDb,
+  (resolver, run): (&RunResolver, &Run),
+  profile: ResourceId,
+) -> Result<AgentProvider, Rejection> {
   let pinned = run
     .snapshot()
     .steps()
@@ -197,12 +202,13 @@ fn provider_of(db: &ProjectDb, run: &Run, profile: ResourceId) -> Result<AgentPr
       _ => None,
     })
     .ok_or(Rejection::ProfileNotInRun)?;
-  let version = db
-    .version::<AgentProfile>(pinned.resource, pinned.number)
-    .map_err(|error| failed("cannot read the agent profile", &error))?
-    .ok_or(Rejection::ProfileNotInRun)?;
+  let body = match resolver.profile(db, pinned) {
+    Ok(body) => body,
+    Err(ResolveError::Store(error)) => return Err(failed("cannot read the agent profile", &error)),
+    Err(_) => return Err(Rejection::ProfileNotInRun),
+  };
   let connection = db
-    .connection(version.body().connection())
+    .connection(body.connection())
     .map_err(|error| failed("cannot read the profile's connection", &error))?;
   match connection.as_ref().map(|connection| connection.kind()) {
     Some(ConnectionKind::Agent(provider)) => Ok(*provider),

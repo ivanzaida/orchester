@@ -5,16 +5,21 @@
 //! from them without reading the current task or resource definitions; they never change once kept.
 
 mod bundle;
+mod labels;
 mod local;
+mod resolve;
 
 use thiserror::Error;
 
 pub use self::{
   bundle::{BundleContent, InputsOrigin, RUN_INPUTS_FORMAT, TaskAtStart, TeamAcceptance},
+  labels::ResourceLabel,
   local::{BoundReference, LocalBindings, LocalConsent, ProfileBinding},
 };
 use crate::{
+  connection::mcp::McpSelectionError,
   id::ResourceId,
+  name::NameError,
   resource::{StepKey, VersionNumber},
   run::{PinnedVersion, RunSnapshot, bundle::PinnedBody},
   task::LimitsError,
@@ -29,11 +34,20 @@ pub enum InputsError {
   Limits(#[from] LimitsError),
   #[error("the {0} cannot be represented in the run inputs")]
   Unrepresentable(&'static str),
+  #[error("the task's title: {0}")]
+  TaskTitle(NameError),
+  #[error("resource {0} is pinned but has no label")]
+  Unlabelled(ResourceId),
+  /// A label names a resource the inputs do not pin, or a pinned resource twice.
+  #[error("resource {0} is labelled but not pinned once")]
+  UnexpectedLabel(ResourceId),
   #[error("agent profile {0} has no local binding")]
   MissingBinding(ResourceId),
   /// A binding names a profile the inputs do not pin, or a pinned profile twice.
   #[error("agent profile {0} is bound but not pinned once")]
   UnexpectedBinding(ResourceId),
+  #[error("the bound MCP servers: {0}")]
+  McpServers(McpSelectionError),
   #[error("{resource} {number} is accepted here but the inputs do not pin it")]
   AcceptedUnpinned {
     resource: ResourceId,
@@ -54,10 +68,12 @@ pub struct RunInputs {
 }
 
 impl RunInputs {
-  /// The inputs of `bundle` as this computer binds and narrows them: each pinned agent profile bound once, consent
-  /// given only to pinned versions, and narrowing that never widens a step's permissions.
+  /// The inputs of `bundle` as this computer binds and narrows them: each pinned agent profile bound once, MCP servers
+  /// bound that a profile can give its agents, consent given only to pinned versions, and narrowing that never widens a
+  /// step's permissions.
   pub fn new(bundle: BundleContent, bindings: LocalBindings, consent: LocalConsent) -> Result<Self, InputsError> {
     check_bindings(&bundle, &bindings)?;
+    resolve::mcp_servers(&bindings)?;
     check_consent(&bundle, &consent)?;
     Ok(Self {
       bundle,

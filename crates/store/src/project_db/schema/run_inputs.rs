@@ -35,3 +35,23 @@ BEGIN SELECT RAISE(ABORT, 'run inputs are immutable'); END;
 CREATE TRIGGER run_local_consent_no_delete BEFORE DELETE ON run_local_consent
 BEGIN SELECT RAISE(ABORT, 'run inputs are immutable'); END;
 ";
+
+/// Team inputs the server accepted for a run this computer has not started yet (team authority P3b): kept by the
+/// operation that accepted them before the runner is asked to start, so a start after a crash or a lost answer finds
+/// them. The run the runner records with them is the operation's only run (`run_bundles.operation_id`). They hold
+/// references, never a secret value, and never change.
+pub(super) const ACCEPTED_MIGRATION: &str = r"
+CREATE TABLE accepted_run_inputs (
+  operation_id TEXT PRIMARY KEY,
+  task_id TEXT NOT NULL REFERENCES task_identities (id),
+  sha256 TEXT NOT NULL CHECK (length(sha256) = 64),
+  body TEXT NOT NULL,
+  bindings TEXT NOT NULL,
+  consent TEXT NOT NULL,
+  accepted_at INTEGER NOT NULL
+) STRICT;
+CREATE TRIGGER accepted_run_inputs_no_update BEFORE UPDATE ON accepted_run_inputs
+BEGIN SELECT RAISE(ABORT, 'run inputs are immutable'); END;
+CREATE TRIGGER accepted_run_inputs_no_delete BEFORE DELETE ON accepted_run_inputs
+BEGIN SELECT RAISE(ABORT, 'run inputs are immutable'); END;
+";

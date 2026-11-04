@@ -24,12 +24,20 @@ use crate::{
 const TASK_RUNS: &str = "SELECT id FROM runs WHERE task_id = ?1";
 
 impl ProjectDb {
-  /// The project's merged tasks with what they took and the points they had then, latest merged first.
+  /// The project's merged tasks with what they took and the points they had then, latest merged first. A task's key,
+  /// title and brief are its definition's here, else, for a team task whose definition is only on its server, as the
+  /// inputs of its latest run with inputs keep them.
   pub fn calibration_records(&self) -> Result<Vec<CalibrationRecord>, StoreError> {
     let mut statement = self.connection.prepare(
-      "SELECT effort.task_id, tasks.number, tasks.title, tasks.brief, effort.points, effort.source, effort.tokens, \
+      "SELECT effort.task_id, COALESCE(tasks.number, json_extract(bundles.body, '$.task_number')), \
+       COALESCE(tasks.title, json_extract(bundles.body, '$.task.title')), \
+       COALESCE(tasks.brief, json_extract(bundles.body, '$.task.brief')), effort.points, effort.source, effort.tokens, \
        effort.active_ms, effort.attempts, effort.runs, effort.merged_at \
-       FROM task_effort AS effort JOIN tasks ON tasks.id = effort.task_id ORDER BY effort.merged_at DESC",
+       FROM task_effort AS effort LEFT JOIN tasks ON tasks.id = effort.task_id \
+       LEFT JOIN run_bundles AS bundles ON bundles.run_id = (SELECT runs.id FROM runs \
+         JOIN run_bundles AS kept ON kept.run_id = runs.id WHERE runs.task_id = effort.task_id \
+         ORDER BY runs.number DESC LIMIT 1) \
+       WHERE tasks.id IS NOT NULL OR bundles.run_id IS NOT NULL ORDER BY effort.merged_at DESC",
     )?;
     let rows = statement
       .query_map([], |row| {

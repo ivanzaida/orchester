@@ -39,6 +39,7 @@ use super::{
   pool::PoolError,
   prepare::{Prepared, RunFolder},
   record::{RecordError, announce_ready, record},
+  resolver::RunResolver,
   step::{
     Active, QaApps,
     worker::{Stop, StopCause, WorkerEvent},
@@ -100,7 +101,10 @@ pub(super) struct RunTask {
   pub(super) root: PathBuf,
   pub(super) db: ProjectDb,
   pub(super) run: Run,
+  /// The run's task as the run started it.
   pub(super) task: Task,
+  /// Where every step reads the run's pinned configuration: its own inputs, or a local run's pinned versions.
+  pub(super) resolver: RunResolver,
   pub(super) project: Project,
   /// Where the run works: its own worktree from before workspaces, or a workspace it borrows.
   pub(super) folder: RunFolder,
@@ -154,6 +158,7 @@ impl RunTask {
       db,
       run: prepared.run,
       task: prepared.task,
+      resolver: prepared.resolver,
       project,
       worktree: match &prepared.folder {
         RunFolder::Own(path) => Some(path.clone()),

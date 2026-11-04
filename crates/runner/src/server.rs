@@ -308,6 +308,7 @@ async fn answer(
     }
     Command::Ping { nonce } => Reply::Pong { nonce },
     Command::StartRun { key, task } => started(scheduler.start_requested_run(key, task).await),
+    Command::StartAcceptedRun { operation } => started(scheduler.start_accepted_run(operation).await),
     Command::RunAgain {
       key,
       task,

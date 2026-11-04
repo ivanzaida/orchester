@@ -16,15 +16,15 @@ use orchester_core::{
   name::Name,
   permission::StepPermissions,
   resource::{
-    AgentProfile, Deliverable, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Step, StepKey,
+    AgentProfile, Deliverable, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Slug, Step, StepKey,
     StepKind, Version, VersionNumber,
   },
   run::{
     BranchName, CommitId, PinnedVersion, PublishedVersions, RunSnapshot,
     bundle::{CanonicalExecutionInputs, PinnedBodies},
     inputs::{
-      BoundReference, BundleContent, InputsError, InputsOrigin, LocalBindings, LocalConsent, ProfileBinding, RunInputs,
-      TaskAtStart, TeamAcceptance,
+      BoundReference, BundleContent, InputsError, InputsOrigin, LocalBindings, LocalConsent, ProfileBinding,
+      ResourceLabel, RunInputs, TaskAtStart, TeamAcceptance,
     },
   },
   sharing::TaskRevision,
@@ -113,6 +113,20 @@ fn team() -> InputsOrigin {
   })
 }
 
+/// A label for each resource `inputs` pin.
+fn labels(inputs: &CanonicalExecutionInputs) -> Vec<ResourceLabel> {
+  inputs
+    .resources()
+    .into_iter()
+    .enumerate()
+    .map(|(index, resource)| ResourceLabel {
+      resource,
+      slug: Slug::new(&format!("resource-{index}")).expect("slug"),
+      name: Name::new(&format!("Resource {index}")).expect("name"),
+    })
+    .collect()
+}
+
 fn content(fixture: &Fixture, origin: InputsOrigin) -> BundleContent {
   let limits = TaskLimits::new(
     Some(TokenBudget::new(50_000).expect("budget")),
@@ -124,7 +138,14 @@ fn content(fixture: &Fixture, origin: InputsOrigin) -> BundleContent {
     brief: "Check the retries.".into(),
     criteria: vec!["Retries are bounded".into()],
   };
-  BundleContent::new(origin, task, limits, Deliverable::default(), fixture.inputs.clone()).expect("content")
+  BundleContent::new(
+    origin,
+    (NonZeroU32::new(12).expect("number"), task),
+    labels(&fixture.inputs),
+    (limits, Deliverable::default()),
+    fixture.inputs.clone(),
+  )
+  .expect("content")
 }
 
 fn bound(fixture: &Fixture) -> LocalBindings {
@@ -154,7 +175,83 @@ fn run_inputs_read_back_and_hash_the_same() {
   assert_ne!(local.sha256().expect("hash"), content.sha256().expect("hash"));
   let value = serde_json::to_value(&local).expect("serializes");
   assert_eq!(value["origin"], json!({"kind": "local"}));
-  assert_eq!(value["format"], json!(1));
+  assert_eq!(value["format"], json!(2));
+  assert_eq!(value["task_number"], json!(12));
+}
+
+#[test]
+fn run_inputs_label_each_pinned_resource_once() {
+  let fixture = fixture();
+  let task = TaskAtStart {
+    title: "Review".into(),
+    brief: String::new(),
+    criteria: Vec::new(),
+  };
+  let make = |labels: Vec<ResourceLabel>, task: TaskAtStart| {
+    BundleContent::new(
+      team(),
+      (NonZeroU32::MIN, task),
+      labels,
+      (TaskLimits::NONE, Deliverable::default()),
+      fixture.inputs.clone(),
+    )
+  };
+  let mut missing = labels(&fixture.inputs);
+  let dropped = missing.pop().expect("a label").resource;
+  assert_eq!(make(missing, task.clone()), Err(InputsError::Unlabelled(dropped)));
+  let mut extra = labels(&fixture.inputs);
+  let stranger = ResourceId::generate();
+  extra[0].resource = stranger;
+  assert!(matches!(
+    make(extra, task.clone()),
+    Err(InputsError::UnexpectedLabel(_) | InputsError::Unlabelled(_))
+  ));
+  let content = make(labels(&fixture.inputs), task.clone()).expect("labelled");
+  assert!(content.label(fixture.snapshot.pipeline().resource).is_some());
+  assert!(content.label(stranger).is_none());
+  let blank = TaskAtStart {
+    title: " ".into(),
+    ..task
+  };
+  assert!(matches!(
+    make(labels(&fixture.inputs), blank),
+    Err(InputsError::TaskTitle(_))
+  ));
+}
+
+#[test]
+fn run_inputs_resolve_a_profile_on_its_binding_and_the_task_at_start() {
+  let fixture = fixture();
+  let bindings = LocalBindings {
+    references: vec![BoundReference::McpServer {
+      named: ConnectionId::generate(),
+      local: ConnectionId::generate(),
+    }],
+    ..bound(&fixture)
+  };
+  let inputs = RunInputs::new(content(&fixture, team()), bindings.clone(), LocalConsent::default()).expect("inputs");
+  let pinned = inputs.bundle().inputs().profiles()[0].pinned();
+  let profile = inputs.profile(pinned).expect("the pinned profile");
+  assert_eq!(profile.connection(), bindings.profiles[0].connection);
+  assert_eq!(profile.role().as_str(), "Reviewer");
+  assert_eq!(profile.mcp_servers(), &inputs.bound_mcp_servers());
+  assert_eq!(inputs.bound_mcp_servers().ids().len(), 1);
+  let other = PinnedVersion {
+    version: VersionId::generate(),
+    ..pinned
+  };
+  assert!(inputs.profile(other).is_none());
+  assert!(inputs.is_team());
+
+  let key = orchester_core::project::ProjectKey::new("WEB").expect("key");
+  let task = inputs.task(TaskId::generate(), &key, Timestamp::from_unix_millis(5));
+  assert_eq!(task.key().to_string(), "WEB-12");
+  assert_eq!(task.details().title.as_str(), "Review the webhooks");
+  assert_eq!(task.details().pipeline, Some(fixture.snapshot.pipeline().resource));
+  assert_eq!(task.pipeline_version(), Some(fixture.snapshot.pipeline().number));
+  assert_eq!(task.revision(), TaskRevision::try_from(7).expect("revision"));
+  assert!(task.module().is_some());
+  assert_eq!(task.organization().delivers(), Some(Deliverable::default()));
 }
 
 #[test]
@@ -162,7 +259,7 @@ fn run_inputs_refuse_another_format_unknown_fields_and_bad_limits() {
   let fixture = fixture();
   let value = serde_json::to_value(content(&fixture, team())).expect("serializes");
   for (pointer, changed, refusal) in [
-    ("/format", json!(2), "format 2"),
+    ("/format", json!(1), "format 1"),
     ("/max_duration_ms", json!(0), "greater than zero"),
   ] {
     let mut changed_value = value.clone();

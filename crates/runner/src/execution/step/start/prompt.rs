@@ -17,7 +17,7 @@ use orchester_core::{
     PinnedVersion, PipelineInfo, Plan, PlanRevision, PromptAssemblyError, PromptInput, ReturnedWork, Run, RunContext,
     StepOutput, run_delivers,
   },
-  store::{ActivityStore, ResourceStore, RunStore},
+  store::{ActivityStore, RunStore},
 };
 
 use super::{
@@ -153,34 +153,28 @@ impl RunTask {
     }
   }
 
-  /// The name of the run's pipeline, as prompts name it.
+  /// The name of the run's pipeline, as prompts name it: as the run's inputs name it, else as it is named here.
   fn pipeline_name(&self) -> Result<String, RunnerProblem> {
-    self
-      .db
-      .resource(self.run.snapshot().pipeline().resource)
-      .map_err(|error| problem(error.to_string()))?
-      .map(|resource| resource.name().as_str().to_owned())
-      .ok_or_else(|| problem("the run's pipeline no longer exists".to_owned()))
+    let (_, name) = self
+      .resolver
+      .label(&self.db, self.run.snapshot().pipeline().resource, "pipeline")
+      .map_err(|error| problem(error.to_string()))?;
+    Ok(name.as_str().to_owned())
   }
 
   /// The instruction versions the run pinned, with their names, in library (slug) order.
   fn pinned_instructions(&self) -> Result<Vec<(PinnedVersion, String, Instruction)>, RunnerProblem> {
     let mut pinned = Vec::new();
     for pin in self.run.snapshot().instructions() {
-      let resource = self
-        .db
-        .resource(pin.resource)
-        .map_err(|error| problem(error.to_string()))?
-        .ok_or_else(|| problem(format!("instruction {} no longer exists", pin.resource)))?;
-      let version = self
-        .db
-        .version::<Instruction>(pin.resource, pin.number)
-        .map_err(|error| problem(error.to_string()))?
-        .ok_or_else(|| problem(format!("instruction version {} is missing", pin.number)))?;
-      pinned.push((
-        resource.slug().clone(),
-        (*pin, resource.name().as_str().to_owned(), version.body().clone()),
-      ));
+      let (slug, name) = self
+        .resolver
+        .label(&self.db, pin.resource, "instruction")
+        .map_err(|error| problem(error.to_string()))?;
+      let body = self
+        .resolver
+        .instruction(&self.db, *pin)
+        .map_err(|error| problem(error.to_string()))?;
+      pinned.push((slug, (*pin, name.as_str().to_owned(), body)));
     }
     pinned.sort_by(|(left, _), (right, _)| left.cmp(right));
     Ok(pinned.into_iter().map(|(_, instruction)| instruction).collect())

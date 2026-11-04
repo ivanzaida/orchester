@@ -82,6 +82,9 @@ pub enum PreflightProblem {
   /// Neither the task nor its module has a base branch, and the checkout has a detached `HEAD` at `head`: a run has
   /// no branch to deliver into, so it does not start.
   NoBranchCheckedOut { head: crate::revision::Revision },
+  /// The commit a team run's accepted inputs start from is not in this repository: it is fetched first, and no run
+  /// starts from another commit instead.
+  BaseCommitMissing { commit: crate::revision::Revision },
 }
 
 /// The configuration a task's run would use.
