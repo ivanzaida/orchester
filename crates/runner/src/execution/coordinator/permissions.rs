@@ -13,9 +13,12 @@ use orchester_ipc::Rejection;
 use orchester_store::ProjectDb;
 
 use super::{Scheduler, idle, link::LocalLink};
-use crate::execution::executor::{
-  control::Control,
-  permissions::{PermissionsChange, provider_of, rejection},
+use crate::{
+  computer::ComputerResources,
+  execution::executor::{
+    control::Control,
+    permissions::{PermissionsChange, provider_of, rejection},
+  },
 };
 
 impl Scheduler {
@@ -46,7 +49,7 @@ impl Scheduler {
         }
         continue;
       }
-      return change_idle(&mut self.open()?, run, &change);
+      return change_idle((&mut self.open()?, &*self.inner.computer), run, &change);
     }
   }
 
@@ -70,10 +73,15 @@ impl Scheduler {
   }
 }
 
-/// A change for a run no task executes: it applies from its next invocations.
-fn change_idle(db: &mut ProjectDb, run: RunId, change: &PermissionsChange) -> Result<(), Rejection> {
+/// A change for a run no task executes: it applies from its next invocations; its profile's connection is read on
+/// `computer`, where the run executes.
+fn change_idle(
+  (db, computer): (&mut ProjectDb, &dyn ComputerResources),
+  run: RunId,
+  change: &PermissionsChange,
+) -> Result<(), Rejection> {
   let mut run = idle::load(db, run)?;
-  let provider = provider_of((&LocalLink::over(&*db), &*db), &run, change.profile)?;
+  let provider = provider_of((&LocalLink::over(&*db), computer), &run, change.profile)?;
   let events = run
     .change_permissions(
       change.profile,

@@ -45,7 +45,10 @@ use super::{
     worker::{Stop, StopCause, WorkerEvent},
   },
 };
-use crate::{browser::ProjectBrowser, execution::coordinator::board::Board, execution_root::ExecutionRoot};
+use crate::{
+  browser::ProjectBrowser, computer::ComputerResources, execution::coordinator::board::Board,
+  execution_root::ExecutionRoot,
+};
 
 /// How long a run waiting for a free agent slot waits before it looks again, in case the slot
 /// was freed by another run in a way it was not woken for. More slots wake it at once.
@@ -59,6 +62,8 @@ pub(super) enum ExecutionError {
   Record(#[from] RecordError),
   #[error(transparent)]
   Store(#[from] StoreError),
+  #[error(transparent)]
+  Computer(#[from] orchester_core::computer::ComputerError),
   #[error(transparent)]
   Link(#[from] LinkError),
   #[error("step execution {0} is not an agent step of the run")]
@@ -80,6 +85,7 @@ pub(in crate::execution) struct TaskContext {
   pub(in crate::execution) sink: Box<dyn Sink>,
   pub(in crate::execution) notifier: Notifier,
   pub(in crate::execution) vault: Arc<dyn SecretVault>,
+  pub(in crate::execution) computer: Arc<dyn ComputerResources>,
   pub(in crate::execution) relay: Option<PathBuf>,
   pub(in crate::execution) board: Arc<Board>,
   pub(in crate::execution) qa: Arc<QaApps>,
@@ -122,6 +128,8 @@ pub(in crate::execution) struct RunTask {
   pub(super) worktree: Option<PathBuf>,
   pub(super) notifier: Notifier,
   pub(super) vault: Arc<dyn SecretVault>,
+  /// The computer the run executes on: its connections are read there, never in the project database.
+  pub(super) computer: Arc<dyn ComputerResources>,
   /// The program Claude Code starts as its permission prompt ([`crate::approval_relay`]).
   pub(super) relay: Option<PathBuf>,
   pub(super) board: Arc<Board>,
@@ -178,6 +186,7 @@ impl RunTask {
       folder: prepared.folder,
       notifier: context.notifier,
       vault: context.vault,
+      computer: context.computer,
       relay: context.relay,
       board: context.board,
       qa: context.qa,

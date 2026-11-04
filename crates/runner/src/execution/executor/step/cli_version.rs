@@ -58,7 +58,7 @@ impl RunTask {
       .step()
       .clone();
     let connection = match self.profile_and_connection(&profile, &step) {
-      Ok((_, connection)) => connection.id(),
+      Ok((_, connection, _)) => connection.id(),
       Err(problem) => {
         tracing::warn!(?problem, "cannot record the CLI version a model needs");
         return Ok(());

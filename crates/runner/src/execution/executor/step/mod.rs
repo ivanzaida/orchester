@@ -433,10 +433,7 @@ impl RunTask {
       answers,
       steers: steered,
       reviewing: None,
-      reviewer_keys: worker::ReviewerKeys {
-        vault: self.vault.clone(),
-        project: self.project.id(),
-      },
+      reviewer_sources: self.reviewer_sources(),
       reviews_held,
       qa: std::sync::Arc::clone(&self.qa),
     };

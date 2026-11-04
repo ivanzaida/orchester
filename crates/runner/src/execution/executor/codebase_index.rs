@@ -28,7 +28,7 @@ use orchester_core::{
   id::RunId,
   revision::Revision,
   run::CodeIndexPrompt,
-  store::{ConnectionStore, SettingsStore},
+  store::SettingsStore,
 };
 use orchester_exec::{
   ripgrep::{self, LOCAL_APP_DATA},
@@ -265,12 +265,12 @@ impl RunTask {
       .map(OsString::from)
       .or_else(|| std::env::var_os(LOCAL_APP_DATA));
     let executables: Vec<PathBuf> = self
-      .db
+      .computer
       .connections()
       .map_err(|error| error.to_string())?
       .into_iter()
       // Connections of other kinds (GitHub) and native agents, which run no program, bundle no ripgrep.
-      .filter_map(|connection| AgentConnection::try_from(connection).ok())
+      .filter_map(|connection| AgentConnection::try_from(connection.into_parts().0).ok())
       .filter_map(|connection| connection.executable().map(Path::to_path_buf))
       .collect();
     let clis: Vec<&Path> = executables.iter().map(PathBuf::as_path).collect();

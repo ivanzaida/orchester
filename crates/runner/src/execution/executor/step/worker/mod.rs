@@ -41,7 +41,7 @@ use orchester_core::{
 use orchester_store::{ProjectDb, StoreError};
 use tokio::sync::mpsc;
 
-pub(in crate::execution) use self::review::{ReviewerKeys, estimate_task};
+pub(in crate::execution) use self::review::estimate_task;
 use super::{
   super::{Notifier, control::Ack, tool::CommandFinished},
   app_server::AppServerSession,
@@ -208,8 +208,8 @@ pub(in super::super) struct Worker {
   pub(in super::super) steers: mpsc::UnboundedReceiver<Vec<Message>>,
   /// Auto mode's review of the waiting approval, while it is under way.
   pub(super) reviewing: Option<review::Reviewing>,
-  /// Where a native reviewer's API key is read.
-  pub(in crate::execution::executor::step) reviewer_keys: review::ReviewerKeys,
+  /// Where the reviewer's connection and a native reviewer's API key are read.
+  pub(in crate::execution::executor::step) reviewer_sources: review::ReviewerSources,
   /// Held by each review until it has recorded what it cost; [`Worker::work`] waits for all of them.
   pub(in crate::execution::executor::step) reviews_held: mpsc::Sender<Infallible>,
   /// The run's QA apps: the invocation's stops while it waits for a person.
