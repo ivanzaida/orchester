@@ -360,10 +360,9 @@ async fn answer(
     Command::CheckConnection { provider, ref api } => return answer_check(&later, handle, provider, api.clone()),
     Command::AnswerInChat { message, ref tools } => chat_answering(scheduler, message, tools.clone()).await,
     Command::StopChat { chat } => chat_stopped(scheduler, chat),
-    Command::SteerChat { message } => match scheduler.steer_chat(message) {
-      Ok(()) => Reply::ChatSteered { message },
-      Err(rejection) => Reply::Rejected(rejection),
-    },
+    Command::SteerChat { message } => scheduler
+      .steer_chat(message)
+      .map_or_else(Reply::Rejected, |()| Reply::ChatSteered { message }),
     Command::StopTurn { run } => return later.answer(run, async move { handle.stop_turn(run).await }),
     Command::Browser(ref command) => return later.browser(handle, command.clone()),
     Command::Folders(ref command) => return later.folders(handle, command.clone()),
