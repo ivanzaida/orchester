@@ -30,6 +30,7 @@ mod server_key;
 pub mod sync;
 pub mod team;
 pub mod team_join;
+mod team_session;
 pub mod trust;
 
 use std::{
@@ -102,6 +103,9 @@ struct Inner {
   watched: Mutex<HashMap<ServerId, Watched>>,
   /// Counts changes of the list and of connections, for the monitor and the screens.
   changes: watch::Sender<u64>,
+  /// The generation of the servers' sessions, raised whenever a token is stored, refused or forgotten: a team session
+  /// made before ends ([`Servers::team_session`]).
+  sessions: watch::Sender<u64>,
   /// Counts changes of shared projects' caches, for the screens.
   shared: watch::Sender<u64>,
   /// Counts requests to read the shared projects' caches again now.
@@ -149,6 +153,7 @@ impl Servers {
         schedule,
         watched: Mutex::new(HashMap::new()),
         changes: watch::channel(0).0,
+        sessions: watch::channel(0).0,
         shared: watch::channel(0).0,
         sync: watch::channel(0).0,
         sync_states: Mutex::new(HashMap::new()),
@@ -308,6 +313,7 @@ impl Servers {
   async fn store_token(&self, server: ServerId, token: SecretValue) -> Result<(), SharingError> {
     let vault = self.inner.vault.clone();
     background::run(move || vault.get().store(&VaultKey::server_token(server), &token)).await??;
+    self.sessions_ended();
     Ok(())
   }
 
@@ -440,6 +446,7 @@ impl Servers {
       last_reached: watched.and_then(|watched| watched.last_reached),
       certificate_changed: false,
     });
+    self.sessions_ended();
   }
 
   fn update(&self, server: ServerId, change: impl FnOnce(Option<&Watched>) -> Watched) {
@@ -455,6 +462,12 @@ impl Servers {
   fn forget(&self, server: ServerId) {
     self.inner.watched.lock().remove(&server);
     self.changed();
+    self.sessions_ended();
+  }
+
+  /// Ends every team session made so far: a token was stored, refused or forgotten.
+  fn sessions_ended(&self) {
+    self.inner.sessions.send_modify(|generation| *generation += 1);
   }
 
   /// The servers the monitor should ask now, and when it should look again.

@@ -6,7 +6,8 @@
 //! holder in its session, the task's and module's expected revisions, and no running work under the claim, and answers
 //! the work with its `start` effect; `work.report` is decided in the server's order: a known event answers as it did,
 //! then fencing (`claim_lost`, `session_mismatch`), ordering per work and run (`sequence_regressed`), the newest run,
-//! and the outcome's state.
+//! and the outcome's state. The module's delivery commands (S7c) are decided in the order its `module-branches.md`
+//! gives them ([`crate::team_deliveries`]).
 
 #![allow(dead_code, reason = "each test binary uses some of the server")]
 
@@ -15,7 +16,8 @@ use serde_json::{Value, json};
 
 use crate::{
   http::Request,
-  team_server::{Claim, MEMBER, OTHER, State, Work, build_bundle, claim_read, holds, refusal},
+  team_deliveries,
+  team_server::{Claim, MEMBER, OTHER, State, Work, build_bundle, claim_read, holds, refusal, subject_claim_read},
 };
 
 pub fn command(state: &mut State, request: &Request) -> (u16, Value) {
@@ -48,6 +50,15 @@ fn carry_out(state: &mut State, token: &str, body: &Value) -> Option<(u16, Value
       state.reports_sent += 1;
       report(state, token, command)
     }
+    "delivery.authorize" => team_deliveries::authorize(state, (token, operation), command),
+    "delivery.request" => {
+      state.delivery_requests += 1;
+      team_deliveries::request(state, token, command)
+    }
+    "delivery.report" => {
+      state.delivery_reports += 1;
+      team_deliveries::report(state, token, command)
+    }
     _ => return None,
   };
   Some(match result {
@@ -62,7 +73,7 @@ fn carry_out(state: &mut State, token: &str, body: &Value) -> Option<(u16, Value
   })
 }
 
-type Refused = (u16, &'static str);
+pub type Refused = (u16, &'static str);
 
 fn claimed(state: &State, claim: ClaimId) -> Value {
   json!({"kind": "claim", "subject": {"kind": "task", "id": state.task}, "claim": claim_read(state, claim),
@@ -70,6 +81,9 @@ fn claimed(state: &State, claim: ClaimId) -> Value {
 }
 
 fn acquire(state: &mut State, token: &str, command: &Value) -> Result<Value, Refused> {
+  if command["subject"]["kind"] == "module" {
+    return acquire_module(state, token, command);
+  }
   assert_eq!(command["subject"]["id"].as_str(), Some(state.task.to_string().as_str()));
   match &state.claim {
     Some(claim) if claim.token == token => Ok(claimed(state, claim.id)),
@@ -83,6 +97,31 @@ fn acquire(state: &mut State, token: &str, command: &Value) -> Result<Value, Ref
       Ok(claimed(state, id))
     }
   }
+}
+
+/// The module's claim for the caller's session; its tasks' claims are not modelled here.
+fn acquire_module(state: &mut State, token: &str, command: &Value) -> Result<Value, Refused> {
+  assert_eq!(
+    command["subject"]["id"].as_str(),
+    Some(state.module.to_string().as_str())
+  );
+  let id = match &state.module_claim {
+    Some(claim) if claim.token == token => claim.id,
+    Some(_) => return Err((409, "claim_conflict")),
+    None => {
+      let id = ClaimId::generate();
+      state.module_claim = Some(Claim {
+        id,
+        token: token.to_owned(),
+      });
+      id
+    }
+  };
+  let subject = json!({"kind": "module", "id": state.module});
+  Ok(
+    json!({"kind": "claim", "claim": subject_claim_read(&subject, id), "subject": subject,
+    "children": [], "effects": []}),
+  )
 }
 
 /// Takes over the claim the caller observed: a new claim id for the caller's session fences the former one's works.

@@ -1,22 +1,21 @@
 //! The team commands of `POST /api/v2/projects/{project}/commands` on the S4 envelopes (`CommandRequest<TeamCommand>`,
 //! answered with `CommandResult<TeamCommandValue>`), field for field the team server's own `Command` and
-//! `CommandValue` (`docs/cloud-api.md`, "Team authority P2 commands" and "Team authority P4 work"), so the server can
-//! take these types without a wire change. Each is internally tagged by its `kind`, and unknown fields are refused.
-//! `delivery.request` and `delivery.report` are the server's too and join with the same shapes when the desktop
-//! delivers. The definitions (task edits, modules, tags, the workspace policy) are no commands: they have their own
-//! admin-checked routes. The task in a value is the public `SharedTask` until the canonical `TaskRead` is published
-//! there.
+//! `CommandValue` (`docs/cloud-api.md`, "Team authority P2 commands", "Team authority P4 work" and "Team authority P4
+//! module delivery"), so the server can take these types without a wire change. Each is internally tagged by its
+//! `kind`, and unknown fields are refused. The definitions (task edits, modules, tags, the workspace policy) are no
+//! commands: they have their own admin-checked routes. The task in a value is the public `SharedTask` until the
+//! canonical `TaskRead` is published there.
 
 use orchester_core::{
-  id::{ClaimId, ModuleId, UserId},
+  id::{ClaimId, ModuleId, OperationId, UserId},
   run::{BranchName, CommitId},
   sharing::TaskRevision,
 };
 use serde::{Deserialize, Serialize};
 
 use super::{
-  AuthorityRef, BundleRef, ClaimRead, LocalEffect, ModuleDeliveryRead, ModuleRead, Subject, WorkRead, WorkReport,
-  page::nullable,
+  AuthorityRef, BundleRef, ClaimRead, DeliveryOutcome, LocalEffect, ModuleDeliveryRead, ModuleRead, Subject, WorkRead,
+  WorkReport, page::nullable,
 };
 use crate::{SharedTask, TaskContent, UserRef};
 
@@ -65,6 +64,26 @@ pub enum TeamCommand {
     source_commit: CommitId,
     base_commit: CommitId,
   },
+  /// The module's holder asks to deliver its branch at `source_commit` onto the base at `base_commit`, under the
+  /// module's claim (`work_id` `null`), on the Admin's authorization `authorization_operation_id` or, with `null`, the
+  /// workspace's automatic merge.
+  #[serde(rename = "delivery.request")]
+  DeliveryRequest {
+    authority: AuthorityRef,
+    #[serde(deserialize_with = "nullable")]
+    authorization_operation_id: Option<OperationId>,
+    branch: BranchName,
+    source_commit: CommitId,
+    base_commit: CommitId,
+  },
+  /// How the holder's merge of the requested delivery of exactly these commits went.
+  #[serde(rename = "delivery.report")]
+  DeliveryReport {
+    authority: AuthorityRef,
+    source_commit: CommitId,
+    base_commit: CommitId,
+    outcome: DeliveryOutcome,
+  },
   /// A run's account of the work it carries out under the work's exact authority, ordered per run.
   #[serde(rename = "work.report")]
   WorkReport(WorkReport),
@@ -82,13 +101,16 @@ impl TeamCommand {
       Self::ModuleBranchSet { .. } => "module.branch.set",
       Self::WorkStart { .. } => "work.start",
       Self::DeliveryAuthorize { .. } => "delivery.authorize",
+      Self::DeliveryRequest { .. } => "delivery.request",
+      Self::DeliveryReport { .. } => "delivery.report",
       Self::WorkReport(_) => "work.report",
     }
   }
 }
 
 /// What a committed team command answers, as `CommandResult::result` carries it. `effects` lists what the caller's
-/// computer may do now: a started work's `start`; every other value's list is empty.
+/// computer may do now: a started work's `start`, an accepted delivery request's `deliver_module`; every other value's
+/// list is empty.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum TeamCommandValue {
@@ -127,7 +149,7 @@ pub enum TeamCommandValue {
     module: Box<ModuleRead>,
     effects: Vec<LocalEffect>,
   },
-  /// `delivery.authorize`: the module's delivery as it is after the command.
+  /// `delivery.authorize`, `delivery.request`, `delivery.report`: the module's delivery as it is after the command.
   Delivery {
     delivery: Box<ModuleDeliveryRead>,
     effects: Vec<LocalEffect>,

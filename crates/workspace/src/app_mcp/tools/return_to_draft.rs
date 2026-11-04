@@ -12,7 +12,7 @@ use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::wire;
+use super::{team, wire};
 use crate::{
   app_mcp::{
     error::{Missing, ToolError},
@@ -33,6 +33,10 @@ pub struct ReturnToDraft {
 }
 
 pub async fn return_to_draft(services: &Services, args: ReturnToDraft) -> Result<Value, ToolError> {
+  // A team task's queue and workflow status are lifecycle transitions whose owner is open (D4): nothing changes here.
+  if team::of(services, &args.project).await?.is_some() {
+    return Err(team::decision_required(orchester_api::v2::DecisionId::D4));
+  }
   let services = services.clone();
   blocking(move || {
     let open = services.project(&args.project)?;

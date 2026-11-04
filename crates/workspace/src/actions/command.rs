@@ -1,11 +1,12 @@
 //! A team action the team server takes as a command (`POST …/commands`, with a receipt): task creation, claims,
-//! assignment, a module's branch, work start and delivery authorization, with the server's ids of its targets and the
-//! revisions it was decided on, checked here without any effect. A new task's pipeline, limits and workflow status
-//! are configuration whose owner is open (D4/D6): such a task is refused before it is sent, never sent without them.
+//! assignment, a module's branch, work start and a module's delivery authorized or requested, with the server's ids
+//! of its targets and the revisions it was decided on, checked here without any effect. A new task's pipeline, limits
+//! and workflow status are configuration whose owner is open (D4/D6): such a task is refused before it is sent, never
+//! sent without them.
 
 use orchester_api::{
   TaskContent,
-  v2::{DecisionId, ExpectedRevision, ExpectedRevisions, RevisionTarget, Subject, TeamCommand},
+  v2::{AuthorityRef, DecisionId, ExpectedRevision, ExpectedRevisions, RevisionTarget, Subject, TeamCommand},
 };
 use orchester_core::{
   id::ModuleId,
@@ -20,7 +21,7 @@ use orchester_store::ProjectDb;
 
 use super::{
   ActionError,
-  action::{AssignmentAction, ClaimAction, DeliveryAction, WorkAction},
+  action::{AssignmentAction, ClaimAction, DeliveryAction, DeliveryStep, WorkAction},
   ownership::{TeamLink, team_authority, team_subject},
 };
 
@@ -136,13 +137,33 @@ pub(super) fn work(db: &ProjectDb, link: TeamLink, action: &WorkAction) -> Resul
   Ok(TeamRequest::revised(command, &read))
 }
 
-/// `delivery.authorize` of a module's branch; a delivery is always a module's.
+/// `delivery.authorize` or `delivery.request` of a module's branch; a delivery is always a module's, and binds to the
+/// module's claim, not to a work.
 pub(super) fn delivery(action: &DeliveryAction) -> TeamRequest {
-  TeamRequest::unrevised(TeamCommand::DeliveryAuthorize {
-    subject: Subject::Module { id: action.module },
-    claim_id: action.claim,
-    branch: action.branch.clone(),
-    source_commit: action.source_commit.clone(),
-    base_commit: action.base_commit.clone(),
+  let subject = Subject::Module { id: action.module };
+  let (branch, source_commit, base_commit) = (
+    action.branch.clone(),
+    action.source_commit.clone(),
+    action.base_commit.clone(),
+  );
+  TeamRequest::unrevised(match action.step {
+    DeliveryStep::Authorize => TeamCommand::DeliveryAuthorize {
+      subject,
+      claim_id: action.claim,
+      branch,
+      source_commit,
+      base_commit,
+    },
+    DeliveryStep::Request { authorization } => TeamCommand::DeliveryRequest {
+      authority: AuthorityRef {
+        subject,
+        claim_id: action.claim,
+        work_id: None,
+      },
+      authorization_operation_id: authorization,
+      branch,
+      source_commit,
+      base_commit,
+    },
   })
 }

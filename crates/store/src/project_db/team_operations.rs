@@ -33,7 +33,7 @@ pub enum TeamOperationState {
 }
 
 impl TeamOperationState {
-  const fn text(self) -> &'static str {
+  pub(super) const fn text(self) -> &'static str {
     match self {
       Self::Sent => "sent",
       Self::Committed => "committed",

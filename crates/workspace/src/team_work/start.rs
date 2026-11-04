@@ -298,7 +298,7 @@ fn failed(record: &TeamStart) -> Result<StartOutcome, TeamWorkError> {
   Ok(StartOutcome::Failed(failure))
 }
 
-/// Settles the start's operation completed once its run is recorded: its start effect happened.
+/// Settles the operation completed once its local effect happened: the start's run is recorded.
 fn complete_operation(db: &mut ProjectDb, operation: OperationId) -> Result<(), TeamWorkError> {
   let Some(kept) = db.team_operation(operation)? else {
     return Ok(());

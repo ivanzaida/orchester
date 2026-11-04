@@ -1,21 +1,27 @@
 //! Team work through the server (`orchester_workspace::team_work`, team authority P4) against a fake team server on
-//! loopback with the server's routes and shapes ([`team_server`], [`team_commands`]): a start recovers once from a
-//! crash or an outage at each boundary and never makes a second work or run ([`start`]); work reports wait in order
-//! across an outage and a restart, with the outcomes as decided and local success apart from server acceptance
-//! ([`reports`]); a takeover fences the run and keeps its output here; and the heartbeat renews only running work
-//! ([`heartbeat`]). Runs are recorded by a stand-in for the runner that keeps them as the runner does; the runner's own
-//! tests start the real one (`crates/runner/tests/team_start.rs`).
+//! loopback with the server's routes and shapes ([`team_server`], [`team_commands`], [`team_deliveries`]): a start
+//! recovers once from a crash or an outage at each boundary and never makes a second work or run ([`start`]); work
+//! reports wait in order across an outage and a restart, with the outcomes as decided and local success apart from
+//! server acceptance ([`reports`]); a takeover fences the run and keeps its output here; the heartbeat renews only
+//! running work ([`heartbeat`]); and a module's delivery merges only on the receipt's effect and reports it once,
+//! across lost answers, outages and a crash ([`delivery`], P4c), and recovers from its edge cases
+//! ([`delivery_recovery`]). Runs are recorded by a stand-in for the runner that keeps them as the runner does; the
+//! runner's own tests start the real one (`crates/runner/tests/team_start.rs`).
 //!
 //! `cargo test -p orchester-workspace --test team_work team_work_`
 
 #[path = "../actions/http.rs"]
 mod http;
 
+mod completion;
+mod delivery;
+mod delivery_recovery;
 mod fixture;
 mod heartbeat;
 mod reports;
 mod start;
 mod team_commands;
+mod team_deliveries;
 mod team_server;
 
 use std::{

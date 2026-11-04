@@ -7,8 +7,8 @@
 //! recorded before it is sent so that a lost response is looked up or sent again under the same id ([`team`]), with
 //! only the local effects its receipt names ([`effects`]); or, for a definition, on that definition's admin-checked
 //! route under the revision read ([`definition`]). The outcome says which happened ([`TeamOutcome`]). A refused team
-//! action never becomes a local change. Nothing calls the dispatcher yet: the desktop's controls, the MCP tools and
-//! the Orchestrator move onto it in P6 and P7.
+//! action never becomes a local change. The domain MCP tools and the Orchestrator chat, which calls them, act on a team
+//! project through it (P7, `crate::app_mcp`); the desktop's controls move onto it in P6.
 
 mod action;
 mod command;
@@ -28,8 +28,8 @@ use orchester_store::{ProjectDb, StoreError};
 
 pub use self::{
   action::{
-    Action, ActionClass, AssignmentAction, ClaimAction, DeliveryAction, Intent, ModuleAction, PolicyAction, TagAction,
-    TaskAction, WorkAction,
+    Action, ActionClass, AssignmentAction, ClaimAction, DeliveryAction, DeliveryStep, Intent, ModuleAction,
+    PolicyAction, TagAction, TaskAction, WorkAction,
   },
   error::ActionError,
   outcome::{Accepted, ActionOutcome, Current, Definition, LocalResult, Receipt, Refusal, TeamOutcome},
