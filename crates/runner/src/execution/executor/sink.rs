@@ -3,15 +3,18 @@
 //! The run log goes this way: its events with the change they make to the run, attempts and step executions,
 //! checkpoints, plans, raised step budgets, changed permissions and why the runner failed. So do the run's
 //! invocations: each start, the transcript of their events and every change to their rows. A transcript's events are
-//! redacted before they become a record. The local sink is `crate::execution::coordinator::sink`'s.
+//! redacted before they become a record. So do the task's conversation (agents' messages and how far people's got),
+//! agents' questions and their tool requests, each change as the store applies it. The local sink is
+//! `crate::execution::coordinator::sink`'s.
 //!
 //! Rows the desktop owns are written only by the coordinator (rule 3): the executor asks for them here, and the
 //! answer tells it what it needs to go on. These are approval rules, Always allow, a connection's model requirement
 //! and agents' memory records.
 
 use orchester_store::{
-  ActivityRecord, AlwaysAllowAnswer, AlwaysAllowRecord, InvocationRecord, InvocationStart, MemoryAnswer, MemoryRecord,
-  ModelRequirement, RuleAnswer, RuleRecord, RunLogRecord, RunStoreError, StoreError,
+  ActivityRecord, AlwaysAllowAnswer, AlwaysAllowRecord, ApprovalRecord, InvocationRecord, InvocationStart,
+  MemoryAnswer, MemoryRecord, MessageRecord, ModelRequirement, QuestionRecord, RuleAnswer, RuleRecord, RunLogRecord,
+  RunStoreError, StoreError,
 };
 
 pub(in crate::execution) trait Sink: Send {
@@ -30,7 +33,19 @@ pub(in crate::execution) trait Sink: Send {
   /// Applies `record` to its invocation's rows (`orchester_store::ProjectDb::write_invocation`).
   fn invocation(&mut self, record: InvocationRecord) -> Result<(), StoreError>;
 
-  /// Adds or counts an approval rule (`orchester_store::ProjectDb::write_rule`).
+  /// Applies `record` to its task's conversation; whether it changed what it names
+  /// (`orchester_store::ProjectDb::write_message`).
+  fn message(&mut self, record: MessageRecord) -> Result<bool, StoreError>;
+
+  /// Applies `record` to its run's questions; whether it changed the request it names
+  /// (`orchester_store::ProjectDb::write_question`).
+  fn question(&mut self, record: QuestionRecord) -> Result<bool, StoreError>;
+
+  /// Applies `record` to its run's tool requests; whether it changed the requests it names
+  /// (`orchester_store::ProjectDb::write_approval`).
+  fn approval(&mut self, record: ApprovalRecord) -> Result<bool, StoreError>;
+
+  /// Adds an approval rule, or counts a request a project's rule answered (`orchester_store::ProjectDb::write_rule`).
   fn rule(&mut self, record: RuleRecord) -> Result<RuleAnswer, StoreError>;
 
   /// Leaves what Always allow promises, or says it is not available

@@ -8,24 +8,25 @@ use orchester_core::{
   run::{Answerer, ApprovalAnswer},
 };
 use orchester_ipc::{Event, Rejection};
-use orchester_store::{ProjectDb, StoreError};
+use orchester_store::{ApprovalRecord, ProjectDb, StoreError};
 use tokio::sync::mpsc::error::SendError;
 
 use super::{
   Notifier,
   control::{Ack, answer},
   run::{ExecutionError, RunTask},
+  sink::Sink,
   step::worker::ApprovalDecision,
 };
 
-/// Ends request `id` of `run`, which no live agent holds, if it still waits: whether it did, and why its
-/// answer is refused ([`refusal`]).
+/// Ends request `id` of `run`, which no live agent holds, through `sink` if it still waits: whether it did, and why
+/// its answer is refused ([`refusal`]), read in `db`.
 pub(in crate::execution) fn end_unheld(
-  db: &mut ProjectDb,
+  (db, sink): (&ProjectDb, &mut dyn Sink),
   run: RunId,
   id: &str,
 ) -> Result<(bool, Rejection), StoreError> {
-  if db.end_waiting_tool_approval(run, id)? {
+  if sink.approval(ApprovalRecord::ended(run, id))? {
     return Ok((true, Rejection::ToolApprovalNotAwaited));
   }
   Ok((false, refusal(db, run, id)?))
@@ -80,7 +81,7 @@ impl RunTask {
 
   /// No agent of the run holds request `id`: it ends if it still waits, and the answer is refused.
   fn end_unheld(&mut self, id: &str, ack: Ack) -> Result<(), ExecutionError> {
-    let (ended, refusal) = end_unheld(&mut self.db, self.run.id(), id)?;
+    let (ended, refusal) = end_unheld((&self.db, self.sink.as_mut()), self.run.id(), id)?;
     if ended {
       notify(&self.notifier, self.run.id(), self.task.id());
     }
@@ -94,7 +95,7 @@ impl RunTask {
     let run = self.run.id();
     let ended = self.db.pending_tool_approvals(run).and_then(|waiting| {
       waiting.iter().try_fold(false, |ended, approval| {
-        Ok(self.db.end_waiting_tool_approval(run, &approval.id)? || ended)
+        Ok(self.sink.approval(ApprovalRecord::ended(run, &approval.id))? || ended)
       })
     });
     match ended {

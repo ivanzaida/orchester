@@ -11,10 +11,10 @@ use orchester_core::{
   conversation::{self, AgentMessage, Arrival, Delivery, Message, MessageBody},
   id::{ResourceId, StepExecutionId},
   run::{Invocation, RunStatus, StepExecutor, StepFailure, StepOutcome, StepOutput},
-  store::ConversationStore,
   time::Timestamp,
 };
 use orchester_ipc::Event;
+use orchester_store::MessageRecord;
 
 use super::{
   attached::{self, AttachedError},
@@ -139,7 +139,7 @@ impl RunTask {
         )
         .map_err(ExecutionError::Conversation)?;
     }
-    self.db.save_deliveries(&messages)?;
+    self.sink.message(MessageRecord::deliveries(&messages)?)?;
     tracing::info!(run = %self.run.id(), %execution, count = messages.len(), "messages delivered");
     self.announce();
     Ok(())
@@ -166,7 +166,7 @@ impl RunTask {
     for message in &mut acknowledged {
       message.acknowledge(now).map_err(ExecutionError::Conversation)?;
     }
-    self.db.save_deliveries(&acknowledged)?;
+    self.sink.message(MessageRecord::deliveries(&acknowledged)?)?;
     if output.outcome != Some(StepOutcome::Question)
       && let Ok(body) = MessageBody::new(&output.text)
     {
@@ -178,7 +178,7 @@ impl RunTask {
         body,
         now,
       );
-      self.db.add_agent_message(&reply)?;
+      self.sink.message(MessageRecord::added(&reply))?;
     }
     self.announce();
     Ok(())
@@ -204,7 +204,7 @@ impl RunTask {
       body,
       Timestamp::now(),
     );
-    self.db.add_agent_message(&message)?;
+    self.sink.message(MessageRecord::added(&message))?;
     self.transition(|run, now| run.wait_step(execution, orchester_core::run::WaitReason::Message, now))?;
     let agent = self.work(execution)?.map(|work| work.agent).unwrap_or_default();
     tracing::info!(run = %self.run.id(), %execution, "question asked");
@@ -220,7 +220,7 @@ impl RunTask {
   /// Resumes the steps whose agent asked a question that people's messages now answer, unless the
   /// run is to pause. A question with suggested answers that still waits holds its step: the messages
   /// reach the agent with its answer.
-  pub(super) fn answer_questions(&mut self) -> Result<(), ExecutionError> {
+  pub(super) fn resume_answered_steps(&mut self) -> Result<(), ExecutionError> {
     if self.run.pause_requested() {
       return Ok(());
     }

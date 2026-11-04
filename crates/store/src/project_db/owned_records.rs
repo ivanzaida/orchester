@@ -28,7 +28,8 @@ use serde::{Deserialize, Serialize};
 use super::ProjectDb;
 use crate::StoreError;
 
-/// A rule a request's answer makes, or a request a rule answered.
+/// A rule a request's answer makes, or a request a rule of the project answered. A request a rule of the run answered
+/// is recorded with the request itself (`ApprovalRecord::rule`).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "kind")]
 pub enum RuleRecord {
@@ -46,18 +47,12 @@ pub enum RuleRecord {
     request: String,
     at: Timestamp,
   },
-  /// Rule `rule` of `run` answered its request `request` ([`ProjectDb::rule_answered`]).
-  RunAnswered {
-    run: RunId,
-    rule: ApprovalRuleId,
-    request: String,
-  },
   /// Rule `rule` of the project answered a request ([`ProjectDb::project_rule_answered`]).
   ProjectAnswered { rule: ProjectRuleId },
 }
 
 /// What a [`RuleRecord`] did: the rule that answers from now on (an active one of the same scope when there was one
-/// already), or that a rule's count went up.
+/// already), or that a project rule's count went up.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "kind", content = "rule")]
 pub enum RuleAnswer {
@@ -152,10 +147,6 @@ impl ProjectDb {
         request,
         at,
       } => RuleAnswer::Project(self.add_project_approval_rule(scope, (*run, request), *at)?.id),
-      RuleRecord::RunAnswered { run, rule, request } => {
-        self.rule_answered(*run, *rule, request)?;
-        RuleAnswer::Counted
-      }
       RuleRecord::ProjectAnswered { rule } => {
         self.project_rule_answered(*rule)?;
         RuleAnswer::Counted

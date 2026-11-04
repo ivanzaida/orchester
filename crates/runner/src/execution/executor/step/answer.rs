@@ -33,7 +33,7 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_ipc::{Event, Rejection};
-use orchester_store::{AlwaysAllowAnswer, AlwaysAllowRecord, RuleRecord, StoreError};
+use orchester_store::{AlwaysAllowAnswer, AlwaysAllowRecord, ApprovalRecord, RuleRecord, StoreError};
 
 use super::{
   super::tool_approval::refusal,
@@ -230,7 +230,7 @@ impl Worker {
       // A check its access rules approve once per run: this approval covers its later calls in the run.
       ApprovalAnswer::Once if self.once_per_run(&subject) => {
         if let Ok(scope) = RuleScope::similar(&subject) {
-          watch.sink().rule(RuleRecord::Run { run, scope, at })?;
+          watch.sink.rule(RuleRecord::Run { run, scope, at })?;
         }
       }
       ApprovalAnswer::Once => {}
@@ -251,14 +251,14 @@ impl Worker {
         let Ok(scope) = RuleScope::similar(&subject) else {
           return Ok(Err(unavailable("Approve similar")));
         };
-        watch.sink().rule(RuleRecord::Run { run, scope, at })?;
+        watch.sink.rule(RuleRecord::Run { run, scope, at })?;
       }
       ApprovalAnswer::SimilarProject => {
         let Some(scope) = ProjectScope::of(&subject) else {
           return Ok(Err(unavailable("Approve for every run of this project")));
         };
         let request = approval.id.clone();
-        watch.sink().rule(RuleRecord::Project {
+        watch.sink.rule(RuleRecord::Project {
           scope,
           run,
           request,
@@ -341,7 +341,7 @@ impl Worker {
       },
       _ => return Ok(Err(unavailable("Always allow"))),
     };
-    Ok(match watch.sink().always_allow(record)? {
+    Ok(match watch.sink.always_allow(record)? {
       AlwaysAllowAnswer::Allowed => Ok(()),
       AlwaysAllowAnswer::Unavailable => Err(unavailable("Always allow")),
     })
@@ -368,8 +368,9 @@ impl Worker {
     let item = awaiting.item().to_owned();
     // The answer settled: a QA start it lets run keeps its app, unless another wait for a person remains.
     self.resume_qa(watch, Some(&approval.id));
+    let interrupted = ApprovalRecord::interrupted(run, watch.invocation.id);
     if let Err(error) = self.deliver(watch, awaiting, &settled).await {
-      watch.db.interrupt_tool_approvals(run, watch.invocation.id)?;
+      watch.sink.approval(interrupted)?;
       self.end_approval_wait(watch)?;
       self.observe(
         watch,
@@ -387,8 +388,11 @@ impl Worker {
     } else {
       ToolApprovalDecision::Denied
     };
-    if !watch.db.delivered_tool_approval(run, &approval.id, kind)? {
-      watch.db.interrupt_tool_approvals(run, watch.invocation.id)?;
+    if !watch
+      .sink
+      .approval(ApprovalRecord::delivered(run, &approval.id, kind))?
+    {
+      watch.sink.approval(interrupted)?;
       self.end_approval_wait(watch)?;
       self.observe(
         watch,
@@ -434,28 +438,23 @@ impl Worker {
 /// Takes `approval` from the waiting as `settled` answers it, with how the run's mode answered it, the rule that did
 /// and a denial's words; whether it still waited.
 fn claim(watch: &mut Watch, approval: &PendingToolApproval, settled: &Settled) -> Result<bool, StoreError> {
-  let run = approval.run;
-  if !watch
-    .db
-    .claim_tool_approval(run, &approval.id, settled.decided_by, Timestamp::now())?
-  {
+  let (run, id) = (approval.run, approval.id.as_str());
+  let claimed = ApprovalRecord::claimed(run, id, settled.decided_by, Timestamp::now());
+  if !watch.sink.approval(claimed)? {
     return Ok(false);
   }
-  watch.db.record_request_answer(run, &approval.id, &settled.answer)?;
-  let counted = match settled.rule {
-    Some(Answering::Run(rule)) => Some(RuleRecord::RunAnswered {
-      run,
-      rule,
-      request: approval.id.clone(),
-    }),
-    Some(Answering::Project(rule)) => Some(RuleRecord::ProjectAnswered { rule }),
-    None => None,
-  };
-  if let Some(counted) = counted {
-    watch.sink().rule(counted)?;
+  watch.sink.approval(ApprovalRecord::answer(run, id, &settled.answer))?;
+  match settled.rule {
+    Some(Answering::Run(rule)) => {
+      watch.sink.approval(ApprovalRecord::rule(run, id, rule))?;
+    }
+    Some(Answering::Project(rule)) => {
+      watch.sink.rule(RuleRecord::ProjectAnswered { rule })?;
+    }
+    None => {}
   }
   if let Some(note) = &settled.note {
-    watch.db.record_denial_note(run, &approval.id, note)?;
+    watch.sink.approval(ApprovalRecord::denial_note(run, id, note))?;
   }
   Ok(true)
 }

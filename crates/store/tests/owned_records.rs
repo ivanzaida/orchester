@@ -86,22 +86,10 @@ fn owned_record_rules_round_trip_and_answer_the_rule() {
   let RuleAnswer::Project(project_rule) = sent(&db.write_rule(&project).expect("written")) else {
     panic!("a project's rule answers its id");
   };
-  let counted = [
-    RuleRecord::RunAnswered {
-      run: run.id(),
-      rule,
-      request: "invocation:1".to_owned(),
-    },
-    RuleRecord::ProjectAnswered { rule: project_rule },
-  ];
-  for record in &counted {
-    assert_eq!(
-      sent(&db.write_rule(&sent(record)).expect("counted")),
-      RuleAnswer::Counted
-    );
-  }
+  let counted = sent(&RuleRecord::ProjectAnswered { rule: project_rule });
+  assert_eq!(sent(&db.write_rule(&counted).expect("counted")), RuleAnswer::Counted);
   let rules = db.approval_rules(run.id()).expect("rules");
-  assert_eq!((rules.len(), rules[0].id, rules[0].answered), (1, rule, 1));
+  assert_eq!((rules.len(), rules[0].id), (1, rule));
   let project_rules = db.project_approval_rules().expect("project rules");
   assert_eq!(
     (

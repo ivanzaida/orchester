@@ -257,8 +257,9 @@ pub(in super::super) type Coordinator = (Box<dyn Sink>, Box<dyn CoordinatorLink 
 
 pub(super) struct Watch {
   pub(super) db: ProjectDb,
-  /// Where the invocation's transcript and the changes to its rows are recorded.
-  sink: Box<dyn Sink>,
+  /// Where the invocation's transcript and the changes to its rows, its messages, questions and tool requests are
+  /// recorded.
+  pub(super) sink: Box<dyn Sink>,
   /// Where the messages sent to the agent while its turn runs, and the files attached to them, are asked for.
   pub(super) link: Box<dyn CoordinatorLink + Send>,
   pub(super) invocation: Invocation,
@@ -350,11 +351,6 @@ impl Watch {
   /// Appends `events` of the invocation to its run's transcript; the sequence the desktop is told of.
   pub(super) fn record_events(&mut self, events: Vec<(Timestamp, AgentEvent)>) -> Result<u64, StoreError> {
     self.sink.activity(ActivityRecord::new(&self.invocation, events))
-  }
-
-  /// The coordinator's sink, which writes the rows the desktop owns that an answer leaves: its rules, Always allow.
-  pub(super) fn sink(&mut self) -> &mut dyn Sink {
-    &mut *self.sink
   }
 
   /// The mode this agent's requests are answered in now (`docs/design/approval-modes.md`): by its profile's approval

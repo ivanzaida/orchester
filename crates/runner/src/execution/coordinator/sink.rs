@@ -6,8 +6,9 @@
 use std::path::{Path, PathBuf};
 
 use orchester_store::{
-  ActivityRecord, AlwaysAllowAnswer, AlwaysAllowRecord, InvocationRecord, InvocationStart, MemoryAnswer, MemoryRecord,
-  ModelRequirement, ProjectDb, RuleAnswer, RuleRecord, RunLogRecord, RunStoreError, StoreError,
+  ActivityRecord, AlwaysAllowAnswer, AlwaysAllowRecord, ApprovalRecord, InvocationRecord, InvocationStart,
+  MemoryAnswer, MemoryRecord, MessageRecord, ModelRequirement, ProjectDb, QuestionRecord, RuleAnswer, RuleRecord,
+  RunLogRecord, RunStoreError, StoreError,
 };
 
 use crate::execution::executor::sink::Sink;
@@ -97,14 +98,32 @@ impl Sink for LocalSink {
     Ok(answer)
   }
 
+  fn message(&mut self, record: MessageRecord) -> Result<bool, StoreError> {
+    #[cfg(feature = "test-agent")]
+    survives_sending(&record);
+    self.write(|db| db.write_message(&record))
+  }
+
+  fn question(&mut self, record: QuestionRecord) -> Result<bool, StoreError> {
+    #[cfg(feature = "test-agent")]
+    survives_sending(&record);
+    self.write(|db| db.write_question(&record))
+  }
+
+  fn approval(&mut self, record: ApprovalRecord) -> Result<bool, StoreError> {
+    #[cfg(feature = "test-agent")]
+    survives_sending(&record);
+    self.write(|db| db.write_approval(&record))
+  }
+
   fn another(&self) -> Box<dyn Sink> {
     Box::new(Self::new(&self.root))
   }
 }
 
-/// In the runner's own tests every record and request crosses the sink as JSON and must arrive unchanged, as a
-/// coordinator in another process would receive it (`docs/architecture/remote-runners.md`, rule 4); so does every
-/// answer on its way back.
+/// In the runner's own tests every invocation, conversation, question and tool request record, and every request for
+/// rows the desktop owns, crosses the sink as JSON and must arrive unchanged, as a coordinator in another process would
+/// receive it (`docs/architecture/remote-runners.md`, rule 4); so does every answer on its way back.
 #[cfg(feature = "test-agent")]
 fn survives_sending<T>(record: &T)
 where

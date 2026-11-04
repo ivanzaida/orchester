@@ -25,13 +25,13 @@ pub use lock_watch::worst::{LockHold, LockHolds, lock_holds, reset_lock_holds};
 #[cfg(feature = "test-support")]
 pub use project_db::ProjectMigration;
 pub use project_db::{
-  ActivityRecord, AlwaysAllowAnswer, AlwaysAllowRecord, AttachmentOwner, AutoModeSave, AutomaticStatus,
+  ActivityRecord, AlwaysAllowAnswer, AlwaysAllowRecord, ApprovalRecord, AttachmentOwner, AutoModeSave, AutomaticStatus,
   AutomationPoints, Bound, BoundBy, BoundReference, CachedClaim, CachedModule, CachedModuleChange, CachedRunStatus,
   CachedTask, CachedVersion, ChatListing, ChatTurn, ConfirmedVersion, DecisionCounts, EndedRun, InvocationRecord,
-  InvocationStart, JoinedKey, KeptAction, KeptReport, KeptWait, MemoryAnswer, MemoryRecord, ModelRequirement,
-  NamingVersion, NotSent, OrchestratorSwitch, ProjectDb, PublishState, ReadOnlyProjectDb, ReferenceBinding,
-  ReferenceTarget, ResolutionStart, ResourceSharing, ResourceUpdate, ReturnedTask, RuleAnswer, RuleRecord, RunBranch,
-  RunLogRecord, ServerAdmin, SharedEvent, SharedMember, SharedPerson, SharedSnapshot, SharedStanding, SharedTaskInfo,
-  SharingLink, StartedQueued, TaskDeletionFacts, UnsentStatus, VersionReference, WaitingPublish, WaitingVersion,
-  attachment_file, exclude_project_data,
+  InvocationStart, JoinedKey, KeptAction, KeptReport, KeptWait, MemoryAnswer, MemoryRecord, MessageRecord,
+  ModelRequirement, NamingVersion, NotSent, OrchestratorSwitch, ProjectDb, PublishState, QuestionRecord,
+  ReadOnlyProjectDb, ReferenceBinding, ReferenceTarget, ResolutionStart, ResourceSharing, ResourceUpdate, ReturnedTask,
+  RuleAnswer, RuleRecord, RunBranch, RunLogRecord, ServerAdmin, SharedEvent, SharedMember, SharedPerson,
+  SharedSnapshot, SharedStanding, SharedTaskInfo, SharingLink, StartedQueued, TaskDeletionFacts, UnsentStatus,
+  VersionReference, WaitingPublish, WaitingVersion, attachment_file, exclude_project_data,
 };
