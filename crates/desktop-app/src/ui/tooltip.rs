@@ -131,10 +131,13 @@ impl Tooltip {
     ctx.mount_keyed_with::<TooltipHost>(&key, self, vec![anchor.into()])
   }
 
-  /// Its panel laid out in place, for a tooltip the design draws beside its anchor rather than under it (`Tooltip` in
-  /// `Message actions` `EXtmO`); its element id is `<id>-tooltip`.
-  pub fn beside(&self) -> Row {
-    self.panel(&self.text)
+  /// Its panel hung `placement` of `anchor`, for an anchor that shows its tooltip by itself rather than once the
+  /// pointer rested on it (a message's actions, `Tooltip` in `06 · Message actions` `XPDAX`). It is always laid out,
+  /// unseen until `shown`: the pointer's arrival only fades it in, so a press that arrives with the pointer reaches
+  /// the anchor laid out as it was.
+  pub fn hung(&self, anchor: ElementRef, placement: Placement, shown: bool) -> Popup {
+    let panel = self.panel(&self.text);
+    self.popup(anchor, panel.opacity(if shown { 1.0 } else { 0.0 }), placement)
   }
 
   /// What the tooltip says once the pointer rested on its anchor, if it shows at all: a cut text's own
@@ -147,6 +150,17 @@ impl Tooltip {
       Some(_) if fits => None,
       Some(_) => Some(&self.text),
     }
+  }
+
+  /// Its panel saying `words`, hung `placement` of `anchor`, `Snug` from it; the pointer goes through it.
+  fn popup(&self, anchor: ElementRef, panel: Row, placement: Placement) -> Popup {
+    Popup::new(anchor, panel)
+      .open_when(true)
+      .placement(placement)
+      .offset(0.0, ExtraSpacing::Snug.value())
+      .hit_test(HitTestBehavior::None)
+      .dismiss_on_outside_click(false)
+      .dismiss_on_escape(false)
   }
 
   fn panel(&self, words: &str) -> Row {
@@ -238,19 +252,12 @@ impl Component for TooltipHost {
       None => anchor.with_children(ctx.children().iter().cloned()),
     };
     if let Some(words) = tooltip.words(self.fits.get()).filter(|_| self.shown.get()) {
-      anchor = anchor.child(
-        Popup::new(self.anchor.clone(), tooltip.panel(words))
-          .open_when(true)
-          .placement(if tooltip.end {
-            Placement::BottomEnd
-          } else {
-            Placement::BottomStart
-          })
-          .offset(0.0, ExtraSpacing::Snug.value())
-          .hit_test(HitTestBehavior::None)
-          .dismiss_on_outside_click(false)
-          .dismiss_on_escape(false),
-      );
+      let placement = if tooltip.end {
+        Placement::BottomEnd
+      } else {
+        Placement::BottomStart
+      };
+      anchor = anchor.child(tooltip.popup(self.anchor.clone(), tooltip.panel(words), placement));
     }
     anchor
   }

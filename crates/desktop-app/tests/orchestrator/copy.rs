@@ -1,7 +1,8 @@
-//! Copy in the Orchestrator chat (ORC-323, 07 `GgXmd`, 07b `Iogxc`): the Orchestrator's answer shows Copy at the end of
-//! its name line while the pointer is on it, which puts what it wrote on the clipboard and says *Copied*; the code
-//! block in it has Copy in its head, which puts its code without the fence; the person's own message has Copy beside
-//! its bubble, which puts their words as they wrote them.
+//! A message's actions in the Orchestrator chat (ORC-323, ORC-706, `06 · Message actions` `XPDAX`): the Orchestrator's
+//! answer shows Copy in a line under what it wrote while the pointer is on it, which puts what it wrote on the
+//! clipboard and says *Copied*; the code block in it has Copy in its head, which puts its code without the fence; the
+//! person's own message has *Edit*, Copy, *Rewind to here* and *Fork from here* as icon buttons in the line under its
+//! bubble, where the message stands last, and its Copy puts their words as they wrote them.
 
 use orchester_app::{
   routes::OrchestratorChat,
@@ -98,6 +99,27 @@ fn orchestrator_copy_an_answer_puts_what_it_wrote() {
 }
 
 #[test]
+fn orchestrator_an_answers_copy_stands_under_its_text_not_in_its_name_line() {
+  let (mut screen, (answer, _), _) = answered();
+  screen.window.hover(&answer);
+  let message = screen.bounds(&format!("{answer}-message"));
+  let copy = screen.bounds(&format!("{answer}-copy"));
+  assert!(
+    copy.y >= message.y + message.height,
+    "under what it wrote: {copy:?} under {message:?}"
+  );
+  assert!(
+    copy.x < message.x + message.width / 2.0,
+    "at the text's start: {copy:?}"
+  );
+  for gone in ["edit", "more"] {
+    assert!(!screen.exists(&format!("{answer}-{gone}")), "no {gone} on an answer");
+  }
+  screen.window.hover(&format!("{answer}-copy"));
+  assert_eq!(screen.text(&format!("{answer}-copy-tooltip")), "Copy message");
+}
+
+#[test]
 fn orchestrator_copy_a_code_block_puts_its_code() {
   let (mut screen, _, copied) = answered();
   let block = with_suffix(&mut screen, "orchestrator-reply-", "-copy")
@@ -119,4 +141,43 @@ fn orchestrator_copy_the_persons_message_puts_their_words() {
   screen.press(&format!("{mine}-copy"));
   screen.window.pass();
   assert_eq!(*copied.lock(), vec![message()]);
+}
+
+#[test]
+fn orchestrator_your_messages_actions_are_icons_with_where_it_stands_last() {
+  let (mut screen, (_, mine), _) = answered();
+  let resting = screen.bounds("orchestrator-delivery");
+  screen.window.hover(&format!("{mine}-bubble"));
+  assert_eq!(
+    screen.bounds("orchestrator-delivery"),
+    resting,
+    "the actions keep their room: nothing moves when they show"
+  );
+  assert!(!screen.exists(&format!("{mine}-more")), "no … menu");
+  let bubble = screen.bounds(&format!("{mine}-bubble"));
+  let mut end = f32::MIN;
+  for (action, says) in [
+    ("edit", "Edit"),
+    ("copy", "Copy message"),
+    ("rewind", "Rewind to here"),
+    ("fork", "Fork from here"),
+  ] {
+    let id = format!("{mine}-{action}");
+    let button = screen.bounds(&id);
+    assert!(button.x >= end, "{action} after the one before it");
+    assert!(button.y >= bubble.y + bubble.height, "{action} under the bubble");
+    assert!(
+      button.width < 25.0 && button.height < 25.0,
+      "an icon button: {button:?}"
+    );
+    end = button.x + button.width;
+    screen.window.hover(&id);
+    assert_eq!(screen.text(&format!("{id}-tooltip")), says, "its tooltip names it");
+  }
+  let delivery = screen.bounds("orchestrator-delivery");
+  assert!(delivery.x >= end, "where the message stands comes last");
+  assert!(
+    (delivery.x + delivery.width - (bubble.x + bubble.width)).abs() < 1.0,
+    "at the bubble's end"
+  );
 }

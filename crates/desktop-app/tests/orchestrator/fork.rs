@@ -1,5 +1,5 @@
 //! *Fork from here* (ORC-334; ORC-330's 09 `GYAPg` menu and 11 `RT5T7`), end to end with the real runner and
-//! `orchester-fake-claude`, which answers `Noted: <prompt>`: the message menu's *Fork from here* opens, without a
+//! `orchester-fake-claude`, which answers `Noted: <prompt>`: a message's *Fork from here* (ORC-706) opens, without a
 //! question, a new conversation titled after the original with the messages before the person's message, its words in
 //! the composer; the original stays as it was and *Open original ↗* goes back to it. The fork's first answer shows the
 //! agent goes on from the copied history only. It works while the Orchestrator answers, from what was kept so far.
@@ -64,7 +64,7 @@ fn newest(screen: &Orchestrator) -> ChatId {
   screen.db().chats().expect("chats")[0].chat.id()
 }
 
-/// Opens the menu of the message `id` once it is laid out and presses *Fork from here*.
+/// Shows the actions of the message `id` once it is laid out and presses *Fork from here*.
 fn fork_from(screen: &mut Orchestrator, id: &str) {
   let bubble = format!("{id}-bubble");
   screen.until("the message laid out", |screen| {
@@ -76,9 +76,10 @@ fn fork_from(screen: &mut Orchestrator, id: &str) {
       .is_some()
   });
   screen.window.hover(&bubble);
-  screen.press(&format!("{id}-more"));
-  assert_eq!(screen.text(&format!("{id}-fork")), "Fork from here");
-  screen.press(&format!("{id}-fork"));
+  let fork = format!("{id}-fork");
+  screen.window.hover(&fork);
+  assert_eq!(screen.text(&format!("{fork}-tooltip")), "Fork from here");
+  screen.press(&fork);
 }
 
 #[test]
@@ -93,8 +94,10 @@ fn orchestrator_fork_from_a_message_opens_a_new_conversation_with_what_came_befo
 
   fork_from(&mut screen, &id);
 
-  screen.until("the fork", |screen| {
+  // The fork opens as History opens a conversation: its title first, then its messages once they are read.
+  screen.until("the fork read", |screen| {
     screen.text("orchestrator-title") == format!("{FIRST} · fork")
+      && screen.text("orchestrator-meta") != "· opening from History"
   });
   let fork = newest(&screen);
   assert_ne!(fork, original, "History lists the fork first");
