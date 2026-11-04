@@ -29,6 +29,5 @@ pub(super) mod stuck;
 pub(super) mod task_groups;
 pub(super) mod tool_approval;
 pub(super) mod turn_stop;
-pub(super) mod worktree_sweep;
 
 use super::{Notifier, Scheduler, failed, read_failed};
