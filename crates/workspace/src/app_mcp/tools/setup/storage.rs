@@ -19,8 +19,9 @@ use crate::{
     services::{Services, blocking},
   },
   messages::Message,
-  storage::{self, CleanableRow, DiskGuard},
-  tasks::outside::Outside,
+  runner::ExecutorFolders,
+  storage::{self, CleanableRow, DiskGuard, FoldersReadError},
+  tasks::{outside::Outside, run::control_message},
 };
 
 pub(super) const SPECS: &[Spec] = &[
@@ -73,7 +74,12 @@ async fn get_storage(services: &Services, args: InProject) -> Result<Value, Tool
   let services = services.clone();
   blocking(move || {
     let open = services.project(&args.project)?;
-    let read = storage::read_local(&open.repo_root)?;
+    let root = open.repo_root.clone();
+    let folders = ExecutorFolders::new(services.runners, open);
+    let read = storage::read_local(&root, &folders).map_err(|error| match error {
+      FoldersReadError::Store(error) => ToolError::from(error),
+      FoldersReadError::Runner(error) => ToolError::runner(&error, vec![control_message(&error)]),
+    })?;
     let cleanable: Vec<Value> = read.cleanable.iter().map(cleanable_json).collect();
     Ok(json!({ "disk_guard": guard_json(&read.guard), "cleanable": cleanable }))
   })

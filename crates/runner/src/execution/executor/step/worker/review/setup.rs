@@ -6,13 +6,15 @@
 
 use std::{
   path::{Path, PathBuf},
+  sync::Arc,
   time::Duration,
 };
 
 use orchester_agent::AnthropicClient;
 use orchester_core::{
+  computer::{ComputerConnection, OnComputer},
   connection::{
-    AgentProvider, ApiEndpoint, ConnectionKind,
+    AgentProvider, ApiEndpoint, Connection, ConnectionKind,
     invocation::{account_environment, agent_environment},
     reviewer::{ClaudeReviewer, CodexReviewer},
   },
@@ -28,7 +30,7 @@ use orchester_core::{
     },
   },
   secret::{SecretValue, SecretVault},
-  store::{ConnectionStore, SecretStore, SettingsStore},
+  store::{SecretStore, SettingsStore},
   time::Timestamp,
   usage::UsedProvider,
 };
@@ -36,12 +38,12 @@ use orchester_store::{ProjectDb, StoreError};
 use tokio::{runtime::Handle, sync::watch};
 
 use super::{
-  super::{Watch, Worker},
+  super::{super::super::run::RunTask, Watch, Worker},
   ledger::ReviewLedger,
   native::{NativeReviewer, client},
   process::{ReviewPlace, SupervisedRunner},
 };
-use crate::git::Git;
+use crate::{computer::ComputerResources, git::Git};
 
 /// The project's reviewer, before one review runs.
 pub(super) enum ReviewerSetup {
@@ -321,15 +323,24 @@ impl RequestReviewer for Unreachable {
 impl Worker {
   /// The project's reviewer, as its auto mode settings resolve against its connections.
   pub(super) fn reviewer(&self, watch: &Watch) -> Result<ReviewerSetup, StoreError> {
-    reviewer_setup(&watch.db, &self.reviewer_keys)
+    reviewer_setup(&watch.db, &self.reviewer_sources)
   }
 }
 
-/// The reviewer of the project of `db`, as its auto mode settings resolve against its connections, its key read
-/// with `keys`; the story-point estimator runs on it too.
-pub(super) fn reviewer_setup(db: &ProjectDb, keys: &ReviewerKeys) -> Result<ReviewerSetup, StoreError> {
+/// The reviewer of the project of `db`, as its auto mode settings resolve against its connections on the computer,
+/// its key read from `sources`; the story-point estimator runs on it too. Without the computer's connections there is
+/// no reviewer to ask, and the person decides.
+pub(super) fn reviewer_setup(db: &ProjectDb, sources: &ReviewerSources) -> Result<ReviewerSetup, StoreError> {
   let settings = db.auto_mode_settings()?;
-  let connections = db.connections()?;
+  let listed = match sources.computer.connections() {
+    Ok(listed) => listed,
+    Err(error) => {
+      tracing::warn!(%error, "cannot read the connections a reviewer runs on");
+      return Ok(ReviewerSetup::Missing);
+    }
+  };
+  let (connections, here): (Vec<Connection>, Vec<OnComputer>) =
+    listed.into_iter().map(ComputerConnection::into_parts).unzip();
   let Ok(resolved) = resolve_reviewer(&settings, &connections) else {
     return Ok(ReviewerSetup::Missing);
   };
@@ -345,7 +356,7 @@ pub(super) fn reviewer_setup(db: &ProjectDb, keys: &ReviewerKeys) -> Result<Revi
     name: connection.name().as_str().into(),
   };
   if let (ReviewerKind::AnthropicApi, Some(api)) = (kind, connection.endpoint().api()) {
-    return Ok(native(db, keys, (api, used), (model, effort)));
+    return Ok(native(db, sources, (api, used), (model, effort)));
   }
   let Some(executable) = connection.executable() else {
     return Ok(ReviewerSetup::Missing);
@@ -353,7 +364,12 @@ pub(super) fn reviewer_setup(db: &ProjectDb, keys: &ReviewerKeys) -> Result<Revi
   let ConnectionKind::Agent(provider) = *connection.kind() else {
     return Ok(ReviewerSetup::Missing);
   };
-  if let Some(reason) = connection.account().start_problem(Path::is_dir) {
+  let account_problem = connections
+    .iter()
+    .zip(&here)
+    .find(|(listed, _)| listed.id() == connection.id())
+    .and_then(|(_, here)| here.account_problem());
+  if let Some(reason) = account_problem {
     tracing::warn!(%reason, "the reviewer's connection cannot run on its account");
     return Ok(ReviewerSetup::Missing);
   }
@@ -380,7 +396,7 @@ pub(super) fn reviewer_setup(db: &ProjectDb, keys: &ReviewerKeys) -> Result<Revi
 /// The client of a native reviewer at `api` of `connection`; unreachable when its key cannot be read.
 fn native(
   db: &ProjectDb,
-  keys: &ReviewerKeys,
+  keys: &ReviewerSources,
   (api, connection): (&ApiEndpoint, UsedProvider),
   (model, effort): (ModelId, Option<String>),
 ) -> ReviewerSetup {
@@ -404,7 +420,7 @@ fn native(
 
 /// The value of the project secret `id` holding a native reviewer's API key; why not is logged, never
 /// the value.
-fn api_key(db: &ProjectDb, keys: &ReviewerKeys, id: SecretId) -> Option<SecretValue> {
+fn api_key(db: &ProjectDb, keys: &ReviewerSources, id: SecretId) -> Option<SecretValue> {
   let secret = match db.secret(id) {
     Ok(Some(secret)) if !secret.is_archived() => secret,
     Ok(_) => {
@@ -424,8 +440,21 @@ fn api_key(db: &ProjectDb, keys: &ReviewerKeys, id: SecretId) -> Option<SecretVa
     .ok()
 }
 
-/// Where a native reviewer's key is read: the keychain, and the project its secrets belong to.
-pub(in crate::execution) struct ReviewerKeys {
-  pub(in crate::execution) vault: std::sync::Arc<dyn SecretVault>,
+/// Where the reviewer is read: its connection on the computer the review runs on, and a native reviewer's key in the
+/// keychain, with the project its secrets belong to.
+pub(in crate::execution) struct ReviewerSources {
+  pub(in crate::execution) computer: Arc<dyn ComputerResources>,
+  pub(in crate::execution) vault: Arc<dyn SecretVault>,
   pub(in crate::execution) project: orchester_core::id::ProjectId,
+}
+
+impl RunTask {
+  /// Where this run's reviews read their reviewer.
+  pub(in crate::execution::executor::step) fn reviewer_sources(&self) -> ReviewerSources {
+    ReviewerSources {
+      computer: Arc::clone(&self.computer),
+      vault: Arc::clone(&self.vault),
+      project: self.project.id(),
+    }
+  }
 }

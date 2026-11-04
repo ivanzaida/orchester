@@ -65,7 +65,11 @@ use self::{
   },
 };
 pub use crate::notify::Notifier;
-use crate::{browser::ProjectBrowser, execution_root::ExecutionRoot};
+use crate::{
+  browser::ProjectBrowser,
+  computer::{ComputerResources, LocalComputer},
+  execution_root::ExecutionRoot,
+};
 
 /// How long stopping waits for each run to end its agent and record the interruption.
 const STOP_TIMEOUT: Duration = Duration::from_secs(10);
@@ -104,6 +108,8 @@ struct Inner {
   notifier: Notifier,
   /// Where the values of the secrets MCP servers use are read from when an agent starts.
   vault: Arc<dyn SecretVault>,
+  /// What belongs to the computer the runs execute on: their connections, accounts and CLI config folders.
+  computer: Arc<dyn ComputerResources>,
   /// The runner's own program, which Claude Code starts as its permission prompt; `None` when it
   /// cannot be found, which keeps steps that ask a person on Claude Code from starting.
   relay: Option<PathBuf>,
@@ -147,6 +153,7 @@ impl Scheduler {
       inner: Arc::new(Inner {
         project_root: project_root.to_path_buf(),
         vault,
+        computer: Arc::new(LocalComputer::of_project(project_root)),
         relay,
         board: Arc::new(Board::new(notifier.clone())),
         qa: Arc::new(QaApps::new(qa_slots)),
@@ -536,6 +543,7 @@ impl Scheduler {
       sink: Box::new(coordinator::sink::LocalSink::new(&self.inner.project_root)),
       notifier: self.inner.notifier.clone(),
       vault: self.inner.vault.clone(),
+      computer: self.inner.computer.clone(),
       relay: self.inner.relay.clone(),
       board: self.inner.board.clone(),
       qa: self.inner.qa.clone(),

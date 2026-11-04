@@ -28,6 +28,8 @@ use crate::{
   ErrorReports,
   browser::{BrowserCommand, BrowserEvent, BrowserReply, ScreencastFrame},
   chat::ChatTools,
+  folders::{FoldersCommand, FoldersReply},
+  merge_queue::{MergeQueueCommand, MergeQueueReply},
   rejection::Rejection,
   work::WorkSummary,
   worktree::WorktreeChangesRead,
@@ -286,8 +288,14 @@ pub enum Command {
   /// `get_changes` (protocol 40): only the runner reads a run's worktree. Answered with [`Reply::WorktreeChanges`],
   /// whatever it found, a failed read included.
   ReadWorktreeChanges { run: RunId },
+  /// The merge queue's work in a run's worktree: syncing its base in, or running Check again on the merged result
+  /// (protocol 41). Answered with [`Reply::MergeQueue`] once done.
+  MergeQueue(MergeQueueCommand),
+  /// A request about the folders the project's runs leave with their executor (protocol 42, [`crate::folders`]).
+  /// Answered with [`Reply::Folders`] once carried out, or [`Rejection::Failed`].
+  Folders(FoldersCommand),
   /// Removes what run `run`, which ended, left, as `request` allows: its worktrees and branches, with the run's own
-  /// processes in a held folder stopped first when asked (protocol 41). The desktop records the removal in the
+  /// processes in a held folder stopped first when asked (protocol 43). The desktop records the removal in the
   /// project's database before and after; the runner removes, then removes the codebase indexes only removed worktrees
   /// used and sweeps the worktree folders. Answered with [`Reply::WorktreesRemoved`], or [`Reply::RemovalFailed`] when
   /// nothing was removed.
@@ -486,6 +494,10 @@ pub enum Reply {
     run: RunId,
     read: WorktreeChangesRead,
   },
+  /// The answer to [`Command::MergeQueue`].
+  MergeQueue(MergeQueueReply),
+  /// The answer to [`Command::Folders`].
+  Folders(FoldersReply),
   /// The answer to [`Command::RemoveWorktrees`] that removed: what it removed, and what stays and why.
   WorktreesRemoved(Cleanup),
   /// The answer to [`Command::RemoveWorktrees`] that removed nothing, and why.

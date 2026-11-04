@@ -14,6 +14,7 @@ use orchester_core::{
   agent_files::skills::RepositorySkills,
   attachment::input::AttachedFile,
   command::Command,
+  computer::OnComputer,
   connection::{
     AgentConnection, AgentProvider, ConnectionAccount,
     app_server_config::{names_read_command, read_configured_names},
@@ -84,10 +85,10 @@ pub(super) struct Cli<'a> {
 }
 
 /// The program of the agent CLI `connection` runs, or why no agent starts on it: this version runs
-/// no native agent, and none starts without an account or on an account whose folder is gone (a connection changed
-/// after the run's preflight).
-pub(super) fn program(connection: &AgentConnection) -> Result<&Path, RunnerProblem> {
-  if let Some(reason) = connection.account().start_problem(Path::is_dir) {
+/// no native agent, and none starts without an account or on an account whose folder is not on the computer the run
+/// executes on (`here`; a connection changed after the run's preflight).
+pub(super) fn program<'a>(connection: &'a AgentConnection, here: &OnComputer) -> Result<&'a Path, RunnerProblem> {
+  if let Some(reason) = here.account_problem() {
     return Err(problem(reason.to_string()));
   }
   match connection.executable() {

@@ -7,6 +7,8 @@
 //! it started, and each lane delivers on its own, one run at a time, first finished first. What holds one lane (a run
 //! being delivered, blocked by the checkout say) holds no other.
 
+pub mod recheck;
+
 use serde::{Deserialize, Serialize};
 
 use crate::{

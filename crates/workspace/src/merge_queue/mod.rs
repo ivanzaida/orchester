@@ -13,8 +13,9 @@
 //! nothing in another.
 //!
 //! Every rule is here; the screens and automation read the queue ([`read`]) and change it through these functions
-//! only. The store keeps the entries (`orchester_core::merge_queue`). Blocks on SQLite, git and the check's programs:
-//! callers with a UI run it off their thread.
+//! only. The store keeps the entries (`orchester_core::merge_queue`). Syncing a run's worktree and Check on the merged
+//! result are carried out by the project's runner ([`RunWorktrees`]). Blocks on SQLite, git and the runner: callers
+//! with a UI run it off their thread.
 
 mod approve;
 mod check;
@@ -26,6 +27,7 @@ mod land;
 mod order;
 mod read;
 mod wake;
+mod worktrees;
 
 pub use self::{
   approve::{approve, reject, requeue, resolve_myself, resolved},
@@ -39,6 +41,7 @@ pub use self::{
     RunDelivery, TaskDelivery, delivered_by_queue, delivery_of, in_queue, read, task_delivery,
   },
   wake::{changes, wake},
+  worktrees::RunWorktrees,
 };
 use crate::messages::Message;
 

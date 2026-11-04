@@ -1,20 +1,24 @@
 //! What a person changes of the warm workspaces (ORC-114): the warm folders, the warm-up command and the free space
 //! the disk guard keeps; cleaning idle workspaces' warm folders; and a stranded workspace's leftovers kept in a branch
-//! or discarded. Each blocks on SQLite and git: the UI calls it off the UI thread.
+//! or discarded. The desktop reserves the workspace in the project database and records what became of it; the
+//! project's runner changes its folder (`docs/architecture/remote-runners.md`, rule 5). Each blocks on SQLite, git
+//! or the runner: the UI calls it off the UI thread and off the async runtime.
 
 use std::{path::Path, time::Duration};
 
 use orchester_core::{
-  integration::workspace::{WorkspaceGitError, Workspaces},
   run::BranchName,
   store::{RunStore, WorkspaceStore},
   workspaces::{Holder, WorkspaceNumber, WorkspaceSettings, rescue_branch},
 };
-use orchester_exec::{ProcessRunner, disk_space::folder_size};
+use orchester_exec::ProcessRunner;
 use orchester_store::{ProjectDb, StoreError};
 use thiserror::Error;
 
-use crate::tasks::{changes::GIT, detail::run_store_error, worktree_removal::WorktreeRemover};
+use crate::{
+  runner::{ExecutorFolders, RunRequestError},
+  tasks::{changes::GIT, detail::run_store_error, worktree_removal::WorktreeRemover},
+};
 
 /// Deleting a large build folder can take a while; only a git that hangs is stopped.
 const GIT_TIMEOUT: Duration = Duration::from_secs(60 * 60);
@@ -23,8 +27,9 @@ const GIT_TIMEOUT: Duration = Duration::from_secs(60 * 60);
 pub enum WorkspaceActionError {
   #[error(transparent)]
   Store(#[from] StoreError),
+  /// The runner did not change the workspace's folder: git refused, or the runner did not answer.
   #[error(transparent)]
-  Git(#[from] WorkspaceGitError),
+  Runner(#[from] RunRequestError),
   /// A workspace in use is never cleaned or rescued.
   #[error("workspace {0} is in use")]
   InUse(WorkspaceNumber),
@@ -76,29 +81,32 @@ pub fn save_settings(repo_root: &Path, settings: &WorkspaceSettings) -> Result<(
   Ok(())
 }
 
-/// Deletes the warm folders of each idle workspace of `numbers` (one in use is skipped and logged); the bytes that
-/// freed. Their next run builds from cold; branches, checkpoints and the runs' artifacts stay. Each is reserved while
-/// it is cleaned, so no run borrows it meanwhile.
-pub fn clean(repo_root: &Path, numbers: &[WorkspaceNumber]) -> Result<u64, WorkspaceActionError> {
+/// Has the project's runner (`folders`) delete the warm folders of each idle workspace of `numbers` (one in use is
+/// skipped and logged); the bytes that freed. Their next run builds from cold; branches, checkpoints and the runs'
+/// artifacts stay. Each is reserved while it is cleaned, so no run borrows it meanwhile.
+pub fn clean(
+  repo_root: &Path,
+  folders: &ExecutorFolders,
+  numbers: &[WorkspaceNumber],
+) -> Result<u64, WorkspaceActionError> {
   let mut db = ProjectDb::open(repo_root)?;
-  let runner = ProcessRunner::new(GIT_TIMEOUT);
-  let workspaces = Workspaces::new(&runner, Path::new(GIT), repo_root);
   let mut freed = 0_u64;
   for number in numbers {
     if !db.reserve_idle_workspace(*number, Holder::Upkeep)? {
       tracing::warn!(%number, "a workspace in use is not cleaned");
       continue;
     }
-    let path = number.path(repo_root);
-    let before = folder_size(&path).unwrap_or(0);
-    let cleaned = workspaces
-      .clean_warm(&path)
+    let cleaned = folders
+      .clean(*number)
       .map_err(WorkspaceActionError::from)
-      .and_then(|()| Ok(db.set_workspace_cold(*number)?));
+      .and_then(|bytes| {
+        db.set_workspace_cold(*number)?;
+        Ok(bytes)
+      });
     let released = db.release_workspace(*number, Holder::Upkeep);
-    cleaned?;
+    let bytes = cleaned?;
     released?;
-    freed = freed.saturating_add(before.saturating_sub(folder_size(&path).unwrap_or(0)));
+    freed = freed.saturating_add(bytes);
   }
   Ok(freed)
 }
@@ -112,10 +120,12 @@ pub enum Leftovers {
   Discard,
 }
 
-/// Keeps or discards the leftovers of stranded workspace `number`, which is free again afterwards; the branch they
-/// were kept on, when kept. The workspace is reserved meanwhile, so no run borrows it.
+/// Keeps or discards, by the project's runner (`folders`), the leftovers of stranded workspace `number`, which is free
+/// again afterwards; the branch they were kept on, when kept. The workspace is reserved meanwhile, so no run borrows
+/// it.
 pub fn resolve_leftovers(
   repo_root: &Path,
+  folders: &ExecutorFolders,
   number: WorkspaceNumber,
   leftovers: Leftovers,
 ) -> Result<Option<BranchName>, WorkspaceActionError> {
@@ -128,7 +138,7 @@ pub fn resolve_leftovers(
       WorkspaceActionError::NotStranded(number)
     });
   }
-  let resolved = resolve_reserved(&mut db, repo_root, number, leftovers);
+  let resolved = resolve_reserved(&mut db, folders, number, leftovers);
   let released = db.release_workspace(number, Holder::Upkeep);
   let kept = resolved?;
   released?;
@@ -138,7 +148,7 @@ pub fn resolve_leftovers(
 /// [`resolve_leftovers`] once the workspace is reserved.
 fn resolve_reserved(
   db: &mut ProjectDb,
-  repo_root: &Path,
+  folders: &ExecutorFolders,
   number: WorkspaceNumber,
   leftovers: Leftovers,
 ) -> Result<Option<BranchName>, WorkspaceActionError> {
@@ -148,12 +158,9 @@ fn resolve_reserved(
     .find(|record| record.number == number)
     .and_then(|record| record.stranded)
     .ok_or(WorkspaceActionError::NotStranded(number))?;
-  let runner = ProcessRunner::new(GIT_TIMEOUT);
-  let workspaces = Workspaces::new(&runner, Path::new(GIT), repo_root);
-  let path = number.path(repo_root);
   let kept = match leftovers {
     Leftovers::Discard => {
-      workspaces.discard(&path)?;
+      folders.discard(number)?;
       None
     }
     Leftovers::KeepInBranch => {
@@ -166,11 +173,7 @@ fn resolve_reserved(
         Some(run) => rescue_branch(run.branch()),
         None => rescue_branch(&BranchName::new(&format!("workspace-{number}")).expect("a valid branch name")),
       };
-      workspaces.rescue(
-        &path,
-        &branch,
-        &format!("Kept from workspace {number}: what a stopped run left"),
-      )?;
+      folders.keep(number, branch.clone())?;
       Some(branch)
     }
   };

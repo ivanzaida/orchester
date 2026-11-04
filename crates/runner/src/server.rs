@@ -3,6 +3,9 @@
 //! shows.
 
 mod browser;
+mod estimate;
+mod folders;
+mod merge_queue;
 
 use std::{
   future::Future,
@@ -361,20 +364,14 @@ async fn answer(
     },
     Command::StopTurn { run } => return later.answer(run, async move { handle.stop_turn(run).await }),
     Command::Browser(ref command) => return later.browser(handle, command.clone()),
-    Command::EstimateTask { task } => return answer_estimate(&later, handle, task),
+    Command::Folders(ref command) => return later.folders(handle, command.clone()),
+    Command::MergeQueue(ref command) => return later.merge_queue(handle, command.clone()),
+    Command::EstimateTask { task } => return later.estimate(handle, task),
     Command::SetErrorReports { ref reports } => return Answer::ErrorReports(id, reports.clone()),
     Command::ReadWorktreeChanges { run } => return later.reply(handle.worktree_changes(run)),
     Command::RemoveWorktrees { run, ref request } => return later.reply(handle.remove_worktrees(run, request.clone())),
   };
   Answer::Reply(Event::Reply { id, reply })
-}
-
-/// The reply to [`Command::EstimateTask`], once the estimate ended.
-fn answer_estimate(later: &Later<'_>, scheduler: Scheduler, task: TaskId) -> Answer {
-  later.reply(async move {
-    let estimated = scheduler.estimate_task(task).await;
-    estimated.map_or_else(Reply::Rejected, |outcome| Reply::TaskEstimated { task, outcome })
-  })
 }
 
 /// Routes the decision commands without holding up the runner's other requests.

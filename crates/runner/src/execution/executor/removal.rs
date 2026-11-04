@@ -11,11 +11,11 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_exec::{ProcessRunner, run_processes::RunProcesses};
-use orchester_index::CodebaseIndexes;
 use orchester_ipc::Rejection;
 use orchester_store::ProjectDb;
 
 use super::{failed, worktree_sweep};
+use crate::execution_root::ExecutionRoot;
 
 /// Git removing a worktree full of build output gets as long as the desktop gave it.
 pub(super) const REMOVE_TIMEOUT: Duration = Duration::from_secs(60 * 60);
@@ -55,7 +55,7 @@ pub(in crate::execution) fn remove_worktrees(
 /// used go, off the runtime's async workers (the worktrees are gone either way, and an index left behind goes with
 /// the next removal), and the worktree folders are swept ([`worktree_sweep`]).
 pub(super) fn after_removal(root: &Path) {
-  let indexes = CodebaseIndexes::new(root);
+  let indexes = ExecutionRoot::local(root).code_indexes();
   tokio::task::spawn_blocking(move || {
     if let Err(error) = indexes.prune() {
       tracing::warn!(%error, "cannot remove the codebase indexes of removed worktrees");
