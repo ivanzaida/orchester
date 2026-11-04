@@ -5,12 +5,13 @@
 //! not exist.
 
 use orchester_core::{
+  computer::OnComputer,
   connection::{AgentConnection, SessionOrigin, invocation::Platform, stream::RunnerProblem},
   id::StepExecutionId,
   permission::{EffectiveApprovalMode, FolderBounds, ManualReason, ResolvedFolder, capability::EnforcedPermissions},
   resource::{AgentProfile, ModelId, Step, StepKey, StepKind},
   run::{PinnedVersion, StepExecutor},
-  store::{ActivityStore, ConnectionStore},
+  store::ActivityStore,
 };
 
 use super::{
@@ -55,7 +56,7 @@ impl RunTask {
     let Ok((step, profile, _)) = self.agent_step(execution) else {
       return false;
     };
-    let Ok((_, connection)) = self.profile_and_connection(profile, &step.key) else {
+    let Ok((_, connection, _)) = self.profile_and_connection(profile, &step.key) else {
       return false;
     };
     let Some(account) = connection.plan_account() else {
@@ -140,7 +141,7 @@ impl RunTask {
       return Ok(Vec::new());
     };
     let repository = self.execution.repository();
-    let bounds = FolderBounds::new(repository, std::env::home_dir().as_deref())
+    let bounds = FolderBounds::new(repository, self.computer.home_folder().as_deref())
       .map_err(|error| problem(format!("cannot read the repository {}: {error}", repository.display())))?;
     let mut resolved = folders
       .resolve(&bounds)
@@ -162,13 +163,13 @@ impl RunTask {
       .collect()
   }
 
-  /// The pinned profile version and the agent connection `step` runs it on: the one a person chose for this run
-  /// when the step stopped at its account's plan limit, else the profile's own.
+  /// The pinned profile version and the agent connection `step` runs it on, as the computer the run executes on has
+  /// it: the one a person chose for this run when the step stopped at its account's plan limit, else the profile's own.
   pub(in super::super) fn profile_and_connection(
     &self,
     profile: &PinnedVersion,
     step: &StepKey,
-  ) -> Result<(AgentProfile, AgentConnection), RunnerProblem> {
+  ) -> Result<(AgentProfile, AgentConnection, OnComputer), RunnerProblem> {
     let body = pinned_version::<AgentProfile>(&*self.link, profile)
       .map_err(|error| problem(error.to_string()))?
       .ok_or_else(|| problem(format!("agent profile version {} is missing", profile.number)))?;
@@ -176,14 +177,15 @@ impl RunTask {
       .db
       .step_connection(self.run.id(), step)
       .map_err(|error| problem(error.to_string()))?;
-    let connection = self
-      .db
+    let (connection, here) = self
+      .computer
       .connection(chosen.unwrap_or(body.connection()))
       .map_err(|error| problem(error.to_string()))?
-      .ok_or_else(|| problem("the agent profile's connection no longer exists".to_owned()))?;
+      .ok_or_else(|| problem("the agent profile's connection no longer exists".to_owned()))?
+      .into_parts();
     let connection =
       AgentConnection::try_from(connection).map_err(|_| problem("the connection is not an agent CLI".to_owned()))?;
-    Ok((body, connection))
+    Ok((body, connection, here))
   }
 }
 
@@ -202,7 +204,7 @@ impl RunTask {
     let Ok((step, profile, _)) = self.agent_step(execution) else {
       return Ok(());
     };
-    let Ok((_, connection)) = self.profile_and_connection(profile, &step.key) else {
+    let Ok((_, connection, _)) = self.profile_and_connection(profile, &step.key) else {
       return Ok(());
     };
     let invocations = self.db.invocations(self.run.id())?;

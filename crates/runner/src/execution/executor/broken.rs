@@ -29,6 +29,7 @@ impl ExecutionError {
       Self::Record(RecordError::Store(error)) => error.runner_failure(),
       Self::Link(error) => error.failure,
       Self::Record(RecordError::Run(_))
+      | Self::Computer(_)
       | Self::NotAnAgentStep(_)
       | Self::Stalled
       | Self::Conversation(_)
