@@ -7,8 +7,9 @@
 //! holds and the largest write-ahead log are printed. And runs whose writes find the database locked by another
 //! connection for seconds: they wait for the lock and go on. Both run on a runtime with the runner's own worker
 //! count, and the runner keeps serving its other work meanwhile, as a statement that waits for a lock pauses off the
-//! async workers. Needs `git`. Run with `cargo test -p orchester-runner --features test-agent --test db_contention
-//! db_contention -- --nocapture`.
+//! async workers. And one run's flooded transcript, whose entries' latency to the desktop's `AgentActivity` is
+//! printed with the write-lock holds (ORC-678). Needs `git`. Run with `cargo test -p orchester-runner --features
+//! test-agent --test db_contention db_contention -- --nocapture`.
 
 mod support;
 
@@ -32,7 +33,9 @@ use orchester_core::{
   revision::Revision,
   run::{BranchName, RunStatus},
   store::{ActivityStore, RunStore, SettingsStore, TaskStore},
+  time::Timestamp,
 };
+use orchester_ipc::Event;
 use orchester_runner::WORKER_THREADS;
 use orchester_store::ProjectDb;
 use tokio::task::JoinHandle as TaskHandle;
@@ -299,6 +302,78 @@ async fn eight_runs_with_readers() {
   assert!(
     longest_gap < RESPONSIVE,
     "the runner's other work waited {longest_gap:?} for a worker"
+  );
+}
+
+#[test]
+fn db_contention_transcript_reaches_the_desktop_as_it_is_written() {
+  on_runners_runtime(transcript_latency());
+}
+
+/// One run whose agent floods its transcript (over a thousand lines of standard error): how long each entry takes from
+/// the moment the runner read it to the `AgentActivity` that announces it, and the write-lock holds meanwhile. The
+/// measures are printed, to compare the runner's ways of writing the transcript; every entry is announced.
+#[allow(
+  clippy::print_stderr,
+  reason = "prints the measured latencies and write-lock holds, which the test is run to report"
+)]
+async fn transcript_latency() {
+  let project = project(&Setup::new("Flood standard error. Append one line."));
+  let root = project.repo.path();
+  let (scheduler, mut events) = scheduler(root);
+  orchester_store::reset_lock_holds();
+  let run = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("the run starts");
+  let db = ProjectDb::open(root).expect("open");
+  let mut seen = 0;
+  let mut latencies: Vec<i64> = Vec::new();
+  let follow = async {
+    loop {
+      match events.recv().await.expect("the scheduler notifies") {
+        Event::AgentActivity { run: of, sequence } if of == run && sequence > seen => {
+          let announced = Timestamp::now().unix_millis();
+          for entry in db.activity(run, seen).expect("the transcript") {
+            latencies.push(announced - entry.at.unix_millis());
+            seen = seen.max(entry.sequence);
+          }
+        }
+        Event::RunChanged { run: of, .. } if of == run => {
+          let current = db.run(run).expect("read").expect("the run");
+          if current.status().is_terminal() {
+            return current;
+          }
+        }
+        _ => {}
+      }
+    }
+  };
+  let ended = tokio::time::timeout(support::PATIENCE, follow)
+    .await
+    .expect("the run ends in time");
+  assert_eq!(ended.status(), &RunStatus::Succeeded);
+  wait_for_idle(&scheduler).await;
+  let holds = orchester_store::lock_holds();
+  latencies.sort_unstable();
+  let at = |share: usize| latencies[(latencies.len() - 1) * share / 100];
+  eprintln!(
+    "{} transcript entries announced: latency median {} ms, 95th percentile {} ms, longest {} ms; {} write \
+     transactions held the write lock for {:?} together, the longest wait for it {:?}; longest holds: {:#?}",
+    latencies.len(),
+    at(50),
+    at(95),
+    at(100),
+    holds.count,
+    holds.total,
+    holds.longest_wait,
+    holds.longest
+  );
+  assert!(latencies.len() > 1000, "the flood is announced: {}", latencies.len());
+  assert_eq!(
+    db.activity(run, seen).expect("the transcript"),
+    [],
+    "every entry is announced"
   );
 }
 

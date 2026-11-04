@@ -18,10 +18,9 @@ use orchester_core::{
   id::StepExecutionId,
   resource::{CommandAction, CommandEnvironment, Tool, ToolAction},
   run::{Invocation, StepExecutor, StepFailure, StepStatus, ToolCommand},
-  store::ActivityStore,
   time::Timestamp,
 };
-use orchester_ipc::Event;
+use orchester_store::InvocationStart;
 use tokio::sync::mpsc;
 
 pub(super) use self::worker::CommandFinished;
@@ -69,9 +68,8 @@ impl RunTask {
     }
     // The command checks the base the run will merge into (ORC-151).
     self.merge_moved_base(execution, workspace.as_ref().ok())?;
-    let mut invocation = self
-      .db
-      .start_command_invocation(self.run.id(), execution, Timestamp::now())?;
+    let start = InvocationStart::command(self.run.id(), execution, Timestamp::now());
+    let mut invocation = self.begin_invocation(&start)?;
     let workspace = match workspace {
       Ok(workspace) => workspace,
       Err(detail) => {
@@ -92,7 +90,7 @@ impl RunTask {
       action: &command.action,
     }
     .started();
-    self.record(&invocation, started)?;
+    self.record_activity(&invocation, vec![(Timestamp::now(), started)])?;
     let process = command.action.process(
       &program,
       workspace.path(),
@@ -156,20 +154,6 @@ impl RunTask {
     })
   }
 
-  /// Appends `event` of `invocation` to the transcript and announces it.
-  fn record(
-    &mut self,
-    invocation: &Invocation,
-    event: orchester_core::connection::stream::AgentEvent,
-  ) -> Result<(), ExecutionError> {
-    let sequence = self.db.append_activity(invocation, &[(Timestamp::now(), event)])?;
-    self.notifier.send(Event::AgentActivity {
-      run: self.run.id(),
-      sequence,
-    });
-    Ok(())
-  }
-
   /// Hands the started program to a worker of its own.
   fn follow(
     &mut self,
@@ -187,7 +171,7 @@ impl RunTask {
       .clone();
     let (stops, stopped) = mpsc::unbounded_channel();
     let worker = CommandWorker {
-      root: self.root.clone(),
+      sink: self.sink.another(),
       invocation: invocation.clone(),
       tool: command.tool,
       action: command.action,
