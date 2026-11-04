@@ -8,6 +8,7 @@
 
 pub mod approve;
 pub mod ask;
+pub mod page;
 pub mod read;
 mod recover;
 pub mod send;

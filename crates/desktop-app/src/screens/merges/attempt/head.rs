@@ -41,7 +41,7 @@ use crate::{
 const TICK: Duration = Duration::from_secs(1);
 
 /// *← Review / Merges / KON-12 · run #8*: Review opens the hub on its Merge queue, Merges the Merges tab.
-pub(super) fn crumbs(ctx: &mut Ctx, project: &ShownProject, (key, run): (&str, u32)) -> Element {
+pub(in crate::screens::merges) fn crumbs(ctx: &mut Ctx, project: &ShownProject, (key, run): (&str, u32)) -> Element {
   let navigation = Navigation::of(ctx);
   let id = project.open.project.id();
   let trail = vec![
@@ -65,7 +65,7 @@ pub(super) fn crumbs(ctx: &mut Ctx, project: &ShownProject, (key, run): (&str, u
 }
 
 /// The title and, at the end of its row, `actions`: the ghost one, *Open task*, the primary one.
-pub(super) fn title(title: &str, actions: Vec<Element>) -> Element {
+pub(in crate::screens::merges) fn title(title: &str, actions: Vec<Element>) -> Element {
   Row::new()
     .id("merge-attempt-header")
     .width(Dimension::Pct(100.0))

@@ -4,8 +4,8 @@
 //! that merge only once a person approves; then the merged runs by local day, newest first, older days read as the list
 //! scrolls near its end. Sections without rows are left out; with none at all, *No merges yet* (09c `jhPCL`); while
 //! read, bones (09d `Zlk49`). A row's chevron opens the run's attempts ([`attempt`], ORC-363); a run waiting for review
-//! opens its task until the review page (ORC-367) lands. The merges are read again whenever the project's tasks or runs
-//! change, a merge job ends, or a button here changed something.
+//! opens its review page ([`review`], ORC-697) at the same route. The merges are read again whenever the project's
+//! tasks or runs change, a merge job ends, or a button here changed something.
 
 mod actions;
 pub(crate) mod attempt;
@@ -13,6 +13,7 @@ mod header;
 mod merged;
 mod not_merged;
 mod retrying;
+pub(crate) mod review;
 mod row;
 mod states;
 mod waiting;
@@ -40,7 +41,7 @@ use self::actions::{Actions, PuttingBack};
 use crate::{
   navigation::{Navigation, link::Open},
   project::ShownProject,
-  routes::{ProjectPage, Route, TaskTab, TaskView},
+  routes::{ProjectPage, Route},
   services::Services,
   theme::{DeliverySpacing, HubSpacing},
   ui::{
@@ -258,15 +259,8 @@ fn read(ctx: &mut Ctx, project: &ShownProject, (again, pages): (u64, usize)) -> 
   })
 }
 
-/// The page of `run`'s task on `tab`, which a run waiting for review opens until the review page lands (ORC-367).
-fn task_page(ctx: &mut Ctx, project: &ShownProject, run: &MergeRun, tab: TaskTab) -> Open {
-  Navigation::of(ctx).to(Route::Project(
-    project.open.project.id(),
-    ProjectPage::Task(run.key.clone(), TaskView::of(tab)),
-  ))
-}
-
-/// `run`'s merge attempts (ORC-363, [`attempt`]).
+/// `run`'s page: its review while it waits for one (ORC-697, [`review`]), its merge attempts otherwise (ORC-363,
+/// [`attempt`]).
 fn attempt_page(ctx: &mut Ctx, project: &ShownProject, run: &MergeRun) -> Open {
   Navigation::of(ctx).to(Route::Project(
     project.open.project.id(),
