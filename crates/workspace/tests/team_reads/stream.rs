@@ -1,6 +1,7 @@
 //! The subscription as reads see it: a burst of invalidations comes as one batch that makes only the reads of its
-//! scopes stale; a reconnect and a `reset` make every read stale and resume from the last cursor; a revoked membership
-//! ends the stream, and a read held across it returns no data; a changed session ends the stream and the reads.
+//! scopes stale; a reconnect and a `reset` make every read stale and resume from the last cursor, and losing the
+//! subscription does so before it reconnects; a revoked membership ends the stream, and a read held across it returns
+//! no data; a changed session ends the stream and the reads.
 
 use orchester_api::v2::{QueryScope, TaskFilters};
 use orchester_workspace::team_reads::TeamReadError;
@@ -59,10 +60,12 @@ async fn team_reads_reconnect_and_reset_make_every_read_stale() {
 
   server.drop_streams();
   on_server(&server, |server| server.until_subscribed(2)).await;
-  let reconnected = within(reader.project.changes()).await.expect("changes");
-  assert!(reconnected.is_reset(), "a reconnect makes every read stale");
-  assert!(read.is_stale(&reconnected));
   let resumed = server.cursor().to_string();
+  // A change sent on the new subscription: once it is seen, the reconnect has been taken in too.
+  server.retitle(tasks[0].id, "Sign in once more");
+  reader.until_seen(&server).await;
+  let reconnected = within(reader.project.changes()).await.expect("changes");
+  assert!(read.is_stale(&reconnected), "a reconnect makes every read stale");
   assert_eq!(
     server.subscribed(),
     [None, Some(resumed)],
@@ -77,6 +80,27 @@ async fn team_reads_reconnect_and_reset_make_every_read_stale() {
   let reset = within(reader.project.changes()).await.expect("changes");
   assert!(reset.is_reset());
   assert!(fresh.is_stale(&reset));
+}
+
+/// A lost subscription makes every read stale at once, before any reconnect: no invalidation can reach this computer
+/// meanwhile, so nothing read before is kept as current.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn team_reads_a_lost_subscription_makes_every_read_stale() {
+  let server = TeamServer::start(&[ALICE], TASKS);
+  let reader = Reader::of(&server, ALICE);
+  let tasks = server.tasks();
+  let read = within(reader.project.task(tasks[1].id)).await.expect("a task");
+  server.drop_streams();
+  let lost = within(reader.project.changes()).await.expect("changes");
+  assert!(lost.is_reset(), "a lost subscription makes every read stale");
+  assert!(read.is_stale(&lost));
+  on_server(&server, |server| server.until_subscribed(2)).await;
+  let fresh = within(reader.project.task(tasks[1].id)).await.expect("a task");
+  assert_eq!(
+    fresh.value().task.content.title,
+    read.value().task.content.title,
+    "read again once connected"
+  );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

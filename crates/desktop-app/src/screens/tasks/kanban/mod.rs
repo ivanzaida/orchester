@@ -10,8 +10,9 @@
 //! the columns as laid out (`actions`). Nothing a drag or a question shows moves a card.
 //!
 //! The board is read-only where the list is: a project the person is no longer a member of lifts, moves and selects no
-//! card and locks quick add, its menus kept with Open and Copy key; the *Not shared* tasks lift, move and select no
-//! card and have no menu (`Dropping::locked`).
+//! card and locks quick add, its menus kept with Open and Copy key; a team member's board (01b `zv7b6`) lifts, moves
+//! and selects no card and has no quick add; the *Not shared* tasks lift, move and select no card and have no menu
+//! (`Dropping::locked`).
 
 mod actions;
 mod ask;
@@ -56,6 +57,7 @@ use orchester_core::{
 use orchester_workspace::tasks::{attention::NeedItem, close::Closing, data::ProjectTasks, list::TaskRow};
 use parking_lot::Mutex;
 
+pub(super) use self::menu::copy_key_item;
 pub use self::model::has_empty_columns;
 use self::{
   actions::BoardState,
@@ -95,6 +97,9 @@ pub struct BoardInput<'a> {
   pub read_only: Option<Arc<str>>,
   /// The *Not shared* filter is on: the cards are read-only.
   pub not_shared: bool,
+  /// A team member's board, as the server says the person stands: no quick add, and cards don't drag or change
+  /// (01b `zv7b6`).
+  pub member: bool,
   pub filtered: bool,
   /// What narrows and orders the rows (the view, the search, the filters and the sort): the cards start at their top
   /// when it changes.
@@ -132,6 +137,7 @@ pub fn board(ctx: &mut Ctx, input: BoardInput<'_>) -> Element {
       shared: input.shared,
       read_only: input.read_only,
       not_shared: input.not_shared,
+      member: input.member,
       filtered: input.filtered,
       scroll_key: input.scroll_key,
       tags: Arc::new(tags),
@@ -152,6 +158,7 @@ struct BoardProps {
   shared: bool,
   read_only: Option<Arc<str>>,
   not_shared: bool,
+  member: bool,
   filtered: bool,
   scroll_key: String,
   tags: Arc<Vec<(TagId, Arc<str>)>>,
@@ -171,6 +178,7 @@ impl PartialEq for BoardProps {
       && self.shared == other.shared
       && self.read_only == other.read_only
       && self.not_shared == other.not_shared
+      && self.member == other.member
       && self.filtered == other.filtered
       && self.scroll_key == other.scroll_key
       && self.tags == other.tags
@@ -238,7 +246,7 @@ impl Component for Board {
       lanes: display.lanes,
       free: props.free,
       shared: props.shared,
-      read_only: props.read_only.is_some(),
+      read_only: props.read_only.is_some() || props.member,
       tags: props.tags.clone(),
     };
     ctx.provide(state.clone());
@@ -354,8 +362,8 @@ impl Board {
   ) -> Element {
     let state = &self.state;
     let (drag, refused, selected) = (state.drag.get(), state.refused.get(), state.selected.get());
-    let quick_add =
-      (display.columns == Columns::Status && !props.not_shared).then(|| props.read_only.clone().map_or(Ok(()), Err));
+    let quick_add = (display.columns == Columns::Status && !props.not_shared && !props.member)
+      .then(|| props.read_only.clone().map_or(Ok(()), Err));
     let shared = Shared {
       display,
       selected: &selected,
@@ -363,7 +371,7 @@ impl Board {
       drag: drag.as_ref(),
       refused: refused.as_ref(),
       asked,
-      lifts: props.read_only.is_none() && !props.not_shared,
+      lifts: props.read_only.is_none() && !props.not_shared && !props.member,
       menus: !props.not_shared,
       quick_add,
       filtered: props.filtered,
@@ -390,13 +398,14 @@ impl Board {
   }
 
   /// The selected cards the selection bar acts on. A read-only card is never acted on together: one selected before the
-  /// list became read-only is left out.
+  /// list became read-only is left out, and a team member's board acts on none.
   fn bulk_cards(&self, props: &BoardProps) -> Vec<CardModel> {
     let selected = self.state.selected.get();
+    let editable = props.read_only.is_none() && !props.member;
     props
       .cards
       .iter()
-      .filter(|card| selected.0.contains(&card.row.id) && props.read_only.is_none() && !card.row.not_shared)
+      .filter(|card| selected.0.contains(&card.row.id) && editable && !card.row.not_shared)
       .cloned()
       .collect()
   }

@@ -10,7 +10,7 @@ use crate::{
   time::Timestamp,
 };
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum WorkflowStatus {
   #[default]
   Backlog,
@@ -53,7 +53,7 @@ impl WorkflowStatus {
 }
 
 /// Ordering is for task lists only, never runner scheduling.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum Priority {
   Urgent,
   High,

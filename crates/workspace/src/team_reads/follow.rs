@@ -1,9 +1,10 @@
 //! Following a team project's invalidation subscription (S11): subscribed from the last cursor seen, read until it
 //! ends, and subscribed again after the connection monitor's backoff ([`Schedule`]); a subscription that opened starts
 //! the waits over. The server sends `ready` only to a subscription opened without a cursor; one resumed from the last
-//! cursor seen is a reconnect and, like `reset`, starts a new epoch as it opens. `401`, `revoked` and `404` (which a
-//! removed member gets) end the reads for good, and so does a changed session, which is checked while the stream is
-//! open and between connections.
+//! cursor seen is a reconnect and, like `reset`, starts a new epoch as it opens. An open subscription that ends starts
+//! one too, so what was read is read again rather than kept as current while no invalidation can arrive. `401`,
+//! `revoked` and `404` (which a removed member gets) end the reads for good, and so does a changed session, which is
+//! checked while the stream is open and between connections.
 
 use orchester_api::{
   client::SubscriptionEnd,
@@ -34,7 +35,13 @@ impl TeamProject {
         ) => end.into(),
         Ending::Stream(end) => {
           tracing::debug!(?end, "a team project's subscription ended and connects again");
-          self.inner.live.lock().failed(end.into());
+          {
+            let mut live = self.inner.live.lock();
+            live.failed(end.into());
+            if opened {
+              live.lost();
+            }
+          }
           self.tick();
           failures = if opened { 1 } else { failures + 1 };
           if let Some(ended) = self.wait(clock, failures).await {

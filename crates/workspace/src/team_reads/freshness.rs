@@ -1,9 +1,10 @@
 //! Which reads of a team project are current (`docs/cloud-api.md`, "Team authority S11 subscriptions", client race
 //! rule). The subscription moves a position ([`Live::seen`]) and an epoch, which every `reset` and every reconnect
-//! raises. A read is issued at the position seen then and answers at a snapshot cursor of its own, or at least at that
-//! position; an `invalidated` event for its scope with a later cursor while it is in flight makes it stale, and so does
-//! a new epoch, so an in-flight read that finishes after an invalidation never makes an older revision current.
-//! Invalidations between the consumer's looks coalesce, per scope, at their latest cursor ([`Changes`]).
+//! raises, and so does losing an open subscription (a reconnect with no read made since keeps that epoch). A read is
+//! issued at the position seen then and answers at a snapshot cursor of its own, or at least at that position; an
+//! `invalidated` event for its scope with a later cursor while it is in flight makes it stale, and so does a new epoch,
+//! so an in-flight read that finishes after an invalidation never makes an older revision current. Invalidations
+//! between the consumer's looks coalesce, per scope, at their latest cursor ([`Changes`]).
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -17,13 +18,17 @@ use super::TeamReadError;
 /// What the subscription and the reads in flight have told so far.
 #[derive(Default)]
 pub(super) struct Live {
-  /// Raised by every `reset` and every reconnect: a read of an older epoch is stale.
+  /// Raised by every `reset`, every reconnect and every open subscription lost: a read of an older epoch is stale.
   epoch: u64,
   /// The latest cursor of the subscription; `None` before its first `ready`.
   seen: Option<EventCursor>,
   /// Why the last subscription attempt failed while there is no position yet: reads fail with it instead of waiting.
   unready: Option<TeamReadError>,
   next_read: u64,
+  /// A read began in this epoch.
+  issued: bool,
+  /// The epoch began when the open subscription was lost, and no subscription opened since.
+  lost: bool,
   in_flight: HashMap<u64, InFlight>,
   /// The invalidations the consumer has not taken yet, each scope at its latest cursor.
   pending: BTreeMap<QueryScope, EventCursor>,
@@ -104,11 +109,16 @@ impl Live {
   }
 
   /// A subscription opened. Once there is a position it is a reconnect, resumed from that position with no `ready`,
-  /// after which no earlier read is trusted: a new epoch (`true`).
+  /// after which no earlier read is trusted: a new epoch (`true`). The epoch a lost subscription began serves when no
+  /// read began in it, since none can have missed an invalidation.
   pub(super) fn opened(&mut self) -> bool {
     let Some(seen) = self.seen else {
       return false;
     };
+    let lost = std::mem::take(&mut self.lost);
+    if lost && !self.issued {
+      return false;
+    }
     self.reset(seen);
     true
   }
@@ -120,9 +130,19 @@ impl Live {
     }
   }
 
+  /// An open subscription ended: no invalidation reaches this computer until it connects again, so no earlier read is
+  /// trusted as current any more and each is read again (a new epoch), answered or refused by the server as it stands.
+  pub(super) fn lost(&mut self) {
+    if let Some(seen) = self.seen {
+      self.reset(seen);
+      self.lost = true;
+    }
+  }
+
   /// `reset` at `cursor`: a new epoch from `cursor` on, and the invalidations pending before it dropped.
   pub(super) fn reset(&mut self, cursor: EventCursor) {
     self.epoch += 1;
+    self.issued = false;
     self.seen = Some(cursor);
     self.pending.clear();
   }
@@ -155,6 +175,7 @@ impl Live {
     };
     let id = self.next_read;
     self.next_read += 1;
+    self.issued = true;
     self.in_flight.insert(id, InFlight { scope, hit: None });
     Ok(Some(Ticket {
       id,

@@ -16,21 +16,21 @@ use super::{State, USER, error};
 
 /// The longest a held answer waits before it is refused. The client gives up on a request after 30 seconds and then
 /// takes the server for unreachable, so a held answer ends before that and leaves the server connected.
-const HOLD_AT_MOST: Duration = Duration::from_secs(25);
+pub(super) const HOLD_AT_MOST: Duration = Duration::from_secs(25);
 /// How often a held answer looks whether it may end.
-const HOLD_POLL: Duration = Duration::from_millis(20);
+pub(super) const HOLD_POLL: Duration = Duration::from_millis(20);
 /// The most tasks a page holds, as a real server pages them (`docs/architecture/server.md`).
 const PAGE: usize = 64;
 
 const TAG: &str = "0191c7c0-0000-7000-8000-000000000a01";
-const MODULE: &str = "0191c7c0-0000-7000-8000-000000000a02";
-const TASKS: [(&str, &str); 3] = [
+pub(super) const MODULE: &str = "0191c7c0-0000-7000-8000-000000000a02";
+pub(super) const TASKS: [(&str, &str); 3] = [
   ("0191c7c0-0000-7000-8000-000000000e01", "Sign in with a passkey"),
   ("0191c7c0-0000-7000-8000-000000000e02", "Export the ledger"),
   ("0191c7c0-0000-7000-8000-000000000e03", "Billing retries"),
 ];
 /// The titles and workflow statuses of paged tasks, by number: frame 08's sample (`YN6MO`).
-const PAGED: [(&str, &str); 3] = [
+pub(super) const PAGED: [(&str, &str); 3] = [
   ("Retry webhook delivery on 5xx", "todo"),
   ("Export invoices as PDF", "in_review"),
   ("Show the signed-in account in the menu", "in_progress"),
@@ -76,6 +76,7 @@ pub(super) fn answer((path, query): (&str, &str), state: &Mutex<State>) -> Optio
     ("GET", "modules") if empty => Some(("200 OK", json!({"modules": [], "changes": []}))),
     ("GET", "modules") => Some(("200 OK", json!({"modules": [module()], "changes": []}))),
     ("GET", "tasks") => Some(tasks(&project, query, state)),
+    ("GET", "members") => Some(("200 OK", super::authority::members(&state.lock()))),
     ("POST", "link") if state.lock().refuses_links => Some(("403 Forbidden", error("forbidden"))),
     ("POST", "link") => Some(("200 OK", json!({"tasks": [], "dropped_links": [], "cursor": 0}))),
     _ => None,
@@ -148,14 +149,14 @@ fn attribution() -> Value {
   json!({"by": {"id": USER, "display_name": "Bohdan Koval"}, "at": 1_000})
 }
 
-fn module() -> Value {
+pub(super) fn module() -> Value {
   json!({
     "id": MODULE, "name": "Payments", "description": "", "start": null, "target": null, "state": "open",
     "revision": 1, "created": attribution(), "updated": attribution(),
   })
 }
 
-fn task(id: &str, (key, number): (&str, usize), (title, workflow): (&str, &str)) -> Value {
+pub(super) fn task(id: &str, (key, number): (&str, usize), (title, workflow): (&str, &str)) -> Value {
   json!({
     "id": id, "number": number, "key": format!("{key}-{number}"), "former_key": null, "revision": 1,
     "title": title, "brief": "", "criteria": [], "pipeline": null, "limits": null, "workflow": workflow,

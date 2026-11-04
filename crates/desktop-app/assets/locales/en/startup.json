@@ -278,12 +278,12 @@
         "title": "Pick a project from {{team}}",
         "lead": "Only the projects you are invited to are listed. Each one keeps its tasks and team settings on {{address}}.",
         "member": "you: member",
-        "owner": "you: owner",
+        "owner": "you: Admin",
         "sub": "{{address}} · remote {{hint}}",
         "continue": "Continue with {{project}}",
         "none": {
           "title": "No projects for you on {{team}} yet",
-          "body": "You joined {{address}}, but no project there has invited {{who}}. Ask an owner to invite you: the project then shows here and in All projects.",
+          "body": "You joined {{address}}, but no project there has invited {{who}}. Ask an Admin to invite you: the project then shows here and in All projects.",
           "checkAgain": "Check again",
           "backToStart": "Back to start"
         }

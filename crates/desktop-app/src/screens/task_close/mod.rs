@@ -20,7 +20,7 @@ use lurq::{
     ctx::{Ctx, FutureAction},
     events::is_synthetic_input,
   },
-  components::{Column, Row},
+  components::Row,
   core::{ElementRef, Signal},
   node::{Element, dimension::Dimension},
 };
@@ -271,14 +271,13 @@ impl Closer {
     self.run(Request::Delete(subject, self.unmerged.get_untracked()));
   }
 
-  /// The *More actions* menu of `subject`, its rows' ids starting with `id`, closed by a choice through `open`.
-  fn menu(&self, ctx: &mut Ctx, (id, subject): (&str, &Subject), open: &Signal<bool>) -> Column {
-    let (rows, delete) = self.rows(ctx, (id, subject), open);
-    menu_panel(&format!("{id}-panel"))
-      .width(Dimension::Px(MENU_WIDTH))
-      .with_children(rows)
-      .child(separator(ctx))
-      .child(delete)
+  /// The rows of `subject`'s *More actions* menu ([`more_menu`]), their ids starting with `id`, closed by a choice
+  /// through `open`: those that close or reopen it, then *Delete task…* apart.
+  pub fn menu(&self, ctx: &mut Ctx, (id, subject): (&str, &Subject), open: &Signal<bool>) -> Vec<Element> {
+    let (mut rows, delete) = self.rows(ctx, (id, subject), open);
+    rows.push(separator(ctx));
+    rows.push(delete);
+    rows
   }
 
   /// The rows of a *More actions* menu that close, reopen and delete `subject`, their ids starting with `id`, closed
@@ -440,19 +439,27 @@ impl MenuPlace {
   }
 }
 
-/// The *More actions* button (`…`) of `subject`, as `id`, with its menu while it is open, at the end of a row or of
-/// the task page's actions. The menu is declared only while open: a list shows a button on every row, and every
-/// row's menu would weigh on how fast the list is laid out.
-pub fn more_menu(ctx: &mut Ctx, (closer, place): (&Closer, &MenuPlace), subject: &Subject, id: &str) -> Element {
+/// The *More actions* button (`…`) of the task `key`, as `id`, with its menu of `rows` while it is open, at the end of
+/// a row: [`Closer::menu`]'s, or fewer where the person changes nothing. `rows` reads them, closed by a choice through
+/// the signal it is given. The menu is declared only while open: a list shows a button on every row, and every row's
+/// menu would weigh on how fast the list is laid out.
+pub fn more_menu(
+  ctx: &mut Ctx,
+  place: &MenuPlace,
+  (key, id): (&str, &str),
+  rows: impl FnOnce(&mut Ctx, &Signal<bool>) -> Vec<Element>,
+) -> Element {
   let open = place.open.clone();
-  let label = ctx.t_args("task_close.menu.label", [("task", &*subject.key)]);
+  let label = ctx.t_args("task_close.menu.label", [("task", key)]);
   let button = IconButton::new(id.to_owned(), Icon::Ellipsis, label)
     .element(place.anchor.clone())
     .on_click(move || open.update(|open| *open = !*open));
   let shown = place.open.get();
   let button = if shown { button.active() } else { button }.render(ctx);
   let menu = shown.then(|| {
-    let panel = closer.menu(ctx, (id, subject), &place.open);
+    let panel = menu_panel(&format!("{id}-panel"))
+      .width(Dimension::Px(MENU_WIDTH))
+      .with_children(rows(ctx, &place.open));
     menu_at_end(place.anchor.clone(), place.open.clone(), panel)
   });
   Row::new().child(button).with_children(menu).into()
