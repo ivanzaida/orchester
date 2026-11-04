@@ -263,12 +263,13 @@ const fn readable(command: &TeamCommand) -> Option<Readable> {
     | TeamCommand::ClaimAcquire { .. }
     | TeamCommand::ClaimTakeOver { .. }
     | TeamCommand::ClaimRelease { .. }
-    | TeamCommand::DeliveryAuthorize { .. } => None,
+    | TeamCommand::DeliveryAuthorize { .. }
+    | TeamCommand::WorkReport(_) => None,
   }
 }
 
 /// Refusals that commit nothing and pass: the operation stays open to be sent again under its id.
-const fn retryable(code: AuthorityErrorCode) -> bool {
+pub(crate) const fn retryable(code: AuthorityErrorCode) -> bool {
   matches!(
     code,
     AuthorityErrorCode::Unauthenticated

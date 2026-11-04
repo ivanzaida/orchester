@@ -104,6 +104,19 @@ pub enum StoreError {
   /// No team operation of this project has the id.
   #[error("team operation {0} is not recorded")]
   OperationNotFound(OperationId),
+  /// No team start of this project was recorded under the operation.
+  #[error("no team start is recorded under operation {0}")]
+  TeamStartNotFound(OperationId),
+  /// The team start under the operation is not at the boundary the step goes on from: another step carried it on
+  /// already, or the server refused it. Nothing was changed.
+  #[error("the team start under operation {operation} is {stage}, not where this step goes on from")]
+  TeamStartStage {
+    operation: OperationId,
+    stage: &'static str,
+  },
+  /// The run is not a team run this project started through its server.
+  #[error("run {0} is not a team run")]
+  TeamRunNotFound(RunId),
   /// The project is shared already; nothing was changed.
   #[error("the project's task list is shared already")]
   AlreadyShared,

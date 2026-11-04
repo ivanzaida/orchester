@@ -5,7 +5,6 @@
 //! from them without reading the current task or resource definitions; they never change once kept.
 
 mod bundle;
-mod labels;
 mod local;
 mod resolve;
 
@@ -13,7 +12,6 @@ use thiserror::Error;
 
 pub use self::{
   bundle::{BundleContent, InputsOrigin, RUN_INPUTS_FORMAT, TaskAtStart, TeamAcceptance},
-  labels::ResourceLabel,
   local::{BoundReference, LocalBindings, LocalConsent, ProfileBinding},
 };
 use crate::{
@@ -36,11 +34,6 @@ pub enum InputsError {
   Unrepresentable(&'static str),
   #[error("the task's title: {0}")]
   TaskTitle(NameError),
-  #[error("resource {0} is pinned but has no label")]
-  Unlabelled(ResourceId),
-  /// A label names a resource the inputs do not pin, or a pinned resource twice.
-  #[error("resource {0} is labelled but not pinned once")]
-  UnexpectedLabel(ResourceId),
   #[error("agent profile {0} has no local binding")]
   MissingBinding(ResourceId),
   /// A binding names a profile the inputs do not pin, or a pinned profile twice.

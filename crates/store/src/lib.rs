@@ -25,12 +25,13 @@ pub use lock_watch::worst::{LockHold, LockHolds, lock_holds, reset_lock_holds};
 #[cfg(feature = "test-support")]
 pub use project_db::ProjectMigration;
 pub use project_db::{
-  AcceptedInputs, AttachmentOwner, AutoModeSave, AutomaticStatus, AutomationPoints, BaseBranchMove, Bound, BoundBy,
-  BoundReference, CachedClaim, CachedModule, CachedModuleChange, CachedRunStatus, CachedTask, CachedVersion,
-  ChatListing, ChatTurn, ConfirmedVersion, DecisionCounts, EndedRun, JoinedKey, KeptAction, KeptReport, KeptWait,
-  NamingVersion, NewTeamOperation, NotSent, ProjectDb, PublishState, ReadOnlyProjectDb, RecordedDecisionReview,
-  ReferenceBinding, ReferenceTarget, ResolutionStart, ResourceSharing, ResourceUpdate, ReturnedTask, RunBranch,
-  ServerAdmin, SharedEvent, SharedMember, SharedPerson, SharedSnapshot, SharedStanding, SharedTaskInfo, SharingLink,
-  StartedQueued, TaskDeletionFacts, TeamOperation, TeamOperationState, TeamSettlement, UnsentStatus, VersionReference,
-  WaitingPublish, WaitingVersion, attachment_file, exclude_project_data,
+  AcceptedInputs, AcceptedWork, AttachmentOwner, AutoModeSave, AutomaticStatus, AutomationPoints, BaseBranchMove,
+  Bound, BoundBy, BoundReference, CachedClaim, CachedModule, CachedModuleChange, CachedRunStatus, CachedTask,
+  CachedVersion, ChatListing, ChatTurn, ConfirmedVersion, DecisionCounts, EndedRun, JoinedKey, KeptAction, KeptReport,
+  KeptWait, NamingVersion, NewTeamOperation, NewWorkReport, NotSent, ProjectDb, PublishState, ReadOnlyProjectDb,
+  RecordedDecisionReview, ReferenceBinding, ReferenceTarget, ResolutionStart, ResourceSharing, ResourceUpdate,
+  ReturnedTask, RunBranch, ServerAdmin, SharedEvent, SharedMember, SharedPerson, SharedSnapshot, SharedStanding,
+  SharedTaskInfo, SharingLink, StartedQueued, TaskDeletionFacts, TeamFence, TeamOperation, TeamOperationState, TeamRun,
+  TeamSettlement, TeamStart, TeamStartStage, UnsentStatus, VersionReference, WaitingPublish, WaitingVersion,
+  WorkReportEntry, WorkReportState, attachment_file, exclude_project_data,
 };

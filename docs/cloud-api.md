@@ -229,13 +229,16 @@ core (`orchester_core::run::bundle`) and `orchester_api::v2`; it adds no endpoin
 starts work under a claim and never accepts one a client wrote. Unknown fields are refused in every shape below.
 
 - `ExecutionBundle`, in this field order:
-  `{schema_version,project_id,subject,claim_id,module_id,branch,base_commit,definition_revision,task,pipeline,profiles,permissions,limits,delivery,resources,files,skill_files,bindings,inputs}`.
-  `schema_version` is `EXECUTION_BUNDLE_SCHEMA` (1), as `BundleRef.schema_version` names it. `module_id`, `branch`
+  `{schema_version,project_id,subject,claim_id,module_id,branch,base_commit,definition_revision,task_number,task,pipeline,profiles,permissions,limits,delivery,resources,files,skill_files,bindings,inputs}`.
+  `schema_version` is `EXECUTION_BUNDLE_SCHEMA` (2), as `BundleRef.schema_version` names it; a bundle of another
+  version is refused, with no compatibility shim (2 added `task_number` and the pinned versions' `label`, so a
+  desktop and a server on different versions refuse each other's bundles). `module_id`, `branch`
   and `base_commit` are S7's (below): the module the work is under, its module branch (`BranchName`) and the base
   branch's commit the work starts from (`CommitId`). `definition_revision` is the task's revision when the work
-  started; `task` (`TaskAtStart`) is `{title,brief,criteria}` at that revision. `limits` is a `SharedLimits` (`{}` for
-  none) and `delivery` what the run delivers (`changes`, `report`, `outside` or `changes_or_report`: the task's own
-  choice, else its pipeline's).
+  started; `task_number` is the task's number in its project from 1 (the `7` of `ORC-7`, which names the run and its
+  branch with the project's key); `task` (`TaskAtStart`) is `{title,brief,criteria}` at that revision. `limits` is a
+  `SharedLimits` (`{}` for none) and `delivery` what the run delivers (`changes`, `report`, `outside` or
+  `changes_or_report`: the task's own choice, else its pipeline's).
 - Derived from `inputs`, and refused on read when they differ: `pipeline` `{resource_id,version}`; `profiles`
   `[{role,resource_id,version}]`; `permissions` `[{step,permissions}]`, each agent step's profile permissions
   narrowed by the step, in pipeline step order; `resources` `[{resource_id,version}]`, the pinned instructions, tools
@@ -245,7 +248,10 @@ starts work under a claim and never accepts one a client wrote. Unknown fields a
   provider (`codex_cli`, `claude_code_cli`, …) the executing computer runs it with. Which account or connection runs it,
   and every path, stays on that computer.
 - `inputs` (`CanonicalExecutionInputs`): `{pipeline,steps,profiles,instructions,tools,skills}`, each pinned version
-  `{resource,version,number,body}` with its published body. `steps` are the run snapshot's `[{key,executor}]` in
+  `{resource,version,number,label,body}` with its published body. `label` (`ResourceLabel`) is `{slug,name}`, the
+  resource's slug and name as the pinned version had them, which prompts and skill folders name it by: the slug is
+  1–64 lowercase letters, digits and single inner hyphens, the name is not blank and at most 200 characters; a
+  malformed label is refused. `steps` are the run snapshot's `[{key,executor}]` in
   pipeline order. The pipeline body lists no sources, a profile body is
   `{role,responsibilities,instructions,model,settings,permissions}` without its connection, MCP servers or writable
   folders, and a command tool never starts a program by an absolute path; such inputs are refused. Bodies name
@@ -432,9 +438,10 @@ change. Unknown kinds and fields are refused; the server answers a kind it does 
 - Commands, tagged by `kind`: `task.create {content:TaskContent}` (Admin), `claim.acquire {subject}`,
   `claim.take_over {subject,observed_claim_id}`, `claim.release {authority:AuthorityRef}`,
   `assignment.set {subject,user_id}` (`user_id` sent, `null` for nobody; Admin), `module.branch.set {module_id,branch}`
-  (Admin; `branch` is required), `work.start {authority:AuthorityRef,base_commit}` and
-  `delivery.authorize {subject,claim_id,branch,source_commit,base_commit}` (Admin; a module subject). The server's
-  `delivery.request`, `delivery.report` and `work.report` join `TeamCommand` in P4 with the server's shapes.
+  (Admin; `branch` is required), `work.start {authority:AuthorityRef,base_commit}`,
+  `delivery.authorize {subject,claim_id,branch,source_commit,base_commit}` (Admin; a module subject) and, since P4,
+  `work.report` with `WorkReport`'s fields (below). The server's `delivery.request` and `delivery.report` join
+  `TeamCommand` with the server's shapes when the desktop delivers.
 - Expected revisions: the module's for `module.branch.set`, the task's and its module's for `work.start`, the
   subject's for `assignment.set` (the desktop sends it), none for the others, whose claims fence them by id.
 - Values, tagged by `kind`, each with `effects`: `task {task:SharedTask}` (until `TaskRead` is published there),
@@ -463,7 +470,7 @@ reads `GET …/operations/{operation}` first and sends the same request again on
 final one, is kept as final. After `revision_conflict` the dispatcher reads the subject as it is now (`GET
 /api/v2/projects/{p}/tasks/{task}` or `…/modules/{module}`) and returns it with the refusal. A committed receipt is
 kept before its local effects: a task it answers with is recorded as a team task identity, and `start` stays pending
-on the open operation until P4 carries it out.
+on the open operation until the team start (P4, below) carries it out and completes the operation.
 
 The definition routes keep no receipt, so a definition edit is not recorded. When its response is lost, the
 dispatcher reads the subject again (`GET /api/v1/projects/{p}/tasks/{t}`, `…/tags`, `GET /api/v2/projects/{p}/policy`)
@@ -471,6 +478,47 @@ and compares it with the edit: holding the edit, it was made; still at the revis
 it is sent again, which the revision or the module routes' key makes safe; otherwise it changed meanwhile and the
 edit is refused as superseded, with the current value. A revision conflict whose current value holds the edit is
 taken as made, so the same intent sent again after a lost response finds its edit rather than a refusal.
+
+## Team authority P4 work
+
+The routes of authorized work, as the team server serves them (its `http/workspace/mod.rs`, `bundles.rs`,
+`heartbeat.rs`, `docs/claim-authority.md`, `docs/module-branches.md` and `docs/work-reports.md`), through
+`orchester_api::client::Authority`, each with the device token of the session the claim executes under. Refusals are
+`AuthorityError`s.
+
+| Method and path | Request | Answer |
+| --- | --- | --- |
+| `GET /api/v2/projects/{p}/bundles/{sha256}` | | `ExecutionBundle`; `409 claim_lost` once no claim it was built for is the caller's in this session, and for a hash the workspace does not have |
+| `GET /api/v2/projects/{p}/bundles/{sha256}/files/{file}` | | the file's raw bytes (`application/octet-stream`, at most `MAX_BUNDLE_FILE_BYTES`); refused as the bundle is, `404 not_found` for a file it does not pin |
+| `POST /api/v2/projects/{p}/heartbeat` | `ExactHeartbeat {authorities:[AuthorityRef]}`, at most 256 | `Renewed {renewed:[ClaimRead],lost:[AuthorityRef]}`; `409 decision_required [D1]` while a named claim's work waits for a person or for review, `409 transition_denied` while it is not running; either renews nothing |
+| `POST /api/v2/projects/{p}/commands` | `work.report {authority,run_id,event_id,sequence,outcome,artifacts}` | `{kind:"work",work:WorkRead,bundle:BundleRef,effects:[]}`, decided as the server's `docs/work-reports.md` orders it |
+
+The desktop's team work (`orchester_workspace::team_work`) uses them so:
+
+- **Start.** From a held task claim, the start is recorded in the project database (`team_starts`) with what its caller
+  read and chose, then `work.start` goes through the dispatcher under the start's operation. The receipt's work and
+  bundle reference are kept first; then the bundle and every file it pins are read by hash, each checked
+  (`ExecutionBundle::check_file`, and the bundle's own hash, claim, task and base commit), and kept as the run's
+  accepted inputs, the files as blobs, in one transaction with the start's record; only then is the runner asked to
+  start the run (protocol 42's `StartAcceptedRun`). A crash or an outage at any boundary is carried on from it, once;
+  the operation and the runner's start are idempotent, so a retry never makes a second work or run. A refusal of the
+  start or of its bundle (`claim_lost`) is kept and starts nothing. A bundle that can never become the run's inputs
+  here (it is not the one the receipt names, or the caller's bindings do not fit it) settles the start `failed`, kept
+  with the reason; recovery carries each open start on its own, so one such start holds back no other.
+- **Inputs.** The task's number and each pinned version's label (`{slug,name}`) are the bundle's (schema 2); the
+  start's caller supplies only the local bindings and consent, and each pinned profile must be bound to a connection
+  of the CLI the bundle binds it to.
+- **Reports.** Each change of a team run's outcome (core's `ExecutionOutcome::of_status`) is queued once in
+  `work_report_outbox` with its event id, the run's next sequence, an operation id and its request, before it is sent;
+  queued reports go in sequence order, each again with the same bytes until the server acknowledges it. A transport
+  failure or a retryable refusal keeps the rest waiting in order. `claim_lost`, `membership_revoked`,
+  `session_mismatch`, and an answer whose work's newest run is another, fence the run: it reports and renews nothing
+  more, and its run, worktree and unsent reports stay on this computer. Other refusals are kept with their report.
+  A run's local status and its server acceptance (the work as the server last answered its reports, by revision) are
+  kept apart (`team_runs`).
+- **Heartbeat.** Only runs at work here (running, no step waiting for a person) are named, with their work's
+  authority; when none is, nothing is sent. `decision_required` is returned as such, not retried as a failure; a lost
+  authority fences its run. Nothing calls the team work yet: the screens adopt it in P6, automation in P7.
 
 ## Conventions
 

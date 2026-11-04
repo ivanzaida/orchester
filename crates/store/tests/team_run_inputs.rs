@@ -29,10 +29,10 @@ use orchester_core::{
   revision::Revision,
   run::{
     BranchName, CommitId, NewRun, PublishedVersions, RunSnapshot, StepExecutor,
-    bundle::{CanonicalExecutionInputs, PinnedBodies},
+    bundle::{CanonicalExecutionInputs, PinnedBodies, ResourceLabel},
     inputs::{
-      BoundReference, BundleContent, InputsOrigin, LocalBindings, LocalConsent, ProfileBinding, ResourceLabel,
-      RunInputs, TaskAtStart, TeamAcceptance,
+      BoundReference, BundleContent, InputsOrigin, LocalBindings, LocalConsent, ProfileBinding, RunInputs, TaskAtStart,
+      TeamAcceptance,
     },
   },
   sharing::TaskRevision,
@@ -110,6 +110,10 @@ fn team_project() -> Team {
   };
   let snapshot = RunSnapshot::build(delivery, &version, published).expect("snapshot");
   let bodies = PinnedBodies {
+    labels: &[
+      (profile_version.id(), label("builder", "Builder")),
+      (version.id(), label("delivery", "Delivery")),
+    ],
     profiles: &[profile_version],
     instructions: &[],
     tools: &[],
@@ -163,7 +167,6 @@ impl Team {
     let content = BundleContent::new(
       origin,
       (NonZeroU32::new(7).expect("number"), task),
-      labels(&self.inputs),
       (TaskLimits::NONE, Deliverable::default()),
       self.inputs.clone(),
     )
@@ -211,25 +214,9 @@ fn revision(value: u64) -> TaskRevision {
   TaskRevision::try_from(value).expect("revision")
 }
 
-/// The labels `inputs` were accepted with: the pipeline is Delivery, every other resource Builder.
-fn labels(inputs: &CanonicalExecutionInputs) -> Vec<ResourceLabel> {
-  let pipeline = inputs.pipeline().pinned().resource;
-  inputs
-    .resources()
-    .into_iter()
-    .map(|resource| {
-      let (slug, title) = if resource == pipeline {
-        ("delivery", "Delivery")
-      } else {
-        ("builder", "Builder")
-      };
-      ResourceLabel {
-        resource,
-        slug: Slug::new(slug).expect("slug"),
-        name: name(title),
-      }
-    })
-    .collect()
+/// What a pinned version was called when the inputs were accepted.
+fn label(slug: &str, title: &str) -> ResourceLabel {
+  ResourceLabel::new(Slug::new(slug).expect("slug"), name(title))
 }
 
 #[test]
@@ -432,7 +419,7 @@ fn team_run_inputs_name_secrets_by_id_only() {
   }
 }
 
-/// The local inputs of a run of `snapshot`, its profiles' bodies read from `db`.
+/// The local inputs of a run of `snapshot`, its profiles' bodies and the labels read from `db`.
 fn local_inputs(db: &ProjectDb, snapshot: &RunSnapshot) -> RunInputs {
   let profiles: Vec<_> = snapshot
     .steps()
@@ -452,11 +439,22 @@ fn local_inputs(db: &ProjectDb, snapshot: &RunSnapshot) -> RunInputs {
         .expect("pinned version")
     })
     .collect();
+  let labels: Vec<_> = std::iter::once(snapshot.pipeline())
+    .chain(profiles.iter().copied())
+    .map(|pinned| {
+      let resource = db.resource(pinned.resource).expect("read").expect("the resource");
+      (
+        pinned.version,
+        ResourceLabel::new(resource.slug().clone(), resource.name().clone()),
+      )
+    })
+    .collect();
   let bodies = PinnedBodies {
     profiles: &versions,
     instructions: &[],
     tools: &[],
     skills: &[],
+    labels: &labels,
   };
   let canonical = CanonicalExecutionInputs::pin(snapshot, bodies).expect("inputs");
   let task = TaskAtStart {
@@ -467,7 +465,6 @@ fn local_inputs(db: &ProjectDb, snapshot: &RunSnapshot) -> RunInputs {
   let content = BundleContent::new(
     InputsOrigin::Local,
     (NonZeroU32::new(2).expect("number"), task),
-    labels(&canonical),
     (TaskLimits::NONE, Deliverable::default()),
     canonical,
   )

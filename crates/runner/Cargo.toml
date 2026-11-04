@@ -363,6 +363,10 @@ required-features = ["test-agent"]
 name = "team_inputs"
 required-features = ["test-agent"]
 
+[[test]]
+name = "team_start"
+required-features = ["test-agent"]
+
 [features]
 test-agent = []
 
@@ -405,6 +409,10 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 
 [dev-dependencies]
+# The team start tests (`tests/team_start.rs`): the desktop's start through a fake team server into this runner, with
+# the server's API client and contract.
+orchester-api = { workspace = true, features = ["client"] }
+orchester-workspace.workspace = true
 # The contention tests read the longest write-lock holds and shorten the time a write waits for a lock.
 orchester-store = { workspace = true, features = ["test-support"] }
 # The in-memory keychain of the tests is shared with the scheduler.

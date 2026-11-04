@@ -21,10 +21,10 @@ use orchester_core::{
   },
   run::{
     BranchName, CommitId, PinnedVersion, PublishedVersions, RunSnapshot,
-    bundle::{CanonicalExecutionInputs, PinnedBodies},
+    bundle::{CanonicalExecutionInputs, PinnedBodies, ResourceLabel},
     inputs::{
-      BoundReference, BundleContent, InputsError, InputsOrigin, LocalBindings, LocalConsent, ProfileBinding,
-      ResourceLabel, RunInputs, TaskAtStart, TeamAcceptance,
+      BoundReference, BundleContent, InputsError, InputsOrigin, LocalBindings, LocalConsent, ProfileBinding, RunInputs,
+      TaskAtStart, TeamAcceptance,
     },
   },
   sharing::TaskRevision,
@@ -86,6 +86,10 @@ fn fixture() -> Fixture {
     instructions: &[],
     tools: &[],
     skills: &[],
+    labels: &[
+      (pipeline.id(), label("review-flow", "Review flow")),
+      (profiles[&profile].id(), label("reviewer", "Reviewer")),
+    ],
   };
   let inputs = CanonicalExecutionInputs::pin(&snapshot, bodies).expect("inputs");
   Fixture {
@@ -113,18 +117,8 @@ fn team() -> InputsOrigin {
   })
 }
 
-/// A label for each resource `inputs` pin.
-fn labels(inputs: &CanonicalExecutionInputs) -> Vec<ResourceLabel> {
-  inputs
-    .resources()
-    .into_iter()
-    .enumerate()
-    .map(|(index, resource)| ResourceLabel {
-      resource,
-      slug: Slug::new(&format!("resource-{index}")).expect("slug"),
-      name: Name::new(&format!("Resource {index}")).expect("name"),
-    })
-    .collect()
+fn label(slug: &str, name: &str) -> ResourceLabel {
+  ResourceLabel::new(Slug::new(slug).expect("slug"), Name::new(name).expect("name"))
 }
 
 fn content(fixture: &Fixture, origin: InputsOrigin) -> BundleContent {
@@ -141,7 +135,6 @@ fn content(fixture: &Fixture, origin: InputsOrigin) -> BundleContent {
   BundleContent::new(
     origin,
     (NonZeroU32::new(12).expect("number"), task),
-    labels(&fixture.inputs),
     (limits, Deliverable::default()),
     fixture.inputs.clone(),
   )
@@ -180,43 +173,35 @@ fn run_inputs_read_back_and_hash_the_same() {
 }
 
 #[test]
-fn run_inputs_label_each_pinned_resource_once() {
+fn run_inputs_label_pinned_resources_from_the_canonical_inputs() {
   let fixture = fixture();
   let task = TaskAtStart {
     title: "Review".into(),
     brief: String::new(),
     criteria: Vec::new(),
   };
-  let make = |labels: Vec<ResourceLabel>, task: TaskAtStart| {
+  let make = |task: TaskAtStart| {
     BundleContent::new(
       team(),
       (NonZeroU32::MIN, task),
-      labels,
       (TaskLimits::NONE, Deliverable::default()),
       fixture.inputs.clone(),
     )
   };
-  let mut missing = labels(&fixture.inputs);
-  let dropped = missing.pop().expect("a label").resource;
-  assert_eq!(make(missing, task.clone()), Err(InputsError::Unlabelled(dropped)));
-  let mut extra = labels(&fixture.inputs);
-  let stranger = ResourceId::generate();
-  extra[0].resource = stranger;
-  assert!(matches!(
-    make(extra, task.clone()),
-    Err(InputsError::UnexpectedLabel(_) | InputsError::Unlabelled(_))
-  ));
-  let content = make(labels(&fixture.inputs), task.clone()).expect("labelled");
-  assert!(content.label(fixture.snapshot.pipeline().resource).is_some());
-  assert!(content.label(stranger).is_none());
+  let content = make(task.clone()).expect("content");
+  let pipeline = content
+    .inputs()
+    .label(fixture.snapshot.pipeline().resource)
+    .expect("the pipeline's label");
+  assert_eq!(pipeline.slug().as_str(), "review-flow");
+  let profile = content.inputs().label(fixture.profile).expect("the profile's label");
+  assert_eq!(profile.name().as_str(), "Reviewer");
+  assert!(content.inputs().label(ResourceId::generate()).is_none());
   let blank = TaskAtStart {
     title: " ".into(),
     ..task
   };
-  assert!(matches!(
-    make(labels(&fixture.inputs), blank),
-    Err(InputsError::TaskTitle(_))
-  ));
+  assert!(matches!(make(blank), Err(InputsError::TaskTitle(_))));
 }
 
 #[test]

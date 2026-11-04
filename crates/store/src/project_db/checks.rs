@@ -56,8 +56,9 @@ impl ProjectDb {
     match inputs {
       Some(inputs) => inputs
         .bundle()
+        .inputs()
         .label(pinned.resource)
-        .map(|label| label.slug.clone())
+        .map(|label| label.slug().clone())
         .ok_or_else(gone),
       None => self
         .resource(pinned.resource)?

@@ -1,14 +1,15 @@
 //! A team server's workspace-authority surface under `/api/v2` (`docs/cloud-api.md`, "Team authority S10 read
 //! contract", "Team authority S11 subscriptions"): the bounded reads ([`reads`]), the scoped invalidation
-//! subscription ([`subscription`]) and the team commands with their operations ([`commands`]), through
-//! [`Client::authority`]. Refusals new to `/api/v2` are [`AuthorityError`]s and come as
+//! subscription ([`subscription`]), the team commands with their operations ([`commands`]) and the routes of authorized
+//! work ([`work`]), through [`Client::authority`]. Refusals new to `/api/v2` are [`AuthorityError`]s and come as
 //! [`AuthorityCallError::Refused`]; the common failures keep the `/api/v1` `{error, message}` form and come as
-//! [`ClientError::Api`]. The routes are listed in `docs/cloud-api.md`, "Team authority S10/S11 routes" and "Team
-//! authority P2 commands".
+//! [`ClientError::Api`]. The routes are listed in `docs/cloud-api.md`, "Team authority S10/S11 routes", "Team
+//! authority P2 commands" and "Team authority P4 work".
 
 mod commands;
 mod reads;
 mod subscription;
+mod work;
 
 use orchester_core::{id::ProjectId, secret::SecretValue};
 use reqwest::{Method, RequestBuilder, Response};

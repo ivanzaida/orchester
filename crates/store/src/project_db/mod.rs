@@ -94,6 +94,8 @@ mod task_identities;
 mod task_snapshots;
 mod tasks;
 mod team_operations;
+mod team_runs;
+mod team_starts;
 mod tool_approvals;
 mod usage;
 mod used_versions;
@@ -143,6 +145,8 @@ pub use self::{
   sharing::SharingLink,
   task_deletion::TaskDeletionFacts,
   team_operations::{NewTeamOperation, TeamOperation, TeamOperationState, TeamSettlement},
+  team_runs::{AcceptedWork, NewWorkReport, TeamFence, TeamRun, WorkReportEntry, WorkReportState},
+  team_starts::{TeamStart, TeamStartStage},
 };
 use crate::{
   StoreError, git_exclude, migrate,

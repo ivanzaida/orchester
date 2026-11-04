@@ -139,6 +139,9 @@ pub fn store_error(error: &StoreError) -> Message {
     | StoreError::TaskIdTaken(_)
     | StoreError::OperationMismatch(_)
     | StoreError::OperationNotFound(_)
+    | StoreError::TeamStartNotFound(_)
+    | StoreError::TeamStartStage { .. }
+    | StoreError::TeamRunNotFound(_)
     | StoreError::MigrationBrokeReferences { .. } => Message::new("errors.storage"),
     StoreError::Publish(error) => publish_error(error),
     StoreError::AlwaysAllow(_) => Message::new("errors.alwaysAllow"),
