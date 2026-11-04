@@ -12,7 +12,9 @@ use std::{
 };
 
 use orchester_core::limits::AgentSlots;
-use orchester_ipc::{AttachSession, Command, ErrorReports, Event, IpcError, LaunchError, Reply, RunnerClient};
+use orchester_ipc::{
+  AttachSession, Command, ErrorReports, Event, IpcError, LaunchError, Reply, RunnerClient, browser::ComputerBrowser,
+};
 use parking_lot::Mutex;
 use tokio::{
   runtime::Handle,
@@ -32,6 +34,9 @@ use super::{
 
 /// How long the runner may take to exit after it reported `Stopped` and the connection closed.
 const EXIT_TIMEOUT: Duration = Duration::from_secs(2);
+
+/// An application setting the runners get, as the person set it last; `None` until it is set.
+type Setting<T> = Arc<Mutex<Option<T>>>;
 
 enum Control {
   Stop {
@@ -61,12 +66,13 @@ impl Drop for Connection {
 }
 
 impl Connection {
-  /// Starts the runner for `project`, sending error reports as `reports` says when it starts. Its
-  /// first attach is for `session`; every runner started after a drop attaches as a reconnect.
+  /// Starts the runner for `project`, sending error reports as `reports` says when it starts, and attaching with
+  /// `browser`, this computer's Settings › Browser. Its first attach is for `session`; every runner started after a
+  /// drop attaches as a reconnect.
   pub(super) fn spawn(
     runtime: &Handle,
     runner_exe: PathBuf,
-    reports: Arc<Mutex<Option<ErrorReports>>>,
+    (reports, browser): (Setting<ErrorReports>, Setting<ComputerBrowser>),
     project: PathBuf,
     reporter: Reporter,
     session: AttachSession,
@@ -76,6 +82,7 @@ impl Connection {
       Supervisor {
         runner_exe,
         reports,
+        browser,
         project,
         reporter,
         requests,
@@ -135,7 +142,9 @@ impl Connection {
 struct Supervisor {
   runner_exe: PathBuf,
   /// Whether its runners send error reports, as the person set it last; each runner is started so.
-  reports: Arc<Mutex<Option<ErrorReports>>>,
+  reports: Setting<ErrorReports>,
+  /// This computer's Settings › Browser as the desktop passed them last; each runner attaches with them.
+  browser: Setting<ComputerBrowser>,
   project: PathBuf,
   reporter: Reporter,
   requests: mpsc::UnboundedReceiver<Control>,
@@ -180,11 +189,18 @@ impl Supervisor {
       // Whatever happens to this runner, the next one replaces it after a drop.
       self.session = AttachSession::Reconnect;
       let agent_slots = attach_slots(&self.project).await;
+      // Read after the launch: a change while it started was refused as not connected, and one from now on waits.
+      let browser = self.attach_browser().await;
       // A change of the setting while it started was refused as not connected; one from now on waits for it.
       let reports = self.reports.lock().clone();
       let catch_up = (reports != started_with).then_some(Command::SetErrorReports { reports });
       let served = Session::start(client)
-        .serve((session, agent_slots), catch_up, &mut self.requests, &self.reporter)
+        .serve(
+          (session, agent_slots, browser),
+          catch_up,
+          &mut self.requests,
+          &self.reporter,
+        )
         .await;
       self.reporter.browser_ended();
       match served {
@@ -215,6 +231,26 @@ impl Supervisor {
       tracing::error!(project = %self.project.display(), %error, "cannot start the runner");
       launch_failure(&error, &self.runner_exe)
     }))
+  }
+
+  /// The Settings › Browser the runner attaches with: as the desktop passed them last, or, until it did, those in the
+  /// application data of the runner's program, which the runner read itself before (protocol 47).
+  async fn attach_browser(&self) -> ComputerBrowser {
+    if let Some(browser) = self.browser.lock().clone() {
+      return browser;
+    }
+    let runner = self.runner_exe.clone();
+    let read = tokio::task::spawn_blocking(move || match orchester_store::location::app_data_location_of(&runner) {
+      Ok(location) => crate::workspace::computer_browser_beside(&location.database),
+      Err(error) => ComputerBrowser {
+        program: Ok(None),
+        profiles: Err(format!("the application data folder is unknown: {error}")),
+      },
+    });
+    read.await.unwrap_or_else(|error| ComputerBrowser {
+      program: Err(format!("Settings › Browser cannot be read: {error}")),
+      profiles: Err(format!("the application data folder cannot be read: {error}")),
+    })
   }
 
   /// Reports a failure and, if the state machine reconnects, waits for the next attempt.
