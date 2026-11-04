@@ -201,7 +201,7 @@ fn merge_retry_a_try_under_way_shows_due_and_stop_retrying_ends_it_after() {
   assert!(until_waiting(&fixture, &merge));
   assert!(try_now(run), "Try now ends the wait");
   let deadline = Instant::now() + Duration::from_secs(60);
-  while !waiting(run).is_some_and(|wait| wait.at <= Timestamp::now()) {
+  while waiting(run).is_none_or(|wait| wait.at > Timestamp::now()) {
     assert!(Instant::now() < deadline, "the try never showed as under way");
     thread::sleep(Duration::from_millis(10));
   }

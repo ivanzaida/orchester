@@ -1,7 +1,7 @@
 //! `hold_integration`, in debug builds only: takes the integration lease of the project the active tab shows, as
-//! another operation would, so a merge asked for meanwhile is refused at the integration lock and Orchester really tries
-//! it again by itself (09j `GhnHQ`, the *Retrying* row of `Cjprb`) while QA captures it (`AGENTS.md` rule 15); then lets
-//! the lease go, and the next try merges.
+//! another operation would, so a merge asked for meanwhile is refused at the integration lock and Orchester really
+//! tries it again by itself (09j `GhnHQ`, the *Retrying* row of `Cjprb`) while QA captures it (`AGENTS.md` rule 15);
+//! then lets the lease go, and the next try merges.
 
 use std::{path::PathBuf, sync::Arc};
 

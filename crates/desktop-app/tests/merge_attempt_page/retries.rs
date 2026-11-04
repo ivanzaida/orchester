@@ -136,6 +136,9 @@ fn merge_attempt_page_hold_integration_retries_until_let_go_then_try_now_tries_a
   let meta = page.window.text("merge-attempt-status-meta");
   assert!(meta.contains("by Orchester, retry 1 of 3"), "{meta}");
   let checks = page.window.text("merge-attempt-checks");
-  assert!(checks.contains("Integration lock · Scratch folder"), "past the lock: {checks}");
+  assert!(
+    checks.contains("Integration lock · Scratch folder"),
+    "past the lock: {checks}"
+  );
   assert!(checks.contains("left changed"), "{checks}");
 }

@@ -61,9 +61,10 @@ pub fn not_merged(root: &Path) -> Result<Vec<NotMerged>, StoreError> {
 
 /// Whether `run` waits for a person's approval in the merge queue.
 fn awaits_approval(db: &ProjectDb, run: RunId) -> Result<bool, StoreError> {
-  Ok(db
-    .merge_queue_entry(run)?
-    .is_some_and(|entry| entry.state == QueueState::WaitingForApproval))
+  Ok(
+    db.merge_queue_entry(run)?
+      .is_some_and(|entry| entry.state == QueueState::WaitingForApproval),
+  )
 }
 
 /// Whether the merge queue delivers `run` on its own: it is in the queue, and nothing it waits for is a person's.

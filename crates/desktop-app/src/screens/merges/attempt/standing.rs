@@ -131,7 +131,9 @@ pub(super) fn explanation(ctx: &Ctx, page: &AttemptPage, standing: Standing, bra
     (Standing::Retrying(Retrying { next: Some(_) }), _) => ("merges.page.explain.retrying", None, None),
     (Standing::Retrying(_), _) => ("merges.page.explain.queueRetries", None, None),
     (Standing::AwaitingApproval, _) => ("merges.page.explain.awaitingApproval", None, None),
-    (Standing::LeftChanged, _) if page.left_changed.is_empty() => ("merges.page.explain.leftChangedPutBack", None, None),
+    (Standing::LeftChanged, _) if page.left_changed.is_empty() => {
+      ("merges.page.explain.leftChangedPutBack", None, None)
+    }
     (Standing::LeftChanged, _) => return counted(ctx, "leftChanged", page.left_changed.len(), branch),
     (_, AttemptOutcome::Refused { stage }) if attempt.cause() == Some(HELD) => {
       ("merges.page.explain.held", Some(*stage), None)

@@ -362,9 +362,14 @@ impl AttemptScreen {
       Standing::AwaitingApproval => {
         let queue = Route::Project(shown.project.open.project.id(), ProjectPage::MergeQueue);
         let open = Navigation::of(ctx).to(queue);
-        button("merge-attempt-open-queue", "merges.page.openQueue", Icon::ArrowUpRight, ctx)
-          .opens(open)
-          .into()
+        button(
+          "merge-attempt-open-queue",
+          "merges.page.openQueue",
+          Icon::ArrowUpRight,
+          ctx,
+        )
+        .opens(open)
+        .into()
       }
       Standing::Conflicts => conflicts::editor_button(ctx, shown.project, shown.page.run.run, shown.resolving),
       Standing::NotRecorded => pressed(

@@ -5,8 +5,8 @@
 //!   then the person's refused before Git at the integration lock, held by another operation. Its live retry (09j
 //!   `GhnHQ`, the *Retrying* row of `Cjprb`): with the project's tab active, the debug tool `hold_integration` `held:
 //!   true` takes the integration lease as another operation would, so *Try again* is refused at the integration lock
-//!   and Orchester really tries again by itself — *Retrying by itself · attempt 1 of 3 in 10 s*, then 2 and 3 of 3,
-//!   30 s each, with *Try now* and *Stop retrying*, and the same in its Merges row — until the third try ends it Not
+//!   and Orchester really tries again by itself — *Retrying by itself · attempt 1 of 3 in 10 s*, then 2 and 3 of 3, 30
+//!   s each, with *Try now* and *Stop retrying*, and the same in its Merges row — until the third try ends it Not
 //!   merged; `held: false` lets the lease go, so the next try (or *Try now*) merges.
 //! - *Per-endpoint rate limits* (09e `s1jIpI`): a Feature delivery run the merge queue stopped, its attempt refused at
 //!   Project database; *Try again* puts it back in its place in the queue.
