@@ -22,6 +22,7 @@ mod handshake;
 #[cfg(windows)]
 mod job;
 mod log_path;
+pub mod merge_queue;
 mod message;
 #[cfg(windows)]
 mod pipe_owner;

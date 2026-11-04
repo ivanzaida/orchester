@@ -2,9 +2,9 @@
 //! (`docs/architecture/remote-runners.md`, "The split"): the run's task and its steps, agent processes and the CLI
 //! relay, tool steps, checkpoints, handoffs, the run's side of plans, questions, permissions and tool requests, how
 //! it halts and what holds its steps back (its workspace, the disk guard), the code index of the run's base, its
-//! environment and the warm workspaces it borrows. It reaches the project through the store and the scheduler
-//! handle (`super::Scheduler`), not through `super::coordinator`: `crates/runner/tests/execution_split.rs` fails on
-//! any new place that names it, and lists the places that still do.
+//! environment, the warm workspaces it borrows and the merge queue's work in its worktree. It reaches the project
+//! through the store and the scheduler handle (`super::Scheduler`), not through `super::coordinator`:
+//! `crates/runner/tests/execution_split.rs` fails on any new place that names it, and lists the places that still do.
 
 pub(super) mod broken;
 pub(super) mod checkpoint;
@@ -17,6 +17,7 @@ pub(super) mod environment;
 pub(super) mod halt;
 pub(super) mod handoff;
 pub(super) mod held;
+pub(super) mod merge_queue;
 pub(super) mod permissions;
 pub(super) mod plan;
 pub(super) mod pool;

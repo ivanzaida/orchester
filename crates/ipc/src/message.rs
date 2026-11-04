@@ -25,6 +25,7 @@ use crate::{
   ErrorReports,
   browser::{BrowserCommand, BrowserEvent, BrowserReply, ScreencastFrame},
   chat::ChatTools,
+  merge_queue::{MergeQueueCommand, MergeQueueReply},
   rejection::Rejection,
   work::WorkSummary,
 };
@@ -278,6 +279,9 @@ pub enum Command {
   /// carried out, [`Rejection::BrowserUnavailable`] when the browser cannot start, [`Rejection::NoSuchTab`] for a tab
   /// it does not have, or [`Rejection::Failed`] when the browser refused.
   Browser(BrowserCommand),
+  /// The merge queue's work in a run's worktree: syncing its base in, or running Check again on the merged result
+  /// (protocol 40). Answered with [`Reply::MergeQueue`] once done.
+  MergeQueue(MergeQueueCommand),
 }
 
 /// Which session a runner serves, from the desktop's side.
@@ -467,6 +471,8 @@ pub enum Reply {
   ErrorReportsSet,
   /// The answer to [`Command::Browser`].
   Browser(BrowserReply),
+  /// The answer to [`Command::MergeQueue`].
+  MergeQueue(MergeQueueReply),
   Rejected(Rejection),
 }
 

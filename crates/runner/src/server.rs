@@ -3,6 +3,7 @@
 //! shows.
 
 mod browser;
+mod merge_queue;
 
 use std::{
   future::Future,
@@ -361,6 +362,7 @@ async fn answer(
     },
     Command::StopTurn { run } => return later.answer(run, async move { handle.stop_turn(run).await }),
     Command::Browser(ref command) => return later.browser(handle, command.clone()),
+    Command::MergeQueue(ref command) => return later.merge_queue(handle, command.clone()),
     Command::EstimateTask { task } => {
       return later.reply(async move {
         match handle.estimate_task(task).await {
