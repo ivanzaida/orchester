@@ -3,7 +3,7 @@
 use crate::kontur::scenarios;
 
 /// The scenarios, in the order the seed lists them.
-const NAMES: [&str; 127] = [
+const NAMES: [&str; 129] = [
   "agents",
   "agents-library",
   "agents-browser",
@@ -131,6 +131,8 @@ const NAMES: [&str; 127] = [
   "team-clone",
   "modules-base-branch",
   "loading-states",
+  "storage-low-disk",
+  "storage-empty",
 ];
 
 #[test]

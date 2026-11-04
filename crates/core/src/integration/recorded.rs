@@ -61,6 +61,28 @@ pub fn clean_up_recorded_as_seen<S: WorktreeStore>(
   confirmed: Option<&Leftovers>,
   (at, unchanged): (Timestamp, impl FnOnce(&S) -> Result<bool, S::Error>),
 ) -> Result<Cleanup, RecordedCleanupError<S::Error>> {
+  clean_recorded(store, (runner, git, repo), run, confirmed, (at, unchanged), false)
+}
+
+/// Recorded removal for Storage: every branch stays, including merged branches.
+pub fn clean_up_recorded_worktrees_as_seen<S: WorktreeStore>(
+  store: &mut S,
+  git: (&impl CommandRunner, &Path, &Path),
+  run: &Run,
+  confirmed: Option<&Leftovers>,
+  seen: (Timestamp, impl FnOnce(&S) -> Result<bool, S::Error>),
+) -> Result<Cleanup, RecordedCleanupError<S::Error>> {
+  clean_recorded(store, git, run, confirmed, seen, true)
+}
+
+fn clean_recorded<S: WorktreeStore>(
+  store: &mut S,
+  (runner, git, repo): (&impl CommandRunner, &Path, &Path),
+  run: &Run,
+  confirmed: Option<&Leftovers>,
+  (at, unchanged): (Timestamp, impl FnOnce(&S) -> Result<bool, S::Error>),
+  preserve_branches: bool,
+) -> Result<Cleanup, RecordedCleanupError<S::Error>> {
   let start = store
     .begin_worktree_removal(run.id(), at)
     .map_err(RecordedCleanupError::Store)?;
@@ -78,7 +100,11 @@ pub fn clean_up_recorded_as_seen<S: WorktreeStore>(
     }
     return Err(RecordedCleanupError::RunChanged);
   }
-  let cleanup = clean_up(runner, git, repo, run, confirmed);
+  let cleanup = if preserve_branches {
+    super::clean_up_worktrees(runner, git, repo, run, confirmed)
+  } else {
+    clean_up(runner, git, repo, run, confirmed)
+  };
   // A clean-up fails only before it removes anything (`clean_up`): nothing was touched.
   let untouched = cleanup.as_ref().map_or(true, |cleanup| {
     cleanup.removed.is_empty()

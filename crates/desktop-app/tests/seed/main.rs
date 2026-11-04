@@ -22,6 +22,7 @@ mod scenario_names;
 mod settings;
 mod shared_config;
 mod shared_here;
+mod storage;
 mod team;
 
 use std::{

@@ -2,12 +2,7 @@
 //! it. The guard holds in every project, warm workspaces on or off; the free space it keeps is no permission, so
 //! lowering and raising it are both taken. The runner reads it at its next check: no restart.
 
-use orchester_core::{
-  store::SettingsStore,
-  workspaces::{CleanableKind, DiskUsage, GIGABYTE, KeepFree},
-};
-use orchester_exec::disk_space::LocalDisks;
-use orchester_store::ProjectDb;
+use orchester_core::workspaces::{CleanableKind, DiskUsage, GIGABYTE, KeepFree};
 use rmcp::{handler::server::common::schema_for_type, schemars::JsonSchema};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -90,10 +85,9 @@ async fn set_keep_free(services: &Services, args: SetKeepFree) -> Result<Value, 
         .with("max", KeepFree::MAX_GB.to_string());
       ToolError::refused("invalid_keep_free", vec![reason])
     })?;
-    let mut db = ProjectDb::open(&open.repo_root)?;
-    db.save_keep_free(keep)?;
+    storage::save_keep_free(&open.repo_root, keep)?;
     services.changes.record(open.project.id(), Outside::ProjectSettings);
-    let guard = DiskGuard::read(&db, &open.repo_root, &LocalDisks)?;
+    let guard = storage::guard_local(&open.repo_root)?;
     Ok(json!({ "disk_guard": guard_json(&guard) }))
   })
   .await

@@ -45,6 +45,7 @@ mod shared_here;
 mod side_question;
 mod slot_wait;
 mod sources;
+mod storage;
 mod task_states;
 mod tasks;
 mod tasks_memory;
@@ -99,7 +100,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 127] = [
+pub const ALL: [Scenario; 129] = [
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-library", agents_library::seed),
   Scenario::of("agents-browser", agents_browser::seed),
@@ -227,6 +228,8 @@ pub const ALL: [Scenario; 127] = [
   Scenario::of("team-clone", team::clones),
   Scenario::of("modules-base-branch", modules::base_branch),
   Scenario::of("loading-states", loading_states::seed),
+  Scenario::of("storage-low-disk", storage::low_disk),
+  Scenario::of("storage-empty", storage::nothing),
 ];
 
 /// The scenario called `name`.
