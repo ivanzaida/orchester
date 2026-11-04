@@ -2,8 +2,8 @@
 //! `http/workspace/mod.rs`, `bundles.rs`, `heartbeat.rs`, `docs/claim-authority.md`, `docs/module-branches.md`,
 //! `docs/work-reports.md`): one project with one task in a module, under `/api/v2/projects/{p}`. The commands with
 //! their receipts are in [`crate::team_commands`]. Reads: `GET …/tasks/{task}` (the task's number), the library
-//! (`POST …/library`, and `POST …/resources/query` where this repository's client still sends it until ORC-718 moves
-//! it), `GET …/bundles/{sha256}` and `GET …/bundles/{sha256}/files/{file}` for the claim's holder in its session
+//! (`POST …/library`), `GET …/bundles/{sha256}` and `GET …/bundles/{sha256}/files/{file}` for the claim's holder in its
+//! session
 //! (`409 claim_lost` otherwise), and `POST …/heartbeat` with D1's renewal rule. Each token is one member's session. A
 //! test can take the server down (every connection closed unanswered), make it lose the next write's answer or drop
 //! the next bundle file read, and put the work in a wait for a person.
@@ -182,7 +182,7 @@ fn answer(state: &Mutex<State>, mut stream: TcpStream) {
     ("POST", ["commands"]) => crate::team_commands::command(&mut state, &request),
     ("GET", ["operations", operation]) => crate::team_commands::operation_read(&state, &request.token, operation),
     ("GET", ["tasks", task]) if *task == state.task.to_string() => (200, task_read(&state)),
-    ("POST", ["library"] | ["resources", "query"]) => (
+    ("POST", ["library"]) => (
       200,
       json!({"items": state.config.library(), "next": null, "cursor": "1"}),
     ),
