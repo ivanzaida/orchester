@@ -41,7 +41,7 @@ use orchester_core::{
   resource::ModelId,
   revision::Revision,
   run::{Invocation, MessageOccasion, Plan, StepExecutor, StepFailure, StepStatus, execution_tokens},
-  store::{ActivityStore, RunStore, SettingsStore},
+  store::{ActivityStore, RunStore},
   time::Timestamp,
   tokens::{TokenBudget, TokensUsed},
 };
@@ -378,7 +378,7 @@ impl RunTask {
         &self.root,
         workspace.path(),
         &permissions,
-        &self.db.project_environment()?,
+        &self.computer_environment()?,
       ),
       roots: self.run_roots(execution, workspace.path()),
       profile: self.profile_of(execution),
