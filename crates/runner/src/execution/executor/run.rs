@@ -20,7 +20,6 @@ use orchester_core::{
   id::{MessageId, StepExecutionId},
   project::Project,
   run::{InterruptCause, Invocation, Run, RunError, RunEvent, RunLimit, RunStatus, active_time},
-  secret::SecretVault,
   store::ActivityStore,
   task::Task,
   time::Timestamp,
@@ -84,7 +83,6 @@ pub(in crate::execution) struct TaskContext {
   pub(in crate::execution) execution: ExecutionRoot,
   pub(in crate::execution) sink: Box<dyn Sink>,
   pub(in crate::execution) notifier: Notifier,
-  pub(in crate::execution) vault: Arc<dyn SecretVault>,
   pub(in crate::execution) computer: Arc<dyn ComputerResources>,
   pub(in crate::execution) relay: Option<PathBuf>,
   pub(in crate::execution) board: Arc<Board>,
@@ -127,8 +125,8 @@ pub(in crate::execution) struct RunTask {
   /// first step takes ([`RunTask::hold_workspace`]).
   pub(super) worktree: Option<PathBuf>,
   pub(super) notifier: Notifier,
-  pub(super) vault: Arc<dyn SecretVault>,
-  /// The computer the run executes on: its connections are read there, never in the project database.
+  /// The computer the run executes on: its connections, secrets and MCP servers are read there, never in the project
+  /// database, and secret values in its keychain.
   pub(super) computer: Arc<dyn ComputerResources>,
   /// The program Claude Code starts as its permission prompt ([`crate::approval_relay`]).
   pub(super) relay: Option<PathBuf>,
@@ -185,7 +183,6 @@ impl RunTask {
       },
       folder: prepared.folder,
       notifier: context.notifier,
-      vault: context.vault,
       computer: context.computer,
       relay: context.relay,
       board: context.board,

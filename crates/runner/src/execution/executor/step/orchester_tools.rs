@@ -459,7 +459,7 @@ impl RunTask {
         task: self.run.task(),
         execution,
         provenance: provenance(&self.run, execution),
-        vault: Arc::clone(&self.vault),
+        computer: Arc::clone(&self.computer),
       },
       secrets: Vec::new(),
       grants: Mutex::new(Vec::new()),

@@ -19,7 +19,7 @@ use orchester_core::{
   id::{AgentAccountId, ChatMessageId, ProjectId},
   orchestrator::{Chat, ChatEvent, OrchestratorSettings, TurnFailure, TurnState, runs_orchestrator},
   resource::CommandEnvironment,
-  secret::{SecretValue, SecretVault},
+  secret::SecretValue,
   store::{ConnectionStore, SettingsStore},
   time::Timestamp,
 };
@@ -27,7 +27,9 @@ use orchester_ipc::{ChatTools, Event};
 use orchester_store::ProjectDb;
 use tokio::sync::{mpsc, oneshot};
 
-use crate::{execution::executor::connection_check, notify::Notifier, supervisor::ProcessExit};
+use crate::{
+  computer::ComputerResources, execution::executor::connection_check, notify::Notifier, supervisor::ProcessExit,
+};
 
 /// Characters of the CLI's standard error kept as the reason of a turn that failed without saying why.
 const REASON_CHARS: usize = 300;
@@ -37,8 +39,8 @@ pub(super) struct Turn {
   pub(super) root: PathBuf,
   pub(super) project: ProjectId,
   pub(super) notifier: Notifier,
-  /// Where the key of the connection's API provider is read from.
-  pub(super) vault: Arc<dyn SecretVault>,
+  /// The computer the turn runs on, where the key of the connection's API provider is read.
+  pub(super) computer: Arc<dyn ComputerResources>,
   pub(super) chat: Chat,
   pub(super) message: ChatMessageId,
   pub(super) text: MessageBody,
@@ -115,7 +117,7 @@ impl Turn {
     // step's agent; the reason names the secret, never its value.
     let key = connection
       .api_provider()
-      .map(|on| connection_check::api_key(&db, self.vault.as_ref(), on.key()))
+      .map(|on| connection_check::api_key(self.computer.as_ref(), self.project, on.key()))
       .transpose()
       .map_err(cannot)?;
     let resumed = self

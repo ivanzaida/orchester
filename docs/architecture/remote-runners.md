@@ -73,7 +73,7 @@ What the executor side reads today, and through which interface it will:
 | Step usage (`invocations` tokens, `reviewer_usage`) | `step/mod.rs`, `step/start/shared.rs` | coordinator link |
 | `base_notices` | `step/base_notice.rs` | coordinator link |
 | `connections`, account folders, CLI config folders | `step/start/{shared,cli}.rs`, `permissions.rs`, `step/worker/review/*`, `codebase_index.rs`, `step/roots.rs` | computer's resources |
-| `mcp_servers`, secret metadata and values (`KeychainVault`, `server.rs:66`) | `step/mcp.rs`, `connection_check.rs`, `step/run_records.rs`, `plan.rs`, `step/memory.rs`, `handoff.rs`, `step/worker/review/*` | computer's resources |
+| `mcp_servers`, secret metadata and values (`KeychainVault`, `server.rs:66`) | `step/mcp.rs`, `connection_check.rs`, `step/run_records.rs`, `plan.rs`, `step/memory.rs`, `handoff.rs`, `step/worker/review/*` | computer's resources: **done** (ORC-673, `runner/src/computer.rs`); the vault is the local computer's, the coordinator's chat, estimates and connection checks read through it too, and in tests every link message crosses as JSON (`executor/link/sent.rs`). Always allow's read of the servers' listed tools stays with its write (`step/answer.rs`, rule 3) |
 | `project_environment` | `environment.rs`, `step/mod.rs`, `codebase_index.rs` | computer's resources |
 | Settings › Browser from `orchester.db` (`runner/src/browser/mod.rs:403`) | browser | computer's resources (passed by the desktop) |
 

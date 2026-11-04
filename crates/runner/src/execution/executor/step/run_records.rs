@@ -12,15 +12,16 @@ use orchester_core::{
   id::{RunId, StepExecutionId, TaskId},
   memory::{
     AgentProvenance, ContainsSecret, Memory, MemoryFilter, MemoryNote, MemoryScope, MemoryStatus, MemoryStore,
-    NoteWrite, ScopeFilter, SecretScreen,
+    NoteWrite, ScopeFilter,
   },
   orchester_tools::{TaskView, ToolResult},
   run::StepProgress,
-  secret::SecretVault,
-  store::{ConversationStore, RunStore, SecretStore},
+  store::{ConversationStore, RunStore},
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
+
+use crate::computer::ComputerResources;
 
 /// The run, task and step execution an invocation's agent works on, and where their records are.
 pub(super) struct RunRecords {
@@ -30,7 +31,8 @@ pub(super) struct RunRecords {
   pub(super) execution: StepExecutionId,
   /// The agent of the step, for the memory records it keeps; `None` for a step without an agent profile.
   pub(super) provenance: Option<AgentProvenance>,
-  pub(super) vault: Arc<dyn SecretVault>,
+  /// The run's computer, whose secrets a memory record is screened against.
+  pub(super) computer: Arc<dyn ComputerResources>,
 }
 
 impl RunRecords {
@@ -79,9 +81,11 @@ impl RunRecords {
     let unreadable =
       |error: &dyn std::error::Error| ToolResult::unavailable(&format!("memory cannot be kept: {error}"));
     let settings = db.memory_settings().map_err(|error| unreadable(&error))?;
-    let secrets = db.secrets().map_err(|error| unreadable(&error))?;
-    let screen =
-      SecretScreen::load(db.project().id(), &secrets, self.vault.as_ref()).map_err(|error| unreadable(&error))?;
+    let secrets = self.computer.secrets().map_err(|error| unreadable(&error))?;
+    let screen = self
+      .computer
+      .secret_screen(db.project().id(), &secrets)
+      .map_err(|error| unreadable(&error))?;
     let write = NoteWrite {
       task: self.task,
       provenance,

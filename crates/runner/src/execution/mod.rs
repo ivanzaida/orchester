@@ -106,9 +106,8 @@ pub struct Scheduler {
 struct Inner {
   project_root: PathBuf,
   notifier: Notifier,
-  /// Where the values of the secrets MCP servers use are read from when an agent starts.
-  vault: Arc<dyn SecretVault>,
-  /// What belongs to the computer the runs execute on: their connections, accounts and CLI config folders.
+  /// What belongs to the computer the runs execute on: their connections, accounts and CLI config folders, and the
+  /// secrets with their values in its keychain. The coordinator's own reads of secret values go through it too.
   computer: Arc<dyn ComputerResources>,
   /// The runner's own program, which Claude Code starts as its permission prompt; `None` when it
   /// cannot be found, which keeps steps that ask a person on Claude Code from starting.
@@ -152,8 +151,7 @@ impl Scheduler {
     Self {
       inner: Arc::new(Inner {
         project_root: project_root.to_path_buf(),
-        vault,
-        computer: Arc::new(LocalComputer::of_project(project_root)),
+        computer: Arc::new(LocalComputer::of_project(project_root, vault)),
         relay,
         board: Arc::new(Board::new(notifier.clone())),
         qa: Arc::new(QaApps::new(qa_slots)),
@@ -542,7 +540,6 @@ impl Scheduler {
       execution: ExecutionRoot::local(&self.inner.project_root),
       sink: Box::new(coordinator::sink::LocalSink::new(&self.inner.project_root)),
       notifier: self.inner.notifier.clone(),
-      vault: self.inner.vault.clone(),
       computer: self.inner.computer.clone(),
       relay: self.inner.relay.clone(),
       board: self.inner.board.clone(),

@@ -2,8 +2,9 @@
 //! to the agent's CLI (`orchester_core::connection::invocation::mcp`). A server's program is found
 //! the way a command tool's is, on the `PATH` the CLI starts with or in the worktree, and started
 //! the way `orchester-exec` would start it (npm's Windows launchers through Node.js, other command
-//! scripts through `cmd.exe`). Secret values are read from the keychain now, once per secret, and
-//! go only into the CLI's environment (Codex) or its private configuration file (Claude Code).
+//! scripts through `cmd.exe`). The servers and their secrets are read on the run's computer
+//! (`crate::computer`), the values from its keychain now, once per secret; they go only into the CLI's
+//! environment (Codex) or its private configuration file (Claude Code), never to the coordinator.
 //! A server that cannot be given is left out, and the invocation's activity says why; the agent
 //! works without it.
 
@@ -23,17 +24,15 @@ use orchester_core::{
   },
   id::{InvocationId, SecretId},
   resource::{AgentProfile, CommandEnvironment, NO_CURRENT_DIRECTORY_IN_EXE_PATH, VariableName},
-  secret::{SecretValue, SecretVault},
-  store::{McpServerStore, SecretStore},
+  secret::SecretValue,
 };
 use orchester_exec::launch::{self, Via};
-use orchester_store::ProjectDb;
 
 use super::{
   super::run::RunTask,
   start::{NATIVE_NOT_AVAILABLE, problem},
 };
-use crate::private_file::PrivateFile;
+use crate::{computer::ComputerResources, private_file::PrivateFile};
 
 /// A server left out, by name (by id when the project no longer has it), and why.
 type LeftOut = (String, McpServerProblem);
@@ -158,16 +157,18 @@ impl RunTask {
     environment: &CommandEnvironment,
   ) -> Result<(Vec<McpLaunch>, Vec<LeftOut>), RunnerProblem> {
     let mut secrets = Secrets {
-      db: &self.db,
-      vault: self.vault.as_ref(),
+      computer: self.computer.as_ref(),
       project: self.project.id(),
       read: HashMap::new(),
     };
     let (mut launches, mut left_out) = (Vec::new(), Vec::new());
     for id in profile.mcp_servers().ids() {
-      let server = self.db.mcp_server(*id).map_err(|error| RunnerProblem::CouldNotStart {
-        detail: error.to_string(),
-      })?;
+      let server = self
+        .computer
+        .mcp_server(*id)
+        .map_err(|error| RunnerProblem::CouldNotStart {
+          detail: error.to_string(),
+        })?;
       let Some(server) = server else {
         left_out.push((id.to_string(), McpServerProblem::Missing));
         continue;
@@ -295,10 +296,9 @@ fn unicode(path: PathBuf) -> Result<String, McpServerProblem> {
     .map_err(|_| McpServerProblem::NotUnicode)
 }
 
-/// Secret values read for one invocation, each once.
+/// Secret values read for one invocation on the run's computer, each once.
 struct Secrets<'a> {
-  db: &'a ProjectDb,
-  vault: &'a dyn SecretVault,
+  computer: &'a dyn ComputerResources,
   project: orchester_core::id::ProjectId,
   read: HashMap<SecretId, Result<Arc<SecretValue>, McpServerProblem>>,
 }
@@ -314,7 +314,7 @@ impl Secrets<'_> {
   }
 
   fn fetch(&self, id: SecretId) -> Result<Arc<SecretValue>, McpServerProblem> {
-    let secret = match self.db.secret(id) {
+    let secret = match self.computer.secret(id) {
       Ok(Some(secret)) => secret,
       Ok(None) => return Err(McpServerProblem::SecretMissing { secret: id.to_string() }),
       Err(error) => {
@@ -327,8 +327,8 @@ impl Secrets<'_> {
       return Err(McpServerProblem::SecretArchived { secret: name });
     }
     self
-      .vault
-      .read(&secret.vault_key(self.project))
+      .computer
+      .secret_value(self.project, &secret)
       .map(Arc::new)
       .map_err(|error| {
         tracing::warn!(secret = %name, %error, "the keychain did not give a secret an MCP server uses");

@@ -9,8 +9,12 @@
 //! Each area of the project's data has a trait and a module of its own, which [`CoordinatorLink`] gathers, so an area
 //! added later (messages, memories, approvals, settings) adds its trait and module without touching another's:
 //! - [`resources`]: the resource versions a run pinned, read by id, and the blobs they refer to.
+//!
+//! No secret value is part of any message: the executor reads values on its own computer (`crate::computer`).
 
 pub mod resources;
+#[cfg(feature = "test-agent")]
+pub mod sent;
 
 use orchester_core::run::RunnerFailure;
 use serde::{Deserialize, Serialize};

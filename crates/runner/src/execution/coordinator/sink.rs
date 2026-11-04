@@ -9,6 +9,8 @@ use orchester_store::{
   ActivityRecord, InvocationRecord, InvocationStart, ProjectDb, RunLogRecord, RunStoreError, StoreError,
 };
 
+#[cfg(feature = "test-agent")]
+use crate::execution::executor::link::sent;
 use crate::execution::executor::sink::Sink;
 
 /// Writes through a connection of its own, opened at the first record. A write that fails drops it, so the next one,
@@ -40,42 +42,35 @@ impl LocalSink {
   }
 }
 
+// In the runner's own tests every invocation record crosses the sink as JSON and must arrive unchanged, as a
+// coordinator in another process would receive it (`docs/architecture/remote-runners.md`, rule 4); the run log's
+// records cross as JSON too.
 impl Sink for LocalSink {
   fn run_log(&mut self, record: RunLogRecord) -> Result<(), RunStoreError> {
+    #[cfg(feature = "test-agent")]
+    sent::sending(&record);
     self.write(|db| db.write_run_log(&record))
   }
 
   fn invocation_start(&mut self, start: InvocationStart) -> Result<u32, StoreError> {
     #[cfg(feature = "test-agent")]
-    survives_sending(&start);
+    sent::survives_sending(&start);
     self.write(|db| db.write_invocation_start(&start))
   }
 
   fn activity(&mut self, record: ActivityRecord) -> Result<u64, StoreError> {
     #[cfg(feature = "test-agent")]
-    survives_sending(&record);
+    sent::survives_sending(&record);
     self.write(|db| db.write_activity(&record))
   }
 
   fn invocation(&mut self, record: InvocationRecord) -> Result<(), StoreError> {
     #[cfg(feature = "test-agent")]
-    survives_sending(&record);
+    sent::survives_sending(&record);
     self.write(|db| db.write_invocation(&record))
   }
 
   fn another(&self) -> Box<dyn Sink> {
     Box::new(Self::new(&self.root))
   }
-}
-
-/// In the runner's own tests every invocation record crosses the sink as JSON and must arrive unchanged, as a
-/// coordinator in another process would receive it (`docs/architecture/remote-runners.md`, rule 4).
-#[cfg(feature = "test-agent")]
-fn survives_sending<T>(record: &T)
-where
-  T: serde::Serialize + serde::de::DeserializeOwned + PartialEq + std::fmt::Debug,
-{
-  let text = serde_json::to_string(record).expect("a record the executor sends serializes");
-  let received: T = serde_json::from_str(&text).expect("a record the executor sends deserializes");
-  assert_eq!(&received, record, "the record survives being sent");
 }
