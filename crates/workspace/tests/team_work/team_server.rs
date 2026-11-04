@@ -1,12 +1,11 @@
 //! A fake team server on loopback with the team server's routes and shapes for authorized work (its
 //! `http/workspace/mod.rs`, `bundles.rs`, `heartbeat.rs`, `docs/claim-authority.md`, `docs/module-branches.md`,
 //! `docs/work-reports.md`): one project with one task in a module, under `/api/v2/projects/{p}`. The commands with
-//! their receipts are in [`crate::team_commands`]. Reads: `GET …/tasks/{task}` (the task's number), the library
-//! (`POST …/library`), `GET …/bundles/{sha256}` and `GET …/bundles/{sha256}/files/{file}` for the claim's holder in its
-//! session
-//! (`409 claim_lost` otherwise), and `POST …/heartbeat` with D1's renewal rule. Each token is one member's session. A
-//! test can take the server down (every connection closed unanswered), make it lose the next write's answer or drop
-//! the next bundle file read, and put the work in a wait for a person.
+//! their receipts are in [`crate::team_commands`]; a work start names a schema-2 bundle, which carries the task's
+//! number and the pinned versions' labels. Reads: `GET …/bundles/{sha256}` and `GET …/bundles/{sha256}/files/{file}`
+//! for the claim's holder in its session (`409 claim_lost` otherwise), and `POST …/heartbeat` with D1's renewal rule.
+//! Each token is one member's session. A test can take the server down (every connection closed unanswered), make it
+//! lose the next write's answer or drop the next bundle file read, and put the work in a wait for a person.
 
 #![allow(dead_code, reason = "each test binary uses some of the server")]
 
@@ -24,7 +23,7 @@ use parking_lot::Mutex;
 use serde_json::{Value, json};
 
 use crate::{
-  fixture::{Config, TASK_NUMBER},
+  fixture::Config,
   http::{Request, respond},
 };
 
@@ -181,11 +180,6 @@ fn answer(state: &Mutex<State>, mut stream: TcpStream) {
   let (status, body) = match (request.method.as_str(), segments.as_slice()) {
     ("POST", ["commands"]) => crate::team_commands::command(&mut state, &request),
     ("GET", ["operations", operation]) => crate::team_commands::operation_read(&state, &request.token, operation),
-    ("GET", ["tasks", task]) if *task == state.task.to_string() => (200, task_read(&state)),
-    ("POST", ["library"]) => (
-      200,
-      json!({"items": state.config.library(), "next": null, "cursor": "1"}),
-    ),
     ("GET", ["bundles", sha256]) => bundle_read(&state, &request.token, sha256),
     ("GET", ["bundles", sha256, "files", file]) => {
       if std::mem::take(&mut state.drop_next_file) {
@@ -216,19 +210,6 @@ pub fn refusal(operation: Option<&str>, code: &str) -> Value {
 
 pub fn person() -> Value {
   json!({"id": UserId::generate(), "display_name": "Ivan"})
-}
-
-/// The task as `GET …/tasks/{task}` reads it.
-fn task_read(state: &State) -> Value {
-  let attribution = json!({"by": person(), "at": 1});
-  json!({
-    "id": state.task, "number": TASK_NUMBER, "key": format!("KON-{TASK_NUMBER}"), "former_key": null, "revision": 1,
-    "title": "Say hello", "brief": "Append one line.", "criteria": ["README.md ends with hello"], "pipeline": null,
-    "limits": null, "workflow": "todo", "priority": "none", "tags": [], "blocking": [], "blocked_reason": null,
-    "module": state.module, "status": "queued", "has_run": false, "created": attribution, "updated": attribution,
-    "claim": null, "run": null, "assignee": null, "work": null, "effective_claim": null,
-    "capabilities": {"project_id": state.project, "revision": 1, "role": "member", "actions": [], "unresolved": []}
-  })
 }
 
 /// The claim `id` as `ClaimRead` is.
@@ -309,10 +290,12 @@ pub fn build_bundle(state: &mut State, claim: ClaimId, base_commit: &str) -> Val
   let bundle = state
     .config
     .bundle((state.project, subject), claim, state.module, base_commit);
-  let sha256 = bundle.sha256().expect("a hash").as_str().to_owned();
+  let reference = bundle.bundle_ref().expect("a hash");
   let wire = serde_json::to_value(&bundle).expect("a bundle");
-  state.bundles.insert(sha256.clone(), (wire, claim));
-  json!({"sha256": sha256, "schema_version": 1})
+  state
+    .bundles
+    .insert(reference.sha256.as_str().to_owned(), (wire, claim));
+  serde_json::to_value(reference).expect("a bundle reference")
 }
 
 fn respond_bytes(stream: &mut TcpStream, bytes: &[u8]) {

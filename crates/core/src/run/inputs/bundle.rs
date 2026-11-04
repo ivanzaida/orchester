@@ -5,13 +5,10 @@ use std::{num::NonZeroU32, time::Duration};
 
 use serde::{Deserialize, Serialize};
 
-use super::{
-  InputsError,
-  labels::{self, ResourceLabel},
-};
+use super::InputsError;
 use crate::{
   blob::ContentHash,
-  id::{ClaimId, ModuleId, OperationId, ResourceId, WorkId},
+  id::{ClaimId, ModuleId, OperationId, WorkId},
   name::Name,
   resource::Deliverable,
   run::{
@@ -23,7 +20,8 @@ use crate::{
   tokens::TokenBudget,
 };
 
-/// The version of the stored inputs' shape; 2 added the task's number and the pinned resources' labels.
+/// The version of the stored inputs' shape; 2 added the task's number, and the pinned versions' labels as the
+/// execution bundle's inputs carry them.
 pub const RUN_INPUTS_FORMAT: u32 = 2;
 
 /// `{title, brief, criteria}`: the task the run executes, as it was when the run started.
@@ -66,9 +64,9 @@ pub enum InputsOrigin {
   Team(TeamAcceptance),
 }
 
-/// `{format, origin, task_number, task, labels, budget_tokens?, max_duration_ms?, delivery, inputs}`: everything the
-/// run executes with that does not depend on this computer. Nothing in it is a secret value, an account, a connection
-/// or a path of one computer ([`CanonicalExecutionInputs`]).
+/// `{format, origin, task_number, task, budget_tokens?, max_duration_ms?, delivery, inputs}`: everything the run
+/// executes with that does not depend on this computer. Nothing in it is a secret value, an account, a connection or a
+/// path of one computer ([`CanonicalExecutionInputs`]); each pinned version's label is in the inputs.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "BundleFields")]
 pub struct BundleContent {
@@ -77,8 +75,6 @@ pub struct BundleContent {
   /// The task's number in its project, its key's (`ORC-129`).
   task_number: NonZeroU32,
   task: TaskAtStart,
-  /// One per resource the inputs pin, in resource id order.
-  labels: Vec<ResourceLabel>,
   #[serde(skip_serializing_if = "Option::is_none")]
   budget_tokens: Option<TokenBudget>,
   #[serde(skip_serializing_if = "Option::is_none")]
@@ -94,7 +90,6 @@ struct BundleFields {
   origin: InputsOrigin,
   task_number: NonZeroU32,
   task: TaskAtStart,
-  labels: Vec<ResourceLabel>,
   #[serde(default)]
   budget_tokens: Option<TokenBudget>,
   #[serde(default)]
@@ -117,7 +112,6 @@ impl TryFrom<BundleFields> for BundleContent {
       origin: fields.origin,
       task_number: fields.task_number,
       task: fields.task,
-      labels: labels::checked(fields.labels, &fields.inputs.resources())?,
       budget_tokens: fields.budget_tokens,
       max_duration_ms: fields.max_duration_ms,
       delivery: fields.delivery,
@@ -127,12 +121,10 @@ impl TryFrom<BundleFields> for BundleContent {
 }
 
 impl BundleContent {
-  /// The content of `inputs` accepted by `origin` for the task numbered `number`, as it was then, with a label for
-  /// each resource the inputs pin.
+  /// The content of `inputs` accepted by `origin` for the task numbered `number`, as it was then.
   pub fn new(
     origin: InputsOrigin,
     (number, task): (NonZeroU32, TaskAtStart),
-    labels: Vec<ResourceLabel>,
     (limits, delivery): (TaskLimits, Deliverable),
     inputs: CanonicalExecutionInputs,
   ) -> Result<Self, InputsError> {
@@ -147,7 +139,6 @@ impl BundleContent {
       origin,
       task_number: number,
       task,
-      labels: labels::checked(labels, &inputs.resources())?,
       budget_tokens: limits.budget(),
       max_duration_ms,
       delivery,
@@ -171,11 +162,6 @@ impl BundleContent {
   /// The task's title, which was checked when the content was made or read.
   pub fn task_title(&self) -> Name {
     Name::new(&self.task.title).expect("the title was checked when the content was made or read")
-  }
-
-  /// The label of pinned resource `resource`; `None` for a resource the inputs do not pin.
-  pub fn label(&self, resource: ResourceId) -> Option<&ResourceLabel> {
-    self.labels.iter().find(|label| label.resource == resource)
   }
 
   pub fn limits(&self) -> TaskLimits {

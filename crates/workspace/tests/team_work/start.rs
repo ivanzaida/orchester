@@ -37,7 +37,7 @@ async fn team_work_start_recovers_once_from_every_boundary() {
   let server = TeamServer::start(config.clone());
   let checkout = Checkout::linked(&server);
   let claim = checkout.claim(&server, MEMBER).await;
-  let request = checkout.start_request(&server, MEMBER, claim, &config).await;
+  let request = checkout.start_request(&server, claim, &config);
   let operation = request.operation;
   let runner = StoreRunner::new(checkout.root(), &[Hiccup::Unavailable, Hiccup::StartsThenLost]);
   let (work, _generation) = checkout.work(&server, MEMBER, runner.clone());
@@ -75,10 +75,18 @@ async fn team_work_start_recovers_once_from_every_boundary() {
     (acceptance.work, &acceptance.bundle, acceptance.claim),
     (work_id, &bundle, claim)
   );
+  // The task's number and the skill's label are the bundle's: the start's caller read neither.
   assert_eq!(
     accepted.inputs.bundle().task_number().get(),
     crate::fixture::TASK_NUMBER
   );
+  let skill = accepted
+    .inputs
+    .bundle()
+    .inputs()
+    .label(config.skill)
+    .expect("the skill's label");
+  assert_eq!(skill.slug().as_str(), crate::fixture::SKILL_SLUG);
   let file = accepted.inputs.bundle().inputs().files()[0].sha256.clone();
   assert_eq!(checkout.db().blob(&file).expect("the bundle's file"), NOTES);
 
@@ -115,7 +123,7 @@ async fn team_work_start_refused_or_fenced_before_the_run_starts_nothing() {
   let claim = checkout.claim(&server, MEMBER).await;
   let runner = StoreRunner::new(checkout.root(), &[]);
   let (work, _generation) = checkout.work(&server, MEMBER, runner.clone());
-  let request = checkout.start_request(&server, MEMBER, claim, &config).await;
+  let request = checkout.start_request(&server, claim, &config);
 
   // Offline: the start waits, and nothing new starts without the server.
   server.set_down(true);
@@ -151,7 +159,7 @@ async fn team_work_start_failed_here_holds_back_no_later_start() {
   let (work, _generation) = checkout.work(&server, MEMBER, runner.clone());
 
   // The older start binds none of the profiles the bundle pins; its bundle's file read is cut off before that shows.
-  let mut unbound = checkout.start_request(&server, MEMBER, claim, &config).await;
+  let mut unbound = checkout.start_request(&server, claim, &config);
   unbound.choices.bindings = LocalBindings::default();
   server.drop_next_file();
   let cut = work.start(unbound.clone()).await.expect("started");
@@ -159,7 +167,7 @@ async fn team_work_start_failed_here_holds_back_no_later_start() {
 
   // Its work ends on the server, and a newer start with the profile bound keeps its inputs; the runner is not there.
   server.state().works[0].state = "failed".to_owned();
-  let bound = checkout.start_request(&server, MEMBER, claim, &config).await;
+  let bound = checkout.start_request(&server, claim, &config);
   let waiting = work.start(bound.clone()).await.expect("started");
   assert!(matches!(waiting, StartOutcome::RunnerUnavailable(_)), "{waiting:?}");
 

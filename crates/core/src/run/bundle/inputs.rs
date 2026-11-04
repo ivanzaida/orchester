@@ -272,6 +272,17 @@ impl CanonicalExecutionInputs {
     resources
   }
 
+  /// The label pinned resource `resource` had at its pinned version; `None` for a resource the inputs do not pin.
+  pub fn label(&self, resource: ResourceId) -> Option<&ResourceLabel> {
+    std::iter::once((self.pipeline.resource, &self.pipeline.label))
+      .chain(self.profiles.iter().map(|pinned| (pinned.resource, &pinned.label)))
+      .chain(self.instructions.iter().map(|pinned| (pinned.resource, &pinned.label)))
+      .chain(self.tools.iter().map(|pinned| (pinned.resource, &pinned.label)))
+      .chain(self.skills.iter().map(|pinned| (pinned.resource, &pinned.label)))
+      .find(|(pinned, _)| *pinned == resource)
+      .map(|(_, label)| label)
+  }
+
   /// Each agent step's permissions: its profile's narrowed by the step, in pipeline step order.
   pub fn step_permissions(&self) -> Vec<ResolvedStepPermissions> {
     self

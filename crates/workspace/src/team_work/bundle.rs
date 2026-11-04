@@ -1,7 +1,7 @@
 //! The execution bundle a start's receipt names, read from the server by its hash with every file it pins, each checked
-//! against the bundle, and made into the run's inputs with what the start's caller read and chose.
+//! against the bundle, and made into the run's inputs with what the start's caller chose.
 
-use std::{num::NonZeroU32, time::Duration};
+use std::time::Duration;
 
 use orchester_api::{
   client::Authority,
@@ -12,9 +12,7 @@ use orchester_core::{
   connection::ConnectionKind,
   run::{
     CommitId,
-    inputs::{
-      BundleContent, InputsError, InputsOrigin, LocalBindings, LocalConsent, ResourceLabel, RunInputs, TeamAcceptance,
-    },
+    inputs::{BundleContent, InputsError, InputsOrigin, LocalBindings, LocalConsent, RunInputs, TeamAcceptance},
   },
   store::ConnectionStore,
   task::TaskLimits,
@@ -25,15 +23,11 @@ use serde::{Deserialize, Serialize};
 
 use super::{Answer, TeamWorkError, answer};
 
-/// What the caller of a start read and chose for its run, kept with the start's record.
+/// What the caller of a start chose for its run on this computer, kept with the start's record. The task's number and
+/// the pinned resources' labels are the bundle's.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct StartChoices {
-  /// The task's number, from the task read (`GET …/tasks/{task}`). A contract gap: the plan (§7) has the bundle carry
-  /// it, and once the server's `ExecutionBundle` does, it comes from there.
-  pub task_number: NonZeroU32,
-  /// Each pinned resource's slug and name, from the library read. The same contract gap as the number.
-  pub labels: Vec<ResourceLabel>,
   /// The local connection each pinned profile runs on here, the person's choice.
   pub bindings: LocalBindings,
   pub consent: LocalConsent,
@@ -115,8 +109,7 @@ pub(super) fn inputs(
     TaskLimits::new(budget, start.limits.max_duration_ms.map(Duration::from_millis)).map_err(InputsError::from)?;
   let content = BundleContent::new(
     InputsOrigin::Team(acceptance),
-    (choices.task_number, start.task.clone()),
-    choices.labels,
+    (start.task_number, start.task.clone()),
     (limits, start.delivery),
     bundle.inputs().clone(),
   )?;

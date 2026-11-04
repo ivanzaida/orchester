@@ -70,8 +70,9 @@ impl RunResolver {
     match self {
       Self::Inputs(inputs) => inputs
         .bundle()
+        .inputs()
         .label(resource)
-        .map(|label| (label.slug.clone(), label.name.clone()))
+        .map(|label| (label.slug().clone(), label.name().clone()))
         .ok_or_else(gone),
       Self::Published => db
         .resource(resource)?

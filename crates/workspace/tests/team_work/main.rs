@@ -27,7 +27,7 @@ use std::{
 
 use orchester_api::{
   client::{Client, PlainHttp, ServerAddress},
-  v2::{AuthorityRef, ResourceLibraryRequest, Subject, TeamCommandValue},
+  v2::{AuthorityRef, Subject, TeamCommandValue},
 };
 use orchester_core::{
   connection::{AgentConnection, AgentProvider},
@@ -35,11 +35,10 @@ use orchester_core::{
   integration::base::RunBaseSource,
   name::Name,
   project::{Project, ProjectKey},
-  resource::Slug,
   revision::Revision,
   run::{
     BranchName, CommitId, NewRun, Run, RunError, RunEvent,
-    inputs::{InputsOrigin, LocalBindings, LocalConsent, ProfileBinding, ResourceLabel},
+    inputs::{InputsOrigin, LocalBindings, LocalConsent, ProfileBinding},
   },
   secret::{SecretValue, SecretVault, VaultError, VaultKey},
   sharing::TaskRevision,
@@ -178,26 +177,8 @@ impl Checkout {
     claim.id
   }
 
-  /// The start of the task's work under `claim`, with the task's number and the labels read from the server as its
-  /// caller reads them, and the profile bound to this project's Codex connection.
-  async fn start_request(&self, server: &TeamServer, token: &str, claim: ClaimId, config: &Config) -> TeamStartRequest {
-    let token = SecretValue::new(token.to_owned()).expect("token");
-    let client = client(server);
-    let authority = client.authority(&token, server.project);
-    let task = authority.task(server.task).await.expect("the task");
-    let library = authority
-      .library(&ResourceLibraryRequest::default())
-      .await
-      .expect("the library");
-    let labels = library
-      .items
-      .into_iter()
-      .map(|resource| ResourceLabel {
-        resource: resource.id,
-        slug: Slug::new(&resource.slug).expect("slug"),
-        name: Name::new(&resource.name).expect("name"),
-      })
-      .collect();
+  /// The start of the task's work under `claim`, the profile bound to this project's Codex connection.
+  fn start_request(&self, server: &TeamServer, claim: ClaimId, config: &Config) -> TeamStartRequest {
     TeamStartRequest {
       operation: OperationId::generate(),
       work: WorkAction {
@@ -212,8 +193,6 @@ impl Checkout {
         module_read: TaskRevision::FIRST,
       },
       choices: StartChoices {
-        task_number: std::num::NonZeroU32::new(task.task.number).expect("a number"),
-        labels,
         bindings: LocalBindings {
           profiles: vec![ProfileBinding {
             resource: config.profile,
@@ -248,7 +227,7 @@ fn client(server: &TeamServer) -> Client {
 async fn started(checkout: &Checkout, server: &TeamServer) -> (TeamWork<StoreRunner>, RunId, watch::Sender<u64>) {
   let claim = checkout.claim(server, MEMBER).await;
   let config = server.state().config.clone();
-  let request = checkout.start_request(server, MEMBER, claim, &config).await;
+  let request = checkout.start_request(server, claim, &config);
   let (work, generation) = checkout.work(server, MEMBER, StoreRunner::new(checkout.root(), &[]));
   let outcome = work.start(request).await.expect("started");
   let StartOutcome::Started(run) = outcome else {

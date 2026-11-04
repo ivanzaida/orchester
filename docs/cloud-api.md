@@ -505,10 +505,9 @@ The desktop's team work (`orchester_workspace::team_work`) uses them so:
   start or of its bundle (`claim_lost`) is kept and starts nothing. A bundle that can never become the run's inputs
   here (it is not the one the receipt names, or the caller's bindings do not fit it) settles the start `failed`, kept
   with the reason; recovery carries each open start on its own, so one such start holds back no other.
-- **Contract gap.** The bundle does not carry the task's number or the pinned resources' slugs and names, which a run's
-  inputs need. Until the server's `ExecutionBundle` carries them (plan §7), the start's caller supplies them from its
-  reads: the number from `GET …/tasks/{task}`, the labels from the library read. The local bindings and consent are
-  the caller's for good; each pinned profile must be bound to a connection of the CLI the bundle binds it to.
+- **Inputs.** The task's number and each pinned version's label (`{slug,name}`) are the bundle's (schema 2); the
+  start's caller supplies only the local bindings and consent, and each pinned profile must be bound to a connection
+  of the CLI the bundle binds it to.
 - **Reports.** Each change of a team run's outcome (core's `ExecutionOutcome::of_status`) is queued once in
   `work_report_outbox` with its event id, the run's next sequence, an operation id and its request, before it is sent;
   queued reports go in sequence order, each again with the same bytes until the server acknowledges it. A transport

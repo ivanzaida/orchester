@@ -1,10 +1,14 @@
-//! The team's configuration as the fake server publishes it, and the execution bundle it builds from it at a work
-//! start: a Builder profile run by Codex, a one-step pipeline and a skill with one reference file. Shared with the
-//! runner's team start tests (`#[path]`), so both drive the same bundle.
+//! The team's configuration as the fake server publishes it, and the schema-2 execution bundle it builds from it at a
+//! work start, with the task's number and each pinned version's label: a Builder profile run by Codex, a one-step
+//! pipeline and a skill with one reference file. Shared with the runner's team start tests (`#[path]`), so both drive
+//! the same bundle.
 
 #![allow(dead_code, reason = "each test binary uses some of the fixture")]
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+  collections::{BTreeMap, BTreeSet},
+  num::NonZeroU32,
+};
 
 use orchester_api::{
   SharedLimits,
@@ -17,24 +21,29 @@ use orchester_core::{
   permission::{AgentPermissions, CommandPermission, NetworkAccess, StepPermissions},
   resource::{
     AgentProfile, Deliverable, InstructionScope, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess,
-    Skill, SkillFile, SkillFilePath, Step, StepKey, StepKind, Version, VersionNumber,
+    Skill, SkillFile, SkillFilePath, Slug, Step, StepKey, StepKind, Version, VersionNumber,
   },
   run::{
     BranchName, CommitId, PublishedVersions, RunSnapshot,
-    bundle::{CanonicalExecutionInputs, PinnedBodies, file_sha256},
+    bundle::{CanonicalExecutionInputs, PinnedBodies, ResourceLabel, file_sha256},
   },
   sharing::TaskRevision,
   time::Timestamp,
 };
-use serde_json::{Value, json};
 
 /// The bytes of the skill's one reference file.
 pub const NOTES: &[u8] = b"Run the checks before you finish.";
 /// The task's number on the server.
 pub const TASK_NUMBER: u32 = 7;
+/// The skill's slug, the folder its files are placed in.
+pub const SKILL_SLUG: &str = "checks";
 
 fn name(value: &str) -> Name {
   Name::new(value).expect("name")
+}
+
+fn label(slug: &str, title: &str) -> ResourceLabel {
+  ResourceLabel::new(Slug::new(slug).expect("slug"), name(title))
 }
 
 /// The team's published versions, pinned.
@@ -63,6 +72,11 @@ impl Config {
     };
     let snapshot = RunSnapshot::build(pipeline, &pipeline_version, published).expect("snapshot");
     let bodies = PinnedBodies {
+      labels: &[
+        (profile_version.id(), label("builder", "Builder")),
+        (pipeline_version.id(), label("delivery", "Delivery")),
+        (skill_version.id(), label(SKILL_SLUG, "Checks")),
+      ],
       profiles: &[profile_version],
       instructions: &[],
       tools: &[],
@@ -92,6 +106,7 @@ impl Config {
       branch: BranchName::new("module/webhooks").expect("branch"),
       base_commit: CommitId::new(base_commit).expect("commit"),
       definition_revision: TaskRevision::FIRST,
+      task_number: NonZeroU32::new(TASK_NUMBER).expect("a number"),
       task: TaskAtStart {
         title: "Say hello".into(),
         brief: "Append one line.".into(),
@@ -104,20 +119,6 @@ impl Config {
       delivery: Deliverable::default(),
     };
     ExecutionBundle::new(start, self.inputs.clone(), &[(self.profile, AgentProvider::CodexCli)]).expect("bundle")
-  }
-
-  /// The library page's resources: each pinned resource with its slug and name.
-  pub fn library(&self) -> Vec<Value> {
-    let resource = |id: ResourceId, kind: &str, slug: &str, title: &str| {
-      let at = json!({"by": {"id": orchester_core::id::UserId::generate(), "display_name": "Dana"}, "at": 1});
-      json!({"id": id, "kind": kind, "slug": slug, "name": title, "archived": false, "revision": 1, "latest": 1,
-        "created": at, "updated": at})
-    };
-    vec![
-      resource(self.profile, "agent_profile", "builder", "Builder"),
-      resource(self.pipeline, "pipeline", "delivery", "Delivery"),
-      resource(self.skill, "skill", "checks", "Checks"),
-    ]
   }
 }
 

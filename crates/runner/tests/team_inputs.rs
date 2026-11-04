@@ -28,10 +28,9 @@ use orchester_core::{
   },
   run::{
     BranchName, CommitId, PauseReason, PreflightProblem, PublishedVersions, RunSnapshot, RunStatus, StepStatus,
-    bundle::{CanonicalExecutionInputs, PinnedBodies},
+    bundle::{CanonicalExecutionInputs, PinnedBodies, ResourceLabel},
     inputs::{
-      BundleContent, InputsOrigin, LocalBindings, LocalConsent, ProfileBinding, ResourceLabel, RunInputs, TaskAtStart,
-      TeamAcceptance,
+      BundleContent, InputsOrigin, LocalBindings, LocalConsent, ProfileBinding, RunInputs, TaskAtStart, TeamAcceptance,
     },
   },
   sharing::TaskRevision,
@@ -165,7 +164,13 @@ fn team(setup: &Setup) -> Team {
     skills: &BTreeMap::new(),
   };
   let snapshot = RunSnapshot::build(pipeline, &pipeline_version, published).expect("snapshot");
+  let label = |slug: &str, title: &str| ResourceLabel::new(Slug::new(slug).expect("slug"), name(title));
   let bodies = PinnedBodies {
+    labels: &[
+      (profile_version.id(), label("builder", "Builder")),
+      (pipeline_version.id(), label("delivery", "Delivery")),
+      (tool_version.id(), label("worktree-status", "Worktree status")),
+    ],
     profiles: &[profile_version],
     instructions: &[],
     tools: &[tool_version],
@@ -216,11 +221,6 @@ impl Team {
       base_commit: CommitId::new(base).expect("commit"),
       bundle: ContentHash::new(&"c".repeat(64)).expect("hash"),
     });
-    let label = |resource, slug: &str, title: &str| ResourceLabel {
-      resource,
-      slug: Slug::new(slug).expect("slug"),
-      name: name(title),
-    };
     let task = TaskAtStart {
       title: "Say hello".into(),
       brief: "Work slowly.".into(),
@@ -229,11 +229,6 @@ impl Team {
     let content = BundleContent::new(
       origin,
       (NonZeroU32::new(7).expect("number"), task),
-      vec![
-        label(self.profile, "builder", "Builder"),
-        label(self.pipeline, "delivery", "Delivery"),
-        label(self.tool, "worktree-status", "Worktree status"),
-      ],
       (TaskLimits::NONE, Deliverable::default()),
       self.canonical.clone(),
     )

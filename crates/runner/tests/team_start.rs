@@ -17,19 +17,17 @@ mod team_commands;
 #[path = "../../workspace/tests/team_work/team_server.rs"]
 mod team_server;
 
-use std::{fs, num::NonZeroU32, path::Path, sync::Arc};
+use std::{fs, path::Path, sync::Arc};
 
 use orchester_api::{
   client::{Client, PlainHttp, ServerAddress},
-  v2::{AuthorityRef, ExecutionState, ResourceLibraryRequest, Subject, TeamCommandValue},
+  v2::{AuthorityRef, ExecutionState, Subject, TeamCommandValue},
 };
 use orchester_core::{
   id::{ClaimId, OperationId, RunId},
-  name::Name,
-  resource::Slug,
   run::{
     CommitId, RunStatus,
-    inputs::{LocalBindings, LocalConsent, ProfileBinding, ResourceLabel},
+    inputs::{LocalBindings, LocalConsent, ProfileBinding},
   },
   secret::{SecretValue, SecretVault, VaultError, VaultKey},
   sharing::TaskRevision,
@@ -50,7 +48,7 @@ use parking_lot::Mutex;
 use tokio::sync::watch;
 
 use self::{
-  fixture::{Config, NOTES, TASK_NUMBER},
+  fixture::{Config, NOTES, SKILL_SLUG, TASK_NUMBER},
   support::{Setup, git, wait_for, wait_for_idle},
   team_server::{MEMBER, TeamServer},
 };
@@ -156,31 +154,8 @@ async fn claim(dispatcher: &Dispatcher, server: &TeamServer) -> ClaimId {
   claim.id
 }
 
-/// The start from `base`, with the task's number and the labels read from the server, the profile bound to the
-/// project's Codex connection.
-async fn request(
-  root: &Path,
-  server: &TeamServer,
-  (claim, base): (ClaimId, &str),
-  config: &Config,
-) -> TeamStartRequest {
-  let token = SecretValue::new(MEMBER.to_owned()).expect("token");
-  let client = client(server);
-  let authority = client.authority(&token, server.project);
-  let task = authority.task(server.task).await.expect("the task");
-  let library = authority
-    .library(&ResourceLibraryRequest::default())
-    .await
-    .expect("the library");
-  let labels = library
-    .items
-    .into_iter()
-    .map(|resource| ResourceLabel {
-      resource: resource.id,
-      slug: Slug::new(&resource.slug).expect("slug"),
-      name: Name::new(&resource.name).expect("name"),
-    })
-    .collect();
+/// The start from `base`, the profile bound to the project's Codex connection.
+fn request(root: &Path, server: &TeamServer, (claim, base): (ClaimId, &str), config: &Config) -> TeamStartRequest {
   let connection = ProjectDb::open(root).expect("open").connections().expect("connections")[0].id();
   TeamStartRequest {
     operation: OperationId::generate(),
@@ -196,8 +171,6 @@ async fn request(
       module_read: TaskRevision::FIRST,
     },
     choices: StartChoices {
-      task_number: NonZeroU32::new(task.task.number).expect("a number"),
-      labels,
       bindings: LocalBindings {
         profiles: vec![ProfileBinding {
           resource: config.profile,
@@ -226,7 +199,7 @@ async fn team_start_runs_in_the_runner_and_recovers_once_at_every_boundary() {
   link(root, &server);
   let (claiming, _claim_generation) = dispatcher(root, data.path(), &server);
   let claim = claim(&claiming, &server).await;
-  let request = request(root, &server, (claim, &head), &config).await;
+  let request = request(root, &server, (claim, &head), &config);
   let (scheduler, mut events) = support::scheduler(root);
   let runner = SchedulerRunner {
     scheduler: scheduler.clone(),
@@ -255,13 +228,15 @@ async fn team_start_runs_in_the_runner_and_recovers_once_at_every_boundary() {
   let done = wait_for(root, &mut events, run, |run| run.status().is_terminal()).await;
   assert_eq!(done.status(), &RunStatus::Succeeded);
   wait_for_idle(&scheduler).await;
+  // The branch takes the bundle's task number, and the skill's folder its label's slug.
   assert_eq!(done.base().as_str(), head);
   assert_eq!(done.branch().as_str(), format!("orchester/orc-{TASK_NUMBER}-run-1"));
   let execution = done.current_attempt().expect("an attempt").executions()[0].id();
   let placed = root
     .join(".orchester/skills")
     .join(execution.to_string())
-    .join("checks/references/notes.md");
+    .join(SKILL_SLUG)
+    .join("references/notes.md");
   assert_eq!(fs::read(placed).expect("the skill's file, from the kept bundle"), NOTES);
 
   let db = ProjectDb::open(root).expect("open");
