@@ -400,6 +400,46 @@ read was issued at for a model without one), read again when an `invalidated` ev
 are in flight, and treat every reconnect like a `reset`. A `401`, a `403`, `revoked` or `membership_revoked`, and a
 changed session end them for good.
 
+## Team authority P2 commands
+
+The desktop's team commands on the S4 envelopes (ORC-715, milestone P2): `orchester_api::v2::TeamCommand` in
+`CommandRequest`, answered with `CommandResult<TeamCommandValue>`, through `Authority::command` and
+`Authority::operation`. Like the S10/S11 routes they are this client's; the team server implements them in the
+platform repository, which must match them before the desktop uses them. Unknown fields and variants are refused.
+
+| Method and path | Request | Answer |
+| --- | --- | --- |
+| `POST …/commands` | `CommandRequest<TeamCommand>` | `CommandResult<TeamCommandValue>`, or an `AuthorityError` |
+| `GET …/operations/{operation}` | | `OperationRead<TeamCommandValue>`; `not_found` while the server has no outcome of it |
+
+- Commands, tagged by `kind`: `task.create {content:TaskContent}`, `task.patch {task_id,changes:[TaskField]}`,
+  `module.create {content:ModuleFields}`, `module.patch {module_id,changes:[ModuleField]}`,
+  `module.branch {module_id,branch:BranchName?}` (`null`: the automatic branch again), `tag.create {name}`,
+  `tag.rename {tag_id,name}`, `tag.merge {tag_id,into}`, `tag.delete {tag_id}`, `assignment.set {subject,user_id?}`,
+  `claim.acquire {subject}`, `claim.take_over {subject,observed_claim_id}`, `claim.release {authority:AuthorityRef}`,
+  `policy.set {automatic_merge}` and `delivery.authorize {work_id,claim_id,source_commit,base_commit,bundle}`.
+- Patches are `[{field,value}]`. `TaskField`: `title`, `brief`, `criteria`, `priority`, `tags`, `blocking`,
+  `blocked_reason` (nullable), `module` (nullable). `ModuleField`: `name`, `description`, `start`, `target` (days,
+  nullable) and `state`. A task's `pipeline`, `limits` and `workflow` have no field (D4/D6 open): the desktop refuses
+  such a change before sending it, and a `task.create` sends them empty and in the default workflow status.
+- Expected revisions: the task's or module's revision for `task.patch`, `module.patch`, `module.branch` and
+  `assignment.set`; for `policy.set` the policy's revision as `{kind:"project",id,revision}`; none for the others,
+  whose claims fence them by id.
+- Values, tagged by `kind`, each with `effects`: `task {task:TaskRead}`, `module {module:ModuleRead}`,
+  `tags {tags:[SharedTag],changed_tasks}`, `assignment {subject,assignee:UserRef?,revision}`,
+  `claim {subject,claim:ClaimRead,children:[ClaimRead]}`, `released {subject,released_claim_id}`,
+  `policy {policy:WorkspacePolicy}` and `delivery {delivery:DeliveryRead}`.
+
+The desktop's dispatcher (`orchester_workspace::actions`) records each command's id and request in the project
+database (`team_operations`) before sending it, bound to the SHA-256 of its expected revisions and command: another
+request under a recorded id is refused before anything is sent. A lost or unreadable response leaves the operation
+open as *acceptance unknown*; carrying it on reads `GET …/operations/{operation}` first and sends the same request
+again only on `not_found`. `unauthenticated`, `rate_limited`, `unavailable` and `unsupported_contract` leave it open
+too; every other refusal is kept as final. After `revision_conflict` the dispatcher reads the subject as it is now
+(`GET …/tasks/{task}`, `GET …/modules/{module}`, or `GET …/workspace` for the policy) and returns it with the refusal.
+A committed receipt is kept before its local effects: a task it answers with is recorded as a team task identity, and
+`start`, `pause`, `stop` and the delivery effects stay pending on the open operation until P4 carries them out.
+
 ## Conventions
 
 - JSON bodies in UTF-8. Requests are limited to 1 MiB and must arrive within 10 seconds.

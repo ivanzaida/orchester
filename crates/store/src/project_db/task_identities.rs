@@ -24,7 +24,8 @@ impl ProjectDb {
 
   /// Records the identity of the team task `team`, at `revision`, without its definition, and returns the id this
   /// project's records name it by: the identity recorded before for it, or a new one with the server's task id. The
-  /// project must be linked to the team task's server project.
+  /// project must be linked to the team task's server project; a local task with the server's task id is
+  /// [`StoreError::TaskIdTaken`].
   pub fn record_team_task(&mut self, team: TeamTaskRef, revision: TaskRevision) -> Result<TaskId, StoreError> {
     let transaction = self.connection.transaction()?;
     let link = sharing::link(&transaction)?.ok_or(StoreError::NotShared)?;
@@ -40,6 +41,9 @@ impl ProjectDb {
       .optional()?;
     if let Some(id) = known {
       return parse("task id", &id);
+    }
+    if identity_exists(&transaction, team.task)? {
+      return Err(StoreError::TaskIdTaken(team.task));
     }
     insert_team(&transaction, team.task, team, revision)?;
     transaction.commit()?;
@@ -98,15 +102,18 @@ fn insert_team(
 
 /// Fails with [`StoreError::TaskNotFound`] when no identity is `task`.
 pub(super) fn ensure_known(connection: &Connection, task: TaskId) -> Result<(), StoreError> {
-  let known: bool = connection.query_row(
-    "SELECT EXISTS (SELECT 1 FROM task_identities WHERE id = ?1)",
-    [task.to_string()],
-    |row| row.get(0),
-  )?;
-  if !known {
+  if !identity_exists(connection, task)? {
     return Err(StoreError::TaskNotFound(task));
   }
   Ok(())
+}
+
+fn identity_exists(connection: &Connection, task: TaskId) -> Result<bool, StoreError> {
+  Ok(connection.query_row(
+    "SELECT EXISTS (SELECT 1 FROM task_identities WHERE id = ?1)",
+    [task.to_string()],
+    |row| row.get(0),
+  )?)
 }
 
 /// Whether this computer keeps a definition of `task`: a team task's may be only on its server.

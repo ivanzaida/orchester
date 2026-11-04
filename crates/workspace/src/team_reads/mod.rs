@@ -59,12 +59,17 @@ impl TeamSession {
   }
 
   /// Whether the session is still the one this was made in; a generation whose owner is gone has ended.
-  fn current(&self) -> bool {
+  pub(crate) fn current(&self) -> bool {
     self.generation.has_changed().is_ok() && *self.generation.borrow() == self.bound
   }
 
-  fn authority(&self) -> Authority<'_> {
+  pub(crate) fn authority(&self) -> Authority<'_> {
     self.client.authority(&self.token, self.project)
+  }
+
+  /// The server project the session reads and acts on.
+  pub(crate) const fn project(&self) -> ProjectId {
+    self.project
   }
 }
 

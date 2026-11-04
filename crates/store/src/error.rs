@@ -2,8 +2,8 @@ use std::{io, path::PathBuf, time::Duration};
 
 use orchester_core::{
   id::{
-    AgentAccountId, ConnectionId, InvocationId, MemoryId, ProjectId, ResourceId, RunId, SecretId, ServerId, TaskId,
-    VersionId,
+    AgentAccountId, ConnectionId, InvocationId, MemoryId, OperationId, ProjectId, ResourceId, RunId, SecretId,
+    ServerId, TaskId, VersionId,
   },
   resource::{PublishError, ResourceKind},
   run::{AlwaysAllowError, RunError, RunnerFailure},
@@ -95,6 +95,15 @@ pub enum StoreError {
   /// The team task is another server project's than the one the project is linked to. Nothing was recorded.
   #[error("the team task belongs to another server project")]
   OtherServerProject,
+  /// Another task identity of this project, a local task's, has the team task's id already. Nothing was recorded.
+  #[error("task id {0} is another task's of this project")]
+  TaskIdTaken(TaskId),
+  /// The team operation was recorded with another request: one operation id is one intent. Nothing was recorded.
+  #[error("team operation {0} was recorded with another request")]
+  OperationMismatch(OperationId),
+  /// No team operation of this project has the id.
+  #[error("team operation {0} is not recorded")]
+  OperationNotFound(OperationId),
   /// The project is shared already; nothing was changed.
   #[error("the project's task list is shared already")]
   AlreadyShared,

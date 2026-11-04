@@ -84,6 +84,7 @@ mod stuck_runs;
 mod task_edits;
 mod task_groups;
 mod task_identities;
+mod team_operations;
 mod team_reviewer;
 mod test_suites;
 mod token_budgets;

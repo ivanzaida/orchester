@@ -93,6 +93,7 @@ mod task_groups;
 mod task_identities;
 mod task_snapshots;
 mod tasks;
+mod team_operations;
 mod tool_approvals;
 mod usage;
 mod used_versions;
@@ -140,6 +141,7 @@ pub use self::{
   shared_versions::{CachedVersion, NamingVersion, ReferenceTarget, ResourceSharing, VersionReference},
   sharing::SharingLink,
   task_deletion::TaskDeletionFacts,
+  team_operations::{NewTeamOperation, TeamOperation, TeamOperationState, TeamSettlement},
 };
 use crate::{
   StoreError, git_exclude, migrate,

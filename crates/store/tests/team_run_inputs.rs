@@ -296,6 +296,24 @@ fn team_run_inputs_are_accepted_once_for_their_team_task() {
 }
 
 #[test]
+fn team_run_inputs_a_local_task_keeps_its_id_from_a_team_task() {
+  let mut team = team_project();
+  let task = team.task();
+  connection(team.repo.path())
+    .execute(
+      "INSERT INTO task_identities (id, owner) VALUES (?1, 'local')",
+      [task.task.to_string()],
+    )
+    .expect("a local task's identity");
+  assert!(matches!(
+    team.db.record_team_task(task, revision(1)),
+    Err(orchester_store::StoreError::TaskIdTaken(id)) if id == task.task
+  ));
+  let identity = team.db.task_identity(task.task).expect("read").expect("identity");
+  assert_eq!(identity.owner, TaskOwner::Local, "the local task's identity stays");
+}
+
+#[test]
 fn team_run_inputs_never_change_and_their_references_hold() {
   let mut team = team_project();
   let task = team.task();

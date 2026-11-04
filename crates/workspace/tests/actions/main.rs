@@ -1,0 +1,412 @@
+//! The workspace's action dispatcher (`orchester_workspace::actions`, team authority P2) against a fake team server on
+//! loopback ([`server`]): a lost response is looked up and never commits twice, also after a restart; an operation id
+//! reused with other inputs is refused here and by the server; a revision conflict comes with the current value; a
+//! member's definition write is refused and changes nothing here; a claim's start stays pending; a receipt whose
+//! identity cannot be recorded fails its local effect only; and a local project's actions run as they always did.
+//!
+//! `cargo test -p orchester-workspace --test actions actions_`
+
+mod http;
+mod server;
+
+use std::{fs, path::PathBuf, sync::Arc};
+
+use orchester_api::{
+  client::{Client, PlainHttp, ServerAddress},
+  v2::{AuthorityErrorCode, LocalEffect, PolicyRevision, Subject, TeamCommandValue},
+};
+use orchester_core::{
+  id::{IdempotencyKey, ProjectId, ServerId, TaskId},
+  name::Name,
+  project::{Project, ProjectKey},
+  secret::{SecretValue, SecretVault, VaultError, VaultKey},
+  sharing::TaskRevision,
+  store::TaskStore,
+  task::{Task, TaskDetails, TaskLimits, TaskUpdate, identity::TaskOwner, organization::TaskOrganization},
+  time::Timestamp,
+};
+use orchester_store::{AppDb, ProjectDb, StoreError, TeamOperationState};
+use orchester_workspace::{
+  actions::{
+    Action, ActionClass, ActionError, ActionOutcome, ClaimAction, Current, Dispatcher, Intent, LocalResult,
+    PolicyAction, TaskAction, TeamOutcome,
+  },
+  secrets::Vault,
+  sharing::Servers,
+  team_reads::TeamSession,
+  workspace::Workspace,
+};
+use server::{ADMIN, MEMBER, TeamServer};
+use tempfile::TempDir;
+use tokio::sync::watch;
+
+/// No secret is read or kept here.
+struct NoVault;
+
+impl SecretVault for NoVault {
+  fn store(&self, _: &VaultKey, _: &SecretValue) -> Result<(), VaultError> {
+    Err(VaultError::Failed("no secrets in these tests".to_owned()))
+  }
+
+  fn read(&self, _: &VaultKey) -> Result<SecretValue, VaultError> {
+    Err(VaultError::NotFound)
+  }
+
+  fn delete(&self, _: &VaultKey) -> Result<(), VaultError> {
+    Ok(())
+  }
+}
+
+/// A project in a folder of its own, with the application database its writer needs.
+struct Checkout {
+  dir: TempDir,
+  servers: Servers,
+  _data: TempDir,
+}
+
+impl Checkout {
+  fn local() -> Self {
+    let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/actions-tests");
+    fs::create_dir_all(&scratch).expect("scratch");
+    let dir = tempfile::Builder::new()
+      .prefix("project-")
+      .tempdir_in(&scratch)
+      .expect("project");
+    fs::create_dir(dir.path().join(".git")).expect("create .git");
+    let project = Project::new(
+      ProjectId::generate(),
+      ProjectKey::new("KON").expect("key"),
+      name("Kontur"),
+    );
+    ProjectDb::create(dir.path(), project).expect("create project");
+    let data = tempfile::Builder::new()
+      .prefix("data-")
+      .tempdir_in(&scratch)
+      .expect("data");
+    let workspace = Workspace::new(AppDb::open(&data.path().join("orchester.db")).expect("database"));
+    let servers = Servers::new(workspace, Vault::with(Arc::new(NoVault)));
+    Self {
+      dir,
+      servers,
+      _data: data,
+    }
+  }
+
+  /// A project linked to `server`'s project.
+  fn linked(server: &TeamServer) -> Self {
+    Self::local().link(server)
+  }
+
+  /// The project linked to `server`'s project now.
+  fn link(self, server: &TeamServer) -> Self {
+    let connection = rusqlite::Connection::open(self.dir.path().join(".orchester/orchester.db")).expect("open");
+    connection
+      .execute(
+        "INSERT INTO sharing (only_row, server_id, project_id, project_key, role, joined_at, event_cursor, \
+         last_synced_at) VALUES (1, ?1, ?2, 'KON', 'member', 1, 0, 1)",
+        [ServerId::generate().to_string(), server.project.to_string()],
+      )
+      .expect("link the project");
+    self
+  }
+
+  fn db(&self) -> ProjectDb {
+    ProjectDb::open(self.dir.path()).expect("open")
+  }
+
+  fn local_dispatcher(&self) -> Dispatcher {
+    Dispatcher::new(self.dir.path().to_path_buf(), self.servers.clone(), None)
+  }
+
+  /// The dispatcher of a session signed in to `server` with `token`, and the session's generation it keeps.
+  fn team(&self, server: &TeamServer, token: &str) -> (Dispatcher, watch::Sender<u64>) {
+    let client = Client::new(
+      ServerAddress::parse(&server.url).expect("address"),
+      PlainHttp::NotAllowed,
+    )
+    .expect("client");
+    let token = SecretValue::new(token.to_owned()).expect("token");
+    let generation = watch::channel(0).0;
+    let session = TeamSession::new(client, token, server.project, generation.subscribe());
+    let dispatcher = Dispatcher::new(self.dir.path().to_path_buf(), self.servers.clone(), Some(session));
+    (dispatcher, generation)
+  }
+}
+
+fn name(value: &str) -> Name {
+  Name::new(value).expect("name")
+}
+
+fn details(title: &str) -> TaskDetails {
+  TaskDetails {
+    title: name(title),
+    brief: "Sign in with a password.".to_owned(),
+    acceptance_criteria: vec!["A person can sign in".to_owned()],
+    pipeline: None,
+    limits: TaskLimits::NONE,
+  }
+}
+
+fn create(title: &str) -> Action {
+  Action::Task(TaskAction::Create {
+    details: details(title),
+    organization: TaskOrganization::default(),
+  })
+}
+
+fn retitle(task: TaskId, read: u64, from: &str, to: &str) -> Action {
+  Action::Task(TaskAction::Edit {
+    task,
+    read: TaskRevision::try_from(read).expect("revision"),
+    base: details(from),
+    edited: details(to),
+  })
+}
+
+fn team(outcome: ActionOutcome) -> TeamOutcome {
+  match outcome {
+    ActionOutcome::Team(outcome) => outcome,
+    ActionOutcome::Local(local) => panic!("a team project's action ran locally: {local:?}"),
+  }
+}
+
+/// The task a completed command's receipt names.
+fn completed_task(outcome: TeamOutcome) -> TaskId {
+  let TeamOutcome::Completed { receipt } = outcome else {
+    panic!("not completed: {outcome:?}");
+  };
+  let TeamCommandValue::Task { task, .. } = receipt.result else {
+    panic!("not a task: {receipt:?}");
+  };
+  task.task.id
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn actions_a_lost_response_is_looked_up_and_never_commits_twice() {
+  let server = TeamServer::start();
+  let checkout = Checkout::linked(&server);
+  let (dispatcher, _generation) = checkout.team(&server, ADMIN);
+  server.lose_next_response();
+  let intent = Intent::new(create("Sign in"));
+  let lost = team(dispatcher.dispatch(&intent).await.expect("dispatched"));
+  assert!(
+    matches!(lost, TeamOutcome::AcceptanceUnknown { operation } if operation == intent.operation()),
+    "{lost:?}"
+  );
+  assert_eq!(dispatcher.open_operations().expect("open"), [intent.operation()]);
+  assert_eq!(server.counts(), (1, 1), "the server committed it");
+
+  // After a restart: the operation is looked up, not sent again.
+  let (restarted, _generation) = checkout.team(&server, ADMIN);
+  let task = completed_task(restarted.recover(intent.operation()).await.expect("recovered"));
+  assert_eq!(server.counts(), (1, 1), "looked up, never sent twice");
+  let identity = checkout.db().task_identity(task).expect("read").expect("recorded");
+  assert!(matches!(identity.owner, TaskOwner::Team { task: team, .. } if team.task == task));
+  assert!(restarted.open_operations().expect("open").is_empty());
+
+  // The same intent again reads the kept receipt.
+  let again = team(restarted.dispatch(&intent).await.expect("dispatched"));
+  assert_eq!(completed_task(again), task);
+  assert_eq!(server.counts(), (1, 1));
+  let record = checkout
+    .db()
+    .team_operation(intent.operation())
+    .expect("read")
+    .expect("kept");
+  assert_eq!(
+    (record.state, record.kind.as_str()),
+    (TeamOperationState::Completed, "task.create")
+  );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn actions_an_operation_id_reused_with_other_inputs_is_refused() {
+  let server = TeamServer::start();
+  let task = server.add_task("Sign in");
+  let checkout = Checkout::linked(&server);
+  let (dispatcher, _generation) = checkout.team(&server, ADMIN);
+  let intent = Intent::new(retitle(task.id, 1, "Sign in", "Sign in with email"));
+  completed_task(team(dispatcher.dispatch(&intent).await.expect("dispatched")));
+  let other = Intent::with_operation(intent.operation(), retitle(task.id, 2, "Sign in with email", "Log in"));
+  let refused = dispatcher.dispatch(&other).await;
+  assert!(
+    matches!(refused, Err(ActionError::OperationMismatch(operation)) if operation == intent.operation()),
+    "{refused:?}"
+  );
+  assert_eq!(server.counts().0, 1, "refused before anything was sent");
+  assert_eq!(server.task(task.id).title, "Sign in with email");
+
+  // Another computer of the same account, which never recorded the id: the server refuses it for good.
+  let elsewhere = Checkout::linked(&server);
+  let (dispatcher, _generation) = elsewhere.team(&server, ADMIN);
+  let refused = team(dispatcher.dispatch(&other).await.expect("dispatched"));
+  let TeamOutcome::Rejected { error, retryable, .. } = refused else {
+    panic!("not refused: {refused:?}");
+  };
+  assert_eq!(
+    (error.code(), retryable),
+    (AuthorityErrorCode::OperationMismatch, false)
+  );
+  assert_eq!(server.task(task.id).title, "Sign in with email");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn actions_a_revision_conflict_returns_the_current_value() {
+  let server = TeamServer::start();
+  let task = server.add_task("Sign in");
+  server.retitle(task.id, "Sign in with a passkey");
+  let checkout = Checkout::linked(&server);
+  let (dispatcher, _generation) = checkout.team(&server, ADMIN);
+  let intent = Intent::new(retitle(task.id, 1, "Sign in", "Log in"));
+  let refused = team(dispatcher.dispatch(&intent).await.expect("dispatched"));
+  let TeamOutcome::Rejected {
+    error,
+    retryable: false,
+    current: Some(Current::Task(current)),
+    ..
+  } = refused
+  else {
+    panic!("not a conflict with the current task: {refused:?}");
+  };
+  assert_eq!(error.code(), AuthorityErrorCode::RevisionConflict);
+  assert_eq!(current.task.content.title, "Sign in with a passkey");
+  assert_eq!(current.task.revision.get(), 2);
+  let record = checkout
+    .db()
+    .team_operation(intent.operation())
+    .expect("read")
+    .expect("kept");
+  assert_eq!(record.state, TeamOperationState::Rejected);
+  assert!(dispatcher.open_operations().expect("open").is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn actions_member_writes_are_rejected_and_change_nothing_here() {
+  let server = TeamServer::start();
+  let task = server.add_task("Sign in");
+  let checkout = Checkout::linked(&server);
+  let (dispatcher, _generation) = checkout.team(&server, MEMBER);
+  for action in [create("Sign out"), retitle(task.id, 1, "Sign in", "Log in")] {
+    let refused = team(dispatcher.dispatch(&Intent::new(action)).await.expect("dispatched"));
+    let TeamOutcome::Rejected { error, retryable, .. } = refused else {
+      panic!("a member's write was taken: {refused:?}");
+    };
+    assert_eq!((error.code(), retryable), (AuthorityErrorCode::Forbidden, false));
+  }
+  assert_eq!(server.task(task.id).title, "Sign in");
+  assert_eq!(server.counts().1, 0, "no task was created");
+  let db = checkout.db();
+  assert_eq!(db.task_identity(task.id).expect("read"), None, "nothing recorded here");
+  assert!(db.tasks().expect("tasks").is_empty(), "no local task instead");
+  assert!(dispatcher.open_operations().expect("open").is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn actions_a_claims_start_stays_pending_and_classes_follow_the_owner() {
+  let server = TeamServer::start();
+  let task = server.add_task("Sign in");
+  let checkout = Checkout::linked(&server);
+  let (dispatcher, _generation) = checkout.team(&server, MEMBER);
+  let acquire = Action::Claim(ClaimAction::Acquire {
+    subject: Subject::Task { id: task.id },
+  });
+  assert_eq!(
+    dispatcher.classify(&acquire).expect("class"),
+    ActionClass::ServerThenLocalExecution
+  );
+  let edit = retitle(task.id, 1, "Sign in", "Log in");
+  assert_eq!(dispatcher.classify(&edit).expect("class"), ActionClass::ServerOnly);
+  let intent = Intent::new(acquire);
+  let pending = team(dispatcher.dispatch(&intent).await.expect("dispatched"));
+  let TeamOutcome::AcceptedPending { pending, .. } = pending else {
+    panic!("not pending: {pending:?}");
+  };
+  assert!(matches!(pending.as_slice(), [LocalEffect::Start { .. }]), "{pending:?}");
+  assert_eq!(dispatcher.open_operations().expect("open"), [intent.operation()]);
+
+  let unsigned = Dispatcher::new(checkout.dir.path().to_path_buf(), checkout.servers.clone(), None);
+  let refused = unsigned.dispatch(&Intent::new(edit)).await;
+  assert!(matches!(refused, Err(ActionError::NoTeamSession)), "{refused:?}");
+  assert!(
+    checkout.db().tasks().expect("tasks").is_empty(),
+    "never a local change instead"
+  );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn actions_a_receipt_naming_a_local_task_id_fails_its_local_effect_only() {
+  let server = TeamServer::start();
+  let checkout = Checkout::local();
+  let local = checkout
+    .db()
+    .create_tasks(IdempotencyKey::generate(), vec![details("Kept here")], Timestamp::now())
+    .expect("a local task")
+    .remove(0);
+  let checkout = checkout.link(&server);
+  server.next_task_id(local.id());
+  let (dispatcher, _generation) = checkout.team(&server, ADMIN);
+  let intent = Intent::new(create("Sign in"));
+  let failed = team(dispatcher.dispatch(&intent).await.expect("dispatched"));
+  let TeamOutcome::LocalEffectFailed { receipt, error } = failed else {
+    panic!("not a failed local effect: {failed:?}");
+  };
+  assert!(
+    matches!(error, StoreError::TaskIdTaken(id) if id == local.id()),
+    "{error:?}"
+  );
+  assert_eq!(receipt.operation_id, intent.operation(), "still committed");
+  let record = checkout
+    .db()
+    .team_operation(intent.operation())
+    .expect("read")
+    .expect("kept");
+  assert_eq!(record.state, TeamOperationState::EffectFailed);
+  assert_eq!(dispatcher.open_operations().expect("open"), [intent.operation()]);
+  assert_eq!(server.counts(), (1, 1));
+}
+
+/// The task a local action saved.
+fn saved_locally(outcome: ActionOutcome) -> Task {
+  let ActionOutcome::Local(LocalResult::Task(update)) = outcome else {
+    panic!("not a local task: {outcome:?}");
+  };
+  match *update {
+    TaskUpdate::Saved(task) => task,
+    TaskUpdate::Conflict { current } => panic!("a conflict with {current:?}"),
+  }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn actions_local_actions_run_as_before() {
+  let checkout = Checkout::local();
+  let dispatcher = checkout.local_dispatcher();
+  let intent = Intent::new(create("Sign in"));
+  assert_eq!(
+    dispatcher.classify(intent.action()).expect("class"),
+    ActionClass::LocalOnly
+  );
+  let saved = saved_locally(dispatcher.dispatch(&intent).await.expect("dispatched"));
+  let again = saved_locally(dispatcher.dispatch(&intent).await.expect("dispatched"));
+  assert_eq!(again.id(), saved.id(), "the same intent saves one task");
+  let read = checkout
+    .db()
+    .task(saved.id())
+    .expect("read")
+    .expect("the task")
+    .revision();
+  let edit = Intent::new(retitle(saved.id(), read.get(), "Sign in", "Log in"));
+  let edited = saved_locally(dispatcher.dispatch(&edit).await.expect("dispatched"));
+  assert_eq!(edited.details().title.as_str(), "Log in");
+  let tasks = checkout.db().tasks().expect("tasks");
+  assert_eq!(tasks.len(), 1);
+  assert_eq!(tasks[0].details().title.as_str(), "Log in");
+
+  let policy = Action::Policy(PolicyAction {
+    read: PolicyRevision::FIRST,
+    automatic_merge: true,
+  });
+  assert!(matches!(dispatcher.classify(&policy), Err(ActionError::TeamOnly)));
+  let refused = dispatcher.dispatch(&Intent::new(policy)).await;
+  assert!(matches!(refused, Err(ActionError::TeamOnly)), "{refused:?}");
+  assert!(dispatcher.open_operations().expect("open").is_empty());
+}
