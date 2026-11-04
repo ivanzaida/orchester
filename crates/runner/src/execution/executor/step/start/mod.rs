@@ -202,7 +202,7 @@ impl RunTask {
     let Some(provider) = connection.api_provider() else {
       return Ok(None);
     };
-    let key = connection_check::api_key(&self.db, self.vault.as_ref(), provider.key()).map_err(problem)?;
+    let key = connection_check::api_key(self.computer.as_ref(), self.project.id(), provider.key()).map_err(problem)?;
     Ok(Some(OnProvider { provider, model, key }))
   }
 

@@ -113,7 +113,7 @@ impl Scheduler {
       root: self.inner.project_root.clone(),
       project: db.project().id(),
       notifier: self.inner.notifier.clone(),
-      vault: Arc::clone(&self.inner.vault),
+      computer: Arc::clone(&self.inner.computer),
       chat: kept.chat,
       message,
       text: kept.text,

@@ -66,7 +66,7 @@ impl RunTask {
       db: &mut self.db,
       sink: self.sink.as_mut(),
       notifier: &self.notifier,
-      vault: self.vault.as_ref(),
+      computer: self.computer.as_ref(),
     };
     let result = record(keeper, &mut self.run, request);
     answer(ack, result);
@@ -82,7 +82,7 @@ pub(in crate::execution) fn record(keeper: Keeper<'_>, run: &mut Run, request: P
     db,
     sink,
     notifier,
-    vault,
+    computer,
   } = keeper;
   let plans = db
     .plans(run.id())
@@ -113,7 +113,7 @@ pub(in crate::execution) fn record(keeper: Keeper<'_>, run: &mut Run, request: P
       db,
       sink,
       notifier,
-      vault,
+      computer,
     };
     keeper.keep_or_report(run, request.execution, StepFate::Passed);
   }

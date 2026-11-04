@@ -11,10 +11,14 @@ impl Scheduler {
   /// Estimates the story points of `task`, unless a person set them or nothing they are made from changed. The
   /// reviewer's settings and variables are asked through a link of the estimate's own.
   pub async fn estimate_task(&self, task: TaskId) -> Result<EstimateOutcome, Rejection> {
-    let sources = (self.inner.vault.clone(), self.inner.computer.clone());
     let link = self.open_link().map_err(|error| Rejection::Failed {
       detail: error.to_string(),
     })?;
-    estimate_task((self.inner.project_root.clone(), link), sources, task).await
+    estimate_task(
+      (self.inner.project_root.clone(), link),
+      self.inner.computer.clone(),
+      task,
+    )
+    .await
   }
 }

@@ -345,6 +345,28 @@ fn only_the_executor_adds_or_removes_run_worktrees() {
   );
 }
 
+/// What reads the keychain or the project's secrets and MCP servers in the database: the executor reads secret values
+/// and their metadata only through the computer's resources (`crate::computer`, ORC-673).
+const SECRET_READS: &[&str] = &[
+  "SecretVault",
+  "KeychainVault",
+  "SecretStore",
+  "McpServerStore",
+  "vault_key",
+];
+
+#[test]
+fn executor_reads_secrets_only_through_the_computers_resources() {
+  let mut found = lines_naming("executor", SECRET_READS);
+  // Always allow lists a tool on its MCP server: a row the desktop owns, which only the coordinator will write
+  // (`docs/architecture/remote-runners.md`, rule 3). It is read and written with the run's other approval records.
+  found.retain(|line| !line.contains("answer.rs") || !line.contains("McpServerStore"));
+  assert!(
+    found.is_empty(),
+    "executor code reads the keychain or secret metadata itself; ask the computer's resources: {found:#?}"
+  );
+}
+
 /// The executor reads task and project memory only through the coordinator link (ORC-668): it never searches the
 /// project database's memory indexes or reads its records and Memory setting itself.
 #[test]

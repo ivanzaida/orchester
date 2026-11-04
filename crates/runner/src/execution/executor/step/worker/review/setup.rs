@@ -29,12 +29,11 @@ use orchester_core::{
       review_roots,
     },
   },
-  secret::{SecretValue, SecretVault},
-  store::SecretStore,
+  secret::SecretValue,
   time::Timestamp,
   usage::UsedProvider,
 };
-use orchester_store::{ProjectDb, StoreError};
+use orchester_store::StoreError;
 use tokio::{runtime::Handle, sync::watch};
 
 use super::{
@@ -330,7 +329,7 @@ impl RequestReviewer for Unreachable {
 impl Worker {
   /// The project's reviewer, as its auto mode settings resolve against its connections.
   pub(super) fn reviewer(&self, watch: &Watch) -> Result<ReviewerSetup, WorkerError> {
-    reviewer_setup((&watch.db, &*watch.link), &self.reviewer_sources)
+    reviewer_setup(&*watch.link, &self.reviewer_sources)
   }
 }
 
@@ -347,12 +346,11 @@ pub(super) fn reviewer_variables(
   })
 }
 
-/// The reviewer of the project of `db`, as its auto mode settings, asked through `link`, resolve against its
-/// connections on the computer, its key read from `sources` and a CLI's variables asked through `link`; the
-/// story-point estimator runs on it too. Without the computer's connections there is no reviewer to ask, and the
-/// person decides.
+/// The project's reviewer, as its auto mode settings, asked through `link`, resolve against its connections on the
+/// computer, its key read from `sources` and a CLI's variables asked through `link`; the story-point estimator runs on
+/// it too. Without the computer's connections there is no reviewer to ask, and the person decides.
 pub(super) fn reviewer_setup(
-  (db, link): (&ProjectDb, &(impl EnvironmentLink + SettingsLink + ?Sized)),
+  link: &(impl EnvironmentLink + SettingsLink + ?Sized),
   sources: &ReviewerSources,
 ) -> Result<ReviewerSetup, WorkerError> {
   let settings = auto_mode(link)?;
@@ -380,7 +378,7 @@ pub(super) fn reviewer_setup(
     name: connection.name().as_str().into(),
   };
   if let (ReviewerKind::AnthropicApi, Some(api)) = (kind, connection.endpoint().api()) {
-    return Ok(native(db, sources, (api, used), (model, effort)));
+    return Ok(native(sources, (api, used), (model, effort)));
   }
   let Some(executable) = connection.executable() else {
     return Ok(ReviewerSetup::Missing);
@@ -419,12 +417,11 @@ pub(super) fn reviewer_setup(
 
 /// The client of a native reviewer at `api` of `connection`; unreachable when its key cannot be read.
 fn native(
-  db: &ProjectDb,
   keys: &ReviewerSources,
   (api, connection): (&ApiEndpoint, UsedProvider),
   (model, effort): (ModelId, Option<String>),
 ) -> ReviewerSetup {
-  let key = match api_key(db, keys, api.key()) {
+  let key = match api_key(keys, api.key()) {
     Some(key) => key,
     None => return ReviewerSetup::Unreachable { model, connection },
   };
@@ -442,10 +439,10 @@ fn native(
   }
 }
 
-/// The value of the project secret `id` holding a native reviewer's API key; why not is logged, never
-/// the value.
-fn api_key(db: &ProjectDb, keys: &ReviewerSources, id: SecretId) -> Option<SecretValue> {
-  let secret = match db.secret(id) {
+/// The value of the project secret `id` holding a native reviewer's API key, read on the review's computer; why not is
+/// logged, never the value.
+fn api_key(keys: &ReviewerSources, id: SecretId) -> Option<SecretValue> {
+  let secret = match keys.computer.secret(id) {
     Ok(Some(secret)) if !secret.is_archived() => secret,
     Ok(_) => {
       tracing::warn!(%id, "the native reviewer's API key is missing or archived");
@@ -457,18 +454,17 @@ fn api_key(db: &ProjectDb, keys: &ReviewerSources, id: SecretId) -> Option<Secre
     }
   };
   keys
-    .vault
-    .read(&secret.vault_key(keys.project))
+    .computer
+    .secret_value(keys.project, &secret)
     .inspect_err(|error| tracing::warn!(%id, %error, "the keychain did not give the native reviewer's API key"))
     // `.ok()`: the error is logged above, and a reviewer without its key fails every review.
     .ok()
 }
 
-/// Where the reviewer is read: its connection on the computer the review runs on, and a native reviewer's key in the
-/// keychain, with the project its secrets belong to.
+/// Where the reviewer is read: its connection and a native reviewer's key on the computer the review runs on, with the
+/// project its secrets belong to.
 pub(in crate::execution) struct ReviewerSources {
   pub(in crate::execution) computer: Arc<dyn ComputerResources>,
-  pub(in crate::execution) vault: Arc<dyn SecretVault>,
   pub(in crate::execution) project: orchester_core::id::ProjectId,
 }
 
@@ -477,7 +473,6 @@ impl RunTask {
   pub(in crate::execution::executor::step) fn reviewer_sources(&self) -> ReviewerSources {
     ReviewerSources {
       computer: Arc::clone(&self.computer),
-      vault: Arc::clone(&self.vault),
       project: self.project.id(),
     }
   }

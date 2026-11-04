@@ -12,11 +12,10 @@ use std::{path::PathBuf, sync::Arc};
 use orchester_core::{
   command::{SecretVariable, redact_secrets},
   id::{RunId, StepExecutionId, TaskId},
-  memory::{AgentProvenance, MemoryNote, MemoryStatus, SecretScreen},
+  memory::{AgentProvenance, MemoryNote, MemoryStatus},
   orchester_tools::{TaskView, ToolResult},
   run::StepProgress,
-  secret::SecretVault,
-  store::{RunStore, SecretStore},
+  store::RunStore,
   time::Timestamp,
 };
 use orchester_store::{MemoryAnswer, MemoryRecord, ProjectDb, StepRecord};
@@ -26,6 +25,7 @@ use super::super::{
   link::{CoordinatorLink, messages as message_link, questions as question_link},
   sink::Sink,
 };
+use crate::computer::ComputerResources;
 
 /// The run, task and step execution an invocation's agent works on, and where their records are.
 pub(super) struct RunRecords {
@@ -41,7 +41,8 @@ pub(super) struct RunRecords {
   pub(super) execution: StepExecutionId,
   /// The agent of the step, for the memory records it keeps; `None` for a step without an agent profile.
   pub(super) provenance: Option<AgentProvenance>,
-  pub(super) vault: Arc<dyn SecretVault>,
+  /// The run's computer, whose secrets a memory record is screened against.
+  pub(super) computer: Arc<dyn ComputerResources>,
 }
 
 impl RunRecords {
@@ -89,9 +90,11 @@ impl RunRecords {
     let db = self.db()?;
     let unreadable =
       |error: &dyn std::error::Error| ToolResult::unavailable(&format!("memory cannot be kept: {error}"));
-    let secrets = db.secrets().map_err(|error| unreadable(&error))?;
-    let screen =
-      SecretScreen::load(db.project().id(), &secrets, self.vault.as_ref()).map_err(|error| unreadable(&error))?;
+    let secrets = self.computer.secrets().map_err(|error| unreadable(&error))?;
+    let screen = self
+      .computer
+      .secret_screen(db.project().id(), &secrets)
+      .map_err(|error| unreadable(&error))?;
     if let Err(contains) = note.screen(&screen) {
       return Ok(ToolResult::unavailable(&format!(
         "nothing was kept: the text holds the value of secret `{}`",
