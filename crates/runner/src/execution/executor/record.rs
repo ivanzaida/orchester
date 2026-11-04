@@ -1,16 +1,15 @@
-//! Recording a run's transitions: the events are appended with the new state, then the desktop
-//! is told that the run changed.
+//! Recording a run's transitions: the events are sent to the coordinator's sink with the new state,
+//! then the desktop is told that the run changed.
 
 use orchester_core::{
   run::{Run, RunError, RunEvent, RunStatus},
-  store::RunStore,
   time::Timestamp,
 };
 use orchester_ipc::Event;
-use orchester_store::{ProjectDb, RunStoreError};
+use orchester_store::{RunLogRecord, RunStoreError};
 use thiserror::Error;
 
-use super::Notifier;
+use super::{Notifier, sink::Sink};
 
 #[derive(Debug, Error)]
 pub(super) enum RecordError {
@@ -31,10 +30,10 @@ pub(super) fn announce_ready(notifier: &Notifier, run: &Run) {
   }
 }
 
-/// Applies `transition` to `run`, stores its events with the new state and announces the change.
-/// A transition that changes nothing records nothing.
+/// Applies `transition` to `run`, sends its events with the new state to `sink` and announces the
+/// change. A transition that changes nothing records nothing.
 pub(super) fn record(
-  db: &mut ProjectDb,
+  sink: &mut dyn Sink,
   notifier: &Notifier,
   run: &mut Run,
   transition: impl FnOnce(&mut Run, Timestamp) -> Result<Vec<RunEvent>, RunError>,
@@ -43,7 +42,7 @@ pub(super) fn record(
   if events.is_empty() {
     return Ok(());
   }
-  db.append_events(run, &events)?;
+  sink.run_log(RunLogRecord::events(run, &events)?)?;
   notifier.send(Event::RunChanged {
     run: run.id(),
     task: run.task(),

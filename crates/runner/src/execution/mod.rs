@@ -526,6 +526,7 @@ impl Scheduler {
     let settled = Arc::new(AtomicBool::new(false));
     let context = TaskContext {
       root: self.inner.project_root.clone(),
+      sink: Box::new(coordinator::sink::LocalSink::new(&self.inner.project_root)),
       notifier: self.inner.notifier.clone(),
       vault: self.inner.vault.clone(),
       relay: self.inner.relay.clone(),

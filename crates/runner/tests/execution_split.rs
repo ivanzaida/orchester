@@ -102,6 +102,39 @@ fn executor_names_no_coordinator_module_beyond_the_known_places() {
   assert!(gone.is_empty(), "no longer named; remove them from KNOWN: {gone:?}");
 }
 
+/// The project database's writes of the run log: the executor sends its records to the coordinator's sink instead
+/// (`docs/architecture/remote-runners.md`, rule 2).
+const RUN_LOG_WRITES: &[&str] = &[
+  "append_events",
+  "append_events_with_plan",
+  "append_runner_failure",
+  "write_run_log",
+];
+
+#[test]
+fn executor_writes_the_run_log_only_through_the_sink() {
+  let executor = execution().join("executor");
+  let mut files = Vec::new();
+  rust_files(&executor, &mut files);
+  let mut writes = Vec::new();
+  for file in &files {
+    let text = fs::read_to_string(file).unwrap_or_else(|error| panic!("cannot read {}: {error}", file.display()));
+    for line in text.lines() {
+      let code = line.split("//").next().unwrap_or_default();
+      for write in RUN_LOG_WRITES {
+        let named = code.match_indices(write).any(|(at, _)| {
+          let after = code[at + write.len()..].chars().next();
+          !after.is_some_and(|c| c.is_alphanumeric() || c == '_')
+        });
+        if named {
+          writes.push(format!("{}: {write}", file.display()));
+        }
+      }
+    }
+  }
+  assert!(writes.is_empty(), "executor code writes the run log itself: {writes:?}");
+}
+
 #[test]
 fn a_coordinator_path_in_code_is_found_and_one_in_a_comment_is_not() {
   assert_eq!(
