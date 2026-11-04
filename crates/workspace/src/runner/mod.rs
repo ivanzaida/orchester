@@ -19,6 +19,7 @@ mod idle;
 mod lifetime;
 mod report;
 mod requests;
+mod resolve;
 pub mod state;
 mod work;
 
@@ -111,6 +112,9 @@ struct Inner {
   slot_updates: Mutex<()>,
   /// Hands out the generations of the projects' runners.
   generations: AtomicU64,
+  /// The programs a test without a runner carries out requests about runs' worktrees with, in its own process.
+  #[cfg(feature = "test-support")]
+  worktrees_here: Mutex<Option<orchester_exec::programs::Programs>>,
 }
 
 /// One project's runner.
@@ -167,6 +171,8 @@ impl Runners {
         closing: AtomicBool::new(false),
         slot_updates: Mutex::new(()),
         generations: AtomicU64::new(0),
+        #[cfg(feature = "test-support")]
+        worktrees_here: Mutex::new(None),
       }),
     }
   }

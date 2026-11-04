@@ -9,7 +9,10 @@ use std::{fmt, num::NonZeroU32};
 use orchester_core::{
   connection::{AgentProvider, ApiEndpoint, CheckResult, NativeModel},
   id::{ChatId, ChatMessageId, ConnectionId, IdempotencyKey, ResourceId, RunId, StepExecutionId, TaskId},
-  integration::Leftovers,
+  integration::{
+    Leftovers,
+    resolve::request::{ResolveAnswer, ResolveFailure, ResolveRequest},
+  },
   permission::AgentPermissions,
   question::GivenAnswer,
   resource::StepKey,
@@ -278,6 +281,10 @@ pub enum Command {
   /// carried out, [`Rejection::BrowserUnavailable`] when the browser cannot start, [`Rejection::NoSuchTab`] for a tab
   /// it does not have, or [`Rejection::Failed`] when the browser refused.
   Browser(BrowserCommand),
+  /// `request` about the merge a person resolves by hand in run `run`'s worktree, carried out where the worktree is
+  /// (protocol 40): the desktop keeps the project's record of the resolution and runs no git there itself. Answered
+  /// with [`Reply::Resolved`], or [`Reply::ResolveFailed`] with why it did not go on.
+  Resolve { run: RunId, request: ResolveRequest },
 }
 
 /// Which session a runner serves, from the desktop's side.
@@ -467,6 +474,10 @@ pub enum Reply {
   ErrorReportsSet,
   /// The answer to [`Command::Browser`].
   Browser(BrowserReply),
+  /// The answer to [`Command::Resolve`] that was carried out.
+  Resolved(ResolveAnswer),
+  /// The answer to [`Command::Resolve`] that did not go on, and why.
+  ResolveFailed(ResolveFailure),
   Rejected(Rejection),
 }
 

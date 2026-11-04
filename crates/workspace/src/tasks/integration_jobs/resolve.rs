@@ -11,7 +11,6 @@ use orchester_core::{
   id::RunId,
   integration::resolve::{Side, Started},
 };
-use orchester_exec::programs::Programs;
 
 use super::{Active, JobState, RunJobs};
 use crate::{
@@ -62,7 +61,8 @@ pub struct ResolveJob {
 pub struct ResolveArgs {
   pub open: OpenProject,
   pub run: RunId,
-  pub programs: Programs,
+  /// The project's run worktrees, where git runs.
+  pub worktrees: resolve::RunWorktrees,
   /// The editor to open the worktree in, or why none opens.
   pub editor: Result<resolve::Editor, EditorOpened>,
   /// Called once it ended, so the task is read again.
@@ -108,9 +108,9 @@ impl RunJobs {
   }
 
   fn resolve_now(&self, step: ResolveStep, args: ResolveArgs) {
-    let (root, run, programs) = (&args.open.repo_root, args.run, &args.programs);
+    let (root, run, worktrees) = (&args.open.repo_root, args.run, &args.worktrees);
     let (outcome, editor) = match step {
-      ResolveStep::Start => match resolve::start(programs, root, run) {
+      ResolveStep::Start => match resolve::start(worktrees, root, run) {
         Ok(Started::Conflicts(files)) => (
           Ok(false),
           Some(open_editor(args.editor, &run_worktree(root, run), &files)),
@@ -119,11 +119,11 @@ impl RunJobs {
         Err(message) => (Err(message), None),
       },
       ResolveStep::Decide { path, side } => (
-        resolve::decide(programs, root, (run, &path, side)).map(|()| false),
+        resolve::decide(worktrees, root, (run, &path, side)).map(|()| false),
         None,
       ),
-      ResolveStep::Continue => (resolve::finish(programs, root, run).map(|()| true), None),
-      ResolveStep::Abort => (resolve::abort(programs, root, run).map(|()| false), None),
+      ResolveStep::Continue => (resolve::finish(worktrees, root, run).map(|()| true), None),
+      ResolveStep::Abort => (resolve::abort(worktrees, root, run).map(|()| false), None),
     };
     self.update(|state| {
       state.resolve.ended += 1;
@@ -147,7 +147,9 @@ impl RunJobs {
   }
 }
 
-/// Opens `worktree` and the conflicted `files` in `editor`, or says why it does not open.
+/// Opens `worktree` and the conflicted `files` in `editor`, or says why it does not open. The editor runs on this
+/// computer and opens the worktree's local path, where a local runner keeps it; a run whose worktree is on another
+/// computer (`docs/architecture/remote-runners.md`) will need another way to reach its files, which is not built.
 fn open_editor(editor: Result<resolve::Editor, EditorOpened>, worktree: &Path, files: &[String]) -> EditorOpened {
   let editor = match editor {
     Ok(editor) => editor,

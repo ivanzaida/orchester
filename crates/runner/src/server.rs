@@ -3,6 +3,8 @@
 //! shows.
 
 mod browser;
+mod estimate;
+mod resolve;
 
 use std::{
   future::Future,
@@ -361,14 +363,8 @@ async fn answer(
     },
     Command::StopTurn { run } => return later.answer(run, async move { handle.stop_turn(run).await }),
     Command::Browser(ref command) => return later.browser(handle, command.clone()),
-    Command::EstimateTask { task } => {
-      return later.reply(async move {
-        match handle.estimate_task(task).await {
-          Ok(outcome) => Reply::TaskEstimated { task, outcome },
-          Err(rejection) => Reply::Rejected(rejection),
-        }
-      });
-    }
+    Command::Resolve { run, ref request } => return later.resolve(handle, run, request.clone()),
+    Command::EstimateTask { task } => return later.estimate(handle, task),
     Command::SetErrorReports { ref reports } => return Answer::ErrorReports(id, reports.clone()),
   };
   Answer::Reply(Event::Reply { id, reply })

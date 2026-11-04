@@ -32,7 +32,10 @@ use orchester_core::{
 use orchester_exec::{ProcessRunner, programs::Programs};
 use orchester_ipc::Command as RunnerCommand;
 use orchester_store::ProjectDb;
-use orchester_workspace::merge_queue::{self, Advance};
+use orchester_workspace::{
+  merge_queue::{self, Advance},
+  tasks::resolve::RunWorktrees,
+};
 use parking_lot::Mutex;
 
 /// `git <args>` in `root`, which must succeed; its trimmed output.
@@ -147,6 +150,11 @@ impl Repo {
 
   pub fn programs(&self) -> Programs {
     Programs::with_runner(self.answered.clone())
+  }
+
+  /// The runs' worktrees, where resolving by hand runs git as the project's runner would, in the test's process.
+  pub fn worktrees(&self) -> RunWorktrees {
+    RunWorktrees::here_for_test(self.root(), self.programs())
   }
 
   /// The check runs `script` from now on.

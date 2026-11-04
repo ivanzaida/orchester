@@ -1,13 +1,14 @@
 //! *Resolve in editor* on a run's worktree (`tasks::resolve`): the merge is recorded as the run's resolution before
 //! git begins it, so the run neither continues nor is merged while it waits; *Abort* and *Continue* end it, and a
-//! merge a person ended themselves ends it when the worktree is read again.
+//! merge a person ended themselves ends it when the worktree is read again. Git in the worktree runs as the runner runs
+//! it, here in the test's process through the protocol's messages.
 
 use std::{fs, path::Path};
 
 use orchester_core::integration::resolve::Started;
 use orchester_exec::programs::Programs;
 use orchester_store::ProjectDb;
-use orchester_workspace::tasks::resolve;
+use orchester_workspace::tasks::resolve::{self, RunWorktrees};
 
 use super::support::{Fixture, git};
 
@@ -23,6 +24,11 @@ fn programs() -> Programs {
   Programs::processes()
 }
 
+/// The runs' worktrees of the project at `root`.
+fn worktrees(root: &Path) -> RunWorktrees {
+  RunWorktrees::here_for_test(root, programs())
+}
+
 fn resolution(root: &Path, fixture: &Fixture) -> Option<orchester_core::time::Timestamp> {
   ProjectDb::open(root)
     .expect("db")
@@ -34,15 +40,15 @@ fn resolution(root: &Path, fixture: &Fixture) -> Option<orchester_core::time::Ti
 fn local_integration_resolve_records_the_merge_and_holds_the_run_back_until_it_ends() {
   let fixture = conflicting();
   let root = fixture.root();
-  let started = resolve::start(&programs(), root, fixture.run).expect("merged into the worktree");
+  let started = resolve::start(&worktrees(root), root, fixture.run).expect("merged into the worktree");
   assert_eq!(started, Started::Conflicts(vec!["task.txt".to_owned()]));
   assert!(resolution(root, &fixture).is_some());
-  let worktree = resolve::read(&programs(), root, (fixture.run, true)).expect("read");
+  let worktree = resolve::read(&worktrees(root), root, (fixture.run, true)).expect("read");
   assert!(worktree.present);
   assert!(worktree.merge.is_some());
 
   // The store refuses the run's continuations meanwhile (`orchester-store` `returned_after_end`).
-  resolve::abort(&programs(), root, fixture.run).expect("aborted");
+  resolve::abort(&worktrees(root), root, fixture.run).expect("aborted");
   assert_eq!(resolution(root, &fixture), None);
   assert_eq!(git(&fixture.task_root, &["status", "--porcelain"]), "");
 }
@@ -51,12 +57,12 @@ fn local_integration_resolve_records_the_merge_and_holds_the_run_back_until_it_e
 fn local_integration_resolve_a_merge_ended_outside_orchester_ends_its_resolution() {
   let fixture = conflicting();
   let root = fixture.root();
-  resolve::start(&programs(), root, fixture.run).expect("merged into the worktree");
+  resolve::start(&worktrees(root), root, fixture.run).expect("merged into the worktree");
   git(&fixture.task_root, &["merge", "--abort"]);
   // While a resolving step works, a missing merge may be one it is about to begin: nothing ends then.
-  resolve::read(&programs(), root, (fixture.run, false)).expect("read");
+  resolve::read(&worktrees(root), root, (fixture.run, false)).expect("read");
   assert!(resolution(root, &fixture).is_some());
-  let worktree = resolve::read(&programs(), root, (fixture.run, true)).expect("read");
+  let worktree = resolve::read(&worktrees(root), root, (fixture.run, true)).expect("read");
   assert!(worktree.merge.is_none());
   assert_eq!(resolution(root, &fixture), None);
 }
@@ -65,7 +71,7 @@ fn local_integration_resolve_a_merge_ended_outside_orchester_ends_its_resolution
 fn local_integration_resolve_a_held_run_is_not_merged_and_a_gone_worktree_ends_the_hold() {
   let fixture = conflicting();
   let root = fixture.root();
-  resolve::start(&programs(), root, fixture.run).expect("merged into the worktree");
+  resolve::start(&worktrees(root), root, fixture.run).expect("merged into the worktree");
   let main = git(root, &["rev-parse", "main"]);
   assert!(
     orchester_workspace::tasks::integration::merge_in(root, &programs(), (fixture.run, None)).is_err(),
@@ -81,7 +87,7 @@ fn local_integration_resolve_a_held_run_is_not_merged_and_a_gone_worktree_ends_t
       fixture.task_root.to_str().expect("a path"),
     ],
   );
-  let worktree = resolve::read(&programs(), root, (fixture.run, false)).expect("read");
+  let worktree = resolve::read(&worktrees(root), root, (fixture.run, false)).expect("read");
   assert!(!worktree.present);
   assert_eq!(resolution(root, &fixture), None);
 }
@@ -90,13 +96,13 @@ fn local_integration_resolve_a_held_run_is_not_merged_and_a_gone_worktree_ends_t
 fn local_integration_resolve_continue_commits_and_ends_the_resolution() {
   let fixture = conflicting();
   let root = fixture.root();
-  resolve::start(&programs(), root, fixture.run).expect("merged into the worktree");
+  resolve::start(&worktrees(root), root, fixture.run).expect("merged into the worktree");
   assert!(
-    resolve::finish(&programs(), root, fixture.run).is_err(),
+    resolve::finish(&worktrees(root), root, fixture.run).is_err(),
     "markers are left"
   );
   fs::write(fixture.task_root.join("task.txt"), "main's task\ndelivered task\n").expect("resolved");
-  resolve::finish(&programs(), root, fixture.run).expect("committed");
+  resolve::finish(&worktrees(root), root, fixture.run).expect("committed");
   assert_eq!(resolution(root, &fixture), None);
   let main = git(root, &["rev-parse", "main"]);
   git(&fixture.task_root, &["merge-base", "--is-ancestor", &main, "HEAD"]);

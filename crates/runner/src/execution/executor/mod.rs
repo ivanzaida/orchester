@@ -23,6 +23,7 @@ pub(super) mod pool;
 pub(super) mod prepared;
 pub(super) mod question;
 pub(super) mod record;
+pub(super) mod resolve;
 pub(super) mod run;
 pub(super) mod step;
 pub(super) mod tool;
