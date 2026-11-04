@@ -1,7 +1,8 @@
 //! Turning a queued task into a started run: preflight, the run's base revision and its base branch (which merging
 //! the run brings its work into: the task's base branch, else its module's, else the one the user's checkout has, and
-//! where it came from), the run's branch, its record in the database, its worktree and its start. Idempotent by the
-//! request's key.
+//! where it came from), the run's branch, its record in the database, the start order the executor makes its worktree
+//! from (`super::super::executor::start`) and its start. Only this side reads the person's checkout and numbers runs.
+//! Idempotent by the request's key.
 
 use std::{collections::BTreeMap, path::Path, time::Duration};
 
@@ -15,7 +16,7 @@ use orchester_core::{
   revision::Revision,
   run::{
     BranchName, NewRun, PreflightInput, PreflightProblem, PublishedVersions, Run, RunFailure, RunSnapshot, RunStatus,
-    WorktreeFailure, preflight,
+    StartOrder, WorktreeFailure, preflight,
   },
   sharing::TaskRevision,
   store::{
@@ -30,7 +31,10 @@ use orchester_store::{ProjectDb, RunStoreError, StoreError};
 
 use super::{failed, read_failed};
 pub(in crate::execution) use crate::execution::executor::prepared::{Prepared, RunFolder};
-use crate::{git::Git, worktree::Worktrees};
+use crate::{
+  execution::executor::start::{self, Place},
+  git::Git,
+};
 
 /// A git query that does not answer within this time counts as failed.
 const GIT_TIMEOUT: Duration = Duration::from_secs(30);
@@ -176,19 +180,15 @@ pub(in crate::execution) fn resume_recorded(
   finish_recorded(db, root, run, task)
 }
 
+/// Hands the recorded `run` to the executor with a start order of its revision and branch: the executor makes its
+/// place to work, and the run starts on the branch it answers with; a run whose place cannot be made fails to start.
 fn finish_recorded(db: &mut ProjectDb, root: &Path, mut run: Run, task: Task) -> Result<Prepared, Rejection> {
-  let worktrees = Worktrees::new(root).map_err(|error| failed("cannot find the worktrees", &error))?;
-  let own = worktrees.path(run.id());
-  // A project that has not turned warm workspaces on gives each run a worktree of its own, as before them.
   let borrows = db
     .workspace_settings()
     .map_err(|error| failed("cannot read the workspace settings", &error))?
     .enabled;
-  let folder = if own.is_dir() || !borrows {
-    RunFolder::Own(own)
-  } else {
-    RunFolder::Borrowed
-  };
+  let order = StartOrder::new(run.id(), run.branch().clone(), run.base().clone(), borrows);
+  let place = Place::find(root, order).map_err(|error| failed("cannot find the worktrees", &error))?;
   if let RunStatus::Failed(RunFailure::WorktreeNotCreated(reason)) = run.status() {
     return Err(Rejection::RunNotStarted {
       run: run.id(),
@@ -199,19 +199,19 @@ fn finish_recorded(db: &mut ProjectDb, root: &Path, mut run: Run, task: Task) ->
     return Ok(Prepared {
       run,
       task,
-      folder,
+      folder: place.into_folder(),
       execute: false,
       try_at_plan_limit: None,
     });
   }
   check_readiness(db, run.task())?;
-  match run_branch(&worktrees, &run, &folder) {
+  match place.make() {
     Ok(branch) => record_branch(db, &mut run, branch)?,
     Err(reason) => return Err(fail_to_start(db, run, reason)),
   }
   db.record_run_origin(run.id(), origin_push_url(root).as_deref())
     .map_err(|error| failed("cannot record the run's origin", &error))?;
-  if folder == RunFolder::Borrowed {
+  if place.folder() == &RunFolder::Borrowed {
     db.set_run_borrows(run.id(), true)
       .map_err(|error| failed("cannot record that the run borrows workspaces", &error))?;
   }
@@ -223,30 +223,9 @@ fn finish_recorded(db: &mut ProjectDb, root: &Path, mut run: Run, task: Task) ->
   Ok(Prepared {
     run,
     task,
-    folder,
+    folder: place.into_folder(),
     execute: true,
     try_at_plan_limit: None,
-  })
-}
-
-/// The branch of the pending run: the one its own worktree is on, which is created now unless an earlier request
-/// did; or, for a run that borrows workspaces, a branch made now without a worktree. Why there is none, when it cannot
-/// be. Only the runner's log has git's full answer.
-fn run_branch(worktrees: &Worktrees, run: &Run, folder: &RunFolder) -> Result<BranchName, WorktreeFailure> {
-  let branch = match folder {
-    RunFolder::Own(path) if path.is_dir() => worktrees.branch_of(run.id()),
-    RunFolder::Own(_) => worktrees
-      .create(run.id(), run.branch().as_str(), run.base().as_str())
-      .map(|created| created.branch().to_owned()),
-    RunFolder::Borrowed => worktrees.create_branch(run.branch().as_str(), run.base().as_str()),
-  }
-  .map_err(|error| {
-    tracing::error!(run = %run.id(), %error, "cannot create the run's branch");
-    error.failure()
-  })?;
-  BranchName::new(&branch).map_err(|error| {
-    tracing::error!(run = %run.id(), %branch, %error, "the run's worktree is on a branch a run cannot have");
-    WorktreeFailure::InvalidBranch
   })
 }
 
@@ -334,19 +313,13 @@ impl Prepared {
 /// workspace it borrows, on its branch, for a run made since. Refused when a run of the first kind lost its worktree,
 /// and when a borrowing run's branch, which holds all its work, is gone.
 pub(super) fn existing_folder(db: &ProjectDb, root: &Path, run: &Run) -> Result<RunFolder, Rejection> {
-  let own = Worktrees::new(root)
-    .map_err(|error| failed("cannot find the worktrees", &error))?
-    .path(run.id());
-  if own.is_dir() {
+  if let Some(own) = start::own_worktree(root, run.id()).map_err(|error| failed("cannot find the worktrees", &error))? {
     return Ok(RunFolder::Own(own));
   }
   let borrows = db
     .run_borrows(run.id())
     .map_err(|error| failed("cannot read whether the run borrows workspaces", &error))?;
-  let branch = format!("refs/heads/{}", run.branch());
-  let kept = Git::new(root)
-    .succeeds(&["show-ref", "--verify", "--quiet", &branch])
-    .map_err(|error| failed("cannot read the run's branch", &error))?;
+  let kept = start::branch_kept(root, run.branch()).map_err(|error| failed("cannot read the run's branch", &error))?;
   if !borrows || !kept {
     tracing::warn!(run = %run.id(), "the run's worktree or branch is gone; its agent cannot continue");
     return Err(Rejection::WorktreeRemoved);

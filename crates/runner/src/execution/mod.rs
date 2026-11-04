@@ -139,7 +139,7 @@ impl Scheduler {
     orchester_store::pause_lock_waits_with(crate::lock_pause::pause_off_async_workers);
     // Before the desktop connects and reads the runs.
     coordinator::missing_checkpoints::record(project_root);
-    coordinator::worktree_sweep::sweep_in_background(project_root.to_path_buf());
+    executor::worktree_sweep::sweep_in_background(project_root.to_path_buf());
     Self {
       inner: Arc::new(Inner {
         project_root: project_root.to_path_buf(),

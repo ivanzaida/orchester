@@ -83,9 +83,8 @@ impl Scheduler {
 /// (`Workspace::accepted_work`): the person reads why.
 fn acceptable(root: &std::path::Path, run: &Run) -> Result<(), Rejection> {
   let accepted = run.acceptable().ok_or(Rejection::RunNotWaiting)?;
-  let run_worktree = crate::worktree::Worktrees::new(root)
-    .map(|worktrees| worktrees.path(run.id()))
-    .map_err(|error| Rejection::Failed {
+  let run_worktree =
+    crate::execution::executor::start::worktree_path(root, run.id()).map_err(|error| Rejection::Failed {
       detail: error.to_string(),
     })?;
   match crate::execution::executor::workspace::Workspace::accepted_work(root, (run, &run_worktree), accepted) {
