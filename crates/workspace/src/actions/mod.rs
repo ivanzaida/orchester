@@ -28,8 +28,8 @@ use orchester_store::{ProjectDb, StoreError};
 
 pub use self::{
   action::{
-    Action, ActionClass, AssignmentAction, ClaimAction, DeliveryAction, Intent, ModuleAction, PolicyAction, TagAction,
-    TaskAction, WorkAction,
+    Action, ActionClass, AssignmentAction, ClaimAction, DeliveryAction, DeliveryStep, Intent, ModuleAction,
+    PolicyAction, TagAction, TaskAction, WorkAction,
   },
   error::ActionError,
   outcome::{Accepted, ActionOutcome, Current, Definition, LocalResult, Receipt, Refusal, TeamOutcome},

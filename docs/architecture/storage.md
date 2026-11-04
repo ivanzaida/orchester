@@ -328,7 +328,9 @@ locks (`orchester_core::integration`).
   which stands) so that the merge never touches the checkout's files. A conflict, or a hook that
   refuses the merge commit, ends with the temporary worktree removed, the checkout as it was, and the
   conflicting files named. If the checkout moved to another branch, or its branch got a commit,
-  while the merge commit was made, the merge is dropped and refused.
+  while the merge commit was made, the merge is dropped and refused. A team module's delivery to base
+  (team authority P4c) takes the same merge, always as a merge commit *Merge module/<name>* of the
+  authorized base commit and module branch head, in `orchester-merge-module-<module id>`.
 - **Hooks.** The repository's own hooks run: they are the user's. The merge commit's hooks
   (`pre-merge-commit`, `prepare-commit-msg`, `commit-msg`, `post-merge`) come from the hooks folder
   the checkout uses (`core.hooksPath`, a relative one resolved against the checkout) but run with the

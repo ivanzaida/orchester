@@ -117,6 +117,16 @@ pub enum StoreError {
   /// The run is not a team run this project started through its server.
   #[error("run {0} is not a team run")]
   TeamRunNotFound(RunId),
+  /// No team module delivery of this project was recorded under the operation.
+  #[error("no team delivery is recorded under operation {0}")]
+  TeamDeliveryNotFound(OperationId),
+  /// The team delivery under the operation is not at the boundary the step goes on from: another step carried it on
+  /// already, or it is settled. Nothing was changed.
+  #[error("the team delivery under operation {operation} is {stage}, not where this step goes on from")]
+  TeamDeliveryStage {
+    operation: OperationId,
+    stage: &'static str,
+  },
   /// The project is shared already; nothing was changed.
   #[error("the project's task list is shared already")]
   AlreadyShared,
