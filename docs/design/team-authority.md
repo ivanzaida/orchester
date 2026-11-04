@@ -70,7 +70,8 @@ renewed. Neutral for a healthy claim, warning when it isn't renewed or is stale,
 - **Refused** (02f): *Couldn't take over KON-12 · mara renewed her claim at 15:43, before your request reached the
   team server*; the line shows her fresh claim; nothing started here.
 - **Waits for you · D1** (02g): only Running work renews; the server refuses renewal for a waiting run (or one in
-  review) with `decision_required`. The line says the claim isn't renewed, when it goes stale, and names D1.
+  review) with `decision_required` (D1, decided). The line says the claim isn't renewed and when it goes stale;
+  decision ids stay in the frame captions, never in on-screen text.
 - **Sheet** (02h): every case side by side, including *your claim is stale, nobody took it · Continue*, *nobody
   holds it · Claim* and the four authority-lost lines.
 
@@ -90,7 +91,7 @@ An Admin's unassignment (02h) ends the claim at once in the same way.
   dialog with the new name. Cases: edit; branch taken (field error); refused while a run of the module works
   (danger notice); revision conflict (05's pattern); a member sees it read-only.
 - **Assignee and claim** (04, 04d): Assignee is a picker for Admins and text for members; Claim reads *olha ·
-  renewed 15:40* or *olha · stale*. Child runs don't renew the module claim; what does is D1, named in the line.
+  renewed 15:40* or *olha · stale*. The line says child runs don't renew the module claim; what does is open (D1).
 - **Takeover refused** (04d): *Couldn't take over Webhooks v2 · KON-12 is Running under olha's module claim*.
 - **Delivery** (04e, 04f): not requested; requested (member: *waits for an Admin*); awaiting authorization (Admin:
   *Changes*, *Authorize* for the exact commits); authorized by an Admin; authorized automatically by Automatic merge
@@ -107,9 +108,10 @@ target date, a tag rename, a board move between Backlog and Todo, and Automatic 
 
 - Team lists and pages say *Team data is unavailable* with the time and *Try again*; no old copy is shown as live,
   and Orchester keeps none (06, 06d). The Tasks list keeps one section, *Running on this computer*, with each run's
-  waiting reports.
-- A Task page of a running run (06b) keeps the run (it uses its saved inputs) and drops the team fields from the
-  side panel (*Team fields unavailable*), keeping only the run's branch and pipeline.
+  waiting reports; the sidebar's *Running* lists the same runs (KON-12, KON-21).
+- A Task page of a running run (06b, 06c) keeps the run (it uses its saved inputs) and drops the team fields from the
+  side panel (*Team fields unavailable*), keeping only the run's branch and pipeline; the brief has no version
+  picker, since its versions are team data.
 - Local success apart from team acceptance (06c, 06e): *Run 8 succeeded on this computer* and *Delivery not accepted
   yet* are two lines. Outcomes: succeeded doesn't mark the task Done; failed keeps the claim; cancelled releases an
   independent claim; stopped at its limit stays resumable; reports refused for a lost claim stay readable.
@@ -127,8 +129,9 @@ target date, a tag rename, a board move between Backlog and Todo, and Automatic 
 
 ## Open decisions (drawn as open, no behaviour invented)
 
-- **D1** — what renews a module claim, and whether a run waiting for a person or in review renews. Drawn: such a run
-  isn't renewed and the line names D1; the module line names D1 for its own renewal.
+- **D1** — decided for tasks: only Running work renews, so a run waiting for a person or in review isn't renewed
+  (drawn in 02g, 02h). Still open: what renews a module claim. Drawn: the module line only says its tasks' runs
+  don't renew it; the frame captions and these notes carry the decision id, the on-screen text doesn't.
 - **D4** — completing a task outside a run, manual blocked and reopen. Drawn: a succeeded run never marks the task
   Done; there is no Done action.
 - **D6** — default pipeline and the remaining field ownership. Drawn: the pipeline shown is the Admin's; members have
