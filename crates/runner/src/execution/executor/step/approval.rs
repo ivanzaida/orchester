@@ -15,7 +15,6 @@ use orchester_core::{
   },
   native::{command::CommandForm, item::ToolCallId},
   run::{NativeCommandAsk, PendingToolApproval},
-  store::ActivityStore,
   time::Timestamp,
 };
 use orchester_ipc::{Event, Rejection};
@@ -341,7 +340,7 @@ impl Worker {
       watch.invocation.timing.wait_for_person(since);
       // A person's wait never holds one of the computer's QA slots.
       self.qa.release(watch.invocation.id);
-      watch.db.save_invocation(&watch.invocation)?;
+      watch.record_invocation()?;
     }
     self.notifier.send(Event::ToolApprovalChanged {
       run: approval.run,
@@ -369,7 +368,7 @@ impl Worker {
     watch.db.record_came_to_person(approval.run, &approval.id, None)?;
     let now = Timestamp::now();
     watch.invocation.timing.resume(now);
-    watch.db.save_invocation(&watch.invocation)?;
+    watch.record_invocation()?;
     self.route(watch, (approval, awaiting), now).await?;
     if self.reviewing.is_some() {
       self.resume_qa(watch, None);
@@ -474,7 +473,7 @@ impl Worker {
     watch.invocation.timing.resume(Timestamp::now());
     watch.approval = None;
     self.resume_qa(watch, None);
-    watch.db.save_invocation(&watch.invocation)?;
+    watch.record_invocation()?;
     if waited {
       self.notifier.send(Event::ToolApprovalChanged {
         run: watch.invocation.run,

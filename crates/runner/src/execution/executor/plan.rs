@@ -22,7 +22,6 @@ use super::{
   handoff::Keeper,
   record::{RecordError, announce_ready},
   run::{ExecutionError, RunTask},
-  sink::Sink,
 };
 use crate::execution::coordinator::idle;
 
@@ -65,25 +64,26 @@ impl RunTask {
   pub(super) fn decide_plan(&mut self, request: PlanRequest, ack: Ack) -> Result<(), ExecutionError> {
     let keeper = Keeper {
       db: &mut self.db,
+      sink: self.sink.as_mut(),
       notifier: &self.notifier,
       vault: self.vault.as_ref(),
     };
-    let result = record(keeper, self.sink.as_mut(), &mut self.run, request);
+    let result = record(keeper, &mut self.run, request);
     answer(ack, result);
     Ok(())
   }
 }
 
 /// Applies `request` to `run`: the plan must be the latest of its execution and still undecided,
-/// and the run running with the step waiting for it. Sends the decision with its events to `sink`
+/// and the run running with the step waiting for it. Sends the decision with its events to the keeper's sink
 /// and announces the change; an approved plan's handoff is then kept as task memory.
-pub(in crate::execution) fn record(
-  keeper: Keeper<'_>,
-  sink: &mut dyn Sink,
-  run: &mut Run,
-  request: PlanRequest,
-) -> Result<(), Rejection> {
-  let Keeper { db, notifier, vault } = keeper;
+pub(in crate::execution) fn record(keeper: Keeper<'_>, run: &mut Run, request: PlanRequest) -> Result<(), Rejection> {
+  let Keeper {
+    db,
+    sink,
+    notifier,
+    vault,
+  } = keeper;
   let plans = db
     .plans(run.id())
     .map_err(|error| failed("cannot read the run's plans", &error))?;
@@ -109,7 +109,13 @@ pub(in crate::execution) fn record(
     // Kept before the decision is announced, so whoever sees it finds the handoff. The decision is
     // recorded and the run goes on; a handoff the database could not take is reported rather than
     // turning the recorded decision into a rejection.
-    Keeper { db, notifier, vault }.keep_or_report(run, request.execution, StepFate::Passed);
+    let mut keeper = Keeper {
+      db,
+      sink,
+      notifier,
+      vault,
+    };
+    keeper.keep_or_report(run, request.execution, StepFate::Passed);
   }
   notifier.send(Event::RunChanged {
     run: run.id(),
