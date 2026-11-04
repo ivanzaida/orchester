@@ -21,6 +21,7 @@ mod local_file;
 pub mod mcp;
 mod narrow;
 mod network;
+pub mod pencil;
 #[cfg(windows)]
 pub(crate) mod remote_drive;
 pub mod roots;
