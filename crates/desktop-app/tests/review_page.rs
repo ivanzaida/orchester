@@ -2,7 +2,9 @@
 //! on the QA seed's `review-page` scenario (`examples/seed`): opened from its *Waiting for your review* row at the
 //! run's route under Merges, with the run's real diff, its files and *Viewed* marks, every thread state, the comment
 //! box that adds a comment to the tray, a send the runner did not take kept with why, and *Approve and merge*
-//! unavailable while Implement works on a comment sent. Needs `git`, as the seed does.
+//! unavailable while Implement works on a comment sent; on `review-changed`, a branch that moved after the review
+//! (ORC-699) told with its new commits, and *Approve and merge* unavailable until they are taken in. Needs `git`, as
+//! the seed does.
 //! `cargo test -p orchester-app --test review_page review_page`.
 
 #[path = "../examples/seed/kontur/mod.rs"]
@@ -37,12 +39,17 @@ struct Page {
 impl Page {
   /// The scenario in a window whose project has no runner: answers under way stay, and nothing reaches Implement.
   fn new() -> Self {
+    Self::of("review-page")
+  }
+
+  /// The seed's `scenario` in a window whose project has no runner.
+  fn of(scenario: &str) -> Self {
     let data = Data::new();
-    let repo = data.dir.path().join("repo-review-page");
+    let repo = data.dir.path().join(format!("repo-{scenario}"));
     let request = SeedRequest {
       data_dir: data.dir.path().to_path_buf(),
       repo,
-      scenario: scenarios::named("review-page").expect("a known scenario"),
+      scenario: scenarios::named(scenario).expect("a known scenario"),
       fake_codex: None,
       now: Timestamp::now(),
     };
@@ -237,6 +244,28 @@ fn review_page_approve_is_unavailable_while_implement_works_on_a_comment_sent() 
   let diff = page.diff_text();
   assert!(diff.contains("Sent · Implement is changing the code"), "{diff}");
   assert!(diff.contains("In the Conversation · run #3, step "), "{diff}");
+}
+
+#[test]
+fn review_page_tells_the_commits_after_the_review_and_approves_only_once_they_are_taken_in() {
+  let mut page = Page::of("review-changed");
+  page.open(("Sign webhook payloads", 1));
+  assert_eq!(page.window.text("review-status-text"), "Changed since your review");
+  let notice = page.window.text("review-changed");
+  assert!(notice.contains("2 new commits"), "{notice}");
+  let commits = page.window.text("review-changed-commits");
+  let (newest, oldest) = (
+    commits.find("Test the 30 s bound"),
+    commits.find("Cap the delay and its jitter together"),
+  );
+  assert!(newest.is_some() && oldest.is_some() && newest < oldest, "{commits}");
+  let reason = page.window.text("review-approve-reason");
+  assert!(reason.contains("review the new commits first"), "{reason}");
+  page.window.press("review-changed-take");
+  page.window.until("the commits taken in", |window| {
+    window.texts("review-changed").is_none() && window.texts("review-approve-reason").is_none()
+  });
+  assert_eq!(page.window.text("review-status-text"), "Waiting for your review");
 }
 
 /// The id of the first line of the diff whose id starts with `prefix`.

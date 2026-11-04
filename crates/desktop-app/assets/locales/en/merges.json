@@ -72,6 +72,8 @@
       "unsentOne": "1 comment not sent",
       "unsentOther": "{{count}} comments not sent",
       "changed": "Changed since your review · nothing merged · review again",
+      "changedOne": "Changed since your review: 1 commit after {{reviewed}} · nothing merged · review again",
+      "changedOther": "Changed since your review: {{count}} commits after {{reviewed}} · nothing merged · review again",
       "inQueue": "Merge queue · since {{time}}",
       "onTaskPage": "Task page · since {{time}}"
     },

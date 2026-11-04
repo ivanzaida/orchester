@@ -37,6 +37,7 @@ mod pipelines;
 mod project_settings;
 mod pull_requests;
 pub mod qa_app_asks;
+mod review_changed;
 mod review_page;
 pub mod settings;
 mod shared_config;
@@ -97,7 +98,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 108] = [
+pub const ALL: [Scenario; 109] = [
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-library", agents_library::seed),
   Scenario::of("agents-browser", agents_browser::seed),
@@ -145,6 +146,7 @@ pub const ALL: [Scenario; 108] = [
   Scenario::of("merges-many", merges::many),
   Scenario::of("merge-attempts", merge_attempts::seed),
   Scenario::of("review-page", review_page::seed),
+  Scenario::of("review-changed", review_changed::seed),
   Scenario::of("task-merge-row", task_merge_row::seed),
   Scenario::of("overview-quiet", delivery::quiet),
   Scenario::of("overview-states", overview_states::seed),

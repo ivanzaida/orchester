@@ -6,8 +6,8 @@ use std::path::Path;
 
 use orchester_core::{
   id::{RunId, TaskId},
-  integration::{RunMerge, attempt::RecordedAttempt, branch_head},
-  merge_queue::QueueState,
+  integration::{LoggedCommit, RunMerge, attempt::RecordedAttempt, branch_head, own_commits},
+  merge_queue::{QueueEntry, QueueState},
   revision::Revision,
   run::RunNumber,
   store::RunStore,
@@ -87,9 +87,22 @@ pub struct WaitingReview {
   pub number: RunNumber,
   pub since: Timestamp,
   pub review_in: ReviewIn,
-  /// The run's branch moved after the head that was reviewed: the run's last checkpoint, or in the merge queue the tip
-  /// its last check ran on; `None` when that cannot be told.
-  pub changed_since_review: Option<bool>,
+  /// Where the run's branch stands against the head that was reviewed ([`reviewed_head`]); `None` when that cannot be
+  /// told.
+  pub since_review: Option<SinceReview>,
+}
+
+/// Where a run's branch stands against the head that was reviewed.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SinceReview {
+  /// The branch is at the head reviewed.
+  Unchanged,
+  /// The branch moved after `reviewed`, or is gone: *Changed since your review*.
+  Moved {
+    reviewed: Revision,
+    /// The run's commits after `reviewed` up to where its branch is, newest first ([`commits_after`]).
+    commits: Vec<LoggedCommit>,
+  },
 }
 
 /// The runs of `tasks`, the project at `root`'s, that wait for a person's review before they merge, newest first.
@@ -107,13 +120,7 @@ pub fn waiting_for_review(
     let in_queue = entry
       .as_ref()
       .filter(|entry| entry.state == QueueState::WaitingForApproval);
-    let reviewed = match in_queue.and_then(|entry| entry.checked.as_ref()) {
-      Some(checked) => Some(checked.tip.clone()),
-      None => db
-        .latest_checkpoint(run)
-        .map_err(run_store_error)?
-        .map(|checkpoint| checkpoint.revision().clone()),
-    };
+    let reviewed = reviewed_head(&db, run, in_queue)?;
     waiting.push(WaitingReview {
       task: task.clone(),
       run,
@@ -124,26 +131,63 @@ pub fn waiting_for_review(
       } else {
         ReviewIn::TaskPage
       },
-      changed_since_review: moved_from(&db, (root, programs), run, reviewed.as_ref())?,
+      since_review: moved_from(&db, (root, programs), run, reviewed.as_ref())?,
     });
   }
   waiting.sort_by_key(|item| std::cmp::Reverse(item.since));
   Ok(waiting)
 }
 
-/// Whether `run`'s branch is no longer at `reviewed`: it moved, or is gone; `None` when that cannot be told, with no
-/// reviewed head or a branch Git could not read (the log says why).
+/// The head the person reviews `run` at, which *Approve and merge* pins (ORC-366): the tip the merge queue's last check
+/// ran on while it waits there for approval (`queued`), else the run's latest checkpoint; `None` without either.
+pub(crate) fn reviewed_head(
+  db: &ProjectDb,
+  run: RunId,
+  queued: Option<&QueueEntry>,
+) -> Result<Option<Revision>, StoreError> {
+  if let Some(checked) = queued.and_then(|entry| entry.checked.as_ref()) {
+    return Ok(Some(checked.tip.clone()));
+  }
+  Ok(
+    db.latest_checkpoint(run)
+      .map_err(run_store_error)?
+      .map(|checkpoint| checkpoint.revision().clone()),
+  )
+}
+
+/// The run's commits after `reviewed` up to `head`, newest first, at most
+/// [`MAX_LISTED`](orchester_core::integration::MAX_LISTED); none while they are the same, or when git cannot tell (the
+/// log says why).
+pub(crate) fn commits_after(
+  (root, programs): (&Path, &Programs),
+  (reviewed, head): (&Revision, &Revision),
+) -> Vec<LoggedCommit> {
+  if reviewed == head {
+    return Vec::new();
+  }
+  own_commits(&programs.runner(), Path::new(GIT), (root, reviewed, head)).unwrap_or_else(|error| {
+    tracing::warn!(%error, "cannot list the commits after the reviewed head");
+    Vec::new()
+  })
+}
+
+/// Where `run`'s branch stands against `reviewed`: at it, or moved past it or gone; `None` when that cannot be told,
+/// with no reviewed head or a branch Git could not read (the log says why).
 fn moved_from(
   db: &ProjectDb,
   (root, programs): (&Path, &Programs),
   run: RunId,
   reviewed: Option<&Revision>,
-) -> Result<Option<bool>, StoreError> {
+) -> Result<Option<SinceReview>, StoreError> {
   let (Some(reviewed), Some(stored)) = (reviewed, db.run(run).map_err(run_store_error)?) else {
     return Ok(None);
   };
   match branch_head(&programs.runner(), Path::new(GIT), (root, stored.branch())) {
-    Ok(head) => Ok(Some(head.as_ref() != Some(reviewed))),
+    Ok(Some(head)) if head == *reviewed => Ok(Some(SinceReview::Unchanged)),
+    Ok(head) => Ok(Some(SinceReview::Moved {
+      commits: head.map_or_else(Vec::new, |head| commits_after((root, programs), (reviewed, &head))),
+      reviewed: reviewed.clone(),
+    })),
     Err(error) => {
       tracing::warn!(%error, %run, "cannot read where the run's branch is");
       Ok(None)
