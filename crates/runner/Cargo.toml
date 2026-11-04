@@ -229,6 +229,10 @@ name = "returned"
 required-features = ["test-agent"]
 
 [[test]]
+name = "resolve"
+required-features = ["test-agent"]
+
+[[test]]
 name = "follow_up_routing"
 required-features = ["test-agent"]
 [[test]]

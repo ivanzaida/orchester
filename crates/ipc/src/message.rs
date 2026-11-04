@@ -9,7 +9,10 @@ use std::{fmt, num::NonZeroU32};
 use orchester_core::{
   connection::{AgentProvider, ApiEndpoint, CheckResult, NativeModel},
   id::{ChatId, ChatMessageId, ConnectionId, IdempotencyKey, ResourceId, RunId, StepExecutionId, TaskId},
-  integration::Leftovers,
+  integration::{
+    Leftovers,
+    resolve::request::{ResolveAnswer, ResolveFailure, ResolveRequest},
+  },
   orchestrator::run_git::{RunGitAnswer, RunGitRequest},
   permission::AgentPermissions,
   question::GivenAnswer,
@@ -309,7 +312,11 @@ pub enum Command {
   /// such run, [`Rejection::RunNotEnded`] for a write, or git that does not only read, before the run ended, and
   /// [`Rejection::WorktreeRemoved`] when its worktree is gone.
   RunGit(RunGitRequest),
-  /// The code viewer reads the worktree of run `run` (protocol 46, [`crate::run_files`]): the runner's executor side
+  /// `request` about the merge a person resolves by hand in run `run`'s worktree, carried out where the worktree is
+  /// (protocol 46): the desktop keeps the project's record of the resolution and runs no git there itself. Answered
+  /// with [`Reply::Resolved`], or [`Reply::ResolveFailed`] with why it did not go on.
+  Resolve { run: RunId, request: ResolveRequest },
+  /// The code viewer reads the worktree of run `run` (protocol 47, [`crate::run_files`]): the runner's executor side
   /// reads it where the worktree is. Answered with [`Reply::RunFiles`].
   RunFiles { run: RunId, request: RunFilesRequest },
 }
@@ -521,6 +528,10 @@ pub enum Reply {
   },
   /// The answer to [`Command::RunGit`].
   RunGit(RunGitAnswer),
+  /// The answer to [`Command::Resolve`] that was carried out.
+  Resolved(ResolveAnswer),
+  /// The answer to [`Command::Resolve`] that did not go on, and why.
+  ResolveFailed(ResolveFailure),
   /// The answer to [`Command::RunFiles`]; a file's bytes travel after it in a binary frame.
   RunFiles(RunFilesReply),
   Rejected(Rejection),

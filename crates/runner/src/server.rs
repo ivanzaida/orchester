@@ -6,6 +6,7 @@ mod code_index;
 mod estimate;
 mod folders;
 mod merge_queue;
+mod resolve;
 mod run_folder;
 
 use std::{
@@ -367,6 +368,7 @@ async fn answer(
     Command::Browser(ref command) => return later.browser(handle, command.clone()),
     Command::Folders(ref command) => return later.folders(handle, command.clone()),
     Command::MergeQueue(ref command) => return later.merge_queue(handle, command.clone()),
+    Command::Resolve { run, ref request } => return later.resolve(handle, run, request.clone()),
     Command::RunGit(ref git) => return later.reply(handle.run_git(git.clone())),
     Command::EstimateTask { task } => return later.estimate(handle, task),
     Command::RunFolderState { run } => return later.run_folder_state(handle, run),
@@ -419,7 +421,6 @@ async fn chat_answering(scheduler: &Scheduler, message: ChatMessageId, tools: Ch
   }
 }
 
-/// The reply to [`Command::StopChat`].
 /// Starts the next run of `task` after `after` (Run again), removing `remove_worktrees` first, only for the task at
 /// `revision` when it names one.
 async fn run_again(
@@ -548,8 +549,7 @@ fn answer_stuck(
 }
 
 fn answer_return(later: &Later<'_>, scheduler: Scheduler, returned: WorkReturn) -> Answer {
-  let run = returned.run;
-  later.answer(run, async move { scheduler.return_ended(returned).await })
+  later.answer(returned.run, async move { scheduler.return_ended(returned).await })
 }
 
 fn accepted(run: RunId, result: Result<(), Rejection>) -> Reply {
