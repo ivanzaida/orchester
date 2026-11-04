@@ -479,14 +479,6 @@ fn approval_agent_requests_pencil_reads_main_checkout_design() {
     assert_eq!(autopilot_check(&fixture.roots, &subject), RootsCheck::Inside, "{input}");
     assert_eq!(autopilot_on(&fixture, &subject), approved, "{input}");
   }
-  // A failed snippet patched with code that only reads.
-  let patched = json!({
-    "filePath": main_design(&fixture), "editId": "e1", "edits": [{"find": "depth:1", "replace": "depth:2"}]
-  });
-  assert_eq!(
-    autopilot_on(&fixture, &pencil_call(&fixture, "execute", &patched)),
-    approved
-  );
   // Approve similar still covers the tool.
   assert_eq!(
     RuleScope::similar(&execute(&fixture, r#"TakeScreenshot(["H6kPd"])"#)),
@@ -559,9 +551,11 @@ fn approval_agent_requests_pencil_writes_still_ask() {
   }
   let design = main_design(&fixture);
   let writing_patch = json!({"filePath": design, "editId": "e1", "edits": [{"find": "Get(", "replace": "Update("}]});
+  let reading_patch = json!({"filePath": design, "editId": "e1", "edits": [{"find": "depth:1", "replace": "depth:2"}]});
   let no_file = json!({"input": r#"TakeScreenshot(["a"])"#});
   for (tool, arguments) in [
     ("execute", &writing_patch),
+    ("execute", &reading_patch),
     ("execute", &no_file),
     ("get_screenshot", &json!({"filePath": design, "input": "Print(1)"})),
   ] {
@@ -572,4 +566,29 @@ fn approval_agent_requests_pencil_writes_still_ask() {
       "{arguments}"
     );
   }
+}
+
+/// Pencil runs the whole patched snippet, so a patch whose every piece reads only can still move a quote and make
+/// the failed snippet's string into code: an `edits` patch goes to the reviewer (ORC-698, found in review).
+#[test]
+fn approval_agent_requests_pencil_patch_goes_to_reviewer() {
+  let fixture = Fixture::new();
+  // `Insert` sits in a string: the snippet reads only, and fails at `.a.b`.
+  let failed = execute(&fixture, r#"Print(" Insert(document,{}); Print(");Get("missing").a.b"#);
+  assert_eq!(autopilot_check(&fixture.roots, &failed), RootsCheck::Inside);
+  // Patched, it runs `Print("");Insert(document,{}); Print("")`.
+  let patch = json!({
+    "filePath": main_design(&fixture),
+    "editId": "e1",
+    "edits": [
+      {"find": r#"Print(" "#, "replace": r#"Print("");"#},
+      {"find": r#"Print(");Get("missing").a.b"#, "replace": r#"Print("")"#},
+    ],
+  });
+  let patched = pencil_call(&fixture, "execute", &patch);
+  assert_eq!(autopilot_check(&fixture.roots, &patched), RootsCheck::Unknown);
+  assert_eq!(
+    autopilot_on(&fixture, &patched),
+    ModeStep::Review(ReviewQuestion::Roots)
+  );
 }

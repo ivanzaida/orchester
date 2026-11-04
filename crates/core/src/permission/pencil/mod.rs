@@ -28,31 +28,22 @@ pub struct DesignRead {
 
 impl DesignRead {
   /// The read a call of `server`'s `tool` makes with `arguments`, the JSON its request recorded: an `execute` that
-  /// names its `filePath` and whose snippet (`input`), or each fragment its `edits` patch a failed snippet with, only
-  /// reads. `None` for any other call, one that may change the design, and arguments not recorded whole.
+  /// names its `filePath` and whose snippet (`input`) only reads. `None` for any other call, one that may change the
+  /// design, and arguments not recorded whole.
   ///
-  /// A patch is judged by the code it brings: Pencil reverted all the failed snippet did, and that snippet was a
-  /// request of the step answered on its own.
+  /// A call with an `edits` patch of a failed snippet is `None` too: Pencil runs the whole patched snippet, and a
+  /// fragment that reads only can still move a quote so that the failed snippet's text in a string becomes code.
   pub fn of(server: &str, tool: &str, arguments: Option<&str>) -> Option<Self> {
     if server != SERVER || tool != EXECUTE {
       return None;
     }
     // Arguments that are not JSON were cut at the ceiling of what a request records: not read whole.
     let arguments: Value = serde_json::from_str(arguments?).ok()?;
-    let file = arguments.get("filePath")?.as_str()?.to_owned();
-    let (input, edits) = (arguments.get("input"), arguments.get("edits"));
-    if input.is_none() && edits.is_none() {
+    if arguments.get("edits").is_some() {
       return None;
     }
-    let mut exports = Vec::new();
-    if let Some(input) = input {
-      exports.extend(script::reads_only(input.as_str()?)?);
-    }
-    if let Some(edits) = edits {
-      for edit in edits.as_array()? {
-        exports.extend(script::reads_only(edit.get("replace")?.as_str()?)?);
-      }
-    }
+    let file = arguments.get("filePath")?.as_str()?.to_owned();
+    let exports = script::reads_only(arguments.get("input")?.as_str()?)?;
     Some(Self { file, exports })
   }
 

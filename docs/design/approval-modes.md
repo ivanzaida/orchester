@@ -96,8 +96,9 @@ ORC-610): Autopilot's CLI hands even those calls to Orchester, which approves th
   Orchester's tools reads in, Orchester's other tools as inside; a call of another MCP server's tool is `Unknown`, as
   its arguments may name any path and its tool may act on a remote service, but for a `pencil` `execute` that only
   reads a design, `permission::pencil::DesignRead`, ORC-698: no `Insert`, `Update`, `Replace`, `Move`, `Delete`,
-  `Copy`, `SetVariables`, `Generate`, nor a way to reach a function by a name not written out, in its `input` or its
-  `edits` fragments. Its absolute `filePath` may lie in the roots or the main checkout, whose design a step is meant
+  `Copy`, `SetVariables`, `Generate`, nor a way to reach a function by a name not written out, in its `input`; an
+  `edits` patch is `Unknown`, as Pencil runs the whole patched snippet, which the call does not carry. Its absolute
+  `filePath` may lie in the roots or the main checkout, whose design a step is meant
   to read, and each `Export` path, a written-out absolute string, in the roots or the run's storage
   `.orchester/runs/<run>/`; an export elsewhere or another file comes as `outside`. This lives among Autopilot's rules
   rather than in a project rule, which answers only in Manual and stands for a person's wider answer; it reads
