@@ -1,11 +1,12 @@
-//! Work reports (S9, `orchester_api::v2`): the exact wire shapes of `ArtifactRef`, `AuthorityRef`, `WorkReport` and the
-//! `work.changed` event, unknown and missing fields refused, and the report's sequence rule.
+//! Work reports (S9, `orchester_api::v2`): the exact wire shapes of `ArtifactRef`, `AuthorityRef`, `WorkReport`, the
+//! `work.report` command, the exact heartbeat and the `work.changed` event, unknown and missing fields refused, and the
+//! report's sequence rule.
 
 use orchester_api::{
   UserRef,
   v2::{
-    ArtifactKind, ArtifactRef, AuthorityRef, BundleRef, ExecutionFailure, ExecutionOutcome, ExecutionState, Subject,
-    WorkChanged, WorkEvent, WorkRead, WorkReport,
+    ArtifactKind, ArtifactRef, AuthorityRef, BundleRef, ExactHeartbeat, ExecutionFailure, ExecutionOutcome,
+    ExecutionState, Renewed, Subject, TeamCommand, WorkChanged, WorkEvent, WorkRead, WorkReport,
   },
 };
 use orchester_core::{
@@ -248,4 +249,42 @@ fn work_report_work_changed_shape() {
   let mut missing = delta;
   missing["data"].as_object_mut().expect("an object").remove("work");
   assert!(serde_json::from_value::<WorkEvent>(missing).is_err());
+}
+
+#[test]
+fn work_report_is_the_servers_command_and_the_heartbeat_its_exact_shape() {
+  let (report, wire) = report(4, ExecutionOutcome::Progress {});
+  let command = TeamCommand::WorkReport(report);
+  assert_eq!(command.kind(), "work.report");
+  let mut tagged = wire;
+  tagged
+    .as_object_mut()
+    .expect("an object")
+    .insert("kind".to_owned(), json!("work.report"));
+  roundtrip(&command, &tagged);
+  tagged["path"] = json!("C:/Users/ada/report.md");
+  assert!(
+    serde_json::from_value::<TeamCommand>(tagged).is_err(),
+    "unknown fields are refused"
+  );
+
+  let authority = AuthorityRef {
+    subject: Subject::Task { id: TaskId::generate() },
+    claim_id: ClaimId::generate(),
+    work_id: Some(WorkId::generate()),
+  };
+  let authority_wire = serde_json::to_value(authority).expect("an authority");
+  roundtrip(
+    &ExactHeartbeat {
+      authorities: vec![authority],
+    },
+    &json!({"authorities": [authority_wire]}),
+  );
+  let renewed: Renewed =
+    serde_json::from_value(json!({"renewed": [], "lost": [authority_wire]})).expect("the server's answer");
+  assert_eq!(renewed.lost, [authority]);
+  assert!(
+    serde_json::from_value::<Renewed>(json!({"renewed": []})).is_err(),
+    "`lost` is required"
+  );
 }

@@ -86,6 +86,7 @@ mod task_groups;
 mod task_identities;
 mod team_operations;
 mod team_reviewer;
+mod team_work;
 mod test_suites;
 mod token_budgets;
 mod tool_approvals;

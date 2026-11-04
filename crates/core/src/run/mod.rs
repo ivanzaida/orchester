@@ -72,7 +72,7 @@ pub use self::{
   },
   not_started::{GitMessage, WorktreeFailure},
   number::RunNumber,
-  outcome::{ExecutionFailure, ExecutionOutcome, ReportOrder, SequenceRegressed, order_report},
+  outcome::{ExecutionFailure, ExecutionOutcome, ReportOrder, SequenceRegressed, order_report, renews_claim},
   permissions::{AppliedPermissions, PermissionsApply, PermissionsChangedBy, RunPermissions},
   phase::TaskPhase,
   plan::{Plan, PlanDecision, PlanReview, PlanVersion, ReviewNote, ReviewNoteError},

@@ -20,9 +20,9 @@ pub(super) enum ProjectOwner {
 
 /// The server project a team project is linked to.
 #[derive(Clone, Copy, Debug)]
-pub(super) struct TeamLink {
-  pub(super) server: ServerId,
-  pub(super) project: ProjectId,
+pub(crate) struct TeamLink {
+  pub(crate) server: ServerId,
+  pub(crate) project: ProjectId,
 }
 
 /// The owner of the project of `db`, checked against `session` for a team project: the session must be of the very
@@ -46,7 +46,7 @@ pub(super) fn project_owner(db: &ProjectDb, session: Option<&TeamSession>) -> Re
 
 /// The server's id of the team task this project names `task`: its recorded team identity's, or `task` itself for a
 /// team task this computer never recorded. A task of this computer is never the team's.
-pub(super) fn team_task(db: &ProjectDb, link: TeamLink, task: TaskId) -> Result<TaskId, ActionError> {
+pub(crate) fn team_task(db: &ProjectDb, link: TeamLink, task: TaskId) -> Result<TaskId, ActionError> {
   match db.task_identity(task)? {
     None => Ok(task),
     Some(TaskIdentity {

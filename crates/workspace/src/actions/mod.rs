@@ -39,6 +39,10 @@ use self::{
   route::{TeamRoute, team_route},
   team::Operations,
 };
+pub(crate) use self::{
+  ownership::{TeamLink, team_task},
+  team::retryable,
+};
 use crate::{sharing::Servers, tasks::writer::TaskWriter, team_reads::TeamSession};
 
 /// The actions of the project at `root`. A team project's go to its server in `team`, the session the person is
@@ -125,6 +129,20 @@ impl Dispatcher {
         .map(|operation| operation.id)
         .collect(),
     )
+  }
+
+  /// The project's folder.
+  pub(crate) fn root(&self) -> &std::path::Path {
+    &self.root
+  }
+
+  /// The server project the project is linked to and the session of it, checked as every team action checks them; a
+  /// local project is [`ActionError::TeamOnly`].
+  pub(crate) fn team(&self, db: &ProjectDb) -> Result<(TeamLink, &TeamSession), ActionError> {
+    match project_owner(db, self.team.as_ref())? {
+      ProjectOwner::Team(link) => Ok((link, self.session()?)),
+      ProjectOwner::Local => Err(ActionError::TeamOnly),
+    }
   }
 
   fn session(&self) -> Result<&TeamSession, ActionError> {

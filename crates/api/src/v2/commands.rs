@@ -1,10 +1,11 @@
 //! The team commands of `POST /api/v2/projects/{project}/commands` on the S4 envelopes (`CommandRequest<TeamCommand>`,
 //! answered with `CommandResult<TeamCommandValue>`), field for field the team server's own `Command` and
-//! `CommandValue` (`docs/cloud-api.md`, "Team authority P2 commands"), so the server can take these types without a
-//! wire change. Each is internally tagged by its `kind`, and unknown fields are refused. `work.report`,
-//! `delivery.request` and `delivery.report` are the server's too and join in P4 with the same shapes. The definitions
-//! (task edits, modules, tags, the workspace policy) are no commands: they have their own admin-checked routes. The
-//! task in a value is the public `SharedTask` until the canonical `TaskRead` is published there.
+//! `CommandValue` (`docs/cloud-api.md`, "Team authority P2 commands" and "Team authority P4 work"), so the server can
+//! take these types without a wire change. Each is internally tagged by its `kind`, and unknown fields are refused.
+//! `delivery.request` and `delivery.report` are the server's too and join with the same shapes when the desktop
+//! delivers. The definitions (task edits, modules, tags, the workspace policy) are no commands: they have their own
+//! admin-checked routes. The task in a value is the public `SharedTask` until the canonical `TaskRead` is published
+//! there.
 
 use orchester_core::{
   id::{ClaimId, ModuleId, UserId},
@@ -14,7 +15,8 @@ use orchester_core::{
 use serde::{Deserialize, Serialize};
 
 use super::{
-  AuthorityRef, BundleRef, ClaimRead, LocalEffect, ModuleDeliveryRead, ModuleRead, Subject, WorkRead, page::nullable,
+  AuthorityRef, BundleRef, ClaimRead, LocalEffect, ModuleDeliveryRead, ModuleRead, Subject, WorkRead, WorkReport,
+  page::nullable,
 };
 use crate::{SharedTask, TaskContent, UserRef};
 
@@ -63,6 +65,9 @@ pub enum TeamCommand {
     source_commit: CommitId,
     base_commit: CommitId,
   },
+  /// A run's account of the work it carries out under the work's exact authority, ordered per run.
+  #[serde(rename = "work.report")]
+  WorkReport(WorkReport),
 }
 
 impl TeamCommand {
@@ -77,6 +82,7 @@ impl TeamCommand {
       Self::ModuleBranchSet { .. } => "module.branch.set",
       Self::WorkStart { .. } => "work.start",
       Self::DeliveryAuthorize { .. } => "delivery.authorize",
+      Self::WorkReport(_) => "work.report",
     }
   }
 }
@@ -91,7 +97,7 @@ pub enum TeamCommandValue {
     task: Box<SharedTask>,
     effects: Vec<LocalEffect>,
   },
-  /// `work.start`: the work it made, with the bundle it runs.
+  /// `work.start`: the work it made, with the bundle it runs; `work.report`: the work as the report left it.
   Work {
     work: Box<WorkRead>,
     bundle: BundleRef,

@@ -8,7 +8,7 @@ use orchester_core::{
   id::{OperationId, RunId, TaskId},
   run::{
     bundle::canonical_bytes,
-    inputs::{BundleContent, InputsOrigin, LocalBindings, LocalConsent, RunInputs},
+    inputs::{BundleContent, InputsOrigin, LocalBindings, LocalConsent, RunInputs, TeamAcceptance},
   },
   task::identity::TaskOwner,
   time::Timestamp,
@@ -93,41 +93,8 @@ impl ProjectDb {
   /// accepted them, until the runner starts their run. Keeping the same inputs again changes nothing; other inputs for
   /// the same operation are refused, as are local inputs and inputs of another team task.
   pub fn accept_team_inputs(&mut self, task: TaskId, inputs: &RunInputs, now: Timestamp) -> Result<(), RunStoreError> {
-    let mismatch = |reason| RunStoreError::InputsMismatch { task, reason };
-    let InputsOrigin::Team(accepted) = inputs.bundle().origin() else {
-      return Err(mismatch("the inputs are not a team's"));
-    };
-    let encoded = Encoded::of(inputs)?;
     let transaction = self.connection.transaction()?;
-    let identity = task_identities::load(&transaction, task)?.ok_or(StoreError::TaskNotFound(task))?;
-    if !matches!(identity.owner, TaskOwner::Team { task: team, .. } if team == accepted.task) {
-      return Err(mismatch("the task is not the team task the inputs were accepted for"));
-    }
-    let operation = accepted.operation.to_string();
-    if let Some(kept) = load_accepted(&transaction, &operation)? {
-      let same = kept.0 == task
-        && kept.1.sha256 == encoded.sha256
-        && kept.1.bindings == encoded.bindings
-        && kept.1.consent == encoded.consent;
-      return if same {
-        Ok(())
-      } else {
-        Err(mismatch("the operation accepted other inputs"))
-      };
-    }
-    transaction.execute(
-      "INSERT INTO accepted_run_inputs (operation_id, task_id, sha256, body, bindings, consent, accepted_at) \
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-      params![
-        operation,
-        task.to_string(),
-        encoded.sha256,
-        encoded.body,
-        encoded.bindings,
-        encoded.consent,
-        now.unix_millis()
-      ],
-    )?;
+    keep_accepted(&transaction, task, inputs, now)?;
     transaction.commit()?;
     Ok(())
   }
@@ -148,6 +115,20 @@ impl ProjectDb {
   pub fn run_of_operation(&self, operation: OperationId) -> Result<Option<RunId>, StoreError> {
     run_of_operation(&self.connection, operation)
   }
+}
+
+/// What the team server accepted the inputs operation `operation` kept with; `None` when it kept none, or local ones.
+pub(super) fn team_acceptance(
+  connection: &Connection,
+  operation: OperationId,
+) -> Result<Option<TeamAcceptance>, StoreError> {
+  let Some((_, encoded)) = load_accepted(connection, &operation.to_string())? else {
+    return Ok(None);
+  };
+  Ok(match encoded.decode()?.bundle().origin() {
+    InputsOrigin::Team(accepted) => Some(accepted.clone()),
+    InputsOrigin::Local => None,
+  })
 }
 
 fn load_accepted(connection: &Connection, operation: &str) -> Result<Option<(TaskId, Encoded)>, StoreError> {
@@ -171,6 +152,51 @@ fn load_accepted(connection: &Connection, operation: &str) -> Result<Option<(Tas
   row
     .map(|(task, encoded)| Ok((parse("task id", &task)?, encoded)))
     .transpose()
+}
+
+/// Keeps `inputs` the team server accepted for the team task `task` by their operation, within the caller's
+/// transaction ([`ProjectDb::accept_team_inputs`]).
+pub(super) fn keep_accepted(
+  connection: &Connection,
+  task: TaskId,
+  inputs: &RunInputs,
+  now: Timestamp,
+) -> Result<(), RunStoreError> {
+  let mismatch = |reason| RunStoreError::InputsMismatch { task, reason };
+  let InputsOrigin::Team(accepted) = inputs.bundle().origin() else {
+    return Err(mismatch("the inputs are not a team's"));
+  };
+  let encoded = Encoded::of(inputs)?;
+  let identity = task_identities::load(connection, task)?.ok_or(StoreError::TaskNotFound(task))?;
+  if !matches!(identity.owner, TaskOwner::Team { task: team, .. } if team == accepted.task) {
+    return Err(mismatch("the task is not the team task the inputs were accepted for"));
+  }
+  let operation = accepted.operation.to_string();
+  if let Some(kept) = load_accepted(connection, &operation)? {
+    let same = kept.0 == task
+      && kept.1.sha256 == encoded.sha256
+      && kept.1.bindings == encoded.bindings
+      && kept.1.consent == encoded.consent;
+    return if same {
+      Ok(())
+    } else {
+      Err(mismatch("the operation accepted other inputs"))
+    };
+  }
+  connection.execute(
+    "INSERT INTO accepted_run_inputs (operation_id, task_id, sha256, body, bindings, consent, accepted_at) \
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+    params![
+      operation,
+      task.to_string(),
+      encoded.sha256,
+      encoded.body,
+      encoded.bindings,
+      encoded.consent,
+      now.unix_millis()
+    ],
+  )?;
+  Ok(())
 }
 
 /// Keeps `inputs` as the inputs of the new run `run`.
