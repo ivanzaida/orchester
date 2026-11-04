@@ -4,7 +4,8 @@
 //! Orchester's own retry followed live, and *Put files back* putting a stopped bring-in's file back; *Waiting for your
 //! review* with *Changed since your review*;
 //! the merged runs by local day, older days read as the list scrolls; *No merges yet*; the merges last read shown at
-//! once when the tab opens again, and an info line that does not move as they are read. Needs `git`, as the seed does.
+//! once when the tab opens again, and an info line that does not move as they are read; the hub's counts kept as its
+//! tabs switch, a bone only for the first. Needs `git`, as the seed does.
 //! `cargo test -p orchester-app --test review_merges review_merges`.
 
 #[path = "../examples/seed/kontur/mod.rs"]
@@ -15,7 +16,10 @@
 mod kontur;
 mod support;
 
-use std::{path::PathBuf, time::Duration};
+use std::{
+  path::PathBuf,
+  time::{Duration, Instant},
+};
 
 use lurq::app::events::ScrollPhase;
 use orchester_app::{
@@ -448,6 +452,78 @@ fn review_merges_info_line_keeps_its_place_from_the_first_frame() {
   assert!(read.iter().all(Option::is_some), "{read:?}");
   for (frame, placed) in frames.iter().enumerate() {
     assert_eq!(placed, &read, "frame {frame} of {} of {parts:?}", frames.len());
+  }
+}
+
+/// Where each of the hub's tabs stands and how wide it is, and whether its count is a bone.
+fn hub_tabs(window: &mut Window) -> (Vec<(f32, f32)>, bool) {
+  let names = ["merge_queue", "pull_requests", "merges"];
+  let placed = names
+    .iter()
+    .map(|name| {
+      let bounds = window
+        .tree
+        .get_element_by_id_mut(&format!("review-hub-tab-{name}"))
+        .and_then(|tab| tab.bounds())
+        .unwrap_or_else(|| panic!("the {name} tab is laid out"));
+      (bounds.x, bounds.width)
+    })
+    .collect();
+  // A count is its text; its bone holds no text of its own, only the room of a digit.
+  let bone = names.iter().any(|name| {
+    window
+      .tree
+      .get_element_by_id(&format!("review-hub-tab-{name}-count"))
+      .is_some_and(|count| count.text_content().is_none())
+  });
+  (placed, bone)
+}
+
+/// A project's first count in the window is a bone until it is counted (09d `Zlk49`); switching tabs then shows each
+/// tab's count from the first frame, no bone, and moves no tab (ORC-723).
+#[test]
+fn review_merges_switching_tabs_keeps_the_counts_and_moves_no_tab() {
+  let mut seeded = Seeded::new("merges");
+  let project = seeded.project;
+  let navigation = seeded.window.navigation();
+  navigation.go(Route::Project(project, ProjectPage::MergeQueue));
+  let mut bones = false;
+  seeded.window.until_within(GIT_WORK, "the counts", |window| {
+    if window.tree.get_element_by_id("review-hub-tabs").is_none() {
+      return false;
+    }
+    let bone = hub_tabs(window).1;
+    bones |= bone;
+    !bone
+      && window
+        .texts("review-hub-tab-merges-count")
+        .is_some_and(|texts| texts == ["3"])
+  });
+  assert!(bones, "the first count is a bone until it is counted");
+  let queued = seeded.window.texts("review-hub-tab-merge_queue-count");
+  let (counted, _) = hub_tabs(&mut seeded.window);
+  let pages = [
+    (ProjectPage::PullRequests(Default::default()), "screen-pull_requests"),
+    (ProjectPage::Merges, "screen-merges"),
+    (ProjectPage::MergeQueue, "screen-merge_queue"),
+  ];
+  for (page, screen) in pages {
+    navigation.go(Route::Project(project, page.clone()));
+    seeded.window.pass();
+    // Every frame from the switch on, while the tab's page shows and its counts are read again behind them.
+    let shown = Instant::now();
+    seeded.window.until_within(GIT_WORK, screen, |window| {
+      let (placed, bone) = hub_tabs(window);
+      assert!(!bone, "{page:?}: no bone on a switch");
+      assert_eq!(placed, counted, "{page:?}: the tabs keep their place");
+      assert_eq!(
+        window.texts("review-hub-tab-merges-count"),
+        Some(vec!["3".to_owned()]),
+        "{page:?}"
+      );
+      assert_eq!(window.texts("review-hub-tab-merge_queue-count"), queued, "{page:?}");
+      window.tree.get_element_by_id(screen).is_some() && shown.elapsed() > Duration::from_secs(1)
+    });
   }
 }
 

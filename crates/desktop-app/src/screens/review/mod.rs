@@ -6,7 +6,9 @@
 //!
 //! The Merge queue counts the runs in the queue; the Pull requests the open ones the stored list holds; the Merges, in
 //! `warning`, the runs that need the person there: not merged, and waiting for their review. The counts are read again
-//! when the project's runs or data change. A count of none is left out; one read for the first time is a bone.
+//! when the project's runs or data change, and each time a tab opens: the counts last read show meanwhile, kept in the
+//! project's feed, so a switch of tabs moves none (ORC-723). A count of none is left out, and so is one that could not
+//! be read; a project's first count in the window is a bone (09d `Zlk49`).
 
 use lurq::{
   app::{
@@ -26,7 +28,7 @@ use orchester_workspace::{
 
 use crate::{
   navigation::Navigation,
-  project::ShownProject,
+  project::{ProjectFeed, ShownProject, feed::ReviewCounts},
   routes::{ProjectPage, Route},
   theme::HubSpacing,
   ui::tabs::{PageTab, page_tabs},
@@ -166,7 +168,8 @@ impl Component for ReviewTabs {
   }
 }
 
-/// The open pull requests the stored list holds, once it was synced, and whether it is read for the first time.
+/// The open pull requests the stored list holds, once it was synced, and whether they are counted for the first time
+/// in the window: until then the count last read shows ([`ReviewCounts::pull_requests`]).
 fn open_pull_requests(ctx: &mut Ctx, project: &ShownProject) -> (Option<usize>, bool) {
   let feed = &project.feed;
   let deps = (project.open.repo_root.clone(), feed.revision.get(), feed.states.get());
@@ -184,16 +187,22 @@ fn open_pull_requests(ctx: &mut Ctx, project: &ShownProject) -> (Option<usize>, 
     })
     .state()
     .get();
-  let reading = listed.is_pending() && listed.data.is_none();
-  let open = listed.data.and_then(|list| match list {
-    PullRequestList::Linked(linked) if linked.synced_at.is_some() => Some(linked.count(PullRequestTab::Open)),
-    _ => None,
-  });
-  (open, reading)
+  let counted = match listed.fulfilled_data() {
+    Some(PullRequestList::Linked(linked)) if linked.synced_at.is_some() => {
+      Some(Some(linked.count(PullRequestTab::Open)))
+    }
+    Some(_) => Some(None),
+    // A count that could not be read is hidden, not shown stale.
+    None if listed.is_rejected() => Some(None),
+    None => None,
+  };
+  let last = keep(feed, counted, |counts| &mut counts.pull_requests);
+  (last.flatten(), last.is_none() && listed.is_pending())
 }
 
-/// The runs that need the person in Merges ([`merges::needing_you`]), and whether they are counted for the first time,
-/// the project's tasks still read too.
+/// The runs that need the person in Merges ([`merges::needing_you`]), and whether they are counted for the first time
+/// in the window, the project's tasks still read too: until then the count last read shows
+/// ([`ReviewCounts::needing_you`]).
 fn merges_needing_you(ctx: &mut Ctx, project: &ShownProject) -> (Option<usize>, bool) {
   let feed = &project.feed;
   let tasks = feed.tasks.with(|tasks| tasks.ready().cloned());
@@ -202,7 +211,7 @@ fn merges_needing_you(ctx: &mut Ctx, project: &ShownProject) -> (Option<usize>, 
     .with(|tasks| matches!(tasks, crate::project::TasksState::Loading));
   let deps = (project.open.repo_root.clone(), tasks, feed.saves.get());
   let hold = crate::services::Services::of(ctx).hold;
-  let counted = ctx
+  let read = ctx
     .future(deps, move |(root, tasks, _)| {
       let hold = hold.clone();
       async move {
@@ -221,6 +230,31 @@ fn merges_needing_you(ctx: &mut Ctx, project: &ShownProject) -> (Option<usize>, 
     })
     .state()
     .get();
-  let reading = tasks_reading || (counted.is_pending() && counted.data.is_none());
-  (counted.data.flatten(), reading)
+  let counted = match read.fulfilled_data() {
+    Some(Some(count)) => Some(Some(*count)),
+    // Tasks not read yet count nothing; tasks that could not be read leave none to count.
+    Some(None) if tasks_reading => None,
+    Some(None) => Some(None),
+    None if read.is_rejected() => Some(None),
+    None => None,
+  };
+  let last = keep(feed, counted, |counts| &mut counts.needing_you);
+  (last.flatten(), last.is_none() && (tasks_reading || read.is_pending()))
+}
+
+/// The count of `slot` in the feed's [`ReviewCounts`] once `counted` holds a new one: the count last read, `None`
+/// until the first.
+fn keep(
+  feed: &ProjectFeed,
+  counted: Option<Option<usize>>,
+  slot: fn(&mut ReviewCounts) -> &mut Option<Option<usize>>,
+) -> Option<Option<usize>> {
+  if let Some(counted) = counted {
+    let mut counts = feed.review_counts.get_untracked();
+    if *slot(&mut counts) != Some(counted) {
+      *slot(&mut counts) = Some(counted);
+      feed.review_counts.set(counts);
+    }
+  }
+  *slot(&mut feed.review_counts.get())
 }
