@@ -57,6 +57,7 @@ use orchester_core::{
 use orchester_workspace::tasks::{attention::NeedItem, close::Closing, data::ProjectTasks, list::TaskRow};
 use parking_lot::Mutex;
 
+pub(super) use self::menu::copy_key_item;
 pub use self::model::has_empty_columns;
 use self::{
   actions::BoardState,

@@ -87,6 +87,30 @@ fn team_qa_tasks_a_members_board_has_no_quick_add() {
 }
 
 #[test]
+fn team_qa_tasks_a_members_row_menu_only_opens_and_copies_the_key() {
+  let (mut window, _server) = listed(State::Member);
+  // The row's actions show under the pointer once the row has its place, which can take a pass after it shows.
+  window.until("the row's menu", |window| {
+    let placed = window
+      .tree
+      .get_element_by_id_mut(ROW)
+      .is_some_and(|row| row.bounds().is_some());
+    if placed {
+      window.hover(ROW);
+    }
+    window.texts("task-more-KON-12").is_some()
+  });
+  window.press("task-more-KON-12");
+  window.until("its rows", |window| window.texts("task-more-KON-12-panel").is_some());
+  assert!(window.texts("task-more-KON-12-open").is_some());
+  assert!(window.texts("task-more-KON-12-copy").is_some());
+  for change in ["done", "cancel", "reopen", "delete"] {
+    let id = format!("task-more-KON-12-{change}");
+    assert!(window.texts(&id).is_none(), "a member has no {change}");
+  }
+}
+
+#[test]
 fn team_qa_tasks_an_outage_says_team_data_is_unavailable_instead_of_the_rows() {
   let (mut window, _server) = on_the_tasks_list(State::Outage);
   window.until("the outage", |window| window.texts(UNAVAILABLE).is_some());

@@ -6,9 +6,10 @@
 //! server does not answer, the list says team data is unavailable and shows only what runs on this computer
 //! ([`outage`]); what was read before is never shown as current.
 //!
-//! The view asks the server for its workflow statuses, with the search, the filters and the order; the list then
-//! groups and orders the rows as for a local project. Tag names are still this computer's: the server has no read for
-//! them yet.
+//! The view asks the server for the workflow statuses it may hold, with the search, the filters and the order; the list
+//! then keeps, groups and orders the rows as for a local project. The views are counted from the server's counts by
+//! status, with the tasks something waits for on this computer placed as a local list places them
+//! (`orchester_workspace::tasks::views`). Tag names are still this computer's: the server has no read for them yet.
 
 mod lines;
 pub mod outage;
@@ -17,17 +18,21 @@ use std::sync::Arc;
 
 use lurq::app::ctx::{Ctx, StreamEmitter};
 use orchester_api::v2::{CallerRole, SearchText, TaskSort as ServerSort};
-use orchester_core::{module::Module, task::organization::WorkflowStatus};
+use orchester_core::module::Module;
 use orchester_workspace::{
   sharing::{Connection, project::TeamAdmins},
-  tasks::{browse::TaskSort, data::ProjectTasks},
+  tasks::{
+    browse::TaskSort,
+    data::ProjectTasks,
+    views::{ListView, StatusCounts},
+  },
 };
 
 pub(super) use self::lines::{lock_line, team_line};
-use super::{cache::ViewCounts, header::Choices, shared::Shared};
+use super::{cache::ViewCounts, header::Choices, shared::Shared, views::list_view};
 use crate::{
   project::ShownProject,
-  routes::{TaskList, TaskListTab},
+  routes::TaskList,
   screens::settings::orchester::follow,
   services::Services,
   team::{
@@ -91,21 +96,60 @@ pub(super) fn read(
   if let Some(failure) = failed.into_iter().flatten().next() {
     return Team::Failed((*failure).clone());
   }
-  let (Some(capabilities), Some(read), Some(counted), Some(modules)) =
-    (capabilities.data(), tasks.data(), counts.data(), modules.data())
-  else {
+  let waiting = match waiting(ctx, &source, &key, local) {
+    Ok(waiting) => waiting,
+    Err(failure) => return Team::Failed(failure),
+  };
+  let (Some(capabilities), Some(read), Some(counted), Some(modules), Some(waiting)) = (
+    capabilities.data(),
+    tasks.data(),
+    counts.data(),
+    modules.data(),
+    waiting,
+  ) else {
     return Team::Reading;
   };
   let admins = (capabilities.role == CallerRole::Member)
     .then(|| ctx.query(team_admins(source.clone())).data())
     .flatten();
-  let needs_you = local.waiting_tasks().len();
   Team::Ready(Box::new(TeamShown {
     tasks: joined(local, &read, modules),
-    counts: ViewCounts::of_server(&counted, needs_you),
+    counts: ViewCounts::of_server(&StatusCounts::of_board(&counted), &waiting),
     role: capabilities.role,
     admins,
     more: read.more,
+  }))
+}
+
+/// How many of the tasks something waits for the person in on this computer are in each open status, under the view's
+/// search and filters: read from the server's open tasks, the listing Needs you and Active read too, only while
+/// something waits. `None` while they are read.
+fn waiting(
+  ctx: &mut Ctx,
+  source: &TeamSource,
+  key: &TaskListKey,
+  local: &ProjectTasks,
+) -> Result<Option<StatusCounts>, TeamFailure> {
+  let waiting = local.waiting_tasks();
+  if waiting.is_empty() {
+    return Ok(Some(StatusCounts::default()));
+  }
+  let open = TaskListKey {
+    statuses: ListView::NeedsYou.statuses(),
+    ..key.clone()
+  };
+  let open = ctx.query(team_tasks(source.clone(), open));
+  if let Some(failure) = open.error() {
+    return Err((*failure).clone());
+  }
+  Ok(open.data().map(|read| {
+    StatusCounts::of(
+      read
+        .tasks
+        .iter()
+        .filter(|task| waiting.contains(&task.id()))
+        .map(|task| task.organization().status()),
+    )
   }))
 }
 
@@ -163,12 +207,13 @@ fn generation(ctx: &mut Ctx, team: &TeamQueries) -> u64 {
   stream.state().get().data.unwrap_or_else(|| team.generation())
 }
 
-/// What the list asks the server for: its view's workflow statuses, its search and filters, and its order. A search the
-/// server would refuse (over 200 characters) is not sent; the list still searches what comes back.
+/// What the list asks the server for: the workflow statuses its view may hold (`ListView::statuses`, which the rows
+/// are then kept by), its search and filters, and its order. A search the server would refuse (over 200 characters) is
+/// not sent; the list still searches what comes back.
 fn key(list: &TaskList, choices: &Choices) -> TaskListKey {
   let facets = choices.facets.get();
   TaskListKey {
-    statuses: statuses(list.tab()),
+    statuses: list_view(list.tab()).statuses(),
     search: SearchText::new(list.search().unwrap_or_default()).ok(),
     priorities: facets.priorities,
     tags: facets.tags,
@@ -181,18 +226,5 @@ fn key(list: &TaskList, choices: &Choices) -> TaskListKey {
       TaskSort::Status => ServerSort::Status,
       TaskSort::Priority => ServerSort::Priority,
     },
-  }
-}
-
-/// The workflow statuses a view holds, as `orchester_workspace::tasks::views` keeps them; every status for All, and
-/// every open one for Needs you, whose tasks this computer's runs pick.
-fn statuses(tab: TaskListTab) -> Vec<WorkflowStatus> {
-  use WorkflowStatus::{Backlog, Canceled, Done, InProgress, InReview, Todo};
-  match tab {
-    TaskListTab::NeedsYou => vec![Backlog, Todo, InProgress, InReview],
-    TaskListTab::Active => vec![Todo, InProgress, InReview],
-    TaskListTab::Backlog => vec![Backlog],
-    TaskListTab::Done => vec![Done, Canceled],
-    TaskListTab::All => Vec::new(),
   }
 }

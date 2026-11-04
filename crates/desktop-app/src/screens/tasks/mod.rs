@@ -364,6 +364,7 @@ impl TasksScreen {
       needs: &reading.needs,
       highlight: highlight.as_deref(),
       shared: shown.shared.is_some() || shown.team.is_some(),
+      member: shown.team.is_some_and(team::TeamShown::member),
     };
     let items = list::items(ctx, &source, &parts, &self.folded.get());
     // A new list for what narrows and orders the rows, and once a highlighted task the rows lacked comes: a list keeps

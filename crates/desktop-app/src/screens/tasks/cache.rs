@@ -8,14 +8,13 @@ use std::{
   sync::Arc,
 };
 
-use orchester_api::v2::TaskBoardCounts;
 use orchester_core::id::TaskId;
 use orchester_workspace::tasks::{
   attention::NeedItem,
   browse::{Facets, TaskSort},
   data::ProjectTasks,
   list::TaskRow,
-  views::ListView,
+  views::{ListView, StatusCounts},
 };
 use parking_lot::Mutex;
 
@@ -51,21 +50,10 @@ impl ViewCounts {
     Self(ListView::ALL.map(|view| view.count(rows, waiting)))
   }
 
-  /// A team project's views as its server counts its tasks by workflow status (`orchester_workspace::tasks::views`:
-  /// Active holds Todo, In progress and In review, Done holds Done and Canceled), and Needs you as `needs_you` of them
-  /// wait for the person on this computer.
-  pub(super) fn of_server(counts: &TaskBoardCounts, needs_you: usize) -> Self {
-    let count = |count: u32| usize::try_from(count).unwrap_or(usize::MAX);
-    let active = count(counts.todo) + count(counts.in_progress) + count(counts.in_review);
-    let done = count(counts.done) + count(counts.canceled);
-    let backlog = count(counts.backlog);
-    Self(ListView::ALL.map(|view| match view {
-      ListView::NeedsYou => needs_you,
-      ListView::Active => active,
-      ListView::Backlog => backlog,
-      ListView::Done => done,
-      ListView::All => backlog + active + done,
-    }))
+  /// A team project's views as its server counts its tasks by workflow status, `waiting` counting by status those
+  /// something waits for the person in on this computer (`ListView::count_by_status`).
+  pub(super) fn of_server(counted: &StatusCounts, waiting: &StatusCounts) -> Self {
+    Self(ListView::ALL.map(|view| view.count_by_status(counted, waiting)))
   }
 
   pub(super) fn get(self, tab: TaskListTab) -> usize {
