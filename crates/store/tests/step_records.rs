@@ -24,7 +24,7 @@ use orchester_core::{
     review::{ReviewEnd, ReviewRecord},
   },
   store::{ActivityStore, WorkspaceStore, WorktreeStore},
-  workspaces::{Borrow, Holder, Stranded, WorkspaceNumber},
+  workspaces::{Borrow, Holder, Stranded, WaitReason, WorkspaceNumber},
 };
 use orchester_store::{NoticeRecord, ProjectDb, RemovalRecord, StepRecord, WarmWorkspaceRecord, WorkspaceWritten};
 use serde::{Serialize, de::DeserializeOwned};
@@ -267,4 +267,28 @@ fn step_record_of_base_notices_applies_while_the_notice_is_pending() {
     "a delivered notice is not merged"
   );
   assert_eq!(db.pending_base_notice(run.id()).expect("read"), None);
+}
+
+#[test]
+fn step_record_answers_of_workspaces_and_removals_survive_being_sent() {
+  let written = [
+    WorkspaceWritten::Borrowed(Borrow::Take(WorkspaceNumber::FIRST)),
+    WorkspaceWritten::Borrowed(Borrow::Wait(WaitReason { in_use: 2, of: 2 })),
+    WorkspaceWritten::Returned(Some(WorkspaceNumber::FIRST)),
+    WorkspaceWritten::Returned(None),
+    WorkspaceWritten::Changed,
+  ];
+  for answer in written {
+    sent(&answer);
+  }
+  let starts = [
+    RemovalStart::Recorded,
+    RemovalStart::AlreadyRecorded,
+    RemovalStart::LiveWork,
+    RemovalStart::LocalIntegration,
+  ];
+  for start in starts {
+    sent(&Some(start));
+  }
+  sent(&None::<RemovalStart>);
 }

@@ -9,13 +9,15 @@
 
 use std::path::Path;
 
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use super::{Cleanup, CleanupError, KeepReason, Leftovers, clean_up};
 use crate::{command::CommandRunner, run::Run, store::WorktreeStore, time::Timestamp};
 
 /// What recording a removal found.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum RemovalStart {
   /// Recorded now; it is taken back if git removes nothing.
   Recorded,

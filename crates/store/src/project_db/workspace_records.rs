@@ -45,7 +45,8 @@ enum WorkspaceChange {
 }
 
 /// What a workspace record did.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", tag = "kind", content = "value")]
 pub enum WorkspaceWritten {
   /// A borrow: what the borrower gets.
   Borrowed(Borrow),

@@ -45,34 +45,41 @@ impl LocalSink {
   }
 }
 
-// In the runner's own tests every invocation, conversation, question and tool request record, and every request for
-// rows the desktop owns, crosses the sink as JSON and must arrive unchanged, as a coordinator in another process would
-// receive it (`docs/architecture/remote-runners.md`, rule 4); so does every answer on its way back. The run log's
-// records cross as JSON too.
+// In the runner's own tests every step, workspace, removal, notice, invocation, conversation, question and tool request
+// record, and every request for rows the desktop owns, crosses the sink as JSON and must arrive unchanged, as a
+// coordinator in another process would receive it (`docs/architecture/remote-runners.md`, rule 4); so does every
+// answer on its way back. The run log's records cross as JSON too.
 impl Sink for LocalSink {
   fn step(&mut self, record: StepRecord) -> Result<(), StoreError> {
     #[cfg(feature = "test-agent")]
-    survives_sending(&record);
+    sent::survives_sending(&record);
     self.write(|db| db.write_step(&record))
   }
 
   fn workspace(&mut self, record: WarmWorkspaceRecord) -> Result<WorkspaceWritten, StoreError> {
     #[cfg(feature = "test-agent")]
-    survives_sending(&record);
-    self.write(|db| db.write_workspace(&record))
+    sent::survives_sending(&record);
+    let answer = self.write(|db| db.write_workspace(&record))?;
+    #[cfg(feature = "test-agent")]
+    sent::survives_sending(&answer);
+    Ok(answer)
   }
 
   fn removal(&mut self, record: RemovalRecord) -> Result<Option<RemovalStart>, StoreError> {
     #[cfg(feature = "test-agent")]
-    survives_sending(&record);
-    self.write(|db| db.write_removal(&record))
+    sent::survives_sending(&record);
+    let answer = self.write(|db| db.write_removal(&record))?;
+    #[cfg(feature = "test-agent")]
+    sent::survives_sending(&answer);
+    Ok(answer)
   }
 
   fn notice(&mut self, record: NoticeRecord) -> Result<bool, StoreError> {
     #[cfg(feature = "test-agent")]
-    survives_sending(&record);
+    sent::survives_sending(&record);
     self.write(|db| db.write_notice(&record))
   }
+
   fn run_log(&mut self, record: RunLogRecord) -> Result<(), RunStoreError> {
     #[cfg(feature = "test-agent")]
     sent::sending(&record);
