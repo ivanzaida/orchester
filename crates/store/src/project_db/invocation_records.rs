@@ -19,9 +19,7 @@ use orchester_core::{
   memory::{Delivery, InjectedMemory, InjectionReason, MemoryStore},
   permission::LaunchPermissions,
   resource::ModelId,
-  run::{
-    EditProgress, Invocation, InvocationEngine, InvocationKind, InvocationPrompt, InvocationTiming, TokenUsage,
-  },
+  run::{EditProgress, Invocation, InvocationEngine, InvocationKind, InvocationPrompt, InvocationTiming, TokenUsage},
   store::ActivityStore,
   time::Timestamp,
   usage::UsedProvider,
@@ -131,35 +129,15 @@ pub struct InvocationRecord {
 #[serde(rename_all = "snake_case", tag = "kind")]
 enum InvocationChange {
   State(InvocationState),
-  Permissions {
-    permissions: Box<LaunchPermissions>,
-  },
-  Prompt {
-    prompt: Box<InvocationPrompt>,
-  },
-  CodeIndex {
-    used: CodeIndexUse,
-  },
-  EditProgress {
-    progress: EditProgress,
-  },
-  Memories {
-    chosen: Vec<ChosenMemory>,
-  },
-  Engine {
-    engine: InvocationEngine,
-  },
-  Connection {
-    connection: ConnectionId,
-    name: String,
-  },
-  Account {
-    account: AgentAccountId,
-  },
-  Provider {
-    base_url: BaseUrl,
-    key: SecretId,
-  },
+  Permissions { permissions: Box<LaunchPermissions> },
+  Prompt { prompt: Box<InvocationPrompt> },
+  CodeIndex { used: CodeIndexUse },
+  EditProgress { progress: EditProgress },
+  Memories { chosen: Vec<ChosenMemory> },
+  Engine { engine: InvocationEngine },
+  Connection { connection: ConnectionId, name: String },
+  Account { account: AgentAccountId },
+  Provider { base_url: BaseUrl, key: SecretId },
 }
 
 /// The columns of `invocations` [`ActivityStore::save_invocation`] updates.
@@ -314,7 +292,10 @@ impl ProjectDb {
       InvocationChange::CodeIndex { used } => self.save_invocation_code_index(invocation, used),
       InvocationChange::EditProgress { progress } => self.save_edit_progress(invocation, progress),
       InvocationChange::Memories { chosen } => {
-        let injected = chosen.iter().map(ChosenMemory::injected).collect::<Result<Vec<_>, _>>()?;
+        let injected = chosen
+          .iter()
+          .map(ChosenMemory::injected)
+          .collect::<Result<Vec<_>, _>>()?;
         self.save_injected_memory(invocation, &injected)
       }
       InvocationChange::Engine { engine } => self.save_invocation_engine(invocation, engine),

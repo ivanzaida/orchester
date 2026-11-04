@@ -16,7 +16,9 @@ use orchester_core::{
   },
   id::{AgentAccountId, ConnectionId, InvocationId, MemoryId, SecretId},
   memory::{Delivery, InjectedMemory, InjectionReason, MemoryStore},
-  permission::{AgentPermissions, CommandPermission, LaunchPermissions, NetworkAccess, OutsideCommands, RepositoryAccess},
+  permission::{
+    AgentPermissions, CommandPermission, LaunchPermissions, NetworkAccess, OutsideCommands, RepositoryAccess,
+  },
   run::{EditProgress, InvocationEngine, InvocationKind, TokenUsage},
   secret::SecretValue,
   store::ActivityStore,
@@ -103,7 +105,11 @@ fn invocation_record_of_each_launch_row_is_written_as_directly() {
     .expect("start")
     .id;
   let permissions = LaunchPermissions::new(
-    AgentPermissions::new(RepositoryAccess::Write, CommandPermission::AskBefore, NetworkAccess::Off),
+    AgentPermissions::new(
+      RepositoryAccess::Write,
+      CommandPermission::AskBefore,
+      NetworkAccess::Off,
+    ),
     OutsideCommands::SandboxApproval,
   );
   let engine = InvocationEngine {
@@ -118,7 +124,10 @@ fn invocation_record_of_each_launch_row_is_written_as_directly() {
     delivery: Delivery::Truncated,
   }];
   let account = AgentAccountId::generate();
-  let (base_url, key) = (BaseUrl::new("https://api.deepseek.com").expect("base URL"), SecretId::generate());
+  let (base_url, key) = (
+    BaseUrl::new("https://api.deepseek.com").expect("base URL"),
+    SecretId::generate(),
+  );
   let connection = UsedProvider {
     id: ConnectionId::generate(),
     name: Arc::from("Codex"),
@@ -141,8 +150,14 @@ fn invocation_record_of_each_launch_row_is_written_as_directly() {
   assert_eq!(db.invocation_engine(invocation).expect("read"), Some(engine));
   assert_eq!(db.invocation_accounts(run.id()).expect("read"), [(invocation, account)]);
   assert_eq!(db.invocation_provider(invocation).expect("read"), Some((base_url, key)));
-  assert_eq!(db.invocation_code_index(invocation).expect("read"), Some(CodeIndexUse::Off));
-  assert_eq!(db.edit_progress(invocation).expect("read"), Some(EditProgress::started()));
+  assert_eq!(
+    db.invocation_code_index(invocation).expect("read"),
+    Some(CodeIndexUse::Off)
+  );
+  assert_eq!(
+    db.edit_progress(invocation).expect("read"),
+    Some(EditProgress::started())
+  );
   assert_eq!(db.injected_memory(invocation).expect("read"), injected);
   assert!(
     db.save_invocation_connection(invocation, &connection).is_err(),
@@ -183,7 +198,10 @@ fn invocation_record_carries_no_secret_value() {
   for text in [&activity_text, &provider_text] {
     assert!(!text.contains(KEY_VALUE), "a record carries the key's value: {text}");
   }
-  assert!(provider_text.contains(&key.to_string()), "the key is named by its secret");
+  assert!(
+    provider_text.contains(&key.to_string()),
+    "the key is named by its secret"
+  );
   db.write_activity(&activity).expect("written");
   db.write_invocation(&provider).expect("written");
 }
