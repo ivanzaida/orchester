@@ -8,11 +8,16 @@
 //! lines, what reviews cost and the plan limits CLIs reported, the warm workspaces runs borrow and give back, the
 //! removal of a run's worktrees, and base notices delivered or merged (ORC-681). The local sink is
 //! `crate::execution::coordinator::sink`'s.
+//!
+//! Rows the desktop owns are written only by the coordinator (rule 3): the executor asks for them here, and the
+//! answer tells it what it needs to go on. These are approval rules, Always allow, a connection's model requirement
+//! and agents' memory records.
 
 use orchester_core::integration::RemovalStart;
 use orchester_store::{
-  ActivityRecord, ApprovalRecord, InvocationRecord, InvocationStart, MessageRecord, NoticeRecord, QuestionRecord,
-  RemovalRecord, RunLogRecord, RunStoreError, StepRecord, StoreError, WarmWorkspaceRecord, WorkspaceWritten,
+  ActivityRecord, AlwaysAllowAnswer, AlwaysAllowRecord, ApprovalRecord, InvocationRecord, InvocationStart,
+  MemoryAnswer, MemoryRecord, MessageRecord, ModelRequirement, NoticeRecord, QuestionRecord, RemovalRecord, RuleAnswer,
+  RuleRecord, RunLogRecord, RunStoreError, StepRecord, StoreError, WarmWorkspaceRecord, WorkspaceWritten,
 };
 
 pub(in crate::execution) trait Sink: Send {
@@ -56,6 +61,19 @@ pub(in crate::execution) trait Sink: Send {
   /// Applies `record` to its run's tool requests; whether it changed the requests it names
   /// (`orchester_store::ProjectDb::write_approval`).
   fn approval(&mut self, record: ApprovalRecord) -> Result<bool, StoreError>;
+
+  /// Adds an approval rule, or counts a request a project's rule answered (`orchester_store::ProjectDb::write_rule`).
+  fn rule(&mut self, record: RuleRecord) -> Result<RuleAnswer, StoreError>;
+
+  /// Leaves what Always allow promises, or says it is not available
+  /// (`orchester_store::ProjectDb::write_always_allow`).
+  fn always_allow(&mut self, record: AlwaysAllowRecord) -> Result<AlwaysAllowAnswer, StoreError>;
+
+  /// Records the CLI version a connection's model needs (`orchester_store::ProjectDb::write_model_requirement`).
+  fn model_requirement(&mut self, requirement: ModelRequirement) -> Result<(), StoreError>;
+
+  /// Keeps an agent's memory write, its content already screened (`orchester_store::ProjectDb::write_memory`).
+  fn keep_memory(&mut self, record: MemoryRecord) -> Result<MemoryAnswer, StoreError>;
 
   /// Another sink of the same coordinator, for a task of the run's own: an agent's or a command's worker.
   fn another(&self) -> Box<dyn Sink>;

@@ -1,6 +1,7 @@
 //! What a memory record says: its kind, an optional key, the text, tags, and how important and
 //! how certain it is. Validated here; whether the text may be stored at all (no secret value in
-//! it) is decided by [`super::SecretScreen`].
+//! it) is decided by [`super::SecretScreen`]. Content is sent between the runner's executor and its
+//! coordinator as values that are validated again when they arrive.
 
 use std::collections::BTreeSet;
 

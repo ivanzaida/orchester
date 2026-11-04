@@ -25,13 +25,14 @@ pub use lock_watch::worst::{LockHold, LockHolds, lock_holds, reset_lock_holds};
 #[cfg(feature = "test-support")]
 pub use project_db::ProjectMigration;
 pub use project_db::{
-  ActivityRecord, ApprovalRecord, AttachmentOwner, AutoModeSave, AutomaticStatus, AutomationPoints, Bound, BoundBy,
-  BoundReference, CachedClaim, CachedModule, CachedModuleChange, CachedRunStatus, CachedTask, CachedVersion,
-  ChatListing, ChatTurn, ConfirmedVersion, DecisionCounts, EndedRun, InvocationRecord, InvocationStart, JoinedKey,
-  KeptAction, KeptReport, KeptWait, MessageRecord, NamingVersion, NotSent, NoticeRecord, OrchestratorSwitch, ProjectDb,
-  PublishState, QuestionRecord, ReadOnlyProjectDb, ReferenceBinding, ReferenceTarget, RemovalRecord, ResolutionStart,
-  ResourceSharing, ResourceUpdate, ReturnedTask, RunBranch, RunLogRecord, ServerAdmin, SharedEvent, SharedMember,
-  SharedPerson, SharedSnapshot, SharedStanding, SharedTaskInfo, SharingLink, StartedQueued, StepRecord,
+  ActivityRecord, AlwaysAllowAnswer, AlwaysAllowRecord, ApprovalRecord, AttachmentOwner, AutoModeSave, AutomaticStatus,
+  AutomationPoints, Bound, BoundBy, BoundReference, CachedClaim, CachedModule, CachedModuleChange, CachedRunStatus,
+  CachedTask, CachedVersion, ChatListing, ChatTurn, ConfirmedVersion, DecisionCounts, EndedRun, InvocationRecord,
+  InvocationStart, JoinedKey, KeptAction, KeptReport, KeptWait, MemoryAnswer, MemoryRecord, MessageRecord,
+  ModelRequirement, NamingVersion, NotSent, NoticeRecord, OrchestratorSwitch, ProjectDb, PublishState, QuestionRecord,
+  ReadOnlyProjectDb, ReferenceBinding, ReferenceTarget, RemovalRecord, ResolutionStart, ResourceSharing,
+  ResourceUpdate, ReturnedTask, RuleAnswer, RuleRecord, RunBranch, RunLogRecord, ServerAdmin, SharedEvent,
+  SharedMember, SharedPerson, SharedSnapshot, SharedStanding, SharedTaskInfo, SharingLink, StartedQueued, StepRecord,
   TaskDeletionFacts, UnsentStatus, VersionReference, WaitingPublish, WaitingVersion, WarmWorkspaceRecord,
   WorkspaceWritten, attachment_file, exclude_project_data,
 };

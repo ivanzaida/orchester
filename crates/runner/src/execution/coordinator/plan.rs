@@ -7,7 +7,7 @@ use orchester_core::{
 };
 use orchester_ipc::Rejection;
 
-use super::{Scheduler, idle, link::LocalLink, prepare::Prepared, sink::LocalSink};
+use super::{Scheduler, idle, prepare::Prepared, sink::LocalSink};
 use crate::execution::executor::{
   control::Control,
   handoff::Keeper,
@@ -56,11 +56,8 @@ impl Scheduler {
     // A run that cannot continue refuses the decision before it is recorded.
     let mut prepared = Prepared::continuing(&db, &self.inner.project_root, idle::load(&db, run)?)?;
     let mut sink = LocalSink::new(&self.inner.project_root);
-    let link = LocalLink::open(&self.inner.project_root)
-      .map_err(|error| super::super::failed("cannot open the project database", &error))?;
     let keeper = Keeper {
       db: &mut db,
-      link: &link,
       sink: &mut sink,
       notifier: &self.inner.notifier,
       vault: self.inner.vault.as_ref(),

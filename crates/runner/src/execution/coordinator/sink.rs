@@ -7,9 +7,9 @@ use std::path::{Path, PathBuf};
 
 use orchester_core::integration::RemovalStart;
 use orchester_store::{
-  ActivityRecord, ApprovalRecord, InvocationRecord, InvocationStart, MessageRecord, NoticeRecord, ProjectDb,
-  QuestionRecord, RemovalRecord, RunLogRecord, RunStoreError, StepRecord, StoreError, WarmWorkspaceRecord,
-  WorkspaceWritten,
+  ActivityRecord, AlwaysAllowAnswer, AlwaysAllowRecord, ApprovalRecord, InvocationRecord, InvocationStart,
+  MemoryAnswer, MemoryRecord, MessageRecord, ModelRequirement, NoticeRecord, ProjectDb, QuestionRecord, RemovalRecord,
+  RuleAnswer, RuleRecord, RunLogRecord, RunStoreError, StepRecord, StoreError, WarmWorkspaceRecord, WorkspaceWritten,
 };
 
 use crate::execution::executor::sink::Sink;
@@ -89,6 +89,39 @@ impl Sink for LocalSink {
     self.write(|db| db.write_invocation(&record))
   }
 
+  fn rule(&mut self, record: RuleRecord) -> Result<RuleAnswer, StoreError> {
+    #[cfg(feature = "test-agent")]
+    survives_sending(&record);
+    let answer = self.write(|db| db.write_rule(&record))?;
+    #[cfg(feature = "test-agent")]
+    survives_sending(&answer);
+    Ok(answer)
+  }
+
+  fn always_allow(&mut self, record: AlwaysAllowRecord) -> Result<AlwaysAllowAnswer, StoreError> {
+    #[cfg(feature = "test-agent")]
+    survives_sending(&record);
+    let answer = self.write(|db| db.write_always_allow(&record))?;
+    #[cfg(feature = "test-agent")]
+    survives_sending(&answer);
+    Ok(answer)
+  }
+
+  fn model_requirement(&mut self, requirement: ModelRequirement) -> Result<(), StoreError> {
+    #[cfg(feature = "test-agent")]
+    survives_sending(&requirement);
+    self.write(|db| db.write_model_requirement(&requirement))
+  }
+
+  fn keep_memory(&mut self, record: MemoryRecord) -> Result<MemoryAnswer, StoreError> {
+    #[cfg(feature = "test-agent")]
+    survives_sending(&record);
+    let answer = self.write(|db| db.write_memory(&record))?;
+    #[cfg(feature = "test-agent")]
+    survives_sending(&answer);
+    Ok(answer)
+  }
+
   fn message(&mut self, record: MessageRecord) -> Result<bool, StoreError> {
     #[cfg(feature = "test-agent")]
     survives_sending(&record);
@@ -112,9 +145,9 @@ impl Sink for LocalSink {
   }
 }
 
-/// In the runner's own tests every invocation, conversation, question and tool request record crosses the sink as
-/// JSON and must arrive unchanged, as a coordinator in another process would receive it
-/// (`docs/architecture/remote-runners.md`, rule 4).
+/// In the runner's own tests every invocation, conversation, question and tool request record, and every request for
+/// rows the desktop owns, crosses the sink as JSON and must arrive unchanged, as a coordinator in another process would
+/// receive it (`docs/architecture/remote-runners.md`, rule 4); so does every answer on its way back.
 #[cfg(feature = "test-agent")]
 fn survives_sending<T>(record: &T)
 where
