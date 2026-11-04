@@ -147,6 +147,15 @@ pub fn clock(at: Timestamp) -> String {
   clock_time(UNIX_EPOCH + Duration::from_millis(millis))
 }
 
+/// [`clock`] with the seconds, e.g. `14:32:10`, for times a minute holds more than one of.
+pub fn clock_seconds(at: Timestamp) -> String {
+  // As in `clock`: stored times are after 1970.
+  let millis = u64::try_from(at.unix_millis()).unwrap_or_default();
+  chrono::DateTime::<chrono::Local>::from(UNIX_EPOCH + Duration::from_millis(millis))
+    .format("%H:%M:%S")
+    .to_string()
+}
+
 /// The i18n keys of the months' short names, January first.
 pub const MONTH_KEYS: [&str; 12] = [
   "time.month.jan",

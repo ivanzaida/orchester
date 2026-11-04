@@ -35,6 +35,7 @@ mod lifecycle;
 mod local_integration;
 mod markdown;
 mod memory;
+mod merge_attempt;
 mod metrics;
 mod modules;
 mod needs_you;
@@ -90,6 +91,7 @@ pub use self::{
   local_integration::LocalText,
   markdown::blank_line_between_blocks,
   memory::{MemorySpacing, MemoryText},
+  merge_attempt::{AttemptSpacing, AttemptText},
   metrics::{ControlHeight, ExtraRadius, ExtraSpacing},
   modules::ModulesSpacing,
   needs_you::{NeedsYouRadius, NeedsYouShadow, NeedsYouSpacing, NeedsYouText},
@@ -169,6 +171,7 @@ pub fn install(app: &mut App, mode: Mode) {
   memory::install(theme);
   sources::install(theme);
   delivery::install(theme);
+  merge_attempt::install(theme);
   import::install(theme);
   hub::install(theme);
   failure::install(theme);

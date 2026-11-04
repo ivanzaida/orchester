@@ -6,6 +6,7 @@
 //! merge, either holding the project's integration lease so that no other one goes on.
 
 pub mod merges;
+pub mod page;
 pub mod read;
 
 use std::{path::Path, thread};

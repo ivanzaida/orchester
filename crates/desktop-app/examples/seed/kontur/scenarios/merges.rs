@@ -40,13 +40,13 @@ use orchester_workspace::tasks::integration::{IntegrationProblem, merge_in};
 use super::delivery::{Work, checked_events, enter, passed};
 use crate::kontur::{Kontur, SeedError, catalogue::Published, files, run::Drive};
 
-type Asked = (MergeAsker, MergeVia);
+pub(super) type Asked = (MergeAsker, MergeVia);
 /// How an attempt ended, and why.
-type Ended<'a> = (AttemptOutcome, Option<&'a str>);
+pub(super) type Ended<'a> = (AttemptOutcome, Option<&'a str>);
 
-const PERSON: Asked = (MergeAsker::Person, MergeVia::TaskPage);
-const QUEUE: Asked = (MergeAsker::MergeQueue, MergeVia::MergeQueue);
-const AUTOMATION: Asked = (MergeAsker::Automation, MergeVia::MergeRun);
+pub(super) const PERSON: Asked = (MergeAsker::Person, MergeVia::TaskPage);
+pub(super) const QUEUE: Asked = (MergeAsker::MergeQueue, MergeVia::MergeQueue);
+pub(super) const AUTOMATION: Asked = (MergeAsker::Automation, MergeVia::MergeRun);
 /// Why the integration lock refused, as its preflight says it.
 const HELD: &str = "another merge or local integration holds this checkout";
 const MINUTE: i64 = 60_000;
@@ -186,7 +186,7 @@ pub fn many(kontur: &mut Kontur) -> Result<(), SeedError> {
 }
 
 /// Records the attempt of `run` at `at` that `asked` asked for, ended as `outcome` for `cause`.
-fn record(
+pub(super) fn record(
   kontur: &mut Kontur,
   run: &Run,
   (at, asked): (Timestamp, Asked),
@@ -197,7 +197,7 @@ fn record(
   Ok(())
 }
 
-const fn refused(stage: AttemptStage) -> AttemptOutcome {
+pub(super) const fn refused(stage: AttemptStage) -> AttemptOutcome {
   AttemptOutcome::Refused { stage }
 }
 
@@ -211,7 +211,7 @@ fn queued(kontur: &mut Kontur, pipeline: &Published, (title, state): (&str, &'st
 
 /// A run of a new task titled `title` that passed every step, started `ago` minutes before now (no earlier than
 /// today), and waits to merge from its task page.
-fn ready(
+pub(super) fn ready(
   kontur: &mut Kontur,
   pipeline: &Published,
   (title, state): (&str, &'static str),
@@ -254,7 +254,7 @@ fn merged_before_today(
 }
 
 /// Records the attempt that landed `run`'s merge, as `asked` asked for it.
-fn record_landed(kontur: &mut Kontur, run: &Run, asked: Asked) -> Result<(), SeedError> {
+pub(super) fn record_landed(kontur: &mut Kontur, run: &Run, asked: Asked) -> Result<(), SeedError> {
   let merge = kontur
     .db
     .run_merge(run.id())?
@@ -267,7 +267,7 @@ fn record_landed(kontur: &mut Kontur, run: &Run, asked: Asked) -> Result<(), See
 }
 
 /// The minutes since today's local midnight.
-fn minutes_into_today(kontur: &Kontur) -> i64 {
+pub(super) fn minutes_into_today(kontur: &Kontur) -> i64 {
   (kontur.now.unix_millis() - kontur.now.local_day_start().unix_millis()) / MINUTE
 }
 
@@ -327,7 +327,7 @@ fn unsent_comments(kontur: &mut Kontur, run: &Run, count: u32) -> Result<(), See
 
 /// A run of Quick fix that changes the README, whose merge brought it into the checkout and stopped part way, git then
 /// unable to put it back: its attempt is recorded as the app records it, and the checkout keeps the run's README.
-fn left_changed(kontur: &mut Kontur, quick: &Published) -> Result<(), SeedError> {
+pub(super) fn left_changed(kontur: &mut Kontur, quick: &Published) -> Result<(), SeedError> {
   let task = queued(kontur, quick, ("Payload size guard", "left a file changed"))?;
   let readme = files::initial()
     .into_iter()

@@ -3,11 +3,12 @@
 //! the runs whose last attempt did not land, each with the action that moves it on; *Waiting for your review*: the runs
 //! that merge only once a person approves; then the merged runs by local day, newest first, older days read as the list
 //! scrolls near its end. Sections without rows are left out; with none at all, *No merges yet* (09c `jhPCL`); while
-//! read, bones (09d `Zlk49`). A row's chevron opens its run's task, until the run's own page and the review page
-//! (ORC-363, ORC-367) land. The merges are read again whenever the project's tasks or runs change, a merge job ends, or
-//! a button here changed something.
+//! read, bones (09d `Zlk49`). A row's chevron opens the run's attempts ([`attempt`], ORC-363); a run waiting for review
+//! opens its task until the review page (ORC-367) lands. The merges are read again whenever the project's tasks or runs
+//! change, a merge job ends, or a button here changed something.
 
 mod actions;
+pub(crate) mod attempt;
 mod header;
 mod merged;
 mod not_merged;
@@ -257,10 +258,18 @@ fn read(ctx: &mut Ctx, project: &ShownProject, (again, pages): (u64, usize)) -> 
   })
 }
 
-/// The page of `run`'s task on `tab`, which a row opens until the run has a page of its own.
+/// The page of `run`'s task on `tab`, which a run waiting for review opens until the review page lands (ORC-367).
 fn task_page(ctx: &mut Ctx, project: &ShownProject, run: &MergeRun, tab: TaskTab) -> Open {
   Navigation::of(ctx).to(Route::Project(
     project.open.project.id(),
     ProjectPage::Task(run.key.clone(), TaskView::of(tab)),
+  ))
+}
+
+/// `run`'s merge attempts (ORC-363, [`attempt`]).
+fn attempt_page(ctx: &mut Ctx, project: &ShownProject, run: &MergeRun) -> Open {
+  Navigation::of(ctx).to(Route::Project(
+    project.open.project.id(),
+    ProjectPage::MergeAttempt(run.key.clone(), run.number),
   ))
 }

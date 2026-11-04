@@ -427,7 +427,7 @@ fn worktree_owners(run: &Run) -> (&BranchName, Vec<StepExecutionId>) {
 /// removal is recorded, has other worktrees than `run` ([`clean_up_recorded_as_seen`]). A folder something held is
 /// deleted again once the run's own processes there are stopped, and one that still stays is recorded as not removed
 /// ([`finish_removal`]); then folders no run uses any more are swept ([`super::worktree_sweep`]).
-fn clear(
+pub(super) fn clear(
   db: &mut ProjectDb,
   programs: &Programs,
   repo_root: &Path,

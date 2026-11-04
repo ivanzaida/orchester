@@ -57,7 +57,7 @@ pub fn not_merged(root: &Path) -> Result<Vec<NotMerged>, StoreError> {
 }
 
 /// Whether the merge queue delivers `run` on its own: it is in the queue, and nothing it waits for is a person's.
-fn queue_retries(db: &ProjectDb, run: RunId) -> Result<bool, StoreError> {
+pub(super) fn queue_retries(db: &ProjectDb, run: RunId) -> Result<bool, StoreError> {
   Ok(db.merge_queue_entry(run)?.is_some_and(|entry| {
     matches!(
       entry.state,

@@ -26,6 +26,7 @@ mod live;
 mod loading_states;
 mod long_chats;
 mod memory;
+mod merge_attempts;
 mod merges;
 mod modules;
 mod native;
@@ -94,7 +95,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 105] = [
+pub const ALL: [Scenario; 106] = [
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-library", agents_library::seed),
   Scenario::of("agents-browser", agents_browser::seed),
@@ -140,6 +141,7 @@ pub const ALL: [Scenario; 105] = [
   Scenario::of("merges-outcomes", merges::outcomes),
   Scenario::of("merges-empty", merges::empty),
   Scenario::of("merges-many", merges::many),
+  Scenario::of("merge-attempts", merge_attempts::seed),
   Scenario::of("overview-quiet", delivery::quiet),
   Scenario::of("overview-states", overview_states::seed),
   Scenario::of("interrupted", interrupted::seed),

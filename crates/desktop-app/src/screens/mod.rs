@@ -130,6 +130,7 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
       let body = merges::screen(ctx, project);
       review::page(ctx, project, review::ReviewTab::Merges, body)
     }
+    ProjectPage::MergeAttempt(key, number) => merges::attempt::screen(ctx, project, key, *number),
     ProjectPage::PullRequest(number, file) => pull_requests::pull_request(
       ctx,
       project,

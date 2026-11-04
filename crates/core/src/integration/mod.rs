@@ -17,6 +17,7 @@ mod git;
 mod held;
 pub mod local;
 mod log;
+mod made;
 mod merge;
 mod merged;
 mod preflight;
@@ -40,6 +41,7 @@ pub use self::{
   fork::{Ancestry, RunFork, fork_point, made_on_branch, own_base, parse_log},
   held::{NotRemoved, finish_removal, retry_held},
   log::{LoggedCommit, MAX_LISTED, own_commits},
+  made::merge_made,
   merge::{
     DeliveredAs, Delivering, Interrupted, MergeError, MergeKind, MergeOutcome, MergeStep, RunMerge, TemporaryLeft,
     clear_interrupted, left_by_bring_in, merge_run, merge_run_as, merge_run_at, put_back,

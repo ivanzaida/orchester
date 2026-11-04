@@ -39,6 +39,7 @@ pub mod list;
 pub mod local_integration;
 pub mod merge_attempts;
 pub mod merge_left;
+pub mod merge_record;
 pub mod merge_retry;
 pub mod moves;
 pub mod needs_you;

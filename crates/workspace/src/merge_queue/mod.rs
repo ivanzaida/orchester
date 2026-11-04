@@ -28,7 +28,7 @@ mod read;
 mod wake;
 
 pub use self::{
-  approve::{approve, reject, requeue, resolve_myself, resolved},
+  approve::{approve, reject, requeue, resolve_myself, resolved, retry_stopped},
   check::rechecks,
   checks::{DeliveryCheck, checks},
   drive::{Advance, advance, integrate_sent},

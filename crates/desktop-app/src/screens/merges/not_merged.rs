@@ -1,8 +1,8 @@
 //! *Not merged* (`Section · Not merged` `g7qwcU` in 09 `Os7b3`): a row per run whose last attempt did not land, in
 //! `warning` but while Orchester tries again by itself, in `info` (`Cjprb`). Its action moves the run on: *Try again*
 //! merges it through the task page's own job (`RunJobs::start_merge`), *Try now* ends the wait for Orchester's next
-//! try, *Resolve* opens the task whose conflicts wait, *Put files back* puts back what a stopped bring-in left changed.
-//! *Record merge* is unavailable until the run's attempt page records the merge Git made.
+//! try, *Put files back* puts back what a stopped bring-in left changed; *Resolve* and *Record merge* open the run's
+//! attempt page, where its conflicts are resolved and the merge Git made is recorded.
 
 use std::sync::Arc;
 
@@ -10,18 +10,17 @@ use lurq::app::{ctx::Ctx, theme::PaletteColor};
 use orchester_core::integration::attempt::AttemptOutcome;
 use orchester_workspace::tasks::{
   integration_jobs::{JobState, MergeArgs},
-  merge_attempts::merges::NotMergedRun,
+  merge_attempts::merges::{MergeRun, NotMergedRun},
 };
 
 use super::{
   actions::Actions,
-  retrying,
+  attempt_page, retrying,
   row::{self, Shown},
-  task_page, words,
+  words,
 };
 use crate::{
   project::ShownProject,
-  routes::TaskTab,
   services::Services,
   ui::{
     button::{ActionButton, ButtonKind},
@@ -77,7 +76,7 @@ fn shown(ctx: &mut Ctx, project: &ShownProject, actions: &Actions, run: &NotMerg
     line: (line, outcome_name(run)),
     meta: words::not_merged_meta(ctx, run),
     action: Some(action),
-    opens: task_page(ctx, project, &run.run, TaskTab::Summary),
+    opens: attempt_page(ctx, project, &run.run),
     id,
   }
 }
@@ -111,48 +110,53 @@ fn action(
   }
   match run.not_merged.attempt.attempt.outcome() {
     AttemptOutcome::Conflicts { .. } => button("merges.action.resolve", Icon::CodeXml, ctx)
-      .opens(task_page(ctx, project, &run.run, TaskTab::Summary))
+      .opens(attempt_page(ctx, project, &run.run))
       .into(),
     AttemptOutcome::NotRecorded { .. } => button("merges.action.recordMerge", Icon::Database, ctx)
-      .unavailable(ctx.t("merges.action.recordMergeUnavailable"))
+      .opens(attempt_page(ctx, project, &run.run))
       .into(),
     _ => try_again(
       ctx,
       project,
       button("merges.action.tryAgain", Icon::RotateCcw, ctx),
-      run,
+      &run.run,
     ),
   }
 }
 
 /// *Try again*: merges the run as the task page's *Merge into <base>* does, on the project's shared operations; under
 /// way while it merges, waiting while another run of the project merges, unavailable without the branch it merges into.
-fn try_again(ctx: &mut Ctx, project: &ShownProject, button: ActionButton, run: &NotMergedRun) -> lurq::node::Element {
-  let Some(branch) = run.run.base.clone() else {
+pub(super) fn try_again(
+  ctx: &mut Ctx,
+  project: &ShownProject,
+  button: ActionButton,
+  run: &MergeRun,
+) -> lurq::node::Element {
+  let Some(branch) = run.base.clone() else {
     return button.unavailable(ctx.t("merges.action.noBranch")).into();
   };
   let jobs = project.feed.job_state.get();
-  if jobs.run(run.run.run).merge == JobState::Running {
+  if jobs.run(run.run).merge == JobState::Running {
     return button.loading().into();
   }
-  if jobs.merging().is_some_and(|other| other != run.run.run) {
+  if jobs.merging().is_some_and(|other| other != run.run) {
     return button.unavailable(ctx.t("merges.action.anotherMerge")).into();
   }
   let services = Services::of(ctx);
   let feed = project.feed.clone();
   let args = MergeArgs {
     open: project.open.clone(),
-    task: run.run.task,
-    key: run.run.key.to_string(),
-    number: run.run.number.get(),
+    task: run.task,
+    key: run.key.to_string(),
+    number: run.number.get(),
     branch: branch.as_str().to_owned(),
-    run: run.run.run,
+    run: run.run,
     programs: services.programs,
     activity: services.activity,
     separator: ctx.t("task.listSeparator"),
     changed: Arc::new(move || feed.saved()),
   };
-  let (job, vault) = (project.feed.jobs.of(run.run.run), services.vault);
+  let (job, vault) = (project.feed.jobs.of(run.run), services.vault);
   // A merge that does not begin (another one took the project meanwhile) leaves the job's state as it is.
   let start = move || {
     if lurq::app::events::is_synthetic_input() {

@@ -26,6 +26,8 @@ mod hooks;
 mod ignore_transitions;
 #[path = "local_integration/merge_attempts.rs"]
 mod merge_attempts;
+#[path = "local_integration/merge_record.rs"]
+mod merge_record;
 #[path = "local_integration/merge_recovery.rs"]
 mod merge_recovery;
 #[path = "local_integration/merged_in.rs"]
