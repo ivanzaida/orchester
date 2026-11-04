@@ -24,7 +24,7 @@ use super::{
     control::{Ack, answer},
     question::refusal,
   },
-  worker::{Watch, Worker},
+  worker::{Watch, Worker, WorkerError},
 };
 
 /// The request or call a waiting question answers.
@@ -104,7 +104,7 @@ impl Worker {
   }
 
   /// Gives `answer` to the request this agent holds, or refuses it.
-  pub(super) async fn answer_question(&mut self, watch: &mut Watch, given: QuestionAnswer) -> Result<(), StoreError> {
+  pub(super) async fn answer_question(&mut self, watch: &mut Watch, given: QuestionAnswer) -> Result<(), WorkerError> {
     let QuestionAnswer {
       request,
       answers,
@@ -116,7 +116,7 @@ impl Worker {
       .as_ref()
       .is_some_and(|(waiting, _)| waiting.id() == request);
     if !held || watch.stop.is_some() {
-      let refused = refusal(&watch.db, watch.invocation.run, &request)?;
+      let refused = refusal(&*watch.link, watch.invocation.run, &request)?;
       answer(ack, Err(refused));
       return Ok(());
     }
@@ -132,7 +132,7 @@ impl Worker {
     let run = waiting.run();
     let answered = QuestionRecord::answered((run, waiting.id()), &answers, (by, Timestamp::now()), None);
     if !watch.sink.question(answered)? {
-      let refused = refusal(&watch.db, run, waiting.id())?;
+      let refused = refusal(&*watch.link, run, waiting.id())?;
       // The agent still waits for this call; its end interrupts what is recorded of it.
       watch.question = Some((waiting, awaiting));
       answer(ack, Err(refused));

@@ -136,7 +136,7 @@ impl Worker {
   }
 
   /// A call the relay holds for a person: a decision, or an answer to `ask_question`.
-  async fn relayed(&mut self, watch: &mut Watch, relayed: Relayed) -> Result<(), StoreError> {
+  async fn relayed(&mut self, watch: &mut Watch, relayed: Relayed) -> Result<(), WorkerError> {
     match relayed {
       Relayed::Approval(asked) => self.request_claude_approval(watch, asked).await?,
       Relayed::Question(asked) => self.request_relay_question(watch, asked)?,

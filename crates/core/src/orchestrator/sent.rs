@@ -3,10 +3,13 @@
 //! itself while the person's switch let it, or proposed by it and applied by the person. How it went out is who
 //! decided it ([`Answerer`]): automation when the chat sent it, the person when they applied its proposal.
 
+use serde::{Deserialize, Serialize};
+
 use crate::{id::ChatId, run::Answerer};
 
 /// How something the Orchestrator chat wrote went out.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum SentWay {
   /// The chat sent it itself: *Let the Orchestrator answer agents* was on.
   Direct,
@@ -34,7 +37,7 @@ impl SentWay {
 
 /// A message or an answer the Orchestrator chat wrote: its conversation and how it went out, both `None` for one
 /// kept before its conversation was recorded.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FromOrchestrator {
   pub chat: Option<ChatId>,
   pub way: Option<SentWay>,
