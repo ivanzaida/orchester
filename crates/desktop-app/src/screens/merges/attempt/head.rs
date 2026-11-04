@@ -21,7 +21,7 @@ use orchester_core::{
   integration::{attempt::MergeAsker, retry::RETRIES},
   time::Timestamp,
 };
-use orchester_workspace::{display::short_revision, tasks::merge_attempts::page::AttemptPage};
+use orchester_workspace::tasks::merge_attempts::page::AttemptPage;
 
 use super::{
   standing::Standing,
@@ -139,10 +139,7 @@ fn meta(ctx: &Ctx, page: &AttemptPage, standing: Standing, base: &str) -> Arc<st
     return super::super::words::joined(ctx, &parts);
   }
   match (standing, &page.merge) {
-    (Standing::Merged, Some(merge)) => parts.push(ctx.t_args(
-      "merges.merged.mergeCommit",
-      [("revision", short_revision(merge.revision.as_str()))],
-    )),
+    (Standing::Merged, Some(merge)) => parts.push(super::words::made(ctx, &merge.revision, merge.kind)),
     _ if page.attempts.len() == 1 => parts.push(ctx.t("merges.page.meta.attemptsOne")),
     _ => parts.push(ctx.t_args(
       "merges.page.meta.attemptsOther",

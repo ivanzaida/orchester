@@ -91,7 +91,7 @@ fn passed_result(ctx: &Ctx, attempt: &MergeAttempt, stage: AttemptStage) -> Arc<
 }
 
 /// *Merge commit d08e094*: how Git brought the run in.
-fn made(ctx: &Ctx, revision: &Revision, kind: MergeKind) -> Arc<str> {
+pub(super) fn made(ctx: &Ctx, revision: &Revision, kind: MergeKind) -> Arc<str> {
   let key = match kind {
     MergeKind::MergeCommit => "merges.merged.mergeCommit",
     MergeKind::Squash => "merges.merged.squash",

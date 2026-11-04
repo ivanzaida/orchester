@@ -245,6 +245,12 @@ fn merge_attempt_page_attempts_newest_first_expand_into_their_checks() {
     "a merged run has no primary action"
   );
   assert_eq!(page.window.text("merge-attempt-attempts-head-count"), "3");
+  assert!(
+    page.window.text("merge-attempt-checks-passed").contains("01–06"),
+    "the checks before Git fold even when every stage passed"
+  );
+  assert!(!page.shows("merge-attempt-checks-1"));
+  assert!(page.shows("merge-attempt-checks-7") && page.shows("merge-attempt-checks-8"));
   assert!(page.window.text("merge-attempt-3-outcome").starts_with("Merged as "));
   assert!(
     page
@@ -287,6 +293,14 @@ fn merge_attempt_page_record_merge_records_the_merge_git_made() {
     "Merged by Git, not recorded"
   );
   assert_eq!(page.window.text("merge-attempt-checks-8-result"), "Not recorded");
+  assert!(
+    page.window.text("merge-attempt-checks-passed").contains("01–06"),
+    "only the checks before Git fold"
+  );
+  assert!(
+    page.shows("merge-attempt-checks-7"),
+    "Merge keeps its own row, with the commit Git made"
+  );
   page.window.press("merge-attempt-record-merge");
   page.until_status("Merged into main");
   assert!(!page.shows("merge-attempt-not-done"), "the merge was recorded");

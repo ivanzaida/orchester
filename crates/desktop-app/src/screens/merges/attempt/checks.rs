@@ -1,8 +1,9 @@
 //! An attempt's checks (`Checks` `qfYTz` in 09b; `Attempt 12:41 · checks` `D0SwP` in 09h): the stages in order, each
 //! with its number, its glyph, its name, what it touches and how it went, a `border` line under each but the last. The
 //! stage that refused says its cause in Geist Mono on `code_bg`, selectable (`vJyj2`); the stages after it were not
-//! reached. On the page, two or more stages that passed first fold into one row, *6 checks passed*, with *Show*
-//! (`Qqfhg` in 09f); in an expanded attempt every stage has its own compact row, 12 high.
+//! reached. On the page, two or more checks before Git that passed first fold into one row, *6 checks passed*, with
+//! *Show* (`Qqfhg` in 09f), even when every stage passed (09h); *Merge* and *Record* keep their own rows (09g). In an
+//! expanded attempt every stage has its own compact row, 12 high.
 
 use std::sync::Arc;
 
@@ -51,9 +52,9 @@ pub(super) fn checks(
   let stages = attempt.stages();
   let passed_first = stages
     .iter()
-    .take_while(|(_, result)| *result == StageResult::Passed)
+    .take_while(|(stage, result)| *result == StageResult::Passed && before_git(*stage))
     .count();
-  let folds = size == Size::Page && passed_first >= 2 && stages.len() > passed_first;
+  let folds = size == Size::Page && passed_first >= 2;
   let unfolded = shown.is_some_and(|shown| shown.get());
   let mut rows: Vec<Element> = Vec::new();
   if folds {
@@ -258,6 +259,12 @@ fn cause_box(id: &str, cause: &str) -> Element {
         .width(Dimension::Pct(100.0)),
     )
     .into()
+}
+
+/// Whether `stage` is one of the checks before Git: only those fold; *Merge* and *Record* always keep their own rows,
+/// so the commit Git made and whether it was recorded stay in sight (09g, 09h).
+const fn before_git(stage: AttemptStage) -> bool {
+  !matches!(stage, AttemptStage::Merge | AttemptStage::Record)
 }
 
 const fn result_name(result: StageResult) -> &'static str {
