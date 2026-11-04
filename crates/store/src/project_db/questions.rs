@@ -83,8 +83,19 @@ impl ProjectDb {
     (by, at): (Answerer, Timestamp),
     message: Option<MessageId>,
   ) -> Result<bool, StoreError> {
-    let stored: Vec<GivenAnswer> = answers.iter().map(GivenAnswer::from).collect();
-    let stored = serde_json::to_string(&stored).map_err(|_| StoreError::Unrepresentable("question answers"))?;
+    let given: Vec<GivenAnswer> = answers.iter().map(GivenAnswer::from).collect();
+    self.answer_given((run, id), &given, (by, at), message)
+  }
+
+  /// [`Self::answer_questions`] with the answers as they are stored.
+  pub(super) fn answer_given(
+    &mut self,
+    (run, id): (RunId, &str),
+    given: &[GivenAnswer],
+    (by, at): (Answerer, Timestamp),
+    message: Option<MessageId>,
+  ) -> Result<bool, StoreError> {
+    let stored = serde_json::to_string(given).map_err(|_| StoreError::Unrepresentable("question answers"))?;
     let changed = self.connection.execute(
       "UPDATE questions SET state = 'answered', answers = ?3, answered_by = ?4, ended_at = ?5, message_id = ?6 \
        WHERE run_id = ?1 AND id = ?2 AND state = 'waiting'",

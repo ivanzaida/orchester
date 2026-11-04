@@ -12,12 +12,13 @@ use orchester_core::{
   run::Answerer,
 };
 use orchester_ipc::{Event, Rejection};
-use orchester_store::{ProjectDb, StoreError};
+use orchester_store::{ProjectDb, QuestionRecord, StoreError};
 use tokio::sync::mpsc::error::SendError;
 
 use super::{
   control::{Ack, answer},
   run::{ExecutionError, RunTask},
+  sink::Sink,
   step::question::QuestionAnswer,
 };
 
@@ -33,14 +34,14 @@ pub(in crate::execution) fn held_by_question(
   }))
 }
 
-/// Ends request `id` of `run`, which no live agent holds, if it still waits: whether it did, and why its
-/// answer is refused.
+/// Ends request `id` of `run`, which no live agent holds, through `sink` if it still waits: whether it did, and why
+/// its answer is refused, read in `db`.
 pub(in crate::execution) fn end_unheld(
-  db: &mut ProjectDb,
+  (db, sink): (&ProjectDb, &mut dyn Sink),
   run: RunId,
   id: &str,
 ) -> Result<(bool, Rejection), StoreError> {
-  if db.end_waiting_question(run, id)? {
+  if sink.question(QuestionRecord::ended(run, id))? {
     return Ok((true, Rejection::QuestionNotAwaited));
   }
   Ok((false, refusal(db, run, id)?))
@@ -86,7 +87,7 @@ impl RunTask {
   }
 
   fn end_unheld_question(&mut self, id: &str, ack: Ack) -> Result<(), ExecutionError> {
-    let (ended, refusal) = end_unheld(&mut self.db, self.run.id(), id)?;
+    let (ended, refusal) = end_unheld((&self.db, self.sink.as_mut()), self.run.id(), id)?;
     if ended {
       self.notifier.send(Event::QuestionChanged {
         run: self.run.id(),
@@ -106,7 +107,7 @@ impl RunTask {
         .iter()
         .filter(|asked| asked.waits() && asked.request.turn() == QuestionTurn::InTurn)
         .try_fold(false, |ended, asked| {
-          Ok(self.db.end_waiting_question(run, asked.request.id())? || ended)
+          Ok(self.sink.question(QuestionRecord::ended(run, asked.request.id()))? || ended)
         })
     });
     match ended {
