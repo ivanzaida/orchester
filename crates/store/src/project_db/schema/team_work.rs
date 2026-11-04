@@ -2,8 +2,8 @@
 //! work"). A start is recorded by its `work.start` operation before the command is sent, with what its caller read and
 //! chose here (`request`), and goes forward one boundary at a time: the receipt's work and bundle reference kept
 //! (`accepted`), the bundle's inputs and files kept with the run's accepted inputs in one transaction
-//! (`inputs_stored`), the runner's run recorded (`started`), or the server's refusal (`refused`). So a crash at any
-//! boundary is carried on from it, once.
+//! (`inputs_stored`), the runner's run recorded (`started`), the server's refusal (`refused`), or why the accepted
+//! bundle can never become the run's inputs here (`failed`). So a crash at any boundary is carried on from it, once.
 //!
 //! A started team run keeps the authority it reports under, its server acceptance apart from its local status (the
 //! work as the server last answered one of its reports, by revision), the last outcome it queued, and its fence: once
@@ -16,11 +16,12 @@ CREATE TABLE team_starts (
   operation_id TEXT PRIMARY KEY,
   task_id TEXT NOT NULL REFERENCES task_identities (id),
   request TEXT NOT NULL,
-  stage TEXT NOT NULL CHECK (stage IN ('requested', 'accepted', 'inputs_stored', 'started', 'refused')),
+  stage TEXT NOT NULL CHECK (stage IN ('requested', 'accepted', 'inputs_stored', 'started', 'refused', 'failed')),
   work_id TEXT CHECK (stage = 'refused' OR (stage = 'requested') = (work_id IS NULL)),
   bundle_sha256 TEXT CHECK ((work_id IS NULL) = (bundle_sha256 IS NULL) AND length(bundle_sha256) = 64),
   run_id TEXT CHECK ((stage = 'started') = (run_id IS NOT NULL)),
   refusal TEXT CHECK ((stage = 'refused') = (refusal IS NOT NULL)),
+  failure TEXT CHECK ((stage = 'failed') = (failure IS NOT NULL)),
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 ) STRICT;
@@ -29,7 +30,7 @@ CREATE TRIGGER team_starts_keep_request BEFORE UPDATE ON team_starts
 WHEN NEW.operation_id IS NOT OLD.operation_id OR NEW.task_id IS NOT OLD.task_id OR NEW.request IS NOT OLD.request
   OR NEW.created_at IS NOT OLD.created_at
   OR (OLD.work_id IS NOT NULL AND (NEW.work_id IS NOT OLD.work_id OR NEW.bundle_sha256 IS NOT OLD.bundle_sha256))
-  OR OLD.stage IN ('started', 'refused')
+  OR OLD.stage IN ('started', 'refused', 'failed')
 BEGIN SELECT RAISE(ABORT, 'a team start keeps its request and goes forward once'); END;
 CREATE TRIGGER team_starts_no_delete BEFORE DELETE ON team_starts
 BEGIN SELECT RAISE(ABORT, 'team starts are never deleted'); END;

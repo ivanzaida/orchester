@@ -242,9 +242,11 @@ async fn team_start_runs_in_the_runner_and_recovers_once_at_every_boundary() {
   server.drop_next_file();
   for _ in 0..3 {
     let (_, outcome) = work.recover().await.expect("recovered").remove(0);
+    let outcome = outcome.expect("carried on");
     assert!(waiting(&outcome), "{outcome:?}");
   }
   let (_, started) = work.recover().await.expect("recovered").remove(0);
+  let started = started.expect("carried on");
   let StartOutcome::Started(run) = started else {
     panic!("not started: {started:?}");
   };

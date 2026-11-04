@@ -33,6 +33,8 @@ pub enum TeamStartStage {
   Started,
   /// The server refused the start: no work was made.
   Refused,
+  /// The accepted bundle can never become the run's inputs here: the start goes no further.
+  Failed,
 }
 
 impl TeamStartStage {
@@ -43,6 +45,7 @@ impl TeamStartStage {
       Self::InputsStored => "inputs_stored",
       Self::Started => "started",
       Self::Refused => "refused",
+      Self::Failed => "failed",
     }
   }
 
@@ -53,6 +56,7 @@ impl TeamStartStage {
       "inputs_stored" => Self::InputsStored,
       "started" => Self::Started,
       "refused" => Self::Refused,
+      "failed" => Self::Failed,
       other => return Err(corrupt("team start stage", other)),
     })
   }
@@ -72,6 +76,8 @@ pub struct TeamStart {
   pub run: Option<RunId>,
   /// The server's refusal, as JSON, at [`TeamStartStage::Refused`].
   pub refusal: Option<String>,
+  /// Why the start failed here, as JSON the workspace writes, at [`TeamStartStage::Failed`].
+  pub failure: Option<String>,
 }
 
 impl ProjectDb {
@@ -106,7 +112,7 @@ impl ProjectDb {
     load(&self.connection, operation)
   }
 
-  /// The starts not started and not refused yet, oldest first: what recovery carries on with.
+  /// The starts not settled yet (not started, refused or failed), oldest first: what recovery carries on with.
   pub fn open_team_starts(&self) -> Result<Vec<TeamStart>, StoreError> {
     let mut statement = self.connection.prepare(&format!(
       "{SELECT} WHERE stage IN ('requested', 'accepted', 'inputs_stored') ORDER BY created_at, operation_id"
@@ -155,6 +161,17 @@ impl ProjectDb {
       "UPDATE team_starts SET stage = 'refused', refusal = ?2, updated_at = ?3 WHERE operation_id = ?1 \
        AND stage IN ('requested', 'accepted')",
       params![operation.to_string(), refusal, at.unix_millis()],
+    )?;
+    ensure_updated(&self.connection, operation, updated)
+  }
+
+  /// Records why the accepted start under `operation` can never have its bundle kept as the run's inputs here:
+  /// `failure`, as the workspace wrote it. The start goes no further, and recovery passes it by.
+  pub fn fail_team_start(&mut self, operation: OperationId, failure: &str, at: Timestamp) -> Result<(), StoreError> {
+    let updated = self.connection.execute(
+      "UPDATE team_starts SET stage = 'failed', failure = ?2, updated_at = ?3 WHERE operation_id = ?1 \
+       AND stage = 'accepted'",
+      params![operation.to_string(), failure, at.unix_millis()],
     )?;
     ensure_updated(&self.connection, operation, updated)
   }
@@ -256,7 +273,7 @@ fn out_of_order(start: &TeamStart) -> StoreError {
 }
 
 const SELECT: &str =
-  "SELECT operation_id, task_id, request, stage, work_id, bundle_sha256, run_id, refusal FROM team_starts";
+  "SELECT operation_id, task_id, request, stage, work_id, bundle_sha256, run_id, refusal, failure FROM team_starts";
 
 pub(super) fn load(connection: &Connection, operation: OperationId) -> Result<Option<TeamStart>, StoreError> {
   connection
@@ -275,6 +292,7 @@ fn read(row: &Row<'_>) -> rusqlite::Result<Result<TeamStart, StoreError>> {
     (row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?);
   let (work, bundle, run, refusal): (Option<String>, Option<String>, Option<String>, Option<String>) =
     (row.get(4)?, row.get(5)?, row.get(6)?, row.get(7)?);
+  let failure: Option<String> = row.get(8)?;
   Ok((|| {
     let work = match (work, bundle) {
       (Some(work), Some(bundle)) => Some((
@@ -292,6 +310,7 @@ fn read(row: &Row<'_>) -> rusqlite::Result<Result<TeamStart, StoreError>> {
       work,
       run: run.map(|run| parse("team start run", &run)).transpose()?,
       refusal,
+      failure,
     })
   })())
 }

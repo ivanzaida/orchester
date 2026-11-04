@@ -6,7 +6,8 @@
 //!   receipt's work and bundle reference; the bundle with every file it pins, read by hash and checked, kept as the
 //!   run's accepted inputs in one transaction with the start's record; the runner's run. A crash or an outage at any
 //!   boundary is carried on from it ([`TeamWork::recover`]); the operation and the runner's start are idempotent, so a
-//!   retry never makes a second work or run. Nothing new starts without the server.
+//!   retry never makes a second work or run. A bundle that can never become the run's inputs here settles the start
+//!   failed ([`StartFailure`]). Nothing new starts without the server.
 //! - **Reports** ([`reports`]). Each change of a team run's outcome is queued once in the project database, with its
 //!   event id and the run's next sequence, then sent in order until the server acknowledges it by id. A server that
 //!   cannot be reached or refuses for now keeps the rest waiting, in order. Its answers that the authority is gone
@@ -39,7 +40,7 @@ pub use self::{
   heartbeat::Heartbeat,
   reports::Reported,
   runner::{ProjectRunner, TeamRunner},
-  start::{StartOutcome, TeamStartRequest},
+  start::{Recovered, StartFailure, StartOutcome, TeamStartRequest},
 };
 use crate::actions::{Dispatcher, retryable};
 

@@ -42,11 +42,38 @@ pub enum StartOutcome {
   Waiting(TeamStartStage),
   /// The server refused the start for good: it made no work, or the authority the bundle was built for is gone.
   Refused(AuthorityError),
+  /// The accepted bundle can never become the run's inputs here; the start goes no further.
+  Failed(StartFailure),
   /// The runner refused to run it on this computer; the accepted inputs stay kept for another try.
   RunnerRefused(Rejection),
   /// The runner could not be asked now; the start goes on from the kept inputs.
   RunnerUnavailable(RequestError),
 }
+
+/// Why an accepted start can never become a run here, kept with it. Reading the bundle again gives the same bundle,
+/// which fails the same way, so the start is settled rather than tried on every recovery.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", content = "reason", rename_all = "snake_case")]
+pub enum StartFailure {
+  /// The bundle the server answered, or one of its files, is not the one the receipt names or not built for the start.
+  Bundle(String),
+  /// The accepted bundle with the caller's choices does not make the run's inputs here.
+  Inputs(String),
+}
+
+impl StartFailure {
+  /// The failure `error` is when it lasts: the same bundle and choices fail the same way every time.
+  fn lasting(error: &TeamWorkError) -> Option<Self> {
+    match error {
+      TeamWorkError::BundleMismatch { .. } | TeamWorkError::BundleFile(_) => Some(Self::Bundle(error.to_string())),
+      TeamWorkError::Inputs(_) | TeamWorkError::BindingCli { .. } => Some(Self::Inputs(error.to_string())),
+      _ => None,
+    }
+  }
+}
+
+/// Each open start's operation with where it stands after recovery, or why it could not be carried on now.
+pub type Recovered = Vec<(OperationId, Result<StartOutcome, TeamWorkError>)>;
 
 /// What a start keeps of its request: the work action, with the server's id of its task, and the caller's choices.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -83,13 +110,14 @@ impl<R: TeamRunner> TeamWork<R> {
     self.carry_on(record).await
   }
 
-  /// Carries on every start not started yet, oldest first, e.g. after a restart.
-  pub async fn recover(&self) -> Result<Vec<(OperationId, StartOutcome)>, TeamWorkError> {
+  /// Carries on every start not settled yet, oldest first, e.g. after a restart. Each goes on its own: one that cannot
+  /// be carried on now holds back none after it.
+  pub async fn recover(&self) -> Result<Recovered, TeamWorkError> {
     let open = self.db()?.open_team_starts()?;
     let mut outcomes = Vec::with_capacity(open.len());
     for start in open {
       let operation = start.operation;
-      outcomes.push((operation, self.carry_on(start).await?));
+      outcomes.push((operation, self.carry_on(start).await));
     }
     Ok(outcomes)
   }
@@ -127,13 +155,17 @@ impl<R: TeamRunner> TeamWork<R> {
     loop {
       let step = match record.stage {
         TeamStartStage::Requested => self.request_work(&record, &kept).await?,
-        TeamStartStage::Accepted => self.keep_inputs(&record, kept.clone()).await?,
+        TeamStartStage::Accepted => match self.keep_inputs(&record, kept.clone()).await {
+          Ok(step) => step,
+          Err(error) => return self.fail(record.operation, error),
+        },
         TeamStartStage::InputsStored => return self.start_run(record.operation).await,
         TeamStartStage::Started => {
           let run = record.run.ok_or(TeamWorkError::Unreadable(record.operation))?;
           return Ok(StartOutcome::Started(run));
         }
         TeamStartStage::Refused => return refused(&record),
+        TeamStartStage::Failed => return failed(&record),
       };
       match step {
         Ok(next) => record = next,
@@ -234,6 +266,16 @@ impl<R: TeamRunner> TeamWork<R> {
     self.db()?.refuse_team_start(operation, &text, Timestamp::now())?;
     Ok(StartOutcome::Refused(error))
   }
+
+  /// Settles the accepted start under `operation` failed when `error` lasts; any other error stays the caller's, and
+  /// the start goes on from where it stands next time.
+  fn fail(&self, operation: OperationId, error: TeamWorkError) -> Result<StartOutcome, TeamWorkError> {
+    let failure = StartFailure::lasting(&error).ok_or(error)?;
+    // A failure is a kind and a message: it serializes to JSON without fail.
+    let text = serde_json::to_string(&failure).expect("a start failure serializes");
+    self.db()?.fail_team_start(operation, &text, Timestamp::now())?;
+    Ok(StartOutcome::Failed(failure))
+  }
 }
 
 /// The refusal kept with a refused start.
@@ -244,6 +286,16 @@ fn refused(record: &TeamStart) -> Result<StartOutcome, TeamWorkError> {
     .ok_or(TeamWorkError::Unreadable(record.operation))?;
   let error = serde_json::from_str(text).map_err(|_| TeamWorkError::Unreadable(record.operation))?;
   Ok(StartOutcome::Refused(error))
+}
+
+/// The failure kept with a failed start.
+fn failed(record: &TeamStart) -> Result<StartOutcome, TeamWorkError> {
+  let text = record
+    .failure
+    .as_deref()
+    .ok_or(TeamWorkError::Unreadable(record.operation))?;
+  let failure = serde_json::from_str(text).map_err(|_| TeamWorkError::Unreadable(record.operation))?;
+  Ok(StartOutcome::Failed(failure))
 }
 
 /// Settles the start's operation completed once its run is recorded: its start effect happened.

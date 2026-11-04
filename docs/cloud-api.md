@@ -496,7 +496,9 @@ The desktop's team work (`orchester_workspace::team_work`) uses them so:
   accepted inputs, the files as blobs, in one transaction with the start's record; only then is the runner asked to
   start the run (protocol 42's `StartAcceptedRun`). A crash or an outage at any boundary is carried on from it, once;
   the operation and the runner's start are idempotent, so a retry never makes a second work or run. A refusal of the
-  start or of its bundle (`claim_lost`) is kept and starts nothing.
+  start or of its bundle (`claim_lost`) is kept and starts nothing. A bundle that can never become the run's inputs
+  here (it is not the one the receipt names, or the caller's bindings do not fit it) settles the start `failed`, kept
+  with the reason; recovery carries each open start on its own, so one such start holds back no other.
 - **Contract gap.** The bundle does not carry the task's number or the pinned resources' slugs and names, which a run's
   inputs need. Until the server's `ExecutionBundle` carries them (plan §7), the start's caller supplies them from its
   reads: the number from `GET …/tasks/{task}`, the labels from the library read. The local bindings and consent are
