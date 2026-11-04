@@ -2,6 +2,7 @@
 //! scheduler's change notifications, the project's browser's events and the frames of the tab the *Browser* window
 //! shows.
 
+mod attach;
 mod browser;
 mod code_index;
 mod estimate;
@@ -30,8 +31,8 @@ use orchester_core::{
   tokens::TokenBudget,
 };
 use orchester_ipc::{
-  AttachSession, ChatTools, Command, Endpoint, ErrorReports, Event, IpcError, Rejection, Reply, Request, RequestId,
-  ShutdownMode, WorkReturn,
+  ChatTools, Command, Endpoint, ErrorReports, Event, IpcError, Rejection, Reply, Request, RequestId, ShutdownMode,
+  WorkReturn,
   frame::{FrameReader, FrameWriter},
   handshake,
 };
@@ -303,8 +304,9 @@ async fn answer(
   let handle = scheduler.clone();
   let later = Later { replies, in_flight, id };
   let reply = match request.command {
-    Command::Attach { session, agent_slots } => attached(scheduler, session, agent_slots).await,
+    ref command @ Command::Attach { .. } => attach::attached(scheduler, command).await,
     Command::SetAgentSlots { agent_slots } => slots_set(scheduler, agent_slots).await,
+    Command::SetBrowser { ref browser } => attach::browser_set(scheduler, browser.clone()),
     Command::ContinueRuns { ref runs } => {
       let (continued, refused) = scheduler.continue_runs(runs).await;
       Reply::Continued { continued, refused }
@@ -452,18 +454,6 @@ fn at_plan_limit(
   match connection {
     Some(connection) => later.answer(run, async move { handle.continue_on_connection(run, connection).await }),
     None => later.answer(run, async move { handle.try_at_plan_limit(run).await }),
-  }
-}
-
-/// The reply to [`Command::Attach`].
-async fn attached(scheduler: &Scheduler, session: AttachSession, agent_slots: NonZeroU32) -> Reply {
-  match scheduler.attach(session, agent_slots).await {
-    Ok(attached) => Reply::Attached {
-      active_runs: scheduler.active_runs(),
-      interrupted: attached.interrupted,
-      continued: attached.continued,
-    },
-    Err(rejection) => Reply::Rejected(rejection),
   }
 }
 

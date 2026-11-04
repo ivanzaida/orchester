@@ -25,7 +25,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
   ErrorReports, FolderState,
-  browser::{BrowserCommand, BrowserEvent, BrowserReply, ScreencastFrame},
+  browser::{BrowserCommand, BrowserEvent, BrowserReply, ComputerBrowser, ScreencastFrame},
   chat::ChatTools,
   folders::{FoldersCommand, FoldersReply},
   merge_queue::{MergeQueueCommand, MergeQueueReply},
@@ -80,17 +80,22 @@ pub struct Request {
 pub enum Command {
   /// The first request of a connection: the desktop starts listening to notifications, says
   /// which session this runner serves, which decides what happens to runs still recorded as
-  /// running (`docs/architecture/storage.md`, "Lifecycle"), and how many agents may work at
-  /// once. Answered with [`Reply::Attached`], followed by an [`Event::WorkSummary`].
+  /// running (`docs/architecture/storage.md`, "Lifecycle"), how many agents may work at
+  /// once, and this computer's Settings › Browser (protocol 46). Answered with [`Reply::Attached`], followed by an
+  /// [`Event::WorkSummary`].
   Attach {
     session: AttachSession,
     agent_slots: NonZeroU32,
+    browser: ComputerBrowser,
   },
   /// The project's *Agents working at once* changed to `agent_slots` (protocol 18): it applies at
   /// once. More slots let queued work start now; fewer stop no agent at work, and new work waits
   /// until fewer agents work than there are slots. Answered with [`Reply::AgentSlotsSet`], followed
   /// by an [`Event::WorkSummary`].
   SetAgentSlots { agent_slots: NonZeroU32 },
+  /// This computer's Settings › Browser changed to `browser` (protocol 46): the project's browser starts with it from
+  /// its next start; a browser running now keeps its program. Answered with [`Reply::BrowserSet`].
+  SetBrowser { browser: ComputerBrowser },
   /// Liveness check, answered with [`Reply::Pong`] carrying the same nonce.
   Ping { nonce: u64 },
   /// Starts a run of the queued task `task`. Idempotent by `key`: repeating it (a retry after
@@ -495,6 +500,8 @@ pub enum Reply {
   },
   /// The answer to [`Command::SetErrorReports`]: the runner sends reports as it says from now on.
   ErrorReportsSet,
+  /// The answer to [`Command::SetBrowser`]: the project's browser starts with it from its next start.
+  BrowserSet,
   /// The answer to [`Command::Browser`].
   Browser(BrowserReply),
   /// The answer to [`Command::ReadWorktreeChanges`]: what the worktree of `run` holds beyond its commit.

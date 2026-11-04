@@ -31,6 +31,7 @@ use orchester_exec::programs::Programs;
 use orchester_store::{AppDb, PreviousSession, ProjectDb, RegisteredProject, SessionEnd, SessionId, StoreError};
 use parking_lot::Mutex;
 
+pub(crate) use self::browser::computer_browser_beside;
 pub use self::{
   browser::{AgentsBrowser, BrowserSettings, ChooseBrowserError},
   orchestrator_consent::OrchestratorConsent,

@@ -186,8 +186,8 @@ The tools join `docs/interactive-tool-approvals.md`'s table (`orchester_tools::b
 - Secrets: no browser tool takes a secret reference or a secret's value, and `browser_network` never returns headers
   or bodies. A sign-in with a password is the person's, in the window; the step prompt tells the agent to ask a
   question instead of typing one. The profile folder is never inside a worktree, and `read_external_file` and
-  `search_external_file` refuse `<application data>/browser/` as one of Orchester's own folders
-  (`execution::outside_read_refusals`).
+  `search_external_file` refuse `<application data>/browser/`, as the desktop passed it, as one of Orchester's own
+  folders (`execution::outside_read_refusals`).
 - The step prompt's browser lines (`orchester_tools::browser::prompt`) also name the step's allowed sites, at most 10
   and the others counted, and say that local development hosts are always allowed, that the person may watch and take
   over a tab, and that the agent's actions there then wait.
@@ -212,9 +212,11 @@ The tools join `docs/interactive-tool-approvals.md`'s table (`orchester_tools::b
   `msedge.exe`, `chrome.exe` (Chromium's under a folder named so) or `brave.exe`; on macOS the program of Google
   Chrome, Microsoft Edge, Brave or Chromium, or its app bundle. Anything else, a folder or a path that does not exist,
   is refused under the row with the reason, and nothing changes. The choice is an application setting
-  (`app_settings.browser_program`) the runner reads, read-only, each time it starts a project's browser, headless or
-  in a window of its own; a chosen program that is gone later is unavailable with that reason, never passed over for
-  the one installed.
+  (`app_settings.browser_program`). The desktop reads it, with the folder of the browser profiles, and passes both to
+  each runner as it attaches and again whenever they change (`ComputerBrowser`, `Command::SetBrowser`, protocol 46,
+  ORC-675); the runner never opens `orchester.db` and starts each project's browser, headless or in a window of its
+  own, with what it was passed last. A chosen program that is gone later is unavailable with that reason, never passed
+  over for the one installed.
 - The version is read from the install without starting the browser (`orchester_exec::browser::version`, ORC-182): on
   macOS `CFBundleShortVersionString` in the app bundle's XML `Info.plist`, on Windows the newest folder named after a
   version beside the program. A program whose install does not tell, such as one copied out of its bundle or install

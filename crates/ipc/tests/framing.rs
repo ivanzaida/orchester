@@ -1,4 +1,4 @@
-use std::num::NonZeroU32;
+use std::{num::NonZeroU32, path::PathBuf};
 
 use orchester_core::{
   connection::AgentProvider,
@@ -15,6 +15,7 @@ use orchester_core::{
 use orchester_ipc::{
   AttachSession, Command, ErrorReports, Event, FrameError, Handshake, IpcError, PROTOCOL_VERSION, RefusedRun,
   Rejection, Reply, Request, RequestId, RunWork, SessionEnd, ShutdownMode, SlotWait, WorkState, WorkSummary,
+  browser::ComputerBrowser,
   frame::{FrameReader, FrameWriter, MAX_FRAME_LEN},
   handshake,
 };
@@ -41,10 +42,7 @@ fn requests(run: RunId, task: TaskId) -> Vec<Request> {
         previous_end: SessionEnd::QuitNow,
       },
       agent_slots: NonZeroU32::new(4).expect("above zero"),
-    },
-    Command::Attach {
-      session: AttachSession::Reconnect,
-      agent_slots: NonZeroU32::new(1).expect("above zero"),
+      browser: ComputerBrowser::installed(PathBuf::from("data").join("browser")),
     },
     Command::SetAgentSlots {
       agent_slots: NonZeroU32::new(16).expect("above zero"),
