@@ -1,4 +1,4 @@
-//! A removal of a run's worktrees asked of the runner and its answers (protocol 44) travel as frames unchanged: each
+//! A removal of a run's worktrees asked of the runner and its answers (protocol 45) travel as frames unchanged: each
 //! kind of request, what a removal did with every reason a worktree or branch stays, and every reason it removed
 //! nothing.
 
@@ -31,8 +31,8 @@ fn worktree(path: &str, owner: WorktreeOwner) -> LeftWorktree {
 }
 
 const _: () = assert!(
-  PROTOCOL_VERSION >= 44,
-  "the removal through the runner came with protocol 44"
+  PROTOCOL_VERSION >= 45,
+  "the removal through the runner came with protocol 45"
 );
 
 #[tokio::test]

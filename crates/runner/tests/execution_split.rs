@@ -112,28 +112,66 @@ const RUN_LOG_WRITES: &[&str] = &[
   "write_run_log",
 ];
 
-#[test]
-fn executor_writes_the_run_log_only_through_the_sink() {
+/// The project database's writes of invocations and their transcript (`invocations`, `agent_events` and the
+/// `invocation_*` tables): the executor sends these records to the coordinator's sink too (ORC-678).
+const INVOCATION_WRITES: &[&str] = &[
+  "start_invocation",
+  "start_command_invocation",
+  "save_invocation",
+  "save_invocation_permissions",
+  "append_activity",
+  "save_invocation_prompt",
+  "save_invocation_code_index",
+  "save_invocation_engine",
+  "save_edit_progress",
+  "save_injected_memory",
+  "save_invocation_connection",
+  "save_invocation_account",
+  "save_invocation_provider",
+  "write_invocation_start",
+  "write_activity",
+  "write_invocation",
+];
+
+/// Where executor code names any of `writes` as a whole word outside comments, as `file: write`.
+fn executor_writes(writes: &[&str]) -> Vec<String> {
   let executor = execution().join("executor");
   let mut files = Vec::new();
   rust_files(&executor, &mut files);
-  let mut writes = Vec::new();
+  let mut found = Vec::new();
   for file in &files {
     let text = fs::read_to_string(file).unwrap_or_else(|error| panic!("cannot read {}: {error}", file.display()));
     for line in text.lines() {
       let code = line.split("//").next().unwrap_or_default();
-      for write in RUN_LOG_WRITES {
+      for write in writes {
         let named = code.match_indices(write).any(|(at, _)| {
+          let before = code[..at].chars().next_back();
           let after = code[at + write.len()..].chars().next();
-          !after.is_some_and(|c| c.is_alphanumeric() || c == '_')
+          let word = |c: Option<char>| c.is_some_and(|c| c.is_alphanumeric() || c == '_');
+          !word(before) && !word(after)
         });
         if named {
-          writes.push(format!("{}: {write}", file.display()));
+          found.push(format!("{}: {write}", file.display()));
         }
       }
     }
   }
+  found
+}
+
+#[test]
+fn executor_writes_the_run_log_only_through_the_sink() {
+  let writes = executor_writes(RUN_LOG_WRITES);
   assert!(writes.is_empty(), "executor code writes the run log itself: {writes:?}");
+}
+
+#[test]
+fn executor_writes_invocations_and_their_transcript_only_through_the_sink() {
+  let writes = executor_writes(INVOCATION_WRITES);
+  assert!(
+    writes.is_empty(),
+    "executor code writes invocation or transcript records itself: {writes:?}"
+  );
 }
 /// The lines of the Rust files under `src/execution/<side>` that name any of `names` outside comments, as
 /// `file: line`.

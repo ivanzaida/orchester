@@ -26,7 +26,7 @@ use orchester_core::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-  ErrorReports,
+  ErrorReports, FolderState,
   browser::{BrowserCommand, BrowserEvent, BrowserReply, ScreencastFrame},
   chat::ChatTools,
   folders::{FoldersCommand, FoldersReply},
@@ -300,8 +300,13 @@ pub enum Command {
   /// it is built, [`Rejection::CodeIndexInUse`] while it is in use, or [`Rejection::Failed`] with why it could not be
   /// built.
   RebuildCodeIndex { revision: Revision },
+  /// What run `run`'s folder holds beyond its last commit, for the start-up recovery (protocol 44): its own
+  /// worktree, else the workspace it holds or worked in last. The runner reads it with git in the folder; the desktop
+  /// never does. Answered with [`Reply::RunFolderState`], [`FolderState::Unknown`] when the run has no folder any more
+  /// or git cannot tell.
+  RunFolderState { run: RunId },
   /// Removes what run `run`, which ended, left, as `request` allows: its worktrees and branches, with the run's own
-  /// processes in a held folder stopped first when asked (protocol 44). The desktop records the removal in the
+  /// processes in a held folder stopped first when asked (protocol 45). The desktop records the removal in the
   /// project's database before and after; the runner removes, then removes the codebase indexes only removed worktrees
   /// used and sweeps the worktree folders. Answered with [`Reply::WorktreesRemoved`], or [`Reply::RemovalFailed`] when
   /// nothing was removed.
@@ -512,6 +517,11 @@ pub enum Reply {
   WorktreesRemoved(Cleanup),
   /// The answer to [`Command::RemoveWorktrees`] that removed nothing, and why.
   RemovalFailed(RemovalFailure),
+  /// The answer to [`Command::RunFolderState`].
+  RunFolderState {
+    run: RunId,
+    state: FolderState,
+  },
   Rejected(Rejection),
 }
 
