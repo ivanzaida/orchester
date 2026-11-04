@@ -15,6 +15,7 @@ mod chat;
 mod check;
 mod connection;
 mod estimate;
+mod folders;
 mod idle;
 mod lifetime;
 mod report;
@@ -40,6 +41,7 @@ use tokio::{runtime::Handle, sync::watch, task::JoinSet};
 
 pub use self::{
   answers::AnswerMark,
+  folders::ExecutorFolders,
   idle::ForgetRefusal,
   report::RunnerStatus,
   requests::RequestError,

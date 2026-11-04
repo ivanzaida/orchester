@@ -25,6 +25,7 @@ use crate::{
   ErrorReports,
   browser::{BrowserCommand, BrowserEvent, BrowserReply, ScreencastFrame},
   chat::ChatTools,
+  folders::{FoldersCommand, FoldersReply},
   rejection::Rejection,
   work::WorkSummary,
 };
@@ -278,6 +279,9 @@ pub enum Command {
   /// carried out, [`Rejection::BrowserUnavailable`] when the browser cannot start, [`Rejection::NoSuchTab`] for a tab
   /// it does not have, or [`Rejection::Failed`] when the browser refused.
   Browser(BrowserCommand),
+  /// A request about the folders the project's runs leave with their executor (protocol 40, [`crate::folders`]).
+  /// Answered with [`Reply::Folders`] once carried out, or [`Rejection::Failed`].
+  Folders(FoldersCommand),
 }
 
 /// Which session a runner serves, from the desktop's side.
@@ -467,6 +471,8 @@ pub enum Reply {
   ErrorReportsSet,
   /// The answer to [`Command::Browser`].
   Browser(BrowserReply),
+  /// The answer to [`Command::Folders`].
+  Folders(FoldersReply),
   Rejected(Rejection),
 }
 
