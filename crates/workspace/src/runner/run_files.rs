@@ -27,6 +27,10 @@ pub struct ProjectRunFiles {
 pub type RunFilesStandIn =
   std::sync::Arc<dyn Fn(&std::path::Path, RunId, RunFilesRequest) -> RunFilesReply + Send + Sync>;
 
+/// Where [`Runners::serve_run_files_for_test`] keeps its stand-in; empty outside the `test-support` feature.
+#[derive(Default)]
+pub(super) struct StandIn(#[cfg(feature = "test-support")] parking_lot::Mutex<Option<RunFilesStandIn>>);
+
 impl Runners {
   /// The files of `project`'s runs, which its runner reads.
   pub fn run_files(&self, project: &OpenProject) -> ProjectRunFiles {
@@ -40,7 +44,7 @@ impl Runners {
   #[cfg(feature = "test-support")]
   #[doc(hidden)]
   pub fn serve_run_files_for_test(&self, stand_in: RunFilesStandIn) {
-    *self.inner.run_files_stand_in.lock() = Some(stand_in);
+    *self.inner.run_files_stand_in.0.lock() = Some(stand_in);
   }
 }
 
@@ -48,7 +52,7 @@ impl RunFiles for ProjectRunFiles {
   /// Blocks on the runners' runtime until the runner answers: never call it on an async worker.
   fn ask(&self, run: RunId, request: RunFilesRequest) -> Result<RunFilesReply, FilesError> {
     #[cfg(feature = "test-support")]
-    if let Some(stand_in) = self.runners.inner.run_files_stand_in.lock().clone() {
+    if let Some(stand_in) = self.runners.inner.run_files_stand_in.0.lock().clone() {
       return Ok(stand_in(&self.project.repo_root, run, request));
     }
     let (runners, project) = (self.runners.clone(), self.project.clone());

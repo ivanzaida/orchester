@@ -25,9 +25,12 @@ use crate::{
   ErrorReports,
   browser::{BrowserCommand, BrowserEvent, BrowserReply, ScreencastFrame},
   chat::ChatTools,
+  folders::{FoldersCommand, FoldersReply},
+  merge_queue::{MergeQueueCommand, MergeQueueReply},
   rejection::Rejection,
   run_files::{RunFilesReply, RunFilesRequest},
   work::WorkSummary,
+  worktree::WorktreeChangesRead,
 };
 
 /// Identifies a request within one connection, so its reply can be matched.
@@ -279,7 +282,17 @@ pub enum Command {
   /// carried out, [`Rejection::BrowserUnavailable`] when the browser cannot start, [`Rejection::NoSuchTab`] for a tab
   /// it does not have, or [`Rejection::Failed`] when the browser refused.
   Browser(BrowserCommand),
-  /// The code viewer reads the worktree of run `run` (protocol 40, [`crate::run_files`]): the runner's executor side
+  /// Reads what the worktree of run `run` holds beyond its checked-out commit, for the task page's Changes and
+  /// `get_changes` (protocol 40): only the runner reads a run's worktree. Answered with [`Reply::WorktreeChanges`],
+  /// whatever it found, a failed read included.
+  ReadWorktreeChanges { run: RunId },
+  /// The merge queue's work in a run's worktree: syncing its base in, or running Check again on the merged result
+  /// (protocol 41). Answered with [`Reply::MergeQueue`] once done.
+  MergeQueue(MergeQueueCommand),
+  /// A request about the folders the project's runs leave with their executor (protocol 42, [`crate::folders`]).
+  /// Answered with [`Reply::Folders`] once carried out, or [`Rejection::Failed`].
+  Folders(FoldersCommand),
+  /// The code viewer reads the worktree of run `run` (protocol 43, [`crate::run_files`]): the runner's executor side
   /// reads it where the worktree is. Answered with [`Reply::RunFiles`].
   RunFiles { run: RunId, request: RunFilesRequest },
 }
@@ -471,6 +484,15 @@ pub enum Reply {
   ErrorReportsSet,
   /// The answer to [`Command::Browser`].
   Browser(BrowserReply),
+  /// The answer to [`Command::ReadWorktreeChanges`]: what the worktree of `run` holds beyond its commit.
+  WorktreeChanges {
+    run: RunId,
+    read: WorktreeChangesRead,
+  },
+  /// The answer to [`Command::MergeQueue`].
+  MergeQueue(MergeQueueReply),
+  /// The answer to [`Command::Folders`].
+  Folders(FoldersReply),
   /// The answer to [`Command::RunFiles`]; a file's bytes travel after it in a binary frame.
   RunFiles(RunFilesReply),
   Rejected(Rejection),

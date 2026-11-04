@@ -489,6 +489,19 @@ impl Drop for ProjectRunner {
   }
 }
 
+/// The runner reads the run's files as the checkout's are read: the text, the explicit states, the listing.
+fn assert_runs_files_read(repo: &Path, runs: &ProjectRunFiles, run: RunId) {
+  let programs = runner();
+  let in_run = Version::Run(run);
+  let read = |file: &str| read_file((programs.runner(), runs), repo, &in_run, &path(file));
+  assert_eq!(lines(&read("src/main.rs").expect("in the run")), ["fn main() { run(); }"]);
+  assert_eq!(read("data.bin"), Ok(FileView::Binary { size: 3 }));
+  assert_eq!(read("src"), Err(FilesError::Folder(path("src"))));
+  assert_eq!(read("gone.md"), Err(FilesError::Missing(path("gone.md"))));
+  let list = list_files((programs.runner(), runs), repo, &in_run).expect("the run's files");
+  assert!(list.contains("src/main.rs") && list.contains("notes.md") && list.contains("data.bin"));
+}
+
 #[test]
 fn files_a_runs_worktree_is_a_version_while_it_exists() {
   let (dir, first) = repository();
@@ -505,19 +518,10 @@ fn files_a_runs_worktree_is_a_version_while_it_exists() {
   fs::write(worktree.join("data.bin"), b"\x00\x01\x02").expect("a binary file");
   let project_runner = ProjectRunner::start(repo);
   let runs = &project_runner.runs;
+  assert_runs_files_read(repo, runs, run);
   let programs = runner();
   let read = |version: &Version, file: &str| read_file((programs.runner(), runs), repo, version, &path(file));
   let in_run = Version::Run(run);
-  // The runner reads the run's files as the checkout's are read: the text, the explicit states, the listing.
-  assert_eq!(
-    lines(&read(&in_run, "src/main.rs").expect("in the run")),
-    ["fn main() { run(); }"]
-  );
-  assert_eq!(read(&in_run, "data.bin"), Ok(FileView::Binary { size: 3 }));
-  assert_eq!(read(&in_run, "src"), Err(FilesError::Folder(path("src"))));
-  assert_eq!(read(&in_run, "gone.md"), Err(FilesError::Missing(path("gone.md"))));
-  let list = list_files((programs.runner(), runs), repo, &in_run).expect("the run's files");
-  assert!(list.contains("src/main.rs") && list.contains("notes.md") && list.contains("data.bin"));
   let at_first = Version::Revision(Revision::new(&first).expect("a commit"));
   let choices = versions(
     (programs.runner(), runs),

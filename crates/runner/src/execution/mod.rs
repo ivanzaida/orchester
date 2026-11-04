@@ -48,6 +48,7 @@ use tokio::{
 pub use self::{
   coordinator::attach::Attached,
   executor::{
+    link,
     run_files::answer_run_files,
     step::{QaSlots, outside_read_refusals},
   },
@@ -64,8 +65,12 @@ use self::{
     step::QaApps,
   },
 };
-use crate::browser::ProjectBrowser;
 pub use crate::notify::Notifier;
+use crate::{
+  browser::ProjectBrowser,
+  computer::{ComputerResources, LocalComputer},
+  execution_root::ExecutionRoot,
+};
 
 /// How long stopping waits for each run to end its agent and record the interruption.
 const STOP_TIMEOUT: Duration = Duration::from_secs(10);
@@ -104,6 +109,8 @@ struct Inner {
   notifier: Notifier,
   /// Where the values of the secrets MCP servers use are read from when an agent starts.
   vault: Arc<dyn SecretVault>,
+  /// What belongs to the computer the runs execute on: their connections, accounts and CLI config folders.
+  computer: Arc<dyn ComputerResources>,
   /// The runner's own program, which Claude Code starts as its permission prompt; `None` when it
   /// cannot be found, which keeps steps that ask a person on Claude Code from starting.
   relay: Option<PathBuf>,
@@ -142,11 +149,12 @@ impl Scheduler {
     orchester_store::pause_lock_waits_with(crate::lock_pause::pause_off_async_workers);
     // Before the desktop connects and reads the runs.
     coordinator::missing_checkpoints::record(project_root);
-    coordinator::worktree_sweep::sweep_in_background(project_root.to_path_buf());
+    executor::worktree_sweep::sweep_in_background(project_root.to_path_buf());
     Self {
       inner: Arc::new(Inner {
         project_root: project_root.to_path_buf(),
         vault,
+        computer: Arc::new(LocalComputer::of_project(project_root)),
         relay,
         board: Arc::new(Board::new(notifier.clone())),
         qa: Arc::new(QaApps::new(qa_slots)),
@@ -525,12 +533,18 @@ impl Scheduler {
         detail: format!("another task still executes run {run}"),
       });
     }
+    let link = coordinator::link::LocalLink::open(&self.inner.project_root)
+      .map_err(|error| failed("cannot open the project database", &error))?;
     let (control, controls) = mpsc::unbounded_channel();
     let settled = Arc::new(AtomicBool::new(false));
     let context = TaskContext {
       root: self.inner.project_root.clone(),
+      link: Box::new(link),
+      execution: ExecutionRoot::local(&self.inner.project_root),
+      sink: Box::new(coordinator::sink::LocalSink::new(&self.inner.project_root)),
       notifier: self.inner.notifier.clone(),
       vault: self.inner.vault.clone(),
+      computer: self.inner.computer.clone(),
       relay: self.inner.relay.clone(),
       board: self.inner.board.clone(),
       qa: self.inner.qa.clone(),

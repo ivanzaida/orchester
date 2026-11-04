@@ -17,11 +17,13 @@ pub mod daily_log;
 mod error;
 pub mod error_reports;
 mod exit_code;
+pub mod folders;
 pub mod frame;
 mod handshake;
 #[cfg(windows)]
 mod job;
 mod log_path;
+pub mod merge_queue;
 mod message;
 #[cfg(windows)]
 mod pipe_owner;
@@ -29,6 +31,7 @@ mod rejection;
 pub mod run_files;
 mod transport;
 mod work;
+mod worktree;
 
 pub use chat::{ChatToken, ChatTools};
 pub use client::{CommandSender, EventReceiver, LaunchError, RunnerClient, RunnerProcess};
@@ -45,3 +48,4 @@ pub use message::{
 pub use rejection::Rejection;
 pub use transport::{ClientStream, Endpoint, ServerStream, fnv1a, server_process_id};
 pub use work::{RunWork, SlotWait, WorkState, WorkSummary};
+pub use worktree::{WorktreeChangesRead, WorktreeReadFailure};

@@ -14,7 +14,7 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_ipc::{Event, Rejection};
-use orchester_store::RunStoreError;
+use orchester_store::{RunLogRecord, RunStoreError};
 
 use super::{
   control::{Ack, answer},
@@ -22,6 +22,7 @@ use super::{
   handoff::Keeper,
   record::{RecordError, announce_ready},
   run::{ExecutionError, RunTask},
+  sink::Sink,
 };
 use crate::execution::coordinator::idle;
 
@@ -43,9 +44,8 @@ impl RunTask {
       .run
       .propose_plan(execution, text, &earlier, Timestamp::now())
       .map_err(RecordError::from)?;
-    self
-      .db
-      .append_events_with_plan(&self.run, &events, &plan)
+    RunLogRecord::with_plan(&self.run, &events, &plan)
+      .and_then(|record| self.sink.run_log(record))
       .map_err(RecordError::from)?;
     tracing::info!(run = %self.run.id(), %execution, version = %plan.version, "plan proposed");
     self.notifier.send(Event::RunChanged {
@@ -68,16 +68,21 @@ impl RunTask {
       notifier: &self.notifier,
       vault: self.vault.as_ref(),
     };
-    let result = record(keeper, &mut self.run, request);
+    let result = record(keeper, self.sink.as_mut(), &mut self.run, request);
     answer(ack, result);
     Ok(())
   }
 }
 
 /// Applies `request` to `run`: the plan must be the latest of its execution and still undecided,
-/// and the run running with the step waiting for it. Stores the decision with its events and
-/// announces the change; an approved plan's handoff is then kept as task memory.
-pub(in crate::execution) fn record(keeper: Keeper<'_>, run: &mut Run, request: PlanRequest) -> Result<(), Rejection> {
+/// and the run running with the step waiting for it. Sends the decision with its events to `sink`
+/// and announces the change; an approved plan's handoff is then kept as task memory.
+pub(in crate::execution) fn record(
+  keeper: Keeper<'_>,
+  sink: &mut dyn Sink,
+  run: &mut Run,
+  request: PlanRequest,
+) -> Result<(), Rejection> {
   let Keeper { db, notifier, vault } = keeper;
   let plans = db
     .plans(run.id())
@@ -90,7 +95,8 @@ pub(in crate::execution) fn record(keeper: Keeper<'_>, run: &mut Run, request: P
   let events = run
     .decide_plan(&mut plan, request.decision, request.by, Timestamp::now())
     .map_err(rejection)?;
-  db.append_events_with_plan(run, &events, &plan)
+  RunLogRecord::with_plan(run, &events, &plan)
+    .and_then(|record| sink.run_log(record))
     .map_err(|error: RunStoreError| failed("cannot record the plan decision", &error))?;
   tracing::info!(
     run = %run.id(),

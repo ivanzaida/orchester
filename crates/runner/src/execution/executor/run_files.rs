@@ -15,40 +15,42 @@ use orchester_core::{
   command::{CommandError, CommandRunner},
   diff::git::git_command,
   id::RunId,
-  integration::WORKTREES_DIR,
   native::scope::{FileScope, ScopeError, ScopeRoots},
   permission::RepositoryAccess,
   repository::redact_userinfo,
 };
 use orchester_exec::ProcessRunner;
-use orchester_ipc::run_files::{
-  FileBytes, MAX_VIEW_BYTES, RunFileFailure, RunFileRead, RunFilesReply, RunFilesRequest,
+use orchester_ipc::{
+  Reply,
+  run_files::{FileBytes, MAX_VIEW_BYTES, RunFileFailure, RunFileRead, RunFilesReply, RunFilesRequest},
 };
 
-use super::super::Scheduler;
+use crate::{execution::Scheduler, execution_root::ExecutionRoot};
 
 /// A git listing that does not answer within this time fails, as the desktop's quick git reads do.
 const GIT_TIMEOUT: Duration = Duration::from_secs(30);
 
 impl Scheduler {
-  /// Answers `request` about the worktree of `run`, off the async workers: it blocks on the file system and git.
-  pub async fn run_files(&self, run: RunId, request: RunFilesRequest) -> RunFilesReply {
+  /// The answer to [`orchester_ipc::Command::RunFiles`]: `request` about the worktree of `run`, read off the runner's
+  /// tasks, since it blocks on the file system and git.
+  pub async fn run_files(self, run: RunId, request: RunFilesRequest) -> Reply {
     let root = self.inner.project_root.clone();
-    tokio::task::spawn_blocking(move || answer_run_files(&root, run, request))
+    let answered = tokio::task::spawn_blocking(move || answer_run_files(&root, run, request))
       .await
       .unwrap_or_else(|error| {
         tracing::error!(%run, %error, "reading a run's files ended abnormally");
         RunFilesReply::Failed(RunFileFailure::Unreadable {
           kind: io::ErrorKind::Other.into(),
         })
-      })
+      });
+    Reply::RunFiles(answered)
   }
 }
 
-/// The answer to `request` about the worktree of `run` of the project at `project_root`. Blocks on the file system
-/// and git. The desktop's window tests, which start no runner, answer with it in-process.
+/// The answer to `request` about the worktree of `run` of the project at `project_root`, its execution root here.
+/// Blocks on the file system and git. The desktop's window tests, which start no runner, answer with it in-process.
 pub fn answer_run_files(project_root: &Path, run: RunId, request: RunFilesRequest) -> RunFilesReply {
-  let worktree = project_root.join(WORKTREES_DIR).join(run.to_string());
+  let worktree = ExecutionRoot::local(project_root).run_worktree(run);
   if !worktree.is_dir() {
     return RunFilesReply::Gone;
   }
