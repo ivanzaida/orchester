@@ -20,6 +20,7 @@ use std::path::{Path, PathBuf};
 use orchester_core::{
   code_index::CodeIndexUse,
   command::{Command, SecretVariable},
+  computer::OnComputer,
   connection::{
     AgentConnection, BaseUrl, REASONING_EFFORT,
     invocation::OnProvider,
@@ -169,7 +170,7 @@ pub(super) struct CliLaunch {
 }
 
 /// The agent step an invocation runs: its step, the profile version that runs it and the model, and the
-/// connection it runs on.
+/// connection it runs on, with what that connection has on the computer the run executes on.
 #[derive(Clone, Copy)]
 struct StepAgent<'a> {
   step: &'a Step,
@@ -177,6 +178,7 @@ struct StepAgent<'a> {
   model: &'a ModelId,
   body: &'a AgentProfile,
   connection: &'a AgentConnection,
+  here: &'a OnComputer,
 }
 
 impl<'a> StepAgent<'a> {
@@ -245,13 +247,14 @@ impl RunTask {
     index: AgentIndex,
   ) -> Result<AgentStart, RunnerProblem> {
     let (step, profile, model) = self.agent_step(execution)?;
-    let (body, connection) = self.profile_and_connection(profile, &step.key)?;
+    let (body, connection, here) = self.profile_and_connection(profile, &step.key)?;
     let agent = StepAgent {
       step,
       profile,
       model,
       body: &body,
       connection: &connection,
+      here: &here,
     };
     if connection.provider().is_native() {
       self.native_start(execution, continuation, (invocation, worktree), index, agent)
@@ -271,7 +274,7 @@ impl RunTask {
   ) -> Result<AgentStart, RunnerProblem> {
     let (step, model, body, connection, info) = (agent.step, agent.model, agent.body, agent.connection, agent.info());
     let provider = connection.provider();
-    let executable = cli::program(connection)?;
+    let executable = cli::program(connection, agent.here)?;
     let mut placed = self.place_skills(execution, step, info)?;
     let skill = self.place_code_map_for(&index, execution, &mut placed)?;
     let told = IndexTold::new(&index, skill.as_deref(), provider);

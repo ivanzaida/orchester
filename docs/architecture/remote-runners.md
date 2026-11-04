@@ -20,7 +20,7 @@ computer — without a second code path. Parity holds by construction: the local
 
 | Coordinator — one per project, beside the project database | Executor — one per run, where the run's worktree is |
 | --- | --- |
-| Run creation: number (`counters`), id, branch name, base revision and branch read in the person's checkout (`prepare.rs`, `again.rs`) | Creating and removing the run's worktrees at a given revision (`runner/src/worktree.rs`) |
+| Run creation: number (`counters`), id, branch name, base revision and branch read in the person's checkout (`prepare.rs`, `again.rs`), then a serializable start order (`orchester_core::run::StartOrder`) for the executor | Creating and removing the run's worktrees at a given revision (`executor/start.rs`, `executor/removal.rs`, `executor/worktree_sweep.rs` over `runner/src/worktree.rs`), the tips of the runs' branches at startup (`executor/run_branches.rs`) |
 | Queue, task groups, blocked runs, readiness (`task_groups.rs`, `blocked_runs.rs`, `prepare.rs`) | Steps, agent processes, the CLI relay (`approval_relay.rs`, `step/relay.rs`), checkpoints |
 | Agent slots and the daily budget, plan limits, low disk, held runs as gates (`pool.rs` slots, `idle.rs`, `halt.rs`, `held.rs`, `low_disk.rs`, `plan_limit/`) | Step budgets, the run's tool calls and approvals relay, questions, plans |
 | Orchestrator chat (`chat/`), task estimates (`estimate.rs`) | Code index of the run's base revision (`codebase_index.rs`), QA apps (`step/qa_app/`, `step/run_app/`) |
@@ -81,16 +81,53 @@ Where the desktop touches a run's worktree today (`crates/workspace/src/`):
 
 | What | Where |
 | --- | --- |
-| Uncommitted changes, followed while the page is open; whether work is present | `tasks/changes/mod.rs:311` (`read_worktree_changes`), `:86`, `tasks/changes/follow.rs` |
+| Uncommitted changes, followed while the page is open: **through the runner** since protocol 40 (`Command::ReadWorktreeChanges`, ORC-682) | `tasks/changes/mod.rs` (`not_checkpointed_in`), `runner/worktree_changes.rs`; the runner's `execution/executor/worktree_changes.rs` |
+| Whether a run's work is present (its own worktree folder, else its branch) | `tasks/changes/mod.rs` (`run_work_present`) |
 | Conflict resolution in the worktree | `tasks/resolve/mod.rs`, `tasks/integration_jobs/resolve.rs`, `merge_queue/approve.rs` |
 | Base synced into the worktree, Check tools run in it | `merge_queue/drive.rs:211`, `merge_queue/check.rs` |
-| Local integration reading the worktree as a second repository | `tasks/local_integration/{mod,poll,view}.rs` |
+| Local integration reading the worktree as a second repository | `tasks/local_integration/{mod,poll,view}.rs`, see [Local integration](#local-integration) |
 | Removal, stopping its processes, index prune, sweep | `tasks/integration.rs:487`, `tasks/delete.rs`, `tasks/history.rs`, `app_mcp/tools/worktree.rs`, `tasks/worktree_sweep.rs` |
 | Files of the run's version, Open in editor, copy path | `files/source.rs:39`, `files/open.rs`, `desktop-app/src/screens/task/changes/open_file.rs`, `run_facts.rs:329` |
 | Recovery state of a run's folder | `recovery/mod.rs:239` |
-| Warm workspaces' folders and sizes, ended worktrees' sizes | `warm_workspaces/{actions,mod}.rs`, `storage.rs:100` |
+| Warm workspaces' folders and sizes, ended worktrees' sizes | through the runner since ORC-689 (`Command::Folders`, `runner/folders.rs`); the desktop keeps the database's reservations |
 | Code index rebuild | `code_index/mod.rs:156` |
-| Orchestrator chat git tools in a run's worktree | Through the runner since ORC-691 (`Command::RunGit`, protocol 40): `orchestrator/git/host.rs`, the runner's `execution/executor/run_git.rs` |
+| Orchestrator chat git tools in a run's worktree: **through the runner** since protocol 43 (`Command::RunGit`, ORC-691) | `orchestrator/git/host.rs`; the runner's `execution/executor/run_git.rs` |
+
+### Local integration
+
+Local integration (`crates/workspace/src/tasks/local_integration/`) merges a run's checked result into the person's
+checkout, and that merge stays on the main computer. The merge itself needs only the result's commit
+(`LocalGit::merge_result` on the checkout, `has_merge_receipt`), which today is in the shared object database and
+later comes with the run's branch. What the result *is*, though, is made in the run's worktree: the base is synced
+into it, its conflicts are resolved in it, and Check runs in it. So these uses of the worktree stay until the runner
+serves them (ORC-685 found them; no IPC was added there, and storage.md "Integration" and the ORC-630 holds are
+unchanged):
+
+| Use of the run's worktree | Where | Runner request it needs |
+| --- | --- | --- |
+| Open it as a linked worktree of the checkout, on the run's branch: `owned_directory`, `LocalGit::new`, `own_metadata`, `--git-common-dir` and `symbolic-ref HEAD` checks | `mod.rs` `open_expected`, `ensure_linked_task` | Worktree state (the branch, head and status of the run's folder), with ORC-684's sync request |
+| Snapshot, clean check, tree entries and the merge of the base (`preview_sync`, `refresh_index`, `merge --no-ff --no-commit`), conflicts after it; recovery of an interrupted sync | `sync.rs` `sync`, `execute_sync`; `recover.rs` `reconcile_sync` | ORC-684's base-sync request |
+| Conflicts, file hashes and blobs, index entries and fingerprint, resolution bytes, writing a resolution (`write_regular`, `set_executable`, `set_index`) | `resolution.rs`, `sync.rs` `save_task_resolution`, `drafts.rs` `draft_identity`, `view.rs` `read_conflicts` | ORC-683's conflict-resolution requests (read conflicts and their versions, write a resolution) |
+| Committing the resolved sync and proving it by receipt (`commit_task_resolution`, `HEAD^1`/`HEAD^2`, `has_task_commit_receipt`) | `sync.rs` `continue_task`, `task_commit.rs` | ORC-683's "continue after resolving" request |
+| Aborting the sync merge: preview, retaining the files, `abort_task_merge` | `abort.rs` | ORC-683's abort request |
+| Running the pinned Check tools in the worktree, with the process journal, and its snapshot before and after | `checks.rs` `run_check` | ORC-684's Check request |
+| The worktree still exactly the checked result, before the merge and while the page shows it; its status fingerprint for polling | `sync.rs` `approve_and_merge_at` (`ensure`), `view.rs` `checked_current`, `poll.rs` `fingerprint` | Worktree state (as above), verified (every tracked file hashed) before the merge |
+| The worktree clean and still the owned one when a preparation is canceled or reconciled | `cancel.rs`, `recover.rs` (`TaskConflicts`, `Checking`) | Worktree state (as above) |
+
+The view and the poll read the worktree only while the page shows something of it, task conflicts or a checked result
+(`poll.rs` `shown_task_root`). Every other read takes the run's result from its branch and the checkout's repository.
+
+**The scratch folder.** `LocalGit` gives each checkout it opens a scratch folder inside that checkout, so the run's
+worktree gets `.orchester/local-integration`. Snapshots build their index there (`capture.rs` `rebuilt_status`),
+and so do sync previews, abort previews and resolution merges. It has to be inside the opened root because
+`LocalGit::new` refuses any other place, and on Windows `ExecutionOwnership` holds the root and the scratch folder
+together and allows private copies only under that scratch folder. Proposal, not done here: once the runner serves
+the worktree requests above, the scratch folder belongs to the executor. Put it in the run's storage under its
+execution root, `.orchester/runs/<run>/local-integration` (rule 6, `ExecutionRoot::run_storage`). That keeps it with
+the run's other executor files and out of the folder the agents and Check work in. It needs `LocalGit::new` to
+accept a scratch folder its caller holds outside the root,
+with `ExecutionOwnership` holding both the same way. On the main computer, local integration then keeps only the
+checkout's own `.orchester/local-integration/<run>`.
 
 ## Not part of the preparation
 

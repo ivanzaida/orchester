@@ -97,7 +97,7 @@ const NO_HOOKS: &str = "no-hooks";
 /// being the runner's program: every project's private files, the folder of Orchester's programs, and every project's
 /// browser profile with its cookies and sign-ins.
 pub fn outside_read_refusals(relay: Option<&Path>) -> Vec<PathBuf> {
-  let mut refused = vec![private_file::root()];
+  let mut refused = vec![crate::execution_root::private_files()];
   refused.extend(relay.and_then(Path::parent).map(Path::to_path_buf));
   // Unknown only with the application data, and then no browser has a profile either ([`crate::browser::profile_of`]).
   refused.extend(crate::browser::profiles_folder().ok());
@@ -441,7 +441,7 @@ impl RunTask {
       tools,
       worktree: worktree.to_path_buf(),
       repository: self.root.clone(),
-      artifacts: orchester_core::workspaces::artifacts_folder(&self.root, self.run.id()),
+      artifacts: self.execution.run_storage(self.run.id()),
       git_dir: self.worktree_git_dir(worktree)?,
       base: self.run.base().as_str().to_owned(),
       hooks,

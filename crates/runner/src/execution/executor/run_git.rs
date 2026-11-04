@@ -6,7 +6,6 @@
 use std::{future::Future, path::Path};
 
 use orchester_core::{
-  integration::WORKTREES_DIR,
   orchestrator::run_git::{RunGitAnswer, RunGitRequest},
   store::{RunStore, WorktreeStore},
 };
@@ -15,6 +14,7 @@ use orchester_ipc::{Rejection, Reply};
 use orchester_store::ProjectDb;
 
 use super::super::{Scheduler, failed};
+use crate::execution_root::ExecutionRoot;
 
 impl Scheduler {
   /// Carries out `request` in its run's worktree, off the async workers; answered with [`Reply::RunGit`] or why not.
@@ -32,7 +32,8 @@ impl Scheduler {
 }
 
 /// `request` carried out in the project at `root`, unless its run is unknown, has not ended and the request does not
-/// only read, or has no worktree any more. Blocks on SQLite and git.
+/// only read, or has no worktree any more; the worktree is the run's own in the executor's execution root. Blocks on
+/// SQLite and git.
 fn answer(root: &Path, request: &RunGitRequest) -> Result<RunGitAnswer, Rejection> {
   let db = ProjectDb::open(root).map_err(|error| failed("cannot open the project database", &error))?;
   let run = db
@@ -42,7 +43,7 @@ fn answer(root: &Path, request: &RunGitRequest) -> Result<RunGitAnswer, Rejectio
   if !run.status().is_terminal() && !request.allowed_before_end() {
     return Err(Rejection::RunNotEnded);
   }
-  let dir = root.join(WORKTREES_DIR).join(run.id().to_string());
+  let dir = ExecutionRoot::local(root).run_worktree(run.id());
   let removed = db
     .worktree_removal(run.id())
     .map_err(|error| failed("cannot read the worktree's removal", &error))?;

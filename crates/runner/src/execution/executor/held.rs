@@ -72,7 +72,12 @@ impl RunTask {
     let holder = Holder::Run { run: self.run.id() };
     let branch = self.run.branch().clone();
     let base = self.run.base().as_str().to_owned();
-    match pool::borrow(&mut self.db, &self.root, holder, (SwitchTo::Branch(&branch), &base))? {
+    match pool::borrow(
+      &mut self.db,
+      &self.execution,
+      holder,
+      (SwitchTo::Branch(&branch), &base),
+    )? {
       Borrowed::Folder(path) => {
         tracing::info!(run = %self.run.id(), folder = %path.display(), "the run took a workspace");
         self.worktree = Some(path);
@@ -118,7 +123,7 @@ impl RunTask {
       self.run.number()
     );
     for holder in holders {
-      if let Err(error) = pool::give_back(&mut self.db, &self.root, holder, &message) {
+      if let Err(error) = pool::give_back(&mut self.db, &self.execution, holder, &message) {
         tracing::warn!(%run, %error, "a workspace of the run was not given back");
       }
     }
@@ -182,7 +187,7 @@ impl RunTask {
       run: self.run.id(),
       execution: owner,
     };
-    if let Err(error) = pool::give_back(&mut self.db, &self.root, holder, "merged into the run's branch") {
+    if let Err(error) = pool::give_back(&mut self.db, &self.execution, holder, "merged into the run's branch") {
       tracing::warn!(run = %self.run.id(), %owner, %error, "the merged step's workspace was not given back");
     }
     // `-d` would compare with the person's checked-out branch, not the run's it was merged into.

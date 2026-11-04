@@ -1,4 +1,4 @@
-//! The Orchestrator chat's git in a run's worktree (`Command::RunGit`, protocol 40) crosses the connection as it was
+//! The Orchestrator chat's git in a run's worktree (`Command::RunGit`, protocol 43) crosses the connection as it was
 //! sent: the request with each kind of call, and each kind of answer.
 
 use orchester_core::{
@@ -13,8 +13,8 @@ fn round_trip<T: serde::Serialize + serde::de::DeserializeOwned>(value: &T) -> T
 }
 
 #[test]
-fn run_git_requests_and_answers_round_trip_under_protocol_40() {
-  const { assert!(PROTOCOL_VERSION >= 40, "came with protocol 40") };
+fn run_git_requests_and_answers_round_trip_under_protocol_43() {
+  assert_eq!(PROTOCOL_VERSION, 43, "came with protocol 43");
   let run = RunId::generate();
   let calls = [
     RunGitCall::Git(GitInvocation {

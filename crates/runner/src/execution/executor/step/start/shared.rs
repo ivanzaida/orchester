@@ -5,15 +5,19 @@
 //! not exist.
 
 use orchester_core::{
+  computer::OnComputer,
   connection::{AgentConnection, SessionOrigin, invocation::Platform, stream::RunnerProblem},
   id::StepExecutionId,
   permission::{EffectiveApprovalMode, FolderBounds, ManualReason, ResolvedFolder, capability::EnforcedPermissions},
   resource::{AgentProfile, ModelId, Step, StepKey, StepKind},
   run::{PinnedVersion, StepExecutor},
-  store::{ActivityStore, ConnectionStore, ResourceStore},
+  store::ActivityStore,
 };
 
-use super::{super::super::run::RunTask, problem};
+use super::{
+  super::super::{link::resources::pinned_version, run::RunTask},
+  problem,
+};
 
 impl RunTask {
   /// A step whose agent never started waits for its account's reset before it takes an agent slot: it opens, and
@@ -52,7 +56,7 @@ impl RunTask {
     let Ok((step, profile, _)) = self.agent_step(execution) else {
       return false;
     };
-    let Ok((_, connection)) = self.profile_and_connection(profile, &step.key) else {
+    let Ok((_, connection, _)) = self.profile_and_connection(profile, &step.key) else {
       return false;
     };
     let Some(account) = connection.plan_account() else {
@@ -123,21 +127,22 @@ impl RunTask {
   /// The run's own storage, `.orchester/runs/<run>/` (ORC-114), made when it is not there yet: every step reads it, a
   /// step that edits files writes there too.
   pub(super) fn run_storage(&self) -> Result<std::path::PathBuf, RunnerProblem> {
-    let storage = orchester_core::workspaces::artifacts_folder(&self.root, self.run.id());
+    let storage = self.execution.run_storage(self.run.id());
     std::fs::create_dir_all(&storage)
       .map_err(|error| problem(format!("cannot make the run's storage {}: {error}", storage.display())))?;
     Ok(storage)
   }
 
-  /// The extra writable folders `enforced` grants, resolved in the project's repository, the missing
+  /// The extra writable folders `enforced` grants, resolved in the execution root's repository, the missing
   /// ones created; or why one cannot be given (it was moved, or now lies somewhere refused). An agent that edits
   /// files also gets the run's own storage, where what it writes for people to see stays (ORC-114).
   pub(super) fn writable_folders(&self, enforced: &EnforcedPermissions) -> Result<Vec<ResolvedFolder>, RunnerProblem> {
     let Some(folders) = enforced.permissions().granted_folders() else {
       return Ok(Vec::new());
     };
-    let bounds = FolderBounds::new(&self.root, std::env::home_dir().as_deref())
-      .map_err(|error| problem(format!("cannot read the repository {}: {error}", self.root.display())))?;
+    let repository = self.execution.repository();
+    let bounds = FolderBounds::new(repository, self.computer.home_folder().as_deref())
+      .map_err(|error| problem(format!("cannot read the repository {}: {error}", repository.display())))?;
     let mut resolved = folders
       .resolve(&bounds)
       .map_err(|(folder, error)| problem(format!("extra writable folder {folder}: {error}")))?;
@@ -158,32 +163,29 @@ impl RunTask {
       .collect()
   }
 
-  /// The pinned profile version and the agent connection `step` runs it on: the one a person chose for this run
-  /// when the step stopped at its account's plan limit, else the profile's own.
+  /// The pinned profile version and the agent connection `step` runs it on, as the computer the run executes on has
+  /// it: the one a person chose for this run when the step stopped at its account's plan limit, else the profile's own.
   pub(in super::super) fn profile_and_connection(
     &self,
     profile: &PinnedVersion,
     step: &StepKey,
-  ) -> Result<(AgentProfile, AgentConnection), RunnerProblem> {
-    let body: AgentProfile = self
-      .db
-      .version::<AgentProfile>(profile.resource, profile.number)
+  ) -> Result<(AgentProfile, AgentConnection, OnComputer), RunnerProblem> {
+    let body = pinned_version::<AgentProfile>(&*self.link, profile)
       .map_err(|error| problem(error.to_string()))?
-      .ok_or_else(|| problem(format!("agent profile version {} is missing", profile.number)))?
-      .body()
-      .clone();
+      .ok_or_else(|| problem(format!("agent profile version {} is missing", profile.number)))?;
     let chosen = self
       .db
       .step_connection(self.run.id(), step)
       .map_err(|error| problem(error.to_string()))?;
-    let connection = self
-      .db
+    let (connection, here) = self
+      .computer
       .connection(chosen.unwrap_or(body.connection()))
       .map_err(|error| problem(error.to_string()))?
-      .ok_or_else(|| problem("the agent profile's connection no longer exists".to_owned()))?;
+      .ok_or_else(|| problem("the agent profile's connection no longer exists".to_owned()))?
+      .into_parts();
     let connection =
       AgentConnection::try_from(connection).map_err(|_| problem("the connection is not an agent CLI".to_owned()))?;
-    Ok((body, connection))
+    Ok((body, connection, here))
   }
 }
 
@@ -202,7 +204,7 @@ impl RunTask {
     let Ok((step, profile, _)) = self.agent_step(execution) else {
       return Ok(());
     };
-    let Ok((_, connection)) = self.profile_and_connection(profile, &step.key) else {
+    let Ok((_, connection, _)) = self.profile_and_connection(profile, &step.key) else {
       return Ok(());
     };
     let invocations = self.db.invocations(self.run.id())?;

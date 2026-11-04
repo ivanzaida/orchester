@@ -13,7 +13,7 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_ipc::Event;
-use orchester_store::{ProjectDb, StoreError};
+use orchester_store::{ProjectDb, RunLogRecord, StoreError};
 
 use super::{
   pool::PoolError,
@@ -27,7 +27,9 @@ impl ExecutionError {
     match self {
       Self::Store(error) | Self::Workspace(PoolError::Store(error)) => error.runner_failure(),
       Self::Record(RecordError::Store(error)) => error.runner_failure(),
+      Self::Link(error) => error.failure,
       Self::Record(RecordError::Run(_))
+      | Self::Computer(_)
       | Self::NotAnAgentStep(_)
       | Self::Stalled
       | Self::Conversation(_)
@@ -62,9 +64,8 @@ impl RunTask {
       .run
       .interrupt(InterruptCause::RunnerFailed, ended_at)
       .map_err(RecordError::from)?;
-    self
-      .db
-      .append_runner_failure(&self.run, &events, error.runner_failure())
+    RunLogRecord::runner_failure(&self.run, &events, error.runner_failure())
+      .and_then(|record| self.sink.run_log(record))
       .map_err(RecordError::from)?;
     self.notifier.send(Event::RunChanged {
       run,

@@ -28,7 +28,7 @@ use orchester_core::{
   id::RunId,
   revision::Revision,
   run::CodeIndexPrompt,
-  store::{ConnectionStore, SettingsStore},
+  store::SettingsStore,
 };
 use orchester_exec::{
   ripgrep::{self, LOCAL_APP_DATA},
@@ -170,7 +170,7 @@ impl RunTask {
   }
 
   fn build_code_index(&mut self, holds_starts: bool) {
-    let indexes = CodebaseIndexes::new(&self.root);
+    let indexes = self.execution.code_indexes();
     let handle = tokio::spawn(ensure(indexes, self.run.base().clone(), self.run.id()));
     self.index_build = Some(IndexBuild { handle, holds_starts });
   }
@@ -230,7 +230,7 @@ impl RunTask {
       return Err(CodeIndexUnavailable::Building);
     }
     if let IndexState::Failed { .. } | IndexState::NotBuilt = self.code_index
-      && let Some(folder) = CodebaseIndexes::new(&self.root).existing(self.run.base())
+      && let Some(folder) = self.execution.code_indexes().existing(self.run.base())
     {
       self.code_index = IndexState::Ready { folder };
     }
@@ -265,26 +265,24 @@ impl RunTask {
       .map(OsString::from)
       .or_else(|| std::env::var_os(LOCAL_APP_DATA));
     let executables: Vec<PathBuf> = self
-      .db
+      .computer
       .connections()
       .map_err(|error| error.to_string())?
       .into_iter()
       // Connections of other kinds (GitHub) and native agents, which run no program, bundle no ripgrep.
-      .filter_map(|connection| AgentConnection::try_from(connection).ok())
+      .filter_map(|connection| AgentConnection::try_from(connection.into_parts().0).ok())
       .filter_map(|connection| connection.executable().map(Path::to_path_buf))
       .collect();
     let clis: Vec<&Path> = executables.iter().map(PathBuf::as_path).collect();
     let Some(found) = ripgrep::locate(path.as_deref(), local_app_data.as_deref(), &clis) else {
       return Ok(Err(RipgrepMissing::NotFound));
     };
-    Ok(
-      ripgrep::provide(&found, &self.root.join(".orchester").join("tools")).map_err(|error| {
-        tracing::warn!(%error, found = %found.path.display(), "ripgrep cannot be given to agents");
-        RipgrepMissing::Unavailable {
-          detail: error.to_string(),
-        }
-      }),
-    )
+    Ok(ripgrep::provide(&found, &self.execution.tools()).map_err(|error| {
+      tracing::warn!(%error, found = %found.path.display(), "ripgrep cannot be given to agents");
+      RipgrepMissing::Unavailable {
+        detail: error.to_string(),
+      }
+    }))
   }
 }
 

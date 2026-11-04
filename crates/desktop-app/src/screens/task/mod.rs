@@ -385,7 +385,7 @@ impl Component for TaskFrame {
       .get()
       .is_some_and(|status| status.state_for(&root) == RunnerState::Online);
     let follow = Follow::of(&detail, online, &props.view);
-    self.changes.read(ctx, &root, &detail, follow);
+    self.changes.read(ctx, &props.project.open, &detail, follow);
     let task = TaskContext {
       project: props.project.clone(),
       key: props.key.clone(),

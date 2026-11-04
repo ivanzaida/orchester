@@ -49,7 +49,7 @@ impl QaSlots {
   /// The computer's slots, in the user's data folder.
   pub fn machine() -> Self {
     Self {
-      folder: super::super::run_app::user_data().map(|data| data.join("orchester-qa-slots")),
+      folder: crate::execution_root::qa_slots(),
     }
   }
 
