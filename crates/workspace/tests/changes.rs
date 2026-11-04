@@ -1,7 +1,10 @@
 //! The count of files the Changes tab lists, shown on its label and in the Conversation, the worktree
-//! reads that follow a page only while it is there, and what a missing worktree means.
+//! reads that follow a page only while it is there, and what the runner's read of a worktree comes to: a missing
+//! worktree by the run's stage, the changes as the desktop read them, and why a read failed
+//! (`worktree_changes.rs` reads through the real runner).
 
 use std::{
+  path::Path,
   sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
@@ -14,11 +17,11 @@ use orchester_core::{
   id::RunId,
   revision::Revision,
 };
-use orchester_exec::programs::Programs;
+use orchester_ipc::{WorktreeChangesRead, WorktreeReadFailure};
 use orchester_workspace::{
   messages::Message,
   tasks::changes::{
-    ChangesError, Checkpointed, NotCheckpointed, ReadChanges, Refresh, RunStage, listed_files, not_checkpointed_in,
+    ChangesError, Checkpointed, NotCheckpointed, ReadChanges, Refresh, RunStage, listed_files, not_checkpointed_from,
   },
 };
 
@@ -210,14 +213,58 @@ fn worktree_is_read_once_while_no_agent_works() {
   assert_eq!(reads.load(Ordering::SeqCst), 1);
 }
 
+fn from_runner(stage: RunStage, read: WorktreeChangesRead) -> Result<NotCheckpointed, ChangesError> {
+  not_checkpointed_from(Path::new("repo"), (RunId::generate(), stage), read)
+}
+
 #[test]
 fn a_missing_worktree_is_not_made_yet_removed_or_an_error_by_the_runs_stage() {
-  let repo = tempfile::tempdir().expect("a temporary folder");
-  let programs = Programs::processes();
-  let read = |stage| not_checkpointed_in(repo.path(), &programs, (RunId::generate(), stage));
+  let read = |stage| from_runner(stage, WorktreeChangesRead::NoWorktree);
   assert!(matches!(read(RunStage::NotStarted), Ok(NotCheckpointed::Clean)));
   assert!(matches!(read(RunStage::Ended), Ok(NotCheckpointed::Removed)));
   let missing = read(RunStage::Started).expect_err("a started run's worktree is there");
   assert!(matches!(missing, ChangesError::WorktreeMissing(_)), "{missing}");
   assert_eq!(missing.message().key, "runs.changes.failure.worktreeMissing");
+}
+
+#[test]
+fn what_the_runner_read_is_shown_as_the_desktop_read_it() {
+  let text = "diff --git a/notes.md b/notes.md\n--- a/notes.md\n+++ b/notes.md\n@@ -1 +1,2 @@\n a\n+b\n";
+  let read = WorktreeChangesRead::Read {
+    head: revision(),
+    diff: text.to_owned(),
+  };
+  let Ok(NotCheckpointed::Read(changes)) = from_runner(RunStage::Started, read.clone()) else {
+    panic!("the runner's diff is read");
+  };
+  assert_eq!(changes.from, revision());
+  assert_eq!(*changes.diff, Diff::parse(text).expect("a diff"));
+  let again = from_runner(RunStage::Started, read).expect("read again");
+  assert_eq!(again, NotCheckpointed::Read(changes), "the same changes keep their key");
+  let size = too_large(400);
+  assert_eq!(
+    from_runner(
+      RunStage::Started,
+      WorktreeChangesRead::TooLarge { head: revision(), size }
+    )
+    .expect("measured"),
+    NotCheckpointed::TooLarge { from: revision(), size }
+  );
+  assert_eq!(
+    from_runner(RunStage::Started, WorktreeChangesRead::Clean).expect("clean"),
+    NotCheckpointed::Clean
+  );
+}
+
+#[test]
+fn a_read_the_runner_could_not_make_says_why_as_git_did() {
+  let failed = |failure| from_runner(RunStage::Started, WorktreeChangesRead::Failed(failure)).expect_err("failed");
+  assert_eq!(
+    failed(WorktreeReadFailure::GitMissing).message().key,
+    "runs.changes.failure.gitMissing"
+  );
+  let git = WorktreeReadFailure::Git {
+    detail: "fatal: not a git repository".to_owned(),
+  };
+  assert_eq!(failed(git).message().key, "runs.changes.failure.git");
 }

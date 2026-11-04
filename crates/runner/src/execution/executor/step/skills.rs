@@ -2,11 +2,12 @@
 //! `orchester_core::agent_files`).
 //!
 //! - Orchester's skills: the published versions the run pinned that reach the agent (by scope) are written to a folder
-//!   of the step execution's own, `<repo>/.orchester/skills/<execution-id>/<slug>/` (the `SKILL.md` with its name and
-//!   description, and the reference files from the project's blobs), outside every worktree. It is written again at
-//!   each start of the execution, so what an agent changed there does not last, and kept afterwards: a resumed session
-//!   reads the paths it was told when it started. Both CLIs can read it: Codex's sandbox reads the whole disk, and
-//!   Claude Code is given the folder with `--add-dir`.
+//!   of the step execution's own in the execution root (`crate::execution_root`),
+//!   `.orchester/skills/<execution-id>/<slug>/` (the `SKILL.md` with its name and description, and the reference files
+//!   from the project's blobs), outside every worktree. It is written again at each start of the execution, so what an
+//!   agent changed there does not last, and kept afterwards: a resumed session reads the paths it was told when it
+//!   started. Both CLIs can read it: Codex's sandbox reads the whole disk, and Claude Code is given the folder with
+//!   `--add-dir`.
 //! - Orchester's internal `orchester-codebase-index` skill, embedded in the runner, is placed the same way for an agent
 //!   that gets the code index (`super::super::codebase_index`), under `_orchester/`, which no project skill's slug can
 //!   name. It is not a project resource and no screen lists it.
@@ -33,10 +34,13 @@ use orchester_core::{
   orchester_tools::StepSkills,
   resource::{InstructionTarget, SKILL_FILE, Skill, SkillFilePath, Slug, Step},
   run::{ProfileInfo, SkillListing},
-  store::{BlobStore, ResourceStore, SettingsStore},
+  store::SettingsStore,
 };
 
-use super::super::run::RunTask;
+use super::super::{
+  link::resources::{blob, pinned_version, resource_names},
+  run::RunTask,
+};
 
 /// Where Orchester's internal skills go in an execution's skills folder: `_` starts no slug.
 const INTERNAL_SKILLS: &str = "_orchester";
@@ -98,21 +102,18 @@ impl RunTask {
     };
     let mut reaching = Vec::new();
     for pin in self.run.snapshot().skills() {
-      let resource = self
-        .db
-        .resource(pin.resource)
+      let resource = resource_names(&*self.link, pin.resource)
         .map_err(|error| problem(error.to_string()))?
         .ok_or_else(|| problem(format!("skill {} no longer exists", pin.resource)))?;
-      let version = self
-        .db
-        .version::<Skill>(pin.resource, pin.number)
+      let skill = pinned_version::<Skill>(&*self.link, pin)
         .map_err(|error| problem(error.to_string()))?
         .ok_or_else(|| problem(format!("skill version {} is missing", pin.number)))?;
-      if version.body().reaches(target).is_ok() {
-        reaching.push((resource.slug().clone(), version.body().clone()));
+      if skill.reaches(target).is_ok() {
+        let slug = resource.slug().map_err(|error| problem(error.to_string()))?;
+        reaching.push((slug, skill));
       }
     }
-    let folder = self.skills_folder(execution);
+    let folder = self.execution.skills(execution);
     remove_folder(&folder).map_err(|error| problem(format!("cannot clear {}: {error}", folder.display())))?;
     if reaching.is_empty() {
       return Ok(PlacedSkills::default());
@@ -163,11 +164,6 @@ impl RunTask {
     Ok(offered)
   }
 
-  /// The skills folder of `execution`, outside every worktree.
-  fn skills_folder(&self, execution: StepExecutionId) -> PathBuf {
-    self.root.join(".orchester").join("skills").join(execution.to_string())
-  }
-
   /// Places the internal `orchester-codebase-index` skill for `execution`, beside what `placed` holds, and lists
   /// it; its `SKILL.md`.
   pub(super) fn place_code_map(
@@ -175,7 +171,7 @@ impl RunTask {
     execution: StepExecutionId,
     placed: &mut PlacedSkills,
   ) -> Result<PathBuf, RunnerProblem> {
-    let folder = self.skills_folder(execution);
+    let folder = self.execution.skills(execution);
     let skill = folder.join(INTERNAL_SKILLS).join("codebase-index");
     let document = skill.join(SKILL_FILE);
     fs::create_dir_all(&skill)
@@ -202,7 +198,7 @@ impl RunTask {
     let document = folder.join(SKILL_FILE);
     fs::write(&document, skill.document(slug)).map_err(|error| error.to_string())?;
     for file in skill.files() {
-      let content = self.db.blob(&file.content).map_err(|error| error.to_string())?;
+      let content = blob(&*self.link, &file.content).map_err(|error| error.to_string())?;
       let path = file
         .path
         .segments()

@@ -20,7 +20,7 @@ computer — without a second code path. Parity holds by construction: the local
 
 | Coordinator — one per project, beside the project database | Executor — one per run, where the run's worktree is |
 | --- | --- |
-| Run creation: number (`counters`), id, branch name, base revision and branch read in the person's checkout (`prepare.rs`, `again.rs`) | Creating and removing the run's worktrees at a given revision (`runner/src/worktree.rs`) |
+| Run creation: number (`counters`), id, branch name, base revision and branch read in the person's checkout (`prepare.rs`, `again.rs`), then a serializable start order (`orchester_core::run::StartOrder`) for the executor | Creating and removing the run's worktrees at a given revision (`executor/start.rs`, `executor/removal.rs`, `executor/worktree_sweep.rs` over `runner/src/worktree.rs`), the tips of the runs' branches at startup (`executor/run_branches.rs`) |
 | Queue, task groups, blocked runs, readiness (`task_groups.rs`, `blocked_runs.rs`, `prepare.rs`) | Steps, agent processes, the CLI relay (`approval_relay.rs`, `step/relay.rs`), checkpoints |
 | Agent slots and the daily budget, plan limits, low disk, held runs as gates (`pool.rs` slots, `idle.rs`, `halt.rs`, `held.rs`, `low_disk.rs`, `plan_limit/`) | Step budgets, the run's tool calls and approvals relay, questions, plans |
 | Orchestrator chat (`chat/`), task estimates (`estimate.rs`) | Code index of the run's base revision (`codebase_index.rs`), QA apps (`step/qa_app/`, `step/run_app/`) |
@@ -81,7 +81,8 @@ Where the desktop touches a run's worktree today (`crates/workspace/src/`):
 
 | What | Where |
 | --- | --- |
-| Uncommitted changes, followed while the page is open; whether work is present | `tasks/changes/mod.rs:311` (`read_worktree_changes`), `:86`, `tasks/changes/follow.rs` |
+| Uncommitted changes, followed while the page is open: **through the runner** since protocol 40 (`Command::ReadWorktreeChanges`, ORC-682) | `tasks/changes/mod.rs` (`not_checkpointed_in`), `runner/worktree_changes.rs`; the runner's `execution/executor/worktree_changes.rs` |
+| Whether a run's work is present (its own worktree folder, else its branch) | `tasks/changes/mod.rs` (`run_work_present`) |
 | Conflict resolution in the worktree | `tasks/resolve/mod.rs`, `tasks/integration_jobs/resolve.rs`, `merge_queue/approve.rs` |
 | Base synced into the worktree, Check tools run in it | `merge_queue/drive.rs:211`, `merge_queue/check.rs` |
 | Local integration reading the worktree as a second repository | `tasks/local_integration/{mod,poll,view}.rs` |
