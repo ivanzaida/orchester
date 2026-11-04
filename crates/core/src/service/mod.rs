@@ -10,6 +10,7 @@ mod definition;
 mod error;
 mod folder;
 mod launch;
+mod log;
 mod name;
 mod needs;
 mod placeholder;
@@ -17,6 +18,7 @@ mod publish;
 mod readiness;
 mod seed;
 mod stack;
+mod status;
 mod stored;
 mod value;
 
@@ -25,6 +27,10 @@ pub use self::{
   error::ServiceError,
   folder::{OwnedPath, RelativeFolder, RunFolder},
   launch::ServiceProcess,
+  log::{
+    DEFAULT_TAIL, LogLine, LogStream, MAX_EXCERPT_BYTES, MAX_LINE_BYTES, MAX_LOG_BYTES, MAX_LOG_LINES, MAX_TAIL,
+    ServiceLog,
+  },
   name::{ServiceName, StackName},
   needs::{NeedsError, StartPlan},
   placeholder::{FilledSeedRequest, Placeholder, PlaceholderError, PlaceholderPlace, RunValues, check_placeholders},
@@ -32,5 +38,6 @@ pub use self::{
   readiness::{HttpPath, LogPattern, Readiness, ReadyCheck, ReadyTimeout},
   seed::{Capture, CapturePath, Seed, SeedHeader, SeedRequest, SeedRequests},
   stack::Stack,
+  status::{ServicePhase, ServiceState, ServiceStatus},
   value::{ServiceValue, ServiceVariables},
 };

@@ -1,17 +1,18 @@
-//! `start_service` and `stop_service` end to end against `orchester-fake-codex`, with `orchester-test-command` as the
-//! service (`support::services`): the runner starts a published service on a free loopback port of the run, fills its
+//! The service tools end to end against `orchester-fake-codex`, with `orchester-test-command` as the service
+//! (`support::services`): the runner starts a published service on a free loopback port of the run, fills its
 //! placeholders and variables, reads its secret from the keychain, and answers once it is ready by its port, an HTTP
-//! answer or a log line. One not ready in time is stopped with everything it started. A service is stopped when its
-//! step ends, when its run pauses and while its turn waits for a person; `stop_service` never asks. Two runs get
-//! different ports. Needs `git`. Run with `cargo test -p orchester-runner --features test-agent --test services
-//! service`.
+//! answer or a log line. One not ready in time is stopped with everything it started, and its error ends with its last
+//! lines of output. A service is stopped when its step ends, when its run pauses and while its turn waits for a person;
+//! `stop_service` never asks. `service_status` follows it from ready to stopped or crashed, and `service_logs` reads
+//! its output with its secret's value redacted. Two runs get different ports. Needs `git`. Run with `cargo test -p
+//! orchester-runner --features test-agent --test services service`.
 
 mod support;
 
 use std::{collections::BTreeMap, fs, num::NonZeroU32, path::Path};
 
 use orchester_core::{
-  id::{IdempotencyKey, SecretId},
+  id::{IdempotencyKey, RunId, SecretId},
   resource::VariableName,
   run::{PauseReason, RunStatus},
   secret::{Environment, NewSecret, Secret, SecretKind, SecretName},
@@ -23,7 +24,7 @@ use orchester_store::ProjectDb;
 use self::support::{
   StepSpec, is_running,
   qa::{approve, calls, gone},
-  queue_another_task, scheduler, scheduler_with,
+  queue_another_task, reported, scheduler, scheduler_with,
   services::{accepts, answered, closed, publish, report_file, reported_pid, service, service_project, started_port},
   wait_for,
 };
@@ -39,6 +40,42 @@ fn server(root: &Path, pid: &str, then: &[&str]) -> Vec<String> {
   let mut arguments = vec!["pid-file".to_owned(), report_file(root, pid)];
   arguments.extend(then.iter().map(|argument| (*argument).to_owned()));
   arguments
+}
+
+/// The project secret `SERVICE_TOKEN`, whose value is [`TOKEN`].
+fn token_secret() -> Secret {
+  Secret::new(
+    SecretId::generate(),
+    NewSecret {
+      name: SecretName::new("SERVICE_TOKEN").expect("a name"),
+      kind: SecretKind::AccessToken,
+      environment: Environment::Staging,
+    },
+    Timestamp::now(),
+  )
+}
+
+/// The variable `API_TOKEN`, set to the secret `SERVICE_TOKEN`.
+fn token_variable() -> ServiceVariables {
+  ServiceVariables::new(BTreeMap::from([(
+    VariableName::new("API_TOKEN").expect("a name"),
+    ServiceValue::Secret(SecretName::new("SERVICE_TOKEN").expect("a name")),
+  )]))
+  .expect("variables")
+}
+
+/// Every `service_status` answer of the run's reported calls, in order.
+fn statuses(root: &Path, run: RunId) -> Vec<serde_json::Value> {
+  calls(root, run)
+    .iter()
+    .filter_map(|call| call.strip_prefix("service_status ok: "))
+    .map(|answer| serde_json::from_str(answer).expect("the status is JSON"))
+    .collect()
+}
+
+/// Every line of the answers of the run's reported calls.
+fn answer_lines(root: &Path, run: RunId) -> Vec<String> {
+  reported(&ProjectDb::open(root).expect("open"), run, "orchester-answer| ")
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -105,16 +142,7 @@ async fn service_ready_by_http_and_stop_service_never_asks() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn service_ready_by_log_line_gets_its_variables_and_secret() {
-  let secret = Secret::new(
-    SecretId::generate(),
-    NewSecret {
-      name: SecretName::new("SERVICE_TOKEN").expect("a name"),
-      kind: SecretKind::AccessToken,
-      environment: Environment::Staging,
-    },
-    Timestamp::now(),
-  );
-  let project = service_project(implement("Start the service web."), vec![(secret, TOKEN)]);
+  let project = service_project(implement("Start the service web."), vec![(token_secret(), TOKEN)]);
   let root = project.repo.path();
   let (greeting, token) = (report_file(root, "greeting"), report_file(root, "token"));
   let then = [
@@ -167,8 +195,11 @@ async fn service_not_ready_in_time_is_stopped_with_everything_it_started() {
   let project = service_project(implement("Start the service web."), Vec::new());
   let root = project.repo.path();
   let child = report_file(root, "child.pid");
-  let arguments = server(root, "web.pid", &["spawn-sleeper-into", &child, "sleep", "600"]);
-  publish(root, &[service("web", &arguments, ReadyCheck::PortOpen, 2)]);
+  let then = ["say", "warming up", "spawn-sleeper-into", &child, "sleep", "600"];
+  publish(
+    root,
+    &[service("web", &server(root, "web.pid", &then), ReadyCheck::PortOpen, 2)],
+  );
   let (scheduler, mut events) = scheduler(root);
   let id = scheduler
     .start_run(IdempotencyKey::generate(), project.task)
@@ -187,6 +218,92 @@ async fn service_not_ready_in_time_is_stopped_with_everything_it_started() {
   .await;
   let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
   assert_eq!(run.status(), &RunStatus::Succeeded);
+  // Only the failed start answered with lines of the service's output: its error ends with the last of them.
+  assert!(answer.contains("Its last output: lines 1 to 2 of 2"), "{answer}");
+  let lines = answer_lines(root, id);
+  assert!(lines.iter().any(|line| line == "2 out| warming up"), "{lines:?}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn service_logs_redact_its_secret_and_its_status_goes_from_ready_to_stopped() {
+  let project = service_project(
+    implement("Start the service web. Then look at the service. Then stop the service."),
+    vec![(token_secret(), TOKEN)],
+  );
+  let root = project.repo.path();
+  // The secret's value goes to standard output; readiness waits for the line after it, so the log holds it.
+  let then = [
+    "stderr",
+    "warming up",
+    "env",
+    "API_TOKEN",
+    "say",
+    "booted",
+    "listen",
+    "{{port}}",
+  ];
+  let ready = ReadyCheck::LogLine(LogPattern::new("^booted$").expect("a pattern"));
+  publish(
+    root,
+    &[service("web", &server(root, "web.pid", &then), ready, 20).with_variables(token_variable())],
+  );
+  let (scheduler, mut events) = scheduler_with(root, project.vault.clone());
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("run");
+  approve(&scheduler, root, &mut events, id).await;
+  let port = started_port(&answered(root, &mut events, id, "start_service").await);
+  let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+
+  let statuses = statuses(root, id);
+  assert_eq!(statuses.len(), 2, "{statuses:?}");
+  assert_eq!(statuses[0]["state"], "ready");
+  assert_eq!(statuses[0]["port"], port);
+  assert_eq!(statuses[0]["url"], format!("http://127.0.0.1:{port}"));
+  assert!(statuses[0]["uptime_secs"].is_u64(), "{statuses:?}");
+  assert_eq!(statuses[1]["state"], "stopped");
+  let lines = answer_lines(root, id);
+  assert!(
+    lines.iter().any(|line| line.ends_with("out| API_TOKEN=<redacted>")),
+    "{lines:?}"
+  );
+  assert!(lines.iter().any(|line| line.ends_with("err| warming up")), "{lines:?}");
+  assert!(lines.iter().any(|line| line.ends_with("out| booted")), "{lines:?}");
+  let transcript = reported(&ProjectDb::open(root).expect("open"), id, "");
+  assert!(
+    transcript.iter().all(|line| !line.contains(TOKEN)),
+    "the secret's value reached the transcript"
+  );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn service_status_reports_a_crash_with_its_exit_code() {
+  let project = service_project(
+    implement("Start the service web. Then wait for it to end. Then look at the service."),
+    Vec::new(),
+  );
+  let root = project.repo.path();
+  let then = ["say", "ready", "sleep", "2", "stderr", "giving up", "exit", "3"];
+  let ready = ReadyCheck::LogLine(LogPattern::new("^ready$").expect("a pattern"));
+  publish(root, &[service("web", &server(root, "web.pid", &then), ready, 20)]);
+  let (scheduler, mut events) = scheduler(root);
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("run");
+  approve(&scheduler, root, &mut events, id).await;
+  started_port(&answered(root, &mut events, id, "start_service").await);
+  let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  let statuses = statuses(root, id);
+  assert_eq!(statuses.len(), 1, "{statuses:?}");
+  assert_eq!(statuses[0]["state"], "crashed");
+  assert_eq!(statuses[0]["exit_code"], 3);
+  assert!(statuses[0].get("uptime_secs").is_none(), "{statuses:?}");
+  let lines = answer_lines(root, id);
+  assert!(lines.iter().any(|line| line.ends_with("err| giving up")), "{lines:?}");
 }
 
 #[tokio::test(flavor = "multi_thread")]

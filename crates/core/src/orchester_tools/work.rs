@@ -167,6 +167,10 @@ pub enum ToolWork {
   StartService(ServiceName),
   /// Stops the service of this name the step started.
   StopService(ServiceName),
+  /// The status of the service of this name the step started.
+  ServiceStatus(ServiceName),
+  /// The last `tail` kept lines after line `since` of the service `name` the step started.
+  ServiceLogs { name: ServiceName, tail: u32, since: u64 },
   /// `find_references` of this name, which the caller answers from the code index and the worktree.
   References(String),
   /// `get_task`, which the caller answers from the run's records ([`super::TaskView`]).
@@ -202,6 +206,12 @@ impl ToolCall {
       Self::StartQaApp(start) => Ok(ToolWork::QaApp(start.clone())),
       Self::StartService(name) => Ok(ToolWork::StartService(name.clone())),
       Self::StopService(name) => Ok(ToolWork::StopService(name.clone())),
+      Self::ServiceStatus(name) => Ok(ToolWork::ServiceStatus(name.clone())),
+      Self::ServiceLogs { name, tail, since } => Ok(ToolWork::ServiceLogs {
+        name: name.clone(),
+        tail: *tail,
+        since: *since,
+      }),
       Self::Processes(call) => Ok(ToolWork::Processes(*call)),
       Self::FindReferences { name } => Ok(ToolWork::References(name.clone())),
       Self::GetTask => Ok(ToolWork::Task),

@@ -1,21 +1,26 @@
 //! Starting one service: its published definition, its program found as a command tool's is, its placeholders
-//! filled, its secrets read from the keychain, its tree started and held, and the wait until it is ready. A start
-//! that fails after the program started stops the whole tree first, and its error says so.
+//! filled, its secrets read from the keychain, its tree started and held, its output kept in a fresh log, and the wait
+//! until it is ready. A start that fails after the program started stops the whole tree first, and its error says so
+//! with the last lines of its output.
 
-use std::{path::Path, sync::Arc};
+use std::{path::Path, sync::Arc, time::Instant};
 
 use orchester_core::{
   command::SecretVariable,
   connection::invocation::Platform,
   resource::{ResourceKind, VariableName},
   secret::SecretName,
-  service::{RunData, RunValues, Seed, Service, ServiceName},
+  service::{RunData, RunValues, Seed, Service, ServiceLog, ServiceName, ServicePhase},
   store::{ResourceStore, SecretStore},
 };
 use orchester_exec::process_tree::ProcessTree;
 use orchester_store::{ProjectDb, StoreError};
+use parking_lot::Mutex;
 
-use super::{Running, StepServices, readiness};
+use super::{Running, StepServices, Watch, readiness};
+
+/// How many of its last lines of output a failed start's error shows.
+const FAILED_START_LINES: u32 = 20;
 
 /// The latest published version of each of the project's services at `root`, removed ones left out.
 pub(in crate::execution::step) fn published(root: &Path) -> Result<Vec<Service>, StoreError> {
@@ -42,16 +47,34 @@ impl StepServices {
     let port = lease.port();
     let url = format!("http://127.0.0.1:{port}");
     let values = RunValues::new(self.run, port, &url);
-    let mut tree = self.spawn(&service, &values)?;
-    let ready = readiness::wait(&mut tree, (&service, &values), port, ended);
+    let (mut tree, secrets) = self.spawn(&service, &values)?;
+    let log = Arc::new(Mutex::new(ServiceLog::new(secrets)));
+    self.state.watched.lock().insert(
+      name.clone(),
+      Watch {
+        log: Arc::clone(&log),
+        port,
+        url: url.clone(),
+        started: Instant::now(),
+        phase: ServicePhase::Starting,
+        exit: None,
+      },
+    );
+    let ready = readiness::wait(&mut tree, (&service, &values), port, (&log, ended));
     match ready {
       Ok(()) => Ok(Running { tree, url, lease }),
       Err(why) => {
+        // A program that cannot be watched any more is stopped all the same; its status then says stopped.
+        let exit = tree.exited().unwrap_or(None).map(|status| status.code());
+        self.state.note(name, ServicePhase::Stopped, exit);
         let stopped = match tree.stop() {
           Ok(()) => "it was stopped with everything it started".to_owned(),
           Err(error) => format!("stopping it with everything it started failed: {error}"),
         };
-        Err(format!("the service `{name}` {why}; {stopped}"))
+        let output = log.lock().excerpt(FAILED_START_LINES, 0);
+        Err(format!(
+          "the service `{name}` {why}; {stopped}. Its last output: {output}"
+        ))
       }
     }
   }
@@ -80,8 +103,8 @@ impl StepServices {
     }
   }
 
-  /// Starts `service`'s program with `values`, held with everything it starts.
-  fn spawn(&self, service: &Service, values: &RunValues) -> Result<ProcessTree, String> {
+  /// Starts `service`'s program with `values`, held with everything it starts; and the secrets it was given.
+  fn spawn(&self, service: &Service, values: &RunValues) -> Result<(ProcessTree, Vec<SecretVariable>), String> {
     let name = service.name();
     let folder = service.folder_in(&self.worktree);
     if !folder.is_dir() {
@@ -119,10 +142,14 @@ impl StepServices {
       )
       .map_err(|error| format!("the service `{name}` cannot be started: {error}"))?;
     let mut command = process.command;
+    let mut secrets = Vec::new();
     for (variable, secret) in &process.secrets {
-      command = command.with_secret_env(self.secret(variable, secret)?);
+      let secret = self.secret(variable, secret)?;
+      command = command.with_secret_env(secret.clone());
+      secrets.push(secret);
     }
-    ProcessTree::start(&command).map_err(|error| format!("the service `{name}` did not start: {error}"))
+    let tree = ProcessTree::start(&command).map_err(|error| format!("the service `{name}` did not start: {error}"))?;
+    Ok((tree, secrets))
   }
 
   /// The value of the project secret `secret` for the variable `variable`, read from the keychain.

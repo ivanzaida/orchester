@@ -12,7 +12,7 @@
 //! | a QA copy of the app, built from the worktree (`start_qa_app`), network on | asks; Approve similar is kept to the script's content | not offered |
 //! | a QA copy of the app, network off | not offered | not offered |
 //! | one of the project's published services (`start_service`), network on | asks | asks |
-//! | stopping a service the step started (`stop_service`), with `start_service` | runs | runs |
+//! | stopping or looking at a service the step started (`stop_service`, `service_status`, `service_logs`), with `start_service` | runs | runs |
 //! | the service tools, network off or no published service | not offered | not offered |
 //! | the browser tools (`browser_*`), the profile's Browser and network on | runs or asks per call, by the page's site ([`browser::decide`]) | the same |
 //! | the browser tools, Browser or network off | not offered | not offered |
@@ -115,6 +115,8 @@ impl StepTools {
             | OrchesterTool::ReadSkill
             | OrchesterTool::StartService
             | OrchesterTool::StopService
+            | OrchesterTool::ServiceStatus
+            | OrchesterTool::ServiceLogs
         )
       })
       .filter_map(|tool| decide(tool, permissions).map(|policy| (tool, policy)))
@@ -135,9 +137,9 @@ impl StepTools {
     }
   }
 
-  /// These tools and `start_service` and `stop_service`, for a step with `permissions` of a project that publishes
-  /// `services`: none without a service, or when the step may not start one ([`decide`]). A start asks; a stop of what
-  /// the step started never does.
+  /// These tools and the service tools (`start_service`, `stop_service`, `service_status`, `service_logs`), for a step
+  /// with `permissions` of a project that publishes `services`: none without a service, or when the step may not start
+  /// one ([`decide`]). A start asks; stopping or looking at what the step started never does.
   #[must_use]
   pub fn with_services(mut self, permissions: &AgentPermissions, services: &[ServiceName]) -> Self {
     let Some(policy) = decide(OrchesterTool::StartService, permissions).filter(|_| !services.is_empty()) else {
@@ -154,6 +156,8 @@ impl StepTools {
       [
         (OrchesterTool::StartService, policy),
         (OrchesterTool::StopService, ToolPolicy::Runs),
+        (OrchesterTool::ServiceStatus, ToolPolicy::Runs),
+        (OrchesterTool::ServiceLogs, ToolPolicy::Runs),
       ],
     );
     self.services = services.iter().map(|name| name.as_str().to_owned()).collect();
@@ -340,11 +344,14 @@ impl StepTools {
     }
     if self.policy(OrchesterTool::StartService).is_some() {
       text.push_str(&format!(
-        " Never start the project's servers by shell: start one with {}(name) ({}), which waits until it is ready \
-         and returns its url and port, and stop it with {}(name). Orchester stops them when your turn ends or waits \
-         for a person.",
+        " Start the project's servers only with {}(name) ({}), never by shell: it waits until one is ready and \
+         returns its url and port. See whether a server you started runs with {}(name), read its output with \
+         {}(name, tail, since) and stop it with {}(name), not with shell commands such as ps, tasklist, kill or \
+         taskkill. Orchester stops them when your turn ends or waits for a person.",
         OrchesterTool::StartService.called(claude),
         self.services.join(", "),
+        OrchesterTool::ServiceStatus.called(claude),
+        OrchesterTool::ServiceLogs.called(claude),
         OrchesterTool::StopService.called(claude),
       ));
     }

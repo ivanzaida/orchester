@@ -1,12 +1,13 @@
-//! `start_service` and `stop_service`: offered with the project's published services to a step that reaches the
-//! network, a start asks and auto-approval never answers it, a stop never asks, and both take only a published
-//! service's name.
+//! The service tools: offered with the project's published services to a step that reaches the network, a start asks
+//! and auto-approval never answers it, a stop, `service_status` and `service_logs` never ask, and all take only a
+//! published service's name; `service_logs` takes a capped tail. The prompt tells the agent to start servers only
+//! through `start_service` and to look at and stop them with these tools, not by shell.
 
 use orchester_core::{
   orchester_tools::{OrchesterTool, StepTools, ToolCall, ToolCallError, ToolPolicy, auto_approvable},
   permission::NetworkAccess,
   resource::RepositoryAccess,
-  service::ServiceName,
+  service::{DEFAULT_TAIL, MAX_TAIL, ServiceName},
 };
 use serde_json::json;
 
@@ -30,17 +31,26 @@ fn step(repository: RepositoryAccess, services: &[&str]) -> StepTools {
 fn service_tools_come_with_published_services_and_the_network() {
   let offline = permissions(RepositoryAccess::Write);
   let none = StepTools::for_step(&offline, &[]).with_services(&offline, &names(&["web"]));
-  assert_eq!(none.policy(OrchesterTool::StartService), None, "network off");
-  assert_eq!(none.policy(OrchesterTool::StopService), None, "network off");
-  let empty = step(RepositoryAccess::Write, &[]);
-  assert_eq!(empty.policy(OrchesterTool::StartService), None, "no service");
+  for tool in [
+    OrchesterTool::StartService,
+    OrchesterTool::StopService,
+    OrchesterTool::ServiceStatus,
+    OrchesterTool::ServiceLogs,
+  ] {
+    assert_eq!(none.policy(tool), None, "network off");
+    assert_eq!(step(RepositoryAccess::Write, &[]).policy(tool), None, "no service");
+  }
   for repository in [RepositoryAccess::Write, RepositoryAccess::ReadOnly] {
     let offered = step(repository, &["web", "api"]);
     assert_eq!(offered.policy(OrchesterTool::StartService), Some(ToolPolicy::Asks));
     assert_eq!(offered.policy(OrchesterTool::StopService), Some(ToolPolicy::Runs));
+    assert_eq!(offered.policy(OrchesterTool::ServiceStatus), Some(ToolPolicy::Runs));
+    assert_eq!(offered.policy(OrchesterTool::ServiceLogs), Some(ToolPolicy::Runs));
   }
   assert!(!auto_approvable("Orchester", "start_service"));
   assert!(auto_approvable("Orchester", "stop_service"));
+  assert!(auto_approvable("Orchester", "service_status"));
+  assert!(auto_approvable("Orchester", "service_logs"));
 }
 
 #[test]
@@ -74,30 +84,101 @@ fn service_tools_take_only_a_published_services_name() {
 }
 
 #[test]
+fn service_status_and_logs_take_a_published_service_and_a_capped_tail() {
+  let offered = step(RepositoryAccess::Write, &["web"]);
+  let web = || ServiceName::new("web").expect("a name");
+  assert_eq!(
+    ToolCall::parse("service_status", &json!({"name": "web"}), &offered),
+    Ok(ToolCall::ServiceStatus(web()))
+  );
+  assert_eq!(
+    ToolCall::parse("service_logs", &json!({"name": "web"}), &offered),
+    Ok(ToolCall::ServiceLogs {
+      name: web(),
+      tail: DEFAULT_TAIL,
+      since: 0
+    })
+  );
+  assert_eq!(
+    ToolCall::parse(
+      "service_logs",
+      &json!({"name": "web", "tail": MAX_TAIL, "since": 42}),
+      &offered
+    ),
+    Ok(ToolCall::ServiceLogs {
+      name: web(),
+      tail: MAX_TAIL,
+      since: 42
+    })
+  );
+  for tool in ["service_status", "service_logs"] {
+    assert_eq!(
+      ToolCall::parse(tool, &json!({"name": "api"}), &offered),
+      Err(ToolCallError::UnknownService("api".to_owned()))
+    );
+  }
+  for wrong in [
+    json!({"name": "web", "tail": MAX_TAIL + 1}),
+    json!({"name": "web", "tail": 0}),
+    json!({"name": "web", "since": -1}),
+    json!({"name": "web", "grep": "error"}),
+  ] {
+    assert!(
+      matches!(
+        ToolCall::parse("service_logs", &wrong, &offered),
+        Err(ToolCallError::Invalid { .. })
+      ),
+      "{wrong}"
+    );
+  }
+}
+
+#[test]
 fn service_tools_list_the_services_and_point_the_agent_at_them() {
   let offered = step(RepositoryAccess::Write, &["web", "api"]);
   let listed = offered.mcp_tools();
-  let start = listed
-    .iter()
-    .find(|tool| tool["name"] == "start_service")
-    .expect("listed");
+  let tool = |name: &str| {
+    listed
+      .iter()
+      .find(|tool| tool["name"] == name)
+      .unwrap_or_else(|| panic!("{name} is listed"))
+  };
+  for name in ["start_service", "stop_service", "service_status", "service_logs"] {
+    assert_eq!(
+      tool(name)["inputSchema"]["properties"]["name"]["enum"],
+      json!(["web", "api"]),
+      "{name}"
+    );
+  }
+  assert_eq!(tool("stop_service")["annotations"]["destructiveHint"], json!(true));
+  for name in ["service_status", "service_logs"] {
+    assert_eq!(tool(name)["annotations"]["readOnlyHint"], json!(true), "{name}");
+    assert_eq!(tool(name)["annotations"]["destructiveHint"], json!(false), "{name}");
+  }
   assert_eq!(
-    start["inputSchema"]["properties"]["name"]["enum"],
-    json!(["web", "api"])
+    tool("service_logs")["inputSchema"]["properties"]["tail"]["maximum"],
+    json!(MAX_TAIL)
   );
-  let stop = listed
-    .iter()
-    .find(|tool| tool["name"] == "stop_service")
-    .expect("listed");
-  assert_eq!(stop["annotations"]["destructiveHint"], json!(true));
   let order: Vec<&str> = offered.offered().iter().map(|(tool, _)| tool.as_str()).collect();
   let at = |name: &str| order.iter().position(|tool| *tool == name).expect("offered");
   assert_eq!(at("stop_service"), at("start_service") + 1);
-  assert!(at("start_service") < at("get_task"));
-  let paragraph = offered.prompt_paragraph(true);
-  assert!(
-    paragraph.contains("mcp__Orchester__start_service(name) (web, api)"),
-    "{paragraph}"
-  );
-  assert!(paragraph.contains("mcp__Orchester__stop_service(name)"), "{paragraph}");
+  assert!(at("service_logs") < at("get_task"));
+}
+
+#[test]
+fn service_prompt_rule_says_to_use_the_service_tools_instead_of_the_shell() {
+  let offered = step(RepositoryAccess::Write, &["web", "api"]);
+  for (claude, prefix) in [(true, "mcp__Orchester__"), (false, "")] {
+    let paragraph = offered.prompt_paragraph(claude);
+    for expected in [
+      format!("Start the project's servers only with {prefix}start_service(name) (web, api), never by shell"),
+      format!("with {prefix}service_status(name)"),
+      format!("with {prefix}service_logs(name, tail, since)"),
+      format!("stop it with {prefix}stop_service(name), not with shell commands"),
+    ] {
+      assert!(paragraph.contains(&expected), "{expected}\n{paragraph}");
+    }
+  }
+  let none = step(RepositoryAccess::Write, &[]).prompt_paragraph(true);
+  assert!(!none.contains("start_service"), "{none}");
 }
