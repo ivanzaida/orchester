@@ -68,7 +68,10 @@ async fn storage_lists_what_could_be_cleaned_only_while_the_disk_guard_holds() {
   let limit = NonZeroU32::new(3).expect("above zero");
   // A person's upkeep holds it: the runner gives back only what runs held when it starts.
   let idle = Holder::Run { run: small.id() };
-  fixture.db.borrow_workspace(Holder::Upkeep, None, limit, at(7)).expect("borrow");
+  fixture
+    .db
+    .borrow_workspace(Holder::Upkeep, None, limit, at(7))
+    .expect("borrow");
   fixture.db.borrow_workspace(idle, None, limit, at(8)).expect("borrow");
   fixture.db.return_workspace(idle, at(9)).expect("give back");
   let number = |n: u32| WorkspaceNumber::new(n).expect("above zero");
@@ -78,7 +81,12 @@ async fn storage_lists_what_could_be_cleaned_only_while_the_disk_guard_holds() {
     project: fixture.db.project().clone(),
     repo_root: root.clone(),
   };
-  let runners = Runners::new(programs().runner.clone(), Handle::current(), Activity::new(), SessionEnd::Clean);
+  let runners = Runners::new(
+    programs().runner.clone(),
+    Handle::current(),
+    Activity::new(),
+    SessionEnd::Clean,
+  );
   let folders = ExecutorFolders::new(runners.clone(), project);
 
   let calm = read(&folders, &root, 500).await;

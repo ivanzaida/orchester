@@ -229,10 +229,7 @@ fn folder_row(
 
 /// The worktrees of runs made before workspaces, or while they are off, that are still there: `found`, as the
 /// project's runner listed them with their sizes, of the runs the project knows.
-pub(crate) fn old_worktrees(
-  db: &ProjectDb,
-  found: Vec<(RunId, Option<u64>)>,
-) -> Result<Vec<OldWorktree>, StoreError> {
+pub(crate) fn old_worktrees(db: &ProjectDb, found: Vec<(RunId, Option<u64>)>) -> Result<Vec<OldWorktree>, StoreError> {
   let mut old = Vec::new();
   for (run, bytes) in found {
     let Some(stored) = db.run(run).map_err(run_store_error)? else {

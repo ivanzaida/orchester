@@ -21,7 +21,10 @@ pub enum FoldersCommand {
   Discard { number: WorkspaceNumber },
   /// "Keep them in a branch": commits the uncommitted changes of stranded workspace `number`, which the desktop
   /// reserved, on the new branch `branch`. Answered with [`FoldersReply::Kept`].
-  Keep { number: WorkspaceNumber, branch: BranchName },
+  Keep {
+    number: WorkspaceNumber,
+    branch: BranchName,
+  },
 }
 
 /// The answer to a [`FoldersCommand`] ([`crate::Reply::Folders`]); a git or file error is a
@@ -31,7 +34,9 @@ pub enum FoldersCommand {
 pub enum FoldersReply {
   Sizes(FolderSizes),
   /// The bytes the cleaning freed.
-  Cleaned { freed: u64 },
+  Cleaned {
+    freed: u64,
+  },
   Discarded,
   Kept,
 }

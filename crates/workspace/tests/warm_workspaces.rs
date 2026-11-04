@@ -69,7 +69,10 @@ fn repository_with_workspace(root: &Path) -> WorkspaceNumber {
   assert!(git(root, &["add", "--all"]));
   assert!(git(root, &["commit", "--quiet", "-m", "start"]));
   let number = WorkspaceNumber::new(1).expect("above zero");
-  assert!(git(root, &["worktree", "add", "--quiet", "--detach", &number.relative(), "HEAD"]));
+  assert!(git(
+    root,
+    &["worktree", "add", "--quiet", "--detach", &number.relative(), "HEAD"]
+  ));
   let build = number.path(root).join("build");
   fs::create_dir_all(&build).expect("the build folder");
   fs::write(build.join("out.bin"), vec![0_u8; 10_000]).expect("build output");
@@ -89,19 +92,31 @@ async fn warm_workspaces_are_sized_cleaned_kept_and_discarded_by_the_runner() {
   let root = fixture.repo.path().to_path_buf();
   let number = repository_with_workspace(&root);
   let limit = NonZeroU32::new(2).expect("above zero");
-  fixture.db.borrow_workspace(Holder::Upkeep, None, limit, at(1)).expect("borrow");
+  fixture
+    .db
+    .borrow_workspace(Holder::Upkeep, None, limit, at(1))
+    .expect("borrow");
   fixture.db.release_workspace(number, Holder::Upkeep).expect("release");
   let project = OpenProject {
     project: fixture.db.project().clone(),
     repo_root: root.clone(),
   };
-  let runners = Runners::new(programs().runner.clone(), Handle::current(), Activity::new(), SessionEnd::Clean);
+  let runners = Runners::new(
+    programs().runner.clone(),
+    Handle::current(),
+    Activity::new(),
+    SessionEnd::Clean,
+  );
   let folders = ExecutorFolders::new(runners.clone(), project);
   let path = number.path(&root);
 
   let view = tokio::task::block_in_place(|| warm_workspaces::read(&root, &Disk, &folders)).expect("read");
   assert_eq!(view.rows.len(), 1);
-  assert_eq!(view.rows[0].bytes, folder_size(&path).ok(), "the runner's size is the folder's own");
+  assert_eq!(
+    view.rows[0].bytes,
+    folder_size(&path).ok(),
+    "the runner's size is the folder's own"
+  );
   assert!(view.old_worktrees.is_empty());
 
   let freed = tokio::task::block_in_place(|| actions::clean(&root, &folders, &[number])).expect("clean");
@@ -111,12 +126,20 @@ async fn warm_workspaces_are_sized_cleaned_kept_and_discarded_by_the_runner() {
 
   fs::write(path.join("a.txt"), "two\n").expect("a change a stopped run left");
   strand(&mut fixture, number);
-  let kept = tokio::task::block_in_place(|| actions::resolve_leftovers(&root, &folders, number, Leftovers::KeepInBranch))
-    .expect("keep");
+  let kept =
+    tokio::task::block_in_place(|| actions::resolve_leftovers(&root, &folders, number, Leftovers::KeepInBranch))
+      .expect("keep");
   let branch = BranchName::new("orchester/rescue/workspace-1").expect("a valid branch name");
   assert_eq!(kept, Some(branch));
-  assert!(git(&root, &["rev-parse", "--verify", "--quiet", "orchester/rescue/workspace-1"]));
-  assert_eq!(fs::read_to_string(path.join("a.txt")).expect("read"), "two\n", "kept as it was");
+  assert!(git(
+    &root,
+    &["rev-parse", "--verify", "--quiet", "orchester/rescue/workspace-1"]
+  ));
+  assert_eq!(
+    fs::read_to_string(path.join("a.txt")).expect("read"),
+    "two\n",
+    "kept as it was"
+  );
 
   fs::write(path.join("stray.txt"), "left\n").expect("another change");
   strand(&mut fixture, number);

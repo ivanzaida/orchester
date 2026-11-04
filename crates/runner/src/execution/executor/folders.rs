@@ -43,7 +43,8 @@ impl Scheduler {
 fn serve(execution: &ExecutionRoot, command: FoldersCommand) -> Result<FoldersReply, Rejection> {
   let runner = ProcessRunner::new(GIT_TIMEOUT);
   let workspaces = Workspaces::new(&runner, Path::new(GIT), execution.repository());
-  let git_failed = |number: WorkspaceNumber| move |error: WorkspaceGitError| failed(&format!("workspace {number}"), &error);
+  let git_failed =
+    |number: WorkspaceNumber| move |error: WorkspaceGitError| failed(&format!("workspace {number}"), &error);
   match command {
     FoldersCommand::Sizes { workspaces } => Ok(FoldersReply::Sizes(sizes(execution, workspaces))),
     FoldersCommand::Clean { number } => {
@@ -54,7 +55,9 @@ fn serve(execution: &ExecutionRoot, command: FoldersCommand) -> Result<FoldersRe
       Ok(FoldersReply::Cleaned { freed })
     }
     FoldersCommand::Discard { number } => {
-      workspaces.discard(&execution.workspace(number)).map_err(git_failed(number))?;
+      workspaces
+        .discard(&execution.workspace(number))
+        .map_err(git_failed(number))?;
       Ok(FoldersReply::Discarded)
     }
     FoldersCommand::Keep { number, branch } => {
