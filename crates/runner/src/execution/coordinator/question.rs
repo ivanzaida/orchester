@@ -14,7 +14,7 @@ use orchester_core::{
 use orchester_ipc::{Event, Rejection};
 use orchester_store::{ProjectDb, StoreError};
 
-use super::{Notifier, Scheduler, failed, idle};
+use super::{Notifier, Scheduler, failed, idle, sink::LocalSink};
 use crate::execution::executor::{
   control::Control,
   question::{end_unheld, refusal},
@@ -65,7 +65,8 @@ impl Scheduler {
   /// No task executes `run`, so none of its agents waits in its turn: question request `id` ends if it
   /// still waits, and the answer is refused.
   fn end_unheld_question(&self, db: &mut ProjectDb, run: RunId, id: &str) -> Rejection {
-    match end_unheld(db, run, id) {
+    let mut sink = LocalSink::new(&self.inner.project_root);
+    match end_unheld((db, &mut sink), run, id) {
       Ok((ended, refusal)) => {
         if ended {
           announce(db, &self.inner.notifier, run);
