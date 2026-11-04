@@ -104,7 +104,11 @@ impl RunRecords {
       provenance: provenance.clone(),
       at: Timestamp::now(),
     };
-    let answer = self.sink.lock().keep_memory(record).map_err(|error| unreadable(&error))?;
+    let answer = self
+      .sink
+      .lock()
+      .keep_memory(record)
+      .map_err(|error| unreadable(&error))?;
     let MemoryAnswer::Note { memory, status } = answer else {
       return Err(ToolResult::unavailable("memory cannot be kept: no note was kept"));
     };
