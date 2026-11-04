@@ -27,6 +27,7 @@ use crate::{
   chat::ChatTools,
   rejection::Rejection,
   work::WorkSummary,
+  worktree::WorktreeChangesRead,
 };
 
 /// Identifies a request within one connection, so its reply can be matched.
@@ -278,6 +279,10 @@ pub enum Command {
   /// carried out, [`Rejection::BrowserUnavailable`] when the browser cannot start, [`Rejection::NoSuchTab`] for a tab
   /// it does not have, or [`Rejection::Failed`] when the browser refused.
   Browser(BrowserCommand),
+  /// Reads what the worktree of run `run` holds beyond its checked-out commit, for the task page's Changes and
+  /// `get_changes` (protocol 40): only the runner reads a run's worktree. Answered with [`Reply::WorktreeChanges`],
+  /// whatever it found, a failed read included.
+  ReadWorktreeChanges { run: RunId },
 }
 
 /// Which session a runner serves, from the desktop's side.
@@ -467,6 +472,11 @@ pub enum Reply {
   ErrorReportsSet,
   /// The answer to [`Command::Browser`].
   Browser(BrowserReply),
+  /// The answer to [`Command::ReadWorktreeChanges`]: what the worktree of `run` holds beyond its commit.
+  WorktreeChanges {
+    run: RunId,
+    read: WorktreeChangesRead,
+  },
   Rejected(Rejection),
 }
 
