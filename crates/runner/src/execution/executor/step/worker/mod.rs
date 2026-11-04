@@ -352,6 +352,11 @@ impl Watch {
     self.sink.activity(ActivityRecord::new(&self.invocation, events))
   }
 
+  /// The coordinator's sink, which writes the rows the desktop owns that an answer leaves: its rules, Always allow.
+  pub(super) fn sink(&mut self) -> &mut dyn Sink {
+    &mut *self.sink
+  }
+
   /// The mode this agent's requests are answered in now (`docs/design/approval-modes.md`): by its profile's approval
   /// mode as it started, the project's *Allow Autopilot* and its run's switch to Manual, read again at each request.
   pub(super) fn approval_mode(&self) -> Result<EffectiveMode, StoreError> {

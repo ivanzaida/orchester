@@ -461,6 +461,7 @@ impl RunTask {
             .another()
             .map_err(|error| problem(format!("cannot reach the run's records: {error}")))?,
         ),
+        sink: Mutex::new(self.sink.another()),
         run: self.run.id(),
         task: self.run.task(),
         execution,

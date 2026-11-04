@@ -6,7 +6,8 @@
 use std::path::{Path, PathBuf};
 
 use orchester_store::{
-  ActivityRecord, InvocationRecord, InvocationStart, ProjectDb, RunLogRecord, RunStoreError, StoreError,
+  ActivityRecord, AlwaysAllowAnswer, AlwaysAllowRecord, InvocationRecord, InvocationStart, MemoryAnswer, MemoryRecord,
+  ModelRequirement, ProjectDb, RuleAnswer, RuleRecord, RunLogRecord, RunStoreError, StoreError,
 };
 
 use crate::execution::executor::sink::Sink;
@@ -63,13 +64,47 @@ impl Sink for LocalSink {
     self.write(|db| db.write_invocation(&record))
   }
 
+  fn rule(&mut self, record: RuleRecord) -> Result<RuleAnswer, StoreError> {
+    #[cfg(feature = "test-agent")]
+    survives_sending(&record);
+    let answer = self.write(|db| db.write_rule(&record))?;
+    #[cfg(feature = "test-agent")]
+    survives_sending(&answer);
+    Ok(answer)
+  }
+
+  fn always_allow(&mut self, record: AlwaysAllowRecord) -> Result<AlwaysAllowAnswer, StoreError> {
+    #[cfg(feature = "test-agent")]
+    survives_sending(&record);
+    let answer = self.write(|db| db.write_always_allow(&record))?;
+    #[cfg(feature = "test-agent")]
+    survives_sending(&answer);
+    Ok(answer)
+  }
+
+  fn model_requirement(&mut self, requirement: ModelRequirement) -> Result<(), StoreError> {
+    #[cfg(feature = "test-agent")]
+    survives_sending(&requirement);
+    self.write(|db| db.write_model_requirement(&requirement))
+  }
+
+  fn memory(&mut self, record: MemoryRecord) -> Result<MemoryAnswer, StoreError> {
+    #[cfg(feature = "test-agent")]
+    survives_sending(&record);
+    let answer = self.write(|db| db.write_memory(&record))?;
+    #[cfg(feature = "test-agent")]
+    survives_sending(&answer);
+    Ok(answer)
+  }
+
   fn another(&self) -> Box<dyn Sink> {
     Box::new(Self::new(&self.root))
   }
 }
 
-/// In the runner's own tests every invocation record crosses the sink as JSON and must arrive unchanged, as a
-/// coordinator in another process would receive it (`docs/architecture/remote-runners.md`, rule 4).
+/// In the runner's own tests every record and request crosses the sink as JSON and must arrive unchanged, as a
+/// coordinator in another process would receive it (`docs/architecture/remote-runners.md`, rule 4); so does every
+/// answer on its way back.
 #[cfg(feature = "test-agent")]
 fn survives_sending<T>(record: &T)
 where

@@ -46,6 +46,7 @@ mod orchestrator_usage;
 mod orchestrator_waits;
 mod organization;
 mod organized_drafts;
+mod owned_records;
 mod plan_limits;
 mod plans;
 mod project_rules;
@@ -121,6 +122,9 @@ pub use self::{
   orchestrator_reports::KeptReport,
   orchestrator_switches::OrchestratorSwitch,
   orchestrator_waits::KeptWait,
+  owned_records::{
+    AlwaysAllowAnswer, AlwaysAllowRecord, MemoryAnswer, MemoryRecord, ModelRequirement, RuleAnswer, RuleRecord,
+  },
   read_only::ReadOnlyProjectDb,
   reference_bindings::{Bound, BoundBy, BoundReference, ReferenceBinding},
   resolutions::ResolutionStart,

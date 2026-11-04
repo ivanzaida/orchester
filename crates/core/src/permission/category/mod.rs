@@ -117,8 +117,9 @@ impl CommandCategory {
   }
 }
 
-/// A command line split into its simple commands, each classified.
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// A command line split into its simple commands, each classified. It is sent as it was classified, so Always allow
+/// checks the same parts where it is applied (`docs/architecture/remote-runners.md`, rule 3).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ClassifiedCommand {
   parts: Vec<CommandPart>,
   /// The command line as asked about.

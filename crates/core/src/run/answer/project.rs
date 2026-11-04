@@ -36,10 +36,30 @@ impl ProjectRuleId {
 }
 
 /// What a rule of the project approves: Orchester's `start_qa_app`, while the QA script is at one git blob. Stored as
-/// the [`RuleScope`] Approve similar keeps for the same call.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+/// the [`RuleScope`] Approve similar keeps for the same call, and sent as it.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(try_from = "RuleScope", into = "RuleScope")]
 pub struct ProjectScope {
   script: String,
+}
+
+/// A [`RuleScope`] that names no rule of the project.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
+#[error("not a rule of start_qa_app kept to a script")]
+pub struct NotProjectScope;
+
+impl TryFrom<RuleScope> for ProjectScope {
+  type Error = NotProjectScope;
+
+  fn try_from(scope: RuleScope) -> Result<Self, NotProjectScope> {
+    Self::stored(scope).ok_or(NotProjectScope)
+  }
+}
+
+impl From<ProjectScope> for RuleScope {
+  fn from(scope: ProjectScope) -> Self {
+    scope.rule_scope()
+  }
 }
 
 impl ProjectScope {

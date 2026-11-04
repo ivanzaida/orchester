@@ -52,7 +52,8 @@ pub enum MemoryScope {
 }
 
 /// Where a record stands. Only [`MemoryStatus::Active`] records reach agents.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum MemoryStatus {
   /// Written by an agent while its scope's writes are saved after approval; waits for a person.
   Proposed,
@@ -102,7 +103,7 @@ impl fmt::Display for MemoryStatus {
 }
 
 /// The agent that wrote a record: its profile, and the run, step and execution it worked in.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct AgentProvenance {
   pub profile: ResourceId,
   pub run: RunId,

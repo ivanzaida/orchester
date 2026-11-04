@@ -2,19 +2,20 @@
 //! and for a gated step when its plan is approved ([`orchester_core::memory::Handoff`]). The handoff
 //! is read from the agent's final message in the transcript. One that cannot be kept (it holds a
 //! secret's value, or the keychain cannot be read to check it) is reported in the transcript; the
-//! run goes on without it.
+//! run goes on without it. The handoff is screened here, against the secret values of the computer the run executes
+//! on, and the coordinator keeps it (`docs/architecture/remote-runners.md`, rule 3).
 
 use orchester_core::{
   connection::stream::{AgentEvent, MemoryNotSavedReason, RunnerProblem},
   id::StepExecutionId,
-  memory::{AgentProvenance, Handoff, HandoffWrite, MemoryFilter, MemoryStore, ScopeFilter, SecretScreen, StepFate},
+  memory::{AgentProvenance, Handoff, SecretScreen, StepFate},
   run::{Run, StepExecutor, StepResult},
   secret::SecretVault,
   store::{ActivityStore, SecretStore},
   time::Timestamp,
 };
 use orchester_ipc::Event;
-use orchester_store::{ActivityRecord, ProjectDb, StoreError};
+use orchester_store::{ActivityRecord, MemoryRecord, ProjectDb, StoreError};
 
 use super::{Notifier, sink::Sink};
 
@@ -57,7 +58,6 @@ impl Keeper<'_> {
     let Some(provenance) = provenance(run, execution) else {
       return Ok(());
     };
-    let settings = self.db.memory_settings()?;
     let secrets = self.db.secrets()?;
     let screen = match SecretScreen::load(self.db.project().id(), &secrets, self.vault) {
       Ok(screen) => screen,
@@ -68,34 +68,23 @@ impl Keeper<'_> {
         return self.report(run, execution, reason);
       }
     };
-    let filter = MemoryFilter {
-      scope: ScopeFilter::Task(run.task()),
-      status: None,
-      pinned_only: false,
-    };
-    let write = HandoffWrite {
-      task: run.task(),
-      provenance: &provenance,
-      sources: &[entry],
-      fate,
-      settings: &settings,
-      screen: &screen,
-      now: Timestamp::now(),
-    };
-    // The task's records are read and changed in one transaction: no person's decision on them
-    // comes between.
-    match self
-      .db
-      .change_memories(&filter, |earlier| handoff.changes(&write, earlier))?
-    {
-      Ok(()) => Ok(()),
-      Err(error) => {
-        let reason = MemoryNotSavedReason::ContainsSecret {
-          secret: error.secret.to_string(),
-        };
-        self.report(run, execution, reason)
-      }
+    if let Err(error) = handoff.screen(fate, &screen) {
+      let reason = MemoryNotSavedReason::ContainsSecret {
+        secret: error.secret.to_string(),
+      };
+      return self.report(run, execution, reason);
     }
+    // The coordinator reads the task's records and changes them in one transaction: no person's decision on them
+    // comes between.
+    self.sink.memory(MemoryRecord::Handoff {
+      handoff,
+      task: run.task(),
+      provenance,
+      sources: vec![entry],
+      fate,
+      at: Timestamp::now(),
+    })?;
+    Ok(())
   }
 
   /// Reports in `execution`'s transcript, under its latest invocation, why its handoff was not kept.

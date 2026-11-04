@@ -5,6 +5,8 @@
 //! always waits for a person's approval, whatever the setting, so no agent takes over a person's record or a pin on
 //! its own. A note that holds a secret's value is refused as a whole.
 
+use serde::{Deserialize, Serialize};
+
 use super::{
   AgentProvenance, AgentWrite, Confidence, ContainsSecret, Memory, MemoryAuthor, MemoryChanges, MemoryContent,
   MemoryScope, MemorySettings, MemoryStatus, SecretScreen, WritePolicy,
@@ -12,7 +14,8 @@ use super::{
 use crate::{id::TaskId, time::Timestamp};
 
 /// Whose memory a note goes to.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum NoteScope {
   /// The run's task.
   Task,
@@ -21,7 +24,7 @@ pub enum NoteScope {
 }
 
 /// What a `save_memory` call asks to keep.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MemoryNote {
   scope: NoteScope,
   content: MemoryContent,
@@ -48,6 +51,11 @@ impl MemoryNote {
       NoteScope::Task => MemoryScope::Task(task),
       NoteScope::Project => MemoryScope::Project,
     }
+  }
+
+  /// Whether `screen` lets the note be kept: [`Self::changes`] refuses it with this error, before anything else.
+  pub fn screen(&self, screen: &SecretScreen) -> Result<(), ContainsSecret> {
+    screen.check(self.content.clone()).map(drop)
   }
 
   /// What keeping the note changes, given the records of its scope now (`earlier`), and the note's record as kept.

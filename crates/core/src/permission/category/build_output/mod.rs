@@ -34,7 +34,7 @@ const MOVES_TARGET: [&str; 4] = ["target-dir", "\\u", "\\U", "include"];
 const MAY_ALIAS: [&str; 4] = ["alias", "\\u", "\\U", "include"];
 
 /// A target directory a Cargo build writes its output into, resolved.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct BuildOutput {
   folder: PathBuf,
   in_worktree: Option<PathBuf>,

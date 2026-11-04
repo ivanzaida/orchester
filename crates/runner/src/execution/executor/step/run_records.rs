@@ -3,33 +3,37 @@
 //! record, active or proposed as the project's memory setting says, refused when it holds a secret's value;
 //! `report_progress` keeps the step's progress line, the invocation's secret values removed. Each call opens a
 //! connection of its own to the project database (the run's task loop owns the runner's) and blocks on it, off the
-//! async workers; the task's messages are asked through the invocation's own coordinator link.
+//! async workers; the task's messages are asked through the invocation's own coordinator link. A note is screened
+//! here and kept by the coordinator, through the invocation's own sink (`docs/architecture/remote-runners.md`,
+//! rule 3).
 
 use std::{path::PathBuf, sync::Arc};
 
 use orchester_core::{
   command::{SecretVariable, redact_secrets},
   id::{RunId, StepExecutionId, TaskId},
-  memory::{
-    AgentProvenance, ContainsSecret, Memory, MemoryFilter, MemoryNote, MemoryScope, MemoryStatus, MemoryStore,
-    NoteWrite, ScopeFilter, SecretScreen,
-  },
+  memory::{AgentProvenance, MemoryNote, MemoryStatus, SecretScreen},
   orchester_tools::{TaskView, ToolResult},
   run::StepProgress,
   secret::SecretVault,
   store::{RunStore, SecretStore},
   time::Timestamp,
 };
-use orchester_store::ProjectDb;
+use orchester_store::{MemoryAnswer, MemoryRecord, ProjectDb};
 use parking_lot::Mutex;
 
-use super::super::link::{CoordinatorLink, messages as message_link};
+use super::super::{
+  link::{CoordinatorLink, messages as message_link},
+  sink::Sink,
+};
 
 /// The run, task and step execution an invocation's agent works on, and where their records are.
 pub(super) struct RunRecords {
   pub(super) root: PathBuf,
   /// Where the task's messages are asked for: a link of the invocation's own, which its tool calls share.
   pub(super) link: Mutex<Box<dyn CoordinatorLink + Send>>,
+  /// Where the memory records its agent keeps are sent: a sink of the invocation's own.
+  pub(super) sink: Mutex<Box<dyn Sink>>,
   pub(super) run: RunId,
   pub(super) task: TaskId,
   pub(super) execution: StepExecutionId,
@@ -80,48 +84,36 @@ impl RunRecords {
       .provenance
       .as_ref()
       .ok_or_else(|| ToolResult::unavailable("only an agent step keeps memory"))?;
-    let mut db = self.db()?;
+    let db = self.db()?;
     let unreadable =
       |error: &dyn std::error::Error| ToolResult::unavailable(&format!("memory cannot be kept: {error}"));
-    let settings = db.memory_settings().map_err(|error| unreadable(&error))?;
     let secrets = db.secrets().map_err(|error| unreadable(&error))?;
     let screen =
       SecretScreen::load(db.project().id(), &secrets, self.vault.as_ref()).map_err(|error| unreadable(&error))?;
-    let write = NoteWrite {
-      task: self.task,
-      provenance,
-      settings: &settings,
-      screen: &screen,
-      now: Timestamp::now(),
-    };
-    let filter = MemoryFilter {
-      scope: match note.scope(self.task) {
-        MemoryScope::Task(task) => ScopeFilter::Task(task),
-        MemoryScope::Project => ScopeFilter::Project,
-      },
-      status: None,
-      pinned_only: false,
-    };
-    let mut kept: Option<Memory> = None;
-    let changed = db
-      .change_memories(&filter, |earlier| -> Result<_, ContainsSecret> {
-        let (changes, record) = note.changes(&write, &earlier)?;
-        kept = Some(record);
-        Ok(changes)
-      })
-      .map_err(|error| unreadable(&error))?;
-    if let Err(contains) = changed {
+    if let Err(contains) = note.screen(&screen) {
       return Ok(ToolResult::unavailable(&format!(
         "nothing was kept: the text holds the value of secret `{}`",
         contains.secret
       )));
     }
-    let kept = kept.expect("a kept note's record is set when its changes are made");
-    let status = match kept.status() {
+    // The coordinator reads the scope's records and changes them in one transaction, under the memory setting.
+    let record = MemoryRecord::Note {
+      note: note.clone(),
+      task: self.task,
+      provenance: provenance.clone(),
+      at: Timestamp::now(),
+    };
+    let answer = self.sink.lock().memory(record).map_err(|error| unreadable(&error))?;
+    let MemoryAnswer::Note { memory, status } = answer else {
+      return Err(ToolResult::unavailable(
+        "memory cannot be kept: the coordinator kept no note",
+      ));
+    };
+    let status = match status {
       MemoryStatus::Active => "active: agents get it from their next start on",
       _ => "proposed: a person approves it before agents get it",
     };
-    Ok(ToolResult::shown(format!("kept memory {} ({status})", kept.id())))
+    Ok(ToolResult::shown(format!("kept memory {memory} ({status})")))
   }
 
   /// `report_progress`: `progress` as the step's line, the invocation's `secrets` removed.

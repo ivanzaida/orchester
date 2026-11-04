@@ -1,9 +1,11 @@
 //! What a memory record says: its kind, an optional key, the text, tags, and how important and
 //! how certain it is. Validated here; whether the text may be stored at all (no secret value in
-//! it) is decided by [`super::SecretScreen`].
+//! it) is decided by [`super::SecretScreen`]. Content is sent between the runner's executor and its
+//! coordinator as values that are validated again when they arrive.
 
 use std::collections::BTreeSet;
 
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
@@ -21,7 +23,8 @@ pub enum MemoryContentError {
 }
 
 /// What kind of knowledge a record holds.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum MemoryKind {
   Fact,
   Decision,
@@ -90,7 +93,8 @@ pub(super) fn is_line_break(character: char) -> bool {
 
 /// A short name a record is known by (`auth.token-refresh`), so a newer record on the same subject
 /// replaces it instead of standing beside it.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
 pub struct MemoryKey(String);
 
 impl MemoryKey {
@@ -117,8 +121,23 @@ impl MemoryKey {
   }
 }
 
+impl TryFrom<String> for MemoryKey {
+  type Error = MemoryContentError;
+
+  fn try_from(value: String) -> Result<Self, MemoryContentError> {
+    Self::new(&value)
+  }
+}
+
+impl From<MemoryKey> for String {
+  fn from(key: MemoryKey) -> Self {
+    key.0
+  }
+}
+
 /// A record's tags: lowercase words without spaces, each once, in order.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "Vec<String>", into = "Vec<String>")]
 pub struct Tags(BTreeSet<String>);
 
 impl Tags {
@@ -150,9 +169,24 @@ impl Tags {
   }
 }
 
+impl TryFrom<Vec<String>> for Tags {
+  type Error = MemoryContentError;
+
+  fn try_from(tags: Vec<String>) -> Result<Self, MemoryContentError> {
+    Self::new(tags.iter().map(String::as_str))
+  }
+}
+
+impl From<Tags> for Vec<String> {
+  fn from(tags: Tags) -> Self {
+    tags.0.into_iter().collect()
+  }
+}
+
 /// How much a record matters. A person sets it; an agent's records are of high importance when
 /// they hand off, of normal importance otherwise.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Importance {
   Low,
   Normal,
@@ -203,13 +237,38 @@ impl Confidence {
 }
 
 /// Everything a record says, validated: what a person may edit.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "SentContent")]
 pub struct MemoryContent {
   kind: MemoryKind,
   key: Option<MemoryKey>,
   text: String,
   tags: Tags,
   importance: Importance,
+}
+
+/// [`MemoryContent`] as it arrives, before its text is validated.
+#[derive(Deserialize)]
+struct SentContent {
+  kind: MemoryKind,
+  key: Option<MemoryKey>,
+  text: String,
+  tags: Tags,
+  importance: Importance,
+}
+
+impl TryFrom<SentContent> for MemoryContent {
+  type Error = MemoryContentError;
+
+  fn try_from(sent: SentContent) -> Result<Self, MemoryContentError> {
+    let content = Self::new(sent.kind, &sent.text)?
+      .with_tags(sent.tags)
+      .with_importance(sent.importance);
+    Ok(match sent.key {
+      Some(key) => content.with_key(key),
+      None => content,
+    })
+  }
 }
 
 impl MemoryContent {
