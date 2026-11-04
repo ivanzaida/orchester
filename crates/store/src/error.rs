@@ -92,6 +92,9 @@ pub enum StoreError {
   /// The project's task list is local: it has no server project.
   #[error("the project's task list is not shared")]
   NotShared,
+  /// The team task is another server project's than the one the project is linked to. Nothing was recorded.
+  #[error("the team task belongs to another server project")]
+  OtherServerProject,
   /// The project is shared already; nothing was changed.
   #[error("the project's task list is shared already")]
   AlreadyShared,
@@ -297,6 +300,9 @@ pub enum RunStoreError {
   /// recorded.
   #[error("run {0} cannot continue: a merge waits in its worktree")]
   Resolving(RunId),
+  /// The run's inputs do not belong to its task, or its snapshot does not pin what they carry. Nothing was recorded.
+  #[error("the inputs of a run of task {task} do not match it: {reason}")]
+  InputsMismatch { task: TaskId, reason: &'static str },
 }
 
 impl RunStoreError {
@@ -312,7 +318,8 @@ impl RunStoreError {
       | Self::EventsMismatch(_)
       | Self::WorktreeRemoved(_)
       | Self::Merged(_)
-      | Self::Resolving(_) => RunnerFailure::Other,
+      | Self::Resolving(_)
+      | Self::InputsMismatch { .. } => RunnerFailure::Other,
     }
   }
 }

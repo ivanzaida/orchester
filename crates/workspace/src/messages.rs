@@ -104,7 +104,7 @@ pub fn store_error(error: &StoreError) -> Message {
     StoreError::SharedTask(_) | StoreError::SharedProject => Message::new("sharing.errors.serverOnly"),
     StoreError::NotAdmin => Message::new("sharing.errors.notAdmin"),
     StoreError::NotSharedTask(_) => Message::new("sharing.notShared.readOnly"),
-    StoreError::NotShared => Message::new("sharing.errors.notShared"),
+    StoreError::NotShared | StoreError::OtherServerProject => Message::new("sharing.errors.notShared"),
     StoreError::AlreadyShared => Message::new("sharing.errors.alreadyShared"),
     StoreError::DraftChanged(_) => Message::new("errors.draftChanged"),
     StoreError::VersionInUse(_) => Message::new("sharing.errors.versionInUse"),
