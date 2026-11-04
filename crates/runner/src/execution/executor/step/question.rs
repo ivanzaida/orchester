@@ -16,7 +16,7 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_ipc::{Event, Rejection};
-use orchester_store::StoreError;
+use orchester_store::{QuestionRecord, StoreError};
 use tokio::sync::oneshot;
 
 use super::{
@@ -93,7 +93,7 @@ impl Worker {
       (now, QuestionTurn::InTurn),
     )
     .expect("Codex's question requests and the relay's ask_question calls each carry a question");
-    watch.db.ask_questions(&request)?;
+    watch.sink.question(QuestionRecord::asked(&request))?;
     watch.invocation.timing.wait_for_person(now);
     // A person's wait never holds one of the computer's QA slots.
     self.qa.release(watch.invocation.id);
@@ -130,10 +130,8 @@ impl Worker {
       }
     };
     let run = waiting.run();
-    if !watch
-      .db
-      .answer_questions((run, waiting.id()), &answers, (by, Timestamp::now()), None)?
-    {
+    let answered = QuestionRecord::answered((run, waiting.id()), &answers, (by, Timestamp::now()), None);
+    if !watch.sink.question(answered)? {
       let refused = refusal(&watch.db, run, waiting.id())?;
       // The agent still waits for this call; its end interrupts what is recorded of it.
       watch.question = Some((waiting, awaiting));
@@ -154,7 +152,7 @@ impl Worker {
     };
     self.end_question_wait(watch)?;
     if let Err(error) = delivered {
-      watch.db.undelivered_questions(run, waiting.id())?;
+      watch.sink.question(QuestionRecord::undelivered(run, waiting.id()))?;
       self.observe(
         watch,
         AgentEvent::TurnFailed {
@@ -178,7 +176,7 @@ impl Worker {
   /// the turn fails with it.
   pub(super) fn question_closed(&mut self, watch: &mut Watch) -> Result<(), StoreError> {
     watch.question = None;
-    self.interrupt_questions(watch)?;
+    self.interrupt_waiting_question(watch)?;
     self.observe(
       watch,
       AgentEvent::TurnFailed {
@@ -190,12 +188,10 @@ impl Worker {
   }
 
   /// The agent ended: a question still waiting in its turn can no longer be answered.
-  pub(super) fn interrupt_questions(&self, watch: &mut Watch) -> Result<(), StoreError> {
+  pub(super) fn interrupt_waiting_question(&self, watch: &mut Watch) -> Result<(), StoreError> {
     watch.question = None;
-    if watch
-      .db
-      .interrupt_questions(watch.invocation.run, watch.invocation.id)?
-    {
+    let (run, invocation) = (watch.invocation.run, watch.invocation.id);
+    if watch.sink.question(QuestionRecord::interrupted(run, invocation))? {
       self.end_question_wait(watch)?;
     }
     Ok(())

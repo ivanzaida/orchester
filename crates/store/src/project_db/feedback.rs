@@ -16,7 +16,7 @@ use orchester_core::{
 };
 use rusqlite::{Connection, OptionalExtension, Row, params};
 
-use super::{ProjectDb, messages};
+use super::{ProjectDb, message_records};
 use crate::{
   StoreError,
   rows::{corrupt, parse},
@@ -81,7 +81,7 @@ impl ProjectDb {
       return Ok(false);
     }
     // The post's own id keys the message, so the message is stored once whatever retries it.
-    messages::insert(&transaction, message, Some(IdempotencyKey::from_uuid(post.as_uuid())))?;
+    message_records::insert(&transaction, message, Some(IdempotencyKey::from_uuid(post.as_uuid())))?;
     transaction.execute(
       "UPDATE feedback_posts SET message_id = ?2 WHERE id = ?1",
       params![post.to_string(), message.id().to_string()],
