@@ -33,6 +33,7 @@ use crate::{
   folders::{FoldersCommand, FoldersReply},
   merge_queue::{MergeQueueCommand, MergeQueueReply},
   rejection::Rejection,
+  run_files::{RunFilesReply, RunFilesRequest},
   work::WorkSummary,
   worktree::WorktreeChangesRead,
 };
@@ -320,6 +321,9 @@ pub enum Command {
   /// (protocol 46): the desktop keeps the project's record of the resolution and runs no git there itself. Answered
   /// with [`Reply::Resolved`], or [`Reply::ResolveFailed`] with why it did not go on.
   Resolve { run: RunId, request: ResolveRequest },
+  /// The code viewer reads the worktree of run `run` (protocol 48, [`crate::run_files`]): the runner's executor side
+  /// reads it where the worktree is. Answered with [`Reply::RunFiles`].
+  RunFiles { run: RunId, request: RunFilesRequest },
 }
 
 /// Which session a runner serves, from the desktop's side.
@@ -535,6 +539,8 @@ pub enum Reply {
   Resolved(ResolveAnswer),
   /// The answer to [`Command::Resolve`] that did not go on, and why.
   ResolveFailed(ResolveFailure),
+  /// The answer to [`Command::RunFiles`]; a file's bytes travel after it in a binary frame.
+  RunFiles(RunFilesReply),
   Rejected(Rejection),
 }
 

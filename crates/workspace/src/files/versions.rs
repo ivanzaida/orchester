@@ -18,8 +18,9 @@ use orchester_core::{
 use orchester_store::ProjectDb;
 
 use super::{
-  FilePath, FileView, FilesError, Version,
+  FilePath, FileView, FilesError, RunFiles, Version,
   read::read_file,
+  runs,
   source::{Source, git_error, git_output, source},
 };
 use crate::tasks::{changes::GIT, history::last_step};
@@ -80,9 +81,9 @@ pub enum FileFacts {
 }
 
 /// The versions that exist for the page that shows `asked`, opened from `run` when it was, with what
-/// `path` is in each.
+/// `path` is in each; a run's worktree as its runner (`runs`) finds it.
 pub fn versions(
-  runner: &dyn CommandRunner,
+  (runner, runs): (&dyn CommandRunner, &dyn RunFiles),
   repo_root: &Path,
   (asked, run): (&Version, Option<RunId>),
   path: Option<&FilePath>,
@@ -95,12 +96,31 @@ pub fn versions(
   }
   let mut choices = Vec::new();
   for version in wanted {
+    // A run's version the runner cannot answer for is left out of another page's switch, as a worktree that is
+    // not there is; the page of the run itself fails as its file does.
+    let left_out = |error: &FilesError| {
+      let left_out = matches!(error, FilesError::Runner(_)) && matches!(version, Version::Run(_)) && *asked != version;
+      if left_out {
+        tracing::warn!(%error, "the runner cannot answer for the run's version; the switch leaves it out");
+      }
+      left_out
+    };
     let found = match source(runner, repo_root, &version) {
+      Ok(Source::Run(run)) => match runs::present(runs, run) {
+        Ok(true) => Source::Run(run),
+        Ok(false) => continue,
+        Err(error) if left_out(&error) => continue,
+        Err(error) => return Err(error),
+      },
       Ok(found) => found,
       Err(FilesError::VersionGone(_)) => continue,
       Err(error) => return Err(error),
     };
-    choices.push(choice(runner, repo_root, (version, &found), path)?);
+    match choice((runner, runs), repo_root, (version.clone(), &found), path) {
+      Ok(choice) => choices.push(choice),
+      Err(error) if left_out(&error) => {}
+      Err(error) => return Err(error),
+    }
   }
   // The switch still offers the worktree without the run's name: a database that cannot be read must not
   // hide the files.
@@ -114,18 +134,18 @@ pub fn versions(
 }
 
 fn choice(
-  runner: &dyn CommandRunner,
+  (runner, runs): (&dyn CommandRunner, &dyn RunFiles),
   repo_root: &Path,
   (version, found): (Version, &Source),
   path: Option<&FilePath>,
 ) -> Result<VersionChoice, FilesError> {
   let (branch, commit) = match found {
     Source::Folder(_) if version == Version::Checkout => (checkout_branch(runner, repo_root)?, None),
-    Source::Folder(_) => (None, None),
+    Source::Folder(_) | Source::Run(_) => (None, None),
     Source::Commit { repo, commit, branch } => (branch.clone(), Some(commit_of(runner, repo, commit)?)),
   };
   let file = path
-    .map(|path| facts(read_file(runner, repo_root, &version, path)))
+    .map(|path| facts(read_file((runner, runs), repo_root, &version, path)))
     .transpose()?;
   Ok(VersionChoice {
     version,
