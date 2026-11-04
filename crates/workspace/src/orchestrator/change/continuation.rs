@@ -14,7 +14,6 @@ use orchester_core::{
   },
   run::{Run, RunStatus},
 };
-use orchester_exec::programs::Programs;
 use orchester_store::ProjectDb;
 use rmcp::model::JsonObject;
 use serde_json::{Value, json};
@@ -23,14 +22,17 @@ use super::run_subject;
 use crate::{
   app_mcp::{self, ContinueOffered, ContinueRun, ToolError, continue_offered, find_run},
   messages::Message,
-  tasks::integration_jobs::{IntegrationJobs, JobState},
+  tasks::{
+    integration_jobs::{IntegrationJobs, JobState},
+    resolve::RunWorktrees,
+  },
 };
 
 /// The decision `continue_run` with `arguments` takes on the run it names in the project at `root`, and the key of its
-/// task; refused for a choice that is the person's, and as the tool refuses it. `jobs` are the project's merges.
-/// Blocks on SQLite and git.
+/// task; refused for a choice that is the person's, and as the tool refuses it. The run's worktree is read among
+/// `worktrees`; `jobs` are the project's merges. Blocks on SQLite and the project's runner.
 pub(super) fn continue_change(
-  (root, programs, jobs): (&Path, &Programs, &IntegrationJobs),
+  (root, worktrees, jobs): (&Path, &RunWorktrees, &IntegrationJobs),
   arguments: &JsonObject,
 ) -> Result<(ProposedChange, Option<String>), ToolError> {
   let asked: ContinueRun = serde_json::from_value(Value::Object(arguments.clone()))
@@ -43,7 +45,7 @@ pub(super) fn continue_change(
   ) {
     return Err(person_only());
   }
-  let ContinueOffered { run, target, conflicts } = continue_offered(root, &asked, (programs, jobs))?;
+  let ContinueOffered { run, target, conflicts } = continue_offered(root, &asked, (worktrees, jobs))?;
   let db = ProjectDb::open(root)?;
   let run = find_run(&db, &run.to_string())?;
   let (subject, task) = run_subject(&db, &run)?;

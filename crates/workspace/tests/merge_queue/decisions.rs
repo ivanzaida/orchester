@@ -84,10 +84,10 @@ fn merge_queue_requeues_a_run_resolved_by_hand_when_its_pipeline_has_no_integrat
     })
   );
 
-  let files = merge_queue::resolve_myself(repo.root(), &repo.programs(), run.id()).expect("merged in");
+  let files = merge_queue::resolve_myself(repo.root(), &repo.worktrees(), run.id()).expect("merged in");
   assert_eq!(files, ["shared.txt"]);
   fs::write(repo.worktree(&run).join("shared.txt"), "both lines\n").expect("resolve");
-  let command = merge_queue::resolved(repo.root(), &repo.programs(), run.id()).expect("resolved");
+  let command = merge_queue::resolved(repo.root(), &repo.worktrees(), run.id()).expect("resolved");
   assert_eq!(command, None, "no step to send the work back to");
   merge_queue::requeue(repo.root(), run.id(), Ok(()), at(1_000)).expect("requeued");
   assert_eq!(repo.state(&run), QueueState::Queued);
@@ -118,9 +118,9 @@ fn merge_queue_resolved_by_hand_after_the_integrate_step_could_not_be_told_goes_
   let no_runner = Message::new("errors.storage");
   merge_queue::integrate_sent(repo.root(), run.id(), Err(no_runner.clone())).expect("told");
 
-  merge_queue::resolve_myself(repo.root(), &repo.programs(), run.id()).expect("merged in");
+  merge_queue::resolve_myself(repo.root(), &repo.worktrees(), run.id()).expect("merged in");
   fs::write(repo.worktree(&run).join("shared.txt"), "both lines\n").expect("resolve");
-  let command = merge_queue::resolved(repo.root(), &repo.programs(), run.id()).expect("resolved");
+  let command = merge_queue::resolved(repo.root(), &repo.worktrees(), run.id()).expect("resolved");
   let Some(RunnerCommand::ReturnRun(returned)) = command else {
     panic!("{command:?}");
   };
@@ -131,7 +131,7 @@ fn merge_queue_resolved_by_hand_after_the_integrate_step_could_not_be_told_goes_
     "the runner's words, and the run stays out of the queue"
   );
   assert!(matches!(repo.state(&run), QueueState::Left(Left::Conflicts { .. })));
-  let again = merge_queue::resolved(repo.root(), &repo.programs(), run.id()).expect("pressed again");
+  let again = merge_queue::resolved(repo.root(), &repo.worktrees(), run.id()).expect("pressed again");
   assert!(matches!(again, Some(RunnerCommand::ReturnRun(_))), "{again:?}");
   merge_queue::requeue(repo.root(), run.id(), Ok(()), at(1_001)).expect("requeued");
   assert_eq!(repo.state(&run), QueueState::Queued);
