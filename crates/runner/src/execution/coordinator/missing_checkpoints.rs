@@ -1,8 +1,9 @@
 //! Succeeded runs whose agents committed their work themselves recorded no checkpoint before ORC-147, so whatever reads
 //! a run's work through its checkpoints (its Changes, `get_changes`) found none. As the runner starts, each such run
-//! whose branch is ahead of the revision it started from records the branch's tip as its checkpoint, once.
+//! whose branch is ahead of the revision it started from, as the executor reads the runs' branches
+//! (`super::super::executor::run_branches`), records the branch's tip as its checkpoint, once.
 
-use std::{collections::HashMap, path::Path};
+use std::path::Path;
 
 use orchester_core::{
   revision::Revision,
@@ -12,7 +13,7 @@ use orchester_core::{
 };
 use orchester_store::{ProjectDb, RunStoreError, StoreError};
 
-use crate::{git::Git, worktree::WorktreeError};
+use crate::{execution::executor::run_branches::BranchTips, worktree::WorktreeError};
 
 #[derive(Debug, thiserror::Error)]
 enum RepairError {
@@ -40,8 +41,7 @@ fn record_in(root: &Path) -> Result<(), RepairError> {
   if runs.is_empty() {
     return Ok(());
   }
-  let git = Git::new(root);
-  let tips = branch_tips(&git)?;
+  let tips = BranchTips::read(root)?;
   for run in runs {
     let run = match run {
       Ok(run) => run,
@@ -50,12 +50,9 @@ fn record_in(root: &Path) -> Result<(), RepairError> {
         continue;
       }
     };
-    let Some(tip) = tips.get(run.branch().as_str()) else {
+    let Some(tip) = tips.ahead_of(run.branch(), run.base())?.cloned() else {
       continue;
     };
-    if tip == run.base() || !git.answer(&["merge-base", "--is-ancestor", run.base().as_str(), tip.as_str()])? {
-      continue;
-    }
     let id = run.id();
     match record_tip(&mut db, run, tip.clone()) {
       Ok(()) => tracing::info!(run = %id, %tip, "recorded the checkpoint of a run whose agents committed themselves"),
@@ -63,21 +60,6 @@ fn record_in(root: &Path) -> Result<(), RepairError> {
     }
   }
   Ok(())
-}
-
-/// The tip of each local branch, by its name.
-fn branch_tips(git: &Git<'_>) -> Result<HashMap<String, Revision>, WorktreeError> {
-  let listed = git.stdout(&["for-each-ref", "--format=%(objectname) %(refname)", "refs/heads"])?;
-  Ok(
-    listed
-      .lines()
-      .filter_map(|line| {
-        let (revision, name) = line.split_once(' ')?;
-        let name = name.strip_prefix("refs/heads/")?;
-        Some((name.to_owned(), Revision::new(revision).ok()?))
-      })
-      .collect(),
-  )
 }
 
 fn record_tip(db: &mut ProjectDb, mut run: Run, tip: Revision) -> Result<(), RepairError> {

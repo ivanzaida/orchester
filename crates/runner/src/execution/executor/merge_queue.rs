@@ -8,7 +8,6 @@
 use std::{path::Path, time::Duration};
 
 use orchester_core::{
-  id::RunId,
   integration::delivery,
   merge_queue::recheck::{RecheckOutput, RecheckTool, Rechecked},
   resource::CommandEnvironment,
@@ -24,8 +23,8 @@ use tokio::time::sleep;
 
 use super::{super::Scheduler, environment::run_environment, failed};
 use crate::{
+  execution_root::ExecutionRoot,
   supervisor::{ProcessEvent, ProcessExit, Supervised},
-  worktree::Worktrees,
 };
 
 /// Merging the base into a large worktree runs the repository's hooks: stopping it halfway would leave the worktree
@@ -37,9 +36,10 @@ impl Scheduler {
   /// Carries out the merge queue's `command` in a run's worktree.
   pub async fn merge_queue(&self, command: MergeQueueCommand) -> Result<MergeQueueReply, Rejection> {
     let root = self.inner.project_root.clone();
+    let execution = ExecutionRoot::local(&root);
     match command {
       MergeQueueCommand::SyncBase { run, base, branch } => {
-        let worktree = worktree(&root, run)?;
+        let worktree = execution.run_worktree(run);
         let synced = tokio::task::spawn_blocking(move || {
           delivery::sync(
             &ProcessRunner::new(GIT_TIMEOUT),
@@ -57,23 +57,16 @@ impl Scheduler {
         })
       }
       MergeQueueCommand::Recheck { run, tools } => {
-        let worktree = worktree(&root, run)?;
+        let worktree = execution.run_worktree(run);
         let db = ProjectDb::open(&root).map_err(|error| failed("cannot open the project database", &error))?;
-        let environment = run_environment(&db, &root, run).map_err(|detail| Rejection::Failed { detail })?;
+        let environment = run_environment(&db, &execution, run).map_err(|detail| Rejection::Failed { detail })?;
         drop(db);
         Ok(MergeQueueReply::Rechecked(
-          recheck((&root, &worktree), &tools, &environment).await,
+          recheck((execution.repository(), &worktree), &tools, &environment).await,
         ))
       }
     }
   }
-}
-
-/// The worktree of `run` in the repository at `root`.
-fn worktree(root: &Path, run: RunId) -> Result<std::path::PathBuf, Rejection> {
-  Worktrees::new(root)
-    .map(|worktrees| worktrees.path(run))
-    .map_err(|error| failed("cannot find the run's worktree", &error))
 }
 
 /// Runs `tools` in `worktree` of the repository at `root`, in order, until one does not pass.
