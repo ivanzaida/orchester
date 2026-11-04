@@ -1,4 +1,4 @@
-//! Settings › Browser of the computer a runner runs on (protocol 46, `docs/architecture/remote-runners.md`, the
+//! Settings › Browser of the computer a runner runs on (protocol 47, `docs/architecture/remote-runners.md`, the
 //! computer's resources): the desktop reads them from the application database and passes them to the runner when it
 //! attaches ([`crate::Command::Attach`]) and again whenever they change ([`crate::Command::SetBrowser`]), so the
 //! runner never opens `orchester.db` itself. The next start of the project's browser uses what was passed last.

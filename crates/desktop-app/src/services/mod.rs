@@ -25,8 +25,12 @@ use orchester_workspace::{
   secrets::Vault,
   session::AppSession,
   sharing::{self, Servers, cloud::Cloud, project::clone::Clones, team_join::TeamJoin},
-  tasks::{integration_jobs::ProjectJobs, outside::OutsideChanges, resolve::Editor},
-  workspace::Workspace,
+  tasks::{
+    integration_jobs::ProjectJobs,
+    outside::OutsideChanges,
+    resolve::{Editor, RunWorktrees},
+  },
+  workspace::{OpenProject, Workspace},
 };
 use tokio::{runtime::Handle, task::JoinHandle};
 
@@ -173,6 +177,11 @@ impl Services {
     ctx
       .use_context::<Self>()
       .expect("the root provides the services before mounting the window of a started session")
+  }
+
+  /// The run worktrees of `project`, which resolving a merge by hand reaches through the project's runner.
+  pub fn run_worktrees(&self, project: &OpenProject) -> RunWorktrees {
+    RunWorktrees::through_runner(&self.runners, (&project.repo_root, project.project.name().as_str()))
   }
 
   /// Starts the shared servers' connection monitor, the shared projects' sync and live event streams, the check of the

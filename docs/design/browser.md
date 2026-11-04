@@ -213,7 +213,7 @@ The tools join `docs/interactive-tool-approvals.md`'s table (`orchester_tools::b
   Chrome, Microsoft Edge, Brave or Chromium, or its app bundle. Anything else, a folder or a path that does not exist,
   is refused under the row with the reason, and nothing changes. The choice is an application setting
   (`app_settings.browser_program`). The desktop reads it, with the folder of the browser profiles, and passes both to
-  each runner as it attaches and again whenever they change (`ComputerBrowser`, `Command::SetBrowser`, protocol 46,
+  each runner as it attaches and again whenever they change (`ComputerBrowser`, `Command::SetBrowser`, protocol 47,
   ORC-675); the runner never opens `orchester.db` and starts each project's browser, headless or in a window of its
   own, with what it was passed last. A chosen program that is gone later is unavailable with that reason, never passed
   over for the one installed.

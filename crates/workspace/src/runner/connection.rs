@@ -234,7 +234,7 @@ impl Supervisor {
   }
 
   /// The Settings › Browser the runner attaches with: as the desktop passed them last, or, until it did, those in the
-  /// application data of the runner's program, which the runner read itself before (protocol 46).
+  /// application data of the runner's program, which the runner read itself before (protocol 47).
   async fn attach_browser(&self) -> ComputerBrowser {
     if let Some(browser) = self.browser.lock().clone() {
       return browser;

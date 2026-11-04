@@ -1,7 +1,7 @@
 //! The *Browser* window's messages (`docs/design/browser.md`, decisions 2 and 4, "The *Browser* window"): the app
 //! never talks to the browser itself, it sends [`BrowserCommand`]s to the project's runner and gets
 //! [`BrowserEvent`]s and screencast frames ([`ScreencastFrame`], a binary frame) back. A page's request for files
-//! ([`FileChooser`]) came with protocol 38, the computer's Settings › Browser ([`ComputerBrowser`]) with protocol 46.
+//! ([`FileChooser`]) came with protocol 38, the computer's Settings › Browser ([`ComputerBrowser`]) with protocol 47.
 
 mod computer;
 mod frames;

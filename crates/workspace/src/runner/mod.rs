@@ -20,8 +20,10 @@ mod folders;
 mod idle;
 mod lifetime;
 mod merge_queue;
+mod outcome;
 mod report;
 mod requests;
+mod resolve;
 mod run_git;
 mod settings;
 pub mod state;
@@ -40,9 +42,7 @@ use std::{
 };
 
 use orchester_core::id::RunId;
-use orchester_ipc::{
-  AttachSession, ErrorReports, RefusedRun, Rejection, SessionEnd, WorkState, browser::ComputerBrowser,
-};
+use orchester_ipc::{AttachSession, ErrorReports, SessionEnd, WorkState, browser::ComputerBrowser};
 use parking_lot::Mutex;
 use tokio::{runtime::Handle, sync::watch, task::JoinSet};
 
@@ -51,6 +51,7 @@ pub use self::{
   folders::ExecutorFolders,
   idle::ForgetRefusal,
   merge_queue::RunnerWorktrees,
+  outcome::{Continued, QUIET_STOP_TIMEOUT, RunRequestError, ShutdownOutcome},
   report::RunnerStatus,
   requests::RequestError,
   run_git::ThroughRunner,
@@ -63,37 +64,6 @@ use self::{
   state::{RunnerEvent, RunnerState},
 };
 use crate::{activity::Activity, browser::BrowserWindow, workspace::OpenProject};
-
-/// How long a close without active work waits for the runner to stop and exit before
-/// terminating it.
-pub const QUIET_STOP_TIMEOUT: Duration = Duration::from_secs(6);
-
-/// How asking the runners to stop ended.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ShutdownOutcome {
-  /// No runner was running.
-  NoRunner,
-  /// Every runner confirmed that it stopped.
-  Stopped,
-  /// A runner did not confirm in time or went away first; it was terminated.
-  Unanswered,
-}
-
-/// Why the runner did not do what a request about a run asked.
-#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
-pub enum RunRequestError {
-  #[error(transparent)]
-  Request(#[from] RequestError),
-  #[error("the runner refused the request: {0:?}")]
-  Rejected(Rejection),
-}
-
-/// The answer to continuing interrupted runs.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Continued {
-  pub continued: Vec<RunId>,
-  pub refused: Vec<RefusedRun>,
-}
 
 /// Starts and stops the projects' runners and publishes the displayed project's status.
 #[derive(Clone)]
@@ -126,6 +96,9 @@ struct Inner {
   slot_updates: Mutex<()>,
   /// Hands out the generations of the projects' runners.
   generations: AtomicU64,
+  /// The programs a test without a runner carries out requests about runs' worktrees with, in its own process.
+  #[cfg(feature = "test-support")]
+  worktrees_here: Mutex<Option<orchester_exec::programs::Programs>>,
 }
 
 /// One project's runner.
@@ -184,6 +157,8 @@ impl Runners {
         closing: AtomicBool::new(false),
         slot_updates: Mutex::new(()),
         generations: AtomicU64::new(0),
+        #[cfg(feature = "test-support")]
+        worktrees_here: Mutex::new(None),
       }),
     }
   }

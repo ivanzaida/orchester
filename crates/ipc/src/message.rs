@@ -9,7 +9,10 @@ use std::{fmt, num::NonZeroU32};
 use orchester_core::{
   connection::{AgentProvider, ApiEndpoint, CheckResult, NativeModel},
   id::{ChatId, ChatMessageId, ConnectionId, IdempotencyKey, ResourceId, RunId, StepExecutionId, TaskId},
-  integration::Leftovers,
+  integration::{
+    Leftovers,
+    resolve::request::{ResolveAnswer, ResolveFailure, ResolveRequest},
+  },
   orchestrator::run_git::{RunGitAnswer, RunGitRequest},
   permission::AgentPermissions,
   question::GivenAnswer,
@@ -81,7 +84,7 @@ pub enum Command {
   /// The first request of a connection: the desktop starts listening to notifications, says
   /// which session this runner serves, which decides what happens to runs still recorded as
   /// running (`docs/architecture/storage.md`, "Lifecycle"), how many agents may work at
-  /// once, and this computer's Settings › Browser (protocol 46). Answered with [`Reply::Attached`], followed by an
+  /// once, and this computer's Settings › Browser (protocol 47). Answered with [`Reply::Attached`], followed by an
   /// [`Event::WorkSummary`].
   Attach {
     session: AttachSession,
@@ -93,7 +96,7 @@ pub enum Command {
   /// until fewer agents work than there are slots. Answered with [`Reply::AgentSlotsSet`], followed
   /// by an [`Event::WorkSummary`].
   SetAgentSlots { agent_slots: NonZeroU32 },
-  /// This computer's Settings › Browser changed to `browser` (protocol 46): the project's browser starts with it from
+  /// This computer's Settings › Browser changed to `browser` (protocol 47): the project's browser starts with it from
   /// its next start; a browser running now keeps its program. Answered with [`Reply::BrowserSet`].
   SetBrowser { browser: ComputerBrowser },
   /// Liveness check, answered with [`Reply::Pong`] carrying the same nonce.
@@ -313,6 +316,10 @@ pub enum Command {
   /// such run, [`Rejection::RunNotEnded`] for a write, or git that does not only read, before the run ended, and
   /// [`Rejection::WorktreeRemoved`] when its worktree is gone.
   RunGit(RunGitRequest),
+  /// `request` about the merge a person resolves by hand in run `run`'s worktree, carried out where the worktree is
+  /// (protocol 46): the desktop keeps the project's record of the resolution and runs no git there itself. Answered
+  /// with [`Reply::Resolved`], or [`Reply::ResolveFailed`] with why it did not go on.
+  Resolve { run: RunId, request: ResolveRequest },
 }
 
 /// Which session a runner serves, from the desktop's side.
@@ -524,6 +531,10 @@ pub enum Reply {
   },
   /// The answer to [`Command::RunGit`].
   RunGit(RunGitAnswer),
+  /// The answer to [`Command::Resolve`] that was carried out.
+  Resolved(ResolveAnswer),
+  /// The answer to [`Command::Resolve`] that did not go on, and why.
+  ResolveFailed(ResolveFailure),
   Rejected(Rejection),
 }
 

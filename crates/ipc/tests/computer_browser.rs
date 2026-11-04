@@ -1,5 +1,5 @@
 //! This computer's Settings › Browser, which the desktop passes to a runner as it attaches and again when they change
-//! (protocol 46, ORC-675): a program chosen or none, each part read or why not, round-trip as requests, and the
+//! (protocol 47, ORC-675): a program chosen or none, each part read or why not, round-trip as requests, and the
 //! runner's answer too. Run with `cargo test -p orchester-ipc --test computer_browser`.
 
 use std::{num::NonZeroU32, path::PathBuf};
