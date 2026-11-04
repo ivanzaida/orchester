@@ -18,6 +18,7 @@ pub(super) mod control;
 pub(super) mod conversation;
 pub(super) mod disk_guard;
 pub(super) mod environment;
+pub(super) mod folder_state;
 pub(super) mod folders;
 pub(super) mod halt;
 pub(super) mod handoff;

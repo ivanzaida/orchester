@@ -108,7 +108,7 @@ fn requests(run: RunId, task: TaskId) -> Vec<Request> {
   ]
   .into_iter()
   .chain(decision_commands(run))
-  .chain([Command::DeliverMessages { run }])
+  .chain([Command::DeliverMessages { run }, Command::RunFolderState { run }])
   .enumerate()
   .map(|(index, command)| Request {
     id: RequestId::new(index as u64 + 1),
