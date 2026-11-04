@@ -3,7 +3,7 @@
 //! record, active or proposed as the project's memory setting says, refused when it holds a secret's value;
 //! `report_progress` keeps the step's progress line, the invocation's secret values removed. Each call opens a
 //! connection of its own to the project database (the run's task loop owns the runner's) and blocks on it, off the
-//! async workers.
+//! async workers; the memory setting it reads through a coordinator link of its own.
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -22,9 +22,13 @@ use orchester_core::{
 };
 use orchester_store::ProjectDb;
 
+use super::super::link::{LinkOpener, memory::SettingsRequest};
+
 /// The run, task and step execution an invocation's agent works on, and where their records are.
 pub(super) struct RunRecords {
   pub(super) root: PathBuf,
+  /// Where the project's memory is read.
+  pub(super) links: Arc<dyn LinkOpener>,
   pub(super) run: RunId,
   pub(super) task: TaskId,
   pub(super) execution: StepExecutionId,
@@ -78,7 +82,11 @@ impl RunRecords {
     let mut db = self.db()?;
     let unreadable =
       |error: &dyn std::error::Error| ToolResult::unavailable(&format!("memory cannot be kept: {error}"));
-    let settings = db.memory_settings().map_err(|error| unreadable(&error))?;
+    let settings = self
+      .links
+      .open()
+      .and_then(|link| link.settings(&SettingsRequest))
+      .map_err(|error| unreadable(&error))?;
     let secrets = db.secrets().map_err(|error| unreadable(&error))?;
     let screen =
       SecretScreen::load(db.project().id(), &secrets, self.vault.as_ref()).map_err(|error| unreadable(&error))?;

@@ -64,6 +64,7 @@ impl RunTask {
   pub(super) fn decide_plan(&mut self, request: PlanRequest, ack: Ack) -> Result<(), ExecutionError> {
     let keeper = Keeper {
       db: &mut self.db,
+      link: &*self.link,
       sink: self.sink.as_mut(),
       notifier: &self.notifier,
       vault: self.vault.as_ref(),
@@ -80,6 +81,7 @@ impl RunTask {
 pub(in crate::execution) fn record(keeper: Keeper<'_>, run: &mut Run, request: PlanRequest) -> Result<(), Rejection> {
   let Keeper {
     db,
+    link,
     sink,
     notifier,
     vault,
@@ -111,6 +113,7 @@ pub(in crate::execution) fn record(keeper: Keeper<'_>, run: &mut Run, request: P
     // turning the recorded decision into a rejection.
     let mut keeper = Keeper {
       db,
+      link,
       sink,
       notifier,
       vault,

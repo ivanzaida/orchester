@@ -455,6 +455,7 @@ impl RunTask {
       checks,
       records: RunRecords {
         root: self.root.clone(),
+        links: Arc::clone(&self.links),
         run: self.run.id(),
         task: self.run.task(),
         execution,

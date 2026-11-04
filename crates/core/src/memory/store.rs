@@ -1,6 +1,8 @@
 //! Where memory records are kept. The project database implements it today (SQLite with full-text
 //! indexes); a server will implement it with a store of its own.
 
+use serde::{Deserialize, Serialize};
+
 use super::{Delivery, InjectionReason, Memory, MemoryChanges, MemoryQuery, MemorySettings, MemoryStatus};
 use crate::{
   id::{InvocationId, MemoryId, RunId, StepExecutionId, TaskId},
@@ -38,7 +40,7 @@ pub struct MemoryMatch {
 }
 
 /// A stored record that cannot be read back: its id as stored and what is wrong with it.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UnreadableMemory {
   pub id: String,
   pub detail: String,

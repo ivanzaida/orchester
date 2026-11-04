@@ -35,7 +35,7 @@ use super::{
   codebase_index::{self, IndexBuild, IndexState},
   control::{Ack, Control, answer},
   disk_guard::DiskGuard,
-  link::{CoordinatorLink, LinkError},
+  link::{CoordinatorLink, LinkError, LinkOpener},
   pool::PoolError,
   prepared::{Prepared, RunFolder},
   record::{RecordError, announce_ready, record},
@@ -81,6 +81,7 @@ pub(super) enum ExecutionError {
 pub(in crate::execution) struct TaskContext {
   pub(in crate::execution) root: PathBuf,
   pub(in crate::execution) link: Box<dyn CoordinatorLink + Send>,
+  pub(in crate::execution) links: Arc<dyn LinkOpener>,
   pub(in crate::execution) execution: ExecutionRoot,
   pub(in crate::execution) sink: Box<dyn Sink>,
   pub(in crate::execution) notifier: Notifier,
@@ -113,6 +114,8 @@ pub(in crate::execution) struct RunTask {
   pub(super) root: PathBuf,
   /// Where the run's task asks for the project's data it reads through the link ([`super::link`]).
   pub(super) link: Box<dyn CoordinatorLink + Send>,
+  /// Where its agents' tool calls open links of their own.
+  pub(super) links: Arc<dyn LinkOpener>,
   /// Where the executor keeps its own folders.
   pub(super) execution: ExecutionRoot,
   pub(super) db: ProjectDb,
@@ -173,6 +176,7 @@ impl RunTask {
     Self {
       root: context.root,
       link: context.link,
+      links: context.links,
       execution: context.execution,
       db,
       sink: context.sink,

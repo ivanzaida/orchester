@@ -46,7 +46,7 @@ use tokio::{
 };
 
 pub use self::{
-  coordinator::attach::Attached,
+  coordinator::{attach::Attached, link::LocalLinks},
   executor::{
     link,
     step::{QaSlots, outside_read_refusals},
@@ -59,6 +59,7 @@ use self::{
   executor::{
     control::Control,
     disk_guard::DiskGuard,
+    link::LinkOpener,
     prepared::Prepared,
     run::{RunTask, TaskContext},
     step::QaApps,
@@ -532,13 +533,16 @@ impl Scheduler {
         detail: format!("another task still executes run {run}"),
       });
     }
-    let link = coordinator::link::LocalLink::open(&self.inner.project_root)
+    let links = Arc::new(LocalLinks::new(&self.inner.project_root));
+    let link = links
+      .open()
       .map_err(|error| failed("cannot open the project database", &error))?;
     let (control, controls) = mpsc::unbounded_channel();
     let settled = Arc::new(AtomicBool::new(false));
     let context = TaskContext {
       root: self.inner.project_root.clone(),
-      link: Box::new(link),
+      link,
+      links,
       execution: ExecutionRoot::local(&self.inner.project_root),
       sink: Box::new(coordinator::sink::LocalSink::new(&self.inner.project_root)),
       notifier: self.inner.notifier.clone(),

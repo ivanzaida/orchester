@@ -2,7 +2,7 @@
 //! and for a gated step when its plan is approved ([`orchester_core::memory::Handoff`]). The handoff
 //! is read from the agent's final message in the transcript. One that cannot be kept (it holds a
 //! secret's value, or the keychain cannot be read to check it) is reported in the transcript; the
-//! run goes on without it.
+//! run goes on without it. The project's Memory setting is read through the coordinator link.
 
 use orchester_core::{
   connection::stream::{AgentEvent, MemoryNotSavedReason, RunnerProblem},
@@ -15,15 +15,34 @@ use orchester_core::{
 };
 use orchester_ipc::Event;
 use orchester_store::{ActivityRecord, ProjectDb, StoreError};
+use thiserror::Error;
 
-use super::{Notifier, sink::Sink};
+use super::{
+  Notifier,
+  link::{
+    LinkError,
+    memory::{MemoryLink, SettingsRequest},
+  },
+  sink::Sink,
+};
 
 /// Where a handoff is kept and its problems are reported: the transcript through the coordinator's sink.
 pub(in crate::execution) struct Keeper<'a> {
   pub(in crate::execution) db: &'a mut ProjectDb,
+  /// Where the project's Memory setting is read.
+  pub(in crate::execution) link: &'a dyn MemoryLink,
   pub(in crate::execution) sink: &'a mut dyn Sink,
   pub(in crate::execution) notifier: &'a Notifier,
   pub(in crate::execution) vault: &'a dyn SecretVault,
+}
+
+/// Why a handoff was not kept: the project database or the coordinator link failed.
+#[derive(Debug, Error)]
+enum KeepError {
+  #[error(transparent)]
+  Store(#[from] StoreError),
+  #[error(transparent)]
+  Link(#[from] LinkError),
 }
 
 impl Keeper<'_> {
@@ -44,7 +63,7 @@ impl Keeper<'_> {
     }
   }
 
-  fn keep(&mut self, run: &Run, execution: StepExecutionId, fate: StepFate) -> Result<(), StoreError> {
+  fn keep(&mut self, run: &Run, execution: StepExecutionId, fate: StepFate) -> Result<(), KeepError> {
     if run.is_follow_up(execution) {
       return Ok(());
     }
@@ -57,7 +76,7 @@ impl Keeper<'_> {
     let Some(provenance) = provenance(run, execution) else {
       return Ok(());
     };
-    let settings = self.db.memory_settings()?;
+    let settings = self.link.settings(&SettingsRequest)?;
     let secrets = self.db.secrets()?;
     let screen = match SecretScreen::load(self.db.project().id(), &secrets, self.vault) {
       Ok(screen) => screen,
@@ -65,7 +84,7 @@ impl Keeper<'_> {
         let reason = MemoryNotSavedReason::KeychainUnavailable {
           secret: error.secret.to_string(),
         };
-        return self.report(run, execution, reason);
+        return Ok(self.report(run, execution, reason)?);
       }
     };
     let filter = MemoryFilter {
@@ -93,7 +112,7 @@ impl Keeper<'_> {
         let reason = MemoryNotSavedReason::ContainsSecret {
           secret: error.secret.to_string(),
         };
-        self.report(run, execution, reason)
+        Ok(self.report(run, execution, reason)?)
       }
     }
   }

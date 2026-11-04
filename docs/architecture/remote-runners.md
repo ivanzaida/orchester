@@ -67,7 +67,7 @@ What the executor side reads today, and through which interface it will:
 | --- | --- | --- |
 | Pinned resource versions by id, skill blobs | `permissions.rs`, `step/skills.rs`, `step/start/{prompt,shared}.rs`, `tool/mod.rs`, `work.rs` | coordinator link |
 | `messages`, `attachments` and their files | `step/mod.rs`, `step/worker/steer.rs`, `recovery.rs` | coordinator link |
-| `memories` | `step/memory.rs`, `handoff.rs`, `step/run_records.rs` | coordinator link |
+| `memories` | `step/memory.rs`, `handoff.rs`, `step/run_records.rs` | coordinator link: **done** (ORC-668, `executor/link/memory.rs`): the recall, the unreadable records and the Memory setting; new records and their changes still write the database until the write tasks |
 | `approval_rules`, `project_approval_rules`, `tool_approvals`, `run_auto_approve`, `questions` | `step/answer.rs`, `step/approval.rs`, `question.rs` | coordinator link |
 | Project settings an agent start reads (`code_index`, `repository_agent_files`, `memory_settings`, `approval_mode`, `auto_mode_settings`, `tells_base_moves`) | `step/start/*`, `step/skills.rs`, `handoff.rs`, `step/worker/review/setup.rs`, `step/base_notice.rs` | coordinator link |
 | Step usage (`invocations` tokens, `reviewer_usage`) | `step/mod.rs`, `step/start/shared.rs` | coordinator link |

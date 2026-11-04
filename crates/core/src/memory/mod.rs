@@ -28,7 +28,7 @@ pub use self::{
   approval::approval,
   content::{Confidence, Importance, MemoryContent, MemoryContentError, MemoryKey, MemoryKind, Tags},
   handoff::{FAILED_ATTEMPT_TAG, Handoff, HandoffWrite, MemoryChanges, StepFate, split_handoff},
-  next::{StepContext, next_invocation_memory},
+  next::{StepContext, StepRecall, next_invocation_memory, step_memory},
   note::{MemoryNote, NoteScope, NoteWrite},
   query::MemoryQuery,
   recall::{InjectionReason, RecallRequest, estimated_tokens, recall},
@@ -39,20 +39,22 @@ pub use self::{
   settings::{MemoryLimits, MemoryLimitsError, MemorySettings, WritePolicy},
   store::{GivenMemory, InjectedMemory, MemoryFilter, MemoryMatch, MemoryStore, ScopeFilter, UnreadableMemory},
 };
+use serde::{Deserialize, Serialize};
+
 use crate::{
   id::{ResourceId, RunId, StepExecutionId, TaskId},
   resource::StepKey,
 };
 
 /// Whom a record is for: the agents of one task, or of every task of the project.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum MemoryScope {
   Task(TaskId),
   Project,
 }
 
 /// Where a record stands. Only [`MemoryStatus::Active`] records reach agents.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum MemoryStatus {
   /// Written by an agent while its scope's writes are saved after approval; waits for a person.
   Proposed,
@@ -102,7 +104,7 @@ impl fmt::Display for MemoryStatus {
 }
 
 /// The agent that wrote a record: its profile, and the run, step and execution it worked in.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AgentProvenance {
   pub profile: ResourceId,
   pub run: RunId,
@@ -110,7 +112,7 @@ pub struct AgentProvenance {
   pub execution: StepExecutionId,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MemoryAuthor {
   Agent(AgentProvenance),
   Person,
