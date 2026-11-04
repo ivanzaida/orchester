@@ -22,7 +22,9 @@ use orchester_core::{
 use orchester_exec::ProcessRunner;
 use orchester_ipc::{
   Reply,
-  run_files::{FileBytes, MAX_VIEW_BYTES, RunFileFailure, RunFileRead, RunFilesReply, RunFilesRequest},
+  run_files::{
+    FileBytes, MAX_LIST_PAGE_LEN, MAX_VIEW_BYTES, RunFileFailure, RunFileRead, RunFilesReply, RunFilesRequest,
+  },
 };
 
 use crate::{execution::Scheduler, execution_root::ExecutionRoot};
@@ -57,10 +59,32 @@ pub fn answer_run_files(project_root: &Path, run: RunId, request: RunFilesReques
   let worktree = worktree.as_path();
   let answered = match request {
     RunFilesRequest::Present => Ok(RunFilesReply::Present),
-    RunFilesRequest::List => list(worktree).map(|files| RunFilesReply::Listed { files }),
+    RunFilesRequest::List { from } => list(worktree).map(|files| list_page(files, from, MAX_LIST_PAGE_LEN)),
     RunFilesRequest::Read { path } => read(worktree, &path).map(RunFilesReply::Read),
   };
   answered.unwrap_or_else(RunFilesReply::Failed)
+}
+
+/// The page of `files` that starts at the `from`th: as many as fit `budget` bytes of JSON, and at least one, so a
+/// listing however long is answered in replies that each fit a frame.
+pub fn list_page(files: Vec<String>, from: u64, budget: usize) -> RunFilesReply {
+  let from = usize::try_from(from).unwrap_or(usize::MAX);
+  let mut page = Vec::new();
+  let mut used = 0;
+  let mut rest = files.into_iter().skip(from).peekable();
+  while let Some(file) = rest.peek() {
+    // A name's JSON: itself escaped, its quotes and the comma after it.
+    let len = serde_json::to_string(file).map_or(file.len() * 6 + 2, |json| json.len()) + 1;
+    if !page.is_empty() && used + len > budget {
+      break;
+    }
+    used += len;
+    page.extend(rest.next());
+  }
+  let next = rest
+    .peek()
+    .map(|_| u64::try_from(from.saturating_add(page.len())).unwrap_or(u64::MAX));
+  RunFilesReply::Listed { files: page, next }
 }
 
 /// The files git tracks in `worktree` and the ones it does not ignore, without tracked files that were deleted.

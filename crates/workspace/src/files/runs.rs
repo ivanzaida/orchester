@@ -2,7 +2,7 @@
 //! the desktop never opens the worktree's folder for them. [`RunFiles`] asks the runner; what it answers is turned
 //! into what the code viewer shows of the checkout's files, so a run's file shows as it always did.
 
-use std::{io, sync::Arc};
+use std::{collections::HashSet, io, sync::Arc};
 
 use orchester_core::id::RunId;
 use orchester_ipc::run_files::{RunFileFailure, RunFileRead, RunFilesReply, RunFilesRequest};
@@ -31,14 +31,29 @@ pub(super) fn present(runs: &dyn RunFiles, run: RunId) -> Result<bool, FilesErro
   }
 }
 
-/// The files the worktree of `run` lists.
+/// The files the worktree of `run` lists, asked page by page so no reply outgrows a frame. A file the worktree gained
+/// or lost between two pages can shift the pages: a name listed twice is kept once.
 pub(super) fn list(runs: &dyn RunFiles, run: RunId) -> Result<Vec<String>, FilesError> {
-  match runs.ask(run, RunFilesRequest::List)? {
-    RunFilesReply::Listed { files } => Ok(files),
-    RunFilesReply::Gone => Err(FilesError::VersionGone(Version::Run(run))),
-    RunFilesReply::Failed(failure) => Err(failed(failure, None)),
-    other => Err(unexpected(&other)),
+  let mut files = Vec::new();
+  let mut from = 0;
+  loop {
+    match runs.ask(run, RunFilesRequest::List { from })? {
+      RunFilesReply::Listed { files: page, next } => {
+        files.extend(page);
+        match next {
+          Some(next) if next > from => from = next,
+          Some(_) => return Err(FilesError::Runner("a listing's page did not move on".to_owned())),
+          None => break,
+        }
+      }
+      RunFilesReply::Gone => return Err(FilesError::VersionGone(Version::Run(run))),
+      RunFilesReply::Failed(failure) => return Err(failed(failure, None)),
+      other => return Err(unexpected(&other)),
+    }
   }
+  let mut seen = HashSet::new();
+  files.retain(|file| seen.insert(file.clone()));
+  Ok(files)
 }
 
 /// The file `path` of the worktree of `run`, as the viewer shows it.

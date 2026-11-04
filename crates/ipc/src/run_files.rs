@@ -1,15 +1,21 @@
-//! The files of a run's worktree, which the desktop reads through the project's runner (protocol 44,
+//! The files of a run's worktree, which the desktop reads through the project's runner (protocol 45,
 //! `docs/architecture/remote-runners.md`, rule 5): whether the worktree is there, the files it lists, and one file's
 //! bytes. The runner's executor side reads them with the code viewer's limits; the desktop shows them as it shows the
 //! files of its own checkout. A file's bytes travel raw after the reply's JSON head in a binary frame, as a
-//! screencast frame's JPEG does ([`crate::frame`]).
+//! screencast frame's JPEG does ([`crate::frame`]). A listing travels in pages of at most [`MAX_LIST_PAGE_LEN`], so
+//! however many files a worktree holds, no reply outgrows a frame.
 
 use std::{fmt, io};
 
 use serde::{Deserialize, Serialize};
 
+use crate::frame::MAX_FRAME_LEN;
+
 /// The largest file the code viewer shows: a larger one is measured, not read.
 pub const MAX_VIEW_BYTES: u64 = 5 * 1024 * 1024;
+
+/// The most bytes the names of one page of a listing take as JSON, well inside a frame with the reply around them.
+pub const MAX_LIST_PAGE_LEN: usize = MAX_FRAME_LEN as usize / 4;
 
 /// What the desktop asks of a run's worktree ([`crate::Command::RunFiles`]).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -17,9 +23,9 @@ pub const MAX_VIEW_BYTES: u64 = 5 * 1024 * 1024;
 pub enum RunFilesRequest {
   /// Whether the worktree is there. Answered with [`RunFilesReply::Present`] or [`RunFilesReply::Gone`].
   Present,
-  /// The files git tracks there and the ones it does not ignore, without tracked files that were deleted. Answered
-  /// with [`RunFilesReply::Listed`].
-  List,
+  /// The files git tracks there and the ones it does not ignore, without tracked files that were deleted, from the
+  /// `from`th on (0 for the first page). Answered with [`RunFilesReply::Listed`].
+  List { from: u64 },
   /// The file `path`, relative to the worktree with `/` between names. Answered with [`RunFilesReply::Read`].
   Read { path: String },
 }
@@ -32,8 +38,10 @@ pub enum RunFilesReply {
   Gone,
   /// The run's worktree is there.
   Present,
+  /// One page of a listing: `files`, and `next`, where the next page starts, while the listing goes on.
   Listed {
     files: Vec<String>,
+    next: Option<u64>,
   },
   Read(RunFileRead),
   /// What was asked could not be read.

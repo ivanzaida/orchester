@@ -49,7 +49,7 @@ pub use self::{
   coordinator::attach::Attached,
   executor::{
     link,
-    run_files::answer_run_files,
+    run_files::{answer_run_files, list_page},
     step::{QaSlots, outside_read_refusals},
   },
 };

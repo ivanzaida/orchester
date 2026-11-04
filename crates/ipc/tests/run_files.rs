@@ -1,12 +1,14 @@
-//! The files of a run's worktree on the wire (protocol 44): the requests and every reply round-trip, a file's bytes
-//! travel raw after the reply in a binary frame, the largest file the viewer shows fits a frame, and a file's reply
-//! without its bytes is refused.
+//! The files of a run's worktree on the wire (protocol 45): the requests and every reply round-trip, a file's bytes
+//! travel raw after the reply in a binary frame, the largest file the viewer shows and a listing's page fit a frame,
+//! and a file's reply without its bytes is refused.
 
 use orchester_core::id::RunId;
 use orchester_ipc::{
   Command, Event, FrameError, PROTOCOL_VERSION, Reply, Request, RequestId,
   frame::{FrameReader, FrameWriter, MAX_FRAME_LEN},
-  run_files::{FileBytes, IoKind, MAX_VIEW_BYTES, RunFileFailure, RunFileRead, RunFilesReply, RunFilesRequest},
+  run_files::{
+    FileBytes, IoKind, MAX_LIST_PAGE_LEN, MAX_VIEW_BYTES, RunFileFailure, RunFileRead, RunFilesReply, RunFilesRequest,
+  },
 };
 use tokio::io::{AsyncWriteExt, DuplexStream, ReadHalf, WriteHalf};
 
@@ -54,7 +56,8 @@ fn run_files_requests_round_trip_under_a_raised_protocol() {
   let run = RunId::generate();
   for request in [
     RunFilesRequest::Present,
-    RunFilesRequest::List,
+    RunFilesRequest::List { from: 0 },
+    RunFilesRequest::List { from: 120_000 },
     RunFilesRequest::Read {
       path: "src/main.rs".to_owned(),
     },
@@ -79,6 +82,14 @@ async fn run_files_replies_round_trip_and_a_files_bytes_travel_raw() {
       3,
       RunFilesReply::Listed {
         files: vec!["src/main.rs".to_owned(), "notes.md".to_owned()],
+        next: None,
+      },
+    ),
+    reply(
+      10,
+      RunFilesReply::Listed {
+        files: vec!["a.rs".to_owned()],
+        next: Some(1),
       },
     ),
     reply(4, RunFilesReply::Read(RunFileRead::Bytes(FileBytes { bytes: largest }))),
@@ -106,6 +117,10 @@ async fn run_files_replies_round_trip_and_a_files_bytes_travel_raw() {
   assert!(
     MAX_VIEW_BYTES < u64::from(MAX_FRAME_LEN),
     "the largest file fits a frame"
+  );
+  assert!(
+    MAX_LIST_PAGE_LEN * 2 < MAX_FRAME_LEN as usize,
+    "a listing's page fits a frame with room to spare"
   );
   assert_eq!(round_trip(&sent).await, sent);
 }
