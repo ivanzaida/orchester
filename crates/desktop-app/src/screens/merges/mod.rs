@@ -3,10 +3,11 @@
 //! the runs whose last attempt did not land, each with the action that moves it on; *Waiting for your review*: the runs
 //! that merge only once a person approves; then the merged runs by local day, newest first, older days read as the list
 //! scrolls near its end. Sections without rows are left out; with none at all, *No merges yet* (09c `jhPCL`); while
-//! read, bones (09d `Zlk49`). A row's chevron opens the run's attempts ([`attempt`], ORC-363); a run waiting for review
-//! opens its review page ([`review`], ORC-697) at the same route. The merges are read again whenever the project's
-//! tasks or runs change, a merge job ends, Orchester's wait to try a merge again begins, changes or ends, or a button
-//! here changed something.
+//! read the first time in the window, bones (09d `Zlk49`); opened again, the merges last read, kept in the project's
+//! feed, while they are read anew (ORC-721). A row's chevron opens the run's attempts ([`attempt`], ORC-363); a run
+//! waiting for review opens its review page ([`review`], ORC-697) at the same route. The merges are read again whenever
+//! the project's tasks or runs change, a merge job ends, Orchester's wait to try a merge again begins, changes or ends,
+//! or a button here changed something.
 
 mod actions;
 pub(crate) mod attempt;
@@ -34,9 +35,9 @@ use lurq::{
 };
 use orchester_workspace::{
   background,
+  merge_queue::checkout_base,
   messages::{self, Message},
   tasks::{
-    checkout::Checkout,
     integration_jobs::JobState,
     merge_attempts::merges::{self, MergeRun, Merges},
   },
@@ -45,7 +46,7 @@ use orchester_workspace::{
 use self::actions::{Actions, PuttingBack};
 use crate::{
   navigation::{Navigation, link::Open},
-  project::ShownProject,
+  project::{ShownProject, feed::LastMerges},
   routes::{ProjectPage, Route},
   services::Services,
   theme::{DeliverySpacing, HubSpacing},
@@ -92,9 +93,16 @@ impl Component for MergesScreen {
   type Props = Props;
 
   fn create(ctx: &mut Ctx) -> Self {
+    // Opened again, it reads as many pages as it shows from the last read, so the list does not shrink as they land.
+    let pages = ctx
+      .props::<Props>()
+      .project
+      .feed
+      .merges
+      .with_untracked(|last| last.as_ref().map_or(1, |last| last.pages));
     Self {
       again: ctx.signal(0),
-      pages: ctx.signal(1),
+      pages: ctx.signal(pages),
       failed: ctx.signal(None),
       putting_back: ctx.signal(PuttingBack::default()),
       scroll: ScrollState::new(),
@@ -236,11 +244,20 @@ enum Read {
   Failed(Message),
 }
 
+/// The merges as last read: on a fresh mount, while the first read of this mount is under way, the ones the project's
+/// feed kept from the screen's last read in this window, read with as many `pages`; each read that lands is kept there.
 fn read(ctx: &mut Ctx, project: &ShownProject, (again, pages): (u64, usize)) -> Read {
   let feed = &project.feed;
+  let kept = || {
+    feed
+      .merges
+      .get_untracked()
+      .filter(|last| last.pages == pages)
+      .map(|last| last.merges)
+  };
   let tasks = feed.tasks.with(|tasks| tasks.ready().cloned());
   let Some(tasks) = tasks else {
-    return Read::Reading;
+    return kept().map_or(Read::Reading, |merges| ready(merges, false, pages));
   };
   let root = project.open.repo_root.clone();
   let queue = crate::project::merge_queue::changes(ctx, &root);
@@ -262,32 +279,49 @@ fn read(ctx: &mut Ctx, project: &ShownProject, (again, pages): (u64, usize)) -> 
   if let Some(error) = loaded.error.clone().filter(|_| loaded.is_rejected()) {
     return Read::Failed(error);
   }
+  if let Some(merges) = loaded.fulfilled_data()
+    && feed.merges.with_untracked(|last| {
+      last
+        .as_ref()
+        .is_none_or(|last| last.pages != pages || last.merges != *merges)
+    })
+  {
+    feed.merges.set(Some(LastMerges {
+      merges: merges.clone(),
+      pages,
+    }));
+  }
   let pending = loaded.is_pending();
-  loaded.data.map_or(Read::Reading, |merges| {
-    let listed: usize = merges.merged.iter().map(|day| day.runs.len()).sum();
-    Read::Ready {
-      pending: pending && merges.more && listed < pages * PAGE,
-      merges,
-    }
-  })
+  loaded
+    .data
+    .or_else(kept)
+    .map_or(Read::Reading, |merges| ready(merges, pending, pages))
 }
 
-/// The page while the merges are read ([`states::reading`]), its lead naming the branch the checkout has (09d `Zlk49`
-/// draws the lead real): one quick git call, not held with the merges' reads.
+/// `merges` as read with `pages`, `pending` while a read is under way.
+fn ready(merges: Merges, pending: bool, pages: usize) -> Read {
+  let listed: usize = merges.merged.iter().map(|day| day.runs.len()).sum();
+  Read::Ready {
+    pending: pending && merges.more && listed < pages * PAGE,
+    merges,
+  }
+}
+
+/// The page while the merges are read ([`states::reading`]), its info line drawn from how git tells the checkout
+/// stands (09d `Zlk49` draws the lead real): the same call the merges' read makes for it, quick and not held with the
+/// merges' reads, so the line does not move when they land. `None` until git answered.
 fn reading(ctx: &mut Ctx, project: &ShownProject) -> Element {
   let programs = Services::of(ctx).programs;
-  let branch = ctx
+  let told = ctx
     .future(project.open.repo_root.clone(), move |root| {
       let programs = programs.clone();
-      async move {
-        background::run(move || Checkout::branch(&programs, &root).map(|branch| branch.as_str().to_owned())).await
-      }
+      async move { background::run(move || checkout_base(&root, &programs)).await }
     })
     .state()
-    .get()
-    .data
-    .flatten();
-  states::reading(ctx, branch.as_deref())
+    .get();
+  // A git that could not be asked tells no branch, as the merges' read then does.
+  let base = (!told.is_pending()).then(|| told.data.flatten());
+  states::reading(ctx, base.as_ref().map(Option::as_ref))
 }
 
 /// `run`'s page: its review while it waits for one (ORC-697, [`review`]), its merge attempts otherwise (ORC-363,

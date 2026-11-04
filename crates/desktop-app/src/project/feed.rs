@@ -88,6 +88,8 @@ pub struct ProjectFeed {
   pub hub_counts: Signal<Option<orchester_workspace::agents::hub::HubCounts>>,
   /// The Agents hub's tabs whose own read failed, one bit each: they show no count rather than a stale one.
   pub hub_unread: Signal<u8>,
+  /// What Review › Merges read last, which it shows again at once when it opens again and reads them anew.
+  pub merges: Signal<Option<LastMerges>>,
   /// Whether the sidebar's Configure section is folded for the project, in every tab of the session.
   pub configure_folded: Signal<bool>,
   /// The team's configuration as the five libraries show it, while the project is shared (`team`); `None` while it is
@@ -109,6 +111,15 @@ struct Offline {
 pub struct PipelineNames(pub std::sync::Arc<std::collections::BTreeMap<orchester_core::id::ResourceId, String>>);
 
 impl lurq::app::component::DevtoolsInspectable for PipelineNames {}
+
+/// The merges Review › Merges read last, with how many pages of merged runs they hold.
+#[derive(Clone, Debug, PartialEq)]
+pub struct LastMerges {
+  pub merges: orchester_workspace::tasks::merge_attempts::merges::Merges,
+  pub pages: usize,
+}
+
+impl lurq::app::component::DevtoolsInspectable for LastMerges {}
 
 /// Task forms holding edits that are not saved: Edit task by its task's key, New task as `None`.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -187,6 +198,7 @@ impl ProjectFeed {
       pipeline_names: Signal::new(PipelineNames::default()),
       hub_counts: Signal::new(None),
       hub_unread: Signal::new(0),
+      merges: Signal::new(None),
       configure_folded: Signal::new(false),
       team: Signal::new(None),
       offline: Arc::default(),

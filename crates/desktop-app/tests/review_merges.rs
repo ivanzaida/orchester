@@ -3,8 +3,9 @@
 //! count in `warning`; *Not merged* with each outcome's line and action, *Try again* merging as the task page does,
 //! Orchester's own retry followed live, and *Put files back* putting a stopped bring-in's file back; *Waiting for your
 //! review* with *Changed since your review*;
-//! the merged runs by local day, older days read as the list scrolls; and *No merges yet*. Needs `git`, as the seed
-//! does. `cargo test -p orchester-app --test review_merges review_merges`.
+//! the merged runs by local day, older days read as the list scrolls; *No merges yet*; the merges last read shown at
+//! once when the tab opens again, and an info line that does not move as they are read. Needs `git`, as the seed does.
+//! `cargo test -p orchester-app --test review_merges review_merges`.
 
 #[path = "../examples/seed/kontur/mod.rs"]
 #[allow(
@@ -389,6 +390,65 @@ fn review_merges_without_any_attempt_says_no_merges_yet() {
   seeded.window.until("the tab without a count", |window| {
     window.texts("review-hub-tab-merges").is_some() && window.texts("review-hub-tab-merges-count").is_none()
   });
+}
+
+/// Opened again, the tab shows the merges it read last at once, from the first frame, with no reading state, and reads
+/// them again behind them (ORC-721).
+#[test]
+fn review_merges_opened_again_shows_the_merges_last_read_at_once() {
+  let mut seeded = Seeded::new("merges");
+  seeded.merges();
+  let before = seeded.rows("merges-not-merged");
+  assert!(!before.is_empty());
+  let navigation = seeded.window.navigation();
+  navigation.go(Route::Project(seeded.project, ProjectPage::MergeQueue));
+  seeded
+    .window
+    .until("the Merge queue", |window| window.texts("screen-merge_queue").is_some());
+  navigation.go(Route::Project(seeded.project, ProjectPage::Merges));
+  seeded.window.pass();
+  assert!(seeded.shows("screen-merges"), "the tab opened");
+  assert!(
+    !seeded.shows("merges-loading") && !seeded.shows("merges-info-untold"),
+    "no reading state"
+  );
+  assert_eq!(seeded.rows("merges-not-merged"), before, "the rows last read");
+  let lead = seeded.window.text("merges-info");
+  assert!(lead.contains("Base main"), "{lead}");
+  seeded.until_read();
+  assert_eq!(seeded.rows("merges-not-merged"), before, "read again, the same");
+}
+
+/// On a first opening the info line is drawn from git's word on the checkout as it will stand once the merges are
+/// read: its lead, Base and Checkout keep their place and width from the first frame they show (ORC-721).
+#[test]
+fn review_merges_info_line_keeps_its_place_from_the_first_frame() {
+  let mut seeded = Seeded::new("merges");
+  seeded
+    .window
+    .navigation()
+    .go(Route::Project(seeded.project, ProjectPage::Merges));
+  let parts = ["merges-lead", "merges-base", "merges-checkout"];
+  // Each frame that shows the lead: where each part stands and how wide it is, `None` for a part it lacks.
+  let mut frames: Vec<Vec<Option<(f32, f32)>>> = Vec::new();
+  seeded.window.until_within(GIT_WORK, "the merges", |window| {
+    let placed: Vec<Option<(f32, f32)>> = parts
+      .iter()
+      .map(|id| {
+        let bounds = window.tree.get_element_by_id_mut(id)?.bounds()?;
+        Some((bounds.x, bounds.width))
+      })
+      .collect();
+    if placed[0].is_some() {
+      frames.push(placed);
+    }
+    window.tree.get_element_by_id("merges-not-merged").is_some()
+  });
+  let read = frames.last().expect("the info line is shown").clone();
+  assert!(read.iter().all(Option::is_some), "{read:?}");
+  for (frame, placed) in frames.iter().enumerate() {
+    assert_eq!(placed, &read, "frame {frame} of {} of {parts:?}", frames.len());
+  }
 }
 
 /// Turns the wheel over the list: below 0 scrolls toward its end.
