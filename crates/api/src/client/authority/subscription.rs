@@ -1,7 +1,7 @@
 //! A team project's scoped invalidation subscription (S11): `GET …/subscription`, resumed after a cursor with
 //! `Last-Event-ID` and read as typed [`SubscriptionEvent`]s until it ends, always with a reason. Each SSE event is
-//! named by its `kind` and its data is the event's JSON with that same `kind`. Keep-alive comments are skipped.
-//! Reconnecting and its backoff are the caller's: the stream only says why it ended.
+//! named by its `kind` and its data is the event's JSON with that same `kind`. Comments (`: connected`,
+//! `: keep-alive`) are skipped. Reconnecting and its backoff are the caller's: the stream only says why it ended.
 
 use std::collections::VecDeque;
 
@@ -9,12 +9,13 @@ use reqwest::{Method, Response, header::ACCEPT};
 
 use super::{Authority, AuthorityCallError, answered};
 use crate::{
+  ErrorCode,
   client::{
     ClientError,
     events::{EVENT_STREAM, LAST_EVENT_ID, STREAM_DEADLINE, is_event_stream},
   },
   sse::{SseEvent, SseParser},
-  v2::{AuthorityErrorCode, EventCursor, SubscriptionEvent},
+  v2::{EventCursor, SubscriptionEvent},
 };
 
 /// Why a subscription ended.
@@ -22,14 +23,15 @@ use crate::{
 pub enum SubscriptionEnd {
   /// The server closed the stream; the caller subscribes again.
   Closed,
-  /// `401`: the server no longer accepts this computer's token.
+  /// `401 unauthorized`: the server no longer accepts this computer's token.
   Unauthorized,
-  /// The `revoked` event, or a `403` refusal to open: the caller lost access to the workspace.
+  /// The `revoked` event: the session or the membership ended.
   Revoked,
-  /// `404`: the server has no such workspace for the caller.
+  /// `404 not_found`: the server has no such workspace for the caller, or the caller may not read it (a removed
+  /// member gets this).
   NotFound,
   /// The connection failed, broke off or stayed silent too long, or the server refused the stream otherwise (e.g.
-  /// `429 rate_limited`, `503 unavailable`).
+  /// `400 bad_request` for a malformed `Last-Event-ID`, or more streams than a session may hold).
   Failed(AuthorityCallError),
   /// An event the contract does not read: no or an unknown kind, a name that is not its data's kind, data that is not
   /// its payload, or one longer than [`crate::sse::MAX_EVENT`].
@@ -46,8 +48,8 @@ pub struct Subscription {
 }
 
 impl Authority<'_> {
-  /// `GET …/subscription`: `ready` with the stream's cursor first, then an `invalidated` event per committed batch
-  /// after `last` (sent as `Last-Event-ID`), or `reset` when `last` is older than the server replays.
+  /// `GET …/subscription`. Without `last`, `ready` with the stream's cursor first; with it (sent as `Last-Event-ID`),
+  /// no `ready`, but `reset` when the server cannot replay from it. Then an `invalidated` event per committed batch.
   pub async fn subscribe(&self, last: Option<EventCursor>) -> Result<Subscription, SubscriptionEnd> {
     let mut request = self
       .request(Method::GET, "/subscription")
@@ -117,12 +119,18 @@ fn typed(event: &SseEvent) -> Result<SubscriptionEvent, SubscriptionEnd> {
   }
 }
 
-/// The end of a subscription the server refused to open.
+/// The end of a subscription the server refused to open: in the `/api/v1` `{error, message}` form, `401
+/// unauthorized` for a token it does not accept and `404 not_found` for anyone who may not read the workspace.
 fn refused(error: AuthorityCallError) -> SubscriptionEnd {
-  match error.code() {
-    Some(AuthorityErrorCode::Unauthenticated) => SubscriptionEnd::Unauthorized,
-    Some(AuthorityErrorCode::Forbidden | AuthorityErrorCode::MembershipRevoked) => SubscriptionEnd::Revoked,
-    Some(AuthorityErrorCode::NotFound) => SubscriptionEnd::NotFound,
+  match &error {
+    AuthorityCallError::Client(ClientError::Api {
+      code: ErrorCode::Unauthorized,
+      ..
+    }) => SubscriptionEnd::Unauthorized,
+    AuthorityCallError::Client(ClientError::Api {
+      code: ErrorCode::NotFound,
+      ..
+    }) => SubscriptionEnd::NotFound,
     _ => SubscriptionEnd::Failed(error),
   }
 }

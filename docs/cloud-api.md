@@ -353,7 +353,8 @@ in every shape below.
   burndown, history), `{kind:"library"}` (library and pickers) and `{kind:"resource",resource:ResourceId}` (its
   version list). Scopes compare by value and are totally ordered, so a set of them is stable.
 - `SubscriptionEvent`, tagged by `kind`:
-  - `{kind:"ready",cursor:EventCursor}`: sent first; the stream's position, with no snapshot.
+  - `{kind:"ready",cursor:EventCursor}`: sent first to a stream opened without `Last-Event-ID`; the stream's
+    position, with no snapshot.
   - `{kind:"invalidated",cursor,scopes:[QueryScope]}`: one per committed batch; `cursor` is the batch's last entry and
     `scopes` name each scope once.
   - `{kind:"reset",cursor}`: the resume point is below the server's replay floor; the client drops every cached query
@@ -370,35 +371,50 @@ Existing v1 contracts, the /api/v1 client and earlier v2 types are unchanged.
 ## Team authority S10/S11 routes
 
 The desktop's client of the S10 reads and the S11 subscription (`orchester_api::client::Authority`, through
-`Client::authority(token, project)`; ORC-713, milestone P5) calls these routes under `/api/v2/projects/{project}`, each
-with the device token as `Authorization: Bearer`. A listing that takes filters and a page is a `POST` of its request
-body to `…/query`, so filters never travel in a URL. A refusal is an `AuthorityError` body
-(`AuthorityCallError::Refused`); a `{error,message}` body or one that is not the answer's shape reads as not an
-Orchester server. The routes are this client's; the team server implements them in the platform repository (OP-153,
-OP-154), which must match them before the desktop uses them.
+`Client::authority(token, project)`; ORC-713, milestone P5, routes corrected in ORC-718) calls the team server's own
+routes (platform OP-153 and OP-154, its `docs/workspace-reads.md` and `docs/workspace-subscriptions.md`) under
+`/api/v2/projects/{project}`, each with the device token as `Authorization: Bearer`. A listing that takes filters or
+a page is a `POST` of its request body, so filters never travel in a URL. The server answers these routes for whoever
+may read the workspace (a member, a workspace Admin, or a server admin without membership); anyone else, a removed
+member too, gets `404`.
 
 | Method and path | Request | Answer |
 | --- | --- | --- |
 | `GET …/workspace` | | `WorkspaceMetadata` |
 | `GET …/capabilities` | | `Capabilities` |
-| `POST …/tasks/query` | `TaskListRequest` | `Page<TaskRead>` |
-| `POST …/tasks/counts` | `TaskFilters` | `TaskBoardCounts` |
+| `POST …/task-list` | `TaskListRequest` | `Page<TaskRead>` |
+| `POST …/task-counts` | `TaskFilters` | `TaskBoardCounts` |
 | `GET …/tasks/{task}` | | `TaskRead` |
-| `POST …/modules/query` | `ModuleListRequest` | `Page<ModuleSummary>` |
+| `POST …/module-list` | `ModuleListRequest` | `Page<ModuleSummary>`, oldest module first |
 | `GET …/modules/{module}` | | `ModuleSummary` |
-| `GET …/modules/{module}/burndown` | | `ModuleBurndownRead` |
+| `GET …/modules/{module}/progress` | | `ModuleProgressRead` |
+| `GET …/modules/{module}/burndown` | | `ModuleBurndownRead`, with the forecast |
 | `POST …/modules/{module}/history` | `PageRequest` | `ModuleHistoryPage` |
-| `POST …/resources/query` | `ResourceLibraryRequest` | `ResourceLibraryPage` |
-| `POST …/resources/picker` | `ResourcePickerRequest` | `ResourcePickerPage` |
-| `POST …/resources/{resource}/versions/query` | `PageRequest` | `ResourceVersionsPage` |
-| `GET …/resources/{resource}/versions/{number}` | | `SharedVersion` |
+| `POST …/library` | `ResourceLibraryRequest` | `ResourceLibraryPage`, without versions |
+| `POST …/resource-picker` | `ResourcePickerRequest` | `ResourcePickerPage` |
+| `POST …/resources/{resource}/version-list` | `PageRequest` | `ResourceVersionsPage`, oldest first, each version with its body |
 | `GET …/subscription` | optional `Last-Event-ID` | the S11 event stream |
 
+There is no route for one version on its own: a version's body is read in its page of the version list, which pages
+by count and by at most 1 MiB of JSON (a larger version fills a page of its own).
+
+Refusals come in two forms. What is new to these reads is an `AuthorityError` (`AuthorityCallError::Refused`): `422
+invalid` for a page cursor that is not one or belongs to another request, `410 cursor_expired` for one whose listing
+is gone. The failures common to every route keep their `/api/v1` `{error,message}` envelope (`ClientError::Api` inside
+`AuthorityCallError::Client`): `401 unauthorized`, `404 not_found`, and `400 bad_request` for a malformed body, an
+unknown field or a malformed `Last-Event-ID`. A body in neither form, or an answer not of the route's shape, reads as
+not an Orchester server.
+
+The subscription sends a `: connected` comment first and `: keep-alive` every 20 seconds while nothing else comes.
+Opened without `Last-Event-ID` it sends `ready` at the log's cursor; resumed with one it sends no `ready`, only the
+`invalidated` batches after it, or `reset` when it cannot replay from it. `revoked` (data `{kind:"revoked"}`, no `id:`)
+ends it.
+
 The workspace's reads (`orchester_workspace::team_reads`) follow the race rule above: they wait for the
-subscription's `ready`, are stamped with the cursor they answer at (a page's or count's snapshot, or the position the
-read was issued at for a model without one), read again when an `invalidated` event of their scope arrives while they
-are in flight, and treat every reconnect like a `reset`. A `401`, a `403`, `revoked` or `membership_revoked`, and a
-changed session end them for good.
+subscription's first `ready`, are stamped with the cursor they answer at (a page's or count's snapshot, or the
+position the read was issued at for a model without one), read again when an `invalidated` event of their scope
+arrives while they are in flight, and treat every reconnect (a subscription resumed from the last cursor seen) like a
+`reset`. A `401`, a `404`, `revoked`, and a changed session end them for good.
 
 ## Team authority P2 commands
 

@@ -1,5 +1,6 @@
-//! `Client::authority` against a fake server on loopback: the S10 reads' routes, bodies and pages, refusals typed as
-//! `AuthorityError`s, and the S11 subscription's events, its `Last-Event-ID` and the ends it reports.
+//! `Client::authority` against a fake server on loopback that answers as the team server does: the S10 reads' routes,
+//! bodies and pages, refusals new to the reads typed as `AuthorityError`s and the common failures in their `/api/v1`
+//! form, and the S11 subscription's events, its `Last-Event-ID` and the ends it reports.
 //!
 //! `cargo test -p orchester-api --features client --test authority_client authority_client_`
 
@@ -12,15 +13,15 @@ use std::{
 };
 
 use orchester_api::{
+  ErrorCode, SharedResourceKind,
   client::{AuthorityCallError, Client, ClientError, PlainHttp, ServerAddress, SubscriptionEnd},
   v2::{
     AuthorityErrorCode, EventCursor, ModuleListRequest, PageCursor, PageRequest, QueryScope, ResourceLibraryRequest,
-    SearchText, SubscriptionEvent, TaskFilters, TaskListRequest, TaskSort,
+    ResourcePickerRequest, SearchText, SubscriptionEvent, TaskFilters, TaskListRequest, TaskSort,
   },
 };
 use orchester_core::{
   id::{ModuleId, ProjectId, ResourceId, TaskId},
-  resource::VersionNumber,
   secret::SecretValue,
   task::organization::WorkflowStatus,
 };
@@ -49,8 +50,14 @@ impl Answer {
     }
   }
 
+  /// A refusal new to `/api/v2`, as an `AuthorityError`.
   fn refusal(status: u16, code: &str) -> Self {
     Self::status(status, &json!({ "code": code, "details": {} }))
+  }
+
+  /// A failure common to every route, in the `/api/v1` `{error, message}` form the team server keeps for them.
+  fn failure(status: u16, code: &str) -> Self {
+    Self::status(status, &json!({ "error": code, "message": "Refused" }))
   }
 
   fn stream(pieces: &[&str]) -> Self {
@@ -216,7 +223,7 @@ async fn authority_client_task_list_posts_its_request_and_reads_the_page() {
   assert_eq!(read.next.as_ref().map(PageCursor::as_str), Some("p-2"));
   assert_eq!(read.cursor, cursor("41"));
   let seen = server.seen();
-  assert_eq!(seen[0].line, format!("POST /api/v2/projects/{project}/tasks/query"));
+  assert_eq!(seen[0].line, format!("POST /api/v2/projects/{project}/task-list"));
   assert_eq!(seen[0].header("authorization"), Some("Bearer token"));
   assert_eq!(seen[0].header("content-type"), Some("application/json"));
   assert_eq!(
@@ -235,11 +242,12 @@ async fn authority_client_reads_route_under_the_project() {
     Answer::json(&counts),
     Answer::json(&capabilities(project)),
     Answer::json(&empty),
+    Answer::json(&json!({ "unit": "tasks", "scope": 3, "done": 1 })),
     Answer::json(&empty),
     Answer::json(&empty),
     Answer::json(&empty),
-    Answer::refusal(404, "not_found"),
-    Answer::refusal(404, "not_found"),
+    Answer::json(&empty),
+    Answer::failure(404, "not_found"),
   ]);
   let (client, token) = (server.client(), token());
   let authority = client.authority(&token, project);
@@ -257,28 +265,52 @@ async fn authority_client_reads_route_under_the_project() {
       .items
       .is_empty()
   );
+  let progress = authority.progress(module).await.expect("progress");
+  assert_eq!((progress.scope, progress.done), (3, 1));
   assert!(authority.module_history(module, &PageRequest::first()).await.is_ok());
   assert!(authority.library(&ResourceLibraryRequest::default()).await.is_ok());
+  let picker = ResourcePickerRequest {
+    kind: SharedResourceKind::Tool,
+    search: None,
+    page: PageRequest::first(),
+  };
+  assert!(authority.picker(&picker).await.is_ok());
   assert!(authority.versions(resource, &PageRequest::first()).await.is_ok());
   let missing = authority.task(task_id).await.expect_err("no such task");
-  assert_eq!(missing.code(), Some(AuthorityErrorCode::NotFound));
-  let version = VersionNumber::new(std::num::NonZeroU32::new(3).expect("a version"));
-  assert!(authority.version(resource, version).await.is_err());
-  let lines: Vec<String> = server.seen().into_iter().map(|seen| seen.line).collect();
+  assert!(
+    matches!(
+      &missing,
+      AuthorityCallError::Client(ClientError::Api {
+        status: 404,
+        code: ErrorCode::NotFound,
+        ..
+      })
+    ),
+    "{missing:?}"
+  );
+  let seen = server.seen();
+  let lines: Vec<&str> = seen.iter().map(|seen| seen.line.as_str()).collect();
   let base = format!("/api/v2/projects/{project}");
   assert_eq!(
     lines,
     [
-      format!("POST {base}/tasks/counts"),
+      format!("POST {base}/task-counts"),
       format!("GET {base}/capabilities"),
-      format!("POST {base}/modules/query"),
+      format!("POST {base}/module-list"),
+      format!("GET {base}/modules/{module}/progress"),
       format!("POST {base}/modules/{module}/history"),
-      format!("POST {base}/resources/query"),
-      format!("POST {base}/resources/{resource}/versions/query"),
+      format!("POST {base}/library"),
+      format!("POST {base}/resource-picker"),
+      format!("POST {base}/resources/{resource}/version-list"),
       format!("GET {base}/tasks/{task_id}"),
-      format!("GET {base}/resources/{resource}/versions/3"),
     ]
   );
+  assert_eq!(
+    seen[2].json(),
+    json!({ "state": null, "page": { "after": null, "limit": 50 } })
+  );
+  assert_eq!(seen[4].json(), json!({ "after": null, "limit": 50 }));
+  assert_eq!(seen[7].json(), json!({ "after": null, "limit": 50 }));
 }
 
 #[tokio::test]
@@ -287,8 +319,10 @@ async fn authority_client_refusals_are_typed() {
   unavailable.headers = "Retry-After: 7\r\n";
   let server = Server::start(vec![
     Answer::refusal(410, "cursor_expired"),
+    Answer::refusal(422, "invalid"),
     unavailable,
-    Answer::status(403, &json!({ "error": "forbidden", "message": "Refused" })),
+    Answer::failure(400, "bad_request"),
+    Answer::status(502, &json!({ "detail": "Bad gateway" })),
     Answer::json(&json!({ "items": [] })),
   ]);
   let (client, token) = (server.client(), token());
@@ -297,6 +331,8 @@ async fn authority_client_refusals_are_typed() {
   let expired = authority.tasks(&request).await.expect_err("expired");
   assert!(matches!(&expired, AuthorityCallError::Refused { status: 410, .. }));
   assert_eq!(expired.code(), Some(AuthorityErrorCode::CursorExpired));
+  let invalid = authority.tasks(&request).await.expect_err("not a page cursor");
+  assert_eq!(invalid.code(), Some(AuthorityErrorCode::Invalid));
   let busy = authority.tasks(&request).await.expect_err("unavailable");
   assert!(matches!(
     busy,
@@ -306,13 +342,22 @@ async fn authority_client_refusals_are_typed() {
       ..
     }
   ));
-  let legacy = authority
-    .tasks(&request)
-    .await
-    .expect_err("a v1 refusal is not the contract");
+  let common = authority.tasks(&request).await.expect_err("a common failure");
+  assert!(
+    matches!(
+      &common,
+      AuthorityCallError::Client(ClientError::Api {
+        status: 400,
+        code: ErrorCode::BadRequest,
+        ..
+      })
+    ),
+    "the /api/v1 form of a common failure: {common:?}"
+  );
+  let foreign = authority.tasks(&request).await.expect_err("neither form");
   assert_eq!(
-    legacy,
-    AuthorityCallError::Client(ClientError::NotOrchester { status: 403 })
+    foreign,
+    AuthorityCallError::Client(ClientError::NotOrchester { status: 502 })
   );
   let partial = authority.tasks(&request).await.expect_err("a page without its fields");
   assert_eq!(
@@ -326,20 +371,21 @@ async fn authority_client_subscription_reads_events_and_sends_the_cursor() {
   let task = TaskId::generate();
   let invalidated =
     json!({"kind": "invalidated", "cursor": "43", "scopes": [{"kind": "task_list"}, {"kind": "task", "task": task}]});
-  let server = Server::start(vec![Answer::stream(&[
-    ": keep-alive\n\n",
-    &sse(&json!({"kind": "ready", "cursor": "42"})),
-    &sse(&invalidated),
-    &sse(&json!({"kind": "reset", "cursor": "50"})),
-    &sse(&json!({"kind": "revoked"})),
-    &sse(&json!({"kind": "ready", "cursor": "51"})),
-  ])]);
+  // As the team server streams: a comment first, `ready` only without `Last-Event-ID`, and `revoked` with no `id:`.
+  let server = Server::start(vec![
+    Answer::stream(&[
+      ": connected\n\n",
+      &sse(&json!({"kind": "ready", "cursor": "42"})),
+      ": keep-alive\n\n",
+      &sse(&invalidated),
+      "event: revoked\ndata: {\"kind\":\"revoked\"}\n\n",
+      &sse(&json!({"kind": "ready", "cursor": "51"})),
+    ]),
+    Answer::stream(&[": connected\n\n", &sse(&json!({"kind": "reset", "cursor": "50"}))]),
+  ]);
   let (client, token) = (server.client(), token());
-  let mut subscription = client
-    .authority(&token, ProjectId::generate())
-    .subscribe(Some(cursor("40")))
-    .await
-    .expect("a subscription");
+  let authority = client.authority(&token, ProjectId::generate());
+  let mut subscription = authority.subscribe(None).await.expect("a subscription");
   assert_eq!(
     subscription.next().await,
     Ok(SubscriptionEvent::Ready { cursor: cursor("42") })
@@ -351,43 +397,52 @@ async fn authority_client_subscription_reads_events_and_sends_the_cursor() {
       scopes: vec![QueryScope::TaskList {}, QueryScope::Task { task }],
     })
   );
-  assert_eq!(
-    subscription.next().await,
-    Ok(SubscriptionEvent::Reset { cursor: cursor("50") })
-  );
   assert_eq!(subscription.next().await, Err(SubscriptionEnd::Revoked));
   assert_eq!(
     subscription.next().await,
     Err(SubscriptionEnd::Revoked),
     "nothing after revoked is read"
   );
+  let mut resumed = authority.subscribe(Some(cursor("43"))).await.expect("a subscription");
+  assert_eq!(
+    resumed.next().await,
+    Ok(SubscriptionEvent::Reset { cursor: cursor("50") }),
+    "a resumed subscription gets no ready"
+  );
   let seen = server.seen();
   assert!(seen[0].line.starts_with("GET /api/v2/projects/") && seen[0].line.ends_with("/subscription"));
-  assert_eq!(seen[0].header("last-event-id"), Some("40"));
+  assert_eq!(seen[0].header("last-event-id"), None);
   assert_eq!(seen[0].header("accept"), Some("text/event-stream"));
+  assert_eq!(seen[1].header("last-event-id"), Some("43"));
 }
 
 #[tokio::test]
 async fn authority_client_subscription_ends_with_its_reason() {
   let server = Server::start(vec![
-    Answer::refusal(401, "unauthenticated"),
-    Answer::refusal(403, "membership_revoked"),
-    Answer::refusal(404, "not_found"),
-    Answer::refusal(503, "unavailable"),
+    Answer::failure(401, "unauthorized"),
+    Answer::failure(404, "not_found"),
+    Answer::failure(400, "bad_request"),
     Answer::stream(&["event: ready\ndata: {\"kind\":\"reset\",\"cursor\":\"3\"}\n\n"]),
     Answer::stream(&[&sse(&json!({"kind": "ready", "cursor": "3"}))]),
   ]);
   let (client, token) = (server.client(), token());
   let authority = client.authority(&token, ProjectId::generate());
   let mut ends = Vec::new();
-  for _ in 0..4 {
+  for _ in 0..3 {
     ends.push(authority.subscribe(None).await.err());
   }
   assert_eq!(ends[0], Some(SubscriptionEnd::Unauthorized));
-  assert_eq!(ends[1], Some(SubscriptionEnd::Revoked));
-  assert_eq!(ends[2], Some(SubscriptionEnd::NotFound));
+  assert_eq!(ends[1], Some(SubscriptionEnd::NotFound), "anyone who may not read it");
   assert!(
-    matches!(&ends[3], Some(SubscriptionEnd::Failed(error)) if error.code() == Some(AuthorityErrorCode::Unavailable))
+    matches!(
+      &ends[2],
+      Some(SubscriptionEnd::Failed(AuthorityCallError::Client(ClientError::Api {
+        code: ErrorCode::BadRequest,
+        ..
+      })))
+    ),
+    "a malformed Last-Event-ID: {:?}",
+    ends[2]
   );
   let mut mismatched = authority.subscribe(None).await.expect("a stream");
   assert_eq!(

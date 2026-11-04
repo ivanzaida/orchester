@@ -1,16 +1,13 @@
 //! A team project's shared configuration as the server reads it (S10): a page of the library, a page of a picker's
-//! choices, a page of a resource's published versions and one version with its body. Only what is asked for is read;
-//! no resource's whole history is. The library and the pickers belong to [`QueryScope::Library`], a resource's
-//! versions to its [`QueryScope::Resource`].
+//! choices and a page of a resource's published versions with their bodies. Only what is asked for is read; no
+//! resource's whole history is, and the server has no read of one version on its own. The library and the pickers
+//! belong to [`QueryScope::Library`], a resource's versions to its [`QueryScope::Resource`].
 
-use orchester_api::{
-  SharedVersion,
-  v2::{
-    PageRequest, QueryScope, ResourceLibraryPage, ResourceLibraryRequest, ResourcePickerPage, ResourcePickerRequest,
-    ResourceVersionsPage,
-  },
+use orchester_api::v2::{
+  PageRequest, QueryScope, ResourceLibraryPage, ResourceLibraryRequest, ResourcePickerPage, ResourcePickerRequest,
+  ResourceVersionsPage,
 };
-use orchester_core::{id::ResourceId, resource::VersionNumber};
+use orchester_core::id::ResourceId;
 
 use super::{TeamProject, TeamRead, TeamReadError};
 
@@ -50,18 +47,6 @@ impl TeamProject {
       .read(QueryScope::Resource { resource }, |inner| {
         let page = page.clone();
         async move { inner.session.authority().versions(resource, &page).await }
-      })
-      .await
-  }
-
-  pub async fn version(
-    &self,
-    resource: ResourceId,
-    version: VersionNumber,
-  ) -> Result<TeamRead<SharedVersion>, TeamReadError> {
-    self
-      .read(QueryScope::Resource { resource }, |inner| async move {
-        inner.session.authority().version(resource, version).await
       })
       .await
   }
