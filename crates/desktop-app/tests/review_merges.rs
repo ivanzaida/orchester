@@ -194,7 +194,9 @@ fn review_merges_lists_not_merged_waiting_for_review_and_merged_runs_by_day() {
   let moved = seeded.row("merges-waiting", "Endpoint health page");
   let text = seeded.window.text(&moved);
   assert!(
-    text.contains("Changed since your review") && text.contains("Review again"),
+    text.contains("Changed since your review: 2 commits after ")
+      && text.contains(" · nothing merged · review again")
+      && text.contains("Review again"),
     "{text}"
   );
   let headings: Vec<String> = (0..3)

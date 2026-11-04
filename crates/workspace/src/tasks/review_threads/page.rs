@@ -8,7 +8,7 @@
 use std::{path::Path, sync::Arc};
 
 use orchester_core::{
-  integration::{LoggedCommit, own_commits},
+  integration::LoggedCommit,
   merge_queue::QueueState,
   project::TaskKey,
   resource::StepKey,
@@ -24,10 +24,13 @@ use super::{
   read::{Review, review_of},
 };
 use crate::tasks::{
-  changes::{Checkpointed, GIT, RunRange, checkpointed_in, own_start},
+  changes::{Checkpointed, RunRange, checkpointed_in, own_start},
   data::ProjectTasks,
   detail::{TaskDetail, run_store_error},
-  merge_attempts::{merges::MergeRun, read::ReviewIn},
+  merge_attempts::{
+    merges::MergeRun,
+    read::{ReviewIn, commits_after, reviewed_head},
+  },
   return_work,
 };
 
@@ -105,18 +108,18 @@ pub fn review_page(
     .as_ref()
     .filter(|entry| entry.state == QueueState::WaitingForApproval);
   let waiting = *run.status() == RunStatus::Succeeded;
+  let reviewed = reviewed_head(&db, run.id(), in_queue)?;
   drop(db);
   let review = review_of(root, programs, run.id())?;
   let sent = review.threads.iter().any(|view| view.thread.sent().is_some());
   if !waiting && !sent && !review.implement_at_work {
     return Ok(None);
   }
-  let reviewed = match in_queue.and_then(|entry| entry.checked.as_ref()) {
-    Some(checked) => Some(checked.tip.clone()),
-    None => run.last_checkpoint().map(|checkpoint| checkpoint.revision().clone()),
-  };
   let changes = changes((root, programs), &run, review.head.as_ref())?;
-  let since_review = since_review((root, programs), (reviewed.as_ref(), review.head.as_ref()));
+  let since_review = match (&reviewed, &review.head) {
+    (Some(reviewed), Some(head)) => commits_after((root, programs), (reviewed, head)),
+    _ => Vec::new(),
+  };
   let detail = TaskDetail::load_in(root, task.id())?;
   let view = detail.run.as_ref().filter(|view| view.id() == run.id());
   let implement = view.and_then(|view| {
@@ -176,23 +179,5 @@ fn changes(
   read.map_err(|error| {
     tracing::warn!(%error, run = %run.id(), "cannot read the diff of a run under review");
     ReviewRefusal::Store(error.message())
-  })
-}
-
-/// The commits after `reviewed` up to `head`, newest first; none while they are the same, or when git cannot tell (the
-/// log says why).
-fn since_review(
-  (root, programs): (&Path, &Programs),
-  (reviewed, head): (Option<&Revision>, Option<&Revision>),
-) -> Vec<LoggedCommit> {
-  let (Some(reviewed), Some(head)) = (reviewed, head) else {
-    return Vec::new();
-  };
-  if reviewed == head {
-    return Vec::new();
-  }
-  own_commits(&programs.runner(), Path::new(GIT), (root, reviewed, head)).unwrap_or_else(|error| {
-    tracing::warn!(%error, "cannot list the commits after the reviewed head");
-    Vec::new()
   })
 }
