@@ -1,4 +1,4 @@
-//! The desktop's requests about the folders a project's runs leave with their executor (protocol 40,
+//! The desktop's requests about the folders a project's runs leave with their executor (protocol 42,
 //! `docs/architecture/remote-runners.md`, rule 5): the warm workspaces and the worktrees runs made before workspaces.
 //! The desktop keeps the project database's side (reserving a workspace, recording it cold or no longer stranded);
 //! the runner's executor side sizes the folders and changes them with git.

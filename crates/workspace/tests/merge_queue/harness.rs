@@ -35,6 +35,8 @@ use orchester_store::ProjectDb;
 use orchester_workspace::merge_queue::{self, Advance};
 use parking_lot::Mutex;
 
+use super::runner_side::RunnerSide;
+
 /// `git <args>` in `root`, which must succeed; its trimmed output.
 pub fn git(root: &Path, args: &[&str]) -> String {
   let output = Command::new("git").args(args).current_dir(root).output().expect("git");
@@ -274,11 +276,20 @@ impl Repo {
     git(root, &["rev-parse", "main"])
   }
 
+  /// Moves the queue on by one step, the runner's side syncing and checking the runs' worktrees.
+  pub fn advance(&self) -> Advance {
+    let worktrees = RunnerSide {
+      root: self.root().to_path_buf(),
+      programs: self.answered.clone(),
+    };
+    merge_queue::advance(self.root(), &self.programs(), &worktrees).expect("advanced")
+  }
+
   /// Moves the queue on until it has nothing to do; the commands it gave for the runner.
   pub fn drive(&self) -> Vec<RunnerCommand> {
     let mut commands = Vec::new();
     for _ in 0..60 {
-      match merge_queue::advance(self.root(), &self.programs()).expect("advanced") {
+      match self.advance() {
         Advance::Idle { .. } => return commands,
         Advance::Changed => {}
         Advance::Integrate { command, .. } => commands.push(command),

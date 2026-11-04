@@ -1,4 +1,4 @@
-//! The desktop's requests about the folders a project's runs leave with their executor (protocol 40): sizes, cleaning,
+//! The desktop's requests about the folders a project's runs leave with their executor (protocol 42): sizes, cleaning,
 //! discarding and keeping a warm workspace's files, their replies and a refusal, each read back as written.
 
 use orchester_core::{id::RunId, run::BranchName, workspaces::WorkspaceNumber};
@@ -9,8 +9,8 @@ use orchester_ipc::{
 };
 
 #[tokio::test]
-async fn folders_requests_and_replies_round_trip_under_protocol_40() {
-  assert_eq!(PROTOCOL_VERSION, 40, "an older runner is told apart at the handshake");
+async fn folders_requests_and_replies_round_trip_under_protocol_42() {
+  assert_eq!(PROTOCOL_VERSION, 42, "an older runner is told apart at the handshake");
   let (left, right) = tokio::io::duplex(64 * 1024);
   let (mut reader, mut writer) = (FrameReader::new(left), FrameWriter::new(right));
   let (one, two) = (

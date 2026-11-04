@@ -22,14 +22,11 @@ use unix as platform;
 #[cfg(windows)]
 use windows as platform;
 
-/// The folder of every project's private files.
-pub fn root() -> PathBuf {
-  std::env::temp_dir().join("orchester-mcp")
-}
+use crate::execution_root::private_files;
 
 /// The folder of `project`'s private files.
 pub fn directory(project: ProjectId) -> PathBuf {
-  root().join(project.to_string())
+  private_files().join(project.to_string())
 }
 
 /// An empty folder `name` among `project`'s private files, made if missing; an error when something lies

@@ -3,12 +3,12 @@
 //! worktree's status while the view shows it. When the fingerprint is unchanged, the view read with it is still
 //! current. Nothing here hashes a file: an edit Git's stat cache hides is found by the hashed check an operation
 //! takes, and named after its refusal ([`super::changed_since_review`]).
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use orchester_core::{
   blob::ContentHash,
   id::RunId,
-  integration::local::{LocalIntegrationStore, LocalPhase},
+  integration::local::{LocalIntegrationStore, LocalOperation, LocalPhase},
   store::{MergeStore, RunStore},
 };
 use orchester_exec::local_git::{LocalGit, digest};
@@ -45,16 +45,29 @@ pub fn fingerprint(root: &Path, run: RunId) -> Result<ContentHash, IntegrationEr
     )
     .as_bytes(),
   );
-  let shows_task = operation
-    .as_ref()
-    .is_some_and(|saved| saved.checked().is_some() || saved.phase() == LocalPhase::TaskConflicts);
-  if shows_task
-    && let Some(task_root) =
-      orchester_exec::local_git::owned_directory(root, &[".orchester", "worktrees", &run.to_string()])?
-  {
+  if let Some(task_root) = shown_task_root(root, run, operation.as_ref())? {
     let task_scratch = orchester_exec::local_git::prepare_scratch(&task_root, &[".orchester", "local-integration"])?;
     let task = LocalGit::new(&task_root, &task_scratch)?;
     parts.extend_from_slice(task.status_fingerprint()?.as_str().as_bytes());
   }
   Ok(digest(&parts))
+}
+
+/// The run's worktree, looked for only while the page shows something of it: the conflicts of a sync, or whether a
+/// checked result is still the worktree's. Every other read takes the run's result from its branch in the
+/// repository and leaves the worktree folder alone (docs/architecture/remote-runners.md, "Local integration").
+pub(super) fn shown_task_root(
+  root: &Path,
+  run: RunId,
+  operation: Option<&LocalOperation>,
+) -> Result<Option<PathBuf>, IntegrationError> {
+  let shows_task =
+    operation.is_some_and(|saved| saved.checked().is_some() || saved.phase() == LocalPhase::TaskConflicts);
+  if !shows_task {
+    return Ok(None);
+  }
+  Ok(orchester_exec::local_git::owned_directory(
+    root,
+    &[".orchester", "worktrees", &run.to_string()],
+  )?)
 }

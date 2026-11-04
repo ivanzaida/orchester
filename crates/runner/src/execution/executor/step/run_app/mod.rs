@@ -1,8 +1,6 @@
 //! The loopback MCP client runs in the host relay, never in an agent's sandbox or a worktree script.
 
 mod discovery;
-
-pub(in crate::execution::executor::step) use self::discovery::user_data;
 mod images;
 mod transport;
 

@@ -18,10 +18,12 @@ mod estimate;
 mod folders;
 mod idle;
 mod lifetime;
+mod merge_queue;
 mod report;
 mod requests;
 pub mod state;
 mod work;
+mod worktree_changes;
 
 use std::{
   collections::{HashMap, HashSet},
@@ -43,6 +45,7 @@ pub use self::{
   answers::AnswerMark,
   folders::ExecutorFolders,
   idle::ForgetRefusal,
+  merge_queue::RunnerWorktrees,
   report::RunnerStatus,
   requests::RequestError,
   work::{ActiveWork, ActiveWorkFields, SaveState},
