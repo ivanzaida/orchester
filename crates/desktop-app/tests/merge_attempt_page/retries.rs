@@ -54,33 +54,38 @@ fn merge_attempt_page_a_run_back_in_the_queue_awaiting_approval_opens_the_queue(
   let route = page.open("merges-not-merged", "Per-endpoint rate limits");
   page.window.press("merge-attempt-try-again");
   let repo = page.repo.clone();
-  let mut entry = None;
-  page.window.until_within(GIT_WORK, "the run back in the queue", |_| {
-    let db = ProjectDb::open(&repo).expect("the project database");
-    entry = db
-      .merge_queue()
-      .expect("the queue")
-      .into_iter()
-      .find(|entry| entry.state.in_queue());
-    entry.is_some()
-  });
-  let mut entry = entry.expect("in the queue");
-  let before = entry.state.clone();
-  entry.state = QueueState::WaitingForApproval;
-  let mut db = ProjectDb::open(&repo).expect("the project database");
-  let saved = db
-    .save_merge_queue_entry(&entry, &before, (&[], Timestamp::now()))
-    .expect("saved");
-  assert!(saved, "the queue checked the run again");
+  // The queue may move the entry on between the read and the compare-and-swap, which then refuses it: read it again
+  // and swap until the swap lands.
+  page
+    .window
+    .until_within(GIT_WORK, "the queue checked the run again", |_| {
+      let mut db = ProjectDb::open(&repo).expect("the project database");
+      let Some(mut entry) = db
+        .merge_queue()
+        .expect("the queue")
+        .into_iter()
+        .find(|entry| entry.state.in_queue())
+      else {
+        return false;
+      };
+      let before = entry.state.clone();
+      entry.state = QueueState::WaitingForApproval;
+      db.save_merge_queue_entry(&entry, &before, (&[], Timestamp::now()))
+        .expect("saved")
+    });
   page
     .window
     .navigation()
     .go(Route::Project(page.project, ProjectPage::Merges));
-  page.window.until_within(GIT_WORK, "the merges", |window| {
-    window.texts("merges-not-merged-rows").is_some()
-  });
-  let rows = page.window.text("merges-not-merged-rows");
-  assert!(!rows.contains("Per-endpoint rate limits"), "{rows}");
+  // Merges shows the rows it last read at once, the run among them, and drops it once it reads the queue again.
+  page
+    .window
+    .until_within(GIT_WORK, "the merges without the run awaiting approval", |window| {
+      window.texts("merges-not-merged-rows").is_some_and(|rows| {
+        let rows = rows.join(" ");
+        rows.contains("Add retry to webhook sender") && !rows.contains("Per-endpoint rate limits")
+      })
+    });
   page.window.navigation().go(route);
   page.until_read();
   assert_eq!(
