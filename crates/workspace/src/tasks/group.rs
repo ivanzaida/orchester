@@ -9,7 +9,7 @@ use orchester_core::{
   task_group::{GroupHold, ReviewedPipeline, TaskGroup},
   task_selection::SelectionProblem,
 };
-use orchester_store::ProjectDb;
+use orchester_store::{ProjectDb, StoreError};
 
 use crate::{
   messages::{self, Message},
@@ -154,6 +154,8 @@ pub fn releasable(tasks: &ProjectTasks, selected: &BTreeSet<TaskId>) -> Vec<Task
     .collect()
 }
 
+/// Queues `group` after its review. A team project's tasks are never queued from this computer's copy of them: their
+/// work starts on the team server (`work.start`).
 pub fn queue(
   root: &Path,
   group: &TaskGroup,
@@ -161,6 +163,13 @@ pub fn queue(
   reviewed: &[ReviewedPipeline],
 ) -> Result<TaskGroup, Vec<Message>> {
   let mut db = ProjectDb::open(root).map_err(|error| vec![messages::store_error(&error)])?;
+  if db
+    .sharing()
+    .map_err(|error| vec![messages::store_error(&error)])?
+    .is_some()
+  {
+    return Err(vec![messages::store_error(&StoreError::SharedProject)]);
+  }
   if let Some(existing) = db
     .task_group(group.key())
     .map_err(|error| vec![messages::store_error(&error)])?

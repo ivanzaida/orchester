@@ -5,7 +5,8 @@
 //! number and the pinned versions' labels. Reads: `GET …/bundles/{sha256}` and `GET …/bundles/{sha256}/files/{file}`
 //! for the claim's holder in its session (`409 claim_lost` otherwise), and `POST …/heartbeat` with D1's renewal rule.
 //! Each token is one member's session. A test can take the server down (every connection closed unanswered), make it
-//! lose the next write's answer or drop the next bundle file read, and put the work in a wait for a person.
+//! lose the next write's answer or drop the next bundle file read, and put the work in a wait for a person. A test
+//! binary may add routes of its own ([`Extra`]), e.g. the reads its tools make.
 
 #![allow(dead_code, reason = "each test binary uses some of the server")]
 
@@ -88,9 +89,18 @@ pub struct State {
   pub reports_sent: usize,
 }
 
+/// Routes a test binary adds to the server's own: asked first, without the state's lock, for every request of a known
+/// session while the server is up; `true` when they answered it.
+pub type Extra = Arc<dyn Fn(&Mutex<State>, &Request, &mut TcpStream) -> bool + Send + Sync>;
+
 impl TeamServer {
   /// The server, its task claimed by nobody, its work built from `config`.
   pub fn start(config: Config) -> Self {
+    Self::start_with(config, None)
+  }
+
+  /// [`Self::start`], with `extra` routes answered before the server's own.
+  pub fn start_with(config: Config, extra: Option<Extra>) -> Self {
     let listener = TcpListener::bind("127.0.0.1:0").expect("listen");
     // By address: `localhost` tries IPv6 first, which costs every connection a few hundred milliseconds on Windows.
     let url = format!("http://{}", listener.local_addr().expect("address"));
@@ -119,8 +129,8 @@ impl TeamServer {
     let serving = state.clone();
     thread::spawn(move || {
       for stream in listener.incoming().flatten() {
-        let state = serving.clone();
-        thread::spawn(move || answer(&state, stream));
+        let (state, extra) = (serving.clone(), extra.clone());
+        thread::spawn(move || answer(&state, extra.as_ref(), stream));
       }
     });
     Self {
@@ -157,12 +167,11 @@ impl TeamServer {
   }
 }
 
-fn answer(state: &Mutex<State>, mut stream: TcpStream) {
+fn answer(shared: &Mutex<State>, extra: Option<&Extra>, mut stream: TcpStream) {
   let Some(request) = Request::read(&stream) else {
     return;
   };
-  let mut state = state.lock();
-  if state.down {
+  if shared.lock().down {
     return;
   }
   if request.token != MEMBER && request.token != OTHER {
@@ -172,6 +181,10 @@ fn answer(state: &Mutex<State>, mut stream: TcpStream) {
       &json!({"error": "unauthorized", "message": "refused"}),
     );
   }
+  if extra.is_some_and(|extra| extra(shared, &request, &mut stream)) {
+    return;
+  }
+  let mut state = shared.lock();
   let prefix = format!("/api/v2/projects/{}", state.project);
   let Some(route) = request.path.strip_prefix(&prefix).map(str::to_owned) else {
     return respond(&mut stream, 404, &refusal(None, "not_found"));

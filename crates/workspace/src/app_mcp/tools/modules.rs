@@ -1,7 +1,8 @@
 //! `list_modules`, `get_module`, `create_module` and `update_module`: a project's modules as the Modules list and a
 //! module's page show them (progress, tasks, the burndown by local day), and modules made and changed as the module
 //! form does, through the project's [`TaskWriter`], which makes a shared project's on its server. A module's base
-//! branch is this computer's ([`base_branch`]).
+//! branch is this computer's ([`base_branch`]). A team project's modules are read from and changed on its team server
+//! ([`super::team`]).
 
 use std::path::Path;
 
@@ -19,6 +20,7 @@ use serde_json::{Value, json};
 use super::{
   base_branch,
   task_write::write_error,
+  team,
   wire::{self, Workflow, task_link},
 };
 use crate::{
@@ -124,6 +126,9 @@ pub fn nullable<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<Opt
 }
 
 pub async fn list_modules(services: &Services, args: ListModules) -> Result<Value, ToolError> {
+  if let Some(team) = team::of(services, &args.project).await? {
+    return team::list_modules(services, &team).await;
+  }
   let services = services.clone();
   blocking(move || {
     let open = services.project(&args.project)?;
@@ -139,6 +144,9 @@ pub async fn list_modules(services: &Services, args: ListModules) -> Result<Valu
 }
 
 pub async fn get_module(services: &Services, args: GetModule) -> Result<Value, ToolError> {
+  if let Some(team) = team::of(services, &args.project).await? {
+    return team::get_module(services, &team, &args.module).await;
+  }
   let services = services.clone();
   blocking(move || {
     let open = services.project(&args.project)?;
@@ -152,6 +160,9 @@ pub async fn get_module(services: &Services, args: GetModule) -> Result<Value, T
 }
 
 pub async fn create_module(services: &Services, args: CreateModule) -> Result<Value, ToolError> {
+  if let Some(team) = team::of(services, &args.project).await? {
+    return team::create_module(services, &team, &args).await;
+  }
   let services = services.clone();
   blocking(move || {
     let open = services.project(&args.project)?;
@@ -174,6 +185,9 @@ pub async fn create_module(services: &Services, args: CreateModule) -> Result<Va
 }
 
 pub async fn update_module(services: &Services, args: UpdateModule) -> Result<Value, ToolError> {
+  if let Some(team) = team::of(services, &args.project).await? {
+    return team::update_module(services, &team, &args).await;
+  }
   let services = services.clone();
   blocking(move || {
     let open = services.project(&args.project)?;
@@ -232,7 +246,7 @@ pub fn find_module(db: &ProjectDb, named: &str) -> Result<Module, ToolError> {
     .ok_or_else(|| ToolError::not_found(Missing::Module, named))
 }
 
-fn form_details(form: &ModuleForm<'_>) -> Result<ModuleDetails, ToolError> {
+pub(super) fn form_details(form: &ModuleForm<'_>) -> Result<ModuleDetails, ToolError> {
   form
     .details()
     .map_err(|errors| ToolError::refused("invalid_module", errors.all()))

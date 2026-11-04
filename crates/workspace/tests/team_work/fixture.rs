@@ -123,7 +123,7 @@ impl Config {
 }
 
 /// The Builder profile, version 1, on the publisher's connection.
-fn builder() -> Version<AgentProfile> {
+pub fn builder() -> Version<AgentProfile> {
   let body = AgentProfile::new(
     name("Builder"),
     "Implements tasks.".into(),
@@ -141,7 +141,7 @@ fn builder() -> Version<AgentProfile> {
 }
 
 /// The pipeline, version 1: Implement, run by `profile`.
-fn one_step(profile: ResourceId, instructions: &str) -> Version<Pipeline> {
+pub fn one_step(profile: ResourceId, instructions: &str) -> Version<Pipeline> {
   let step = Step {
     key: StepKey::new("implement").expect("key"),
     name: name("Implement"),

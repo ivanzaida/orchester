@@ -11,6 +11,7 @@
 #[path = "../actions/http.rs"]
 mod http;
 
+mod completion;
 mod fixture;
 mod heartbeat;
 mod reports;

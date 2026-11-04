@@ -23,7 +23,7 @@ use tokio::sync::watch;
 use super::super::{
   Translate,
   runs::{InRun, find_run},
-  wire,
+  team, wire,
 };
 use crate::{
   app_mcp::{
@@ -197,6 +197,10 @@ fn start(
 ) -> Result<Started, ToolError> {
   let open = services.project(&args.project)?;
   let db = ProjectDb::open(&open.repo_root)?;
+  // A team task's run goes into its module's branch, and only the module's delivery takes it to the base branch.
+  if team::linked(&db)? {
+    return Err(team::merge_refused());
+  }
   let run = find_run(&db, &args.run)?;
   ready(&db, &run, (&open.repo_root, &services.programs))?;
   let jobs = services.jobs.of(open.project.id());

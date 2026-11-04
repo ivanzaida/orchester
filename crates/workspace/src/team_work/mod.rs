@@ -18,7 +18,7 @@
 //!   or ended renews nothing, and the server's `decision_required` is an outcome, not a failure to retry.
 //!
 //! A run's local status and its server acceptance (the work as the server last answered its reports) are kept apart
-//! ([`TeamRunState`]). Nothing calls this yet: the screens adopt it in P6 and automation in P7.
+//! ([`TeamRunState`]). The MCP tool `run_task` starts a team task's work through it (P7); the screens adopt it in P6.
 
 mod bundle;
 mod error;

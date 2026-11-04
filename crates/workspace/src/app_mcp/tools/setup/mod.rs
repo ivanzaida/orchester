@@ -417,7 +417,9 @@ const SPECS: &[Spec] = &[
                   integration of the run under way. Otherwise it refuses (needs_decision, merge_failed): preparing \
                   the checkout, conflict choices and approving the exact merged result are a person's, in the \
                   app's Local integration page. A run merged already, by Orchester or outside it as git proves \
-                  (its base branch holds the run's commits), is refused with already_merged.",
+                  (its base branch holds the run's commits), is refused with already_merged. A team project's run \
+                  is never merged into the base branch here: its module's delivery takes it there, which this \
+                  version does not offer yet (team_delivery_pending).",
     schema: schema_for_type::<super::runs::InRun>,
     read_only: false,
   },
