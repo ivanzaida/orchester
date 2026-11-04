@@ -70,7 +70,11 @@ impl Scheduler {
 }
 
 /// Runs `tools` in `worktree` of the repository at `root`, in order, until one does not pass.
-async fn recheck((root, worktree): (&Path, &Path), tools: &[RecheckTool], environment: &CommandEnvironment) -> Rechecked {
+async fn recheck(
+  (root, worktree): (&Path, &Path),
+  tools: &[RecheckTool],
+  environment: &CommandEnvironment,
+) -> Rechecked {
   let mut passed = Vec::new();
   for tool in tools {
     let failed = |detail: String| Rechecked::Failed {

@@ -19,9 +19,7 @@ use std::{
 use orchester_core::{
   id::RunId,
   integration::{branch_head, delivery::Synced},
-  merge_queue::{
-    CheckedOn, Left, MAX_RESYNCS, QueueEntry, QueueEvent, QueueState, lanes, recheck::Rechecked,
-  },
+  merge_queue::{CheckedOn, Left, MAX_RESYNCS, QueueEntry, QueueEvent, QueueState, lanes, recheck::Rechecked},
   resource::{DeliverMode, DeliverStep},
   revision::Revision,
   run::{BranchName, Run, RunStatus},
@@ -371,12 +369,7 @@ impl Driver<'_> {
 
   /// Checked on the base as it is (or not checked again, as the pipeline says): it waits for a person's approval
   /// unless it has one for the run's work as it is now, or merges on its own.
-  fn checked(
-    self,
-    mut entry: QueueEntry,
-    run: &Run,
-    (deliver, events): (&DeliverStep, Vec<QueueEvent>),
-  ) -> Moved {
+  fn checked(self, mut entry: QueueEntry, run: &Run, (deliver, events): (&DeliverStep, Vec<QueueEvent>)) -> Moved {
     if deliver.mode() == DeliverMode::ApproveToMerge && !approval_holds(self.db, &entry, run)? {
       entry.approved_at = None;
       return self.save(entry, QueueState::WaitingForApproval, &events);
@@ -384,12 +377,7 @@ impl Driver<'_> {
     self.land(entry, run, (deliver, events))
   }
 
-  fn land(
-    self,
-    entry: QueueEntry,
-    run: &Run,
-    (deliver, mut events): (&DeliverStep, Vec<QueueEvent>),
-  ) -> Moved {
+  fn land(self, entry: QueueEntry, run: &Run, (deliver, mut events): (&DeliverStep, Vec<QueueEvent>)) -> Moved {
     let Some(task) = self.db.task(run.task())? else {
       return self.leave(entry, stopped("the run's task cannot be read"), events);
     };
@@ -422,12 +410,7 @@ impl Driver<'_> {
   }
 
   /// The Integrate step works on `files`; the run's events since it went were `after`.
-  fn integrating(
-    self,
-    entry: QueueEntry,
-    run: &Run,
-    (after, files): (u64, Vec<String>),
-  ) -> Moved {
+  fn integrating(self, entry: QueueEntry, run: &Run, (after, files): (u64, Vec<String>)) -> Moved {
     if run.last_sequence().get() <= after {
       return Ok(Advance::Idle { poll: false });
     }
@@ -465,7 +448,10 @@ fn stopped(detail: &str) -> Left {
 
 /// The runner answered `request` with a reply to another: its outcome is unknown, as for a lost reply.
 fn unexpected(request: &str) -> Stuck {
-  tracing::error!(request, "unexpected reply to the merge queue's work in a run's worktree");
+  tracing::error!(
+    request,
+    "unexpected reply to the merge queue's work in a run's worktree"
+  );
   Stuck::Runner(Message::new("runs.control.lost"))
 }
 

@@ -7,9 +7,7 @@ use orchester_ipc::{
 };
 
 use super::{RequestError, RunRequestError, Runners};
-use crate::{
-  merge_queue::RunWorktrees, messages::Message, tasks::run::control_message, workspace::OpenProject,
-};
+use crate::{merge_queue::RunWorktrees, messages::Message, tasks::run::control_message, workspace::OpenProject};
 
 impl Runners {
   /// Asks `project`'s runner, starting it if needed, to carry the merge queue's `command` out in a run's worktree.

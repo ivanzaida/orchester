@@ -38,6 +38,7 @@ pub(super) mod tool_approval;
 pub(super) mod turn_stop;
 pub(super) mod work;
 pub(super) mod workspace;
+pub(super) mod worktree_changes;
 pub(super) mod worktree_sweep;
 
 use super::{Notifier, failed};

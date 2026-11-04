@@ -647,7 +647,8 @@
       "failure": {
         "gitMissing": "git was not found. Install git or add it to the PATH, then try again. The run is not affected.",
         "git": "git could not compare the run’s revisions. The run is not affected; the runner log may say more.",
-        "worktreeMissing": "The run's worktree is missing, though the run has not ended. What it holds beyond its checkpoint cannot be read; the runner log may say more."
+        "worktreeMissing": "The run's worktree is missing, though the run has not ended. What it holds beyond its checkpoint cannot be read; the runner log may say more.",
+        "runner": "The project's runner could not be reached, so what the run's worktree holds beyond its checkpoint cannot be read. The run is not affected; the runner log may say more."
       }
     },
     "plan": {

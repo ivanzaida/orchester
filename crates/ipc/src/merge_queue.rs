@@ -1,4 +1,4 @@
-//! The merge queue's work in a run's worktree (protocol 40, ORC-684): the desktop drives the queue, and the runner,
+//! The merge queue's work in a run's worktree (protocol 41, ORC-684): the desktop drives the queue, and the runner,
 //! which reaches the run's worktree, syncs the base branch into it and runs Check on the merged result there.
 //! Landing the run, the merge into the person's checkout, stays the desktop's.
 

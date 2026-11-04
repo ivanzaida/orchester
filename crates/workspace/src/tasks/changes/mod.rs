@@ -1,9 +1,10 @@
 //! A run's changes as the task page's Changes tab shows them: its diff from where its own work starts (its base
 //! revision, or the newer commit of its base branch its branch took in, [`run_changes_in`]) to its latest
-//! checkpoint, read with git once per pair of commits and stored, and what its worktree
-//! (`<repo>/.orchester/worktrees/<run>`) holds beyond its commit, which is not checkpointed and is
-//! read each time. Only read-only git commands run. Blocks on SQLite, blob files and git; the UI
-//! calls it off the UI thread.
+//! checkpoint, read with git in the shared object database once per pair of commits and stored, and what its worktree
+//! (`<repo>/.orchester/worktrees/<run>`) holds beyond its commit, which is not checkpointed and is read each time by
+//! the project's runner ([`not_checkpointed_in`]): the desktop reaches a run's worktree only through the runner
+//! (`docs/architecture/remote-runners.md`, rule 5). Only read-only git commands run. The checkpointed part blocks on
+//! SQLite, blob files and git; the UI calls it off the UI thread.
 
 use std::{
   hash::{DefaultHasher, Hash, Hasher},
@@ -15,7 +16,7 @@ use orchester_core::{
   command::CommandError,
   diff::{
     Changes, Diff, DiffParseError,
-    git::{GitDiffError, RevisionChanges, RevisionDiffError, WorktreeRead, read_revision_diff, read_worktree_changes},
+    git::{GitDiffError, RevisionChanges, RevisionDiffError, read_revision_diff},
   },
   id::RunId,
   integration::{
@@ -28,10 +29,15 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_exec::programs::Programs;
+use orchester_ipc::{WorktreeChangesRead, WorktreeReadFailure};
 use orchester_store::{ProjectDb, StoreError};
 use thiserror::Error;
 
-use crate::messages::Message;
+use crate::{
+  messages::Message,
+  runner::{RunRequestError, Runners},
+  workspace::OpenProject,
+};
 
 mod count;
 mod follow;
@@ -171,6 +177,12 @@ pub enum ChangesError {
   Diff(#[from] DiffParseError),
   #[error("the worktree {0} of a run that has not ended is missing")]
   WorktreeMissing(PathBuf),
+  /// The runner could not read the run's worktree.
+  #[error(transparent)]
+  Worktree(#[from] WorktreeReadFailure),
+  /// The project's runner, which reads the run's worktree, could not be started or reached, or did not answer.
+  #[error("the runner did not read the run's worktree: {0}")]
+  Runner(#[from] RunRequestError),
 }
 
 impl From<RevisionDiffError<StoreError>> for ChangesError {
@@ -186,11 +198,14 @@ impl ChangesError {
   pub fn message(&self) -> Message {
     match self {
       Self::Store(error) => crate::messages::store_error(error),
-      Self::Git(GitDiffError::Run(CommandError::NotFound)) | Self::Log(GitError::Run(CommandError::NotFound)) => {
-        Message::new("runs.changes.failure.gitMissing")
+      Self::Git(GitDiffError::Run(CommandError::NotFound))
+      | Self::Log(GitError::Run(CommandError::NotFound))
+      | Self::Worktree(WorktreeReadFailure::GitMissing) => Message::new("runs.changes.failure.gitMissing"),
+      Self::Git(_) | Self::Log(_) | Self::Diff(_) | Self::Worktree(WorktreeReadFailure::Git { .. }) => {
+        Message::new("runs.changes.failure.git")
       }
-      Self::Git(_) | Self::Log(_) | Self::Diff(_) => Message::new("runs.changes.failure.git"),
       Self::WorktreeMissing(_) => Message::new("runs.changes.failure.worktreeMissing"),
+      Self::Runner(_) => Message::new("runs.changes.failure.runner"),
     }
   }
 }
@@ -301,34 +316,46 @@ pub fn checkpointed_in(
   })
 }
 
-/// What the worktree of `run` holds beyond its commit. A missing worktree was not made yet before the run
-/// started, was removed after it ended, and is an error in between.
-pub fn not_checkpointed_in(
-  repo_root: &Path,
-  programs: &Programs,
+/// What the worktree of `run` of `project` holds beyond its commit, as the project's runner reads it: it is started
+/// and attached as opening the project does when it is not running, and a runner that cannot be reached is an error,
+/// never what was read before. A missing worktree was not made yet before the run started, was removed after it
+/// ended, and is an error in between.
+pub async fn not_checkpointed_in(
+  runners: &Runners,
+  project: &OpenProject,
   (run, stage): (RunId, RunStage),
 ) -> Result<NotCheckpointed, ChangesError> {
-  let worktree = run_worktree(repo_root, run);
-  if !worktree.is_dir() {
-    return match stage {
-      RunStage::NotStarted => Ok(NotCheckpointed::Clean),
-      RunStage::Ended => Ok(NotCheckpointed::Removed),
-      RunStage::Started => Err(ChangesError::WorktreeMissing(worktree)),
-    };
-  }
-  let read = read_worktree_changes(&programs.runner(), Path::new(GIT), &worktree)?;
-  Ok(match read.read {
-    WorktreeRead::Clean => NotCheckpointed::Clean,
-    WorktreeRead::TooLarge(size) => NotCheckpointed::TooLarge { from: read.head, size },
-    WorktreeRead::Read(text) => {
+  let read = runners.worktree_changes(project, run).await?;
+  not_checkpointed_from(&project.repo_root, (run, stage), read)
+}
+
+/// What `read`, the runner's read of the worktree of `run` in the repository at `repo_root`, comes to for a run at
+/// `stage` (see [`not_checkpointed_in`]).
+pub fn not_checkpointed_from(
+  repo_root: &Path,
+  (run, stage): (RunId, RunStage),
+  read: WorktreeChangesRead,
+) -> Result<NotCheckpointed, ChangesError> {
+  Ok(match read {
+    WorktreeChangesRead::NoWorktree => {
+      return match stage {
+        RunStage::NotStarted => Ok(NotCheckpointed::Clean),
+        RunStage::Ended => Ok(NotCheckpointed::Removed),
+        RunStage::Started => Err(ChangesError::WorktreeMissing(run_worktree(repo_root, run))),
+      };
+    }
+    WorktreeChangesRead::Clean => NotCheckpointed::Clean,
+    WorktreeChangesRead::TooLarge { head, size } => NotCheckpointed::TooLarge { from: head, size },
+    WorktreeChangesRead::Read { head, diff } => {
       // The same changes read again keep their key, so what was highlighted stays.
       let mut hasher = DefaultHasher::new();
-      text.hash(&mut hasher);
+      diff.hash(&mut hasher);
       NotCheckpointed::Read(Arc::new(ReadChanges {
-        key: format!("{}:{:016x}", read.head, hasher.finish()).into(),
-        diff: Arc::new(Diff::parse(&text)?),
-        from: read.head,
+        key: format!("{head}:{:016x}", hasher.finish()).into(),
+        diff: Arc::new(Diff::parse(&diff)?),
+        from: head,
       }))
     }
+    WorktreeChangesRead::Failed(failure) => return Err(ChangesError::Worktree(failure)),
   })
 }

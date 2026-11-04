@@ -60,10 +60,7 @@ fn recheck_verdict_passes_on_success_and_says_why_otherwise() {
   );
   assert_eq!(
     tool.verdict(CommandEnd::TimedOut, "partial".to_owned()),
-    Err(format!(
-      "did not finish within {} s",
-      tool.action.timeout().secs()
-    ))
+    Err(format!("did not finish within {} s", tool.action.timeout().secs()))
   );
 }
 

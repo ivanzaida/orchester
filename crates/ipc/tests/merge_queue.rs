@@ -1,4 +1,4 @@
-//! The merge queue's work in a run's worktree (protocol 40, ORC-684): every request and reply crosses a connection as
+//! The merge queue's work in a run's worktree (protocol 41, ORC-684): every request and reply crosses a connection as
 //! it was sent. `cargo test -p orchester-ipc --test merge_queue merge_queue`.
 
 use orchester_core::{
@@ -34,10 +34,7 @@ fn requests(run: RunId) -> Vec<Request> {
       base: branch("main"),
       branch: branch("orchester/orc-1-run-1"),
     },
-    MergeQueueCommand::Recheck {
-      run,
-      tools: vec![tool],
-    },
+    MergeQueueCommand::Recheck { run, tools: vec![tool] },
     MergeQueueCommand::Recheck { run, tools: Vec::new() },
   ]
   .into_iter()
@@ -82,7 +79,7 @@ fn replies() -> Vec<Event> {
 
 #[tokio::test]
 async fn merge_queue_requests_and_replies_cross_a_connection_unchanged() {
-  assert_eq!(PROTOCOL_VERSION, 40, "the merge queue's work came with protocol 40");
+  assert_eq!(PROTOCOL_VERSION, 41, "the merge queue's work came with protocol 41");
   let (left, right) = tokio::io::duplex(64 * 1024);
   let (read, _) = tokio::io::split(left);
   let (_, write) = tokio::io::split(right);
