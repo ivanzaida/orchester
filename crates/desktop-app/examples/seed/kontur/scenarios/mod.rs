@@ -39,6 +39,7 @@ mod pull_requests;
 pub mod qa_app_asks;
 mod run_context;
 mod run_model;
+mod services;
 pub mod settings;
 mod shared_config;
 mod shared_here;
@@ -100,7 +101,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 127] = [
+pub const ALL: [Scenario; 128] = [
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-library", agents_library::seed),
   Scenario::of("agents-browser", agents_browser::seed),
@@ -196,6 +197,7 @@ pub const ALL: [Scenario; 127] = [
   Scenario::of("pull-request-feedback", pull_requests::feedback::seed),
   Scenario::of("sources", sources::seed),
   Scenario::of("sources-unreadable", sources::unreadable),
+  Scenario::of("services", services::seed),
   Scenario::of("usage", usage::seed),
   Scenario::of("usage-empty", usage::no_runs_today),
   Scenario::of("usage-bare", usage::bare),

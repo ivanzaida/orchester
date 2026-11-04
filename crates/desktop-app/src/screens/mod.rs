@@ -175,6 +175,7 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::Settings(tab) => project_settings::screen(ctx, project, project_settings::Shown::Tab(*tab)),
     ProjectPage::ProjectRules => project_settings::screen(ctx, project, project_settings::Shown::Rules),
     ProjectPage::Storage => project_settings::screen(ctx, project, project_settings::Shown::Storage),
+    ProjectPage::Services(page) => project_settings::screen(ctx, project, project_settings::Shown::Services(*page)),
     ProjectPage::MakeLocal => project_settings::make_local_screen(ctx, project),
     ProjectPage::Join(target) => project_settings::join_screen(ctx, project, target),
     ProjectPage::Files(view) => files::screen(ctx, project, view),

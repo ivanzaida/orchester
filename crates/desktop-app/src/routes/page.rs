@@ -15,8 +15,8 @@ use orchester_workspace::{
 use super::{
   AgentTab, CONNECTIONS, ConnectionsView, EDIT, FilesView, IMPORT, ImportTab, InstructionsView, JoinTarget, MODULES,
   MemoryTab, ModuleListTab, ModuleTab, NEW, NewConnection, ORCHESTRATOR, OrchestratorChat, OverviewTab, PULL_REQUESTS,
-  PipelineView, ProjectSettingsTab, RouteError, SETTINGS, Screen, SecretsView, SkillsFilter, TAB, TASKS, TaskList,
-  TaskView, ToolTab,
+  PipelineView, ProjectSettingsTab, RouteError, SETTINGS, Screen, SecretsView, ServicesPage, SkillsFilter, TAB, TASKS,
+  TaskList, TaskView, ToolTab,
   files::FILES,
   modules, project_screen_path,
   query::{Params, with_query},
@@ -32,8 +32,9 @@ const ASK: &str = "ask";
 const MAKE_LOCAL: &str = "make-local";
 /// A task kept Not shared, by its kept key (`/tasks/kept/KON-2/summary`).
 const KEPT: &str = "kept";
-/// What Project settings shows in place of a tab: the join review over Sharing, *Approved for every run* under Runs.
-const VIEW: &str = "view";
+/// What Project settings shows in place of a tab: the join review over Sharing, *Approved for every run* under Runs,
+/// a page under Services.
+pub(super) const VIEW: &str = "view";
 const JOIN: &str = "join";
 const RULES: &str = "rules";
 
@@ -104,6 +105,8 @@ pub enum ProjectPage {
   ProjectRules,
   /// Project settings › Runs › Storage (Storage · redesign, Jsbd1).
   Storage,
+  /// A page under Project settings › Services: an editor, a New page, Import draft or Flaky tests.
+  Services(ServicesPage),
   /// Project settings on its Sharing tab with *Make local*'s question open (the task list's *no longer a
   /// member* notice).
   MakeLocal,
@@ -201,7 +204,7 @@ impl ProjectPage {
       Self::Connections(_) => Screen::Connections,
       Self::NewConnection(_) => Screen::NewConnection,
       Self::EditConnection(_) => Screen::EditConnection,
-      Self::Settings(_) | Self::ProjectRules | Self::Storage | Self::MakeLocal | Self::Join(_) => {
+      Self::Settings(_) | Self::ProjectRules | Self::Storage | Self::Services(_) | Self::MakeLocal | Self::Join(_) => {
         Screen::ProjectSettings
       }
       Self::Files(_) => Screen::Files,
@@ -273,14 +276,15 @@ impl ProjectPage {
       Self::EditConnection(id) => format!("{connections}/{id}/{EDIT}"),
       Self::Files(view) => view.path(format!("{project_root}/{FILES}")),
       Self::Import(tab) => with_query(segment(Screen::ImportResources), &[tab.param()]),
-      Self::MakeLocal | Self::ProjectRules | Self::Storage | Self::Join(_) => {
+      Self::MakeLocal | Self::ProjectRules | Self::Storage | Self::Services(_) | Self::Join(_) => {
         self.settings_path(segment(Screen::ProjectSettings))
       }
       page => segment(page.screen()),
     }
   }
 
-  /// The path of a Project settings question or page under `settings`: *Make local*, the rules, a join.
+  /// The path of a Project settings question or page under `settings`: *Make local*, the rules, a join, a page under
+  /// Services.
   fn settings_path(&self, settings: String) -> String {
     match self {
       Self::MakeLocal => with_query(
@@ -289,6 +293,7 @@ impl ProjectPage {
       ),
       Self::Join(target) => join_path(settings, target),
       Self::Storage => with_query(settings, &[ProjectSettingsTab::Runs.param(), (VIEW, Some("storage"))]),
+      Self::Services(page) => page.path(settings),
       _ => with_query(settings, &[ProjectSettingsTab::Runs.param(), (VIEW, Some(RULES))]),
     }
   }
@@ -451,8 +456,9 @@ fn tools(params: &mut Params) -> Result<ProjectPage, RouteError> {
 }
 
 /// Project settings on the tab the query names, *Make local*'s question on Sharing (`ask=make-local`), the join
-/// review there (`view=join` with the project), or *Approved for every run* under Runs (`view=rules`); Environment
-/// (`tab=environment`, or `secrets` from before it was renamed) is the secrets' route.
+/// review there (`view=join` with the project), *Approved for every run* under Runs (`view=rules`), or a page under
+/// Services ([`ServicesPage`]); Environment (`tab=environment`, or `secrets` from before it was renamed) is the
+/// secrets' route.
 fn settings(params: &mut Params) -> Result<ProjectPage, RouteError> {
   let Some(tab) = ProjectSettingsTab::take(params)? else {
     return Ok(ProjectPage::Secrets(SecretsView::default()));
@@ -466,6 +472,7 @@ fn settings(params: &mut Params) -> Result<ProjectPage, RouteError> {
     }
     (ProjectSettingsTab::Runs, Some(view)) if view == RULES => return Ok(ProjectPage::ProjectRules),
     (ProjectSettingsTab::Runs, Some(view)) if view == "storage" => return Ok(ProjectPage::Storage),
+    (ProjectSettingsTab::Services, Some(view)) => return ServicesPage::take(view, params).map(ProjectPage::Services),
     (_, Some(value)) => {
       return Err(RouteError::InvalidParam {
         param: VIEW.to_owned(),

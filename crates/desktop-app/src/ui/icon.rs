@@ -121,6 +121,7 @@ icons! {
   FileCode => '\u{e0c3}',
   FileDiff => '\u{e317}',
   FileImage => '\u{e31c}',
+  FileInput => '\u{e0c5}',
   FileMinus => '\u{e0c6}',
   FilePen => '\u{e31f}',
   FilePenLine => '\u{e320}',

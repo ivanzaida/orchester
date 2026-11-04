@@ -15,6 +15,7 @@ macro_rules! markers {
     impl $inspect for crate::agents::data::ProfileChange {}
     impl $inspect for crate::agents::data::ProjectAgents {}
     impl $inspect for crate::agents::hub::HubCounts {}
+    impl $inspect for crate::agent_testing::listing::ProjectServices {}
     impl $inspect for crate::removal::Users {}
     impl $inspect for crate::agents::form::ModelSelection {}
     impl $inspect for crate::clock::Clock {}

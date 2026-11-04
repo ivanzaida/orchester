@@ -414,6 +414,79 @@
     "indexInfoUsed": "{{detail}} Used by {{runs}}.",
     "rgFoundHint": "ripgrep · found {{version}}",
     "rgFoundWithoutVersionHint": "ripgrep · found",
-    "ripgrepInfo": "{{detail}} {{source}}."
+    "ripgrepInfo": "{{detail}} {{source}}.",
+    "services": {
+      "tab": "Services",
+      "services": "Services",
+      "stacks": "Stacks",
+      "suites": "Test suites",
+      "flaky": "Flaky tests",
+      "importDraft": "Import draft",
+      "newService": "New service",
+      "newStack": "New stack",
+      "newSuite": "New suite",
+      "reading": "Reading the project's services…",
+      "loadFailed": "The project's services cannot be read",
+      "driver": {
+        "none": "no UI",
+        "native": "native",
+        "mcp": "mcp"
+      },
+      "layer": {
+        "lint": "lint",
+        "unit": "unit",
+        "e2e": "e2e"
+      },
+      "approval": {
+        "asks": "Asks before each start",
+        "notPublished": "Not published"
+      },
+      "needsNothing": "needs nothing",
+      "needs": "needs {{names}}",
+      "owns": "owns {{paths}}",
+      "runData": {
+        "database": "fresh database container per run",
+        "folder": "files in a folder of its own per run"
+      },
+      "stackAll": "all {{count}} services",
+      "slots": {
+        "one": "1 slot",
+        "other": "{{count}} slots"
+      },
+      "suitesNote": "The Test step runs lint, then unit, then e2e",
+      "noServices": "no services",
+      "stackNeed": "stack {{name}}",
+      "report": {
+        "cargoJson": "cargo json",
+        "junitXml": "JUnit XML",
+        "vitestJson": "vitest json",
+        "playwrightJson": "Playwright json",
+        "tap": "TAP"
+      },
+      "minutes": "{{count}} min",
+      "seconds": "{{count}} s",
+      "empty": {
+        "title": "No services yet",
+        "explanation": "A service is a program Orchester starts for a run, such as a dev server, a web app or a desktop app, and stops when the step ends. Import a first draft from the repository's compose files, package.json scripts and Cargo binaries, or add one by hand."
+      },
+      "stacksEmpty": {
+        "title": "Nothing to group yet",
+        "detail": "A stack is a named set of services, such as cloud or full"
+      },
+      "suitesEmpty": {
+        "title": "lint, unit and e2e suites",
+        "detail": "Suites that need no service can be added now"
+      },
+      "agentsNote": "Until a service is published, agents in this project's runs are not offered start_service.",
+      "quarantine": "Quarantine",
+      "quarantineInfo": "A test that is flaky again and again can be quarantined: it still runs and its failure is shown, but it no longer fails the step.",
+      "quarantineHint": "Quarantined tests still run, but no longer fail the step",
+      "page": {
+        "service": "Service",
+        "stack": "Stack",
+        "suite": "Test suite",
+        "notBuilt": "This page is not built in this app yet."
+      }
+    }
   }
 }

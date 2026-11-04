@@ -1,10 +1,12 @@
-//! Project settings (`Project settings · redesign` `XGtkg`): its title with the save status over seven tabs, General,
-//! Runs, Orchestrator, Context, Connections, Environment and Sharing, each a 720 column of groups of rows ([`kit`]).
-//! General, Runs, Orchestrator, Context and Environment's variables save as a person leaves a field or flips a switch,
-//! widening changes asked in place; Connections and Environment's secrets save per action, and Connections says
-//! nothing of a save state, but Add provider says it isn't saved yet. Add, open and edit flows are pages inside their
-//! tab with a crumb back to it: a connection's, Add provider and Add MCP server under Connections, a secret's and New
-//! secret under Environment, *Approved for every run* under Runs, and the first link (`Share`) under Sharing.
+//! Project settings (`Project settings · redesign` `XGtkg`): its title with the save status over eight tabs, General,
+//! Runs, Services, Orchestrator, Context, Connections, Environment and Sharing, each a 720 column of groups of rows
+//! ([`kit`]). General, Runs, Orchestrator, Context and Environment's variables save as a person leaves a field or flips
+//! a switch, widening changes asked in place; Connections and Environment's secrets save per action, and Connections
+//! says nothing of a save state, but Add provider says it isn't saved yet; Services only lists what the project
+//! defines. Add, open and edit flows are pages inside their tab with a crumb back to it: a connection's, Add provider
+//! and Add MCP server under Connections, a secret's and New secret under Environment, *Approved for every run* under
+//! Runs, a service's, stack's or suite's and their New pages, Import draft and Flaky tests under Services, and the
+//! first link (`Share`) under Sharing.
 mod context;
 mod environment;
 mod general;
@@ -14,6 +16,7 @@ mod orchestrator;
 mod page;
 mod rules;
 mod runs;
+mod services;
 mod sharing;
 mod sources;
 mod storage;
@@ -32,7 +35,7 @@ use orchester_core::id::ConnectionId;
 use crate::{
   project::ShownProject,
   queries::Kept,
-  routes::{ConnectionsView, NewConnection, ProjectPage, ProjectSettingsTab as Tab, SecretsView},
+  routes::{ConnectionsView, NewConnection, ProjectPage, ProjectSettingsTab as Tab, SecretsView, ServicesPage},
 };
 
 /// What the page shows under its tabs: one of its own tabs, a page under one, or Connections or Environment (the
@@ -43,6 +46,8 @@ pub enum Shown {
   /// *Approved for every run*, under Runs.
   Rules,
   Storage,
+  /// A page under Services.
+  Services(ServicesPage),
   Connections(ConnectionsView),
   NewConnection(NewConnection),
   EditConnection(ConnectionId),
@@ -54,6 +59,7 @@ impl Shown {
     match self {
       Self::Tab(Tab::General) => Section::General,
       Self::Tab(Tab::Runs) | Self::Rules | Self::Storage => Section::Runs,
+      Self::Tab(Tab::Services) | Self::Services(_) => Section::Services,
       Self::Tab(Tab::Orchestrator) => Section::Orchestrator,
       Self::Tab(Tab::Context) => Section::Context,
       Self::Tab(Tab::Sharing) => Section::Sharing,
@@ -77,6 +83,7 @@ impl Shown {
       Self::Tab(tab) => ProjectPage::Settings(tab),
       Self::Rules => ProjectPage::ProjectRules,
       Self::Storage => ProjectPage::Storage,
+      Self::Services(page) => ProjectPage::Services(page),
       Self::Connections(view) => ProjectPage::Connections(view),
       Self::NewConnection(kind) => ProjectPage::NewConnection(kind),
       Self::EditConnection(id) => ProjectPage::EditConnection(id),
@@ -85,11 +92,13 @@ impl Shown {
   }
 }
 
-/// A tab of the page (`Tabs` `A5Sf0Q`, seven since `S03` `X8mFTS`).
+/// A tab of the page (`Tabs` `A5Sf0Q`, seven since `S03` `X8mFTS`, eight with Services from `01 · Services` `G1sdS`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Section {
   General,
   Runs,
+  /// The services, stacks and test suites the project's runs start.
+  Services,
   /// What the project's Orchestrator may do on its own (`S03` `X8mFTS`).
   Orchestrator,
   Context,
@@ -100,9 +109,10 @@ enum Section {
 }
 
 impl Section {
-  const ALL: [Self; 7] = [
+  const ALL: [Self; 8] = [
     Self::General,
     Self::Runs,
+    Self::Services,
     Self::Orchestrator,
     Self::Context,
     Self::Connections,
@@ -115,6 +125,7 @@ impl Section {
     match self {
       Self::General => "general",
       Self::Runs => "runs",
+      Self::Services => "services",
       Self::Orchestrator => "orchestrator",
       Self::Context => "context",
       Self::Connections => "connections",
@@ -127,6 +138,7 @@ impl Section {
     match self {
       Self::General => "project_settings.general",
       Self::Runs => "project_settings.runs",
+      Self::Services => "project_settings.services.tab",
       Self::Orchestrator => "project_settings.orchestrator.tab",
       Self::Context => "project_settings.context",
       Self::Connections => "project_settings.connections",
@@ -140,6 +152,7 @@ impl Section {
     match self {
       Self::General => Shown::Tab(Tab::General),
       Self::Runs => Shown::Tab(Tab::Runs),
+      Self::Services => Shown::Tab(Tab::Services),
       Self::Orchestrator => Shown::Tab(Tab::Orchestrator),
       Self::Context => Shown::Tab(Tab::Context),
       Self::Sharing => Shown::Tab(Tab::Sharing),
@@ -268,6 +281,8 @@ impl Component for SettingsScreen {
       (Shown::Tab(Tab::Sharing), Some(upload)) => sharing::link_page(ctx, &project, upload, &self.link_page),
       (Shown::Tab(Tab::General), _) => ctx.mount_keyed::<general::General>("project-settings-general", props),
       (Shown::Tab(Tab::Runs), _) => ctx.mount_keyed::<runs::Runs>("project-settings-runs", props),
+      (Shown::Tab(Tab::Services), _) => ctx.mount_keyed::<services::ServicesTab>("project-settings-services", props),
+      (Shown::Services(page), _) => services::not_built(ctx, &project, page),
       (Shown::Tab(Tab::Orchestrator), _) => {
         ctx.mount_keyed::<orchestrator::Orchestrator>("project-settings-orchestrator", props)
       }

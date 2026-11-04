@@ -4,12 +4,13 @@
 use serde_json::{Map, Value};
 
 use super::{ToolError, string};
-use crate::routes::{ConnectionsView, NewConnection, ProjectPage, ProjectSettingsTab, SecretsView};
+use crate::routes::{ConnectionsView, NewConnection, ProjectPage, ProjectSettingsTab, SecretsView, ServicesPage};
 
 /// Project settings' tabs as navigate names them: its own, then the two with routes of their own.
-pub(super) const SETTINGS_TABS: [&str; 7] = [
+pub(super) const SETTINGS_TABS: [&str; 8] = [
   "general",
   "runs",
+  "services",
   "orchestrator",
   "context",
   "connections",
@@ -26,17 +27,10 @@ pub(super) fn connections_view(args: &Map<String, Value>) -> Result<ConnectionsV
 }
 
 /// Project settings on the tab `tab` names: one of its own, or Connections or Environment (`secrets` too, the tab it
-/// was), whose routes are their own; with tab runs, `view` rules or storage opens that sub-page.
+/// was), whose routes are their own; with tab runs, `view` rules or storage opens that sub-page, and with tab services
+/// a page under it ([`services_page`]).
 pub(super) fn project_settings_page(args: &Map<String, Value>) -> Result<ProjectPage, ToolError> {
-  let view = match string(args, "view")? {
-    view @ (None | Some("rules" | "storage")) => view,
-    Some(other) => {
-      return Err(ToolError::InvalidParam {
-        param: "view",
-        reason: format!("`{other}` is not rules or storage"),
-      });
-    }
-  };
+  let view = string(args, "view")?;
   let page = match string(args, "tab")? {
     Some("connections") => ProjectPage::Connections(ConnectionsView::default()),
     Some(name) if ProjectSettingsTab::is_environment(name) => ProjectPage::Secrets(SecretsView::default()),
@@ -47,14 +41,47 @@ pub(super) fn project_settings_page(args: &Map<String, Value>) -> Result<Project
     )?),
   };
   match (page, view) {
+    (page, None) => Ok(page),
     (ProjectPage::Settings(ProjectSettingsTab::Runs), Some("rules")) => Ok(ProjectPage::ProjectRules),
     (ProjectPage::Settings(ProjectSettingsTab::Runs), Some("storage")) => Ok(ProjectPage::Storage),
-    (page, None) => Ok(page),
+    (ProjectPage::Settings(ProjectSettingsTab::Services), Some(view)) => services_page(args, view),
     _ => Err(ToolError::InvalidParam {
       param: "view",
-      reason: "rules and storage are pages of the runs tab".to_owned(),
+      reason: "rules and storage are pages of the runs tab, new-service, new-stack, new-suite, import, flaky, \
+               service, stack and suite pages of the services tab"
+        .to_owned(),
     }),
   }
+}
+
+/// The page under Services `view` names; a service's, a stack's or a suite's with its resource `id`.
+fn services_page(args: &Map<String, Value>, view: &str) -> Result<ProjectPage, ToolError> {
+  if let Some(page) = ServicesPage::named(view) {
+    return Ok(ProjectPage::Services(page));
+  }
+  let item: fn(_) -> ServicesPage = match view {
+    "service" => ServicesPage::Service,
+    "stack" => ServicesPage::Stack,
+    "suite" => ServicesPage::Suite,
+    other => {
+      return Err(ToolError::InvalidParam {
+        param: "view",
+        reason: format!(
+          "`{other}` is not one of {}, service, stack or suite",
+          ServicesPage::NAMED.map(ServicesPage::name).join(", ")
+        ),
+      });
+    }
+  };
+  let id = string(args, "id")?.ok_or_else(|| ToolError::InvalidParam {
+    param: "id",
+    reason: format!("the {view} page needs the {view}'s id"),
+  })?;
+  let id = id.parse().map_err(|_| ToolError::InvalidParam {
+    param: "id",
+    reason: format!("`{id}` is not an id"),
+  })?;
+  Ok(ProjectPage::Services(item(id)))
 }
 
 /// What `kind` adds, an agent provider when left out.
