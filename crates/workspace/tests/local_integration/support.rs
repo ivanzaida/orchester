@@ -140,6 +140,10 @@ impl Fixture {
   }
 
   /// The runs' worktrees, which the project's runner would remove, removed in the test's process instead.
+  #[allow(
+    dead_code,
+    reason = "orchester-app's tests share this file and merge or remove nothing with it"
+  )]
   pub fn worktrees(&self) -> WorktreeRemover {
     WorktreeRemover::here_for_test(self.root(), Programs::processes())
   }
