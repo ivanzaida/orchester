@@ -1,9 +1,9 @@
 //! The run's changes as the task page reads them, once for both the Changes tab and the count on its
 //! label, so the two cannot disagree: the diff from where the run's own work starts (its base, or the newer commit
 //! of its base branch its branch took in) to its latest checkpoint, read again
-//! when it records a new one, and what its worktree holds beyond that, read again after a checkpoint,
-//! when the run ends, when the tab opens or closes and, while an agent works and the page is on screen,
-//! every few seconds. What was read for one run is never shown for another, and a read again after a
+//! when it records a new one, and what its worktree holds beyond that, which the project's runner reads, read again
+//! after a checkpoint, when the run ends, when the tab opens or closes and, while an agent works and the page is on
+//! screen, every few seconds. What was read for one run is never shown for another, and a read again after a
 //! failure shows as being read.
 
 use std::{path::Path, sync::Arc, time::Duration};
@@ -22,6 +22,7 @@ use orchester_workspace::{
     },
     detail::{RunView, TaskDetail},
   },
+  workspace::OpenProject,
 };
 use parking_lot::Mutex;
 
@@ -184,13 +185,13 @@ impl ChangesReads {
     self.latest.get()
   }
 
-  /// The changes of `detail`'s latest run in the repository at `repo_root`; `None` without a run. Call it
-  /// on every render of the page, with or without a run: its reads keep their places among the page's.
-  pub fn read(&self, ctx: &mut Ctx, repo_root: &Path, detail: &TaskDetail, follow: Follow) -> Option<RunChanges> {
+  /// The changes of `detail`'s latest run in `project`; `None` without a run. Call it on every render of the page,
+  /// with or without a run: its reads keep their places among the page's.
+  pub fn read(&self, ctx: &mut Ctx, project: &OpenProject, detail: &TaskDetail, follow: Follow) -> Option<RunChanges> {
     let retry = self.retry.get();
     let run = detail.run.as_ref();
-    let checkpointed = self.checkpointed(ctx, repo_root, run, retry);
-    let worktree = self.not_checkpointed(ctx, repo_root, run, (follow, retry));
+    let checkpointed = self.checkpointed(ctx, &project.repo_root, run, retry);
+    let worktree = self.not_checkpointed(ctx, project, run, (follow, retry));
     let changes = run.map(|_| RunChanges { checkpointed, worktree });
     if self.latest.get_untracked() != changes {
       self.latest.set(changes.clone());
@@ -246,16 +247,16 @@ impl ChangesReads {
     }
   }
 
-  /// What the worktree of `run` holds beyond its commit; `None` until read. Read again on each tick of
-  /// the refresh while followed; the page renders again only when what was read changed.
+  /// What the worktree of `run` holds beyond its commit, as `project`'s runner reads it; `None` until read. Read again
+  /// on each tick of the refresh while followed; the page renders again only when what was read changed.
   fn not_checkpointed(
     &self,
     ctx: &mut Ctx,
-    repo_root: &Path,
+    project: &OpenProject,
     run: Option<&RunView>,
     (follow, retry): (Follow, u64),
   ) -> Option<Result<NotCheckpointed, Message>> {
-    let programs = Services::of(ctx).programs;
+    let runners = Services::of(ctx).runners;
     let (follower, last_read) = (self.refresh.follower(), self.last_read.clone());
     let at = run.map(|run| {
       let head = run
@@ -264,27 +265,23 @@ impl ChangesReads {
         .map(|checkpoint| checkpoint.revision().clone());
       ((run.id(), RunStage::of(run.run.status())), head)
     });
-    let deps = (repo_root.to_path_buf(), at, follow, retry);
+    let deps = (project.clone(), at, follow, retry);
     let reads = ctx.stream(
       deps,
-      move |(repo_root, at, follow, _), emitter: StreamEmitter<Option<ForRun<NotCheckpointed>>, ()>| {
-        let (programs, follower, last_read) = (programs.clone(), follower.clone(), last_read.clone());
+      move |(project, at, follow, _), emitter: StreamEmitter<Option<ForRun<NotCheckpointed>>, ()>| {
+        let (runners, follower, last_read) = (runners.clone(), follower.clone(), last_read.clone());
         async move {
           let Some((read_at, _)) = at else {
             emitter.emit(None);
             return;
           };
           let read = move || {
-            let (repo_root, programs, last_read) = (repo_root.clone(), programs.clone(), last_read.clone());
+            let (project, runners, last_read) = (project.clone(), runners.clone(), last_read.clone());
             async move {
-              let read = background::run(move || not_checkpointed_in(&repo_root, &programs, read_at))
-                .await
-                .and_then(|read| {
-                  read.map_err(|error| {
-                    tracing::warn!(%error, "cannot read the run's worktree");
-                    error.message()
-                  })
-                });
+              let read = not_checkpointed_in(&runners, &project, read_at).await.map_err(|error| {
+                tracing::warn!(%error, "cannot read the run's worktree");
+                error.message()
+              });
               last_read.set(Timestamp::now());
               ForRun { run: read_at.0, read }
             }
