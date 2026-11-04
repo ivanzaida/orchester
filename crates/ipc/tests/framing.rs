@@ -13,9 +13,8 @@ use orchester_core::{
   tokens::TokenBudget,
 };
 use orchester_ipc::{
-  AttachSession, Command, ErrorReports, Event, FolderState, FrameError, Handshake, IpcError, PROTOCOL_VERSION,
-  RefusedRun, Rejection, Reply, Request, RequestId, RunWork, SessionEnd, ShutdownMode, SlotWait, WorkState,
-  WorkSummary,
+  AttachSession, Command, ErrorReports, Event, FrameError, Handshake, IpcError, PROTOCOL_VERSION, RefusedRun,
+  Rejection, Reply, Request, RequestId, RunWork, SessionEnd, ShutdownMode, SlotWait, WorkState, WorkSummary,
   frame::{FrameReader, FrameWriter, MAX_FRAME_LEN},
   handshake,
 };
@@ -263,21 +262,6 @@ fn events(run: RunId, task: TaskId) -> Vec<Event> {
     }),
     reply(Reply::RunStarted { run }),
     reply(Reply::Accepted { run }),
-    reply(Reply::RunFolderState {
-      run,
-      state: FolderState::Uncommitted {
-        files: 3,
-        first: Some("src/é \"quoted\".rs".to_owned()),
-      },
-    }),
-    reply(Reply::RunFolderState {
-      run,
-      state: FolderState::Clean,
-    }),
-    reply(Reply::RunFolderState {
-      run,
-      state: FolderState::Unknown,
-    }),
     reply(Reply::Rejected(Rejection::RunNotFound)),
     reply(Reply::Rejected(Rejection::LimitNotRaised { limit: RunLimit::Time })),
     reply(Reply::Rejected(Rejection::LimitNotAboveUsed {
