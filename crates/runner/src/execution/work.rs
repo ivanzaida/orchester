@@ -1,16 +1,13 @@
 //! How an executing run describes its current work on the [`super::board::Board`]: task, step,
 //! agent role, provider and model, read from the run's pinned configuration.
 
-use orchester_core::{
-  connection::ConnectionKind,
-  id::StepExecutionId,
-  resource::AgentProfile,
-  run::StepExecutor,
-  store::{ConnectionStore, ResourceStore},
-};
+use orchester_core::{connection::ConnectionKind, id::StepExecutionId, run::StepExecutor, store::ConnectionStore};
 use orchester_ipc::{RunWork, WorkState};
 
-use super::run::{ExecutionError, RunTask};
+use super::{
+  resolver::ResolveError,
+  run::{ExecutionError, RunTask},
+};
 
 impl RunTask {
   /// Tells the board which ready agent steps of the run wait for an agent slot, after [`RunTask::start_ready`] said
@@ -45,10 +42,12 @@ impl RunTask {
     else {
       return Err(ExecutionError::NotAnAgentStep(execution));
     };
-    let Some(version) = self.db.version::<AgentProfile>(profile.resource, profile.number)? else {
-      return Ok(None);
+    let body = match self.resolver.profile(&self.db, *profile) {
+      Ok(body) => body,
+      Err(ResolveError::Store(error)) => return Err(error.into()),
+      Err(_) => return Ok(None),
     };
-    let connection = self.db.connection(version.body().connection())?;
+    let connection = self.db.connection(body.connection())?;
     let Some(ConnectionKind::Agent(provider)) = connection.as_ref().map(|connection| connection.kind()) else {
       return Ok(None);
     };
@@ -58,7 +57,7 @@ impl RunTask {
       task_key: self.task.key().to_string(),
       task_title: self.task.details().title.as_str().to_owned(),
       step: step.name.as_str().to_owned(),
-      agent: version.body().role().as_str().to_owned(),
+      agent: body.role().as_str().to_owned(),
       provider: *provider,
       model: model.as_str().to_owned(),
       state: WorkState::Working,

@@ -130,6 +130,7 @@ pub use self::{
   resolutions::ResolutionStart,
   resources::ResourceUpdate,
   run_ends::EndedRun,
+  run_inputs::AcceptedInputs,
   runs::RunBranch,
   shared_events::{SharedEvent, SharedSnapshot},
   shared_members::{ServerAdmin, SharedMember},

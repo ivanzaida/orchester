@@ -1,12 +1,20 @@
-//! Team runs and their inputs (team authority P3): a team task's identity without its definition, a run created with
-//! the inputs the server accepted for it, executed and read back after a restart with no team task row, inputs that
-//! never change and hold no secret value, and a local run that keeps its inputs as today.
+//! Team runs and their inputs (team authority P3): a team task's identity without its definition, team inputs kept by
+//! the operation that accepted them before their run starts, a run created with them, executed and read back after a
+//! restart with no team task row, inputs that never change and hold no secret value, usage and plan limits that name
+//! a team run's task from its inputs, and a local run that keeps its inputs as today.
 mod support;
 
-use std::{collections::BTreeMap, fs, path::Path};
+#[path = "team_run_inputs/accepted.rs"]
+mod accepted;
+
+use std::{collections::BTreeMap, fs, num::NonZeroU32, path::Path};
 
 use orchester_core::{
   blob::ContentHash,
+  connection::{
+    AgentProvider,
+    plan_limits::{LimitReading, PlanLimits},
+  },
   id::{
     ClaimId, ConnectionId, IdempotencyKey, ModuleId, OperationId, ProjectId, ResourceId, SecretId, ServerId, TaskId,
     WorkId,
@@ -23,18 +31,18 @@ use orchester_core::{
     BranchName, CommitId, NewRun, PublishedVersions, RunSnapshot, StepExecutor,
     bundle::{CanonicalExecutionInputs, PinnedBodies},
     inputs::{
-      BoundReference, BundleContent, InputsOrigin, LocalBindings, LocalConsent, ProfileBinding, RunInputs, TaskAtStart,
-      TeamAcceptance,
+      BoundReference, BundleContent, InputsOrigin, LocalBindings, LocalConsent, ProfileBinding, ResourceLabel,
+      RunInputs, TaskAtStart, TeamAcceptance,
     },
   },
   sharing::TaskRevision,
-  store::{ResourceStore, RunStore, TaskStore},
+  store::{ActivityStore, ResourceStore, RunStore, TaskStore},
   task::{
     TaskDetails, TaskLimits,
     identity::{TaskOwner, TeamTaskRef},
   },
 };
-use orchester_store::{ProjectDb, RunStoreError};
+use orchester_store::{AcceptedInputs, ProjectDb, RunStoreError};
 use serde_json::Value;
 use support::{at, model, name};
 use tempfile::TempDir;
@@ -154,9 +162,9 @@ impl Team {
     };
     let content = BundleContent::new(
       origin,
-      task,
-      TaskLimits::NONE,
-      Deliverable::default(),
+      (NonZeroU32::new(7).expect("number"), task),
+      labels(&self.inputs),
+      (TaskLimits::NONE, Deliverable::default()),
       self.inputs.clone(),
     )
     .expect("content");
@@ -201,6 +209,27 @@ fn accepted(task: TeamTaskRef, operation: OperationId) -> InputsOrigin {
 
 fn revision(value: u64) -> TaskRevision {
   TaskRevision::try_from(value).expect("revision")
+}
+
+/// The labels `inputs` were accepted with: the pipeline is Delivery, every other resource Builder.
+fn labels(inputs: &CanonicalExecutionInputs) -> Vec<ResourceLabel> {
+  let pipeline = inputs.pipeline().pinned().resource;
+  inputs
+    .resources()
+    .into_iter()
+    .map(|resource| {
+      let (slug, title) = if resource == pipeline {
+        ("delivery", "Delivery")
+      } else {
+        ("builder", "Builder")
+      };
+      ResourceLabel {
+        resource,
+        slug: Slug::new(slug).expect("slug"),
+        name: name(title),
+      }
+    })
+    .collect()
 }
 
 #[test]
@@ -419,9 +448,9 @@ fn local_inputs(db: &ProjectDb, snapshot: &RunSnapshot) -> RunInputs {
   };
   let content = BundleContent::new(
     InputsOrigin::Local,
-    task,
-    TaskLimits::NONE,
-    Deliverable::default(),
+    (NonZeroU32::new(2).expect("number"), task),
+    labels(&canonical),
+    (TaskLimits::NONE, Deliverable::default()),
     canonical,
   )
   .expect("content");

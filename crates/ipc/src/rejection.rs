@@ -18,6 +18,9 @@ use serde::{Deserialize, Serialize};
 #[serde(tag = "reason", rename_all = "snake_case")]
 pub enum Rejection {
   TaskNotFound,
+  /// No team inputs that the operation accepted are kept in the project database (protocol 42): a team run starts only
+  /// from inputs the team server accepted and the desktop kept first.
+  InputsNotAccepted,
   /// Only queued tasks start a run.
   TaskNotQueued,
   /// The task changed since it was checked for this run: nothing started.

@@ -8,7 +8,7 @@ use std::{fmt, num::NonZeroU32};
 
 use orchester_core::{
   connection::{AgentProvider, ApiEndpoint, CheckResult, NativeModel},
-  id::{ChatId, ChatMessageId, ConnectionId, IdempotencyKey, ResourceId, RunId, StepExecutionId, TaskId},
+  id::{ChatId, ChatMessageId, ConnectionId, IdempotencyKey, OperationId, ResourceId, RunId, StepExecutionId, TaskId},
   integration::Leftovers,
   permission::AgentPermissions,
   question::GivenAnswer,
@@ -93,6 +93,12 @@ pub enum Command {
   /// [`Reply::RunStarted`] or [`Reply::Rejected`]. An explicit first-run request also releases
   /// its scheduling group’s persisted session-end hold; it does not bypass group eligibility.
   StartRun { key: IdempotencyKey, task: TaskId },
+  /// Starts the run of the team inputs the accepted operation `operation` kept in the project database (protocol 42,
+  /// team authority §7): the runner reads and checks them, makes sure this computer can run them (the base commit,
+  /// room on the disk, the bound connections, MCP servers and secrets), then records the run with them and starts it.
+  /// It reads no task or resource definition and holds no server token. Idempotent by `operation`: the operation has
+  /// one run, and repeating the request answers with it. Answered with [`Reply::RunStarted`] or [`Reply::Rejected`].
+  StartAcceptedRun { operation: OperationId },
   /// Starts the next run of task `task`, whose latest run `after` failed or was cancelled (Run
   /// again): from the first step, in a new worktree on a new branch from the current base, with
   /// the latest published version of the task's pipeline and the task's limits. With

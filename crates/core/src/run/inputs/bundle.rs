@@ -1,14 +1,18 @@
 //! The canonical part of a run's inputs: what was accepted for the run, by the team server for a team run or by this
 //! computer for a local one, apart from how this computer binds it.
 
-use std::time::Duration;
+use std::{num::NonZeroU32, time::Duration};
 
 use serde::{Deserialize, Serialize};
 
-use super::InputsError;
+use super::{
+  InputsError,
+  labels::{self, ResourceLabel},
+};
 use crate::{
   blob::ContentHash,
-  id::{ClaimId, ModuleId, OperationId, WorkId},
+  id::{ClaimId, ModuleId, OperationId, ResourceId, WorkId},
+  name::Name,
   resource::Deliverable,
   run::{
     BranchName, CommitId,
@@ -19,8 +23,8 @@ use crate::{
   tokens::TokenBudget,
 };
 
-/// The version of the stored inputs' shape.
-pub const RUN_INPUTS_FORMAT: u32 = 1;
+/// The version of the stored inputs' shape; 2 added the task's number and the pinned resources' labels.
+pub const RUN_INPUTS_FORMAT: u32 = 2;
 
 /// `{title, brief, criteria}`: the task the run executes, as it was when the run started.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -62,15 +66,19 @@ pub enum InputsOrigin {
   Team(TeamAcceptance),
 }
 
-/// `{format, origin, task, budget_tokens?, max_duration_ms?, delivery, inputs}`: everything the run executes with that
-/// does not depend on this computer. Nothing in it is a secret value, an account, a connection or a path of one
-/// computer ([`CanonicalExecutionInputs`]).
+/// `{format, origin, task_number, task, labels, budget_tokens?, max_duration_ms?, delivery, inputs}`: everything the
+/// run executes with that does not depend on this computer. Nothing in it is a secret value, an account, a connection
+/// or a path of one computer ([`CanonicalExecutionInputs`]).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "BundleFields")]
 pub struct BundleContent {
   format: u32,
   origin: InputsOrigin,
+  /// The task's number in its project, its key's (`ORC-129`).
+  task_number: NonZeroU32,
   task: TaskAtStart,
+  /// One per resource the inputs pin, in resource id order.
+  labels: Vec<ResourceLabel>,
   #[serde(skip_serializing_if = "Option::is_none")]
   budget_tokens: Option<TokenBudget>,
   #[serde(skip_serializing_if = "Option::is_none")]
@@ -84,7 +92,9 @@ pub struct BundleContent {
 struct BundleFields {
   format: u32,
   origin: InputsOrigin,
+  task_number: NonZeroU32,
   task: TaskAtStart,
+  labels: Vec<ResourceLabel>,
   #[serde(default)]
   budget_tokens: Option<TokenBudget>,
   #[serde(default)]
@@ -101,10 +111,13 @@ impl TryFrom<BundleFields> for BundleContent {
       return Err(InputsError::Format(fields.format));
     }
     TaskLimits::new(fields.budget_tokens, fields.max_duration_ms.map(Duration::from_millis))?;
+    Name::new(&fields.task.title).map_err(InputsError::TaskTitle)?;
     Ok(Self {
       format: fields.format,
       origin: fields.origin,
+      task_number: fields.task_number,
       task: fields.task,
+      labels: labels::checked(fields.labels, &fields.inputs.resources())?,
       budget_tokens: fields.budget_tokens,
       max_duration_ms: fields.max_duration_ms,
       delivery: fields.delivery,
@@ -114,11 +127,13 @@ impl TryFrom<BundleFields> for BundleContent {
 }
 
 impl BundleContent {
+  /// The content of `inputs` accepted by `origin` for the task numbered `number`, as it was then, with a label for
+  /// each resource the inputs pin.
   pub fn new(
     origin: InputsOrigin,
-    task: TaskAtStart,
-    limits: TaskLimits,
-    delivery: Deliverable,
+    (number, task): (NonZeroU32, TaskAtStart),
+    labels: Vec<ResourceLabel>,
+    (limits, delivery): (TaskLimits, Deliverable),
     inputs: CanonicalExecutionInputs,
   ) -> Result<Self, InputsError> {
     let max_duration_ms = limits
@@ -126,10 +141,13 @@ impl BundleContent {
       .map(|limit| u64::try_from(limit.as_millis()))
       .transpose()
       .map_err(|_| InputsError::Unrepresentable("time limit"))?;
+    Name::new(&task.title).map_err(InputsError::TaskTitle)?;
     Ok(Self {
       format: RUN_INPUTS_FORMAT,
       origin,
+      task_number: number,
       task,
+      labels: labels::checked(labels, &inputs.resources())?,
       budget_tokens: limits.budget(),
       max_duration_ms,
       delivery,
@@ -141,8 +159,23 @@ impl BundleContent {
     &self.origin
   }
 
+  pub const fn task_number(&self) -> NonZeroU32 {
+    self.task_number
+  }
+
+  /// The task as it was when the run started; its title is a [`Name`].
   pub const fn task(&self) -> &TaskAtStart {
     &self.task
+  }
+
+  /// The task's title, which was checked when the content was made or read.
+  pub fn task_title(&self) -> Name {
+    Name::new(&self.task.title).expect("the title was checked when the content was made or read")
+  }
+
+  /// The label of pinned resource `resource`; `None` for a resource the inputs do not pin.
+  pub fn label(&self, resource: ResourceId) -> Option<&ResourceLabel> {
+    self.labels.iter().find(|label| label.resource == resource)
   }
 
   pub fn limits(&self) -> TaskLimits {
