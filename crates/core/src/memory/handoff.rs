@@ -16,9 +16,11 @@
 
 use std::fmt::Write as _;
 
+use serde::{Deserialize, Serialize};
+
 use super::{
   AgentProvenance, AgentWrite, Confidence, ContainsSecret, Importance, Memory, MemoryAuthor, MemoryContent, MemoryKind,
-  MemoryScope, MemorySettings, MemoryStatus, ScreenedContent, SecretScreen, Tags,
+  MemoryScope, MemorySettings, MemoryStatus, SecretScreen, Tags,
 };
 use crate::{
   id::TaskId,
@@ -27,7 +29,8 @@ use crate::{
 };
 
 /// How the step a handoff comes from ended.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum StepFate {
   /// It passed, or its plan was approved.
   Passed,
@@ -35,13 +38,56 @@ pub enum StepFate {
 }
 
 /// A finished step's handoff, as its result reported it.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "SentHandoff")]
 pub struct Handoff {
   summary: String,
   completed: Vec<String>,
   decisions: Vec<String>,
   open_questions: Vec<String>,
   next_agent_should_know: Vec<String>,
+}
+
+/// [`Handoff`] as it arrives, before it is checked to be one [`Handoff::from_result`] makes.
+#[derive(Deserialize)]
+struct SentHandoff {
+  summary: String,
+  completed: Vec<String>,
+  decisions: Vec<String>,
+  open_questions: Vec<String>,
+  next_agent_should_know: Vec<String>,
+}
+
+/// A sent handoff that says nothing, or has a blank item: no result's handoff is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
+#[error("a handoff says something and has no blank item")]
+pub struct BlankHandoff;
+
+impl TryFrom<SentHandoff> for Handoff {
+  type Error = BlankHandoff;
+
+  fn try_from(sent: SentHandoff) -> Result<Self, BlankHandoff> {
+    let handoff = Self {
+      summary: sent.summary.trim().to_owned(),
+      completed: sent.completed,
+      decisions: sent.decisions,
+      open_questions: sent.open_questions,
+      next_agent_should_know: sent.next_agent_should_know,
+    };
+    let lists = [
+      &handoff.completed,
+      &handoff.decisions,
+      &handoff.open_questions,
+      &handoff.next_agent_should_know,
+    ];
+    let blank_item = lists
+      .iter()
+      .any(|items| items.iter().any(|item| item.trim().is_empty()));
+    if blank_item || handoff.text(StepFate::Passed).is_empty() {
+      return Err(BlankHandoff);
+    }
+    Ok(handoff)
+  }
 }
 
 /// Where a handoff is kept and by whom.
@@ -143,31 +189,57 @@ impl Handoff {
     text
   }
 
+  /// The handoff record's content for a step that ended as `fate`.
+  fn content(&self, fate: StepFate) -> MemoryContent {
+    let content = MemoryContent::new(MemoryKind::Handoff, &self.text(fate))
+      // `from_result` returns no handoff whose text is blank, and none arrives so.
+      .expect("a handoff's text is not blank")
+      .with_importance(Importance::High);
+    match fate {
+      StepFate::Passed => content,
+      StepFate::Failed => {
+        content.with_tags(Tags::new([FAILED_ATTEMPT_TAG]).expect("the failed-attempt tag is one word"))
+      }
+    }
+  }
+
+  /// The decision records' contents for a step that ended as `fate`, of high importance: none for a failed one.
+  fn decision_contents(&self, fate: StepFate) -> impl Iterator<Item = MemoryContent> + '_ {
+    let decisions: &[String] = match fate {
+      StepFate::Passed => &self.decisions,
+      StepFate::Failed => &[],
+    };
+    decisions.iter().map(|decision| {
+      // The lists' items are not blank: `StepResult` drops blank ones, and none arrives so.
+      let content = MemoryContent::new(MemoryKind::Decision, decision).expect("handoff list items are not blank");
+      content.with_importance(Importance::High)
+    })
+  }
+
+  /// Whether `screen` lets the handoff of a step that ended as `fate` be kept: [`Self::changes`] refuses it with this
+  /// error, before it reads any earlier record.
+  pub fn screen(&self, fate: StepFate, screen: &SecretScreen) -> Result<(), ContainsSecret> {
+    screen.check(self.content(fate))?;
+    for content in self.decision_contents(fate) {
+      screen.check(content)?;
+    }
+    Ok(())
+  }
+
   /// What keeping the handoff changes, given the task's records now (`earlier`). Refused as a whole
   /// when any new record holds a secret's value.
   pub fn changes(&self, write: &HandoffWrite<'_>, earlier: Vec<Memory>) -> Result<MemoryChanges, ContainsSecret> {
-    let mut handoff_content = MemoryContent::new(MemoryKind::Handoff, &self.text(write.fate))
-      // `from_result` returns no handoff whose text is blank.
-      .expect("a handoff's text is not blank")
-      .with_importance(Importance::High);
-    if write.fate == StepFate::Failed {
-      handoff_content =
-        handoff_content.with_tags(Tags::new([FAILED_ATTEMPT_TAG]).expect("the failed-attempt tag is one word"));
-    }
-    let handoff_content = write.screen.check(handoff_content)?;
+    let handoff_content = write.screen.check(self.content(write.fate))?;
     let mut decisions = Vec::new();
-    if write.fate == StepFate::Passed {
-      for decision in &self.decisions {
-        let content = reported(write, MemoryKind::Decision, decision)?;
-        let scope = MemoryScope::Task(write.task);
-        decisions.push(Memory::by_agent(
-          scope,
-          agent_write(write),
-          content,
-          write.settings,
-          write.now,
-        ));
-      }
+    for content in self.decision_contents(write.fate) {
+      let content = write.screen.check(content)?;
+      decisions.push(Memory::by_agent(
+        MemoryScope::Task(write.task),
+        agent_write(write),
+        content,
+        write.settings,
+        write.now,
+      ));
     }
     let mut step_records: Vec<Memory> = earlier
       .into_iter()
@@ -228,13 +300,6 @@ impl Handoff {
     changes.added.extend(decisions);
     Ok(changes)
   }
-}
-
-/// A decision record's content of `kind` saying `text`, of high importance, screened.
-fn reported(write: &HandoffWrite<'_>, kind: MemoryKind, text: &str) -> Result<ScreenedContent, ContainsSecret> {
-  // The lists' items are not blank: `StepResult` drops blank ones.
-  let content = MemoryContent::new(kind, text).expect("handoff list items are not blank");
-  write.screen.check(content.with_importance(Importance::High))
 }
 
 /// How the step's agent writes: its own report, of medium confidence.

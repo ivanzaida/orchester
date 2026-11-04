@@ -47,7 +47,12 @@ on another computer is decided with the transport.
    and the transaction stay the same.
 3. Rows the desktop owns are written only by the coordinator: *Always allow* (`mcp_servers`, `resource_versions`,
    `resource_drafts`, `step/answer.rs`), the model requirement of a connection (`connections`, `step/cli_version.rs`),
-   new memories and their changes.
+   new memories and their changes. Done (ORC-680): the executor sends them through the sink as requests
+   (`orchester_store::{RuleRecord, AlwaysAllowRecord, ModelRequirement, MemoryRecord}`), and the coordinator applies
+   them with the store's own functions and answers what the executor needs to go on (the rule's id, Always allow
+   unavailable, the kept note's id and status). Approval rules and their counts (`approval_rules`,
+   `project_approval_rules`) go the same way. The executor screens memory content against its own computer's secret
+   values before it sends it.
 4. Every value that crosses the boundary is serializable (serde), and the tests run the local executor through a
    channel that serializes every message, so nothing that only works in one process slips in.
 5. The desktop reaches a run's worktree only through the runner: reading its uncommitted changes and files, resolving
@@ -67,8 +72,8 @@ What the executor side reads today, and through which interface it will:
 | --- | --- | --- |
 | Pinned resource versions by id, skill blobs | `permissions.rs`, `step/skills.rs`, `step/start/{prompt,shared}.rs`, `tool/mod.rs`, `work.rs` | coordinator link |
 | `messages`, `attachments` and their files | `step/mod.rs`, `step/worker/steer.rs`, `recovery.rs` | coordinator link: done (ORC-667, `executor/link/messages.rs`), with `conversation.rs` and `get_task` (`step/run_records.rs`); the files' content travels in the answer and the executor keeps its copies in its execution root's `attachments/` (`executor/attached.rs`). Delivery state is still written to the database (ORC-680) |
-| `memories` | `step/memory.rs`, `handoff.rs`, `step/run_records.rs` | coordinator link: **done** (ORC-668, `executor/link/memory.rs`): the recall, the unreadable records and the Memory setting; new records and their changes still write the database until the write tasks |
-| `approval_rules`, `project_approval_rules`, `tool_approvals`, `run_auto_approve`, `questions` | `step/answer.rs`, `step/approval.rs`, `question.rs` | coordinator link: done (ORC-669, `executor/link/{approvals,questions}.rs`), with `tool_approval.rs`, `step/question.rs`, `step/worker/` (`in_autopilot`), `conversation.rs` and `get_task`; matching against the rules stays the executor's. Writes of approvals, rules and questions still go to the database. The coordinator's own reads (`coordinator/attach.rs` interrupting a cut-off run's requests) stay on the database |
+| `memories` | `step/memory.rs`, `handoff.rs`, `step/run_records.rs` | coordinator link: **done** (ORC-668, `executor/link/memory.rs`): the recall and the unreadable records. New records and their changes go through the sink (ORC-680, rule 3); the coordinator reads the Memory setting itself when it applies them, so the executor no longer asks the link's `settings` for them |
+| `approval_rules`, `project_approval_rules`, `tool_approvals`, `run_auto_approve`, `questions` | `step/answer.rs`, `step/approval.rs`, `question.rs` | coordinator link: done (ORC-669, `executor/link/{approvals,questions}.rs`), with `tool_approval.rs`, `step/question.rs`, `step/worker/` (`in_autopilot`), `conversation.rs` and `get_task`; matching against the rules stays the executor's. Writes of approvals and questions go through the sink (ORC-679), rules and their counts too (ORC-680). The coordinator's own reads (`coordinator/attach.rs` interrupting a cut-off run's requests) stay on the database |
 | Project settings an agent start reads (`code_index`, `repository_agent_files`, `memory_settings`, `approval_mode`, `auto_mode_settings`, `tells_base_moves`) | `step/start/*`, `step/skills.rs`, `handoff.rs`, `step/worker/review/setup.rs`, `step/base_notice.rs` | coordinator link |
 | Step usage (`invocations` tokens, `reviewer_usage`) | `step/mod.rs`, `step/start/shared.rs` | coordinator link |
 | `base_notices` | `step/base_notice.rs` | coordinator link |

@@ -37,8 +37,8 @@ impl ProjectRuleId {
 }
 
 /// What a rule of the project approves: Orchester's `start_qa_app`, while the QA script is at one git blob. Stored as
-/// the [`RuleScope`] Approve similar keeps for the same call, and serialized as it (the coordinator link), read back
-/// only as [`ProjectScope::stored`] takes it.
+/// the [`RuleScope`] Approve similar keeps for the same call, and serialized as it (the coordinator link and the
+/// coordinator's sink), read back only as [`ProjectScope::stored`] takes it.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(try_from = "RuleScope", into = "RuleScope")]
 pub struct ProjectScope {
