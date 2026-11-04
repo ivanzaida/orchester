@@ -5,7 +5,8 @@
 //! scrolls near its end. Sections without rows are left out; with none at all, *No merges yet* (09c `jhPCL`); while
 //! read, bones (09d `Zlk49`). A row's chevron opens the run's attempts ([`attempt`], ORC-363); a run waiting for review
 //! opens its review page ([`review`], ORC-697) at the same route. The merges are read again whenever the project's
-//! tasks or runs change, a merge job ends, or a button here changed something.
+//! tasks or runs change, a merge job ends, Orchester's wait to try a merge again begins, changes or ends, or a button
+//! here changed something.
 
 mod actions;
 pub(crate) mod attempt;
@@ -36,6 +37,7 @@ use orchester_workspace::{
   messages::{self, Message},
   tasks::{
     checkout::Checkout,
+    integration_jobs::JobState,
     merge_attempts::merges::{self, MergeRun, Merges},
   },
 };
@@ -139,12 +141,8 @@ impl Component for MergesScreen {
         )
       }));
     if merges.is_empty() {
-      return frame
-        .child(states::empty(
-          ctx,
-          merges.base.as_ref().map(|base| base.branch.as_str()),
-        ))
-        .into();
+      let empty = states::empty(ctx, merges.base.as_ref().map(|base| base.branch.as_str()));
+      return frame.child(empty).with_children(self.watches(ctx, &project)).into();
     }
     let body = self.body(ctx, &project, &merges, more_pending);
     let more = (merges.more && !more_pending).then(|| self.read_more(pages));
@@ -184,7 +182,18 @@ impl Component for MergesScreen {
 }
 
 impl MergesScreen {
-  /// The sections with rows, and while earlier merged runs are read, a line that says so.
+  /// Orchester's waits between its tries change no job state: each run whose merge job works is watched, so its row
+  /// turns to *Retrying by itself* and its attempt stays current as they begin, change and end. They render nothing.
+  fn watches(&self, ctx: &mut Ctx, project: &ShownProject) -> Vec<Element> {
+    let jobs = project.feed.job_state.get();
+    jobs
+      .runs()
+      .filter(|(_, state)| state.merge == JobState::Running)
+      .map(|(run, _)| attempt::watch::watch(ctx, run, &self.again))
+      .collect()
+  }
+
+  /// The sections with rows, while earlier merged runs are read a line that says so, and the [`Self::watches`].
   fn body(&self, ctx: &mut Ctx, project: &ShownProject, merges: &Merges, more_pending: bool) -> Vec<Element> {
     let separator = ctx.t("task.listSeparator");
     let services = Services::of(ctx);
@@ -200,6 +209,7 @@ impl MergesScreen {
     if more_pending {
       body.push(loading("merges-reading-more", &ctx.t("merges.readingMore")).into());
     }
+    body.extend(self.watches(ctx, project));
     body
   }
 

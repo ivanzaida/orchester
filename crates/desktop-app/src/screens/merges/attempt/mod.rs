@@ -17,7 +17,7 @@ mod left;
 mod properties;
 pub(crate) mod read;
 pub(crate) mod standing;
-mod watch;
+pub(super) mod watch;
 mod words;
 
 use std::{sync::Arc, time::Duration};

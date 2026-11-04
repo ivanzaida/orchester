@@ -1,7 +1,8 @@
 //! Review › Merges (ORC-362, 09 `Os7b3` of `Review · redesign`) in the app's real window, on the QA seed's merges
 //! scenarios (`examples/seed`): the hub's third tab, its own route by tab, history, *Jump to* and `navigate`, with its
-//! count in `warning`; *Not merged* with each outcome's line and action, *Try again* merging as the task page does and
-//! *Put files back* putting a stopped bring-in's file back; *Waiting for your review* with *Changed since your review*;
+//! count in `warning`; *Not merged* with each outcome's line and action, *Try again* merging as the task page does,
+//! Orchester's own retry followed live, and *Put files back* putting a stopped bring-in's file back; *Waiting for your
+//! review* with *Changed since your review*;
 //! the merged runs by local day, older days read as the list scrolls; and *No merges yet*. Needs `git`, as the seed
 //! does. `cargo test -p orchester-app --test review_merges review_merges`.
 
@@ -13,7 +14,7 @@
 mod kontur;
 mod support;
 
-use std::time::Duration;
+use std::{path::PathBuf, time::Duration};
 
 use lurq::app::events::ScrollPhase;
 use orchester_app::{
@@ -21,6 +22,7 @@ use orchester_app::{
   routes::{OverviewTab, ProjectPage, Route},
 };
 use orchester_core::{id::ProjectId, time::Timestamp};
+use orchester_exec::local_git::IntegrationLease;
 use serde_json::json;
 
 use crate::{
@@ -34,14 +36,16 @@ const GIT_WORK: Duration = Duration::from_secs(60);
 struct Seeded {
   window: Window,
   project: ProjectId,
+  repo: PathBuf,
 }
 
 impl Seeded {
   fn new(scenario: &str) -> Self {
     let data = Data::new();
+    let repo = data.dir.path().join(format!("repo-{scenario}"));
     let request = SeedRequest {
       data_dir: data.dir.path().to_path_buf(),
-      repo: data.dir.path().join(format!("repo-{scenario}")),
+      repo: repo.clone(),
       scenario: scenarios::named(scenario).expect("a known scenario"),
       fake_codex: None,
       now: Timestamp::now(),
@@ -53,6 +57,7 @@ impl Seeded {
     Self {
       window,
       project: seeded.project,
+      repo,
     }
   }
 
@@ -309,6 +314,42 @@ fn review_merges_try_again_merges_as_the_task_page_does() {
       .texts("review-hub-tab-merges-count")
       .is_some_and(|texts| texts == ["2"])
   });
+}
+
+/// While Orchester waits to try a merge again, no job state changes: the list watches the run that merges once a
+/// second, the window's timers firing meanwhile, so its row turns to *Retrying by itself* with *Try now* as the wait
+/// begins, and counts the next attempt as each try is refused again; once the lease is let go, *Try now* tries at once
+/// and the row tells how that try ended.
+#[test]
+fn review_merges_follows_orchesters_retry_live() {
+  let mut seeded = Seeded::new("merges-outcomes");
+  seeded.merges();
+  let row = seeded.row("merges-not-merged", "Add retry to webhook sender");
+  let action = format!("{row}-action");
+  let held = IntegrationLease::acquire(&seeded.repo).expect("another operation's lease");
+  seeded.window.press(&action);
+  let retrying = |attempt: &'static str| {
+    let (row, action) = (row.clone(), action.clone());
+    move |window: &mut Window| {
+      window.tree.tick_timers();
+      let line = format!("Retrying by itself · attempt {attempt} of 3 in");
+      window
+        .texts(&row)
+        .is_some_and(|texts| texts.iter().any(|text| text.contains(&line)))
+        && window.texts(&action).is_some_and(|texts| texts == ["Try now"])
+    }
+  };
+  seeded.window.until_within(GIT_WORK, "the row to retry", retrying("1"));
+  seeded.window.press(&action);
+  seeded.window.until_within(GIT_WORK, "the next attempt", retrying("2"));
+  drop(held);
+  seeded.window.press(&action);
+  seeded.window.until_within(GIT_WORK, "the try to end", |window| {
+    window.tree.tick_timers();
+    window.texts(&action).is_some_and(|texts| texts != ["Try now"])
+  });
+  let text = seeded.window.text(&row);
+  assert!(!text.contains("Retrying by itself"), "{text}");
 }
 
 #[test]
