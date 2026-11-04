@@ -14,11 +14,11 @@ use orchester_core::{
   resource::{
     AgentProfile, AgentTargets, CommandAction, CommandArg, CommandProgram, InjectionEvent, Instruction,
     InstructionScope, ModelId, Pipeline, PipelineSources, PromptText, ProviderSettings, RepositoryAccess, Skill,
-    SkillFile, SkillFilePath, Step, StepKey, StepKind, Tool, Version, VersionNumber,
+    SkillFile, SkillFilePath, Slug, Step, StepKey, StepKind, Tool, Version, VersionNumber,
   },
   run::{
     PublishedVersions, RunSnapshot,
-    bundle::{BundleError, CanonicalExecutionInputs, MAX_BUNDLE_FILE_BYTES, PinnedBodies, file_sha256},
+    bundle::{BundleError, CanonicalExecutionInputs, MAX_BUNDLE_FILE_BYTES, PinnedBodies, ResourceLabel, file_sha256},
   },
   source::SourcePath,
   time::Timestamp,
@@ -147,20 +147,49 @@ impl Config {
     RunSnapshot::build(self.pipeline, &self.pipeline_version, published).expect("every reference is published")
   }
 
+  /// A label for every version, the pipeline's too: `kind-n` and `Kind n`.
+  fn labels(&self) -> Vec<(VersionId, ResourceLabel)> {
+    let ids = [
+      ("pipeline", vec![self.pipeline_version.id()]),
+      ("profile", self.profiles.values().map(Version::id).collect()),
+      ("tool", self.tools.values().map(Version::id).collect()),
+      ("instruction", self.instructions.values().map(Version::id).collect()),
+      ("skill", self.skills.values().map(Version::id).collect()),
+    ];
+    ids
+      .into_iter()
+      .flat_map(|(kind, ids)| {
+        ids
+          .into_iter()
+          .enumerate()
+          .map(move |(n, id)| (id, label(&format!("{kind}-{n}"), &format!("{kind} {n}"))))
+      })
+      .collect()
+  }
+
   /// The inputs of the config's snapshot, with each list of versions reversed when `reversed`.
   fn inputs(&self, reversed: bool) -> Result<CanonicalExecutionInputs, BundleError> {
     let profiles = listed(&self.profiles, reversed);
     let tools = listed(&self.tools, reversed);
     let instructions = listed(&self.instructions, reversed);
     let skills = listed(&self.skills, reversed);
+    let labels = self.labels();
     let bodies = PinnedBodies {
       profiles: &profiles,
       instructions: &instructions,
       tools: &tools,
       skills: &skills,
+      labels: &labels,
     };
     CanonicalExecutionInputs::pin(&self.snapshot(), bodies)
   }
+}
+
+fn label(slug: &str, name: &str) -> ResourceLabel {
+  ResourceLabel::new(
+    Slug::new(slug).expect("valid slug"),
+    Name::new(name).expect("valid name"),
+  )
 }
 
 fn listed<B: Clone>(versions: &BTreeMap<ResourceId, Version<B>>, reversed: bool) -> Vec<Version<B>> {
@@ -212,13 +241,23 @@ fn execution_bundle_inputs_hash_the_same_whatever_order_their_versions_come_in()
 fn execution_bundle_inputs_hash_differently_when_any_field_changes() {
   let value = serde_json::to_value(inputs()).expect("serializes");
   let hash = inputs_hash(&value);
-  let changes: [(&str, Value); 6] = [
+  let changes: [(&str, Value); 16] = [
     ("/pipeline/body/steps/0/name", json!("Implement it")),
     ("/pipeline/number", json!(9)),
     ("/profiles/0/body/model", json!("model-c")),
     ("/instructions/0/body/text", json!("Another rule.")),
     ("/tools/0/body/action/command/timeout_secs", json!(60)),
     ("/skills/0/body/description", json!("Another skill.")),
+    ("/pipeline/label/slug", json!("feature-delivery")),
+    ("/pipeline/label/name", json!("Feature delivery")),
+    ("/profiles/0/label/slug", json!("reviewer")),
+    ("/profiles/0/label/name", json!("Reviewer")),
+    ("/instructions/0/label/slug", json!("house-rules")),
+    ("/instructions/0/label/name", json!("House rules")),
+    ("/tools/0/label/slug", json!("cargo-check")),
+    ("/tools/0/label/name", json!("Cargo check")),
+    ("/skills/0/label/slug", json!("rust-code-quality")),
+    ("/skills/0/label/name", json!("Rust code quality")),
   ];
   for (pointer, changed) in changes {
     let mut value = value.clone();
@@ -234,6 +273,76 @@ fn inputs_hash(value: &Value) -> String {
     .expect("hashes")
     .as_str()
     .to_owned()
+}
+
+#[test]
+fn execution_bundle_inputs_label_each_pinned_version_as_it_was() {
+  let config = Config::new("cargo");
+  let inputs = config.inputs(false).expect("the inputs pin");
+  let pipeline = inputs.pipeline().label();
+  assert_eq!(
+    (pipeline.slug().as_str(), pipeline.name().as_str()),
+    ("pipeline-0", "pipeline 0")
+  );
+  let profile = inputs.profiles()[0].label();
+  assert_eq!(
+    (profile.slug().as_str(), profile.name().as_str()),
+    ("profile-0", "profile 0")
+  );
+  let value = serde_json::to_value(&inputs).expect("serializes");
+  assert_eq!(value["tools"][0]["label"], json!({"slug": "tool-0", "name": "tool 0"}));
+  let bytes = String::from_utf8(serde_json::to_vec(&inputs).expect("serializes")).expect("UTF-8");
+  assert!(
+    bytes.contains("\"number\":3,\"label\":{\"slug\":\"pipeline-0\",\"name\":\"pipeline 0\"},\"body\":"),
+    "{bytes}"
+  );
+
+  let unlabelled = config.labels()[1..].to_vec();
+  let bodies = PinnedBodies {
+    profiles: &listed(&config.profiles, false),
+    instructions: &listed(&config.instructions, false),
+    tools: &listed(&config.tools, false),
+    skills: &listed(&config.skills, false),
+    labels: &unlabelled,
+  };
+  let missing = CanonicalExecutionInputs::pin(&config.snapshot(), bodies);
+  assert!(matches!(missing, Err(BundleError::MissingLabel { .. })));
+}
+
+#[test]
+fn execution_bundle_inputs_refuse_a_malformed_label() {
+  let value = serde_json::to_value(inputs()).expect("serializes");
+  let changes: [(&str, Value, &str); 9] = [
+    ("/pipeline/label/slug", json!(""), "slug must be"),
+    ("/profiles/0/label/slug", json!("Builder"), "slug must be"),
+    ("/tools/0/label/slug", json!("-check"), "slug must be"),
+    ("/instructions/0/label/slug", json!("house--rules"), "slug must be"),
+    ("/skills/0/label/slug", json!("a".repeat(65)), "slug must be"),
+    ("/skills/0/label/name", json!(""), "must not be blank"),
+    ("/tools/0/label/name", json!("   "), "must not be blank"),
+    ("/profiles/0/label/name", json!("n".repeat(201)), "the limit is"),
+    ("/pipeline/label/slug", json!(null), "invalid type"),
+  ];
+  for (pointer, changed, error) in changes {
+    let mut value = value.clone();
+    *value.pointer_mut(pointer).unwrap_or_else(|| panic!("{pointer} exists")) = changed;
+    let refused = read(value).expect_err("refused").to_string();
+    assert!(refused.contains(error), "{pointer}: {refused}");
+  }
+  for (pointer, field) in [("/pipeline/label", "slug"), ("/skills/0/label", "name")] {
+    let mut value = value.clone();
+    let label = value
+      .pointer_mut(pointer)
+      .and_then(Value::as_object_mut)
+      .expect("a label");
+    label.remove(field);
+    let refused = read(value).expect_err("refused").to_string();
+    assert!(refused.contains("missing field"), "{pointer}: {refused}");
+  }
+  let mut unknown = value;
+  unknown["tools"][0]["label"]["key"] = json!("CHK");
+  let refused = read(unknown).expect_err("refused").to_string();
+  assert!(refused.contains("unknown field"), "{refused}");
 }
 
 #[test]
@@ -376,6 +485,7 @@ fn execution_bundle_inputs_need_every_pinned_body_and_bounded_files() {
     instructions: &[],
     tools: &config.tools.values().cloned().collect::<Vec<_>>(),
     skills: &config.skills.values().cloned().collect::<Vec<_>>(),
+    labels: &config.labels(),
   };
   let missing = CanonicalExecutionInputs::pin(&config.snapshot(), bodies);
   assert!(matches!(missing, Err(BundleError::MissingVersion { .. })));

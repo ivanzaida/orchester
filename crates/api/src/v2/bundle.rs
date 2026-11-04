@@ -12,7 +12,11 @@
 //! Reads: the bundle read answers an `ExecutionBundle`; a bundle file read answers one file's raw bytes by its
 //! `sha256`, at most [`MAX_BUNDLE_FILE_BYTES`], which the desktop checks with [`ExecutionBundle::check_file`].
 
-pub use orchester_core::run::bundle::{MAX_BUNDLE_FILE_BYTES, ResolvedStepPermissions, SkillFileEntry, SkillFiles};
+use std::num::NonZeroU32;
+
+pub use orchester_core::run::bundle::{
+  MAX_BUNDLE_FILE_BYTES, ResolvedStepPermissions, ResourceLabel, SkillFileEntry, SkillFiles,
+};
 use orchester_core::{
   blob::ContentHash,
   connection::AgentProvider,
@@ -31,8 +35,9 @@ use thiserror::Error;
 use super::{BundleRef, Subject};
 use crate::SharedLimits;
 
-/// The version of the bundle's shape, as [`BundleRef::schema_version`] names it.
-pub const EXECUTION_BUNDLE_SCHEMA: u32 = 1;
+/// The version of the bundle's shape, as [`BundleRef::schema_version`] names it. 2 added the task's number and each
+/// pinned version's label; a side on another version refuses the bundle.
+pub const EXECUTION_BUNDLE_SCHEMA: u32 = 2;
 
 /// `{resource_id, version}`: a pinned published version.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -85,6 +90,8 @@ pub struct BundleStart {
   pub base_commit: CommitId,
   /// The task's revision when the work started.
   pub definition_revision: TaskRevision,
+  /// The task's number in its project, the `7` of `ORC-7` that names the run and its branch.
+  pub task_number: NonZeroU32,
   pub task: TaskAtStart,
   /// The run's token budget and time limit; `{}` for none.
   pub limits: SharedLimits,

@@ -1,8 +1,10 @@
 //! The bundle's wire shape, in the field order of its canonical bytes:
-//! `{schema_version, project_id, subject, claim_id, module_id, branch, base_commit, definition_revision, task,
-//! pipeline, profiles, permissions, limits, delivery, resources, files, skill_files, bindings, inputs}`. The refs,
-//! permissions, files and skill file manifests are what the inputs decide; collections whose order means nothing are
-//! read in any order and kept sorted.
+//! `{schema_version, project_id, subject, claim_id, module_id, branch, base_commit, definition_revision, task_number,
+//! task, pipeline, profiles, permissions, limits, delivery, resources, files, skill_files, bindings, inputs}`. The
+//! refs, permissions, files and skill file manifests are what the inputs decide; collections whose order means nothing
+//! are read in any order and kept sorted.
+
+use std::num::NonZeroU32;
 
 use orchester_core::{
   id::{ClaimId, ModuleId, ProjectId},
@@ -32,6 +34,7 @@ pub(super) struct ExecutionBundleWire {
   branch: BranchName,
   base_commit: CommitId,
   definition_revision: TaskRevision,
+  task_number: NonZeroU32,
   task: TaskAtStart,
   pipeline: ResourceVersionRef,
   profiles: Vec<ProfileVersionRef>,
@@ -101,6 +104,7 @@ impl From<ExecutionBundle> for ExecutionBundleWire {
       branch: start.branch,
       base_commit: start.base_commit,
       definition_revision: start.definition_revision,
+      task_number: start.task_number,
       task: start.task,
       pipeline: derived.pipeline,
       profiles: derived.profiles,
@@ -150,6 +154,7 @@ impl TryFrom<ExecutionBundleWire> for ExecutionBundle {
         branch: wire.branch,
         base_commit: wire.base_commit,
         definition_revision: wire.definition_revision,
+        task_number: wire.task_number,
         task: wire.task,
         limits: wire.limits,
         delivery: wire.delivery,
