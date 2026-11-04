@@ -11,6 +11,7 @@
 //! (`orchester_workspace::orchestrator::settings::save_in`), and the next answer runs on it.
 
 mod effort;
+mod foot;
 mod header;
 mod item;
 mod keys;
@@ -139,12 +140,13 @@ impl Component for RunsOnPicker {
       return self.chip(ctx, &props, Some(&label));
     }
     let margin = ctx.theme().spacing_value(SpacingSize::Md).to_px();
-    let room = room_over(&self.anchor, (ExtraSpacing::Snug.value(), margin));
+    // 16 over the chip (`Runs on menu` `r2owi1` over `KohZb` in `v6mWp8`).
+    let gap = ctx.theme().spacing_value(SpacingSize::Lg).to_px();
+    let room = room_over(&self.anchor, (gap, margin));
     let panel = panel::panel(ctx, (&props, &sources), (&self.picking, &self.publish), room);
     let chip = self.chip(ctx, &props, Some(&label));
-    // Over the chip, 6 away from it, and never flipped under it, where it would cover the status bar: it is as tall
+    // Over the chip, 16 away from it, and never flipped under it, where it would cover the status bar: it is as tall
     // as the room over the chip lets it be, and its models scroll inside their column.
-    let gap = ExtraSpacing::Snug.value();
     let picker = Popup::new(self.anchor.clone(), panel)
       .open(props.open.clone())
       .placement(Placement::TopStart)

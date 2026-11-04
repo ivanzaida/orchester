@@ -123,6 +123,62 @@ fn open(screen: &mut Orchestrator) {
   screen.until("the picker", |screen| screen.exists("orchestrator-runs-on-menu"));
 }
 
+/// The limit dot of `busy`'s item and the bar of `chosen`'s are drawn where the design has them (`KsrNe`, `ERvx7`).
+fn assert_marks(screen: &mut Orchestrator, (busy, chosen): (ConnectionId, ConnectionId)) {
+  // The dot is 7 at 24, 6 in its item; the chosen one's bar 2 × 16 at the rail's edge, 10 down.
+  let (busy_item, dot) = (
+    screen.bounds(&format!("orchestrator-runs-on-{busy}")),
+    screen.bounds(&format!("orchestrator-runs-on-{busy}-limit")),
+  );
+  assert!(
+    (dot.width - 7.0).abs() < 0.5 && (dot.height - 7.0).abs() < 0.5,
+    "the dot is drawn: {dot:?}"
+  );
+  assert!(
+    (dot.x - busy_item.x - 24.0).abs() < 0.5 && (dot.y - busy_item.y - 6.0).abs() < 0.5,
+    "at its item's top right: {dot:?} {busy_item:?}"
+  );
+  let (rail, claude_item, bar) = (
+    screen.bounds("orchestrator-runs-on-rail"),
+    screen.bounds(&format!("orchestrator-runs-on-{chosen}")),
+    screen.bounds(&format!("orchestrator-runs-on-{chosen}-bar")),
+  );
+  assert!(
+    (bar.width - 2.0).abs() < 0.5 && (bar.height - 16.0).abs() < 0.5,
+    "the bar is drawn: {bar:?}"
+  );
+  assert!(
+    (bar.x - rail.x).abs() < 1.0 && (bar.y - claude_item.y - 10.0).abs() < 0.5,
+    "at the rail's edge: {bar:?} {rail:?}"
+  );
+}
+
+/// The picker is 640 wide, over its chip and under the title bar, with its Effort column and its 32-high foot.
+fn assert_frame(screen: &mut Orchestrator) {
+  // The foot is 32 high with its line inside it, as the design's stroke is.
+  let (foot, rule) = (
+    screen.bounds("orchestrator-runs-on-foot"),
+    screen.bounds("orchestrator-runs-on-rule"),
+  );
+  assert!((foot.height - 32.0).abs() < 1.0, "the foot 32 high: {foot:?}");
+  assert!(
+    (rule.y - foot.y).abs() < 0.5 && (rule.height - 1.0).abs() < 0.5 && (rule.width - foot.width).abs() < 0.5,
+    "its line at its top: {rule:?} {foot:?}"
+  );
+  let (menu, chip) = (
+    screen.bounds("orchestrator-runs-on-menu"),
+    screen.bounds("orchestrator-runs-on-chip"),
+  );
+  assert!((menu.width - 640.0).abs() < 0.5, "640 wide: {menu:?}");
+  assert!(menu.y >= TITLE_BAR_HEIGHT - 0.5, "under the title bar: {menu:?}");
+  assert!(
+    (chip.y - (menu.y + menu.height) - 16.0).abs() < 1.0,
+    "16 over the chip: {menu:?} {chip:?}"
+  );
+  let effort = screen.bounds("orchestrator-runs-on-effort");
+  assert!((effort.width - 196.0).abs() < 0.5, "Effort 196 wide: {effort:?}");
+}
+
 #[test]
 fn orchestrator_picker_shows_a_cli_connection_on_the_rail_with_its_models_and_efforts() {
   let mut screen = Orchestrator::new(Setup::Ready);
@@ -152,11 +208,11 @@ fn orchestrator_picker_shows_a_cli_connection_on_the_rail_with_its_models_and_ef
   assert_eq!(screen.text("orchestrator-runs-on-effort-0"), "Default the CLI's own");
   assert_eq!(screen.text("orchestrator-runs-on-effort-1"), "Low");
   assert!(!screen.exists("orchestrator-runs-on-publish"), "no Publish step");
-  assert!(screen.exists("orchestrator-runs-on-rule"), "a line over the foot");
   // A plan at its limit has its dot on the rail; one not signed in cannot be chosen.
   screen.until("Busy's limit read", |screen| {
     screen.exists(&format!("orchestrator-runs-on-{at_busy}-limit"))
   });
+  assert_marks(&mut screen, (at_busy, claude));
   assert!(!screen.exists(&format!("orchestrator-runs-on-{at_work}-limit")));
   screen.press(&format!("orchestrator-runs-on-{signed_out}"));
   assert_eq!(
@@ -193,16 +249,7 @@ fn orchestrator_picker_shows_a_cli_connection_on_the_rail_with_its_models_and_ef
     screen.text(&format!("orchestrator-runs-on-{at_busy}-plan")),
     "limit reached"
   );
-  // The picker is 640 wide, over its chip and under the title bar.
-  let (menu, chip) = (
-    screen.bounds("orchestrator-runs-on-menu"),
-    screen.bounds("orchestrator-runs-on-chip"),
-  );
-  assert!((menu.width - 640.0).abs() < 0.5, "640 wide: {menu:?}");
-  assert!(menu.y >= TITLE_BAR_HEIGHT - 0.5, "under the title bar: {menu:?}");
-  assert!(menu.y + menu.height <= chip.y, "over the chip: {menu:?} {chip:?}");
-  let effort = screen.bounds("orchestrator-runs-on-effort");
-  assert!((effort.width - 196.0).abs() < 0.5, "Effort 196 wide: {effort:?}");
+  assert_frame(&mut screen);
 }
 
 #[test]
@@ -232,31 +279,46 @@ fn orchestrator_picker_applies_a_model_and_an_effort_at_once() {
   assert_eq!(published(&screen).map(|(version, _)| version), Some(3));
 }
 
-#[test]
-fn orchestrator_picker_on_an_api_provider_has_no_efforts_and_takes_a_typed_model() {
-  let mut screen = Orchestrator::new(Setup::Ready);
+/// A DeepSeek connection of `screen`'s project, chosen in the open picker.
+fn on_deepseek(screen: &mut Orchestrator) -> ConnectionId {
   let program = std::env::current_exe().expect("a program");
   let deepseek = connections::api_provider("DeepSeek", &program);
   screen
     .db()
     .create_connection(&deepseek)
     .expect("the API provider's connection");
-  open(&mut screen);
+  open(screen);
   screen.press(&format!("orchestrator-runs-on-{}", deepseek.id()));
   let pro = OrchestratorSettings::new(deepseek.id(), ModelId::new("deepseek-v4-pro").expect("model"), None);
   screen.until("DeepSeek published", |screen| {
     published(screen) == Some((2, pro.clone()))
   });
+  deepseek.id()
+}
+
+/// Types `text` into the field `id` with the focus in it, and presses Enter.
+fn enter(screen: &mut Orchestrator, id: &str, text: &str) {
+  screen.set(id, text);
+  screen
+    .window
+    .tree
+    .get_element_by_id_mut(id)
+    .unwrap_or_else(|| panic!("{id} exists"))
+    .focus();
+  screen.window.pass();
+  screen.key(("Enter", "Enter"), false);
+}
+
+#[test]
+fn orchestrator_picker_on_an_api_provider_takes_a_typed_model() {
+  let mut screen = Orchestrator::new(Setup::Ready);
+  let deepseek = on_deepseek(&mut screen);
   screen.until("its head", |screen| {
     screen.text("orchestrator-runs-on-who") == "Claude Code · api.deepseek.com"
   });
-  let usage = screen.text(&format!("orchestrator-runs-on-{}-usage", deepseek.id()));
+  let usage = screen.text(&format!("orchestrator-runs-on-{deepseek}-usage"));
   assert_eq!(usage, "0 today no plan limit");
   assert!(screen.text("orchestrator-runs-on-sent-to").contains("api.deepseek.com"));
-  assert!(
-    !screen.exists("orchestrator-runs-on-effort"),
-    "no efforts listed: no column"
-  );
   assert!(
     screen
       .text("orchestrator-runs-on-search")
@@ -268,9 +330,44 @@ fn orchestrator_picker_on_an_api_provider_has_no_efforts_and_takes_a_typed_model
     screen.text("orchestrator-runs-on-typed") == "Use deepseek-v4-flash"
   });
   screen.key(("Enter", "Enter"), false);
-  let flash = OrchestratorSettings::new(deepseek.id(), ModelId::new("deepseek-v4-flash").expect("model"), None);
+  let flash = OrchestratorSettings::new(deepseek, ModelId::new("deepseek-v4-flash").expect("model"), None);
   screen.until("the typed model published", |screen| {
     published(screen) == Some((3, flash.clone()))
+  });
+}
+
+#[test]
+fn orchestrator_picker_on_an_api_provider_takes_a_typed_effort() {
+  let mut screen = Orchestrator::new(Setup::Ready);
+  let deepseek = on_deepseek(&mut screen);
+  // It lists no efforts: *Default* and a field for the one it takes (`wzbRG`).
+  screen.until("its efforts", |screen| {
+    screen.exists("orchestrator-runs-on-effort-typed")
+  });
+  assert_eq!(screen.text("orchestrator-runs-on-effort-model"), "deepseek-v4-pro");
+  assert_eq!(screen.text("orchestrator-runs-on-effort-0"), "Default the CLI's own");
+  assert!(
+    screen
+      .text("orchestrator-runs-on-effort-hint")
+      .starts_with("The provider lists no efforts")
+  );
+  enter(&mut screen, "orchestrator-runs-on-effort-typed", " think-hard ");
+  let pro = ModelId::new("deepseek-v4-pro").expect("model");
+  let typed = OrchestratorSettings::new(deepseek, pro, Some("think-hard".to_owned()));
+  screen.until("the typed effort published", |screen| {
+    published(screen) == Some((3, typed.clone()))
+  });
+  // Another model keeps it; *Default* clears it.
+  screen.set("orchestrator-runs-on-search", "deepseek-v4-flash");
+  screen.until("the typed model", |screen| screen.exists("orchestrator-runs-on-typed"));
+  screen.press("orchestrator-runs-on-typed");
+  let flash = ModelId::new("deepseek-v4-flash").expect("model");
+  let kept = OrchestratorSettings::new(deepseek, flash.clone(), Some("think-hard".to_owned()));
+  screen.until("the effort kept", |screen| published(screen) == Some((4, kept.clone())));
+  screen.press("orchestrator-runs-on-effort-0");
+  let default = OrchestratorSettings::new(deepseek, flash, None);
+  screen.until("Default published", |screen| {
+    published(screen) == Some((5, default.clone()))
   });
 }
 
@@ -305,6 +402,29 @@ fn orchestrator_picker_says_why_a_choice_was_refused_and_changes_nothing() {
 }
 
 #[test]
+fn orchestrator_picker_says_why_a_connection_the_keys_choose_cannot_be_chosen() {
+  let mut screen = Orchestrator::new(Setup::Ready);
+  on_account(&screen, "Away", false);
+  open(&mut screen);
+  // The rail lists Claude · Away before Claude · Kontur, which it runs on: ← lands on Kontur, ↑ on Away.
+  screen.key(("ArrowLeft", "ArrowLeft"), false);
+  screen.key(("ArrowUp", "ArrowUp"), false);
+  screen.key(("Enter", "Enter"), false);
+  screen.until("why it cannot be chosen", |screen| {
+    screen.exists("orchestrator-runs-on-unavailable")
+  });
+  assert_eq!(
+    screen.text("orchestrator-runs-on-unavailable"),
+    "Claude Code · Away: not signed in, sign in in Connections"
+  );
+  assert_eq!(
+    published(&screen).map(|(version, _)| version),
+    Some(1),
+    "nothing changed"
+  );
+}
+
+#[test]
 fn orchestrator_picker_without_connections_is_its_foot_with_no_line_over_it() {
   let mut screen = Orchestrator::new(Setup::NoConnection);
   open(&mut screen);
@@ -325,4 +445,8 @@ fn orchestrator_picker_without_connections_is_its_foot_with_no_line_over_it() {
     screen.bounds("orchestrator-runs-on-foot"),
   );
   assert!((foot.y - menu.y).abs() < 1.5, "the foot at the top: {menu:?} {foot:?}");
+  assert!(
+    (menu.width - 360.0).abs() < 0.5,
+    "only as wide as its foot (`k95WLp`): {menu:?}"
+  );
 }

@@ -76,10 +76,12 @@ pub enum OrchestratorText {
   Message,
   /// 12/500 `text_primary`, 1.3: *Plan only* on the composer's *Mode* line (`xptH1` in `y51fw9`).
   Mode,
+  /// 12 `text_secondary`, 1.3: *Settings ↗* at the runs-on picker's foot, one 16 line in its 32 (`rIT51` in `SwrjI`).
+  PickerLink,
 }
 
 impl OrchestratorText {
-  pub const ALL: [Self; 26] = [
+  pub const ALL: [Self; 27] = [
     Self::HeaderTitle,
     Self::StartTitle,
     Self::Emphasis,
@@ -106,6 +108,7 @@ impl OrchestratorText {
     Self::HistoryLine,
     Self::Message,
     Self::Mode,
+    Self::PickerLink,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -140,6 +143,7 @@ impl OrchestratorText {
       Self::HistoryLine => "orchestrator_history_line",
       Self::Message => "orchestrator_message",
       Self::Mode => "orchestrator_mode",
+      Self::PickerLink => "orchestrator_picker_link",
     }
   }
 
@@ -177,6 +181,7 @@ impl OrchestratorText {
       Self::HistoryLine => style(11.5, FontWeight::Normal, 1.4, 0.0, palette.text_secondary),
       Self::Message => style(13.0, FontWeight::Normal, 1.3, 0.0, palette.text_primary),
       Self::Mode => style(12.0, FontWeight::Medium, 1.3, 0.0, palette.text_primary),
+      Self::PickerLink => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
     }
   }
 }
@@ -255,6 +260,24 @@ pub fn chat_scrollbar(base: &ScrollBarStyle) -> ScrollBarStyle {
 /// the chat, as the composer's is, wherever the lane takes room.
 pub fn beside_chat_lane(scrollbar: &ScrollBarStyle) -> f32 {
   OrchestratorSpacing::PageSide.value() - (scrollbar.width + scrollbar.resolved_edge_inset() * 2.0)
+}
+
+/// The runs-on picker's models' scrollbar (`Scrollbar` `Px0Pz` in `GaA7N`): 3 wide, radius 2, at the list's end, 2
+/// from its top and bottom.
+const PICKER_SCROLLBAR_WIDTH: f32 = 3.0;
+const PICKER_SCROLLBAR_RADIUS: f32 = 2.0;
+const PICKER_SCROLLBAR_END: f32 = 2.0;
+
+/// `base`, the theme's scrollbar (its `border_strong` thumb), as the runs-on picker's models' list draws it.
+pub fn picker_scrollbar(base: &ScrollBarStyle) -> ScrollBarStyle {
+  ScrollBarStyle {
+    width: PICKER_SCROLLBAR_WIDTH,
+    thumb_radius: PICKER_SCROLLBAR_RADIUS,
+    track_radius: PICKER_SCROLLBAR_RADIUS,
+    edge_inset: Some(0.0),
+    end_inset: Some(PICKER_SCROLLBAR_END),
+    ..base.clone()
+  }
 }
 
 /// Shadows of the Orchestrator.

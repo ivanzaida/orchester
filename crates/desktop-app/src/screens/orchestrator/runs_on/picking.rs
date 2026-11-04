@@ -1,18 +1,20 @@
 //! What the runs-on picker shows while it is open, and choosing in it. The rail's connection whose models show (the
-//! one the Orchestrator runs on when the picker opens), what Search holds, whether every model shows, and where the
-//! keys are: a column and the place in it. Choosing applies at once: the connection with what is kept on it or its
-//! first model, a model with the effort when the model lists it, or an effort, published as the Orchestrator's next
-//! version through the checks of its settings page (`orchester_workspace::orchestrator::settings::save_in`). Until
-//! the version is read again, what was chosen shows chosen; a refused choice changes nothing and the picker says why.
+//! one the Orchestrator runs on when the picker opens), what Search holds, the effort typed for an API provider, where
+//! the models' list is scrolled, and where the keys are: a column and the place in it. Choosing applies at once: the
+//! connection with what is kept on it or its first model, a model with the effort when the model lists it, or an
+//! effort, published as the Orchestrator's next version through the checks of its settings page
+//! (`orchester_workspace::orchestrator::settings::save_in`). Until the version is read again, what was chosen shows
+//! chosen; a refused choice changes nothing and the picker says why, as it does for a connection that cannot be chosen.
 
 use lurq::{
   app::{component::DevtoolsInspectable, ctx::Ctx},
   core::{ElementRef, Signal},
+  layout::layout_kind::ScrollState,
 };
 use orchester_core::{id::ConnectionId, orchestrator::OrchestratorSettings, resource::ModelId};
 use orchester_workspace::orchestrator::settings::{Keep, OrchestratorSetup, Saving};
 
-use super::{Publish, models::ModelItem, rail::Entry};
+use super::{Publish, models, rail::Entry};
 
 /// A column of the picker, where ← and → move the keys.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -24,11 +26,21 @@ pub(super) enum Part {
 
 impl DevtoolsInspectable for Part {}
 
-/// The connection whose models show, as a signal holds it.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-struct Viewing(Option<ConnectionId>);
+/// A field of the picker that takes the focus on the next pass.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Focus {
+  Stay,
+  Search,
+  Effort,
+}
 
-impl DevtoolsInspectable for Viewing {}
+impl DevtoolsInspectable for Focus {}
+
+/// A connection, as a signal holds it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct Connection(Option<ConnectionId>);
+
+impl DevtoolsInspectable for Connection {}
 
 /// What was chosen since the picker opened, as a signal holds it.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -40,71 +52,44 @@ impl DevtoolsInspectable for Applied {}
 #[derive(Clone)]
 pub(super) struct Picking {
   /// The connection whose models show.
-  viewing: Signal<Viewing>,
+  viewing: Signal<Connection>,
   /// What Search holds.
   pub(super) query: Signal<String>,
-  /// *Show all N* was pressed.
-  pub(super) all: Signal<bool>,
+  /// The effort typed for an API provider.
+  pub(super) typed_effort: Signal<String>,
   /// The column the keys are in, and their place in it once an arrow moved them.
   pub(super) part: Signal<Part>,
   pub(super) at: Signal<Option<usize>>,
   /// What was chosen since the picker opened.
   applied: Signal<Applied>,
+  /// A connection the keys tried to choose that cannot be chosen: the picker says why.
+  unavailable: Signal<Connection>,
   seeded: Signal<bool>,
-  /// Search takes the focus on the next pass.
-  focus: Signal<bool>,
-  pub(super) input: ElementRef,
-}
-
-/// What the keys move over: the rail's connections (whether each can be chosen), the models shown and the efforts,
-/// `None` the CLI's own; and in each, where the one shown or chosen is.
-pub(super) struct Lists {
-  pub(super) rail: Vec<(ConnectionId, bool)>,
-  pub(super) models: Vec<ModelItem>,
-  pub(super) efforts: Vec<Option<String>>,
-  pub(super) homes: [Option<usize>; 3],
-}
-
-impl Lists {
-  pub(super) fn len(&self, part: Part) -> usize {
-    match part {
-      Part::Rail => self.rail.len(),
-      Part::Models => self.models.len(),
-      Part::Effort => self.efforts.len(),
-    }
-  }
-
-  /// Where the keys start in `part`: on the one shown or chosen, else the first.
-  pub(super) fn home(&self, part: Part) -> usize {
-    let index = match part {
-      Part::Rail => 0,
-      Part::Models => 1,
-      Part::Effort => 2,
-    };
-    self.homes[index].unwrap_or(0)
-  }
-
-  /// The columns the keys can be in, in their order: the rail and Effort only when they show something.
-  pub(super) fn parts(&self) -> Vec<Part> {
-    [Part::Rail, Part::Models, Part::Effort]
-      .into_iter()
-      .filter(|part| *part == Part::Models || self.len(*part) > 0)
-      .collect()
-  }
+  /// The chosen model is scrolled into view on the next pass.
+  reveal: Signal<bool>,
+  focus: Signal<Focus>,
+  pub(super) search: ElementRef,
+  pub(super) effort_field: ElementRef,
+  /// Where the models' list is scrolled.
+  pub(super) scroll: ScrollState,
 }
 
 impl Picking {
   pub(super) fn new(ctx: &mut Ctx) -> Self {
     Self {
-      viewing: ctx.signal(Viewing::default()),
+      viewing: ctx.signal(Connection::default()),
       query: ctx.signal(String::new()),
-      all: ctx.signal(false),
+      typed_effort: ctx.signal(String::new()),
       part: ctx.signal(Part::Models),
       at: ctx.signal(None),
       applied: ctx.signal(Applied::default()),
+      unavailable: ctx.signal(Connection::default()),
       seeded: ctx.signal(false),
-      focus: ctx.signal(false),
-      input: ElementRef::new(),
+      reveal: ctx.signal(false),
+      focus: ctx.signal(Focus::Stay),
+      search: ElementRef::new(),
+      effort_field: ElementRef::new(),
+      scroll: ScrollState::new(),
     }
   }
 
@@ -115,8 +100,8 @@ impl Picking {
     }
   }
 
-  /// Once since the picker opened: the models of what the Orchestrator runs on show, else of the first connection it
-  /// can run on, with nothing searched and Search focused.
+  /// Once since the picker opened: the models of what the Orchestrator runs on show, scrolled to the chosen one, else
+  /// of the first connection it can run on, with nothing searched and Search focused.
   pub(super) fn seed(&self, setup: &OrchestratorSetup, entries: &[Entry]) {
     if self.seeded.get_untracked() {
       return;
@@ -124,16 +109,24 @@ impl Picking {
     let published = setup
       .settings
       .as_ref()
+      .filter(|settings| entries.iter().any(|entry| entry.id == settings.connection()));
+    let viewing = published
       .map(OrchestratorSettings::connection)
-      .filter(|connection| entries.iter().any(|entry| entry.id == *connection));
-    let viewing = published.or_else(|| entries.iter().find(|entry| entry.choosable).map(|entry| entry.id));
-    self.viewing.set(Viewing(viewing));
+      .or_else(|| entries.iter().find(|entry| entry.choosable).map(|entry| entry.id));
+    self.viewing.set(Connection(viewing));
     self.query.set(String::new());
-    self.all.set(false);
+    self.typed_effort.set(
+      published
+        .and_then(OrchestratorSettings::effort)
+        .unwrap_or_default()
+        .to_owned(),
+    );
     self.part.set(Part::Models);
     self.at.set(None);
     self.applied.set(Applied::default());
-    self.focus.set(true);
+    self.unavailable.set(Connection::default());
+    self.reveal.set(true);
+    self.focus.set(Focus::Search);
     self.seeded.set(true);
   }
 
@@ -142,11 +135,44 @@ impl Picking {
     self.viewing.get().0
   }
 
-  /// Search takes the focus when it was asked to.
-  pub(super) fn take_focus(&self, ctx: &mut Ctx) {
-    if self.focus.get() {
-      ctx.focus(&self.input);
-      self.focus.set(false);
+  /// A connection the keys tried to choose that cannot be chosen.
+  pub(super) fn unavailable(&self) -> Option<ConnectionId> {
+    self.unavailable.get().0
+  }
+
+  /// The keys tried to choose `connection`, which cannot be chosen.
+  pub(super) fn refuse(&self, connection: ConnectionId) {
+    self.unavailable.set(Connection(Some(connection)));
+  }
+
+  /// The field asked for takes the focus, and the chosen model at `chosen` in the list scrolls into view once.
+  pub(super) fn settle(&self, ctx: &mut Ctx, chosen: Option<usize>) {
+    match self.focus.get() {
+      Focus::Stay => {}
+      Focus::Search => ctx.focus(&self.search),
+      Focus::Effort => ctx.focus(&self.effort_field),
+    }
+    if self.focus.get_untracked() != Focus::Stay {
+      self.focus.set(Focus::Stay);
+    }
+    if self.reveal.get() {
+      if let Some(chosen) = chosen {
+        models::reveal(&self.scroll, chosen);
+      }
+      self.reveal.set(false);
+    }
+  }
+
+  /// The keys are on the typed effort (`on_field`) or elsewhere: its field or Search takes the focus.
+  pub(super) fn focus_for(&self, on_field: bool) {
+    let target = if on_field { Focus::Effort } else { Focus::Search };
+    let focused = if on_field {
+      self.effort_field.focused()
+    } else {
+      self.search.focused()
+    };
+    if !focused {
+      self.focus.set(target);
     }
   }
 
@@ -154,7 +180,7 @@ impl Picking {
   pub(super) fn type_in(&self, typed: &str) {
     self.query.update(|query| query.push_str(typed));
     self.typed();
-    self.focus.set(true);
+    self.focus.set(Focus::Search);
   }
 
   /// What Search holds changed: the keys go to the models it finds, from the first.
@@ -205,10 +231,11 @@ impl Chooser {
   /// effort; one with no model to start on only shows, for a model to be typed.
   pub(super) fn connection(&self, connection: ConnectionId) {
     let picking = &self.picking;
+    picking.unavailable.set(Connection::default());
     if picking.viewing.get_untracked().0 != Some(connection) {
-      picking.viewing.set(Viewing(Some(connection)));
+      picking.viewing.set(Connection(Some(connection)));
       picking.query.set(String::new());
-      picking.all.set(false);
+      picking.scroll.scroll_to_top_pending();
     }
     if self.chosen_on(connection).is_some() {
       return;
@@ -220,20 +247,25 @@ impl Chooser {
       .filter(|settings| settings.connection() == connection)
       .or_else(|| self.setup.choosing(connection));
     if let Some(settings) = settings {
+      picking
+        .typed_effort
+        .set(settings.effort().unwrap_or_default().to_owned());
       self.apply(settings);
     }
   }
 
-  /// Runs on `model` of the connection shown, with the effort chosen when `model` lists it.
+  /// Runs on `model` of the connection shown, with the effort chosen when `model` lists it, or the effort typed on an
+  /// API provider.
   pub(super) fn model(&self, model: ModelId) {
     let Some(connection) = self.picking.viewing.get_untracked().0 else {
       return;
     };
+    let typed = self.typed_only(connection);
     let efforts = efforts_for(&self.setup, connection, &model);
     let effort = self
       .chosen_on(connection)
       .and_then(|chosen| chosen.effort().map(str::to_owned))
-      .filter(|effort| efforts.contains(effort));
+      .filter(|effort| typed || efforts.contains(effort));
     self.apply(OrchestratorSettings::new(connection, model, effort));
   }
 
@@ -248,6 +280,10 @@ impl Chooser {
     else {
       return;
     };
+    let effort = effort
+      .map(|effort| effort.trim().to_owned())
+      .filter(|effort| !effort.is_empty());
+    self.picking.typed_effort.set(effort.clone().unwrap_or_default());
     self.apply(OrchestratorSettings::new(
       chosen.connection(),
       chosen.model().clone(),
@@ -255,9 +291,9 @@ impl Chooser {
     ));
   }
 
-  /// Every model of the connection shown shows.
-  pub(super) fn show_all(&self) {
-    self.picking.all.set(true);
+  /// Runs on the effort typed for an API provider; nothing typed is the CLI's own.
+  pub(super) fn typed_effort(&self) {
+    self.effort(Some(self.picking.typed_effort.get_untracked()));
   }
 
   /// What is chosen, when it is on `connection`.
@@ -265,8 +301,17 @@ impl Chooser {
     self.chosen.as_ref().filter(|chosen| chosen.connection() == connection)
   }
 
+  /// `connection` lists no efforts of its own: its effort is typed (an API provider).
+  pub(super) fn typed_only(&self, connection: ConnectionId) -> bool {
+    matches!(
+      self.setup.runs_on(connection),
+      Some(orchester_workspace::orchestrator::runs_on::RunsOn::ApiProvider { .. })
+    )
+  }
+
   /// Publishes `settings` unless they are what is chosen.
   fn apply(&self, settings: OrchestratorSettings) {
+    self.picking.unavailable.set(Connection::default());
     if self.chosen.as_ref() == Some(&settings) {
       return;
     }

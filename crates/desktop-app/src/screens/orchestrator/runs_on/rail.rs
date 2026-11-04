@@ -13,7 +13,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
-  components::{Button, Column, Row},
+  components::{Button, Column, Row, Stack},
   layout::{Alignment, layout_kind::Justify},
   node::{Element, Style, border::Border, dimension::Dimension, padding::Padding},
 };
@@ -241,19 +241,22 @@ fn item(
     .justify(Justify::Center)
     .align_items(Alignment::Center)
     .rounded(RadiusSize::Md)
-    .child(mark)
-    .with_children(entry.limit.then(|| limit_dot(id)))
-    .with_children(chosen.then(|| chosen_bar(id)));
+    .child(mark);
   let button = match (chosen, current) {
     (true, _) => button.background(ExtraColor::Pressed.role()),
     (false, true) => button.background(ExtraColor::Hover.role()),
     (false, false) => button,
   };
-  Tooltip::new(format!("orchestrator-runs-on-{id}-tip"), tip).wrap(ctx, button)
+  // A stack, as only a stack lays out what is placed at a point of it: the dot and the bar.
+  let item = Stack::new()
+    .child(button)
+    .with_children(entry.limit.then(|| limit_dot(id)))
+    .with_children(chosen.then(|| chosen_bar(id)));
+  Tooltip::new(format!("orchestrator-runs-on-{id}-tip"), tip).wrap(ctx, item)
 }
 
 /// What an entry's tooltip says: its name, and why it cannot be chosen.
-fn tip(ctx: &Ctx, entry: &Entry) -> Arc<str> {
+pub(super) fn tip(ctx: &Ctx, entry: &Entry) -> Arc<str> {
   match &entry.runs_on {
     RunsOn::ApiProvider { base_url, .. } => ctx.t_args(
       "orchestrator.runsOn.railProvider",
@@ -280,6 +283,7 @@ fn limit_dot(id: ConnectionId) -> Element {
       Dimension::Px(DOT),
       Dimension::Px(DOT),
     )
+    .pointer_events_none()
     .rounded(ExtraRadius::Full.role())
     .background(PaletteColor::Warning)
     .border(Border::inside(BorderSize::Md, PaletteColor::SurfaceRaised))
@@ -296,6 +300,7 @@ fn chosen_bar(id: ConnectionId) -> Element {
       Dimension::Px(BAR_WIDTH),
       Dimension::Px(BAR_HEIGHT),
     )
+    .pointer_events_none()
     .rounded(ExtraRadius::Full.role())
     .background(PaletteColor::Accent)
     .into()

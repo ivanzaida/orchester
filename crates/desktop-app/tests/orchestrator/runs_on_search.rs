@@ -1,7 +1,8 @@
 //! The runs-on picker's Search and keys (`Searching` `b187v`, `Many models` `q1ZHoz` and the notes `JbhvF` in
 //! `Runs-on picker · states` `t7cdi`): Search filters the chosen connection's models and says when none matches; more
-//! than six show the first six and *Show all N*; ← → move between the rail, Models and Effort, ↑ ↓ within one, Enter
-//! chooses and applies at once, a key typed elsewhere in the picker goes to Search, and Esc closes the picker.
+//! than seven scroll inside the Models column, the chosen one scrolled into view, and the panel keeps its height; ← →
+//! move between the rail, Models and Effort, ↑ ↓ within one (keeping the place in view), Enter chooses and applies at
+//! once, a key typed elsewhere in the picker goes to Search, and Esc closes the picker.
 
 use orchester_app::routes::OrchestratorChat;
 use orchester_core::{
@@ -34,7 +35,7 @@ const MODELS: [&str; 12] = [
   "gpt-5.4-mini",
 ];
 
-/// A Codex connection that lists the twelve [`MODELS`], published as what the Orchestrator runs on with the first.
+/// A Codex connection that lists the twelve [`MODELS`], published as what the Orchestrator runs on with the last.
 fn many_models(screen: &Orchestrator) -> ConnectionId {
   let program = std::env::current_exe().expect("a program");
   let mut connection = connections::cli(AgentProvider::CodexCli, "Codex · Many", &program);
@@ -55,7 +56,7 @@ fn many_models(screen: &Orchestrator) -> ConnectionId {
     .expect("its check");
   let mut db = screen.db();
   db.create_connection(&connection).expect("created");
-  let settings = OrchestratorSettings::new(connection.id(), ModelId::new(MODELS[0]).expect("model"), None);
+  let settings = OrchestratorSettings::new(connection.id(), ModelId::new(MODELS[11]).expect("model"), None);
   db.publish_orchestrator(&settings, Timestamp::now()).expect("published");
   connection.id()
 }
@@ -78,22 +79,39 @@ fn open(screen: &mut Orchestrator) {
   screen.until("the picker", |screen| screen.exists("orchestrator-runs-on-search"));
 }
 
+/// The place `index` of the models' list shows whole inside it.
+fn in_view(screen: &mut Orchestrator, index: usize) -> bool {
+  let (list, row) = (
+    screen.bounds("orchestrator-runs-on-model-scroll"),
+    screen.bounds(&format!("orchestrator-runs-on-model-{index}")),
+  );
+  row.y >= list.y - 0.5 && row.y + row.height <= list.y + list.height + 0.5
+}
+
 #[test]
-fn orchestrator_picker_shows_six_models_then_all_and_search_filters_them() {
+fn orchestrator_picker_scrolls_many_models_in_their_column_and_search_filters_them() {
   let mut screen = Orchestrator::new(Setup::Ready);
   many_models(&screen);
   open(&mut screen);
-  assert_eq!(listed(&mut screen), MODELS[..6].to_vec());
-  assert_eq!(screen.text("orchestrator-runs-on-show-all"), "Show all 12");
-  screen.press("orchestrator-runs-on-show-all");
-  screen.until("every model", |screen| listed(screen).len() == 12);
+  // Every model is in the list, which is seven rows high (`GaA7N`) and scrolled to the chosen, the last.
+  assert_eq!(listed(&mut screen), MODELS.to_vec());
   assert!(!screen.exists("orchestrator-runs-on-show-all"));
-  // The list scrolls inside its column, never past the picker.
-  let (list, menu) = (
-    screen.bounds("orchestrator-runs-on-model-scroll"),
-    screen.bounds("orchestrator-runs-on-menu"),
+  let list = screen.bounds("orchestrator-runs-on-model-scroll");
+  assert!((list.height - 222.0).abs() < 0.5, "seven rows high: {list:?}");
+  screen.until("the chosen model in view", |screen| in_view(screen, 11));
+  let menu = screen.bounds("orchestrator-runs-on-menu");
+  // ↑ moves the keys to the first, which scrolls into view; the panel keeps its height.
+  screen.key(("ArrowUp", "ArrowUp"), false);
+  for _ in 0..11 {
+    screen.key(("ArrowUp", "ArrowUp"), false);
+  }
+  screen.until("the first model in view", |screen| in_view(screen, 0));
+  assert!(!in_view(&mut screen, 11), "the list scrolled");
+  let after = screen.bounds("orchestrator-runs-on-menu");
+  assert!(
+    (after.height - menu.height).abs() < 0.5 && (after.y - menu.y).abs() < 0.5,
+    "the panel stays: {menu:?} {after:?}"
   );
-  assert!(list.y + list.height <= menu.y + menu.height, "{list:?} in {menu:?}");
 
   screen.set("orchestrator-runs-on-search", "sol");
   screen.until("the models found", |screen| listed(screen).len() == 3);
