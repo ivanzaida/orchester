@@ -30,6 +30,7 @@ use crate::{
   chat::ChatTools,
   rejection::Rejection,
   work::WorkSummary,
+  worktree::WorktreeChangesRead,
 };
 
 /// Identifies a request within one connection, so its reply can be matched.
@@ -281,8 +282,12 @@ pub enum Command {
   /// carried out, [`Rejection::BrowserUnavailable`] when the browser cannot start, [`Rejection::NoSuchTab`] for a tab
   /// it does not have, or [`Rejection::Failed`] when the browser refused.
   Browser(BrowserCommand),
+  /// Reads what the worktree of run `run` holds beyond its checked-out commit, for the task page's Changes and
+  /// `get_changes` (protocol 40): only the runner reads a run's worktree. Answered with [`Reply::WorktreeChanges`],
+  /// whatever it found, a failed read included.
+  ReadWorktreeChanges { run: RunId },
   /// `request` about the merge a person resolves by hand in run `run`'s worktree, carried out where the worktree is
-  /// (protocol 40): the desktop keeps the project's record of the resolution and runs no git there itself. Answered
+  /// (protocol 41): the desktop keeps the project's record of the resolution and runs no git there itself. Answered
   /// with [`Reply::Resolved`], or [`Reply::ResolveFailed`] with why it did not go on.
   Resolve { run: RunId, request: ResolveRequest },
 }
@@ -474,6 +479,11 @@ pub enum Reply {
   ErrorReportsSet,
   /// The answer to [`Command::Browser`].
   Browser(BrowserReply),
+  /// The answer to [`Command::ReadWorktreeChanges`]: what the worktree of `run` holds beyond its commit.
+  WorktreeChanges {
+    run: RunId,
+    read: WorktreeChangesRead,
+  },
   /// The answer to [`Command::Resolve`] that was carried out.
   Resolved(ResolveAnswer),
   /// The answer to [`Command::Resolve`] that did not go on, and why.

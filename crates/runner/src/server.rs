@@ -366,6 +366,7 @@ async fn answer(
     Command::Resolve { run, ref request } => return later.resolve(handle, run, request.clone()),
     Command::EstimateTask { task } => return later.estimate(handle, task),
     Command::SetErrorReports { ref reports } => return Answer::ErrorReports(id, reports.clone()),
+    Command::ReadWorktreeChanges { run } => return later.reply(handle.worktree_changes(run)),
   };
   Answer::Reply(Event::Reply { id, reply })
 }

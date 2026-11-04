@@ -22,6 +22,7 @@ mod requests;
 mod resolve;
 pub mod state;
 mod work;
+mod worktree_changes;
 
 use std::{
   collections::{HashMap, HashSet},
