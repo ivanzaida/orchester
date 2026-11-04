@@ -234,17 +234,20 @@ impl Supervisor {
   }
 
   /// The Settings › Browser the runner attaches with: as the desktop passed them last, or, until it did, those in the
-  /// application database beside this program, which the runner read itself before (protocol 46).
+  /// application data of the runner's program, which the runner read itself before (protocol 46).
   async fn attach_browser(&self) -> ComputerBrowser {
     if let Some(browser) = self.browser.lock().clone() {
       return browser;
     }
-    let read = tokio::task::spawn_blocking(|| match crate::app_paths::app_data_location() {
-      Ok(location) => crate::workspace::computer_browser_beside(&location.database),
-      Err(error) => ComputerBrowser {
-        program: Ok(None),
-        profiles: Err(format!("the application data folder is unknown: {error}")),
-      },
+    let runner = self.runner_exe.clone();
+    let read = tokio::task::spawn_blocking(move || {
+      match orchester_store::location::app_data_location_of(&runner) {
+        Ok(location) => crate::workspace::computer_browser_beside(&location.database),
+        Err(error) => ComputerBrowser {
+          program: Ok(None),
+          profiles: Err(format!("the application data folder is unknown: {error}")),
+        },
+      }
     });
     read.await.unwrap_or_else(|error| ComputerBrowser {
       program: Err(format!("Settings › Browser cannot be read: {error}")),
