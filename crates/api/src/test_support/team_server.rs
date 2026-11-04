@@ -4,8 +4,9 @@
 //! identity), joining with a code (`POST /auth/code`) or a cloud identity (`POST /auth/cloud`), who signed in
 //! (`GET /auth/me`), and the projects the person is a member of (`GET /projects`, by `?slug=` too). What a linked
 //! checkout's first download reads, and what a first link of a project sends (the workspace's `local_owner`), is in
-//! [`first_download`]. It answers a wrong code and an expired one alike, `invalid_code`, as a real server does; it can
-//! have no place for a cloud identity, it can refuse a link, and it can stop answering.
+//! [`first_download`]; the reads of a team project straight from the server (`/api/v2`) are in [`authority`]. It
+//! answers a wrong code and an expired one alike, `invalid_code`, as a real server does; it can have no place for a
+//! cloud identity, it can refuse a link, and it can stop answering.
 
 use std::{
   io::{Read, Write},
@@ -18,7 +19,9 @@ use orchester_core::id::ProjectId;
 use parking_lot::Mutex;
 use serde_json::{Value, json};
 
+mod authority;
 mod first_download;
+pub use authority::{AuthorityTask, Standing};
 use first_download::TaskPages;
 pub use first_download::TasksAnswer;
 
@@ -57,6 +60,8 @@ struct State {
   pages: Option<TaskPages>,
   /// How often a project's tasks were asked for.
   tasks_asked: usize,
+  /// What the `/api/v2` surface answers.
+  authority: authority::Authority,
 }
 
 pub struct TeamServer {
@@ -86,6 +91,7 @@ impl TeamServer {
       tasks: TasksAnswer::default(),
       pages: None,
       tasks_asked: 0,
+      authority: authority::Authority::default(),
     }));
     let serving = state.clone();
     thread::spawn(move || {
@@ -184,6 +190,13 @@ fn serve(mut stream: TcpStream, state: &Mutex<State>) {
   let Some((line, headers, body)) = read_request(&mut stream) else {
     return;
   };
+  if line
+    .split_whitespace()
+    .nth(1)
+    .is_some_and(|path| path.starts_with("/api/v2/"))
+  {
+    return authority::serve(&mut stream, (&line, &headers, &body), state);
+  }
   let target = line.split_whitespace().take(2).collect::<Vec<_>>().join(" ");
   let (path, query) = target.split_once('?').unwrap_or((&target, ""));
   let (status, answer) = route((path, query), (&headers, &body), state);

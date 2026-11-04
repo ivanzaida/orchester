@@ -96,7 +96,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 106] = [
+pub const ALL: [Scenario; 108] = [
   Scenario::of("reviewer-row", reviewer_rows::seed),
   Scenario::of("reviewer-row-local", reviewer_rows::local),
   Scenario::of("reviewer-row-unavailable", reviewer_rows::unavailable),
@@ -201,6 +201,8 @@ pub const ALL: [Scenario; 106] = [
   Scenario::of("team-shared-projects", team::shared_projects),
   Scenario::of("team-shared-none", team::shared_none),
   Scenario::of("team-clone", team::clones),
+  Scenario::of("team-member", team::member),
+  Scenario::of("team-outage", team::outage),
   Scenario::of("modules-base-branch", modules::base_branch),
   Scenario::of("loading-states", loading_states::seed),
 ];

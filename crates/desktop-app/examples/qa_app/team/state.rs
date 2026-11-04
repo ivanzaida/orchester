@@ -36,10 +36,14 @@ pub enum State {
   NoSharedProjects,
   /// Joined, with one project per way a clone from *Link a folder* ends, each cloned by a stand-in console (ORC-584).
   Clones,
+  /// Joined as a member, with Kontur linked and its tasks read from the server (ORC-716, 01 `QdL7N`).
+  Member,
+  /// As [`Self::Member`], with the server's reads unavailable (ORC-716, 06 `GR3RS`).
+  Outage,
 }
 
 impl State {
-  pub const ALL: [Self; 13] = [
+  pub const ALL: [Self; 15] = [
     Self::Join,
     Self::WrongCode,
     Self::ExpiredCode,
@@ -53,6 +57,8 @@ impl State {
     Self::SharedProjects,
     Self::NoSharedProjects,
     Self::Clones,
+    Self::Member,
+    Self::Outage,
   ];
 
   /// The seed's scenario of this state.
@@ -71,6 +77,8 @@ impl State {
       Self::SharedProjects => "team-shared-projects",
       Self::NoSharedProjects => "team-shared-none",
       Self::Clones => "team-clone",
+      Self::Member => "team-member",
+      Self::Outage => "team-outage",
     }
   }
 

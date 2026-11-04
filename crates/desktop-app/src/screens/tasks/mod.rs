@@ -14,7 +14,8 @@
 //! as cards in columns; List or Board is kept for the project (`kanban::display`).
 //!
 //! The tasks are the project feed's, as they stand with its runner: while no runner serves the project, a run recorded
-//! as running is interrupted. Not built yet (D4): selecting the list's rows, Manage tags.
+//! as running is interrupted. A team project's tasks are its server's instead, joined with this computer's runs
+//! (`team`, `team_view`, ORC-716). Not built yet (D4): selecting the list's rows, Manage tags.
 
 mod board_view;
 mod cache;
@@ -32,6 +33,8 @@ mod row;
 mod shared;
 mod skeleton;
 mod states;
+mod team;
+mod team_view;
 mod views;
 
 use std::sync::Arc;
@@ -178,7 +181,13 @@ impl Component for TasksScreen {
       .padding(Padding::new().top(SpacingSize::Xl).left(TasksSpacing::Sides.role()))
       .spacing(TasksSpacing::Stack.role())
       .on_key_down(slash(self.focus_search.clone()));
-    let head = (id, shared.as_ref());
+    // A team project's tasks are read from its server ([`team_view`]); this computer's own copy of them is not shown.
+    if let TasksState::Ready(local) = project.feed.tasks.get()
+      && local.shared
+    {
+      return self.team(ctx, page, (&project, &list), (shared.as_ref(), &local));
+    }
+    let head = (id, shared.as_ref(), false);
     match project.feed.tasks.get() {
       TasksState::Ready(tasks) if tasks.tasks.is_empty() && tasks.not_shared.is_empty() => {
         self.no_tasks(ctx, page, (&project, &list), (shared.as_ref(), not_member))
@@ -192,6 +201,7 @@ impl Component for TasksScreen {
           source: &source,
           shared: shared.as_ref(),
           not_shared,
+          team: None,
         };
         let options = Arc::new(Options::of(ctx, &source));
         let chosen = self.choices.facets.get_untracked();
@@ -219,11 +229,12 @@ impl Component for TasksScreen {
 }
 
 impl TasksScreen {
-  /// The header row, with the Filter's facets and the holds on new starts once the tasks are read.
+  /// The header row, with the Filter's facets and the holds on new starts once the tasks are read; a team member's
+  /// has no New task.
   fn header(
     &self,
     ctx: &mut Ctx,
-    (project, shared): (ProjectId, Option<&shared::Shared>),
+    (project, shared, member): (ProjectId, Option<&shared::Shared>, bool),
     (options, queue): (Option<Arc<Options>>, Option<queue::QueueProps>),
   ) -> Column {
     inset(header::header(
@@ -234,6 +245,7 @@ impl TasksScreen {
         options,
         queue,
         shared,
+        member,
         display: &self.display,
       },
     ))
@@ -252,7 +264,7 @@ impl TasksScreen {
     match project.feed.download.get() {
       Some(FirstDownload::Downloading { server }) => {
         let page = page
-          .child(self.header(ctx, (id, shared), (None, None)))
+          .child(self.header(ctx, (id, shared, false), (None, None)))
           .with_children(not_member);
         let label = ctx.t_args("tasks.downloading", [("project", name), ("server", server.as_str())]);
         self.reading(ctx, page, (project, list), label)
@@ -261,7 +273,7 @@ impl TasksScreen {
         let (servers, root) = (Services::of(ctx).servers, project.open.repo_root.clone());
         let retry = move || servers.retry_download(&root);
         page
-          .child(self.header(ctx, (id, shared), (None, None)))
+          .child(self.header(ctx, (id, shared, false), (None, None)))
           .with_children(not_member)
           .child(inset(views::views(ctx, (id, list), Counts::Unknown, None)))
           .child(inset(states::download_failed(ctx, (name, &server, &reason), retry)))
@@ -313,6 +325,8 @@ impl TasksScreen {
     let Rows { rows, counts } = self.cache.rows(key.clone(), |tasks| {
       browse::faceted(tasks, (&key.search, &separator), &key.facets, key.sort)
     });
+    // A team project's views count the server's tasks, of which only the view's are read.
+    let (counts, totals) = shown.team.map_or((counts, totals), |team| (team.counts, team.counts));
     let page = self.top(ctx, page, shown, (&reading, counts), options);
     let parts = grouped(
       list_view(list.tab()),
@@ -349,7 +363,7 @@ impl TasksScreen {
       tasks: &reading.tasks,
       needs: &reading.needs,
       highlight: highlight.as_deref(),
-      shared: shown.shared.is_some(),
+      shared: shown.shared.is_some() || shown.team.is_some(),
     };
     let items = list::items(ctx, &source, &parts, &self.folded.get());
     // A new list for what narrows and orders the rows, and once a highlighted task the rows lacked comes: a list keeps
@@ -509,14 +523,15 @@ fn online(project: &ShownProject) -> bool {
     == Some(RunnerState::Online)
 }
 
-/// What the list is drawn from: the project, its route, the feed's tasks, its sharing, and whether the *Not shared*
-/// filter is on.
+/// What the list is drawn from: the project, its route, the feed's tasks, its sharing, whether the *Not shared* filter
+/// is on, and for a team project what its server said.
 struct Shown<'a> {
   project: &'a ShownProject,
   list: &'a TaskList,
   source: &'a ProjectTasks,
   shared: Option<&'a shared::Shared>,
   not_shared: bool,
+  team: Option<&'a team::TeamShown>,
 }
 
 /// What the rows were last placed for, and whether the highlighted task, if any, was among them.

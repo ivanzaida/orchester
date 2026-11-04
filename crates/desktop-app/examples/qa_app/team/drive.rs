@@ -43,7 +43,9 @@ pub fn to(
     | State::DownloadProgress
     | State::DownloadStopped
     | State::SharedProjects
-    | State::NoSharedProjects => Err(format!("{state:?} opens the app's own window, with nothing to press").into()),
+    | State::NoSharedProjects
+    | State::Member
+    | State::Outage => Err(format!("{state:?} opens the app's own window, with nothing to press").into()),
   }
 }
 

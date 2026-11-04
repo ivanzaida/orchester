@@ -111,7 +111,7 @@
       "toServer": "{{inviter}} invited you to {{server}}",
       "toAccount": "{{inviter}} invited you to link your Orchester account on {{server}}",
       "role": {
-        "owner": "an owner",
+        "owner": "an Admin",
         "member": "a member"
       },
       "expires": "expires {{expires}}",
@@ -228,7 +228,7 @@
         },
         "reading": "Reading your projects there…",
         "none": "You aren't a member of a project there yet.",
-        "owner": "Owner",
+        "owner": "Admin",
         "member": "Member",
         "notHere": "not on this computer",
         "open": "Open",
@@ -250,7 +250,7 @@
       "admin": {
         "title": "Server admin",
         "bodyAdmin": "Projects, members and roles, invites, people, devices and {{server}}'s settings are managed in the browser, at {{url}}. You're an admin there; members see only the link.",
-        "bodyMember": "Members and roles, invites and devices of {{server}} are managed in the browser by its admins and owners, at {{url}}.",
+        "bodyMember": "Members and roles, invites and devices of {{server}} are managed in the browser by its Server admins and its projects' Admins, at {{url}}.",
         "open": "Open server admin",
         "signIn": "Sign in to the admin",
         "hint": "Makes a pairing code that signs you in to the server admin once, within 10 minutes: for when your browser can't reach Orchester Cloud.",
@@ -328,7 +328,7 @@
       "manyBody": "Invites to projects and servers, through Orchester Cloud.",
       "review": "Review",
       "role": {
-        "owner": "As an owner",
+        "owner": "As an Admin",
         "member": "As a member",
         "server": "To the server"
       },

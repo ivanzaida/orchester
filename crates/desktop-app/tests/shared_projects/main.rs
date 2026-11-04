@@ -121,7 +121,7 @@ fn shared_projects_lists_the_teams_projects_with_the_first_picked() {
   assert_eq!(window.text("join-team-projects-joined"), "Joined");
   assert_eq!(window.text("join-team-projects-kontur-title"), "Kontur");
   assert_eq!(window.text("join-team-projects-kontur-role"), "you: member");
-  assert_eq!(window.text("join-team-projects-billing-role"), "you: owner");
+  assert_eq!(window.text("join-team-projects-billing-role"), "you: Admin");
   assert!(
     window
       .text("join-team-projects-kontur-sub")

@@ -65,6 +65,8 @@ pub(super) struct Header<'a> {
   /// The holds on new starts, once the tasks are read.
   pub queue: Option<QueueProps>,
   pub shared: Option<&'a Shared>,
+  /// A team member's list, whose tasks only Admins create: no New task (01 `QdL7N`).
+  pub member: bool,
   /// How the tasks are shown, kept for the project.
   pub display: &'a Signal<Display>,
 }
@@ -77,19 +79,21 @@ pub(super) fn header(ctx: &mut Ctx, header: Header<'_>) -> Column {
     options,
     queue,
     shared,
+    member,
     display,
   } = header;
   let read_only = shared.and_then(|shared| shared.read_only(ctx));
+  let controls = controls(
+    ctx,
+    (project, choices, display),
+    (options, queue),
+    (read_only.clone(), member),
+  );
   let row = title_row(ctx)
     .child(Spacer::new().flex(1.0))
     .child(search(ctx, choices))
     .child(layout_switch(ctx, display, "tasks-layout", false))
-    .with_children(controls(
-      ctx,
-      (project, choices, display),
-      (options, queue),
-      read_only.clone(),
-    ));
+    .with_children(controls);
   Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Xs)
@@ -101,6 +105,13 @@ pub(super) fn header(ctx: &mut Ctx, header: Header<'_>) -> Column {
         .child(reason_at_end("tasks-new-task-reason", &reason))
     }))
     .with_children(shared.map(|shared| shared::line(ctx, project, shared)))
+}
+
+/// The header of a team project whose data cannot be read: its title and the search (`Header` `IYa9R` in 06 `GR3RS`).
+pub(super) fn title_and_search(ctx: &mut Ctx, choices: &Choices) -> Row {
+  title_row(ctx)
+    .child(Spacer::new().flex(1.0))
+    .child(search(ctx, choices))
 }
 
 /// The search, as the list's path holds it.
@@ -115,12 +126,13 @@ fn search(ctx: &mut Ctx, choices: &Choices) -> lurq::node::Element {
     .render(ctx)
 }
 
-/// Filter, Display, `…` and New task, locked for `read_only`'s reason; Create multiple says the same reason.
+/// Filter, Display, `…` and New task, locked for `read_only`'s reason; Create multiple says the same reason. A team
+/// `member`'s has no New task.
 fn controls(
   ctx: &mut Ctx,
   (project, choices, shown): (ProjectId, &Choices, &Signal<Display>),
   (options, queue): (Option<Arc<Options>>, Option<QueueProps>),
-  read_only: Option<Arc<str>>,
+  (read_only, member): (Option<Arc<str>>, bool),
 ) -> Vec<lurq::node::Element> {
   let ready = options.is_some();
   let filter = ctx.mount_keyed::<FilterControl>(
@@ -149,6 +161,9 @@ fn controls(
     ),
     None => IconButton::new("tasks-more", Icon::Ellipsis, ctx.t("tasks.more")).render(ctx),
   };
+  if member {
+    return vec![filter, display, more];
+  }
   let navigation = Navigation::of(ctx);
   let new = new_task(ctx, "tasks-new-task", project, &navigation);
   let new = match read_only {

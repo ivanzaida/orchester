@@ -5,6 +5,7 @@
 //! shipped: an example is no part of the app's program.
 
 pub mod drive;
+mod member;
 mod state;
 #[path = "../../sign_in_qa/window.rs"]
 pub mod window;
@@ -90,6 +91,10 @@ pub fn prepare(state: State, services: &Services, runtime: &Handle) -> Result<Te
       server.share(&CLONED);
       let address = add(&server, services, runtime)?.0;
       join(&address, services, runtime)?;
+    }
+    State::Member | State::Outage => {
+      member::serve(&server, state == State::Outage);
+      join_linked(&server, services, runtime, TasksAnswer::Serve).map(drop)?;
     }
   }
   Ok(server)

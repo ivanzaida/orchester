@@ -1,7 +1,8 @@
 //! A team project's reads straight from its server (`docs/architecture/team-authority-plan.md` §6, milestone P5): the
 //! S10 bounded reads by area ([`tasks`], [`modules`], [`library`], [`metadata`]) and the S11 invalidation subscription
-//! ([`follow`]), with no copy of team data on disk and no full-project download. Nothing uses them yet: the screens
-//! adopt them in P6, and team projects keep the event stream and their cache ([`crate::sharing::sync`]) until then.
+//! ([`follow`]), with no copy of team data on disk and no full-project download. The desktop's Tasks list and board
+//! read team tasks through them (P6, its lurq queries); the other screens and team projects' event stream and cache
+//! ([`crate::sharing::sync`]) follow in later milestones. [`listed`] turns a listing into the tasks the lists show.
 //!
 //! The sequence is race-safe ([`freshness`]): [`TeamProject::follow`] subscribes and takes the stream's cursor, reads
 //! wait for that cursor and are stamped with the snapshot they answer at, an invalidation that arrives while a read is
@@ -13,6 +14,7 @@ mod error;
 mod follow;
 mod freshness;
 pub mod library;
+pub mod listed;
 pub mod metadata;
 pub mod modules;
 pub mod tasks;

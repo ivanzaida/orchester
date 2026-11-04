@@ -92,6 +92,16 @@ pub fn clones(kontur: &mut Kontur) -> Result<(), SeedError> {
   mark(kontur, State::Clones)
 }
 
+/// Kontur linked and joined as a member, its tasks read from the team server (`01 · Tasks · member` `QdL7N`).
+pub fn member(kontur: &mut Kontur) -> Result<(), SeedError> {
+  mark(kontur, State::Member)
+}
+
+/// As [`member`], with the team server's reads unavailable (`06 · Tasks · team data unavailable` `GR3RS`).
+pub fn outage(kontur: &mut Kontur) -> Result<(), SeedError> {
+  mark(kontur, State::Outage)
+}
+
 /// Kontur's checkout has the team's repository as its `origin`, which the QA app's server names for its project.
 fn origin(kontur: &Kontur) -> Result<(), SeedError> {
   git::add_origin(&kontur.repo, "https://github.com/acme/kontur.git")?;
