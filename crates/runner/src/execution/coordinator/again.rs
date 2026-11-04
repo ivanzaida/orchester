@@ -1,16 +1,15 @@
 //! Run again ([`Scheduler::run_again`]): whether a task whose latest run failed or was cancelled may start its next run
-//! (the rule is core's, [`run_again`]), and removing that run's worktrees first when the person
-//! asked to, with the same rules as *Remove worktree* ([`clean_up`]): a worktree with uncommitted
-//! changes goes only with exactly the changes the person saw. The codebase indexes only removed
-//! worktrees used go with them. An interrupted run whose worktree a person removed no longer holds
+//! (the rule is core's, [`run_again`]), and having the executor remove that run's worktrees first when the person
+//! asked to (`super::super::executor::removal`). An interrupted run whose worktree a person removed no longer holds
 //! its task (ORC-63), and removing a run's own worktree is recorded. A run that passed every step and committed
-//! nothing although its pipeline expects changes runs again too (ORC-93), as git tells.
+//! nothing although its pipeline expects changes runs again too (ORC-93), as git tells from the previous run's
+//! branches, read here. The next run is created as the first one is (`super::prepare`).
 
 use std::path::Path;
 
 use orchester_core::{
   id::{IdempotencyKey, RunId, TaskId},
-  integration::{Branches, Delivered, KeepReason, Leftovers, RunWork, clean_up_recorded, finish_removal},
+  integration::{Branches, Delivered, Leftovers, RunWork},
   resource::{Pipeline, WithoutCommits},
   run::{Run, RunAgainInput, RunStatus, run_again, run_delivers},
   sharing::TaskRevision,
@@ -18,13 +17,12 @@ use orchester_core::{
   task::Task,
   time::Timestamp,
 };
-use orchester_exec::{ProcessRunner, run_processes::RunProcesses};
-use orchester_index::CodebaseIndexes;
+use orchester_exec::ProcessRunner;
 use orchester_ipc::Rejection;
 use orchester_store::ProjectDb;
 
 use super::{Scheduler, failed, read_failed};
-use crate::worktree::Worktrees;
+use crate::execution::executor::{removal, start};
 
 /// How long git may take to list the branches when it tells whether a run committed nothing.
 const GIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
@@ -79,7 +77,7 @@ impl Scheduler {
       return Err(Rejection::TaskChangedMeanwhile);
     }
     if let Some(confirmed) = &remove_worktrees {
-      self::remove_worktrees(&mut db, root, &previous, confirmed)?;
+      removal::remove_worktrees(&mut db, root, &previous, confirmed)?;
     }
     // Compared again where the run is recorded: an edit after the check above is refused there.
     let prepared = super::prepare::record(&mut db, root, key, checked, revision);
@@ -87,15 +85,11 @@ impl Scheduler {
   }
 }
 
-/// Git removing a worktree full of build output gets as long as the desktop gives it.
-const REMOVE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60 * 60);
-
 /// Records the removal of the worktree of each interrupted run of `task` whose folder is gone
-/// (deleted by hand): it can never continue, so it no longer holds its task. A run that continued
-/// meanwhile has live work and is left alone.
+/// (deleted by hand), as the executor finds it: it can never continue, so it no longer holds its task. A run that
+/// continued meanwhile has live work and is left alone.
 pub(super) fn note_missing_worktrees(db: &mut ProjectDb, root: &Path, task: TaskId) -> Result<(), Rejection> {
   let store = |error: &dyn std::error::Error| failed("cannot record a removed worktree", error);
-  let worktrees = Worktrees::new(root).map_err(|error| store(&error))?;
   let listed = db
     .runs_of_task(task)
     .map_err(|error| read_failed("cannot read runs", error))?;
@@ -105,7 +99,11 @@ pub(super) fn note_missing_worktrees(db: &mut ProjectDb, root: &Path, task: Task
     .filter(|run| matches!(run.status(), RunStatus::Interrupted(_)));
   for run in interrupted {
     let recorded = db.worktree_removal(run.id()).map_err(|error| store(&error))?;
-    if recorded.is_none() && !worktrees.path(run.id()).is_dir() {
+    if recorded.is_none()
+      && start::own_worktree(root, run.id())
+        .map_err(|error| store(&error))?
+        .is_none()
+    {
       tracing::warn!(run = %run.id(), "the interrupted run's worktree is gone; it can no longer continue");
       db.begin_worktree_removal(run.id(), Timestamp::now())
         .map_err(|error| store(&error))?;
@@ -177,45 +175,5 @@ fn committed_nothing(root: &Path, task: &Task, run: &Run) -> bool {
       tracing::warn!(%error, run = %run.id(), "cannot tell whether the run committed nothing; it is not run again so");
       false
     }
-  }
-}
-
-/// Removes what `previous` left in the repository at `root`, as the person confirmed it
-/// (`confirmed`), with the removal recorded in `db` first; a folder something held is deleted again once the run's own
-/// processes there are stopped, and one that still stays is recorded as not removed ([`finish_removal`]). Refused when
-/// a worktree stays.
-pub(super) fn remove_worktrees(
-  db: &mut ProjectDb,
-  root: &Path,
-  previous: &Run,
-  confirmed: &Leftovers,
-) -> Result<(), Rejection> {
-  let git = ProcessRunner::new(REMOVE_TIMEOUT);
-  let git = (&git, Path::new("git"), root);
-  let mut cleanup = clean_up_recorded(db, git, previous, Some(confirmed), Timestamp::now())
-    .map_err(|error| failed("cannot remove the worktrees of the run before", &error))?;
-  let stop = |folder: &Path| RunProcesses::stop_in(folder, previous.created_at());
-  if let Err(error) = finish_removal(db, git, (previous.id(), Timestamp::now()), &mut cleanup, stop) {
-    tracing::warn!(%error, run = %previous.id(), "cannot record what the worktree removal left");
-  }
-  // Off the runtime's threads: the worktrees are gone either way, and an index left behind goes
-  // with the next removal.
-  let indexes = CodebaseIndexes::new(root);
-  tokio::task::spawn_blocking(move || {
-    if let Err(error) = indexes.prune() {
-      tracing::warn!(%error, "cannot remove the codebase indexes of removed worktrees");
-    }
-  });
-  super::worktree_sweep::sweep_in_background(root.to_path_buf());
-  match cleanup.kept_worktrees.into_iter().next() {
-    None => Ok(()),
-    Some((worktree, KeepReason::Failed(detail))) => {
-      tracing::warn!(path = %worktree.path, %detail, "git did not remove the worktree of the run before");
-      Err(Rejection::WorktreeNotRemoved {
-        path: worktree.path,
-        detail,
-      })
-    }
-    Some((worktree, _)) => Err(Rejection::WorktreeChanged { path: worktree.path }),
   }
 }
