@@ -28,6 +28,7 @@ pub(super) mod record;
 pub(super) mod removal;
 pub(super) mod run;
 pub(super) mod run_branches;
+pub(super) mod sink;
 pub(super) mod start;
 pub(super) mod step;
 pub(super) mod tool;
