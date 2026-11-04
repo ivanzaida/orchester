@@ -44,7 +44,7 @@ use super::{
     worker::{Stop, StopCause, WorkerEvent},
   },
 };
-use crate::{browser::ProjectBrowser, execution::coordinator::board::Board};
+use crate::{browser::ProjectBrowser, execution::coordinator::board::Board, execution_root::ExecutionRoot};
 
 /// How long a run waiting for a free agent slot waits before it looks again, in case the slot
 /// was freed by another run in a way it was not woken for. More slots wake it at once.
@@ -72,6 +72,7 @@ pub(super) enum ExecutionError {
 /// changes, where its requests arrive and where it tells the scheduler that it no longer executes the run.
 pub(in crate::execution) struct TaskContext {
   pub(in crate::execution) root: PathBuf,
+  pub(in crate::execution) execution: ExecutionRoot,
   pub(in crate::execution) sink: Box<dyn Sink>,
   pub(in crate::execution) notifier: Notifier,
   pub(in crate::execution) vault: Arc<dyn SecretVault>,
@@ -98,7 +99,10 @@ pub(super) struct Pending {
 pub(in crate::execution) struct RunTask {
   /// A step a person asked to start on its account now ([`Prepared::try_at_plan_limit`]), taken when it starts.
   pub(super) try_at_plan_limit: Option<orchester_core::id::StepExecutionId>,
+  /// The project root: the person's checkout, which holds the project database.
   pub(super) root: PathBuf,
+  /// Where the executor keeps its own folders.
+  pub(super) execution: ExecutionRoot,
   pub(super) db: ProjectDb,
   /// The coordinator's sink, which the run's log is written to.
   pub(super) sink: Box<dyn Sink>,
@@ -154,6 +158,7 @@ impl RunTask {
     let (worker_events, events) = mpsc::unbounded_channel();
     Self {
       root: context.root,
+      execution: context.execution,
       db,
       sink: context.sink,
       run: prepared.run,

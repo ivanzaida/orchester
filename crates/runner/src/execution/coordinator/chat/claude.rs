@@ -31,7 +31,8 @@ use super::{
   turn::{Prepared, Seen, Turn, cannot},
 };
 use crate::{
-  private_file::{self, PrivateFile},
+  execution_root::private_files,
+  private_file::PrivateFile,
   supervisor::{ProcessEvent, ProcessExit, Supervised},
 };
 
@@ -59,7 +60,7 @@ fn denied(account: &ConnectionAccount) -> (Vec<PathBuf>, Vec<PathBuf>) {
       .or_else(|| home.as_ref().map(|home| home.join(cli.own_folder_name())))
   };
   let account_folder = account.folder().map(Path::to_path_buf).or_else(own);
-  let folders = [Some(private_file::root()), account_folder]
+  let folders = [Some(private_files()), account_folder]
     .into_iter()
     .flatten()
     .flat_map(|folder| {

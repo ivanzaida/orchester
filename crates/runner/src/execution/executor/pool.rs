@@ -19,6 +19,8 @@ use orchester_exec::ProcessRunner;
 use orchester_store::{ProjectDb, StoreError};
 use thiserror::Error;
 
+use crate::execution_root::ExecutionRoot;
+
 /// Git here checks out branches of large checkouts and deletes build output: only a git that hangs is stopped.
 const GIT_TIMEOUT: Duration = Duration::from_secs(60 * 60);
 const GIT: &str = "git";
@@ -42,18 +44,18 @@ pub(super) enum Borrowed {
   Wait(WaitReason),
 }
 
-/// Takes a workspace for `holder` in the repository at `root` and switches it to `to`; a new workspace's folder is
+/// Takes a workspace for `holder` in the execution root `root` and switches it to `to`; a new workspace's folder is
 /// made at `base` first.
 pub(super) fn borrow(
   db: &mut ProjectDb,
-  root: &Path,
+  root: &ExecutionRoot,
   holder: Holder,
   (to, base): (SwitchTo<'_>, &str),
 ) -> Result<Borrowed, PoolError> {
   let limit = db.project_limits()?.agent_slots().get();
   let folders = db.workspace_settings()?.folders;
   let runner = ProcessRunner::new(GIT_TIMEOUT);
-  let workspaces = Workspaces::new(&runner, Path::new(GIT), root);
+  let workspaces = Workspaces::new(&runner, Path::new(GIT), root.repository());
   let branch = match to {
     SwitchTo::Branch(branch) => Some(branch),
     SwitchTo::Commit(_) => None,
@@ -88,12 +90,12 @@ pub(super) fn borrow(
   }
 }
 
-/// Gives back the workspace `holder` holds in the repository at `root`, its changes committed with `message` first;
+/// Gives back the workspace `holder` holds in the execution root `root`, its changes committed with `message` first;
 /// `None` when it holds none. A commit or a detach git refuses is logged: the workspace is given back all the same,
 /// and what is left in it makes the next borrower strand it for a person.
 pub(super) fn give_back(
   db: &mut ProjectDb,
-  root: &Path,
+  root: &ExecutionRoot,
   holder: Holder,
   message: &str,
 ) -> Result<Option<WorkspaceNumber>, StoreError> {
@@ -105,8 +107,8 @@ pub(super) fn give_back(
     return Ok(None);
   };
   let runner = ProcessRunner::new(GIT_TIMEOUT);
-  let workspaces = Workspaces::new(&runner, Path::new(GIT), root);
-  let path = record.number.path(root);
+  let workspaces = Workspaces::new(&runner, Path::new(GIT), root.repository());
+  let path = root.workspace(record.number);
   if path.is_dir() {
     let saved = workspaces.commit(&path, message).and_then(|_| workspaces.detach(&path));
     if let Err(error) = saved {

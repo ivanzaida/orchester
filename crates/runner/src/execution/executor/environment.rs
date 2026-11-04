@@ -8,7 +8,6 @@ use orchester_core::{
   connection::stream::RunnerProblem,
   resource::{CommandEnvironment, VariableName},
   store::SettingsStore,
-  workspaces::artifacts_folder,
 };
 
 use super::run::RunTask;
@@ -27,7 +26,7 @@ impl RunTask {
     if project.get(RUN_STORAGE).is_some() {
       return Ok(project);
     }
-    let storage = artifacts_folder(&self.root, self.run.id());
+    let storage = self.execution.run_storage(self.run.id());
     let mut variables: BTreeMap<VariableName, String> = project.into();
     variables.insert(
       VariableName::new(RUN_STORAGE).map_err(|error| failed(error.to_string()))?,

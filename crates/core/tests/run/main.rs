@@ -27,6 +27,7 @@ mod schedule;
 mod skills;
 mod snapshot;
 mod sources;
+mod start_order;
 mod step_budget;
 mod steps;
 mod stuck;
