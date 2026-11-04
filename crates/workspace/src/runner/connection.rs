@@ -240,14 +240,12 @@ impl Supervisor {
       return browser;
     }
     let runner = self.runner_exe.clone();
-    let read = tokio::task::spawn_blocking(move || {
-      match orchester_store::location::app_data_location_of(&runner) {
-        Ok(location) => crate::workspace::computer_browser_beside(&location.database),
-        Err(error) => ComputerBrowser {
-          program: Ok(None),
-          profiles: Err(format!("the application data folder is unknown: {error}")),
-        },
-      }
+    let read = tokio::task::spawn_blocking(move || match orchester_store::location::app_data_location_of(&runner) {
+      Ok(location) => crate::workspace::computer_browser_beside(&location.database),
+      Err(error) => ComputerBrowser {
+        program: Ok(None),
+        profiles: Err(format!("the application data folder is unknown: {error}")),
+      },
     });
     read.await.unwrap_or_else(|error| ComputerBrowser {
       program: Err(format!("Settings › Browser cannot be read: {error}")),
