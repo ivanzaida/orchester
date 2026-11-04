@@ -97,7 +97,7 @@ pub enum PlanDecision {
 
 /// A decision on a plan, who made it and when: the person on the plan card or the plan review, or
 /// automation through Orchester's MCP server (`decide_plan`).
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlanReview {
   pub decision: PlanDecision,
   pub by: Answerer,
@@ -106,7 +106,7 @@ pub struct PlanReview {
 
 /// One result of a gated step, as its agent left it, and the decision on it once there is one.
 /// Created by [`super::Run::propose_plan`] and decided by [`super::Run::decide_plan`].
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Plan {
   pub run: RunId,
   pub execution: StepExecutionId,
