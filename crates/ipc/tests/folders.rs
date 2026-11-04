@@ -10,7 +10,12 @@ use orchester_ipc::{
 
 #[tokio::test]
 async fn folders_requests_and_replies_round_trip_under_protocol_42() {
-  assert_eq!(PROTOCOL_VERSION, 42, "an older runner is told apart at the handshake");
+  const {
+    assert!(
+      PROTOCOL_VERSION >= 42,
+      "a runner older than the folders requests is told apart at the handshake"
+    )
+  };
   let (left, right) = tokio::io::duplex(64 * 1024);
   let (mut reader, mut writer) = (FrameReader::new(left), FrameWriter::new(right));
   let (one, two) = (
