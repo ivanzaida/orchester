@@ -2,6 +2,7 @@
 //! scheduler's change notifications, the project's browser's events and the frames of the tab the *Browser* window
 //! shows.
 
+mod attach;
 mod browser;
 mod code_index;
 mod estimate;
@@ -12,7 +13,6 @@ mod run_folder;
 
 use std::{
   future::Future,
-  num::NonZeroU32,
   path::Path,
   sync::{
     Arc,
@@ -31,8 +31,8 @@ use orchester_core::{
   tokens::TokenBudget,
 };
 use orchester_ipc::{
-  AttachSession, ChatTools, Command, Endpoint, ErrorReports, Event, IpcError, Rejection, Reply, Request, RequestId,
-  ShutdownMode, WorkReturn,
+  ChatTools, Command, Endpoint, ErrorReports, Event, IpcError, Rejection, Reply, Request, RequestId, ShutdownMode,
+  WorkReturn,
   frame::{FrameReader, FrameWriter},
   handshake,
 };
@@ -304,12 +304,14 @@ async fn answer(
   let handle = scheduler.clone();
   let later = Later { replies, in_flight, id };
   let reply = match request.command {
-    Command::Attach { session, agent_slots } => attached(scheduler, session, agent_slots).await,
-    Command::SetAgentSlots { agent_slots } => slots_set(scheduler, agent_slots).await,
-    Command::ContinueRuns { ref runs } => {
-      let (continued, refused) = scheduler.continue_runs(runs).await;
-      Reply::Continued { continued, refused }
-    }
+    Command::Attach {
+      session,
+      agent_slots,
+      ref browser,
+    } => attach::attached(scheduler, session, agent_slots, browser.clone()).await,
+    Command::SetAgentSlots { agent_slots } => attach::slots_set(scheduler, agent_slots).await,
+    Command::SetBrowser { ref browser } => attach::browser_set(scheduler, browser.clone()),
+    Command::ContinueRuns { ref runs } => attach::continued(scheduler, runs).await,
     Command::Ping { nonce } => Reply::Pong { nonce },
     Command::StartRun { key, task } => started(scheduler.start_requested_run(key, task).await),
     Command::RunAgain {
@@ -361,10 +363,7 @@ async fn answer(
     Command::CheckConnection { provider, ref api } => return answer_check(&later, handle, provider, api.clone()),
     Command::AnswerInChat { message, ref tools } => chat_answering(scheduler, message, tools.clone()).await,
     Command::StopChat { chat } => chat_stopped(scheduler, chat),
-    Command::SteerChat { message } => match scheduler.steer_chat(message) {
-      Ok(()) => Reply::ChatSteered { message },
-      Err(rejection) => Reply::Rejected(rejection),
-    },
+    Command::SteerChat { message } => chat_steered(scheduler, message),
     Command::StopTurn { run } => return later.answer(run, async move { handle.stop_turn(run).await }),
     Command::Browser(ref command) => return later.browser(handle, command.clone()),
     Command::Folders(ref command) => return later.folders(handle, command.clone()),
@@ -442,6 +441,14 @@ fn chat_stopped(scheduler: &Scheduler, chat: ChatId) -> Reply {
   }
 }
 
+/// The reply to [`Command::SteerChat`].
+fn chat_steered(scheduler: &Scheduler, message: ChatMessageId) -> Reply {
+  match scheduler.steer_chat(message) {
+    Ok(()) => Reply::ChatSteered { message },
+    Err(rejection) => Reply::Rejected(rejection),
+  }
+}
+
 /// Continues `run`, stopped at its account's plan limit: on `connection`, another account's
 /// ([`Command::ContinueOnConnection`]), or without one on the same account now ([`Command::TryAtPlanLimit`]).
 fn at_plan_limit(
@@ -456,18 +463,6 @@ fn at_plan_limit(
   }
 }
 
-/// The reply to [`Command::Attach`].
-async fn attached(scheduler: &Scheduler, session: AttachSession, agent_slots: NonZeroU32) -> Reply {
-  match scheduler.attach(session, agent_slots).await {
-    Ok(attached) => Reply::Attached {
-      active_runs: scheduler.active_runs(),
-      interrupted: attached.interrupted,
-      continued: attached.continued,
-    },
-    Err(rejection) => Reply::Rejected(rejection),
-  }
-}
-
 fn raise_limit(
   later: &Later<'_>,
   scheduler: Scheduler,
@@ -479,14 +474,6 @@ fn raise_limit(
     max_duration: max_duration_ms.map(Duration::from_millis),
   };
   later.answer(run, async move { scheduler.raise_limit(run, limits).await })
-}
-
-/// The reply to [`Command::SetAgentSlots`].
-async fn slots_set(scheduler: &Scheduler, agent_slots: NonZeroU32) -> Reply {
-  match scheduler.set_agent_slots(agent_slots).await {
-    Ok(()) => Reply::AgentSlotsSet { agent_slots },
-    Err(rejection) => Reply::Rejected(rejection),
-  }
 }
 
 fn answer_tool_approval(

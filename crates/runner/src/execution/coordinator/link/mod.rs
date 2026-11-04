@@ -2,10 +2,12 @@
 //! requests by reading the project database, as the executor did before it asked. Each area of the link answers in a
 //! module of its own.
 
+mod approvals;
 mod base_notices;
 mod environment;
 mod memory;
 mod messages;
+mod questions;
 mod resources;
 mod settings;
 mod usage;

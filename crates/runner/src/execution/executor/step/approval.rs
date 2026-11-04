@@ -375,7 +375,7 @@ impl Worker {
     Ok(())
   }
 
-  pub(super) async fn decide(&mut self, watch: &mut Watch, decision: ApprovalDecision) -> Result<(), StoreError> {
+  pub(super) async fn decide(&mut self, watch: &mut Watch, decision: ApprovalDecision) -> Result<(), WorkerError> {
     let result = self.apply_decision(watch, &decision).await;
     match result {
       Ok(reply) => answer(decision.ack, reply),
@@ -397,7 +397,7 @@ impl Worker {
     &mut self,
     watch: &mut Watch,
     decision: &ApprovalDecision,
-  ) -> Result<Result<(), Rejection>, StoreError> {
+  ) -> Result<Result<(), Rejection>, WorkerError> {
     let held = watch
       .approval
       .as_ref()
@@ -406,7 +406,7 @@ impl Worker {
       // Not the call this agent waits on (one of an earlier invocation, or recorded without one): no
       // agent can take its answer, so it ends, unless it was answered already.
       let run = watch.invocation.run;
-      let (ended, refusal) = end_unheld((&watch.db, watch.sink.as_mut()), run, &decision.id)?;
+      let (ended, refusal) = end_unheld::<WorkerError>(watch.sink.as_mut(), &*watch.link, run, &decision.id)?;
       if ended {
         self.notifier.send(Event::ToolApprovalChanged { run, task: self.task });
       }

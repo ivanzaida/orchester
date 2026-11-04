@@ -31,10 +31,10 @@ use orchester_core::{
   run::{PauseReason, RunStatus},
 };
 use orchester_exec::browser::DevToolsActivePort;
+use orchester_ipc::browser::ComputerBrowser;
 use orchester_runner::browser::{
   BrowserError, Listening, ProjectBrowser,
   cdp::{Cdp, TargetId},
-  profile_of,
 };
 use serde_json::json;
 use tokio::net::TcpStream;
@@ -113,26 +113,39 @@ async fn exited(port: u16) {
   .expect("the browser exits in time");
 }
 
-/// Each project has its own profile folder, in the application data beside `orchester.db`, named by the project's id;
-/// none is made until the browser starts.
+/// Each project has its own profile folder among the computer's profiles the app passed (ORC-675: the runner reads no
+/// `orchester.db`), named by the project's id; it is unknown, saying why, until the app passed them, or when the app
+/// could not tell them or the project cannot be read. None is made until the browser starts.
 #[test]
-fn browser_profile_of_a_project_is_its_own_folder_in_the_application_data() {
+fn browser_profile_of_a_project_is_its_own_folder_among_the_profiles_the_app_passed() {
   let project = project(&Setup::new("Say hello."));
-  let profile = profile_of(project.repo.path()).expect("the folder is known");
-  let data = orchester_store::location::app_data_location().expect("the application data");
-
+  let data = tempfile::tempdir().expect("temporary folder");
+  let profiles = data.path().join("browser");
+  let browser = ProjectBrowser::of_project(project.repo.path());
+  let unknown = browser.profile().expect_err("nothing passed yet");
   assert_eq!(
-    profile,
-    data
-      .database
-      .parent()
-      .expect("the database's folder")
-      .join("browser")
-      .join(project.project.to_string())
+    unknown.reason(),
+    "the app has not passed this computer's Settings › Browser yet"
   );
+  assert_eq!(browser.profiles_folder(), None);
+
+  browser.set_computer(ComputerBrowser::installed(profiles.clone()));
+  let profile = browser.profile().expect("the folder is known");
+  assert_eq!(profile, profiles.join(project.project.to_string()));
+  assert_eq!(browser.profiles_folder(), Some(profiles));
   assert!(!profile.starts_with(project.repo.path()), "never inside the repository");
-  let unknown = tempfile::tempdir().expect("temporary folder");
-  let refused = profile_of(unknown.path()).expect_err("not a project");
+  assert!(!profile.exists(), "made only as the browser starts");
+
+  browser.set_computer(ComputerBrowser {
+    program: Ok(None),
+    profiles: Err("the application database has no folder".to_owned()),
+  });
+  let untold = browser.profile().expect_err("the app could not tell");
+  assert_eq!(untold.reason(), "the application database has no folder");
+  let elsewhere = tempfile::tempdir().expect("temporary folder");
+  let stranger = ProjectBrowser::of_project(elsewhere.path());
+  stranger.set_computer(ComputerBrowser::installed(data.path().join("browser")));
+  let refused = stranger.profile().expect_err("not a project");
   assert!(refused.reason().starts_with("the project cannot be read"), "{refused}");
 }
 
@@ -196,32 +209,50 @@ async fn browser_opens_a_runs_tab_reads_it_and_closes_the_runs_tabs_at_its_end()
   );
 }
 
-/// A program chosen in Settings › Browser that is no Chromium-based browser's is never passed over for the one
-/// installed: the browser is unavailable and says why.
-#[tokio::test(flavor = "multi_thread")]
-async fn browser_chosen_in_settings_that_cannot_be_used_is_unavailable_with_the_reason() {
-  let data = tempfile::tempdir().expect("temporary folder");
-  let database = data.path().join("orchester.db");
-  let gone = data.path().join("gone").join("chrome");
-  orchester_store::AppDb::open(&database)
-    .expect("the application database")
-    .set_browser_program(Some(&gone))
-    .expect("the choice is kept");
-  let browser = ProjectBrowser::new(data.path().join("profile")).with_settings(database);
+/// This computer's Settings › Browser as the app passes them with `program` chosen; the profiles' folder does not
+/// matter to a browser on a profile folder of its own.
+pub fn chosen(program: &Path) -> ComputerBrowser {
+  ComputerBrowser {
+    program: Ok(Some(program.to_path_buf())),
+    profiles: Err("the browser has a profile folder of its own".to_owned()),
+  }
+}
 
+/// Why `browser` cannot start now.
+async fn unavailable(browser: &ProjectBrowser) -> String {
   let refused = browser
     .open_tab(RunId::generate(), "about:blank")
     .await
-    .expect_err("the chosen program is gone");
+    .expect_err("the browser cannot start");
   let BrowserError::Unavailable(unavailable) = refused else {
     panic!("unavailable, not {refused}");
   };
+  unavailable.reason().to_owned()
+}
+
+/// A program chosen in Settings › Browser that is no Chromium-based browser's is never passed over for the one
+/// installed: the browser is unavailable and says why. So is a choice the app could not read, with the app's reason.
+#[tokio::test(flavor = "multi_thread")]
+async fn browser_chosen_in_settings_that_cannot_be_used_is_unavailable_with_the_reason() {
+  let data = tempfile::tempdir().expect("temporary folder");
+  let gone = data.path().join("gone").join("chrome");
+  let browser = ProjectBrowser::new(data.path().join("profile"));
+  browser.set_computer(chosen(&gone));
+
   assert_eq!(
-    unavailable.reason(),
+    unavailable(&browser).await,
     format!(
       "the program chosen in Settings › Browser cannot be used: {} does not exist",
       gone.display()
     )
+  );
+  browser.set_computer(ComputerBrowser {
+    program: Err("Settings › Browser cannot be read: the database is locked".to_owned()),
+    profiles: Ok(data.path().join("browser")),
+  });
+  assert_eq!(
+    unavailable(&browser).await,
+    "Settings › Browser cannot be read: the database is locked"
   );
   assert!(!data.path().join("profile").exists(), "nothing started");
 }
@@ -234,12 +265,8 @@ async fn browser_starts_the_program_chosen_in_settings() {
   }
   let installed = orchester_exec::browser::find().expect("installed");
   let data = tempfile::tempdir().expect("temporary folder");
-  let database = data.path().join("orchester.db");
-  orchester_store::AppDb::open(&database)
-    .expect("the application database")
-    .set_browser_program(Some(installed.path()))
-    .expect("the choice is kept");
-  let browser = ProjectBrowser::new(data.path().join("profile")).with_settings(database);
+  let browser = ProjectBrowser::new(data.path().join("profile"));
+  browser.set_computer(chosen(installed.path()));
   let site = pages().await;
   let run = RunId::generate();
 

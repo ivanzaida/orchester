@@ -488,6 +488,10 @@ async fn a_runner_asked_to_quit_does_not_wait_for_an_index_build() {
       previous_end: SessionEnd::Clean,
     },
     agent_slots: NonZeroU32::new(1).expect("above zero"),
+    browser: orchester_ipc::browser::ComputerBrowser {
+      program: Ok(None),
+      profiles: Err("this test starts no browser".to_owned()),
+    },
   };
   ask(&mut client, 1, attach).await;
   let start = Command::StartRun {
