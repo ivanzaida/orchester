@@ -173,6 +173,45 @@ fn executor_writes_invocations_and_their_transcript_only_through_the_sink() {
     "executor code writes invocation or transcript records itself: {writes:?}"
   );
 }
+
+/// The project database's writes of the task's conversation (`messages` and their deliveries), agents' questions
+/// (`questions`) and tool requests (`tool_approvals`, `approval_interruptions`): the executor sends these records to
+/// the coordinator's sink too (ORC-679).
+const DECISION_WRITES: &[&str] = &[
+  "add_agent_message",
+  "save_deliveries",
+  "change_delivery",
+  "send_message",
+  "send_message_with",
+  "ask_questions",
+  "answer_questions",
+  "interrupt_questions",
+  "end_waiting_question",
+  "undelivered_questions",
+  "request_tool_approval",
+  "record_came_to_person",
+  "set_reviewing",
+  "record_review",
+  "claim_tool_approval",
+  "record_request_answer",
+  "rule_answered",
+  "record_denial_note",
+  "delivered_tool_approval",
+  "interrupt_tool_approvals",
+  "end_waiting_tool_approval",
+  "write_message",
+  "write_question",
+  "write_approval",
+];
+
+#[test]
+fn executor_writes_messages_questions_and_tool_requests_only_through_the_sink() {
+  let writes = executor_writes(DECISION_WRITES);
+  assert!(
+    writes.is_empty(),
+    "executor code writes messages, questions or tool requests itself: {writes:?}"
+  );
+}
 /// The lines of the Rust files under `src/execution/<side>` that name any of `names` outside comments, as
 /// `file: line`.
 fn lines_naming(side: &str, names: &[&str]) -> Vec<String> {

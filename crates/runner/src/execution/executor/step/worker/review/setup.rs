@@ -20,7 +20,7 @@ use orchester_core::{
   },
   id::{AgentAccountId, SecretId},
   permission::{AgentPermissions, RepositoryAccess, category::CommandPart},
-  resource::ModelId,
+  resource::{CommandEnvironment, ModelId},
   run::{
     ApprovalSubject,
     review::{
@@ -30,7 +30,6 @@ use orchester_core::{
     },
   },
   secret::SecretValue,
-  store::SettingsStore,
   time::Timestamp,
   usage::UsedProvider,
 };
@@ -38,7 +37,10 @@ use orchester_store::{ProjectDb, StoreError};
 use tokio::{runtime::Handle, sync::watch};
 
 use super::{
-  super::{super::super::run::RunTask, Watch, Worker},
+  super::{
+    super::super::{environment::computer_environment, link::EnvironmentLink, run::RunTask},
+    Watch, Worker,
+  },
   ledger::ReviewLedger,
   native::{NativeReviewer, client},
   process::{ReviewPlace, SupervisedRunner},
@@ -323,14 +325,30 @@ impl RequestReviewer for Unreachable {
 impl Worker {
   /// The project's reviewer, as its auto mode settings resolve against its connections.
   pub(super) fn reviewer(&self, watch: &Watch) -> Result<ReviewerSetup, StoreError> {
-    reviewer_setup(&watch.db, &self.reviewer_sources)
+    reviewer_setup((&watch.db, &*watch.link), &self.reviewer_sources)
   }
 }
 
+/// The variables a CLI reviewer starts with on the computer of `sources`: the project's, asked through `link`. Why
+/// not is a store error, as reading them was before they came through the link: what the coordinator could not read,
+/// or the computer could not make of them.
+pub(super) fn reviewer_variables(
+  link: &(impl EnvironmentLink + ?Sized),
+  sources: &ReviewerSources,
+) -> Result<CommandEnvironment, StoreError> {
+  computer_environment(link, &*sources.computer).map_err(|error| StoreError::Io {
+    path: PathBuf::from("project environment"),
+    source: std::io::Error::other(error),
+  })
+}
+
 /// The reviewer of the project of `db`, as its auto mode settings resolve against its connections on the computer,
-/// its key read from `sources`; the story-point estimator runs on it too. Without the computer's connections there is
-/// no reviewer to ask, and the person decides.
-pub(super) fn reviewer_setup(db: &ProjectDb, sources: &ReviewerSources) -> Result<ReviewerSetup, StoreError> {
+/// its key read from `sources` and a CLI's variables asked through `link`; the story-point estimator runs on it too.
+/// Without the computer's connections there is no reviewer to ask, and the person decides.
+pub(super) fn reviewer_setup(
+  (db, link): (&ProjectDb, &(impl EnvironmentLink + ?Sized)),
+  sources: &ReviewerSources,
+) -> Result<ReviewerSetup, StoreError> {
   let settings = db.auto_mode_settings()?;
   let listed = match sources.computer.connections() {
     Ok(listed) => listed,
@@ -374,7 +392,7 @@ pub(super) fn reviewer_setup(db: &ProjectDb, sources: &ReviewerSources) -> Resul
     return Ok(ReviewerSetup::Missing);
   }
   let mut environment = agent_environment(std::env::vars_os());
-  db.project_environment()?.add_to(&mut environment);
+  reviewer_variables(link, sources)?.add_to(&mut environment);
   let environment = match account_environment(environment, connection.account(), provider) {
     Ok(environment) => environment,
     Err(error) => {

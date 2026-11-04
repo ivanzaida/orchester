@@ -1,8 +1,10 @@
 //! The computer's resources (`docs/architecture/remote-runners.md`, rule 1): what belongs to the computer a run's
 //! executor runs on, which the executor asks for here instead of reading the project database, the keychain and the
 //! home folder itself. It asks for a connection by the id its pinned profile (or the run's choice for a step) names,
-//! and gets back what starting the CLI or native agent on this computer needs ([`ComputerConnection`]). Every such
-//! answer is a serializable value, so a remote implementation can answer for another computer later.
+//! and gets back what starting the CLI or native agent on this computer needs ([`ComputerConnection`]). The project's
+//! variables, which come through the coordinator link, become the environment there
+//! ([`ComputerResources::environment`]). Every such answer is a serializable value, so a remote implementation can
+//! answer for another computer later.
 //!
 //! Secrets are this computer's too: the metadata of the project's secrets and MCP servers, and their values in this
 //! computer's keychain (MCP servers' secrets, API keys, the screen that keeps values out of memory). A value is
@@ -20,6 +22,7 @@ use orchester_core::{
   connection::mcp::McpServer,
   id::{ConnectionId, ProjectId, SecretId},
   memory::{ScreenUnavailable, SecretScreen},
+  resource::CommandEnvironment,
   secret::{Secret, SecretValue, SecretVault, VaultError},
   store::{ConnectionStore, McpServerStore, SecretStore},
 };
@@ -54,6 +57,11 @@ pub(crate) trait ComputerResources: Send + Sync {
   /// The values of `secrets` of `project` in this computer's keychain, to keep them out of memory records, as
   /// [`SecretScreen::load`] reads them.
   fn secret_screen(&self, project: ProjectId, secrets: &[Secret]) -> Result<SecretScreen, ScreenUnavailable>;
+
+  /// The variables agents and command tools start with on this computer, made of `project`'s, the ones Project
+  /// settings › Environment sets: a computer that sets its own value for a name gives that one instead. No secret
+  /// value is among them.
+  fn environment(&self, project: CommandEnvironment) -> Result<CommandEnvironment, ComputerError>;
 }
 
 /// This computer, read where the runner read it before the executor asked: the connections, secrets and MCP servers in
@@ -124,6 +132,11 @@ impl ComputerResources for LocalComputer {
 
   fn secret_screen(&self, project: ProjectId, secrets: &[Secret]) -> Result<SecretScreen, ScreenUnavailable> {
     SecretScreen::load(project, secrets, self.vault.as_ref())
+  }
+
+  /// This computer sets no values of its own: the project's variables, exactly.
+  fn environment(&self, project: CommandEnvironment) -> Result<CommandEnvironment, ComputerError> {
+    Ok(project)
   }
 }
 

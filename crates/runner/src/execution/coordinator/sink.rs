@@ -6,7 +6,8 @@
 use std::path::{Path, PathBuf};
 
 use orchester_store::{
-  ActivityRecord, InvocationRecord, InvocationStart, ProjectDb, RunLogRecord, RunStoreError, StoreError,
+  ActivityRecord, ApprovalRecord, InvocationRecord, InvocationStart, MessageRecord, ProjectDb, QuestionRecord,
+  RunLogRecord, RunStoreError, StoreError,
 };
 
 #[cfg(feature = "test-agent")]
@@ -42,9 +43,9 @@ impl LocalSink {
   }
 }
 
-// In the runner's own tests every invocation record crosses the sink as JSON and must arrive unchanged, as a
-// coordinator in another process would receive it (`docs/architecture/remote-runners.md`, rule 4); the run log's
-// records cross as JSON too.
+// In the runner's own tests every invocation, conversation, question and tool request record crosses the sink as JSON
+// and must arrive unchanged, as a coordinator in another process would receive it
+// (`docs/architecture/remote-runners.md`, rule 4); the run log's records cross as JSON too.
 impl Sink for LocalSink {
   fn run_log(&mut self, record: RunLogRecord) -> Result<(), RunStoreError> {
     #[cfg(feature = "test-agent")]
@@ -68,6 +69,24 @@ impl Sink for LocalSink {
     #[cfg(feature = "test-agent")]
     sent::survives_sending(&record);
     self.write(|db| db.write_invocation(&record))
+  }
+
+  fn message(&mut self, record: MessageRecord) -> Result<bool, StoreError> {
+    #[cfg(feature = "test-agent")]
+    sent::survives_sending(&record);
+    self.write(|db| db.write_message(&record))
+  }
+
+  fn question(&mut self, record: QuestionRecord) -> Result<bool, StoreError> {
+    #[cfg(feature = "test-agent")]
+    sent::survives_sending(&record);
+    self.write(|db| db.write_question(&record))
+  }
+
+  fn approval(&mut self, record: ApprovalRecord) -> Result<bool, StoreError> {
+    #[cfg(feature = "test-agent")]
+    sent::survives_sending(&record);
+    self.write(|db| db.write_approval(&record))
   }
 
   fn another(&self) -> Box<dyn Sink> {

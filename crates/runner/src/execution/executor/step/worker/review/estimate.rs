@@ -32,7 +32,7 @@ use super::{
   process::{ReviewPlace, SupervisedRunner, stop_review},
   setup::{ReviewerSetup, ReviewerSources, reviewer_setup},
 };
-use crate::computer::ComputerResources;
+use crate::{computer::ComputerResources, execution::coordinator::link::LocalLink};
 
 /// The longest an estimate may take; the estimator is stopped then, and the task gets no points.
 const ESTIMATE_TIMEOUT: Duration = Duration::from_secs(90);
@@ -78,7 +78,7 @@ fn estimate_blocking(
     return Ok(EstimateOutcome::TriedBefore);
   }
   let input = EstimateInput::new(task.details(), &db.calibration_records().map_err(failed)?);
-  let setup = reviewer_setup(&db, &keys).map_err(failed)?;
+  let setup = reviewer_setup((&db, &LocalLink::over(&db)), &keys).map_err(failed)?;
   let provider = setup.provider().map(|(provider, ..)| provider);
   let connection = setup.connection().cloned();
   let started_at = Timestamp::now();
