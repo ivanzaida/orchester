@@ -11,7 +11,6 @@ use orchester_core::{
     stream::{AgentEvent, InvocationOutcome, OutputStream, RunnerProblem},
   },
   orchester_tools::SERVER,
-  store::ActivityStore,
   time::Timestamp,
 };
 use orchester_ipc::Event;
@@ -20,6 +19,7 @@ use tokio::time::{Instant, sleep};
 
 use super::{
   super::{
+    super::sink::Sink,
     app_server::{AppServerFailure, AppServerSession},
     approval::Awaiting,
     claude_approval::ClaudeApprovals,
@@ -42,8 +42,8 @@ async fn next_event(driver: &mut Driver) -> Option<ProcessEvent> {
 }
 
 impl Worker {
-  pub(super) async fn follow(mut self) -> Result<Finished, StoreError> {
-    let mut watch = Watch::open(&self.root, &self.invocation)?;
+  pub(super) async fn follow(mut self, sink: Box<dyn Sink>) -> Result<Finished, StoreError> {
+    let mut watch = Watch::open(&self.root, &self.invocation, sink)?;
     self.initialize_app_server(&mut watch).await?;
     let mut flush = tokio::time::interval(FLUSH_INTERVAL);
     let grace = sleep(Duration::ZERO);
@@ -496,7 +496,7 @@ impl Worker {
     };
     watch.invocation.ended_at = Some(Timestamp::now());
     watch.invocation.outcome = Some(outcome.clone());
-    watch.db.save_invocation(&watch.invocation)?;
+    watch.save_invocation()?;
     // Only while that close is still why the turn failed: a later CLI error is a failure of its own.
     let closed_after_result = watch
       .closed_after_result

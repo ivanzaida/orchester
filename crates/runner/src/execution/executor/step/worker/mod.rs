@@ -38,12 +38,12 @@ use orchester_core::{
   time::Timestamp,
   tokens::TokensUsed,
 };
-use orchester_store::{ProjectDb, StoreError};
+use orchester_store::{ActivityRecord, InvocationRecord, ProjectDb, StoreError};
 use tokio::sync::mpsc;
 
 pub(in crate::execution) use self::review::estimate_task;
 use super::{
-  super::{Notifier, control::Ack, tool::CommandFinished},
+  super::{Notifier, control::Ack, sink::Sink, tool::CommandFinished},
   app_server::AppServerSession,
   approval::Awaiting,
   claude_approval::ClaudeApprovals,
@@ -225,6 +225,8 @@ enum RelayClosed {
 
 pub(super) struct Watch {
   pub(super) db: ProjectDb,
+  /// Where the invocation's transcript and the changes to its rows are recorded.
+  sink: Box<dyn Sink>,
   pub(super) invocation: Invocation,
   pub(super) tracker: InvocationTracker,
   edits: FirstEditTracker,
@@ -270,8 +272,9 @@ pub(super) struct Watch {
 }
 
 impl Watch {
-  /// Follows `invocation`, whose searches of the code index count when it got the index, as recorded before it started.
-  fn open(root: &Path, invocation: &Invocation) -> Result<Self, StoreError> {
+  /// Follows `invocation`, whose searches of the code index count when it got the index, as recorded before it
+  /// started, and records what it does in `sink`.
+  fn open(root: &Path, invocation: &Invocation, sink: Box<dyn Sink>) -> Result<Self, StoreError> {
     let db = ProjectDb::open(root)?;
     let index_given = matches!(
       db.invocation_code_index(invocation.id)?,
@@ -279,6 +282,7 @@ impl Watch {
     );
     Ok(Self {
       db,
+      sink,
       invocation: invocation.clone(),
       tracker: InvocationTracker::default(),
       edits: FirstEditTracker::new(index_given),
@@ -301,6 +305,16 @@ impl Watch {
       plan_reached: false,
       codex_failure: None,
     })
+  }
+
+  /// Stores the invocation's session, usage, end, outcome and waits as they are now.
+  pub(super) fn save_invocation(&mut self) -> Result<(), StoreError> {
+    self.sink.invocation(InvocationRecord::state(&self.invocation))
+  }
+
+  /// Appends `events` of the invocation to its run's transcript; the sequence the desktop is told of.
+  pub(super) fn append_activity(&mut self, events: Vec<(Timestamp, AgentEvent)>) -> Result<u64, StoreError> {
+    self.sink.activity(ActivityRecord::new(&self.invocation, events))
   }
 
   /// The mode this agent's requests are answered in now (`docs/design/approval-modes.md`): by its profile's approval
@@ -380,15 +394,16 @@ impl Worker {
   /// ended: the agent's end stops a review still under way, which then records what it cost and hands its
   /// tokens to the run before the run hears of the end. So the run, still listening, counts them toward
   /// its budget and the step's, once, before another invocation of the step reads what the step used.
-  /// `reviews_ended` is the other end of [`Worker::reviews_held`].
-  pub(in super::super) async fn work(mut self, mut reviews_ended: mpsc::Receiver<Infallible>) {
+  /// `reviews_ended` is the other end of [`Worker::reviews_held`]. What the agent does is recorded in `sink`, the
+  /// coordinator's.
+  pub(in super::super) async fn work(mut self, mut reviews_ended: mpsc::Receiver<Infallible>, sink: Box<dyn Sink>) {
     let execution = self.invocation.execution;
     let events = self.events.clone();
     let mcp_file = self.mcp_file.take();
     let end = if self.is_native() {
-      self.follow_native().await
+      self.follow_native(sink).await
     } else {
-      self.follow().await
+      self.follow(sink).await
     };
     // The worker, its own holder and the review under way are gone; this ends once every review has.
     if let Some(never) = reviews_ended.recv().await {

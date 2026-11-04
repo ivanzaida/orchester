@@ -13,7 +13,6 @@ use orchester_core::{
   },
   question::{GivenAnswer, Question, QuestionRequest, QuestionTurn, answers_for_agent},
   run::Answerer,
-  store::ActivityStore,
   time::Timestamp,
 };
 use orchester_ipc::{Event, Rejection};
@@ -98,7 +97,7 @@ impl Worker {
     watch.invocation.timing.wait_for_person(now);
     // A person's wait never holds one of the computer's QA slots.
     self.qa.release(watch.invocation.id);
-    watch.db.save_invocation(&watch.invocation)?;
+    watch.save_invocation()?;
     self.question_changed(watch);
     watch.question = Some((request, awaiting));
     Ok(())
@@ -225,7 +224,7 @@ impl Worker {
   fn end_question_wait(&self, watch: &mut Watch) -> Result<(), StoreError> {
     watch.invocation.timing.resume(Timestamp::now());
     self.resume_qa(watch, None);
-    watch.db.save_invocation(&watch.invocation)?;
+    watch.save_invocation()?;
     self.question_changed(watch);
     Ok(())
   }

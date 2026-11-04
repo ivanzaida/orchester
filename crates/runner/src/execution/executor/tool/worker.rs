@@ -3,21 +3,21 @@
 //! once it has ended its end is recorded in the transcript and on its invocation. A command has no
 //! turns: a run limit reached by an agent's turn lets it run to its end, as a pause does.
 
-use std::{path::PathBuf, time::Instant};
+use std::time::Instant;
 
 use orchester_core::{
   connection::stream::AgentEvent,
   resource::{CommandAction, StepKey},
   run::{CapturedOutput, CommandEnd, Invocation, OutputCapture, StepAt, StepFailure, StepOutput, ToolCommand},
-  store::ActivityStore,
   time::Timestamp,
 };
 use orchester_ipc::Event;
-use orchester_store::{ProjectDb, StoreError};
+use orchester_store::{ActivityRecord, InvocationRecord, StoreError};
 use tokio::{sync::mpsc, time::sleep};
 
 use super::super::{
   Notifier,
+  sink::Sink,
   step::worker::{Stop, StopCause, WorkerEvent},
 };
 use crate::supervisor::{ProcessEvent, ProcessExit, Supervised};
@@ -34,7 +34,8 @@ pub(in super::super) struct CommandFinished {
 
 /// One running program and where its news goes.
 pub(super) struct CommandWorker {
-  pub(super) root: PathBuf,
+  /// Where its end is recorded.
+  pub(super) sink: Box<dyn Sink>,
   pub(super) invocation: Invocation,
   pub(super) tool: String,
   pub(super) action: CommandAction,
@@ -58,7 +59,6 @@ impl CommandWorker {
   }
 
   async fn follow(mut self) -> Result<CommandFinished, StoreError> {
-    let db = ProjectDb::open(&self.root)?;
     let started = Instant::now();
     let timeout = sleep(self.action.timeout().duration());
     tokio::pin!(timeout);
@@ -97,13 +97,12 @@ impl CommandWorker {
       (None, false, ProcessExit::Terminated | ProcessExit::WaitFailed { .. }) => CommandEnd::Exited { code: None },
     };
     let elapsed = started.elapsed();
-    self.finish(db, (end, stopped), &capture.finish(), elapsed)
+    self.finish((end, stopped), &capture.finish(), elapsed)
   }
 
   /// Records the end in the transcript and on the invocation, and what it means for the step.
   fn finish(
-    &self,
-    mut db: ProjectDb,
+    &mut self,
     (end, stopped): (CommandEnd, Option<StopCause>),
     output: &CapturedOutput,
     elapsed: std::time::Duration,
@@ -114,7 +113,9 @@ impl CommandWorker {
     };
     let now = Timestamp::now();
     let event: AgentEvent = command.finished(end, output);
-    let sequence = db.append_activity(&self.invocation, &[(now, event)])?;
+    let sequence = self
+      .sink
+      .activity(ActivityRecord::new(&self.invocation, vec![(now, event)]))?;
     self.notifier.send(Event::AgentActivity {
       run: self.invocation.run,
       sequence,
@@ -122,7 +123,7 @@ impl CommandWorker {
     let mut invocation = self.invocation.clone();
     invocation.ended_at = Some(now);
     invocation.outcome = Some(command.outcome(end));
-    db.save_invocation(&invocation)?;
+    self.sink.invocation(InvocationRecord::state(&invocation))?;
     let at = StepAt {
       run: invocation.run,
       execution: invocation.execution,

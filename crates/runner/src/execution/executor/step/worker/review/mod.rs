@@ -30,7 +30,7 @@ use orchester_core::{
     },
     without_reviewer,
   },
-  store::{ActivityStore, RunStore, SettingsStore, TaskStore},
+  store::{RunStore, SettingsStore, TaskStore},
   time::Timestamp,
 };
 use orchester_ipc::Event;
@@ -230,7 +230,7 @@ impl Worker {
     watch.invocation.timing.wait_for_person(Timestamp::now());
     // A person's wait never holds one of the computer's QA slots.
     self.qa.release(watch.invocation.id);
-    watch.db.save_invocation(&watch.invocation)?;
+    watch.save_invocation()?;
     self.notifier.send(Event::ToolApprovalChanged {
       run: watch.invocation.run,
       task: self.task,
