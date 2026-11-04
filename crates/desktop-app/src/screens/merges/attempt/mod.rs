@@ -340,7 +340,7 @@ impl AttemptScreen {
   }
 
   /// The action that moves the run on, as its last attempt left it; none once merged, or while the merge queue tries
-  /// again by itself.
+  /// again by itself; the merge queue, where the run merges, while it waits for approval there.
   fn primary(&self, ctx: &mut Ctx, shown: &Shown<'_>, standing: Standing, actions: &Actions) -> Option<Element> {
     let button = |id: &str, key: &str, glyph: Icon, ctx: &Ctx| {
       ActionButton::new(id.to_owned(), ButtonKind::Primary, ctx.t(key)).icon(glyph)
@@ -359,6 +359,13 @@ impl AttemptScreen {
       Standing::Retrying(_) => button("merge-attempt-try-now", "merges.action.tryNow", Icon::RotateCcw, ctx)
         .on_click(move || actions.try_now())
         .into(),
+      Standing::AwaitingApproval => {
+        let queue = Route::Project(shown.project.open.project.id(), ProjectPage::MergeQueue);
+        let open = Navigation::of(ctx).to(queue);
+        button("merge-attempt-open-queue", "merges.page.openQueue", Icon::ArrowUpRight, ctx)
+          .opens(open)
+          .into()
+      }
       Standing::Conflicts => conflicts::editor_button(ctx, shown.project, shown.page.run.run, shown.resolving),
       Standing::NotRecorded => pressed(
         button(

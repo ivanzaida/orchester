@@ -29,7 +29,10 @@ use orchester_workspace::{
 use parking_lot::Mutex;
 
 use super::state::ReviewState;
-use crate::{project::ShownProject, services::Services};
+use crate::{
+  project::{ShownProject, hold::ReadHold},
+  services::Services,
+};
 
 /// A change of the run's review.
 #[derive(Clone, Debug)]
@@ -74,6 +77,8 @@ struct Reach {
   open: OpenProject,
   run: RunId,
   written: Signal<u64>,
+  /// Holds a hand-off to the runner while QA captures it (`hold_hand_offs`).
+  hand_offs: ReadHold,
 }
 
 /// The box a change's words were written in, which closes once the change was kept; it stays open, its words with
@@ -110,6 +115,7 @@ impl Writes {
       open: project.open.clone(),
       run,
       written: state.written.clone(),
+      hand_offs: services.hand_offs,
     };
     let action = ctx.future_action(move |write: Write| {
       let reach = reach.clone();
@@ -179,18 +185,18 @@ async fn apply(reach: &Reach, write: Write) -> Result<Landed, ReviewRefusal> {
     }
     Write::Ask(anchor, head, body) => {
       let asking = blocking(move || ask::start(&root, run, (anchor, head), &body, now)).await?;
-      shown(reach);
+      shown(reach).await;
       handed(ask::ask(&reach.runners, &reach.open, &asking).await)
     }
     Write::AskAgain(thread, body) => {
       let asking = blocking(move || ask::again(&root, thread, &body, now)).await?;
-      shown(reach);
+      shown(reach).await;
       handed(ask::ask(&reach.runners, &reach.open, &asking).await)
     }
     Write::Send => {
       let programs = reach.programs.clone();
       let sending = blocking(move || send::begin(&root, &programs, run)).await?;
-      shown(reach);
+      shown(reach).await;
       handed(send::send(&reach.runners, &reach.open, &sending).await)
     }
     Write::Stop(thread) => {
@@ -207,9 +213,10 @@ async fn apply(reach: &Reach, write: Write) -> Result<Landed, ReviewRefusal> {
   }
 }
 
-/// What was kept before its hand-off to the runner is read again.
-fn shown(reach: &Reach) {
+/// What was kept before its hand-off to the runner is read again; the hand-off goes once QA does not hold it.
+async fn shown(reach: &Reach) {
   reach.written.update(|count| *count += 1);
+  reach.hand_offs.released().await;
 }
 
 /// How handing a question or comments to the runner went: one the runner did not take was kept *Not asked* or *Not

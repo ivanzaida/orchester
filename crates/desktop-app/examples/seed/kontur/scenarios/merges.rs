@@ -12,8 +12,9 @@
 //! refused before Git, stopped in the merge queue, conflicts, merged by Git but not recorded, Git stopped answering
 //! after 2 min, and a bring-in that stopped part way and left a file changed in the checkout (made by a real merge
 //! whose git stops after writing it, so *Put files back* puts it back); a run waiting in the queue with two review
-//! comments not sent; two runs merged today, their branches deleted. Orchester's own retry waits only in a running app,
-//! so no row retries here.
+//! comments not sent; two runs merged today, their branches deleted. The *Retrying* row is Orchester's own retry in
+//! the running app: the debug tool `hold_integration` `held: true` holds the project's integration lease, then *Try
+//! again* on the row refused at the integration lock retries by itself (`merge-attempts` tells the same of its page).
 //!
 //! `merges-empty` (09c `jhPCL`): the delivering catalogue and no merge attempt.
 //!

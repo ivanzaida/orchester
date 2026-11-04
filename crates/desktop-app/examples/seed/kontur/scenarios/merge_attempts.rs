@@ -2,7 +2,12 @@
 //! opened from its row in Review › Merges or at `/project/<id>/merges/<KEY>/<run>`:
 //!
 //! - *Add retry to webhook sender* (09b `PVZKL`): automation's attempt through `merge_run` refused at Project database,
-//!   then the person's refused before Git at the integration lock, held by another operation.
+//!   then the person's refused before Git at the integration lock, held by another operation. Its live retry (09j
+//!   `GhnHQ`, the *Retrying* row of `Cjprb`): with the project's tab active, the debug tool `hold_integration` `held:
+//!   true` takes the integration lease as another operation would, so *Try again* is refused at the integration lock
+//!   and Orchester really tries again by itself — *Retrying by itself · attempt 1 of 3 in 10 s*, then 2 and 3 of 3,
+//!   30 s each, with *Try now* and *Stop retrying*, and the same in its Merges row — until the third try ends it Not
+//!   merged; `held: false` lets the lease go, so the next try (or *Try now*) merges.
 //! - *Per-endpoint rate limits* (09e `s1jIpI`): a Feature delivery run the merge queue stopped, its attempt refused at
 //!   Project database; *Try again* puts it back in its place in the queue.
 //! - *Per-endpoint secrets* (09f `Q6yPN8`): conflicts in two files.
@@ -10,9 +15,8 @@
 //!   records it.
 //! - *Delivery log per endpoint* (09h `rzo3w`): merged on its third attempt, after automation's and the person's were
 //!   refused.
-//! - *Retry budget per endpoint* (09j `GhnHQ`): the person's attempt and Orchester's retry 1 of 3 ten seconds later,
-//!   both refused at Project database. Orchester's wait for its next try lives only in a running app's merge, so here
-//!   the run shows Not merged with its retry among its attempts.
+//! - *Retry budget per endpoint* (09j's attempts): the person's attempt and Orchester's retry 1 of 3 ten seconds later,
+//!   both refused at Project database; it shows Not merged with its retry among its attempts.
 //! - *Rate limit per endpoint* (09k `X3DJKY`): Git stopped answering at Merge.
 //! - *Payload size guard* (09l `Asu5i`): a bring-in that stopped part way and left the README changed in the checkout.
 

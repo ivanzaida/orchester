@@ -40,20 +40,30 @@ pub struct Retrying {
 
 /// The runs of the project at `root` whose last merge attempt did not land and that were not merged since, newest
 /// first, each with whether Orchester tries again: its own retry of a cause that passes, at a set time
-/// ([`crate::tasks::merge_retry`]), or the merge queue's.
+/// ([`crate::tasks::merge_retry`]), or the merge queue's. A run the merge queue took back and that waits for a person's
+/// approval there is not among them: it waits for review ([`waiting_for_review`]).
 pub fn not_merged(root: &Path) -> Result<Vec<NotMerged>, StoreError> {
   let db = ProjectDb::open(root)?;
-  db.unlanded_merge_attempts()?
-    .into_iter()
-    .map(|attempt| {
-      let run = attempt.attempt.run();
-      let retrying = match crate::tasks::merge_retry::waiting(run) {
-        Some(wait) => Some(Retrying { next: Some(wait.at) }),
-        None => queue_retries(&db, run)?.then_some(Retrying { next: None }),
-      };
-      Ok(NotMerged { attempt, retrying })
-    })
-    .collect()
+  let mut runs = Vec::new();
+  for attempt in db.unlanded_merge_attempts()? {
+    let run = attempt.attempt.run();
+    if awaits_approval(&db, run)? {
+      continue;
+    }
+    let retrying = match crate::tasks::merge_retry::waiting(run) {
+      Some(wait) => Some(Retrying { next: Some(wait.at) }),
+      None => queue_retries(&db, run)?.then_some(Retrying { next: None }),
+    };
+    runs.push(NotMerged { attempt, retrying });
+  }
+  Ok(runs)
+}
+
+/// Whether `run` waits for a person's approval in the merge queue.
+fn awaits_approval(db: &ProjectDb, run: RunId) -> Result<bool, StoreError> {
+  Ok(db
+    .merge_queue_entry(run)?
+    .is_some_and(|entry| entry.state == QueueState::WaitingForApproval))
 }
 
 /// Whether the merge queue delivers `run` on its own: it is in the queue, and nothing it waits for is a person's.

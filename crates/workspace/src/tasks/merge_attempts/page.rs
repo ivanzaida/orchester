@@ -53,6 +53,9 @@ pub struct AttemptPage {
   /// The merge queue stopped delivering the run until someone acts on what stopped it: *Try again* puts it back in
   /// its place there (`crate::merge_queue::retry_stopped`) rather than merging it from its task page.
   pub queue_stopped: bool,
+  /// The merge queue took the run back after its last attempt and waits for a person's approval there: it merges from
+  /// the queue, not from its task page.
+  pub awaiting_approval: bool,
   /// The files the last attempt's bring-in left changed in the checkout and that are not put back yet.
   pub left_changed: Vec<String>,
 }
@@ -99,10 +102,12 @@ pub fn attempt_page(
     Some(_) => retrying(&db, &run)?,
     None => None,
   };
-  let queue_stopped = last.is_some()
-    && db
-      .merge_queue_entry(run.id())?
-      .is_some_and(|entry| matches!(entry.state, QueueState::Left(Left::Stopped { .. })));
+  let queue = match last {
+    Some(_) => db.merge_queue_entry(run.id())?.map(|entry| entry.state),
+    None => None,
+  };
+  let queue_stopped = matches!(queue, Some(QueueState::Left(Left::Stopped { .. })));
+  let awaiting_approval = queue == Some(QueueState::WaitingForApproval);
   let left_changed = left_changed((root, programs), &run, last);
   Ok(Some(AttemptPage {
     run: MergeRun {
@@ -122,6 +127,7 @@ pub fn attempt_page(
     merge,
     retrying,
     queue_stopped,
+    awaiting_approval,
     left_changed,
   }))
 }

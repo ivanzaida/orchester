@@ -78,6 +78,8 @@ pub struct Services {
   pub jobs: ProjectJobs,
   /// Holds the project feeds' reads while QA captures loading states.
   pub hold: ReadHold,
+  /// Holds the review page's hand-offs to the runner while QA captures what shows while one is under way.
+  pub hand_offs: ReadHold,
   /// The runtime background work runs on.
   pub runtime: Handle,
   /// How the previous session ended, as the runners are told when they attach.
@@ -155,6 +157,7 @@ impl Services {
       changes: OutsideChanges::default(),
       jobs,
       hold: ReadHold::default(),
+      hand_offs: ReadHold::default(),
       runtime,
       previous_end: session.previous_end(),
       session_start: session.started_at(),

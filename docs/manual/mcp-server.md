@@ -2,8 +2,8 @@
 
 Orchester exposes everything it does to automation through **MCP** (Model Context Protocol). This page covers the
 app's own MCP server: how to connect, what it permits, the conventions every tool follows, the error format, and
-the window tools (`app_state`, `navigate`, `set_theme`, `hold_reads`, `set_update_state`, `sign_in_state` and lurq's
-`lurq_*` tools).
+the window tools (`app_state`, `navigate`, `set_theme`, `hold_reads`, `hold_hand_offs`, `hold_integration`,
+`set_update_state`, `sign_in_state` and lurq's `lurq_*` tools).
 
 The domain tools are documented in [mcp-tools-setup.md](mcp-tools-setup.md) and [mcp-tools-work.md](mcp-tools-work.md).
 Two other MCP surfaces exist and are documented separately: the tools agents get inside runs
@@ -13,7 +13,7 @@ Two other MCP surfaces exist and are documented separately: the tools agents get
 
 | Server | Who connects | Name the client registers | Tools |
 |---|---|---|---|
-| **The app's MCP server** (this page) | Your own agent CLIs (Claude Code, Codex), QA and design-verification agents | `orchester` → `mcp__orchester__*` | `lurq_*` window tools, `app_state`, `navigate`, `set_theme`, `sign_in_state`, `hold_reads` and `set_update_state` (debug) and 80 domain tools |
+| **The app's MCP server** (this page) | Your own agent CLIs (Claude Code, Codex), QA and design-verification agents | `orchester` → `mcp__orchester__*` | `lurq_*` window tools, `app_state`, `navigate`, `set_theme`, `sign_in_state`, `hold_reads`, `hold_hand_offs`, `hold_integration` and `set_update_state` (debug) and 80 domain tools |
 | **The runner's relay**, one per agent invocation | Agents inside runs | `Orchester` (capital O) → `mcp__Orchester__*` in Claude Code, bare names in Codex | Run tools (`read_file`, `edit_file`, `run_check`, `start_qa_app`, …), `approve`, `ask_question` |
 | **The Orchestrator chat's server**, one per chat turn | The project's Orchestrator chat agent | `orchester` | 60 domain tools + 23 chat-only tools (git, MCP servers, `init_repository`, `apply_proposal`) |
 
@@ -93,7 +93,7 @@ Tools outside the granted scopes are **not listed**, and calling one answers `un
 |---|---|---|
 | Observe | always | lurq looking tools, `app_state`, `sign_in_state`, read-only domain tools |
 | `data` | always | domain tools that change data (each still applies its own gates) |
-| Interact | only with **window control** | lurq input tools, `navigate`, `set_theme`, `hold_reads`, `set_update_state` |
+| Interact | only with **window control** | lurq input tools, `navigate`, `set_theme`, `hold_reads`, `hold_hand_offs`, `hold_integration`, `set_update_state` |
 | Navigate | never | `lurq_navigate` (use `navigate`, which keeps the tabs' histories) |
 
 ### Window control
@@ -275,6 +275,22 @@ Answers `{setting, mode}`. Errors: `unknown_theme` (with `known`), `not_saved` (
 `held` (boolean, req.). `true` holds every read of a project's tasks, limits and agent profiles that starts from then
 on, so a screen reading them for the first time stays in its loading state (for capturing loading states in design
 verification); data already on screen stays. `false` releases them. Answers `{held}`.
+
+### `hold_hand_offs` — debug builds only, needs window control
+
+`held` (boolean, req.). `true` holds every hand-off to the project's runner that a run's review page starts from then on
+(*Ask Implement*, *Ask again*, *Send to Implement*), after the question or the comments are kept: the thread shows
+*Sent to Implement* or *Sending…* and the tray *Sending N comments to Implement…* for as long as it holds. `false` lets
+the waiting hand-offs go to the runner, which takes them or not as it would have. Answers `{held}`.
+
+### `hold_integration` — debug builds only, needs window control
+
+`held` (boolean, req.). `true` takes the integration lease of the project the active tab shows, as another operation
+would: a merge asked for meanwhile is refused at the integration lock and Orchester tries it again by itself (10 s,
+then 30 s apart, three times), so *Retrying by itself* with its countdown can be captured on a run's merge attempt page
+and in Review › Merges. `false` lets the lease go; the next try merges. Answers `{held, project}` (the project folder
+whose lease is held). Errors: `invalid_param` (the active tab shows no open project), `not_saved` (the lease could not
+be taken), `not_ready`, `missing_param`, `not_a_bool`.
 
 ### `set_update_state` — debug builds only, needs window control
 

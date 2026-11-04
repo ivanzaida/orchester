@@ -2,7 +2,8 @@
 //! on the QA seed's `review-page` scenario (`examples/seed`): opened from its *Waiting for your review* row at the
 //! run's route under Merges, with the run's real diff, its files and *Viewed* marks, every thread state, the comment
 //! box that adds a comment to the tray and whose field takes the focus as it opens, the **+** only on the line under
-//! the pointer and never over its numbers (ORC-702), a send the runner did not take kept with why, and *Approve and
+//! the pointer and never over its numbers (ORC-702), a send the runner did not take kept with why, a send QA holds
+//! (`hold_hand_offs`) shown *Sending…* in its threads and the tray, and *Approve and
 //! merge* unavailable while Implement works on a comment sent, whose link names the step at work; on
 //! `review-changed`, a branch that moved after the review
 //! (ORC-699) told with its new commits, and *Approve and merge* unavailable until they are taken in. Needs `git`, as
@@ -17,8 +18,12 @@ mod support;
 use std::{num::NonZeroU32, time::Duration};
 
 use lurq::app::events::ScrollPhase;
-use orchester_app::routes::{ProjectPage, Route};
+use orchester_app::{
+  mcp::tools::hold_hand_offs,
+  routes::{ProjectPage, Route},
+};
 use orchester_core::{id::ProjectId, project::TaskKey, run::RunNumber, time::Timestamp};
+use serde_json::json;
 
 use crate::{
   kontur::{SeedRequest, SeededTask, scenarios},
@@ -234,6 +239,36 @@ fn review_page_send_the_runner_did_not_take_keeps_the_comments_with_why() {
       .text("review-tray-detail")
       .starts_with("The send failed; nothing is lost.")
   );
+}
+
+/// QA's `hold_hand_offs` keeps a send under way: every comment it sends and the tray say *Sending…* until it is let go,
+/// and then, with no runner, the comments wait unsent again with why.
+#[test]
+fn review_page_send_held_shows_sending_until_let_go() {
+  let mut page = Page::new();
+  page.open(("Sign webhook payloads", 1));
+  let hand_offs = page
+    .window
+    .launch
+    .services()
+    .expect("a started session")
+    .hand_offs
+    .clone();
+  hold_hand_offs(&hand_offs, &json!({ "held": true })).expect("a flag");
+  page.window.press("review-tray-send");
+  page.window.until_within(GIT_WORK, "the comments sending", |window| {
+    window
+      .texts("review-tray-title")
+      .is_some_and(|title| title.join(" ") == "Sending 2 comments to Implement…")
+  });
+  assert_eq!(page.window.text("review-tray-send"), "Sending…");
+  assert!(page.diff_text().contains("Sending…"), "the comment's own tag");
+  hold_hand_offs(&hand_offs, &json!({ "held": false })).expect("a flag");
+  page.window.until_within(GIT_WORK, "the send refused", |window| {
+    window
+      .texts("review-tray-title")
+      .is_some_and(|title| title.join(" ") == "Not sent: the runner is not running")
+  });
 }
 
 #[test]

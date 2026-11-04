@@ -1,7 +1,8 @@
 //! The app's MCP tools on a window without a screen: `app_state` reports where the window is and the
 //! projects its tabs show, `navigate` goes through the tabs' history and refuses with typed errors,
-//! `set_theme` recolors the window, `hold_reads` holds the project feeds' reads, and what agents may do
-//! follows the settings.
+//! `set_theme` recolors the window, `hold_reads` and `hold_hand_offs` hold the project feeds' reads and the review
+//! page's hand-offs, `hold_integration` needs a project in the active tab, and what agents may do follows the
+//! settings.
 
 mod support;
 
@@ -14,7 +15,7 @@ use orchester_app::{
     McpSettings, ThisRun, WindowLink,
     domain::DATA_SCOPE,
     settings::WINDOW_CONTROL_VARIABLE,
-    tools::{ToolError, app_state, hold_reads, navigate, set_theme},
+    tools::{HeldLease, ToolError, app_state, hold_hand_offs, hold_integration, hold_reads, navigate, set_theme},
   },
   project::hold::ReadHold,
   theme::Mode,
@@ -522,6 +523,39 @@ fn hold_reads_holds_and_releases_the_feeds_reads() {
   let error = hold_reads(&hold, &json!({ "held": "yes" })).expect_err("not a flag");
   assert_eq!(error.to_json()["code"], "not_a_bool");
   let error = hold_reads(&hold, &json!({})).expect_err("no flag");
+  assert_eq!(error.to_json()["code"], "missing_param");
+}
+
+#[test]
+fn hold_hand_offs_holds_and_releases_the_review_pages_hand_offs() {
+  let hold = ReadHold::default();
+  assert_eq!(
+    hold_hand_offs(&hold, &json!({ "held": true })).expect("a flag"),
+    json!({ "held": true })
+  );
+  assert!(hold.is_held());
+  assert_eq!(
+    hold_hand_offs(&hold, &json!({ "held": false })).expect("a flag"),
+    json!({ "held": false })
+  );
+  assert!(!hold.is_held());
+  let error = hold_hand_offs(&hold, &json!({ "held": 1 })).expect_err("not a flag");
+  assert_eq!(error.to_json()["code"], "not_a_bool");
+}
+
+#[test]
+fn hold_integration_needs_a_project_in_the_active_tab() {
+  let lease = HeldLease::default();
+  let error = hold_integration(&WindowLink::default(), &lease, &json!({ "held": true })).expect_err("no window yet");
+  assert_eq!(error, ToolError::NotReady);
+  let window = Window::open();
+  let error = hold_integration(&window.link, &lease, &json!({ "held": true })).expect_err("All projects");
+  assert_eq!(error.to_json()["code"], "invalid_param");
+  assert_eq!(
+    hold_integration(&window.link, &lease, &json!({ "held": false })).expect("nothing to let go"),
+    json!({ "held": false, "project": null })
+  );
+  let error = hold_integration(&window.link, &lease, &json!({})).expect_err("no flag");
   assert_eq!(error.to_json()["code"], "missing_param");
 }
 #[test]

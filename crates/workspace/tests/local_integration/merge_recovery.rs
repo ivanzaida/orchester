@@ -9,7 +9,10 @@ use std::{
   num::NonZeroU32,
   panic::{AssertUnwindSafe, catch_unwind},
   path::PathBuf,
-  sync::Arc,
+  sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+  },
   thread,
   time::{Duration, Instant},
 };
@@ -30,7 +33,7 @@ use orchester_workspace::tasks::{
   integration::{IntegrationProblem, merge_in},
   merge_attempts::read,
   merge_left::{left_changed, put_files_back, recover_interrupted},
-  merge_retry::{merge_retrying, stop_retrying, try_now, waiting},
+  merge_retry::{merge_retrying, retried, stop_retrying, try_now, waiting},
 };
 
 use super::support::{Fixture, git};
@@ -174,6 +177,41 @@ fn failed(stderr: &str) -> Result<CommandOutput, CommandError> {
     stdout: String::new(),
     stderr: stderr.to_owned(),
   })
+}
+
+/// While Orchester's try goes on, the run still shows it, due since it began, and *Stop retrying* asked then ends the
+/// merge once that try did not land, though its cause passes.
+#[test]
+fn merge_retry_a_try_under_way_shows_due_and_stop_retrying_ends_it_after() {
+  let fixture = Fixture::new(false);
+  let released = Arc::new(AtomicBool::new(false));
+  let gate = released.clone();
+  let programs = faked(move |args| {
+    has(args, "--ff-only").then(|| {
+      while !gate.load(Ordering::SeqCst) {
+        thread::sleep(Duration::from_millis(10));
+      }
+      Err(CommandError::Failed(
+        "The process cannot access the file because it is being used by another process.".to_owned(),
+      ))
+    })
+  });
+  let (root, run) = (fixture.root().to_owned(), fixture.run);
+  let merge = thread::spawn(move || retried(&root, &programs, (run, None, None), PERSON, Err(held_lease())));
+  assert!(until_waiting(&fixture, &merge));
+  assert!(try_now(run), "Try now ends the wait");
+  let deadline = Instant::now() + Duration::from_secs(60);
+  while !waiting(run).is_some_and(|wait| wait.at <= Timestamp::now()) {
+    assert!(Instant::now() < deadline, "the try never showed as under way");
+    thread::sleep(Duration::from_millis(10));
+  }
+  assert_eq!(waiting(run).map(|wait| wait.number.get()), Some(1));
+  assert!(stop_retrying(run), "Stop retrying reaches the try under way");
+  released.store(true, Ordering::SeqCst);
+  let ended = merge.join().expect("the merge thread");
+  assert!(ended.as_ref().expect_err("not merged").passes(), "{ended:?}");
+  assert_eq!(askers(&fixture), [retry(1)], "no try after the one under way");
+  assert_eq!(waiting(run), None);
 }
 
 #[test]

@@ -2,13 +2,15 @@
 //! `merge-attempts` scenario (`examples/seed`): its route under Merges from a row, history and `navigate`, with its
 //! breadcrumb, header actions and status; *Checks* in order, the passed ones folded, the refused one with its cause,
 //! the later ones not reached; *Attempts* expanding into their own checks, Orchester's retries among them; and the
-//! actions that move a run on: *Record merge*, *Put files back*, *Try again* back into the merge queue, Orchester's
-//! retry with *Stop retrying*, and *Copy details*. Needs `git`, as the seed does.
+//! actions that move a run on: *Record merge*, *Put files back*, and *Copy details*; *Try again* back into the merge
+//! queue and Orchester's retry are in `retries`. Needs `git`, as the seed does.
 //! `cargo test -p orchester-app --test merge_attempt_page merge_attempt_page`.
 
-#[path = "../examples/seed/kontur/mod.rs"]
+#[path = "../../examples/seed/kontur/mod.rs"]
 #[allow(dead_code, reason = "the seed's helpers serve every scenario; these tests seed one")]
 mod kontur;
+mod retries;
+#[path = "../support/mod.rs"]
 mod support;
 
 use std::{path::PathBuf, time::Duration};
@@ -22,7 +24,6 @@ use orchester_core::{
   store::{MergeStore, RunStore, TaskStore},
   time::Timestamp,
 };
-use orchester_exec::local_git::IntegrationLease;
 use orchester_store::ProjectDb;
 use serde_json::json;
 
@@ -424,32 +425,11 @@ fn merge_attempt_page_put_files_back_then_try_again() {
     });
   assert!(!page.shows("merge-attempt-left"), "nothing is left changed");
   assert!(!page.shows("merge-attempt-not-done"), "the put-back went through");
-}
-
-#[test]
-fn merge_attempt_page_try_again_puts_a_run_the_queue_stopped_back_in_its_place() {
-  let mut page = Page::new();
-  let route = page.open("merges-not-merged", "Per-endpoint rate limits");
-  let Route::Project(_, ProjectPage::MergeAttempt(_, number)) = route else {
-    panic!("the attempt page");
-  };
-  assert_eq!(
-    page.window.text("merge-attempt-status-text"),
-    "Stopped in the merge queue"
+  let explanation = page.window.text("merge-attempt-explanation");
+  assert!(
+    explanation.contains("are put back") && !explanation.contains("still holds"),
+    "What stopped it no longer asks to put a file back: {explanation}"
   );
-  assert_eq!(
-    page.window.text("merge-attempt-1-via"),
-    format!("delivering run #{}", number.get())
-  );
-  page.window.press("merge-attempt-try-again");
-  let repo = page.repo.clone();
-  page.window.until_within(GIT_WORK, "the run back in the queue", |_| {
-    let db = ProjectDb::open(&repo).expect("the project database");
-    db.merge_queue()
-      .expect("the queue")
-      .iter()
-      .any(|entry| entry.state.in_queue())
-  });
 }
 
 #[test]
@@ -478,30 +458,6 @@ fn merge_attempt_page_copy_details_copies_the_stage_cause_branch_and_revisions()
   ] {
     assert!(details.contains(line), "{line}: {details}");
   }
-}
-
-#[test]
-fn merge_attempt_page_retrying_counts_down_until_stop_retrying() {
-  let mut page = Page::new();
-  page.open("merges-not-merged", "Add retry to webhook sender");
-  let held = IntegrationLease::acquire(&page.repo).expect("another operation's lease");
-  page.window.press("merge-attempt-try-again");
-  page.until_status("Retrying by itself");
-  let status = page.window.text("merge-attempt-status-text");
-  assert!(status.starts_with("Retrying by itself · attempt 1 of 3"), "{status}");
-  assert_eq!(page.window.text("merge-attempt-try-now"), "Try now");
-  assert_eq!(page.window.text("merge-attempt-stop-retrying"), "Stop retrying");
-  assert!(
-    page
-      .window
-      .text("merge-attempt-status-meta")
-      .contains("nothing merged so far")
-  );
-  page.window.press("merge-attempt-stop-retrying");
-  page.until_status("Not merged into main");
-  drop(held);
-  assert_eq!(page.window.text("merge-attempt-try-again"), "Try again");
-  assert_eq!(page.window.text("merge-attempt-attempts-head-count"), "3");
 }
 
 #[test]

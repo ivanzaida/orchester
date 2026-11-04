@@ -32,6 +32,8 @@ pub(crate) enum Standing {
   GitStopped,
   /// The merge queue stopped it: Try again puts it back in its place there.
   QueueStopped,
+  /// The merge queue took it back and waits for a person's approval there, where it merges.
+  AwaitingApproval,
   Interrupted,
   Moved,
   /// Refused before Git, or at a stage that ends the merge.
@@ -50,6 +52,9 @@ impl Standing {
     }
     if !page.left_changed.is_empty() {
       return Some(Self::LeftChanged);
+    }
+    if page.awaiting_approval {
+      return Some(Self::AwaitingApproval);
     }
     Some(match last.outcome() {
       AttemptOutcome::Merged { .. } => Self::Merged,
@@ -70,6 +75,7 @@ impl Standing {
     match self {
       Self::Merged => (Icon::CircleCheck, PaletteColor::Success),
       Self::Retrying(_) => (Icon::RefreshCw, PaletteColor::Info),
+      Self::AwaitingApproval => (Icon::CirclePause, PaletteColor::Warning),
       Self::Conflicts => (Icon::GitMerge, PaletteColor::Warning),
       Self::LeftChanged => (Icon::TriangleAlert, PaletteColor::Warning),
       _ => (Icon::CircleAlert, PaletteColor::Warning),
@@ -86,6 +92,7 @@ impl Standing {
       Self::LeftChanged => "left_changed",
       Self::GitStopped => "git_stopped",
       Self::QueueStopped => "queue_stopped",
+      Self::AwaitingApproval => "awaiting_approval",
       Self::Interrupted => "interrupted",
       Self::Moved => "moved",
       Self::NotMerged => "not_merged",
@@ -102,6 +109,7 @@ impl Standing {
       Self::LeftChanged => "merges.page.status.leftChanged",
       Self::GitStopped => "merges.page.status.gitStopped",
       Self::QueueStopped => "merges.page.status.queueStopped",
+      Self::AwaitingApproval => "merges.page.status.awaitingApproval",
       Self::Interrupted => "merges.page.status.interrupted",
       Self::Moved => "merges.page.status.moved",
       Self::NotMerged => "merges.page.status.notMerged",
@@ -122,9 +130,9 @@ pub(super) fn explanation(ctx: &Ctx, page: &AttemptPage, standing: Standing, bra
   let (key, stage, revision) = match (standing, attempt.outcome()) {
     (Standing::Retrying(Retrying { next: Some(_) }), _) => ("merges.page.explain.retrying", None, None),
     (Standing::Retrying(_), _) => ("merges.page.explain.queueRetries", None, None),
-    (Standing::LeftChanged, _) => {
-      return counted(ctx, "leftChanged", page.left_changed.len().max(1), branch);
-    }
+    (Standing::AwaitingApproval, _) => ("merges.page.explain.awaitingApproval", None, None),
+    (Standing::LeftChanged, _) if page.left_changed.is_empty() => ("merges.page.explain.leftChangedPutBack", None, None),
+    (Standing::LeftChanged, _) => return counted(ctx, "leftChanged", page.left_changed.len(), branch),
     (_, AttemptOutcome::Refused { stage }) if attempt.cause() == Some(HELD) => {
       ("merges.page.explain.held", Some(*stage), None)
     }
