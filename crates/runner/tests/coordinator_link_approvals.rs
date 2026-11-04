@@ -82,7 +82,7 @@ fn coordinator_link_approval_answers_round_trip() {
       prefix: CommandPrefix::new("cargo test").expect("a prefix"),
     },
     revoked_at: None,
-    ..similar.clone()
+    ..similar
   };
   round_trip(&vec![similar, always]);
   let scope = ProjectScope::stored(qa_scope("0123456789abcdef")).expect("a QA start's scope");
