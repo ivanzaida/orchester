@@ -1,8 +1,9 @@
 //! *Waiting for your review* (`Section · Waiting for your review` `c7rBsw` in 09 `Os7b3`): a row per run that passed
 //! every step and merges only once a person approves it, *Ready for review* on its task page or *Waiting for approval*
 //! in the merge queue, with its `info` eye. Its line says what it changes, how it merges and the review comments not
-//! sent yet; once its branch moved after the head that was reviewed, *Changed since your review* in `warning`. The row,
-//! and its *Review changes* or *Review again*, open the run's review page (ORC-697, [`super::review`]).
+//! sent yet; once its branch moved after the head that was reviewed, *Changed since your review: 2 commits after
+//! 0d6969d* in `warning` (`wVIYy` in `Row · KON-20` `cd7dN`). The row, and its *Review changes* or *Review again*, open
+//! the run's review page (ORC-697, [`super::review`]).
 
 use std::sync::Arc;
 
@@ -10,9 +11,13 @@ use lurq::{
   app::{ctx::Ctx, theme::PaletteColor},
   node::Element,
 };
+use orchester_core::integration::LoggedCommit;
 use orchester_workspace::{
-  display::clock,
-  tasks::merge_attempts::{merges::WaitingRun, read::ReviewIn},
+  display::{clock, short_revision},
+  tasks::merge_attempts::{
+    merges::WaitingRun,
+    read::{ReviewIn, SinceReview},
+  },
 };
 
 use super::{
@@ -46,15 +51,14 @@ pub(super) fn section(ctx: &mut Ctx, project: &ShownProject, runs: &[WaitingRun]
 
 fn shown(ctx: &mut Ctx, project: &ShownProject, run: &WaitingRun) -> Shown {
   let id = format!("merges-waiting-{}", run.run.run);
-  let changed = run.waiting.changed_since_review == Some(true);
-  let (line, color, name) = if changed {
-    (
-      ctx.t("merges.waiting.changed"),
-      PaletteColor::Warning,
-      "changed_since_review",
-    )
-  } else {
-    (passed_line(ctx, run), PaletteColor::TextSecondary, "waiting_for_review")
+  let moved = match &run.waiting.since_review {
+    Some(SinceReview::Moved { reviewed, commits }) => Some(changed_line(ctx, reviewed.as_str(), commits)),
+    Some(SinceReview::Unchanged) | None => None,
+  };
+  let changed = moved.is_some();
+  let (line, color, name) = match moved {
+    Some(line) => (line, PaletteColor::Warning, "changed_since_review"),
+    None => (passed_line(ctx, run), PaletteColor::TextSecondary, "waiting_for_review"),
   };
   let since = [("time", clock(run.waiting.since))];
   let meta = match run.waiting.review_in {
@@ -77,6 +81,20 @@ fn shown(ctx: &mut Ctx, project: &ShownProject, run: &WaitingRun) -> Shown {
     action: Some(review.into()),
     opens: attempt_page(ctx, project, &run.run),
     id,
+  }
+}
+
+/// *Changed since your review: 2 commits after 0d6969d · nothing merged · review again*; without the commits when git
+/// could not list them, or the branch is gone.
+fn changed_line(ctx: &Ctx, reviewed: &str, commits: &[LoggedCommit]) -> Arc<str> {
+  let reviewed = short_revision(reviewed).to_owned();
+  match commits.len() {
+    0 => ctx.t("merges.waiting.changed"),
+    1 => ctx.t_args("merges.waiting.changedOne", [("reviewed", reviewed)]),
+    count => ctx.t_args(
+      "merges.waiting.changedOther",
+      [("count", count.to_string()), ("reviewed", reviewed)],
+    ),
   }
 }
 

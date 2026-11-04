@@ -365,10 +365,10 @@ impl<'k> Drive<'k> {
     Ok(self)
   }
 
-  /// Commits `files` on the run's branch with no checkpoint: the branch moves past the head a person reviewed.
-  pub fn commit_past_review(&mut self, files: &[(&str, String)]) -> Result<&mut Self, SeedError> {
+  /// Commits `files` on the run's branch as `subject`, with no checkpoint: the branch moves past the head reviewed.
+  pub fn commit_past_review(&mut self, subject: &str, files: &[(&str, String)]) -> Result<&mut Self, SeedError> {
     let worktree = self.worktree.as_ref().ok_or(SeedError::WorktreeRemoved)?;
-    worktree.commit(files, &format!("{}: after the review", self.task.key()))?;
+    worktree.commit(files, &format!("{}: {subject}", self.task.key()))?;
     Ok(self)
   }
 

@@ -3,7 +3,8 @@
 //! run waits for approval and no retry waits.
 //!
 //! `merges` (09 `Os7b3`): a run refused before Git at the integration lock after two attempts; two runs waiting for
-//! review, one in the merge queue, one on its task page whose branch moved after the reviewed head; three runs merged
+//! review, one in the merge queue, one on its task page whose branch moved two commits after the reviewed head
+//! (*Changed since your review: 2 commits after …*, as `Row · KON-20` `cd7dN`); three runs merged
 //! today, by the person after a refused attempt, by automation and by the merge queue; one merged yesterday and one
 //! three days ago.
 //!
@@ -96,7 +97,18 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
   let at = kontur.today_ago(160);
   let mut drive = Drive::start(kontur, &task, quick, at)?;
   drive.pass_all()?;
-  drive.commit_past_review(&[("notes/health.md", "Health page: one more check.\n".to_owned())])?;
+  drive
+    .commit_past_review(
+      "Check the endpoint's TLS too",
+      &[("notes/health.md", "Health page: one more check.\n".to_owned())],
+    )?
+    .commit_past_review(
+      "Show when the endpoint last answered",
+      &[(
+        "notes/health.md",
+        "Health page: one more check.\nLast answered at.\n".to_owned(),
+      )],
+    )?;
   Ok(())
 }
 

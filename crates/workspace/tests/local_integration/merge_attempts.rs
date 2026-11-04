@@ -10,7 +10,7 @@ use orchester_core::{
     MergeError, MergeKind,
     attempt::{AttemptOutcome, AttemptStage, CauseKind, MergeAsker, MergeVia, OpenAttempt, StageResult},
   },
-  store::MergeStore,
+  store::{MergeStore, RunStore},
   time::Timestamp,
 };
 use orchester_exec::{ProcessRunner, local_git::IntegrationLease, programs::Programs};
@@ -18,7 +18,7 @@ use orchester_store::ProjectDb;
 use orchester_workspace::tasks::{
   data::ProjectTasks,
   integration::{IntegrationProblem, merge_in, merge_in_as},
-  merge_attempts::read::{self, ReviewIn},
+  merge_attempts::read::{self, ReviewIn, SinceReview},
 };
 
 use super::support::{Fixture, git};
@@ -323,8 +323,20 @@ fn merge_attempts_waiting_for_review_tells_a_branch_that_moved_after_the_review(
   assert_eq!(before.len(), 1);
   assert_eq!(before[0].run, fixture.run);
   assert_eq!(before[0].review_in, ReviewIn::TaskPage);
-  assert_eq!(before[0].changed_since_review, Some(false));
-  fs::write(fixture.task_root.join("task.txt"), "changed after the review\n").expect("edit");
-  git(&fixture.task_root, &["commit", "-am", "after the review"]);
-  assert_eq!(waiting(&fixture)[0].changed_since_review, Some(true));
+  assert_eq!(before[0].since_review, Some(SinceReview::Unchanged));
+  let checkpoint = ProjectDb::open(fixture.root())
+    .expect("db")
+    .latest_checkpoint(fixture.run)
+    .expect("read")
+    .expect("the run has a checkpoint");
+  for subject in ["after the review", "and once more"] {
+    fs::write(fixture.task_root.join("task.txt"), format!("{subject}\n")).expect("edit");
+    git(&fixture.task_root, &["commit", "-am", subject]);
+  }
+  let Some(SinceReview::Moved { reviewed, commits }) = waiting(&fixture).remove(0).since_review else {
+    panic!("the branch moved after the review");
+  };
+  assert_eq!(&reviewed, checkpoint.revision());
+  let subjects: Vec<&str> = commits.iter().map(|commit| commit.subject.as_str()).collect();
+  assert_eq!(subjects, ["and once more", "after the review"]);
 }
