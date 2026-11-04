@@ -119,9 +119,8 @@ struct MessageActions {
   reset: Timeout,
   /// The button the pointer is on.
   pointed: Signal<Option<Action>>,
-  /// The button the keyboard is on.
-  focused: Signal<Option<Action>>,
-  /// Each action's button, by [`Action::index`], which its tooltip hangs from.
+  /// Each action's button, by [`Action::index`], which its tooltip hangs from and which tells whether the keyboard
+  /// is on it.
   anchors: [ElementRef; 4],
 }
 
@@ -136,7 +135,6 @@ impl Component for MessageActions {
       copied,
       reset,
       pointed: ctx.signal(None),
-      focused: ctx.signal(None),
       anchors: std::array::from_fn(|_| ctx.element_ref()),
     }
   }
@@ -144,7 +142,7 @@ impl Component for MessageActions {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<MessageActionsProps>().clone();
     let copied = self.copied.get();
-    let shown = props.hovered || self.tipped().is_some();
+    let shown = props.hovered || self.pointed.get().or(self.keyboard()).is_some();
     let buttons: Vec<Element> = Action::ALL
       .into_iter()
       .filter_map(|action| self.action(ctx, &props, action))
@@ -166,10 +164,18 @@ impl Component for MessageActions {
 
 impl MessageActions {
   /// The button whose tooltip shows: the one the pointer or else the keyboard is on, or Copy while it says what came of
-  /// its last press.
-  fn tipped(&self) -> Option<Action> {
-    let told = (self.copied.get() != Copied::Not).then_some(Action::Copy);
-    self.pointed.get().or(self.focused.get()).or(told)
+  /// its last press and the pointer is on the message (`hovered`).
+  fn tipped(&self, hovered: bool) -> Option<Action> {
+    let told = (hovered && self.copied.get() != Copied::Not).then_some(Action::Copy);
+    self.pointed.get().or(self.keyboard()).or(told)
+  }
+
+  /// The button the keyboard is on, with its focus ring: a press with the pointer focuses a button too, but only the
+  /// keyboard's focus keeps the line shown once the pointer leaves the message.
+  fn keyboard(&self) -> Option<Action> {
+    Action::ALL
+      .into_iter()
+      .find(|action| self.anchors[action.index()].focus_visible())
   }
 
   /// The button of `action`; `None` for one the message does not offer.
@@ -203,18 +209,19 @@ impl MessageActions {
   /// The button of `action`, which `choice` makes: pressed with the pointer or the keyboard, or at half saying why
   /// it cannot be made now.
   fn choice(&self, props: &MessageActionsProps, action: Action, choice: &ToolbarChoice) -> Element {
-    let glyph = icon(action.icon(), IconSize::Md, self.color(action));
     let label = &choice.label;
     match &choice.choose {
       Ok(choose) => {
+        let glyph = icon(action.icon(), IconSize::Md, self.color(action));
         let button = self.button(props, action, (label, label), glyph);
         let pressed = Press::Run(choose.clone()).on(Focus::Keyboard.apply(button));
         pressed.describe("state", "enabled").into()
       }
-      Err(why) => held(
-        self.button(props, action, (label, why), glyph.opacity(DISABLED_OPACITY)),
-        why,
-      ),
+      Err(why) => {
+        // A held action takes no hover colour: its glyph stays `text_secondary`, at half.
+        let glyph = icon(action.icon(), IconSize::Md, PaletteColor::TextSecondary).opacity(DISABLED_OPACITY);
+        held(self.button(props, action, (label, why), glyph), why)
+      }
     }
   }
 
@@ -246,10 +253,9 @@ impl MessageActions {
     let tooltip = Tooltip::new(format!("{}-{}", props.id, action.key()), tip.clone()).hung(
       anchor.clone(),
       placement,
-      self.tipped() == Some(action),
+      self.tipped(props.hovered) == Some(action),
     );
     let (enter, leave) = (self.pointed.clone(), self.pointed.clone());
-    let (focus, blur) = (self.focused.clone(), self.focused.clone());
     let side = Dimension::Px(ControlHeight::Sm.value());
     Button::empty()
       .id(format!("{}-{}", props.id, action.key()))
@@ -265,8 +271,6 @@ impl MessageActions {
       .active_style(Style::new().background(ExtraColor::Pressed.role()))
       .on_mouse_enter(move || enter.set(Some(action)))
       .on_mouse_leave(move || leave.update(|on| *on = on.filter(|on| *on != action)))
-      .on_focus(move || focus.set(Some(action)))
-      .on_blur(move || blur.update(|on| *on = on.filter(|on| *on != action)))
       .child(glyph)
       .child(tooltip)
   }

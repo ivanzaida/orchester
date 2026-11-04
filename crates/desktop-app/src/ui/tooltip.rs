@@ -23,6 +23,8 @@ use crate::theme::{ExtraSpacing, ExtraTypography, SHORTCUT_OPACITY};
 
 /// How long the pointer rests on the anchor before the tooltip shows.
 pub const TOOLTIP_DELAY: Duration = Duration::from_millis(500);
+/// The class of a hung tooltip's panel while it shows ([`Tooltip::hung`]), for tests and QA.
+pub const SHOWN_CLASS: &str = "tooltip-shown";
 /// The widest a tooltip's words run before they wrap.
 const TEXT_MAX_WIDTH: f32 = 400.0;
 
@@ -137,7 +139,12 @@ impl Tooltip {
   /// the anchor laid out as it was.
   pub fn hung(&self, anchor: ElementRef, placement: Placement, shown: bool) -> Popup {
     let panel = self.panel(&self.text);
-    self.popup(anchor, panel.opacity(if shown { 1.0 } else { 0.0 }), placement)
+    let panel = if shown {
+      panel.class(SHOWN_CLASS)
+    } else {
+      panel.opacity(0.0)
+    };
+    self.popup(anchor, panel, placement)
   }
 
   /// What the tooltip says once the pointer rested on its anchor, if it shows at all: a cut text's own

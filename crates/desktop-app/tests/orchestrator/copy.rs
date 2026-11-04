@@ -6,7 +6,10 @@
 
 use orchester_app::{
   routes::OrchestratorChat,
-  ui::chat::copy::{COPIED_CLASS, SHOWN_CLASS},
+  ui::{
+    chat::copy::{COPIED_CLASS, SHOWN_CLASS},
+    tooltip,
+  },
 };
 
 use super::{
@@ -117,6 +120,25 @@ fn orchestrator_an_answers_copy_stands_under_its_text_not_in_its_name_line() {
   }
   screen.window.hover(&format!("{answer}-copy"));
   assert_eq!(screen.text(&format!("{answer}-copy-tooltip")), "Copy message");
+}
+
+#[test]
+fn orchestrator_a_pointer_press_keeps_no_line_once_the_pointer_leaves_the_message() {
+  let (mut screen, (answer, mine), _) = answered();
+  let (actions, tip) = (format!("{answer}-actions"), format!("{answer}-copy-tooltip"));
+  screen.window.hover(&answer);
+  screen.press(&format!("{answer}-copy"));
+  screen.window.pass();
+  assert!(
+    has_class(&mut screen, &tip, tooltip::SHOWN_CLASS),
+    "Copied shows under Copy"
+  );
+  screen.window.hover(&format!("{mine}-bubble"));
+  assert!(
+    !has_class(&mut screen, &actions, SHOWN_CLASS),
+    "the pressed button keeps no line shown once the pointer is on another message"
+  );
+  assert!(!has_class(&mut screen, &tip, tooltip::SHOWN_CLASS), "and no tooltip");
 }
 
 #[test]
