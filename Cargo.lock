@@ -2884,6 +2884,7 @@ dependencies = [
  "orchester-exec",
  "orchester-ipc",
  "orchester-report",
+ "orchester-runner",
  "orchester-store",
  "orchester-workspace",
  "parking_lot",

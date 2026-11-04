@@ -1,18 +1,19 @@
-//! Where a version's files are: a folder (the project's checkout or a run's worktree) or a commit of the
-//! repository, and the read-only git commands that read a commit.
+//! Where a version's files are: the project's checkout, a run's worktree (which the project's runner reads,
+//! `super::runs`) or a commit of the repository, and the read-only git commands that read a commit.
 
 use std::path::{Path, PathBuf};
 
 use orchester_core::{
   command::{CommandError, CommandRunner},
   diff::git::git_command,
+  id::RunId,
   integration::{GitError, checked_out_branch},
   repository::redact_userinfo,
   run::BranchName,
 };
 
 use super::{FilesError, Version};
-use crate::tasks::changes::{GIT, run_worktree};
+use crate::tasks::changes::GIT;
 
 /// Git's option that takes the paths it is given as paths, never as patterns.
 pub(super) const LITERAL_PATHS: &str = "--literal-pathspecs";
@@ -20,7 +21,10 @@ pub(super) const LITERAL_PATHS: &str = "--literal-pathspecs";
 /// Where the files of a version are read.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum Source {
+  /// The project's checkout.
   Folder(PathBuf),
+  /// The worktree of a run: its runner reads it, and tells whether it is still there.
+  Run(RunId),
   /// A commit of the repository at `repo`, named as git takes it; `branch` when it is a branch's tip.
   Commit {
     repo: PathBuf,
@@ -30,19 +34,13 @@ pub(super) enum Source {
 }
 
 /// Where `version` of the project at `repo_root` is, or [`FilesError::VersionGone`] when it no longer
-/// exists: a removed worktree, a commit the repository lost, a checkout without a branch.
+/// exists: a commit the repository lost, a checkout without a branch. Whether a run's worktree is still there
+/// only its runner tells.
 pub(super) fn source(runner: &dyn CommandRunner, repo_root: &Path, version: &Version) -> Result<Source, FilesError> {
   let gone = || FilesError::VersionGone(version.clone());
   match version {
     Version::Checkout => Ok(Source::Folder(repo_root.to_path_buf())),
-    Version::Run(run) => {
-      let worktree = run_worktree(repo_root, *run);
-      if worktree.is_dir() {
-        Ok(Source::Folder(worktree))
-      } else {
-        Err(gone())
-      }
-    }
+    Version::Run(run) => Ok(Source::Run(*run)),
     Version::Revision(revision) => {
       let commit = format!("{revision}^{{commit}}");
       if git_succeeds(runner, repo_root, &["cat-file", "-e", &commit])? {

@@ -370,6 +370,10 @@ async fn answer(
       });
     }
     Command::SetErrorReports { ref reports } => return Answer::ErrorReports(id, reports.clone()),
+    Command::RunFiles { run, ref request } => {
+      let request = request.clone();
+      return later.reply(async move { Reply::RunFiles(handle.run_files(run, request).await) });
+    }
   };
   Answer::Reply(Event::Reply { id, reply })
 }

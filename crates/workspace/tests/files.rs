@@ -1,19 +1,46 @@
 //! The code viewer's reads (`docs/design/code-viewer.md`): which paths open and which are refused with
-//! their reason, a file and the tree at the checkout, a run's worktree, a commit and the base branch,
+//! their reason, a file and the tree at the checkout, a run's worktree (read by the project's runner, the real
+//! `orchester-runner`, which the test builds itself: `support/runner_programs.rs`), a commit and the base branch,
 //! the versions a file has, binary and too large files, file-name search, search within a file.
+
+#[path = "support/runner_programs.rs"]
+mod runner_programs;
 
 use std::{collections::BTreeSet, fs, path::Path, process, sync::Arc};
 
-use orchester_core::{command::CommandRunner, id::RunId, revision::Revision};
+use orchester_core::{
+  command::CommandRunner,
+  id::{ProjectId, RunId},
+  name::Name,
+  project::{Project, ProjectKey},
+  revision::Revision,
+};
 use orchester_exec::programs::Programs;
+use orchester_ipc::{
+  SessionEnd,
+  run_files::{RunFilesReply, RunFilesRequest},
+};
+use orchester_store::ProjectDb;
 use orchester_workspace::{
+  activity::Activity,
   files::{
     EntryKind, FileFacts, FileList, FilePath, FileText, FileView, FilesError, LineRange, MAX_VIEW_BYTES, PathError,
-    TextMatch, Version, list_files, read_file, versions,
+    RunFiles, TextMatch, Version, list_files, read_file, versions,
   },
+  runner::{ProjectRunFiles, QUIET_STOP_TIMEOUT, Runners},
   tasks::changes::run_worktree,
+  workspace::OpenProject,
 };
 use tempfile::TempDir;
+
+/// The run's files of the tests that read only the checkout and commits: none is asked for.
+struct NoRuns;
+
+impl RunFiles for NoRuns {
+  fn ask(&self, run: RunId, request: RunFilesRequest) -> Result<RunFilesReply, FilesError> {
+    panic!("no run's files are read here, yet {request:?} of {run} was asked")
+  }
+}
 
 fn git(repo: &Path, args: &[&str]) -> String {
   let output = process::Command::new("git")
@@ -56,9 +83,15 @@ fn path(value: &str) -> FilePath {
   FilePath::new(value).expect("a project path")
 }
 
+/// `file` at `version`, the checkout or a commit.
 fn read(repo: &Path, version: &Version, file: &str) -> Result<FileView, FilesError> {
   let programs = runner();
-  read_file(programs.runner() as &dyn CommandRunner, repo, version, &path(file))
+  read_file(
+    (programs.runner() as &dyn CommandRunner, &NoRuns),
+    repo,
+    version,
+    &path(file),
+  )
 }
 
 fn lines(view: &FileView) -> Vec<String> {
@@ -368,7 +401,7 @@ fn files_listing_holds_untracked_files_and_leaves_out_ignored_deleted_and_hidden
   fs::write(repo.join(".orchester/state"), "x").expect("state");
   fs::remove_file(repo.join("README.md")).expect("remove README");
   let programs = runner();
-  let list = list_files(programs.runner(), repo, &Version::Checkout).expect("the checkout's files");
+  let list = list_files((programs.runner(), &NoRuns), repo, &Version::Checkout).expect("the checkout's files");
   let rows: Vec<String> = list
     .rows(&[Arc::from("src")].into())
     .iter()
@@ -402,7 +435,7 @@ fn files_a_commit_and_the_base_branch_read_what_git_holds() {
     Err(FilesError::Missing(path("src/*.rs")))
   );
   let programs = runner();
-  let list = list_files(programs.runner(), repo, &at_first).expect("the commit's files");
+  let list = list_files((programs.runner(), &NoRuns), repo, &at_first).expect("the commit's files");
   assert!(list.contains("src/main.rs") && list.contains("README.md"));
   let lost = Version::Revision(Revision::new("0123456789abcdef0123456789abcdef01234567").expect("a commit"));
   assert_eq!(
@@ -419,6 +452,43 @@ fn files_a_commit_and_the_base_branch_read_what_git_holds() {
 /// A version as the switch lists it: its branch, its commit and what the file is there.
 type Listed = (Version, Option<String>, Option<String>, Option<FileFacts>);
 
+/// The project's runner, the real `orchester-runner`, which reads the worktrees of the project at `repo`; it stops
+/// when dropped.
+struct ProjectRunner {
+  runtime: tokio::runtime::Runtime,
+  runners: Runners,
+  runs: ProjectRunFiles,
+}
+
+impl ProjectRunner {
+  fn start(repo: &Path) -> Self {
+    let project = OpenProject {
+      project: Project::new(
+        ProjectId::generate(),
+        ProjectKey::new("KON").expect("a key"),
+        Name::new("Kontur").expect("a name"),
+      ),
+      repo_root: repo.to_path_buf(),
+    };
+    drop(ProjectDb::create(repo, project.project.clone()).expect("the project's database"));
+    let runtime = tokio::runtime::Runtime::new().expect("a runtime");
+    let runners = Runners::new(
+      runner_programs::programs().runner.clone(),
+      runtime.handle().clone(),
+      Activity::new(),
+      SessionEnd::Clean,
+    );
+    let runs = runners.run_files(&project);
+    Self { runtime, runners, runs }
+  }
+}
+
+impl Drop for ProjectRunner {
+  fn drop(&mut self) {
+    self.runtime.block_on(self.runners.shutdown(Some(QUIET_STOP_TIMEOUT)));
+  }
+}
+
 #[test]
 fn files_a_runs_worktree_is_a_version_while_it_exists() {
   let (dir, first) = repository();
@@ -431,22 +501,33 @@ fn files_a_runs_worktree_is_a_version_while_it_exists() {
     &["worktree", "add", "--quiet", "-b", "orchester/run", &shown, "HEAD"],
   );
   fs::write(worktree.join("src/main.rs"), "fn main() { run(); }\n").expect("the run's edit");
+  fs::write(worktree.join("notes.md"), "draft\n").expect("an untracked file");
+  fs::write(worktree.join("data.bin"), b"\x00\x01\x02").expect("a binary file");
+  let project_runner = ProjectRunner::start(repo);
+  let runs = &project_runner.runs;
+  let programs = runner();
+  let read = |version: &Version, file: &str| read_file((programs.runner(), runs), repo, version, &path(file));
   let in_run = Version::Run(run);
+  // The runner reads the run's files as the checkout's are read: the text, the explicit states, the listing.
   assert_eq!(
-    lines(&read(repo, &in_run, "src/main.rs").expect("in the run")),
+    lines(&read(&in_run, "src/main.rs").expect("in the run")),
     ["fn main() { run(); }"]
   );
-  let programs = runner();
+  assert_eq!(read(&in_run, "data.bin"), Ok(FileView::Binary { size: 3 }));
+  assert_eq!(read(&in_run, "src"), Err(FilesError::Folder(path("src"))));
+  assert_eq!(read(&in_run, "gone.md"), Err(FilesError::Missing(path("gone.md"))));
+  let list = list_files((programs.runner(), runs), repo, &in_run).expect("the run's files");
+  assert!(list.contains("src/main.rs") && list.contains("notes.md") && list.contains("data.bin"));
   let at_first = Version::Revision(Revision::new(&first).expect("a commit"));
   let choices = versions(
-    programs.runner(),
+    (programs.runner(), runs),
     repo,
     (&at_first, Some(run)),
     Some(&path("README.md")),
   )
   .expect("versions");
   let readme = Some(FileFacts::Text { lines: 1, size: 9 });
-  assert_eq!(choices.run, None, "the fixture has no project database to name the run");
+  assert_eq!(choices.run, None, "the project's database holds no such run to name");
   let listed: Vec<Listed> = choices
     .choices
     .iter()
@@ -469,7 +550,7 @@ fn files_a_runs_worktree_is_a_version_while_it_exists() {
     ]
   );
   let choices = versions(
-    programs.runner(),
+    (programs.runner(), runs),
     repo,
     (&Version::Checkout, None),
     Some(&path("gone.md")),
@@ -478,10 +559,16 @@ fn files_a_runs_worktree_is_a_version_while_it_exists() {
   assert_eq!(choices.choices[0].file, Some(FileFacts::Absent));
   git(repo, &["worktree", "remove", "--force", &shown]);
   assert_eq!(
-    read(repo, &in_run, "README.md"),
+    read(&in_run, "README.md"),
     Err(FilesError::VersionGone(in_run.clone()))
   );
-  let choices = versions(programs.runner(), repo, (&Version::Checkout, Some(run)), None).expect("versions");
+  let choices = versions(
+    (programs.runner(), runs),
+    repo,
+    (&Version::Checkout, Some(run)),
+    None,
+  )
+  .expect("versions");
   let listed: Vec<&Version> = choices.choices.iter().map(|choice| &choice.version).collect();
   assert_eq!(listed, [&Version::Checkout, &Version::Base]);
   assert_eq!(

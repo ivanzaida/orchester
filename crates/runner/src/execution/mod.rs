@@ -47,7 +47,10 @@ use tokio::{
 
 pub use self::{
   coordinator::attach::Attached,
-  executor::step::{QaSlots, outside_read_refusals},
+  executor::{
+    run_files::answer_run_files,
+    step::{QaSlots, outside_read_refusals},
+  },
 };
 // The coordinator's modules are named by their full path here, never imported: an import would make them reachable
 // from the executor as `crate::execution::<module>`, past the check of `crates/runner/tests/execution_split.rs`.

@@ -26,6 +26,7 @@ use crate::{
   browser::{BrowserCommand, BrowserEvent, BrowserReply, ScreencastFrame},
   chat::ChatTools,
   rejection::Rejection,
+  run_files::{RunFilesReply, RunFilesRequest},
   work::WorkSummary,
 };
 
@@ -278,6 +279,9 @@ pub enum Command {
   /// carried out, [`Rejection::BrowserUnavailable`] when the browser cannot start, [`Rejection::NoSuchTab`] for a tab
   /// it does not have, or [`Rejection::Failed`] when the browser refused.
   Browser(BrowserCommand),
+  /// The code viewer reads the worktree of run `run` (protocol 40, [`crate::run_files`]): the runner's executor side
+  /// reads it where the worktree is. Answered with [`Reply::RunFiles`].
+  RunFiles { run: RunId, request: RunFilesRequest },
 }
 
 /// Which session a runner serves, from the desktop's side.
@@ -467,6 +471,8 @@ pub enum Reply {
   ErrorReportsSet,
   /// The answer to [`Command::Browser`].
   Browser(BrowserReply),
+  /// The answer to [`Command::RunFiles`]; a file's bytes travel after it in a binary frame.
+  RunFiles(RunFilesReply),
   Rejected(Rejection),
 }
 

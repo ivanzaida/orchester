@@ -19,6 +19,7 @@ mod idle;
 mod lifetime;
 mod report;
 mod requests;
+mod run_files;
 pub mod state;
 mod work;
 
@@ -43,6 +44,7 @@ pub use self::{
   idle::ForgetRefusal,
   report::RunnerStatus,
   requests::RequestError,
+  run_files::ProjectRunFiles,
   work::{ActiveWork, ActiveWorkFields, SaveState},
 };
 use self::{
@@ -111,6 +113,9 @@ struct Inner {
   slot_updates: Mutex<()>,
   /// Hands out the generations of the projects' runners.
   generations: AtomicU64,
+  /// What answers for a runner about runs' files in tests that start none (`run_files`).
+  #[cfg(feature = "test-support")]
+  run_files_stand_in: Mutex<Option<run_files::RunFilesStandIn>>,
 }
 
 /// One project's runner.
@@ -167,6 +172,8 @@ impl Runners {
         closing: AtomicBool::new(false),
         slot_updates: Mutex::new(()),
         generations: AtomicU64::new(0),
+        #[cfg(feature = "test-support")]
+        run_files_stand_in: Mutex::new(None),
       }),
     }
   }
