@@ -14,7 +14,7 @@ fn round_trip<T: serde::Serialize + serde::de::DeserializeOwned>(value: &T) -> T
 
 #[test]
 fn run_git_requests_and_answers_round_trip_under_protocol_45() {
-  assert!(PROTOCOL_VERSION >= 45, "came with protocol 45");
+  const { assert!(PROTOCOL_VERSION >= 45, "came with protocol 45") };
   let run = RunId::generate();
   let calls = [
     RunGitCall::Git(GitInvocation {

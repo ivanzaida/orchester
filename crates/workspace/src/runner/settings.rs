@@ -1,7 +1,7 @@
-//! The application settings every project's runner gets: whether it sends error reports ([`Runners::set_error_reports`])
-//! and this computer's Settings › Browser ([`Runners::set_browser`], `docs/architecture/remote-runners.md`), which the
-//! runner never reads from the application database itself. A runner gets both when it starts or attaches, and again
-//! whenever they change.
+//! The application settings every project's runner gets: whether it sends error reports
+//! ([`Runners::set_error_reports`]) and this computer's Settings › Browser ([`Runners::set_browser`],
+//! `docs/architecture/remote-runners.md`), which the runner never reads from the application database itself. A runner
+//! gets both when it starts or attaches, and again whenever they change.
 
 use orchester_ipc::{Command, ErrorReports, Reply, browser::ComputerBrowser};
 
