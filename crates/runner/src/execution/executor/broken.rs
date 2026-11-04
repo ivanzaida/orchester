@@ -27,6 +27,7 @@ impl ExecutionError {
     match self {
       Self::Store(error) | Self::Workspace(PoolError::Store(error)) => error.runner_failure(),
       Self::Record(RecordError::Store(error)) => error.runner_failure(),
+      Self::Link(error) => error.failure,
       Self::Record(RecordError::Run(_))
       | Self::NotAnAgentStep(_)
       | Self::Stalled
