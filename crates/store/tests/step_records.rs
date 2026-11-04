@@ -26,9 +26,7 @@ use orchester_core::{
   store::{ActivityStore, WorkspaceStore, WorktreeStore},
   workspaces::{Borrow, Holder, Stranded, WorkspaceNumber},
 };
-use orchester_store::{
-  NoticeRecord, RemovalRecord, StepRecord, WarmWorkspaceRecord, WorkspaceWritten,
-};
+use orchester_store::{NoticeRecord, RemovalRecord, StepRecord, WarmWorkspaceRecord, WorkspaceWritten};
 use serde::{Serialize, de::DeserializeOwned};
 
 use self::support::{at, model, started_run};
@@ -71,7 +69,11 @@ fn step_record_of_outputs_progress_reviews_and_limits_stores_what_direct_writes_
   };
   db.write_step(&sent(&StepRecord::output(&later).expect("a record")))
     .expect("written");
-  assert_eq!(db.step_outputs(run.id()).expect("read"), [output.clone()], "the first output stays");
+  assert_eq!(
+    db.step_outputs(run.id()).expect("read"),
+    std::slice::from_ref(&output),
+    "the first output stays"
+  );
   let question = StepOutput {
     outcome: Some(StepOutcome::Question),
     ..output
@@ -140,16 +142,27 @@ fn step_record_of_warm_workspaces_borrows_strands_and_gives_back() {
   let holder = Holder::Run { run: run.id() };
   let two = NonZeroU32::new(2).expect("two");
   let borrowed = db
-    .write_workspace(&sent(&WarmWorkspaceRecord::borrow(holder, Some(run.branch()), two, at(10))))
+    .write_workspace(&sent(&WarmWorkspaceRecord::borrow(
+      holder,
+      Some(run.branch()),
+      two,
+      at(10),
+    )))
     .expect("written");
-  assert_eq!(borrowed, WorkspaceWritten::Borrowed(Borrow::Take(WorkspaceNumber::FIRST)));
+  assert_eq!(
+    borrowed,
+    WorkspaceWritten::Borrowed(Borrow::Take(WorkspaceNumber::FIRST))
+  );
   let stranded = Stranded {
     run: Some(run.id()),
     files: 3,
   };
   assert_eq!(
-    db.write_workspace(&sent(&WarmWorkspaceRecord::stranded(WorkspaceNumber::FIRST, Some(stranded))))
-      .expect("written"),
+    db.write_workspace(&sent(&WarmWorkspaceRecord::stranded(
+      WorkspaceNumber::FIRST,
+      Some(stranded)
+    )))
+    .expect("written"),
     WorkspaceWritten::Changed
   );
   assert_eq!(
@@ -165,7 +178,10 @@ fn step_record_of_warm_workspaces_borrows_strands_and_gives_back() {
   let waits = db
     .write_workspace(&sent(&WarmWorkspaceRecord::borrow(holder, None, one, at(30))))
     .expect("written");
-  assert!(matches!(waits, WorkspaceWritten::Borrowed(Borrow::Wait(_))), "a stranded workspace is not taken");
+  assert!(
+    matches!(waits, WorkspaceWritten::Borrowed(Borrow::Wait(_))),
+    "a stranded workspace is not taken"
+  );
   assert_eq!(db.workspace_waits().expect("read"), [(run.id(), at(30))]);
   db.write_workspace(&sent(&WarmWorkspaceRecord::wait_ended(run.id())))
     .expect("written");
@@ -233,10 +249,14 @@ fn step_record_of_base_notices_applies_while_the_notice_is_pending() {
   assert_eq!(pending.overlapping, ["src/a.rs", "src/b.rs"]);
   let delivered = NoticeRecord::delivered(&notice, (execution, invocation.id), at(10));
   assert!(db.write_notice(&sent(&delivered)).expect("written"));
-  assert!(!db.write_notice(&sent(&delivered)).expect("written"), "a notice is delivered once");
+  assert!(
+    !db.write_notice(&sent(&delivered)).expect("written"),
+    "a notice is delivered once"
+  );
   let merged = Revision::new(&"d".repeat(40)).expect("revision");
   assert!(
-    !db.write_notice(&sent(&NoticeRecord::merged(&notice, (execution, &merged), at(11))))
+    !db
+      .write_notice(&sent(&NoticeRecord::merged(&notice, (execution, &merged), at(11))))
       .expect("written"),
     "a delivered notice is not merged"
   );

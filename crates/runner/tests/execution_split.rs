@@ -283,8 +283,14 @@ fn executor_writes_step_records_workspaces_removals_and_notices_only_through_the
 #[test]
 fn a_call_of_a_write_is_found_and_its_definition_is_not() {
   assert!(calls("db.save_worktree_removal(run, at)", "save_worktree_removal"));
-  assert!(calls("WorktreeStore::save_worktree_removal(db, run, at)", "save_worktree_removal"));
-  assert!(!calls("fn save_worktree_removal(&mut self, run: RunId)", "save_worktree_removal"));
+  assert!(calls(
+    "WorktreeStore::save_worktree_removal(db, run, at)",
+    "save_worktree_removal"
+  ));
+  assert!(!calls(
+    "fn save_worktree_removal(&mut self, run: RunId)",
+    "save_worktree_removal"
+  ));
 }
 /// The lines of the Rust files under `src/execution/<side>` that name any of `names` outside comments, as
 /// `file: line`.

@@ -63,7 +63,10 @@ pub(super) fn borrow(
   };
   loop {
     let before = db.workspaces()?;
-    let number = match take(sink, WarmWorkspaceRecord::borrow(holder, branch, limit, Timestamp::now()))? {
+    let number = match take(
+      sink,
+      WarmWorkspaceRecord::borrow(holder, branch, limit, Timestamp::now()),
+    )? {
       Borrow::Take(number) => number,
       Borrow::Wait(reason) => return Ok(Borrowed::Wait(reason)),
     };
@@ -80,7 +83,10 @@ pub(super) fn borrow(
       Err(WorkspaceGitError::Uncommitted(files)) => {
         tracing::warn!(%number, files = files.len(), "a workspace holds uncommitted changes; it waits for a person");
         let files = u32::try_from(files.len()).unwrap_or(u32::MAX);
-        sink.workspace(WarmWorkspaceRecord::stranded(number, Some(Stranded { run: last_run, files })))?;
+        sink.workspace(WarmWorkspaceRecord::stranded(
+          number,
+          Some(Stranded { run: last_run, files }),
+        ))?;
         returned(sink, holder)?;
       }
       Err(source) => {

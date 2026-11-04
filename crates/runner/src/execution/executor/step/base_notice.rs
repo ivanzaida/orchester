@@ -171,9 +171,7 @@ impl RunTask {
       return Ok(());
     };
     let at = invocation.started_at;
-    self
-      .sink
-      .notice(NoticeRecord::overlap(&notice, &notice.overlapping)?)?;
+    self.sink.notice(NoticeRecord::overlap(&notice, &notice.overlapping)?)?;
     if self
       .sink
       .notice(NoticeRecord::delivered(&notice, (execution, invocation.id), at))?
