@@ -556,7 +556,13 @@ The desktop's module delivery (`orchester_workspace::team_work::ModuleDeliveries
   server answers it, oldest delivery first; a report that waits for the server holds back the later ones.
 - **States.** Each delivery keeps what the server last answered (`ModuleDeliveryRead`) and reads as requested,
   awaiting authorization, authorized by an Admin, authorized automatically, delivered, failed or refused, with its
-  merge and whether its report waits (`TeamDeliveryState`), for the screens (P6). Nothing calls it yet.
+  merge and whether its report waits (`TeamDeliveryState`), for the screens (P6).
+- **MCP `merge_run` (P7b).** On a team project it requests the run's module's delivery: the module's claim
+  (`claim.acquire`, taken only once the request is about to be sent), the module branch's tip as `source_commit` and
+  the tip of the checkout's checked-out branch (never the module's own) as `base_commit`, citing as
+  `authorization_operation_id` the Admin's `delivery.authorize` operation its caller names in `authorization`, else
+  none (the automatic merge); it never authorizes. An open delivery of the module is carried on instead. Only a
+  delivered module is its result; every other state is a refusal naming it.
 
 ## Conventions
 

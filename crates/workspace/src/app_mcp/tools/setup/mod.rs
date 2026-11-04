@@ -418,9 +418,20 @@ const SPECS: &[Spec] = &[
                   the checkout, conflict choices and approving the exact merged result are a person's, in the \
                   app's Local integration page. A run merged already, by Orchester or outside it as git proves \
                   (its base branch holds the run's commits), is refused with already_merged. A team project's run \
-                  is never merged into the base branch here: its module's delivery takes it there, which this \
-                  version does not offer yet (team_delivery_pending).",
-    schema: schema_for_type::<super::runs::InRun>,
+                  is never merged into the base branch itself: its work is in its module's branch, and merge_run \
+                  requests that module's delivery from the team server, under the module's claim (taken when nobody \
+                  holds it), from the module branch's tip onto the tip of the branch the checkout has checked out; \
+                  an open delivery of the module is carried on instead. An Admin's authorization or the team's \
+                  automatic merge decides it, never this tool: `authorization` names the operation id of an Admin's \
+                  delivery authorization of this branch at these commits for the request to cite; without it only \
+                  the automatic merge allows it. Only a delivered module is a result (delivery with its \
+                  merge_commit); otherwise it refuses with where the delivery stands: delivery_not_authorized \
+                  (neither allows it; call again with `authorization`, or once the automatic merge is on), \
+                  team_work_running (runs of the module still work here), team_delivery_waiting (waits for the \
+                  server), team_delivery_merge_waiting (the checkout is busy), delivery_failed, \
+                  delivery_report_refused, module_branch_checked_out (the checkout is on the module's branch), or \
+                  module_required for a run outside a module. Call it again to carry a waiting delivery on.",
+    schema: schema_for_type::<merge::MergeRun>,
     read_only: false,
   },
   Spec {

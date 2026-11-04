@@ -64,6 +64,22 @@ impl ModuleDeliveries {
   pub fn deliveries(&self) -> Result<Vec<TeamDeliveryState>, TeamWorkError> {
     self.db()?.team_deliveries()?.iter().map(state).collect()
   }
+
+  /// The operation of the newest delivery of `module` not settled yet, which [`Self::recover`] carries on; `None` when
+  /// every delivery of the module is settled.
+  pub fn open_delivery(&self, module: ModuleId) -> Result<Option<OperationId>, TeamWorkError> {
+    for record in self.db()?.team_deliveries()?.iter().rev() {
+      if record.stage.settled() {
+        continue;
+      }
+      let kept: KeptDelivery =
+        serde_json::from_str(&record.request).map_err(|_| TeamWorkError::UnreadableDelivery(record.operation))?;
+      if kept.module == module {
+        return Ok(Some(record.operation));
+      }
+    }
+    Ok(None)
+  }
 }
 
 fn state(record: &TeamDelivery) -> Result<TeamDeliveryState, TeamWorkError> {

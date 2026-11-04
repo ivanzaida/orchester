@@ -16,8 +16,8 @@
 //!   report is sent; it is sent again with the same bytes until the server answers it, oldest delivery first, and a
 //!   report that waits for the server holds back the later ones.
 //!
-//! Each state the server answers is kept for the screens ([`TeamDeliveryState`]). Nothing calls this yet: the screens
-//! adopt it in P6 and automation in P7.
+//! Each state the server answers is kept for the screens ([`TeamDeliveryState`]). The MCP tool `merge_run` of a team
+//! task's run requests its module's delivery (P7b); the screens adopt it in P6.
 
 mod state;
 mod steps;
@@ -109,6 +109,17 @@ impl ModuleDeliveries {
 
   fn db(&self) -> Result<ProjectDb, TeamWorkError> {
     Ok(ProjectDb::open(self.dispatcher.root())?)
+  }
+
+  /// The dispatcher the deliveries go through, e.g. to take the module's claim a request cites.
+  pub const fn dispatcher(&self) -> &Dispatcher {
+    &self.dispatcher
+  }
+
+  /// The team runs of `module` that still work on this computer: while there are any, a request is not sent
+  /// ([`DeliveryProgress::WorkRunning`]).
+  pub fn runs_at_work(&self, module: ModuleId) -> Result<Vec<RunId>, TeamWorkError> {
+    module_runs_at_work(&self.db()?, module)
   }
 
   /// Requests the delivery `request` asks for: recorded here first, then carried on as far as it goes now, after the

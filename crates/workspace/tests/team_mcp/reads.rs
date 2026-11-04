@@ -17,7 +17,7 @@ use serde_json::{Value, json};
 use crate::{
   fixture::{self, Config},
   http::{Request, respond},
-  team_server::{Extra, MEMBER, State},
+  team_server::{Extra, MEMBER, MODULE_BRANCH, State},
 };
 
 /// What the tools' reads and edits did on the server.
@@ -122,7 +122,7 @@ fn route(
     json!({
       "module": {
         "id": module, "name": "Webhooks", "description": "", "start": null, "target": null, "state": "open",
-        "revision": 1, "created": attribution(), "updated": attribution(), "branch": "module/webhooks",
+        "revision": 1, "created": attribution(), "updated": attribution(), "branch": MODULE_BRANCH,
         "assignee": null, "work": null, "effective_claim": null, "capabilities": capabilities(project)
       },
       "progress": {"unit": "tasks", "scope": 1, "done": 0}, "tasks": 1,
