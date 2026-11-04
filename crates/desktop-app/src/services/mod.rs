@@ -25,8 +25,8 @@ use orchester_workspace::{
   secrets::Vault,
   session::AppSession,
   sharing::{self, Servers, cloud::Cloud, project::clone::Clones, team_join::TeamJoin},
-  tasks::{integration_jobs::ProjectJobs, outside::OutsideChanges, resolve::Editor},
-  workspace::Workspace,
+  tasks::{integration_jobs::ProjectJobs, outside::OutsideChanges, resolve::Editor, worktree_removal::WorktreeRemover},
+  workspace::{OpenProject, Workspace},
 };
 use tokio::{runtime::Handle, task::JoinHandle};
 
@@ -195,6 +195,11 @@ impl Services {
         self.runners.clone(),
       )),
     ])
+  }
+
+  /// The run worktrees of `project`, which removing what runs left reaches through the project's runner.
+  pub fn worktree_remover(&self, project: &OpenProject) -> WorktreeRemover {
+    WorktreeRemover::through_runner(&self.runners, (&project.repo_root, project.project.name().as_str()))
   }
 }
 

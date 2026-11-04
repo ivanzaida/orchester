@@ -286,7 +286,7 @@ fn merge_queue_blocks_on_a_dirty_checkout_and_goes_on_once_it_is_clean() {
     })
   );
   assert_eq!(
-    merge_queue::advance(repo.root(), &repo.programs()).expect("advanced"),
+    merge_queue::advance(&repo.remover(), &repo.programs()).expect("advanced"),
     Advance::Idle { poll: true },
     "it looks again later, by itself"
   );

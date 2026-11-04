@@ -47,6 +47,7 @@ use crate::{
   tasks::{
     changes::{GIT, run_worktree},
     detail::run_store_error,
+    worktree_removal::WorktreeRemover,
   },
 };
 
@@ -87,13 +88,15 @@ impl Drop for Driving {
   }
 }
 
-/// Moves the queue of the project at `root` on by one step, with `programs` running git and the checks. While
-/// another caller moves it on, this does nothing. Blocks on SQLite, git and the checks.
-pub fn advance(root: &Path, programs: &Programs) -> Result<Advance, Message> {
+/// Moves the queue of the project whose run worktrees are `worktrees` (which its runner removes once a run landed) on
+/// by one step, with `programs` running git and the checks. While another caller moves it on, this does nothing.
+/// Blocks on SQLite, git, the checks and the runner.
+pub fn advance(worktrees: &WorktreeRemover, programs: &Programs) -> Result<Advance, Message> {
+  let root = worktrees.root();
   let Some(_driving) = Driving::take(root) else {
     return Ok(Advance::Idle { poll: false });
   };
-  let advanced = step(root, programs).map_err(|error| {
+  let advanced = step(worktrees, programs).map_err(|error| {
     tracing::warn!(%error, "the merge queue cannot move on");
     messages::store_error(&error)
   })?;
@@ -105,7 +108,8 @@ pub fn advance(root: &Path, programs: &Programs) -> Result<Advance, Message> {
 
 /// Moves the first lane that has something to do on by one step, the lanes taking turns; idle, polling, when no lane
 /// moved and one of them waits for the checkout.
-fn step(root: &Path, programs: &Programs) -> Result<Advance, StoreError> {
+fn step(worktrees: &WorktreeRemover, programs: &Programs) -> Result<Advance, StoreError> {
+  let root = worktrees.root();
   let mut db = ProjectDb::open(root)?;
   if join(&mut db, (root, programs), Timestamp::now())? {
     return Ok(Advance::Changed);
@@ -116,6 +120,7 @@ fn step(root: &Path, programs: &Programs) -> Result<Advance, StoreError> {
       db: &mut db,
       root,
       programs,
+      worktrees,
     })
     .step(entry, run)?
     {
@@ -169,6 +174,8 @@ struct Driver<'a> {
   db: &'a mut ProjectDb,
   root: &'a Path,
   programs: &'a Programs,
+  /// The project's run worktrees, which its runner removes once a run landed.
+  worktrees: &'a WorktreeRemover,
 }
 
 impl Driver<'_> {
@@ -348,7 +355,7 @@ impl Driver<'_> {
       return self.leave(entry, stopped("the run's task cannot be read"), events);
     };
     match land(
-      (self.root, self.programs),
+      (self.worktrees, self.programs),
       (run, &task),
       (deliver, entry.checked.as_ref()),
     ) {

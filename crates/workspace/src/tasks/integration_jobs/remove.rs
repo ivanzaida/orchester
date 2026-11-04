@@ -7,10 +7,12 @@ use std::{
 };
 
 use orchester_core::integration::Leftovers;
-use orchester_exec::programs::Programs;
 
 use super::{
-  super::integration::{IntegrationProblem, RemovalRefused, remove_in},
+  super::{
+    integration::{IntegrationProblem, RemovalRefused, remove_in},
+    worktree_removal::WorktreeRemover,
+  },
   Active, JobState, RunJobs,
 };
 use crate::{
@@ -60,7 +62,7 @@ impl RunJobs {
       number,
       run,
       confirmed,
-      programs,
+      worktrees,
       activity,
       separator,
       changed,
@@ -70,9 +72,7 @@ impl RunJobs {
     let not_done = Message::new("statusBar.operations.runCleanup.notDone")
       .with("task", key)
       .with("run", number.to_string());
-    let result = catch_unwind(AssertUnwindSafe(|| {
-      remove_in(&open.repo_root, &programs, &run, &confirmed)
-    }));
+    let result = catch_unwind(AssertUnwindSafe(|| remove_in(&worktrees, &run, &confirmed)));
     let run_changed = matches!(result, Ok(Err(IntegrationProblem::RunChanged)));
     let outcome = match (result, &by) {
       (Ok(Ok(())), _) => {
@@ -149,7 +149,8 @@ pub struct RemoveArgs {
   pub number: u32,
   pub run: orchester_core::run::Run,
   pub confirmed: Leftovers,
-  pub programs: Programs,
+  /// The project's run worktrees, which its runner removes.
+  pub worktrees: WorktreeRemover,
   pub activity: Activity,
   pub separator: Arc<str>,
   pub changed: Arc<dyn Fn() + Send + Sync>,

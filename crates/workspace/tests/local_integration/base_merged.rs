@@ -69,7 +69,7 @@ fn base_merged_a_run_that_merged_main_after_its_last_checkpoint_merges_with_one_
   );
   assert_eq!(delivery(&fixture), Delivery::Waiting);
   let tip = git(fixture.root(), &["rev-parse", "task"]);
-  merge_in(fixture.root(), &Programs::processes(), (fixture.run, None)).expect("merged");
+  merge_in(&fixture.worktrees(), &Programs::processes(), (fixture.run, None)).expect("merged");
   assert_eq!(git(fixture.root(), &["merge-base", "--is-ancestor", &tip, "main"]), "");
   assert_eq!(git(fixture.root(), &["show", "main:more.txt"]), "more task work");
   assert_eq!(git(fixture.root(), &["show", "main:later.txt"]), "later main work");
@@ -95,7 +95,7 @@ fn base_merged_a_commit_of_the_run_cherry_picked_into_main_still_needs_local_int
     .expect("part of the run is in main");
   assert_eq!(evidence.kind, ResultEvidenceKind::EquivalentPatches);
   let before = git(fixture.root(), &["rev-parse", "main"]);
-  assert!(merge_in(fixture.root(), &Programs::processes(), (fixture.run, None)).is_err());
+  assert!(merge_in(&fixture.worktrees(), &Programs::processes(), (fixture.run, None)).is_err());
   assert_eq!(git(fixture.root(), &["rev-parse", "main"]), before, "nothing merged");
 }
 
@@ -108,7 +108,7 @@ fn base_merged_a_commit_of_the_run_from_before_its_merges_merged_into_main_still
     .expect("part of the run is in main");
   assert_eq!(evidence.kind, ResultEvidenceKind::PartialAncestry);
   let before = git(fixture.root(), &["rev-parse", "main"]);
-  assert!(merge_in(fixture.root(), &Programs::processes(), (fixture.run, None)).is_err());
+  assert!(merge_in(&fixture.worktrees(), &Programs::processes(), (fixture.run, None)).is_err());
   assert_eq!(git(fixture.root(), &["rev-parse", "main"]), before, "nothing merged");
 }
 
@@ -123,6 +123,6 @@ fn base_merged_a_run_with_no_merge_of_main_whose_agent_committed_after_its_check
     external_integration(fixture.root(), fixture.run).expect("evidence"),
     None
   );
-  merge_in(fixture.root(), &Programs::processes(), (fixture.run, None)).expect("merged");
+  merge_in(&fixture.worktrees(), &Programs::processes(), (fixture.run, None)).expect("merged");
   assert_eq!(git(fixture.root(), &["show", "main:more.txt"]), "more task work");
 }

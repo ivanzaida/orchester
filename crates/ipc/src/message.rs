@@ -9,7 +9,10 @@ use std::{fmt, num::NonZeroU32};
 use orchester_core::{
   connection::{AgentProvider, ApiEndpoint, CheckResult, NativeModel},
   id::{ChatId, ChatMessageId, ConnectionId, IdempotencyKey, ResourceId, RunId, StepExecutionId, TaskId},
-  integration::Leftovers,
+  integration::{
+    Cleanup, Leftovers,
+    removal::{RemovalFailure, RemovalRequest},
+  },
   permission::AgentPermissions,
   question::GivenAnswer,
   resource::StepKey,
@@ -283,6 +286,12 @@ pub enum Command {
   /// `get_changes` (protocol 40): only the runner reads a run's worktree. Answered with [`Reply::WorktreeChanges`],
   /// whatever it found, a failed read included.
   ReadWorktreeChanges { run: RunId },
+  /// Removes what run `run`, which ended, left, as `request` allows: its worktrees and branches, with the run's own
+  /// processes in a held folder stopped first when asked (protocol 41). The desktop records the removal in the
+  /// project's database before and after; the runner removes, then removes the codebase indexes only removed worktrees
+  /// used and sweeps the worktree folders. Answered with [`Reply::WorktreesRemoved`], or [`Reply::RemovalFailed`] when
+  /// nothing was removed.
+  RemoveWorktrees { run: RunId, request: RemovalRequest },
 }
 
 /// Which session a runner serves, from the desktop's side.
@@ -477,6 +486,10 @@ pub enum Reply {
     run: RunId,
     read: WorktreeChangesRead,
   },
+  /// The answer to [`Command::RemoveWorktrees`] that removed: what it removed, and what stays and why.
+  WorktreesRemoved(Cleanup),
+  /// The answer to [`Command::RemoveWorktrees`] that removed nothing, and why.
+  RemovalFailed(RemovalFailure),
   Rejected(Rejection),
 }
 

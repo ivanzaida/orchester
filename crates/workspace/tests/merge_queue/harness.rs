@@ -32,7 +32,10 @@ use orchester_core::{
 use orchester_exec::{ProcessRunner, programs::Programs};
 use orchester_ipc::Command as RunnerCommand;
 use orchester_store::ProjectDb;
-use orchester_workspace::merge_queue::{self, Advance};
+use orchester_workspace::{
+  merge_queue::{self, Advance},
+  tasks::worktree_removal::WorktreeRemover,
+};
 use parking_lot::Mutex;
 
 /// `git <args>` in `root`, which must succeed; its trimmed output.
@@ -147,6 +150,11 @@ impl Repo {
 
   pub fn programs(&self) -> Programs {
     Programs::with_runner(self.answered.clone())
+  }
+
+  /// The runs' worktrees, which the project's runner would remove once a run landed, removed in the test's process.
+  pub fn remover(&self) -> WorktreeRemover {
+    WorktreeRemover::here_for_test(self.root(), self.programs())
   }
 
   /// The check runs `script` from now on.
@@ -278,7 +286,7 @@ impl Repo {
   pub fn drive(&self) -> Vec<RunnerCommand> {
     let mut commands = Vec::new();
     for _ in 0..60 {
-      match merge_queue::advance(self.root(), &self.programs()).expect("advanced") {
+      match merge_queue::advance(&self.remover(), &self.programs()).expect("advanced") {
         Advance::Idle { .. } => return commands,
         Advance::Changed => {}
         Advance::Integrate { command, .. } => commands.push(command),

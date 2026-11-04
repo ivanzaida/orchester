@@ -364,6 +364,7 @@ async fn answer(
     Command::EstimateTask { task } => return answer_estimate(&later, handle, task),
     Command::SetErrorReports { ref reports } => return Answer::ErrorReports(id, reports.clone()),
     Command::ReadWorktreeChanges { run } => return later.reply(handle.worktree_changes(run)),
+    Command::RemoveWorktrees { run, ref request } => return later.reply(handle.remove_worktrees(run, request.clone())),
   };
   Answer::Reply(Event::Reply { id, reply })
 }
@@ -371,10 +372,8 @@ async fn answer(
 /// The reply to [`Command::EstimateTask`], once the estimate ended.
 fn answer_estimate(later: &Later<'_>, scheduler: Scheduler, task: TaskId) -> Answer {
   later.reply(async move {
-    match scheduler.estimate_task(task).await {
-      Ok(outcome) => Reply::TaskEstimated { task, outcome },
-      Err(rejection) => Reply::Rejected(rejection),
-    }
+    let estimated = scheduler.estimate_task(task).await;
+    estimated.map_or_else(Reply::Rejected, |outcome| Reply::TaskEstimated { task, outcome })
   })
 }
 

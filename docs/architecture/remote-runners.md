@@ -86,7 +86,8 @@ Where the desktop touches a run's worktree today (`crates/workspace/src/`):
 | Conflict resolution in the worktree | `tasks/resolve/mod.rs`, `tasks/integration_jobs/resolve.rs`, `merge_queue/approve.rs` |
 | Base synced into the worktree, Check tools run in it | `merge_queue/drive.rs:211`, `merge_queue/check.rs` |
 | Local integration reading the worktree as a second repository | `tasks/local_integration/{mod,poll,view}.rs` |
-| Removal, stopping its processes, index prune, sweep | `tasks/integration.rs:487`, `tasks/delete.rs`, `tasks/history.rs`, `app_mcp/tools/worktree.rs`, `tasks/worktree_sweep.rs` |
+| Removal, stopping its processes, index prune, sweep: **through the runner** since protocol 41 (`Command::RemoveWorktrees`, ORC-686); the desktop records the removal before and after, and its own sweep is gone (the runner's covers the same folders) | `tasks/worktree_removal.rs` (`WorktreeRemover`), `tasks/integration.rs` (`clear`), `tasks/delete.rs`, `runner/worktree_removal.rs`; the runner's `execution/executor/worktree_removal.rs` |
+| Whether a run's worktree folder is there, for `get_task`/`get_run` and the missing-worktree note | `app_mcp/tools/worktree.rs` (`worktree_state`), `tasks/history.rs` (`note_missing_worktrees`): still local reads, so read-only tools start no runner |
 | Files of the run's version, Open in editor, copy path | `files/source.rs:39`, `files/open.rs`, `desktop-app/src/screens/task/changes/open_file.rs`, `run_facts.rs:329` |
 | Recovery state of a run's folder | `recovery/mod.rs:239` |
 | Warm workspaces' folders and sizes, ended worktrees' sizes | `warm_workspaces/{actions,mod}.rs`, `storage.rs:100` |

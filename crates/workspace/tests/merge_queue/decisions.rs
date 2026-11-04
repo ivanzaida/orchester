@@ -150,7 +150,11 @@ fn merge_queue_merge_refuses_a_base_that_moved_after_the_queue_read_it() {
     as_delivered: DeliveredAs::MergeCommit,
     base: &checked,
   };
-  let merged = merge_in_as(repo.root(), &repo.programs(), (run.id(), Some(&tip), Some(delivering)));
+  let merged = merge_in_as(
+    &repo.remover(),
+    &repo.programs(),
+    (run.id(), Some(&tip), Some(delivering)),
+  );
   assert!(
     matches!(merged, Err(IntegrationProblem::Merge(MergeError::BaseMoved { .. }))),
     "{merged:?}"

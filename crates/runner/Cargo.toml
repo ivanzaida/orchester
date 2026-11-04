@@ -359,6 +359,10 @@ required-features = ["test-agent"]
 name = "disk_guard"
 required-features = ["test-agent"]
 
+[[test]]
+name = "worktree_removal"
+required-features = ["test-agent"]
+
 [features]
 test-agent = []
 

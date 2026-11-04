@@ -17,8 +17,8 @@ use orchester_store::ProjectDb;
 
 use super::{failed, worktree_sweep};
 
-/// Git removing a worktree full of build output gets as long as the desktop gives it.
-const REMOVE_TIMEOUT: Duration = Duration::from_secs(60 * 60);
+/// Git removing a worktree full of build output gets as long as the desktop gave it.
+pub(super) const REMOVE_TIMEOUT: Duration = Duration::from_secs(60 * 60);
 
 /// Removes what `previous` left in the repository at `root`, as the person confirmed it (`confirmed`), with the
 /// removal recorded in `db` first; a folder something held is deleted again once the run's own processes there are
@@ -37,15 +37,7 @@ pub(in crate::execution) fn remove_worktrees(
   if let Err(error) = finish_removal(db, git, (previous.id(), Timestamp::now()), &mut cleanup, stop) {
     tracing::warn!(%error, run = %previous.id(), "cannot record what the worktree removal left");
   }
-  // Off the runtime's threads: the worktrees are gone either way, and an index left behind goes
-  // with the next removal.
-  let indexes = CodebaseIndexes::new(root);
-  tokio::task::spawn_blocking(move || {
-    if let Err(error) = indexes.prune() {
-      tracing::warn!(%error, "cannot remove the codebase indexes of removed worktrees");
-    }
-  });
-  worktree_sweep::sweep_in_background(root.to_path_buf());
+  after_removal(root);
   match cleanup.kept_worktrees.into_iter().next() {
     None => Ok(()),
     Some((worktree, KeepReason::Failed(detail))) => {
@@ -57,4 +49,17 @@ pub(in crate::execution) fn remove_worktrees(
     }
     Some((worktree, _)) => Err(Rejection::WorktreeChanged { path: worktree.path }),
   }
+}
+
+/// What follows a removal of run worktrees in the repository at `root`: the codebase indexes only removed worktrees
+/// used go, off the runtime's async workers (the worktrees are gone either way, and an index left behind goes with
+/// the next removal), and the worktree folders are swept ([`worktree_sweep`]).
+pub(super) fn after_removal(root: &Path) {
+  let indexes = CodebaseIndexes::new(root);
+  tokio::task::spawn_blocking(move || {
+    if let Err(error) = indexes.prune() {
+      tracing::warn!(%error, "cannot remove the codebase indexes of removed worktrees");
+    }
+  });
+  worktree_sweep::sweep_in_background(root.to_path_buf());
 }

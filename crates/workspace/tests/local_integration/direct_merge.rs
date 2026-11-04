@@ -51,7 +51,7 @@ fn local_integration_direct_merge_passes_a_review_paused_before_it_held_anything
   assert_eq!(paused.phase(), LocalPhase::Paused);
   assert!(!paused.reserves_checkout());
   let source = git(&fixture.task_root, &["rev-parse", "HEAD"]);
-  let merged = merge_in(fixture.root(), &Programs::processes(), (fixture.run, None)).expect("direct merge");
+  let merged = merge_in(&fixture.worktrees(), &Programs::processes(), (fixture.run, None)).expect("direct merge");
   assert_eq!(merged.merge.kind, MergeKind::FastForward);
   assert_eq!(git(fixture.root(), &["rev-parse", "HEAD"]), source);
   unchanged(&fixture, &work);
@@ -78,7 +78,7 @@ fn local_integration_direct_merge_waits_for_this_runs_local_integration_that_sta
   session.preserve("Before the merge").expect("preserve");
   drop(session);
   let before = git(fixture.root(), &["rev-parse", "HEAD"]);
-  let refused = merge_in(fixture.root(), &Programs::processes(), (fixture.run, None)).expect_err("held");
+  let refused = merge_in(&fixture.worktrees(), &Programs::processes(), (fixture.run, None)).expect_err("held");
   assert_eq!(refused, IntegrationProblem::HeldLocally(CheckoutHolder::ThisRun));
   assert!(refused.continues_locally());
   assert_eq!(git(fixture.root(), &["rev-parse", "HEAD"]), before);
@@ -90,7 +90,7 @@ fn local_integration_direct_merge_at_a_dirty_path_changes_nothing_and_continues_
   fs::write(fixture.root().join("task.txt"), "the person's task edit\n").expect("edit");
   let bytes = fs::read(fixture.root().join("task.txt")).expect("bytes");
   let before = git(fixture.root(), &["rev-parse", "HEAD"]);
-  let refused = merge_in(fixture.root(), &Programs::processes(), (fixture.run, None)).expect_err("in the way");
+  let refused = merge_in(&fixture.worktrees(), &Programs::processes(), (fixture.run, None)).expect_err("in the way");
   assert_eq!(
     refused,
     IntegrationProblem::Merge(MergeError::UncommittedInTheWay {
@@ -122,7 +122,7 @@ fn canceled_and_cleaned(fixture: &Fixture) {
 fn local_integration_direct_merge_beside_a_canceled_cleaned_integration_completes_it() {
   let fixture = Fixture::new(false);
   canceled_and_cleaned(&fixture);
-  let merged = merge_in(fixture.root(), &Programs::processes(), (fixture.run, None)).expect("direct merge");
+  let merged = merge_in(&fixture.worktrees(), &Programs::processes(), (fixture.run, None)).expect("direct merge");
   let db = ProjectDb::open(fixture.root()).expect("db");
   let settled = db.local_operation(fixture.run).expect("read").expect("the record");
   assert_eq!(settled.phase(), LocalPhase::Complete, "nothing is left to restore");
@@ -163,6 +163,6 @@ fn local_integration_direct_merge_waits_for_an_unfinished_git_process_of_a_revie
   drop(session);
   let mut db = ProjectDb::open(fixture.root()).expect("db");
   db.begin_local_process(fixture.run).expect("a git process begins");
-  let refused = merge_in(fixture.root(), &Programs::processes(), (fixture.run, None)).expect_err("held");
+  let refused = merge_in(&fixture.worktrees(), &Programs::processes(), (fixture.run, None)).expect_err("held");
   assert_eq!(refused, IntegrationProblem::HeldLocally(CheckoutHolder::ThisRun));
 }

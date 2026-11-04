@@ -16,8 +16,9 @@ use orchester_core::{
   task::{TaskDetails, TaskLimits},
   time::Timestamp,
 };
+use orchester_exec::programs::Programs;
 use orchester_store::ProjectDb;
-use orchester_workspace::tasks::local_integration::LocalIntegration;
+use orchester_workspace::tasks::{local_integration::LocalIntegration, worktree_removal::WorktreeRemover};
 
 pub struct Fixture {
   pub repo: tempfile::TempDir,
@@ -136,6 +137,11 @@ impl Fixture {
 
   pub fn root(&self) -> &Path {
     self.repo.path()
+  }
+
+  /// The runs' worktrees, which the project's runner would remove, removed in the test's process instead.
+  pub fn worktrees(&self) -> WorktreeRemover {
+    WorktreeRemover::here_for_test(self.root(), Programs::processes())
   }
   pub fn open(&self) -> LocalIntegration {
     LocalIntegration::open(self.root(), self.run).expect("open")

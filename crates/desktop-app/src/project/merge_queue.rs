@@ -12,7 +12,7 @@ use orchester_workspace::{
   background,
   merge_queue::{self, Advance},
   runner::Runners,
-  tasks::run::control_message,
+  tasks::{run::control_message, worktree_removal::WorktreeRemover},
   workspace::OpenProject,
 };
 
@@ -39,12 +39,13 @@ pub(super) fn follow(ctx: &mut Ctx, open: &OpenProject) {
 
 async fn drive(open: OpenProject, runners: Runners, programs: Programs) {
   let root = open.repo_root.clone();
+  let worktrees = WorktreeRemover::through_runner(&runners, (&root, open.project.name().as_str()));
   let mut states = runners.states_of(&root);
   // Without a runner the runs' states do not change; the queue still moves on when a person changes it.
   let mut states_open = true;
   let mut queue = merge_queue::changes(&root);
   loop {
-    let wait = match advance(&root, &programs).await {
+    let wait = match advance(&worktrees, &programs).await {
       Ok(Advance::Changed) => continue,
       Ok(Advance::Integrate { run, command }) => {
         let sent = runners
@@ -87,9 +88,9 @@ async fn drive(open: OpenProject, runners: Runners, programs: Programs) {
   }
 }
 
-async fn advance(root: &Path, programs: &Programs) -> Result<Advance, ()> {
-  let (root, programs) = (root.to_path_buf(), programs.clone());
-  match background::run(move || merge_queue::advance(&root, &programs)).await {
+async fn advance(worktrees: &WorktreeRemover, programs: &Programs) -> Result<Advance, ()> {
+  let (worktrees, programs) = (worktrees.clone(), programs.clone());
+  match background::run(move || merge_queue::advance(&worktrees, &programs)).await {
     Ok(Ok(advance)) => Ok(advance),
     Ok(Err(error)) | Err(error) => {
       tracing::warn!(
