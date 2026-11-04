@@ -152,9 +152,7 @@ impl Worker {
     };
     self.end_question_wait(watch)?;
     if let Err(error) = delivered {
-      watch
-        .sink
-        .question(QuestionRecord::undelivered(run, waiting.id()))?;
+      watch.sink.question(QuestionRecord::undelivered(run, waiting.id()))?;
       self.observe(
         watch,
         AgentEvent::TurnFailed {
@@ -193,10 +191,7 @@ impl Worker {
   pub(super) fn interrupt_waiting_question(&self, watch: &mut Watch) -> Result<(), StoreError> {
     watch.question = None;
     let (run, invocation) = (watch.invocation.run, watch.invocation.id);
-    if watch
-      .sink
-      .question(QuestionRecord::interrupted(run, invocation))?
-    {
+    if watch.sink.question(QuestionRecord::interrupted(run, invocation))? {
       self.end_question_wait(watch)?;
     }
     Ok(())

@@ -448,9 +448,7 @@ fn claim(watch: &mut Watch, approval: &PendingToolApproval, settled: &Settled) -
   if !watch.sink.approval(claimed)? {
     return Ok(false);
   }
-  watch
-    .sink
-    .approval(ApprovalRecord::answer(run, id, &settled.answer))?;
+  watch.sink.approval(ApprovalRecord::answer(run, id, &settled.answer))?;
   match settled.rule {
     Some(Answering::Run(rule)) => {
       watch.sink.approval(ApprovalRecord::rule(run, id, rule))?;

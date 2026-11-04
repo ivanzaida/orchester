@@ -35,7 +35,7 @@ enum MessageChange {
   },
   Delivery {
     before: Standing,
-    changed: DeliveryRow,
+    changed: Box<DeliveryRow>,
     by_automation: bool,
   },
 }
@@ -121,7 +121,7 @@ impl MessageRecord {
     };
     Ok(Self(MessageChange::Delivery {
       before,
-      changed: DeliveryRow::of(changed)?,
+      changed: Box::new(DeliveryRow::of(changed)?),
       // Automation that sends a message again is recorded as its sender, as for one it wrote.
       by_automation: changed.answerer() == Some(Answerer::Automation),
     }))
@@ -152,7 +152,11 @@ impl ProjectDb {
 }
 
 /// Stores `message`, a person's one once per `key`.
-pub(super) fn insert(connection: &Connection, message: &Message, key: Option<IdempotencyKey>) -> Result<(), StoreError> {
+pub(super) fn insert(
+  connection: &Connection,
+  message: &Message,
+  key: Option<IdempotencyKey>,
+) -> Result<(), StoreError> {
   MessageRow::of(message, key).insert(connection)
 }
 

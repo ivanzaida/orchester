@@ -51,13 +51,17 @@ fn decision_record_of_messages_stores_what_direct_writes_store() {
     .deliver(run.id(), (invocation.execution, invocation.id), at(11), Arrival::Prompt)
     .expect("delivered");
   assert!(
-    db.write_message(&sent(&MessageRecord::deliveries(std::slice::from_ref(&message)).expect("a record")))
-      .expect("written")
+    db.write_message(&sent(
+      &MessageRecord::deliveries(std::slice::from_ref(&message)).expect("a record")
+    ))
+    .expect("written")
   );
   let delivered = message.clone();
   message.acknowledge(at(12)).expect("acknowledged");
-  db.write_message(&sent(&MessageRecord::deliveries(std::slice::from_ref(&message)).expect("a record")))
-    .expect("written");
+  db.write_message(&sent(
+    &MessageRecord::deliveries(std::slice::from_ref(&message)).expect("a record"),
+  ))
+  .expect("written");
   let reply = Message::from_agent(
     run.task(),
     run.id(),
@@ -67,7 +71,10 @@ fn decision_record_of_messages_stores_what_direct_writes_store() {
     at(13),
   );
   assert!(db.write_message(&sent(&MessageRecord::added(&reply))).expect("written"));
-  assert_eq!(db.messages(run.task()).expect("messages"), [message.clone(), reply.clone()]);
+  assert_eq!(
+    db.messages(run.task()).expect("messages"),
+    [message.clone(), reply.clone()]
+  );
 
   let backwards = MessageRecord::deliveries(std::slice::from_ref(&delivered)).expect("a record");
   assert!(
@@ -84,7 +91,13 @@ fn decision_record_of_messages_stores_what_direct_writes_store() {
 #[test]
 fn decision_record_of_a_racing_delivery_applies_once() {
   let (_repo, mut db, run, invocation) = invoked();
-  let mut refused = Message::from_person(run.task(), Some(run.id()), Recipient::Orchestrator, body("Now."), at(10));
+  let mut refused = Message::from_person(
+    run.task(),
+    Some(run.id()),
+    Recipient::Orchestrator,
+    body("Now."),
+    at(10),
+  );
   db.send_message(IdempotencyKey::generate(), &refused).expect("stored");
   refused
     .not_delivered(run.id(), invocation.execution, at(11), Undelivered::Refused)
@@ -93,7 +106,12 @@ fn decision_record_of_a_racing_delivery_applies_once() {
   let (mut again, mut taken) = (refused.clone(), refused.clone());
   again.send_after_turn().expect("sent after the turn");
   taken
-    .deliver(run.id(), (invocation.execution, invocation.id), at(12), Arrival::MidTurn)
+    .deliver(
+      run.id(),
+      (invocation.execution, invocation.id),
+      at(12),
+      Arrival::MidTurn,
+    )
     .expect("taken late");
   let first = sent(&MessageRecord::delivery_change(&refused, &again).expect("a record"));
   let later = sent(&MessageRecord::delivery_change(&refused, &taken).expect("a record"));
@@ -146,8 +164,14 @@ fn decision_record_of_questions_asks_answers_and_ends_each_once() {
     Some(message),
   ));
   assert!(db.write_question(&answer).expect("answered"));
-  assert!(!db.write_question(&answer).expect("not again"), "a request is answered once");
-  let stored = db.question_request(run.id(), answered.id()).expect("read").expect("kept");
+  assert!(
+    !db.write_question(&answer).expect("not again"),
+    "a request is answered once"
+  );
+  let stored = db
+    .question_request(run.id(), answered.id())
+    .expect("read")
+    .expect("kept");
   assert_eq!(
     stored.state,
     QuestionState::Answered {
@@ -158,7 +182,8 @@ fn decision_record_of_questions_asks_answers_and_ends_each_once() {
   );
   assert_eq!(stored.message, Some(message));
   assert!(
-    !db.write_question(&sent(&QuestionRecord::ended(run.id(), answered.id())))
+    !db
+      .write_question(&sent(&QuestionRecord::ended(run.id(), answered.id())))
       .expect("written"),
     "an answered request no longer waits"
   );
@@ -166,10 +191,14 @@ fn decision_record_of_questions_asks_answers_and_ends_each_once() {
     .expect("written");
 
   let in_turn = request(&invocation, "2", QuestionTurn::InTurn);
-  db.write_question(&sent(&QuestionRecord::asked(&in_turn))).expect("asked");
+  db.write_question(&sent(&QuestionRecord::asked(&in_turn)))
+    .expect("asked");
   let interrupted = sent(&QuestionRecord::interrupted(run.id(), invocation.id));
   assert!(db.write_question(&interrupted).expect("interrupted"));
-  assert!(!db.write_question(&interrupted).expect("written"), "nothing waits any more");
+  assert!(
+    !db.write_question(&interrupted).expect("written"),
+    "nothing waits any more"
+  );
   let states: Vec<_> = db
     .questions(run.id())
     .expect("questions")
@@ -196,8 +225,56 @@ fn approval(invocation: &Invocation, key: &str) -> PendingToolApproval {
   }
 }
 
+/// Three requests of `invocation`, recorded through records.
+fn requested(db: &mut ProjectDb, invocation: &Invocation) -> [PendingToolApproval; 3] {
+  let requests = ["1", "2", "3"].map(|key| approval(invocation, key));
+  for request in &requests {
+    assert!(
+      db.write_approval(&sent(&ApprovalRecord::requested(request)))
+        .expect("requested")
+    );
+  }
+  assert!(
+    db.write_approval(&sent(&ApprovalRecord::requested(&requests[0])))
+      .is_err(),
+    "a request is recorded once"
+  );
+  assert_eq!(db.pending_tool_approvals(invocation.run).expect("pending"), requests);
+  requests
+}
+
 #[test]
-fn decision_record_of_tool_requests_is_written_as_directly() {
+fn decision_record_of_a_waiting_tool_request_is_written_as_directly() {
+  let (_repo, mut db, run, invocation) = invoked();
+  let [waiting, ..] = requested(&mut db, &invocation);
+  let (id, run_id) = (waiting.id.as_str(), run.id());
+  let came = CameToPerson::because(PersonReason::Outside);
+  for record in [
+    ApprovalRecord::came_to_person(run_id, id, Some(&came)),
+    ApprovalRecord::reviewing(run_id, id, true),
+  ] {
+    db.write_approval(&sent(&record)).expect("written");
+  }
+  assert_eq!(db.came_to_person(run_id, id).expect("read"), Some(came));
+  assert_eq!(
+    db.reviewing_tool_approvals().expect("read"),
+    std::slice::from_ref(&waiting.id)
+  );
+  let review = Review::Asked {
+    reason: "Not needed for the task.".to_owned(),
+    model: "claude-haiku-4-5-20251001".to_owned(),
+  };
+  db.write_approval(&sent(&ApprovalRecord::reviewed(run_id, id, &review)))
+    .expect("written");
+  assert!(db.reviewing_tool_approvals().expect("read").is_empty());
+  assert_eq!(db.tool_approval_review(run_id, id).expect("read"), Some(review));
+  db.write_approval(&sent(&ApprovalRecord::came_to_person(run_id, id, None)))
+    .expect("written");
+  assert_eq!(db.came_to_person(run_id, id).expect("read"), None);
+}
+
+#[test]
+fn decision_record_of_answered_and_ended_tool_requests_is_written_as_directly() {
   let (_repo, mut db, run, invocation) = invoked();
   let rule = db
     .add_approval_rule(
@@ -211,42 +288,14 @@ fn decision_record_of_tool_requests_is_written_as_directly() {
       at(10),
     )
     .expect("rule");
-  let (approved, denied, ended) = (
-    approval(&invocation, "1"),
-    approval(&invocation, "2"),
-    approval(&invocation, "3"),
-  );
-  for request in [&approved, &denied, &ended] {
-    assert!(db.write_approval(&sent(&ApprovalRecord::requested(request))).expect("requested"));
-  }
-  assert!(
-    db.write_approval(&sent(&ApprovalRecord::requested(&approved))).is_err(),
-    "a request is recorded once"
-  );
-  assert_eq!(db.pending_tool_approvals(run.id()).expect("pending").len(), 3);
-
+  let [approved, denied, ended] = requested(&mut db, &invocation);
   let (id, run_id) = (approved.id.as_str(), run.id());
-  let came = CameToPerson::because(PersonReason::Outside);
-  let review = Review::Approved {
-    reason: "It serves the task.".to_owned(),
-    model: "claude-haiku-4-5-20251001".to_owned(),
-  };
-  for record in [
-    ApprovalRecord::came_to_person(run_id, id, Some(&came)),
-    ApprovalRecord::reviewing(run_id, id, true),
-  ] {
-    db.write_approval(&sent(&record)).expect("written");
-  }
-  assert_eq!(db.came_to_person(run_id, id).expect("read"), Some(came));
-  assert_eq!(db.reviewing_tool_approvals().expect("read"), [approved.id.clone()]);
-  db.write_approval(&sent(&ApprovalRecord::reviewed(run_id, id, &review)))
-    .expect("written");
-  assert!(db.reviewing_tool_approvals().expect("read").is_empty());
-  assert_eq!(db.tool_approval_review(run_id, id).expect("read"), Some(review.clone()));
-
   let claimed = sent(&ApprovalRecord::claimed(run_id, id, DecidedBy::SimilarRule, at(30)));
   assert!(db.write_approval(&claimed).expect("claimed"));
-  assert!(!db.write_approval(&claimed).expect("written"), "a request is claimed once");
+  assert!(
+    !db.write_approval(&claimed).expect("written"),
+    "a request is claimed once"
+  );
   let answer = RequestAnswer::by(AnswerKind::Person);
   for record in [
     ApprovalRecord::answer(run_id, id, &answer),
@@ -291,6 +340,5 @@ fn decision_record_of_tool_requests_is_written_as_directly() {
       (ended.id.as_str(), None, None),
     ]
   );
-  assert_eq!(decided[0].review, Some(review));
   assert_eq!(decided[1].note, Some(note));
 }

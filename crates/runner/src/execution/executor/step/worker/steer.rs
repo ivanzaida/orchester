@@ -333,10 +333,7 @@ impl Worker {
     };
     // The person may send it after the turn meanwhile; whoever writes first wins, and the other
     // change is left out.
-    if !watch
-      .sink
-      .message(MessageRecord::delivery_change(&before, &message)?)?
-    {
+    if !watch.sink.message(MessageRecord::delivery_change(&before, &message)?)? {
       tracing::info!(message = %id, "the message changed meanwhile; its delivery is left as it is");
       return Ok(None);
     }

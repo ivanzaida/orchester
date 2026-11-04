@@ -28,17 +28,48 @@ pub struct ApprovalRecord {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "kind")]
 enum ApprovalChange {
-  Requested { approval: Box<PendingToolApproval> },
-  CameToPerson { id: String, came: Option<CameToPerson> },
-  Reviewing { id: String, on: bool },
-  Reviewed { id: String, review: Review },
-  Claimed { id: String, decided_by: DecidedBy, at: Timestamp },
-  Answer { id: String, answer: RequestAnswer },
-  Rule { id: String, rule: ApprovalRuleId },
-  DenialNote { id: String, note: DenialNote },
-  Delivered { id: String, decision: ToolApprovalDecision },
-  Interrupted { invocation: InvocationId },
-  Ended { id: String },
+  Requested {
+    approval: Box<PendingToolApproval>,
+  },
+  CameToPerson {
+    id: String,
+    came: Option<CameToPerson>,
+  },
+  Reviewing {
+    id: String,
+    on: bool,
+  },
+  Reviewed {
+    id: String,
+    review: Review,
+  },
+  Claimed {
+    id: String,
+    decided_by: DecidedBy,
+    at: Timestamp,
+  },
+  Answer {
+    id: String,
+    answer: RequestAnswer,
+  },
+  Rule {
+    id: String,
+    rule: ApprovalRuleId,
+  },
+  DenialNote {
+    id: String,
+    note: DenialNote,
+  },
+  Delivered {
+    id: String,
+    decision: ToolApprovalDecision,
+  },
+  Interrupted {
+    invocation: InvocationId,
+  },
+  Ended {
+    id: String,
+  },
 }
 
 impl ApprovalRecord {
