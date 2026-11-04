@@ -3,7 +3,7 @@
 //! record, active or proposed as the project's memory setting says, refused when it holds a secret's value;
 //! `report_progress` keeps the step's progress line, the invocation's secret values removed. Each call opens a
 //! connection of its own to the project database (the run's task loop owns the runner's) and blocks on it, off the
-//! async workers; the task's messages are asked through the invocation's own coordinator link.
+//! async workers; the task's messages and the run's questions are asked through the invocation's own coordinator link.
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -23,12 +23,13 @@ use orchester_core::{
 use orchester_store::ProjectDb;
 use parking_lot::Mutex;
 
-use super::super::link::{CoordinatorLink, messages as message_link};
+use super::super::link::{CoordinatorLink, messages as message_link, questions as question_link};
 
 /// The run, task and step execution an invocation's agent works on, and where their records are.
 pub(super) struct RunRecords {
   pub(super) root: PathBuf,
-  /// Where the task's messages are asked for: a link of the invocation's own, which its tool calls share.
+  /// Where the task's messages and the run's questions are asked for: a link of the invocation's own, which its tool
+  /// calls share.
   pub(super) link: Mutex<Box<dyn CoordinatorLink + Send>>,
   pub(super) run: RunId,
   pub(super) task: TaskId,
@@ -58,7 +59,7 @@ impl RunRecords {
       .map_err(|error| unreadable(&error))?
       .ok_or_else(|| ToolResult::unavailable("the run's task no longer exists"))?;
     let plans = db.plans(self.run).map_err(|error| unreadable(&error))?;
-    let questions = db.questions(self.run).map_err(|error| unreadable(&error))?;
+    let questions = question_link::questions(&**self.link.lock(), self.run).map_err(|error| unreadable(&error))?;
     let messages = message_link::messages(&**self.link.lock(), self.task).map_err(|error| unreadable(&error))?;
     let view = TaskView {
       run: self.run,

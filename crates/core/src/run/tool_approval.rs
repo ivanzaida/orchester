@@ -42,7 +42,8 @@ pub fn cut_arguments(recorded: &str) -> Option<&str> {
   recorded.strip_suffix(cut_mark().as_str())
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// A request as it waits; it travels as it is to a run's executor (the coordinator link).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PendingToolApproval {
   pub id: String,
   pub run: RunId,
@@ -62,7 +63,7 @@ pub struct PendingToolApproval {
 }
 
 /// How a native agent's `run_command` would run (`docs/architecture/native-agent.md` §4.6, 04.H9).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NativeCommandAsk {
   /// The shell the command string goes to; `None` when the program runs without one.
   pub shell: Option<CommandShell>,

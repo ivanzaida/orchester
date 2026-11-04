@@ -27,6 +27,7 @@ use orchester_store::ProjectDb;
 
 use super::{
   Scheduler, failed, idle,
+  link::LocalLink,
   prepare::{self, Prepared},
 };
 use crate::execution::executor::{control::Control, question::held_by_question};
@@ -163,8 +164,9 @@ fn deliver_idle(db: &mut ProjectDb, root: &Path, run: RunId) -> Result<Option<Pr
 /// Whether a step of `run` waits for an answer that a message can give: one that no question with suggested
 /// answers holds.
 fn answerable(db: &ProjectDb, run: &Run) -> Result<bool, Rejection> {
+  let link = LocalLink::over(db);
   for execution in run.awaiting_answer() {
-    if !held_by_question(db, run.id(), execution).map_err(|error| failed("cannot read the run's questions", &error))? {
+    if !held_by_question(&link, run.id(), execution).map_err(|error| failed("cannot read the run's questions", &error))? {
       return Ok(true);
     }
   }

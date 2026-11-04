@@ -14,27 +14,48 @@ use tokio::sync::mpsc::error::SendError;
 use super::{
   Notifier,
   control::{Ack, answer},
+  link::{
+    ApprovalLink, LinkError,
+    approvals::{approval_answered, pending_approvals},
+  },
   run::{ExecutionError, RunTask},
   step::worker::ApprovalDecision,
 };
 
-/// Ends request `id` of `run`, which no live agent holds, if it still waits: whether it did, and why its
-/// answer is refused ([`refusal`]).
-pub(in crate::execution) fn end_unheld(
+/// Ends request `id` of `run`, which no live agent holds, if it still waits, in `db`: whether it did, and why its
+/// answer is refused, asked through `link` ([`unheld_refusal`]).
+pub(in crate::execution) fn end_unheld<E: From<StoreError> + From<LinkError>>(
   db: &mut ProjectDb,
+  link: &(impl ApprovalLink + ?Sized),
   run: RunId,
   id: &str,
-) -> Result<(bool, Rejection), StoreError> {
-  if db.end_waiting_tool_approval(run, id)? {
-    return Ok((true, Rejection::ToolApprovalNotAwaited));
+) -> Result<(bool, Rejection), E> {
+  let ended = db.end_waiting_tool_approval(run, id)?;
+  Ok((ended, unheld_refusal(ended, link, run, id)?))
+}
+
+/// Why an answer to request `id` of `run`, which no live agent holds, is refused once ending it found it still
+/// waiting (`ended`) or not ([`refusal`]).
+pub(in crate::execution) fn unheld_refusal(
+  ended: bool,
+  link: &(impl ApprovalLink + ?Sized),
+  run: RunId,
+  id: &str,
+) -> Result<Rejection, LinkError> {
+  if ended {
+    return Ok(Rejection::ToolApprovalNotAwaited);
   }
-  Ok((false, refusal(db, run, id)?))
+  refusal(link, run, id)
 }
 
 /// Why an answer to request `id` of `run`, which no longer waits, is refused: it was answered already,
 /// or it ended without an answer.
-pub(in crate::execution) fn refusal(db: &ProjectDb, run: RunId, id: &str) -> Result<Rejection, StoreError> {
-  Ok(if db.tool_approval_answered(run, id)? {
+pub(in crate::execution) fn refusal(
+  link: &(impl ApprovalLink + ?Sized),
+  run: RunId,
+  id: &str,
+) -> Result<Rejection, LinkError> {
+  Ok(if approval_answered(link, run, id)? {
     Rejection::ToolApprovalAnswered
   } else {
     Rejection::ToolApprovalNotAwaited
@@ -52,9 +73,9 @@ impl RunTask {
     (given, by): (ApprovalAnswer, Answerer),
     ack: Ack,
   ) -> Result<(), ExecutionError> {
-    let pending = self.db.pending_tool_approvals(self.run.id())?;
+    let pending = pending_approvals(&*self.link, self.run.id())?;
     let Some(approval) = pending.iter().find(|approval| approval.id == id) else {
-      answer(ack, Err(refusal(&self.db, self.run.id(), &id)?));
+      answer(ack, Err(refusal(&*self.link, self.run.id(), &id)?));
       return Ok(());
     };
     let worker = self
@@ -80,7 +101,7 @@ impl RunTask {
 
   /// No agent of the run holds request `id`: it ends if it still waits, and the answer is refused.
   fn end_unheld(&mut self, id: &str, ack: Ack) -> Result<(), ExecutionError> {
-    let (ended, refusal) = end_unheld(&mut self.db, self.run.id(), id)?;
+    let (ended, refusal) = end_unheld::<ExecutionError>(&mut self.db, &*self.link, self.run.id(), id)?;
     if ended {
       notify(&self.notifier, self.run.id(), self.task.id());
     }
@@ -92,11 +113,13 @@ impl RunTask {
   /// waiting can never be answered, and end.
   pub(super) fn end_waiting_approvals(&mut self) {
     let run = self.run.id();
-    let ended = self.db.pending_tool_approvals(run).and_then(|waiting| {
-      waiting.iter().try_fold(false, |ended, approval| {
-        Ok(self.db.end_waiting_tool_approval(run, &approval.id)? || ended)
-      })
-    });
+    let ended = pending_approvals(&*self.link, run)
+      .map_err(ExecutionError::from)
+      .and_then(|waiting| {
+        waiting.iter().try_fold(false, |ended, approval| {
+          Ok(self.db.end_waiting_tool_approval(run, &approval.id)? || ended)
+        })
+      });
     match ended {
       Ok(false) => {}
       Ok(true) => {

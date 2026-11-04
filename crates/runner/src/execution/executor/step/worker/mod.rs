@@ -47,7 +47,7 @@ use super::{
   super::{
     Notifier,
     control::Ack,
-    link::{CoordinatorLink, LinkError},
+    link::{CoordinatorLink, LinkError, approvals},
     run::ExecutionError,
     sink::Sink,
     tool::CommandFinished,
@@ -259,7 +259,8 @@ pub(super) struct Watch {
   pub(super) db: ProjectDb,
   /// Where the invocation's transcript and the changes to its rows are recorded.
   sink: Box<dyn Sink>,
-  /// Where the messages sent to the agent while its turn runs, and the files attached to them, are asked for.
+  /// Where the messages sent to the agent while its turn runs, and the files attached to them, are asked for, and what
+  /// its requests and questions are answered by: the rules, the run's auto-approval and the requests as recorded.
   pub(super) link: Box<dyn CoordinatorLink + Send>,
   pub(super) invocation: Invocation,
   pub(super) tracker: InvocationTracker,
@@ -364,8 +365,11 @@ impl Watch {
   }
 
   /// Whether Autopilot answers this agent's requests now: the run is in it, and its own *Stop* did not take it back.
-  pub(super) fn in_autopilot(&self) -> Result<bool, StoreError> {
-    Ok(self.approval_mode()?.is_autopilot() && self.db.run_auto_approve(self.invocation.run)? != Some(false))
+  pub(super) fn in_autopilot(&self) -> Result<bool, WorkerError> {
+    Ok(
+      self.approval_mode()?.is_autopilot()
+        && approvals::run_auto_approve(&*self.link, self.invocation.run)? != Some(false),
+    )
   }
 
   /// Ready once a call the relay holds for a person can no longer be answered: a Claude Code call waiting
@@ -419,7 +423,7 @@ impl Worker {
 
   /// The worker's regular beat: what waits is written, and a request Autopilot brought to the person is looked at
   /// again should its run have dropped to Manual ([`Worker::recheck_mode`]).
-  async fn tick(&mut self, watch: &mut Watch) -> Result<(), StoreError> {
+  async fn tick(&mut self, watch: &mut Watch) -> Result<(), WorkerError> {
     self.flush(watch)?;
     self.poll_servers(watch).await?;
     self.recheck_mode(watch).await
@@ -430,13 +434,14 @@ impl Worker {
   /// tokens to the run before the run hears of the end. So the run, still listening, counts them toward
   /// its budget and the step's, once, before another invocation of the step reads what the step used.
   /// `reviews_ended` is the other end of [`Worker::reviews_held`]. What the agent does is recorded in the sink of
-  /// `ends`, the coordinator's, and what is sent to it is asked through its link.
+  /// `ends`, the coordinator's, and what is sent to it, the rules its requests are answered by and its questions
+  /// are asked through its link.
   pub(in super::super) async fn work(mut self, mut reviews_ended: mpsc::Receiver<Infallible>, ends: Coordinator) {
     let execution = self.invocation.execution;
     let events = self.events.clone();
     let mcp_file = self.mcp_file.take();
     let end = if self.is_native() {
-      self.follow_native(ends).await.map_err(WorkerError::from)
+      self.follow_native(ends).await
     } else {
       self.follow(ends).await
     };

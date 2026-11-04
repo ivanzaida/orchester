@@ -43,7 +43,7 @@ use self::{
   process::{StopReview, stop_review},
   setup::{PushPlace, ReviewJob, ReviewerSetup, hold_now, ignored_build_output},
 };
-use super::{super::answer::Settled, Watch, Worker};
+use super::{super::answer::Settled, Watch, Worker, WorkerError};
 
 /// The longest a review may take; the reviewer is stopped then, and the person decides.
 const REVIEW_TIMEOUT: Duration = Duration::from_secs(60);
@@ -178,7 +178,7 @@ impl Worker {
   /// Records what the reviewer did with its request, and answers it when the reviewer approved, unless the person
   /// answered first; else the request comes to the person with why. A review whose run changed mode meanwhile is
   /// dropped, and the request is answered by the mode it is in now.
-  pub(super) async fn apply_review(&mut self, watch: &mut Watch, reviewed: Reviewed) -> Result<(), StoreError> {
+  pub(super) async fn apply_review(&mut self, watch: &mut Watch, reviewed: Reviewed) -> Result<(), WorkerError> {
     let Reviewed {
       approval: id,
       question,
@@ -200,12 +200,12 @@ impl Worker {
       watch.db.set_reviewing(run, &id, false)?;
       let unsure = CameToPerson::because(PersonReason::ReviewerUnsure);
       self.ask_person(watch, (&id, &unsure), autopilot)?;
-      return Err(error);
+      return Err(error.into());
     }
     let answer = match after_review(question, &review) {
       Ok(answer) => answer,
       // The person decides, and now reads why the reviewer left it to them.
-      Err(came) => return self.ask_person(watch, (&id, &came), autopilot),
+      Err(came) => return Ok(self.ask_person(watch, (&id, &came), autopilot)?),
     };
     let (approval, awaiting) = watch.approval.take().expect("the waiting request was matched above");
     let subject = ApprovalSubject::of(&approval, &self.scope);

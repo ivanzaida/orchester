@@ -53,7 +53,8 @@ pub use self::{
   answer::{
     AlwaysAllowError, AlwaysUnavailable, AnswerKind, AnswerRecord, Answerer, ApprovalAnswer, ApprovalRule,
     ApprovalRuleId, ApprovalSubject, AutoAsk, AutoVerdict, AutomationAnswerError, CameToPerson, DecidedBy, DenialNote,
-    DenialNoteError, ModeStep, PersonReason, ProjectRule, ProjectRuleId, ProjectScope, RequestAnswer, ReviewQuestion,
+    DenialNoteError, ModeStep, NotAProjectScope, PersonReason, ProjectRule, ProjectRuleId, ProjectScope, RequestAnswer,
+    ReviewQuestion,
     RuleScope, SimilarUnavailable, ToolDecision, ToolReach, UnknownAnswer, after_review, allowing_command,
     allowing_tool, always_prefixes, answering, answering_in_project, auto_approves, auto_verdict, autopilot_check,
     autopilot_step, codex_denial, denial_message, denial_with_message, listing, permitted, without_reviewer,

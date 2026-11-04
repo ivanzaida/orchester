@@ -19,11 +19,11 @@ use orchester_store::StoreError;
 
 use super::{
   super::native::{NativeHandle, NativeUpdate},
-  Coordinator, Driver, FLUSH_INTERVAL, Finished, Stop, StopCause, Watch, Worker, review,
+  Coordinator, Driver, FLUSH_INTERVAL, Finished, Stop, StopCause, Watch, Worker, WorkerError, review,
 };
 
 impl Worker {
-  pub(super) async fn follow_native(mut self, ends: Coordinator) -> Result<Finished, StoreError> {
+  pub(super) async fn follow_native(mut self, ends: Coordinator) -> Result<Finished, WorkerError> {
     let mut watch = Watch::open(&self.root, &self.invocation, ends)?;
     let mut flush = tokio::time::interval(FLUSH_INTERVAL);
     let mut listening = true;
@@ -33,8 +33,10 @@ impl Worker {
         update = next_update(&mut self.driver) => match update {
           Some(NativeUpdate::Activity(event)) => self.observe(&mut watch, event)?,
           Some(NativeUpdate::Approval(ask)) => self.request_native_approval(&mut watch, ask).await?,
-          Some(NativeUpdate::Ended(end)) => return self.finish_native(watch, end),
-          None => return self.finish_native(watch, Err("the native agent ended without saying how".to_owned())),
+          Some(NativeUpdate::Ended(end)) => return Ok(self.finish_native(watch, end)?),
+          None => {
+            return Ok(self.finish_native(watch, Err("the native agent ended without saying how".to_owned()))?);
+          }
         },
         _ = flush.tick() => self.tick(&mut watch).await?,
         decision = self.decisions.recv(), if deciding => match decision {
