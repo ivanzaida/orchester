@@ -30,23 +30,24 @@ use orchester_store::{AutomationPoints, ProjectDb, StoreError};
 use tokio::runtime::Handle;
 
 use super::{
+  super::super::super::link::CoordinatorLink,
   process::{ReviewPlace, SupervisedRunner, stop_review},
   setup::{ReviewerSetup, ReviewerSources, reviewer_setup},
 };
-use crate::{computer::ComputerResources, execution::coordinator::link::LocalLink};
+use crate::computer::ComputerResources;
 
 /// The longest an estimate may take; the estimator is stopped then, and the task gets no points.
 const ESTIMATE_TIMEOUT: Duration = Duration::from_secs(90);
 
-/// Estimates the story points of `task` of the project at `root`, the reviewer's connection read on `computer` and a
-/// native reviewer's key from `vault`.
+/// Estimates the story points of `task` of the project at `root`, the reviewer's settings and variables asked through
+/// `link`, its connection read on `computer` and a native reviewer's key from `vault`.
 pub(in crate::execution) async fn estimate_task(
-  root: PathBuf,
+  (root, link): (PathBuf, Box<dyn CoordinatorLink + Send>),
   (vault, computer): (Arc<dyn SecretVault>, Arc<dyn ComputerResources>),
   task: TaskId,
 ) -> Result<EstimateOutcome, Rejection> {
   let runtime = Handle::current();
-  tokio::task::spawn_blocking(move || estimate_blocking(&root, (vault, computer), task, runtime))
+  tokio::task::spawn_blocking(move || estimate_blocking((&root, &*link), (vault, computer), task, runtime))
     .await
     .map_err(|error| Rejection::Failed {
       detail: error.to_string(),
@@ -54,7 +55,7 @@ pub(in crate::execution) async fn estimate_task(
 }
 
 fn estimate_blocking(
-  root: &Path,
+  (root, link): (&Path, &(dyn CoordinatorLink + Send)),
   (vault, computer): (Arc<dyn SecretVault>, Arc<dyn ComputerResources>),
   task: TaskId,
   runtime: Handle,
@@ -80,7 +81,9 @@ fn estimate_blocking(
     return Ok(EstimateOutcome::TriedBefore);
   }
   let input = EstimateInput::new(task.details(), &db.calibration_records().map_err(failed)?);
-  let setup = reviewer_setup((&db, &LocalLink::over(&db)), &keys).map_err(failed)?;
+  let setup = reviewer_setup((&db, link), &keys).map_err(|error| Rejection::Failed {
+    detail: error.to_string(),
+  })?;
   let provider = setup.provider().map(|(provider, ..)| provider);
   let connection = setup.connection().cloned();
   let started_at = Timestamp::now();

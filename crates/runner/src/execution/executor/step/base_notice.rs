@@ -29,6 +29,7 @@ use orchester_store::NoticeRecord;
 use super::{
   super::{
     checkpoint::{self, Merge},
+    link::base_notices::{pending_notice, tells_base_moves},
     run::{ExecutionError, RunTask},
     workspace::Workspace,
   },
@@ -58,16 +59,16 @@ impl RunTask {
 
   /// The notice `execution`'s agent, working in `worktree`, takes now: the run's pending one, past its window, when it
   /// overlaps the run's changes, its step takes base moves and the project tells its working agents when the base
-  /// branch moves.
+  /// branch moves. The switch and the notice are asked through the coordinator link.
   pub(super) fn notice_for(
     &self,
     execution: StepExecutionId,
     worktree: &Path,
   ) -> Result<Option<BaseNotice>, ExecutionError> {
-    if !self.takes_base_moves(execution) || !self.db.tells_base_moves()? {
+    if !self.takes_base_moves(execution) || !tells_base_moves(&*self.link)? {
       return Ok(None);
     }
-    let notice = self.db.pending_base_notice(self.run.id())?;
+    let notice = pending_notice(&*self.link, self.run.id())?;
     Ok(
       notice
         .filter(|notice| notice.deliverable(Timestamp::now()))
@@ -113,13 +114,11 @@ impl RunTask {
         .agents
         .values()
         .any(|active| matches!(active.workspace, Workspace::Run(_)))
-      || !self.db.tells_base_moves()?
+      || !tells_base_moves(&*self.link)?
     {
       return Ok(None);
     }
-    let Some(notice) = self
-      .db
-      .pending_base_notice(self.run.id())?
+    let Some(notice) = pending_notice(&*self.link, self.run.id())?
       .filter(|notice| notice.deliverable(Timestamp::now()) && notice.overlapping.is_empty())
     else {
       return Ok(None);

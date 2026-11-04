@@ -34,11 +34,13 @@ use orchester_core::{
   orchester_tools::StepSkills,
   resource::{InstructionTarget, SKILL_FILE, Skill, SkillFilePath, Slug, Step},
   run::{ProfileInfo, SkillListing},
-  store::SettingsStore,
 };
 
 use super::super::{
-  link::resources::{blob, pinned_version, resource_names},
+  link::{
+    resources::{blob, pinned_version, resource_names},
+    settings::agent_files,
+  },
   run::RunTask,
 };
 
@@ -151,10 +153,7 @@ impl RunTask {
         .add_placed((&skill.name, &skill.description), Path::new(&skill.path), &skill.files)
         .map_err(|error| problem(error.to_string()))?;
     }
-    let agent_files = self
-      .db
-      .repository_agent_files()
-      .map_err(|error| problem(error.to_string()))?;
+    let agent_files = agent_files(&*self.link).map_err(|error| problem(error.to_string()))?;
     if agent_files.mechanism(provider) == AgentFilesMechanism::CodexLoads {
       for folder in CODEX_SKILL_FOLDERS {
         let folder = folder.iter().fold(worktree.to_path_buf(), |path, name| path.join(name));

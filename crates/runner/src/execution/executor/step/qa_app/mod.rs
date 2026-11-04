@@ -42,15 +42,14 @@ use orchester_core::{
   orchester_tools::{ProcessCall, QA_APP_SCRIPT, QaAppStart, StartedQaApp, ToolResult},
   project::TaskKey,
   run::RunNumber,
-  store::SettingsStore,
   time::Timestamp,
 };
 use orchester_exec::run_processes::RunProcesses;
-use orchester_store::ProjectDb;
 use parking_lot::Mutex;
 
 pub use self::slots::QaSlots;
 use self::slots::{Holder, Lease, Take};
+use super::super::link::{CoordinatorLink, LinkError, settings::qa_slots};
 
 /// How often a start that waits for a QA slot tries again.
 const SLOT_POLL: Duration = Duration::from_millis(500);
@@ -176,8 +175,9 @@ pub(in crate::execution::executor::step) struct StepQa {
   /// The QA folder's name, `.tmp/qa/<name>/` in the worktree.
   pub(in crate::execution::executor::step) name: String,
   pub(in crate::execution::executor::step) worktree: PathBuf,
-  /// The project's repository, whose database holds its *QA apps at once*.
-  pub(in crate::execution::executor::step) root: PathBuf,
+  /// Where the project's *QA apps at once* is asked for at each try: a link of the invocation's own, or why it could
+  /// not be had.
+  pub(in crate::execution::executor::step) link: Mutex<Result<Box<dyn CoordinatorLink + Send>, LinkError>>,
   pub(in crate::execution::executor::step) run_created: Timestamp,
   /// The run's task's key and the run's number, which its slot's record names.
   pub(in crate::execution::executor::step) task: TaskKey,
@@ -297,10 +297,15 @@ impl StepQa {
     }
   }
 
-  /// The project's *QA apps at once* as stored now; the fewest, logged, when it cannot be read.
+  /// The project's *QA apps at once* as stored now, asked through the coordinator link; the fewest, logged, when it
+  /// cannot be read.
   fn allowed(&self) -> Allowed {
-    match ProjectDb::open_read_only(&self.root).and_then(|db| db.project_limits()) {
-      Ok(limits) => limits.qa_slots(),
+    let asked = match &*self.link.lock() {
+      Ok(link) => qa_slots(&**link),
+      Err(error) => Err(error.clone()),
+    };
+    match asked {
+      Ok(slots) => slots,
       Err(error) => {
         tracing::warn!(%error, "the project's QA apps at once cannot be read; this start uses one slot");
         Allowed::new(Allowed::MIN.into()).expect("the fewest QA slots are in range")

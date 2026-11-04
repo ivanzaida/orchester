@@ -40,7 +40,8 @@ impl RunTask {
       state: self.qa.register(invocation),
       name: qa_name(self.run.number(), &step),
       worktree: worktree.to_path_buf(),
-      root: self.root.clone(),
+      // A link that cannot be had is a setting that cannot be read: each start then takes the fewest slots, as before.
+      link: Mutex::new(self.link.another()),
       run_created: self.run.created_at(),
       task: self.task.key().clone(),
       run: self.run.number(),

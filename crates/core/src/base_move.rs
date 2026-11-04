@@ -80,7 +80,8 @@ pub struct LandedTask {
 }
 
 /// Where a notice stands.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
 pub enum NoticeDelivery {
   /// It waits for an agent of a writing step of its run, for the runner to merge it, or for the window of its move to
   /// pass.
@@ -107,7 +108,7 @@ pub enum NoticeDelivery {
 /// Only a notice that overlaps the run's changes interrupts a writing step's agent (ORC-151); the runner merges one
 /// that does not itself, before the run's next step that does not take base moves, and delivers it to a writing step
 /// as one that overlaps when that merge conflicts.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BaseNotice {
   pub id: NoticeId,
   pub run: RunId,

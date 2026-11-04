@@ -5,7 +5,7 @@ use std::num::NonZeroU32;
 
 use orchester_ipc::{
   AttachSession, Command, CommandSender, Event, Reply, RunnerClient, RunnerProcess, ShutdownMode,
-  browser::BrowserCommand,
+  browser::{BrowserCommand, ComputerBrowser},
 };
 use tokio::{
   sync::{mpsc, oneshot},
@@ -77,13 +77,17 @@ impl Session {
   /// Attaches, sends `catch_up` (a change the runner missed while it started) and serves the requests.
   pub(super) async fn serve(
     mut self,
-    (session, agent_slots): (AttachSession, NonZeroU32),
+    (session, agent_slots, browser): (AttachSession, NonZeroU32, ComputerBrowser),
     catch_up: Option<Command>,
     requests: &mut mpsc::UnboundedReceiver<Control>,
     reporter: &Reporter,
   ) -> Served {
     let (reply, mut attached) = oneshot::channel();
-    let attach = Command::Attach { session, agent_slots };
+    let attach = Command::Attach {
+      session,
+      agent_slots,
+      browser,
+    };
     if !self.send(attach, Some(reply)).await {
       return Served::Dropped(RunnerFailure::Lost);
     }

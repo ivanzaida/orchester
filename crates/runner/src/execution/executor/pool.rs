@@ -19,7 +19,10 @@ use orchester_exec::ProcessRunner;
 use orchester_store::{ProjectDb, StoreError, WarmWorkspaceRecord, WorkspaceWritten};
 use thiserror::Error;
 
-use super::sink::Sink;
+use super::{
+  link::{LinkError, SettingsLink, settings::warm_folders},
+  sink::Sink,
+};
 use crate::execution_root::ExecutionRoot;
 
 /// Git here checks out branches of large checkouts and deletes build output: only a git that hangs is stopped.
@@ -30,6 +33,8 @@ const GIT: &str = "git";
 pub(super) enum PoolError {
   #[error(transparent)]
   Store(#[from] StoreError),
+  #[error(transparent)]
+  Link(#[from] LinkError),
   #[error("workspace {number}: {source}")]
   Git {
     number: WorkspaceNumber,
@@ -45,16 +50,17 @@ pub(super) enum Borrowed {
   Wait(WaitReason),
 }
 
-/// Takes a workspace for `holder` in the execution root `root` and switches it to `to`; a new workspace's folder is
-/// made at `base` first. The project's workspaces are read from `db`; the borrow and what follows it go to `sink`.
+/// Takes a workspace for `holder` in the execution root `root` and switches it to `to`, keeping or clearing the warm
+/// folders asked through `link`; a new workspace's folder is made at `base` first. The project's workspaces are read
+/// from `db`; the borrow and what follows it go to `sink`.
 pub(super) fn borrow(
-  (db, sink): (&ProjectDb, &mut dyn Sink),
+  (db, link, sink): (&ProjectDb, &(impl SettingsLink + ?Sized), &mut dyn Sink),
   root: &ExecutionRoot,
   holder: Holder,
   (to, base): (SwitchTo<'_>, &str),
 ) -> Result<Borrowed, PoolError> {
   let limit = db.project_limits()?.agent_slots().get();
-  let folders = db.workspace_settings()?.folders;
+  let folders = warm_folders(link)?;
   let runner = ProcessRunner::new(GIT_TIMEOUT);
   let workspaces = Workspaces::new(&runner, Path::new(GIT), root.repository());
   let branch = match to {

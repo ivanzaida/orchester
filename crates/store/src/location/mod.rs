@@ -41,17 +41,22 @@ impl AppDataLocation {
 }
 
 /// Where the running build keeps its data.
-#[cfg(not(target_os = "macos"))]
 pub fn app_data_location() -> io::Result<AppDataLocation> {
-  Ok(AppDataLocation::beside(&env::current_exe()?))
+  app_data_location_of(&env::current_exe()?)
 }
 
-/// Where the running build keeps its data: the Library for an app bundle, beside the executable
+/// Where the build whose program is `executable` keeps its data, such as that of the runner beside the app.
+#[cfg(not(target_os = "macos"))]
+pub fn app_data_location_of(executable: &Path) -> io::Result<AppDataLocation> {
+  Ok(AppDataLocation::beside(executable))
+}
+
+/// Where the build whose program is `executable` keeps its data: the Library for an app bundle, beside the executable
 /// otherwise.
 #[cfg(target_os = "macos")]
-pub fn app_data_location() -> io::Result<AppDataLocation> {
+pub fn app_data_location_of(executable: &Path) -> io::Result<AppDataLocation> {
   let home = env::var_os("HOME").map(PathBuf::from);
-  macos::location_of(&env::current_exe()?, home.as_deref())
+  macos::location_of(executable, home.as_deref())
 }
 
 /// The application database of the running build. Its folder is created if missing (the Library

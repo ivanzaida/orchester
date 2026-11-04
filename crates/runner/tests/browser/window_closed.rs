@@ -235,21 +235,15 @@ async fn browser_that_cannot_come_back_from_its_window_is_unavailable_with_the_r
   }
   let installed = orchester_exec::browser::find().expect("installed");
   let data = tempfile::tempdir().expect("temporary folder");
-  let database = data.path().join("orchester.db");
-  let mut settings = orchester_store::AppDb::open(&database).expect("the application database");
-  settings
-    .set_browser_program(Some(installed.path()))
-    .expect("the choice is kept");
   let profile = data.path().join("profile");
-  let browser = ProjectBrowser::new(profile.clone())
-    .with_settings(database)
-    .with_windows_out_of_sight();
+  let browser = ProjectBrowser::new(profile.clone()).with_windows_out_of_sight();
+  browser.set_computer(crate::chosen(installed.path()));
   let site = pages().await;
   let mut desktop = Desktop::new();
   let run = RunId::generate();
   let (first, _) = in_its_window(&browser, &mut desktop, &site, run).await;
   let gone = data.path().join("gone").join("chrome");
-  settings.set_browser_program(Some(&gone)).expect("the choice is kept");
+  browser.set_computer(crate::chosen(&gone));
 
   kill(browser_process(&profile).await);
 
