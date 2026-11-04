@@ -4,6 +4,7 @@
 
 mod browser;
 mod estimate;
+mod merge_queue;
 mod resolve;
 
 use std::{
@@ -363,6 +364,7 @@ async fn answer(
     },
     Command::StopTurn { run } => return later.answer(run, async move { handle.stop_turn(run).await }),
     Command::Browser(ref command) => return later.browser(handle, command.clone()),
+    Command::MergeQueue(ref command) => return later.merge_queue(handle, command.clone()),
     Command::Resolve { run, ref request } => return later.resolve(handle, run, request.clone()),
     Command::EstimateTask { task } => return later.estimate(handle, task),
     Command::SetErrorReports { ref reports } => return Answer::ErrorReports(id, reports.clone()),
