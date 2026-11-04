@@ -158,8 +158,8 @@ fn similar_command(command: &ClassifiedCommand) -> Result<SimilarCommand, Simila
     .ok_or(SimilarUnavailable::Unknown)
 }
 
-/// A rule of a run.
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// A rule of a run; it travels as it is to a run's executor (the coordinator link).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ApprovalRule {
   pub id: ApprovalRuleId,
   pub run: RunId,

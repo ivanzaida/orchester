@@ -3,7 +3,8 @@
 //! is read from the agent's final message in the transcript. One that cannot be kept (it holds a
 //! secret's value, or the keychain cannot be read to check it) is reported in the transcript; the
 //! run goes on without it. The handoff is screened here, against the secret values of the computer the run executes
-//! on, and the coordinator keeps it (`docs/architecture/remote-runners.md`, rule 3).
+//! on, and the coordinator keeps it under the project's Memory setting, which it reads itself
+//! (`docs/architecture/remote-runners.md`, rule 3).
 
 use orchester_core::{
   connection::stream::{AgentEvent, MemoryNotSavedReason, RunnerProblem},
@@ -76,7 +77,7 @@ impl Keeper<'_> {
     }
     // The coordinator reads the task's records and changes them in one transaction: no person's decision on them
     // comes between.
-    self.sink.memory(MemoryRecord::Handoff {
+    self.sink.keep_memory(MemoryRecord::Handoff {
       handoff,
       task: run.task(),
       provenance,

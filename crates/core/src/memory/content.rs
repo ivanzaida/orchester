@@ -24,7 +24,6 @@ pub enum MemoryContentError {
 
 /// What kind of knowledge a record holds.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
 pub enum MemoryKind {
   Fact,
   Decision,
@@ -124,7 +123,7 @@ impl MemoryKey {
 impl TryFrom<String> for MemoryKey {
   type Error = MemoryContentError;
 
-  fn try_from(value: String) -> Result<Self, MemoryContentError> {
+  fn try_from(value: String) -> Result<Self, Self::Error> {
     Self::new(&value)
   }
 }
@@ -172,7 +171,7 @@ impl Tags {
 impl TryFrom<Vec<String>> for Tags {
   type Error = MemoryContentError;
 
-  fn try_from(tags: Vec<String>) -> Result<Self, MemoryContentError> {
+  fn try_from(tags: Vec<String>) -> Result<Self, Self::Error> {
     Self::new(tags.iter().map(String::as_str))
   }
 }
@@ -186,7 +185,6 @@ impl From<Tags> for Vec<String> {
 /// How much a record matters. A person sets it; an agent's records are of high importance when
 /// they hand off, of normal importance otherwise.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
 pub enum Importance {
   Low,
   Normal,
@@ -212,7 +210,7 @@ impl Importance {
 
 /// How sure the author is. An agent says so for its own records, and people cannot change it; a
 /// person's record is certain.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum Confidence {
   Low,
   Medium,
@@ -236,39 +234,16 @@ impl Confidence {
   }
 }
 
-/// Everything a record says, validated: what a person may edit.
+/// Everything a record says, validated: what a person may edit. It is read back from serde through
+/// [`MemoryContent::new`], so the text is checked again.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(try_from = "SentContent")]
+#[serde(try_from = "ContentFields")]
 pub struct MemoryContent {
   kind: MemoryKind,
   key: Option<MemoryKey>,
   text: String,
   tags: Tags,
   importance: Importance,
-}
-
-/// [`MemoryContent`] as it arrives, before its text is validated.
-#[derive(Deserialize)]
-struct SentContent {
-  kind: MemoryKind,
-  key: Option<MemoryKey>,
-  text: String,
-  tags: Tags,
-  importance: Importance,
-}
-
-impl TryFrom<SentContent> for MemoryContent {
-  type Error = MemoryContentError;
-
-  fn try_from(sent: SentContent) -> Result<Self, MemoryContentError> {
-    let content = Self::new(sent.kind, &sent.text)?
-      .with_tags(sent.tags)
-      .with_importance(sent.importance);
-    Ok(match sent.key {
-      Some(key) => content.with_key(key),
-      None => content,
-    })
-  }
 }
 
 impl MemoryContent {
@@ -324,5 +299,29 @@ impl MemoryContent {
 
   pub const fn importance(&self) -> Importance {
     self.importance
+  }
+}
+
+/// [`MemoryContent`] as serde reads it, before it is checked.
+#[derive(Deserialize)]
+struct ContentFields {
+  kind: MemoryKind,
+  key: Option<MemoryKey>,
+  text: String,
+  tags: Tags,
+  importance: Importance,
+}
+
+impl TryFrom<ContentFields> for MemoryContent {
+  type Error = MemoryContentError;
+
+  fn try_from(fields: ContentFields) -> Result<Self, Self::Error> {
+    let content = Self::new(fields.kind, &fields.text)?
+      .with_tags(fields.tags)
+      .with_importance(fields.importance);
+    Ok(match fields.key {
+      Some(key) => content.with_key(key),
+      None => content,
+    })
   }
 }

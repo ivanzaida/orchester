@@ -89,7 +89,7 @@ impl Sink for LocalSink {
     self.write(|db| db.write_model_requirement(&requirement))
   }
 
-  fn memory(&mut self, record: MemoryRecord) -> Result<MemoryAnswer, StoreError> {
+  fn keep_memory(&mut self, record: MemoryRecord) -> Result<MemoryAnswer, StoreError> {
     #[cfg(feature = "test-agent")]
     survives_sending(&record);
     let answer = self.write(|db| db.write_memory(&record))?;

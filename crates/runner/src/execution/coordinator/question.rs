@@ -12,12 +12,13 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_ipc::{Event, Rejection};
-use orchester_store::{ProjectDb, StoreError};
+use orchester_store::{ProjectDb, QuestionRecord, StoreError};
 
-use super::{Notifier, Scheduler, failed, idle, sink::LocalSink};
+use super::{Notifier, Scheduler, failed, idle, link::LocalLink, sink::LocalSink};
 use crate::execution::executor::{
   control::Control,
-  question::{end_unheld, refusal},
+  question::{refusal, unheld_refusal},
+  sink::Sink,
 };
 
 impl Scheduler {
@@ -65,16 +66,16 @@ impl Scheduler {
   /// No task executes `run`, so none of its agents waits in its turn: question request `id` ends if it
   /// still waits, and the answer is refused.
   fn end_unheld_question(&self, db: &mut ProjectDb, run: RunId, id: &str) -> Rejection {
+    let failure = |error: &dyn std::error::Error| failed("cannot end a question no agent holds", error);
     let mut sink = LocalSink::new(&self.inner.project_root);
-    match end_unheld((db, &mut sink), run, id) {
-      Ok((ended, refusal)) => {
-        if ended {
-          announce(db, &self.inner.notifier, run);
-        }
-        refusal
-      }
-      Err(error) => failed("cannot end a question no agent holds", &error),
+    let ended = match sink.question(QuestionRecord::ended(run, id)) {
+      Ok(ended) => ended,
+      Err(error) => return failure(&error),
+    };
+    if ended {
+      announce(db, &self.inner.notifier, run);
     }
+    unheld_refusal(ended, &LocalLink::over(&*db), run, id).unwrap_or_else(|error| failure(&error))
   }
 
   /// Ends the questions left waiting in the turns of agents that are gone: those of every run this runner
@@ -146,7 +147,10 @@ fn answer_step_end(
     .answer_questions((run.id(), request.id()), answers, (by, now), Some(message.id()))
     .map_err(store)?
   {
-    return Err(refusal(db, run.id(), request.id()).map_err(store)?);
+    return Err(
+      refusal(&LocalLink::over(&*db), run.id(), request.id())
+        .map_err(|error| failed("cannot record the answer", &error))?,
+    );
   }
   db.send_message(IdempotencyKey::generate(), &message).map_err(store)?;
   tracing::info!(run = %run.id(), execution = %request.execution(), "a step's question was answered");

@@ -8,6 +8,7 @@
 //! made it, and a person can revoke it.
 
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 use super::{
   rule::RuleScope,
@@ -36,23 +37,24 @@ impl ProjectRuleId {
 }
 
 /// What a rule of the project approves: Orchester's `start_qa_app`, while the QA script is at one git blob. Stored as
-/// the [`RuleScope`] Approve similar keeps for the same call, and sent as it.
+/// the [`RuleScope`] Approve similar keeps for the same call, and serialized as it (the coordinator link and the
+/// coordinator's sink), read back only as [`ProjectScope::stored`] takes it.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(try_from = "RuleScope", into = "RuleScope")]
 pub struct ProjectScope {
   script: String,
 }
 
-/// A [`RuleScope`] that names no rule of the project.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
-#[error("not a rule of start_qa_app kept to a script")]
-pub struct NotProjectScope;
+/// A rule scope that is not one a rule of the project keeps ([`ProjectScope::stored`]).
+#[derive(Clone, Copy, Debug, Error, PartialEq, Eq)]
+#[error("a rule of the project approves only `start_qa_app` while its QA script is one git blob")]
+pub struct NotAProjectScope;
 
 impl TryFrom<RuleScope> for ProjectScope {
-  type Error = NotProjectScope;
+  type Error = NotAProjectScope;
 
-  fn try_from(scope: RuleScope) -> Result<Self, NotProjectScope> {
-    Self::stored(scope).ok_or(NotProjectScope)
+  fn try_from(scope: RuleScope) -> Result<Self, NotAProjectScope> {
+    Self::stored(scope).ok_or(NotAProjectScope)
   }
 }
 
@@ -139,8 +141,8 @@ impl ProjectScope {
 /// How many characters of a script's blob a person reads, as git abbreviates one.
 const SHORT_SCRIPT: usize = 7;
 
-/// A rule of the project ([`ProjectScope`]).
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// A rule of the project ([`ProjectScope`]); it travels as it is to a run's executor (the coordinator link).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProjectRule {
   pub id: ProjectRuleId,
   pub scope: ProjectScope,

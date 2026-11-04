@@ -30,7 +30,7 @@ pub use self::{
   },
   note::{DenialNote, DenialNoteError},
   permitted::permitted,
-  project::{ProjectRule, ProjectRuleId, ProjectScope, answering_in_project},
+  project::{NotAProjectScope, ProjectRule, ProjectRuleId, ProjectScope, answering_in_project},
   rule::{ApprovalRule, ApprovalRuleId, RuleScope, SimilarUnavailable, answering},
   subject::{ApprovalSubject, ToolReach},
 };

@@ -71,9 +71,9 @@ pub(super) async fn subject(
       blocking(move || answer::message_change(&root, sending)).await?
     }
     (None, CONTINUE_RUN) => {
-      let (arguments, programs) = (arguments.clone(), services.programs().clone());
+      let (arguments, worktrees) = (arguments.clone(), services.run_worktrees(&root, &scope.name));
       let jobs = services.jobs().of(scope.project);
-      blocking(move || continuation::continue_change((&root, &programs, &jobs), &arguments)).await?
+      blocking(move || continuation::continue_change((&root, &worktrees, &jobs), &arguments)).await?
     }
     (None, control::PAUSE_RUN | control::RESUME_RUN | control::RELEASE_QUEUE) => {
       let (name, arguments) = (name.to_owned(), arguments.clone());

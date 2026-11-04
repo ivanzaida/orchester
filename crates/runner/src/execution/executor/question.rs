@@ -12,44 +12,65 @@ use orchester_core::{
   run::Answerer,
 };
 use orchester_ipc::{Event, Rejection};
-use orchester_store::{ProjectDb, QuestionRecord, StoreError};
+use orchester_store::{QuestionRecord, StoreError};
 use tokio::sync::mpsc::error::SendError;
 
 use super::{
   control::{Ack, answer},
+  link::{
+    LinkError, QuestionLink,
+    questions::{question, questions},
+  },
   run::{ExecutionError, RunTask},
   sink::Sink,
   step::question::QuestionAnswer,
 };
 
-/// Whether a question with suggested answers that ended `execution`'s step still waits: messages written
-/// meanwhile do not resume the step, they reach the agent with the answer.
+/// Whether a question with suggested answers that ended `execution`'s step still waits, asked through `link`:
+/// messages written meanwhile do not resume the step, they reach the agent with the answer.
 pub(in crate::execution) fn held_by_question(
-  db: &ProjectDb,
+  link: &(impl QuestionLink + ?Sized),
   run: RunId,
   execution: StepExecutionId,
-) -> Result<bool, StoreError> {
-  Ok(db.questions(run)?.iter().any(|asked| {
+) -> Result<bool, LinkError> {
+  Ok(questions(link, run)?.iter().any(|asked| {
     asked.waits() && asked.request.turn() == QuestionTurn::StepEnd && asked.request.execution() == execution
   }))
 }
 
 /// Ends request `id` of `run`, which no live agent holds, through `sink` if it still waits: whether it did, and why
-/// its answer is refused, read in `db`.
-pub(in crate::execution) fn end_unheld(
-  (db, sink): (&ProjectDb, &mut dyn Sink),
+/// its answer is refused, asked through `link` ([`unheld_refusal`]).
+pub(in crate::execution) fn end_unheld<E: From<StoreError> + From<LinkError>>(
+  sink: &mut dyn Sink,
+  link: &(impl QuestionLink + ?Sized),
   run: RunId,
   id: &str,
-) -> Result<(bool, Rejection), StoreError> {
-  if sink.question(QuestionRecord::ended(run, id))? {
-    return Ok((true, Rejection::QuestionNotAwaited));
+) -> Result<(bool, Rejection), E> {
+  let ended = sink.question(QuestionRecord::ended(run, id))?;
+  Ok((ended, unheld_refusal(ended, link, run, id)?))
+}
+
+/// Why an answer to request `id` of `run`, which no live agent holds, is refused once ending it found it still
+/// waiting (`ended`) or not ([`refusal`]).
+pub(in crate::execution) fn unheld_refusal(
+  ended: bool,
+  link: &(impl QuestionLink + ?Sized),
+  run: RunId,
+  id: &str,
+) -> Result<Rejection, LinkError> {
+  if ended {
+    return Ok(Rejection::QuestionNotAwaited);
   }
-  Ok((false, refusal(db, run, id)?))
+  refusal(link, run, id)
 }
 
 /// Why an answer to request `id` of `run`, which no longer waits for this answer, is refused.
-pub(in crate::execution) fn refusal(db: &ProjectDb, run: RunId, id: &str) -> Result<Rejection, StoreError> {
-  Ok(match db.question_request(run, id)?.map(|asked| asked.state) {
+pub(in crate::execution) fn refusal(
+  link: &(impl QuestionLink + ?Sized),
+  run: RunId,
+  id: &str,
+) -> Result<Rejection, LinkError> {
+  Ok(match question(link, run, id)?.map(|asked| asked.state) {
     Some(QuestionState::Answered { .. }) => Rejection::QuestionAnswered,
     _ => Rejection::QuestionNotAwaited,
   })
@@ -62,9 +83,9 @@ impl RunTask {
     (answers, by): (Vec<GivenAnswer>, Answerer),
     ack: Ack,
   ) -> Result<(), ExecutionError> {
-    let asked = self.db.question_request(self.run.id(), &request)?;
+    let asked = question(&*self.link, self.run.id(), &request)?;
     let Some(asked) = asked.filter(AskedQuestions::waits) else {
-      answer(ack, Err(refusal(&self.db, self.run.id(), &request)?));
+      answer(ack, Err(refusal(&*self.link, self.run.id(), &request)?));
       return Ok(());
     };
     let worker = self
@@ -87,7 +108,7 @@ impl RunTask {
   }
 
   fn end_unheld_question(&mut self, id: &str, ack: Ack) -> Result<(), ExecutionError> {
-    let (ended, refusal) = end_unheld((&self.db, self.sink.as_mut()), self.run.id(), id)?;
+    let (ended, refusal) = end_unheld::<ExecutionError>(self.sink.as_mut(), &*self.link, self.run.id(), id)?;
     if ended {
       self.notifier.send(Event::QuestionChanged {
         run: self.run.id(),
@@ -102,14 +123,16 @@ impl RunTask {
   /// answered, and end.
   pub(super) fn end_waiting_questions(&mut self) {
     let run = self.run.id();
-    let ended = self.db.questions(run).and_then(|asked| {
-      asked
-        .iter()
-        .filter(|asked| asked.waits() && asked.request.turn() == QuestionTurn::InTurn)
-        .try_fold(false, |ended, asked| {
-          Ok(self.sink.question(QuestionRecord::ended(run, asked.request.id()))? || ended)
-        })
-    });
+    let ended = questions(&*self.link, run)
+      .map_err(ExecutionError::from)
+      .and_then(|asked| {
+        asked
+          .iter()
+          .filter(|asked| asked.waits() && asked.request.turn() == QuestionTurn::InTurn)
+          .try_fold(false, |ended, asked| {
+            Ok(self.sink.question(QuestionRecord::ended(run, asked.request.id()))? || ended)
+          })
+      });
     match ended {
       Ok(false) => {}
       Ok(true) => self.notifier.send(Event::QuestionChanged {

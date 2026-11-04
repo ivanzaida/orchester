@@ -1,7 +1,7 @@
 //! What the tools work with: the same workspace, runners, servers and programs the screens use, so a
 //! tool goes through the paths a person's action goes through, with the same rules and records.
 
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
 use orchester_core::{id::ResourceId, resource::ResourceBody, store::ResourceStore, time::Timestamp};
 use orchester_exec::programs::Programs;
@@ -17,7 +17,7 @@ use crate::{
   runner::Runners,
   secrets::Vault,
   sharing::Servers,
-  tasks::{estimate::Estimates, integration_jobs::ProjectJobs, outside::OutsideChanges},
+  tasks::{estimate::Estimates, integration_jobs::ProjectJobs, outside::OutsideChanges, resolve::RunWorktrees},
   workspace::{OpenProject, Workspace},
 };
 
@@ -139,6 +139,11 @@ impl Services {
   /// The programs the tools run git with.
   pub(crate) const fn programs(&self) -> &Programs {
     &self.programs
+  }
+
+  /// The run worktrees of the project at `root`, named `name`, reached through its runner.
+  pub(crate) fn run_worktrees(&self, root: &Path, name: &str) -> RunWorktrees {
+    RunWorktrees::through_runner(&self.runners, (root, name))
   }
 
   /// The chat's git in the runs' worktrees of the project at `root`, which its runner runs.

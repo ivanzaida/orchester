@@ -9,11 +9,15 @@
 
 mod request;
 pub mod tool;
+mod wire;
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-pub use self::request::{AskedQuestions, QuestionRequest, QuestionState, QuestionTurn};
+pub use self::{
+  request::{AskedQuestions, NoQuestions, QuestionRequest, QuestionState, QuestionTurn},
+  wire::WireQuestionsError,
+};
 
 /// The most options one question may suggest.
 pub const MAX_OPTIONS: usize = 26;
@@ -226,8 +230,9 @@ impl From<&Answer> for GivenAnswer {
   }
 }
 
-/// The person's answer to one question: the labels picked, in the options' order, and their own text.
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// The person's answer to one question: the labels picked, in the options' order, and their own text. It serializes
+/// as the [`GivenAnswer`] it reads back from, checked against its question ([`Question::answer`]).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct Answer {
   choices: Vec<String>,
   text: Option<String>,

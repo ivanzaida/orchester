@@ -56,7 +56,7 @@ pub(in crate::execution) trait Sink: Send {
   fn model_requirement(&mut self, requirement: ModelRequirement) -> Result<(), StoreError>;
 
   /// Keeps an agent's memory write, its content already screened (`orchester_store::ProjectDb::write_memory`).
-  fn memory(&mut self, record: MemoryRecord) -> Result<MemoryAnswer, StoreError>;
+  fn keep_memory(&mut self, record: MemoryRecord) -> Result<MemoryAnswer, StoreError>;
 
   /// Another sink of the same coordinator, for a task of the run's own: an agent's or a command's worker.
   fn another(&self) -> Box<dyn Sink>;
