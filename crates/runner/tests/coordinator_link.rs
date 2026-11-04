@@ -8,17 +8,21 @@ use std::{
 };
 
 use orchester_core::{
+  attachment::{Attachment, AttachmentName, NewAttachment},
   blob::ContentHash,
-  id::{ConnectionId, ResourceId, VersionId},
+  conversation::{Message, MessageBody, Recipient, Timing},
+  id::{ConnectionId, ResourceId, RunId, TaskId, VersionId},
   name::Name,
   resource::{
     AgentProfile, AgentTargets, CommandAction, CommandProgram, InjectionEvent, Instruction, InstructionScope, ModelId,
     PromptText, ProviderSettings, Skill, SkillFile, SkillFilePath, Tool, VersionNumber,
   },
   run::{PinnedVersion, RunnerFailure},
+  time::Timestamp,
 };
 use orchester_runner::execution::link::{
   LinkError,
+  messages::{AttachedContent, AttachedRequest, MessagesRequest},
   resources::{
     Blob, BlobRequest, PinnedBody, PinnedKind, ResourceLink, ResourceNames, ResourceRequest, VersionRequest,
     pinned_version,
@@ -119,6 +123,45 @@ fn coordinator_link_resource_answers_round_trip() {
   round_trip(&Blob {
     content: b"cargo test".to_vec(),
   });
+}
+
+/// A 3 by 2 PNG header, which is taken as an image.
+fn png() -> Vec<u8> {
+  let mut bytes = b"\x89PNG\r\n\x1a\n\0\0\0\x0dIHDR".to_vec();
+  bytes.extend(3u32.to_be_bytes());
+  bytes.extend(2u32.to_be_bytes());
+  bytes.extend([8, 6, 0, 0, 0]);
+  bytes
+}
+
+#[test]
+fn coordinator_link_a_message_with_an_attachment_round_trips() {
+  let (task, run) = (TaskId::generate(), RunId::generate());
+  let body = MessageBody::new("Use this screenshot").expect("text");
+  let message = Message::from_person(task, Some(run), Recipient::Orchestrator, body, Timestamp::now())
+    .sent(Timing::Now)
+    .expect("a person's message is sent now");
+  round_trip(&MessagesRequest { task });
+  round_trip(&vec![message.clone()]);
+  round_trip(&AttachedRequest { message: message.id() });
+  let file = NewAttachment::new(AttachmentName::new("shot.png").expect("a name"), png()).expect("an image");
+  let attachment = Attachment::kept(&file, hash());
+  let attached = vec![
+    AttachedContent {
+      attachment: attachment.clone(),
+      content: Ok(png()),
+    },
+    AttachedContent {
+      attachment,
+      content: Err("the project's copy is gone".to_owned()),
+    },
+  ];
+  round_trip(&attached);
+  let shown = format!("{:?}", attached[0]);
+  assert!(
+    shown.contains("shot.png") && !shown.contains("137, 80, 78, 71"),
+    "{shown}"
+  );
 }
 
 #[test]

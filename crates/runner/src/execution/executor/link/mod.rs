@@ -7,11 +7,13 @@
 //! one or a closure. Reads keep their timing: what an agent start read before, it asks the link at each start.
 //!
 //! Each area of the project's data has a trait and a module of its own, which [`CoordinatorLink`] gathers, so an area
-//! added later (messages, memories, approvals, settings) adds its trait and module without touching another's:
+//! added later (memories, approvals, settings) adds its trait and module without touching another's:
 //! - [`resources`]: the resource versions a run pinned, read by id, and the blobs they refer to.
+//! - [`messages`]: the task's conversation, and the files people attached to its messages with their content.
 //!
 //! No secret value is part of any message: the executor reads values on its own computer (`crate::computer`).
 
+pub mod messages;
 pub mod resources;
 #[cfg(feature = "test-agent")]
 pub mod sent;
@@ -20,12 +22,14 @@ use orchester_core::run::RunnerFailure;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-pub use self::resources::ResourceLink;
+pub use self::{messages::MessageLink, resources::ResourceLink};
 
 /// Everything the executor asks its coordinator: one trait per area.
-pub trait CoordinatorLink: ResourceLink {}
-
-impl<T: ResourceLink + ?Sized> CoordinatorLink for T {}
+pub trait CoordinatorLink: ResourceLink + MessageLink {
+  /// Another link to the same coordinator, for a task of the run's own: an agent's worker, which reads the messages
+  /// sent to its agent while its turn runs.
+  fn another(&self) -> Result<Box<dyn CoordinatorLink + Send>, LinkError>;
+}
 
 /// Why the coordinator could not answer a request: what reading failed with, as text, and what kind of failure it is
 /// when it stops the run ([`RunnerFailure`]: the database stayed busy, is unavailable, or something else).
