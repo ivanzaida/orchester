@@ -12,8 +12,11 @@
 //! - [`messages`]: the task's conversation, and the files people attached to its messages with their content.
 //! - [`approvals`]: the rules that answer a run's tool requests, its auto-approval, and the requests themselves.
 //! - [`questions`]: the questions with suggested answers a run's agents asked.
+//! - [`environment`]: the variables Project settings › Environment sets, which the computer's resources turn into the
+//!   environment there.
 
 pub mod approvals;
+pub mod environment;
 pub mod messages;
 pub mod questions;
 pub mod resources;
@@ -22,12 +25,15 @@ use orchester_core::run::RunnerFailure;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-pub use self::{approvals::ApprovalLink, messages::MessageLink, questions::QuestionLink, resources::ResourceLink};
+pub use self::{
+  approvals::ApprovalLink, environment::EnvironmentLink, messages::MessageLink, questions::QuestionLink,
+  resources::ResourceLink,
+};
 
 /// Everything the executor asks its coordinator: one trait per area.
-pub trait CoordinatorLink: ResourceLink + MessageLink + ApprovalLink + QuestionLink {
+pub trait CoordinatorLink: ResourceLink + MessageLink + ApprovalLink + QuestionLink + EnvironmentLink {
   /// Another link to the same coordinator, for a task of the run's own: an agent's worker, which reads the messages
-  /// sent to its agent while its turn runs.
+  /// sent to its agent while its turn runs and the project's variables its reviews read.
   fn another(&self) -> Result<Box<dyn CoordinatorLink + Send>, LinkError>;
 }
 

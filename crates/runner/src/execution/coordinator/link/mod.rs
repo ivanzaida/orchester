@@ -3,6 +3,7 @@
 //! module of its own.
 
 mod approvals;
+mod environment;
 mod messages;
 mod questions;
 mod resources;
