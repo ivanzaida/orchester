@@ -47,7 +47,12 @@ on another computer is decided with the transport.
    and the transaction stay the same.
 3. Rows the desktop owns are written only by the coordinator: *Always allow* (`mcp_servers`, `resource_versions`,
    `resource_drafts`, `step/answer.rs`), the model requirement of a connection (`connections`, `step/cli_version.rs`),
-   new memories and their changes.
+   new memories and their changes. Done (ORC-680): the executor sends them through the sink as requests
+   (`orchester_store::{RuleRecord, AlwaysAllowRecord, ModelRequirement, MemoryRecord}`), and the coordinator applies
+   them with the store's own functions and answers what the executor needs to go on (the rule's id, Always allow
+   unavailable, the kept note's id and status). Approval rules and their counts (`approval_rules`,
+   `project_approval_rules`) go the same way. The executor screens memory content against its own computer's secret
+   values before it sends it.
 4. Every value that crosses the boundary is serializable (serde), and the tests run the local executor through a
    channel that serializes every message, so nothing that only works in one process slips in.
 5. The desktop reaches a run's worktree only through the runner: reading its uncommitted changes and files, resolving
