@@ -1,6 +1,7 @@
 //! Real git in folders of the tests' own under the worktree's `.tmp/`: git's settings are a file of each test's own
 //! (`GIT_CONFIG_GLOBAL`, `GIT_CONFIG_NOSYSTEM`, the author named there), git looks for no repository above each test's
-//! folder (`GIT_CEILING_DIRECTORIES`) and goes through no proxy. A project `kontur` on `main` with one commit, its
+//! folder (`GIT_CEILING_DIRECTORIES`), goes through no proxy and asks nobody for a password: no credential helper, no
+//! askpass program and no prompt, whatever the machine has. A project `kontur` on `main` with one commit, its
 //! `.orchester/` kept out of git, and a bare `origin` it tracks.
 
 use std::{
@@ -54,7 +55,10 @@ impl CommandRunner for Isolated {
       .with_env("GIT_CONFIG_GLOBAL", &self.global.to_string_lossy())
       .with_env("GIT_CONFIG_NOSYSTEM", "1")
       .with_env("GIT_CEILING_DIRECTORIES", &self.ceiling.to_string_lossy())
-      .with_env("NO_PROXY", "*");
+      .with_env("NO_PROXY", "*")
+      // Nobody is asked for a password, whatever the machine's environment says.
+      .with_env_replaced("GIT_TERMINAL_PROMPT", "0")
+      .with_env_replaced("GCM_INTERACTIVE", "never");
     for variable in [
       "GIT_AUTHOR_NAME",
       "GIT_AUTHOR_EMAIL",
@@ -67,6 +71,8 @@ impl CommandRunner for Isolated {
       "http_proxy",
       "https_proxy",
       "all_proxy",
+      "GIT_ASKPASS",
+      "SSH_ASKPASS",
     ] {
       isolated = isolated.without_env(variable);
     }
@@ -93,8 +99,9 @@ impl Scratch {
     let global = dir.path().join("gitconfig");
     fs::write(
       &global,
+      // No credential helper and no askpass program: an empty value clears what any other settings named.
       "[user]\n\tname = Test Author\n\temail = author@example.com\n\tuseConfigOnly = true\n[core]\n\tautocrlf = \
-       false\n[init]\n\tdefaultBranch = main\n",
+       false\n\taskPass =\n[credential]\n\thelper =\n[init]\n\tdefaultBranch = main\n",
     )
     .expect("git's settings");
     let runner = Arc::new(Isolated {
