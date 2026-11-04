@@ -265,6 +265,28 @@ fn only_the_executor_adds_or_removes_run_worktrees() {
   );
 }
 
+/// The executor reads task and project memory only through the coordinator link (ORC-668): it never searches the
+/// project database's memory indexes or reads its records and Memory setting itself.
+#[test]
+fn the_executor_reads_memory_only_through_the_coordinator_link() {
+  let found = lines_naming(
+    "executor",
+    &[
+      "next_invocation_memory",
+      "step_memory",
+      "search_memories",
+      "unreadable_memories",
+      "memory_settings",
+      ".memories(",
+      ".memory(",
+    ],
+  );
+  assert!(
+    found.is_empty(),
+    "executor code reads memory from the project database; ask the coordinator link instead: {found:#?}"
+  );
+}
+
 #[test]
 fn a_coordinator_path_in_code_is_found_and_one_in_a_comment_is_not() {
   assert_eq!(

@@ -7,6 +7,8 @@
 
 use std::collections::BTreeSet;
 
+use serde::{Deserialize, Serialize};
+
 use super::{
   InjectedMemory, InjectionReason, Memory, MemoryAuthor, MemoryLimits, estimated_tokens,
   handoff::DECISIONS,
@@ -15,7 +17,7 @@ use super::{
 use crate::id::MemoryId;
 
 /// What became of a record chosen for a prompt.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Delivery {
   Given,
   /// Given cut to fit the token limit.
@@ -55,7 +57,7 @@ impl Delivery {
 
 /// A record given to a prompt, why, the body the prompt shows (cut, when it was truncated), and the
 /// text the prompt shows for it ([`super::render`]).
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RecalledMemory {
   pub memory: Memory,
   pub reason: InjectionReason,
@@ -66,7 +68,7 @@ pub struct RecalledMemory {
 }
 
 /// A record chosen for a prompt that did not fit it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LeftOut {
   pub memory: MemoryId,
   pub reason: InjectionReason,
@@ -74,8 +76,9 @@ pub struct LeftOut {
   pub delivery: Delivery,
 }
 
-/// The records a prompt gets, in prompt order, and those left out.
-#[derive(Clone, Debug, Default, PartialEq)]
+/// The records a prompt gets, in prompt order, and those left out. It serializes as it is, so whoever
+/// recalled it (the coordinator of a run) can hand it to the prompt's maker as chosen.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Recalled {
   entries: Vec<RecalledMemory>,
   left_out: Vec<LeftOut>,
