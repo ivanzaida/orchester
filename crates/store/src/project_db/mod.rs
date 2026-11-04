@@ -39,6 +39,7 @@ mod message_records;
 mod messages;
 mod modules;
 mod native;
+mod notice_records;
 mod orchestrator;
 mod orchestrator_queue;
 mod orchestrator_reports;
@@ -60,6 +61,7 @@ mod queue_holds;
 mod read_only;
 mod rebases;
 mod reference_bindings;
+mod removal_records;
 mod removals;
 mod repository;
 mod repository_import;
@@ -86,6 +88,7 @@ mod sharing;
 mod sources;
 mod step_outputs;
 mod step_progress;
+mod step_records;
 mod tags;
 mod task_deletion;
 mod task_effort;
@@ -95,6 +98,7 @@ mod tasks;
 mod tool_approvals;
 mod usage;
 mod used_versions;
+mod workspace_records;
 mod workspaces;
 mod worktree_removals;
 mod write_transaction;
@@ -121,6 +125,7 @@ pub use self::{
   invocation_records::{ActivityRecord, InvocationRecord, InvocationStart},
   joining::{JoinedKey, ReturnedTask},
   message_records::MessageRecord,
+  notice_records::NoticeRecord,
   orchestrator::{ChatListing, ChatTurn},
   orchestrator_queue::StartedQueued,
   orchestrator_reports::KeptReport,
@@ -129,6 +134,7 @@ pub use self::{
   question_records::QuestionRecord,
   read_only::ReadOnlyProjectDb,
   reference_bindings::{Bound, BoundBy, BoundReference, ReferenceBinding},
+  removal_records::RemovalRecord,
   resolutions::ResolutionStart,
   resources::ResourceUpdate,
   run_ends::EndedRun,
@@ -141,7 +147,9 @@ pub use self::{
   shared_tasks::{CachedClaim, CachedRunStatus, CachedTask, SharedPerson, SharedTaskInfo},
   shared_versions::{CachedVersion, NamingVersion, ReferenceTarget, ResourceSharing, VersionReference},
   sharing::SharingLink,
+  step_records::StepRecord,
   task_deletion::TaskDeletionFacts,
+  workspace_records::{WarmWorkspaceRecord, WorkspaceWritten},
 };
 use crate::{
   StoreError, git_exclude, migrate,

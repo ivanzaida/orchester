@@ -265,9 +265,7 @@ impl ActivityStore for ProjectDb {
   }
 
   fn save_step_output(&mut self, output: &StepOutput) -> Result<(), StoreError> {
-    retried(&mut self.connection, "save step output", |transaction| {
-      step_outputs::save(transaction, output)
-    })
+    self.write_step(&super::step_records::StepRecord::output(output)?)
   }
 
   fn step_outputs(&self, run: RunId) -> Result<Vec<StepOutput>, StoreError> {

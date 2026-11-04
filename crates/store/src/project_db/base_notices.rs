@@ -13,7 +13,7 @@ use orchester_core::{
 use rusqlite::{OptionalExtension, Row, params};
 use serde::{Deserialize, Serialize};
 
-use super::ProjectDb;
+use super::{ProjectDb, notice_records::NoticeRecord};
 use crate::{
   StoreError,
   rows::{corrupt, decode_json, encode_json, parse},
@@ -30,6 +30,19 @@ struct Body {
   commits: Vec<LandedCommit>,
   tasks: Vec<LandedTask>,
   overlapping: Vec<String>,
+}
+
+/// The body of `notice` with `files` joined to the files it overlaps in, in path order, as stored.
+pub(super) fn overlap_body(notice: &BaseNotice, files: &[String]) -> Result<String, StoreError> {
+  let mut overlapping: Vec<String> = notice.overlapping.iter().chain(files).cloned().collect();
+  overlapping.sort();
+  overlapping.dedup();
+  let body = Body {
+    commits: notice.commits.clone(),
+    tasks: notice.tasks.clone(),
+    overlapping,
+  };
+  encode_json(BODY, SCHEMA, &body)
 }
 
 impl ProjectDb {
@@ -116,18 +129,7 @@ impl ProjectDb {
     (execution, invocation): (StepExecutionId, InvocationId),
     at: Timestamp,
   ) -> Result<bool, StoreError> {
-    let changed = self.connection.execute(
-      "UPDATE base_notices SET execution_id = ?1, invocation_id = ?2, delivered_at = ?3 \
-       WHERE id = ?4 AND revision = ?5 AND delivered_at IS NULL",
-      params![
-        execution.to_string(),
-        invocation.to_string(),
-        at.unix_millis(),
-        notice.id.to_string(),
-        notice.revision.as_str(),
-      ],
-    )?;
-    Ok(changed == 1)
+    self.write_notice(&NoticeRecord::delivered(notice, (execution, invocation), at))
   }
 
   /// Records that the runner merged `notice` into the run's worktree itself at `at`, with the merge commit `merged`,
@@ -139,18 +141,7 @@ impl ProjectDb {
     (execution, merged): (StepExecutionId, &Revision),
     at: Timestamp,
   ) -> Result<bool, StoreError> {
-    let changed = self.connection.execute(
-      "UPDATE base_notices SET execution_id = ?1, merged_revision = ?2, delivered_at = ?3 \
-       WHERE id = ?4 AND revision = ?5 AND delivered_at IS NULL",
-      params![
-        execution.to_string(),
-        merged.as_str(),
-        at.unix_millis(),
-        notice.id.to_string(),
-        notice.revision.as_str(),
-      ],
-    )?;
-    Ok(changed == 1)
+    self.write_notice(&NoticeRecord::merged(notice, (execution, merged), at))
   }
 
   /// Records that pending `notice` overlaps the run's changes also in `files` (ORC-151), as the runner found them in
@@ -158,23 +149,7 @@ impl ProjectDb {
   /// step's agent takes it as a notice that overlaps the run's changes. `false`, with nothing stored, once a newer move
   /// replaced it or it was delivered already.
   pub fn note_base_notice_overlap(&mut self, notice: &BaseNotice, files: &[String]) -> Result<bool, StoreError> {
-    let mut overlapping: Vec<String> = notice.overlapping.iter().chain(files).cloned().collect();
-    overlapping.sort();
-    overlapping.dedup();
-    let body = Body {
-      commits: notice.commits.clone(),
-      tasks: notice.tasks.clone(),
-      overlapping,
-    };
-    let changed = self.connection.execute(
-      "UPDATE base_notices SET body = ?1 WHERE id = ?2 AND revision = ?3 AND delivered_at IS NULL",
-      params![
-        encode_json(BODY, SCHEMA, &body)?,
-        notice.id.to_string(),
-        notice.revision.as_str(),
-      ],
-    )?;
-    Ok(changed == 1)
+    self.write_notice(&NoticeRecord::overlap(notice, files)?)
   }
 
   /// The notices to `task`'s runs, oldest first.
