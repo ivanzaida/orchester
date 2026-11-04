@@ -34,10 +34,9 @@ pub enum OrchestratorText {
   Line,
   /// 13/600 `text_primary`, 1.3: what a decision card asks (`Question` in `3 · Decisions` `bxJZp`).
   Question,
-  /// Geist Mono 10.5 `text_muted`, 1.3: a plan's use in the runs-on picker (`qSIt9` in `WaQcn`).
+  /// Geist Mono 10.5 `text_muted`, 1.3: a plan's use in the runs-on picker (`sP8cS` in `v6mWp8`), an API provider's
+  /// tokens and *no plan limit* (`AJwSk`, `xzvGo` in `AZp3I`), the model over its efforts (`NPHfB`).
   PlanUse,
-  /// 10.5 `text_muted`, 1.3: *no plan limit* under an API provider's tokens (`d4hRF0` in `WaQcn`).
-  PlanNote,
   /// 12 `text_muted`, 1.3: what a fact of a decision card is (`Key` in `bxJZp`).
   FactKey,
   /// 12 `text_secondary`, 1.3: a fact's value (`Value` in `bxJZp`).
@@ -80,7 +79,7 @@ pub enum OrchestratorText {
 }
 
 impl OrchestratorText {
-  pub const ALL: [Self; 27] = [
+  pub const ALL: [Self; 26] = [
     Self::HeaderTitle,
     Self::StartTitle,
     Self::Emphasis,
@@ -89,7 +88,6 @@ impl OrchestratorText {
     Self::Line,
     Self::Question,
     Self::PlanUse,
-    Self::PlanNote,
     Self::FactKey,
     Self::FactValue,
     Self::FactLink,
@@ -124,7 +122,6 @@ impl OrchestratorText {
       Self::Line => "orchestrator_line",
       Self::Question => "orchestrator_question",
       Self::PlanUse => "orchestrator_plan_use",
-      Self::PlanNote => "orchestrator_plan_note",
       Self::FactKey => "orchestrator_fact_key",
       Self::FactValue => "orchestrator_fact_value",
       Self::FactLink => "orchestrator_fact_link",
@@ -156,7 +153,6 @@ impl OrchestratorText {
       Self::Line => style(12.5, FontWeight::Normal, 1.3, 0.0, palette.text_primary),
       Self::Question => style(13.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
       Self::PlanUse => mono(style(10.5, FontWeight::Normal, 1.3, 0.0, palette.text_muted)),
-      Self::PlanNote => style(10.5, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
       Self::FactKey => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
       Self::FactValue => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
       Self::FactLink => style(

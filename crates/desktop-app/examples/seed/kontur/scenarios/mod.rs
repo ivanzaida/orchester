@@ -99,7 +99,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 125] = [
+pub const ALL: [Scenario; 127] = [
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-library", agents_library::seed),
   Scenario::of("agents-browser", agents_browser::seed),
@@ -139,6 +139,8 @@ pub const ALL: [Scenario; 125] = [
   Scenario::of("long-chats", long_chats::seed),
   Scenario::of("orchestrator", orchestrator::seed),
   Scenario::of("orchestrator-not-set-up", orchestrator::not_set_up),
+  Scenario::of("orchestrator-on-codex", orchestrator::on_codex),
+  Scenario::of("orchestrator-codex-limit", orchestrator::codex_limit),
   Scenario::of("orchestrator-context-plenty", orchestrator::context::plenty),
   Scenario::of("orchestrator-context-near-full", orchestrator::context::near_full),
   Scenario::of("orchestrator-context-full", orchestrator::context::full),

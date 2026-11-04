@@ -1,8 +1,9 @@
-//! What the Orchestrator runs on, from the composer's chip (`05 Account and model picker` `v6mWp8`, `05b On an API
-//! provider` `AZp3I`): the picker lists the project's sign-in connections by CLI, each account with its plan's 5-hour
-//! use, a limit reached and until when, or faded while it is not signed in, and its API-provider connections with
-//! their tokens and no plan limit; choosing one publishes the Orchestrator's next version as its settings page does,
-//! only once the person presses *Publish vN*.
+//! What the Orchestrator runs on, from the composer's chip (`05 · Account and model` `v6mWp8`, `05b · On DeepSeek`
+//! `AZp3I`, `Runs-on picker · states` `t7cdi`): one panel with the project's connections on a rail, the chosen one's
+//! models and the chosen model's efforts; an account's plan use and limit in the head of its models, one not signed in
+//! faded and not to be chosen; an API provider with its tokens, no plan limit and no efforts. Choosing a connection, a
+//! model or an effort publishes the Orchestrator's next version at once, with no *Publish* step, and a refused choice
+//! says why and changes nothing.
 
 use orchester_app::{chrome::TITLE_BAR_HEIGHT, routes::OrchestratorChat};
 use orchester_core::{
@@ -110,59 +111,129 @@ fn read_plan(screen: &Orchestrator, account: &AgentAccount, (used, reached): (f6
     .expect("kept");
 }
 
+/// What is published now: its version and settings.
+fn published(screen: &Orchestrator) -> Option<(u32, OrchestratorSettings)> {
+  screen.db().orchestrator_published().expect("read")
+}
+
+/// Opens the picker from the chip of a new conversation.
+fn open(screen: &mut Orchestrator) {
+  screen.go(OrchestratorChat::New);
+  screen.click("orchestrator-runs-on-chip");
+  screen.until("the picker", |screen| screen.exists("orchestrator-runs-on-menu"));
+}
+
 #[test]
-fn orchestrator_picker_shows_each_accounts_plan_use_its_limit_and_a_signed_out_one_faded() {
+fn orchestrator_picker_shows_a_cli_connection_on_the_rail_with_its_models_and_efforts() {
   let mut screen = Orchestrator::new(Setup::Ready);
   let (work, at_work) = on_account(&screen, "Work", true);
   read_plan(&screen, &work, (42.0, false));
   let (busy, at_busy) = on_account(&screen, "Busy", true);
   read_plan(&screen, &busy, (100.0, true));
   let (_, signed_out) = on_account(&screen, "Away", false);
-  screen.go(OrchestratorChat::New);
-  screen.click("orchestrator-runs-on-chip");
-  screen.until("the accounts' plans", |screen| {
-    screen
-      .text(&format!("orchestrator-runs-on-{at_work}-plan"))
-      .contains("42%")
-      && screen
-        .text(&format!("orchestrator-runs-on-{at_busy}-plan"))
-        .contains("limit reached")
+  open(&mut screen);
+  for column in [
+    "orchestrator-runs-on-rail",
+    "orchestrator-runs-on-models",
+    "orchestrator-runs-on-effort",
+    "orchestrator-runs-on-search",
+  ] {
+    assert!(screen.exists(column), "{column}");
+  }
+  for id in [at_work, at_busy, signed_out, screen.claude, screen.codex] {
+    assert!(screen.exists(&format!("orchestrator-runs-on-{id}")), "{id} on the rail");
+  }
+  // What it runs on is chosen: its bar on the rail, its model checked, its efforts beside them, Default first.
+  let claude = screen.claude;
+  assert!(screen.exists(&format!("orchestrator-runs-on-{claude}-bar")));
+  assert_eq!(screen.text("orchestrator-runs-on-model-0"), "haiku");
+  assert_eq!(screen.text("orchestrator-runs-on-model-1"), "opus");
+  assert_eq!(screen.text("orchestrator-runs-on-effort-model"), "haiku");
+  assert_eq!(screen.text("orchestrator-runs-on-effort-0"), "Default the CLI's own");
+  assert_eq!(screen.text("orchestrator-runs-on-effort-1"), "Low");
+  assert!(!screen.exists("orchestrator-runs-on-publish"), "no Publish step");
+  assert!(screen.exists("orchestrator-runs-on-rule"), "a line over the foot");
+  // A plan at its limit has its dot on the rail; one not signed in cannot be chosen.
+  screen.until("Busy's limit read", |screen| {
+    screen.exists(&format!("orchestrator-runs-on-{at_busy}-limit"))
   });
+  assert!(!screen.exists(&format!("orchestrator-runs-on-{at_work}-limit")));
+  screen.press(&format!("orchestrator-runs-on-{signed_out}"));
   assert_eq!(
-    screen.text(&format!("orchestrator-runs-on-{at_work}-plan")),
-    "42% of 5h"
+    published(&screen).map(|(version, _)| version),
+    Some(1),
+    "nothing chosen"
   );
-  // The meter is an 88 track (`y5a6D`), filled to the share; a limit reached fills it.
+
+  // Choosing Work runs on it at once, and its head says its plan's use over an 88 meter filled to it.
+  screen.press(&format!("orchestrator-runs-on-{at_work}"));
+  screen.until("Work published", |screen| {
+    published(screen).is_some_and(|(version, settings)| version == 2 && settings.connection() == at_work)
+  });
+  screen.until("Work's plan", |screen| {
+    screen.text(&format!("orchestrator-runs-on-{at_work}-plan")) == "42% of 5h"
+  });
+  assert_eq!(screen.text(&format!("orchestrator-runs-on-{at_work}-name")), "Work");
+  assert_eq!(
+    screen.text("orchestrator-runs-on-who"),
+    "Claude Code · ana@example.com · Pro plan"
+  );
   let meter = screen.bounds(&format!("orchestrator-runs-on-{at_work}-meter"));
   assert!((meter.width - 88.0).abs() < 0.5, "with its meter: {meter:?}");
   let fill = screen.bounds(&format!("orchestrator-runs-on-{at_work}-meter-fill"));
   assert!((fill.width - 88.0 * 0.42).abs() < 1.0, "filled to 42%: {fill:?}");
-  let full = screen.bounds(&format!("orchestrator-runs-on-{at_busy}-meter-fill"));
-  assert!((full.width - 88.0).abs() < 0.5, "a limit reached fills it: {full:?}");
-  let work_row = screen.text(&format!("orchestrator-runs-on-{at_work}"));
-  assert!(work_row.contains("ana@example.com · "), "{work_row}");
-  let busy_row = screen.text(&format!("orchestrator-runs-on-{at_busy}"));
-  assert!(busy_row.contains("ana@example.com · limit until "), "{busy_row}");
-  let away = screen.text(&format!("orchestrator-runs-on-{signed_out}"));
-  assert!(away.contains("Not signed in · sign in in Connections"), "{away}");
-  assert!(
-    !screen.exists(&format!("orchestrator-runs-on-{signed_out}-plan")),
-    "no plan is read of an account not signed in"
+  // Busy's head says until when its limit holds, and the limit fills its meter.
+  screen.press(&format!("orchestrator-runs-on-{at_busy}"));
+  screen.until("Busy's head", |screen| {
+    screen
+      .text("orchestrator-runs-on-who")
+      .starts_with("Claude Code · ana@example.com · limit until ")
+  });
+  assert_eq!(
+    screen.text(&format!("orchestrator-runs-on-{at_busy}-plan")),
+    "limit reached"
   );
-  // Over its chip, never over it nor under it, where the status bar is, and under the title bar.
+  // The picker is 640 wide, over its chip and under the title bar.
   let (menu, chip) = (
     screen.bounds("orchestrator-runs-on-menu"),
     screen.bounds("orchestrator-runs-on-chip"),
   );
+  assert!((menu.width - 640.0).abs() < 0.5, "640 wide: {menu:?}");
   assert!(menu.y >= TITLE_BAR_HEIGHT - 0.5, "under the title bar: {menu:?}");
   assert!(menu.y + menu.height <= chip.y, "over the chip: {menu:?} {chip:?}");
-  // A faded row cannot be chosen: pressing it changes nothing.
-  screen.press(&format!("orchestrator-runs-on-{signed_out}"));
-  assert!(!screen.exists("orchestrator-runs-on-publish"), "nothing chosen");
+  let effort = screen.bounds("orchestrator-runs-on-effort");
+  assert!((effort.width - 196.0).abs() < 0.5, "Effort 196 wide: {effort:?}");
 }
 
 #[test]
-fn orchestrator_picker_lists_sign_ins_and_api_providers_and_publishes_the_choice() {
+fn orchestrator_picker_applies_a_model_and_an_effort_at_once() {
+  let mut screen = Orchestrator::new(Setup::Ready);
+  open(&mut screen);
+  screen.press("orchestrator-runs-on-model-1");
+  let opus = OrchestratorSettings::new(screen.claude, ModelId::new("opus").expect("model"), None);
+  screen.until("opus published", |screen| published(screen) == Some((2, opus.clone())));
+  screen.until("the chip", |screen| {
+    screen.text("orchestrator-runs-on").ends_with("· opus")
+  });
+  assert!(screen.exists("orchestrator-runs-on-menu"), "the picker stays open");
+  screen.until("opus's efforts", |screen| {
+    screen.text("orchestrator-runs-on-effort-model") == "opus"
+  });
+  screen.press("orchestrator-runs-on-effort-2");
+  let high = OrchestratorSettings::new(
+    screen.claude,
+    ModelId::new("opus").expect("model"),
+    Some("high".to_owned()),
+  );
+  screen.until("high published", |screen| published(screen) == Some((3, high.clone())));
+  // Choosing what is chosen publishes nothing.
+  screen.press("orchestrator-runs-on-effort-2");
+  screen.window.pass();
+  assert_eq!(published(&screen).map(|(version, _)| version), Some(3));
+}
+
+#[test]
+fn orchestrator_picker_on_an_api_provider_has_no_efforts_and_takes_a_typed_model() {
   let mut screen = Orchestrator::new(Setup::Ready);
   let program = std::env::current_exe().expect("a program");
   let deepseek = connections::api_provider("DeepSeek", &program);
@@ -170,57 +241,88 @@ fn orchestrator_picker_lists_sign_ins_and_api_providers_and_publishes_the_choice
     .db()
     .create_connection(&deepseek)
     .expect("the API provider's connection");
-  screen.go(OrchestratorChat::New);
-  screen.click("orchestrator-runs-on-chip");
-  screen.until("the picker", |screen| screen.exists("orchestrator-runs-on-menu"));
-  let menu = screen.text("orchestrator-runs-on-menu");
-  for part in [
-    "Claude Code · your sign-ins",
-    "Codex · your sign-ins",
-    "API providers · pay per token",
-    "Claude Code · api.deepseek.com",
-    "0 today",
-    "no plan limit",
-    "Another account starts a new session: earlier messages aren't remembered.",
-    "Settings ↗",
-  ] {
-    assert!(menu.contains(part), "{part} in {menu}");
-  }
-  assert_eq!(
-    screen.text(&format!("orchestrator-runs-on-{}-name", deepseek.id())),
-    "DeepSeek"
-  );
-  // What it runs on now is chosen; the effort row offers the connection's efforts, Default first.
-  assert_eq!(screen.text("orchestrator-runs-on-model-value"), "haiku");
-  assert!(screen.exists("orchestrator-runs-on-effort"));
-  assert!(!screen.exists("orchestrator-runs-on-publish"), "nothing changed yet");
-
+  open(&mut screen);
   screen.press(&format!("orchestrator-runs-on-{}", deepseek.id()));
-  screen.until("the provider chosen", |screen| {
-    screen.exists("orchestrator-runs-on-sent-to")
+  let pro = OrchestratorSettings::new(deepseek.id(), ModelId::new("deepseek-v4-pro").expect("model"), None);
+  screen.until("DeepSeek published", |screen| {
+    published(screen) == Some((2, pro.clone()))
   });
+  screen.until("its head", |screen| {
+    screen.text("orchestrator-runs-on-who") == "Claude Code · api.deepseek.com"
+  });
+  let usage = screen.text(&format!("orchestrator-runs-on-{}-usage", deepseek.id()));
+  assert_eq!(usage, "0 today no plan limit");
   assert!(screen.text("orchestrator-runs-on-sent-to").contains("api.deepseek.com"));
-  assert_eq!(screen.text("orchestrator-runs-on-model-value"), "deepseek-v4-pro");
   assert!(
     !screen.exists("orchestrator-runs-on-effort"),
-    "a provider that lists no efforts has no effort row"
+    "no efforts listed: no column"
   );
-  assert_eq!(
+  assert!(
     screen
-      .db()
-      .orchestrator_published()
-      .expect("read")
-      .map(|(version, _)| version),
-    Some(1),
-    "choosing alone changes nothing"
+      .text("orchestrator-runs-on-search")
+      .contains("Search or type a model…")
   );
-  assert_eq!(screen.text("orchestrator-runs-on-publish"), "Publish v2");
-  screen.click("orchestrator-runs-on-publish");
-  let chosen = OrchestratorSettings::new(deepseek.id(), ModelId::new("deepseek-v4-pro").expect("model"), None);
-  screen.until("the next version", |screen| {
-    screen.db().orchestrator_published().expect("read") == Some((2, chosen.clone()))
+  // A model it does not list is typed, and taken with Enter.
+  screen.set("orchestrator-runs-on-search", "deepseek-v4-flash");
+  screen.until("the typed model", |screen| {
+    screen.text("orchestrator-runs-on-typed") == "Use deepseek-v4-flash"
   });
-  screen.until("the chip", |screen| {
-    screen.text("orchestrator-runs-on") == "DeepSeek · deepseek-v4-pro"
+  screen.key(("Enter", "Enter"), false);
+  let flash = OrchestratorSettings::new(deepseek.id(), ModelId::new("deepseek-v4-flash").expect("model"), None);
+  screen.until("the typed model published", |screen| {
+    published(screen) == Some((3, flash.clone()))
   });
+}
+
+#[test]
+fn orchestrator_picker_says_why_a_choice_was_refused_and_changes_nothing() {
+  let mut screen = Orchestrator::new(Setup::Ready);
+  let program = std::env::current_exe().expect("a program");
+  let deepseek = connections::api_provider("DeepSeek", &program);
+  screen
+    .db()
+    .create_connection(&deepseek)
+    .expect("the API provider's connection");
+  open(&mut screen);
+  // Removed after the picker read it: choosing it is refused.
+  let db = rusqlite::Connection::open(screen.root.join(".orchester/orchester.db")).expect("the project's database");
+  db.execute("DELETE FROM connections WHERE id = ?1", [deepseek.id().to_string()])
+    .expect("removed");
+  screen.press(&format!("orchestrator-runs-on-{}", deepseek.id()));
+  screen.until("the refusal", |screen| screen.exists("orchestrator-runs-on-error"));
+  let refusal = screen.text("orchestrator-runs-on-error");
+  assert!(!refusal.is_empty(), "it says why");
+  assert_eq!(
+    published(&screen).map(|(version, _)| version),
+    Some(1),
+    "nothing changed"
+  );
+  let claude = screen.claude;
+  assert!(
+    screen.exists(&format!("orchestrator-runs-on-{claude}-bar")),
+    "what it runs on stays chosen"
+  );
+}
+
+#[test]
+fn orchestrator_picker_without_connections_is_its_foot_with_no_line_over_it() {
+  let mut screen = Orchestrator::new(Setup::NoConnection);
+  open(&mut screen);
+  for part in [
+    "orchestrator-runs-on-body",
+    "orchestrator-runs-on-rail",
+    "orchestrator-runs-on-models",
+  ] {
+    assert!(!screen.exists(part), "no {part}");
+  }
+  assert_eq!(
+    screen.text("orchestrator-runs-on-menu"),
+    "Another account starts a new session: earlier messages aren't remembered. Settings ↗"
+  );
+  assert!(!screen.exists("orchestrator-runs-on-rule"), "no line over the foot");
+  let (menu, foot) = (
+    screen.bounds("orchestrator-runs-on-menu"),
+    screen.bounds("orchestrator-runs-on-foot"),
+  );
+  assert!((foot.y - menu.y).abs() < 1.5, "the foot at the top: {menu:?} {foot:?}");
 }
