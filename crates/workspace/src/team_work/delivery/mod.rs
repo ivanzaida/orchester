@@ -111,6 +111,17 @@ impl ModuleDeliveries {
     Ok(ProjectDb::open(self.dispatcher.root())?)
   }
 
+  /// The dispatcher the deliveries go through, e.g. to take the module's claim a request cites.
+  pub const fn dispatcher(&self) -> &Dispatcher {
+    &self.dispatcher
+  }
+
+  /// The team runs of `module` that still work on this computer: while there are any, a request is not sent
+  /// ([`DeliveryProgress::WorkRunning`]).
+  pub fn runs_at_work(&self, module: ModuleId) -> Result<Vec<RunId>, TeamWorkError> {
+    module_runs_at_work(&self.db()?, module)
+  }
+
   /// Requests the delivery `request` asks for: recorded here first, then carried on as far as it goes now, after the
   /// reports of earlier deliveries that wait for the server are sent. Sending the same request again carries on the
   /// recorded delivery; the same operation with another request is refused.

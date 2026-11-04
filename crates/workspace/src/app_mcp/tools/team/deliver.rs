@@ -4,13 +4,13 @@
 //! which answers the claim this session holds already and takes it when nobody holds it); the module branch's tip as
 //! the source commit, and the tip of the branch the checkout has checked out, the base the module branch was made from,
 //! as the base commit. A delivery of the module not settled yet is carried on rather than requested again. An Admin's
-//! authorization or the workspace's automatic merge (D7) decides whether it is delivered: the tool cites no
-//! authorization and never authorizes. Only a delivered module is the tool's result; every other state is a refusal
-//! that names it.
+//! authorization or the workspace's automatic merge (D7) decides whether it is delivered: the request cites the Admin's
+//! `delivery.authorize` operation its caller names, if any, and the tool never authorizes. Only a delivered module is
+//! the tool's result; every other state is a refusal that names it.
 
 use std::path::Path;
 
-use orchester_api::v2::{AuthorityErrorCode, DeliveryState, Subject};
+use orchester_api::v2::{AuthorityError, AuthorityErrorCode, DeliveryState, Subject};
 use orchester_core::{
   id::{ModuleId, OperationId},
   integration::{base::RunBaseSource, checked_out_branch},
@@ -37,7 +37,9 @@ use crate::{
   messages::Message,
   tasks::changes::GIT,
   team_reads::TeamReadError,
-  team_work::{DeliveryProgress, ModuleDeliveries, TeamDeliveryRequest, TeamDeliveryState, TeamWorkError},
+  team_work::{
+    DeliveryProgress, DeliveryStatus, ModuleDeliveries, TeamDeliveryRequest, TeamDeliveryState, TeamWorkError,
+  },
 };
 
 /// The branches a delivery takes the module's work between, each at its tip in the checkout.
@@ -48,11 +50,16 @@ struct Tips {
   base_commit: CommitId,
 }
 
-/// Requests the delivery of the module run `run` of `team` worked in, or carries on the module's open one.
+/// Where the module's delivery stands: what carrying it on answered, `None` when another caller settled it meanwhile;
+/// and its record.
+type Delivered = (Option<DeliveryProgress>, Option<TeamDeliveryState>);
+
+/// Requests the delivery of the module run `run` of `team` worked in, citing the Admin's `authorization` when one is
+/// named, or carries on the module's open one.
 pub(in crate::app_mcp::tools) async fn merge_run(
   services: &Services,
   team: &Team,
-  run: &str,
+  (run, authorization): (&str, Option<OperationId>),
   translate: &Translate,
 ) -> Result<Value, ToolError> {
   let (root, named) = (team.open.repo_root.clone(), run.to_owned());
@@ -70,25 +77,14 @@ pub(in crate::app_mcp::tools) async fn merge_run(
   };
   let dispatcher = team.dispatcher(services).await?;
   let (progress, state) = on_worker(move || async move {
-    let claim = acquire(&dispatcher, Subject::Module { id: module }, delivery_failed).await?;
-    let request = TeamDeliveryRequest {
-      operation: OperationId::generate(),
-      delivery: DeliveryAction {
-        module,
-        claim,
-        branch: tips.branch,
-        source_commit: tips.source_commit,
-        base_commit: tips.base_commit,
-        step: DeliveryStep::Request { authorization: None },
-      },
-      base_branch: tips.base_branch,
-    };
-    deliver(&ModuleDeliveries::new(dispatcher, programs), request)
-      .await
-      .map_err(work_refused)
+    let deliveries = ModuleDeliveries::new(dispatcher, programs);
+    deliver(&deliveries, (module, tips), authorization).await
   })
   .await?;
-  answer(progress, state.as_ref(), translate)
+  match progress {
+    Some(progress) => answer(progress, state.as_ref(), translate),
+    None => recorded(state.as_ref(), translate),
+  }
 }
 
 /// The module run `named` worked in: a run that did not start on a module's branch has no delivery.
@@ -102,7 +98,8 @@ fn run_module(db: &ProjectDb, named: &str) -> Result<ModuleId, ToolError> {
   }
 }
 
-/// The module's `branch` and the branch checked out at `root`, each with its tip.
+/// The module's `branch` and the branch checked out at `root`, each with its tip; refused when the checkout has no
+/// branch checked out, or the module's own.
 fn tips(programs: &Programs, root: &Path, branch: &str) -> Result<Tips, ToolError> {
   let runner = programs.runner();
   let no_base = || ToolError::refused("no_base_branch", vec![Message::new("appMcp.errors.teamDeliveryNoBase")]);
@@ -113,6 +110,12 @@ fn tips(programs: &Programs, root: &Path, branch: &str) -> Result<Tips, ToolErro
       no_base()
     })?
     .ok_or_else(no_base)?;
+  if base_branch.as_str() == branch {
+    return Err(ToolError::refused(
+      "module_branch_checked_out",
+      vec![Message::new("appMcp.errors.teamDeliveryOnModuleBranch").with("branch", branch.to_owned())],
+    ));
+  }
   let base_commit = branch_tip(runner, root, base_branch.as_str())?;
   Ok(Tips {
     // `branch_tip` read the branch by this name, so it is one.
@@ -123,26 +126,49 @@ fn tips(programs: &Programs, root: &Path, branch: &str) -> Result<Tips, ToolErro
   })
 }
 
-/// Carries on the module's open delivery, with the project's other open ones in their order, else requests `request`;
-/// where it stands, and its record.
+/// Carries on the module's open delivery, with the project's other open ones in their order; else, unless runs of the
+/// module still work here, takes the module's claim and requests its delivery between `tips`.
 async fn deliver(
   deliveries: &ModuleDeliveries,
-  request: TeamDeliveryRequest,
-) -> Result<(DeliveryProgress, Option<TeamDeliveryState>), TeamWorkError> {
-  let (operation, progress) = match deliveries.open_delivery(request.delivery.module)? {
-    Some(open) => {
-      let carried = deliveries
-        .recover()
-        .await?
-        .into_iter()
-        .find(|(operation, _)| *operation == open);
-      // Another caller settled it between the read and the recovery: its record says how.
-      let progress = carried.map_or(Err(TeamWorkError::UnreadableDelivery(open)), |(_, progress)| progress)?;
-      (open, progress)
-    }
-    None => (request.operation, deliveries.request(request).await?),
+  (module, tips): (ModuleId, Tips),
+  authorization: Option<OperationId>,
+) -> Result<Delivered, ToolError> {
+  if let Some(open) = deliveries.open_delivery(module).map_err(work_refused)? {
+    // Another caller may have settled it between the read and the recovery: then its record says how.
+    let carried = deliveries
+      .recover()
+      .await
+      .map_err(work_refused)?
+      .into_iter()
+      .find(|(operation, _)| *operation == open)
+      .map(|(_, progress)| progress)
+      .transpose()
+      .map_err(work_refused)?;
+    return Ok((carried, deliveries.delivery_state(open).map_err(work_refused)?));
+  }
+  let running = deliveries.runs_at_work(module).map_err(work_refused)?;
+  if !running.is_empty() {
+    return Ok((Some(DeliveryProgress::WorkRunning(running)), None));
+  }
+  let claim = acquire(deliveries.dispatcher(), Subject::Module { id: module }, delivery_failed).await?;
+  let request = TeamDeliveryRequest {
+    operation: OperationId::generate(),
+    delivery: DeliveryAction {
+      module,
+      claim,
+      branch: tips.branch,
+      source_commit: tips.source_commit,
+      base_commit: tips.base_commit,
+      step: DeliveryStep::Request { authorization },
+    },
+    base_branch: tips.base_branch,
   };
-  Ok((progress, deliveries.delivery_state(operation)?))
+  let operation = request.operation;
+  let progress = deliveries.request(request).await.map_err(work_refused)?;
+  Ok((
+    Some(progress),
+    deliveries.delivery_state(operation).map_err(work_refused)?,
+  ))
 }
 
 /// The tool's answer for where the delivery stands.
@@ -151,48 +177,52 @@ fn answer(
   state: Option<&TeamDeliveryState>,
   translate: &Translate,
 ) -> Result<Value, ToolError> {
-  let refused = |code: &str, message: Message| ToolError::refused(code, vec![message]);
   match progress {
-    DeliveryProgress::WorkRunning(runs) => Err(refused(
+    DeliveryProgress::WorkRunning(runs) => Err(ToolError::refused(
       "team_work_running",
-      Message::new("appMcp.errors.teamDeliveryWorkRunning").with("runs", runs.len().to_string()),
+      vec![Message::new("appMcp.errors.teamDeliveryWorkRunning").with("runs", runs.len().to_string())],
     )),
-    DeliveryProgress::Refused(error) if error.code() == AuthorityErrorCode::DeliveryNotAuthorized => Err(refused(
-      "delivery_not_authorized",
-      Message::new("appMcp.errors.teamDeliveryNotAuthorized"),
-    )),
+    DeliveryProgress::Refused(error) if error.code() == AuthorityErrorCode::DeliveryNotAuthorized => {
+      Err(not_authorized())
+    }
     DeliveryProgress::Refused(error) => Err(authority_refused(&error)),
     DeliveryProgress::Waiting(TeamDeliveryStage::Reporting) => Err(refused(
       "team_delivery_waiting",
-      Message::new("appMcp.errors.teamDeliveryReportWaiting"),
+      "appMcp.errors.teamDeliveryReportWaiting",
     )),
-    DeliveryProgress::Waiting(_) => Err(refused(
-      "team_delivery_waiting",
-      Message::new("appMcp.errors.teamDeliveryWaiting"),
-    )),
+    DeliveryProgress::Waiting(_) => Err(waiting()),
     DeliveryProgress::MergeWaiting => Err(refused(
       "team_delivery_merge_waiting",
-      Message::new("appMcp.errors.teamDeliveryMergeWaiting"),
+      "appMcp.errors.teamDeliveryMergeWaiting",
     )),
     DeliveryProgress::Reported(delivery) => match delivery.state {
-      DeliveryState::Delivered => Ok(delivered(state, translate)?),
-      DeliveryState::Failed => Err(refused(
-        "delivery_failed",
-        Message::new("appMcp.errors.teamDeliveryFailed"),
-      )),
-      DeliveryState::Authorized | DeliveryState::Requested => Err(refused(
-        "team_delivery_waiting",
-        Message::new("appMcp.errors.teamDeliveryWaiting"),
-      )),
+      DeliveryState::Delivered => delivered(state, translate),
+      DeliveryState::Failed => Err(failed()),
+      DeliveryState::Authorized | DeliveryState::Requested => Err(waiting()),
     },
     // A report refused as not authorized is of a delivery the automatic merge's withdrawal failed.
-    DeliveryProgress::ReportRefused(error) if error.code() == AuthorityErrorCode::DeliveryNotAuthorized => Err(
-      refused("delivery_failed", Message::new("appMcp.errors.teamDeliveryWithdrawn")),
-    ),
-    DeliveryProgress::ReportRefused(error) => Err(refused(
-      "delivery_report_refused",
-      Message::new("appMcp.errors.teamDeliveryReportRefused").with("code", code_name(error.code())),
-    )),
+    DeliveryProgress::ReportRefused(error) if error.code() == AuthorityErrorCode::DeliveryNotAuthorized => {
+      Err(refused("delivery_failed", "appMcp.errors.teamDeliveryWithdrawn"))
+    }
+    DeliveryProgress::ReportRefused(error) => Err(report_refused(&error)),
+  }
+}
+
+/// The tool's answer for a delivery another caller settled while this one carried it on, by its record.
+fn recorded(state: Option<&TeamDeliveryState>, translate: &Translate) -> Result<Value, ToolError> {
+  let Some(recorded) = state else {
+    return Err(delivery_failed());
+  };
+  match &recorded.status {
+    DeliveryStatus::Delivered => delivered(state, translate),
+    DeliveryStatus::Failed => Err(failed()),
+    DeliveryStatus::AwaitingAuthorization => Err(not_authorized()),
+    // Only a report is refused once the merge was made here.
+    DeliveryStatus::Refused(error) if recorded.merge.is_some() => Err(report_refused(error)),
+    DeliveryStatus::Refused(error) => Err(authority_refused(error)),
+    DeliveryStatus::Requested | DeliveryStatus::Authorized { .. } | DeliveryStatus::AuthorizedAutomatically => {
+      Err(waiting())
+    }
   }
 }
 
@@ -232,9 +262,29 @@ fn work_refused(error: TeamWorkError) -> ToolError {
   }
 }
 
-fn delivery_failed() -> ToolError {
+fn refused(code: &str, key: &'static str) -> ToolError {
+  ToolError::refused(code, vec![Message::new(key)])
+}
+
+fn not_authorized() -> ToolError {
+  refused("delivery_not_authorized", "appMcp.errors.teamDeliveryNotAuthorized")
+}
+
+fn waiting() -> ToolError {
+  refused("team_delivery_waiting", "appMcp.errors.teamDeliveryWaiting")
+}
+
+fn failed() -> ToolError {
+  refused("delivery_failed", "appMcp.errors.teamDeliveryFailed")
+}
+
+fn report_refused(error: &AuthorityError) -> ToolError {
   ToolError::refused(
-    "team_delivery_failed",
-    vec![Message::new("appMcp.errors.teamDeliveryCouldNotGoOn")],
+    "delivery_report_refused",
+    vec![Message::new("appMcp.errors.teamDeliveryReportRefused").with("code", code_name(error.code()))],
   )
+}
+
+fn delivery_failed() -> ToolError {
+  refused("team_delivery_failed", "appMcp.errors.teamDeliveryCouldNotGoOn")
 }

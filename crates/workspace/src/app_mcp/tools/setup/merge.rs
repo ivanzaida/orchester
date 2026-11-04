@@ -9,7 +9,7 @@ use std::{
 
 use orchester_core::{
   diff::{Diff, FileChange},
-  id::RunId,
+  id::{OperationId, RunId},
   integration::MergeKind,
   revision::Revision,
   run::{Run, RunStatus},
@@ -17,6 +17,8 @@ use orchester_core::{
 };
 use orchester_exec::programs::Programs;
 use orchester_store::ProjectDb;
+use rmcp::schemars::JsonSchema;
+use serde::Deserialize;
 use serde_json::{Value, json};
 use tokio::sync::watch;
 
@@ -126,12 +128,46 @@ fn diff_json(diff: &Diff) -> Value {
   json!({ "files": files, "additions": diff.additions(), "deletions": diff.deletions() })
 }
 
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(crate = "rmcp::schemars")]
+pub struct MergeRun {
+  /// The project's id, or its name.
+  pub project: String,
+  /// The run's id, or its number (`7` or `#7`).
+  pub run: String,
+  /// A team project only: the operation id of the Admin's delivery authorization the module's delivery cites. Leave
+  /// it out for the team's automatic merge, and for a local project.
+  #[serde(default)]
+  pub authorization: Option<String>,
+}
+
 /// `merge_run`: a local project's run merged into its base branch; a team project's run has its module's delivery
 /// requested instead ([`team::merge_run`]).
-pub async fn merge_run(services: &Services, args: InRun, translate: &Translate) -> Result<Value, ToolError> {
+pub async fn merge_run(services: &Services, args: MergeRun, translate: &Translate) -> Result<Value, ToolError> {
+  let authorization = args
+    .authorization
+    .as_deref()
+    .map(|named| {
+      named.parse::<OperationId>().map_err(|_| {
+        ToolError::InvalidArguments(format!(
+          "`authorization` is an operation id such as a UUID, not `{named}`"
+        ))
+      })
+    })
+    .transpose()?;
   if let Some(team) = team::of(services, &args.project).await? {
-    return team::merge_run(services, &team, &args.run, translate).await;
+    return team::merge_run(services, &team, (&args.run, authorization), translate).await;
   }
+  if authorization.is_some() {
+    return Err(ToolError::InvalidArguments(
+      "`authorization` cites a team module delivery's authorization; a local project's merge_run takes none".to_owned(),
+    ));
+  }
+  let args = InRun {
+    project: args.project,
+    run: args.run,
+  };
   merge_at(services, (args, None), translate).await
 }
 
