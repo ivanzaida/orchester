@@ -10,6 +10,7 @@ use orchester_core::{
   connection::{AgentProvider, ApiEndpoint, CheckResult, NativeModel},
   id::{ChatId, ChatMessageId, ConnectionId, IdempotencyKey, ResourceId, RunId, StepExecutionId, TaskId},
   integration::Leftovers,
+  orchestrator::run_git::{RunGitAnswer, RunGitRequest},
   permission::AgentPermissions,
   question::GivenAnswer,
   resource::StepKey,
@@ -303,7 +304,12 @@ pub enum Command {
   /// never does. Answered with [`Reply::RunFolderState`], [`FolderState::Unknown`] when the run has no folder any more
   /// or git cannot tell.
   RunFolderState { run: RunId },
-  /// The code viewer reads the worktree of run `run` (protocol 45, [`crate::run_files`]): the runner's executor side
+  /// git of the Orchestrator chat in a run's worktree, which the runner runs there (protocol 45,
+  /// `docs/architecture/remote-runners.md` rule 5). Answered with [`Reply::RunGit`]; [`Rejection::RunNotFound`] for no
+  /// such run, [`Rejection::RunNotEnded`] for a write, or git that does not only read, before the run ended, and
+  /// [`Rejection::WorktreeRemoved`] when its worktree is gone.
+  RunGit(RunGitRequest),
+  /// The code viewer reads the worktree of run `run` (protocol 46, [`crate::run_files`]): the runner's executor side
   /// reads it where the worktree is. Answered with [`Reply::RunFiles`].
   RunFiles { run: RunId, request: RunFilesRequest },
 }
@@ -513,6 +519,8 @@ pub enum Reply {
     run: RunId,
     state: FolderState,
   },
+  /// The answer to [`Command::RunGit`].
+  RunGit(RunGitAnswer),
   /// The answer to [`Command::RunFiles`]; a file's bytes travel after it in a binary frame.
   RunFiles(RunFilesReply),
   Rejected(Rejection),

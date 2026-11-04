@@ -368,6 +368,7 @@ async fn answer(
     Command::Browser(ref command) => return later.browser(handle, command.clone()),
     Command::Folders(ref command) => return later.folders(handle, command.clone()),
     Command::MergeQueue(ref command) => return later.merge_queue(handle, command.clone()),
+    Command::RunGit(ref git) => return later.reply(handle.run_git(git.clone())),
     Command::EstimateTask { task } => return later.estimate(handle, task),
     Command::RunFolderState { run } => return later.run_folder_state(handle, run),
     Command::SetErrorReports { ref reports } => return Answer::ErrorReports(id, reports.clone()),

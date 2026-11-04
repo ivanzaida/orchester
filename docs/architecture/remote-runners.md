@@ -66,7 +66,7 @@ What the executor side reads today, and through which interface it will:
 | Read today | Where (`crates/runner/src/execution/`) | Through |
 | --- | --- | --- |
 | Pinned resource versions by id, skill blobs | `permissions.rs`, `step/skills.rs`, `step/start/{prompt,shared}.rs`, `tool/mod.rs`, `work.rs` | coordinator link |
-| `messages`, `attachments` and their files | `step/mod.rs`, `step/worker/steer.rs`, `recovery.rs` | coordinator link |
+| `messages`, `attachments` and their files | `step/mod.rs`, `step/worker/steer.rs`, `recovery.rs` | coordinator link: done (ORC-667, `executor/link/messages.rs`), with `conversation.rs` and `get_task` (`step/run_records.rs`); the files' content travels in the answer and the executor keeps its copies in its execution root's `attachments/` (`executor/attached.rs`). Delivery state is still written to the database (ORC-680) |
 | `memories` | `step/memory.rs`, `handoff.rs`, `step/run_records.rs` | coordinator link |
 | `approval_rules`, `project_approval_rules`, `tool_approvals`, `run_auto_approve`, `questions` | `step/answer.rs`, `step/approval.rs`, `question.rs` | coordinator link |
 | Project settings an agent start reads (`code_index`, `repository_agent_files`, `memory_settings`, `approval_mode`, `auto_mode_settings`, `tells_base_moves`) | `step/start/*`, `step/skills.rs`, `handoff.rs`, `step/worker/review/setup.rs`, `step/base_notice.rs` | coordinator link |
@@ -87,12 +87,12 @@ Where the desktop touches a run's worktree today (`crates/workspace/src/`):
 | Base synced into the worktree, Check tools run in it | `merge_queue/drive.rs:211`, `merge_queue/check.rs` |
 | Local integration reading the worktree as a second repository | `tasks/local_integration/{mod,poll,view}.rs`, see [Local integration](#local-integration) |
 | Removal, stopping its processes, index prune, sweep | `tasks/integration.rs:487`, `tasks/delete.rs`, `tasks/history.rs`, `app_mcp/tools/worktree.rs`, `tasks/worktree_sweep.rs` |
-| Files of the run's version: **through the runner** since protocol 45 (`Command::RunFiles`, ORC-696; a listing travels in pages that each fit a frame) | `files/runs.rs`, `runner/run_files.rs`; the runner's `execution/executor/run_files.rs` |
+| Files of the run's version: **through the runner** since protocol 46 (`Command::RunFiles`, ORC-696; a listing travels in pages that each fit a frame) | `files/runs.rs`, `runner/run_files.rs`; the runner's `execution/executor/run_files.rs` |
 | Open in editor, copy path of a run's file: still the local path, marked for a run on another computer | `files/open.rs` (`open_target`), `run_facts.rs:329` |
 | Recovery state of a run's folder: **through the runner** since protocol 44 (`Command::RunFolderState`, ORC-688) | `recovery/mod.rs` (`read_folder_states`), `runner/ask.rs`; the runner's `execution/coordinator/run_folder.rs`, `execution/executor/folder_state.rs` |
 | Warm workspaces' folders and sizes, ended worktrees' sizes | through the runner since ORC-689 (`Command::Folders`, `runner/folders.rs`); the desktop keeps the database's reservations |
 | Code index rebuild | Done (ORC-690): the runner builds it on `Command::RebuildCodeIndex` (protocol 43); `code_index::rebuild` asks it |
-| Orchestrator chat git tools in a run's worktree | `orchestrator/git/place.rs:58` |
+| Orchestrator chat git tools in a run's worktree: **through the runner** since protocol 45 (`Command::RunGit`, ORC-691) | `orchestrator/git/host.rs`; the runner's `execution/executor/run_git.rs` |
 
 ### Local integration
 

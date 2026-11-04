@@ -1,69 +1,47 @@
 //! How the chat's git tools run git: in one folder, with git's messages in English and without the caller's variables
-//! that would point git at another repository, index or settings (`orchester_core::diff::git::local_git_command`);
-//! never waiting for a person — no terminal prompt, no credential window, no editor — and stopped after its runner's
-//! time. What git said of a failure becomes a refusal with a stable code, its words with any credentials in a URL
-//! removed.
+//! that would point git at another repository, index or settings (`orchester_core::orchestrator::run_git::
+//! chat_git_command`); never waiting for a person — no terminal prompt, no credential window, no editor — and stopped
+//! after its time. Where git runs, the desktop or the runner, its [`Host`] says. What git said of a failure becomes a
+//! refusal with a stable code, its words with any credentials in a URL removed.
 
-use std::{path::Path, time::Duration};
+use std::time::Duration;
 
 use orchester_core::{
-  command::{Command, CommandError, CommandOutput, CommandRunner},
-  diff::git::local_git_command,
+  command::{CommandError, CommandOutput},
+  orchestrator::run_git::PathFacts,
   repository::redact_userinfo,
 };
-use orchester_exec::programs::Programs;
 
+use super::host::Host;
 use crate::{app_mcp::ToolError, messages::Message};
 
 /// The `git` program, looked up on the `PATH` like the runner does.
 const GIT: &str = "git";
-/// How long a read of git's whose output is capped may take.
-const READ_TIMEOUT: Duration = Duration::from_secs(30);
+/// How long a read of git's whose output is capped may take, and git that only reads or checks.
+pub(super) const READ_TIMEOUT: Duration = Duration::from_secs(30);
 /// The most of git's output a tool answers with; the rest is cut and the answer says so.
 pub(super) const MAX_OUTPUT: usize = 60_000;
 /// The most of git's words a card or a refusal keeps.
 const MAX_SAID: usize = 2_000;
 
-/// git in one folder, run by `runner`; network git with `ssh` as its ssh command.
+/// git in one place ([`Host`]), stopped after `timeout`; network git with `ssh` as its ssh command.
 pub(super) struct Git<'a> {
-  pub(super) runner: &'a dyn CommandRunner,
-  pub(super) dir: &'a Path,
+  pub(super) at: Host<'a>,
+  timeout: Duration,
   pub(super) ssh: Option<String>,
 }
 
 impl<'a> Git<'a> {
-  pub(super) const fn new(runner: &'a dyn CommandRunner, dir: &'a Path) -> Self {
-    Self { runner, dir, ssh: None }
+  pub(super) const fn new(at: Host<'a>, timeout: Duration) -> Self {
+    Self { at, timeout, ssh: None }
   }
 
-  /// `git <args>`, with `input` on its standard input.
-  pub(super) fn command(&self, args: &[&str], input: Option<&str>) -> Command {
-    let settings = ["-c", "color.ui=never", "-c", "core.quotepath=false"];
-    let command = local_git_command(Path::new(GIT), self.dir, settings.iter().chain(args).copied())
-      // Nobody answers a prompt: git fails at once where it would ask for a user name, a password or an editor's text.
-      .with_env("GIT_TERMINAL_PROMPT", "0")
-      .with_env("GCM_INTERACTIVE", "never")
-      .with_env("GIT_EDITOR", ":")
-      .with_env("GIT_SEQUENCE_EDITOR", ":")
-      .with_env("GIT_MERGE_AUTOEDIT", "no")
-      // A path the chat names is a path, never a pathspec with magic (`:(top)`, globs).
-      .with_env("GIT_LITERAL_PATHSPECS", "1");
-    let command = match &self.ssh {
-      Some(ssh) => command.with_env("GIT_SSH_COMMAND", ssh),
-      None => command,
-    };
-    match input {
-      Some(text) => command.with_stdin(text.to_owned()),
-      None => command,
-    }
-  }
-
-  /// Runs `git <args>` with `programs`, reading at most [`MAX_OUTPUT`] bytes as git writes; its output and whether
-  /// some was left out, or the refusal of a failure.
-  pub(super) fn capped(&self, programs: &Programs, args: &[&str]) -> Result<(String, bool), ToolError> {
-    let (output, cut) = programs
-      .capped(&self.command(args, None), READ_TIMEOUT, MAX_OUTPUT)
-      .map_err(|error| not_run(&error, args))?;
+  /// Runs `git <args>`, reading at most [`MAX_OUTPUT`] bytes as git writes; its output and whether some was left out,
+  /// or the refusal of a failure.
+  pub(super) fn capped(&self, args: &[&str]) -> Result<(String, bool), ToolError> {
+    let (output, cut) = self
+      .at
+      .git((args, None, self.ssh.as_deref()), READ_TIMEOUT, Some(MAX_OUTPUT))?;
     if output.success() {
       Ok((output.stdout, cut))
     } else {
@@ -73,10 +51,13 @@ impl<'a> Git<'a> {
 
   /// Runs `git <args>`; git that cannot be run or did not finish is refused.
   pub(super) fn run(&self, args: &[&str], input: Option<&str>) -> Result<CommandOutput, ToolError> {
-    self
-      .runner
-      .run(&self.command(args, input))
-      .map_err(|error| not_run(&error, args))
+    let (output, _) = self.at.git((args, input, self.ssh.as_deref()), self.timeout, None)?;
+    Ok(output)
+  }
+
+  /// What is at each of `paths`, as git named them: relative to the folder, or absolute.
+  pub(super) fn facts(&self, paths: &[String]) -> Result<Vec<PathFacts>, ToolError> {
+    self.at.facts(paths)
   }
 
   /// Runs `git <args>` and answers its output; a failure is refused as [`refusal`] reads it.
@@ -136,7 +117,7 @@ fn cut(text: &str, max: usize) -> (String, bool) {
 }
 
 /// Why git that could not be run, or did not finish, did not do `args`.
-fn not_run(error: &CommandError, args: &[&str]) -> ToolError {
+pub(super) fn not_run(error: &CommandError, args: &[&str]) -> ToolError {
   match error {
     CommandError::NotFound => refused("git_not_found", Message::new("orchestrator.git.gitMissing")),
     CommandError::TimedOut => refused(

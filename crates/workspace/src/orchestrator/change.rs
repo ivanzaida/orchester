@@ -199,9 +199,9 @@ pub(super) async fn apply(
 /// made: a repository with a commit since is never touched; git's work in a run that went on, or whose refs moved or
 /// work changed since, is refused.
 async fn apply_in_folder(services: &Services, root: PathBuf, change: Change) -> Result<Value, ToolError> {
-  let programs = services.programs().clone();
+  let (programs, runs) = (services.programs().clone(), services.run_git(root.clone()));
   blocking(move || match change {
-    Change::Git(git) => super::git::apply(&programs, &root, &git, super::git::Timeouts::STANDARD),
+    Change::Git(git) => super::git::apply((&programs, &runs), &root, &git, super::git::Timeouts::STANDARD),
     change => repository::apply(programs.git_work(), &root, &change),
   })
   .await
