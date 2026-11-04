@@ -26,6 +26,7 @@ use crate::{
   ErrorReports,
   browser::{BrowserCommand, BrowserEvent, BrowserReply, ScreencastFrame},
   chat::ChatTools,
+  folders::{FoldersCommand, FoldersReply},
   merge_queue::{MergeQueueCommand, MergeQueueReply},
   rejection::Rejection,
   work::WorkSummary,
@@ -288,8 +289,11 @@ pub enum Command {
   /// The merge queue's work in a run's worktree: syncing its base in, or running Check again on the merged result
   /// (protocol 41). Answered with [`Reply::MergeQueue`] once done.
   MergeQueue(MergeQueueCommand),
+  /// A request about the folders the project's runs leave with their executor (protocol 42, [`crate::folders`]).
+  /// Answered with [`Reply::Folders`] once carried out, or [`Rejection::Failed`].
+  Folders(FoldersCommand),
   /// Builds the code index of `revision` again where the runner keeps the indexes (*Rebuild*, *Retry* in Project
-  /// settings › Context, protocol 42); the desktop builds none itself. Answered with [`Reply::CodeIndexRebuilt`] once
+  /// settings › Context, protocol 43); the desktop builds none itself. Answered with [`Reply::CodeIndexRebuilt`] once
   /// it is built, [`Rejection::CodeIndexInUse`] while it is in use, or [`Rejection::Failed`] with why it could not be
   /// built.
   RebuildCodeIndex { revision: Revision },
@@ -489,6 +493,8 @@ pub enum Reply {
   },
   /// The answer to [`Command::MergeQueue`].
   MergeQueue(MergeQueueReply),
+  /// The answer to [`Command::Folders`].
+  Folders(FoldersReply),
   /// The answer to [`Command::RebuildCodeIndex`]: the index of `revision` is built again.
   CodeIndexRebuilt {
     revision: Revision,

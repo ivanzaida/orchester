@@ -1,7 +1,9 @@
 //! Warm workspaces as Project settings › Runs reads them (ORC-114): each workspace with what it does and its size,
 //! the disk the workspaces are on, the warm folders with what the person's checkout holds of each, the suggestions
-//! not taken yet, the warm-up and the worktrees runs made before workspaces. Reading walks folders to size them, so
-//! it blocks: the UI calls it off the UI thread. What changes them is in [`actions`].
+//! not taken yet, the warm-up and the worktrees runs made before workspaces. The project's runner sizes the
+//! workspaces and lists the worktrees (`docs/architecture/remote-runners.md`, rule 5); reading blocks on it and on
+//! walking the checkout's folders: the UI calls it off the UI thread and off the async runtime. What changes them is
+//! in [`actions`].
 
 pub mod actions;
 mod scan;
@@ -18,13 +20,14 @@ use orchester_core::{
     WorkspaceState, suggest,
   },
 };
-use orchester_exec::disk_space::{LocalDisks, folder_size};
+use orchester_exec::disk_space::LocalDisks;
 use orchester_store::{ProjectDb, StoreError};
 
 pub use self::scan::ignored_folders;
 use crate::{
-  storage::DiskGuard,
-  tasks::{changes::run_worktree, detail::run_store_error},
+  runner::ExecutorFolders,
+  storage::{DiskGuard, FoldersReadError},
+  tasks::detail::run_store_error,
 };
 
 /// One workspace.
@@ -108,15 +111,27 @@ impl WorkspacesView {
   }
 }
 
-/// The view of the project at `repo_root`, its disk read by `disks`.
-pub fn read(repo_root: &Path, disks: &dyn DiskSpace) -> Result<WorkspacesView, StoreError> {
+/// The view of the project at `repo_root`, its disk read by `disks` and its folders sized by its runner (`folders`).
+pub fn read(
+  repo_root: &Path,
+  disks: &dyn DiskSpace,
+  folders: &ExecutorFolders,
+) -> Result<WorkspacesView, FoldersReadError> {
   let db = ProjectDb::open(repo_root)?;
   let limit = db.project_limits()?.agent_slots().get();
   let settings = db.workspace_settings()?;
-  let rows = db
-    .workspaces()?
+  let records = db.workspaces()?;
+  let sizes = folders.sizes(records.iter().map(|record| record.number).collect())?;
+  let rows = records
     .into_iter()
-    .map(|record| row(&db, repo_root, record, limit))
+    .map(|record| {
+      let bytes = sizes
+        .workspaces
+        .iter()
+        .find(|(number, _)| *number == record.number)
+        .and_then(|(_, bytes)| *bytes);
+      row(&db, record, bytes, limit)
+    })
     .collect::<Result<Vec<_>, _>>()?;
   let ignored = ignored_folders(repo_root);
   let suggested = suggest(&ignored);
@@ -142,20 +157,21 @@ pub fn read(repo_root: &Path, disks: &dyn DiskSpace) -> Result<WorkspacesView, S
     suggestions,
     warm_up: settings.warm_up,
     warm_up_failure: db.warm_up_failure()?,
-    old_worktrees: old_worktrees(&db, repo_root)?,
+    old_worktrees: old_worktrees(&db, sizes.run_worktrees)?,
     waits: db.workspace_waits()?,
   })
 }
 
 /// [`read`] of this computer's disk.
-pub fn read_local(repo_root: &Path) -> Result<WorkspacesView, StoreError> {
-  read(repo_root, &LocalDisks)
+pub fn read_local(repo_root: &Path, folders: &ExecutorFolders) -> Result<WorkspacesView, FoldersReadError> {
+  read(repo_root, &LocalDisks, folders)
 }
 
+/// The row of `record`, whose folder holds `bytes`.
 fn row(
   db: &ProjectDb,
-  repo_root: &Path,
   record: WorkspaceRecord,
+  bytes: Option<u64>,
   limit: NonZeroU32,
 ) -> Result<WorkspaceRow, StoreError> {
   let run = record
@@ -167,7 +183,7 @@ fn row(
     .flatten();
   Ok(WorkspaceRow {
     state: record.state(limit),
-    bytes: folder_size(&record.number.path(repo_root)).ok(),
+    bytes,
     run,
     record,
   })
@@ -211,17 +227,11 @@ fn folder_row(
   }
 }
 
-/// The worktrees of runs made before workspaces, or while they are off, that are still there.
-pub(crate) fn old_worktrees(db: &ProjectDb, repo_root: &Path) -> Result<Vec<OldWorktree>, StoreError> {
-  let folder = repo_root.join(orchester_core::integration::WORKTREES_DIR);
-  let Ok(entries) = std::fs::read_dir(&folder) else {
-    return Ok(Vec::new());
-  };
+/// The worktrees of runs made before workspaces, or while they are off, that are still there: `found`, as the
+/// project's runner listed them with their sizes, of the runs the project knows.
+pub(crate) fn old_worktrees(db: &ProjectDb, found: Vec<(RunId, Option<u64>)>) -> Result<Vec<OldWorktree>, StoreError> {
   let mut old = Vec::new();
-  for entry in entries.flatten() {
-    let Some(run) = entry.file_name().to_str().and_then(|name| name.parse::<RunId>().ok()) else {
-      continue;
-    };
+  for (run, bytes) in found {
     let Some(stored) = db.run(run).map_err(run_store_error)? else {
       continue;
     };
@@ -232,7 +242,7 @@ pub(crate) fn old_worktrees(db: &ProjectDb, repo_root: &Path) -> Result<Vec<OldW
       run,
       task_key,
       number: stored.number().get(),
-      bytes: folder_size(&run_worktree(repo_root, run)).ok(),
+      bytes,
       in_use: stored.status().has_live_work() && !matches!(stored.status(), RunStatus::Interrupted(_)),
       ended_at: if stored.status().is_terminal() {
         db.events(run)
