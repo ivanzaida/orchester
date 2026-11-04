@@ -1,6 +1,5 @@
-//! Serves the desktop over the project's IPC endpoint: answers its requests and forwards the
-//! scheduler's change notifications, the project's browser's events and the frames of the tab the *Browser* window
-//! shows.
+//! Serves the desktop over the project's IPC endpoint: answers its requests and forwards the scheduler's change
+//! notifications, the project's browser's events and the frames of the tab the *Browser* window shows.
 
 mod attach;
 mod browser;
@@ -375,6 +374,7 @@ async fn answer(
     Command::SetErrorReports { ref reports } => return Answer::ErrorReports(id, reports.clone()),
     Command::ReadWorktreeChanges { run } => return later.reply(handle.worktree_changes(run)),
     Command::RebuildCodeIndex { ref revision } => return later.rebuild_code_index(handle, revision.clone()),
+    Command::RunFiles { run, ref request } => return later.reply(handle.run_files(run, request.clone())),
   };
   Answer::Reply(Event::Reply { id, reply })
 }

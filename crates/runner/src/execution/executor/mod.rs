@@ -35,6 +35,7 @@ pub(super) mod removal;
 pub(super) mod resolve;
 pub(super) mod run;
 pub(super) mod run_branches;
+pub(super) mod run_files;
 pub(super) mod run_git;
 pub(super) mod sink;
 pub(super) mod start;

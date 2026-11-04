@@ -100,9 +100,10 @@ impl Data {
     repo
   }
 
-  /// Starts a session of the data folder, as on a first run: nobody is signed in. Its runner program does not exist.
+  /// Starts a session of the data folder, as on a first run: nobody is signed in. Its runner program does not exist,
+  /// so the runner's own reading of runs' files answers in-process ([`runs_read_in_process`]).
   pub fn launch(&self) -> Launch {
-    self.launch_with(self.no_runner())
+    runs_read_in_process(self.launch_with(self.no_runner()))
   }
 
   /// [`Self::launch`] with the runner program `runner`.
@@ -112,7 +113,12 @@ impl Data {
 
   /// A session of the data folder signed in to the stand-in cloud, for what needs an account.
   pub fn launch_signed_in(&self) -> Launch {
-    signed_in::launch_signed_in(&self.database(), self.no_runner(), self.runtime.handle(), &self.cloud)
+    runs_read_in_process(signed_in::launch_signed_in(
+      &self.database(),
+      self.no_runner(),
+      self.runtime.handle(),
+      &self.cloud,
+    ))
   }
 
   /// A runner program that does not exist.
@@ -130,6 +136,18 @@ impl Default for Data {
   fn default() -> Self {
     Self::new()
   }
+}
+
+/// `launch`, whose runners' program does not exist, with runs' files read in-process by the runner's own code
+/// (`orchester_runner::execution::answer_run_files`), as a runner would read them: the code viewer shows a run's
+/// files without a runner process, whose start would record the seeds' running runs as interrupted.
+pub fn runs_read_in_process(launch: Launch) -> Launch {
+  if let Some(services) = launch.services() {
+    services
+      .runners
+      .serve_run_files_for_test(Arc::new(orchester_runner::execution::answer_run_files));
+  }
+  launch
 }
 
 /// The project `(id, key, name)` set up in `repo` and added to `workspace`.

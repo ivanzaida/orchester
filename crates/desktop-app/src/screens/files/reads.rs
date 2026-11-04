@@ -18,10 +18,12 @@ use orchester_core::{command::CommandRunner, id::RunId};
 use orchester_workspace::{
   background,
   files::{
-    Digest, FileList, FilePath, FileText, FileView, FilesError, Version, Versions, list_files, read_file, versions,
+    Digest, FileList, FilePath, FileText, FileView, FilesError, RunFiles, Version, Versions, list_files, read_file,
+    versions,
   },
   highlight::{LineTokens, highlight_lines},
   messages::Message,
+  workspace::OpenProject,
 };
 use parking_lot::Mutex;
 
@@ -176,17 +178,23 @@ async fn run<T: Send + 'static>(work: impl FnOnce() -> Result<T, FilesError> + S
 }
 
 /// The files of `at`.
-pub fn list(ctx: &mut Ctx, root: &Path, at: &Version, (wake, kept): (Wake, &Steady<FileList>)) -> Shown<FileList> {
+pub fn list(
+  ctx: &mut Ctx,
+  project: &OpenProject,
+  at: &Version,
+  (wake, kept): (Wake, &Steady<FileList>),
+) -> Shown<FileList> {
   let services = Services::of(ctx);
   let (programs, hold) = (services.programs, services.hold);
+  let runs = services.runners.run_files(project);
   let key = at.clone();
   let state = ctx
-    .future((root.to_path_buf(), key.clone(), wake), move |(root, at, _)| {
-      let (programs, hold) = (programs.clone(), hold.clone());
+    .future((project.repo_root.clone(), key.clone(), wake), move |(root, at, _)| {
+      let (programs, hold, runs) = (programs.clone(), hold.clone(), runs.clone());
       async move {
         hold.released().await;
         let read = at.clone();
-        let value = run(move || list_files(programs.runner(), &root, &read)).await?;
+        let value = run(move || list_files((programs.runner(), &runs), &root, &read)).await?;
         let digest = value.digest();
         Ok(Found::new(at, value, Some(digest)))
       }
@@ -234,23 +242,24 @@ pub type FileFollowing<'a> = (Wake, &'a Steady<FileView>, &'a Arc<FileReads>, bo
 /// the runner's changes, since nothing reads it again soon.
 pub fn file(
   ctx: &mut Ctx,
-  root: &Path,
+  project: &OpenProject,
   (at, path): (&Version, &FilePath),
   (wake, kept, reads, following): FileFollowing<'_>,
 ) -> (Shown<FileView>, Option<Failure>) {
   let services = Services::of(ctx);
   let (programs, hold) = (services.programs, services.hold);
+  let runs = services.runners.run_files(project);
   let key = (at.clone(), path.clone());
   let counted = reads.clone();
   let state = ctx
-    .future((root.to_path_buf(), key.clone(), wake), move |(root, key, _)| {
-      let (programs, hold) = (programs.clone(), hold.clone());
+    .future((project.repo_root.clone(), key.clone(), wake), move |(root, key, _)| {
+      let (programs, hold, runs) = (programs.clone(), hold.clone(), runs.clone());
       let reads = counted.clone();
       reads.started.fetch_add(1, Ordering::Relaxed);
       async move {
         hold.released().await;
         let (at, path) = key.clone();
-        let read = run(move || read_steadily(programs.runner(), &root, (&at, &path))).await;
+        let read = run(move || read_steadily((programs.runner(), &runs), &root, (&at, &path))).await;
         reads.settled(&read);
         let value = read?;
         let digest = value.digest();
@@ -271,20 +280,21 @@ pub fn file(
 /// The versions the page offers for `path` at `at`, opened from `run`.
 pub fn choices(
   ctx: &mut Ctx,
-  root: &Path,
+  project: &OpenProject,
   (at, run_id, path): (&Version, Option<RunId>, Option<&FilePath>),
   wake: Wake,
 ) -> Shown<Arc<Versions>> {
-  let programs = Services::of(ctx).programs;
+  let services = Services::of(ctx);
+  let (programs, runs) = (services.programs, services.runners.run_files(project));
   let key = (at.clone(), run_id, path.cloned());
   let state = ctx
     .future(
-      (root.to_path_buf(), key.clone(), wake.versions()),
+      (project.repo_root.clone(), key.clone(), wake.versions()),
       move |(root, key, _)| {
-        let programs = programs.clone();
+        let (programs, runs) = (programs.clone(), runs.clone());
         async move {
           let (at, run_id, path) = key.clone();
-          let value = run(move || versions(programs.runner(), &root, (&at, run_id), path.as_ref())).await?;
+          let value = run(move || versions((programs.runner(), &runs), &root, (&at, run_id), path.as_ref())).await?;
           Ok(Found::new(key, Arc::new(value), None))
         }
       },
@@ -337,14 +347,14 @@ const SETTLE: Duration = Duration::from_millis(50);
 /// The file `path` at `at`, read once more after [`SETTLE`] when it was missing or unreadable, so a save by
 /// rename does not show as a missing file.
 fn read_steadily(
-  runner: &dyn CommandRunner,
+  readers: (&dyn CommandRunner, &dyn RunFiles),
   root: &Path,
   (at, path): (&Version, &FilePath),
 ) -> Result<FileView, FilesError> {
-  match read_file(runner, root, at, path) {
+  match read_file(readers, root, at, path) {
     Err(FilesError::Missing(_) | FilesError::Unreadable { .. }) => {
       thread::sleep(SETTLE);
-      read_file(runner, root, at, path)
+      read_file(readers, root, at, path)
     }
     read => read,
   }

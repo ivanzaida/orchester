@@ -24,6 +24,7 @@ mod outcome;
 mod report;
 mod requests;
 mod resolve;
+mod run_files;
 mod run_git;
 mod settings;
 pub mod state;
@@ -54,6 +55,7 @@ pub use self::{
   outcome::{Continued, QUIET_STOP_TIMEOUT, RunRequestError, ShutdownOutcome},
   report::RunnerStatus,
   requests::RequestError,
+  run_files::ProjectRunFiles,
   run_git::ThroughRunner,
   work::{ActiveWork, ActiveWorkFields, SaveState},
 };
@@ -73,8 +75,7 @@ pub struct Runners {
 
 struct Inner {
   runner_exe: PathBuf,
-  /// Whether the runners send error reports, and in which environment and release; each runner reads it when it
-  /// starts.
+  /// Whether the runners send error reports, in which environment and release; each runner reads it as it starts.
   reports: Arc<Mutex<Option<ErrorReports>>>,
   /// Held while the setting is stored and handed to the running runners ([`Runners::set_error_reports`]).
   report_updates: Mutex<()>,
@@ -91,11 +92,13 @@ struct Inner {
   tabbed: Mutex<HashSet<PathBuf>>,
   /// Set once the application closes; no runner starts after that.
   closing: AtomicBool,
-  /// Held while a project's limits are stored and changed agent slots are handed to its runner, so
-  /// the runner gets them in the order they were stored ([`Runners::store_agent_slots`]).
+  /// Held while a project's limits are stored and changed agent slots are handed to its runner, so the runner gets
+  /// them in the order they were stored ([`Runners::store_agent_slots`]).
   slot_updates: Mutex<()>,
   /// Hands out the generations of the projects' runners.
   generations: AtomicU64,
+  /// What answers for a runner about runs' files in tests that start none (`run_files`).
+  run_files_stand_in: run_files::StandIn,
   /// The programs a test without a runner carries out requests about runs' worktrees with, in its own process.
   #[cfg(feature = "test-support")]
   worktrees_here: Mutex<Option<orchester_exec::programs::Programs>>,
@@ -129,8 +132,7 @@ impl Runners {
     self.inner.shared.limits.subscribe()
   }
 
-  /// The runners of the program `runner_exe`. They send no error reports until
-  /// [`Self::set_error_reports`] says so.
+  /// The runners of the program `runner_exe`. They send no error reports until [`Self::set_error_reports`] says so.
   pub fn new(runner_exe: PathBuf, runtime: Handle, activity: Activity, previous_end: SessionEnd) -> Self {
     Self {
       inner: Arc::new(Inner {
@@ -157,6 +159,7 @@ impl Runners {
         closing: AtomicBool::new(false),
         slot_updates: Mutex::new(()),
         generations: AtomicU64::new(0),
+        run_files_stand_in: run_files::StandIn::default(),
         #[cfg(feature = "test-support")]
         worktrees_here: Mutex::new(None),
       }),
