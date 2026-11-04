@@ -1,6 +1,6 @@
 //! What a run's folder holds beyond its last commit, for the desktop's start-up recovery
-//! ([`Command::RunFolderState`](orchester_ipc::Command::RunFolderState)), answered once git has read it, without holding
-//! up the runner's other requests.
+//! ([`Command::RunFolderState`](orchester_ipc::Command::RunFolderState)), answered once git has read it, without
+//! holding up the runner's other requests.
 
 use orchester_core::id::RunId;
 
