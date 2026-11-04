@@ -1,4 +1,4 @@
-//! Removing what a run left as the desktop asks it ([`orchester_ipc::Command::RemoveWorktrees`], protocol 46) against
+//! Removing what a run left as the desktop asks it ([`orchester_ipc::Command::RemoveWorktrees`], protocol 47) against
 //! `orchester-fake-codex`: the runner keeps a worktree whose uncommitted changes nobody confirmed, removes it with
 //! exactly the changes the person saw, and with everything the run left once a task is deleted; a run it cannot read
 //! removes nothing. The desktop records the removal; the runner records nothing. Needs `git`. Run with

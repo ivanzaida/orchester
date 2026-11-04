@@ -21,8 +21,10 @@ mod idle;
 mod lifetime;
 mod log;
 mod merge_queue;
+mod outcome;
 mod report;
 mod requests;
+mod resolve;
 mod run_git;
 pub mod state;
 mod work;
@@ -40,7 +42,7 @@ use std::{
 };
 
 use orchester_core::id::RunId;
-use orchester_ipc::{AttachSession, Command, ErrorReports, RefusedRun, Rejection, Reply, SessionEnd, WorkState};
+use orchester_ipc::{AttachSession, Command, ErrorReports, Reply, SessionEnd, WorkState};
 use parking_lot::Mutex;
 use tokio::{runtime::Handle, sync::watch, task::JoinSet};
 
@@ -49,6 +51,7 @@ pub use self::{
   folders::ExecutorFolders,
   idle::ForgetRefusal,
   merge_queue::RunnerWorktrees,
+  outcome::{Continued, QUIET_STOP_TIMEOUT, RunRequestError, ShutdownOutcome},
   report::RunnerStatus,
   requests::RequestError,
   run_git::ThroughRunner,
@@ -61,37 +64,6 @@ use self::{
   state::{RunnerEvent, RunnerState},
 };
 use crate::{activity::Activity, browser::BrowserWindow, workspace::OpenProject};
-
-/// How long a close without active work waits for the runner to stop and exit before
-/// terminating it.
-pub const QUIET_STOP_TIMEOUT: Duration = Duration::from_secs(6);
-
-/// How asking the runners to stop ended.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ShutdownOutcome {
-  /// No runner was running.
-  NoRunner,
-  /// Every runner confirmed that it stopped.
-  Stopped,
-  /// A runner did not confirm in time or went away first; it was terminated.
-  Unanswered,
-}
-
-/// Why the runner did not do what a request about a run asked.
-#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
-pub enum RunRequestError {
-  #[error(transparent)]
-  Request(#[from] RequestError),
-  #[error("the runner refused the request: {0:?}")]
-  Rejected(Rejection),
-}
-
-/// The answer to continuing interrupted runs.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Continued {
-  pub continued: Vec<RunId>,
-  pub refused: Vec<RefusedRun>,
-}
 
 /// Starts and stops the projects' runners and publishes the displayed project's status.
 #[derive(Clone)]

@@ -6,10 +6,14 @@
 //! text holds no marker, and a file git could not merge by content (a binary file, or one a side deleted) waits for
 //! the person to keep one side ([`decide`]). [`finish`] commits the merge once every file is resolved, after which
 //! the run's branch holds the base branch and merges into it without conflicts; [`abort`] puts the worktree back. A
-//! worktree with uncommitted work, or whose branch moved past the run's last checkpoint, is not merged into.
+//! worktree with uncommitted work, or whose branch moved past the run's last checkpoint, is not merged into. The
+//! desktop asks for each of these where the worktree is, through the run's runner ([`request`]).
+
+pub mod request;
 
 use std::{collections::BTreeMap, fs, io::Read as _, path::Path};
 
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use super::{
@@ -30,7 +34,8 @@ const RUN_STAGE: u8 = 2;
 const BASE_STAGE: u8 = 3;
 
 /// A side of the merge a person keeps for a file git could not merge by content.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Side {
   /// The run's version (`--ours`): its branch is checked out in the worktree.
   Run,
@@ -39,7 +44,8 @@ pub enum Side {
 }
 
 /// Why a file waits for the person to keep one side.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Undecided {
   /// Git could not merge its content: a binary file, or text git keeps as binary (UTF-16, say).
   Unmergeable,
@@ -50,7 +56,8 @@ pub enum Undecided {
 }
 
 /// How a file that conflicted stands.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", content = "data", rename_all = "snake_case")]
 pub enum FileState {
   /// Still unmerged, and its text holds git's markers.
   Markers,
@@ -64,14 +71,14 @@ pub enum FileState {
 }
 
 /// A file that conflicted in the merge, as `git` names it from the worktree's root.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ConflictFile {
   pub path: String,
   pub state: FileState,
 }
 
 /// A merge in progress in a run's worktree: every file that conflicted in it, still unmerged ones first.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Resolution {
   pub files: Vec<ConflictFile>,
 }
@@ -98,7 +105,7 @@ impl Resolution {
 }
 
 /// The merge of the base branch committed in the run's worktree.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MergedIn {
   /// The commit of the base branch that was merged in: the run's own commits sit on it now.
   pub base: Revision,
@@ -107,7 +114,8 @@ pub struct MergedIn {
 }
 
 /// How merging the base branch into the run's branch went.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", content = "data", rename_all = "snake_case")]
 pub enum Started {
   /// Git merged without a conflict and committed the merge.
   Merged(MergedIn),

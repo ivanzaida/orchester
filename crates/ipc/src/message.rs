@@ -12,6 +12,7 @@ use orchester_core::{
   integration::{
     Cleanup, Leftovers,
     removal::{RemovalFailure, RemovalRequest},
+    resolve::request::{ResolveAnswer, ResolveFailure, ResolveRequest},
   },
   orchestrator::run_git::{RunGitAnswer, RunGitRequest},
   permission::AgentPermissions,
@@ -311,8 +312,12 @@ pub enum Command {
   /// such run, [`Rejection::RunNotEnded`] for a write, or git that does not only read, before the run ended, and
   /// [`Rejection::WorktreeRemoved`] when its worktree is gone.
   RunGit(RunGitRequest),
+  /// `request` about the merge a person resolves by hand in run `run`'s worktree, carried out where the worktree is
+  /// (protocol 46): the desktop keeps the project's record of the resolution and runs no git there itself. Answered
+  /// with [`Reply::Resolved`], or [`Reply::ResolveFailed`] with why it did not go on.
+  Resolve { run: RunId, request: ResolveRequest },
   /// Removes what run `run`, which ended, left, as `request` allows: its worktrees and branches, with the run's own
-  /// processes in a held folder stopped first when asked (protocol 46). The desktop records the removal in the
+  /// processes in a held folder stopped first when asked (protocol 47). The desktop records the removal in the
   /// project's database before and after; the runner removes, then removes the codebase indexes only removed worktrees
   /// used and sweeps the worktree folders. Answered with [`Reply::WorktreesRemoved`], or [`Reply::RemovalFailed`] when
   /// nothing was removed.
@@ -530,6 +535,10 @@ pub enum Reply {
   },
   /// The answer to [`Command::RunGit`].
   RunGit(RunGitAnswer),
+  /// The answer to [`Command::Resolve`] that was carried out.
+  Resolved(ResolveAnswer),
+  /// The answer to [`Command::Resolve`] that did not go on, and why.
+  ResolveFailed(ResolveFailure),
   Rejected(Rejection),
 }
 

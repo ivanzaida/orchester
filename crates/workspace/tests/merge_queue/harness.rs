@@ -34,7 +34,7 @@ use orchester_ipc::Command as RunnerCommand;
 use orchester_store::ProjectDb;
 use orchester_workspace::{
   merge_queue::{self, Advance},
-  tasks::worktree_removal::WorktreeRemover,
+  tasks::{resolve::RunWorktrees, worktree_removal::WorktreeRemover},
 };
 use parking_lot::Mutex;
 
@@ -157,6 +157,11 @@ impl Repo {
   /// The runs' worktrees, which the project's runner would remove once a run landed, removed in the test's process.
   pub fn remover(&self) -> WorktreeRemover {
     WorktreeRemover::here_for_test(self.root(), self.programs())
+  }
+
+  /// The runs' worktrees, where resolving by hand runs git as the project's runner would, in the test's process.
+  pub fn worktrees(&self) -> RunWorktrees {
+    RunWorktrees::here_for_test(self.root(), self.programs())
   }
 
   /// The check runs `script` from now on.

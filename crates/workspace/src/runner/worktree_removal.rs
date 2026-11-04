@@ -12,8 +12,6 @@ use orchester_core::{
     removal::{RemovalFailure, RemovalRequest},
   },
 };
-#[cfg(feature = "test-support")]
-use orchester_exec::programs::Programs;
 use orchester_ipc::{Command, Reply};
 
 use super::{RequestError, RunRequestError, Runners};
@@ -38,18 +36,5 @@ impl Runners {
         Err(RunRequestError::Request(RequestError::Lost))
       }
     }
-  }
-
-  /// The session of a test has no runner: what the desktop asks of a run's worktrees is carried out in this process
-  /// with `programs`, through the same serialized messages (`crate::tasks::worktree_removal::WorktreeRemover`).
-  #[cfg(feature = "test-support")]
-  pub fn serve_worktrees_here_for_test(&self, programs: Programs) {
-    *self.inner.worktrees_here.lock() = Some(programs);
-  }
-
-  /// The programs [`Runners::serve_worktrees_here_for_test`] was given.
-  #[cfg(feature = "test-support")]
-  pub(crate) fn worktrees_here(&self) -> Option<Programs> {
-    self.inner.worktrees_here.lock().clone()
   }
 }
