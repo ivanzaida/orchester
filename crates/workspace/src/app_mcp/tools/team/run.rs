@@ -10,7 +10,7 @@ use std::path::Path;
 use orchester_api::v2::{AuthorityRef, Subject, TeamCommandValue};
 use orchester_core::{
   command::CommandRunner,
-  id::{ClaimId, OperationId, ResourceId, TaskId},
+  id::{ClaimId, OperationId, ResourceId},
   integration::base::set_branch_tip,
   run::{BranchName, CommitId, inputs::LocalConsent},
   store::ConnectionStore,
@@ -69,7 +69,7 @@ pub(in crate::app_mcp::tools) async fn run_task(
   let (root, programs) = (team.open.repo_root.clone(), services.programs().clone());
   let branch = module_read.branch.clone();
   let (base_commit, connections) = blocking(move || {
-    let commit = base_commit(programs.runner(), &root, &branch)?;
+    let commit = branch_tip(programs.runner(), &root, &branch)?;
     Ok((commit, ProjectDb::open(&root)?.connections()?))
   })
   .await?;
@@ -86,7 +86,7 @@ pub(in crate::app_mcp::tools) async fn run_task(
   let (id, read) = (task.task.id, task.task.revision);
   let module_read = module_read.module.revision;
   let outcome = on_worker(move || async move {
-    let claim_id = acquire(&dispatcher, id).await?;
+    let claim_id = acquire(&dispatcher, Subject::Task { id }, start_failed).await?;
     let work = WorkAction {
       authority: AuthorityRef {
         subject: Subject::Task { id },
@@ -112,8 +112,12 @@ pub(in crate::app_mcp::tools) async fn run_task(
   started(outcome)
 }
 
-/// The commit the module's `branch` is at in the checkout at `root`, the start's base.
-fn base_commit(runner: &(dyn CommandRunner + Send + Sync), root: &Path, branch: &str) -> Result<CommitId, ToolError> {
+/// The commit `branch` is at in the checkout at `root`: a module's branch is a start's base and a delivery's source.
+pub(super) fn branch_tip(
+  runner: &(dyn CommandRunner + Send + Sync),
+  root: &Path,
+  branch: &str,
+) -> Result<CommitId, ToolError> {
   let missing = || {
     ToolError::refused(
       "branch_not_found",
@@ -122,30 +126,33 @@ fn base_commit(runner: &(dyn CommandRunner + Send + Sync), root: &Path, branch: 
   };
   let name = BranchName::new(branch).map_err(|_| missing())?;
   let revision = set_branch_tip(&runner, Path::new(GIT), (root, &name)).map_err(|error| {
-    tracing::warn!(%error, "cannot read a team module's branch");
+    tracing::warn!(%error, "cannot read a team branch's tip");
     missing()
   })?;
   CommitId::new(revision.as_str()).map_err(|_| missing())
 }
 
-/// The claim of `task` this session holds, taken now unless it held it already.
-async fn acquire(dispatcher: &Dispatcher, task: TaskId) -> Result<ClaimId, ToolError> {
-  let action = Action::Claim(ClaimAction::Acquire {
-    subject: Subject::Task { id: task },
-  });
+/// The claim of `subject` this session holds, taken now unless it held it already; `failed` when the server answered
+/// with something other than a claim.
+pub(super) async fn acquire(
+  dispatcher: &Dispatcher,
+  subject: Subject,
+  failed: fn() -> ToolError,
+) -> Result<ClaimId, ToolError> {
+  let action = Action::Claim(ClaimAction::Acquire { subject });
   let outcome = dispatcher
     .dispatch(&Intent::new(action))
     .await
     .map_err(action_refused)?;
   let ActionOutcome::Team(outcome) = outcome else {
-    return Err(start_failed());
+    return Err(failed());
   };
   match accepted(outcome)? {
     Accepted::Command(receipt) => match receipt.result {
       TeamCommandValue::Claim { claim, .. } => Ok(claim.id),
-      _ => Err(start_failed()),
+      _ => Err(failed()),
     },
-    Accepted::Definition(_) => Err(start_failed()),
+    Accepted::Definition(_) => Err(failed()),
   }
 }
 

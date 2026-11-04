@@ -1631,7 +1631,18 @@
       "teamNotFound": "The team server doesn't know this, or it is no longer there for you.",
       "teamReadFailed": "The team server's answer could not be read, so nothing was read or changed.",
       "teamProjectUnsupported": "{{tool}} is not available for a team project in this version: what it reads or changes belongs to the team server, and it is not answered from this computer's copy.",
-      "teamDeliveryPending": "A team task's run goes into its module's branch, and only its module's delivery, authorized by an Admin, takes it to the base branch. That delivery is not available in this version yet, so nothing was merged.",
+      "teamDeliveryPending": "A team task's run goes into its module's branch, and only its module's delivery, authorized by an Admin or the team's automatic merge, takes it to the base branch. A proposal does not request that delivery: call merge_run for the run. Nothing was merged.",
+      "teamRunNotInModule": "This run did not start on a team module's branch, so no module delivery takes it to the base branch. Nothing was merged.",
+      "teamDeliveryNoBase": "The checkout has no branch checked out, so there is no base branch for the module's delivery to land on. Nothing was requested.",
+      "teamDeliveryWorkRunning": "{{runs}} run(s) of this module still work on this computer; the module's branch is delivered once they end. Nothing was requested.",
+      "teamDeliveryNotAuthorized": "The module's delivery was requested and waits for an Admin's authorization, or for the team's automatic merge to be turned on. Nothing was merged; call merge_run again once it is authorized.",
+      "teamDeliveryWaiting": "The module's delivery was recorded and waits for the team server's answer. Nothing was merged; call merge_run again to carry it on.",
+      "teamDeliveryReportWaiting": "The module's branch was merged into the base branch here, and its report waits for the team server. Call merge_run again to send it.",
+      "teamDeliveryMergeWaiting": "The team server allowed the module's delivery, and its merge waits while another merge or a local integration holds the checkout. Call merge_run again once it is free.",
+      "teamDeliveryFailed": "The module's delivery failed: its merge into the base branch did not succeed here, or the team ended it. The team server keeps it failed.",
+      "teamDeliveryWithdrawn": "The team's automatic merge was turned off before the module's delivery was reported, so the team server keeps it failed. The merge stays as it is on this computer.",
+      "teamDeliveryReportRefused": "The team server refused the report of the module's delivery ({{code}}). The merge stays as it is on this computer.",
+      "teamDeliveryCouldNotGoOn": "The module's delivery could not go on. Nothing more was merged or sent; what was recorded goes on when merge_run is called again.",
       "teamAcceptanceUnknown": "The team server's answer was lost, so it is not known whether the change was made. Read it again before you try again.",
       "teamRefused": "The team server refused this ({{code}}). Nothing was changed.",
       "teamDecisionRequired": "Who may change this on a team project is not decided yet ({{decision}}), so nothing was sent.",
@@ -1647,6 +1658,7 @@
       "teamRunAgain": "A team task runs again only through the team server: start its work with run_task. The message was not sent or kept."
     },
     "githubConnectionName": "gh · {{host}}",
+    "teamDelivered": "The module's branch was delivered into {{into}}, and the team server keeps it delivered.",
     "projectTools": {
       "errors": {
         "nameNotEditable": "A tool keeps the name it was made with; leave out the name to change it.",

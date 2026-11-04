@@ -16,8 +16,8 @@
 //!   report is sent; it is sent again with the same bytes until the server answers it, oldest delivery first, and a
 //!   report that waits for the server holds back the later ones.
 //!
-//! Each state the server answers is kept for the screens ([`TeamDeliveryState`]). Nothing calls this yet: the screens
-//! adopt it in P6 and automation in P7.
+//! Each state the server answers is kept for the screens ([`TeamDeliveryState`]). The MCP tool `merge_run` of a team
+//! task's run requests its module's delivery (P7b); the screens adopt it in P6.
 
 mod state;
 mod steps;

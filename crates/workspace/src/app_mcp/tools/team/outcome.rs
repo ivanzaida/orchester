@@ -61,16 +61,27 @@ pub(super) fn authority_refused(error: &AuthorityError) -> ToolError {
   }
 }
 
+/// A team command's refusal code by its snake_case name, as the server sends it.
+pub(super) fn code_name(code: AuthorityErrorCode) -> String {
+  name(serde_json::to_value(code))
+}
+
 /// A refusal under the server's own code, which serializes to its snake_case name.
 fn coded(code: serde_json::Result<serde_json::Value>) -> ToolError {
-  let code = code
-    .ok()
-    .and_then(|code| code.as_str().map(str::to_owned))
-    .unwrap_or_else(|| "team_refused".to_owned());
+  let code = name(code);
   ToolError::refused(
     code.clone(),
     vec![Message::new("appMcp.errors.teamRefused").with("code", code)],
   )
+}
+
+/// The snake_case name a code serialized to; a code that did not serialize to a name is a refusal all the same, so it
+/// reads as `team_refused` rather than failing the tool.
+fn name(code: serde_json::Result<serde_json::Value>) -> String {
+  code
+    .ok()
+    .and_then(|code| code.as_str().map(str::to_owned))
+    .unwrap_or_else(|| "team_refused".to_owned())
 }
 
 /// The subject changed on the server since it was read: nothing was changed.

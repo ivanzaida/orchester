@@ -1,8 +1,10 @@
 //! The domain MCP tools on a team project (team authority P7, `orchester_workspace::app_mcp`) against a fake team
-//! server on loopback with the server's routes and shapes (the work tests' [`team_server`] and [`team_commands`], with
-//! the reads and definition routes of [`reads`]): what the tools read comes from the server, a member's edit is refused
-//! `not_admin` and changes nothing here, `run_task` starts the task's work through `work.start`, nothing falls back to
-//! the project database's tasks while the server is down, and a local project's tools work as before ([`tools`]).
+//! server on loopback with the server's routes and shapes (the work tests' [`team_server`], [`team_commands`] and
+//! [`team_deliveries`], with the reads and definition routes of [`reads`]): what the tools read comes from the server,
+//! a member's edit is refused `not_admin` and changes nothing here, `run_task` starts the task's work through
+//! `work.start`, nothing falls back to the project database's tasks while the server is down, and a local project's
+//! tools work as before ([`tools`]); `merge_run` of a team task's run requests its module's delivery and answers each
+//! state it reaches, while a local project's `merge_run` keeps its own path ([`delivery`], P7b).
 //!
 //! `cargo test -p orchester-workspace --test team_mcp team_mcp_`
 
@@ -17,6 +19,7 @@ mod team_deliveries;
 #[path = "../team_work/team_server.rs"]
 mod team_server;
 
+mod delivery;
 mod reads;
 mod tools;
 
@@ -225,19 +228,31 @@ fn draft(title: &str) -> TaskDetails {
   }
 }
 
-/// A repository at `root` on `main` with one commit and the module's branch at it.
+/// A repository at `root` on `main` with one commit, and the module's branch one commit ahead of it, as a task run
+/// merged into it left it (D3).
 fn repository(root: &Path) {
   git(root, &["init", "-b", "main"]);
   git(root, &["config", "user.name", "Team MCP test"]);
   git(root, &["config", "user.email", "test@example.invalid"]);
+  git(root, &["config", "core.autocrlf", "false"]);
   fs::write(root.join(".gitignore"), ".orchester/\n").expect("ignore");
   fs::write(root.join("README.md"), "Kontur\n").expect("readme");
   git(root, &["add", "."]);
   git(root, &["commit", "-m", "base"]);
-  git(root, &["branch", "module/webhooks"]);
+  git(root, &["switch", "-c", team_server::MODULE_BRANCH]);
+  fs::write(root.join("webhooks.txt"), "webhooks\n").expect("webhooks");
+  git(root, &["add", "webhooks.txt"]);
+  git(root, &["commit", "-m", "Merge KON-7 run #1"]);
+  git(root, &["switch", "main"]);
 }
 
-fn git(root: &Path, args: &[&str]) {
-  let status = Command::new("git").args(args).current_dir(root).status().expect("git");
-  assert!(status.success(), "git {args:?}");
+/// Git's trimmed output of `args` at `root`.
+fn git(root: &Path, args: &[&str]) -> String {
+  let output = Command::new("git").args(args).current_dir(root).output().expect("git");
+  assert!(
+    output.status.success(),
+    "git {args:?}: {}",
+    String::from_utf8_lossy(&output.stderr)
+  );
+  String::from_utf8(output.stdout).expect("text").trim().to_owned()
 }

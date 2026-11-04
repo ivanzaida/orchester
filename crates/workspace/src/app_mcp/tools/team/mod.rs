@@ -1,10 +1,12 @@
 //! The tools on a team project (`docs/architecture/team-authority-plan.md` §4 and §10, milestone P7): what the team
 //! server holds is read from it ([`crate::team_reads`]) and changed through the dispatcher ([`crate::actions`]), as on
-//! the screens, and a team task's work starts through the team server ([`crate::team_work`]). Nothing falls back to the
-//! project database's copy of team tasks or modules: a server that cannot be reached, a signed-out session or a refusal
-//! is the tool's refusal. A project without a link to a server is local, and its tools keep their own paths.
+//! the screens, a team task's work starts through the team server ([`crate::team_work`]), and `merge_run` of its run
+//! requests its module's delivery ([`deliver`]). Nothing falls back to the project database's copy of team tasks or
+//! modules: a server that cannot be reached, a signed-out session or a refusal is the tool's refusal. A project without
+//! a link to a server is local, and its tools keep their own paths.
 
 mod bindings;
+mod deliver;
 mod modules;
 mod outcome;
 mod run;
@@ -15,6 +17,7 @@ use orchester_store::{ProjectDb, SharingLink};
 
 pub use self::bindings::Binding;
 pub(super) use self::{
+  deliver::merge_run,
   modules::{create_module, get_module, list_modules, update_module},
   run::run_task,
   tasks::{get_task, list_tasks},
@@ -144,8 +147,8 @@ pub(super) fn decision_required(decision: orchester_api::v2::DecisionId) -> Tool
 }
 
 /// A team task's run is never merged into the base branch from here: its work goes into its module's branch, and only
-/// the module's delivery, which an Admin authorizes on the team server, takes it further. That delivery is not built
-/// yet (team authority P4c), so the merge is refused.
+/// the module's delivery takes it further, which `merge_run` requests ([`merge_run`]). A merge a person approved in a
+/// proposal is of the run's own commit, so on a team project it is refused.
 pub(super) fn merge_refused() -> ToolError {
   ToolError::refused(
     "team_delivery_pending",

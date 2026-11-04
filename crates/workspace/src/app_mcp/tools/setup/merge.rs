@@ -126,7 +126,12 @@ fn diff_json(diff: &Diff) -> Value {
   json!({ "files": files, "additions": diff.additions(), "deletions": diff.deletions() })
 }
 
+/// `merge_run`: a local project's run merged into its base branch; a team project's run has its module's delivery
+/// requested instead ([`team::merge_run`]).
 pub async fn merge_run(services: &Services, args: InRun, translate: &Translate) -> Result<Value, ToolError> {
+  if let Some(team) = team::of(services, &args.project).await? {
+    return team::merge_run(services, &team, &args.run, translate).await;
+  }
   merge_at(services, (args, None), translate).await
 }
 

@@ -28,7 +28,7 @@ use crate::{
 };
 
 /// The fake team server with the tools' routes, and what they saw.
-fn server() -> (TeamServer, std::sync::Arc<parking_lot::Mutex<reads::Seen>>) {
+pub(crate) fn server() -> (TeamServer, std::sync::Arc<parking_lot::Mutex<reads::Seen>>) {
   let config = Config::new("Say hello.");
   let (extra, seen) = reads::routes(&config);
   (TeamServer::start_with(config, Some(extra)), seen)
@@ -68,7 +68,7 @@ fn team_mcp_reads_come_from_the_team_server() {
   let module = checkout
     .call("get_module", &json!({"project": "Kontur", "module": "webhooks"}))
     .expect("the module");
-  assert_eq!(module["branch"], "module/webhooks");
+  assert_eq!(module["branch"], crate::team_server::MODULE_BRANCH);
   assert_eq!(module["module"]["id"], server.module.to_string());
 
   // Across projects, a team project's tasks are not read from this computer's copy: it is listed apart.
@@ -150,7 +150,12 @@ fn team_mcp_a_message_does_not_run_a_team_task_again() {
 }
 
 /// A run of the project's first task with a one-step pipeline published here, started and canceled.
-fn canceled_run(db: &mut orchester_store::ProjectDb) {
+pub(crate) fn canceled_run(db: &mut orchester_store::ProjectDb) {
+  run_from(db, (None, RunBaseSource::CheckedOut));
+}
+
+/// [`canceled_run`], started from `base_branch` as `base_source` says it was chosen.
+pub(crate) fn run_from(db: &mut orchester_store::ProjectDb, (base_branch, base_source): (Option<&str>, RunBaseSource)) {
   let now = Timestamp::now();
   let task = db.tasks().expect("tasks")[0].id();
   let builder = crate::fixture::builder();
@@ -189,8 +194,8 @@ fn canceled_run(db: &mut orchester_store::ProjectDb) {
     snapshot: RunSnapshot::build(id, &version, published).expect("snapshot"),
     branch: BranchName::new("orchester/kon-1-run-1").expect("branch"),
     base: Revision::new(&"a".repeat(40)).expect("revision"),
-    base_branch: None,
-    base_source: RunBaseSource::CheckedOut,
+    base_branch: base_branch.map(|branch| BranchName::new(branch).expect("branch")),
+    base_source,
     budget: None,
     max_duration: None,
   };
@@ -242,10 +247,6 @@ fn team_mcp_run_task_on_a_team_task_goes_through_work_start() {
   let code = checkout.refused("run_task", &json!({"project": "Kontur", "key": "KON-7"}));
   assert_eq!(code, "bindings_required");
   assert_eq!(server.state().works_made, 1, "nothing more was started");
-
-  // A team task's run goes into its module's branch, never merged into the base branch here.
-  let merge = json!({"project": "Kontur", "run": "1"});
-  assert_eq!(checkout.refused("merge_run", &merge), "team_delivery_pending");
 }
 
 #[test]
