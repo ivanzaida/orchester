@@ -2,11 +2,14 @@
 //! agent role, provider and model, read from the run's pinned configuration.
 
 use orchester_core::{
-  connection::ConnectionKind, id::StepExecutionId, resource::AgentProfile, run::StepExecutor, store::ResourceStore,
+  connection::ConnectionKind, id::StepExecutionId, resource::AgentProfile, run::StepExecutor,
 };
 use orchester_ipc::{RunWork, WorkState};
 
-use super::run::{ExecutionError, RunTask};
+use super::{
+  link::resources::pinned_version,
+  run::{ExecutionError, RunTask},
+};
 
 impl RunTask {
   /// Tells the board which ready agent steps of the run wait for an agent slot, after [`RunTask::start_ready`] said
@@ -41,10 +44,10 @@ impl RunTask {
     else {
       return Err(ExecutionError::NotAnAgentStep(execution));
     };
-    let Some(version) = self.db.version::<AgentProfile>(profile.resource, profile.number)? else {
+    let Some(body) = pinned_version::<AgentProfile>(&*self.link, profile)? else {
       return Ok(None);
     };
-    let connection = self.computer.connection(version.body().connection())?;
+    let connection = self.computer.connection(body.connection())?;
     let Some(ConnectionKind::Agent(provider)) = connection.as_ref().map(|connection| connection.connection().kind())
     else {
       return Ok(None);
@@ -55,7 +58,7 @@ impl RunTask {
       task_key: self.task.key().to_string(),
       task_title: self.task.details().title.as_str().to_owned(),
       step: step.name.as_str().to_owned(),
-      agent: version.body().role().as_str().to_owned(),
+      agent: body.role().as_str().to_owned(),
       provider: *provider,
       model: model.as_str().to_owned(),
       state: WorkState::Working,

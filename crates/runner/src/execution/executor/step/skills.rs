@@ -34,10 +34,13 @@ use orchester_core::{
   orchester_tools::StepSkills,
   resource::{InstructionTarget, SKILL_FILE, Skill, SkillFilePath, Slug, Step},
   run::{ProfileInfo, SkillListing},
-  store::{BlobStore, ResourceStore, SettingsStore},
+  store::SettingsStore,
 };
 
-use super::super::run::RunTask;
+use super::super::{
+  link::resources::{blob, pinned_version, resource_names},
+  run::RunTask,
+};
 
 /// Where Orchester's internal skills go in an execution's skills folder: `_` starts no slug.
 const INTERNAL_SKILLS: &str = "_orchester";
@@ -99,18 +102,15 @@ impl RunTask {
     };
     let mut reaching = Vec::new();
     for pin in self.run.snapshot().skills() {
-      let resource = self
-        .db
-        .resource(pin.resource)
+      let resource = resource_names(&*self.link, pin.resource)
         .map_err(|error| problem(error.to_string()))?
         .ok_or_else(|| problem(format!("skill {} no longer exists", pin.resource)))?;
-      let version = self
-        .db
-        .version::<Skill>(pin.resource, pin.number)
+      let skill = pinned_version::<Skill>(&*self.link, pin)
         .map_err(|error| problem(error.to_string()))?
         .ok_or_else(|| problem(format!("skill version {} is missing", pin.number)))?;
-      if version.body().reaches(target).is_ok() {
-        reaching.push((resource.slug().clone(), version.body().clone()));
+      if skill.reaches(target).is_ok() {
+        let slug = resource.slug().map_err(|error| problem(error.to_string()))?;
+        reaching.push((slug, skill));
       }
     }
     let folder = self.execution.skills(execution);
@@ -198,7 +198,7 @@ impl RunTask {
     let document = folder.join(SKILL_FILE);
     fs::write(&document, skill.document(slug)).map_err(|error| error.to_string())?;
     for file in skill.files() {
-      let content = self.db.blob(&file.content).map_err(|error| error.to_string())?;
+      let content = blob(&*self.link, &file.content).map_err(|error| error.to_string())?;
       let path = file
         .path
         .segments()

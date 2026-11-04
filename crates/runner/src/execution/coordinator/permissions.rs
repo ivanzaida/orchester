@@ -12,7 +12,7 @@ use orchester_core::{
 use orchester_ipc::Rejection;
 use orchester_store::ProjectDb;
 
-use super::{Scheduler, idle};
+use super::{Scheduler, idle, link::LocalLink};
 use crate::{
   computer::ComputerResources,
   execution::executor::{
@@ -81,7 +81,7 @@ fn change_idle(
   change: &PermissionsChange,
 ) -> Result<(), Rejection> {
   let mut run = idle::load(db, run)?;
-  let provider = provider_of((&*db, computer), &run, change.profile)?;
+  let provider = provider_of((&LocalLink::over(&*db), computer), &run, change.profile)?;
   let events = run
     .change_permissions(
       change.profile,
