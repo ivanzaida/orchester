@@ -154,3 +154,45 @@ fn domain_one_pull_request_refused_by_a_rate_limit_says_so_and_holds_the_list() 
   );
   assert_eq!(held["code"], "github_rate_limited", "{held}");
 }
+
+#[test]
+fn domain_pull_request_and_its_run_give_the_ci_checks_gh_reads() {
+  let (mut served, seeded) = Served::seeded("pull-requests");
+  let failing = served.ok("get_pull_request", &json!({ "project": "Kontur", "number": 137 }));
+  let checks = &failing["checks"];
+  assert_eq!(checks["passed"], 4, "the last sync's counts stay: {checks}");
+  assert_eq!(checks["state"], "failed", "{checks}");
+  assert_eq!(checks["pull_request"], 137);
+  assert!(checks["read_at"].is_number(), "{checks}");
+  assert_eq!(checks["next_read_at"], Value::Null, "nothing runs any more");
+  assert_eq!(checks["counts"]["passed"], 4);
+  assert_eq!(checks["counts"]["failed"], 1);
+  let failed = &checks["runs"][4];
+  assert_eq!(failed["state"], "failed", "{failed}");
+  assert_eq!(failed["name"], "check 5");
+  assert_eq!(
+    failed["url"],
+    "https://github.com/ivanzaida/kontur/actions/runs/137/job/13704"
+  );
+  let tail = failed["log_tail"].as_str().expect("the failed job's log");
+  assert!(tail.contains("webhook_retry_137 ... FAILED"), "{tail}");
+  assert!(tail.ends_with("exit code 101."), "{tail}");
+  assert_eq!(checks["runs"][0]["log_tail"], Value::Null);
+  let run = failing["task"]["run"]["id"].as_str().expect("its run");
+  let read = served.ok("get_run", &json!({ "project": "Kontur", "run": run }));
+  assert_eq!(read["checks"]["state"], "failed", "{}", read["checks"]);
+  assert_eq!(read["checks"]["pull_request"], 137);
+  let running = served.ok("get_pull_request", &json!({ "project": "Kontur", "number": 142 }));
+  assert_eq!(running["checks"]["state"], "running", "{}", running["checks"]);
+  assert!(running["checks"]["next_read_at"].is_number(), "{}", running["checks"]);
+  let none = served.ok("get_pull_request", &json!({ "project": "Kontur", "number": 133 }));
+  assert_eq!(none["checks"]["state"], "no_checks", "{}", none["checks"]);
+  answering(&seeded.repo, "not-signed-in");
+  let signed_out = served.ok("get_pull_request", &json!({ "project": "Kontur", "number": 134 }));
+  assert_eq!(
+    signed_out["checks"]["state"], "not_signed_in",
+    "{}",
+    signed_out["checks"]
+  );
+  assert_eq!(signed_out["checks"]["runs"], json!([]));
+}

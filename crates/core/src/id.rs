@@ -189,6 +189,10 @@ define_id!(
   AttachmentId
 );
 define_id!(
+  /// One side question a person asked about a run (`crate::run::side_question`).
+  SideQuestionId
+);
+define_id!(
   /// One thread of agent feedback on a pull request (`crate::pull_request::feedback`).
   FeedbackId
 );

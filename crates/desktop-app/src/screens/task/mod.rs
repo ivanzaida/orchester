@@ -15,6 +15,7 @@
 
 pub(crate) mod cards;
 pub(crate) mod changes;
+mod ci;
 mod context;
 mod conversation;
 mod header;
@@ -271,6 +272,11 @@ pub struct PageState {
   pub run_again_remove: Signal<bool>,
   /// A run the runner refused for want of a branch: the header's status line and Properties › Base say so.
   pub no_branch: Signal<Option<header::no_branch::NoBranch>>,
+  /// The search of the Conversation's transcript, which the search button at the end of the tabs opens; its query
+  /// stays while the page is open.
+  pub search: conversation::TranscriptSearch,
+  /// The Conversation's export from *More actions* (ORC-327): the tab hands it the timeline it shows.
+  pub export: header::export::RunExport,
 }
 
 impl PageState {
@@ -302,6 +308,9 @@ struct TaskFrame {
   /// Whether the task's latest run ran when the task was last read: only then do its transcript's lines
   /// change the task.
   live: Signal<bool>,
+  /// The latest run's pull request and its CI as last read, and what Fix CI and its switch do (`ci`).
+  ci: Signal<ci::reader::Found>,
+  ci_actions: ci::actions::CiActions,
 }
 
 impl Component for TaskFrame {
@@ -325,9 +334,13 @@ impl Component for TaskFrame {
         run_again: ctx.signal(header::run_again::Confirming::default()),
         run_again_remove: ctx.signal(false),
         no_branch: ctx.signal(None),
+        search: conversation::TranscriptSearch::new(ctx),
+        export: header::export::RunExport::new(ctx),
       },
       requested: ctx.signal(None),
       live: ctx.signal(false),
+      ci: ctx.signal(ci::reader::Found::default()),
+      ci_actions: ci::actions::CiActions::new(ctx, &props.project.feed),
     }
   }
 
@@ -386,6 +399,7 @@ impl Component for TaskFrame {
       .is_some_and(|status| status.state_for(&root) == RunnerState::Online);
     let follow = Follow::of(&detail, online, &props.view);
     self.changes.read(ctx, &root, &detail, follow);
+    let (reader, ci) = self.ci(ctx, (&props.project, &detail), (saves, online));
     let task = TaskContext {
       project: props.project.clone(),
       key: props.key.clone(),
@@ -393,6 +407,7 @@ impl Component for TaskFrame {
       left,
       online,
       jobs,
+      ci,
     };
     let header = HeaderProps {
       task: task.clone(),
@@ -412,6 +427,7 @@ impl Component for TaskFrame {
       .height(Dimension::Pct(100.0))
       .child(ctx.mount_keyed::<TaskHeader>("task-header", header))
       .child(body)
+      .with_children(reader)
       .into()
   }
 }
@@ -429,6 +445,21 @@ impl TaskFrame {
       self.stale.set(StaleRead(kept.clone()));
     }
     kept
+  }
+
+  /// The run's pull request's CI (ORC-335): its reader beside the task while the page shows `detail`'s run in
+  /// `project`, with the project's `saves`, and what the page shows of it; `online`: the project's runner is.
+  fn ci(
+    &self,
+    ctx: &mut Ctx,
+    (project, detail): (&ShownProject, &orchester_workspace::tasks::detail::TaskDetail),
+    (saves, online): (u64, bool),
+  ) -> (Option<Element>, Option<ci::ShownCi>) {
+    ctx.provide(self.ci_actions.clone());
+    let again = (self.ci_actions.again.get(), saves);
+    let reader = ci::reader::mount(ctx, (project, detail), again, &self.ci);
+    let shown = ci::shown(&self.ci.get(), detail, detail.lost_its_runner(online));
+    (reader, shown)
   }
 }
 

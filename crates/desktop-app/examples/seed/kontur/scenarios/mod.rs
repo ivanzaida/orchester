@@ -29,15 +29,20 @@ mod memory;
 mod modules;
 mod native;
 mod orchestrator;
+mod orchestrator_plan;
+mod orchestrator_rewind;
 mod overview_states;
 mod ownership;
 mod pipelines;
 mod project_settings;
 mod pull_requests;
 pub mod qa_app_asks;
+mod run_context;
+mod run_model;
 pub mod settings;
 mod shared_config;
 mod shared_here;
+mod side_question;
 mod slot_wait;
 mod sources;
 mod storage;
@@ -46,6 +51,7 @@ mod tasks;
 mod tasks_memory;
 mod tasks_unreadable;
 pub mod team;
+mod todo_lists;
 mod unreadable_db;
 mod usage;
 mod usage_accounts;
@@ -94,7 +100,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 103] = [
+pub const ALL: [Scenario; 127] = [
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-library", agents_library::seed),
   Scenario::of("agents-browser", agents_browser::seed),
@@ -121,9 +127,33 @@ pub const ALL: [Scenario; 103] = [
   Scenario::of("memory", memory::seed),
   Scenario::of("task-states", task_states::seed),
   Scenario::of("conversation", conversation::seed),
+  Scenario::of("conversation-context-plenty", run_context::plenty),
+  Scenario::of("conversation-context-near-full", run_context::near_full),
+  Scenario::of("conversation-context-full", run_context::full),
+  Scenario::of("conversation-model", run_model::seed),
+  Scenario::of("conversation-model-changed", run_model::changed),
+  Scenario::of("conversation-model-waits", run_model::waits),
+  Scenario::of("conversation-model-fixed", run_model::fixed),
+  Scenario::of("conversation-model-back", run_model::back),
+  Scenario::of("side-question", side_question::seed),
+  Scenario::of("side-question-sent", side_question::sent),
   Scenario::of("long-chats", long_chats::seed),
   Scenario::of("orchestrator", orchestrator::seed),
   Scenario::of("orchestrator-not-set-up", orchestrator::not_set_up),
+  Scenario::of("orchestrator-context-plenty", orchestrator::context::plenty),
+  Scenario::of("orchestrator-context-near-full", orchestrator::context::near_full),
+  Scenario::of("orchestrator-context-full", orchestrator::context::full),
+  Scenario::of("orchestrator-context-unknown", orchestrator::context::unknown),
+  Scenario::of("orchestrator-compacting", orchestrator::context::compacting),
+  Scenario::of("orchestrator-compacted", orchestrator::context::compacted),
+  Scenario::of("orchestrator-compact-failed", orchestrator::context::compact_failed),
+  Scenario::of("orchestrator-plan-only", orchestrator_plan::plan_only),
+  Scenario::of("orchestrator-plan-answer", orchestrator_plan::answer),
+  Scenario::of("orchestrator-plan-approved", orchestrator_plan::approved),
+  Scenario::of("orchestrator-plan-changed", orchestrator_plan::changed),
+  Scenario::of("orchestrator-rewind", orchestrator_rewind::seed),
+  Scenario::of("orchestrator-rewound", orchestrator_rewind::rewound),
+  Scenario::of("orchestrator-forked", orchestrator_rewind::forked),
   Scenario::of("changes", changes::seed),
   Scenario::of("cards", cards::seed),
   Scenario::of("cards-auto-mode", auto_mode::seed),
@@ -149,8 +179,6 @@ pub const ALL: [Scenario; 103] = [
   Scenario::of("native", native::seed),
   Scenario::of("project-settings", project_settings::seed),
   Scenario::of("project-settings-shared", project_settings::shared),
-  Scenario::of("storage-low-disk", storage::low_disk),
-  Scenario::of("storage-empty", storage::nothing),
   Scenario::of("shared-config", shared_config::admin),
   Scenario::of("shared-config-member", shared_config::member),
   Scenario::of("shared-config-here", shared_here::seed),
@@ -198,6 +226,8 @@ pub const ALL: [Scenario; 103] = [
   Scenario::of("team-clone", team::clones),
   Scenario::of("modules-base-branch", modules::base_branch),
   Scenario::of("loading-states", loading_states::seed),
+  Scenario::of("storage-low-disk", storage::low_disk),
+  Scenario::of("storage-empty", storage::nothing),
 ];
 
 /// The scenario called `name`.

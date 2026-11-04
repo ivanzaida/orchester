@@ -1,6 +1,7 @@
 //! *More actions* (`More` `lDoAj` in `j8DakG`, its menu `JapSp`): every action of the task the header does not show
 //! as its primary one. First the task's own: *Edit task* (E), *Copy link*, *Open worktree in Files* of the latest run
-//! and *Memory for this task*; then the run's: Pause run, Run again and *Return to a step* while they apply; then
+//! and *Memory for this task*, on the Conversation tab with the export's group after *Copy link* (ORC-327, `Y2KGi3`,
+//! `super::export`); then the run's: Pause run, Run again and *Return to a step* while they apply; then
 //! closing the task (*Mark as done*, *Cancel task* or *Reopen task*, `task_close`); and after a line what removes:
 //! *Remove worktree* of the latest run, *Cancel run* and *Delete task…*, the last two in `danger`. An action that
 //! applies but cannot be used now stays, unavailable with why.
@@ -70,8 +71,8 @@ impl MenuPlace {
   }
 }
 
-/// The `…` button with its menu while it is open.
-pub fn more(ctx: &mut Ctx, task: &TaskContext, place: &MenuPlace, held: Held) -> Element {
+/// The `…` button with its menu while it is open; on the Conversation tab (`conversation`) it exports too.
+pub fn more(ctx: &mut Ctx, (task, conversation): (&TaskContext, bool), place: &MenuPlace, held: Held) -> Element {
   let open = place.open.clone();
   let label = ctx.t("task.more.label");
   let button = IconButton::new("task-more", Icon::Ellipsis, label)
@@ -80,13 +81,13 @@ pub fn more(ctx: &mut Ctx, task: &TaskContext, place: &MenuPlace, held: Held) ->
   let shown = place.open.get();
   let button = if shown { button.active() } else { button }.render(ctx);
   let menu = shown.then(|| {
-    let panel = panel(ctx, task, &place.open, held);
+    let panel = panel(ctx, (task, conversation), &place.open, held);
     menu_at_end(place.anchor.clone(), place.open.clone(), panel)
   });
   Row::new().child(button).with_children(menu).into()
 }
 
-fn panel(ctx: &mut Ctx, task: &TaskContext, open: &Signal<bool>, held: Held) -> Element {
+fn panel(ctx: &mut Ctx, (task, conversation): (&TaskContext, bool), open: &Signal<bool>, held: Held) -> Element {
   let own = own_actions(ctx, task);
   let run: Vec<Control> = held
     .controls
@@ -100,7 +101,20 @@ fn panel(ctx: &mut Ctx, task: &TaskContext, open: &Signal<bool>, held: Held) -> 
     .into_iter()
     .chain(held.controls.into_iter().filter(is_cancel))
     .collect();
-  let mut rows: Vec<Element> = own.iter().map(|control| control.item(ctx, open)).collect();
+  // On the Conversation the export's group follows *Copy link*, before the task's other own actions (`Y2KGi3`).
+  let exports = if conversation {
+    PageState::of(ctx).export.controls(ctx, task)
+  } else {
+    Vec::new()
+  };
+  let split = if exports.is_empty() { own.len() } else { linked(&own) };
+  let mut rows: Vec<Element> = own[..split].iter().map(|control| control.item(ctx, open)).collect();
+  if !exports.is_empty() {
+    rows.push(separator(ctx));
+    rows.extend(exports.iter().map(|control| control.item(ctx, open)));
+    rows.push(separator(ctx));
+    rows.extend(own[split..].iter().map(|control| control.item(ctx, open)));
+  }
   if !run.is_empty() {
     rows.push(separator(ctx));
     rows.extend(run.iter().map(|control| control.item(ctx, open)));
@@ -129,6 +143,14 @@ fn panel(ctx: &mut Ctx, task: &TaskContext, open: &Signal<bool>, held: Held) -> 
 
 fn is_cancel(control: &Control) -> bool {
   &*control.id == "task-cancel-run"
+}
+
+/// How many of the task's own actions go before the export's group: those up to *Copy link*.
+fn linked(own: &[Control]) -> usize {
+  own
+    .iter()
+    .position(|control| &*control.id == "task-copy-link")
+    .map_or(own.len(), |at| at + 1)
 }
 
 /// *Edit task* while the task can be edited (locked, with why, while it is kept *Not shared*), *Copy link*, *Open

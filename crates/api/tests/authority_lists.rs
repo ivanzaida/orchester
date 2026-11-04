@@ -81,9 +81,9 @@ fn authority_lists_search_is_trimmed_and_bounded() {
 
 #[test]
 fn authority_lists_board_counts_shape() {
-  let wire = json!({"backlog":3,"todo":2,"in_progress":1,"in_review":0,"done":5,"canceled":1,"cursor":"c1"});
+  let wire = json!({"backlog":3,"todo":2,"in_progress":1,"in_review":0,"done":5,"canceled":1,"cursor":"1"});
   let counts: TaskBoardCounts = serde_json::from_value(wire.clone()).expect("counts");
-  assert_eq!((counts.backlog, counts.done, counts.cursor.as_str()), (3, 5, "c1"));
+  assert_eq!((counts.backlog, counts.done, counts.cursor.position().get()), (3, 5, 1));
   assert_eq!(serde_json::to_value(&counts).expect("serialize"), wire);
   let mut unknown = wire;
   unknown["needs_you"] = json!(1);
@@ -137,7 +137,7 @@ fn authority_lists_module_summaries_follow_core() {
     start_scope: 2,
   };
   let module = ModuleId::generate();
-  let cursor = orchester_api::v2::EventCursor::new("c1".to_owned()).expect("cursor");
+  let cursor = orchester_api::v2::EventCursor::new("1").expect("cursor");
   let read = ModuleBurndownRead::from_core(module, (&burndown, &dates), cursor);
   let read_wire = serde_json::to_value(&read).expect("burndown");
   assert_eq!(
@@ -192,7 +192,7 @@ fn authority_lists_workspace_metadata_refuses_unknown_fields() {
       "remote_hint":null,"role":"member","next_number":13},
     "policy":{"revision":1,"automatic_merge":false},
     "capabilities":{"project_id":project,"revision":1,"role":"member","actions":[],"unresolved":[]},
-    "cursor":"c1"
+    "cursor":"1"
   });
   let metadata: WorkspaceMetadata = serde_json::from_value(wire.clone()).expect("metadata");
   assert_eq!(metadata.project.key, "KON");

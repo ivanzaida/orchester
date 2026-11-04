@@ -8,6 +8,7 @@
 //! it. What an entry says is [`shown`]'s.
 
 mod change;
+mod found;
 mod mcp;
 mod native;
 mod problem;
@@ -32,8 +33,9 @@ use orchester_workspace::{
   },
 };
 
-use self::shown::Shown;
-use super::Timeline;
+pub(super) use self::mcp::subject_key;
+use self::{found::Places, shown::Shown};
+use super::{super::search::marks::opened, Timeline};
 use crate::{
   routes::{ChangeSource, ChangedFile, TaskView},
   theme::{
@@ -49,8 +51,24 @@ use crate::{
 const ROW_HEIGHT: f32 = 26.0;
 const OUTPUT_LINES: usize = 200;
 
-/// `entry`'s row in an open tool group; `key` keeps whether a person opened it.
+/// `entry`'s row on its own; `key` keeps whether a person opened it.
 pub(super) fn tool_row(ctx: &mut Ctx, timeline: &Timeline, key: &Arc<str>, entry: &Entry) -> Element {
+  call(ctx, timeline, key, entry, &[])
+}
+
+/// `entry`'s row in the open tool group `group`, with what the search found in it marked; `key` keeps whether a
+/// person opened it.
+pub(super) fn call_row(ctx: &mut Ctx, timeline: &Timeline, (group, key): (&str, &Arc<str>), entry: &Entry) -> Element {
+  let places = timeline
+    .search
+    .as_ref()
+    .map(|marks| marks.in_call((group, key), |_| true))
+    .unwrap_or_default();
+  call(ctx, timeline, key, entry, &places)
+}
+
+/// `entry`'s row, the `places` the search found in it marked.
+fn call(ctx: &mut Ctx, timeline: &Timeline, key: &Arc<str>, entry: &Entry, places: &Places) -> Element {
   let mut shown = shown::shown(ctx, entry, timeline.works(entry.invocation));
   // A command whose request to run waits for the person has not started.
   if let EntryKind::Command(command) = &entry.kind
@@ -65,39 +83,7 @@ pub(super) fn tool_row(ctx: &mut Ctx, timeline: &Timeline, key: &Arc<str>, entry
   }
   let id = format!("conversation-{key}");
   let open = shown.collapsible && shown.has_details() && timeline.toggles.is_open(key, false);
-  let line = Row::new()
-    .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(ROW_HEIGHT))
-    .padding_horizontal(SpacingSize::Sm)
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
-    .child(icon(shown.glyph, IconSize::Base, PaletteColor::TextMuted))
-    .child(
-      Text::new(&shown.title)
-        .id(format!("{id}-title"))
-        .variant(if shown.code {
-          TypographyStyle::Mono
-        } else {
-          TypographyStyle::Description
-        })
-        .color(PaletteColor::TextSecondary)
-        .nowrap()
-        .text_overflow(TextOverflow::Elipsis)
-        .min_width(Dimension::Px(0.0))
-        .flex(1.0),
-    )
-    .with_children((!shown.meta.is_empty()).then(|| {
-      Text::new(&shown.meta)
-        .id(format!("{id}-meta"))
-        .variant(TypographyStyle::Caption)
-        .color(if shown.failed {
-          PaletteColor::Danger
-        } else {
-          PaletteColor::TextMuted
-        })
-        .nowrap()
-    }))
-    .child(time(entry));
+  let line = line(ctx, timeline, (&id, key), (entry, &shown), places);
   let line = pressed(ctx, timeline, (key, &shown, open), line);
   let mark = shown.mark.as_ref().map(|words| {
     let glyph = if entry.is_failure() {
@@ -118,10 +104,11 @@ pub(super) fn tool_row(ctx: &mut Ctx, timeline: &Timeline, key: &Arc<str>, entry
       .child(Text::new(words).variant(TypographyStyle::Caption).nowrap())
   });
   let details = open.then(|| {
+    let around = found::output(ctx, timeline, (&id, key), (entry, &shown), places);
     Column::new()
       .padding_left(ConversationSpacing::Mark.role())
       .padding_bottom(SpacingSize::Xs)
-      .child(details(ctx, &id, &shown))
+      .child(details(ctx, &id, &shown, around))
   });
   Column::new()
     .id(id)
@@ -131,6 +118,63 @@ pub(super) fn tool_row(ctx: &mut Ctx, timeline: &Timeline, key: &Arc<str>, entry
     .with_children(mark)
     .with_children(details)
     .into()
+}
+
+/// A call's line: its glyph, what it is (the places found in it marked), how it ended, that the search opened it, and
+/// its time.
+fn line(
+  ctx: &Ctx,
+  timeline: &Timeline,
+  (id, key): (&str, &Arc<str>),
+  (entry, shown): (&Entry, &Shown),
+  places: &Places,
+) -> Row {
+  let look = (
+    if shown.code {
+      TypographyStyle::Mono
+    } else {
+      TypographyStyle::Description
+    },
+    PaletteColor::TextSecondary,
+  );
+  let title: Element = match found::title(entry, (&shown.title, shown.opens.as_ref()), places, look.clone()) {
+    Some(marked) => marked.id(format!("{id}-title")).into(),
+    None => Text::new(&shown.title)
+      .id(format!("{id}-title"))
+      .variant(look.0)
+      .color(look.1)
+      .nowrap()
+      .text_overflow(TextOverflow::Elipsis)
+      .min_width(Dimension::Px(0.0))
+      .flex(1.0)
+      .into(),
+  };
+  Row::new()
+    .width(Dimension::Pct(100.0))
+    .height(Dimension::Px(ROW_HEIGHT))
+    .padding_horizontal(SpacingSize::Sm)
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .child(icon(shown.glyph, IconSize::Base, PaletteColor::TextMuted))
+    .child(title)
+    .with_children((!shown.meta.is_empty()).then(|| {
+      Text::new(&shown.meta)
+        .id(format!("{id}-meta"))
+        .variant(TypographyStyle::Caption)
+        .color(if shown.failed {
+          PaletteColor::Danger
+        } else {
+          PaletteColor::TextMuted
+        })
+        .nowrap()
+    }))
+    .with_children(
+      timeline
+        .toggles
+        .opened_by_search(key)
+        .then(|| opened(ctx, &format!("{id}-opened"))),
+    )
+    .child(time(entry))
 }
 
 /// `line`, pressed: a file change opens its file in the Changes tab, a row with more to show opens or folds.
@@ -217,7 +261,7 @@ pub(super) fn problem_row(ctx: &mut Ctx, timeline: &Timeline, key: &Arc<str>, en
     )
     .with_children(shown.has_details().then(|| {
       let output = Shown { body: None, ..shown };
-      details(ctx, &id, &output)
+      details(ctx, &id, &output, None)
     }));
   Row::new()
     .id(id)
@@ -248,8 +292,10 @@ fn shown_glyph(entry: &Entry) -> Icon {
   }
 }
 
-/// What an open row shows under its line: the command whole, the body, the change and the output.
-fn details(ctx: &Ctx, id: &str, shown: &Shown) -> Element {
+/// What an open row shows under its line: the command whole, the body, the change and the output, or its lines
+/// `around` the places a search found in it.
+fn details(ctx: &Ctx, id: &str, shown: &Shown, around: Option<Element>) -> Element {
+  let output = around.or_else(|| (!shown.output.is_empty()).then(|| output(ctx, id, shown)));
   Column::new()
     .id(format!("{id}-details"))
     .width(Dimension::Pct(100.0))
@@ -270,7 +316,7 @@ fn details(ctx: &Ctx, id: &str, shown: &Shown) -> Element {
         .selectable(true)
     }))
     .with_children(shown.change.as_ref().map(|found| change::block(ctx, found, id)))
-    .with_children((!shown.output.is_empty()).then(|| output(ctx, id, shown)))
+    .with_children(output)
     .into()
 }
 

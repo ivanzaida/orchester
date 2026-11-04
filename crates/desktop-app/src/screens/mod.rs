@@ -39,7 +39,7 @@ mod task_form;
 pub(crate) mod tasks;
 mod tools;
 mod unavailable_project;
-mod usage;
+pub(crate) mod usage;
 
 use std::sync::Arc;
 

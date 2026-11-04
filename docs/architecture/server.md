@@ -427,6 +427,27 @@ current effective claim on current unfenced work counts as Admin-authorized; off
 `delivery.authorize`. Report and outside deliverables have no base merge (D4 open). OP-150 implements routes and
 enforcement in the platform repository; these types alone implement none.
 
+### Module delivery (ORC-656, S7c)
+
+Task works reach base only through their module. A task's run branch merges into its module branch by the runner's
+local merge, which the work's reports tell the server about (S9); no task delivery goes to base. Base delivery is the
+module's: a module has no pipeline, criteria or deliverable, so it has no work and no execution bundle (making one
+would need a default pipeline, open decision D6), and delivering a branch executes nothing.
+
+`v2::ModuleDeliveryRead` is one delivery of a module branch: `subject` (always `{kind:"module",id}`; a task subject is
+refused), the module's `claim_id`, the authorizing operation or `null`, the module `branch`, `source_commit` (the
+module branch's head being delivered), `base_commit`, `state` and `revision`, with no `work_id` and no `bundle`. It is
+a type of its own rather than a `kind`-tagged form of `DeliveryRead`: tagging would add a field to the task form's
+wire and change ORC-654's shape, while the two field sets are disjoint (`work_id`/`bundle` against
+`subject`/`branch`), so with unknown fields refused a body reads as exactly one of them. `DeliveryRead` is unchanged.
+`LocalEffect::DeliverModule {module_id, branch, source_commit, base_commit}` (`{kind:"deliver_module",...}`)
+authorizes the runner to merge that branch head into base at that commit on its computer; it names no local path,
+and the runner finds the module's checkout itself.
+
+A module delivery is authorized either by an Admin's `delivery.authorize` on the module, or, with the workspace's
+`automatic_merge` on, by the request itself coming from the module's current effective claim (D7, as decided above).
+OP-150 implements the commands and enforcement in the platform repository; these types alone implement none.
+
 ## Team authority S9 contract (ORC-655 / OP-152)
 
 Work reports, execution outcomes and work events. The wire shapes are in
@@ -444,6 +465,27 @@ delta with `{work:WorkRead}`. Refusals reuse `claim_lost` for a stale generation
 success is not permission to mark the task Done: no human-wait or task-completion outcome exists until D1, D4 and D8
 are decided. OP-152 implements routes, fencing and storage in the platform repository; these types alone implement
 none.
+
+## Team authority S11 contract (ORC-660 / OP-154)
+
+Scoped invalidation subscriptions without replica snapshots. The wire shapes are in
+[cloud-api.md](../cloud-api.md#team-authority-s11-subscriptions). The server provides
+`GET /api/v2/projects/{project}/subscription`, a server-sent event stream that a client resumes with an optional
+`Last-Event-ID`; each event is named by its `kind` and carries its cursor as the SSE `id:`. `v2::subscription` defines
+the `QueryScope`s a change can make stale (workspace, task list, task, task comments, module list, module, library,
+resource) and the `SubscriptionEvent`s: `ready` first with the stream's cursor and no snapshot, one `invalidated` per
+committed batch with its last cursor and its de-duplicated scopes, `reset` when the resume point is below the replay
+floor, and `revoked` before the stream closes. `QueryScope` is `Eq`, `Hash` and `Ord`, so a set of scopes is stable.
+
+**Client race rule.** Reads stay on the ordinary routes, each answering the `EventCursor` it was taken at. An
+`EventCursor` is the server's committed event sequence position: on the wire a string holding the canonical decimal of
+a positive integer (no sign, no leading zeros, refused otherwise), ordered by that integer and never by string order,
+so `"9"` < `"10"`. Cursors of the same project compare; cursors of different projects are not comparable. A cached
+read taken at cursor `R` is stale only when an `invalidated` event with a cursor greater than `R` names its scope;
+events at or below `R` are already in it. A client may therefore subscribe before or after reading without missing a
+change. A `reset` drops every cached read, which is read again at or after its cursor. `PageCursor` stays opaque: page
+cursors are not ordered. OP-154 implements the route, replay and enforcement in the platform repository; these types
+alone implement none.
 
 ## Claims
 

@@ -85,6 +85,7 @@ fn merge_queue_conversation_lines_follow_the_steps_before_them_and_come_before_l
     .map(|line| match &line.kind {
       DeliveryKind::Event(event) => event,
       DeliveryKind::WaitsForApproval => panic!("an Auto-merge run never waits for approval"),
+      DeliveryKind::Ci(_) => panic!("a delivery's lines are the queue's"),
     })
     .collect();
   assert!(

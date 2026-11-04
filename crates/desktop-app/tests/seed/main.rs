@@ -8,6 +8,7 @@ mod browser;
 #[path = "../../examples/seed/cli.rs"]
 mod cli;
 mod command_line;
+mod context;
 #[path = "../../examples/seed/kontur/mod.rs"]
 mod kontur;
 mod live;
@@ -15,6 +16,7 @@ mod loading_states;
 mod native;
 mod orchestrator;
 mod pipelines;
+mod plan_only;
 mod refusals;
 mod scenario_names;
 mod settings;

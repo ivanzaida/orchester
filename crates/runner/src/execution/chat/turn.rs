@@ -13,6 +13,7 @@ use orchester_core::{
   attachment::input::AttachedFile,
   connection::{
     AccountStartProblem, AgentConnection, AgentProvider, ConnectionError,
+    context_use::ContextUse,
     stream::{AgentEvent, OutputStream},
   },
   conversation::MessageBody,
@@ -68,7 +69,7 @@ impl Turn {
   /// Runs the turn to its end, or until `stop` says so, giving it the messages sent now that `steers` hands over,
   /// and records how it ended; what it had of them and did not take is left for turns of their own.
   pub(super) async fn run(self, stop: oneshot::Receiver<()>, mut steers: mpsc::UnboundedReceiver<ChatMessageId>) {
-    let state = match self.prepare() {
+    let state = match self.prepare(false) {
       Ok(prepared) if prepared.connection.provider() == AgentProvider::CodexCli => {
         self.run_codex(prepared, (stop, &mut steers)).await
       }
@@ -84,8 +85,8 @@ impl Turn {
   }
 
   /// What the turn starts from, or why it cannot start. A session the turn cannot resume, on another connection or
-  /// account, is said in the conversation.
-  fn prepare(&self) -> Result<Prepared, TurnFailure> {
+  /// account, is said in the conversation, but by a compaction (`compaction`), which starts no session.
+  pub(super) fn prepare(&self, compaction: bool) -> Result<Prepared, TurnFailure> {
     let mut db = ProjectDb::open(&self.root).map_err(|error| cannot(error.to_string()))?;
     let stored = db
       .connection(self.settings.connection())
@@ -102,16 +103,15 @@ impl Turn {
       return Err(TurnFailure::ConnectionGone);
     }
     if let Some(problem) = connection.account().start_problem(Path::is_dir) {
-      return Err(TurnFailure::Account(problem));
+      return Err(TurnFailure::Account { problem });
     }
     let executable = connection
       .executable()
       .ok_or_else(|| cannot("the connection has no CLI program".to_owned()))?
       .to_path_buf();
-    let account = connection
-      .account()
-      .id(provider)
-      .ok_or(TurnFailure::Account(AccountStartProblem::NoAccount))?;
+    let account = connection.account().id(provider).ok_or(TurnFailure::Account {
+      problem: AccountStartProblem::NoAccount,
+    })?;
     // A key secret that is archived, gone or not given by the keychain keeps the turn from starting, as it keeps a
     // step's agent; the reason names the secret, never its value.
     let key = connection
@@ -123,7 +123,11 @@ impl Turn {
       .chat
       .resumes_on(self.settings.connection(), account)
       .map(str::to_owned);
-    if let Some(because) = self.chat.session_change(self.settings.connection(), account) {
+    if let Some(because) = self
+      .chat
+      .session_change(self.settings.connection(), account)
+      .filter(|_| !compaction)
+    {
       // The session lives in another CLI folder: the agent starts afresh, and the conversation says so.
       db.add_chat_event(self.chat.id(), &ChatEvent::NewSession { because }, Timestamp::now())
         .map_err(|error| cannot(error.to_string()))?;
@@ -141,7 +145,8 @@ impl Turn {
     })
   }
 
-  /// Keeps what `event` of the CLI on `account` says: the session, a reply, or how the turn goes.
+  /// Keeps what `event` of the CLI on `account` says: the session, a reply, the agent's todo list, or how the turn
+  /// goes.
   pub(super) fn keep(&self, event: AgentEvent, account: AgentAccountId, seen: &mut Seen) {
     match event {
       AgentEvent::SessionStarted { session } => {
@@ -150,6 +155,9 @@ impl Turn {
       }
       AgentEvent::Message { text } if !text.trim().is_empty() => {
         self.record(|db| db.add_chat_reply(self.chat.id(), (&text, self.settings.model()), Timestamp::now()));
+      }
+      AgentEvent::TodoList { items } => {
+        self.record(|db| db.keep_chat_todo(self.message, &items, Timestamp::now()));
       }
       AgentEvent::TurnCompleted { usage } => {
         seen.answered = true;
@@ -176,6 +184,15 @@ impl Turn {
     }
     self.notifier.send(Event::ChatChanged { chat: self.chat.id() });
   }
+
+  /// Keeps how full the session's context is, as the CLI's output said so far, when it changed since it was kept.
+  pub(super) fn keep_context(&self, context: Option<ContextUse>, seen: &mut Seen) {
+    let Some(reading) = context.filter(|reading| seen.context != Some(*reading)) else {
+      return;
+    };
+    seen.context = Some(reading);
+    self.record(|db| db.set_chat_context(self.chat.id(), &reading));
+  }
 }
 
 /// Why a turn could not start, as the runner's log says it.
@@ -195,6 +212,8 @@ pub(super) struct Seen {
   pub(super) stderr: Option<String>,
   /// The runner ended it at the time limit.
   pub(super) timed_out: Option<TurnFailure>,
+  /// How full the session's context is, as last kept.
+  context: Option<ContextUse>,
 }
 
 impl Seen {

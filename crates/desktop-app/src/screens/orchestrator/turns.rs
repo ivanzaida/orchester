@@ -1,16 +1,22 @@
-//! A conversation as turns: each message a person sent, what the Orchestrator answered it with (its replies and
-//! the actions it took, in the order they were kept) and how the turn ended; and each wait of an agent of the
-//! project and each daily report, with the turn it started by itself, if it started one. What is kept while a turn
-//! runs belongs to that turn, even when a wait kept meanwhile shows under it. A message the answer under way took
-//! (*Send now*) goes on with that answer: what the answer said after it shows under it, and so does how the answer
-//! ended. The messages that wait for the answer to end, queued or handed to it, show after every turn, in order.
+//! A conversation as turns: each message a person sent, what the Orchestrator answered it with (its replies, the
+//! actions it took and the plans it answered with in plan-only mode, in the order they were kept) and how the turn
+//! ended; and each wait of an agent of the project and each daily report, with the turn it started by itself, if it
+//! started one. What is kept while a turn runs belongs to that turn, even when a wait kept meanwhile shows under it. A
+//! message the answer under way took (*Send now*) goes on with that answer: what the answer said after it shows under
+//! it, and so does how the answer ended. The turn that carries out an approved plan has no message of the person's to
+//! show: it goes on under the plan it carries out (`12c` `j7Oa9v`). The messages that wait for the answer to end,
+//! queued or handed to it, show after every turn, in order.
 
 use std::{collections::BTreeMap, sync::Arc};
 
 use orchester_core::{
   attachment::{Attachment, is_names_only},
+  connection::stream::TodoList,
   id::ChatMessageId,
-  orchestrator::{AgentWait, ChatAction, ChatEntry, ChatEvent, DailyReport, EntryKind, TurnState, WaitTurn},
+  orchestrator::{
+    AgentWait, ChatAction, ChatEntry, ChatEvent, ChatPlan, DailyReport, EntryKind, PlanState, TurnMode, TurnState,
+    WaitTurn,
+  },
   time::Timestamp,
 };
 use orchester_workspace::orchestrator::chat::{ChatView, EndMoved};
@@ -32,13 +38,25 @@ pub(super) enum Part {
     event: ChatEvent,
     at: Timestamp,
   },
+  /// A plan, its entry, and which plan of the conversation it is, from 1.
+  Plan {
+    plan: Box<ChatPlan>,
+    at: Timestamp,
+    seq: i64,
+    number: usize,
+  },
 }
 
 impl Part {
   pub(super) const fn at(&self) -> Timestamp {
     match self {
-      Self::Reply { at, .. } | Self::Action { at, .. } | Self::Event { at, .. } => *at,
+      Self::Reply { at, .. } | Self::Action { at, .. } | Self::Event { at, .. } | Self::Plan { at, .. } => *at,
     }
+  }
+
+  /// Whether it is a plan the person approved at `at`.
+  fn approved_at(&self, at: Timestamp) -> bool {
+    matches!(self, Self::Plan { plan, .. } if plan.state() == PlanState::Approved { at })
   }
 }
 
@@ -72,8 +90,13 @@ pub(super) struct Turn {
   pub(super) moved: Option<EndMoved>,
   /// The daily report that opens the row instead of a person's message.
   pub(super) report: Option<Box<DailyReport>>,
+  /// An event that is the whole row: a compaction of the session (`super::compaction`), or where a rewind went back
+  /// to (`super::rewind::line`).
+  pub(super) compaction: Option<ChatEvent>,
   /// Its entry in the conversation; `None` while it is being sent.
   seq: Option<i64>,
+  /// The entry of the last part of its answer; `None` before its answer said or did anything.
+  last: Option<i64>,
   /// When it was kept; `None` while it is being sent.
   pub(super) at: Option<Timestamp>,
   /// When its turn ended, when the runner said.
@@ -85,6 +108,10 @@ pub(super) struct Turn {
   /// A message the answer under way took follows it: that answer goes on, and ends, under that message.
   pub(super) continued: bool,
   pub(super) answer: Vec<Part>,
+  /// The todo list of the turn it started, as the agent's latest update left it; `None` when the agent keeps none.
+  pub(super) todo: Option<TodoList>,
+  /// How the person's message's turn went: it planned only, or it acted.
+  pub(super) mode: TurnMode,
 }
 
 impl Turn {
@@ -104,13 +131,17 @@ impl Turn {
       stands: false,
       moved: None,
       report: None,
+      compaction: None,
       seq: None,
+      last: None,
       at: None,
       ended: None,
       state: Some(state),
       arrival,
       continued: false,
       answer: Vec::new(),
+      todo: None,
+      mode: TurnMode::Acts,
     }
   }
 
@@ -136,13 +167,17 @@ impl Turn {
       stands: false,
       moved: None,
       report: None,
+      compaction: None,
       seq: Some(entry.seq),
+      last: None,
       at: Some(entry.at),
       ended: turn.and_then(|turn| turn.ended),
       state: turn.map(|turn| turn.state.clone()),
       arrival: Arrival::Own,
       continued: false,
       answer: Vec::new(),
+      todo: None,
+      mode: TurnMode::Acts,
     }
   }
 
@@ -165,29 +200,43 @@ impl Turn {
       (None, None) => "sending".to_owned(),
     }
   }
+
+  /// Its entry in the conversation; `None` while it is being sent.
+  pub(super) const fn seq(&self) -> Option<i64> {
+    self.seq
+  }
+
+  /// The entry of the last part of its answer; `None` before its answer said or did anything.
+  pub(super) const fn last(&self) -> Option<i64> {
+    self.last
+  }
+}
+
+/// The key of the row of `turns` that shows entry `seq`: the row it opens, or the latest row before it whose answer
+/// it is part of; a message that waits shows only itself.
+pub(super) fn row_of(turns: &[Turn], seq: i64) -> Option<String> {
+  turns
+    .iter()
+    .filter(|turn| {
+      turn
+        .seq
+        .is_some_and(|at| at == seq || (at < seq && turn.arrival != Arrival::Waiting))
+    })
+    .max_by_key(|turn| turn.seq)
+    .map(Turn::key)
 }
 
 /// The turns of conversation `shown`, oldest first, and after them the messages that wait for the answer to end; its
 /// waits stand as it read them. What comes before the first message or wait belongs to no turn and is left out; a
-/// reply, action or event belongs to the newest row that takes it.
+/// reply, action, event or plan belongs to the newest row that takes it.
 pub(super) fn turns(shown: &ChatView) -> Vec<Turn> {
   let mut turns: Vec<Turn> = Vec::new();
   let mut waiting: Vec<Turn> = Vec::new();
+  let mut plans = 0;
   for entry in &shown.entries {
     let part = match &entry.kind {
-      EntryKind::Person {
-        message,
-        text,
-        turn,
-        ended,
-        ..
-      } => {
-        let row = person(entry, (*message, text.as_str(), turn), *ended, &shown.attachments);
-        if row.arrival == Arrival::Waiting {
-          waiting.push(row);
-        } else {
-          turns.push(row);
-        }
+      EntryKind::Person { .. } => {
+        add_person((&mut turns, &mut waiting), entry, shown);
         continue;
       }
       EntryKind::Wait { wait, turn } => {
@@ -206,6 +255,29 @@ pub(super) fn turns(shown: &ChatView) -> Vec<Turn> {
         });
         continue;
       }
+      // A compaction is a row of its own between the turns (`06b` `j7eSQO`), and so are where a rewind went back to
+      // (`10` `Zm7kq`), a fork's first line and what its original made after it (`11` `RT5T7`).
+      EntryKind::Event(
+        event @ (ChatEvent::Compaction { .. }
+        | ChatEvent::Rewound { .. }
+        | ChatEvent::Forked { .. }
+        | ChatEvent::MadeInOriginal { .. }),
+      ) => {
+        turns.push(Turn {
+          compaction: Some(event.clone()),
+          ..Turn::opened(entry, None)
+        });
+        continue;
+      }
+      EntryKind::Plan(plan) => {
+        plans += 1;
+        Part::Plan {
+          plan: plan.clone(),
+          at: entry.at,
+          seq: entry.seq,
+          number: plans,
+        }
+      }
       EntryKind::Reply { text, .. } => Part::Reply {
         text: Arc::from(text.as_str()),
         at: entry.at,
@@ -222,11 +294,62 @@ pub(super) fn turns(shown: &ChatView) -> Vec<Turn> {
     };
     if let Some(turn) = turns.iter_mut().rev().find(|turn| turn.takes_parts()) {
       turn.answer.push(part);
+      turn.last = Some(entry.seq);
     }
   }
   join_answers(&mut turns);
+  // A turn's list is the one its agent keeps for the message, wait or report that started it.
+  for turn in &mut turns {
+    turn.todo = turn
+      .message
+      .filter(|_| turn.arrival == Arrival::Own)
+      .and_then(|message| shown.todo_of(message).cloned());
+  }
   turns.extend(waiting);
   turns
+}
+
+/// The row of the person's message kept as `entry` of `shown`, among the `turns` or those `waiting`; the turn that
+/// carries out an approved plan goes on under that plan instead.
+fn add_person((turns, waiting): (&mut Vec<Turn>, &mut Vec<Turn>), entry: &ChatEntry, shown: &ChatView) {
+  let EntryKind::Person {
+    message,
+    text,
+    turn,
+    ended,
+    mode,
+    ..
+  } = &entry.kind
+  else {
+    return;
+  };
+  if *mode == TurnMode::CarriesOut {
+    carry_on(turns, entry.at, (turn, *ended));
+    return;
+  }
+  let row = Turn {
+    mode: *mode,
+    ..person(entry, (*message, text.as_str(), turn), *ended, &shown.attachments)
+  };
+  if row.arrival == Arrival::Waiting {
+    waiting.push(row);
+  } else {
+    turns.push(row);
+  }
+}
+
+/// The turn that carries out the plan approved at `at`, which stands at `turn` and ended at `ended`, goes on in the row
+/// holding that plan, or else in the newest row that takes parts: what it does shows under the plan, and its end is
+/// that row's.
+fn carry_on(turns: &mut [Turn], at: Timestamp, (turn, ended): (&TurnState, Option<Timestamp>)) {
+  let holder = turns
+    .iter()
+    .rposition(|row| row.answer.iter().any(|part| part.approved_at(at)))
+    .or_else(|| turns.iter().rposition(Turn::takes_parts));
+  if let Some(row) = holder.map(|index| &mut turns[index]) {
+    row.state = Some(turn.clone());
+    row.ended = ended;
+  }
 }
 
 /// The row of the person's message `message`, kept as `entry`, whose turn stands at `turn` and ended at `ended`.
@@ -254,13 +377,17 @@ fn person(
     stands: false,
     moved: None,
     report: None,
+    compaction: None,
     seq: Some(entry.seq),
+    last: None,
     at: Some(entry.at),
     ended,
     state: Some(turn.clone()),
     arrival,
     continued: false,
     answer: Vec::new(),
+    todo: None,
+    mode: TurnMode::Acts,
   }
 }
 

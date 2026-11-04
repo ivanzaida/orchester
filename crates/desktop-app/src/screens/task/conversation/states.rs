@@ -22,6 +22,7 @@ use orchester_core::{
   run::{RunStatus, TaskPhase},
 };
 use orchester_workspace::{
+  files::Version,
   messages::Message,
   tasks::{
     conversation::Conversation,
@@ -245,10 +246,12 @@ pub(super) fn without_run(
       Vec::new(),
     );
   }
+  // Before a run, the files a message mentions are the project's checkout's.
+  let (id, root) = project;
   let messages: Vec<Element> = conversation
     .entries
     .iter()
-    .map(|entry| person_message(ctx, (project, entry)))
+    .map(|entry| person_message(ctx, ((id, root, &Version::Checkout), entry), (None, None)))
     .collect();
   Column::new()
     .id("conversation-waiting")

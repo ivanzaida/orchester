@@ -25,7 +25,7 @@ use serde_json::{Value, json};
 use super::{
   Translate,
   approvals::approval,
-  base_branch, base_moved,
+  base_branch, base_moved, ci_wire,
   message_waits::message_waits,
   orchestrated, plans, wire,
   worktree::{worktree_left, worktree_state},
@@ -98,6 +98,7 @@ fn read_run(services: &Services, args: &InRun) -> Result<(Value, Vec<ShownApprov
   let messages = message_waits(&db, &run, &asked, Some(&conversation))?;
   let approval_mode = db.run_approval_mode(run.id())?;
   let merge = merge_state(&db, (&root, &services.programs), &run)?;
+  let checks = ci_wire::of_run(services, (project, &root), &db, &run)?;
   let view = run_view(&db, run)?;
   let plan = PlanReview::of(&view).map(|review| {
     let mut plan = plans::waiting(&review, true);
@@ -133,6 +134,7 @@ fn read_run(services: &Services, args: &InRun) -> Result<(Value, Vec<ShownApprov
     "worktree_not_removed": worktree_left(&db, &root, run.id())?,
     "base": base_branch::run_json(run),
     "merge": merge,
+    "checks": checks,
     "delivery": super::merge_queue::run_delivery(&db, run.id())?,
     "base_moved": base_moved::of_run(&view),
     "awaiting": {
@@ -316,7 +318,9 @@ fn decided_plans(view: &RunView, link: &str) -> Vec<Value> {
     .collect()
 }
 
-/// A step of the run; `waits`: the executions the project's runner says wait for an agent slot.
+/// A step of the run; `waits`: the executions the project's runner says wait for an agent slot. `todo` is its latest
+/// execution's todo list (`text` and `state`: `pending`, `in_progress` or `done` per item), `null` when its agent
+/// keeps none.
 fn step(step: &StepView, waits: &[StepExecutionId]) -> Value {
   let waits_for_slot = step.execution.is_some_and(|execution| waits.contains(&execution));
   json!({
@@ -327,5 +331,7 @@ fn step(step: &StepView, waits: &[StepExecutionId]) -> Value {
     "tool_step": step.tool_step,
     "status": step.status.map(|status| wire::step_status(status, waits_for_slot)),
     "attempt": step.attempt.map(std::num::NonZeroU32::get),
+    "todo": step.todo,
+    "context": wire::context(step.context.as_ref()),
   })
 }

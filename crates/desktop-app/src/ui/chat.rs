@@ -5,10 +5,18 @@
 //! a bubble that hugs it up to 80 % of the chat (`own_message` in a `border` stroke, radius 10, 8 by 12 inside) and,
 //! under it, where it stands. Where a link in what an agent wrote leads is [`links`]'; which places an agent names as
 //! plain text are links, [`references`]'; which of its lists are labelled links, [`labelled`]'s. Both chats open at
-//! their end and follow it ([`follow`]).
+//! their end and follow it ([`follow`]); what a search found in a message is filled behind its words ([`found`]).
+//! A message and a code block in it can be copied ([`copy`], [`code_block`]); a message's toolbar can offer *Edit* and
+//! a menu of more besides ([`toolbar`]).
 
 mod agent_text;
+pub mod code_block;
+pub mod copy;
+mod copyable;
+pub mod export;
+pub mod fences;
 pub mod follow;
+pub mod found;
 mod grid;
 pub mod labelled;
 pub mod links;
@@ -16,6 +24,8 @@ pub mod names;
 mod place;
 pub mod presentation;
 pub mod references;
+pub mod said;
+pub mod toolbar;
 
 use std::sync::Arc;
 
@@ -31,12 +41,20 @@ use lurq::{
 use orchester_core::time::Timestamp;
 use orchester_workspace::display;
 
-pub use self::agent_text::agent_text;
+use self::found::Found;
+pub use self::{
+  agent_text::agent_text,
+  copyable::{row as copyable_row, row_with as copyable_row_with},
+};
 use super::{
   icon::{Icon, icon},
   markdown::LinkHandler,
 };
 use crate::theme::{ConversationText, ExtraColor, ExtraSpacing, IconSize};
+
+/// What a person's message says: the element that shows it, and their words as written, which its Copy puts on the
+/// clipboard.
+pub type Said = (Element, Arc<str>);
 
 /// The avatar's box (`HO4bJ`) and how wide a person's bubble may grow, of the chat's width.
 pub const AVATAR_SIZE: f32 = 24.0;
@@ -69,6 +87,41 @@ impl Avatar {
 
 /// The avatar, then `name` and `meta` with `body` under them; `id` names the row.
 pub fn chat_row(id: String, avatar: Avatar, (name, meta): (&str, &str), body: Vec<Element>) -> Element {
+  chat_row_marked(id, avatar, (name, meta, None), body)
+}
+
+/// [`chat_row`] with `mark` on the name line after `meta`: an ended answer's plan chip (09 g `OoT5k`).
+pub fn chat_row_marked(
+  id: String,
+  avatar: Avatar,
+  (name, meta, mark): (&str, &str, Option<Element>),
+  body: Vec<Element>,
+) -> Element {
+  message_row(id, avatar, head((name, meta, mark)), body).into()
+}
+
+/// Who wrote a message, `name`, then `meta` and `mark`.
+fn head((name, meta, mark): (&str, &str, Option<Element>)) -> Row {
+  Row::new()
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::Center)
+    .child(
+      Text::new(name)
+        .id("conversation-message-name")
+        .variant(ConversationText::Name.role())
+        .nowrap(),
+    )
+    .child(
+      Text::new(meta)
+        .id("conversation-message-meta")
+        .variant(TypographyStyle::Caption)
+        .nowrap(),
+    )
+    .with_children(mark)
+}
+
+/// The avatar, then `head` with `body` under it; `id` names the row.
+fn message_row(id: String, avatar: Avatar, head: Row, body: Vec<Element>) -> Row {
   Row::new()
     .id(id)
     .width(Dimension::Pct(100.0))
@@ -90,46 +143,30 @@ pub fn chat_row(id: String, avatar: Avatar, (name, meta): (&str, &str), body: Ve
         .flex(1.0)
         .min_width(Dimension::Px(0.0))
         .spacing(ExtraSpacing::Fine.role())
-        .child(
-          Row::new()
-            .spacing(ExtraSpacing::Snug.role())
-            .align_items(Alignment::Center)
-            .child(
-              Text::new(name)
-                .id("conversation-message-name")
-                .variant(ConversationText::Name.role())
-                .nowrap(),
-            )
-            .child(
-              Text::new(meta)
-                .id("conversation-message-meta")
-                .variant(TypographyStyle::Caption)
-                .nowrap(),
-            ),
-        )
+        .child(head)
         .with_children(body),
     )
-    .into()
 }
 
-/// *You*, the time when it is known, the bubble with `body` as written, the files attached to it (`attached`,
-/// [`super::attachments::sent`]) and `delivery` under it; `id` names the message. A message of attachments only has
-/// no bubble.
+/// *You*, the time when it is known, the bubble with what the message says (`said`, [`said::said`]) and its Copy, the
+/// files attached to it (`attached`, [`super::attachments::sent`]) and `delivery` under it; `id` names the message. A
+/// message of attachments only has no bubble.
 pub fn person_message(
   ctx: &mut Ctx,
   id: &str,
-  (body, at): (&Arc<str>, Option<Timestamp>),
+  (said, at): (Option<Said>, Option<Timestamp>),
   (attached, delivery): (Option<Element>, Option<Element>),
 ) -> Column {
   let you = ctx.t("conversation.you");
-  person_side_message(id, (&you, body, at), (attached, delivery))
+  person_side_message(ctx, id, (&you, said, at), (attached, delivery))
 }
 
 /// A message on the person's side as [`person_message`] shows it, written by `author` (the project's Orchestrator
 /// for one it sent the agents of a task) instead of *You*.
 pub fn person_side_message(
+  ctx: &mut Ctx,
   id: &str,
-  (author, body, at): (&str, &Arc<str>, Option<Timestamp>),
+  (author, said, at): (&str, Option<Said>, Option<Timestamp>),
   (attached, delivery): (Option<Element>, Option<Element>),
 ) -> Column {
   let head = Row::new()
@@ -146,44 +183,89 @@ pub fn person_side_message(
         .variant(TypographyStyle::Caption)
         .nowrap()
     }));
-  message_column(id, Some(head), body, (attached, delivery))
+  message_column(ctx, id, Some(head), said, (attached, delivery))
 }
 
 /// The person's message without its *You* and time (`Your message` in the Orchestrator's `01 Conversation`
-/// `wRSL4`): the bubble with `body` as written, the files attached to it and `delivery` under it; `id` names it.
-pub fn own_bubble(id: &str, body: &Arc<str>, (attached, delivery): (Option<Element>, Option<Element>)) -> Column {
-  message_column(id, None, body, (attached, delivery))
-}
-
-fn message_column(
+/// `wRSL4`): the bubble with what it says and its Copy, the files attached to it and `delivery` under it; `id` names
+/// it.
+pub fn own_bubble(
+  ctx: &mut Ctx,
   id: &str,
-  head: Option<Row>,
-  body: &Arc<str>,
+  said: Option<Said>,
   (attached, delivery): (Option<Element>, Option<Element>),
 ) -> Column {
-  // As the person wrote it, so the bubble hugs its words up to its widest (`pCzqz`): lurq's Markdown always
-  // fills its parent's width.
-  let bubble = (!body.trim().is_empty()).then(|| {
-    let said = Text::new(body)
+  message_column(ctx, id, None, said, (attached, delivery))
+}
+
+/// [`own_bubble`] whose toolbar holds `extras` around Copy ([`toolbar`]), at the start of the line under the message,
+/// before `delivery` (09 `GYAPg`).
+pub fn own_bubble_with(
+  ctx: &mut Ctx,
+  id: &str,
+  said: Option<Said>,
+  (attached, delivery): (Option<Element>, Element),
+  extras: toolbar::MessageExtras,
+) -> Element {
+  let (bubble, words) = said.map_or((None, Arc::from("")), |(said, words)| {
+    (Some(bubble_box(id, said).into()), words)
+  });
+  let attached = attached.map(|attached| attached_row(attached).into());
+  copyable::acted(ctx, id, (&words, extras), [bubble, attached], delivery)
+}
+
+/// What `body` says as written, without links (a note the person returned the work with), what a search found in it
+/// filled behind its words (`found`); `id` names the message.
+pub fn plain_said(ctx: &Ctx, id: &str, body: &str, found: Option<&Found>) -> Option<Said> {
+  (!body.trim().is_empty()).then(|| {
+    let words = Text::new(body)
       .id(format!("{id}-text"))
       .variant(TypographyStyle::Body)
       .selectable(true);
-    Column::new()
-      .id(format!("{id}-bubble"))
-      .max_width(Dimension::Pct(BUBBLE_WIDTH))
-      .padding(Padding::symmetric(SpacingSize::Md, SpacingSize::Sm))
-      .background(ExtraColor::OwnMessage.role())
-      .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-      .rounded(RadiusSize::Lg)
-      .child(said)
-  });
-  // The files sit at the message's end, as wide as the bubble may grow.
-  let attached = attached.map(|attached| {
-    Row::new()
-      .max_width(Dimension::Pct(BUBBLE_WIDTH))
-      .justify(Justify::End)
-      .child(attached)
-  });
+    (marked_words(ctx, words, body, found), Arc::from(body))
+  })
+}
+
+/// `words`, a message's words that show `text` as written, with what a search found in them filled behind them.
+pub fn marked_words(ctx: &Ctx, words: Text, text: &str, found: Option<&Found>) -> Element {
+  let Some(found) = found else {
+    return words.into();
+  };
+  let highlights = found.highlights(ctx, text);
+  let places = highlights.len();
+  found.classed(words.highlights(highlights).into(), places)
+}
+
+/// The bubble of the person's message `id` that holds `said`. Words as the person wrote them hug it up to its widest
+/// (`pCzqz`); words with mentions are lurq's Markdown ([`said::said`]), which fills it.
+fn bubble_box(id: &str, said: Element) -> Column {
+  Column::new()
+    .id(format!("{id}-bubble"))
+    .max_width(Dimension::Pct(BUBBLE_WIDTH))
+    .padding(Padding::symmetric(SpacingSize::Md, SpacingSize::Sm))
+    .background(ExtraColor::OwnMessage.role())
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .rounded(RadiusSize::Lg)
+    .child(said)
+}
+
+/// The files of a message, at its end, as wide as the bubble may grow.
+fn attached_row(attached: Element) -> Row {
+  Row::new()
+    .max_width(Dimension::Pct(BUBBLE_WIDTH))
+    .justify(Justify::End)
+    .child(attached)
+}
+
+fn message_column(
+  ctx: &mut Ctx,
+  id: &str,
+  head: Option<Row>,
+  said: Option<Said>,
+  (attached, delivery): (Option<Element>, Option<Element>),
+) -> Column {
+  let bubble = said.map(|(said, words)| copyable::bubble(ctx, id, &words, bubble_box(id, said).into()));
+  let attached = attached.map(attached_row);
   Column::new()
     .id(id.to_owned())
     .width(Dimension::Pct(100.0))

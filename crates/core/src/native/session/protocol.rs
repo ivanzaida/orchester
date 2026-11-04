@@ -29,6 +29,9 @@ pub struct LoopSettings {
   pub max_output: u32,
   /// The model's context window in tokens; [`DEFAULT_CONTEXT_WINDOW`] when unknown.
   pub context_window: u64,
+  /// `context_window` is [`DEFAULT_CONTEXT_WINDOW`] because neither the endpoint nor the person named one: how full
+  /// the context is reads against it as an estimate.
+  pub context_window_estimated: bool,
   pub system: String,
   pub tools: ToolSet,
   /// The shell a `shell: true` command goes to, as the system prompt names it (§4.6); `None` when
