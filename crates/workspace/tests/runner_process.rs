@@ -337,6 +337,77 @@ async fn runner_process_error_reports_turned_off_and_on_reach_the_running_runner
   );
 }
 
+/// The person changes Settings › Browser while the project's runner runs (ORC-675): the desktop passes the program
+/// chosen with `Attach` and again once it changes, and the runner's next browser start uses the one chosen last. Each
+/// stand-in program is removed once chosen, so the browser cannot start and its refusal names the program it tried.
+#[cfg(target_os = "windows")]
+#[tokio::test(flavor = "multi_thread")]
+async fn runner_process_starts_the_browser_with_the_program_chosen_last_in_settings() {
+  use orchester_ipc::browser::BrowserCommand;
+  use orchester_workspace::workspace::Workspace;
+
+  let project = project();
+  let data = tempfile::tempdir().expect("temporary directory");
+  let workspace = Workspace::new(orchester_store::AppDb::open(&data.path().join("orchester.db")).expect("app db"));
+  let choose = |folder: &str| {
+    let program = data.path().join(folder).join("chrome.exe");
+    fs::create_dir_all(program.parent().expect("a folder above")).expect("its folder");
+    fs::write(&program, "").expect("a stand-in program");
+    workspace.choose_browser_program(&program).expect("taken");
+    fs::remove_file(&program).expect("the stand-in is gone");
+    program
+  };
+  let first = choose("first");
+  let runners = Runners::new(programs().runner.clone(), Handle::current(), Activity::new(), Clean);
+  // As the app's services do: the settings as they are now, then every change.
+  runners.set_browser(&workspace.computer_browser());
+  let following = tokio::spawn(runners.clone().follow_browser_settings(workspace.clone()));
+  let mut updates = runners.subscribe();
+  runners.show(Some(&open(project.path())));
+  online_and_reported(&runners, &mut updates, project.path()).await;
+  assert_eq!(
+    browser_refusal(&runners, project.path()).await,
+    unusable(&first),
+    "the program passed with Attach"
+  );
+
+  let second = choose("second");
+  timeout(PATIENCE, async {
+    while browser_refusal(&runners, project.path()).await != unusable(&second) {
+      tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+  })
+  .await
+  .expect("the browser starts with the program chosen last");
+  following.abort();
+  assert_eq!(
+    runners.shutdown(Some(QUIET_STOP_TIMEOUT)).await,
+    ShutdownOutcome::Stopped
+  );
+
+  /// Why the project's browser did not open a tab.
+  async fn browser_refusal(runners: &Runners, project: &Path) -> RunRequestError {
+    let opened = timeout(
+      PATIENCE,
+      runners.browser(project, BrowserCommand::OpenTab { url: None }),
+    )
+    .await
+    .expect("answer in time");
+    opened.expect_err("the chosen program is gone")
+  }
+
+  /// How the runner refuses to start the browser with `program`, which is gone.
+  fn unusable(program: &Path) -> RunRequestError {
+    RunRequestError::Rejected(Rejection::BrowserUnavailable {
+      detail: format!(
+        "{}: the program chosen in Settings › Browser cannot be used: {} does not exist",
+        orchester_exec::browser::BROWSER_UNAVAILABLE,
+        program.display()
+      ),
+    })
+  }
+}
+
 /// Waits until today's log of `project`'s runner holds `line`.
 async fn runner_logged(project: &Path, line: &str) {
   timeout(PATIENCE, async {
