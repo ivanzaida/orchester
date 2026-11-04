@@ -2,7 +2,7 @@
 //! keeps with the runs that use them, rebuilding one, and ripgrep for agents, looked up the way the
 //! runner looks it up and installed only when a person asks. Read from the project's
 //! `.orchester/index` and database and from the file system; blocks, so the UI calls it off the UI
-//! thread.
+//! thread. A rebuild is the project's runner's ([`rebuild`]): the desktop builds no index itself.
 
 mod install;
 
@@ -29,11 +29,16 @@ use orchester_exec::{
   search_path::search_path,
 };
 pub use orchester_index::{BuildPhase, BuildProgress, IndexState as KeptIndexState};
-use orchester_index::{CodebaseIndexes, IndexError, IndexState};
+use orchester_index::{CodebaseIndexes, IndexState};
+use orchester_ipc::Rejection;
 use orchester_store::{ProjectDb, StoreError};
 
 pub use self::install::{Install, cancel_install, ends_with_the_app, install_state, start_install};
-use crate::messages::{self, Message};
+use crate::{
+  messages::{self, Message},
+  runner::{RunRequestError, Runners},
+  workspace::OpenProject,
+};
 
 /// `git rev-parse` answers at once; one that does not is stuck.
 const GIT_TIMEOUT: Duration = Duration::from_secs(10);
@@ -151,18 +156,26 @@ impl<'a> BranchHeads<'a> {
   }
 }
 
-/// Builds the index of `revision` again (*Rebuild*, *Retry*); why it failed.
-pub fn rebuild_in(repo_root: &Path, revision: &Revision) -> Result<(), Message> {
-  CodebaseIndexes::new(repo_root)
-    .rebuild(revision)
-    .map(drop)
-    .map_err(|error: IndexError| {
+/// Has `project`'s runner build the index of `revision` again (*Rebuild*, *Retry*), starting the runner if needed;
+/// why it failed.
+pub async fn rebuild(runners: &Runners, project: &OpenProject, revision: Revision) -> Result<(), Message> {
+  runners
+    .rebuild_code_index_in(project, revision.clone())
+    .await
+    .map_err(|error| {
       tracing::warn!(%error, %revision, "the codebase index could not be rebuilt");
-      match error {
-        IndexError::InUse { .. } => Message::new("settings.codeIndex.rebuildInUse"),
-        error => Message::new("settings.codeIndex.rebuildFailed").with("reason", error.to_string()),
-      }
+      rebuild_failure(error)
     })
+}
+
+/// What the person reads of a rebuild the runner did not carry out.
+fn rebuild_failure(error: RunRequestError) -> Message {
+  let reason = match error {
+    RunRequestError::Rejected(Rejection::CodeIndexInUse) => return Message::new("settings.codeIndex.rebuildInUse"),
+    RunRequestError::Rejected(Rejection::Failed { detail }) => detail,
+    error => error.to_string(),
+  };
+  Message::new("settings.codeIndex.rebuildFailed").with("reason", reason)
 }
 
 /// Whether agents have ripgrep, and how it could be installed.

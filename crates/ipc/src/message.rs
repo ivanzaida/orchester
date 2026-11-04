@@ -13,6 +13,7 @@ use orchester_core::{
   permission::AgentPermissions,
   question::GivenAnswer,
   resource::StepKey,
+  revision::Revision,
   run::{
     Answerer, ApprovalAnswer, EventSequence, InterruptCause, MergeConflicts, PermissionsApply, PlanDecision,
     PlanVersion, ReviewNote, RunNumber, StuckDecision,
@@ -292,7 +293,12 @@ pub enum Command {
   /// A request about the folders the project's runs leave with their executor (protocol 42, [`crate::folders`]).
   /// Answered with [`Reply::Folders`] once carried out, or [`Rejection::Failed`].
   Folders(FoldersCommand),
-  /// The code viewer reads the worktree of run `run` (protocol 43, [`crate::run_files`]): the runner's executor side
+  /// Builds the code index of `revision` again where the runner keeps the indexes (*Rebuild*, *Retry* in Project
+  /// settings › Context, protocol 43); the desktop builds none itself. Answered with [`Reply::CodeIndexRebuilt`] once
+  /// it is built, [`Rejection::CodeIndexInUse`] while it is in use, or [`Rejection::Failed`] with why it could not be
+  /// built.
+  RebuildCodeIndex { revision: Revision },
+  /// The code viewer reads the worktree of run `run` (protocol 44, [`crate::run_files`]): the runner's executor side
   /// reads it where the worktree is. Answered with [`Reply::RunFiles`].
   RunFiles { run: RunId, request: RunFilesRequest },
 }
@@ -493,6 +499,10 @@ pub enum Reply {
   MergeQueue(MergeQueueReply),
   /// The answer to [`Command::Folders`].
   Folders(FoldersReply),
+  /// The answer to [`Command::RebuildCodeIndex`]: the index of `revision` is built again.
+  CodeIndexRebuilt {
+    revision: Revision,
+  },
   /// The answer to [`Command::RunFiles`]; a file's bytes travel after it in a binary frame.
   RunFiles(RunFilesReply),
   Rejected(Rejection),

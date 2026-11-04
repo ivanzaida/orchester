@@ -1,4 +1,4 @@
-//! The files of a run's worktree, which the desktop reads through the project's runner (protocol 43,
+//! The files of a run's worktree, which the desktop reads through the project's runner (protocol 44,
 //! `docs/architecture/remote-runners.md`, rule 5): whether the worktree is there, the files it lists, and one file's
 //! bytes. The runner's executor side reads them with the code viewer's limits; the desktop shows them as it shows the
 //! files of its own checkout. A file's bytes travel raw after the reply's JSON head in a binary frame, as a

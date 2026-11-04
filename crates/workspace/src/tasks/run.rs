@@ -368,9 +368,7 @@ pub fn start_messages(error: &RunRequestError) -> Vec<Message> {
       | Rejection::NoAgentSlot { .. }
       | Rejection::LowDisk { .. }
       | Rejection::ShuttingDown),
-    ) => {
-      vec![capacity_message(rejection)]
-    }
+    ) => vec![capacity_message(rejection)],
     RunRequestError::Rejected(
       Rejection::Failed { .. }
       | Rejection::RunNotInterrupted
@@ -410,6 +408,7 @@ pub fn start_messages(error: &RunRequestError) -> Vec<Message> {
       | Rejection::TurnNotStoppable
       | Rejection::BrowserUnavailable { .. }
       | Rejection::NoSuchTab
+      | Rejection::CodeIndexInUse
       | Rejection::Busy,
     ) => vec![Message::new("runs.start.failed")],
   }
@@ -539,6 +538,7 @@ pub fn control_message(error: &RunRequestError) -> Message {
       | Rejection::WorktreeNotRemoved { .. }
       | Rejection::BrowserUnavailable { .. }
       | Rejection::NoSuchTab
+      | Rejection::CodeIndexInUse
       | Rejection::Busy,
     ) => Message::new("runs.control.failed"),
   }

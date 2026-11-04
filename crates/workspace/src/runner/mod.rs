@@ -13,6 +13,7 @@ mod ask;
 mod browser;
 mod chat;
 mod check;
+mod code_index;
 mod connection;
 mod estimate;
 mod folders;

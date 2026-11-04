@@ -2882,6 +2882,7 @@ dependencies = [
  "orchester-app",
  "orchester-core",
  "orchester-exec",
+ "orchester-index",
  "orchester-ipc",
  "orchester-report",
  "orchester-runner",
