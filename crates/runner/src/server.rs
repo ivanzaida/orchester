@@ -1,6 +1,5 @@
-//! Serves the desktop over the project's IPC endpoint: answers its requests and forwards the
-//! scheduler's change notifications, the project's browser's events and the frames of the tab the *Browser* window
-//! shows.
+//! Serves the desktop over the project's IPC endpoint: answers its requests and forwards the scheduler's change
+//! notifications, the project's browser's events and the frames of the tab the *Browser* window shows.
 
 mod browser;
 mod code_index;
