@@ -13,12 +13,13 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_ipc::Event;
-use orchester_store::{ProjectDb, RunLogRecord, StoreError};
+use orchester_store::{InvocationRecord, ProjectDb, RunLogRecord, StoreError};
 
 use super::{
   pool::PoolError,
   record::RecordError,
   run::{ExecutionError, RunTask},
+  sink::Sink,
 };
 
 impl ExecutionError {
@@ -71,25 +72,25 @@ impl RunTask {
       run,
       task: self.run.task(),
     });
-    if let Err(error) = close_invocations(&mut self.db, run, ended_at) {
+    if let Err(error) = close_invocations(&self.db, self.sink.as_mut(), run, ended_at) {
       tracing::error!(%run, %error, "the ended invocations could not be recorded after runner failure");
     }
     let problem = RunnerProblem::RunnerFailed {
       detail: error.to_string(),
     };
     if let Some(invocation) = self.db.invocations(run)?.last() {
-      let events = [(Timestamp::now(), AgentEvent::RunnerProblem { problem })];
-      let sequence = self.db.append_activity(invocation, &events)?;
-      self.notifier.send(Event::AgentActivity { run, sequence });
+      let events = vec![(Timestamp::now(), AgentEvent::RunnerProblem { problem })];
+      self.record_activity(invocation, events)?;
     }
     Ok(())
   }
 }
 
-/// All workers had ended by the recorded interruption. Close missing end records then, even
-/// if storage only becomes writable on an explicit continuation, preserving usage and sessions.
+/// All workers had ended by the recorded interruption. Close missing end records then, read in `db` and sent to
+/// `sink`, even if storage only becomes writable on an explicit continuation, preserving usage and sessions.
 pub(in crate::execution) fn close_invocations(
-  db: &mut ProjectDb,
+  db: &ProjectDb,
+  sink: &mut dyn Sink,
   run: RunId,
   ended_at: Timestamp,
 ) -> Result<(), StoreError> {
@@ -101,7 +102,7 @@ pub(in crate::execution) fn close_invocations(
     invocation.ended_at = Some(ended_at);
     invocation.outcome = Some(InvocationOutcome::Unrecorded);
     invocation.timing.resume(ended_at);
-    db.save_invocation(&invocation)?;
+    sink.invocation(InvocationRecord::state(&invocation))?;
   }
   Ok(())
 }

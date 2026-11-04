@@ -1,4 +1,5 @@
-//! Agent CLI and command tool invocations and the transcript of their events, written by the runner.
+//! Agent CLI and command tool invocations and the transcript of their events, written by the runner. The writes go
+//! through the records the runner's executor sends ([`super::invocation_records`]).
 
 use orchester_core::{
   code_index::CodeIndexUse,
@@ -14,19 +15,21 @@ use orchester_core::{
   time::Timestamp,
   tokens::TokensUsed,
 };
-use rusqlite::{Connection, OptionalExtension, Row, params};
+use rusqlite::{OptionalExtension, Row, params};
 
 use super::{
-  ProjectDb, code_index, estimates, invocation_prompts, native, orchestrator_usage, reviewer_usage, step_outputs,
+  ProjectDb, code_index, estimates,
+  invocation_records::{InvocationRecord, InvocationStart, append},
+  invocation_prompts, native, orchestrator_usage, reviewer_usage, step_outputs,
   write_transaction::retried,
 };
 use crate::{
-  StoreError, busy,
+  StoreError,
   rows::{corrupt, decode_body, decode_document, decode_json, encode_json, parse},
 };
 
 pub(super) const EVENT_SCHEMA: u32 = 1;
-const OUTCOME_SCHEMA: u32 = 1;
+pub(super) const OUTCOME_SCHEMA: u32 = 1;
 /// 2: launch permissions with what happened to commands outside them; 1 held the permissions alone.
 const PERMISSIONS_SCHEMA: u32 = 2;
 
@@ -35,8 +38,8 @@ const SELECT_INVOCATIONS: &str = "SELECT id, run_id, step_execution_id, number, 
                                   inactive_ms, waiting_since, permissions \
                                   FROM invocations";
 /// `kind` of an agent CLI's invocation and of a command tool's.
-const AGENT: &str = "agent";
-const COMMAND: &str = "command";
+pub(super) const AGENT: &str = "agent";
+pub(super) const COMMAND: &str = "command";
 
 impl ActivityStore for ProjectDb {
   type Error = StoreError;
@@ -48,8 +51,9 @@ impl ActivityStore for ProjectDb {
     model: &ModelId,
     now: Timestamp,
   ) -> Result<Invocation, StoreError> {
-    let kind = InvocationKind::Agent { model: model.clone() };
-    start(&mut self.connection, run, execution, &kind, now)
+    let start = InvocationStart::agent(run, execution, model, now);
+    let number = self.write_invocation_start(&start)?;
+    Ok(start.invocation(number))
   }
 
   fn start_command_invocation(
@@ -58,41 +62,13 @@ impl ActivityStore for ProjectDb {
     execution: StepExecutionId,
     now: Timestamp,
   ) -> Result<Invocation, StoreError> {
-    start(&mut self.connection, run, execution, &InvocationKind::Command, now)
+    let start = InvocationStart::command(run, execution, now);
+    let number = self.write_invocation_start(&start)?;
+    Ok(start.invocation(number))
   }
 
   fn save_invocation(&mut self, invocation: &Invocation) -> Result<(), StoreError> {
-    let outcome = invocation
-      .outcome
-      .as_ref()
-      .map(|outcome| encode_json("invocation outcome", OUTCOME_SCHEMA, outcome))
-      .transpose()?;
-    // One statement, run again while the database is busy. It stays outside a transaction, so what
-    // a trigger that fails it with `RAISE(FAIL)` changed before is kept, as it always was.
-    let changed = busy::retry("save invocation", || {
-      self
-        .connection
-        .execute(
-          "UPDATE invocations SET session_id = ?2, ended_at = ?3, input_tokens = ?4, cached_input_tokens = ?5, \
-           output_tokens = ?6, outcome = ?7, inactive_ms = ?8, waiting_since = ?9 WHERE id = ?1",
-          params![
-            invocation.id.to_string(),
-            invocation.session,
-            invocation.ended_at.map(Timestamp::unix_millis),
-            count_column(invocation.usage.input)?,
-            count_column(invocation.usage.cached_input)?,
-            count_column(invocation.usage.output)?,
-            outcome,
-            count_column(invocation.timing.inactive_ms())?,
-            invocation.timing.waiting_since().map(Timestamp::unix_millis),
-          ],
-        )
-        .map_err(StoreError::from)
-    })?;
-    if changed == 0 {
-      return Err(StoreError::InvocationNotFound(invocation.id));
-    }
-    Ok(())
+    self.write_invocation(&InvocationRecord::state(invocation))
   }
 
   fn save_invocation_permissions(
@@ -170,26 +146,11 @@ impl ActivityStore for ProjectDb {
     invocation: &Invocation,
     events: &[(Timestamp, AgentEvent)],
   ) -> Result<u64, StoreError> {
-    retried(&mut self.connection, "append transcript", |transaction| {
-      let mut last = last_sequence(transaction, invocation.run)?;
-      let mut insert = transaction.prepare_cached(
-        "INSERT INTO agent_events (run_id, sequence, step_execution_id, invocation_id, at, kind, payload) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-      )?;
-      for (at, event) in events {
-        last += 1;
-        insert.execute(params![
-          invocation.run.to_string(),
-          sequence_column(last)?,
-          invocation.execution.to_string(),
-          invocation.id.to_string(),
-          at.unix_millis(),
-          event.name(),
-          encode_json("agent event", EVENT_SCHEMA, event)?,
-        ])?;
-      }
-      Ok(last)
-    })
+    append(
+      &mut self.connection,
+      (invocation.run, invocation.execution, invocation.id),
+      events,
+    )
   }
 
   fn last_agent_message(&self, run: RunId, execution: StepExecutionId) -> Result<Option<(u64, String)>, StoreError> {
@@ -314,72 +275,11 @@ impl ActivityStore for ProjectDb {
   }
 }
 
-/// Records the next invocation of `execution`.
-fn start(
-  connection: &mut Connection,
-  run: RunId,
-  execution: StepExecutionId,
-  kind: &InvocationKind,
-  now: Timestamp,
-) -> Result<Invocation, StoreError> {
-  let (kind_column, model) = match kind {
-    InvocationKind::Agent { model } => (AGENT, model.as_str().to_owned()),
-    InvocationKind::Command => (COMMAND, String::new()),
-  };
-  retried(connection, "start invocation", |transaction| {
-    let previous: i64 = transaction.query_row(
-      "SELECT COALESCE(MAX(number), 0) FROM invocations WHERE step_execution_id = ?1",
-      [execution.to_string()],
-      |row| row.get(0),
-    )?;
-    let invocation = Invocation {
-      id: InvocationId::generate(),
-      run,
-      execution,
-      number: u32::try_from(previous + 1).map_err(|_| corrupt("invocation number", previous))?,
-      kind: kind.clone(),
-      permissions: None,
-      session: None,
-      started_at: now,
-      ended_at: None,
-      usage: TokenUsage::default(),
-      outcome: None,
-      timing: InvocationTiming::default(),
-    };
-    transaction.execute(
-      "INSERT INTO invocations (id, run_id, step_execution_id, number, kind, model, started_at, input_tokens,      cached_input_tokens, output_tokens) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 0, 0, 0)",
-      params![
-        invocation.id.to_string(),
-        run.to_string(),
-        execution.to_string(),
-        invocation.number,
-        kind_column,
-        model,
-        now.unix_millis(),
-      ],
-    )?;
-    Ok(invocation)
-  })
-}
-
-fn last_sequence(connection: &Connection, run: RunId) -> Result<u64, StoreError> {
-  let last: Option<i64> = connection
-    .query_row(
-      "SELECT MAX(sequence) FROM agent_events WHERE run_id = ?1",
-      [run.to_string()],
-      |row| row.get(0),
-    )
-    .optional()?
-    .flatten();
-  let last = last.unwrap_or(0);
-  u64::try_from(last).map_err(|_| corrupt("agent event sequence", last))
-}
-
-fn sequence_column(sequence: u64) -> Result<i64, StoreError> {
+pub(super) fn sequence_column(sequence: u64) -> Result<i64, StoreError> {
   i64::try_from(sequence).map_err(|_| StoreError::Unrepresentable("agent event sequence"))
 }
 
-fn count_column(count: u64) -> Result<i64, StoreError> {
+pub(super) fn count_column(count: u64) -> Result<i64, StoreError> {
   i64::try_from(count).map_err(|_| StoreError::Unrepresentable("token count"))
 }
 
