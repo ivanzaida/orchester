@@ -34,7 +34,10 @@ use lurq::{
 use orchester_workspace::{
   background,
   messages::{self, Message},
-  tasks::merge_attempts::merges::{self, MergeRun, Merges},
+  tasks::{
+    checkout::Checkout,
+    merge_attempts::merges::{self, MergeRun, Merges},
+  },
 };
 
 use self::actions::{Actions, PuttingBack};
@@ -111,7 +114,7 @@ impl Component for MergesScreen {
       .spacing(DeliverySpacing::Lanes.role());
     let pages = self.pages.get();
     let (merges, more_pending) = match read(ctx, &project, (self.again.get(), pages)) {
-      Read::Reading => return Element::from(frame.child(states::reading(ctx))),
+      Read::Reading => return Element::from(frame.child(reading(ctx, &project))),
       Read::Failed(reason) => {
         let again = self.again.clone();
         let body = ctx.t_args("merges.readFailedBody", [("reason", message_text(ctx, &reason))]);
@@ -257,6 +260,24 @@ fn read(ctx: &mut Ctx, project: &ShownProject, (again, pages): (u64, usize)) -> 
       merges,
     }
   })
+}
+
+/// The page while the merges are read ([`states::reading`]), its lead naming the branch the checkout has (09d `Zlk49`
+/// draws the lead real): one quick git call, not held with the merges' reads.
+fn reading(ctx: &mut Ctx, project: &ShownProject) -> Element {
+  let programs = Services::of(ctx).programs;
+  let branch = ctx
+    .future(project.open.repo_root.clone(), move |root| {
+      let programs = programs.clone();
+      async move {
+        background::run(move || Checkout::branch(&programs, &root).map(|branch| branch.as_str().to_owned())).await
+      }
+    })
+    .state()
+    .get()
+    .data
+    .flatten();
+  states::reading(ctx, branch.as_deref())
 }
 
 /// `run`'s page: its review while it waits for one (ORC-697, [`review`]), its merge attempts otherwise (ORC-363,

@@ -1,7 +1,8 @@
 //! The info line of Review › Merges (`Info` `il5fP` in 09 `Os7b3`), 28 high: what the tab lists, and at its end the
 //! base branch (`Base` `RNiQG`: a 13 git-branch glyph, *Base*, the branch in mono) and how the checkout stands
 //! (`Checkout` `V1b1XV`: a 6 dot, *Checkout*, the branch it has and whether it is clean), 16 apart. While the merges
-//! are read (09d `Zlk49`) the lead and the names stay, the branch and the checkout's words are bones.
+//! are read (09d `Zlk49`) the lead, naming the checkout's branch, and the names stay; the base, the checkout's dot
+//! and its words are bones.
 
 use lurq::{
   app::{
@@ -19,7 +20,7 @@ use crate::{
   theme::{DeliveryText, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     icon::{Icon, icon},
-    skeleton::{self, round_bone},
+    skeleton::{self, Skeleton, round_bone},
   },
 };
 
@@ -47,19 +48,36 @@ pub(super) fn info(ctx: &Ctx, base: Option<&BaseState>) -> Row {
     .child(checkout(ctx, base))
 }
 
-/// The info line while the merges are read: the lead's words without the branch, the names, and bones.
-pub(super) fn reading(ctx: &Ctx) -> Row {
-  line(&ctx.t("merges.leadNoBranch"))
-    .child(base_part(ctx).child(skeleton::line(ctx, ExtraTypography::PropertyMono.role(), BASE_BONE)))
-    .child(
-      Row::new()
-        .flex_shrink(0.0)
-        .spacing(ExtraSpacing::Snug.role())
-        .align_items(Alignment::Center)
-        .child(round_bone(DOT))
-        .child(name(ctx, "delivery.queue.checkout.key"))
-        .child(skeleton::line(ctx, ExtraTypography::Property.role(), CHECKOUT_BONE)),
-    )
+/// The info line while the merges are read: the lead naming `branch`, the checkout's once git named it, the names,
+/// and the values' bones, which pulse after the skeleton's delay as the list's do.
+pub(super) fn reading(ctx: &mut Ctx, branch: Option<&str>) -> Row {
+  let lead = match branch {
+    Some(branch) => ctx.t_args("merges.lead", [("branch", branch)]),
+    None => ctx.t("merges.leadNoBranch"),
+  };
+  let label = ctx.t("merges.reading");
+  let (base, state) = (
+    skeleton::line(ctx, ExtraTypography::PropertyMono.role(), BASE_BONE),
+    skeleton::line(ctx, ExtraTypography::Property.role(), CHECKOUT_BONE),
+  );
+  let base = Skeleton::new("merges-base-reading", label.clone())
+    .inline()
+    .show(ctx, base);
+  let dot = Skeleton::new("merges-checkout-dot-reading", label.clone())
+    .inline()
+    .show(ctx, round_bone(DOT));
+  let state = Skeleton::new("merges-checkout-reading", label)
+    .inline()
+    .show(ctx, state);
+  line(&lead).child(base_part(ctx).child(base)).child(
+    Row::new()
+      .flex_shrink(0.0)
+      .spacing(ExtraSpacing::Snug.role())
+      .align_items(Alignment::Center)
+      .child(dot)
+      .child(name(ctx, "delivery.queue.checkout.key"))
+      .child(state),
+  )
 }
 
 /// The line with the lead, which takes the room the base and the checkout leave.

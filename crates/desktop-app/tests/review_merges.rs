@@ -64,11 +64,11 @@ impl Seeded {
     self.until_read();
   }
 
-  /// Until the merges are read: their sections, or *No merges yet*.
+  /// Until the merges are read: their sections, or *No merges yet*. The info line stands while they are read too.
   fn until_read(&mut self) {
-    self
-      .window
-      .until_within(GIT_WORK, "the merges", |window| window.texts("merges-info").is_some());
+    self.window.until_within(GIT_WORK, "the merges", |window| {
+      window.texts("merges-info").is_some() && window.tree.get_element_by_id("merges-loading").is_none()
+    });
   }
 
   fn shows(&mut self, id: &str) -> bool {
@@ -218,7 +218,15 @@ fn review_merges_lists_not_merged_waiting_for_review_and_merged_runs_by_day() {
     "newest first: {titles:?}"
   );
   assert!(titles[0].contains("Merge queue · "), "{titles:?}");
+  assert!(
+    titles[0].contains("· worktree removed · branch deleted"),
+    "a run whose branch went says so: {titles:?}"
+  );
   assert!(titles[2].contains("after 1 refused attempt"), "{titles:?}");
+  assert!(
+    !titles[2].contains("branch deleted"),
+    "a run whose branch stays does not: {titles:?}"
+  );
   assert!(
     !seeded.shows(&format!("{}-action", today[0])),
     "a merged run has no action"
@@ -246,7 +254,11 @@ fn review_merges_tells_every_outcome_with_the_action_that_moves_it_on() {
       "not recorded: the project database stayed busy",
       "Record merge",
     ),
-    ("Rate limit per endpoint", "Git stopped answering at Merge", "Try again"),
+    (
+      "Rate limit per endpoint",
+      "Git stopped answering at Merge · stopped after 2 min · checkout and main untouched",
+      "Try again",
+    ),
     (
       "Payload size guard",
       "Stopped while bringing the merge in · 1 file left changed · main did not move",

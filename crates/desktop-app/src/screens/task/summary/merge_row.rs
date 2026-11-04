@@ -13,7 +13,7 @@ use lurq::{
     ctx::Ctx,
     theme::{PaletteColor, TypographyStyle},
   },
-  components::{Column, Row, Text},
+  components::{Column, Row, Text, TextOverflow},
   layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
 };
@@ -197,6 +197,8 @@ impl Component for MergeRow {
     let open = Navigation::of(ctx).to(route);
     let words = shown.words(ctx);
     let (glyph, color) = shown.glyph();
+    // As `Value` in `Cjprb` draws it: the words, then a spacer that takes the room left, so the open arrow keeps its
+    // gaps on both sides of the spacer however long the words are; words too long for the column end in an ellipsis.
     let value = Row::new()
       .id("task-property-merge")
       .flex(1.0)
@@ -209,11 +211,13 @@ impl Component for MergeRow {
           .id("task-property-merge-label")
           .variant(TypographyStyle::Description)
           .color(color)
-          .flex(1.0)
+          .flex_shrink(1.0)
           .min_width(Dimension::Px(0.0))
-          .nowrap(),
+          .nowrap()
+          .text_overflow(TextOverflow::Elipsis),
       )
-      .child(icon(Icon::ArrowUpRight, IconSize::Sm, PaletteColor::TextMuted));
+      .child(Column::new().flex(1.0).min_width(Dimension::Px(0.0)))
+      .child(icon(Icon::ArrowUpRight, IconSize::Sm, PaletteColor::TextMuted).id("task-property-merge-open"));
     let property = row(
       "task-property-merge",
       &ctx.t("summary.properties.merge.label"),

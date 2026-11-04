@@ -25,6 +25,8 @@ use orchester_workspace::{
 
 /// The base branch a line names when the run did not record its own.
 const NO_BRANCH: &str = "—";
+/// What an unanswered Git's cause says before how long it wrote nothing.
+const SILENT: &str = "wrote nothing for ";
 
 /// The stage's name.
 fn stage(ctx: &Ctx, stage: AttemptStage) -> Arc<str> {
@@ -85,10 +87,7 @@ pub(super) fn outcome(ctx: &Ctx, run: &NotMergedRun) -> Arc<str> {
         ("cause", why),
       ],
     ),
-    AttemptOutcome::GitStopped { stage: at } => ctx.t_args(
-      "merges.outcome.gitStopped",
-      [("stage", stage(ctx, *at)), ("cause", why)],
-    ),
+    AttemptOutcome::GitStopped { stage: at } => git_stopped(ctx, (*at, attempt.cause()), base),
     AttemptOutcome::LeftChanged { files } => counted(
       ctx,
       ("merges.outcome.leftChangedOne", "merges.outcome.leftChangedOther"),
@@ -104,6 +103,40 @@ pub(super) fn outcome(ctx: &Ctx, run: &NotMergedRun) -> Arc<str> {
     }
     AttemptOutcome::Moved { stage: None } => ctx.t_args("merges.outcome.movedBefore", [("branch", base)]),
   }
+}
+
+/// *Git stopped answering at Merge · stopped after 2 min · checkout and master untouched*: the stage, how long Git
+/// wrote nothing when the cause says it, and what it did not touch, as `Cjprb` draws it; the cause stays on the
+/// attempt page.
+fn git_stopped(ctx: &Ctx, (at, cause): (AttemptStage, Option<&str>), base: &str) -> Arc<str> {
+  let stage = stage(ctx, at);
+  let Some(seconds) = cause.and_then(silent_for) else {
+    return ctx.t_args(
+      "merges.outcome.gitStopped",
+      [("stage", stage), ("branch", Arc::from(base))],
+    );
+  };
+  let (minutes, seconds) = (seconds / 60, seconds % 60);
+  let time = match (minutes, seconds) {
+    (0, seconds) => ctx.t_args("merges.outcome.seconds", [("seconds", seconds.to_string())]),
+    (minutes, 0) => ctx.t_args("merges.outcome.minutes", [("minutes", minutes.to_string())]),
+    (minutes, seconds) => ctx.t_args(
+      "merges.outcome.minutesSeconds",
+      [("minutes", minutes.to_string()), ("seconds", seconds.to_string())],
+    ),
+  };
+  ctx.t_args(
+    "merges.outcome.gitStoppedAfter",
+    [("stage", stage), ("time", time), ("branch", Arc::from(base))],
+  )
+}
+
+/// How many seconds Git wrote nothing before it was stopped, as an unanswered Git's cause says it (`… wrote nothing
+/// for 120 s and was stopped`, `GitError::Unanswered` and `MergeError::Unanswered`).
+fn silent_for(cause: &str) -> Option<u64> {
+  let (_, after) = cause.split_once(SILENT)?;
+  let (seconds, _) = after.split_once(" s")?;
+  seconds.trim().parse().ok()
 }
 
 /// A line with `count` files and the branch, worded for one or more.
@@ -190,6 +223,9 @@ pub(super) fn merged_line(ctx: &Ctx, run: &MergedRun) -> Arc<str> {
   let mut parts = vec![landed];
   if run.worktree_removed {
     parts.push(ctx.t("merges.merged.worktreeRemoved"));
+  }
+  if run.branch_deleted {
+    parts.push(ctx.t("merges.merged.branchDeleted"));
   }
   match run.refused_before {
     0 => {}

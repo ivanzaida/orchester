@@ -4,15 +4,16 @@
 //!
 //! `merges` (09 `Os7b3`): a run refused before Git at the integration lock after two attempts; two runs waiting for
 //! review, one in the merge queue, one on its task page whose branch moved two commits after the reviewed head
-//! (*Changed since your review: 2 commits after …*, as `Row · KON-20` `cd7dN`); three runs merged
-//! today, by the person after a refused attempt, by automation and by the merge queue; one merged yesterday and one
-//! three days ago.
+//! (*Changed since your review: 2 commits after …*, as `Row · KON-20` `cd7dN`); three runs merged today, by the person
+//! after a refused attempt, by automation and by the merge queue, the last two with their branches deleted; one merged
+//! yesterday and one three days ago.
 //!
 //! `merges-outcomes` (every row of `Cjprb`): a run not merged for each way an attempt ends that the rows tell —
-//! refused before Git, stopped in the merge queue, conflicts, merged by Git but not recorded, Git stopped answering,
-//! and a bring-in that stopped part way and left a file changed in the checkout (made by a real merge whose git stops
-//! after writing it, so *Put files back* puts it back); a run waiting in the queue with two review comments not sent;
-//! two runs merged today. Orchester's own retry waits only in a running app, so no row retries here.
+//! refused before Git, stopped in the merge queue, conflicts, merged by Git but not recorded, Git stopped answering
+//! after 2 min, and a bring-in that stopped part way and left a file changed in the checkout (made by a real merge
+//! whose git stops after writing it, so *Put files back* puts it back); a run waiting in the queue with two review
+//! comments not sent; two runs merged today, their branches deleted. Orchester's own retry waits only in a running app,
+//! so no row retries here.
 //!
 //! `merges-empty` (09c `jhPCL`): the delivering catalogue and no merge attempt.
 //!
@@ -39,7 +40,7 @@ use orchester_exec::{ProcessRunner, programs::Programs};
 use orchester_workspace::tasks::integration::{IntegrationProblem, merge_in};
 
 use super::delivery::{Work, checked_events, enter, passed};
-use crate::kontur::{Kontur, SeedError, catalogue::Published, files, run::Drive};
+use crate::kontur::{Kontur, SeedError, catalogue::Published, files, git, run::Drive};
 
 pub(super) type Asked = (MergeAsker, MergeVia);
 /// How an attempt ended, and why.
@@ -70,13 +71,15 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
     ("Delivery log per endpoint", 420),
     (PERSON, refused_first),
   )?;
-  merged_today(
+  let honored = merged_today(
     kontur,
     quick,
     ("Honor Retry-After on 429 and 503", 330),
     (AUTOMATION, None),
   )?;
-  merged_today(kontur, quick, ("Retry budget per endpoint", 260), (QUEUE, None))?;
+  branch_deleted(kontur, &honored)?;
+  let budget = merged_today(kontur, quick, ("Retry budget per endpoint", 260), (QUEUE, None))?;
+  branch_deleted(kontur, &budget)?;
   let (_, held) = ready(
     kontur,
     quick,
@@ -116,13 +119,13 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
 pub fn outcomes(kontur: &mut Kontur) -> Result<(), SeedError> {
   let catalogue = kontur.delivering_catalogue()?;
   let (feature, quick) = (&catalogue.feature_delivery, &catalogue.quick_fix);
-  merged_today(
-    kontur,
-    quick,
-    ("Honor Retry-After on 429 and 503", 420),
-    (AUTOMATION, None),
-  )?;
-  merged_today(kontur, quick, ("Retry budget per endpoint", 360), (QUEUE, None))?;
+  for (title, ago, asked) in [
+    ("Honor Retry-After on 429 and 503", 420, AUTOMATION),
+    ("Retry budget per endpoint", 360, QUEUE),
+  ] {
+    let run = merged_today(kontur, quick, (title, ago), (asked, None))?;
+    branch_deleted(kontur, &run)?;
+  }
   let base = kontur.base.clone();
   let not_merged: [(&str, Asked, Ended<'_>); 5] = [
     (
@@ -254,13 +257,20 @@ fn merged_today(
   pipeline: &Published,
   (title, ago): (&str, i64),
   (asked, before): (Asked, Option<(AttemptOutcome, &str)>),
-) -> Result<(), SeedError> {
+) -> Result<Run, SeedError> {
   let ago = ago.min(minutes_into_today(kontur) - 1);
   let run = passed(kontur, pipeline, (title, "merged today"), (Work::Merged, ago))?;
   if let Some((outcome, cause)) = before {
     record(kontur, &run, (kontur.today_ago(ago), asked), (outcome, Some(cause)))?;
   }
-  record_landed(kontur, &run, asked)
+  record_landed(kontur, &run, asked)?;
+  Ok(run)
+}
+
+/// Deletes `run`'s branch, as Orchester's cleanup does once the run merged (`branch deleted` in 09 `Os7b3`).
+fn branch_deleted(kontur: &Kontur, run: &Run) -> Result<(), SeedError> {
+  git::delete_branch(&kontur.repo, run.branch().as_str())?;
+  Ok(())
 }
 
 /// A run titled `title` merged `days` days before today, in the evening, its merge asked for by `asked`.

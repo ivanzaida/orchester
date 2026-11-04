@@ -52,7 +52,21 @@ fn skeletons_review_merges_shows_its_bones_after_a_moment() {
   held.page(ProjectPage::Merges);
   held.skeleton("merges-loading");
   assert!(held.exists("review-hub-title"), "the hub's title stays real");
-  assert!(held.exists("merges-info"), "the info line stands in its bones");
+  assert!(held.exists("merges-info"), "the info line stands over the bones");
+  // 09d `Zlk49`: the lead names the checkout's branch, read apart from the held reads, and every tab's count is a bone.
+  held.window.until("the lead to name the branch", |window| {
+    window
+      .texts("merges-lead")
+      .is_some_and(|texts| texts.iter().any(|text| text.starts_with("Every merge into main:")))
+  });
+  assert!(
+    held.exists("merges-base-reading-bones") && held.exists("merges-checkout-reading-bones"),
+    "the base and the checkout's words are bones"
+  );
+  for tab in ["merge_queue", "pull_requests", "merges"] {
+    let count = format!("review-hub-tab-{tab}-count");
+    assert!(held.exists(&count), "{count} is a bone while counts are read");
+  }
 }
 
 #[test]
