@@ -2,36 +2,41 @@
 //! seen on 2026-11-02 on macOS with Approve automatically on), by their exact command lines: reading its own task
 //! output, the code-signing queries a prefix allows, `git log -L` on a file of the worktree and listing rustup's
 //! targets. Each is read to the end, placed in the run's roots, kept within the step's limits, and answered by
-//! Autopilot, the step's allowed commands and Approve automatically.
+//! Autopilot, the step's allowed commands and Approve automatically. A `pencil` read of the main checkout's design
+//! (ORC-698) is placed by its file and exports.
 //! `cargo test -p orchester-core --test approval_agent_requests approval_agent_requests`.
 
 use std::path::{Path, PathBuf};
 
 use orchester_core::{
   connection::{AgentProvider, invocation::Platform},
+  id::{InvocationId, RunId, StepExecutionId},
   permission::{
     AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess,
     category::{ClassifiedCommand, CommandCategory, CommandScope},
     roots::{AgentHomes, RootsCheck, RunRoots, ToolRequest},
   },
   run::{
-    AnswerKind, ApprovalSubject, AutoAsk, AutoVerdict, ModeStep, RequestAnswer, auto_verdict, autopilot_check,
-    autopilot_step, permitted,
+    AnswerKind, ApprovalSubject, AutoAsk, AutoVerdict, ModeStep, PendingToolApproval, RequestAnswer, ReviewQuestion,
+    RuleScope, auto_verdict, autopilot_check, autopilot_step, permitted,
     review::{StepLimit, step_limit},
   },
+  time::Timestamp,
 };
+use serde_json::{Value, json};
 use tempfile::TempDir;
 
 const BRANCH: &str = "orchester/orc-627-run-1";
 const USER: u32 = 501;
 
 /// A main checkout in a folder whose name holds a space, as `/Volumes/External SSD/…` does, with the run's worktree
-/// in it and `crates/desktop-app/Cargo.toml` there; a Builder that edits, with its network off and `security
-/// find-identity` among its allowed commands.
+/// and its storage in it and `crates/desktop-app/Cargo.toml` there; a Builder that edits, with its network off and
+/// `security find-identity` among its allowed commands.
 struct Fixture {
   _root: TempDir,
   main: PathBuf,
   worktree: PathBuf,
+  storage: PathBuf,
   elsewhere: PathBuf,
   roots: RunRoots,
   scope: CommandScope,
@@ -45,9 +50,11 @@ impl Fixture {
     let root = PathBuf::from(root.to_string_lossy().trim_start_matches(r"\\?\"));
     let main = root.join("External SSD").join("orchester");
     let worktree = main.join(".orchester").join("worktrees").join("w1");
+    let storage = main.join(".orchester").join("runs").join("r1");
     let elsewhere = root.join("elsewhere");
     for folder in [
       &worktree.join("crates").join("desktop-app"),
+      &storage,
       &elsewhere,
       &root.join("temp"),
     ] {
@@ -58,6 +65,8 @@ impl Fixture {
       .expect("worktree")
       .with_main_checkout(&main)
       .expect("main checkout")
+      .with_run_storage(&storage)
+      .expect("run storage")
       .with_agent_temp(
         AgentProvider::ClaudeCodeCli,
         AgentHomes {
@@ -79,6 +88,7 @@ impl Fixture {
       _root: dir,
       main,
       worktree,
+      storage,
       elsewhere,
       roots,
       scope,
@@ -403,5 +413,163 @@ fn approval_agent_requests_git_reads_main_checkout() {
     let command = fixture.command(&line);
     assert_eq!(command.category(), category, "{line}");
     assert!(command.parts()[0].writes_outside(), "{line}");
+  }
+}
+
+/// A call of the `pencil` server's `tool` with `arguments`, as Claude Code's prompt records it: `filePath` as its
+/// target, the arguments as JSON.
+fn pencil_call(fixture: &Fixture, tool: &str, arguments: &Value) -> ApprovalSubject {
+  let approval = PendingToolApproval {
+    id: "invocation:1".to_owned(),
+    run: RunId::generate(),
+    execution: StepExecutionId::generate(),
+    invocation: InvocationId::generate(),
+    agent: "Builder".to_owned(),
+    command: false,
+    scope: Some(arguments.to_string()),
+    server: "pencil".to_owned(),
+    action: tool.to_owned(),
+    target: arguments["filePath"].as_str().map(str::to_owned),
+    requested_at: Timestamp::from_unix_millis(0),
+    native: None,
+  };
+  ApprovalSubject::of(&approval, &fixture.scope)
+}
+
+/// What Autopilot does with `subject`, within the step's limits.
+fn autopilot_on(fixture: &Fixture, subject: &ApprovalSubject) -> ModeStep {
+  let limit = step_limit(subject, Some(&fixture.permissions), &[]);
+  autopilot_step(&autopilot_check(&fixture.roots, subject), limit)
+}
+
+/// The main checkout's design, as `AGENTS.md` asks a step to name it.
+fn main_design(fixture: &Fixture) -> String {
+  slashed(&fixture.main.join("crates/desktop-app/design/orchester.pen"))
+}
+
+/// A `pencil` `execute` of `input` on the main checkout's design.
+fn execute(fixture: &Fixture, input: &str) -> ApprovalSubject {
+  pencil_call(
+    fixture,
+    "execute",
+    &json!({"filePath": main_design(fixture), "input": input}),
+  )
+}
+
+/// UI runs read the design through `pencil` `execute` on the main checkout's `orchester.pen`, as `AGENTS.md` asks,
+/// and every call came to the person as `reviewerUnsure` (ORC-698, seen in ORC-362, ORC-363, ORC-364 and ORC-697). A
+/// snippet that only reads, exporting at most into the worktree or the run's storage, runs under Autopilot.
+#[test]
+fn approval_agent_requests_pencil_reads_main_checkout_design() {
+  let fixture = Fixture::new();
+  let storage = slashed(&fixture.storage.join("screenshots"));
+  let tmp = slashed(&fixture.worktree.join(".tmp/orc-698"));
+  let approved = ModeStep::Approve(RequestAnswer::by(AnswerKind::Autopilot));
+  for input in [
+    r#"Print(Get((n,c)=>{if(c.depth===0){c.skipChildren();return n.name}}).join(" | "))"#.to_owned(),
+    r#"Print(Get("H6kPd",{depth:2}))"#.to_owned(),
+    r#"TakeScreenshot(["H6kPd"])"#.to_owned(),
+    r#"Get("H6kPd",(n,c)=>Print(n.id,n.name,c.bounds.width,`${c.depth}`))"#.to_owned(),
+    r#"const kids=Get("H6kPd",{depth:1}).children; Print(kids[0].name, "Insert row", /Row \d+/.test(kids[0].name))"#
+      .to_owned(),
+    format!(r#"Export(["H6kPd","p6tXIO"],"png","{storage}")"#),
+    format!(r#"TakeScreenshot(["H6kPd"]); Export(["H6kPd"], "png", "{tmp}", {{scale: 1}})"#),
+  ] {
+    let subject = execute(&fixture, &input);
+    assert_eq!(autopilot_check(&fixture.roots, &subject), RootsCheck::Inside, "{input}");
+    assert_eq!(autopilot_on(&fixture, &subject), approved, "{input}");
+  }
+  // A failed snippet patched with code that only reads.
+  let patched = json!({
+    "filePath": main_design(&fixture), "editId": "e1", "edits": [{"find": "depth:1", "replace": "depth:2"}]
+  });
+  assert_eq!(
+    autopilot_on(&fixture, &pencil_call(&fixture, "execute", &patched)),
+    approved
+  );
+  // Approve similar still covers the tool.
+  assert_eq!(
+    RuleScope::similar(&execute(&fixture, r#"TakeScreenshot(["H6kPd"])"#)),
+    RuleScope::similar(&execute(&fixture, r#"Insert(document,{type:"frame"})"#))
+  );
+}
+
+/// An export elsewhere, into the main checkout outside the run's storage, or by a relative path writes outside the
+/// roots; so does another design file (ORC-698).
+#[test]
+fn approval_agent_requests_pencil_exports_elsewhere_ask() {
+  let fixture = Fixture::new();
+  let elsewhere = slashed(&fixture.elsewhere);
+  let main = slashed(&fixture.main);
+  for input in [
+    format!(r#"Export(["H6kPd"],"png","{elsewhere}")"#),
+    format!(r#"Export(["H6kPd"],"png","{main}/crates/desktop-app/design/exports")"#),
+  ] {
+    assert!(
+      matches!(autopilot_on(&fixture, &execute(&fixture, &input)), ModeStep::Person(_)),
+      "{input}"
+    );
+  }
+  let relative = execute(&fixture, r#"Export(["H6kPd"],"png","./exports")"#);
+  assert_eq!(
+    autopilot_on(&fixture, &relative),
+    ModeStep::Review(ReviewQuestion::Roots)
+  );
+  let other = json!({"filePath": format!("{elsewhere}/other.pen"), "input": r#"TakeScreenshot(["a"])"#});
+  assert!(matches!(
+    autopilot_on(&fixture, &pencil_call(&fixture, "execute", &other)),
+    ModeStep::Person(_)
+  ));
+}
+
+/// What may change the design, or reach a function by a name not written out, is not placed: it goes to the
+/// reviewer's question as before (ORC-698).
+#[test]
+fn approval_agent_requests_pencil_writes_still_ask() {
+  let fixture = Fixture::new();
+  for input in [
+    r#"Insert(document,{type:"frame",name:"x"})"#,
+    r#"Update("H6kPd",{name:"x"})"#,
+    r#"Get(n=>n.name==="Row"&&Delete(n.id))"#,
+    r#"Copy("H6kPd",document)"#,
+    r#"Replace("a/b",{type:"text"})"#,
+    r#"Move("a",document)"#,
+    r##"SetVariables({accent:{type:"color",value:"#fff"}})"##,
+    r#"Generate("stock","a","cats")"#,
+    r#"globalThis["Ins"+"ert"](document,{})"#,
+    r#"eval("Insert(document,{})")"#,
+    r#"[]["con"+"structor"]"#,
+    r#"const k="x"; Print(Get("a")[k])"#,
+    "\\u0049nsert(document,{})",
+    r#"const e=Export; e(["a"],"png","/tmp")"#,
+    r#"Export(["a"],"png",`/tmp/${1}`)"#,
+    r#"Print("unterminated)"#,
+  ] {
+    let subject = execute(&fixture, input);
+    assert_eq!(
+      autopilot_check(&fixture.roots, &subject),
+      RootsCheck::Unknown,
+      "{input}"
+    );
+    assert_eq!(
+      autopilot_on(&fixture, &subject),
+      ModeStep::Review(ReviewQuestion::Roots),
+      "{input}"
+    );
+  }
+  let design = main_design(&fixture);
+  let writing_patch = json!({"filePath": design, "editId": "e1", "edits": [{"find": "Get(", "replace": "Update("}]});
+  let no_file = json!({"input": r#"TakeScreenshot(["a"])"#});
+  for (tool, arguments) in [
+    ("execute", &writing_patch),
+    ("execute", &no_file),
+    ("get_screenshot", &json!({"filePath": design, "input": "Print(1)"})),
+  ] {
+    let subject = pencil_call(&fixture, tool, arguments);
+    assert_eq!(
+      autopilot_check(&fixture.roots, &subject),
+      RootsCheck::Unknown,
+      "{arguments}"
+    );
   }
 }
