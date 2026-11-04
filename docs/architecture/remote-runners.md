@@ -90,8 +90,8 @@ Where the desktop touches a run's worktree today (`crates/workspace/src/`):
 | Files of the run's version, Open in editor, copy path | `files/source.rs:39`, `files/open.rs`, `desktop-app/src/screens/task/changes/open_file.rs`, `run_facts.rs:329` |
 | Recovery state of a run's folder | `recovery/mod.rs:239` |
 | Warm workspaces' folders and sizes, ended worktrees' sizes | through the runner since ORC-689 (`Command::Folders`, `runner/folders.rs`); the desktop keeps the database's reservations |
-| Code index rebuild | `code_index/mod.rs:156` |
-| Orchestrator chat git tools in a run's worktree: **through the runner** since protocol 43 (`Command::RunGit`, ORC-691) | `orchestrator/git/host.rs`; the runner's `execution/executor/run_git.rs` |
+| Code index rebuild | Done (ORC-690): the runner builds it on `Command::RebuildCodeIndex` (protocol 43); `code_index::rebuild` asks it |
+| Orchestrator chat git tools in a run's worktree: **through the runner** since protocol 44 (`Command::RunGit`, ORC-691) | `orchestrator/git/host.rs`; the runner's `execution/executor/run_git.rs` |
 
 ### Local integration
 

@@ -80,8 +80,9 @@ fn replies() -> Vec<Event> {
 #[tokio::test]
 async fn merge_queue_requests_and_replies_cross_a_connection_unchanged() {
   assert_eq!(
-    PROTOCOL_VERSION, 43,
-    "the merge queue's work came with protocol 41, the executor's folders with 42, the chat's git with 43"
+    PROTOCOL_VERSION, 44,
+    "the merge queue's work came with protocol 41, the executor's folders with 42, the code index rebuild with 43, \
+     the chat's git with 44"
   );
   let (left, right) = tokio::io::duplex(64 * 1024);
   let (read, _) = tokio::io::split(left);
