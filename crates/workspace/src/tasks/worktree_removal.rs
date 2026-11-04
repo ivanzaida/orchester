@@ -93,7 +93,8 @@ impl WorktreeRemover {
 }
 
 /// A test's stand-in for the runner: the request and the reply go through the protocol's serialization, and what the
-/// runner does after a removal (the codebase indexes pruned, the worktree folders swept) happens here, in order.
+/// runner does after a removal happens here too: the codebase indexes pruned, and the worktree folders swept on a
+/// thread of their own.
 #[cfg(feature = "test-support")]
 mod here {
   use std::path::Path;
@@ -145,8 +146,8 @@ mod here {
     request: &RemovalRequest,
   ) -> Result<Cleanup, RemovalFailure> {
     let unreadable = |error: &dyn std::error::Error| RemovalFailure::RunUnreadable(error.to_string());
-    let db = ProjectDb::open(root).map_err(|error| unreadable(&error))?;
-    let run = db
+    let run = ProjectDb::open_read_only(root)
+      .map_err(|error| unreadable(&error))?
       .run(run)
       .map_err(|error| unreadable(&error))?
       .ok_or_else(|| RemovalFailure::RunUnreadable("the project has no such run".to_owned()))?;
@@ -155,8 +156,23 @@ mod here {
     if let Err(error) = CodebaseIndexes::new(root).prune() {
       tracing::warn!(%error, "cannot remove the codebase indexes of removed worktrees");
     }
-    db.sweep_worktree_folders(&programs.git_work(), (Path::new(GIT), root));
+    sweep_in_background(programs, root);
     Ok(cleanup)
+  }
+
+  /// Sweeps the worktree folders on a thread of its own, as the runner does: a removal does not wait for other runs'
+  /// folders, nor holds the checkout's integration lease while they go.
+  fn sweep_in_background(programs: &Programs, root: &Path) {
+    let (programs, root) = (programs.clone(), root.to_path_buf());
+    let started = std::thread::Builder::new()
+      .name("worktree-sweep".into())
+      .spawn(move || match ProjectDb::open(&root) {
+        Ok(db) => db.sweep_worktree_folders(&programs.git_work(), (Path::new(GIT), &root)),
+        Err(error) => tracing::warn!(%error, "cannot read which runs own the worktree folders; none is swept"),
+      });
+    if let Err(error) = started {
+      tracing::warn!(%error, "cannot start the sweep of worktree folders");
+    }
   }
 
   fn lost() -> Unremoved {
