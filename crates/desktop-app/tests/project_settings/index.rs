@@ -1,8 +1,10 @@
-//! Code-index setting, empty and failed lists, and a real rebuild in a test repository.
+//! Code-index setting, empty and failed lists, and a real rebuild in a test repository, which the project's runner
+//! carries out. The indexes the tests start with are built here as a runner would have built them.
 use std::{fs, process::Command};
 
 use orchester_core::{revision::Revision, store::SettingsStore};
-use orchester_workspace::{code_index, tools::form::parse_environment};
+use orchester_index::CodebaseIndexes;
+use orchester_workspace::tools::form::parse_environment;
 
 use super::harness::Settings;
 
@@ -39,7 +41,7 @@ fn project_settings_code_index_saves_its_switch_and_checks_the_search_tool() {
 
 #[test]
 fn project_settings_code_index_lists_ready_and_failed_revisions_and_rebuilds() {
-  let mut page = Settings::new(false);
+  let mut page = Settings::with_runner();
   git(&page.repo, &["init"]);
   fs::write(page.repo.join("lib.rs"), "fn main() {}\n").expect("source file");
   git(&page.repo, &["add", "lib.rs"]);
@@ -62,9 +64,11 @@ fn project_settings_code_index_lists_ready_and_failed_revisions_and_rebuilds() {
     .output()
     .expect("head");
   let revision = Revision::new(String::from_utf8_lossy(&output.stdout).trim()).expect("revision");
-  code_index::rebuild_in(&page.repo, &revision).expect("build index");
+  CodebaseIndexes::new(&page.repo)
+    .rebuild(&revision)
+    .expect("build index");
   let missing = Revision::new("1111111111111111111111111111111111111111").expect("revision");
-  assert!(code_index::rebuild_in(&page.repo, &missing).is_err());
+  assert!(CodebaseIndexes::new(&page.repo).rebuild(&missing).is_err());
   page.tab("codeIndex", "settings-code-index");
   if !page.db().code_index().expect("setting").is_on() {
     page.click("settings-code-index");
@@ -97,6 +101,12 @@ fn project_settings_code_index_lists_ready_and_failed_revisions_and_rebuilds() {
     p.click("settings-index-rebuild-1111111");
     false
   });
+  // Why the runner could not build it, as the desktop said when it built indexes itself.
+  assert!(
+    page
+      .text("settings-index-rebuild-error")
+      .starts_with("The index was not rebuilt: ")
+  );
 }
 #[test]
 fn project_settings_review_code_index_refreshes_runner_created_and_removed_indexes() {
@@ -109,7 +119,7 @@ fn project_settings_review_code_index_refreshes_runner_created_and_removed_index
   }
   page.until("empty index list", |p| p.exists("settings-no-indexes"));
   let revision = Revision::new("1111111111111111111111111111111111111111").expect("revision");
-  assert!(code_index::rebuild_in(&page.repo, &revision).is_err());
+  assert!(CodebaseIndexes::new(&page.repo).rebuild(&revision).is_err());
   let feed = page.window.projects().feed(crate::support::project_id());
   // As the runner reports that the run whose index it built changed state (its agents start once it is built).
   feed.states.update(|revision| *revision += 1);

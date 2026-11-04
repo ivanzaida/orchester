@@ -2,7 +2,7 @@
 //! Failed, Outdated) with Rebuild or Retry, and in its hint when it was built and how many files it holds, how far a
 //! build got, why it failed or that an earlier Orchester built it; its size, symbols and the runs using it in its (i).
 //! No index yet is the empty row (`Empty · No index yet` `sDP3O`).
-use std::{path::Path, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use lurq::{
   app::ctx::{Ctx, FutureState},
@@ -52,7 +52,7 @@ pub fn total(ctx: &Ctx, state: &FutureState<Listed, Message>) -> Option<Arc<str>
   ))
 }
 
-pub fn rows(ctx: &mut Ctx, state: &FutureState<Listed, Message>, rebuild: &Rebuild, root: &Path) -> Vec<Element> {
+pub fn rows(ctx: &mut Ctx, state: &FutureState<Listed, Message>, rebuild: &Rebuild) -> Vec<Element> {
   let reading = SettingRow::new("settings-index-list", ctx.t("project_settings.indexRow"));
   if let Some(error) = &state.error {
     return vec![reading.toned(message_text(ctx, error), Tone::Danger).render(ctx)];
@@ -77,10 +77,10 @@ pub fn rows(ctx: &mut Ctx, state: &FutureState<Listed, Message>, rebuild: &Rebui
       .into(),
     ];
   }
-  list.0.0.iter().map(|row| index_row(ctx, row, rebuild, root)).collect()
+  list.0.0.iter().map(|row| index_row(ctx, row, rebuild)).collect()
 }
 
-fn index_row(ctx: &mut Ctx, row: &IndexRow, rebuild: &Rebuild, root: &Path) -> Element {
+fn index_row(ctx: &mut Ctx, row: &IndexRow, rebuild: &Rebuild) -> Element {
   let short = display::short_revision(row.revision.as_str());
   let (tone, key, retry, hint) = match &row.state {
     State::Ready(_) => (BadgeTone::Success, "project_settings.ready", false, Tone::Muted),
@@ -88,7 +88,7 @@ fn index_row(ctx: &mut Ctx, row: &IndexRow, rebuild: &Rebuild, root: &Path) -> E
     State::Failed { .. } => (BadgeTone::Danger, "project_settings.indexFailed", true, Tone::Danger),
     State::Outdated => (BadgeTone::Warning, "project_settings.outdated", false, Tone::Warning),
   };
-  let (action, revision, root) = (rebuild.clone(), row.revision.clone(), root.to_path_buf());
+  let (action, revision) = (rebuild.clone(), row.revision.clone());
   let button = ActionButton::new(
     format!("settings-index-rebuild-{short}"),
     ButtonKind::Secondary,
@@ -103,7 +103,7 @@ fn index_row(ctx: &mut Ctx, row: &IndexRow, rebuild: &Rebuild, root: &Path) -> E
   let button = if matches!(row.state, State::Building(_)) || rebuild.state().get().is_pending() {
     button.disabled()
   } else {
-    button.on_click(move || action.run((root.clone(), revision.clone())))
+    button.on_click(move || action.run(revision.clone()))
   };
   let used = used_by(ctx, row);
   let info = if used.is_empty() {
