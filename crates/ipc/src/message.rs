@@ -22,7 +22,7 @@ use orchester_core::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-  ErrorReports,
+  ErrorReports, FolderState,
   browser::{BrowserCommand, BrowserEvent, BrowserReply, ScreencastFrame},
   chat::ChatTools,
   rejection::Rejection,
@@ -278,6 +278,11 @@ pub enum Command {
   /// carried out, [`Rejection::BrowserUnavailable`] when the browser cannot start, [`Rejection::NoSuchTab`] for a tab
   /// it does not have, or [`Rejection::Failed`] when the browser refused.
   Browser(BrowserCommand),
+  /// What run `run`'s folder holds beyond its last commit, for the start-up recovery (protocol 40): its own
+  /// worktree, else the workspace it holds or worked in last. The runner reads it with git in the folder; the desktop
+  /// never does. Answered with [`Reply::RunFolderState`], [`FolderState::Unknown`] when the run has no folder any more
+  /// or git cannot tell.
+  RunFolderState { run: RunId },
 }
 
 /// Which session a runner serves, from the desktop's side.
@@ -467,6 +472,11 @@ pub enum Reply {
   ErrorReportsSet,
   /// The answer to [`Command::Browser`].
   Browser(BrowserReply),
+  /// The answer to [`Command::RunFolderState`].
+  RunFolderState {
+    run: RunId,
+    state: FolderState,
+  },
   Rejected(Rejection),
 }
 

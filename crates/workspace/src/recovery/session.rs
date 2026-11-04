@@ -13,11 +13,10 @@ use orchester_core::{
   id::{ProjectId, RunId},
   time::Timestamp,
 };
-use orchester_exec::programs::Programs;
 use orchester_ipc::SessionEnd;
 use tokio::{runtime::Handle, sync::watch};
 
-use super::{InterruptedRun, Unread, interrupted_runs, pending, reports};
+use super::{InterruptedRun, Unread, interrupted_runs, pending, read_folder_states, reports};
 use crate::{
   background,
   messages::{self, Message},
@@ -139,9 +138,10 @@ impl Recovery {
   /// or a crash (`previous`), those interrupted at `since` or later (the previous session's start); and
   /// the runs of projects whose interrupted runs the person has not decided on yet, also after a clean
   /// end, since they were interrupted. Projects with runs to offer are kept undecided until the person
-  /// decides.
+  /// decides. What each run's folder holds is asked of its project's runner among `runners`, started for
+  /// it when it has none yet.
   pub fn start(
-    (workspace, programs): (Workspace, Programs),
+    (workspace, runners): (Workspace, Runners),
     previous: SessionEnd,
     since: Timestamp,
     runtime: &Handle,
@@ -161,7 +161,7 @@ impl Recovery {
     if reads {
       let state = recovery.state.clone();
       runtime.spawn(async move {
-        let reading = read((workspace, programs), previous, since, marks).await;
+        let reading = read((workspace, runners), previous, since, marks).await;
         state.send_modify(|state| state.reading = reading);
       });
     }
@@ -241,8 +241,9 @@ impl Recovery {
 /// or since its undecided runs were interrupted, whichever is earlier; otherwise only of the projects with
 /// undecided runs. Never from before the person last decided about a project's runs. The projects with
 /// runs to offer are kept undecided; a project whose undecided runs are no longer interrupted is not.
+/// Then asks the projects' runners what the runs' folders hold.
 async fn read(
-  (workspace, programs): (Workspace, Programs),
+  (workspace, runners): (Workspace, Runners),
   previous: SessionEnd,
   since: Timestamp,
   marks: pending::Marks,
@@ -258,7 +259,7 @@ async fn read(
       };
       Some(marks.decided.get(&project).map_or(from, |decided| from.max(*decided)))
     };
-    let found = interrupted_runs(&workspace, &programs, previous, &since_of)?;
+    let found = interrupted_runs(&workspace, previous, &since_of)?;
     let mut offered: Vec<ProjectId> = found.runs.iter().map(|run| run.project_id).collect();
     offered.dedup();
     for project in &offered {
@@ -281,10 +282,13 @@ async fn read(
   })
   .await;
   match read {
-    Ok(Ok(found)) => Reading::Read {
-      runs: found.runs.into(),
-      unread: found.unread.into(),
-    },
+    Ok(Ok(mut found)) => {
+      read_folder_states(&runners, &mut found.runs).await;
+      Reading::Read {
+        runs: found.runs.into(),
+        unread: found.unread.into(),
+      }
+    }
     Ok(Err(error)) => {
       tracing::error!(%error, "cannot read the interrupted runs");
       Reading::Failed(messages::store_error(&error))

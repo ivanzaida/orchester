@@ -6,9 +6,11 @@
 //! waiting, and the answer or the decision resumes its agent's session. Runs interrupted
 //! earlier, e.g. ones not continued at an earlier start, are not this end's and are not listed.
 //! Nothing continues on its own; the user continues all of them or none.
-//! Blocks on SQLite and git; the UI calls it off the UI thread. Runs or projects that cannot be read are
-//! named, and the others are still offered. [`Recovery`] reads them once for the
-//! session and keeps what the person decided.
+//! The runs are read from SQLite, off the UI thread; what each run's folder holds beyond its last
+//! checkpoint is asked of the project's runner ([`read_folder_states`]), which reads it with git in the
+//! folder: the desktop never reads a run's folder itself (`docs/architecture/remote-runners.md`, rule 5).
+//! Runs or projects that cannot be read are named, and the others are still offered. [`Recovery`]
+//! reads them once for the session and keeps what the person decided.
 
 mod pending;
 mod session;
@@ -19,7 +21,6 @@ use std::{
 };
 
 use orchester_core::{
-  command::Command,
   connection::AgentProvider,
   id::{ProjectId, RunId, TaskId},
   project::TaskKey,
@@ -27,18 +28,15 @@ use orchester_core::{
   store::{RunStore, TaskStore},
   time::Timestamp,
 };
-use orchester_exec::programs::Programs;
-use orchester_ipc::SessionEnd;
+use orchester_ipc::{FolderState, SessionEnd};
 use orchester_store::{ProjectDb, RunStoreError, StoreError};
 
 pub use self::session::{Continuation, Decision, NotContinued, Reading, Recovery, RecoveryState};
 use crate::{
   display,
   messages::{self, Message},
-  tasks::{
-    changes::{GIT, run_folder, run_worktree},
-    detail,
-  },
+  runner::Runners,
+  tasks::detail,
   workspace::Workspace,
 };
 
@@ -108,10 +106,10 @@ pub struct Unread {
 /// can record its runs as interrupted before this session starts), or none of it when it says `None`. A
 /// project whose database cannot be opened is skipped and logged; it shows as unavailable when opened,
 /// and its runner records the interruption when it starts. What cannot be read is named in
-/// [`Found::unread`], and the rest is still offered.
+/// [`Found::unread`], and the rest is still offered. Their folders' states are not read here: each run's
+/// is [`WorktreeState::Unknown`] until [`read_folder_states`] asks the runners. Blocks on SQLite.
 pub fn interrupted_runs(
   workspace: &Workspace,
-  programs: &Programs,
   previous: SessionEnd,
   since: &dyn Fn(ProjectId) -> Option<Timestamp>,
 ) -> Result<Found, StoreError> {
@@ -156,7 +154,7 @@ pub fn interrupted_runs(
         RunStatus::Interrupted(cause) => *cause,
         _ => stale_cause,
       };
-      match describe(&db, programs, (&project.repo_root, &name), run, cause) {
+      match describe(&db, (&project.repo_root, &name), run, cause) {
         Ok(interrupted) => found.runs.push(interrupted),
         Err(error) => {
           tracing::warn!(run = %id, %error, "cannot describe an interrupted run");
@@ -222,7 +220,6 @@ fn readable(listed: Vec<ListedRun<RunStoreError>>) -> (Vec<Run>, Vec<Unreadable>
 
 fn describe(
   db: &ProjectDb,
-  programs: &Programs,
   (root, project): (&Path, &Arc<str>),
   run: Run,
   cause: InterruptCause,
@@ -236,8 +233,6 @@ fn describe(
       checkpoint.created_at(),
     )
   });
-  let worktree = run_folder(db, root, view.run.id()).unwrap_or_else(|| run_worktree(root, view.run.id()));
-  let (state, uncommitted_file) = worktree_state(programs, &worktree);
   Ok(InterruptedRun {
     project_id: db.project().id(),
     project_root: root.to_path_buf(),
@@ -253,39 +248,33 @@ fn describe(
     model: step.and_then(|step| step.model.clone()),
     cause,
     checkpoint,
-    worktree: state,
-    uncommitted_file,
+    // Asked of the runner afterwards (`read_folder_states`).
+    worktree: WorktreeState::Unknown,
+    uncommitted_file: None,
   })
 }
 
-/// Counts the files git reports as changed or untracked in `worktree`, and names the first of them as a
-/// repository path.
-fn worktree_state(programs: &Programs, worktree: &Path) -> (WorktreeState, Option<Arc<str>>) {
-  if !worktree.is_dir() {
-    return (WorktreeState::Unknown, None);
-  }
-  let status =
-    Command::new(Path::new(GIT), ["status", "--porcelain", "--untracked-files=all"]).with_current_dir(worktree);
-  match programs.runner().run(&status) {
-    Ok(output) if output.success() => {
-      let files: Vec<&str> = output.stdout.lines().filter(|line| !line.trim().is_empty()).collect();
-      // `XY path`, or `XY from -> to` for a rename: the path the worktree has now.
-      let first = files.first().and_then(|line| line.get(3..)).map(|path| {
-        let path = path.rsplit(" -> ").next().unwrap_or(path);
-        Arc::from(path.trim_matches('"'))
-      });
-      match files.len() {
-        0 => (WorktreeState::Clean, None),
-        count => (WorktreeState::Uncommitted(count), first),
+/// Asks the project's runner of each of `runs` what its folder holds beyond its last commit, and keeps it with the
+/// run: the runner reads it with git where the folder is. A project's runner that is not attached yet is started and
+/// waited for, as continuing the runs does; one that cannot be reached, or does not answer, leaves the run's state
+/// unknown, which is logged.
+pub async fn read_folder_states(runners: &Runners, runs: &mut [InterruptedRun]) {
+  for run in runs {
+    match runners.run_folder_state(&run.project_root, &run.project, run.run).await {
+      Ok(state) => (run.worktree, run.uncommitted_file) = worktree_state(state),
+      Err(error) => {
+        tracing::warn!(run = %run.run, %error, "the runner did not tell what the run's folder holds");
+        (run.worktree, run.uncommitted_file) = (WorktreeState::Unknown, None);
       }
     }
-    Ok(output) => {
-      tracing::warn!(worktree = %worktree.display(), stderr = %output.stderr, "git status failed");
-      (WorktreeState::Unknown, None)
-    }
-    Err(error) => {
-      tracing::warn!(worktree = %worktree.display(), %error, "cannot run git status");
-      (WorktreeState::Unknown, None)
-    }
+  }
+}
+
+/// The recovery's state of a run's folder as its runner read it, and the first file not committed.
+fn worktree_state(state: FolderState) -> (WorktreeState, Option<Arc<str>>) {
+  match state {
+    FolderState::Clean => (WorktreeState::Clean, None),
+    FolderState::Uncommitted { files, first } => (WorktreeState::Uncommitted(files), first.map(Arc::from)),
+    FolderState::Unknown => (WorktreeState::Unknown, None),
   }
 }

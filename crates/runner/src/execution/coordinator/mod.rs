@@ -24,6 +24,7 @@ pub(super) mod prepare;
 pub(super) mod question;
 pub(super) mod recovery;
 pub(super) mod returned;
+pub(super) mod run_folder;
 pub(super) mod stuck;
 pub(super) mod task_groups;
 pub(super) mod tool_approval;

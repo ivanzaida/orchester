@@ -87,7 +87,7 @@ Where the desktop touches a run's worktree today (`crates/workspace/src/`):
 | Local integration reading the worktree as a second repository | `tasks/local_integration/{mod,poll,view}.rs` |
 | Removal, stopping its processes, index prune, sweep | `tasks/integration.rs:487`, `tasks/delete.rs`, `tasks/history.rs`, `app_mcp/tools/worktree.rs`, `tasks/worktree_sweep.rs` |
 | Files of the run's version, Open in editor, copy path | `files/source.rs:39`, `files/open.rs`, `desktop-app/src/screens/task/changes/open_file.rs`, `run_facts.rs:329` |
-| Recovery state of a run's folder | `recovery/mod.rs:239` |
+| Recovery state of a run's folder | done (ORC-688): asked of the runner, `Command::RunFolderState` (protocol 40) |
 | Warm workspaces' folders and sizes, ended worktrees' sizes | `warm_workspaces/{actions,mod}.rs`, `storage.rs:100` |
 | Code index rebuild | `code_index/mod.rs:156` |
 | Orchestrator chat git tools in a run's worktree | `orchestrator/git/place.rs:58` |
