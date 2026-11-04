@@ -92,6 +92,8 @@ fn run_git_before_the_end_takes_only_reads() {
   for args in [
     &["status", "--porcelain=v2"][..],
     &["log", "-n", "5"],
+    &["diff", "--output-indicator-new=>", "HEAD"],
+    &["log", "--", "--output=a-file-of-that-name"],
     &["remote", "-v"],
     &["remote"],
     &["config", "--get", "core.sshCommand"],
@@ -103,6 +105,9 @@ fn run_git_before_the_end_takes_only_reads() {
   }
   for args in [
     &["commit", "-m", "x"][..],
+    &["diff", "--output=stolen.txt"],
+    &["show", "--output", "stolen.txt", "HEAD"],
+    &["log", "-p", "--output=stolen.txt", "--", "README.md"],
     &["remote", "add", "far", "x"],
     &["config", "user.name", "x"],
     &["symbolic-ref", "HEAD", "refs/heads/x"],
@@ -111,4 +116,24 @@ fn run_git_before_the_end_takes_only_reads() {
   ] {
     assert!(!git(GitAccess::Read, args).allowed_before_end(), "{args:?}");
   }
+}
+
+/// The most output the runner answers with (`MOST_OUTPUT` in `orchester-runner`'s `execution::executor::run_git`):
+/// both of git's outputs at that size, all of them control characters JSON writes with six bytes, still fit a frame.
+#[test]
+fn run_git_answer_at_the_runners_most_output_fits_a_frame() {
+  let most = orchester_ipc::frame::MAX_FRAME_LEN as usize / 16;
+  let event = Event::Reply {
+    id: RequestId::new(u64::MAX),
+    reply: Reply::RunGit(RunGitAnswer::Ran {
+      output: CommandOutput {
+        code: Some(i32::MIN),
+        stdout: "\u{0}".repeat(most),
+        stderr: "\u{1}".repeat(most),
+      },
+      cut: true,
+    }),
+  };
+  let len = serde_json::to_vec(&event).expect("serializes").len();
+  assert!(len <= orchester_ipc::frame::MAX_FRAME_LEN as usize, "{len} bytes");
 }

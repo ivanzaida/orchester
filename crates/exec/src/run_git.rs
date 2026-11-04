@@ -2,6 +2,11 @@
 //! runs one request in the worktree at `dir`, the same way the desktop runs git in the person's checkout. Whether
 //! the request may run there at all, the runner decides before ([`RunGitRequest::allowed_before_end`]).
 //!
+//! The answer goes to the desktop in one message of a bounded size, so git's output is never kept past `most` bytes
+//! of each stream: a request with a smaller cap is cut as asked, and one that wants more of it than that (git's whole
+//! output, e.g. `status` of a worktree with a huge number of changes) is answered as git that could not be run
+//! ([`too_large`]), never with an output silently cut short.
+//!
 //! [`RunGitRequest::allowed_before_end`]: orchester_core::orchestrator::run_git::RunGitRequest::allowed_before_end
 
 use std::{fs, path::Path, time::Duration};
@@ -13,26 +18,37 @@ use orchester_core::{
 
 use crate::programs::Programs;
 
-/// Carries out `call` in the worktree at `dir` with `programs`. Blocks on git.
-pub fn serve(programs: &Programs, dir: &Path, call: &RunGitCall) -> RunGitAnswer {
+/// Why git whose output is larger than `most` bytes, the most of each output an answer holds, is answered without it.
+pub fn too_large(most: usize) -> CommandError {
+  CommandError::Failed(format!(
+    "git's output was larger than the runner can send (more than {most} bytes), so its result is not known"
+  ))
+}
+
+/// Carries out `call` in the worktree at `dir` with `programs`, keeping at most `most` bytes of each of git's outputs.
+/// Blocks on git.
+pub fn serve(programs: &Programs, dir: &Path, call: &RunGitCall, most: usize) -> RunGitAnswer {
   match call {
-    RunGitCall::Git(git) => run(programs, dir, git),
+    RunGitCall::Git(git) => run(programs, dir, git, most),
     RunGitCall::Paths { paths } => RunGitAnswer::Paths {
       facts: paths.iter().map(|path| path_facts(&dir.join(path))).collect(),
     },
   }
 }
 
-fn run(programs: &Programs, dir: &Path, git: &GitInvocation) -> RunGitAnswer {
+fn run(programs: &Programs, dir: &Path, git: &GitInvocation, most: usize) -> RunGitAnswer {
   let args: Vec<&str> = git.args.iter().map(String::as_str).collect();
-  let cap = git.cap.map(|cap| usize::try_from(cap).unwrap_or(usize::MAX));
+  let asked = git
+    .cap
+    .map_or(usize::MAX, |cap| usize::try_from(cap).unwrap_or(usize::MAX));
   let ran = chat_git(
     programs,
     dir,
     (&args, git.input.as_deref(), git.ssh.as_deref()),
-    (Duration::from_millis(git.timeout_ms), cap),
+    (Duration::from_millis(git.timeout_ms), Some(asked.min(most))),
   );
   match ran {
+    Ok((_, true)) if asked > most => RunGitAnswer::NotRun { error: too_large(most) },
     Ok((output, cut)) => RunGitAnswer::Ran { output, cut },
     Err(error) => RunGitAnswer::NotRun { error },
   }

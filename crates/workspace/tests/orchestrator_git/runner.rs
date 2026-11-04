@@ -55,6 +55,9 @@ impl CommandRunner for Noted {
   }
 }
 
+/// The most of each of git's outputs the runner answers with, as its `MOST_OUTPUT`.
+const MOST_OUTPUT: usize = orchester_ipc::frame::MAX_FRAME_LEN as usize / 16;
+
 /// The runner of the project at `root`, running git with `programs`; it notes every request it was asked.
 pub struct Runner {
   pub root: PathBuf,
@@ -88,7 +91,7 @@ impl Runner {
     if db.worktree_removal(run.id()).map_err(|error| failed(&error))?.is_some() || !dir.is_dir() {
       return Err(Rejection::WorktreeRemoved);
     }
-    Ok(serve(&self.programs, &dir, &request.call))
+    Ok(serve(&self.programs, &dir, &request.call, MOST_OUTPUT))
   }
 }
 

@@ -56,6 +56,9 @@ pub enum RunGitCall {
 
 /// `git <args>` with `input` on its standard input and `ssh` as its ssh command, stopped after `timeout_ms`; with
 /// `cap`, at most that many bytes of each output are kept, read as git writes.
+///
+/// The runner takes `ssh` as the desktop built it, from the desktop's own environment: right for the runner on the
+/// same computer; a runner on another computer will need to build its own.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GitInvocation {
   pub args: Vec<String>,
@@ -109,7 +112,7 @@ pub fn chat_git_command(dir: &Path, args: &[&str], input: Option<&str>, ssh: Opt
   }
 }
 
-/// Git's commands that only read, whatever follows them.
+/// Git's commands that only read, unless told to write their output to a file ([`writes_a_file`]).
 const READS: [&str; 11] = [
   "status",
   "rev-parse",
@@ -124,19 +127,28 @@ const READS: [&str; 11] = [
   "merge-base",
 ];
 
-/// Whether `git <args>` only reads the repository: one of [`READS`], `remote` that only lists, `config --get`,
-/// `symbolic-ref` that reads HEAD, or `hash-object` that writes no object.
+/// Whether `git <args>` only reads the repository: one of [`READS`] that writes no file, `remote` that only lists,
+/// `config --get`, `symbolic-ref` that reads HEAD, or `hash-object` that writes no object.
 pub fn only_reads(args: &[String]) -> bool {
   let Some((command, rest)) = args.split_first() else {
     return false;
   };
   let operands = || rest.iter().filter(|arg| !arg.starts_with('-')).count();
   match command.as_str() {
-    read if READS.contains(&read) => true,
+    read if READS.contains(&read) => !writes_a_file(rest),
     "remote" => rest.iter().all(|arg| arg == "-v"),
     "config" => rest.first().is_some_and(|arg| arg == "--get"),
     "symbolic-ref" => operands() <= 1,
     "hash-object" => !rest.iter().any(|arg| arg == "-w"),
     _ => false,
   }
+}
+
+/// Whether the options before `--` in `rest` write the command's output to a file (`diff`, `log` and `show`'s
+/// `--output=<file>`). Git refuses its shorter forms as ambiguous with `--output-indicator-*`, which write nothing.
+fn writes_a_file(rest: &[String]) -> bool {
+  rest
+    .iter()
+    .take_while(|arg| *arg != "--")
+    .any(|arg| arg.starts_with("--output") && !arg.starts_with("--output-indicator-"))
 }

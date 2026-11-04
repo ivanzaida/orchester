@@ -1,7 +1,8 @@
 //! The Orchestrator chat's git in a run's worktree, run here for the desktop ([`orchester_ipc::Command::RunGit`],
 //! `docs/architecture/remote-runners.md` rule 5): the desktop never runs git there itself. The run's worktree belongs
 //! to its agents until the run ended, so until then only reads run ([`RunGitRequest::allowed_before_end`]); the
-//! worktree is the run's own, found here, never a folder the desktop names.
+//! worktree is the run's own, found here, never a folder the desktop names. Every answer fits one frame
+//! ([`MOST_OUTPUT`]).
 
 use std::{future::Future, path::Path};
 
@@ -10,11 +11,16 @@ use orchester_core::{
   store::{RunStore, WorktreeStore},
 };
 use orchester_exec::{programs::Programs, run_git::serve};
-use orchester_ipc::{Rejection, Reply};
+use orchester_ipc::{Rejection, Reply, frame::MAX_FRAME_LEN};
 use orchester_store::ProjectDb;
 
 use super::super::{Scheduler, failed};
 use crate::execution_root::ExecutionRoot;
+
+/// The most of each of git's two outputs an answer carries: a frame holds at most [`MAX_FRAME_LEN`], and JSON writes
+/// a control character of the text with six bytes. Git that writes more than this where the desktop wants it all is
+/// answered as not run (`orchester_exec::run_git::too_large`), never with a frame too large to send.
+const MOST_OUTPUT: usize = MAX_FRAME_LEN as usize / 16;
 
 impl Scheduler {
   /// Carries out `request` in its run's worktree, off the async workers; answered with [`Reply::RunGit`] or why not.
@@ -35,7 +41,7 @@ impl Scheduler {
 /// only read, or has no worktree any more; the worktree is the run's own in the executor's execution root. Blocks on
 /// SQLite and git.
 fn answer(root: &Path, request: &RunGitRequest) -> Result<RunGitAnswer, Rejection> {
-  let db = ProjectDb::open(root).map_err(|error| failed("cannot open the project database", &error))?;
+  let db = ProjectDb::open_read_only(root).map_err(|error| failed("cannot open the project database", &error))?;
   let run = db
     .run(request.run)
     .map_err(|error| failed("cannot read the run", &error))?
@@ -50,5 +56,5 @@ fn answer(root: &Path, request: &RunGitRequest) -> Result<RunGitAnswer, Rejectio
   if removed.is_some() || !dir.is_dir() {
     return Err(Rejection::WorktreeRemoved);
   }
-  Ok(serve(&Programs::processes(), &dir, &request.call))
+  Ok(serve(&Programs::processes(), &dir, &request.call, MOST_OUTPUT))
 }
