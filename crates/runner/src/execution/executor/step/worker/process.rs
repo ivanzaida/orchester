@@ -496,7 +496,7 @@ impl Worker {
     };
     watch.invocation.ended_at = Some(Timestamp::now());
     watch.invocation.outcome = Some(outcome.clone());
-    watch.save_invocation()?;
+    watch.record_invocation()?;
     // Only while that close is still why the turn failed: a later CLI error is a failure of its own.
     let closed_after_result = watch
       .closed_after_result

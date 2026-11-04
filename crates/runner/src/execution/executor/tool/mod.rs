@@ -68,7 +68,8 @@ impl RunTask {
     }
     // The command checks the base the run will merge into (ORC-151).
     self.merge_moved_base(execution, workspace.as_ref().ok())?;
-    let mut invocation = self.start_invocation(InvocationStart::command(self.run.id(), execution, Timestamp::now()))?;
+    let start = InvocationStart::command(self.run.id(), execution, Timestamp::now());
+    let mut invocation = self.begin_invocation(&start)?;
     let workspace = match workspace {
       Ok(workspace) => workspace,
       Err(detail) => {

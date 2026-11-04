@@ -130,7 +130,7 @@ impl Worker {
     if watch.invocation.session != session || watch.invocation.usage != watch.tracker.usage() {
       watch.invocation.session = session;
       watch.invocation.usage = watch.tracker.usage();
-      watch.save_invocation()?;
+      watch.record_invocation()?;
     }
     if watch.edits_changed {
       let progress = InvocationRecord::edit_progress(watch.invocation.id, watch.edits.progress());
@@ -139,7 +139,7 @@ impl Worker {
     }
     // The events were redacted as they came in ([`Worker::observe`]).
     let events = std::mem::take(&mut watch.pending);
-    let sequence = watch.append_activity(events)?;
+    let sequence = watch.record_events(events)?;
     self.notifier.send(Event::AgentActivity {
       run: watch.invocation.run,
       sequence,

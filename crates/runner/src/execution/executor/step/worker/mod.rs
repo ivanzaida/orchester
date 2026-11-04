@@ -308,12 +308,12 @@ impl Watch {
   }
 
   /// Stores the invocation's session, usage, end, outcome and waits as they are now.
-  pub(super) fn save_invocation(&mut self) -> Result<(), StoreError> {
+  pub(super) fn record_invocation(&mut self) -> Result<(), StoreError> {
     self.sink.invocation(InvocationRecord::state(&self.invocation))
   }
 
   /// Appends `events` of the invocation to its run's transcript; the sequence the desktop is told of.
-  pub(super) fn append_activity(&mut self, events: Vec<(Timestamp, AgentEvent)>) -> Result<u64, StoreError> {
+  pub(super) fn record_events(&mut self, events: Vec<(Timestamp, AgentEvent)>) -> Result<u64, StoreError> {
     self.sink.activity(ActivityRecord::new(&self.invocation, events))
   }
 

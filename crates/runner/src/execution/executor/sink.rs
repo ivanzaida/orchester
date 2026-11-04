@@ -14,7 +14,7 @@ pub(in crate::execution) trait Sink: Send {
 
   /// Records `start` and gives its number among its execution's invocations
   /// (`orchester_store::ProjectDb::write_invocation_start`).
-  fn start_invocation(&mut self, start: InvocationStart) -> Result<u32, StoreError>;
+  fn invocation_start(&mut self, start: InvocationStart) -> Result<u32, StoreError>;
 
   /// Appends `record` to its run's transcript and gives the sequence the desktop is told of
   /// (`orchester_store::ProjectDb::write_activity`).

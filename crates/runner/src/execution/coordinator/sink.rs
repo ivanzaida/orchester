@@ -45,18 +45,21 @@ impl Sink for LocalSink {
     self.write(|db| db.write_run_log(&record))
   }
 
-  fn start_invocation(&mut self, start: InvocationStart) -> Result<u32, StoreError> {
-    let start = sent(start);
+  fn invocation_start(&mut self, start: InvocationStart) -> Result<u32, StoreError> {
+    #[cfg(feature = "test-agent")]
+    survives_sending(&start);
     self.write(|db| db.write_invocation_start(&start))
   }
 
   fn activity(&mut self, record: ActivityRecord) -> Result<u64, StoreError> {
-    let record = sent(record);
+    #[cfg(feature = "test-agent")]
+    survives_sending(&record);
     self.write(|db| db.write_activity(&record))
   }
 
   fn invocation(&mut self, record: InvocationRecord) -> Result<(), StoreError> {
-    let record = sent(record);
+    #[cfg(feature = "test-agent")]
+    survives_sending(&record);
     self.write(|db| db.write_invocation(&record))
   }
 
@@ -65,21 +68,14 @@ impl Sink for LocalSink {
   }
 }
 
-/// `record` as a coordinator in another process would receive it: in the runner's own tests, every invocation record
-/// crosses the sink as JSON (`docs/architecture/remote-runners.md`, rule 4).
+/// In the runner's own tests every invocation record crosses the sink as JSON and must arrive unchanged, as a
+/// coordinator in another process would receive it (`docs/architecture/remote-runners.md`, rule 4).
 #[cfg(feature = "test-agent")]
-fn sent<T>(record: T) -> T
+fn survives_sending<T>(record: &T)
 where
   T: serde::Serialize + serde::de::DeserializeOwned + PartialEq + std::fmt::Debug,
 {
-  let text = serde_json::to_string(&record).expect("a record the executor sends serializes");
+  let text = serde_json::to_string(record).expect("a record the executor sends serializes");
   let received: T = serde_json::from_str(&text).expect("a record the executor sends deserializes");
-  assert_eq!(received, record, "the record survives being sent");
-  received
-}
-
-/// `record`, which the local sink writes as it is.
-#[cfg(not(feature = "test-agent"))]
-const fn sent<T>(record: T) -> T {
-  record
+  assert_eq!(&received, record, "the record survives being sent");
 }

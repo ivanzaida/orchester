@@ -276,7 +276,7 @@ impl RunTask {
     self.keep_session_on_its_account(execution, &mut continuation)?;
     let judged = self.meet_moved_base(execution, workspace.as_ref(), &mut continuation, judged)?;
     let model = self.model(execution)?;
-    let mut invocation = self.start_invocation(InvocationStart::agent(
+    let mut invocation = self.begin_invocation(&InvocationStart::agent(
       self.run.id(),
       execution,
       &model,
@@ -284,7 +284,7 @@ impl RunTask {
     ))?;
     if continuation.session.is_some() {
       invocation.session.clone_from(&continuation.session);
-      self.save_invocation(&invocation)?;
+      self.record_invocation(&invocation)?;
     }
     let workspace = match workspace {
       Ok(workspace) => workspace,
@@ -555,7 +555,7 @@ impl RunTask {
     self.report(invocation, problem)?;
     invocation.ended_at = Some(Timestamp::now());
     invocation.outcome = Some(InvocationOutcome::NotStarted);
-    self.save_invocation(invocation)?;
+    self.record_invocation(invocation)?;
     self.board.release(execution);
     self.fail(execution, failure)
   }

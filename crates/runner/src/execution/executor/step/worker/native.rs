@@ -113,7 +113,7 @@ impl Worker {
     self.flush(&mut watch)?;
     watch.invocation.ended_at = Some(Timestamp::now());
     watch.invocation.outcome = Some(outcome.clone());
-    watch.save_invocation()?;
+    watch.record_invocation()?;
     Ok(Finished {
       outcome,
       stopped,

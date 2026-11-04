@@ -449,13 +449,13 @@ impl RunTask {
   }
 
   /// Records `start` and gives the invocation as it started.
-  pub(super) fn start_invocation(&mut self, start: InvocationStart) -> Result<Invocation, ExecutionError> {
-    let number = self.sink.start_invocation(start.clone())?;
+  pub(super) fn begin_invocation(&mut self, start: &InvocationStart) -> Result<Invocation, ExecutionError> {
+    let number = self.sink.invocation_start(start.clone())?;
     Ok(start.invocation(number))
   }
 
   /// Stores `invocation`'s session, usage, end, outcome and waits.
-  pub(super) fn save_invocation(&mut self, invocation: &Invocation) -> Result<(), ExecutionError> {
+  pub(super) fn record_invocation(&mut self, invocation: &Invocation) -> Result<(), ExecutionError> {
     Ok(self.sink.invocation(InvocationRecord::state(invocation))?)
   }
 }

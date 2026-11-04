@@ -230,7 +230,7 @@ impl Worker {
     watch.invocation.timing.wait_for_person(Timestamp::now());
     // A person's wait never holds one of the computer's QA slots.
     self.qa.release(watch.invocation.id);
-    watch.save_invocation()?;
+    watch.record_invocation()?;
     self.notifier.send(Event::ToolApprovalChanged {
       run: watch.invocation.run,
       task: self.task,
