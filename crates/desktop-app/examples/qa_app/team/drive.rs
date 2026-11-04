@@ -45,7 +45,11 @@ pub fn to(
     | State::SharedProjects
     | State::NoSharedProjects
     | State::Member
-    | State::Outage => Err(format!("{state:?} opens the app's own window, with nothing to press").into()),
+    | State::Admin
+    | State::ServerAdmin
+    | State::Outage
+    | State::OutageRunning
+    | State::OutageLater => Err(format!("{state:?} opens the app's own window, with nothing to press").into()),
   }
 }
 

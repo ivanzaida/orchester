@@ -108,17 +108,19 @@ impl TeamServer {
     format!("http://127.0.0.1:{}", self.port)
   }
 
-  /// The person's projects there: `(name, slug, remote hint)`.
+  /// The person's projects there: `(name, slug, remote hint)`, each with the role the person stands in.
   pub fn share(&self, projects: &[(&str, &str, Option<&str>)]) {
     let url = self.url();
-    self.state.lock().projects = projects
+    let mut state = self.state.lock();
+    let role = state.authority.v1_role();
+    state.projects = projects
       .iter()
       .enumerate()
       .map(|(index, (name, slug, hint))| {
         json!({
           "id": format!("0191c7c0-0000-7000-8000-00000000{index:04x}"), "slug": slug,
           "address": format!("{url}/{slug}"), "key": "KON", "name": name, "remote_hint": hint,
-          "role": "member", "next_number": 4,
+          "role": role, "next_number": 4,
         })
       })
       .collect();
@@ -225,7 +227,7 @@ fn route((path, query): (&str, &str), (headers, body): (&str, &str), state: &Mut
       state.code_joins.push(request.get("identity_token").is_some());
       let code = request["code"].as_str().unwrap_or_default();
       if code == CODE || (code == LATER_CODE && !state.later_expired) {
-        ("201 Created", joined("code"))
+        ("201 Created", joined("code", state.authority.server_admin()))
       } else {
         ("400 Bad Request", error("invalid_code"))
       }
@@ -236,13 +238,16 @@ fn route((path, query): (&str, &str), (headers, body): (&str, &str), state: &Mut
       if state.not_invited {
         ("403 Forbidden", error("not_invited"))
       } else {
-        ("201 Created", joined("cloud"))
+        ("201 Created", joined("cloud", state.authority.server_admin()))
       }
     }
     _ if (path.starts_with("GET ") || path.starts_with("POST /api/v1/projects/")) && !signed_in => {
       ("401 Unauthorized", error("unauthorized"))
     }
-    "GET /api/v1/auth/me" => ("200 OK", json!({"user": user(false)})),
+    "GET /api/v1/auth/me" => {
+      let admin = state.lock().authority.server_admin();
+      ("200 OK", json!({"user": user(false, admin)}))
+    }
     "GET /api/v1/projects" => match query.strip_prefix("slug=") {
       Some(slug) => first_download::by_slug(slug, state),
       None => ("200 OK", json!({"projects": state.lock().projects})),
@@ -251,20 +256,21 @@ fn route((path, query): (&str, &str), (headers, body): (&str, &str), state: &Mut
   }
 }
 
-/// The `201` of a join `via` a code or the cloud: this computer's device token and Bohdan's account.
-fn joined(via: &str) -> Value {
+/// The `201` of a join `via` a code or the cloud: this computer's device token and Bohdan's account, the server's
+/// admin's when `admin`.
+fn joined(via: &str, admin: bool) -> Value {
   json!({
     "token": TOKEN,
     "session": {"id": "0191c7c0-0000-7000-8000-00000000d0d0", "device": "Bohdan's laptop", "created_at": 1,
       "last_used_at": 1, "current": true, "via": via},
-    "user": user(via == "cloud"),
+    "user": user(via == "cloud", admin),
     "joined": null,
   })
 }
 
 /// Bohdan's account.
-fn user(cloud: bool) -> Value {
-  json!({"id": USER, "username": USERNAME, "display_name": "Bohdan Koval", "admin": false, "disabled": false,
+fn user(cloud: bool, admin: bool) -> Value {
+  json!({"id": USER, "username": USERNAME, "display_name": "Bohdan Koval", "admin": admin, "disabled": false,
     "cloud": cloud})
 }
 

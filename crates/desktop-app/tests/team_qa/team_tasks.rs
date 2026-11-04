@@ -8,7 +8,7 @@
 
 use orchester_api::test_support::team_server::{Standing, TeamServer};
 use orchester_app::{
-  routes::{ProjectPage, Route, TaskList, TaskListTab},
+  routes::{ProjectPage, ProjectSettingsTab, Route, TaskList, TaskListTab},
   test_support::{Data, Window, project_id},
 };
 
@@ -59,6 +59,38 @@ fn team_qa_tasks_an_admin_has_new_task_and_no_lock_line() {
   assert!(window.texts("tasks-new-task").is_some(), "an Admin creates tasks");
   assert!(window.texts(LOCK).is_none());
   assert_eq!(window.text("tasks-team-role"), "You're an Admin");
+}
+
+/// The `team-admin` and `team-server-admin` states: the Tasks line and Sharing's *Your role* name the role.
+#[test]
+fn team_qa_tasks_the_admin_states_name_the_role_on_tasks_and_in_sharing() {
+  for (state, line, role) in [
+    (State::Admin, "You're an Admin", "Admin"),
+    (State::ServerAdmin, "You're a Server admin", "Server admin"),
+  ] {
+    let (mut window, _server) = listed(state);
+    assert!(window.texts("tasks-new-task").is_some(), "{state:?} creates tasks");
+    assert!(window.texts(LOCK).is_none(), "{state:?}");
+    assert_eq!(window.text("tasks-team-role"), line);
+    window.navigation().go(Route::Project(
+      project_id(),
+      ProjectPage::Settings(ProjectSettingsTab::Sharing),
+    ));
+    window.until("Your role", |window| window.texts("sharing-role-value").is_some());
+    assert_eq!(window.text("sharing-role-value"), role, "{state:?}");
+  }
+}
+
+/// `team-outage-later`: the tasks show, then the server stops answering and they are no longer shown as current.
+#[test]
+fn team_qa_tasks_an_outage_after_the_tasks_were_read_takes_them_away() {
+  let (mut window, server) = listed(State::OutageLater);
+  window.until("the outage", |window| window.texts(UNAVAILABLE).is_some());
+  assert!(window.texts(ROW).is_none(), "nothing read before shows as current");
+  assert!(window.texts("tasks-views").is_none());
+  server.authority_unavailable(false);
+  window.press("tasks-team-try-again");
+  window.until("the server's tasks", |window| window.texts(ROW).is_some());
 }
 
 #[test]

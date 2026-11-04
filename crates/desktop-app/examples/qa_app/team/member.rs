@@ -1,8 +1,35 @@
-//! The member and outage states (ORC-716): Kontur's tasks as the team server reads them, with the person a member and
-//! the Admins named as `Row 1 · Member views` (`rD8mt`) names them; in the outage the server's reads are unavailable.
-//! Fixture data for QA, never shipped.
+//! The member, role and outage states (ORC-716): Kontur's tasks as the team server reads them, with the person a member
+//! (or an Admin, or the server's admin) and the Admins named as `Row 1 · Member views` (`rD8mt`) names them; in the
+//! outage the server's reads are unavailable, from the start or once the tasks were shown. Fixture data for QA, never
+//! shipped.
+
+use std::time::Duration;
 
 use orchester_api::test_support::team_server::{AuthorityTask, Standing, TeamServer};
+use orchester_core::sharing::MemberRole;
+
+use super::State;
+
+/// How long the tasks show in `team-outage-later` before the server stops answering.
+const SHOWN_FOR: Duration = Duration::from_secs(3);
+
+/// Serves Kontur to the person as `state` says; the role the person's link records, as the server gives it.
+pub fn serve_as(server: &TeamServer, state: State) -> Option<MemberRole> {
+  let standing = match state {
+    State::Admin => Standing::Admin,
+    State::ServerAdmin => Standing::ServerAdmin,
+    _ => Standing::Member,
+  };
+  serve(server, standing, matches!(state, State::Outage | State::OutageRunning));
+  if state == State::OutageLater {
+    server.authority_unavailable_once_read(SHOWN_FOR);
+  }
+  match standing {
+    Standing::Member => Some(MemberRole::Member),
+    Standing::Admin => Some(MemberRole::Owner),
+    Standing::ServerAdmin => None,
+  }
+}
 
 /// Kontur's tasks on the team server: number, title, workflow status, priority and minutes since created. 18 are
 /// active, 3 in the backlog and 3 done, as the frame counts them.
@@ -36,10 +63,10 @@ const TASKS: [(u32, &str, &str, &str, i64); 24] = [
 /// The tasks on the seed's Quick fix pipeline, as the frame draws them; the others are on Feature delivery.
 const QUICK_FIXES: [u32; 3] = [9, 17, 23];
 
-/// Serves Kontur's tasks to a member, with dana-k as its Admin and olha as the server's admin; `unavailable` makes
-/// every read of them `503 unavailable`.
-pub fn serve(server: &TeamServer, unavailable: bool) {
-  server.stand_as(Standing::Member);
+/// Serves Kontur's tasks to the person standing as `standing`, with dana-k as its Admin and olha as the server's admin;
+/// `unavailable` makes every read of them `503 unavailable`.
+fn serve(server: &TeamServer, standing: Standing, unavailable: bool) {
+  server.stand_as(standing);
   server.members_named(&["dana-k"], &["olha"]);
   server.authority_tasks(
     TASKS

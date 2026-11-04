@@ -38,12 +38,20 @@ pub enum State {
   Clones,
   /// Joined as a member, with Kontur linked and its tasks read from the server (ORC-716, 01 `QdL7N`).
   Member,
+  /// As [`Self::Member`], standing as an Admin of Kontur (ORC-716, 07 `BLTsP`).
+  Admin,
+  /// As [`Self::Member`], standing as the server's admin, no member of Kontur (ORC-716, 07 `BLTsP`).
+  ServerAdmin,
   /// As [`Self::Member`], with the server's reads unavailable (ORC-716, 06 `GR3RS`).
   Outage,
+  /// As [`Self::Outage`], with two of Kontur's tasks running on this computer (ORC-716, 06 `XTBXg`).
+  OutageRunning,
+  /// As [`Self::Member`], until the tasks were read and shown: then the server stops answering (ORC-716, 06 `GR3RS`).
+  OutageLater,
 }
 
 impl State {
-  pub const ALL: [Self; 15] = [
+  pub const ALL: [Self; 19] = [
     Self::Join,
     Self::WrongCode,
     Self::ExpiredCode,
@@ -58,7 +66,11 @@ impl State {
     Self::NoSharedProjects,
     Self::Clones,
     Self::Member,
+    Self::Admin,
+    Self::ServerAdmin,
     Self::Outage,
+    Self::OutageRunning,
+    Self::OutageLater,
   ];
 
   /// The seed's scenario of this state.
@@ -78,7 +90,11 @@ impl State {
       Self::NoSharedProjects => "team-shared-none",
       Self::Clones => "team-clone",
       Self::Member => "team-member",
+      Self::Admin => "team-admin",
+      Self::ServerAdmin => "team-server-admin",
       Self::Outage => "team-outage",
+      Self::OutageRunning => "team-outage-running",
+      Self::OutageLater => "team-outage-later",
     }
   }
 

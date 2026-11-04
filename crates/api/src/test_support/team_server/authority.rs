@@ -47,6 +47,15 @@ impl Standing {
       Self::ServerAdmin => "server_admin",
     }
   }
+
+  /// The person's role in a project as the v1 reads give it: none for a server admin, who is no member.
+  fn v1_role(self) -> Value {
+    match self {
+      Self::Member => json!("member"),
+      Self::Admin => json!("owner"),
+      Self::ServerAdmin => Value::Null,
+    }
+  }
 }
 
 /// A task as the stand-in's `/api/v2` reads give it: its number in the project, title, workflow status and priority as
@@ -89,12 +98,28 @@ impl Authority {
     let cursor = self.cursor() + 1;
     self.batches.push((cursor, scopes));
   }
+
+  /// The caller is the server's admin.
+  pub(super) fn server_admin(&self) -> bool {
+    self.standing == Standing::ServerAdmin
+  }
+
+  /// The caller's role in a project as the v1 reads give it.
+  pub(super) fn v1_role(&self) -> Value {
+    self.standing.v1_role()
+  }
 }
 
 impl TeamServer {
-  /// The caller stands as `standing` in every project from now on.
+  /// The caller stands as `standing` in every project from now on, in the v1 reads too: an Admin's role there is
+  /// `owner`, and a server admin is no member of the projects, with the server's `admin` on the account a join signs
+  /// in.
   pub fn stand_as(&self, standing: Standing) {
-    self.state.lock().authority.standing = standing;
+    let mut state = self.state.lock();
+    state.authority.standing = standing;
+    for project in &mut state.projects {
+      project["role"] = standing.v1_role();
+    }
   }
 
   /// The `/api/v2` reads give `tasks` in place of the project's v1 tasks; the change is committed as one batch.
@@ -120,9 +145,20 @@ impl TeamServer {
 
   /// Every `/api/v2` read and the subscription answer `503 unavailable` while `unavailable`; the open streams end.
   pub fn authority_unavailable(&self, unavailable: bool) {
-    let mut state = self.state.lock();
-    state.authority.unavailable = unavailable;
-    state.authority.streams += 1;
+    unavailable_now(&self.state, unavailable);
+  }
+
+  /// [`Self::authority_unavailable`] `after` the first task read was answered: an outage in a session that read the
+  /// tasks already.
+  pub fn authority_unavailable_once_read(&self, after: Duration) {
+    let state = self.state.clone();
+    thread::spawn(move || {
+      while state.lock().authority.reads == 0 {
+        thread::sleep(STREAM_POLL);
+      }
+      thread::sleep(after);
+      unavailable_now(&state, true);
+    });
   }
 
   /// How many task list, count and task reads were answered or are held.
@@ -138,13 +174,16 @@ impl TeamServer {
   }
 }
 
-/// `GET /api/v1/projects/{id}/members`: Bohdan as a member, the Admins and the server admins named.
+/// `GET /api/v1/projects/{id}/members`: Bohdan as he stands (a member, an Admin, or one of the server admins), the
+/// Admins and the server admins named.
 pub(super) fn members(state: &State) -> Value {
   let person = |index: usize, name: &str| json!({"id": format!("0191c7c0-0000-7000-8000-0000000a{index:04x}"), "display_name": name});
-  let mut members = vec![
-    json!({"user": {"id": USER, "display_name": "Bohdan Koval"}, "username": super::USERNAME,
-    "role": "member", "added_at": 1_000}),
-  ];
+  let bohdan = json!({"id": USER, "display_name": "Bohdan Koval"});
+  let standing = state.authority.standing;
+  let mut members: Vec<Value> = match standing.v1_role() {
+    Value::Null => Vec::new(),
+    role => vec![json!({"user": bohdan, "username": super::USERNAME, "role": role, "added_at": 1_000})],
+  };
   members.extend(
     state
       .authority
@@ -153,14 +192,24 @@ pub(super) fn members(state: &State) -> Value {
       .enumerate()
       .map(|(index, name)| json!({"user": person(index, name), "username": name, "role": "owner", "added_at": 1_000})),
   );
-  let admins: Vec<Value> = state
+  let mut admins: Vec<Value> = state
     .authority
     .server_admins
     .iter()
     .enumerate()
     .map(|(index, name)| json!({"user": person(index + 100, name), "username": name}))
     .collect();
+  if standing == Standing::ServerAdmin {
+    admins.push(json!({"user": bohdan, "username": super::USERNAME}));
+  }
   json!({"members": members, "admins": admins})
+}
+
+/// The `/api/v2` surface answers `503 unavailable` while `unavailable`; the open streams end.
+fn unavailable_now(state: &Mutex<State>, unavailable: bool) {
+  let mut state = state.lock();
+  state.authority.unavailable = unavailable;
+  state.authority.streams += 1;
 }
 
 /// The paths `orchester_api::client::Authority` calls for routes the team server names otherwise
