@@ -1,4 +1,4 @@
-//! Resolving by hand in a run's worktree through the runner (protocol 43): every request and answer, and a failure with
+//! Resolving by hand in a run's worktree through the runner (protocol 44): every request and answer, and a failure with
 //! git's words, cross the connection as they were sent.
 
 use orchester_core::{
@@ -97,8 +97,8 @@ fn replies() -> Vec<Reply> {
 }
 
 #[tokio::test]
-async fn resolve_requests_and_answers_round_trip_under_protocol_43() {
-  const { assert!(PROTOCOL_VERSION >= 43) };
+async fn resolve_requests_and_answers_round_trip_under_protocol_44() {
+  const { assert!(PROTOCOL_VERSION >= 44) };
   let (left, right) = tokio::io::duplex(64 * 1024);
   let (read, _) = tokio::io::split(left);
   let (_, write) = tokio::io::split(right);
