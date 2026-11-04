@@ -54,7 +54,7 @@ pub(super) fn line(
     let text = ctx.t_args("composer.failed", [("reason", &*message_text(ctx, &error))]);
     let retry = match presses {
       Sending::Ready { primary, .. } => Some(retry(ctx, primary.clone())),
-      Sending::Empty | Sending::Busy => None,
+      Sending::Empty | Sending::Busy | Sending::SkillHeld => None,
     };
     return Some(
       Row::new()

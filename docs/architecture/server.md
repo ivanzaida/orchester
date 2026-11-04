@@ -329,6 +329,164 @@ team-authority-plan.md §12 is absent in this checkout; this prerequisite does n
 No v1 workspace contracts or /api/v1 client change. OP-145 implements routes, persistence and enforcement in
 the platform repository; these public types alone implement none of those server behaviors.
 
+## Team authority S4 contract (ORC-649 / OP-147)
+
+Idempotent action receipts. The wire shapes are in [cloud-api.md](../cloud-api.md#team-authority-s4-command-envelopes).
+Core adds `id::OperationId` and `id::WorkId`, distinct UUID newtypes: the client makes an operation id once per
+intent and repeats it on every retry; the server makes work ids. Neither is ever a task id or a client-local run
+number. Core's `sharing::ExpectedRevisions` is the validated expected-revision set of a command: each
+`ExpectedRevision` names a `RevisionTarget` (project, task, module, tag, resource or work, each with its own id type,
+so a kind and id cannot mismatch) and a revision between 1 and `i64::MAX`; a record named twice is refused
+(`ExpectedRevisionError::Duplicate`, `OutOfRange`).
+
+The v2 surface adds `Subject`, `BundleRef`, `LocalEffect`, `EventCursor`, `CommandRequest<C>`, `CommandResult<V>`,
+`OperationRead<V>`, `AuthorityError` with `AuthorityErrorCode` (and its HTTP status), `ErrorDetails` and the closed
+`DecisionId` set D1–D9. No command has a public payload type yet, so the envelopes take the command (`C`) and its
+value (`V`) as type parameters; each later stage adds its commands and values. The server keys a receipt by
+project, authenticated account and operation id; the same id with another request is `operation_mismatch`. Read
+models (pages, task and module reads, capabilities) belong to the S10 contract. OP-147 implements routes, receipts
+and enforcement in the platform repository; these types alone implement none of them.
+
+## Team authority S10 contract (ORC-650 / OP-153)
+
+Bounded direct reads and server-side summaries. The wire shapes are in
+[cloud-api.md](../cloud-api.md#team-authority-s10-read-contract). Every listing is paged: a `PageRequest` asks for
+at most 200 items (50 when it does not say), and each `Page<T>` carries the listing's snapshot `EventCursor`, the same
+on every page, with an opaque `PageCursor` to the next page that is bound to the workspace, the filters, the sort and
+that snapshot. Entities are ordered by ascending (creation sequence, id), histories by ascending sequence.
+
+**Cursor retention.** A server keeps a listing's snapshot for at least **15 minutes after it served the last page
+from it** (`v2::PAGE_CURSOR_RETENTION_SECONDS` = 900); each page served renews it. A page cursor used after that, or
+whose snapshot the server dropped for any other reason, is answered `cursor_expired` (HTTP 410), never with a page of
+another snapshot; the client then reads the listing again from its first page. A cursor sent with other filters or
+another sort than it was made for is `invalid`.
+
+Module progress, burndown and the delivery forecast moved from `orchester-workspace` to core
+(`module::progress`, `module::measure`, `module::burndown`, `forecast`), which the workspace re-exports unchanged, so a
+server's module summaries (`ModuleSummary`, `ModuleBurndownRead`, `ForecastRead`) count by the desktop's rules:
+Canceled tasks are out of scope, Done counts as done, and each move of a task into or out of a module counts on its
+day. On the v2 surface this lets a server serve the summaries that row 69 keeps on each desktop for `/api/v1`.
+`Capabilities` list what the caller may do, each denial with its `DenialReason`; they are advisory and commands check
+again. `TaskRead` and `ModuleRead` add the assignee, the work (`WorkRead` with its `ExecutionState`), the effective
+claim (`ClaimRead`) and the capabilities to the existing shared task and module fields; a task's workflow status stays
+apart from its work's execution state.
+
+Flagged, not decided by this contract (open decisions among D1–D9, or later stages): human waits beyond the proposed
+`awaiting_human` state, so the *Needs you* and *Active* views and their counts; the full set of command kinds an
+`Action` names (any dotted lowercase kind is accepted until the commands are published); the time zone a server counts
+burndown and forecast days in (core counts the computer's local days); and what `Capabilities.revision` counts.
+OP-153 implements routes, snapshots and enforcement in the platform repository; these types alone implement none.
+
+## Team authority S8 contract (ORC-651 / OP-151)
+
+Consistent immutable execution bundles. The wire shapes are in
+[cloud-api.md](../cloud-api.md#team-authority-s8-execution-bundle). Core's `run::bundle` defines
+`CanonicalExecutionInputs` on the run's `RunSnapshot`: the pinned pipeline and its body, each step's executor, and
+the published bodies of the pinned profile, instruction, tool and skill versions, so a run executes and recovers
+without reading the mutable current definitions. Everything that binds a run to one computer stays out: the run's
+and the pipeline's sources (`RunSources`), a profile's connection, MCP servers and writable folders
+(`ExecutionProfile`), and a command tool that starts a program by an absolute path, which makes no bundle. Bodies
+name secrets by id; credentials stay in the local credential store.
+
+**Canonical bytes and hash.** `run::bundle::canonical` states the rule server and desktop share: the value's compact
+`serde_json` JSON, fields in declared order, maps in key order, no `HashMap`, and collections whose order means
+nothing sorted by their constructors and again when read; the hash is the SHA-256 of those bytes (`bundle_sha256`),
+a file's the SHA-256 of its bytes (`file_sha256`). The server hashes the bundle it built and never accepts one a
+client wrote.
+
+`v2::ExecutionBundle` adds what the server decides when it starts the work (project, subject, `claim_id`, S7's
+`module_id`, `branch` and `base_commit`, the task's revision and content at start, limits, delivery) and the local
+bindings (profile → CLI kind and model, no account or path) to the inputs; its refs, permissions, file and skill file
+manifests are derived from the inputs and checked when read. A bundle file read answers raw bytes by hash, at most
+`MAX_BUNDLE_FILE_BYTES` (8 MiB). The work is not in the bundle: a bundle binds to its claim, and S7's `work.start`
+attaches the work. OP-151 implements routes, storage and enforcement in the platform repository; these types alone
+implement none.
+
+## Team authority S7 contract (ORC-654 / OP-150)
+
+Mandatory modules, module branches and authorized delivery. The wire shapes are in
+[cloud-api.md](../cloud-api.md#team-authority-s7-delivery-contract). Core's `run::CommitId` is a full Git object id,
+40 (SHA-1) or 64 (SHA-256) lowercase hex digits, refusing anything else with `CommitIdError`; branches are
+`run::BranchName`. The execution bundle carries the work's `module_id`, its module `branch` and the `base_commit` it
+starts from, right after `claim_id` in its canonical bytes. That changes the hash of every bundle against ORC-651's
+shape; no bundle was stored in that shape, and the schema version stays 1.
+
+`v2::DeliveryRead` is one delivery of authorized work (`work_id`, `claim_id`, the authorizing operation or `null`,
+`source_commit`, `base_commit`, `bundle`, `state`, `revision`); `DeliveryState` is `authorized`, `requested`,
+`delivered` or `failed`, and the server reports `delivered` only after the runner reported the merge commit.
+`LocalEffect::Deliver {work_id}` authorizes the runner's local merge of the module branch into base. The commands
+`delivery.authorize` (Admin) and `delivery.request` are the server's, each answering
+`{kind:"delivery",delivery,effects}`.
+
+Decided for S7 (D3, D7; the orchestrator's, 2026-11-03, revisable by the person): the automatic module branch is
+`module/<name-slug>`, with `-<8 hex of the module id>` on collision, fixed at first assignment; the runner creates it
+from its checkout's base at the first task start. Task run branches merge into the module branch, and only delivery
+takes it to base. A manually assigned branch is unique in the workspace, may be an existing Git branch, and cannot
+change while work under the module runs. With the workspace's `automatic_merge` on, a delivery request from the
+current effective claim on current unfenced work counts as Admin-authorized; off, it needs an explicit
+`delivery.authorize`. Report and outside deliverables have no base merge (D4 open). OP-150 implements routes and
+enforcement in the platform repository; these types alone implement none.
+
+### Module delivery (ORC-656, S7c)
+
+Task works reach base only through their module. A task's run branch merges into its module branch by the runner's
+local merge, which the work's reports tell the server about (S9); no task delivery goes to base. Base delivery is the
+module's: a module has no pipeline, criteria or deliverable, so it has no work and no execution bundle (making one
+would need a default pipeline, open decision D6), and delivering a branch executes nothing.
+
+`v2::ModuleDeliveryRead` is one delivery of a module branch: `subject` (always `{kind:"module",id}`; a task subject is
+refused), the module's `claim_id`, the authorizing operation or `null`, the module `branch`, `source_commit` (the
+module branch's head being delivered), `base_commit`, `state` and `revision`, with no `work_id` and no `bundle`. It is
+a type of its own rather than a `kind`-tagged form of `DeliveryRead`: tagging would add a field to the task form's
+wire and change ORC-654's shape, while the two field sets are disjoint (`work_id`/`bundle` against
+`subject`/`branch`), so with unknown fields refused a body reads as exactly one of them. `DeliveryRead` is unchanged.
+`LocalEffect::DeliverModule {module_id, branch, source_commit, base_commit}` (`{kind:"deliver_module",...}`)
+authorizes the runner to merge that branch head into base at that commit on its computer; it names no local path,
+and the runner finds the module's checkout itself.
+
+A module delivery is authorized either by an Admin's `delivery.authorize` on the module, or, with the workspace's
+`automatic_merge` on, by the request itself coming from the module's current effective claim (D7, as decided above).
+OP-150 implements the commands and enforcement in the platform repository; these types alone implement none.
+
+## Team authority S9 contract (ORC-655 / OP-152)
+
+Work reports, execution outcomes and work events. The wire shapes are in
+[cloud-api.md](../cloud-api.md#team-authority-s9-work-reports). Core's `run::ExecutionOutcome` is what a run reports
+about the work it carries out (`progress`, `succeeded`, `failed` with a closed `ExecutionFailure`, `cancelled`); the
+failure kinds are the desktop's own (`RunFailure`'s kinds map with `From`, plus a reached limit and a failed runner)
+and carry no text, path or local id. Core's `run::order_report` is the pure per-run sequence rule: a report is
+accepted only after the last accepted sequence of its run, the same sequence with the same report is a duplicate, and
+anything else is `SequenceRegressed`. Core adds `id::WorkEventId`, the event id a report repeats on retry.
+
+`v2::WorkReport` is the `work.report` payload (`AuthorityRef`, `run_id`, `event_id`, `sequence`, `outcome`,
+`ArtifactRef`s with an `ArtifactKind` of `report`, `patch` or `log`); `v2::WorkEvent::Changed` is the `work.changed`
+delta with `{work:WorkRead}`. Refusals reuse `claim_lost` for a stale generation and add `session_mismatch`,
+`sequence_regressed` and `membership_revoked`; a duplicate is answered with the original result. An execution
+success is not permission to mark the task Done: no human-wait or task-completion outcome exists until D1, D4 and D8
+are decided. OP-152 implements routes, fencing and storage in the platform repository; these types alone implement
+none.
+
+## Team authority S11 contract (ORC-660 / OP-154)
+
+Scoped invalidation subscriptions without replica snapshots. The wire shapes are in
+[cloud-api.md](../cloud-api.md#team-authority-s11-subscriptions). The server provides
+`GET /api/v2/projects/{project}/subscription`, a server-sent event stream that a client resumes with an optional
+`Last-Event-ID`; each event is named by its `kind` and carries its cursor as the SSE `id:`. `v2::subscription` defines
+the `QueryScope`s a change can make stale (workspace, task list, task, task comments, module list, module, library,
+resource) and the `SubscriptionEvent`s: `ready` first with the stream's cursor and no snapshot, one `invalidated` per
+committed batch with its last cursor and its de-duplicated scopes, `reset` when the resume point is below the replay
+floor, and `revoked` before the stream closes. `QueryScope` is `Eq`, `Hash` and `Ord`, so a set of scopes is stable.
+
+**Client race rule.** Reads stay on the ordinary routes, each answering the `EventCursor` it was taken at. An
+`EventCursor` is the server's committed event sequence position: on the wire a string holding the canonical decimal of
+a positive integer (no sign, no leading zeros, refused otherwise), ordered by that integer and never by string order,
+so `"9"` < `"10"`. Cursors of the same project compare; cursors of different projects are not comparable. A cached
+read taken at cursor `R` is stale only when an `invalidated` event with a cursor greater than `R` names its scope;
+events at or below `R` are already in it. A client may therefore subscribe before or after reading without missing a
+change. A `reset` drops every cached read, which is read again at or after its cursor. `PageCursor` stays opaque: page
+cursors are not ordered. OP-154 implements the route, replay and enforcement in the platform repository; these types
+alone implement none.
+
 ## Claims
 
 A claim says who has taken a task into work. A task has at most one; the server keeps it and its history.
@@ -710,7 +868,7 @@ shared through the server. Nothing of a managed skill lives as files Orchester r
 project blob, a zstd file under `<repo>/.orchester/blobs/`. At each start of a step execution the runner writes the
 skills that reach the agent to `<repo>/.orchester/skills/<execution-id>/<slug>/` and keeps them afterwards
 (`crates/runner/src/execution/step/skills.rs`). Besides that, the repository's own skill folders are a live source:
-while Project settings › *Repository agent files* is on, Codex loads `.agents/skills` and `.codex/skills` from the
+while Project settings › Context › *Repository agent files* is on, Codex loads `.agents/skills` and `.codex/skills` from the
 worktree, the native agent lists them in its prompt (`core::agent_files::skills::native`), and `list_skills` /
 `read_skill` offer them (`core::orchester_tools::skills::repository`). Import from repository
 (`crates/workspace/src/skills/repository/`, its bounded no-follow scan of `.claude/skills` and `.agents/skills`)

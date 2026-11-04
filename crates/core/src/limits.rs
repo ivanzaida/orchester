@@ -1,4 +1,4 @@
-//! Project settings › Limits (02.M `c7e729`): budgets are project resources, so their defaults
+//! Project settings › Runs › Limits (02.M `c7e729`): budgets are project resources, so their defaults
 //! are project settings. A run's budget and time limit are optional and have no maximum: an empty
 //! one means no limit (user decision 2026-10-09). Changes apply to new runs; a run keeps the
 //! limits it started with. How many agents work at once is the exception: the project's runner

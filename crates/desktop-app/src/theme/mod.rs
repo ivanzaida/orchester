@@ -15,9 +15,11 @@ pub mod badge;
 mod browser;
 mod cards;
 mod chat_links;
+mod ci;
 mod code;
 mod composer;
 mod connections;
+mod context;
 mod conversation;
 mod date_picker;
 mod decisions;
@@ -43,22 +45,27 @@ mod orchester;
 mod orchestrator;
 mod overview;
 mod palette;
+mod permissions;
 pub mod pipelines;
 mod project_settings;
 mod projects;
 mod pull_requests;
 mod review;
+mod run_model;
 mod secrets;
 mod settings;
 mod shadow;
 mod shell;
+mod side_question;
 mod sign_in;
 pub mod skills;
+mod slash;
 mod sources;
 mod startup;
 mod task;
 mod task_form;
 mod tasks;
+mod todo_list;
 mod typography;
 pub mod usage;
 
@@ -74,14 +81,16 @@ pub use self::{
   browser::{BrowserBorder, BrowserColor, BrowserSpacing, BrowserText},
   cards::{CardsSpacing, CardsText, NOT_CHOSEN_OPACITY},
   chat_links::ChatLinkLooks,
+  ci::CiText,
   code::{CodeText, token_color},
-  composer::{ComposerColor, ComposerRadius},
+  composer::{ComposerColor, ComposerRadius, mention_chip},
   connections::{ConnectionsSpacing, ConnectionsText},
-  conversation::{ConversationRadius, ConversationShadow, ConversationSpacing, ConversationText},
+  context::ContextText,
+  conversation::{ConversationRadius, ConversationShadow, ConversationSpacing, ConversationText, TRACK_MARK_OPACITY},
   date_picker::{DatePickerText, UNAVAILABLE_DAY_OPACITY},
   decisions::{DecisionSpacing, DecisionText},
   delivery::{DeliverySpacing, DeliveryText, LOCKED_SWITCH_OPACITY},
-  dialog::{DIALOG_TILE, DIALOG_WIDTH, DialogSpacing, DialogText},
+  dialog::{DIALOG_TILE, DIALOG_WIDTH, DialogSpacing, DialogText, NARROW_DIALOG_WIDTH},
   failure::{FailureSpacing, FailureText},
   files::{FilesRadius, FilesText},
   fonts::mono_space,
@@ -90,7 +99,7 @@ pub use self::{
   import::{ImportSpacing, ImportText},
   lifecycle::{CLOSING_TABS_OPACITY, LifecycleSpacing, LifecycleText},
   local_integration::LocalText,
-  markdown::blank_line_between_blocks,
+  markdown::{blank_line_between_blocks, code_lines},
   memory::{MemorySpacing, MemoryText},
   merge_attempt::{AttemptSpacing, AttemptText},
   metrics::{ControlHeight, ExtraRadius, ExtraSpacing},
@@ -100,16 +109,20 @@ pub use self::{
   orchestrator::{OrchestratorShadow, OrchestratorSpacing, OrchestratorText, beside_chat_lane, chat_scrollbar},
   overview::{OverviewSpacing, OverviewText},
   palette::{ExtraColor, Mode},
+  permissions::{PermissionsSpacing, PermissionsText},
   pipelines::{PipelinesSpacing, PipelinesText},
   project_settings::{ProjectSettingsSpacing, ProjectSettingsText},
   projects::{ProjectsSpacing, ProjectsText},
   pull_requests::{PullRequestsSpacing, PullRequestsText},
   review::{REVIEW_TYPING_OPACITY, ReviewSpacing, ReviewText},
+  run_model::ModelText,
   secrets::{SECRETS_PENDING_OPACITY, SecretsSpacing, SecretsText},
   settings::{SettingsSpacing, SettingsText},
   shadow::ExtraShadow,
   shell::{ShellSpacing, ShellText},
+  side_question::{SideSpacing, SideText},
   sign_in::{SignInSpacing, SignInText},
+  slash::SlashText,
   sources::{SourcesSpacing, SourcesText},
   startup::{StartupSpacing, StartupText},
   task::{TaskSpacing, TaskText},
@@ -118,6 +131,7 @@ pub use self::{
     DROP_SCRIM_OPACITY, DROP_VEIL_OPACITY, HELD_CARD_OPACITY, SKELETON_DELAY, SKELETON_DIM, SKELETON_FADE,
     SKELETON_LAST_CARD, SKELETON_PULSE, SKELETON_STEPS, TasksSpacing, list_scrollbar, skeleton_line,
   },
+  todo_list::TodoText,
   typography::{ExtraTypography, IconSize},
   usage::{UsageRadius, UsageSpacing, UsageText},
 };
@@ -125,6 +139,8 @@ pub use self::{
 /// A control that cannot be used, faded as a whole: a button that is unavailable or disabled (`Create
 /// multiple` `Q9aeZ`, `Attach context` `p6caAv`).
 pub const DISABLED_OPACITY: f32 = 0.5;
+/// The messages sending an edit of an earlier message drops, while it is edited in place (09b `QJb0b`).
+pub const DROPPED_OPACITY: f32 = 0.4;
 /// The split between a menu button's label and its chevron (`Split` `gsHDM` in `Bm2gp`).
 pub const MENU_SPLIT_OPACITY: f32 = 0.25;
 /// A shortcut beside a tooltip's label (`n75PTn` in `b6q3OZ`).
@@ -182,6 +198,8 @@ pub fn install(app: &mut App, mode: Mode) {
   project_settings::install(theme);
   browser::install(theme);
   dialog::install(theme);
+  permissions::install(theme);
+  side_question::install(theme);
   theme.set_shadows(shadow::shadows());
   theme.set_form(form::form());
 }

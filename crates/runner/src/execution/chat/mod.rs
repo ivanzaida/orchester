@@ -8,6 +8,8 @@
 
 mod claude;
 mod codex;
+mod compact;
+mod skill;
 mod steer;
 mod turn;
 
@@ -32,7 +34,7 @@ pub(super) use self::{
 };
 use super::{Scheduler, failed, idle::check_daily_budget};
 
-/// The turns under way, by conversation.
+/// The turns and compactions under way, by conversation.
 #[derive(Default)]
 pub(super) struct Chats {
   running: Mutex<HashMap<ChatId, Running>>,
@@ -41,12 +43,21 @@ pub(super) struct Chats {
   limit_ms: std::sync::atomic::AtomicU64,
 }
 
+/// What a conversation's CLI does now.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Work {
+  /// The turn of this message.
+  Turn(ChatMessageId),
+  /// The compaction kept as this entry ([`compact`]).
+  Compaction(i64),
+}
+
 struct Running {
-  message: ChatMessageId,
-  /// Ends the turn's CLI; gone once it was used.
+  work: Work,
+  /// Ends the turn's CLI; gone once it was used, and none for a compaction.
   stop: Option<oneshot::Sender<()>>,
-  /// Hands the turn the messages sent now.
-  steers: mpsc::UnboundedSender<ChatMessageId>,
+  /// Hands the turn the messages sent now; none for a compaction, which takes none.
+  steers: Option<mpsc::UnboundedSender<ChatMessageId>>,
   task: JoinHandle<()>,
 }
 
@@ -67,16 +78,16 @@ impl Chats {
     TIME_LIMIT
   }
 
-  /// Whether no turn is under way.
+  /// Whether no turn or compaction is under way.
   pub(super) fn idle(&self) -> bool {
     self.held().is_empty()
   }
 
-  /// The messages whose turns are under way.
-  fn held(&self) -> Vec<ChatMessageId> {
+  /// The turns and compactions under way.
+  fn held(&self) -> Vec<Work> {
     let mut running = self.running.lock();
     running.retain(|_, turn| !turn.task.is_finished());
-    running.values().map(|turn| turn.message).collect()
+    running.values().map(|turn| turn.work).collect()
   }
 }
 
@@ -108,7 +119,7 @@ impl Scheduler {
     let mut running = self.inner.chats.running.lock();
     running.retain(|_, turn| !turn.task.is_finished());
     match running.get(&chat) {
-      Some(turn) if turn.message == message => return Ok(()),
+      Some(turn) if turn.work == Work::Turn(message) => return Ok(()),
       Some(_) => return Err(Rejection::ChatBusy),
       None => {}
     }
@@ -131,9 +142,9 @@ impl Scheduler {
     running.insert(
       chat,
       Running {
-        message,
+        work: Work::Turn(message),
         stop: Some(stop),
-        steers,
+        steers: Some(steers),
         task,
       },
     );
@@ -158,7 +169,11 @@ impl Scheduler {
     {
       let mut running = self.inner.chats.running.lock();
       running.retain(|_, turn| !turn.task.is_finished());
-      if running.get(&chat).is_some_and(|turn| turn.steers.send(message).is_ok()) {
+      if running
+        .get(&chat)
+        .and_then(|turn| turn.steers.as_ref())
+        .is_some_and(|steers| steers.send(message).is_ok())
+      {
         return Ok(());
       }
     }
@@ -199,13 +214,31 @@ impl Scheduler {
     self.interrupt_chat_turns(&mut db, Some(chat))
   }
 
-  /// Records the turns `db` still has thinking, of conversation `only` when it names one, as interrupted, but those
-  /// this runner answers: no runner answers them any more.
+  /// Records the turns `db` still has thinking and the compactions still running, of conversation `only` when it names
+  /// one, as interrupted, but those this runner carries out: no runner carries them out any more.
   pub(super) fn interrupt_chat_turns(&self, db: &mut ProjectDb, only: Option<ChatId>) -> Result<(), Rejection> {
     let held = self.inner.chats.held();
-    let chats = db
-      .interrupt_chat_turns(&held, only)
+    let messages: Vec<ChatMessageId> = held
+      .iter()
+      .filter_map(|work| match work {
+        Work::Turn(message) => Some(*message),
+        Work::Compaction(_) => None,
+      })
+      .collect();
+    let compactions: Vec<i64> = held
+      .iter()
+      .filter_map(|work| match work {
+        Work::Compaction(seq) => Some(*seq),
+        Work::Turn(_) => None,
+      })
+      .collect();
+    let mut chats = db
+      .interrupt_chat_turns(&messages, only)
       .map_err(|error| failed("cannot end the chat's interrupted turns", &error))?;
+    chats.extend(
+      db.interrupt_chat_compactions(&compactions, only)
+        .map_err(|error| failed("cannot end the chat's interrupted compactions", &error))?,
+    );
     for chat in chats {
       self.inner.notifier.send(Event::ChatChanged { chat });
     }

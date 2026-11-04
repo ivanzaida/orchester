@@ -75,13 +75,13 @@ pub(super) fn follow(ctx: &mut Ctx, (open, states): (&OpenProject, u64)) {
 async fn follow_once(services: &Services, i18n: I18n, open: &OpenProject) -> Result<(), Message> {
   start_queued(services, i18n.clone(), open).await?;
   let switches = {
-    let workspace = services.workspace.clone();
+    let (workspace, root) = (services.workspace.clone(), open.repo_root.clone());
     background::run(move || {
+      let allows = |consent| workspace.orchestrator_allows(&root, consent);
       Ok::<_, StoreError>(Switches {
-        answers: workspace.orchestrator_allows(OrchestratorConsent::AnswerAgents)?,
-        continues: workspace.orchestrator_allows(OrchestratorConsent::ContinueInterrupted)?,
-        merges: workspace.orchestrator_allows(OrchestratorConsent::MergeFinished)?
-          && workspace.orchestrator_allows(OrchestratorConsent::MergeRuns)?,
+        answers: allows(OrchestratorConsent::AnswerAgents)?,
+        continues: allows(OrchestratorConsent::ContinueInterrupted)?,
+        merges: allows(OrchestratorConsent::MergeFinished)? && allows(OrchestratorConsent::MergeRuns)?,
       })
     })
     .await?

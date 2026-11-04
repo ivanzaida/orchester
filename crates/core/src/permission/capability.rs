@@ -476,15 +476,6 @@ impl AgentPermissions {
     .fitted_to(provider, platform)
     .0
   }
-
-  /// What a new profile on `provider` starts with: [`Self::most_restrictive`] with *Approve automatically (don't ask
-  /// me)* on, where profiles offer it (not on a connection whose agents Orchester runs). Also what a profile never
-  /// published is compared with for widening, so keeping this default widens nothing.
-  pub fn for_new_profile(provider: AgentProvider, platform: Platform) -> Self {
-    let mut permissions = Self::most_restrictive(provider, platform);
-    permissions.set_auto_approve(!provider.is_native());
-    permissions
-  }
 }
 
 /// How a provider grants the extra writable folders and asks a person about the commands its

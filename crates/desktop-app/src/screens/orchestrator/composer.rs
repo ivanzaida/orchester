@@ -9,7 +9,8 @@
 //! chip reads *Not set up* and *Set up the Orchestrator* takes the keys' and the square's place. The files attached
 //! show as chips over the message (`ui::attachments::tray`); a paste of an image, files or long text attaches them,
 //! and so does a drop on the box; why the files last given were not attached shows under it. The draft and its files
-//! stay until its message is kept; a failed send keeps them.
+//! stay until its message is kept; a failed send keeps them. A skill chosen in the slash menu shows as a chip before
+//! the message (`07c` `f0b717`, `ui::slash`) and goes with it (ORC-634); its tooltip says how it reaches the agent.
 
 use std::sync::Arc;
 
@@ -39,7 +40,9 @@ use crate::{
     attachments::tray::{self, PutBack},
     composer::message_scrollbar,
     icon::{Icon, icon},
+    mention::MentionField,
     pressable::{inert, pressable},
+    slash::{SkillReach, with_skill_chip},
     tooltip::Tooltip,
   },
 };
@@ -71,6 +74,18 @@ pub(super) enum Sending {
   WhileAnswering(Arc<Ways>),
 }
 
+impl Sending {
+  /// What the keys that send do now: send the draft, after the answer while the Orchestrator answers; nothing while
+  /// nothing can be sent or a send is under way.
+  pub(super) fn press(&self) -> Option<Press> {
+    match self {
+      Self::Ready(press) | Self::Empty { press, .. } => Some(press.clone()),
+      Self::WhileAnswering(ways) => Some(ways.after_answer.clone()),
+      Self::Held(_) | Self::Busy => None,
+    }
+  }
+}
+
 /// The box as a screen shows it.
 pub(super) struct ComposerBox<'a> {
   pub(super) placeholder: Arc<str>,
@@ -80,15 +95,31 @@ pub(super) struct ComposerBox<'a> {
   pub(super) stop: Option<Press>,
   /// The runs-on chip.
   pub(super) runs_on: Element,
+  /// The context meter of the conversation shown, between the free space and the keys (`Kp4IZ`).
+  pub(super) context: Option<Element>,
   /// *Set up the Orchestrator*, while it is not set up.
   pub(super) set_up: Option<Element>,
   /// The box starts a new conversation (`Composer` `QcfyZ` in `03 New conversation`): 12 over it and 28 between the
   /// message and its bar.
   pub(super) starts: bool,
+  /// The @ menu and the slash menu over the box (`ui::mention`, `ui::slash`).
+  pub(super) menus: [Element; 2],
+  /// Plan-only mode's parts, once the Orchestrator is set up (`super::plan_only::composer`).
+  pub(super) plan: Option<PlanParts>,
+  /// How a skill its chip holds reaches the Orchestrator's agent, as the chip's tooltip says.
+  pub(super) reach: SkillReach,
+}
+
+/// What the composer shows of plan-only mode: the switch after the runs-on chip, the *Mode* line and the chip of the
+/// plan being changed on top of the box while they show, and what Alt+P in the message does.
+pub(super) struct PlanParts {
+  pub(super) switch: Element,
+  pub(super) over: Vec<Element>,
+  pub(super) flip: Press,
 }
 
 /// The box, and why the files last given were not attached under it.
-pub(super) fn composer(ctx: &mut Ctx, view: &View, composer: ComposerBox<'_>) -> Column {
+pub(super) fn composer(ctx: &mut Ctx, view: &View, mut composer: ComposerBox<'_>) -> Column {
   let not_set_up = composer.set_up.is_some();
   let (fill, stroke) = match (not_set_up, composer.focused.get()) {
     (true, _) => (PaletteColor::SurfacePanel, PaletteColor::Border),
@@ -100,7 +131,13 @@ pub(super) fn composer(ctx: &mut Ctx, view: &View, composer: ComposerBox<'_>) ->
   } else {
     (ExtraSpacing::Loose.role(), ExtraSpacing::Loose.role())
   };
-  let field = field(ctx, view, &composer, not_set_up);
+  let flip = composer.plan.as_ref().map(|plan| plan.flip.clone());
+  let (switch, over) = composer
+    .plan
+    .take()
+    .map_or((None, Vec::new()), |plan| (Some(plan.switch), plan.over));
+  let field = field(ctx, view, &composer, (not_set_up, flip));
+  let field = with_skill_chip(ctx, ("orchestrator-composer", composer.reach), &view.skill, field);
   let end: Vec<Element> = match composer.set_up {
     Some(set_up) => vec![set_up],
     None => vec![keys(ctx).into(), send(ctx, view, composer.sending)],
@@ -112,7 +149,9 @@ pub(super) fn composer(ctx: &mut Ctx, view: &View, composer: ComposerBox<'_>) ->
     .align_items(Alignment::Center)
     .child(attach(ctx, view))
     .child(composer.runs_on)
+    .with_children(switch)
     .child(Spacer::new().flex(1.0))
+    .with_children(composer.context)
     .with_children(end);
   let draft = view.draft.clone();
   let put_back: PutBack = Arc::new(move |text: String| draft.update(|words| tray::put_back_into(words, &text)));
@@ -120,6 +159,7 @@ pub(super) fn composer(ctx: &mut Ctx, view: &View, composer: ComposerBox<'_>) ->
   let boxed = Column::new()
     .id("orchestrator-composer")
     .describe("set_up", (!not_set_up).to_string())
+    .ref_element(view.mention_anchor.clone())
     .width(Dimension::Pct(100.0))
     .padding(
       Padding::new()
@@ -132,6 +172,7 @@ pub(super) fn composer(ctx: &mut Ctx, view: &View, composer: ComposerBox<'_>) ->
     .background(fill)
     .border(Border::inside(BorderSize::Sm, stroke))
     .rounded(RadiusSize::Lg)
+    .with_children(over)
     .with_children(attached)
     .child(field)
     .child(bar);
@@ -140,6 +181,7 @@ pub(super) fn composer(ctx: &mut Ctx, view: &View, composer: ComposerBox<'_>) ->
     .spacing(SpacingSize::Sm)
     .child(tray::drop_target(boxed, &view.attached))
     .with_children(tray::refusals(ctx, ATTACHMENTS, &view.attached))
+    .with_children(composer.menus)
 }
 
 /// *Ctrl Enter* (*⌘ Enter* on macOS), the keys that send.
@@ -156,8 +198,8 @@ fn keys(ctx: &Ctx) -> Text {
 
 /// The message field, in 13 on 17 lines: it grows with its lines up to [`MAX_LINES`]; a paste of an image, files or
 /// long text attaches them instead of pasting words. Until the Orchestrator is set up its placeholder, saying so, is in
-/// `text_secondary`.
-fn field(ctx: &Ctx, view: &View, composer: &ComposerBox<'_>, not_set_up: bool) -> Element {
+/// `text_secondary`. Alt+P in it flips the *Plan only* switch as `flip` does, once it is set up.
+fn field(ctx: &Ctx, view: &View, composer: &ComposerBox<'_>, (not_set_up, flip): (bool, Option<Press>)) -> Element {
   let theme = ctx.theme();
   let resolve = |color| {
     FormTextRole {
@@ -167,14 +209,10 @@ fn field(ctx: &Ctx, view: &View, composer: &ComposerBox<'_>, not_set_up: bool) -
     .resolve(&theme.typography(), &theme.palette())
   };
   let (gained, lost) = (composer.focused.clone(), composer.focused.clone());
-  let press = match composer.sending {
-    Sending::Ready(press) | Sending::Empty { press, .. } => Some(press.clone()),
-    Sending::WhileAnswering(ways) => Some(ways.after_answer.clone()),
-    Sending::Held(_) | Sending::Busy => None,
-  };
   let keys = Keys {
-    press,
+    press: composer.sending.press(),
     stop: composer.stop.clone(),
+    flip,
     menu: view.menu.clone(),
     focused: composer.focused.clone(),
   };
@@ -183,7 +221,9 @@ fn field(ctx: &Ctx, view: &View, composer: &ComposerBox<'_>, not_set_up: bool) -
   } else {
     PaletteColor::TextMuted
   };
-  TextInput::styled(view.draft.clone(), resolve(PaletteColor::TextPrimary))
+  let (slash, mention) = (view.slash.clone(), view.mention.clone());
+  let chips = view.draft.with(|text| MentionField::tokens(text));
+  let input = TextInput::styled(view.draft.clone(), resolve(PaletteColor::TextPrimary))
     .placeholder_style(resolve(placeholder))
     .caret_color(PaletteColor::TextPrimary)
     .id("orchestrator-input")
@@ -193,12 +233,20 @@ fn field(ctx: &Ctx, view: &View, composer: &ComposerBox<'_>, not_set_up: bool) -
     .scrollbar(message_scrollbar(ctx))
     .width(Dimension::Pct(100.0))
     .placeholder(&composer.placeholder)
-    .ref_element(view.input.clone())
+    .controller(view.mention.controller())
+    .tokens(chips)
     .on_focus(move || gained.set(true))
     .on_blur(move || lost.set(false))
-    .on_key_down(move |event: KeyboardEvent| keys.down(&event))
-    .on_paste(view.attached.on_paste())
-    .into()
+    .on_key_down(move |event: KeyboardEvent| {
+      // The slash and @ menus and the chips take their keys first: Enter chooses while a menu is open, Esc closes it.
+      if !slash.key(&event) && !mention.key(&event) {
+        keys.down(&event);
+      }
+    })
+    .on_paste(view.attached.on_paste());
+  view
+    .mention
+    .with_marker("orchestrator-field", input, OrchestratorText::Message.role())
 }
 
 /// What the field's keys do. lurq hands a key to every node that takes keys, from the window's root down, so each key
@@ -206,13 +254,16 @@ fn field(ctx: &Ctx, view: &View, composer: &ComposerBox<'_>, not_set_up: bool) -
 struct Keys {
   press: Option<Press>,
   stop: Option<Press>,
+  /// Flips the *Plan only* switch (Alt+P, ⌥P on macOS).
+  flip: Option<Press>,
   menu: Signal<bool>,
   focused: Signal<bool>,
 }
 
 impl Keys {
   /// Ctrl+Enter (Cmd+Enter) sends; Enter alone adds a line, as the field does by itself. Esc closes the send menu,
-  /// else stops the answer under way.
+  /// else stops the answer under way. Alt+P flips the *Plan only* switch: the design's Shift Tab moves the focus back
+  /// to the replies' links here, so the person chose Alt+P instead (ORC-646).
   fn down(&self, event: &KeyboardEvent) {
     if event.key == "Escape" {
       if event.default_prevented() || !self.focused.get_untracked() {
@@ -224,6 +275,19 @@ impl Keys {
       } else if let Some(stop) = &self.stop {
         stop();
         event.prevent_default();
+      }
+      return;
+    }
+    // ⌥P types a letter of its own on macOS: the key's place tells it.
+    let plan_keys = event.alt && !event.ctrl && !event.meta && !event.shift;
+    if plan_keys && (event.key.eq_ignore_ascii_case("p") || event.code == "KeyP") {
+      if let Some(flip) = self
+        .flip
+        .as_ref()
+        .filter(|_| self.focused.get_untracked() && !event.composing)
+      {
+        event.prevent_default();
+        flip();
       }
       return;
     }

@@ -2,7 +2,8 @@
 //! domain tools as the HTTP server `orchester` (`-c mcp_servers.orchester.url="…"`, its bearer token under the
 //! variable `bearer_token_env_var` names). It appends how it was started to `.orchester/fake-chat.log` in its working
 //! directory (`codex-argv: `, `system-prompt: ` with the first line of the thread's `baseInstructions`, `thread: `
-//! with `new` or the thread it resumed, `mcp-url: `, `mcp-token: present`, and `prompt: ` with the turn's first line),
+//! with `new` or the thread it resumed, `mcp-url: `, `mcp-token: present`, `prompt: ` with the turn's first line, and
+//! `prompt-words: ` with its whole prompt on one line),
 //! then answers by the message, the prompt's last line:
 //!
 //! - "Call <tool> <JSON arguments>": calls that tool with the token and replies `Tool said: <result text>`;
@@ -168,6 +169,35 @@ pub fn answer(session: &mut Session, (args, base): (&[String], Option<&str>), pr
   Step::Go
 }
 
+/// `thread/compact/start` (request `id`), as Codex compacts a thread: in a turn of its own, with a `contextCompaction`
+/// item, then the thread's size after it (41,000 of a 200,000 window). A thread whose id holds `-empty-` has nothing
+/// to compact, and Codex refuses it.
+pub fn compacted(session: &mut Session, id: &Value) -> Step {
+  append_log(session, &[format!("compact: {}", session.thread)]);
+  if session.thread.contains("-empty-") {
+    super::emit(&json!({"id": id, "error": {"code": -32600, "message": "no history to compact"}}));
+    return Step::Go;
+  }
+  super::emit(&json!({"id": id, "result": {}}));
+  session.turn = "turn-compact".to_owned();
+  notify(session, "turn/started", json!({"turn": {"id": session.turn}}));
+  let item = json!({"item": {"id": "item_compact", "type": "contextCompaction"}});
+  notify(session, "item/started", item.clone());
+  notify(session, "item/completed", item);
+  let usage = json!({"inputTokens": 0, "cachedInputTokens": 0, "outputTokens": 0, "totalTokens": 41_000});
+  notify(
+    session,
+    "thread/tokenUsage/updated",
+    json!({"tokenUsage": {"last": usage, "total": usage, "modelContextWindow": 200_000}}),
+  );
+  notify(
+    session,
+    "turn/completed",
+    json!({"turn": {"id": session.turn, "status": "completed"}}),
+  );
+  Step::Go
+}
+
 /// A message sent now (`turn/steer` with `id`) to a turn that waits for one: taken and answered, or refused while the
 /// turn answers its prompt; with no turn waiting, "no active turn to steer", as Codex answers it.
 pub fn steered(session: &mut Session, id: &Value, params: &Value) -> Step {
@@ -214,6 +244,10 @@ fn log(session: &Session, (args, base): (&[String], Option<&str>), server: Optio
       lines.push("mcp-token: present".to_owned());
     }
   }
+  lines.push(format!(
+    "prompt-words: {}",
+    prompt.split_whitespace().collect::<Vec<_>>().join(" ")
+  ));
   append_log(session, &lines);
 }
 

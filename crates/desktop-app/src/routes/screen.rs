@@ -165,7 +165,7 @@ impl Screen {
       Self::Memory => "shell.screens.memory",
       Self::Skills => "shell.screens.skills",
       Self::Tools => "shell.screens.tools",
-      Self::Secrets => "shell.screens.secrets",
+      Self::Secrets => "shell.screens.environment",
       Self::Connections => "shell.screens.connections",
       Self::NewConnection => "shell.screens.newConnection",
       Self::EditConnection => "shell.screens.editConnection",

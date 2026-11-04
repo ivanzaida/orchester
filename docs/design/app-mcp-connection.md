@@ -53,10 +53,11 @@ directly as `mcp__orchester__*`. There is no pid, no discovery file and no Pytho
   each sent with `initialize`. Settings lists them as *the client says it is …*, with *connected now* or *last
   request N min ago*. This list is kept in memory since the app started; nothing is stored and nothing is inferred
   beyond what the client sent.
-- **What automation may do.** The existing person-only rows keep their place and behaviour under their own section
-  title, *What automation may do*: window control, *Let automation answer approvals*, *Let automation change agent
-  permissions*. The MCP section only states the relation in its description: *What connected agents may do is set
-  below, in What automation may do.* None of the new rows can be changed through the MCP server.
+- **What automation may do.** The existing person-only rows keep their place and behaviour under their own groups of
+  Settings › Automation: *The window* (window control) and *Approvals and permissions* (*Let automation answer
+  approvals*, *Let automation change agent permissions*). The Orchestrator's switches are each project's, in Project
+  settings › Orchestrator (`docs/design/settings.md`). The MCP section only states the relation in its description:
+  *What connected agents may do is set below.* None of the new rows can be changed through the MCP server.
 - **QA copies and tests** keep today's mechanism: a free port, a token per start (not stored in the secret store),
   and a discovery file. The file goes into a folder that an environment variable names
   (`ORCHESTER_APP_MCP_DISCOVERY=<folder>`); `tools/qa-app.ps1` sets it to `.tmp/qa/<task>/mcp/` in the worktree.
@@ -111,7 +112,7 @@ files (`{{name}}`).
 | Key | English |
 |---|---|
 | `settings.automation.server.section` | Orchester MCP server |
-| `settings.automation.server.description` | Agents you connect here can read and change your projects through Orchester, with the rules of its screens. What they may do beyond that is set below, in What automation may do. Only programs on this computer can connect. |
+| `settings.automation.server.description` | Agents you connect here can read and change your projects through Orchester, with the rules of its screens. What they may do beyond that is set below. Only programs on this computer can connect. |
 | `settings.automation.server.enabled.title` | Let agents connect to Orchester |
 | `settings.automation.server.enabled.off` | Off: nothing listens. Agents you registered can't reach Orchester until you turn this on. |
 | `settings.automation.server.address.title` | Address |

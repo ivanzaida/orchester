@@ -24,9 +24,8 @@ impl Served {
       .expect("the setting is saved");
   }
 
-  /// The permissions a new profile gets when none are given: the most restrictive its CLI enforces, approving
-  /// automatically.
-  fn new_profile_permissions(&mut self) -> Value {
+  /// The permissions a new profile gets when none are given: the most restrictive its CLI enforces.
+  fn most_restrictive(&mut self) -> Value {
     let probe = self.ok("save_profile_draft", &profile("Probe", None));
     probe["profile"]["permissions"].clone()
   }
@@ -55,7 +54,7 @@ fn assert_person_only(error: &Value) {
 #[test]
 fn domain_widening_a_profile_needs_a_person_and_narrowing_never_does() {
   let mut served = served();
-  let base = served.new_profile_permissions();
+  let base = served.most_restrictive();
   let wide = permissions(&base, "write", "any_in_worktree");
   assert_person_only(&served.refused("save_profile_draft", &profile("Builder 2", Some(wide.clone()))));
   served.let_automation_widen(true);
@@ -72,7 +71,7 @@ fn domain_widening_a_profile_needs_a_person_and_narrowing_never_does() {
   same["profile"] = json!("Builder 2");
   served.ok("save_profile_draft", &same);
   let mut automatic = permissions(&base, "write", "any_in_worktree");
-  automatic["approve_automatically"] = json!(true);
+  automatic["approval_mode"] = json!("autopilot");
   let mut auto = profile("Builder 2", Some(automatic));
   auto["profile"] = json!("Builder 2");
   assert_person_only(&served.refused("save_profile_draft", &auto));
@@ -80,7 +79,7 @@ fn domain_widening_a_profile_needs_a_person_and_narrowing_never_does() {
   let answers = served.refused("save_profile_draft", &auto);
   assert_eq!(
     answers["code"], "automation_not_allowed",
-    "approving automatically needs both switches"
+    "Autopilot needs both switches"
   );
   served
     .services()
@@ -103,36 +102,13 @@ fn domain_widening_a_profile_needs_a_person_and_narrowing_never_does() {
   served.ok("save_profile_draft", &auto);
 }
 
-/// A new profile made without `permissions` approves automatically: saved and published with neither of a person's
-/// switches on. Turned off, it stays off once published, and turning it on again is a person's decision.
-#[test]
-fn domain_new_profile_approves_automatically_by_default() {
-  let mut served = served();
-  let new = served.new_profile_permissions();
-  assert_eq!(new["approve_automatically"], true, "{new}");
-  let probe = json!({ "project": "Kontur", "profile": "Probe" });
-  served.ok("publish_profile", &probe);
-  let mut off = new.clone();
-  off["approve_automatically"] = json!(false);
-  let mut turned_off = profile("Probe", Some(off));
-  turned_off["profile"] = json!("Probe");
-  served.ok("save_profile_draft", &turned_off);
-  served.ok("publish_profile", &probe);
-  let read = served.ok("get_profile", &probe);
-  assert_eq!(read["profile"]["permissions"]["approve_automatically"], false, "{read}");
-  let mut turned_on = profile("Probe", Some(new));
-  turned_on["profile"] = json!("Probe");
-  let refused = served.refused("save_profile_draft", &turned_on);
-  assert_eq!(refused["code"], "person_only", "{refused}");
-}
-
 /// Manual → Autopilot widens what agents do unasked and answers requests in a person's place: over MCP it needs both
 /// of a person's switches, as the window's question does. Switching back to Manual is always taken. `get_profile`
 /// reads the mode.
 #[test]
 fn approval_mode_mcp_profile_autopilot_is_person_only() {
   let mut served = served();
-  let manual = served.new_profile_permissions();
+  let manual = served.most_restrictive();
   assert_eq!(manual["approval_mode"], "manual", "a new profile is Manual");
   served.ok("save_profile_draft", &profile("Pilot", Some(manual.clone())));
   let read = json!({ "project": "Kontur", "profile": "Pilot" });
@@ -353,7 +329,7 @@ fn domain_only_harmless_variables_change_without_a_person() {
 #[test]
 fn domain_pipeline_steps_only_narrow_what_the_inspector_offers() {
   let mut served = served();
-  let base = served.new_profile_permissions();
+  let base = served.most_restrictive();
   served.let_automation_widen(true);
   served.ok(
     "save_profile_draft",

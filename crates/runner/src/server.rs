@@ -5,6 +5,7 @@
 mod browser;
 mod chat;
 mod review;
+mod side;
 
 use std::{
   future::Future,
@@ -355,25 +356,32 @@ async fn answer(
     Command::Shutdown { mode } => return Answer::Shutdown(mode),
     Command::StopIfIdle => return Answer::StopIfIdle(id),
     Command::CheckConnection { provider, ref api } => return answer_check(&later, handle, provider, api.clone()),
-    ref chat @ (Command::AnswerInChat { .. } | Command::StopChat { .. } | Command::SteerChat { .. }) => {
-      chat::reply(scheduler, chat).await
-    }
+    ref chat @ (Command::AnswerInChat { .. }
+    | Command::StopChat { .. }
+    | Command::CompactChat { .. }
+    | Command::SteerChat { .. }) => chat::reply(scheduler, chat).await,
     Command::StopTurn { run } => return later.answer(run, async move { handle.stop_turn(run).await }),
     ref review @ (Command::AnswerReviewQuestion { .. } | Command::StopReviewAnswer { .. }) => {
       return later.review(handle, review);
     }
     Command::Browser(ref command) => return later.browser(handle, command.clone()),
-    Command::EstimateTask { task } => {
-      return later.reply(async move {
-        match handle.estimate_task(task).await {
-          Ok(outcome) => Reply::TaskEstimated { task, outcome },
-          Err(rejection) => Reply::Rejected(rejection),
-        }
-      });
+    Command::EstimateTask { task } => return estimated(&later, handle, task),
+    ref side @ (Command::AnswerSideQuestion { .. } | Command::StopSideQuestion { .. }) => {
+      return side::answer_side(&later, handle, side);
     }
     Command::SetErrorReports { ref reports } => return Answer::ErrorReports(id, reports.clone()),
   };
   Answer::Reply(Event::Reply { id, reply })
+}
+
+/// Estimates the story points of `task` without holding up the runner's other requests.
+fn estimated(later: &Later<'_>, handle: Scheduler, task: TaskId) -> Answer {
+  later.reply(async move {
+    match handle.estimate_task(task).await {
+      Ok(outcome) => Reply::TaskEstimated { task, outcome },
+      Err(rejection) => Reply::Rejected(rejection),
+    }
+  })
 }
 
 /// Routes the decision commands without holding up the runner's other requests.

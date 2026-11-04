@@ -8,6 +8,13 @@
 //! module is what a person plans and follows, whatever runs its tasks and however often. Neither is it a tag: a task
 //! carries many tags and a tag has no dates, state or history of its own. Dependencies order tasks; a module only
 //! groups them, so a blocked task stays in its module.
+//!
+//! How far a module is ([`progress`]), its burndown by day ([`burndown`]) and the unit its work is counted in
+//! ([`measure`]) are pure rules here, so the desktop and a team server's module summaries count them alike.
+
+pub mod burndown;
+pub mod measure;
+pub mod progress;
 
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};

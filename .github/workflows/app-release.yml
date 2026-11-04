@@ -3,7 +3,9 @@
 # tools/installer/orchester.iss). For macOS (Apple silicon) it builds Orchester.app with tools/package-macos.sh, signed
 # with the Developer ID, notarized and stapled, and packs it as a disk image and a zip. It signs the four files with the
 # release key and uploads them to Orchester Cloud as one release, which the cloud publishes on Beta (the staff promote it
-# to Stable), and then tags the commit `app-v<version>`. The files no longer go to a GitHub Release. See
+# to Stable), and then tags the commit `app-v<version>`. Once the cloud has accepted the release, it also publishes the
+# GitHub Release `app-v<version>` (`Orchester <version>`, a pre-release for a version with a suffix) with the same four
+# files, both SHA256SUMS files and the cloud release's notes; the app updates from Orchester Cloud only. See
 # docs/stable-build.md, "Releases from CI".
 #
 # The version is crates/desktop-app/Cargo.toml's own `version`, apart from the workspace's `[workspace.package]`
@@ -24,7 +26,8 @@
 # Ed25519 release key in the secret ORCHESTER_RELEASE_SIGNING_KEY and uploads it with the release token in
 # ORCHESTER_CLOUD_RELEASE_TOKEN (`releases:write`). Both reach only that step's environment (and the Windows job's
 # check that they are set), never a command line, the log or an artifact. The job fails unless the cloud accepted all
-# the files; only then is the tag made.
+# the files; only then are the tag and the GitHub Release made, by the tag job with `gh release` and the workflow's own
+# token (GH_TOKEN: github.token), from the artifacts the windows, macos and cloud jobs uploaded: no build of its own.
 #
 # The Windows programs and the installer are not code-signed, so Windows SmartScreen warns about them. Code signing would
 # be one step before packing, with a certificate kept in the repository's secrets.
@@ -582,7 +585,8 @@ jobs:
         with:
           name: orchester-release-tool
           path: ${{ runner.temp }}/release-tool
-      # The release's notes, which the app shows with its update offer; the staff can edit them in the cloud's admin.
+      # The release's notes, which the app shows with its update offer; the staff can edit them in the cloud's admin. The
+      # GitHub Release takes this same file as its body (the notes artifact below).
       - name: Write the release notes
         shell: pwsh
         env:
@@ -615,8 +619,8 @@ jobs:
       # orchester-release signs the four files with the release key and uploads them: it creates the draft (or takes up
       # the one a failed run left), declares each file with its platform, architecture, size, SHA-256, key id and
       # signature, sends the parts the cloud does not have yet, and finalizes once, after the last file, which publishes
-      # the release. It fails unless the cloud accepted all four, and then the tag is not made. The key and the token are
-      # in this step's environment only, never on a command line; the tool never prints them.
+      # the release. It fails unless the cloud accepted all four, and then neither the tag nor the GitHub Release is made.
+      # The key and the token are in this step's environment only, never on a command line; the tool never prints them.
       - name: Sign and upload to Orchester Cloud
         shell: pwsh
         env:
@@ -636,18 +640,29 @@ jobs:
             --platform macos --arch aarch64 `
             (Join-Path $macos "Orchester-$env:VERSION-macos-aarch64.dmg") (Join-Path $macos "Orchester-$env:VERSION-macos-aarch64.zip")
           if ($LASTEXITCODE -ne 0) {
-            Write-Output "::error title=Release not uploaded::Orchester Cloud did not accept Orchester $env:VERSION (the error above); no tag is made. See docs/stable-build.md, `"When the cloud rejects an upload`"."
+            Write-Output "::error title=Release not uploaded::Orchester Cloud did not accept Orchester $env:VERSION (the error above); no tag and no GitHub Release are made. See docs/stable-build.md, `"When the cloud rejects an upload`"."
             exit $LASTEXITCODE
           }
+      # The notes the cloud took, as they are, for the GitHub Release the tag job makes; only once the cloud accepted the
+      # release. `overwrite`, so a run again of this job replaces them instead of failing on the name.
+      - uses: actions/upload-artifact@v7
+        with:
+          name: orchester-${{ needs.prepare.outputs.version }}-notes
+          path: ${{ runner.temp }}/notes.md
+          if-no-files-found: error
+          retention-days: 7
+          overwrite: true
 
-  # The tag `app-v<version>` on the released commit, once the cloud has published the release. No GitHub Release is
-  # made: the files and the notes live in Orchester Cloud.
+  # The tag `app-v<version>` on the released commit, once the cloud has published the release, and the GitHub Release
+  # `app-v<version>` for that tag, titled `Orchester <version>`, with the four files, both SHA256SUMS files and the cloud
+  # release's notes. The app still updates from Orchester Cloud only; the GitHub Release is a copy for people who look
+  # on GitHub. It reuses the artifacts the windows, macos and cloud jobs uploaded: no build of its own.
   tag:
-    name: Tag
+    name: Tag and GitHub Release
     needs: [prepare, cloud]
     if: ${{ needs.prepare.outputs.release == 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     permissions:
       contents: write
     steps:
@@ -670,4 +685,62 @@ jobs:
             exit 0
           fi
           gh api "repos/$REPO/git/refs" -f ref="refs/tags/$tag" -f sha="$COMMIT" --silent
-          echo "::notice title=Released::Orchester $VERSION is on Orchester Cloud's Beta and tagged $tag."
+          echo "::notice title=Tagged::Orchester $VERSION is on Orchester Cloud's Beta and tagged $tag."
+      - uses: actions/download-artifact@v8
+        with:
+          name: orchester-${{ needs.prepare.outputs.version }}-windows
+          path: ${{ runner.temp }}/app-release-windows
+      - uses: actions/download-artifact@v8
+        with:
+          name: orchester-${{ needs.prepare.outputs.version }}-macos
+          path: ${{ runner.temp }}/app-release-macos
+      - uses: actions/download-artifact@v8
+        with:
+          name: orchester-${{ needs.prepare.outputs.version }}-notes
+          path: ${{ runner.temp }}/app-release-notes
+      # Both jobs write a SHA256SUMS.txt, and a release's files need names of their own, so they go up as
+      # SHA256SUMS-windows.txt and SHA256SUMS-macos.txt; the names inside are the release's files, so
+      # `sha256sum -c` still checks them. A version with a suffix (`0.5.0-rc.1`) is a pre-release. A run again finds the
+      # release it made (or the one a failed upload left): it does not make a second one, and uploads the files again
+      # with `--clobber`, which replaces a file of the same name instead of adding one. The token is in the environment
+      # only, never on a command line.
+      - name: Publish the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          tag="app-v$VERSION"
+          windows="$RUNNER_TEMP/app-release-windows"
+          macos="$RUNNER_TEMP/app-release-macos"
+          sums="$RUNNER_TEMP/app-release-sums"
+          mkdir -p "$sums"
+          cp "$windows/SHA256SUMS.txt" "$sums/SHA256SUMS-windows.txt"
+          cp "$macos/SHA256SUMS.txt" "$sums/SHA256SUMS-macos.txt"
+          files=(
+            "$windows/Orchester-$VERSION-setup.exe"
+            "$windows/Orchester-$VERSION-windows-x64.zip"
+            "$macos/Orchester-$VERSION-macos-aarch64.dmg"
+            "$macos/Orchester-$VERSION-macos-aarch64.zip"
+            "$sums/SHA256SUMS-windows.txt"
+            "$sums/SHA256SUMS-macos.txt"
+          )
+          # As in the prepare job: a 404 is "no release yet"; any other failure stops the run.
+          if output="$(gh api "repos/$REPO/releases/tags/$tag" --silent 2>&1)"; then
+            echo "The GitHub Release $tag exists already; its files are uploaded again in place."
+            gh release upload "$tag" --repo "$REPO" --clobber "${files[@]}"
+            echo "::notice title=Released::Orchester $VERSION is on Orchester Cloud's Beta, tagged $tag and on GitHub as the release $tag."
+            exit 0
+          fi
+          if [[ "$output" != *"HTTP 404"* ]]; then
+            echo "::error::Could not ask GitHub for the release $tag: $output"
+            exit 1
+          fi
+          prerelease=()
+          if [[ "$VERSION" == *-* ]]; then
+            prerelease=(--prerelease)
+          fi
+          gh release create "$tag" --repo "$REPO" --verify-tag --title "Orchester $VERSION" \
+            --notes-file "$RUNNER_TEMP/app-release-notes/notes.md" "${prerelease[@]}" "${files[@]}"
+          echo "::notice title=Released::Orchester $VERSION is on Orchester Cloud's Beta, tagged $tag and on GitHub as the release $tag."

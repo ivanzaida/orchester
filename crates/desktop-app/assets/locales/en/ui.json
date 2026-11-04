@@ -3,6 +3,27 @@
     "copied": "Copied",
     "copyFailed": "Couldn't copy",
     "tabCount": "{{label}} {{count}}",
+    "chat": {
+      "copyMessage": "Copy message",
+      "codeLanguageFile": "{{language}} · {{file}}",
+      "export": {
+        "menu": "Export conversation…",
+        "copyAll": "Copy conversation as Markdown",
+        "more": "More",
+        "title": "Export conversation",
+        "include": "Include",
+        "messagesOnly": "Messages only",
+        "withTools": "Messages and tool calls",
+        "savesAs": "Saves as",
+        "format": "Markdown · {{size}}",
+        "save": "Save…",
+        "copyMarkdown": "Copy Markdown",
+        "cancel": "Cancel",
+        "enterSaves": "saves",
+        "pickerTitle": "Export conversation",
+        "fileKind": "Markdown"
+      }
+    },
     "addSource": {
       "path": "Folder or file path",
       "choose": "Choose folder…",
@@ -90,8 +111,36 @@
       "waiting": "Orchester tries again on its own; nothing was changed."
     },
     "dialog": {
+      "enterKey": "Enter",
       "escKey": "Esc",
       "escCancels": "cancels"
+    },
+    "contextMeter": {
+      "name": "Context",
+      "share": "{{share}}%",
+      "shareEstimate": "≈ {{share}}%",
+      "full": "Full",
+      "nearFull": "Near full",
+      "agentModel": "{{agent}} · {{model}}",
+      "used": "{{used}} of {{window}} tokens",
+      "usedEstimate": "≈ {{used}} of {{window}} tokens",
+      "usedOnly": "{{used}} tokens",
+      "estimateNote": "An estimate: the agent's CLI didn't report its context window, so Orchester takes the model's known limit.",
+      "notReported": "This agent's CLI doesn't report how full its context is, so there is no share to show.",
+      "windowNotReported": "This agent's CLI reports the tokens it used but not its context window, so there is no share to show.",
+      "tooltip": "Context {{share}}% · {{used}} of {{window}}",
+      "tooltipEstimate": "Context ≈ {{share}}% · {{used}} of {{window}}",
+      "tooltipFull": "Context full · {{used}} of {{window}}",
+      "tooltipUsedOnly": "Context {{used}} tokens · size not reported",
+      "tooltipUnknown": "Context size not reported",
+      "compact": "Compact",
+      "compacting": "Compacting…",
+      "compactWaits": "Compact once the turn under way has ended.",
+      "hintPlenty": "Compact replaces the conversation with a summary the agent continues from.",
+      "hintNearFull": "Compacts on its own before the next reply. Compact now to choose when.",
+      "hintNearFullAgent": "{{agent}} compacts on its own before its next reply. Compact now to choose when.",
+      "hintFull": "Full: compact the conversation so the agent has room to go on.",
+      "hintUnknown": "Compact still works: the agent writes a summary and continues from it."
     },
     "datePicker": {
       "monthYear": "{{month}} {{year}}",

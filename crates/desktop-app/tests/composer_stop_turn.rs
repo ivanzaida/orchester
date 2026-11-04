@@ -186,6 +186,21 @@ fn composer_stop_turn_esc_in_the_composer_stops_the_turn() {
   });
 }
 
+/// The slash menu's *Stop turn* (ORC-321) does what the working line's does; the typed `/` goes.
+#[test]
+fn composer_stop_turn_from_the_slash_menu() {
+  stops_and_goes_on(|window| {
+    click(window, "composer-input");
+    key(window, ("/", "Slash"));
+    wait(window, "Stop turn in the slash menu", |window| {
+      text(window, "composer-slash-stop-turn").contains("Enter")
+    });
+    key(window, ("Enter", "Enter"));
+    let left = text(window, "composer-input");
+    assert!(!left.starts_with('/'), "the typed / goes: {left}");
+  });
+}
+
 #[test]
 fn composer_stop_turn_and_send_from_the_send_menu() {
   let (mut window, repo, task) = working();

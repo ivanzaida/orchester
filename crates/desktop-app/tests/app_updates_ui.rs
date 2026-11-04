@@ -299,7 +299,7 @@ fn app_updates_ui_an_unreachable_cloud_says_when_it_last_answered() {
     row(&mut section),
     (
       "Couldn't reach Orchester Cloud".to_owned(),
-      "It hasn't answered from here yet · Orchester tries again in 6 hours".to_owned(),
+      "It hasn't answered from here yet · Orchester tries again in 20 minutes".to_owned(),
       vec!["Check now".to_owned()]
     )
   );
@@ -309,7 +309,7 @@ fn app_updates_ui_an_unreachable_cloud_says_when_it_last_answered() {
   }));
   let hint = section.text("settings-update-hint");
   assert!(hint.starts_with("Last checked 2"), "{hint}");
-  assert!(hint.ends_with("· Orchester tries again in 6 hours"), "{hint}");
+  assert!(hint.ends_with("· Orchester tries again in 20 minutes"), "{hint}");
 }
 
 #[test]

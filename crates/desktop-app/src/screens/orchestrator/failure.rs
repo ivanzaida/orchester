@@ -47,7 +47,7 @@ pub(super) fn failure_line(ctx: &mut Ctx, row: &TurnRow, failure: &TurnFailure) 
       ctx.t("orchestrator.failure.connectionGone"),
       Fix::Settings,
     ),
-    TurnFailure::Account(problem) => (unreachable(), account(ctx, problem), Fix::Account),
+    TurnFailure::Account { problem } => (unreachable(), account(ctx, problem), Fix::Account),
     TurnFailure::CannotStart { .. } => (unreachable(), ctx.t("orchestrator.failure.cannotStart"), Fix::None),
     TurnFailure::Failed { reason } => (
       ctx.t("orchestrator.failure.failed"),
@@ -181,6 +181,21 @@ fn account(ctx: &Ctx, problem: &AccountStartProblem) -> Arc<str> {
   }
 }
 
+/// What `failure` means, as the newest turn's failure says it under its title: a compaction that failed says it too.
+pub(super) fn why(ctx: &Ctx, failure: &TurnFailure) -> Arc<str> {
+  match failure {
+    TurnFailure::NotSignedIn => ctx.t("orchestrator.failure.notSignedIn"),
+    TurnFailure::ConnectionGone => ctx.t("orchestrator.failure.connectionGone"),
+    TurnFailure::Account { problem } => account(ctx, problem),
+    TurnFailure::CannotStart { .. } => ctx.t("orchestrator.failure.cannotStart"),
+    TurnFailure::Failed { reason } => ctx.t_args("orchestrator.failure.failedBody", [("reason", reason.as_str())]),
+    TurnFailure::Interrupted => ctx.t("orchestrator.interrupted"),
+    TurnFailure::TimeLimit { minutes } => {
+      ctx.t_args("orchestrator.failure.timeLimit", [("minutes", minutes.to_string())])
+    }
+  }
+}
+
 /// An earlier turn's failure, on its divider.
 pub(super) fn earlier(ctx: &Ctx, failure: &TurnFailure) -> Arc<str> {
   match failure {
@@ -191,7 +206,7 @@ pub(super) fn earlier(ctx: &Ctx, failure: &TurnFailure) -> Arc<str> {
       [("minutes", minutes.to_string())],
     ),
     TurnFailure::ConnectionGone
-    | TurnFailure::Account(_)
+    | TurnFailure::Account { .. }
     | TurnFailure::CannotStart { .. }
     | TurnFailure::Interrupted => ctx.t("orchestrator.failure.earlierUnreachable"),
   }

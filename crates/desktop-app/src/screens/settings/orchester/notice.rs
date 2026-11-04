@@ -19,7 +19,7 @@ use orchester_api::cloud::{CloudInvite, TwoFactorStatus};
 use orchester_core::time::Timestamp;
 
 use super::{
-  Invites, Waiting, follow, invites,
+  Invites, Waiting, follow, invites, reads,
   two_factor::{self, Need},
   words::day,
 };
@@ -35,28 +35,30 @@ use crate::{
   },
 };
 
-/// The notice's answers, which the page that shows it keeps.
+/// The notice's answers and reads, which the page that shows it keeps.
 pub struct InvitesNotice {
   answers: invites::Answers,
+  /// The invites and two-factor authentication, through the queries Settings › Orchester Cloud shows them from.
+  reads: reads::Reads,
 }
 
 impl InvitesNotice {
   pub fn new(ctx: &mut Ctx) -> Self {
     Self {
       answers: invites::Answers::new(ctx),
+      reads: reads::Reads::new(),
     }
   }
 
-  /// The invites waiting for the cloud account and its two-factor authentication, read again when a server's
-  /// connection or the account changes. The page asks for them in every render, before what it asks only sometimes:
-  /// lurq keeps a component's futures by the order it asks for them.
-  pub fn read(ctx: &mut Ctx) -> Waiting {
+  /// The invites waiting for the cloud account and its two-factor authentication: the last read at once, read again
+  /// as the page mounts and when a server's connection or the account changes. The page asks for them in every
+  /// render, before what it asks only sometimes: lurq keeps a component's futures by the order it asks for them.
+  pub fn read(&self, ctx: &mut Ctx) -> Waiting {
     let services = Services::of(ctx);
     let revision = follow(ctx, (&services.servers, &services.cloud));
-    let account = account(ctx, revision);
-    let invites = super::invites(ctx, revision, &services.cloud, account.as_ref());
-    let signed_in = account.as_ref().map(|account| account.account);
-    let two_factor = two_factor::read(ctx, revision, &services.cloud, signed_in);
+    let signed_in = account(ctx, revision).map(|account| account.account);
+    let invites = self.reads.invites(ctx, signed_in).unwrap_or(Invites::SignedOut);
+    let two_factor = self.reads.two_factor(ctx, signed_in).and_then(|read| read.0);
     Waiting { invites, two_factor }
   }
 

@@ -22,7 +22,7 @@ use super::{
 };
 
 const DESCRIPTION: &str = "Debug builds only. Shows an update state in place of this copy's real one, so Settings › \
-  Updates, the status bar's update item, the install question and the ready notification can be seen in each \
+  General's Updates, the status bar's update item, the install question and the ready notification can be seen in each \
   state. Takes what update_state answers: state with its fields (up_to_date checked_at; downloading or paused \
   version, received, total; ready version, notes, critical; waiting_for_runs the same and runs; installing the same \
   and step, with runs while it is waiting_for_runs; failed version and reason; install_failed version, reason, \

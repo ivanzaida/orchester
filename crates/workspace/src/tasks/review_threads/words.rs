@@ -38,7 +38,7 @@ fn turn_message(failure: &TurnFailure) -> Message {
   match failure {
     TurnFailure::NotSignedIn => Message::new("review.failure.notSignedIn"),
     TurnFailure::ConnectionGone => Message::new("review.failure.connectionGone"),
-    TurnFailure::Account(problem) => Message::new("review.failure.account").with("detail", problem.to_string()),
+    TurnFailure::Account { problem } => Message::new("review.failure.account").with("detail", problem.to_string()),
     TurnFailure::CannotStart { reason } => Message::new("review.failure.cannotStart").with("detail", reason.clone()),
     TurnFailure::Failed { reason } => Message::new("review.failure.failed").with("detail", reason.clone()),
     TurnFailure::Interrupted => Message::new("review.failure.interrupted"),

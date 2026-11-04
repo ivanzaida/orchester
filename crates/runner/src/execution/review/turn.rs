@@ -154,7 +154,7 @@ impl ReviewTurn {
       return Err(ReviewFailure::NativeAgent);
     }
     if let Some(problem) = connection.account().start_problem(Path::is_dir) {
-      return Err(ReviewFailure::Turn(TurnFailure::Account(problem)));
+      return Err(ReviewFailure::Turn(TurnFailure::Account { problem }));
     }
     let executable = connection
       .executable()

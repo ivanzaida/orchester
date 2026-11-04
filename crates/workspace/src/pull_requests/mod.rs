@@ -7,6 +7,8 @@
 //! The deprecated desktop's inbox ([`load_in`], [`sync_in`]) holds the open pull requests; the new
 //! app's page ([`list`]) syncs the closed and merged ones too, into the same stored list.
 
+pub mod ci;
+pub mod ci_fix;
 pub mod create;
 pub mod detail;
 pub mod feedback;

@@ -25,6 +25,8 @@ pub struct TaskContext {
   pub online: bool,
   /// The project's merge and removal operations as they stand.
   pub jobs: ProjectJobState,
+  /// The latest run's pull request and its CI, while its branch has one (`super::ci`).
+  pub ci: Option<super::ci::ShownCi>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for TaskContext {}

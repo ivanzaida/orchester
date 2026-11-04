@@ -2,7 +2,7 @@
 //! scenario, whose GitHub connection runs a fake `gh` that answers from files): the list by tab with each
 //! pull request's state, review, checks and task, searched and opened (`list`), and what the page shows
 //! when it cannot list them: no linked repository, the first sync reading, an empty tab, and each way a sync
-//! fails (`states`). Needs `git`, as the seed does.
+//! fails (`states`); a run's pull request CI and Fix CI on its task's page (`ci`). Needs `git`, as the seed does.
 
 #[path = "../../examples/seed/kontur/mod.rs"]
 #[allow(
@@ -13,6 +13,7 @@ mod kontur;
 #[path = "../support/mod.rs"]
 mod support;
 
+mod ci;
 mod detail;
 mod feedback;
 mod harness;

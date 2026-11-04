@@ -162,10 +162,21 @@ login shell is not asked then.
 GitHub Actions builds the app for Windows and for macOS (Apple silicon, signed with the Developer ID
 and notarized), signs the four files with the release key and uploads them to Orchester Cloud as
 one release, which the cloud publishes on Beta; then it tags the commit `app-v<version>`
-(`.github/workflows/app-release.yml`). The files live in the cloud (*Orchester Cloud upload*
-below), not on GitHub: since ORC-412 (2026-10-31) the workflow makes no GitHub Release, not even
-one with notes only, since the notes are the cloud release's and the app shows them with its
-update offer. The GitHub Releases of earlier versions stay as they are.
+(`.github/workflows/app-release.yml`). The app updates from the cloud only (*Orchester Cloud
+upload* below).
+
+Once the cloud has accepted the release, the workflow's `tag` job also publishes the GitHub Release
+`app-v<version>` in `ivanzaida/orchester` (again since ORC-653, 2026-11-03, after ORC-412 had
+dropped it on 2026-10-31), titled `Orchester <version>`: the four files, the checksums as
+`SHA256SUMS-windows.txt` and `SHA256SUMS-macos.txt` (each job's `SHA256SUMS.txt`), and as its body
+the notes the cloud job wrote and uploaded, passed on as the run's artifact
+`orchester-<version>-notes`. A version with a suffix (`0.5.0-rc.1`) is a GitHub pre-release. It
+reuses the artifacts the Windows, macOS and cloud jobs uploaded, with `gh release` and the
+workflow's own token (`GH_TOKEN: github.token`); no secret reaches a command line or the log. A
+run again for a version whose GitHub Release exists makes no second one: it uploads the files again
+with `--clobber`, which replaces each file of the same name. When the cloud rejects the release,
+neither the tag nor the GitHub Release is made. The GitHub Releases of earlier versions stay as they
+are.
 
 **To release**, raise `version` in `[package]` of `crates/desktop-app/Cargo.toml` (the app's own
 version, e.g. `0.2.0` to `0.2.1`; a version with a suffix such as `0.3.0-rc.1` is a pre-release)
@@ -224,7 +235,8 @@ release already has, whatever its platform and architecture ([cloud-api.md](clou
 releases"), so a later universal or Intel build needs a name per architecture.
 
 Their SHA-256 checksums are in the run's log (*Pack the zip and the installer*, *Write the
-checksums*) and in the cloud, which serves each file with `ETag: "<sha256>"`.
+checksums*), on the GitHub Release (`SHA256SUMS-windows.txt`, `SHA256SUMS-macos.txt`) and in the
+cloud, which serves each file with `ETag: "<sha256>"`.
 
 **Its Orchester Cloud** has its web pages at `https://orchester.cloud` and its API at
 `https://api.orchester.cloud/v1`, built in (`BUILD_ADDRESS` and `BUILD_API_ADDRESS` in
@@ -458,9 +470,9 @@ fixed address instead (see *The new app's MCP server* below).
   rejection such as `run_not_running`, `shutting_down` or `runner_unavailable`), `list_pipelines`, `duplicate_pipeline` (copies a
   pipeline's latest published version under a new name, optionally with other published profiles on its
   agent steps, and publishes it as v1, as New pipeline, the editor and Publish do), `set_code_index`
-  (*Use code index* in Project settings, off until a person turns it on; `list_projects` shows each
+  (*Use code index* in Project settings › Context, off until a person turns it on; `list_projects` shows each
   project's setting) and
-  `update_project_limits` (Project settings › Limits: the token budgets, the default time limit,
+  `update_project_limits` (Project settings › Runs › Limits: the token budgets, the default time limit,
   *Agents working at once*, which the project's runner applies at once, and *QA apps at once*, which
   applies from the next `start_qa_app`; invalid limits are refused with `invalid_limits` and the tab's
   own words; `list_projects` shows each project's limits). A modal
@@ -545,7 +557,7 @@ which a release build grants only when its settings or `ORCHESTER_APP_MCP_WINDOW
 **Update states in a QA copy.** A QA copy never updates itself, so `update_state` always answers
 `not_this_copy` (reason `qa`). To see the other states on screen, debug builds (QA copies included) serve
 `set_update_state` (window control): it takes the very JSON `update_state` answers and shows that state in place of
-the real one, in Settings › Updates, the status bar's update item and the ready notification, with
+the real one, in Settings › General's Updates, the status bar's update item and the ready notification, with
 `updated: {version, notes}` for the status bar's *Updated to* (S6) and *What's new*. `{"real": true}` shows the real
 state again. A state set this way lives in memory only: nothing of it is written to `orchester.db`, and it is gone at
 the next start. It never checks, downloads or installs anything: *Restart to update* or *Install now* pressed in it
@@ -681,9 +693,8 @@ Orchester's does not.
 **Let automation change agent permissions.** Any client with the token may set a project up, so the setup
 tools only narrow what agents may do unless a person allows more. Widening it is refused with
 `person_only` and the reasons while this application setting is off: a profile's permissions or MCP
-servers broader than its latest published version (a new profile: what it starts with, the most restrictive
-permissions its CLI enforces with *Approve automatically* on, and no MCP server) on save or publish, which covers
-write access, writable folders, broader
+servers broader than its latest published version (a new profile: the most restrictive permissions its
+CLI enforces and no MCP server) on save or publish, which covers write access, writable folders, broader
 commands, network access, no longer asking before tool calls and approving automatically; an agent CLI
 whose program is not a copy found on the search path, refused before it runs; any change to the project's
 environment variables, removals included, but to `RUST_LOG`, `RUST_BACKTRACE`, `CI`, `NO_COLOR`,
@@ -718,7 +729,7 @@ Automatic approvals require the separate approvals opt-in too. Secret replacemen
 draft remain person-only, irrespective of the permission opt-in. Consent is re-read before forwarded input and
 checked again when a confirmation runs; unknown, pending, revoked or failed consent cannot authorize it.
 Narrowing is always taken. The setting is off by
-default and only a person changes it, in the window, in Settings › What automation may do. No domain tool
+default and only a person changes it, in the window, in Settings › Automation. No domain tool
 changes it, and window input cannot either: while its row is on screen, lurq denies its input tools when a
 call runs (also one queued earlier, or one whose answer timed out), the server refuses every window-input
 tool of lurq's (clicks and keys by element or by coordinates, values, resizing) with `person_only`, whatever
@@ -820,11 +831,11 @@ tracks nothing in) is no write and goes to the reviewer (2026-10-18); `cargo fmt
 target directory elsewhere still ask. The person accepted (2026-10-18) that such a build runs the worktree's
 build scripts, macros, tests and repository Cargo settings under the reviewer's approval alone. *Approve for every run of this
 project* on a `start_qa_app` card keeps a rule of the project, by the QA script's git blob, which answers the
-tool in every run until the script changes or the rule is revoked in Project settings › Auto mode; only a
+tool in every run until the script changes or the rule is revoked in Project settings › Runs › Approved for every run; only a
 person makes it.
 A reviewer that fails, takes longer than 60 seconds or
 answers with something unreadable asks the person too. The reviewer is any agent connection of the
-project with a model of it and an effort, chosen in Project settings › General › Auto mode (the same model
+project with a model of it and an effort, chosen in Project settings › Runs › Approvals (the same model
 list as an agent profile's) or through the MCP server; until a person chooses, it is the first Claude Code
 connection with `claude-haiku-4-5-20251001`, else the first connection a reviewer runs on with its default
 model. Claude Code runs in print mode with no tools, no MCP servers and no settings, its instructions as

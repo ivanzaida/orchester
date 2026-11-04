@@ -146,18 +146,11 @@ fn connections_without_any_offer_each_way_to_connect() {
 
 #[test]
 fn connections_say_they_are_read_and_why_reading_failed() {
-  let mut seeded = Seeded::new("connections");
-  seeded.go(ProjectPage::Connections(ConnectionsView::default()));
-  assert!(
-    seeded.exists("connections-loading"),
-    "the first pass reads the connections"
-  );
-  seeded.until("the connections", |seeded| seeded.exists("connections-list"));
-  let sqlite =
-    rusqlite::Connection::open(seeded.repo.join(".orchester").join("orchester.db")).expect("the database opens");
-  sqlite.execute("DROP TABLE mcp_servers", []).expect("the table goes");
-  // Coming back reads them again.
-  seeded.go(ProjectPage::Usage(Box::default()));
+  // The connections cannot be read from the start: no list was ever read, so the tab says why.
+  let mut seeded = Seeded::changed("connections", |repo| {
+    let sqlite = rusqlite::Connection::open(repo.join(".orchester").join("orchester.db")).expect("the database opens");
+    sqlite.execute("DROP TABLE mcp_servers", []).expect("the table goes");
+  });
   seeded.go(ProjectPage::Connections(ConnectionsView::default()));
   seeded.until("the failure", |seeded| seeded.exists("connections-load-error"));
   assert!(
@@ -165,4 +158,22 @@ fn connections_say_they_are_read_and_why_reading_failed() {
       .text("connections-load-error")
       .contains("Connections could not be read")
   );
+}
+
+#[test]
+fn connections_keep_the_last_list_when_reading_them_again_fails() {
+  let mut seeded = Seeded::new("connections");
+  seeded.list();
+  let sqlite =
+    rusqlite::Connection::open(seeded.repo.join(".orchester").join("orchester.db")).expect("the database opens");
+  sqlite.execute("DROP TABLE mcp_servers", []).expect("the table goes");
+  // A change of the project's connections reads them again, which fails now: the list read before stays.
+  seeded.window.launch.services().expect("services").changes.record(
+    seeded.project,
+    orchester_workspace::tasks::outside::Outside::Connections,
+  );
+  seeded.go(ProjectPage::Usage(Box::default()));
+  seeded.go(ProjectPage::Connections(ConnectionsView::default()));
+  assert!(seeded.exists("connections-list"), "coming back shows the list at once");
+  assert!(!seeded.exists("connections-load-error"));
 }

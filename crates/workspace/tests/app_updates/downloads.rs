@@ -234,6 +234,43 @@ async fn app_updates_a_pause_no_download_took_up_does_not_stop_later_checks() {
   );
 }
 
+/// A check while a download is under way, as the next timed one can come during a long download, asks the cloud
+/// nothing and starts no second download.
+#[tokio::test]
+async fn app_updates_a_check_while_a_download_is_under_way_changes_nothing() {
+  let bytes = installer_bytes();
+  let offer = Offer::of(&bytes);
+  let half = bytes.len() / 2;
+  let stand = Stand::start(move |asked| {
+    if is_check(asked) {
+      return Answer::json(&offer.answer());
+    }
+    let mut answer = Answer::file(asked, &bytes);
+    answer.stall = Some(half);
+    answer
+  });
+  let copy = Copy::installed(&stand.api);
+  let updates = copy.updates.clone();
+  let check = tokio::spawn(async move { updates.check_now().await });
+  let mut changes = copy.updates.subscribe();
+  let downloading =
+    changes.wait_for(|state| matches!(state, UpdateState::Downloading { received, .. } if *received > 0));
+  tokio::time::timeout(std::time::Duration::from_secs(20), downloading)
+    .await
+    .expect("the download to start")
+    .map(drop)
+    .expect("the state to be followed");
+  let before = copy.updates.state();
+
+  copy.updates.check_now().await;
+
+  assert_eq!(copy.updates.state(), before);
+  let asked: Vec<String> = stand.asked().into_iter().map(|asked| asked.line).collect();
+  assert_eq!(asked.len(), 2, "one check and one download: {asked:?}");
+  copy.updates.pause();
+  check.await.expect("the check ends");
+}
+
 /// Checks once against a cloud that offers `offer` but serves `served`, and returns the copy.
 async fn failing(offer: Offer, served: Vec<u8>) -> Copy {
   let stand = offering(offer, served);

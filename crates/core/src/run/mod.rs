@@ -11,6 +11,8 @@ mod apply;
 mod approval_mode;
 mod attempt;
 mod branch;
+pub mod bundle;
+mod commit;
 mod completion;
 mod error;
 mod event;
@@ -20,6 +22,7 @@ mod index_search;
 mod invocation;
 mod not_started;
 mod number;
+mod outcome;
 mod permissions;
 mod phase;
 mod plan;
@@ -30,7 +33,10 @@ mod recovery;
 mod result;
 mod return_ended;
 pub mod review;
+mod run_model;
+mod run_permissions;
 mod schedule;
+pub mod side_question;
 mod snapshot;
 mod state;
 mod status;
@@ -57,6 +63,7 @@ pub use self::{
   approval_mode::{AllowAutopilot, AutopilotPersonOnly, EffectiveMode, ManualBecause, ManualSwitch},
   attempt::{Attempt, Checkpoint, StepExecution},
   branch::{BranchName, BranchNameError},
+  commit::{CommitId, CommitIdError},
   completion::{CompletedBy, REPORT_ARTIFACT, RunArtifact, RunCompletion, UnknownCompleter, last_report, run_delivers},
   error::RunError,
   event::{EventSequence, PlannedExecution, RunCreated, RunEvent, RunEventKind},
@@ -67,6 +74,7 @@ pub use self::{
   },
   not_started::{GitMessage, WorktreeFailure},
   number::RunNumber,
+  outcome::{ExecutionFailure, ExecutionOutcome, ReportOrder, SequenceRegressed, order_report},
   permissions::{AppliedPermissions, PermissionsApply, PermissionsChangedBy, RunPermissions},
   phase::TaskPhase,
   plan::{Plan, PlanDecision, PlanReview, PlanVersion, ReviewNote, ReviewNoteError},
@@ -80,6 +88,8 @@ pub use self::{
     RunContext, SCRATCH_FILES, SkillListing, WorkingTools, notice_text,
   },
   result::{STEP_RESULT_SCHEMA, StepOutcome, StepOutput, StepResult, UnverifiedCheck},
+  run_model::{ModelChoice, ModelEvent, ModelEventKind, ModelScope, StepBefore},
+  run_permissions::{PermissionEvent, PermissionEventKind, RunPermissionChange, WideningPersonOnly},
   snapshot::{PinnedVersion, PublishedVersions, RunSnapshot, SnapshotError, StepExecutor, StepSnapshot},
   state::{NewRun, Run, StoredRun},
   status::{

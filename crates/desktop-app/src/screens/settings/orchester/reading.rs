@@ -127,7 +127,7 @@ fn servers(ctx: &mut Ctx) -> SettingGroup {
     ctx.t("settings.connectServer"),
   )
   .icon(Icon::Plus)
-  .small()
+  .in_heading()
   .disabled();
   let end = Row::new()
     .spacing(SpacingSize::Md)

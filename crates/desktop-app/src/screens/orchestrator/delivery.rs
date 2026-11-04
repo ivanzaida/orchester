@@ -15,29 +15,44 @@ use lurq::{
   layout::Alignment,
   node::Element,
 };
-use orchester_core::orchestrator::{Queued, TurnState};
-use orchester_workspace::display;
+use orchester_core::orchestrator::{Queued, TurnMode, TurnState};
+use orchester_workspace::{display, files::Version};
 
 use super::{send::QueuedChange, timeline::TurnRow, turns::Arrival};
 use crate::ui::{
   attachments,
   button::{ActionButton, ButtonKind},
-  chat::{delivery_line, own_bubble},
+  chat::{delivery_line, own_bubble, own_bubble_with, said::said},
   icon::Icon,
 };
 
 /// The person's message that opens `row`'s turn, keyed `key`, with the files attached to it and where it stands; the
-/// delivery line under it says when.
+/// delivery line under it says when. A message that reached the Orchestrator has *Edit*, Copy and `…` at that line's
+/// start (`super::rewind::toolbar`); while it is edited, the field takes its place (`super::rewind::editing`).
 pub(super) fn opening_message(ctx: &mut Ctx, row: &TurnRow, key: &str) -> Element {
-  let delivery = delivery(ctx, row);
   let id = format!("orchestrator-message-{key}");
+  if let Some((_, after)) = row
+    .env
+    .rewind
+    .editing()
+    .filter(|(editing, _)| Some(editing.message) == row.turn.message)
+  {
+    return super::rewind::editing::field(ctx, &id, (&row.env.rewind, &row.env.open), after);
+  }
+  let delivery = delivery(ctx, row);
   let attached = attachments::sent::sent(ctx, &id, &row.env.root, &row.turn.attachments);
+  // The person's words, with their mentions as links and without the facts the Orchestrator got with them; the files
+  // they mention are the project's checkout's.
+  let said = said(ctx, &id, (&row.turn.text, None), (row.env.project, &Version::Checkout));
+  if let Some(extras) = row.env.rewind.on_message(ctx, &row.turn) {
+    return own_bubble_with(ctx, &id, said, (attached, delivery), extras);
+  }
   let under = Column::new()
     .spacing(SpacingSize::Xs)
     .align_items(Alignment::End)
     .child(delivery)
     .with_children(queued_actions(ctx, row));
-  own_bubble(&id, &row.turn.text, (attached, Some(under.into()))).into()
+  own_bubble(ctx, &id, said, (attached, Some(under.into()))).into()
 }
 
 /// Where the message stands: its glyph, its color and its words.
@@ -64,11 +79,19 @@ fn delivery(ctx: &Ctx, row: &TurnRow) -> Element {
       (Icon::LoaderCircle, PaletteColor::TextMuted),
       &ctx.t("orchestrator.delivery.sending"),
     ),
-    (Arrival::Own, _, Some(_)) => delivery_line(
-      id,
-      (Icon::CheckCheck, PaletteColor::Success),
-      &ctx.t_args("orchestrator.delivery.delivered", [("time", time.as_str())]),
-    ),
+    (Arrival::Own, _, Some(_)) => {
+      // A message sent in plan-only mode says so (`12b` `X7BYz`).
+      let key = if row.turn.mode == TurnMode::Plans {
+        "orchestrator.plan.delivered"
+      } else {
+        "orchestrator.delivery.delivered"
+      };
+      delivery_line(
+        id,
+        (Icon::CheckCheck, PaletteColor::Success),
+        &ctx.t_args(key, [("time", time.as_str())]),
+      )
+    }
   }
 }
 

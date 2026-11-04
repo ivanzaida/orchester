@@ -18,16 +18,19 @@ use thiserror::Error;
 
 pub use self::questions::{NO_OPTIONS_REFUSED, PendingQuestion, SECRET_REFUSED};
 use self::{
+  context::context_use,
   items::{command_finished, file_changed, mcp_tool_finished},
   sandbox_setup::setup_failure,
   tool_calls::{AskedOwnCalls, ToolContext},
 };
 use super::{
+  context_use::ContextUse,
   mcp::InvocationExemptions,
-  stream::{AgentEvent, QuestionRefusal},
+  stream::{AgentEvent, QuestionRefusal, codex_plan},
 };
 use crate::run::TokenUsage;
 
+mod context;
 mod items;
 mod questions;
 mod sandbox_setup;
@@ -203,6 +206,8 @@ pub struct AppServerStream {
   exemptions: InvocationExemptions,
   /// The runner's requests about calls of Orchester's tools that have not started yet.
   asked_own: AskedOwnCalls,
+  /// How full the thread's context is after its latest model response ([`Self::context`]).
+  context: Option<ContextUse>,
   /// A command already reported that Codex's sandbox could not be set up ([`sandbox_setup`]).
   sandbox_setup_failed: bool,
 }
@@ -424,6 +429,10 @@ impl AppServerStream {
         Vec::new()
       }
       "turn/completed" => self.turn_completed(params),
+      // Each update holds the whole plan, which replaces the one before.
+      "turn/plan/updated" => codex_plan(params)
+        .map(|items| vec![Update::Activity(AgentEvent::TodoList { items })])
+        .unwrap_or_default(),
       "error" => {
         let error = params.get("error").unwrap_or(&Value::Null);
         // An error Codex retries is no reason for the turn's end yet.
@@ -497,11 +506,12 @@ impl AppServerStream {
   }
 
   /// A turn takes several model responses; each reports its own usage as `last`, and the thread's
-  /// running `total` grows by it.
+  /// running `total` grows by it. `last` is also how full the context is, against `modelContextWindow`.
   fn count_usage(&mut self, token_usage: &Value) {
     let (Some(last), Some(total)) = (token_usage.get("last"), token_usage.get("total")) else {
       return;
     };
+    self.context = context_use(last, token_usage.get("modelContextWindow")).or(self.context);
     let total = usage(total);
     if self.total != Some(total) {
       if self.in_turn {
@@ -514,6 +524,13 @@ impl AppServerStream {
   /// What the running turn spent so far: the model responses Codex reported before the turn ended.
   pub const fn usage_so_far(&self) -> TokenUsage {
     self.usage
+  }
+
+  /// How full the thread's context is after its latest model response: what Codex counts in the context window (the
+  /// response's `totalTokens`), against the window it named; no window when it named none. `None` while Codex
+  /// reported no usage.
+  pub const fn context(&self) -> Option<ContextUse> {
+    self.context
   }
 
   fn turn_completed(&mut self, params: &Value) -> Vec<Update> {

@@ -1,15 +1,16 @@
 //! The project's Memory page's tabs (`Memory with tabs` `wMr98`): their order with and without waiting proposals
-//! (`HFISx` in `C0OJpC`), Approve and Reject in *Waiting for approval* moving a record to its tab, a search with no
-//! match in the open tab naming the tab that holds one and opening it with the search kept (`vUhJo`), and nothing
-//! past the window's right edge at 1440 and at 960 wide (`CIThk`, `ghfRl`). Only *Active* groups its records by type;
-//! *Rejected* lists them without headings (`hxQhj`).
+//! (`HFISx` in `C0OJpC`), *Memory settings* at their end opening Project settings › Context (`S15` `BJQn0`), Approve
+//! and Reject in *Waiting for approval* moving a record to its tab, a search with no match in the open tab naming the
+//! tab that holds one and opening it with the search kept (`vUhJo`), and nothing past the window's right edge at 1440
+//! and at 960 wide (`CIThk`, `ghfRl`). Only *Active* groups its records by type; *Rejected* lists them without headings
+//! (`hxQhj`).
 
-use orchester_app::routes::{MemoryTab, ProjectPage, Route};
+use orchester_app::routes::{MemoryTab, ProjectPage, ProjectSettingsTab, Route};
 use orchester_core::memory::MemoryStatus;
 
 use super::harness::Page;
 
-const ALL_STATUSES_WAITING_FIRST: [&str; 6] = ["waiting", "active", "deprecated", "superseded", "rejected", "settings"];
+const ALL_STATUSES_WAITING_FIRST: [&str; 5] = ["waiting", "active", "deprecated", "superseded", "rejected"];
 
 #[test]
 fn memory_tabs_lead_with_waiting_while_proposals_wait() {
@@ -22,7 +23,7 @@ fn memory_tabs_lead_with_waiting_while_proposals_wait() {
   assert_eq!(page.text("memory-tab-waiting-count"), "4");
   assert_eq!(page.text("memory-tab-active"), "Active 10");
   assert_eq!(page.text("memory-tab-rejected"), "Rejected 1");
-  assert_eq!(page.text("memory-tab-settings"), "Settings");
+  assert!(!page.has("memory-tab-settings"), "the page has no Settings tab");
   // The Agents hub's Memory tab counts what waits for the person (05).
   page.until("the hub's counts", |window| {
     window.texts("agents-hub-tab-memory-count").is_some()
@@ -30,15 +31,26 @@ fn memory_tabs_lead_with_waiting_while_proposals_wait() {
   assert_eq!(page.text("agents-hub-tab-memory-count"), "4");
 }
 
+/// *Memory settings* ends the tab row, right of the last status tab, and opens Project settings › Context.
+#[test]
+fn memory_settings_link_ends_the_tabs_and_opens_project_settings_context() {
+  let mut page = Page::seeded("memory");
+  page.project_memory();
+  assert_eq!(page.text("memory-settings-link"), "Memory settings");
+  let mut left = |id: &str| page.bounds_of(id).unwrap_or_else(|| panic!("{id} is laid out")).x;
+  assert!(left("memory-settings-link") > left("memory-tab-rejected"));
+  let context = Route::Project(page.project, ProjectPage::Settings(ProjectSettingsTab::Context));
+  page.press_until("memory-settings-link", "Project settings › Context", |window| {
+    window.navigation().route_now() == context
+  });
+}
+
 #[test]
 fn memory_tabs_follow_active_while_nothing_waits() {
   let mut page = Page::seeded("tasks");
   page.project_memory();
   let (order, shown) = page.tabs();
-  assert_eq!(
-    order,
-    ["active", "waiting", "deprecated", "superseded", "rejected", "settings"]
-  );
+  assert_eq!(order, ["active", "waiting", "deprecated", "superseded", "rejected"]);
   assert_eq!(shown, "active", "the page opens on Active");
   assert!(!page.has("memory-tab-waiting-count"), "no count while nothing waits");
   assert_eq!(
@@ -179,8 +191,5 @@ fn memory_page_runs_past_no_edge_at_1440_or_960() {
     let past = page.past_right_edge("screen-memory", right);
     assert!(past.is_empty(), "a record's page at {width}: {past:?}");
     page.window.press("memory-record-crumb");
-    page.memory_tab(MemoryTab::Settings);
-    let past = page.past_right_edge("screen-memory", right);
-    assert!(past.is_empty(), "Settings at {width}: {past:?}");
   }
 }

@@ -1,4 +1,4 @@
-//! What Project settings › Secrets shows (`06 Secrets` `bVh1e`), so each filter, secret and question has an address
+//! What Project settings › Environment shows (`06 Secrets` `bVh1e`), so each filter, secret and question has an address
 //! (`/project/<id>/secrets?environment=staging&secret=…&panel=replace`).
 
 use orchester_core::{id::SecretId, secret::Environment};

@@ -4,6 +4,8 @@
 //! page's hand-offs, `hold_integration` needs a project in the active tab, and what agents may do follows the
 //! settings.
 
+#[path = "mcp_tools/holds.rs"]
+mod holds;
 mod support;
 
 use std::sync::{Arc, OnceLock};
@@ -15,9 +17,8 @@ use orchester_app::{
     McpSettings, ThisRun, WindowLink,
     domain::DATA_SCOPE,
     settings::WINDOW_CONTROL_VARIABLE,
-    tools::{HeldLease, ToolError, app_state, hold_hand_offs, hold_integration, hold_reads, navigate, set_theme},
+    tools::{ToolError, app_state, navigate, set_theme},
   },
-  project::hold::ReadHold,
   theme::Mode,
 };
 use orchester_store::AppDb;
@@ -213,6 +214,30 @@ fn navigate_takes_the_parameters_each_screen_has_and_answers_them_back() {
     window.texts("screen-edit_task").is_none(),
     "only the active route's screen is shown"
   );
+}
+
+#[test]
+fn navigate_opens_settings_general_at_plan_limits_and_answers_it_back() {
+  let window = Window::open();
+  let navigation = window.navigation();
+  let args = json!({ "route": "settings", "tab": "plan-limits" });
+  let answer = navigate(&navigation, &args).expect("a valid route");
+  assert_eq!(answer["route"]["path"], json!("/settings?tab=general&show=plan-limits"));
+  assert_eq!(answer["route"]["params"], json!({ "tab": "plan-limits" }));
+}
+
+/// The Memory page's Settings tab is gone (`S15` `BJQn0`): naming it opens Project settings › Context.
+#[test]
+fn navigate_opens_project_settings_context_for_the_memory_settings_tab() {
+  let window = Window::open();
+  let navigation = window.navigation();
+  let args = json!({ "route": "memory", "project": PROJECT, "tab": "settings" });
+  let answer = navigate(&navigation, &args).expect("a valid route");
+  assert_eq!(
+    answer["route"]["path"],
+    json!(format!("/project/{PROJECT}/settings?tab=context"))
+  );
+  assert_eq!(answer["route"]["name"], json!("project_settings"));
 }
 
 #[test]
@@ -507,57 +532,6 @@ fn tools_wait_for_the_window() {
   assert_eq!(error.to_json()["code"], "no_session");
 }
 
-#[test]
-fn hold_reads_holds_and_releases_the_feeds_reads() {
-  let hold = ReadHold::default();
-  assert_eq!(
-    hold_reads(&hold, &json!({ "held": true })).expect("a flag"),
-    json!({ "held": true })
-  );
-  assert!(hold.is_held());
-  assert_eq!(
-    hold_reads(&hold, &json!({ "held": false })).expect("a flag"),
-    json!({ "held": false })
-  );
-  assert!(!hold.is_held());
-  let error = hold_reads(&hold, &json!({ "held": "yes" })).expect_err("not a flag");
-  assert_eq!(error.to_json()["code"], "not_a_bool");
-  let error = hold_reads(&hold, &json!({})).expect_err("no flag");
-  assert_eq!(error.to_json()["code"], "missing_param");
-}
-
-#[test]
-fn hold_hand_offs_holds_and_releases_the_review_pages_hand_offs() {
-  let hold = ReadHold::default();
-  assert_eq!(
-    hold_hand_offs(&hold, &json!({ "held": true })).expect("a flag"),
-    json!({ "held": true })
-  );
-  assert!(hold.is_held());
-  assert_eq!(
-    hold_hand_offs(&hold, &json!({ "held": false })).expect("a flag"),
-    json!({ "held": false })
-  );
-  assert!(!hold.is_held());
-  let error = hold_hand_offs(&hold, &json!({ "held": 1 })).expect_err("not a flag");
-  assert_eq!(error.to_json()["code"], "not_a_bool");
-}
-
-#[test]
-fn hold_integration_needs_a_project_in_the_active_tab() {
-  let lease = HeldLease::default();
-  let error = hold_integration(&WindowLink::default(), &lease, &json!({ "held": true })).expect_err("no window yet");
-  assert_eq!(error, ToolError::NotReady);
-  let window = Window::open();
-  let error = hold_integration(&window.link, &lease, &json!({ "held": true })).expect_err("All projects");
-  assert_eq!(error.to_json()["code"], "invalid_param");
-  assert_eq!(
-    hold_integration(&window.link, &lease, &json!({ "held": false })).expect("nothing to let go"),
-    json!({ "held": false, "project": null })
-  );
-  let error = hold_integration(&window.link, &lease, &json!({})).expect_err("no flag");
-  assert_eq!(error.to_json()["code"], "missing_param");
-}
 #[test]
 fn navigate_skills_forms_round_trip_their_parameters() {
   let window = Window::open();

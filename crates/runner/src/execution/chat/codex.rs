@@ -47,10 +47,18 @@ use crate::{
 };
 
 /// App Server's command, what the session starts with, and the account it runs on.
-struct Started {
-  command: Command,
-  setup: AppServerSetup,
-  account: AgentAccountId,
+pub(super) struct Started {
+  pub(super) command: Command,
+  pub(super) setup: AppServerSetup,
+  pub(super) account: AgentAccountId,
+}
+
+/// Why a turn on App Server failed, as App Server's `failure` says.
+pub(super) fn turn_failure(failure: AppServerFailure) -> TurnFailure {
+  match failure {
+    AppServerFailure::NotSignedIn(_) => TurnFailure::NotSignedIn,
+    AppServerFailure::Protocol(reason) => TurnFailure::Failed { reason },
+  }
 }
 
 impl Turn {
@@ -66,7 +74,7 @@ impl Turn {
   }
 
   /// App Server's command and the session's setup, or why none can start.
-  fn start_codex(&self, prepared: Prepared) -> Result<Started, TurnFailure> {
+  pub(super) fn start_codex(&self, prepared: Prepared) -> Result<Started, TurnFailure> {
     let (mcp, left_out) = CodexMcp::new(&[self.tools_launch()?]);
     if !left_out.is_empty() {
       return Err(cannot("the tools' server was left out".to_owned()));
@@ -130,6 +138,7 @@ impl Turn {
         self.project,
         ProjectReads::GitTools,
       )),
+      compact: false,
     };
     Ok(Started {
       command,
@@ -168,13 +177,11 @@ impl Turn {
             let over = match session.receive(stream, &line, &process).await {
               Ok(updates) => {
                 self.steer_answered(&mut steering, session.take_steer_answers());
+                self.keep_context(session.context(), &mut seen);
                 self.codex_updates(updates, (&process, started.account), (&mut seen, &mut steering)).await
               }
               Err(failure) => {
-                seen.failure.get_or_insert(match failure {
-                  AppServerFailure::NotSignedIn(_) => TurnFailure::NotSignedIn,
-                  AppServerFailure::Protocol(reason) => TurnFailure::Failed { reason },
-                });
+                seen.failure.get_or_insert(turn_failure(failure));
                 true
               }
             };
@@ -188,10 +195,7 @@ impl Turn {
         },
         _ = beat.tick(), if !seen.stopped && !seen.finished && seen.timed_out.is_none() => {
           if let Err(failure) = session.poll_servers(&process).await {
-            seen.failure.get_or_insert(match failure {
-              AppServerFailure::NotSignedIn(_) => TurnFailure::NotSignedIn,
-              AppServerFailure::Protocol(reason) => TurnFailure::Failed { reason },
-            });
+            seen.failure.get_or_insert(turn_failure(failure));
             seen.finished = true;
             process.terminate();
           }

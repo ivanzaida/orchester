@@ -108,6 +108,13 @@ impl Held {
     );
   }
 
+  /// The skeleton `id` of a settings tab shows its bones from the first frame it is in the window.
+  pub fn skeleton_at_once(&mut self, id: &str) {
+    self.until(id);
+    let bones = format!("{id}-bones");
+    assert!(self.exists(&bones), "{id}: a settings tab never comes up empty");
+  }
+
   /// Lets the reads go and waits until `id` is in the window.
   pub fn release(&mut self, id: &str) {
     self.hold.set(false);

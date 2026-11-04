@@ -73,7 +73,7 @@ connect, what they trust or where tools keep their configuration.
 ### `set_repository_agent_files` — changes data · gate AP when turning on
 
 Turns on or off whether the project's agents load the repository's own agent files (`AGENTS.md`, `CLAUDE.md` and
-the like), as Project settings › General › *Repository agent files* does. Applies to runs that start from now on. Turning off is always
+the like), as Project settings › Context › *Repository agent files* does. Applies to runs that start from now on. Turning off is always
 accepted; turning on puts the repository's text into every agent's prompt and is `person_only` unless AP is on.
 
 | Parameter | Type    | Req. | Description                                       |
@@ -336,10 +336,9 @@ editor checks it: role, an agent connection of the project and a model are requi
 project's.
 
 Narrowing is always accepted. Anything **broader than the latest published version** (for a new profile: broader
-than what it gets without `permissions`, with no MCP server) is `person_only` unless AP is on: write
-access, writable folders, broader commands, network on, MCP servers, no longer asking before tool calls, approving
-automatically and Autopilot (both answer requests in a person's place, so they additionally need AA, as the
-window's question does).
+than the most restrictive permissions its CLI enforces, with no MCP server) is `person_only` unless AP is on: write
+access, writable folders, broader commands, network on, MCP servers, no longer asking before tool calls and
+Autopilot (it answers requests in a person's place, so it additionally needs AA, as the window's question does).
 
 | Parameter           | Type                   | Req. | Description                                                                                   |
 |---------------------|------------------------|------|-----------------------------------------------------------------------------------------------|
@@ -351,7 +350,7 @@ window's question does).
 | `effort`            | string \| null         | no   | A reasoning effort the model lists; left out = the CLI's default.                             |
 | `responsibilities`  | string                 | no   | What the agent is responsible for, a sentence or two. Default `""`.                           |
 | `instructions`      | string                 | no   | Role instructions carried by every prompt; may use `{{variables}}`. Default `""`.            |
-| `permissions`       | Permissions \| null    | no   | Left out: new profile = most restrictive its CLI enforces with `approve_automatically` on (off on a native connection); existing = keeps its own. |
+| `permissions`       | Permissions \| null    | no   | Left out: new profile = most restrictive its CLI enforces; existing = keeps its own.          |
 | `mcp_servers`       | array<string>          | no   | Project MCP servers its agents get, by id or name. Default `[]`.                              |
 | `expected_revision` | string \| null         | no   | Optimistic lock: save only if the draft is still at this revision, else `draft_changed`.      |
 
@@ -365,8 +364,7 @@ window's question does).
 | `network`               | `off` \| `on`                                 | yes  | Network access.                                                            |
 | `writable_folders`      | array<string>                                 | no   | Folders outside the worktree the agent may write (write access only).     |
 | `ask_before_tool_calls` | boolean                                       | no   | Ask a person before each MCP or app tool call.                             |
-| `approve_automatically` | boolean                                       | no   | *Approve automatically (don't ask me)*: Orchester answers what would ask a person. Default `false`. |
-| `approval_mode`         | `autopilot` \| `manual`                       | no   | Who answers tool requests. Default `manual`; `manual` → `autopilot` widens (gate AP, and AA as approving automatically), the reverse never asks. |
+| `approval_mode`         | `autopilot` \| `manual`                       | no   | Who answers tool requests. Default `manual`; `manual` → `autopilot` widens (gates AP and AA), the reverse never asks. A profile saved before approval modes with *Approve automatically* on reads as `autopilot`. |
 
 `get_profile` gives the same permissions object, `approval_mode` included. A profile set to Autopilot runs as Manual
 where its project does not allow Autopilot or its run was switched to Manual: `get_approvals` gives the mode each
@@ -632,7 +630,7 @@ A project's active secrets **by name and use only — never a value** (values st
 read). Each: id, name, kind, environment (a name is unique per environment, written `NAME@environment` where tools
 and MCP servers refer to it), `added_at`, `replaced_at`, and `used_by` (tools, MCP servers, agent connections whose
 API key it is, and the profiles whose draft or latest version chooses an MCP server using it, with that server),
-each with a link, plus the link to Secrets.
+each with a link, plus the link to Project settings › Environment.
 
 Adding, replacing and archiving secrets are done by a person in the app. Parameter: `project` (string | null).
 

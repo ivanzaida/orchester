@@ -547,6 +547,21 @@ One pull request, with the repository's sync state. One the last sync did not re
 `github_rate_limited` (until `paused_until`), `github_unreachable`, `pull_request_not_read`,
 `pull_request_not_found`.
 
+`checks` keeps the last sync's counts (`passed`, `failed`, `running`, `skipped`, `revision`) and adds the pull
+request's CI read now through `gh pr checks`, at most once per 30 s per pull request (a call sooner gets that read):
+
+- `state`: `passed`, `failed`, `running` or `no_checks`; or why nothing was read — `no_pull_request`, `gh_missing`,
+  `not_signed_in`, `wrong_account`, `missing_scope`, `gh_unavailable`, `rate_limited` (with `resets_at`),
+  `github_unreachable`, `github_server_error`, `not_read`. A state that was not read is never `passed`.
+- `pull_request`, `read_at`; `next_read_at`: when to read again while a check is queued or running, else `null`.
+- `counts`: `queued`, `running`, `passed`, `failed`, `cancelled`, `skipped`.
+- `runs`: each check's `name`, `workflow`, `state` (one of the counts' names), `url` and, for a failed GitHub
+  Actions job, `log_tail` — the last 40 lines of its failed steps' log (`gh run view --job <id> --log-failed`),
+  `null` when `gh` gave none. At most 5 failed jobs' logs are read per read.
+
+`get_run` gives the same `checks` for the pull request of the run's branch, as the last sync stored it (its open one,
+else its latest); `no_pull_request` when there is none, `not_linked` without a linked GitHub repository.
+
 Parameters: `project` (req.), `number` (integer, req.), `refresh` (boolean).
 
 ---

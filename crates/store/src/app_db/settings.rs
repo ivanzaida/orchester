@@ -168,8 +168,8 @@ impl AppDb {
     Ok(())
   }
 
-  /// Whether Orchester estimates the story points of tasks without a person's value (*Let Orchester estimate story
-  /// points*); each estimate asks auto mode's reviewer's model and spends tokens.
+  /// The application-wide *Let Orchester estimate story points* of before ORC-103. It decides nothing any more: only
+  /// the copy into a project that has no value of its own reads it (`ProjectDb::copy_estimates_story_points`).
   pub fn estimates_story_points(&self) -> Result<bool, StoreError> {
     Ok(self.connection.query_row(
       "SELECT estimates_story_points FROM app_settings WHERE id = 1",
@@ -178,6 +178,7 @@ impl AppDb {
     )?)
   }
 
+  /// Sets the application-wide value of before ORC-103, as a database of then held it.
   pub fn set_estimates_story_points(&mut self, allowed: bool) -> Result<(), StoreError> {
     self.connection.execute(
       "UPDATE app_settings SET estimates_story_points = ?1 WHERE id = 1",

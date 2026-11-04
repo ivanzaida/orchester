@@ -48,7 +48,7 @@ fn switched_on() -> (Served, Seeded, ProjectDb, ChatScope) {
     OrchestratorConsent::PublishDrafts,
   ] {
     workspace
-      .set_orchestrator_allows(consent, true)
+      .set_orchestrator_allows(&seeded.repo, consent, true)
       .expect("the person turned it on");
   }
   workspace

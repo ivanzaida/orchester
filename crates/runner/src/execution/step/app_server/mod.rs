@@ -149,6 +149,11 @@ impl AppServerSession {
     self.stream.usage_so_far()
   }
 
+  /// How full the thread's context is after its latest model response, as Codex reported it.
+  pub const fn context(&self) -> Option<orchester_core::connection::context_use::ContextUse> {
+    self.stream.context()
+  }
+
   /// Whether a turn runs that a message can join.
   pub fn turn_working(&self) -> bool {
     matches!(self.phase, Phase::Turn | Phase::Working) && self.turn.is_some()
@@ -484,8 +489,17 @@ impl AppServerSession {
   }
 
   /// The turn of the prompt, with the files attached to the messages it delivers; a copy that cannot be read fails
-  /// the turn's start as a write to Codex would.
+  /// the turn's start as a write to Codex would. A session that compacts asks Codex to compact the thread instead,
+  /// which Codex does in a turn of its own.
   async fn start_turn(&mut self, process: &Supervised) -> io::Result<()> {
+    if self.setup.compact {
+      self.turn_replies.insert(self.turn_request);
+      return send(
+        process,
+        json!({"id":self.turn_request,"method":"thread/compact/start","params":{"threadId":self.thread}}),
+      )
+      .await;
+    }
     let input = codex_items(&self.setup.prompt, &self.setup.attached)?;
     self.turn_with(process, input).await
   }

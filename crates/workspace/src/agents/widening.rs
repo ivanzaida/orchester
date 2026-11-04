@@ -10,9 +10,8 @@ use orchester_store::{ProjectDb, StoreError};
 
 use crate::messages::Message;
 
-/// Compared with the latest published version, never an unapproved draft, or with what a new profile starts with
-/// ([`AgentPermissions::for_new_profile`]) when none was published. A profile whose connection now runs on another
-/// account than the latest version's widens too ([`moves_to_another_account`]).
+/// Compared with the latest published version, never an unapproved draft. A profile whose connection now runs on
+/// another account than the latest version's widens too ([`moves_to_another_account`]).
 pub fn reasons(
   db: &ProjectDb,
   id: Option<ResourceId>,
@@ -24,7 +23,7 @@ pub fn reasons(
     .transpose()?
     .flatten();
   let base = latest.as_ref().map_or_else(
-    || AgentPermissions::for_new_profile(provider, Platform::current()),
+    || AgentPermissions::most_restrictive(provider, Platform::current()),
     |version| version.body().permissions().clone(),
   );
   let mut reasons: Vec<_> = profile
@@ -64,18 +63,15 @@ pub fn message(widening: Widening) -> Message {
     Widening::Commands => "appMcp.widens.commands",
     Widening::Network => "appMcp.widens.network",
     Widening::ToolCallsUnasked => "appMcp.widens.toolCallsUnasked",
-    Widening::AutoApprove => "appMcp.widens.autoApprove",
     Widening::Browser => "appMcp.widens.browser",
     Widening::BrowserSite => "appMcp.widens.browserSite",
     Widening::Autopilot => "appMcp.widens.autopilot",
   })
 }
 
-/// Whether what `reasons` say widens answers requests in a person's place (approving automatically, or Autopilot):
-/// automation may then make the change only when a person also lets it answer approvals. The window's question and
-/// the domain tools both follow this rule.
+/// Whether what `reasons` say widens answers requests in a person's place (Autopilot): automation may then make the
+/// change only when a person also lets it answer approvals. The window's question and the domain tools both follow
+/// this rule.
 pub fn answers_in_persons_place(reasons: &[Message]) -> bool {
-  [Widening::AutoApprove, Widening::Autopilot]
-    .into_iter()
-    .any(|widening| reasons.contains(&message(widening)))
+  reasons.contains(&message(Widening::Autopilot))
 }

@@ -1,13 +1,10 @@
 //! What widens what agents may do: profile permissions broader than those they replace, and any change to
 //! a project environment variable but the few harmless ones.
 
-use orchester_core::{
-  connection::{AgentProvider, invocation::Platform},
-  permission::{
-    AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, FolderBounds, NetworkAccess, RepositoryAccess,
-    WritableFolder, WritableFolders,
-    widening::{Widening, harmless_variable},
-  },
+use orchester_core::permission::{
+  AgentPermissions, AllowedCommands, ApprovalMode, CommandPermission, CommandPrefix, FolderBounds, NetworkAccess,
+  RepositoryAccess, WritableFolder, WritableFolders,
+  widening::{Widening, harmless_variable},
 };
 
 fn allowed(commands: &[&str]) -> CommandPermission {
@@ -52,14 +49,14 @@ fn widening_names_every_broader_setting() {
     CommandPermission::AnyInWorktree,
     NetworkAccess::On,
   );
-  wider.set_auto_approve(true);
+  wider.set_approval_mode(ApprovalMode::Autopilot);
   assert_eq!(
     wider.widenings_from(&base),
     [
       Widening::Repository,
       Widening::Commands,
       Widening::Network,
-      Widening::AutoApprove
+      Widening::Autopilot
     ]
   );
   let added = permissions(
@@ -87,44 +84,8 @@ fn widening_names_every_broader_setting() {
   asked.set_interactive_tool_approvals(true);
   assert_eq!(base.widenings_from(&asked), [Widening::ToolCallsUnasked]);
   let mut auto = base;
-  auto.set_auto_approve(true);
-  assert!(
-    auto.widenings_from(&auto).is_empty(),
-    "keeping auto-approval is no change"
-  );
-}
-
-#[test]
-fn widening_new_profiles_start_approving_automatically_where_offered() {
-  for provider in [AgentProvider::CodexCli, AgentProvider::ClaudeCodeCli] {
-    for platform in [Platform::Windows, Platform::MacOs] {
-      let new = AgentPermissions::for_new_profile(provider, platform);
-      let mut expected = AgentPermissions::most_restrictive(provider, platform);
-      expected.set_auto_approve(true);
-      assert_eq!(new, expected, "{provider:?} on {platform:?}");
-      assert!(
-        new.widenings_from(&new).is_empty(),
-        "keeping the default widens nothing"
-      );
-      let mut off = new.clone();
-      off.set_auto_approve(false);
-      assert!(off.widenings_from(&new).is_empty(), "turning it off narrows");
-      assert_eq!(
-        new.widenings_from(&off),
-        [Widening::AutoApprove],
-        "turning it on where it is off still widens"
-      );
-    }
-  }
-  for provider in [AgentProvider::AnthropicApi, AgentProvider::OpenAiApi] {
-    let new = AgentPermissions::for_new_profile(provider, Platform::current());
-    assert!(!new.auto_approve(), "{provider:?} offers no approval switches");
-    assert_eq!(new, AgentPermissions::most_restrictive(provider, Platform::current()));
-  }
-  assert!(
-    !AgentPermissions::before_permissions().auto_approve(),
-    "profiles saved before it keep it off"
-  );
+  auto.set_approval_mode(ApprovalMode::Autopilot);
+  assert!(auto.widenings_from(&auto).is_empty(), "keeping Autopilot is no change");
 }
 
 #[test]

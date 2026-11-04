@@ -1,4 +1,4 @@
-//! Token budgets in the project database: Project settings › Limits, the project's daily usage and
+//! Token budgets in the project database: Project settings › Runs › Limits, the project's daily usage and
 //! the migration of money budgets to tokens.
 
 mod support;
@@ -355,7 +355,7 @@ fn version_before_maximum_removed(latest: u32) -> u32 {
     .expect("a schema with a maximum run budget")
 }
 
-/// Project settings › Limits as a schema with a maximum run budget stored them: at most 8M per run,
+/// Project settings › Runs › Limits as a schema with a maximum run budget stored them: at most 8M per run,
 /// 2M by default, 30M a day and 45 minutes; `slots` adds the agent slots column's value when the
 /// schema has it (`", 3"`).
 fn insert_limits_with_maximum(database: &Path, slots: &str) {

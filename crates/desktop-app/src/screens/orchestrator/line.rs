@@ -44,6 +44,8 @@ pub(super) enum Tone {
   Muted,
   /// Under way or neutral: the icon in `text_secondary`.
   Plain,
+  /// Done in the background (a compaction, `l5YmWb`): the icon in `text_muted`, the words in `text_primary`.
+  Quiet,
 }
 
 impl Tone {
@@ -54,6 +56,7 @@ impl Tone {
       Self::Danger => (PaletteColor::Danger, PaletteColor::Danger),
       Self::Muted => (PaletteColor::TextMuted, PaletteColor::TextMuted),
       Self::Plain => (PaletteColor::TextSecondary, PaletteColor::TextPrimary),
+      Self::Quiet => (PaletteColor::TextMuted, PaletteColor::TextPrimary),
     }
   }
 }

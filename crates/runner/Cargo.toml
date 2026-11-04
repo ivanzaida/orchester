@@ -77,6 +77,10 @@ name = "run_permissions"
 required-features = ["test-agent"]
 
 [[test]]
+name = "run_model"
+required-features = ["test-agent"]
+
+[[test]]
 name = "claude"
 required-features = ["test-agent"]
 
@@ -90,6 +94,18 @@ required-features = ["test-agent"]
 
 [[test]]
 name = "review_answer"
+required-features = ["test-agent"]
+
+[[test]]
+name = "chat_compact"
+required-features = ["test-agent"]
+
+[[test]]
+name = "chat_rewind"
+required-features = ["test-agent"]
+
+[[test]]
+name = "chat_fork"
 required-features = ["test-agent"]
 
 [[test]]

@@ -44,7 +44,8 @@ pub(super) struct Target {
 
 /// What sending does in `mode` while something is written or attached and no send is under way: the state's way,
 /// the second where it has one, and *Stop turn and send* where it offers it. Files still being read keep it busy:
-/// they go with the message.
+/// they go with the message, and so does the skill the chip holds (ORC-634). A plan's changes carry no skill: nothing
+/// is sent while the chip holds one there.
 pub(super) fn presses(state: &ComposerState, target: &Target, (mode, to): (&ComposerMode, Recipient)) -> Sending {
   if state.send.state().get().is_pending() || state.in_flight.get() || state.attached.reading.get() > 0 {
     return Sending::Busy;
@@ -52,6 +53,9 @@ pub(super) fn presses(state: &ComposerState, target: &Target, (mode, to): (&Comp
   let Some(primary) = Action::of(mode, Way::Primary, to) else {
     return Sending::Empty;
   };
+  if state.skill.get().is_some() && matches!(primary, Action::PlanChanges(_)) {
+    return Sending::SkillHeld;
+  }
   if state.draft.get().trim().is_empty() && state.attached.attached.get().0.is_empty() {
     return Sending::Empty;
   }
@@ -62,7 +66,7 @@ pub(super) fn presses(state: &ComposerState, target: &Target, (mode, to): (&Comp
   }
 }
 
-/// A press that sends the draft and its files `way`, to do `expected`. It reads the draft and its key when
+/// A press that sends the draft, its files and its skill `way`, to do `expected`. It reads the draft and its key when
 /// pressed, and does nothing while a send is under way: a second run of the action would replace the first mid-way.
 fn press(state: &ComposerState, target: &Target, (way, expected): (Way, Action)) -> Press {
   let state = state.clone();
@@ -91,6 +95,7 @@ fn press(state: &ComposerState, target: &Target, (way, expected): (Way, Action))
       key: state.key_for((&text, &attachments), (way, expected)),
       text,
       attachments,
+      skill: state.skill.get_untracked().and_then(|skill| skill.chosen()),
       by: expected.decision_kind().map_or_else(
         || {
           Some(if lurq::app::events::is_synthetic_input() {
@@ -118,7 +123,7 @@ pub(super) fn keys(
 ) -> impl Fn(KeyboardEvent) + Send + Sync + 'static {
   let (primary, second) = match presses {
     Sending::Ready { primary, second, .. } => (Some(primary.clone()), second.clone()),
-    Sending::Empty | Sending::Busy => (None, None),
+    Sending::Empty | Sending::Busy | Sending::SkillHeld => (None, None),
   };
   move |event: KeyboardEvent| {
     if event.key == "Escape" {

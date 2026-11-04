@@ -163,6 +163,7 @@ impl ReviewTurn {
         .collect(),
       model_provider: on_provider.as_ref().map(|_| CODEX_PROVIDER_ID.to_owned()),
       base_instructions: None,
+      compact: false,
     };
     Ok((command, setup))
   }

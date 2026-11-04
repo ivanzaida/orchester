@@ -21,7 +21,6 @@ fn agents_create_first_draft_and_publish() {
   screen.go();
   screen.click("agents-new");
   screen.until("the new profile's editor", |s| s.exists("agent-role"));
-  assert!(screen.exists("agent-auto-row"), "a new profile approves automatically");
   screen.set("agent-role", "Reviewer");
   screen.set("agent-instructions", "Review the implementation.");
   screen.set("agent-custom-model", "test-model");
@@ -33,10 +32,6 @@ fn agents_create_first_draft_and_publish() {
   screen.until("first version", |s| {
     matches!(s.listed().profiles[0].state, VersionState::Published(_))
   });
-  assert!(
-    screen.listed().profiles[0].profile.permissions().auto_approve(),
-    "published without asking, approving automatically"
-  );
 }
 
 #[test]

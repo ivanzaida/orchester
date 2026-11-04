@@ -1,6 +1,7 @@
 //! Changes made outside the screens, by automation through Orchester's MCP server, counted per project
 //! and per kind of data: only the changed project's feed reads its data again, and a screen reads again
-//! only what the change touched, in place.
+//! only what the change touched, in place. Application settings, which no project owns, are counted apart
+//! ([`AppOutside`]).
 
 use std::{collections::HashMap, sync::Arc};
 
@@ -34,6 +35,10 @@ pub enum Outside {
   Instructions,
   /// A skill draft or published version changed.
   Skills,
+  /// A switch of what the project's Orchestrator may do itself changed.
+  Orchestrator,
+  /// Whether Orchester estimates the project's story points changed.
+  Estimates,
 }
 
 /// How often each kind of a project's data changed outside the screens.
@@ -51,6 +56,8 @@ pub struct OutsideCounts {
   pub profiles: u64,
   pub instructions: u64,
   pub skills: u64,
+  pub orchestrator: u64,
+  pub estimates: u64,
 }
 
 impl OutsideCounts {
@@ -69,6 +76,8 @@ impl OutsideCounts {
       Outside::Profiles => self.profiles,
       Outside::Instructions => self.instructions,
       Outside::Skills => self.skills,
+      Outside::Orchestrator => self.orchestrator,
+      Outside::Estimates => self.estimates,
     }
   }
 
@@ -86,24 +95,81 @@ impl OutsideCounts {
       Outside::Profiles => &mut self.profiles,
       Outside::Instructions => &mut self.instructions,
       Outside::Skills => &mut self.skills,
+      Outside::Orchestrator => &mut self.orchestrator,
+      Outside::Estimates => &mut self.estimates,
     };
     *count += 1;
   }
 }
 
-/// Counts the changes made outside the screens, by project.
+/// An application setting that changed, which no project owns.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AppOutside {
+  /// The share of a plan window at which Usage warns.
+  UsageThreshold,
+  /// Whether error reports are sent.
+  ErrorReports,
+  /// When the Orchestrator's daily report comes, or that it is off.
+  DailyReport,
+  /// Agents' browser program or the Browser window's switch.
+  Browser,
+  /// What automation may do, or whether agents may control the window.
+  Automation,
+}
+
+/// How often each application setting changed.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct AppOutsideCounts {
+  pub usage_threshold: u64,
+  pub error_reports: u64,
+  pub daily_report: u64,
+  pub browser: u64,
+  pub automation: u64,
+}
+
+impl AppOutsideCounts {
+  /// How often `change` was made.
+  pub const fn of(self, change: AppOutside) -> u64 {
+    match change {
+      AppOutside::UsageThreshold => self.usage_threshold,
+      AppOutside::ErrorReports => self.error_reports,
+      AppOutside::DailyReport => self.daily_report,
+      AppOutside::Browser => self.browser,
+      AppOutside::Automation => self.automation,
+    }
+  }
+
+  const fn count(&mut self, change: AppOutside) {
+    let count = match change {
+      AppOutside::UsageThreshold => &mut self.usage_threshold,
+      AppOutside::ErrorReports => &mut self.error_reports,
+      AppOutside::DailyReport => &mut self.daily_report,
+      AppOutside::Browser => &mut self.browser,
+      AppOutside::Automation => &mut self.automation,
+    };
+    *count += 1;
+  }
+}
+
+/// Counts the changes made outside the screens, by project, and the application settings' changes.
 #[derive(Clone)]
-pub struct OutsideChanges(Arc<watch::Sender<HashMap<ProjectId, OutsideCounts>>>);
+pub struct OutsideChanges {
+  projects: Arc<watch::Sender<HashMap<ProjectId, OutsideCounts>>>,
+  app: Arc<watch::Sender<AppOutsideCounts>>,
+}
 
 impl Default for OutsideChanges {
   fn default() -> Self {
-    Self(Arc::new(watch::Sender::new(HashMap::new())))
+    Self {
+      projects: Arc::new(watch::Sender::new(HashMap::new())),
+      app: Arc::new(watch::Sender::new(AppOutsideCounts::default())),
+    }
   }
 }
 
 impl PartialEq for OutsideChanges {
   fn eq(&self, other: &Self) -> bool {
-    Arc::ptr_eq(&self.0, &other.0)
+    Arc::ptr_eq(&self.projects, &other.projects)
   }
 }
 
@@ -112,7 +178,7 @@ impl OutsideChanges {
   /// with this change, before any later one: a screen that made the change takes it as seen.
   pub fn record(&self, project: ProjectId, change: Outside) -> OutsideCounts {
     let mut recorded = OutsideCounts::default();
-    self.0.send_modify(|counts| {
+    self.projects.send_modify(|counts| {
       let counts = counts.entry(project).or_default();
       counts.count(change);
       recorded = *counts;
@@ -122,10 +188,24 @@ impl OutsideChanges {
 
   /// How often each kind of `project`'s data changed so far.
   pub fn counts(&self, project: ProjectId) -> OutsideCounts {
-    self.0.borrow().get(&project).copied().unwrap_or_default()
+    self.projects.borrow().get(&project).copied().unwrap_or_default()
   }
 
   pub fn subscribe(&self) -> watch::Receiver<HashMap<ProjectId, OutsideCounts>> {
-    self.0.subscribe()
+    self.projects.subscribe()
+  }
+
+  /// The application setting `change` names changed. Returns how often each one changed with this change.
+  pub fn record_app(&self, change: AppOutside) -> AppOutsideCounts {
+    let mut recorded = AppOutsideCounts::default();
+    self.app.send_modify(|counts| {
+      counts.count(change);
+      recorded = *counts;
+    });
+    recorded
+  }
+
+  pub fn subscribe_app(&self) -> watch::Receiver<AppOutsideCounts> {
+    self.app.subscribe()
   }
 }

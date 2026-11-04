@@ -25,6 +25,7 @@ use orchester_core::{
   command::SecretVariable,
   connection::{
     app_server::CodexFailure,
+    context_use::ContextUse,
     stream::{AgentEvent, ClaudeStream, InvocationOutcome, InvocationTracker},
   },
   conversation::Message,
@@ -41,7 +42,7 @@ use orchester_core::{
 use orchester_store::{ProjectDb, StoreError};
 use tokio::sync::mpsc;
 
-pub(in crate::execution) use self::review::{ReviewerKeys, estimate_task};
+pub(in crate::execution) use self::review::{ReviewerKeys, answer_side, estimate_task};
 use super::{
   super::{Notifier, control::Ack, tool::CommandFinished},
   app_server::AppServerSession,
@@ -168,6 +169,21 @@ impl Driver {
       Self::Native(handle) => handle.stop(StopMode::Now),
     }
   }
+
+  /// How full the CLI's context is, as its output said so far; a native agent's loop keeps its own reading.
+  fn context(&self) -> Option<ContextUse> {
+    match self {
+      Self::Process {
+        transport: Transport::Claude(claude),
+        ..
+      } => claude.context(),
+      Self::Process {
+        transport: Transport::AppServer(app),
+        ..
+      } => app.context(),
+      Self::Native(_) => None,
+    }
+  }
 }
 
 /// One agent at work and where its news goes.
@@ -265,6 +281,8 @@ pub(super) struct Watch {
   /// The agent's CLI would refuse turns, as its last plan reading said (credits that carry work past a full window
   /// included): a turn that fails now, for no reason the CLI named, stops at that limit instead of failing the step.
   pub(super) plan_reached: bool,
+  /// How full the agent's context is, as last stored for the invocation.
+  context: Option<ContextUse>,
   /// Why Codex said a turn of this invocation failed; a usage limit, once named, stays.
   pub(super) codex_failure: Option<CodexFailure>,
 }
@@ -299,6 +317,7 @@ impl Watch {
       returns_continued: 0,
       idle_continuations: 0,
       plan_reached: false,
+      context: None,
       codex_failure: None,
     })
   }

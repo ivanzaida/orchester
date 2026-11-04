@@ -55,6 +55,7 @@ pub fn group(
     .row(autopilot)
     .row(reviewer)
     .row(rules)
+    .foot(&ctx.t("project_settings.approvalsFoot"))
 }
 fn unavailable_reviewer(ctx: &mut Ctx, props: &Props) -> Element {
   let nav = crate::navigation::Navigation::of(ctx);

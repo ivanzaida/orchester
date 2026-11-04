@@ -109,10 +109,10 @@ impl Component for TaskMemoryTab {
       }
       Read::Failed(reason) => (
         Shown::Scrolls(self.failed(ctx, &state, &reason)),
-        Some(next::panel(ctx, None)),
+        Some(next::panel(ctx, props.task.project.open.project.id(), None)),
       ),
       Read::Ready(memory) => {
-        let side = next::panel(ctx, Some(&memory));
+        let side = next::panel(ctx, props.task.project.open.project.id(), Some(&memory));
         (records(ctx, &state, &memory), Some(side))
       }
     };

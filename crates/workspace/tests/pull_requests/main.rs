@@ -3,11 +3,13 @@
 //! desktop's inbox, which keeps only the open ones (`list`); syncing them through a fake `gh`: a rate limit
 //! that holds every later sync, how the latest sync went, and the closed ones a sync of the open ones keeps
 //! (`sync`); creating one from a task's run (`create`), and whether it would carry the local base's unpushed
-//! commits (`unpushed`).
+//! commits (`unpushed`); a run's pull request's CI (`ci`) and Fix CI (`ci_fix`).
 
 #[path = "../support/mod.rs"]
 mod support;
 
+mod ci;
+mod ci_fix;
 mod create;
 mod feedback;
 mod list;

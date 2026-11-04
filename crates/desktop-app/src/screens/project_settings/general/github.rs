@@ -1,6 +1,8 @@
 //! The repository's GitHub rows (`GitHub repository` `AuIZJ`, `GitHub account` `KjfsB` in `01 · General`; `FDH62` in
 //! `01b`): the stored link with Check again, which reads the folder's origin again, and the account the project expects
-//! with how `gh` matches it; when `gh` is signed in as another account, *Use* it takes the place of the value.
+//! with how `gh` matches it; when `gh` is signed in as another account, *Use* it takes the place of the value. The
+//! stored link is read through its query, which the project's loader read as the project opened; a check records a
+//! change of the project's connections, which reads it again (`queries`).
 use std::{path::PathBuf, sync::Arc};
 
 use lurq::{
@@ -16,8 +18,8 @@ use lurq::{
 use orchester_core::{connection::GitHubState, repository::DetectionState};
 use orchester_workspace::{
   background,
-  messages::{self, Message},
-  project_settings::{self, RepositoryRead, Settings},
+  messages::Message,
+  project_settings::{self, RepositoryRead},
   tasks::outside::Outside,
 };
 
@@ -27,6 +29,7 @@ use super::super::{
   work::{self, Change, Save},
 };
 use crate::{
+  queries::{self, Session, project},
   services::Services,
   theme::{ExtraSpacing, IconSize, ProjectSettingsText},
   ui::{
@@ -43,49 +46,28 @@ use crate::{
 const REPOSITORY_BONE: f32 = 58.0;
 
 #[derive(Clone, PartialEq)]
-struct Read(RepositoryRead, u64);
+struct Read(RepositoryRead);
 impl DevtoolsInspectable for Read {}
-type Check = FutureAction<(PathBuf, u64), Read, Message>;
+type Check = FutureAction<PathBuf, Read, Message>;
 
 /// The two rows, or one that says they are read; a failed read or check says why on the repository's.
-pub fn rows(ctx: &mut Ctx, props: &TabProps, settings: &Settings, save: &Save, revision: u64) -> Vec<Element> {
+pub fn rows(ctx: &mut Ctx, props: &TabProps, save: &Save) -> Vec<Element> {
   let changes = Services::of(ctx).changes;
   let project = props.project.open.project.id();
-  let check: Check = ctx.future_action(move |(root, revision): (PathBuf, u64)| {
+  let check: Check = ctx.future_action(move |root: PathBuf| {
     let changes = changes.clone();
     async move {
-      let read = background::run(move || project_settings::check_repository_in(&root).map(|read| Read(read, revision)))
-        .await??;
+      let read = background::run(move || project_settings::check_repository_in(&root).map(Read)).await??;
       changes.record(project, Outside::Connections);
       Ok(read)
     }
   });
   let checked = check.state().get();
-  let state = ctx
-    .future(
-      (
-        props.project.open.repo_root.clone(),
-        settings.connections.clone(),
-        revision,
-        props.project.feed.outside.get().of(Outside::Connections),
-        checked.data.clone(),
-      ),
-      |(root, _, revision, ..)| async move {
-        background::run(move || project_settings::repository_in(&root).map(|read| Read(read, revision)))
-          .await?
-          .map_err(|e| messages::store_error(&e))
-      },
-    )
-    .state()
-    .get();
-  let fresh = state.data.as_ref().filter(|read| read.1 == revision);
-  let checked_read = checked.data.as_ref().filter(|read| read.1 == revision);
-  // A check's snapshot is useful during its readback, but cannot override later saves.
-  let data = if state.is_pending() {
-    checked_read.or(fresh)
-  } else {
-    fresh.or(checked_read)
-  };
+  let session = Session::of(ctx);
+  let state = queries::state(&ctx.query(project::repository(session, props.project.open.repo_root.clone())));
+  let checked_read = checked.data.as_ref().map(|read| &read.0);
+  // The stored link as read; a check's snapshot until the link was ever read.
+  let data = state.data.as_ref().or(checked_read);
   let error = checked
     .error
     .as_ref()
@@ -114,10 +96,10 @@ pub fn rows(ctx: &mut Ctx, props: &TabProps, settings: &Settings, save: &Save, r
     };
     return vec![reading.render(ctx)];
   };
-  let mut shown = read.0.clone();
-  shown.detection = checked_read.and_then(|read| read.0.detection.clone());
+  let mut shown = read.clone();
+  shown.detection = checked_read.and_then(|read| read.detection.clone());
   vec![
-    repository_row(ctx, (props, &check, revision), &shown, error),
+    repository_row(ctx, (props, &check), &shown, error),
     account_row(ctx, props, save, &shown),
   ]
 }
@@ -125,7 +107,7 @@ pub fn rows(ctx: &mut Ctx, props: &TabProps, settings: &Settings, save: &Save, r
 /// The repository with Check again; its hint says what a check found, why reading failed, or where pushes go.
 fn repository_row(
   ctx: &mut Ctx,
-  (props, check, revision): (&TabProps, &Check, u64),
+  (props, check): (&TabProps, &Check),
   read: &RepositoryRead,
   error: Option<Arc<str>>,
 ) -> Element {
@@ -185,7 +167,7 @@ fn repository_row(
   let again = if check.state().get().is_pending() {
     again
   } else {
-    again.on_click(move || action.run((root.clone(), revision)))
+    again.on_click(move || action.run(root.clone()))
   };
   let again = again.render(ctx);
   let shown = Row::new()

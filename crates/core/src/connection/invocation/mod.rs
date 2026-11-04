@@ -19,7 +19,7 @@ use std::{
 };
 
 pub use self::{
-  chat::ClaudeChat,
+  chat::{ChatSkill, ClaudeChat},
   claude::{ClaudeInvocation, ClaudeMcp, ClaudeSession, first_line, input_line, result_schema},
   codex::{
     CodexAgentFiles, CodexInvocation, ISOLATION as CODEX_ISOLATION, SUB_AGENTS_OFF as CODEX_SUB_AGENTS_OFF,

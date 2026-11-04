@@ -19,10 +19,8 @@ use lurq::{
 };
 use orchester_api::{client::ServerAddress, cloud::CloudServer};
 use orchester_core::id::TeamServerId;
-use orchester_store::StoredCloudAccount;
 use orchester_workspace::sharing::{
   ServerEntry,
-  cloud::Cloud,
   team_join::{JoinOutcome, JoinedServer, TeamJoin},
 };
 
@@ -47,9 +45,10 @@ use crate::{
 /// Where the answers to *Connect* show, under the group.
 const ANSWER: &str = "orchester-joined-answer";
 
-/// The account's team servers, as Orchester Cloud lists them.
+/// The account's team servers, as Orchester Cloud lists them (read by [`super::reads`]); none while signed out or when
+/// the cloud could not say.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub(super) struct Listed(Arc<Vec<CloudServer>>);
+pub(super) struct Listed(pub(super) Arc<Vec<CloudServer>>);
 
 impl DevtoolsInspectable for Listed {}
 
@@ -66,31 +65,6 @@ impl Listed {
       })
       .collect()
   }
-}
-
-/// The team servers of `account`, read at `revision`; none while signed out or when the cloud could not say (logged).
-pub(super) fn listed(ctx: &mut Ctx, revision: u64, cloud: &Cloud, account: Option<&StoredCloudAccount>) -> Listed {
-  let signed_in = account.map(|account| account.account);
-  ctx
-    .future(
-      (revision, signed_in, cloud.clone()),
-      |(_, signed_in, cloud)| async move {
-        if signed_in.is_none() {
-          return Ok::<_, ()>(Listed::default());
-        }
-        let listed = cloud
-          .team_servers()
-          .await
-          .map_err(|error| tracing::warn!(%error, "the account's team servers could not be read"))?;
-        Ok(Listed(Arc::new(
-          listed.into_iter().map(|listed| listed.server).collect(),
-        )))
-      },
-    )
-    .state()
-    .get()
-    .data
-    .unwrap_or_default()
 }
 
 /// What *Connect* came to.

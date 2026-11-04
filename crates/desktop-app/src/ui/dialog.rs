@@ -1,18 +1,20 @@
 //! A confirmation in a modal (confirmations are modals, decided 2026-10-28; `Modal layer` `ZsL7y` in `04d · Bind an
 //! MCP server` `z0iFy`, after `05d · Delete connection` `D3c8ht`): the `scrim` over the window under its title bar,
-//! and the dialog centred in it, 500 wide on `surface_raised` in a `border_strong` stroke, radius 12, with the
-//! dialog's shadow. Its body is 20 at its sides and top, its parts 14 apart: a 32 tile in `warning_muted` with the
-//! glyph in `warning` (or another [`Tone`]) beside the question in 15/600, the parts the caller gives (a choice under
-//! its label, lines of what it does, [`line`]), and for a person-only action the line on `hover` that only the person
-//! confirms it. Its footer, under a `border` line, says *Esc cancels* at its start and ends in *Cancel* and the
-//! actions; a plain footer (`Footer` `a2EDb` of `03 · Install now · runs at work` `MGILm`) ends in a ghost *Cancel*
-//! with its ×, then the actions. Esc and a press on the scrim cancel.
+//! and the dialog centred in it, 500 wide (or as wide as its caller says) on `surface_raised` in a `border_strong`
+//! stroke, radius 12, with the dialog's shadow. Its body is 20 at its sides and top, its parts 14 apart: a 32 tile in
+//! `warning_muted` with the glyph in `warning` (or another [`Tone`]) beside the question in 15/600, the parts the
+//! caller gives (a choice under its label, lines of what it does, [`line`]), and for a person-only action the line on
+//! `hover` that only the person confirms it. Its footer, under a `border` line, says *Esc cancels* at its start, after
+//! what Enter does where Enter confirms it (`Keys` `D0v5t` in `08e · History · Delete confirmation` `I4xzOf`), and
+//! ends in *Cancel* and the actions; a plain footer (`Footer` `a2EDb` of `03 · Install now · runs at work` `MGILm`)
+//! ends in a ghost *Cancel* with its ×, then the actions. Esc and a press on the scrim cancel.
 
 use std::sync::Arc;
 
 use lurq::{
   app::{
     ctx::Ctx,
+    events::KeyboardEvent,
     theme::{BorderSize, PaletteColor, RadiusSize, ShadowStyle, SpacingSize},
   },
   components::{Column, Modal, ModalTarget, Row, Stack, Text},
@@ -43,6 +45,11 @@ pub enum Tone {
   Warning,
   /// `info_muted` with the glyph in `info` (`Tile` `gGQD5` of `MGILm`).
   Info,
+  /// `danger_muted` with the glyph in `danger`: the action destroys (`Tile` `ZVuxg` of `I4xzOf`).
+  Danger,
+  /// `hover` with the glyph in `text_secondary`: the action changes nothing, e.g. an export (`Tile` `C907Pu` of
+  /// `hysCz`).
+  Neutral,
 }
 
 impl Tone {
@@ -50,20 +57,29 @@ impl Tone {
     match self {
       Self::Warning => (PaletteColor::WarningMuted, PaletteColor::Warning),
       Self::Info => (PaletteColor::InfoMuted, PaletteColor::Info),
+      Self::Danger => (PaletteColor::DangerMuted, PaletteColor::Danger),
+      Self::Neutral => (PaletteColor::AccentMuted, PaletteColor::TextSecondary),
     }
   }
 }
+
+/// What Enter does in the dialog: its words beside the key, and the action.
+type Enter = (Arc<str>, Arc<dyn Fn() + Send + Sync>);
 
 pub struct Dialog {
   id: Arc<str>,
   glyph: Icon,
   tone: Tone,
+  width: f32,
   title: Arc<str>,
+  /// What the dialog is about, under its title.
+  what: Option<Arc<str>>,
   parts: Vec<Element>,
   person_only: Option<Arc<str>>,
   cancel: Arc<str>,
   /// The footer without *Esc cancels*, its *Cancel* a ghost button with its ×.
   plain_footer: bool,
+  enter: Option<Enter>,
   actions: Vec<ActionButton>,
   under: Vec<Element>,
 }
@@ -75,11 +91,14 @@ impl Dialog {
       id: id.into(),
       glyph,
       tone: Tone::default(),
+      width: DIALOG_WIDTH,
       title: title.into(),
+      what: None,
       parts: Vec::new(),
       person_only: None,
       cancel: cancel.into(),
       plain_footer: false,
+      enter: None,
       actions: Vec::new(),
       under: Vec::new(),
     }
@@ -91,9 +110,28 @@ impl Dialog {
     self
   }
 
+  /// `width` wide instead of the dialog's own 500, a structural size its caller names with its design node.
+  pub fn width(mut self, width: f32) -> Self {
+    self.width = width;
+    self
+  }
+
+  /// What the dialog is about, in 11.5 `text_muted` 2 under its title (`<id>-what`; `What` `eoJka` of `hysCz`).
+  pub fn what(mut self, what: impl Into<Arc<str>>) -> Self {
+    self.what = Some(what.into());
+    self
+  }
+
   /// The footer without *Esc cancels*: a ghost *Cancel* with its ×, then the actions.
   pub fn plain_footer(mut self) -> Self {
     self.plain_footer = true;
+    self
+  }
+
+  /// Enter, pressed while no text field has the focus, runs `confirm`; the footer says so with `does` before *Esc
+  /// cancels*.
+  pub fn on_enter(mut self, does: impl Into<Arc<str>>, confirm: impl Fn() + Send + Sync + 'static) -> Self {
+    self.enter = Some((does.into(), Arc::new(confirm)));
     self
   }
 
@@ -125,15 +163,17 @@ impl Dialog {
   pub fn render(mut self, ctx: &Ctx, open: &Signal<bool>) -> Element {
     let id = self.id.clone();
     let actions = std::mem::take(&mut self.actions);
+    let enter = self.enter.take();
     let footer = if self.plain_footer {
       plain_footer(&id, &self.cancel, actions, open)
     } else {
-      footer(ctx, &id, &self.cancel, actions, open)
+      footer(ctx, &id, (&self.cancel, enter.as_ref()), actions, open)
     };
+    let width = self.width;
     let body = self.body();
     let dialog = Column::new()
       .id(id.to_string())
-      .width(Dimension::Px(DIALOG_WIDTH))
+      .width(Dimension::Px(width))
       .background(PaletteColor::SurfaceRaised)
       .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
       .rounded(RadiusSize::Lg)
@@ -159,6 +199,15 @@ impl Dialog {
       .padding(Padding::new().top(Dimension::Px(TITLE_BAR_HEIGHT)))
       .hit_test(HitTestBehavior::ContentOnly)
       .child(layer);
+    let window = match enter {
+      Some((_, confirm)) => window.on_key_down(move |event: KeyboardEvent| {
+        if event.key == "Enter" && !event.text_input_focused && !event.composing {
+          event.prevent_default();
+          confirm();
+        }
+      }),
+      None => window,
+    };
     Modal::new(window).target(ModalTarget::Root).open(open.clone()).into()
   }
 
@@ -174,17 +223,28 @@ impl Dialog {
       .rounded(ExtraRadius::Tile.role())
       .background(fill)
       .child(icon(self.glyph, IconSize::Lg, glyph));
+    let what = self.what.as_ref().map(|what| {
+      Text::new(what)
+        .id(format!("{id}-what"))
+        .variant(DialogText::Detail.role())
+    });
     let head = Row::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Md)
       .align_items(Alignment::Center)
       .child(tile)
       .child(
-        Text::new(&self.title)
-          .id(format!("{id}-title"))
-          .variant(DialogText::Title.role())
+        Column::new()
           .flex(1.0)
-          .min_width(Dimension::Px(0.0)),
+          .min_width(Dimension::Px(0.0))
+          .spacing(ExtraSpacing::Tight.role())
+          .child(
+            Text::new(&self.title)
+              .id(format!("{id}-title"))
+              .variant(DialogText::Title.role())
+              .width(Dimension::Pct(100.0)),
+          )
+          .with_children(what),
       );
     let person = self.person_only.as_ref().map(|words| {
       Row::new()
@@ -221,24 +281,40 @@ impl Dialog {
   }
 }
 
-/// *Esc cancels*, *Cancel* and the actions.
-fn footer(ctx: &Ctx, id: &str, cancel: &str, actions: Vec<ActionButton>, open: &Signal<bool>) -> Row {
+/// What Enter does when it confirms, *Esc cancels*, *Cancel* and the actions.
+fn footer(
+  ctx: &Ctx,
+  id: &str,
+  (cancel, enter): (&str, Option<&Enter>),
+  actions: Vec<ActionButton>,
+  open: &Signal<bool>,
+) -> Row {
   let shut = open.clone();
   let cancel = ActionButton::new(format!("{id}-cancel"), ButtonKind::Secondary, cancel)
     .in_form()
     .on_click(move || shut.set(false));
+  let words = |text: &str| Text::new(text).variant(DialogText::Keys.role()).nowrap();
+  // The pairs are a cap's gap further apart than a key and its words (`Gap` `t5dAz`).
+  let enter = enter.map(|(does, _)| -> [Element; 3] {
+    [
+      key_cap(&format!("{id}-enter"), &ctx.t("ui.dialog.enterKey")),
+      words(does).into(),
+      Row::new()
+        .width(Dimension::Px(ExtraSpacing::Snug.value()))
+        .flex_shrink(0.0)
+        .into(),
+    ]
+  });
   footer_row(id)
     .child(
       Row::new()
+        .id(format!("{id}-keys"))
         .flex(1.0)
         .spacing(ExtraSpacing::Snug.role())
         .align_items(Alignment::Center)
+        .with_children(enter.into_iter().flatten().collect::<Vec<Element>>())
         .child(key_cap(&format!("{id}-esc"), &ctx.t("ui.dialog.escKey")))
-        .child(
-          Text::new(&ctx.t("ui.dialog.escCancels"))
-            .variant(DialogText::Keys.role())
-            .nowrap(),
-        ),
+        .child(words(&ctx.t("ui.dialog.escCancels"))),
     )
     .child(cancel)
     .with_children(actions.into_iter().map(ActionButton::in_form))

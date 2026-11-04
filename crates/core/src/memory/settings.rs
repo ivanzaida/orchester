@@ -1,4 +1,4 @@
-//! Project settings › Memory: how agents' writes are kept, for task memory and for project memory
+//! Project settings › Context › Memory: how agents' writes are kept, for task memory and for project memory
 //! separately, and how much memory an agent's prompt gets. Read at every invocation, so a change
 //! applies to the next agent that starts; records already proposed stay proposed when a scope
 //! switches to saving automatically.

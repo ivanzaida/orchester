@@ -5,7 +5,7 @@ use orchester_workspace::app_updates::{
 };
 use serde_json::{Value, json};
 
-const DESCRIPTION: &str = "Where this copy's own update stands, as Settings › Updates shows it: `running` (this copy's \
+const DESCRIPTION: &str = "Where this copy's own update stands, as Settings › General's Updates shows it: `running` (this copy's \
   version), `updated` (the version and notes this start updated to, or null) and `state`: up_to_date (checked_at), \
   checking, downloading (version, received, total, percent), paused (the same: the person paused the download), ready \
   (version, notes, critical), waiting_for_runs (the same and runs), installing (the same and step: waiting_for_runs \

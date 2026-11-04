@@ -91,7 +91,7 @@ impl From<Pill> for Element {
 }
 
 /// `pills` in a row, then `end` at its right.
-pub(crate) fn strip(id: &str, pills: Vec<Pill>, end: Vec<Pill>) -> Row {
+pub(crate) fn strip(id: &str, pills: Vec<Pill>, end: Element) -> Row {
   Row::new()
     .id(id.to_owned())
     .width(Dimension::Pct(100.0))
@@ -99,5 +99,5 @@ pub(crate) fn strip(id: &str, pills: Vec<Pill>, end: Vec<Pill>) -> Row {
     .align_items(Alignment::Center)
     .with_children(pills.into_iter().map(Element::from))
     .child(Row::new().flex(1.0))
-    .with_children(end.into_iter().map(Element::from))
+    .child(end)
 }

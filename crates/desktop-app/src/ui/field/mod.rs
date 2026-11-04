@@ -15,7 +15,7 @@ use lurq::{
 };
 
 pub use self::{
-  input::FieldInput,
+  input::{FieldInput, UnitLook},
   number::NumberField,
   select::{SelectField, select_style},
 };

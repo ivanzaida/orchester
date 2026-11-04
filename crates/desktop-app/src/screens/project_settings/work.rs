@@ -1,11 +1,8 @@
-//! Off-thread saves using workspace services, and the page's read/save feedback.
-use std::{
-  path::PathBuf,
-  sync::{
-    Arc,
-    atomic::{AtomicBool, Ordering},
-  },
-};
+//! Off-thread saves using workspace services, and the page's read/save feedback. The tabs read the project's settings
+//! through their query (`queries::project::project_settings`), which the project's loader read as the project opened.
+//! A save reads the settings back right after writing them, which the tab shows at once, and records its change, which
+//! reads the query again (`queries`); what the save read shows until the query has it.
+use std::{path::PathBuf, sync::Arc};
 
 use lurq::{
   app::{
@@ -14,6 +11,7 @@ use lurq::{
   },
   core::Signal,
   node::Element,
+  query::QueryHandle,
 };
 use orchester_core::{
   id::{ConnectionId, ProjectId},
@@ -25,19 +23,18 @@ use orchester_workspace::{
   connections::github::expect_active_account_in,
   messages::{self, Message},
   project_settings::{self, Settings},
-  tasks::outside::{Outside, OutsideCounts},
+  tasks::outside::Outside,
 };
-use parking_lot::Mutex;
 
 use super::{Status, TabProps};
 use crate::{
-  project::{ProjectFeed, own::OwnChanges},
+  queries::{self, Kept, Session, project},
   services::Services,
   ui::{field::field_error, message::message_text, skeleton::Skeleton, state::load_error},
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Read(pub Settings, pub u64);
+pub struct Read(pub Settings);
 impl DevtoolsInspectable for Read {}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Change {
@@ -65,10 +62,9 @@ pub enum Change {
   /// Revokes a rule of the project's (*Approve for every run of this project*).
   Revoke(ProjectRuleId),
 }
-/// The settings as the save read them after writing, and the project's change counts right after the save
-/// recorded its change.
+/// The settings as the save read them after writing.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Saved(pub Settings, pub OutsideCounts);
+pub struct Saved(pub Settings);
 impl DevtoolsInspectable for Saved {}
 pub type Save = FutureAction<(PathBuf, Change), Saved, Message>;
 
@@ -117,110 +113,50 @@ pub fn action(ctx: &mut Ctx, project: ProjectId) -> Save {
           }
         }
         // Right after the write, whether or not the tab is still there to take the save: every screen that
-        // shows the change reads it again.
-        let counts = changes.record(project, outside);
+        // shows the change reads it again, and so does the settings' query.
+        changes.record(project, outside);
         project_settings::load_in(&root)
-          .map(|settings| Saved(settings, counts))
+          .map(Saved)
           .map_err(|e| messages::store_error(&e))
       })
       .await?
     }
   })
 }
-/// What a tab's own saves leave for its reads: the settings a save read right after writing, which the read the
-/// save asks for takes instead of reading them again, and the changes of the kinds the tab shows, its own too.
-#[derive(Clone)]
-pub struct OwnSaves {
-  read: Arc<Mutex<Option<Settings>>>,
-  changes: OwnChanges,
-  /// How many of the tab's saves run now.
-  saving: Signal<u32>,
-  /// The count the tab last read at, which holds while a save of its own runs.
-  last: Arc<Mutex<u64>>,
+/// The project's settings as its query has them, and the query, which *Try again* reads again.
+pub struct Loaded {
+  pub state: FutureState<Read, Message>,
+  query: QueryHandle<Settings, Message>,
 }
 
-impl OwnSaves {
-  pub fn new(ctx: &mut Ctx, kinds: &'static [Outside]) -> Self {
-    Self {
-      read: Arc::default(),
-      changes: OwnChanges::new(ctx, kinds),
-      saving: ctx.signal(0),
-      last: Arc::default(),
-    }
-  }
-
-  /// Follows a save of the tab's as it runs (`pending`) and ends; `begun` is that save's own mark.
-  pub fn saving(&self, pending: bool, begun: &AtomicBool) {
-    if pending != begun.swap(pending, Ordering::Relaxed) {
-      self.saving.update(|saving| {
-        *saving = if pending { *saving + 1 } else { saving.saturating_sub(1) };
-      });
-    }
-  }
-
-  /// How often the kinds the tab shows changed. Reading it in a render renders again when it moves. While a save of
-  /// the tab's runs, it holds: the save records its change before the tab takes it, and a change counted
-  /// meanwhile is read once the save ended. Once a change was counted after the tab's own save, what that save
-  /// read is not taken: the tab reads the settings again.
-  pub fn count(&self, feed: &ProjectFeed) -> u64 {
-    let count = self.changes.count(feed);
-    if self.saving.get() > 0 {
-      return *self.last.lock();
-    }
-    if self.changes.newer(feed) {
-      self.read.lock().take();
-    }
-    *self.last.lock() = count;
-    count
-  }
-
-  /// Takes a save of the tab's own: the tab's next read is what the save read, and the change the save recorded
-  /// is seen, so neither the tab's revision nor the feed catching up reads the settings again. A change made
-  /// after the save recorded its own still reads them again.
-  pub fn took(&self, saved: &Saved) {
-    self.changes.saw(saved.1);
-    *self.read.lock() = Some(saved.0.clone());
+impl Loaded {
+  /// What a tab shows: what its own last save read back, until the query has it or read again since (a failed save
+  /// kept nothing), else the query's.
+  pub fn shown(&self, kept: &Kept<Read>, saving: bool) -> Option<Read> {
+    kept.over((self.state.data.clone(), &self.query), saving)
   }
 }
 
-pub fn load(ctx: &mut Ctx, root: PathBuf, revision: u64, own: &OwnSaves) -> FutureState<Read, Message> {
-  let saved = Arc::clone(&own.read);
-  let hold = crate::services::Services::of(ctx).hold;
-  let mut state = ctx
-    .future((root, revision), move |(root, revision)| {
-      let saved = saved.lock().take();
-      if saved.is_none() {
-        tracing::trace!(target: crate::app_log::READ_LOG, read = "project settings");
-      }
-      let hold = hold.clone();
-      async move {
-        if let Some(settings) = saved {
-          return Ok(Read(settings, revision));
-        }
-        hold.released().await;
-        background::run(move || project_settings::load_in(&root).map(|settings| Read(settings, revision)))
-          .await?
-          .map_err(|e| messages::store_error(&e))
-      }
-    })
-    .state()
-    .get();
-  // Futures retain their previous data when dependencies change. It is no longer a fresh read.
-  if state.data.as_ref().is_some_and(|read| read.1 != revision) {
-    state.data = None;
+/// The settings of the project at `root`, from the session's cache: its last read in the first frame, read again
+/// behind it when a change invalidated it.
+pub fn load(ctx: &mut Ctx, root: PathBuf) -> Loaded {
+  let session = Session::of(ctx);
+  let query = ctx.query(project::project_settings(session, root));
+  let FutureState { status, data, error } = queries::state(&query);
+  Loaded {
+    state: FutureState {
+      status,
+      data: data.map(Read),
+      error,
+    },
+    query,
   }
-  state
 }
-pub fn follow(
-  ctx: &mut Ctx,
-  save: &Save,
-  status: Signal<Status>,
-  (revision, stored, own): (Signal<u64>, Signal<Option<Read>>, OwnSaves),
-) {
+
+/// Follows the tab's `save`: the page's `status`, and what the save read back, `kept` until the query moves on.
+pub fn follow(ctx: &mut Ctx, save: &Save, status: Signal<Status>, kept: Kept<Read>) {
   let project = ctx.props::<TabProps>().project.clone();
-  let begun = AtomicBool::new(false);
   ctx.watch(&save.state(), move |state| {
-    own.saving(state.is_pending(), &begun);
     if state.is_pending() {
       status.set(Status::Saving);
       return;
@@ -229,10 +165,8 @@ pub fn follow(
       tracing::warn!(key=%error.key, "project settings save failed");
       status.set(Status::Failed);
     } else if let Some(saved) = &state.data {
-      stored.set(Some(Read(saved.0.clone(), u64::MAX)));
+      kept.keep(Read(saved.0.clone()));
       status.set(Status::Saved);
-      own.took(saved);
-      revision.update(|r| *r += 1);
       project.feed.saved();
     }
   });
@@ -252,22 +186,17 @@ pub fn error(ctx: &Ctx, save: &Save) -> Option<Element> {
     .error
     .map(|e| field_error("settings-save-error", &message_text(ctx, &e)).into())
 }
-/// What a tab shows before its settings are read: why reading failed with Try again, or the `bones` it builds in its
-/// skeleton, named *Reading project settings…* (`project_settings.reading`).
-pub fn pending<T: Into<Element>>(
-  ctx: &mut Ctx,
-  state: &FutureState<Read, Message>,
-  revision: &Signal<u64>,
-  bones: impl FnOnce(&mut Ctx) -> T,
-) -> Element {
-  match &state.error {
+/// What a tab shows before its settings were ever read: why reading failed with Try again, or the `bones` it builds in
+/// its skeleton, named *Reading project settings…* (`project_settings.reading`).
+pub fn pending<T: Into<Element>>(ctx: &mut Ctx, loaded: &Loaded, bones: impl FnOnce(&mut Ctx) -> T) -> Element {
+  match &loaded.state.error {
     Some(error) => {
-      let revision = revision.clone();
+      let query = loaded.query.clone();
       load_error(
         ctx,
         "settings-load-error",
         (&ctx.t("project_settings.loadFailed"), &message_text(ctx, error)),
-        move || revision.update(|r| *r += 1),
+        move || query.refresh(),
       )
     }
     None => {

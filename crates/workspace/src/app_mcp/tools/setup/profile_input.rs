@@ -3,9 +3,8 @@
 //! what the editor offers is taken: permissions the connection's CLI enforces on this computer, the
 //! project's MCP servers (adding only one that is turned on), an effort the model lists, and no approval switches or
 //! MCP servers on a connection whose agents Orchester runs itself. Permissions and MCP servers broader than the
-//! profile's latest published version (before its first: what a new profile starts with,
-//! [`AgentPermissions::for_new_profile`], and no server) are a person's decision ([`widening`]); narrowing them is
-//! always taken.
+//! profile's latest published version (before its first: the most restrictive its CLI enforces, no server) are a
+//! person's decision ([`widening`]); narrowing them is always taken.
 
 use std::path::Path;
 
@@ -72,8 +71,8 @@ pub struct SaveProfileDraft {
   pub model: String,
   /// A reasoning effort the model lists; left out, the CLI's default.
   pub effort: Option<String>,
-  /// Left out: a new profile gets the most restrictive permissions its CLI enforces with Approve automatically on
-  /// (off on a connection whose agents Orchester runs), a profile being changed keeps its own.
+  /// Left out: a new profile gets the most restrictive permissions its CLI enforces, a profile being
+  /// changed keeps its own.
   pub permissions: Option<Permissions>,
   /// MCP servers of the project its agents get, by id or name.
   #[serde(default)]
@@ -99,9 +98,6 @@ pub struct Permissions {
   /// Ask a person before each MCP or app tool call.
   #[serde(default)]
   pub ask_before_tool_calls: bool,
-  /// Approve automatically (don't ask me): Orchester answers what would ask a person. Left out, off.
-  #[serde(default)]
-  pub approve_automatically: bool,
   /// Who answers tool requests; left out, manual. Switching to autopilot is a person's decision.
   #[serde(default)]
   pub approval_mode: Approvals,
@@ -200,7 +196,7 @@ pub async fn save_profile_draft(services: &Services, args: SaveProfileDraft) -> 
         permissions(given, &root, kept)?
       }
       None => existing.map_or_else(
-        || AgentPermissions::for_new_profile(connection.provider(), Platform::current()),
+        || AgentPermissions::most_restrictive(connection.provider(), Platform::current()),
         |entry| entry.profile.permissions().clone(),
       ),
     };
@@ -314,7 +310,6 @@ fn permissions(given: &Permissions, root: &Path, kept: BrowserPermission) -> Res
   let mut permissions =
     AgentPermissions::new(given.repository.into(), commands, network).with_writable_folders(folders);
   permissions.set_interactive_tool_approvals(given.ask_before_tool_calls);
-  permissions.set_auto_approve(given.approve_automatically);
   permissions.set_browser(browser);
   permissions.set_approval_mode(given.approval_mode.into());
   Ok(permissions)
@@ -347,7 +342,7 @@ fn offered(
   if let Err(problem) = permissions.enforced_on(provider, Platform::current()) {
     return Err(refused("permissions_not_enforced", not_enforceable(&problem)));
   }
-  let switches = permissions.interactive_tool_approvals() || permissions.auto_approve() || !args.mcp_servers.is_empty();
+  let switches = permissions.interactive_tool_approvals() || !args.mcp_servers.is_empty();
   if provider.is_native() && switches {
     return Err(refused("not_offered", Message::new("appMcp.errors.nativeNoSwitches")));
   }
