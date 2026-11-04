@@ -361,14 +361,8 @@ async fn answer(
     },
     Command::StopTurn { run } => return later.answer(run, async move { handle.stop_turn(run).await }),
     Command::Browser(ref command) => return later.browser(handle, command.clone()),
-    Command::EstimateTask { task } => {
-      return later.reply(async move {
-        match handle.estimate_task(task).await {
-          Ok(outcome) => Reply::TaskEstimated { task, outcome },
-          Err(rejection) => Reply::Rejected(rejection),
-        }
-      });
-    }
+    Command::RunGit(ref git) => return later.reply(handle.run_git(git.clone())),
+    Command::EstimateTask { task } => return answer_estimate(&later, handle, task),
     Command::SetErrorReports { ref reports } => return Answer::ErrorReports(id, reports.clone()),
   };
   Answer::Reply(Event::Reply { id, reply })
@@ -513,6 +507,15 @@ fn answer_check(later: &Later<'_>, scheduler: Scheduler, provider: AgentProvider
   later.reply(async move {
     match scheduler.check_connection(provider, api).await {
       Ok((result, models)) => Reply::ConnectionChecked { result, models },
+      Err(rejection) => Reply::Rejected(rejection),
+    }
+  })
+}
+
+fn answer_estimate(later: &Later<'_>, scheduler: Scheduler, task: TaskId) -> Answer {
+  later.reply(async move {
+    match scheduler.estimate_task(task).await {
+      Ok(outcome) => Reply::TaskEstimated { task, outcome },
       Err(rejection) => Reply::Rejected(rejection),
     }
   })

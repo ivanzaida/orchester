@@ -90,7 +90,7 @@ Where the desktop touches a run's worktree today (`crates/workspace/src/`):
 | Recovery state of a run's folder | `recovery/mod.rs:239` |
 | Warm workspaces' folders and sizes, ended worktrees' sizes | `warm_workspaces/{actions,mod}.rs`, `storage.rs:100` |
 | Code index rebuild | `code_index/mod.rs:156` |
-| Orchestrator chat git tools in a run's worktree | `orchestrator/git/place.rs:58` |
+| Orchestrator chat git tools in a run's worktree | Through the runner since ORC-691 (`Command::RunGit`, protocol 40): `orchestrator/git/host.rs`, the runner's `execution/executor/run_git.rs` |
 
 ## Not part of the preparation
 

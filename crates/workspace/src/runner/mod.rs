@@ -19,6 +19,7 @@ mod idle;
 mod lifetime;
 mod report;
 mod requests;
+mod run_git;
 pub mod state;
 mod work;
 
@@ -43,6 +44,7 @@ pub use self::{
   idle::ForgetRefusal,
   report::RunnerStatus,
   requests::RequestError,
+  run_git::ThroughRunner,
   work::{ActiveWork, ActiveWorkFields, SaveState},
 };
 use self::{

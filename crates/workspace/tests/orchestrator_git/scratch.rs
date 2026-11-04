@@ -6,7 +6,7 @@
 use std::{
   fs,
   path::{Path, PathBuf},
-  sync::Arc,
+  sync::{Arc, Mutex},
   time::Duration,
 };
 
@@ -14,17 +14,32 @@ use orchester_core::{
   command::{Command, CommandError, CommandOutput, CommandRunner},
   id::ProjectId,
   name::Name,
-  orchestrator::git::GitChange,
+  orchestrator::{git::GitChange, run_git::RunGitRequest},
   project::{Project, ProjectKey},
 };
 use orchester_exec::{ProcessRunner, programs::Programs};
 use orchester_store::{ProjectDb, exclude_project_data};
 use orchester_workspace::{
   app_mcp::ToolError,
-  orchestrator::git::{Called, Timeouts, apply, call},
+  orchestrator::git::{Called, RunGit, Timeouts, apply, call},
+  runner::RunRequestError,
 };
 use serde_json::Value;
 use tempfile::TempDir;
+
+use super::runner::{Noted, Runner};
+
+/// No runner: for git in a folder of no project's runs, which never asks one.
+pub struct NoRuns;
+
+impl RunGit for NoRuns {
+  fn call(
+    &self,
+    request: RunGitRequest,
+  ) -> Result<orchester_core::orchestrator::run_git::RunGitAnswer, RunRequestError> {
+    panic!("git in a checkout asked a runner: {request:?}")
+  }
+}
 
 /// git with the settings file `global` only, looking for no repository above `ceiling`.
 struct Isolated {
@@ -62,7 +77,11 @@ impl CommandRunner for Isolated {
 pub struct Scratch {
   pub dir: TempDir,
   runner: Arc<Isolated>,
+  /// The desktop's programs, which note where they ran git.
   pub programs: Programs,
+  desktop: Arc<Noted>,
+  /// The project's runner, which runs git in the runs' worktrees.
+  pub runs: Runner,
 }
 
 impl Scratch {
@@ -82,8 +101,20 @@ impl Scratch {
       global,
       ceiling: dir.path().to_path_buf(),
     });
-    let programs = Programs::with_runner(runner.clone());
-    let scratch = Self { dir, runner, programs };
+    let desktop = Arc::new(Noted::new(runner.clone()));
+    let programs = Programs::with_runner(desktop.clone());
+    let runs = Runner {
+      root: dir.path().join("kontur"),
+      programs: Programs::with_runner(runner.clone()),
+      asked: Mutex::default(),
+    };
+    let scratch = Self {
+      dir,
+      runner,
+      programs,
+      desktop,
+      runs,
+    };
     scratch.git_in(scratch.dir.path(), &["init", "--bare", "origin.git"]);
     scratch.git_in(scratch.dir.path(), &["init", "kontur"]);
     scratch.write("README.md", "Kontur\n");
@@ -166,11 +197,21 @@ impl Scratch {
       panic!("arguments are an object");
     };
     call(
-      &self.programs,
+      (&self.programs, &self.runs),
       &self.root(),
       (name, arguments),
       (writes, Timeouts::STANDARD),
     )
+  }
+
+  /// Whether the desktop's own programs ran git in `dir` or a folder in it.
+  pub fn desktop_ran_in(&self, dir: &Path) -> bool {
+    self.desktop.ran_in(dir)
+  }
+
+  /// The requests the runner was asked.
+  pub fn asked_runner(&self) -> Vec<RunGitRequest> {
+    self.runs.asked.lock().expect("the requests").clone()
   }
 
   /// A read's answer.
@@ -207,7 +248,7 @@ impl Scratch {
 
   /// The person applies `change`.
   pub fn apply(&self, change: &GitChange) -> Result<Value, ToolError> {
-    apply(&self.programs, &self.root(), change, Timeouts::STANDARD)
+    apply((&self.programs, &self.runs), &self.root(), change, Timeouts::STANDARD)
   }
 }
 
