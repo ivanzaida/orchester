@@ -19,7 +19,7 @@ pub enum ActionError {
   /// The project is a team's, and no session of its server is signed in: nothing is changed on this computer instead.
   #[error("the project's team server is not signed in")]
   NoTeamSession,
-  /// The session given is another server project's than the one the project is linked to.
+  /// The session given is another server's, or another server project's, than the one the project is linked to.
   #[error("the session is another server project's")]
   OtherProject,
   /// The session the dispatcher was made in ended: the person signed out or switched account or server.

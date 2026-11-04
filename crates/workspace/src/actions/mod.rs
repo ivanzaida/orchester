@@ -1,21 +1,24 @@
-//! The one entry point of the actions on a project's tasks, modules, tags, claims, assignment, workspace policy and
-//! delivery (team authority P2, `docs/architecture/team-authority-plan.md` §4, "Action architecture"). The
+//! The one entry point of the actions on a project's tasks, modules, tags, claims, assignment, workspace policy, work
+//! and delivery (team authority P2, `docs/architecture/team-authority-plan.md` §4, "Action architecture"). The
 //! [`Dispatcher`] takes a typed [`Intent`], finds who owns its project and target from the project database
 //! ([`ownership`]), checks its inputs without any effect and classifies it ([`ActionClass`]). A local project's action
-//! runs as it always did ([`local`]). A team project's goes to its server as a command with its operation id, the
-//! revisions it was decided on and its typed inputs ([`command`]), recorded before it is sent so that a lost response
-//! is looked up or sent again under the same id ([`team`]); only the local effects its receipt names happen
-//! ([`effects`]), and the outcome says which of them did ([`TeamOutcome`]). A refused team command never becomes a
-//! local change. Nothing calls the dispatcher yet: the desktop's controls, the MCP tools and the Orchestrator move onto
-//! it in P6 and P7.
+//! runs as it always did ([`local`]). A team project's goes to its server by the server's own contract ([`route`]):
+//! either as a command with its operation id, the revisions it was decided on and its typed inputs ([`command`]),
+//! recorded before it is sent so that a lost response is looked up or sent again under the same id ([`team`]), with
+//! only the local effects its receipt names ([`effects`]); or, for a definition, on that definition's admin-checked
+//! route under the revision read ([`definition`]). The outcome says which happened ([`TeamOutcome`]). A refused team
+//! action never becomes a local change. Nothing calls the dispatcher yet: the desktop's controls, the MCP tools and
+//! the Orchestrator move onto it in P6 and P7.
 
 mod action;
 mod command;
+mod definition;
 mod effects;
 mod error;
 mod local;
 mod outcome;
 mod ownership;
+mod route;
 mod team;
 
 use std::path::PathBuf;
@@ -26,13 +29,14 @@ use orchester_store::{ProjectDb, StoreError};
 pub use self::{
   action::{
     Action, ActionClass, AssignmentAction, ClaimAction, DeliveryAction, Intent, ModuleAction, PolicyAction, TagAction,
-    TaskAction,
+    TaskAction, WorkAction,
   },
   error::ActionError,
-  outcome::{ActionOutcome, Current, LocalResult, Receipt, TeamOutcome},
+  outcome::{Accepted, ActionOutcome, Current, Definition, LocalResult, Receipt, Refusal, TeamOutcome},
 };
 use self::{
   ownership::{ProjectOwner, project_owner},
+  route::{TeamRoute, team_route},
   team::Operations,
 };
 use crate::{sharing::Servers, tasks::writer::TaskWriter, team_reads::TeamSession};
@@ -63,7 +67,8 @@ impl Dispatcher {
   }
 
   /// Carries out `intent`: on this computer for a local project, on the team server for a team project. Sending the
-  /// same intent again is safe: a team operation recorded before is looked up and carried on, not sent anew.
+  /// same intent again is safe: a team operation recorded before is looked up and carried on, not sent anew, and a
+  /// definition edit is decided on the revision read or keyed by the intent.
   pub async fn dispatch(&self, intent: &Intent) -> Result<ActionOutcome, ActionError> {
     let mut db = ProjectDb::open(&self.root)?;
     let ProjectOwner::Team(link) = project_owner(&db, self.team.as_ref())? else {
@@ -74,13 +79,21 @@ impl Dispatcher {
       let mut writer = TaskWriter::open(&self.root, &self.servers)?;
       return local::run(&mut writer, intent.operation(), intent.action()).map(ActionOutcome::Local);
     };
-    let request = command::team_request(&db, link, intent.action())?;
-    let mut operations = Operations {
-      db: &mut db,
-      session: self.session()?,
-      link,
+    let session = self.session()?;
+    let outcome = match team_route(&db, link, intent.operation(), intent.action())? {
+      TeamRoute::Command(request) => {
+        let mut operations = Operations {
+          db: &mut db,
+          session,
+          link,
+        };
+        operations.dispatch(intent.operation(), request).await?
+      }
+      TeamRoute::Definition(edit) => {
+        drop(db);
+        definition::carry_out(session, intent.operation(), &edit).await?
+      }
     };
-    let outcome = operations.dispatch(intent.operation(), request).await?;
     Ok(ActionOutcome::Team(outcome))
   }
 

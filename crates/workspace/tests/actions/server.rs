@@ -1,8 +1,10 @@
-//! A fake team server on loopback for the S4 commands: one project with its tasks, an Admin's and a member's tokens,
-//! and every operation's receipt or refusal kept by account and operation id with its request, so the same request
-//! under the same id answers the same receipt and another request under it is `operation_mismatch`. A member's
-//! definition write is `forbidden`, a stale expected revision `revision_conflict`. A test makes the server commit the
-//! next command and hang up without answering, and chooses the id of the next task it creates.
+//! A fake team server on loopback with the team server's routes and shapes (`docs/cloud-api.md`, "Team authority P2
+//! commands"): one project with its tasks and workspace policy, an Admin's and a member's tokens. The commands with
+//! their receipts are in [`crate::commands`]. The definition routes keep the server's rules: `PATCH
+//! /api/v1/projects/{p}/tasks/{t}` is the Admin's (`403 not_admin` for a member) on the task's revision
+//! (`409 revision_conflict` with the current task), and `PATCH /api/v2/projects/{p}/policy` on the policy's revision
+//! (`409 policy_revision_conflict` with the current policy). A test makes the server carry out the next write and hang
+//! up without answering, and chooses the id of the next task it creates.
 
 use std::{
   collections::HashMap,
@@ -11,7 +13,7 @@ use std::{
   thread,
 };
 
-use orchester_core::id::{ClaimId, ProjectId, TaskId, UserId, WorkId};
+use orchester_core::id::{ProjectId, ServerId, TaskId, UserId};
 use parking_lot::Mutex;
 use serde_json::{Value, json};
 
@@ -23,6 +25,7 @@ pub const MEMBER: &str = "member-token";
 #[derive(Clone)]
 pub struct TeamServer {
   pub url: String,
+  pub server: ServerId,
   pub project: ProjectId,
   state: Arc<Mutex<State>>,
 }
@@ -36,15 +39,19 @@ pub struct Task {
 }
 
 #[derive(Default)]
-struct State {
-  tasks: Vec<Task>,
+pub struct State {
+  pub tasks: Vec<Task>,
+  /// The workspace policy: its revision and automatic merge.
+  pub policy: (u64, bool),
   /// By token and operation id: the request (expected revisions and command) and the kept answer.
-  operations: HashMap<(String, String), (Value, u16, Value)>,
-  cursor: u64,
+  pub operations: HashMap<(String, String), (Value, u16, Value)>,
+  pub cursor: u64,
   lose_next: bool,
-  next_task: Option<TaskId>,
+  pub next_task: Option<TaskId>,
+  /// Every request to `POST …/commands`, and every write a definition route carried out.
   commands: usize,
-  created: usize,
+  pub created: usize,
+  writes: usize,
 }
 
 impl TeamServer {
@@ -54,6 +61,7 @@ impl TeamServer {
     let url = format!("http://{}", listener.local_addr().expect("address"));
     let state = Arc::new(Mutex::new(State {
       cursor: 10,
+      policy: (1, false),
       ..State::default()
     }));
     let project = ProjectId::generate();
@@ -64,7 +72,12 @@ impl TeamServer {
         thread::spawn(move || answer(&state, project, stream));
       }
     });
-    Self { url, project, state }
+    Self {
+      url,
+      server: ServerId::generate(),
+      project,
+      state,
+    }
   }
 
   /// A task the project has, at revision 1.
@@ -93,7 +106,17 @@ impl TeamServer {
     state.tasks.iter().find(|task| task.id == id).expect("a task").clone()
   }
 
-  /// The next command is committed and its connection closed without an answer.
+  /// Turns the automatic merge on or off as another Admin would, raising the policy's revision.
+  pub fn set_policy(&self, automatic_merge: bool) {
+    let mut state = self.state.lock();
+    state.policy = (state.policy.0 + 1, automatic_merge);
+  }
+
+  pub fn policy(&self) -> (u64, bool) {
+    self.state.lock().policy
+  }
+
+  /// The next write is carried out and its connection closed without an answer.
   pub fn lose_next_response(&self) {
     self.state.lock().lose_next = true;
   }
@@ -107,6 +130,11 @@ impl TeamServer {
     let state = self.state.lock();
     (state.commands, state.created)
   }
+
+  /// How many writes the definition routes carried out.
+  pub fn writes(&self) -> usize {
+    self.state.lock().writes
+  }
 }
 
 fn answer(state: &Mutex<State>, project: ProjectId, mut stream: TcpStream) {
@@ -114,158 +142,113 @@ fn answer(state: &Mutex<State>, project: ProjectId, mut stream: TcpStream) {
     return;
   };
   if request.token != ADMIN && request.token != MEMBER {
-    return respond(&mut stream, 401, &refusal(None, "unauthenticated"));
+    return respond(&mut stream, 401, &api_error("unauthorized"));
   }
-  let prefix = format!("/api/v2/projects/{project}");
-  let route = request.path.strip_prefix(&prefix).unwrap_or_default().to_owned();
+  let (version, route) = route(&request.path, project);
   let segments: Vec<&str> = route.split('/').filter(|segment| !segment.is_empty()).collect();
-  match (request.method.as_str(), segments.as_slice()) {
-    ("POST", ["commands"]) => command(state, project, &request, stream),
-    ("GET", ["operations", operation]) => {
-      let (status, body) = operation_read(&state.lock(), &request.token, operation);
-      respond(&mut stream, status, &body);
-    }
-    ("GET", ["tasks", task]) => {
-      let id: TaskId = task.parse().expect("a task id");
-      let state = state.lock();
-      let task = state.tasks.iter().find(|known| known.id == id).expect("a task");
-      respond(&mut stream, 200, &task_read(project, task));
-    }
-    _ => respond(&mut stream, 404, &refusal(None, "not_found")),
-  }
-}
-
-/// `POST …/commands`: the kept answer of an operation seen before, else the command carried out and its answer kept.
-fn command(state: &Mutex<State>, project: ProjectId, request: &Request, mut stream: TcpStream) {
-  let body = request.json();
-  let operation = body["operation_id"].as_str().expect("an operation id").to_owned();
-  let identity = json!({ "expected": body["expected"], "command": body["command"] });
   let mut state = state.lock();
-  state.commands += 1;
-  let key = (request.token.clone(), operation.clone());
-  let (status, answer) = match state.operations.get(&key) {
-    Some((known, status, answer)) if *known == identity => (*status, answer.clone()),
-    Some(_) => (409, refusal(Some(&operation), "operation_mismatch")),
-    None => {
-      let (status, answer) = carry_out(&mut state, project, &request.token, &body);
-      state.operations.insert(key, (identity, status, answer.clone()));
-      (status, answer)
+  let (status, body) = match (version, request.method.as_str(), segments.as_slice()) {
+    ("v2", "POST", ["commands"]) => {
+      state.commands += 1;
+      crate::commands::command(&mut state, &request)
     }
+    ("v2", "GET", ["operations", operation]) => crate::commands::operation_read(&state, &request.token, operation),
+    ("v2", "GET", ["policy"]) => (200, policy_response(&state, &request.token)),
+    ("v2", "PATCH", ["policy"]) => change_policy(&mut state, &request),
+    ("v1", "GET", ["tasks", task]) => (200, json!({"task": shared_task(find(&state, task))})),
+    ("v1", "PATCH", ["tasks", task]) => patch_task(&mut state, &request, task),
+    _ => (404, api_error("not_found")),
   };
-  if std::mem::take(&mut state.lose_next) {
+  if status < 300 && request.method != "GET" && std::mem::take(&mut state.lose_next) {
     return;
   }
   drop(state);
-  respond(&mut stream, status, &answer);
+  respond(&mut stream, status, &body);
 }
 
-fn carry_out(state: &mut State, project: ProjectId, token: &str, body: &Value) -> (u16, Value) {
-  let operation = body["operation_id"].as_str().expect("an operation id");
-  let command = &body["command"];
-  let kind = command["kind"].as_str().expect("a kind");
-  if kind == "claim.acquire" {
-    return committed(state, operation, &claim(command));
-  }
-  if token != ADMIN {
-    return (403, refusal(Some(operation), "forbidden"));
-  }
-  match kind {
-    "task.create" => {
-      let task = Task {
-        id: state.next_task.take().unwrap_or_else(TaskId::generate),
-        number: u32::try_from(state.tasks.len()).expect("a few tasks") + 1,
-        title: command["content"]["title"].as_str().expect("a title").to_owned(),
-        revision: 1,
-      };
-      state.tasks.push(task.clone());
-      state.created += 1;
-      committed(
-        state,
-        operation,
-        &json!({"kind": "task", "task": task_read(project, &task), "effects": []}),
-      )
+/// The API version and the route under the project.
+fn route(path: &str, project: ProjectId) -> (&'static str, String) {
+  for version in ["v1", "v2"] {
+    if let Some(route) = path.strip_prefix(&format!("/api/{version}/projects/{project}")) {
+      return (version, route.to_owned());
     }
-    "task.patch" => patch(state, project, operation, body),
-    _ => (422, refusal(Some(operation), "invalid")),
   }
+  ("", String::new())
 }
 
-fn patch(state: &mut State, project: ProjectId, operation: &str, body: &Value) -> (u16, Value) {
-  let id: TaskId = body["command"]["task_id"]
-    .as_str()
-    .expect("a task id")
-    .parse()
-    .expect("a task id");
-  let expected = body["expected"][0]["revision"].as_u64().expect("an expected revision");
-  let task = state.tasks.iter_mut().find(|task| task.id == id).expect("a task");
-  if task.revision != expected {
-    return (409, refusal(Some(operation), "revision_conflict"));
+fn find<'a>(state: &'a State, task: &str) -> &'a Task {
+  let id: TaskId = task.parse().expect("a task id");
+  state.tasks.iter().find(|known| known.id == id).expect("a task")
+}
+
+/// `PATCH /api/v1/projects/{p}/tasks/{t}`: `{revision, changes}`, the Admin's.
+fn patch_task(state: &mut State, request: &Request, task: &str) -> (u16, Value) {
+  if request.token != ADMIN {
+    return (403, api_error("not_admin"));
   }
-  for change in body["command"]["changes"].as_array().expect("changes") {
-    if change["field"] == "title" {
-      change["value"].as_str().expect("a title").clone_into(&mut task.title);
-    }
+  let body = request.json();
+  let current = find(state, task).clone();
+  if body["revision"].as_u64() != Some(current.revision) {
+    let mut conflict = api_error("revision_conflict");
+    conflict["current"] = shared_task(&current);
+    return (409, conflict);
+  }
+  let task = state
+    .tasks
+    .iter_mut()
+    .find(|known| known.id == current.id)
+    .expect("a task");
+  if let Some(title) = body["changes"]["title"].as_str() {
+    title.clone_into(&mut task.title);
   }
   task.revision += 1;
-  let read = task_read(project, task);
-  committed(state, operation, &json!({"kind": "task", "task": read, "effects": []}))
+  let answer = json!({"task": shared_task(task)});
+  state.writes += 1;
+  (200, answer)
 }
 
-/// A claim of the command's subject, allowing this computer to start its work.
-fn claim(command: &Value) -> Value {
+/// `PATCH /api/v2/projects/{p}/policy`: `{revision, automatic_merge}`, the Admin's.
+fn change_policy(state: &mut State, request: &Request) -> (u16, Value) {
+  if request.token != ADMIN {
+    return (403, api_error("forbidden"));
+  }
+  let body = request.json();
+  let (revision, automatic_merge) = state.policy;
+  if body["revision"].as_u64() != Some(revision) {
+    return (
+      409,
+      json!({"error": "policy_revision_conflict", "current": {"revision": revision, "automatic_merge": automatic_merge}}),
+    );
+  }
+  state.policy = (revision + 1, body["automatic_merge"].as_bool().expect("a setting"));
+  state.writes += 1;
+  (200, policy_response(state, &request.token))
+}
+
+fn policy_response(state: &State, token: &str) -> Value {
+  let (revision, automatic_merge) = state.policy;
   json!({
-    "kind": "claim", "subject": command["subject"],
-    "claim": {"subject": command["subject"], "id": ClaimId::generate(), "holder": person(), "acquired_at": 1,
-      "last_execution_heartbeat_at": 1, "stale_at": 2, "stale": false, "parent_module_claim_id": null},
-    "children": [],
-    "effects": [{"kind": "start", "work_id": WorkId::generate(),
-      "bundle": {"sha256": "a".repeat(64), "schema_version": 1}}]
+    "policy": {"revision": revision, "automatic_merge": automatic_merge},
+    "capabilities": {"read_policy": true, "change_policy": token == ADMIN}
   })
 }
 
-fn committed(state: &mut State, operation: &str, result: &Value) -> (u16, Value) {
-  state.cursor += 1;
-  let cursor = state.cursor.to_string();
-  (
-    200,
-    json!({"operation_id": operation, "state": "committed", "result": result, "cursor": cursor}),
-  )
+/// The `/api/v1` refusal: `{error, message}`.
+pub fn api_error(code: &str) -> Value {
+  json!({"error": code, "message": "refused"})
 }
 
-/// `GET …/operations/{operation}`: the kept receipt or refusal, or `not_found`.
-fn operation_read(state: &State, token: &str, operation: &str) -> (u16, Value) {
-  match state.operations.get(&(token.to_owned(), operation.to_owned())) {
-    Some((_, 200, receipt)) => (
-      200,
-      json!({"operation_id": operation, "state": "committed", "response": receipt}),
-    ),
-    Some((_, _, error)) => (
-      200,
-      json!({"operation_id": operation, "state": "rejected", "error": error}),
-    ),
-    None => (404, refusal(None, "not_found")),
-  }
-}
-
-fn refusal(operation: Option<&str>, code: &str) -> Value {
-  match operation {
-    Some(operation) => json!({"operation_id": operation, "code": code, "details": {}}),
-    None => json!({"code": code, "details": {}}),
-  }
-}
-
-fn person() -> Value {
+pub fn person() -> Value {
   json!({"id": UserId::generate(), "display_name": "Alice"})
 }
 
-pub fn task_read(project: ProjectId, task: &Task) -> Value {
+/// A task as the server's `SharedTask` is.
+pub fn shared_task(task: &Task) -> Value {
   let attribution = json!({"by": person(), "at": 1});
   json!({
     "id": task.id, "number": task.number, "key": format!("KON-{}", task.number), "former_key": null,
     "revision": task.revision, "title": task.title, "brief": "", "criteria": [], "pipeline": null, "limits": null,
     "workflow": "backlog", "priority": "none", "tags": [], "blocking": [], "blocked_reason": null, "module": null,
-    "status": "draft", "has_run": false, "created": attribution, "updated": attribution, "claim": null, "run": null,
-    "assignee": null, "work": null, "effective_claim": null,
-    "capabilities": {"project_id": project, "revision": 1, "role": "admin", "actions": [], "unresolved": []}
+    "status": "draft", "has_run": false, "created": attribution, "updated": attribution, "claim": null, "run": null
   })
 }

@@ -14,7 +14,10 @@ use reqwest::{Method, RequestBuilder, Response};
 use serde::{Serialize, de::DeserializeOwned};
 use thiserror::Error;
 
-pub use self::subscription::{Subscription, SubscriptionEnd};
+pub use self::{
+  commands::PolicyChange,
+  subscription::{Subscription, SubscriptionEnd},
+};
 use super::{Client, ClientError, bearer, redirect, retry_after};
 use crate::v2::{AuthorityError, AuthorityErrorCode};
 

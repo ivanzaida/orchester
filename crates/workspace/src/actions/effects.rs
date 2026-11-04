@@ -1,7 +1,7 @@
 //! The local effects of a committed team command, exactly those its receipt names. A task the server answers with is
-//! recorded as a team task identity, so this computer's records can name it without keeping its definition. Starting,
-//! pausing, stopping and delivering work are carried out by P4's execution; until then they stay pending on the open
-//! operation, never done in part and never claimed done.
+//! recorded as a team task identity, so this computer's records can name it without keeping its definition. Starting
+//! work is carried out by P4's execution; until then the start stays pending on the open operation, never done in part
+//! and never claimed done.
 
 use orchester_api::v2::{LocalEffect, TeamCommandValue};
 use orchester_core::task::identity::TeamTaskRef;
@@ -19,9 +19,9 @@ pub(super) fn apply(
     let team = TeamTaskRef {
       server: link.server,
       project: link.project,
-      task: task.task.id,
+      task: task.id,
     };
-    db.record_team_task(team, task.task.revision)?;
+    db.record_team_task(team, task.revision)?;
   }
   Ok(
     value

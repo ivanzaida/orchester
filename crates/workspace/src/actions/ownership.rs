@@ -25,13 +25,14 @@ pub(super) struct TeamLink {
   pub(super) project: ProjectId,
 }
 
-/// The owner of the project of `db`, checked against `session` for a team project.
+/// The owner of the project of `db`, checked against `session` for a team project: the session must be of the very
+/// server and server project the project is linked to.
 pub(super) fn project_owner(db: &ProjectDb, session: Option<&TeamSession>) -> Result<ProjectOwner, ActionError> {
   let Some(link) = db.sharing()? else {
     return Ok(ProjectOwner::Local);
   };
   let session = session.ok_or(ActionError::NoTeamSession)?;
-  if session.project() != link.project {
+  if session.server() != link.server || session.project() != link.project {
     return Err(ActionError::OtherProject);
   }
   if !session.current() {

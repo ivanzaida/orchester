@@ -1,12 +1,16 @@
 //! The workspace's action dispatcher (`orchester_workspace::actions`, team authority P2) against a fake team server on
-//! loopback ([`server`]): a lost response is looked up and never commits twice, also after a restart; an operation id
-//! reused with other inputs is refused here and by the server; an operation never goes to another server project than
-//! the one it was recorded for; a revision conflict comes with the current value; a member's definition write is
-//! refused and changes nothing here; a claim's start stays pending; a receipt whose identity cannot be recorded fails
-//! its local effect only; and a local project's actions run as they always did ([`organize`]).
+//! loopback with the team server's routes and shapes ([`server`], [`commands`]): a command's lost response is looked
+//! up and never commits twice, also after a restart; an operation id reused with other inputs is refused here and by
+//! the server; an operation never goes to another server project than the one it was recorded for; a work start's
+//! `start` stays pending while a claim allows nothing locally; a receipt whose identity cannot be recorded fails its
+//! local effect only; definition edits go to their own routes, are read again after a lost response, come with the
+//! current value after a revision conflict and are refused for a member ([`definitions`]); and a local project's
+//! actions run as they always did ([`organize`]).
 //!
 //! `cargo test -p orchester-workspace --test actions actions_`
 
+mod commands;
+mod definitions;
 mod http;
 mod organize;
 mod run;
@@ -16,12 +20,13 @@ use std::{fs, path::PathBuf, sync::Arc};
 
 use orchester_api::{
   client::{Client, PlainHttp, ServerAddress},
-  v2::{AuthorityErrorCode, LocalEffect, PolicyRevision, Subject, TeamCommandValue},
+  v2::{AuthorityErrorCode, AuthorityRef, LocalEffect, PolicyRevision, Subject, TeamCommandValue},
 };
 use orchester_core::{
-  id::{IdempotencyKey, ProjectId, ServerId, TaskId},
+  id::{IdempotencyKey, ModuleId, ProjectId, ServerId, TaskId},
   name::Name,
   project::{Project, ProjectKey},
+  run::CommitId,
   secret::{SecretValue, SecretVault, VaultError, VaultKey},
   sharing::TaskRevision,
   store::TaskStore,
@@ -31,8 +36,8 @@ use orchester_core::{
 use orchester_store::{AppDb, ProjectDb, StoreError, TeamOperationState};
 use orchester_workspace::{
   actions::{
-    Action, ActionClass, ActionError, ActionOutcome, ClaimAction, Current, Dispatcher, Intent, LocalResult,
-    PolicyAction, TaskAction, TeamOutcome,
+    Accepted, Action, ActionClass, ActionError, ActionOutcome, ClaimAction, Dispatcher, Intent, LocalResult,
+    PolicyAction, Receipt, Refusal, TaskAction, TeamOutcome, WorkAction,
   },
   secrets::Vault,
   sharing::Servers,
@@ -107,7 +112,7 @@ impl Checkout {
       .execute(
         "INSERT INTO sharing (only_row, server_id, project_id, project_key, role, joined_at, event_cursor, \
          last_synced_at) VALUES (1, ?1, ?2, 'KON', 'member', 1, 0, 1)",
-        [ServerId::generate().to_string(), server.project.to_string()],
+        [server.server.to_string(), server.project.to_string()],
       )
       .expect("link the project");
     self
@@ -132,6 +137,11 @@ impl Checkout {
 
   /// The dispatcher of a session signed in to `server` with `token`, and the session's generation it keeps.
   fn team(&self, server: &TeamServer, token: &str) -> (Dispatcher, watch::Sender<u64>) {
+    self.session(server, token, server.server)
+  }
+
+  /// The dispatcher of a session signed in with `token` to the server `id` names, with `server`'s address and project.
+  fn session(&self, server: &TeamServer, token: &str, id: ServerId) -> (Dispatcher, watch::Sender<u64>) {
     let client = Client::new(
       ServerAddress::parse(&server.url).expect("address"),
       PlainHttp::NotAllowed,
@@ -139,7 +149,7 @@ impl Checkout {
     .expect("client");
     let token = SecretValue::new(token.to_owned()).expect("token");
     let generation = watch::channel(0).0;
-    let session = TeamSession::new(client, token, server.project, generation.subscribe());
+    let session = TeamSession::new((client, token), (id, server.project), generation.subscribe());
     let dispatcher = Dispatcher::new(self.dir.path().to_path_buf(), self.servers.clone(), Some(session));
     (dispatcher, generation)
   }
@@ -169,9 +179,20 @@ fn create(title: &str) -> Action {
 fn retitle(task: TaskId, read: u64, from: &str, to: &str) -> Action {
   Action::Task(TaskAction::Edit {
     task,
-    read: TaskRevision::try_from(read).expect("revision"),
+    read: revision(read),
     base: details(from),
     edited: details(to),
+  })
+}
+
+fn revision(value: u64) -> TaskRevision {
+  TaskRevision::try_from(value).expect("revision")
+}
+
+fn policy(read: u64, automatic_merge: bool) -> Action {
+  Action::Policy(PolicyAction {
+    read: PolicyRevision::try_from(read).expect("revision"),
+    automatic_merge,
   })
 }
 
@@ -182,15 +203,21 @@ fn team(outcome: ActionOutcome) -> TeamOutcome {
   }
 }
 
+/// The receipt of a completed command.
+fn receipt(outcome: TeamOutcome) -> Box<Receipt> {
+  match outcome {
+    TeamOutcome::Completed(Accepted::Command(receipt)) => receipt,
+    outcome => panic!("not a completed command: {outcome:?}"),
+  }
+}
+
 /// The task a completed command's receipt names.
 fn completed_task(outcome: TeamOutcome) -> TaskId {
-  let TeamOutcome::Completed { receipt } = outcome else {
-    panic!("not completed: {outcome:?}");
-  };
+  let receipt = receipt(outcome);
   let TeamCommandValue::Task { task, .. } = receipt.result else {
     panic!("not a task: {receipt:?}");
   };
-  task.task.id
+  task.id
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -234,32 +261,35 @@ async fn actions_a_lost_response_is_looked_up_and_never_commits_twice() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn actions_an_operation_id_reused_with_other_inputs_is_refused() {
   let server = TeamServer::start();
-  let task = server.add_task("Sign in");
   let checkout = Checkout::linked(&server);
   let (dispatcher, _generation) = checkout.team(&server, ADMIN);
-  let intent = Intent::new(retitle(task.id, 1, "Sign in", "Sign in with email"));
+  let intent = Intent::new(create("Sign in"));
   completed_task(team(dispatcher.dispatch(&intent).await.expect("dispatched")));
-  let other = Intent::with_operation(intent.operation(), retitle(task.id, 2, "Sign in with email", "Log in"));
+  let other = Intent::with_operation(intent.operation(), create("Log in"));
   let refused = dispatcher.dispatch(&other).await;
   assert!(
     matches!(refused, Err(ActionError::OperationMismatch(operation)) if operation == intent.operation()),
     "{refused:?}"
   );
-  assert_eq!(server.counts().0, 1, "refused before anything was sent");
-  assert_eq!(server.task(task.id).title, "Sign in with email");
+  assert_eq!(server.counts(), (1, 1), "refused before anything was sent");
 
   // Another computer of the same account, which never recorded the id: the server refuses it for good.
   let elsewhere = Checkout::linked(&server);
   let (dispatcher, _generation) = elsewhere.team(&server, ADMIN);
   let refused = team(dispatcher.dispatch(&other).await.expect("dispatched"));
-  let TeamOutcome::Rejected { error, retryable, .. } = refused else {
+  let TeamOutcome::Rejected {
+    refusal: Refusal::Command(error),
+    retryable,
+    ..
+  } = refused
+  else {
     panic!("not refused: {refused:?}");
   };
   assert_eq!(
     (error.code(), retryable),
     (AuthorityErrorCode::OperationMismatch, false)
   );
-  assert_eq!(server.task(task.id).title, "Sign in with email");
+  assert_eq!(server.counts(), (2, 1), "no second task");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -297,72 +327,40 @@ async fn actions_an_operation_never_goes_to_another_server_project() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn actions_a_revision_conflict_returns_the_current_value() {
+async fn actions_a_work_start_stays_pending_and_classes_follow_the_owner() {
   let server = TeamServer::start();
   let task = server.add_task("Sign in");
-  server.retitle(task.id, "Sign in with a passkey");
   let checkout = Checkout::linked(&server);
-  let (dispatcher, _generation) = checkout.team(&server, ADMIN);
-  let intent = Intent::new(retitle(task.id, 1, "Sign in", "Log in"));
-  let refused = team(dispatcher.dispatch(&intent).await.expect("dispatched"));
-  let TeamOutcome::Rejected {
-    error,
-    retryable: false,
-    current: Some(Current::Task(current)),
-    ..
-  } = refused
-  else {
-    panic!("not a conflict with the current task: {refused:?}");
+  let (dispatcher, _generation) = checkout.team(&server, MEMBER);
+  let subject = Subject::Task { id: task.id };
+  let acquire = Action::Claim(ClaimAction::Acquire { subject });
+  let edit = retitle(task.id, 1, "Sign in", "Log in");
+  assert_eq!(dispatcher.classify(&acquire).expect("class"), ActionClass::ServerOnly);
+  assert_eq!(dispatcher.classify(&edit).expect("class"), ActionClass::ServerOnly);
+
+  let claimed = receipt(team(
+    dispatcher.dispatch(&Intent::new(acquire)).await.expect("dispatched"),
+  ));
+  let TeamCommandValue::Claim { claim, effects, .. } = claimed.result else {
+    panic!("not a claim: {claimed:?}");
   };
-  assert_eq!(error.code(), AuthorityErrorCode::RevisionConflict);
-  assert_eq!(current.task.content.title, "Sign in with a passkey");
-  assert_eq!(current.task.revision.get(), 2);
-  let record = checkout
-    .db()
-    .team_operation(intent.operation())
-    .expect("read")
-    .expect("kept");
-  assert_eq!(record.state, TeamOperationState::Rejected);
-  assert!(dispatcher.open_operations().expect("open").is_empty());
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn actions_member_writes_are_rejected_and_change_nothing_here() {
-  let server = TeamServer::start();
-  let task = server.add_task("Sign in");
-  let checkout = Checkout::linked(&server);
-  let (dispatcher, _generation) = checkout.team(&server, MEMBER);
-  for action in [create("Sign out"), retitle(task.id, 1, "Sign in", "Log in")] {
-    let refused = team(dispatcher.dispatch(&Intent::new(action)).await.expect("dispatched"));
-    let TeamOutcome::Rejected { error, retryable, .. } = refused else {
-      panic!("a member's write was taken: {refused:?}");
-    };
-    assert_eq!((error.code(), retryable), (AuthorityErrorCode::Forbidden, false));
-  }
-  assert_eq!(server.task(task.id).title, "Sign in");
-  assert_eq!(server.counts().1, 0, "no task was created");
-  let db = checkout.db();
-  assert_eq!(db.task_identity(task.id).expect("read"), None, "nothing recorded here");
-  assert!(db.tasks().expect("tasks").is_empty(), "no local task instead");
-  assert!(dispatcher.open_operations().expect("open").is_empty());
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn actions_a_claims_start_stays_pending_and_classes_follow_the_owner() {
-  let server = TeamServer::start();
-  let task = server.add_task("Sign in");
-  let checkout = Checkout::linked(&server);
-  let (dispatcher, _generation) = checkout.team(&server, MEMBER);
-  let acquire = Action::Claim(ClaimAction::Acquire {
-    subject: Subject::Task { id: task.id },
+  assert!(effects.is_empty(), "a claim allows nothing here");
+  let start = Action::Work(WorkAction {
+    authority: AuthorityRef {
+      subject,
+      claim_id: claim.id,
+      work_id: None,
+    },
+    base_commit: CommitId::new(&"b".repeat(40)).expect("commit"),
+    read: revision(1),
+    module: ModuleId::generate(),
+    module_read: revision(1),
   });
   assert_eq!(
-    dispatcher.classify(&acquire).expect("class"),
+    dispatcher.classify(&start).expect("class"),
     ActionClass::ServerThenLocalExecution
   );
-  let edit = retitle(task.id, 1, "Sign in", "Log in");
-  assert_eq!(dispatcher.classify(&edit).expect("class"), ActionClass::ServerOnly);
-  let intent = Intent::new(acquire);
+  let intent = Intent::new(start);
   let pending = team(dispatcher.dispatch(&intent).await.expect("dispatched"));
   let TeamOutcome::AcceptedPending { pending, .. } = pending else {
     panic!("not pending: {pending:?}");
@@ -371,8 +369,15 @@ async fn actions_a_claims_start_stays_pending_and_classes_follow_the_owner() {
   assert_eq!(dispatcher.open_operations().expect("open"), [intent.operation()]);
 
   let unsigned = Dispatcher::new(checkout.dir.path().to_path_buf(), checkout.servers.clone(), None);
-  let refused = unsigned.dispatch(&Intent::new(edit)).await;
+  let refused = unsigned.dispatch(&Intent::new(edit.clone())).await;
   assert!(matches!(refused, Err(ActionError::NoTeamSession)), "{refused:?}");
+  let (elsewhere, _generation) = checkout.session(&server, ADMIN, ServerId::generate());
+  let refused = elsewhere.dispatch(&Intent::new(edit)).await;
+  assert!(
+    matches!(refused, Err(ActionError::OtherProject)),
+    "a session of another server with the same project id: {refused:?}"
+  );
+  assert_eq!(server.writes(), 0);
   assert!(
     checkout.db().tasks().expect("tasks").is_empty(),
     "never a local change instead"
@@ -447,10 +452,7 @@ async fn actions_local_actions_run_as_before() {
   assert_eq!(tasks.len(), 1);
   assert_eq!(tasks[0].details().title.as_str(), "Log in");
 
-  let policy = Action::Policy(PolicyAction {
-    read: PolicyRevision::FIRST,
-    automatic_merge: true,
-  });
+  let policy = policy(1, true);
   assert!(matches!(dispatcher.classify(&policy), Err(ActionError::TeamOnly)));
   let refused = dispatcher.dispatch(&Intent::new(policy)).await;
   assert!(matches!(refused, Err(ActionError::TeamOnly)), "{refused:?}");

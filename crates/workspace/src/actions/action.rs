@@ -2,9 +2,9 @@
 //! person or automation means to change, with the revision it was decided on; whether it changes this computer's
 //! database or goes to the team server follows from the project's owner, never from the action.
 
-use orchester_api::v2::{AuthorityRef, BundleRef, PolicyRevision, Subject};
+use orchester_api::v2::{AuthorityRef, PolicyRevision, Subject};
 use orchester_core::{
-  id::{ClaimId, ModuleId, OperationId, TagId, TaskId, UserId, WorkId},
+  id::{ClaimId, ModuleId, OperationId, TagId, TaskId, UserId},
   module::ModuleDetails,
   name::Name,
   run::{BranchName, CommitId},
@@ -48,6 +48,7 @@ pub enum Action {
   Claim(ClaimAction),
   Assignment(AssignmentAction),
   Policy(PolicyAction),
+  Work(WorkAction),
   Delivery(DeliveryAction),
 }
 
@@ -93,11 +94,11 @@ pub enum ModuleAction {
     base: ModuleDetails,
     edited: ModuleDetails,
   },
-  /// A team module's branch, assigned by an Admin; `None` gives it its automatic branch again.
+  /// A team module's branch, assigned by an Admin on the module read at `read`.
   AssignBranch {
     module: ModuleId,
     read: TaskRevision,
-    branch: Option<BranchName>,
+    branch: BranchName,
   },
 }
 
@@ -141,15 +142,26 @@ pub struct PolicyAction {
   pub automatic_merge: bool,
 }
 
-/// Authorizes the delivery of `work` under `claim`, from `source_commit` onto base at `base_commit`, bound to the
-/// work's `bundle` (Admin).
+/// Starts a team task's work under the task's claim `authority`, from the base branch at `base_commit`, on the task
+/// read at `read` in `module` read at `module_read`.
+#[derive(Clone, Debug)]
+pub struct WorkAction {
+  pub authority: AuthorityRef,
+  pub base_commit: CommitId,
+  pub read: TaskRevision,
+  pub module: ModuleId,
+  pub module_read: TaskRevision,
+}
+
+/// Authorizes the delivery of `module`'s `branch` under the module's claim `claim`, from `source_commit` onto the base
+/// at `base_commit` (Admin).
 #[derive(Clone, Debug)]
 pub struct DeliveryAction {
-  pub work: WorkId,
+  pub module: ModuleId,
   pub claim: ClaimId,
+  pub branch: BranchName,
   pub source_commit: CommitId,
   pub base_commit: CommitId,
-  pub bundle: BundleRef,
 }
 
 /// How an action is carried out (`docs/architecture/team-authority-plan.md` §4, "Distinguish action classes").
@@ -159,7 +171,7 @@ pub enum ActionClass {
   LocalOnly,
   /// The team server commits it; this computer only learns of it.
   ServerOnly,
-  /// The team server commits it and its receipt may allow this computer to start, stop or deliver work.
+  /// The team server commits it and its receipt allows this computer to start work: `work.start`.
   ServerThenLocalExecution,
   /// Pausing, stopping or answering within work already authorized, reported afterwards. No P2 action is of this
   /// class: the work commands join it in P4.
@@ -170,23 +182,26 @@ pub enum ActionClass {
 }
 
 impl Action {
-  /// Whether the action exists only for a team project: claims, assignment, the policy, delivery and module branches.
+  /// Whether the action exists only for a team project: claims, assignment, the policy, work, delivery and module
+  /// branches.
   pub const fn team_only(&self) -> bool {
     matches!(
       self,
       Self::Claim(_)
         | Self::Assignment(_)
         | Self::Policy(_)
+        | Self::Work(_)
         | Self::Delivery(_)
         | Self::Module(ModuleAction::AssignBranch { .. })
     )
   }
 
-  /// The class of the action on a project that is a team's when `team` is set.
+  /// The class of the action on a project that is a team's when `team` is set. A claim allows no local effect on the
+  /// team server: only the work it starts does.
   pub const fn class(&self, team: bool) -> ActionClass {
     match (team, self) {
       (false, _) => ActionClass::LocalOnly,
-      (true, Self::Claim(_) | Self::Delivery(_)) => ActionClass::ServerThenLocalExecution,
+      (true, Self::Work(_)) => ActionClass::ServerThenLocalExecution,
       (true, _) => ActionClass::ServerOnly,
     }
   }

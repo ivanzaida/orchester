@@ -1,9 +1,10 @@
-//! A team action's operation (S4): its id and request are recorded before the request is sent, so a response that is
+//! A team command's operation (S4): its id and request are recorded before the request is sent, so a response that is
 //! lost leaves an open operation, never a guess. An open operation is first looked up on the server, then sent again
 //! with the same id and the same bytes only when the server has no outcome of it, so a retry never commits twice. A
 //! committed receipt is kept before its local effects are made, and a refusal is kept as it came; the same intent sent
 //! again reads that back. The request's digest binds the id to the request: another request under the same id is
-//! refused here, and by the server too.
+//! refused here, and by the server too. Two dispatches of one intent at once may both send it, which the server answers
+//! with one receipt; whichever settles it first decides what is kept, and the other returns that.
 
 use std::fmt::Write as _;
 
@@ -19,7 +20,9 @@ use orchester_core::{
 use orchester_store::{NewTeamOperation, ProjectDb, TeamOperation, TeamOperationState, TeamSettlement};
 use sha2::{Digest as _, Sha256};
 
-use super::{ActionError, Current, Receipt, TeamOutcome, command::TeamRequest, effects, ownership::TeamLink};
+use super::{
+  Accepted, ActionError, Current, Receipt, Refusal, TeamOutcome, command::TeamRequest, effects, ownership::TeamLink,
+};
 use crate::team_reads::TeamSession;
 
 /// One team project's operations in one session.
@@ -56,56 +59,46 @@ impl Operations<'_> {
       digest: &digest,
       request: &text,
     };
-    self
+    let recorded = self
       .db
       .begin_team_operation(new, Timestamp::now())
       .map_err(ActionError::of_record)?;
+    if recorded.state != TeamOperationState::Sent {
+      return self.resume(recorded).await;
+    }
     self.send(&body).await
   }
 
   /// Carries on with the recorded operation `record` from where it stands; one recorded for another server project
   /// than this link's is [`ActionError::OperationOfOtherProject`].
   pub(super) async fn resume(&mut self, record: TeamOperation) -> Result<TeamOutcome, ActionError> {
-    let operation = record.id;
     if record.server != self.link.server || record.project != self.link.project {
-      return Err(ActionError::OperationOfOtherProject(operation));
+      return Err(ActionError::OperationOfOtherProject(record.id));
     }
-    match record.state {
-      TeamOperationState::Sent => self.look_up(&record).await,
-      TeamOperationState::Committed | TeamOperationState::EffectFailed => {
-        let text = record.receipt.ok_or(ActionError::Unreadable(operation))?;
-        let receipt = read(operation, &text)?;
-        self.committed(receipt, &text)
-      }
-      TeamOperationState::Completed => {
-        let text = record.receipt.ok_or(ActionError::Unreadable(operation))?;
-        Ok(TeamOutcome::Completed {
-          receipt: Box::new(read(operation, &text)?),
-        })
-      }
-      TeamOperationState::Rejected => {
-        let text = record.rejection.ok_or(ActionError::Unreadable(operation))?;
-        Ok(TeamOutcome::Rejected {
-          operation,
-          error: read(operation, &text)?,
-          retryable: false,
-          current: None,
-        })
-      }
+    if let Some(outcome) = kept(&record)? {
+      return Ok(outcome);
     }
+    if record.state == TeamOperationState::Sent {
+      return self.look_up(&record).await;
+    }
+    let text = record.receipt.ok_or(ActionError::Unreadable(record.id))?;
+    let receipt = read(record.id, &text)?;
+    self.committed(receipt, &text)
   }
 
-  /// What the server made of an operation sent before; sent again when the server has no outcome of it.
+  /// What the server made of an operation sent before; sent again when the server has no outcome of it. A lookup the
+  /// server refuses for good, e.g. for a caller who may no longer see the operation's outcome, is its refusal.
   async fn look_up(&mut self, record: &TeamOperation) -> Result<TeamOutcome, ActionError> {
     self.ensure_session()?;
+    let body: CommandRequest<TeamCommand> = read(record.id, &record.request)?;
     match self.session.authority().operation(record.id).await {
       Ok(OperationRead::Committed { response, .. }) => self.receipt(record.id, response),
-      Ok(OperationRead::Rejected { error, .. }) => {
-        self.refused(record.id, &read(record.id, &record.request)?, error).await
-      }
+      Ok(OperationRead::Rejected { error, .. }) => self.refused(record.id, &body, error).await,
       Err(AuthorityCallError::Refused { error, .. }) if error.code() == AuthorityErrorCode::NotFound => {
-        let body: CommandRequest<TeamCommand> = read(record.id, &record.request)?;
         self.send(&body).await
+      }
+      Err(AuthorityCallError::Refused { error, .. }) if !retryable(error.code()) => {
+        self.refused(record.id, &body, error).await
       }
       Err(_) => Ok(TeamOutcome::AcceptanceUnknown { operation: record.id }),
     }
@@ -140,17 +133,15 @@ impl Operations<'_> {
   /// Keeps the committed `receipt` first, then makes its local effects; it stays committed whatever they do.
   fn committed(&mut self, receipt: Receipt, text: &str) -> Result<TeamOutcome, ActionError> {
     let operation = receipt.operation_id;
-    self
-      .db
-      .settle_team_operation(operation, TeamSettlement::Committed { receipt: text }, Timestamp::now())?;
+    if let Some(kept) = self.settle(operation, TeamSettlement::Committed { receipt: text })? {
+      return Ok(kept);
+    }
     let pending = match effects::apply(self.db, self.link, &receipt.result) {
       Ok(pending) => pending,
       Err(error) => {
-        self.db.settle_team_operation(
-          operation,
-          TeamSettlement::EffectFailed { receipt: text },
-          Timestamp::now(),
-        )?;
+        if let Some(kept) = self.settle(operation, TeamSettlement::EffectFailed { receipt: text })? {
+          return Ok(kept);
+        }
         return Ok(TeamOutcome::LocalEffectFailed {
           receipt: Box::new(receipt),
           error,
@@ -163,12 +154,10 @@ impl Operations<'_> {
         pending,
       });
     }
-    self
-      .db
-      .settle_team_operation(operation, TeamSettlement::Completed { receipt: text }, Timestamp::now())?;
-    Ok(TeamOutcome::Completed {
-      receipt: Box::new(receipt),
-    })
+    if let Some(kept) = self.settle(operation, TeamSettlement::Completed { receipt: text })? {
+      return Ok(kept);
+    }
+    Ok(TeamOutcome::Completed(Accepted::Command(Box::new(receipt))))
   }
 
   /// The server's refusal of `body`: kept unless retryable, with the subject as it is now after a revision conflict.
@@ -181,11 +170,9 @@ impl Operations<'_> {
     let retryable = retryable(error.code());
     if !retryable {
       let text = serde_json::to_string(&error).expect("a refusal serializes");
-      self.db.settle_team_operation(
-        operation,
-        TeamSettlement::Rejected { rejection: &text },
-        Timestamp::now(),
-      )?;
+      if let Some(kept) = self.settle(operation, TeamSettlement::Rejected { rejection: &text })? {
+        return Ok(kept);
+      }
     }
     let current = match (error.code(), readable(&body.command)) {
       (AuthorityErrorCode::RevisionConflict, Some(subject)) => Some(self.current(subject).await),
@@ -193,27 +180,64 @@ impl Operations<'_> {
     };
     Ok(TeamOutcome::Rejected {
       operation,
-      error,
+      refusal: Refusal::Command(error),
       retryable,
       current,
     })
   }
 
+  /// Records `settlement` of `operation`; `None` once recorded. When another dispatch of the same intent settled it
+  /// for good first, the database refuses another outcome and the one kept is returned instead.
+  fn settle(
+    &mut self,
+    operation: OperationId,
+    settlement: TeamSettlement<'_>,
+  ) -> Result<Option<TeamOutcome>, ActionError> {
+    let Err(error) = self.db.settle_team_operation(operation, settlement, Timestamp::now()) else {
+      return Ok(None);
+    };
+    let Some(record) = self.db.team_operation(operation)? else {
+      return Err(error.into());
+    };
+    match kept(&record)? {
+      Some(outcome) => Ok(Some(outcome)),
+      None => Err(error.into()),
+    }
+  }
+
   async fn current(&self, subject: Readable) -> Current {
     let authority = self.session.authority();
     let read = match subject {
-      Readable::Task(task) => authority.task(task).await.map(|read| Current::Task(Box::new(read))),
+      Readable::Task(task) => authority.task(task).await.map(|read| Current::TaskRead(Box::new(read))),
       Readable::Module(module) => authority
         .module(module)
         .await
-        .map(|summary| Current::Module(Box::new(summary.module))),
-      Readable::Policy => authority
-        .workspace()
-        .await
-        .map(|workspace| Current::Policy(workspace.policy)),
+        .map(|summary| Current::ModuleRead(Box::new(summary.module))),
     };
     read.unwrap_or_else(Current::NotRead)
   }
+}
+
+/// The outcome kept for an operation settled for good, completed or rejected; `None` while it is still open.
+fn kept(record: &TeamOperation) -> Result<Option<TeamOutcome>, ActionError> {
+  let operation = record.id;
+  let outcome = match record.state {
+    TeamOperationState::Completed => {
+      let text = record.receipt.as_deref().ok_or(ActionError::Unreadable(operation))?;
+      TeamOutcome::Completed(Accepted::Command(Box::new(read(operation, text)?)))
+    }
+    TeamOperationState::Rejected => {
+      let text = record.rejection.as_deref().ok_or(ActionError::Unreadable(operation))?;
+      TeamOutcome::Rejected {
+        operation,
+        refusal: Refusal::Command(read(operation, text)?),
+        retryable: false,
+        current: None,
+      }
+    }
+    TeamOperationState::Sent | TeamOperationState::Committed | TeamOperationState::EffectFailed => return Ok(None),
+  };
+  Ok(Some(outcome))
 }
 
 /// A subject whose current value the server reads after a revision conflict.
@@ -221,26 +245,25 @@ impl Operations<'_> {
 enum Readable {
   Task(TaskId),
   Module(ModuleId),
-  Policy,
 }
 
 /// The revision-checked subject of `command`.
 const fn readable(command: &TeamCommand) -> Option<Readable> {
   match command {
-    TeamCommand::TaskPatch { task_id, .. } => Some(Readable::Task(*task_id)),
-    TeamCommand::ModulePatch { module_id, .. } | TeamCommand::ModuleBranch { module_id, .. } => {
-      Some(Readable::Module(*module_id))
-    }
-    TeamCommand::AssignmentSet {
-      subject: Subject::Task { id },
-      ..
-    } => Some(Readable::Task(*id)),
-    TeamCommand::AssignmentSet {
-      subject: Subject::Module { id },
-      ..
-    } => Some(Readable::Module(*id)),
-    TeamCommand::PolicySet { .. } => Some(Readable::Policy),
-    _ => None,
+    TeamCommand::AssignmentSet { subject, .. } => Some(match subject {
+      Subject::Task { id } => Readable::Task(*id),
+      Subject::Module { id } => Readable::Module(*id),
+    }),
+    TeamCommand::ModuleBranchSet { module_id, .. } => Some(Readable::Module(*module_id)),
+    TeamCommand::WorkStart { authority, .. } => match authority.subject {
+      Subject::Task { id } => Some(Readable::Task(id)),
+      Subject::Module { id } => Some(Readable::Module(id)),
+    },
+    TeamCommand::TaskCreate { .. }
+    | TeamCommand::ClaimAcquire { .. }
+    | TeamCommand::ClaimTakeOver { .. }
+    | TeamCommand::ClaimRelease { .. }
+    | TeamCommand::DeliveryAuthorize { .. } => None,
   }
 }
 

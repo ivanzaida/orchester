@@ -24,7 +24,9 @@ pub(super) fn run(
     Action::Task(action) => task(writer, operation, action),
     Action::Module(action) => module(writer, action),
     Action::Tag(action) => tag(writer, action),
-    Action::Claim(_) | Action::Assignment(_) | Action::Policy(_) | Action::Delivery(_) => Err(ActionError::TeamOnly),
+    Action::Claim(_) | Action::Assignment(_) | Action::Policy(_) | Action::Work(_) | Action::Delivery(_) => {
+      Err(ActionError::TeamOnly)
+    }
   }
 }
 

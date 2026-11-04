@@ -23,7 +23,10 @@ use orchester_api::{
   client::{Authority, AuthorityCallError, Client},
   v2::{EventCursor, QueryScope},
 };
-use orchester_core::{id::ProjectId, secret::SecretValue};
+use orchester_core::{
+  id::{ProjectId, ServerId},
+  secret::SecretValue,
+};
 use parking_lot::Mutex;
 use tokio::sync::watch;
 
@@ -40,18 +43,25 @@ const READ_ATTEMPTS: usize = 3;
 pub struct TeamSession {
   client: Client,
   token: SecretValue,
+  server: ServerId,
   project: ProjectId,
   generation: watch::Receiver<u64>,
   bound: u64,
 }
 
 impl TeamSession {
-  /// The session of `project` with `client` and `token`, in the generation `generation` holds now.
-  pub fn new(client: Client, token: SecretValue, project: ProjectId, generation: watch::Receiver<u64>) -> Self {
+  /// The session of `project` on the server `server` with `client` and `token`, in the generation `generation` holds
+  /// now.
+  pub fn new(
+    (client, token): (Client, SecretValue),
+    (server, project): (ServerId, ProjectId),
+    generation: watch::Receiver<u64>,
+  ) -> Self {
     let bound = *generation.borrow();
     Self {
       client,
       token,
+      server,
       project,
       generation,
       bound,
@@ -65,6 +75,17 @@ impl TeamSession {
 
   pub(crate) fn authority(&self) -> Authority<'_> {
     self.client.authority(&self.token, self.project)
+  }
+
+  /// The server's `/api/v1` client and the token it is called with: the routes the team server keeps there, such as a
+  /// project's definitions.
+  pub(crate) const fn client(&self) -> (&Client, &SecretValue) {
+    (&self.client, &self.token)
+  }
+
+  /// The server the session is signed in to.
+  pub(crate) const fn server(&self) -> ServerId {
+    self.server
   }
 
   /// The server project the session reads and acts on.
