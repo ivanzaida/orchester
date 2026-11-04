@@ -151,7 +151,8 @@ pub fn read_after(
   if let Some(shown) = selected {
     redact.ensure_text_metadata(shown.path.as_str())?;
   }
-  let task_root = orchester_exec::local_git::owned_directory(root, &[".orchester", "worktrees", &run.to_string()])?;
+  // Only task conflicts and a checked result read the run's worktree; nothing else on the page needs its folder.
+  let task_root = super::poll::shown_task_root(root, run, operation.as_ref())?;
   let conflicts = read_conflicts(&db, operation.as_ref(), &checkout, &main, task_root.as_deref(), &redact)?;
   let diff = read_diff(&main, operation.as_ref(), selected, &redact)?;
   // Sizes serve choosing what to commit or preserve; later phases skip the extra Git reads of each refresh.

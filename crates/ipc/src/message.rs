@@ -25,8 +25,10 @@ use crate::{
   ErrorReports, FolderState,
   browser::{BrowserCommand, BrowserEvent, BrowserReply, ScreencastFrame},
   chat::ChatTools,
+  merge_queue::{MergeQueueCommand, MergeQueueReply},
   rejection::Rejection,
   work::WorkSummary,
+  worktree::WorktreeChangesRead,
 };
 
 /// Identifies a request within one connection, so its reply can be matched.
@@ -278,7 +280,14 @@ pub enum Command {
   /// carried out, [`Rejection::BrowserUnavailable`] when the browser cannot start, [`Rejection::NoSuchTab`] for a tab
   /// it does not have, or [`Rejection::Failed`] when the browser refused.
   Browser(BrowserCommand),
-  /// What run `run`'s folder holds beyond its last commit, for the start-up recovery (protocol 40): its own
+  /// Reads what the worktree of run `run` holds beyond its checked-out commit, for the task page's Changes and
+  /// `get_changes` (protocol 40): only the runner reads a run's worktree. Answered with [`Reply::WorktreeChanges`],
+  /// whatever it found, a failed read included.
+  ReadWorktreeChanges { run: RunId },
+  /// The merge queue's work in a run's worktree: syncing its base in, or running Check again on the merged result
+  /// (protocol 41). Answered with [`Reply::MergeQueue`] once done.
+  MergeQueue(MergeQueueCommand),
+  /// What run `run`'s folder holds beyond its last commit, for the start-up recovery (protocol 42): its own
   /// worktree, else the workspace it holds or worked in last. The runner reads it with git in the folder; the desktop
   /// never does. Answered with [`Reply::RunFolderState`], [`FolderState::Unknown`] when the run has no folder any more
   /// or git cannot tell.
@@ -472,6 +481,13 @@ pub enum Reply {
   ErrorReportsSet,
   /// The answer to [`Command::Browser`].
   Browser(BrowserReply),
+  /// The answer to [`Command::ReadWorktreeChanges`]: what the worktree of `run` holds beyond its commit.
+  WorktreeChanges {
+    run: RunId,
+    read: WorktreeChangesRead,
+  },
+  /// The answer to [`Command::MergeQueue`].
+  MergeQueue(MergeQueueReply),
   /// The answer to [`Command::RunFolderState`].
   RunFolderState {
     run: RunId,

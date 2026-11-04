@@ -35,6 +35,7 @@ mod return_ended;
 pub mod review;
 mod schedule;
 mod snapshot;
+mod start_order;
 mod state;
 mod status;
 mod step;
@@ -86,6 +87,7 @@ pub use self::{
   },
   result::{STEP_RESULT_SCHEMA, StepOutcome, StepOutput, StepResult, UnverifiedCheck},
   snapshot::{PinnedVersion, PublishedVersions, RunSnapshot, SnapshotError, StepExecutor, StepSnapshot},
+  start_order::StartOrder,
   state::{NewRun, Run, StoredRun},
   status::{
     AttemptReason, AttemptStatus, ContinueTrigger, InterruptCause, MergeConflicts, PauseReason, RunFailure, RunLimit,
