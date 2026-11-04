@@ -151,6 +151,17 @@ fn assert_marks(screen: &mut Orchestrator, (busy, chosen): (ConnectionId, Connec
     (bar.x - rail.x).abs() < 1.0 && (bar.y - claude_item.y - 10.0).abs() < 0.5,
     "at the rail's edge: {bar:?} {rail:?}"
   );
+  // Inside its own item and the rail: outside them (at -6 of its item) it laid out but was not painted.
+  let item = screen.bounds(&format!("orchestrator-runs-on-{chosen}-item"));
+  for (holder, name) in [(item, "its item"), (rail, "the rail")] {
+    assert!(
+      bar.x >= holder.x - 0.5
+        && bar.y >= holder.y - 0.5
+        && bar.x + bar.width <= holder.x + holder.width + 0.5
+        && bar.y + bar.height <= holder.y + holder.height + 0.5,
+      "inside {name}: {bar:?} {holder:?}"
+    );
+  }
 }
 
 /// The picker is 640 wide, over its chip and under the title bar, with its Effort column and its 32-high foot.

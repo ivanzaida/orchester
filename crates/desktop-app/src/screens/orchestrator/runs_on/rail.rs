@@ -190,7 +190,13 @@ pub(super) fn rail(
   Column::new()
     .id("orchestrator-runs-on-rail")
     .flex_shrink(0.0)
-    .padding(ExtraSpacing::Snug.role())
+    // Its items reach its start, where the chosen one's bar is (`ERvx7`): 6 in on the other sides only.
+    .padding(
+      Padding::new()
+        .top(ExtraSpacing::Snug.role())
+        .right(ExtraSpacing::Snug.role())
+        .bottom(ExtraSpacing::Snug.role()),
+    )
     .spacing(SpacingSize::Xs)
     .border_right(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .with_children(items)
@@ -199,7 +205,7 @@ pub(super) fn rail(
 
 /// The line between two groups.
 fn line() -> Element {
-  Column::new()
+  let line = Column::new()
     .width(Dimension::Px(ITEM))
     .padding(Padding::symmetric(SpacingSize::Sm, ExtraSpacing::Tight.role()))
     .child(
@@ -207,7 +213,10 @@ fn line() -> Element {
         .width(Dimension::Pct(100.0))
         .height(Dimension::Px(LINE))
         .background(PaletteColor::Border),
-    )
+    );
+  Row::new()
+    .padding(Padding::new().left(ExtraSpacing::Snug.role()))
+    .child(line)
     .into()
 }
 
@@ -247,9 +256,15 @@ fn item(
     (false, true) => button.background(ExtraColor::Hover.role()),
     (false, false) => button,
   };
-  // A stack, as only a stack lays out what is placed at a point of it: the dot and the bar.
+  // A stack, as only a stack lays out what is placed at a point of it: the dot, and the bar in the 6 before the item at
+  // the rail's start, inside the stack so that nothing around it clips it.
   let item = Stack::new()
-    .child(button)
+    .id(format!("orchestrator-runs-on-{id}-item"))
+    .child(
+      Row::new()
+        .padding(Padding::new().left(ExtraSpacing::Snug.role()))
+        .child(button),
+    )
     .with_children(entry.limit.then(|| limit_dot(id)))
     .with_children(chosen.then(|| chosen_bar(id)));
   Tooltip::new(format!("orchestrator-runs-on-{id}-tip"), tip).wrap(ctx, item)
@@ -278,7 +293,7 @@ fn limit_dot(id: ConnectionId) -> Element {
   Row::new()
     .id(format!("orchestrator-runs-on-{id}-limit"))
     .absolute(
-      DOT_LEFT,
+      ExtraSpacing::Snug.value() + DOT_LEFT,
       ExtraSpacing::Snug.value(),
       Dimension::Px(DOT),
       Dimension::Px(DOT),
@@ -295,7 +310,7 @@ fn chosen_bar(id: ConnectionId) -> Element {
   Row::new()
     .id(format!("orchestrator-runs-on-{id}-bar"))
     .absolute(
-      -ExtraSpacing::Snug.value(),
+      0.0,
       (ITEM - BAR_HEIGHT) / 2.0,
       Dimension::Px(BAR_WIDTH),
       Dimension::Px(BAR_HEIGHT),
