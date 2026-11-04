@@ -1,6 +1,6 @@
 //! What the runner records when a run borrows a warm workspace or gives it back (ORC-114), as values that can be sent
-//! (`docs/architecture/remote-runners.md`, rule 2): a borrow, with the wait it records when every workspace is in use, a
-//! return, a workspace stranded with a run's uncommitted changes, and a run's wait that ended. Each record holds the
+//! (`docs/architecture/remote-runners.md`, rule 2): a borrow, with the wait it records when every workspace is in use,
+//! a return, a workspace stranded with a run's uncommitted changes, and a run's wait that ended. Each record holds the
 //! arguments of its store function, and [`ProjectDb::write_workspace`] applies it with that function, in its
 //! transaction: a borrow still reads the workspaces and records its choice in one immediate transaction.
 
