@@ -17,6 +17,7 @@ mod connection;
 mod estimate;
 mod idle;
 mod lifetime;
+mod merge_queue;
 mod report;
 mod requests;
 pub mod state;
@@ -42,6 +43,7 @@ use tokio::{runtime::Handle, sync::watch, task::JoinSet};
 pub use self::{
   answers::AnswerMark,
   idle::ForgetRefusal,
+  merge_queue::RunnerWorktrees,
   report::RunnerStatus,
   requests::RequestError,
   work::{ActiveWork, ActiveWorkFields, SaveState},
