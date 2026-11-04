@@ -5,6 +5,7 @@
 //! ([`i18n`]); no UI toolkit is used here.
 
 pub mod accounts;
+pub mod actions;
 pub mod activity;
 pub mod agent_testing;
 pub mod agents;

@@ -2,7 +2,7 @@
 //! path is kept once per list, in the order given.
 
 use orchester_core::{id::TaskId, source::SourcePath};
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{Connection, params};
 
 use super::ProjectDb;
 use crate::{StoreError, rows::corrupt};
@@ -40,15 +40,11 @@ impl ProjectDb {
     )
   }
 
-  /// Makes `sources` the sources of `task`; its runs that already started keep theirs.
+  /// Makes `sources` the sources of `task`, a local or a team task's identity; its runs that already started keep
+  /// theirs.
   pub fn set_task_sources(&mut self, task: TaskId, sources: &[SourcePath]) -> Result<(), StoreError> {
     let transaction = self.connection.transaction()?;
-    let known = transaction
-      .query_row("SELECT 1 FROM tasks WHERE id = ?1", [task.to_string()], |_| Ok(()))
-      .optional()?;
-    if known.is_none() {
-      return Err(StoreError::TaskNotFound(task));
-    }
+    super::task_identities::ensure_known(&transaction, task)?;
     transaction.execute("DELETE FROM task_sources WHERE task_id = ?1", [task.to_string()])?;
     {
       let mut insert = transaction.prepare("INSERT INTO task_sources (task_id, position, path) VALUES (?1, ?2, ?3)")?;

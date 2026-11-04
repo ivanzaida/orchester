@@ -5,6 +5,7 @@ use std::time::Duration;
 
 pub mod content;
 pub mod estimate;
+pub mod identity;
 pub mod organization;
 pub mod requirements;
 

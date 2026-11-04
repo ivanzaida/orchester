@@ -113,16 +113,19 @@ fn blocked_by(connection: &Connection, task: TaskId) -> Result<Vec<TaskId>, Stor
   Ok(blocked)
 }
 
-/// The rows to delete, by table and rowid: the task's, and every row that refers to one of them, to the last.
+/// The rows to delete, by table and rowid: the task's identity, and every row that refers to one of them, to the last;
+/// its definition is one of those.
 fn doomed_rows(connection: &Connection, task: TaskId) -> Result<BTreeMap<String, BTreeSet<i64>>, StoreError> {
   let references = references(connection)?;
   let rowid: Option<i64> = connection
-    .query_row("SELECT rowid FROM tasks WHERE id = ?1", [task.to_string()], |row| {
-      row.get(0)
-    })
+    .query_row(
+      "SELECT rowid FROM task_identities WHERE id = ?1",
+      [task.to_string()],
+      |row| row.get(0),
+    )
     .optional()?;
   let rowid = rowid.ok_or(StoreError::TaskNotFound(task))?;
-  let mut doomed = BTreeMap::from([("tasks".to_owned(), BTreeSet::from([rowid]))]);
+  let mut doomed = BTreeMap::from([("task_identities".to_owned(), BTreeSet::from([rowid]))]);
   loop {
     let mut grew = false;
     for reference in &references {

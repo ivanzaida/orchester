@@ -223,6 +223,19 @@ impl CanonicalExecutionInputs {
       .expect("the inputs were checked as a snapshot when they were made")
   }
 
+  /// Every resource the inputs pin a version of, once, in id order.
+  pub fn resources(&self) -> Vec<ResourceId> {
+    let mut resources: Vec<ResourceId> = std::iter::once(self.pipeline.resource)
+      .chain(self.profiles.iter().map(|pinned| pinned.resource))
+      .chain(self.instructions.iter().map(|pinned| pinned.resource))
+      .chain(self.tools.iter().map(|pinned| pinned.resource))
+      .chain(self.skills.iter().map(|pinned| pinned.resource))
+      .collect();
+    resources.sort();
+    resources.dedup();
+    resources
+  }
+
   /// Each agent step's permissions: its profile's narrowed by the step, in pipeline step order.
   pub fn step_permissions(&self) -> Vec<ResolvedStepPermissions> {
     self

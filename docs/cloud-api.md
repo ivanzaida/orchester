@@ -400,6 +400,62 @@ read was issued at for a model without one), read again when an `invalidated` ev
 are in flight, and treat every reconnect like a `reset`. A `401`, a `403`, `revoked` or `membership_revoked`, and a
 changed session end them for good.
 
+## Team authority P2 commands
+
+The team server's commands on the S4 envelopes, as it accepts them (its `docs/operation-receipts.md`,
+`docs/claim-authority.md` and `docs/module-branches.md`): `orchester_api::v2::TeamCommand` in `CommandRequest`,
+answered with `CommandResult<TeamCommandValue>`, through `Authority::command` and `Authority::operation`. The two
+enums are field for field the server's own `Command` and `CommandValue`, so the server can take them without a wire
+change. Unknown kinds and fields are refused; the server answers a kind it does not have `400`.
+
+| Method and path | Request | Answer |
+| --- | --- | --- |
+| `POST /api/v2/projects/{p}/commands` | `CommandRequest<TeamCommand>` | `201` `CommandResult<TeamCommandValue>`, `200` the same result for a repeat, or an `AuthorityError` |
+| `GET /api/v2/projects/{p}/operations/{operation}` | | `OperationRead<TeamCommandValue>`; `404 not_found` while the server has no outcome of it |
+
+- Commands, tagged by `kind`: `task.create {content:TaskContent}` (Admin), `claim.acquire {subject}`,
+  `claim.take_over {subject,observed_claim_id}`, `claim.release {authority:AuthorityRef}`,
+  `assignment.set {subject,user_id}` (`user_id` sent, `null` for nobody; Admin), `module.branch.set {module_id,branch}`
+  (Admin; `branch` is required), `work.start {authority:AuthorityRef,base_commit}` and
+  `delivery.authorize {subject,claim_id,branch,source_commit,base_commit}` (Admin; a module subject). The server's
+  `delivery.request`, `delivery.report` and `work.report` join `TeamCommand` in P4 with the server's shapes.
+- Expected revisions: the module's for `module.branch.set`, the task's and its module's for `work.start`, the
+  subject's for `assignment.set` (the desktop sends it), none for the others, whose claims fence them by id.
+- Values, tagged by `kind`, each with `effects`: `task {task:SharedTask}` (until `TaskRead` is published there),
+  `work {work:WorkRead,bundle:BundleRef}`, `claim {subject,claim:ClaimRead,children:[ClaimRead]}`,
+  `released {subject,released_claim_id}`, `assignment {subject,assignee:UserRef?,revision}`,
+  `module {module:ModuleRead}` and `delivery {delivery:ModuleDeliveryRead}`. Only `work.start` answers an effect,
+  `start {work_id,bundle}`; every other list is empty.
+
+Definitions are no commands. The desktop's dispatcher (`orchester_workspace::actions`) sends these actions to the
+server's own Admin-checked routes (Authority S3, its `docs/definition-authority.md` and `docs/workspace-policy.md`),
+which refuse a member with `403` (`not_admin` on the `/api/v1` routes):
+
+| Dispatcher action | Route | Decided on |
+| --- | --- | --- |
+| Task edit, organization, move | `PATCH /api/v1/projects/{p}/tasks/{t}` `TaskPatch {revision,changes}` | the task's revision; `409 revision_conflict` carries the current task |
+| Module create | `POST /api/v1/projects/{p}/modules` `ModuleCreate` | its `idempotency_key` and `id`, both the intent's operation id |
+| Module edit | `PATCH /api/v1/projects/{p}/modules/{m}` `ModulePatch` | the module's revision and the intent's key; `409 revision_conflict` carries the current module |
+| Tag create, rename, merge, delete | `POST …/tags`, `PATCH …/tags/{tag}`, `POST …/tags/{tag}/merge`, `DELETE …/tags/{tag}` | nothing: tags have no revision |
+| Workspace policy | `PATCH /api/v2/projects/{p}/policy` `WorkspacePolicyChanges {revision,automatic_merge}` | the policy's revision; `409 {error:"policy_revision_conflict",current}` |
+
+The dispatcher records each command's id and request in the project database (`team_operations`) before sending it,
+bound to the SHA-256 of its expected revisions and command: another request under a recorded id is refused before
+anything is sent. A lost or unreadable response leaves the operation open as *acceptance unknown*; carrying it on
+reads `GET …/operations/{operation}` first and sends the same request again only on `not_found`. `unauthenticated`,
+`rate_limited`, `unavailable` and `unsupported_contract` leave it open too; every other refusal, including a lookup's
+final one, is kept as final. After `revision_conflict` the dispatcher reads the subject as it is now (`GET
+/api/v2/projects/{p}/tasks/{task}` or `…/modules/{module}`) and returns it with the refusal. A committed receipt is
+kept before its local effects: a task it answers with is recorded as a team task identity, and `start` stays pending
+on the open operation until P4 carries it out.
+
+The definition routes keep no receipt, so a definition edit is not recorded. When its response is lost, the
+dispatcher reads the subject again (`GET /api/v1/projects/{p}/tasks/{t}`, `…/tags`, `GET /api/v2/projects/{p}/policy`)
+and compares it with the edit: holding the edit, it was made; still at the revision read (a tag without the edit),
+it is sent again, which the revision or the module routes' key makes safe; otherwise it changed meanwhile and the
+edit is refused as superseded, with the current value. A revision conflict whose current value holds the edit is
+taken as made, so the same intent sent again after a lost response finds its edit rather than a refusal.
+
 ## Conventions
 
 - JSON bodies in UTF-8. Requests are limited to 1 MiB and must arrive within 10 seconds.

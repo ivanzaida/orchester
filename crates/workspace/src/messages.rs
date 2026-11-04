@@ -104,7 +104,7 @@ pub fn store_error(error: &StoreError) -> Message {
     StoreError::SharedTask(_) | StoreError::SharedProject => Message::new("sharing.errors.serverOnly"),
     StoreError::NotAdmin => Message::new("sharing.errors.notAdmin"),
     StoreError::NotSharedTask(_) => Message::new("sharing.notShared.readOnly"),
-    StoreError::NotShared => Message::new("sharing.errors.notShared"),
+    StoreError::NotShared | StoreError::OtherServerProject => Message::new("sharing.errors.notShared"),
     StoreError::AlreadyShared => Message::new("sharing.errors.alreadyShared"),
     StoreError::DraftChanged(_) => Message::new("errors.draftChanged"),
     StoreError::VersionInUse(_) => Message::new("sharing.errors.versionInUse"),
@@ -136,24 +136,30 @@ pub fn store_error(error: &StoreError) -> Message {
     | StoreError::MemoryConflict(_)
     | StoreError::MemoryNotActive(_)
     | StoreError::DuplicateMemoryKey(_)
+    | StoreError::TaskIdTaken(_)
+    | StoreError::OperationMismatch(_)
+    | StoreError::OperationNotFound(_)
     | StoreError::MigrationBrokeReferences { .. } => Message::new("errors.storage"),
-    StoreError::Publish(PublishError::StaleDraft { latest, .. }) => Message::new("errors.staleDraft").with(
+    StoreError::Publish(error) => publish_error(error),
+    StoreError::AlwaysAllow(_) => Message::new("errors.alwaysAllow"),
+  }
+}
+
+/// Why a draft was not published.
+fn publish_error(error: &PublishError) -> Message {
+  match error {
+    PublishError::StaleDraft { latest, .. } => Message::new("errors.staleDraft").with(
       "version",
       latest.map_or_else(String::new, |version| version.to_string()),
     ),
-    StoreError::Publish(PublishError::VersionLimit) => Message::new("errors.versionLimit"),
-    StoreError::Publish(PublishError::NoSteps | PublishError::UnassignedSteps(_)) => {
-      Message::new("pipelines.problems.notPublishable")
-    }
-    StoreError::Publish(PublishError::BlankInstruction) => Message::new("instructions.errors.blankText"),
-    StoreError::Publish(PublishError::BlankSkillDescription) => Message::new("skills.errors.blankDescription"),
-    StoreError::Publish(PublishError::BlankSkillBody) => Message::new("skills.errors.blankBody"),
-    StoreError::Publish(PublishError::ConnectionMissing) => {
-      Message::new("agents.permissions.publish.connectionMissing")
-    }
-    StoreError::Publish(PublishError::Permissions(problem)) => crate::agents::permissions::not_enforceable(problem),
-    StoreError::Publish(PublishError::Needs(error)) => needs_error(error),
-    StoreError::AlwaysAllow(_) => Message::new("errors.alwaysAllow"),
+    PublishError::VersionLimit => Message::new("errors.versionLimit"),
+    PublishError::NoSteps | PublishError::UnassignedSteps(_) => Message::new("pipelines.problems.notPublishable"),
+    PublishError::BlankInstruction => Message::new("instructions.errors.blankText"),
+    PublishError::BlankSkillDescription => Message::new("skills.errors.blankDescription"),
+    PublishError::BlankSkillBody => Message::new("skills.errors.blankBody"),
+    PublishError::ConnectionMissing => Message::new("agents.permissions.publish.connectionMissing"),
+    PublishError::Permissions(problem) => crate::agents::permissions::not_enforceable(problem),
+    PublishError::Needs(error) => needs_error(error),
   }
 }
 

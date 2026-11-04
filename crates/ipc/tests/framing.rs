@@ -346,6 +346,28 @@ async fn frames_round_trip_every_message() {
   assert_eq!(reader.read::<Event>().await.expect("clean end"), None);
 }
 
+/// The start of a team run from the inputs its accepted operation kept, and its refusal when none were kept
+/// (protocol 42).
+#[tokio::test]
+async fn frames_round_trip_an_accepted_start() {
+  let ((mut reader, _), (_, mut writer)) = connection();
+  let start = Request {
+    id: RequestId::new(1),
+    command: Command::StartAcceptedRun {
+      operation: orchester_core::id::OperationId::generate(),
+    },
+  };
+  let refused = Event::Reply {
+    id: RequestId::new(1),
+    reply: Reply::Rejected(Rejection::InputsNotAccepted),
+  };
+  writer.write(&start).await.expect("write request");
+  writer.write(&refused).await.expect("write event");
+  drop(writer);
+  assert_eq!(reader.read::<Request>().await.expect("read request"), Some(start));
+  assert_eq!(reader.read::<Event>().await.expect("read event"), Some(refused));
+}
+
 /// *Test connection* of a native connection (protocol 17): the model API asked about, and what the runner
 /// found with the models it listed.
 #[tokio::test]

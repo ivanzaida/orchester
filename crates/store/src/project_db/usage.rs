@@ -128,14 +128,25 @@ impl ProjectDb {
     rows.into_iter().map(|row| row.into_facts(now)).collect()
   }
 
+  /// The runs that worked since `since`, each with its task's key and title: the task's definition here, else, for a
+  /// team task whose definition is only on its server, the task as the run's inputs keep it; and the pipeline's name
+  /// here, else the name the inputs gave it.
   fn runs_since(&self, since: Timestamp) -> Result<Vec<RunFacts>, StoreError> {
     let tags = self.task_tag_names()?;
     let mut statement = self.connection.prepare(&format!(
-      "SELECT runs.id, runs.number, runs.task_id, runs.status, tasks.number, tasks.title, pipelines.name, pipelines.id, \
+      "SELECT runs.id, runs.number, runs.task_id, runs.status, \
+       COALESCE(tasks.number, json_extract(bundles.body, '$.task_number')), \
+       COALESCE(tasks.title, json_extract(bundles.body, '$.task.title')), \
+       COALESCE(pipelines.name, (SELECT json_extract(label.value, '$.name') FROM json_each(bundles.body, '$.labels') \
+         AS label WHERE json_extract(label.value, '$.resource') = json_extract(runs.snapshot, '$.body.pipeline.resource'))), \
+       COALESCE(pipelines.id, CASE WHEN bundles.run_id IS NOT NULL \
+         THEN json_extract(runs.snapshot, '$.body.pipeline.resource') END), \
        json_extract(runs.snapshot, '$.body.pipeline.number') \
-       FROM {READABLE_RUNS} AS runs JOIN tasks ON tasks.id = runs.task_id \
+       FROM {READABLE_RUNS} AS runs LEFT JOIN tasks ON tasks.id = runs.task_id \
+       LEFT JOIN run_bundles AS bundles ON bundles.run_id = runs.id \
        LEFT JOIN resources AS pipelines ON pipelines.id = json_extract(runs.snapshot, '$.body.pipeline.resource') \
-       WHERE runs.id IN (SELECT run_id FROM invocations WHERE {RAN_SINCE}) ORDER BY runs.number"
+       WHERE runs.id IN (SELECT run_id FROM invocations WHERE {RAN_SINCE}) \
+       AND (tasks.id IS NOT NULL OR bundles.run_id IS NOT NULL) ORDER BY runs.number"
     ))?;
     let rows = statement
       .query_map([since.unix_millis()], |row| {

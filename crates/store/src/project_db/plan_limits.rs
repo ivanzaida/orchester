@@ -46,12 +46,15 @@ impl ProjectDb {
     Ok(())
   }
 
-  /// The reports stored from `since` on, oldest first, each with the run that reported it.
+  /// The reports stored from `since` on, oldest first, each with the run that reported it and that run's task: its
+  /// definition's number here, else, for a team task whose definition is only on its server, the run's inputs'.
   pub fn limit_snapshots(&self, since: Timestamp) -> Result<Vec<LimitSnapshot>, StoreError> {
     let mut statement = self.connection.prepare(
-      "SELECT snapshots.provider, snapshots.at, snapshots.body, runs.number, tasks.number, snapshots.account_id \
+      "SELECT snapshots.provider, snapshots.at, snapshots.body, runs.number, \
+       COALESCE(tasks.number, json_extract(bundles.body, '$.task_number')), snapshots.account_id \
        FROM plan_limit_snapshots AS snapshots \
        LEFT JOIN runs ON runs.id = snapshots.run_id LEFT JOIN tasks ON tasks.id = runs.task_id \
+       LEFT JOIN run_bundles AS bundles ON bundles.run_id = runs.id \
        WHERE snapshots.at >= ?1 ORDER BY snapshots.at, snapshots.id",
     )?;
     let rows = statement

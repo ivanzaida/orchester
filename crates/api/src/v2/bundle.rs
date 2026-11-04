@@ -13,6 +13,9 @@
 //! `sha256`, at most [`MAX_BUNDLE_FILE_BYTES`], which the desktop checks with [`ExecutionBundle::check_file`].
 
 pub use orchester_core::run::bundle::{MAX_BUNDLE_FILE_BYTES, ResolvedStepPermissions, SkillFileEntry, SkillFiles};
+/// `{title, brief, criteria}`: the task the run executes, as it was at the bundle's `definition_revision`; a run
+/// keeps it with its inputs.
+pub use orchester_core::run::inputs::TaskAtStart;
 use orchester_core::{
   blob::ContentHash,
   connection::AgentProvider,
@@ -60,15 +63,6 @@ pub struct LocalBinding {
   pub role: Name,
   pub cli: AgentProvider,
   pub model: ModelId,
-}
-
-/// `{title, brief, criteria}`: the task the run executes, as it was at the bundle's `definition_revision`.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct TaskAtStart {
-  pub title: String,
-  pub brief: String,
-  pub criteria: Vec<String>,
 }
 
 /// What the server decides when it starts the work, besides the resolved inputs.

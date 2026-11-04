@@ -38,7 +38,7 @@ use zeroize::Zeroize;
 pub use self::recorded::trust_for_tests;
 pub use self::{
   address::{AddressError, PlainHttp, ServerAddress},
-  authority::{Authority, AuthorityCallError, Subscription, SubscriptionEnd},
+  authority::{Authority, AuthorityCallError, PolicyChange, Subscription, SubscriptionEnd},
   cloud::{CloudClient, SignInAnswer},
   cloud_address::CloudAddress,
   error::ClientError,
@@ -348,12 +348,17 @@ async fn refusal(response: Response, status: StatusCode) -> ClientError {
   let Ok(bytes) = response.bytes().await else {
     return ClientError::NotOrchester { status };
   };
-  match serde_json::from_slice::<ApiError>(&bytes) {
+  refused(&bytes, status, retry_after)
+}
+
+/// The error of a refusal's body `bytes`: the server's `{error, message}` with its details, or not an Orchester server.
+fn refused(bytes: &[u8], status: u16, retry_after: Option<u64>) -> ClientError {
+  match serde_json::from_slice::<ApiError>(bytes) {
     Ok(error) => ClientError::Api {
       status,
       code: error.error,
       retry_after,
-      details: details(&bytes).map(Box::new),
+      details: details(bytes).map(Box::new),
     },
     Err(_) => ClientError::NotOrchester { status },
   }

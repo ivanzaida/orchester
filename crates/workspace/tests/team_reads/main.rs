@@ -17,7 +17,7 @@ use orchester_api::{
   client::{Client, PlainHttp, ServerAddress},
   v2::{ModuleListRequest, PageRequest, QueryScope, SearchText, TaskFilters, TaskListRequest, TaskSort},
 };
-use orchester_core::{secret::SecretValue, task::organization::WorkflowStatus};
+use orchester_core::{id::ServerId, secret::SecretValue, task::organization::WorkflowStatus};
 use orchester_workspace::{
   sharing::sync::Clock,
   team_reads::{TeamProject, TeamReadError, TeamSession},
@@ -63,7 +63,11 @@ impl Reader {
     let client = Client::new(ServerAddress::parse(url).expect("address"), PlainHttp::NotAllowed).expect("client");
     let token = SecretValue::new(token.to_owned()).expect("token");
     let generation = watch::channel(0).0;
-    let session = TeamSession::new(client, token, server.project, generation.subscribe());
+    let session = TeamSession::new(
+      (client, token),
+      (ServerId::generate(), server.project),
+      generation.subscribe(),
+    );
     let project = TeamProject::new(session);
     let following = project.clone();
     let follow = tokio::spawn(async move { following.follow(&QuickClock).await });

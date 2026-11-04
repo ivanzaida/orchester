@@ -1,9 +1,11 @@
 //! A team server's workspace-authority surface under `/api/v2` (`docs/cloud-api.md`, "Team authority S10 read
-//! contract", "Team authority S11 subscriptions"): the bounded reads ([`reads`]) and the scoped invalidation
-//! subscription ([`subscription`]), through [`Client::authority`]. Refusals there are [`AuthorityError`]s, not the
-//! `/api/v1` `{error, message}` form, so they come as [`AuthorityCallError::Refused`]. The routes are listed in
-//! `docs/cloud-api.md`, "Team authority S10/S11 routes".
+//! contract", "Team authority S11 subscriptions"): the bounded reads ([`reads`]), the scoped invalidation
+//! subscription ([`subscription`]) and the team commands with their operations ([`commands`]), through
+//! [`Client::authority`]. Refusals there are [`AuthorityError`]s, not the `/api/v1` `{error, message}` form, so they
+//! come as [`AuthorityCallError::Refused`]. The routes are listed in `docs/cloud-api.md`, "Team authority S10/S11
+//! routes" and "Team authority P2 commands".
 
+mod commands;
 mod reads;
 mod subscription;
 
@@ -12,7 +14,10 @@ use reqwest::{Method, RequestBuilder, Response};
 use serde::{Serialize, de::DeserializeOwned};
 use thiserror::Error;
 
-pub use self::subscription::{Subscription, SubscriptionEnd};
+pub use self::{
+  commands::PolicyChange,
+  subscription::{Subscription, SubscriptionEnd},
+};
 use super::{Client, ClientError, bearer, redirect, retry_after};
 use crate::v2::{AuthorityError, AuthorityErrorCode};
 
@@ -77,7 +82,8 @@ impl Authority<'_> {
     call(self.request(Method::GET, route)?).await
   }
 
-  /// `POST` of `body` to `route`, the answer read as `T`: the listings that take a request with filters and a page.
+  /// `POST` of `body` to `route`, the answer read as `T`: the listings that take a request with filters and a page,
+  /// and the commands.
   async fn query<B: Serialize, T: DeserializeOwned>(&self, route: &str, body: &B) -> Result<T, AuthorityCallError> {
     // Serializing the contract's own types fails only for a map with non-string keys, which it has not.
     let bytes = serde_json::to_vec(body).map_err(|_| ClientError::Setup)?;

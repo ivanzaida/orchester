@@ -27,7 +27,9 @@ use crate::{
 const SELECT_TASKS: &str = "SELECT id, number, title, brief, CASE WHEN sharing IS 'shared' THEN \
   (SELECT resources.id FROM resources WHERE resources.kind = 'pipeline' AND resources.slug = tasks.pipeline_slug) \
   ELSE pipeline_id END, budget_tokens, max_duration_ms, status, created_at, pipeline_version, revision, kept_key, \
-  (SELECT module_id FROM task_modules WHERE task_modules.task_id = tasks.id), base_choice, base_branch \
+  (SELECT module_id FROM task_modules WHERE task_modules.task_id = tasks.id), \
+  COALESCE((SELECT choice FROM task_bases WHERE task_bases.task_id = tasks.id), 'inherit'), \
+  (SELECT branch FROM task_bases WHERE task_bases.task_id = tasks.id) \
   FROM tasks";
 
 struct RunTaskSnapshot {
@@ -306,10 +308,11 @@ pub(super) fn revision_value(revision: i64) -> Result<TaskRevision, StoreError> 
     .ok_or_else(|| corrupt("task revision", revision))
 }
 
-/// Stores the new task `task`, and keeps what it asks for as its creation version.
+/// Stores the new task `task` with its local identity, and keeps what it asks for as its creation version.
 pub(super) fn insert_task(transaction: &Transaction<'_>, task: &Task, batch: &str) -> Result<(), StoreError> {
   let details = task.details();
   let (budget_tokens, max_duration_ms) = limit_columns(details.limits)?;
+  super::task_identities::insert_local(transaction, task.id())?;
   transaction.execute(
     "INSERT INTO tasks (id, number, batch_key, title, brief, pipeline_id, budget_tokens, max_duration_ms, status, \
      created_at, pipeline_version, revision) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",

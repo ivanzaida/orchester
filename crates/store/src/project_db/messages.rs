@@ -53,14 +53,7 @@ impl ProjectDb {
     if let Some(existing) = existing {
       return existing.into_message();
     }
-    let task_exists: bool = transaction.query_row(
-      "SELECT EXISTS (SELECT 1 FROM tasks WHERE id = ?1)",
-      [message.task().to_string()],
-      |row| row.get(0),
-    )?;
-    if !task_exists {
-      return Err(StoreError::TaskNotFound(message.task()));
-    }
+    super::task_identities::ensure_known(&transaction, message.task())?;
     let (written, kept) = attachments::write(&self.directory, attachments)?;
     insert(&transaction, message, Some(key))?;
     attachments::insert(
