@@ -229,13 +229,16 @@ core (`orchester_core::run::bundle`) and `orchester_api::v2`; it adds no endpoin
 starts work under a claim and never accepts one a client wrote. Unknown fields are refused in every shape below.
 
 - `ExecutionBundle`, in this field order:
-  `{schema_version,project_id,subject,claim_id,module_id,branch,base_commit,definition_revision,task,pipeline,profiles,permissions,limits,delivery,resources,files,skill_files,bindings,inputs}`.
-  `schema_version` is `EXECUTION_BUNDLE_SCHEMA` (1), as `BundleRef.schema_version` names it. `module_id`, `branch`
+  `{schema_version,project_id,subject,claim_id,module_id,branch,base_commit,definition_revision,task_number,task,pipeline,profiles,permissions,limits,delivery,resources,files,skill_files,bindings,inputs}`.
+  `schema_version` is `EXECUTION_BUNDLE_SCHEMA` (2), as `BundleRef.schema_version` names it; a bundle of another
+  version is refused, with no compatibility shim (2 added `task_number` and the pinned versions' `label`, so a
+  desktop and a server on different versions refuse each other's bundles). `module_id`, `branch`
   and `base_commit` are S7's (below): the module the work is under, its module branch (`BranchName`) and the base
   branch's commit the work starts from (`CommitId`). `definition_revision` is the task's revision when the work
-  started; `task` (`TaskAtStart`) is `{title,brief,criteria}` at that revision. `limits` is a `SharedLimits` (`{}` for
-  none) and `delivery` what the run delivers (`changes`, `report`, `outside` or `changes_or_report`: the task's own
-  choice, else its pipeline's).
+  started; `task_number` is the task's number in its project from 1 (the `7` of `ORC-7`, which names the run and its
+  branch with the project's key); `task` (`TaskAtStart`) is `{title,brief,criteria}` at that revision. `limits` is a
+  `SharedLimits` (`{}` for none) and `delivery` what the run delivers (`changes`, `report`, `outside` or
+  `changes_or_report`: the task's own choice, else its pipeline's).
 - Derived from `inputs`, and refused on read when they differ: `pipeline` `{resource_id,version}`; `profiles`
   `[{role,resource_id,version}]`; `permissions` `[{step,permissions}]`, each agent step's profile permissions
   narrowed by the step, in pipeline step order; `resources` `[{resource_id,version}]`, the pinned instructions, tools
@@ -245,7 +248,10 @@ starts work under a claim and never accepts one a client wrote. Unknown fields a
   provider (`codex_cli`, `claude_code_cli`, …) the executing computer runs it with. Which account or connection runs it,
   and every path, stays on that computer.
 - `inputs` (`CanonicalExecutionInputs`): `{pipeline,steps,profiles,instructions,tools,skills}`, each pinned version
-  `{resource,version,number,body}` with its published body. `steps` are the run snapshot's `[{key,executor}]` in
+  `{resource,version,number,label,body}` with its published body. `label` (`ResourceLabel`) is `{slug,name}`, the
+  resource's slug and name as the pinned version had them, which prompts and skill folders name it by: the slug is
+  1–64 lowercase letters, digits and single inner hyphens, the name is not blank and at most 200 characters; a
+  malformed label is refused. `steps` are the run snapshot's `[{key,executor}]` in
   pipeline order. The pipeline body lists no sources, a profile body is
   `{role,responsibilities,instructions,model,settings,permissions}` without its connection, MCP servers or writable
   folders, and a command tool never starts a program by an absolute path; such inputs are refused. Bodies name

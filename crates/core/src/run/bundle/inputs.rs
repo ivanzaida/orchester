@@ -1,6 +1,7 @@
 //! The complete resolved inputs of one execution, built on the run's [`RunSnapshot`]: the pinned pipeline with its
-//! body, each step's executor, and the bodies of the profile, instruction, tool and skill versions the run pins, so a
-//! run executes and recovers without reading the mutable current definitions. Nothing in them is a secret value, an
+//! body, each step's executor, and the bodies of the profile, instruction, tool and skill versions the run pins, each
+//! pinned version with the slug and name it had ([`ResourceLabel`]), so a run executes and recovers without reading
+//! the mutable current definitions. Nothing in them is a secret value, an
 //! account, a connection or a path of one computer: bodies name secrets by id only, the run's sources
 //! ([`crate::source::RunSources`]) and the pipeline's are left out, and profiles go without their computer's bindings
 //! ([`ExecutionProfile`]).
@@ -15,30 +16,56 @@ use super::{
 use crate::{
   blob::ContentHash,
   id::{ResourceId, VersionId},
+  name::Name,
   permission::AgentPermissions,
   resource::{
-    AgentProfile, Instruction, Pipeline, PipelineSources, Skill, StepKey, StepKind, Tool, ToolAction, Version,
+    AgentProfile, Instruction, Pipeline, PipelineSources, Skill, Slug, StepKey, StepKind, Tool, ToolAction, Version,
     VersionNumber,
   },
   run::{PinnedVersion, RunSnapshot, StepExecutor, StepSnapshot},
 };
 
-/// `{resource, version, number, body}`: a pinned published version with its body.
+/// `{slug, name}`: what a resource was called at a pinned version, as prompts and skill folders name it. Both are
+/// checked as a slug and a name are, also when a bundle is read.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResourceLabel {
+  slug: Slug,
+  name: Name,
+}
+
+impl ResourceLabel {
+  pub const fn new(slug: Slug, name: Name) -> Self {
+    Self { slug, name }
+  }
+
+  pub const fn slug(&self) -> &Slug {
+    &self.slug
+  }
+
+  pub const fn name(&self) -> &Name {
+    &self.name
+  }
+}
+
+/// `{resource, version, number, label, body}`: a pinned published version with its label and body.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PinnedBody<B> {
   resource: ResourceId,
   version: VersionId,
   number: VersionNumber,
+  label: ResourceLabel,
   body: B,
 }
 
 impl<B> PinnedBody<B> {
-  const fn new(pinned: PinnedVersion, body: B) -> Self {
+  const fn new(pinned: PinnedVersion, label: ResourceLabel, body: B) -> Self {
     Self {
       resource: pinned.resource,
       version: pinned.version,
       number: pinned.number,
+      label,
       body,
     }
   }
@@ -51,18 +78,25 @@ impl<B> PinnedBody<B> {
     }
   }
 
+  /// The resource's slug and name as the pinned version had them.
+  pub const fn label(&self) -> &ResourceLabel {
+    &self.label
+  }
+
   pub const fn body(&self) -> &B {
     &self.body
   }
 }
 
 /// The published versions a snapshot's pins are looked up in, by version id; older versions as well as the latest.
+/// `labels` holds each pinned version's label, the pipeline's too, by version id.
 #[derive(Clone, Copy, Debug)]
 pub struct PinnedBodies<'a> {
   pub profiles: &'a [Version<AgentProfile>],
   pub instructions: &'a [Version<Instruction>],
   pub tools: &'a [Version<Tool>],
   pub skills: &'a [Version<Skill>],
+  pub labels: &'a [(VersionId, ResourceLabel)],
 }
 
 /// `{step, permissions}`: what an agent step's agents may do, its profile's permissions narrowed by the step.
@@ -106,7 +140,7 @@ impl TryFrom<InputsFields> for CanonicalExecutionInputs {
 }
 
 impl CanonicalExecutionInputs {
-  /// The inputs of a run that pinned `snapshot`, with the bodies of its pinned versions from `bodies`.
+  /// The inputs of a run that pinned `snapshot`, with the bodies and labels of its pinned versions from `bodies`.
   pub fn pin(snapshot: &RunSnapshot, bodies: PinnedBodies<'_>) -> Result<Self, BundleError> {
     let body = snapshot
       .body()
@@ -118,17 +152,19 @@ impl CanonicalExecutionInputs {
       .map(|pinned| {
         Ok(PinnedBody::new(
           pinned,
+          label(bodies.labels, pinned)?,
           ExecutionProfile::of(find(bodies.profiles, pinned)?),
         ))
       })
       .collect::<Result<_, BundleError>>()?;
+    let pipeline = snapshot.pipeline();
     Self::checked(InputsFields {
-      pipeline: PinnedBody::new(snapshot.pipeline(), body),
+      pipeline: PinnedBody::new(pipeline, label(bodies.labels, pipeline)?, body),
       steps: snapshot.steps().to_vec(),
       profiles,
-      instructions: pinned_bodies(snapshot.instructions(), bodies.instructions)?,
-      tools: pinned_bodies(snapshot.tools(), bodies.tools)?,
-      skills: pinned_bodies(snapshot.skills(), bodies.skills)?,
+      instructions: pinned_bodies(snapshot.instructions(), bodies.instructions, bodies.labels)?,
+      tools: pinned_bodies(snapshot.tools(), bodies.tools, bodies.labels)?,
+      skills: pinned_bodies(snapshot.skills(), bodies.skills, bodies.labels)?,
     })
   }
 
@@ -315,14 +351,35 @@ fn find<B>(versions: &[Version<B>], pinned: PinnedVersion) -> Result<&B, BundleE
     })
 }
 
+fn label(labels: &[(VersionId, ResourceLabel)], pinned: PinnedVersion) -> Result<ResourceLabel, BundleError> {
+  labels
+    .iter()
+    .find(|(version, _)| *version == pinned.version)
+    .map(|(_, label)| label.clone())
+    .ok_or(BundleError::MissingLabel {
+      resource: pinned.resource,
+      number: pinned.number,
+    })
+}
+
 fn pins<B>(list: &[PinnedBody<B>]) -> Vec<PinnedVersion> {
   list.iter().map(PinnedBody::pinned).collect()
 }
 
-fn pinned_bodies<B: Clone>(pins: &[PinnedVersion], versions: &[Version<B>]) -> Result<Vec<PinnedBody<B>>, BundleError> {
+fn pinned_bodies<B: Clone>(
+  pins: &[PinnedVersion],
+  versions: &[Version<B>],
+  labels: &[(VersionId, ResourceLabel)],
+) -> Result<Vec<PinnedBody<B>>, BundleError> {
   pins
     .iter()
-    .map(|&pinned| Ok(PinnedBody::new(pinned, find(versions, pinned)?.clone())))
+    .map(|&pinned| {
+      Ok(PinnedBody::new(
+        pinned,
+        label(labels, pinned)?,
+        find(versions, pinned)?.clone(),
+      ))
+    })
     .collect()
 }
 
