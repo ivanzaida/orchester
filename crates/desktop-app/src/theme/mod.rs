@@ -47,6 +47,7 @@ pub mod pipelines;
 mod project_settings;
 mod projects;
 mod pull_requests;
+mod review;
 mod secrets;
 mod settings;
 mod shadow;
@@ -103,6 +104,7 @@ pub use self::{
   project_settings::{ProjectSettingsSpacing, ProjectSettingsText},
   projects::{ProjectsSpacing, ProjectsText},
   pull_requests::{PullRequestsSpacing, PullRequestsText},
+  review::{REVIEW_TYPING_OPACITY, ReviewSpacing, ReviewText},
   secrets::{SECRETS_PENDING_OPACITY, SecretsSpacing, SecretsText},
   settings::{SettingsSpacing, SettingsText},
   shadow::ExtraShadow,
@@ -172,6 +174,7 @@ pub fn install(app: &mut App, mode: Mode) {
   sources::install(theme);
   delivery::install(theme);
   merge_attempt::install(theme);
+  review::install(theme);
   import::install(theme);
   hub::install(theme);
   failure::install(theme);

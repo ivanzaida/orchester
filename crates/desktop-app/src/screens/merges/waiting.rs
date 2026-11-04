@@ -1,8 +1,8 @@
 //! *Waiting for your review* (`Section · Waiting for your review` `c7rBsw` in 09 `Os7b3`): a row per run that passed
 //! every step and merges only once a person approves it, *Ready for review* on its task page or *Waiting for approval*
 //! in the merge queue, with its `info` eye. Its line says what it changes, how it merges and the review comments not
-//! sent yet; once its branch moved after the head that was reviewed, *Changed since your review* in `warning`. *Review
-//! changes*, or *Review again*, opens the run's changes.
+//! sent yet; once its branch moved after the head that was reviewed, *Changed since your review* in `warning`. The row,
+//! and its *Review changes* or *Review again*, open the run's review page (ORC-697, [`super::review`]).
 
 use std::sync::Arc;
 
@@ -16,12 +16,12 @@ use orchester_workspace::{
 };
 
 use super::{
+  attempt_page,
   row::{self, Shown},
-  task_page, words,
+  words,
 };
 use crate::{
   project::ShownProject,
-  routes::TaskTab,
   ui::{
     button::{ActionButton, ButtonKind},
     icon::Icon,
@@ -69,13 +69,13 @@ fn shown(ctx: &mut Ctx, project: &ShownProject, run: &WaitingRun) -> Shown {
   let review = ActionButton::new(format!("{id}-action"), ButtonKind::Secondary, ctx.t(key))
     .icon(Icon::FileDiff)
     .small()
-    .opens(task_page(ctx, project, &run.run, TaskTab::Changes));
+    .opens(attempt_page(ctx, project, &run.run));
   Shown {
     glyph: (Icon::Eye, PaletteColor::Info),
     line: (row::line(&id, &line, color), name),
     meta,
     action: Some(review.into()),
-    opens: task_page(ctx, project, &run.run, TaskTab::Summary),
+    opens: attempt_page(ctx, project, &run.run),
     id,
   }
 }
