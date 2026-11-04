@@ -41,7 +41,7 @@ use orchester_core::{
   resource::ModelId,
   revision::Revision,
   run::{Invocation, MessageOccasion, Plan, StepExecutor, StepFailure, StepStatus, execution_tokens},
-  store::{ActivityStore, RunStore, SettingsStore},
+  store::{ActivityStore, RunStore},
   time::Timestamp,
   tokens::{TokenBudget, TokensUsed},
 };
@@ -207,7 +207,7 @@ impl RunTask {
     if let Some(waiting_for_slot) = self.held_back()? {
       return Ok(waiting_for_slot);
     }
-    self.answer_questions()?;
+    self.resume_answered_steps()?;
     // An agent stopped to take changed permissions while a pause was asked for waits for it.
     let continuing: Vec<StepExecutionId> = self
       .run
@@ -378,7 +378,7 @@ impl RunTask {
         &self.root,
         workspace.path(),
         &permissions,
-        &self.db.project_environment()?,
+        &self.computer_environment()?,
       ),
       roots: self.run_roots(execution, workspace.path()),
       profile: self.profile_of(execution),

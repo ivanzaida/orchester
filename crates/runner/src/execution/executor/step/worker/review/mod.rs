@@ -30,18 +30,18 @@ use orchester_core::{
     },
     without_reviewer,
   },
-  store::{RunStore, SettingsStore, TaskStore},
+  store::{RunStore, TaskStore},
   time::Timestamp,
 };
 use orchester_ipc::Event;
-use orchester_store::StoreError;
+use orchester_store::{ApprovalRecord, StoreError};
 use tokio::{runtime::Handle, task::JoinHandle};
 
 pub(in crate::execution) use self::{estimate::estimate_task, setup::ReviewerSources};
 use self::{
   ledger::ReviewLedger,
   process::{StopReview, stop_review},
-  setup::{PushPlace, ReviewJob, ReviewerSetup, hold_now, ignored_build_output},
+  setup::{PushPlace, ReviewJob, ReviewerSetup, hold_now, ignored_build_output, reviewer_variables},
 };
 use super::{super::answer::Settled, Watch, Worker};
 
@@ -136,13 +136,14 @@ impl Worker {
       ),
     };
     if let Some(hold) = hold {
-      watch
-        .db
-        .record_review(approval.run, &approval.id, &Review::Held { hold })?;
+      let held = ApprovalRecord::reviewed(approval.run, &approval.id, &Review::Held { hold });
+      watch.sink.approval(held)?;
       return Ok(Err(CameToPerson::held(hold)));
     }
     // Marked last, after everything that can fail: a request marked under review always gets its review.
-    watch.db.set_reviewing(approval.run, &approval.id, true)?;
+    watch
+      .sink
+      .approval(ApprovalRecord::reviewing(approval.run, &approval.id, true))?;
     let (stop, stopped) = stop_review();
     let job = ReviewJob {
       subject,
@@ -191,13 +192,13 @@ impl Worker {
     }
     let autopilot = watch.in_autopilot()?;
     if autopilot != (question == ReviewQuestion::Roots) {
-      watch.db.set_reviewing(run, &id, false)?;
+      watch.sink.approval(ApprovalRecord::reviewing(run, &id, false))?;
       let waiting = watch.approval.take().expect("the waiting request was matched above");
       return self.route(watch, waiting, Timestamp::now()).await;
     }
-    if let Err(error) = watch.db.record_review(run, &id, &review) {
+    if let Err(error) = watch.sink.approval(ApprovalRecord::reviewed(run, &id, &review)) {
       // The review is lost, but the request must not stay hidden: the person decides.
-      watch.db.set_reviewing(run, &id, false)?;
+      watch.sink.approval(ApprovalRecord::reviewing(run, &id, false))?;
       let unsure = CameToPerson::because(PersonReason::ReviewerUnsure);
       self.ask_person(watch, (&id, &unsure), autopilot)?;
       return Err(error);
@@ -225,7 +226,8 @@ impl Worker {
     autopilot: bool,
   ) -> Result<(), StoreError> {
     let came = came.clone().in_mode(autopilot);
-    watch.db.record_came_to_person(watch.invocation.run, id, Some(&came))?;
+    let record = ApprovalRecord::came_to_person(watch.invocation.run, id, Some(&came));
+    watch.sink.approval(record)?;
     watch.asked_in_autopilot = autopilot;
     watch.invocation.timing.wait_for_person(Timestamp::now());
     // A person's wait never holds one of the computer's QA slots.
@@ -289,7 +291,7 @@ impl Worker {
       note: approval.command.then(|| approval.scope.clone()).flatten(),
       working_folder: approval.target.clone(),
     };
-    let variables = build_variables(&watch.db.project_environment()?);
+    let variables = build_variables(&reviewer_variables(&*watch.link, &self.reviewer_sources)?);
     Ok(ReviewInput::new(request, step, task, &messages).map(|input| input.with_build_variables(variables)))
   }
 

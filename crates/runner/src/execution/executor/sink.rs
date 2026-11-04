@@ -3,9 +3,14 @@
 //! The run log goes this way: its events with the change they make to the run, attempts and step executions,
 //! checkpoints, plans, raised step budgets, changed permissions and why the runner failed. So do the run's
 //! invocations: each start, the transcript of their events and every change to their rows. A transcript's events are
-//! redacted before they become a record. The local sink is `crate::execution::coordinator::sink`'s.
+//! redacted before they become a record. So do the task's conversation (agents' messages and how far people's got),
+//! agents' questions and their tool requests, each change as the store applies it. The local sink is
+//! `crate::execution::coordinator::sink`'s.
 
-use orchester_store::{ActivityRecord, InvocationRecord, InvocationStart, RunLogRecord, RunStoreError, StoreError};
+use orchester_store::{
+  ActivityRecord, ApprovalRecord, InvocationRecord, InvocationStart, MessageRecord, QuestionRecord, RunLogRecord,
+  RunStoreError, StoreError,
+};
 
 pub(in crate::execution) trait Sink: Send {
   /// Writes `record` to the run's log, in one transaction, as `orchester_store::ProjectDb::write_run_log` does; a
@@ -22,6 +27,18 @@ pub(in crate::execution) trait Sink: Send {
 
   /// Applies `record` to its invocation's rows (`orchester_store::ProjectDb::write_invocation`).
   fn invocation(&mut self, record: InvocationRecord) -> Result<(), StoreError>;
+
+  /// Applies `record` to its task's conversation; whether it changed what it names
+  /// (`orchester_store::ProjectDb::write_message`).
+  fn message(&mut self, record: MessageRecord) -> Result<bool, StoreError>;
+
+  /// Applies `record` to its run's questions; whether it changed the request it names
+  /// (`orchester_store::ProjectDb::write_question`).
+  fn question(&mut self, record: QuestionRecord) -> Result<bool, StoreError>;
+
+  /// Applies `record` to its run's tool requests; whether it changed the requests it names
+  /// (`orchester_store::ProjectDb::write_approval`).
+  fn approval(&mut self, record: ApprovalRecord) -> Result<bool, StoreError>;
 
   /// Another sink of the same coordinator, for a task of the run's own: an agent's or a command's worker.
   fn another(&self) -> Box<dyn Sink>;
