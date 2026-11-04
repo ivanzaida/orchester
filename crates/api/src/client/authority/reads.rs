@@ -1,20 +1,16 @@
-//! The S10 bounded reads of one team project: the workspace and the caller's capabilities, the task list with its
-//! filters, search, sort and board counts, a task, the modules with their progress, burndown and history, the resource
-//! library, its pickers and a resource's versions. Each listing answers one [`Page`] at a time.
+//! The S10 bounded reads of one team project, on the team server's routes (its `docs/workspace-reads.md`): the
+//! workspace and the caller's capabilities, the task list with its filters, search, sort and board counts, a task, the
+//! modules with their progress, burndown and history, the resource library, its pickers and a resource's versions.
+//! Each listing answers one [`Page`] at a time. A version's body comes in its page of the version list; there is no
+//! route of its own for one version.
 
-use orchester_core::{
-  id::{ModuleId, ResourceId, TaskId},
-  resource::VersionNumber,
-};
+use orchester_core::id::{ModuleId, ResourceId, TaskId};
 
 use super::{Authority, AuthorityCallError};
-use crate::{
-  SharedVersion,
-  v2::{
-    Capabilities, ModuleBurndownRead, ModuleHistoryPage, ModuleListRequest, ModuleSummary, Page, PageRequest,
-    ResourceLibraryPage, ResourceLibraryRequest, ResourcePickerPage, ResourcePickerRequest, ResourceVersionsPage,
-    TaskBoardCounts, TaskFilters, TaskListRequest, TaskRead, WorkspaceMetadata,
-  },
+use crate::v2::{
+  Capabilities, ModuleBurndownRead, ModuleHistoryPage, ModuleListRequest, ModuleProgressRead, ModuleSummary, Page,
+  PageRequest, ResourceLibraryPage, ResourceLibraryRequest, ResourcePickerPage, ResourcePickerRequest,
+  ResourceVersionsPage, TaskBoardCounts, TaskFilters, TaskListRequest, TaskRead, WorkspaceMetadata,
 };
 
 impl Authority<'_> {
@@ -28,14 +24,14 @@ impl Authority<'_> {
     self.get("/capabilities").await
   }
 
-  /// `POST …/tasks/query`: one page of the tasks `request`'s filters keep, in its order.
+  /// `POST …/task-list`: one page of the tasks `request`'s filters keep, in its order.
   pub async fn tasks(&self, request: &TaskListRequest) -> Result<Page<TaskRead>, AuthorityCallError> {
-    self.query("/tasks/query", request).await
+    self.query("/task-list", request).await
   }
 
-  /// `POST …/tasks/counts`: how many of the tasks `filters` keep are in each workflow status.
+  /// `POST …/task-counts`: how many of the tasks `filters` keep are in each workflow status.
   pub async fn task_counts(&self, filters: &TaskFilters) -> Result<TaskBoardCounts, AuthorityCallError> {
-    self.query("/tasks/counts", filters).await
+    self.query("/task-counts", filters).await
   }
 
   /// `GET …/tasks/{task}`.
@@ -43,9 +39,9 @@ impl Authority<'_> {
     self.get(&format!("/tasks/{task}")).await
   }
 
-  /// `POST …/modules/query`: one page of the modules with their progress and forecast.
+  /// `POST …/module-list`: one page of the modules with their progress and forecast, oldest first.
   pub async fn modules(&self, request: &ModuleListRequest) -> Result<Page<ModuleSummary>, AuthorityCallError> {
-    self.query("/modules/query", request).await
+    self.query("/module-list", request).await
   }
 
   /// `GET …/modules/{module}`: the module with its progress and forecast.
@@ -53,7 +49,12 @@ impl Authority<'_> {
     self.get(&format!("/modules/{module}")).await
   }
 
-  /// `GET …/modules/{module}/burndown`.
+  /// `GET …/modules/{module}/progress`.
+  pub async fn progress(&self, module: ModuleId) -> Result<ModuleProgressRead, AuthorityCallError> {
+    self.get(&format!("/modules/{module}/progress")).await
+  }
+
+  /// `GET …/modules/{module}/burndown`: the burndown by day with the forecast.
   pub async fn burndown(&self, module: ModuleId) -> Result<ModuleBurndownRead, AuthorityCallError> {
     self.get(&format!("/modules/{module}/burndown")).await
   }
@@ -67,33 +68,23 @@ impl Authority<'_> {
     self.query(&format!("/modules/{module}/history"), page).await
   }
 
-  /// `POST …/resources/query`: one page of the library.
+  /// `POST …/library`: one page of the library, without the resources' versions.
   pub async fn library(&self, request: &ResourceLibraryRequest) -> Result<ResourceLibraryPage, AuthorityCallError> {
-    self.query("/resources/query", request).await
+    self.query("/library", request).await
   }
 
-  /// `POST …/resources/picker`: one page of the resources a form may choose.
+  /// `POST …/resource-picker`: one page of the resources a form may choose.
   pub async fn picker(&self, request: &ResourcePickerRequest) -> Result<ResourcePickerPage, AuthorityCallError> {
-    self.query("/resources/picker", request).await
+    self.query("/resource-picker", request).await
   }
 
-  /// `POST …/resources/{resource}/versions/query`: one page of the resource's published versions, oldest first.
+  /// `POST …/resources/{resource}/version-list`: one page of the resource's published versions with their bodies,
+  /// oldest first.
   pub async fn versions(
     &self,
     resource: ResourceId,
     page: &PageRequest,
   ) -> Result<ResourceVersionsPage, AuthorityCallError> {
-    self.query(&format!("/resources/{resource}/versions/query"), page).await
-  }
-
-  /// `GET …/resources/{resource}/versions/{version}`: one published version with its body.
-  pub async fn version(
-    &self,
-    resource: ResourceId,
-    version: VersionNumber,
-  ) -> Result<SharedVersion, AuthorityCallError> {
-    self
-      .get(&format!("/resources/{resource}/versions/{}", version.get()))
-      .await
+    self.query(&format!("/resources/{resource}/version-list"), page).await
   }
 }

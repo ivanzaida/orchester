@@ -1,7 +1,10 @@
 //! Why a team project's read or subscription failed, typed so callers tell a server that cannot be reached from a
-//! membership that ended or a session that changed. No variant carries a request, a response body or a token.
+//! membership that ended or a session that changed. No variant carries a request, a response body or a token. The
+//! team server answers `401` and `404` in the `/api/v1` `{error, message}` form and what is new to the reads
+//! (`422 invalid`, `410 cursor_expired`) as an `AuthorityError`; both forms are read.
 
 use orchester_api::{
+  ErrorCode,
   client::{AuthorityCallError, ClientError, SubscriptionEnd},
   v2::AuthorityErrorCode,
 };
@@ -13,18 +16,19 @@ pub enum TeamReadError {
   /// said. Cached reads stay as they were, stale.
   #[error("the team server is unavailable")]
   Unavailable { retry_after: Option<u64> },
-  /// `401`: the server no longer accepts this computer's token. Ends the project's reads.
+  /// `401 unauthorized`: the server no longer accepts this computer's token. Ends the project's reads.
   #[error("the team server signed this computer out")]
   SignedOut,
-  /// The person is no longer a member of the workspace: `membership_revoked`, a `403` subscription or `revoked`.
-  /// Ends the project's reads.
+  /// The person is no longer a member of the workspace: the subscription's `revoked`, or `membership_revoked`. Ends
+  /// the project's reads.
   #[error("the person is no longer a member of the workspace")]
   MembershipRevoked,
   /// The session the reads were made for ended: sign-out, another account or another server. Ends the project's
   /// reads; nothing read for the old session is returned.
   #[error("the session changed")]
   SessionChanged,
-  /// `404`: the workspace, or the task, module or resource read, is not there for the caller.
+  /// `404 not_found`: the workspace, or the task, module or resource read, is not there for the caller. The team
+  /// server answers a removed member this way too.
   #[error("not found on the team server")]
   NotFound,
   /// A page cursor whose snapshot the server no longer keeps: read the listing again from its first page.
@@ -36,7 +40,8 @@ pub enum TeamReadError {
   /// The server refused the read with another code.
   #[error("the team server refused the read: {0:?}")]
   Refused(AuthorityErrorCode),
-  /// What answered is not an Orchester server, redirected, or could not be trusted.
+  /// What answered is not an Orchester server, redirected, could not be trusted, or refused the read with another
+  /// `/api/v1` code (e.g. `400 bad_request`).
   #[error(transparent)]
   Server(ClientError),
   /// The subscription sent an event the contract does not read.
@@ -55,7 +60,7 @@ impl From<AuthorityCallError> for TeamReadError {
   fn from(error: AuthorityCallError) -> Self {
     match error {
       AuthorityCallError::Client(error) if error.is_connection() => Self::Unavailable { retry_after: None },
-      AuthorityCallError::Client(error) => Self::Server(error),
+      AuthorityCallError::Client(error) => common(error),
       AuthorityCallError::Refused { error, retry_after, .. } => match error.code() {
         AuthorityErrorCode::Unauthenticated => Self::SignedOut,
         AuthorityErrorCode::MembershipRevoked => Self::MembershipRevoked,
@@ -65,6 +70,21 @@ impl From<AuthorityCallError> for TeamReadError {
         code => Self::Refused(code),
       },
     }
+  }
+}
+
+/// A failure in the `/api/v1` form, as the team server answers the failures common to every route.
+fn common(error: ClientError) -> TeamReadError {
+  match error {
+    ClientError::Api {
+      code: ErrorCode::Unauthorized,
+      ..
+    } => TeamReadError::SignedOut,
+    ClientError::Api {
+      code: ErrorCode::NotFound,
+      ..
+    } => TeamReadError::NotFound,
+    error => TeamReadError::Server(error),
   }
 }
 

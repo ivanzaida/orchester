@@ -17,7 +17,7 @@ use std::{
 use orchester_core::id::{ModuleId, ProjectId, TaskId};
 use serde_json::{Value, json};
 
-use crate::http::{Request, refusal, respond};
+use crate::http::{Request, failure, respond};
 
 /// The cursor before the first batch: the project had a history before the test.
 const BEFORE_FIRST: u64 = 99;
@@ -218,7 +218,7 @@ impl TeamServer {
     state.expired_through = state.cursor();
   }
 
-  /// Ends `token`'s membership: its streams get `revoked`, its requests `403 membership_revoked`.
+  /// Ends `token`'s membership: its streams get `revoked`, its requests `404 not_found`.
   pub fn revoke(&self, token: &str) {
     self.state().revoked.push(token.to_owned());
     self.changed();
@@ -257,27 +257,32 @@ fn caller(state: &State, request: &Request) -> Caller {
   Caller::Unknown
 }
 
+/// One request on the team server's `/api/v2` routes. As there, a token it does not accept is `401 unauthorized` and
+/// anyone who may not read the workspace, a removed member too, `404 not_found`, both in the `/api/v1` form.
 fn answer(shared: &Shared, project: ProjectId, mut stream: TcpStream) {
   let Some(request) = Request::read(&stream) else {
     return;
   };
   let prefix = format!("/api/v2/projects/{project}");
-  let Some(route) = request.path.strip_prefix(&prefix) else {
-    return refusal(&mut stream, 404, "not_found");
-  };
   let token = match caller(&shared.state.lock().expect("state"), &request) {
     Caller::Member(token) => token,
-    Caller::Revoked => return refusal(&mut stream, 403, "membership_revoked"),
-    Caller::Unknown => return refusal(&mut stream, 401, "unauthenticated"),
+    Caller::Revoked => return failure(&mut stream, 404, "not_found"),
+    Caller::Unknown => return failure(&mut stream, 401, "unauthorized"),
+  };
+  let Some(route) = request.path.strip_prefix(&prefix) else {
+    return failure(&mut stream, 404, "not_found");
   };
   let segments: Vec<&str> = route.split('/').filter(|segment| !segment.is_empty()).collect();
   match (request.method.as_str(), segments.as_slice()) {
     ("GET", ["subscription"]) => subscription::stream(shared, &request, &token, &mut stream),
-    ("POST", ["tasks", "query"]) => listing::page(shared, project, &request, &mut stream),
-    ("POST", ["tasks", "counts"]) => listing::counts(shared, &request, &mut stream),
+    ("POST", ["task-list"]) => listing::page(shared, project, &request, &mut stream),
+    ("POST", ["task-counts"]) => listing::counts(shared, &request, &mut stream),
     ("GET", ["tasks", task]) => task_read(shared, project, task.parse().expect("a task id"), &mut stream),
-    ("POST", ["modules", "query"]) => listing::modules(shared, project, &mut stream),
-    _ => refusal(&mut stream, 404, "not_found"),
+    ("POST", ["module-list"]) => listing::modules(shared, project, &request, &mut stream),
+    ("GET", ["modules", module, "progress"]) => {
+      listing::progress(shared, module.parse().expect("a module id"), &mut stream);
+    }
+    _ => failure(&mut stream, 404, "not_found"),
   }
 }
 

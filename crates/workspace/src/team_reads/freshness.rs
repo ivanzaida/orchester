@@ -7,12 +7,9 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-use orchester_api::{
-  SharedVersion,
-  v2::{
-    Capabilities, EventCursor, ModuleBurndownRead, ModuleSummary, Page, QueryScope, TaskBoardCounts, TaskRead,
-    WorkspaceMetadata,
-  },
+use orchester_api::v2::{
+  Capabilities, EventCursor, ModuleBurndownRead, ModuleProgressRead, ModuleSummary, Page, QueryScope, TaskBoardCounts,
+  TaskRead, WorkspaceMetadata,
 };
 
 use super::TeamReadError;
@@ -24,7 +21,6 @@ pub(super) struct Live {
   epoch: u64,
   /// The latest cursor of the subscription; `None` before its first `ready`.
   seen: Option<EventCursor>,
-  connected: bool,
   /// Why the last subscription attempt failed while there is no position yet: reads fail with it instead of waiting.
   unready: Option<TeamReadError>,
   next_read: u64,
@@ -100,15 +96,21 @@ impl Live {
     self.ended.get_or_insert(error).clone()
   }
 
-  /// The subscription's `ready` at `cursor`. The first one sets the position; a later one is a reconnect, after which
-  /// no earlier read is trusted.
+  /// The subscription's `ready` at `cursor`, sent only to a subscription opened without a cursor: it sets the
+  /// position.
   pub(super) fn ready(&mut self, cursor: EventCursor) {
     self.unready = None;
-    if std::mem::replace(&mut self.connected, true) {
-      self.reset(cursor);
-      return;
-    }
     self.seen = Some(cursor);
+  }
+
+  /// A subscription opened. Once there is a position it is a reconnect, resumed from that position with no `ready`,
+  /// after which no earlier read is trusted: a new epoch (`true`).
+  pub(super) fn opened(&mut self) -> bool {
+    let Some(seen) = self.seen else {
+      return false;
+    };
+    self.reset(seen);
+    true
   }
 
   /// A subscription attempt failed with `error`: until the first `ready`, reads fail with it instead of waiting.
@@ -236,4 +238,4 @@ macro_rules! issued_at_position {
   };
 }
 
-issued_at_position!(TaskRead, ModuleSummary, Capabilities, SharedVersion);
+issued_at_position!(TaskRead, ModuleSummary, ModuleProgressRead, Capabilities);

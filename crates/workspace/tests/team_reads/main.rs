@@ -1,8 +1,8 @@
 //! A team project's reads straight from its server (`orchester_workspace::team_reads`) against a fake team server on
-//! loopback: the task list's filters, search, sort, pages and counts, modules with core's progress, an expired page
-//! snapshot; reads invalidated in flight never make an older revision current ([`races`]); bursts coalesce, reconnects
-//! and resets make every read stale, and a revoked membership or a changed session ends the stream and the reads
-//! ([`stream`]).
+//! loopback that answers on the team server's routes: the task list's filters, search, sort, pages and counts,
+//! modules with core's progress, an expired page snapshot; reads invalidated in flight never make an older revision
+//! current ([`races`]); bursts coalesce, reconnects and resets make every read stale, and a revoked membership or a
+//! changed session ends the stream and the reads ([`stream`]).
 //!
 //! `cargo test -p orchester-workspace --test team_reads team_reads_`
 
@@ -17,7 +17,11 @@ use orchester_api::{
   client::{Client, PlainHttp, ServerAddress},
   v2::{ModuleListRequest, PageRequest, QueryScope, SearchText, TaskFilters, TaskListRequest, TaskSort},
 };
-use orchester_core::{id::ServerId, secret::SecretValue, task::organization::WorkflowStatus};
+use orchester_core::{
+  id::{ModuleId, ServerId},
+  secret::SecretValue,
+  task::organization::WorkflowStatus,
+};
 use orchester_workspace::{
   sharing::sync::Clock,
   team_reads::{TeamProject, TeamReadError, TeamSession},
@@ -203,6 +207,15 @@ async fn team_reads_modules_count_progress_by_core() {
   let progress = summary.progress.to_core();
   assert_eq!((progress.scope, progress.done, progress.remaining()), (3, 1, 2));
   assert_eq!(progress.percent(), Some(33));
+
+  let module = server.module();
+  let read = within(reader.project.module_progress(module))
+    .await
+    .expect("the module's progress");
+  assert_eq!(read.scope(), QueryScope::Module { module });
+  assert_eq!(read.value().to_core(), progress);
+  let other = within(reader.project.module_progress(ModuleId::generate())).await;
+  assert_eq!(other.err(), Some(TeamReadError::NotFound));
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

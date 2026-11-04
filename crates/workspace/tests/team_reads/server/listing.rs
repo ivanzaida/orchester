@@ -1,14 +1,14 @@
 //! The fake's task list: the request's filters and search, its sort, pages over an opaque cursor that names the
-//! snapshot and the offset, the board counts, and the modules' summaries.
+//! snapshot and the offset, the board counts, and the modules' summaries and progress.
 
 use std::net::TcpStream;
 
-use orchester_api::v2::{TaskFilters, TaskListRequest};
-use orchester_core::id::ProjectId;
+use orchester_api::v2::{ModuleListRequest, TaskFilters, TaskListRequest};
+use orchester_core::id::{ModuleId, ProjectId};
 use serde_json::{Value, json};
 
 use super::{Shared, State, Task};
-use crate::http::{Request, refusal, respond};
+use crate::http::{Request, failure, refusal, respond};
 
 const USER: &str = "01a183cf-b73c-71db-8a62-bd509770cd4e";
 
@@ -54,7 +54,8 @@ fn kept<'a>(state: &'a State, filters: &TaskFilters) -> Vec<&'a Task> {
     .collect()
 }
 
-/// `POST …/tasks/query`: one page of the kept tasks in the request's order. A cursor is `<snapshot>:<offset>`.
+/// `POST …/task-list`: one page of the kept tasks in the request's order. A cursor is `<snapshot>:<offset>`; one whose
+/// snapshot is gone is `410 cursor_expired`.
 pub fn page(shared: &Shared, project: ProjectId, request: &Request, stream: &mut TcpStream) {
   let request: TaskListRequest = request.json();
   let state = shared.state.lock().expect("state");
@@ -85,7 +86,7 @@ pub fn page(shared: &Shared, project: ProjectId, request: &Request, stream: &mut
   respond(stream, 200, &body);
 }
 
-/// `POST …/tasks/counts`: the kept tasks by workflow status.
+/// `POST …/task-counts`: the kept tasks by workflow status.
 pub fn counts(shared: &Shared, request: &Request, stream: &mut TcpStream) {
   let filters: TaskFilters = request.json();
   let state = shared.state.lock().expect("state");
@@ -98,9 +99,8 @@ pub fn counts(shared: &Shared, request: &Request, stream: &mut TcpStream) {
   respond(stream, 200, &counts);
 }
 
-/// `POST …/modules/query`: the project's one module with its progress over its tasks, as core counts it.
-pub fn modules(shared: &Shared, project: ProjectId, stream: &mut TcpStream) {
-  let state = shared.state.lock().expect("state");
+/// The module's tasks, how many of them are in its scope (not Canceled) and how many are Done, as core counts them.
+fn counted(state: &State) -> (usize, usize, usize) {
   let tasks: Vec<&Task> = state
     .tasks
     .iter()
@@ -108,17 +108,39 @@ pub fn modules(shared: &Shared, project: ProjectId, stream: &mut TcpStream) {
     .collect();
   let scope = tasks.iter().filter(|task| task.workflow != "canceled").count();
   let done = tasks.iter().filter(|task| task.workflow == "done").count();
+  (tasks.len(), scope, done)
+}
+
+/// `POST …/module-list`: the project's one module with its progress over its tasks.
+pub fn modules(shared: &Shared, project: ProjectId, request: &Request, stream: &mut TcpStream) {
+  // The fake has one module, open, so it reads the request only to check it is the contract's.
+  let _: ModuleListRequest = request.json();
+  let state = shared.state.lock().expect("state");
+  let (tasks, scope, done) = counted(&state);
   let module = json!({
     "id": state.module, "name": "Sign-in", "description": "", "start": null, "target": null, "state": "open",
     "revision": 1, "created": attribution(), "updated": attribution(), "branch": "module/sign-in",
     "assignee": null, "work": null, "effective_claim": null, "capabilities": capabilities(project)
   });
   let summary = json!({
-    "module": module, "progress": {"unit": "tasks", "scope": scope, "done": done}, "tasks": tasks.len(),
+    "module": module, "progress": {"unit": "tasks", "scope": scope, "done": done}, "tasks": tasks,
     "forecast": {"remaining": scope - done, "history_days": 0, "history_delivered": 0,
       "outlook": {"kind": "not_enough_history"}}
   });
   let body = json!({ "items": [summary], "next": null, "cursor": state.cursor().to_string() });
   drop(state);
   respond(stream, 200, &body);
+}
+
+/// `GET …/modules/{module}/progress`: `ModuleProgressRead`, with no cursor of its own; `404 not_found` for another
+/// module.
+pub fn progress(shared: &Shared, module: ModuleId, stream: &mut TcpStream) {
+  let state = shared.state.lock().expect("state");
+  if module != state.module {
+    drop(state);
+    return failure(stream, 404, "not_found");
+  }
+  let (_, scope, done) = counted(&state);
+  drop(state);
+  respond(stream, 200, &json!({"unit": "tasks", "scope": scope, "done": done}));
 }
