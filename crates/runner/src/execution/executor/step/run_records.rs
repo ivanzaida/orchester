@@ -3,7 +3,7 @@
 //! record, active or proposed as the project's memory setting says, refused when it holds a secret's value;
 //! `report_progress` keeps the step's progress line, the invocation's secret values removed. Each call opens a
 //! connection of its own to the project database (the run's task loop owns the runner's) and blocks on it, off the
-//! async workers; the task's messages are asked through the invocation's own coordinator link.
+//! async workers; the task's messages and the memory setting are asked through the invocation's own coordinator link.
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -22,13 +22,14 @@ use orchester_core::{
 use orchester_store::ProjectDb;
 use parking_lot::Mutex;
 
-use super::super::link::{CoordinatorLink, messages as message_link};
+use super::super::link::{CoordinatorLink, memory::SettingsRequest, messages as message_link};
 use crate::computer::ComputerResources;
 
 /// The run, task and step execution an invocation's agent works on, and where their records are.
 pub(super) struct RunRecords {
   pub(super) root: PathBuf,
-  /// Where the task's messages are asked for: a link of the invocation's own, which its tool calls share.
+  /// Where the task's messages and the project's memory setting are asked for: a link of the invocation's own, which
+  /// its tool calls share.
   pub(super) link: Mutex<Box<dyn CoordinatorLink + Send>>,
   pub(super) run: RunId,
   pub(super) task: TaskId,
@@ -84,7 +85,11 @@ impl RunRecords {
     let mut db = self.db()?;
     let unreadable =
       |error: &dyn std::error::Error| ToolResult::unavailable(&format!("memory cannot be kept: {error}"));
-    let settings = db.memory_settings().map_err(|error| unreadable(&error))?;
+    let settings = self
+      .link
+      .lock()
+      .settings(&SettingsRequest)
+      .map_err(|error| unreadable(&error))?;
     let secrets = self.computer.secrets().map_err(|error| unreadable(&error))?;
     let screen = self
       .computer

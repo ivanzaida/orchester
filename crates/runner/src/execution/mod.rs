@@ -45,13 +45,6 @@ use tokio::{
   task::JoinHandle,
 };
 
-pub use self::{
-  coordinator::attach::Attached,
-  executor::{
-    link,
-    step::{QaSlots, outside_read_refusals},
-  },
-};
 // The coordinator's modules are named by their full path here, never imported: an import would make them reachable
 // from the executor as `crate::execution::<module>`, past the check of `crates/runner/tests/execution_split.rs`.
 use self::{
@@ -62,6 +55,13 @@ use self::{
     prepared::Prepared,
     run::{RunTask, TaskContext},
     step::QaApps,
+  },
+};
+pub use self::{
+  coordinator::{attach::Attached, link::LocalLinks},
+  executor::{
+    link,
+    step::{QaSlots, outside_read_refusals},
   },
 };
 pub use crate::notify::Notifier;
@@ -530,13 +530,14 @@ impl Scheduler {
         detail: format!("another task still executes run {run}"),
       });
     }
-    let link = coordinator::link::LocalLink::open(&self.inner.project_root)
+    let link = LocalLinks::new(&self.inner.project_root)
+      .open()
       .map_err(|error| failed("cannot open the project database", &error))?;
     let (control, controls) = mpsc::unbounded_channel();
     let settled = Arc::new(AtomicBool::new(false));
     let context = TaskContext {
       root: self.inner.project_root.clone(),
-      link: Box::new(link),
+      link,
       execution: ExecutionRoot::local(&self.inner.project_root),
       sink: Box::new(coordinator::sink::LocalSink::new(&self.inner.project_root)),
       notifier: self.inner.notifier.clone(),

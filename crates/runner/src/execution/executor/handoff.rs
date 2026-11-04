@@ -2,7 +2,7 @@
 //! and for a gated step when its plan is approved ([`orchester_core::memory::Handoff`]). The handoff
 //! is read from the agent's final message in the transcript. One that cannot be kept (it holds a
 //! secret's value, or the keychain cannot be read to check it) is reported in the transcript; the
-//! run goes on without it.
+//! run goes on without it. The project's Memory setting is read through the coordinator link.
 
 use orchester_core::{
   computer::ComputerError,
@@ -17,23 +17,35 @@ use orchester_ipc::Event;
 use orchester_store::{ActivityRecord, ProjectDb, StoreError};
 use thiserror::Error;
 
-use super::{Notifier, sink::Sink};
+use super::{
+  Notifier,
+  link::{
+    LinkError,
+    memory::{MemoryLink, SettingsRequest},
+  },
+  sink::Sink,
+};
 use crate::computer::ComputerResources;
 
 /// Where a handoff is kept and its problems are reported: the transcript through the coordinator's sink. The secrets it
 /// is screened against are read on the run's computer.
 pub(in crate::execution) struct Keeper<'a> {
   pub(in crate::execution) db: &'a mut ProjectDb,
+  /// Where the project's Memory setting is read.
+  pub(in crate::execution) link: &'a dyn MemoryLink,
   pub(in crate::execution) sink: &'a mut dyn Sink,
   pub(in crate::execution) notifier: &'a Notifier,
   pub(in crate::execution) computer: &'a dyn ComputerResources,
 }
 
-/// Why a handoff was not kept: the database, or the computer's secrets, could not be read.
+/// Why a handoff was not kept: the project database or the coordinator link failed, or the
+/// computer's secrets could not be read.
 #[derive(Debug, Error)]
 enum KeepError {
   #[error(transparent)]
   Store(#[from] StoreError),
+  #[error(transparent)]
+  Link(#[from] LinkError),
   #[error(transparent)]
   Computer(#[from] ComputerError),
 }
@@ -69,7 +81,7 @@ impl Keeper<'_> {
     let Some(provenance) = provenance(run, execution) else {
       return Ok(());
     };
-    let settings = self.db.memory_settings()?;
+    let settings = self.link.settings(&SettingsRequest)?;
     let secrets = self.computer.secrets()?;
     let screen = match self.computer.secret_screen(self.db.project().id(), &secrets) {
       Ok(screen) => screen,

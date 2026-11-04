@@ -67,7 +67,7 @@ What the executor side reads today, and through which interface it will:
 | --- | --- | --- |
 | Pinned resource versions by id, skill blobs | `permissions.rs`, `step/skills.rs`, `step/start/{prompt,shared}.rs`, `tool/mod.rs`, `work.rs` | coordinator link |
 | `messages`, `attachments` and their files | `step/mod.rs`, `step/worker/steer.rs`, `recovery.rs` | coordinator link: done (ORC-667, `executor/link/messages.rs`), with `conversation.rs` and `get_task` (`step/run_records.rs`); the files' content travels in the answer and the executor keeps its copies in its execution root's `attachments/` (`executor/attached.rs`). Delivery state is still written to the database (ORC-680) |
-| `memories` | `step/memory.rs`, `handoff.rs`, `step/run_records.rs` | coordinator link |
+| `memories` | `step/memory.rs`, `handoff.rs`, `step/run_records.rs` | coordinator link: **done** (ORC-668, `executor/link/memory.rs`): the recall, the unreadable records and the Memory setting; new records and their changes still write the database until the write tasks |
 | `approval_rules`, `project_approval_rules`, `tool_approvals`, `run_auto_approve`, `questions` | `step/answer.rs`, `step/approval.rs`, `question.rs` | coordinator link |
 | Project settings an agent start reads (`code_index`, `repository_agent_files`, `memory_settings`, `approval_mode`, `auto_mode_settings`, `tells_base_moves`) | `step/start/*`, `step/skills.rs`, `handoff.rs`, `step/worker/review/setup.rs`, `step/base_notice.rs` | coordinator link |
 | Step usage (`invocations` tokens, `reviewer_usage`) | `step/mod.rs`, `step/start/shared.rs` | coordinator link |
@@ -83,7 +83,7 @@ Where the desktop touches a run's worktree today (`crates/workspace/src/`):
 | --- | --- |
 | Uncommitted changes, followed while the page is open: **through the runner** since protocol 40 (`Command::ReadWorktreeChanges`, ORC-682) | `tasks/changes/mod.rs` (`not_checkpointed_in`), `runner/worktree_changes.rs`; the runner's `execution/executor/worktree_changes.rs` |
 | Whether a run's work is present (its own worktree folder, else its branch) | `tasks/changes/mod.rs` (`run_work_present`) |
-| Conflict resolution in the worktree | `tasks/resolve/mod.rs`, `tasks/integration_jobs/resolve.rs`, `merge_queue/approve.rs` |
+| Conflict resolution in the worktree (resolve by hand, a resolved finish, an abort, the worktree's head): **through the runner** since protocol 46 (`Command::Resolve`, ORC-683); the desktop keeps the resolution's record | `tasks/resolve/mod.rs`, `tasks/integration_jobs/resolve.rs`, `merge_queue/approve.rs`; the runner serves core's `integration::resolve::request::serve` |
 | Base synced into the worktree, Check tools run in it | `merge_queue/drive.rs:211`, `merge_queue/check.rs` |
 | Local integration reading the worktree as a second repository | `tasks/local_integration/{mod,poll,view}.rs`, see [Local integration](#local-integration) |
 | Removal, stopping its processes, index prune, sweep | `tasks/integration.rs:487`, `tasks/delete.rs`, `tasks/history.rs`, `app_mcp/tools/worktree.rs`, `tasks/worktree_sweep.rs` |
@@ -107,9 +107,9 @@ unchanged):
 | --- | --- | --- |
 | Open it as a linked worktree of the checkout, on the run's branch: `owned_directory`, `LocalGit::new`, `own_metadata`, `--git-common-dir` and `symbolic-ref HEAD` checks | `mod.rs` `open_expected`, `ensure_linked_task` | Worktree state (the branch, head and status of the run's folder), with ORC-684's sync request |
 | Snapshot, clean check, tree entries and the merge of the base (`preview_sync`, `refresh_index`, `merge --no-ff --no-commit`), conflicts after it; recovery of an interrupted sync | `sync.rs` `sync`, `execute_sync`; `recover.rs` `reconcile_sync` | ORC-684's base-sync request |
-| Conflicts, file hashes and blobs, index entries and fingerprint, resolution bytes, writing a resolution (`write_regular`, `set_executable`, `set_index`) | `resolution.rs`, `sync.rs` `save_task_resolution`, `drafts.rs` `draft_identity`, `view.rs` `read_conflicts` | ORC-683's conflict-resolution requests (read conflicts and their versions, write a resolution) |
-| Committing the resolved sync and proving it by receipt (`commit_task_resolution`, `HEAD^1`/`HEAD^2`, `has_task_commit_receipt`) | `sync.rs` `continue_task`, `task_commit.rs` | ORC-683's "continue after resolving" request |
-| Aborting the sync merge: preview, retaining the files, `abort_task_merge` | `abort.rs` | ORC-683's abort request |
+| Conflicts, file hashes and blobs, index entries and fingerprint, resolution bytes, writing a resolution (`write_regular`, `set_executable`, `set_index`) | `resolution.rs`, `sync.rs` `save_task_resolution`, `drafts.rs` `draft_identity`, `view.rs` `read_conflicts` | Conflict-resolution requests like ORC-683's `Command::Resolve` (read conflicts and their versions, write a resolution); not built: ORC-683 moved only the run's own resolution |
+| Committing the resolved sync and proving it by receipt (`commit_task_resolution`, `HEAD^1`/`HEAD^2`, `has_task_commit_receipt`) | `sync.rs` `continue_task`, `task_commit.rs` | A "continue after resolving" request like `Command::Resolve`'s finish; not built |
+| Aborting the sync merge: preview, retaining the files, `abort_task_merge` | `abort.rs` | An abort request like `Command::Resolve`'s abort; not built |
 | Running the pinned Check tools in the worktree, with the process journal, and its snapshot before and after | `checks.rs` `run_check` | ORC-684's Check request |
 | The worktree still exactly the checked result, before the merge and while the page shows it; its status fingerprint for polling | `sync.rs` `approve_and_merge_at` (`ensure`), `view.rs` `checked_current`, `poll.rs` `fingerprint` | Worktree state (as above), verified (every tracked file hashed) before the merge |
 | The worktree clean and still the owned one when a preparation is canceled or reconciled | `cancel.rs`, `recover.rs` (`TaskConflicts`, `Checking`) | Worktree state (as above) |

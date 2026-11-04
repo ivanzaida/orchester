@@ -43,7 +43,7 @@ use orchester_workspace::{
   display::short_revision,
   merge_queue::{self, QueueRefusal, TaskDelivery},
   messages::Message,
-  tasks::{delivery::Delivery, detail::RunView, run::control_message},
+  tasks::{delivery::Delivery, detail::RunView, resolve::RunWorktrees, run::control_message},
 };
 
 use self::rows::Stage;
@@ -375,12 +375,13 @@ impl View<'_> {
 /// person approves a merge: the press of an MCP client driving the window is refused by the queue's rule.
 fn decide(ctx: &mut Ctx, task: &TaskContext) -> FutureAction<Decision, Act, Refused> {
   let services = Services::of(ctx);
-  let (runners, programs, project) = (services.runners, services.programs, task.project.open.clone());
+  let project = task.project.open.clone();
+  let (worktrees, runners) = (services.run_worktrees(&project), services.runners);
   ctx.future_action(move |(run, act, by): Decision| {
-    let (runners, programs, project) = (runners.clone(), programs.clone(), project.clone());
+    let (runners, worktrees, project) = (runners.clone(), worktrees.clone(), project.clone());
     async move {
       let root = project.repo_root.clone();
-      let made = background::run(move || made(&root, &programs, (run, act), by))
+      let made = background::run(move || made(&root, &worktrees, (run, act), by))
         .await?
         .map_err(|refusal| refused(&refusal))?;
       let Made::Resolved(command) = made else {
@@ -422,7 +423,7 @@ enum Made {
 /// base without a conflict now goes on as *I've resolved it* at once: nothing is left for the person.
 fn made(
   root: &std::path::Path,
-  programs: &orchester_exec::programs::Programs,
+  worktrees: &RunWorktrees,
   (run, act): (RunId, Act),
   by: Answerer,
 ) -> Result<Made, QueueRefusal> {
@@ -431,12 +432,12 @@ fn made(
     Act::Approve => merge_queue::approve(root, run, now, by).map(|()| Made::Done),
     Act::Reject => merge_queue::reject(root, run, now).map(|()| Made::Done),
     Act::ResolveMyself => {
-      if merge_queue::resolve_myself(root, programs, run)?.is_empty() {
-        merge_queue::resolved(root, programs, run).map(Made::Resolved)
+      if merge_queue::resolve_myself(root, worktrees, run)?.is_empty() {
+        merge_queue::resolved(root, worktrees, run).map(Made::Resolved)
       } else {
         Ok(Made::Done)
       }
     }
-    Act::Resolved => merge_queue::resolved(root, programs, run).map(Made::Resolved),
+    Act::Resolved => merge_queue::resolved(root, worktrees, run).map(Made::Resolved),
   }
 }
