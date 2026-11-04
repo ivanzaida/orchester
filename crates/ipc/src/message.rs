@@ -288,17 +288,14 @@ pub enum Command {
   /// The merge queue's work in a run's worktree: syncing its base in, or running Check again on the merged result
   /// (protocol 41). Answered with [`Reply::MergeQueue`] once done.
   MergeQueue(MergeQueueCommand),
-<<<<<<< HEAD
-  /// What run `run`'s folder holds beyond its last commit, for the start-up recovery (protocol 42): its own
+  /// A request about the folders the project's runs leave with their executor (protocol 42, [`crate::folders`]).
+  /// Answered with [`Reply::Folders`] once carried out, or [`Rejection::Failed`].
+  Folders(FoldersCommand),
+  /// What run `run`'s folder holds beyond its last commit, for the start-up recovery (protocol 43): its own
   /// worktree, else the workspace it holds or worked in last. The runner reads it with git in the folder; the desktop
   /// never does. Answered with [`Reply::RunFolderState`], [`FolderState::Unknown`] when the run has no folder any more
   /// or git cannot tell.
   RunFolderState { run: RunId },
-=======
-  /// A request about the folders the project's runs leave with their executor (protocol 42, [`crate::folders`]).
-  /// Answered with [`Reply::Folders`] once carried out, or [`Rejection::Failed`].
-  Folders(FoldersCommand),
->>>>>>> module/remote-runners
 }
 
 /// Which session a runner serves, from the desktop's side.
@@ -495,16 +492,13 @@ pub enum Reply {
   },
   /// The answer to [`Command::MergeQueue`].
   MergeQueue(MergeQueueReply),
-<<<<<<< HEAD
+  /// The answer to [`Command::Folders`].
+  Folders(FoldersReply),
   /// The answer to [`Command::RunFolderState`].
   RunFolderState {
     run: RunId,
     state: FolderState,
   },
-=======
-  /// The answer to [`Command::Folders`].
-  Folders(FoldersReply),
->>>>>>> module/remote-runners
   Rejected(Rejection),
 }
 

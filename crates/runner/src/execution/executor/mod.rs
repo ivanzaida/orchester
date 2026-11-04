@@ -16,11 +16,8 @@ pub(super) mod control;
 pub(super) mod conversation;
 pub(super) mod disk_guard;
 pub(super) mod environment;
-<<<<<<< HEAD
 pub(super) mod folder_state;
-=======
 pub(super) mod folders;
->>>>>>> module/remote-runners
 pub(super) mod halt;
 pub(super) mod handoff;
 pub(super) mod held;

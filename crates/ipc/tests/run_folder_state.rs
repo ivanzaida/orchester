@@ -1,4 +1,4 @@
-//! A run's folder state asked of the runner for the start-up recovery and its answers (protocol 42) travel as frames
+//! A run's folder state asked of the runner for the start-up recovery and its answers (protocol 43) travel as frames
 //! unchanged: every state, and the first file not committed as git named it.
 
 use orchester_core::id::RunId;
