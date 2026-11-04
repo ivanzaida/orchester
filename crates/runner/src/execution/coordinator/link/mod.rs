@@ -19,6 +19,7 @@ use std::{
 
 use orchester_store::{ProjectDb, ReadOnlyProjectDb, StoreError};
 
+use super::Scheduler;
 use crate::execution::executor::link::{CoordinatorLink, LinkError};
 
 /// The coordinator link of an executor in the coordinator's own process, over the project database `D` holds.
@@ -80,6 +81,21 @@ impl LocalLinks {
   pub fn open(&self) -> Result<Box<dyn CoordinatorLink + Send>, LinkError> {
     let link = LocalLink::open(&self.root).map_err(|error| read_failed(&error))?;
     Ok(Box::new(link))
+  }
+}
+
+impl Scheduler {
+  /// A new link of the project's executor to its coordinator, which a run's task and the executor's work outside one
+  /// ask the project's data through: here the local link, over a read-only connection of its own, and over the
+  /// channel that serializes every message in the runner's tests of the boundary (`super::channel`). The one place
+  /// the executor is handed its coordinator's link.
+  pub(in crate::execution) fn open_link(&self) -> Result<Box<dyn CoordinatorLink + Send>, LinkError> {
+    let link = LocalLinks::new(&self.inner.project_root).open()?;
+    #[cfg(feature = "test-agent")]
+    if let Some(calls) = &self.inner.channel {
+      return Ok(Box::new(super::channel::ChannelLink::over(link, calls.clone())));
+    }
+    Ok(link)
   }
 }
 

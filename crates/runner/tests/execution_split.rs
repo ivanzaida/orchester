@@ -416,6 +416,92 @@ fn the_executor_reads_settings_usage_and_base_notices_only_through_the_coordinat
   );
 }
 
+/// What the executor never opens (`docs/architecture/remote-runners.md`, rule 1): the project database, the
+/// application database and the keychain.
+const STORES: &[&str] = &["ProjectDb", "AppDb", "KeychainVault"];
+
+/// Executor code that still names one of [`STORES`], as `(file under executor/, name)`, and why. Each is a read or a
+/// write the coordinator link, the sink or the computer's resources do not carry yet:
+/// - `run.rs`: the run's task is handed the coordinator's connection (`RunTask::new`) and reads its run and project.
+/// - `broken.rs`: reads the run back to record its interruption after a store failure.
+/// - `handoff.rs`: reads the step's run and invocations for its handoff.
+/// - `pool.rs`: reads the warm workspaces a run borrows from and gives back.
+/// - `removal.rs`, `worktree_removal.rs`, `worktree_sweep.rs`: read the runs and removals recorded.
+/// - `run_git.rs`: reads the run whose worktree the Orchestrator chat's git tools work in.
+/// - `connection_check.rs`: reads the project's id for the API key's keychain entry.
+/// - `step/native/drive.rs`, `step/start/native.rs`: write a native agent's conversation and its items.
+/// - `step/run_records.rs`: Orchester's run tools (`get_task`, `get_run`) read the run's records.
+/// - `step/qa_app/task.rs`: reads the invocation a QA app note belongs to.
+/// - `step/worker/mod.rs`: the worker reads the run and its invocation while it follows the agent.
+/// - `step/worker/review/estimate.rs`: auto mode's reviewer records what its estimate used.
+const STORE_USES: &[(&str, &str)] = &[
+  ("broken.rs", "ProjectDb"),
+  ("connection_check.rs", "ProjectDb"),
+  ("handoff.rs", "ProjectDb"),
+  ("pool.rs", "ProjectDb"),
+  ("removal.rs", "ProjectDb"),
+  ("run.rs", "ProjectDb"),
+  ("run_git.rs", "ProjectDb"),
+  ("step/native/drive.rs", "ProjectDb"),
+  ("step/qa_app/task.rs", "ProjectDb"),
+  ("step/run_records.rs", "ProjectDb"),
+  ("step/start/native.rs", "ProjectDb"),
+  ("step/worker/mod.rs", "ProjectDb"),
+  ("step/worker/review/estimate.rs", "ProjectDb"),
+  ("worktree_removal.rs", "ProjectDb"),
+  ("worktree_sweep.rs", "ProjectDb"),
+];
+
+/// Whether `code` names `name` as a whole word.
+fn names_word(code: &str, name: &str) -> bool {
+  let word = |c: Option<char>| c.is_some_and(|c| c.is_alphanumeric() || c == '_');
+  code
+    .match_indices(name)
+    .any(|(at, _)| !word(code[..at].chars().next_back()) && !word(code[at + name.len()..].chars().next()))
+}
+
+#[test]
+fn executor_uses_no_project_database_app_database_or_keychain_beyond_the_known_places() {
+  let executor = execution().join("executor");
+  let mut files = Vec::new();
+  rust_files(&executor, &mut files);
+  let mut named = BTreeSet::new();
+  for file in &files {
+    let text = fs::read_to_string(file).unwrap_or_else(|error| panic!("cannot read {}: {error}", file.display()));
+    let relative = file
+      .strip_prefix(&executor)
+      .expect("the file is under executor/")
+      .to_string_lossy()
+      .replace('\\', "/");
+    let code_lines = text.lines().map(|line| line.split("//").next().unwrap_or_default());
+    for code in code_lines {
+      for store in STORES.iter().filter(|store| names_word(code, store)) {
+        named.insert((relative.clone(), (*store).to_owned()));
+      }
+    }
+  }
+  let known: BTreeSet<(String, String)> = STORE_USES
+    .iter()
+    .map(|(file, store)| ((*file).to_owned(), (*store).to_owned()))
+    .collect();
+  let new: Vec<_> = named.difference(&known).collect();
+  assert!(
+    new.is_empty(),
+    "executor code uses the project database, the application database or the keychain; ask the coordinator link, \
+     send to the sink or ask the computer's resources instead: {new:?}"
+  );
+  let gone: Vec<_> = known.difference(&named).collect();
+  assert!(gone.is_empty(), "no longer used; remove them from STORE_USES: {gone:?}");
+}
+
+#[test]
+fn a_store_named_in_code_is_found_and_a_longer_name_is_not() {
+  assert!(names_word("let db = ProjectDb::open(root)?;", "ProjectDb"));
+  assert!(names_word("fn new(db: &ProjectDb)", "ProjectDb"));
+  assert!(!names_word("let db: ReadOnlyProjectDb = open();", "ProjectDb"));
+  assert!(!names_word("struct AppDbPath;", "AppDb"));
+}
+
 #[test]
 fn a_coordinator_path_in_code_is_found_and_one_in_a_comment_is_not() {
   assert_eq!(

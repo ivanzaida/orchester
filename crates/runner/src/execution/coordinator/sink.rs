@@ -12,9 +12,23 @@ use orchester_store::{
   RuleAnswer, RuleRecord, RunLogRecord, RunStoreError, StepRecord, StoreError, WarmWorkspaceRecord, WorkspaceWritten,
 };
 
+use super::Scheduler;
 #[cfg(feature = "test-agent")]
 use crate::execution::executor::link::sent;
 use crate::execution::executor::sink::Sink;
+
+impl Scheduler {
+  /// The sink a run's task records through: the local one, over the channel that serializes every message in the
+  /// runner's tests of the boundary (`super::channel`).
+  pub(in crate::execution) fn executor_sink(&self) -> Box<dyn Sink> {
+    let sink = Box::new(LocalSink::new(&self.inner.project_root));
+    #[cfg(feature = "test-agent")]
+    if let Some(calls) = &self.inner.channel {
+      return Box::new(super::channel::ChannelSink::over(sink, calls.clone()));
+    }
+    sink
+  }
+}
 
 /// Writes through a connection of its own, opened at the first record. A write that fails drops it, so the next one,
 /// such as the runner's interruption of the run after that failure, goes through a fresh connection.

@@ -133,6 +133,9 @@ struct Inner {
   /// The disk guard's reading of free space (ORC-114), and its watch over runs paused for low disk space.
   disks: DiskGuard,
   disk_watch: coordinator::low_disk::DiskWatch,
+  /// The executor's channel to the coordinator in the runner's tests of the boundary (`coordinator::channel`).
+  #[cfg(feature = "test-agent")]
+  channel: Option<Arc<coordinator::channel::Calls>>,
 }
 
 impl Scheduler {
@@ -167,6 +170,8 @@ impl Scheduler {
         chats: coordinator::chat::Chats::default(),
         disks: DiskGuard::local(),
         disk_watch: coordinator::low_disk::DiskWatch::default(),
+        #[cfg(feature = "test-agent")]
+        channel: None,
       }),
     }
   }
@@ -540,7 +545,7 @@ impl Scheduler {
       root: self.inner.project_root.clone(),
       link,
       execution: ExecutionRoot::local(&self.inner.project_root),
-      sink: Box::new(coordinator::sink::LocalSink::new(&self.inner.project_root)),
+      sink: self.executor_sink(),
       notifier: self.inner.notifier.clone(),
       computer: self.inner.computer.clone(),
       relay: self.inner.relay.clone(),
@@ -563,13 +568,6 @@ impl Scheduler {
     });
     active.insert(run, ActiveRun { control, task, settled });
     Ok(())
-  }
-
-  /// A new link of the project's executor to its coordinator, which a run's task and the executor's work outside one
-  /// ask the project's data through: here the local link, over a read-only connection of its own. The one place the
-  /// executor is handed its coordinator's link.
-  pub(in crate::execution) fn open_link(&self) -> Result<Box<dyn link::CoordinatorLink + Send>, link::LinkError> {
-    LocalLinks::new(&self.inner.project_root).open()
   }
 }
 

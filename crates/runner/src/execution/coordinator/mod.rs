@@ -11,6 +11,8 @@ pub(super) mod attach;
 pub(super) mod blocked_runs;
 pub(super) mod board;
 pub(super) mod browser;
+#[cfg(feature = "test-agent")]
+pub(super) mod channel;
 pub(super) mod chat;
 pub(super) mod conversation;
 pub(super) mod estimate;

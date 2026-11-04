@@ -54,7 +54,14 @@ on another computer is decided with the transport.
    `project_approval_rules`) go the same way. The executor screens memory content against its own computer's secret
    values before it sends it.
 4. Every value that crosses the boundary is serializable (serde), and the tests run the local executor through a
-   channel that serializes every message, so nothing that only works in one process slips in.
+   channel that serializes every message, so nothing that only works in one process slips in. Done (ORC-692): in
+   test-agent builds `Scheduler::over_channel` (`coordinator/channel/`) gives a run's task a link, a sink and
+   computer's resources that send each request as JSON to a thread of the coordinator's, which answers with the local
+   implementation, and go on with the answer read back from JSON; `crates/runner/tests/serialized_boundary.rs` runs
+   the main scenarios that way and in process and compares the execution rows they leave. Not text yet: the sink's
+   store errors (`StoreError`, `RunStoreError` do not serialize), and the computer's secrets, values and MCP servers
+   (`Secret`, `McpServer` do not serialize; values never cross). The executor's remaining `ProjectDb` uses are listed,
+   with why, in `crates/runner/tests/execution_split.rs` (`STORE_USES`); a new one fails there.
 5. The desktop reaches a run's worktree only through the runner: reading its uncommitted changes and files, resolving
    a conflict in it, syncing the base into it, running Check tools in it, removing it, its recovery state, warm
    workspaces' folders, the Orchestrator chat's git tools in it. The person's own checkout (local integration's merge,

@@ -371,6 +371,10 @@ required-features = ["test-agent"]
 name = "run_git"
 required-features = ["test-agent"]
 
+[[test]]
+name = "serialized_boundary"
+required-features = ["test-agent"]
+
 [features]
 test-agent = []
 
