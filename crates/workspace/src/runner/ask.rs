@@ -10,7 +10,7 @@ use orchester_core::{
   limits::AgentSlots,
   sharing::TaskRevision,
 };
-use orchester_ipc::{Command, Reply};
+use orchester_ipc::{Command, FolderState, Reply};
 use orchester_store::StoreError;
 use tokio::sync::oneshot;
 
@@ -163,6 +163,22 @@ impl Runners {
       Reply::Continued { continued, refused } => Ok(Continued { continued, refused }),
       Reply::Rejected(rejection) => Err(RunRequestError::Rejected(rejection)),
       other => unexpected(&other, "ContinueRuns"),
+    }
+  }
+
+  /// What the folder of run `run` of project `root` holds beyond its last commit, as the project's runner reads it
+  /// there for the start-up recovery: the desktop never reads a run's folder itself. Starts the runner (named `name`)
+  /// if needed and waits for it to attach, as continuing the interrupted runs does.
+  pub async fn run_folder_state(&self, root: &Path, name: &str, run: RunId) -> Result<FolderState, RunRequestError> {
+    self.ensure(root, name);
+    // A project no tab shows keeps its runner while it reads, then lets it stop.
+    let _pin = self.pin(root);
+    self.linger_untabbed();
+    self.attached(root).await?;
+    match self.ask(Some(root), Command::RunFolderState { run }).await? {
+      Reply::RunFolderState { state, .. } => Ok(state),
+      Reply::Rejected(rejection) => Err(RunRequestError::Rejected(rejection)),
+      other => unexpected(&other, "RunFolderState"),
     }
   }
 

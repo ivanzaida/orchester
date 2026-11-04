@@ -32,8 +32,9 @@ use orchester_core::{
   connection::stream::AgentEvent,
   id::{ProjectId, RunId},
   run::{InterruptCause, RunStatus},
-  store::{ActivityStore, RunStore},
+  store::{ActivityStore, RunStore, SettingsStore},
   time::Timestamp,
+  workspaces::KeepFree,
 };
 use orchester_store::{PreviousSession, ProjectDb, SessionEnd};
 use orchester_workspace::{
@@ -72,6 +73,12 @@ impl Live {
       now: Timestamp::now(),
     };
     let seeded = kontur::seed(&request).expect("the scenario seeds");
+    // The project lives in the system's temporary folder: its disk guard keeps the least free space it allows, so the
+    // runs start whatever that disk has free.
+    ProjectDb::open(&seeded.repo)
+      .expect("the project's database")
+      .save_keep_free(KeepFree::from_gigabytes(KeepFree::MIN_GB).expect("the least keep free"))
+      .expect("keep free saved");
     let data = Data::at(dir, Runtime::new().expect("tokio runtime"));
     let mut live = Self::open(data, &runner, seeded.project);
     live.repo = seeded.repo;

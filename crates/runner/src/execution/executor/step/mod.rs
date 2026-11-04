@@ -41,7 +41,7 @@ use orchester_core::{
   resource::ModelId,
   revision::Revision,
   run::{Invocation, MessageOccasion, Plan, StepExecutor, StepFailure, StepStatus, execution_tokens},
-  store::{ActivityStore, ConversationStore, RunStore, SettingsStore},
+  store::{ActivityStore, RunStore},
   time::Timestamp,
   tokens::{TokenBudget, TokensUsed},
 };
@@ -57,6 +57,7 @@ use self::{
 };
 pub use self::{orchester_tools::outside_read_refusals, qa_app::QaSlots};
 use super::{
+  link::messages as message_link,
   record::RecordError,
   run::{ExecutionError, RunTask},
   workspace::{Start, Workspace},
@@ -377,7 +378,7 @@ impl RunTask {
         &self.root,
         workspace.path(),
         &permissions,
-        &self.db.project_environment()?,
+        &self.computer_environment()?,
       ),
       roots: self.run_roots(execution, workspace.path()),
       profile: self.profile_of(execution),
@@ -398,12 +399,14 @@ impl RunTask {
       decisions,
       answers,
       steers: steered,
+      attachments: self.execution.attachments(),
       reviewing: None,
       reviewer_sources: self.reviewer_sources(),
       reviews_held,
       qa: std::sync::Arc::clone(&self.qa),
     };
-    tokio::spawn(worker.work(reviews_ended, self.sink.another()));
+    let ends = (self.sink.another(), self.link.another()?);
+    tokio::spawn(worker.work(reviews_ended, ends));
     // The budget in force: one raised for the run after it stopped at the step's limit, else the
     // pipeline's.
     let budget = self
@@ -474,7 +477,7 @@ impl RunTask {
     }
     let last = self.last_invocation(execution)?;
     let started = last.as_ref().map(|invocation| invocation.started_at);
-    let conversation = self.db.messages(self.run.task())?;
+    let conversation = message_link::messages(&*self.link, self.run.task())?;
     // Asked in the last invocation, so the one that starts now answers it.
     let question = latest_question(&conversation, execution)
       .filter(|question| started.is_none_or(|started| question.created_at() >= started))

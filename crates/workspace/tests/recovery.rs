@@ -1,9 +1,14 @@
 //! The runs the start-up recovery (02.E `o8DCd`) lists after a crash, read from a registered
 //! project's database: a run left at work is interrupted; a run that waits for a person's answer
 //! or decision keeps waiting, as the runner leaves it when it attaches; one held at a tool
-//! approval was interrupted, since its agent process held the request.
+//! approval was interrupted, since its agent process held the request. What each run's folder
+//! holds is asked of the project's runner (`folder_states`), the real `orchester-runner`.
 
+#[path = "support/runner_programs.rs"]
+mod runner_programs;
 mod support;
+
+use std::path::Path;
 
 use orchester_core::{
   id::ProjectId,
@@ -11,14 +16,29 @@ use orchester_core::{
   run::{InterruptCause, PendingToolApproval, WaitReason},
   store::ActivityStore,
 };
-use orchester_exec::programs::Programs;
 use orchester_ipc::SessionEnd;
 use orchester_store::AppDb;
 use orchester_workspace::{
+  activity::Activity,
   recovery::{Decision, Reading, Recovery, RecoveryState, interrupted_runs},
+  runner::Runners,
   workspace::Workspace,
 };
 use support::{Fixture, at};
+use tokio::runtime::Runtime;
+
+#[path = "recovery/folder_states.rs"]
+mod folder_states;
+
+/// Runners whose program, in `folder`, is missing: no run's folder is read, and each stays unknown.
+fn without_runner(folder: &Path, runtime: &Runtime) -> Runners {
+  Runners::new(
+    folder.join("orchester-runner.exe"),
+    runtime.handle().clone(),
+    Activity::new(),
+    SessionEnd::Crashed,
+  )
+}
 
 #[test]
 fn recovery_lists_a_run_at_work_but_not_one_waiting_for_a_person() {
@@ -39,10 +59,7 @@ fn recovery_lists_a_run_at_work_but_not_one_waiting_for_a_person() {
   let app = tempfile::tempdir().expect("an app folder");
   let workspace = Workspace::new(AppDb::open(&app.path().join("orchester.db")).expect("the app database"));
   workspace.open(fixture.repo.path()).expect("the project is registered");
-  let listed = interrupted_runs(&workspace, &Programs::processes(), SessionEnd::Crashed, &|_| {
-    Some(at(90))
-  })
-  .expect("read");
+  let listed = interrupted_runs(&workspace, SessionEnd::Crashed, &|_| Some(at(90))).expect("read");
   let runs: Vec<_> = listed.runs.iter().map(|run| run.run).collect();
   assert_eq!(runs, [at_work.id()]);
 }
@@ -77,10 +94,7 @@ fn recovery_lists_a_run_held_at_a_tool_approval() {
   let app = tempfile::tempdir().expect("an app folder");
   let workspace = Workspace::new(AppDb::open(&app.path().join("orchester.db")).expect("the app database"));
   workspace.open(fixture.repo.path()).expect("the project is registered");
-  let listed = interrupted_runs(&workspace, &Programs::processes(), SessionEnd::Crashed, &|_| {
-    Some(at(30))
-  })
-  .expect("read");
+  let listed = interrupted_runs(&workspace, SessionEnd::Crashed, &|_| Some(at(30))).expect("read");
   let runs: Vec<_> = listed.runs.iter().map(|run| run.run).collect();
   assert_eq!(runs, [run.id()], "the agent that held the request is gone");
 }
@@ -95,8 +109,9 @@ fn recovery_after(previous: SessionEnd) -> (Recovery, RecoveryState, orchester_c
   let app = tempfile::tempdir().expect("an app folder");
   let workspace = Workspace::new(AppDb::open(&app.path().join("orchester.db")).expect("the app database"));
   workspace.open(fixture.repo.path()).expect("the project is registered");
-  let runtime = tokio::runtime::Runtime::new().expect("a runtime");
-  let recovery = Recovery::start((workspace, Programs::processes()), previous, at(90), runtime.handle());
+  let runtime = Runtime::new().expect("a runtime");
+  let runners = without_runner(app.path(), &runtime);
+  let recovery = Recovery::start((workspace, runners), previous, at(90), runtime.handle());
   let mut updates = recovery.subscribe();
   let state = runtime.block_on(async {
     let read = updates.wait_for(|state| state.reading != Reading::Reading).await;
@@ -153,16 +168,14 @@ fn recovery_lists_a_run_its_runner_interrupted_before_this_session_started() {
   let app = tempfile::tempdir().expect("an app folder");
   let workspace = Workspace::new(AppDb::open(&app.path().join("orchester.db")).expect("the app database"));
   workspace.open(fixture.repo.path()).expect("the project is registered");
-  let programs = Programs::processes();
-  let from_previous_start =
-    interrupted_runs(&workspace, &programs, SessionEnd::QuitNow, &|_| Some(at(40))).expect("read");
+  let from_previous_start = interrupted_runs(&workspace, SessionEnd::QuitNow, &|_| Some(at(40))).expect("read");
   let runs: Vec<_> = from_previous_start
     .runs
     .iter()
     .map(|listed| (listed.run, listed.cause))
     .collect();
   assert_eq!(runs, [(run.id(), InterruptCause::QuitNow)]);
-  let from_this_start = interrupted_runs(&workspace, &programs, SessionEnd::QuitNow, &|_| Some(at(90))).expect("read");
+  let from_this_start = interrupted_runs(&workspace, SessionEnd::QuitNow, &|_| Some(at(90))).expect("read");
   assert!(from_this_start.runs.is_empty(), "interrupted before the given start");
 }
 
@@ -175,10 +188,10 @@ fn recovery_session_keeps_undecided_runs_across_a_clean_restart_until_the_person
   let app = tempfile::tempdir().expect("an app folder");
   let workspace = Workspace::new(AppDb::open(&app.path().join("orchester.db")).expect("the app database"));
   workspace.open(fixture.repo.path()).expect("the project is registered");
-  let runtime = tokio::runtime::Runtime::new().expect("a runtime");
+  let runtime = Runtime::new().expect("a runtime");
   let read = |previous: SessionEnd| {
     let recovery = Recovery::start(
-      (workspace.clone(), Programs::processes()),
+      (workspace.clone(), without_runner(app.path(), &runtime)),
       previous,
       at(90),
       runtime.handle(),
@@ -215,10 +228,10 @@ fn recovery_session_does_not_offer_again_what_the_person_left_after_a_later_quit
   let app = tempfile::tempdir().expect("an app folder");
   let workspace = Workspace::new(AppDb::open(&app.path().join("orchester.db")).expect("the app database"));
   workspace.open(fixture.repo.path()).expect("the project is registered");
-  let runtime = tokio::runtime::Runtime::new().expect("a runtime");
+  let runtime = Runtime::new().expect("a runtime");
   let read = || {
     let recovery = Recovery::start(
-      (workspace.clone(), Programs::processes()),
+      (workspace.clone(), without_runner(app.path(), &runtime)),
       SessionEnd::QuitNow,
       at(40),
       runtime.handle(),

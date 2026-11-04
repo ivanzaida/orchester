@@ -30,7 +30,7 @@ use orchester_core::{
     },
     without_reviewer,
   },
-  store::{RunStore, SettingsStore, TaskStore},
+  store::{RunStore, TaskStore},
   time::Timestamp,
 };
 use orchester_ipc::Event;
@@ -41,7 +41,7 @@ pub(in crate::execution) use self::{estimate::estimate_task, setup::ReviewerSour
 use self::{
   ledger::ReviewLedger,
   process::{StopReview, stop_review},
-  setup::{PushPlace, ReviewJob, ReviewerSetup, hold_now, ignored_build_output},
+  setup::{PushPlace, ReviewJob, ReviewerSetup, hold_now, ignored_build_output, reviewer_variables},
 };
 use super::{super::answer::Settled, Watch, Worker};
 
@@ -289,7 +289,7 @@ impl Worker {
       note: approval.command.then(|| approval.scope.clone()).flatten(),
       working_folder: approval.target.clone(),
     };
-    let variables = build_variables(&watch.db.project_environment()?);
+    let variables = build_variables(&reviewer_variables(&*watch.link, &self.reviewer_sources)?);
     Ok(ReviewInput::new(request, step, task, &messages).map(|input| input.with_build_variables(variables)))
   }
 

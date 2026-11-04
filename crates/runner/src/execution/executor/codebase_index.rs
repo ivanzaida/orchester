@@ -258,7 +258,7 @@ impl RunTask {
   /// found on the `PATH` the agent starts with (the project's, else the runner's), where winget
   /// installs for the agent's user or with an agent CLI, or the one found could not be copied.
   fn provide_ripgrep(&self) -> Result<Result<PathBuf, RipgrepMissing>, String> {
-    let environment = self.db.project_environment().map_err(|error| error.to_string())?;
+    let environment = self.computer_environment().map_err(|error| error.to_string())?;
     let path = environment.get("PATH").map(OsString::from).or_else(search_path);
     let local_app_data = environment
       .get(LOCAL_APP_DATA)

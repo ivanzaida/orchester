@@ -127,7 +127,7 @@ impl Services {
     let programs = Programs::processes();
     let jobs = ProjectJobs::default();
     let recovery = Recovery::start(
-      (workspace.clone(), programs.clone()),
+      (workspace.clone(), runners.clone()),
       session.previous_end(),
       session.interrupted_since(),
       &runtime,

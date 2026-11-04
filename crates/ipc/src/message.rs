@@ -13,6 +13,7 @@ use orchester_core::{
     Leftovers,
     resolve::request::{ResolveAnswer, ResolveFailure, ResolveRequest},
   },
+  orchestrator::run_git::{RunGitAnswer, RunGitRequest},
   permission::AgentPermissions,
   question::GivenAnswer,
   resource::StepKey,
@@ -26,7 +27,7 @@ use orchester_core::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-  ErrorReports,
+  ErrorReports, FolderState,
   browser::{BrowserCommand, BrowserEvent, BrowserReply, ScreencastFrame},
   chat::ChatTools,
   folders::{FoldersCommand, FoldersReply},
@@ -300,8 +301,18 @@ pub enum Command {
   /// it is built, [`Rejection::CodeIndexInUse`] while it is in use, or [`Rejection::Failed`] with why it could not be
   /// built.
   RebuildCodeIndex { revision: Revision },
+  /// What run `run`'s folder holds beyond its last commit, for the start-up recovery (protocol 44): its own
+  /// worktree, else the workspace it holds or worked in last. The runner reads it with git in the folder; the desktop
+  /// never does. Answered with [`Reply::RunFolderState`], [`FolderState::Unknown`] when the run has no folder any more
+  /// or git cannot tell.
+  RunFolderState { run: RunId },
+  /// git of the Orchestrator chat in a run's worktree, which the runner runs there (protocol 45,
+  /// `docs/architecture/remote-runners.md` rule 5). Answered with [`Reply::RunGit`]; [`Rejection::RunNotFound`] for no
+  /// such run, [`Rejection::RunNotEnded`] for a write, or git that does not only read, before the run ended, and
+  /// [`Rejection::WorktreeRemoved`] when its worktree is gone.
+  RunGit(RunGitRequest),
   /// `request` about the merge a person resolves by hand in run `run`'s worktree, carried out where the worktree is
-  /// (protocol 44): the desktop keeps the project's record of the resolution and runs no git there itself. Answered
+  /// (protocol 46): the desktop keeps the project's record of the resolution and runs no git there itself. Answered
   /// with [`Reply::Resolved`], or [`Reply::ResolveFailed`] with why it did not go on.
   Resolve { run: RunId, request: ResolveRequest },
 }
@@ -506,6 +517,13 @@ pub enum Reply {
   CodeIndexRebuilt {
     revision: Revision,
   },
+  /// The answer to [`Command::RunFolderState`].
+  RunFolderState {
+    run: RunId,
+    state: FolderState,
+  },
+  /// The answer to [`Command::RunGit`].
+  RunGit(RunGitAnswer),
   /// The answer to [`Command::Resolve`] that was carried out.
   Resolved(ResolveAnswer),
   /// The answer to [`Command::Resolve`] that did not go on, and why.

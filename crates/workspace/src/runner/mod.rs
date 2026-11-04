@@ -24,6 +24,7 @@ mod outcome;
 mod report;
 mod requests;
 mod resolve;
+mod run_git;
 pub mod state;
 mod work;
 mod worktree_changes;
@@ -52,6 +53,7 @@ pub use self::{
   outcome::{Continued, QUIET_STOP_TIMEOUT, RunRequestError, ShutdownOutcome},
   report::RunnerStatus,
   requests::RequestError,
+  run_git::ThroughRunner,
   work::{ActiveWork, ActiveWorkFields, SaveState},
 };
 use self::{

@@ -146,6 +146,11 @@ impl Services {
     RunWorktrees::through_runner(&self.runners, (root, name))
   }
 
+  /// The chat's git in the runs' worktrees of the project at `root`, which its runner runs.
+  pub(crate) fn run_git(&self, root: std::path::PathBuf) -> crate::runner::ThroughRunner {
+    self.runners.run_git(root)
+  }
+
   /// The projects' merge and removal operations, shared with the task pages.
   pub(crate) const fn jobs(&self) -> &ProjectJobs {
     &self.jobs

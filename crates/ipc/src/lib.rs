@@ -17,6 +17,7 @@ pub mod daily_log;
 mod error;
 pub mod error_reports;
 mod exit_code;
+mod folder;
 pub mod folders;
 pub mod frame;
 mod handshake;
@@ -37,6 +38,7 @@ pub use client::{CommandSender, EventReceiver, LaunchError, RunnerClient, Runner
 pub use error::{FrameError, IpcError};
 pub use error_reports::ErrorReports;
 pub use exit_code::EXIT_PROJECT_LOCKED;
+pub use folder::FolderState;
 pub use handshake::{Handshake, PROTOCOL_VERSION, handshake};
 #[cfg(windows)]
 pub use job::KillOnCloseJob;
