@@ -41,15 +41,14 @@ pub(super) fn connections_view(args: &Map<String, Value>) -> Result<ConnectionsV
 }
 
 /// Project settings on the tab `tab` names: one of its own, or Connections or Environment (`secrets` too, the tab it
-/// was), whose routes are their own; with tab runs and `view` rules, *Approved for every run*.
+/// was), whose routes are their own; with tab runs, `view` rules or storage opens that sub-page.
 pub(super) fn project_settings_page(args: &Map<String, Value>) -> Result<ProjectPage, ToolError> {
-  let rules = match string(args, "view")? {
-    None => false,
-    Some("rules") => true,
+  let view = match string(args, "view")? {
+    view @ (None | Some("rules" | "storage")) => view,
     Some(other) => {
       return Err(ToolError::InvalidParam {
         param: "view",
-        reason: format!("`{other}` is not rules, the only page of Project settings' Runs"),
+        reason: format!("`{other}` is not rules or storage"),
       });
     }
   };
@@ -62,12 +61,13 @@ pub(super) fn project_settings_page(args: &Map<String, Value>) -> Result<Project
       &SETTINGS_TABS,
     )?),
   };
-  match page {
-    ProjectPage::Settings(ProjectSettingsTab::Runs) if rules => Ok(ProjectPage::ProjectRules),
-    page if !rules => Ok(page),
+  match (page, view) {
+    (ProjectPage::Settings(ProjectSettingsTab::Runs), Some("rules")) => Ok(ProjectPage::ProjectRules),
+    (ProjectPage::Settings(ProjectSettingsTab::Runs), Some("storage")) => Ok(ProjectPage::Storage),
+    (page, None) => Ok(page),
     _ => Err(ToolError::InvalidParam {
       param: "view",
-      reason: "rules is a page of the runs tab".to_owned(),
+      reason: "rules and storage are pages of the runs tab".to_owned(),
     }),
   }
 }

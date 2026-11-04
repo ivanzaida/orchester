@@ -10,7 +10,8 @@ use std::{
 use orchester_api::{
   SharedLimits,
   v2::{
-    BundleFileError, BundleStart, EXECUTION_BUNDLE_SCHEMA, ExecutionBundle, ExecutionBundleError, Subject, TaskAtStart,
+    BundleFileError, BundleStart, EXECUTION_BUNDLE_SCHEMA, ExecutionBundle, ExecutionBundleError, ResourceLabel,
+    Subject, TaskAtStart,
   },
 };
 use orchester_core::{
@@ -22,7 +23,7 @@ use orchester_core::{
   resource::{
     AgentProfile, AgentTargets, CommandAction, CommandArg, CommandProgram, Deliverable, InjectionEvent, Instruction,
     InstructionScope, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Skill, SkillFile,
-    SkillFilePath, Step, StepKey, StepKind, Tool, Version, VersionNumber,
+    SkillFilePath, Slug, Step, StepKey, StepKind, Tool, Version, VersionNumber,
   },
   run::{
     BranchName, CommitId, PublishedVersions, RunSnapshot,
@@ -113,14 +114,33 @@ fn fixture() -> Fixture {
     skills: &skills,
   };
   let snapshot = RunSnapshot::build(pipeline, &pipeline_version, published).expect("published");
+  let labels = [
+    (pipeline_version.id(), label("feature-delivery", "Feature delivery")),
+    (profiles[&builder].id(), label("builder", "Builder")),
+    (tools[&tool].id(), label("cargo-check", "Cargo check")),
+    (only(&instructions).id(), label("house-rules", "House rules")),
+    (only(&skills).id(), label("checks", "Checks")),
+  ];
   let bodies = PinnedBodies {
     profiles: &profiles.into_values().collect::<Vec<_>>(),
     instructions: &instructions.into_values().collect::<Vec<_>>(),
     tools: &tools.into_values().collect::<Vec<_>>(),
     skills: &skills.into_values().collect::<Vec<_>>(),
+    labels: &labels,
   };
   let inputs = CanonicalExecutionInputs::pin(&snapshot, bodies).expect("the inputs pin");
   Fixture { builder, inputs }
+}
+
+fn label(slug: &str, name: &str) -> ResourceLabel {
+  ResourceLabel::new(
+    Slug::new(slug).expect("valid slug"),
+    Name::new(name).expect("valid name"),
+  )
+}
+
+fn only<B>(versions: &BTreeMap<ResourceId, Version<B>>) -> &Version<B> {
+  versions.values().next().expect("one version")
 }
 
 const BASE_COMMIT: &str = "0123456789abcdef0123456789abcdef01234567";
@@ -134,6 +154,7 @@ fn start() -> BundleStart {
     branch: BranchName::new("module/github-sign-in").expect("branch"),
     base_commit: CommitId::new(BASE_COMMIT).expect("commit"),
     definition_revision: TaskRevision::try_from(7).expect("revision"),
+    task_number: NonZeroU32::new(42).expect("a task number"),
     task: TaskAtStart {
       title: "Add GitHub sign-in".into(),
       brief: "Sign in with GitHub.".into(),
@@ -170,6 +191,7 @@ fn execution_bundle_wire_shape_lists_its_fields_in_canonical_order() {
     "branch",
     "base_commit",
     "definition_revision",
+    "task_number",
     "task",
     "pipeline",
     "profiles",
@@ -191,10 +213,10 @@ fn execution_bundle_wire_shape_lists_its_fields_in_canonical_order() {
     })
     .collect();
   assert!(places.windows(2).all(|pair| pair[0] < pair[1]), "{bytes}");
-  assert!(bytes.starts_with("{\"schema_version\":1,"), "{bytes}");
+  assert!(bytes.starts_with("{\"schema_version\":2,"), "{bytes}");
   let s7 = format!(
     "\"claim_id\":{},\"module_id\":{},\"branch\":\"module/github-sign-in\",\"base_commit\":\"{BASE_COMMIT}\",\
-     \"definition_revision\":7,",
+     \"definition_revision\":7,\"task_number\":42,\"task\":",
     serde_json::to_string(&bundle.start().claim_id).expect("an id serializes"),
     serde_json::to_string(&bundle.start().module_id).expect("an id serializes"),
   );
@@ -226,6 +248,7 @@ fn execution_bundle_wire_shape_lists_its_fields_in_canonical_order() {
   assert_eq!(value["limits"], json!({"budget_tokens": 1_000_000}));
   assert_eq!(value["delivery"], json!("changes"));
   assert_eq!(value["definition_revision"], json!(7));
+  assert_eq!(value["task_number"], json!(42));
   let checks = file_sha256(b"checks");
   assert_eq!(value["files"], json!([{"sha256": checks, "size_bytes": 6}]));
   assert_eq!(
@@ -235,6 +258,25 @@ fn execution_bundle_wire_shape_lists_its_fields_in_canonical_order() {
   );
   assert_eq!(value["resources"].as_array().map(Vec::len), Some(3));
   assert_eq!(value["inputs"], serde_json::to_value(inputs).expect("serializes"));
+}
+
+#[test]
+fn execution_bundle_wire_shape_labels_every_pinned_version() {
+  let value = serde_json::to_value(bundle().0).expect("serializes");
+  let labels = [
+    ("/inputs/pipeline/label", "feature-delivery", "Feature delivery"),
+    ("/inputs/profiles/0/label", "builder", "Builder"),
+    ("/inputs/tools/0/label", "cargo-check", "Cargo check"),
+    ("/inputs/instructions/0/label", "house-rules", "House rules"),
+    ("/inputs/skills/0/label", "checks", "Checks"),
+  ];
+  for (pointer, slug, name) in labels {
+    assert_eq!(
+      value.pointer(pointer),
+      Some(&json!({"slug": slug, "name": name})),
+      "{pointer}"
+    );
+  }
 }
 
 #[test]
@@ -262,15 +304,26 @@ fn execution_bundle_wire_shape_hashes_the_same_bundle_the_same() {
     .reverse();
   assert_eq!(read(reordered).expect("reads").sha256().expect("hashes"), hash);
 
-  let changes: [(&str, Value); 8] = [
+  let changes: [(&str, Value); 19] = [
     ("/claim_id", json!(ClaimId::generate())),
     ("/module_id", json!(ModuleId::generate())),
     ("/branch", json!("module/github-sign-in-1a2b3c4d")),
     ("/base_commit", json!("f".repeat(64))),
     ("/definition_revision", json!(8)),
+    ("/task_number", json!(43)),
     ("/task/title", json!("Add GitLab sign-in")),
     ("/limits", json!({})),
     ("/bindings/0/cli", json!("codex_cli")),
+    ("/inputs/pipeline/label/slug", json!("delivery")),
+    ("/inputs/pipeline/label/name", json!("Delivery")),
+    ("/inputs/profiles/0/label/slug", json!("reviewer")),
+    ("/inputs/profiles/0/label/name", json!("Reviewer")),
+    ("/inputs/tools/0/label/slug", json!("cargo-test")),
+    ("/inputs/tools/0/label/name", json!("Cargo test")),
+    ("/inputs/instructions/0/label/slug", json!("team-rules")),
+    ("/inputs/instructions/0/label/name", json!("Team rules")),
+    ("/inputs/skills/0/label/slug", json!("tests")),
+    ("/inputs/skills/0/label/name", json!("Tests")),
   ];
   for (pointer, changed) in changes {
     let mut value = value.clone();
@@ -291,6 +344,8 @@ fn execution_bundle_wire_shape_refuses_unknown_fields() {
     "/files/0",
     "/skill_files/0",
     "/inputs",
+    "/inputs/pipeline/label",
+    "/inputs/profiles/0/label",
   ] {
     let mut value = value.clone();
     value
@@ -308,8 +363,9 @@ fn execution_bundle_wire_shape_refuses_unknown_fields() {
 #[test]
 fn execution_bundle_wire_shape_refuses_fields_its_inputs_do_not_decide() {
   let value = serde_json::to_value(bundle().0).expect("serializes");
-  let changes: [(&str, Value, &str); 6] = [
-    ("/schema_version", json!(2), "schema 2"),
+  let changes: [(&str, Value, &str); 7] = [
+    ("/schema_version", json!(1), "schema 1 is not 2"),
+    ("/schema_version", json!(3), "schema 3 is not 2"),
     ("/pipeline/version", json!(4), "`pipeline`"),
     ("/profiles/0/role", json!("Reviewer"), "`profiles`"),
     ("/files", json!([]), "`files`"),
@@ -324,6 +380,37 @@ fn execution_bundle_wire_shape_refuses_fields_its_inputs_do_not_decide() {
       "{pointer}"
     );
   }
+}
+
+#[test]
+fn execution_bundle_wire_shape_refuses_a_bad_task_number_or_label() {
+  let value = serde_json::to_value(bundle().0).expect("serializes");
+  let changes: [(&str, Value, &str); 7] = [
+    ("/task_number", json!(0), "nonzero"),
+    ("/task_number", json!("ORC-42"), "invalid type"),
+    ("/task_number", json!(-1), "invalid value"),
+    ("/inputs/pipeline/label/slug", json!("Feature delivery"), "slug must be"),
+    ("/inputs/profiles/0/label/slug", json!(""), "slug must be"),
+    ("/inputs/skills/0/label/name", json!(" "), "must not be blank"),
+    ("/inputs/tools/0/label/name", json!("n".repeat(201)), "the limit is"),
+  ];
+  for (pointer, changed, error) in changes {
+    let mut value = value.clone();
+    *value.pointer_mut(pointer).unwrap_or_else(|| panic!("{pointer} exists")) = changed;
+    let refused = read(value).expect_err("refused").to_string();
+    assert!(refused.contains(error), "{pointer}: {refused}");
+  }
+  let mut missing = value.clone();
+  missing.as_object_mut().expect("an object").remove("task_number");
+  let refused = read(missing).expect_err("refused").to_string();
+  assert!(refused.contains("missing field `task_number`"), "{refused}");
+  let mut unlabelled = value;
+  unlabelled["inputs"]["instructions"][0]
+    .as_object_mut()
+    .expect("a pinned version")
+    .remove("label");
+  let refused = read(unlabelled).expect_err("refused").to_string();
+  assert!(refused.contains("missing field `label`"), "{refused}");
 }
 
 #[test]

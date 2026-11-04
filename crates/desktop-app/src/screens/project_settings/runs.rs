@@ -85,7 +85,8 @@ impl Component for Runs {
         .spacing(ExtraSpacing::Roomy.role())
         .child(auto)
         .child(estimates)
-        .child(limits),
+        .child(limits)
+        .child(super::storage::entry(ctx, &props)),
     )
   }
 }

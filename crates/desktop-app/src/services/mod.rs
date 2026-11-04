@@ -41,6 +41,7 @@ pub mod path_picker;
 pub mod plan_limits;
 pub mod reference_picker;
 pub mod save_picker;
+pub mod storage;
 pub mod updates;
 
 use self::{browser_lookup::BrowserLookup, links::Links, page_file_picker::PageFilePicker};

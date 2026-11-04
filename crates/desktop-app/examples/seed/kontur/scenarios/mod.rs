@@ -48,6 +48,7 @@ mod shared_here;
 mod side_question;
 mod slot_wait;
 mod sources;
+mod storage;
 mod task_states;
 mod tasks;
 mod tasks_memory;
@@ -102,7 +103,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 130] = [
+pub const ALL: [Scenario; 132] = [
   Scenario::of("reviewer-row", reviewer_rows::seed),
   Scenario::of("reviewer-row-local", reviewer_rows::local),
   Scenario::of("reviewer-row-unavailable", reviewer_rows::unavailable),
@@ -233,6 +234,8 @@ pub const ALL: [Scenario; 130] = [
   Scenario::of("team-clone", team::clones),
   Scenario::of("modules-base-branch", modules::base_branch),
   Scenario::of("loading-states", loading_states::seed),
+  Scenario::of("storage-low-disk", storage::low_disk),
+  Scenario::of("storage-empty", storage::nothing),
 ];
 
 /// The scenario called `name`.
