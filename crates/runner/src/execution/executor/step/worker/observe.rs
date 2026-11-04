@@ -14,7 +14,7 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_ipc::Event;
-use orchester_store::{InvocationRecord, StoreError};
+use orchester_store::{InvocationRecord, StepRecord, StoreError};
 
 use super::{Driver, FLUSH_BATCH, StopCause, Transport, Watch, Worker, WorkerEvent};
 
@@ -92,7 +92,8 @@ impl Worker {
     };
     watch.plan_reached = reading.refuses_turns(reading.at);
     // The history only lacks this report, which its chart shows as a gap; the agent works on.
-    if let Err(error) = watch.db.save_limit_snapshot(watch.invocation.run, &reading) {
+    let stored = StepRecord::limits(watch.invocation.run, &reading).and_then(|record| watch.sink.step(record));
+    if let Err(error) = stored {
       tracing::warn!(%error, "cannot store the plan limits the agent's CLI reported");
     }
     self.notifier.send(Event::PlanLimits(reading));

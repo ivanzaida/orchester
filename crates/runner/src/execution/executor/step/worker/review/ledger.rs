@@ -1,11 +1,11 @@
 //! What a review cost, recorded when it ends, from the blocking pool it ran on: whether the worker still
 //! waits for it or not (the person answered first, the agent ended), a reviewer that was asked has spent
 //! its tokens. The worker reports its end only after every ledger is gone (`Worker::work`), so the run
-//! always hears of a review's tokens while its agent's invocation is still the step's. The record goes to the project's
-//! store; known tokens go to the run, which counts them toward its budget, the step's and the project's daily budget
-//! like an agent's turn; the plan limits its CLI reported go to the plan limits history and the desktop.
+//! always hears of a review's tokens while its agent's invocation is still the step's. The record goes to the
+//! coordinator's sink; known tokens go to the run, which counts them toward its budget, the step's and the project's
+//! daily budget like an agent's turn; the plan limits its CLI reported go to the plan limits history and the desktop.
 
-use std::{convert::Infallible, path::PathBuf};
+use std::convert::Infallible;
 
 use orchester_core::{
   connection::plan_limits::LimitReading,
@@ -14,15 +14,17 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_ipc::Event;
-use orchester_store::ProjectDb;
+use orchester_store::StepRecord;
+use parking_lot::Mutex;
 use tokio::sync::mpsc;
 
 use super::{super::WorkerEvent, setup::SpentOn};
-use crate::notify::Notifier;
+use crate::{execution::executor::sink::Sink, notify::Notifier};
 
 /// Where the cost of one review goes.
 pub(super) struct ReviewLedger {
-  pub(super) root: PathBuf,
+  /// A sink of the review's own, as it records from the blocking pool.
+  pub(super) sink: Mutex<Box<dyn Sink>>,
   pub(super) run: RunId,
   pub(super) execution: StepExecutionId,
   pub(super) invocation: InvocationId,
@@ -82,22 +84,16 @@ impl ReviewLedger {
     }
   }
 
-  /// Stores the review's record and the plan limits it reported. A failure is logged: the review has
-  /// ended and its verdict stands, only its record (and with it the daily budget's and the dashboard's
-  /// share of it) is lost.
+  /// Sends the review's record and the plan limits it reported to the ledger's sink. A failure is logged: the review
+  /// has ended and its verdict stands, only its record (and with it the daily budget's and the dashboard's share of
+  /// it) is lost.
   fn store(&self, record: &ReviewRecord, readings: &[LimitReading]) {
-    let mut db = match ProjectDb::open(&self.root) {
-      Ok(db) => db,
-      Err(error) => {
-        tracing::warn!(%error, "cannot open the project to record what a review cost");
-        return;
-      }
-    };
-    if let Err(error) = db.record_reviewer_usage(record) {
+    let mut sink = self.sink.lock();
+    if let Err(error) = StepRecord::review(record).and_then(|record| sink.step(record)) {
       tracing::warn!(%error, "cannot record what a review cost");
     }
     for reading in readings {
-      if let Err(error) = db.save_limit_snapshot(self.run, reading) {
+      if let Err(error) = StepRecord::limits(self.run, reading).and_then(|record| sink.step(record)) {
         tracing::warn!(%error, "cannot store the plan limits the reviewer's CLI reported");
       }
     }

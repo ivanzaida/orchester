@@ -14,10 +14,10 @@ use orchester_core::{
   memory::StepFate,
   revision::Revision,
   run::{Checkpoint, Invocation, RunLimit, RunStatus, StepFailure, StepOutcome, StepOutput},
-  store::ActivityStore,
   time::Timestamp,
 };
 use orchester_ipc::Event;
+use orchester_store::StepRecord;
 
 use super::{
   Active,
@@ -159,7 +159,7 @@ impl RunTask {
     // broke, leaves none.
     let question = output.outcome == Some(StepOutcome::Question);
     if (output.outcome.is_some() || !output.text.is_empty()) && !question && !self.run.is_follow_up(execution) {
-      self.db.save_step_output(&output)?;
+      self.sink.step(StepRecord::output(&output)?)?;
     }
     if let Some(failure) = failure {
       self.save(execution, active, "step failed")?;

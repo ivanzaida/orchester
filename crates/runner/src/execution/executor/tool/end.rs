@@ -2,8 +2,8 @@
 //! step that passed joins the run's branch; its summary is the step's output, and an exit code the
 //! tool does not expect or a timeout fails the step for its failure route to handle.
 
-use orchester_core::{id::StepExecutionId, store::ActivityStore};
-use orchester_store::StoreError;
+use orchester_core::id::StepExecutionId;
+use orchester_store::{StepRecord, StoreError};
 
 use super::CommandFinished;
 use crate::execution::executor::{
@@ -39,7 +39,7 @@ impl RunTask {
           return self.save(execution, &active, "work in progress at low disk space");
         }
         if let Some(output) = &finished.output {
-          self.db.save_step_output(output)?;
+          self.sink.step(StepRecord::output(output)?)?;
         }
         match finished.failure {
           Some(failure) => {

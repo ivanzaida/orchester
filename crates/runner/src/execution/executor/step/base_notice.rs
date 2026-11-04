@@ -24,6 +24,7 @@ use orchester_core::{
   base_move::BaseNotice, id::StepExecutionId, permission::RepositoryAccess, revision::Revision, run::Invocation,
   time::Timestamp,
 };
+use orchester_store::NoticeRecord;
 
 use super::{
   super::{
@@ -134,7 +135,7 @@ impl RunTask {
       Ok(Merge::Merged(merged)) => merged,
       Ok(Merge::Conflict(files)) => {
         tracing::info!(run = %self.run.id(), revision = %notice.revision, ?files, "the moved base conflicts; an agent merges it");
-        if self.db.note_base_notice_overlap(&notice, &files)? {
+        if self.sink.notice(NoticeRecord::overlap(&notice, &files)?)? {
           self.announce_notice();
         }
         return Ok(None);
@@ -148,8 +149,8 @@ impl RunTask {
       self.checkpoint(execution, merged.clone())?;
     }
     if self
-      .db
-      .merge_base_notice(&notice, (execution, &merged), Timestamp::now())?
+      .sink
+      .notice(NoticeRecord::merged(&notice, (execution, &merged), Timestamp::now()))?
     {
       tracing::info!(run = %self.run.id(), %execution, revision = %notice.revision, %merged, "the runner merged the moved base");
       self.announce_notice();
@@ -170,8 +171,13 @@ impl RunTask {
       return Ok(());
     };
     let at = invocation.started_at;
-    self.db.note_base_notice_overlap(&notice, &notice.overlapping)?;
-    if self.db.deliver_base_notice(&notice, (execution, invocation.id), at)? {
+    self
+      .sink
+      .notice(NoticeRecord::overlap(&notice, &notice.overlapping)?)?;
+    if self
+      .sink
+      .notice(NoticeRecord::delivered(&notice, (execution, invocation.id), at))?
+    {
       tracing::info!(run = %self.run.id(), %execution, revision = %notice.revision, "the base move was told");
       self.announce_notice();
     }

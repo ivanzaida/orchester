@@ -1,9 +1,10 @@
 //! The tools that read or keep records of the run for its agent (`docs/plan.md`, M12): `get_task` answers the run's
 //! task with its approved plans and the person's decisions and notes; `save_memory` keeps a task or project memory
 //! record, active or proposed as the project's memory setting says, refused when it holds a secret's value;
-//! `report_progress` keeps the step's progress line, the invocation's secret values removed. Each call opens a
-//! connection of its own to the project database (the run's task loop owns the runner's) and blocks on it, off the
-//! async workers; the task's messages and the memory setting are asked through the invocation's own coordinator link.
+//! `report_progress` keeps the step's progress line, the invocation's secret values removed, through the invocation's
+//! own sink. Each call opens a connection of its own to the project database (the run's task loop owns the runner's)
+//! and blocks on it, off the async workers; the task's messages and the memory setting are asked through the
+//! invocation's own coordinator link.
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -20,10 +21,13 @@ use orchester_core::{
   store::{RunStore, SecretStore},
   time::Timestamp,
 };
-use orchester_store::ProjectDb;
+use orchester_store::{ProjectDb, StepRecord};
 use parking_lot::Mutex;
 
-use super::super::link::{CoordinatorLink, memory::SettingsRequest, messages as message_link};
+use super::super::{
+  link::{CoordinatorLink, memory::SettingsRequest, messages as message_link},
+  sink::Sink,
+};
 
 /// The run, task and step execution an invocation's agent works on, and where their records are.
 pub(super) struct RunRecords {
@@ -31,6 +35,8 @@ pub(super) struct RunRecords {
   /// Where the task's messages and the project's memory setting are asked for: a link of the invocation's own, which
   /// its tool calls share.
   pub(super) link: Mutex<Box<dyn CoordinatorLink + Send>>,
+  /// Where the step's progress line goes: a sink of the invocation's own, which its tool calls share.
+  pub(super) sink: Mutex<Box<dyn Sink>>,
   pub(super) run: RunId,
   pub(super) task: TaskId,
   pub(super) execution: StepExecutionId,
@@ -135,11 +141,8 @@ impl RunRecords {
       Ok(redacted) => redacted,
       Err(error) => return ToolResult::unavailable(&error.to_string()),
     };
-    let mut db = match self.db() {
-      Ok(db) => db,
-      Err(unavailable) => return unavailable,
-    };
-    match db.report_step_progress(self.execution, &redacted, Timestamp::now()) {
+    let record = StepRecord::progress(self.execution, &redacted, Timestamp::now());
+    match self.sink.lock().step(record) {
       Ok(()) => ToolResult::shown("reported".to_owned()),
       Err(error) => ToolResult::unavailable(&format!("the progress line cannot be kept: {error}")),
     }

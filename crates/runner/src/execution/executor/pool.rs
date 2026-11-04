@@ -16,9 +16,10 @@ use orchester_core::{
   workspaces::{Borrow, Holder, Stranded, WaitReason, WorkspaceNumber},
 };
 use orchester_exec::ProcessRunner;
-use orchester_store::{ProjectDb, StoreError};
+use orchester_store::{ProjectDb, StoreError, WarmWorkspaceRecord, WorkspaceWritten};
 use thiserror::Error;
 
+use super::sink::Sink;
 use crate::execution_root::ExecutionRoot;
 
 /// Git here checks out branches of large checkouts and deletes build output: only a git that hangs is stopped.
@@ -45,9 +46,9 @@ pub(super) enum Borrowed {
 }
 
 /// Takes a workspace for `holder` in the execution root `root` and switches it to `to`; a new workspace's folder is
-/// made at `base` first.
+/// made at `base` first. The project's workspaces are read from `db`; the borrow and what follows it go to `sink`.
 pub(super) fn borrow(
-  db: &mut ProjectDb,
+  (db, sink): (&ProjectDb, &mut dyn Sink),
   root: &ExecutionRoot,
   holder: Holder,
   (to, base): (SwitchTo<'_>, &str),
@@ -62,7 +63,7 @@ pub(super) fn borrow(
   };
   loop {
     let before = db.workspaces()?;
-    let number = match db.borrow_workspace(holder, branch, limit, Timestamp::now())? {
+    let number = match take(sink, WarmWorkspaceRecord::borrow(holder, branch, limit, Timestamp::now()))? {
       Borrow::Take(number) => number,
       Borrow::Wait(reason) => return Ok(Borrowed::Wait(reason)),
     };
@@ -79,11 +80,11 @@ pub(super) fn borrow(
       Err(WorkspaceGitError::Uncommitted(files)) => {
         tracing::warn!(%number, files = files.len(), "a workspace holds uncommitted changes; it waits for a person");
         let files = u32::try_from(files.len()).unwrap_or(u32::MAX);
-        db.set_workspace_stranded(number, Some(Stranded { run: last_run, files }))?;
-        db.return_workspace(holder, Timestamp::now())?;
+        sink.workspace(WarmWorkspaceRecord::stranded(number, Some(Stranded { run: last_run, files })))?;
+        returned(sink, holder)?;
       }
       Err(source) => {
-        db.return_workspace(holder, Timestamp::now())?;
+        returned(sink, holder)?;
         return Err(PoolError::Git { number, source });
       }
     }
@@ -92,9 +93,10 @@ pub(super) fn borrow(
 
 /// Gives back the workspace `holder` holds in the execution root `root`, its changes committed with `message` first;
 /// `None` when it holds none. A commit or a detach git refuses is logged: the workspace is given back all the same,
-/// and what is left in it makes the next borrower strand it for a person.
+/// and what is left in it makes the next borrower strand it for a person. The workspaces are read from `db`; the
+/// return goes to `sink`.
 pub(super) fn give_back(
-  db: &mut ProjectDb,
+  (db, sink): (&ProjectDb, &mut dyn Sink),
   root: &ExecutionRoot,
   holder: Holder,
   message: &str,
@@ -115,5 +117,29 @@ pub(super) fn give_back(
       tracing::warn!(number = %record.number, %error, "a workspace given back keeps what it holds");
     }
   }
-  db.return_workspace(holder, Timestamp::now())
+  returned(sink, holder)
+}
+
+/// What the borrow `record` sent to `sink` gets.
+fn take(sink: &mut dyn Sink, record: WarmWorkspaceRecord) -> Result<Borrow, StoreError> {
+  match sink.workspace(record)? {
+    WorkspaceWritten::Borrowed(borrow) => Ok(borrow),
+    other => Err(unexpected(other)),
+  }
+}
+
+/// Gives back the workspace `holder` holds, through `sink`: which it was, if it held one.
+fn returned(sink: &mut dyn Sink, holder: Holder) -> Result<Option<WorkspaceNumber>, StoreError> {
+  match sink.workspace(WarmWorkspaceRecord::give_back(holder, Timestamp::now()))? {
+    WorkspaceWritten::Returned(number) => Ok(number),
+    other => Err(unexpected(other)),
+  }
+}
+
+/// A sink's answer of another kind than the record it was sent.
+fn unexpected(answer: WorkspaceWritten) -> StoreError {
+  StoreError::Corrupt {
+    what: "workspace record answer",
+    detail: format!("{answer:?}"),
+  }
 }

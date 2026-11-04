@@ -212,6 +212,80 @@ fn executor_writes_messages_questions_and_tool_requests_only_through_the_sink() 
     "executor code writes messages, questions or tool requests itself: {writes:?}"
   );
 }
+
+/// The project database's writes of steps' outputs (`step_outputs`) and progress lines (`step_progress`), what reviews
+/// cost (`reviewer_usage`), plan limits reported (`plan_limit_snapshots`), a run's step connection
+/// (`run_step_connections`), warm workspaces (`workspaces`, `workspace_waits`, `borrowing_runs`), worktree removals
+/// (`run_worktree_removals`, `run_worktrees_not_removed`, `run_resolutions`) and base notices delivered or merged
+/// (`base_notices`): the executor sends these records to the coordinator's sink too (ORC-681).
+const STEP_WRITES: &[&str] = &[
+  "save_step_output",
+  "report_step_progress",
+  "record_reviewer_usage",
+  "save_limit_snapshot",
+  "set_step_connection",
+  "borrow_workspace",
+  "return_workspace",
+  "return_runner_workspaces",
+  "set_workspace_stranded",
+  "end_workspace_wait",
+  "set_run_borrows",
+  "save_worktree_removal",
+  "begin_worktree_removal",
+  "undo_worktree_removal",
+  "save_worktree_not_removed",
+  "clear_worktree_not_removed",
+  "deliver_base_notice",
+  "merge_base_notice",
+  "note_base_notice_overlap",
+  "write_step",
+  "write_workspace",
+  "write_removal",
+  "write_notice",
+];
+
+/// Whether `code` calls `write` (`.write(` or `::write(`); a definition of the same name is no call.
+fn calls(code: &str, write: &str) -> bool {
+  [format!(".{write}("), format!("::{write}(")]
+    .iter()
+    .any(|call| code.contains(call.as_str()))
+}
+
+/// Where executor code calls any of `writes` outside comments, as `file: write`. Definitions do not count: the
+/// executor's own store over the sink implements core's `WorktreeStore`.
+fn executor_calls(writes: &[&str]) -> Vec<String> {
+  let executor = execution().join("executor");
+  let mut files = Vec::new();
+  rust_files(&executor, &mut files);
+  let mut found = Vec::new();
+  for file in &files {
+    let text = fs::read_to_string(file).unwrap_or_else(|error| panic!("cannot read {}: {error}", file.display()));
+    for line in text.lines() {
+      let code = line.split("//").next().unwrap_or_default();
+      for write in writes.iter().filter(|write| calls(code, write)) {
+        found.push(format!("{}: {write}", file.display()));
+      }
+    }
+  }
+  found
+}
+
+#[test]
+fn executor_writes_step_records_workspaces_removals_and_notices_only_through_the_sink() {
+  let writes = executor_calls(STEP_WRITES);
+  assert!(
+    writes.is_empty(),
+    "executor code writes step outputs, progress, usage, plan limits, workspaces, removals or notices itself: \
+     {writes:?}"
+  );
+}
+
+#[test]
+fn a_call_of_a_write_is_found_and_its_definition_is_not() {
+  assert!(calls("db.save_worktree_removal(run, at)", "save_worktree_removal"));
+  assert!(calls("WorktreeStore::save_worktree_removal(db, run, at)", "save_worktree_removal"));
+  assert!(!calls("fn save_worktree_removal(&mut self, run: RunId)", "save_worktree_removal"));
+}
 /// The lines of the Rust files under `src/execution/<side>` that name any of `names` outside comments, as
 /// `file: line`.
 fn lines_naming(side: &str, names: &[&str]) -> Vec<String> {

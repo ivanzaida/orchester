@@ -158,7 +158,7 @@ impl Worker {
       stop: stopped,
     };
     let ledger = ReviewLedger {
-      root: self.root.clone(),
+      sink: parking_lot::Mutex::new(watch.sink.another()),
       run: approval.run,
       execution: approval.execution,
       invocation: approval.invocation,

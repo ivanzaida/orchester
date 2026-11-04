@@ -21,7 +21,6 @@ use super::{
   ProjectDb, code_index, estimates, invocation_prompts,
   invocation_records::{InvocationRecord, InvocationStart, append},
   native, orchestrator_usage, reviewer_usage, step_outputs,
-  write_transaction::retried,
 };
 use crate::{
   StoreError,

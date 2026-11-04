@@ -5,9 +5,11 @@
 
 use std::path::{Path, PathBuf};
 
+use orchester_core::integration::RemovalStart;
 use orchester_store::{
-  ActivityRecord, ApprovalRecord, InvocationRecord, InvocationStart, MessageRecord, ProjectDb, QuestionRecord,
-  RunLogRecord, RunStoreError, StoreError,
+  ActivityRecord, ApprovalRecord, InvocationRecord, InvocationStart, MessageRecord, NoticeRecord, ProjectDb,
+  QuestionRecord, RemovalRecord, RunLogRecord, RunStoreError, StepRecord, StoreError, WarmWorkspaceRecord,
+  WorkspaceWritten,
 };
 
 use crate::execution::executor::sink::Sink;
@@ -42,6 +44,29 @@ impl LocalSink {
 }
 
 impl Sink for LocalSink {
+  fn step(&mut self, record: StepRecord) -> Result<(), StoreError> {
+    #[cfg(feature = "test-agent")]
+    survives_sending(&record);
+    self.write(|db| db.write_step(&record))
+  }
+
+  fn workspace(&mut self, record: WarmWorkspaceRecord) -> Result<WorkspaceWritten, StoreError> {
+    #[cfg(feature = "test-agent")]
+    survives_sending(&record);
+    self.write(|db| db.write_workspace(&record))
+  }
+
+  fn removal(&mut self, record: RemovalRecord) -> Result<Option<RemovalStart>, StoreError> {
+    #[cfg(feature = "test-agent")]
+    survives_sending(&record);
+    self.write(|db| db.write_removal(&record))
+  }
+
+  fn notice(&mut self, record: NoticeRecord) -> Result<bool, StoreError> {
+    #[cfg(feature = "test-agent")]
+    survives_sending(&record);
+    self.write(|db| db.write_notice(&record))
+  }
   fn run_log(&mut self, record: RunLogRecord) -> Result<(), RunStoreError> {
     self.write(|db| db.write_run_log(&record))
   }

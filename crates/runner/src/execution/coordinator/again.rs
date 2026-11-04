@@ -21,7 +21,7 @@ use orchester_exec::ProcessRunner;
 use orchester_ipc::Rejection;
 use orchester_store::ProjectDb;
 
-use super::{Scheduler, failed, read_failed};
+use super::{Scheduler, failed, read_failed, sink::LocalSink};
 use crate::execution::executor::{removal, start};
 
 /// How long git may take to list the branches when it tells whether a run committed nothing.
@@ -77,7 +77,8 @@ impl Scheduler {
       return Err(Rejection::TaskChangedMeanwhile);
     }
     if let Some(confirmed) = &remove_worktrees {
-      removal::remove_worktrees(&mut db, root, &previous, confirmed)?;
+      let mut sink = LocalSink::new(root);
+      removal::remove_worktrees((&db, &mut sink), root, &previous, confirmed)?;
     }
     // Compared again where the run is recorded: an edit after the check above is refused there.
     let prepared = super::prepare::record(&mut db, root, key, checked, revision);

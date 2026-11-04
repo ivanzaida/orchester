@@ -13,6 +13,7 @@ use orchester_core::{
   store::ActivityStore,
   time::Timestamp,
 };
+use orchester_store::StepRecord;
 
 use super::super::run::{ExecutionError, RunTask};
 
@@ -59,11 +60,11 @@ impl RunTask {
       .find(|output| output.execution == accepted);
     let text = result.as_ref().map(|result| result.text.clone()).unwrap_or_default();
     if let Some(result) = result {
-      self.db.save_step_output(&StepOutput {
+      self.sink.step(StepRecord::output(&StepOutput {
         execution,
         created_at: Timestamp::now(),
         ..result
-      })?;
+      })?)?;
     }
     self.pass(execution, (&workspace, &invocation), judged.judged(), text)
   }
