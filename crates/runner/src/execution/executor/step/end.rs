@@ -18,11 +18,10 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_ipc::Event;
-use orchester_store::StoreError;
 
 use super::{
   Active,
-  worker::{Finished, StopCause},
+  worker::{Finished, StopCause, WorkerError},
 };
 use crate::{
   execution::executor::{
@@ -39,7 +38,7 @@ impl RunTask {
   pub(in super::super) fn on_ended(
     &mut self,
     execution: StepExecutionId,
-    finished: Result<Finished, StoreError>,
+    finished: Result<Finished, WorkerError>,
   ) -> Result<(), ExecutionError> {
     let active = self.retire_worker(execution);
     let finished = finished?;

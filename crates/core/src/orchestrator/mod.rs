@@ -15,6 +15,7 @@ pub mod merging;
 pub mod proposal;
 pub mod report;
 pub mod resume;
+pub mod run_git;
 pub mod sent;
 pub mod settings;
 pub mod wait;

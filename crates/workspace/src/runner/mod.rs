@@ -23,6 +23,7 @@ mod log;
 mod merge_queue;
 mod report;
 mod requests;
+mod run_git;
 pub mod state;
 mod work;
 mod worktree_changes;
@@ -50,6 +51,7 @@ pub use self::{
   merge_queue::RunnerWorktrees,
   report::RunnerStatus,
   requests::RequestError,
+  run_git::ThroughRunner,
   work::{ActiveWork, ActiveWorkFields, SaveState},
 };
 use self::{

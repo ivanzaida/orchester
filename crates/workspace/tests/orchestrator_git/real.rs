@@ -21,6 +21,8 @@ use orchester_workspace::orchestrator::git::{Called, Timeouts, call};
 use serde_json::{Value, json};
 use tempfile::TempDir;
 
+use super::scratch::NoRuns;
+
 fn git(dir: &Path, args: &[&str]) {
   let output = Command::new("git")
     .args(args)
@@ -68,7 +70,13 @@ fn called(root: &Path, (name, arguments): (&str, Value), timeouts: Timeouts) -> 
   let Value::Object(arguments) = arguments else {
     panic!("arguments are an object");
   };
-  call(&Programs::processes(), root, (name, &arguments), (true, timeouts)).expect("the tool ran")
+  call(
+    (&Programs::processes(), &NoRuns),
+    root,
+    (name, &arguments),
+    (true, timeouts),
+  )
+  .expect("the tool ran")
 }
 
 fn refusal(called: Called) -> String {
@@ -121,7 +129,7 @@ fn orchestrator_git_real_reads_are_cut_while_git_writes() {
     unreachable!("an object");
   };
   let read = call(
-    &Programs::processes(),
+    (&Programs::processes(), &NoRuns),
     &root,
     ("git_show", &arguments),
     (false, Timeouts::STANDARD),

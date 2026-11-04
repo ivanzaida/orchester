@@ -13,6 +13,7 @@ use orchester_core::{
     Cleanup, Leftovers,
     removal::{RemovalFailure, RemovalRequest},
   },
+  orchestrator::run_git::{RunGitAnswer, RunGitRequest},
   permission::AgentPermissions,
   question::GivenAnswer,
   resource::StepKey,
@@ -305,8 +306,13 @@ pub enum Command {
   /// never does. Answered with [`Reply::RunFolderState`], [`FolderState::Unknown`] when the run has no folder any more
   /// or git cannot tell.
   RunFolderState { run: RunId },
+  /// git of the Orchestrator chat in a run's worktree, which the runner runs there (protocol 45,
+  /// `docs/architecture/remote-runners.md` rule 5). Answered with [`Reply::RunGit`]; [`Rejection::RunNotFound`] for no
+  /// such run, [`Rejection::RunNotEnded`] for a write, or git that does not only read, before the run ended, and
+  /// [`Rejection::WorktreeRemoved`] when its worktree is gone.
+  RunGit(RunGitRequest),
   /// Removes what run `run`, which ended, left, as `request` allows: its worktrees and branches, with the run's own
-  /// processes in a held folder stopped first when asked (protocol 45). The desktop records the removal in the
+  /// processes in a held folder stopped first when asked (protocol 46). The desktop records the removal in the
   /// project's database before and after; the runner removes, then removes the codebase indexes only removed worktrees
   /// used and sweeps the worktree folders. Answered with [`Reply::WorktreesRemoved`], or [`Reply::RemovalFailed`] when
   /// nothing was removed.
@@ -522,6 +528,8 @@ pub enum Reply {
     run: RunId,
     state: FolderState,
   },
+  /// The answer to [`Command::RunGit`].
+  RunGit(RunGitAnswer),
   Rejected(Rejection),
 }
 

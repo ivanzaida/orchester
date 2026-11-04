@@ -39,6 +39,7 @@ fn execution_root_local_keeps_every_repository_folder_where_it_was() {
   assert_eq!(root.run_storage(run), state.join("runs").join(run.to_string()));
   assert_eq!(root.skills(execution), state.join("skills").join(execution.to_string()));
   assert_eq!(root.tools(), state.join("tools"));
+  assert_eq!(root.attachments(), state.join("attachments"));
   assert_eq!(
     format!("{:?}", root.code_indexes()),
     format!("{:?}", CodebaseIndexes::new(&repository))
