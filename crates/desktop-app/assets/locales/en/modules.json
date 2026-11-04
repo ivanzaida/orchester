@@ -129,6 +129,36 @@
       "safe": "85%",
       "added": "ADDED",
       "removed": "REMOVED"
+    },
+    "team": {
+      "notClaimed": "Not claimed",
+      "you": "{{name}} (you)",
+      "readOnly": "Only Admins create and change modules: {{admins}}. You claim a module to work on all its tasks.",
+      "readOnlyUnnamed": "Only Admins create and change modules. You claim a module to work on all its tasks.",
+      "unavailable": {
+        "title": "The modules can't be read now",
+        "body": "{{server}} hasn't answered since {{time}}. The modules show again when it does; Orchester keeps no copy of them."
+      },
+      "page": {
+        "readOnly": "Only Admins change this module, its tasks and its branch: {{admins}}. You read it, run its tasks and claim them.",
+        "readOnlyUnnamed": "Only Admins change this module, its tasks and its branch. You read it, run its tasks and claim them.",
+        "unavailableTitle": "{{module}} can't be read now",
+        "unavailableTitleUnnamed": "This module can't be read now",
+        "unavailableBody": "{{server}} hasn't answered since {{time}}. The module's tasks, branch, claim and delivery show again when it does; Orchester keeps no copy of them.",
+        "unavailableSince": "Team data unavailable since {{time}}",
+        "runningOne": "{{task}}, one of its tasks, is still running on this computer; open it from Running in the sidebar.",
+        "runningOther": "{{tasks}}, some of its tasks, are still running on this computer; open them from Running in the sidebar.",
+        "noBurndown": "A team module's burndown isn't shown yet: the team server doesn't send it to this version of Orchester."
+      },
+      "properties": {
+        "assignee": "Assignee",
+        "claim": "Claim",
+        "branch": "Branch",
+        "deliversTo": "Delivers to",
+        "notAssigned": "Not assigned",
+        "renewed": "{{holder}} · renewed {{time}}",
+        "stale": "{{holder}} · stale"
+      }
     }
   }
 }

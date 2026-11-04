@@ -29,7 +29,7 @@ mod project_settings;
 mod pull_requests;
 mod review;
 mod secrets;
-mod settings;
+pub(crate) mod settings;
 mod shared_config;
 mod skills;
 pub(crate) mod task;

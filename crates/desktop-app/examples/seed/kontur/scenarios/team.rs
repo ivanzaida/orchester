@@ -1,8 +1,8 @@
 //! The team scenarios, each Kontur with the catalogue and no task (`empty`) and a marker beside the application
 //! database that names its state: the stand-in team server has to answer while the window is open, so what joins it is
 //! the QA app's own (`examples/qa_app/team`), and so are `team-clone`'s clones. `team-offer` also has Ledger, a local
-//! project, so All projects shows *Local* beside *Shared · Acme* (09 `i5G19A`); `team-outage-running` has two tasks
-//! running on this computer.
+//! project, so All projects shows *Local* beside *Shared · Acme* (09 `i5G19A`); `team-outage-running`,
+//! `team-member-running` and `team-module-outage` have two tasks running on this computer.
 
 #[allow(
   dead_code,
@@ -126,6 +126,28 @@ pub fn outage(kontur: &mut Kontur) -> Result<(), SeedError> {
 /// As [`outage`], with KON-12 running Implement and KON-21 running Plan on this computer (`On this computer` `XTBXg`):
 /// the runs are this computer's, so they show while the team's tasks cannot be read.
 pub fn outage_running(kontur: &mut Kontur) -> Result<(), SeedError> {
+  running(kontur, State::OutageRunning)
+}
+
+/// As [`member`]; the QA app has the server stop answering once the tasks were shown.
+pub fn outage_later(kontur: &mut Kontur) -> Result<(), SeedError> {
+  mark(kontur, State::OutageLater)
+}
+
+/// As [`member`], with KON-12 and KON-21 running on this computer: the QA app's server names them by their ids here, so
+/// KON-12's page joins its run with the server's task, claimed by the person (`01c` `Tb55G`).
+pub fn member_running(kontur: &mut Kontur) -> Result<(), SeedError> {
+  running(kontur, State::MemberRunning)
+}
+
+/// As [`member_running`]; the QA app has the server stop answering once a module's page read its module (`06d`
+/// `B7Mbe`).
+pub fn module_outage(kontur: &mut Kontur) -> Result<(), SeedError> {
+  running(kontur, State::ModuleOutage)
+}
+
+/// KON-12 running Implement and KON-21 running Plan on this computer, and the marker naming `state`.
+fn running(kontur: &mut Kontur, state: State) -> Result<(), SeedError> {
   let catalogue = kontur.catalogue()?;
   let pipeline = &catalogue.feature_delivery;
   for (number, title, step, minutes) in RUNNING {
@@ -137,12 +159,7 @@ pub fn outage_running(kontur: &mut Kontur) -> Result<(), SeedError> {
     let mut task = kontur.task((title, title, &[title]), Some(pipeline), created)?;
     shapes::apply(kontur, &mut task, Some(pipeline), Shape::Running(step), started)?;
   }
-  write_marker(kontur, State::OutageRunning)
-}
-
-/// As [`member`]; the QA app has the server stop answering once the tasks were shown.
-pub fn outage_later(kontur: &mut Kontur) -> Result<(), SeedError> {
-  mark(kontur, State::OutageLater)
+  write_marker(kontur, state)
 }
 
 /// Kontur's checkout has the team's repository as its `origin`, which the QA app's server names for its project.

@@ -9,7 +9,10 @@ use lurq::query::QueryClient;
 use orchester_api::v2::QueryScope;
 use orchester_workspace::team_reads::{Changes, TeamProject, TeamReadError};
 
-use super::queries::{team_admins, team_capabilities, team_counts, team_modules, team_tasks};
+use super::{
+  pages::{team_module, team_module_list, team_task},
+  queries::{team_admins, team_capabilities, team_counts, team_modules, team_tasks},
+};
 
 /// The shortest time between two rounds of invalidations of one project.
 pub const COALESCE: Duration = Duration::from_millis(150);
@@ -53,6 +56,7 @@ impl Stale {
     if self.tasks {
       client.invalidate(team_tasks::all());
       client.invalidate(team_counts::all());
+      client.invalidate(team_task::all());
     }
     if self.workspace {
       client.invalidate(team_capabilities::all());
@@ -60,6 +64,8 @@ impl Stale {
     }
     if self.modules {
       client.invalidate(team_modules::all());
+      client.invalidate(team_module_list::all());
+      client.invalidate(team_module::all());
     }
   }
 }

@@ -9,7 +9,7 @@ use orchester_workspace::tasks::{
   approvals::ShownApproval, detail::TaskDetail, integration_jobs::ProjectJobState, slot_wait::slot_waits,
 };
 
-use super::read::TaskLeftovers;
+use super::{read::TaskLeftovers, team::TeamTaskShown};
 use crate::project::{ShownProject, TasksState};
 
 #[derive(Clone, PartialEq)]
@@ -25,6 +25,8 @@ pub struct TaskContext {
   pub online: bool,
   /// The project's merge and removal operations as they stand.
   pub jobs: ProjectJobState,
+  /// A team task as its server reads it, with the person's standing; `None` for a local project's.
+  pub team: Option<Arc<TeamTaskShown>>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for TaskContext {}
@@ -33,6 +35,11 @@ impl TaskContext {
   /// The page of this task on `view`, at the address of a task kept *Not shared* when it is one.
   pub fn page(&self, view: crate::routes::TaskView) -> crate::routes::ProjectPage {
     crate::routes::ProjectPage::task(self.detail.task.key().clone(), view, self.detail.not_shared())
+  }
+
+  /// The person changes nothing of the task: a member of its team, as the server says. Only Admins do.
+  pub fn read_only(&self) -> bool {
+    self.team.as_ref().is_some_and(|team| team.standing.member())
   }
 
   /// The run is recorded as running while no runner looks after it: it is interrupted until one does.

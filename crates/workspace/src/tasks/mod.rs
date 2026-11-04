@@ -59,6 +59,7 @@ pub(crate) mod run_times;
 pub mod slot_wait;
 pub mod standing;
 mod step_executors;
+mod team_detail;
 pub mod timeline;
 pub mod transcript;
 pub mod unreadable;

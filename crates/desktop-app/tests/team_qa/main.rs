@@ -1,13 +1,15 @@
 //! The QA app's team scenarios (`examples/qa_app/team`), each state on the headless window with the stand-in team
 //! server: what the person's presses reach on the start page's *Join a team* with a code, and what the session's own
-//! work reaches with Kontur linked and joined; a team project's Tasks list read from the server is in [`team_tasks`].
-//! Nothing here starts `tools/qa-app.ps1`; the running copy is the Verify step's.
+//! work reaches with Kontur linked and joined; a team project's Tasks list read from the server is in [`team_tasks`],
+//! its Task page, Modules list and Module page in [`team_pages`]. Nothing here starts `tools/qa-app.ps1`; the running
+//! copy is the Verify step's.
 //!
 //! `cargo test -p orchester-app --test team_qa team_qa`
 
 mod first_download;
 #[path = "../../examples/qa_app/team/mod.rs"]
 mod team;
+mod team_pages;
 mod team_tasks;
 
 use lurq::app::events::with_synthetic_input;

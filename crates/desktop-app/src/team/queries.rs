@@ -173,7 +173,7 @@ pub async fn team_admins(source: TeamSource) -> Result<TeamAdmins, TeamFailure> 
 }
 
 /// This computer's pipelines of the project by their slugs.
-async fn slugs(source: &TeamSource) -> Result<PipelineSlugs, TeamFailure> {
+pub(super) async fn slugs(source: &TeamSource) -> Result<PipelineSlugs, TeamFailure> {
   let root = source.root().to_owned();
   match background::run(move || PipelineSlugs::read(&root)).await {
     Ok(Ok(slugs)) => Ok(slugs),

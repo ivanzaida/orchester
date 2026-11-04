@@ -1,28 +1,43 @@
-//! The member, role and outage states (ORC-716): Kontur's tasks as the team server reads them, with the person a member
-//! (or an Admin, or the server's admin) and the Admins named as `Row 1 · Member views` (`rD8mt`) names them; in the
-//! outage the server's reads are unavailable, from the start or once the tasks were shown. Fixture data for QA, never
-//! shipped.
+//! The member, role and outage states (ORC-716, ORC-717): Kontur's tasks and modules as the team server reads them,
+//! with the person a member (or an Admin, or the server's admin) and the Admins named as `Row 1 · Member views`
+//! (`rD8mt`) names them; the modules Webhooks v2 (held by olha), Billing exports (held by the person) and API rate
+//! limits (held by nobody) as 01d `rvXxg` draws them, and KON-12 claimed by the person and assigned to them. The tasks
+//! this computer runs keep their ids here, so their runs join the server's tasks. In the outage the server's reads are
+//! unavailable, from the start, once the tasks were shown, or once a module's page read its module. Fixture data for
+//! QA, never shipped.
 
-use std::time::Duration;
+mod modules;
 
-use orchester_api::test_support::team_server::{AuthorityTask, Standing, TeamServer};
+use std::{collections::HashMap, time::Duration};
+
+use orchester_api::test_support::team_server::{AuthorityClaim, AuthorityTask, Person, Standing, TeamServer};
 use orchester_core::sharing::MemberRole;
 
 use super::State;
 
-/// How long the tasks show in `team-outage-later` before the server stops answering.
+/// How long the tasks show in `team-outage-later` before the server stops answering, and a module's page in
+/// `team-module-outage`.
 const SHOWN_FOR: Duration = Duration::from_secs(3);
 
-/// Serves Kontur to the person as `state` says; the role the person's link records, as the server gives it.
-pub fn serve_as(server: &TeamServer, state: State) -> Option<MemberRole> {
+/// Serves Kontur to the person as `state` says, the tasks this computer has by their number keeping their ids `here`;
+/// the role the person's link records, as the server gives it.
+pub fn serve_as(server: &TeamServer, state: State, here: &HashMap<u32, String>) -> Option<MemberRole> {
   let standing = match state {
     State::Admin => Standing::Admin,
     State::ServerAdmin => Standing::ServerAdmin,
     _ => Standing::Member,
   };
-  serve(server, standing, matches!(state, State::Outage | State::OutageRunning));
-  if state == State::OutageLater {
-    server.authority_unavailable_once_read(SHOWN_FOR);
+  let ids = if state.runs_here() { here } else { &HashMap::new() };
+  serve(
+    server,
+    standing,
+    matches!(state, State::Outage | State::OutageRunning),
+    ids,
+  );
+  match state {
+    State::OutageLater => server.authority_unavailable_once_read(SHOWN_FOR),
+    State::ModuleOutage => server.authority_unavailable_once_module_read(SHOWN_FOR),
+    _ => {}
   }
   match standing {
     Standing::Member => Some(MemberRole::Member),
@@ -63,11 +78,16 @@ const TASKS: [(u32, &str, &str, &str, i64); 24] = [
 /// The tasks on the seed's Quick fix pipeline, as the frame draws them; the others are on Feature delivery.
 const QUICK_FIXES: [u32; 3] = [9, 17, 23];
 
-/// Serves Kontur's tasks to the person standing as `standing`, with dana-k as its Admin and olha as the server's admin;
-/// `unavailable` makes every read of them `503 unavailable`.
-fn serve(server: &TeamServer, standing: Standing, unavailable: bool) {
+/// The task the person claimed and is assigned, and how many minutes ago their run last renewed the claim.
+const CLAIMED: (u32, i64) = (12, 2);
+
+/// Serves Kontur's tasks and modules to the person standing as `standing`, with dana-k as its Admin and olha as the
+/// server's admin, the tasks numbered in `ids` with those ids; `unavailable` makes every read of them `503
+/// unavailable`.
+fn serve(server: &TeamServer, standing: Standing, unavailable: bool, ids: &HashMap<u32, String>) {
   server.stand_as(standing);
   server.members_named(&["dana-k"], &["olha"]);
+  server.authority_modules(modules::modules());
   server.authority_tasks(
     TASKS
       .iter()
@@ -82,8 +102,15 @@ fn serve(server: &TeamServer, standing: Standing, unavailable: bool) {
           } else {
             "feature-delivery"
           }),
-          module: number % 2 == 0,
+          module: modules::of(number),
           created_minutes_ago,
+          id: ids.get(&number).cloned(),
+          assignee: (number == CLAIMED.0).then_some(Person::You),
+          claim: (number == CLAIMED.0).then_some(AuthorityClaim {
+            holder: Person::You,
+            renewed_minutes_ago: CLAIMED.1,
+            stale: false,
+          }),
         },
       )
       .collect(),

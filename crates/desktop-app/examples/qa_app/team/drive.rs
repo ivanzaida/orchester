@@ -49,7 +49,9 @@ pub fn to(
     | State::ServerAdmin
     | State::Outage
     | State::OutageRunning
-    | State::OutageLater => Err(format!("{state:?} opens the app's own window, with nothing to press").into()),
+    | State::OutageLater
+    | State::MemberRunning
+    | State::ModuleOutage => Err(format!("{state:?} opens the app's own window, with nothing to press").into()),
   }
 }
 

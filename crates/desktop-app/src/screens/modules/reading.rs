@@ -45,12 +45,20 @@ const TASKS: [(bool, f32); 6] = [
   (false, 218.0),
 ];
 
-/// The header and the body of module `module`'s page on `tab` while it is read.
-pub(super) fn page(ctx: &mut Ctx, (project, module): (ProjectId, ModuleId), tab: ModuleTab) -> (Element, Element) {
+/// The header and the body of module `module`'s page on `tab` while it is read; `creates` when the page has its
+/// actions, New task in module and *More actions*, which a team module's page has not.
+pub(super) fn page(
+  ctx: &mut Ctx,
+  (project, module): (ProjectId, ModuleId),
+  (tab, creates): (ModuleTab, bool),
+) -> (Element, Element) {
   let navigation = Navigation::of(ctx);
-  let new_task = ActionButton::new("module-new-task", ButtonKind::Primary, ctx.t("modules.page.newTask"))
-    .icon(Icon::Plus)
-    .opens(navigation.to(Route::Project(project, ProjectPage::NewTaskInModule(module))));
+  let new_task = creates.then(|| {
+    ActionButton::new("module-new-task", ButtonKind::Primary, ctx.t("modules.page.newTask"))
+      .icon(Icon::Plus)
+      .opens(navigation.to(Route::Project(project, ProjectPage::NewTaskInModule(module))))
+      .into()
+  });
   let tabs: Vec<PageTab> = ModuleTab::ALL
     .into_iter()
     .map(|shown| {
@@ -71,12 +79,13 @@ pub(super) fn page(ctx: &mut Ctx, (project, module): (ProjectId, ModuleId), tab:
     ],
   );
   // *More actions* stays real; it waits for the module.
-  let more = IconButton::new("module-more-reading", Icon::Ellipsis, ctx.t("modules.page.more")).render(ctx);
+  let more =
+    creates.then(|| IconButton::new("module-more-reading", Icon::Ellipsis, ctx.t("modules.page.more")).render(ctx));
   let top = header::header(header::Header {
     id: "module-header",
     back: Some(back(ctx, project)),
     title: skeleton::line(ctx, TypographyStyle::Heading, NAME).into(),
-    actions: vec![new_task.into(), more],
+    actions: new_task.into_iter().chain(more).collect(),
     status,
     tabs,
   });

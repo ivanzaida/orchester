@@ -1,7 +1,8 @@
 //! A session's reads of its team projects from their servers (`docs/architecture/team-authority-plan.md` §6, milestone
 //! P6): one lurq [`QueryClient`] for the session, shared by its windows, and per linked project the reads of
-//! `orchester_workspace::team_reads` with their subscription followed on the runtime ([`TeamSource`]). The queries are
-//! in [`queries`]; what the subscription makes stale is in [`invalidation`].
+//! `orchester_workspace::team_reads` with their subscription followed on the runtime ([`TeamSource`]). The lists'
+//! queries are in [`queries`], the pages' in [`pages`]; what the subscription makes stale is in [`invalidation`]; how a
+//! view finds its project's source is in [`view`].
 //!
 //! The client and every source belong to one generation of the session. Another account on a server, signing out of
 //! one, or a membership revoked ends the generation: a new client replaces the old one, whose reads no view observes
@@ -10,8 +11,12 @@
 //! change or the person asks again ([`TeamQueries::retry`]).
 
 pub mod invalidation;
+pub mod lock;
+pub mod outage;
+pub mod pages;
 pub mod queries;
 mod source;
+pub mod view;
 
 use std::{
   collections::HashMap,

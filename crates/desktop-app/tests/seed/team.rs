@@ -1,6 +1,6 @@
 //! The team scenarios: each is in the registry and leaves the marker the QA app reads its state from
 //! (`examples/qa_app/team/state.rs`), every other scenario leaves none, `team-offer` registers a local project, and
-//! `team-outage-running` has two tasks running on this computer.
+//! `team-outage-running`, `team-member-running` and `team-module-outage` have two tasks running on this computer.
 
 use orchester_core::{run::TaskPhase, store::TaskStore};
 use orchester_store::AppDb;
@@ -19,17 +19,19 @@ fn seed_team_scenarios_leave_the_marker_of_their_state() {
     let read = State::beside(&seed.seeded.app_database).expect("the marker reads");
     assert_eq!(read, Some(state));
     let tasks = seed.db().tasks().expect("tasks").len();
-    let expected = if state == State::OutageRunning { 2 } else { 0 };
+    let expected = if state.runs_here() { 2 } else { 0 };
     assert_eq!(tasks, expected, "{state:?}");
   }
 }
 
 #[test]
-fn seed_team_outage_running_runs_kon_12_and_kon_21_here() {
-  let seed = Seed::of("team-outage-running");
-  let db = seed.db();
-  for key in ["KON-12", "KON-21"] {
-    assert_eq!(phase(&db, key), Some(TaskPhase::Running), "{key}");
+fn seed_team_running_states_run_kon_12_and_kon_21_here() {
+  for name in ["team-outage-running", "team-member-running", "team-module-outage"] {
+    let seed = Seed::of(name);
+    let db = seed.db();
+    for key in ["KON-12", "KON-21"] {
+      assert_eq!(phase(&db, key), Some(TaskPhase::Running), "{name} {key}");
+    }
   }
 }
 

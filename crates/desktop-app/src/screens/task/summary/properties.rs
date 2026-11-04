@@ -96,13 +96,15 @@ pub fn row(id: &str, key: &str, value: impl Into<Element>, padding: SpacingSize)
 }
 
 /// The column: the task's properties, what the shared project says of it (`section`), the run's facts with their
-/// disclosure `more`, and the memory link.
+/// disclosure `more`, and the memory link. A team task's have its assignee and claim first, its module after the
+/// pipeline and the module's branch it merges into in place of the base (`super::team`).
 pub fn column(ctx: &mut Ctx, task: &TaskContext, (section, more): (Option<Element>, &Signal<bool>)) -> Element {
   let tasks = task.project.feed.tasks.get();
   let tasks = tasks.ready();
   let organization = task.detail.task.organization();
   let property = |id: &str, key: &str, value: Element| row(id, key, value, TaskSpacing::PropertyRow.role());
-  let rows = vec![
+  let mut rows = super::team::first_rows(ctx, task);
+  rows.extend([
     property(
       "task-property-status",
       &ctx.t("summary.properties.status"),
@@ -118,6 +120,16 @@ pub fn column(ctx: &mut Ctx, task: &TaskContext, (section, more): (Option<Elemen
       &ctx.t("summary.properties.pipeline"),
       pipeline(ctx, task, tasks),
     ),
+  ]);
+  rows.extend(super::team::module_row(ctx, task));
+  let base = super::team::merges_row(ctx, task).unwrap_or_else(|| {
+    property(
+      "task-property-base",
+      &ctx.t("summary.properties.base.label"),
+      super::base_branch::base(ctx, task, tasks),
+    )
+  });
+  rows.extend([
     property(
       "task-property-tags",
       &ctx.t("summary.properties.tags"),
@@ -138,22 +150,13 @@ pub fn column(ctx: &mut Ctx, task: &TaskContext, (section, more): (Option<Elemen
       &ctx.t("summary.properties.branch"),
       branch(ctx, task),
     ),
-    property(
-      "task-property-base",
-      &ctx.t("summary.properties.base.label"),
-      super::base_branch::base(ctx, task, tasks),
-    ),
+    base,
     property(
       "task-property-created",
       &ctx.t("summary.properties.created"),
-      value(
-        "task-property-created",
-        &day_and_clock(ctx, task.detail.task.created_at()),
-        Look::Secondary,
-      )
-      .into(),
+      created(ctx, task),
     ),
-  ];
+  ]);
   let facts = task
     .detail
     .run
@@ -172,6 +175,12 @@ pub fn column(ctx: &mut Ctx, task: &TaskContext, (section, more): (Option<Elemen
     .with_children(facts)
     .child(memory_link(ctx, task))
     .into()
+}
+
+/// When the task was made.
+fn created(ctx: &Ctx, task: &TaskContext) -> Element {
+  let when = day_and_clock(ctx, task.detail.task.created_at());
+  value("task-property-created", &when, Look::Secondary).into()
 }
 
 /// A glyph and its word.

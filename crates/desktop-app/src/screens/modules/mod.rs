@@ -12,13 +12,16 @@ mod form_chips;
 mod header;
 mod list;
 mod list_row;
+mod list_team;
 mod more;
 mod page;
+mod page_team;
 mod properties;
 mod reading;
 mod save;
 mod summary;
 mod tasks;
+mod team_properties;
 pub(crate) mod words;
 
 use std::sync::Arc;

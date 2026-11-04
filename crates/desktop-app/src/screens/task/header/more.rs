@@ -170,7 +170,7 @@ fn edit(ctx: &mut Ctx, task: &TaskContext) -> Option<Control> {
     };
     return Some(Control::new(ctx, look, ButtonKind::Ghost, Offer::Unavailable(reason)));
   }
-  if !task.detail.editable() {
+  if !task.detail.editable() || task.read_only() {
     return None;
   }
   let navigation = Navigation::of(ctx);

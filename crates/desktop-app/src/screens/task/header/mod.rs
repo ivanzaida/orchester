@@ -201,10 +201,12 @@ impl TaskHeader {
         closing: None,
       }
     } else {
+      // A team's member does not close or delete the team's task: only its Admins do.
+      let closing = (!props.task.read_only()).then(|| (self.closer.clone(), subject(&props.task)));
       Held {
         controls: moves.into_iter().chain(shown.pause).chain(shown.cancel).collect(),
         run_again,
-        closing: Some((self.closer.clone(), subject(&props.task))),
+        closing,
       }
     };
     let more = more::more(ctx, &props.task, &self.menu, held);
@@ -259,7 +261,7 @@ fn subject(task: &TaskContext) -> Subject {
 /// to lurq: E stays theirs there.
 fn edit_key(ctx: &mut Ctx, task: &TaskContext, view: &TaskView) -> impl Fn(KeyboardEvent) + use<> {
   let own_editor = matches!(view, TaskView::LocalIntegration | TaskView::Memory);
-  let editable = task.detail.editable() && !task.detail.not_shared() && !own_editor;
+  let editable = task.detail.editable() && !task.detail.not_shared() && !task.read_only() && !own_editor;
   let navigation = Navigation::of(ctx);
   let route = Route::Project(
     task.project.open.project.id(),

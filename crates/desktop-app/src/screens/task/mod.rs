@@ -25,6 +25,7 @@ mod read;
 mod reading;
 mod sharing;
 pub(crate) mod summary;
+mod team;
 
 use std::time::Instant;
 
@@ -115,6 +116,8 @@ impl Component for TaskPage {
         return page(reading::page(ctx, &task, &props.view));
       }
       TasksState::Failed(reason) => return page(read_failed(ctx, &reason, None)),
+      // A team project's task is read from its server ([`team`]); this computer's copy of it is not shown.
+      TasksState::Ready(tasks) if tasks.shared => return page(self.team(ctx, props)),
       // A task kept Not shared keeps its key from before the join, which a shared task may have too: its own
       // address names it. A link to a key no shared task has still finds it.
       TasksState::Ready(tasks) => {
@@ -138,8 +141,42 @@ impl Component for TaskPage {
       kept,
       view: props.view,
       opened: self.opened,
+      team: None,
     };
     page(ctx.mount_keyed::<TaskFrame>(&format!("task-frame-{task}"), frame))
+  }
+}
+
+impl TaskPage {
+  /// A team task's page: its frame once the server read it, why it cannot be read, or that the project has no such
+  /// task.
+  fn team(&self, ctx: &mut Ctx, props: PageProps) -> Element {
+    let shown = match team::read(ctx, &props.project, &props.key) {
+      team::TeamPage::Ready(shown) => shown,
+      team::TeamPage::Reading => {
+        let task = reading::Reading {
+          project: props.project.open.project.id(),
+          key: &props.key,
+          kept: false,
+          title: None,
+          since: self.opened,
+        };
+        return reading::page(ctx, &task, &props.view);
+      }
+      team::TeamPage::Missing => return not_found(ctx, &props),
+      team::TeamPage::Failed(failure) => return team::unavailable(ctx, &props.project, &props.key, &failure),
+    };
+    let task = shown.task.task.id();
+    let frame = FrameProps {
+      project: props.project,
+      task,
+      key: props.key,
+      kept: false,
+      view: props.view,
+      opened: self.opened,
+      team: Some(shown),
+    };
+    ctx.mount_keyed::<TaskFrame>(&format!("task-frame-{task}"), frame)
   }
 }
 
@@ -208,6 +245,8 @@ struct FrameProps {
   view: TaskView,
   /// When the page opened, which the reading skeleton's delay runs from.
   opened: Instant,
+  /// A team task as its server read it ([`team`]).
+  team: Option<std::sync::Arc<team::TeamTaskShown>>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for FrameProps {}
@@ -358,7 +397,11 @@ impl Component for TaskFrame {
       retries: self.retries.get(),
     };
     let root = props.project.open.repo_root.clone();
-    let (detail, stale) = match read::task(ctx, root.clone(), props.task, again) {
+    let team = props
+      .team
+      .as_ref()
+      .map(|team| (team.task.task.clone(), team.task.missing_pipeline.clone()));
+    let (detail, stale) = match read::task(ctx, root.clone(), (props.task, team), again) {
       TaskRead::Loading => return reading_page(ctx, &props),
       TaskRead::Failed(reason) => return read_failed(ctx, &reason, Some(self.retries.clone())),
       TaskRead::Ready(detail, stale, pending) => (detail, self.stale(stale, pending)),
@@ -393,6 +436,7 @@ impl Component for TaskFrame {
       left,
       online,
       jobs,
+      team: props.team.clone(),
     };
     let header = HeaderProps {
       task: task.clone(),

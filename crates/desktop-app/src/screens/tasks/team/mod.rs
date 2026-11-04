@@ -16,7 +16,7 @@ pub mod outage;
 
 use std::sync::Arc;
 
-use lurq::app::ctx::{Ctx, StreamEmitter};
+use lurq::app::ctx::Ctx;
 use orchester_api::v2::{CallerRole, SearchText, TaskSort as ServerSort};
 use orchester_core::module::Module;
 use orchester_workspace::{
@@ -33,11 +33,10 @@ use super::{cache::ViewCounts, header::Choices, shared::Shared, views::list_view
 use crate::{
   project::ShownProject,
   routes::TaskList,
-  screens::settings::orchester::follow,
-  services::Services,
   team::{
-    TeamFailure, TeamQueries, TeamSource,
+    TeamFailure, TeamSource,
     queries::{TaskListKey, TeamTasks, team_admins, team_capabilities, team_counts, team_modules, team_tasks},
+    view::source,
   },
 };
 
@@ -168,43 +167,6 @@ fn joined(local: &ProjectTasks, read: &TeamTasks, modules: Arc<Vec<Module>>) -> 
     shared: true,
     ..local.clone()
   }
-}
-
-/// The project's source in the session's current generation, read again when the generation or a server changes;
-/// `Ok(None)` until it is read.
-fn source(ctx: &mut Ctx, project: &ShownProject) -> Result<Option<TeamSource>, TeamFailure> {
-  let services = Services::of(ctx);
-  let generation = generation(ctx, &services.team);
-  let revision = follow(ctx, (&services.servers, &services.cloud));
-  let root = project.open.repo_root.clone();
-  let team = services.team.clone();
-  let state = ctx
-    .future((root, generation, revision), move |(root, ..)| {
-      let team = team.clone();
-      async move { team.source(&root).await }
-    })
-    .state()
-    .get();
-  let pending = state.is_pending();
-  match (state.data, state.error) {
-    (_, Some(failure)) if !pending => Err(failure),
-    (Some(Some(source)), _) if source.key().generation == generation => Ok(Some(source)),
-    _ => Ok(None),
-  }
-}
-
-/// The session's team generation, read again when it ends.
-fn generation(ctx: &mut Ctx, team: &TeamQueries) -> u64 {
-  let stream = ctx.stream(team.clone(), |team, emitter: StreamEmitter<u64, ()>| async move {
-    let mut generations = team.subscribe();
-    loop {
-      let generation = *generations.borrow_and_update();
-      if !emitter.emit(generation) || generations.changed().await.is_err() {
-        return;
-      }
-    }
-  });
-  stream.state().get().data.unwrap_or_else(|| team.generation())
 }
 
 /// What the list asks the server for: the workflow statuses its view may hold (`ListView::statuses`, which the rows

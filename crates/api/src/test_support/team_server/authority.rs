@@ -5,12 +5,13 @@
 //! and its progress, and a subscription that says `ready`, sends each committed change as `invalidated` and keeps the
 //! stream alive. Not served yet: a module's burndown and history, the library, the picker and a resource's versions.
 //! The tasks are the project's v1 tasks as [`TasksAnswer`] serves them, or the ones [`TeamServer::authority_tasks`]
-//! set: a held answer holds the task reads too, and a refused one answers them, as
-//! [`TeamServer::authority_unavailable`] answers every read and the subscription, `503 unavailable`. Who reads them
-//! stands as [`TeamServer::stand_as`] says; the v1 members read names the Admins and server admins
-//! [`TeamServer::members_named`] gives.
+//! set, with the modules [`TeamServer::authority_modules`] sets ([`work`]): a held answer holds the task reads too, and
+//! a refused one answers them, as [`TeamServer::authority_unavailable`] answers every read and the subscription, `503
+//! unavailable`. Who reads them stands as [`TeamServer::stand_as`] says; the v1 members read names the Admins and
+//! server admins [`TeamServer::members_named`] gives.
 
 mod listing;
+mod work;
 
 use std::{
   io::Write,
@@ -22,6 +23,7 @@ use std::{
 use parking_lot::Mutex;
 use serde_json::{Value, json};
 
+pub use self::work::{AuthorityClaim, AuthorityModule, Person, STALE_AFTER_MINUTES};
 use super::{State, TasksAnswer, TeamServer, USER, first_download};
 
 /// The cursor before the first change the stand-in commits.
@@ -59,8 +61,9 @@ impl Standing {
 }
 
 /// A task as the stand-in's `/api/v2` reads give it: its number in the project, title, workflow status and priority as
-/// the wire names them, the slug of its pipeline, whether it is in the project's module, and how long ago it was
-/// created. Its brief and its one criterion repeat its title, so it is complete.
+/// the wire names them, the slug of its pipeline, the module it is in, and how long ago it was created; its id, when it
+/// is to be the one this computer's runs of it name, its assignee and its claim. Its brief and its one criterion repeat
+/// its title, so it is complete.
 #[derive(Clone, Debug)]
 pub struct AuthorityTask {
   pub number: u32,
@@ -68,8 +71,13 @@ pub struct AuthorityTask {
   pub workflow: &'static str,
   pub priority: &'static str,
   pub pipeline: Option<&'static str>,
-  pub module: bool,
+  /// The index of one of the modules [`TeamServer::authority_modules`] set; without them, any is the project's one.
+  pub module: Option<usize>,
   pub created_minutes_ago: i64,
+  /// Made from its number when `None`.
+  pub id: Option<String>,
+  pub assignee: Option<Person>,
+  pub claim: Option<AuthorityClaim>,
 }
 
 /// What the stand-in's `/api/v2` surface answers.
@@ -77,6 +85,7 @@ pub struct AuthorityTask {
 pub(super) struct Authority {
   standing: Standing,
   tasks: Option<Vec<AuthorityTask>>,
+  modules: Option<Vec<AuthorityModule>>,
   unavailable: bool,
   /// Each committed change: its cursor and the scopes it invalidates.
   batches: Vec<(u64, Vec<Value>)>,
@@ -84,6 +93,8 @@ pub(super) struct Authority {
   streams: u64,
   /// How many task list, count and task reads were answered or are held.
   reads: usize,
+  /// How many reads of one module were answered.
+  module_reads: usize,
   /// The usernames the members read names as Admins and as server admins.
   admins: Vec<String>,
   server_admins: Vec<String>,
@@ -129,15 +140,23 @@ impl TeamServer {
     state.authority.commit(vec![json!({"kind": "task_list"})]);
   }
 
+  /// The `/api/v2` reads give `modules` in place of the project's one module; the change is committed as one batch.
+  pub fn authority_modules(&self, modules: Vec<AuthorityModule>) {
+    let mut state = self.state.lock();
+    state.authority.modules = Some(modules);
+    state.authority.commit(vec![json!({"kind": "module_list"})]);
+  }
+
   /// Retitles the task numbered `number` of those [`Self::authority_tasks`] set, in one committed batch that
   /// invalidates the list and the task.
   pub fn retitle(&self, number: u32, title: &str) {
     let mut state = self.state.lock();
     let tasks = state.authority.tasks.iter_mut().flatten();
-    if let Some(task) = tasks.into_iter().find(|task| task.number == number) {
-      title.clone_into(&mut task.title);
-    }
-    let id = listing::authority_id(number);
+    let Some(task) = tasks.into_iter().find(|task| task.number == number) else {
+      return;
+    };
+    title.clone_into(&mut task.title);
+    let id = listing::task_id(task);
     state
       .authority
       .commit(vec![json!({"kind": "task_list"}), json!({"kind": "task", "task": id})]);
@@ -151,9 +170,19 @@ impl TeamServer {
   /// [`Self::authority_unavailable`] `after` the first task read was answered: an outage in a session that read the
   /// tasks already.
   pub fn authority_unavailable_once_read(&self, after: Duration) {
+    self.unavailable_once(after, |authority| authority.reads > 0);
+  }
+
+  /// [`Self::authority_unavailable`] `after` the first read of one module was answered: an outage while a module's
+  /// page shows.
+  pub fn authority_unavailable_once_module_read(&self, after: Duration) {
+    self.unavailable_once(after, |authority| authority.module_reads > 0);
+  }
+
+  fn unavailable_once(&self, after: Duration, read: impl Fn(&Authority) -> bool + Send + 'static) {
     let state = self.state.clone();
     thread::spawn(move || {
-      while state.lock().authority.reads == 0 {
+      while !read(&state.lock().authority) {
         thread::sleep(STREAM_POLL);
       }
       thread::sleep(after);
@@ -259,11 +288,15 @@ pub(super) fn serve(stream: &mut TcpStream, (line, headers, body): (&str, &str, 
     ("GET", "workspace") => respond(stream, 200, &workspace(project, state)),
     ("POST", read @ ("task-list" | "task-counts")) => task_read(stream, (read, body), project, state),
     ("GET", task) if task.starts_with("tasks/") => task_read(stream, (task, body), project, state),
-    ("POST", "module-list") => respond(stream, 200, &listing::modules(project.0, &state.lock())),
-    ("GET", module) if module.starts_with("modules/") => match listing::module(project.0, module, &state.lock()) {
-      Some(answer) => respond(stream, 200, &answer),
-      None => respond(stream, 404, &super::error("not_found")),
-    },
+    ("POST", "module-list") => respond(stream, 200, &listing::modules(project, &state.lock())),
+    ("GET", module) if module.starts_with("modules/") => {
+      let mut state = state.lock();
+      state.authority.module_reads += 1;
+      match listing::module(project, module, &state) {
+        Some(answer) => respond(stream, 200, &answer),
+        None => respond(stream, 404, &super::error("not_found")),
+      }
+    }
     _ => respond(stream, 404, &super::error("not_found")),
   }
 }

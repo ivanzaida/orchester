@@ -11,6 +11,7 @@ mod state;
 pub mod window;
 
 use std::{
+  collections::HashMap,
   error::Error,
   path::{Path, PathBuf},
 };
@@ -21,7 +22,7 @@ use orchester_api::{
   test_support::team_server::{CODE, TasksAnswer, TeamServer, USERNAME},
 };
 use orchester_app::services::Services;
-use orchester_core::{id::ServerId, project::ProjectKey, sharing::MemberRole, time::Timestamp};
+use orchester_core::{id::ServerId, project::ProjectKey, sharing::MemberRole, store::TaskStore, time::Timestamp};
 use orchester_store::{ProjectDb, SharingLink};
 use orchester_workspace::sharing::{CodeRequest, Servers, Trust, project::FirstDownload, team_join::JoinOutcome};
 pub use state::State;
@@ -92,12 +93,43 @@ pub fn prepare(state: State, services: &Services, runtime: &Handle) -> Result<Te
       let address = add(&server, services, runtime)?.0;
       join(&address, services, runtime)?;
     }
-    State::Member | State::Admin | State::ServerAdmin | State::Outage | State::OutageRunning | State::OutageLater => {
-      let role = member::serve_as(&server, state);
+    State::Member
+    | State::Admin
+    | State::ServerAdmin
+    | State::Outage
+    | State::OutageRunning
+    | State::OutageLater
+    | State::MemberRunning
+    | State::ModuleOutage => {
+      let role = member::serve_as(&server, state, &task_ids(services)?);
       join_linked_as(&server, (services, runtime), (TasksAnswer::Serve, role)).map(drop)?;
     }
   }
   Ok(server)
+}
+
+/// The session's Kontur's folder.
+fn kontur(services: &Services) -> Result<PathBuf, Box<dyn Error>> {
+  Ok(
+    services
+      .workspace
+      .projects()?
+      .into_iter()
+      .find(|project| project.name.as_str() == "Kontur")
+      .ok_or("the session has Kontur")?
+      .repo_root,
+  )
+}
+
+/// The ids of Kontur's tasks on this computer, by their number.
+fn task_ids(services: &Services) -> Result<HashMap<u32, String>, Box<dyn Error>> {
+  let tasks = ProjectDb::open(&kontur(services)?)?.tasks()?;
+  Ok(
+    tasks
+      .iter()
+      .map(|task| (task.key().number().get(), task.id().to_string()))
+      .collect(),
+  )
 }
 
 /// Adds `server` to the list; its address and id.
@@ -148,13 +180,7 @@ fn join_linked_as(
   (tasks, role): (TasksAnswer, Option<MemberRole>),
 ) -> Result<PathBuf, Box<dyn Error>> {
   server.answer_tasks(tasks);
-  let kontur = services
-    .workspace
-    .projects()?
-    .into_iter()
-    .find(|project| project.name.as_str() == "Kontur")
-    .ok_or("the session has Kontur")?
-    .repo_root;
+  let kontur = kontur(services)?;
   let (address, id) = add(server, services, runtime)?;
   link(&kontur, server, (id, role))?;
   join(&address, services, runtime)?;

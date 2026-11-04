@@ -22,6 +22,7 @@ mod run_account;
 mod run_facts;
 pub(super) mod runs;
 mod steps;
+mod team;
 mod version;
 
 use lurq::{
@@ -112,6 +113,8 @@ impl Component for TaskSummary {
     } else {
       self.parts(ctx, task)
     };
+    // A team task's line for a member and its claim come first (`team`).
+    let column = team::top(ctx, task).into_iter().chain(column).collect();
     let properties = properties::column(ctx, task, (section, &self.more_facts));
     layout(column, properties, state.summary_scroll)
   }

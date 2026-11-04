@@ -1,11 +1,11 @@
 //! The stand-in's task list as the `/api/v2` reads give it: its tasks as `TaskRead`s, the request's filters and search,
 //! its sort, pages over an opaque cursor that names the snapshot and the offset, the board counts, and the project's
-//! module with its progress.
+//! modules with their progress: the ones [`super::TeamServer::authority_modules`] set, or else its one module.
 
 use orchester_core::time::Timestamp;
 use serde_json::{Value, json};
 
-use super::{AuthorityTask, State, capabilities};
+use super::{AuthorityTask, State, capabilities, work};
 use crate::{
   test_support::team_server::{
     TasksAnswer, USER,
@@ -18,9 +18,12 @@ use crate::{
 const WORKFLOW: [&str; 6] = ["backlog", "todo", "in_progress", "in_review", "done", "canceled"];
 const PRIORITY: [&str; 5] = ["urgent", "high", "medium", "low", "none"];
 
-/// The id of the task numbered `number` that [`super::TeamServer::authority_tasks`] set.
-pub(super) fn authority_id(number: u32) -> String {
-  format!("0191c7c0-0000-7000-8000-0000001{number:05x}")
+/// The id of a task that [`super::TeamServer::authority_tasks`] set: its own, or one made from its number.
+pub(super) fn task_id(task: &AuthorityTask) -> String {
+  task
+    .id
+    .clone()
+    .unwrap_or_else(|| format!("0191c7c0-0000-7000-8000-0000001{:05x}", task.number))
 }
 
 /// The project's tasks as `TaskRead`s: those [`super::TeamServer::authority_tasks`] set, or else the v1 tasks.
@@ -35,7 +38,10 @@ pub(super) fn tasks((project, key): (&str, &str), state: &State) -> Vec<Value> {
     task
   };
   if let Some(tasks) = &state.authority.tasks {
-    return tasks.iter().map(|task| read(authority_task(task, key))).collect();
+    return tasks
+      .iter()
+      .map(|task| authority_task(task, key, state, capabilities(project, standing)))
+      .collect();
   }
   match (state.tasks, state.pages) {
     (TasksAnswer::Empty, _) => Vec::new(),
@@ -54,22 +60,39 @@ pub(super) fn tasks((project, key): (&str, &str), state: &State) -> Vec<Value> {
   }
 }
 
-fn authority_task(task: &AuthorityTask, key: &str) -> Value {
+/// `task` as a `TaskRead` with the caller's `capabilities`. Its claim is its own, else its module's.
+fn authority_task(task: &AuthorityTask, key: &str, state: &State, capabilities: Value) -> Value {
   let number = usize::try_from(task.number).unwrap_or(usize::MAX);
-  let mut read = first_download::task(&authority_id(task.number), (key, number), (&task.title, task.workflow));
+  let id = task_id(task);
+  let mut read = first_download::task(&id, (key, number), (&task.title, task.workflow));
   let created = Timestamp::now().unix_millis() - task.created_minutes_ago * 60_000;
   read["priority"] = json!(task.priority);
   read["pipeline"] = json!(task.pipeline);
   read["brief"] = json!(task.title);
   read["criteria"] = json!([task.title]);
   read["tags"] = json!([]);
-  read["module"] = if task.module {
-    json!(first_download::MODULE)
-  } else {
-    Value::Null
+  let modules = state.authority.modules.as_deref();
+  read["module"] = match (task.module, modules) {
+    (Some(index), Some(_)) => json!(work::module_id(index)),
+    (Some(_), None) => json!(first_download::MODULE),
+    (None, _) => Value::Null,
   };
   read["created"] = json!({"by": {"id": USER, "display_name": "Bohdan Koval"}, "at": created});
   read["updated"] = read["created"].clone();
+  read["assignee"] = task.assignee.map_or(Value::Null, work::Person::wire);
+  read["work"] = Value::Null;
+  let module_claim = task
+    .module
+    .and_then(|index| modules?.get(index)?.claim.map(|claim| (claim, index)));
+  read["effective_claim"] = match (task.claim, module_claim) {
+    (Some(claim), _) => claim.wire(&json!({"kind": "task", "id": id}), task.number),
+    (None, Some((claim, index))) => {
+      let subject = json!({"kind": "module", "id": work::module_id(index)});
+      claim.wire(&subject, u32::try_from(index).unwrap_or_default() + 0x800)
+    }
+    (None, None) => Value::Null,
+  };
+  read["capabilities"] = capabilities;
   read
 }
 
@@ -142,18 +165,19 @@ pub(super) fn counts(tasks: &[Value], body: &str, cursor: u64) -> Result<Value, 
   Ok(counts)
 }
 
-/// `POST …/module-list`: the project's one module, unless the project is empty.
-pub(super) fn modules(project: &str, state: &State) -> Value {
-  let items: Vec<Value> = summary(project, state).into_iter().collect();
-  json!({"items": items, "next": null, "cursor": state.authority.cursor().to_string()})
+/// `POST …/module-list`: the project's modules, none while the project is empty.
+pub(super) fn modules(project: (&str, &str), state: &State) -> Value {
+  json!({"items": summaries(project, state), "next": null, "cursor": state.authority.cursor().to_string()})
 }
 
 /// `GET …/modules/{module}` and `GET …/modules/{module}/progress`, `path` being what follows the project; `None` for no
 /// module of the project.
-pub(super) fn module(project: &str, path: &str, state: &State) -> Option<Value> {
+pub(super) fn module(project: (&str, &str), path: &str, state: &State) -> Option<Value> {
   let rest = path.strip_prefix("modules/")?;
   let (id, part) = rest.split_once('/').unwrap_or((rest, ""));
-  let summary = summary(project, state).filter(|_| id == first_download::MODULE)?;
+  let summary = summaries(project, state)
+    .into_iter()
+    .find(|summary| summary["module"]["id"] == id)?;
   match part {
     "" => Some(summary),
     "progress" => Some(summary["progress"].clone()),
@@ -161,34 +185,45 @@ pub(super) fn module(project: &str, path: &str, state: &State) -> Option<Value> 
   }
 }
 
-/// The project's one module as a `ModuleSummary`, with its progress over its tasks as core counts it; `None` while the
-/// project is empty.
-fn summary(project: &str, state: &State) -> Option<Value> {
+/// The project's modules as `ModuleSummary`s, each with its progress over its tasks as core counts it: those
+/// [`super::TeamServer::authority_modules`] set, or else its one module; none while the project is empty.
+fn summaries((project, key): (&str, &str), state: &State) -> Vec<Value> {
   if state.authority.tasks.is_none() && state.tasks == TasksAnswer::Empty {
-    return None;
+    return Vec::new();
   }
-  let key = state
-    .projects
-    .iter()
-    .find(|shared| shared["id"] == project)
-    .and_then(|shared| shared["key"].as_str())
-    .unwrap_or_default();
   let tasks = tasks((project, key), state);
-  let inside: Vec<&Value> = tasks
+  let capabilities = || capabilities(project, state.authority.standing);
+  let Some(modules) = &state.authority.modules else {
+    let mut module = first_download::module();
+    module["branch"] = json!("module/payments");
+    module["assignee"] = Value::Null;
+    module["work"] = Value::Null;
+    module["effective_claim"] = Value::Null;
+    module["capabilities"] = capabilities();
+    let (progress, count, remaining) = progress(&tasks, first_download::MODULE);
+    let forecast = json!({"remaining": remaining, "history_days": 0, "history_delivered": 0,
+      "outlook": {"kind": "not_enough_history"}});
+    return vec![json!({"module": module, "progress": progress, "tasks": count, "forecast": forecast})];
+  };
+  modules
     .iter()
-    .filter(|task| task["module"] == first_download::MODULE)
-    .collect();
+    .enumerate()
+    .map(|(index, module)| {
+      let (progress, count, remaining) = progress(&tasks, &work::module_id(index));
+      json!({"module": module.read(index, &capabilities()), "progress": progress, "tasks": count,
+        "forecast": module.forecast(remaining)})
+    })
+    .collect()
+}
+
+/// The progress of the module `id` over `tasks`, how many tasks it has and how many remain.
+fn progress(tasks: &[Value], id: &str) -> (Value, usize, usize) {
+  let inside: Vec<&Value> = tasks.iter().filter(|task| task["module"] == id).collect();
   let scope = inside.iter().filter(|task| task["workflow"] != "canceled").count();
   let done = inside.iter().filter(|task| task["workflow"] == "done").count();
-  let mut module = first_download::module();
-  module["branch"] = json!("module/payments");
-  module["assignee"] = Value::Null;
-  module["work"] = Value::Null;
-  module["effective_claim"] = Value::Null;
-  module["capabilities"] = capabilities(project, state.authority.standing);
-  Some(json!({
-    "module": module, "progress": {"unit": "tasks", "scope": scope, "done": done}, "tasks": inside.len(),
-    "forecast": {"remaining": scope - done, "history_days": 0, "history_delivered": 0,
-      "outlook": {"kind": "not_enough_history"}},
-  }))
+  (
+    json!({"unit": "tasks", "scope": scope, "done": done}),
+    inside.len(),
+    scope - done,
+  )
 }

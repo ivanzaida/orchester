@@ -422,7 +422,11 @@ impl TaskDetail {
     })
   }
 
-  fn without_runs(task: Task, (messages, attachments): Conversation, requirements: TaskRequirements) -> Self {
+  pub(super) fn without_runs(
+    task: Task,
+    (messages, attachments): Conversation,
+    requirements: TaskRequirements,
+  ) -> Self {
     Self {
       task,
       run_task: None,

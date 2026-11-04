@@ -48,10 +48,16 @@ pub enum State {
   OutageRunning,
   /// As [`Self::Member`], until the tasks were read and shown: then the server stops answering (ORC-716, 06 `GR3RS`).
   OutageLater,
+  /// As [`Self::Member`], with KON-12 and KON-21 running on this computer, KON-12 claimed by the person and assigned to
+  /// them (ORC-717, 01c `Tb55G`).
+  MemberRunning,
+  /// As [`Self::MemberRunning`], until a module's page read its module: then the server stops answering (ORC-717, 06d
+  /// `B7Mbe`).
+  ModuleOutage,
 }
 
 impl State {
-  pub const ALL: [Self; 19] = [
+  pub const ALL: [Self; 21] = [
     Self::Join,
     Self::WrongCode,
     Self::ExpiredCode,
@@ -71,6 +77,8 @@ impl State {
     Self::Outage,
     Self::OutageRunning,
     Self::OutageLater,
+    Self::MemberRunning,
+    Self::ModuleOutage,
   ];
 
   /// The seed's scenario of this state.
@@ -95,7 +103,14 @@ impl State {
       Self::Outage => "team-outage",
       Self::OutageRunning => "team-outage-running",
       Self::OutageLater => "team-outage-later",
+      Self::MemberRunning => "team-member-running",
+      Self::ModuleOutage => "team-module-outage",
     }
+  }
+
+  /// Whether KON-12 and KON-21 run on this computer.
+  pub const fn runs_here(self) -> bool {
+    matches!(self, Self::OutageRunning | Self::MemberRunning | Self::ModuleOutage)
   }
 
   /// Whether the QA copy presses in the window before it shows: *Join with the code* and *Clone repository…* are a

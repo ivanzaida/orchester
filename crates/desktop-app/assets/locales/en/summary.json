@@ -47,6 +47,32 @@
       "after": "after {{step}} · {{time}}",
       "step": "{{number}} {{step}}"
     },
+    "team": {
+      "readOnly": "Only Admins change this task: {{admins}}. You read it, run it and claim it.",
+      "readOnlyUnnamed": "Only Admins change this task. You read it, run it and claim it.",
+      "claim": {
+        "hereTitle": "Claimed by you on this computer",
+        "hereDetail": "{{computer}} holds the claim and the running step renews it · renewed {{time}} · stale after {{minutes}} min without renewal.",
+        "yoursTitle": "Claimed by you",
+        "otherTitle": "Claimed by {{holder}}",
+        "moduleTitle": "Claimed under module {{module}} by {{holder}}",
+        "detail": "Renewed {{time}} · stale after {{minutes}} min without renewal.",
+        "staleTitle": "{{holder}}'s claim is stale",
+        "staleDetail": "Not renewed since {{time}}; the server finds a claim stale after {{minutes}} min without renewal."
+      },
+      "properties": {
+        "assignee": "Assignee",
+        "claim": "Claim",
+        "module": "Module",
+        "mergesInto": "Merges into",
+        "notAssigned": "Not assigned",
+        "notClaimed": "Not claimed",
+        "you": "{{name}} (you)",
+        "here": "You · this computer",
+        "yours": "You",
+        "stale": "{{holder}} · stale"
+      }
+    },
     "properties": {
       "status": "Status",
       "priority": "Priority",

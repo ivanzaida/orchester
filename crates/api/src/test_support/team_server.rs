@@ -21,7 +21,7 @@ use serde_json::{Value, json};
 
 mod authority;
 mod first_download;
-pub use authority::{AuthorityTask, Standing};
+pub use authority::{AuthorityClaim, AuthorityModule, AuthorityTask, Person, STALE_AFTER_MINUTES, Standing};
 use first_download::TaskPages;
 pub use first_download::TasksAnswer;
 

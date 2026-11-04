@@ -268,7 +268,7 @@ impl ModuleProperties {
 }
 
 /// The dot before the state's word (`Dot` `fKFJa`).
-const DOT: f32 = 6.0;
+pub(super) const DOT: f32 = 6.0;
 
 /// A date's calendar 10 under its row from the column's left hairline, not the row's start (`Target date picker`
 /// `oY7mm` in `iJ6mn`). The row stays the popup's anchor, so a press on another row switches to its control at once.
@@ -315,7 +315,7 @@ fn run(
   }
 }
 
-fn date_value(ctx: &Ctx, id: &str, day_set: Option<NaiveDate>) -> Element {
+pub(super) fn date_value(ctx: &Ctx, id: &str, day_set: Option<NaiveDate>) -> Element {
   let (words, color) = match day_set {
     Some(date) => (day(ctx, date), PaletteColor::TextPrimary),
     None => (ctx.t("modules.properties.notSet"), PaletteColor::TextMuted),
@@ -367,7 +367,7 @@ pub(super) fn bones(ctx: &Ctx) -> Column {
 }
 
 /// A property's row: its key and value; `press`, the surface that opens its control and what ends it.
-fn property(
+pub(super) fn property(
   (id, key): (&str, &str),
   value: Element,
   press: Option<(lurq::components::Button, Option<lurq::components::Text>)>,

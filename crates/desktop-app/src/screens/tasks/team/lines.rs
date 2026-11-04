@@ -1,7 +1,7 @@
 //! The lines under a team project's Tasks header (`Shared line` `kY3Fg` and `Read-only line` `dLyl8` in 01b `zv7b6`;
 //! `zUEa1` in 01 `QdL7N`): where the project lives, that its tasks are read from the server and the person's role as
 //! the server says it (12, a 14 cloud, `·` between, *Sharing settings* at the end); and for a member, one calm line
-//! naming who changes the team's tasks (a 13 lock, 12.5 `text_secondary`, 8 apart, 2 over and under).
+//! naming who changes the team's tasks (`crate::team::lock`).
 
 use lurq::{
   app::{
@@ -10,7 +10,7 @@ use lurq::{
   },
   components::{Row, Spacer, Text},
   layout::Alignment,
-  node::{dimension::Dimension, padding::Padding},
+  node::dimension::Dimension,
 };
 use orchester_api::v2::CallerRole;
 use orchester_core::id::ProjectId;
@@ -20,7 +20,8 @@ use crate::{
   navigation::Navigation,
   routes::{ProjectPage, ProjectSettingsTab, Route},
   screens::settings::orchester::shown_address,
-  theme::{ExtraSpacing, HubText, IconSize},
+  team::lock::{lock_words, locked},
+  theme::IconSize,
   ui::{
     icon::{Icon, icon},
     pressable::opening,
@@ -81,55 +82,10 @@ pub(in crate::screens::tasks) fn team_line(
 /// *Only Admins change team tasks, modules and tags: dana-k (Admin) and olha (Server admin). You read, run and claim.*;
 /// on the board, that they move cards too. Without the admins' names until the members are read.
 pub(in crate::screens::tasks) fn lock_line(ctx: &Ctx, admins: Option<&TeamAdmins>, board: bool) -> Row {
-  let named = admins
-    .map(|admins| names(ctx, admins))
-    .filter(|names| !names.is_empty());
-  let words = match (named, board) {
-    (Some(admins), false) => ctx.t_args("tasks.team.readOnly", [("admins", admins)]),
-    (Some(admins), true) => ctx.t_args("tasks.team.readOnlyBoard", [("admins", admins)]),
-    (None, false) => ctx.t("tasks.team.readOnlyUnnamed"),
-    (None, true) => ctx.t("tasks.team.readOnlyBoardUnnamed"),
+  let keys = if board {
+    ("tasks.team.readOnlyBoard", "tasks.team.readOnlyBoardUnnamed")
+  } else {
+    ("tasks.team.readOnly", "tasks.team.readOnlyUnnamed")
   };
-  Row::new()
-    .id("tasks-team-read-only")
-    .width(Dimension::Pct(100.0))
-    .padding(Padding::vertical(ExtraSpacing::Tight.role()))
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
-    .child(icon(Icon::Lock, IconSize::Base, PaletteColor::TextMuted))
-    .child(
-      Text::new(&words)
-        .id("tasks-team-read-only-text")
-        .variant(HubText::TeamLine.role())
-        .flex(1.0)
-        .min_width(Dimension::Px(0.0)),
-    )
-}
-
-/// `dana-k (Admin) and olha (Server admin)`; empty when nobody is named.
-fn names(ctx: &Ctx, admins: &TeamAdmins) -> String {
-  let named = |key: &str, name: &str| ctx.t_args(key, [("name", name)]).to_string();
-  let all: Vec<String> = admins
-    .admins
-    .iter()
-    .map(|name| named("tasks.team.admin", name))
-    .chain(
-      admins
-        .server_admins
-        .iter()
-        .map(|name| named("tasks.team.serverAdmin", name)),
-    )
-    .collect();
-  match all.split_last() {
-    Some((last, rest)) if !rest.is_empty() => ctx
-      .t_args(
-        "tasks.team.and",
-        [
-          ("first", rest.join(&ctx.t("tasks.team.separator"))),
-          ("last", last.clone()),
-        ],
-      )
-      .to_string(),
-    _ => all.concat(),
-  }
+  locked("tasks-team-read-only", &lock_words(ctx, admins, keys))
 }

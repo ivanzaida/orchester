@@ -85,6 +85,15 @@ pub fn forecast_line(ctx: &Ctx, forecast: &Forecast) -> Arc<str> {
   }
 }
 
+/// A team member by name, *olha*, or the person signed in, *ivan (you)*.
+pub fn person(ctx: &Ctx, person: &crate::team::pages::TeamPerson) -> Arc<str> {
+  if person.you {
+    ctx.t_args("modules.team.you", [("name", person.name.as_str())])
+  } else {
+    Arc::from(person.name.as_str())
+  }
+}
+
 /// The status line after the state: `Oct 14 – Nov 1 · 8 of 12 tasks done · Likely done by …`.
 pub fn facts(ctx: &Ctx, details: &ModuleDetails, progress: Progress, forecast: &Forecast) -> Arc<str> {
   ctx.t_args(
