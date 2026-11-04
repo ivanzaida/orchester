@@ -8,14 +8,14 @@
 
 use orchester_core::{
   id::StepExecutionId,
-  run::{RunLimit, RunStatus, execution_tokens},
-  store::ActivityStore,
+  run::{RunLimit, RunStatus},
   tokens::TokensUsed,
 };
 use orchester_ipc::Rejection;
 
 use super::{
   control::{Control, answer},
+  link::usage::step_usage,
   run::{ExecutionError, RunTask},
   step::worker::{Stop, StopCause},
 };
@@ -146,15 +146,16 @@ impl RunTask {
     })
   }
 
-  /// A running execution of the current attempt that has used its step's budget.
+  /// A running execution of the current attempt that has used its step's budget, by what they used as the coordinator
+  /// link answers it.
   fn used_step_budget(&self) -> Result<Option<StepExecutionId>, ExecutionError> {
-    let invocations = self.db.invocations(self.run.id())?;
-    let reviews = self.db.reviewer_usage(self.run.id())?;
-    Ok(self.run.running_executions().into_iter().find(|execution| {
+    let running = self.run.running_executions();
+    let usage = step_usage(&*self.link, self.run.id(), running.clone())?;
+    Ok(running.into_iter().find(|execution| {
       let step = self.run.execution(*execution).map(|execution| execution.step());
       step
         .and_then(|step| self.run.step_budget(step))
-        .is_some_and(|budget| execution_tokens(&invocations, &reviews, *execution).reached(budget))
+        .is_some_and(|budget| usage.of(*execution).reached(budget))
     }))
   }
 

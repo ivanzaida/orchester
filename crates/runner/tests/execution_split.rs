@@ -287,6 +287,33 @@ fn the_executor_reads_memory_only_through_the_coordinator_link() {
   );
 }
 
+/// The executor reads the project settings an agent start reads, its steps' usage and the run's base notices only
+/// through the coordinator link (ORC-670): never from the project database itself. The project-level gates (the daily
+/// budget, agent slots, the disk guard's free space) stay the coordinator's and are not listed.
+#[test]
+fn the_executor_reads_settings_usage_and_base_notices_only_through_the_coordinator_link() {
+  let found = lines_naming(
+    "executor",
+    &[
+      ".code_index()",
+      "repository_agent_files",
+      "auto_mode_settings",
+      "db.approval_mode",
+      "workspace_settings",
+      ".qa_slots()",
+      ".tells_base_moves()",
+      "pending_base_notice",
+      ".reviewer_usage(",
+      "execution_tokens",
+    ],
+  );
+  assert!(
+    found.is_empty(),
+    "executor code reads settings, usage or base notices from the project database; ask the coordinator link instead: \
+     {found:#?}"
+  );
+}
+
 #[test]
 fn a_coordinator_path_in_code_is_found_and_one_in_a_comment_is_not() {
   assert_eq!(

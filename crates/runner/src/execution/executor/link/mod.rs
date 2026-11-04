@@ -7,26 +7,37 @@
 //! one or a closure. Reads keep their timing: what an agent start read before, it asks the link at each start.
 //!
 //! Each area of the project's data has a trait and a module of its own, which [`CoordinatorLink`] gathers, so an area
-//! added later (approvals, settings) adds its trait and module without touching another's:
+//! added later (approvals) adds its trait and module without touching another's:
 //! - [`resources`]: the resource versions a run pinned, read by id, and the blobs they refer to.
 //! - [`messages`]: the task's conversation, and the files people attached to its messages with their content.
 //! - [`environment`]: the variables Project settings › Environment sets, which the computer's resources turn into the
 //!   environment there.
 //! - [`memory`]: the task and project memory a prompt gets, the records that cannot be read back, the Memory setting.
+//! - [`settings`]: the project settings an agent's start, its tools and its worker read.
+//! - [`usage`]: the tokens a run's steps used toward their budgets.
+//! - [`base_notices`]: whether the project tells its agents that the base moved, and the run's pending notice.
 
+pub mod base_notices;
 pub mod environment;
 pub mod memory;
 pub mod messages;
 pub mod resources;
+pub mod settings;
+pub mod usage;
 
 use orchester_core::run::RunnerFailure;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-pub use self::{environment::EnvironmentLink, memory::MemoryLink, messages::MessageLink, resources::ResourceLink};
+pub use self::{
+  base_notices::BaseNoticeLink, environment::EnvironmentLink, memory::MemoryLink, messages::MessageLink,
+  resources::ResourceLink, settings::SettingsLink, usage::UsageLink,
+};
 
 /// Everything the executor asks its coordinator: one trait per area.
-pub trait CoordinatorLink: ResourceLink + MessageLink + EnvironmentLink + MemoryLink {
+pub trait CoordinatorLink:
+  ResourceLink + MessageLink + EnvironmentLink + MemoryLink + SettingsLink + UsageLink + BaseNoticeLink
+{
   /// Another link to the same coordinator, for a task of the run's own: an agent's worker, which reads the messages
   /// sent to its agent while its turn runs and the project's variables its reviews read, and an agent's tool calls,
   /// which read the run's records.

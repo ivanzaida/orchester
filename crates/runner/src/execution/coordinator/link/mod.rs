@@ -2,10 +2,13 @@
 //! requests by reading the project database, as the executor did before it asked. Each area of the link answers in a
 //! module of its own.
 
+mod base_notices;
 mod environment;
 mod memory;
 mod messages;
 mod resources;
+mod settings;
+mod usage;
 
 use std::{
   ops::Deref,

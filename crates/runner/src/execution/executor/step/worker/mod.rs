@@ -47,7 +47,7 @@ use super::{
   super::{
     Notifier,
     control::Ack,
-    link::{CoordinatorLink, LinkError},
+    link::{CoordinatorLink, LinkError, settings::ApprovalModeRequest},
     run::ExecutionError,
     sink::Sink,
     tool::CommandFinished,
@@ -354,18 +354,22 @@ impl Watch {
   }
 
   /// The mode this agent's requests are answered in now (`docs/design/approval-modes.md`): by its profile's approval
-  /// mode as it started, the project's *Allow Autopilot* and its run's switch to Manual, read again at each request.
-  pub(super) fn approval_mode(&self) -> Result<EffectiveMode, StoreError> {
+  /// mode as it started, the project's *Allow Autopilot* and its run's switch to Manual, asked through the worker's
+  /// link again at each request.
+  pub(super) fn approval_mode(&self) -> Result<EffectiveMode, LinkError> {
     let profile = self
       .invocation
       .permissions
       .as_ref()
       .map_or(ApprovalMode::Manual, |launch| launch.permissions().approval_mode());
-    self.db.approval_mode(self.invocation.run, profile)
+    self.link.approval_mode(&ApprovalModeRequest {
+      run: self.invocation.run,
+      profile,
+    })
   }
 
   /// Whether Autopilot answers this agent's requests now: the run is in it, and its own *Stop* did not take it back.
-  pub(super) fn in_autopilot(&self) -> Result<bool, StoreError> {
+  pub(super) fn in_autopilot(&self) -> Result<bool, WorkerError> {
     Ok(self.approval_mode()?.is_autopilot() && self.db.run_auto_approve(self.invocation.run)? != Some(false))
   }
 
@@ -420,7 +424,7 @@ impl Worker {
 
   /// The worker's regular beat: what waits is written, and a request Autopilot brought to the person is looked at
   /// again should its run have dropped to Manual ([`Worker::recheck_mode`]).
-  async fn tick(&mut self, watch: &mut Watch) -> Result<(), StoreError> {
+  async fn tick(&mut self, watch: &mut Watch) -> Result<(), WorkerError> {
     self.flush(watch)?;
     self.poll_servers(watch).await?;
     self.recheck_mode(watch).await
@@ -437,7 +441,7 @@ impl Worker {
     let events = self.events.clone();
     let mcp_file = self.mcp_file.take();
     let end = if self.is_native() {
-      self.follow_native(ends).await.map_err(WorkerError::from)
+      self.follow_native(ends).await
     } else {
       self.follow(ends).await
     };
