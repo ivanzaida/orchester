@@ -20,13 +20,13 @@ use orchester_core::{
   resource::ModelId,
   revision::Revision,
   run::{
-    PendingToolApproval, StepOutcome, StepOutput, StepProgress, TokenUsage,
+    Invocation, PendingToolApproval, StepOutcome, StepOutput, StepProgress, TokenUsage,
     review::{ReviewEnd, ReviewRecord},
   },
   store::{ActivityStore, WorkspaceStore, WorktreeStore},
   workspaces::{Borrow, Holder, Stranded, WorkspaceNumber},
 };
-use orchester_store::{NoticeRecord, RemovalRecord, StepRecord, WarmWorkspaceRecord, WorkspaceWritten};
+use orchester_store::{NoticeRecord, ProjectDb, RemovalRecord, StepRecord, WarmWorkspaceRecord, WorkspaceWritten};
 use serde::{Serialize, de::DeserializeOwned};
 
 use self::support::{at, model, started_run};
@@ -46,6 +46,26 @@ fn limits() -> PlanLimits {
     credits: None,
     blocked: None,
   }
+}
+
+/// A waiting request of `invocation`'s agent to run a command, which a review is about.
+fn request(db: &mut ProjectDb, invocation: &Invocation) -> PendingToolApproval {
+  let approval = PendingToolApproval {
+    id: format!("{}:call_1", invocation.id),
+    run: invocation.run,
+    execution: invocation.execution,
+    invocation: invocation.id,
+    agent: "Builder".to_owned(),
+    command: true,
+    scope: None,
+    server: "command".to_owned(),
+    action: "cargo build".to_owned(),
+    target: None,
+    requested_at: at(22),
+    native: None,
+  };
+  db.request_tool_approval(&approval).expect("request");
+  approval
 }
 
 #[test]
@@ -88,21 +108,7 @@ fn step_record_of_outputs_progress_reviews_and_limits_stores_what_direct_writes_
   let invocation = db
     .start_invocation(run.id(), execution, &model(), at(21))
     .expect("invocation");
-  let approval = PendingToolApproval {
-    id: format!("{}:call_1", invocation.id),
-    run: run.id(),
-    execution,
-    invocation: invocation.id,
-    agent: "Builder".to_owned(),
-    command: true,
-    scope: None,
-    server: "command".to_owned(),
-    action: "cargo build".to_owned(),
-    target: None,
-    requested_at: at(22),
-    native: None,
-  };
-  db.request_tool_approval(&approval).expect("request");
+  let approval = request(&mut db, &invocation);
   let review = ReviewRecord {
     run: run.id(),
     execution,
