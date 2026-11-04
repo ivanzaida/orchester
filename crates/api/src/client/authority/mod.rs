@@ -1,9 +1,10 @@
 //! A team server's workspace-authority surface under `/api/v2` (`docs/cloud-api.md`, "Team authority S10 read
 //! contract", "Team authority S11 subscriptions"): the bounded reads ([`reads`]), the scoped invalidation
 //! subscription ([`subscription`]) and the team commands with their operations ([`commands`]), through
-//! [`Client::authority`]. Refusals there are [`AuthorityError`]s, not the `/api/v1` `{error, message}` form, so they
-//! come as [`AuthorityCallError::Refused`]. The routes are listed in `docs/cloud-api.md`, "Team authority S10/S11
-//! routes" and "Team authority P2 commands".
+//! [`Client::authority`]. Refusals new to `/api/v2` are [`AuthorityError`]s and come as
+//! [`AuthorityCallError::Refused`]; the common failures keep the `/api/v1` `{error, message}` form and come as
+//! [`ClientError::Api`]. The routes are listed in `docs/cloud-api.md`, "Team authority S10/S11 routes" and "Team
+//! authority P2 commands".
 
 mod commands;
 mod reads;
@@ -18,7 +19,7 @@ pub use self::{
   commands::PolicyChange,
   subscription::{Subscription, SubscriptionEnd},
 };
-use super::{Client, ClientError, bearer, redirect, retry_after};
+use super::{Client, ClientError, bearer, redirect, refused, retry_after};
 use crate::v2::{AuthorityError, AuthorityErrorCode};
 
 /// Where the workspace-authority API is under a team server's address.
@@ -70,7 +71,7 @@ impl Client {
 }
 
 impl Authority<'_> {
-  /// A request to `route` under the project, e.g. `/tasks/query`, with the bearer token.
+  /// A request to `route` under the project, e.g. `/task-list`, with the bearer token.
   fn request(&self, method: Method, route: &str) -> Result<RequestBuilder, ClientError> {
     let path = format!("/projects/{}{route}", self.project);
     let url = self.client.address.endpoint_under(V2_BASE, &path)?;
@@ -104,7 +105,9 @@ async fn call<T: DeserializeOwned>(request: RequestBuilder) -> Result<T, Authori
   serde_json::from_slice(&bytes).map_err(|_| ClientError::NotOrchester { status }.into())
 }
 
-/// Sends `request`: the response of a success, or the error of a redirect, a refusal or a failed transport.
+/// Sends `request`: the response of a success, or the error of a redirect, a refusal or a failed transport. The
+/// server answers what is new to `/api/v2` with an [`AuthorityError`] and the common failures (`401`, `404`, a
+/// malformed body's `400`) with their `/api/v1` `{error, message}` envelope, read as [`ClientError::Api`].
 async fn answered(request: RequestBuilder) -> Result<Response, AuthorityCallError> {
   let response = request.send().await.map_err(|error| ClientError::transport(&error))?;
   let status = response.status();
@@ -125,6 +128,6 @@ async fn answered(request: RequestBuilder) -> Result<Response, AuthorityCallErro
       error,
       retry_after,
     }),
-    Err(_) => Err(ClientError::NotOrchester { status }.into()),
+    Err(_) => Err(refused(&bytes, status, retry_after).into()),
   }
 }

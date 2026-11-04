@@ -1,4 +1,5 @@
-//! The fake team server's HTTP: one request read from a connection, a JSON answer, and an `AuthorityError` refusal.
+//! The fake team server's HTTP: one request read from a connection, a JSON answer, an `AuthorityError` refusal and a
+//! failure in the `/api/v1` form.
 
 use std::{
   io::{BufRead, BufReader, Read, Write},
@@ -78,8 +79,15 @@ pub fn respond(stream: &mut TcpStream, status: u16, body: &Value) {
     .and_then(|()| stream.write_all(body.as_bytes()));
 }
 
+/// A refusal new to the reads, as an `AuthorityError` (`410 cursor_expired`, `422 invalid`).
 pub fn refusal(stream: &mut TcpStream, status: u16, code: &str) {
   respond(stream, status, &json!({ "code": code, "details": {} }));
+}
+
+/// A failure common to every route, in the `/api/v1` `{error, message}` form the team server keeps for them (`401
+/// unauthorized`, `404 not_found`).
+pub fn failure(stream: &mut TcpStream, status: u16, code: &str) {
+  respond(stream, status, &json!({ "error": code, "message": "Refused" }));
 }
 
 /// `event` as one SSE event: its kind as the name, its cursor as the id, itself as the data.

@@ -1,6 +1,7 @@
-//! The fake's `GET …/subscription`: `ready` at the current cursor, `reset` when the test asked for one, the batches
-//! after `Last-Event-ID`, then each new batch as it commits and a keep-alive while none does, until the streams are
-//! dropped, the member is revoked (`revoked`, then the stream closes) or the client hangs up.
+//! The fake's `GET …/subscription`, as the team server streams it: a `: connected` comment; without `Last-Event-ID`,
+//! `ready` at the current cursor; with it, no `ready`, but `reset` at the current cursor when the test asked for one,
+//! or else the batches after it. Then each new batch as it commits and a keep-alive while none does, until the
+//! streams are dropped, the member is revoked (`revoked`, then the stream closes) or the client hangs up.
 
 use std::{io::Write, net::TcpStream, time::Duration};
 
@@ -17,11 +18,13 @@ pub fn stream(shared: &Shared, request: &Request, token: &str, stream: &mut TcpS
   state.subscribed.push(last.clone());
   let generation = state.streams;
   let mut cursor = state.cursor();
-  let mut text = sse(&json!({"kind": "ready", "cursor": cursor.to_string()}));
-  if std::mem::take(&mut state.reset_next) {
-    text.push_str(&sse(&json!({"kind": "reset", "cursor": cursor.to_string()})));
-  } else if let Some(last) = last {
-    text.push_str(&batches_after(&state, last.parse().expect("a cursor")));
+  let mut text = ": connected\n\n".to_owned();
+  match last {
+    None => text.push_str(&sse(&json!({"kind": "ready", "cursor": cursor.to_string()}))),
+    Some(_) if std::mem::take(&mut state.reset_next) => {
+      text.push_str(&sse(&json!({"kind": "reset", "cursor": cursor.to_string()})));
+    }
+    Some(last) => text.push_str(&batches_after(&state, last.parse().expect("a cursor"))),
   }
   drop(state);
   shared.changed.notify_all();

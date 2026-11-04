@@ -1,11 +1,12 @@
 //! A team project's modules as the server reads them (S10), counted on the server by core's rules: a page of the
-//! modules with their progress and forecast, one module, its burndown and a page of its history. The list belongs to
-//! [`QueryScope::ModuleList`], the rest to the module's [`QueryScope::Module`]. A summary's progress converts to core's
-//! [`orchester_core::module::progress::Progress`] (`ModuleProgressRead::to_core`), whose percent and remaining work the
-//! screens show.
+//! modules with their progress and forecast, one module, its progress, its burndown and a page of its history. The
+//! list belongs to [`QueryScope::ModuleList`], the rest to the module's [`QueryScope::Module`]. A progress read
+//! converts to core's [`orchester_core::module::progress::Progress`] (`ModuleProgressRead::to_core`), whose percent
+//! and remaining work the screens show.
 
 use orchester_api::v2::{
-  ModuleBurndownRead, ModuleHistoryPage, ModuleListRequest, ModuleSummary, Page, PageRequest, QueryScope,
+  ModuleBurndownRead, ModuleHistoryPage, ModuleListRequest, ModuleProgressRead, ModuleSummary, Page, PageRequest,
+  QueryScope,
 };
 use orchester_core::id::ModuleId;
 
@@ -26,6 +27,15 @@ impl TeamProject {
     self
       .read(QueryScope::Module { module }, |inner| async move {
         inner.session.authority().module(module).await
+      })
+      .await
+  }
+
+  /// How far the module's work is: its scope and what of it is Done.
+  pub async fn module_progress(&self, module: ModuleId) -> Result<TeamRead<ModuleProgressRead>, TeamReadError> {
+    self
+      .read(QueryScope::Module { module }, |inner| async move {
+        inner.session.authority().progress(module).await
       })
       .await
   }
