@@ -12,22 +12,20 @@ use orchester_core::{
   },
   question::{Question, QuestionRequest, QuestionTurn, question_as_text},
   run::{StepOutcome, StepResult},
+  store::ActivityStore,
   time::Timestamp,
 };
 use orchester_ipc::Event;
 use orchester_store::StoreError;
 
 use super::{
-  super::{
-    super::sink::Sink,
-    native::{NativeHandle, NativeUpdate},
-  },
+  super::native::{NativeHandle, NativeUpdate},
   Driver, FLUSH_INTERVAL, Finished, Stop, StopCause, Watch, Worker, review,
 };
 
 impl Worker {
-  pub(super) async fn follow_native(mut self, sink: Box<dyn Sink>) -> Result<Finished, StoreError> {
-    let mut watch = Watch::open(&self.root, &self.invocation, sink)?;
+  pub(super) async fn follow_native(mut self) -> Result<Finished, StoreError> {
+    let mut watch = Watch::open(&self.root, &self.invocation)?;
     let mut flush = tokio::time::interval(FLUSH_INTERVAL);
     let mut listening = true;
     let mut deciding = true;
@@ -113,7 +111,7 @@ impl Worker {
     self.flush(&mut watch)?;
     watch.invocation.ended_at = Some(Timestamp::now());
     watch.invocation.outcome = Some(outcome.clone());
-    watch.record_invocation()?;
+    watch.db.save_invocation(&watch.invocation)?;
     Ok(Finished {
       outcome,
       stopped,

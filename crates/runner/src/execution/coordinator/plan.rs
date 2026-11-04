@@ -55,14 +55,13 @@ impl Scheduler {
     let mut db = self.open()?;
     // A run that cannot continue refuses the decision before it is recorded.
     let mut prepared = Prepared::continuing(&db, &self.inner.project_root, idle::load(&db, run)?)?;
-    let mut sink = LocalSink::new(&self.inner.project_root);
     let keeper = Keeper {
       db: &mut db,
-      sink: &mut sink,
       notifier: &self.inner.notifier,
       vault: self.inner.vault.as_ref(),
     };
-    record(keeper, &mut prepared.run, request)?;
+    let mut sink = LocalSink::new(&self.inner.project_root);
+    record(keeper, &mut sink, &mut prepared.run, request)?;
     self.spawn(db, prepared)
   }
 }

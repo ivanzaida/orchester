@@ -26,7 +26,6 @@ mod invocation_accounts;
 mod invocation_connections;
 mod invocation_prompts;
 mod invocation_providers;
-mod invocation_records;
 mod joining;
 mod limits;
 mod local_integration;
@@ -114,7 +113,6 @@ pub use self::{
   automatic_status::{AutomaticStatus, NotSent, UnsentStatus},
   chat_decisions::KeptAction,
   estimates::AutomationPoints,
-  invocation_records::{ActivityRecord, InvocationRecord, InvocationStart},
   joining::{JoinedKey, ReturnedTask},
   orchestrator::{ChatListing, ChatTurn},
   orchestrator_queue::StartedQueued,

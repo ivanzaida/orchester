@@ -11,10 +11,11 @@ use orchester_core::{
     stream::{AgentEvent, InvocationOutcome},
   },
   run::RunLimit,
+  store::ActivityStore,
   time::Timestamp,
 };
 use orchester_ipc::Event;
-use orchester_store::{InvocationRecord, StoreError};
+use orchester_store::StoreError;
 
 use super::{Driver, FLUSH_BATCH, StopCause, Transport, Watch, Worker, WorkerEvent};
 
@@ -130,16 +131,16 @@ impl Worker {
     if watch.invocation.session != session || watch.invocation.usage != watch.tracker.usage() {
       watch.invocation.session = session;
       watch.invocation.usage = watch.tracker.usage();
-      watch.record_invocation()?;
+      watch.db.save_invocation(&watch.invocation)?;
     }
     if watch.edits_changed {
-      let progress = InvocationRecord::edit_progress(watch.invocation.id, watch.edits.progress());
-      watch.sink.invocation(progress)?;
+      watch
+        .db
+        .save_edit_progress(watch.invocation.id, watch.edits.progress())?;
       watch.edits_changed = false;
     }
-    // The events were redacted as they came in ([`Worker::observe`]).
     let events = std::mem::take(&mut watch.pending);
-    let sequence = watch.record_events(events)?;
+    let sequence = watch.db.append_activity(&watch.invocation, &events)?;
     self.notifier.send(Event::AgentActivity {
       run: watch.invocation.run,
       sequence,

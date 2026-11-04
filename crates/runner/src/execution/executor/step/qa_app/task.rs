@@ -11,13 +11,12 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_ipc::Event;
-use orchester_store::{ActivityRecord, ProjectDb, StoreError};
-use parking_lot::Mutex;
+use orchester_store::{ProjectDb, StoreError};
 
 use super::StepQa;
 use crate::execution::{
   Notifier,
-  executor::{run::RunTask, sink::Sink, step::start::problem},
+  executor::{run::RunTask, step::start::problem},
 };
 
 impl RunTask {
@@ -34,7 +33,6 @@ impl RunTask {
       .map(|execution| execution.step().clone())
       .ok_or_else(|| problem("the step execution is not the run's".to_owned()))?;
     let (root, run, notifier) = (self.root.clone(), self.run.id(), self.notifier.clone());
-    let sink = Mutex::new(self.sink.another());
     Ok(StepQa {
       apps: Arc::clone(&self.qa),
       state: self.qa.register(invocation),
@@ -44,32 +42,23 @@ impl RunTask {
       run_created: self.run.created_at(),
       task: self.task.key().clone(),
       run: self.run.number(),
-      waiting: Box::new(move |holders| {
-        say_waiting((&root, &mut **sink.lock()), (run, invocation), holders, &notifier);
-      }),
+      waiting: Box::new(move |holders| say_waiting(&root, (run, invocation), holders, &notifier)),
     })
   }
 }
 
-/// Notes in the run's transcript, through `sink`, that `invocation`'s `start_qa_app` waits for a QA slot, which
-/// `holders` hold. A note that cannot be written is logged: the start waits all the same.
-fn say_waiting(
-  (root, sink): (&Path, &mut dyn Sink),
-  (run, invocation): (RunId, InvocationId),
-  holders: Vec<QaSlotHolder>,
-  notifier: &Notifier,
-) {
+/// Notes in the run's transcript that `invocation`'s `start_qa_app` waits for a QA slot, which `holders` hold. A note
+/// that cannot be written is logged: the start waits all the same.
+fn say_waiting(root: &Path, (run, invocation): (RunId, InvocationId), holders: Vec<QaSlotHolder>, notifier: &Notifier) {
   let noted = || -> Result<Option<u64>, StoreError> {
-    let db = ProjectDb::open(root)?;
+    let mut db = ProjectDb::open(root)?;
     let Some(invocation) = db.invocations(run)?.into_iter().find(|found| found.id == invocation) else {
       return Ok(None);
     };
     let note = AgentEvent::RunnerProblem {
       problem: RunnerProblem::WaitingForQaSlot { holders },
     };
-    sink
-      .activity(ActivityRecord::new(&invocation, vec![(Timestamp::now(), note)]))
-      .map(Some)
+    db.append_activity(&invocation, &[(Timestamp::now(), note)]).map(Some)
   };
   match noted() {
     Ok(Some(sequence)) => notifier.send(Event::AgentActivity { run, sequence }),

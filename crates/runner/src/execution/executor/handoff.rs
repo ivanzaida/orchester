@@ -14,14 +14,13 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_ipc::Event;
-use orchester_store::{ActivityRecord, ProjectDb, StoreError};
+use orchester_store::{ProjectDb, StoreError};
 
-use super::{Notifier, sink::Sink};
+use super::Notifier;
 
-/// Where a handoff is kept and its problems are reported: the transcript through the coordinator's sink.
+/// Where a handoff is kept and its problems are reported.
 pub(in crate::execution) struct Keeper<'a> {
   pub(in crate::execution) db: &'a mut ProjectDb,
-  pub(in crate::execution) sink: &'a mut dyn Sink,
   pub(in crate::execution) notifier: &'a Notifier,
   pub(in crate::execution) vault: &'a dyn SecretVault,
 }
@@ -111,8 +110,8 @@ impl Keeper<'_> {
     };
     tracing::warn!(run = %run.id(), %execution, ?reason, "the step's handoff was not kept");
     let problem = RunnerProblem::MemoryNotSaved { reason };
-    let events = vec![(Timestamp::now(), AgentEvent::RunnerProblem { problem })];
-    let sequence = self.sink.activity(ActivityRecord::new(&invocation, events))?;
+    let events = [(Timestamp::now(), AgentEvent::RunnerProblem { problem })];
+    let sequence = self.db.append_activity(&invocation, &events)?;
     self.notifier.send(Event::AgentActivity {
       run: run.id(),
       sequence,

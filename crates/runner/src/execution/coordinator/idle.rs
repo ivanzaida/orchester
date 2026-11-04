@@ -133,8 +133,7 @@ pub(in crate::execution) fn continue_interrupted(
       .find(|event| matches!(event.kind(), RunEventKind::Interrupted { .. }))
       .expect("an interrupted run has a recorded interruption")
       .at();
-    let mut sink = super::sink::LocalSink::new(root);
-    crate::execution::executor::broken::close_invocations(db, &mut sink, run.id(), ended_at)
+    crate::execution::executor::broken::close_invocations(db, run.id(), ended_at)
       .map_err(|error| failed("cannot record the ended invocations before continuing", &error))?;
   }
   let events = run.continue_run(Timestamp::now()).map_err(rejection)?;

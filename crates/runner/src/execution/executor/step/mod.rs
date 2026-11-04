@@ -14,7 +14,6 @@ mod claude_approval;
 mod cli_version;
 mod command_scope;
 mod end;
-mod launch_records;
 mod mcp;
 mod memory;
 mod native;
@@ -34,18 +33,19 @@ pub(in crate::execution) mod worker;
 
 use orchester_core::{
   command::SecretVariable,
-  connection::stream::{InvocationOutcome, RunnerProblem},
+  connection::stream::{AgentEvent, InvocationOutcome, RunnerProblem},
   conversation::{Arrival, Message, latest_question},
-  id::StepExecutionId,
+  id::{InvocationId, StepExecutionId},
+  memory::MemoryStore,
   permission::LaunchPermissions,
   resource::ModelId,
   revision::Revision,
-  run::{Invocation, MessageOccasion, Plan, StepExecutor, StepFailure, StepStatus, execution_tokens},
+  run::{EditProgress, Invocation, MessageOccasion, Plan, StepExecutor, StepFailure, StepStatus, execution_tokens},
   store::{ActivityStore, ConversationStore, RunStore, SettingsStore},
   time::Timestamp,
   tokens::{TokenBudget, TokensUsed},
 };
-use orchester_store::InvocationStart;
+use orchester_ipc::Event;
 use tokio::sync::mpsc;
 
 pub(in crate::execution) use self::qa_app::QaApps;
@@ -276,15 +276,12 @@ impl RunTask {
     self.keep_session_on_its_account(execution, &mut continuation)?;
     let judged = self.meet_moved_base(execution, workspace.as_ref(), &mut continuation, judged)?;
     let model = self.model(execution)?;
-    let mut invocation = self.begin_invocation(&InvocationStart::agent(
-      self.run.id(),
-      execution,
-      &model,
-      Timestamp::now(),
-    ))?;
+    let mut invocation = self
+      .db
+      .start_invocation(self.run.id(), execution, &model, Timestamp::now())?;
     if continuation.session.is_some() {
       invocation.session.clone_from(&continuation.session);
-      self.record_invocation(&invocation)?;
+      self.db.save_invocation(&invocation)?;
     }
     let workspace = match workspace {
       Ok(workspace) => workspace,
@@ -305,8 +302,13 @@ impl RunTask {
         return Ok(true);
       }
     };
-    self.record_launch(&invocation, &start)?;
+    self.db.save_invocation_permissions(invocation.id, &start.permissions)?;
     invocation.permissions = Some(start.permissions.clone());
+    self.record_reached(invocation.id, &start)?;
+    self.db.save_invocation_prompt(invocation.id, &start.prompt)?;
+    self.db.save_invocation_code_index(invocation.id, &start.code_index)?;
+    self.db.save_edit_progress(invocation.id, &EditProgress::started())?;
+    self.db.save_injected_memory(invocation.id, &start.memory)?;
     self.report_unreadable_memory(&invocation)?;
     self.record_left_out(&invocation, std::mem::take(&mut start.left_out))?;
     let driven = match start.launch.start() {
@@ -343,6 +345,38 @@ impl RunTask {
       tracing::warn!(?problem, "the step's checks could not be read for its approvals");
       Vec::new()
     })
+  }
+
+  /// Records what `invocation` reaches its model through and on: its connection, a native agent's engine, a CLI's
+  /// account, or the API provider a CLI runs on.
+  fn record_reached(&mut self, invocation: InvocationId, start: &start::AgentStart) -> Result<(), ExecutionError> {
+    self.db.save_invocation_connection(invocation, &start.connection)?;
+    if let Some(engine) = &start.engine {
+      self.db.save_invocation_engine(invocation, engine)?;
+    }
+    if let Some(account) = start.account {
+      self.db.save_invocation_account(invocation, account)?;
+    }
+    if let Some((base_url, key)) = &start.provider {
+      self.db.save_invocation_provider(invocation, base_url, *key)?;
+    }
+    Ok(())
+  }
+
+  /// Records what the agent of `invocation` works without: the MCP servers and the codebase index
+  /// of `left_out`.
+  fn record_left_out(&mut self, invocation: &Invocation, left_out: Vec<AgentEvent>) -> Result<(), ExecutionError> {
+    if left_out.is_empty() {
+      return Ok(());
+    }
+    let now = Timestamp::now();
+    let events: Vec<(Timestamp, AgentEvent)> = left_out.into_iter().map(|event| (now, event)).collect();
+    let sequence = self.db.append_activity(invocation, &events)?;
+    self.notifier.send(Event::AgentActivity {
+      run: self.run.id(),
+      sequence,
+    });
+    Ok(())
   }
 
   fn spawn(
@@ -403,7 +437,7 @@ impl RunTask {
       reviews_held,
       qa: std::sync::Arc::clone(&self.qa),
     };
-    tokio::spawn(worker.work(reviews_ended, self.sink.another()));
+    tokio::spawn(worker.work(reviews_ended));
     // The budget in force: one raised for the run after it stopped at the step's limit, else the
     // pipeline's.
     let budget = self
@@ -555,7 +589,7 @@ impl RunTask {
     self.report(invocation, problem)?;
     invocation.ended_at = Some(Timestamp::now());
     invocation.outcome = Some(InvocationOutcome::NotStarted);
-    self.record_invocation(invocation)?;
+    self.db.save_invocation(invocation)?;
     self.board.release(execution);
     self.fail(execution, failure)
   }

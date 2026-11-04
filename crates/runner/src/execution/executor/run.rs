@@ -26,7 +26,7 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_ipc::{Event, Rejection};
-use orchester_store::{ActivityRecord, InvocationRecord, InvocationStart, ProjectDb, StoreError};
+use orchester_store::{ProjectDb, StoreError};
 use thiserror::Error;
 use tokio::{sync::mpsc, time::Instant};
 
@@ -430,32 +430,12 @@ impl RunTask {
   /// Reports a problem around `invocation`'s agent in the run's transcript.
   pub(super) fn report(&mut self, invocation: &Invocation, problem: RunnerProblem) -> Result<(), ExecutionError> {
     tracing::warn!(run = %self.run.id(), ?problem, "a step ran into a problem");
-    let events = vec![(Timestamp::now(), AgentEvent::RunnerProblem { problem })];
-    self.record_activity(invocation, events)
-  }
-
-  /// Appends `events` of `invocation` to the run's transcript and announces them.
-  pub(super) fn record_activity(
-    &mut self,
-    invocation: &Invocation,
-    events: Vec<(Timestamp, AgentEvent)>,
-  ) -> Result<(), ExecutionError> {
-    let sequence = self.sink.activity(ActivityRecord::new(invocation, events))?;
+    let events = [(Timestamp::now(), AgentEvent::RunnerProblem { problem })];
+    let sequence = self.db.append_activity(invocation, &events)?;
     self.notifier.send(Event::AgentActivity {
       run: self.run.id(),
       sequence,
     });
     Ok(())
-  }
-
-  /// Records `start` and gives the invocation as it started.
-  pub(super) fn begin_invocation(&mut self, start: &InvocationStart) -> Result<Invocation, ExecutionError> {
-    let number = self.sink.invocation_start(start.clone())?;
-    Ok(start.invocation(number))
-  }
-
-  /// Stores `invocation`'s session, usage, end, outcome and waits.
-  pub(super) fn record_invocation(&mut self, invocation: &Invocation) -> Result<(), ExecutionError> {
-    Ok(self.sink.invocation(InvocationRecord::state(invocation))?)
   }
 }
