@@ -17,7 +17,7 @@ use thiserror::Error;
 
 use crate::{
   runner::{ExecutorFolders, RunRequestError},
-  tasks::{changes::GIT, detail::run_store_error},
+  tasks::{changes::GIT, detail::run_store_error, worktree_removal::WorktreeRemover},
 };
 
 /// Deleting a large build folder can take a while; only a git that hangs is stopped.
@@ -54,22 +54,25 @@ impl WorkspaceActionError {
   }
 }
 
-/// Removes the worktree run `run` made before workspaces, by the rules every removal follows: never while the run
-/// works, never discarding uncommitted changes (the row shows only the folder's size, so none was seen), and keeping
-/// every branch whose commits are not merged.
-pub fn remove_old_worktree(repo_root: &Path, run: orchester_core::id::RunId) -> Result<(), WorkspaceActionError> {
+/// Removes the worktree run `run` made before workspaces, among `worktrees`, by the rules every removal follows: never
+/// while the run works, never discarding uncommitted changes (the row shows only the folder's size, so none was seen),
+/// and keeping every branch whose commits are not merged. The project's runner removes it.
+pub fn remove_old_worktree(
+  worktrees: &WorktreeRemover,
+  run: orchester_core::id::RunId,
+) -> Result<(), WorkspaceActionError> {
+  let repo_root = worktrees.root();
   let stored = ProjectDb::open(repo_root)?
     .run(run)
     .map_err(run_store_error)?
     .ok_or(WorkspaceActionError::RunMissing)?;
-  let programs = orchester_exec::programs::Programs::processes();
   let runner = ProcessRunner::new(GIT_TIMEOUT);
   let mut seen = orchester_core::integration::leftovers(&runner, Path::new(GIT), repo_root, &stored)
     .map_err(|error| WorkspaceActionError::NotRemoved(crate::tasks::integration::IntegrationProblem::Read(error)))?;
   for worktree in &mut seen.worktrees {
     worktree.uncommitted.clear();
   }
-  crate::tasks::integration::remove_in(repo_root, &programs, &stored, &seen).map_err(WorkspaceActionError::NotRemoved)
+  crate::tasks::integration::remove_in(worktrees, &stored, &seen).map_err(WorkspaceActionError::NotRemoved)
 }
 
 /// Saves `settings` for the project at `repo_root`.

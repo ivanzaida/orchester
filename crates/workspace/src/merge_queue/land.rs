@@ -27,6 +27,7 @@ use crate::tasks::{
   changes::GIT,
   integration::{IntegrationProblem, merge_in_as},
   local_integration::CheckoutHolder,
+  worktree_removal::WorktreeRemover,
 };
 
 /// Characters of the task's brief the squash commit's body keeps.
@@ -49,13 +50,14 @@ pub(super) enum Landed {
 }
 
 /// Merges `run`, of `task`, which was synced and checked on `checked` (`None`: its pipeline does not check the merged
-/// result again), into its base branch in the checkout at `root`, or beside it when the run's base branch was set and
-/// the checkout has another branch, as `deliver` says.
+/// result again), into its base branch in the checkout of the project whose run worktrees are `worktrees`, or beside
+/// it when the run's base branch was set and the checkout has another branch, as `deliver` says.
 pub(super) fn land(
-  (root, programs): (&Path, &Programs),
+  (worktrees, programs): (&WorktreeRemover, &Programs),
   (run, task): (&Run, &Task),
   (deliver, checked): (&DeliverStep, Option<&CheckedOn>),
 ) -> Landed {
+  let root = worktrees.root();
   let Some(base) = run.base_branch() else {
     return Landed::Stopped("the run did not record its base branch".to_owned());
   };
@@ -107,7 +109,7 @@ pub(super) fn land(
     as_delivered,
     base: &base_head,
   };
-  match merge_in_as(root, programs, (run.id(), Some(&tip), Some(delivering))) {
+  match merge_in_as(worktrees, programs, (run.id(), Some(&tip), Some(delivering))) {
     Ok(merged) => Landed::Merged(cleared(programs, (root, run), &merged)),
     Err(problem) => not_landed(problem),
   }

@@ -10,7 +10,8 @@ use orchester_core::{
   connection::{AgentProvider, ApiEndpoint, CheckResult, NativeModel},
   id::{ChatId, ChatMessageId, ConnectionId, IdempotencyKey, ResourceId, RunId, StepExecutionId, TaskId},
   integration::{
-    Leftovers,
+    Cleanup, Leftovers,
+    removal::{RemovalFailure, RemovalRequest},
     resolve::request::{ResolveAnswer, ResolveFailure, ResolveRequest},
   },
   orchestrator::run_git::{RunGitAnswer, RunGitRequest},
@@ -324,6 +325,12 @@ pub enum Command {
   /// The code viewer reads the worktree of run `run` (protocol 48, [`crate::run_files`]): the runner's executor side
   /// reads it where the worktree is. Answered with [`Reply::RunFiles`].
   RunFiles { run: RunId, request: RunFilesRequest },
+  /// Removes what run `run`, which ended, left, as `request` allows: its worktrees and branches, with the run's own
+  /// processes in a held folder stopped first when asked (protocol 49). The desktop records the removal in the
+  /// project's database before and after; the runner removes, then removes the codebase indexes only removed worktrees
+  /// used and sweeps the worktree folders. Answered with [`Reply::WorktreesRemoved`], or [`Reply::RemovalFailed`] when
+  /// nothing was removed.
+  RemoveWorktrees { run: RunId, request: RemovalRequest },
 }
 
 /// Which session a runner serves, from the desktop's side.
@@ -528,6 +535,10 @@ pub enum Reply {
   CodeIndexRebuilt {
     revision: Revision,
   },
+  /// The answer to [`Command::RemoveWorktrees`] that removed: what it removed, and what stays and why.
+  WorktreesRemoved(Cleanup),
+  /// The answer to [`Command::RemoveWorktrees`] that removed nothing, and why.
+  RemovalFailed(RemovalFailure),
   /// The answer to [`Command::RunFolderState`].
   RunFolderState {
     run: RunId,

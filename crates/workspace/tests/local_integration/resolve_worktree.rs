@@ -74,7 +74,7 @@ fn local_integration_resolve_a_held_run_is_not_merged_and_a_gone_worktree_ends_t
   resolve::start(&worktrees(root), root, fixture.run).expect("merged into the worktree");
   let main = git(root, &["rev-parse", "main"]);
   assert!(
-    orchester_workspace::tasks::integration::merge_in(root, &programs(), (fixture.run, None)).is_err(),
+    orchester_workspace::tasks::integration::merge_in(&fixture.worktrees(), &programs(), (fixture.run, None)).is_err(),
     "the merge waits in the worktree"
   );
   assert_eq!(git(root, &["rev-parse", "main"]), main, "git changed nothing");

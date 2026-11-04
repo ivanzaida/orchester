@@ -4,6 +4,7 @@
 mod attach;
 mod browser;
 mod code_index;
+mod decisions;
 mod estimate;
 mod folders;
 mod merge_queue;
@@ -22,10 +23,9 @@ use std::{
 
 use orchester_core::{
   connection::{AgentProvider, ApiEndpoint},
-  id::{ChatId, ChatMessageId, IdempotencyKey, RunId, StepExecutionId, TaskId},
+  id::{ChatId, ChatMessageId, IdempotencyKey, ResourceId, RunId, TaskId},
   integration::Leftovers,
-  question::GivenAnswer,
-  run::{Answerer, ApprovalAnswer, InterruptCause, PlanDecision, PlanVersion, RaisedLimits, StuckDecision},
+  run::{InterruptCause, RaisedLimits},
   sharing::TaskRevision,
   tokens::TokenBudget,
 };
@@ -346,16 +346,14 @@ async fn answer(
       });
     }
     Command::KeepPermissionsForNextInvocation { run, profile } => {
-      return later.answer(run, async move {
-        handle.keep_permissions_for_next_invocation(run, profile).await
-      });
+      return keep_permissions(&later, handle, run, profile);
     }
     Command::ReturnRun(ref returned) => return answer_return(&later, handle, returned.clone()),
     ref decision @ (Command::DecidePlan { .. }
     | Command::DecideStuckRun { .. }
     | Command::DecideStuckRunAs { .. }
     | Command::DecideToolApproval { .. }
-    | Command::AnswerQuestion { .. }) => return answer_decision(&later, handle, decision),
+    | Command::AnswerQuestion { .. }) => return later.decision(handle, decision),
     Command::DeliverMessages { run } => return later.answer(run, async move { handle.deliver_messages(run).await }),
     Command::Shutdown { mode } => return Answer::Shutdown(mode),
     Command::StopIfIdle => return Answer::StopIfIdle(id),
@@ -375,41 +373,9 @@ async fn answer(
     Command::ReadWorktreeChanges { run } => return later.reply(handle.worktree_changes(run)),
     Command::RebuildCodeIndex { ref revision } => return later.rebuild_code_index(handle, revision.clone()),
     Command::RunFiles { run, ref request } => return later.reply(handle.run_files(run, request.clone())),
+    Command::RemoveWorktrees { run, ref request } => return later.reply(handle.remove_worktrees(run, request.clone())),
   };
   Answer::Reply(Event::Reply { id, reply })
-}
-
-/// Routes the decision commands without holding up the runner's other requests.
-fn answer_decision(later: &Later<'_>, handle: Scheduler, command: &Command) -> Answer {
-  match *command {
-    Command::DecidePlan {
-      run,
-      execution,
-      version,
-      ref decision,
-      by,
-    } => answer_plan(later, handle, (run, execution, version), (decision.clone(), by)),
-    Command::DecideStuckRun { run, ref decision } => answer_stuck(later, handle, run, (decision.clone(), None)),
-    Command::DecideStuckRunAs {
-      run,
-      expected,
-      ref decision,
-      by,
-    } => answer_stuck(later, handle, run, (decision.clone(), Some((by, expected)))),
-    Command::DecideToolApproval {
-      run,
-      ref approval,
-      ref answer,
-      by,
-    } => answer_tool_approval(later, handle, run, approval, (answer.clone(), by)),
-    Command::AnswerQuestion {
-      run,
-      ref request,
-      ref answers,
-      by,
-    } => answer_question(later, handle, run, (request, answers, by)),
-    _ => unreachable!("answer routes only the five decision commands here"),
-  }
 }
 
 /// The reply to [`Command::AnswerInChat`].
@@ -463,6 +429,13 @@ fn at_plan_limit(
   }
 }
 
+/// Keeps the permissions of `profile` that `run`'s agent asked for for its next invocation
+/// ([`Command::KeepPermissionsForNextInvocation`]).
+fn keep_permissions(later: &Later<'_>, handle: Scheduler, run: RunId, profile: ResourceId) -> Answer {
+  later.answer(run, async move {
+    handle.keep_permissions_for_next_invocation(run, profile).await
+  })
+}
 fn raise_limit(
   later: &Later<'_>,
   scheduler: Scheduler,
@@ -476,61 +449,11 @@ fn raise_limit(
   later.answer(run, async move { scheduler.raise_limit(run, limits).await })
 }
 
-fn answer_tool_approval(
-  later: &Later<'_>,
-  scheduler: Scheduler,
-  run: RunId,
-  approval: &str,
-  (answer, by): (ApprovalAnswer, Answerer),
-) -> Answer {
-  let approval = approval.to_owned();
-  later.answer(run, async move {
-    scheduler.decide_tool_approval(run, approval, answer, by).await
-  })
-}
-
-fn answer_question(
-  later: &Later<'_>,
-  scheduler: Scheduler,
-  run: RunId,
-  (request, answers, by): (&str, &[GivenAnswer], Answerer),
-) -> Answer {
-  let (request, answers) = (request.to_owned(), answers.to_vec());
-  later.answer(run, async move {
-    scheduler.answer_question(run, request, answers, by).await
-  })
-}
-
 fn answer_check(later: &Later<'_>, scheduler: Scheduler, provider: AgentProvider, api: ApiEndpoint) -> Answer {
   later.reply(async move {
     match scheduler.check_connection(provider, api).await {
       Ok((result, models)) => Reply::ConnectionChecked { result, models },
       Err(rejection) => Reply::Rejected(rejection),
-    }
-  })
-}
-
-fn answer_plan(
-  later: &Later<'_>,
-  scheduler: Scheduler,
-  (run, execution, version): (RunId, StepExecutionId, PlanVersion),
-  (decision, by): (PlanDecision, Answerer),
-) -> Answer {
-  later.answer(run, async move {
-    scheduler.decide_plan(run, execution, version, decision, by).await
-  })
-}
-
-fn answer_stuck(
-  later: &Later<'_>,
-  scheduler: Scheduler,
-  run: RunId,
-  (decision, seen): (StuckDecision, Option<(Answerer, orchester_core::run::EventSequence)>),
-) -> Answer {
-  later.answer(run, async move {
-    match seen {
-      Some((by, expected)) => scheduler.decide_stuck_as(run, decision, by, expected).await,
-      None => scheduler.decide_stuck(run, decision).await,
     }
   })
 }

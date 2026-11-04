@@ -364,8 +364,8 @@ fn action(ctx: &mut Ctx, (project, feed): (OpenProject, ProjectFeed), asked: Sig
             .and_then(|reopened| reopened)
         }
         Request::Delete(subject, unmerged) => {
-          let programs = services.programs.clone();
-          let deleted = background::run(move || delete_in(&root, &programs, subject.id, unmerged))
+          let worktrees = services.worktree_remover(&project);
+          let deleted = background::run(move || delete_in(&worktrees, subject.id, unmerged))
             .await
             .and_then(|deleted| deleted);
           if deleted.is_ok() {

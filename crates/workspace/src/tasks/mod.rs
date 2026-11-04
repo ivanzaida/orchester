@@ -65,5 +65,5 @@ mod unverified;
 pub mod usage;
 pub mod views;
 pub mod worktree_left;
-mod worktree_sweep;
+pub mod worktree_removal;
 pub mod writer;

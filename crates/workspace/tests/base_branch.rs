@@ -32,8 +32,15 @@ use orchester_workspace::{
   tasks::{
     delivery::{self, Delivery},
     integration::{IntegrationProblem, merge_in},
+    worktree_removal::WorktreeRemover,
   },
 };
+
+/// The runs' worktrees in the repository at `root`, which the project's runner would remove, removed in the test's
+/// process with `programs` instead, through the messages the runner reads and answers.
+fn here(root: &Path, programs: &Programs) -> WorktreeRemover {
+  WorktreeRemover::here_for_test(root, programs.clone())
+}
 
 fn git(root: &Path, args: &[&str]) -> String {
   let output = Command::new("git").args(args).current_dir(root).output().expect("git");
@@ -239,7 +246,7 @@ fn base_branch_merge_lands_beside_a_checkout_on_another_branch_and_clears_up() {
   let checked_out = repo.succeeded(&following, "orchester/orc-1-run-1", ("feature.txt", "work\n"));
   let main = git(repo.root(), &["rev-parse", "main"]);
   let programs = Programs::processes();
-  let refused = merge_in(repo.root(), &programs, (checked_out.id(), None)).map(|merged| merged.merge);
+  let refused = merge_in(&here(repo.root(), &programs), &programs, (checked_out.id(), None)).map(|merged| merged.merge);
   assert!(
     matches!(&refused, Err(IntegrationProblem::Merge(MergeError::WrongBranch { .. }))),
     "a run that took the checked-out branch merges only there: {refused:?}"
@@ -248,7 +255,8 @@ fn base_branch_merge_lands_beside_a_checkout_on_another_branch_and_clears_up() {
   repo.source = RunBaseSource::Task;
   let task = repo.task("Sign in");
   let run = repo.succeeded(&task, "orchester/orc-2-run-1", ("feature.txt", "work\n"));
-  let merged = merge_in(repo.root(), &programs, (run.id(), None)).expect("merged beside the checkout");
+  let merged =
+    merge_in(&here(repo.root(), &programs), &programs, (run.id(), None)).expect("merged beside the checkout");
   assert_eq!(merged.merge.into, branch("staging"));
   assert_eq!(merged.merge.kind, MergeKind::FastForward);
   assert_eq!(
@@ -297,13 +305,14 @@ fn run_base_resolution_each_run_lands_by_where_its_base_came_from() {
   let from_project = repo.succeeded(&from_project, "orchester/orc-4-run-1", ("shared.txt", "reset\n"));
   assert_eq!(base_moved::observe_in(repo.root(), &programs).expect("observed"), 0);
 
-  let refused = merge_in(repo.root(), &programs, (checked_out.id(), None)).map(|merged| merged.merge);
+  let refused = merge_in(&here(repo.root(), &programs), &programs, (checked_out.id(), None)).map(|merged| merged.merge);
   assert!(
     matches!(&refused, Err(IntegrationProblem::Merge(MergeError::WrongBranch { .. }))),
     "a run that took the checked-out branch merges only there: {refused:?}"
   );
   for run in [&from_module, &from_project] {
-    let merged = merge_in(repo.root(), &programs, (run.id(), None)).expect("merged beside the checkout");
+    let merged =
+      merge_in(&here(repo.root(), &programs), &programs, (run.id(), None)).expect("merged beside the checkout");
     assert_eq!(merged.merge.into, branch("staging"));
   }
   assert_eq!(git(repo.root(), &["show", "staging:module.txt"]), "module");
@@ -331,7 +340,7 @@ fn base_branch_moves_of_the_branch_set_are_told_to_its_runs() {
   let working = repo.working(&working_task, "orchester/orc-2-run-1", ("shared.txt", "sign out\n"));
   let programs = Programs::processes();
   assert_eq!(base_moved::observe_in(repo.root(), &programs).expect("observed"), 0);
-  merge_in(repo.root(), &programs, (merged.id(), None)).expect("merged beside the checkout");
+  merge_in(&here(repo.root(), &programs), &programs, (merged.id(), None)).expect("merged beside the checkout");
   let notices = ProjectDb::open(repo.root())
     .expect("open")
     .run_base_notices(working.id())

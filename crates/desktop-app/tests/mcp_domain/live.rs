@@ -397,6 +397,7 @@ fn hold_merge(served: &Served, repo: &Path) -> HeldMerge {
     number: run.number().get(),
     branch: "main".to_owned(),
     run: run.id(),
+    worktrees: services.worktree_remover(&open),
     programs: Programs::with_runner(Arc::new(Held(Arc::clone(&gate)))),
     activity: services.activity.clone(),
     separator: ", ".into(),

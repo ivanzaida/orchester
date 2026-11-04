@@ -29,6 +29,7 @@ use orchester_workspace::{
     integration_jobs::ProjectJobs,
     outside::OutsideChanges,
     resolve::{Editor, RunWorktrees},
+    worktree_removal::WorktreeRemover,
   },
   workspace::{OpenProject, Workspace},
 };
@@ -210,6 +211,11 @@ impl Services {
         .runtime
         .spawn(self.runners.clone().follow_browser_settings(self.workspace.clone())),
     ])
+  }
+
+  /// The run worktrees of `project`, which removing what runs left reaches through the project's runner.
+  pub fn worktree_remover(&self, project: &OpenProject) -> WorktreeRemover {
+    WorktreeRemover::through_runner(&self.runners, (&project.repo_root, project.project.name().as_str()))
   }
 }
 

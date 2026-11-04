@@ -19,6 +19,7 @@ mod estimate;
 mod folders;
 mod idle;
 mod lifetime;
+mod log;
 mod merge_queue;
 mod outcome;
 mod report;
@@ -30,10 +31,10 @@ mod settings;
 pub mod state;
 mod work;
 mod worktree_changes;
+mod worktree_removal;
 
 use std::{
   collections::{HashMap, HashSet},
-  io,
   path::{Path, PathBuf},
   sync::{
     Arc,
@@ -319,7 +320,7 @@ impl Runners {
   pub fn open_log_of(&self, root: &Path) {
     let project = root.to_path_buf();
     self.inner.runtime.spawn_blocking(move || {
-      if let Err(error) = open_log(&project) {
+      if let Err(error) = log::open_log(&project) {
         tracing::error!(project = %project.display(), %error, "cannot open the runner log");
       }
     });
@@ -534,14 +535,4 @@ impl Runners {
       }
     }
   }
-}
-
-fn open_log(project: &Path) -> io::Result<()> {
-  let log = orchester_ipc::runner_log_path(project, SystemTime::now());
-  let target = if log.is_file() {
-    log
-  } else {
-    orchester_ipc::runner_log_dir(project)
-  };
-  orchester_exec::external::open_path(&target)
 }

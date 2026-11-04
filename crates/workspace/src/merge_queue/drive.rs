@@ -45,7 +45,7 @@ use super::{
 };
 use crate::{
   messages::{self, Message},
-  tasks::{changes::GIT, detail::run_store_error},
+  tasks::{changes::GIT, detail::run_store_error, worktree_removal::WorktreeRemover},
 };
 
 /// What [`advance`] did.
@@ -102,14 +102,18 @@ impl Drop for Driving {
   }
 }
 
-/// Moves the queue of the project at `root` on by one step, with `programs` running git in the person's checkout and
-/// `worktrees` syncing and checking the runs' worktrees. While another caller moves it on, this does nothing. Blocks
-/// on SQLite, git and the runner.
-pub fn advance(root: &Path, programs: &Programs, worktrees: &dyn RunWorktrees) -> Result<Advance, Message> {
+/// Moves the queue of the project at `root` on by one step, with `programs` running git in the person's checkout,
+/// `worktrees` syncing and checking the runs' worktrees and `remover` removing what a landed run left. While another
+/// caller moves it on, this does nothing. Blocks on SQLite, git and the runner.
+pub fn advance(
+  root: &Path,
+  programs: &Programs,
+  (worktrees, remover): (&dyn RunWorktrees, &WorktreeRemover),
+) -> Result<Advance, Message> {
   let Some(_driving) = Driving::take(root) else {
     return Ok(Advance::Idle { poll: false });
   };
-  let advanced = step(root, programs, worktrees).map_err(|stuck| match stuck {
+  let advanced = step(root, programs, (worktrees, remover)).map_err(|stuck| match stuck {
     Stuck::Store(error) => {
       tracing::warn!(%error, "the merge queue cannot move on");
       messages::store_error(&error)
@@ -127,7 +131,7 @@ pub fn advance(root: &Path, programs: &Programs, worktrees: &dyn RunWorktrees) -
 
 /// Moves the first lane that has something to do on by one step, the lanes taking turns; idle, polling, when no lane
 /// moved and one of them waits for the checkout.
-fn step(root: &Path, programs: &Programs, worktrees: &dyn RunWorktrees) -> Moved {
+fn step(root: &Path, programs: &Programs, (worktrees, remover): (&dyn RunWorktrees, &WorktreeRemover)) -> Moved {
   let mut db = ProjectDb::open(root)?;
   if join(&mut db, (root, programs), Timestamp::now())? {
     return Ok(Advance::Changed);
@@ -139,6 +143,7 @@ fn step(root: &Path, programs: &Programs, worktrees: &dyn RunWorktrees) -> Moved
       root,
       programs,
       worktrees,
+      remover,
     })
     .step(entry, run)?
     {
@@ -193,6 +198,8 @@ struct Driver<'a> {
   root: &'a Path,
   programs: &'a Programs,
   worktrees: &'a dyn RunWorktrees,
+  /// The project's run worktrees, which its runner removes once a run landed.
+  remover: &'a WorktreeRemover,
 }
 
 impl Driver<'_> {
@@ -382,7 +389,7 @@ impl Driver<'_> {
       return self.leave(entry, stopped("the run's task cannot be read"), events);
     };
     match land(
-      (self.root, self.programs),
+      (self.remover, self.programs),
       (run, &task),
       (deliver, entry.checked.as_ref()),
     ) {

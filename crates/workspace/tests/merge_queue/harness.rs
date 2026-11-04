@@ -34,7 +34,7 @@ use orchester_ipc::Command as RunnerCommand;
 use orchester_store::ProjectDb;
 use orchester_workspace::{
   merge_queue::{self, Advance},
-  tasks::resolve::RunWorktrees,
+  tasks::{resolve::RunWorktrees, worktree_removal::WorktreeRemover},
 };
 use parking_lot::Mutex;
 
@@ -152,6 +152,11 @@ impl Repo {
 
   pub fn programs(&self) -> Programs {
     Programs::with_runner(self.answered.clone())
+  }
+
+  /// The runs' worktrees, which the project's runner would remove once a run landed, removed in the test's process.
+  pub fn remover(&self) -> WorktreeRemover {
+    WorktreeRemover::here_for_test(self.root(), self.programs())
   }
 
   /// The runs' worktrees, where resolving by hand runs git as the project's runner would, in the test's process.
@@ -290,7 +295,7 @@ impl Repo {
       root: self.root().to_path_buf(),
       programs: self.answered.clone(),
     };
-    merge_queue::advance(self.root(), &self.programs(), &worktrees).expect("advanced")
+    merge_queue::advance(self.root(), &self.programs(), (&worktrees, &self.remover())).expect("advanced")
   }
 
   /// Moves the queue on until it has nothing to do; the commands it gave for the runner.

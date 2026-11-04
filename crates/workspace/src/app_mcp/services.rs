@@ -17,7 +17,10 @@ use crate::{
   runner::Runners,
   secrets::Vault,
   sharing::Servers,
-  tasks::{estimate::Estimates, integration_jobs::ProjectJobs, outside::OutsideChanges, resolve::RunWorktrees},
+  tasks::{
+    estimate::Estimates, integration_jobs::ProjectJobs, outside::OutsideChanges, resolve::RunWorktrees,
+    worktree_removal::WorktreeRemover,
+  },
   workspace::{OpenProject, Workspace},
 };
 
@@ -154,6 +157,11 @@ impl Services {
   /// The projects' merge and removal operations, shared with the task pages.
   pub(crate) const fn jobs(&self) -> &ProjectJobs {
     &self.jobs
+  }
+
+  /// The run worktrees of `project`, which its runner removes.
+  pub(crate) fn worktree_remover(&self, project: &OpenProject) -> WorktreeRemover {
+    WorktreeRemover::through_runner(&self.runners, (&project.repo_root, project.project.name().as_str()))
   }
 
   /// Orchester's story-point estimates of saved tasks.

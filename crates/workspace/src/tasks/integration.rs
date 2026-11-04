@@ -13,22 +13,31 @@ use orchester_core::{
   id::{RunId, StepExecutionId},
   integration::{
     Cleanup, CleanupError, Delivering, FolderListing, GitError, KeepReason, LeftWorktree, Leftovers, MergeError,
-    RecordedCleanupError, RunMerge, TemporaryLeft, base::Landing, clean_up_recorded_as_seen, finish_removal,
-    leftovers_of, merge_run_as,
+    RecordedCleanupError, RunMerge, TemporaryLeft,
+    base::Landing,
+    leftovers_of, merge_run_as, record_removal_as_seen, record_what_stayed,
+    removal::{Discard, RemovalRequest},
+    settle_removal,
   },
   revision::Revision,
   run::{BranchName, Run},
   store::{MergeStore, RunStore, TaskStore},
   time::Timestamp,
 };
-use orchester_exec::{programs::Programs, run_processes::RunProcesses};
-use orchester_index::CodebaseIndexes;
+use orchester_exec::programs::Programs;
 use orchester_store::{ProjectDb, StoreError};
 
-use super::{changes::GIT, detail::run_store_error, local_integration::CheckoutHolder};
+use super::{
+  changes::GIT,
+  detail::run_store_error,
+  local_integration::CheckoutHolder,
+  run::control_message,
+  worktree_removal::{Unremoved, WorktreeRemover},
+};
 use crate::{
   activity::{Activity, Running, run_operations},
   messages::Message,
+  runner::RunRequestError,
   workspace::OpenProject,
 };
 
@@ -64,6 +73,8 @@ pub enum IntegrationProblem {
     merge: RunMerge,
     problem: Message,
   },
+  /// The project's runner, which removes runs' worktrees, did not carry the removal out: nothing was removed.
+  Runner(RunRequestError),
 }
 
 /// Why a removal automation asked for did not happen: what a person reads, and whether the run changed since
@@ -105,6 +116,7 @@ impl IntegrationProblem {
         | Self::Read(_)
         | Self::Merge(MergeError::Git(_))
         | Self::Cleanup(CleanupError::Git(_))
+        | Self::Runner(_)
     );
     if !could_not_run {
       running.finish_as(not_done);
@@ -117,6 +129,7 @@ impl IntegrationProblem {
       | Self::Cleanup(CleanupError::Git(GitError::Run(CommandError::NotFound))) => {
         Message::new("runs.merge.failure.brief.gitMissing")
       }
+      Self::Runner(error) => control_message(error),
       _ => Message::new("runs.merge.failure.brief.git"),
     };
     running.fail(reason);
@@ -155,6 +168,7 @@ impl IntegrationProblem {
       Self::NotRemoved { path, detail } => Message::new("runs.worktree.failure.notRemoved")
         .with("path", short_path(path))
         .with("detail", short_reason(detail, path)),
+      Self::Runner(error) => control_message(error),
     }
   }
 }
@@ -315,23 +329,25 @@ fn not_merged_or_held(db: &ProjectDb, run: RunId) -> Result<(), IntegrationProbl
   Ok(())
 }
 
-/// Merges run `run` of the project at `repo_root`, records the merge and removes what the run left
-/// that is safe to remove: its clean worktrees and its merged branches. With `expected`, only while the run's
-/// branch is at that commit (the one a person reviewed); a branch that moved since merges nothing.
+/// Merges run `run` of the project whose run worktrees are `worktrees`, with `programs` running git in the person's
+/// checkout, records the merge and has the project's runner remove what the run left that is safe to remove: its
+/// clean worktrees and its merged branches. With `expected`, only while the run's branch is at that commit (the one a
+/// person reviewed); a branch that moved since merges nothing.
 pub fn merge_in(
-  repo_root: &Path,
+  worktrees: &WorktreeRemover,
   programs: &Programs,
   (run, expected): (RunId, Option<&Revision>),
 ) -> Result<Merged, IntegrationProblem> {
-  merge_in_as(repo_root, programs, (run, expected, None))
+  merge_in_as(worktrees, programs, (run, expected, None))
 }
 
 /// [`merge_in`], landed as `delivering` says when the merge queue delivers the run (`None`: as the task page merges).
 pub fn merge_in_as(
-  repo_root: &Path,
+  worktrees: &WorktreeRemover,
   programs: &Programs,
   (run, expected, delivering): (RunId, Option<&Revision>, Option<Delivering<'_>>),
 ) -> Result<Merged, IntegrationProblem> {
+  let repo_root = worktrees.root();
   let _lease = orchester_exec::local_git::IntegrationLease::acquire(repo_root)
     .map_err(|_| IntegrationProblem::Store(Message::new("localIntegration.preflightFailed")))?;
   let _store_owner = orchester_exec::local_git::owned::StoreOwnership::acquire(repo_root)
@@ -404,7 +420,7 @@ pub fn merge_in_as(
   }
   super::local_integration::settle_review(&mut db, &merge);
   crate::base_moved::after_merge(repo_root, programs);
-  let cleanup = clear(&mut db, programs, repo_root, &run, None);
+  let cleanup = clear(&mut db, worktrees, &run, None);
   if cleanup.is_err() {
     tracing::warn!("the run was merged, but what it left could not be cleared");
   }
@@ -440,23 +456,18 @@ pub fn leftovers_in(
   Ok(LeftBehind(runs.iter().map(|run| run.id()).zip(left).collect()))
 }
 
-/// Removes what `run` left, discarding uncommitted changes only where `confirmed`, what the person
+/// Removes what `run` left, among `worktrees`, discarding uncommitted changes only where `confirmed`, what the person
 /// saw, lists exactly those, and records when its own worktree went. A worktree that stays is a
 /// problem to show: it changed since, or git refused. The run is read again first: one that has other
 /// worktrees than `run`, the run the person saw, removes nothing ([`IntegrationProblem::RunChanged`]).
-pub fn remove_in(
-  repo_root: &Path,
-  programs: &Programs,
-  run: &Run,
-  confirmed: &Leftovers,
-) -> Result<(), IntegrationProblem> {
-  let mut db = ProjectDb::open(repo_root)?;
+pub fn remove_in(worktrees: &WorktreeRemover, run: &Run, confirmed: &Leftovers) -> Result<(), IntegrationProblem> {
+  let mut db = ProjectDb::open(worktrees.root())?;
   let stored = db
     .run(run.id())
     .map_err(run_store_error)?
     .filter(|stored| worktree_owners(stored) == worktree_owners(run))
     .ok_or(IntegrationProblem::RunChanged)?;
-  let cleanup = clear(&mut db, programs, repo_root, &stored, Some(confirmed))?;
+  let cleanup = clear(&mut db, worktrees, &stored, Some(confirmed))?;
   match cleanup.kept_worktrees.into_iter().next() {
     None => Ok(()),
     Some((worktree, KeepReason::Failed(detail))) => Err(IntegrationProblem::NotRemoved {
@@ -481,48 +492,59 @@ fn worktree_owners(run: &Run) -> (&BranchName, Vec<StepExecutionId>) {
 
 /// Removes what `run` left with the removal recorded first, refused once the run has live work as
 /// stored now, e.g. continued from another window since its page was read, or, read again once the
-/// removal is recorded, has other worktrees than `run` ([`clean_up_recorded_as_seen`]). A folder something held is
-/// deleted again once the run's own processes there are stopped, and one that still stays is recorded as not removed
-/// ([`finish_removal`]); then folders no run uses any more are swept ([`super::worktree_sweep`]).
+/// removal is recorded, has other worktrees than `run` ([`record_removal_as_seen`]). The project's runner removes
+/// (`worktrees`): a folder something held is deleted again once the run's own processes there are stopped, then the
+/// codebase indexes only removed worktrees used go and folders no run uses any more are swept. The record is taken
+/// back when nothing was touched ([`settle_removal`]), and a folder that still stays is recorded as not removed
+/// ([`record_what_stayed`]).
 fn clear(
   db: &mut ProjectDb,
-  programs: &Programs,
-  repo_root: &Path,
+  worktrees: &WorktreeRemover,
   run: &Run,
   confirmed: Option<&Leftovers>,
 ) -> Result<Cleanup, IntegrationProblem> {
-  let git = programs.git_work();
   let unchanged = |db: &ProjectDb| {
     let stored = db.run(run.id()).map_err(run_store_error)?;
     Ok(stored.is_some_and(|stored| worktree_owners(&stored) == worktree_owners(run)))
   };
-  let git = (&git, Path::new(GIT), repo_root);
-  let mut cleanup =
-    clean_up_recorded_as_seen(db, git, run, confirmed, (Timestamp::now(), unchanged)).map_err(|error| {
-      tracing::warn!("cannot remove what the run left");
-      match error {
-        RecordedCleanupError::Cleanup(error) => IntegrationProblem::Cleanup(error),
-        RecordedCleanupError::Store(error) => IntegrationProblem::from(error),
-        RecordedCleanupError::RunChanged => IntegrationProblem::RunChanged,
-      }
-    })?;
-  let stop = |folder: &Path| RunProcesses::stop_in(folder, run.created_at());
-  if let Err(error) = finish_removal(db, git, (run.id(), Timestamp::now()), &mut cleanup, stop) {
+  let at = Timestamp::now();
+  let start = record_removal_as_seen(db, run.id(), (at, unchanged)).map_err(|error| {
+    tracing::warn!("cannot remove what the run left");
+    match error {
+      RecordedCleanupError::Cleanup(error) => IntegrationProblem::Cleanup(error),
+      RecordedCleanupError::Store(error) => IntegrationProblem::from(error),
+      RecordedCleanupError::RunChanged => IntegrationProblem::RunChanged,
+    }
+  })?;
+  let request = RemovalRequest {
+    discard: Discard::Seen(confirmed.cloned()),
+    retry_held: true,
+  };
+  let removed = worktrees.remove(run.id(), request);
+  // Removing fails only before it removes anything: nothing was touched.
+  settle_removal(db, (run.id(), start, at), removed.as_ref().ok())?;
+  let cleanup = removed.map_err(|unremoved| {
+    tracing::warn!(%unremoved, "cannot remove what the run left");
+    IntegrationProblem::from(unremoved)
+  })?;
+  if let Err(error) = record_what_stayed(db, (run.id(), Timestamp::now()), &cleanup) {
     // The worktrees are as the clean-up says either way; only the record of what stayed is missing.
     tracing::warn!(%error, run = %run.id(), "cannot record what the worktree removal left");
   }
   if let Some(left) = cleanup.not_removed() {
     tracing::warn!(run = %run.id(), path = %left.path, reason = ?left.reason, "a worktree of the run was not removed");
   }
-  super::worktree_sweep::sweep_in_background(programs, repo_root);
-  prune_indexes(repo_root);
   Ok(cleanup)
 }
 
-/// Removes the codebase indexes that only removed worktrees used. The worktrees are gone either way;
-/// an index left behind goes with the next removal.
-pub(super) fn prune_indexes(repo_root: &Path) {
-  if let Err(error) = CodebaseIndexes::new(repo_root).prune() {
-    tracing::warn!(%error, "cannot remove the codebase indexes of removed worktrees");
+impl From<Unremoved> for IntegrationProblem {
+  fn from(unremoved: Unremoved) -> Self {
+    match unremoved {
+      Unremoved::Runner(error) => Self::Runner(error),
+      Unremoved::Failed(failure) => match failure.cleanup_error() {
+        Some(error) => Self::Cleanup(error),
+        None => Self::Store(Message::new("errors.storage")),
+      },
+    }
   }
 }

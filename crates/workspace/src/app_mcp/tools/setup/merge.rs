@@ -255,6 +255,7 @@ fn start(
     branch,
     run: run.id(),
     programs: services.programs.clone(),
+    worktrees: services.worktree_remover(&open),
     activity: services.activity.clone(),
     separator,
     changed: Arc::new(move || {

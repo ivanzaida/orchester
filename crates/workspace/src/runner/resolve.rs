@@ -35,8 +35,9 @@ impl Runners {
     }
   }
 
-  /// The session of a test has no runner: what resolving by hand asks of a run's worktree is carried out in this
-  /// process with `programs`, through the same serialized messages (`crate::tasks::resolve::RunWorktrees`).
+  /// The session of a test has no runner: what the desktop asks of a run's worktrees (resolving by hand, removing them)
+  /// is carried out in this process with `programs`, through the same serialized messages
+  /// (`crate::tasks::resolve::RunWorktrees`, `crate::tasks::worktree_removal::WorktreeRemover`).
   #[cfg(feature = "test-support")]
   pub fn serve_worktrees_here_for_test(&self, programs: Programs) {
     *self.inner.worktrees_here.lock() = Some(programs);

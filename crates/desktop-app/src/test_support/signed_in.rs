@@ -66,8 +66,8 @@ pub fn launch_signed_in(database: &Path, runner: PathBuf, runtime: &Handle, clou
 }
 
 /// [`launch_signed_in`] without signing in: this computer's projects only, as on a first run. Where the runner program
-/// does not exist, what resolving a merge by hand asks of a run's worktree is carried out in this process with the
-/// session's programs, through the messages the runner would read and answer.
+/// does not exist, what the desktop asks of a run's worktrees (removing them, resolving a merge by hand) is carried out
+/// in this process with the session's programs, through the messages the runner would read and answer.
 pub fn launch(database: &Path, runner: PathBuf, runtime: &Handle) -> Launch {
   let no_runner = !runner.exists();
   let launch = Launch::begin_with_vault(database, runner, runtime, (None, keychain()));

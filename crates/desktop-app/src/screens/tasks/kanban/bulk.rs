@@ -178,8 +178,8 @@ async fn close_all(
 
 async fn delete_all(project: &OpenProject, services: &Services, tasks: &[Subject]) -> Result<(), Failed> {
   for task in tasks {
-    let (root, programs, id) = (project.repo_root.clone(), services.programs.clone(), task.id);
-    background::run(move || delete_in(&root, &programs, id, false))
+    let (worktrees, id) = (services.worktree_remover(project), task.id);
+    background::run(move || delete_in(&worktrees, id, false))
       .await
       .and_then(|deleted| deleted)
       .map_err(|message| Failed {

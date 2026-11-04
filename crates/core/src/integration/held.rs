@@ -19,6 +19,16 @@ pub fn finish_removal<S: WorktreeStore>(
   stop: impl FnMut(&Path),
 ) -> Result<(), S::Error> {
   retry_held(runner, (git, repo), cleanup, stop);
+  record_what_stayed(store, (run, at), cleanup)
+}
+
+/// Records in `store` at `at` the folder of `run`'s worktrees that the removal `cleanup` did left on disk and why, or
+/// that none stays.
+pub fn record_what_stayed<S: WorktreeStore>(
+  store: &mut S,
+  (run, at): (RunId, Timestamp),
+  cleanup: &Cleanup,
+) -> Result<(), S::Error> {
   match cleanup.not_removed() {
     Some(left) => store.save_worktree_not_removed(run, &left, at),
     None => store.clear_worktree_not_removed(run),
