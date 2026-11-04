@@ -18,10 +18,17 @@
 //! `orchester-orchester`, numbered on while taken), the person's server is turned off for the thread, and the system
 //! prompt tells the agent the name (`renamed_server`). What Codex says of the server (its tool calls, its approval
 //! requests) the session names `orchester` again, so the chat's approvals still match it. The person's configuration
-//! file is only read, never written.
+//! file is only read, never written. The same read lists Codex's skills, and the turn disables every one but Codex's
+//! bundled ones (ORC-663).
+//!
+//! A message that carries a skill the person chose has it written as a skills folder of that skill alone
+//! (`super::skill`), registered for the turn's App Server before the thread starts (`skills/extraRoots/set`), and the
+//! turn's input is `$<slug> <words>` with the skill named (`CodexChatSkill`). A Codex that refuses the registration
+//! gets the message as kept, the skill's text in its block.
 
 use std::{
   collections::{BTreeMap, BTreeSet},
+  path::PathBuf,
   time::Duration,
 };
 
@@ -31,8 +38,8 @@ use orchester_core::{
   connection::{
     AgentProvider,
     app_server::Update,
-    app_server_config::{names_read_command, read_configured_names},
-    invocation::{CODEX_PROVIDER_ID, CodexChat, CodexMcp, OnProvider, Platform, on_account},
+    app_server_config::{chat_read_command, read_chat_configuration},
+    invocation::{CODEX_PROVIDER_ID, CodexChat, CodexChatSkill, CodexMcp, OnProvider, Platform, on_account},
     mcp::InvocationExemptions,
     stream::AgentEvent,
   },
@@ -48,25 +55,28 @@ use orchester_core::{
 use orchester_exec::ProcessRunner;
 use tokio::sync::{mpsc, oneshot};
 
-/// How long the read of the MCP server names of Codex's configuration may take, as for a step
+/// How long the read of the MCP server names and skills of Codex's configuration may take, as for a step
 /// (`crate::execution::step::start::cli`): App Server answers it in a fraction of a second once it runs, but its first
 /// start on a machine is slower.
 const NAMES_TIMEOUT: Duration = Duration::from_secs(20);
 
 use super::{
+  skill::{SkillLayout, SkillPlugin},
   steer::Steering,
   turn::{Prepared, Seen, Turn, cannot},
 };
 use crate::{
-  execution::step::app_server::{AppServerFailure, AppServerSession, AppServerSetup},
+  execution::step::app_server::{AppServerFailure, AppServerSession, AppServerSetup, SetupSkill},
   supervisor::{ProcessEvent, ProcessExit, Supervised},
 };
 
-/// App Server's command, what the session starts with, and the account it runs on.
+/// App Server's command, what the session starts with, the account it runs on, and the folder of the skill the message
+/// carries, which must outlive App Server.
 pub(super) struct Started {
   pub(super) command: Command,
   pub(super) setup: AppServerSetup,
   pub(super) account: AgentAccountId,
+  _skill: Option<SkillPlugin>,
 }
 
 /// What follows from the name Codex gets the chat's server by.
@@ -93,14 +103,14 @@ impl Turn {
     prepared: Prepared,
     (stop, steers): (oneshot::Receiver<()>, &mut mpsc::UnboundedReceiver<ChatMessageId>),
   ) -> TurnState {
-    match self.start_codex(prepared).await {
+    match self.start_codex(prepared, false).await {
       Ok(started) => self.drive_codex(started, (stop, steers)).await,
       Err(failure) => TurnState::Failed(failure),
     }
   }
 
-  /// App Server's command and the session's setup, or why none can start.
-  pub(super) async fn start_codex(&self, prepared: Prepared) -> Result<Started, TurnFailure> {
+  /// App Server's command and the session's setup, or why none can start; a compaction (`compaction`) loads no skill.
+  pub(super) async fn start_codex(&self, prepared: Prepared, compaction: bool) -> Result<Started, TurnFailure> {
     let (mcp, left_out) = CodexMcp::new(&[self.tools_launch()?]);
     if !left_out.is_empty() {
       return Err(cannot("the tools' server was left out".to_owned()));
@@ -115,16 +125,13 @@ impl Turn {
         model: self.settings.model(),
         key,
       });
-    // Codex loads the folder's skills even from an untrusted folder: each is disabled, and a search that could miss
-    // one starts no turn, as for a step without its agent files.
-    let skills = RepositorySkills::find(&self.root)
-      .map_err(|error| {
-        cannot(format!(
-          "the project's skills cannot all be found to keep them from the Orchestrator: {error}"
-        ))
-      })?
-      .codex_paths();
-    let mcp = self.named_apart(&prepared, &skills, mcp).await;
+    let (mcp, skills) = self.disabled_skills(&prepared, mcp).await?;
+    // A skill the message carries is Codex's own for this turn, from a folder of its own; a compaction takes none.
+    let placed = if compaction {
+      None
+    } else {
+      self.place_skill(SkillLayout::CodexRoot)
+    };
     let command = CodexChat {
       executable: &prepared.executable,
       folder: &self.root,
@@ -146,6 +153,13 @@ impl Turn {
       renamed,
       instructions,
     } = self.server_names(&mcp, &prepared.project_name);
+    let skill = placed.as_ref().map(|(folder, words)| SetupSkill {
+      skill: CodexChatSkill {
+        root: folder.folder.clone(),
+        slug: folder.slug.clone(),
+      },
+      words: (*words).to_owned(),
+    });
     let setup = AppServerSetup {
       prompt: self.text.as_str().to_owned(),
       attached: self.attached.clone(),
@@ -167,11 +181,13 @@ impl Turn {
       model_provider: on_provider.as_ref().map(|_| CODEX_PROVIDER_ID.to_owned()),
       base_instructions: Some(instructions),
       compact: false,
+      skill,
     };
     Ok(Started {
       command,
       setup,
       account: prepared.account,
+      _skill: placed.map(|(folder, _)| folder),
     })
   }
 
@@ -200,11 +216,33 @@ impl Turn {
     }
   }
 
+  /// `mcp` as Codex gets it ([`Self::own_setup`]) and every skill the turn disables: the project folder's, which Codex
+  /// loads even from an untrusted folder and whose search starts no turn when it could miss one, as for a step without
+  /// its agent files, and the person's own, so that only Codex's bundled skills and the chosen one load.
+  async fn disabled_skills(&self, prepared: &Prepared, mcp: CodexMcp) -> Result<(CodexMcp, Vec<PathBuf>), TurnFailure> {
+    let mut skills = RepositorySkills::find(&self.root)
+      .map_err(|error| {
+        cannot(format!(
+          "the project's skills cannot all be found to keep them from the Orchestrator: {error}"
+        ))
+      })?
+      .codex_paths();
+    let (mcp, own_skills) = self.own_setup(prepared, &skills, mcp).await;
+    for own in own_skills {
+      if !skills.contains(&own) {
+        skills.push(own);
+      }
+    }
+    Ok((mcp, skills))
+  }
+
+  /// What Codex's own setup asks of the turn, read with an App Server started for that alone, confined as the turn's
+  /// and without its server, on the connection's account but not its API provider, whose key the read does not need:
   /// `mcp` with a name apart in Codex for the chat's server when Codex's own configuration has a server of its name
-  /// (`CodexMcp::named_apart`), read with an App Server started for that alone, confined as the turn's and without its
-  /// server, on the connection's account but not its API provider, whose key the read does not need. Unchanged when
-  /// the read fails: the turn's own App Server reads its configuration again and refuses a name that is taken.
-  async fn named_apart(&self, prepared: &Prepared, skills: &[std::path::PathBuf], mcp: CodexMcp) -> CodexMcp {
+  /// (`CodexMcp::named_apart`), and the person's own skills, which the turn disables (ORC-663). Unchanged and none when
+  /// the read fails: the turn's own App Server reads its configuration again and refuses a name that is taken, and
+  /// its log says the person's skills were not read.
+  async fn own_setup(&self, prepared: &Prepared, skills: &[PathBuf], mcp: CodexMcp) -> (CodexMcp, Vec<PathBuf>) {
     let none = CodexMcp::default();
     let command = CodexChat {
       executable: &prepared.executable,
@@ -215,20 +253,20 @@ impl Turn {
     }
     .command(std::env::vars_os(), &prepared.environment)
     .and_then(|command| on_account(command, prepared.connection.account(), AgentProvider::CodexCli))
-    .map(|command| names_read_command(command, &self.root));
+    .map(|command| chat_read_command(command, &self.root));
     let read = match command {
       Ok(command) => tokio::task::spawn_blocking(move || {
-        read_configured_names(&ProcessRunner::new(NAMES_TIMEOUT), &command).map_err(|error| error.to_string())
+        read_chat_configuration(&ProcessRunner::new(NAMES_TIMEOUT), &command).map_err(|error| error.to_string())
       })
       .await
       .unwrap_or_else(|error| Err(error.to_string())),
       Err(error) => Err(error.to_string()),
     };
     match read {
-      Ok(taken) => mcp.named_apart(&taken),
+      Ok(read) => (mcp.named_apart(&read.names), read.own_skills),
       Err(error) => {
-        tracing::warn!(%error, "cannot read the MCP server names of Codex's configuration for the Orchestrator");
-        mcp
+        tracing::warn!(%error, "cannot read Codex's own MCP server names and skills for the Orchestrator");
+        (mcp, Vec::new())
       }
     }
   }

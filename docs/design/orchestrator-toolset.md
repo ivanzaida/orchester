@@ -442,7 +442,12 @@ each but `unified_exec` shows off in `codex features list` with them):
   folder, is disabled by its paths (`skills.config`). The runner finds them with the search a step without its agent
   files uses (`RepositorySkills`), and starts no turn when that search could miss one (a link out of the folder, an
   unreadable folder, a search past its bounds), saying why. A skill committed to the project therefore never reaches
-  the Orchestrator's context.
+  the Orchestrator's context. The person's own skills (`$CODEX_HOME/skills`, which the isolation overrides do not
+  keep out) are disabled by path as well, from the `skills/list` of the App Server that reads Codex's server names
+  before the turn; only Codex's bundled skills stay (ORC-663, `docs/evidence/orc-663-codex-skill-2026-11-05.md`).
+- A skill the person chose for the message is written as a skills folder of that skill alone, registered for the
+  turn's App Server with `skills/extraRoots/set` (in memory only), and given as `$<slug> <words>` with the skill
+  named; checked with Codex 0.166.0 and model turns (ORC-663).
 - What stays is `apply_patch` and `request_user_input`, which Codex 0.159.2 always offers. `apply_patch` cannot
   write: the thread is `read-only` with nothing writable, and the approval policy leaves nothing beyond the sandbox to
   a person (`sandbox_approval`, `rules`, `request_permissions` and `skill_approval` off), so Codex's own approval check

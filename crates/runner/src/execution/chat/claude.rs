@@ -29,7 +29,7 @@ use orchester_core::{
 use tokio::sync::{mpsc, oneshot};
 
 use super::{
-  skill::SkillPlugin,
+  skill::{SkillLayout, SkillPlugin},
   steer::Steering,
   turn::{Prepared, Seen, Turn, cannot},
 };
@@ -120,7 +120,11 @@ impl Turn {
         key,
       });
     // A skill the message carries is the CLI's own for this turn; a compaction takes none.
-    let placed = if compaction { None } else { self.place_skill() };
+    let placed = if compaction {
+      None
+    } else {
+      self.place_skill(SkillLayout::ClaudePlugin)
+    };
     let (skill, words) = match placed {
       Some((plugin, words)) => (Some(plugin), words),
       None => (None, self.text.as_str()),

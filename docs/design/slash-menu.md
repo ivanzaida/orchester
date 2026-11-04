@@ -65,12 +65,14 @@ board's theme, so the window exports render light; the canvas shows them dark.
 - The chip is `Tag chip` `FK4CS` with a `graduation-cap` icon and the name in `font_mono` 11, plus × in the composer.
   The sent message shows the chip without ×, above its text. On hover, a `Tooltip` shows *release-notes · Published
   v2*.
-- Every agent uses `/`. `$skill` (Codex) is plain text in Orchester.
-- How the skill reaches the agent (ORC-634, `docs/evidence/orc-634-claude-skill-2026-11-03.md`): the message is kept
-  with the skill's text in a marked block before its words, which a run's agents (every engine), native agents and
-  the Orchestrator on Codex read. A new Orchestrator turn on Claude Code loads it as the CLI's own skill instead, from
-  a plugin of that skill alone, with the person's own skills and settings still kept out. The composer chip's tooltip
-  adds which of the two applies; a plan's changes carry no skill.
+- Every agent uses `/`. `$skill` (Codex) typed by the person is plain text in Orchester.
+- How the skill reaches the agent (ORC-634, `docs/evidence/orc-634-claude-skill-2026-11-03.md`; ORC-663,
+  `docs/evidence/orc-663-codex-skill-2026-11-05.md`): the message is kept with the skill's text in a marked block
+  before its words, which a run's agents (every engine) and native agents read. A new Orchestrator turn loads it as
+  its CLI's own skill instead: Claude Code from a plugin of that skill alone, Codex from a skills folder of that skill
+  alone that the turn's App Server registers (`$<slug>`), with the person's own skills and settings still kept out
+  (on Codex, the person's own skills are disabled by path). The composer chip's tooltip adds which applies; a plan's
+  changes carry no skill.
 
 ## Copy (namespace for the implementer)
 

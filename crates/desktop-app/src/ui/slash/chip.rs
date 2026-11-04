@@ -29,13 +29,13 @@ use crate::{
   },
 };
 
-/// How a chosen skill reaches the agent the message goes to (ORC-634), as the chip's tooltip says it.
+/// How a chosen skill reaches the agent the message goes to (ORC-634, ORC-663), as the chip's tooltip says it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SkillReach {
   /// The Orchestrator on Claude Code loads it as the CLI's own skill for a turn of its own.
   ClaudeOwn,
-  /// The Orchestrator on Codex gets its text in a marked block: Codex's `$skill` is not used yet.
-  CodexText,
+  /// The Orchestrator on Codex loads it as Codex's own skill (`$<slug>`) for a turn of its own.
+  CodexOwn,
   /// A run's agent, of any engine, gets its text in a marked block.
   Text,
 }
@@ -45,7 +45,7 @@ impl SkillReach {
   pub const fn orchestrator(provider: Option<AgentProvider>) -> Self {
     match provider {
       Some(AgentProvider::ClaudeCodeCli) => Self::ClaudeOwn,
-      Some(AgentProvider::CodexCli) => Self::CodexText,
+      Some(AgentProvider::CodexCli) => Self::CodexOwn,
       _ => Self::Text,
     }
   }
@@ -53,7 +53,7 @@ impl SkillReach {
   const fn key(self) -> &'static str {
     match self {
       Self::ClaudeOwn => "composer.skill.reach.claude",
-      Self::CodexText => "composer.skill.reach.codex",
+      Self::CodexOwn => "composer.skill.reach.codex",
       Self::Text => "composer.skill.reach.text",
     }
   }

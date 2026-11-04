@@ -4,8 +4,9 @@
 //! named `orchester` (`fake_codex_user`). It appends how it was started to `.orchester/fake-chat.log` in its working
 //! directory (`codex-argv: `, `system-prompt: ` with the first line of the thread's `baseInstructions`,
 //! `system-prompt-end: ` with its last line, `thread: ` with `new` or the thread it resumed, `mcp-server: ` with the
-//! chat's server's name, `mcp-url: `, `mcp-token: present`, `prompt: ` with the turn's first line, and
-//! `prompt-words: ` with its whole prompt on one line),
+//! chat's server's name, `mcp-url: `, `mcp-token: present`, `prompt: ` with the turn's first line,
+//! `prompt-words: ` with its whole prompt on one line, and `skill: <name> loaded` or `skill: <name> not found` for each
+//! skill the turn's input names, `fake_codex_skills`),
 //! then answers by the message, the prompt's last line:
 //!
 //! - "Call <tool> <JSON arguments>": calls that tool with the token and replies `Tool said: <result text>`;
@@ -263,6 +264,9 @@ fn log(session: &Session, (args, base): (&[String], Option<&str>), server: Optio
     "prompt-words: {}",
     prompt.split_whitespace().collect::<Vec<_>>().join(" ")
   ));
+  for skill in super::fake_codex_skills::taken() {
+    lines.push(format!("skill: {skill}"));
+  }
   append_log(session, &lines);
 }
 

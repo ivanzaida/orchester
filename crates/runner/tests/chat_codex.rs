@@ -10,6 +10,8 @@
 
 #[path = "chat_codex/readiness.rs"]
 mod readiness;
+#[path = "chat_codex/skill.rs"]
+mod skill;
 mod support;
 #[path = "chat_codex/tool_server.rs"]
 mod tool_server;

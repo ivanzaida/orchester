@@ -26,6 +26,7 @@ use orchester_core::{
     app_server::{AppServerStream, PendingApproval, Update},
     app_server_config::{refuse_taken_names, refuse_taken_provider, repository_settings},
     app_server_mcp::{refuse_user_hooks, servers_to_turn_off, thread_config},
+    invocation::EXTRA_ROOTS_METHOD,
     stream::{AgentEvent, OutputStream, RunnerProblem},
   },
   resource::RepositoryAccess,
@@ -39,7 +40,8 @@ mod checks;
 mod names;
 mod readiness;
 mod setup;
-pub(in crate::execution) use self::setup::AppServerSetup;
+mod skills;
+pub(in crate::execution) use self::setup::{AppServerSetup, SetupSkill};
 use crate::supervisor::Supervised;
 
 /// Characters kept of Codex's reason for refusing a request.
@@ -74,6 +76,8 @@ impl From<String> for AppServerFailure {
 enum Phase {
   Initialize,
   Account,
+  /// The skill the turn loads is being registered (`skills/extraRoots/set`).
+  Skills,
   Configuration,
   Thread,
   Servers,
@@ -327,6 +331,9 @@ impl AppServerSession {
         .ok_or_else(|| "Codex omitted an MCP readiness result".to_owned())?;
       return self.servers_received(result, true, process).await;
     }
+    if self.phase == Phase::Skills && value.get("id").and_then(Value::as_str) == Some(skills::REQUEST) {
+      return self.skill_registered(value, process).await;
+    }
     let id = value
       .get("id")
       .and_then(Value::as_u64)
@@ -357,14 +364,7 @@ impl AppServerSession {
             "Codex is not signed in. Sign in to the normal Codex account and retry this step.".to_owned(),
           ));
         }
-        self.phase = Phase::Configuration;
-        let cwd = self.setup.worktree.to_string_lossy();
-        send(
-          process,
-          json!({"id":6,"method":"config/read","params":{"cwd":cwd,"includeLayers":true}}),
-        )
-        .await
-        .map_err(|error| io_message(&error))?;
+        self.signed_in(process).await?;
         Ok(Vec::new())
       }
       (Phase::Configuration, 6) => self.configured(result, process).await,
@@ -500,7 +500,10 @@ impl AppServerSession {
       )
       .await;
     }
-    let input = codex_items(&self.setup.prompt, &self.setup.attached)?;
+    let input = match &self.setup.skill {
+      Some(skill) => skill.skill.input(&skill.words, &self.setup.attached)?,
+      None => codex_items(&self.setup.prompt, &self.setup.attached)?,
+    };
     self.turn_with(process, input).await
   }
 
@@ -551,6 +554,7 @@ fn phase_name(phase: Phase) -> &'static str {
   match phase {
     Phase::Initialize => "initialize",
     Phase::Account => "account/read",
+    Phase::Skills => EXTRA_ROOTS_METHOD,
     Phase::Configuration => "config/read",
     Phase::Thread => "thread/start or resume",
     Phase::Servers => "mcpServerStatus/list",

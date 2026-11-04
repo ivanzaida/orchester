@@ -7,12 +7,23 @@ use std::{
 };
 
 use orchester_core::{
-  attachment::input::AttachedFile, command::SecretVariable, connection::mcp::InvocationExemptions,
-  permission::NetworkAccess, resource::RepositoryAccess,
+  attachment::input::AttachedFile,
+  command::SecretVariable,
+  connection::{invocation::CodexChatSkill, mcp::InvocationExemptions},
+  permission::NetworkAccess,
+  resource::RepositoryAccess,
 };
 use serde_json::Value;
 
+/// A skill the Orchestrator chat's turn loads as Codex's own (ORC-663): its folder, which the session registers before
+/// the thread starts, and the person's words, which the turn gives after the skill's `$<slug>`.
+pub(in crate::execution) struct SetupSkill {
+  pub skill: CodexChatSkill,
+  pub words: String,
+}
+
 pub(in crate::execution) struct AppServerSetup {
+  /// The turn's prompt; for a [`Self::skill`] Codex did not register, the message as kept, the skill's text in it.
   pub prompt: String,
   /// The files people attached to the messages the prompt delivers, given with it.
   pub attached: Vec<AttachedFile>,
@@ -45,6 +56,8 @@ pub(in crate::execution) struct AppServerSetup {
   pub base_instructions: Option<String>,
   /// The session compacts the thread it resumes (`thread/compact/start`, ORC-309) in place of a turn of the prompt.
   pub compact: bool,
+  /// The skill the turn loads as Codex's own; `None` for a step and a message without one.
+  pub skill: Option<SetupSkill>,
 }
 
 impl AppServerSetup {
