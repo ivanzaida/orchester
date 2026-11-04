@@ -4,8 +4,8 @@
 //! `cargo test -p orchester-api --test authority_commands authority_commands_`
 
 use orchester_api::v2::{
-  CommandRequest, ExpectedRevision, ExpectedRevisions, LocalEffect, RevisionTarget, Subject, TeamCommand,
-  TeamCommandValue,
+  AuthorityRef, CommandRequest, DeliveryOutcome, ExpectedRevision, ExpectedRevisions, LocalEffect, RevisionTarget,
+  Subject, TeamCommand, TeamCommandValue,
 };
 use orchester_core::{
   id::{ClaimId, ModuleId, OperationId, TaskId, UserId},
@@ -75,6 +75,83 @@ fn authority_commands_requests_carry_the_servers_kinds_and_shapes() {
   assert_eq!(
     serde_json::to_value(&set).expect("serialize"),
     json!({"kind": "assignment.set", "subject": {"kind": "task", "id": task}, "user_id": user})
+  );
+}
+
+#[test]
+fn authority_commands_delivery_request_and_report_carry_the_servers_shapes() {
+  let (module, claim, authorization) = (ModuleId::generate(), ClaimId::generate(), OperationId::generate());
+  let (source, base, merged) = ("a".repeat(40), "b".repeat(40), "c".repeat(40));
+  let commit = |text: &str| CommitId::new(text).expect("commit");
+  let authority = AuthorityRef {
+    subject: Subject::Module { id: module },
+    claim_id: claim,
+    work_id: None,
+  };
+  let wire_authority = json!({"subject": {"kind": "module", "id": module}, "claim_id": claim, "work_id": null});
+  for (cited, wire_cited) in [(Some(authorization), json!(authorization)), (None, json!(null))] {
+    let request = TeamCommand::DeliveryRequest {
+      authority,
+      authorization_operation_id: cited,
+      branch: BranchName::new("module/billing").expect("branch"),
+      source_commit: commit(&source),
+      base_commit: commit(&base),
+    };
+    let wire = json!({"kind": "delivery.request", "authority": wire_authority, "authorization_operation_id": wire_cited,
+      "branch": "module/billing", "source_commit": source, "base_commit": base});
+    assert_eq!(serde_json::to_value(&request).expect("serialize"), wire);
+    assert_eq!(serde_json::from_value::<TeamCommand>(wire).expect("read"), request);
+    assert_eq!(request.kind(), "delivery.request");
+  }
+  let no_authorization = json!({"kind": "delivery.request", "authority": wire_authority, "branch": "module/billing",
+    "source_commit": source, "base_commit": base});
+  assert!(
+    serde_json::from_value::<TeamCommand>(no_authorization).is_err(),
+    "the authorization is always sent"
+  );
+
+  for (outcome, wire_outcome) in [
+    (
+      DeliveryOutcome::Delivered {
+        merge_commit: commit(&merged),
+      },
+      json!({"kind": "delivered", "merge_commit": merged}),
+    ),
+    (DeliveryOutcome::Failed {}, json!({"kind": "failed"})),
+  ] {
+    let report = TeamCommand::DeliveryReport {
+      authority,
+      source_commit: commit(&source),
+      base_commit: commit(&base),
+      outcome,
+    };
+    let wire = json!({"kind": "delivery.report", "authority": wire_authority, "source_commit": source,
+      "base_commit": base, "outcome": wire_outcome});
+    assert_eq!(serde_json::to_value(&report).expect("serialize"), wire);
+    assert_eq!(serde_json::from_value::<TeamCommand>(wire).expect("read"), report);
+    assert_eq!(report.kind(), "delivery.report");
+  }
+  for refused in [
+    json!({"kind": "failed", "merge_commit": merged}),
+    json!({"kind": "delivered"}),
+    json!({"kind": "merged", "merge_commit": merged}),
+  ] {
+    assert!(
+      serde_json::from_value::<DeliveryOutcome>(refused.clone()).is_err(),
+      "{refused}"
+    );
+  }
+
+  let effect = json!({"kind": "deliver_module", "module_id": module, "branch": "module/billing",
+    "source_commit": source, "base_commit": base});
+  let wire = json!({"kind": "delivery", "effects": [effect], "delivery": {
+    "subject": {"kind": "module", "id": module}, "claim_id": claim, "authorization_operation_id": authorization,
+    "branch": "module/billing", "source_commit": source, "base_commit": base, "state": "requested", "revision": 2
+  }});
+  let value: TeamCommandValue = serde_json::from_value(wire).expect("a delivery value");
+  assert!(
+    matches!(value.effects(), [LocalEffect::DeliverModule { .. }]),
+    "{value:?}"
   );
 }
 

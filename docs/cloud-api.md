@@ -439,16 +439,16 @@ change. Unknown kinds and fields are refused; the server answers a kind it does 
   `claim.take_over {subject,observed_claim_id}`, `claim.release {authority:AuthorityRef}`,
   `assignment.set {subject,user_id}` (`user_id` sent, `null` for nobody; Admin), `module.branch.set {module_id,branch}`
   (Admin; `branch` is required), `work.start {authority:AuthorityRef,base_commit}`,
-  `delivery.authorize {subject,claim_id,branch,source_commit,base_commit}` (Admin; a module subject) and, since P4,
-  `work.report` with `WorkReport`'s fields (below). The server's `delivery.request` and `delivery.report` join
-  `TeamCommand` with the server's shapes when the desktop delivers.
+  `delivery.authorize {subject,claim_id,branch,source_commit,base_commit}` (Admin; a module subject), since P4
+  `work.report` with `WorkReport`'s fields (below), and since P4c `delivery.request` and `delivery.report` ("Team
+  authority P4 module delivery").
 - Expected revisions: the module's for `module.branch.set`, the task's and its module's for `work.start`, the
   subject's for `assignment.set` (the desktop sends it), none for the others, whose claims fence them by id.
 - Values, tagged by `kind`, each with `effects`: `task {task:SharedTask}` (until `TaskRead` is published there),
   `work {work:WorkRead,bundle:BundleRef}`, `claim {subject,claim:ClaimRead,children:[ClaimRead]}`,
   `released {subject,released_claim_id}`, `assignment {subject,assignee:UserRef?,revision}`,
-  `module {module:ModuleRead}` and `delivery {delivery:ModuleDeliveryRead}`. Only `work.start` answers an effect,
-  `start {work_id,bundle}`; every other list is empty.
+  `module {module:ModuleRead}` and `delivery {delivery:ModuleDeliveryRead}`. Only `work.start` and
+  `delivery.request` answer an effect, `start {work_id,bundle}` and `deliver_module`; every other list is empty.
 
 Definitions are no commands. The desktop's dispatcher (`orchester_workspace::actions`) sends these actions to the
 server's own Admin-checked routes (Authority S3, its `docs/definition-authority.md` and `docs/workspace-policy.md`),
@@ -519,6 +519,44 @@ The desktop's team work (`orchester_workspace::team_work`) uses them so:
 - **Heartbeat.** Only runs at work here (running, no step waiting for a person) are named, with their work's
   authority; when none is, nothing is sent. `decision_required` is returned as such, not retried as a failure; a lost
   authority fences its run. Nothing calls the team work yet: the screens adopt it in P6, automation in P7.
+
+## Team authority P4 module delivery
+
+A team task's run merges into its module's branch (D3: the accepted run's base branch is the module's); only the
+module's delivery takes that branch to the base. The commands, on `POST /api/v2/projects/{p}/commands`, as the team
+server's `docs/module-branches.md` (S7c) defines them; each answers `{kind:"delivery",delivery:ModuleDeliveryRead,
+effects}`, and refusals are `AuthorityError`s.
+
+| `command.kind` | Payload | Effects | Who |
+| --- | --- | --- | --- |
+| `delivery.authorize` | `{subject,claim_id,branch,source_commit,base_commit}` | `[]` | Workspace Admin |
+| `delivery.request` | `{authority:AuthorityRef,authorization_operation_id:OperationId?,branch,source_commit,base_commit}` | `[{kind:"deliver_module",module_id,branch,source_commit,base_commit}]` | The module's holder, in its session |
+| `delivery.report` | `{authority:AuthorityRef,source_commit,base_commit,outcome}` | `[]` | The module's holder, in its session |
+
+`authority` is the module's claim with `work_id` `null`. `authorization_operation_id` is always sent: the Admin's
+`delivery.authorize` operation, or `null` for the workspace's automatic merge (D7); without either the request is
+`403 delivery_not_authorized`. `outcome` (`v2::DeliveryOutcome`) is `{kind:"delivered",merge_commit}` or
+`{kind:"failed"}`; only a `delivered` report makes the delivery delivered.
+
+The desktop's module delivery (`orchester_workspace::team_work::ModuleDeliveries`) uses them so:
+
+- **Request.** The delivery is recorded in the project database (`team_deliveries`) with the module, its claim and
+  branch, both commits, the cited authorization and the branch of this repository the base commit was read from,
+  then `delivery.request` goes through the dispatcher under the delivery's operation (a lost answer is looked up, not
+  sent again). It is not sent while a team run of the module still works on this computer. A refusal is kept;
+  `delivery_not_authorized` reads as awaiting an Admin's authorization.
+- **Merge.** Only a receipt whose effects carry `deliver_module` for exactly the requested branch and commits lets this
+  computer merge, by the merge a run takes into its base branch (core's `merge_module`, under the merge hold that
+  keeps local integration and other merges out), always as a merge commit and only while the module branch and the
+  base branch are still at those commits. The merge is marked begun before git is asked; on recovery a base branch
+  whose tip is a merge commit of exactly those two commits is taken as the merge made, so it is never made twice. A
+  busy checkout leaves the merge to try again; any other refusal of git's is reported `failed`.
+- **Report.** The merge's outcome is kept with the `delivery.report` made of it, with its own operation id, in one
+  transaction, and the request's operation is then completed. The report is sent again with the same bytes until the
+  server answers it, oldest delivery first; a report that waits for the server holds back the later ones.
+- **States.** Each delivery keeps what the server last answered (`ModuleDeliveryRead`) and reads as requested,
+  awaiting authorization, authorized by an Admin, authorized automatically, delivered, failed or refused, with its
+  merge and whether its report waits (`TeamDeliveryState`), for the screens (P6). Nothing calls it yet.
 
 ## Conventions
 

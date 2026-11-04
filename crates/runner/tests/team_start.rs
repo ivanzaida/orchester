@@ -14,6 +14,8 @@ mod fixture;
 mod http;
 #[path = "../../workspace/tests/team_work/team_commands.rs"]
 mod team_commands;
+#[path = "../../workspace/tests/team_work/team_deliveries.rs"]
+mod team_deliveries;
 #[path = "../../workspace/tests/team_work/team_server.rs"]
 mod team_server;
 

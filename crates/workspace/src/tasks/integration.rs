@@ -21,7 +21,11 @@ use orchester_core::{
   store::{MergeStore, RunStore, TaskStore},
   time::Timestamp,
 };
-use orchester_exec::{programs::Programs, run_processes::RunProcesses};
+use orchester_exec::{
+  local_git::{IntegrationLease, LocalGit, LocalGitError, owned::StoreOwnership},
+  programs::Programs,
+  run_processes::RunProcesses,
+};
 use orchester_index::CodebaseIndexes;
 use orchester_store::{ProjectDb, StoreError};
 
@@ -326,22 +330,38 @@ pub fn merge_in(
   merge_in_as(repo_root, programs, (run, expected, None))
 }
 
+/// What a merge into the person's repository holds while git changes it: the project's integration lease, so no local
+/// integration or other merge works in it meanwhile, the ownership of its store and of its Git metadata.
+pub(crate) struct MergeHold {
+  _lease: IntegrationLease,
+  _store_owner: Arc<StoreOwnership>,
+  _git_owner: LocalGit,
+}
+
+impl MergeHold {
+  /// Holds the repository at `repo_root`; refused while another merge or a local integration holds it.
+  pub(crate) fn acquire(repo_root: &Path) -> Result<Self, LocalGitError> {
+    let lease = IntegrationLease::acquire(repo_root)?;
+    let store_owner = StoreOwnership::acquire(repo_root)?;
+    let scratch =
+      orchester_exec::local_git::prepare_scratch(repo_root, &[".orchester", "local-integration", "legacy"])?;
+    let mut git_owner = LocalGit::new(repo_root, &scratch)?;
+    git_owner.own_metadata()?;
+    Ok(Self {
+      _lease: lease,
+      _store_owner: store_owner,
+      _git_owner: git_owner,
+    })
+  }
+}
+
 /// [`merge_in`], landed as `delivering` says when the merge queue delivers the run (`None`: as the task page merges).
 pub fn merge_in_as(
   repo_root: &Path,
   programs: &Programs,
   (run, expected, delivering): (RunId, Option<&Revision>, Option<Delivering<'_>>),
 ) -> Result<Merged, IntegrationProblem> {
-  let _lease = orchester_exec::local_git::IntegrationLease::acquire(repo_root)
-    .map_err(|_| IntegrationProblem::Store(Message::new("localIntegration.preflightFailed")))?;
-  let _store_owner = orchester_exec::local_git::owned::StoreOwnership::acquire(repo_root)
-    .map_err(|_| IntegrationProblem::Store(Message::new("localIntegration.preflightFailed")))?;
-  let scratch = orchester_exec::local_git::prepare_scratch(repo_root, &[".orchester", "local-integration", "legacy"])
-    .map_err(|_| IntegrationProblem::Store(Message::new("localIntegration.preflightFailed")))?;
-  let mut git_owner = orchester_exec::local_git::LocalGit::new(repo_root, &scratch)
-    .map_err(|_| IntegrationProblem::Store(Message::new("localIntegration.preflightFailed")))?;
-  git_owner
-    .own_metadata()
+  let _hold = MergeHold::acquire(repo_root)
     .map_err(|_| IntegrationProblem::Store(Message::new("localIntegration.preflightFailed")))?;
   let mut db = ProjectDb::open(repo_root)?;
   // Runs are never deleted: a run the task page read is there.
