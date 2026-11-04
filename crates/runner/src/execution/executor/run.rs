@@ -44,7 +44,7 @@ use super::{
     worker::{Stop, StopCause, WorkerEvent},
   },
 };
-use crate::{browser::ProjectBrowser, execution::coordinator::board::Board};
+use crate::{browser::ProjectBrowser, execution::coordinator::board::Board, execution_root::ExecutionRoot};
 
 /// How long a run waiting for a free agent slot waits before it looks again, in case the slot
 /// was freed by another run in a way it was not woken for. More slots wake it at once.
@@ -75,6 +75,7 @@ pub(super) enum ExecutionError {
 pub(in crate::execution) struct TaskContext {
   pub(in crate::execution) root: PathBuf,
   pub(in crate::execution) link: Box<dyn CoordinatorLink + Send>,
+  pub(in crate::execution) execution: ExecutionRoot,
   pub(in crate::execution) notifier: Notifier,
   pub(in crate::execution) vault: Arc<dyn SecretVault>,
   pub(in crate::execution) relay: Option<PathBuf>,
@@ -100,9 +101,12 @@ pub(super) struct Pending {
 pub(in crate::execution) struct RunTask {
   /// A step a person asked to start on its account now ([`Prepared::try_at_plan_limit`]), taken when it starts.
   pub(super) try_at_plan_limit: Option<orchester_core::id::StepExecutionId>,
+  /// The project root: the person's checkout, which holds the project database.
   pub(super) root: PathBuf,
   /// Where the run's task asks for the project's data it reads through the link ([`super::link`]).
   pub(super) link: Box<dyn CoordinatorLink + Send>,
+  /// Where the executor keeps its own folders.
+  pub(super) execution: ExecutionRoot,
   pub(super) db: ProjectDb,
   pub(super) run: Run,
   pub(super) task: Task,
@@ -157,6 +161,7 @@ impl RunTask {
     Self {
       root: context.root,
       link: context.link,
+      execution: context.execution,
       db,
       run: prepared.run,
       task: prepared.task,

@@ -253,7 +253,7 @@ impl RunTask {
     if *borrowed {
       self.give_back_merged_step(*owner, branch);
     } else if let Err(error) =
-      Worktrees::new(&self.root).and_then(|worktrees| worktrees.remove_merged_step(*owner, branch))
+      Worktrees::new(self.execution.repository()).and_then(|worktrees| worktrees.remove_merged_step(*owner, branch))
     {
       // The step's commits are on the run's branch now; a worktree left behind only takes space.
       tracing::warn!(run = %self.run.id(), %execution, %error, "the merged step's worktree was not removed");

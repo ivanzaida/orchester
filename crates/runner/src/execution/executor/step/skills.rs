@@ -2,11 +2,12 @@
 //! `orchester_core::agent_files`).
 //!
 //! - Orchester's skills: the published versions the run pinned that reach the agent (by scope) are written to a folder
-//!   of the step execution's own, `<repo>/.orchester/skills/<execution-id>/<slug>/` (the `SKILL.md` with its name and
-//!   description, and the reference files from the project's blobs), outside every worktree. It is written again at
-//!   each start of the execution, so what an agent changed there does not last, and kept afterwards: a resumed session
-//!   reads the paths it was told when it started. Both CLIs can read it: Codex's sandbox reads the whole disk, and
-//!   Claude Code is given the folder with `--add-dir`.
+//!   of the step execution's own in the execution root (`crate::execution_root`),
+//!   `.orchester/skills/<execution-id>/<slug>/` (the `SKILL.md` with its name and description, and the reference files
+//!   from the project's blobs), outside every worktree. It is written again at each start of the execution, so what an
+//!   agent changed there does not last, and kept afterwards: a resumed session reads the paths it was told when it
+//!   started. Both CLIs can read it: Codex's sandbox reads the whole disk, and Claude Code is given the folder with
+//!   `--add-dir`.
 //! - Orchester's internal `orchester-codebase-index` skill, embedded in the runner, is placed the same way for an agent
 //!   that gets the code index (`super::super::codebase_index`), under `_orchester/`, which no project skill's slug can
 //!   name. It is not a project resource and no screen lists it.
@@ -112,7 +113,7 @@ impl RunTask {
         reaching.push((slug, skill));
       }
     }
-    let folder = self.skills_folder(execution);
+    let folder = self.execution.skills(execution);
     remove_folder(&folder).map_err(|error| problem(format!("cannot clear {}: {error}", folder.display())))?;
     if reaching.is_empty() {
       return Ok(PlacedSkills::default());
@@ -163,11 +164,6 @@ impl RunTask {
     Ok(offered)
   }
 
-  /// The skills folder of `execution`, outside every worktree.
-  fn skills_folder(&self, execution: StepExecutionId) -> PathBuf {
-    self.root.join(".orchester").join("skills").join(execution.to_string())
-  }
-
   /// Places the internal `orchester-codebase-index` skill for `execution`, beside what `placed` holds, and lists
   /// it; its `SKILL.md`.
   pub(super) fn place_code_map(
@@ -175,7 +171,7 @@ impl RunTask {
     execution: StepExecutionId,
     placed: &mut PlacedSkills,
   ) -> Result<PathBuf, RunnerProblem> {
-    let folder = self.skills_folder(execution);
+    let folder = self.execution.skills(execution);
     let skill = folder.join(INTERNAL_SKILLS).join("codebase-index");
     let document = skill.join(SKILL_FILE);
     fs::create_dir_all(&skill)
