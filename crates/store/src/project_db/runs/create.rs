@@ -75,7 +75,7 @@ impl ProjectDb {
     let key = key.to_string();
     let project = self.project.key().clone();
     let transaction = self.connection.transaction()?;
-    if let Some(existing) = load_runs(&transaction, "WHERE idempotency_key = ?1", [&key])?.pop() {
+    if let Some(existing) = load_runs(&transaction, "WHERE idempotency_key = ?1", rusqlite::params![key])?.pop() {
       return existing.map_err(|unreadable| unreadable.error);
     }
     if let Some(revision) = queued {
@@ -110,7 +110,7 @@ impl ProjectDb {
   ) -> Result<Run, RunStoreError> {
     let key = key.to_string();
     let transaction = self.connection.transaction()?;
-    if let Some(existing) = load_runs(&transaction, "WHERE idempotency_key = ?1", [&key])?.pop() {
+    if let Some(existing) = load_runs(&transaction, "WHERE idempotency_key = ?1", rusqlite::params![key])?.pop() {
       return existing.map_err(|unreadable| unreadable.error);
     }
     let InputsOrigin::Team(accepted) = inputs.bundle().origin() else {

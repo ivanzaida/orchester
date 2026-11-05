@@ -1,5 +1,7 @@
 //! `run_merges`: runs whose work was merged into their base branch, one row per run.
 
+use std::collections::HashMap;
+
 use orchester_core::{
   id::{RunId, TaskId},
   integration::{MergeKind, RunMerge},
@@ -66,7 +68,7 @@ impl MergeStore for ProjectDb {
   }
 
   fn run_merge(&self, run: RunId) -> Result<Option<RunMerge>, StoreError> {
-    let row: Option<(String, String, String, i64)> = self
+    let row: Option<MergeColumns> = self
       .connection
       .query_row(
         "SELECT into_branch, revision, kind, merged_at FROM run_merges WHERE run_id = ?1",
@@ -116,12 +118,35 @@ impl ProjectDb {
       })
       .collect()
   }
+
+  /// [`MergeStore::run_merge`] of every merged run, in one statement.
+  pub fn run_merges(&self) -> Result<HashMap<RunId, RunMerge>, StoreError> {
+    let mut statement = self
+      .connection
+      .prepare("SELECT run_id, into_branch, revision, kind, merged_at FROM run_merges")?;
+    let rows = statement
+      .query_map([], |row| {
+        Ok((
+          row.get::<_, String>(0)?,
+          (row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?),
+        ))
+      })?
+      .collect::<Result<Vec<_>, _>>()?;
+    rows
+      .into_iter()
+      .map(|(run, columns)| {
+        let run = crate::rows::parse("run id", &run)?;
+        Ok((run, merge_of(run, columns)?))
+      })
+      .collect()
+  }
 }
 
-fn merge_of(
-  run: RunId,
-  (into, revision, kind, merged_at): (String, String, String, i64),
-) -> Result<RunMerge, StoreError> {
+/// `into_branch`, `revision`, `kind` and `merged_at` of a merge.
+type MergeColumns = (String, String, String, i64);
+
+/// The merge of `run` these columns record.
+fn merge_of(run: RunId, (into, revision, kind, merged_at): MergeColumns) -> Result<RunMerge, StoreError> {
   Ok(RunMerge {
     run,
     into: BranchName::new(&into).map_err(|error| corrupt("merged branch", error))?,

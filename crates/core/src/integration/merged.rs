@@ -32,7 +32,7 @@ pub enum Delivered {
 
 /// What a run's work is in git: its branch, the revision it started from, and the branch merging it brings it
 /// into, when the run recorded one.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct RunWork {
   pub branch: BranchName,
   pub base: Revision,
@@ -81,6 +81,12 @@ impl<'a, R: CommandRunner> Branches<'a, R> {
   /// Whether the repository has the local branch `branch`.
   pub fn has(&self, branch: &BranchName) -> bool {
     self.tips.contains_key(branch.as_str())
+  }
+
+  /// The commit `branch` points at; `None` when it is not a branch here. The tips of a run's branch and of its
+  /// base branch, with the run's start, decide what [`Self::delivered`] tells of it.
+  pub fn tip(&self, branch: &BranchName) -> Option<&str> {
+    self.tips.get(branch.as_str()).map(String::as_str)
   }
 
   /// What became of `work`. Only a run git finds commits of in its base branch reads as merged; a branch

@@ -11,6 +11,7 @@
 mod answers;
 mod ask;
 mod browser;
+mod changes;
 mod chat;
 mod check;
 mod code_index;
@@ -335,40 +336,6 @@ impl Runners {
 
   pub fn status(&self) -> RunnerStatus {
     self.inner.shared.published.borrow().clone()
-  }
-
-  /// Changes whenever project `root`'s runner reports that a run changed state.
-  pub fn states_of(&self, root: &Path) -> watch::Receiver<u64> {
-    self.inner.shared.counters(root).states.subscribe()
-  }
-
-  /// Changes whenever project `root`'s runner reports that a run or its transcript changed.
-  pub fn changes_of(&self, root: &Path) -> watch::Receiver<u64> {
-    self.inner.shared.counters(root).changes.subscribe()
-  }
-
-  /// Tells the readers of [`Self::changes_of`] that the desktop queued notices that project `root`'s base branch
-  /// moved (`crate::base_moved`): the runs' timelines read them again. A run's state did not change.
-  pub fn base_notices_queued(&self, root: &Path) {
-    self
-      .inner
-      .shared
-      .counters(root)
-      .changes
-      .send_modify(|revision| *revision += 1);
-  }
-
-  /// Counts a change as project `root`'s runner reports it: a run's state (`true`), which moves its transcript
-  /// on too, or its transcript alone. For tests of what follows the counts, which run no runner.
-  #[cfg(feature = "test-support")]
-  #[doc(hidden)]
-  pub fn count_change_for_test(&self, root: &Path, state: bool) {
-    let counters = self.inner.shared.counters(root);
-    if state {
-      self.inner.shared.runs.send_modify(|revision| *revision += 1);
-      counters.states.send_modify(|revision| *revision += 1);
-    }
-    counters.changes.send_modify(|revision| *revision += 1);
   }
 
   /// Hands `reading`, from `source`, on to what shows the session's plan limits, as a project's runner hands on what

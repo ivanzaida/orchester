@@ -48,7 +48,7 @@ fn turn(window: &Window, seeded: &Seeded, reading: &ContextUse) {
     .state(seeded.project)
     .and_then(|state| state.open().map(|open| open.repo_root.clone()))
     .expect("the project is open");
-  services.runners.count_change_for_test(&root, false);
+  services.runners.count_change_for_test(&root, None, false);
 }
 
 /// The ids of the step meters the chat shows, without their parts.

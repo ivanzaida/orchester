@@ -19,7 +19,10 @@ use orchester_ipc::{
 use parking_lot::Mutex;
 use tokio::sync::watch;
 
-use super::state::{RunnerEvent, RunnerState};
+use super::{
+  changes::RunChanges,
+  state::{RunnerEvent, RunnerState},
+};
 use crate::{
   activity::{Activity, Place, Target},
   browser::BrowserWindow,
@@ -206,10 +209,24 @@ pub(super) struct RunCounters {
   pub(super) states: watch::Sender<u64>,
   /// A run changed state or its transcript grew.
   pub(super) changes: watch::Sender<u64>,
+  /// What `changes` counts, for each followed run by itself.
+  pub(super) runs: RunChanges,
   /// A conversation of the Orchestrator chat changed.
   pub(super) chats: watch::Sender<u64>,
   /// The answers sent from this window that the project's tasks were not read back with yet.
   pub(super) answers: watch::Sender<PendingAnswers>,
+}
+
+impl RunCounters {
+  /// Counts a change of run `run`, or of no run in particular (`None`, which counts for every run): its state
+  /// (`state`), which moves `changes` on too, or what else `changes` counts.
+  pub(super) fn count(&self, run: Option<RunId>, state: bool) {
+    if state {
+      self.states.send_modify(|revision| *revision += 1);
+    }
+    self.changes.send_modify(|revision| *revision += 1);
+    self.runs.changed(run);
+  }
 }
 
 impl Shared {
@@ -222,6 +239,7 @@ impl Shared {
       .or_insert_with(|| RunCounters {
         states: watch::Sender::new(0),
         changes: watch::Sender::new(0),
+        runs: RunChanges::default(),
         chats: watch::Sender::new(0),
         answers: watch::Sender::new(PendingAnswers::default()),
       })
@@ -268,27 +286,37 @@ impl Reporter {
     }
   }
 
-  /// The runner changed a run: screens showing runs and the project's tasks read them again.
-  pub(super) fn run_changed(&self) {
+  /// The runner changed run `run`, or something of the project's runs that names none (`None`): screens showing
+  /// runs and the project's tasks read them again.
+  pub(super) fn run_changed(&self, run: Option<RunId>) {
     self.shared.runs.send_modify(|revision| *revision += 1);
     if let Some(counters) = self.counters() {
-      counters.states.send_modify(|revision| *revision += 1);
-      counters.changes.send_modify(|revision| *revision += 1);
+      counters.count(run, true);
     }
   }
 
+  /// Run `run` of task `task` changed state ([`orchester_ipc::Event::RunChanged`]): [`Self::run_changed`] and
+  /// [`Self::task_run_changed`], and now is when the run last had an event.
+  pub(super) fn run_state_changed(&self, run: RunId, task: TaskId) {
+    self.event_of(run);
+    self.run_changed(Some(run));
+    self.task_run_changed(task);
+  }
+
   /// The runner reported an event of `run`: now is when it last did.
-  pub(super) fn event_of(&self, run: RunId) {
+  fn event_of(&self, run: RunId) {
     let Some(root) = self.status.borrow().project_root().map(Path::to_path_buf) else {
       return;
     };
     self.shared.last_events.lock().insert(run, (root, SystemTime::now()));
   }
 
-  /// A run's transcript grew: screens showing the transcript read it again.
-  pub(super) fn transcript_grew(&self) {
+  /// Run `run`'s transcript grew: screens showing the transcript read it again, and now is when the run last had an
+  /// event.
+  pub(super) fn transcript_grew(&self, run: RunId) {
+    self.event_of(run);
     if let Some(counters) = self.counters() {
-      counters.changes.send_modify(|revision| *revision += 1);
+      counters.count(Some(run), false);
     }
   }
 
@@ -407,7 +435,7 @@ impl Reporter {
   /// A run of task `task` changed: if it waited for the user's decision, it may no longer, so its
   /// item stops holding the slot. A run that starts to wait says so right after
   /// ([`Self::run_waits`]).
-  pub(super) fn task_run_changed(&self, task: TaskId) {
+  fn task_run_changed(&self, task: TaskId) {
     if let Some(target) = self.task_target(task) {
       self.shared.activity.settle_needs_you(&target);
     }

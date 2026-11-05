@@ -165,7 +165,7 @@ impl Component for PullRequestScreen {
           );
       }
     };
-    let (head, board) = board_of(ctx, (&project, number), &view, self.feedback.written.get());
+    let (head, board) = board_of(ctx, (&project, number), &view, &self.feedback);
     let actions = self.actions(&view);
     let open_count = board.board.as_ref().map(|board| board.open().count());
     let frame = frame
@@ -212,7 +212,7 @@ fn board_of(
   ctx: &mut Ctx,
   (project, number): (&ShownProject, NonZeroU64),
   view: &PullRequestView,
-  written: u64,
+  feedback: &FeedbackState,
 ) -> (Option<Revision>, BoardRead) {
   let head = view
     .pull_request
@@ -226,7 +226,7 @@ fn board_of(
     ctx,
     (project, number),
     head.clone().map(|head| (head, latest_diff)),
-    written,
+    feedback,
   );
   (head, board)
 }

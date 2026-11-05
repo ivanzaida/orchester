@@ -239,12 +239,8 @@ fn return_button(ctx: &mut Ctx, task: &TaskContext) -> (ActionButton, Option<Arc
 /// *Run again*: opens Run again's confirmation under the header, while the task can run again after the run.
 fn run_again_button(ctx: &mut Ctx, task: &TaskContext) -> (ActionButton, Option<Arc<str>>) {
   let services = Services::of(ctx);
-  let feed = &task.project.feed;
-  let again = (
-    feed.revision.get() + feed.outside.get().tasks,
-    feed.run_changes(feed.running.get()),
-    feed.outside.get().limits,
-  );
+  // What the project's other runs used today counts in the check: it follows today's use, not their lines.
+  let again = run_again::check_again(&task.project.feed);
   let root = task.project.open.repo_root.clone();
   let check = run_again::check(ctx, (root, services.programs), &task.detail, again);
   let button = ActionButton::new(

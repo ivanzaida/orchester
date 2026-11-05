@@ -130,6 +130,97 @@ impl ProjectDb {
   pub fn check_task_readiness(&self, task: TaskId) -> Result<(), StoreError> {
     check_readiness(&self.connection, task)
   }
+
+  /// [`Self::task_organization_updated_at`] of every task that has a stored organization, in one statement.
+  pub fn task_organization_update_times(&self) -> Result<HashMap<TaskId, Timestamp>, StoreError> {
+    let mut statement = self
+      .connection
+      .prepare("SELECT task_id, updated_at FROM task_organization")?;
+    let rows = statement
+      .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)))?
+      .collect::<Result<Vec<_>, _>>()?;
+    rows
+      .into_iter()
+      .map(|(task, at)| Ok((crate::rows::parse("task id", &task)?, Timestamp::from_unix_millis(at))))
+      .collect()
+  }
+
+  /// [`Self::unfinished_blocking_tasks`] of every task that has a stored organization, in two statements; a task
+  /// left out has none.
+  pub fn unfinished_blocking_by_task(&self) -> Result<HashMap<TaskId, Vec<TaskId>>, StoreError> {
+    super::consistent::read(&self.connection, || {
+      let completed = latest_runs_completed(&self.connection)?;
+      let mut statement = self.connection.prepare(
+        "SELECT task_organization.task_id, task_organization.body FROM task_organization \
+         JOIN tasks ON tasks.id = task_organization.task_id",
+      )?;
+      let rows = statement
+        .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))?
+        .collect::<Result<Vec<_>, _>>()?;
+      rows
+        .into_iter()
+        .map(|(task, body)| {
+          let value: TaskOrganization = decode_json("task organization", 1, &body)?;
+          let blocking = value
+            .dependencies()
+            .iter()
+            .filter(|link| {
+              !completed
+                .get(&link.task)
+                .is_some_and(|&(succeeded, merged)| match link.gate {
+                  DependencyGate::Review => succeeded,
+                  DependencyGate::Merge => merged,
+                })
+            })
+            .map(|link| link.task)
+            .collect();
+          Ok((crate::rows::parse("task id", &task)?, blocking))
+        })
+        .collect()
+    })
+  }
+
+  /// [`Self::active_task_run`] of every task that has an active run, in one statement.
+  pub fn active_task_runs(&self) -> Result<HashMap<TaskId, RunId>, StoreError> {
+    // SQLite takes the other columns from the row of the greatest number: each task's latest run that has not ended.
+    let mut statement = self.connection.prepare(&format!(
+      "SELECT task_id, id, MAX(number) FROM runs WHERE {ACTIVE} GROUP BY task_id"
+    ))?;
+    let rows = statement
+      .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))?
+      .collect::<Result<Vec<_>, _>>()?;
+    rows
+      .into_iter()
+      .map(|(task, run)| {
+        Ok((
+          crate::rows::parse("task id", &task)?,
+          crate::rows::parse("run id", &run)?,
+        ))
+      })
+      .collect()
+  }
+}
+
+/// A run that has not ended, as [`active_run`] counts one.
+const ACTIVE: &str = "status NOT IN ('succeeded', 'failed', 'cancelled') \
+                      AND NOT (status = 'interrupted' AND id IN (SELECT run_id FROM run_worktree_removals))";
+
+/// Of each task's latest run, whether it succeeded and whether it was merged: what completes a link to the task
+/// through review and through merge ([`unfinished`]).
+fn latest_runs_completed(connection: &Connection) -> Result<HashMap<TaskId, (bool, bool)>, StoreError> {
+  let mut statement = connection.prepare(
+    "SELECT latest.task_id, latest.status = 'succeeded', EXISTS(SELECT 1 FROM run_merges WHERE run_id = latest.id) \
+     FROM runs latest WHERE latest.number = (SELECT MAX(number) FROM runs WHERE task_id = latest.task_id)",
+  )?;
+  let rows = statement
+    .query_map([], |row| {
+      Ok((row.get::<_, String>(0)?, row.get::<_, bool>(1)?, row.get::<_, bool>(2)?))
+    })?
+    .collect::<Result<Vec<_>, _>>()?;
+  rows
+    .into_iter()
+    .map(|(task, succeeded, merged)| Ok((crate::rows::parse("task id", &task)?, (succeeded, merged))))
+    .collect()
 }
 
 pub(super) fn load(connection: &Connection, task: TaskId) -> Result<TaskOrganization, StoreError> {
@@ -228,9 +319,7 @@ fn ensure_task(connection: &Connection, task: TaskId) -> Result<(), StoreError> 
 pub(super) fn active_run(connection: &Connection, task: TaskId) -> Result<Option<RunId>, StoreError> {
   let id: Option<String> = connection
     .query_row(
-      "SELECT id FROM runs WHERE task_id = ?1 AND status NOT IN ('succeeded', 'failed', 'cancelled') \
-       AND NOT (status = 'interrupted' AND id IN (SELECT run_id FROM run_worktree_removals)) \
-       ORDER BY number DESC LIMIT 1",
+      &format!("SELECT id FROM runs WHERE task_id = ?1 AND {ACTIVE} ORDER BY number DESC LIMIT 1"),
       [task.to_string()],
       |row| row.get(0),
     )

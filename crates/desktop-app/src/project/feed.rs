@@ -66,6 +66,9 @@ pub struct ProjectFeed {
   /// Counts changes of the state of the project's runs: a run started, waits or ended. A transcript's lines do
   /// not count.
   pub states: Signal<u64>,
+  /// Whether the active tab shows the project: only then are its transcripts' lines followed, in `changes` and in a
+  /// run's own count (`super::run_changes`).
+  pub following: Signal<bool>,
   /// Whether one of the project's runs runs, as its tasks were last read.
   pub running: Signal<bool>,
   /// Counts saves of the project's tasks a screen made; the tasks are read again after each
@@ -185,6 +188,7 @@ impl ProjectFeed {
       status: Signal::new(None),
       changes: Signal::new(0),
       states: Signal::new(0),
+      following: Signal::new(false),
       running: Signal::new(false),
       revision: Signal::new(0),
       saves: Signal::new(0),
@@ -213,13 +217,6 @@ impl ProjectFeed {
   /// `Runners::answering`): the tasks drop it in this frame, without waiting for the mark to reach the feed.
   pub fn answer_sent(&self) {
     self.answering.update(|sent| *sent += 1);
-  }
-
-  /// The count of the project's run changes a view of runs follows: while one of its runs runs (`live`)
-  /// every change, its transcript's lines too; otherwise a run's change of state only, as nothing else of
-  /// the runs it shows changes. Reading it in a render re-renders it when that count moves.
-  pub fn run_changes(&self, live: bool) -> u64 {
-    if live { self.changes.get() } else { self.states.get() }
   }
 
   /// Whether a runner serves the project at `repo_root` now. Reading it in a render re-renders it when
@@ -327,6 +324,7 @@ impl Component for FeedLoader {
     publish(&self.feed.status, runner);
     publish(&self.feed.changes, changes);
     publish(&self.feed.states, states);
+    publish(&self.feed.following, active);
     let outside = outside(ctx, (services.changes.clone(), project));
     publish(&self.feed.outside, outside);
     if let Some(state) = jobs(ctx, self.feed.jobs.clone()) {
