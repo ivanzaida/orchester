@@ -52,10 +52,16 @@ impl ArtifactGlob {
   /// Whether the file at `path`, relative to the suite's working folder with `/` between its parts, matches: `*` and
   /// `?` stand for characters within one part, `**` for any number of whole parts.
   pub fn matches(&self, path: &str) -> bool {
-    let pattern: Vec<&str> = self.0.split('/').collect();
-    let parts: Vec<&str> = path.split('/').collect();
-    parts_match(&pattern, &parts)
+    glob_matches(&self.0, path)
   }
+}
+
+/// Whether `path`, with `/` between its parts, matches the glob `pattern` with `/` between its parts: `*` and `?`
+/// stand for characters within one part, `**` for any number of whole parts.
+pub(crate) fn glob_matches(pattern: &str, path: &str) -> bool {
+  let pattern: Vec<&str> = pattern.split('/').collect();
+  let parts: Vec<&str> = path.split('/').collect();
+  parts_match(&pattern, &parts)
 }
 
 fn parts_match(pattern: &[&str], parts: &[&str]) -> bool {

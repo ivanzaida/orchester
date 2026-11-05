@@ -42,7 +42,7 @@ pub enum PreflightProblem {
   ToolNotRunnable { step: StepKey, kind: ToolKind },
   /// The step's command tool carries access rules; tool steps do not apply access rules yet.
   ToolAccessRules { step: StepKey },
-  /// The step runs a tool and has an approval gate: only agent steps propose plans for review.
+  /// The step runs a tool or the test suites and has an approval gate: only agent steps propose plans for review.
   ApprovalGate { step: StepKey },
   /// The step's agent profile has no published version.
   ProfileNotPublished { step: StepKey },
@@ -129,6 +129,12 @@ pub fn preflight(input: PreflightInput<'_>) -> Vec<PreflightProblem> {
           problems.push(PreflightProblem::SecretMissing { step: key() });
         }
         problems.extend(tool_problem(tool, key()));
+        continue;
+      }
+      StepKind::Test => {
+        if step.approval_gate {
+          problems.push(PreflightProblem::ApprovalGate { step: key() });
+        }
         continue;
       }
       StepKind::Agent { profile, .. } => profile.and_then(|profile| input.profiles.get(&profile)),

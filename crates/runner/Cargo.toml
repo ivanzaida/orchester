@@ -368,6 +368,10 @@ name = "run_tests"
 required-features = ["test-agent"]
 
 [[test]]
+name = "test_step"
+required-features = ["test-agent"]
+
+[[test]]
 name = "db_contention"
 required-features = ["test-agent"]
 

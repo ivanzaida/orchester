@@ -31,7 +31,7 @@ impl Run {
       .rev()
       .filter(|step| match step.executor() {
         StepExecutor::Agent { profile: pinned, .. } => profile.is_none_or(|profile| pinned.resource == profile),
-        StepExecutor::Tool { .. } => false,
+        StepExecutor::Tool { .. } | StepExecutor::Test => false,
       })
       .map(|step| step.key())
       .find(|key| self.latest_execution(key).map(StepExecution::status) == Some(StepStatus::Passed))

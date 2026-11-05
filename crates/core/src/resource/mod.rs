@@ -20,6 +20,7 @@ mod variable;
 
 use serde::{Serialize, de::DeserializeOwned};
 
+pub(crate) use self::test_suite::glob_matches;
 pub use self::{
   agent_profile::{AgentProfile, ModelId, ModelIdError, ProviderSettings, ProviderSettingsError},
   instruction::{

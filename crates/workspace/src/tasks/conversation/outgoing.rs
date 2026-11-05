@@ -217,7 +217,7 @@ pub fn answers_question(detail: &TaskDetail, recipient: Recipient) -> bool {
       .and_then(|execution| view.run.snapshot().step(execution.step()))
       .and_then(|step| match step.executor() {
         orchester_core::run::StepExecutor::Agent { profile, .. } => Some(profile.resource),
-        orchester_core::run::StepExecutor::Tool { .. } => None,
+        orchester_core::run::StepExecutor::Tool { .. } | orchester_core::run::StepExecutor::Test => None,
       });
     profile
       .is_some_and(|profile| matches!(recipient, Recipient::Orchestrator) || recipient == Recipient::Agent(profile))

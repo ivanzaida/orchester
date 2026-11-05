@@ -29,6 +29,9 @@
 //! A new session of an attempt a failure sent back reads that failure in its task part ([`retry`]):
 //! the step the work returned to, why it came back; the step that failed, its own earlier result.
 //!
+//! A new session of a step that runs after a passed Test step reads the result that step stored ([`tests`]), and that
+//! single checks go through `run_tests(filter)` instead of running every suite again.
+//!
 //! An invocation that delivers a notice that the run's base branch moved ([`BaseMoved`]) reads it like people's
 //! messages: in a new session's task part, first in a resumed one; every writing agent's *Files and commands* part
 //! says how to merge the base safely ([`MERGE_SAFELY`]).
@@ -44,6 +47,7 @@ mod memory;
 mod native;
 mod retry;
 mod source;
+mod tests;
 mod working;
 
 use std::num::NonZeroU32;
@@ -56,6 +60,7 @@ pub use self::{
   native::{NativePrompt, NativeSetting},
   retry::{FailureReport, RetryReport, ReturnedWork},
   source::{InstructionVersion, InvocationPrompt, PromptPart, PromptSource},
+  tests::StoredTestResult,
   working::{RUN_PLAINLY, SCRATCH_FILES, WorkingTools},
 };
 use super::{
@@ -221,6 +226,8 @@ pub struct PromptInput<'a> {
   pub code_index: Option<CodeIndexPrompt<'a>>,
   /// Outputs of the steps `step` depends on, in pipeline order.
   pub dependencies: &'a [DependencyOutput<'a>],
+  /// The results of the passed Test steps `step` runs after, directly or not, in pipeline order.
+  pub tests: &'a [StoredTestResult<'a>],
   /// The step's plan a reviewer sent back, when this invocation revises it.
   pub revision: Option<PlanRevision<'a>>,
   /// People's messages this invocation delivers, if any.

@@ -90,7 +90,9 @@ fn project() -> Project {
 fn builder_of(run: &Run) -> ResourceId {
   match run.snapshot().steps()[0].executor() {
     orchester_core::run::StepExecutor::Agent { profile, .. } => profile.resource,
-    orchester_core::run::StepExecutor::Tool { .. } => panic!("Implement is an agent step"),
+    orchester_core::run::StepExecutor::Tool { .. } | orchester_core::run::StepExecutor::Test => {
+      panic!("Implement is an agent step")
+    }
   }
 }
 

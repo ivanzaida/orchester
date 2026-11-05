@@ -149,7 +149,7 @@ fn fix_mode(conversation: &Conversation, run: &RunView) -> (ComposerMode, Recipi
     .and_then(|step| run.run.snapshot().step(&step.key))
     .and_then(|step| match step.executor() {
       StepExecutor::Agent { profile, .. } => Some(Recipient::Agent(profile.resource)),
-      StepExecutor::Tool { .. } => None,
+      StepExecutor::Tool { .. } | StepExecutor::Test => None,
     });
   match writer {
     Some(recipient) => (ComposerMode::of(conversation, Some(run), recipient), recipient),

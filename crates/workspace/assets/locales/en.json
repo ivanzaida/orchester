@@ -1348,7 +1348,9 @@
       "readsOnly": "Reads the repository",
       "exitCodeDecides": "Its exit code decides the step",
       "toolUnavailable": "This tool can’t run in this version yet",
-      "profileConnectionModel": "{{profile}} · {{connection}} / {{model}}"
+      "profileConnectionModel": "{{profile}} · {{connection}} / {{model}}",
+      "tests": "Test suites of the changed areas",
+      "failedTestsDecide": "Failed tests fail the step"
     },
     "inspector": {
       "readOnly": "Read-only",
@@ -1639,6 +1641,7 @@
       "stepKeyInvalid": "{{key}} is not a step key: use small letters, digits and -, starting with a letter or digit.",
       "profileOrTool": "A step runs an agent profile or a tool, not both.",
       "toolStepOptions": "A tool step takes no repository access, model or narrowed permissions; those are an agent step’s.",
+      "testStepOptions": "A Test step runs the project's test suites: it takes no profile, tool, repository access, model or narrowed permissions.",
       "toolNotPublished": "No published tool is named {{tool}}. A step calls a tool once it is published.",
       "toolNotRunnable": "{{tool}} cannot run as a step in this version.",
       "profileNotPublished": "No published agent profile is named {{profile}}. A step runs a profile once it is published.",
@@ -1686,7 +1689,8 @@
         "program": "The tool would run {{program}} where it ran {{before}}.",
         "arguments": "The tool's arguments would change, and with them what its program does.",
         "exitCodes": "Exit codes {{codes}} would pass, which did not.",
-        "toolStep": "Step {{step}} would run {{tool}} with your rights, network access and no sandbox, on files the agents before it wrote; the pipeline does not call it there yet. Approve it only after agents you would let do that."
+        "toolStep": "Step {{step}} would run {{tool}} with your rights, network access and no sandbox, on files the agents before it wrote; the pipeline does not call it there yet. Approve it only after agents you would let do that.",
+        "testStep": "Step {{step}} would run the project's test suites and the services they need with your rights, network access and no sandbox, on files the agents before it wrote, without asking. Approve it only after agents you would let do that."
       }
     },
     "services": {

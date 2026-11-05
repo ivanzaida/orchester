@@ -10,6 +10,8 @@
 //! - `cat <file>`: prints the file `<file>` on standard output;
 //! - `pid-file <file>`: writes its own pid to `<file>`; `env-file <file> <name>` the value of `<name>`, or `<not set>`;
 //! - `fail-once <file>`: exits with 1 after creating `<file>` in its working directory, unless the file exists;
+//! - `first-then <marker> <first> <then>`: prints the file `<first>` after creating `<marker>`, or the file `<then>`
+//!   when `<marker>` exists: a report that fails once, then passes;
 //! - `spawn-sleeper`: starts a copy of itself that sleeps for ten minutes and prints `child pid: <pid>`;
 //!   `spawn-sleeper-into <file>` writes the copy's pid to `<file>` instead;
 //! - `listen <port>`: a stand-in web server on `127.0.0.1:<port>` until it is ended (`fake_server`);
@@ -52,6 +54,7 @@ fn main() -> ExitCode {
       "write" => write(rest.next(), rest.next()),
       "copy" => copy(rest.next(), rest.next()),
       "cat" => cat(rest.next()),
+      "first-then" => first_then(rest.next(), rest.next(), rest.next()),
       "pid-file" => write(rest.next(), Some(&std::process::id().to_string())),
       "env-file" => {
         let file = rest.next();
@@ -123,6 +126,16 @@ fn cat(file: Option<&str>) -> Result<(), String> {
   let mut out = std::io::stdout().lock();
   out.write_all(text.as_bytes()).map_err(|error| error.to_string())?;
   out.flush().map_err(|error| error.to_string())
+}
+
+/// Prints `first` the first time, when it creates `marker`, and `then` every time after.
+fn first_then(marker: Option<&str>, first: Option<&str>, then: Option<&str>) -> Result<(), String> {
+  let marker = marker.ok_or("first-then needs a marker")?;
+  if fs::metadata(marker).is_ok() {
+    return cat(then);
+  }
+  fs::write(marker, "printed the first").map_err(|error| error.to_string())?;
+  cat(first)
 }
 
 /// `true` when this call created the file: the program fails this time.

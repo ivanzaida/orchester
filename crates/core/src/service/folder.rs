@@ -89,4 +89,13 @@ impl OwnedPath {
   pub fn as_str(&self) -> &str {
     &self.0
   }
+
+  /// Whether the service owns the repository file `path`, with `/` between its parts as git lists it: the pattern
+  /// matches it as an artifact glob does (`*` and `?` within a part, `**` across parts), or names a folder it is in.
+  pub fn matches(&self, path: &str) -> bool {
+    let pattern = self.0.replace('\\', "/");
+    let pattern = pattern.trim_end_matches('/');
+    crate::resource::glob_matches(pattern, path)
+      || (!pattern.contains(['*', '?']) && path.strip_prefix(pattern).is_some_and(|rest| rest.starts_with('/')))
+  }
 }

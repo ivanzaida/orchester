@@ -45,7 +45,7 @@ impl RunTask {
       .and_then(|execution| self.run.snapshot().step(execution.step()))
       .and_then(|step| match step.executor() {
         StepExecutor::Agent { profile, .. } => Some(*profile),
-        StepExecutor::Tool { .. } => None,
+        StepExecutor::Tool { .. } | StepExecutor::Test => None,
       });
     let Some(profile) = profile else {
       return Ok(());

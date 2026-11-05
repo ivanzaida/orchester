@@ -30,6 +30,7 @@ mod skills;
 mod start;
 mod stderr;
 mod suite;
+mod test_step;
 mod tool_files;
 pub(super) mod worker;
 
@@ -252,7 +253,7 @@ impl RunTask {
   /// Starts `execution`'s agent in a slot of its own; `false` when no slot is free. An agent that
   /// cannot start fails its step.
   fn start(&mut self, execution: StepExecutionId, start: Start) -> Result<bool, ExecutionError> {
-    if self.is_tool_step(execution) {
+    if self.is_command_step(execution) {
       return self.start_command(execution, start);
     }
     if self.passes_accepted(execution)? || self.waits_for_plan_reset(execution)? {

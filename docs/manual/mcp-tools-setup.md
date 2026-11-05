@@ -450,6 +450,7 @@ pipeline (nothing is saved then).
 | `name`             | string                   | yes  | Display name.                                                                                       |
 | `profile`          | string \| null           | no   | Published agent profile that runs the step (id or name). Leave both `profile` and `tool` out = unassigned (blocks publishing only). |
 | `tool`             | string \| null           | no   | Published command tool the step calls instead (id or name).                                         |
+| `tests`            | boolean                  | no   | A Test step instead (`docs/architecture/agent-testing.md`, "The Test step"): no `profile`, `tool` or agent fields. |
 | `runs_after`       | array<string>            | no   | Keys of the steps it runs after (no cycles).                                                        |
 | `approval_gate`    | boolean                  | no   | The step's result waits for a person's approval (e.g. a plan).                                      |
 | `on_failure`       | {`return_to`: string, `retries`: integer ≥ 1} \| null | no | Return to an earlier step it runs after; after `retries` returns the run waits for a person. |
@@ -463,9 +464,15 @@ pipeline (nothing is saved then).
 Example command step: `{"key": "check", "name": "Check", "tool": "Check", "runs_after": ["implement"],
 "on_failure": {"return_to": "implement", "retries": 2}}`.
 
+Example Test step: `{"key": "tests", "name": "Tests", "tests": true, "runs_after": ["implement"], "on_failure":
+{"return_to": "implement", "retries": 2}}`. It runs the published suites whose services own a path the run changed,
+plus those marked always, lint then unit then e2e, stopping after the first layer that fails; a failed test runs once
+more, and one that passes then is flaky and does not fail the step. On failure the writing step reads only the failed
+tests; later steps read the stored result.
+
 `person_only` unless AP is on: dropping an approval gate or *ask about tool calls* that the latest published version
-(before the first: the draft) has — removing the step that has it included — and adding a step that calls a tool
-neither the draft nor the latest version calls under that key (it runs a program on this computer).
+(before the first: the draft) has — removing the step that has it included — and adding a step that calls a tool, or a
+Test step, neither the draft nor the latest version has under that key (it runs programs on this computer).
 
 ### `publish_pipeline` — changes data · gate AP unless provably no weaker
 

@@ -334,13 +334,16 @@ const SPECS: &[Spec] = &[
                   saved then. A command step names a published command tool (publish_tool) as `tool`, runs after \
                   the steps it checks, and may return to one of them when the program fails, e.g. {\"key\": \
                   \"check\", \"name\": \"Check\", \"tool\": \"Check\", \"runs_after\": [\"implement\"], \
-                  \"on_failure\": {\"return_to\": \"implement\", \"retries\": 2}}. Unless a person turned on Let \
+                  \"on_failure\": {\"return_to\": \"implement\", \"retries\": 2}}. A Test step sets `tests: true` \
+                  and no profile or tool: Orchester runs the published test suites whose services own a path the \
+                  run changed, plus those marked always, lint then unit then e2e, and returns only the failed tests \
+                  to the step its on_failure names. Unless a person turned on Let \
                   automation change agent permissions, these are refused as person_only: dropping an approval \
                   gate, or asking about tool calls, that the latest published version (before the first: the \
-                  draft) has, a step removed with it included; and a step that calls a tool neither the draft nor \
-                  the latest version calls under its key, since it runs a program on this computer. `delivers` \
-                  changes what its runs deliver (changes, report, outside or changes_or_report); left out, it stays \
-                  as it is.",
+                  draft) has, a step removed with it included; and a step that calls a tool, or a Test step, \
+                  neither the draft nor the latest version has under its key, since it runs programs on this \
+                  computer. `delivers` changes what its runs deliver (changes, report, outside or \
+                  changes_or_report); left out, it stays as it is.",
     schema: schema_for_type::<pipeline_steps::SavePipelineDraft>,
     read_only: false,
   },

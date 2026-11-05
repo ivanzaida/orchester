@@ -47,7 +47,7 @@ pub(in crate::execution::step) struct StepSuites {
 }
 
 /// The latest published version of each of the project's test suites at `root`, with its slug, removed ones left out.
-fn published(root: &Path) -> Result<Vec<(Slug, TestSuite)>, StoreError> {
+pub(in crate::execution::step) fn published(root: &Path) -> Result<Vec<(Slug, TestSuite)>, StoreError> {
   let db = ProjectDb::open_read_only(root)?;
   let mut suites = Vec::new();
   for resource in db.resources(ResourceKind::TestSuite)? {
@@ -57,6 +57,9 @@ fn published(root: &Path) -> Result<Vec<(Slug, TestSuite)>, StoreError> {
   }
   Ok(suites)
 }
+
+/// A suite's run kept with the run, and where its result is.
+pub(in crate::execution::step) type Kept = (SuiteRun, String);
 
 impl StepSuites {
   /// Runs the published suite `slug` with `filter`, its needs started through `services` before and those it started
@@ -83,40 +86,52 @@ impl StepSuites {
         "the suite `{name}` takes no filter: none of its arguments holds {{{{filter}}}}; call run_tests without one"
       ));
     }
+    match self.test(slug, &suite, filter, services) {
+      Ok((run, stored)) => run.answer(&stored),
+      Err(why) => ToolResult::unavailable(&why),
+    }
+  }
+
+  /// Runs `suite`, published as `slug`, with `filter`, its needs started through `services` before and those it
+  /// started stopped after, and keeps its run with the run; why it did not run when it did not.
+  pub(in crate::execution::step) fn test(
+    &self,
+    slug: &Slug,
+    suite: &TestSuite,
+    filter: Option<&TestFilter>,
+    services: Option<&StepServices>,
+  ) -> Result<Kept, String> {
+    let name = slug.as_str();
     let needs = suite.needs().as_slice();
     let started = match (needs.is_empty(), services) {
       (true, _) => Vec::new(),
-      (false, Some(services)) => match services.start_needs(needs) {
-        Ok(started) => started,
-        Err(why) => return ToolResult::unavailable(&format!("the suite `{name}` did not run: {why}")),
-      },
+      (false, Some(services)) => services
+        .start_needs(needs)
+        .map_err(|why| format!("the suite `{name}` did not run: {why}"))?,
       (false, None) => {
         let needs: Vec<String> = needs.iter().map(|need| format!("`{}`", need.as_str())).collect();
-        return ToolResult::unavailable(&format!(
+        return Err(format!(
           "the suite `{name}` needs {}, but this step cannot start services",
           needs.join(", ")
         ));
       }
     };
-    let answer = self.run_started(slug, &suite, filter);
+    let kept = self.run_started(slug, suite, filter);
     if let Some(services) = services {
       services.stop_started(&started);
     }
-    answer
+    kept
   }
 
   /// Runs `suite`, whose needs run, and keeps its result with the run.
-  fn run_started(&self, slug: &Slug, suite: &TestSuite, filter: Option<&TestFilter>) -> ToolResult {
-    let folder = match RunFolder::create(&self.storage) {
-      Ok(folder) => folder,
-      Err(why) => return ToolResult::unavailable(&why),
-    };
+  fn run_started(&self, slug: &Slug, suite: &TestSuite, filter: Option<&TestFilter>) -> Result<Kept, String> {
+    let folder = RunFolder::create(&self.storage)?;
     let began = Instant::now();
     let finished = match self.execute(suite, filter) {
       Ok(finished) => finished,
       Err(why) => {
         folder.discard();
-        return ToolResult::unavailable(&format!("the suite `{}` did not run: {why}", slug.as_str()));
+        return Err(format!("the suite `{}` did not run: {why}", slug.as_str()));
       }
     };
     let duration_ms = u64::try_from(began.elapsed().as_millis()).unwrap_or(u64::MAX);
@@ -134,8 +149,8 @@ impl StepSuites {
     run.artifacts = copies.stored;
     run.artifact_problems = copies.problems;
     match folder.save(&run) {
-      Ok(stored) => run.answer(&stored),
-      Err(why) => ToolResult::unavailable(&format!("the suite `{}` ran, but {why}", slug.as_str())),
+      Ok(stored) => Ok((run, stored)),
+      Err(why) => Err(format!("the suite `{}` ran, but {why}", slug.as_str())),
     }
   }
 

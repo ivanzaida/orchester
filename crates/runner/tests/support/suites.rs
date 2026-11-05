@@ -31,6 +31,11 @@ pub fn commit(root: &Path, files: &[(&str, &str)]) {
 /// The suite running `orchester-test-command` with `arguments`, whose report has `format`, read from the file `path`
 /// when one is given.
 pub fn suite(arguments: &[&str], format: ReportFormat, path: Option<&str>) -> TestSuite {
+  layered(TestLayer::Unit, arguments, (format, path))
+}
+
+/// [`suite`] in the Test step's layer `layer`.
+pub fn layered(layer: TestLayer, arguments: &[&str], (format, path): (ReportFormat, Option<&str>)) -> TestSuite {
   let program = CommandProgram::new(TEST_COMMAND).expect("the test program");
   let arguments = arguments
     .iter()
@@ -38,11 +43,7 @@ pub fn suite(arguments: &[&str], format: ReportFormat, path: Option<&str>) -> Te
     .collect();
   let command = SuiteCommand::new(program, arguments).expect("a command");
   let path = path.map(|path| SuitePath::new(path).expect("a path"));
-  TestSuite::new(
-    command,
-    TestReport::new(format, path).expect("a report"),
-    TestLayer::Unit,
-  )
+  TestSuite::new(command, TestReport::new(format, path).expect("a report"), layer)
 }
 
 /// The JSON answer of a `run_tests ok: {…}` call.

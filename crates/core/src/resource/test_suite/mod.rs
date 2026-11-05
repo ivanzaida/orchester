@@ -11,6 +11,7 @@ mod variables;
 
 use thiserror::Error;
 
+pub(crate) use self::paths::glob_matches;
 pub use self::{
   command::{SuiteCommand, TestFilter},
   launch::SuiteProcess,

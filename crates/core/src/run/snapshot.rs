@@ -47,6 +47,8 @@ pub enum StepExecutor {
   Tool {
     tool: PinnedVersion,
   },
+  /// Orchester runs the project's test suites ([`StepKind::Test`]): the versions published when the step starts.
+  Test,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -160,6 +162,7 @@ fn check_executor(step: &Step, pinned: &StepSnapshot) -> Result<(), SnapshotErro
         && model.as_ref().is_none_or(|model| model == pinned_model)
     }
     (StepKind::Tool { tool }, StepExecutor::Tool { tool: pinned_tool }) => *tool == Some(pinned_tool.resource),
+    (StepKind::Test, StepExecutor::Test) => true,
     _ => false,
   };
   if matches {
@@ -334,6 +337,7 @@ fn resolve_step(step: &Step, published: PublishedVersions<'_>) -> Result<StepSna
         tool: PinnedVersion::of(*tool, version),
       }
     }
+    StepKind::Test => StepExecutor::Test,
   };
   Ok(StepSnapshot {
     key: step.key.clone(),
@@ -381,7 +385,7 @@ fn pinned_tools(
     .iter()
     .filter_map(|step| match step.executor {
       StepExecutor::Tool { tool } => Some((tool.resource, tool)),
-      StepExecutor::Agent { .. } => None,
+      StepExecutor::Agent { .. } | StepExecutor::Test => None,
     })
     .collect();
   for (&id, version) in published.tools {

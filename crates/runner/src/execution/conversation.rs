@@ -265,7 +265,7 @@ impl RunTask {
     Ok(())
   }
 
-  /// The agent profile `execution`'s step runs on; `None` for a tool step.
+  /// The agent profile `execution`'s step runs on; `None` for a tool or Test step.
   pub(super) fn profile_of(&self, execution: StepExecutionId) -> Option<ResourceId> {
     self
       .run
@@ -273,7 +273,7 @@ impl RunTask {
       .and_then(|execution| self.run.snapshot().step(execution.step()))
       .and_then(|step| match step.executor() {
         StepExecutor::Agent { profile, .. } => Some(profile.resource),
-        StepExecutor::Tool { .. } => None,
+        StepExecutor::Tool { .. } | StepExecutor::Test => None,
       })
   }
 

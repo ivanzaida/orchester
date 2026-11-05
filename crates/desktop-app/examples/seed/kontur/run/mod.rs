@@ -174,15 +174,18 @@ impl<'k> Drive<'k> {
     let at = self.tick();
     let events = self.run.start_step(execution, at)?;
     self.record(&events)?;
-    let tool = matches!(self.kind(step)?, StepKind::Tool { .. });
+    let kind = self.kind(step)?.clone();
+    let tool = matches!(kind, StepKind::Tool { .. });
     let model = self.model(step);
     let db = &mut self.kontur.db;
-    let invocation = if tool {
+    let invocation = if tool || kind == StepKind::Test {
       db.start_command_invocation(self.run.id(), execution, at)?
     } else {
       db.start_invocation(self.run.id(), execution, &model, at)?
     };
-    let opening = if tool {
+    let opening = if kind == StepKind::Test {
+      Vec::new()
+    } else if tool {
       vec![AgentEvent::ToolCommandStarted {
         tool: step.to_owned(),
         command: catalogue::command_line(step),
@@ -238,6 +241,7 @@ impl<'k> Drive<'k> {
         output: "test result: ok. 42 passed; 0 failed".to_owned(),
         omitted_bytes: 0,
       }],
+      StepKind::Test => Vec::new(),
       StepKind::Agent { .. } => vec![AgentEvent::Message {
         text: format!("Finished {step}."),
       }],
@@ -413,12 +417,15 @@ impl<'k> Drive<'k> {
         output: "test webhooks::retry::jitter_bound ... FAILED\ntest result: FAILED. 41 passed; 1 failed".to_owned(),
         omitted_bytes: 0,
       }],
+      // A Test step records no transcript of its own: its result is its output.
+      StepKind::Test => Vec::new(),
       StepKind::Agent { .. } => vec![AgentEvent::Message {
         text: "The change does not meet the acceptance criteria yet.".to_owned(),
       }],
     };
     let outcome = match self.kind(step)? {
       StepKind::Tool { .. } => InvocationOutcome::ExitFailed { code: Some(101) },
+      StepKind::Test => InvocationOutcome::ExitFailed { code: None },
       StepKind::Agent { .. } => InvocationOutcome::Completed,
     };
     self.end(step, closing, outcome)?;
@@ -432,7 +439,7 @@ impl<'k> Drive<'k> {
   /// Fails `step` with a verdict until no automatic route is left: the run waits for a person.
   pub fn fail_until_stuck(&mut self, step: &str) -> Result<&mut Self, SeedError> {
     let verdict = match self.kind(step)? {
-      StepKind::Tool { .. } => StepFailure::CommandFailed,
+      StepKind::Tool { .. } | StepKind::Test => StepFailure::CommandFailed,
       StepKind::Agent { .. } => StepFailure::ReportedFailed,
     };
     while self.run.status() == &RunStatus::Running {
