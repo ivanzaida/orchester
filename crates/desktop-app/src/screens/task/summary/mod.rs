@@ -38,7 +38,7 @@ use lurq::{
 };
 
 pub use self::{
-  decisions::{Waiting, decisions, returnable, waiting},
+  decisions::{PullRequestState, Waiting, decisions, pull_request_rows, returnable, waiting},
   notice::EventWords,
   version::Version,
 };

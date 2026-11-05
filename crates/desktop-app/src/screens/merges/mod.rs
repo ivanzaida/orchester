@@ -19,7 +19,7 @@ pub(crate) mod review;
 mod row;
 mod states;
 mod waiting;
-mod words;
+pub(crate) mod words;
 
 use lurq::{
   app::{

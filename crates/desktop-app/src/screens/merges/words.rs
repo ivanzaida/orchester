@@ -9,7 +9,7 @@ use lurq::app::ctx::Ctx;
 use orchester_core::{
   integration::{
     MergeKind,
-    attempt::{AttemptOutcome, AttemptStage, MergeAsker, MergeVia},
+    attempt::{AttemptOutcome, AttemptStage, MergeAsker, MergeAttempt, MergeVia},
     retry::RETRIES,
   },
   time::Timestamp,
@@ -29,7 +29,7 @@ const NO_BRANCH: &str = "—";
 const SILENT: &str = "wrote nothing for ";
 
 /// The stage's name.
-fn stage(ctx: &Ctx, stage: AttemptStage) -> Arc<str> {
+pub(crate) fn stage(ctx: &Ctx, stage: AttemptStage) -> Arc<str> {
   ctx.t(match stage {
     AttemptStage::Policy => "merges.stage.policy",
     AttemptStage::ProjectDatabase => "merges.stage.projectDatabase",
@@ -60,9 +60,12 @@ pub(super) fn branch(run: &NotMergedRun) -> &str {
 /// The run's last attempt in one line: where it stopped and why. A run Orchester tries again has its own line
 /// ([`retrying_line`]).
 pub(super) fn outcome(ctx: &Ctx, run: &NotMergedRun) -> Arc<str> {
-  let attempt = &run.not_merged.attempt.attempt;
+  attempt_line(ctx, &run.not_merged.attempt.attempt, branch(run))
+}
+
+/// `attempt` into `base` in one line, as a row of Review › Merges and the task page's top card say it (ORC-731).
+pub(crate) fn attempt_line(ctx: &Ctx, attempt: &MergeAttempt, base: &str) -> Arc<str> {
   let why = cause(ctx, attempt.cause());
-  let base = branch(run);
   match attempt.outcome() {
     AttemptOutcome::Merged { .. } => why,
     AttemptOutcome::Refused { stage: at } => {
@@ -188,7 +191,7 @@ pub(super) fn who(ctx: &Ctx, asked_by: MergeAsker) -> Arc<str> {
 }
 
 /// When, as a row says it: the time alone today, else the date and time.
-pub(super) fn when(ctx: &Ctx, at: Timestamp) -> Arc<str> {
+pub(crate) fn when(ctx: &Ctx, at: Timestamp) -> Arc<str> {
   crate::screens::task::summary::runs::line::day_and_clock(ctx, at)
 }
 

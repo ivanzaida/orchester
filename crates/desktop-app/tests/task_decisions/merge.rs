@@ -1,7 +1,7 @@
-//! Ready for review with Merge into main: merging beside the person's uncommitted work (also past a local
-//! integration paused at its review), refused at a dirty path the run changes and at a conflict with Local
-//! integration offered, unavailable without a branch to merge into, merged; and what git tells of the work without
-//! Orchester: merged by a person, and current external Git evidence in place of Ready. A run with nothing to merge is
+//! Ready to merge with Merge: merging beside the person's uncommitted work (also past a local integration paused at
+//! its review), refused at a dirty path the run changes and at a conflict, each turning the card to its outcome,
+//! unavailable without a branch to merge into, merged; and what git tells of the work without Orchester: merged by a
+//! person, and current external Git evidence in place of Ready. A run with nothing to merge is
 //! [`super::completion`]'s.
 
 use std::{fs, process};
@@ -132,15 +132,17 @@ fn decision_merge_into_main_merges_beside_unrelated_uncommitted_work() {
   let work = person_work(&page, "README.md");
   let tip = tip(&page, &run);
   page.open("ready for review, merges cleanly", "task-merge");
-  assert_eq!(page.text("task-notice-title"), "Ready for your review");
-  assert!(page.locked("task-review-pull-request"));
-  assert_eq!(
-    page.text("task-review-pull-request-reason"),
-    "Review PR needs a pull request: create one for this run first."
+  assert_eq!(page.text("task-notice-title"), "Ready to merge");
+  assert!(
+    !page.has("task-review-pull-request"),
+    "Review PR waits for a pull request"
   );
-  assert!(page.locked("task-ask-agent"), "Ask agent waits for the composer");
-  page.until_says("task-ready-changes-figure", "1 file");
-  assert!(page.has("task-ready-check-review"), "Review verified the work");
+  assert!(!page.has("task-ask-agent"), "01i draws no Ask agent");
+  page.window.until("how much the run changes", |window| {
+    window
+      .texts("task-notice-body")
+      .is_some_and(|texts| texts.join(" ").starts_with("1 file, +"))
+  });
   assert!(page.has("task-facts"), "the run's facts beside the card");
   page.merge_until(("task-merge", "task-notice-title"), "Merged into main");
   assert!(page.text("task-notice").contains("main got merge commit"));
@@ -183,7 +185,7 @@ fn decision_merge_merges_a_run_whose_local_integration_paused_at_review() {
 }
 
 #[test]
-fn decision_merge_at_a_dirty_path_keeps_the_ready_card_and_the_merge_row_says_not_merged() {
+fn decision_merge_at_a_dirty_path_turns_the_card_not_merged_and_the_merge_row_says_so() {
   let _checkout = checkout_page();
   let mut page = Page::seeded("decisions");
   let run = latest_run(&page, "ready for review, merges cleanly");
@@ -196,20 +198,16 @@ fn decision_merge_at_a_dirty_path_keeps_the_ready_card_and_the_merge_row_says_no
   let head = git_out(&page, &["rev-parse", "HEAD"]);
   page.open("ready for review, merges cleanly", "task-merge");
   page.merge_until(("task-merge", "task-property-merge-label"), "Not merged · ");
-  assert_eq!(
-    page.text("task-notice-title"),
-    "Ready for your review",
-    "no card says the merge did not land"
-  );
+  page.until_says("task-notice-title", "Not merged into main");
   assert_eq!(git_out(&page, &["rev-parse", "HEAD"]), head);
   unchanged(&page, &work);
   assert!(!merged(&page, (&run, &tip)));
-  assert!(page.has("task-merge"), "Merge into main stays for another try");
+  assert_eq!(page.text("task-merge-label"), "Try again", "the card tries again");
   assert!(!page.has("task-open-local-integration"));
 }
 
 #[test]
-fn decision_merge_conflict_keeps_the_ready_card_and_the_merge_row_counts_the_files() {
+fn decision_merge_conflict_turns_the_card_to_conflicts_and_the_merge_row_counts_the_files() {
   let _checkout = checkout_page();
   let mut page = Page::seeded("decisions");
   let run = latest_run(&page, "ready for review, conflicts with main");
@@ -217,7 +215,8 @@ fn decision_merge_conflict_keeps_the_ready_card_and_the_merge_row_counts_the_fil
   let head = git_out(&page, &["rev-parse", "HEAD"]);
   page.open("ready for review, conflicts with main", "task-merge");
   page.merge_until(("task-merge", "task-property-merge-label"), "Conflicts · 2 files");
-  assert_eq!(page.text("task-notice-title"), "Ready for your review");
+  page.until_says("task-notice-title", "Conflicts with main");
+  assert_eq!(page.text("task-merge-label"), "Resolve");
   assert!(
     !page.has("task-merge-conflicts"),
     "the files are on the run's attempt page"

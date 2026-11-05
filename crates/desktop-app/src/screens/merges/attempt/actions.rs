@@ -3,7 +3,8 @@
 //! and *Stop retrying* end Orchester's wait for its next try (`merge_retry`); *Record merge* records the merge Git made
 //! (`merge_record`); *Put files back* puts back what a stopped bring-in left changed (`merge_left`). Each runs off the
 //! UI thread; the page is read again after it, and one that did not happen says why on the page. *Open folder* and
-//! *Runner log folder* open a folder in the system's file manager.
+//! *Runner log folder* open a folder in the system's file manager. The task page's top card and header press the same
+//! work when a merge of the run did not land (`screens::task::merge`).
 
 use std::{
   path::{Path, PathBuf},
@@ -21,7 +22,7 @@ use orchester_workspace::{
 
 /// The page's own work under way, if any.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(super) enum Busy {
+pub(crate) enum Busy {
   #[default]
   Idle,
   PuttingBack,
@@ -33,7 +34,7 @@ impl DevtoolsInspectable for Busy {}
 
 /// The buttons' work for run `run` of the project at `root`.
 #[derive(Clone)]
-pub(super) struct Actions {
+pub(crate) struct Actions {
   root: Arc<PathBuf>,
   programs: Programs,
   run: RunId,
@@ -47,7 +48,7 @@ pub(super) struct Actions {
 }
 
 impl Actions {
-  pub(super) fn new(
+  pub(crate) fn new(
     (root, programs, run): (&Path, Programs, RunId),
     separator: Arc<str>,
     (failed, busy, again): (Signal<Option<Message>>, Signal<Busy>, Signal<u64>),
@@ -83,7 +84,7 @@ impl Actions {
   }
 
   /// *Try again* on a run the merge queue stopped: back in its place in the queue.
-  pub(super) fn requeue(&self) {
+  pub(crate) fn requeue(&self) {
     let run = self.run;
     self.work(Busy::Requeueing, "merge-attempt-requeue", move |root, _, _| {
       merge_queue::retry_stopped(root, run, Timestamp::now()).map_err(|refusal| refusal.message())
@@ -91,7 +92,7 @@ impl Actions {
   }
 
   /// *Record merge*: the merge Git made is recorded; nothing is merged again.
-  pub(super) fn record_merge(&self) {
+  pub(crate) fn record_merge(&self) {
     let run = self.run;
     self.work(
       Busy::Recording,
@@ -105,7 +106,7 @@ impl Actions {
   }
 
   /// *Put files back*.
-  pub(super) fn put_files_back(&self) {
+  pub(crate) fn put_files_back(&self) {
     let run = self.run;
     self.work(
       Busy::PuttingBack,

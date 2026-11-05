@@ -1,8 +1,10 @@
 //! The header's one primary action (`Primary action` `xxoqb` in `j8DakG`), the one the task's state calls for: Share
 //! task for a task kept *Not shared*; what the run waits for when a card waits (Approve and Answer open the
-//! Conversation at its card; Review, or Merge for a run ready to merge, open the Summary at its decision); else the run
-//! control that moves the run on (Run, Start run, Resume run, Continue run); none when nothing applies. A card's
-//! action is left out on the tab that shows the card, which holds it (`Decision cards` `CqVv3`).
+//! Conversation at its card; Review opens the Summary at its decision); for a run that waits to be merged, the merge's
+//! own action with its key cap, on every tab, as the Summary's top card has it (ORC-731, `crate::screens::task::merge`:
+//! *Merge*, or once a merge did not land *Try again* or the attempt page's action); else the run control that moves the
+//! run on (Run, Start run, Resume run, Continue run); none when nothing applies. Any other card's action is left out
+//! on the tab that shows the card, which holds it (`Decision cards` `CqVv3`).
 
 use orchester_core::run::RunStatus;
 
@@ -14,7 +16,11 @@ use crate::{
     press::OpenIn,
   },
   routes::{Route, TaskTab, TaskView},
-  screens::task::{PageState, TaskContext, summary::Waiting},
+  screens::task::{
+    PageState, TaskContext,
+    merge::{self, Merge},
+    summary::Waiting,
+  },
   ui::{button::ButtonKind, icon::Icon, pressable::Press},
 };
 
@@ -92,6 +98,16 @@ pub fn primary(
     && let Some(control) = crate::screens::task::ci::header::primary(ctx, task)
   {
     return Some(control);
+  }
+  // The merge's action, with its keys, on every tab, the Summary's top card too (01i `k9GBy`, 01j `k4C0Es`).
+  if card == Some(Card::Decision(Waiting::Ready))
+    && let Some(merge) = Merge::of(task)
+    && let Some(action) = merge::action(ctx, task, merge, false)
+  {
+    return Some(Control {
+      id: "task-primary-merge".into(),
+      ..action.control
+    });
   }
   let Some(card) = card else {
     return moves;

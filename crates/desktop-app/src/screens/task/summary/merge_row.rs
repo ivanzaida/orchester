@@ -3,7 +3,8 @@
 //! before. It says how the run's last merge attempt left it, as the run's attempt page tells it (ORC-363,
 //! [`Standing`]): *Waits for your review* and *Retrying · N of 3* in `info`, *Not merged*, *Git stopped*, *Files left
 //! changed*, *Conflicts · N files* and *Not recorded* in `warning`, *Merged* in `success`, which stays after the merge.
-//! The whole row opens that page, with the open arrow at its end; the Summary shows no card for any of these.
+//! The whole row opens that page, with the open arrow at its end; the Summary's top card says the same outcome
+//! (`crate::screens::task::merge`, 01j `k4C0Es`).
 
 use std::sync::Arc;
 

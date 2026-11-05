@@ -3,8 +3,8 @@
 //! the worktree is and whether the editor opened (`jI4tM`), *Conflicting files* says of each whether it still holds a
 //! conflict marker, is resolved, or waits for the person to keep a side because git could not merge it by content (a
 //! binary file, or one a side deleted; no frame has this yet), *Continue* commits the merge and waits, saying why,
-//! while a file is not resolved (`IerPj`, `Forys`), *Abort the merge* puts the worktree back (`X1UbH`), and *Merge
-//! into main* waits until the merge is done (`k3oSNb`).
+//! while a file is not resolved (`IerPj`, `Forys`), *Abort the merge* puts the worktree back (`X1UbH`), and *Try
+//! again* waits until the merge is done (`k3oSNb`).
 
 use std::sync::Arc;
 
@@ -78,7 +78,7 @@ pub fn resolving(
   ]
   .into_iter()
   .chain(failure)
-  .chain(std::iter::once(merge_actions(ctx, task, run, (pull, true))))
+  .chain(std::iter::once(merge_actions(ctx, task, run, pull)))
   .collect()
 }
 

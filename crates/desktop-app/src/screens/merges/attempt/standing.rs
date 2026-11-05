@@ -99,8 +99,9 @@ impl Standing {
     }
   }
 
-  /// The status line's words, but for Orchester's retry, whose line counts down on its own.
-  pub(super) fn status(self, ctx: &Ctx, branch: &str) -> Arc<str> {
+  /// The status line's words, but for Orchester's retry, whose line counts down on its own; the task page's top card
+  /// is titled with them too (ORC-731).
+  pub(crate) fn status(self, ctx: &Ctx, branch: &str) -> Arc<str> {
     let key = match self {
       Self::Merged => "merges.page.status.merged",
       Self::Retrying(_) => "merges.page.status.queueRetries",

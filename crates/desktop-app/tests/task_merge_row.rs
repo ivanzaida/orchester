@@ -1,8 +1,8 @@
 //! The Merge row of a task's properties (ORC-364, `Review · redesign` 01h `fUHdZ` and `Cjprb` › *Task page ·
 //! Properties › Merge row*) in the app's real window, on the QA seed's `task-merge-row` scenario (`examples/seed`):
-//! under Branch in each of its eight states once the run waits for review or its merge was attempted, none before; the
-//! Summary's top card stays Ready for your review after a merge that did not land; the row opens the run's attempt
-//! page. Needs `git`, as the seed does. `cargo test -p orchester-app --test task_merge_row task_merge_row`.
+//! under Branch in each of its eight states once the run waits for review or its merge was attempted, none before; it
+//! stays beside the Summary's top card once a merge did not land (01j `k4C0Es`, ORC-731); the row opens the run's
+//! attempt page. Needs `git`, as the seed does. `cargo test -p orchester-app --test task_merge_row task_merge_row`.
 
 #[path = "../examples/seed/kontur/mod.rs"]
 #[allow(dead_code, reason = "the seed's helpers serve every scenario; these tests seed one")]
@@ -180,20 +180,21 @@ fn task_merge_row_keeps_the_open_arrow_apart_from_long_words() {
 }
 
 #[test]
-fn task_merge_row_keeps_the_ready_card_and_opens_the_attempt_page() {
+fn task_merge_row_stays_beside_the_not_merged_card_and_opens_the_attempt_page() {
   let mut page = Page::new();
-  for title in [
-    "Add retry to webhook sender",
-    "Per-endpoint secrets",
-    "Delivery dashboard",
+  // The top card turns to the outcome once a merge did not land (01j `k4C0Es`, ORC-731); the row stays.
+  for (title, outcome) in [
+    ("Add retry to webhook sender", "Not merged into main"),
+    ("Per-endpoint secrets", "Conflicts with main"),
+    ("Delivery dashboard", "Merged by Git, not recorded"),
   ] {
     page.open(title);
     page.words();
-    assert_eq!(
-      page.window.text("task-notice-title"),
-      "Ready for your review",
-      "{title}: the top card stays the run's state"
-    );
+    page.window.until_within(GIT_WORK, outcome, |window| {
+      window
+        .texts("task-notice-title")
+        .is_some_and(|texts| texts.join(" ") == outcome)
+    });
     for gone in ["task-merge-conflicts", "task-resolve", "task-open-local-integration"] {
       assert!(
         page.window.texts(gone).is_none(),

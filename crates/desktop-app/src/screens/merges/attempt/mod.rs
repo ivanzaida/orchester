@@ -7,7 +7,7 @@
 //! properties and links. The page is read from the run's attempts (`merge_attempts::page`) again whenever the project's
 //! tasks or runs change, the merge queue moves, a merge job ends, or a button here changed something.
 
-mod actions;
+pub(crate) mod actions;
 mod attempts;
 mod checks;
 mod conflicts;

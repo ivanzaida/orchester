@@ -1,13 +1,13 @@
-//! Ready for review (`Decision · Ready to merge` `I500yD` in `Decision cards` `CqVv3`) and what merging makes of it
-//! (`Task · Summary · merge states` `kxMAN`). A run whose every step passed shows the Ready card ([`card`]) at the top
-//! of the Summary with *Merge into main*, *Create pull request* ([`pull_request`]), *Ask agent* and *Review PR*, then
-//! what changed and what verified it ([`changed`]). Merging and creating a pull request run on the project's shared
-//! operations (`ProjectJobs`, which Orchester's MCP server uses too), so they go on when the page closes: the buttons
-//! show them under way. A merge that did not land keeps the Ready card, whose *Merge into main* tries again: how it
-//! ended, its conflicts and how to resolve them are on the run's attempt page under Review › Merges (ORC-363), which
-//! the properties' Merge row opens (01h `fUHdZ`). While a merge of the base branch waits in the run's worktree for the
-//! person to finish it, that is shown instead ([`resolving`]); a merged run says where its work went and what was
-//! cleared after it.
+//! A run whose every step passed waits to be merged (ORC-731; `Review · redesign`, Row 4 `XHQpC`), and what merging
+//! makes of it (`Task · Summary · merge states` `kxMAN`). The top card of the Summary ([`card`]) is *Ready to merge*
+//! (01i `k9GBy`) with *Merge* and its key cap, *Review changes*, which opens the run's review page, and *Close without
+//! merging*; once a merge did not land it turns to the warning card (01j `k4C0Es`): the outcome, what stopped it in
+//! one line, the attempt page's primary action and *Open in Review* (`crate::screens::task::merge`). The run's pull
+//! request is created from the header's *More actions* ([`pull_request`]); once it has one, the card says so and
+//! *Review PR* opens it. Merging and creating a pull request run on the project's shared operations (`ProjectJobs`,
+//! which Orchester's MCP server uses too), so they go on when the page closes: the buttons show them under way. While
+//! a merge of the base branch waits in the run's worktree for the person to finish it, that is shown instead
+//! ([`resolving`]); a merged run says where its work went and what was cleared after it.
 
 mod card;
 pub(super) mod changed;
@@ -38,18 +38,17 @@ use orchester_workspace::{
 };
 
 pub(super) use self::card::frame;
-use self::{pull_request::PullRequestRead, unpushed::Refused};
+pub use self::pull_request::PullRequestState;
 use super::{TaskContext, arranged};
-use crate::services::Services;
+use crate::{
+  screens::task::{PageState, merge::Merge},
+  services::Services,
+};
 
 /// How often a merge waiting in the run's worktree is read again while the person resolves it.
 const LOOK: Duration = Duration::from_secs(2);
 
 pub struct ReadyForReview {
-  /// *Open as draft*: on until the person turns it off (rule 7).
-  draft: Signal<bool>,
-  /// The run whose question about the base's unpushed commits window input tried to answer.
-  pull_person_only: Signal<Option<Refused>>,
   /// Counts while a merge waits in the run's worktree, which is read again then: the person resolves it in an editor,
   /// which tells Orchester nothing.
   look: Signal<u64>,
@@ -64,12 +63,7 @@ impl Component for ReadyForReview {
     let look = ctx.signal(0_u64);
     let next = look.clone();
     let looking = ctx.create_interval(LOOK, move || next.update(|tick| *tick += 1));
-    Self {
-      draft: ctx.signal(true),
-      pull_person_only: ctx.signal(None),
-      look,
-      looking,
-    }
+    Self { look, looking }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -83,11 +77,8 @@ impl Component for ReadyForReview {
     // remote's read runs git in it.
     let (external, settled) = external::notice(ctx, &props);
     let (reminder, reminded) = local::reminder(ctx, &props);
-    let pull = PullRequestRead {
-      readiness: pull_request::read(ctx, &props, settled && reminded),
-      draft: self.draft.clone(),
-      person_only: self.pull_person_only.clone(),
-    };
+    let readiness = pull_request::read(ctx, &props, settled && reminded);
+    let pull = PageState::of(ctx).pull_request.read(readiness);
     let worktree = in_worktree(ctx, &props, (run.id(), self.look.get()));
     let in_merge = worktree.as_ref().and_then(|worktree| worktree.merge.as_ref());
     if in_merge.is_some() {
@@ -97,26 +88,45 @@ impl Component for ReadyForReview {
     }
     let job = props.jobs.run(run.id());
     // A merge git made shows as soon as it is made, also while the task is not read again with it; one it could not
-    // record is not merged yet, and the Ready card's merge records it.
+    // record is not merged yet, and the top card's merge records it.
     let unrecorded = props.detail.merge.is_none() && matches!(job.merge, JobState::Failed(_));
     let made = props
       .detail
       .merge
       .as_ref()
       .or(job.merged.as_ref().filter(|_| !unrecorded));
-    let mut parts: Vec<Element> = match made {
-      None if let Some(resolution) = in_merge => resolving::resolving(ctx, &props, run, (resolution, &pull)),
-      Some(merge) => vec![card::merged(ctx, &props, merge)],
-      None => vec![
-        external.unwrap_or_else(|| card::ready(ctx, &props, run, &pull)),
-        changed::columns(ctx, &props, read.as_ref(), (Vec::new(), None)),
-      ],
+    let mut parts: Vec<Element> = match (made, Merge::of(&props)) {
+      (None, _) if let Some(resolution) = in_merge => resolving::resolving(ctx, &props, run, (resolution, &pull)),
+      (Some(merge), _) => vec![card::merged(ctx, &props, merge)],
+      (None, Some(merge)) => {
+        let card = card::Shown {
+          merge,
+          run,
+          pull: &pull,
+        };
+        vec![external.unwrap_or_else(|| card::top(ctx, &props, &card, read.as_ref()))]
+      }
+      (None, None) => Vec::new(),
     };
     if let Some(reminder) = reminder {
       parts.insert(0, reminder);
     }
     arranged(parts)
   }
+}
+
+/// *Create pull request* and *Open as draft* for the header's *More actions*, which `menu` opens, while the task's
+/// latest run waits to be merged; read on every render of the header, in the same place: lurq keeps futures by their
+/// order. Whether one can be created is read while the menu is open.
+pub fn pull_request_rows(ctx: &mut Ctx, task: &TaskContext, menu: &Signal<bool>) -> Vec<Element> {
+  let waits = Merge::of(task).is_some();
+  let open = menu.get();
+  let readiness = pull_request::read(ctx, task, waits && open);
+  if !(waits && open) {
+    return Vec::new();
+  }
+  let read = PageState::of(ctx).pull_request.read(readiness);
+  pull_request::menu_rows(ctx, task, &read, menu)
 }
 
 /// What [`in_worktree`] read.

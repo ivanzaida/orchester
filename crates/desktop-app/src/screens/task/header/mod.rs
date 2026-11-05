@@ -42,7 +42,7 @@ use super::{
 };
 use crate::{
   navigation::{Navigation, link::Open, press::OpenIn},
-  routes::{ProjectPage, Route, TaskList, TaskTab, TaskView},
+  routes::{ProjectPage, Route, TaskTab, TaskView},
   screens::task_close::{self, Closer, Subject},
   services::Services,
   theme::{ExtraSpacing, TaskSpacing},
@@ -84,14 +84,12 @@ impl Component for TaskHeader {
 
   fn create(ctx: &mut Ctx) -> Self {
     let state = super::PageState::of(ctx);
-    let project = ctx.props::<HeaderProps>().task.project.clone();
-    let tasks = Route::Project(project.open.project.id(), ProjectPage::Tasks(TaskList::default()));
     Self {
       refusals: Refusals::new(ctx),
       confirming: state.run_again,
       remove: state.run_again_remove,
       no_branch: state.no_branch,
-      closer: Closer::new(ctx, (project.open, project.feed), Some(tasks)),
+      closer: state.closer,
       menu: MenuPlace::new(ctx),
     }
   }
@@ -116,11 +114,12 @@ impl Component for TaskHeader {
       (open, feed),
       (self.confirming.clone(), self.no_branch.clone()),
     );
+    let pull_request = super::summary::pull_request_rows(ctx, &props.task, &self.menu.open);
     let latest_busy = detail
       .run
       .as_ref()
       .is_some_and(|run| props.task.jobs.run(run.id()).busy());
-    let (primary, more) = self.actions(ctx, &props, check.as_ref(), latest_busy);
+    let (primary, more) = self.actions(ctx, &props, (check.as_ref(), pull_request), latest_busy);
     let title_row = actions::title_row(ctx, &props, primary, more);
     let confirmation = check
       .as_ref()
@@ -167,13 +166,13 @@ impl Component for TaskHeader {
 }
 
 impl TaskHeader {
-  /// The primary action, and *More actions* with every other. A task kept *Not shared* starts no run: it has Share
-  /// task, and Edit locked in its menu.
+  /// The primary action, and *More actions* with every other, `pull_request`'s rows among them. A task kept *Not
+  /// shared* starts no run: it has Share task, and Edit locked in its menu.
   fn actions(
     &self,
     ctx: &mut Ctx,
     props: &HeaderProps,
-    check: Option<&Result<RunAgainCheck, Message>>,
+    (check, pull_request): (Option<&Result<RunAgainCheck, Message>>, Vec<Element>),
     latest_busy: bool,
   ) -> (Option<controls::Control>, Element) {
     let detail = props.task.detail.clone();
@@ -206,12 +205,14 @@ impl TaskHeader {
       Held {
         controls: Vec::new(),
         run_again: None,
+        pull_request: Vec::new(),
         closing: None,
       }
     } else {
       Held {
         controls: moves.into_iter().chain(shown.pause).chain(shown.cancel).collect(),
         run_again,
+        pull_request,
         closing: Some((self.closer.clone(), subject(&props.task))),
       }
     };
@@ -253,7 +254,7 @@ impl TaskHeader {
 }
 
 /// The task as closing and deleting it name it.
-fn subject(task: &TaskContext) -> Subject {
+pub(in crate::screens::task) fn subject(task: &TaskContext) -> Subject {
   let detail = &task.detail;
   Subject {
     id: detail.task.id(),

@@ -6,7 +6,8 @@ use std::sync::Arc;
 
 use orchester_core::{id::StepExecutionId, project::TaskKey};
 use orchester_workspace::tasks::{
-  approvals::ShownApproval, detail::TaskDetail, integration_jobs::ProjectJobState, slot_wait::slot_waits,
+  approvals::ShownApproval, detail::TaskDetail, integration_jobs::ProjectJobState, merge_attempts::page::AttemptPage,
+  slot_wait::slot_waits,
 };
 
 use super::read::TaskLeftovers;
@@ -27,6 +28,8 @@ pub struct TaskContext {
   pub jobs: ProjectJobState,
   /// The latest run's pull request and its CI, while its branch has one (`super::ci`).
   pub ci: Option<super::ci::ShownCi>,
+  /// The latest run's merge attempts as last read, while it waits for review (`super::merge::reader`).
+  pub attempt: Option<Arc<AttemptPage>>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for TaskContext {}

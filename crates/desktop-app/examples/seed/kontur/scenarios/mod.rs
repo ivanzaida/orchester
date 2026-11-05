@@ -49,6 +49,7 @@ mod shared_here;
 mod side_question;
 mod slot_wait;
 mod sources;
+mod task_merge_card;
 mod task_merge_row;
 mod task_states;
 mod tasks;
@@ -104,7 +105,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 133] = [
+pub const ALL: [Scenario; 136] = [
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-library", agents_library::seed),
   Scenario::of("agents-browser", agents_browser::seed),
@@ -178,6 +179,9 @@ pub const ALL: [Scenario; 133] = [
   Scenario::of("review-page", review_page::seed),
   Scenario::of("review-changed", review_changed::seed),
   Scenario::of("task-merge-row", task_merge_row::seed),
+  Scenario::of("task-merge-card-ready", task_merge_card::ready_to_merge),
+  Scenario::of("task-merge-card-refused", task_merge_card::refused_at_lock),
+  Scenario::of("task-merge-card-conflicts", task_merge_card::conflicts),
   Scenario::of("overview-quiet", delivery::quiet),
   Scenario::of("overview-states", overview_states::seed),
   Scenario::of("interrupted", interrupted::seed),
