@@ -28,6 +28,9 @@
 //! it stops, also while its invocation waits for a person; a start takes the slots of every service it starts first,
 //! waiting while too few are free, and a test suite's own process takes one while it runs
 //! ([`StepServices::suite_slot`]).
+//!
+//! The task page's Services tab reads a run's services, their logs, and stops and restarts them through the service
+//! tools of the run's invocations ([`shown`]).
 
 mod crash;
 mod data;
@@ -36,6 +39,7 @@ mod order;
 mod port;
 mod readiness;
 mod seed;
+mod shown;
 mod slots;
 mod task;
 
@@ -56,12 +60,15 @@ use orchester_core::{
   orchester_tools::ToolResult,
   resource::CommandEnvironment,
   secret::SecretVault,
-  service::{ServiceName, ServicePhase, ServiceState, ServiceStatus},
+  service::{ServiceApproval, ServiceName, ServicePhase, ServiceState, ServiceStatus, StackName},
+  time::Timestamp,
 };
 use orchester_exec::process_tree::ProcessTree;
+use orchester_ipc::services::ServiceStarter;
 use parking_lot::Mutex;
 use serde_json::json;
 
+pub(in crate::execution) use self::shown::ShownServiceError;
 pub use self::slots::ServiceSlots;
 pub(in crate::execution::step) use self::{
   launch::{project_secret, published as published_services, published_stacks},
@@ -74,18 +81,19 @@ use self::{
   slots::{Asker, Waiting},
 };
 
-/// The services of the runner's invocations that have not ended, the ports they hold, and the computer's service
-/// slots they take.
+/// The services of the runner's invocations that have not ended, the ports they hold, the computer's service slots
+/// they take, and the service tools of each invocation, which the Services tab reaches them through.
 pub(in crate::execution) struct Services {
   ports: Arc<Ports>,
   slots: ServiceSlots,
   invocations: Mutex<HashMap<InvocationId, Arc<InvocationServices>>>,
+  tools: Mutex<HashMap<InvocationId, StepServices>>,
 }
 
-/// One invocation's services: its starts one at a time, the services it keeps, what it knows of each service it
-/// started, whether it ended or waits for a person, and the crash notices its agent has not read yet. Its tools hold
-/// it as long as they live; the runner forgets it once the invocation ended. Whoever takes both locks takes `running`
-/// first.
+/// One invocation's services: its agent's starts one at a time and a person's one at a time, the services it keeps,
+/// what it knows of each service it started, whether it ended or waits for a person, and the crash notices its agent
+/// has not read yet. Its tools hold it as long as they live; the runner forgets it once the invocation ended. Whoever
+/// takes both locks takes `running` first.
 #[derive(Default)]
 pub(in crate::execution::step) struct InvocationServices {
   ended: AtomicBool,
@@ -93,9 +101,31 @@ pub(in crate::execution::step) struct InvocationServices {
   /// Set once the watcher of its crashes started ([`crash`]).
   watching: AtomicBool,
   starting: Mutex<()>,
+  /// A person's Restart or Start from the Services tab, which does not wait for the agent's start under way.
+  restarting: Mutex<()>,
   running: Mutex<BTreeMap<ServiceName, Running>>,
   watched: Mutex<BTreeMap<ServiceName, Watch>>,
   notices: Mutex<Vec<String>>,
+  /// The definitions the invocation's starts ran, each approved as its start's request named it: a person's Restart
+  /// runs only these ([`order`]).
+  ran: Mutex<Vec<ServiceApproval>>,
+}
+
+/// What a start brings up, a stack's services or a service with what it needs, and who asked for it.
+#[derive(Clone)]
+struct Origin {
+  stack: Option<StackName>,
+  by: ServiceStarter,
+}
+
+impl Origin {
+  /// A start of the agent's, of the stack `stack` when it names one.
+  fn agent(stack: Option<&StackName>) -> Self {
+    Self {
+      stack: stack.cloned(),
+      by: ServiceStarter::Agent,
+    }
+  }
 }
 
 impl InvocationServices {
@@ -107,13 +137,25 @@ impl InvocationServices {
     self.waiting.load(Ordering::Acquire)
   }
 
-  /// Notes that the service `name` reached `phase`, and how its program exited when `exit` says it was seen to.
+  /// Notes that the service `name` reached `phase`, and how its program exited when `exit` says it was seen to; a
+  /// service that stopped or exited is noted with when.
   fn note(&self, name: &ServiceName, phase: ServicePhase, exit: Option<Option<i32>>) {
     if let Some(watch) = self.watched.lock().get_mut(name) {
       watch.phase = phase;
       if exit.is_some() {
         watch.exit = exit;
       }
+      if (phase == ServicePhase::Stopped || watch.exit.is_some()) && watch.ended_at.is_none() {
+        watch.ended_at = Some(Timestamp::now());
+      }
+    }
+  }
+
+  /// Notes that the service `name` was stopped because `crashed`, which it needs, crashed.
+  fn note_stopped_for(&self, name: &ServiceName, crashed: &ServiceName) {
+    self.note(name, ServicePhase::Stopped, None);
+    if let Some(watch) = self.watched.lock().get_mut(name) {
+      watch.stopped_for = Some(crashed.clone());
     }
   }
 }
@@ -162,9 +204,18 @@ struct Watch {
   port: u16,
   url: String,
   started: Instant,
+  started_at: Timestamp,
+  /// When it was seen to exit or was stopped.
+  ended_at: Option<Timestamp>,
+  /// What brought it up, and who.
+  origin: Origin,
   phase: ServicePhase,
   /// The exit code of its program, once it was seen to exit on its own.
   exit: Option<Option<i32>>,
+  /// Set when it is stopped while it starts: its start gives up.
+  given_up: Arc<AtomicBool>,
+  /// The service it needs whose crash stopped it.
+  stopped_for: Option<ServiceName>,
 }
 
 impl Watch {
@@ -185,6 +236,7 @@ impl Services {
       ports: Arc::default(),
       slots,
       invocations: Mutex::default(),
+      tools: Mutex::default(),
     }
   }
 
@@ -195,6 +247,8 @@ impl Services {
 
   /// `invocation` ended: its services stop and free their ports, and a start of its still under way gives up.
   pub(in crate::execution) fn end(&self, invocation: InvocationId) {
+    // Its tools hold its services and these: forgetting them breaks that cycle.
+    self.tools.lock().remove(&invocation);
     let Some(state) = self.invocations.lock().remove(&invocation) else {
       return;
     };
@@ -234,6 +288,7 @@ fn stop_aside(running: BTreeMap<ServiceName, Running>) {
 }
 
 /// The service tools of one invocation.
+#[derive(Clone)]
 pub(in crate::execution::step) struct StepServices {
   services: Arc<Services>,
   state: Arc<InvocationServices>,
@@ -255,11 +310,26 @@ pub(in crate::execution::step) struct StepServices {
 
 impl StepServices {
   /// Stops the service `name` the invocation started, with everything it started, and frees its port and its service
-  /// slot; says so when none runs.
+  /// slot; one that still starts gives its start up, which stops it. Says so when none runs.
   pub(in crate::execution::step) fn stop(&self, name: &ServiceName) -> ToolResult {
     let removed = self.state.running.lock().remove(name);
     let Some(mut running) = removed else {
-      return ToolResult::shown(format!("the service `{name}` is not running in this step"));
+      let starting = self
+        .state
+        .watched
+        .lock()
+        .get(name)
+        .filter(|watch| watch.phase == ServicePhase::Starting)
+        .map(|watch| Arc::clone(&watch.given_up));
+      return match starting {
+        Some(given_up) => {
+          given_up.store(true, Ordering::Release);
+          ToolResult::shown(format!(
+            "the service `{name}` was starting: its start gives up and stops it"
+          ))
+        }
+        None => ToolResult::shown(format!("the service `{name}` is not running in this step")),
+      };
     };
     // A program that cannot be watched any more is stopped all the same; its status then says stopped.
     let exit = running.exit().unwrap_or(None);
@@ -369,7 +439,8 @@ impl StepServices {
   }
 
   /// Keeps `running` for the invocation, or stops it when the invocation ended or began to wait for a person while it
-  /// started.
+  /// started. One the agent's start and a person's brought up at once is kept once: the later replaces the earlier,
+  /// which stops.
   fn keep(&self, name: &ServiceName, running: Running) -> Result<(), String> {
     let mut kept = self.state.running.lock();
     // Checked under the services' lock, which `Services::release` takes too: a wait that began during the start sees
@@ -381,7 +452,9 @@ impl StepServices {
       return Err(format!("the service `{name}` was ready but stopped again: {refusal}"));
     }
     self.state.note(name, ServicePhase::Ready, None);
-    kept.insert(name.clone(), running);
+    if let Some(replaced) = kept.insert(name.clone(), running) {
+      stop_aside(BTreeMap::from([(name.clone(), replaced)]));
+    }
     drop(kept);
     self.watch_crashes();
     Ok(())

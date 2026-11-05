@@ -8,7 +8,8 @@
 //! too few are free; its answer says how long it waited.
 //!
 //! A start's request names every service it runs ([`StepServices::service_approvals`]), and the start runs only those
-//! definitions: a service published again since, with another fingerprint, is refused until it is asked about.
+//! definitions: a service published again since, with another fingerprint, is refused until it is asked about. A
+//! person's Restart in the Services tab runs only definitions the invocation's starts ran before.
 
 use std::thread;
 
@@ -17,10 +18,11 @@ use orchester_core::{
   resource::Slug,
   service::{Service, ServiceApproval, ServiceName, Stack, StackName, StartPlan},
 };
+use orchester_ipc::services::ServiceStarter;
 use serde_json::{Map, json};
 
 use super::{
-  Running, ServiceSlot, StepServices, Waited,
+  Origin, Running, ServiceSlot, StepServices, Waited,
   launch::{published, published_stacks},
 };
 
@@ -64,7 +66,7 @@ impl StepServices {
   /// the invocation runs, and while too few service slots are free; the answer says how long it waited for them.
   pub(in crate::execution::step) fn start(&self, name: &ServiceName, approved: &[ServiceApproval]) -> ToolResult {
     let _one_at_a_time = self.state.starting.lock();
-    let started = self.services_of(Some(approved), |services| {
+    let started = self.services_of((Some(approved), &Origin::agent(None)), |services| {
       StartPlan::for_service(services, name).map_err(|error| format!("the service `{name}` cannot be started: {error}"))
     });
     let waited = match started {
@@ -83,6 +85,40 @@ impl StepServices {
     }
   }
 
+  /// A person's Restart or Start in the Services tab: stops the service `name` when it runs, then starts it as
+  /// published with what it needs, and waits until it is ready. It runs only the definitions the invocation's starts
+  /// ran before, as their requests named them: a service published again since, or a need it did not have then, is
+  /// refused before anything stops, as the agent's `start_service` refuses it, so a press never approves a definition
+  /// nobody was shown. A start of the agent's may be under way meanwhile, waiting for another service: the person's
+  /// does not wait for it, only for an earlier one of the person's. A service both bring up at once is kept once
+  /// ([`StepServices::keep`]).
+  pub(super) fn restart_for_person(&self, name: &ServiceName) -> Result<(), String> {
+    let _one_at_a_time = self.state.restarting.lock();
+    let ran = self.state.ran.lock().clone();
+    // Checked before the stop too, so a refused Restart leaves the service running.
+    if let Some(new) = self
+      .service_approvals(Started::Service(name))?
+      .iter()
+      .find(|approval| !ran.contains(approval))
+    {
+      return Err(not_ran(&new.name));
+    }
+    let stopped = self.stop(name);
+    if stopped.is_error() {
+      return Err(stopped.text().to_owned());
+    }
+    let person = Origin {
+      stack: None,
+      by: ServiceStarter::Person,
+    };
+    self
+      .services_of((Some(&ran), &person), |services| {
+        StartPlan::for_service(services, name)
+          .map_err(|error| format!("the service `{name}` cannot be started: {error}"))
+      })
+      .map(|_| ())
+  }
+
   /// Starts every service of the published stack `name` with what they need, in order, and answers each one's URL
   /// and port; a service the invocation runs already is reused. Runs only the definitions `approved` names. Blocks
   /// while an earlier start of the invocation runs, and while too few service slots are free for all of them.
@@ -92,7 +128,7 @@ impl StepServices {
       Ok(stack) => stack,
       Err(refusal) => return ToolResult::unavailable(&refusal),
     };
-    let started = self.services_of(Some(approved), |services| {
+    let started = self.services_of((Some(approved), &Origin::agent(Some(name))), |services| {
       StartPlan::for_stack(services, &stack).map_err(|error| error.to_string())
     });
     let (plan, waited) = match started {
@@ -138,14 +174,14 @@ impl StepServices {
       // A suite's run asks at every call, naming the suite: what it needs starts as published.
       started = match stack {
         Some(stack) => self
-          .services_of(None, |services| {
+          .services_of((None, &Origin::agent(Some(stack.name()))), |services| {
             StartPlan::for_stack(services, stack).map_err(|error| error.to_string())
           })
           .map_err(|why| format!("the stack `{need}` the suite needs was not started fully: {why}")),
         None => ServiceName::new(need)
           .map_err(|error| error.to_string())
           .and_then(|name| {
-            self.services_of(None, |services| {
+            self.services_of((None, &Origin::agent(None)), |services| {
               StartPlan::for_service(services, &name).map_err(|error| {
                 format!("the suite needs `{need}`, which cannot be started as a service or a stack: {error}")
               })
@@ -184,12 +220,12 @@ impl StepServices {
     }
   }
 
-  /// Reads the published services, orders them with `plan` and starts that plan; the plan once it is up, and what it
-  /// waited for service slots when it did. With `approved`, a service whose definition it does not name is refused
-  /// before anything starts.
+  /// Reads the published services, orders them with `plan` and starts that plan, each service noted with `origin`; the
+  /// plan once it is up, and what it waited for service slots when it did. With `approved`, a service whose definition
+  /// it does not name is refused before anything starts.
   fn services_of(
     &self,
-    approved: Option<&[ServiceApproval]>,
+    (approved, origin): (Option<&[ServiceApproval]>, &Origin),
     plan: impl FnOnce(&[Service]) -> Result<StartPlan, String>,
   ) -> Result<(StartPlan, Option<Waited>), String> {
     self.may_start()?;
@@ -206,23 +242,38 @@ impl StepServices {
         if let Some(approved) = approved
           && !approved.contains(&ServiceApproval::of(service))
         {
-          return Err(format!(
-            "the service `{name}` is not the definition this start's approval named: it was published again since; \
-             start it again to be asked about it"
-          ));
+          return Err(match origin.by {
+            ServiceStarter::Agent => format!(
+              "the service `{name}` is not the definition this start's approval named: it was published again \
+               since; start it again to be asked about it"
+            ),
+            ServiceStarter::Person => not_ran(name.as_str()),
+          });
         }
         definitions.push(service);
       }
       steps.push(definitions);
     }
-    let waited = self.bring_up(&steps)?;
+    self.note_ran(&steps);
+    let waited = self.bring_up(&steps, origin)?;
     Ok((plan, waited))
   }
 
-  /// Starts the services of `steps` the invocation does not run yet, step by step, those of one step together, once it
-  /// holds a service slot for each of them; what it waited for the slots, when it did. The slots of services that did
-  /// not start are freed.
-  fn bring_up(&self, steps: &[Vec<&Service>]) -> Result<Option<Waited>, String> {
+  /// Notes the definitions of `steps` as ones the invocation's starts ran, approved as their start's request named
+  /// them, so a person's Restart may run them again.
+  fn note_ran(&self, steps: &[Vec<&Service>]) {
+    let mut ran = self.state.ran.lock();
+    for approval in steps.iter().flatten().map(|service| ServiceApproval::of(service)) {
+      if !ran.contains(&approval) {
+        ran.push(approval);
+      }
+    }
+  }
+
+  /// Starts the services of `steps` the invocation does not run yet, step by step, those of one step together, each
+  /// noted with `origin`, once it holds a service slot for each of them; what it waited for the slots, when it did. The
+  /// slots of services that did not start are freed.
+  fn bring_up(&self, steps: &[Vec<&Service>], origin: &Origin) -> Result<Option<Waited>, String> {
     let needed = {
       let running = self.state.running.lock();
       steps
@@ -235,7 +286,7 @@ impl StepServices {
     let (mut slots, waited) = self.take_slots(needed)?;
     for (at, step) in steps.iter().enumerate() {
       self.may_start()?;
-      if let Err((name, why)) = self.bring_up_step(step, &mut slots) {
+      if let Err((name, why)) = self.bring_up_step(step, (&mut slots, origin)) {
         let running = self.state.running.lock();
         let skipped: Vec<&ServiceName> = steps[at + 1..]
           .iter()
@@ -249,12 +300,12 @@ impl StepServices {
     Ok(waited)
   }
 
-  /// Starts the services of `step` the invocation does not run yet, together, each with one of `slots`; the first
-  /// that failed and why.
+  /// Starts the services of `step` the invocation does not run yet, together, each with one of `slots` and noted with
+  /// `origin`; the first that failed and why.
   fn bring_up_step<'a>(
     &self,
     step: &[&'a Service],
-    slots: &mut Vec<ServiceSlot>,
+    (slots, origin): (&mut Vec<ServiceSlot>, &Origin),
   ) -> Result<(), (&'a ServiceName, String)> {
     let (wired, missing) = {
       let running = self.state.running.lock();
@@ -285,7 +336,7 @@ impl StepServices {
           let wired = &wired;
           (
             service.name(),
-            scope.spawn(move || self.launch(service, (wired, slot), &|| self.state.ended())),
+            scope.spawn(move || self.launch(service, (wired, origin, slot), &|| self.state.ended())),
           )
         })
         .collect();
@@ -320,5 +371,13 @@ fn stopped_chain(failed: &ServiceName, why: &str, skipped: &[&ServiceName]) -> S
   format!(
     "the service `{failed}` did not start, so nothing after it was started ({}): {why}",
     skipped.join(", ")
+  )
+}
+
+/// Why a person's Restart does not start the service `name`: this step never ran it as it is published now.
+fn not_ran(name: &str) -> String {
+  format!(
+    "`{name}` is published differently from when this step's agent started it, or this step never ran it: a Restart \
+     here starts only what an approved start ran. The agent starts it again with start_service, which asks about it"
   )
 }

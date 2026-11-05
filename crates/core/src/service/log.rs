@@ -5,7 +5,10 @@
 
 use std::collections::VecDeque;
 
-use crate::command::{SecretVariable, redact_secrets};
+use crate::{
+  command::{SecretVariable, redact_secrets},
+  time::Timestamp,
+};
 
 /// The most lines a service's log keeps.
 pub const MAX_LOG_LINES: usize = 5000;
@@ -39,12 +42,13 @@ impl LogStream {
   }
 }
 
-/// One kept line, its secret values replaced.
+/// One kept line, its secret values replaced, and when it was kept.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LogLine {
   number: u64,
   stream: LogStream,
   text: String,
+  at: Timestamp,
 }
 
 impl LogLine {
@@ -59,6 +63,11 @@ impl LogLine {
 
   pub fn text(&self) -> &str {
     &self.text
+  }
+
+  /// When the service wrote it, as its reader kept it.
+  pub const fn at(&self) -> Timestamp {
+    self.at
   }
 
   /// The line as an excerpt shows it: `<number> <out|err>| <text>`.
@@ -124,6 +133,7 @@ impl ServiceLog {
       number: self.last,
       stream,
       text,
+      at: Timestamp::now(),
     });
     while self.lines.len() > MAX_LOG_LINES || self.bytes > MAX_LOG_BYTES {
       let Some(dropped) = self.lines.pop_front() else {

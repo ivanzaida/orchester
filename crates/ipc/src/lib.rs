@@ -26,6 +26,7 @@ mod message;
 #[cfg(windows)]
 mod pipe_owner;
 mod rejection;
+pub mod services;
 mod transport;
 mod work;
 

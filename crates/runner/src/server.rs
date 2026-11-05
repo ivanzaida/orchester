@@ -4,6 +4,7 @@
 
 mod browser;
 mod chat;
+mod services;
 mod side;
 
 use std::{
@@ -361,6 +362,7 @@ async fn answer(
     Command::SteerChat { message } => chat::steered(scheduler, message),
     Command::StopTurn { run } => return later.answer(run, async move { handle.stop_turn(run).await }),
     Command::Browser(ref command) => return later.browser(handle, command.clone()),
+    Command::Services(ref command) => return later.services(handle, command.clone()),
     Command::EstimateTask { task } => return estimated(&later, handle, task),
     ref side @ (Command::AnswerSideQuestion { .. } | Command::StopSideQuestion { .. }) => {
       return side::answer_side(&later, handle, side);

@@ -29,6 +29,7 @@ use crate::{
   browser::{BrowserCommand, BrowserEvent, BrowserReply, ScreencastFrame},
   chat::ChatTools,
   rejection::Rejection,
+  services::{ServiceCommand, ServiceReply},
   work::WorkSummary,
 };
 
@@ -299,6 +300,9 @@ pub enum Command {
   /// carried out, [`Rejection::BrowserUnavailable`] when the browser cannot start, [`Rejection::NoSuchTab`] for a tab
   /// it does not have, or [`Rejection::Failed`] when the browser refused.
   Browser(BrowserCommand),
+  /// A request of a task page's Services tab about a run's services (protocol 42). Answered with [`Reply::Services`]
+  /// once carried out, or [`Rejection::Failed`] with why not.
+  Services(ServiceCommand),
 }
 
 /// Which session a runner serves, from the desktop's side.
@@ -501,6 +505,8 @@ pub enum Reply {
   ErrorReportsSet,
   /// The answer to [`Command::Browser`].
   Browser(BrowserReply),
+  /// The answer to [`Command::Services`].
+  Services(ServiceReply),
   Rejected(Rejection),
 }
 

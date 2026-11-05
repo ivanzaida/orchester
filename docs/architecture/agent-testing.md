@@ -230,6 +230,21 @@ at once* slots until it is migrated to a service. Both limits are read and set t
 | Waiting for service slots in Tasks, the sidebar and the tab badge | `ewA0y` |
 | Loading versions of every screen | `Chf6V` |
 
+Built (ORC-265): the task page's fourth tab, Services (`cjvRr`; `orchester-app`'s `screens::task::services`). While
+the run runs on a runner that is online, the page asks the runner every second for the services the steps at work
+started (`Command::Services`, `orchester_ipc::services`, protocol 42): each one's state, port, URL, when it started and
+ended, the stack whose start brought it up, who started it (the agent or the person) and the service whose crash
+stopped it. The tab counts them with a dot (`danger` once one crashed, `info` while one starts, `success` while all are
+ready), lists them with their UI driver and readiness from the published definitions, and shows the selected one's
+log (the first that crashed, else the first) under its row, read every second after the last line read while
+*Follow* is on; *Open full log* shows every kept line in a dialog. Log lines carry the time they were kept; their
+secret values were replaced before the runner kept them. Restart, Start, Stop and *Stop all* go to the runner
+(`Scheduler::services`): Stop stops a ready service as `stop_service` does and gives the start of a starting one up;
+Restart stops it and starts it again as published with what it needs, approved by the person's press, without waiting
+for an agent's start under way (a service both bring up at once is kept once). A URL opens in a new tab of the in-app
+Browser. Not built: *Services at once* slots in the stack line, and the `browser` driver's chip (the drivers are
+`none`, `native` and `mcp`). The QA seed's `run-services` scenario (with `-FakeAgents`) holds real services for it.
+
 ## Phases
 
 1. Model and storage of services, stacks and suites; report parsers.

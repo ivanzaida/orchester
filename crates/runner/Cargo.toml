@@ -382,6 +382,10 @@ name = "service_data"
 required-features = ["test-agent"]
 
 [[test]]
+name = "run_services"
+required-features = ["test-agent"]
+
+[[test]]
 name = "run_tests"
 required-features = ["test-agent"]
 

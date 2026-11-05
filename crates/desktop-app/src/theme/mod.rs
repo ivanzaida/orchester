@@ -50,6 +50,7 @@ mod project_settings;
 mod projects;
 mod pull_requests;
 mod run_model;
+mod run_services;
 mod secrets;
 mod services;
 mod settings;
@@ -113,6 +114,7 @@ pub use self::{
   projects::{ProjectsSpacing, ProjectsText},
   pull_requests::{PullRequestsSpacing, PullRequestsText},
   run_model::ModelText,
+  run_services::RunServicesText,
   secrets::{SECRETS_PENDING_OPACITY, SecretsSpacing, SecretsText},
   services::ServicesText,
   settings::{SettingsSpacing, SettingsText},

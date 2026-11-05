@@ -229,3 +229,20 @@ fn seed_request_icons_match_bundled_font_names() {
     assert_eq!(glyph_name(font, font_glyph(font, icon.glyph() as usize)), name);
   }
 }
+
+/// The glyphs of a task's Services tab: the stack line, a service's live log, its Stop, Start and Restart, and its
+/// address (`T92RJ`, `WGv2K`, `jzRK3`, `p3yTp` in `cjvRr`); the font names `layers` by its former name `layers-3`.
+#[test]
+fn run_services_icons_match_bundled_font_names() {
+  let font = include_bytes!("../../assets/fonts/lucide.ttf");
+  for (icon, name) in [
+    (Icon::Layers, "layers-3"),
+    (Icon::ScrollText, "scroll-text"),
+    (Icon::Square, "square"),
+    (Icon::RotateCw, "rotate-cw"),
+    (Icon::Globe, "globe"),
+    (Icon::ArrowUpRight, "arrow-up-right"),
+  ] {
+    assert_eq!(glyph_name(font, font_glyph(font, icon.glyph() as usize)), name);
+  }
+}
