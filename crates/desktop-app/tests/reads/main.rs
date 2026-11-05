@@ -24,7 +24,7 @@ use std::{
 use kontur::{SeedRequest, Seeded, scenarios};
 use orchester_app::routes::{ProjectPage, Route};
 use orchester_core::{
-  id::IdempotencyKey,
+  id::{IdempotencyKey, RunId},
   name::Name,
   task::{TaskDetails, TaskLimits},
   time::Timestamp,
@@ -107,8 +107,13 @@ impl Counted {
 
   /// Counts a report of the project's runner: a run changed state (`true`) or a transcript grew.
   fn report(&self, state: bool) {
+    self.report_of(None, state);
+  }
+
+  /// [`Self::report`] of run `run` alone; `None`: of no run in particular, which counts for every run.
+  fn report_of(&self, run: Option<RunId>, state: bool) {
     let services = self.window.launch.services().expect("the session started");
-    services.runners.count_change_for_test(&self.root(), None, state);
+    services.runners.count_change_for_test(&self.root(), run, state);
   }
 }
 

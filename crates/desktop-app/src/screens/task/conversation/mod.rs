@@ -56,7 +56,7 @@ pub(crate) use self::timeline::{links, step_label};
 use self::{
   built::BuiltTimeline,
   composer::Composing,
-  read::{Transcript, TranscriptRead, Waiting, with_requests},
+  read::{Transcript, Waiting, transcript, with_requests},
   search::view::{SearchHold, searching},
   shared::Shared,
   timeline::{ChatProject, Timeline, Toggles},
@@ -65,7 +65,7 @@ use self::{
 pub use self::{composer::ComposerState, search::TranscriptSearch};
 use super::{super::orchestrator::data::revision as chat_revision, PageState, TaskContext, cards::Decisions};
 use crate::{
-  project::TasksState,
+  project::{TasksState, run_changes},
   services::Services,
   ui::chat::{follow::Follow, names::ProjectNames},
 };
@@ -90,7 +90,6 @@ struct ConversationTab {
   follow: Follow,
   toggles: Toggles,
   retry: Signal<u64>,
-  transcript: TranscriptRead,
   timeline: BuiltTimeline,
   /// The page's search of the transcript, and what the tab keeps of it.
   search: TranscriptSearch,
@@ -115,7 +114,6 @@ impl Component for ConversationTab {
       toggles: Toggles::new(ctx, follow.clone()),
       follow,
       retry: ctx.signal(0),
-      transcript: TranscriptRead::default(),
       timeline: BuiltTimeline::default(),
       search: PageState::of(ctx).search,
       found: SearchHold {
@@ -355,13 +353,12 @@ impl ConversationTab {
     let repo_root: PathBuf = task.project.open.repo_root.clone();
     let hold = Services::of(ctx).hold;
     let retry = self.retry.get();
-    // The run's events and, while it runs, the runner's transcript changes move the transcript on; another
+    // The run's events and, while it runs, the runner's changes of this run move the transcript on; another
     // run's lines do not.
     let running = run.run.status() == &RunStatus::Running;
-    let revision = feed.run_changes(running) + run.run.last_sequence().get();
-    let read = self
-      .transcript
-      .read(ctx, (repo_root.clone(), run.id(), hold.clone()), (revision, retry));
+    let revision =
+      run_changes::of_shown_run(ctx, &task.project, Some(run.id()), running) + run.run.last_sequence().get();
+    let read = transcript(ctx, (repo_root.clone(), run.id(), hold.clone()), (revision, retry));
     let waiting = match feed.tasks.get() {
       TasksState::Ready(tasks) => Some(Waiting::of(&tasks, run.id())),
       TasksState::Loading | TasksState::Failed(_) => None,

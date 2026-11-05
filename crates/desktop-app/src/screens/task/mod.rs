@@ -8,8 +8,9 @@
 //! properties open the task's memory (`memory`) in its place, Changes' *Try locally* Local integration
 //! (`local_integration`). The frame holds the run controls' request, so the header and the Summary share it.
 //!
-//! The task is read off the UI thread (`read`) and again whenever the runner changes one of the
-//! project's runs, tasks are saved, or the person tries again after a failed reading. A failed reread shows
+//! The task is read off the UI thread (`read`) and again whenever the runner changes the state of one of the
+//! project's runs or, while the task's run runs, that run (another run's lines do not), tasks are saved, or the person
+//! tries again after a failed reading; never restarted while it reads (`project::settled_read`). A failed reread shows
 //! the error until fresh data succeeds, so retained data cannot offer decisions. What the task's ended runs
 //! left in the repository is read beside it, for *Remove worktree* and Run again.
 
@@ -55,7 +56,7 @@ use self::{
 };
 use crate::{
   navigation::Navigation,
-  project::{ShownProject, TasksState},
+  project::{ShownProject, TasksState, run_changes},
   routes::{ProjectPage, Route, TaskView},
   services::Services,
   ui::{
@@ -305,9 +306,9 @@ struct TaskFrame {
   requested: Signal<Option<header::controls::Requested>>,
   /// The composer's draft and sends, kept across the page's tabs and the task's runs.
   composer: conversation::ComposerState,
-  /// Whether the task's latest run ran when the task was last read: only then do its transcript's lines
-  /// change the task.
-  live: Signal<bool>,
+  /// The task's latest run while it ran when the task was last read: only then do its transcript's lines
+  /// change the task, and only that run's.
+  live: Signal<Option<RunId>>,
   /// The latest run's pull request and its CI as last read, and what Fix CI and its switch do (`ci`).
   ci: Signal<ci::reader::Found>,
   ci_actions: ci::actions::CiActions,
@@ -338,7 +339,7 @@ impl Component for TaskFrame {
         export: header::export::RunExport::new(ctx),
       },
       requested: ctx.signal(None),
-      live: ctx.signal(false),
+      live: ctx.signal(None),
       ci: ctx.signal(ci::reader::Found::default()),
       ci_actions: ci::actions::CiActions::new(ctx, &props.project.feed),
     }
@@ -365,8 +366,9 @@ impl Component for TaskFrame {
     // A run switched to Manual by an MCP client changes its mode chip and its Conversation.
     let outside = feed.outside.get();
     let saves = feed.revision.get() + outside.tasks + outside.runs + queue;
+    let live = self.live.get();
     let again = ReadAgain {
-      changes: feed.run_changes(self.live.get()),
+      changes: run_changes::of_shown_run(ctx, &props.project, live, live.is_some()),
       saves,
       retries: self.retries.get(),
     };
@@ -380,8 +382,8 @@ impl Component for TaskFrame {
     if let Some(reason) = &stale {
       return read_failed(ctx, reason, Some(self.retries.clone()));
     }
-    // Set only when it changes: the frame then renders again, following the transcript's lines or not.
-    let live = read::runs(&detail);
+    // Set only when it changes: the frame then renders again, following the transcript's lines of that run or not.
+    let live = read::running(&detail);
     if self.live.get_untracked() != live {
       self.live.set(live);
     }

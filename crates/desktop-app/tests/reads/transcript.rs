@@ -11,7 +11,12 @@ use orchester_app::{
   project::feed::TRANSCRIPT_PACE,
   routes::{ProjectPage, TaskView},
 };
-use orchester_core::{name::Name, store::TaskStore, task::TaskUpdate};
+use orchester_core::{
+  id::RunId,
+  name::Name,
+  store::{RunStore, TaskStore},
+  task::TaskUpdate,
+};
 use orchester_store::ProjectDb;
 
 use super::Counted;
@@ -52,9 +57,17 @@ fn reads_a_transcript_line_again_only_where_its_run_runs() {
   retitle(&running, "KON-12", "Retry webhooks, renamed");
   running.report(false);
   let line = running.settle();
+  // The context meter of its step at work reads its step's context use with the line.
+  let read = [
+    ("context use", 1),
+    ("project usage", 1),
+    ("requests", 1),
+    ("task", 1),
+    ("transcript", 1),
+  ];
   assert_eq!(
     line,
-    counts(&[("project usage", 1), ("requests", 1), ("task", 1), ("transcript", 1)]),
+    counts(&read),
     "the running run's page reads it, and the project's use today"
   );
   assert!(title(&mut running).contains("Retry webhooks, renamed"), "and shows it");
@@ -123,4 +136,44 @@ fn reads_todays_use_on_a_line_while_one_of_the_projects_runs_runs() {
     Some(&1),
     "an agent's turn moves today's use: {line:?}"
   );
+}
+
+/// The latest run of `key`.
+fn latest_run(counted: &Counted, key: &str) -> RunId {
+  let db = ProjectDb::open(&counted.root()).expect("the project's database");
+  let task = db
+    .tasks()
+    .expect("the tasks")
+    .into_iter()
+    .find(|task| task.key().to_string() == key)
+    .expect("the task");
+  let runs = db.runs_of_task(task.id()).expect("the task's runs");
+  runs
+    .into_iter()
+    .filter_map(Result::ok)
+    .last()
+    .expect("a run of the task")
+    .id()
+}
+
+#[test]
+fn reads_a_running_tasks_page_again_on_its_runs_lines_not_another_runs() {
+  // KON-12 runs: its Conversation reads the task, the run's transcript with its requests, and its step's context.
+  let mut page = task_page("KON-12", TaskView::Conversation, "conversation-chat");
+  let run = latest_run(&page, "KON-12");
+  retitle(&page, "KON-12", "Retry webhooks, renamed");
+  page.report_of(Some(RunId::generate()), false);
+  let other = page.settle();
+  assert_eq!(
+    other,
+    counts(&[("project usage", 1)]),
+    "another run's line reads only the project's use today, no part of the page"
+  );
+  assert!(!title(&mut page).contains("renamed"), "the page was not read again");
+  page.report_of(Some(run), false);
+  let own = page.settle();
+  for read in ["task", "transcript", "requests"] {
+    assert_eq!(own.get(read), Some(&1), "its own run's line reads the {read}: {own:?}");
+  }
+  assert!(title(&mut page).contains("Retry webhooks, renamed"), "and shows it");
 }

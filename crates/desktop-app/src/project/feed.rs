@@ -62,6 +62,9 @@ pub struct ProjectFeed {
   /// Counts changes of the state of the project's runs: a run started, waits or ended. A transcript's lines do
   /// not count.
   pub states: Signal<u64>,
+  /// Whether the active tab shows the project: only then are its transcripts' lines followed, in `changes` and in a
+  /// run's own count (`super::run_changes`).
+  pub following: Signal<bool>,
   /// Whether one of the project's runs runs, as its tasks were last read.
   pub running: Signal<bool>,
   /// Counts saves of the project's tasks a screen made; the tasks are read again after each
@@ -177,6 +180,7 @@ impl ProjectFeed {
       status: Signal::new(None),
       changes: Signal::new(0),
       states: Signal::new(0),
+      following: Signal::new(false),
       running: Signal::new(false),
       revision: Signal::new(0),
       saves: Signal::new(0),
@@ -317,6 +321,7 @@ impl Component for FeedLoader {
     publish(&self.feed.status, runner);
     publish(&self.feed.changes, changes);
     publish(&self.feed.states, states);
+    publish(&self.feed.following, active);
     let outside = outside(ctx, (services.changes.clone(), project));
     publish(&self.feed.outside, outside);
     if let Some(state) = jobs(ctx, self.feed.jobs.clone()) {

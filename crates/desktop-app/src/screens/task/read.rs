@@ -21,7 +21,7 @@ use orchester_workspace::{
   },
 };
 
-use crate::services::Services;
+use crate::{project::settled_read::settled_read, services::Services};
 
 /// The task as read, shared by the page's parts.
 #[derive(Clone, Debug, PartialEq)]
@@ -38,9 +38,9 @@ pub enum TaskRead {
   Failed(Message),
 }
 
-/// What makes the task page read the task again: the runner changed a run, or the transcript of the
-/// task's run while it runs (`ProjectFeed::run_changes`), a screen or automation saved tasks, or the person
-/// asked to try again.
+/// What makes the task page read the task again: the runner changed a run's state, or the task's latest run or its
+/// transcript while it runs (`project::run_changes::of_shown_run`; another run's lines do not), a screen or
+/// automation saved tasks, or the person asked to try again.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ReadAgain {
   pub changes: u64,
@@ -48,20 +48,21 @@ pub struct ReadAgain {
   pub retries: u64,
 }
 
-/// Whether the task's latest run runs, as `detail` read it.
-pub fn runs(detail: &TaskDetail) -> bool {
+/// The task's latest run while it runs, as `detail` read it.
+pub fn running(detail: &TaskDetail) -> Option<RunId> {
   detail
     .run
     .as_ref()
-    .is_some_and(|run| run.run.status() == &RunStatus::Running)
+    .filter(|run| run.run.status() == &RunStatus::Running)
+    .map(|run| run.id())
 }
 
-/// Reads `task` of the project at `root`, again whenever `again` changes.
+/// Reads `task` of the project at `root`, again whenever `again` changes: once the reading under way ended, never
+/// restarted while it reads (`settled_read`).
 pub fn task(ctx: &mut Ctx, root: PathBuf, task: TaskId, again: ReadAgain) -> TaskRead {
   let services = Services::of(ctx);
   let (programs, hold) = (services.programs, services.hold);
-  let load = ctx.future((root, task, again), move |(root, task, _)| {
-    tracing::trace!(target: crate::app_log::READ_LOG, read = "task");
+  let state = settled_read(ctx, "task", (root, task, again), move |(root, task, _)| {
     let (programs, hold) = (programs.clone(), hold.clone());
     async move {
       hold.released().await;
@@ -74,7 +75,6 @@ pub fn task(ctx: &mut Ctx, root: PathBuf, task: TaskId, again: ReadAgain) -> Tas
         })
     }
   });
-  let state = load.state().get();
   let pending = state.is_pending();
   match (state.data, state.error) {
     (Some(LoadedTask(detail)), stale) => TaskRead::Ready(detail, stale, pending),

@@ -39,8 +39,9 @@ impl<D, E> DevtoolsInspectable for Failed<D, E> {}
 /// that was read (kept while a read runs and after one failed), `error` the latest read's error while it is
 /// `Rejected`. The render that sees a read end gets its outcome, even when it starts the next read.
 ///
-/// `name` names the read in the trace lines of [`crate::app_log::READ_LOG`], one per read with its duration and
-/// whether deps that moved after an earlier read made it.
+/// `name` names the read in two trace lines of [`crate::app_log::READ_LOG`] per read: `read` as it starts, on the
+/// render's thread, with whether deps that moved after an earlier read made it (`again`); `ended` as it ends, with
+/// its duration (`took`) and whether it succeeded.
 pub fn settled_read<D, T, E, F, Fut>(ctx: &mut Ctx, name: &'static str, deps: D, read: F) -> FutureState<T, E>
 where
   D: Clone + PartialEq + Send + Sync + 'static,
@@ -49,13 +50,37 @@ where
   F: Fn(D) -> Fut + Send + Sync + 'static,
   Fut: Future<Output = Result<T, E>> + Send + 'static,
 {
+  settled_read_traced(ctx, (name, |_| true), deps, read)
+}
+
+/// [`settled_read`] whose trace lines name only the reads of deps `traced` tells: the others read nothing (say, there
+/// is nothing to read yet) and have no line.
+pub fn settled_read_traced<D, T, E, F, Fut>(
+  ctx: &mut Ctx,
+  (name, traced): (&'static str, fn(&D) -> bool),
+  deps: D,
+  read: F,
+) -> FutureState<T, E>
+where
+  D: Clone + PartialEq + Send + Sync + 'static,
+  T: SignalValue + Clone + PartialEq + Send + Sync + 'static,
+  E: SignalValue + Clone + PartialEq + Send + Sync + 'static,
+  F: Fn(D) -> Fut + Send + Sync + 'static,
+  Fut: Future<Output = Result<T, E>> + Send + 'static,
+{
   let action = ctx.future_action(move |(deps, again): (D, bool)| {
+    let traced = traced(&deps);
+    if traced {
+      tracing::trace!(target: crate::app_log::READ_LOG, read = name, again);
+    }
     let reading = read(deps.clone());
     async move {
       let started = Instant::now();
       let result = reading.await;
       let took = started.elapsed();
-      tracing::trace!(target: crate::app_log::READ_LOG, read = name, ?took, again, ok = result.is_ok());
+      if traced {
+        tracing::trace!(target: crate::app_log::READ_LOG, ended = name, ?took, ok = result.is_ok());
+      }
       result
         .map(|value| Done {
           deps: deps.clone(),
