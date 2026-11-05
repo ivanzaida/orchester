@@ -20,12 +20,14 @@ pub enum FolderSource {
   InstallFolder,
   /// The folder of the program that starts, so a CLI finds the Node.js installed beside it (macOS).
   ProgramFolder,
+  /// The `Path` Windows keeps for the machine and the user, which a program started by another one may lack (Windows).
+  Registry,
 }
 
 /// What a search of the search path looked at, so what it says of a program not found is true.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SearchBasis {
-  /// The `PATH` alone: Windows.
+  /// The `PATH`, with the `Path` Windows keeps for the machine and the user: Windows.
   Path,
   /// macOS, after a read of this login shell's `PATH` succeeded.
   LoginShell { shell: String },
@@ -102,9 +104,15 @@ impl SearchPath {
   }
 
   /// This process's search path: its `PATH`.
-  #[cfg(not(target_os = "macos"))]
+  #[cfg(not(any(windows, target_os = "macos")))]
   pub fn current() -> Self {
     Self::merge(env::var_os("PATH").as_deref(), &[], &[])
+  }
+
+  /// This process's search path: its `PATH`, then the machine's and the user's `Path` in the app.
+  #[cfg(windows)]
+  pub fn current() -> Self {
+    Self::merge(env::var_os("PATH").as_deref(), &[], &[]).with_registry(&super::windows::added_folders())
   }
 
   /// This process's search path: its `PATH`, then the login shell's, then the usual install folders.
@@ -121,6 +129,16 @@ impl SearchPath {
   #[must_use]
   pub fn with_program_folder(mut self, folder: &Path) -> Self {
     self.add(folder, FolderSource::ProgramFolder);
+    self
+  }
+
+  /// This search path with each of `folders`, the machine's and the user's `Path`, that is not on it yet.
+  #[cfg(windows)]
+  #[must_use]
+  pub fn with_registry(mut self, folders: &[PathBuf]) -> Self {
+    for folder in folders {
+      self.add(folder, FolderSource::Registry);
+    }
     self
   }
 
@@ -141,7 +159,7 @@ impl SearchPath {
     let mut searched: Vec<SearchFolder> = Vec::new();
     let mut found: Vec<PathBuf> = Vec::new();
     for folder in &self.folders {
-      if !searched_folder(&folder.path) || searched.iter().any(|seen| seen.path == folder.path) {
+      if !searched_folder(&folder.path) || searched.iter().any(|seen| same_folder(&seen.path, &folder.path)) {
         continue;
       }
       searched.push(folder.clone());
@@ -160,7 +178,7 @@ impl SearchPath {
 
   /// Adds `folder` at the end unless it is on the search path already.
   fn add(&mut self, folder: &Path, source: FolderSource) {
-    if !self.folders.iter().any(|known| known.path == folder) {
+    if !self.folders.iter().any(|known| same_folder(&known.path, folder)) {
       self.push(folder.to_path_buf(), source);
     }
   }
@@ -172,4 +190,20 @@ impl SearchPath {
     }
     self.folders.push(SearchFolder { path, source });
   }
+}
+
+/// Whether `one` and `other` name the same folder: on Windows, whose file names ignore case, whatever the case of
+/// their letters.
+#[cfg(windows)]
+fn same_folder(one: &Path, other: &Path) -> bool {
+  one.components().count() == other.components().count()
+    && one
+      .components()
+      .zip(other.components())
+      .all(|(one, other)| one.as_os_str().eq_ignore_ascii_case(other.as_os_str()))
+}
+
+#[cfg(not(windows))]
+fn same_folder(one: &Path, other: &Path) -> bool {
+  one == other
 }

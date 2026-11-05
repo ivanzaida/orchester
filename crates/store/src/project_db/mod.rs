@@ -3,6 +3,7 @@ mod agent_files;
 mod always_allow;
 mod approval_modes;
 mod approval_rules;
+mod archive_stops;
 mod attachments;
 mod auto_mode;
 mod automatic_status;
@@ -124,6 +125,7 @@ use rusqlite::{Connection, params};
 
 pub use self::{
   approval_rules::DecisionCounts,
+  archive_stops::ArchiveStop,
   attachments::{AttachmentOwner, attachment_file},
   auto_mode::AutoModeSave,
   automatic_status::{AutomaticStatus, NotSent, UnsentStatus},

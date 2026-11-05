@@ -67,6 +67,16 @@ impl NotificationPrefs {
   }
 }
 
+/// One project's events, each kind observed in its scope.
+struct ProjectEvents {
+  /// Its own events.
+  events: Vec<Event>,
+  /// Its Orchestrator proposals' events; `None` while they cannot be read.
+  proposals: Option<Vec<Event>>,
+  /// The runs a resource archived on the team's server stopped this session.
+  archive_stops: Vec<Event>,
+}
+
 /// The notifier the window's readers feed and its host asks, with a count of the readings that changed it.
 #[derive(Clone)]
 struct NotifierLink(Arc<Shared>);
@@ -92,16 +102,16 @@ impl NotifierLink {
     }))
   }
 
-  /// Takes a project's reading, its own events and its proposals' (`None` while they cannot be read), `needs_you` the
-  /// count its *Needs you* shows, and tells the host.
-  fn read_project(&self, project: ProjectId, (events, proposals): (Vec<Event>, Option<Vec<Event>>), needs_you: usize) {
+  /// Takes a project's reading, `needs_you` the count its *Needs you* shows, and tells the host.
+  fn read_project(&self, project: ProjectId, reading: ProjectEvents, needs_you: usize) {
     {
       let mut notifier = self.0.notifier.lock();
       let now = Timestamp::now();
-      notifier.observe(Scope::Project(project), events, now);
-      if let Some(proposals) = proposals {
+      notifier.observe(Scope::Project(project), reading.events, now);
+      if let Some(proposals) = reading.proposals {
         notifier.observe(Scope::Chats(project), proposals, now);
       }
+      notifier.observe(Scope::Archives(project), reading.archive_stops, now);
       notifier.set_needs_you(project, needs_you);
     }
     self.0.readings.update(|count| *count += 1);

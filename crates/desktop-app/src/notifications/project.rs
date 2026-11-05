@@ -1,7 +1,7 @@
-//! One open project's reading for the notifier: its tasks as they stand with its runner, its runner, its merges, and
-//! what its Orchestrator conversations hold (the proposals that wait, and the runs the chat merged itself), read again
-//! whenever any of them changes. Mounted by the host per open project, beside the project's feed, so it follows the
-//! project whether or not one of its tabs is active.
+//! One open project's reading for the notifier: its tasks as they stand with its runner, its runner, its merges, what
+//! its Orchestrator conversations hold (the proposals that wait, and the runs the chat merged itself) and the runs a
+//! resource archived on the team's server stopped, read again whenever any of them changes. Mounted by the host per
+//! open project, beside the project's feed, so it follows the project whether or not one of its tabs is active.
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -12,18 +12,20 @@ use lurq::{
   },
   node::Element,
 };
+use orchester_store::ArchiveStop;
 use orchester_workspace::{
   background,
   messages::{self, Message},
   notifications::{
     ChatReading, chats_in,
-    sources::{self, MergeStop, Project, ProjectReading},
+    sources::{self, MergeStop, Project, ProjectReading, archive_stops_in},
   },
   runner::Runners,
+  sharing::Servers,
   workspace::OpenProject,
 };
 
-use super::NotifierLink;
+use super::{NotifierLink, ProjectEvents};
 use crate::{
   project::{Projects, TasksState},
   services::Services,
@@ -52,6 +54,12 @@ enum ChatsRead {
   Failed,
 }
 
+/// The runs a resource archived on the team's server stopped, as read.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct Stops(Arc<Vec<ArchiveStop>>);
+
+impl lurq::app::component::DevtoolsInspectable for Stops {}
+
 /// Reads one project for the notifier. Renders nothing.
 pub(super) struct ProjectNotices;
 
@@ -70,10 +78,11 @@ impl Component for ProjectNotices {
     let tasks = feed.tasks_with_runner(&root);
     let runner = feed.status.get().map(|status| status.state_for(&root));
     let merges = MergeStop::of_jobs(&feed.job_state.get());
-    let chats = chats(ctx, (services.runners, root));
-    // A project is read once its tasks and conversations are, or its conversations cannot be: a reading before would
-    // take a merge the chat carried out for the person's.
-    let TasksState::Ready(tasks) = tasks else {
+    let chats = chats(ctx, (services.runners, root.clone()));
+    let stops = archive_stops(ctx, (services.servers, root));
+    // A project is read once its tasks, archive stops and conversations are, or its conversations cannot be: a reading
+    // before would take a merge the chat carried out for the person's.
+    let (TasksState::Ready(tasks), Some(stops)) = (tasks, stops) else {
       return Element::new();
     };
     let chats = match chats {
@@ -95,11 +104,12 @@ impl Component for ProjectNotices {
     let proposals = chats
       .as_ref()
       .map(|chats| sources::of_proposals(&project, &chats.0.proposals));
-    link.read_project(
-      project.id,
-      (sources::of_project(&project, &reading), proposals),
-      tasks.needs_you(),
-    );
+    let events = ProjectEvents {
+      events: sources::of_project(&project, &reading),
+      proposals,
+      archive_stops: sources::of_archive_stops(&project, &tasks, &stops.0, services.session_start),
+    };
+    link.read_project(project.id, events, tasks.needs_you());
     Element::new()
   }
 }
@@ -136,5 +146,38 @@ fn chats(ctx: &mut Ctx, (runners, root): (Runners, PathBuf)) -> ChatsRead {
     (Some(chats), _) => ChatsRead::Read(chats),
     (None, Some(_)) => ChatsRead::Failed,
     (None, None) => ChatsRead::Waiting,
+  }
+}
+
+/// The runs of the project at `root` that a resource archived on the team's server stopped, read again whenever a
+/// shared project's cache changes (the stream records each stop before it says so); `None` until first read. A reading
+/// that fails is logged and read as none.
+fn archive_stops(ctx: &mut Ctx, (servers, root): (Servers, PathBuf)) -> Option<Stops> {
+  let revisions = ctx.stream(servers, |servers, emitter: StreamEmitter<u64, ()>| async move {
+    let mut updates = servers.subscribe_shared();
+    loop {
+      let revision = *updates.borrow_and_update();
+      if !emitter.emit(revision) || updates.changed().await.is_err() {
+        return;
+      }
+    }
+  });
+  let revision = revisions.state().get().data.unwrap_or(0);
+  let read = ctx
+    .future((root, revision), |(root, _)| async move {
+      background::run(move || archive_stops_in(&root))
+        .await?
+        .map(|stops| Stops(Arc::new(stops)))
+        .map_err(|error| -> Message {
+          tracing::error!(%error, "the runs archived resources stopped cannot be read for notifications");
+          messages::store_error(&error)
+        })
+    })
+    .state()
+    .get();
+  match (read.data, read.error) {
+    (Some(stops), _) => Some(stops),
+    (None, Some(_)) => Some(Stops::default()),
+    (None, None) => None,
   }
 }

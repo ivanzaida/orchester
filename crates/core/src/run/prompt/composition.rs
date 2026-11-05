@@ -294,7 +294,7 @@ fn push_resume_opening(text: &mut String, input: &PromptInput<'_>) {
     && (input.revision.is_some() || input.messages.is_some())
   {
     text.push('\n');
-    push_block(text, &base_moved::notice_text(moved.notice));
+    push_block(text, &base_moved::notice_text(moved.notice, moved.merge));
   }
   code_index::push(text, input.code_index);
 }

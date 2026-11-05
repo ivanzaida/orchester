@@ -1,6 +1,6 @@
-//! The notifier's rules: once per event and not for what stood at the first reading, a group's events within 30 s as
-//! one, nothing while the window shows the place, in quiet hours or for a group switched off, and an interruption and
-//! a merge held 30 s.
+//! The notifier's rules: once per event and not for what stood at the first reading (but for this session's archive
+//! stops), a group's events within 30 s as one, nothing while the window shows the place, in quiet hours or for a
+//! group switched off, and an interruption and a merge held 30 s.
 
 use super::*;
 
@@ -224,4 +224,32 @@ fn notifier_holds_a_merge_so_the_chats_record_of_its_own_can_drop_it() {
   let shown = notifier.due(&view(at(80_000), false, &finished));
   assert_eq!(shown.len(), 1, "a person's merge is told once it stood 30 s");
   assert_eq!(shown[0].title.key, "notifications.title.merged");
+}
+
+#[test]
+fn notifier_tells_an_archive_stop_of_the_first_reading_once() {
+  let project = ProjectId::generate();
+  let scope = Scope::Archives(project);
+  let settings = NotificationSettings::default();
+  let mut notifier = Notifier::default();
+  let stopped = || {
+    event(
+      project,
+      "archived:run",
+      Kind::Archived {
+        resource: "Builder".into(),
+      },
+      1,
+    )
+  };
+  notifier.observe(scope, vec![stopped()], at(0));
+  let shown = notifier.due(&view(at(0), false, &settings));
+  assert_eq!(
+    shown.len(),
+    1,
+    "stopped while this computer was offline, told once it reads"
+  );
+  assert_eq!(shown[0].title.key, "notifications.title.archived");
+  notifier.observe(scope, vec![stopped()], at(1));
+  assert!(notifier.due(&view(at(1), false, &settings)).is_empty(), "told once");
 }

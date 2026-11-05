@@ -1,10 +1,16 @@
-//! Module delivery (S7c): a module branch delivered to base without a work, its local effect, and both kept apart from
-//! the task form of a delivery.
+//! Module delivery (S7c): a module branch delivered to base without a work, its local effect, both kept apart from
+//! the task form of a delivery, and a module's open delivery request as its read carries it.
 
-use orchester_api::v2::{BundleRef, DeliveryRead, DeliveryState, LocalEffect, ModuleDeliveryRead};
+use orchester_api::{
+  UserRef,
+  v2::{
+    BundleRef, DeliveryRead, DeliveryState, LocalEffect, ModuleDeliveryRead, PendingAuthorization,
+    PendingDeliveryError, PendingDeliveryRead,
+  },
+};
 use orchester_core::{
   blob::ContentHash,
-  id::{ClaimId, ModuleId, OperationId, TaskId, WorkId},
+  id::{ClaimId, ModuleId, OperationId, TaskId, UserId, WorkId},
   run::{BranchName, CommitId},
   sharing::TaskRevision,
 };
@@ -175,4 +181,92 @@ fn module_delivery_local_effect_shape() {
   let mut short = wire;
   short["source_commit"] = json!(&SOURCE[..7]);
   assert!(serde_json::from_value::<LocalEffect>(short).is_err());
+}
+
+fn olha() -> UserRef {
+  UserRef {
+    id: UserId::generate(),
+    display_name: "Olha".to_owned(),
+  }
+}
+
+fn pending(authorization: PendingAuthorization) -> PendingDeliveryRead {
+  PendingDeliveryRead::new(
+    olha(),
+    1_762_353_480_000,
+    CommitId::new(SOURCE).expect("commit"),
+    CommitId::new(BASE).expect("commit"),
+    authorization,
+  )
+  .expect("pending delivery")
+}
+
+#[test]
+fn module_delivery_pending_read_wire_shape() {
+  for (authorization, name) in [
+    (PendingAuthorization::AwaitingAdmin, "awaiting_admin"),
+    (PendingAuthorization::Admin, "admin"),
+    (PendingAuthorization::Automatic, "automatic"),
+  ] {
+    let read = pending(authorization);
+    let wire = json!({
+      "requested_by": {"id": read.requested_by().id, "display_name": "Olha"},
+      "requested_at": 1_762_353_480_000_i64,
+      "source_commit": SOURCE,
+      "base_commit": BASE,
+      "authorization": name
+    });
+    assert_eq!(serde_json::to_value(&read).expect("serializes"), wire);
+    let back = serde_json::from_value::<PendingDeliveryRead>(wire).expect("reads");
+    assert_eq!(back, read);
+    assert_eq!(back.authorization(), authorization);
+    assert_eq!(back.requested_at(), 1_762_353_480_000);
+    assert_eq!(back.source_commit().as_str(), SOURCE);
+    assert_eq!(back.base_commit().as_str(), BASE);
+  }
+}
+
+#[test]
+fn module_delivery_pending_read_refuses_malformed_fields() {
+  let same = PendingDeliveryRead::new(
+    olha(),
+    1,
+    CommitId::new(SOURCE).expect("commit"),
+    CommitId::new(SOURCE).expect("commit"),
+    PendingAuthorization::AwaitingAdmin,
+  );
+  assert_eq!(same, Err(PendingDeliveryError::NothingToDeliver));
+
+  let wire = serde_json::to_value(pending(PendingAuthorization::AwaitingAdmin)).expect("serializes");
+  let mut nothing = wire.clone();
+  nothing["base_commit"] = json!(SOURCE);
+  assert!(serde_json::from_value::<PendingDeliveryRead>(nothing).is_err());
+  for field in [
+    "requested_by",
+    "requested_at",
+    "source_commit",
+    "base_commit",
+    "authorization",
+  ] {
+    let mut missing = wire.clone();
+    missing.as_object_mut().expect("an object").remove(field);
+    assert!(
+      serde_json::from_value::<PendingDeliveryRead>(missing).is_err(),
+      "{field}"
+    );
+  }
+  for (field, value) in [
+    ("authorization", json!("pending")),
+    ("source_commit", json!(&SOURCE[..12])),
+    ("requested_at", json!("15:38")),
+    ("claim_id", json!(ClaimId::generate())),
+    ("path", json!("C:/repo")),
+  ] {
+    let mut malformed = wire.clone();
+    malformed[field] = value;
+    assert!(
+      serde_json::from_value::<PendingDeliveryRead>(malformed).is_err(),
+      "{field}"
+    );
+  }
 }

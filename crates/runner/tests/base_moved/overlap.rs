@@ -1,7 +1,8 @@
 //! Only a base move that overlaps the run's changes interrupts a writing step (ORC-151): one that does not lets its
 //! step pass, and the runner merges it itself before Check; a merge of the runner's that conflicts is undone and the
 //! notice goes to the next writing step; pending moves combine, and the combined one is delivered once any of its
-//! files overlap.
+//! files overlap. One that overlaps the runner merges into the writing agent's worktree before the agent reads it,
+//! leaving the conflicts for the agent to resolve by editing the files.
 
 use std::path::Path;
 
@@ -135,12 +136,9 @@ async fn base_moved_with_overlap_in_the_worktree_the_notice_reaches_implement() 
     implement("Wait for release."),
     verify("Compare the screen. Change nothing."),
   );
+  let mut head = String::new();
   let (project, run) = run_while_moved(&setup, |root, ids| {
-    std::fs::write(root.join("README.md"), "hi\nfrom the base\n").expect("written");
-    git(root, &["commit", "--quiet", "-am", "ORC-7: Reword the readme"]);
-    let head = git(root, &["rev-parse", "main"]);
-    // The desktop saw no overlap: the run had committed nothing yet; its agent's README.md is uncommitted.
-    queue_moved(root, ids, &head, &[(&head, "ORC-7: Reword the readme")], &[]);
+    head = reworded_readme(root, ids);
   })
   .await;
   let root = project.repo.path();
@@ -154,14 +152,39 @@ async fn base_moved_with_overlap_in_the_worktree_the_notice_reaches_implement() 
   );
   assert_eq!(told[0].overlapping, ["README.md"], "kept as found");
   assert_eq!(invocations(root, &run), 5, "Implement went on to read it");
-  let log = git(root, &["log", "--format=%s", run.branch().as_str()]);
+  let branch = run.branch().as_str();
+  let log = git(root, &["log", "--format=%s", branch]);
   assert!(log.contains("saved to merge the moved base"), "{log}");
+  // The runner merged it, and the agent only edited the conflicted file, as a sandboxed Codex can.
+  let merges = git(root, &["rev-list", "--merges", "--parents", branch]);
   assert!(
-    !log.contains("merge the moved base main"),
-    "the runner merged nothing: {log}"
+    merges.lines().any(|parents| parents.ends_with(&head)),
+    "the moved base is a parent of the run's merge commit: {merges}"
   );
+  assert_eq!(
+    git(root, &["show", &format!("{branch}:README.md")]),
+    "hi\nhello\nfrom the base\ncontinued",
+    "both sides kept, no conflict marker committed"
+  );
+  assert_eq!(git(&worktree_of(root, &run), &["status", "--porcelain"]), "");
   let prompt = reported(&ProjectDb::open(root).expect("open"), run.id(), "prompt| ");
+  assert!(
+    prompt
+      .iter()
+      .any(|line| line.starts_with("Git stopped at conflicts in these files")),
+    "{prompt:?}"
+  );
   assert!(prompt.iter().any(|line| line == "- `README.md`"), "{prompt:?}");
+}
+
+/// Rewords `README.md` on `main` in the checkout, where the run's agent appends to it uncommitted, and queues the move
+/// for `ids` with no overlap the desktop saw (the run had committed nothing yet); the new head.
+pub(super) fn reworded_readme(root: &Path, ids: (RunId, TaskId)) -> String {
+  std::fs::write(root.join("README.md"), "hi\nfrom the base\n").expect("written");
+  git(root, &["commit", "--quiet", "-am", "ORC-7: Reword the readme"]);
+  let head = git(root, &["rev-parse", "main"]);
+  queue_moved(root, ids, &head, &[(&head, "ORC-7: Reword the readme")], &[]);
+  head
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -174,9 +197,10 @@ async fn base_moved_a_runner_merge_that_conflicts_is_undone_and_goes_to_the_next
     ],
     ..Setup::new("Say hello.")
   };
+  let mut head = String::new();
   let (project, run) = run_while_moved(&setup, |root, ids| {
     // A folder where Implement writes its file: no path in common, yet the merge conflicts.
-    let head = landed_file(root, "implement.txt/landed.md", "ORC-7: Land a folder");
+    head = landed_file(root, "implement.txt/landed.md", "ORC-7: Land a folder");
     queue_moved(root, ids, &head, &[(&head, "ORC-7: Land a folder")], &[]);
   })
   .await;
@@ -191,22 +215,18 @@ async fn base_moved_a_runner_merge_that_conflicts_is_undone_and_goes_to_the_next
   );
   assert!(!told[0].overlapping.is_empty(), "the files it conflicted in");
   assert_eq!(invocations(root, &run), 3, "no step was held to read it");
-  let log = git(root, &["log", "--format=%s", run.branch().as_str()]);
-  assert!(
-    !log.contains("merge the moved base main"),
-    "the merge was undone: {log}"
-  );
+  let branch = run.branch().as_str();
+  let log = git(root, &["log", "--format=%s", branch]);
   assert!(!log.contains("saved to merge the moved base"), "{log}");
-  let worktree = worktree_of(root, &run);
-  assert!(
-    worktree.join("implement.txt").is_file(),
-    "Implement's file is as it was"
-  );
-  assert!(
-    !worktree.join("implement.txt~HEAD").exists(),
-    "nothing of the merge is left"
-  );
-  assert_eq!(git(&worktree, &["status", "--porcelain"]), "");
+  // The runner's merge before Check was undone; the one it made for Document's agent, which conflicted too, its save
+  // committed: one merge commit, right on Implement's work.
+  let merges = git(root, &["rev-list", "--merges", "--parents", branch]);
+  let parents: Vec<&str> = merges.split_whitespace().collect();
+  assert_eq!(parents.len(), 3, "one merge commit: {merges}");
+  assert_eq!(parents[2], head, "of the moved base");
+  let before = git(root, &["log", "-1", "--format=%s", parents[1]]);
+  assert!(before.contains("Implement"), "nothing between: {before}");
+  assert_eq!(git(&worktree_of(root, &run), &["status", "--porcelain"]), "");
 }
 
 #[tokio::test(flavor = "multi_thread")]

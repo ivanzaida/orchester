@@ -104,10 +104,12 @@ pub enum Choice {
   /// For a run whose last merge into its base branch stopped at conflicts (merge_run's merge_failed, the task page's
   /// Not merged into main): Ask an agent to resolve. Its work returns to `step` (its key or name; left out, the step
   /// that implemented what conflicts, else the last one), which must be a step whose agent may write in the worktree,
-  /// with a note to merge the base branch in and resolve the conflicts, `note` after it, and the conflicting files as
-  /// data. Refused as merge_not_conflicted unless the run's last merge in this app stopped at conflicts,
-  /// step_cannot_write for a step that may not write, no_writing_step when none may, integration_running while git
-  /// works on the run, and as return_to is refused (run_merged, worktree_removed, worktree_in_merge, run_not_ended).
+  /// with a note to resolve the conflicts, `note` after it, and the conflicting files as data; the runner merges the
+  /// base branch into its worktree before its agent starts, leaving the conflicts for the agent to edit away, and
+  /// commits the merge with its work. Refused as merge_not_conflicted unless the run's last merge in this app stopped
+  /// at conflicts, step_cannot_write for a step that may not write, no_writing_step when none may, integration_running
+  /// while git works on the run, and as return_to is refused (run_merged, worktree_removed, worktree_in_merge — a merge
+  /// already in the worktree, which the runner's own would collide with — and run_not_ended).
   ResolveConflicts {
     #[serde(default)]
     step: Option<String>,

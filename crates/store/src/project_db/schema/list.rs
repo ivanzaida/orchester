@@ -572,6 +572,7 @@ ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 
   super::plan_only::MIGRATION,
   super::side_questions::MIGRATION,
   super::ci_fixes::MIGRATION,
+  super::archive_stops::MIGRATION,
   super::decision_connections::MIGRATION,
   super::team_reviewer::MIGRATION,
   super::decision_reviewer::MIGRATION,

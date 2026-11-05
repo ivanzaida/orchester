@@ -46,6 +46,11 @@ impl RunnerProcess {
       .stdout(Stdio::null())
       .stderr(Stdio::piped());
     ErrorReports::pass(reports, &mut command);
+    // The runner gets the full search path as its `PATH`, for the git it runs, the programs of command tools and what
+    // its agents inherit (`orchester_exec::search_path`).
+    if let Some(path) = orchester_exec::search_path::search_path() {
+      command.env("PATH", path);
+    }
     platform::prepare(&mut command);
     let mut child = command.spawn().map_err(|source| LaunchError::Spawn {
       exe: runner_exe.to_path_buf(),
@@ -142,14 +147,9 @@ mod platform {
   use super::{RunnerProcess, TERMINATE_GRACE};
 
   /// Dropping the handle ends the runner through SIGTERM (see [`RunnerProcess`]'s `Drop`),
-  /// not with tokio's immediate SIGKILL, which would leave its agents running. The runner gets
-  /// the full search path as its `PATH`, for the git it runs, the programs of command tools and
-  /// what its agents inherit (`orchester_exec::search_path`).
+  /// not with tokio's immediate SIGKILL, which would leave its agents running.
   pub(super) fn prepare(command: &mut Command) {
     command.kill_on_drop(false);
-    if let Some(path) = orchester_exec::search_path::search_path() {
-      command.env("PATH", path);
-    }
   }
 
   impl Drop for RunnerProcess {

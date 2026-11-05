@@ -82,8 +82,8 @@ fn spawn(command: &Command) -> Result<Child, CommandError> {
 
 /// The process that runs `command`, ready to start: launched through what [`launch::resolve`]
 /// finds, with its arguments, directory and environment, standard input piped when the command
-/// has input (otherwise empty), output piped, no console window and, on macOS, leading a process
-/// group of its own ([`process_group`]) with the full search path ([`search_path`]). Secret variables are
+/// has input (otherwise empty), output piped, no console window, the full search path ([`search_path`]) and, on
+/// macOS, leading a process group of its own ([`process_group`]). Secret variables are
 /// set last; the returned process holds their values, so it is not logged. For callers that stream a
 /// program's output instead of waiting for it, such as the runner with agent CLIs.
 pub fn prepare(command: &Command) -> Result<Process, CommandError> {
@@ -121,6 +121,8 @@ pub fn prepare(command: &Command) -> Result<Process, CommandError> {
   process_group::lead_own_group(&mut process);
   #[cfg(target_os = "macos")]
   search_path::macos::apply(&mut process, command, launch.program());
+  #[cfg(windows)]
+  search_path::windows::apply(&mut process, command);
   Ok(process)
 }
 

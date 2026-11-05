@@ -67,6 +67,8 @@ mod fake_codex_check;
 mod fake_codex_index;
 #[path = "fake_codex_limits.rs"]
 mod fake_codex_limits;
+#[path = "fake_codex_merge.rs"]
+mod fake_codex_merge;
 #[path = "fake_codex_question.rs"]
 mod fake_codex_question;
 #[path = "fake_codex_readiness.rs"]

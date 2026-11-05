@@ -8,6 +8,7 @@ mod api_providers;
 mod approval_choices;
 mod approval_modes;
 mod approve_everything;
+mod archive_stops;
 mod attachments;
 mod auto_mode;
 mod automation_answers;
