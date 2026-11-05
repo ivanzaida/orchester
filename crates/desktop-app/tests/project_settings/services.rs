@@ -134,8 +134,8 @@ fn services_tab_lists_services_stacks_and_suites() {
   assert!(!settings.exists("settings-services-agents"));
 
   settings.click("settings-stack-cloud-row");
-  settings.until("the stack's page", |s| s.exists("settings-services-page-stack"));
-  assert_eq!(settings.text("settings-services-page-title"), "Stack");
+  settings.until("the stack's page", |s| s.exists("settings-stack-editor"));
+  assert_eq!(settings.text("settings-stack-editor-head-title"), "cloud");
 }
 
 /// A read again that fails after one that worked says so with Try again above what was read before, rather than passing

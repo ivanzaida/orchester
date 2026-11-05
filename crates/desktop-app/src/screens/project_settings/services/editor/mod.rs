@@ -18,17 +18,16 @@
 
 mod actions;
 mod approval;
-mod aside;
-mod delete;
-mod fields;
-mod needs;
+pub(super) mod aside;
+pub(super) mod fields;
+pub(super) mod needs;
 mod owned;
 mod readiness;
 mod run_data;
 mod sections;
 mod seed;
 mod ui_driver;
-mod variables;
+pub(super) mod variables;
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -77,17 +76,19 @@ use crate::{
   },
 };
 
-/// The page's room: the 720 pane, 32 and the side column (`Body` `czsh2`, `Pane` `aEj3e`, `Aside` `hJqTm`).
-const PAGE_WIDTH: f32 = 1136.0;
-/// The pane (`Pane` `aEj3e`).
-const PANE_WIDTH: f32 = 720.0;
-/// Where the side column's first card starts, level with the Program group (`Gap` `ElHia`, the aside's 2 and 20).
-const ASIDE_TOP: f32 = 92.0;
-/// A row's label column (`Text` `m8rIK4`, `l1tJi`).
-const LABEL_WIDTH: f32 = 220.0;
+/// The page's room: the 720 pane, 32 and the side column (`Body` `czsh2`, `Pane` `aEj3e`, `Aside` `hJqTm`); a stack's
+/// and a suite's pages share it (`bEh5w` in `iNxTM`, `g7mjA` in `uxYcD`).
+pub(super) const PAGE_WIDTH: f32 = 1136.0;
+/// The pane (`Pane` `aEj3e`, `LExer`, `h7Pzb`).
+pub(super) const PANE_WIDTH: f32 = 720.0;
+/// Where the side column's first card starts, level with the page's first group (`Gap` `ElHia`, `O6OdbI`, `OjRz5`, the
+/// aside's 2 and 20).
+pub(super) const ASIDE_TOP: f32 = 92.0;
+/// A row's label column (`Text` `m8rIK4`, `l1tJi`, `LZ8Os`, `cbpC3`).
+pub(super) const LABEL_WIDTH: f32 = 220.0;
 
 /// Saves the draft as the fields are now.
-type Commit = Arc<dyn Fn() + Send + Sync>;
+pub(super) type Commit = Arc<dyn Fn() + Send + Sync>;
 
 /// The page of service `id`, or of a new one.
 pub(in crate::screens::project_settings) fn editor(ctx: &mut Ctx, props: &TabProps, id: Option<ResourceId>) -> Element {
@@ -273,11 +274,10 @@ impl Component for Editor {
       .with_children(needs::start_order_card(ctx, &view))
       .with_children(aside::values_card(ctx, &view))
       .with_children(aside::tools_card(ctx, &view));
-    let deleting = self
-      .deleting
-      .get()
-      .then(|| delete::dialog(ctx, &props.tab, &view, &self.deleting))
-      .flatten();
+    let deleting = view.stored.entry.as_ref().filter(|_| self.deleting.get()).map(|entry| {
+      let what = (super::delete::Deleted::SERVICE, entry.id, entry.name.clone());
+      super::delete::dialog(ctx, &props.tab, what, &self.deleting)
+    });
     let page = Row::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Xl)

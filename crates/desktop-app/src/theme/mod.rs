@@ -116,7 +116,7 @@ pub use self::{
   run_model::ModelText,
   run_services::RunServicesText,
   secrets::{SECRETS_PENDING_OPACITY, SecretsSpacing, SecretsText},
-  services::ServicesText,
+  services::{ServicesSpacing, ServicesText},
   settings::{SettingsSpacing, SettingsText},
   shadow::ExtraShadow,
   shell::{ShellSpacing, ShellText},
@@ -194,6 +194,7 @@ pub fn install(app: &mut App, mode: Mode) {
   failure::install(theme);
   modules::install(theme);
   project_settings::install(theme);
+  services::install(theme);
   browser::install(theme);
   dialog::install(theme);
   permissions::install(theme);

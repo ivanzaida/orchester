@@ -121,7 +121,8 @@ pub(super) fn suite_hint(ctx: &Ctx, suite: &TestSuite, stacks: &[Entry<Stack>]) 
   ])
 }
 
-fn report(ctx: &Ctx, format: ReportFormat) -> Arc<str> {
+/// A report format as Services and a suite's Report group name it (`cargo json`, `Playwright json`).
+pub(super) fn report(ctx: &Ctx, format: ReportFormat) -> Arc<str> {
   ctx.t(match format {
     ReportFormat::CargoJson => "project_settings.services.report.cargoJson",
     ReportFormat::JunitXml => "project_settings.services.report.junitXml",

@@ -34,13 +34,13 @@ use crate::{
 
 /// The variables' rows as typed.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub(super) struct Lines(pub Vec<VariableLine>);
+pub(in crate::screens::project_settings::services) struct Lines(pub Vec<VariableLine>);
 
 impl DevtoolsInspectable for Lines {}
 
-/// The services it needs, in order.
+/// Names as typed or chosen, in order: the services a service needs, or that a stack or a suite starts.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub(super) struct Needs(pub Vec<String>);
+pub(in crate::screens::project_settings::services) struct Needs(pub Vec<String>);
 
 impl DevtoolsInspectable for Needs {}
 
@@ -208,12 +208,16 @@ pub(super) fn program_group(ctx: &mut Ctx, fields: &Fields, view: &View, commit:
 }
 
 /// A row of the page's groups: its label and hint in the 220 label column.
-pub(super) fn field(id: &str, label: Arc<str>, hint: Arc<str>) -> FormField {
+pub(in crate::screens::project_settings::services) fn field(id: &str, label: Arc<str>, hint: Arc<str>) -> FormField {
   FormField::new(id, label).hint(hint).label_width(LABEL_WIDTH)
 }
 
 /// A field typing into `value` in Geist Mono 12 (`EltV2`), saved as it is left.
-pub(super) fn input((id, name): (&str, Arc<str>), value: &Signal<String>, commit: &Commit) -> FieldInput {
+pub(in crate::screens::project_settings::services) fn input(
+  (id, name): (&str, Arc<str>),
+  value: &Signal<String>,
+  commit: &Commit,
+) -> FieldInput {
   let commit = commit.clone();
   FieldInput::new(id.to_owned(), name, value.clone())
     .mono()
@@ -221,7 +225,11 @@ pub(super) fn input((id, name): (&str, Arc<str>), value: &Signal<String>, commit
 }
 
 /// `input` saying `error` under it, its stroke `danger`.
-pub(super) fn with_error(ctx: &Ctx, input: FieldInput, error: Option<&Message>) -> FieldInput {
+pub(in crate::screens::project_settings::services) fn with_error(
+  ctx: &Ctx,
+  input: FieldInput,
+  error: Option<&Message>,
+) -> FieldInput {
   match error {
     Some(error) => input.error(message_text(ctx, error)),
     None => input,
@@ -243,10 +251,11 @@ fn name_row(ctx: &mut Ctx, fields: &Fields, error: Option<&Message>, commit: &Co
 fn program_row(ctx: &mut Ctx, fields: &Fields, view: &View, commit: &Commit) -> Element {
   let label = ctx.t("project_settings.services.editor.program");
   let error = view.problems().and_then(|problems| problems.program.as_ref());
-  let found = found(ctx, &fields.program.get());
+  let root = ctx.props::<super::EditorProps>().tab.project.open.repo_root.clone();
+  let note = program_found(ctx, (&root, &fields.program.get()), "settings-service-program-found");
   let control = input(("settings-service-program", label.clone()), &fields.program, commit);
   let control = with_error(ctx, control, error).render(ctx);
-  let note = found.filter(|_| error.is_none()).map(|found| found_note(ctx, found));
+  let note = note.filter(|_| error.is_none());
   field(
     "settings-service-program",
     label,
@@ -262,12 +271,15 @@ fn program_row(ctx: &mut Ctx, fields: &Fields, view: &View, commit: &Commit) -> 
   )
 }
 
-/// Where a start finds `program`, looked up off the UI thread as it is typed; `None` while that is not known or it
-/// is no program.
-fn found(ctx: &mut Ctx, program: &str) -> Option<ProgramFound> {
-  let root = ctx.props::<super::EditorProps>().tab.project.open.repo_root.clone();
+/// Whether a start in the project at `root` finds `program` (`id`), looked up off the UI thread as it is typed: in
+/// `success` where it does, in `warning` where it does not; `None` while that is not known or it is no program.
+pub(in crate::screens::project_settings::services) fn program_found(
+  ctx: &mut Ctx,
+  (root, program): (&std::path::Path, &str),
+  id: &str,
+) -> Option<Element> {
   let found = ctx
-    .future((root, program.to_owned()), |(root, program)| async move {
+    .future((root.to_path_buf(), program.to_owned()), |(root, program)| async move {
       background::run(move || {
         Found(
           CommandProgram::new(&program)
@@ -279,11 +291,7 @@ fn found(ctx: &mut Ctx, program: &str) -> Option<ProgramFound> {
     })
     .state()
     .get();
-  found.data?.0
-}
-
-/// Whether a start finds the program: in `success` where it does, in `warning` where it does not.
-fn found_note(ctx: &Ctx, found: ProgramFound) -> Element {
+  let found = found.data?.0?;
   let key = match found {
     ProgramFound::OnPath => "project_settings.services.editor.found.onPath",
     ProgramFound::NotOnPath => "project_settings.services.editor.found.notOnPath",
@@ -297,11 +305,13 @@ fn found_note(ctx: &Ctx, found: ProgramFound) -> Element {
   } else {
     PaletteColor::Warning
   };
-  Text::new(&ctx.t(key))
-    .id("settings-service-program-found")
-    .variant(ExtraTypography::Note.role())
-    .color(tone)
-    .into()
+  Some(
+    Text::new(&ctx.t(key))
+      .id(id.to_owned())
+      .variant(ExtraTypography::Note.role())
+      .color(tone)
+      .into(),
+  )
 }
 
 fn arguments_row(ctx: &mut Ctx, fields: &Fields, view: &View, commit: &Commit) -> Element {
@@ -352,7 +362,7 @@ fn variables_row(ctx: &mut Ctx, fields: &Fields, view: &View, commit: &Commit) -
     .problems()
     .and_then(|problems| problems.variables.clone())
     .or_else(|| placeholder_in(view, Field::Variables));
-  let control = super::variables::variables(ctx, &fields.variables, error.as_ref(), commit);
+  let control = super::variables::variables(ctx, ("settings-service", &fields.variables), error.as_ref(), commit);
   field(
     "settings-service-variables",
     label,

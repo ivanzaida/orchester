@@ -75,7 +75,7 @@ pub fn start_order(service: &Service, services: &[Entry<Service>]) -> Result<Vec
 }
 
 /// Why the needs do not resolve: a need names a service the project no longer has, or they form a cycle.
-fn order_error(error: &NeedsError) -> Message {
+pub(crate) fn order_error(error: &NeedsError) -> Message {
   match error {
     NeedsError::Missing {
       name,

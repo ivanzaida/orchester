@@ -1,5 +1,5 @@
-//! A service's page's own type roles (`02 · Service editor` `TGRTt`).
-use orchester_app::theme::ServicesText;
+//! The Services pages' own roles (`02 · Service editor` `TGRTt`, `03 · Stack editor` `iNxTM`).
+use orchester_app::theme::{ServicesSpacing, ServicesText};
 
 use super::*;
 
@@ -48,6 +48,13 @@ fn services_roles_follow_the_service_editor() {
       FontWeight::Normal,
       PaletteColor::TextSecondary,
     ),
+    // A stack's service's step in its round mark (`L5UCWh` in `iNxTM`).
+    (
+      ServicesText::StepNumber,
+      10.5,
+      FontWeight::Normal,
+      PaletteColor::TextSecondary,
+    ),
   ] {
     let style = theme.typography_style(role.role());
     assert_eq!(
@@ -55,5 +62,15 @@ fn services_roles_follow_the_service_editor() {
       (size, weight, "Geist Mono", theme.palette_color(color)),
       "{role:?}"
     );
+  }
+}
+
+/// The tree of needs steps 18 in per level (`ePZt6`); the slots' bar keeps 4 between its slots (`QXz4w`).
+#[test]
+fn services_spacing_follows_the_stack_editor() {
+  let app = themed(Mode::Dark);
+  let theme = app.theme();
+  for (role, value) in [(ServicesSpacing::TreeIndent, 18.0), (ServicesSpacing::SlotGap, 4.0)] {
+    assert_eq!(theme.spacing_value(role.role()), Dimension::Px(value), "{role:?}");
   }
 }

@@ -35,8 +35,13 @@ fn service(view: &View) -> Option<&Service> {
   view.built.as_ref().ok().or_else(|| view.base())
 }
 
-/// A card of the side column: its title over its lines, 10 apart, in a `border` outline, radius 10, padding 16.
-fn card(id: &str, title: &str, lines: impl IntoIterator<Item = Element>) -> Element {
+/// A card of the side column: its title over its lines, 10 apart, in a `border` outline, radius 10, padding 16; a
+/// stack's *Dependencies* and a suite's *Last runs* are cards too (`z1aSH`, `vMRvk`).
+pub(in crate::screens::project_settings::services) fn card(
+  id: &str,
+  title: &str,
+  lines: impl IntoIterator<Item = Element>,
+) -> Element {
   Column::new()
     .id(id.to_owned())
     .width(Dimension::Pct(100.0))

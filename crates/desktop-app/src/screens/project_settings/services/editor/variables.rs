@@ -1,7 +1,8 @@
-//! The variables of a service's Program group (`Variables` `cVZui`): each a row of its name in a 190 field, `=` and its
-//! value, or the name of a project secret after a key (`Var SESSION_SECRET` `sTrHF`), then *Add variable* and *Add
-//! secret* (`Add variable` `E9kFqw`). A row leaves the variables when its name and value are both cleared. A secret's
-//! value is never read here: its row holds the secret's name only.
+//! The variables of a service's Program group (`Variables` `cVZui`) and of a test suite's Run group (`Variables`
+//! `HGnzG`): each a row of its name in a 190 field, `=` and its value, or the name of a project secret after a key
+//! (`Var SESSION_SECRET` `sTrHF`), then *Add variable* and *Add secret* (`Add variable` `E9kFqw`). A row leaves the
+//! variables when its name and value are both cleared. A secret's value is never read here: its row holds the secret's
+//! name only.
 
 use std::sync::Arc;
 
@@ -34,16 +35,22 @@ const NAME_WIDTH: f32 = 190.0;
 /// What stands between a variable's name and its value (`Text` `KnQ0G`): a sign, not words.
 const EQUALS: &str = "=";
 
-/// The variables' rows, the adders and `error` under them.
-pub(super) fn variables(ctx: &mut Ctx, variables: &Signal<Lines>, error: Option<&Message>, commit: &Commit) -> Element {
+/// The variables' rows, the adders and `error` under them; their ids start with `prefix` (`settings-service`).
+pub(in crate::screens::project_settings::services) fn variables(
+  ctx: &mut Ctx,
+  (prefix, variables): (&str, &Signal<Lines>),
+  error: Option<&Message>,
+  commit: &Commit,
+) -> Element {
   let lines = variables.get().0;
   let rows: Vec<Element> = lines
     .into_iter()
     .enumerate()
     .map(|(at, line)| {
       ctx.mount_keyed::<VariableRow>(
-        &format!("settings-service-variable-{at}"),
+        &format!("{prefix}-variable-{at}"),
         RowProps {
+          id: format!("{prefix}-variable-{at}").into(),
           at,
           line,
           variables: variables.clone(),
@@ -55,17 +62,17 @@ pub(super) fn variables(ctx: &mut Ctx, variables: &Signal<Lines>, error: Option<
   let adders = Row::new()
     .spacing(SpacingSize::Xs)
     .align_items(Alignment::Center)
-    .child(adder(ctx, variables, false))
-    .child(adder(ctx, variables, true));
+    .child(adder(ctx, (prefix, variables), false))
+    .child(adder(ctx, (prefix, variables), true));
   Column::new()
-    .id("settings-service-variables")
+    .id(format!("{prefix}-variables"))
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Snug.role())
     .with_children(rows)
     .child(adders)
     .with_children(error.map(|error| {
       Element::from(field_error(
-        "settings-service-variables-error",
+        &format!("{prefix}-variables-error"),
         &message_text(ctx, error),
       ))
     }))
@@ -73,16 +80,16 @@ pub(super) fn variables(ctx: &mut Ctx, variables: &Signal<Lines>, error: Option<
 }
 
 /// *Add variable*, or *Add secret* when `secret`: a new empty row of that kind.
-fn adder(ctx: &Ctx, variables: &Signal<Lines>, secret: bool) -> Element {
+fn adder(ctx: &Ctx, (prefix, variables): (&str, &Signal<Lines>), secret: bool) -> Element {
   let (id, key, glyph) = if secret {
     (
-      "settings-service-add-secret",
+      format!("{prefix}-add-secret"),
       "project_settings.services.editor.addSecret",
       Icon::KeyRound,
     )
   } else {
     (
-      "settings-service-add-variable",
+      format!("{prefix}-add-variable"),
       "project_settings.services.editor.addVariable",
       Icon::Plus,
     )
@@ -104,6 +111,8 @@ fn adder(ctx: &Ctx, variables: &Signal<Lines>, secret: bool) -> Element {
 
 #[derive(Clone)]
 struct RowProps {
+  /// The row's element id.
+  id: Arc<str>,
   at: usize,
   line: VariableLine,
   variables: Signal<Lines>,
@@ -113,7 +122,7 @@ struct RowProps {
 /// Compared by what the row shows; the signal and the save are the page's.
 impl PartialEq for RowProps {
   fn eq(&self, other: &Self) -> bool {
-    self.at == other.at && self.line == other.line
+    self.id == other.id && self.at == other.at && self.line == other.line
   }
 }
 
@@ -149,7 +158,9 @@ impl Component for VariableRow {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let RowProps { at, line, commit, .. } = ctx.props::<RowProps>().clone();
+    let RowProps {
+      id, at, line, commit, ..
+    } = ctx.props::<RowProps>().clone();
     // The page's variables move only through this row's fields once it shows, but a fill (the page read again) puts
     // what is stored in them.
     if self.name.get_untracked() != line.name {
@@ -158,7 +169,6 @@ impl Component for VariableRow {
     if self.value.get_untracked() != line.value {
       self.value.set(line.value.clone());
     }
-    let id = format!("settings-service-variable-{at}");
     let leave = |commit: &Commit| {
       let commit = commit.clone();
       move || commit()
@@ -185,7 +195,7 @@ impl Component for VariableRow {
       value
     };
     Row::new()
-      .id(id)
+      .id(id.to_string())
       .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Snug.role())
       .align_items(Alignment::Center)

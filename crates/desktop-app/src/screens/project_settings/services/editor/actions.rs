@@ -10,10 +10,15 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::resource::VersionNumber;
-use orchester_workspace::{agent_testing::editor::order::Field, agents::data::VersionState};
+use orchester_workspace::agent_testing::editor::order::Field;
 
-use super::{Editor, EditorProps, View};
+use super::{
+  super::{
+    delete::Deleted,
+    lifecycle::{next_version, stale_reason, state_words},
+  },
+  Editor, EditorProps, View,
+};
 use crate::{
   theme::{ExtraSpacing, ExtraTypography},
   ui::{
@@ -26,19 +31,13 @@ use crate::{
 
 /// The actions line and what it says under it.
 pub(super) fn actions(ctx: &mut Ctx, editor: &Editor, props: &EditorProps, view: &View) -> Element {
-  let delete = view.stored.entry.as_ref().map(|_| {
-    let deleting = editor.deleting.clone();
-    Element::from(
-      ActionButton::new(
-        "settings-service-delete",
-        ButtonKind::DangerGhost,
-        ctx.t("project_settings.services.editor.delete.button"),
-      )
-      .icon(Icon::Trash2)
-      .on_click(move || deleting.set(true)),
-    )
-  });
-  let state = Text::new(&state_words(ctx, view))
+  let delete = view
+    .stored
+    .entry
+    .as_ref()
+    .map(|_| Deleted::SERVICE.button(ctx, &editor.deleting));
+  let stored = view.stored.entry.as_ref().map(|entry| entry.state);
+  let state = Text::new(&state_words(ctx, stored))
     .id("settings-service-state")
     .variant(ExtraTypography::Note.role());
   let line = Row::new()
@@ -58,49 +57,10 @@ pub(super) fn actions(ctx: &mut Ctx, editor: &Editor, props: &EditorProps, view:
     .into()
 }
 
-/// Where the service stands, as stored.
-fn state_words(ctx: &Ctx, view: &View) -> std::sync::Arc<str> {
-  let Some(entry) = &view.stored.entry else {
-    return ctx.t("project_settings.services.editor.state.new");
-  };
-  let version = |number: VersionNumber| number.get().to_string();
-  match entry.state {
-    VersionState::Draft { published: None } | VersionState::StaleDraft { published: None, .. } => {
-      ctx.t("project_settings.services.editor.state.draftNew")
-    }
-    VersionState::Draft {
-      published: Some(published),
-    } => ctx.t_args(
-      "project_settings.services.editor.state.draft",
-      [("version", version(published))],
-    ),
-    VersionState::StaleDraft {
-      based_on,
-      published: Some(published),
-    } => ctx.t_args(
-      "project_settings.services.editor.state.stale",
-      [
-        ("based", based_on.map_or_else(String::new, version)),
-        ("version", version(published)),
-      ],
-    ),
-    VersionState::Published(published) => ctx.t_args(
-      "project_settings.services.editor.state.published",
-      [("version", version(published))],
-    ),
-  }
-}
-
 /// *Publish vN* while the service has a draft, or while the fields hold a change that will be one.
 fn publish(ctx: &Ctx, editor: &Editor, props: &EditorProps, view: &View) -> Option<Element> {
   let entry = view.stored.entry.as_ref()?;
-  if !entry.state.has_draft() && !view.changed {
-    return None;
-  }
-  let next = entry
-    .state
-    .published()
-    .map_or(Some(VersionNumber::FIRST), VersionNumber::next)?;
+  let next = next_version(entry.state, view.changed)?;
   let button = ActionButton::new(
     "settings-service-publish",
     ButtonKind::Primary,
@@ -110,15 +70,8 @@ fn publish(ctx: &Ctx, editor: &Editor, props: &EditorProps, view: &View) -> Opti
     ),
   )
   .icon(Icon::Upload);
-  let waits = if let VersionState::StaleDraft {
-    published: Some(published),
-    ..
-  } = entry.state
-  {
-    Some(ctx.t_args(
-      "project_settings.services.editor.publishStale",
-      [("version", published.get().to_string())],
-    ))
+  let waits = if let Some(stale) = stale_reason(ctx, entry.state) {
+    Some(stale)
   } else if view.built.is_err() {
     Some(ctx.t("project_settings.services.editor.publishWaitsFix"))
   } else if view.changed || editor.save.state().get().is_pending() {

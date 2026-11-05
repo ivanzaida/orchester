@@ -1582,6 +1582,45 @@
         },
         "elsewhere": "A placeholder of this service has no value in a run."
       }
+    },
+    "stack": {
+      "errors": {
+        "nameRequired": "Enter the stack's name.",
+        "name": "{{name}} is not a stack name: 1 to {{max}} lowercase letters, digits and single hyphens, such as full.",
+        "nameTaken": "Another stack is named {{name}}, or was. Give this one a name of its own.",
+        "empty": "Add a service: a stack starts at least one.",
+        "duplicate": "{{name}} is in the stack twice.",
+        "missing": "The stack starts {{service}}, which is no longer a service of this project. Remove it.",
+        "invalid": "This stack cannot be saved as it is.",
+        "gone": "This stack no longer exists. It was deleted, here or by automation."
+      }
+    },
+    "suite": {
+      "errors": {
+        "nameRequired": "Enter the suite's name.",
+        "name": "{{name}} is not a suite name: 1 to {{max}} lowercase letters, digits and single hyphens, such as web-e2e.",
+        "nameTaken": "Another test suite is named {{name}}, or was. Give this one a name of its own.",
+        "gone": "This test suite no longer exists. It was deleted, here or by automation.",
+        "filterPlaceholder": "Write the argument that takes run_tests' filter with {{filter}} in it, such as --grep={{filter}}, or leave it empty.",
+        "placeholderInProgram": "The program cannot hold a placeholder: {{filter}} goes in the filter's argument.",
+        "unknownPlaceholder": "{{value}} is not a placeholder of a test suite: the only one is {{filter}}, in the filter's argument.",
+        "unclosedPlaceholder": "{{value}} opens a placeholder but never closes it.",
+        "repeatedFilter": "{{filter}} stands in one argument only, once: keep it in the filter's field.",
+        "unknownFormat": "{{value}} is not a report format.",
+        "unknownLayer": "{{value}} is not a layer: lint, unit or e2e.",
+        "reportPathRequired": "Enter the file the report is written to, inside the working folder.",
+        "reportPrinted": "This format is printed: read it from the standard output.",
+        "blankPath": "Enter a path, or remove it.",
+        "absolutePath": "{{value}} starts from a drive or a root: write a path inside the worktree.",
+        "leavesWorktree": "{{value}} leaves the worktree: write a path without ..",
+        "secretName": "A variable takes a secret by its name: a capital letter, then capital letters, digits or underscores.",
+        "need": "A need names a service or a stack: lowercase letters, digits and single hyphens.",
+        "repeatedNeed": "{{value}} is needed twice.",
+        "servicesRequired": "Add a service, or choose Nothing.",
+        "stackRequired": "Choose a stack, or choose Nothing.",
+        "missing": "The suite needs {{name}}, which is no longer a service or a stack of this project.",
+        "timeout": "Enter a whole number of minutes from 1 to {{max}}."
+      }
     }
   },
   "sources": {

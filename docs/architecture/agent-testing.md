@@ -245,6 +245,18 @@ for an agent's start under way (a service both bring up at once is kept once). A
 Browser. Not built: *Services at once* slots in the stack line, and the `browser` driver's chip (the drivers are
 `none`, `native` and `mcp`). The QA seed's `run-services` scenario (with `-FakeAgents`) holds real services for it.
 
+Built (ORC-263): the stack editor (`iNxTM`) and the test suite editor (`uxYcD`) under Project settings › Services
+(`orchester-app`'s `screens::project_settings::services::{stack, suite}`, the workspace's `agent_testing::
+{stack_editor, suite_editor}`). Both save their draft as a field is left or a choice made, say the core's errors in
+place and publish. A stack lists every service its start brings up in start order (`StartPlan::for_stack`), each with
+its step and whether it was chosen or a need brought it, the *Services at once* slots it takes of the computer's, the
+suites that need it, and its tree of needs (each service under the need it waits for longest). A suite's filter is the
+one argument holding `{{filter}}`, edited in its own field and kept where it stood among the arguments; the switch the
+design draws as *Re-run a failed test once* is the suite's `always` flag (*Run in every Test step*), since the flaky
+re-run is the Test step's own; *Last runs* says no results are kept until the Test step stores them. A suite runs a
+program, so an MCP client changes what it runs or publishes it only under *Let automation change agent permissions*;
+a stack widens nothing. Not built: *Duplicate*.
+
 ## Phases
 
 1. Model and storage of services, stacks and suites; report parsers.

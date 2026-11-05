@@ -652,6 +652,104 @@
           "personOnly": "Only a person deletes a service: input from an MCP client is not taken here.",
           "failed": "The service was not deleted. {{reason}}"
         }
+      },
+      "stack": {
+        "lead": "Starting it starts every service below once its needs are ready; services on the same step start together. It takes one Services at once slot per service.",
+        "newLead": "A named set of services started together. It is saved as a draft as you go; agents and suites start it once it is published.",
+        "reading": "Reading the stack…",
+        "loadFailed": "The stack cannot be read",
+        "title": "Stack",
+        "name": "Name",
+        "nameHint": "Agents and suites name it",
+        "inStartOrder": "In start order",
+        "chosen": "Chosen",
+        "chosenWith": "Chosen · starts with {{names}}",
+        "neededBy": "Needed by {{names}}",
+        "fromNeeds": "from needs",
+        "noMoreServices": "Every service is in it",
+        "addNote": "Its needs are added for you",
+        "slots": {
+          "title": "Slots",
+          "takes": "Takes {{count}} slots",
+          "takesOf": "Takes {{count}} of {{limit}} slots",
+          "waits": "Services at once on this computer · a run starting it waits until {{count}} are free",
+          "tooMany": "More than this computer runs at once: a start of it is refused until Services at once is raised"
+        },
+        "usedBy": {
+          "title": "Used by",
+          "none": "No test suite yet",
+          "start": "Agents start it by name: {{call}}"
+        },
+        "dependencies": {
+          "title": "Dependencies",
+          "note": "Each arrow is a need. A crash stops what depends on it."
+        },
+        "delete": {
+          "button": "Delete stack",
+          "gone": "Runs that start after this cannot start it, and suites that need it no longer resolve.",
+          "confirm": "Delete stack",
+          "personOnly": "Only a person deletes a stack: input from an MCP client is not taken here.",
+          "failed": "The stack was not deleted. {{reason}}"
+        }
+      },
+      "suite": {
+        "lead": "The Test step runs it in its layer, once the layers before it pass, and agents run it with run_tests.",
+        "newLead": "A program Orchester runs in a run's worktree to test it, without a shell. It is saved as a draft as you go; the Test step runs it once it is published.",
+        "reading": "Reading the test suite…",
+        "loadFailed": "The test suite cannot be read",
+        "personOnly": "Only a person changes what a test suite runs, or publishes it: input from an MCP client is taken only while you let automation change agent permissions. Nothing was saved.",
+        "run": "Run",
+        "name": "Name",
+        "nameHint": "Agents and the Test step name it by this; it keeps it",
+        "programHint": "No shell",
+        "report": "Report",
+        "format": "Format",
+        "formatHint": "How Orchester reads the results",
+        "readFrom": "Read from",
+        "readFromHint": "Where the program leaves its report",
+        "printed": "Standard output",
+        "file": "A file",
+        "reportPath": "Report file",
+        "reportPathExample": "test-results/report.json",
+        "layerAndNeeds": "Layer and needs",
+        "layer": "Layer",
+        "layerHint": "lint runs first, then unit, then e2e; a failing layer stops the next",
+        "needsHint": "Started before the suite, stopped after it",
+        "needsNothing": "Nothing",
+        "needsServices": "Services",
+        "needsStack": "A stack",
+        "chooseStack": "Choose a stack",
+        "noStacks": "No stack yet",
+        "slots": {
+          "one": "· 1 slot",
+          "other": "· {{count}} slots"
+        },
+        "artifacts": "Artifacts",
+        "keep": "Keep",
+        "keepHint": "Shown on the task's Summary with the results",
+        "artifactAdd": "Add a path pattern",
+        "logsKept": "The logs of the services it needed are always kept.",
+        "limits": "Limits",
+        "timeout": "Timeout",
+        "timeoutHint": "Then the suite fails with what it reported so far",
+        "minutes": "minutes",
+        "filter": "Filter",
+        "filterHint": "How to run only some tests: for re-runs and run_tests(filter)",
+        "filterExample": "--grep={{filter}}",
+        "always": "Run in every Test step",
+        "alwaysHint": "Even when a run changed none of the paths it owns",
+        "lastRuns": {
+          "title": "Last runs",
+          "none": "No run's results are kept yet. Once the Test step stores them, its last runs show here."
+        },
+        "withFilter": "{{call}} --filter <filter>",
+        "delete": {
+          "button": "Delete suite",
+          "gone": "The Test step and agents can no longer run it.",
+          "confirm": "Delete suite",
+          "personOnly": "Only a person deletes a test suite: input from an MCP client is not taken here.",
+          "failed": "The test suite was not deleted. {{reason}}"
+        }
       }
     }
   }

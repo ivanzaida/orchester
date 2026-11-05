@@ -189,6 +189,16 @@ pub(crate) fn question(id: &str, title: &str, body: &[Arc<str>], actions: Vec<El
 
 /// The crumb back to `parent`, which `open` opens, with the page itself after it when it has a name of its own.
 pub(crate) fn back(id: &str, (parent, here): (&str, Option<&str>), open: Open) -> Element {
+  crumb(id, parent, None, here, open)
+}
+
+/// The crumb back to `parent`, which `open` opens, then the part of it the page belongs to and the page itself
+/// (`Crumb` `tiCDt`: *Services / Stacks / full*); the middle part is `<id>-through`.
+pub(crate) fn back_through(id: &str, (parent, through, here): (&str, &str, &str), open: Open) -> Element {
+  crumb(id, parent, Some(through), Some(here), open)
+}
+
+fn crumb(id: &str, parent: &str, through: Option<&str>, here: Option<&str>, open: Open) -> Element {
   let link = opening(open)
     .id(format!("{id}-back"))
     .spacing(ExtraSpacing::Snug.role())
@@ -198,25 +208,26 @@ pub(crate) fn back(id: &str, (parent, here): (&str, Option<&str>), open: Open) -
     .describe("a11y_name", parent.to_owned())
     .child(icon(Icon::ArrowLeft, IconSize::Base, PaletteColor::TextMuted))
     .child(Text::new(parent).variant(ProjectSettingsText::Hint.role()).nowrap());
-  let here = here.map(|here| {
+  let part = |words: &str, part: &str, color: PaletteColor| {
     Row::new()
       .spacing(ExtraSpacing::Snug.role())
       .align_items(Alignment::Center)
       .child(Text::new(crate::ui::breadcrumb::SLASH).variant(ProjectSettingsText::Hint.role()))
       .child(
-        Text::new(here)
-          .id(format!("{id}-here"))
+        Text::new(words)
+          .id(format!("{id}-{part}"))
           .variant(ProjectSettingsText::Hint.role())
-          .color(PaletteColor::TextSecondary)
+          .color(color)
           .nowrap(),
       )
-  });
+  };
   Row::new()
     .id(id.to_owned())
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
     .child(link)
-    .with_children(here)
+    .with_children(through.map(|through| part(through, "through", PaletteColor::TextMuted)))
+    .with_children(here.map(|here| part(here, "here", PaletteColor::TextSecondary)))
     .into()
 }
 
