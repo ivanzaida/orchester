@@ -12,6 +12,7 @@ mod failure;
 pub mod fork;
 pub mod git;
 pub mod instructions;
+pub mod leads;
 pub mod mcp;
 pub mod merging;
 pub mod plan;
@@ -22,6 +23,7 @@ pub mod rewind;
 pub mod run_git;
 pub mod sent;
 pub mod settings;
+pub mod task_event;
 pub mod wait;
 pub mod watch;
 
@@ -30,6 +32,7 @@ pub use self::{
     ActionOutcome, BlankTitle, Chat, ChatAction, ChatApproval, ChatEntry, ChatEvent, ChatSession, ChatTitle,
     CompactionState, EntryKind, HeldWork, Queued, SessionChange, TurnFailure, TurnState, WaitTurn,
   },
+  leads::{Lead, Leads},
   merging::{MergeLeft, Merging},
   plan::{ChatPlan, PlanState, PlanStep, StepKind, TurnMode},
   report::{DailyReport, ReportSchedule, ReportTime},
@@ -37,6 +40,7 @@ pub use self::{
   rewind::{Dropped, RewindPoint, RewoundTo},
   sent::{FromOrchestrator, SentWay},
   settings::{NoProgressError, OrchestratorSettings, WatchSettings, runs_orchestrator},
+  task_event::{TaskEvent, TaskEventKind},
   wait::{AgentWait, RunEnd, StopReason, WaitKind},
   watch::{Claim, Subscription, Subscriptions, WatchTarget},
 };

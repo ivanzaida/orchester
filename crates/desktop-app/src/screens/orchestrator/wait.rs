@@ -146,7 +146,9 @@ pub(super) const fn look(kind: WaitKind, named: bool) -> (Icon, &'static str) {
     (WaitKind::Message, true) => (Icon::MessageCircle, "orchestrator.wait.what.message"),
     (WaitKind::Message, false) => (Icon::MessageCircle, "orchestrator.wait.what.messageAnyone"),
     (WaitKind::Plan, true) => (Icon::Map, "orchestrator.wait.what.plan"),
-    (WaitKind::Plan, false) | (WaitKind::Ended(_), _) => (Icon::Map, "orchestrator.wait.what.planAnyone"),
+    (WaitKind::Plan, false) | (WaitKind::Ended(_) | WaitKind::Event(_), _) => {
+      (Icon::Map, "orchestrator.wait.what.planAnyone")
+    }
   }
 }
 
@@ -156,6 +158,7 @@ const fn kind_name(kind: WaitKind) -> &'static str {
     WaitKind::Message => "message",
     WaitKind::Plan => "plan",
     WaitKind::Ended(_) => "run_end",
+    WaitKind::Event(_) => "event",
   }
 }
 
