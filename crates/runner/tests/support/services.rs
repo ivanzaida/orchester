@@ -79,7 +79,8 @@ pub fn publish_stack(root: &Path, name: &str, services: &[&str]) {
   publish_one(root, name, &stack);
 }
 
-fn publish_one<B: ResourceBody>(root: &Path, name: &str, body: &B) {
+/// Publishes `body` as the resource `name` of its kind in the project at `root`.
+pub fn publish_one<B: ResourceBody>(root: &Path, name: &str, body: &B) {
   let mut db = ProjectDb::open(root).expect("open");
   let resource = db
     .create_resource(

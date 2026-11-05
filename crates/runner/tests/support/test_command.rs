@@ -6,6 +6,8 @@
 //! - `stderr <text>`: prints `<text>` on standard error;
 //! - `env <name>`: prints `<name>=<value>` of its environment, or `<name> is not set`;
 //! - `write <file> <text>`: writes `<text>` to `<file>` in its working directory;
+//! - `copy <from> <to>`: copies the file `<from>` to `<to>`, making the folders `<to>` needs;
+//! - `cat <file>`: prints the file `<file>` on standard output;
 //! - `pid-file <file>`: writes its own pid to `<file>`; `env-file <file> <name>` the value of `<name>`, or `<not set>`;
 //! - `fail-once <file>`: exits with 1 after creating `<file>` in its working directory, unless the file exists;
 //! - `spawn-sleeper`: starts a copy of itself that sleeps for ten minutes and prints `child pid: <pid>`;
@@ -48,6 +50,8 @@ fn main() -> ExitCode {
         Ok(())
       }
       "write" => write(rest.next(), rest.next()),
+      "copy" => copy(rest.next(), rest.next()),
+      "cat" => cat(rest.next()),
       "pid-file" => write(rest.next(), Some(&std::process::id().to_string())),
       "env-file" => {
         let file = rest.next();
@@ -104,6 +108,21 @@ fn print(count: Option<&str>) -> Result<(), String> {
 fn write(file: Option<&str>, text: Option<&str>) -> Result<(), String> {
   let file = file.ok_or("write needs a file")?;
   fs::write(file, text.unwrap_or_default()).map_err(|error| error.to_string())
+}
+
+fn copy(from: Option<&str>, to: Option<&str>) -> Result<(), String> {
+  let (from, to) = from.zip(to).ok_or("copy needs a file and where it goes")?;
+  if let Some(folder) = std::path::Path::new(to).parent() {
+    fs::create_dir_all(folder).map_err(|error| error.to_string())?;
+  }
+  fs::copy(from, to).map(|_| ()).map_err(|error| error.to_string())
+}
+
+fn cat(file: Option<&str>) -> Result<(), String> {
+  let text = fs::read_to_string(file.ok_or("cat needs a file")?).map_err(|error| error.to_string())?;
+  let mut out = std::io::stdout().lock();
+  out.write_all(text.as_bytes()).map_err(|error| error.to_string())?;
+  out.flush().map_err(|error| error.to_string())
 }
 
 /// `true` when this call created the file: the program fails this time.

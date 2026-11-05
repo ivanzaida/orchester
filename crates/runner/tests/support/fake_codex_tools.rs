@@ -145,7 +145,9 @@ pub fn report(server: Option<&mut Prompt>, worktree: &Path, prompt: &str) {
     return;
   }
   if prompt.contains("Use the process tools") {
-    fake_process_tools::exercise(worktree, |tool, arguments| report_call(server, tool, arguments));
+    fake_process_tools::exercise(worktree, |tool, arguments| {
+      report_call(server, tool, arguments);
+    });
     return;
   }
   if prompt.contains("Use the browser tools") {
@@ -173,6 +175,10 @@ pub fn report(server: Option<&mut Prompt>, worktree: &Path, prompt: &str) {
     services(server, worktree, prompt);
     return;
   }
+  if prompt.contains("Run the suite ") {
+    suites(server, prompt);
+    return;
+  }
   for (tool, arguments) in calls(prompt, worktree) {
     report_call(server, tool, &arguments);
   }
@@ -196,7 +202,7 @@ fn services(server: &mut Prompt, worktree: &Path, prompt: &str) {
   match stack {
     Some(stack) => report_call(server, "start_stack", &json!({"name": stack})),
     None => report_call(server, "start_service", &named),
-  }
+  };
   if let Some(other) = named_after(prompt, "Then start the service ") {
     report_call(server, "start_service", &json!({"name": other}));
   }
@@ -236,7 +242,29 @@ fn read_outside(server: &mut Prompt, worktree: &Path) {
   );
 }
 
-fn report_call(server: &mut Prompt, tool: &str, arguments: &Value) {
+/// "Run the suite <name>." calls `run_tests` of that suite, "Run the suite <name> with filter <filter>." narrowed by
+/// the filter, each such sentence once, in order; with "Then read the output of <test>." it then calls `test_output`
+/// of that test of the last run `run_tests` answered.
+fn suites(server: &mut Prompt, prompt: &str) {
+  let mut last_run = None;
+  for sentence in prompt.split("Run the suite ").skip(1).filter_map(|rest| rest.split('.').next()) {
+    let (suite, filter) = match sentence.split_once(" with filter ") {
+      Some((suite, filter)) => (suite, Some(filter)),
+      None => (sentence, None),
+    };
+    let answer = report_call(server, "run_tests", &json!({"suite": suite, "filter": filter}));
+    let run = answer
+      .and_then(|text| serde_json::from_str::<Value>(&text).ok())
+      .and_then(|answer| answer["run"].as_str().map(str::to_owned));
+    last_run = run.or(last_run);
+  }
+  if let (Some(test), Some(run)) = (named_after(prompt, "Then read the output of "), last_run) {
+    report_call(server, "test_output", &json!({"run": run, "test": test}));
+  }
+}
+
+/// Calls `tool` with `arguments` and reports its answer; the answer's text, when it came.
+fn report_call(server: &mut Prompt, tool: &str, arguments: &Value) -> Option<String> {
   match server.call(tool, arguments) {
     Some((text, failed)) => {
       eprintln!(
@@ -247,7 +275,11 @@ fn report_call(server: &mut Prompt, tool: &str, arguments: &Value) {
       for line in text.lines() {
         eprintln!("orchester-answer| {line}");
       }
+      Some(text)
     }
-    None => eprintln!("orchester-call: {tool} no answer"),
+    None => {
+      eprintln!("orchester-call: {tool} no answer");
+      None
+    }
   }
 }

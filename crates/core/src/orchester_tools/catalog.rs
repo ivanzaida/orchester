@@ -86,22 +86,32 @@ const SERVICE_STATUS: &str = "The status of a service start_service started in t
 /// What `service_logs` does.
 const SERVICE_LOGS: &str = "The latest lines of standard output and error of a service start_service started in this step, without asking, its secret values redacted; Orchester keeps a bounded number of them. Each line is numbered: pass the last number you read as since to get only later lines. Use this instead of reading its output by shell.";
 
+/// What `run_tests` does.
+const RUNS_TESTS: &str = "Run one of the project's test suites by name in this run's worktree, narrowed to the tests filter names when the suite takes a filter. The services or stacks it needs start first and stop after it, unless this step was already running them. Orchester reads its report and keeps the result and the files it left with the run. Returns {run, passed, exit_code, totals, failures: [{name, message, location, excerpt, artifacts}], run_errors, artifacts, result}, never the raw output; a report that cannot be read is an error with the exit code and the last lines, never a pass. A person may be asked first. Use this instead of running test commands by shell.";
+
+/// What `test_output` does.
+const TEST_OUTPUT: &str = "The captured output of one test of an earlier run_tests call of this run, with its message, the end of it when it is long, without asking. Pass the run and the test's name as run_tests returned them. Use it only when the failure's message and excerpt do not say enough.";
+
+/// What `list_run_processes` does.
+const LISTS_RUN_PROCESSES: &str = "List processes whose resolved executable lies inside this run's worktree: pid, name, relative executable path and start time.";
+
+/// What `stop_run_process` does.
+const STOPS_RUN_PROCESS: &str = "Stop a process and its children inside this run's worktree without asking: request close, wait briefly, then end survivors. Outside executables, the runner and agent CLIs are refused. Reports closed, ended or already gone.";
+
 impl OrchesterTool {
   /// What the agent is told the tool does.
   pub const fn description(self) -> &'static str {
     match self {
-      Self::ListRunProcesses => {
-        "List processes whose resolved executable lies inside this run's worktree: pid, name, relative executable path and start time."
-      }
-      Self::StopRunProcess => {
-        "Stop a process and its children inside this run's worktree without asking: request close, wait briefly, then end survivors. Outside executables, the runner and agent CLIs are refused. Reports closed, ended or already gone."
-      }
+      Self::ListRunProcesses => LISTS_RUN_PROCESSES,
+      Self::StopRunProcess => STOPS_RUN_PROCESS,
       Self::StartQaApp => STARTS_QA_APP,
       Self::StartService => STARTS_SERVICE,
       Self::StartStack => STARTS_STACK,
       Self::StopService => STOPS_SERVICE,
       Self::ServiceStatus => SERVICE_STATUS,
       Self::ServiceLogs => SERVICE_LOGS,
+      Self::RunTests => RUNS_TESTS,
+      Self::TestOutput => TEST_OUTPUT,
       Self::CallRunApp => {
         "Call one embedded MCP tool of an app started inside this run's worktree, without asking. Leave out pid to call the QA app start_qa_app started in this step. Other executables and mismatched discovery files are refused. The relay keeps the token private; PNG images are saved in the run's own storage (.orchester/runs/<run>/screenshots/, kept with the run and listed on its task page under Artifacts) and returned as absolute paths: open one with read_file to see it. Use this instead of tools/lurq-mcp-client.py."
       }
@@ -185,6 +195,7 @@ impl OrchesterTool {
         | Self::StartService
         | Self::StartStack
         | Self::StopService
+        | Self::RunTests
         | Self::RunCheck
         | Self::SaveMemory
         | Self::ReportProgress
@@ -192,12 +203,28 @@ impl OrchesterTool {
   }
 }
 
+/// The input schema of `run_tests`, `suites` being the names of the suites it runs.
+fn run_tests_schema(suites: &[String]) -> Value {
+  json!({"type":"object","properties":{
+    "suite":{"type":"string","enum":suites,"description":"The test suite to run, as the project names it."},
+    "filter":{"type":["string","null"],"minLength":1,"maxLength":1000,
+      "description":"Only the tests this names, passed to the suite's program as its filter (a test's name or part of it); null for all."}
+  },"required":["suite"],"additionalProperties":false})
+}
+
+/// The input schema of `test_output`.
+const TEST_OUTPUT_INPUT: &str = r#"{"type":"object","properties":{
+  "run":{"type":"string","pattern":"^t[1-9][0-9]{0,8}$","description":"The run run_tests returned, e.g. t1."},
+  "test":{"type":"string","minLength":1,"maxLength":2000,"description":"The test's name, as run_tests returned it."}
+},"required":["run","test"],"additionalProperties":false}"#;
+
 /// The input schema of `tool`; `projects` are the names and descriptions of the checks `run_check` may run, `services`
-/// the names of the services the service tools take and `stacks` those of the stacks `start_stack` takes.
+/// the names of the services the service tools take, `stacks` those of the stacks `start_stack` takes and `suites`
+/// those of the test suites `run_tests` runs.
 pub(super) fn input_schema(
   tool: OrchesterTool,
   projects: &[(String, String, bool)],
-  (services, stacks): (&[String], &[String]),
+  (services, stacks, suites): (&[String], &[String], &[String]),
 ) -> Value {
   let fixed = |text: &str| serde_json::from_str::<Value>(text).expect("the static tool schemas are valid JSON");
   let read_lines = |path: &str| {
@@ -253,6 +280,8 @@ pub(super) fn input_schema(
       "since":{"type":["integer","null"],"minimum":0,
         "description":"Only lines numbered after this one, the last number an earlier call returned; null for any."}
     },"required":["name"],"additionalProperties":false}),
+    OrchesterTool::RunTests => run_tests_schema(suites),
+    OrchesterTool::TestOutput => fixed(TEST_OUTPUT_INPUT),
     OrchesterTool::SaveMemory => fixed(SAVE_MEMORY),
     OrchesterTool::ReportProgress => fixed(REPORT_PROGRESS),
     OrchesterTool::FindSymbol => fixed(FIND_SYMBOL),

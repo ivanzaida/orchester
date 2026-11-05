@@ -9,7 +9,7 @@ use orchester_core::{
   command::SecretVariable,
   connection::invocation::Platform,
   resource::{ResourceBody, VariableName},
-  secret::SecretName,
+  secret::{SecretName, SecretVault},
   service::{RunValues, Service, ServiceLog, ServicePhase, Stack},
   store::{ResourceStore, SecretStore},
 };
@@ -148,25 +148,33 @@ impl StepServices {
     Ok((tree, secrets))
   }
 
-  /// The value of the project secret `secret` for the variable `variable`, read from the keychain.
   fn secret(&self, variable: &VariableName, secret: &SecretName) -> Result<SecretVariable, String> {
-    let missing = || format!("the variable `{variable}` names the secret `{secret}`, which the project does not have");
-    let db = ProjectDb::open_read_only(&self.root).map_err(|error| format!("the secrets cannot be read: {error}"))?;
-    let found = db
-      .secrets()
-      .map_err(|error| format!("the secrets cannot be read: {error}"))?
-      .into_iter()
-      .find(|found| found.name() == secret)
-      .ok_or_else(missing)?;
-    if found.is_archived() {
-      return Err(format!(
-        "the variable `{variable}` names the archived secret `{secret}`"
-      ));
-    }
-    let value = self
-      .vault
-      .read(&found.vault_key(db.project().id()))
-      .map_err(|error| format!("the secret `{secret}` cannot be read from the keychain: {error}"))?;
-    Ok(SecretVariable::new(variable.as_str(), Arc::new(value)))
+    project_secret((&self.root, self.vault.as_ref()), variable, secret)
   }
+}
+
+/// The value of the secret `secret` of the project at `root` for the variable `variable`, read from `vault`, the
+/// keychain.
+pub(in crate::execution::step) fn project_secret(
+  (root, vault): (&Path, &dyn SecretVault),
+  variable: &VariableName,
+  secret: &SecretName,
+) -> Result<SecretVariable, String> {
+  let missing = || format!("the variable `{variable}` names the secret `{secret}`, which the project does not have");
+  let db = ProjectDb::open_read_only(root).map_err(|error| format!("the secrets cannot be read: {error}"))?;
+  let found = db
+    .secrets()
+    .map_err(|error| format!("the secrets cannot be read: {error}"))?
+    .into_iter()
+    .find(|found| found.name() == secret)
+    .ok_or_else(missing)?;
+  if found.is_archived() {
+    return Err(format!(
+      "the variable `{variable}` names the archived secret `{secret}`"
+    ));
+  }
+  let value = vault
+    .read(&found.vault_key(db.project().id()))
+    .map_err(|error| format!("the secret `{secret}` cannot be read from the keychain: {error}"))?;
+  Ok(SecretVariable::new(variable.as_str(), Arc::new(value)))
 }

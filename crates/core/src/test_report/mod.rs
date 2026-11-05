@@ -4,6 +4,7 @@
 //! them, its captured output (capped) and, for a failure, a short excerpt — or into a [`TestReportError`] that says
 //! what was readable. A report that is cut off or cannot be read is never taken for one where every test passed.
 
+mod answer;
 mod case;
 mod error;
 mod excerpt;
@@ -11,18 +12,23 @@ mod junit;
 mod libtest;
 mod playwright;
 mod report;
+mod run;
 mod tap;
 mod vitest;
 
 use std::fmt;
 
+pub use answer::{MAX_FAILURES_SHOWN, TEST_OUTPUT_BYTES};
 pub use case::{
   Attachment, CapturedOutput, EXCERPT_LINE_CHARS, EXCERPT_LINES, MESSAGE_CAP_BYTES, OUTPUT_CAP_BYTES, SourceLocation,
   TestCase, TestOutcome,
 };
 pub use error::{Position, TestReportError};
 pub use report::{RunError, TestReport, Totals};
+pub use run::{LAST_LINES, StoredArtifact, SuiteRun, SuiteRunEnd, TestRunId, last_lines, test_name};
 use serde::{Deserialize, Serialize};
+
+use crate::resource;
 
 /// The report formats Orchester reads.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -49,6 +55,19 @@ impl fmt::Display for ReportFormat {
       Self::PlaywrightJson => "Playwright json",
       Self::Tap => "TAP",
     })
+  }
+}
+
+/// The format a test suite says its report has.
+impl From<resource::ReportFormat> for ReportFormat {
+  fn from(format: resource::ReportFormat) -> Self {
+    match format {
+      resource::ReportFormat::CargoJson => Self::CargoJson,
+      resource::ReportFormat::JunitXml => Self::JunitXml,
+      resource::ReportFormat::VitestJson => Self::VitestJson,
+      resource::ReportFormat::PlaywrightJson => Self::PlaywrightJson,
+      resource::ReportFormat::Tap => Self::Tap,
+    }
   }
 }
 

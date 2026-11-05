@@ -21,6 +21,8 @@ mod port;
 mod readiness;
 mod task;
 
+pub(in crate::execution::step) use self::launch::project_secret;
+
 use std::{
   collections::{BTreeMap, HashMap},
   ffi::OsString,

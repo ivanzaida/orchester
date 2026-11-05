@@ -9,6 +9,7 @@ use std::thread;
 
 use orchester_core::{
   orchester_tools::ToolResult,
+  resource::Slug,
   service::{RunData, Seed, Service, ServiceName, StackName, StartPlan},
 };
 use serde_json::{Map, json};
@@ -63,6 +64,61 @@ impl StepServices {
       }
     }
     ToolResult::shown(json!({ "services": answered }).to_string())
+  }
+
+  /// Starts what a test suite needs, `needs`, in order: each a published stack, whose services start as
+  /// [`Self::start_stack`] starts them, or a published service with what it needs. The services it started, which
+  /// the invocation did not run before, so [`Self::stop_started`] stops them after the suite; on an error it stops
+  /// them itself. Blocks while an earlier start of the invocation runs.
+  pub(in crate::execution::step) fn start_needs(&self, needs: &[Slug]) -> Result<Vec<ServiceName>, String> {
+    let _one_at_a_time = self.state.starting.lock();
+    let before: Vec<ServiceName> = self.state.running.lock().keys().cloned().collect();
+    let stacks = published_stacks(&self.root).map_err(|error| format!("the project's stacks cannot be read: {error}"))?;
+    let mut started = Ok(());
+    for need in needs.iter().map(Slug::as_str) {
+      let stack = stacks.iter().find(|stack| stack.name().as_str() == need);
+      started = match stack {
+        Some(stack) => self
+          .services_of(|services| StartPlan::for_stack(services, stack).map_err(|error| error.to_string()))
+          .map_err(|why| format!("the stack `{need}` the suite needs was not started fully: {why}")),
+        None => ServiceName::new(need).map_err(|error| error.to_string()).and_then(|name| {
+          self.services_of(|services| {
+            StartPlan::for_service(services, &name).map_err(|error| {
+              format!("the suite needs `{need}`, which cannot be started as a service or a stack: {error}")
+            })
+          })
+        }),
+      }
+      .map(|_| ());
+      if started.is_err() {
+        break;
+      }
+    }
+    let new: Vec<ServiceName> = self
+      .state
+      .running
+      .lock()
+      .keys()
+      .filter(|name| !before.contains(name))
+      .cloned()
+      .collect();
+    match started {
+      Ok(()) => Ok(new),
+      Err(why) => {
+        self.stop_started(&new);
+        Err(why)
+      }
+    }
+  }
+
+  /// Stops the services `started` named that still run, as [`Self::stop`] stops one.
+  pub(in crate::execution::step) fn stop_started(&self, started: &[ServiceName]) {
+    for name in started {
+      let stopped = self.stop(name);
+      if stopped.is_error() {
+        tracing::warn!(service = %name, why = stopped.text(), "a service a test suite needed did not stop");
+      }
+    }
   }
 
   /// Reads the published services, orders them with `plan` and starts that plan; the plan once it is up.

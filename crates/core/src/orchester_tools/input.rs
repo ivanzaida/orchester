@@ -12,10 +12,14 @@ use super::{
 };
 use crate::{
   memory::{Importance, MemoryContent, MemoryKey, MemoryKind, MemoryNote, NoteScope, Tags},
-  resource::{SKILL_FILE, SkillFilePath},
+  resource::{SKILL_FILE, SkillFilePath, Slug, TestFilter},
   run::StepProgress,
   service::{DEFAULT_TAIL, MAX_TAIL, ServiceName, StackName},
+  test_report::TestRunId,
 };
+
+/// The longest test name `test_output` takes, in characters.
+const MAX_TEST_NAME_CHARS: usize = 2000;
 
 /// Lines a read returns when the call gives no `length` or `limit`.
 pub(super) const DEFAULT_READ_LINES: u32 = 2000;
@@ -90,6 +94,16 @@ pub enum ToolCall {
     name: ServiceName,
     tail: u32,
     since: u64,
+  },
+  /// `run_tests`: one of the project's published test suites, by its slug, narrowed by `filter`.
+  RunTests {
+    suite: Slug,
+    filter: Option<TestFilter>,
+  },
+  /// `test_output`: the captured output of the test `test` of the run's test run `run`.
+  TestOutput {
+    run: TestRunId,
+    test: String,
   },
   GetTask,
   SaveMemory(Box<MemoryNote>),
@@ -197,6 +211,9 @@ impl ToolCall {
         Err(ToolCallError::UnknownService(name.to_string()))
       }
       Self::StartStack(name) if !step.offers_stack(name) => Err(ToolCallError::UnknownStack(name.to_string())),
+      Self::RunTests { suite, .. } if !step.offers_suite(suite) => {
+        Err(ToolCallError::UnknownSuite(suite.as_str().to_owned()))
+      }
       _ => Ok(call),
     }
   }
@@ -221,12 +238,52 @@ impl ToolCall {
       Self::StopService(_) => OrchesterTool::StopService,
       Self::ServiceStatus(_) => OrchesterTool::ServiceStatus,
       Self::ServiceLogs { .. } => OrchesterTool::ServiceLogs,
+      Self::RunTests { .. } => OrchesterTool::RunTests,
+      Self::TestOutput { .. } => OrchesterTool::TestOutput,
       Self::SaveMemory(_) => OrchesterTool::SaveMemory,
       Self::ReportProgress(_) => OrchesterTool::ReportProgress,
     }
   }
 }
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RunTestsInput {
+  suite: String,
+  #[serde(default)]
+  filter: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TestOutputInput {
+  run: String,
+  test: String,
+}
+
+/// A `run_tests` call: a suite's slug and, when given, a filter that is one argument of a program.
+fn run_tests(input: &RunTestsInput) -> Result<ToolCall, String> {
+  Ok(ToolCall::RunTests {
+    suite: Slug::new(&input.suite).map_err(|error| error.to_string())?,
+    filter: input
+      .filter
+      .as_deref()
+      .map(|filter| TestFilter::new(filter).map_err(|error| format!("filter: {error}")))
+      .transpose()?,
+  })
+}
+
+/// A `test_output` call: a test run as `run_tests` names it and a test's name on one line.
+fn test_output(input: &TestOutputInput) -> Result<ToolCall, String> {
+  let test = input.test.trim();
+  if test.is_empty() || test.chars().count() > MAX_TEST_NAME_CHARS || test.chars().any(char::is_control) {
+    return Err(format!("`{}` is not a test's name", input.test));
+  }
+  Ok(ToolCall::TestOutput {
+    run: input.run.parse()?,
+    test: test.to_owned(),
+  })
+}
 /// The `name` of a service or stack tool's input, read as `Name`.
 fn named<Name, Error: ToString>(
   arguments: Value,
@@ -256,6 +313,8 @@ fn read(tool: OrchesterTool, arguments: Value) -> Result<ToolCall, String> {
     OrchesterTool::StopService => ToolCall::StopService(service(arguments)?),
     OrchesterTool::ServiceStatus => ToolCall::ServiceStatus(service(arguments)?),
     OrchesterTool::ServiceLogs => service_logs(&serde_json::from_value(arguments).map_err(invalid)?)?,
+    OrchesterTool::RunTests => run_tests(&serde_json::from_value(arguments).map_err(invalid)?)?,
+    OrchesterTool::TestOutput => test_output(&serde_json::from_value(arguments).map_err(invalid)?)?,
     OrchesterTool::FindSymbol => {
       let query: FindSymbol = serde_json::from_value(arguments).map_err(invalid)?;
       if query.name().trim().is_empty() {

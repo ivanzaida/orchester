@@ -14,6 +14,9 @@
 //! | one of the project's published services (`start_service`) or stacks (`start_stack`, with the service tools), network on | asks | asks |
 //! | stopping or looking at a service the step started (`stop_service`, `service_status`, `service_logs`), with `start_service` | runs | runs |
 //! | the service tools, network off or no published service | not offered | not offered |
+//! | one of the project's published test suites (`run_tests`), network on | asks at every call (no rules of their own yet) | the same |
+//! | a stored test's output (`test_output`), with `run_tests` | runs | runs |
+//! | the test tools, network off or no published suite | not offered | not offered |
 //! | the browser tools (`browser_*`), the profile's Browser and network on | runs or asks per call, by the page's site ([`browser::decide`]) | the same |
 //! | the browser tools, Browser or network off | not offered | not offered |
 //!
@@ -38,7 +41,7 @@ use super::{
 };
 use crate::{
   permission::{AgentPermissions, NetworkAccess, browser::AllowedSites},
-  resource::RepositoryAccess,
+  resource::{RepositoryAccess, Slug},
   service::{ServiceName, StackName},
   source::{RunSources, SourcePath},
 };
@@ -60,11 +63,11 @@ pub fn decide(tool: OrchesterTool, permissions: &AgentPermissions) -> Option<Too
   match tool.access() {
     AccessClass::ReadOnly | AccessClass::Records | AccessClass::RunProcesses => Some(ToolPolicy::Runs),
     AccessClass::WritesWorktree => (permissions.repository() == RepositoryAccess::Write).then_some(ToolPolicy::Runs),
-    // A check or a service runs a program outside every sandbox, where no host list holds.
+    // A check, a service or a test suite runs a program outside every sandbox, where no host list holds.
     AccessClass::Outside
       if matches!(
         tool,
-        OrchesterTool::RunCheck | OrchesterTool::StartService | OrchesterTool::StartStack
+        OrchesterTool::RunCheck | OrchesterTool::StartService | OrchesterTool::StartStack | OrchesterTool::RunTests
       ) && !online =>
     {
       None
@@ -80,20 +83,21 @@ pub fn decide(tool: OrchesterTool, permissions: &AgentPermissions) -> Option<Too
 }
 
 /// Whether auto-approval may answer a call of `tool` of MCP server `server`: any call but one of Orchester's
-/// `run_check`, `start_qa_app`, `start_service` or `start_stack`, which run programs outside every sandbox, or of its
-/// browser tools ([`super::browser`]), which can send anything to any site.
+/// `run_check`, `start_qa_app`, `start_service`, `start_stack` or `run_tests`, which run programs outside every
+/// sandbox, or of its browser tools ([`super::browser`]), which can send anything to any site.
 pub fn auto_approvable(server: &str, tool: &str) -> bool {
   server != SERVER
     || (tool != OrchesterTool::RunCheck.as_str()
       && tool != OrchesterTool::StartQaApp.as_str()
       && tool != OrchesterTool::StartService.as_str()
       && tool != OrchesterTool::StartStack.as_str()
+      && tool != OrchesterTool::RunTests.as_str()
       && BrowserTool::from_name(tool).is_none())
 }
 
 /// The tools one step is offered, with their policy, the checks `run_check` runs, the services `start_service`
-/// starts, the stacks `start_stack` starts, and the run's sources, which the calls outside the worktree read without
-/// asking.
+/// starts, the stacks `start_stack` starts, the suites `run_tests` runs, and the run's sources, which the calls outside
+/// the worktree read without asking.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct StepTools {
   offered: Vec<(OrchesterTool, ToolPolicy)>,
@@ -103,6 +107,8 @@ pub struct StepTools {
   services: Vec<String>,
   /// The names of the project's published stacks, when `start_stack` is offered ([`Self::with_stacks`]).
   stacks: Vec<String>,
+  /// The slugs of the project's published test suites, when `run_tests` is offered ([`Self::with_test_suites`]).
+  suites: Vec<String>,
   sources: Vec<SourcePath>,
   /// The allowed sites, the prompt names them, when the browser tools are offered ([`super::browser::offered`]).
   /// Whether a call of one asks depends on the page it acts on, so the runner decides each call itself
@@ -129,6 +135,8 @@ impl StepTools {
             | OrchesterTool::StopService
             | OrchesterTool::ServiceStatus
             | OrchesterTool::ServiceLogs
+            | OrchesterTool::RunTests
+            | OrchesterTool::TestOutput
         )
       })
       .filter_map(|tool| decide(tool, permissions).map(|policy| (tool, policy)))
@@ -145,9 +153,40 @@ impl StepTools {
         .collect(),
       services: Vec::new(),
       stacks: Vec::new(),
+      suites: Vec::new(),
       sources: Vec::new(),
       browser: browser::offered(permissions).then(|| permissions.browser().sites().clone()),
     }
+  }
+
+  /// These tools and `run_tests` with `test_output`, for a step with `permissions` of a project that publishes the test
+  /// suites `suites`, after the service tools and before the run's records: none without a suite, or when the step may
+  /// not run one ([`decide`]). A run asks every time, as a service start does, until suites have approval rules of
+  /// their own; reading a stored test's output never asks.
+  #[must_use]
+  pub fn with_test_suites(mut self, permissions: &AgentPermissions, suites: &[Slug]) -> Self {
+    let Some(policy) = decide(OrchesterTool::RunTests, permissions).filter(|_| !suites.is_empty()) else {
+      return self;
+    };
+    let at = self
+      .offered
+      .iter()
+      .position(|(tool, _)| matches!(tool, OrchesterTool::ListSkills | OrchesterTool::GetTask))
+      .unwrap_or(self.offered.len());
+    self.offered.splice(
+      at..at,
+      [
+        (OrchesterTool::RunTests, policy),
+        (OrchesterTool::TestOutput, ToolPolicy::Runs),
+      ],
+    );
+    self.suites = suites.iter().map(|slug| slug.as_str().to_owned()).collect();
+    self
+  }
+
+  /// Whether `suite` is one of the suites `run_tests` runs.
+  pub(super) fn offers_suite(&self, suite: &Slug) -> bool {
+    self.suites.iter().any(|offered| offered == suite.as_str())
   }
 
   /// These tools and the service tools (`start_service`, `stop_service`, `service_status`, `service_logs`), for a step
@@ -316,7 +355,7 @@ impl StepTools {
         json!({
           "name": tool.as_str(),
           "description": tool.description(),
-          "inputSchema": input_schema(*tool, &self.checks, (&self.services, &self.stacks)),
+          "inputSchema": input_schema(*tool, &self.checks, (&self.services, &self.stacks, &self.suites)),
           "annotations": {
             "readOnlyHint": tool.read_only(),
             "destructiveHint": matches!(tool, OrchesterTool::StopRunProcess | OrchesterTool::StopService),
@@ -377,6 +416,16 @@ impl StepTools {
         OrchesterTool::CallRunApp.called(claude),
       ));
     }
+    text.push_str(&self.service_lines(claude));
+    if let Some(sites) = &self.browser {
+      text.push_str(&browser::prompt::lines(sites, claude));
+    }
+    text
+  }
+
+  /// The prompt's sentences on the service tools and `run_tests`, for the tools the step is offered.
+  fn service_lines(&self, claude: bool) -> String {
+    let mut text = String::new();
     if self.policy(OrchesterTool::StartService).is_some() {
       text.push_str(&format!(
         " Start the project's servers only with {}(name) ({}), never by shell: it waits until one is ready and \
@@ -397,8 +446,15 @@ impl StepTools {
         ));
       }
     }
-    if let Some(sites) = &self.browser {
-      text.push_str(&browser::prompt::lines(sites, claude));
+    if self.policy(OrchesterTool::RunTests).is_some() {
+      text.push_str(&format!(
+        " Run the project's test suites ({}) with {}(suite, filter), never by shell: it starts what a suite needs \
+         and returns its failures with their messages, not the raw output; read one test's output with {}(run, test) \
+         only when that is not enough.",
+        self.suites.join(", "),
+        OrchesterTool::RunTests.called(claude),
+        OrchesterTool::TestOutput.called(claude),
+      ));
     }
     text
   }

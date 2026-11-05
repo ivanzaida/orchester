@@ -34,6 +34,8 @@
 //!   another service, reads outside, waits for it to end, looks at its status and logs or calls `stop_service` as the
 //!   prompt says (`fake_codex_tools`); with "Hold the services" it then waits while `fake-hold` lies next to the
 //!   worktrees;
+//! - "Run the suite <name>.": calls `run_tests` of each suite so named, in order, then `test_output` as the prompt says
+//!   (`fake_codex_tools`); "Hold the services" holds it as above;
 //! - "Leave a handoff": works as below, and its step result hands off (`completed`, `decisions`, `open_questions`,
 //!   `next_agent_should_know`), with the decision "Greet in README.md from <step>";
 //! - "Fail once": the first time a step works on it, the result says it failed; later it works as below;
@@ -133,7 +135,7 @@ const ANSWERS: [(&str, SteerAnswer); 6] = [
 ];
 
 /// The prompts whose work uses Orchester's tools ([`fake_codex_tools::report`]).
-const TOOL_PROMPTS: [&str; 11] = [
+const TOOL_PROMPTS: [&str; 12] = [
   "Use Orchester's tools",
   "Use the file tools",
   "Use the run tools",
@@ -144,6 +146,7 @@ const TOOL_PROMPTS: [&str; 11] = [
   "Start the QA app",
   "Start the service ",
   "Start the stack ",
+  "Run the suite ",
   "Use the browser tools",
 ];
 

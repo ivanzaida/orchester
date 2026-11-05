@@ -51,6 +51,7 @@ use super::{
   run_records::RunRecords,
   service::StepServices,
   start::problem,
+  suite::StepSuites,
   tool_files::ToolFiles,
 };
 use crate::{approval_relay::TOOLS_FLAG, git::Git, private_file};
@@ -143,6 +144,8 @@ pub(in super::super) struct ToolHost {
   /// The invocation's services (`start_service`, `stop_service`, `service_status`, `service_logs`); `None` while the
   /// host is being made.
   services: Option<StepServices>,
+  /// The invocation's test tools (`run_tests`, `test_output`), for a step that is offered them.
+  suites: Option<StepSuites>,
   /// The browser tools, for a step that is offered them ([`StepTools::offers_browser`]).
   browser: Option<StepBrowser>,
 }
@@ -226,6 +229,10 @@ impl ToolHost {
       }
       (ToolCall::StartService(name), None) => Some(name.to_string()),
       (ToolCall::StartStack(name), None) => Some(name.to_string()),
+      (ToolCall::RunTests { suite, filter }, None) => Some(match filter {
+        Some(filter) => format!("{} {}", suite.as_str(), filter.as_str()),
+        None => suite.as_str().to_owned(),
+      }),
       _ => None,
     };
     Ok(Looked {
@@ -328,6 +335,13 @@ impl ToolHost {
         .services
         .as_ref()
         .map_or_else(no_services, |services| services.logs(&name, tail, since)),
+      Ok(ToolWork::RunTests { suite, filter }) => self.suites.as_ref().map_or_else(no_suites, |suites| {
+        suites.run(&suite, filter.as_ref(), self.services.as_ref())
+      }),
+      Ok(ToolWork::TestOutput { run, test }) => self
+        .suites
+        .as_ref()
+        .map_or_else(no_suites, |suites| suites.output(run, &test)),
       Ok(ToolWork::Processes(call)) => self.processes.run(call),
       Ok(ToolWork::Run(program)) => program.finished(run_capped(program.command(), program.timeout(), program.cap())),
       Err(error) => ToolResult::refused(&error),
@@ -385,6 +399,10 @@ fn no_services() -> ToolResult {
   ToolResult::unavailable("this step has no services")
 }
 
+fn no_suites() -> ToolResult {
+  ToolResult::unavailable("this step has no test suites")
+}
+
 /// The relay Codex starts as Orchester's server, with its tools approved, and the listener it reaches.
 pub(in super::super) struct CodexTools {
   pub(in super::super) server: CodexOrchester,
@@ -422,6 +440,9 @@ impl RunTask {
     let qa = self.step_qa(execution, invocation, worktree)?;
     if host.tools.policy(OrchesterTool::StartService).is_some() {
       host.services = Some(self.step_services(invocation, worktree, environment));
+    }
+    if host.tools.policy(OrchesterTool::RunTests).is_some() {
+      host.suites = Some(self.step_suites(worktree, environment));
     }
     let secrets = setup.secrets().into_iter().chain(provider_key).collect();
     let tools = Arc::new(host.with_secrets(secrets).with_qa(qa));
@@ -466,7 +487,8 @@ impl RunTask {
     let mut tools = StepTools::for_step(permissions, &checks)
       .with_sources(sources)
       .with_services(permissions, &self.service_names()?)
-      .with_stacks(&self.stack_names()?);
+      .with_stacks(&self.stack_names()?)
+      .with_test_suites(permissions, &self.suite_slugs()?);
     if files.indexed() {
       tools = tools.with_code_index();
     }
@@ -502,6 +524,7 @@ impl RunTask {
       qa_scripts: Mutex::new(Vec::new()),
       qa: None,
       services: None,
+      suites: None,
       browser: None,
     })
   }

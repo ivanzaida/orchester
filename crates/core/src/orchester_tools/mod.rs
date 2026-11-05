@@ -86,6 +86,8 @@ pub enum OrchesterTool {
   StopService,
   ServiceStatus,
   ServiceLogs,
+  RunTests,
+  TestOutput,
   ListSkills,
   ReadSkill,
   GetTask,
@@ -110,7 +112,7 @@ pub enum AccessClass {
 }
 
 impl OrchesterTool {
-  pub const ALL: [Self; 26] = [
+  pub const ALL: [Self; 28] = [
     Self::ReadFile,
     Self::ListFiles,
     Self::SearchFile,
@@ -132,6 +134,8 @@ impl OrchesterTool {
     Self::StopService,
     Self::ServiceStatus,
     Self::ServiceLogs,
+    Self::RunTests,
+    Self::TestOutput,
     Self::ListSkills,
     Self::ReadSkill,
     Self::GetTask,
@@ -163,6 +167,8 @@ impl OrchesterTool {
       Self::StopService => "stop_service",
       Self::ServiceStatus => "service_status",
       Self::ServiceLogs => "service_logs",
+      Self::RunTests => "run_tests",
+      Self::TestOutput => "test_output",
       Self::ListSkills => "list_skills",
       Self::ReadSkill => "read_skill",
       Self::GetTask => "get_task",
@@ -256,7 +262,8 @@ impl OrchesterTool {
       Self::ReadFile | Self::ListFiles | Self::SearchFile | Self::FindSymbol | Self::FindReferences => {
         AccessClass::ReadOnly
       }
-      Self::ListSkills | Self::ReadSkill | Self::GetTask => AccessClass::ReadOnly,
+      // The run's stored test results, which the run's storage keeps.
+      Self::ListSkills | Self::ReadSkill | Self::GetTask | Self::TestOutput => AccessClass::ReadOnly,
       Self::EditFile | Self::CreateFile | Self::DeleteFile | Self::MoveFile => AccessClass::WritesWorktree,
       // Builds and runs the worktree's code outside every sandbox, as a check runs a program outside it.
       Self::SearchExternalFile
@@ -264,7 +271,8 @@ impl OrchesterTool {
       | Self::RunCheck
       | Self::StartQaApp
       | Self::StartService
-      | Self::StartStack => AccessClass::Outside,
+      | Self::StartStack
+      | Self::RunTests => AccessClass::Outside,
       Self::SaveMemory | Self::ReportProgress => AccessClass::Records,
       Self::ListRunProcesses
       | Self::StopRunProcess
@@ -291,6 +299,8 @@ pub enum ToolCallError {
   UnknownService(String),
   #[error("the project publishes no stack named `{0}`")]
   UnknownStack(String),
+  #[error("the project publishes no test suite named `{0}`")]
+  UnknownSuite(String),
   #[error("the program `{0}` of the check was not found")]
   ProgramNotFound(String),
   #[error(

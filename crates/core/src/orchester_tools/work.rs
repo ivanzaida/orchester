@@ -17,9 +17,10 @@ use crate::{
   command::{Command, CommandError},
   connection::invocation::{Platform, agent_environment},
   memory::MemoryNote,
-  resource::{ApprovalMode, CommandAction, CommandEnvironment, ExitCodes},
+  resource::{ApprovalMode, CommandAction, CommandEnvironment, ExitCodes, Slug, TestFilter},
   run::StepProgress,
   service::{ServiceName, StackName},
+  test_report::TestRunId,
 };
 
 /// A check: a command tool of the project's Tools library offered to the step, as the run pinned it.
@@ -173,6 +174,10 @@ pub enum ToolWork {
   ServiceStatus(ServiceName),
   /// The last `tail` kept lines after line `since` of the service `name` the step started.
   ServiceLogs { name: ServiceName, tail: u32, since: u64 },
+  /// Runs the published test suite `suite` narrowed by `filter`, with what it needs, and keeps its result with the run.
+  RunTests { suite: Slug, filter: Option<TestFilter> },
+  /// The captured output of the test `test` of the run's stored test run `run`.
+  TestOutput { run: TestRunId, test: String },
   /// `find_references` of this name, which the caller answers from the code index and the worktree.
   References(String),
   /// `get_task`, which the caller answers from the run's records ([`super::TaskView`]).
@@ -214,6 +219,14 @@ impl ToolCall {
         name: name.clone(),
         tail: *tail,
         since: *since,
+      }),
+      Self::RunTests { suite, filter } => Ok(ToolWork::RunTests {
+        suite: suite.clone(),
+        filter: filter.clone(),
+      }),
+      Self::TestOutput { run, test } => Ok(ToolWork::TestOutput {
+        run: *run,
+        test: test.clone(),
       }),
       Self::Processes(call) => Ok(ToolWork::Processes(*call)),
       Self::FindReferences { name } => Ok(ToolWork::References(name.clone())),

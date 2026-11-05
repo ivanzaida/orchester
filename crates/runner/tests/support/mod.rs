@@ -12,6 +12,7 @@ pub mod pending;
 pub mod qa;
 pub mod reviewer;
 pub mod services;
+pub mod suites;
 pub mod tool_wait;
 pub mod tools;
 pub mod vault;

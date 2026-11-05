@@ -364,6 +364,10 @@ name = "service_needs"
 required-features = ["test-agent"]
 
 [[test]]
+name = "run_tests"
+required-features = ["test-agent"]
+
+[[test]]
 name = "db_contention"
 required-features = ["test-agent"]
 

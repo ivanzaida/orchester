@@ -38,8 +38,8 @@ pub use self::{
   removal::{Removal, RemoveMode, StepUser, StepVersion, pipeline_step_users, step_users},
   skill::{SKILL_FILE, Skill, SkillError, SkillFile, SkillFilePath},
   test_suite::{
-    ArtifactGlob, ReportFormat, ReportOutput, SuiteCommand, SuiteNeeds, SuitePath, SuiteVariable, SuiteVariables,
-    TestFilter, TestLayer, TestReport, TestSuite, TestSuiteError,
+    ArtifactGlob, ReportFormat, ReportOutput, SuiteCommand, SuiteNeeds, SuitePath, SuiteProcess, SuiteVariable,
+    SuiteVariables, TestFilter, TestLayer, TestReport, TestSuite, TestSuiteError,
   },
   tool::{
     AccessPolicy, AccessPolicyError, AccessWindow, AllowedSteps, ApprovalMode, CommandAction, CommandArg,

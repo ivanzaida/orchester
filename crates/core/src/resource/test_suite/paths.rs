@@ -40,6 +40,50 @@ impl ArtifactGlob {
   pub fn as_str(&self) -> &str {
     &self.0
   }
+
+  /// The folders before the first part with a wildcard, `test-results` of `test-results/**/*.png`: only files under
+  /// them can match, so a search starts there.
+  pub fn base(&self) -> Vec<&str> {
+    self
+      .0
+      .split('/')
+      .take_while(|part| !part.contains(['*', '?']))
+      .collect::<Vec<_>>()
+      .split_last()
+      .map(|(_, folders)| folders.to_vec())
+      .unwrap_or_default()
+  }
+
+  /// Whether the file at `path`, relative to the suite's working folder with `/` between its parts, matches: `*` and
+  /// `?` stand for characters within one part, `**` for any number of whole parts.
+  pub fn matches(&self, path: &str) -> bool {
+    let pattern: Vec<&str> = self.0.split('/').collect();
+    let parts: Vec<&str> = path.split('/').collect();
+    parts_match(&pattern, &parts)
+  }
+}
+
+fn parts_match(pattern: &[&str], parts: &[&str]) -> bool {
+  match pattern.split_first() {
+    None => parts.is_empty(),
+    Some((&"**", rest)) => (0..=parts.len()).any(|skipped| parts_match(rest, &parts[skipped..])),
+    Some((first, rest)) => parts.split_first().is_some_and(|(part, others)| {
+      let (glob, name): (Vec<char>, Vec<char>) = (first.chars().collect(), part.chars().collect());
+      name_matches(&glob, &name) && parts_match(rest, others)
+    }),
+  }
+}
+
+/// Whether one part of a path matches one part of a glob.
+fn name_matches(pattern: &[char], name: &[char]) -> bool {
+  match pattern.split_first() {
+    None => name.is_empty(),
+    Some(('*', rest)) => (0..=name.len()).any(|skipped| name_matches(rest, &name[skipped..])),
+    Some(('?', rest)) => name.split_first().is_some_and(|(_, others)| name_matches(rest, others)),
+    Some((wanted, rest)) => name
+      .split_first()
+      .is_some_and(|(first, others)| first == wanted && name_matches(rest, others)),
+  }
 }
 
 /// `value` trimmed, with `/` between its parts: refused when blank, absolute, from a drive or a
