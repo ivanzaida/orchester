@@ -57,7 +57,6 @@ impl Following {
       Follow::Integration | Follow::Never => 0,
     };
     let runs = self.coalesced(ctx, changes).max(self.runs_from(follow, changes));
-    eprintln!("DBG wake follow={follow:?} changes={changes} runs={runs}");
     let jobs = match follow {
       Follow::RunChanges | Follow::Integration => self.jobs(feed.job_state.get()),
       Follow::Never => 0,

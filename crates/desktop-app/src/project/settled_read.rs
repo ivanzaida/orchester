@@ -67,11 +67,7 @@ where
     }
   });
   let state = action.state().get();
-  let active = action.is_active();
-  if name == "file" {
-    eprintln!("DBG file render status={:?} active={active}", state.status);
-  }
-  if !active {
+  if !action.is_active() {
     let last = match state.status {
       FutureStatus::Fulfilled => state.data.as_ref().map(|done| &done.deps),
       FutureStatus::Rejected => state.error.as_ref().map(|failed| &failed.deps),
@@ -79,10 +75,7 @@ where
     };
     if last != Some(&deps) {
       let again = !state.is_idle();
-      let started = action.run_if_idle((deps, again));
-      if name == "file" {
-        eprintln!("DBG file start started={started}");
-      }
+      action.run_if_idle((deps, again));
     }
   }
   let shown = if state.is_idle() {
