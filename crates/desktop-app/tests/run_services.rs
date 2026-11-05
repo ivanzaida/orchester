@@ -2,7 +2,8 @@
 //! `orchester-fake-codex` and `orchester-test-command` as the services, which the test builds itself
 //! (`support::runner_programs`): once the task runs, the tab lists the stack's services and cloud-web with their
 //! states, counts them with a dot, follows the selected one's log live, shows team-server's crash and team-web stopped
-//! for it, and its Stop and Restart go to the runner, which stops and starts the service again. The services' secret
+//! for it, and its Stop and Restart go to the runner, which stops and starts the service again; an MCP client's
+//! synthetic press on Restart starts nothing and the tab says only a person starts it. The services' secret
 //! values never reach the tab: the runner replaces them before it keeps a line, as its own test of the same request
 //! shows (`crates/runner/tests/run_services.rs`); a real runner reads secrets only from the OS keychain, which a test
 //! does not write. Needs `git`. Run with `cargo test -p orchester-app --test run_services run_services`.
@@ -14,6 +15,7 @@ mod support;
 
 use std::{fs, path::Path, time::Duration};
 
+use lurq::app::events::with_synthetic_input;
 use orchester_app::{
   routes::{ProjectPage, Route, TaskTab, TaskView},
   ui::icon::Icon,
@@ -113,7 +115,16 @@ fn run_services_tab_follows_the_runs_services_and_stops_and_restarts_them_throug
   window.until_within(PATIENCE, "cloud-api stopped by the runner", |window| {
     says(window, "task-service-cloud-api-state") == "Stopped"
   });
+  // Restart is a person's press: an MCP client's input starts nothing, and the tab says so.
+  with_synthetic_input(|| window.press("task-service-team-server-restart"));
+  window.until("the refusal of a synthetic Restart", |window| {
+    shows(window, "task-services-person-only")
+  });
+  assert_eq!(says(&mut window, "task-service-team-server-state"), "Crashed");
   window.press("task-service-team-server-restart");
+  window.until("a person's press clears the refusal", |window| {
+    !shows(window, "task-services-person-only")
+  });
   window.until_within(PATIENCE, "team-server restarted by the runner", |window| {
     says(window, "task-service-team-server-state") == "Ready"
   });

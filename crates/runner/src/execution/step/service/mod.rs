@@ -60,7 +60,7 @@ use orchester_core::{
   orchester_tools::ToolResult,
   resource::CommandEnvironment,
   secret::SecretVault,
-  service::{ServiceName, ServicePhase, ServiceState, ServiceStatus, StackName},
+  service::{ServiceApproval, ServiceName, ServicePhase, ServiceState, ServiceStatus, StackName},
   time::Timestamp,
 };
 use orchester_exec::process_tree::ProcessTree;
@@ -106,6 +106,9 @@ pub(in crate::execution::step) struct InvocationServices {
   running: Mutex<BTreeMap<ServiceName, Running>>,
   watched: Mutex<BTreeMap<ServiceName, Watch>>,
   notices: Mutex<Vec<String>>,
+  /// The definitions the invocation's starts ran, each approved as its start's request named it: a person's Restart
+  /// runs only these ([`order`]).
+  ran: Mutex<Vec<ServiceApproval>>,
 }
 
 /// What a start brings up, a stack's services or a service with what it needs, and who asked for it.

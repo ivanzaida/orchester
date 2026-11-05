@@ -8,7 +8,8 @@
 //! too few are free; its answer says how long it waited.
 //!
 //! A start's request names every service it runs ([`StepServices::service_approvals`]), and the start runs only those
-//! definitions: a service published again since, with another fingerprint, is refused until it is asked about.
+//! definitions: a service published again since, with another fingerprint, is refused until it is asked about. A
+//! person's Restart in the Services tab runs only definitions the invocation's starts ran before.
 
 use std::thread;
 
@@ -85,11 +86,23 @@ impl StepServices {
   }
 
   /// A person's Restart or Start in the Services tab: stops the service `name` when it runs, then starts it as
-  /// published with what it needs, the person's press approving it, and waits until it is ready. A start of the
-  /// agent's may be under way meanwhile, waiting for another service: the person's does not wait for it, only for an
-  /// earlier one of the person's. A service both bring up at once is kept once ([`StepServices::keep`]).
+  /// published with what it needs, and waits until it is ready. It runs only the definitions the invocation's starts
+  /// ran before, as their requests named them: a service published again since, or a need it did not have then, is
+  /// refused before anything stops, as the agent's `start_service` refuses it, so a press never approves a definition
+  /// nobody was shown. A start of the agent's may be under way meanwhile, waiting for another service: the person's
+  /// does not wait for it, only for an earlier one of the person's. A service both bring up at once is kept once
+  /// ([`StepServices::keep`]).
   pub(super) fn restart_for_person(&self, name: &ServiceName) -> Result<(), String> {
     let _one_at_a_time = self.state.restarting.lock();
+    let ran = self.state.ran.lock().clone();
+    // Checked before the stop too, so a refused Restart leaves the service running.
+    if let Some(new) = self
+      .service_approvals(Started::Service(name))?
+      .iter()
+      .find(|approval| !ran.contains(approval))
+    {
+      return Err(not_ran(&new.name));
+    }
     let stopped = self.stop(name);
     if stopped.is_error() {
       return Err(stopped.text().to_owned());
@@ -99,7 +112,7 @@ impl StepServices {
       by: ServiceStarter::Person,
     };
     self
-      .services_of((None, &person), |services| {
+      .services_of((Some(&ran), &person), |services| {
         StartPlan::for_service(services, name)
           .map_err(|error| format!("the service `{name}` cannot be started: {error}"))
       })
@@ -229,17 +242,32 @@ impl StepServices {
         if let Some(approved) = approved
           && !approved.contains(&ServiceApproval::of(service))
         {
-          return Err(format!(
-            "the service `{name}` is not the definition this start's approval named: it was published again since; \
-             start it again to be asked about it"
-          ));
+          return Err(match origin.by {
+            ServiceStarter::Agent => format!(
+              "the service `{name}` is not the definition this start's approval named: it was published again \
+               since; start it again to be asked about it"
+            ),
+            ServiceStarter::Person => not_ran(name.as_str()),
+          });
         }
         definitions.push(service);
       }
       steps.push(definitions);
     }
+    self.note_ran(&steps);
     let waited = self.bring_up(&steps, origin)?;
     Ok((plan, waited))
+  }
+
+  /// Notes the definitions of `steps` as ones the invocation's starts ran, approved as their start's request named
+  /// them, so a person's Restart may run them again.
+  fn note_ran(&self, steps: &[Vec<&Service>]) {
+    let mut ran = self.state.ran.lock();
+    for approval in steps.iter().flatten().map(|service| ServiceApproval::of(service)) {
+      if !ran.contains(&approval) {
+        ran.push(approval);
+      }
+    }
   }
 
   /// Starts the services of `steps` the invocation does not run yet, step by step, those of one step together, each
@@ -343,5 +371,13 @@ fn stopped_chain(failed: &ServiceName, why: &str, skipped: &[&ServiceName]) -> S
   format!(
     "the service `{failed}` did not start, so nothing after it was started ({}): {why}",
     skipped.join(", ")
+  )
+}
+
+/// Why a person's Restart does not start the service `name`: this step never ran it as it is published now.
+fn not_ran(name: &str) -> String {
+  format!(
+    "`{name}` is published differently from when this step's agent started it, or this step never ran it: a Restart \
+     here starts only what an approved start ran. The agent starts it again with start_service, which asks about it"
   )
 }

@@ -26,6 +26,8 @@ pub enum ServiceCommand {
   /// The person stops `service` of `run` with everything it started: [`ServiceReply::Done`] once it stopped.
   Stop { run: RunId, service: String },
   /// The person starts `service` of `run` again, as published, with what it needs: one that runs is stopped first.
+  /// Only a person's press sends it (the tab refuses an MCP client's input), and the runner runs only definitions the
+  /// run's starts ran before as approved, so a service published again since is refused and keeps running.
   /// [`ServiceReply::Done`] once it is ready, [`crate::Rejection::Failed`] with why it did not start.
   Restart { run: RunId, service: String },
 }

@@ -2,7 +2,8 @@
 //! `orchester-test-command` as the services (`support::services`): the run's services are listed with their state,
 //! port and URL while its step holds them; a service's log lines come with their secret's value redacted, later lines
 //! after the last one read; the person's Stop stops it and frees its port, and Restart starts it again on a new port,
-//! started by the person; a crash shows with its exit code and the service that needs it as stopped for it. Needs
+//! started by the person, but never a definition published again since its approval; a crash shows with its exit code
+//! and the service that needs it as stopped for it. Needs
 //! `git`. Run with `cargo test -p orchester-runner --features test-agent --test run_services run_services`.
 
 mod support;
@@ -11,14 +12,19 @@ use std::{collections::BTreeMap, fs, path::Path, time::Duration};
 
 use orchester_core::{
   id::{IdempotencyKey, RunId, SecretId},
-  resource::VariableName,
+  resource::{Draft, ResourceBody, VariableName},
   run::RunStatus,
   secret::{Environment, NewSecret, Secret, SecretKind, SecretName},
-  service::{LogPattern, ReadyCheck, ServiceName, ServiceValue, ServiceVariables},
+  service::{LogPattern, ReadyCheck, Service, ServiceName, ServiceValue, ServiceVariables},
+  store::ResourceStore,
   time::Timestamp,
 };
-use orchester_ipc::services::{RunService, RunServiceState, ServiceCommand, ServiceReply, ServiceStarter};
+use orchester_ipc::{
+  Rejection,
+  services::{RunService, RunServiceState, ServiceCommand, ServiceReply, ServiceStarter},
+};
 use orchester_runner::execution::Scheduler;
+use orchester_store::ProjectDb;
 
 use self::support::{
   PATIENCE, StepSpec,
@@ -92,6 +98,27 @@ async fn log(scheduler: &Scheduler, run: RunId, since: u64) -> (Vec<String>, u64
     Ok(ServiceReply::Log { lines, last }) => (lines.into_iter().map(|line| line.text).collect(), last),
     other => panic!("the service's log: {other:?}"),
   }
+}
+
+/// Publishes `service` again, as a person does who changes it on the project's Services page.
+fn republish(root: &Path, service: &Service) {
+  let mut db = ProjectDb::open(root).expect("open");
+  let resource = db
+    .resources(Service::KIND)
+    .expect("services")
+    .into_iter()
+    .find(|resource| resource.slug().as_str() == service.name().as_str())
+    .expect("the service is published");
+  db.update_draft::<Service>(resource.id(), |_, latest| {
+    Ok(Draft::new(
+      service.clone(),
+      latest.map(|version| version.number()),
+      Timestamp::now(),
+    ))
+  })
+  .expect("a draft");
+  db.publish_draft::<Service>(resource.id(), Timestamp::now())
+    .expect("published again");
 }
 
 fn hold(root: &Path) -> std::path::PathBuf {
@@ -303,4 +330,48 @@ async fn run_services_restart_does_not_wait_for_the_agents_start_under_way() {
       .any(|call| call.starts_with("start_service error: the service `slow` was stopped before it was ready")),
     "{answers:?}"
   );
+}
+
+/// A person's Restart runs only what an approved start ran: once the service is published again with another command,
+/// the Restart is refused before anything stops, and the service the agent started keeps running.
+#[tokio::test(flavor = "multi_thread")]
+async fn run_services_restart_refuses_a_definition_published_again_since_its_approval() {
+  let project = service_project(implement("Start the service web. Hold the services."), Vec::new());
+  let root = project.repo.path();
+  let listen = ["listen".to_owned(), "{{port}}".to_owned()];
+  publish(root, &[service("web", &listen, ReadyCheck::PortOpen, 20)]);
+  let hold = hold(root);
+  let (scheduler, mut events) = scheduler_with(root, project.vault.clone());
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("run");
+  approve(&scheduler, root, &mut events, id).await;
+  let port = started_port(&answered(root, &mut events, id, "start_service").await);
+
+  let changed = ["say", "changed", "listen", "{{port}}"].map(str::to_owned);
+  republish(root, &service("web", &changed, ReadyCheck::PortOpen, 20));
+  let restart = ServiceCommand::Restart {
+    run: id,
+    service: "web".to_owned(),
+  };
+  match scheduler.services(restart).await {
+    Err(Rejection::Failed { detail }) => assert!(
+      detail.contains("published differently from when this step's agent started it"),
+      "{detail}"
+    ),
+    other => panic!("a definition nobody approved is refused: {other:?}"),
+  }
+  let services = listed(&scheduler, id).await;
+  assert_eq!(services.len(), 1, "{services:?}");
+  assert_eq!(
+    (services[0].state, services[0].port, services[0].started_by),
+    (RunServiceState::Ready, port, ServiceStarter::Agent),
+    "the refused Restart stopped nothing"
+  );
+  assert!(accepts(port), "the agent's service still listens");
+
+  fs::remove_file(&hold).expect("release");
+  let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
 }

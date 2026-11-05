@@ -9,6 +9,7 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
+    events::is_synthetic_input,
     theme::{BorderSize, PaletteColor, RadiusSize, TypographyStyle},
   },
   components::{Column, ScrollVertical},
@@ -74,6 +75,8 @@ struct ServicesTab {
   chosen: Signal<Chosen>,
   /// The request last made, which the buttons show under way while the action is.
   asked: Signal<Option<ServiceRequest>>,
+  /// The service an MCP client's input last asked to start, which was refused as a person's.
+  person_only: Signal<Option<Arc<str>>>,
   /// `None` for a task without a run, which has no services.
   action: Option<ServiceAction>,
   open: OpenAction,
@@ -94,6 +97,7 @@ impl Component for ServicesTab {
     Self {
       chosen: ctx.signal(Chosen::First),
       asked: ctx.signal(None),
+      person_only: ctx.signal(None),
       action,
       open: open_action(ctx, root),
       opened: Instant::now(),
@@ -234,10 +238,20 @@ impl ServicesTab {
     })
   }
 
-  /// Runs a request about the run's services.
+  /// Runs a request about the run's services. Restart and Start are a person's press only: a start the person asks
+  /// for is the person's approval, which no MCP client gives, so synthetic input is refused and the tab says so. Stop
+  /// widens nothing and stays open to it, as `stop_service` is the agent's.
   fn requester(&self) -> Arc<dyn Fn(ServiceRequest) + Send + Sync> {
-    let (action, asked) = (self.action.clone(), self.asked.clone());
+    let (action, asked, person_only) = (self.action.clone(), self.asked.clone(), self.person_only.clone());
     Arc::new(move |request: ServiceRequest| {
+      if let ServiceRequest::Restart(name) = &request
+        && is_synthetic_input()
+      {
+        tracing::warn!(service = %name, "synthetic input asked to start a run's service; not taken");
+        person_only.set(Some(name.clone()));
+        return;
+      }
+      person_only.set(None);
       if let Some(action) = &action {
         asked.set(Some(request.clone()));
         action.run(request);
@@ -256,8 +270,20 @@ impl ServicesTab {
     action.state().get().is_pending().then(|| self.asked.get()).flatten()
   }
 
-  /// What the runner did not carry out of the last request, or of the last address opened.
+  /// A start an MCP client's input asked for, refused as a person's; what the runner did not carry out of the last
+  /// request, or of the last address opened.
   fn refused(&self, ctx: &Ctx) -> Option<Element> {
+    if let Some(name) = self.person_only.get() {
+      return Some(
+        Notice::new(
+          "task-services-person-only",
+          NoticeTone::Warning,
+          ctx.t_args("run_services.personOnly.title", [("name", name.to_string())]),
+        )
+        .body(ctx.t("run_services.personOnly.body"))
+        .into(),
+      );
+    }
     if let Some(action) = &self.action {
       let state = action.state().get();
       if let (false, Some(refused)) = (state.is_pending(), state.error) {

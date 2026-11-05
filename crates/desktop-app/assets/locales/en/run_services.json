@@ -62,6 +62,10 @@
       "stop": "{{name}} didn't stop",
       "open": "The Browser tab didn't open the address"
     },
+    "personOnly": {
+      "title": "Only a person starts {{name}} here",
+      "body": "Restart and Start in this tab are a person's: input from an MCP client isn't taken. The agent starts a service with start_service, which asks about it first."
+    },
     "log": {
       "title": "{{name}} · live log",
       "count": {
