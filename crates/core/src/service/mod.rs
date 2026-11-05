@@ -21,6 +21,7 @@ mod readiness;
 mod run_data;
 mod seed;
 mod stack;
+mod start_failure;
 mod status;
 mod stored;
 mod value;
@@ -47,6 +48,7 @@ pub use self::{
   },
   seed::{Capture, CapturePath, Seed, SeedHeader, SeedRequest, SeedRequests},
   stack::Stack,
+  start_failure::{ReadyAsked, ServiceStartFailure, StartFailureCause},
   status::{ServicePhase, ServiceState, ServiceStatus},
   value::{ServiceValue, ServiceVariables},
 };

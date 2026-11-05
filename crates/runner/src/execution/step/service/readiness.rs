@@ -14,11 +14,15 @@ use std::{
   time::{Duration, Instant},
 };
 
-use orchester_core::service::{LogStream, MAX_LINE_BYTES, ReadyCheck, RunValues, Service, ServiceLog, exited};
+use orchester_core::service::{
+  LogStream, MAX_LINE_BYTES, ReadyAsked, ReadyCheck, RunValues, Service, ServiceLog, StartFailureCause, exited,
+};
 use orchester_exec::process_tree::ProcessTree;
 use parking_lot::Mutex;
 use regex::Regex;
 use reqwest::{blocking, redirect};
+
+use super::Failed;
 
 /// How often readiness is checked.
 const POLL: Duration = Duration::from_millis(100);
@@ -52,17 +56,31 @@ impl Probe {
       Self::Line(seen) => seen.load(Ordering::Acquire),
     }
   }
+
+  /// What it asks, as a failed start's note names it.
+  fn asked(&self, check: &ReadyCheck, port: u16) -> ReadyAsked {
+    match (self, check) {
+      (Self::Http { url, .. }, ReadyCheck::Http(path)) => ReadyAsked::Http {
+        url: url.clone(),
+        path: path.as_str().to_owned(),
+      },
+      (_, ReadyCheck::LogLine(pattern)) => ReadyAsked::LogLine {
+        pattern: pattern.as_str().to_owned(),
+      },
+      _ => ReadyAsked::Port { port },
+    }
+  }
 }
 
 /// Waits until `service`, started as `tree` with `values` on `port`, is ready, its output kept in `log`, and hands
-/// back the readers of its output; why not, when it exits first, its timeout passes, or `ended` says the invocation
-/// ended.
+/// back the readers of its output; why not, when it exits first, its timeout passes (a failure the person is shown),
+/// or `ended` says the invocation ended.
 pub(super) fn wait(
   tree: &mut ProcessTree,
   (service, values): (&Service, &RunValues),
   port: u16,
   (log, ended): (&SharedLog, &dyn Fn() -> bool),
-) -> Result<Output, String> {
+) -> Result<Output, Failed> {
   let check = service.readiness().check();
   let pattern = match check {
     ReadyCheck::LogLine(pattern) => {
@@ -89,25 +107,26 @@ pub(super) fn wait(
   let deadline = Instant::now() + timeout.duration();
   loop {
     if ended() {
-      return Err("was given up: the turn ended before it was ready".to_owned());
+      return Err("was given up: the turn ended before it was ready".to_owned().into());
     }
     match tree.exited() {
       Ok(Some(status)) => {
         output.settle();
-        return Err(format!("{} before it was ready", exited(status.code())));
+        return Err(format!("{} before it was ready", exited(status.code())).into());
       }
       Ok(None) => {}
-      Err(error) => return Err(format!("cannot be watched: {error}")),
+      Err(error) => return Err(format!("cannot be watched: {error}").into()),
     }
     if probe.ready() {
       return Ok(output);
     }
     if Instant::now() >= deadline {
-      return Err(format!(
-        "was not ready within {} s: {}",
-        timeout.secs(),
-        unready(check, port)
-      ));
+      let why = format!("was not ready within {} s: {}", timeout.secs(), unready(check, port));
+      let cause = StartFailureCause::NotReady {
+        secs: timeout.secs(),
+        asked: probe.asked(check, port),
+      };
+      return Err(Failed::shown(why, cause));
     }
     thread::sleep(POLL);
   }

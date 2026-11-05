@@ -52,6 +52,7 @@ mod pull_requests;
 mod run_model;
 mod run_services;
 mod secrets;
+mod service_cards;
 mod services;
 mod settings;
 mod shadow;
@@ -117,6 +118,7 @@ pub use self::{
   run_model::ModelText,
   run_services::RunServicesText,
   secrets::{SECRETS_PENDING_OPACITY, SecretsSpacing, SecretsText},
+  service_cards::ServiceCardsText,
   services::{ServicesSpacing, ServicesText},
   settings::{SettingsSpacing, SettingsText},
   shadow::ExtraShadow,

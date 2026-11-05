@@ -68,7 +68,7 @@ impl RunTask {
   ) -> StepServices {
     let (root, run, notifier) = (self.root.clone(), self.run.id(), self.notifier.clone());
     let noted = Arc::new(move |problem: RunnerProblem| runner_note::note(&root, (run, invocation), problem, &notifier));
-    let crash_noted = Arc::clone(&noted);
+    let (crash_noted, failure_noted) = (Arc::clone(&noted), Arc::clone(&noted));
     let tools = StepServices {
       services: Arc::clone(&self.services),
       state: self.services.register(invocation),
@@ -80,6 +80,7 @@ impl RunTask {
       inherited: std::env::vars_os().collect(),
       project: environment.clone(),
       crashed: Arc::new(move |crash| crash_noted(RunnerProblem::ServiceCrashed(crash.clone()))),
+      start_failed: Arc::new(move |failure| failure_noted(RunnerProblem::ServiceStartFailed(failure))),
       // A note that cannot be written is logged by `runner_note`: the start waits all the same.
       waiting: Arc::new(move |Waiting { slots, share, limit }| {
         noted(RunnerProblem::WaitingForServiceSlots { slots, share, limit });

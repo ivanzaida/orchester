@@ -310,6 +310,9 @@ pub enum RunnerProblem {
   },
   /// A service the agent started crashed after it was ready; the agent got the same facts as a notice.
   ServiceCrashed(crate::service::ServiceCrash),
+  /// A start of the agent's failed because Docker was not available or a service was not ready in time; the agent
+  /// got the same facts in its start's answer.
+  ServiceStartFailed(crate::service::ServiceStartFailure),
   /// The agent's start of services, or of a test suite's own process, waits for `slots` service slots
   /// (`docs/architecture/agent-testing.md`, decision 3): its project's runs may run `share` services at once and the
   /// computer's `limit`, and too few of them are free. It goes on once enough services stop, after the starts that

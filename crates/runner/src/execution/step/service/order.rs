@@ -16,13 +16,13 @@ use std::thread;
 use orchester_core::{
   orchester_tools::ToolResult,
   resource::Slug,
-  service::{Service, ServiceApproval, ServiceName, Stack, StackName, StartPlan},
+  service::{Service, ServiceApproval, ServiceName, ServiceStartFailure, Stack, StackName, StartPlan},
 };
 use orchester_ipc::services::ServiceStarter;
 use serde_json::{Map, json};
 
 use super::{
-  Origin, Running, ServiceSlot, StepServices, Waited,
+  Failed, Origin, Running, ServiceSlot, StepServices, Waited,
   launch::{published, published_stacks},
 };
 
@@ -272,7 +272,8 @@ impl StepServices {
 
   /// Starts the services of `steps` the invocation does not run yet, step by step, those of one step together, each
   /// noted with `origin`, once it holds a service slot for each of them; what it waited for the slots, when it did. The
-  /// slots of services that did not start are freed.
+  /// slots of services that did not start are freed. A failure the person can act on is noted in the run's
+  /// conversation, with the services not started because of it and those the step still runs.
   fn bring_up(&self, steps: &[Vec<&Service>], origin: &Origin) -> Result<Option<Waited>, String> {
     let needed = {
       let running = self.state.running.lock();
@@ -286,7 +287,7 @@ impl StepServices {
     let (mut slots, waited) = self.take_slots(needed)?;
     for (at, step) in steps.iter().enumerate() {
       self.may_start()?;
-      if let Err((name, why)) = self.bring_up_step(step, (&mut slots, origin)) {
+      if let Err((name, failed)) = self.bring_up_step(step, (&mut slots, origin)) {
         let running = self.state.running.lock();
         let skipped: Vec<&ServiceName> = steps[at + 1..]
           .iter()
@@ -294,7 +295,16 @@ impl StepServices {
           .map(|service| service.name())
           .filter(|later| !running.contains_key(*later))
           .collect();
-        return Err(stopped_chain(name, &why, &skipped));
+        if let Some((cause, lines)) = failed.shown {
+          (self.start_failed)(ServiceStartFailure {
+            service: name.to_string(),
+            cause,
+            lines,
+            not_started: skipped.iter().map(ToString::to_string).collect(),
+            running: running.keys().map(ToString::to_string).collect(),
+          });
+        }
+        return Err(stopped_chain(name, &failed.why, &skipped));
       }
     }
     Ok(waited)
@@ -306,7 +316,7 @@ impl StepServices {
     &self,
     step: &[&'a Service],
     (slots, origin): (&mut Vec<ServiceSlot>, &Origin),
-  ) -> Result<(), (&'a ServiceName, String)> {
+  ) -> Result<(), (&'a ServiceName, Failed)> {
     let (wired, missing) = {
       let running = self.state.running.lock();
       let wired: Vec<Address> = running
@@ -325,10 +335,10 @@ impl StepServices {
       // A service counted as running when the slots were taken stopped since, as one a crash stopped: it takes a
       // slot of its own now.
       let short = u32::try_from(missing.len() - given.len()).unwrap_or(u32::MAX);
-      let (more, _) = self.take_slots(short).map_err(|why| (first.name(), why))?;
+      let (more, _) = self.take_slots(short).map_err(|why| (first.name(), Failed::from(why)))?;
       given.extend(more);
     }
-    let started: Vec<(&ServiceName, Result<Running, String>)> = thread::scope(|scope| {
+    let started: Vec<(&ServiceName, Result<Running, Failed>)> = thread::scope(|scope| {
       let starts: Vec<_> = missing
         .iter()
         .zip(given)
@@ -343,16 +353,16 @@ impl StepServices {
       starts
         .into_iter()
         .map(|(name, start)| {
-          let outcome = start
-            .join()
-            .unwrap_or_else(|_| Err(format!("the start of the service `{name}` ended without an answer")));
+          let outcome = start.join().unwrap_or_else(|_| {
+            Err(format!("the start of the service `{name}` ended without an answer").into())
+          });
           (name, outcome)
         })
         .collect()
     });
     let mut failed = None;
     for (name, outcome) in started {
-      let kept = outcome.and_then(|running| self.keep(name, running));
+      let kept = outcome.and_then(|running| self.keep(name, running).map_err(Failed::from));
       if let Err(why) = kept {
         failed.get_or_insert((name, why));
       }

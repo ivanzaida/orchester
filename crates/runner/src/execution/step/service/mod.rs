@@ -34,6 +34,7 @@
 
 mod crash;
 mod data;
+mod failed;
 mod launch;
 mod order;
 mod port;
@@ -60,7 +61,7 @@ use orchester_core::{
   orchester_tools::ToolResult,
   resource::CommandEnvironment,
   secret::SecretVault,
-  service::{ServiceApproval, ServiceName, ServicePhase, ServiceState, ServiceStatus, StackName},
+  service::{ServiceApproval, ServiceName, ServicePhase, ServiceStartFailure, ServiceState, ServiceStatus, StackName},
   time::Timestamp,
 };
 use orchester_exec::process_tree::ProcessTree;
@@ -71,6 +72,7 @@ use serde_json::json;
 pub(in crate::execution) use self::shown::ShownServiceError;
 pub use self::slots::ServiceSlots;
 pub(in crate::execution::step) use self::{
+  failed::Failed,
   launch::{project_secret, published as published_services, published_stacks},
   order::Started,
   slots::{ServiceSlot, Waited},
@@ -304,6 +306,8 @@ pub(in crate::execution::step) struct StepServices {
   project: CommandEnvironment,
   /// Records a crash in the run's conversation.
   crashed: crash::CrashReport,
+  /// Records in the run's conversation a start that failed for a reason the person can act on.
+  start_failed: Arc<dyn Fn(ServiceStartFailure) + Send + Sync>,
   /// Says in the run's conversation that a start waits for service slots.
   waiting: Arc<dyn Fn(Waiting) + Send + Sync>,
 }

@@ -3,8 +3,9 @@
 //! ready, and fills `{{services.<name>.url|port}}` with the URLs and ports of the services started before it;
 //! `start_stack` starts a stack's services and their needs, each once. A service the step runs already is reused, not
 //! started twice. When a service a start needs fails, nothing after it starts and the error names it, its exit code
-//! and its last lines. When a ready service crashes, the services that need it stop, the agent's next tool answer
-//! carries a notice and the conversation records it. Needs `git`.
+//! and its last lines; a readiness timeout is noted in the conversation too. When a ready service crashes, the
+//! services that need it stop, the agent's next tool answer carries a notice and the conversation records it. Needs
+//! `git`.
 //! Run with `cargo test -p orchester-runner --features test-agent --test service_needs service`.
 
 mod support;
@@ -15,7 +16,9 @@ use orchester_core::{
   connection::stream::{AgentEvent, RunnerProblem},
   id::{IdempotencyKey, RunId},
   run::{Answerer, ApprovalAnswer, RunStatus},
-  service::{LogPattern, ReadyCheck, Service, ServiceCrash, ServiceName},
+  service::{
+    LogPattern, ReadyAsked, ReadyCheck, Service, ServiceCrash, ServiceName, ServiceStartFailure, StartFailureCause,
+  },
   store::ActivityStore,
 };
 use orchester_ipc::Event;
@@ -395,5 +398,61 @@ async fn service_crash_after_ready_notifies_the_agent_and_the_conversation() {
   assert!(
     crash.lines.iter().any(|line| line.ends_with("err| lost the disk")),
     "{crash:?}"
+  );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn service_readiness_timeout_is_noted_in_the_conversation_with_its_last_lines() {
+  let project = service_project(implement("Start the service web."), Vec::new());
+  let root = project.repo.path();
+  // `api` never listens on its port, and may take 1 s to.
+  let waits: Vec<String> = ["say", "starting", "sleep", "30"].map(str::to_owned).to_vec();
+  let slow = service("api", &waits, ReadyCheck::PortOpen, 1)
+    .with_needs(vec![ServiceName::new("db").expect("a name")])
+    .expect("needs");
+  publish(
+    root,
+    &[
+      needing(root, "db", &[], (&["listen", "{{port}}"], ReadyCheck::PortOpen)),
+      slow,
+      chained(root, "web", &["api"]),
+    ],
+  );
+  let (scheduler, mut events) = scheduler(root);
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("run");
+  approve(&scheduler, root, &mut events, id).await;
+  let answer = answered(root, &mut events, id, "start_service").await;
+  assert!(answer.contains("was not ready within 1 s"), "{answer}");
+  let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+
+  let failures: Vec<ServiceStartFailure> = ProjectDb::open(root)
+    .expect("open")
+    .activity(id, 0)
+    .expect("activity")
+    .into_iter()
+    .filter_map(|entry| match entry.event {
+      AgentEvent::RunnerProblem {
+        problem: RunnerProblem::ServiceStartFailed(failure),
+      } => Some(failure),
+      _ => None,
+    })
+    .collect();
+  let [failure] = failures.as_slice() else {
+    panic!("one failed start is in the conversation: {failures:?}");
+  };
+  assert_eq!(failure.service, "api");
+  assert!(
+    matches!(failure.cause, StartFailureCause::NotReady { secs: 1, asked: ReadyAsked::Port { .. } }),
+    "{failure:?}"
+  );
+  assert_eq!(failure.not_started, ["web"]);
+  assert_eq!(failure.running, ["db"]);
+  assert!(
+    failure.lines.iter().any(|line| line.ends_with("out| starting")),
+    "{failure:?}"
   );
 }

@@ -20,7 +20,7 @@ use orchester_core::{
   connection::invocation::Platform,
   resource::{ResourceBody, VariableName},
   secret::{SecretName, SecretValue, SecretVault},
-  service::{RunValues, Service, ServiceLog, ServiceName, ServicePhase, Stack},
+  service::{CRASH_LINES, RunValues, Service, ServiceLog, ServiceName, ServicePhase, Stack},
   store::{ResourceStore, SecretStore},
   time::Timestamp,
 };
@@ -29,7 +29,7 @@ use orchester_store::{ProjectDb, StoreError};
 use parking_lot::Mutex;
 
 use super::{
-  Origin, Running, ServiceSlot, StepServices, Watch,
+  Failed, Origin, Running, ServiceSlot, StepServices, Watch,
   data::{Container, Data},
   order::Address,
   readiness,
@@ -70,10 +70,10 @@ impl StepServices {
     service: &Service,
     (wired, origin, slot): (&[Address], &Origin, ServiceSlot),
     ended: &dyn Fn() -> bool,
-  ) -> Result<Running, String> {
+  ) -> Result<Running, Failed> {
     let name = service.name();
     let cannot = |why: String| format!("the service `{name}` cannot be started: {why}");
-    let data = self.prepare_data(service).map_err(cannot)?;
+    let data = self.prepare_data(service).map_err(|failed| failed.worded(cannot))?;
     let headers = self.header_secrets(service).map_err(cannot)?;
     let lease = self
       .services
@@ -115,6 +115,7 @@ impl StepServices {
       self
         .seed(service, &mut values, (&headers, &secrets), (&log, &ended))
         .map(|captured| (output, captured))
+        .map_err(Failed::from)
     });
     match ready {
       Ok((output, captured)) => Ok(Running {
@@ -127,26 +128,26 @@ impl StepServices {
         output,
         _slot: slot,
       }),
-      Err(why) => {
-        let why = if given_up.load(Ordering::Acquire) {
-          "was stopped before it was ready".to_owned()
+      Err(failed) => {
+        let failed = if given_up.load(Ordering::Acquire) {
+          Failed::from("was stopped before it was ready".to_owned())
         } else {
-          why
+          failed
         };
-        Err(self.failed_start(name, (tree, container), (&log, &given_up), &why))
+        Err(self.failed_start(name, (tree, container), (&log, &given_up), failed))
       }
     }
   }
 
   /// Stops `tree`, then removes `container`, of the service `name` whose start, the one `given_up` belongs to, failed
-  /// as `why` says; the start's error, with the last lines of its `log`.
+  /// as `failed` says; the start's error, with the last lines of its `log`.
   fn failed_start(
     &self,
     name: &ServiceName,
     (mut tree, container): (ProcessTree, Option<Container>),
     (log, given_up): (&Mutex<ServiceLog>, &Arc<AtomicBool>),
-    why: &str,
-  ) -> String {
+    failed: Failed,
+  ) -> Failed {
     // A program that cannot be watched any more is stopped all the same; its status then says stopped. A later start
     // of the service, which may be under way already, keeps its own.
     let exit = tree.exited().unwrap_or(None).map(|status| status.code());
@@ -165,8 +166,13 @@ impl StepServices {
     };
     // Its container goes once the tree is stopped.
     drop(container);
-    let output = log.lock().excerpt(FAILED_START_LINES, 0);
-    format!("the service `{name}` {why}; {stopped}. Its last output: {output}")
+    let (output, lines) = {
+      let log = log.lock();
+      (log.excerpt(FAILED_START_LINES, 0), log.last_rows(CRASH_LINES))
+    };
+    failed
+      .worded(|why| format!("the service `{name}` {why}; {stopped}. Its last output: {output}"))
+      .with_lines(lines)
   }
 
   /// Starts `service`'s program with `values` on `port`, as its per-run data `data` says: its own program, or its

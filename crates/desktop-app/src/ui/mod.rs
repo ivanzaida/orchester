@@ -63,6 +63,7 @@ pub mod row_group;
 pub mod rule_item;
 pub mod setting_notice;
 pub mod setting_rows;
+pub mod service_card;
 pub mod settings_page;
 pub mod skeleton;
 pub mod skill_row;

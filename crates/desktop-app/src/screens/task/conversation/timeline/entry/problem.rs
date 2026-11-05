@@ -138,6 +138,13 @@ pub(super) fn text(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Option<Arc<
     ),
     RunnerProblem::QuestionRefused { question, reason } => question_refused(ctx, question, *reason),
     RunnerProblem::ServiceCrashed(crash) => service_crashed(ctx, crash),
+    RunnerProblem::ServiceStartFailed(failure) => (
+      ctx.t_args(
+        "conversation.problem.serviceStartFailed",
+        [("service", failure.service.as_str())],
+      ),
+      (!failure.lines.is_empty()).then(|| failure.lines.join("\n").into()),
+    ),
     RunnerProblem::ContextCompacted { .. }
     | RunnerProblem::ModelRetrying { .. }
     | RunnerProblem::ThinkingStripped
@@ -147,7 +154,7 @@ pub(super) fn text(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Option<Arc<
 }
 
 /// A service that crashed after it was ready: how it ended and how long it had run, then the services Orchester
-/// stopped with it and its last lines. The crash card's own look is ORC-265's.
+/// stopped with it and its last lines. In the chat it is its card (`timeline::service`); this is its plain row.
 fn service_crashed(ctx: &Ctx, crash: &ServiceCrash) -> (Arc<str>, Option<Arc<str>>) {
   let seconds = format!("{:.1}", Duration::from_millis(crash.uptime_ms).as_secs_f64());
   let service = crash.service.as_str();

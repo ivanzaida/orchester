@@ -11,11 +11,14 @@ use std::{ffi::OsString, fs, io, path::PathBuf};
 
 use orchester_core::{
   command::SecretVariable,
-  service::{ContainerName, ContainerStart, RunData, RunValues, Service, container_notes_folder},
+  service::{ContainerName, ContainerStart, RunData, RunValues, Service, StartFailureCause, container_notes_folder},
 };
-use orchester_exec::{docker::Docker, process_tree::ProcessTree};
+use orchester_exec::{
+  docker::{Docker, DockerUnavailable},
+  process_tree::ProcessTree,
+};
 
-use super::StepServices;
+use super::{Failed, StepServices};
 
 /// What a service's per-run data gives its start.
 pub(super) enum Data {
@@ -53,8 +56,9 @@ impl Drop for Container {
 
 impl StepServices {
   /// Prepares `service`'s per-run data before it starts: its run folder made, or Docker asked and its image's port
-  /// read (the image pulled first when the computer does not have it).
-  pub(super) fn prepare_data(&self, service: &Service) -> Result<Data, String> {
+  /// read (the image pulled first when the computer does not have it). Docker that is not available is a failure the
+  /// person is shown.
+  pub(super) fn prepare_data(&self, service: &Service) -> Result<Data, Failed> {
     match service.run_data() {
       RunData::None => Ok(Data::None),
       RunData::RunFolder(folder) => {
@@ -64,7 +68,8 @@ impl StepServices {
         Ok(Data::Folder(path))
       }
       RunData::DatabaseContainer => {
-        let docker = Docker::ready(self.docker_path().as_deref()).map_err(|error| error.to_string())?;
+        let docker = Docker::ready(self.docker_path().as_deref())
+          .map_err(|error| Failed::shown(error.to_string(), docker_cause(&error)))?;
         let image = service.program().as_str();
         let port = docker.exposed_port(image).map_err(|error| error.to_string())?;
         Ok(Data::Container { docker, port })
@@ -123,5 +128,16 @@ impl StepServices {
     let tree =
       ProcessTree::start(&command).map_err(|error| format!("its container did not start through docker: {error}"))?;
     Ok((tree, secrets, container))
+  }
+}
+
+/// What the conversation notes of Docker that is not available: missing, or there and not answering.
+fn docker_cause(error: &DockerUnavailable) -> StartFailureCause {
+  let detail = error.to_string();
+  match error {
+    DockerUnavailable::NotFound { .. } => StartFailureCause::DockerMissing { detail },
+    DockerUnavailable::NoAnswer { .. } | DockerUnavailable::NotRunning { .. } => {
+      StartFailureCause::DockerNotAnswering { detail }
+    }
   }
 }

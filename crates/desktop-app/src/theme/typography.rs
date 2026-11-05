@@ -272,6 +272,7 @@ pub fn typography(palette: &ThemePalette) -> ThemeTypography {
       .chain(super::project_settings::typography(palette))
       .chain(super::services::typography(palette))
       .chain(super::run_services::typography(palette))
+      .chain(super::service_cards::typography(palette))
       .chain(super::test_results::typography(palette))
       .chain(super::import::typography(palette))
       .chain(super::hub::typography(palette))

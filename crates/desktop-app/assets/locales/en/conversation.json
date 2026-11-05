@@ -555,6 +555,7 @@
       "serviceCrashed": "{{service}} crashed: exit code {{code}}, {{seconds}} s after it started",
       "serviceCrashedBySignal": "{{service}} crashed: ended by a signal, {{seconds}} s after it started",
       "serviceCrashedStopped": "Orchester stopped {{services}}, which need it.",
+      "serviceStartFailed": "{{service}} did not start",
       "stderrLeftOut": {
         "one": "{{count}} more line of the agent’s standard error left out",
         "other": "{{count}} more lines of the agent’s standard error left out"
