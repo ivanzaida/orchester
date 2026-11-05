@@ -1489,6 +1489,41 @@
       "needNotPublished": "{{service}} needs {{need}}, which is not a published service. Publish {{need}} first.",
       "serviceNotPublished": "{{service}} is not a published service. Publish it first.",
       "needsCycle": "The services' needs form a cycle: {{cycle}}. A service cannot start after itself."
+    },
+    "editor": {
+      "errors": {
+        "nameRequired": "Enter the service's name.",
+        "name": "{{name}} is not a service name: 1 to {{max}} lowercase letters, digits and single hyphens, such as team-web.",
+        "nameTaken": "Another service is named {{name}}, or was. Give this one a name of its own.",
+        "outsideWorktree": "{{folder}} is not a folder in the run's worktree: write a relative path without .., a drive or a leading slash.",
+        "secretRequired": "Enter the name of the project secret {{name}} takes.",
+        "secretName": "{{name}} takes a secret by its name: a capital letter, then capital letters, digits or underscores, at most {{max}} characters.",
+        "needsItself": "{{name}} cannot need itself.",
+        "duplicateNeed": "{{name}} is needed twice.",
+        "needMissing": "{{service}} needs {{need}}, which is no longer a service of this project.",
+        "invalid": "This service cannot be saved as it is.",
+        "gone": "This service no longer exists. It was deleted, here or by automation.",
+        "inUse": "Something still uses this service, so it was not deleted."
+      },
+      "placeholder": {
+        "argument": {
+          "unclosed": "Argument {{line}} opens a placeholder but never closes it.",
+          "malformed": "Argument {{line}} has a placeholder with nothing or a brace inside.",
+          "unknownField": "Argument {{line}}: {{value}} is not a placeholder of a service. They are port, url, run, services.<name>.url, services.<name>.port and seed.<name>.",
+          "unknownService": "Argument {{line}} uses the service {{value}}, which is not defined.",
+          "notNeeded": "Argument {{line}} uses {{value}}, which this service does not need. Add it under Needs.",
+          "unknownCapture": "Argument {{line}} uses seed.{{value}}, which no seed request captures before it."
+        },
+        "variable": {
+          "unclosed": "{{name}} opens a placeholder but never closes it.",
+          "malformed": "{{name}} has a placeholder with nothing or a brace inside.",
+          "unknownField": "{{name}}: {{value}} is not a placeholder of a service. They are port, url, run, services.<name>.url, services.<name>.port and seed.<name>.",
+          "unknownService": "{{name}} uses the service {{value}}, which is not defined.",
+          "notNeeded": "{{name}} uses {{value}}, which this service does not need. Add it under Needs.",
+          "unknownCapture": "{{name}} uses seed.{{value}}, which no seed request captures."
+        },
+        "elsewhere": "A placeholder in the readiness check, the seed or where ui_open starts cannot be used as written."
+      }
     }
   },
   "sources": {

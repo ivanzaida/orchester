@@ -2,10 +2,12 @@
 //! project's services, each with its driver, needs, owned paths and whether its start asks a person; its stacks with
 //! the order they start their services in and the slots they take; its test suites with their layer; and the entry to
 //! Flaky tests ([`groups`]). With no service yet it says what a service is and offers Import draft and New service.
-//! A row, New and Import draft open their pages under the tab, which say they are not built yet ([`not_built`]).
+//! A service's row and New service open the service's page ([`editor`]); the other pages under the tab say they are
+//! not built yet ([`not_built`]).
 //!
 //! What the tab lists is read off the UI thread when it opens and when the project's tasks are saved; services that
 //! automation adds while it shows appear when it is opened again.
+mod editor;
 mod groups;
 mod not_built;
 mod words;
@@ -18,9 +20,10 @@ use lurq::{
 };
 use orchester_workspace::{agent_testing::listing::ProjectServices, background, messages};
 
-pub(super) use self::not_built::not_built;
+use self::not_built::not_built;
 use super::{TabProps, page};
 use crate::{
+  routes::ServicesPage,
   services::Services,
   theme::ExtraSpacing,
   ui::{
@@ -28,6 +31,15 @@ use crate::{
     state::{load_error, loading},
   },
 };
+
+/// The page `shown` under the tab: a service's or New service's editor, or a page not built yet.
+pub(super) fn services_page(ctx: &mut Ctx, props: &TabProps, shown: ServicesPage) -> Element {
+  match shown {
+    ServicesPage::NewService => editor::editor(ctx, props, None),
+    ServicesPage::Service(id) => editor::editor(ctx, props, Some(id)),
+    other => not_built(ctx, &props.project, other),
+  }
+}
 
 pub(super) struct ServicesTab {
   /// Counts *Try again*s, each of which reads the list again.

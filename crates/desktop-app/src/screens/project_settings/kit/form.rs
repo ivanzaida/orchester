@@ -60,7 +60,7 @@ pub(crate) fn form_row(label: Label, control: impl Into<Element>) -> Element {
         .variant(ProjectSettingsText::Hint.role())
         .width(Dimension::Pct(100.0))
     }));
-  field_row(&id, words, control.into())
+  field_row(&id, (words, LABEL_WIDTH), control.into())
 }
 
 /// A field's row with one short hint line, in its tone, and what the hint leaves out in the label's (i) (`Program`
@@ -70,6 +70,7 @@ pub(crate) struct FormField {
   label: Arc<str>,
   hint: Option<(Arc<str>, Tone)>,
   info: Option<Arc<str>>,
+  label_width: f32,
 }
 
 impl FormField {
@@ -79,7 +80,15 @@ impl FormField {
       label: label.into(),
       hint: None,
       info: None,
+      label_width: LABEL_WIDTH,
     }
+  }
+
+  /// The label column `width` wide instead of the form's 240, a structural size its caller names with its design
+  /// node (a service's page draws 220, `m8rIK4` in `TGRTt`).
+  pub(crate) fn label_width(mut self, width: f32) -> Self {
+    self.label_width = width;
+    self
   }
 
   /// The hint line, `text_muted`.
@@ -124,12 +133,12 @@ impl FormField {
           .color(tone.color())
           .width(Dimension::Pct(100.0))
       }));
-    field_row(&id, words, control.into())
+    field_row(&id, (words, self.label_width), control.into())
   }
 }
 
 /// The row of the field `id`: `words` in the label column, `control` taking the rest.
-fn field_row(id: &str, words: Column, control: Element) -> Element {
+fn field_row(id: &str, (words, width): (Column, f32), control: Element) -> Element {
   Row::new()
     .id(format!("{id}-row"))
     .width(Dimension::Pct(100.0))
@@ -141,7 +150,7 @@ fn field_row(id: &str, words: Column, control: Element) -> Element {
     .align_items(Alignment::Start)
     .child(
       words
-        .width(Dimension::Px(LABEL_WIDTH))
+        .width(Dimension::Px(width))
         .flex_shrink(0.0)
         .spacing(ExtraSpacing::Tight.role()),
     )

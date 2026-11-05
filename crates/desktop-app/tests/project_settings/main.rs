@@ -20,6 +20,7 @@ mod review_regressions;
 mod reviewer_authority;
 mod reviewer_refresh;
 mod run_fixture;
+mod service_editor;
 mod services;
 mod sources;
 mod storage;
