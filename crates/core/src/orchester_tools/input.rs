@@ -14,7 +14,7 @@ use crate::{
   memory::{Importance, MemoryContent, MemoryKey, MemoryKind, MemoryNote, NoteScope, Tags},
   resource::{SKILL_FILE, SkillFilePath},
   run::StepProgress,
-  service::{DEFAULT_TAIL, MAX_TAIL, ServiceName},
+  service::{DEFAULT_TAIL, MAX_TAIL, ServiceName, StackName},
 };
 
 /// Lines a read returns when the call gives no `length` or `limit`.
@@ -79,6 +79,8 @@ pub enum ToolCall {
   StartQaApp(QaAppStart),
   /// `start_service`: one of the project's published services, started for the step.
   StartService(ServiceName),
+  /// `start_stack`: one of the project's published stacks, its services started for the step.
+  StartStack(StackName),
   /// `stop_service`: a service the step started.
   StopService(ServiceName),
   /// `service_status`: where a service the step started is.
@@ -194,6 +196,7 @@ impl ToolCall {
       {
         Err(ToolCallError::UnknownService(name.to_string()))
       }
+      Self::StartStack(name) if !step.offers_stack(name) => Err(ToolCallError::UnknownStack(name.to_string())),
       _ => Ok(call),
     }
   }
@@ -214,6 +217,7 @@ impl ToolCall {
       Self::App(_) => OrchesterTool::CallRunApp,
       Self::StartQaApp(_) => OrchesterTool::StartQaApp,
       Self::StartService(_) => OrchesterTool::StartService,
+      Self::StartStack(_) => OrchesterTool::StartStack,
       Self::StopService(_) => OrchesterTool::StopService,
       Self::ServiceStatus(_) => OrchesterTool::ServiceStatus,
       Self::ServiceLogs { .. } => OrchesterTool::ServiceLogs,
@@ -223,13 +227,19 @@ impl ToolCall {
   }
 }
 
+/// The `name` of a service or stack tool's input, read as `Name`.
+fn named<Name, Error: ToString>(
+  arguments: Value,
+  new: impl FnOnce(&str) -> Result<Name, Error>,
+) -> Result<Name, String> {
+  let input: NameInput = serde_json::from_value(arguments).map_err(|error| error.to_string())?;
+  new(&input.name).map_err(|error| error.to_string())
+}
+
 /// `arguments` read as `tool`'s input, or why they are not.
 fn read(tool: OrchesterTool, arguments: Value) -> Result<ToolCall, String> {
   let invalid = |error: serde_json::Error| error.to_string();
-  let service = |arguments: Value| {
-    let input: NameInput = serde_json::from_value(arguments).map_err(invalid)?;
-    ServiceName::new(&input.name).map_err(|error| error.to_string())
-  };
+  let service = |arguments: Value| named(arguments, ServiceName::new);
   Ok(match tool {
     OrchesterTool::ListRunProcesses => {
       serde_json::from_value::<NoInput>(arguments).map_err(invalid)?;
@@ -242,6 +252,7 @@ fn read(tool: OrchesterTool, arguments: Value) -> Result<ToolCall, String> {
     OrchesterTool::CallRunApp => ToolCall::App(AppCall::parse(arguments)?),
     OrchesterTool::StartQaApp => ToolCall::StartQaApp(QaAppStart::parse(arguments)?),
     OrchesterTool::StartService => ToolCall::StartService(service(arguments)?),
+    OrchesterTool::StartStack => ToolCall::StartStack(named(arguments, StackName::new)?),
     OrchesterTool::StopService => ToolCall::StopService(service(arguments)?),
     OrchesterTool::ServiceStatus => ToolCall::ServiceStatus(service(arguments)?),
     OrchesterTool::ServiceLogs => service_logs(&serde_json::from_value(arguments).map_err(invalid)?)?,

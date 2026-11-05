@@ -225,6 +225,7 @@ impl ToolHost {
         Some(approval.target())
       }
       (ToolCall::StartService(name), None) => Some(name.to_string()),
+      (ToolCall::StartStack(name), None) => Some(name.to_string()),
       _ => None,
     };
     Ok(Looked {
@@ -311,6 +312,10 @@ impl ToolHost {
         .services
         .as_ref()
         .map_or_else(no_services, |services| services.start(&name)),
+      Ok(ToolWork::StartStack(name)) => self
+        .services
+        .as_ref()
+        .map_or_else(no_services, |services| services.start_stack(&name)),
       Ok(ToolWork::StopService(name)) => self
         .services
         .as_ref()
@@ -460,7 +465,8 @@ impl RunTask {
     let checks = self.offered_checks(&step)?;
     let mut tools = StepTools::for_step(permissions, &checks)
       .with_sources(sources)
-      .with_services(permissions, &self.service_names()?);
+      .with_services(permissions, &self.service_names()?)
+      .with_stacks(&self.stack_names()?);
     if files.indexed() {
       tools = tools.with_code_index();
     }

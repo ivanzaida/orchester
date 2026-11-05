@@ -12,9 +12,9 @@ use orchester_core::{
   id::RunId,
   name::Name,
   permission::{AgentPermissions, CommandPermission, NetworkAccess, RepositoryAccess},
-  resource::{CommandArg, CommandProgram, Slug},
+  resource::{CommandArg, CommandProgram, ResourceBody, Slug},
   secret::Secret,
-  service::{Readiness, ReadyCheck, ReadyTimeout, Service, ServiceName},
+  service::{Readiness, ReadyCheck, ReadyTimeout, Service, ServiceName, Stack, StackName},
   store::ResourceStore,
   time::Timestamp,
 };
@@ -64,20 +64,33 @@ pub fn service_project(steps: Vec<StepSpec>, secrets: Vec<(Secret, &'static str)
 
 /// Publishes `services` in the project at `root`, as a person does on the project's Services page.
 pub fn publish(root: &Path, services: &[Service]) {
-  let mut db = ProjectDb::open(root).expect("open");
   for service in services {
-    let name = service.name().as_str();
-    let resource = db
-      .create_resource(
-        Slug::new(name).expect("slug"),
-        Name::new(name).expect("name"),
-        service,
-        Timestamp::now(),
-      )
-      .expect("service");
-    db.publish_draft::<Service>(resource.id(), Timestamp::now())
-      .expect("published");
+    publish_one(root, service.name().as_str(), service);
   }
+}
+
+/// Publishes the stack `name` of `services` in the project at `root`, after the services it lists.
+pub fn publish_stack(root: &Path, name: &str, services: &[&str]) {
+  let services = services
+    .iter()
+    .map(|service| ServiceName::new(service).expect("a name"))
+    .collect();
+  let stack = Stack::new(StackName::new(name).expect("a name"), services).expect("a stack");
+  publish_one(root, name, &stack);
+}
+
+fn publish_one<B: ResourceBody>(root: &Path, name: &str, body: &B) {
+  let mut db = ProjectDb::open(root).expect("open");
+  let resource = db
+    .create_resource(
+      Slug::new(name).expect("slug"),
+      Name::new(name).expect("name"),
+      body,
+      Timestamp::now(),
+    )
+    .expect("resource");
+  db.publish_draft::<B>(resource.id(), Timestamp::now())
+    .expect("published");
 }
 
 /// The answer of the run's first call of `tool`, `<tool> <ok|error>: <first line>`, once it returned.

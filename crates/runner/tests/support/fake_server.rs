@@ -1,6 +1,7 @@
 //! `listen <port>`: a stand-in web server for the service tests. It accepts connections on `127.0.0.1:<port>` until
 //! it is ended and answers every request by its path: `/moved` with `302 Found`, `/missing` with `404 Not Found`,
-//! any other with `200 OK`. It prints `listening on <port>` once it accepts connections.
+//! any other with `200 OK`. It prints `listening on <port>` once it accepts connections. `connect <port>` fails
+//! unless something accepts connections on `127.0.0.1:<port>`: a service that needs another checks it is ready.
 
 use std::{
   io::{BufRead, BufReader, Write},
@@ -19,6 +20,13 @@ pub fn listen(port: Option<&str>) -> Result<(), String> {
     }
   }
   Ok(())
+}
+
+pub fn connect(port: Option<&str>) -> Result<(), String> {
+  let port: u16 = port.and_then(|port| port.parse().ok()).ok_or("connect needs a port")?;
+  TcpStream::connect((Ipv4Addr::LOCALHOST, port))
+    .map(drop)
+    .map_err(|error| format!("nothing accepts connections on {port}: {error}"))
 }
 
 fn answer(stream: &TcpStream) {

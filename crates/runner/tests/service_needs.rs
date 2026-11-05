@@ -1,0 +1,264 @@
+//! Needs and stacks end to end against `orchester-fake-codex`, with `orchester-test-command` as the services
+//! (`support::services`): `start_service` starts what a service needs first, in order, each once what it needs is
+//! ready, and fills `{{services.<name>.url|port}}` with the URLs and ports of the services started before it;
+//! `start_stack` starts a stack's services and their needs, each once. A service the step runs already is reused, not
+//! started twice. When a service a start needs fails, nothing after it starts and the error names it. Needs `git`.
+//! Run with `cargo test -p orchester-runner --features test-agent --test service_needs service`.
+
+mod support;
+
+use std::{fs, path::Path};
+
+use orchester_core::{
+  id::{IdempotencyKey, RunId},
+  run::{Answerer, ApprovalAnswer, RunStatus},
+  service::{ReadyCheck, Service, ServiceName},
+};
+use orchester_ipc::Event;
+use orchester_runner::execution::Scheduler;
+use tokio::sync::mpsc;
+
+use self::support::{
+  PATIENCE, StepSpec, is_running, pending_approval,
+  qa::{approve, calls, gone},
+  scheduler,
+  services::{
+    accepts, answered, publish, publish_stack, report_file, report_folder, reported_pid, service, service_project,
+    started_port,
+  },
+  wait_for,
+};
+
+fn implement(instructions: &'static str) -> Vec<StepSpec> {
+  vec![StepSpec::new("implement", "Implement", instructions, &[])]
+}
+
+/// The service `name` that needs `needs`: it reports its pid in `<name>.pid`, checks that each need accepts
+/// connections, writes each need's URL to `<name>-<need>.url`, then listens on its port, ready once it accepts
+/// connections.
+fn chained(root: &Path, name: &str, needs: &[&str]) -> Service {
+  let mut arguments = vec!["pid-file".to_owned(), report_file(root, &format!("{name}.pid"))];
+  for need in needs {
+    arguments.extend([
+      "connect".to_owned(),
+      format!("{{{{services.{need}.port}}}}"),
+      "write".to_owned(),
+      report_file(root, &format!("{name}-{need}.url")),
+      format!("{{{{services.{need}.url}}}}"),
+    ]);
+  }
+  arguments.extend(["listen".to_owned(), "{{port}}".to_owned()]);
+  let needs = needs
+    .iter()
+    .map(|need| ServiceName::new(need).expect("a name"))
+    .collect();
+  service(name, &arguments, ReadyCheck::PortOpen, 20)
+    .with_needs(needs)
+    .expect("needs")
+}
+
+/// Publishes the chain `db` ← `api` ← `web`: `web` needs `api`, which needs `db`.
+fn publish_chain(root: &Path) {
+  publish(
+    root,
+    &[
+      chained(root, "db", &[]),
+      chained(root, "api", &["db"]),
+      chained(root, "web", &["api"]),
+    ],
+  );
+}
+
+/// The port of the URL `name` wrote for its need `need`, `http://127.0.0.1:<port>`.
+fn wired_port(root: &Path, name: &str, need: &str) -> u16 {
+  let url = fs::read_to_string(report_folder(root).join(format!("{name}-{need}.url"))).expect("the wired URL");
+  url
+    .strip_prefix("http://127.0.0.1:")
+    .and_then(|port| port.parse().ok())
+    .unwrap_or_else(|| panic!("`{url}` is a loopback URL"))
+}
+
+/// The answers of the run's first `count` calls of `start_service`, once they returned.
+async fn starts(root: &Path, events: &mut mpsc::UnboundedReceiver<Event>, run: RunId, count: usize) -> Vec<String> {
+  tokio::time::timeout(PATIENCE, async {
+    loop {
+      let starts: Vec<String> = calls(root, run)
+        .into_iter()
+        .filter(|call| call.starts_with("start_service"))
+        .collect();
+      if starts.len() >= count {
+        return starts;
+      }
+      events.recv().await.expect("notification");
+    }
+  })
+  .await
+  .unwrap_or_else(|_| panic!("{count} starts answer in time"))
+}
+
+/// Answers the run's pending approval with Approve similar, so its later calls of the tool do not ask.
+async fn approve_similar(scheduler: &Scheduler, root: &Path, events: &mut mpsc::UnboundedReceiver<Event>, run: RunId) {
+  let request = pending_approval(root, events, run).await;
+  scheduler
+    .decide_tool_approval(run, request.id, ApprovalAnswer::Similar, Answerer::Person)
+    .await
+    .expect("approved");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn service_needs_start_in_order_and_wire_their_urls() {
+  let project = service_project(implement("Start the service web. Hold the services."), Vec::new());
+  let root = project.repo.path();
+  publish_chain(root);
+  let hold = root.join(".orchester").join("fake-hold");
+  fs::write(&hold, "hold").expect("hold");
+  let (scheduler, mut events) = scheduler(root);
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("run");
+  approve(&scheduler, root, &mut events, id).await;
+  let web = started_port(&answered(root, &mut events, id, "start_service").await);
+  // Each service checked that what it needs accepts connections before it went on, so each started once its needs
+  // were ready; and each got the URL of what it needs.
+  let (api, db) = (wired_port(root, "web", "api"), wired_port(root, "api", "db"));
+  for port in [db, api, web] {
+    assert!(accepts(port), "port {port} is listened on");
+  }
+  assert!(db != api && api != web && db != web, "{db} {api} {web}");
+  let mut pids = Vec::new();
+  for name in ["db", "api", "web"] {
+    let pid = reported_pid(root, &format!("{name}.pid")).await;
+    assert!(is_running(&pid), "{name} runs while its step works");
+    pids.push(pid);
+  }
+
+  fs::remove_file(&hold).expect("release");
+  let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  for pid in &pids {
+    gone(pid, "a service after its step ended").await;
+  }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn service_already_running_is_reused_not_started_twice() {
+  let project = service_project(
+    implement("Start the service api. Then start the service web. Hold the services."),
+    Vec::new(),
+  );
+  let root = project.repo.path();
+  publish_chain(root);
+  let hold = root.join(".orchester").join("fake-hold");
+  fs::write(&hold, "hold").expect("hold");
+  let (scheduler, mut events) = scheduler(root);
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("run");
+  approve_similar(&scheduler, root, &mut events, id).await;
+  let api = started_port(&answered(root, &mut events, id, "start_service").await);
+  let (db_pid, api_pid) = (reported_pid(root, "db.pid").await, reported_pid(root, "api.pid").await);
+  let starts = starts(root, &mut events, id, 2).await;
+  let web = started_port(&starts[1]);
+  let web_pid = reported_pid(root, "web.pid").await;
+  assert!(accepts(web), "web listens on the port it was given");
+  // `web` got the `api` the first start started, which still runs with the same `db`.
+  assert_eq!(wired_port(root, "web", "api"), api);
+  assert_eq!(
+    reported_pid(root, "api.pid").await,
+    api_pid,
+    "api was not started again"
+  );
+  assert_eq!(reported_pid(root, "db.pid").await, db_pid, "db was not started again");
+  for pid in [&db_pid, &api_pid, &web_pid] {
+    assert!(is_running(pid), "every service runs");
+  }
+
+  fs::remove_file(&hold).expect("release");
+  let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn service_stack_starts_its_services_and_their_needs_once() {
+  let project = service_project(implement("Start the stack full. Hold the services."), Vec::new());
+  let root = project.repo.path();
+  publish_chain(root);
+  // `db` is in the stack and a need of `api`: it starts once.
+  publish_stack(root, "full", &["web", "db"]);
+  let hold = root.join(".orchester").join("fake-hold");
+  fs::write(&hold, "hold").expect("hold");
+  let (scheduler, mut events) = scheduler(root);
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("run");
+  approve(&scheduler, root, &mut events, id).await;
+  let answer = answered(root, &mut events, id, "start_stack").await;
+  let json = answer
+    .strip_prefix("start_stack ok: ")
+    .unwrap_or_else(|| panic!("the stack started: {answer}"));
+  let started: serde_json::Value = serde_json::from_str(json).expect("the answer is JSON");
+  let services = started["services"].as_object().expect("the services");
+  let mut names: Vec<&str> = services.keys().map(String::as_str).collect();
+  names.sort_unstable();
+  assert_eq!(names, ["api", "db", "web"]);
+  let port = |name: &str| u16::try_from(services[name]["port"].as_u64().expect("a port")).expect("a port number");
+  assert_eq!(wired_port(root, "api", "db"), port("db"));
+  assert_eq!(wired_port(root, "web", "api"), port("api"));
+  for name in ["db", "api", "web"] {
+    assert!(accepts(port(name)), "{name} listens on the port it was given");
+    assert_eq!(services[name]["url"], format!("http://127.0.0.1:{}", port(name)));
+  }
+
+  fs::remove_file(&hold).expect("release");
+  let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn service_failing_need_stops_the_chain_and_is_named() {
+  let project = service_project(implement("Start the service web."), Vec::new());
+  let root = project.repo.path();
+  let failing = service(
+    "db",
+    &[
+      "pid-file".to_owned(),
+      report_file(root, "db.pid"),
+      "stderr".to_owned(),
+      "no disk".to_owned(),
+      "exit".to_owned(),
+      "3".to_owned(),
+    ],
+    ReadyCheck::PortOpen,
+    20,
+  );
+  publish(
+    root,
+    &[failing, chained(root, "api", &["db"]), chained(root, "web", &["api"])],
+  );
+  let (scheduler, mut events) = scheduler(root);
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("run");
+  approve(&scheduler, root, &mut events, id).await;
+  let answer = answered(root, &mut events, id, "start_service").await;
+  assert!(
+    answer.starts_with(
+      "start_service error: the service `db` did not start, so nothing after it was started (`api`, `web`): the \
+       service `db` exited before it was ready"
+    ),
+    "{answer}"
+  );
+  let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  assert!(report_folder(root).join("db.pid").exists(), "db was started");
+  for name in ["api", "web"] {
+    assert!(
+      !report_folder(root).join(format!("{name}.pid")).exists(),
+      "{name} was not started after db failed"
+    );
+  }
+}

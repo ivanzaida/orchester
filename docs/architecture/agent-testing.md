@@ -74,6 +74,7 @@ and line, and artifacts.
 | --- | --- |
 | `list_services`, `list_test_suites` | What the project defines, with needs and drivers |
 | `start_service(name)` | Starts it and its needs in order, waits for ready, runs the seed; returns URL, port and captured seed values |
+| `start_stack(name)` | Starts a stack's services and their needs in order, each once; returns each one's URL and port |
 | `service_status(name)`, `service_logs(name, tail, since)`, `stop_service(name)` | State, log tail (secrets redacted), stop without asking |
 | `run_tests(suite, filter?)` | Runs a suite (starting what it needs) and returns the structured result: counts, each failure with message, file:line, a short excerpt and its artifacts |
 | `test_output(run, test)` | One test's whole output, when it is really needed |

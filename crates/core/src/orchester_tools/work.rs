@@ -19,7 +19,7 @@ use crate::{
   memory::MemoryNote,
   resource::{ApprovalMode, CommandAction, CommandEnvironment, ExitCodes},
   run::StepProgress,
-  service::ServiceName,
+  service::{ServiceName, StackName},
 };
 
 /// A check: a command tool of the project's Tools library offered to the step, as the run pinned it.
@@ -163,8 +163,10 @@ pub enum ToolWork {
   App(AppCall),
   /// Starts a QA copy of the app once a QA slot its project allows is free, and keeps it for the step.
   QaApp(QaAppStart),
-  /// Starts the published service of this name for the step and waits until it is ready.
+  /// Starts the published service of this name and what it needs for the step and waits until it is ready.
   StartService(ServiceName),
+  /// Starts the services of the published stack of this name and what they need for the step.
+  StartStack(StackName),
   /// Stops the service of this name the step started.
   StopService(ServiceName),
   /// The status of the service of this name the step started.
@@ -205,6 +207,7 @@ impl ToolCall {
       Self::App(call) => Ok(ToolWork::App(call.clone())),
       Self::StartQaApp(start) => Ok(ToolWork::QaApp(start.clone())),
       Self::StartService(name) => Ok(ToolWork::StartService(name.clone())),
+      Self::StartStack(name) => Ok(ToolWork::StartStack(name.clone())),
       Self::StopService(name) => Ok(ToolWork::StopService(name.clone())),
       Self::ServiceStatus(name) => Ok(ToolWork::ServiceStatus(name.clone())),
       Self::ServiceLogs { name, tail, since } => Ok(ToolWork::ServiceLogs {

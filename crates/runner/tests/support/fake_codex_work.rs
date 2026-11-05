@@ -30,9 +30,10 @@
 //!   `call_run_app` without a pid (`fake_codex_tools`); with "Then read outside" it then reads `deps-a/notes.txt` of
 //!   the repository, which asks, and calls `call_run_app` again (and with "Then start again" `start_qa_app` again, at
 //!   once after that answer); with "Hold the QA app" it then waits while `fake-hold` lies next to the worktrees;
-//! - "Start the service <name>.": calls `start_service`, then reads outside, waits for it to end, looks at its status
-//!   and logs or calls `stop_service` as the prompt says (`fake_codex_tools`); with "Hold the services" it then waits
-//!   while `fake-hold` lies next to the worktrees;
+//! - "Start the service <name>." or "Start the stack <name>.": calls `start_service` or `start_stack`, then starts
+//!   another service, reads outside, waits for it to end, looks at its status and logs or calls `stop_service` as the
+//!   prompt says (`fake_codex_tools`); with "Hold the services" it then waits while `fake-hold` lies next to the
+//!   worktrees;
 //! - "Leave a handoff": works as below, and its step result hands off (`completed`, `decisions`, `open_questions`,
 //!   `next_agent_should_know`), with the decision "Greet in README.md from <step>";
 //! - "Fail once": the first time a step works on it, the result says it failed; later it works as below;
@@ -132,7 +133,7 @@ const ANSWERS: [(&str, SteerAnswer); 6] = [
 ];
 
 /// The prompts whose work uses Orchester's tools ([`fake_codex_tools::report`]).
-const TOOL_PROMPTS: [&str; 10] = [
+const TOOL_PROMPTS: [&str; 11] = [
   "Use Orchester's tools",
   "Use the file tools",
   "Use the run tools",
@@ -142,6 +143,7 @@ const TOOL_PROMPTS: [&str; 10] = [
   "Use the skill tools",
   "Start the QA app",
   "Start the service ",
+  "Start the stack ",
   "Use the browser tools",
 ];
 

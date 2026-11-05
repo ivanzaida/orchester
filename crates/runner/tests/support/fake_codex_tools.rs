@@ -169,7 +169,7 @@ pub fn report(server: Option<&mut Prompt>, worktree: &Path, prompt: &str) {
     }
     return;
   }
-  if prompt.contains("Start the service ") {
+  if prompt.contains("Start the service ") || prompt.contains("Start the stack ") {
     services(server, worktree, prompt);
     return;
   }
@@ -178,19 +178,28 @@ pub fn report(server: Option<&mut Prompt>, worktree: &Path, prompt: &str) {
   }
 }
 
-/// "Start the service <name>.": calls `start_service`; with "Then read outside" it then reads `deps-a/notes.txt` of
-/// the repository, which asks; with "Then wait for it to end" it calls `service_status` until the service is no longer
-/// ready; with "Then look at the service" it calls `service_status` and `service_logs`; and with "Then stop the
-/// service" it calls `stop_service`, then `service_status` again when it also looks.
+/// The name after `lead` in `prompt`, up to the next `.`.
+fn named_after<'a>(prompt: &'a str, lead: &str) -> Option<&'a str> {
+  prompt.split(lead).nth(1).and_then(|rest| rest.split('.').next())
+}
+
+/// "Start the service <name>." calls `start_service`, "Start the stack <name>." `start_stack`; with "Then start the
+/// service <other>." it then calls `start_service` of that one; with "Then read outside" it then reads
+/// `deps-a/notes.txt` of the repository, which asks; with "Then wait for it to end" it calls `service_status` until the
+/// service is no longer ready; with "Then look at the service" it calls `service_status` and `service_logs`; and with
+/// "Then stop the service" it calls `stop_service`, then `service_status` again when it also looks.
 fn services(server: &mut Prompt, worktree: &Path, prompt: &str) {
-  let name = prompt
-    .split("Start the service ")
-    .nth(1)
-    .and_then(|rest| rest.split('.').next())
-    .unwrap_or("web");
+  let stack = named_after(prompt, "Start the stack ");
+  let name = named_after(prompt, "Start the service ").unwrap_or("web");
   let named = json!({"name": name});
   let look = prompt.contains("Then look at the service");
-  report_call(server, "start_service", &named);
+  match stack {
+    Some(stack) => report_call(server, "start_stack", &json!({"name": stack})),
+    None => report_call(server, "start_service", &named),
+  }
+  if let Some(other) = named_after(prompt, "Then start the service ") {
+    report_call(server, "start_service", &json!({"name": other}));
+  }
   if prompt.contains("Then read outside") {
     read_outside(server, worktree);
   }
