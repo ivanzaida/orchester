@@ -97,7 +97,10 @@ impl Rows {
       let theirs = other.0.get(table).unwrap_or(&none);
       let rows: BTreeSet<&String> = mine.keys().chain(theirs.keys()).collect();
       for row in rows {
-        let (here, there) = (mine.get(row).copied().unwrap_or(0), theirs.get(row).copied().unwrap_or(0));
+        let (here, there) = (
+          mine.get(row).copied().unwrap_or(0),
+          theirs.get(row).copied().unwrap_or(0),
+        );
         let shown: String = row.chars().take(600).collect();
         if here > there {
           found.push_str(&format!("{table} -{} {shown}\n", here - there));
