@@ -59,12 +59,18 @@ fn run_changes_a_change_that_names_no_run_moves_every_runs_count() {
   let mut states = runners.states_of(root);
 
   runners.base_notices_queued(root);
-  assert!(moved(&mut of_a) && moved(&mut of_b), "queued base notices move every run's count");
+  assert!(
+    moved(&mut of_a) && moved(&mut of_b),
+    "queued base notices move every run's count"
+  );
   assert!(moved(&mut changes), "and the project's changes");
   assert!(!moved(&mut states), "not its states");
 
   runners.count_change_for_test(root, None, true);
-  assert!(moved(&mut of_a) && moved(&mut of_b), "a run change without a run moves every run's count");
+  assert!(
+    moved(&mut of_a) && moved(&mut of_b),
+    "a run change without a run moves every run's count"
+  );
   assert!(moved(&mut changes) && moved(&mut states), "and the project's counts");
 }
 
@@ -96,5 +102,8 @@ fn run_changes_a_run_followed_again_after_its_readers_left_moves_again() {
   let mut second = first.clone();
   assert!(!moved(&mut first), "a new subscription starts seen");
   runners.count_change_for_test(root, Some(run), false);
-  assert!(moved(&mut first) && moved(&mut second), "every receiver of the run's count sees it move");
+  assert!(
+    moved(&mut first) && moved(&mut second),
+    "every receiver of the run's count sees it move"
+  );
 }
