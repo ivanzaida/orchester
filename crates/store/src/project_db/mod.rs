@@ -23,6 +23,7 @@ mod disk_guard;
 mod environment;
 mod estimates;
 mod feedback;
+mod flaky_tests;
 mod import;
 mod invocation_accounts;
 mod invocation_connections;

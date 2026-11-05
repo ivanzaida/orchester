@@ -1711,6 +1711,11 @@
         "seed": "The service's seed would change: what it runs, or the requests it sends, once the service is ready."
       }
     },
+    "flakyTests": {
+      "quarantine": "Quarantining {{test}} in {{suite}} lets its failures pass the Test step: its runs would no longer be held to it, so a person decides it.",
+      "notFlaky": "{{test}} in {{suite}} was never flaky in a Test step of this project; list_flaky_tests lists the tests that were. Only a flaky test is quarantined.",
+      "invalid": "Name the suite and the test as list_flaky_tests gives them: {{reason}}"
+    },
     "widens": {
       "repository": "Write access to the repository, which the latest version does not give.",
       "writableFolder": "A writable folder outside the worktree that the latest version does not give.",

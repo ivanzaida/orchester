@@ -1,14 +1,21 @@
 //! What a Test step found, and how it reads for the agents after it: the result the step leaves for the steps after it
-//! when it passes ([`TestStepResult::summary`]), and the failed tests alone when it fails
-//! ([`TestStepResult::failure_report`]) — each with its name, message, file:line, excerpt and artifacts, never the
-//! programs' raw output, which stays with the run for `test_output`.
+//! when it passes ([`TestStepResult::summary`]), with the quarantined tests that failed, and the failed tests alone
+//! when it fails ([`TestStepResult::failure_report`]) — each with its name, message, file:line, excerpt and artifacts,
+//! never the programs' raw output, which stays with the run for `test_output`. A quarantined test is never sent back
+//! to the writing step: the failure report leaves it out, and the project's flaky history keeps it
+//! ([`TestStepResult::flaky_outcomes`]).
 
 use std::fmt::Write as _;
 
-use super::outcome::SuiteOutcome;
+use super::{
+  flaky::{FlakyKind, FlakyOutcome, TestKey},
+  outcome::SuiteOutcome,
+};
 use crate::{
+  id::RunId,
   resource::{Slug, TestLayer},
   test_report::MAX_FAILURES_SHOWN,
+  time::Timestamp,
 };
 
 /// The most characters of a failed test's message the report shows; its excerpt has the start of the rest.
@@ -41,8 +48,8 @@ impl TestStepResult {
       .map(|(layer, _)| *layer)
   }
 
-  /// What the steps after it read when it passed: the suites it ran with their totals, the flaky tests, and the
-  /// suites it left out.
+  /// What the steps after it read when it passed: the suites it ran with their totals, the flaky tests, the
+  /// quarantined tests that failed, and the suites it left out.
   pub fn summary(&self) -> String {
     let suites: Vec<&SuiteOutcome> = self.suites().collect();
     if suites.is_empty() {
@@ -65,6 +72,7 @@ impl TestStepResult {
     }
     text.push('\n');
     self.push_flaky(&mut text);
+    self.push_quarantined(&mut text);
     self.push_left_out(&mut text);
     text
   }
@@ -117,6 +125,26 @@ impl TestStepResult {
     text
   }
 
+  /// What the project's flaky history keeps of it, seen in `run` at `at`: each flaky test, and each quarantined test
+  /// that failed again.
+  pub fn flaky_outcomes(&self, run: RunId, at: Timestamp) -> Vec<FlakyOutcome> {
+    let mut outcomes = Vec::new();
+    for suite in self.suites() {
+      let flaky = suite.flaky.iter().map(|name| (name, FlakyKind::Flaky));
+      let quarantined = suite
+        .quarantined
+        .iter()
+        .map(|test| (&test.name, FlakyKind::QuarantinedFailure));
+      for (name, kind) in flaky.chain(quarantined) {
+        // A test its report gave no name cannot be told apart from another one, nor quarantined: none is kept.
+        if let Ok(test) = TestKey::new(suite.suite.clone(), name) {
+          outcomes.push(FlakyOutcome { test, kind, run, at });
+        }
+      }
+    }
+    outcomes
+  }
+
   fn suites(&self) -> impl Iterator<Item = &SuiteOutcome> {
     self.reached.iter().flat_map(|(_, suites)| suites.iter())
   }
@@ -138,6 +166,38 @@ impl TestStepResult {
         "\nFlaky, so they do not fail the step: they failed, then passed when run again: {}.",
         flaky.join(", ")
       );
+    }
+  }
+
+  /// The quarantined tests that failed again, which the steps after a passed step read and the writing step never
+  /// does.
+  fn push_quarantined(&self, text: &mut String) {
+    let mut quarantined = self
+      .suites()
+      .flat_map(|suite| suite.quarantined.iter().map(move |test| (suite, test)));
+    let Some(first) = quarantined.next() else {
+      return;
+    };
+    text.push_str(
+      "\nQuarantined by the person, so they do not fail the step: they failed, and failed again when run again. They \
+       are not the work's to fix.\n",
+    );
+    for (suite, test) in std::iter::once(first).chain(quarantined) {
+      // Writing to a String cannot fail.
+      let _ = write!(
+        text,
+        "\n- `{}` in `{}`: {}",
+        test.name,
+        suite.suite.as_str(),
+        test.outcome
+      );
+      if let Some(location) = &test.location {
+        let _ = write!(text, " at {location}");
+      }
+      text.push('\n');
+      if let Some(message) = &test.message {
+        let _ = writeln!(text, "  message: {}", short(message.lines().next().unwrap_or_default()));
+      }
     }
   }
 

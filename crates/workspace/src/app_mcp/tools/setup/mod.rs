@@ -8,6 +8,7 @@ mod accounts;
 mod api_providers;
 mod complete;
 mod connections;
+mod flaky_tests;
 mod instructions;
 mod mcp_preview;
 mod mcp_servers;
@@ -446,6 +447,7 @@ pub fn listed() -> Vec<Tool> {
     .chain(skills::SPECS)
     .chain(secrets::SPECS)
     .chain(services::SPECS)
+    .chain(flaky_tests::SPECS)
     .chain(storage::SPECS)
     .map(tool)
     .collect()
@@ -470,6 +472,9 @@ pub async fn call(
   }
   if named(self::services::SPECS) {
     return Some(self::services::call(services, translate, name, Value::Object(arguments)).await);
+  }
+  if named(flaky_tests::SPECS) {
+    return Some(flaky_tests::call(services, name, Value::Object(arguments)).await);
   }
   if named(storage::SPECS) {
     return Some(storage::call(services, name, Value::Object(arguments)).await);

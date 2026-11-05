@@ -28,6 +28,7 @@ mod denial_notes;
 mod disk_guard;
 mod editor_drafts;
 mod feedback;
+mod flaky_tests;
 mod import;
 mod invocation_permissions;
 mod joining;

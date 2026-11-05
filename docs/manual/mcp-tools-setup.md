@@ -678,3 +678,42 @@ Completes a run that passed every step and **committed nothing** (its task's lat
 Refusals: `expects_changes` (pipeline expects changes and no `anyway`), `automation_not_allowed` (`anyway` without
 AA), `has_commits` (use `merge_run`), `already_completed`, `run_not_completable` (did not succeed, not the latest,
 merged, or waiting in a merge). The completion is recorded as automation's.
+
+---
+
+## 11. Flaky tests
+
+A Test step runs a failed test once more; one that passes then is **flaky** and does not fail the step. Every flaky
+outcome is kept for the project with its suite, test, run and time. A test flaky in **3 runs within 14 days** is
+*watched*: one flaky outcome is often chance and two can be one bad hour, a third in another run is a pattern; runs
+are counted, not outcomes, so one run going back and forth does not make a test watched alone, and a fixed test leaves
+the list after two quiet weeks. The person moves a test to **quarantine** and back: a quarantined test still runs,
+and when it fails again its failure is in the step's result for the steps after it and in the flaky history, but it
+never fails the step and is never returned to the writing step.
+
+### `list_flaky_tests` — read-only
+
+Every test a Test step saw flaky, or that is quarantined: `suite`, `test` (its name as `run_tests` names it),
+`standing` (`quarantined` with `quarantined_since`, `watched` or `seen`), `flaky_runs` (within the window),
+`last_flaky` and `last_quarantined_failure` (ms since the epoch, `null` for never); quarantined first, then watched,
+then the others. `watch` gives `after_runs` and `window_days`. Parameter: `project` (req.).
+
+### `quarantine_test` — changes data · gate AP
+
+Quarantines a flaky test for the Test steps that start from then on. Its failures would pass, so it is refused as
+`person_only` unless a person turned on *Let automation change agent permissions*. Refusals: `not_flaky` (no Test
+step saw it flaky), `invalid_test`. Answers `changed` (`false` when it was quarantined already) and `test` as
+`list_flaky_tests` gives it.
+
+### `release_test` — changes data
+
+Takes a test out of quarantine: its failures fail the Test steps that start from then on again. Always taken. Answers
+`changed` and `test` (`null` for a test never seen flaky).
+
+`quarantine_test` and `release_test` both take:
+
+| Parameter | Type   | Req. | Description                                      |
+|-----------|--------|------|--------------------------------------------------|
+| `project` | string | yes  | The project's id, or its name.                   |
+| `suite`   | string | yes  | The test suite's name, as `list_flaky_tests` gives it. |
+| `test`    | string | yes  | The test's name, as `list_flaky_tests` gives it. |
