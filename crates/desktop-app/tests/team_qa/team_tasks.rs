@@ -2,7 +2,9 @@
 //! app's `team-member` and `team-outage` states with the stand-in team server's `/api/v2`: a member's list without New
 //! task and with the line naming the Admins, an Admin's with New task, the views counted by the server, a change the
 //! server commits refreshing the mounted list, the board without quick add, the outage in place of the rows, the
-//! sources keyed by the session and not the person, and a local project left as it was.
+//! sources keyed by the session and not the person, and a local project left as it was. ORC-727: the team's line on
+//! the board only, the sidebar counting the server's Active tasks, the status bar saying the server answers, and
+//! Sharing's *Your role* saying what the role does.
 //!
 //! `cargo test -p orchester-app --test team_qa team_qa_tasks`
 
@@ -29,6 +31,13 @@ fn count(window: &mut Window, tab: TaskListTab) -> String {
   window.text(&format!("tasks-view-{}-count", tab.name()))
 }
 
+/// The board, where the team's line shows (01b `zv7b6`), and the role it names.
+fn role_on_the_board(window: &mut Window) -> String {
+  window.press("tasks-layout-board");
+  window.until("the team's line", |window| window.texts("tasks-team-role").is_some());
+  window.text("tasks-team-role")
+}
+
 #[test]
 fn team_qa_tasks_a_member_reads_the_servers_tasks_without_new_task() {
   let (mut window, server) = listed(State::Member);
@@ -41,12 +50,26 @@ fn team_qa_tasks_a_member_reads_the_servers_tasks_without_new_task() {
     window.text(LOCK),
     "Only Admins change team tasks, modules and tags: dana-k (Admin) and olha (Server admin). You read, run and claim."
   );
-  assert_eq!(window.text("tasks-team-role"), "You're a member");
-  assert_eq!(window.text("tasks-team-from-server"), "Read from the server");
+  assert!(
+    window.texts("tasks-team-line").is_none(),
+    "the list draws no team line (01 `QdL7N`)"
+  );
   assert_eq!(count(&mut window, TaskListTab::All), "24");
   assert_eq!(count(&mut window, TaskListTab::Active), "18");
   assert_eq!(count(&mut window, TaskListTab::Backlog), "3");
   assert_eq!(count(&mut window, TaskListTab::Done), "3");
+  assert_eq!(role_on_the_board(&mut window), "You're a member");
+  assert_eq!(window.text("tasks-team-from-server"), "Read from the server");
+}
+
+/// The sidebar counts the server's Active tasks, and the status bar says nothing of a server whose reads answer.
+#[test]
+fn team_qa_tasks_the_sidebar_and_the_status_bar_follow_the_servers_reads() {
+  let (mut window, _server) = listed(State::Member);
+  window.until("the server's Active count", |window| {
+    window.texts("nav-tasks").is_some_and(|texts| texts == ["Tasks", "18"])
+  });
+  window.until("the server answering", |window| window.texts("status-server").is_none());
 }
 
 #[test]
@@ -58,26 +81,52 @@ fn team_qa_tasks_an_admin_has_new_task_and_no_lock_line() {
   window.until("the server's tasks", |window| window.texts(ROW).is_some());
   assert!(window.texts("tasks-new-task").is_some(), "an Admin creates tasks");
   assert!(window.texts(LOCK).is_none());
-  assert_eq!(window.text("tasks-team-role"), "You're an Admin");
+  assert_eq!(role_on_the_board(&mut window), "You're an Admin");
 }
 
-/// The `team-admin` and `team-server-admin` states: the Tasks line and Sharing's *Your role* name the role.
+/// The `team-member`, `team-admin` and `team-server-admin` states: the board's line and Sharing's *Your role* name the
+/// role, and *Your role* says what it does (07e `BLTsP`).
 #[test]
-fn team_qa_tasks_the_admin_states_name_the_role_on_tasks_and_in_sharing() {
-  for (state, line, role) in [
-    (State::Admin, "You're an Admin", "Admin"),
-    (State::ServerAdmin, "You're a Server admin", "Server admin"),
+fn team_qa_tasks_the_role_states_name_the_role_on_the_board_and_in_sharing() {
+  for (state, line, role, does) in [
+    (
+      State::Member,
+      "You're a member",
+      "Member",
+      "Reads, runs and claims team work".to_owned(),
+    ),
+    (
+      State::Admin,
+      "You're an Admin",
+      "Admin",
+      "Changes team tasks, modules, tags and configuration".to_owned(),
+    ),
+    (
+      State::ServerAdmin,
+      "You're a Server admin",
+      "Server admin",
+      "Administers {host} and every workspace on it; includes Admin".to_owned(),
+    ),
   ] {
-    let (mut window, _server) = listed(state);
-    assert!(window.texts("tasks-new-task").is_some(), "{state:?} creates tasks");
-    assert!(window.texts(LOCK).is_none(), "{state:?}");
-    assert_eq!(window.text("tasks-team-role"), line);
+    let (mut window, server) = listed(state);
+    assert_eq!(
+      window.texts("tasks-new-task").is_some(),
+      state != State::Member,
+      "{state:?}"
+    );
+    assert_eq!(role_on_the_board(&mut window), line);
     window.navigation().go(Route::Project(
       project_id(),
       ProjectPage::Settings(ProjectSettingsTab::Sharing),
     ));
     window.until("Your role", |window| window.texts("sharing-role-value").is_some());
     assert_eq!(window.text("sharing-role-value"), role, "{state:?}");
+    let host = server.url().trim_start_matches("http://").to_owned();
+    assert_eq!(
+      window.text("sharing-role-hint"),
+      does.replace("{host}", &host),
+      "{state:?}"
+    );
   }
 }
 
@@ -144,12 +193,21 @@ fn team_qa_tasks_a_members_row_menu_only_opens_and_copies_the_key() {
 
 #[test]
 fn team_qa_tasks_an_outage_says_team_data_is_unavailable_instead_of_the_rows() {
-  let (mut window, _server) = on_the_tasks_list(State::Outage);
+  let (mut window, server) = on_the_tasks_list(State::Outage);
   window.until("the outage", |window| window.texts(UNAVAILABLE).is_some());
   assert_eq!(window.text(UNAVAILABLE), "Team data is unavailable");
+  // The server by its host, as `l6EMj` names orchester.acme.dev.
+  let host = server.url().trim_start_matches("http://").to_owned();
+  let said = window.text("tasks-team-unavailable");
+  assert!(said.contains(&format!("{host} hasn't answered since")), "{said}");
   assert!(window.texts(ROW).is_none(), "no task is shown as current");
   assert!(window.texts("tasks-views").is_none());
   assert!(window.texts("tasks-new-task").is_none());
+  window.until("the server not answering", |window| {
+    window
+      .texts("status-server")
+      .is_some_and(|texts| texts.concat().contains("Acme offline"))
+  });
 }
 
 #[test]

@@ -2,7 +2,8 @@
 //! database that names its state: the stand-in team server has to answer while the window is open, so what joins it is
 //! the QA app's own (`examples/qa_app/team`), and so are `team-clone`'s clones. `team-offer` also has Ledger, a local
 //! project, so All projects shows *Local* beside *Shared · Acme* (09 `i5G19A`); `team-outage-running`,
-//! `team-member-running` and `team-module-outage` have two tasks running on this computer.
+//! `team-member-running` and `team-module-outage` have two tasks running on this computer, and in `team-outage-running`
+//! their work reports wait in the outbox to be sent.
 
 #[allow(
   dead_code,
@@ -14,10 +15,13 @@ pub mod state;
 use std::fs;
 
 use orchester_core::{
-  id::ProjectId,
+  id::{ClaimId, OperationId, ProjectId, WorkEventId, WorkId},
   project::{Project, ProjectKey},
+  task::Task,
+  time::Timestamp,
 };
 use orchester_store::{AppDb, ProjectDb};
+use rusqlite::{Connection, params};
 
 use self::state::{FILE, State};
 use crate::kontur::{
@@ -26,10 +30,11 @@ use crate::kontur::{
 };
 
 /// The tasks running on this computer in `team-outage-running`, as `On this computer` (`XTBXg`) lists them: number,
-/// title, the step at work and how many minutes ago the run started.
-const RUNNING: [(u32, &str, &str, i64); 2] = [
-  (12, "Add retry to webhook sender", "implement", 40),
-  (21, "Replay a failed delivery", "plan", 12),
+/// title, the step at work, how many minutes ago the run started, the run's number and how many of its work reports
+/// wait to be sent.
+const RUNNING: [(u32, &str, &str, i64, u32, u32); 2] = [
+  (12, "Add retry to webhook sender", "implement", 40, 8, 3),
+  (21, "Replay a failed delivery", "plan", 12, 2, 1),
 ];
 
 pub fn join(kontur: &mut Kontur) -> Result<(), SeedError> {
@@ -146,20 +151,66 @@ pub fn module_outage(kontur: &mut Kontur) -> Result<(), SeedError> {
   running(kontur, State::ModuleOutage)
 }
 
-/// KON-12 running Implement and KON-21 running Plan on this computer, and the marker naming `state`.
+/// KON-12 running Implement and KON-21 running Plan on this computer, and the marker naming `state`; in
+/// `team-outage-running` their work reports wait to be sent.
 fn running(kontur: &mut Kontur, state: State) -> Result<(), SeedError> {
   let catalogue = kontur.catalogue()?;
   let pipeline = &catalogue.feature_delivery;
-  for (number, title, step, minutes) in RUNNING {
-    // The store numbers tasks in order and has no API to number one: the seed moves its counter on, as in a project
-    // whose earlier tasks are the server's.
-    rusqlite::Connection::open(kontur.database())?
-      .execute("UPDATE counters SET next = ?1 WHERE name = 'task'", [number])?;
+  for (number, title, step, minutes, run, reports) in RUNNING {
+    // The store numbers tasks and runs in order and has no API to number one: the seed moves its counters on, as in a
+    // project whose earlier tasks are the server's and whose earlier runs ended.
+    let database = Connection::open(kontur.database())?;
+    database.execute("UPDATE counters SET next = ?1 WHERE name = 'task'", [number])?;
+    database.execute("UPDATE counters SET next = ?1 WHERE name = 'run'", [run])?;
     let (created, started) = (kontur.ago(minutes + 30), kontur.ago(minutes));
     let mut task = kontur.task((title, title, &[title]), Some(pipeline), created)?;
     shapes::apply(kontur, &mut task, Some(pipeline), Shape::Running(step), started)?;
+    if matches!(state, State::OutageRunning) {
+      waiting_reports(&database, &task, (started, reports))?;
+    }
   }
   write_marker(kontur, state)
+}
+
+/// `count` work reports of `task`'s run, started `at`, waiting in the outbox to be sent: the run recorded as started
+/// through the team server, as the workspace's team work records it, with the fixture's empty JSON for what the start
+/// and the reports send, which nothing sends while the server does not answer.
+fn waiting_reports(database: &Connection, task: &Task, (at, count): (Timestamp, u32)) -> Result<(), SeedError> {
+  let task = task.id().to_string();
+  let run: String = database.query_row(
+    "SELECT id FROM runs WHERE task_id = ?1 ORDER BY number DESC LIMIT 1",
+    [&task],
+    |row| row.get(0),
+  )?;
+  let (operation, work, at) = (
+    OperationId::generate().to_string(),
+    WorkId::generate().to_string(),
+    at.unix_millis(),
+  );
+  database.execute(
+    "INSERT INTO team_starts (operation_id, task_id, request, stage, work_id, bundle_sha256, run_id, created_at, \
+     updated_at) VALUES (?1, ?2, '{}', 'started', ?3, ?4, ?5, ?6, ?6)",
+    params![operation, task, work, "0".repeat(64), run, at],
+  )?;
+  database.execute(
+    "INSERT INTO team_runs (run_id, operation_id, team_task_id, claim_id, work_id, next_sequence) \
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+    params![run, operation, task, ClaimId::generate().to_string(), work, count + 1],
+  )?;
+  for sequence in 1..=count {
+    database.execute(
+      "INSERT INTO work_report_outbox (event_id, run_id, sequence, operation_id, outcome, request, state, created_at) \
+       VALUES (?1, ?2, ?3, ?4, '{}', '{}', 'pending', ?5)",
+      params![
+        WorkEventId::generate().to_string(),
+        run,
+        sequence,
+        OperationId::generate().to_string(),
+        at
+      ],
+    )?;
+  }
+  Ok(())
 }
 
 /// Kontur's checkout has the team's repository as its `origin`, which the QA app's server names for its project.

@@ -147,8 +147,9 @@ impl Component for Linked {
     let role = match link.removed_at {
       Some(_) => removed::role_row(ctx, link, &shared),
       None => {
-        let words = role_words(ctx, link.role);
-        rows::role_row(ctx, &words)
+        let host = entry.map_or_else(|| missing_server(ctx, link), |entry| entry.address.authority());
+        let (words, hint) = role_words(ctx, link.role, &host);
+        rows::role_row(ctx, &words, hint)
       }
     };
     let team = Group::new("project-settings-sharing-team", ctx.t("sharing.team.title"))
@@ -329,14 +330,18 @@ fn refused(ctx: &mut Ctx) -> Element {
     .into()
 }
 
-/// The person's role there, as the page says it.
-fn role_words(ctx: &Ctx, role: Option<MemberRole>) -> String {
-  match role {
-    Some(MemberRole::Owner) => ctx.t("sharing.linked.owner"),
-    Some(MemberRole::Member) => ctx.t("sharing.linked.member"),
-    None => ctx.t("sharing.linked.noRole"),
-  }
-  .to_string()
+/// The person's role there, as the page says it, and what the role does (`07e` `BLTsP`); `host` names the server a
+/// Server admin administers.
+fn role_words(ctx: &Ctx, role: Option<MemberRole>, host: &str) -> (String, Arc<str>) {
+  let (words, hint) = match role {
+    Some(MemberRole::Owner) => (ctx.t("sharing.linked.owner"), ctx.t("sharing.team.roleHint.admin")),
+    Some(MemberRole::Member) => (ctx.t("sharing.linked.member"), ctx.t("sharing.team.roleHint.member")),
+    None => (
+      ctx.t("sharing.linked.noRole"),
+      ctx.t_args("sharing.team.roleHint.serverAdmin", [("server", host)]),
+    ),
+  };
+  (words.to_string(), hint)
 }
 
 /// *Members*, read-only, with who the person is there: rows of *Team server*.

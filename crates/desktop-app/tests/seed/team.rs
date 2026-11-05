@@ -1,9 +1,13 @@
 //! The team scenarios: each is in the registry and leaves the marker the QA app reads its state from
 //! (`examples/qa_app/team/state.rs`), every other scenario leaves none, `team-offer` registers a local project, and
-//! `team-outage-running`, `team-member-running` and `team-module-outage` have two tasks running on this computer.
+//! `team-outage-running`, `team-member-running` and `team-module-outage` have two tasks running on this computer, in
+//! `team-outage-running` with work reports waiting to be sent.
 
-use orchester_core::{run::TaskPhase, store::TaskStore};
-use orchester_store::AppDb;
+use orchester_core::{
+  run::TaskPhase,
+  store::{RunStore, TaskStore},
+};
+use orchester_store::{AppDb, WorkReportState};
 
 use super::{
   Seed,
@@ -33,6 +37,29 @@ fn seed_team_running_states_run_kon_12_and_kon_21_here() {
       assert_eq!(phase(&db, key), Some(TaskPhase::Running), "{name} {key}");
     }
   }
+}
+
+/// `On this computer` (`XTBXg`): run 8 with 3 reports waiting, run 2 with 1.
+#[test]
+fn seed_team_outage_running_reports_wait_to_be_sent() {
+  let seed = Seed::of("team-outage-running");
+  let db = seed.db();
+  let mut waiting: Vec<(u32, usize)> = db
+    .team_runs()
+    .expect("the team runs")
+    .iter()
+    .map(|team| {
+      let run = db.run(team.run).expect("the run reads").expect("the run is recorded");
+      let reports = db.work_reports(team.run).expect("the reports");
+      let pending = reports
+        .iter()
+        .filter(|report| report.state == WorkReportState::Pending)
+        .count();
+      (run.number().get(), pending)
+    })
+    .collect();
+  waiting.sort_unstable();
+  assert_eq!(waiting, [(2, 1), (8, 3)]);
 }
 
 #[test]

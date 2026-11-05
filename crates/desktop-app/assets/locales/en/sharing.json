@@ -536,6 +536,11 @@
       "address": "Address",
       "addressHint": "Synced {{time}} · {{state}}",
       "role": "Your role",
+      "roleHint": {
+        "member": "Reads, runs and claims team work",
+        "admin": "Changes team tasks, modules, tags and configuration",
+        "serverAdmin": "Administers {{server}} and every workspace on it; includes Admin"
+      },
       "leave": "Leave the project",
       "refused": "What a shared project can't do yet",
       "refusedFields": "Task fields the server doesn't keep",
