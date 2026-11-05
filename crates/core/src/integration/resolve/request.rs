@@ -97,7 +97,9 @@ impl From<ResolveError> for ResolveFailure {
     let detail = error.to_string();
     let reason = match error {
       ResolveError::Git(GitError::Run(CommandError::NotFound)) => FailureReason::GitMissing,
-      ResolveError::Git(GitError::Run(_) | GitError::Unrecognized { .. }) => FailureReason::GitStopped,
+      ResolveError::Git(GitError::Run(_) | GitError::Unrecognized { .. } | GitError::Unanswered { .. }) => {
+        FailureReason::GitStopped
+      }
       ResolveError::Git(GitError::Failed(said)) => FailureReason::GitRefused(said),
       ResolveError::Uncommitted(files) => FailureReason::Uncommitted(files),
       ResolveError::NotOnBranch => FailureReason::NotOnBranch,

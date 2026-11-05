@@ -34,6 +34,8 @@ enum AppError {
   NoQaApp(String),
   #[error("refused: this executable is not an Orchester app")]
   AppName,
+  #[error("refused: a QA copy is reached only when it runs from .tmp/qa/<task>/bin/ of this run's worktree")]
+  QaCopyPlace,
   #[error("the app's MCP request failed")]
   Request,
   #[error("the app's MCP response is invalid or exceeds its size limit")]
@@ -90,12 +92,13 @@ fn run(
     .file_stem()
     .and_then(|name| name.to_str())
     .ok_or(AppError::AppName)?;
-  if !is_app(program, target.is_some()) {
+  if !is_app(program) {
     return Err(AppError::AppName);
   }
   let discovery = match &target {
     // Checked again at each call: a link put in its place since the app started is never followed.
     Some(target) => discovery::read(&discovery::qa_file(&target.discovery)?.ok_or(AppError::Missing)?, pid)?,
+    None if is_qa_copy(program) => discovery::qa_copy(worktree, process.executable(), pid)?,
     None => discovery::find(worktree, pid)?,
   };
   let mut result = transport::Client::new(&process, &discovery)?.call(call)?;
@@ -105,10 +108,14 @@ fn run(
 }
 
 /// Whether `program` (a file name without its extension) is the app: `orchester`, or `orchester-app` as builds before
-/// the program's rename named it. `tools/qa-app.ps1` names the copy it starts `orchester-app-qa`; only the step's QA
-/// app (`qa_app`) goes by that name.
-fn is_app(program: &str, qa_app: bool) -> bool {
-  program.eq_ignore_ascii_case("orchester")
-    || program.eq_ignore_ascii_case("orchester-app")
-    || (qa_app && program.eq_ignore_ascii_case("orchester-app-qa"))
+/// the program's rename named it, or a QA copy ([`is_qa_copy`]).
+fn is_app(program: &str) -> bool {
+  program.eq_ignore_ascii_case("orchester") || program.eq_ignore_ascii_case("orchester-app") || is_qa_copy(program)
+}
+
+/// Whether `program` is the name `tools/qa-app.ps1` gives the copy it starts. Besides the step's QA app, such a copy is
+/// reached only from `.tmp/qa/<task>/bin/` of this run's worktree, through that task folder's own discovery file
+/// ([`discovery::qa_copy`]): the agent may have started it with the script itself, inside its sandbox.
+fn is_qa_copy(program: &str) -> bool {
+  program.eq_ignore_ascii_case("orchester-app-qa")
 }

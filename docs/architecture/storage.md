@@ -331,7 +331,9 @@ locks (`orchester_core::integration`).
   which stands) so that the merge never touches the checkout's files. A conflict, or a hook that
   refuses the merge commit, ends with the temporary worktree removed, the checkout as it was, and the
   conflicting files named. If the checkout moved to another branch, or its branch got a commit,
-  while the merge commit was made, the merge is dropped and refused.
+  while the merge commit was made, the merge is dropped and refused. A team module's delivery to base
+  (team authority P4c) takes the same merge, always as a merge commit *Merge module/<name>* of the
+  authorized base commit and module branch head, in `orchester-merge-module-<module id>`.
 - **Hooks.** The repository's own hooks run: they are the user's. The merge commit's hooks
   (`pre-merge-commit`, `prepare-commit-msg`, `commit-msg`, `post-merge`) come from the hooks folder
   the checkout uses (`core.hooksPath`, a relative one resolved against the checkout) but run with the
@@ -345,6 +347,20 @@ locks (`orchester_core::integration`).
   work. Should git still stop part way, e.g. at a file another program holds open, the files it
   wrote are put back; any it could not put back are named. A branch that already holds every
   commit of the run is recorded as merged without a change.
+- **When a merge fails for another reason than the code (ORC-365).** Every git command of a merge
+  runs in a job (Windows) or process group (macOS) of its own and is stopped with everything it
+  started once it writes nothing for 120 s (`orchester_exec::WatchedRunner`): the attempt ends as
+  *Git stopped answering* at its step, with the command and the wait, the temporary worktree
+  removed and what a bring-in wrote put back. What a bring-in changes is kept beside the checkout
+  while it runs, in `<the checkout's git dir>/orchester-bring-in-<run id>.json`, removed once the
+  merge is in or put back. While files it could not put back still differ from the base, no merge
+  reaches the checkout (*Put files back* runs the put-back again, never touching a file the person
+  changed since); a record whose checkout moved off its base is dropped. A cause that passes by
+  itself — the integration lease another operation holds, a file another program holds, the
+  project database busy — is tried again by Orchester up to 3 times, 10 s then 30 s apart, each
+  recorded as its retry; the merge queue waits for a held lease on its own. A merge the app or the
+  runner ended part way is found when the project is followed again: its temporary worktree goes,
+  the files its bring-in left changed are named, and its attempt is recorded as interrupted.
 - **Rebased runs.** A run keeps the base it started from, so after its branch was rebased onto
   newer commits of the branch it merges into, the commits between the two would read as the run's
   own work already integrated. When git proves the rebase, the base its own commits sit on now is
@@ -556,6 +572,11 @@ it as missing. A tool copy keeps allowed callers only for pipelines copied with 
 | --- | --- |
 | `runs` | task, number, group, version snapshot, status and reason (a pause is requested or at a limit; at a step's budget with the execution that used it; waiting for a person, with the step whose retries ran out or that broke again), branch, base revision and the branch the user's checkout had there, worktree, token budget and time limit at creation and in force (`NULL` for no limit), tokens used, pause requested |
 | `run_merges` | a run that succeeded and was merged into its base branch: the branch, the commit it was at afterwards, how (fast-forward, merge commit, already merged), when — desktop-written, once per run |
+| `merge_attempts` | every attempt to merge a run into its base branch, landed or not (ORC-361): when, who asked (a person, automation, the merge queue, Orchester's own retry with its number), from where (task page, `merge_run`, merge queue), the outcome with why it did not land, the kind of that cause (`cause_kind`, ORC-700: held by another operation, the OS's refusal with its error number, Git, the checkout, or how long Git wrote nothing; `NULL` before it was kept), and each stage's result in the order the stages run — append-only, written by whoever merged; a failed write is logged and never fails the merge |
+| `merge_attempts_open` | an attempt that passed its preflight and has not ended; its record replaces it, and the next merge, holding the integration lease, records one left behind as interrupted |
+| `review_threads` | a thread of a person's review of a run waiting for it (ORC-366): comment or question, anchored to lines of one side of a file of the run's diff at the head they read, with the code those lines held; resolved threads are kept — desktop-written |
+| `review_messages` | the messages of a review thread in order: the person's (a question with how asking it went, a comment with how sending it went) and the implementing agent's words, which grow while its read-only turn answers — the person's desktop-written, an answer runner-written; only a comment not sent yet changes or goes |
+| `review_viewed` | the files of a run's diff the person marked Viewed, per head — desktop-written |
 | `run_completions` | a run that succeeded and committed nothing, completed instead of merged (ORC-93): who completed it (a person, automation through the MCP server or window input, or the Orchestrator) and when; it sets the task Done as a merge does — desktop-written, once per run |
 | `run_worktree_removals` | when a run's own worktree was removed (*Remove worktree*, a merge, Run again), once per run — written by the desktop or the runner, whichever removed it |
 | `run_worktrees_not_removed` | the folder a removal of a run's worktrees could not delete and why (ORC-418), once per run; it goes once a removal leaves nothing behind — written by whichever removed it |

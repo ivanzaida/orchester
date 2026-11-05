@@ -160,15 +160,20 @@ impl Settings {
       return;
     }
     self.click(id);
-    let option = (0..)
-      .map(|index| format!("{id}-option-{index}"))
-      .map_while(|option| {
-        let first = self.window.texts(&option)?.first().cloned()?;
-        Some((option, first))
-      })
-      .find(|(_, first)| first == label)
-      .map(|(option, _)| option)
-      .unwrap_or_else(|| panic!("{id} offers {label}"));
+    // The open menu shows the choices of the settings as read; a change just counted may still be reading.
+    let mut option = None;
+    self.until(&format!("{id} offering {label}"), |s| {
+      option = (0..)
+        .map(|index| format!("{id}-option-{index}"))
+        .map_while(|option| {
+          let first = s.window.texts(&option)?.first().cloned()?;
+          Some((option, first))
+        })
+        .find(|(_, first)| first == label)
+        .map(|(option, _)| option);
+      option.is_some()
+    });
+    let option = option.expect("found above");
     self.click(&option);
   }
   pub fn saved(&mut self) {

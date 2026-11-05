@@ -57,6 +57,8 @@ pub enum Kind {
   Limit(Option<LimitKind>),
   /// A run was interrupted: the app or the runner crashed, or the runner could not carry it on.
   Interrupted,
+  /// A run was stopped because `resource`, which it pins, was archived on the team's server.
+  Archived { resource: Arc<str> },
   /// The project's runner went away and did not come back.
   RunnerOffline,
   /// The project's runner could not start.
@@ -99,6 +101,7 @@ impl Kind {
       }
       Self::Limit(_)
       | Self::Interrupted
+      | Self::Archived { .. }
       | Self::RunnerOffline
       | Self::RunnerNotStarted
       | Self::MergeConflicts

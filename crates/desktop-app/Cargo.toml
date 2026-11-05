@@ -93,6 +93,8 @@ lurq = { workspace = true, features = [
   "tokio",
   # The Usage page's charts; tiny-skia and lyon are already built for `svg`, so it adds no crate.
   "canvas",
+  # A team project's reads from its server, cached for the session's windows (`team`); it adds no crate.
+  "query",
 ] }
 parking_lot.workspace = true
 # Where an agent's chat message has text outside code and links, by offset, for the places it names

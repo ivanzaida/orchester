@@ -41,6 +41,7 @@ fn review_detail_is_kept_with_a_failed_review_and_older_records_read_without_it(
     failure: ReviewFailure::CouldNotRun,
     model: Some("claude-haiku-4-5-20251001".to_owned()),
     detail: Some("the reviewer could not run: the CLI exited with code 1: Not logged in".to_owned()),
+    decision: false,
   };
   db.record_review(run.id(), &failed.id, &review).expect("review");
   assert_eq!(
@@ -70,12 +71,14 @@ fn review_detail_is_kept_with_a_failed_review_and_older_records_read_without_it(
       failure: ReviewFailure::TimedOut,
       model: Some("claude-haiku-4-5".to_owned()),
       detail: None,
+      decision: false,
     })
   );
   let none = serde_json::to_value(Review::Failed {
     failure: ReviewFailure::NoReviewer,
     model: None,
     detail: None,
+    decision: false,
   })
   .expect("JSON");
   assert!(none.get("detail").is_none(), "{none}");

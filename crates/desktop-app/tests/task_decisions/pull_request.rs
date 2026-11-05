@@ -1,9 +1,9 @@
-//! Create pull request on the Ready card through a fake `gh` and `git push` that answer in the shapes gh 2.97 and
-//! git 2.46 write (every other git command runs for real in the seeded repository): offered beside Merge into main,
-//! under way while the branch is pushed, opened as a draft with its number and Review PR, or ready for review; why it
-//! is unavailable (no GitHub remote, no usable connection, another account, a missing scope, no base branch, an open
-//! one already); and a refused push or GitHub refusing to open it, with the recovery and Try again. GitHub is never
-//! reached.
+//! Create pull request in the task header's *More actions* (ORC-731) through a fake `gh` and `git push` that answer
+//! in the shapes gh 2.97 and git 2.46 write (every other git command runs for real in the seeded repository): offered
+//! there with Open as draft while the run waits to be merged, under way while the branch is pushed, opened as a draft
+//! with its number and Review PR on the top card, or ready for review; why it is unavailable (no GitHub remote, no
+//! usable connection, another account, a missing scope, no base branch); none once the run has one; and a refused
+//! push or GitHub refusing to open it, on the card with the recovery and Try again. GitHub is never reached.
 
 use std::{
   num::NonZeroU64,
@@ -15,10 +15,7 @@ use std::{
   time::Duration,
 };
 
-use orchester_app::{
-  routes::{ProjectPage, Route},
-  ui::icon::Icon,
-};
+use orchester_app::routes::{ProjectPage, Route};
 use orchester_core::{
   command::{Command, CommandError, CommandOutput, CommandRunner},
   connection::{GitHubCheck, GitHubCheckResult, GitHubConnection, GitHubHost, GitHubLogin, SignIn},
@@ -205,15 +202,33 @@ pub(super) fn linked(fake: &Arc<FakeGitHub>) -> Page {
   page
 }
 
-/// Presses Create pull request once whether it can be used is read, until the fake sees a new push.
+/// Chooses Create pull request in *More actions* once whether it can be used is read, until the fake sees a new push.
 fn create(page: &mut Page, fake: &FakeGitHub) {
   let before = fake.pushes();
   page.window.until("the branch to be pushed", |window| {
-    if let Some(mut button) = window.tree.get_element_by_id_mut("task-create-pull-request") {
-      button.click();
+    if window.texts("task-more-panel").is_none() {
+      window.press("task-more");
+    }
+    let ready =
+      window.texts("task-create-pull-request").is_some() && window.texts("task-create-pull-request-detail").is_none();
+    if ready {
+      window.press("task-create-pull-request");
     }
     fake.pushes() > before
   });
+}
+
+/// Waits until *More actions* says `words` under Create pull request; the menu is closed again after.
+fn until_create_says(page: &mut Page, words: &str) {
+  page.window.until(&format!("Create pull request: {words}"), |window| {
+    if window.texts("task-more-panel").is_none() {
+      window.press("task-more");
+    }
+    window
+      .texts("task-create-pull-request-detail")
+      .is_some_and(|texts| texts.join(" ").contains(words))
+  });
+  page.click("task-more");
 }
 
 /// Presses Try again until the failure notice's title says `title`.
@@ -228,62 +243,41 @@ fn retry_until(page: &mut Page, title: &str) {
   });
 }
 
-/// The icon the button `id` shows before its label.
-fn glyph(page: &mut Page, id: &str) -> String {
-  page
-    .window
-    .tree
-    .get_element_by_id(&format!("{id}-icon"))
-    .and_then(|icon| icon.text_content().map(str::to_owned))
-    .unwrap_or_else(|| panic!("{id} shows an icon"))
-}
-
-/// Whether *Open as draft*'s knob is at the end of its track: the switch is on.
-fn knob_at_end(window: &mut super::support::Window) -> bool {
-  let mut bounds = |id: &str| {
-    window
-      .tree
-      .get_element_by_id_mut(id)
-      .and_then(|element| element.bounds())
-      .unwrap_or_else(|| panic!("{id} is laid out"))
-  };
-  let (track, knob) = (
-    bounds("task-pull-request-draft-mark"),
-    bounds("task-pull-request-draft-knob"),
-  );
-  knob.x + knob.width / 2.0 > track.x + track.width / 2.0
-}
-
 #[test]
 fn decision_create_pull_request_pushes_and_opens_a_draft_review_pr_opens_it() {
   let _checkout = checkout_page();
   let fake = FakeGitHub::new();
   let mut page = linked(&fake);
-  page.open(READY, "task-create-pull-request");
+  page.open(READY, "task-merge");
+  assert!(
+    !page.has("task-create-pull-request"),
+    "the top card draws only 01i's actions"
+  );
+  page.open_more();
   assert_eq!(page.text("task-create-pull-request-label"), "Create pull request");
   assert_eq!(page.text("task-pull-request-draft-label"), "Open as draft");
-  let actions = page.text("task-ready-actions");
-  assert!(
-    actions.starts_with("Merge into main Create pull request Open as draft"),
-    "Create pull request stands beside Merge into main: {actions}"
-  );
+  page.click("task-more");
   fake.held.store(true, Ordering::SeqCst);
   create(&mut page, &fake);
-  page.window.pass();
-  assert_eq!(
-    glyph(&mut page, "task-create-pull-request"),
-    Icon::LoaderCircle.glyph().to_string(),
-    "under way while the branch is pushed"
-  );
+  until_create_says(&mut page, "Under way…");
   assert_eq!(
     page.text("task-merge-reason"),
     "Merge waits until the run's pull request is created."
   );
   fake.held.store(false, Ordering::SeqCst);
   page.until_says("task-pull-request-opened", "Pull request #143 opened as a draft.");
-  assert!(!page.has("task-create-pull-request"), "a run has one pull request");
-  assert!(!page.has("task-review-pull-request-reason"));
+  assert!(!page.in_more("task-create-pull-request"), "a run has one pull request");
   assert!(!page.locked("task-review-pull-request"));
+  let keys = if cfg!(target_os = "macos") {
+    "⌘↵"
+  } else {
+    "Ctrl+Enter"
+  };
+  assert_eq!(
+    page.text("task-ready-actions"),
+    format!("Merge {keys} Review changes Close without merging Review PR"),
+    "Review PR, a fourth action, once the run has a pull request"
+  );
   let run = latest_run(&page, READY);
   let request = fake.request();
   assert_eq!(
@@ -304,17 +298,16 @@ fn decision_create_pull_request_pushes_and_opens_a_draft_review_pr_opens_it() {
     run.id(),
     "the Pull requests list links it to the task's run"
   );
-  // Another task's run, with Open as draft turned off, opens one ready for review.
-  page.open(CONFLICTS, "task-create-pull-request");
-  assert!(knob_at_end(&mut page.window), "Open as draft is on by default");
-  // The switch is fixed until whether a pull request can be created is read; once it can, a press turns it off.
-  page.window.until("Open as draft to turn off", |window| {
-    if let Some(mut switch) = window.tree.get_element_by_id_mut("task-pull-request-draft") {
-      switch.click();
+  // Another task's run, with Open as draft turned off, opens one ready for review: the row turns it off once a pull
+  // request can be created.
+  page.open(CONFLICTS, "task-merge");
+  page.window.until("Create pull request to be offered", |window| {
+    if window.texts("task-more-panel").is_none() {
+      window.press("task-more");
     }
-    window.pass();
-    !knob_at_end(window)
+    window.texts("task-create-pull-request").is_some() && window.texts("task-create-pull-request-detail").is_none()
   });
+  page.click("task-pull-request-draft");
   create(&mut page, &fake);
   page.until_says("task-pull-request-opened", "Pull request #143 opened.");
   assert_eq!(fake.request()["draft"], json!(false), "ready for review is asked for");
@@ -337,9 +330,8 @@ fn decision_create_pull_request_says_why_it_is_unavailable() {
   let mut page = Page::seeded_with_programs("decisions", Programs::with_runner(fake.clone()));
   let reopen = |page: &mut Page, words: &str| {
     page.open(NO_BRANCH, "task-merge");
-    page.open(READY, "task-create-pull-request");
-    page.until_says("task-create-pull-request-reason", words);
-    assert!(page.locked("task-create-pull-request"));
+    page.open(READY, "task-merge");
+    until_create_says(page, words);
   };
   reopen(&mut page, "Create pull request needs a GitHub remote");
   git(
@@ -356,9 +348,9 @@ fn decision_create_pull_request_says_why_it_is_unavailable() {
     "Missing scope: repo. Run gh auth refresh -h github.com -s repo",
   );
   *fake.auth.lock() = SIGNED_IN;
-  page.open(NO_BRANCH, "task-create-pull-request");
-  page.until_says(
-    "task-create-pull-request-reason",
+  page.open(NO_BRANCH, "task-merge");
+  until_create_says(
+    &mut page,
     "Create pull request needs the branch your checkout had when the run started",
   );
   let run = latest_run(&page, READY);
@@ -385,8 +377,17 @@ fn decision_create_pull_request_says_why_it_is_unavailable() {
     .expect("the project database")
     .replace_pull_requests(&repo(), &[open], Timestamp::now())
     .expect("stored");
-  reopen(&mut page, "This run's branch already has open pull request #141.");
-  assert!(!page.locked("task-review-pull-request"), "Review PR is offered instead");
+  // The run has a pull request: the card offers Review PR, and More actions no Create pull request.
+  page.open(NO_BRANCH, "task-merge");
+  page.open(READY, "task-merge");
+  page.window.until("Review PR", |window| {
+    if window.texts("task-more-panel").is_none() {
+      window.press("task-more");
+    }
+    window.texts("task-review-pull-request").is_some()
+  });
+  assert!(!page.has("task-create-pull-request"), "Review PR is offered instead");
+  assert!(!page.locked("task-review-pull-request"));
   assert_eq!(fake.pushes(), 0, "nothing was pushed");
 }
 
@@ -398,7 +399,7 @@ fn decision_create_pull_request_failures_say_why_in_place_and_try_again() {
   let fake = FakeGitHub::new();
   *fake.push.lock() = output(128, "", SIGN_IN_REFUSED);
   let mut page = linked(&fake);
-  page.open(READY, "task-create-pull-request");
+  page.open(READY, "task-merge");
   create(&mut page, &fake);
   let branch = latest_run(&page, READY).branch().to_string();
   page.until_says(
@@ -416,8 +417,11 @@ fn decision_create_pull_request_failures_say_why_in_place_and_try_again() {
     ["gh", "auth", "setup-git"]
   );
   assert!(fake.created.lock().is_none(), "GitHub was asked nothing");
-  assert!(!page.locked("task-merge"), "Merge into main stays offered");
-  assert!(page.has("task-create-pull-request"), "and so does Create pull request");
+  assert!(!page.locked("task-merge"), "Merge stays offered");
+  assert!(
+    page.in_more("task-create-pull-request"),
+    "and so does Create pull request"
+  );
   *fake.push.lock() = output(0, "", "");
   *fake.create.lock() = output(1, NO_COMMITS, "gh: Validation Failed (HTTP 422)\n");
   retry_until(&mut page, "No pull request opened");

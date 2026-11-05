@@ -60,3 +60,107 @@ fn project_settings_estimates_show_the_projects_value_not_the_application_settin
     "the application-wide setting is off"
   );
 }
+
+fn choose_decision(page: &mut Settings) {
+  use orchester_core::{
+    connection::{DecisionConnection, DecisionServerUrl},
+    id::DecisionConnectionId,
+    name::Name,
+    resource::ModelId,
+    run::review::{AutoModeSettings, ReviewerChoice},
+  };
+  let model = ModelId::new("decision-only").expect("model");
+  let decision = DecisionConnection::new(
+    DecisionConnectionId::generate(),
+    Name::new("Decision reviewer").expect("name"),
+    DecisionServerUrl::new("http://localhost:8000").expect("URL"),
+    None,
+  )
+  .with_models(vec![model.clone()]);
+  let mut db = page.db();
+  db.create_decision_connection(&decision)
+    .expect("create decision connection");
+  db.save_auto_mode_settings(&AutoModeSettings {
+    reviewer: Some(ReviewerChoice::decision(decision.id(), model, None)),
+  })
+  .expect("decision reviewer");
+  // Counted as the workspace's writer counts a reviewer's change, which reads the settings again.
+  page.outside(orchester_workspace::tasks::outside::Outside::AutoMode);
+  page.tab("general", "settings-project-name");
+  page.tab("runs", &format!("{SWITCH}-row"));
+}
+
+#[test]
+fn estimates_decision_reviewer_row_names_the_default_language_connection() {
+  let mut page = Settings::new(true);
+  choose_decision(&mut page);
+  page.until("language estimator hint", |p| {
+    p.text(&format!("{SWITCH}-hint"))
+      .contains("on Claude Code, as the reviewer writes no reasons")
+  });
+}
+
+#[test]
+fn estimates_decision_reviewer_row_says_unavailable_without_a_language_connection() {
+  let mut page = Settings::new(false);
+  choose_decision(&mut page);
+  page.until("unavailable estimator reason", |p| {
+    p.text(&format!("{SWITCH}-hint")).contains("Estimates unavailable")
+  });
+  assert!(page.text(&format!("{SWITCH}-hint")).contains("no language reviewer"));
+  page.click(SWITCH);
+  // A project without the setting reads off; the switch saved nothing.
+  assert!(!page.db().estimates_story_points().expect("read"));
+}
+
+#[test]
+fn estimates_decision_reviewer_failed_refresh_disables_until_successful_reread() {
+  use orchester_core::store::ConnectionStore;
+  use orchester_workspace::tasks::outside::Outside;
+
+  let mut page = Settings::new(true);
+  choose_decision(&mut page);
+  // The switch is a bone until the project's value is read.
+  page.until("the estimates switch", |p| p.exists(SWITCH));
+  press_until(&mut page, true);
+  let connection = page.db().connections().expect("connections").remove(0);
+  let sqlite = rusqlite::Connection::open(page.repo.join(".orchester/orchester.db")).expect("fixture DB");
+  sqlite
+    .execute("DELETE FROM connections", [])
+    .expect("remove last language connection");
+  // Keep the tab mounted with its cached settings, but make the next settings read fail.
+  sqlite
+    .execute("ALTER TABLE decision_reviewer_connection RENAME TO held_reviewer", [])
+    .expect("reject read");
+  page.outside(Outside::Connections);
+  page.until("settings refresh error", |p| p.exists(&format!("{SWITCH}-error")));
+  assert!(
+    page
+      .text(&format!("{SWITCH}-error"))
+      .contains("This setting can't be read:")
+  );
+  assert!(!page.text(&format!("{SWITCH}-hint")).contains("on Claude Code"));
+  page.click(SWITCH);
+  assert!(page.db().estimates_story_points().expect("unchanged"));
+
+  sqlite
+    .execute("ALTER TABLE held_reviewer RENAME TO decision_reviewer_connection", [])
+    .expect("allow read");
+  page.outside(Outside::Connections);
+  page.until("fresh unavailable state", |p| {
+    p.text(&format!("{SWITCH}-hint")).contains("no language reviewer")
+  });
+  assert!(!page.exists(&format!("{SWITCH}-error")));
+  page.click(SWITCH);
+  assert!(page.db().estimates_story_points().expect("still unavailable"));
+
+  page
+    .db()
+    .create_connection(&connection)
+    .expect("restore language connection");
+  page.outside(Outside::Connections);
+  page.until("fresh language estimator", |p| {
+    p.text(&format!("{SWITCH}-hint")).contains("on Claude Code")
+  });
+  press_until(&mut page, false);
+}

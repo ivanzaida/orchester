@@ -5,8 +5,10 @@ mod authority_error;
 mod bundle;
 mod bundle_wire;
 mod capabilities;
+mod commands;
 mod delivery;
 mod execution;
+mod heartbeat;
 mod invites;
 mod library;
 mod membership;
@@ -14,6 +16,7 @@ mod module_read;
 mod module_summary;
 mod operations;
 mod page;
+mod pending_delivery;
 mod policy;
 mod projects;
 pub mod subscription;
@@ -24,8 +27,10 @@ mod work_report;
 pub use authority_error::*;
 pub use bundle::*;
 pub use capabilities::*;
+pub use commands::*;
 pub use delivery::*;
 pub use execution::*;
+pub use heartbeat::*;
 pub use invites::*;
 pub use library::*;
 pub use membership::*;
@@ -37,6 +42,7 @@ pub use page::{
   DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT, PAGE_CURSOR_RETENTION_SECONDS, Page, PageCursor, PageCursorError, PageRequest,
   PageRequestError,
 };
+pub use pending_delivery::*;
 pub use policy::*;
 pub use projects::*;
 pub use subscription::*;

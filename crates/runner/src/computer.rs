@@ -19,8 +19,8 @@ use std::{
 
 use orchester_core::{
   computer::{CliHomes, ComputerConnection, ComputerError},
-  connection::mcp::McpServer,
-  id::{ConnectionId, ProjectId, SecretId},
+  connection::{DecisionConnection, mcp::McpServer},
+  id::{ConnectionId, DecisionConnectionId, ProjectId, SecretId},
   memory::{ScreenUnavailable, SecretScreen},
   resource::CommandEnvironment,
   secret::{Secret, SecretValue, SecretVault, VaultError},
@@ -35,6 +35,9 @@ pub(crate) trait ComputerResources: Send + Sync {
 
   /// Every connection this computer has, by name.
   fn connections(&self) -> Result<Vec<ComputerConnection>, ComputerError>;
+
+  /// Decision model connection `id` as this computer has it; `None` when it has none by that id.
+  fn decision_connection(&self, id: DecisionConnectionId) -> Result<Option<DecisionConnection>, ComputerError>;
 
   /// This computer's home folder, which bounds the folders a step may be given; `None` when it cannot be told.
   fn home_folder(&self) -> Option<PathBuf>;
@@ -89,6 +92,10 @@ impl LocalComputer {
 }
 
 impl ComputerResources for LocalComputer {
+  fn decision_connection(&self, id: DecisionConnectionId) -> Result<Option<DecisionConnection>, ComputerError> {
+    self.read(|db| db.decision_connection(id))
+  }
+
   fn connection(&self, id: ConnectionId) -> Result<Option<ComputerConnection>, ComputerError> {
     let connection = self.read(|db| db.connection(id))?;
     let homes = homes();

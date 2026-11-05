@@ -1,7 +1,7 @@
 //! The fake team server's resources: a version published appends its `resource.published` ([`super::publishing`]),
-//! and a resource's versions are read one a page.
+//! an archive or a restore its `resource.archived`, and a resource's versions are read one a page.
 
-use orchester_api::{Reference, SharedResourceKind, SharedVersion, Versions};
+use orchester_api::{Event, Reference, ResourceArchived, SharedResourceKind, SharedVersion, Versions};
 use orchester_core::{blob::ContentHash, id::ResourceId, resource::VersionNumber};
 use serde_json::Value;
 
@@ -22,6 +22,25 @@ impl TeamServer {
     drop(state);
     self.shared.appended.notify_all();
     version.number
+  }
+
+  /// The first member archives resource `id` (`archived`) or restores it. Appends its `resource.archived`.
+  pub fn archive(&self, id: ResourceId, archived: bool) {
+    let mut state = self.state();
+    let by = state.members[0].1.clone();
+    let resource = state
+      .resources
+      .iter_mut()
+      .find(|resource| resource.id == id)
+      .expect("a resource the server has");
+    resource.archived = archived;
+    state.append(
+      &by,
+      ResourceArchived { resource: id, archived },
+      Event::ResourceArchived,
+    );
+    drop(state);
+    self.shared.appended.notify_all();
   }
 
   /// `token`'s member changes the team's configuration from now on, as the server's admin does.

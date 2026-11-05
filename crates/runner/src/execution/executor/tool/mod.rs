@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 use orchester_core::{
   connection::{invocation::Platform, stream::RunnerProblem},
   id::StepExecutionId,
-  resource::{CommandAction, CommandEnvironment, Tool, ToolAction},
+  resource::{CommandAction, CommandEnvironment, ToolAction},
   run::{Invocation, StepExecutor, StepFailure, StepStatus, ToolCommand},
   time::Timestamp,
 };
@@ -26,7 +26,6 @@ use tokio::sync::mpsc;
 pub(super) use self::worker::CommandFinished;
 use self::worker::CommandWorker;
 use super::{
-  link::resources::{pinned_version, resource_names},
   run::{ExecutionError, RunTask},
   step::Active,
   workspace::{Start, Workspace},
@@ -138,18 +137,16 @@ impl RunTask {
       })
       .ok_or_else(|| problem("the step is not a tool step"))?;
     let read = |error: &dyn std::error::Error| problem(&error.to_string());
-    let body = pinned_version::<Tool>(&*self.link, &pinned)
-      .map_err(|error| read(&error))?
-      .ok_or_else(|| problem("the tool's pinned version no longer exists"))?;
+    let body = self.resolver.tool(&*self.link, pinned).map_err(|error| read(&error))?;
     let ToolAction::Command(action) = body.action() else {
       return Err(problem("the tool is not a command tool"));
     };
-    let tool = resource_names(&*self.link, pinned.resource)
-      .map_err(|error| read(&error))?
-      .map(|resource| resource.name)
-      .ok_or_else(|| problem("the tool no longer exists"))?;
+    let (_, name) = self
+      .resolver
+      .label(&*self.link, pinned.resource, "tool")
+      .map_err(|error| read(&error))?;
     Ok(PinnedCommand {
-      tool,
+      tool: name.as_str().to_owned(),
       action: action.clone(),
     })
   }

@@ -38,13 +38,18 @@ impl ReviewerTrouble {
   }
 
   /// Why a review or an estimate that ended with `failure` could not run, at `now`: a CLI that failed on an account
-  /// that is at its limit or signed out failed for that; `None` for one that never asked a reviewer.
+  /// that is at its limit or signed out failed for that; `None` for one that never asked a reviewer, and for a
+  /// decision model's own failures, which the approval card's review line says.
   pub fn of(failure: ReviewFailure, account: &ReviewerAccount, now: Timestamp) -> Option<Self> {
     match failure {
       ReviewFailure::TimedOut => Some(Self::TimedOut),
       ReviewFailure::Unreadable => Some(Self::Unreadable),
       ReviewFailure::CouldNotRun => Some(account.trouble(now).unwrap_or(Self::CliFailed)),
-      ReviewFailure::NoReviewer => None,
+      ReviewFailure::NoReviewer
+      | ReviewFailure::KeyRefused
+      | ReviewFailure::NothingAnswers
+      | ReviewFailure::NotSystemOneApi
+      | ReviewFailure::ModelGone => None,
     }
   }
 }

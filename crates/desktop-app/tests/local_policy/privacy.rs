@@ -40,7 +40,19 @@ fn local_policy_legacy_sensitive_filename_is_refused_before_job_and_never_reache
   let args = serde_json::json!({"project":db.project().id().to_string(),"run":page.run().to_string()});
   let result = client.call(&mut page, "merge_run", &args);
   assert_eq!(value(&result)["code"], "integration_preflight_failed");
+  assert!(
+    result.to_string().contains("refused at its policy stage"),
+    "the refusal names the preflight's stage: {result}"
+  );
   assert!(!result.to_string().contains(PRIVATE_VALUE));
+  let read = client.call(&mut page, "get_run", &args);
+  let attempts = &value(&read)["merge_attempts"];
+  assert_eq!(attempts.as_array().map(Vec::len), Some(1), "{read}");
+  assert_eq!(attempts[0]["who"], "automation");
+  assert_eq!(attempts[0]["via"], "merge_run");
+  assert_eq!(attempts[0]["outcome"], "refused");
+  assert_eq!(attempts[0]["stage"], "policy");
+  assert!(!read.to_string().contains(PRIVATE_VALUE), "{read}");
   let policy = orchester_workspace::tasks::local_integration::LegacyPolicy::new(
     page.root(),
     page.run(),
@@ -134,4 +146,13 @@ fn local_policy_merge_run_checks_metadata_with_the_sessions_vault() {
   // secret, so a merge checked against it would be refused as unverifiable.
   let result = client.call(&mut page, "merge_run", &args);
   assert_eq!(value(&result)["merge"]["kind"], "fast_forward", "{result}");
+  let read = client.call(&mut page, "get_run", &args);
+  let attempt = &value(&read)["merge_attempts"][0];
+  assert_eq!(attempt["who"], "automation", "{read}");
+  assert_eq!(attempt["via"], "merge_run");
+  assert_eq!(attempt["outcome"], "merged");
+  assert_eq!(attempt["kind"], "fast_forward");
+  assert_eq!(attempt["revision"], value(&result)["merge"]["revision"]);
+  assert_eq!(attempt["stages"][0]["stage"], "policy");
+  assert_eq!(attempt["stages"][0]["result"], "passed");
 }

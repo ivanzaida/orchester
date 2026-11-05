@@ -15,9 +15,13 @@ use orchester_store::ProjectDb;
 use super::{Scheduler, idle, link::LocalLink};
 use crate::{
   computer::ComputerResources,
-  execution::executor::{
-    control::Control,
-    permissions::{PermissionsChange, provider_of, rejection},
+  execution::{
+    executor::{
+      control::Control,
+      permissions::{PermissionsChange, provider_of, rejection},
+      resolver::RunResolver,
+    },
+    failed,
   },
 };
 
@@ -81,7 +85,8 @@ fn change_idle(
   change: &PermissionsChange,
 ) -> Result<(), Rejection> {
   let mut run = idle::load(db, run)?;
-  let provider = provider_of((&LocalLink::over(&*db), computer), &run, change.profile)?;
+  let resolver = RunResolver::load(db, run.id()).map_err(|error| failed("cannot read the run's inputs", &error))?;
+  let provider = provider_of((&LocalLink::over(&*db), computer), (&resolver, &run), change.profile)?;
   let events = run
     .change_permissions(
       change.profile,

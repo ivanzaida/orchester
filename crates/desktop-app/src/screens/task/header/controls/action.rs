@@ -1,7 +1,8 @@
 //! What a run control asks of the page's project: run a ready draft (queue it, then start its first
 //! run), start a queued task's first run, pause, resume, continue or cancel its run. Each goes to the
 //! runner of the project the page shows, whichever tab is active. Work on a shared task goes on only
-//! under the person's claim; Pause and Cancel need none.
+//! under the person's claim, a team run's under the authority its start recorded; Pause and Cancel
+//! need none.
 
 use std::sync::Arc;
 
@@ -71,10 +72,10 @@ pub fn control_action(
     async move {
       let claim = match control {
         RunControl::Run(_) => queue(&project, &servers, task).await?,
-        RunControl::Start(_) | RunControl::Resume(_) | RunControl::Continue(_) => servers
-          .claim_for_work(&project.repo_root, task)
-          .await
-          .map_err(|refusal| refusal.message())?,
+        RunControl::Resume(run) | RunControl::Continue(run) => {
+          work_claim(&project, &servers, (task, Some(run))).await?
+        }
+        RunControl::Start(_) => work_claim(&project, &servers, (task, None)).await?,
         RunControl::Pause(_) | RunControl::Cancel(_) => WorkClaim::default(),
       };
       let result = carry_out(&project, (&runners, task), control).await;
@@ -84,6 +85,35 @@ pub fn control_action(
       result.map(|()| control)
     }
   })
+}
+
+/// The claim work on `task` goes on under, `run` going on again when given: a team run's is the claim and the work its
+/// start through the team server recorded, which its heartbeat renews and its reports name (`team_work`), so nothing is
+/// taken again here, and a team run the server fenced (taken over, membership removed, another device) goes on no
+/// more; any other work takes or confirms the task's claim.
+async fn work_claim(
+  project: &OpenProject,
+  servers: &Servers,
+  (task, run): (TaskId, Option<RunId>),
+) -> Result<WorkClaim, Message> {
+  if let Some(run) = run {
+    let root = project.repo_root.clone();
+    let team = background::run(move || {
+      ProjectDb::open(&root)
+        .and_then(|db| db.team_run(run))
+        .map_err(|error| messages::store_error(&error))
+    })
+    .await??;
+    match team {
+      Some(team) if team.fence.is_some() => return Err(Message::new("claims.refused.fenced")),
+      Some(_) => return Ok(WorkClaim::default()),
+      None => {}
+    }
+  }
+  servers
+    .claim_for_work(&project.repo_root, task)
+    .await
+    .map_err(|refusal| refusal.message())
 }
 
 /// Queues draft `task` on the latest published version of its pipeline, the claim of a shared task

@@ -329,19 +329,59 @@
       "checkCode": "Check the new code",
       "notMember": "Not a member since {{time}} · read-only",
       "member": "You're a member",
-      "owner": "You're an owner",
-      "admin": "You're an admin there",
+      "owner": "You're an Admin",
+      "admin": "You're a Server admin",
       "wasMember": "You were a member",
       "settings": "Sharing settings",
       "readOnly": "Read-only: you're not a member.",
       "removedTitle": "You're no longer a member of {{project}} on {{server}}",
-      "removedBody": "{{server}} answered at {{time}} that you aren't in {{project}} any more. This computer keeps {{key}}'s {{count}} tasks as they were then, read-only. Runs already going here finish; none can start. Make {{project}} local to keep working here, or ask an owner, {{owners}}, to add you again.",
+      "removedBody": "{{server}} answered at {{time}} that you aren't in {{project}} any more. This computer keeps {{key}}'s {{count}} tasks as they were then, read-only. Runs already going here finish; none can start. Make {{project}} local to keep working here, or ask an Admin, {{owners}}, to add you again.",
       "or": " or ",
-      "anOwner": "one of its owners",
+      "anOwner": "one of its Admins",
       "checkAgain": "Check again",
       "makeLocal": "Make local…",
       "separator": "·",
       "withName": "{{role}} · {{username}}"
+    },
+    "team": {
+      "on": "Team project on {{place}}",
+      "fromServer": "Read from the server",
+      "role": {
+        "member": "You're a member",
+        "admin": "You're an Admin",
+        "serverAdmin": "You're a Server admin"
+      },
+      "readOnly": "Only Admins change team tasks, modules and tags: {{admins}}. You read, run and claim.",
+      "readOnlyBoard": "Only Admins change team tasks, modules and tags, and move cards: {{admins}}. You read, run and claim.",
+      "readOnlyUnnamed": "Only Admins change team tasks, modules and tags. You read, run and claim.",
+      "readOnlyBoardUnnamed": "Only Admins change team tasks, modules and tags, and move cards. You read, run and claim.",
+      "admin": "{{name}} (Admin)",
+      "serverAdmin": "{{name}} (Server admin)",
+      "separator": ", ",
+      "and": "{{first}} and {{last}}",
+      "more": "This view shows its first {{count}} tasks. Search or filter to find the others.",
+      "unavailable": {
+        "title": "Team data is unavailable",
+        "body": "{{server}} hasn't answered since {{time}}. Tasks show again when it does; Orchester keeps no copy of them, so nothing here is out of date."
+      },
+      "signedOut": "This computer is signed out of {{server}}, so {{project}}'s tasks can't be read. Join again in Settings › Orchester; Orchester keeps no copy of them.",
+      "notMember": "{{server}} says you're no longer a member of {{project}}, so its tasks can't be read here. Ask an Admin to add you again; runs on this computer keep their worktrees.",
+      "refused": {
+        "title": "Team data can't be read",
+        "body": "{{server}} refused to send the tasks, or sent what this Orchester can't read. Try again; Orchester keeps no copy of them."
+      },
+      "unsupported": {
+        "title": "This team server needs Orchester {{version}}",
+        "body": "{{server}} needs Orchester {{version}} and refuses {{current}}: a team server and a desktop of different versions don't talk to each other. Update Orchester to see and run the team's tasks again; runs on this computer keep their worktrees."
+      },
+      "running": "Running on this computer",
+      "run": "Run {{number}}",
+      "runStep": "{{number}} {{step}} · run {{run}}",
+      "reportsWaiting": {
+        "one": "1 report waits to send",
+        "other": "{{count}} reports wait to send"
+      },
+      "outageNote": "Runs that started before the outage keep going with what they had at their start. Nothing new starts and no Admin change is saved until the server answers."
     },
     "formerKey": "was {{key}}",
     "notShared": {

@@ -1,12 +1,13 @@
-//! *Create pull request* beside *Merge into main* (`docs/design/orchester-workspace.md`, "GitHub", rules 3 to 7):
-//! the button (`git-pull-request`) with its *Open as draft* switch, on until the person turns it off (06.A
-//! `mtPZd`); under way while the run's branch is pushed and the pull request opened, on the project's shared
-//! operations; unavailable with why when the project has no usable GitHub connection, the folder no GitHub remote,
-//! `gh` acts as another account or lacks the `repo` scope, the run recorded no base branch, or the branch has an
-//! open pull request already. Once opened, the card says so with its number and *Review PR* opens it; a refused
-//! push or GitHub refusing to open it says why in place, with the recovery the rules name (06.B `YDKJS`) and *Try
-//! again*. When the pull request would include commits of the local base its remote lacks, nothing is pushed and
-//! the person is asked in place ([`super::unpushed`]).
+//! Creating the run's pull request (`docs/design/orchester-workspace.md`, "GitHub", rules 3 to 7): *Create pull
+//! request* (`git-pull-request`) and *Open as draft*, on until the person turns it off, in the task header's *More
+//! actions* while the run waits to be merged (ORC-731: 01i `k9GBy` draws only Merge, Review changes and Close
+//! without merging on the top card); under way while the run's branch is pushed and the pull request opened, on the
+//! project's shared operations; unavailable with why when the project has no usable GitHub connection, the folder no
+//! GitHub remote, `gh` acts as another account or lacks the `repo` scope, the run recorded no base branch, or the
+//! branch has an open pull request already. Once opened, the top card says so with its number and *Review PR* opens
+//! it; a refused push or GitHub refusing to open it says why on the card, with the recovery the rules name (06.B
+//! `YDKJS`) and *Try again*. When the pull request would include commits of the local base its remote lacks, nothing
+//! is pushed and the person is asked on the card ([`super::unpushed`]).
 
 use std::{num::NonZeroU64, sync::Arc};
 
@@ -44,9 +45,9 @@ use crate::{
     code_box::Copier,
     command_row::CommandRow,
     icon::{Icon, icon},
+    menu::MenuItem,
     message::message_text,
     notice::{Notice, NoticeTone},
-    toggle::{Toggle, ToggleKind},
   },
 };
 
@@ -56,13 +57,40 @@ struct Read(Option<Readiness>);
 
 impl DevtoolsInspectable for Read {}
 
-/// What the Ready card knows of creating a pull request: whether it can (`None` while it is read), and the *Open
-/// as draft* switch, which the card keeps for the run.
+/// What the task page keeps of creating a pull request while it shows the task, for the header's menu and the top
+/// card alike.
+#[derive(Clone)]
+pub struct PullRequestState {
+  /// *Open as draft*: on until the person turns it off (rule 7).
+  pub draft: Signal<bool>,
+  /// The run whose question about the base's unpushed commits window automation tried to answer.
+  pub person_only: Signal<Option<Refused>>,
+}
+
+impl PullRequestState {
+  pub fn new(ctx: &mut Ctx) -> Self {
+    Self {
+      draft: ctx.signal(true),
+      person_only: ctx.signal(None),
+    }
+  }
+
+  /// What is known of creating one, with `readiness` as read.
+  pub fn read(&self, readiness: Option<Result<Readiness, Message>>) -> PullRequestRead {
+    PullRequestRead {
+      readiness,
+      draft: self.draft.clone(),
+      person_only: self.person_only.clone(),
+    }
+  }
+}
+
+/// What the page knows of creating a pull request: whether it can (`None` while it is read), and the page's
+/// [`PullRequestState`].
 #[derive(Clone)]
 pub struct PullRequestRead {
   pub readiness: Option<Result<Readiness, Message>>,
   pub draft: Signal<bool>,
-  /// The run whose question about the base's unpushed commits window automation tried to answer.
   pub person_only: Signal<Option<Refused>>,
 }
 
@@ -100,12 +128,8 @@ pub fn read(ctx: &mut Ctx, task: &TaskContext, settled: bool) -> Option<Result<R
   }
 }
 
-/// The card's parts for creating a pull request.
+/// The top card's parts of the run's pull request.
 pub struct Parts {
-  /// The button and its switch, for the actions row after *Merge into main*.
-  pub actions: Vec<Element>,
-  /// Why the button cannot be used now.
-  pub reason: Option<Arc<str>>,
   /// What came of creating one: it was opened, or why not.
   pub outcome: Option<Element>,
   /// The run's open pull request, which *Review PR* opens.
@@ -116,32 +140,11 @@ pub fn parts(ctx: &mut Ctx, task: &TaskContext, run: &RunView, read: &PullReques
   let job = task.jobs.run(run.id());
   if let PullRequestJob::Created(created) = &job.pull_request {
     return Parts {
-      actions: Vec::new(),
-      reason: None,
       outcome: Some(opened(ctx, created)),
       review: NonZeroU64::new(created.pull_request.number),
     };
   }
-  let open = match (&job.pull_request, &read.readiness) {
-    (PullRequestJob::Failed(CreateProblem::AlreadyOpen { number: Some(number) }), _)
-    | (_, Some(Ok(Readiness::Open { number }))) => NonZeroU64::new(*number),
-    _ => None,
-  };
-  let start = start(ctx, task, run, (read, UnpushedBase::Refuse));
-  let state = if let Some(number) = open {
-    State::Unavailable(ctx.t_args("decisions.ready.pullRequest.open", [("number", number.to_string())]))
-  } else if job.pull_request == PullRequestJob::Running {
-    State::UnderWay
-  } else if job.busy() {
-    State::Waits(ctx.t("decisions.ready.pullRequest.waits"))
-  } else {
-    match &read.readiness {
-      None => State::Reading,
-      Some(Err(error)) => State::Unavailable(message_text(ctx, error)),
-      Some(Ok(Readiness::Unavailable(unavailable))) => State::Unavailable(unavailable_reason(ctx, unavailable)),
-      Some(Ok(_)) => State::Ready,
-    }
-  };
+  let (open, state) = stands(ctx, task, run, read);
   let outcome = match &job.pull_request {
     PullRequestJob::Failed(CreateProblem::BaseNotPushed { commits, base, remote }) if open.is_none() => {
       let unpushed = Unpushed {
@@ -159,23 +162,82 @@ pub fn parts(ctx: &mut Ctx, task: &TaskContext, run: &RunView, read: &PullReques
       Some(unpushed::question(ctx, &unpushed, choices))
     }
     PullRequestJob::Failed(problem) if open.is_none() => {
-      let again = (state == State::Ready).then(|| start.clone());
+      let again = (state == State::Ready).then(|| start(ctx, task, run, (read, UnpushedBase::Refuse)));
       Some(failure(ctx, run, problem, again))
     }
     _ => None,
   };
-  Parts {
-    actions: vec![button(ctx, &state, start), draft_switch(ctx, &state, &read.draft)],
-    reason: state.reason(),
-    outcome,
-    review: open,
-  }
+  Parts { outcome, review: open }
 }
 
-/// Where the button stands.
+/// *Create pull request* and *Open as draft*, rows of the header's *More actions* that a choice closes through
+/// `menu`; none once the run has a pull request, which the top card shows with *Review PR*.
+pub fn menu_rows(ctx: &mut Ctx, task: &TaskContext, read: &PullRequestRead, menu: &Signal<bool>) -> Vec<Element> {
+  let Some(run) = task.detail.run.as_ref() else {
+    return Vec::new();
+  };
+  if matches!(task.jobs.run(run.id()).pull_request, PullRequestJob::Created(_)) {
+    return Vec::new();
+  }
+  let (open, state) = stands(ctx, task, run, read);
+  if open.is_some() {
+    return Vec::new();
+  }
+  let (id, label) = ("task-create-pull-request", ctx.t("decisions.ready.pullRequest.create"));
+  let create = match &state {
+    State::Ready => {
+      let start = start(ctx, task, run, (read, UnpushedBase::Refuse));
+      MenuItem::new(id, label, move || start())
+    }
+    State::UnderWay => MenuItem::unavailable(id, label, ctx.t("decisions.ready.pullRequest.underWay")).without_lock(),
+    State::Reading => MenuItem::unavailable(id, label, ctx.t("decisions.ready.pullRequest.reading")).without_lock(),
+    State::Waits(reason) => MenuItem::unavailable(id, label, reason.clone()).without_lock(),
+    State::Unavailable(reason) => MenuItem::unavailable(id, label, reason.clone()),
+  };
+  let draft = read.draft.clone();
+  let on = draft.get();
+  let switch = MenuItem::new(
+    "task-pull-request-draft",
+    ctx.t("decisions.ready.pullRequest.draft"),
+    move || draft.set(!on),
+  )
+  .icon(Icon::GitPullRequestDraft)
+  .chosen(on);
+  vec![
+    create.icon(Icon::GitPullRequest).render(ctx, menu),
+    switch.render(ctx, menu),
+  ]
+}
+
+/// The run's open pull request, if it has one, and where creating one stands.
+fn stands(ctx: &Ctx, task: &TaskContext, run: &RunView, read: &PullRequestRead) -> (Option<NonZeroU64>, State) {
+  let job = task.jobs.run(run.id());
+  let open = match (&job.pull_request, &read.readiness) {
+    (PullRequestJob::Failed(CreateProblem::AlreadyOpen { number: Some(number) }), _)
+    | (_, Some(Ok(Readiness::Open { number }))) => NonZeroU64::new(*number),
+    _ => None,
+  };
+  let state = if let Some(number) = open {
+    State::Unavailable(ctx.t_args("decisions.ready.pullRequest.open", [("number", number.to_string())]))
+  } else if job.pull_request == PullRequestJob::Running {
+    State::UnderWay
+  } else if job.busy() {
+    State::Waits(ctx.t("decisions.ready.pullRequest.waits"))
+  } else {
+    match &read.readiness {
+      None => State::Reading,
+      Some(Err(error)) => State::Unavailable(message_text(ctx, error)),
+      Some(Ok(Readiness::Unavailable(unavailable))) => State::Unavailable(unavailable_reason(ctx, unavailable)),
+      Some(Ok(_)) => State::Ready,
+    }
+  };
+  (open, state)
+}
+
+/// Where creating one stands.
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum State {
-  /// Whether it can be used is read.
+  /// Whether it can be created is read.
   Reading,
   Ready,
   /// The branch is pushed and the pull request opened now.
@@ -183,46 +245,6 @@ enum State {
   /// Another operation of the run works; it waits, and says so.
   Waits(Arc<str>),
   Unavailable(Arc<str>),
-}
-
-impl State {
-  fn reason(&self) -> Option<Arc<str>> {
-    match self {
-      Self::Waits(reason) | Self::Unavailable(reason) => Some(reason.clone()),
-      Self::Reading | Self::Ready | Self::UnderWay => None,
-    }
-  }
-}
-
-fn button(ctx: &Ctx, state: &State, start: Start) -> Element {
-  let button = ActionButton::new(
-    "task-create-pull-request",
-    ButtonKind::Secondary,
-    ctx.t("decisions.ready.pullRequest.create"),
-  )
-  .icon(Icon::GitPullRequest);
-  match state {
-    State::Ready => button.on_click(move || start()),
-    State::UnderWay => button.loading(),
-    State::Reading | State::Waits(_) => button.disabled(),
-    State::Unavailable(reason) => button.unavailable(reason.clone()),
-  }
-  .into()
-}
-
-/// *Open as draft*, on until the person turns it off; fixed while the button cannot be pressed.
-fn draft_switch(ctx: &Ctx, state: &State, draft: &Signal<bool>) -> Element {
-  let switch = Toggle::new(
-    "task-pull-request-draft",
-    ToggleKind::Switch,
-    draft.get(),
-    ctx.t("decisions.ready.pullRequest.draft"),
-  );
-  if *state != State::Ready {
-    return switch.into();
-  }
-  let draft = draft.clone();
-  switch.on_change(move |on| draft.set(on)).into()
 }
 
 pub(super) type Start = Arc<dyn Fn() + Send + Sync>;

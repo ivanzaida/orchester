@@ -22,6 +22,7 @@ use super::{
   conflict::{Choices, Conflict},
   form::{FormProps, TaskForm},
   state::{Phase, View},
+  team::{TeamSave, TeamStopped},
   values::Values,
 };
 
@@ -56,6 +57,14 @@ impl TaskForm {
       .map_or_else(TaskOrganization::default, |(task, ..)| task.organization().clone());
     let base_values = base.map(|base| base.values).unwrap_or_default();
     let edited = view.values.organization(&base_values, &organization);
+    let team = props
+      .team
+      .clone()
+      .zip(made_on.as_ref())
+      .map(|(source, (task, ..))| TeamSave {
+        source,
+        task: task.clone(),
+      });
     let args = view.ready.clone().map(|details| SaveArgs {
       repo_root: props.project.open.repo_root.clone(),
       // On the version the edits were made on: a change made meanwhile is met, never overwritten.
@@ -78,6 +87,7 @@ impl TaskForm {
       } else {
         Vec::new()
       },
+      team,
     });
     let (ask, keep) = (self.confirming_discard.clone(), self.confirming_discard.clone());
     Handlers {
@@ -138,6 +148,10 @@ impl TaskForm {
       module: view.module,
       base_branch: view.base_branch.clone(),
       sources: Vec::new(),
+      team: props.team.clone().map(|source| TeamSave {
+        source,
+        task: current.clone(),
+      }),
     };
     Some(press(save, args, &self.dismissed))
   }
@@ -188,7 +202,7 @@ impl TaskForm {
       self.kept_at.clone(),
     );
     let (conflict, choices, dismissed) = (self.conflict.clone(), self.choices.clone(), self.dismissed.clone());
-    let (kept, written) = (self.kept.clone(), self.written.clone());
+    let (kept, written, team_stop) = (self.kept.clone(), self.written.clone(), self.team_stop.clone());
     ctx.watch(&save.state(), move |state| {
       let Some(outcome) = state.data.clone().filter(|_| state.is_fulfilled()) else {
         return;
@@ -202,8 +216,17 @@ impl TaskForm {
           conflict.set(Some(Conflict(met)));
           return;
         }
+        SaveOutcome::Team(stop) => {
+          // What the server took before it stopped is the version the rest of the edits are made on now.
+          if let Some(saved) = &stop.saved {
+            base.set(Some(Base::of(saved, &separator)));
+          }
+          team_stop.set(Some(TeamStopped(stop)));
+          return;
+        }
         SaveOutcome::Stored(task) => task,
       };
+      team_stop.set(None);
       if new && base.get_untracked().is_none_or(|base| base.task.is_none()) {
         Self::forget_kept(&kept, &written);
         nav.tasks(task.key().clone());

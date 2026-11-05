@@ -96,12 +96,7 @@ async fn reviewer_failure_keeps_why_without_secrets_or_prompt_and_logs_it_at_war
   })
   .await
   .expect("the failed review leaves the request to the person");
-  let Review::Failed { failure, model, detail } = &review else {
-    panic!("{review:?}");
-  };
-  assert_eq!(*failure, ReviewFailure::CouldNotRun);
-  assert_eq!(model.as_deref(), Some(DEFAULT_REVIEW_MODEL));
-  let detail = detail.as_deref().expect("why the reviewer could not run");
+  let detail = could_not_run_detail(&review);
   assert!(
     detail.starts_with("the reviewer could not run: the CLI exited with code 1: Not logged in · Please run /login"),
     "{detail}"
@@ -134,4 +129,17 @@ async fn reviewer_failure_keeps_why_without_secrets_or_prompt_and_logs_it_at_war
     .await
     .expect("denied");
   wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
+}
+
+/// Why the default reviewer could not run, from `review`, which failed so.
+fn could_not_run_detail(review: &Review) -> &str {
+  let Review::Failed {
+    failure, model, detail, ..
+  } = review
+  else {
+    panic!("{review:?}");
+  };
+  assert_eq!(*failure, ReviewFailure::CouldNotRun);
+  assert_eq!(model.as_deref(), Some(DEFAULT_REVIEW_MODEL));
+  detail.as_deref().expect("why the reviewer could not run")
 }

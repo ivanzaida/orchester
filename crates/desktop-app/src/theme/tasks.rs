@@ -70,15 +70,19 @@ pub enum TasksSpacing {
   /// 25: a board question's keys, in from its start under its words, past its mark and their gap (`Keys` `gWRaB` in
   /// `Popover · stop run` `XdfNz`).
   QuestionKeys,
+  /// 40: over a team project's *Team data is unavailable* card, under the header (`Unavailable` `bMqts` in 06
+  /// `GR3RS`).
+  OutageTop,
 }
 
 impl TasksSpacing {
-  pub const ALL: [Self; 5] = [
+  pub const ALL: [Self; 6] = [
     Self::Sides,
     Self::Stack,
     Self::GroupTop,
     Self::EmptyLift,
     Self::QuestionKeys,
+    Self::OutageTop,
   ];
 
   pub fn role(self) -> SpacingSize {
@@ -92,6 +96,7 @@ impl TasksSpacing {
       Self::GroupTop => "tasks_group_top",
       Self::EmptyLift => "tasks_empty_lift",
       Self::QuestionKeys => "tasks_question_keys",
+      Self::OutageTop => "tasks_outage_top",
     }
   }
 
@@ -102,6 +107,7 @@ impl TasksSpacing {
       Self::GroupTop => 10.0,
       Self::EmptyLift => 80.0,
       Self::QuestionKeys => 25.0,
+      Self::OutageTop => 40.0,
     }
   }
 }

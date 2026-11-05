@@ -1,8 +1,9 @@
 //! One module of the list (`Webhooks v2` `l5w8QF` in `01 · Modules`): 40 high, 8 at its sides, its parts 12 apart,
 //! radius 6, the `hover` fill under the pointer, opening the module's Summary. A 14 `target`, the name in 13/500 with
 //! its description 8 after it in 11.5 `text_muted`, both cut to their room; the forecast in 12 in its tone (an open
-//! module's only), the dates in 11 `text_muted` and the progress, a 56 meter and *N of M tasks done* in 12
-//! `text_secondary`, at the row's end.
+//! module's only), a team module's holder (`Holder` `Ju7rK` in 01d `rvXxg`: 120 wide, a 13 `user-check` and the name in
+//! 12 `text_secondary`, or a `circle-dashed` and *Not claimed* in `text_muted`), the dates in 11 `text_muted` and the
+//! progress, a 56 meter and *N of M tasks done* in 12 `text_secondary`, at the row's end.
 
 use std::sync::Arc;
 
@@ -22,7 +23,8 @@ use super::words;
 use crate::{
   navigation::Navigation,
   routes::{ModuleTab, ProjectPage, Route},
-  theme::{ExtraColor, ExtraTypography, IconSize},
+  team::pages::TeamPerson,
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     icon::{Icon, icon},
     meter::{MeterTone, meter},
@@ -32,18 +34,24 @@ use crate::{
   },
 };
 
-/// The row's height and the widths at its end (`l5w8QF`): the dates 130, the progress 180 with its 56 meter.
+/// The row's height and the widths at its end (`l5w8QF`): the dates 130, the progress 180 with its 56 meter; a team
+/// module's holder 120 (`Ju7rK`).
 const ROW_HEIGHT: f32 = 40.0;
 const DATES_WIDTH: f32 = 130.0;
 const PROGRESS_WIDTH: f32 = 180.0;
 const METER_WIDTH: f32 = 56.0;
+const HOLDER_WIDTH: f32 = 120.0;
 
-/// `summary`'s row, its forecast once it is read; the row's element id is `modules-row-<index>`.
+/// Who holds a team module, on its row: someone, or nobody.
+pub type Holder<'a> = Option<&'a TeamPerson>;
+
+/// `summary`'s row, its forecast once it is read and, for a team module, who holds it; the row's element id is
+/// `modules-row-<index>`.
 pub fn row(
   ctx: &mut Ctx,
   (project, index): (ProjectId, usize),
   summary: &ModuleSummary,
-  forecast: Option<&Forecast>,
+  (forecast, holder): (Option<&Forecast>, Option<Holder<'_>>),
 ) -> Element {
   let id = format!("modules-row-{index}");
   let details = summary.module.details();
@@ -57,6 +65,7 @@ pub fn row(
       .nowrap()
       .flex_shrink(0.0)
   });
+  let holder = holder.map(|holder| holder_cell(ctx, &id, holder));
   let line = Row::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(ROW_HEIGHT))
@@ -74,6 +83,7 @@ pub fn row(
     ))
     .child(name(ctx, &id, summary))
     .with_children(forecast)
+    .with_children(holder)
     .child(
       Row::new()
         .width(Dimension::Px(DATES_WIDTH))
@@ -176,6 +186,36 @@ fn name(ctx: &mut Ctx, id: &str, summary: &ModuleSummary) -> Element {
     .into()
 }
 
+/// Who holds the module, or *Not claimed*.
+fn holder_cell(ctx: &Ctx, id: &str, holder: Holder<'_>) -> Element {
+  let (glyph, words, color) = match holder {
+    Some(person) => (
+      Icon::UserRoundCheck,
+      words::person(ctx, person),
+      PaletteColor::TextSecondary,
+    ),
+    None => (
+      Icon::CircleDashed,
+      ctx.t("modules.team.notClaimed"),
+      PaletteColor::TextMuted,
+    ),
+  };
+  Row::new()
+    .id(format!("{id}-holder"))
+    .width(Dimension::Px(HOLDER_WIDTH))
+    .flex_shrink(0.0)
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::Center)
+    .child(icon(glyph, IconSize::Base, color.clone()))
+    .child(
+      Text::new(&words)
+        .id(format!("{id}-holder-name"))
+        .variant(TypographyStyle::Description)
+        .color(color)
+        .nowrap(),
+    )
+    .into()
+}
 /// A meter of the work done and *N of M tasks done*.
 fn progress(ctx: &Ctx, id: &str, summary: &ModuleSummary) -> Element {
   let (done, scope) = (u64::from(summary.progress.done), u64::from(summary.progress.scope));

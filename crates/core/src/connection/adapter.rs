@@ -75,6 +75,7 @@ pub fn check(
     Err(CommandError::NotFound) => CheckResult::ExecutableMissing,
     Err(
       CommandError::TimedOut
+      | CommandError::Silent { .. }
       | CommandError::Failed(_)
       | CommandError::NotStarted(_)
       | CommandError::UnsafeScriptArgument { .. },

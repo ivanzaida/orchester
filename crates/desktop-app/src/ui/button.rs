@@ -10,14 +10,17 @@
 //! one with a consequence is as wide as its parent, its label and the consequence under it at its start, 8 over and
 //! under and 12 at its sides, the cap 12 after them (`Option · Skip the exports` `wWuSM`).
 
+mod kind;
+
 use std::sync::Arc;
 
+pub use kind::ButtonKind;
 use lurq::{
   app::theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   components::{Button, Column, Row, Text},
   core::ElementRef,
   layout::{Alignment, layout_kind::Justify},
-  node::{CursorIcon, Element, Style, border::Border, dimension::Dimension, padding::Padding},
+  node::{CursorIcon, Element, border::Border, dimension::Dimension, padding::Padding},
 };
 
 use super::{
@@ -31,80 +34,6 @@ use crate::{
     CONSEQUENCE_ON_ACCENT_OPACITY, ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraSpacing, ExtraTypography, IconSize,
   },
 };
-
-/// The look of a button.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ButtonKind {
-  /// The one action a screen or card is about: `accent`, its content `on_accent`.
-  Primary,
-  /// `surface_raised` inside a `border_strong` stroke, its content `text_primary`.
-  Secondary,
-  /// No fill: its content `text_secondary`, the `hover` fill under the pointer.
-  Ghost,
-  /// `danger_muted`, its content `danger`.
-  Danger,
-  /// Destructive text on the ghost button (Secrets inspector, Emd0h).
-  DangerGhost,
-  /// A field-like menu trigger with a trailing chevron (LWah7, Runs after).
-  Select,
-}
-
-impl ButtonKind {
-  const fn name(self) -> &'static str {
-    match self {
-      Self::Primary => "primary",
-      Self::Secondary => "secondary",
-      Self::Ghost => "ghost",
-      Self::Danger => "danger",
-      Self::DangerGhost => "danger-ghost",
-      Self::Select => "select",
-    }
-  }
-
-  /// The color of the icon and the label.
-  fn content(self) -> PaletteColor {
-    match self {
-      Self::Primary => ExtraColor::OnAccent.role(),
-      Self::Secondary | Self::Select => PaletteColor::TextPrimary,
-      Self::Ghost => PaletteColor::TextSecondary,
-      Self::Danger | Self::DangerGhost => PaletteColor::Danger,
-    }
-  }
-
-  fn dressed(self, button: Button) -> Button {
-    match self {
-      Self::Primary => button.background(PaletteColor::Accent),
-      Self::Secondary => button
-        .background(PaletteColor::SurfaceRaised)
-        .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong)),
-      Self::Ghost | Self::DangerGhost => button,
-      Self::Select => button
-        .background(PaletteColor::SurfaceInput)
-        .border(Border::inside(BorderSize::Sm, PaletteColor::Border)),
-      Self::Danger => button.background(PaletteColor::DangerMuted),
-    }
-  }
-
-  /// Under the pointer and while pressed. The design draws neither; they follow the shell's `hover` and
-  /// `pressed` overlays and the accent's own hover.
-  fn interactive(self, button: Button) -> Button {
-    let fill = |color: PaletteColor| Style::new().background(color);
-    match self {
-      Self::Primary => button
-        .hovered_style(fill(PaletteColor::AccentHover))
-        .active_style(fill(PaletteColor::AccentHover)),
-      Self::Secondary | Self::Select => button
-        .hovered_style(fill(PaletteColor::Border))
-        .active_style(fill(PaletteColor::BorderStrong)),
-      Self::Ghost | Self::DangerGhost => button
-        .hovered_style(fill(ExtraColor::Hover.role()))
-        .active_style(fill(ExtraColor::Pressed.role())),
-      Self::Danger => button
-        .hovered_style(Style::new().border(Border::inside(BorderSize::Sm, PaletteColor::Danger)))
-        .active_style(Style::new().border(Border::inside(BorderSize::Sm, PaletteColor::Danger))),
-    }
-  }
-}
 
 /// Why a button cannot be pressed now. It wins over a handler given in any order.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -139,6 +68,8 @@ pub struct ActionButton {
   in_heading: bool,
   /// 24 high instead of 28, as a Copy inside a command row (`PEnj5`).
   small: bool,
+  /// 26 high instead of 28, as an action of a review thread (`SYiTG`).
+  snug: bool,
   /// 36 high with a 13/500 label.
   large: bool,
   /// Large and not primary, with a primary's room at each side.
@@ -157,6 +88,7 @@ pub struct ActionButton {
   /// What a press leads to, under its label, in a stacked button.
   consequence: Option<Arc<str>>,
   element: Option<ElementRef>,
+  on_focus: Option<Arc<dyn Fn() + Send + Sync>>,
 }
 
 impl ActionButton {
@@ -176,6 +108,7 @@ impl ActionButton {
       tight: false,
       in_heading: false,
       small: false,
+      snug: false,
       large: false,
       roomy: false,
       bounded: false,
@@ -186,6 +119,7 @@ impl ActionButton {
       stacked: false,
       consequence: None,
       element: None,
+      on_focus: None,
     }
   }
 
@@ -198,6 +132,12 @@ impl ActionButton {
   /// held, when the loader says it is under way.
   pub fn after(mut self, icon: Icon) -> Self {
     self.after = Some(icon);
+    self
+  }
+
+  /// Updates supporting copy when the keyboard focuses this answer (06b I8MyfC).
+  pub fn on_focus(mut self, handler: impl Fn() + Send + Sync + 'static) -> Self {
+    self.on_focus = Some(Arc::new(handler));
     self
   }
 
@@ -309,6 +249,13 @@ impl ActionButton {
     self
   }
 
+  /// 26 high, its icon and label as a button's: an action in a review thread's head or the comment box (`Ask again`
+  /// `SYiTG`, `Add comment` `Z0RVD` in `Review · redesign`).
+  pub fn snug(mut self) -> Self {
+    self.snug = true;
+    self
+  }
+
   /// 36 high, its label 13/500: the welcome's actions (`rDzhV`, `fZDtO`).
   pub fn large(mut self) -> Self {
     self.large = true;
@@ -394,6 +341,8 @@ impl ActionButton {
       )
     } else if self.small {
       (ControlHeight::Sm, IconSize::Md, TypographyStyle::Button)
+    } else if self.snug {
+      (ControlHeight::Snug, IconSize::Md, TypographyStyle::Button)
     } else if self.large {
       (
         ControlHeight::Lg,
@@ -571,6 +520,9 @@ impl From<ActionButton> for Element {
     }
     if let Some(element) = button.element {
       frame = frame.ref_element(element);
+    }
+    if let Some(on_focus) = button.on_focus {
+      frame = frame.on_focus(move || on_focus());
     }
     if let Some(Hold::Unavailable(reason) | Hold::UnavailableWithIcon(reason)) = &button.hold {
       frame = frame.describe("reason", reason.clone());

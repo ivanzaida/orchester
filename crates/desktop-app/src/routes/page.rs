@@ -1,9 +1,10 @@
-use std::num::NonZeroU64;
+use std::num::{NonZeroU32, NonZeroU64};
 
 use orchester_core::{
   id::{ConnectionId, FeedbackId, ModuleId, ResourceId},
   project::TaskKey,
   resource::VersionNumber,
+  run::RunNumber,
 };
 use orchester_workspace::{
   delivery::DeliveryPeriod,
@@ -60,6 +61,10 @@ pub enum ProjectPage {
   MergeQueue,
   /// The Pull requests page on its tab.
   PullRequests(PullRequestTab),
+  /// The Review hub's Merges: the runs not merged, those waiting for review and the merged ones by day.
+  Merges,
+  /// One run's merge attempts, under Merges, by its task's key and its number (`/merges/KON-12/8`).
+  MergeAttempt(TaskKey, RunNumber),
   /// A pull request of the project's repository, by its number, with the path of the file whose diff it
   /// shows (`None`: the first).
   PullRequest(NonZeroU64, Option<String>),
@@ -157,6 +162,7 @@ impl ProjectPage {
       Screen::Modules => Self::Modules(ModuleListTab::default()),
       Screen::MergeQueue => Self::MergeQueue,
       Screen::PullRequests => Self::PullRequests(PullRequestTab::default()),
+      Screen::Merges => Self::Merges,
       Screen::Usage => Self::Usage(Box::default()),
       Screen::Pipelines => Self::Pipelines,
       Screen::Agents => Self::Agents,
@@ -184,6 +190,7 @@ impl ProjectPage {
       Self::Task(..) | Self::KeptTask(..) => Screen::Task,
       Self::Modules(_) | Self::NewModule | Self::Module(..) | Self::EditModule(_) => Screen::Modules,
       Self::MergeQueue => Screen::MergeQueue,
+      Self::Merges | Self::MergeAttempt(..) => Screen::Merges,
       Self::PullRequests(_) | Self::PullRequest(..) | Self::PullRequestFeedback(..) => Screen::PullRequests,
       Self::Usage(_) | Self::Delivery(_) => Screen::Usage,
       Self::Pipelines
@@ -273,6 +280,7 @@ impl ProjectPage {
       Self::EditConnection(id) => format!("{connections}/{id}/{EDIT}"),
       Self::Files(view) => view.path(format!("{project_root}/{FILES}")),
       Self::Import(tab) => with_query(segment(Screen::ImportResources), &[tab.param()]),
+      Self::MergeAttempt(key, number) => format!("{}/{key}/{}", segment(Screen::Merges), number.get()),
       Self::MakeLocal | Self::ProjectRules | Self::Storage | Self::Join(_) => {
         self.settings_path(segment(Screen::ProjectSettings))
       }
@@ -356,6 +364,10 @@ impl ProjectPage {
       [FILES, file @ ..] => FilesView::parse(file, params).map(Self::Files),
       [CONNECTIONS, id, EDIT] => id.parse().map(Self::EditConnection).map_err(|_| RouteError::NoScreen),
       [MODULES, rest @ ..] => modules::parse(rest, params),
+      ["merges", key, number] => {
+        let number = number.parse::<NonZeroU32>().map_err(|_| RouteError::NoScreen)?;
+        Ok(Self::MergeAttempt(task_key(key)?, RunNumber::new(number)))
+      }
       [segment] => Screen::ALL
         .into_iter()
         .find(|screen| screen.segment() == Some(*segment))

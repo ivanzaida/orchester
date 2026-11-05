@@ -31,7 +31,10 @@ use orchester_workspace::{
 };
 
 use crate::{
-  screens::task::TaskContext,
+  screens::{
+    merges::attempt::standing::Standing,
+    task::{TaskContext, merge::Merge},
+  },
   ui::{
     chip::TagChip,
     status::{Status, StatusChip},
@@ -57,6 +60,9 @@ pub fn status_line(ctx: &mut Ctx, task: &TaskContext, mode: bool) -> Element {
       let (status, about) = chip_words(ctx, task);
       let chip = StatusChip::new("task-status", status);
       match about {
+        // A run at work names its step after a dot, as one that stopped does after *at* (`Running · 03 Implement` in
+        // 01c `Tb55G`).
+        Some(About::Step(step)) if status == Status::Running => chip.detail(step),
         Some(About::Step(step)) => {
           let words = ctx.t_args("task.status.at", [("status", ctx.t(status.key())), ("step", step)]);
           chip.words(words)
@@ -128,6 +134,11 @@ fn chip_words(ctx: &Ctx, task: &TaskContext) -> (Status, Option<About>) {
       .as_ref()
       .and_then(|run| run.step_of(approval.approval.execution));
     return (Status::NeedsInput, step.map(|step| About::Step(step_label(ctx, step))));
+  }
+  // A merge that did not land, as the run's attempts tell it (01j `k4C0Es`, ORC-731).
+  if let Some(Merge::NotMerged(standing)) = Merge::of(task) {
+    let words = (standing == Standing::Conflicts).then(|| About::Reason(ctx.t("task.status.conflict")));
+    return (Status::NotMerged, words);
   }
   if let Some(conflict) = merge_failed(task) {
     let words = conflict.then(|| About::Reason(ctx.t("task.status.conflict")));

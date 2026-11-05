@@ -52,8 +52,9 @@ pub(super) struct Started {
 /// The places that hold secrets the chat's agent must not read, as folders and files: the runner's private files
 /// (every running agent's MCP configuration with its tokens, and other chats' tokens), the account's CLI folder (its
 /// sign-in) and, for the Default account kept in the home folder, `~/.claude.json`. Each folder is named as it is
-/// given and as the file system resolves it, so a short (8.3) or linked spelling of it is denied too.
-fn denied(account: &ConnectionAccount) -> (Vec<PathBuf>, Vec<PathBuf>) {
+/// given and as the file system resolves it, so a short (8.3) or linked spelling of it is denied too. A review answer's
+/// agent is kept from them the same way.
+pub(in crate::execution) fn denied(account: &ConnectionAccount) -> (Vec<PathBuf>, Vec<PathBuf>) {
   let cli = AccountCli::ClaudeCode;
   let variable = std::env::var_os(cli.folder_variable()).filter(|value| !value.is_empty());
   let home = std::env::home_dir();

@@ -37,6 +37,48 @@ pub(super) struct ReviewLedger {
 }
 
 impl ReviewLedger {
+  pub(super) fn record_decision(
+    &self,
+    connection: &orchester_core::connection::DecisionConnection,
+    model: &orchester_core::resource::ModelId,
+    started_at: Timestamp,
+    done: &AutoReview,
+  ) {
+    let Some(end) = ReviewEnd::of(&done.review) else {
+      return;
+    };
+    let cost = done.cost.as_ref();
+    let usage = cost.and_then(|cost| cost.usage);
+    let record = orchester_core::run::review::DecisionReviewRecord {
+      run: self.run,
+      execution: self.execution,
+      invocation: self.invocation,
+      approval: self.approval.clone(),
+      connection: connection.id(),
+      provider: connection.name().as_str().to_owned(),
+      model: cost.map_or_else(|| model.clone(), |cost| cost.model.clone()),
+      started_at,
+      ended_at: Timestamp::now(),
+      input_tokens: usage.map(|usage| usage.input),
+      end,
+    };
+    if let Err(error) = self.sink.lock().step(StepRecord::decision_review(&record)) {
+      tracing::warn!(%error, "cannot record decision reviewer usage");
+    }
+    if let Some(usage) = usage
+      && usage.input > 0
+      && self
+        .events
+        .send(WorkerEvent::Usage {
+          execution: self.execution,
+          tokens: usage.counted_tokens(),
+        })
+        .is_err()
+    {
+      tracing::debug!("the run no longer counts its decision reviewer's usage");
+    }
+  }
+
   /// Records what the review by `provider` on `account` and `connection` that started at `started_at` cost, when it
   /// asked a model.
   pub(super) fn record(&self, (provider, account, connection): SpentOn, started_at: Timestamp, done: &AutoReview) {

@@ -93,7 +93,8 @@ impl Desktop {
       Activity::new(),
       orchester_ipc::SessionEnd::Clean,
     );
-    let servers = Servers::new(workspace.clone(), Vault::with(Arc::new(NoVault)));
+    let version = orchester_api::releases::ReleaseVersion::parse("0.5.0").expect("a release version");
+    let servers = Servers::new(workspace.clone(), Vault::with(Arc::new(NoVault)), version);
     let services = app_mcp::Services::new(
       workspace.clone(),
       runners.clone(),

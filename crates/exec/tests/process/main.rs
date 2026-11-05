@@ -116,7 +116,8 @@ fn process_with_an_explicit_environment_sees_nothing_else() {
     .filter_map(|line| line.split_once('=').map(|(name, _)| name))
     .collect();
   assert!(names.contains(&"ORCHESTER_PROBE"), "{names:?}");
-  // cmd.exe adds a few variables of its own (PROMPT, COMSPEC, PATHEXT); the parent's are gone.
+  // cmd.exe adds a few variables of its own (PROMPT, COMSPEC, PATHEXT); the parent's are gone. This process does not
+  // add the Path Windows keeps (`search_path::read_login_shell`).
   #[cfg(windows)]
   assert!(!names.iter().any(|name| name.eq_ignore_ascii_case("PATH")), "{names:?}");
   // On macOS every program gets the search path as its PATH (`search_path::macos::apply`): with no PATH of the

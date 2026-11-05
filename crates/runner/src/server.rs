@@ -4,12 +4,15 @@
 mod attach;
 mod browser;
 mod chat;
+mod check;
 mod code_index;
+mod decision_test;
 mod decisions;
 mod estimate;
 mod folders;
 mod merge_queue;
 mod resolve;
+mod review;
 mod run_folder;
 mod side;
 
@@ -24,7 +27,6 @@ use std::{
 };
 
 use orchester_core::{
-  connection::{AgentProvider, ApiEndpoint},
   id::{IdempotencyKey, ResourceId, RunId, TaskId},
   integration::Leftovers,
   run::{InterruptCause, RaisedLimits},
@@ -314,6 +316,7 @@ async fn answer(
     Command::ContinueRuns { ref runs } => attach::continued(scheduler, runs).await,
     Command::Ping { nonce } => Reply::Pong { nonce },
     Command::StartRun { key, task } => started(scheduler.start_requested_run(key, task).await),
+    Command::StartAcceptedRun { operation } => started(scheduler.start_accepted_run(operation).await),
     Command::RunAgain {
       key,
       task,
@@ -348,12 +351,16 @@ async fn answer(
     Command::DeliverMessages { run } => return later.answer(run, async move { handle.deliver_messages(run).await }),
     Command::Shutdown { mode } => return Answer::Shutdown(mode),
     Command::StopIfIdle => return Answer::StopIfIdle(id),
-    Command::CheckConnection { provider, ref api } => return answer_check(&later, handle, provider, api.clone()),
-    Command::AnswerInChat { message, ref tools } => chat::answering(scheduler, message, tools.clone()).await,
-    Command::StopChat { chat } => chat::stopped(scheduler, chat),
-    Command::CompactChat { chat, ref tools } => chat::compacting(scheduler, chat, tools.clone()).await,
-    Command::SteerChat { message } => chat::steered(scheduler, message),
+    Command::CheckConnection { provider, ref api } => return check::answer(&later, handle, provider, api.clone()),
+    ref command @ Command::TestDecisionConnection { .. } => return decision_test::answer(&later, handle, command),
+    ref chat @ (Command::AnswerInChat { .. }
+    | Command::StopChat { .. }
+    | Command::CompactChat { .. }
+    | Command::SteerChat { .. }) => chat::reply(scheduler, chat).await,
     Command::StopTurn { run } => return later.answer(run, async move { handle.stop_turn(run).await }),
+    ref review @ (Command::AnswerReviewQuestion { .. } | Command::StopReviewAnswer { .. }) => {
+      return later.review(handle, review);
+    }
     Command::Browser(ref command) => return later.browser(handle, command.clone()),
     Command::Folders(ref command) => return later.folders(handle, command.clone()),
     Command::MergeQueue(ref command) => return later.merge_queue(handle, command.clone()),
@@ -436,15 +443,6 @@ fn raise_limit(
     max_duration: max_duration_ms.map(Duration::from_millis),
   };
   later.answer(run, async move { scheduler.raise_limit(run, limits).await })
-}
-
-fn answer_check(later: &Later<'_>, scheduler: Scheduler, provider: AgentProvider, api: ApiEndpoint) -> Answer {
-  later.reply(async move {
-    match scheduler.check_connection(provider, api).await {
-      Ok((result, models)) => Reply::ConnectionChecked { result, models },
-      Err(rejection) => Reply::Rejected(rejection),
-    }
-  })
 }
 
 fn answer_return(later: &Later<'_>, scheduler: Scheduler, returned: WorkReturn) -> Answer {

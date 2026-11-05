@@ -37,9 +37,11 @@ const COMMAND: u64 = 910;
 const OTHER_SERVER: u64 = 911;
 const OWN_SERVER: u64 = 912;
 
-/// Whether `args` start a turn of the Orchestrator chat.
+/// Whether `args` start a turn of the Orchestrator chat, or the read-only turn that answers a review question, which
+/// the fake answers the same way: the only App Server a runner starts without any MCP server (a step always has
+/// Orchester's tools).
 pub fn is_chat(args: &[String]) -> bool {
-  args.iter().any(|arg| arg.starts_with(URL))
+  args.iter().any(|arg| arg.starts_with(URL)) || !args.iter().any(|arg| arg.contains("mcp_servers."))
 }
 
 /// Whether `answer` answers one of the chat's requests.

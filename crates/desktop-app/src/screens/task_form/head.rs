@@ -178,7 +178,8 @@ fn status(ctx: &Ctx, view: &View) -> (Icon, PaletteColor, Arc<str>) {
 }
 
 fn editing_status(ctx: &Ctx, view: &View) -> (Icon, PaletteColor, Arc<str>) {
-  if view.newer || view.conflict.is_some() {
+  let changed_first = view.team_stop.as_ref().is_some_and(|stopped| stopped.0.changed());
+  if view.newer || view.conflict.is_some() || changed_first {
     return (Icon::GitCompare, PaletteColor::Warning, ctx.t("task_form.status.newer"));
   }
   if let Some(at) = view.kept_at.filter(|_| view.changed) {

@@ -33,9 +33,11 @@ const KEY_VARIABLE: &str = "ANTHROPIC_AUTH_TOKEN";
 /// How long "Wait for a message" waits for one.
 const MESSAGE_WAIT: Duration = Duration::from_secs(60);
 
-/// Whether `args` start a turn of the Orchestrator chat.
+/// Whether `args` start a turn of the Orchestrator chat, or the read-only turn that answers a review question (only the
+/// reading tools, and no MCP server), which the fake answers the same way.
 pub fn is_chat(args: &[String]) -> bool {
-  args.iter().any(|arg| arg == "--system-prompt-file") && args.iter().any(|arg| arg == "--mcp-config")
+  let has = |flag: &str| args.iter().any(|arg| arg == flag);
+  (has("--system-prompt-file") && has("--mcp-config")) || (has("--tools") && !has("--mcp-config"))
 }
 
 /// Answers `message` in session `session`.

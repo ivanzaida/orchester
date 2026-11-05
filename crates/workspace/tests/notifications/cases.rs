@@ -1,6 +1,6 @@
 //! The cases read off the sources beyond the first fixtures: merges by a person, outside git or the Orchestrator's
-//! chat, an agent's question and a question with answers, each decision, each limit, a group's budget and a reached
-//! plan limit.
+//! chat, an agent's question and a question with answers, each decision, each limit, a group's budget, a reached
+//! plan limit and a run an archived resource stopped.
 
 use super::*;
 
@@ -288,4 +288,46 @@ fn notifications_read_a_plan_limit_reached() {
   let events = sources::of_plan_limits(&readings, at(2_000), name);
   assert_eq!(kinds(&events), [&Kind::PlanLimitNear { percent: 100 }]);
   assert_eq!(events[0].group(), NotificationGroup::Finished);
+}
+
+#[test]
+fn notifications_read_a_run_an_archived_resource_stopped_on_its_task() {
+  let mut fixture = Fixture::new();
+  let run = started(&mut fixture, "Add sign-out", 10);
+  let tasks = load(&fixture);
+  let project = project();
+  let stop = |stopped_at| orchester_store::ArchiveStop {
+    run: run.id(),
+    task: run.task(),
+    resource: orchester_core::name::Name::new("Builder").expect("valid name"),
+    stopped_at,
+  };
+  assert!(
+    sources::of_archive_stops(&project, &tasks, &[stop(at(15))], at(20)).is_empty(),
+    "a stop before the session started is no event"
+  );
+
+  let events = sources::of_archive_stops(&project, &tasks, &[stop(at(20))], at(20));
+  let [archived] = events.as_slice() else {
+    panic!("one event: {events:?}");
+  };
+  assert_eq!(
+    archived.kind,
+    Kind::Archived {
+      resource: "Builder".into()
+    }
+  );
+  assert_eq!(archived.group(), NotificationGroup::Stopped);
+  assert_eq!(archived.key.as_ref(), format!("archived:{}", run.id()));
+  assert_eq!(
+    archived.task.as_ref().map(|task| task.title.as_ref()),
+    Some("Add sign-out")
+  );
+  assert!(matches!(
+    archived.target,
+    Target::Task {
+      page: TaskPage::Summary,
+      ..
+    }
+  ));
 }

@@ -197,29 +197,29 @@ impl Turn {
 }
 
 /// Why a turn could not start, as the runner's log says it.
-pub(super) const fn cannot(reason: String) -> TurnFailure {
+pub(in crate::execution) const fn cannot(reason: String) -> TurnFailure {
   TurnFailure::CannotStart { reason }
 }
 
-/// What the CLI reported so far.
+/// What the CLI reported so far; a review answer's turn reads it the same way.
 #[derive(Default)]
-pub(super) struct Seen {
-  pub(super) answered: bool,
-  pub(super) stopped: bool,
+pub(in crate::execution) struct Seen {
+  pub(in crate::execution) answered: bool,
+  pub(in crate::execution) stopped: bool,
   /// The runner ended the CLI once its turn was over: Codex App Server waits for more otherwise.
-  pub(super) finished: bool,
-  pub(super) failure: Option<TurnFailure>,
+  pub(in crate::execution) finished: bool,
+  pub(in crate::execution) failure: Option<TurnFailure>,
   /// The last line of standard error.
-  pub(super) stderr: Option<String>,
+  pub(in crate::execution) stderr: Option<String>,
   /// The runner ended it at the time limit.
-  pub(super) timed_out: Option<TurnFailure>,
+  pub(in crate::execution) timed_out: Option<TurnFailure>,
   /// How full the session's context is, as last kept.
   context: Option<ContextUse>,
 }
 
 impl Seen {
   /// How the turn ended, once its CLI exited as `exit` says.
-  pub(super) fn ended(self, exit: &ProcessExit) -> TurnState {
+  pub(in crate::execution) fn ended(self, exit: &ProcessExit) -> TurnState {
     if let Some(failure) = self.timed_out {
       return TurnState::Failed(failure);
     }

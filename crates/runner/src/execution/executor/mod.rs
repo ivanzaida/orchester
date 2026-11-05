@@ -8,6 +8,7 @@
 //! through `super::coordinator`:
 //! `crates/runner/tests/execution_split.rs` fails on any new place that names it, and lists the places that still do.
 
+pub(super) mod active;
 pub(super) mod attached;
 pub(super) mod broken;
 pub(super) mod checkpoint;
@@ -33,6 +34,7 @@ pub(super) mod question;
 pub(super) mod record;
 pub(super) mod removal;
 pub(super) mod resolve;
+pub(super) mod resolver;
 pub(super) mod run;
 pub(super) mod run_branches;
 pub(super) mod run_files;

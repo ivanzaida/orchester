@@ -14,10 +14,7 @@ use orchester_core::{
   store::ActivityStore,
 };
 
-use super::{
-  super::super::{link::resources::pinned_version, run::RunTask},
-  problem,
-};
+use super::{super::super::run::RunTask, problem};
 
 impl RunTask {
   /// A step whose agent never started waits for its account's reset before it takes an agent slot: it opens, and
@@ -74,8 +71,9 @@ impl RunTask {
 
   /// The permissions the agent of step `key` gets on `connection`: the run's for the profile, if they
   /// were changed for it, else the profile's, narrowed by the step, in the approval mode the step runs in there
-  /// (Autopilot only where the connection's CLI hands its requests to Orchester, else Manual). Preflight already
-  /// refused steps whose permissions the CLI cannot enforce; checked again because an agent never starts with
+  /// (Autopilot only where the connection's CLI hands its requests to Orchester, else Manual). What a person on this
+  /// computer narrowed the step to in the run's inputs applies when it gives the agents no more than that. Preflight
+  /// already refused steps whose permissions the CLI cannot enforce; checked again because an agent never starts with
   /// permissions that are not enforced.
   pub(super) fn enforced(
     &self,
@@ -87,6 +85,10 @@ impl RunTask {
       .run
       .step_permissions(key, body.permissions())
       .expect("an agent step of the run has permissions");
+    let permissions = match self.resolver.narrowed(key) {
+      Some(narrowed) if narrowed.widenings_from(&permissions).is_empty() => narrowed.clone(),
+      _ => permissions,
+    };
     let effective = EffectiveApprovalMode::of(permissions.approval_mode(), connection.autopilot_support());
     if let EffectiveApprovalMode::Manual {
       why: ManualReason::CantEnforce { why },
@@ -193,16 +195,18 @@ impl RunTask {
       .collect()
   }
 
-  /// The pinned profile version and the agent connection `step` runs it on, as the computer the run executes on has
-  /// it: the one a person chose for this run when the step stopped at its account's plan limit, else the profile's own.
+  /// The pinned profile version, as the run's inputs bind it or the coordinator link reads it, and the agent connection
+  /// `step` runs it on, as the computer the run executes on has it: the one a person chose for this run when the step
+  /// stopped at its account's plan limit, else the profile's own.
   pub(in super::super) fn profile_and_connection(
     &self,
     profile: &PinnedVersion,
     step: &StepKey,
   ) -> Result<(AgentProfile, AgentConnection, OnComputer), RunnerProblem> {
-    let body = pinned_version::<AgentProfile>(&*self.link, profile)
-      .map_err(|error| problem(error.to_string()))?
-      .ok_or_else(|| problem(format!("agent profile version {} is missing", profile.number)))?;
+    let body = self
+      .resolver
+      .profile(&*self.link, *profile)
+      .map_err(|error| problem(error.to_string()))?;
     let chosen = self
       .db
       .step_connection(self.run.id(), step)

@@ -83,6 +83,7 @@ impl Seeded {
   pub fn until(&mut self, what: &str, mut done: impl FnMut(&mut Self) -> bool) {
     let deadline = std::time::Instant::now() + Duration::from_secs(20);
     loop {
+      self.window.tree.tick_timers();
       self.window.tree.tick_futures();
       self.window.pass();
       if done(self) {

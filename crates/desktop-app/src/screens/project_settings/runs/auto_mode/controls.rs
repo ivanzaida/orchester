@@ -31,7 +31,10 @@ use crate::{
 
 /// The reviewer's selects (`Claude · Work` `d5VoC`, `Opus 5.5` `jEztM`, `Effort · Medium` `mqIoa` in Approvals 02c
 /// `m0eUB`).
-const CONNECTION_WIDTH: f32 = 130.0;
+const CONNECTION_WIDTH: f32 = 150.0;
+/// Model fields of decision reviewers (`04 b/c`).
+const REMOTE_MODEL_WIDTH: f32 = 120.0;
+const LOCAL_MODEL_WIDTH: f32 = 206.0;
 const MODEL_WIDTH: f32 = 156.0;
 const EFFORT_WIDTH: f32 = 120.0;
 
@@ -45,10 +48,11 @@ pub fn group(
   let options = project_settings::review_options(settings, &tab.connection.get(), &tab.model.get());
   let busy = save.state().get().is_pending();
   let autopilot = super::autopilot::row(ctx, (tab, props), settings, (save, busy));
-  let reviewer = if options.connections.is_empty() {
+  let reviewer = if options.connections.is_empty() && options.decisions.is_empty() {
     unavailable_reviewer(ctx, props)
   } else {
-    reviewer_row(ctx, tab, (options, cannot_run), busy)
+    let busy = busy || tab.check.state().get().is_pending();
+    reviewer_row(ctx, (tab, props), (options, cannot_run), busy)
   };
   let rules = super::rules::row(ctx, props, settings);
   Group::new("settings-auto", ctx.t("project_settings.auto"))
@@ -79,15 +83,28 @@ fn unavailable_reviewer(ctx: &mut Ctx, props: &Props) -> Element {
 }
 fn reviewer_row(
   ctx: &mut Ctx,
-  tab: &AutoMode,
+  (tab, props): (&AutoMode, &Props),
   (options, cannot_run): (project_settings::ReviewOptions, Option<Arc<str>>),
   busy: bool,
 ) -> Element {
+  let settings = tab.stored.get().0;
+  let decision = tab.selected_decision(&settings);
   let connection = connection_select(ctx, tab, &options, busy);
+  let row = reviewer_label(ctx, (&options, cannot_run), decision.is_some());
   // A model is named by the id its CLI takes, as its developer names it (the person's decision for ORC-103).
   let model = select(
     ctx,
-    ("settings-reviewer-model", "project_settings.model", MODEL_WIDTH),
+    (
+      "settings-reviewer-model",
+      "project_settings.model",
+      decision.map_or(MODEL_WIDTH, |c| {
+        if c.is_on_this_computer() {
+          LOCAL_MODEL_WIDTH
+        } else {
+          REMOTE_MODEL_WIDTH
+        }
+      }),
+    ),
     &tab.model,
     options
       .models
@@ -99,39 +116,23 @@ fn reviewer_row(
       .collect(),
     busy,
   );
-  let effort = select(
-    ctx,
-    ("settings-reviewer-effort", "project_settings.effort", EFFORT_WIDTH),
-    &tab.effort,
-    std::iter::once((String::new(), ctx.t("project_settings.defaultEffort")))
-      .chain(
-        options
-          .efforts
-          .into_iter()
-          .map(|effort| (effort.clone(), effort.into())),
-      )
-      .collect(),
-    busy,
-  );
-  let detail = ctx.t("project_settings.reviewerDetail");
-  let row = SettingRow::new("settings-auto-reviewer", ctx.t("project_settings.reviewer"));
-  let row = match options.resolved {
-    Ok(shown) => {
-      let readback = ctx.t_args(
-        "project_settings.reviewedBy",
-        [("model", shown.model.as_str()), ("connection", &shown.connection)],
-      );
-      let row = row.info(ctx.t_args(
-        "project_settings.reviewerInfo",
-        [("detail", &*detail), ("readback", &*readback)],
-      ));
-      // Why the reviewer cannot run, in the hint's place while it cannot.
-      match cannot_run {
-        Some(said) => row.toned(said, Tone::Warning),
-        None => row.hint(ctx.t("project_settings.reviewerHint")),
-      }
-    }
-    Err(why) => row.info(detail).toned(message_text(ctx, &why), Tone::Warning),
+  let effort = if decision.is_some() {
+    super::decision::threshold_field(ctx, tab, busy)
+  } else {
+    select(
+      ctx,
+      ("settings-reviewer-effort", "project_settings.effort", EFFORT_WIDTH),
+      &tab.effort,
+      std::iter::once((String::new(), ctx.t("project_settings.defaultEffort")))
+        .chain(
+          options
+            .efforts
+            .into_iter()
+            .map(|effort| (effort.clone(), effort.into())),
+        )
+        .collect(),
+      busy,
+    )
   };
   let selects = Row::new()
     .id("settings-reviewer-selects")
@@ -140,7 +141,15 @@ fn reviewer_row(
     .child(connection)
     .child(model)
     .child(effort);
-  row.control(selects).render(ctx)
+  let row = row.control(selects);
+  let row = if let Some(question) = tab.hosted_question(ctx, props) {
+    row.under(question)
+  } else if let Some(connection) = decision {
+    row.under(super::decision::destination_line(ctx, tab, props, connection))
+  } else {
+    row
+  };
+  row.render(ctx)
 }
 
 fn default_connection_label(ctx: &Ctx, name: Option<&str>) -> Arc<str> {
@@ -155,25 +164,7 @@ fn default_connection_label(ctx: &Ctx, name: Option<&str>) -> Arc<str> {
 fn connection_select(ctx: &mut Ctx, tab: &AutoMode, options: &project_settings::ReviewOptions, busy: bool) -> Element {
   let default = default_connection_label(ctx, options.default_connection.as_deref());
   if busy {
-    let connections = std::iter::once((String::new(), default))
-      .chain(
-        options
-          .connections
-          .iter()
-          .map(|(id, name)| (id.clone(), name.as_str().into())),
-      )
-      .collect();
-    return select(
-      ctx,
-      (
-        "settings-reviewer-connection",
-        "project_settings.connection",
-        CONNECTION_WIDTH,
-      ),
-      &tab.connection,
-      connections,
-      true,
-    );
+    return locked_connection(ctx, tab, options, default);
   }
   let choice = |value: String, label: Arc<str>, unavailable: Option<Arc<str>>| Choice {
     value,
@@ -186,13 +177,12 @@ fn connection_select(ctx: &mut Ctx, tab: &AutoMode, options: &project_settings::
     unavailable,
   };
   let reason = ctx.t("project_settings.reviewerApiProvider");
-  let choices = std::iter::once(choice(String::new(), default, None))
-    .chain(
-      options
-        .connections
-        .iter()
-        .map(|(id, name)| choice(id.clone(), name.as_str().into(), None)),
-    )
+  let mut choices: Vec<_> = std::iter::once(choice(String::new(), default, None))
+    .chain(options.connections.iter().map(|(id, name)| {
+      let mut option = choice(id.clone(), name.as_str().into(), None);
+      option.detail = Some(project_settings::default_model(&tab.stored.get().0, id).into());
+      option
+    }))
     .chain(
       options
         .on_providers
@@ -200,6 +190,29 @@ fn connection_select(ctx: &mut Ctx, tab: &AutoMode, options: &project_settings::
         .map(|(id, name)| choice(id.clone(), name.as_str().into(), Some(reason.clone()))),
     )
     .collect();
+  let decisions_at = choices.len();
+  choices.extend(options.decisions.iter().map(|connection| {
+    let mut option = choice(connection.id().to_string(), connection.name().as_str().into(), None);
+    option.icon = if connection.is_on_this_computer() {
+      Icon::Monitor
+    } else {
+      Icon::Scale
+    };
+    option.detail = Some(connection.base_url().host().into());
+    option
+  }));
+  let mut add = choice(
+    "add-decision".into(),
+    ctx.t("project_settings.decision.add"),
+    Some(ctx.t("project_settings.decision.addUnavailable")),
+  );
+  add.separator = true;
+  add.icon = Icon::Plus;
+  choices.push(add);
+  let headings = vec![
+    (0, ctx.t("project_settings.decision.languages")),
+    (decisions_at, ctx.t("project_settings.decision.decisions")),
+  ];
   ChoiceField {
     id: "settings-reviewer-connection".into(),
     name: ctx.t("project_settings.connection"),
@@ -207,11 +220,11 @@ fn connection_select(ctx: &mut Ctx, tab: &AutoMode, options: &project_settings::
     open: tab.connection_open.clone(),
     choices,
     width: CONNECTION_WIDTH,
-    icon_in_field: false,
+    icon_in_field: true,
     placeholder: None,
     mono: false,
   }
-  .render(ctx)
+  .render_grouped(ctx, headings)
 }
 
 fn select(
@@ -232,7 +245,7 @@ fn select(
       .width(Dimension::Px(width))
       .render(ctx)
   } else {
-    SelectField::new(
+    let field = SelectField::new(
       id.to_owned(),
       ctx.t(key),
       value.clone(),
@@ -241,7 +254,75 @@ fn select(
         .map(|(value, label)| SelectOption::new(value, label))
         .collect(),
     )
-    .width(Dimension::Px(width))
-    .render(ctx)
+    .width(Dimension::Px(width));
+    let field = if id == "settings-reviewer-model" {
+      field.mono()
+    } else {
+      field
+    };
+    field.render(ctx)
   }
+}
+
+fn reviewer_label(
+  ctx: &Ctx,
+  (options, cannot_run): (&project_settings::ReviewOptions, Option<Arc<str>>),
+  decision: bool,
+) -> SettingRow {
+  let row = SettingRow::new("settings-auto-reviewer", ctx.t("project_settings.reviewer"));
+  if decision {
+    return row.hint(ctx.t("project_settings.reviewerHint"));
+  }
+  let detail = ctx.t("project_settings.reviewerDetail");
+  match &options.resolved {
+    Ok(shown) => {
+      let readback = ctx.t_args(
+        "project_settings.reviewedBy",
+        [("model", shown.model.as_str()), ("connection", &shown.connection)],
+      );
+      let row = row.info(ctx.t_args(
+        "project_settings.reviewerInfo",
+        [("detail", &*detail), ("readback", &*readback)],
+      ));
+      // Why the reviewer cannot run, in the hint's place while it cannot.
+      match cannot_run {
+        Some(said) => row.toned(said, Tone::Warning),
+        None => row.hint(ctx.t("project_settings.reviewerHint")),
+      }
+    }
+    Err(why) => row.info(detail).toned(message_text(ctx, why), Tone::Warning),
+  }
+}
+
+fn locked_connection(
+  ctx: &mut Ctx,
+  tab: &AutoMode,
+  options: &project_settings::ReviewOptions,
+  default: Arc<str>,
+) -> Element {
+  let connections = std::iter::once((String::new(), default))
+    .chain(
+      options
+        .connections
+        .iter()
+        .map(|(id, name)| (id.clone(), name.as_str().into())),
+    )
+    .chain(
+      options
+        .decisions
+        .iter()
+        .map(|c| (c.id().to_string(), c.name().as_str().into())),
+    )
+    .collect();
+  select(
+    ctx,
+    (
+      "settings-reviewer-connection",
+      "project_settings.connection",
+      CONNECTION_WIDTH,
+    ),
+    &tab.connection,
+    connections,
+    true,
+  )
 }

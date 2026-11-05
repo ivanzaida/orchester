@@ -113,7 +113,7 @@ impl TaskForm<'_> {
   }
 }
 
-fn title_error(error: &NameError) -> Message {
+pub(crate) fn title_error(error: &NameError) -> Message {
   match error {
     NameError::Blank => Message::new("errors.titleRequired"),
     NameError::TooLong { .. } => crate::messages::name_error(error),

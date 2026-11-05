@@ -5,6 +5,7 @@
 //! own, never the user's. Team servers per account through the tools, which need a real team server, are checked by
 //! the end-to-end tests of the private platform repository (`crates/e2e`, `mcp_servers_per_account`).
 
+mod access;
 mod http;
 mod signed_out;
 #[path = "../support/mod.rs"]
@@ -320,6 +321,8 @@ fn the_apps_own_tools_word_their_schemas_in_single_spaces() {
     "navigate",
     "set_theme",
     "hold_reads",
+    "hold_hand_offs",
+    "hold_integration",
     "update_state",
     "set_update_state",
   ] {

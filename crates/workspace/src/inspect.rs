@@ -64,12 +64,15 @@ macro_rules! markers {
     impl $inspect for crate::memory::read::GivenTo {}
     impl $inspect for crate::memory::read::ProjectMemory {}
     impl $inspect for crate::memory::read::TaskMemory {}
+    impl $inspect for crate::merge_queue::BaseState {}
     impl $inspect for crate::merge_queue::LaneLanding {}
     impl $inspect for crate::merge_queue::QueueLaneRead {}
     impl $inspect for crate::merge_queue::QueueRead {}
     impl $inspect for crate::merge_queue::QueueRefusal {}
     impl $inspect for crate::merge_queue::QueueRow {}
     impl $inspect for crate::merge_queue::RunDelivery {}
+    impl $inspect for crate::tasks::merge_attempts::merges::Merges {}
+    impl $inspect for crate::tasks::merge_attempts::page::AttemptPage {}
     impl $inspect for crate::messages::Message {}
     impl $inspect for crate::modules::ModuleChoice {}
     impl $inspect for crate::modules::ModuleFilter {}

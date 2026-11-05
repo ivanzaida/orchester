@@ -5,10 +5,15 @@ use std::path::PathBuf;
 
 use orchester_core::{id::StepExecutionId, run::Run, task::Task};
 
+use super::resolver::RunResolver;
+
 /// A recorded run and whether this request is the one that executes it.
 pub(in crate::execution) struct Prepared {
   pub(in crate::execution) run: Run,
+  /// The run's task as the run started it.
   pub(in crate::execution) task: Task,
+  /// Where the run's pinned configuration is read from.
+  pub(in crate::execution) resolver: RunResolver,
   pub(in crate::execution) folder: RunFolder,
   /// `false` when an earlier request with the same key already started the run.
   pub(in crate::execution) execute: bool,

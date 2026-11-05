@@ -14,11 +14,14 @@
 //! *Keep asking* included, takes a client's input, so a client can take the question back. The tile being confirmed
 //! stays marked (`$hover` fill, `$border_focus` stroke) while the question shows.
 
+mod inline;
+
 use std::sync::{
   Arc,
   atomic::{AtomicBool, Ordering},
 };
 
+pub(super) use inline::answers as inline_answers;
 use lurq::{
   app::{
     ctx::Ctx,

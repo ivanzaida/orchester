@@ -14,25 +14,27 @@ use super::super::{LocalError, LocalGitError, digest};
 use crate::process_group::ProcessGroup;
 
 /// The group of the one program a family runs; none until it is started.
-pub(in crate::local_git) struct Family {
+pub(crate) struct Family {
   token: ContentHash,
   group: OnceLock<ProcessGroup>,
   /// The program the family started, which stands for its image once it exited.
   program: OnceLock<PathBuf>,
 }
 impl Family {
-  pub(in crate::local_git) fn create() -> Result<Self, LocalGitError> {
+  pub(crate) fn create() -> Result<Self, LocalGitError> {
     Ok(Self {
       token: digest(IdempotencyKey::generate().to_string().as_bytes()),
       group: OnceLock::new(),
       program: OnceLock::new(),
     })
   }
-  pub(in crate::local_git) fn spawn(&self, command: &mut Command) -> Result<Child, LocalGitError> {
+  pub(crate) fn spawn(&self, command: &mut Command) -> Result<Child, LocalGitError> {
     if self.group.get().is_some() {
       return Err(LocalError::ProcessUncertain.into());
     }
-    let mut child = command.spawn().map_err(|_| LocalGitError::Process)?;
+    let mut child = command
+      .spawn()
+      .map_err(|error| LocalGitError::Process(orchester_core::integration::IoCause::new(&error)))?;
     let Some(group) = ProcessGroup::led_by(child.id()) else {
       child.kill().map_err(|_| LocalError::ProcessUncertain)?;
       child.wait().map_err(|_| LocalError::ProcessUncertain)?;
@@ -62,14 +64,14 @@ impl Family {
   }
   /// The group was set before the program ran, which is what the job's suspended start makes sure of on Windows:
   /// nothing waits to be resumed.
-  pub(in crate::local_git) fn resume(&self, _child: &Child) -> Result<(), LocalGitError> {
+  pub(crate) fn resume(&self, _child: &Child) -> Result<(), LocalGitError> {
     Ok(())
   }
   /// Whether no process of the group is left; the leader counts until it is reaped.
-  pub(in crate::local_git) fn empty(&self) -> Result<bool, LocalGitError> {
+  pub(crate) fn empty(&self) -> Result<bool, LocalGitError> {
     self.group.get().map_or(Ok(true), |group| gone(*group))
   }
-  pub(in crate::local_git) fn stop(&self) -> Result<(), LocalGitError> {
+  pub(crate) fn stop(&self) -> Result<(), LocalGitError> {
     match self.group.get() {
       Some(group) => group.kill().map_err(|_| LocalError::ProcessUncertain.into()),
       None => Ok(()),

@@ -38,7 +38,8 @@ pub enum HubText {
   /// Geist Mono 13/500 `text_primary`: a row's label that is code, e.g. a variable (`wuoOU` in 02d `JXvc0`).
   Code,
   /// 12.5 `text_secondary`, 1.4: the line over a shared project's library and editor saying it is the team's
-  /// (`Kk64E` in 01 `cHvkL`, `xUInm` in 03 `pjEjf`).
+  /// (`Kk64E` in 01 `cHvkL`, `xUInm` in 03 `pjEjf`), and a team member's line over the Tasks list naming the Admins
+  /// (`kgU7O` in `Team authority · redesign` 01 `QdL7N`).
   TeamLine,
   /// 11.5 `text_muted`, 1.4: what a bar says beside its actions, e.g. what a newer version changed (`xtJhx` in 02c
   /// `JZFlA`).

@@ -1,11 +1,11 @@
 //! How an executing run describes its current work on the [`super::board::Board`]: task, step,
 //! agent role, provider and model, read from the run's pinned configuration.
 
-use orchester_core::{connection::ConnectionKind, id::StepExecutionId, resource::AgentProfile, run::StepExecutor};
+use orchester_core::{connection::ConnectionKind, id::StepExecutionId, run::StepExecutor};
 use orchester_ipc::{RunWork, WorkState};
 
 use super::{
-  link::resources::pinned_version,
+  resolver::ResolveError,
   run::{ExecutionError, RunTask},
 };
 
@@ -42,8 +42,10 @@ impl RunTask {
     else {
       return Err(ExecutionError::NotAnAgentStep(execution));
     };
-    let Some(body) = pinned_version::<AgentProfile>(&*self.link, profile)? else {
-      return Ok(None);
+    let body = match self.resolver.profile(&*self.link, *profile) {
+      Ok(body) => body,
+      Err(ResolveError::Link(error)) => return Err(error.into()),
+      Err(_) => return Ok(None),
     };
     let connection = self.computer.connection(body.connection())?;
     let Some(ConnectionKind::Agent(provider)) = connection.as_ref().map(|connection| connection.connection().kind())

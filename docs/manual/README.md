@@ -55,6 +55,8 @@ widening calls; **AA** = needs *Let automation answer approvals*; **WC** = needs
 | [`navigate`](mcp-server.md#navigate--needs-window-control) | WC | Take the active tab to a route |
 | [`set_theme`](mcp-server.md#set_theme--needs-window-control) | WC | Dark, light or system |
 | [`hold_reads`](mcp-server.md#hold_reads--debug-builds-only-needs-window-control) | WC, debug | Hold project reads to capture loading states |
+| [`hold_hand_offs`](mcp-server.md#hold_hand_offs--debug-builds-only-needs-window-control) | WC, debug | Hold the review page's hand-offs to the runner to capture Sending… |
+| [`hold_integration`](mcp-server.md#hold_integration--debug-builds-only-needs-window-control) | WC, debug | Hold the active project's integration lease to capture Orchester's own merge retry |
 | [`set_update_state`](mcp-server.md#set_update_state--debug-builds-only-needs-window-control) | WC, debug | Show any update state in place of the real one |
 | [`sign_in_state`](mcp-server.md#sign_in_state--read-only-always-answers) | RO | Whether Orchester is signed in to Orchester Cloud |
 | [`lurq_screenshot`, `lurq_read_tree`, `lurq_inspect`, `lurq_find`, `lurq_find_by_id`, `lurq_find_by_class`, `lurq_windows`, `lurq_menu`, `lurq_wait`, `lurq_logs`, `lurq_profile_start`, `lurq_profile_read`, `lurq_profile_end`](mcp-server.md#looking-tools-always-available) | RO | Look at the window |

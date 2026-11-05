@@ -14,7 +14,9 @@
 
 mod account;
 mod add_agent;
+mod add_decision;
 mod data;
+mod decision;
 mod edit_agent;
 mod inspector;
 mod list;
@@ -42,6 +44,15 @@ use crate::{
 
 /// The Connections tab: its groups, or the page of the connection `view` names.
 pub fn screen(ctx: &mut Ctx, project: &ShownProject, view: ConnectionsView) -> Element {
+  if let Some(connection) = view.selected_decision() {
+    return ctx.mount_keyed::<decision::DecisionPage>(
+      &format!("decision-page-{}-{connection}", project.open.project.id()),
+      decision::Props {
+        project: project.clone(),
+        connection,
+      },
+    );
+  }
   let key = format!("connections-{}", project.open.project.id());
   ctx.mount_keyed::<ConnectionsScreen>(
     &key,
@@ -56,6 +67,12 @@ pub fn screen(ctx: &mut Ctx, project: &ShownProject, view: ConnectionsView) -> E
 pub fn new_connection(ctx: &mut Ctx, project: &ShownProject, kind: NewConnection) -> Element {
   let id = project.open.project.id();
   match kind {
+    NewConnection::DecisionModel => ctx.mount_keyed::<add_decision::AddDecision>(
+      &format!("connection-add-decision-{id}"),
+      add_decision::Props {
+        project: project.clone(),
+      },
+    ),
     NewConnection::AgentProvider => ctx.mount_keyed::<AddAgent>(
       &format!("connection-add-agent-{id}"),
       AddAgentProps {

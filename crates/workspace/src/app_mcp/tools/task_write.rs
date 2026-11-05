@@ -1,9 +1,9 @@
 //! `create_task` and `update_task`: a task saved as the new task form and the task page save it. The
 //! details are read with the form's rules ([`TaskForm`]: each limit optional with no maximum, the
 //! project's default limits filled in as the form fills them), the organization as the form gives it
-//! ([`super::task_organization`]), and saved through the project's [`TaskWriter`], so a shared
-//! project's task goes to its server. The task's history records the organization changes as
-//! automation's: they come from a client of the app's MCP server or the Orchestrator chat.
+//! ([`super::task_organization`]), and saved through the project's [`TaskWriter`]. A team project's task
+//! goes through the dispatcher to its team server instead ([`super::team`]). The task's history records the
+//! organization changes as automation's: they come from a client of the app's MCP server or the Orchestrator chat.
 
 use std::path::Path;
 
@@ -29,6 +29,7 @@ use super::{
   modules::find_module,
   task_organization::{Blocker, Changes},
   tasks::find_task,
+  team,
   wire::{self, Delivers, Rank, Workflow},
 };
 use crate::{
@@ -236,12 +237,18 @@ impl Fields<'_> {
 }
 
 pub async fn create_task(services: &Services, args: CreateTask) -> Result<Value, ToolError> {
+  if let Some(team) = team::of(services, &args.project).await? {
+    return team::create_task(services, &team, &args).await;
+  }
   let services = services.clone();
   let task = blocking(move || create(&services, &args)).await?;
   Ok(json!({ "task": saved(&task) }))
 }
 
 pub async fn update_task(services: &Services, args: UpdateTask) -> Result<Value, ToolError> {
+  if let Some(team) = team::of(services, &args.project).await? {
+    return team::update_task(services, &team, &args).await;
+  }
   let services = services.clone();
   let task = blocking(move || update(&services, &args)).await?;
   Ok(json!({ "task": saved(&task) }))

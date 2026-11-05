@@ -6,6 +6,7 @@
 //! [`CommandRunner`](crate::command::CommandRunner); none of it stashes, resets or discards uncommitted work a
 //! person did not confirm discarding.
 
+pub mod attempt;
 pub mod base;
 mod cleanup;
 pub mod delivery;
@@ -16,11 +17,14 @@ mod git;
 mod held;
 pub mod local;
 mod log;
+mod made;
 mod merge;
 mod merged;
+mod preflight;
 mod recorded;
 pub mod removal;
 pub mod resolve;
+pub mod retry;
 mod sweep;
 pub mod workspace;
 
@@ -38,11 +42,14 @@ pub use self::{
   fork::{Ancestry, RunFork, fork_point, made_on_branch, own_base, parse_log},
   held::{NotRemoved, finish_removal, record_what_stayed, retry_held},
   log::{LoggedCommit, MAX_LISTED, own_commits},
+  made::merge_made,
   merge::{
-    DeliveredAs, Delivering, MergeError, MergeKind, MergeOutcome, RunMerge, TemporaryLeft, merge_run, merge_run_as,
-    merge_run_at,
+    DeliveredAs, Delivering, Interrupted, MergeError, MergeKind, MergeOutcome, MergeStep, ModuleDelivery, ModuleMerge,
+    RunMerge, TemporaryLeft, clear_interrupted, left_by_bring_in, merge_module, merge_run, merge_run_as, merge_run_at,
+    module_merged, put_back,
   },
   merged::{Branches, Delivered, RunWork},
+  preflight::{GitCause, IoCause, PreflightCause, PreflightStage},
   recorded::{
     RecordedCleanupError, RemovalStart, clean_up_recorded, clean_up_recorded_as_seen, record_removal_as_seen,
     settle_removal,
@@ -63,6 +70,13 @@ pub enum GitError {
   Failed(String),
   #[error("git printed something that is not {expected}: {detail}")]
   Unrecognized { expected: &'static str, detail: String },
+  /// `git <command>` wrote nothing for `after` and was stopped with everything it started
+  /// ([`CommandError::Silent`]).
+  #[error("git stopped answering: `git {command}` wrote nothing for {} s and was stopped", after.as_secs())]
+  Unanswered {
+    command: String,
+    after: std::time::Duration,
+  },
 }
 
 /// The branch checked out in the repository at `repo`, read with the `git` program; `None` on a

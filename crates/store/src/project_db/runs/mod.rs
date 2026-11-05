@@ -1,4 +1,5 @@
 mod columns;
+mod create;
 mod legacy;
 mod load;
 mod record;
@@ -9,7 +10,6 @@ use orchester_core::{
   id::{IdempotencyKey, ResourceId, RunId, TaskId},
   resource::VersionNumber,
   run::{AttemptReason, BranchName, Checkpoint, ListedRun, NewRun, Plan, Run, RunEvent, RunEventKind, RunNumber},
-  sharing::TaskRevision,
   store::RunStore,
   time::Timestamp,
 };
@@ -21,12 +21,7 @@ use self::{
   columns::run_status_columns,
   load::{load_checkpoint, load_events, load_runs},
 };
-use super::{
-  ProjectDb, plans,
-  resources::version_number,
-  tasks::{has_revision, is_queued, snapshot_new_run},
-  write_transaction::retried,
-};
+use super::{ProjectDb, plans, resources::version_number, write_transaction::retried};
 use crate::{
   RunStoreError, StoreError,
   rows::{corrupt, encode_json, optional_budget_column, optional_millis_column, tokens_column},
@@ -104,59 +99,6 @@ impl ProjectDb {
       [],
     )?)
   }
-
-  /// [`RunStore::create_run`] for a task the caller found queued: the task must still be queued
-  /// when the run is recorded, in the same transaction. A person may have taken it back to the
-  /// drafts since the caller checked it (a held group's task), and a draft never has a run. With
-  /// `revision`, the task must also still be at that revision, read in the same transaction: a task
-  /// edited since a person confirmed its run is refused ([`RunStoreError::TaskChangedMeanwhile`]).
-  pub fn create_run_of_queued_task(
-    &mut self,
-    key: IdempotencyKey,
-    new: NewRun,
-    now: Timestamp,
-    revision: Option<TaskRevision>,
-  ) -> Result<Run, RunStoreError> {
-    self.record_run(key, new, now, Some(revision))
-  }
-
-  /// Records the run; `queued` checks the task is still queued and, with a revision, still at it.
-  fn record_run(
-    &mut self,
-    key: IdempotencyKey,
-    new: NewRun,
-    now: Timestamp,
-    queued: Option<Option<TaskRevision>>,
-  ) -> Result<Run, RunStoreError> {
-    let key = key.to_string();
-    let project = self.project.key().clone();
-    let transaction = self.connection.transaction()?;
-    if let Some(existing) = load_runs(&transaction, "WHERE idempotency_key = ?1", [&key])?.pop() {
-      return existing.map_err(|unreadable| unreadable.error);
-    }
-    if let Some(revision) = queued {
-      if !is_queued(&transaction, new.task)? {
-        return Err(RunStoreError::TaskNotQueued(new.task));
-      }
-      if let Some(revision) = revision
-        && !has_revision(&transaction, new.task, revision)?
-      {
-        return Err(RunStoreError::TaskChangedMeanwhile(new.task));
-      }
-    }
-    if super::shared_tasks::is_not_shared(&transaction, new.task)? {
-      return Err(StoreError::NotSharedTask(new.task).into());
-    }
-    super::organization::check_readiness(&transaction, new.task)?;
-    let number: i64 = transaction.query_row("SELECT next FROM counters WHERE name = 'run'", [], |row| row.get(0))?;
-    let (run, created) = Run::create(RunId::generate(), run_number(number)?, new, now)?;
-    insert_run(&transaction, &run, &key)?;
-    snapshot_new_run(&transaction, run.id(), run.task(), &project)?;
-    insert_event(&transaction, &created)?;
-    transaction.execute("UPDATE counters SET next = ?1 WHERE name = 'run'", [number + 1])?;
-    transaction.commit()?;
-    Ok(run)
-  }
 }
 
 impl RunStore for ProjectDb {
@@ -166,7 +108,7 @@ impl RunStore for ProjectDb {
   /// drafts. Production code records runs with [`ProjectDb::create_run_of_queued_task`], which
   /// rechecks that the task is still queued.
   fn create_run(&mut self, key: IdempotencyKey, new: NewRun, now: Timestamp) -> Result<Run, RunStoreError> {
-    self.record_run(key, new, now, None)
+    self.record_run(key, new, now, None, None)
   }
 
   fn run_with_key(&self, key: IdempotencyKey) -> Result<Option<Run>, RunStoreError> {
@@ -306,25 +248,35 @@ fn append_in(transaction: &Transaction<'_>, record: &RunLogRecord) -> Result<(),
   if found != expected {
     return Err(RunStoreError::SequenceConflict { run, expected, found });
   }
-  if continues {
+  // A team task whose definition is kept only on its server has no readiness or workflow status here, and a run of
+  // inputs the team server accepted never changes its task here, even one with a cached definition: its run goes on
+  // from its inputs, and the server keeps the task's status.
+  let defined =
+    super::task_identities::has_definition(transaction, task)? && !super::run_inputs::is_team_run(transaction, run)?;
+  if continues && defined {
     super::organization::check_readiness(transaction, task)?;
   }
   record.store_change(transaction)?;
   for event in events {
     insert_event(transaction, event)?;
-    let status = match event.kind() {
-      kind if kind.starts_execution() => Some(orchester_core::task::organization::WorkflowStatus::InProgress),
-      RunEventKind::Succeeded | RunEventKind::FollowUpFailed => {
-        Some(orchester_core::task::organization::WorkflowStatus::InReview)
-      }
-      _ => None,
-    };
-    if let Some(status) = status {
-      super::organization::automatic(transaction, task, status, event.at())?;
+    if defined {
+      follow_workflow(transaction, task, event)?;
     }
   }
   record.store_kept(transaction)?;
   Ok(())
+}
+
+/// Moves `task` to the workflow status `event` brings it to, if any: In progress when an agent starts, In review when
+/// the run succeeds.
+fn follow_workflow(transaction: &Transaction<'_>, task: TaskId, event: &RunEvent) -> Result<(), StoreError> {
+  use orchester_core::task::organization::WorkflowStatus;
+  let status = match event.kind() {
+    kind if kind.starts_execution() => WorkflowStatus::InProgress,
+    RunEventKind::Succeeded | RunEventKind::FollowUpFailed => WorkflowStatus::InReview,
+    _ => return Ok(()),
+  };
+  super::organization::automatic(transaction, task, status, event.at())
 }
 
 fn insert_run(transaction: &Transaction<'_>, run: &Run, key: &str) -> Result<(), StoreError> {

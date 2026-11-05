@@ -1,11 +1,11 @@
 //! The task's properties beside the Summary's column (`Properties` `Sq8ss`, 260 wide, 24 inside its left hairline):
 //! a row each, 7 over and under it, what it is in 12 `text_muted` in an 84 column and its value 8 after it in 12 —
-//! Status and Priority with their glyphs, Pipeline, Tags, Depends on, Limits, Branch in Geist Mono, Base and where it
-//! came from (`base_branch`, `qg3JF`) and Created. They replace *Run #N setup* and *Task organization* and keep what
-//! those said: the pipeline and limits are those the latest run started with, and when the task has others now the
-//! value says *changed* and its tooltip what the task has; a run that cannot be read, or ran on a teammate's computer,
-//! has them *Not recorded*. Then what the shared project says of the task, the run's facts (`run_facts`), and last the
-//! link to the task's memory (`Memory link` `lJQcf`).
+//! Status and Priority with their glyphs, Pipeline, Tags, Depends on, Limits, Branch in Geist Mono, the run's Merge
+//! (`merge_row`), Base and where it came from (`base_branch`, `qg3JF`) and Created. They replace *Run #N setup* and
+//! *Task organization* and keep what those said: the pipeline and limits are those the latest run started with, and
+//! when the task has others now the value says *changed* and its tooltip what the task has; a run that cannot be read,
+//! or ran on a teammate's computer, has them *Not recorded*. Then what the shared project says of the task, the run's
+//! facts (`run_facts`), and last the link to the task's memory (`Memory link` `lJQcf`).
 
 use std::{sync::Arc, time::Duration};
 
@@ -96,13 +96,15 @@ pub fn row(id: &str, key: &str, value: impl Into<Element>, padding: SpacingSize)
 }
 
 /// The column: the task's properties, what the shared project says of it (`section`), the run's facts with their
-/// disclosure `more`, and the memory link.
+/// disclosure `more`, and the memory link. A team task's have its assignee and claim first, its module after the
+/// pipeline and the module's branch it merges into in place of the base (`super::team`).
 pub fn column(ctx: &mut Ctx, task: &TaskContext, (section, more): (Option<Element>, &Signal<bool>)) -> Element {
   let tasks = task.project.feed.tasks.get();
   let tasks = tasks.ready();
   let organization = task.detail.task.organization();
   let property = |id: &str, key: &str, value: Element| row(id, key, value, TaskSpacing::PropertyRow.role());
-  let rows = vec![
+  let mut rows = super::team::first_rows(ctx, task);
+  rows.extend([
     property(
       "task-property-status",
       &ctx.t("summary.properties.status"),
@@ -118,6 +120,16 @@ pub fn column(ctx: &mut Ctx, task: &TaskContext, (section, more): (Option<Elemen
       &ctx.t("summary.properties.pipeline"),
       pipeline(ctx, task, tasks),
     ),
+  ]);
+  rows.extend(super::team::module_row(ctx, task));
+  let base = super::team::merges_row(ctx, task).unwrap_or_else(|| {
+    property(
+      "task-property-base",
+      &ctx.t("summary.properties.base.label"),
+      super::base_branch::base(ctx, task, tasks),
+    )
+  });
+  rows.extend([
     property(
       "task-property-tags",
       &ctx.t("summary.properties.tags"),
@@ -133,27 +145,14 @@ pub fn column(ctx: &mut Ctx, task: &TaskContext, (section, more): (Option<Elemen
       &ctx.t("summary.properties.limits"),
       limits(ctx, task),
     ),
-    property(
-      "task-property-branch",
-      &ctx.t("summary.properties.branch"),
-      branch(ctx, task),
-    ),
-    property(
-      "task-property-base",
-      &ctx.t("summary.properties.base.label"),
-      super::base_branch::base(ctx, task, tasks),
-    ),
+    branch_and_merge(ctx, task),
+    base,
     property(
       "task-property-created",
       &ctx.t("summary.properties.created"),
-      value(
-        "task-property-created",
-        &day_and_clock(ctx, task.detail.task.created_at()),
-        Look::Secondary,
-      )
-      .into(),
+      created(ctx, task),
     ),
-  ];
+  ]);
   let facts = task
     .detail
     .run
@@ -172,6 +171,12 @@ pub fn column(ctx: &mut Ctx, task: &TaskContext, (section, more): (Option<Elemen
     .with_children(facts)
     .child(memory_link(ctx, task))
     .into()
+}
+
+/// When the task was made.
+fn created(ctx: &Ctx, task: &TaskContext) -> Element {
+  let when = day_and_clock(ctx, task.detail.task.created_at());
+  value("task-property-created", &when, Look::Secondary).into()
 }
 
 /// A glyph and its word.
@@ -376,6 +381,22 @@ fn branch(ctx: &mut Ctx, task: &TaskContext) -> Element {
     Some(branch) => cut(ctx, id, branch.as_str()),
     None => value(id, &ctx.t("summary.properties.none"), Look::Muted).into(),
   }
+}
+
+/// Branch, and under it the Merge row once the run has one ([`super::merge_row`]): together, so that a row the run does
+/// not have leaves no gap.
+fn branch_and_merge(ctx: &mut Ctx, task: &TaskContext) -> Element {
+  let branch = row(
+    "task-property-branch",
+    &ctx.t("summary.properties.branch"),
+    branch(ctx, task),
+    TaskSpacing::PropertyRow.role(),
+  );
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .child(branch)
+    .with_children(super::merge_row::merge_row(ctx, task))
+    .into()
 }
 
 /// An identifier on one line in Geist Mono 12 `text_secondary`, cut to its room with the whole of it in a tooltip.

@@ -18,6 +18,12 @@ pub enum BundleError {
     resource: ResourceId,
     number: VersionNumber,
   },
+  /// The run pins a version whose slug and name were not given.
+  #[error("the label of {resource} {number} was not given")]
+  MissingLabel {
+    resource: ResourceId,
+    number: VersionNumber,
+  },
   #[error("{0} is pinned more than once")]
   Duplicate(ResourceId),
   /// The pipeline's sources are folders of one computer; a bundle never carries them.

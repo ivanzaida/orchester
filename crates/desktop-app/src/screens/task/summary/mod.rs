@@ -4,15 +4,18 @@
 //! of a run that ended to a step; the run (`run`: its steps on a rail and its last event); the brief with the version
 //! of the requirements it shows (`brief`) and the acceptance criteria; what the run made (`output`); and the task's
 //! runs (`runs`). Beside it, 40 away, the task's properties with its run's facts and its memory (`properties`). Before
-//! the task's first run the column says there are no runs yet (`empty`) over the brief; a task kept *Not shared*
-//! says why it is read-only, or asks *Share task* in place; a task whose latest run cannot be read says why.
+//! the task's first run the column says there are no runs yet (`empty`) over the brief, or, for a team task another
+//! computer holds, what its team server reports of the run there (`team_run`); a task kept *Not shared* says why
+//! it is read-only, or asks *Share task* in place; a task whose latest run cannot be read says why.
 
 mod base_branch;
 mod brief;
 mod browser_line;
+mod claim;
 mod decisions;
 mod empty;
 mod live;
+mod merge_row;
 mod notice;
 mod output;
 mod properties;
@@ -20,8 +23,10 @@ pub(super) mod reading;
 mod run;
 mod run_account;
 mod run_facts;
-pub(super) mod runs;
+pub(crate) mod runs;
 mod steps;
+mod team;
+mod team_run;
 mod version;
 
 use lurq::{
@@ -37,7 +42,7 @@ use lurq::{
 };
 
 pub use self::{
-  decisions::{Waiting, decisions, returnable, waiting},
+  decisions::{PullRequestState, Waiting, decisions, pull_request_rows, returnable, waiting},
   notice::EventWords,
   version::Version,
 };
@@ -91,9 +96,9 @@ impl Component for TaskSummary {
     let column: Vec<Element> = if detail.not_shared() {
       self.kept_parts(ctx, task, (linked.as_ref(), next.as_ref()))
     } else if detail.before_first_run() {
-      std::iter::once(empty::empty(ctx, task))
-        .chain(self.requirements(ctx, task))
-        .collect()
+      // A team task another computer holds has the run its server reports, and nothing to start here.
+      let first = team_run::reported(ctx, task).unwrap_or_else(|| empty::empty(ctx, task));
+      std::iter::once(first).chain(self.requirements(ctx, task)).collect()
     } else if let Some(unreadable) = &detail.latest_unreadable {
       let notice = Notice::new(
         "task-notice",
@@ -112,6 +117,8 @@ impl Component for TaskSummary {
     } else {
       self.parts(ctx, task)
     };
+    // A team task's line for a member and its claim come first (`team`).
+    let column = team::top(ctx, task).into_iter().chain(column).collect();
     let properties = properties::column(ctx, task, (section, &self.more_facts));
     layout(column, properties, state.summary_scroll)
   }

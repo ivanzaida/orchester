@@ -114,6 +114,9 @@ const RUNS: &[&str] = &[
   "bash .tmp/verify/x.sh",
   "sh -eu .tmp/verify/x.sh",
   "pwsh -NoProfile -NonInteractive -File .tmp/verify/start-app.ps1 -Port 1",
+  // The person's own PowerShell profile is no code from elsewhere (ORC-662).
+  "pwsh -File .tmp/verify/start-app.ps1",
+  "powershell -ExecutionPolicy Bypass -File .tmp/verify/start-app.ps1",
   "python .tmp/verify/tree.py 1 2>&1 | grep -E 'ok' | head -5",
   "git -C .tmp/verify/kontur add -A",
   "git status && python .tmp/verify/start.py",
@@ -199,8 +202,6 @@ const ASKS: &[&str] = &[
   "python {WR}/s.py",
   "git -C {WR}/repo commit -m m",
   // Startup code of the user, options that write or load elsewhere, signing, links from the `-C` folder.
-  "pwsh -File .tmp/verify/start-app.ps1",
-  "powershell -ExecutionPolicy Bypass -File .tmp/verify/start-app.ps1",
   "zsh .tmp/verify/x.sh",
   "python -X pycache_prefix=C:/x .tmp/verify/start.py",
   "python -Xpresite=mod .tmp/verify/start.py",

@@ -1,90 +1,47 @@
-//! Ready for review (`Decision · Ready to merge` `I500yD` in `Decision cards` `CqVv3`) and what merging makes of it
-//! (`Task · Summary · merge states` `kxMAN`). A run whose every step passed shows the Ready card ([`card`]) at the top
-//! of the Summary with *Merge into main*, *Create pull request* ([`pull_request`]), *Ask agent* and *Review PR*, then
-//! what changed and what verified it ([`changed`]). Merging and creating a pull request run on the project's shared
-//! operations (`ProjectJobs`, which Orchester's MCP server uses too), so they go on when the page closes: the buttons
-//! show them under way. A merge that did not happen says why in place of the Ready card, with the files that
-//! conflicted, how to resolve them — in the person's editor or by an agent of the run ([`resolve`]) — and offers to
-//! merge again; while a merge waits in the run's worktree for the person to resolve it, that is shown instead
-//! ([`resolving`]); a merged run says where its work went and what was cleared after it.
+//! A run whose every step passed waits to be merged (ORC-731; `Review · redesign`, Row 4 `XHQpC`), and what merging
+//! makes of it (`Task · Summary · merge states` `kxMAN`). The top card of the Summary ([`card`]) is *Ready to merge*
+//! (01i `k9GBy`) with *Merge* and its key cap, *Review changes*, which opens the run's review page, and *Close without
+//! merging*; once a merge did not land it turns to the warning card (01j `k4C0Es`): the outcome, what stopped it in
+//! one line, the attempt page's primary action and *Open in Review* (`crate::screens::task::merge`). The run's pull
+//! request is created from the header's *More actions* ([`pull_request`]); once it has one, the card says so and
+//! *Review PR* opens it. Merging and creating a pull request run on the project's shared operations (`ProjectJobs`,
+//! which Orchester's MCP server uses too), so they go on when the page closes: the buttons show them under way. While
+//! a merge of the base branch waits in the run's worktree for the person to finish it, as the task's frame read it
+//! (`merge::worktree`), that is shown instead ([`resolving`]); a merged run says where its work went and what was
+//! cleared after it.
 
 mod card;
 pub(super) mod changed;
 mod external;
 mod local;
 mod pull_request;
-mod resolve;
 mod resolving;
 mod unpushed;
 
-use std::time::Duration;
-
 use lurq::{
-  app::{
-    component::Component,
-    ctx::{Ctx, Interval},
-  },
+  app::{component::Component, ctx::Ctx},
   components::Column,
   core::Signal,
   node::Element,
 };
 use orchester_core::id::RunId;
-use orchester_workspace::{
-  background,
-  tasks::{
-    integration_jobs::JobState,
-    resolve::{self as worktree, Worktree},
-  },
-};
+use orchester_workspace::tasks::{integration_jobs::JobState, resolve::Worktree};
 
 pub(super) use self::card::frame;
-use self::{
-  pull_request::PullRequestRead,
-  resolve::{Asking, Offer, StepChoice},
-  unpushed::Refused,
-};
+pub use self::pull_request::PullRequestState;
 use super::{TaskContext, arranged};
-use crate::{mcp::input_gate::InputGate, services::Services};
+use crate::screens::task::{
+  PageState,
+  merge::{self, Merge},
+};
 
-/// How often a merge waiting in the run's worktree is read again while the person resolves it.
-const LOOK: Duration = Duration::from_secs(2);
-
-pub struct ReadyForReview {
-  /// *Open as draft*: on until the person turns it off (rule 7).
-  draft: Signal<bool>,
-  /// The run whose question about the base's unpushed commits window input tried to answer.
-  pull_person_only: Signal<Option<Refused>>,
-  /// Counts while a merge waits in the run's worktree, which is read again then: the person resolves it in an editor,
-  /// which tells Orchester nothing.
-  look: Signal<u64>,
-  /// Ticks [`Self::look`]; it runs only while a merge waits in the worktree.
-  looking: Interval,
-  /// The step *Ask an agent to resolve* returns the run to.
-  step: Signal<StepChoice>,
-  /// The return under way.
-  asked: Signal<Option<Asking>>,
-  /// Window input asked an agent to resolve without a person's leave.
-  person_only: Signal<bool>,
-  gate: Option<InputGate>,
-}
+pub struct ReadyForReview;
 
 impl Component for ReadyForReview {
   type Props = TaskContext;
 
-  fn create(ctx: &mut Ctx) -> Self {
-    let look = ctx.signal(0_u64);
-    let next = look.clone();
-    let looking = ctx.create_interval(LOOK, move || next.update(|tick| *tick += 1));
-    Self {
-      draft: ctx.signal(true),
-      pull_person_only: ctx.signal(None),
-      look,
-      looking,
-      step: ctx.signal(StepChoice(None)),
-      asked: ctx.signal(None),
-      person_only: ctx.signal(false),
-      gate: ctx.use_context::<InputGate>(),
-    }
+  fn create(_ctx: &mut Ctx) -> Self {
+    Self
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -98,49 +55,30 @@ impl Component for ReadyForReview {
     // remote's read runs git in it.
     let (external, settled) = external::notice(ctx, &props);
     let (reminder, reminded) = local::reminder(ctx, &props);
-    let pull = PullRequestRead {
-      readiness: pull_request::read(ctx, &props, settled && reminded),
-      draft: self.draft.clone(),
-      person_only: self.pull_person_only.clone(),
-    };
-    let worktree = in_worktree(ctx, &props, (run.id(), self.look.get()));
-    let in_merge = worktree.as_ref().and_then(|worktree| worktree.merge.as_ref());
-    if in_merge.is_some() {
-      self.looking.start();
-    } else {
-      self.looking.stop();
-    }
-    let action = resolve::ask_action(ctx, &props, run.id());
+    let readiness = pull_request::read(ctx, &props, settled && reminded);
+    let pull = PageState::of(ctx).pull_request.read(readiness);
+    let in_merge = props.worktree.as_ref().and_then(|worktree| worktree.merge.as_ref());
     let job = props.jobs.run(run.id());
-    // A merge git made shows as soon as it is made, also while the task is not read again with it.
-    let made = props.detail.merge.as_ref().or(job.merged.as_ref());
-    let mut parts: Vec<Element> = match (made, &job.merge) {
+    // A merge git made shows as soon as it is made, also while the task is not read again with it; one it could not
+    // record is not merged yet, and the top card's merge records it.
+    let unrecorded = props.detail.merge.is_none() && matches!(job.merge, JobState::Failed(_));
+    let made = props
+      .detail
+      .merge
+      .as_ref()
+      .or(job.merged.as_ref().filter(|_| !unrecorded));
+    let mut parts: Vec<Element> = match (made, Merge::of(&props)) {
       (None, _) if let Some(resolution) = in_merge => resolving::resolving(ctx, &props, run, (resolution, &pull)),
-      (Some(merge), JobState::Failed(problem)) if props.detail.merge.is_none() => {
-        card::not_merged(ctx, &props, run, (problem, Some(merge)), (&job.conflicts, &pull), None)
-      }
       (Some(merge), _) => vec![card::merged(ctx, &props, merge)],
-      (None, JobState::Failed(problem)) => {
-        let offer = (!job.conflicts.is_empty()).then(|| {
-          Offer {
-            task: &props,
-            run,
-            worktree: worktree.as_ref(),
-            conflicts: &job.conflicts,
-            step: &self.step,
-            asked: &self.asked,
-            action: &action,
-            person_only: &self.person_only,
-            gate: self.gate.as_ref(),
-          }
-          .render(ctx)
-        });
-        card::not_merged(ctx, &props, run, (problem, None), (&job.conflicts, &pull), offer)
+      (None, Some(merge)) => {
+        let card = card::Shown {
+          merge,
+          run,
+          pull: &pull,
+        };
+        vec![external.unwrap_or_else(|| card::top(ctx, &props, &card, read.as_ref()))]
       }
-      (None, _) => vec![
-        external.unwrap_or_else(|| card::ready(ctx, &props, run, &pull)),
-        changed::columns(ctx, &props, read.as_ref(), (Vec::new(), None)),
-      ],
+      (None, None) => Vec::new(),
     };
     if let Some(reminder) = reminder {
       parts.insert(0, reminder);
@@ -149,39 +87,24 @@ impl Component for ReadyForReview {
   }
 }
 
-/// What [`in_worktree`] read.
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct InWorktree(Worktree);
-
-impl lurq::app::component::DevtoolsInspectable for InWorktree {}
+/// *Create pull request* and *Open as draft* for the header's *More actions*, which `menu` opens, while the task's
+/// latest run waits to be merged; read on every render of the header, in the same place: lurq keeps futures by their
+/// order. Whether one can be created is read while the menu is open.
+pub fn pull_request_rows(ctx: &mut Ctx, task: &TaskContext, menu: &Signal<bool>) -> Vec<Element> {
+  let waits = Merge::of(task).is_some();
+  let open = menu.get();
+  let readiness = pull_request::read(ctx, task, waits && open);
+  if !(waits && open) {
+    return Vec::new();
+  }
+  let read = PageState::of(ctx).pull_request.read(readiness);
+  pull_request::menu_rows(ctx, task, &read, menu)
+}
 
 /// `run`'s worktree and the merge waiting in it for the person to resolve it, read again when the task or its
 /// resolving changes and at each `look` while one waits; `None` while it is first read.
 pub(super) fn in_worktree(ctx: &mut Ctx, task: &TaskContext, (run, look): (RunId, u64)) -> Option<Worktree> {
-  let worktrees = Services::of(ctx).run_worktrees(&task.project.open);
-  let root = task.project.open.repo_root.clone();
   let job = task.jobs.run(run);
-  let idle = !job.resolving();
-  let key = (
-    root,
-    (run, idle),
-    (task.project.feed.revision.get(), job.resolve.ended, look),
-  );
-  ctx
-    .future(key, move |(root, (run, idle), _)| {
-      let worktrees = worktrees.clone();
-      async move {
-        background::run(move || worktree::read(&worktrees, &root, (run, idle)))
-          .await
-          .map_err(|_| ())?
-          .map(InWorktree)
-          .map_err(|message| {
-            tracing::warn!(?message, "cannot read whether a merge waits in the run's worktree");
-          })
-      }
-    })
-    .state()
-    .get()
-    .data
-    .map(|read| read.0)
+  let again = ((task.project.feed.revision.get(), job.resolve.ended), look);
+  merge::worktree::read(ctx, &task.project.open, (run, !job.resolving()), again)
 }

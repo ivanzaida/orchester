@@ -35,12 +35,16 @@ impl ProjectDb {
     }
     record(&transaction, completion, report)?;
     let task = task_of(&transaction, run)?;
-    super::organization::automatic(
-      &transaction,
-      task,
-      orchester_core::task::organization::WorkflowStatus::Done,
-      completion.completed_at,
-    )?;
+    // A team run's completion is its own record: the team server keeps its task's status, and whether a completed
+    // team run makes its task Done is open (D4).
+    if !super::run_inputs::is_team_run(&transaction, run)? {
+      super::organization::automatic(
+        &transaction,
+        task,
+        orchester_core::task::organization::WorkflowStatus::Done,
+        completion.completed_at,
+      )?;
+    }
     super::task_effort::record(&transaction, task, completion.completed_at)?;
     transaction.commit()?;
     Ok(())

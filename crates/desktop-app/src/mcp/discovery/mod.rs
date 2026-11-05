@@ -1,7 +1,8 @@
 //! The discovery file of the app's MCP server: `<pid>.json` in a folder of the user's profile that is
 //! the app's own (`orchester-app-mcp/`, see [`platform::user_folder`]), never lurq's `lurq/mcp/` nor
 //! the deprecated desktop's `orchester-mcp/`, so tools tell the servers apart. It holds the port, the
-//! endpoint and the bearer token, so only the user can read it; it is removed when the server stops.
+//! endpoint and the bearer token, so only the user and the account the app runs as (a sandbox's user, for a
+//! QA copy an agent started inside its sandbox) can read it; it is removed when the server stops.
 //! Each process also holds a lock on `<pid>.lock` while it runs: a file whose lock can be taken belongs
 //! to a process that ended without removing it (it was killed), and the next server that starts removes
 //! it. Adapted from the deprecated desktop's `app_mcp::discovery`, which goes with that crate.

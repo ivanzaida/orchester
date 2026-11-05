@@ -23,15 +23,12 @@ mod executor;
 use std::{
   collections::HashMap,
   path::{Path, PathBuf},
-  sync::{
-    Arc,
-    atomic::{AtomicBool, Ordering},
-  },
+  sync::{Arc, atomic::AtomicBool},
   time::Duration,
 };
 
 use orchester_core::{
-  id::{ConnectionId, IdempotencyKey, RunId, TaskId},
+  id::{IdempotencyKey, RunId, TaskId},
   run::{InterruptCause, RaisedLimits, RunStatus},
   secret::SecretVault,
   store::RunStore,
@@ -40,16 +37,14 @@ use orchester_core::{
 use orchester_ipc::{Event, Rejection};
 use orchester_store::{ProjectDb, RunStoreError};
 use parking_lot::Mutex;
-use tokio::{
-  sync::{mpsc, oneshot},
-  task::JoinHandle,
-};
+use tokio::sync::{mpsc, oneshot};
 
 // The coordinator's modules are named by their full path here, never imported: an import would make them reachable
 // from the executor as `crate::execution::<module>`, past the check of `crates/runner/tests/execution_split.rs`.
 use self::{
   coordinator::board::Board,
   executor::{
+    active::ActiveRun,
     control::Control,
     disk_guard::DiskGuard,
     prepared::Prepared,
@@ -75,29 +70,6 @@ use crate::{
 /// How long stopping waits for each run to end its agent and record the interruption.
 const STOP_TIMEOUT: Duration = Duration::from_secs(10);
 
-struct ActiveRun {
-  control: mpsc::UnboundedSender<Control>,
-  task: JoinHandle<()>,
-  /// Set by the task once it no longer executes the run, before the change that shows it can be
-  /// read: the run settled (paused, stopped at a limit, cancelled, interrupted or ended), waits
-  /// for a person with nothing else to do, or the task failed. The task only ends after.
-  settled: Arc<AtomicBool>,
-}
-
-impl ActiveRun {
-  /// Whether the task has ended. It lets go of its requests as it drops its state, once its last
-  /// change is recorded and its agents have ended; its [`JoinHandle`] reports it finished only a
-  /// moment later.
-  fn ended(&self) -> bool {
-    self.control.is_closed()
-  }
-
-  /// Whether the task still executes the run: it counts among the active runs.
-  fn executes(&self) -> bool {
-    !self.ended() && !self.settled.load(Ordering::Acquire)
-  }
-}
-
 /// The runs this runner executes.
 #[derive(Clone)]
 pub struct Scheduler {
@@ -110,6 +82,9 @@ struct Inner {
   /// What belongs to the computer the runs execute on: their connections, accounts and CLI config folders, and the
   /// secrets with their values in its keychain. The coordinator's own reads of secret values go through it too.
   computer: Arc<dyn ComputerResources>,
+  /// The keychain the scheduler itself reads from on this computer: a decision connection's key while a person tests
+  /// it.
+  vault: Arc<dyn SecretVault>,
   /// The runner's own program, which Claude Code starts as its permission prompt; `None` when it
   /// cannot be found, which keeps steps that ask a person on Claude Code from starting.
   relay: Option<PathBuf>,
@@ -130,6 +105,8 @@ struct Inner {
   plan_waits: coordinator::plan_limit::PlanWaits,
   /// The turns of the Orchestrator chat under way, and the side questions being answered.
   chats: coordinator::chat::Chats,
+  /// The review answers under way.
+  reviews: coordinator::review::Reviews,
   side_agents: coordinator::side_question::SideAgents,
   /// The disk guard's reading of free space (ORC-114), and its watch over runs paused for low disk space.
   disks: DiskGuard,
@@ -152,11 +129,13 @@ impl Scheduler {
     orchester_store::pause_lock_waits_with(crate::lock_pause::pause_off_async_workers);
     // Before the desktop connects and reads the runs.
     coordinator::missing_checkpoints::record(project_root);
+    crate::decision_test::recover(project_root);
     executor::worktree_sweep::sweep_in_background(project_root.to_path_buf());
     Self {
       inner: Arc::new(Inner {
         project_root: project_root.to_path_buf(),
-        computer: Arc::new(LocalComputer::of_project(project_root, vault)),
+        computer: Arc::new(LocalComputer::of_project(project_root, vault.clone())),
+        vault,
         relay,
         board: Arc::new(Board::new(notifier.clone())),
         qa: Arc::new(QaApps::new(qa_slots)),
@@ -169,6 +148,7 @@ impl Scheduler {
         blocked_runs: coordinator::blocked_runs::BlockedRuns::default(),
         plan_waits: coordinator::plan_limit::PlanWaits::default(),
         chats: coordinator::chat::Chats::default(),
+        reviews: coordinator::review::Reviews::default(),
         side_agents: coordinator::side_question::SideAgents::default(),
         disks: DiskGuard::local(),
         disk_watch: coordinator::low_disk::DiskWatch::default(),
@@ -214,7 +194,7 @@ impl Scheduler {
   /// request is changing a run under the scheduler lock. The server separately tracks requests
   /// awaiting a task's answer.
   pub fn is_idle(&self) -> bool {
-    if !self.active_runs().is_empty() || self.inner.continuing.try_lock().is_err() || !self.inner.chats.idle() {
+    if !self.active_runs().is_empty() || self.inner.continuing.try_lock().is_err() || !self.turns_idle() {
       return false;
     }
     match self
@@ -345,30 +325,6 @@ impl Scheduler {
     if result.is_err() {
       self.wait_for_plan_resets();
     }
-  }
-
-  /// Continues `run`, stopped at its account's plan limit, now on `connection`, another account's connection of
-  /// the same CLI, as a new session for the stopped step and this run only.
-  pub async fn continue_on_connection(&self, run: RunId, connection: ConnectionId) -> Result<(), Rejection> {
-    self.plan_waits().clear(run);
-    let continued = self
-      .continue_settled(run, |db, root| {
-        coordinator::plan_limit::continue_on(db, root, run, connection)
-      })
-      .await;
-    self.wait_again_if_refused(&continued);
-    continued
-  }
-
-  /// Continues `run`, stopped at its account's plan limit, on the same account now, as a person asked; it stops there
-  /// again if the CLI still refuses.
-  pub async fn try_at_plan_limit(&self, run: RunId) -> Result<(), Rejection> {
-    self.plan_waits().clear(run);
-    let tried = self
-      .continue_settled(run, |db, root| coordinator::plan_limit::try_now(db, root, run))
-      .await;
-    self.wait_again_if_refused(&tried);
-    tried
   }
 
   /// Raises the limits of `run`, stopped at a limit, and continues it.

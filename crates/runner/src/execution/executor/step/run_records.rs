@@ -23,6 +23,7 @@ use parking_lot::Mutex;
 
 use super::super::{
   link::{CoordinatorLink, messages as message_link, questions as question_link},
+  resolver::RunResolver,
   sink::Sink,
 };
 use crate::computer::ComputerResources;
@@ -51,7 +52,8 @@ impl RunRecords {
       .map_err(|error| ToolResult::unavailable(&format!("the project database cannot be opened: {error}")))
   }
 
-  /// `get_task`: the run's task as the run started it, its approved plans and the person's decisions and notes.
+  /// `get_task`: the run's task as the run started it (a team run's from its inputs), its approved plans and the
+  /// person's decisions and notes.
   pub(super) fn task(&self) -> ToolResult {
     self.read_task().unwrap_or_else(|unavailable| unavailable)
   }
@@ -60,8 +62,12 @@ impl RunRecords {
     let db = self.db()?;
     let unreadable =
       |error: &dyn std::error::Error| ToolResult::unavailable(&format!("the task cannot be read: {error}"));
-    let task = db
-      .task_for_run(self.task, self.run)
+    let run = db
+      .run(self.run)
+      .map_err(|error| unreadable(&error))?
+      .ok_or_else(|| ToolResult::unavailable("the run no longer exists"))?;
+    let task = RunResolver::load(&db, self.run)
+      .and_then(|resolver| resolver.task_at_start(&db, self.task, &run))
       .map_err(|error| unreadable(&error))?
       .ok_or_else(|| ToolResult::unavailable("the run's task no longer exists"))?;
     let plans = db.plans(self.run).map_err(|error| unreadable(&error))?;

@@ -1,13 +1,14 @@
 //! The computer's resources over the channel: its connections, home folder and environment cross as JSON to a thread
 //! that answers with the computer the scheduler had (the local one), and back. Its secrets, their values and its MCP
-//! servers are answered by that computer on the executor's side (see the module above).
+//! servers and its decision model connections are answered by that computer on the executor's side (see the module
+//! above).
 
 use std::{path::PathBuf, sync::Arc};
 
 use orchester_core::{
   computer::{ComputerConnection, ComputerError},
-  connection::mcp::McpServer,
-  id::{ConnectionId, ProjectId, SecretId},
+  connection::{DecisionConnection, mcp::McpServer},
+  id::{ConnectionId, DecisionConnectionId, ProjectId, SecretId},
   memory::{ScreenUnavailable, SecretScreen},
   resource::CommandEnvironment,
   secret::{Secret, SecretValue, VaultError},
@@ -62,6 +63,10 @@ impl ComputerResources for ChannelComputer {
 
   fn home_folder(&self) -> Option<PathBuf> {
     crossed_whole(self.wire.ask("home_folder", &()))
+  }
+
+  fn decision_connection(&self, id: DecisionConnectionId) -> Result<Option<DecisionConnection>, ComputerError> {
+    self.local.decision_connection(id)
   }
 
   fn mcp_server(&self, id: ConnectionId) -> Result<Option<McpServer>, ComputerError> {

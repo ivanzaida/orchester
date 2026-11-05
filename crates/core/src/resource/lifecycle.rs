@@ -26,6 +26,7 @@ pub enum ResourceKind {
   TestSuite,
   Service,
   Stack,
+  TeamReviewer,
 }
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -38,8 +39,23 @@ pub enum SlugError {
 }
 
 /// Stable, URL-safe handle of a resource within its project, e.g. `feature-delivery`.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
 pub struct Slug(String);
+
+impl TryFrom<String> for Slug {
+  type Error = SlugError;
+
+  fn try_from(value: String) -> Result<Self, SlugError> {
+    Self::new(&value)
+  }
+}
+
+impl From<Slug> for String {
+  fn from(slug: Slug) -> Self {
+    slug.0
+  }
+}
 
 impl Slug {
   pub const MAX_CHARS: usize = 64;

@@ -28,6 +28,10 @@ use tokio::{
 };
 
 use self::turn::Turn;
+pub(super) use self::{
+  claude::denied,
+  turn::{Seen, cannot},
+};
 use super::{Scheduler, failed, idle::check_daily_budget};
 
 /// The turns and compactions under way, by conversation.

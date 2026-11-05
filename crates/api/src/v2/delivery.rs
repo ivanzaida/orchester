@@ -80,3 +80,15 @@ mod module_subject {
     }
   }
 }
+
+/// `{kind:"delivered", merge_commit}` or `{kind:"failed"}`: how the runner's merge of a module delivery went, as
+/// `delivery.report` says it. Only a `delivered` report makes the delivery delivered, with its merge commit.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum DeliveryOutcome {
+  Delivered {
+    merge_commit: CommitId,
+  },
+  /// Braced so serde refuses unknown fields on it too; a unit variant would ignore them.
+  Failed {},
+}

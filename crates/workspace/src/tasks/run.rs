@@ -2,7 +2,7 @@
 //! task and queue it, then ask the runner to start its run. Every step is safe to retry: the
 //! new draft is saved under the form's batch key or an existing draft is edited in place;
 //! queueing a queued task changes nothing, and the run is started under the form's run key. A
-//! shared task is claimed for the person before it is queued: someone else's task is not changed.
+//! team project's tasks are not queued here: their work starts on the team server (`work.start`).
 
 use std::{collections::BTreeMap, path::Path};
 
@@ -17,6 +17,7 @@ use orchester_core::{
 use orchester_ipc::Rejection;
 use orchester_store::{ProjectDb, StoreError};
 
+pub use super::preflight_messages::preflight_message;
 use super::{
   data::{PipelineChoice, SaveTarget, pinned_pipeline, save_to},
   writer::{TaskWriter, WriteError},
@@ -29,10 +30,6 @@ use crate::{
     project::{WorkClaim, WorkRefusal},
   },
 };
-
-mod preflight;
-
-pub use self::preflight::preflight_message;
 
 /// Why the task was not queued for a run.
 #[derive(Debug)]
@@ -108,6 +105,7 @@ pub fn queue_organized_in(
   version: VersionNumber,
 ) -> Result<QueuedStart, QueueFailure> {
   let mut writer = TaskWriter::open(repo_root, servers)?;
+  not_team(writer.db())?;
   let existing = match target {
     SaveTarget::Task(task, _) => writer.db().task(task)?,
     SaveTarget::New(batch) => writer.db().task_by_batch(batch)?,
@@ -158,6 +156,15 @@ pub fn queue_in(
   }
 }
 
+/// Refused for a team project: its tasks are queued and started on its team server (`work.start`, team authority P7),
+/// never from this computer's copy of them.
+fn not_team(db: &ProjectDb) -> Result<(), QueueFailure> {
+  if db.sharing()?.is_some() {
+    return Err(QueueFailure::Store(StoreError::SharedProject));
+  }
+  Ok(())
+}
+
 fn queue_claimed(
   (repo_root, servers, claimed): (&Path, &Servers, &mut WorkClaim),
   target: SaveTarget,
@@ -165,6 +172,7 @@ fn queue_claimed(
   selected_version: VersionNumber,
 ) -> Result<QueuedStart, QueueFailure> {
   let mut writer = TaskWriter::open(repo_root, servers)?;
+  not_team(writer.db())?;
   let existing = match target {
     SaveTarget::New(batch) => writer.db().task_by_batch(batch)?,
     SaveTarget::Task(id, _) => writer.db().task(id)?,
@@ -361,6 +369,7 @@ pub fn start_messages(error: &RunRequestError) -> Vec<Message> {
       | Rejection::BrowserUnavailable { .. }
       | Rejection::NoSuchTab
       | Rejection::CodeIndexInUse
+      | Rejection::InputsNotAccepted
       | Rejection::Busy,
     ) => vec![Message::new("runs.start.failed")],
   }
@@ -492,6 +501,7 @@ pub fn control_message(error: &RunRequestError) -> Message {
       | Rejection::BrowserUnavailable { .. }
       | Rejection::NoSuchTab
       | Rejection::CodeIndexInUse
+      | Rejection::InputsNotAccepted
       | Rejection::Busy,
     ) => Message::new("runs.control.failed"),
   }

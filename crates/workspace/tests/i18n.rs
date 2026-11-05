@@ -54,45 +54,67 @@ fn fallback() -> BTreeMap<String, Vec<String>> {
   locale_leaves(contents)
 }
 
+/// Extensions of the files the sources name (`"projects.txt"`): a literal ending in one is a file
+/// name, never a key, even when its first segment is a section's name.
+const FILE_EXTENSIONS: &[&str] = &[
+  "txt", "json", "jsonl", "db", "log", "toml", "md", "lock", "tmp", "bak", "zip", "png", "sqlite",
+];
+
 /// Every string literal of the sources that reads like a key of one of the locale's sections
-/// (dotted, starting with a section's name), and the first literal of every `Message::new(`, `t(`
-/// and `t_args(` call, whatever it starts with.
+/// (dotted, starting with a section's name, not a file name), and the first literal of every
+/// `Message::new(`, `t(` and `t_args(` call, whatever it starts with.
 fn named_keys(sections: &BTreeSet<&str>) -> BTreeSet<String> {
   let mut sources = Vec::new();
   rust_sources(&Path::new(env!("CARGO_MANIFEST_DIR")).join("src"), &mut sources);
   let mut keys = BTreeSet::new();
   for source in &sources {
-    for call in ["Message::new(\"", ".t(\"", ".t_args(\""] {
-      for part in source.split(call).skip(1) {
-        if let Some((key, _)) = part.split_once('"') {
-          keys.insert(key.to_owned());
-        }
-      }
-    }
-    // Every text between two quotes: a literal, or the code between two literals, which never reads
-    // as a dotted key.
-    let quoted = source.match_indices('"').filter_map(|(at, _)| {
-      let rest = &source[at + 1..];
-      rest.find('"').map(|end| &rest[..end])
-    });
-    for literal in quoted {
-      // A literal ending in the dot is a prefix keys are told by, not a key.
-      let dotted = literal.contains('.')
-        && !literal.ends_with('.')
-        && literal
-          .chars()
-          .all(|character| character.is_ascii_alphanumeric() || character == '.' || character == '_');
-      if dotted
-        && literal
-          .split('.')
-          .next()
-          .is_some_and(|section| sections.contains(section))
-      {
-        keys.insert(literal.to_owned());
+    keys.extend(keys_in(source, sections));
+  }
+  keys
+}
+
+/// The keys one source names, as [`named_keys`] reads them.
+fn keys_in(source: &str, sections: &BTreeSet<&str>) -> BTreeSet<String> {
+  let mut keys = BTreeSet::new();
+  for call in ["Message::new(\"", ".t(\"", ".t_args(\""] {
+    for part in source.split(call).skip(1) {
+      if let Some((key, _)) = part.split_once('"') {
+        keys.insert(key.to_owned());
       }
     }
   }
+  // Every text between two quotes: a literal, or the code between two literals, which never reads
+  // as a dotted key.
+  let quoted = source.match_indices('"').filter_map(|(at, _)| {
+    let rest = &source[at + 1..];
+    rest.find('"').map(|end| &rest[..end])
+  });
+  for literal in quoted {
+    // A literal ending in the dot is a prefix keys are told by, not a key.
+    let dotted = literal.contains('.')
+      && !literal.ends_with('.')
+      && literal
+        .chars()
+        .all(|character| character.is_ascii_alphanumeric() || character == '.' || character == '_');
+    let file_name = literal
+      .rsplit_once('.')
+      .is_some_and(|(_, extension)| FILE_EXTENSIONS.contains(&extension));
+    if dotted
+      && !file_name
+      && literal
+        .split('.')
+        .next()
+        .is_some_and(|section| sections.contains(section))
+    {
+      keys.insert(literal.to_owned());
+    }
+  }
   keys
+}
+
+/// The keys `named` holds that `known` lacks.
+fn missing(named: BTreeSet<String>, known: &BTreeMap<String, Vec<String>>) -> Vec<String> {
+  named.into_iter().filter(|key| !known.contains_key(key)).collect()
 }
 
 fn rust_sources(dir: &Path, out: &mut Vec<String>) {
@@ -122,13 +144,31 @@ fn locales_have_identical_keys_and_placeholders() {
 fn locales_hold_every_key_the_sources_name() {
   let known = fallback();
   let sections: BTreeSet<&str> = known.keys().filter_map(|key| key.split('.').next()).collect();
-  let missing: Vec<String> = named_keys(&sections)
-    .into_iter()
-    .filter(|key| !known.contains_key(key))
-    .collect();
+  let missing = missing(named_keys(&sections), &known);
   assert!(
     missing.is_empty(),
     "keys missing from {FALLBACK_LOCALE}.json: {missing:?}"
+  );
+}
+
+/// A file name whose first segment is a section is not a key; a key the locale lacks still is
+/// reported, as a bare literal or in a call.
+#[test]
+fn a_missing_key_is_reported_and_a_file_name_is_not() {
+  let known = fallback();
+  let sections: BTreeSet<&str> = known.keys().filter_map(|key| key.split('.').next()).collect();
+  assert!(sections.contains("projects"), "the locale has a `projects` section");
+  let source = r#"
+    const PROJECTS_LIST: &str = "projects.txt";
+    const LOG: &str = "projects.server.log";
+    const KEY: &str = "projects.noSuchKey";
+    fn message() -> Message { Message::new("projects.noSuchCall") }
+    fn file() -> Message { Message::new("projects.called.txt") }
+  "#;
+  assert_eq!(
+    missing(keys_in(source, &sections), &known),
+    ["projects.called.txt", "projects.noSuchCall", "projects.noSuchKey"],
+    "a file name read as a key only where a call passes it as one"
   );
 }
 

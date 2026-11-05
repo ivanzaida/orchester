@@ -25,8 +25,8 @@ use orchester_core::{
     ApprovalSubject,
     review::{
       AutoReview, HoldRules, PushFacts, RequestReviewer, ResolvedReviewer, Review, ReviewError, ReviewHold,
-      ReviewInput, ReviewSpend, Reviewed, ReviewerKind, RootsQuestion, resolve_reviewer, review_hold, review_request,
-      review_roots,
+      ReviewInput, ReviewSpend, Reviewed, ReviewerConnectionId, ReviewerKind, RootsQuestion, resolve_estimator,
+      resolve_reviewer, review_hold, review_request, review_roots,
     },
   },
   secret::SecretValue,
@@ -45,6 +45,7 @@ use super::{
     },
     Watch, Worker, WorkerError,
   },
+  decision_setup::decision_setup,
   ledger::ReviewLedger,
   native::{NativeReviewer, client},
   process::{ReviewPlace, SupervisedRunner},
@@ -53,6 +54,7 @@ use crate::{computer::ComputerResources, git::Git};
 
 /// The project's reviewer, before one review runs.
 pub(super) enum ReviewerSetup {
+  Decision(DecisionSetup),
   /// Claude Code or Codex, by its program.
   Cli {
     kind: ReviewerKind,
@@ -72,12 +74,22 @@ pub(super) enum ReviewerSetup {
     model: ModelId,
     effort: Option<String>,
   },
-  /// A reviewer that cannot be reached (its key could not be read): every review fails.
-  Unreachable { model: ModelId, connection: UsedProvider },
+  /// A reviewer that cannot be reached (its key could not be read, its decision connection is gone): every review
+  /// fails. `connection` is the agent connection it would have run on; a decision model has none.
+  Unreachable {
+    model: ModelId,
+    connection: Option<UsedProvider>,
+  },
   /// The project has no reviewer.
   Missing,
 }
 
+pub(super) struct DecisionSetup {
+  pub(super) connection: orchester_core::connection::DecisionConnection,
+  pub(super) model: ModelId,
+  pub(super) threshold: orchester_core::run::review::Probability,
+  pub(super) key: Option<SecretValue>,
+}
 /// What a review's usage is spent on: the reviewer's CLI, its account and its connection.
 pub(super) type SpentOn = (AgentProvider, Option<AgentAccountId>, UsedProvider);
 
@@ -191,12 +203,23 @@ impl ReviewerSetup {
   pub(super) fn review(self, job: ReviewJob, ledger: &ReviewLedger) -> Review {
     let started_at = Timestamp::now();
     let provider = self.provider();
+    let decision = match &self {
+      Self::Decision(setup) => Some((setup.connection.clone(), setup.model.clone())),
+      _ => None,
+    };
     let connection = self.connection().cloned();
     let done = self.judge(job);
+    let by_decision = decision.is_some();
+    if let Some((connection, model)) = decision {
+      ledger.record_decision(&connection, &model, started_at, &done);
+    }
     if let Some(spent) = provider {
       ledger.record(spent, started_at, &done);
     }
-    if let Review::Failed { failure, model, detail } = &done.review {
+    if let Review::Failed {
+      failure, model, detail, ..
+    } = &done.review
+    {
       tracing::warn!(
         run = %ledger.run,
         request = %ledger.approval,
@@ -208,7 +231,11 @@ impl ReviewerSetup {
         "the reviewer gave no verdict"
       );
     }
-    done.review
+    if by_decision {
+      done.review.by_decision_model()
+    } else {
+      done.review
+    }
   }
 
   /// The provider, account and connection a review with this reviewer is spent on; `None` when it asks no model.
@@ -219,19 +246,18 @@ impl ReviewerSetup {
         account,
         connection,
         ..
-      } => Some((kind.provider(), *account, connection.clone())),
+      } => kind.provider().map(|provider| (provider, *account, connection.clone())),
       Self::Native { connection, .. } => Some((AgentProvider::AnthropicApi, None, connection.clone())),
-      Self::Unreachable { .. } | Self::Missing => None,
+      Self::Unreachable { .. } | Self::Missing | Self::Decision(_) => None,
     }
   }
 
   /// The connection this reviewer runs on; `None` when the project has none.
   pub(super) const fn connection(&self) -> Option<&UsedProvider> {
     match self {
-      Self::Cli { connection, .. } | Self::Native { connection, .. } | Self::Unreachable { connection, .. } => {
-        Some(connection)
-      }
-      Self::Missing => None,
+      Self::Cli { connection, .. } | Self::Native { connection, .. } => Some(connection),
+      Self::Unreachable { connection, .. } => connection.as_ref(),
+      Self::Missing | Self::Decision(_) => None,
     }
   }
 
@@ -266,6 +292,13 @@ impl ReviewerSetup {
     };
     match self {
       Self::Missing => ask(None),
+      Self::Decision(setup) => ask(Some(&crate::decision_review::DecisionReviewer::new(
+        runtime,
+        setup.connection,
+        setup.model,
+        setup.threshold,
+        setup.key,
+      ))),
       Self::Unreachable { model, .. } => ask(Some(&Unreachable { model })),
       Self::Native {
         client, model, effort, ..
@@ -299,7 +332,10 @@ impl ReviewerSetup {
         let folder = (place.folder(), environment);
         let reviewer: Box<dyn RequestReviewer> = match kind {
           ReviewerKind::Codex => Box::new(CodexReviewer::new(&executable, (model, effort), folder, runner)),
-          _ => Box::new(ClaudeReviewer::new(&executable, (model, effort), folder, runner)),
+          ReviewerKind::ClaudeCode | ReviewerKind::AnthropicApi => {
+            Box::new(ClaudeReviewer::new(&executable, (model, effort), folder, runner))
+          }
+          ReviewerKind::Decision => return ask(Some(&Unreachable { model })),
         };
         let done = ask(Some(reviewer.as_ref()));
         // The folder goes only after the reviewer, which runs in it, has ended.
@@ -347,25 +383,62 @@ pub(super) fn reviewer_variables(
 }
 
 /// The project's reviewer, as its auto mode settings, asked through `link`, resolve against its connections on the
-/// computer, its key read from `sources` and a CLI's variables asked through `link`; the story-point estimator runs on
-/// it too. Without the computer's connections there is no reviewer to ask, and the person decides.
+/// computer, its key read from `sources` and a CLI's variables asked through `link`. A decision model chosen as the
+/// reviewer is read on the computer too ([`decision_setup`]). Without the computer's connections there is no reviewer
+/// to ask, and the person decides.
 pub(super) fn reviewer_setup(
   link: &(impl EnvironmentLink + SettingsLink + ?Sized),
   sources: &ReviewerSources,
 ) -> Result<ReviewerSetup, WorkerError> {
   let settings = auto_mode(link)?;
-  let listed = match sources.computer.connections() {
-    Ok(listed) => listed,
-    Err(error) => {
-      tracing::warn!(%error, "cannot read the connections a reviewer runs on");
-      return Ok(ReviewerSetup::Missing);
-    }
-  };
-  let (connections, here): (Vec<Connection>, Vec<OnComputer>) =
-    listed.into_iter().map(ComputerConnection::into_parts).unzip();
-  let Ok(resolved) = resolve_reviewer(&settings, &connections) else {
+  if let Some(choice) = &settings.reviewer
+    && let ReviewerConnectionId::Decision { decision } = choice.connection
+  {
+    return Ok(decision_setup(sources, decision, choice));
+  }
+  let Some((connections, here)) = computer_connections(sources) else {
     return Ok(ReviewerSetup::Missing);
   };
+  let Ok(resolved) = resolve_reviewer(&settings, &connections, &[]) else {
+    return Ok(ReviewerSetup::Missing);
+  };
+  language_setup(link, sources, resolved, (&connections, &here))
+}
+
+/// The story-point estimator's language connection, resolved as [`reviewer_setup`] resolves the reviewer; a decision
+/// reviewer leaves the estimate to the project's default language reviewer.
+pub(super) fn estimator_setup(
+  link: &(impl EnvironmentLink + SettingsLink + ?Sized),
+  sources: &ReviewerSources,
+) -> Result<ReviewerSetup, WorkerError> {
+  let settings = auto_mode(link)?;
+  let Some((connections, here)) = computer_connections(sources) else {
+    return Ok(ReviewerSetup::Missing);
+  };
+  let Ok(resolved) = resolve_estimator(&settings, &connections) else {
+    return Ok(ReviewerSetup::Missing);
+  };
+  language_setup(link, sources, resolved, (&connections, &here))
+}
+
+/// The connections of the computer of `sources`, with what each has there; `None`, logged, when they cannot be read.
+fn computer_connections(sources: &ReviewerSources) -> Option<(Vec<Connection>, Vec<OnComputer>)> {
+  match sources.computer.connections() {
+    Ok(listed) => Some(listed.into_iter().map(ComputerConnection::into_parts).unzip()),
+    Err(error) => {
+      tracing::warn!(%error, "cannot read the connections a reviewer runs on");
+      None
+    }
+  }
+}
+
+/// The language model reviewer `resolved` names, among the computer's `connections` with what each has there (`here`).
+fn language_setup(
+  link: &(impl EnvironmentLink + ?Sized),
+  sources: &ReviewerSources,
+  resolved: ResolvedReviewer<'_>,
+  (connections, here): (&[Connection], &[OnComputer]),
+) -> Result<ReviewerSetup, WorkerError> {
   let ResolvedReviewer {
     connection,
     kind,
@@ -373,6 +446,10 @@ pub(super) fn reviewer_setup(
     effort,
     ..
   } = resolved;
+  let Some(connection) = connection.language() else {
+    // Decision review execution is separate from language review execution; never run a language fallback.
+    return Ok(ReviewerSetup::Missing);
+  };
   let used = UsedProvider {
     id: connection.id(),
     name: connection.name().as_str().into(),
@@ -388,7 +465,7 @@ pub(super) fn reviewer_setup(
   };
   let account_problem = connections
     .iter()
-    .zip(&here)
+    .zip(here)
     .find(|(listed, _)| listed.id() == connection.id())
     .and_then(|(_, here)| here.account_problem());
   if let Some(reason) = account_problem {
@@ -423,7 +500,12 @@ fn native(
 ) -> ReviewerSetup {
   let key = match api_key(keys, api.key()) {
     Some(key) => key,
-    None => return ReviewerSetup::Unreachable { model, connection },
+    None => {
+      return ReviewerSetup::Unreachable {
+        model,
+        connection: Some(connection),
+      };
+    }
   };
   match client(api, key) {
     Ok(client) => ReviewerSetup::Native {
@@ -434,7 +516,10 @@ fn native(
     },
     Err(error) => {
       tracing::warn!(%error, "cannot make the native reviewer's client");
-      ReviewerSetup::Unreachable { model, connection }
+      ReviewerSetup::Unreachable {
+        model,
+        connection: Some(connection),
+      }
     }
   }
 }

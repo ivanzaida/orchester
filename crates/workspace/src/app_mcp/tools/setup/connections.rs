@@ -125,10 +125,18 @@ pub async fn list_connections(
       .collect()
   });
   let mcp = read.items(|open, listed| super::mcp_servers::servers_json(listed, open.project.id()));
+  let decisions = read.items(|_, listed| {
+    listed
+      .decisions
+      .iter()
+      .map(super::decision_connections::connection_json)
+      .collect()
+  });
   Ok(json!({
     "agents": agents,
     "github": github,
     "mcp_servers": mcp,
+    "decision_models": decisions,
     "unreadable_projects": read.unreadable(translate),
   }))
 }
@@ -244,7 +252,36 @@ pub async fn list_models(services: &Services, args: InConnection) -> Result<Valu
   let services = services.clone();
   blocking(move || {
     let open = services.project(&args.project)?;
-    let connection = agent_named(&ProjectDb::open(&open.repo_root)?, &args.connection)?;
+    let db = ProjectDb::open(&open.repo_root)?;
+    let decisions = db.decision_connections()?;
+    let connections = db.connections()?;
+    let id = model_connection_id(&connections, &decisions, &args.connection)?;
+    if let Some(connection) = decisions
+      .iter()
+      .find(|connection| ModelConnectionId::Decision(connection.id()) == id)
+    {
+      let models: Vec<Value> = connection
+        .models()
+        .iter()
+        .map(|model| json!({ "id": model.as_str(), "efforts": [] }))
+        .collect();
+      return Ok(json!({
+        "connection": connection.name().as_str(),
+        "checked": connection.last_check().is_some(),
+        "source": "decision",
+        "models": models,
+      }));
+    }
+    let connection = connections
+      .into_iter()
+      .find(|connection| ModelConnectionId::Agent(connection.id()) == id)
+      .expect("model_connection_id found a connection in one of the two lists");
+    let connection = AgentConnection::try_from(connection).map_err(|_| {
+      refused(
+        "not_an_agent_connection",
+        Message::new("appMcp.errors.notAnAgentConnection").with("connection", args.connection.clone()),
+      )
+    })?;
     let models: Vec<Value> = listed_models(&connection)
       .iter()
       .map(|model| json!({ "id": model.as_str(), "efforts": effort_options(&connection, model) }))
@@ -264,6 +301,50 @@ pub async fn list_models(services: &Services, args: InConnection) -> Result<Valu
     }))
   })
   .await
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ModelConnectionId {
+  Agent(ConnectionId),
+  Decision(orchester_core::id::DecisionConnectionId),
+}
+
+fn model_connection_id(
+  connections: &[Connection],
+  decisions: &[orchester_core::connection::DecisionConnection],
+  named: &str,
+) -> Result<ModelConnectionId, ToolError> {
+  let entries = connections
+    .iter()
+    .map(|connection| {
+      (
+        ModelConnectionId::Agent(connection.id()),
+        connection.id().to_string(),
+        connection.name(),
+      )
+    })
+    .chain(decisions.iter().map(|connection| {
+      (
+        ModelConnectionId::Decision(connection.id()),
+        connection.id().to_string(),
+        connection.name(),
+      )
+    }));
+  // Names are unique only within each table; an exact ID always takes precedence across both.
+  if let Some((id, ..)) = entries.clone().find(|(_, id, _)| id == named) {
+    return Ok(id);
+  }
+  let lowered = named.to_lowercase();
+  let mut matches = entries.filter(|(_, _, name)| name.as_str().to_lowercase() == lowered);
+  let (id, ..) = matches
+    .next()
+    .ok_or_else(|| ToolError::not_found(Missing::Connection, named))?;
+  if matches.next().is_some() {
+    return Err(ToolError::InvalidArguments(format!(
+      "more than one connection is named {named:?}; name it by id"
+    )));
+  }
+  Ok(id)
 }
 
 /// The project's connection named by `named`: its id or, ignoring case, its name.

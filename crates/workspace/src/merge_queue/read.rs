@@ -333,12 +333,9 @@ pub fn read(root: &Path, programs: &Programs) -> Result<QueueRead, StoreError> {
     .find(|row| row.entry.state.in_queue())
     .and_then(|row| lane_of(&lanes, row))
     .or_else(|| lanes.first());
-  let base = first.map(|lane| lane.base.clone()).or_else(|| {
-    orchester_core::integration::checked_out_branch(&programs.runner(), Path::new(GIT), root)
-      .ok()
-      .flatten()
-      .map(|branch| base_state((branch, Landing::Checkout), (root, programs)))
-  });
+  let base = first
+    .map(|lane| lane.base.clone())
+    .or_else(|| checkout_base(root, programs));
   let rows = rows
     .into_iter()
     .map(|mut row| {
@@ -352,6 +349,15 @@ pub fn read(root: &Path, programs: &Programs) -> Result<QueueRead, StoreError> {
     rows,
     pipelines: pipelines(&db)?,
   })
+}
+
+/// The branch the checkout of the project at `root` has, with how it stands, as `programs`' git tells; `None` on a
+/// detached HEAD or when git cannot tell.
+pub fn checkout_base(root: &Path, programs: &Programs) -> Option<BaseState> {
+  orchester_core::integration::checked_out_branch(&programs.runner(), Path::new(GIT), root)
+    .ok()
+    .flatten()
+    .map(|branch| base_state((branch, Landing::Checkout), (root, programs)))
 }
 
 /// Whether the queue delivers `run`, so that neither the task page's *Merge into <base>* nor `merge_run` merges it:

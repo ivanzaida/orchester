@@ -14,6 +14,7 @@ pub mod browser;
 mod chat;
 mod client;
 pub mod daily_log;
+mod decision_test;
 mod error;
 pub mod error_reports;
 mod exit_code;
@@ -36,6 +37,7 @@ mod worktree;
 
 pub use chat::{ChatToken, ChatTools};
 pub use client::{CommandSender, EventReceiver, LaunchError, RunnerClient, RunnerProcess};
+pub use decision_test::DecisionTestTarget;
 pub use error::{FrameError, IpcError};
 pub use error_reports::ErrorReports;
 pub use exit_code::EXIT_PROJECT_LOCKED;

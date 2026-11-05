@@ -14,6 +14,7 @@ use serde_json::{Value, json};
 use super::{
   SentBy, Translate,
   runs::{find_run, status_now},
+  team,
 };
 use crate::{
   app_mcp::{
@@ -39,6 +40,14 @@ pub fn plan_person_only() -> ToolError {
   ToolError::refused(
     "plan_decision_person_only",
     vec![Message::new("orchestrator.tools.planPersonOnly")],
+  )
+}
+
+/// A message that would run a team task again: its work starts only through the team server.
+fn team_run_again() -> ToolError {
+  ToolError::refused(
+    "team_run_again_unsupported",
+    vec![Message::new("appMcp.errors.teamRunAgain")],
   )
 }
 
@@ -81,7 +90,8 @@ pub async fn send_message(
   let (timing, checked) = (args.timing, expected.map(str::to_owned));
   let (project, prepared) = blocking(move || {
     let project = reading.project(&project)?;
-    let named = find_run(&orchester_store::ProjectDb::open(&project.repo_root)?, &run)?;
+    let db = orchester_store::ProjectDb::open(&project.repo_root)?;
+    let named = find_run(&db, &run)?;
     // Automation reads the run as stored: the runner it asks starts if the project has none.
     let prepared = prepare_in(&project.repo_root, (named.task(), Some(named.id())), (false, None)).map_err(refusal)?;
     // Checked first: a run that moved on since is refused as changed, and one that now waits on a plan would take the
@@ -91,6 +101,11 @@ pub async fn send_message(
       way_of(&prepared.mode, timing),
       (checked.as_deref(), named.number().get()),
     )?;
+    // Running a team task again would start its work from this computer's copy, without the team server's claim and
+    // work start: refused before the message is stored, run_task starts it through the server.
+    if matches!(prepared.mode, ComposerMode::RunAgain) && team::linked(&db)? {
+      return Err(team_run_again());
+    }
     if let Some(kind) = prepared.decision_kind(Way::Primary) {
       // The Orchestrator's plan path below retains its stricter refusal.
       if !matches!(by, SentBy::Person(_)) && !matches!(prepared.mode, ComposerMode::PlanChanges { .. }) {

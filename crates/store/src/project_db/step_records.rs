@@ -7,7 +7,10 @@
 use orchester_core::{
   connection::plan_limits::LimitReading,
   id::{RunId, StepExecutionId},
-  run::{StepOutput, StepProgress, review::ReviewRecord},
+  run::{
+    StepOutput, StepProgress,
+    review::{DecisionReviewRecord, ReviewRecord},
+  },
   time::Timestamp,
 };
 use serde::{Deserialize, Serialize};
@@ -33,6 +36,8 @@ enum StepChange {
   Review { row: Box<ReviewRow> },
   /// Appended to `plan_limit_snapshots`, the reports older than 90 days before it removed.
   Limits { row: SnapshotRow },
+  /// Appended to the usage of the project's decision reviewers.
+  DecisionReview { record: Box<DecisionReviewRecord> },
 }
 
 impl StepRecord {
@@ -57,6 +62,13 @@ impl StepRecord {
     }))
   }
 
+  /// What one review by a decision model cost.
+  pub fn decision_review(record: &DecisionReviewRecord) -> Self {
+    Self(StepChange::DecisionReview {
+      record: Box::new(record.clone()),
+    })
+  }
+
   /// What `run`'s CLI reported of its limits.
   pub fn limits(run: RunId, reading: &LimitReading) -> Result<Self, StoreError> {
     Ok(Self(StepChange::Limits {
@@ -75,6 +87,7 @@ impl ProjectDb {
       StepChange::Progress { row } => row.save(&self.connection),
       StepChange::Review { row } => row.insert(&self.connection),
       StepChange::Limits { row } => row.save(self),
+      StepChange::DecisionReview { record } => self.record_decision_reviewer_usage(record),
     }
   }
 }

@@ -12,6 +12,7 @@
 
 use std::path::Path;
 
+use orchester_api::v2::DecisionId;
 use orchester_core::{
   id::{RunId, TaskId},
   resource::StepKey,
@@ -26,7 +27,7 @@ use serde_json::Value;
 
 use super::{
   runs::{find_run, status_now},
-  wire,
+  team, wire,
 };
 use crate::{
   app_mcp::{
@@ -104,10 +105,12 @@ pub enum Choice {
   /// For a run whose last merge into its base branch stopped at conflicts (merge_run's merge_failed, the task page's
   /// Not merged into main): Ask an agent to resolve. Its work returns to `step` (its key or name; left out, the step
   /// that implemented what conflicts, else the last one), which must be a step whose agent may write in the worktree,
-  /// with a note to merge the base branch in and resolve the conflicts, `note` after it, and the conflicting files as
-  /// data. Refused as merge_not_conflicted unless the run's last merge in this app stopped at conflicts,
-  /// step_cannot_write for a step that may not write, no_writing_step when none may, integration_running while git
-  /// works on the run, and as return_to is refused (run_merged, worktree_removed, worktree_in_merge, run_not_ended).
+  /// with a note to resolve the conflicts, `note` after it, and the conflicting files as data; the runner merges the
+  /// base branch into its worktree before its agent starts, leaving the conflicts for the agent to edit away, and
+  /// commits the merge with its work. Refused as merge_not_conflicted unless the run's last merge in this app stopped
+  /// at conflicts, step_cannot_write for a step that may not write, no_writing_step when none may, integration_running
+  /// while git works on the run, and as return_to is refused (run_merged, worktree_removed, worktree_in_merge — a merge
+  /// already in the worktree, which the runner's own would collide with — and run_not_ended).
   ResolveConflicts {
     #[serde(default)]
     step: Option<String>,
@@ -130,8 +133,16 @@ pub async fn continue_run(services: &Services, args: ContinueRun) -> Result<Valu
 /// `continue_run` decided by `by`: automation's decision on a waiting run, or its raise of a limit that stopped one,
 /// needs the person's consent, while a person's (the Orchestrator chat's proposal a person applied) is recorded as
 /// theirs and needs none. A resume after the daily budget raises nothing: the runner refuses it while today's budget
-/// is still used up.
+/// is still used up. A team task's limits are its Admin's (D6), so a raise is refused there; its other choices read
+/// the task from this computer's copy, so they are refused for a team project until its runs are read from their
+/// own execution records.
 pub(crate) async fn continue_as(services: &Services, args: ContinueRun, by: Answerer) -> Result<Value, ToolError> {
+  if team::of(services, &args.project).await?.is_some() {
+    return Err(match args.choice {
+      Choice::RaiseLimits { .. } | Choice::RaiseStepBudget { .. } => team::decision_required(DecisionId::D6),
+      _ => team::team_only_on_server("continue_run"),
+    });
+  }
   let reading = services.clone();
   let resolves = matches!(args.choice, Choice::ResolveConflicts { .. });
   let (project, run, request) = blocking(move || {

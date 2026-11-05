@@ -49,6 +49,7 @@ pub fn waiting(root: &Path, resource: ResourceId) -> Result<Option<Waiting>, Sha
     ResourceKind::AgentProfile => adds::<AgentProfile>(&db, resource, number)?,
     ResourceKind::Instruction => adds::<Instruction>(&db, resource, number)?,
     ResourceKind::Tool => adds::<Tool>(&db, resource, number)?,
+    ResourceKind::TeamReviewer => adds::<orchester_core::resource::TeamReviewer>(&db, resource, number)?,
     // Skills are not kept here yet, and agent testing's kinds are never shared.
     ResourceKind::Skill | ResourceKind::TestSuite | ResourceKind::Service | ResourceKind::Stack => (None, Vec::new()),
   };

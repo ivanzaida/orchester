@@ -6,6 +6,7 @@
 //! run that is not executing). It hands each run it starts to the executor (`super::executor`), and requests for
 //! a run being executed to its task (`super::executor::control`).
 
+pub(super) mod accepted;
 pub(super) mod again;
 pub(super) mod attach;
 pub(super) mod blocked_runs;
@@ -15,6 +16,7 @@ pub(super) mod browser;
 pub(super) mod channel;
 pub(super) mod chat;
 pub(super) mod conversation;
+pub(super) mod decision_test;
 pub(super) mod estimate;
 pub(super) mod idle;
 pub(super) mod link;
@@ -27,6 +29,7 @@ pub(super) mod prepare;
 pub(super) mod question;
 pub(super) mod recovery;
 pub(super) mod returned;
+pub(super) mod review;
 pub(super) mod run_folder;
 pub(super) mod side_question;
 pub(super) mod sink;

@@ -5,7 +5,7 @@
 use std::{path::Path, time::Duration};
 
 use orchester_core::{
-  id::{IdempotencyKey, RunId, TaskId},
+  id::{IdempotencyKey, OperationId, RunId, TaskId},
   integration::Leftovers,
   limits::AgentSlots,
   sharing::TaskRevision,
@@ -180,6 +180,23 @@ impl Runners {
       Reply::Rejected(rejection) => Err(RunRequestError::Rejected(rejection)),
       other => unexpected(&other, "RunFolderState"),
     }
+  }
+
+  /// Asks the runner of project `root` (named `name`), started if needed, to start the run of the team inputs the
+  /// accepted operation `operation` kept (protocol 42). Idempotent by `operation`: it has one run.
+  pub async fn start_accepted_run(
+    &self,
+    root: &Path,
+    name: &str,
+    operation: OperationId,
+  ) -> Result<RunId, RunRequestError> {
+    self.ensure(root, name);
+    // A project no tab shows keeps its runner for the run it starts, then lets it stop once it has no work.
+    let _pin = self.pin(root);
+    self.linger_untabbed();
+    self.attached(root).await?;
+    let reply = self.ask(Some(root), Command::StartAcceptedRun { operation }).await?;
+    run_started(reply, "StartAcceptedRun")
   }
 
   /// Runs `store`, which stores project `root`'s limits and returns the agent slots when they

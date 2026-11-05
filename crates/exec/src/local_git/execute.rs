@@ -6,10 +6,15 @@ use std::{
   time::{Duration, Instant},
 };
 
-use orchester_core::{command::Command, integration::local::ProcessJournal};
+use orchester_core::{
+  command::Command,
+  integration::{IoCause, local::ProcessJournal},
+};
 
 use super::{LocalError, LocalGitError, family::Family, process::GitOutput};
 const MAX_BYTES: u64 = 16 * 1024 * 1024;
+/// The end of Git's error output a refusal keeps.
+const ERROR_TAIL: usize = 4 * 1024;
 
 pub(super) fn invoke(
   command: &Command,
@@ -21,14 +26,11 @@ pub(super) fn invoke(
   let family = Family::create()?;
   let sequence = journal.map(ProcessJournal::begin).transpose()?;
   let mut child = spawn(command, input.is_some(), &family, journal.zip(sequence))?;
-  let stdout = child.stdout.take().ok_or(LocalGitError::Process)?;
-  let stderr = child.stderr.take().ok_or(LocalGitError::Process)?;
+  let missing_pipe = || LocalGitError::process(io::ErrorKind::BrokenPipe);
+  let stdout = child.stdout.take().ok_or_else(missing_pipe)?;
+  let stderr = child.stderr.take().ok_or_else(missing_pipe)?;
   let output = worker(move || bounded(stdout, capture));
-  let errors = worker(move || {
-    io::copy(&mut { stderr }, &mut io::sink())
-      .map(|_| ())
-      .map_err(|_| LocalGitError::Io)
-  });
+  let errors = worker(move || tail(stderr));
   let writer = input.map(|input| {
     let bytes = input.to_owned();
     let pipe = child.stdin.take();
@@ -36,15 +38,15 @@ pub(super) fn invoke(
       Some(mut pipe) => match pipe.write_all(&bytes) {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == io::ErrorKind::BrokenPipe => Ok(()),
-        Err(_) => Err(LocalGitError::Io),
+        Err(error) => Err(LocalGitError::io(&error)),
       },
-      None => Err(LocalGitError::Process),
+      None => Err(missing_pipe()),
     })
   });
   let status = finish_family(&mut child, &family, timeout);
   let deadline = Instant::now() + Duration::from_secs(2);
   let bytes = receive(&output, deadline)?;
-  receive(&errors, deadline)?;
+  let errors = receive(&errors, deadline)?;
   if let Some(writer) = writer {
     receive(&writer, deadline)?;
   }
@@ -57,6 +59,7 @@ pub(super) fn invoke(
   Ok(GitOutput {
     code: status?.code(),
     bytes,
+    errors,
   })
 }
 
@@ -66,7 +69,13 @@ fn spawn(
   family: &Family,
   journal: Option<(&dyn ProcessJournal, u64)>,
 ) -> Result<Child, LocalGitError> {
-  let mut process = crate::prepare(command).map_err(|_| LocalGitError::Process)?;
+  let mut process = crate::prepare(command).map_err(|error| {
+    let kind = match error {
+      orchester_core::command::CommandError::NotFound => io::ErrorKind::NotFound,
+      _ => io::ErrorKind::Other,
+    };
+    LocalGitError::Process(IoCause::new(&io::Error::new(kind, error.to_string())))
+  })?;
   process.stdin(if input { Stdio::piped() } else { Stdio::null() });
   let child = match family.spawn(&mut process) {
     Ok(child) => child,
@@ -122,7 +131,7 @@ fn finish_family(
       // Reaped first: a process group counts its leader until then, which a job does not.
       child.wait().map_err(|_| LocalError::ProcessUncertain)?;
       await_empty(family)?;
-      return Err(LocalGitError::Process);
+      return Err(LocalGitError::process(io::ErrorKind::TimedOut));
     }
     thread::sleep(Duration::from_millis(10));
   }
@@ -159,11 +168,28 @@ fn bounded(mut pipe: impl Read, capture: bool) -> Result<Vec<u8>, LocalGitError>
       .by_ref()
       .take(MAX_BYTES + 1)
       .read_to_end(&mut bytes)
-      .map_err(|_| LocalGitError::Io)?;
+      .map_err(|error| LocalGitError::io(&error))?;
   }
-  io::copy(&mut pipe, &mut io::sink()).map_err(|_| LocalGitError::Io)?;
+  io::copy(&mut pipe, &mut io::sink()).map_err(|error| LocalGitError::io(&error))?;
   if bytes.len() as u64 > MAX_BYTES {
     return Err(LocalError::Unsupported.into());
   }
   Ok(bytes)
+}
+
+/// The last [`ERROR_TAIL`] bytes `pipe` yields, read to its end.
+fn tail(mut pipe: impl Read) -> Result<Vec<u8>, LocalGitError> {
+  let mut kept = Vec::new();
+  let mut buffer = [0; 8 * 1024];
+  loop {
+    let count = match pipe.read(&mut buffer) {
+      Ok(0) => return Ok(kept),
+      Ok(count) => count,
+      Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+      Err(error) => return Err(LocalGitError::io(&error)),
+    };
+    kept.extend_from_slice(&buffer[..count]);
+    let excess = kept.len().saturating_sub(ERROR_TAIL);
+    kept.drain(..excess);
+  }
 }

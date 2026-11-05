@@ -115,6 +115,11 @@ define_id!(
   ConnectionId
 );
 define_id!(
+  /// A project's connection to a decision model's server (`crate::connection::DecisionConnection`). Its own type,
+  /// so no agent profile, which names a [`ConnectionId`], can choose one.
+  DecisionConnectionId
+);
+define_id!(
   /// A project secret. Bodies and rows hold only this reference; the value stays in the OS keychain.
   SecretId
 );
@@ -141,6 +146,13 @@ impl TaskId {
   /// Reopening a queued task must retry its first run with the same key. Later runs use
   /// independent request keys.
   pub const fn first_run_key(self) -> IdempotencyKey {
+    IdempotencyKey::from_uuid(self.as_uuid())
+  }
+}
+
+impl OperationId {
+  /// The key of the one run an accepted operation starts: a start repeated after a crash or a lost answer finds it.
+  pub const fn run_key(self) -> IdempotencyKey {
     IdempotencyKey::from_uuid(self.as_uuid())
   }
 }
@@ -199,6 +211,14 @@ define_id!(
 define_id!(
   /// One request or reply a person wrote in a feedback thread.
   FeedbackPostId
+);
+define_id!(
+  /// One thread of a person's review of a run's diff (`crate::review`).
+  ReviewThreadId
+);
+define_id!(
+  /// One message of a review thread: the person's, or the implementing agent's.
+  ReviewMessageId
 );
 define_id!(
   /// One document of a project's Docs (`crate::docs`).

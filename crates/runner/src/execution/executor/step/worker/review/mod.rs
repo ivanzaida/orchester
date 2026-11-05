@@ -11,6 +11,7 @@
 //! the reviewer where the step's network is off or it only reads. What a review that asked a model cost is recorded
 //! when it ends, dropped or not, and counts like a turn of the agent's ([`ledger`]).
 
+mod decision_setup;
 mod estimate;
 mod ledger;
 mod native;
@@ -48,6 +49,7 @@ use self::{
   setup::{PushPlace, ReviewJob, ReviewerSetup, hold_now, ignored_build_output, reviewer_variables},
 };
 use super::{super::answer::Settled, Watch, Worker, WorkerError};
+use crate::execution::executor::resolver::RunResolver;
 
 /// The longest a review may take; the reviewer is stopped then, and the person decides.
 const REVIEW_TIMEOUT: Duration = Duration::from_secs(60);
@@ -81,6 +83,7 @@ pub(super) async fn next(slot: &mut Option<Reviewing>) -> Reviewed {
       failure: ReviewFailure::CouldNotRun,
       model: None,
       detail: Some("the review did not finish".to_owned()),
+      decision: false,
     }
   });
   let reviewing = slot.take().expect("the review awaited above is under way");
@@ -261,7 +264,7 @@ impl Worker {
     approval: &PendingToolApproval,
     permissions: Option<&AgentPermissions>,
   ) -> Result<Result<ReviewInput, ReviewHold>, StoreError> {
-    let task = watch.db.task(self.task)?;
+    let task = self.reviewed_task(watch, approval)?;
     let messages: Vec<String> = watch
       .db
       .recent_agent_messages(approval.run, approval.execution, MESSAGES_READ)?
@@ -274,18 +277,6 @@ impl Worker {
       repository: permissions.unwrap_or(&defaults).repository(),
       network: permissions.unwrap_or(&defaults).network().clone(),
       writable_folders: self.writable_folders(permissions),
-    };
-    let task = ReviewedTask {
-      title: task
-        .as_ref()
-        .map_or_else(String::new, |task| task.details().title.as_str().to_owned()),
-      brief: task
-        .as_ref()
-        .map_or_else(String::new, |task| task.details().brief.clone()),
-      criteria: task
-        .as_ref()
-        .map(|task| task.details().acceptance_criteria.clone())
-        .unwrap_or_default(),
     };
     let request = ReviewedRequest {
       command: approval.command,
@@ -318,6 +309,33 @@ impl Worker {
         })
         .unwrap_or_else(|| self.agent.clone()),
     )
+  }
+
+  /// The task the reviewer reads: a team run's as its inputs keep it, which never change; a local run's definition as
+  /// it is now; nothing of a local task that is gone.
+  fn reviewed_task(&self, watch: &Watch, approval: &PendingToolApproval) -> Result<ReviewedTask, StoreError> {
+    let resolver = RunResolver::load(&watch.db, approval.run)?;
+    if let Some(inputs) = resolver.team() {
+      let task = inputs.bundle().task();
+      return Ok(ReviewedTask {
+        title: task.title.clone(),
+        brief: task.brief.clone(),
+        criteria: task.criteria.clone(),
+      });
+    }
+    let task = watch.db.task(self.task)?;
+    Ok(ReviewedTask {
+      title: task
+        .as_ref()
+        .map_or_else(String::new, |task| task.details().title.as_str().to_owned()),
+      brief: task
+        .as_ref()
+        .map_or_else(String::new, |task| task.details().brief.clone()),
+      criteria: task
+        .as_ref()
+        .map(|task| task.details().acceptance_criteria.clone())
+        .unwrap_or_default(),
+    })
   }
 
   /// The folders outside the worktree the step may write to, as paths.

@@ -30,7 +30,7 @@ use std::path::Path;
 pub use authority::{LocalAuthorization, LocalIntent, LocalOrigin};
 pub use changed::changed_since_review;
 pub use direct::CheckoutHolder;
-pub(crate) use direct::{checkout_holder, managed_checkout, settle_review};
+pub(crate) use direct::{checkout_held, checkout_holder, managed_checkout, settle_review};
 pub use discard::{DiscardFailure, DiscardReport, DiscardedFile};
 pub use external::{EvidenceInputs, external_integration};
 pub use legacy::LegacyPolicy;
@@ -274,15 +274,14 @@ fn ensure_checkout_available(db: &ProjectDb, run: RunId) -> Result<(), Integrati
 }
 
 pub(super) fn ensure_project_git(git: &LocalGit) -> Result<(), IntegrationError> {
-  let directory = Path::new(git.common_dir())
-    .canonicalize()
-    .map_err(|_| LocalGitError::Io)?;
+  let common = Path::new(git.common_dir());
+  let directory = common.canonicalize().map_err(LocalGitError::io_at(common))?;
   for name in ["objects", "refs", "logs"] {
     let path = directory.join(name);
     if path.exists()
       && !path
         .canonicalize()
-        .map_err(|_| LocalGitError::Io)?
+        .map_err(LocalGitError::io_at(&path))?
         .starts_with(git.root())
     {
       return Err(LocalError::Unsupported.into());
@@ -298,7 +297,11 @@ fn ensure_linked_task(main: &LocalGit, task: Option<&LocalGit>) -> Result<(), In
   if let Some(task) = task {
     let common = |git: &LocalGit| -> Result<_, IntegrationError> {
       let name = git.text(&["rev-parse", "--path-format=absolute", "--git-common-dir"])?;
-      Ok(Path::new(&name).canonicalize().map_err(|_| LocalGitError::Io)?)
+      Ok(
+        Path::new(&name)
+          .canonicalize()
+          .map_err(LocalGitError::io_at(Path::new(&name)))?,
+      )
     };
     if common(main)? != common(task)? {
       return Err(LocalError::Unsupported.into());

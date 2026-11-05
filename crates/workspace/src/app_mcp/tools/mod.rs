@@ -13,6 +13,7 @@ mod conversation;
 mod daily_report;
 mod delivery;
 mod limits;
+mod merge_attempts;
 mod merge_queue;
 mod message_waits;
 mod messages;
@@ -28,6 +29,7 @@ mod pull_requests;
 mod questions;
 mod queue_hold;
 mod return_to_draft;
+mod review;
 mod run_list;
 mod run_task;
 mod runs;
@@ -35,6 +37,7 @@ pub mod setup;
 mod task_organization;
 mod task_write;
 mod tasks;
+mod team;
 mod usage;
 mod wire;
 mod worktree;
@@ -156,7 +159,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "run_task",
-    description: "Runs a task as the app allows: queues and starts a draft, starts a queued task, or runs a task again after its latest run ended. Refusals name why.",
+    description: "Runs a task as the app allows: queues and starts a draft, starts a queued task, or runs a task again after its latest run ended. Refusals name why. A team project's task starts through its team server instead: it is claimed for this computer (claim.acquire) and its work started (work.start) in its module, from the module's branch here; each agent profile of its pipeline runs on the local connection bindings names for it, else on the only local agent connection of its CLI (bindings_required names the profiles that need a choice). A start the server or the runner can't take now waits and goes on by itself (team_start_waiting).",
     schema: schema_for_type::<run_task::RunTask>,
     read_only: false,
   },
@@ -201,11 +204,19 @@ const SPECS: &[Spec] = &[
                   conflicts with files, check_failed, base_keeps_moving with heads, stopped, later_run), merged \
                   (revision, kind merge_commit or squash, worktree_removed, branch_deleted) or removed; since, \
                   resyncs, approved_at and checked_on (the base the last passed check ran on). A run the merge queue \
-                  delivers is not merged by merge_run. checks is the CI of the pull request of the run's branch, as \
-                  get_pull_request's checks reads it (no_pull_request when the last sync stored none, not_linked \
-                  without a linked GitHub repository). The run's \
-                  link is its task's page; the waiting approvals, questions, messages and plans link to their cards \
-                  on the task's Conversation.",
+                  delivers is not merged by merge_run. merge_attempts lists every attempt to merge the run, newest \
+                  first: sequence, at, who (person, automation, merge_queue, or retry with its retry number), via \
+                  (task_page, merge_run or merge_queue), outcome (merged with revision and kind, refused, conflicts \
+                  with files, not_recorded with the revision Git merged to, git_stopped, left_changed with the files \
+                  left changed, interrupted when the app or runner ended mid-merge, stopped, moved when the base or \
+                  the run's branch moved), stage (the one it ended at, null when it landed or reached none), cause \
+                  (why it did not land, or the merge queue's words; told only as merge_run's policy allows, else \
+                  null or the policy's notice) and stages (each stage with passed, refused or not_reached: policy \
+                  for automation's attempts, integration_lock, project_database, scratch_folder, checkout_identity, \
+                  git_metadata, existing_result, merge, record). checks is the CI of the pull request of the run's \
+                  branch, as get_pull_request's checks reads it (no_pull_request when the last sync stored none, \
+                  not_linked without a linked GitHub repository). The run's link is its task's page; the waiting \
+                  approvals, questions, messages and plans link to their cards on the task's Conversation.",
     schema: schema_for_type::<runs::InRun>,
     read_only: true,
   },
@@ -283,7 +294,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "set_reviewer",
-    description: "Chooses the reviewer Manual asks before the person, as Project settings › Runs does: an agent connection of the project, a model of it and an effort it takes; without a connection, the default reviewer. Refused as automation_not_allowed unless a person turned on Let automation answer approvals, and another reviewer than the current one also needs Let automation change agent permissions (person_only). Answers as get_approvals does.",
+    description: "Chooses the reviewer Manual asks before the person. connection names a language reviewer with model and effort; decision_connection names a decision reviewer with model and threshold (0.01–0.99, two decimals, default 0.80). Without either, uses the default language reviewer. Choosing a hosted decision reviewer is always person_only. Threshold edits and switching back to a language reviewer are narrowing. Requires Let automation answer approvals; other reviewer changes require Let automation change agent permissions. Answers as get_approvals does.",
     schema: schema_for_type::<approval_settings::SetReviewer>,
     read_only: false,
   },
@@ -325,7 +336,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "continue_run",
-    description: "Continues a run stopped at a limit with a choice its task page offers for how it stopped: raise_limits (token budget and time limit), raise_step_budget, resume (after the daily budget), allow_retry, return_to, or accept (a step waiting unverified or unchanged); and resolve_conflicts for a run whose merge into its base branch stopped at conflicts (merge_run's merge_failed): Ask an agent to resolve, which returns its work to a step whose agent may write in the worktree (the implementing one unless step names another) with a note to merge the base branch in and resolve them, the optional note after it, and the conflicting files as data; refused as merge_not_conflicted, step_cannot_write, no_writing_step, integration_running, run_merged, worktree_removed, worktree_in_merge or run_not_ended. Retry, return, resolving and acceptance require Let automation answer approvals and record automation as the decider. Every value is given, null for no limit; nothing raises or lifts a limit by itself. Refusals name why.",
+    description: "Continues a run stopped at a limit with a choice its task page offers for how it stopped: raise_limits (token budget and time limit), raise_step_budget, resume (after the daily budget), allow_retry, return_to, or accept (a step waiting unverified or unchanged); and resolve_conflicts for a run whose merge into its base branch stopped at conflicts (merge_run's merge_failed): Ask an agent to resolve, which returns its work to a step whose agent may write in the worktree (the implementing one unless step names another) with a note to resolve them, the optional note after it, and the conflicting files as data (Orchester merges the base branch into its worktree first and commits the merge with the agent's work); refused as merge_not_conflicted, step_cannot_write, no_writing_step, integration_running, run_merged, worktree_removed, worktree_in_merge or run_not_ended. Retry, return, resolving and acceptance require Let automation answer approvals and record automation as the decider. Every value is given, null for no limit; nothing raises or lifts a limit by itself. Refusals name why.",
     schema: schema_for_type::<continue_run::ContinueRun>,
     read_only: false,
   },

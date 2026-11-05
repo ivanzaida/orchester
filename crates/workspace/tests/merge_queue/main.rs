@@ -8,10 +8,12 @@
 //! (`harness`); syncing and checking a run's worktree is the runner's, done here in the test's process with every
 //! message crossing as JSON (`runner_side`). `cargo test -p orchester-workspace --test merge_queue merge_queue`.
 
+mod attempts;
 mod conversation;
 mod decisions;
 mod harness;
 mod lanes;
+mod preflight;
 mod runner_side;
 
 use std::{fs, sync::Arc};

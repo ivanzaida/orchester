@@ -11,7 +11,6 @@ use orchester_core::{
   connection::{AgentProvider, ConnectionKind, invocation::Platform},
   id::ResourceId,
   permission::AgentPermissions,
-  resource::AgentProfile,
   run::{PermissionsApply, Run, RunError, StepExecutor},
 };
 use orchester_ipc::Rejection;
@@ -19,8 +18,9 @@ use orchester_ipc::Rejection;
 use super::{
   control::{Ack, answer},
   failed,
-  link::resources::{ResourceLink, pinned_version},
+  link::resources::ResourceLink,
   record::{RecordError, record},
+  resolver::{ResolveError, RunResolver},
   run::{ExecutionError, RunTask},
   step::worker::{Stop, StopCause},
 };
@@ -37,7 +37,11 @@ pub(in crate::execution) struct PermissionsChange {
 impl RunTask {
   /// Records `change`; for Apply now, tells the profile's agents to stop after their command.
   pub(super) fn change_permissions(&mut self, change: PermissionsChange, ack: Ack) -> Result<(), ExecutionError> {
-    let provider = match provider_of((&*self.link, &*self.computer), &self.run, change.profile) {
+    let provider = match provider_of(
+      (&*self.link, &*self.computer),
+      (&self.resolver, &self.run),
+      change.profile,
+    ) {
       Ok(provider) => provider,
       Err(rejection) => {
         answer(ack, Err(rejection));
@@ -109,11 +113,11 @@ impl RunTask {
   }
 }
 
-/// The agent CLI of `profile`'s connection, as the run pinned the profile: the profile version asked through `link`,
-/// its connection read on `computer`, where the run executes.
+/// The agent CLI of `profile`'s connection, as the run pinned the profile: the profile version `resolver` reads, from
+/// the run's inputs or through `link`, its connection read on `computer`, where the run executes.
 pub(in crate::execution) fn provider_of(
   (link, computer): (&(impl ResourceLink + ?Sized), &dyn ComputerResources),
-  run: &Run,
+  (resolver, run): (&RunResolver, &Run),
   profile: ResourceId,
 ) -> Result<AgentProvider, Rejection> {
   let pinned = run
@@ -125,9 +129,11 @@ pub(in crate::execution) fn provider_of(
       _ => None,
     })
     .ok_or(Rejection::ProfileNotInRun)?;
-  let body = pinned_version::<AgentProfile>(link, &pinned)
-    .map_err(|error| failed("cannot read the agent profile", &error))?
-    .ok_or(Rejection::ProfileNotInRun)?;
+  let body = match resolver.profile(link, pinned) {
+    Ok(body) => body,
+    Err(ResolveError::Link(error)) => return Err(failed("cannot read the agent profile", &error)),
+    Err(_) => return Err(Rejection::ProfileNotInRun),
+  };
   let connection = computer
     .connection(body.connection())
     .map_err(|error| failed("cannot read the profile's connection", &error))?;

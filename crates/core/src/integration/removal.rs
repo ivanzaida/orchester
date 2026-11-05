@@ -74,7 +74,7 @@ impl From<CleanupError> for RemovalFailure {
       CleanupError::LiveWork => Self::LiveWork,
       CleanupError::LocalIntegration => Self::LocalIntegration,
       CleanupError::Git(GitError::Run(CommandError::NotFound)) => Self::GitMissing,
-      CleanupError::Git(error @ (GitError::Run(_) | GitError::Unrecognized { .. })) => {
+      CleanupError::Git(error @ (GitError::Run(_) | GitError::Unrecognized { .. } | GitError::Unanswered { .. })) => {
         Self::GitStopped(error.to_string())
       }
       CleanupError::Git(GitError::Failed(said)) => Self::GitRefused(said),

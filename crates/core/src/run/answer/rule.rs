@@ -89,7 +89,7 @@ impl RuleScope {
     match subject {
       ApprovalSubject::McpTool { server, tool, reach } => {
         let (folder, check) = match reach {
-          ToolReach::Any => (None, None),
+          ToolReach::Any | ToolReach::Design(_) => (None, None),
           ToolReach::Folder { broad: true, .. } => return Err(SimilarUnavailable::BroadFolder),
           ToolReach::Folder { folder, .. } => (Some(folder.clone()), None),
           ToolReach::Check { every_call: true, .. } | ToolReach::PageScript => {

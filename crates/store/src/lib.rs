@@ -25,14 +25,17 @@ pub use lock_watch::worst::{LockHold, LockHolds, lock_holds, reset_lock_holds};
 #[cfg(feature = "test-support")]
 pub use project_db::ProjectMigration;
 pub use project_db::{
-  ActivityRecord, AlwaysAllowAnswer, AlwaysAllowRecord, ApprovalRecord, ApprovedPlan, AttachmentOwner, AutoModeSave,
-  AutomaticStatus, AutomationPoints, Bound, BoundBy, BoundReference, CachedClaim, CachedModule, CachedModuleChange,
-  CachedRunStatus, CachedTask, CachedVersion, ChatDeletion, ChatFork, ChatListing, ChatRewind, ChatTurn,
-  ConfirmedVersion, DecisionCounts, EndedRun, InvocationRecord, InvocationStart, JoinedKey, KeptAction, KeptReport,
-  KeptWait, MemoryAnswer, MemoryRecord, MessageRecord, ModelRequirement, NamingVersion, NotSent, NoticeRecord,
-  OrchestratorSwitch, ProjectDb, PublishState, QuestionRecord, ReadOnlyProjectDb, ReferenceBinding, ReferenceTarget,
-  RemovalRecord, ResolutionStart, ResourceSharing, ResourceUpdate, ReturnedTask, RuleAnswer, RuleRecord, RunBranch,
-  RunLogRecord, ServerAdmin, SharedEvent, SharedMember, SharedPerson, SharedSnapshot, SharedStanding, SharedTaskInfo,
-  SharingLink, StartedQueued, StepRecord, TaskDeletionFacts, UnsentStatus, VersionReference, WaitingPublish,
-  WaitingVersion, WarmWorkspaceRecord, WorkspaceWritten, attachment_file, exclude_project_data,
+  AcceptedInputs, AcceptedWork, ActivityRecord, AlwaysAllowAnswer, AlwaysAllowRecord, ApprovalRecord, ApprovedPlan,
+  ArchiveStop, AttachmentOwner, AutoModeSave, AutomaticStatus, AutomationPoints, Bound, BoundBy, BoundReference,
+  CachedClaim, CachedModule, CachedModuleChange, CachedRunStatus, CachedTask, CachedVersion, ChatDeletion, ChatFork,
+  ChatListing, ChatRewind, ChatTurn, ConfirmedVersion, DecisionCounts, DeliveryMerge, DeliveryReport, EndedRun,
+  InvocationRecord, InvocationStart, JoinedKey, KeptAction, KeptReport, KeptWait, MemoryAnswer, MemoryRecord,
+  MessageRecord, ModelRequirement, NamingVersion, NewTeamOperation, NewWorkReport, NotSent, NoticeRecord,
+  OrchestratorSwitch, ProjectDb, PublishState, QuestionRecord, ReadOnlyProjectDb, RecordedDecisionReview,
+  ReferenceBinding, ReferenceTarget, RemovalRecord, ResolutionStart, ResourceSharing, ResourceUpdate, ReturnedTask,
+  RuleAnswer, RuleRecord, RunBranch, RunLogRecord, ServerAdmin, SharedEvent, SharedMember, SharedPerson,
+  SharedSnapshot, SharedStanding, SharedTaskInfo, SharingLink, StartedQueued, StepRecord, TaskDeletionFacts,
+  TeamDelivery, TeamDeliveryStage, TeamFence, TeamOperation, TeamOperationState, TeamRun, TeamSettlement, TeamStart,
+  TeamStartStage, UnsentStatus, VersionReference, WaitingPublish, WaitingVersion, WarmWorkspaceRecord, WorkReportEntry,
+  WorkReportState, WorkspaceWritten, attachment_file, exclude_project_data,
 };

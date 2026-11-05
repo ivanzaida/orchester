@@ -2,7 +2,8 @@
 //! column over the brief: no run has progress, results or history to show, so a 32 `workflow` glyph, *No runs yet* and
 //! what the Summary will hold, then *Start run*, 16 apart. Start run is the header's control for the first run
 //! (`header::controls::first_start`), sharing its request: unavailable with the same reason, which shows under it; a
-//! draft that misses details has none to offer, and says so.
+//! draft that misses details has none to offer, and says so. A team task starts only as its claim allows
+//! (`team_controls::can_run`): while it does not, there is no Start run.
 
 use std::sync::Arc;
 
@@ -67,13 +68,24 @@ pub fn empty(ctx: &mut Ctx, task: &TaskContext) -> Element {
         .width(Dimension::Px(TEXT_WIDTH))
         .max_width(Dimension::Pct(100.0)),
     )
-    .child(start)
+    .with_children(start)
     .with_children(reason)
     .into()
 }
 
-/// Start run, and why it is unavailable when it is.
-fn start(ctx: &mut Ctx, task: &TaskContext) -> (ActionButton, Option<Arc<str>>) {
+/// Start run, and why it is unavailable when it is. A team task's starts through its server, and only as its claim
+/// allows: while it does not, there is none.
+fn start(ctx: &mut Ctx, task: &TaskContext) -> (Option<ActionButton>, Option<Arc<str>>) {
+  if task.team.is_some() {
+    let run = crate::screens::task::header::team::run(ctx, task, ("task-empty-start", "task.controls.start"));
+    return match run {
+      Some(control) => (
+        Some(control.button()),
+        control.reason().map(|reason| reason.full.clone()),
+      ),
+      None => (None, None),
+    };
+  }
   let run_controls = RunControls::of(ctx);
   let controls = Controls {
     detail: &task.detail,
@@ -82,14 +94,15 @@ fn start(ctx: &mut Ctx, task: &TaskContext) -> (ActionButton, Option<Arc<str>>) 
     pending: run_controls.pending(),
     requested: &run_controls.requested,
     approval_waits: false,
+    fenced: false,
   };
   if let Some(control) = first_start(ctx, &controls, "task-empty-start") {
     let reason = control.reason().map(|reason| reason.full.clone());
-    return (control.button(), reason);
+    return (Some(control.button()), reason);
   }
   let missing = ctx.t("summary.empty.missing");
   let button = ActionButton::new("task-empty-start", ButtonKind::Primary, ctx.t("task.controls.start"))
     .icon(Icon::Play)
     .unavailable(missing.clone());
-  (button, Some(missing))
+  (Some(button), Some(missing))
 }

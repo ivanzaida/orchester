@@ -4,6 +4,7 @@ mod always_allow;
 mod approval_modes;
 mod approval_records;
 mod approval_rules;
+mod archive_stops;
 mod attachments;
 mod auto_mode;
 mod automatic_status;
@@ -19,6 +20,10 @@ mod completions;
 mod connections;
 mod consistent;
 mod context_uses;
+mod decision_connections;
+mod decision_review_usage;
+mod decision_test_history;
+mod decision_tests;
 mod default_pipeline;
 mod disk_guard;
 mod environment;
@@ -35,6 +40,7 @@ mod limits;
 mod local_integration;
 mod mcp_servers;
 mod memory;
+mod merge_attempts;
 mod merge_queue;
 mod merges;
 mod message_records;
@@ -78,10 +84,12 @@ mod repository_import;
 mod request_answers;
 mod resolutions;
 mod resources;
+mod review_threads;
 mod reviewer_usage;
 mod revision_diffs;
 mod run_connections;
 mod run_ends;
+mod run_inputs;
 mod run_models;
 mod runner_failures;
 mod runs;
@@ -105,8 +113,13 @@ mod tags;
 mod task_deletion;
 mod task_effort;
 mod task_groups;
+mod task_identities;
 mod task_snapshots;
 mod tasks;
+mod team_deliveries;
+mod team_operations;
+mod team_runs;
+mod team_starts;
 mod todo_lists;
 mod tool_approvals;
 mod usage;
@@ -130,10 +143,12 @@ use rusqlite::{Connection, params};
 pub use self::{
   approval_records::ApprovalRecord,
   approval_rules::DecisionCounts,
+  archive_stops::ArchiveStop,
   attachments::{AttachmentOwner, attachment_file},
   auto_mode::AutoModeSave,
   automatic_status::{AutomaticStatus, NotSent, UnsentStatus},
   chat_decisions::KeptAction,
+  decision_test_history::RecordedDecisionReview,
   estimates::AutomationPoints,
   invocation_records::{ActivityRecord, InvocationRecord, InvocationStart},
   joining::{JoinedKey, ReturnedTask},
@@ -158,6 +173,7 @@ pub use self::{
   resolutions::ResolutionStart,
   resources::ResourceUpdate,
   run_ends::EndedRun,
+  run_inputs::AcceptedInputs,
   runs::{RunBranch, RunLogRecord},
   shared_events::{SharedEvent, SharedSnapshot},
   shared_members::{ServerAdmin, SharedMember},
@@ -169,6 +185,10 @@ pub use self::{
   sharing::SharingLink,
   step_records::StepRecord,
   task_deletion::TaskDeletionFacts,
+  team_deliveries::{DeliveryMerge, DeliveryReport, TeamDelivery, TeamDeliveryStage},
+  team_operations::{NewTeamOperation, TeamOperation, TeamOperationState, TeamSettlement},
+  team_runs::{AcceptedWork, NewWorkReport, TeamFence, TeamRun, WorkReportEntry, WorkReportState},
+  team_starts::{TeamStart, TeamStartStage},
   workspace_records::{WarmWorkspaceRecord, WorkspaceWritten},
 };
 use crate::{

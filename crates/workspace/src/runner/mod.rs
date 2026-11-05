@@ -15,6 +15,7 @@ mod chat;
 mod check;
 mod code_index;
 mod connection;
+mod decision_test;
 mod estimate;
 mod folders;
 mod idle;

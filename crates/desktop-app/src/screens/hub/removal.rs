@@ -192,7 +192,8 @@ fn words(ctx: &Ctx, kind: ResourceKind, users: &Users) -> (Arc<str>, Arc<str>) {
       | ResourceKind::Pipeline
       | ResourceKind::TestSuite
       | ResourceKind::Service
-      | ResourceKind::Stack => "hub.remove.unused",
+      | ResourceKind::Stack
+      | ResourceKind::TeamReviewer => "hub.remove.unused",
     };
     return (ctx.t(key), ctx.t("hub.remove.confirm"));
   }

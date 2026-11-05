@@ -37,6 +37,7 @@ mod lifecycle;
 mod local_integration;
 mod markdown;
 mod memory;
+mod merge_attempt;
 mod metrics;
 mod modules;
 mod needs_you;
@@ -49,6 +50,7 @@ pub mod pipelines;
 mod project_settings;
 mod projects;
 mod pull_requests;
+mod review;
 mod run_model;
 mod secrets;
 mod settings;
@@ -77,7 +79,7 @@ use lurq::{
 pub use self::{
   accounts::{AccountsSpacing, AccountsText},
   browser::{BrowserBorder, BrowserColor, BrowserSpacing, BrowserText},
-  cards::{CardsSpacing, CardsText, NOT_CHOSEN_OPACITY},
+  cards::{CardsSpacing, CardsText, NOT_CHOSEN_OPACITY, RISK_TRACK_HEIGHT},
   chat_links::ChatLinkLooks,
   ci::CiText,
   code::{CodeText, token_color},
@@ -99,6 +101,7 @@ pub use self::{
   local_integration::LocalText,
   markdown::{blank_line_between_blocks, code_lines},
   memory::{MemorySpacing, MemoryText},
+  merge_attempt::{AttemptSpacing, AttemptText},
   metrics::{ControlHeight, ExtraRadius, ExtraSpacing},
   modules::ModulesSpacing,
   needs_you::{NeedsYouRadius, NeedsYouShadow, NeedsYouSpacing, NeedsYouText},
@@ -113,6 +116,7 @@ pub use self::{
   project_settings::{ProjectSettingsSpacing, ProjectSettingsText},
   projects::{ProjectsSpacing, ProjectsText},
   pull_requests::{PullRequestsSpacing, PullRequestsText},
+  review::{REVIEW_TYPING_OPACITY, ReviewSpacing, ReviewText},
   run_model::ModelText,
   secrets::{SECRETS_PENDING_OPACITY, SecretsSpacing, SecretsText},
   settings::{SettingsSpacing, SettingsText},
@@ -187,6 +191,8 @@ pub fn install(app: &mut App, mode: Mode) {
   memory::install(theme);
   sources::install(theme);
   delivery::install(theme);
+  merge_attempt::install(theme);
+  review::install(theme);
   import::install(theme);
   hub::install(theme);
   failure::install(theme);

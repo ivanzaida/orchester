@@ -3,7 +3,7 @@
 //! (and, for Codex, the result schema); for a session that resumes the continue prompt with the
 //! instructions injected at resume. A gated step a reviewer sent back is told what should change
 //! instead (the plan revision). A new session of an attempt a failure sent back is told that
-//! failure ([`super::retry`]).
+//! failure ([`super::retry`]); one a merge's conflicts were returned to, how that merge stands in its worktree.
 
 use std::{num::NonZeroU32, path::Path};
 
@@ -22,10 +22,7 @@ use orchester_core::{
 
 use super::{
   super::{
-    super::{
-      link::resources::{pinned_version, resource_names},
-      run::RunTask,
-    },
+    super::{checkpoint::Merge, run::RunTask},
     Continuation, Occasion,
   },
   PromptParts, problem,
@@ -71,6 +68,7 @@ impl RunTask {
       .map_err(|error| problem(error.to_string()))?;
     let dependencies = dependencies(&self.run, step, &outputs, &plans);
     let retry = self.retry_report(execution, &outputs)?;
+    let resolving = self.resolving_merge(execution, worktree);
     let instructions = self.pinned_instructions()?;
     let sources: Vec<InstructionSource<'_>> = instructions
       .iter()
@@ -110,12 +108,13 @@ impl RunTask {
           messages: &continuation.messages,
         },
       ),
-      base_moved: continuation.notice.as_ref().map(|notice| BaseMoved {
-        notice,
+      base_moved: continuation.notice.as_ref().map(|taken| BaseMoved {
+        notice: &taken.notice,
+        merge: taken.merge(),
         after_turn: matches!(continuation.occasion, Occasion::AfterTurn),
       }),
       memory,
-      retry: self.returned(retry.as_ref(), execution),
+      retry: self.returned(retry.as_ref(), execution, resolving.as_ref()),
       working,
     };
     assemble(&input, event).map_err(|PromptAssemblyError::UnavailableVariable { variable, .. }| {
@@ -126,15 +125,24 @@ impl RunTask {
   }
 
   /// Why the work came back to `execution`'s step: the failure `retry` reports, else the note of a person who
-  /// returned the work of the ended run to it.
-  fn returned<'a>(&'a self, retry: Option<&'a LoadedReport>, execution: StepExecutionId) -> Option<ReturnedWork<'a>> {
+  /// returned the work of the ended run to it, with how the merge of its conflicts stands in its worktree (`merge`).
+  fn returned<'a>(
+    &'a self,
+    retry: Option<&'a LoadedReport>,
+    execution: StepExecutionId,
+    merge: Option<&'a Merge>,
+  ) -> Option<ReturnedWork<'a>> {
     retry
       .map(|loaded| ReturnedWork::Retry(loaded.report(self)))
       .or_else(|| {
         self
           .run
           .returned_work(execution)
-          .map(|(note, conflicts)| ReturnedWork::AfterEnd { note, conflicts })
+          .map(|(note, conflicts)| ReturnedWork::AfterEnd {
+            note,
+            conflicts,
+            merge: merge.map(Merge::as_prompt),
+          })
       })
   }
 
@@ -159,25 +167,28 @@ impl RunTask {
     }
   }
 
-  /// The name of the run's pipeline, as prompts name it.
+  /// The name of the run's pipeline, as prompts name it: as the run's inputs name it, else as it is named here.
   fn pipeline_name(&self) -> Result<String, RunnerProblem> {
-    resource_names(&*self.link, self.run.snapshot().pipeline().resource)
-      .map_err(|error| problem(error.to_string()))?
-      .map(|resource| resource.name)
-      .ok_or_else(|| problem("the run's pipeline no longer exists".to_owned()))
+    let (_, name) = self
+      .resolver
+      .label(&*self.link, self.run.snapshot().pipeline().resource, "pipeline")
+      .map_err(|error| problem(error.to_string()))?;
+    Ok(name.as_str().to_owned())
   }
 
   /// The instruction versions the run pinned, with their names, in library (slug) order.
   fn pinned_instructions(&self) -> Result<Vec<(PinnedVersion, String, Instruction)>, RunnerProblem> {
     let mut pinned = Vec::new();
     for pin in self.run.snapshot().instructions() {
-      let resource = resource_names(&*self.link, pin.resource)
-        .map_err(|error| problem(error.to_string()))?
-        .ok_or_else(|| problem(format!("instruction {} no longer exists", pin.resource)))?;
-      let instruction = pinned_version::<Instruction>(&*self.link, pin)
-        .map_err(|error| problem(error.to_string()))?
-        .ok_or_else(|| problem(format!("instruction version {} is missing", pin.number)))?;
-      pinned.push((resource.slug, (*pin, resource.name, instruction)));
+      let (slug, name) = self
+        .resolver
+        .label(&*self.link, pin.resource, "instruction")
+        .map_err(|error| problem(error.to_string()))?;
+      let body = self
+        .resolver
+        .instruction(&*self.link, *pin)
+        .map_err(|error| problem(error.to_string()))?;
+      pinned.push((slug, (*pin, name.as_str().to_owned(), body)));
     }
     pinned.sort_by(|(left, _), (right, _)| left.cmp(right));
     Ok(pinned.into_iter().map(|(_, instruction)| instruction).collect())

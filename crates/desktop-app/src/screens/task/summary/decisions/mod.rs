@@ -31,8 +31,11 @@ use lurq::{
 use orchester_core::run::{PauseReason, RunLimit, RunStatus};
 use orchester_workspace::tasks::{delivery::Delivery, detail::StepView, plan::PlanReview};
 
-pub use self::return_ended::returnable;
 pub(super) use self::{delivery::details::rows as delivery_rows, return_ended::return_card};
+pub use self::{
+  ready::{PullRequestState, pull_request_rows},
+  return_ended::returnable,
+};
 use super::notice::{self, Said};
 use crate::{
   navigation::Navigation,

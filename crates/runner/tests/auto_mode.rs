@@ -385,9 +385,10 @@ async fn codex_escalating(repository: RepositoryAccess) -> Started {
     .expect("connections")
     .remove(0);
   let choice = ReviewerChoice {
-    connection: codex.id(),
+    connection: codex.id().into(),
     model: ModelId::new("gpt-5.5-codex").expect("model"),
     effort: None,
+    threshold: None,
   };
   Started::of(project, Some(choice)).await
 }
@@ -486,9 +487,10 @@ async fn reviewed_by_codex(brief: &'static str) -> Started {
   let mut db = ProjectDb::open(project.repo.path()).expect("open");
   db.create_connection(&codex).expect("a Codex connection");
   let choice = ReviewerChoice {
-    connection: codex.id(),
+    connection: codex.id().into(),
     model: ModelId::new("gpt-5.5-codex").expect("model"),
     effort: Some("low".to_owned()),
+    threshold: None,
   };
   Started::of(project, Some(choice)).await
 }
@@ -524,7 +526,7 @@ async fn auto_mode_reviews_with_a_codex_connection_in_its_read_only_sandbox() {
   let mut failed = reviewed_by_codex("Run `cargo build`. Reviewer fails.").await;
   let (request, review) = failed.left_to_person().await;
   assert!(
-    matches!(&review, Review::Failed { failure: ReviewFailure::CouldNotRun, model: Some(model), detail: Some(detail) }
+    matches!(&review, Review::Failed { failure: ReviewFailure::CouldNotRun, model: Some(model), detail: Some(detail), .. }
       if model == "gpt-5.5-codex" && detail == "the reviewer could not run: the CLI exited with code 1: the fake model failed"),
     "{review:?}"
   );

@@ -10,6 +10,8 @@ mod fork;
 mod merge;
 mod merge_beside;
 mod merge_guards;
+mod merge_recovery;
+mod merge_retry;
 mod merged;
 mod recorded;
 mod resolve;

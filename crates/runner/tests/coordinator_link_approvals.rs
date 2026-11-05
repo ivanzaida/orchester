@@ -134,6 +134,7 @@ fn coordinator_link_approval_answers_round_trip() {
       failure: ReviewFailure::TimedOut,
       model: None,
       detail: None,
+      decision: false,
     }),
     None,
   ] {

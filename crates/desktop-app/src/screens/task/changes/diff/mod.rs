@@ -8,7 +8,7 @@
 mod annotate;
 mod cache;
 mod line;
-mod rows;
+pub(crate) mod rows;
 
 use std::sync::Arc;
 
@@ -32,7 +32,7 @@ use orchester_workspace::{
 use parking_lot::Mutex;
 
 pub use self::{
-  annotate::{Annotations, BlockView, LineKey, LinePress},
+  annotate::{Annotations, BlockView, LineKey, LinePress, Marks},
   line::{CutAction, CutNote},
 };
 use self::{

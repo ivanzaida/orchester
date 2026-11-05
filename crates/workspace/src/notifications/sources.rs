@@ -5,7 +5,7 @@
 //! a notification. A run's end is read off its task's latest run, as the Orchestrator follows ends: merged in
 //! Orchester or outside it, or failed. An event names only what a notification may show.
 
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
 use orchester_core::{
   connection::plan_limits::{LimitReading, LimitState, PlanReadings},
@@ -13,6 +13,7 @@ use orchester_core::{
   run::{RunLimit, TaskPhase},
   time::Timestamp,
 };
+use orchester_store::{ArchiveStop, ProjectDb, StoreError};
 
 use super::{Event, EventTask, Kind, LimitKind, Origin, Target, WaitingProposal};
 use crate::{
@@ -222,6 +223,52 @@ fn batch(project: &Project, kind: &Kind, since: Timestamp) -> Option<Arc<str>> {
   };
   let day = since.local_day_start().unix_millis();
   Some(format!("limit:{shared}:{}:{day}", project.id).into())
+}
+
+/// The runs of the project at `root` stopped because a resource they pin was archived on the team's server.
+pub fn archive_stops_in(root: &Path) -> Result<Vec<ArchiveStop>, StoreError> {
+  ProjectDb::open(root)?.archive_stops()
+}
+
+/// The events of the runs in `project` that a resource archived on the team's server stopped since `since` (the
+/// session's start), observed in a scope of their own (`Scope::Archives`). Each opens its task's Summary, or the
+/// project's runner when the task is no longer listed.
+pub fn of_archive_stops(
+  project: &Project,
+  tasks: &ProjectTasks,
+  stops: &[ArchiveStop],
+  since: Timestamp,
+) -> Vec<Event> {
+  stops
+    .iter()
+    .filter(|stop| stop.stopped_at >= since)
+    .map(|stop| archived(project, tasks, stop))
+    .collect()
+}
+
+fn archived(project: &Project, tasks: &ProjectTasks, stop: &ArchiveStop) -> Event {
+  let task = tasks
+    .tasks
+    .iter()
+    .find(|task| task.id() == stop.task)
+    .map(|task| EventTask {
+      key: task.key().clone(),
+      title: task.details().title.as_str().into(),
+    });
+  let target = task.as_ref().map_or(Target::Runner(project.id), |task| {
+    task_target(project, task, TaskPage::Summary, None)
+  });
+  Event {
+    key: format!("archived:{}", stop.run).into(),
+    batch: None,
+    kind: Kind::Archived {
+      resource: stop.resource.as_str().into(),
+    },
+    origin: origin(project),
+    target,
+    task,
+    step: None,
+  }
 }
 
 /// The ends of the tasks' latest runs that are no wait: merged, by a person in Orchester or outside it, and failed.

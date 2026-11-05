@@ -13,11 +13,10 @@ use orchester_core::{
   tokens::TokenBudget,
 };
 use orchester_ipc::{
-  AttachSession, Command, ErrorReports, Event, FrameError, Handshake, IpcError, PROTOCOL_VERSION, RefusedRun,
-  Rejection, Reply, Request, RequestId, RunWork, SessionEnd, ShutdownMode, SlotWait, WorkState, WorkSummary,
+  AttachSession, Command, ErrorReports, Event, FrameError, RefusedRun, Rejection, Reply, Request, RequestId, RunWork,
+  SessionEnd, ShutdownMode, SlotWait, WorkState, WorkSummary,
   browser::ComputerBrowser,
   frame::{FrameReader, FrameWriter, MAX_FRAME_LEN},
-  handshake,
 };
 use tokio::io::{AsyncWriteExt, DuplexStream, ReadHalf, WriteHalf};
 
@@ -360,6 +359,28 @@ async fn frames_round_trip_every_message() {
   assert_eq!(reader.read::<Event>().await.expect("clean end"), None);
 }
 
+/// The start of a team run from the inputs its accepted operation kept, and its refusal when none were kept
+/// (protocol 42).
+#[tokio::test]
+async fn frames_round_trip_an_accepted_start() {
+  let ((mut reader, _), (_, mut writer)) = connection();
+  let start = Request {
+    id: RequestId::new(1),
+    command: Command::StartAcceptedRun {
+      operation: orchester_core::id::OperationId::generate(),
+    },
+  };
+  let refused = Event::Reply {
+    id: RequestId::new(1),
+    reply: Reply::Rejected(Rejection::InputsNotAccepted),
+  };
+  writer.write(&start).await.expect("write request");
+  writer.write(&refused).await.expect("write event");
+  drop(writer);
+  assert_eq!(reader.read::<Request>().await.expect("read request"), Some(start));
+  assert_eq!(reader.read::<Event>().await.expect("read event"), Some(refused));
+}
+
 /// *Test connection* of a native connection (protocol 17): the model API asked about, and what the runner
 /// found with the models it listed.
 #[tokio::test]
@@ -540,48 +561,4 @@ async fn frames_reject_oversized_and_truncated_input() {
   raw.write_all(b"{\"ty").await.expect("write partial body");
   drop(raw);
   assert!(matches!(reader.read::<Request>().await, Err(FrameError::Truncated)));
-}
-
-#[tokio::test]
-async fn handshake_succeeds_between_equal_versions() {
-  let ((mut left_reader, mut left_writer), (mut right_reader, mut right_writer)) = connection();
-  let (left, right) = tokio::join!(
-    handshake(&mut left_reader, &mut left_writer),
-    handshake(&mut right_reader, &mut right_writer),
-  );
-  left.expect("left handshake");
-  right.expect("right handshake");
-}
-
-#[tokio::test]
-async fn handshake_reports_a_version_mismatch() {
-  let ((mut reader, mut writer), (mut peer_reader, mut peer_writer)) = connection();
-  let peer_version = PROTOCOL_VERSION + 1;
-  let peer = async {
-    peer_writer
-      .write(&Handshake::new(peer_version))
-      .await
-      .expect("peer writes its version");
-    peer_reader.read::<Handshake>().await.expect("peer reads the version")
-  };
-  let (result, received) = tokio::join!(handshake(&mut reader, &mut writer), peer);
-
-  assert_eq!(received, Some(Handshake::new(PROTOCOL_VERSION)));
-  match result {
-    Err(IpcError::VersionMismatch { local, remote }) => {
-      assert_eq!(local, PROTOCOL_VERSION);
-      assert_eq!(remote, peer_version);
-    }
-    other => panic!("expected a version mismatch, got {other:?}"),
-  }
-}
-
-#[tokio::test]
-async fn handshake_reports_a_peer_that_closes() {
-  let ((mut reader, mut writer), peer) = connection();
-  drop(peer);
-  assert!(matches!(
-    handshake(&mut reader, &mut writer).await,
-    Err(IpcError::ClosedDuringHandshake | IpcError::Frame(FrameError::Io(_)))
-  ));
 }

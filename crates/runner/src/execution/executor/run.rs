@@ -38,6 +38,7 @@ use super::{
   pool::PoolError,
   prepared::{Prepared, RunFolder},
   record::{RecordError, announce_ready, record},
+  resolver::RunResolver,
   sink::Sink,
   step::{
     Active, QaApps,
@@ -117,7 +118,10 @@ pub(in crate::execution) struct RunTask {
   /// The coordinator's sink, which the run's log is written to.
   pub(super) sink: Box<dyn Sink>,
   pub(super) run: Run,
+  /// The run's task as the run started it.
   pub(super) task: Task,
+  /// Where every step reads the run's pinned configuration: its own inputs, or a local run's pinned versions.
+  pub(super) resolver: RunResolver,
   pub(super) project: Project,
   /// Where the run works: its own worktree from before workspaces, or a workspace it borrows.
   pub(super) folder: RunFolder,
@@ -176,6 +180,7 @@ impl RunTask {
       sink: context.sink,
       run: prepared.run,
       task: prepared.task,
+      resolver: prepared.resolver,
       project,
       worktree: match &prepared.folder {
         RunFolder::Own(path) => Some(path.clone()),

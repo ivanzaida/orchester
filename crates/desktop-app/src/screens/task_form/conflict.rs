@@ -323,7 +323,12 @@ fn card(card: &Card, choose: impl Fn() + Send + Sync + Clone + 'static) -> Eleme
 }
 
 /// A field's value as a version has it, in words.
-fn value_text(ctx: &Ctx, field: ContentField, details: &TaskDetails, pipelines: Option<&[PipelineChoice]>) -> String {
+pub(super) fn value_text(
+  ctx: &Ctx,
+  field: ContentField,
+  details: &TaskDetails,
+  pipelines: Option<&[PipelineChoice]>,
+) -> String {
   match field {
     ContentField::Title => details.title.as_str().to_owned(),
     ContentField::Brief if details.brief.trim().is_empty() => ctx.t("task_form.conflict.empty").to_string(),

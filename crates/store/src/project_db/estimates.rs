@@ -301,7 +301,11 @@ const fn failure_text(failure: ReviewFailure) -> &'static str {
   match failure {
     ReviewFailure::TimedOut => "timed_out",
     ReviewFailure::Unreadable => "unreadable",
-    ReviewFailure::CouldNotRun => "could_not_run",
+    ReviewFailure::CouldNotRun
+    | ReviewFailure::KeyRefused
+    | ReviewFailure::NothingAnswers
+    | ReviewFailure::NotSystemOneApi
+    | ReviewFailure::ModelGone => "could_not_run",
     ReviewFailure::NoReviewer => "no_reviewer",
   }
 }

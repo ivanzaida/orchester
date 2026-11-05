@@ -137,7 +137,7 @@ impl Component for ConnectionsScreen {
     if let Some(entry) = chosen {
       return kit::scroll(self.page(ctx, &project, (&listed, &accounts), entry, (&work, unread)));
     }
-    if data::entries(&listed).is_empty() {
+    if data::entries(&listed).is_empty() && listed.decisions.is_empty() {
       return kit::scroll(empty::page(ctx, &project, &self.recheck));
     }
     let asks = self.asks(&project, &listed);

@@ -15,6 +15,8 @@ mod cards;
 mod changes;
 mod connections;
 mod conversation;
+mod decision_connections;
+mod decision_reviews;
 mod decisions;
 mod deliverables;
 mod delivery;
@@ -26,6 +28,8 @@ mod live;
 mod loading_states;
 mod long_chats;
 mod memory;
+mod merge_attempts;
+mod merges;
 mod modules;
 mod native;
 mod orchestrator;
@@ -37,6 +41,9 @@ mod pipelines;
 mod project_settings;
 mod pull_requests;
 pub mod qa_app_asks;
+mod review_changed;
+mod review_page;
+mod reviewer_rows;
 mod run_context;
 mod run_model;
 pub mod settings;
@@ -46,6 +53,8 @@ mod side_question;
 mod slot_wait;
 mod sources;
 mod storage;
+mod task_merge_card;
+mod task_merge_row;
 mod task_states;
 mod tasks;
 mod tasks_memory;
@@ -100,7 +109,10 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 129] = [
+pub const ALL: [Scenario; 159] = [
+  Scenario::of("reviewer-row", reviewer_rows::seed),
+  Scenario::of("reviewer-row-local", reviewer_rows::local),
+  Scenario::of("reviewer-row-unavailable", reviewer_rows::unavailable),
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-library", agents_library::seed),
   Scenario::of("agents-browser", agents_browser::seed),
@@ -168,6 +180,17 @@ pub const ALL: [Scenario; 129] = [
   Scenario::of("delivery-blocked", delivery::blocked),
   Scenario::of("delivery-lanes", delivery::lanes),
   Scenario::of("delivery-empty", delivery::empty),
+  Scenario::of("merges", merges::seed),
+  Scenario::of("merges-outcomes", merges::outcomes),
+  Scenario::of("merges-empty", merges::empty),
+  Scenario::of("merges-many", merges::many),
+  Scenario::of("merge-attempts", merge_attempts::seed),
+  Scenario::of("review-page", review_page::seed),
+  Scenario::of("review-changed", review_changed::seed),
+  Scenario::of("task-merge-row", task_merge_row::seed),
+  Scenario::of("task-merge-card-ready", task_merge_card::ready_to_merge),
+  Scenario::of("task-merge-card-refused", task_merge_card::refused_at_lock),
+  Scenario::of("task-merge-card-conflicts", task_merge_card::conflicts),
   Scenario::of("overview-quiet", delivery::quiet),
   Scenario::of("overview-states", overview_states::seed),
   Scenario::of("interrupted", interrupted::seed),
@@ -177,6 +200,8 @@ pub const ALL: [Scenario; 129] = [
   Scenario::with_fake_codex("lifecycle", lifecycle::seed),
   Scenario::with_fake_codex("slot-wait", slot_wait::seed),
   Scenario::of("connections", connections::seed),
+  Scenario::of("decision-connections", decision_connections::seed),
+  Scenario::of("decision-connections-missing", decision_connections::missing),
   Scenario::of("api-providers", api_providers::seed),
   Scenario::of("native", native::seed),
   Scenario::of("project-settings", project_settings::seed),
@@ -226,6 +251,20 @@ pub const ALL: [Scenario; 129] = [
   Scenario::of("team-shared-projects", team::shared_projects),
   Scenario::of("team-shared-none", team::shared_none),
   Scenario::of("team-clone", team::clones),
+  Scenario::of("team-member", team::member),
+  Scenario::of("team-admin", team::admin),
+  Scenario::of("team-server-admin", team::server_admin),
+  Scenario::of("team-outage", team::outage),
+  Scenario::of("team-outage-running", team::outage_running),
+  Scenario::of("team-outage-later", team::outage_later),
+  Scenario::of("team-member-running", team::member_running),
+  Scenario::of("team-module-outage", team::module_outage),
+  Scenario::of("team-claims", team::claims),
+  Scenario::of("team-module-work", team::module_work),
+  Scenario::of("team-admin-work", team::admin_work),
+  Scenario::of("team-version-refused", team::version_refused),
+  Scenario::with_fake_codex("team-running", team::team_running),
+  Scenario::of("team-edit-conflict", team::edit_conflict),
   Scenario::of("modules-base-branch", modules::base_branch),
   Scenario::of("loading-states", loading_states::seed),
   Scenario::of("storage-low-disk", storage::low_disk),

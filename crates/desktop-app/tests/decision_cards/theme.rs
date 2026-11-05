@@ -19,6 +19,9 @@ fn card_theme_roles_follow_the_card_components() {
     (CardsText::PlanLines, (12.5, 1.6), FontWeight::Normal, "#B3B3BA"),
     (CardsText::Decided, (12.5, 1.35), FontWeight::Medium, "#EDEDF0"),
     (CardsText::Action, (12.5, 1.5), FontWeight::Normal, "#B3B3BA"),
+    (CardsText::Command, (12.0, 1.5), FontWeight::Normal, "#EDEDF0"),
+    (CardsText::Review, (12.5, 1.4), FontWeight::Normal, "#B3B3BA"),
+    (CardsText::Probability, (11.5, 1.4), FontWeight::Normal, "#EDEDF0"),
   ] {
     let style = theme.typography_style(role.role());
     assert_eq!(
@@ -28,4 +31,5 @@ fn card_theme_roles_follow_the_card_components() {
     );
   }
   assert_eq!(theme.spacing_value(CardsSpacing::PlanHead.role()), Dimension::Px(11.0));
+  assert_eq!(theme.spacing_value(CardsSpacing::ReviewGap.role()), Dimension::Px(7.0));
 }

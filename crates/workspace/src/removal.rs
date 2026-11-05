@@ -65,7 +65,8 @@ pub fn users_in(root: &Path, id: ResourceId, kind: ResourceKind) -> Result<Users
     | ResourceKind::Pipeline
     | ResourceKind::TestSuite
     | ResourceKind::Service
-    | ResourceKind::Stack => Ok(Users::Steps(Vec::new())),
+    | ResourceKind::Stack
+    | ResourceKind::TeamReviewer => Ok(Users::Steps(Vec::new())),
   };
   users.map_err(|error| messages::store_error(&error))
 }
@@ -87,7 +88,7 @@ pub const fn changed_by_removal(kind: ResourceKind) -> &'static [Outside] {
     ResourceKind::Instruction => &[Outside::Instructions],
     ResourceKind::Skill => &[Outside::Skills],
     ResourceKind::Pipeline => &[Outside::Pipelines],
-    ResourceKind::TestSuite | ResourceKind::Service | ResourceKind::Stack => &[],
+    ResourceKind::TestSuite | ResourceKind::Service | ResourceKind::Stack | ResourceKind::TeamReviewer => &[],
   }
 }
 

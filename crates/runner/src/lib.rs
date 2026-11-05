@@ -5,6 +5,8 @@
 pub mod approval_relay;
 pub mod browser;
 mod computer;
+pub mod decision_review;
+pub mod decision_test;
 pub mod error_reports;
 pub mod execution;
 pub mod execution_root;

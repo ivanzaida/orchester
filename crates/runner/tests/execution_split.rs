@@ -434,12 +434,15 @@ const STORES: &[&str] = &["ProjectDb", "AppDb", "KeychainVault"];
 /// - `step/qa_app/task.rs`: reads the invocation a QA app note belongs to.
 /// - `step/worker/mod.rs`: the worker reads the run and its invocation while it follows the agent.
 /// - `step/worker/review/estimate.rs`: auto mode's reviewer records what its estimate used.
+/// - `resolver.rs`: a run's execution inputs (team authority §7) and its task as it started are read from the project
+///   database; its pinned published versions come through the coordinator link.
 const STORE_USES: &[(&str, &str)] = &[
   ("broken.rs", "ProjectDb"),
   ("connection_check.rs", "ProjectDb"),
   ("handoff.rs", "ProjectDb"),
   ("pool.rs", "ProjectDb"),
   ("removal.rs", "ProjectDb"),
+  ("resolver.rs", "ProjectDb"),
   ("run.rs", "ProjectDb"),
   ("run_git.rs", "ProjectDb"),
   ("step/native/drive.rs", "ProjectDb"),

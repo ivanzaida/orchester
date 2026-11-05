@@ -140,8 +140,9 @@ pub fn command(
 }
 
 /// The note an agent reads when the conflicts of a merge into `base` go back to it; the files that conflicted reach
-/// its prompt as data beside it ([`MergeConflicts`]), never in its words. Written to an agent in English, as prompts
-/// are.
+/// its prompt as data beside it ([`MergeConflicts`]), never in its words. The runner merges the base into the agent's
+/// worktree before it starts and commits the merge with its work: a sandboxed agent cannot write the repository's git
+/// data. Written to an agent in English, as prompts are.
 pub fn conflict_note(base: &BranchName) -> ReviewNote {
   conflict_note_with(base, None)
 }
@@ -150,8 +151,9 @@ pub fn conflict_note(base: &BranchName) -> ReviewNote {
 pub fn conflict_note_with(base: &BranchName, extra: Option<&str>) -> ReviewNote {
   let base = base.as_str();
   let mut note = format!(
-    "Merge {base} into this branch and resolve the conflicts listed below, keeping both sides' intent; for appended \
-     lists such as migrations keep the base's entries first and put this run's after them; commit the merge."
+    "Resolve the conflicts with {base} listed below, keeping both sides' intent; for appended lists such as \
+     migrations keep the base's entries first and put this run's after them. Orchester merges {base} into this branch \
+     for you and commits the merge with your work."
   );
   if let Some(extra) = extra.map(str::trim).filter(|extra| !extra.is_empty()) {
     note.push_str("\n\n");

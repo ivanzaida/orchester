@@ -99,15 +99,19 @@ pub enum TaskFormSpacing {
   Composer,
   /// 7: over and under a pipeline in the Pipeline menu (`Feature delivery v3` `I2BrOT`).
   MenuOption,
+  /// 44: a team conflict's actions under its callout, in line with its words past its icon (`Conflict actions` `abHoW`
+  /// in `Team authority · redesign` 05 `LmxUY`).
+  ConflictActions,
 }
 
 impl TaskFormSpacing {
-  pub const ALL: [Self; 5] = [
+  pub const ALL: [Self; 6] = [
     Self::PageTop,
     Self::PageBottom,
     Self::Side,
     Self::Composer,
     Self::MenuOption,
+    Self::ConflictActions,
   ];
 
   pub fn role(self) -> SpacingSize {
@@ -121,6 +125,7 @@ impl TaskFormSpacing {
       Self::Side => "task_form_side",
       Self::Composer => "task_form_composer",
       Self::MenuOption => "task_form_menu_option",
+      Self::ConflictActions => "task_form_conflict_actions",
     }
   }
 
@@ -130,6 +135,7 @@ impl TaskFormSpacing {
       Self::PageBottom => 40.0,
       Self::Composer => 20.0,
       Self::MenuOption => 7.0,
+      Self::ConflictActions => 44.0,
     }
   }
 }

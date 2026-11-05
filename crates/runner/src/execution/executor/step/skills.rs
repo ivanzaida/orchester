@@ -1,13 +1,13 @@
 //! Skills and the repository's own agent files at an agent's start (ORC-15,
 //! `orchester_core::agent_files`).
 //!
-//! - Orchester's skills: the published versions the run pinned that reach the agent (by scope) are written to a folder
-//!   of the step execution's own in the execution root (`crate::execution_root`),
-//!   `.orchester/skills/<execution-id>/<slug>/` (the `SKILL.md` with its name and description, and the reference files
-//!   from the project's blobs), outside every worktree. It is written again at each start of the execution, so what an
-//!   agent changed there does not last, and kept afterwards: a resumed session reads the paths it was told when it
-//!   started. Both CLIs can read it: Codex's sandbox reads the whole disk, and Claude Code is given the folder with
-//!   `--add-dir`.
+//! - Orchester's skills: the versions the run pinned that reach the agent (by scope), read from the run's own inputs or
+//!   through the coordinator link ([`RunResolver`]), are written to a folder of the step execution's own in the
+//!   execution root (`crate::execution_root`), `.orchester/skills/<execution-id>/<slug>/` (the `SKILL.md` with its name
+//!   and description, and the reference files from the project's blobs, each checked against its content hash), outside
+//!   every worktree. It is written again at each start of the execution, so what an agent changed there does not last,
+//!   and kept afterwards: a resumed session reads the paths it was told when it started. Both CLIs can read it: Codex's
+//!   sandbox reads the whole disk, and Claude Code is given the folder with `--add-dir`.
 //! - Orchester's internal `orchester-codebase-index` skill, embedded in the runner, is placed the same way for an agent
 //!   that gets the code index (`super::super::codebase_index`), under `_orchester/`, which no project skill's slug can
 //!   name. It is not a project resource and no screen lists it.
@@ -36,13 +36,7 @@ use orchester_core::{
   run::{ProfileInfo, SkillListing},
 };
 
-use super::super::{
-  link::{
-    resources::{blob, pinned_version, resource_names},
-    settings::agent_files,
-  },
-  run::RunTask,
-};
+use super::super::{link::settings::agent_files, resolver::RunResolver, run::RunTask};
 
 /// Where Orchester's internal skills go in an execution's skills folder: `_` starts no slug.
 const INTERNAL_SKILLS: &str = "_orchester";
@@ -104,14 +98,15 @@ impl RunTask {
     };
     let mut reaching = Vec::new();
     for pin in self.run.snapshot().skills() {
-      let resource = resource_names(&*self.link, pin.resource)
-        .map_err(|error| problem(error.to_string()))?
-        .ok_or_else(|| problem(format!("skill {} no longer exists", pin.resource)))?;
-      let skill = pinned_version::<Skill>(&*self.link, pin)
-        .map_err(|error| problem(error.to_string()))?
-        .ok_or_else(|| problem(format!("skill version {} is missing", pin.number)))?;
+      let (slug, _) = self
+        .resolver
+        .label(&*self.link, pin.resource, "skill")
+        .map_err(|error| problem(error.to_string()))?;
+      let skill = self
+        .resolver
+        .skill(&*self.link, *pin)
+        .map_err(|error| problem(error.to_string()))?;
       if skill.reaches(target).is_ok() {
-        let slug = resource.slug().map_err(|error| problem(error.to_string()))?;
         reaching.push((slug, skill));
       }
     }
@@ -191,13 +186,14 @@ impl RunTask {
     Ok(document)
   }
 
-  /// Writes `skill`'s `SKILL.md` and reference files into `folder`; the `SKILL.md` written.
+  /// Writes `skill`'s `SKILL.md` and reference files into `folder`; the `SKILL.md` written. Each file is read by its
+  /// content hash and written only when it has that hash and its size.
   fn write_skill(&self, folder: &Path, slug: &Slug, skill: &Skill) -> Result<PathBuf, String> {
     fs::create_dir_all(folder).map_err(|error| error.to_string())?;
     let document = folder.join(SKILL_FILE);
     fs::write(&document, skill.document(slug)).map_err(|error| error.to_string())?;
     for file in skill.files() {
-      let content = blob(&*self.link, &file.content).map_err(|error| error.to_string())?;
+      let content = RunResolver::skill_file(&*self.link, file).map_err(|error| error.to_string())?;
       let path = file
         .path
         .segments()

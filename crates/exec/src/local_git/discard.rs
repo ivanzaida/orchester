@@ -102,8 +102,8 @@ impl LocalGit {
     let hash = super::digest(bytes);
     let copy = LocalPath::new(name)?;
     let key = super::digest(format!("{}\0{name}\0{}", file.path, hash.as_str()).as_bytes());
-    let folder =
-      hold_directory(&self.scratch, &[COPIES, &key.as_str()[..COPY_FOLDER]], true)?.ok_or(LocalGitError::Io)?;
+    let folder = hold_directory(&self.scratch, &[COPIES, &key.as_str()[..COPY_FOLDER]], true)?
+      .ok_or_else(|| LocalGitError::missing(&self.scratch.join(COPIES)))?;
     match super::write_regular(folder.path(), &copy, None, Some(bytes)) {
       Ok(()) => {}
       // An earlier attempt left this copy when the trash refused it: the same version of the same file.

@@ -32,7 +32,10 @@ use orchester_store::{ProjectDb, RunStoreError, StoreError};
 use super::{failed, read_failed};
 pub(in crate::execution) use crate::execution::executor::prepared::{Prepared, RunFolder};
 use crate::{
-  execution::executor::start::{self, Place},
+  execution::executor::{
+    resolver::RunResolver,
+    start::{self, Place},
+  },
   git::Git,
 };
 
@@ -143,7 +146,7 @@ pub(super) fn record(
   db: &mut ProjectDb,
   root: &Path,
   key: IdempotencyKey,
-  Checked { task, new }: Checked,
+  Checked { task: _, new }: Checked,
   revision: Option<TaskRevision>,
 ) -> Result<Prepared, Rejection> {
   let run = db
@@ -153,11 +156,8 @@ pub(super) fn record(
       RunStoreError::TaskChangedMeanwhile(_) => Rejection::TaskChangedMeanwhile,
       other => read_failed("cannot record the run", other),
     })?;
-  let task = db
-    .task_for_run(task.id(), run.id())
-    .map_err(|error| failed("cannot read the run's task snapshot", &error))?
-    .ok_or(Rejection::TaskNotFound)?;
-  finish_recorded(db, root, run, task)
+  let resolved = resolve_task(db, &run)?;
+  finish_recorded(db, root, run, resolved)
 }
 
 /// A retry of a recorded request reads that run directly, without rechecking configuration that
@@ -173,16 +173,30 @@ pub(in crate::execution) fn resume_recorded(
       detail: "the start request key belongs to another task".into(),
     });
   }
-  let task = db
-    .task_for_run(task_id, run.id())
+  let resolved = resolve_task(db, &run)?;
+  finish_recorded(db, root, run, resolved)
+}
+
+/// The resolver of `run` ([`RunResolver`]) and its task as the run started it.
+pub(in crate::execution) fn resolve_task(db: &ProjectDb, run: &Run) -> Result<(RunResolver, Task), Rejection> {
+  let resolver = RunResolver::load(db, run.id()).map_err(|error| failed("cannot read the run's inputs", &error))?;
+  let task = resolver
+    .task_at_start(db, run.task(), run)
     .map_err(|error| failed("cannot read the run's task", &error))?
     .ok_or(Rejection::TaskNotFound)?;
-  finish_recorded(db, root, run, task)
+  Ok((resolver, task))
 }
 
 /// Hands the recorded `run` to the executor with a start order of its revision and branch: the executor makes its
 /// place to work, and the run starts on the branch it answers with; a run whose place cannot be made fails to start.
-fn finish_recorded(db: &mut ProjectDb, root: &Path, mut run: Run, task: Task) -> Result<Prepared, Rejection> {
+/// One that started already is executed by the request that started it. A team run's task has no readiness here: the
+/// server keeps it.
+pub(in crate::execution) fn finish_recorded(
+  db: &mut ProjectDb,
+  root: &Path,
+  mut run: Run,
+  (resolver, task): (RunResolver, Task),
+) -> Result<Prepared, Rejection> {
   let borrows = db
     .workspace_settings()
     .map_err(|error| failed("cannot read the workspace settings", &error))?
@@ -199,12 +213,15 @@ fn finish_recorded(db: &mut ProjectDb, root: &Path, mut run: Run, task: Task) ->
     return Ok(Prepared {
       run,
       task,
+      resolver,
       folder: place.into_folder(),
       execute: false,
       try_at_plan_limit: None,
     });
   }
-  check_readiness(db, run.task())?;
+  if resolver.team().is_none() {
+    check_readiness(db, run.task())?;
+  }
   match place.make() {
     Ok(branch) => record_branch(db, &mut run, branch)?,
     Err(reason) => return Err(fail_to_start(db, run, reason)),
@@ -223,6 +240,7 @@ fn finish_recorded(db: &mut ProjectDb, root: &Path, mut run: Run, task: Task) ->
   Ok(Prepared {
     run,
     task,
+    resolver,
     folder: place.into_folder(),
     execute: true,
     try_at_plan_limit: None,
@@ -276,10 +294,13 @@ fn check_readiness(db: &ProjectDb, task: TaskId) -> Result<(), Rejection> {
 }
 
 impl Prepared {
-  /// A recorded run that continues where it works: resumed or with raised limits. A run whose worktree a person
-  /// removed never continues, even should a folder of its name be back.
+  /// A recorded run that continues where it works: resumed, retried, followed up or with raised limits, from its own
+  /// inputs. A run whose worktree a person removed never continues, even should a folder of its name be back.
   pub(super) fn continuing(db: &ProjectDb, root: &Path, run: Run) -> Result<Self, Rejection> {
-    check_readiness(db, run.task())?;
+    let resolver = RunResolver::load(db, run.id()).map_err(|error| failed("cannot read the run's inputs", &error))?;
+    if resolver.team().is_none() {
+      check_readiness(db, run.task())?;
+    }
     if db
       .worktree_removal(run.id())
       .map_err(|error| failed("cannot read whether the run's worktree was removed", &error))?
@@ -288,14 +309,15 @@ impl Prepared {
       tracing::warn!(run = %run.id(), "a person removed the run's worktree; its agent cannot continue");
       return Err(Rejection::WorktreeRemoved);
     }
-    let task = db
-      .task_for_run(run.task(), run.id())
+    let task = resolver
+      .task_at_start(db, run.task(), &run)
       .map_err(|error| failed("cannot read the run's task", &error))?
       .ok_or(Rejection::TaskNotFound)?;
     let folder = existing_folder(db, root, &run)?;
     Ok(Self {
       run,
       task,
+      resolver,
       folder,
       execute: true,
       try_at_plan_limit: None,

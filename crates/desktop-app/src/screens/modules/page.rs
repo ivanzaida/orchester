@@ -28,7 +28,7 @@ use orchester_workspace::{
   modules::data::ModulePage,
 };
 
-use super::{burndown, header, more, save, summary, words};
+use super::{burndown, header, more, save, summary, tasks, words};
 use crate::{
   navigation::Navigation,
   project::{ShownProject, TasksState},
@@ -87,6 +87,8 @@ pub struct ModuleScreen {
   save: save::SaveAction,
   /// What this page and its properties last wrote of the module.
   written: save::Written,
+  /// The task groups of a team module's Summary the person opened or folded ([`super::page_team`]).
+  pub(super) toggled: Signal<tasks::Toggled>,
 }
 
 impl Component for ModuleScreen {
@@ -103,11 +105,18 @@ impl Component for ModuleScreen {
       menu: more::MenuPlace::new(ctx),
       save,
       written,
+      toggled: ctx.signal(tasks::Toggled::default()),
     }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let PageProps { project, module, tab } = ctx.props::<PageProps>().clone();
+    // A team module is read from its server ([`super::page_team`]); this computer's copy is not shown.
+    if let TasksState::Ready(tasks) = project.feed.tasks.get()
+      && tasks.shared
+    {
+      return self.team(ctx, &project, module, tab);
+    }
     // Read again whenever the project's tasks are read again, which every run change does, and after every save: a
     // save of the module alone (its state, its dates) leaves the tasks as they were, and the feed does not publish
     // tasks equal to the ones it holds.
@@ -144,7 +153,7 @@ impl Component for ModuleScreen {
         self.body(ctx, &project, page, tab),
       ),
       (None, Some(Read(None))) => (back_only(ctx, id), padded(missing(ctx))),
-      (None, None) => super::reading::page(ctx, (id, module), tab),
+      (None, None) => super::reading::page(ctx, (id, module), (tab, true)),
     };
     Column::new()
       .id("screen-modules")
@@ -220,7 +229,7 @@ impl ModuleScreen {
 }
 
 /// Summary and Burndown.
-fn tabs(ctx: &mut Ctx, (project, module): (ProjectId, ModuleId), chosen: ModuleTab) -> Element {
+pub(super) fn tabs(ctx: &mut Ctx, (project, module): (ProjectId, ModuleId), chosen: ModuleTab) -> Element {
   let navigation = Navigation::of(ctx);
   let tabs: Vec<PageTab> = ModuleTab::ALL
     .into_iter()
@@ -245,7 +254,7 @@ pub fn body_padding() -> Padding {
     .bottom(TaskSpacing::Foot.role())
 }
 
-fn padded(content: Element) -> Element {
+pub(super) fn padded(content: Element) -> Element {
   Column::new()
     .width(Dimension::Pct(100.0))
     .padding(body_padding())
@@ -254,7 +263,7 @@ fn padded(content: Element) -> Element {
 }
 
 /// `← Modules` alone, over a page that is read, failed or gone (`Crumb` `XeoEE`).
-fn back_only(ctx: &mut Ctx, project: ProjectId) -> Element {
+pub(super) fn back_only(ctx: &mut Ctx, project: ProjectId) -> Element {
   let navigation = Navigation::of(ctx);
   let list = Route::Project(project, ProjectPage::Modules(ModuleListTab::default()));
   let words = ctx.t("modules.page.back");
@@ -282,7 +291,7 @@ fn back_only(ctx: &mut Ctx, project: ProjectId) -> Element {
     .into()
 }
 
-fn missing(ctx: &Ctx) -> Element {
+pub(super) fn missing(ctx: &Ctx) -> Element {
   EmptyState::new(
     "module-not-found",
     Icon::SearchX,

@@ -59,6 +59,8 @@ pub(crate) struct SettingRow {
   info: Option<Arc<str>>,
   hint: Option<(Arc<str>, Tone)>,
   hint_style: TypographyStyle,
+  /// Lines under the hint, in the words' column.
+  lines: Vec<Element>,
   lead: Option<Element>,
   controls: Vec<Element>,
   under: Vec<Element>,
@@ -81,6 +83,7 @@ impl SettingRow {
       info: None,
       hint: None,
       hint_style: ProjectSettingsText::Hint.role(),
+      lines: Vec::new(),
       lead: None,
       controls: Vec::new(),
       under: Vec::new(),
@@ -100,6 +103,13 @@ impl SettingRow {
   /// The hint line is a value as written (a variable's): in Geist Mono 12.
   pub(crate) fn mono_hint(mut self) -> Self {
     self.hint_style = ProjectSettingsText::MonoHint.role();
+    self
+  }
+
+  /// Lines of their own under the hint, in the words' column beside the control, the words then 4 apart (a decision
+  /// connection's model no longer listed, under *Used by*).
+  pub(crate) fn lines(mut self, lines: impl IntoIterator<Item = Element>) -> Self {
+    self.lines.extend(lines);
     self
   }
 
@@ -259,9 +269,14 @@ impl SettingRow {
     let words = Column::new()
       .flex(1.0)
       .min_width(Dimension::Px(0.0))
-      .spacing(ExtraSpacing::Tight.role())
+      .spacing(if self.lines.is_empty() {
+        ExtraSpacing::Tight.role()
+      } else {
+        SpacingSize::Xs
+      })
       .child(heading)
-      .with_children(hint);
+      .with_children(hint)
+      .with_children(self.lines);
     let line = Row::new()
       .width(Dimension::Pct(100.0))
       .spacing(if self.item { SpacingSize::Md } else { SpacingSize::Lg })

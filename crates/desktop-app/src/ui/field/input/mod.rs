@@ -64,6 +64,7 @@ pub struct FieldInput {
   /// The leading glyph goes once the field holds text.
   leading_while_empty: bool,
   unit: Option<Arc<str>>,
+  prefix: Option<Arc<str>>,
   lines: Lines,
   mono: bool,
   text_style: Option<TypographyStyle>,
@@ -114,6 +115,7 @@ impl PartialEq for FieldInput {
       && self.leading == other.leading
       && self.leading_while_empty == other.leading_while_empty
       && self.unit == other.unit
+      && self.prefix == other.prefix
       && self.unit_look == other.unit_look
       && self.lines == other.lines
       && self.mono == other.mono
@@ -150,6 +152,7 @@ impl FieldInput {
       leading: None,
       leading_while_empty: false,
       unit: None,
+      prefix: None,
       lines: Lines::One,
       mono: false,
       text_style: None,
@@ -225,6 +228,12 @@ impl FieldInput {
   /// While it holds text, the box ends in a cross that clears it; `label` names the cross for tools.
   pub fn clearable(mut self, label: impl Into<Arc<str>>) -> Self {
     self.clear = Some(label.into());
+    self
+  }
+
+  /// A quiet label before the value inside the box (`Approves at`, `04 c`).
+  pub fn prefix(mut self, prefix: impl Into<Arc<str>>) -> Self {
+    self.prefix = Some(prefix.into());
     self
   }
 

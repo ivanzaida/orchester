@@ -1,4 +1,6 @@
-//! Typed local Git execution. Raw bytes stay inside this boundary; errors never include Git or hook output.
+//! Typed local Git execution. Raw bytes stay inside this boundary; an error's words never include Git or hook output.
+//! Only a refusal's cause keeps the end of Git's error output, bounded and without a URL's user part
+//! (`orchester_core::integration::GitCause`), and an OS error's cause the path and the OS's error.
 
 mod abort;
 mod ancestry;
@@ -17,9 +19,13 @@ pub mod owned;
 mod path_collision;
 mod process;
 mod resolve;
+mod stamps;
 mod sync_preview;
 
-use std::path::{Path, PathBuf};
+use std::{
+  io,
+  path::{Path, PathBuf},
+};
 
 pub use discard::{DiscardError, STAGED, Take};
 pub use files::{
@@ -29,25 +35,62 @@ pub use files::{
 pub use lease::IntegrationLease;
 use orchester_core::{
   blob::ContentHash,
-  integration::local::{Checkout, LocalError, LocalPath},
+  integration::{
+    GitCause, IoCause, PreflightCause,
+    local::{Checkout, LocalError, LocalPath},
+  },
 };
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
+/// What went wrong; the words say nothing of Git's output, which only a refusal's cause keeps, its tail bounded.
 #[derive(Debug, Error)]
 pub enum LocalGitError {
   #[error(transparent)]
   State(#[from] LocalError),
   #[error("cannot execute the local Git operation")]
-  Process,
+  Process(IoCause),
   #[error("Git or a repository hook refused the operation")]
-  Refused,
+  Refused(GitCause),
   #[error("cannot access local checkout content")]
-  Io,
+  Io(IoCause),
   #[error("a commit hook changed the reviewed commit; nothing was committed")]
   HookChanged(orchester_core::integration::local::HookChange),
   #[error("Git returned unsupported repository data")]
   Data,
+}
+
+impl LocalGitError {
+  /// `error` of the OS, reading or changing `path`.
+  pub fn io_at(path: &Path) -> impl FnOnce(io::Error) -> Self + '_ {
+    move |error| Self::Io(IoCause::new(&error).at(path))
+  }
+
+  /// `error` of the OS, about the file or folder the caller holds open.
+  pub(crate) fn io(error: &io::Error) -> Self {
+    Self::Io(IoCause::new(error))
+  }
+
+  /// The folder or file at `path`, which must be there, is not.
+  pub(crate) fn missing(path: &Path) -> Self {
+    Self::Io(IoCause::of_kind(io::ErrorKind::NotFound).at(path))
+  }
+
+  /// A Git program that could not run or be waited for, as `kind` says when the OS gave no error.
+  pub(crate) fn process(kind: io::ErrorKind) -> Self {
+    Self::Process(IoCause::of_kind(kind))
+  }
+
+  /// This error's cause, as the preflight of a merge in the project at `root` tells it.
+  pub fn preflight_cause(&self, root: &Path) -> PreflightCause {
+    match self {
+      Self::State(error) => PreflightCause::State(error.clone()),
+      Self::Process(cause) | Self::Io(cause) => PreflightCause::io(cause, root),
+      Self::Refused(cause) => PreflightCause::Git(cause.clone()),
+      Self::HookChanged(_) => PreflightCause::State(LocalError::HookChanged),
+      Self::Data => PreflightCause::Reason(self.to_string()),
+    }
+  }
 }
 
 /// A canonical checkout and its own scratch folder, never an arbitrary worktree chosen by Git environment variables.
@@ -78,8 +121,8 @@ impl LocalGit {
   pub fn new(root: &Path, scratch: &Path) -> Result<Self, LocalGitError> {
     let root_owner = owned::Directory::open(root)?;
     let scratch_owner = owned::Directory::open(scratch)?;
-    let root = root.canonicalize().map_err(|_| LocalGitError::Io)?;
-    let scratch = scratch.canonicalize().map_err(|_| LocalGitError::Io)?;
+    let root = root.canonicalize().map_err(LocalGitError::io_at(root))?;
+    let scratch = scratch.canonicalize().map_err(LocalGitError::io_at(scratch))?;
     if !scratch.starts_with(&root) {
       return Err(LocalError::Unsupported.into());
     }
@@ -114,10 +157,16 @@ impl LocalGit {
       return Err(LocalGitError::Data);
     };
     let (named, common) = (named.to_owned(), common.to_owned());
-    if Path::new(top).canonicalize().map_err(|_| LocalGitError::Io)? != git.root {
+    if Path::new(top)
+      .canonicalize()
+      .map_err(LocalGitError::io_at(Path::new(top)))?
+      != git.root
+    {
       return Err(LocalError::Unsupported.into());
     }
-    let directory = Path::new(&named).canonicalize().map_err(|_| LocalGitError::Io)?;
+    let directory = Path::new(&named)
+      .canonicalize()
+      .map_err(LocalGitError::io_at(Path::new(&named)))?;
     git._git_owner = Some(owned::Directory::open(&directory)?);
     git.git_dir = Some(directory);
     git.git_dir_text = named;
@@ -155,7 +204,8 @@ impl LocalGit {
     self.capture(capture::Freshness::Cached)
   }
 
-  /// The checkout with every tracked file hashed: taken right before Git or Orchester changes it.
+  /// The checkout with every tracked file hashed, or proven unchanged since it was by its stamp: taken right before
+  /// Git or Orchester changes it.
   pub fn verified_snapshot(&self) -> Result<Checkout, LocalGitError> {
     self.capture(capture::Freshness::Verified)
   }
@@ -163,7 +213,7 @@ impl LocalGit {
   pub fn text(&self, args: &[&str]) -> Result<String, LocalGitError> {
     let output = self.raw(args, None, None)?;
     if output.code != Some(0) {
-      return Err(LocalGitError::Refused);
+      return Err(output.refused());
     }
     String::from_utf8(output.bytes)
       .map(|text| text.trim().to_owned())
@@ -174,7 +224,7 @@ impl LocalGit {
     validate_object(object)?;
     let output = self.raw(&["cat-file", "blob", object], None, None)?;
     if output.code != Some(0) {
-      return Err(LocalGitError::Refused);
+      return Err(output.refused());
     }
     Ok(output.bytes)
   }
@@ -184,7 +234,7 @@ impl LocalGit {
     let object = format!("{tree}:{}", path.as_str());
     let output = self.raw(&["cat-file", "--filters", &object], None, None)?;
     if output.code != Some(0) {
-      return Err(LocalGitError::Refused);
+      return Err(output.refused());
     }
     Ok(output.bytes)
   }
@@ -193,7 +243,7 @@ impl LocalGit {
     let filter_path = format!("--path={path}");
     let output = self.raw(&["hash-object", "-w", "--stdin", &filter_path], Some(content), None)?;
     if output.code != Some(0) {
-      return Err(LocalGitError::Refused);
+      return Err(output.refused());
     }
     let object = String::from_utf8(output.bytes).map_err(|_| LocalGitError::Data)?;
     let object = object.trim();
@@ -204,7 +254,7 @@ impl LocalGit {
   pub fn put_blob(&self, content: &[u8]) -> Result<String, LocalGitError> {
     let output = self.raw(&["hash-object", "-w", "--stdin", "--no-filters"], Some(content), None)?;
     if output.code != Some(0) {
-      return Err(LocalGitError::Refused);
+      return Err(output.refused());
     }
     let object = String::from_utf8(output.bytes).map_err(|_| LocalGitError::Data)?;
     let object = object.trim();
@@ -233,12 +283,12 @@ impl LocalGit {
     let output = self.quiet_plumbing(&["update-index", "-q", "--refresh"], None, None)?;
     // 1 says some entries differ from their files, which only means they stay changed.
     if !matches!(output.code, Some(0 | 1)) {
-      return Err(LocalGitError::Refused);
+      return Err(output.refused());
     }
     Ok(())
   }
 
-  /// Whether the checkout is still exactly `reviewed`, every tracked file hashed.
+  /// Whether the checkout is still exactly `reviewed`, read as [`Self::verified_snapshot`] reads it.
   pub fn ensure(&self, reviewed: &Checkout) -> Result<(), LocalGitError> {
     reviewed.ensure_current(&self.verified_snapshot()?)?;
     Ok(())

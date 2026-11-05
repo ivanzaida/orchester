@@ -19,6 +19,21 @@ pub(super) const SETTINGS_TABS: [&str; 7] = [
 
 /// Project settings › Connections, or the page of the connection `selected` names.
 pub(super) fn connections_view(args: &Map<String, Value>) -> Result<ConnectionsView, ToolError> {
+  if let Some(id) = string(args, "decision")? {
+    if args.contains_key("selected") {
+      return Err(ToolError::InvalidParam {
+        param: "decision",
+        reason: "choose one connection kind".to_owned(),
+      });
+    }
+    return id
+      .parse()
+      .map(ConnectionsView::decision)
+      .map_err(|_| ToolError::InvalidParam {
+        param: "decision",
+        reason: "expected a decision connection id".to_owned(),
+      });
+  }
   if args.contains_key("selected") {
     return Ok(ConnectionsView::of(super::navigate::connection(args, "selected")?));
   }

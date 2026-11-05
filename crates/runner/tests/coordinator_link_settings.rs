@@ -64,9 +64,10 @@ fn warm_folder() -> WarmFolder {
 fn reviewer() -> AutoModeSettings {
   AutoModeSettings {
     reviewer: Some(ReviewerChoice {
-      connection: ConnectionId::generate(),
+      connection: ConnectionId::generate().into(),
       model: ModelId::new("claude-haiku-4-5-20251001").expect("a model"),
       effort: Some("low".to_owned()),
+      threshold: None,
     }),
   }
 }

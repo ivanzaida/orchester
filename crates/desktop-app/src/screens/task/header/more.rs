@@ -1,7 +1,8 @@
 //! *More actions* (`More` `lDoAj` in `j8DakG`, its menu `JapSp`): every action of the task the header does not show
 //! as its primary one. First the task's own: *Edit task* (E), *Copy link*, *Open worktree in Files* of the latest run
 //! and *Memory for this task*, on the Conversation tab with the export's group after *Copy link* (ORC-327, `Y2KGi3`,
-//! `super::export`); then the run's: Pause run, Run again and *Return to a step* while they apply; then
+//! `super::export`); then the run's pull request, *Create pull request* and *Open as draft*, while the run waits to be
+//! merged (ORC-731); then the run's: Pause run, Run again and *Return to a step* while they apply; then
 //! closing the task (*Mark as done*, *Cancel task* or *Reopen task*, `task_close`); and after a line what removes:
 //! *Remove worktree* of the latest run, *Cancel run* and *Delete task…*, the last two in `danger`. An action that
 //! applies but cannot be used now stays, unavailable with why.
@@ -51,6 +52,9 @@ pub struct Held {
   /// card's action is the primary one.
   pub controls: Vec<Control>,
   pub run_again: Option<Control>,
+  /// *Create pull request* and *Open as draft* while the latest run waits to be merged and has no pull request
+  /// (ORC-731), rows a choice closes the menu with.
+  pub pull_request: Vec<Element>,
   /// Closing and deleting the task; none for a task kept *Not shared*.
   pub closing: Option<(Closer, task_close::Subject)>,
 }
@@ -114,6 +118,10 @@ fn panel(ctx: &mut Ctx, (task, conversation): (&TaskContext, bool), open: &Signa
     rows.extend(exports.iter().map(|control| control.item(ctx, open)));
     rows.push(separator(ctx));
     rows.extend(own[split..].iter().map(|control| control.item(ctx, open)));
+  }
+  if !held.pull_request.is_empty() {
+    rows.push(separator(ctx));
+    rows.extend(held.pull_request);
   }
   if !run.is_empty() {
     rows.push(separator(ctx));
@@ -192,7 +200,7 @@ fn edit(ctx: &mut Ctx, task: &TaskContext) -> Option<Control> {
     };
     return Some(Control::new(ctx, look, ButtonKind::Ghost, Offer::Unavailable(reason)));
   }
-  if !task.detail.editable() {
+  if !task.detail.editable() || task.read_only() {
     return None;
   }
   let navigation = Navigation::of(ctx);

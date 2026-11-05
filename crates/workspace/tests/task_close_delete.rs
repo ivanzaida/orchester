@@ -162,7 +162,8 @@ impl Repo {
   }
 
   fn servers(&self) -> Servers {
-    Servers::new(self.workspace.clone(), Vault::with(Arc::new(NoVault)))
+    let version = orchester_api::releases::ReleaseVersion::parse("0.5.0").expect("a release version");
+    Servers::new(self.workspace.clone(), Vault::with(Arc::new(NoVault)), version)
   }
 
   /// Runners of a session without a runner: nothing here asks one.

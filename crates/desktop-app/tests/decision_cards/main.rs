@@ -10,6 +10,7 @@
 mod answering;
 mod approval_modes;
 mod auto_mode;
+mod decision_review;
 mod deny_message;
 #[allow(
   dead_code,
@@ -17,6 +18,7 @@ mod deny_message;
 )]
 #[path = "../../examples/seed/kontur/mod.rs"]
 mod kontur;
+mod model_approved;
 mod project;
 #[path = "../support/mod.rs"]
 mod support;
