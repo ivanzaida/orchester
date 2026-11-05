@@ -43,8 +43,8 @@ pub fn of_run(ctx: &mut Ctx, project: &ShownProject, run: Option<RunId>) -> u64 
 }
 
 /// What a view of `run` follows: the project's runs' changes of state (`ProjectFeed::states`), and while `live` (the
-/// run goes on) the run's own changes, its transcript's lines too ([`of_run`]); never the lines of another run. It
-/// takes the place of [`super::ProjectFeed::run_changes`] for a view of one run.
+/// run goes on) the run's own changes, its transcript's lines too ([`of_run`]); never the lines of another run, which
+/// only the project-wide `ProjectFeed::changes` counts.
 pub fn of_shown_run(ctx: &mut Ctx, project: &ShownProject, run: Option<RunId>, live: bool) -> u64 {
   let own = of_run(ctx, project, run.filter(|_| live));
   project.feed.states.get() + if live { own } else { 0 }

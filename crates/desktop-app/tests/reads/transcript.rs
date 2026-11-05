@@ -22,9 +22,19 @@ use orchester_store::ProjectDb;
 use super::Counted;
 
 /// `key`'s page on `view` of the `conversation` scenario, where KON-12's run runs and KON-1's was merged.
+///
+/// As the project opens, its waits follower (`project::waits`) keeps the scenario's waits in the Orchestrator chat,
+/// which moves the chat's count that a conversation's requests follow. It asks git first, so on a loaded machine it
+/// may end after the page settled: the page waits for it, so it never lands amid a count of the test.
 fn task_page(key: &str, view: TaskView, shown: &str) -> Counted {
   let mut counted = Counted::open("conversation");
   counted.show(ProjectPage::Task(key.parse().expect("a task key"), view), shown);
+  let services = counted.window.launch.services().expect("the session started");
+  let chats = services.runners.chats_of(&counted.root());
+  counted
+    .window
+    .until("the waits kept in the Orchestrator chat", |_| *chats.borrow() > 0);
+  counted.settle();
   counted
 }
 

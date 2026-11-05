@@ -209,13 +209,6 @@ impl ProjectFeed {
     self.answering.update(|sent| *sent += 1);
   }
 
-  /// The count of the project's run changes a view of runs follows: while one of its runs runs (`live`)
-  /// every change, its transcript's lines too; otherwise a run's change of state only, as nothing else of
-  /// the runs it shows changes. Reading it in a render re-renders it when that count moves.
-  pub fn run_changes(&self, live: bool) -> u64 {
-    if live { self.changes.get() } else { self.states.get() }
-  }
-
   /// Whether a runner serves the project at `repo_root` now. Reading it in a render re-renders it when
   /// that changes.
   pub fn runner_online(&self, repo_root: &Path) -> bool {

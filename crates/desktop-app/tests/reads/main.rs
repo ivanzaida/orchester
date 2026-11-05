@@ -35,9 +35,9 @@ use support::{Data, Window, reads::Reads};
 /// A read that starts later than this after the last one belongs to no change of the test.
 ///
 /// The harness cannot wait until no future of the window is pending: lurq's `Tree` does not say, and the window's
-/// streams never end. So `settle` waits until no read *started* for this long. On a loaded machine a read may still
-/// run after that; a test that needs a reading to have *ended* waits for what it shows (`read_rows`), and a test
-/// that counts no read can then pass with a late one uncounted, never fail for it.
+/// streams never end. So `settle` waits until every settled read the window started has ended (`Reads::running`)
+/// and no read *started* for this long: what a read that ended shows starts the next one within a pass. A read that
+/// is not settled writes no end; a test that needs one to have ended waits for what it shows (`read_rows`).
 const QUIET: Duration = Duration::from_millis(400);
 
 /// A window on `scenario`, seeded in its own data folder, its reads counted from the start.
@@ -77,19 +77,24 @@ impl Counted {
     self.settle();
   }
 
-  /// Delivers what the window's futures finish until no read started for a while; the reads counted so far,
-  /// by what they read, and counts again from none.
+  /// Delivers what the window's futures finish until no settled read runs and no read started or ended for a
+  /// while; the reads counted so far, by what they read, and counts again from none.
   fn settle(&mut self) -> BTreeMap<String, usize> {
     let deadline = Instant::now() + Duration::from_secs(15);
-    let mut last = (self.reads.total(), Instant::now());
-    while last.1.elapsed() < QUIET {
-      assert!(Instant::now() < deadline, "the window kept reading");
+    let reading = |reads: &Reads| (reads.total(), reads.running());
+    let mut last = (reading(&self.reads), Instant::now());
+    while last.1.elapsed() < QUIET || !last.0.1.is_empty() {
+      assert!(
+        Instant::now() < deadline,
+        "the window kept reading; still running: {:?}",
+        last.0.1
+      );
       self.window.tree.tick_futures();
       self.window.pass();
       thread::sleep(Duration::from_millis(5));
-      let total = self.reads.total();
-      if total != last.0 {
-        last = (total, Instant::now());
+      let now = reading(&self.reads);
+      if now != last.0 {
+        last = (now, Instant::now());
       }
     }
     self.reads.take()

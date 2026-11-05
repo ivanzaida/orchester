@@ -6,7 +6,11 @@
 //! Here at most one read runs per call position. When the deps change while it reads, it finishes, its result is
 //! published, and the latest deps are read once more: every change during a read makes one more read together.
 
-use std::{future::Future, time::Instant};
+use std::{
+  future::Future,
+  sync::atomic::{AtomicU64, Ordering},
+  time::Instant,
+};
 
 use lurq::{
   app::{
@@ -15,6 +19,52 @@ use lurq::{
   },
   core::SignalValue,
 };
+
+/// The `id` of the next read's trace lines.
+static NEXT_ID: AtomicU64 = AtomicU64::new(0);
+
+/// The trace lines of one read (see [`settled_read`]): `read` as it is made, `ended` as it ends or is dropped.
+struct Trace {
+  name: &'static str,
+  id: u64,
+  again: bool,
+  started: Instant,
+  /// Whether its `ended` line is still to be written.
+  open: bool,
+}
+
+impl Trace {
+  fn start(name: &'static str, again: bool) -> Self {
+    let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
+    tracing::trace!(target: crate::app_log::READ_LOG, read = name, id, again);
+    Self {
+      name,
+      id,
+      again,
+      started: Instant::now(),
+      open: true,
+    }
+  }
+
+  /// Writes the `ended` line of a read that ended, `ok` or failed.
+  fn end(mut self, ok: bool) {
+    self.open = false;
+    let took = self.started.elapsed();
+    let (name, id, again) = (self.name, self.id, self.again);
+    tracing::trace!(target: crate::app_log::READ_LOG, ended = name, id, ?took, again, ok);
+  }
+}
+
+impl Drop for Trace {
+  /// A read dropped before it ended still ends its pair of lines.
+  fn drop(&mut self) {
+    if self.open {
+      let took = self.started.elapsed();
+      let (name, id, again) = (self.name, self.id, self.again);
+      tracing::trace!(target: crate::app_log::READ_LOG, ended = name, id, ?took, again, dropped = true);
+    }
+  }
+}
 
 /// The result of a read, with the deps it read.
 #[derive(Clone, PartialEq)]
@@ -41,7 +91,9 @@ impl<D, E> DevtoolsInspectable for Failed<D, E> {}
 ///
 /// `name` names the read in two trace lines of [`crate::app_log::READ_LOG`] per read: `read` as it starts, on the
 /// render's thread as the other reads of the log are, with whether deps that moved after an earlier read made it
-/// (`again`); `ended` as it ends, with its duration (`took`), `again` and whether it succeeded.
+/// (`again`); `ended` as it ends, on whichever thread ran it, with its duration (`took`), `again` and whether it
+/// succeeded (`ok`), or `dropped` when it was dropped before it ended (its component went). Both carry the read's
+/// `id`, unique in the process, which pairs them.
 pub fn settled_read<D, T, E, F, Fut>(ctx: &mut Ctx, name: &'static str, deps: D, read: F) -> FutureState<T, E>
 where
   D: Clone + PartialEq + Send + Sync + 'static,
@@ -69,17 +121,12 @@ where
   Fut: Future<Output = Result<T, E>> + Send + 'static,
 {
   let action = ctx.future_action(move |(deps, again): (D, bool)| {
-    let traced = traced(&deps);
-    if traced {
-      tracing::trace!(target: crate::app_log::READ_LOG, read = name, again);
-    }
+    let trace = traced(&deps).then(|| Trace::start(name, again));
     let reading = read(deps.clone());
     async move {
-      let started = Instant::now();
       let result = reading.await;
-      let took = started.elapsed();
-      if traced {
-        tracing::trace!(target: crate::app_log::READ_LOG, ended = name, ?took, again, ok = result.is_ok());
+      if let Some(trace) = trace {
+        trace.end(result.is_ok());
       }
       result
         .map(|value| Done {
