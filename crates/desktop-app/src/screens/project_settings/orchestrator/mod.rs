@@ -64,10 +64,8 @@ impl Component for Orchestrator {
       .end(only_you)
       .rows(rows)
       .foot(&ctx.t("project_settings.orchestrator.foot"));
-    let watching = ctx.mount_keyed::<watching::Watching>(
-      "settings-orchestrator-watching",
-      self.sections.props(&props, WATCHING),
-    );
+    let watching =
+      ctx.mount_keyed::<watching::Watching>("settings-orchestrator-watching", self.sections.props(&props, WATCHING));
     let computer = ctx.mount_keyed::<computer::ThisComputer>("settings-orchestrator-computer", props);
     page::scroll(
       Column::new()

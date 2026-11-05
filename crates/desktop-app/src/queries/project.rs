@@ -3,9 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
-use orchester_core::{
-  id::SecretId, memory::MemorySettings, orchestrator::WatchSettings, resource::CommandEnvironment,
-};
+use orchester_core::{id::SecretId, memory::MemorySettings, orchestrator::WatchSettings, resource::CommandEnvironment};
 use orchester_store::StoreError;
 use orchester_workspace::{
   background,

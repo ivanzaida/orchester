@@ -114,24 +114,7 @@ impl Component for FieldBox {
       })),
       Lines::Many | Lines::Compact => match &props.foot {
         None => dress(Row::new().id(format!("{}-box", props.id)).align_items(Alignment::Start)).child(input),
-        // The foot under the lines, inside the box, at the lines' sides.
-        Some(foot) => dress(Row::new().id(format!("{}-box", props.id))).child(
-          Column::new()
-            .width(Dimension::Pct(100.0))
-            .child(input)
-            .child(
-              Text::new(foot)
-                .id(format!("{}-foot", props.id))
-                .variant(TypographyStyle::Caption)
-                .width(Dimension::Pct(100.0))
-                .padding(
-                  Padding::new()
-                    .left(ExtraSpacing::Loose.role())
-                    .right(ExtraSpacing::Loose.role())
-                    .bottom(ExtraSpacing::TextArea.role()),
-                ),
-            ),
-        ),
+        Some(foot) => dress(Row::new().id(format!("{}-box", props.id))).child(with_foot(&props.id, input, foot)),
       },
     };
     let Some(error) = &props.error else {
@@ -231,6 +214,23 @@ impl FieldBox {
         )),
     }
   }
+}
+
+/// The lines `input` of the field `id` with the line `foot` under them, inside the box, at the lines' sides; the
+/// foot's element id is `<id>-foot`.
+fn with_foot(id: &str, input: Element, foot: &str) -> Column {
+  Column::new().width(Dimension::Pct(100.0)).child(input).child(
+    Text::new(foot)
+      .id(format!("{id}-foot"))
+      .variant(TypographyStyle::Caption)
+      .width(Dimension::Pct(100.0))
+      .padding(
+        Padding::new()
+          .left(ExtraSpacing::Loose.role())
+          .right(ExtraSpacing::Loose.role())
+          .bottom(ExtraSpacing::TextArea.role()),
+      ),
+  )
 }
 
 /// The unit after the value of the field `props`, as its unit look has it read; its text's element id is `<id>-unit`.

@@ -159,8 +159,16 @@ impl Component for Watching {
       .rows(rows)
       .foot(&foot);
     let problems = [
-      (read.error.as_ref(), "unreadable", "project_settings.orchestrator.unreadable"),
-      (state.error.as_ref(), "not-saved", "project_settings.orchestrator.notSaved"),
+      (
+        read.error.as_ref(),
+        "unreadable",
+        "project_settings.orchestrator.unreadable",
+      ),
+      (
+        state.error.as_ref(),
+        "not-saved",
+        "project_settings.orchestrator.notSaved",
+      ),
     ];
     for (reason, part, key) in problems {
       if let Some(reason) = reason {
