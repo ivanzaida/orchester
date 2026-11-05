@@ -11,7 +11,7 @@ use orchester_api::{
 };
 use orchester_app::services::Services;
 use orchester_core::{
-  id::{ClaimId, ModuleId, OperationId, ServerId, TaskId},
+  id::{ClaimId, ModuleId, OperationId, ProjectId, ServerId, TaskId},
   store::RunStore,
   time::Timestamp,
 };
@@ -111,8 +111,10 @@ pub fn after_join(
   let session = runtime.block_on(services.servers.team_session(id, project))?;
   let dispatcher = Dispatcher::new(root.to_owned(), services.servers.clone(), Some(session));
   let take = |subject| claim_here(&dispatcher, runtime, subject);
+  let teams = |numbers: &[u32]| as_team(root, (id, project), ids, numbers);
   match state {
     State::MemberRunning | State::ModuleOutage | State::TeamRunning => {
+      teams(&[12])?;
       let claim = take(task_subject(ids, 12)?)?;
       if state == State::TeamRunning
         && let Some(task) = local(ids, 12)?
@@ -121,6 +123,8 @@ pub fn after_join(
       }
     }
     State::Claims => {
+      teams(&HELD_HERE)?;
+      teams(&FENCED.map(|(number, _)| number))?;
       for number in HELD_HERE {
         take(task_subject(ids, number)?)?;
       }
@@ -160,6 +164,30 @@ fn claim_here(dispatcher: &Dispatcher, runtime: &Handle, subject: Subject) -> Re
 /// The id here of the task numbered `number`, when this computer has it.
 fn local(ids: &HashMap<u32, String>, number: u32) -> Result<Option<TaskId>, Box<dyn Error>> {
   Ok(ids.get(&number).map(|id| id.parse()).transpose()?)
+}
+
+/// Records the tasks numbered `numbers` this computer has as tasks of the team's `project` on `server`, as the first
+/// sync records the tasks the server serves by their ids here, before anything acts on them: the dispatcher refuses a
+/// team action on a task this computer owns, and the join's sync may not have run yet.
+fn as_team(
+  root: &Path,
+  (server, project): (ServerId, ProjectId),
+  ids: &HashMap<u32, String>,
+  numbers: &[u32],
+) -> Result<(), Box<dyn Error>> {
+  let connection = rusqlite::Connection::open(root.join(".orchester").join("orchester.db"))?;
+  for &number in numbers {
+    let Some(task) = local(ids, number)? else {
+      continue;
+    };
+    connection.execute(
+      "UPDATE task_identities SET owner = 'team', server_id = ?2, team_project_id = ?3, team_task_id = id, \
+       recorded_revision = (SELECT revision FROM tasks WHERE tasks.id = task_identities.id) \
+       WHERE id = ?1 AND owner = 'local'",
+      rusqlite::params![task.to_string(), server.to_string(), project.to_string()],
+    )?;
+  }
+  Ok(())
 }
 
 /// The task numbered `number` as the server names it: by its id here when this computer has it, else by the id the
