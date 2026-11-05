@@ -1,9 +1,11 @@
 //! What became of the work of a task's latest run that passed every step and that Orchester did not merge
 //! (`orchester_core::integration::Branches`): a run that committed nothing has nothing to merge, and one whose
 //! commits its base branch holds was merged by a person without Orchester, so it reads as merged into it. The
-//! task list's rows and the task's page ask git the same way, once per reading. What git cannot see waits to
-//! be merged until the task is Done: a squash-merged or rebased pull request, a base branch not pulled, a run
-//! branch deleted or force-pushed.
+//! task list's rows and the task's page ask git the same way, once per reading, and only of runs whose branches
+//! moved since git last told of them ([`known`]). What git cannot see waits to be merged until the task is Done:
+//! a squash-merged or rebased pull request, a base branch not pulled, a run branch deleted or force-pushed.
+
+mod known;
 
 use std::{
   collections::HashSet,
@@ -12,6 +14,7 @@ use std::{
 };
 
 use orchester_core::{
+  command::CommandRunner,
   id::{RunId, TaskId},
   integration::{Branches, Delivered, GitError, RunWork},
   run::{BranchName, Run, TaskPhase},
@@ -125,11 +128,14 @@ impl Unmerged {
   }
 }
 
-/// What became of each of `works`, in their order: git lists the branches once for all of them. What git cannot
-/// tell waits to be merged, which a merge in Orchester settles.
+/// What became of each of `works`, in their order: git lists the branches once for all of them, and is asked more
+/// only of a run whose branch or base branch moved since this session last asked, or that it never asked of
+/// ([`known`]). No git runs when git found every one of them merged already. What git cannot tell waits to be
+/// merged, which a merge in Orchester settles.
 pub(crate) fn deliveries(programs: &Programs, repo_root: &Path, works: &[RunWork]) -> Vec<Delivery> {
-  if works.is_empty() {
-    return Vec::new();
+  let merged: Vec<Option<Delivery>> = works.iter().map(|work| known::merged(repo_root, work)).collect();
+  if merged.iter().all(Option::is_some) {
+    return merged.into_iter().flatten().collect();
   }
   let program = Path::new(GIT);
   let runner = programs.runner();
@@ -137,27 +143,48 @@ pub(crate) fn deliveries(programs: &Programs, repo_root: &Path, works: &[RunWork
     Ok(branches) => branches,
     Err(error) => {
       once(repo_root, None, &error);
-      return vec![Delivery::Waiting; works.len()];
+      return merged.into_iter().map(Option::unwrap_or_default).collect();
     }
   };
   works
     .iter()
-    .map(|work| match branches.delivered(work) {
-      Ok(Delivered::Waiting) => Delivery::Waiting,
-      Ok(Delivered::NothingToMerge) => Delivery::NothingToMerge,
-      Ok(Delivered::Merged) => {
-        let into = work
-          .into
-          .as_ref()
-          .expect("only a run with a base branch reads as merged into it");
-        Delivery::MergedOutside(into.as_str().into())
-      }
-      Err(error) => {
-        once(repo_root, work.into.as_ref(), &error);
-        Delivery::Waiting
-      }
-    })
+    .zip(merged)
+    .map(|(work, merged)| merged.unwrap_or_else(|| delivered(&mut branches, repo_root, work)))
     .collect()
+}
+
+/// What became of `work`, as git told it last while its branches stood where they stand in `branches`, or as git
+/// tells it now.
+fn delivered<R: CommandRunner>(branches: &mut Branches<'_, R>, repo_root: &Path, work: &RunWork) -> Delivery {
+  let tips = known::Tips {
+    branch: branches.tip(&work.branch).map(str::to_owned),
+    into: work
+      .into
+      .as_ref()
+      .and_then(|into| branches.tip(into))
+      .map(str::to_owned),
+  };
+  if let Some(told) = known::told(repo_root, work, &tips) {
+    return told;
+  }
+  let delivery = match branches.delivered(work) {
+    Ok(Delivered::Waiting) => Delivery::Waiting,
+    Ok(Delivered::NothingToMerge) => Delivery::NothingToMerge,
+    Ok(Delivered::Merged) => {
+      let into = work
+        .into
+        .as_ref()
+        .expect("only a run with a base branch reads as merged into it");
+      Delivery::MergedOutside(into.as_str().into())
+    }
+    Err(error) => {
+      // Not kept: git is asked again next time, and says it once (`once`).
+      once(repo_root, work.into.as_ref(), &error);
+      return Delivery::Waiting;
+    }
+  };
+  known::keep(repo_root, work, tips, delivery.clone());
+  delivery
 }
 
 /// What git could not tell, already logged in this session, by checkout and base branch: without git, every
