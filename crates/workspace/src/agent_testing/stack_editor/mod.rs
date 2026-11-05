@@ -198,8 +198,8 @@ pub fn save_stack_in(
   Ok(Saved { id, revision })
 }
 
-/// Publishes the draft of stack `id` as its next version while it is still `expected`; refused while a service it
-/// starts is not published or the needs form a cycle.
+/// Publishes the draft of stack `id` as its next version while it is still `expected`; refused when the draft changed
+/// since.
 pub fn publish_stack_in(root: &Path, id: ResourceId, expected: &Stack) -> Result<VersionNumber, Message> {
   let mut db = ProjectDb::open(root).map_err(|error| store_error(&error))?;
   db.publish_draft_matching(id, expected, Timestamp::now())

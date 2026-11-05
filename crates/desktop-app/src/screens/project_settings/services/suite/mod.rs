@@ -104,6 +104,11 @@ type SaveAsk = (PathBuf, (Option<ResourceId>, String), TestSuite, Option<String>
 type Save = FutureAction<SaveAsk, Read, Message>;
 type Publish = FutureAction<(PathBuf, ResourceId, TestSuite), Read, Message>;
 
+/// The suite a save under way sends, which is stored once it lands.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct Sending(Option<TestSuite>);
+
+impl DevtoolsInspectable for Sending {}
 /// What the fields make of themselves against what is stored, for the parts of the page.
 struct View {
   stored: SuiteRead,
@@ -145,6 +150,7 @@ struct SuiteEditor {
   retry: Signal<u64>,
   save: Save,
   publish: Publish,
+  sending: Signal<Sending>,
   /// A field was left or a choice made while a save was under way: the page saves again once it lands.
   again: Signal<bool>,
   /// An MCP client's input asked for what only a person decides here; nothing was saved or published.
@@ -177,6 +183,7 @@ impl Component for SuiteEditor {
         })
         .await?
       }),
+      sending: ctx.signal(Sending(None)),
       again: ctx.signal(false),
       refused: ctx.signal(false),
       deleting: ctx.signal(false),
@@ -363,18 +370,23 @@ impl SuiteEditor {
   }
 
   /// Saves the fields as they are now. What an MCP client changed of what the suite runs, while only a person decides
-  /// that, is put back first to what is stored, whoever's input saves; a save asked for while one is under way follows
-  /// it.
+  /// that, is put back first to what is stored (or being stored), whoever's input saves; a save asked for while one is
+  /// under way follows it.
   fn save_now(&self, root: &std::path::Path) {
     let Some(Read(stored)) = self.stored.get_untracked() else {
       return;
     };
-    let put_back = self.fields.put_back(&shown(&stored));
+    let pending = self.save.state().get_untracked().is_pending();
+    let to = match self.sending.get_untracked().0.filter(|_| pending) {
+      Some(sending) => SuiteForm::of(&sending, &stored.stack_names()),
+      None => shown(&stored),
+    };
+    let put_back = self.fields.put_back(&to);
     if put_back {
       tracing::warn!("synthetic input changed what a test suite runs; put back");
       self.refused.set(true);
     }
-    if self.save.state().get_untracked().is_pending() {
+    if pending {
       self.again.set(true);
       return;
     }
@@ -395,6 +407,7 @@ impl SuiteEditor {
     }
     let id = stored.entry.as_ref().map(|entry| entry.id);
     let name = self.fields.name.get_untracked();
+    self.sending.set(Sending(Some(suite.clone())));
     self.save.run((root.to_path_buf(), (id, name), suite, stored.revision));
   }
 

@@ -291,3 +291,70 @@ fn suite_editor_puts_back_what_an_mcp_client_typed_into_the_program() {
   }
   assert_eq!(settings.text("settings-suite-state"), "Draft · not published yet");
 }
+
+/// A person's program left while its save is under way is kept when an MCP client's arguments are put back during that
+/// save: they are put back to the suite being saved, not to what was stored before it.
+#[test]
+fn suite_editor_keeps_a_persons_change_when_an_mcp_clients_is_put_back_during_its_save() {
+  let mut settings = open_suite();
+  type_and_leave(
+    &mut settings,
+    ("settings-suite-program", "pnpx"),
+    "settings-suite-arguments",
+  );
+  assert_eq!(
+    settings.text("project-settings-save-status"),
+    "Saving…",
+    "the person's save is under way"
+  );
+  with_synthetic_input(|| {
+    type_and_leave(
+      &mut settings,
+      ("settings-suite-arguments", "other\nargs"),
+      "settings-suite-folder",
+    );
+  });
+  assert_eq!(
+    settings.value("settings-suite-program"),
+    "pnpx",
+    "the person's program stays"
+  );
+  assert_eq!(
+    settings.value("settings-suite-arguments"),
+    "playwright\ntest\n--reporter=json",
+    "the client's arguments are put back"
+  );
+  settings.until("the refusal", |s| s.exists("settings-suite-person-only"));
+  settings.until("the person's program stored", |s| {
+    stored(s, "web-e2e").is_some_and(|suite| suite.command().program().as_str() == "pnpx")
+  });
+  settings.saved();
+  let suite = stored(&settings, "web-e2e").expect("web-e2e");
+  assert_eq!(suite.command().program().as_str(), "pnpx", "the save after it keeps it");
+  assert_eq!(
+    arguments(&suite),
+    ["playwright", "test", "--grep={{filter}}", "--reporter=json"]
+  );
+  assert_eq!(settings.value("settings-suite-program"), "pnpx");
+}
+
+/// An MCP client cannot make a new suite while *Let automation change agent permissions* is off.
+#[test]
+fn new_suite_is_not_made_by_an_mcp_client() {
+  let mut settings = Settings::new(false);
+  seed(&settings);
+  settings.tab("services", "settings-suites-new");
+  settings.click("settings-suites-new");
+  settings.until("New suite's page", |s| s.exists("settings-suite-name"));
+  with_synthetic_input(|| {
+    settings.set("settings-suite-name", "lint");
+    type_and_leave(
+      &mut settings,
+      ("settings-suite-program", "cargo"),
+      "settings-suite-arguments",
+    );
+  });
+  settings.until("the refusal", |s| s.exists("settings-suite-person-only"));
+  assert!(stored(&settings, "lint").is_none(), "nothing was made");
+  assert!(settings.exists("settings-suite-name"), "still the New suite page");
+}
