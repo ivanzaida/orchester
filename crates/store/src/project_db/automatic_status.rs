@@ -4,7 +4,11 @@
 //! server still has that status and the person still holds the task. A status that was not sent says
 //! why on the task until the person dismisses it.
 
-use orchester_core::{id::TaskId, task::organization::WorkflowStatus, time::Timestamp};
+use orchester_core::{
+  id::{RunId, TaskId},
+  task::organization::WorkflowStatus,
+  time::Timestamp,
+};
 use rusqlite::{Connection, OptionalExtension, params};
 
 use super::ProjectDb;
@@ -139,6 +143,29 @@ impl ProjectDb {
       "DELETE FROM shared_automatic_status WHERE task_id = ?1 AND not_sent IS NOT NULL",
       [task.to_string()],
     )?;
+    Ok(())
+  }
+
+  /// Records the Done of the shared task of `run`, a run git found merged into its base branch, at `at`, as a merge
+  /// recorded here would ([`orchester_core::store::MergeStore::save_run_merge`]). Its claim's end reads the run merged
+  /// from git, which can be before Orchester's own merge writes its record, or without one for a merge made outside
+  /// Orchester; the Done must wait before the claim is completed, or it is no longer the person's to send (ORC-750).
+  /// Nothing is recorded for a run whose merge is recorded (it recorded the Done itself), a team run (whether it makes
+  /// its task Done is open, D4) or a run of a local task.
+  pub fn record_merged_done(&mut self, run: RunId, at: Timestamp) -> Result<(), StoreError> {
+    let transaction = self.connection.transaction()?;
+    if super::merges::merged(&transaction, run)? || super::run_inputs::is_team_run(&transaction, run)? {
+      return Ok(());
+    }
+    let task: Option<String> = transaction
+      .query_row("SELECT task_id FROM runs WHERE id = ?1", [run.to_string()], |row| row.get(0))
+      .optional()?;
+    let task: TaskId = parse("task id", &task.ok_or(StoreError::RunNotFound(run))?)?;
+    if !super::shared_tasks::is_shared(&transaction, task)? {
+      return Ok(());
+    }
+    super::organization::automatic(&transaction, task, WorkflowStatus::Done, at)?;
+    transaction.commit()?;
     Ok(())
   }
 }
