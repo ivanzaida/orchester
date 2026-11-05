@@ -63,7 +63,7 @@ impl StepServices {
   /// the invocation runs.
   pub(in crate::execution::step) fn start(&self, name: &ServiceName, approved: &[ServiceApproval]) -> ToolResult {
     let _one_at_a_time = self.state.starting.lock();
-    let started = self.services_of(Some(approved), |services| {
+    let started = self.services_of((Some(approved), &Origin::agent(None)), |services| {
       StartPlan::for_service(services, name).map_err(|error| format!("the service `{name}` cannot be started: {error}"))
     });
     if let Err(refusal) = started {
@@ -76,23 +76,24 @@ impl StepServices {
   }
 
   /// A person's Restart or Start in the Services tab: stops the service `name` when it runs, then starts it as
-  /// published with what it needs, the person's press approving it, and waits until it is ready. Blocks while an
-  /// earlier start of the invocation runs.
+  /// published with what it needs, the person's press approving it, and waits until it is ready. A start of the
+  /// agent's may be under way meanwhile, waiting for another service: the person's does not wait for it, only for an
+  /// earlier one of the person's. A service both bring up at once is kept once ([`StepServices::keep`]).
   pub(super) fn restart_for_person(&self, name: &ServiceName) -> Result<(), String> {
-    let _one_at_a_time = self.state.starting.lock();
+    let _one_at_a_time = self.state.restarting.lock();
     let stopped = self.stop(name);
     if stopped.is_error() {
       return Err(stopped.text().to_owned());
     }
-    let earlier = self.state.set_origin(Origin {
+    let person = Origin {
       stack: None,
       by: ServiceStarter::Person,
-    });
-    let started = self.services_of(None, |services| {
-      StartPlan::for_service(services, name).map_err(|error| format!("the service `{name}` cannot be started: {error}"))
-    });
-    self.state.set_origin(earlier);
-    started.map(|_| ())
+    };
+    self
+      .services_of((None, &person), |services| {
+        StartPlan::for_service(services, name).map_err(|error| format!("the service `{name}` cannot be started: {error}"))
+      })
+      .map(|_| ())
   }
 
   /// Starts every service of the published stack `name` with what they need, in order, and answers each one's URL
@@ -104,14 +105,9 @@ impl StepServices {
       Ok(stack) => stack,
       Err(refusal) => return ToolResult::unavailable(&refusal),
     };
-    let earlier = self.state.set_origin(Origin {
-      stack: Some(name.clone()),
-      by: ServiceStarter::Agent,
-    });
-    let started = self.services_of(Some(approved), |services| {
+    let started = self.services_of((Some(approved), &Origin::agent(Some(name))), |services| {
       StartPlan::for_stack(services, &stack).map_err(|error| error.to_string())
     });
-    self.state.set_origin(earlier);
     let plan = match started {
       Ok(plan) => plan,
       Err(refusal) => return ToolResult::unavailable(&format!("the stack `{name}` was not started fully: {refusal}")),
@@ -151,14 +147,14 @@ impl StepServices {
       // A suite's run asks at every call, naming the suite: what it needs starts as published.
       started = match stack {
         Some(stack) => self
-          .services_of(None, |services| {
+          .services_of((None, &Origin::agent(Some(stack.name()))), |services| {
             StartPlan::for_stack(services, stack).map_err(|error| error.to_string())
           })
           .map_err(|why| format!("the stack `{need}` the suite needs was not started fully: {why}")),
         None => ServiceName::new(need)
           .map_err(|error| error.to_string())
           .and_then(|name| {
-            self.services_of(None, |services| {
+            self.services_of((None, &Origin::agent(None)), |services| {
               StartPlan::for_service(services, &name).map_err(|error| {
                 format!("the suite needs `{need}`, which cannot be started as a service or a stack: {error}")
               })
@@ -197,11 +193,12 @@ impl StepServices {
     }
   }
 
-  /// Reads the published services, orders them with `plan` and starts that plan; the plan once it is up. With
-  /// `approved`, a service whose definition it does not name is refused before anything starts.
+  /// Reads the published services, orders them with `plan` and starts that plan, each service noted with `origin`; the
+  /// plan once it is up. With `approved`, a service whose definition it does not name is refused before anything
+  /// starts.
   fn services_of(
     &self,
-    approved: Option<&[ServiceApproval]>,
+    (approved, origin): (Option<&[ServiceApproval]>, &Origin),
     plan: impl FnOnce(&[Service]) -> Result<StartPlan, String>,
   ) -> Result<StartPlan, String> {
     self.may_start()?;
@@ -227,12 +224,13 @@ impl StepServices {
       }
       steps.push(definitions);
     }
-    self.bring_up(&steps)?;
+    self.bring_up(&steps, origin)?;
     Ok(plan)
   }
 
-  /// Starts the services of `steps` the invocation does not run yet, step by step, those of one step together.
-  fn bring_up(&self, steps: &[Vec<&Service>]) -> Result<(), String> {
+  /// Starts the services of `steps` the invocation does not run yet, step by step, those of one step together, each
+  /// noted with `origin`.
+  fn bring_up(&self, steps: &[Vec<&Service>], origin: &Origin) -> Result<(), String> {
     for (at, step) in steps.iter().enumerate() {
       self.may_start()?;
       let (wired, missing) = {
@@ -255,7 +253,7 @@ impl StepServices {
             let wired = &wired;
             (
               service.name(),
-              scope.spawn(move || self.launch(service, wired, &|| self.state.ended())),
+              scope.spawn(move || self.launch(service, (wired, origin), &|| self.state.ended())),
             )
           })
           .collect();

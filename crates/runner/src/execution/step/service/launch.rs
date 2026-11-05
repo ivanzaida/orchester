@@ -5,14 +5,22 @@
 //! ([`super::seed`]). A start that fails after the program started stops the whole tree first, and its error says so
 //! with the last lines of its output; its container is removed after.
 
-use std::{ffi::OsString, path::Path, sync::Arc, time::Instant};
+use std::{
+  ffi::OsString,
+  path::Path,
+  sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+  },
+  time::Instant,
+};
 
 use orchester_core::{
   command::SecretVariable,
   connection::invocation::Platform,
   resource::{ResourceBody, VariableName},
   secret::{SecretName, SecretValue, SecretVault},
-  service::{RunValues, Service, ServiceLog, ServicePhase, Stack},
+  service::{RunValues, Service, ServiceLog, ServiceName, ServicePhase, Stack},
   store::{ResourceStore, SecretStore},
   time::Timestamp,
 };
@@ -21,7 +29,7 @@ use orchester_store::{ProjectDb, StoreError};
 use parking_lot::Mutex;
 
 use super::{
-  Running, StepServices, Watch,
+  Origin, Running, StepServices, Watch,
   data::{Container, Data},
   order::Address,
   readiness,
@@ -54,12 +62,12 @@ fn latest<T: ResourceBody + Clone>(root: &Path) -> Result<Vec<T>, StoreError> {
 }
 
 impl StepServices {
-  /// Starts `service` with the addresses of the services already running, `wired`, waits until it is ready and runs
-  /// its seed, giving up when `ended` says the invocation ended.
+  /// Starts `service` with the addresses of the services already running, `wired`, as `origin` asked, waits until it
+  /// is ready and runs its seed, giving up when `ended` says the invocation ended.
   pub(super) fn launch(
     &self,
     service: &Service,
-    wired: &[Address],
+    (wired, origin): (&[Address], &Origin),
     ended: &dyn Fn() -> bool,
   ) -> Result<Running, String> {
     let name = service.name();
@@ -84,7 +92,7 @@ impl StepServices {
     let (mut tree, mut secrets, container) = self.start_program(service, &values, data, port)?;
     secrets.extend(headers.iter().map(|(_, secret)| secret.clone()));
     let log = Arc::new(Mutex::new(ServiceLog::new(secrets.clone())));
-    let origin = self.state.origin.lock().clone();
+    let given_up = Arc::new(AtomicBool::new(false));
     self.state.watched.lock().insert(
       name.clone(),
       Watch {
@@ -94,15 +102,17 @@ impl StepServices {
         started: Instant::now(),
         started_at: Timestamp::now(),
         ended_at: None,
-        origin,
+        origin: origin.clone(),
         phase: ServicePhase::Starting,
         exit: None,
         stopped_for: None,
+        given_up: Arc::clone(&given_up),
       },
     );
-    let ready = readiness::wait(&mut tree, (service, &values), port, (&log, ended)).and_then(|output| {
+    let ended = || ended() || given_up.load(Ordering::Acquire);
+    let ready = readiness::wait(&mut tree, (service, &values), port, (&log, &ended)).and_then(|output| {
       self
-        .seed(service, &mut values, (&headers, &secrets), (&log, ended))
+        .seed(service, &mut values, (&headers, &secrets), (&log, &ended))
         .map(|captured| (output, captured))
     });
     match ready {
@@ -116,21 +126,45 @@ impl StepServices {
         output,
       }),
       Err(why) => {
-        // A program that cannot be watched any more is stopped all the same; its status then says stopped.
-        let exit = tree.exited().unwrap_or(None).map(|status| status.code());
-        self.state.note(name, ServicePhase::Stopped, exit);
-        let stopped = match tree.stop() {
-          Ok(()) => "it was stopped with everything it started".to_owned(),
-          Err(error) => format!("stopping it with everything it started failed: {error}"),
+        let why = if given_up.load(Ordering::Acquire) {
+          "was stopped before it was ready".to_owned()
+        } else {
+          why
         };
-        // Its container goes once the tree is stopped.
-        drop(container);
-        let output = log.lock().excerpt(FAILED_START_LINES, 0);
-        Err(format!(
-          "the service `{name}` {why}; {stopped}. Its last output: {output}"
-        ))
+        Err(self.failed_start(name, (tree, container), (&log, &given_up), &why))
       }
     }
+  }
+
+  /// Stops `tree`, then removes `container`, of the service `name` whose start, the one `given_up` belongs to, failed
+  /// as `why` says; the start's error, with the last lines of its `log`.
+  fn failed_start(
+    &self,
+    name: &ServiceName,
+    (mut tree, container): (ProcessTree, Option<Container>),
+    (log, given_up): (&Mutex<ServiceLog>, &Arc<AtomicBool>),
+    why: &str,
+  ) -> String {
+    // A program that cannot be watched any more is stopped all the same; its status then says stopped. A later start
+    // of the service, which may be under way already, keeps its own.
+    let exit = tree.exited().unwrap_or(None).map(|status| status.code());
+    let own = self
+      .state
+      .watched
+      .lock()
+      .get(name)
+      .is_some_and(|watch| Arc::ptr_eq(&watch.given_up, given_up));
+    if own {
+      self.state.note(name, ServicePhase::Stopped, exit);
+    }
+    let stopped = match tree.stop() {
+      Ok(()) => "it was stopped with everything it started".to_owned(),
+      Err(error) => format!("stopping it with everything it started failed: {error}"),
+    };
+    // Its container goes once the tree is stopped.
+    drop(container);
+    let output = log.lock().excerpt(FAILED_START_LINES, 0);
+    format!("the service `{name}` {why}; {stopped}. Its last output: {output}")
   }
 
   /// Starts `service`'s program with `values` on `port`, as its per-run data `data` says: its own program, or its

@@ -22,7 +22,7 @@ use orchester_runner::execution::Scheduler;
 
 use self::support::{
   PATIENCE, StepSpec,
-  qa::approve,
+  qa::{approve, calls},
   scheduler_with,
   services::{accepts, answered, closed, publish, report_file, service, service_project, started_port},
   wait_for,
@@ -215,4 +215,76 @@ async fn run_services_show_a_crash_and_what_it_stopped() {
   fs::remove_file(&hold).expect("release");
   let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
   assert_eq!(run.status(), &RunStatus::Succeeded);
+}
+
+/// A person's Restart goes on while the agent's start of another service still waits for it to be ready.
+#[tokio::test(flavor = "multi_thread")]
+async fn run_services_restart_does_not_wait_for_the_agents_start_under_way() {
+  let project = service_project(
+    implement("Start the service api. Then start the service slow. Hold the services."),
+    Vec::new(),
+  );
+  let root = project.repo.path();
+  let api = service("api", &["listen".to_owned(), "{{port}}".to_owned()], ReadyCheck::PortOpen, 20);
+  let never = ["say", "warming up", "sleep", "600"].map(str::to_owned);
+  let slow = service("slow", &never, ReadyCheck::PortOpen, 20);
+  publish(root, &[api, slow]);
+  let hold = hold(root);
+  let (scheduler, mut events) = scheduler_with(root, project.vault.clone());
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("run");
+  approve(&scheduler, root, &mut events, id).await;
+  let first = started_port(&answered(root, &mut events, id, "start_service").await);
+  approve(&scheduler, root, &mut events, id).await;
+  listed_until(&scheduler, id, "slow starting", |services| {
+    services
+      .iter()
+      .any(|service| service.name == "slow" && service.state == RunServiceState::Starting)
+  })
+  .await;
+
+  let restart = ServiceCommand::Restart {
+    run: id,
+    service: "api".to_owned(),
+  };
+  let restarted = tokio::time::timeout(Duration::from_secs(10), scheduler.services(restart))
+    .await
+    .expect("the restart does not wait for slow's start");
+  assert_eq!(restarted, Ok(ServiceReply::Done));
+  let services = listed(&scheduler, id).await;
+  let api = services
+    .iter()
+    .find(|service| service.name == "api")
+    .expect("api is listed");
+  assert_eq!(
+    (api.state, api.started_by),
+    (RunServiceState::Ready, ServiceStarter::Person)
+  );
+  assert_ne!(api.port, first, "the restarted service listens on a port of its own");
+  assert!(accepts(api.port));
+
+  // Stop on a service that still starts gives its start up: the agent's call answers, and the step goes on.
+  let stop = ServiceCommand::Stop {
+    run: id,
+    service: "slow".to_owned(),
+  };
+  assert_eq!(scheduler.services(stop).await, Ok(ServiceReply::Done));
+  listed_until(&scheduler, id, "slow stopped", |services| {
+    services
+      .iter()
+      .any(|service| service.name == "slow" && service.state == RunServiceState::Stopped)
+  })
+  .await;
+  fs::remove_file(&hold).expect("release");
+  let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  let answers = calls(root, id);
+  assert!(
+    answers
+      .iter()
+      .any(|call| call.starts_with("start_service error: the service `slow` was stopped before it was ready")),
+    "{answers:?}"
+  );
 }
