@@ -4,13 +4,16 @@
 //! its needs are ready. A service the invocation runs already is reused, not started again. Each start's
 //! `{{services.<name>.url|port}}` are filled from the services the invocation runs by then. When a service fails,
 //! the services of its step that became ready are kept, nothing after it starts, and the error names it.
+//!
+//! A start's request names every service it runs ([`StepServices::service_approvals`]), and the start runs only those
+//! definitions: a service published again since, with another fingerprint, is refused until it is asked about.
 
 use std::thread;
 
 use orchester_core::{
   orchester_tools::ToolResult,
   resource::Slug,
-  service::{RunData, Seed, Service, ServiceName, StackName, StartPlan},
+  service::{RunData, Seed, Service, ServiceApproval, ServiceName, Stack, StackName, StartPlan},
 };
 use serde_json::{Map, json};
 
@@ -22,12 +25,44 @@ use super::{
 /// Where a service the invocation runs listens: its name, port and URL.
 pub(super) type Address = (ServiceName, u16, String);
 
+/// What a start brings up: a service with what it needs, or a stack's services with theirs.
+#[derive(Clone, Copy)]
+pub(in crate::execution::step) enum Started<'a> {
+  Service(&'a ServiceName),
+  Stack(&'a StackName),
+}
+
 impl StepServices {
+  /// The services a start of `started` runs, in the order it starts them, as its request names them; why it cannot
+  /// start, when the project's services do not let it.
+  pub(in crate::execution::step) fn service_approvals(
+    &self,
+    started: Started<'_>,
+  ) -> Result<Vec<ServiceApproval>, String> {
+    let services = published(&self.root).map_err(|error| format!("the project's services cannot be read: {error}"))?;
+    let plan = match started {
+      Started::Service(name) => StartPlan::for_service(&services, name)
+        .map_err(|error| format!("the service `{name}` cannot be started: {error}"))?,
+      Started::Stack(name) => StartPlan::for_stack(&services, &self.stack(name)?)
+        .map_err(|error| format!("the stack `{name}` cannot be started: {error}"))?,
+    };
+    Ok(
+      plan
+        .steps()
+        .iter()
+        .flatten()
+        .filter_map(|name| services.iter().find(|service| service.name() == name))
+        .map(ServiceApproval::of)
+        .collect(),
+    )
+  }
+
   /// Starts the published service `name` with what it needs, in order, and waits until it is ready; a service the
-  /// invocation runs already is reused. Blocks while an earlier start of the invocation runs.
-  pub(in crate::execution::step) fn start(&self, name: &ServiceName) -> ToolResult {
+  /// invocation runs already is reused. Runs only the definitions `approved` names. Blocks while an earlier start of
+  /// the invocation runs.
+  pub(in crate::execution::step) fn start(&self, name: &ServiceName, approved: &[ServiceApproval]) -> ToolResult {
     let _one_at_a_time = self.state.starting.lock();
-    let started = self.services_of(|services| {
+    let started = self.services_of(Some(approved), |services| {
       StartPlan::for_service(services, name).map_err(|error| format!("the service `{name}` cannot be started: {error}"))
     });
     if let Err(refusal) = started {
@@ -40,18 +75,17 @@ impl StepServices {
   }
 
   /// Starts every service of the published stack `name` with what they need, in order, and answers each one's URL
-  /// and port; a service the invocation runs already is reused. Blocks while an earlier start of the invocation runs.
-  pub(in crate::execution::step) fn start_stack(&self, name: &StackName) -> ToolResult {
+  /// and port; a service the invocation runs already is reused. Runs only the definitions `approved` names. Blocks
+  /// while an earlier start of the invocation runs.
+  pub(in crate::execution::step) fn start_stack(&self, name: &StackName, approved: &[ServiceApproval]) -> ToolResult {
     let _one_at_a_time = self.state.starting.lock();
-    let stacks = match published_stacks(&self.root) {
-      Ok(stacks) => stacks,
-      Err(error) => return ToolResult::unavailable(&format!("the project's stacks cannot be read: {error}")),
+    let stack = match self.stack(name) {
+      Ok(stack) => stack,
+      Err(refusal) => return ToolResult::unavailable(&refusal),
     };
-    let Some(stack) = stacks.into_iter().find(|stack| stack.name() == name) else {
-      return ToolResult::unavailable(&format!("the project publishes no stack named `{name}`"));
-    };
-    let started =
-      self.services_of(|services| StartPlan::for_stack(services, &stack).map_err(|error| error.to_string()));
+    let started = self.services_of(Some(approved), |services| {
+      StartPlan::for_stack(services, &stack).map_err(|error| error.to_string())
+    });
     let plan = match started {
       Ok(plan) => plan,
       Err(refusal) => return ToolResult::unavailable(&format!("the stack `{name}` was not started fully: {refusal}")),
@@ -66,6 +100,16 @@ impl StepServices {
     ToolResult::shown(json!({ "services": answered }).to_string())
   }
 
+  /// The published stack `name`.
+  fn stack(&self, name: &StackName) -> Result<Stack, String> {
+    let stacks =
+      published_stacks(&self.root).map_err(|error| format!("the project's stacks cannot be read: {error}"))?;
+    stacks
+      .into_iter()
+      .find(|stack| stack.name() == name)
+      .ok_or_else(|| format!("the project publishes no stack named `{name}`"))
+  }
+
   /// Starts what a test suite needs, `needs`, in order: each a published stack, whose services start as
   /// [`Self::start_stack`] starts them, or a published service with what it needs. The services it started, which
   /// the invocation did not run before, so [`Self::stop_started`] stops them after the suite; on an error it stops
@@ -78,14 +122,17 @@ impl StepServices {
     let mut started = Ok(());
     for need in needs.iter().map(Slug::as_str) {
       let stack = stacks.iter().find(|stack| stack.name().as_str() == need);
+      // A suite's run asks at every call, naming the suite: what it needs starts as published.
       started = match stack {
         Some(stack) => self
-          .services_of(|services| StartPlan::for_stack(services, stack).map_err(|error| error.to_string()))
+          .services_of(None, |services| {
+            StartPlan::for_stack(services, stack).map_err(|error| error.to_string())
+          })
           .map_err(|why| format!("the stack `{need}` the suite needs was not started fully: {why}")),
         None => ServiceName::new(need)
           .map_err(|error| error.to_string())
           .and_then(|name| {
-            self.services_of(|services| {
+            self.services_of(None, |services| {
               StartPlan::for_service(services, &name).map_err(|error| {
                 format!("the suite needs `{need}`, which cannot be started as a service or a stack: {error}")
               })
@@ -124,8 +171,13 @@ impl StepServices {
     }
   }
 
-  /// Reads the published services, orders them with `plan` and starts that plan; the plan once it is up.
-  fn services_of(&self, plan: impl FnOnce(&[Service]) -> Result<StartPlan, String>) -> Result<StartPlan, String> {
+  /// Reads the published services, orders them with `plan` and starts that plan; the plan once it is up. With
+  /// `approved`, a service whose definition it does not name is refused before anything starts.
+  fn services_of(
+    &self,
+    approved: Option<&[ServiceApproval]>,
+    plan: impl FnOnce(&[Service]) -> Result<StartPlan, String>,
+  ) -> Result<StartPlan, String> {
     self.may_start()?;
     let services = published(&self.root).map_err(|error| format!("the project's services cannot be read: {error}"))?;
     let plan = plan(&services)?;
@@ -137,6 +189,14 @@ impl StepServices {
           .iter()
           .find(|service| service.name() == name)
           .ok_or_else(|| format!("the project publishes no service named `{name}`"))?;
+        if let Some(approved) = approved
+          && !approved.contains(&ServiceApproval::of(service))
+        {
+          return Err(format!(
+            "the service `{name}` is not the definition this start's approval named: it was published again since; \
+             start it again to be asked about it"
+          ));
+        }
         startable(service)?;
         definitions.push(service);
       }

@@ -13,6 +13,7 @@ use crate::{
   permission::category::{ClassifiedCommand, CommandScope},
   resource::ApprovalMode,
   run::{CommandShell, NativeCommandAsk, PendingToolApproval},
+  service::{ServiceApproval, started_by},
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -41,6 +42,10 @@ pub enum ToolReach {
   /// A call of `start_qa_app`, which runs the worktree's QA script at git blob `blob` (`QaApproval`); empty when the
   /// request names none: no rule is made for it.
   Script { blob: String },
+  /// A call of `start_service` or `start_stack`, which runs `services`, as the request's target names them
+  /// ([`crate::service::start_target`]); empty when it names none: no rule of the project is made for it. Approve
+  /// similar keeps its rule to the tool.
+  Services { services: Vec<ServiceApproval> },
   /// A call of a browser tool that opens or acts on a page of `host` (`BrowserReach::Site`), as the request's target
   /// names it: Approve similar keeps its rule to the tool on that host. Empty for a page without a web host: no rule
   /// is made for it.
@@ -80,6 +85,9 @@ impl ApprovalSubject {
             .and_then(QaApproval::script_of)
             .unwrap_or_default()
             .to_owned(),
+        },
+        (Some(OrchesterTool::StartService | OrchesterTool::StartStack), target) => ToolReach::Services {
+          services: target.as_deref().and_then(started_by).unwrap_or_default(),
         },
         (None, host) if ours => browser_reach(&approval.action, host),
         _ => ToolReach::Any,

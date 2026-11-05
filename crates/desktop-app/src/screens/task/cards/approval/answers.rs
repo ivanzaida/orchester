@@ -450,16 +450,25 @@ const fn wider_name(given: Given) -> &'static str {
   }
 }
 
-/// What *Approve for every run of this project* covers, for a request it is offered ([`ProjectScope`]).
+/// What *Approve for every run of this project* covers, for a request it is offered ([`ProjectScope`]): the QA script,
+/// or each service a start runs by its name.
 fn project_covers(ctx: &Ctx, request: &PendingToolApproval) -> Option<Arc<str>> {
-  let scope = ProjectScope::of_request(request)?;
+  let scopes = ProjectScope::of_request(request);
+  let first = scopes.first()?;
+  if let Some(script) = first.short_script() {
+    return Some(ctx.t_args(
+      "cards.approval.projectCovers",
+      [("server", first.server()), ("tool", first.tool()), ("script", script)],
+    ));
+  }
+  let services: Vec<&str> = scopes
+    .iter()
+    .filter_map(ProjectScope::service)
+    .map(|service| service.name.as_str())
+    .collect();
   Some(ctx.t_args(
-    "cards.approval.projectCovers",
-    [
-      ("server", scope.server()),
-      ("tool", scope.tool()),
-      ("script", scope.short_script()),
-    ],
+    "cards.approval.projectCoversServices",
+    [("server", first.server()), ("services", services.join(", ").as_str())],
   ))
 }
 

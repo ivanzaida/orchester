@@ -2,12 +2,13 @@
 //! requests", `docs/design/approval-modes.md`): Orchester answers it itself by the run's approval mode. A rule of the
 //! run covers it in both modes (Approve similar, or a command Always allowed during the run), and so does a tool its
 //! MCP server lists to run without asking (always allowed): Autopilot's CLI hands even those to Orchester, Manual's
-//! did not know one listed since the agent started. Autopilot approves what lies in the run's roots within the step's
+//! did not know one listed since the agent started. So do the rules of the project (Approve for every run of this
+//! project: `start_qa_app`, and a service start whose every service has one), before auto mode looks at the request.
+//! Autopilot approves what lies in the run's roots within the step's
 //! own limits (`orchester_core::run::autopilot_step`), asks the reviewer about what it could not place, and brings the
 //! rest to the person. Manual approves what the profile's permissions allow (a command whose every part the step's
 //! permissions run on their own,
-//! `orchester_core::run::permitted`), then a rule of the project (Approve for every run of this project,
-//! `start_qa_app` only) and the run's own auto-approval; the rest goes to the reviewer. Otherwise a
+//! `orchester_core::run::permitted`), then the run's own auto-approval; the rest goes to the reviewer. Otherwise a
 //! person answers, and a wider answer first leaves what it promises: a rule, a profile version or a server setting, or
 //! the run's auto-approval. Each answer is recorded with who gave it and how by the mode
 //! (`orchester_core::run::RequestAnswer`), delivered to the one call that asked, and marked in the activity; Deny
@@ -41,11 +42,11 @@ use super::{
   worker::{Watch, Worker},
 };
 
-/// The rule that gives an answer: one of the run's, or one of the project's.
-#[derive(Clone, Copy, Debug)]
+/// The rule that gives an answer: one of the run's, or the project's, one for each service a start runs.
+#[derive(Clone, Debug)]
 pub(super) enum Answering {
   Run(ApprovalRuleId),
-  Project(ProjectRuleId),
+  Project(Vec<ProjectRuleId>),
 }
 
 /// An answer about to be given: who gives it, the rule that does, a command's category for its mark,
@@ -100,9 +101,9 @@ pub(super) enum Itself {
 }
 
 impl Worker {
-  /// Orchester's own handling of `approval` in Autopilot (`autopilot`) or Manual: a rule a person made in the run
-  /// and a tool its server lists to run without asking answer in both; then the mode's own rules answer, ask the
-  /// reviewer, or bring it to the person.
+  /// Orchester's own handling of `approval` in Autopilot (`autopilot`) or Manual: a rule a person made in the run,
+  /// a tool its server lists to run without asking and the project's rules answer in both, so a start they cover never
+  /// reaches the reviewer; then the mode's own rules answer, ask the reviewer, or bring it to the person.
   pub(super) fn answer_itself(
     &self,
     watch: &Watch,
@@ -129,10 +130,16 @@ impl Worker {
         ..Settled::by(DecidedBy::AlwaysAllowed, None)
       }));
     }
+    if let Some(rules) = answering_in_project(&watch.db.project_approval_rules()?, &subject) {
+      return Ok(Itself::Settled(Settled {
+        rule: Some(Answering::Project(rules.iter().map(|rule| rule.id).collect())),
+        ..Settled::by(DecidedBy::SimilarRule, category)
+      }));
+    }
     if autopilot {
       return Ok(self.autopilot(watch, &subject, category));
     }
-    self.manual(watch, approval, (&subject, category))
+    self.manual(watch, approval, &subject)
   }
 
   /// Autopilot's rule for `subject`: by what it touches compared with the run's roots, which cannot be placed when the
@@ -152,24 +159,18 @@ impl Worker {
     }
   }
 
-  /// Manual's rules for `approval` about `subject`: what the profile's permissions allow, a rule of the project (only
-  /// in Manual), the run's own auto-approval; else the reviewer.
+  /// Manual's rules for `approval` about `subject`: what the profile's permissions allow, the run's own
+  /// auto-approval; else the reviewer.
   fn manual(
     &self,
     watch: &Watch,
     approval: &PendingToolApproval,
-    (subject, category): (&ApprovalSubject, Option<CommandCategory>),
+    subject: &ApprovalSubject,
   ) -> Result<Itself, StoreError> {
     if let Some(launch) = &watch.invocation.permissions
       && let Some(category) = permitted(subject, launch.permissions())
     {
       return Ok(Itself::Settled(Settled::by(DecidedBy::Permissions, Some(category))));
-    }
-    if let Some(rule) = answering_in_project(&watch.db.project_approval_rules()?, subject) {
-      return Ok(Itself::Settled(Settled {
-        rule: Some(Answering::Project(rule.id)),
-        ..Settled::by(DecidedBy::SimilarRule, category)
-      }));
     }
     // Manual is not Autopilot: only the run's own *Approve everything in this run*, a person's answer, approves here.
     if auto_approves(watch.db.run_auto_approve(approval.run)?, false)
@@ -254,12 +255,13 @@ impl Worker {
         watch.db.add_approval_rule(approval.run, &scope, now)?;
       }
       ApprovalAnswer::SimilarProject => {
-        let Some(scope) = ProjectScope::of(&subject) else {
+        let scopes = ProjectScope::of(&subject);
+        if scopes.is_empty() {
           return Ok(Err(unavailable("Approve for every run of this project")));
-        };
+        }
         watch
           .db
-          .add_project_approval_rule(&scope, (approval.run, &approval.id), now)?;
+          .add_project_approval_rules(&scopes, (approval.run, &approval.id), now)?;
       }
       ApprovalAnswer::Always { prefix } => {
         if let Err(rejection) = self.always_allow(watch, approval, &subject, prefix.as_ref())? {
@@ -447,9 +449,13 @@ fn claim(watch: &mut Watch, approval: &PendingToolApproval, settled: &Settled) -
     return Ok(false);
   }
   watch.db.record_request_answer(run, &approval.id, &settled.answer)?;
-  match settled.rule {
-    Some(Answering::Run(rule)) => watch.db.rule_answered(run, rule, &approval.id)?,
-    Some(Answering::Project(rule)) => watch.db.project_rule_answered(rule)?,
+  match &settled.rule {
+    Some(Answering::Run(rule)) => watch.db.rule_answered(run, *rule, &approval.id)?,
+    Some(Answering::Project(rules)) => {
+      for rule in rules {
+        watch.db.project_rule_answered(*rule)?;
+      }
+    }
     None => {}
   }
   if let Some(note) = &settled.note {

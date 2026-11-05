@@ -12,8 +12,9 @@
 //! workers, and its port freed. A start that is still waiting for readiness when its invocation ends gives up and
 //! stops what it started.
 //!
-//! Not here yet: seeds and per-run data (the start refuses a service that has them), crash events, the computer's
-//! service slots and approval rules of their own; until then a start asks a person as any program run does.
+//! A start asks a person once for everything it runs, unless the project's rules approve every service of it
+//! ([`order`], `orchester_core::run::ProjectScope`). Not here yet: seeds and per-run data (the start refuses a service
+//! that has them), crash events and the computer's service slots.
 
 mod launch;
 mod order;
@@ -44,7 +45,10 @@ use orchester_exec::process_tree::ProcessTree;
 use parking_lot::Mutex;
 use serde_json::json;
 
-pub(in crate::execution::step) use self::launch::{project_secret, published as published_services, published_stacks};
+pub(in crate::execution::step) use self::{
+  launch::{project_secret, published as published_services, published_stacks},
+  order::Started,
+};
 use self::{
   port::{PortLease, Ports},
   readiness::SharedLog,

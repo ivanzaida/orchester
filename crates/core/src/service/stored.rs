@@ -400,6 +400,35 @@ impl TryFrom<RequestFields> for SeedRequest {
   }
 }
 
+/// What an approval of a service's start is kept to (`super::ServiceApproval`): its program, arguments, variables
+/// with their values (a secret by its name) and seed, in this order.
+#[derive(Serialize)]
+struct ApprovedFields {
+  program: String,
+  arguments: Vec<String>,
+  variables: BTreeMap<String, ValueFields>,
+  seed: SeedFields,
+}
+
+/// The compact JSON of what an approval of `service`'s start is kept to; the same definition always gives the same
+/// bytes, as the fields keep their order and the variables are sorted by name.
+pub(super) fn approved_bytes(service: &Service) -> Vec<u8> {
+  let ServiceFields {
+    program,
+    arguments,
+    variables,
+    seed,
+    ..
+  } = ServiceFields::from(service);
+  serde_json::to_vec(&ApprovedFields {
+    program,
+    arguments,
+    variables,
+    seed,
+  })
+  .expect("a service's fields are always JSON")
+}
+
 fn texts(arguments: &[CommandArg]) -> Vec<String> {
   arguments.iter().map(|argument| argument.as_str().to_owned()).collect()
 }
