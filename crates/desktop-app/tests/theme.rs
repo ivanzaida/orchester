@@ -37,6 +37,8 @@ mod skills;
 mod startup;
 #[path = "theme/task_form.rs"]
 mod task_form;
+#[path = "theme/test_results.rs"]
+mod test_results;
 
 use lurq::{
   app::{

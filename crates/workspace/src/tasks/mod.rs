@@ -63,6 +63,7 @@ pub mod slot_wait;
 pub mod standing;
 mod step_executors;
 mod step_views;
+pub mod test_results;
 pub mod timeline;
 pub mod transcript;
 pub mod unreadable;

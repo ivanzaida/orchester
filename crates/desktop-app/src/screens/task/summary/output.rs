@@ -71,10 +71,16 @@ pub fn section(ctx: &mut Ctx, task: &TaskContext, run: &RunView) -> Element {
     .into()
 }
 
-/// Each step's latest report that says something, the latest first.
+/// Each step's latest report that says something, the latest first. A Test step whose record the Tests card shows
+/// has no report row: the card says what it found.
 fn reports(run: &RunView) -> Vec<&StepOutput> {
+  let carded = run.tests.as_ref().map(|tests| &tests.step);
   let mut latest: Vec<&StepOutput> = Vec::new();
-  for output in run.outputs.iter().filter(|output| !output.text.trim().is_empty()) {
+  let said = run
+    .outputs
+    .iter()
+    .filter(|output| !output.text.trim().is_empty() && Some(&output.step) != carded);
+  for output in said {
     match latest.iter_mut().find(|kept| kept.step == output.step) {
       Some(kept) if kept.created_at < output.created_at => *kept = output,
       Some(_) => {}

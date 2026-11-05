@@ -65,6 +65,7 @@ mod startup;
 mod task;
 mod task_form;
 mod tasks;
+mod test_results;
 mod todo_list;
 mod typography;
 pub mod usage;
@@ -131,6 +132,7 @@ pub use self::{
     DROP_SCRIM_OPACITY, DROP_VEIL_OPACITY, HELD_CARD_OPACITY, SKELETON_DELAY, SKELETON_DIM, SKELETON_FADE,
     SKELETON_LAST_CARD, SKELETON_PULSE, SKELETON_STEPS, TasksSpacing, list_scrollbar, skeleton_line,
   },
+  test_results::TestsText,
   todo_list::TodoText,
   typography::{ExtraTypography, IconSize},
   usage::{UsageRadius, UsageSpacing, UsageText},

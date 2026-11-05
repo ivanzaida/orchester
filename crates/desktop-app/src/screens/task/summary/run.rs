@@ -103,6 +103,10 @@ fn rail(ctx: &mut Ctx, task: &TaskContext, run: &RunView) -> Element {
 fn last_event(ctx: &mut Ctx, task: &TaskContext, here: bool) -> Element {
   let said = decisions::said(ctx, task);
   let (glyph, text) = crate::screens::task::ci::header::event(ctx, task).unwrap_or_else(|| {
+    // An event said in one line, as a Test step's return is, has no body.
+    if said.body.is_empty() {
+      return (said.icon, said.title.clone());
+    }
     let text = ctx.t_args(
       "summary.run.event",
       [("title", said.title.clone()), ("body", said.body.clone())],

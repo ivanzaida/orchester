@@ -10,11 +10,13 @@
 pub mod flaky;
 mod outcome;
 mod plan;
+mod record;
 mod result;
 
 pub use self::{
   outcome::{FailedTest, MAX_SINGLE_RERUNS, SuiteOutcome, rerun_filters},
   plan::{Chosen, PlannedLayer, PlannedSuite, TestPlan},
+  record::{ArtifactKind, FlakyRecord, LayerRecord, SuiteRecord, TestRecord, TestStepRecord, record_file},
   result::TestStepResult,
 };
 use crate::run::{StepAt, StepFailure, StepOutcome, StepOutput};

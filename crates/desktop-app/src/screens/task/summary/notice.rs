@@ -164,6 +164,9 @@ fn running(ctx: &Ctx, run: &RunView, slot_waits: &[StepExecutionId]) -> Said {
   if let Some(said) = resolving(ctx, run) {
     return said;
   }
+  if let Some(said) = super::tests::returned::said(ctx, run) {
+    return said;
+  }
   let attempt = run
     .run
     .current_attempt()

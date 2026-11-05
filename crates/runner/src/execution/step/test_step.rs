@@ -25,7 +25,9 @@ use orchester_core::{
   run::{Invocation, StepAt, StepExecutor, StepFailure},
   store::ActivityStore,
   test_report::SuiteRun,
-  test_step::{PlannedSuite, SuiteOutcome, TestPlan, TestStepResult, flaky::Quarantine, rerun_filters},
+  test_step::{
+    PlannedSuite, SuiteOutcome, TestPlan, TestStepRecord, TestStepResult, flaky::Quarantine, record_file, rerun_filters,
+  },
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, StoreError};
@@ -166,7 +168,10 @@ impl TestWorker {
     let stop = Arc::new(AtomicBool::new(false));
     let (plan, quarantine, suites, services) = (self.plan, self.quarantine, self.suites, self.services);
     let flag = Arc::clone(&stop);
-    let job = tokio::task::spawn_blocking(move || run_layers(plan, (&suites, &services), &quarantine, &flag));
+    let job = tokio::task::spawn_blocking(move || {
+      let result = run_layers(plan, (&suites, &services), &quarantine, &flag);
+      result.map(|result| (result, quarantine))
+    });
     tokio::pin!(job);
     let mut stopped = None;
     let mut listening = true;
@@ -196,13 +201,13 @@ impl TestWorker {
 }
 
 /// Records how the Test step's invocation ended, and what it means for the step: its result when it ran to its end,
-/// with its flaky and quarantined outcomes kept for the project; none when the run stopped it, or when its suites
-/// ended without a result, which fails it as a breakage.
+/// with its flaky and quarantined outcomes kept for the project and its record for the task page ([`keep_record`]);
+/// none when the run stopped it, or when its suites ended without a result, which fails it as a breakage.
 fn finish(
   root: &Path,
   invocation: &Invocation,
   step: StepKey,
-  (result, stopped): (Option<TestStepResult>, Option<StopCause>),
+  (result, stopped): (Option<(TestStepResult, Quarantine)>, Option<StopCause>),
 ) -> Result<CommandFinished, StoreError> {
   let mut db = ProjectDb::open(root)?;
   let now = Timestamp::now();
@@ -217,7 +222,8 @@ fn finish(
         output: None,
       }
     }
-    (None, Some(result)) => {
+    (None, Some((result, quarantine))) => {
+      keep_record(root, invocation, &TestStepRecord::of(&result, &quarantine));
       db.record_flaky_outcomes(&result.flaky_outcomes(invocation.run, now))?;
       let failure = result.failure();
       ended.outcome = Some(match failure {
@@ -247,6 +253,25 @@ fn finish(
   };
   db.save_invocation(&ended)?;
   Ok(finished)
+}
+
+/// Keeps `record` in the run's storage, where the task page reads it (`orchester_core::test_step::record_file`). One
+/// that cannot be kept is logged and the step goes on: its result is its output, which the steps after it and the
+/// writing step read; only the Tests card is missing then.
+fn keep_record(root: &Path, invocation: &Invocation, record: &TestStepRecord) {
+  let storage = orchester_core::workspaces::artifacts_folder(root, invocation.run);
+  let file = record_file(&storage, invocation.execution);
+  let kept = serde_json::to_vec_pretty(record)
+    .map_err(std::io::Error::other)
+    .and_then(|json| {
+      if let Some(folder) = file.parent() {
+        std::fs::create_dir_all(folder)?;
+      }
+      std::fs::write(&file, json)
+    });
+  if let Err(error) = kept {
+    tracing::warn!(%error, file = %file.display(), "the Test step's record for the task page was not kept");
+  }
 }
 
 /// Runs `plan`'s layers in order, every suite of a layer, and stops after the first layer that fails; `None` when
