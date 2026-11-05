@@ -2,10 +2,13 @@
 //! implements each one, so the envelopes take them as type parameters: `C` a command, internally tagged by `kind`
 //! (e.g. `{kind:"claim.acquire",subject}`), and `V` its value, which carries `effects: [LocalEffect]`.
 
+use std::{fmt, num::NonZeroU64};
+
 pub use orchester_core::sharing::{ExpectedRevision, ExpectedRevisionError, ExpectedRevisions, RevisionTarget};
 use orchester_core::{
   blob::ContentHash,
   id::{ModuleId, OperationId, TaskId, WorkId},
+  run::{BranchName, CommitId},
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -46,29 +49,71 @@ pub enum LocalEffect {
   Deliver {
     work_id: WorkId,
   },
+  /// The runner may merge `branch` at `source_commit` into base at `base_commit` on its computer
+  /// ([`super::ModuleDeliveryRead`]). It names no path: the runner finds the module's checkout itself.
+  DeliverModule {
+    module_id: ModuleId,
+    branch: BranchName,
+    source_commit: CommitId,
+    base_commit: CommitId,
+  },
   /// Braced so serde refuses unknown fields on it too; a unit variant would ignore them.
   None {},
 }
 
+/// Why a string is not an [`EventCursor`]: it must be the canonical decimal of a positive integer.
 #[derive(Clone, Copy, Debug, Error, PartialEq, Eq)]
-#[error("an event cursor cannot be empty")]
-pub struct EventCursorError;
+pub enum EventCursorError {
+  #[error("an event cursor cannot be empty")]
+  Empty,
+  #[error("an event cursor is decimal digits only, without sign, space or other characters")]
+  NotDecimal,
+  #[error("an event cursor has no leading zeros")]
+  LeadingZero,
+  #[error("an event cursor is a positive integer, not zero")]
+  Zero,
+  #[error("an event cursor does not fit in 64 bits")]
+  OutOfRange,
+}
 
-/// A server-made position in the project's event stream. Opaque: clients store and send it back, never read it.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+/// The server's committed event sequence position in one project's event stream. Its wire form is a string holding
+/// the canonical decimal of a positive integer (no sign, no leading zeros). Cursors order by that integer, never by
+/// string order (`"9" < "10"`): a client may compare two cursors of the same project, while cursors of different
+/// projects are not comparable.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
-pub struct EventCursor(String);
+pub struct EventCursor(NonZeroU64);
 
 impl EventCursor {
-  pub fn new(cursor: String) -> Result<Self, EventCursorError> {
+  pub fn new(cursor: &str) -> Result<Self, EventCursorError> {
     if cursor.is_empty() {
-      return Err(EventCursorError);
+      return Err(EventCursorError::Empty);
     }
-    Ok(Self(cursor))
+    if !cursor.bytes().all(|byte| byte.is_ascii_digit()) {
+      return Err(EventCursorError::NotDecimal);
+    }
+    if cursor == "0" {
+      return Err(EventCursorError::Zero);
+    }
+    if cursor.starts_with('0') {
+      return Err(EventCursorError::LeadingZero);
+    }
+    // Only digits are left, so parsing fails on overflow alone.
+    cursor
+      .parse::<NonZeroU64>()
+      .map(Self)
+      .map_err(|_| EventCursorError::OutOfRange)
   }
 
-  pub fn as_str(&self) -> &str {
-    &self.0
+  /// The committed sequence position this cursor names.
+  pub const fn position(self) -> NonZeroU64 {
+    self.0
+  }
+}
+
+impl fmt::Display for EventCursor {
+  fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    self.0.fmt(formatter)
   }
 }
 
@@ -76,13 +121,13 @@ impl TryFrom<String> for EventCursor {
   type Error = EventCursorError;
 
   fn try_from(cursor: String) -> Result<Self, Self::Error> {
-    Self::new(cursor)
+    Self::new(&cursor)
   }
 }
 
 impl From<EventCursor> for String {
   fn from(cursor: EventCursor) -> Self {
-    cursor.0
+    cursor.to_string()
   }
 }
 

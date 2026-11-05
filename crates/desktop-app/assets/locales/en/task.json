@@ -17,6 +17,19 @@
       "label": "Module",
       "none": "No module"
     },
+    "export": {
+      "what": "{{key}} · {{title}} · run {{number}} · {{steps}} · {{messages}}",
+      "steps": {
+        "one": "{{count}} step",
+        "other": "{{count}} steps"
+      },
+      "messages": {
+        "one": "{{count}} message",
+        "other": "{{count}} messages"
+      },
+      "messagesOnlyHint": "Each step's messages from every agent and from you, with their code blocks",
+      "withToolsHint": "Adds the commands, file edits and tool calls, each with its input and a short result, and the step markers"
+    },
     "crumbs": {
       "tasks": "Tasks",
       "notShared": "Not shared",

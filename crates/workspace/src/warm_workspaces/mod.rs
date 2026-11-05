@@ -157,7 +157,7 @@ pub fn read(
     suggestions,
     warm_up: settings.warm_up,
     warm_up_failure: db.warm_up_failure()?,
-    old_worktrees: old_worktrees(&db, sizes.run_worktrees)?,
+    old_worktrees: old_worktrees(&db, sizes.worktrees)?,
     waits: db.workspace_waits()?,
   })
 }
@@ -227,11 +227,14 @@ fn folder_row(
   }
 }
 
-/// The worktrees of runs made before workspaces, or while they are off, that are still there: `found`, as the
-/// project's runner listed them with their sizes, of the runs the project knows.
-pub(crate) fn old_worktrees(db: &ProjectDb, found: Vec<(RunId, Option<u64>)>) -> Result<Vec<OldWorktree>, StoreError> {
+/// The worktrees of runs made before workspaces, or while they are off, that are still there: of `found`, the folders
+/// the project's runner listed with their sizes, those named by a run the project knows.
+pub(crate) fn old_worktrees(db: &ProjectDb, found: Vec<(String, Option<u64>)>) -> Result<Vec<OldWorktree>, StoreError> {
   let mut old = Vec::new();
-  for (run, bytes) in found {
+  let runs = found
+    .into_iter()
+    .filter_map(|(name, bytes)| Some((name.parse::<RunId>().ok()?, bytes)));
+  for (run, bytes) in runs {
     let Some(stored) = db.run(run).map_err(run_store_error)? else {
       continue;
     };

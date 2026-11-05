@@ -13,7 +13,11 @@ mod answer;
 mod body;
 pub(in crate::screens) mod card;
 pub(in crate::screens) mod change;
+mod commands;
+mod compact;
+mod compaction;
 mod composer;
+mod context;
 pub(in crate::screens) mod data;
 mod decision;
 mod delivery;
@@ -21,15 +25,18 @@ mod digest;
 mod draft;
 mod ending;
 mod env;
+mod export;
 mod failure;
 mod header;
 mod held;
 mod history;
 mod line;
 mod page;
+mod plan_only;
 mod proposal;
 mod reading;
 mod report;
+mod rewind;
 mod run_end;
 mod runs_on;
 mod send;
@@ -61,9 +68,11 @@ use orchester_core::{
 use orchester_workspace::{
   display,
   orchestrator::{
+    chat::History,
     queue::{TakenBack, WhileAnswering},
     send::Outgoing,
   },
+  skills::offered::OfferedSkill,
 };
 
 use self::{
@@ -71,6 +80,7 @@ use self::{
   draft::Conversation,
   header::Named,
   send::{QueuedAction, SendAction, Sending, Sent, StopAction},
+  timeline::OpenedPlans,
 };
 use crate::{
   navigation::Navigation,
@@ -80,6 +90,8 @@ use crate::{
     attachments::draft::DraftAttachments,
     chat::{self, follow::Follow},
     markdown::LinkHandler,
+    mention::MentionField,
+    slash::SlashField,
   },
 };
 
@@ -118,25 +130,43 @@ struct View {
   outgoing: Signal<Option<Outgoing>>,
   how: Signal<Option<WhileAnswering>>,
   history: Signal<bool>,
-  search: Signal<String>,
+  /// What History keeps while it shows: Esc ends the delete it asks about, then cancels a title edited in place,
+  /// before it closes History.
+  listing: history::HistoryState,
   /// The composer's runs-on picker is open.
   runs_on: Signal<bool>,
   /// Set to put the focus in the message field.
   focus: Signal<bool>,
   /// The message field has the focus.
   focused: Signal<bool>,
+  /// The message field, the field's @ menu and its mentions (`ui::mention`), its slash menu (`ui::slash`) and the
+  /// skill its chip holds, and the box the menus open over.
   input: ElementRef,
+  mention: MentionField,
+  slash: SlashField,
+  skill: Signal<Option<OfferedSkill>>,
+  mention_anchor: ElementRef,
   /// The send menu over the send button is open while the Orchestrator answers, and its chevron.
   menu: Signal<bool>,
   menu_anchor: ElementRef,
   send: SendAction,
   stop: StopAction,
+  /// Compacts the conversation's session (ORC-309).
+  compact: compact::CompactAction,
   /// Takes a queued message's words back into the composer, or removes it.
   queued: QueuedAction,
   /// What a press on a link in a reply does; made once, so a reply is laid out again only when it changes.
   links: LinkHandler,
   /// The turns open at their end and follow it; another conversation opens at its own end.
   follow: Follow,
+  /// The answers whose todo list the person opened under their name line.
+  plans: Signal<OpenedPlans>,
+  /// The *Plan only* switch and the plan being changed (ORC-646).
+  plan_only: plan_only::PlanOnly,
+  /// Edit and *Rewind to here* on an earlier message (ORC-333).
+  rewind: rewind::Rewinding,
+  /// The header's … with *Copy conversation as Markdown* and *Export conversation…* (ORC-327).
+  export: export::ChatExport,
 }
 
 struct OrchestratorScreen {
@@ -147,26 +177,40 @@ impl Component for OrchestratorScreen {
   type Props = Props;
 
   fn create(ctx: &mut Ctx) -> Self {
+    let (draft, focused) = (ctx.signal(String::new()), ctx.signal(false));
+    let skill = ctx.signal(None);
+    let mention = MentionField::new(ctx, draft.clone(), focused.clone());
+    let slash = SlashField::new(ctx, draft.clone(), (focused.clone(), skill.clone()));
     let view = View {
-      draft: ctx.signal(String::new()),
+      draft,
       attached: DraftAttachments::new(ctx, Vec::new()),
       of: ctx.signal(None),
       outgoing: ctx.signal(None),
       how: ctx.signal(None),
       history: ctx.signal(false),
-      search: ctx.signal(String::new()),
+      listing: history::HistoryState::new(ctx),
       runs_on: ctx.signal(false),
       focus: ctx.signal(false),
-      focused: ctx.signal(false),
-      input: ElementRef::new(),
+      focused,
+      input: mention.element(),
+      mention,
+      slash,
+      skill,
+      mention_anchor: ElementRef::new(),
       menu: ctx.signal(false),
       menu_anchor: ElementRef::new(),
       send: send::send_action(ctx),
       stop: send::stop_action(ctx),
+      compact: compact::compact_action(ctx),
       queued: send::queued_action(ctx),
       links: chat::links(ctx),
       follow: Follow::new(ctx),
+      plans: ctx.signal(OpenedPlans::default()),
+      plan_only: plan_only::PlanOnly::new(ctx),
+      rewind: rewind::Rewinding::new(ctx),
+      export: export::ChatExport::new(ctx),
     };
+    rewind::watch(ctx, &view);
     let taker = view.clone();
     ctx.watch(&view.queued.state(), move |state| {
       if let Some(taken) = state
@@ -210,6 +254,9 @@ impl Component for OrchestratorScreen {
         ));
       }
     });
+    // A result of History's search opens its conversation at the match, the one shown too.
+    let follow = view.follow.clone();
+    ctx.watch(&view.listing.opened_at, move |_| follow.open_anew());
     Self { view }
   }
 
@@ -226,8 +273,15 @@ impl Component for OrchestratorScreen {
     if reads.target.is_some() || reads.shown != Shown::Loading {
       view.hold_draft_of(props.project.open.project.id(), reads.target.into());
     }
+    view
+      .plan_only
+      .hold(matches!(&reads.shown, Shown::Chat(shown) if shown.chat.plan_only()));
+    view.rewind.hold(match &reads.shown {
+      Shown::Chat(shown) => Some(&**shown),
+      _ => None,
+    });
     let chat = match &reads.shown {
-      Shown::Chat(shown) => Named::Chat(&shown.chat),
+      Shown::Chat(shown) => Named::Chat(&shown.chat, rewind::forked::is_fork(&shown.entries)),
       Shown::Loading => Named::Opening(reads.target.and_then(|target| {
         let chats = &reads.history.ready()?.chats;
         let listing = chats.iter().find(|listing| listing.chat.id() == target)?;
@@ -235,34 +289,38 @@ impl Component for OrchestratorScreen {
       })),
       Shown::New | Shown::Failed(_) | Shown::Missing => Named::New,
     };
-    let head = header::header(ctx, view, (&props.project, chat));
+    // A conversation that is kept can be copied and exported.
+    let kept = match &reads.shown {
+      Shown::Chat(shown) => Some(&**shown),
+      _ => None,
+    };
+    let more = kept.map(|shown| view.export.more(ctx, (&props.project, shown)));
+    let head = header::header(ctx, view, (&props.project, chat), more);
     let main = body::main(ctx, view, (&props.project, &reads));
     // History opens over the chat's right edge, under the header.
     let panel = view.history.get().then(|| {
       // While the conversations are read the list is bones; a failed reading lists none.
-      let chats = match &reads.history {
+      let none = History::default();
+      let read = match &reads.history {
         data::Read::Loading => None,
-        data::Read::Failed(_) => Some(&[][..]),
-        data::Read::Ready(history) => Some(history.chats.as_slice()),
+        data::Read::Failed(_) => Some(&none),
+        data::Read::Ready(history) => Some(history),
       };
-      history::panel(
-        ctx,
-        &view.search,
+      let rows = history::Rows::new(
         props.project.open.project.id(),
-        (chats, reads.target),
-      )
+        &props.project.open.repo_root,
+        &view.listing,
+      );
+      history::panel(ctx, &view.listing, &rows, (read, reads.target))
     });
-    let history = view.history.clone();
+    // The question before going back, and the export, are modals over the window.
+    let asked = rewind::dialog(ctx, view, &props.project);
+    let exported = kept.and_then(|shown| view.export.dialog(ctx, (&props.project, shown)));
     Column::new()
       .id("screen-orchestrator")
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
-      .on_key_down(move |event: KeyboardEvent| {
-        if event.key == "Escape" && history.get_untracked() {
-          history.set(false);
-          event.prevent_default();
-        }
-      })
+      .on_key_down(escape(view))
       .child(head)
       .child(
         Stack::new()
@@ -273,6 +331,30 @@ impl Component for OrchestratorScreen {
           .child(main)
           .with_children(panel),
       )
+      .with_children(asked)
+      .with_children(exported)
+  }
+}
+
+/// Esc while History shows: it first ends the delete History asks about, then cancels a title edited in place, and
+/// only then closes History, which opens on its list again.
+fn escape(view: &View) -> impl Fn(KeyboardEvent) + Send + Sync + 'static {
+  let (history, listing) = (view.history.clone(), view.listing.clone());
+  move |event: KeyboardEvent| {
+    if event.key != "Escape" || !history.get_untracked() {
+      return;
+    }
+    if listing.deleting.get_untracked().0.is_some() {
+      listing.deleting.set(history::Deleting::default());
+    } else if listing.renaming.get_untracked().0.is_some() {
+      listing.renaming.set(history::Renaming::default());
+    } else {
+      history.set(false);
+      if listing.archived.get_untracked() {
+        listing.archived.set(false);
+      }
+    }
+    event.prevent_default();
   }
 }
 
@@ -292,6 +374,7 @@ impl View {
     let typed = unknown.then(|| self.draft.get_untracked());
     let given = unknown.then(|| self.attached.held());
     self.of.set(Some(of));
+    self.plan_only.stop_changing();
     if self.runs_on.get_untracked() {
       self.runs_on.set(false);
     }
@@ -320,17 +403,24 @@ impl View {
 
   /// `sent` was kept. The draft it was sent from empties while it still holds the words sent: what the person wrote
   /// since stays, and goes with the conversation when it was a new one's first message and the route still says a
-  /// new or the latest conversation (`fresh`). Whether it started a conversation so.
+  /// new or the latest conversation (`fresh`). The chip empties while it still holds the skill sent. Whether it started
+  /// a conversation so.
   fn sent(&self, project: ProjectId, sent: Sent, fresh: bool) -> bool {
-    if self
+    let outgoing = self
       .outgoing
       .get_untracked()
-      .is_some_and(|outgoing| outgoing.message == sent.message)
-    {
+      .filter(|outgoing| outgoing.message == sent.message);
+    if outgoing.is_some() {
       self.outgoing.set(None);
     }
     if !sent.from_draft {
       return false;
+    }
+    // The change of a plan went with it, and so did the skill.
+    self.plan_only.stop_changing();
+    let skill = outgoing.and_then(|outgoing| outgoing.skill);
+    if skill.is_some() && self.skill.get_untracked().and_then(|held| held.chosen()) == skill {
+      self.skill.set(None);
     }
     let Some(from) = draft::sent(project, (sent.chat, sent.message)) else {
       return false;
@@ -369,7 +459,10 @@ impl View {
       }
       view.menu.set(false);
       let to = chat.unwrap_or_else(ChatId::generate);
-      let outgoing = draft::sending(project.project.id(), from, (to, text, attachments), sender());
+      let on = view.plan_only.on_now(Some(from));
+      let sent_as = (sender(), view.plan_only.mode(on), on);
+      let skill = view.skill.get_untracked().and_then(|skill| skill.chosen());
+      let outgoing = draft::sending(project.project.id(), from, (to, text, attachments, skill), sent_as);
       view.outgoing.set(Some(outgoing.clone()));
       view.how.set(how);
       view.follow.follow_again();
@@ -392,6 +485,7 @@ impl View {
       }
       view.how.set(None);
       view.follow.follow_again();
+      let on = view.plan_only.on_now(Some(Conversation::Chat(chat)));
       view.send.run(Sending {
         project: project.clone(),
         outgoing: Outgoing {
@@ -399,7 +493,10 @@ impl View {
           message: ChatMessageId::generate(),
           text: text.to_string(),
           attachments: Vec::new(),
+          skill: None,
           sent_by: sender(),
+          mode: view.plan_only.mode(on),
+          plan_only: on,
         },
         from_draft: false,
         how: None,
@@ -407,10 +504,24 @@ impl View {
     })
   }
 
+  /// *Change it* on a plan: the composer holds the plan as a chip, and the focus goes there; what is sent next plans.
+  fn change_plan(&self) -> Arc<dyn Fn(plan_only::Changing) + Send + Sync> {
+    let view = self.clone();
+    Arc::new(move |changing| {
+      view.plan_only.changing.set(Some(changing));
+      view.focus.set(true);
+    })
+  }
+
   /// A queued message taken back: its words go into the composer after what is written there, its files after the
-  /// draft's, with the focus there.
+  /// draft's, its skill into the chip, with the focus there. The facts its mentions carried are read again when it is
+  /// sent again.
   fn take_back(&self, taken: &TakenBack) {
-    let (draft, words) = (self.draft.get_untracked(), taken.words.as_str());
+    if let Some(skill) = OfferedSkill::carried_by(&taken.words) {
+      self.skill.set(Some(skill));
+    }
+    let words = orchester_workspace::mentions::facts::said(&taken.words);
+    let draft = self.draft.get_untracked();
     let text = if draft.trim().is_empty() {
       words.to_owned()
     } else if words.trim().is_empty() {

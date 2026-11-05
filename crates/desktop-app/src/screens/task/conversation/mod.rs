@@ -9,23 +9,30 @@
 //! The task page (P1) reads the task and hands it here ([`tab`]); the transcript and the run's requests are
 //! read here ([`read`]), again as the runner reports changes of the project's runs (the feed counts them per
 //! project, not per run). What the person opened and how far they scrolled are the run's: another run of
-//! the task starts the tab afresh. The step rail, *Show*, the search and Details are not part of this
-//! build (D4): the chat shows every step.
+//! the task starts the tab afresh. Ctrl F (⌘ F) searches the transcript ([`search`]). The step rail, *Show* and
+//! Details are not part of this build (D4): the chat shows every step.
 
 mod built;
 mod composer;
+mod context;
+mod model;
+mod permissions;
 mod read;
+mod search;
 mod shared;
+mod side;
 mod states;
 mod timeline;
+mod todo;
 mod toolbar;
 
 use std::{path::PathBuf, sync::Arc};
 
 use lurq::{
   app::{component::Component, ctx::Ctx},
-  components::Column,
+  components::{Column, Row, Stack},
   core::Signal,
+  layout::StackAlignment,
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{id::InvocationId, run::RunStatus};
@@ -35,24 +42,28 @@ use orchester_workspace::{
     conversation::{
       Conversation, PanelState,
       orchestrator::{merged_by, message_offer, proposals},
+      outgoing::offer,
     },
     detail::RunView,
+    side_question::send_way,
     timeline::{self as items, Item, ItemKind, load::Loaded},
     transcript::{Entry, EntryKind},
   },
 };
+use parking_lot::Mutex;
 
-pub use self::composer::ComposerState;
 pub(crate) use self::timeline::{links, step_label};
 use self::{
   built::BuiltTimeline,
   composer::Composing,
   read::{Transcript, TranscriptRead, Waiting, with_requests},
+  search::view::{SearchHold, searching},
   shared::Shared,
   timeline::{ChatProject, Timeline, Toggles},
   toolbar::RunState,
 };
-use super::{super::orchestrator::data::revision as chat_revision, TaskContext, cards::Decisions};
+pub use self::{composer::ComposerState, search::TranscriptSearch};
+use super::{super::orchestrator::data::revision as chat_revision, PageState, TaskContext, cards::Decisions};
 use crate::{
   project::TasksState,
   services::Services,
@@ -81,6 +92,9 @@ struct ConversationTab {
   retry: Signal<u64>,
   transcript: TranscriptRead,
   timeline: BuiltTimeline,
+  /// The page's search of the transcript, and what the tab keeps of it.
+  search: TranscriptSearch,
+  found: SearchHold,
 }
 
 impl Component for ConversationTab {
@@ -90,6 +104,10 @@ impl Component for ConversationTab {
     let follow = Follow::new(ctx);
     let decisions = Decisions::new(ctx);
     ctx.provide(decisions.clone());
+    let feed = ctx.props::<TaskContext>().project.feed.clone();
+    permissions::Permissions::provide(ctx, feed.clone());
+    model::RunModel::provide(ctx, feed);
+    side::SideQuestions::provide(ctx);
     Self {
       decisions,
       composing: Shared::provide(ctx),
@@ -99,6 +117,11 @@ impl Component for ConversationTab {
       retry: ctx.signal(0),
       transcript: TranscriptRead::default(),
       timeline: BuiltTimeline::default(),
+      search: PageState::of(ctx).search,
+      found: SearchHold {
+        outcome: ctx.signal(Default::default()),
+        current: Mutex::default(),
+      },
     }
   }
 
@@ -124,11 +147,12 @@ impl Component for ConversationTab {
       }
     };
     let state = state.unwrap_or_else(|| RunState::of(&conversation, detail, false));
-    Column::new()
+    let plan = todo::pinned(ctx, detail.run.as_ref(), &conversation);
+    let column = Column::new()
       .id("conversation")
-      .width(Dimension::Pct(100.0))
       .flex(1.0)
       .min_height(Dimension::Px(0.0))
+      .on_key_down(search::keys(&self.search))
       .child(toolbar::toolbar(ctx, state))
       .child(
         Column::new()
@@ -137,8 +161,71 @@ impl Component for ConversationTab {
           .min_height(Dimension::Px(0.0))
           .child(body),
       )
-      .child(composer)
+      .with_children(plan)
+      .child(composer);
+    let Some(pane) = side_pane(ctx, &task, &conversation) else {
+      return Element::from(column.width(Dimension::Pct(100.0)));
+    };
+    // The pane opens to the right of the transcript and its composer, which keep working beside it (12 `j8r9z`).
+    Element::from(
+      Row::new()
+        .id("conversation-with-side-question")
+        .width(Dimension::Pct(100.0))
+        .flex(1.0)
+        .min_height(Dimension::Px(0.0))
+        .child(column.min_width(Dimension::Px(0.0)).height(Dimension::Pct(100.0)))
+        .child(pane),
+    )
   }
+}
+
+/// The side question pane beside the latest run's conversation, while the person keeps it open.
+fn side_pane(ctx: &mut Ctx, task: &TaskContext, conversation: &Conversation) -> Option<Element> {
+  let state = side::SideQuestions::of(ctx)?;
+  let run = task.detail.run.as_ref().filter(|_| state.open.get())?;
+  let mode = offer(conversation, Some(run), None).0;
+  let props = side::PaneProps {
+    project: task.project.clone(),
+    task: task.detail.task.id(),
+    key: task.key.clone(),
+    run: run.id(),
+    number: run.run.number().get(),
+    agent: side_agent(ctx, run),
+    sendable: send_way(&mode).is_some(),
+    running: run.run.status() == &RunStatus::Running,
+    not_shared: task.detail.not_shared(),
+  };
+  Some(side::pane(ctx, props))
+}
+
+/// The agent of `run` the side question is about: its agent at work, else the one that worked last.
+fn side_agent(ctx: &Ctx, run: &RunView) -> Arc<str> {
+  run
+    .current_step()
+    .and_then(|step| step.agent.clone())
+    .unwrap_or_else(|| ctx.t("side_question.theAgent"))
+}
+
+/// The merge queue's lines with what `run`'s pull request's CI did among them, each before the row its time places it
+/// (ORC-335), in the order of the rows.
+fn with_ci(
+  ctx: &mut Ctx,
+  task: &TaskContext,
+  run: &RunView,
+  (rows, delivery): (
+    &[Arc<orchester_workspace::tasks::timeline::view::Row>],
+    &Arc<Vec<timeline::Placed>>,
+  ),
+) -> Arc<Vec<timeline::Placed>> {
+  let Some(shown) = &task.ci else {
+    return delivery.clone();
+  };
+  let lines = super::ci::timeline::lines(run, shown, Services::of(ctx).clock.now());
+  let places = orchester_workspace::tasks::timeline::delivery::places(rows, &lines);
+  let mut placed: Vec<timeline::Placed> = delivery.iter().cloned().collect();
+  placed.extend(places.into_iter().zip(lines.into_iter().map(Arc::new)));
+  placed.sort_by_key(|(before, line)| (*before, line.at));
+  Arc::new(placed)
 }
 
 impl ConversationTab {
@@ -164,6 +251,8 @@ impl ConversationTab {
       .timeline
       .of((run, &task.detail), (&loaded, conversation), self.toggles.open_rows());
     let items = &built.items;
+    // *More actions* exports the timeline the chat shows (ORC-327).
+    PageState::of(ctx).export.publish(run.id(), items);
     // An agent that waits for the person (its question in its turn, C·15, a tool request or a plan decision)
     // does not work: the run waits for the person, so the line under the chat and the chip say so.
     let asking = live && items.iter().any(items::waits_for_you);
@@ -179,9 +268,58 @@ impl ConversationTab {
         .find(|item| items::waits_for_you(item))
         .map(|item| item.key.clone()),
     );
+    let found = searching(
+      ctx,
+      &self.search,
+      (&self.toggles, &self.follow),
+      (&built, loaded.entries.len()),
+      &self.found,
+    );
+    self.share(task, (run, conversation, &loaded), names, found.as_ref());
+    // Stale as applying would find it: what a message sent now meets, as the chat's own Apply reads the run.
+    let offered = message_offer(&task.detail, run.id());
+    let proposed = proposals(&loaded.orchestrated, (offered.as_ref(), &loaded.questions));
+    let working = working_line(run, conversation, (items, &loaded.entries), asking);
+    let arrived = arrivals(items, &loaded.entries) + proposed.len();
+    let (reveal, track, bar) = found.map_or((None, None, None), |found| {
+      (found.reveal, Some(found.track), Some(found.bar))
+    });
+    let delivery = with_ci(ctx, task, run, (&built.rows, &built.delivery));
+    let chat = timeline::chat(
+      ctx,
+      &self.follow,
+      (&built.rows, &delivery, run.approvals.approved_by_autopilot()),
+      (items, &proposed),
+      (working, arrived),
+      (reveal, track),
+    );
+    // The find bar floats over the chat's top end, taking no room from its rows.
+    let chat = match bar {
+      Some(bar) => Stack::with(StackAlignment::TopEnd, [chat, bar])
+        .width(Dimension::Pct(100.0))
+        .height(Dimension::Pct(100.0))
+        .into(),
+      None => chat,
+    };
+    (
+      states::shown_as_last_read(ctx, chat, stale.as_ref(), &self.retry),
+      Some(state),
+    )
+  }
+
+  /// Shares the timeline of `run` with the chat's rows: whose it is, what `loaded` holds besides its rows, and what the
+  /// open search marks (`found`).
+  fn share(
+    &self,
+    task: &TaskContext,
+    (run, conversation, loaded): (&RunView, &Conversation, &Loaded),
+    names: ProjectNames,
+    found: Option<&search::view::Searching>,
+  ) {
     let open = &task.project.open;
     self.shown.set(Timeline {
       project: open.project.id(),
+      shown_project: task.project.clone(),
       chat_project: ChatProject {
         id: open.project.id(),
         name: open.project.name().as_str().into(),
@@ -191,27 +329,18 @@ impl ConversationTab {
       key: task.key.clone(),
       detail: task.detail.clone(),
       toggles: self.toggles.clone(),
-      working: working_invocations(run, live),
+      working: working_invocations(run, conversation.state == PanelState::Live),
       pending: loaded.pending.clone(),
       decided: loaded.decided.clone(),
       merged_by: merged_by(&loaded.orchestrated),
+      pins: todo::pins(conversation.state),
+      search: found.map(|found| found.marks.clone()),
+      ci: task.ci.clone().map(|shown| super::ci::timeline::CiShare {
+        shown,
+        project: open.clone(),
+        lost: task.lost(),
+      }),
     });
-    // Stale as applying would find it: what a message sent now meets, as the chat's own Apply reads the run.
-    let offered = message_offer(&task.detail, run.id());
-    let proposed = proposals(&loaded.orchestrated, (offered.as_ref(), &loaded.questions));
-    let working = working_line(run, conversation, (items, &loaded.entries), asking);
-    let arrived = arrivals(items, &loaded.entries) + proposed.len();
-    let chat = timeline::chat(
-      ctx,
-      &self.follow,
-      (&built.rows, &built.delivery, run.approvals.approved_by_autopilot()),
-      (items, &proposed),
-      (working, arrived),
-    );
-    (
-      states::shown_as_last_read(ctx, chat, stale.as_ref(), &self.retry),
-      Some(state),
-    )
   }
 
   /// The run's transcript with its requests, and why reading them again failed while they show as last read;

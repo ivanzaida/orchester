@@ -1,5 +1,91 @@
 {
   "settings": {
+    "project": {
+      "runs": {
+        "storage": {
+          "title": "Storage",
+          "folderOpenFailed": "The system could not open this folder.",
+          "cancel": "Cancel",
+          "lead": "What Orchester keeps for this project on the disk, largest first. Removing a worktree keeps its branch, pull request and artifacts.",
+          "group": "Workspaces and storage",
+          "entryLow": "Low disk space · {{free}} free on {{disk}} · {{count}} runs paused",
+          "entryLowOne": "Low disk space · {{free}} free on {{disk}} · {{count}} run paused",
+          "entryLowWaiting": "Low disk space · {{free}} free on {{disk}} · new steps wait",
+          "entryCalm": "Orchester keeps {{size}} · {{free}} free on {{disk}}",
+          "disk": "Disk",
+          "diskNamed": "Disk {{disk}}",
+          "readingDisk": "Reading the disk…",
+          "reading": "Reading what Orchester keeps…",
+          "diskUnavailable": "The disk could not be read. The guard cannot check free space.",
+          "diskSummary": "{{free}} free of {{total}} · keeps {{keep}} GB free",
+          "diskLow": "{{free}} free of {{total}} · below the {{keep}} GB to keep free · {{count}} runs paused",
+          "diskLowOne": "{{free}} free of {{total}} · below the {{keep}} GB to keep free · {{count}} run paused",
+          "diskLowWaiting": "{{free}} free of {{total}} · below the {{keep}} GB to keep free · new steps wait",
+          "gigabytes": "{{size}} GB",
+          "gb": "GB",
+          "unknown": "—",
+          "measuringValue": "…",
+          "orchester": "Orchester",
+          "orchesterUnknown": "Orchester · size not known",
+          "kept": "What Orchester keeps",
+          "keep_free": {
+            "title": "Keep free on the repository disk",
+            "named": "Keep free on {{disk}}",
+            "hint": "Below it no new step starts; working steps pause with a checkpoint and go on when space is back",
+            "invalid": "Enter a whole number from 1 to 1048576 GB.",
+            "mark": "Keep free"
+          },
+          "build_output_after": {
+            "title": "Build output of waiting runs is cleared after",
+            "hint": "A run that waits for you keeps its code; clearing build output lets its next step build again",
+            "unavailableValue": "Not available",
+            "unavailable": "Automatic build-output clearing is not implemented in the workspace storage layer yet. No clearing interval is active."
+          },
+          "clean_up": {
+            "title": "Clean up",
+            "measuring": "Available once sizes are read",
+            "nothing": "Nothing to clean: no ended run keeps a worktree",
+            "hint": "{{count}} ended runs keep {{size}}; their branches, pull requests and artifacts stay",
+            "hintOne": "{{count}} ended run keeps {{size}}; its branch, pull request and artifacts stay",
+            "confirm": {
+              "title": "Clean up {{count}} ended runs?",
+              "titleOne": "Clean up {{count}} ended run?",
+              "run": "{{title}} · run {{number}}",
+              "lead": "Their worktrees go, with everything in them",
+              "action": "Clean up · {{size}}",
+              "frees": "Frees about {{size}}. The disk would then have about {{after}} free; the guard keeps {{keep}} GB free. Sizes may change while runs work.",
+              "stays": "Stays: their branches, pull requests and artifacts. A run can be continued from its branch.",
+              "untouched": "Waiting, paused and working runs and the warm workspaces are not touched."
+            }
+          },
+          "columns": {
+            "item": "Worktree or workspace",
+            "size": "Size",
+            "build": "Build output",
+            "last": "Last used"
+          },
+          "count": "{{count}} · {{size}} · largest first",
+          "measuring": "Measuring sizes · {{count}} of {{total}}",
+          "empty": {
+            "title": "Orchester keeps nothing on this disk yet",
+            "hint": "Each run gets its own worktree when it starts, and warm workspaces appear after the first runs. They show here, largest first, with their sizes."
+          },
+          "newTask": "New task",
+          "inUse": "In use",
+          "clearBuild": "Clear build output",
+          "remove": "Remove",
+          "openFolder": "Open folder",
+          "buildUnavailable": "Build-output sizes and clearing are not available in the workspace storage layer yet.",
+          "workspaceRemoveUnavailable": "Removing idle warm workspaces is not available in the workspace storage layer yet.",
+          "runRemoveUnavailable": "Storage removes only ended runs. An interrupted run can still be continued.",
+          "processUnavailable": "The file system reports why removal failed; identifying the process holding a file is not available yet.",
+          "workspace": "Warm workspace {{number}}",
+          "worktree": "Run worktree",
+          "task": "{{key}} · {{title}}",
+          "path": "run {{number}} · {{path}}"
+        }
+      }
+    },
     "notifications": {
       "when": "Notify me when",
       "how": "How",

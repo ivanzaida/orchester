@@ -19,11 +19,13 @@
 //! ([`ReviewSpend::Unknown`]), and one that could not be started spent nothing.
 //!
 //! The story-point estimator runs on the same connection and model in the same isolation, with its own
-//! instructions and schema ([`estimate`]).
+//! instructions and schema ([`estimate`]); the side agent of a side question about a run runs in that isolation on
+//! the Orchestrator's connection and model ([`side`]).
 
 mod codex;
 mod estimate;
 mod native;
+mod side;
 
 use std::path::{Path, PathBuf};
 
@@ -36,6 +38,7 @@ pub use self::{
     read_codex_estimate,
   },
   native::{NATIVE_MAX_OUTPUT, NativeSpend, native_request, native_verdict},
+  side::{CliSideAgent, SideAsked, claude_side_args},
 };
 use crate::{
   command::{Command, CommandError, CommandOutput, CommandRunner},

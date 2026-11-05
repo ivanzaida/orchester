@@ -156,7 +156,9 @@ mod here {
     if let Err(error) = CodebaseIndexes::new(root).prune() {
       tracing::warn!(%error, "cannot remove the codebase indexes of removed worktrees");
     }
-    sweep_in_background(programs, root);
+    if request.sweeps() {
+      sweep_in_background(programs, root);
+    }
     Ok(cleanup)
   }
 

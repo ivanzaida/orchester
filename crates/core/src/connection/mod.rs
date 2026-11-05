@@ -18,6 +18,8 @@ pub mod app_server_mcp;
 mod catalog;
 pub mod claude_approval;
 mod claude_catalog;
+pub mod compaction;
+pub mod context_use;
 mod discovery;
 mod endpoint;
 mod github;

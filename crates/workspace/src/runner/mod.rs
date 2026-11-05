@@ -28,6 +28,7 @@ mod resolve;
 mod run_files;
 mod run_git;
 mod settings;
+mod side_question;
 pub mod state;
 mod work;
 mod worktree_changes;

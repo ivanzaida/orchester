@@ -1109,6 +1109,19 @@
     }
   },
   "settings": {
+    "project": {
+      "runs": {
+        "storage": {
+          "clean_up": {
+            "running": "Cleaning up ended runs' worktrees",
+            "done": "Clean up freed about {{size}} GB · {{count}} ended runs' worktrees removed",
+            "partial": "Clean up freed about {{size}} GB · {{count}} ended runs could not be removed",
+            "doneUnknown": "Clean up removed {{count}} ended runs' worktrees · sizes were unavailable",
+            "partialUnknown": "Clean up finished · {{count}} ended runs could not be removed; freed space is unknown"
+          }
+        }
+      }
+    },
     "codeIndex": {
       "listFailed": "Couldn’t read the kept indexes",
       "rebuildFailed": "The index was not rebuilt: {{reason}}",
@@ -1448,6 +1461,7 @@
     }
   },
   "skills": {
+    "chosenGone": "The project no longer has the version of the skill you chose. Remove its chip and choose it again.",
     "errors": {
       "blankDescription": "Write a description first: agents choose a skill by it",
       "blankBody": "Write the body first: it is what an agent loads"
@@ -2100,6 +2114,32 @@
     "stop": {
       "failed": "The answer couldn't be stopped: the runner didn't answer."
     },
+    "plan": {
+      "taken": "This plan no longer waits: it was approved, replaced or dismissed meanwhile.",
+      "busy": "Not approved yet · the Orchestrator is still answering. Approve the plan once its answer ends."
+    },
+    "compact": {
+      "nothing": "Nothing to compact yet: this conversation has no session the Orchestrator can resume.",
+      "busy": "Not compacted · the Orchestrator is still answering. Compact once it's done.",
+      "notReady": "Choose a connection and model in Orchestrator settings and publish them before you compact.",
+      "dailyBudgetUsed": "Not compacted · today's token budget is used.",
+      "runnerUnavailable": "Not compacted · the runner didn't answer",
+      "shuttingDown": "Not compacted · the runner is stopping",
+      "toolsUnavailable": "Not compacted · the Orchestrator's tools couldn't be served on this computer",
+      "failed": "Not compacted · the runner refused it"
+    },
+    "conversation": {
+      "blankTitle": "A conversation's title can't be blank.",
+      "gone": "This conversation is no longer kept.",
+      "busy": "The Orchestrator is still answering in it, or a message waits there for its turn. Stop it or let it finish, then delete it."
+    },
+    "rewind": {
+      "busy": "Nothing was dropped · the Orchestrator is answering in this conversation, or a message waits there for its turn. Stop the answer or let it finish, then try again.",
+      "notThere": "Nothing was dropped · this message is no longer in the conversation, or nothing follows it."
+    },
+    "fork": {
+      "notThere": "No fork was made · this message is no longer in the conversation."
+    },
     "queued": {
       "started": "Its turn had already started, so the message was left as it is."
     },
@@ -2168,6 +2208,10 @@
         "deliveredByQueue": "Run #{{run}} was not merged on its own: its pipeline ends in a Deliver step, so the merge queue delivers it, after the person's approval when the step asks for one."
       },
       "reportChangesNothing": "A turn the daily report started changes nothing, and this change is not one the person can apply from a card. Nothing was changed: put it in your recommendations instead.",
+      "planOnly": "Plan only is on: this turn takes no action. Nothing was changed: put it in your plan with propose_plan instead.",
+      "notPlanOnly": "This turn does not plan: propose_plan works only for a message sent in plan-only mode. Nothing was kept.",
+      "invalidPlan": "A plan has at least one step that says what will happen, and at most 20. Nothing was kept.",
+      "planProposed": "The plan waits for the person: nothing has been done. Tell them they can approve it, change it or dismiss it.",
       "releaseNothing": {
         "project": "New starts in {{project}} are not held: there is nothing to release. Nothing was changed.",
         "group": "New starts of {{task}}'s group are not held: there is nothing to release. Nothing was changed.",
@@ -2188,6 +2232,7 @@
     "approval": {
       "applied": "Applied for the person, as their decision in this conversation: its card says so. Tell them what it did, with its link.",
       "notPersonsTurn": "Nobody asked you in this turn: Orchester started it by itself. Only the person's own message approves a proposal; nothing was applied. Tell them it waits for them.",
+      "approvedPlan": "This turn carries out a plan the person approved, which approves none of the cards it makes: what only the person decides stays theirs to apply. Nothing was applied. Tell them it waits for them.",
       "automationInput": "The message of this turn was sent by automation driving the window, not typed by the person: it never approves a proposal. Nothing was applied; the person applies it on its card.",
       "notPending": "Proposal {{proposal}} does not wait for the person in this conversation, or was made after their message, which so cannot approve it. Nothing was applied: call apply_proposal without proposal to list those that wait.",
       "clickOnly": {
@@ -2269,6 +2314,91 @@
       "first": "The run is first in line already.",
       "personOnly": "Only a person approves a merge from the merge queue. Press Merge into the base branch yourself.",
       "resolve": "The run's worktree could not be merged: {{detail}}"
+    }
+  },
+  "sideQuestion": {
+    "errors": {
+      "blank": "Write a question first.",
+      "tooLong": "The question is too long: keep it under 4,000 characters.",
+      "notFound": "This side question is no longer kept.",
+      "notAnswered": "Only an answered side question can be sent.",
+      "alreadySent": "This answer was sent already.",
+      "notLatestRun": "This run is no longer the task's latest: nothing was sent.",
+      "runEnded": "Nothing was sent: no agent of this run reads messages any more."
+    },
+    "failure": {
+      "noOrchestrator": "Couldn't answer: choose a connection and model in Orchestrator settings first.",
+      "signedOut": "Couldn't answer: the Orchestrator's connection is signed out. Sign in, or pick another connection in Settings.",
+      "dailyBudgetUsed": "Couldn't answer: today's token budget is used.",
+      "secretsUnreadable": "Couldn't answer: the project's secrets couldn't be read to keep them out of what the side agent reads.",
+      "timedOut": "Couldn't answer in time.",
+      "failed": "Couldn't answer: {{detail}}",
+      "stopped": "You stopped this answer.",
+      "interrupted": "Couldn't answer: the app or its runner stopped meanwhile."
+    },
+    "stop": {
+      "failed": "The answer couldn't be stopped: the runner didn't answer."
+    }
+  },
+  "fixCi": {
+    "unavailable": {
+      "notRead": "Fix CI needs the checks: Orchester couldn't read them.",
+      "running": "Nothing failed yet: CI is still running.",
+      "nothingFailed": "Nothing failed: Fix CI sends failing checks only.",
+      "waiting": "A Fix CI already waits for the agent to read it.",
+      "decision": "The run waits for your decision first: a message now would answer it.",
+      "limit": "The run stopped at its limit: raise it first.",
+      "closed": "No agent of this run reads messages any more."
+    }
+  },
+  "export": {
+    "size": "≈ {{count}} KB",
+    "markdown": {
+      "fact": "**{{label}}:** {{value}}",
+      "date": "Exported",
+      "conversation": "Conversation",
+      "conversationOf": "{{title}}, started {{started}}",
+      "task": "Task",
+      "run": "Run",
+      "runNumber": "Run {{number}}",
+      "you": "You",
+      "youTo": "You to {{agent}}",
+      "orchestrator": "Orchestrator",
+      "attachments": "Attached: {{names}}",
+      "toolCall": "Tool call",
+      "toolCallOn": "Tool call ({{task}})",
+      "outcome": {
+        "done": "Done",
+        "refused": "Refused: {{reason}}",
+        "proposed": "Proposed, waiting for a person",
+        "applied": "Applied by a person",
+        "dismissed": "Dismissed"
+      },
+      "mark": {
+        "returned": "Returned the work to {{to}} after {{failed}} failed",
+        "restarted": "Restarted {{step}} as a fresh session",
+        "returnedWithNote": "Returned the work to {{to}} with a note"
+      },
+      "tool": {
+        "command": "Command",
+        "declined": "Declined command",
+        "failed": "Failed command",
+        "exited": "{{what}}, exit {{code}}",
+        "added": "Added",
+        "edited": "Edited",
+        "deleted": "Deleted",
+        "mcp": "MCP call to {{server}}",
+        "error": "Error"
+      }
+    },
+    "errors": {
+      "secretsUnreadable": "Nothing was exported: the project's secrets couldn't be read to keep them out of the file.",
+      "denied": "Couldn't save {{path}}: this folder doesn't allow writing there.",
+      "noFolder": "Couldn't save {{path}}: its folder no longer exists.",
+      "full": "Couldn't save {{path}}: the disk is full.",
+      "readOnly": "Couldn't save {{path}}: the disk is read-only.",
+      "folder": "Couldn't save {{path}}: a folder has that name.",
+      "failed": "Couldn't save {{path}}: the file couldn't be written."
     }
   }
 }

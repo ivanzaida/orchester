@@ -1,10 +1,10 @@
 //! The box of a text field: `surface_input` inside a `border` stroke, radius 6, 10 at its sides, the
 //! value in 12 `text_primary` and the placeholder in 12 `text_muted`. A single line is 28 high (`QWfRV`)
 //! with an optional 13 `text_muted` glyph before the value, 8 from it (`Field/search` `Z7mGr2`), or a
-//! 12 `text_muted` unit after it (`Limit field` `eesXH`); a text area is 84 high at least, 7 over and
-//! under its lines (`IBFli`). The box takes the `border_focus` stroke while its input has the focus
-//! (`QWfRV` in `C0Qk5`) and the `danger` stroke while its value is not accepted (`wbLGz` in `CqBFL`).
-//! A search that holds text can end in a 13 `text_muted` cross that clears it (`Clear search` `rUHLV`);
+//! 12 `text_muted` unit after it (`Limit field` `eesXH`), which a find field's count takes ([`UnitLook`]); a text
+//! area is 84 high at least, 7 over and under its lines (`IBFli`). The box takes the `border_focus` stroke while its
+//! input has the focus (`QWfRV` in `C0Qk5`) and the `danger` stroke while its value is not accepted (`wbLGz` in
+//! `CqBFL`). A search that holds text can end in a 13 `text_muted` cross that clears it (`Clear search` `rUHLV`);
 //! an empty one can end in the key cap of the shortcut that reaches it (`Kbd` in `nsdST`).
 //! It types each key once: the input writes into the value itself. A locked field shows its value in
 //! `text_secondary` on `surface_panel` and takes no input or focus (`Bzakf` in New task · queued
@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use lurq::{
   app::{component::DevtoolsInspectable, ctx::Ctx, events::TextInputEvent, theme::TypographyStyle},
+  components::TextInputController,
   core::{ElementRef, Signal},
   node::{Element, dimension::Dimension},
 };
@@ -37,6 +38,20 @@ enum Lines {
   Compact,
 }
 
+/// How the unit after a single line's value reads.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum UnitLook {
+  /// 12 `text_muted` (`eesXH`).
+  #[default]
+  Quiet,
+  /// 11.5 `text_muted`: where a find field's current place is among those found (`Count` `k4sfiI` in `Find field`).
+  Count,
+  /// 11.5 `danger`: a find field that found nothing (`NZkiD`).
+  Refused,
+  /// 11.5 `text_muted` after a turning 12 loader: a search under way (`Find bar states` in `aoVlE`).
+  Busy,
+}
+
 /// Told of an edit as it is typed ([`FieldInput::on_typed`]).
 type OnTyped = Arc<dyn Fn(&TextInputEvent) + Send + Sync>;
 
@@ -52,6 +67,8 @@ pub struct FieldInput {
   lines: Lines,
   mono: bool,
   text_style: Option<TypographyStyle>,
+  /// The placeholder's own role, where the design draws it in another type than the value.
+  placeholder_style: Option<TypographyStyle>,
   name: Arc<str>,
   /// Why the value is not accepted, said under the box, whose stroke turns `danger`.
   error: Option<Arc<str>>,
@@ -80,12 +97,15 @@ pub struct FieldInput {
   on_typed: Option<OnTyped>,
   /// The input, for its owner to focus.
   element: Option<ElementRef>,
+  /// The input's selection, for its owner to focus it and select its value.
+  controller: Option<TextInputController>,
+  unit_look: UnitLook,
   /// Its place among the window's first Tab stops ([`FieldInput::tab_first`]).
   tab_first: Option<i32>,
 }
 
-/// Compared by what it shows; the value by its signal. The input's element ref is its owner's, kept for
-/// the owner's life.
+/// Compared by what it shows; the value by its signal. The input's element ref and controller are its owner's, kept
+/// for the owner's life.
 impl PartialEq for FieldInput {
   fn eq(&self, other: &Self) -> bool {
     self.id == other.id
@@ -94,9 +114,11 @@ impl PartialEq for FieldInput {
       && self.leading == other.leading
       && self.leading_while_empty == other.leading_while_empty
       && self.unit == other.unit
+      && self.unit_look == other.unit_look
       && self.lines == other.lines
       && self.mono == other.mono
       && self.text_style == other.text_style
+      && self.placeholder_style == other.placeholder_style
       && self.name == other.name
       && self.error == other.error
       && self.group_separator == other.group_separator
@@ -131,6 +153,7 @@ impl FieldInput {
       lines: Lines::One,
       mono: false,
       text_style: None,
+      placeholder_style: None,
       name: name.into(),
       error: None,
       group_separator: None,
@@ -148,6 +171,8 @@ impl FieldInput {
       on_leave: None,
       on_typed: None,
       element: None,
+      controller: None,
+      unit_look: UnitLook::Quiet,
       tab_first: None,
     }
   }
@@ -209,6 +234,19 @@ impl FieldInput {
     self
   }
 
+  /// How the unit reads: a find field's count, that it found nothing, or that it is searching.
+  pub fn unit_look(mut self, look: UnitLook) -> Self {
+    self.unit_look = look;
+    self
+  }
+
+  /// `controller` keeps the input's selection: its owner focuses the input and selects its value with it. It takes the
+  /// place of [`Self::element`].
+  pub fn controller(mut self, controller: TextInputController) -> Self {
+    self.controller = Some(controller);
+    self
+  }
+
   /// A text area: lines wrap and add up as they are typed.
   pub fn text_area(mut self) -> Self {
     self.lines = Lines::Many;
@@ -256,6 +294,13 @@ impl FieldInput {
   /// The design's text role for the value and placeholder.
   pub fn text_style(mut self, style: TypographyStyle) -> Self {
     self.text_style = Some(style);
+    self
+  }
+
+  /// The placeholder in `style` instead of the value's, e.g. a search typed in Geist Mono whose placeholder is words
+  /// (`Search models…` `Aenob` in the runs-on picker).
+  pub fn placeholder_style(mut self, style: TypographyStyle) -> Self {
+    self.placeholder_style = Some(style);
     self
   }
 

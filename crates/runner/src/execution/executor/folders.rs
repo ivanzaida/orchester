@@ -7,7 +7,6 @@
 use std::{path::Path, time::Duration};
 
 use orchester_core::{
-  id::RunId,
   integration::{
     WORKTREES_DIR,
     workspace::{WorkspaceGitError, Workspaces},
@@ -81,24 +80,25 @@ fn keep(
   )
 }
 
-/// The sizes of `numbers`' folders and of every run's own worktree. A folder that cannot be read has none; a
-/// worktrees folder that cannot be listed lists none, as there is then nothing to show.
+/// The sizes of `numbers`' folders and of every folder of the worktrees folder, runs' own worktrees and their steps'.
+/// A folder that cannot be read has none; a worktrees folder that cannot be listed lists none, as there is then
+/// nothing to show.
 fn sizes(execution: &ExecutionRoot, numbers: Vec<WorkspaceNumber>) -> FolderSizes {
   let workspaces = numbers
     .into_iter()
     .map(|number| (number, folder_size(&execution.workspace(number)).ok()))
     .collect();
-  let run_worktrees = std::fs::read_dir(execution.repository().join(WORKTREES_DIR))
+  let worktrees = std::fs::read_dir(execution.repository().join(WORKTREES_DIR))
     .map(|entries| {
       entries
         .flatten()
-        .filter_map(|entry| entry.file_name().to_str()?.parse::<RunId>().ok())
-        .map(|run| (run, folder_size(&execution.run_worktree(run)).ok()))
+        .filter(|entry| entry.path().is_dir())
+        .filter_map(|entry| {
+          let name = entry.file_name().into_string().ok()?;
+          Some((name, folder_size(&entry.path()).ok()))
+        })
         .collect()
     })
     .unwrap_or_default();
-  FolderSizes {
-    workspaces,
-    run_worktrees,
-  }
+  FolderSizes { workspaces, worktrees }
 }

@@ -86,11 +86,16 @@ are refused in every shape below.
 - `CommandRequest`: `{operation_id,expected:[ExpectedRevision],command}`; `command` is internally tagged by `kind`
   (e.g. `{kind:"claim.acquire",subject}`).
 - `CommandResult`: `{operation_id,state:"committed",result,cursor}`; `result` is the command's value, which carries
-  `effects:[LocalEffect]` (empty when no local effect is authorized). `cursor` is an opaque, non-empty
-  `EventCursor` string.
+  `effects:[LocalEffect]` (empty when no local effect is authorized). `cursor` is the `EventCursor` just after the
+  command's events.
+- `EventCursor`: the server's committed event sequence position in one project's event stream. Its wire form is a
+  string holding the canonical decimal of a positive integer that fits in 64 bits: digits only, no sign, no leading
+  zeros (`"1"`, `"10"`; never `""`, `"0"`, `"-1"`, `"+1"`, `"007"` or `"c1"`), and anything else is refused
+  (`EventCursorError`). Cursors order by that integer, never by string order (`"9"` < `"10"`; `EventCursor` is `Ord`).
+  Clients may compare two cursors of the same project; cursors of different projects are not comparable.
 - `LocalEffect`: `{kind:"start",work_id,bundle:{sha256,schema_version}}`, `{kind:"pause",work_id}`,
-  `{kind:"stop",work_id}`, `{kind:"deliver",work_id}` (S7, below) or `{kind:"none"}`; `sha256` is a 64-digit
-  lowercase hex `ContentHash`.
+  `{kind:"stop",work_id}`, `{kind:"deliver",work_id}`, `{kind:"deliver_module",module_id,branch,source_commit,base_commit}`
+  (S7, below) or `{kind:"none"}`; `sha256` is a 64-digit lowercase hex `ContentHash`.
 - `OperationRead`: `{operation_id,state:"committed",response:CommandResult}` or
   `{operation_id,state:"rejected",error:AuthorityError}`.
 - `AuthorityError`: `{operation_id?,code,details}`; `operation_id` is left out when the refusal came before the
@@ -123,7 +128,8 @@ The public prerequisite for platform OP-153 (bounded direct reads and server-sid
 unknown field is refused. Times are milliseconds since the Unix epoch; days are `YYYY-MM-DD`.
 
 - `PageRequest`: `{after:PageCursor?,limit}`; `limit` may be left out for 50 and is 1..=200 (`PageRequestError`).
-  `PageCursor` is an opaque, non-empty string, bound to the workspace, the filters, the sort and the snapshot.
+  `PageCursor` is an opaque, non-empty string, bound to the workspace, the filters, the sort and the snapshot; unlike
+  `EventCursor` it is not ordered, and clients never read or compare it.
 - `Page<T>`: `{items:[T],next:PageCursor?,cursor:EventCursor}`; `next` is `null` on the last page, and every page of
   one listing carries the same snapshot `cursor`. Entities come in ascending (creation sequence, id) order, histories
   in ascending sequence. A snapshot is kept at least 15 minutes (`PAGE_CURSOR_RETENTION_SECONDS`, 900) after the last
@@ -227,6 +233,15 @@ and `orchester_api::v2`; it adds no endpoints. Unknown fields are refused in eve
   `{work_id,claim_id,source_commit,base_commit,bundle}` (Admin) and `delivery.request`
   `{authority,authorization_operation_id,source_commit,base_commit,bundle}`, each answering
   `{kind:"delivery",delivery:DeliveryRead,effects}`.
+- Module delivery (S7c, ORC-656): base delivery is a module's, and task works reach base only through their module
+  (the run branch merges into the module branch locally; work reports tell the server). `ModuleDeliveryRead`:
+  `{subject:{kind:"module",id},claim_id,authorization_operation_id:OperationId?,branch,source_commit,base_commit,state,revision}`,
+  with the module's claim and branch and no `work_id` or `bundle`; a task `subject` is refused. It is a separate type,
+  not a tagged `DeliveryRead`, so the task form above keeps its wire; the field sets are disjoint, so a body reads as
+  one form only. `LocalEffect` gains `{kind:"deliver_module",module_id,branch,source_commit,base_commit}`: the runner
+  may merge that module branch head into base at `base_commit` on its computer; no local path is sent. Authorized by
+  an Admin's `delivery.authorize`, or by the workspace's `automatic_merge` for a request from the module's current
+  effective claim (D7).
 
 Decided for S7 (the orchestrator's D3 and D7, 2026-11-03, revisable by the person): the automatic module branch is
 `module/<name-slug>` (with `-<8 hex of the module id>` on collision), fixed at first assignment and created by the
@@ -270,6 +285,35 @@ The public prerequisite for platform OP-152's S9b (`work.report`) is in core (`o
 
 No D4/D8 completion or human-wait variant is added. Existing v1 contracts, the /api/v1 client and earlier v2 types are
 unchanged, apart from the new error codes.
+
+## Team authority S11 subscriptions
+
+The public prerequisite for platform OP-154 (scoped invalidation subscriptions without replica snapshots) is in
+`orchester_api::v2::subscription`, re-exported from `orchester_api::v2`; it defines no route. Unknown fields are refused
+in every shape below.
+
+- Route, the server's: `GET /api/v2/projects/{project}/subscription`, a server-sent event stream, with an optional
+  `Last-Event-ID` header carrying the last cursor the client saw. Each event's SSE `event:` name is its `kind`, its
+  `id:` its `cursor` (`revoked` has none), and its `data:` the JSON below.
+- `QueryScope`, a family of cached reads, tagged by `kind`: `{kind:"workspace"}` (project, policy, capabilities,
+  members), `{kind:"task_list"}` (task list and task counts), `{kind:"task",task:TaskId}`,
+  `{kind:"task_comments",task:TaskId}`, `{kind:"module_list"}`, `{kind:"module",module:ModuleId}` (summary, progress,
+  burndown, history), `{kind:"library"}` (library and pickers) and `{kind:"resource",resource:ResourceId}` (its
+  version list). Scopes compare by value and are totally ordered, so a set of them is stable.
+- `SubscriptionEvent`, tagged by `kind`:
+  - `{kind:"ready",cursor:EventCursor}`: sent first; the stream's position, with no snapshot.
+  - `{kind:"invalidated",cursor,scopes:[QueryScope]}`: one per committed batch; `cursor` is the batch's last entry and
+    `scopes` name each scope once.
+  - `{kind:"reset",cursor}`: the resume point is below the server's replay floor; the client drops every cached query
+    and reads again at or after `cursor`.
+  - `{kind:"revoked"}`: the caller lost access; the stream then closes.
+- Client race rule: a cached read taken at cursor `R` (a page's or command's `EventCursor`) is stale only when an
+  `invalidated` event with a cursor greater than `R` names its scope, "greater" in the `EventCursor` ordering above
+  (by integer, never by string). Events with a cursor at or below `R` are already in the read, so a client may
+  subscribe before or after reading without missing a change. The rule compares cursors of the same project only. A
+  `reset` drops everything.
+
+Existing v1 contracts, the /api/v1 client and earlier v2 types are unchanged.
 
 ## Conventions
 

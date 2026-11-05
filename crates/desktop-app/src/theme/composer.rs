@@ -5,11 +5,12 @@
 use std::sync::Arc;
 
 use lurq::{
-  app::theme::{PaletteColor, RadiusSize, Theme},
+  app::theme::{PaletteColor, RadiusSize, SpacingSize, Theme},
+  components::InputTokenStyle,
   node::color::Color,
 };
 
-use super::Mode;
+use super::{ExtraRadius, ExtraTypography, Mode};
 
 /// Colors of the composer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -65,6 +66,16 @@ impl ComposerRadius {
       Self::Context => 8.0,
     }
   }
+}
+
+/// A mention in the message (`Mention · task` `iC7N0`, `Mention · run` `avtHN` in 08d `KoirO`): Geist Mono 11 in
+/// `text_secondary` on `surface_raised`, 8 at its sides, round ends. lurq draws an input's chip with no stroke and no
+/// icon, so the design's `border` stroke and glyph are not drawn.
+pub fn mention_chip() -> InputTokenStyle {
+  InputTokenStyle::new(PaletteColor::TextSecondary, PaletteColor::SurfaceRaised)
+    .padding(SpacingSize::Sm)
+    .radius(ExtraRadius::Full.role())
+    .typography(ExtraTypography::MonoNote.role())
 }
 
 pub(super) fn colors(mode: Mode) -> impl Iterator<Item = (Arc<str>, Color)> {

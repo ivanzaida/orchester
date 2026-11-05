@@ -12,7 +12,7 @@ use std::path::Path;
 use orchester_core::{
   attachment::NewAttachment,
   connection::AgentProvider,
-  conversation::{Message, Recipient, Timing},
+  conversation::{Message, Recipient, Timing, skill::ChosenSkill},
   id::{ChatId, IdempotencyKey, MessageId, RunId, TaskId},
   integration::Leftovers,
   run::{Answerer, PlanDecision, PlanVersion, ReviewNote},
@@ -23,10 +23,10 @@ use orchester_store::{ProjectDb, StoreError};
 use super::{
   Conversation, SendError,
   composer::{ComposerMode, Then},
-  send::send_as,
+  send::{Carried, send_as},
 };
 use crate::{
-  attachments,
+  attachments, mentions,
   messages::{self, Message as UiMessage},
   tasks::{
     detail::{RunView, TaskDetail},
@@ -287,38 +287,38 @@ pub fn store_in(
   (key, way): (IdempotencyKey, Way),
   text: &str,
 ) -> Result<(Then, Message), OutgoingError> {
-  store_as(root, prepared, (key, way), ((text, &[]), None, Answerer::Person))
+  store_as(root, prepared, (key, way), ((text, &[], None), None, Answerer::Person))
 }
 
 /// [`store_in`] for the project's Orchestrator chat of conversation `chat`, which wrote `text` on the person's side:
 /// the conversation names it as the chat's, sent by the chat itself when `by` is automation, applied by the person
-/// otherwise. The chat attaches no files.
+/// otherwise. The chat attaches no files and chooses no skill.
 pub fn store_by_orchestrator_in(
   root: &Path,
   prepared: &Prepared,
   (key, way): (IdempotencyKey, Way),
   (text, chat, by): (&str, ChatId, Answerer),
 ) -> Result<(Then, Message), OutgoingError> {
-  store_as(root, prepared, (key, way), ((text, &[]), Some(chat), by))
+  store_as(root, prepared, (key, way), ((text, &[], None), Some(chat), by))
 }
 
 /// Stores a window or MCP client's message with the decider captured before yielding, with the files the person
-/// attached in the window (an MCP client attaches none).
+/// attached in the window and the skill they chose in its composer (an MCP client gives neither).
 pub fn store_answer_in(
   root: &Path,
   prepared: &Prepared,
   key_way: (IdempotencyKey, Way),
-  (text, attachments): (&str, &[NewAttachment]),
+  (text, attachments, skill): (&str, &[NewAttachment], Option<&ChosenSkill>),
   by: Answerer,
 ) -> Result<(Then, Message), OutgoingError> {
-  store_as(root, prepared, key_way, ((text, attachments), None, by))
+  store_as(root, prepared, key_way, ((text, attachments, skill), None, by))
 }
 
 fn store_as(
   root: &Path,
   prepared: &Prepared,
   (key, way): (IdempotencyKey, Way),
-  ((text, attachments), by_orchestrator, by): ((&str, &[NewAttachment]), Option<ChatId>, Answerer),
+  ((text, attachments, skill), by_orchestrator, by): (Carried<'_>, Option<ChatId>, Answerer),
 ) -> Result<(Then, Message), OutgoingError> {
   let then = match way {
     Way::Primary => prepared.mode.then(),
@@ -349,7 +349,7 @@ fn store_as(
     key,
     (task, run, recovery_after),
     (prepared.recipient, timing),
-    ((text, attachments), by_orchestrator, by),
+    ((text, attachments, skill), by_orchestrator, by),
   )
   .map_err(OutgoingError::Send)?;
   Ok((then, stored))
@@ -374,8 +374,11 @@ fn reached_providers(
 }
 
 /// *Request changes* with `text` as the changes the plan that waits needs, decided `by`: the command to
-/// tell the runner. `version`, where given, is the plan the person saw: another one waiting is refused.
+/// tell the runner, its note with the facts of the tasks and runs `text` mentions, as the project at `root` holds
+/// them. `version`, where given, is the plan the person saw: another one waiting is refused. Blocks on SQLite when
+/// `text` mentions something.
 pub fn plan_changes(
+  root: &Path,
   prepared: &Prepared,
   text: &str,
   (by, version): (Answerer, Option<PlanVersion>),
@@ -390,7 +393,13 @@ pub fn plan_changes(
   if version.is_some_and(|seen| seen != waiting.version) {
     return Err(OutgoingError::Changed);
   }
-  let note = ReviewNote::new(text).map_err(|_| OutgoingError::Send(SendError::Blank))?;
+  let text = if mentions::find(text).is_empty() {
+    text.to_owned()
+  } else {
+    let db = ProjectDb::open(root).map_err(OutgoingError::Store)?;
+    mentions::facts::with_facts_from(&db, text).map_err(OutgoingError::Store)?
+  };
+  let note = ReviewNote::new(&text).map_err(|_| OutgoingError::Send(SendError::Blank))?;
   Ok(Command::DecidePlan {
     run: review.run,
     execution: waiting.execution,

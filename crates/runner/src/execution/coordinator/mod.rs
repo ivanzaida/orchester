@@ -28,6 +28,7 @@ pub(super) mod question;
 pub(super) mod recovery;
 pub(super) mod returned;
 pub(super) mod run_folder;
+pub(super) mod side_question;
 pub(super) mod sink;
 pub(super) mod stuck;
 pub(super) mod task_groups;

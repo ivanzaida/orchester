@@ -44,7 +44,7 @@ fn refuses_missing_and_unknown<T: for<'de> Deserialize<'de>>(wire: &Value, field
 }
 
 fn cursor() -> EventCursor {
-  EventCursor::new("c1".to_owned()).expect("cursor")
+  EventCursor::new("1").expect("cursor")
 }
 
 fn user() -> UserRef {
@@ -106,14 +106,14 @@ fn authority_reads_page_shape() {
     next: Some(next),
     cursor: cursor(),
   };
-  let wire = json!({"items":[1,2],"next":"p2","cursor":"c1"});
+  let wire = json!({"items":[1,2],"next":"p2","cursor":"1"});
   roundtrip(&page, &wire);
   let last = Page::<u32> {
     items: vec![],
     next: None,
     cursor: cursor(),
   };
-  roundtrip(&last, &json!({"items":[],"next":null,"cursor":"c1"}));
+  roundtrip(&last, &json!({"items":[],"next":null,"cursor":"1"}));
   refuses_missing_and_unknown::<Page<u32>>(&wire, "next");
   refuses_missing_and_unknown::<Page<u32>>(&wire, "cursor");
 }

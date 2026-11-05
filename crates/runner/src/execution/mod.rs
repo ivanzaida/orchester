@@ -128,8 +128,9 @@ struct Inner {
   blocked_runs: coordinator::blocked_runs::BlockedRuns,
   /// Runs stopped at their account's plan limit that a timer continues at its reset.
   plan_waits: coordinator::plan_limit::PlanWaits,
-  /// The turns of the Orchestrator chat under way.
+  /// The turns of the Orchestrator chat under way, and the side questions being answered.
   chats: coordinator::chat::Chats,
+  side_agents: coordinator::side_question::SideAgents,
   /// The disk guard's reading of free space (ORC-114), and its watch over runs paused for low disk space.
   disks: DiskGuard,
   disk_watch: coordinator::low_disk::DiskWatch,
@@ -168,6 +169,7 @@ impl Scheduler {
         blocked_runs: coordinator::blocked_runs::BlockedRuns::default(),
         plan_waits: coordinator::plan_limit::PlanWaits::default(),
         chats: coordinator::chat::Chats::default(),
+        side_agents: coordinator::side_question::SideAgents::default(),
         disks: DiskGuard::local(),
         disk_watch: coordinator::low_disk::DiskWatch::default(),
         #[cfg(feature = "test-agent")]

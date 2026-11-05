@@ -33,7 +33,10 @@ mod recovery;
 mod result;
 mod return_ended;
 pub mod review;
+mod run_model;
+mod run_permissions;
 mod schedule;
+pub mod side_question;
 mod snapshot;
 mod start_order;
 mod state;
@@ -87,6 +90,8 @@ pub use self::{
     RunContext, SCRATCH_FILES, SkillListing, WorkingTools, notice_text,
   },
   result::{STEP_RESULT_SCHEMA, StepOutcome, StepOutput, StepResult, UnverifiedCheck},
+  run_model::{ModelChoice, ModelEvent, ModelEventKind, ModelScope, StepBefore},
+  run_permissions::{PermissionEvent, PermissionEventKind, RunPermissionChange, WideningPersonOnly},
   snapshot::{PinnedVersion, PublishedVersions, RunSnapshot, SnapshotError, StepExecutor, StepSnapshot},
   start_order::StartOrder,
   state::{NewRun, Run, StoredRun},

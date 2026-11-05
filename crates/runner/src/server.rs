@@ -3,6 +3,7 @@
 
 mod attach;
 mod browser;
+mod chat;
 mod code_index;
 mod decisions;
 mod estimate;
@@ -10,6 +11,7 @@ mod folders;
 mod merge_queue;
 mod resolve;
 mod run_folder;
+mod side;
 
 use std::{
   future::Future,
@@ -23,15 +25,14 @@ use std::{
 
 use orchester_core::{
   connection::{AgentProvider, ApiEndpoint},
-  id::{ChatId, ChatMessageId, IdempotencyKey, ResourceId, RunId, TaskId},
+  id::{IdempotencyKey, ResourceId, RunId, TaskId},
   integration::Leftovers,
   run::{InterruptCause, RaisedLimits},
   sharing::TaskRevision,
   tokens::TokenBudget,
 };
 use orchester_ipc::{
-  ChatTools, Command, Endpoint, ErrorReports, Event, IpcError, Rejection, Reply, Request, RequestId, ShutdownMode,
-  WorkReturn,
+  Command, Endpoint, ErrorReports, Event, IpcError, Rejection, Reply, Request, RequestId, ShutdownMode, WorkReturn,
   frame::{FrameReader, FrameWriter},
   handshake,
 };
@@ -334,17 +335,7 @@ async fn answer(
     Command::RaiseStepBudget { run, budget } => {
       return later.answer(run, async move { handle.raise_step_budget(run, budget).await });
     }
-    Command::ChangeRunPermissions {
-      run,
-      profile,
-      ref permissions,
-      apply,
-    } => {
-      let permissions = permissions.clone();
-      return later.answer(run, async move {
-        handle.change_permissions(run, profile, permissions, apply).await
-      });
-    }
+    ref change @ Command::ChangeRunPermissions { .. } => return change_permissions(&later, handle, change),
     Command::KeepPermissionsForNextInvocation { run, profile } => {
       return keep_permissions(&later, handle, run, profile);
     }
@@ -358,9 +349,10 @@ async fn answer(
     Command::Shutdown { mode } => return Answer::Shutdown(mode),
     Command::StopIfIdle => return Answer::StopIfIdle(id),
     Command::CheckConnection { provider, ref api } => return answer_check(&later, handle, provider, api.clone()),
-    Command::AnswerInChat { message, ref tools } => chat_answering(scheduler, message, tools.clone()).await,
-    Command::StopChat { chat } => chat_stopped(scheduler, chat),
-    Command::SteerChat { message } => chat_steered(scheduler, message),
+    Command::AnswerInChat { message, ref tools } => chat::answering(scheduler, message, tools.clone()).await,
+    Command::StopChat { chat } => chat::stopped(scheduler, chat),
+    Command::CompactChat { chat, ref tools } => chat::compacting(scheduler, chat, tools.clone()).await,
+    Command::SteerChat { message } => chat::steered(scheduler, message),
     Command::StopTurn { run } => return later.answer(run, async move { handle.stop_turn(run).await }),
     Command::Browser(ref command) => return later.browser(handle, command.clone()),
     Command::Folders(ref command) => return later.folders(handle, command.clone()),
@@ -369,6 +361,9 @@ async fn answer(
     Command::RunGit(ref git) => return later.reply(handle.run_git(git.clone())),
     Command::EstimateTask { task } => return later.estimate(handle, task),
     Command::RunFolderState { run } => return later.run_folder_state(handle, run),
+    ref side @ (Command::AnswerSideQuestion { .. } | Command::StopSideQuestion { .. }) => {
+      return side::answer_side(&later, handle, side);
+    }
     Command::SetErrorReports { ref reports } => return Answer::ErrorReports(id, reports.clone()),
     Command::ReadWorktreeChanges { run } => return later.reply(handle.worktree_changes(run)),
     Command::RebuildCodeIndex { ref revision } => return later.rebuild_code_index(handle, revision.clone()),
@@ -376,14 +371,6 @@ async fn answer(
     Command::RemoveWorktrees { run, ref request } => return later.reply(handle.remove_worktrees(run, request.clone())),
   };
   Answer::Reply(Event::Reply { id, reply })
-}
-
-/// The reply to [`Command::AnswerInChat`].
-async fn chat_answering(scheduler: &Scheduler, message: ChatMessageId, tools: ChatTools) -> Reply {
-  match scheduler.answer_in_chat(message, tools).await {
-    Ok(()) => Reply::ChatAnswering { message },
-    Err(rejection) => Reply::Rejected(rejection),
-  }
 }
 
 /// Starts the next run of `task` after `after` (Run again), removing `remove_worktrees` first, only for the task at
@@ -398,21 +385,6 @@ async fn run_again(
       .run_again_as(key, (task, after), remove_worktrees.clone(), revision)
       .await,
   )
-}
-
-fn chat_stopped(scheduler: &Scheduler, chat: ChatId) -> Reply {
-  match scheduler.stop_chat(chat) {
-    Ok(()) => Reply::ChatStopped { chat },
-    Err(rejection) => Reply::Rejected(rejection),
-  }
-}
-
-/// The reply to [`Command::SteerChat`].
-fn chat_steered(scheduler: &Scheduler, message: ChatMessageId) -> Reply {
-  match scheduler.steer_chat(message) {
-    Ok(()) => Reply::ChatSteered { message },
-    Err(rejection) => Reply::Rejected(rejection),
-  }
 }
 
 /// Continues `run`, stopped at its account's plan limit: on `connection`, another account's
@@ -431,6 +403,23 @@ fn at_plan_limit(
 
 /// Keeps the permissions of `profile` that `run`'s agent asked for for its next invocation
 /// ([`Command::KeepPermissionsForNextInvocation`]).
+/// Routes [`Command::ChangeRunPermissions`].
+fn change_permissions(later: &Later<'_>, handle: Scheduler, command: &Command) -> Answer {
+  let Command::ChangeRunPermissions {
+    run,
+    profile,
+    ref permissions,
+    apply,
+  } = *command
+  else {
+    unreachable!("change_permissions routes only Command::ChangeRunPermissions");
+  };
+  let permissions = permissions.clone();
+  later.answer(run, async move {
+    handle.change_permissions(run, profile, permissions, apply).await
+  })
+}
+
 fn keep_permissions(later: &Later<'_>, handle: Scheduler, run: RunId, profile: ResourceId) -> Answer {
   later.answer(run, async move {
     handle.keep_permissions_for_next_invocation(run, profile).await

@@ -25,7 +25,7 @@ enum CommandValue {
 }
 
 fn cursor() -> EventCursor {
-  EventCursor::new("c1".to_owned()).expect("cursor")
+  EventCursor::new("1").expect("cursor")
 }
 
 fn roundtrip<T: Serialize + for<'de> Deserialize<'de> + PartialEq + std::fmt::Debug>(value: &T, wire: &Value) {
@@ -107,7 +107,7 @@ fn authority_operations_command_request_and_result_shapes() {
   let result = CommandResult::committed(operation_id, CommandValue::Acquired { effects: Vec::new() }, cursor());
   let wire = json!({
     "operation_id":operation_id, "state":"committed",
-    "result":{"kind":"claim.acquire","effects":[]}, "cursor":"c1"
+    "result":{"kind":"claim.acquire","effects":[]}, "cursor":"1"
   });
   roundtrip(&result, &wire);
   for (field, value) in [("state", json!("rejected")), ("receipt", json!(1))] {
@@ -128,7 +128,7 @@ fn authority_operations_operation_read_roundtrips() {
   let wire = json!({
     "operation_id":operation_id, "state":"committed",
     "response":{"operation_id":operation_id,"state":"committed","result":{"kind":"claim.acquire","effects":[]},
-      "cursor":"c1"}
+      "cursor":"1"}
   });
   roundtrip(&committed, &wire);
   assert_eq!(committed.operation_id(), operation_id);

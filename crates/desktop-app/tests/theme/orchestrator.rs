@@ -1,5 +1,7 @@
-//! The Orchestrator's own type roles and spacing (`hujxu`, `zuvUi` in the new orchester.pen; `Xir64`), and its
-//! replies' links (`agv8r`).
+//! The Orchestrator's own type roles and spacing (`hujxu`, `zuvUi` in the new orchester.pen; `Xir64`), its replies'
+//! links (`agv8r`), and the context meter and the slash menu in its composer.
+use orchester_app::theme::{ContextText, SlashText};
+
 use super::*;
 
 #[test]
@@ -20,9 +22,14 @@ fn orchestrator_roles_follow_the_design() {
     // A plan's use in the runs-on picker (`qSIt9`).
     (OrchestratorText::PlanUse, 10.5, 1.3, FontWeight::Normal, "Geist Mono"),
     (OrchestratorText::FactKey, 12.0, 1.3, FontWeight::Normal, "Geist"),
-    // A History row's meta (`r9TeH`), the composer's message (`lB97V`).
+    // A History row's meta (`r9TeH`) and a result's matching line (`srL91`), the composer's message (`lB97V`).
     (OrchestratorText::HistoryMeta, 11.0, 1.3, FontWeight::Normal, "Geist"),
+    (OrchestratorText::HistoryLine, 11.5, 1.4, FontWeight::Normal, "Geist"),
     (OrchestratorText::Message, 13.0, 1.3, FontWeight::Normal, "Geist"),
+    // *Plan only* on the composer's Mode line (`xptH1` in `y51fw9`).
+    (OrchestratorText::Mode, 12.0, 1.3, FontWeight::Medium, "Geist"),
+    // *Settings ↗* at the runs-on picker's foot (`rIT51`).
+    (OrchestratorText::PickerLink, 12.0, 1.3, FontWeight::Normal, "Geist"),
   ] {
     let style = theme.typography_style(role.role());
     assert_eq!(
@@ -155,4 +162,116 @@ fn orchestrator_labelled_link_roles_follow_the_grid() {
     theme.spacing_value(OrchestratorSpacing::LinkColumns.role()),
     Dimension::Px(12.0)
   );
+}
+
+/// The context meter in the Orchestrator's composer and on a run's step at work (`Context meter · states` `Kp4IZ`,
+/// its popovers `v6vdj` and `OZGiw`).
+#[test]
+fn context_meter_roles_follow_the_design() {
+  let app = themed(Mode::Dark);
+  let theme = app.theme();
+  let mono = theme.typography_style(ExtraTypography::MonoNote.role()).font_family;
+  for (role, size, weight, in_mono) in [
+    // The share (`kYtZG`), *Full* (`kqwKb`), *Context* (`C0x35f`), the model (`hncjV`), the tokens (`DtYpM`), a note
+    // (`YwJOp`).
+    (ContextText::Share, 11.0, FontWeight::Normal, true),
+    (ContextText::Full, 11.0, FontWeight::Normal, false),
+    (ContextText::Title, 12.0, FontWeight::SemiBold, false),
+    (ContextText::Model, 11.0, FontWeight::Normal, true),
+    (ContextText::Tokens, 12.0, FontWeight::Normal, false),
+    (ContextText::Note, 11.0, FontWeight::Normal, false),
+  ] {
+    let style = theme.typography_style(role.role());
+    assert_eq!(
+      (style.font_size, style.weight, style.font_family == mono),
+      (size, weight, in_mono),
+      "{role:?}"
+    );
+  }
+  assert_eq!(
+    theme.typography_style(ContextText::Full.role()).color,
+    theme.palette_color(PaletteColor::Danger),
+    "kqwKb"
+  );
+}
+
+/// A composer's slash menu (`Slash menu` `IQOLN`, filtered `OKWFL`) and its skill chip (`o6R6w`): all 1.3, a
+/// skill's name in Geist Mono.
+#[test]
+fn slash_menu_roles_follow_the_design() {
+  let app = themed(Mode::Dark);
+  let theme = app.theme();
+  for (role, size, weight, color, family) in [
+    // *Commands* (`WG5ZV`), a head's or the footer's words (`cvxZd`, `VzkPa`), a name (`mSV2x`), its matched letters
+    // (`Match`), what it does (`Bu9RV`); a skill's name (`cLPAs`), its matched letters, and the chip's (`LTjMB`).
+    (
+      SlashText::Section,
+      11.0,
+      FontWeight::Medium,
+      PaletteColor::TextMuted,
+      "Geist",
+    ),
+    (
+      SlashText::Note,
+      11.0,
+      FontWeight::Normal,
+      PaletteColor::TextMuted,
+      "Geist",
+    ),
+    (
+      SlashText::Label,
+      12.0,
+      FontWeight::Normal,
+      PaletteColor::TextPrimary,
+      "Geist",
+    ),
+    (
+      SlashText::Match,
+      12.0,
+      FontWeight::SemiBold,
+      PaletteColor::TextPrimary,
+      "Geist",
+    ),
+    (
+      SlashText::Detail,
+      12.0,
+      FontWeight::Normal,
+      PaletteColor::TextMuted,
+      "Geist",
+    ),
+    (
+      SlashText::SkillLabel,
+      12.0,
+      FontWeight::Normal,
+      PaletteColor::TextPrimary,
+      "Geist Mono",
+    ),
+    (
+      SlashText::SkillMatch,
+      12.0,
+      FontWeight::SemiBold,
+      PaletteColor::TextPrimary,
+      "Geist Mono",
+    ),
+    (
+      SlashText::Chip,
+      11.0,
+      FontWeight::Normal,
+      PaletteColor::TextSecondary,
+      "Geist Mono",
+    ),
+  ] {
+    let style = theme.typography_style(role.role());
+    assert_eq!(
+      (
+        style.font_size,
+        style.line_height,
+        style.weight,
+        style.color,
+        &*style.font_family
+      ),
+      (size, 1.3, weight, theme.palette_color(color), family),
+      "{role:?}"
+    );
+  }
 }

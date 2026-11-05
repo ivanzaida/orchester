@@ -55,6 +55,24 @@ impl Runners {
     }
   }
 
+  /// Asks `project`'s runner to compact the session of `chat`, giving its CLI the domain tools at `tools` as a turn
+  /// gets them, starting the runner if needed. `Ok` once the compaction is under way.
+  pub async fn compact_chat(
+    &self,
+    project: &OpenProject,
+    chat: ChatId,
+    tools: ChatTools,
+  ) -> Result<(), RunRequestError> {
+    match self.ask_project(project, Command::CompactChat { chat, tools }).await? {
+      Reply::ChatCompacting { .. } => Ok(()),
+      Reply::Rejected(rejection) => Err(RunRequestError::Rejected(rejection)),
+      other => {
+        tracing::error!(?other, "unexpected reply to CompactChat");
+        Err(RunRequestError::Request(RequestError::Lost))
+      }
+    }
+  }
+
   /// Asks `project`'s runner to hand the person's message `message`, kept as sent now, to the answer under way in its
   /// conversation. `Ok` once it is handed over or left for a turn of its own.
   pub async fn steer_chat(&self, project: &OpenProject, message: ChatMessageId) -> Result<(), RunRequestError> {

@@ -420,7 +420,7 @@ pub fn merge_in_as(
   }
   super::local_integration::settle_review(&mut db, &merge);
   crate::base_moved::after_merge(repo_root, programs);
-  let cleanup = clear(&mut db, worktrees, &run, None);
+  let cleanup = clear(&mut db, worktrees, &run, None, false);
   if cleanup.is_err() {
     tracing::warn!("the run was merged, but what it left could not be cleared");
   }
@@ -461,13 +461,34 @@ pub fn leftovers_in(
 /// problem to show: it changed since, or git refused. The run is read again first: one that has other
 /// worktrees than `run`, the run the person saw, removes nothing ([`IntegrationProblem::RunChanged`]).
 pub fn remove_in(worktrees: &WorktreeRemover, run: &Run, confirmed: &Leftovers) -> Result<(), IntegrationProblem> {
+  remove_as(worktrees, run, confirmed, false)
+}
+
+/// Storage cleanup keeps all branches and refuses runs that have not ended.
+pub fn remove_storage_in(
+  worktrees: &WorktreeRemover,
+  run: &Run,
+  confirmed: &Leftovers,
+) -> Result<(), IntegrationProblem> {
+  if !run.status().is_terminal() {
+    return Err(IntegrationProblem::Cleanup(CleanupError::LiveWork));
+  }
+  remove_as(worktrees, run, confirmed, true)
+}
+
+fn remove_as(
+  worktrees: &WorktreeRemover,
+  run: &Run,
+  confirmed: &Leftovers,
+  preserve_branches: bool,
+) -> Result<(), IntegrationProblem> {
   let mut db = ProjectDb::open(worktrees.root())?;
   let stored = db
     .run(run.id())
     .map_err(run_store_error)?
     .filter(|stored| worktree_owners(stored) == worktree_owners(run))
     .ok_or(IntegrationProblem::RunChanged)?;
-  let cleanup = clear(&mut db, worktrees, &stored, Some(confirmed))?;
+  let cleanup = clear(&mut db, worktrees, &stored, Some(confirmed), preserve_branches)?;
   match cleanup.kept_worktrees.into_iter().next() {
     None => Ok(()),
     Some((worktree, KeepReason::Failed(detail))) => Err(IntegrationProblem::NotRemoved {
@@ -496,16 +517,20 @@ fn worktree_owners(run: &Run) -> (&BranchName, Vec<StepExecutionId>) {
 /// (`worktrees`): a folder something held is deleted again once the run's own processes there are stopped, then the
 /// codebase indexes only removed worktrees used go and folders no run uses any more are swept. The record is taken
 /// back when nothing was touched ([`settle_removal`]), and a folder that still stays is recorded as not removed
-/// ([`record_what_stayed`]).
+/// ([`record_what_stayed`]). A Storage clean-up (`preserve_branches`) keeps every branch, refuses a run that has not
+/// ended and sweeps no folders ([`Discard::Worktrees`]).
 fn clear(
   db: &mut ProjectDb,
   worktrees: &WorktreeRemover,
   run: &Run,
   confirmed: Option<&Leftovers>,
+  preserve_branches: bool,
 ) -> Result<Cleanup, IntegrationProblem> {
   let unchanged = |db: &ProjectDb| {
     let stored = db.run(run.id()).map_err(run_store_error)?;
-    Ok(stored.is_some_and(|stored| worktree_owners(&stored) == worktree_owners(run)))
+    Ok(stored.is_some_and(|stored| {
+      worktree_owners(&stored) == worktree_owners(run) && (!preserve_branches || stored.status().is_terminal())
+    }))
   };
   let at = Timestamp::now();
   let start = record_removal_as_seen(db, run.id(), (at, unchanged)).map_err(|error| {
@@ -516,8 +541,13 @@ fn clear(
       RecordedCleanupError::RunChanged => IntegrationProblem::RunChanged,
     }
   })?;
+  let confirmed = confirmed.cloned();
   let request = RemovalRequest {
-    discard: Discard::Seen(confirmed.cloned()),
+    discard: if preserve_branches {
+      Discard::Worktrees(confirmed)
+    } else {
+      Discard::Seen(confirmed)
+    },
     retry_held: true,
   };
   let removed = worktrees.remove(run.id(), request);

@@ -145,6 +145,68 @@ fn update_install_icons_match_bundled_font_names() {
   }
 }
 
+/// The glyphs of *Compact* and the compaction's lines (ORC-309, `GENCC`, `dPq1I`, `l5YmWb`).
+#[test]
+fn compact_icons_match_bundled_font_names() {
+  let font = include_bytes!("../../assets/fonts/lucide.ttf");
+  for (icon, name) in [
+    (Icon::FoldVertical, "fold-vertical"),
+    (Icon::FoldHorizontal, "fold-horizontal"),
+  ] {
+    assert_eq!(glyph_name(font, font_glyph(font, icon.glyph() as usize)), name);
+  }
+}
+/// The glyphs of the @ menu's rows and its empty state (`qhBhC`, `zzJ78`); the font names `square-check` by its
+/// former name `check-square-2`.
+#[test]
+fn mention_menu_icons_match_bundled_font_names() {
+  let font = include_bytes!("../../assets/fonts/lucide.ttf");
+  for (icon, name) in [
+    (Icon::SquareCheck, "check-square-2"),
+    (Icon::Play, "play"),
+    (Icon::SearchX, "search-x"),
+  ] {
+    assert_eq!(glyph_name(font, font_glyph(font, icon.glyph() as usize)), name);
+  }
+}
+
+/// The glyphs of Edit and *Rewind to here* on an earlier message (ORC-330's `GYAPg`, `QJb0b`, `Zm7kq`).
+#[test]
+fn rewind_icons_match_bundled_font_names() {
+  let font = include_bytes!("../../assets/fonts/lucide.ttf");
+  for (icon, name) in [
+    (Icon::MessageSquareX, "message-square-x"),
+    (Icon::History, "history"),
+    (Icon::Ellipsis, "ellipsis"),
+    (Icon::ArrowDown, "arrow-down"),
+    (Icon::ListChecks, "list-checks"),
+  ] {
+    assert_eq!(glyph_name(font, font_glyph(font, icon.glyph() as usize)), name);
+  }
+}
+
+/// The glyph of *Fork from here* and the fork's line (ORC-330's `GYAPg`, `RT5T7`).
+#[test]
+fn fork_icons_match_bundled_font_names() {
+  let font = include_bytes!("../../assets/fonts/lucide.ttf");
+  assert_eq!(
+    glyph_name(font, font_glyph(font, Icon::GitFork.glyph() as usize)),
+    "git-fork"
+  );
+}
+
+/// The glyphs of a run's pull request CI and of *Fix CI* (ORC-335, 10b `mxt1S`, 11c `NMHzc`).
+#[test]
+fn ci_icons_match_bundled_font_names() {
+  let font = include_bytes!("../../assets/fonts/lucide.ttf");
+  for (icon, name) in [
+    (Icon::Repeat, "repeat"),
+    (Icon::Wrench, "wrench"),
+    (Icon::GitPullRequest, "git-pull-request"),
+  ] {
+    assert_eq!(glyph_name(font, font_glyph(font, icon.glyph() as usize)), name);
+  }
+}
 /// The glyph of the Memory page's *Memory settings* (`YHyk4` in `S15` `BJQn0`).
 #[test]
 fn memory_settings_icon_matches_bundled_font_name() {

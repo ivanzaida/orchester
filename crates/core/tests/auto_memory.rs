@@ -166,6 +166,7 @@ fn auto_memory_is_off_for_the_orchestrator_chat() {
     mcp_config: Path::new("/tmp/mcp.json"),
     denied: &[],
     denied_files: &[],
+    skill: None,
   }
   .command(("Hello.", &[]), environment(), &project())
   .expect("a command");

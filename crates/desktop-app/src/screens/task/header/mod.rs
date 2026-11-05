@@ -9,6 +9,7 @@
 mod actions;
 mod back;
 pub(super) mod controls;
+pub(super) mod export;
 mod module;
 mod more;
 pub(super) mod no_branch;
@@ -45,7 +46,11 @@ use crate::{
   screens::task_close::{self, Closer, Subject},
   services::Services,
   theme::{ExtraSpacing, TaskSpacing},
-  ui::tabs::{PageTab, page_tabs},
+  ui::{
+    icon::Icon,
+    icon_button::IconButton,
+    tabs::{PageTab, page_tabs, page_tabs_with_note},
+  },
 };
 
 #[derive(Clone, PartialEq)]
@@ -124,8 +129,10 @@ impl Component for TaskHeader {
     let run_controls = RunControls::of(ctx);
     let state = run_controls.action.state().get();
     let refused = self.refusals.shown(&state, run_controls.requested.get(), &detail);
+    // On the Conversation the composer's permissions chip says the run's approval mode instead (ORC-319, 15 `x55hWH`).
+    let mode = props.view.tab() != TaskTab::Conversation;
     let status_line = no_branch::status_line(ctx, &props.task, &self.no_branch, (&self.confirming, &self.remove))
-      .unwrap_or_else(|| run_line::status_line(ctx, &props.task));
+      .unwrap_or_else(|| run_line::status_line(ctx, &props.task, mode));
     Column::new()
       .id("task-header")
       .width(Dimension::Pct(100.0))
@@ -149,6 +156,7 @@ impl Component for TaskHeader {
         ("task-close", task_close::StopLook::Primary),
       ))
       .with_children(removal(ctx, &props))
+      .with_children(PageState::of(ctx).export.dialog(ctx, &props.task))
       .child(
         Column::new()
           .width(Dimension::Pct(100.0))
@@ -207,7 +215,8 @@ impl TaskHeader {
         closing: Some((self.closer.clone(), subject(&props.task))),
       }
     };
-    let more = more::more(ctx, &props.task, &self.menu, held);
+    let conversation = props.view.tab() == TaskTab::Conversation;
+    let more = more::more(ctx, (&props.task, conversation), &self.menu, held);
     (primary, more)
   }
 
@@ -322,5 +331,26 @@ fn tabs(ctx: &mut Ctx, props: &HeaderProps) -> Element {
     tab(TaskTab::Conversation, ctx.t(TaskTab::Conversation.title_key())),
     tab(TaskTab::Changes, changes),
   ];
-  page_tabs(ctx, "task-tabs", tabs).into()
+  if props.view != TaskView::Conversation {
+    return page_tabs(ctx, "task-tabs", tabs).into();
+  }
+  let search = search_button(ctx);
+  page_tabs_with_note(ctx, "task-tabs", tabs, search).into()
+}
+
+/// The search of the transcript at the right end of the tabs, on the Conversation tab only (`Search` `E1gMr0` in 13):
+/// a small search button, `pressed` while the find bar is open, its tooltip with Ctrl F (⌘ F on macOS).
+fn search_button(ctx: &mut Ctx) -> Element {
+  let search = PageState::of(ctx).search;
+  let keys = if cfg!(target_os = "macos") {
+    ctx.t("conversation.search.keysCmd")
+  } else {
+    ctx.t("conversation.search.keysCtrl")
+  };
+  let open = search.is_open();
+  let button = IconButton::new("task-search", Icon::Search, ctx.t("conversation.search.button"))
+    .small()
+    .shortcut(keys)
+    .on_click(move || search.show());
+  if open { button.active() } else { button }.render(ctx)
 }

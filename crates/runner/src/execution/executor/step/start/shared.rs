@@ -10,7 +10,7 @@ use orchester_core::{
   id::StepExecutionId,
   permission::{EffectiveApprovalMode, FolderBounds, ManualReason, ResolvedFolder, capability::EnforcedPermissions},
   resource::{AgentProfile, ModelId, Step, StepKey, StepKind},
-  run::{PinnedVersion, StepExecutor},
+  run::{ModelChoice, PinnedVersion, StepExecutor},
   store::ActivityStore,
 };
 
@@ -98,6 +98,36 @@ impl RunTask {
       .with_effective_mode(&effective)
       .enforced_on(connection.provider(), Platform::current())
       .map_err(|error| problem(error.to_string()))
+  }
+
+  /// The model and effort a person chose for this run's step `key` from its Conversation (ORC-322), read at each
+  /// turn's start so a change applies from the step's next turn; `None` runs the profile's.
+  pub(in super::super) fn chosen_model(&self, key: &StepKey) -> Result<Option<ModelChoice>, RunnerProblem> {
+    self
+      .db
+      .step_model(self.run.id(), key)
+      .map_err(|error| problem(error.to_string()))
+  }
+
+  /// The model `execution`'s next invocation runs on, as its record keeps it: the run's own for its step if a person
+  /// chose one ([`Self::chosen_model`]), else its profile's as the run pinned it.
+  pub(in super::super) fn invocation_model(
+    &self,
+    execution: StepExecutionId,
+  ) -> Result<ModelId, crate::execution::executor::step::ExecutionError> {
+    let not_agent = crate::execution::executor::step::ExecutionError::NotAnAgentStep(execution);
+    let Some(step) = self
+      .run
+      .execution(execution)
+      .and_then(|execution| self.run.snapshot().step(execution.step()))
+    else {
+      return Err(not_agent);
+    };
+    let StepExecutor::Agent { model, .. } = step.executor() else {
+      return Err(not_agent);
+    };
+    let chosen = self.db.step_model(self.run.id(), step.key())?;
+    Ok(chosen.map_or_else(|| model.clone(), |chosen| chosen.model))
   }
 
   /// The agent step `execution` executes, the profile version that runs it and its model.

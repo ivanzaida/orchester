@@ -22,6 +22,43 @@
       "ctrlEnter": "Ctrl+Enter",
       "enter": "Enter"
     },
+    "mention": {
+      "changedInRun": "changed in this run",
+      "count": "{{shown}} of {{total}}",
+      "empty": {
+        "hint": "Tasks, runs and files of {{project}} are found by key, title, run number and path. Keep typing, or press Esc and the text stays as typed.",
+        "title": "Nothing matches “{{query}}”"
+      },
+      "files": {
+        "reading": "Listing the repository’s files…",
+        "unreadable": "The repository’s files could not be listed: {{reason}}"
+      },
+      "hint": {
+        "close": "Close",
+        "insert": "Insert",
+        "move": "Move"
+      },
+      "keys": {
+        "enter": "Enter",
+        "esc": "Esc",
+        "move": "↑ ↓",
+        "tab": "Tab"
+      },
+      "matches": {
+        "one": "1 match for “{{query}}”",
+        "other": "{{count}} matches for “{{query}}”"
+      },
+      "run": "{{key}} · #{{number}}",
+      "section": {
+        "files": "Files",
+        "runs": "Runs",
+        "tasks": "Tasks"
+      },
+      "thisRun": "{{title}} · this run",
+      "typeToFilter": "Type to filter",
+      "unreadable": "The menu could not read them: {{reason}}",
+      "unreadableTitle": "Tasks and runs could not be read"
+    },
     "menu": {
       "afterTurn": "Waits until {{agent}} finishes its turn",
       "continueLater": "Waits until the run continues",
@@ -104,6 +141,61 @@
       "whenStarts": "Send when the run starts",
       "withoutContinuing": "Send without continuing",
       "withoutResuming": "Send without resuming"
+    },
+    "skill": {
+      "notTaken": "The agent your message goes to can’t take a skill: its connection runs no agents in this version",
+      "planHeld": "A plan’s changes can’t carry a skill. Remove the skill to send them.",
+      "reach": {
+        "claude": "{{name}} · Published v{{version}}. Claude Code loads it as its own skill for this message; sent into an answer under way, its text goes in a marked block instead.",
+        "codex": "{{name}} · Published v{{version}}. Codex gets the skill’s text in a marked block with your message; Codex’s own $skill isn’t used yet.",
+        "text": "{{name}} · Published v{{version}}. The agent gets the skill’s text in a marked block with your message."
+      },
+      "remove": "Remove {{name}}",
+      "tooltip": "{{name}} · Published v{{version}}"
+    },
+    "slash": {
+      "agentStep": "{{agent}} · {{step}}",
+      "command": {
+        "history": {
+          "detail": "Open an earlier conversation",
+          "label": "History"
+        },
+        "newConversation": {
+          "already": "This is a new conversation already",
+          "detail": "Start fresh; this one stays in History",
+          "label": "New conversation"
+        },
+        "stopTurn": {
+          "cannot": "{{agent}}’s turn can’t be stopped on its own: it runs as a native agent",
+          "detail": "Stop {{agent}}’s current turn; the run then waits for you",
+          "noTurn": "No turn is running",
+          "noTurnAnswer": "No turn is running: {{agent}} waits for your answer",
+          "label": "Stop turn",
+          "stopping": "{{agent}}’s turn is being stopped"
+        }
+      },
+      "commands": "Commands",
+      "count": "{{shown}} of {{total}}",
+      "empty": {
+        "hint": "Enter sends “/{{query}}” as a message. Skills are published in Agents › Skills.",
+        "title": "No command or skill matches /{{query}}"
+      },
+      "hint": {
+        "choose": "Choose",
+        "close": "Close",
+        "move": "Move",
+        "sendAsText": "Send as text"
+      },
+      "keys": {
+        "enter": "Enter",
+        "esc": "Esc",
+        "move": "↑ ↓"
+      },
+      "published": "{{count}} published",
+      "skills": "Skills",
+      "skillsUnreadable": "Couldn’t read them: {{reason}}",
+      "typeToFilter": "Type to filter",
+      "typed": "/{{query}}"
     },
     "stopFailed": "The turn was not stopped: {{reason}}",
     "undelivered": {

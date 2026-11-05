@@ -52,7 +52,7 @@ fn remove(
       if let Some(left) = cleanup.not_removed() {
         tracing::warn!(run = %run.id(), path = %left.path, reason = ?left.reason, "a worktree of the run was not removed");
       }
-      after_removal(root);
+      after_removal(root, request.sweeps());
     }
     Err(failure) => tracing::warn!(run = %run.id(), %failure, "cannot remove what the run left"),
   }

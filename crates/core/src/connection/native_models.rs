@@ -269,6 +269,11 @@ impl NativeModels {
       .and_then(NativeModel::context_window)
       .map_or(DEFAULT_CONTEXT_WINDOW, |window| u64::from(window.get()))
   }
+
+  /// Whether `model` is listed with its context window, as the endpoint or the person named it.
+  pub fn lists_context_window(&self, model: &ModelId) -> bool {
+    self.model(model).and_then(NativeModel::context_window).is_some()
+  }
 }
 
 /// [`NativeModels`] as stored, checked when read back.

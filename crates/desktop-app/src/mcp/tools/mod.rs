@@ -209,9 +209,9 @@ fn page_params(page: &ProjectPage, params: &mut Map<String, Value>) {
       }
     }
     ProjectPage::Settings(tab) => insert("tab", tab.name()),
-    ProjectPage::ProjectRules => {
+    ProjectPage::ProjectRules | ProjectPage::Storage => {
       insert("tab", crate::routes::ProjectSettingsTab::Runs.name());
-      insert("view", "rules");
+      insert("view", settings_view(page));
     }
     ProjectPage::NewConnection(kind) => insert("kind", kind.name()),
     ProjectPage::EditConnection(connection) => insert("connection", &connection.to_string()),
@@ -244,6 +244,14 @@ fn page_params(page: &ProjectPage, params: &mut Map<String, Value>) {
         insert(name, &value);
       }
     }
+  }
+}
+
+fn settings_view(page: &ProjectPage) -> &'static str {
+  if matches!(page, ProjectPage::Storage) {
+    "storage"
+  } else {
+    "rules"
   }
 }
 

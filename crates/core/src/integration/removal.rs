@@ -8,7 +8,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use super::{Cleanup, CleanupError, GitError, Leftovers, clean_up, clean_up_all, retry_held};
+use super::{Cleanup, CleanupError, GitError, Leftovers, clean_up, clean_up_all, clean_up_worktrees, retry_held};
 use crate::{
   command::{CommandError, CommandRunner},
   run::Run,
@@ -20,6 +20,9 @@ use crate::{
 pub enum Discard {
   /// Only the uncommitted changes a person saw, `confirmed` ([`clean_up`]), and no branch with commits merged nowhere.
   Seen(Option<Leftovers>),
+  /// The worktrees as [`Discard::Seen`] removes them, every branch kept, merged or not: Project settings › Runs ›
+  /// Storage ([`clean_up_worktrees`]).
+  Worktrees(Option<Leftovers>),
   /// Everything the run left, unmerged work included: deleting its task ([`clean_up_all`]).
   Everything,
 }
@@ -32,6 +35,14 @@ pub struct RemovalRequest {
   /// processes running from it are stopped ([`retry_held`]): *Remove worktree* and a merge's clean-up do, deleting a
   /// task does not.
   pub retry_held: bool,
+}
+
+impl RemovalRequest {
+  /// Whether the worktree folders no run uses any more are swept after the removal: not after a Storage clean-up
+  /// ([`Discard::Worktrees`]), which removes only what it was asked to.
+  pub const fn sweeps(&self) -> bool {
+    !matches!(self.discard, Discard::Worktrees(_))
+  }
 }
 
 /// Why a [`RemovalRequest`] removed nothing: [`CleanupError`] as it crosses to the desktop, git's failure told as the
@@ -87,8 +98,8 @@ impl RemovalFailure {
 }
 
 /// Carries out `request` for `run` in the repository at `repo` with the `git` program on `runner`: removes what the run
-/// left as [`clean_up`] or [`clean_up_all`] does and, when asked, tries again the folders something held once `stop`
-/// ended what of the run runs in each.
+/// left as [`clean_up`], [`clean_up_worktrees`] or [`clean_up_all`] does and, when asked, tries again the folders
+/// something held once `stop` ended what of the run runs in each.
 pub fn serve(
   runner: &impl CommandRunner,
   (git, repo): (&Path, &Path),
@@ -98,6 +109,7 @@ pub fn serve(
 ) -> Result<Cleanup, RemovalFailure> {
   let mut cleanup = match &request.discard {
     Discard::Seen(confirmed) => clean_up(runner, git, repo, run, confirmed.as_ref()),
+    Discard::Worktrees(confirmed) => clean_up_worktrees(runner, git, repo, run, confirmed.as_ref()),
     Discard::Everything => clean_up_all(runner, git, repo, run),
   }?;
   if request.retry_held {

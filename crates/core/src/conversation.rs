@@ -22,6 +22,7 @@
 //! runner (`docs/architecture/storage.md`, "Write ownership").
 
 mod body;
+pub mod skill;
 mod wire;
 
 use serde::{Deserialize, Serialize};

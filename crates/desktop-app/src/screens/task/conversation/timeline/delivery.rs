@@ -87,6 +87,9 @@ pub(super) fn line(ctx: &mut Ctx, timeline: &Timeline, line: &DeliveryLine) -> E
       event(id, Icon::Hand, &text, Some(link))
     }
     DeliveryKind::Event(queued) => queue_event(ctx, timeline, (&id, line.at), &names, queued),
+    DeliveryKind::Ci(ci) => {
+      crate::screens::task::ci::timeline::line(ctx, (timeline.ci.as_ref(), &timeline.detail), &id, ci)
+    }
   }
 }
 

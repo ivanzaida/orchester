@@ -8,13 +8,17 @@ use std::time::Duration;
 
 pub mod change;
 pub mod chat;
+mod failure;
+pub mod fork;
 pub mod git;
 pub mod instructions;
 pub mod mcp;
 pub mod merging;
+pub mod plan;
 pub mod proposal;
 pub mod report;
 pub mod resume;
+pub mod rewind;
 pub mod run_git;
 pub mod sent;
 pub mod settings;
@@ -22,12 +26,14 @@ pub mod wait;
 
 pub use self::{
   chat::{
-    ActionOutcome, Chat, ChatAction, ChatApproval, ChatEntry, ChatEvent, ChatSession, EntryKind, HeldWork, Queued,
-    SessionChange, TurnFailure, TurnState, WaitTurn,
+    ActionOutcome, BlankTitle, Chat, ChatAction, ChatApproval, ChatEntry, ChatEvent, ChatSession, ChatTitle,
+    CompactionState, EntryKind, HeldWork, Queued, SessionChange, TurnFailure, TurnState, WaitTurn,
   },
   merging::{MergeLeft, Merging},
+  plan::{ChatPlan, PlanState, PlanStep, StepKind, TurnMode},
   report::{DailyReport, ReportSchedule, ReportTime},
   resume::{ChatResume, Continuing, PersonsStop},
+  rewind::{Dropped, RewindPoint, RewoundTo},
   sent::{FromOrchestrator, SentWay},
   settings::{OrchestratorSettings, runs_orchestrator},
   wait::{AgentWait, RunEnd, StopReason, WaitKind},

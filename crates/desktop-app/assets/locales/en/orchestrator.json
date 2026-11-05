@@ -10,7 +10,21 @@
     "newConversation": "New conversation",
     "meta": {
       "today": "· today {{time}}",
-      "on": "· {{date}}"
+      "on": "· {{date}}",
+      "forkedToday": "· forked today {{time}}",
+      "forkedOn": "· forked {{date}}"
+    },
+    "export": {
+      "what": "{{title}} · {{messages}} · {{when}}",
+      "whatEmpty": "{{title}} · {{messages}}",
+      "messages": {
+        "one": "{{count}} message",
+        "other": "{{count}} messages"
+      },
+      "spanToday": "today {{from}}–{{to}}",
+      "spanOn": "{{date}} {{from}}–{{to}}",
+      "messagesOnlyHint": "Your messages and the Orchestrator's answers, with their code blocks",
+      "withToolsHint": "Adds each tool the Orchestrator called — tasks read, runs continued, drafts made — with its input and a short result"
     },
     "start": {
       "title": "What should we plan?",
@@ -46,12 +60,13 @@
       "signIn": "{{cli}} · {{account}} · {{model}}",
       "cli": "{{cli}} · {{model}}",
       "provider": "{{provider}} · {{model}}",
-      "claudeSignIns": "Claude Code · your sign-ins",
-      "codexSignIns": "Codex · your sign-ins",
-      "providers": "API providers · pay per token",
-      "who": "{{email}} · {{plan}} plan",
-      "limitUntil": "{{email}} · limit until {{time}}",
-      "signedOut": "Not signed in · sign in in Connections",
+      "railSignIn": "{{cli}} · {{name}}",
+      "railSignedOut": "{{cli}} · {{name}}: not signed in, sign in in Connections",
+      "railProvider": "{{name}} · {{host}}",
+      "who": "{{cli}} · {{email}} · {{plan}} plan",
+      "whoNoPlan": "{{cli}} · {{email}}",
+      "limitUntil": "{{cli}} · {{email}} · limit until {{time}}",
+      "signedOut": "{{cli}} · not signed in: sign in in Connections",
       "use": "{{used}}% of 5h",
       "useUnknown": "5h use not read",
       "limitReached": "limit reached",
@@ -60,14 +75,17 @@
       "noPlanLimit": "no plan limit",
       "key": "Its key: secret {{secret}}",
       "keyGone": "Its key's secret is missing",
-      "model": "Model",
+      "search": "Search models…",
+      "searchOrType": "Search or type a model…",
+      "noMatch": "No models match",
+      "useTyped": "Use {{model}}",
       "effort": "Effort",
       "effortDefault": "Default",
       "effortDefaultDetail": "the CLI's own",
-      "effortMaxDetail": "slower, more tokens",
+      "typeEffort": "Type an effort…",
+      "typeEffortHint": "The provider lists no efforts: type the value it takes, Enter uses it. Empty is Default.",
       "sentTo": "Prompts, repository content and command output go to {{host}} under its terms. Orchester reads no plan limits there.",
-      "publishNote": "Publishes v{{version}} of the Orchestrator's settings: the next answer runs on it.",
-      "publishOverDraft": "Publishes v{{version}} and replaces the draft saved in Orchestrator settings.",
+      "overDraft": "Choosing here publishes a new version and replaces the draft saved in Orchestrator settings.",
       "newSession": "Another account starts a new session: earlier messages aren't remembered.",
       "settings": "Settings ↗"
     },
@@ -86,11 +104,126 @@
       "steering": "Sending into this answer…",
       "joined": "Taken mid-answer · {{time}}"
     },
+    "plan": {
+      "owner": "Orchestrator · answering",
+      "switch": "Plan only",
+      "switchTip": "Plan only · propose first, act after you approve",
+      "switchKeys": "Alt P",
+      "switchKeysMac": "⌥ P",
+      "mode": "Plan only",
+      "modeNote": "· the Orchestrator answers with a plan and does nothing until you approve it",
+      "placeholder": "Ask for a plan…",
+      "delivered": "Delivered · {{time}} · plan only",
+      "title": "Plan · {{steps}} steps",
+      "nothingDone": "nothing done yet",
+      "waits": "Waits for you · {{time}}",
+      "beingChanged": "Being changed",
+      "leftOut": "Left out",
+      "uses": "Uses",
+      "approve": "Approve and do it",
+      "change": "Change it",
+      "dismiss": "Dismiss",
+      "onlyYou": "Only you can approve",
+      "personOnly": "Only you can approve a plan: automation driving the window was not taken.",
+      "changingChip": "Changing: Plan · {{steps}} steps · {{time}}",
+      "stopChanging": "Stop changing the plan",
+      "approved": "Plan approved · {{steps}} steps",
+      "replaced": "Plan replaced by plan {{plan}}",
+      "dismissed": "Plan dismissed · nothing done",
+      "showPlan": "Show plan",
+      "hidePlan": "Hide plan"
+    },
     "queued": {
       "edit": "Edit",
       "remove": "Remove",
       "failed": "The queued message wasn't changed",
       "dismiss": "Dismiss"
+    },
+    "message": {
+      "edit": "Edit",
+      "more": "More actions",
+      "rewind": "Rewind to here",
+      "fork": "Fork from here",
+      "busy": "Stop the answer to edit or rewind",
+      "nothingAfter": "Nothing comes after this answer"
+    },
+    "fork": {
+      "title": "{{title}} · fork",
+      "line": "Forked from {{title}} at {{time}} · the original stays as it was",
+      "openOriginal": "Open original ↗",
+      "made": {
+        "title": "Made after this point in the original",
+        "body": "{{list}} stay as they are. This conversation starts without them: mention them if you need them."
+      },
+      "making": "Making the fork…",
+      "failed": "The conversation wasn't forked",
+      "failedBody": "{{why}} The original is as it was.",
+      "dismiss": "Dismiss"
+    },
+    "edit": {
+      "field": "Edit your message",
+      "drops": {
+        "one": "Sending drops the message after this one",
+        "other": "Sending drops the {{count}} messages after this one"
+      },
+      "dropLine": {
+        "one": "This message goes when you send",
+        "other": "These {{count}} messages go when you send"
+      },
+      "send": "Send",
+      "cancel": "Cancel",
+      "keySend": "sends",
+      "keyCancel": "cancels",
+      "blank": "Write the message first",
+      "confirm": {
+        "title": {
+          "one": "Send the edit and drop 1 message?",
+          "other": "Send the edit and drop {{count}} messages?"
+        },
+        "what": "Your edit replaces the message from {{time}}. The {{count}} messages after it leave this conversation: {{mine}} from you and {{theirs}} from the Orchestrator.",
+        "whatOne": "Your edit replaces the message from {{time}}. The message after it leaves this conversation.",
+        "send": {
+          "one": "Drop 1 and send",
+          "other": "Drop {{count}} and send"
+        },
+        "enterSends": "sends"
+      },
+      "notSent": "The conversation went back, but your edit wasn't sent",
+      "notSentBody": "{{why}} Your edit is in the composer: send it from there.",
+      "dismiss": "Dismiss"
+    },
+    "rewind": {
+      "confirm": {
+        "before": {
+          "one": "Rewind to before {{time}} and drop 1 message?",
+          "other": "Rewind to before {{time}} and drop {{count}} messages?"
+        },
+        "after": {
+          "one": "Rewind to after the answer of {{time}} and drop 1 message?",
+          "other": "Rewind to after the answer of {{time}} and drop {{count}} messages?"
+        },
+        "whatBefore": "Your message from {{time}} and everything after it leave this conversation: {{mine}} from you and {{theirs}} from the Orchestrator. Its text goes back to the composer.",
+        "whatAfter": "Everything after the answer of {{time}} leaves this conversation: {{mine}} from you and {{theirs}} from the Orchestrator.",
+        "go": "Rewind",
+        "enterRewinds": "rewinds"
+      },
+      "stays": "What the Orchestrator did after {{time}} stays: {{list}}. The Orchestrator is told they exist.",
+      "staysNone": "The Orchestrator made no task, run or change after {{time}}: nothing is left behind.",
+      "staysItem": "{{what}} {{task}}",
+      "failed": "Nothing was dropped: {{reason}}",
+      "personOnly": "Only a person edits or rewinds the conversation: input from an MCP client is not taken here.",
+      "lineBefore": {
+        "one": "Rewound to before your message of {{time}} · 1 message dropped",
+        "other": "Rewound to before your message of {{time}} · {{count}} messages dropped"
+      },
+      "lineAfter": {
+        "one": "Rewound to after the answer of {{time}} · 1 message dropped",
+        "other": "Rewound to after the answer of {{time}} · {{count}} messages dropped"
+      },
+      "kept": {
+        "title": "What the Orchestrator did after this point stays",
+        "body": "The Orchestrator still knows about them. To undo one, cancel the run or delete the task on its page."
+      }
     },
     "thinking": "Orchestrator is thinking",
     "stop": "Stop",
@@ -216,6 +349,19 @@
       "connection": "The Orchestrator runs on another connection now: this answer starts a new session and doesn't remember the earlier messages.",
       "account": "The Orchestrator's connection is on another account now: this answer starts a new session and doesn't remember the earlier messages."
     },
+    "context": {
+      "event": {
+        "compacting": "Compacting the conversation",
+        "compacted": "Compacted",
+        "notCompacted": "Not compacted",
+        "change": "{{before}} → {{after}}",
+        "after": "→ {{after}}",
+        "afterUnreported": "{{before}} → size comes with the next reply"
+      },
+      "placeholderCompacting": "Message the Orchestrator — send it once compacting ends…",
+      "sendWaits": "The conversation is being compacted: send once it's done.",
+      "notStarted": "The conversation wasn't compacted"
+    },
     "wait": {
       "what": {
         "question": "{{agent}} asks a question",
@@ -272,6 +418,7 @@
     "historyPanel": {
       "reading": "Reading conversations…",
       "search": "Search conversations",
+      "pinned": "PINNED",
       "today": "TODAY",
       "yesterday": "YESTERDAY",
       "earlier": "EARLIER",
@@ -280,9 +427,73 @@
         "other": "{{count}} messages"
       },
       "meta": "{{when}} · {{messages}}",
+      "found": {
+        "results": {
+          "one": "Found in 1 conversation · titles and messages",
+          "other": "Found in {{count}} conversations · titles and messages"
+        },
+        "searching": "Searching messages · {{done}} of {{total}} conversations",
+        "searched": {
+          "one": "Searched 1 conversation · titles and messages",
+          "other": "Searched {{count}} conversations · titles and messages"
+        },
+        "failed": "Messages not searched: {{reason}}",
+        "you": "You:",
+        "orchestrator": "Orchestrator:",
+        "report": "Report:",
+        "matches": {
+          "one": "{{when}} · 1 match",
+          "other": "{{when}} · {{count}} matches"
+        },
+        "titleAndMessages": {
+          "one": "{{when}} · title and 1 message",
+          "other": "{{when}} · title and {{count}} messages"
+        },
+        "titleOnly": "{{when}} · title only"
+      },
       "empty": "No conversation yet. Your first message starts one.",
-      "noMatch": "No conversation's title has these words.",
-      "note": "Conversations stay in this project on this computer."
+      "noMatch": "No conversation's title or messages have these words.",
+      "note": "Conversations stay in this project on this computer.",
+      "archived": "Archived",
+      "backToHistory": "Back to History",
+      "searchArchived": "Search archived",
+      "archivedEmpty": "No archived conversation.",
+      "archivedNoMatch": "No archived conversation's title has these words.",
+      "archivedNote": "Archived conversations keep every message. History and its search leave them out.",
+      "archivedToday": "Archived today · {{messages}}",
+      "archivedOn": "Archived {{date}} · {{messages}}",
+      "more": "More for {{title}}",
+      "rename": "Rename",
+      "pin": "Pin",
+      "unpin": "Unpin",
+      "archive": "Archive",
+      "unarchive": "Unarchive",
+      "title": "Title",
+      "enterKey": "Enter",
+      "saves": "saves",
+      "escKey": "Esc",
+      "cancels": "cancels",
+      "notSaved": "Not saved: {{reason}}",
+      "notPinned": "Not pinned: {{reason}}",
+      "notUnpinned": "Not unpinned: {{reason}}",
+      "notArchived": "Not archived: {{reason}}",
+      "notUnarchived": "Not unarchived: {{reason}}",
+      "delete": {
+        "item": "Delete…",
+        "title": "Delete “{{title}}”?",
+        "messages": {
+          "none": "What it holds is removed from this computer.",
+          "one": "Its 1 message and the files attached to it are removed from this computer.",
+          "other": "Its {{count}} messages and the files attached to them are removed from this computer."
+        },
+        "stays": "Tasks, runs and decisions it started stay as they are.",
+        "final": "This can't be undone. Archive keeps it out of History instead.",
+        "enterDeletes": "deletes",
+        "cancel": "Cancel",
+        "confirm": "Delete conversation",
+        "failed": "Not deleted: {{reason}}",
+        "personOnly": "Only a person deletes a conversation: input from an MCP client is not taken here."
+      }
     },
     "settings": {
       "crumb": "Settings",

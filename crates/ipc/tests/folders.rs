@@ -46,7 +46,7 @@ async fn folders_requests_and_replies_round_trip_under_protocol_42() {
   let events = vec![
     reply(Reply::Folders(FoldersReply::Sizes(FolderSizes {
       workspaces: vec![(one, Some(80_000)), (two, None)],
-      run_worktrees: vec![(run, Some(1_000))],
+      worktrees: vec![(run.to_string(), Some(1_000))],
     }))),
     reply(Reply::Folders(FoldersReply::Cleaned { freed: 79_000 })),
     reply(Reply::Folders(FoldersReply::Discarded)),

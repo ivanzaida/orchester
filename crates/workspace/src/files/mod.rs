@@ -25,7 +25,8 @@ use std::{collections::HashSet, io, path::Path};
 use orchester_core::command::CommandRunner;
 use thiserror::Error;
 
-use self::source::{Source, git_output, source};
+pub(crate) use self::source::git_output;
+use self::source::{Source, source};
 pub use self::{
   digest::Digest,
   follow::{Follow, agent_at_work},

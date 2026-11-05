@@ -99,10 +99,12 @@ keyring-core = "1"
 # 0.51.2: what the mounting code puts on a component's root (`.id(..)`, a Draggable's handlers) survives its own render;
 # 0.52.1: a screenshot of an occluded macOS window (a hidden QA app) completes; 0.53: trackpad swipes between pages
 # (`on_history_swipe`, the window's back and forward), and typed async queries with a shared cache (`query`), which the
-# app's settings tabs read through (`orchester-app`'s `queries`);
+# app's settings tabs read through (`orchester-app`'s `queries`); 0.54: a fill behind ranges of a `Text` or a `Markdown`
+# block (`TextHighlight`, `MarkdownProps::highlights`), the search's marks in a message; 0.56: middle-button autoscroll
+# of a scroll container, off unless it asks (`middle_button_autoscroll`), on only in the chats (`ui::chat::follow`);
 # 0.43: execution-bound input origin and canceled queued-call rejection; an app's own MCP server hosts lurq's window tools (`McpConfig::hosted`, `McpHandle::service`); see
 # `orchester-app`'s `mcp` module.
-lurq = { version = "0.53.0", default-features = false, features = ["query"] }
+lurq = { version = "0.56.0", default-features = false, features = ["query"] }
 # libproc process enumeration and identity on macOS; already transitive through rustix.
 libc = "0.2"
 parking_lot = "0.12"

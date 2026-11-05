@@ -1,9 +1,11 @@
-//! The sign-ins the runs-on picker lists (`05 Account and model picker` `v6mWp8`): Claude Code's *Work*, signed in on
-//! Max with 42 % of its 5-hour window used; Claude Code's *Personal*, signed in on Pro with its 5-hour limit reached
-//! for another 80 minutes; and Codex's *Client*, signed out. Each is an account of the application database with the
-//! check and the plan reading the picker reads, and a connection of the project runs on it: *Claude · Work* (the
-//! Orchestrator's, made by the scenario), *Claude · Personal* and *Codex · Client*. The accounts' folders are names
-//! only: nothing runs on them.
+//! The sign-ins the runs-on picker lists (`05 · Account and model` `v6mWp8`, `Runs-on picker · states` `t7cdi`):
+//! Claude Code's *Work*, signed in on Max with 42 % of its 5-hour window used; Claude Code's *Personal*, signed in on
+//! Pro with its 5-hour limit reached for another 80 minutes; Codex's *Default*, signed in on Plus with 8 % used or, for
+//! `orchestrator-codex-limit`, its limit reached; and Codex's *Client*, signed out. Each is an account of the
+//! application database with the check and the plan reading the picker reads, and a connection of the project runs on
+//! it: *Claude · Work* (the Orchestrator's, its models with every effort), *Claude · Personal*, *Codex · Default*
+//! (twelve models, the *Many models* state) and *Codex · Client*. The accounts' folders are names only: nothing runs on
+//! them.
 
 use std::path::{Path, PathBuf};
 
@@ -23,14 +25,44 @@ use orchester_core::{
 };
 use orchester_store::AppDb;
 
+use super::MODEL;
 use crate::kontur::{Kontur, SeedError, name};
 
 /// The 5-hour window, in minutes.
 const FIVE_HOURS: u64 = 300;
 
-/// The accounts' connections: what each runs on.
+/// The models Codex · Default lists (`Many models` `q1ZHoz`).
+pub const CODEX_MODELS: [&str; 12] = [
+  "gpt-6-astra",
+  "gpt-6.1-sol",
+  "gpt-6.1-terra",
+  "gpt-6-sol",
+  "gpt-6-luna",
+  "gpt-5.6-sol",
+  "gpt-5.6-terra",
+  "gpt-5.6-luna",
+  "gpt-5.5",
+  "gpt-5.5-mini",
+  "gpt-5.4",
+  "gpt-5.4-mini",
+];
+
+/// The efforts the Orchestrator's connections list for each model (`Js9xG`).
+const EFFORTS: [&str; 5] = ["low", "medium", "high", "xhigh", "max"];
+
+/// How Codex's *Default* plan stands.
+#[derive(Clone, Copy)]
+pub enum CodexPlan {
+  /// 8 % of its 5-hour window used.
+  Used,
+  /// Its 5-hour limit reached.
+  AtLimit,
+}
+
+/// The connections the Orchestrator may be set up on: *Claude · Work* and *Codex · Default*.
 pub struct SignIns {
-  pub work: ConnectionAccount,
+  pub work: ConnectionId,
+  pub codex: ConnectionId,
 }
 
 /// One account to add: its CLI and name, who the check found signed in (`None`: nobody) and its 5-hour use with
@@ -42,9 +74,8 @@ struct Planned<'a> {
   used: Option<(f64, bool)>,
 }
 
-/// Adds the accounts, their checks and readings, and the connections on *Personal* and *Client*; what *Work*'s
-/// connection runs on.
-pub fn add(kontur: &mut Kontur, programs: (&Path, &Path)) -> Result<SignIns, SeedError> {
+/// Adds the accounts, their checks and readings, and the connections on them, Codex's *Default* plan as `codex` says.
+pub fn add(kontur: &mut Kontur, programs: (&Path, &Path), codex: CodexPlan) -> Result<SignIns, SeedError> {
   let folders = kontur
     .app_database
     .parent()
@@ -65,25 +96,42 @@ pub fn add(kontur: &mut Kontur, programs: (&Path, &Path)) -> Result<SignIns, See
     identity: Some(("me@personal.example", "pro")),
     used: Some((100.0, true)),
   })?;
+  let default = account(Planned {
+    cli: AccountCli::Codex,
+    named: "Default",
+    identity: Some(("dana@example.com", "plus")),
+    used: Some(match codex {
+      CodexPlan::Used => (8.0, false),
+      CodexPlan::AtLimit => (100.0, true),
+    }),
+  })?;
   let client = account(Planned {
     cli: AccountCli::Codex,
     named: "Client",
     identity: None,
     used: None,
   })?;
+  let work = connection(
+    kontur,
+    ("Claude · Work", AgentProvider::ClaudeCodeCli, programs.0),
+    (&work, &[MODEL, "claude-sonnet-5-5", "claude-haiku-4-5"], &EFFORTS),
+  )?;
   connection(
     kontur,
     ("Claude · Personal", AgentProvider::ClaudeCodeCli, programs.0),
-    (&personal, &["claude-opus-5-5", "claude-sonnet-5-5"]),
+    (&personal, &["claude-opus-5-5", "claude-sonnet-5-5"], &[]),
+  )?;
+  let codex = connection(
+    kontur,
+    ("Codex · Default", AgentProvider::CodexCli, programs.1),
+    (&default, &CODEX_MODELS, &EFFORTS),
   )?;
   connection(
     kontur,
     ("Codex · Client", AgentProvider::CodexCli, programs.1),
-    (&client, &["gpt-5.5"]),
+    (&client, &["gpt-5.5"], &[]),
   )?;
-  Ok(SignIns {
-    work: ConnectionAccount::of(&work),
-  })
+  Ok(SignIns { work, codex })
 }
 
 fn add_account(
@@ -138,11 +186,11 @@ fn add_account(
   Ok(account)
 }
 
-/// A CLI connection on `account`, checked and signed in, offering `models`.
+/// A CLI connection on `account`, checked and signed in, offering `models`, each with `efforts`.
 fn connection(
   kontur: &mut Kontur,
   (named, provider, program): (&str, AgentProvider, &Path),
-  (account, models): (&AgentAccount, &[&str]),
+  (account, models, efforts): (&AgentAccount, &[&str], &[&str]),
 ) -> Result<ConnectionId, SeedError> {
   let at = kontur.ago(4);
   let mut connection = AgentConnection::new(
@@ -157,7 +205,7 @@ fn connection(
     .iter()
     .map(|model| {
       ModelId::new(model)
-        .map(|id| CatalogModel::new(id, Vec::new()))
+        .map(|id| CatalogModel::new(id, efforts.iter().map(|effort| (*effort).to_owned()).collect()))
         .map_err(|error| SeedError::Invalid(error.to_string()))
     })
     .collect::<Result<Vec<_>, _>>()?;

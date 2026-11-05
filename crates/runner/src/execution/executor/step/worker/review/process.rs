@@ -37,7 +37,7 @@ pub(super) fn stop_review() -> (StopReview, watch::Receiver<()>) {
 
 /// An empty folder for one review, with the reviewer's system prompt and the verdict's schema beside it;
 /// removed when dropped.
-pub(super) struct ReviewPlace {
+pub(in crate::execution) struct ReviewPlace {
   root: TempDir,
 }
 
@@ -47,7 +47,7 @@ impl ReviewPlace {
   }
 
   /// A folder for one request of another kind (the story-point estimator), with its `instructions` and `schema`.
-  pub(super) fn with(instructions: &str, schema: &str) -> io::Result<Self> {
+  pub(in crate::execution) fn with(instructions: &str, schema: &str) -> io::Result<Self> {
     let root = tempfile::Builder::new().prefix("orchester-review-").tempdir()?;
     let place = Self { root };
     let folder = place.folder();
@@ -57,7 +57,7 @@ impl ReviewPlace {
     Ok(place)
   }
 
-  pub(super) fn folder(&self) -> ReviewFolder {
+  pub(in crate::execution) fn folder(&self) -> ReviewFolder {
     ReviewFolder {
       work: self.root.path().join("work"),
       instructions: self.root.path().join("instructions.md"),
@@ -67,10 +67,10 @@ impl ReviewPlace {
 }
 
 /// Runs the reviewer's CLI from the blocking pool on the runner's runtime, supervised.
-pub(super) struct SupervisedRunner {
-  pub(super) runtime: Handle,
-  pub(super) timeout: Duration,
-  pub(super) stop: watch::Receiver<()>,
+pub(in crate::execution) struct SupervisedRunner {
+  pub(in crate::execution) runtime: Handle,
+  pub(in crate::execution) timeout: Duration,
+  pub(in crate::execution) stop: watch::Receiver<()>,
 }
 
 impl CommandRunner for SupervisedRunner {

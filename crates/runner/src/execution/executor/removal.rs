@@ -42,7 +42,7 @@ pub(in crate::execution) fn remove_worktrees(
   if let Err(error) = finish_removal(&mut store, git, (previous.id(), Timestamp::now()), &mut cleanup, stop) {
     tracing::warn!(%error, run = %previous.id(), "cannot record what the worktree removal left");
   }
-  after_removal(root);
+  after_removal(root, true);
   match cleanup.kept_worktrees.into_iter().next() {
     None => Ok(()),
     Some((worktree, KeepReason::Failed(detail))) => {
@@ -58,15 +58,17 @@ pub(in crate::execution) fn remove_worktrees(
 
 /// What follows a removal of run worktrees in the repository at `root`: the codebase indexes only removed worktrees
 /// used go, off the runtime's async workers (the worktrees are gone either way, and an index left behind goes with
-/// the next removal), and the worktree folders are swept ([`worktree_sweep`]).
-pub(super) fn after_removal(root: &Path) {
+/// the next removal), and, when `sweep` says so, the worktree folders are swept ([`worktree_sweep`]).
+pub(super) fn after_removal(root: &Path, sweep: bool) {
   let indexes = ExecutionRoot::local(root).code_indexes();
   tokio::task::spawn_blocking(move || {
     if let Err(error) = indexes.prune() {
       tracing::warn!(%error, "cannot remove the codebase indexes of removed worktrees");
     }
   });
-  worktree_sweep::sweep_in_background(root.to_path_buf());
+  if sweep {
+    worktree_sweep::sweep_in_background(root.to_path_buf());
+  }
 }
 
 /// The worktree removals as the executor keeps them: read from the project database, written through the

@@ -4,7 +4,14 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::{change::ProposedChange, proposal::ProposedStart, report::DailyReport, wait::AgentWait};
+use super::{
+  change::ProposedChange,
+  plan::{ChatPlan, TurnMode},
+  proposal::ProposedStart,
+  report::DailyReport,
+  rewind::RewoundTo,
+  wait::AgentWait,
+};
 use crate::{
   connection::AccountStartProblem,
   conversation::MessageBody,
@@ -43,6 +50,57 @@ pub enum SessionChange {
 pub enum ChatEvent {
   /// The turn after it started a new session: the agent does not remember what was said before.
   NewSession { because: SessionChange },
+  /// A person compacted the conversation's session (*Compact*, ORC-309): the tokens its context held when it started,
+  /// as last reported (`None` while nothing reported them), and how it went. It is kept running and changed in place
+  /// once it ended.
+  Compaction {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    before: Option<u64>,
+    state: CompactionState,
+  },
+  /// A person rewound the conversation, or edited an earlier message (ORC-333, [`super::rewind`]): where it went back
+  /// to, how many messages it dropped, and what the agent did in them, which stays done. The session that heard them
+  /// is not resumed again.
+  Rewound {
+    to: RewoundTo,
+    dropped: u32,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    done: Vec<ChatAction>,
+  },
+  /// The conversation is a fork of conversation `from` (ORC-334, [`super::fork`]), titled `title` then, made from the
+  /// message or answer of `at`: the first entry of the fork, before the copies of what came up to that point.
+  Forked { from: ChatId, title: String, at: Timestamp },
+  /// What the agent did in the original after the point the fork was made from, which stays as it is there: the fork
+  /// starts without it. Kept after the copies, only when the original had done something.
+  MadeInOriginal { made: Vec<ChatAction> },
+}
+
+/// Where a compaction of an agent session stands.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum CompactionState {
+  /// The CLI compacts the session now.
+  Running,
+  /// The CLI compacted it: the tokens its context holds now, as it reported them; `None` when it reported none.
+  Done {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    after: Option<u64>,
+  },
+  /// It did not compact, for `reason`; the session is as it was.
+  Failed { reason: TurnFailure },
+}
+
+impl ChatEvent {
+  /// Whether it is a compaction still running.
+  pub const fn is_compacting(&self) -> bool {
+    matches!(
+      self,
+      Self::Compaction {
+        state: CompactionState::Running,
+        ..
+      }
+    )
+  }
 }
 
 /// One conversation of a project's Orchestrator chat.
@@ -52,6 +110,8 @@ pub struct Chat {
   title: String,
   started: Timestamp,
   session: Option<ChatSession>,
+  /// Its *Plan only* switch is on ([`super::plan`]): each message plans, until the person switches it off.
+  plan_only: bool,
 }
 
 impl Chat {
@@ -68,6 +128,7 @@ impl Chat {
       title: title_of(title),
       started: at,
       session: None,
+      plan_only: false,
     }
   }
 
@@ -78,7 +139,15 @@ impl Chat {
       title,
       started,
       session,
+      plan_only: false,
     }
+  }
+
+  /// The conversation with its *Plan only* switch `on` or off.
+  #[must_use]
+  pub const fn with_plan_only(mut self, on: bool) -> Self {
+    self.plan_only = on;
+    self
   }
 
   pub const fn id(&self) -> ChatId {
@@ -95,6 +164,11 @@ impl Chat {
 
   pub const fn session(&self) -> Option<&ChatSession> {
     self.session.as_ref()
+  }
+
+  /// Whether its *Plan only* switch is on.
+  pub const fn plan_only(&self) -> bool {
+    self.plan_only
   }
 
   /// The session a turn on `connection` and its `account` resumes; `None` starts a new one, as the first turn does
@@ -118,6 +192,30 @@ impl Chat {
     } else {
       None
     }
+  }
+}
+
+/// A title a person gave a conversation (*Rename* in History, ORC-328): its words without the whitespace around them,
+/// never blank. It wins over the one taken from the first message from then on.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ChatTitle(String);
+
+/// A conversation's title that says nothing.
+#[derive(Clone, Copy, Debug, thiserror::Error, PartialEq, Eq)]
+#[error("a conversation's title says something")]
+pub struct BlankTitle;
+
+impl ChatTitle {
+  pub fn new(text: &str) -> Result<Self, BlankTitle> {
+    let text = text.trim();
+    if text.is_empty() {
+      return Err(BlankTitle);
+    }
+    Ok(Self(text.to_owned()))
+  }
+
+  pub fn as_str(&self) -> &str {
+    &self.0
   }
 }
 
@@ -198,16 +296,16 @@ impl TurnState {
   }
 }
 
-/// Why a turn ended without its answer.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
+/// Why a turn ended without its answer. It is kept as JSON tagged by `kind` (`super::failure`), which also reads the
+/// account problems kept before they had a key of their own.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TurnFailure {
   /// The CLI is not signed in on the connection's account.
   NotSignedIn,
   /// The Orchestrator's connection is gone, or is not one it runs on.
   ConnectionGone,
-  /// The connection's account cannot start its CLI.
-  Account(AccountStartProblem),
+  /// The connection's account cannot start its CLI, for `problem`.
+  Account { problem: AccountStartProblem },
   /// The CLI could not be started, as `reason` tells the runner's log.
   CannotStart { reason: String },
   /// The CLI started and failed: what it or the runner said.
@@ -349,6 +447,8 @@ pub enum EntryKind {
     /// Who sent it: the person, or automation driving the window (lurq's synthetic input), whose message never
     /// approves a proposal for the person (ORC-96).
     sent_by: Answerer,
+    /// How its turn goes: as any, planning only, or carrying out a plan the person approved.
+    mode: TurnMode,
   },
   Reply {
     text: String,
@@ -367,6 +467,8 @@ pub enum EntryKind {
     report: Box<DailyReport>,
     turn: Option<WaitTurn>,
   },
+  /// A plan the Orchestrator answered with in a turn that plans, and where it stands ([`super::plan`]).
+  Plan(Box<ChatPlan>),
 }
 
 /// The Orchestrator turn a wait or a daily report started by itself: under the id its prompt was kept by, where it

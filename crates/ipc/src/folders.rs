@@ -3,7 +3,7 @@
 //! The desktop keeps the project database's side (reserving a workspace, recording it cold or no longer stranded);
 //! the runner's executor side sizes the folders and changes them with git.
 
-use orchester_core::{id::RunId, run::BranchName, workspaces::WorkspaceNumber};
+use orchester_core::{run::BranchName, workspaces::WorkspaceNumber};
 use serde::{Deserialize, Serialize};
 
 /// What the desktop asks of the executor's folders ([`crate::Command::Folders`]).
@@ -46,6 +46,7 @@ pub enum FoldersReply {
 pub struct FolderSizes {
   /// Each workspace asked about, in the order asked.
   pub workspaces: Vec<(WorkspaceNumber, Option<u64>)>,
-  /// Each worktree a run made before workspaces that is still there, in no certain order.
-  pub run_worktrees: Vec<(RunId, Option<u64>)>,
+  /// Each folder of the worktrees folder that is still there, by its name, in no certain order: a run's own worktree
+  /// is named by its run's id, a step execution's by the execution's id.
+  pub worktrees: Vec<(String, Option<u64>)>,
 }

@@ -1,26 +1,45 @@
 //! The Orchestrator chat's conversations as the screen reads them: History's list and one conversation's entries,
-//! with the files the person attached to their messages, which of its waits still stand and what became of the runs
-//! whose ends no longer do.
+//! with the files the person attached to their messages, the todo list each turn's agent keeps, which of its waits
+//! still stand, what became of the runs whose ends no longer do, and how full its session's context is; and what a
+//! person changes of a conversation in History: its title and its pin (ORC-328), its archive and its deletion
+//! (ORC-329).
 
 use std::{
+  cmp::Reverse,
   collections::{BTreeMap, HashMap, HashSet},
   path::Path,
 };
 
 use orchester_core::{
   attachment::Attachment,
+  connection::{context_use::ContextUse, stream::TodoList},
   id::{ChatId, ChatMessageId},
-  orchestrator::{Chat, ChatEntry, TurnState},
+  orchestrator::{BlankTitle, Chat, ChatEntry, ChatTitle, EntryKind, TurnState},
   run::RunStatus,
+  time::Timestamp,
 };
-use orchester_store::{ChatListing, ProjectDb};
+use orchester_store::{ChatDeletion, ChatListing, ProjectDb};
 
 use crate::messages::{self, Message};
 
-/// The project's conversations as History lists them, the one with the latest entry first.
+/// The project's conversations, archived ones too, the one with the latest entry first.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct History {
   pub chats: Vec<ChatListing>,
+}
+
+impl History {
+  /// The conversations History lists: those not archived, the one with the latest entry first.
+  pub fn listed(&self) -> impl Iterator<Item = &ChatListing> {
+    self.chats.iter().filter(|listing| listing.archived.is_none())
+  }
+
+  /// The archived conversations, the one archived last first.
+  pub fn archived(&self) -> Vec<&ChatListing> {
+    let mut archived: Vec<&ChatListing> = self.chats.iter().filter(|listing| listing.archived.is_some()).collect();
+    archived.sort_by_key(|listing| Reverse(listing.archived));
+    archived
+  }
 }
 
 /// Every conversation of the project at `root`. Blocks on SQLite.
@@ -31,6 +50,66 @@ pub fn history_in(root: &Path) -> Result<History, Message> {
     .map_err(|error| messages::store_error(&error))
 }
 
+/// Titles conversation `chat` of the project at `root` `title`, as a person named it in History; it keeps that title
+/// from then on. A blank title is refused. Blocks on SQLite.
+pub fn rename_in(root: &Path, chat: ChatId, title: &str) -> Result<(), Message> {
+  let title = ChatTitle::new(title).map_err(|BlankTitle| Message::new("orchestrator.conversation.blankTitle"))?;
+  ProjectDb::open(root)
+    .and_then(|mut db| db.rename_chat(chat, &title))
+    .map_err(|error| messages::store_error(&error))
+    .and_then(kept)
+}
+
+/// Pins conversation `chat` of the project at `root` to History's top as of `at`, which lists the latest pin first, or
+/// unpins it (`None`). Blocks on SQLite.
+pub fn pin_in(root: &Path, chat: ChatId, at: Option<Timestamp>) -> Result<(), Message> {
+  ProjectDb::open(root)
+    .and_then(|mut db| db.pin_chat(chat, at))
+    .map_err(|error| messages::store_error(&error))
+    .and_then(kept)
+}
+
+/// Archives conversation `chat` of the project at `root` as of `at`, which lists it under History's Archived and
+/// unpins it, or unarchives it (`None`), which lists it under its day again. Blocks on SQLite.
+pub fn archive_in(root: &Path, chat: ChatId, at: Option<Timestamp>) -> Result<(), Message> {
+  ProjectDb::open(root)
+    .and_then(|mut db| db.archive_chat(chat, at))
+    .map_err(|error| messages::store_error(&error))
+    .and_then(kept)
+}
+
+/// Deletes conversation `chat` of the project at `root` with its messages and the files attached to them, from the
+/// project's own database and folder; refused while the Orchestrator answers in it, compacts its session or a message
+/// waits there for its turn. Blocks on SQLite.
+pub fn delete_in(root: &Path, chat: ChatId) -> Result<(), Message> {
+  let deleted = ProjectDb::open(root)
+    .and_then(|mut db| db.delete_chat(chat))
+    .map_err(|error| messages::store_error(&error))?;
+  match deleted {
+    ChatDeletion::Deleted => Ok(()),
+    ChatDeletion::Gone => Err(Message::new("orchestrator.conversation.gone")),
+    ChatDeletion::Busy => Err(Message::new("orchestrator.conversation.busy")),
+  }
+}
+
+/// A change of a conversation the project no longer keeps did not happen.
+fn kept(changed: bool) -> Result<(), Message> {
+  if changed {
+    Ok(())
+  } else {
+    Err(Message::new("orchestrator.conversation.gone"))
+  }
+}
+
+/// How full the context of the session conversation `chat`'s turns continue is, read alone: the Orchestrator's context
+/// meter reads it again as turns arrive, without the conversation's entries. `None` while no turn's CLI reported it.
+/// Blocks on SQLite.
+pub fn context_in(root: &Path, chat: ChatId) -> Result<Option<ContextUse>, Message> {
+  ProjectDb::open(root)
+    .and_then(|db| db.chat_context(chat))
+    .map_err(|error| messages::store_error(&error))
+}
+
 /// One conversation and its entries in the order they were kept.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ChatView {
@@ -38,11 +117,16 @@ pub struct ChatView {
   pub entries: Vec<ChatEntry>,
   /// The files attached to the person's messages, by message, in the order they were attached.
   pub attachments: BTreeMap<ChatMessageId, Vec<Attachment>>,
+  /// The todo list of each turn whose agent keeps one, by the message that started the turn.
+  pub todos: BTreeMap<ChatMessageId, TodoList>,
   /// The entries of its waits and runs' ends that still stand as they were read: an agent that still waits, a run
   /// still where it ended. The others were dealt with since, here or elsewhere.
   pub standing: HashSet<i64>,
   /// What became of the runs whose ends no longer stand, by entry.
   pub moved: HashMap<i64, EndMoved>,
+  /// How full the context of the session its turns continue is; `None` while no turn's CLI reported it (unknown, not
+  /// empty).
+  pub context: Option<ContextUse>,
 }
 
 /// What became of a run since an end of it a conversation keeps, once that end no longer stands.
@@ -94,14 +178,18 @@ impl ChatView {
     let attachments = db
       .chat_attachments(chat)
       .map_err(|error| messages::store_error(&error))?;
+    let todos = db.chat_todos(chat).map_err(|error| messages::store_error(&error))?;
     let (standing, moved) =
       super::waits::standing(&db, chat, &entries).map_err(|error| messages::store_error(&error))?;
+    let context = db.chat_context(chat).map_err(|error| messages::store_error(&error))?;
     Ok(Some(Self {
       chat: found,
       entries,
       attachments,
+      todos: todos.into_iter().collect(),
       standing,
       moved,
+      context,
     }))
   }
 
@@ -115,6 +203,11 @@ impl ChatView {
     self.attachments.get(&message).map_or(&[], Vec::as_slice)
   }
 
+  /// The todo list of the turn `message` started, as its agent's latest update left it; `None` when it keeps none.
+  pub fn todo_of(&self, message: ChatMessageId) -> Option<&TodoList> {
+    self.todos.get(&message)
+  }
+
   /// The last turn and where it stands: a person's message's, or one a wait of an agent started by itself.
   pub fn last_turn(&self) -> Option<(ChatMessageId, &TurnState)> {
     self.entries.iter().rev().find_map(|entry| entry.kind.turn())
@@ -123,5 +216,13 @@ impl ChatView {
   /// Whether the agent is answering the last message.
   pub fn thinking(&self) -> bool {
     self.last_turn().is_some_and(|(_, turn)| turn.is_thinking())
+  }
+
+  /// Whether the session is being compacted (ORC-309).
+  pub fn compacting(&self) -> bool {
+    self
+      .entries
+      .iter()
+      .any(|entry| matches!(&entry.kind, EntryKind::Event(event) if event.is_compacting()))
   }
 }

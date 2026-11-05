@@ -14,6 +14,7 @@ use super::{
 use crate::{
   activity::Activity,
   messages::Message,
+  pull_requests::ci::CiReads,
   runner::Runners,
   secrets::Vault,
   sharing::Servers,
@@ -39,6 +40,8 @@ pub struct Services {
   pub(super) jobs: ProjectJobs,
   /// What `get_pull_request` read of pull requests outside the synced lists in the last 30 s.
   pub(super) pull_request_reads: RecentReads,
+  /// The pull requests' checks `get_pull_request` and `get_run` read in the last 30 s.
+  pub(super) ci_reads: CiReads,
   /// A person decided the publication, or the MCP server's change, the tools are called for (they applied a proposal
   /// of the Orchestrator chat): what it widens is theirs to decide, as in the window, not *Let automation change agent
   /// permissions*, but only for the draft they decided on and what they were shown it widens.
@@ -74,6 +77,7 @@ impl Services {
       activity,
       jobs,
       pull_request_reads: RecentReads::default(),
+      ci_reads: CiReads::default(),
       person: None,
       chat_publishes: false,
     }

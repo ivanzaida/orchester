@@ -45,7 +45,7 @@ use super::{
     native::{CommandHost, NativeSession},
     skills::PlacedSkill,
   },
-  AgentIndex, AgentStart, Launch, NATIVE_NOT_AVAILABLE, PromptParts, StepAgent, problem, reasoning_effort,
+  AgentIndex, AgentStart, Launch, NATIVE_NOT_AVAILABLE, PromptParts, StepAgent, problem,
 };
 
 /// The response cap a request asks for when the connection lists none for its model; the client lowers
@@ -102,7 +102,7 @@ impl RunTask {
       // A native agent's own prompt names its tools.
       working: None,
     };
-    let effort = api.models().effort_for(model, reasoning_effort(body));
+    let effort = api.models().effort_for(model, agent.effort);
     let settings = loop_settings(api, model, effort, &prepared);
     let started = match continuation.session.as_deref() {
       None => self.new_conversation(
@@ -112,7 +112,7 @@ impl RunTask {
         instructions.as_deref(),
         &prepared,
       )?,
-      Some(session) => self.resumed_conversation(parts, (execution, session), settings, &prepared)?,
+      Some(session) => self.resumed_conversation(parts, (execution, session, agent.chosen), settings, &prepared)?,
     };
     let mut left_out = std::mem::take(&mut prepared.left_out);
     left_out.extend(index.problems(provider));
@@ -297,11 +297,12 @@ impl RunTask {
   }
 
   /// The stored conversation `session` continued with the resume prompt, or with the person's answer, then the files
-  /// attached to the messages it delivers.
+  /// attached to the messages it delivers. Its requests name the model it was started on, unless the run chose
+  /// another for the step (`chosen`): then that one, from this turn on.
   fn resumed_conversation(
     &self,
     parts: PromptParts<'_>,
-    (execution, session): (StepExecutionId, &str),
+    (execution, session, chosen): (StepExecutionId, &str, bool),
     mut settings: LoopSettings,
     prepared: &Prepared,
   ) -> Result<Started, RunnerProblem> {
@@ -321,7 +322,9 @@ impl RunTask {
     };
     let attached = self.attached_items(parts.continuation, origin)?;
     settings.conversation = id;
-    settings.model = stored.model.clone();
+    if !chosen {
+      settings.model = stored.model.clone();
+    }
     settings.system = stored.system.clone();
     settings.tools = stored.tools();
     let changed = self.changed_files(execution)?;
@@ -382,6 +385,7 @@ fn loop_settings(api: &ApiEndpoint, model: &ModelId, effort: Option<Effort>, pre
       .and_then(NativeModel::max_output)
       .map_or(DEFAULT_MAX_OUTPUT, NonZeroU32::get),
     context_window: api.models().context_window(model),
+    context_window_estimated: !api.models().lists_context_window(model),
     system: String::new(),
     tools: ToolSet::for_access(prepared.access),
     shell: prepared.commands.shell(),

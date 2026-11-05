@@ -37,7 +37,11 @@ use orchester_ipc::Event;
 use orchester_store::{ApprovalRecord, StoreError};
 use tokio::{runtime::Handle, task::JoinHandle};
 
-pub(in crate::execution) use self::{estimate::estimate_task, setup::ReviewerSources};
+pub(in crate::execution) use self::{
+  estimate::estimate_task,
+  process::{ReviewPlace, SupervisedRunner},
+  setup::ReviewerSources,
+};
 use self::{
   ledger::ReviewLedger,
   process::{StopReview, stop_review},

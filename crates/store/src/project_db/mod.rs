@@ -13,10 +13,12 @@ mod base_notices;
 mod blobs;
 mod chat_decisions;
 mod checks;
+mod ci_fixes;
 mod code_index;
 mod completions;
 mod connections;
 mod consistent;
+mod context_uses;
 mod default_pipeline;
 mod disk_guard;
 mod environment;
@@ -41,15 +43,22 @@ mod modules;
 mod native;
 mod notice_records;
 mod orchestrator;
+mod orchestrator_compactions;
+mod orchestrator_fork;
+mod orchestrator_plans;
 mod orchestrator_queue;
 mod orchestrator_reports;
+mod orchestrator_rewind;
 mod orchestrator_sent;
+mod orchestrator_settings;
 mod orchestrator_switches;
+mod orchestrator_titles;
 mod orchestrator_usage;
 mod orchestrator_waits;
 mod organization;
 mod organized_drafts;
 mod owned_records;
+mod permission_events;
 mod plan_limits;
 mod plans;
 mod project_rules;
@@ -73,6 +82,7 @@ mod reviewer_usage;
 mod revision_diffs;
 mod run_connections;
 mod run_ends;
+mod run_models;
 mod runner_failures;
 mod runs;
 mod schema;
@@ -86,6 +96,7 @@ mod shared_standing;
 mod shared_tasks;
 mod shared_versions;
 mod sharing;
+mod side_questions;
 mod sources;
 mod step_outputs;
 mod step_progress;
@@ -96,6 +107,7 @@ mod task_effort;
 mod task_groups;
 mod task_snapshots;
 mod tasks;
+mod todo_lists;
 mod tool_approvals;
 mod usage;
 mod used_versions;
@@ -128,9 +140,13 @@ pub use self::{
   message_records::MessageRecord,
   notice_records::NoticeRecord,
   orchestrator::{ChatListing, ChatTurn},
+  orchestrator_fork::ChatFork,
+  orchestrator_plans::ApprovedPlan,
   orchestrator_queue::StartedQueued,
   orchestrator_reports::KeptReport,
+  orchestrator_rewind::ChatRewind,
   orchestrator_switches::OrchestratorSwitch,
+  orchestrator_titles::ChatDeletion,
   orchestrator_waits::KeptWait,
   owned_records::{
     AlwaysAllowAnswer, AlwaysAllowRecord, MemoryAnswer, MemoryRecord, ModelRequirement, RuleAnswer, RuleRecord,

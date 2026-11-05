@@ -126,6 +126,171 @@
         "automationProfile": "by automation · {{time}} · {{agent}}’s profile stays on Autopilot"
       }
     },
+    "permissions": {
+      "chip": {
+        "manual": "Manual",
+        "autopilot": "Autopilot",
+        "everything": "Everything in this run",
+        "manualRun": "Manual · this run",
+        "manualProject": "Manual · project",
+        "profileManual": "· profile: Manual",
+        "profileAutopilot": "· profile: Autopilot",
+        "name": "Permissions of Run {{run}}",
+        "tip": {
+          "manual": "{{agent}}’s profile is Manual: requests off its allowed list go to the reviewer, then to you",
+          "autopilot": "{{agent}}’s profile is Autopilot and {{project}} allows it: requests inside the worktree are approved at once",
+          "projectOff": "{{agent}}’s profile is Autopilot, but {{project}} doesn’t allow Autopilot: requests off its allowed list go to the reviewer, then to you"
+        }
+      },
+      "menu": {
+        "heading": "Run {{run}} · how {{agent}}’s requests are answered"
+      },
+      "option": {
+        "manualRun": {
+          "name": "Manual for this run",
+          "sub": "Allowed commands run; the reviewer judges the rest, then you. Stays Manual until Run {{run}} ends.",
+          "subStop": "Stops approving everything: {{agent}}’s allowed list runs, the reviewer judges the rest, then you.",
+          "subCurrent": "Allowed commands run; the reviewer judges the rest, then you.",
+          "subSwitchedPerson": "Allowed commands run; the reviewer judges the rest, then you. Switched by you at {{time}}.",
+          "subSwitchedAutomation": "Allowed commands run; the reviewer judges the rest, then you. Switched by automation at {{time}}."
+        },
+        "autopilot": {
+          "name": "Autopilot",
+          "sub": "Approves requests inside the worktree at once. Work outside it, pushes and other branches ask you.",
+          "subStop": "Stops approving everything: requests inside the worktree are approved at once, the rest ask you."
+        },
+        "everything": {
+          "name": "Approve everything in this run",
+          "sub": "Run {{run}} answers its worktree commands and MCP calls itself. Network, outside writes, secrets, installs and destructive commands still ask you.",
+          "subOn": "On since {{time}}, by you. Network, outside writes, secrets, installs and destructive commands still ask you.",
+          "subOnUntimed": "On. Network, outside writes, secrets, installs and destructive commands still ask you.",
+          "confirmBody": "Network, outside writes, secrets, installs and destructive commands still ask you."
+        }
+      },
+      "tag": {
+        "narrows": "narrows",
+        "onlyYou": "only you"
+      },
+      "unavailable": {
+        "switched": "Not available: a run switched to Manual stays Manual until it ends. {{agent}}’s next run starts on Autopilot again.",
+        "profileManual": "Not available: {{agent}}’s profile is Manual.",
+        "projectOff": "Not available: {{project}} doesn’t allow Autopilot.",
+        "personOnly": "Only a person can choose this: the Orchestrator and MCP clients may only narrow a run."
+      },
+      "similar": {
+        "heading": "Approved similar in this run",
+        "revoke": "Revoke",
+        "empty": "None yet: Approve similar on a request’s card adds one here.",
+        "command": "· {{category}} · since {{time}}",
+        "tool": "· every call · since {{time}}",
+        "folder": "· reads in {{folder}} · since {{time}}",
+        "check": "· {{check}} · since {{time}}"
+      },
+      "foot": {
+        "manualAllows": "{{agent}}’s profile: Manual · {{project}} allows Autopilot. A change here is for Run {{run}} only.",
+        "manualOff": "{{agent}}’s profile: Manual · {{project}} doesn’t allow Autopilot. A change here is for Run {{run}} only.",
+        "autopilotAllows": "{{agent}}’s profile: Autopilot · {{project}} allows Autopilot. A change here is for Run {{run}} only.",
+        "autopilotOff": "{{agent}}’s profile: Autopilot · {{project}} doesn’t allow Autopilot. A change here is for Run {{run}} only.",
+        "nothingWider": {
+          "profileManual": "Nothing wider for Run {{run}}: {{agent}}’s profile is Manual.",
+          "profileManualProjectOff": "Nothing wider for Run {{run}}: {{agent}}’s profile is Manual and {{project}} doesn’t allow Autopilot.",
+          "projectOff": "Nothing wider for Run {{run}}: {{project}} doesn’t allow Autopilot.",
+          "switched": "Nothing wider for Run {{run}}: it was switched to Manual and stays so until it ends."
+        },
+        "personOnly": "Only a person widens a run: the Orchestrator and MCP clients may only narrow it.",
+        "profile": "{{agent}}’s profile"
+      },
+      "event": {
+        "everything": "Approving everything in this run",
+        "stopped": "Stopped approving everything in this run",
+        "revoked": "Similar rule revoked",
+        "refused": "Not changed: automation can’t widen a run",
+        "stop": "Stop",
+        "review": "Review…",
+        "detail": {
+          "everythingWasAutopilot": "· by you · {{time}} · was Autopilot · network, outside writes, secrets, installs and destructive commands still ask you",
+          "everythingWasManual": "· by you · {{time}} · was Manual · network, outside writes, secrets, installs and destructive commands still ask you",
+          "stoppedPersonAutopilot": "· by you · {{time}} · back to Autopilot",
+          "stoppedPersonManual": "· by you · {{time}} · back to Manual",
+          "stoppedAutomationAutopilot": "· by automation · {{time}} · back to Autopilot",
+          "stoppedAutomationManual": "· by automation · {{time}} · back to Manual",
+          "revokedPerson": "· by you · {{time}} · asks again",
+          "revokedAutomation": "· by automation · {{time}} · asks again",
+          "refused": "· automation asked to approve everything in this run · {{time}} · only a person widens a run’s approvals"
+        }
+      },
+      "failed": "The change was not saved: {{reason}}"
+    },
+    "model": {
+      "chip": {
+        "name": "Model and effort of {{step}}",
+        "tip": "Profile: {{choice}}",
+        "afterTurn": "after this turn"
+      },
+      "choice": "{{model}} · {{effort}}",
+      "menu": {
+        "heading": "{{agent}} · {{connection}} · its models"
+      },
+      "profileModel": "The profile’s model",
+      "now": "now",
+      "effort": "Effort",
+      "effortNow": "now {{effort}}",
+      "effortDefault": "CLI default",
+      "efforts": {
+        "minimal": "Minimal",
+        "low": "Low",
+        "medium": "Medium",
+        "high": "High",
+        "xhigh": "Extra high",
+        "max": "Max"
+      },
+      "applies": "Applies",
+      "scope": {
+        "step": "From the next turn of this step",
+        "stepNote": "{{step}} only. {{later}} start on their own profiles again.",
+        "stepNoteAlone": "{{step}} only.",
+        "run": "For this step and the rest of the run",
+        "runNote": "Also {{changing}}, where {{agent}} runs on {{connection}}. {{keeping}} run on another connection and keep their models.",
+        "runNoteChanging": "Also {{changing}}, where {{agent}} runs on {{connection}}.",
+        "runNoteKeeping": "No later step runs on {{connection}}: {{keeping}} run on another connection and keep their models.",
+        "runNoteAlone": "No later step runs on {{connection}}."
+      },
+      "profileStays": "{{agent}}’s profile stays on {{choice}}.",
+      "apply": "Apply",
+      "cancel": "Cancel",
+      "fixed": {
+        "model": "Model",
+        "effortNone": "Not offered by this connection",
+        "note": "This connection serves one model, so this step can’t switch. To escalate, give {{agent}}’s profile another connection and restart the step.",
+        "link": "Connections"
+      },
+      "event": {
+        "changedStep": "Model changed for this step",
+        "changedRun": "Model changed for the rest of the run",
+        "effort": "Effort changed for this step",
+        "waits": "Model change waits for this turn to end",
+        "canceled": "Model change canceled",
+        "cancel": "Cancel change",
+        "backToProfile": "{{step}} starts on its profile",
+        "detail": {
+          "wasPerson": "· was {{was}} · by you · {{time}}",
+          "wasAutomation": "· was {{was}} · by automation · {{time}}",
+          "alsoPerson": "· also {{steps}} · was {{was}} · by you · {{time}}",
+          "alsoAutomation": "· also {{steps}} · was {{was}} · by automation · {{time}}",
+          "waitsPerson": "· by you · {{time}} · this step only · the turn finishes on {{was}}",
+          "waitsAutomation": "· by automation · {{time}} · this step only · the turn finishes on {{was}}",
+          "waitsRunPerson": "· by you · {{time}} · for the rest of the run · the turn finishes on {{was}}",
+          "waitsRunAutomation": "· by automation · {{time}} · for the rest of the run · the turn finishes on {{was}}",
+          "canceledPerson": "· by you · {{time}} · stays on {{stays}}",
+          "canceledAutomation": "· by automation · {{time}} · stays on {{stays}}",
+          "backToProfile": "· the change was for {{step}} only"
+        }
+      },
+      "failed": "The change was not saved: {{reason}}",
+      "notOffered": "{{connection}} doesn’t offer this model or effort any more.",
+      "notWaiting": "The turn ended first: the change applies from the next turn.",
+      "unavailable": "The step’s model can’t be changed now: the run ended, or its profile or connection is gone."
+    },
     "entry": {
       "agentMessage": "agent message",
       "awaitsApproval": "waiting for approval",
@@ -318,6 +483,18 @@
       "one": "{{steps}} did not start",
       "other": "{{steps}} did not start"
     },
+    "plan": {
+      "chip": "Plan · {{done}} of {{total}}",
+      "count": "{{done}} of {{total}}",
+      "doneFolded": "{{count}} done",
+      "more": "{{count}} more to do",
+      "notDone": "{{count}} not done when {{step}} stopped at {{time}}",
+      "owner": "{{agent}} · {{step}}",
+      "show": "Show",
+      "showAll": "Show all",
+      "showLess": "Show less",
+      "title": "Plan"
+    },
     "preset": {
       "custom": "Custom",
       "deepseek": "DeepSeek",
@@ -415,6 +592,29 @@
       "toolStep": "{{step}} · Tool",
       "unverified": "{{step}} could not check everything",
       "withReport": "{{reported}} · {{meta}}"
+    },
+    "search": {
+      "button": "Search the conversation",
+      "close": "Close search",
+      "count": "{{at}} of {{count}}",
+      "countMany": "{{at}} of {{count}}+",
+      "field": "Search this run",
+      "groupSeparator": ",",
+      "keysCmd": "⌘ F",
+      "keysCtrl": "Ctrl F",
+      "matches": {
+        "one": "1 match",
+        "other": "{{count}} matches"
+      },
+      "next": "Next match",
+      "none": "No matches",
+      "opened": "opened by search",
+      "outputAround": "Output · {{total}} lines · lines {{first}}–{{last}}, around the matches",
+      "placeholder": "Search this run",
+      "previous": "Previous match",
+      "searched": "Searched all {{count}} entries: messages, tool calls, output",
+      "searching": "Searching…",
+      "showAllOutput": "Show all output"
     },
     "separator": " · ",
     "span": "{{start}}–{{end}}",
