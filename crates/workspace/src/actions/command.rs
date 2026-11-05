@@ -74,6 +74,7 @@ pub(super) fn create_task(details: &TaskDetails, organization: &TaskOrganization
     blocking: Vec::new(),
     blocked_reason: None,
     module: None,
+    release: None,
   };
   content.set_organization(organization);
   Ok(TeamRequest::unrevised(TeamCommand::TaskCreate { content }))

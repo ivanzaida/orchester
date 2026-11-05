@@ -36,6 +36,7 @@ pub mod private_file;
 pub mod project;
 pub mod pull_request;
 pub mod question;
+pub mod release;
 pub mod repository;
 pub mod resource;
 pub mod review;

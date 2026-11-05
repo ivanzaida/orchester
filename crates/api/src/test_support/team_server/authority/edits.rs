@@ -2,13 +2,14 @@
 //! `docs/cloud-api.md` "Team authority P2 commands"): on the revision read, a member's change `403 not_admin`, a stale
 //! revision `409 revision_conflict` with the task as it is now. What changed is laid over the task's reads from then
 //! on, at its new revision and in the name of who changed it; someone else can change a task first, just before the
-//! next change asked here, as when another Admin saved it meanwhile.
+//! next change asked here, as when another Admin saved it meanwhile. A move into or out of a release is checked and
+//! kept in the releases' history by [`super::roadmap`].
 
-use orchester_core::time::Timestamp;
+use orchester_core::{task::organization::ChangeActor, time::Timestamp};
 use parking_lot::Mutex;
 use serde_json::{Map, Value, json};
 
-use super::{Authority, Person, Standing, listing};
+use super::{Authority, Person, Standing, listing, roadmap};
 use crate::{TaskPatch, test_support::team_server::State};
 
 /// `PATCH /api/v1/projects/{p}/tasks/{t}` as `path` names it (method first), with `body`: the status line and the
@@ -44,7 +45,7 @@ pub(in crate::test_support::team_server) fn answer(
 /// The fields of a task's content a change sets when it names them: absent or `null` leaves them.
 const SET: [&str; 6] = ["title", "brief", "criteria", "priority", "tags", "blocking"];
 /// The fields a change may set to `null`: present, they take what it gives.
-const NULLABLE: [&str; 2] = ["module", "blocked_reason"];
+const NULLABLE: [&str; 3] = ["module", "release", "blocked_reason"];
 
 /// A task's definition as changed here: its revision, the fields as changed, who changed it last and when.
 #[derive(Clone, Debug)]
@@ -125,6 +126,9 @@ fn patch(state: &mut State, (project, task): ((&str, &str), &str), body: &str) -
     );
   }
   let asked = serde_json::to_value(&patch.changes).unwrap_or(Value::Null);
+  if let Some(refusal) = roadmap::refused_move(&state.authority, &current, &asked) {
+    return refusal;
+  }
   let mut fields = Map::new();
   for field in SET {
     if !asked[field].is_null() {
@@ -137,6 +141,8 @@ fn patch(state: &mut State, (project, task): ((&str, &str), &str), body: &str) -
     }
   }
   change(&mut state.authority, &current, (fields, Person::You));
+  let actor = patch.changes.actor.unwrap_or(ChangeActor::Person);
+  roadmap::record_move(&mut state.authority, &current, &asked, actor);
   let changed = listing::tasks(project, state)
     .into_iter()
     .find(|read| read["id"] == task);
@@ -144,7 +150,7 @@ fn patch(state: &mut State, (project, task): ((&str, &str), &str), body: &str) -
 }
 
 /// Lays `fields` over the task `read`, at its next revision in `by`'s name, committed as one batch.
-fn change(authority: &mut Authority, read: &Value, (fields, by): (Map<String, Value>, Person)) {
+pub(super) fn change(authority: &mut Authority, read: &Value, (fields, by): (Map<String, Value>, Person)) {
   let id = read["id"].as_str().unwrap_or_default().to_owned();
   let revision = read["revision"].as_u64().unwrap_or(1) + 1;
   let edited = authority.edits.entry(id.clone()).or_insert_with(|| Edited {

@@ -140,6 +140,6 @@ pub struct Page<T> {
 
 /// A field the S10 reads always send, `null` when it has no value: unlike a plain `Option` field, leaving it out is
 /// refused.
-pub(super) fn nullable<'de, D: Deserializer<'de>, T: Deserialize<'de>>(deserializer: D) -> Result<Option<T>, D::Error> {
+pub(crate) fn nullable<'de, D: Deserializer<'de>, T: Deserialize<'de>>(deserializer: D) -> Result<Option<T>, D::Error> {
   Option::<T>::deserialize(deserializer)
 }

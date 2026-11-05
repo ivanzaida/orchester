@@ -27,7 +27,8 @@ pub fn task_read(project: ProjectId, task: &Task) -> Value {
     "id": task.id, "number": task.number, "key": format!("KON-{}", task.number), "former_key": null,
     "revision": task.revision, "title": task.title, "brief": "", "criteria": [], "pipeline": null, "limits": null,
     "workflow": task.workflow, "priority": task.priority, "tags": [], "blocking": [], "blocked_reason": null,
-    "module": task.module, "status": "draft", "has_run": false, "created": attribution(), "updated": attribution(),
+    "module": task.module, "release": null, "status": "draft", "has_run": false, "created": attribution(),
+    "updated": attribution(),
     "claim": null, "run": null, "assignee": null, "work": null, "effective_claim": null,
     "capabilities": capabilities(project)
   })
@@ -119,6 +120,7 @@ pub fn modules(shared: &Shared, project: ProjectId, request: &Request, stream: &
   let (tasks, scope, done) = counted(&state);
   let module = json!({
     "id": state.module, "name": "Sign-in", "description": "", "start": null, "target": null, "state": "open",
+    "horizon": "later", "place": 0,
     "revision": 1, "created": attribution(), "updated": attribution(), "branch": "module/sign-in",
     "assignee": null, "work": null, "effective_claim": null, "capabilities": capabilities(project),
     "pending_delivery": null

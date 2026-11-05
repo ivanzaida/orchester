@@ -121,7 +121,8 @@ impl AuthorityModule {
     let (branch, revision) = changed.map_or((self.branch, 1), |changed| (changed.branch.as_str(), changed.revision));
     json!({
       "id": id, "name": self.name, "description": self.description, "start": self.start, "target": self.target,
-      "state": "open", "revision": revision, "created": created, "updated": updated, "branch": branch,
+      "state": "open", "horizon": "later", "place": 0, "revision": revision, "created": created, "updated": updated,
+      "branch": branch,
       "assignee": self.assignee.map(Person::wire), "work": null,
       "effective_claim": self.claim.map(|claim| claim.wire(&json!({"kind": "module", "id": id}), module_number(index))),
       "capabilities": capabilities,

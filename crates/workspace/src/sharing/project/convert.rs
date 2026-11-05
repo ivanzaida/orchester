@@ -130,6 +130,7 @@ pub fn content(
     blocking: Vec::new(),
     blocked_reason: None,
     module: None,
+    release: None,
   };
   content.set_organization(organization);
   Ok(content)

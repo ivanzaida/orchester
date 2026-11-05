@@ -1,5 +1,5 @@
 use orchester_core::{
-  id::{ClaimId, IdempotencyKey, ModuleId, TagId, TaskId},
+  id::{ClaimId, IdempotencyKey, ModuleId, ReleaseId, TagId, TaskId},
   run::TaskPhase,
   sharing::{ClaimKind, TaskRevision},
   task::{
@@ -105,6 +105,9 @@ pub struct TaskContent {
   /// The project's module the task is in.
   #[serde(default)]
   pub module: Option<ModuleId>,
+  /// The project's release the task ships in, as its fix version.
+  #[serde(default)]
+  pub release: Option<ReleaseId>,
 }
 impl TaskContent {
   pub fn organization(&self) -> Organization {
@@ -240,6 +243,10 @@ pub struct TaskChanges {
   /// The module the task moves to; `null` takes it out of its module.
   #[serde(default, deserialize_with = "present", skip_serializing_if = "Option::is_none")]
   pub module: Option<Option<ModuleId>>,
+  /// The release the task moves to; `null` takes it out of its release. A released release takes no task and gives
+  /// none up (`422 release {reason: released}`).
+  #[serde(default, deserialize_with = "present", skip_serializing_if = "Option::is_none")]
+  pub release: Option<Option<ReleaseId>>,
   #[serde(default, with = "wire::optional_actor")]
   pub actor: Option<ChangeActor>,
 }

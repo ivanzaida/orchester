@@ -34,7 +34,7 @@ fn task() -> Value {
     "id": TASK, "number": 108, "key": "ORC-108", "former_key": null, "revision": 4,
     "title": "Status bar", "brief": "", "criteria": ["Shows the phase"], "pipeline": null,
     "limits": { "budget_tokens": 1_000 }, "workflow": "in_progress", "priority": "high", "tags": [TAG],
-    "blocking": [{ "task": TASK, "gate": "merge" }], "blocked_reason": null, "module": MODULE,
+    "blocking": [{ "task": TASK, "gate": "merge" }], "blocked_reason": null, "module": MODULE, "release": null,
     "status": "queued", "has_run": true, "created": attribution(1), "updated": attribution(2),
     "claim": claim(),
     "run": { "holder": alice(), "number": 3, "phase": "running", "step": "Implement", "started_at": 1_000,
@@ -48,7 +48,8 @@ fn tag() -> Value {
 
 fn module() -> Value {
   json!({ "id": MODULE, "name": "Live updates", "description": "", "start": "2026-10-29", "target": null,
-    "state": "open", "revision": 2, "created": attribution(1), "updated": attribution(2) })
+    "state": "open", "horizon": "now", "place": 1, "revision": 2, "created": attribution(1),
+    "updated": attribution(2) })
 }
 
 fn member() -> Value {

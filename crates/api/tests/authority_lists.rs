@@ -12,7 +12,7 @@ use orchester_api::{
 };
 use orchester_core::{
   forecast::{Forecast, History, Outlook},
-  id::{ModuleId, ResourceId, TagId},
+  id::{ModuleId, ReleaseId, ResourceId, TagId},
   module::{
     ModuleState,
     burndown::{Burndown, BurndownDay},
@@ -34,11 +34,11 @@ fn authority_lists_task_list_request_defaults_and_filters() {
   assert_eq!(request, TaskListRequest::default());
   assert_eq!(request.sort, TaskSort::Created);
   assert_eq!(request.page.limit(), 50);
-  let (tag, module) = (TagId::generate(), ModuleId::generate());
+  let (tag, module, release) = (TagId::generate(), ModuleId::generate(), ReleaseId::generate());
   let wire = json!({
     "filters":{
       "statuses":["in_review","canceled"],"priorities":["urgent","none"],"tags":[tag],"all_tags":true,
-      "pipelines":["default",null],"modules":[module,null],"search":"sign in"
+      "pipelines":["default",null],"modules":[module,null],"releases":[release],"search":"sign in"
     },
     "sort":"priority",
     "page":{"after":null,"limit":20}
@@ -53,6 +53,7 @@ fn authority_lists_task_list_request_defaults_and_filters() {
       all_tags: true,
       pipelines: vec![Some("default".to_owned()), None],
       modules: vec![Some(module), None],
+      releases: vec![Some(release)],
       search: Some(SearchText::new("sign in").expect("search")),
     }
   );

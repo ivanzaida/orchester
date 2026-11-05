@@ -597,6 +597,99 @@ The desktop's module delivery (`orchester_workspace::team_work::ModuleDeliveries
   none (the automatic merge); it never authorizes. An open delivery of the module is carried on instead. Only a
   delivered module is its result; every other state is a refusal naming it.
 
+## Team authority releases
+
+A shared project's releases, each task's release and each module's horizon belong to its team server
+(`docs/design/roadmap.md`, decision 7). The contract the server's *Roadmap and releases · team authority* module
+(platform OP-177…OP-195) builds against is in `orchester_api` (the definitions and the history at the crate root, the
+reads in `orchester_api::v2`) and core (`orchester_core::release`, `id::ReleaseId`, `module::Horizon`); architecture
+in [server.md](architecture/server.md#releases-team-authority). It supersedes ORC-468, which described the old replica
+model. It is a coordinated breaking upgrade: a task read now requires `release` and a module read `horizon` and
+`place`, with no compatibility window, so the desktop and the team server move to it together. Unknown fields are
+refused in every shape below; in the reads every field is sent, `?` meaning `null`.
+
+- `SharedRelease`:
+  `{id,name,description,planned?,state,released_on?,released_by:UserRef?,released_commit:CommitId?,revision,created,updated}`.
+  `id` is a `ReleaseId` the desktop makes (UUIDv7); `name` is a core `Name`, unique in the project without regard to
+  case; `description` is Markdown, trimmed; `planned` and `released_on` are `YYYY-MM-DD` days; `state` is `planned`
+  or `released`. A released release names `released_on` and `released_by`, and `released_commit` when it was given; a
+  planned one names none of the three, and any other combination is refused (`ReleaseStateError`). `revision` counts
+  the release's changes and its changelog's. `ReleaseFields` `{name,description,planned?}` is what a person sets
+  (`details()` gives core's `ReleaseDetails`, `422 invalid` when the name or the day is not one).
+- A task's release: `release:ReleaseId?` in `TaskContent` (so `SharedTask` and `TaskRead`) and in `TaskChanges`
+  (absent leaves it, `null` takes the task out), moved under the task's revision as `module` is. At most one per task.
+- `ReleaseChange` `{sequence,task,from?,to?,by,actor,at}`: every move of a task into a release, out of one or from one
+  to another, append-only, `actor` `person` or `orchester` (*Mark released*'s moves are Orchester's).
+- The changelog, `SharedChangelog` `{release,revision,document,hidden,kept_aside}`: `revision` is the release's;
+  `document` (`ChangelogDocument`) is `{markdown,blocks}`, the Markdown as core's `docs::blocks` writes it and the id of
+  each of its blocks in order (as many as the Markdown parses into, each once, or refused with `ChangelogError`);
+  `hidden` are the release's tasks whose entry a person deleted; `kept_aside` (`KeptEntry` `{task,markdown}`) the
+  edited entries of tasks that left the release or are no longer Done.
+- A module's horizon: `ModuleFields` (so `SharedModule`, `ModuleRead` and the module create and patch) gains
+  `horizon` (`now`, `next`, `later`; core's `module::Horizon`) and `place` (`u32`): the Now / Next / Later board shows a
+  horizon's modules in ascending `place`, then in creation order. A module that names neither, a new one too, is in
+  `later` at place 0. Dates never change a horizon.
+
+Definitions, on the server's Admin-checked routes as a module's are (Authority S3); only a workspace Admin or a server
+admin writes them, and anyone else gets `403 not_admin`. Each write carries an `idempotency_key`, and the server
+answers a repeat with its first answer, as for modules.
+
+| Method and path | Request | Answer |
+| --- | --- | --- |
+| `POST /api/v1/projects/{p}/releases` | `ReleaseCreate {idempotency_key,id,release:ReleaseFields}` | `201 ReleaseResponse {release}`, planned, at revision 1 |
+| `PATCH /api/v1/projects/{p}/releases/{r}` | `ReleasePatch {idempotency_key,revision,release}`, the fields as a whole | `ReleaseResponse` |
+| `POST /api/v1/projects/{p}/releases/{r}/released` | `MarkReleased {idempotency_key,revision,commit:CommitId?}` (`commit` always sent) | `ReleaseMarked {release,moves:[ReleaseChange]}` |
+| `DELETE /api/v1/projects/{p}/releases/{r}` | `ReleaseDelete {idempotency_key,revision}` | `ReleaseDeleted {moves}`; a planned release only |
+| `PATCH /api/v1/projects/{p}/releases/{r}/changelog` | `ChangelogPatch {idempotency_key,revision,document,hidden,kept_aside}`, the changelog as a whole | `ChangelogResponse {changelog}` |
+| `PATCH /api/v1/projects/{p}/tasks/{t}` | `TaskPatch` with `changes.release` | the task, as every task edit |
+
+*Mark released* records the server's day, the caller and the commit, keeps the release's Done tasks and moves every
+other one but the Canceled to the next planned release (planned releases with a day by day, then those without one in
+creation order; the first after this one), or out of any release when there is none; each move is a `ReleaseChange`
+with `actor:"orchester"`, all in the answer. A released release is final: it takes no change, no changelog edit, no
+task in or out and no delete. Deleting a planned release takes each of its tasks out (`actor:"person"`) and removes
+its changelog.
+
+Refusals, in the `/api/v1` envelope (`SharingError`):
+
+| Status, `error` | When | Details |
+| --- | --- | --- |
+| `409 release_exists` | another release of the project has the name, without regard to case | `release`: that release (`SharingErrorDetails::Release`) |
+| `422 release` | `reason` (`ReleaseRefusal`): `released` for any write of a released release, a move into or out of one; `release_not_found` for a task's release the project does not have | `reason` |
+| `409 revision_conflict` | a release write or changelog patch on another revision | `current`: the release as it is now (`SharingErrorDetails::ReleaseRevision`) |
+| `422 invalid` | a name that is not a name, or a day that is not `YYYY-MM-DD` | |
+| `409 id_taken` | the release id is the project's already | |
+| `403 not_admin` | a member's definition write | |
+| `404 not_found` | no such release | |
+
+Reads, on the S10/S11 routes under `/api/v2/projects/{project}` for whoever may read the workspace:
+
+| Method and path | Request | Answer |
+| --- | --- | --- |
+| `POST …/release-list` | `ReleaseListRequest {state?:"planned"\|"released",page}` | `Page<ReleaseSummary>`, oldest release first |
+| `GET …/releases/{release}` | | `ReleaseSummary` |
+| `GET …/releases/{release}/progress` | | `ModuleProgressRead` |
+| `GET …/releases/{release}/burndown` | | `ReleaseBurndownRead`, with the forecast |
+| `POST …/releases/{release}/history` | `PageRequest` | `ReleaseHistoryPage` (`Page<ReleaseChange>`, ascending sequence) |
+| `GET …/releases/{release}/changelog` | | `SharedChangelog` |
+
+- `ReleaseSummary` `{release:ReleaseRead,progress,tasks,forecast:ForecastRead,after_planned,overdue_days?}`;
+  `ReleaseRead` is `{release:SharedRelease,capabilities}`. Progress, burndown and forecast are a module's, counted by
+  core's rules over the release's tasks (Canceled out of scope, Done done, each move on its day). `after_planned` is
+  `true` when the forecast's 85% (`safe`) day is after the planned day; `overdue_days` is how many days a planned
+  release is past its planned day, `null` when it is not. A released release is neither.
+- `ReleaseBurndownRead` `{release,unit,start_scope,days,forecast,cursor}`, its days from the release's first task to its
+  planned day (no ideal line without one), each as a module's burndown day.
+- The task list's `TaskFilters` gains `releases` (`null` among them is a task without one), as `modules`.
+- `QueryScope` gains `{kind:"release_list"}` and `{kind:"release",release}` (its summary, progress, burndown, history
+  and changelog). A release write invalidates both; a task's move the task's scopes and each release it left or
+  joined; *Mark released* also the release its tasks moved to.
+
+Open, not decided by this contract: the source of *Mark released*'s commit picker (the base branch's recent commits
+read from the desktop's checkout or from the server), and the time zone a server counts days in (the released day,
+`overdue_days`, the burndown's days). Not here either: a `releases` event on the `/api/v1` stream and Share, Join and
+Make local carrying releases, which come with the desktop's half.
+
 ## Conventions
 
 - JSON bodies in UTF-8. Requests are limited to 1 MiB and must arrive within 10 seconds.

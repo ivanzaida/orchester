@@ -3,7 +3,11 @@
 //! are read with the task list's module filter ([`super::TaskFilters::modules`]). Every field is sent; one without a
 //! value is `null`, and an unknown field is refused.
 
-use orchester_core::{id::ModuleId, module::ModuleState, sharing::TaskRevision};
+use orchester_core::{
+  id::ModuleId,
+  module::{Horizon, ModuleState},
+  sharing::TaskRevision,
+};
 use serde::{Deserialize, Serialize};
 
 use super::{Capabilities, ClaimRead, PendingDeliveryRead, WorkRead, page::nullable};
@@ -35,6 +39,8 @@ struct ModuleReadWire {
   target: Option<String>,
   #[serde(with = "wire::ModuleStateWire")]
   state: ModuleState,
+  horizon: Horizon,
+  place: u32,
   revision: TaskRevision,
   created: Attribution,
   updated: Attribution,
@@ -58,6 +64,8 @@ impl From<ModuleReadWire> for ModuleRead {
       start: wire.start,
       target: wire.target,
       state: wire.state,
+      horizon: wire.horizon,
+      place: wire.place,
     };
     Self {
       module: SharedModule {
@@ -93,6 +101,8 @@ impl From<ModuleRead> for ModuleReadWire {
       start: fields.start,
       target: fields.target,
       state: fields.state,
+      horizon: fields.horizon,
+      place: fields.place,
       revision,
       created,
       updated,

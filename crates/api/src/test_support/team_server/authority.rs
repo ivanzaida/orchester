@@ -2,8 +2,9 @@
 //! server's routes and in its shapes (`docs/workspace-reads.md`, `docs/workspace-subscriptions.md` of the platform),
 //! for the app's tests and QA states that read a team project from its server: the caller's capabilities and the
 //! workspace, the task list with its filters, search, sort, pages and board counts, one task, the module list, a module
-//! and its progress, and a subscription that says `ready`, sends each committed change as `invalidated` and keeps the
-//! stream alive. Not served yet: a module's burndown and history, the library, the picker and a resource's versions.
+//! and its progress, the releases ([`roadmap`]), and a subscription ([`stream`]) that says `ready`, sends each
+//! committed change as `invalidated` and keeps the stream alive. Not served yet: a module's burndown and history, the
+//! library, the picker and a resource's versions.
 //! The tasks are the project's v1 tasks as [`TasksAnswer`] serves them, or the ones [`TeamServer::authority_tasks`]
 //! set, with the modules [`TeamServer::authority_modules`] sets ([`work`]): a held answer holds the task reads too, and
 //! a refused one answers them, as [`TeamServer::authority_unavailable`] answers every read and the subscription, `503
@@ -15,6 +16,8 @@ mod delivery;
 pub(super) mod edits;
 mod execution;
 mod listing;
+pub(super) mod roadmap;
+mod stream;
 mod work;
 
 use std::{
@@ -130,6 +133,8 @@ pub(super) struct Authority {
   /// before the next one asked here.
   edits: HashMap<String, edits::Edited>,
   edit_first: Option<edits::FirstChange>,
+  /// The releases Admins made, with their changelogs and every move of a task into or out of one.
+  releases: roadmap::Releases,
 }
 
 impl Authority {
@@ -351,7 +356,8 @@ const CLIENT_PATHS: [(&str, &str); 3] = [
 /// Answers one `/api/v2` request on `stream`: `line` is its request line, `headers` its headers in lowercase. The
 /// routes are the team server's: `GET workspace`, `GET capabilities`, `GET subscription`, `POST task-list`, `POST
 /// task-counts`, `GET tasks/{task}`, `POST module-list`, `GET modules/{module}` and `GET modules/{module}/progress`,
-/// the commands, an operation and the policy ([`commands`]), and the heartbeat ([`execution`]);
+/// the commands, an operation and the policy ([`commands`]), the heartbeat ([`execution`]), and the release reads
+/// ([`roadmap`]);
 /// the client's own paths for some of them are answered as those ([`CLIENT_PATHS`]). A request without the token is
 /// `401` and one for a project the server has not `404`, in the common `{error, message}` envelope, as the server
 /// answers them; an outage is `503 unavailable` in the authority envelope.
@@ -391,7 +397,7 @@ pub(super) fn serve(stream: &mut TcpStream, (line, headers, body): (&str, &str, 
     .map_or(asked.as_str(), |(_, server)| server);
   let project = (project, key.as_str());
   match route.split_once(' ').unwrap_or_default() {
-    ("GET", "subscription") => subscribe(stream, headers, state),
+    ("GET", "subscription") => stream::subscribe(stream, headers, state),
     ("GET", "capabilities") => respond(stream, 200, &capabilities(project.0, state.lock().authority.standing)),
     ("GET", "workspace") => respond(stream, 200, &workspace(project, state)),
     ("POST", read @ ("task-list" | "task-counts")) => task_read(stream, (read, body), project, state),
@@ -421,6 +427,10 @@ pub(super) fn serve(stream: &mut TcpStream, (line, headers, body): (&str, &str, 
     ("GET", "policy") => respond(stream, 200, &commands::policy(&state.lock().authority)),
     ("PATCH", "policy") => {
       let (status, answer) = commands::change_policy(&mut state.lock().authority, body);
+      respond(stream, status, &answer);
+    }
+    (method, read) if read.starts_with("release") => {
+      let (status, answer) = roadmap::read(project, (method, read, body), &state.lock());
       respond(stream, status, &answer);
     }
     _ => respond(stream, 404, &super::error("not_found")),
@@ -513,69 +523,6 @@ fn workspace((id, key): (&str, &str), state: &Mutex<State>) -> Value {
     "cursor": state.authority.cursor().to_string(),
     "claim_staleness_seconds": STALE_AFTER_MINUTES * 60,
   })
-}
-
-/// `GET …/subscription`: `ready` at the current cursor and the batches after `Last-Event-ID`, then each batch as it
-/// commits and a keep-alive while none does, until the streams end, the server stops answering or the client hangs up.
-fn subscribe(stream: &mut TcpStream, headers: &str, state: &Mutex<State>) {
-  let last = headers
-    .lines()
-    .find_map(|line| line.strip_prefix("last-event-id:"))
-    .and_then(|value| value.trim().parse::<u64>().ok());
-  let (generation, mut cursor) = {
-    let state = state.lock();
-    (state.authority.streams, state.authority.cursor())
-  };
-  let mut text = sse(&json!({"kind": "ready", "cursor": cursor.to_string()}));
-  if let Some(last) = last {
-    text.push_str(&batches_after(&state.lock(), last));
-  }
-  let head =
-    "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\nConnection: close\r\n\r\n";
-  if stream.write_all(head.as_bytes()).is_err() {
-    return;
-  }
-  let mut quiet_since = Instant::now();
-  loop {
-    if !text.is_empty() {
-      if stream.write_all(text.as_bytes()).is_err() || stream.flush().is_err() {
-        return;
-      }
-      quiet_since = Instant::now();
-    }
-    thread::sleep(STREAM_POLL);
-    let state = state.lock();
-    if state.down || state.authority.streams != generation || state.authority.unavailable {
-      return;
-    }
-    text = batches_after(&state, cursor);
-    cursor = state.authority.cursor();
-    if text.is_empty() && quiet_since.elapsed() >= KEEP_ALIVE {
-      text = ": keep-alive\n\n".to_owned();
-    }
-  }
-}
-
-/// The `invalidated` events of the batches after `cursor`.
-fn batches_after(state: &State, cursor: u64) -> String {
-  state
-    .authority
-    .batches
-    .iter()
-    .filter(|(batch, _)| *batch > cursor)
-    .map(|(batch, scopes)| sse(&json!({"kind": "invalidated", "cursor": batch.to_string(), "scopes": scopes})))
-    .collect()
-}
-
-/// `event` as one SSE event: its kind as the name, its cursor as the id, itself as the data.
-fn sse(event: &Value) -> String {
-  let id = event
-    .get("cursor")
-    .and_then(Value::as_str)
-    .map(|cursor| format!("id: {cursor}\n"))
-    .unwrap_or_default();
-  let kind = event["kind"].as_str().unwrap_or_default();
-  format!("{id}event: {kind}\ndata: {event}\n\n")
 }
 
 fn respond(stream: &mut TcpStream, status: u16, body: &Value) {

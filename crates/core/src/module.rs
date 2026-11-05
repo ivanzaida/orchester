@@ -36,6 +36,17 @@ pub enum ModuleState {
   Closed,
 }
 
+/// When a module is planned to be worked on, as the Roadmap's Now / Next / Later sorts it (`docs/design/roadmap.md`,
+/// decision 13). A person sets it; dates never change it, and a new module starts in [`Horizon::Later`].
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Horizon {
+  Now,
+  Next,
+  #[default]
+  Later,
+}
+
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum ModuleError {
   #[error("a module's target date cannot be before its start date")]

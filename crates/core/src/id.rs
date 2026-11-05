@@ -103,6 +103,10 @@ define_id!(
   ModuleId
 );
 define_id!(
+  /// A release of a project (`crate::release`): what ships, when, and as which version.
+  ReleaseId
+);
+define_id!(
   /// One tenure of a shared task's holder.
   ClaimId
 );
