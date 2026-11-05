@@ -35,4 +35,5 @@ mod stuck;
 mod stuck_loops;
 mod tool;
 mod unverified;
+mod waits_on;
 mod working_prompt;

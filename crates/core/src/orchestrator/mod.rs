@@ -23,6 +23,7 @@ pub mod run_git;
 pub mod sent;
 pub mod settings;
 pub mod wait;
+pub mod watch;
 
 pub use self::{
   chat::{
@@ -35,8 +36,9 @@ pub use self::{
   resume::{ChatResume, Continuing, PersonsStop},
   rewind::{Dropped, RewindPoint, RewoundTo},
   sent::{FromOrchestrator, SentWay},
-  settings::{OrchestratorSettings, runs_orchestrator},
+  settings::{NoProgressError, OrchestratorSettings, WatchSettings, runs_orchestrator},
   wait::{AgentWait, RunEnd, StopReason, WaitKind},
+  watch::{Claim, Subscription, Subscriptions, WatchTarget},
 };
 
 /// The agentic turns one answer on Claude Code may take at most (`--max-turns`): reading, searching and calling tools,

@@ -9,7 +9,7 @@ use orchester_core::{
   id::{AgentAccountId, ChatId, ChatMessageId, ConnectionId},
   orchestrator::{
     ActionOutcome, Chat, ChatAction, ChatEvent, EntryKind, OrchestratorSettings, SessionChange, TurnFailure, TurnMode,
-    TurnState,
+    TurnState, WatchSettings,
   },
   run::{Answerer, TokenUsage},
 };
@@ -44,6 +44,29 @@ fn orchestrator_settings_are_drafted_then_published_as_numbered_versions() {
   assert_eq!(db.orchestrator_settings().expect("read"), Some(first));
   assert_eq!(db.publish_orchestrator(&second, at(40)).expect("published"), 2);
   assert_eq!(db.orchestrator_published().expect("read"), Some((2, second)));
+}
+
+/// ORC-757: how the Orchestrator watches the runs is kept as set, and a project from before it has the defaults.
+#[test]
+fn orchestrator_watch_starts_at_its_defaults_and_keeps_what_is_set() {
+  let (repo, mut db, _run, _execution) = started_run();
+  assert_eq!(db.orchestrator_watch().expect("read"), WatchSettings::default());
+  let set = WatchSettings::new("Watch the queue until it is empty.", Some(45)).expect("valid");
+  db.save_orchestrator_watch(&set).expect("kept");
+  assert_eq!(db.orchestrator_watch().expect("read"), set);
+  let off = WatchSettings::new("", None).expect("off");
+  db.save_orchestrator_watch(&off).expect("kept");
+  assert_eq!(db.orchestrator_watch().expect("read"), off, "off is kept as off");
+  drop(db);
+
+  let current = repo.path().join(".orchester/orchester.db");
+  let old = copied_at_version(&current, schema_version(&current) - 1);
+  let upgraded = ProjectDb::open(old.path()).expect("migrate");
+  assert_eq!(
+    upgraded.orchestrator_watch().expect("read"),
+    WatchSettings::default(),
+    "a project from before the setting has no order and 20 minutes"
+  );
 }
 
 #[test]
