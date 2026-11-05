@@ -1,13 +1,15 @@
 //! The service tools: offered with the project's published services to a step that reaches the network, a start asks
 //! and auto-approval never answers it, a stop, `service_status` and `service_logs` never ask, and all take only a
-//! published service's name; `service_logs` takes a capped tail. The prompt tells the agent to start servers only
-//! through `start_service` and to look at and stop them with these tools, not by shell.
+//! published service's name; `service_logs` takes a capped tail. `start_stack` comes with them when the project
+//! publishes a stack, asks as a start does and takes only a published stack's name. The prompt tells the agent to
+//! start servers only through `start_service` and `start_stack` and to look at and stop them with these tools, not by
+//! shell.
 
 use orchester_core::{
   orchester_tools::{OrchesterTool, StepTools, ToolCall, ToolCallError, ToolPolicy, auto_approvable},
   permission::NetworkAccess,
   resource::RepositoryAccess,
-  service::{DEFAULT_TAIL, MAX_TAIL, ServiceName},
+  service::{DEFAULT_TAIL, MAX_TAIL, ServiceName, StackName},
 };
 use serde_json::json;
 
@@ -181,4 +183,72 @@ fn service_prompt_rule_says_to_use_the_service_tools_instead_of_the_shell() {
   }
   let none = step(RepositoryAccess::Write, &[]).prompt_paragraph(true);
   assert!(!none.contains("start_service"), "{none}");
+}
+
+fn stacks(values: &[&str]) -> Vec<StackName> {
+  values
+    .iter()
+    .map(|name| StackName::new(name).expect("a name"))
+    .collect()
+}
+
+#[test]
+fn service_stack_tool_comes_with_published_stacks_and_the_service_tools() {
+  let offered = step(RepositoryAccess::Write, &["web", "api"]).with_stacks(&stacks(&["full"]));
+  assert_eq!(offered.policy(OrchesterTool::StartStack), Some(ToolPolicy::Asks));
+  assert!(!auto_approvable("Orchester", "start_stack"));
+  let order: Vec<&str> = offered.offered().iter().map(|(tool, _)| tool.as_str()).collect();
+  let at = |name: &str| order.iter().position(|tool| *tool == name).expect("offered");
+  assert_eq!(at("start_stack") + 1, at("start_service"));
+  assert_eq!(
+    step(RepositoryAccess::Write, &["web"])
+      .with_stacks(&[])
+      .policy(OrchesterTool::StartStack),
+    None,
+    "no stack"
+  );
+  assert_eq!(
+    step(RepositoryAccess::Write, &[])
+      .with_stacks(&stacks(&["full"]))
+      .policy(OrchesterTool::StartStack),
+    None,
+    "no service tools"
+  );
+  let offline = permissions(RepositoryAccess::Write);
+  let none = StepTools::for_step(&offline, &[])
+    .with_services(&offline, &names(&["web"]))
+    .with_stacks(&stacks(&["full"]));
+  assert_eq!(none.policy(OrchesterTool::StartStack), None, "network off");
+}
+
+#[test]
+fn service_stack_tool_takes_only_a_published_stacks_name_and_is_in_the_prompt() {
+  let offered = step(RepositoryAccess::Write, &["web"]).with_stacks(&stacks(&["full", "cloud"]));
+  assert_eq!(
+    ToolCall::parse("start_stack", &json!({"name": "full"}), &offered),
+    Ok(ToolCall::StartStack(StackName::new("full").expect("a name")))
+  );
+  assert_eq!(
+    ToolCall::parse("start_stack", &json!({"name": "team"}), &offered),
+    Err(ToolCallError::UnknownStack("team".to_owned()))
+  );
+  assert!(matches!(
+    ToolCall::parse("start_stack", &json!({"name": "full", "only": "web"}), &offered),
+    Err(ToolCallError::Invalid { .. })
+  ));
+  let listed = offered.mcp_tools();
+  let stack = listed
+    .iter()
+    .find(|tool| tool["name"] == "start_stack")
+    .expect("start_stack is listed");
+  assert_eq!(
+    stack["inputSchema"]["properties"]["name"]["enum"],
+    json!(["full", "cloud"])
+  );
+  assert_eq!(stack["annotations"]["readOnlyHint"], json!(false));
+  let paragraph = offered.prompt_paragraph(false);
+  assert!(
+    paragraph.contains("Start a whole stack (full, cloud) with start_stack(name)."),
+    "{paragraph}"
+  );
 }

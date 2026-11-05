@@ -11,6 +11,7 @@
 //! - `spawn-sleeper`: starts a copy of itself that sleeps for ten minutes and prints `child pid: <pid>`;
 //!   `spawn-sleeper-into <file>` writes the copy's pid to `<file>` instead;
 //! - `listen <port>`: a stand-in web server on `127.0.0.1:<port>` until it is ended (`fake_server`);
+//! - `connect <port>`: fails unless something accepts connections on `127.0.0.1:<port>`;
 //! - `sleep <seconds>`: sleeps;
 //! - `exit <code>`: exits with `<code>`.
 //!
@@ -70,6 +71,7 @@ fn main() -> ExitCode {
       "spawn-sleeper-into" => spawn_sleeper(rest.next()),
       "serve-app" => fake_run_app_server::serve(rest.next().unwrap_or_default()),
       "listen" => fake_server::listen(rest.next()),
+      "connect" => fake_server::connect(rest.next()),
       "sleep" => sleep(rest.next()),
       "exit" => return ExitCode::from(rest.next().and_then(|code| code.parse().ok()).unwrap_or(2)),
       other => Err(format!("unknown action {other}")),

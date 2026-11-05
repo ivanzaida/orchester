@@ -82,6 +82,7 @@ pub enum OrchesterTool {
   CallRunApp,
   StartQaApp,
   StartService,
+  StartStack,
   StopService,
   ServiceStatus,
   ServiceLogs,
@@ -109,7 +110,7 @@ pub enum AccessClass {
 }
 
 impl OrchesterTool {
-  pub const ALL: [Self; 25] = [
+  pub const ALL: [Self; 26] = [
     Self::ReadFile,
     Self::ListFiles,
     Self::SearchFile,
@@ -127,6 +128,7 @@ impl OrchesterTool {
     Self::CallRunApp,
     Self::StartQaApp,
     Self::StartService,
+    Self::StartStack,
     Self::StopService,
     Self::ServiceStatus,
     Self::ServiceLogs,
@@ -157,6 +159,7 @@ impl OrchesterTool {
       Self::CallRunApp => "call_run_app",
       Self::StartQaApp => "start_qa_app",
       Self::StartService => "start_service",
+      Self::StartStack => "start_stack",
       Self::StopService => "stop_service",
       Self::ServiceStatus => "service_status",
       Self::ServiceLogs => "service_logs",
@@ -256,9 +259,12 @@ impl OrchesterTool {
       Self::ListSkills | Self::ReadSkill | Self::GetTask => AccessClass::ReadOnly,
       Self::EditFile | Self::CreateFile | Self::DeleteFile | Self::MoveFile => AccessClass::WritesWorktree,
       // Builds and runs the worktree's code outside every sandbox, as a check runs a program outside it.
-      Self::SearchExternalFile | Self::ReadExternalFile | Self::RunCheck | Self::StartQaApp | Self::StartService => {
-        AccessClass::Outside
-      }
+      Self::SearchExternalFile
+      | Self::ReadExternalFile
+      | Self::RunCheck
+      | Self::StartQaApp
+      | Self::StartService
+      | Self::StartStack => AccessClass::Outside,
       Self::SaveMemory | Self::ReportProgress => AccessClass::Records,
       Self::ListRunProcesses
       | Self::StopRunProcess
@@ -283,6 +289,8 @@ pub enum ToolCallError {
   UnknownCheck(String),
   #[error("the project publishes no service named `{0}`")]
   UnknownService(String),
+  #[error("the project publishes no stack named `{0}`")]
+  UnknownStack(String),
   #[error("the program `{0}` of the check was not found")]
   ProgramNotFound(String),
   #[error(

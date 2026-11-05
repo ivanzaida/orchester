@@ -72,7 +72,10 @@ const CREATE_FILE: &str = r#"{"type":"object","properties":{
 const STARTS_QA_APP: &str = "Build and start a QA copy of the app from this worktree on a seeded scenario (tools/qa-app.ps1), off-screen and without focus, and make it the app call_run_app calls when you leave out its pid. As many QA apps run on this computer at once as the project's setting QA apps at once allows: while other runs' QA apps hold every slot, the call waits until one is free. Starting again replaces this step's QA app; Orchester stops it when your turn ends or waits for a person. A person may be asked first. Never start tools/qa-app.ps1 yourself.";
 
 /// What `start_service` does.
-const STARTS_SERVICE: &str = "Start one of the project's services by name in this run's worktree, on a free loopback port of this run, and wait until it is ready as the service defines (its port open, an HTTP answer, or a log line). Returns {url, port}. A service already running in this step is returned as it is. Orchester stops it with everything it started when your turn ends or waits for a person. A person may be asked first. Use this instead of starting servers by shell.";
+const STARTS_SERVICE: &str = "Start one of the project's services by name in this run's worktree, on a free loopback port of this run, and wait until it is ready as the service defines (its port open, an HTTP answer, or a log line). The services it needs start first, in order, each once what it needs is ready; their URLs and ports fill its {{services.<name>.url}} and {{services.<name>.port}}. Returns {url, port}. A service already running in this step is reused as it is, not started twice. When a service it needs fails, nothing after it starts and the error names it. Orchester stops them with everything they started when your turn ends or waits for a person. A person may be asked first. Use this instead of starting servers by shell.";
+
+/// What `start_stack` does.
+const STARTS_STACK: &str = "Start one of the project's stacks by name: every service of it and the services they need, in order, as start_service starts one, those that need none of each other together. Returns {services: {<name>: {url, port}}} for every service it started or found running. A service already running in this step is reused, not started twice. When a service fails, nothing after it starts and the error names it. A person may be asked first. Use this instead of starting servers by shell.";
 
 /// What `stop_service` does.
 const STOPS_SERVICE: &str = "Stop a service start_service started in this step, with everything it started, without asking. Stopping one that is not running says so.";
@@ -95,6 +98,7 @@ impl OrchesterTool {
       }
       Self::StartQaApp => STARTS_QA_APP,
       Self::StartService => STARTS_SERVICE,
+      Self::StartStack => STARTS_STACK,
       Self::StopService => STOPS_SERVICE,
       Self::ServiceStatus => SERVICE_STATUS,
       Self::ServiceLogs => SERVICE_LOGS,
@@ -179,6 +183,7 @@ impl OrchesterTool {
         | Self::CallRunApp
         | Self::StartQaApp
         | Self::StartService
+        | Self::StartStack
         | Self::StopService
         | Self::RunCheck
         | Self::SaveMemory
@@ -188,8 +193,12 @@ impl OrchesterTool {
 }
 
 /// The input schema of `tool`; `projects` are the names and descriptions of the checks `run_check` may run, `services`
-/// the names of the services the service tools take.
-pub(super) fn input_schema(tool: OrchesterTool, projects: &[(String, String, bool)], services: &[String]) -> Value {
+/// the names of the services the service tools take and `stacks` those of the stacks `start_stack` takes.
+pub(super) fn input_schema(
+  tool: OrchesterTool,
+  projects: &[(String, String, bool)],
+  (services, stacks): (&[String], &[String]),
+) -> Value {
   let fixed = |text: &str| serde_json::from_str::<Value>(text).expect("the static tool schemas are valid JSON");
   let read_lines = |path: &str| {
     json!({"type":"object","properties":{
@@ -232,6 +241,9 @@ pub(super) fn input_schema(tool: OrchesterTool, projects: &[(String, String, boo
     },"required":["tool","arguments"],"additionalProperties":false}),
     OrchesterTool::StartQaApp => fixed(START_QA_APP),
     OrchesterTool::StartService => service("The service to start, as the project names it."),
+    OrchesterTool::StartStack => json!({"type":"object","properties":{
+      "name":{"type":"string","enum":stacks,"description":"The stack to start, as the project names it."}
+    },"required":["name"],"additionalProperties":false}),
     OrchesterTool::StopService => service("The service to stop."),
     OrchesterTool::ServiceStatus => service("The service to look at."),
     OrchesterTool::ServiceLogs => json!({"type":"object","properties":{

@@ -1,10 +1,10 @@
-//! `start_service`, `stop_service`, `service_status` and `service_logs` (`docs/architecture/agent-testing.md`,
-//! "Service" and "Agent tools"): the runner starts one of the project's published services for an invocation, in the
-//! run's worktree and the runner's own process tree, without a shell ([`launch`]), on a free loopback port no other
-//! service of the runner holds ([`port`]), and waits until it is ready as the service defines ([`readiness`]). Its
-//! output goes into a bounded log with its secret values redacted ([`orchester_core::service::ServiceLog`]); a start
-//! that fails says its last lines, and the step reads the log and the service's status while the invocation lasts,
-//! also after it stopped.
+//! `start_service`, `start_stack`, `stop_service`, `service_status` and `service_logs`
+//! (`docs/architecture/agent-testing.md`, "Service", "Stack" and "Agent tools"): the runner starts one of the project's
+//! published services, or a stack's, with what they need in order ([`order`]), for an invocation, in the run's worktree
+//! and the runner's own process tree, without a shell ([`launch`]), on a free loopback port no other service of the
+//! runner holds ([`port`]), and waits until each is ready as the service defines ([`readiness`]). Its output goes into
+//! a bounded log with its secret values redacted ([`orchester_core::service::ServiceLog`]); a start that fails says its
+//! last lines, and the step reads the log and the service's status while the invocation lasts, also after it stopped.
 //!
 //! A service lives for the step that started it, as a QA app does ([`super::qa_app`]): when the invocation ends
 //! ([`Services::end`]) — its turn is over, its run stopped, paused or failed — and while it waits for a person inside
@@ -12,10 +12,11 @@
 //! workers, and its port freed. A start that is still waiting for readiness when its invocation ends gives up and
 //! stops what it started.
 //!
-//! Not here yet: needs, seeds and per-run data (the start refuses a service that has them), crash events, the
-//! computer's service slots and approval rules of their own; until then a start asks a person as any program run does.
+//! Not here yet: seeds and per-run data (the start refuses a service that has them), crash events, the computer's
+//! service slots and approval rules of their own; until then a start asks a person as any program run does.
 
 mod launch;
+mod order;
 mod port;
 mod readiness;
 mod task;
@@ -95,8 +96,13 @@ struct Running {
 }
 
 impl Running {
+  /// Its URL and port, as a start answers them.
+  fn address(&self) -> serde_json::Value {
+    json!({"url": self.url, "port": self.lease.port()})
+  }
+
   fn answer(&self) -> ToolResult {
-    ToolResult::shown(json!({"url": self.url, "port": self.lease.port()}).to_string())
+    ToolResult::shown(self.address().to_string())
   }
 
   /// The exit code of its program, once it exited on its own.
@@ -192,23 +198,6 @@ pub(in crate::execution::step) struct StepServices {
 }
 
 impl StepServices {
-  /// Starts the published service `name` for the invocation and waits until it is ready; one it runs already is
-  /// answered as it is. Blocks while an earlier start of the invocation runs and until the service is ready.
-  pub(in crate::execution::step) fn start(&self, name: &ServiceName) -> ToolResult {
-    let _one_at_a_time = self.state.starting.lock();
-    if let Err(refusal) = self.may_start() {
-      return ToolResult::unavailable(&refusal);
-    }
-    if let Some(running) = self.state.running.lock().get(name) {
-      return running.answer();
-    }
-    let state = Arc::clone(&self.state);
-    match self.launch(name, &move || state.ended()) {
-      Ok(running) => self.keep(name, running),
-      Err(refusal) => ToolResult::unavailable(&refusal),
-    }
-  }
-
   /// Stops the service `name` the invocation started, with everything it started; says so when none runs.
   pub(in crate::execution::step) fn stop(&self, name: &ServiceName) -> ToolResult {
     let removed = self.state.running.lock().remove(name);
@@ -271,7 +260,7 @@ impl StepServices {
 
   /// Keeps `running` for the invocation, or stops it when the invocation ended or began to wait for a person while it
   /// started.
-  fn keep(&self, name: &ServiceName, running: Running) -> ToolResult {
+  fn keep(&self, name: &ServiceName, running: Running) -> Result<(), String> {
     let mut kept = self.state.running.lock();
     // Checked under the services' lock, which `Services::release` takes too: a wait that began during the start sees
     // the service stored, or the start sees the wait.
@@ -279,12 +268,11 @@ impl StepServices {
       self.state.note(name, ServicePhase::Stopped, None);
       drop(kept);
       drop(running);
-      return ToolResult::unavailable(&format!("the service `{name}` was ready but stopped again: {refusal}"));
+      return Err(format!("the service `{name}` was ready but stopped again: {refusal}"));
     }
     self.state.note(name, ServicePhase::Ready, None);
-    let answer = running.answer();
     kept.insert(name.clone(), running);
-    answer
+    Ok(())
   }
 }
 

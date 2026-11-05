@@ -1,44 +1,60 @@
-//! Starting one service: its published definition, its program found as a command tool's is, its placeholders
-//! filled, its secrets read from the keychain, its tree started and held, its output kept in a fresh log, and the wait
-//! until it is ready. A start that fails after the program started stops the whole tree first, and its error says so
-//! with the last lines of its output.
+//! Starting one service: its program found as a command tool's is, its placeholders filled with its own port and URL
+//! and those of the services already running, its secrets read from the keychain, its tree started and held, its
+//! output kept in a fresh log, and the wait until it is ready. A start that fails after the program started stops the
+//! whole tree first, and its error says so with the last lines of its output.
 
 use std::{path::Path, sync::Arc, time::Instant};
 
 use orchester_core::{
   command::SecretVariable,
   connection::invocation::Platform,
-  resource::{ResourceKind, VariableName},
+  resource::{ResourceBody, VariableName},
   secret::SecretName,
-  service::{RunData, RunValues, Seed, Service, ServiceLog, ServiceName, ServicePhase},
+  service::{RunValues, Service, ServiceLog, ServicePhase, Stack},
   store::{ResourceStore, SecretStore},
 };
 use orchester_exec::process_tree::ProcessTree;
 use orchester_store::{ProjectDb, StoreError};
 use parking_lot::Mutex;
 
-use super::{Running, StepServices, Watch, readiness};
+use super::{Running, StepServices, Watch, order::Address, readiness};
 
 /// How many of its last lines of output a failed start's error shows.
 const FAILED_START_LINES: u32 = 20;
 
 /// The latest published version of each of the project's services at `root`, removed ones left out.
 pub(in crate::execution::step) fn published(root: &Path) -> Result<Vec<Service>, StoreError> {
+  latest(root)
+}
+
+/// The latest published version of each of the project's stacks at `root`, removed ones left out.
+pub(in crate::execution::step) fn published_stacks(root: &Path) -> Result<Vec<Stack>, StoreError> {
+  latest(root)
+}
+
+/// The latest published body of each resource of kind `T` at `root`, removed ones left out.
+fn latest<T: ResourceBody + Clone>(root: &Path) -> Result<Vec<T>, StoreError> {
   let db = ProjectDb::open_read_only(root)?;
-  let mut services = Vec::new();
-  for resource in db.resources(ResourceKind::Service)? {
-    services.extend(
-      db.latest_version::<Service>(resource.id())?
+  let mut bodies = Vec::new();
+  for resource in db.resources(T::KIND)? {
+    bodies.extend(
+      db.latest_version::<T>(resource.id())?
         .map(|version| version.body().clone()),
     );
   }
-  Ok(services)
+  Ok(bodies)
 }
 
 impl StepServices {
-  /// Starts the service `name` and waits until it is ready, giving up when `ended` says the invocation ended.
-  pub(super) fn launch(&self, name: &ServiceName, ended: &dyn Fn() -> bool) -> Result<Running, String> {
-    let service = self.definition(name)?;
+  /// Starts `service` with the addresses of the services already running, `wired`, and waits until it is ready, giving
+  /// up when `ended` says the invocation ended.
+  pub(super) fn launch(
+    &self,
+    service: &Service,
+    wired: &[Address],
+    ended: &dyn Fn() -> bool,
+  ) -> Result<Running, String> {
+    let name = service.name();
     let lease = self
       .services
       .ports
@@ -46,8 +62,12 @@ impl StepServices {
       .map_err(|error| format!("no free loopback port for the service `{name}`: {error}"))?;
     let port = lease.port();
     let url = format!("http://127.0.0.1:{port}");
-    let values = RunValues::new(self.run, port, &url);
-    let (mut tree, secrets) = self.spawn(&service, &values)?;
+    let values = wired
+      .iter()
+      .fold(RunValues::new(self.run, port, &url), |values, (other, port, url)| {
+        values.with_service(other.clone(), *port, url)
+      });
+    let (mut tree, secrets) = self.spawn(service, &values)?;
     let log = Arc::new(Mutex::new(ServiceLog::new(secrets)));
     self.state.watched.lock().insert(
       name.clone(),
@@ -60,7 +80,7 @@ impl StepServices {
         exit: None,
       },
     );
-    let ready = readiness::wait(&mut tree, (&service, &values), port, (&log, ended));
+    let ready = readiness::wait(&mut tree, (service, &values), port, (&log, ended));
     match ready {
       Ok(()) => Ok(Running { tree, url, lease }),
       Err(why) => {
@@ -76,30 +96,6 @@ impl StepServices {
           "the service `{name}` {why}; {stopped}. Its last output: {output}"
         ))
       }
-    }
-  }
-
-  /// The published service `name`, when this step can start it: one without needs, seed or per-run data.
-  fn definition(&self, name: &ServiceName) -> Result<Service, String> {
-    let services = published(&self.root).map_err(|error| format!("the project's services cannot be read: {error}"))?;
-    let service = services
-      .into_iter()
-      .find(|service| service.name() == name)
-      .ok_or_else(|| format!("the project publishes no service named `{name}`"))?;
-    let unsupported = if !service.needs().is_empty() {
-      Some("needs other services")
-    } else if !matches!(service.seed(), Seed::None) {
-      Some("has a seed")
-    } else if !matches!(service.run_data(), RunData::None) {
-      Some("keeps data of its own per run")
-    } else {
-      None
-    };
-    match unsupported {
-      Some(what) => Err(format!(
-        "the service `{name}` {what}, which Orchester cannot start for a run yet"
-      )),
-      None => Ok(service),
     }
   }
 
