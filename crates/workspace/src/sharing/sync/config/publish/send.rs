@@ -136,7 +136,7 @@ impl<S: ConfigServer> RemoteResourceStore<S> {
       mcp_servers: &mcp_servers,
       secrets: &secrets,
     };
-    let bound = bindings::bound(&self.db.reference_bindings()?);
+    let bound = bindings::bound(&self.db.reference_bindings()?, &connections);
     Ok(for_publishing(body, entities, &base, &bound))
   }
 

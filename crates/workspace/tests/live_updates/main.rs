@@ -15,6 +15,7 @@
 mod archived;
 mod catalog;
 mod config;
+mod connection_kinds;
 mod desktop;
 mod here;
 mod http;
