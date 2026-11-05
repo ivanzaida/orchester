@@ -94,6 +94,7 @@ fn start(ctx: &mut Ctx, task: &TaskContext) -> (Option<ActionButton>, Option<Arc
     pending: run_controls.pending(),
     requested: &run_controls.requested,
     approval_waits: false,
+    fenced: false,
   };
   if let Some(control) = first_start(ctx, &controls, "task-empty-start") {
     let reason = control.reason().map(|reason| reason.full.clone());

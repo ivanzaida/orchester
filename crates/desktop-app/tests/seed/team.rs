@@ -7,18 +7,26 @@
 
 use std::path::PathBuf;
 
-use orchester_app::test_support::signed_in;
+use orchester_app::{
+  routes::{ProjectPage, Route, TaskView},
+  test_support::{Data, Window, signed_in},
+};
 use orchester_core::{
+  project::TaskKey,
   run::TaskPhase,
   store::{RunStore, TaskStore},
   task::identity::TaskOwner,
+  time::Timestamp,
 };
 use orchester_store::{AppDb, TeamOperationState, WorkReportState};
 use tokio::runtime::Runtime;
 
 use super::{
   Seed, by_key,
-  kontur::scenarios::{self, team::state::State},
+  kontur::{
+    self, SeedRequest,
+    scenarios::{self, team::state::State},
+  },
   phase, qa_team,
 };
 
@@ -52,7 +60,8 @@ fn seed_team_claims_runs_each_task_its_claim_state_rests_on() {
   for (key, expected) in [
     ("KON-12", TaskPhase::Running),
     ("KON-21", TaskPhase::Waiting),
-    ("KON-11", TaskPhase::Cancelled),
+    ("KON-11", TaskPhase::Interrupted),
+    ("KON-23", TaskPhase::Cancelled),
     ("KON-24", TaskPhase::Interrupted),
   ] {
     assert_eq!(phase(&db, key), Some(expected), "{key}");
@@ -121,6 +130,49 @@ fn seed_team_scenarios_with_runs_here_start_as_the_qa_app_starts_them() {
       assert_eq!(run.fence, None, "it reports");
     }
     launch.end();
+  }
+}
+
+/// 03 `hWXxr`: KON-11's run, interrupted and taken over by mara, stopped for good. Nothing continues or resumes it, in
+/// the header or its *More actions*: an agent run on a task someone else holds would report nothing the server takes.
+/// Cancel run stays, which stops an agent should one still work.
+#[test]
+fn seed_team_claims_a_fenced_interrupted_run_offers_no_continue() {
+  let folder = tempfile::tempdir().expect("a temporary folder");
+  let request = SeedRequest {
+    data_dir: folder.path().to_path_buf(),
+    repo: folder.path().join("repo-team-claims"),
+    scenario: scenarios::named("team-claims").expect("a known scenario"),
+    fake_codex: None,
+    now: Timestamp::now(),
+  };
+  let seeded = kontur::seed(&request).expect("the scenario seeds");
+  let data = Data::at(folder, Runtime::new().expect("a runtime"));
+  let launch = data.launch();
+  let qa_state = qa_team::State::beside(&seeded.app_database)
+    .expect("the marker reads")
+    .expect("a team state");
+  let services = launch.services().expect("the session started");
+  let _server = qa_team::prepare(qa_state, services, data.runtime.handle()).expect("the state is set up");
+  let mut window = Window::of(data, launch);
+  let key: TaskKey = "KON-11".parse().expect("a task key");
+  window.navigation().go(Route::Project(
+    seeded.project,
+    ProjectPage::task(key, TaskView::Summary, false),
+  ));
+  window.until("the run stopped", |window| {
+    window
+      .texts("task-status-label")
+      .is_some_and(|texts| texts.concat() == "Taken over by mara")
+  });
+  let shows = |window: &mut Window, id: &str| window.tree.get_element_by_id(id).is_some();
+  for id in ["task-continue-run", "task-resume-run", "task-team-continue"] {
+    assert!(!shows(&mut window, id), "{id} in the header");
+  }
+  window.press("task-more");
+  window.until("More actions", |window| shows(window, "task-cancel-run"));
+  for id in ["task-continue-run", "task-resume-run"] {
+    assert!(!shows(&mut window, id), "{id} in More actions");
   }
 }
 

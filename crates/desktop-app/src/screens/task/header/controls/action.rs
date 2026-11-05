@@ -89,7 +89,8 @@ pub fn control_action(
 
 /// The claim work on `task` goes on under, `run` going on again when given: a team run's is the claim and the work its
 /// start through the team server recorded, which its heartbeat renews and its reports name (`team_work`), so nothing is
-/// taken again here; any other work takes or confirms the task's claim.
+/// taken again here, and a team run the server fenced (taken over, membership removed, another device) goes on no
+/// more; any other work takes or confirms the task's claim.
 async fn work_claim(
   project: &OpenProject,
   servers: &Servers,
@@ -103,8 +104,10 @@ async fn work_claim(
         .map_err(|error| messages::store_error(&error))
     })
     .await??;
-    if team.is_some() {
-      return Ok(WorkClaim::default());
+    match team {
+      Some(team) if team.fence.is_some() => return Err(Message::new("claims.refused.fenced")),
+      Some(_) => return Ok(WorkClaim::default()),
+      None => {}
     }
   }
   servers

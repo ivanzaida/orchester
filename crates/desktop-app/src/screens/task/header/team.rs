@@ -176,17 +176,24 @@ fn stopped_chip(words: &str) -> Element {
     .into()
 }
 
+/// Why the team server fenced this computer's latest run of the task; `None` while it reports, and for a local task.
+pub fn fence(task: &TaskContext) -> Option<TeamFence> {
+  let team = task.team.as_ref()?;
+  let run = task.detail.run.as_ref()?;
+  team
+    .task
+    .fences
+    .iter()
+    .find(|(fenced, _)| *fenced == run.id())
+    .map(|(_, fence)| *fence)
+}
+
 /// The status of this computer's run whose authority the server fenced: who has the task now, and that the run stopped
 /// with its output kept here.
 fn lost(ctx: &Ctx, task: &TaskContext) -> Option<Said> {
   let team = task.team.as_ref()?;
   let run = task.detail.run.as_ref()?;
-  let fence = team
-    .task
-    .fences
-    .iter()
-    .find(|(fenced, _)| *fenced == run.id())
-    .map(|(_, fence)| *fence)?;
+  let fence = fence(task)?;
   let claim = team.task.claim.as_ref();
   let words = match (fence, claim) {
     (TeamFence::MembershipRevoked, _) => ctx.t("task.team.removed"),

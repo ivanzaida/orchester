@@ -183,6 +183,7 @@ impl TaskHeader {
         pending,
         requested: &run_controls.requested,
         approval_waits: props.task.waiting_approval().is_some(),
+        fenced: team::fence(&props.task).is_some(),
       },
     );
     // A team task's first run starts through its server, never from this computer's queue (`team`).

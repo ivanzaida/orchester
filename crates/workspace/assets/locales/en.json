@@ -2080,7 +2080,8 @@
       "held": "{{holder}} has taken this task, so nothing started. Ask them, or wait until they release it.",
       "heldStale": "{{holder}} has taken this task and their claim has gone stale; nothing started. Take it over from the task page once that is possible.",
       "heldUnknown": "Someone else has taken this task, so nothing started.",
-      "merged": "This task was merged; nobody takes it into work again."
+      "merged": "This task was merged; nobody takes it into work again.",
+      "fenced": "This run lost its authority on the team server, so it doesn't go on here. Its output stays on this computer to read."
     }
   },
   "accounts": {

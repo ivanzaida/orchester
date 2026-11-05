@@ -394,6 +394,7 @@ fn continue_button(ctx: &mut Ctx, task: &TaskContext) -> Option<ActionButton> {
       pending: run_controls.pending(),
       requested: &run_controls.requested,
       approval_waits: task.waiting_approval().is_some(),
+      fenced: fenced(task).is_some(),
     },
   );
   let moves = shown.moves?;

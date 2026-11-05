@@ -5,7 +5,7 @@
 //! runtime. Once the server took an action, the session's reads of the project are read again at once; the
 //! subscription says so too, a little later.
 
-use orchester_api::v2::{AuthorityErrorCode, TeamCommandValue};
+use orchester_api::v2::{AuthorityErrorCode, TeamCommandValue, WorkspacePolicy};
 use orchester_core::id::ClaimId;
 use orchester_workspace::{
   actions::{Accepted, Action, ActionError, ActionOutcome, Current, Dispatcher, Intent, Refusal, TeamOutcome},
@@ -42,8 +42,8 @@ impl lurq::app::component::DevtoolsInspectable for Acted {}
 pub enum Holds {
   /// A module's branch, and who changed the module last.
   Branch { branch: String, by: String },
-  /// The workspace's automatic merge.
-  AutomaticMerge(bool),
+  /// The workspace's policy: its automatic merge, at the revision a change again names.
+  AutomaticMerge(WorkspacePolicy),
 }
 
 /// What the screens need to carry out a team action: the session's servers and team reads, and the runtime.
@@ -158,7 +158,7 @@ fn holds(current: Current) -> Option<Holds> {
       branch: module.branch,
       by: module.module.updated.by.display_name,
     }),
-    Current::Policy(policy) => Some(Holds::AutomaticMerge(policy.automatic_merge)),
+    Current::Policy(policy) => Some(Holds::AutomaticMerge(policy)),
     Current::Module(_) | Current::Task(_) | Current::TaskRead(_) | Current::Tags(_) | Current::NotRead(_) => None,
   }
 }

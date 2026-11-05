@@ -152,10 +152,11 @@ pub fn module_outage(kontur: &mut Kontur) -> Result<(), SeedError> {
 }
 
 /// A member with a task in every claim state (`02h` `xUwYS`): the runs this computer has of them, which the QA app
-/// joins with the server's claims, the claims it took here and the ones the server fenced.
+/// joins with the server's claims, the claims it took here and the ones the server fenced. KON-11's fenced run was
+/// interrupted, as a run taken over while its runner was gone is: it stays stopped, nothing continues it.
 pub fn claims(kontur: &mut Kontur) -> Result<(), SeedError> {
   let runs = [
-    (11, "Export invoices as PDF", Shape::Cancelled("implement"), 50),
+    (11, "Export invoices as PDF", Shape::Interrupted("implement"), 50),
     (12, "Add retry to webhook sender", Shape::Running("implement"), 40),
     (14, "Cache GitHub API responses", Shape::Succeeded, 90),
     (21, "Typed errors per module", Shape::Question("implement"), 25),

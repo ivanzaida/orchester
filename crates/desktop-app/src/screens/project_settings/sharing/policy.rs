@@ -244,7 +244,9 @@ impl Policy {
   }
 }
 
-/// The automatic merge someone else set first (`o3iheS` in 05b): what it is now, to change again or keep.
+/// The automatic merge someone else set first (`o3iheS` in 05b): what it is now, to change again or keep. A change
+/// again names the revision the server answered the conflict with, so it goes through before the page reads the policy
+/// again.
 fn conflict(
   ctx: &Ctx,
   (action, kept, person): (&FutureAction<PolicyAction, Acted, ()>, &Signal<bool>, &PersonOnly),
@@ -254,10 +256,11 @@ fn conflict(
   let Acted::Changed(holds) = acted else {
     return None;
   };
-  let now = match holds {
-    Some(Holds::AutomaticMerge(now)) => *now,
-    _ => policy.policy.automatic_merge,
+  let current = match holds {
+    Some(Holds::AutomaticMerge(current)) => *current,
+    _ => policy.policy,
   };
+  let now = current.automatic_merge;
   let (body, again, keep) = if now {
     (
       "sharing.policy.conflictOn",
@@ -271,7 +274,7 @@ fn conflict(
       "sharing.policy.keepOff",
     )
   };
-  let (change, read, person) = (action.clone(), policy.policy.revision, person.clone());
+  let (change, read, person) = (action.clone(), current.revision, person.clone());
   let again = ActionButton::new(AGAIN, ButtonKind::Secondary, ctx.t(again)).on_click(move || {
     if person.allows(AGAIN) {
       change.run_if_idle(PolicyAction {
