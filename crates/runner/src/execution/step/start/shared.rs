@@ -213,6 +213,11 @@ impl RunTask {
       .connection(chosen.unwrap_or(body.connection()))
       .map_err(|error| problem(error.to_string()))?
       .ok_or_else(|| problem("the agent profile's connection no longer exists".to_owned()))?;
+    if let Some(inputs) = self.resolver.team() {
+      inputs
+        .check_connection(profile.resource, &connection)
+        .map_err(|_| problem("the agent profile's connection no longer exists".to_owned()))?;
+    }
     let connection =
       AgentConnection::try_from(connection).map_err(|_| problem("the connection is not an agent CLI".to_owned()))?;
     Ok((body, connection))

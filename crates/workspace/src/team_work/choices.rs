@@ -94,6 +94,7 @@ pub async fn bind(
         resource: profile.id,
         connection,
         account: None,
+        required_cli: None,
       }),
       None => unbound.push(profile.role.clone()),
     }

@@ -4,13 +4,13 @@
 
 use super::{BoundReference, InputsError, InputsOrigin, LocalBindings, RunInputs};
 use crate::{
-  connection::mcp::McpServerSelection,
-  id::{ConnectionId, SecretId, TaskId},
+  connection::{Connection, mcp::McpServerSelection},
+  id::{ConnectionId, ResourceId, SecretId, TaskId},
   permission::AgentPermissions,
   project::{ProjectKey, TaskKey},
   resource::{AgentProfile, Instruction, StepKey, Tool},
   run::{PinnedVersion, bundle::PinnedBody},
-  sharing::TaskRevision,
+  sharing::{ConnectionRole, TaskRevision},
   task::{Task, TaskDetails, TaskStatus, organization::TaskOrganization},
   time::Timestamp,
 };
@@ -51,6 +51,25 @@ impl RunInputs {
       .find(|binding| binding.resource == pinned.resource)?;
     let servers = mcp_servers(&self.bindings).expect("the bound MCP servers were checked when the inputs were made");
     Some(accepted.bound(binding.connection, servers))
+  }
+
+  /// Refuses a shared profile's connection as unbound when its kind differs from the recorded reference.
+  /// An absent requirement preserves runs recorded before this check.
+  pub fn check_connection(&self, profile: ResourceId, connection: &Connection) -> Result<(), InputsError> {
+    let binding = self
+      .bindings
+      .profiles
+      .iter()
+      .find(|binding| binding.resource == profile)
+      .ok_or(InputsError::MissingBinding(profile))?;
+    if self.is_team()
+      && binding
+        .required_cli
+        .is_some_and(|cli| ConnectionRole::of(connection.kind()) != ConnectionRole::Agent(cli))
+    {
+      return Err(InputsError::MissingBinding(profile));
+    }
+    Ok(())
   }
 
   pub fn instruction(&self, pinned: PinnedVersion) -> Option<&Instruction> {

@@ -209,6 +209,7 @@ impl Checkout {
             resource: config.profile,
             connection: self.connection,
             account: None,
+            required_cli: None,
           }],
           references: Vec::new(),
         },
