@@ -160,14 +160,15 @@ pub struct AgentWait {
 
 /// Whether `wait` now was raised by the Orchestrator's own doing, so that it starts no turn by itself: in `entries`,
 /// those of every conversation in the order they were kept (the person may have started another since), the newest
-/// entry about its run, before a wait of the run, is the chat's own doing (applied, or done itself;
-/// [`own_doing`]). An agent the Orchestrator answered that asks again, or a run it continued, resumed or started that
-/// stops, is answered by a person, or by an Orchestrator turn the person starts.
+/// entry about its run, before a wait of the run, is the chat's own doing (applied, or done itself, or for a merge
+/// conflict its own merge refused at conflicts; [`own_doing`]). An agent the Orchestrator answered that asks again, or
+/// a run it continued, resumed or started that stops, is answered by a person, or by an Orchestrator turn the person
+/// starts.
 pub fn raised_by_own(entries: &[ChatEntry], wait: &AgentWait) -> bool {
   for entry in entries.iter().rev() {
     match &entry.kind {
       EntryKind::Wait { wait: kept, .. } if kept.run == wait.run => return false,
-      EntryKind::Action(action) if action.outcome.answered() && own_doing(action, wait) => return true,
+      EntryKind::Action(action) if own_doing(action, wait) => return true,
       _ => {}
     }
   }
@@ -179,10 +180,13 @@ pub fn raised_by_own(entries: &[ChatEntry], wait: &AgentWait) -> bool {
 /// message that ran the task again started). A run that succeeded follows only from a message of the chat's that
 /// moved the run (a follow-up, a continuation, a resume) or from its message that ran the task again: its turn only
 /// tells the person and proposes, so nothing else of the chat's makes it loop. An event follows from what its kind
-/// names ([`super::task_event::TaskEventKind::raised_by`]).
+/// names, with the outcome it names ([`super::task_event::TaskEventKind::raised_by`]).
 fn own_doing(action: &ChatAction, wait: &AgentWait) -> bool {
   if let Some(event) = wait.kind.event() {
     return event.kind.raised_by(action, wait.run);
+  }
+  if !action.outcome.answered() {
+    return false;
   }
   let end = wait.kind.run_end();
   let change = action.change.as_ref().map(|change| &change.change);

@@ -156,6 +156,10 @@ fn task_event_raised_by_the_orchestrators_own_doing_starts_no_turn() {
     sent_as: None,
   };
   let cancel = |run| Change::Cancel { run, number: 1 };
+  let refused = |code: &str| ActionOutcome::Refused {
+    code: code.to_owned(),
+    reason: "Merging stopped at conflicts in src/hooks.rs.".to_owned(),
+  };
   let cases = [
     (
       stalled(),
@@ -165,17 +169,27 @@ fn task_event_raised_by_the_orchestrators_own_doing_starts_no_turn() {
     (stalled(), acted("send_message", message, ActionOutcome::Waits), false),
     (
       TaskEventKind::MergeConflict,
+      acted("merge_run", merge(run), refused("merge_failed")),
+      true,
+    ),
+    (
+      TaskEventKind::MergeConflict,
+      acted("merge_run", merge(run), refused("needs_decision")),
+      false,
+    ),
+    (
+      TaskEventKind::MergeConflict,
+      acted("merge_run", merge(run), ActionOutcome::Dismissed),
+      false,
+    ),
+    (
+      TaskEventKind::MergeConflict,
       acted("merge_run", merge(run), ActionOutcome::Done),
-      true,
+      false,
     ),
     (
       TaskEventKind::MergeConflict,
-      acted("merge_run", merge(run), ActionOutcome::Applied),
-      true,
-    ),
-    (
-      TaskEventKind::MergeConflict,
-      acted("merge_run", merge(waited), ActionOutcome::Done),
+      acted("merge_run", merge(waited), refused("merge_failed")),
       false,
     ),
     (
@@ -216,7 +230,14 @@ fn task_event_raised_by_the_orchestrators_own_doing_starts_no_turn() {
 fn task_event_after_a_newer_wait_of_the_run_or_its_start_is_not_own() {
   let run = RunId::generate();
   let entries = [
-    acted("merge_run", merge(run), ActionOutcome::Done),
+    acted(
+      "merge_run",
+      merge(run),
+      ActionOutcome::Refused {
+        code: "merge_failed".to_owned(),
+        reason: "Merging stopped at conflicts.".to_owned(),
+      },
+    ),
     kept(2, &happened(run, TaskEventKind::MergeConflict)),
   ];
   assert!(
