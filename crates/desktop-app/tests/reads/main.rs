@@ -108,7 +108,7 @@ impl Counted {
   /// Counts a report of the project's runner: a run changed state (`true`) or a transcript grew.
   fn report(&self, state: bool) {
     let services = self.window.launch.services().expect("the session started");
-    services.runners.count_change_for_test(&self.root(), state);
+    services.runners.count_change_for_test(&self.root(), None, state);
   }
 }
 
