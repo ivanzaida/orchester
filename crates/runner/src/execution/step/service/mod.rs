@@ -15,10 +15,13 @@
 //! Once a service is ready, its seed runs once before its start answers ([`seed`]); what the seed's requests captured
 //! comes back with its URL and port.
 //!
+//! A service's per-run data is prepared before it starts ([`data`]): its run folder in the run's storage, kept until
+//! the run ends (`crate::execution::run_data`), or a fresh database container that lives as long as the service.
+//!
 //! A start asks a person once for everything it runs, unless the project's rules approve every service of it
-//! ([`order`], `orchester_core::run::ProjectScope`). Not here yet: per-run data (the start refuses a service that has
-//! it), crash events and the computer's service slots.
+//! ([`order`], `orchester_core::run::ProjectScope`). Not here yet: crash events and the computer's service slots.
 
+mod data;
 mod launch;
 mod order;
 mod port;
@@ -39,7 +42,7 @@ use std::{
 };
 
 use orchester_core::{
-  id::{InvocationId, RunId},
+  id::{InvocationId, ProjectId, RunId},
   orchester_tools::ToolResult,
   resource::CommandEnvironment,
   secret::SecretVault,
@@ -97,9 +100,12 @@ impl InvocationServices {
   }
 }
 
-/// A service at work. Its tree is stopped before its port is freed (fields drop in order).
+/// A service at work. Its tree is stopped, then its container removed, before its port is freed (fields drop in
+/// order).
 struct Running {
   tree: ProcessTree,
+  /// The container it is, when its per-run data is a database container: held to be removed when it drops.
+  _container: Option<data::Container>,
   url: String,
   lease: PortLease,
   /// What its seed's requests captured, their secret values replaced.
@@ -204,6 +210,8 @@ pub(in crate::execution::step) struct StepServices {
   state: Arc<InvocationServices>,
   /// The project's repository, whose database holds the published services and the secrets' names.
   root: PathBuf,
+  /// The project's id, which its containers' labels name.
+  project_id: ProjectId,
   worktree: PathBuf,
   run: RunId,
   vault: Arc<dyn SecretVault>,

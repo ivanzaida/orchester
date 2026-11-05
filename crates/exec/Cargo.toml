@@ -39,6 +39,10 @@ required-features = ["test-program"]
 name = "clone_console"
 required-features = ["test-program"]
 
+[[test]]
+name = "docker"
+required-features = ["test-program"]
+
 [features]
 test-program = []
 

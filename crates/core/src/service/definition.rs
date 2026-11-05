@@ -3,13 +3,13 @@ use std::collections::BTreeSet;
 use super::{OwnedPath, Readiness, RelativeFolder, RunFolder, Seed, ServiceError, ServiceName, ServiceVariables};
 use crate::resource::{CommandArg, CommandProgram};
 
-/// The data a run gets of its own, deleted when the run ends.
+/// The data a run gets of its own, deleted when the run ends (`super::run_data`).
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum RunData {
   None,
-  /// A fresh database container per run.
+  /// A fresh database container per start: the service is that container, its program the image.
   DatabaseContainer,
-  /// Files in a folder of the run's own.
+  /// Files in a folder of the run's own, `{{data}}`.
   RunFolder(RunFolder),
 }
 

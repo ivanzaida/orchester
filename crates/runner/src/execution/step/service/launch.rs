@@ -1,8 +1,9 @@
-//! Starting one service: its program found as a command tool's is, its placeholders filled with its own port and URL
-//! and those of the services already running, its secrets and those of its seed's headers read from the keychain, its
-//! tree started and held, its output kept in a fresh log, the wait until it is ready, and its seed ([`super::seed`]).
-//! A start that fails after the program started stops the whole tree first, and its error says so with the last lines
-//! of its output.
+//! Starting one service: its per-run data prepared ([`super::data`]), its program found as a command tool's is (or,
+//! for a database container, `docker` run with its image), its placeholders filled with its own port and URL, its run
+//! folder and those of the services already running, its secrets and those of its seed's headers read from the
+//! keychain, its tree started and held, its output kept in a fresh log, the wait until it is ready, and its seed
+//! ([`super::seed`]). A start that fails after the program started stops the whole tree first, and its error says so
+//! with the last lines of its output; its container is removed after.
 
 use std::{ffi::OsString, path::Path, sync::Arc, time::Instant};
 
@@ -18,7 +19,12 @@ use orchester_exec::process_tree::ProcessTree;
 use orchester_store::{ProjectDb, StoreError};
 use parking_lot::Mutex;
 
-use super::{Running, StepServices, Watch, order::Address, readiness};
+use super::{
+  Running, StepServices, Watch,
+  data::{Container, Data},
+  order::Address,
+  readiness,
+};
 
 /// How many of its last lines of output a failed start's error shows.
 const FAILED_START_LINES: u32 = 20;
@@ -56,9 +62,9 @@ impl StepServices {
     ended: &dyn Fn() -> bool,
   ) -> Result<Running, String> {
     let name = service.name();
-    let headers = self
-      .header_secrets(service)
-      .map_err(|why| format!("the service `{name}` cannot be started: {why}"))?;
+    let cannot = |why: String| format!("the service `{name}` cannot be started: {why}");
+    let data = self.prepare_data(service).map_err(cannot)?;
+    let headers = self.header_secrets(service).map_err(cannot)?;
     let lease = self
       .services
       .ports
@@ -71,7 +77,10 @@ impl StepServices {
       .fold(RunValues::new(self.run, port, &url), |values, (other, port, url)| {
         values.with_service(other.clone(), *port, url)
       });
-    let (mut tree, mut secrets) = self.spawn(service, &values)?;
+    if let Data::Folder(folder) = &data {
+      values = values.with_data(&folder.to_string_lossy());
+    }
+    let (mut tree, mut secrets, container) = self.start_program(service, &values, data, port)?;
     secrets.extend(headers.iter().map(|(_, secret)| secret.clone()));
     let log = Arc::new(Mutex::new(ServiceLog::new(secrets.clone())));
     self.state.watched.lock().insert(
@@ -90,6 +99,7 @@ impl StepServices {
     match ready {
       Ok(captured) => Ok(Running {
         tree,
+        _container: container,
         url,
         lease,
         captured,
@@ -102,10 +112,35 @@ impl StepServices {
           Ok(()) => "it was stopped with everything it started".to_owned(),
           Err(error) => format!("stopping it with everything it started failed: {error}"),
         };
+        // Its container goes once the tree is stopped.
+        drop(container);
         let output = log.lock().excerpt(FAILED_START_LINES, 0);
         Err(format!(
           "the service `{name}` {why}; {stopped}. Its last output: {output}"
         ))
+      }
+    }
+  }
+
+  /// Starts `service`'s program with `values` on `port`, as its per-run data `data` says: its own program, or its
+  /// container through `docker`. Its tree, the secrets it was given and its container.
+  fn start_program(
+    &self,
+    service: &Service,
+    values: &RunValues,
+    data: Data,
+    port: u16,
+  ) -> Result<(ProcessTree, Vec<SecretVariable>, Option<Container>), String> {
+    match data {
+      Data::Container { docker, port: exposed } => {
+        let (tree, secrets, container) = self
+          .spawn_container(service, values, (docker, exposed), port)
+          .map_err(|why| format!("the service `{}` cannot be started: {why}", service.name()))?;
+        Ok((tree, secrets, Some(container)))
+      }
+      Data::None | Data::Folder(_) => {
+        let (tree, secrets) = self.spawn(service, values)?;
+        Ok((tree, secrets, None))
       }
     }
   }

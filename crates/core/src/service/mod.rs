@@ -17,6 +17,7 @@ mod needs;
 mod placeholder;
 mod publish;
 mod readiness;
+mod run_data;
 mod seed;
 mod stack;
 mod status;
@@ -38,6 +39,10 @@ pub use self::{
   placeholder::{FilledSeedRequest, Placeholder, PlaceholderError, PlaceholderPlace, RunValues, check_placeholders},
   publish::PublishNeeds,
   readiness::{HttpPath, LogPattern, Readiness, ReadyCheck, ReadyTimeout},
+  run_data::{
+    CONTAINER_PROJECT_LABEL, CONTAINER_RUN_LABEL, CONTAINER_SERVICE_LABEL, ContainerName, ContainerProcess,
+    ContainerStart, container_notes_folder, run_data_folder,
+  },
   seed::{Capture, CapturePath, Seed, SeedHeader, SeedRequest, SeedRequests},
   stack::Stack,
   status::{ServicePhase, ServiceState, ServiceStatus},

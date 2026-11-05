@@ -41,6 +41,7 @@ impl RunTask {
       services: Arc::clone(&self.services),
       state: self.services.register(invocation),
       root: self.root.clone(),
+      project_id: self.project.id(),
       worktree: worktree.to_path_buf(),
       run: self.run.id(),
       vault: Arc::clone(&self.vault),

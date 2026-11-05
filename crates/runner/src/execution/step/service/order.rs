@@ -13,7 +13,7 @@ use std::thread;
 use orchester_core::{
   orchester_tools::ToolResult,
   resource::Slug,
-  service::{RunData, Service, ServiceApproval, ServiceName, Stack, StackName, StartPlan},
+  service::{Service, ServiceApproval, ServiceName, Stack, StackName, StartPlan},
 };
 use serde_json::{Map, json};
 
@@ -197,7 +197,6 @@ impl StepServices {
              start it again to be asked about it"
           ));
         }
-        startable(service)?;
         definitions.push(service);
       }
       steps.push(definitions);
@@ -264,17 +263,6 @@ impl StepServices {
     }
     Ok(())
   }
-}
-
-/// Whether this step can start `service`: one without per-run data.
-fn startable(service: &Service) -> Result<(), String> {
-  if matches!(service.run_data(), RunData::None) {
-    return Ok(());
-  }
-  Err(format!(
-    "the service `{}` keeps data of its own per run, which Orchester cannot start for a run yet",
-    service.name()
-  ))
 }
 
 /// The error of a start that stopped at the service `failed`, which failed as `why` says: it names the services after

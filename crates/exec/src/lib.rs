@@ -11,6 +11,7 @@ mod exchange;
 pub mod browser;
 pub mod clone_console;
 pub mod disk_space;
+pub mod docker;
 pub mod external;
 pub mod launch;
 pub mod local_git;

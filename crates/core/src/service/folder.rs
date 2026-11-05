@@ -53,8 +53,9 @@ impl RelativeFolder {
   }
 }
 
-/// The folder of a run's own files, below the worktree, e.g. `runs/{{run}}/team-web`. It is deleted when the run
-/// ends, so it is never the worktree itself.
+/// The folder of a run's own files, e.g. `team-web`: it lies in the run's data folder in the run's storage
+/// ([`crate::service::run_data_folder`]), is made before the service starts, reaches the service as `{{data}}` and is
+/// deleted when the run ends, so it is never that data folder itself.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct RunFolder(RelativeFolder);
 

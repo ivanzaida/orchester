@@ -39,13 +39,13 @@ A program Orchester starts for a run.
 
 | Field | Meaning |
 | --- | --- |
-| program, arguments | No shell. `{{port}}`, `{{url}}`, `{{run}}` and `{{services.<name>.url|port}}` are filled per run |
+| program, arguments | No shell. `{{port}}`, `{{url}}`, `{{run}}`, `{{data}}` and `{{services.<name>.url|port}}` are filled per run |
 | working folder | Inside the run's worktree |
 | variables | Plain values, or a project secret by name (never shown, never logged) |
 | needs | Services started first, in order; each must be ready before the next |
 | readiness | The port accepts connections; an HTTP 2xx/3xx on a path; or a log line matching a pattern. Plus a timeout; on timeout the start fails with the last log lines |
 | seed | Runs once after ready: a sequence of HTTP requests whose answers may be captured (`team_id ← $.id`) for later requests and for agents, or a command |
-| per-run data | None; a fresh database container; or files in the run's own folder. Deleted when the run ends |
+| per-run data | None; a fresh database container; or files in the run's own folder. Deleted when the run ends ([per-run data](#per-run-data)) |
 | UI driver | `none`, `browser`, `native`, `cdp` or `mcp` (see [UI drivers](#ui-drivers)), and where `ui_open` starts |
 | owned paths | Repository paths (`web/cloud/**`); a run that changed them starts this service in its Test step |
 | approval | The first start asks a person; *Approve for every run* keeps answering while the program, arguments, variables and seed are unchanged |
@@ -54,6 +54,29 @@ Ports and data are per run, so parallel runs never clash. A service lives for th
 it when the step ends, when the run pauses or fails, and while the run waits for a person (as QA apps today), and
 releases its slot. A crash is reported to the agent as an event with the exit code and the last log lines, and to the
 person in the Conversation.
+
+#### Per-run data
+
+Built (ORC-251; the person chose the shape, 2026-11-05):
+
+- **Run folder.** `.orchester/runs/<run>/data/<folder>` in the run's storage, made before the service starts and
+  passed as `{{data}}` (only a service whose per-run data is a run folder may use it; publishing checks). It lives
+  through the run's steps and goes with the whole `data/` folder when the run ends — succeeded, failed or cancelled —
+  tried again for a few seconds while a stopping service still holds a file.
+- **Database container.** The service *is* the container: its program is the image (`postgres:16-alpine`), its
+  arguments go to the container's command, its plain variables are set by value and its secrets by name only (the
+  value reaches `docker` in its environment). The image's lowest exposed TCP port is published on `127.0.0.1:{{port}}`,
+  so `{{port}}` and `{{services.<name>.port}}` reach it; an image the computer lacks is pulled first (up to 10 min).
+  It runs as `docker run --rm` named `orchester-<run>-<service>-<port>` with the labels `orchester.project`,
+  `orchester.run` and `orchester.service`, and is removed when the service stops (its step ends, the run pauses, waits
+  for a person or is cancelled). The run's storage notes each container (`containers/<name>`); when the run ends the
+  containers still noted are removed, and a runner that starts removes the noted containers that carry its project's label
+  — what a runner that died left — and the data folders of runs that ended. Readiness by an open port says ready as
+  soon as Docker publishes it, before the database listens: a log line is the better check.
+- **No Docker.** `docker` is looked up in the project's `PATH`, else the runner's, as a service's program is. When it is
+  missing, or its engine does not answer `docker version` within 15 s, the start fails at once with *Docker is not
+  available*, naming the folders searched or the program asked and its answer (`orchester_exec::docker::
+  DockerUnavailable`). On macOS any Docker whose CLI is on that `PATH` works: Docker Desktop, OrbStack or colima.
 
 ### Stack
 

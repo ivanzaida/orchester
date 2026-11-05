@@ -44,6 +44,7 @@ mod recovery;
 mod rejection;
 mod returned;
 mod run;
+mod run_data;
 mod side_question;
 mod step;
 mod stuck;
@@ -174,6 +175,8 @@ impl Scheduler {
     // Before the desktop connects and reads the runs.
     missing_checkpoints::record(project_root);
     worktree_sweep::sweep_in_background(project_root.to_path_buf());
+    // Before any run starts a service: its notes are read now.
+    run_data::sweep_in_background(project_root.to_path_buf());
     Self {
       inner: Arc::new(Inner {
         project_root: project_root.to_path_buf(),
@@ -346,6 +349,7 @@ impl Scheduler {
         task: cancelled.task(),
       });
       self.inner.browser.end_run(run);
+      run_data::end_in_background(self.inner.project_root.clone(), run);
       return Ok(());
     }
   }
@@ -571,6 +575,7 @@ impl Scheduler {
     let task = tokio::spawn(async move {
       if RunTask::new(db, prepared, context).drive().await {
         scheduler.inner.browser.end_run(run);
+        run_data::end_in_background(scheduler.inner.project_root.clone(), run);
       }
       // A run its task stopped at a plan limit continues at the reset, and one it paused for low disk space once
       // the disk has room.

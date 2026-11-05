@@ -159,8 +159,9 @@ fn placeholder_message(error: &PlaceholderError) -> (Field, Message) {
     PlaceholderError::UnknownService { place, service } => (place, Some(Wrong::UnknownService), Some(service.clone())),
     PlaceholderError::NotNeeded { place, service } => (place, Some(Wrong::NotNeeded), Some(service.to_string())),
     PlaceholderError::UnknownCapture { place, capture } => (place, Some(Wrong::UnknownCapture), Some(capture.clone())),
-    // Only a start fills placeholders; a check never finds a value missing.
-    PlaceholderError::NoValue { place, .. } => (place, None, None),
+    // Only a start fills placeholders; a check never finds a value missing. The page does not set per-run data yet
+    // (ORC-251 left its UI out), so `{{data}}` without a run folder is said as a problem elsewhere.
+    PlaceholderError::NoValue { place, .. } | PlaceholderError::NoRunFolder { place } => (place, None, None),
   };
   let Some(wrong) = wrong else {
     return (Field::Elsewhere, Message::new(ELSEWHERE));
