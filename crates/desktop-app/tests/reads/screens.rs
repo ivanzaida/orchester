@@ -163,7 +163,11 @@ fn reads_no_code_index_on_lines_while_a_run_runs() {
     index.window.pass();
   }
   let lines = index.settle();
-  assert_eq!(lines.get("code index"), None, "transcript lines read no index: {lines:?}");
+  assert_eq!(
+    lines.get("code index"),
+    None,
+    "transcript lines read no index: {lines:?}"
+  );
   index.report(true);
   let state = index.settle();
   assert_eq!(state.get("code index"), Some(&1), "a run's state reads it: {state:?}");

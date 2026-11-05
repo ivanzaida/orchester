@@ -113,11 +113,7 @@ impl Component for DeliveryScreen {
     let name = project.open.project.name().as_str().to_owned();
     // Again whenever a run changes state, the project's tasks change, or Retry is pressed. What it counts is the runs'
     // steps and states: a transcript's lines change none of it.
-    let deps = (
-      project.feed.states.get(),
-      project.feed.revision.get(),
-      self.retry.get(),
-    );
+    let deps = (project.feed.states.get(), project.feed.revision.get(), self.retry.get());
     let read = read(ctx, &project, period, deps);
     let failed = read.error.as_ref().filter(|_| read.is_rejected());
     let content = match (failed, &read.data) {
