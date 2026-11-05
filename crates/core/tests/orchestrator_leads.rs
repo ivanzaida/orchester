@@ -112,7 +112,7 @@ fn orchestrator_leads_without_a_default_order_the_switches_decide() {
 
 #[test]
 fn orchestrator_leads_standing_instructions_name_what_the_conversation_leads() {
-  let (leads, _, _) = two_modules("Ask before merging.");
+  let (leads, ..) = two_modules("Ask before merging.");
   let project = ProjectId::generate();
   let standing = leads.system_prompt("Konto", project, ProjectReads::FileTools);
   let base = system_prompt("Konto", project, ProjectReads::FileTools);
