@@ -6,6 +6,7 @@
 //! Both are versioned resources ([`crate::resource::ResourceBody`]) with drafts and published versions; publishing
 //! checks their needs against the published services ([`PublishNeeds`]).
 
+mod approval;
 mod definition;
 mod error;
 mod folder;
@@ -23,6 +24,7 @@ mod stored;
 mod value;
 
 pub use self::{
+  approval::{ServiceApproval, start_target, started_by},
   definition::{RunData, Service, UiDriver, UiStart},
   error::ServiceError,
   folder::{OwnedPath, RelativeFolder, RunFolder},

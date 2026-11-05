@@ -288,6 +288,7 @@ fn project_settings_approved_for_every_run_opens_its_rules_and_revokes_one() {
         blob: "3f2a1b9c0d4e5f60718293a4b5c6d7e8f9012345".to_owned(),
       },
     })
+    .pop()
     .expect("a project rule");
     db.add_project_approval_rule(&scope, (run, "invocation:qa"), Timestamp::now())
       .expect("rule")
@@ -326,6 +327,64 @@ fn project_settings_approved_for_every_run_opens_its_rules_and_revokes_one() {
   assert!(page.exists("settings-rules-none-row"));
   page.click("settings-rules-crumb-back");
   page.until("Runs", |p| p.exists("settings-auto-rules-row"));
+}
+
+/// A service's rule (`docs/architecture/agent-testing.md`, "Service › approval") is listed with what it covers: the
+/// service, its program and arguments, its variables by name and its fingerprint, never a variable's value.
+#[test]
+fn project_settings_approved_for_every_run_lists_a_service_rule_without_its_values() {
+  use orchester_core::{
+    resource::{CommandArg, CommandProgram, VariableName},
+    run::ProjectScope,
+    service::{
+      Readiness, ReadyCheck, ReadyTimeout, Service, ServiceApproval, ServiceName, ServiceValue, ServiceVariables,
+    },
+    time::Timestamp,
+  };
+  let mut page = Settings::new(false);
+  let service = Service::new(
+    ServiceName::new("web").expect("a name"),
+    CommandProgram::new("node").expect("a program"),
+    Readiness::new(ReadyCheck::PortOpen, ReadyTimeout::from_secs(20).expect("in range")),
+  )
+  .with_arguments(vec![CommandArg::new("server.js").expect("an argument")])
+  .with_variables(
+    ServiceVariables::new(std::collections::BTreeMap::from([(
+      VariableName::new("API_TOKEN").expect("a name"),
+      ServiceValue::Plain("token-value-5e1a".to_owned()),
+    )]))
+    .expect("variables"),
+  );
+  let approval = ServiceApproval::of(&service);
+  let rule = {
+    let mut db = page.db();
+    let run = super::run_fixture::started_run(&mut db);
+    db.add_project_approval_rule(
+      &ProjectScope::Service(approval.clone()),
+      (run, "invocation:web"),
+      Timestamp::now(),
+    )
+    .expect("rule")
+  };
+  page.outside(orchester_workspace::tasks::outside::Outside::Runs);
+  page.tab("runs", "settings-auto-rules-row");
+  page.until("the rule counted", |p| {
+    p.text("settings-auto-rules-row").contains("1 rule")
+  });
+  page.click("settings-auto-rules-row");
+  let id = format!("settings-auto-rule-{}", rule.id.get());
+  page.until("the rule listed", |p| p.exists(&format!("{id}-row")));
+  let words = page.text(&format!("{id}-row"));
+  assert!(words.contains("Service web"), "{words}");
+  let covers = format!(
+    "node server.js with variables API_TOKEN, while unchanged ({}) · answered 0 times",
+    approval.short_fingerprint()
+  );
+  assert!(words.contains(&covers), "{words}");
+  assert!(
+    !words.contains("token-value-5e1a"),
+    "a variable's value is never shown: {words}"
+  );
 }
 
 /// Runs keeps Approvals, Estimates and Limits (`S02` `Ekiul`); Approvals' foot says where a profile chooses its

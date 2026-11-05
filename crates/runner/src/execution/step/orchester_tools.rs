@@ -14,6 +14,8 @@
 //!
 //! A check is offered to a step whose run pinned it and whose access rules let the step call it.
 
+mod requests;
+
 use std::{
   ffi::OsString,
   io,
@@ -30,11 +32,12 @@ use orchester_core::{
   },
   id::{InvocationId, StepExecutionId},
   orchester_tools::{
-    OrchesterTool, OutsideReads, ProjectTool, QaAppStart, QaApproval, StepSkills, StepTools, ToolCall, ToolCallError,
-    ToolContext, ToolResult, ToolWork,
+    OrchesterTool, OutsideReads, ProjectTool, QaAppStart, StepSkills, StepTools, ToolCall, ToolCallError, ToolContext,
+    ToolResult, ToolWork,
   },
   permission::{AgentPermissions, ResolvedFolder, category::CommandScope},
   resource::CommandEnvironment,
+  service::ServiceApproval,
   source::ResolvedSources,
 };
 use orchester_exec::{run_capped, run_processes::RunProcesses};
@@ -46,10 +49,10 @@ use super::{
   browser::StepBrowser,
   claude_approval::ClaudeApprovals,
   mcp::McpSetup,
-  qa_app::{StepQa, script_blob},
+  qa_app::StepQa,
   relay::{Listening, Served, bind},
   run_records::RunRecords,
-  service::StepServices,
+  service::{Started, StepServices},
   start::problem,
   suite::StepSuites,
   tool_files::ToolFiles,
@@ -139,6 +142,8 @@ pub(in super::super) struct ToolHost {
   grants: Mutex<Vec<(OrchesterTool, Value)>>,
   /// The QA starts looked at and the QA script's blob each one's approval named, not run yet.
   qa_scripts: Mutex<Vec<(QaAppStart, String)>>,
+  /// The service and stack starts looked at and the services each one's approval named, not run yet.
+  service_starts: Mutex<Vec<(ToolCall, Vec<ServiceApproval>)>>,
   /// The invocation's QA app (`start_qa_app`); `None` while the host is being made.
   qa: Option<StepQa>,
   /// The invocation's services (`start_service`, `stop_service`, `service_status`, `service_logs`); `None` while the
@@ -227,8 +232,8 @@ impl ToolHost {
         self.qa_scripts.lock().push((start.clone(), approval.script.clone()));
         Some(approval.target())
       }
-      (ToolCall::StartService(name), None) => Some(name.to_string()),
-      (ToolCall::StartStack(name), None) => Some(name.to_string()),
+      (ToolCall::StartService(name), None) => Some(self.service_target(call, Started::Service(name))?),
+      (ToolCall::StartStack(name), None) => Some(self.service_target(call, Started::Stack(name))?),
       (ToolCall::RunTests { suite, filter }, None) => Some(match filter {
         Some(filter) => format!("{} {}", suite.as_str(), filter.as_str()),
         None => suite.as_str().to_owned(),
@@ -315,14 +320,20 @@ impl ToolHost {
         }
         None => ToolResult::unavailable("this step cannot start a QA app"),
       },
-      Ok(ToolWork::StartService(name)) => self
-        .services
-        .as_ref()
-        .map_or_else(no_services, |services| services.start(&name)),
-      Ok(ToolWork::StartStack(name)) => self
-        .services
-        .as_ref()
-        .map_or_else(no_services, |services| services.start_stack(&name)),
+      Ok(ToolWork::StartService(name)) => {
+        let approved = self.approved_services(&ToolCall::StartService(name.clone()));
+        self
+          .services
+          .as_ref()
+          .map_or_else(no_services, |services| services.start(&name, &approved))
+      }
+      Ok(ToolWork::StartStack(name)) => {
+        let approved = self.approved_services(&ToolCall::StartStack(name.clone()));
+        self
+          .services
+          .as_ref()
+          .map_or_else(no_services, |services| services.start_stack(&name, &approved))
+      }
       Ok(ToolWork::StopService(name)) => self
         .services
         .as_ref()
@@ -345,35 +356,6 @@ impl ToolHost {
       Ok(ToolWork::Processes(call)) => self.processes.run(call),
       Ok(ToolWork::Run(program)) => program.finished(run_capped(program.command(), program.timeout(), program.cap())),
       Err(error) => ToolResult::refused(&error),
-    }
-  }
-}
-
-impl ToolHost {
-  /// What the approval of `start` names: the QA script's git blob and the build or start scripts changed since the
-  /// run's base revision, committed or not. What git cannot tell is left out, and the request says less.
-  fn qa_approval(&self, start: &QaAppStart) -> QaApproval {
-    let git = Git::new(&self.worktree);
-    let script = script_blob(&self.worktree).unwrap_or_default();
-    let mut changed: Vec<String> = [
-      git.stdout(&["diff", "--name-only", &self.base, "--"]),
-      git.stdout(&["ls-files", "--others", "--exclude-standard"]),
-    ]
-    .into_iter()
-    .filter_map(|listed| {
-      listed
-        .inspect_err(|error| tracing::warn!(%error, "the changed build scripts cannot be listed"))
-        .ok()
-    })
-    .flat_map(|listed| listed.lines().map(str::to_owned).collect::<Vec<_>>())
-    .filter(|path| QaApproval::watches(path))
-    .collect();
-    changed.sort();
-    changed.dedup();
-    QaApproval {
-      script: script.trim().to_owned(),
-      scenario: start.scenario().to_owned(),
-      changed,
     }
   }
 }
@@ -522,6 +504,7 @@ impl RunTask {
       secrets: Vec::new(),
       grants: Mutex::new(Vec::new()),
       qa_scripts: Mutex::new(Vec::new()),
+      service_starts: Mutex::new(Vec::new()),
       qa: None,
       services: None,
       suites: None,

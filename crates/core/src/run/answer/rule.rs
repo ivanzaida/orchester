@@ -89,7 +89,8 @@ impl RuleScope {
     match subject {
       ApprovalSubject::McpTool { server, tool, reach } => {
         let (folder, check) = match reach {
-          ToolReach::Any => (None, None),
+          // Approve similar of a service start covers the tool's later starts in the run, whatever they start.
+          ToolReach::Any | ToolReach::Services { .. } => (None, None),
           ToolReach::Folder { broad: true, .. } => return Err(SimilarUnavailable::BroadFolder),
           ToolReach::Folder { folder, .. } => (Some(folder.clone()), None),
           ToolReach::Check { every_call: true, .. } | ToolReach::PageScript => {

@@ -38,6 +38,11 @@ reach.
   may answer it. **Auto-approval and the reviewer never answer `run_check` or `start_qa_app`.**
 - *Approve for every run of this project* on a `start_qa_app` card keeps a project rule tied to the QA script's git
   blob (revoked in Project settings › Runs › Approvals › *Approved for every run*).
+- A `start_service` or `start_stack` call asks once for everything it starts: its request names each service with its
+  program, arguments and variable names, never their values. *Approve for every run of this project* keeps one rule
+  per service, tied to a fingerprint of its program, arguments, variables and seed; a later start whose every service
+  has a rule is approved without asking and without the reviewer, and a change to any of them asks again. A start runs
+  only the definitions its approval named: a service published again while it waited is refused.
 
 ## Tool reference
 
