@@ -1,9 +1,10 @@
 //! An agent of the chat's project waits for a person (`docs/design/orchestrator-toolset.md`, "Decisions" 5): it asked
 //! a question with suggested answers, its step waits for a message, or its plan waits for a decision; or a task's
-//! latest run ended or stopped ([`RunEnd`]). The Orchestrator's conversation keeps one entry per wait, linking to its
-//! card, in the conversation that last dealt with its task ([`dealt_with`]); with *Let the Orchestrator answer
-//! agents* on, the wait also starts one Orchestrator turn by itself, unless the Orchestrator's own answer, message or
-//! decision raised it, so the chat and an agent never answer each other in a loop.
+//! latest run ended or stopped ([`RunEnd`]), or something happened to it ([`TaskEvent`]). The Orchestrator's
+//! conversation keeps one entry per wait, linking to its card, in the conversation that last dealt with its task
+//! ([`dealt_with`]); with *Let the Orchestrator answer agents* on, the wait also starts one Orchestrator turn by
+//! itself, unless the Orchestrator's own answer, message or decision raised it, so the chat and an agent never answer
+//! each other in a loop.
 
 use serde::{Deserialize, Serialize};
 
@@ -12,6 +13,7 @@ use super::{
   chat::{ChatAction, ChatEntry, EntryKind},
   merging::Merging,
   resume::Continuing,
+  task_event::TaskEvent,
 };
 use crate::{
   id::{ChatId, RunId},
@@ -30,14 +32,24 @@ pub enum WaitKind {
   Plan,
   /// Its task's latest run ended or stopped so: the person decides what comes next.
   Ended(RunEnd),
+  /// Something happened to the run or the task it waits on ([`TaskEvent`]).
+  Event(TaskEvent),
 }
 
 impl WaitKind {
-  /// How the run ended or stopped, for a run's end; `None` for an agent's wait.
+  /// How the run ended or stopped, for a run's end; `None` for an agent's wait or an event.
   pub const fn run_end(self) -> Option<RunEnd> {
     match self {
       Self::Ended(end) => Some(end),
-      Self::Question | Self::Message | Self::Plan => None,
+      Self::Question | Self::Message | Self::Plan | Self::Event(_) => None,
+    }
+  }
+
+  /// What happened, for an event; `None` for an agent's wait or a run's end.
+  pub const fn event(self) -> Option<TaskEvent> {
+    match self {
+      Self::Event(event) => Some(event),
+      Self::Question | Self::Message | Self::Plan | Self::Ended(_) => None,
     }
   }
 }
@@ -148,14 +160,15 @@ pub struct AgentWait {
 
 /// Whether `wait` now was raised by the Orchestrator's own doing, so that it starts no turn by itself: in `entries`,
 /// those of every conversation in the order they were kept (the person may have started another since), the newest
-/// entry about its run, before a wait of the run, is the chat's own doing (applied, or done itself;
-/// [`own_doing`]). An agent the Orchestrator answered that asks again, or a run it continued, resumed or started that
-/// stops, is answered by a person, or by an Orchestrator turn the person starts.
+/// entry about its run, before a wait of the run, is the chat's own doing (applied, or done itself, or for a merge
+/// conflict its own merge refused at conflicts; [`own_doing`]). An agent the Orchestrator answered that asks again, or
+/// a run it continued, resumed or started that stops, is answered by a person, or by an Orchestrator turn the person
+/// starts.
 pub fn raised_by_own(entries: &[ChatEntry], wait: &AgentWait) -> bool {
   for entry in entries.iter().rev() {
     match &entry.kind {
       EntryKind::Wait { wait: kept, .. } if kept.run == wait.run => return false,
-      EntryKind::Action(action) if action.outcome.answered() && own_doing(action, wait) => return true,
+      EntryKind::Action(action) if own_doing(action, wait) => return true,
       _ => {}
     }
   }
@@ -166,8 +179,15 @@ pub fn raised_by_own(entries: &[ChatEntry], wait: &AgentWait) -> bool {
 /// resume of its run; for a run's end also the chat's start of the run (`started`: its own start, or the run its
 /// message that ran the task again started). A run that succeeded follows only from a message of the chat's that
 /// moved the run (a follow-up, a continuation, a resume) or from its message that ran the task again: its turn only
-/// tells the person and proposes, so nothing else of the chat's makes it loop.
+/// tells the person and proposes, so nothing else of the chat's makes it loop. An event follows from what its kind
+/// names, with the outcome it names ([`super::task_event::TaskEventKind::raised_by`]).
 fn own_doing(action: &ChatAction, wait: &AgentWait) -> bool {
+  if let Some(event) = wait.kind.event() {
+    return event.kind.raised_by(action, wait.run);
+  }
+  if !action.outcome.answered() {
+    return false;
+  }
   let end = wait.kind.run_end();
   let change = action.change.as_ref().map(|change| &change.change);
   let on_run = change.is_some_and(|change| change.run() == Some(wait.run));
