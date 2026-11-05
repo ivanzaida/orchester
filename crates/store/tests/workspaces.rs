@@ -196,7 +196,8 @@ fn workspaces_migration_keeps_the_free_space_only_a_project_with_workspaces_on_k
       .expect("open")
       .pragma_query_value(None, "user_version", |row| row.get(0))
       .expect("user_version");
-    let old = copied_at_version(&database, latest - 1);
+    // Before the disk guard, which the Orchestrator's switches follow.
+    let old = copied_at_version(&database, latest - 2);
     Connection::open(old.path().join(".orchester").join("orchester.db"))
       .expect("open")
       .execute(

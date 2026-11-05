@@ -1,27 +1,36 @@
-# Releases the Windows app (crates/desktop-app, the program `orchester`) when its version changes on master: builds
-# `orchester.exe` and `orchester-runner.exe`, packs them as a portable zip and as an installer (Inno Setup,
-# tools/installer/orchester.iss), signs both with the release key and uploads them to Orchester Cloud, which publishes
-# the release on Beta (the staff promote it to Stable), and then tags the commit `app-v<version>`. The files no longer
-# go to a GitHub Release. See docs/stable-build.md, "Releases from CI".
+# Releases the app (crates/desktop-app, the program `orchester`) when its version changes on master. For Windows it
+# builds `orchester.exe` and `orchester-runner.exe` and packs them as a portable zip and as an installer (Inno Setup,
+# tools/installer/orchester.iss). For macOS (Apple silicon) it builds Orchester.app with tools/package-macos.sh, signed
+# with the Developer ID, notarized and stapled, and packs it as a disk image and a zip. It signs the four files with the
+# release key and uploads them to Orchester Cloud as one release, which the cloud publishes on Beta (the staff promote it
+# to Stable), and then tags the commit `app-v<version>`. Once the cloud has accepted the release, it also publishes the
+# GitHub Release `app-v<version>` (`Orchester <version>`, a pre-release for a version with a suffix) with the same four
+# files, both SHA256SUMS files and the cloud release's notes; the app updates from Orchester Cloud only. See
+# docs/stable-build.md, "Releases from CI".
 #
 # The version is crates/desktop-app/Cargo.toml's own `version`, apart from the workspace's `[workspace.package]`
 # version: bumping that one releases nothing. The team server's releases are in the private platform repository.
 # A push to master that changes the file releases only when neither the tag nor a release `app-v<version>` exists yet,
 # so other edits of that file, and the same run again, release nothing.
 #
-# A release uploads the programs' PDBs to GlitchTip before the files go to the cloud, with the repository secret
-# GLITCHTIP_AUTH_TOKEN, and fails without it; a dry run skips the upload. The PDBs never go into the zip or the
-# installer.
+# A release uploads the programs' PDBs and dSYMs to GlitchTip before the files go to the cloud, with the repository
+# secret GLITCHTIP_AUTH_TOKEN, and fails without it; a dry run skips the upload. The debug files never go into the
+# packed files.
+#
+# The macOS job signs and notarizes with the secrets MACOS_CERTIFICATE_P12, MACOS_CERTIFICATE_PASSWORD, APPLE_API_KEY_P8,
+# APPLE_API_KEY_ID and APPLE_API_ISSUER_ID and the variable APPLE_TEAM_ID; a release stops before the build without them.
+# They reach only the environment of the steps that need them, and the certificate only a keychain of that job's own,
+# which its last step deletes whatever happened.
 #
 # The cloud job's upload (`orchester-release`, crates/release, built by the Windows job) signs each file with the
 # Ed25519 release key in the secret ORCHESTER_RELEASE_SIGNING_KEY and uploads it with the release token in
 # ORCHESTER_CLOUD_RELEASE_TOKEN (`releases:write`). Both reach only that step's environment (and the Windows job's
-# check that they are set), never a command line, the log or an artifact. The job fails unless the cloud accepted both
-# files; only then is the tag made.
+# check that they are set), never a command line, the log or an artifact. The job fails unless the cloud accepted all
+# the files; only then are the tag and the GitHub Release made, by the tag job with `gh release` and the workflow's own
+# token (GH_TOKEN: github.token), from the artifacts the windows, macos and cloud jobs uploaded: no build of its own.
 #
-# The programs and the installer are not code-signed, so Windows SmartScreen warns about them. Code signing would be
-# one step before packing, with a certificate kept in the repository's secrets. macOS is not built here:
-# tools/package-macos.sh makes Orchester.app on a Mac, for a later job on a macOS runner.
+# The Windows programs and the installer are not code-signed, so Windows SmartScreen warns about them. Code signing would
+# be one step before packing, with a certificate kept in the repository's secrets.
 name: App release
 
 on:
@@ -29,11 +38,12 @@ on:
     branches: [master]
     paths: [crates/desktop-app/Cargo.toml]
   # A release by hand: run it on master; it releases as a push would. A test of the build: tick `dry_run`, on any
-  # branch; it builds and packs both files, keeps them as the run's artifact for 7 days, and releases nothing.
+  # branch; it builds and packs the Windows and macOS files, keeps them as the run's artifacts for 7 days, and releases
+  # nothing. With the Apple secrets set it still signs and notarizes the macOS files, which is what it tests.
   workflow_dispatch:
     inputs:
       dry_run:
-        description: Only build and pack the zip and the installer as the run's artifact, on any ref (nothing is released)
+        description: Only build and pack the Windows and macOS files as the run's artifacts, on any ref (nothing is released)
         type: boolean
         default: false
 
@@ -316,11 +326,248 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  # Signs both files and uploads them to Orchester Cloud. A job of its own: only it sees the signing key and the release
-  # token (no checkout, no build), and a run again of it alone sends the same files and resumes the upload.
+  macos:
+    name: macOS (disk image and zip)
+    needs: prepare
+    if: ${{ needs.prepare.outputs.build == 'true' }}
+    # Apple silicon, free for this public repository. Only aarch64 is released for now.
+    runs-on: macos-15
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    env:
+      CARGO_TERM_COLOR: always
+      # The installed app, as tools/package-macos.sh builds it: the MCP server on its fixed address with the token in the
+      # login keychain, and OS notifications (docs/stable-build.md, "The new app's MCP server").
+      ORCHESTER_APP_INSTALLED_BUILD: "1"
+      # The bundle says macOS 11 or later (LSMinimumSystemVersion); the C dependencies must not ask for this runner's.
+      MACOSX_DEPLOYMENT_TARGET: "11.0"
+    steps:
+      # A release that Gatekeeper refuses or whose error reports show bare addresses is no release, so a release stops
+      # here, before the build, when something for the steps below is missing. A dry run without the Apple secrets still
+      # tests the build, signed ad hoc, and says so. The values stay in this step's environment; only "signed" leaves it.
+      - id: apple
+        name: Check the release secrets
+        env:
+          RELEASE: ${{ needs.prepare.outputs.release }}
+          GLITCHTIP_AUTH_TOKEN: ${{ secrets.GLITCHTIP_AUTH_TOKEN }}
+          MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+        shell: bash
+        run: |
+          missing=""
+          for name in MACOS_CERTIFICATE_P12 MACOS_CERTIFICATE_PASSWORD APPLE_API_KEY_P8 APPLE_API_KEY_ID APPLE_API_ISSUER_ID APPLE_TEAM_ID; do
+            if [ -z "${!name}" ]; then
+              missing="$missing $name"
+            fi
+          done
+          if [ "$RELEASE" = true ]; then
+            failed=0
+            if [ -n "$missing" ]; then
+              echo "::error title=No Apple signing secrets::Missing:$missing. A release signs and notarizes its macOS files with them (docs/stable-build.md, \"Releases from CI\")."
+              failed=1
+            fi
+            if [ -z "$GLITCHTIP_AUTH_TOKEN" ]; then
+              echo "::error title=No GlitchTip token::The repository secret GLITCHTIP_AUTH_TOKEN is missing; a release uploads its dSYMs to GlitchTip with it (docs/stable-build.md, \"Releases from CI\")."
+              failed=1
+            fi
+            if [ "$failed" = 1 ]; then
+              exit 1
+            fi
+          elif [ -n "$missing" ]; then
+            echo "::notice title=Signed ad hoc::Missing:$missing. This dry run packs an ad hoc signed app, which is neither notarized nor what a release ships."
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "signed=true" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: Swatinem/rust-cache@v2
+      # A step of its own, before any secret reaches this job's disk or environment: the dependencies' build scripts run here.
+      - name: Build
+        run: cargo build --release --locked -p orchester-app -p orchester-runner
+      # In a keychain of this job's own, which the last step deletes whatever happened. Its password is new for each run
+      # and known only here. `security import` takes the .p12's password only as an argument; no command is echoed to the
+      # log, and GitHub masks the value. The .p12 lives on disk only within this step.
+      - id: keychain
+        name: Import the certificate into a temporary keychain
+        if: ${{ steps.apple.outputs.signed == 'true' }}
+        env:
+          MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          keychain="$RUNNER_TEMP/orchester-signing.keychain-db"
+          certificate="$RUNNER_TEMP/orchester-signing.p12"
+          trap 'rm -f "$certificate"' EXIT
+          password="$(openssl rand -base64 32)"
+          echo "::add-mask::$password"
+          printf '%s' "$MACOS_CERTIFICATE_P12" | base64 --decode > "$certificate"
+          security create-keychain -p "$password" "$keychain"
+          # Stays unlocked for the job's whole length (6 hours, past its time limit).
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$certificate" -k "$keychain" -f pkcs12 -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          # The intermediate between the certificate and Apple's root, in case the .p12 lacks it; trust still ends at the
+          # root the system holds, so a wrong file here would only leave the identity invalid. A .p12 with its chain has
+          # it already, and `security` then refuses it as "already exists", which is no failure.
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/DeveloperIDG2CA.cer" https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer
+          if ! imported="$(security import "$RUNNER_TEMP/DeveloperIDG2CA.cer" -k "$keychain" 2>&1)"; then
+            if [[ "$imported" != *"already exists"* ]]; then
+              echo "$imported" >&2
+              exit 1
+            fi
+            echo "The certificate brought Apple's intermediate already."
+          fi
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain" > /dev/null
+          existing="$(security list-keychains -d user | sed -e 's/^ *"//' -e 's/"$//')"
+          # shellcheck disable=SC2086 # One path per word, as the runner's keychains have no spaces.
+          security list-keychains -d user -s "$keychain" $existing
+          identity="$(security find-identity -v -p codesigning "$keychain" |
+            sed -n "s/.*\"\(Developer ID Application: .*($APPLE_TEAM_ID)\)\"\$/\1/p" | head -n 1)"
+          if [ -z "$identity" ]; then
+            echo "::error title=No Developer ID identity::The certificate in MACOS_CERTIFICATE_P12 gives no valid Developer ID Application identity of the team APPLE_TEAM_ID."
+            exit 1
+          fi
+          echo "identity=$identity" >> "$GITHUB_OUTPUT"
+      # tools/package-macos.sh takes the build above (its cargo has nothing left to do), signs (runner first, hardened
+      # runtime, secure timestamp), notarizes and staples the app, then packs the disk image and the zip. A rejection
+      # fails this step with notarytool's log. The API key is on disk only within this step; its id and issuer reach only
+      # this step's environment.
+      - name: Sign, notarize and pack
+        env:
+          SIGNED: ${{ steps.apple.outputs.signed }}
+          IDENTITY: ${{ steps.keychain.outputs.identity }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          if [ "$SIGNED" = true ]; then
+            key="$RUNNER_TEMP/orchester-notary.p8"
+            trap 'rm -f "$key"' EXIT
+            printf '%s\n' "$APPLE_API_KEY_P8" > "$key"
+            export ORCHESTER_MACOS_IDENTITY="$IDENTITY"
+            export ORCHESTER_NOTARY_KEY="$key"
+            export ORCHESTER_NOTARY_KEY_ID="$APPLE_API_KEY_ID"
+            export ORCHESTER_NOTARY_ISSUER="$APPLE_API_ISSUER_ID"
+          fi
+          umask 022
+          tools/package-macos.sh --out-dir "$RUNNER_TEMP/app-release" --archives
+      # As the Windows job's PDBs: GlitchTip (project `desktop` of organization `orchester-desktop`) resolves the
+      # release's error reports to function, file and line with the two dSYMs, which never go to the person. Signing
+      # leaves a program's UUID, so they match the signed programs. sentry-cli is pinned and checked against its SHA-256
+      # from Sentry's release registry. The token is in the environment only, also for curl, which reads it from stdin.
+      - name: Upload the debug files to GlitchTip
+        if: ${{ needs.prepare.outputs.release == 'true' }}
+        shell: bash
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.GLITCHTIP_AUTH_TOKEN }}
+          SENTRY_URL: https://errors.orchester.cloud
+          SENTRY_ORG: orchester-desktop
+          SENTRY_PROJECT: desktop
+          SENTRY_DISABLE_UPDATE_CHECK: "true"
+          SENTRY_CLI_VERSION: 3.8.2
+          SENTRY_CLI_SHA256: c80d92b6d34eb64fe7402f56cc7968fbb15aab1c763254ad428b55cc98ec7dcf
+        run: |
+          set -euo pipefail
+          cli="$RUNNER_TEMP/sentry-cli"
+          curl -fsSL --retry 3 -o "$cli" "https://downloads.sentry-cdn.com/sentry-cli/$SENTRY_CLI_VERSION/sentry-cli-Darwin-arm64"
+          hash="$(shasum -a 256 "$cli" | cut -d ' ' -f 1)"
+          if [ "$hash" != "$SENTRY_CLI_SHA256" ]; then
+            echo "::error::sentry-cli $SENTRY_CLI_VERSION has the SHA-256 $hash, not $SENTRY_CLI_SHA256; it is not run."
+            exit 1
+          fi
+          chmod +x "$cli"
+
+          # Only the two dSYMs, in a folder of their own, so nothing else of target/ is uploaded.
+          files="$RUNNER_TEMP/debug-files"
+          mkdir -p "$files"
+          ids=()
+          only=()
+          for program in orchester orchester-runner; do
+            # target/release/<program>.dSYM is a link into deps/, and the DWARF file in it is named with the build's hash.
+            cp -RL "target/release/$program.dSYM" "$files/$program.dSYM"
+            checked="$("$cli" debug-files check --json "$files/$program.dSYM/Contents/Resources/DWARF/"*)"
+            if [ "$(jq -r '.is_usable' <<<"$checked")" != true ] || [ "$(jq -r '.type' <<<"$checked")" != dsym ]; then
+              echo "::error::$program.dSYM is not a usable dSYM: $(jq -r '.problem' <<<"$checked")"
+              exit 1
+            fi
+            id="$(jq -r '.variants[0].debug_id' <<<"$checked")"
+            echo "$program.dSYM has the debug ID $id."
+            ids+=("$id")
+            only+=(--id "$id")
+          done
+
+          # No `--require-all`, as for the PDBs: the check below asks GlitchTip's own list instead.
+          if ! "$cli" debug-files upload --no-sources "${only[@]}" --wait-for 600 "$files"; then
+            echo "::error title=Debug files not uploaded::sentry-cli could not upload the dSYMs to GlitchTip; nothing goes to Orchester Cloud."
+            exit 1
+          fi
+
+          # The project's debug files, newest first: each dSYM's debug ID must be there, else nothing goes on.
+          stored="$(printf 'header = "Authorization: Bearer %s"\n' "$SENTRY_AUTH_TOKEN" |
+            curl -fsS --config - "$SENTRY_URL/api/0/projects/$SENTRY_ORG/$SENTRY_PROJECT/files/dsyms/")"
+          for id in "${ids[@]}"; do
+            if ! jq -e --arg id "$id" 'any(.[]; (.debugId | ascii_downcase) == ($id | ascii_downcase))' <<<"$stored" > /dev/null; then
+              echo "::error title=Debug files not stored::GlitchTip does not list the dSYM with the debug ID $id; nothing goes to Orchester Cloud."
+              exit 1
+            fi
+            echo "GlitchTip has the dSYM with the debug ID $id."
+          done
+      - name: Skip the uploads
+        if: ${{ needs.prepare.outputs.release != 'true' }}
+        shell: bash
+        run: |
+          echo "::notice title=No uploads::A dry run uploads no dSYMs to GlitchTip and no files to Orchester Cloud; a release does."
+      - name: Write the checksums
+        shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/app-release"
+          shasum -a 256 "Orchester-$VERSION-macos-aarch64.dmg" "Orchester-$VERSION-macos-aarch64.zip" | tee SHA256SUMS.txt
+      # The files as the cloud job below uploads them, so a run again of that job sends the same bytes; for a dry run,
+      # its result.
+      - uses: actions/upload-artifact@v7
+        with:
+          name: orchester-${{ needs.prepare.outputs.version }}-macos
+          path: |
+            ${{ runner.temp }}/app-release/Orchester-${{ needs.prepare.outputs.version }}-macos-aarch64.dmg
+            ${{ runner.temp }}/app-release/Orchester-${{ needs.prepare.outputs.version }}-macos-aarch64.zip
+            ${{ runner.temp }}/app-release/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 7
+      # Last and whatever happened before, a cancelled run too. Deleting it also takes it off the search list.
+      - name: Delete the temporary keychain
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          keychain="$RUNNER_TEMP/orchester-signing.keychain-db"
+          if [ -e "$keychain" ]; then
+            security delete-keychain "$keychain"
+            echo "Deleted the temporary keychain."
+          else
+            echo "No temporary keychain was made."
+          fi
+
+  # Signs the Windows and macOS files and uploads them to Orchester Cloud as one release. A job of its own: only it sees
+  # the signing key and the release token (no checkout, no build), and a run again of it alone sends the same files and
+  # resumes the upload.
   cloud:
     name: Orchester Cloud
-    needs: [prepare, windows]
+    needs: [prepare, windows, macos]
     if: ${{ needs.prepare.outputs.release == 'true' }}
     runs-on: windows-latest
     timeout-minutes: 30
@@ -332,9 +579,14 @@ jobs:
           path: ${{ runner.temp }}/app-release
       - uses: actions/download-artifact@v8
         with:
+          name: orchester-${{ needs.prepare.outputs.version }}-macos
+          path: ${{ runner.temp }}/app-release-macos
+      - uses: actions/download-artifact@v8
+        with:
           name: orchester-release-tool
           path: ${{ runner.temp }}/release-tool
-      # The release's notes, which the app shows with its update offer; the staff can edit them in the cloud's admin.
+      # The release's notes, which the app shows with its update offer; the staff can edit them in the cloud's admin. The
+      # GitHub Release takes this same file as its body (the notes artifact below).
       - name: Write the release notes
         shell: pwsh
         env:
@@ -343,24 +595,31 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           $notes = @'
-          Orchester {version} for Windows 10 and 11 (x64), built from commit `{commit}`.
+          Orchester {version} for Windows 10 and 11 (x64) and for macOS 11 or later (Apple silicon), built from commit `{commit}`.
 
           ### Your data stays
 
-          The app keeps its database (`orchester.db`) and its logs beside its program. Installing a newer version over an older one replaces only the two programs: the database and the logs stay in the folder. Close Orchester first; the installer waits until it is closed and never closes it itself.
+          **Windows:** the app keeps its database (`orchester.db`) and its logs beside its program. Installing a newer version over an older one replaces only the two programs: the database and the logs stay in the folder. Close Orchester first; the installer waits until it is closed and never closes it itself.
 
-          **Back up before the first start of a newer version:** copy aside `orchester.db` (with `orchester.db-wal`, if any) and each project's `.orchester\orchester.db`. A newer version migrates them, and an older one then refuses them.
+          **macOS:** the app keeps its database and its logs in `~/Library`, so replacing `Orchester.app` leaves them. Quit Orchester first.
 
-          ### Not code-signed
+          **Back up before the first start of a newer version:** copy aside the database (`orchester.db`, with `orchester.db-wal`, if any; on macOS in `~/Library/Application Support/Orchester`) and each project's `.orchester/orchester.db`. A newer version migrates them, and an older one then refuses them.
+
+          ### On Windows: not code-signed
 
           Neither the programs nor the installer are code-signed, so Windows SmartScreen may show *Windows protected your PC*: choose *More info*, then *Run anyway*.
+
+          ### On macOS: signed and notarized
+
+          `Orchester.app` and its disk image are signed with a Developer ID and notarized by Apple, so Gatekeeper opens them without a warning. Open the `.dmg` and drag Orchester to Applications. The first start after an ad hoc signed copy may ask once more before Orchester reads what it keeps in the login keychain; choose *Always Allow*. Later versions keep the same signature identity, so they do not ask again.
           '@
           $notes = $notes.Replace("{version}", $env:VERSION).Replace("{commit}", $env:COMMIT.Substring(0, 12))
           [System.IO.File]::WriteAllText((Join-Path $env:RUNNER_TEMP "notes.md"), $notes)
           Write-Output $notes
-      # orchester-release signs both files with the release key and uploads them: it creates the draft (or takes up the
-      # one a failed run left), declares each file with its size, SHA-256, key id and signature, sends the parts the
-      # cloud does not have yet, and finalizes. It fails unless the cloud accepted both, and then the tag is not made.
+      # orchester-release signs the four files with the release key and uploads them: it creates the draft (or takes up
+      # the one a failed run left), declares each file with its platform, architecture, size, SHA-256, key id and
+      # signature, sends the parts the cloud does not have yet, and finalizes once, after the last file, which publishes
+      # the release. It fails unless the cloud accepted all four, and then neither the tag nor the GitHub Release is made.
       # The key and the token are in this step's environment only, never on a command line; the tool never prints them.
       - name: Sign and upload to Orchester Cloud
         shell: pwsh
@@ -371,24 +630,39 @@ jobs:
           VERSION: ${{ needs.prepare.outputs.version }}
         run: |
           $ErrorActionPreference = "Stop"
-          $files = Join-Path $env:RUNNER_TEMP "app-release"
+          $windows = Join-Path $env:RUNNER_TEMP "app-release"
+          $macos = Join-Path $env:RUNNER_TEMP "app-release-macos"
           $tool = Join-Path $env:RUNNER_TEMP "release-tool\orchester-release.exe"
-          & $tool publish --api $env:CLOUD_API --version $env:VERSION --platform windows --arch x86_64 `
+          & $tool publish --api $env:CLOUD_API --version $env:VERSION `
             --notes-file (Join-Path $env:RUNNER_TEMP "notes.md") `
-            (Join-Path $files "Orchester-$env:VERSION-setup.exe") (Join-Path $files "Orchester-$env:VERSION-windows-x64.zip")
+            --platform windows --arch x86_64 `
+            (Join-Path $windows "Orchester-$env:VERSION-setup.exe") (Join-Path $windows "Orchester-$env:VERSION-windows-x64.zip") `
+            --platform macos --arch aarch64 `
+            (Join-Path $macos "Orchester-$env:VERSION-macos-aarch64.dmg") (Join-Path $macos "Orchester-$env:VERSION-macos-aarch64.zip")
           if ($LASTEXITCODE -ne 0) {
-            Write-Output "::error title=Release not uploaded::Orchester Cloud did not accept Orchester $env:VERSION (the error above); no tag is made. See docs/stable-build.md, `"When the cloud rejects an upload`"."
+            Write-Output "::error title=Release not uploaded::Orchester Cloud did not accept Orchester $env:VERSION (the error above); no tag and no GitHub Release are made. See docs/stable-build.md, `"When the cloud rejects an upload`"."
             exit $LASTEXITCODE
           }
+      # The notes the cloud took, as they are, for the GitHub Release the tag job makes; only once the cloud accepted the
+      # release. `overwrite`, so a run again of this job replaces them instead of failing on the name.
+      - uses: actions/upload-artifact@v7
+        with:
+          name: orchester-${{ needs.prepare.outputs.version }}-notes
+          path: ${{ runner.temp }}/notes.md
+          if-no-files-found: error
+          retention-days: 7
+          overwrite: true
 
-  # The tag `app-v<version>` on the released commit, once the cloud has published the release. No GitHub Release is
-  # made: the files and the notes live in Orchester Cloud.
+  # The tag `app-v<version>` on the released commit, once the cloud has published the release, and the GitHub Release
+  # `app-v<version>` for that tag, titled `Orchester <version>`, with the four files, both SHA256SUMS files and the cloud
+  # release's notes. The app still updates from Orchester Cloud only; the GitHub Release is a copy for people who look
+  # on GitHub. It reuses the artifacts the windows, macos and cloud jobs uploaded: no build of its own.
   tag:
-    name: Tag
+    name: Tag and GitHub Release
     needs: [prepare, cloud]
     if: ${{ needs.prepare.outputs.release == 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     permissions:
       contents: write
     steps:
@@ -411,4 +685,62 @@ jobs:
             exit 0
           fi
           gh api "repos/$REPO/git/refs" -f ref="refs/tags/$tag" -f sha="$COMMIT" --silent
-          echo "::notice title=Released::Orchester $VERSION is on Orchester Cloud's Beta and tagged $tag."
+          echo "::notice title=Tagged::Orchester $VERSION is on Orchester Cloud's Beta and tagged $tag."
+      - uses: actions/download-artifact@v8
+        with:
+          name: orchester-${{ needs.prepare.outputs.version }}-windows
+          path: ${{ runner.temp }}/app-release-windows
+      - uses: actions/download-artifact@v8
+        with:
+          name: orchester-${{ needs.prepare.outputs.version }}-macos
+          path: ${{ runner.temp }}/app-release-macos
+      - uses: actions/download-artifact@v8
+        with:
+          name: orchester-${{ needs.prepare.outputs.version }}-notes
+          path: ${{ runner.temp }}/app-release-notes
+      # Both jobs write a SHA256SUMS.txt, and a release's files need names of their own, so they go up as
+      # SHA256SUMS-windows.txt and SHA256SUMS-macos.txt; the names inside are the release's files, so
+      # `sha256sum -c` still checks them. A version with a suffix (`0.5.0-rc.1`) is a pre-release. A run again finds the
+      # release it made (or the one a failed upload left): it does not make a second one, and uploads the files again
+      # with `--clobber`, which replaces a file of the same name instead of adding one. The token is in the environment
+      # only, never on a command line.
+      - name: Publish the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          tag="app-v$VERSION"
+          windows="$RUNNER_TEMP/app-release-windows"
+          macos="$RUNNER_TEMP/app-release-macos"
+          sums="$RUNNER_TEMP/app-release-sums"
+          mkdir -p "$sums"
+          cp "$windows/SHA256SUMS.txt" "$sums/SHA256SUMS-windows.txt"
+          cp "$macos/SHA256SUMS.txt" "$sums/SHA256SUMS-macos.txt"
+          files=(
+            "$windows/Orchester-$VERSION-setup.exe"
+            "$windows/Orchester-$VERSION-windows-x64.zip"
+            "$macos/Orchester-$VERSION-macos-aarch64.dmg"
+            "$macos/Orchester-$VERSION-macos-aarch64.zip"
+            "$sums/SHA256SUMS-windows.txt"
+            "$sums/SHA256SUMS-macos.txt"
+          )
+          # As in the prepare job: a 404 is "no release yet"; any other failure stops the run.
+          if output="$(gh api "repos/$REPO/releases/tags/$tag" --silent 2>&1)"; then
+            echo "The GitHub Release $tag exists already; its files are uploaded again in place."
+            gh release upload "$tag" --repo "$REPO" --clobber "${files[@]}"
+            echo "::notice title=Released::Orchester $VERSION is on Orchester Cloud's Beta, tagged $tag and on GitHub as the release $tag."
+            exit 0
+          fi
+          if [[ "$output" != *"HTTP 404"* ]]; then
+            echo "::error::Could not ask GitHub for the release $tag: $output"
+            exit 1
+          fi
+          prerelease=()
+          if [[ "$VERSION" == *-* ]]; then
+            prerelease=(--prerelease)
+          fi
+          gh release create "$tag" --repo "$REPO" --verify-tag --title "Orchester $VERSION" \
+            --notes-file "$RUNNER_TEMP/app-release-notes/notes.md" "${prerelease[@]}" "${files[@]}"
+          echo "::notice title=Released::Orchester $VERSION is on Orchester Cloud's Beta, tagged $tag and on GitHub as the release $tag."

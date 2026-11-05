@@ -91,7 +91,8 @@ impl ResourceBody for AgentProfile {
   /// 5: the approval mode in the permissions (2026-10-29, `docs/design/approval-modes.md`), left out while Manual,
   /// so every older profile reads as Manual with its commands kept: *Allowed commands* keeps its list as Manual's,
   /// *Ask before running commands* keeps asking (Manual with no list of its own), and *Any command in the
-  /// worktree* stays as it was, Manual too, until a person switches it to Autopilot.
+  /// worktree* stays as it was, Manual too, until a person switches it to Autopilot. A version of any schema with the
+  /// old *Approve automatically (don't ask me)* on reads as Autopilot, and is stored without it; the shape is the same.
   const SCHEMA: u32 = 5;
 
   fn upgrade(schema: u32, mut body: serde_json::Value) -> Option<serde_json::Value> {

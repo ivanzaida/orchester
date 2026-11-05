@@ -324,7 +324,7 @@ fn every_screen() -> Vec<(Route, Vec<&'static str>)> {
     (at(ProjectPage::Memory(None)), placeholder("Memory")),
     (at(ProjectPage::Skills(Default::default())), placeholder("Skills")),
     (at(ProjectPage::Tools), placeholder("Tools")),
-    (at(ProjectPage::Secrets(Default::default())), placeholder("Secrets")),
+    (at(ProjectPage::Secrets(Default::default())), placeholder("Environment")),
     (
       at(ProjectPage::Connections(ConnectionsView::default())),
       placeholder("Connections"),

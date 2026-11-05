@@ -39,7 +39,7 @@ pub fn settings(
   let section = shown.section();
   let navigation = Navigation::of(ctx);
   let id = project.open.project.id();
-  let saved = !section.autosaves() || status.get() == Status::Saved;
+  let saved = !shown.autosaves() || status.get() == Status::Saved;
   let tabs = Section::ALL
     .into_iter()
     .map(|choice| {
@@ -66,7 +66,7 @@ pub fn settings(
       (Icon::CircleDashed, PaletteColor::TextMuted),
       "project_settings.notSavedYet",
     )),
-    _ => section.autosaves().then(|| save_status(ctx, status)),
+    _ => shown.autosaves().then(|| save_status(ctx, status)),
   };
   let header = Row::new()
     .id("project-settings-header")
@@ -108,7 +108,7 @@ const fn at_root(shown: Shown) -> bool {
     Shown::Tab(_) => true,
     Shown::Connections(view) => view.selected().is_none(),
     Shown::Secrets(view) => view.secret.is_none() && matches!(view.panel, crate::routes::SecretsPanel::Inspect),
-    Shown::Rules | Shown::NewConnection(_) | Shown::EditConnection(_) => false,
+    Shown::Rules | Shown::Storage | Shown::NewConnection(_) | Shown::EditConnection(_) => false,
   }
 }
 
@@ -132,6 +132,18 @@ pub fn screen(header: Element, content: Element) -> Element {
     .child(content)
     .into()
 }
+/// What shows under the tabs for the tab `key`. lurq hands a scroll's offset to whichever scroll takes its place,
+/// whatever its id, so a tab opened in place of a scrolled one came up scrolled as far; keyed, each tab keeps only its
+/// own. The key goes on a node inside the returned one, as `settings::frame::column` does.
+pub fn tab_body(key: &str, body: Element) -> Element {
+  let room = || {
+    Column::new()
+      .width(Dimension::Pct(100.0))
+      .flex(1.0)
+      .min_height(Dimension::Px(0.0))
+  };
+  room().child(Element::from(room().child(body)).key(key)).into()
+}
 /// A tab's column of groups, scrolling under the tabs.
 pub fn scroll(content: impl Into<Element>) -> Element {
   column_scroll(content).into()
@@ -141,6 +153,10 @@ pub fn scroll_with(content: impl Into<Element>, state: &ScrollState) -> Element 
   column_scroll(content).with_scroll_state(state.clone()).into()
 }
 fn column_scroll(content: impl Into<Element>) -> ScrollVertical {
+  column_scroll_wide(content, WIDTH)
+}
+/// Storage's left-aligned pane (E7GqFt), wider to leave room for its size columns.
+pub fn column_scroll_wide(content: impl Into<Element>, width: f32) -> ScrollVertical {
   ScrollVertical::new(
     Column::new()
       .id("settings-form")
@@ -155,7 +171,7 @@ fn column_scroll(content: impl Into<Element>) -> ScrollVertical {
       .child(
         Column::new()
           .width(Dimension::Pct(100.0))
-          .max_width(Dimension::Px(WIDTH))
+          .max_width(Dimension::Px(width))
           .spacing(ExtraSpacing::Roomy.role())
           .child(content),
       ),

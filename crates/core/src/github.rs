@@ -8,6 +8,7 @@ use crate::{
   connection::{GitHubCheck, GitHubConnection, GitHubHost, check_github},
   pull_request::{
     CreateFailure, Fields, ListedStates, NewPullRequest, OpenedPullRequest, PullRequest, PullRequestHead,
+    ci::{CiCheck, gh_job_log_command, gh_pr_checks_command, parse_gh_job_log, parse_gh_pr_checks},
     gh_check_rollups_command, gh_compare_diff_command, gh_pr_create_command, gh_pr_list_command, gh_pr_view_command,
     gh_rate_limit_command, parse_gh_check_rollups, parse_gh_compare_diff, parse_gh_pr_create, parse_gh_pr_list,
     parse_gh_pr_view, parse_gh_rate_limit,
@@ -39,6 +40,12 @@ pub trait GitHub {
 
   /// Pull request `number` of `repo` now, read with `fields`, with its base revision.
   fn pull_request(&self, repo: &GitHubRepo, number: u64, fields: Fields) -> Result<PullRequestHead, RepositoryError>;
+
+  /// Every check of pull request `number`'s head, without logs.
+  fn pull_request_checks(&self, repo: &GitHubRepo, number: u64) -> Result<Vec<CiCheck>, RepositoryError>;
+
+  /// The tail of the failed steps' log of GitHub Actions job `job` of `repo`; `None` when GitHub gave none.
+  fn job_log(&self, repo: &GitHubRepo, job: u64) -> Result<Option<String>, RepositoryError>;
 
   /// The unified diff of `repo` from the merge base of `base` and `head` to `head`.
   fn compare_diff(&self, repo: &GitHubRepo, base: &Revision, head: &Revision) -> Result<String, RepositoryError>;
@@ -118,6 +125,16 @@ impl<R: CommandRunner> GitHub for GhCli<R> {
   fn pull_request(&self, repo: &GitHubRepo, number: u64, fields: Fields) -> Result<PullRequestHead, RepositoryError> {
     let output = self.run_for(repo, &gh_pr_view_command(&self.executable, repo, number, fields))?;
     parse_gh_pr_view(repo, number, &output)
+  }
+
+  fn pull_request_checks(&self, repo: &GitHubRepo, number: u64) -> Result<Vec<CiCheck>, RepositoryError> {
+    let output = self.run_for(repo, &gh_pr_checks_command(&self.executable, repo, number))?;
+    parse_gh_pr_checks(repo, number, &output)
+  }
+
+  fn job_log(&self, repo: &GitHubRepo, job: u64) -> Result<Option<String>, RepositoryError> {
+    let output = self.run_for(repo, &gh_job_log_command(&self.executable, repo, job))?;
+    parse_gh_job_log(repo, &output)
   }
 
   fn compare_diff(&self, repo: &GitHubRepo, base: &Revision, head: &Revision) -> Result<String, RepositoryError> {

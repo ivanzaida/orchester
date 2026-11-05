@@ -25,6 +25,7 @@ mod cloud;
 mod facts;
 mod health;
 mod item;
+mod low_disk;
 mod mcp;
 mod operations;
 mod plan_limits;
@@ -315,6 +316,16 @@ impl Component for StatusBarView {
     // Online, the health dot stands for the runner; in any other state it says so first (`vNIo3`, `a7yNee`).
     if let Some(project) = project.filter(|project| project.runner.state != RunnerState::Online) {
       left.extend(runner::runner(ctx, &project.runner, &dispatch));
+    }
+    if let Some(project) = project {
+      left.push(ctx.mount_keyed::<low_disk::LowDisk>(
+        "status-low-disk-host",
+        low_disk::Props {
+          project: project.id,
+          root: project.repo_root.clone(),
+          dispatch: dispatch.clone(),
+        },
+      ));
     }
     // Tasks that could not be read are the project's own unresolved failure: they take the slot until a
     // reading succeeds. Then the runs the previous session left interrupted stay pinned until the person

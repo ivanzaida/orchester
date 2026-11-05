@@ -43,8 +43,9 @@ whose pages the app opens in the browser.
 ## Team authority S2 shared contracts
 
 The public prerequisite for platform OP-145 is in core and `orchester-api`; it does not add cloud endpoints.
-Team server admins alone read/change `server_admin::ServerSettings.claim_staleness_seconds` and
-`SettingsChanges.claim_staleness_seconds` (optional in changes). Core's `ClaimStalenessThreshold` is a JSON
+Team server admins alone change `server_admin::ServerSettings.claim_staleness_seconds` through
+`SettingsChanges.claim_staleness_seconds` (optional in changes); every reader of a workspace, member or Admin, reads it
+on the v2 `WorkspaceMetadata` (S10, below). Core's `ClaimStalenessThreshold` is a JSON
 integer in whole seconds, defaults to 900, and accepts 300..=86400 inclusive. Missing read fields from older
 servers use the default; invalid supplied values are refused. Unknown settings-change fields remain refused.
 
@@ -86,22 +87,32 @@ are refused in every shape below.
 - `CommandRequest`: `{operation_id,expected:[ExpectedRevision],command}`; `command` is internally tagged by `kind`
   (e.g. `{kind:"claim.acquire",subject}`).
 - `CommandResult`: `{operation_id,state:"committed",result,cursor}`; `result` is the command's value, which carries
-  `effects:[LocalEffect]` (empty when no local effect is authorized). `cursor` is an opaque, non-empty
-  `EventCursor` string.
+  `effects:[LocalEffect]` (empty when no local effect is authorized). `cursor` is the `EventCursor` just after the
+  command's events.
+- `EventCursor`: the server's committed event sequence position in one project's event stream. Its wire form is a
+  string holding the canonical decimal of a positive integer that fits in 64 bits: digits only, no sign, no leading
+  zeros (`"1"`, `"10"`; never `""`, `"0"`, `"-1"`, `"+1"`, `"007"` or `"c1"`), and anything else is refused
+  (`EventCursorError`). Cursors order by that integer, never by string order (`"9"` < `"10"`; `EventCursor` is `Ord`).
+  Clients may compare two cursors of the same project; cursors of different projects are not comparable.
 - `LocalEffect`: `{kind:"start",work_id,bundle:{sha256,schema_version}}`, `{kind:"pause",work_id}`,
-  `{kind:"stop",work_id}` or `{kind:"none"}`; `sha256` is a 64-digit lowercase hex `ContentHash`.
+  `{kind:"stop",work_id}`, `{kind:"deliver",work_id}`, `{kind:"deliver_module",module_id,branch,source_commit,base_commit}`
+  (S7, below) or `{kind:"none"}`; `sha256` is a 64-digit lowercase hex `ContentHash`.
 - `OperationRead`: `{operation_id,state:"committed",response:CommandResult}` or
   `{operation_id,state:"rejected",error:AuthorityError}`.
 - `AuthorityError`: `{operation_id?,code,details}`; `operation_id` is left out when the refusal came before the
   operation was read. `details` is `{}` for every code but `decision_required`, whose details are
-  `{decisions:["D1".."D9"]}` with at least one decision. Details never echo the request or carry credentials.
+  `{decisions:["D1".."D9"]}` with at least one decision, and `unsupported_contract`, whose details are
+  `{required_version:"0.4.0"}` (ORC-733): the oldest desktop version the server accepts, a `ReleaseVersion`
+  (`MAJOR.MINOR.PATCH` with an optional `-pre` suffix, no build metadata), so the desktop can say which Orchester the
+  server needs. A code with another code's details, or details of two codes, is refused. Details never echo the
+  request or carry credentials.
 
 | Code | Status |
 | --- | --- |
 | `unauthenticated` | 401 |
-| `forbidden`, `delivery_not_authorized` | 403 |
+| `forbidden`, `delivery_not_authorized`, `membership_revoked` | 403 |
 | `not_found` | 404 |
-| `revision_conflict`, `operation_mismatch`, `claim_conflict`, `claim_lost`, `module_required`, `module_claim_conflict`, `transition_denied`, `decision_required`, `bundle_missing` | 409 |
+| `revision_conflict`, `operation_mismatch`, `claim_conflict`, `claim_lost`, `module_required`, `module_claim_conflict`, `transition_denied`, `decision_required`, `bundle_missing`, `session_mismatch`, `sequence_regressed` | 409 |
 | `cursor_expired` | 410 |
 | `invalid` | 422 |
 | `unsupported_contract` | 426 |
@@ -113,6 +124,220 @@ The server keys a receipt by project, authenticated account and `operation_id`; 
 (`CommandRequest<C>`, `CommandResult<V>`, `OperationRead<V>`), and each later stage adds its own. Read models
 (pages, task and module reads, capabilities) are the S10 contract's. Existing v1 contracts, the /api/v1 client and
 earlier v2 types are unchanged.
+
+## Team authority S10 read contract
+
+The public prerequisite for platform OP-153 (bounded direct reads and server-side summaries) is in core and
+`orchester_api::v2`; it adds no endpoints. It reuses S4's `EventCursor`, `Subject`, `DecisionId` and
+`cursor_expired`. In the read models every field is sent: `?` below means `null`, never left out, and a missing or
+unknown field is refused. Times are milliseconds since the Unix epoch; days are `YYYY-MM-DD`.
+
+- `PageRequest`: `{after:PageCursor?,limit}`; `limit` may be left out for 50 and is 1..=200 (`PageRequestError`).
+  `PageCursor` is an opaque, non-empty string, bound to the workspace, the filters, the sort and the snapshot; unlike
+  `EventCursor` it is not ordered, and clients never read or compare it.
+- `Page<T>`: `{items:[T],next:PageCursor?,cursor:EventCursor}`; `next` is `null` on the last page, and every page of
+  one listing carries the same snapshot `cursor`. Entities come in ascending (creation sequence, id) order, histories
+  in ascending sequence. A snapshot is kept at least 15 minutes (`PAGE_CURSOR_RETENTION_SECONDS`, 900) after the last
+  page served from it; a later cursor may answer `cursor_expired` (410), and the client reads from the first page again.
+- `Capabilities`: `{project_id,revision,role:"member"|"admin"|"server_admin",actions:[ActionCapability],unresolved:[DecisionId]}`.
+  `ActionCapability`: `{action,subject:Subject?,allowed,reason:DenialReason?}`; `reason` is `null` exactly when
+  `allowed`. `action` is a command kind (dotted lowercase words, e.g. `claim.acquire`; `CommandKind`), `read`,
+  `export.shared` or `server.admin`. `DenialReason`: `role_required`, `claim_required`, `claim_lost`,
+  `module_required`, `decision_required`, `configuration_invalid`. Capabilities are advisory; commands check again.
+- `ClaimRead`: `{subject,id,holder:UserRef,acquired_at,last_execution_heartbeat_at,stale_at,stale,parent_module_claim_id?}`.
+- `WorkRead`: `{id,subject,claim_id,revision,state,runs:[RunId],bundle:BundleRef,created_at,updated_at}`;
+  `ExecutionState` is `running`, `paused`, `awaiting_human`, `succeeded`, `failed` or `cancelled` (proposed).
+- `TaskRead`: every `SharedTask` field (the content's fields inline) and `assignee:UserRef?`, `work:WorkRead?`,
+  `effective_claim:ClaimRead?`, `capabilities`. `workflow` stays apart from `work.state`.
+- `ModuleRead`: every `SharedModule` field (its fields inline) and `branch`, `assignee?`, `work?`, `effective_claim?`,
+  `capabilities`, `pending_delivery:PendingDeliveryRead?`. A module's tasks are read with the task list's `modules`
+  filter.
+- `PendingDeliveryRead` (ORC-733): the module's open delivery to base, from its `delivery.request` until the runner
+  reports the merge or the delivery fails, `null` when there is none:
+  `{requested_by:UserRef,requested_at,source_commit,base_commit,authorization}`. `requested_at` is when it was asked
+  for; `source_commit` (the module branch head) and `base_commit` are S7's `CommitId`s and differ, or it is refused
+  (`PendingDeliveryError::NothingToDeliver`). `authorization` (`PendingAuthorization`) is `awaiting_admin` (it waits
+  for an Admin's `delivery.authorize`), `admin` (an Admin authorized it) or `automatic` (the workspace's
+  `automatic_merge` authorized it, D7). An Admin's screen reads it as "Delivery to main waits for your authorization ·
+  olha asked at 15:38". The full record stays `ModuleDeliveryRead` (S7).
+- Task list: `TaskListRequest` `{filters,sort,page}`, each defaulted. `TaskFilters`
+  `{statuses,priorities,tags,all_tags,pipelines,modules,search}`: each facet keeps tasks with any of its values, `null`
+  among `pipelines` (slugs) or `modules` is a task without one, `all_tags` keeps tasks with every tag. `search`
+  (`SearchText`, trimmed, 1..=200 characters) matches title, key, former key, id or brief, ignoring case. `TaskSort`:
+  `created` (default), `newest`, `title`, `status`, `priority`, each ending on creation sequence and id.
+  `TaskBoardCounts`: `{backlog,todo,in_progress,in_review,done,canceled,cursor}` for a `TaskFilters`.
+- Modules: `ModuleListRequest` `{state?:"open"|"closed",page}` answers `Page<ModuleSummary>`, a summary being
+  `{module:ModuleRead,progress:{unit:"tasks",scope,done},tasks,forecast:ForecastRead}`. `ForecastRead`:
+  `{remaining,history_days,history_delivered,outlook}`, `outlook` `{kind:"done"}`, `{kind:"not_enough_history"}` or
+  `{kind:"dates",likely,safe,past_horizon}`. `ModuleBurndownRead`: `{module,unit,start_scope,days,forecast,cursor}`,
+  a day `{date,scope?,remaining?,ideal?,added,removed}`. `ModuleHistoryPage` is `Page<SharedModuleChange>`. All are
+  counted by core's rules (`orchester_core::module::{progress, burndown}`, `orchester_core::forecast`): Canceled tasks
+  are out of scope, Done counts as done, and every move into or out of the module counts on its day.
+- Configuration: `ResourceLibraryRequest` `{kind?,archived,search?,page}` answers `ResourceLibraryPage`
+  (`Page<SharedResource>`); a resource's versions are `ResourceVersionsPage` (`Page<SharedVersion>`, oldest first);
+  `ResourcePickerRequest` `{kind,search?,page}` answers `ResourcePickerPage` of `ResourceChoice`
+  `{id,kind,slug,name,latest}`, resources not archived with a published version.
+- `WorkspaceMetadata`: `{project:SharedProject,policy:WorkspacePolicy,capabilities,cursor,claim_staleness_seconds}`.
+  `claim_staleness_seconds` (ORC-733) is the server's `ClaimStalenessThreshold` in whole seconds (300..=86400), sent
+  to every reader of the workspace, so a member's desktop can say when a claim goes stale; it is required, and a value
+  out of range is refused. It stays the server's setting, not `WorkspacePolicy`'s, and only a server admin changes it
+  (S2, above). A change to it makes every workspace's `{kind:"workspace"}` scope stale (S11).
+
+Left open, not invented here (they rest on the open decisions D1–D9 or on later stages): human waits beyond
+`awaiting_human` (questions, plans, approvals), the *Needs you* and *Active* list views and their counts that rest on
+them, the full set of command kinds behind `action`, which time zone a server counts days in, and what `revision` in
+`Capabilities` counts. Existing v1 contracts, the /api/v1 client and earlier v2 types are unchanged.
+
+## Team authority S8 execution bundle
+
+The public prerequisite for platform OP-151 (consistent immutable execution bundles and pinned skill assets) is in
+core (`orchester_core::run::bundle`) and `orchester_api::v2`; it adds no endpoints. The server builds a bundle when it
+starts work under a claim and never accepts one a client wrote. Unknown fields are refused in every shape below.
+
+- `ExecutionBundle`, in this field order:
+  `{schema_version,project_id,subject,claim_id,module_id,branch,base_commit,definition_revision,task_number,task,pipeline,profiles,permissions,limits,delivery,resources,files,skill_files,bindings,inputs}`.
+  `schema_version` is `EXECUTION_BUNDLE_SCHEMA` (2), as `BundleRef.schema_version` names it; a bundle of another
+  version is refused, with no compatibility shim (2 added `task_number` and the pinned versions' `label`, so a
+  desktop and a server on different versions refuse each other's bundles). `module_id`, `branch`
+  and `base_commit` are S7's (below): the module the work is under, its module branch (`BranchName`) and the base
+  branch's commit the work starts from (`CommitId`). `definition_revision` is the task's revision when the work
+  started; `task_number` is the task's number in its project from 1 (the `7` of `ORC-7`, which names the run and its
+  branch with the project's key); `task` (`TaskAtStart`) is `{title,brief,criteria}` at that revision. `limits` is a
+  `SharedLimits` (`{}` for none) and `delivery` what the run delivers (`changes`, `report`, `outside` or
+  `changes_or_report`: the task's own choice, else its pipeline's).
+- Derived from `inputs`, and refused on read when they differ: `pipeline` `{resource_id,version}`; `profiles`
+  `[{role,resource_id,version}]`; `permissions` `[{step,permissions}]`, each agent step's profile permissions
+  narrowed by the step, in pipeline step order; `resources` `[{resource_id,version}]`, the pinned instructions, tools
+  and skills; `files` `[{sha256,size_bytes}]`, every file once; `skill_files`
+  `[{resource_id,files:[{path,sha256,size_bytes}]}]`. `version` is the published version number.
+- `bindings` `[{resource_id,role,cli,model}]`: one per pinned profile, with its role and model; `cli` is the agent
+  provider (`codex_cli`, `claude_code_cli`, …) the executing computer runs it with. Which account or connection runs it,
+  and every path, stays on that computer.
+- `inputs` (`CanonicalExecutionInputs`): `{pipeline,steps,profiles,instructions,tools,skills}`, each pinned version
+  `{resource,version,number,label,body}` with its published body. `label` (`ResourceLabel`) is `{slug,name}`, the
+  resource's slug and name as the pinned version had them, which prompts and skill folders name it by: the slug is
+  1–64 lowercase letters, digits and single inner hyphens, the name is not blank and at most 200 characters; a
+  malformed label is refused. `steps` are the run snapshot's `[{key,executor}]` in
+  pipeline order. The pipeline body lists no sources, a profile body is
+  `{role,responsibilities,instructions,model,settings,permissions}` without its connection, MCP servers or writable
+  folders, and a command tool never starts a program by an absolute path; such inputs are refused. Bodies name
+  secrets by id only.
+- Order: `steps` and `permissions` keep pipeline order; `profiles`, `bindings`, `resources`, `skill_files` and the
+  pinned versions are read in any order and kept in resource id order, `files` in hash order, a skill's files in path
+  order.
+- Hash: the lowercase hex SHA-256 of the bundle's canonical bytes, its compact JSON as `serde_json` writes it with the
+  fields in the order above and collections in the order just given (`run::bundle::canonical`). The same bundle always
+  hashes the same, whichever order its collections were read in; any field change changes it.
+- Reads: the bundle read answers `ExecutionBundle`. A bundle file read answers one file's raw bytes by its `sha256`,
+  at most `MAX_BUNDLE_FILE_BYTES` (8 MiB; a run whose skills have a larger file makes no bundle), which the desktop
+  checks against the bundle (`ExecutionBundle::check_file`). There is no confirmation command.
+
+The work is not in the bundle: a bundle binds to its claim, and S7's `work.start` attaches the work. Existing v1
+contracts, the /api/v1 client and earlier v2 types are unchanged.
+
+## Team authority S7 delivery contract
+
+The public prerequisite for platform OP-150 (mandatory modules, module branches and authorized delivery) is in core
+and `orchester_api::v2`; it adds no endpoints. Unknown fields are refused in every shape below.
+
+- `CommitId` (`orchester_core::run`): a full Git object id, 40 lowercase hex digits (SHA-1) or 64 (SHA-256), sent as
+  a string. Abbreviated ids, uppercase and ref names are refused (`CommitIdError`). Branches are `BranchName`.
+- The execution bundle gains `module_id:ModuleId`, `branch:BranchName` and `base_commit:CommitId` after `claim_id`
+  (above). This changes the canonical bytes, so a bundle with these fields hashes differently from the same bundle
+  in ORC-651's shape; nothing stored that shape yet, and `schema_version` stays 1.
+- `DeliveryRead`:
+  `{work_id,claim_id,authorization_operation_id:OperationId?,source_commit,base_commit,bundle:BundleRef,state,revision}`.
+  `authorization_operation_id` is always sent, `null` when no `delivery.authorize` allowed the delivery; leaving it
+  out is refused. `source_commit` and `base_commit` are `CommitId`s, `revision` is 1..=i64::MAX.
+- `DeliveryState`: `authorized`, `requested`, `delivered` or `failed`. The server reports `delivered` only after the
+  runner reported the merge commit.
+- `LocalEffect` gains `{kind:"deliver",work_id}`: the runner may merge the work's module branch into base on its
+  computer.
+- Commands, instantiated by the server on the S4 envelopes rather than defined here: `delivery.authorize`
+  `{work_id,claim_id,source_commit,base_commit,bundle}` (Admin) and `delivery.request`
+  `{authority,authorization_operation_id,source_commit,base_commit,bundle}`, each answering
+  `{kind:"delivery",delivery:DeliveryRead,effects}`.
+- Module delivery (S7c, ORC-656): base delivery is a module's, and task works reach base only through their module
+  (the run branch merges into the module branch locally; work reports tell the server). `ModuleDeliveryRead`:
+  `{subject:{kind:"module",id},claim_id,authorization_operation_id:OperationId?,branch,source_commit,base_commit,state,revision}`,
+  with the module's claim and branch and no `work_id` or `bundle`; a task `subject` is refused. It is a separate type,
+  not a tagged `DeliveryRead`, so the task form above keeps its wire; the field sets are disjoint, so a body reads as
+  one form only. `LocalEffect` gains `{kind:"deliver_module",module_id,branch,source_commit,base_commit}`: the runner
+  may merge that module branch head into base at `base_commit` on its computer; no local path is sent. Authorized by
+  an Admin's `delivery.authorize`, or by the workspace's `automatic_merge` for a request from the module's current
+  effective claim (D7).
+
+Decided for S7 (the orchestrator's D3 and D7, 2026-11-03, revisable by the person): the automatic module branch is
+`module/<name-slug>` (with `-<8 hex of the module id>` on collision), fixed at first assignment and created by the
+runner from its checkout's base at the first task start; task run branches merge into it, and only delivery takes it
+to base. A manually assigned branch is unique in the workspace, may be an existing Git branch, and cannot change while
+work under the module runs. With the workspace's `automatic_merge` on, a delivery request from the current effective
+claim on current unfenced work counts as Admin-authorized; off, it needs an explicit `delivery.authorize`. Report and
+outside deliverables have no base merge (D4 open). Existing v1 contracts, the /api/v1 client and earlier v2 types are
+unchanged, apart from the bundle fields above.
+
+## Team authority S9 work reports
+
+The public prerequisite for platform OP-152's S9b (`work.report`) is in core (`orchester_core::run`) and
+`orchester_api::v2`; it adds no endpoints. Unknown fields are refused in every shape below.
+
+- `ExecutionOutcome` (core): `{kind:"progress"}`, `{kind:"succeeded"}`, `{kind:"failed",reason}` or
+  `{kind:"cancelled"}`. `reason` is an `ExecutionFailure`, a closed set without text, paths or local ids, named as the
+  desktop's run states name them: `step_failed`, `retries_exhausted`, `worktree_not_created`, `limit_reached` or
+  `runner_failed`. An execution success is not permission to mark the task Done; human-wait entry and exit and the
+  task-completion effects have no outcome until D1, D4 and D8 are decided.
+- `ArtifactRef`: `{sha256:ContentHash,kind,size_bytes}`, a secret-free shared artifact by the hash of its bytes, never
+  a local path. `ArtifactKind` is `report` (a completed run's report), `patch` (the run's changes) or `log` (a step's
+  captured output). The set is closed, so a reader refuses a kind it does not know: a new kind is a new variant in
+  `v2::ArtifactKind` and in this list, published before any runner reports it.
+- `AuthorityRef`: `{subject,claim_id,work_id:WorkId?}`; `work_id` is always sent, `null` before the claim has work.
+- `WorkReport`, the payload of the command `work.report`:
+  `{authority:AuthorityRef,run_id:RunId,event_id:WorkEventId,sequence:u64,outcome:ExecutionOutcome,artifacts:[ArtifactRef]}`.
+  `run_id` is the reporting computer's run, `event_id` (a UUID) is made once per event and repeated on every retry,
+  and `sequence` is monotonic per run. It answers `{kind:"work",work:WorkRead,bundle:BundleRef,effects}`, instantiated
+  by the server on the S4 envelopes.
+- Order (`run::order_report`): a report is accepted only with a sequence greater than the last one accepted for its
+  run. The same sequence with the same report is a duplicate, answered with the original result, not an error; any
+  other equal or lower sequence is refused with `sequence_regressed`.
+- Fencing, as `AuthorityError` codes: a stale claim generation or fenced work is `claim_lost`; the claim held by
+  another session of the same account is `session_mismatch` (409); a regressed sequence `sequence_regressed` (409); a
+  caller no longer a member `membership_revoked` (403). A delayed report never overwrites the state of the work's new
+  holder.
+- `WorkEvent::Changed`, `kind` `work.changed`, a delta with `{work:WorkRead}`:
+  `{kind:"work.changed",data:{id,by,actor,at,work}}`. A client replaces its cached work and ignores one whose
+  `work.revision` is not newer than its own.
+
+No D4/D8 completion or human-wait variant is added. Existing v1 contracts, the /api/v1 client and earlier v2 types are
+unchanged, apart from the new error codes.
+
+## Team authority S11 subscriptions
+
+The public prerequisite for platform OP-154 (scoped invalidation subscriptions without replica snapshots) is in
+`orchester_api::v2::subscription`, re-exported from `orchester_api::v2`; it defines no route. Unknown fields are refused
+in every shape below.
+
+- Route, the server's: `GET /api/v2/projects/{project}/subscription`, a server-sent event stream, with an optional
+  `Last-Event-ID` header carrying the last cursor the client saw. Each event's SSE `event:` name is its `kind`, its
+  `id:` its `cursor` (`revoked` has none), and its `data:` the JSON below.
+- `QueryScope`, a family of cached reads, tagged by `kind`: `{kind:"workspace"}` (project, policy, claim staleness
+  threshold, capabilities, members), `{kind:"task_list"}` (task list and task counts), `{kind:"task",task:TaskId}`,
+  `{kind:"task_comments",task:TaskId}`, `{kind:"module_list"}`, `{kind:"module",module:ModuleId}` (summary, progress,
+  burndown, history), `{kind:"library"}` (library and pickers) and `{kind:"resource",resource:ResourceId}` (its
+  version list). Scopes compare by value and are totally ordered, so a set of them is stable.
+- `SubscriptionEvent`, tagged by `kind`:
+  - `{kind:"ready",cursor:EventCursor}`: sent first; the stream's position, with no snapshot.
+  - `{kind:"invalidated",cursor,scopes:[QueryScope]}`: one per committed batch; `cursor` is the batch's last entry and
+    `scopes` name each scope once.
+  - `{kind:"reset",cursor}`: the resume point is below the server's replay floor; the client drops every cached query
+    and reads again at or after `cursor`.
+  - `{kind:"revoked"}`: the caller lost access; the stream then closes.
+- Client race rule: a cached read taken at cursor `R` (a page's or command's `EventCursor`) is stale only when an
+  `invalidated` event with a cursor greater than `R` names its scope, "greater" in the `EventCursor` ordering above
+  (by integer, never by string). Events with a cursor at or below `R` are already in the read, so a client may
+  subscribe before or after reading without missing a change. The rule compares cursors of the same project only. A
+  `reset` drops everything.
+
+Existing v1 contracts, the /api/v1 client and earlier v2 types are unchanged.
 
 ## Conventions
 

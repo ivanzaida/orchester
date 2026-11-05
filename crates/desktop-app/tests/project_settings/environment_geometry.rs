@@ -19,7 +19,7 @@ fn project_settings_environment_field_and_helper_keep_the_drawn_bounds() {
       .get_element_by_id_mut("settings-environment-variables-box")
       .and_then(|e| e.bounds())
       .expect("field bounds");
-    // The editor runs the row's width inside its 14 sides (`Variables` `qGfsz` in `02 · Runs`).
+    // The editor runs the row's width inside its 14 sides (`Edit variables` `J0NdQ` in `S06`).
     assert_eq!((field.width, field.height), (692.0, 132.0));
     let helper = page
       .window
@@ -27,18 +27,11 @@ fn project_settings_environment_field_and_helper_keep_the_drawn_bounds() {
       .get_element_by_id_mut("settings-environment-helper")
       .and_then(|e| e.bounds())
       .expect("helper");
-    let action = page
-      .window
-      .tree
-      .get_element_by_id_mut("settings-open-secrets")
-      .and_then(|e| e.bounds())
-      .expect("Open Secrets");
-    assert!((action.y - helper.y).abs() < 0.5, "action stays on helper row");
     assert!(
-      (action.x + action.width - helper.x - helper.width).abs() < 0.5,
-      "action aligns at the right of the helper, as wide as the field"
+      (helper.x - field.x).abs() < 0.5 && (helper.width - field.width).abs() < 0.5,
+      "the helper runs under the field, as wide: {helper:?} under {field:?}"
     );
-    assert_eq!(action.height, 22.0);
+    assert!(helper.y >= field.y + field.height, "the helper follows the field");
   }
 }
 
@@ -86,8 +79,8 @@ fn project_settings_environment_pointer_focus_covers_132_body_and_insets_then_bl
     page
       .window
       .tree
-      .get_element_by_id_mut("settings-open-secrets")
-      .expect("helper action")
+      .get_element_by_id_mut("settings-environment-edit")
+      .expect("Edit variables' Done")
       .focus();
     page.window.pass();
     page.until("pointer edit saved on blur", |s| {

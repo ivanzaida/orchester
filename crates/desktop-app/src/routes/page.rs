@@ -102,6 +102,8 @@ pub enum ProjectPage {
   Settings(ProjectSettingsTab),
   /// Project settings › Runs › *Approved for every run*: the project's rules (`12` `wQy6o`).
   ProjectRules,
+  /// Project settings › Runs › Storage (Storage · redesign, Jsbd1).
+  Storage,
   /// Project settings on its Sharing tab with *Make local*'s question open (the task list's *no longer a
   /// member* notice).
   MakeLocal,
@@ -199,7 +201,9 @@ impl ProjectPage {
       Self::Connections(_) => Screen::Connections,
       Self::NewConnection(_) => Screen::NewConnection,
       Self::EditConnection(_) => Screen::EditConnection,
-      Self::Settings(_) | Self::ProjectRules | Self::MakeLocal | Self::Join(_) => Screen::ProjectSettings,
+      Self::Settings(_) | Self::ProjectRules | Self::Storage | Self::MakeLocal | Self::Join(_) => {
+        Screen::ProjectSettings
+      }
       Self::Files(_) => Screen::Files,
       Self::Import(_) => Screen::ImportResources,
     }
@@ -269,7 +273,9 @@ impl ProjectPage {
       Self::EditConnection(id) => format!("{connections}/{id}/{EDIT}"),
       Self::Files(view) => view.path(format!("{project_root}/{FILES}")),
       Self::Import(tab) => with_query(segment(Screen::ImportResources), &[tab.param()]),
-      Self::MakeLocal | Self::ProjectRules | Self::Join(_) => self.settings_path(segment(Screen::ProjectSettings)),
+      Self::MakeLocal | Self::ProjectRules | Self::Storage | Self::Join(_) => {
+        self.settings_path(segment(Screen::ProjectSettings))
+      }
       page => segment(page.screen()),
     }
   }
@@ -282,6 +288,7 @@ impl ProjectPage {
         &[ProjectSettingsTab::Sharing.param(), (ASK, Some(MAKE_LOCAL))],
       ),
       Self::Join(target) => join_path(settings, target),
+      Self::Storage => with_query(settings, &[ProjectSettingsTab::Runs.param(), (VIEW, Some("storage"))]),
       _ => with_query(settings, &[ProjectSettingsTab::Runs.param(), (VIEW, Some(RULES))]),
     }
   }
@@ -334,7 +341,7 @@ impl ProjectPage {
       ["instructions"] => InstructionsView::take(params).map(Self::Instructions),
       ["secrets"] => SecretsView::take(params).map(Self::Secrets),
       [IMPORT] => ImportTab::take(params).map(Self::Import),
-      ["memory"] => MemoryTab::take(params).map(Self::Memory),
+      ["memory"] => MemoryTab::take(params),
       [SETTINGS] => settings(params),
       [PULL_REQUESTS] => Ok(Self::PullRequests(
         params.take_or_default(TAB, PullRequestTab::from_name)?,
@@ -444,9 +451,12 @@ fn tools(params: &mut Params) -> Result<ProjectPage, RouteError> {
 }
 
 /// Project settings on the tab the query names, *Make local*'s question on Sharing (`ask=make-local`), the join
-/// review there (`view=join` with the project), or *Approved for every run* under Runs (`view=rules`).
+/// review there (`view=join` with the project), or *Approved for every run* under Runs (`view=rules`); Environment
+/// (`tab=environment`, or `secrets` from before it was renamed) is the secrets' route.
 fn settings(params: &mut Params) -> Result<ProjectPage, RouteError> {
-  let tab = ProjectSettingsTab::take(params)?;
+  let Some(tab) = ProjectSettingsTab::take(params)? else {
+    return Ok(ProjectPage::Secrets(SecretsView::default()));
+  };
   match (tab, params.take(VIEW)?) {
     (_, None) => {}
     (ProjectSettingsTab::Sharing, Some(view)) if view == JOIN => {
@@ -455,6 +465,7 @@ fn settings(params: &mut Params) -> Result<ProjectPage, RouteError> {
         .ok_or(RouteError::NoScreen);
     }
     (ProjectSettingsTab::Runs, Some(view)) if view == RULES => return Ok(ProjectPage::ProjectRules),
+    (ProjectSettingsTab::Runs, Some(view)) if view == "storage" => return Ok(ProjectPage::Storage),
     (_, Some(value)) => {
       return Err(RouteError::InvalidParam {
         param: VIEW.to_owned(),

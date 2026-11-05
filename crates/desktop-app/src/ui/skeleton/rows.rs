@@ -38,9 +38,18 @@ pub fn line(ctx: &Ctx, style: impl Into<TypographyStyle>, width: f32) -> Row {
     .child(bone(width, high))
 }
 
-/// A count beside a title or a tab.
+/// A count beside a title.
 pub fn count() -> Column {
   bone(COUNT.0, COUNT.1)
+}
+
+/// A count's bone as high as [`count`]'s and as wide as the place it stands in: a count that keeps the room of the
+/// count it stands for (a tab's).
+pub fn count_in_room() -> Column {
+  Column::new()
+    .height(Dimension::Px(COUNT.1))
+    .rounded(RadiusSize::Sm)
+    .background(PaletteColor::Border)
 }
 
 /// A state at a row's end: its dot and its words, `width` long, in 12.
@@ -80,6 +89,16 @@ pub fn unit_field(ctx: &Ctx, width: f32, value: f32, unit: &str) -> Row {
       .color(PaletteColor::TextMuted)
       .nowrap(),
   )
+}
+
+/// A number's `field` with what it reads back as under it, a bone `width` long, as `ui::field::NumberField` lays it
+/// out.
+pub fn read_back(ctx: &Ctx, field: Row, width: f32) -> Column {
+  Column::new()
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::End)
+    .child(field)
+    .child(line(ctx, TypographyStyle::Caption, width))
 }
 
 /// [`field`] that opens a list: its chevron real at its end.

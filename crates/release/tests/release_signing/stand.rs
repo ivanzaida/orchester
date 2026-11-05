@@ -19,6 +19,8 @@ pub struct Asked {
 
 pub struct Stand {
   pub client: CloudClient,
+  /// The stand-in's address, as the release tool's `--api` takes it.
+  pub address: String,
   asked: Arc<Mutex<Vec<Asked>>>,
 }
 
@@ -26,7 +28,7 @@ impl Stand {
   /// Answers with `answers`, each a status line such as `200 OK` and a JSON body.
   pub fn start(answers: Vec<(&'static str, serde_json::Value)>) -> Self {
     let listener = TcpListener::bind("127.0.0.1:0").expect("listen");
-    let api = format!("http://{}", listener.local_addr().expect("address"));
+    let address = format!("http://{}", listener.local_addr().expect("address"));
     let asked = Arc::new(Mutex::new(Vec::new()));
     let kept = asked.clone();
     thread::spawn(move || {
@@ -36,9 +38,10 @@ impl Stand {
         write(stream, status, &serde_json::to_vec(&body).expect("JSON"));
       }
     });
-    let api = ServerAddress::parse(&api).expect("API address");
+    let api = ServerAddress::parse(&address).expect("API address");
     Self {
       client: CloudClient::new(CloudAddress::new(api.clone(), Some(api))).expect("client"),
+      address,
       asked,
     }
   }

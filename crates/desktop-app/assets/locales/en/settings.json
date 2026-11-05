@@ -1,5 +1,91 @@
 {
   "settings": {
+    "project": {
+      "runs": {
+        "storage": {
+          "title": "Storage",
+          "folderOpenFailed": "The system could not open this folder.",
+          "cancel": "Cancel",
+          "lead": "What Orchester keeps for this project on the disk, largest first. Removing a worktree keeps its branch, pull request and artifacts.",
+          "group": "Workspaces and storage",
+          "entryLow": "Low disk space · {{free}} free on {{disk}} · {{count}} runs paused",
+          "entryLowOne": "Low disk space · {{free}} free on {{disk}} · {{count}} run paused",
+          "entryLowWaiting": "Low disk space · {{free}} free on {{disk}} · new steps wait",
+          "entryCalm": "Orchester keeps {{size}} · {{free}} free on {{disk}}",
+          "disk": "Disk",
+          "diskNamed": "Disk {{disk}}",
+          "readingDisk": "Reading the disk…",
+          "reading": "Reading what Orchester keeps…",
+          "diskUnavailable": "The disk could not be read. The guard cannot check free space.",
+          "diskSummary": "{{free}} free of {{total}} · keeps {{keep}} GB free",
+          "diskLow": "{{free}} free of {{total}} · below the {{keep}} GB to keep free · {{count}} runs paused",
+          "diskLowOne": "{{free}} free of {{total}} · below the {{keep}} GB to keep free · {{count}} run paused",
+          "diskLowWaiting": "{{free}} free of {{total}} · below the {{keep}} GB to keep free · new steps wait",
+          "gigabytes": "{{size}} GB",
+          "gb": "GB",
+          "unknown": "—",
+          "measuringValue": "…",
+          "orchester": "Orchester",
+          "orchesterUnknown": "Orchester · size not known",
+          "kept": "What Orchester keeps",
+          "keep_free": {
+            "title": "Keep free on the repository disk",
+            "named": "Keep free on {{disk}}",
+            "hint": "Below it no new step starts; working steps pause with a checkpoint and go on when space is back",
+            "invalid": "Enter a whole number from 1 to 1048576 GB.",
+            "mark": "Keep free"
+          },
+          "build_output_after": {
+            "title": "Build output of waiting runs is cleared after",
+            "hint": "A run that waits for you keeps its code; clearing build output lets its next step build again",
+            "unavailableValue": "Not available",
+            "unavailable": "Automatic build-output clearing is not implemented in the workspace storage layer yet. No clearing interval is active."
+          },
+          "clean_up": {
+            "title": "Clean up",
+            "measuring": "Available once sizes are read",
+            "nothing": "Nothing to clean: no ended run keeps a worktree",
+            "hint": "{{count}} ended runs keep {{size}}; their branches, pull requests and artifacts stay",
+            "hintOne": "{{count}} ended run keeps {{size}}; its branch, pull request and artifacts stay",
+            "confirm": {
+              "title": "Clean up {{count}} ended runs?",
+              "titleOne": "Clean up {{count}} ended run?",
+              "run": "{{title}} · run {{number}}",
+              "lead": "Their worktrees go, with everything in them",
+              "action": "Clean up · {{size}}",
+              "frees": "Frees about {{size}}. The disk would then have about {{after}} free; the guard keeps {{keep}} GB free. Sizes may change while runs work.",
+              "stays": "Stays: their branches, pull requests and artifacts. A run can be continued from its branch.",
+              "untouched": "Waiting, paused and working runs and the warm workspaces are not touched."
+            }
+          },
+          "columns": {
+            "item": "Worktree or workspace",
+            "size": "Size",
+            "build": "Build output",
+            "last": "Last used"
+          },
+          "count": "{{count}} · {{size}} · largest first",
+          "measuring": "Measuring sizes · {{count}} of {{total}}",
+          "empty": {
+            "title": "Orchester keeps nothing on this disk yet",
+            "hint": "Each run gets its own worktree when it starts, and warm workspaces appear after the first runs. They show here, largest first, with their sizes."
+          },
+          "newTask": "New task",
+          "inUse": "In use",
+          "clearBuild": "Clear build output",
+          "remove": "Remove",
+          "openFolder": "Open folder",
+          "buildUnavailable": "Build-output sizes and clearing are not available in the workspace storage layer yet.",
+          "workspaceRemoveUnavailable": "Removing idle warm workspaces is not available in the workspace storage layer yet.",
+          "runRemoveUnavailable": "Storage removes only ended runs. An interrupted run can still be continued.",
+          "processUnavailable": "The file system reports why removal failed; identifying the process holding a file is not available yet.",
+          "workspace": "Warm workspace {{number}}",
+          "worktree": "Run worktree",
+          "task": "{{key}} · {{title}}",
+          "path": "run {{number}} · {{path}}"
+        }
+      }
+    },
     "notifications": {
       "when": "Notify me when",
       "how": "How",
@@ -48,7 +134,6 @@
     "automation": {
       "window": "The window",
       "approvals": "Approvals and permissions",
-      "orchestratorMay": "The Orchestrator may",
       "onlyYou": "Only you, here in the window",
       "lookAtWindow": {
         "title": "Look at the window",
@@ -89,60 +174,24 @@
         "notSaved": "Not saved: {{reason}}",
         "blocked": "A change brought by automation was not taken: only you change this setting, here in the window."
       },
-      "publishDrafts": {
-        "title": "Let the Orchestrator publish drafts",
-        "label": "Publish drafts",
-        "hint": "Pipelines, profiles, instructions, skills and tools it drafts",
-        "description": "Lets the Orchestrator's chat publish the pipelines, agent profiles, instructions, skills and tools it drafts, without your click. Off: it proposes each publish as a card you apply. A draft that widens what agents may do still needs Let automation change agent permissions. Only you can change this, here in the window.",
-        "on": "The chat publishes without asking in every project and keeps each publish as an action in its conversation. A draft that widens what agents may do is still proposed while Let automation change agent permissions is off.",
-        "unreadable": "This setting can't be read: {{reason}}",
-        "notSaved": "Not saved: {{reason}}",
-        "blocked": "A change brought by automation was not taken: only you change this setting, here in the window."
-      },
-      "answerAgents": {
-        "title": "Let the Orchestrator answer agents",
-        "label": "Answer agents",
-        "hint": "Read their questions and answer, or tell you with a recommendation",
-        "description": "Lets the Orchestrator's chat answer agents' questions and send messages to a run's agents without your click, and start a turn by itself when an agent asks or waits for a message. Off: it proposes each answer as a card you apply, and tells you when an agent waits. Approvals and plan decisions stay yours. Only you can change this, here in the window.",
-        "unreadable": "This setting can't be read: {{reason}}",
-        "notSaved": "Not saved: {{reason}}",
-        "blocked": "A change brought by automation was not taken: only you change this setting, here in the window."
-      },
-      "mergeRuns": {
-        "title": "Let the Orchestrator merge runs",
-        "label": "Merge runs",
-        "hint": "When you ask it in the chat",
-        "description": "Lets the Orchestrator's chat merge a run you asked it to merge, without your click: only a task's latest run that succeeded, and only when the main checkout needs no local integration. Off: it proposes each merge as a card you apply. Conflicts and approving a merged result stay yours, on the Local integration page. Only you can change this, here in the window.",
-        "unreadable": "This setting can't be read: {{reason}}",
-        "notSaved": "Not saved: {{reason}}",
-        "blocked": "A change brought by automation was not taken: only you change this setting, here in the window."
-      },
-      "mergeFinished": {
-        "title": "Let the Orchestrator merge finished runs on its own",
-        "label": "Merge finished runs on its own",
-        "hint": "Without asking, when every step passed",
-        "description": "When a task's run succeeds, the Orchestrator's chat merges it without your click: only the task's latest run whose every step passed (a step you accepted as it was counts, one automation accepted does not), never a task marked Blocked or blocked by unfinished tasks, while new starts are held, or for a task that says Don't merge automatically, and only when the main checkout needs no local integration. It tries each run once, one at a time in the order they finished; conflicts it proposes to send back to an agent, anything else it leaves to you. Needs Let the Orchestrator merge runs and Let the Orchestrator answer agents on too. Off: it tells you a run is ready and the merge stays yours. Only you can change this, here in the window.",
-        "unreadable": "This setting can't be read: {{reason}}",
-        "notSaved": "Not saved: {{reason}}",
-        "blocked": "A change brought by automation was not taken: only you change this setting, here in the window."
-      },
-      "continueInterrupted": {
-        "title": "Let the Orchestrator continue interrupted runs",
-        "label": "Continue interrupted runs",
-        "hint": "From their last checkpoint",
-        "description": "Lets the Orchestrator's chat continue a run that a crash, the runner going away or quitting the app interrupted, from its last checkpoint, without your Continue. With Let the Orchestrator answer agents also on, it continues such a run once when it is interrupted, but leaves one interrupted again within 10 minutes to you. Off: continuing stays yours, on the task's Summary. Runs stopped at a limit, runs you canceled and runs whose worktree is gone stay yours. Only you can change this, here in the window.",
-        "unreadable": "This setting can't be read: {{reason}}",
-        "notSaved": "Not saved: {{reason}}",
-        "blocked": "A change brought by automation was not taken: only you change this setting, here in the window."
-      },
-      "writeGit": {
-        "title": "Let the Orchestrator write with git",
-        "label": "Write with git",
-        "hint": "Commit, branch, pull and push when you ask it to",
-        "description": "Lets the Orchestrator's chat commit, create and switch branches, pull, push, merge, revert, tag and fetch in the project's repository when you ask it to. None of these loses work: a switch keeps your changes or is refused, a pull only fast-forwards unless you ask for a merge, a push never forces, and a conflict is undone. Reset, clean, deleting a branch or tag, a forced push, discarding changes and rebase stay cards you apply, whatever this says. Never in a run's worktree before the run ended. Off: the chat only reads git. Only you can change this, here in the window.",
-        "unreadable": "This setting can't be read: {{reason}}",
-        "notSaved": "Not saved: {{reason}}",
-        "blocked": "A change brought by automation was not taken: only you change this setting, here in the window."
+      "orchestrator": {
+        "title": "The Orchestrator",
+        "label": "What the Orchestrator may do",
+        "everyProject": "Each project sets its own",
+        "someOn": "Each project sets its own · {{project}}: {{switches}}",
+        "noneOn": "Each project sets its own · {{project}}: everything stays yours",
+        "listSeparator": ", ",
+        "does": {
+          "publishDrafts": "publishes drafts",
+          "answerAgents": "answers agents",
+          "mergeRuns": "merges runs",
+          "mergeFinished": "merges finished runs on its own",
+          "continueInterrupted": "continues interrupted runs",
+          "writeGit": "writes with git"
+        },
+        "open": "Project settings",
+        "unreadable": "What {{project}}'s Orchestrator may do can't be read: {{reason}}",
+        "foot": "Each project's Orchestrator has its own switches, in Project settings › Orchestrator."
       },
       "server": {
         "section": "Orchester MCP server",
@@ -389,8 +438,8 @@
         },
         "unreachable": {
           "label": "Couldn't reach Orchester Cloud",
-          "hint": "Last checked {{ago}} · Orchester tries again in 6 hours",
-          "neverHint": "It hasn't answered from here yet · Orchester tries again in 6 hours"
+          "hint": "Last checked {{ago}} · Orchester tries again in 20 minutes",
+          "neverHint": "It hasn't answered from here yet · Orchester tries again in 20 minutes"
         },
         "notThisCopy": {
           "label": "This copy doesn't update itself",
@@ -403,12 +452,15 @@
           "portable": "It wasn't installed by the installer (a portable zip).",
           "portableNewest": "It wasn't installed by the installer (a portable zip). Orchester {{version}} is out.",
           "programFolderUnknown": "Orchester can't tell which folder it runs from.",
-          "programFolderUnknownNewest": "Orchester can't tell which folder it runs from. Orchester {{version}} is out."
-        },
-        "macos": {
-          "label": "Updates aren't automatic on macOS yet",
-          "hint": "Download new releases and install them by hand",
-          "newestHint": "Orchester {{version}} is out; download and install it by hand"
+          "programFolderUnknownNewest": "Orchester can't tell which folder it runs from. Orchester {{version}} is out.",
+          "notInBundle": "It doesn't run from an Orchester.app bundle.",
+          "notInBundleNewest": "It doesn't run from an Orchester.app bundle. Orchester {{version}} is out.",
+          "translocated": "macOS runs it from a temporary copy. Move Orchester to Applications and open it from there to get updates.",
+          "translocatedNewest": "macOS runs it from a temporary copy. Move Orchester to Applications and open it from there to get {{version}}.",
+          "bundleNotWritable": "You can't change the folder Orchester.app is in, so it can't be replaced.",
+          "bundleNotWritableNewest": "You can't change the folder Orchester.app is in, so it can't be replaced. Orchester {{version}} is out.",
+          "noTeamId": "It isn't signed with a Developer ID, as Orchester's releases are (a build from source).",
+          "noTeamIdNewest": "It isn't signed with a Developer ID, as Orchester's releases are (a build from source). Orchester {{version}} is out."
         },
         "otherPlatform": {
           "label": "Orchester isn't released for this computer",
@@ -420,7 +472,7 @@
         },
         "automatic": {
           "title": "Update automatically",
-          "hint": "Checks at start and every 6 hours, downloads in the background, installs when no run is at work"
+          "hint": "Checks at start and every 20 minutes, downloads in the background, installs when no run is at work"
         },
         "lastChecked": {
           "title": "Last checked",

@@ -1,6 +1,10 @@
-use orchester_api::v2::{
-  AuthorityError, AuthorityErrorCode, AuthorityErrorShapeError, BundleRef, CommandRequest, CommandResult, DecisionId,
-  ErrorDetails, EventCursor, ExpectedRevision, ExpectedRevisions, LocalEffect, OperationRead, RevisionTarget, Subject,
+use orchester_api::{
+  releases::ReleaseVersion,
+  v2::{
+    AuthorityError, AuthorityErrorCode, AuthorityErrorShapeError, BundleRef, CommandRequest, CommandResult, DecisionId,
+    ErrorDetails, EventCursor, ExpectedRevision, ExpectedRevisions, LocalEffect, OperationRead, RevisionTarget,
+    Subject,
+  },
 };
 use orchester_core::{
   blob::ContentHash,
@@ -25,7 +29,7 @@ enum CommandValue {
 }
 
 fn cursor() -> EventCursor {
-  EventCursor::new("c1".to_owned()).expect("cursor")
+  EventCursor::new("1").expect("cursor")
 }
 
 fn roundtrip<T: Serialize + for<'de> Deserialize<'de> + PartialEq + std::fmt::Debug>(value: &T, wire: &Value) {
@@ -53,6 +57,10 @@ fn authority_operations_subject_and_local_effect_shapes() {
       json!({"kind":"pause","work_id":work_id}),
     ),
     (LocalEffect::Stop { work_id }, json!({"kind":"stop","work_id":work_id})),
+    (
+      LocalEffect::Deliver { work_id },
+      json!({"kind":"deliver","work_id":work_id}),
+    ),
     (LocalEffect::None {}, json!({"kind":"none"})),
   ] {
     roundtrip(&effect, &wire);
@@ -62,6 +70,8 @@ fn authority_operations_subject_and_local_effect_shapes() {
     json!({"kind":"pause","work_id":work_id,"bundle":null}),
     json!({"kind":"start","work_id":work_id,"bundle":{"sha256":sha256,"schema_version":2,"url":"x"}}),
     json!({"kind":"resume","work_id":work_id}),
+    json!({"kind":"deliver"}),
+    json!({"kind":"deliver","work_id":work_id,"branch":"module/x"}),
   ] {
     assert!(serde_json::from_value::<LocalEffect>(invalid).is_err());
   }
@@ -101,7 +111,7 @@ fn authority_operations_command_request_and_result_shapes() {
   let result = CommandResult::committed(operation_id, CommandValue::Acquired { effects: Vec::new() }, cursor());
   let wire = json!({
     "operation_id":operation_id, "state":"committed",
-    "result":{"kind":"claim.acquire","effects":[]}, "cursor":"c1"
+    "result":{"kind":"claim.acquire","effects":[]}, "cursor":"1"
   });
   roundtrip(&result, &wire);
   for (field, value) in [("state", json!("rejected")), ("receipt", json!(1))] {
@@ -122,7 +132,7 @@ fn authority_operations_operation_read_roundtrips() {
   let wire = json!({
     "operation_id":operation_id, "state":"committed",
     "response":{"operation_id":operation_id,"state":"committed","result":{"kind":"claim.acquire","effects":[]},
-      "cursor":"c1"}
+      "cursor":"1"}
   });
   roundtrip(&committed, &wire);
   assert_eq!(committed.operation_id(), operation_id);
@@ -164,6 +174,9 @@ fn authority_operations_error_codes_map_to_status() {
     (Code::DecisionRequired, "decision_required", 409),
     (Code::BundleMissing, "bundle_missing", 409),
     (Code::DeliveryNotAuthorized, "delivery_not_authorized", 403),
+    (Code::SessionMismatch, "session_mismatch", 409),
+    (Code::SequenceRegressed, "sequence_regressed", 409),
+    (Code::MembershipRevoked, "membership_revoked", 403),
     (Code::CursorExpired, "cursor_expired", 410),
     (Code::UnsupportedContract, "unsupported_contract", 426),
     (Code::RateLimited, "rate_limited", 429),
@@ -207,5 +220,55 @@ fn authority_operations_error_details_belong_to_their_code() {
     json!({"code":"teapot","details":{}}),
   ] {
     assert!(serde_json::from_value::<AuthorityError>(invalid).is_err());
+  }
+}
+
+#[test]
+fn authority_operations_unsupported_contract_carries_the_required_version() {
+  let required_version = ReleaseVersion::parse("0.4.0").expect("version");
+  let error = AuthorityError::new(
+    None,
+    AuthorityErrorCode::UnsupportedContract,
+    ErrorDetails::UnsupportedContract {
+      required_version: required_version.clone(),
+    },
+  )
+  .expect("error");
+  roundtrip(
+    &error,
+    &json!({"code":"unsupported_contract","details":{"required_version":"0.4.0"}}),
+  );
+  assert_eq!(error.code().status(), 426);
+  assert_eq!(error.details(), &ErrorDetails::UnsupportedContract { required_version });
+
+  assert_eq!(
+    AuthorityError::new(None, AuthorityErrorCode::UnsupportedContract, ErrorDetails::None),
+    Err(AuthorityErrorShapeError::DetailsMismatch(
+      AuthorityErrorCode::UnsupportedContract
+    ))
+  );
+  let version = ErrorDetails::UnsupportedContract {
+    required_version: ReleaseVersion::parse("0.4.0").expect("version"),
+  };
+  assert_eq!(
+    AuthorityError::new(None, AuthorityErrorCode::Unavailable, version),
+    Err(AuthorityErrorShapeError::DetailsMismatch(
+      AuthorityErrorCode::Unavailable
+    ))
+  );
+  for invalid in [
+    json!({"code":"unsupported_contract","details":{}}),
+    json!({"code":"unsupported_contract","details":{"required_version":"0.4"}}),
+    json!({"code":"unsupported_contract","details":{"required_version":"v0.4.0"}}),
+    json!({"code":"unsupported_contract","details":{"required_version":"0.4.0+build"}}),
+    json!({"code":"unsupported_contract","details":{"required_version":null}}),
+    json!({"code":"unsupported_contract","details":{"required_version":"0.4.0","decisions":["D1"]}}),
+    json!({"code":"decision_required","details":{"required_version":"0.4.0","decisions":["D1"]}}),
+    json!({"code":"invalid","details":{"required_version":"0.4.0"}}),
+  ] {
+    assert!(
+      serde_json::from_value::<AuthorityError>(invalid.clone()).is_err(),
+      "{invalid}"
+    );
   }
 }

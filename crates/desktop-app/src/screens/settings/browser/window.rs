@@ -1,7 +1,8 @@
 //! *Browser window* (`Browser window` `GoSUF` in `j3Lre`): *Open the Browser window when an agent starts browsing*,
 //! on until a person turns it off (the person's decision 2026-10-29; the frame draws it off). Its hint says the window
 //! takes focus (decision 15 in `docs/design/browser.md`). The window's auto-open (`browser::link::AutoOpen`) reads it.
-//! A change shows at once and is saved off the UI thread; one that was not saved says why under the row.
+//! A change shows at once and is saved off the UI thread; one that was not saved says why under the row, and the
+//! stored setting shows again.
 
 use lurq::{
   app::{
@@ -18,6 +19,7 @@ use orchester_workspace::{
 
 use super::super::save_state::{Outcome, SaveState};
 use crate::{
+  queries,
   services::Services,
   ui::{
     field::field_error,
@@ -53,7 +55,9 @@ impl Component for WindowSwitch {
     if let Some(saves) = SaveState::of(ctx) {
       saves.report(ID, Outcome::of(&state));
     }
-    // The person's choice once it saved or while it saves; the stored value until then, or after a save failed.
+    // The person's choice while it saves and until the stored value is it; the stored value until they choose, or once
+    // a save failed.
+    queries::settle(&self.chosen, Some(&stored), state.is_pending());
     let shown = match (&state.error, self.chosen.get()) {
       (None, Some(chosen)) => chosen,
       _ => stored,
@@ -88,7 +92,8 @@ impl Component for WindowSwitch {
   }
 }
 
-/// Saves the switch the person turned.
+/// Saves the switch the person turned; the workspace counts the change, which reads Settings › Browser again
+/// (`queries`).
 fn save_action(ctx: &mut Ctx) -> SaveAction {
   let workspace = Services::of(ctx).workspace;
   ctx.future_action(move |opens: bool| {

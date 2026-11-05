@@ -8,7 +8,9 @@ use std::{fmt, num::NonZeroU32};
 
 use orchester_core::{
   connection::{AgentProvider, ApiEndpoint, CheckResult, NativeModel},
-  id::{ChatId, ChatMessageId, ConnectionId, IdempotencyKey, ResourceId, RunId, StepExecutionId, TaskId},
+  id::{
+    ChatId, ChatMessageId, ConnectionId, IdempotencyKey, ResourceId, RunId, SideQuestionId, StepExecutionId, TaskId,
+  },
   integration::Leftovers,
   permission::AgentPermissions,
   question::GivenAnswer,
@@ -16,6 +18,7 @@ use orchester_core::{
   run::{
     Answerer, ApprovalAnswer, EventSequence, InterruptCause, MergeConflicts, PermissionsApply, PlanDecision,
     PlanVersion, ReviewNote, RunNumber, StuckDecision,
+    side_question::{SideInput, SideOutcome},
   },
   tokens::TokenBudget,
 };
@@ -253,6 +256,13 @@ pub enum Command {
   /// Stops the answer under way in conversation `chat`: its agent CLI ends, and what it did until then stays.
   /// Answered with [`Reply::ChatStopped`], whether an answer was under way or not.
   StopChat { chat: ChatId },
+  /// Compacts the session of conversation `chat` (*Compact*, protocol 40): the CLI summarizes it and goes on from the
+  /// summary, with the domain tools at `tools` given as for a turn. The compaction is kept as an event of the
+  /// conversation, running until it ends, which [`Event::ChatChanged`] tells. Answered with [`Reply::ChatCompacting`]
+  /// once it is under way; [`Rejection::ChatBusy`] while a turn of the conversation is, [`Rejection::NothingToCompact`]
+  /// when it has no session the Orchestrator can resume, [`Rejection::NoOrchestrator`] when nothing was chosen to run
+  /// it on.
+  CompactChat { chat: ChatId, tools: ChatTools },
   /// Gives the person's message `message`, which the desktop kept as sent now (*Send now*, protocol 32), to the answer
   /// under way in its conversation: its CLI takes it at its next tool call, and the message joins that turn. A turn
   /// that refuses it or ends before taking it, or no turn under way, leaves it for a turn of its own after the answer.
@@ -269,6 +279,17 @@ pub enum Command {
   /// person set them or they were estimated or asked from its brief and criteria as they are; what it spent is kept.
   /// Answered with [`Reply::TaskEstimated`] once it ended, [`Rejection::TaskNotFound`] for no such task.
   EstimateTask { task: TaskId },
+  /// Answers side question `question` about a run (ORC-337, protocol 41) with a separate agent on the Orchestrator's
+  /// connection and model, from `input` alone: it is given no tools, so it writes nothing and runs nothing, and nothing
+  /// reaches the run's agent. The runner masks the project's secret values in `input` and in the answer. Answered with
+  /// [`Reply::SideAnswered`] once it ended, answered or not; the desktop keeps the question and its answer.
+  AnswerSideQuestion {
+    question: SideQuestionId,
+    input: Box<SideInput>,
+  },
+  /// Stops the side agent answering `question`: its answer ends as stopped. Answered with [`Reply::SideStopped`],
+  /// whether one was answering or not.
+  StopSideQuestion { question: SideQuestionId },
   /// The person turned error reports on, with the app's environment and release, or off (`None`), while this runner
   /// runs (protocol 33): it applies at once. Off drops the reports still waiting to leave, and the runner sends none
   /// until they are turned on again; a runner started later is told when it starts
@@ -453,6 +474,10 @@ pub enum Reply {
   ChatStopped {
     chat: ChatId,
   },
+  /// The answer to [`Command::CompactChat`]: the compaction of `chat`'s session is under way.
+  ChatCompacting {
+    chat: ChatId,
+  },
   /// The answer to [`Command::SteerChat`]: the message was handed to the turn under way, or left for a turn of its
   /// own.
   ChatSteered {
@@ -462,6 +487,15 @@ pub enum Reply {
   TaskEstimated {
     task: TaskId,
     outcome: orchester_core::task::estimate::EstimateOutcome,
+  },
+  /// The answer to [`Command::AnswerSideQuestion`]: how the side agent's work on `question` ended.
+  SideAnswered {
+    question: SideQuestionId,
+    outcome: SideOutcome,
+  },
+  /// The answer to [`Command::StopSideQuestion`].
+  SideStopped {
+    question: SideQuestionId,
   },
   /// The answer to [`Command::SetErrorReports`]: the runner sends reports as it says from now on.
   ErrorReportsSet,

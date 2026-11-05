@@ -16,6 +16,7 @@ use lurq::{
   components::{Column, Router, Stack},
   core::Signal,
   node::{Element, dimension::Dimension},
+  query::QueryClient,
   router::RouterHandle,
 };
 use orchester_workspace::{
@@ -36,6 +37,7 @@ use crate::{
   notifications::{Chosen, NotificationPrefs, NotificationsHost},
   open_link::{self, LinkHost},
   project::{Landing, Projects, ProjectsHost},
+  queries::AppReads,
   routes,
   services::{
     Services,
@@ -154,6 +156,8 @@ struct SessionWindow {
   accounts: WindowAccounts,
   /// The Browser window, which the window opens and points.
   browser: BrowserLink,
+  /// The settings the tabs show, kept for the session (`queries`).
+  queries: QueryClient,
 }
 
 impl Component for SessionWindow {
@@ -195,6 +199,7 @@ impl Component for SessionWindow {
       notifications: NotificationPrefs::new(ctx.signal(Chosen::default())),
       accounts: WindowAccounts::new(ctx.signal(Accounts::default())),
       browser,
+      queries: QueryClient::new(),
     }
   }
 
@@ -214,10 +219,13 @@ impl Component for SessionWindow {
     ctx.provide(self.notifications.clone());
     ctx.provide(self.accounts.clone());
     ctx.provide(self.browser.clone());
+    ctx.provide(self.queries.clone());
     let sign_in = follow_sign_in(ctx, &services.cloud);
     self.account_tabs.follow(&sign_in, &self.navigation, &self.projects);
     let phase = lifecycle::phase(ctx, &services.close);
     let closing = phase.holds_window();
+    // The application's settings are read as the session starts, so Settings opens on them.
+    let settings = ctx.mount_keyed::<AppReads>("settings-reads", ());
     let projects = ctx.mount_keyed::<ProjectsHost>("projects", ());
     // The accounts the status bar and the notifications name are read once for both.
     let accounts = ctx.mount_keyed::<AccountsReader>("accounts", ());
@@ -245,6 +253,7 @@ impl Component for SessionWindow {
     let window = Column::new()
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
+      .child(settings)
       .child(projects)
       .child(accounts)
       .child(notifications)

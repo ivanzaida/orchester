@@ -101,6 +101,33 @@ fn join_team_browser_joined_only_a_person_connects() {
   assert!(joined(&window).is_empty());
 }
 
+/// ORC-635: the invites, the two-factor badge and the server joined in the browser are queries the session keeps, so
+/// coming back to the tab shows them in its first frame and nothing below them moves after it.
+#[test]
+fn join_team_browser_joined_a_visit_after_the_first_shows_the_clouds_reads_in_its_first_frame() {
+  let server = TeamServer::start();
+  let mut window = settings(&server);
+  let parts = [
+    connect(),
+    format!("orchester-invite-{INVITE}"),
+    "orchester-cloud-two-factor".to_owned(),
+  ];
+  for part in &parts {
+    shows(&mut window, part);
+  }
+  for visit in 0..3 {
+    window.navigation().go(Route::AllProjects);
+    window.until("the tab left", |window| {
+      window.tree.get_element_by_id("orchester-servers").is_none()
+    });
+    window.navigation().go(Route::Orchester(OrchesterView::default()));
+    window.pass();
+    for part in &parts {
+      assert!(has(&mut window, part), "visit {visit}: {part} in the first frame");
+    }
+  }
+}
+
 #[test]
 fn join_team_browser_accepted_invite_without_receipt_stays_acceptable() {
   let server = TeamServer::start();

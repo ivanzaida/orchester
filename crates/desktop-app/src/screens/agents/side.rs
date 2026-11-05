@@ -1,15 +1,23 @@
-//! The side of a profile's page (`Side` `y8gUZ` in 01c): what enforces its permissions, what else reaches its prompts,
-//! where it is used and the runs using it now. A new profile has only the first.
+//! The side of a profile's page (`Side` `y8gUZ` in 01c): what enforces its permissions and what the project sets
+//! (S14 a), what else reaches its prompts, where it is used and the runs using it now. A new profile has only the
+//! first two.
 use lurq::{app::ctx::Ctx, components::Column, node::Element};
 use orchester_core::name::Name;
 
-use super::{active, editor::Props, fields::Fields, policy_panel, prompts, uses};
+use super::{active, editor::Props, fields::Fields, policy_panel, project_sets, prompts, uses};
 use crate::theme::HubSpacing;
 
 pub fn render(ctx: &mut Ctx, props: &Props, fields: &Fields, blocked: Option<&'static str>) -> Element {
+  let sets = ctx.mount_keyed::<project_sets::ProjectSets>(
+    "agent-project-sets",
+    project_sets::Props {
+      project: props.project.clone(),
+    },
+  );
   let mut side = Column::new()
     .spacing(HubSpacing::SideSections.role())
-    .child(policy_panel::enforcement(ctx, fields, &props.listed));
+    .child(policy_panel::enforcement(ctx, fields, &props.listed))
+    .child(sets);
   if let Some(entry) = &props.entry {
     let role = Name::new(&fields.role.get()).unwrap_or_else(|_| entry.profile.role().clone());
     side = side

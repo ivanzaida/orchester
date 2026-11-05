@@ -1,20 +1,22 @@
 //! What the turns' rows need from the screen ([`super::timeline::TurnEnv`]): the conversation's scope and what the
-//! person can do about its newest turn and the messages that wait for it.
+//! person can do about its newest turn and the messages that wait for it, and about its earlier messages.
 
 use std::sync::Arc;
 
+use lurq::app::ctx::Ctx;
 use orchester_core::id::ChatId;
 use orchester_workspace::orchestrator::tools::ChatScope;
 
-use super::{View, send::ChangeQueued, timeline::TurnEnv};
+use super::{View, draft::Conversation, rewind::toolbar::RewindEnv, send::ChangeQueued, timeline::TurnEnv};
 use crate::{project::ShownProject, ui::chat::names::ProjectNames};
 
 /// The rows' environment for conversation `chat` of `project`, on `connection` (its name) when the Orchestrator has
-/// one.
+/// one, `answering` while a turn of it thinks.
 pub(super) fn env(
+  ctx: &Ctx,
   view: &View,
   project: &ShownProject,
-  (chat, connection): (Option<ChatId>, Option<Arc<str>>),
+  (chat, connection, answering): (Option<ChatId>, Option<Arc<str>>, bool),
   names: &ProjectNames,
 ) -> TurnEnv {
   let open = project.open.clone();
@@ -33,6 +35,15 @@ pub(super) fn env(
   });
   let (queued, root) = (view.queued.clone(), open.repo_root.clone());
   let picker = view.runs_on.clone();
+  // An edit goes as the composer would send a message to the conversation now.
+  let on = view.plan_only.on_now(Some(Conversation::from(chat)));
+  let sending = view.send.state().get().is_pending();
+  let rewind = RewindEnv::new(
+    ctx,
+    (&view.rewind, &project.open),
+    (view.plan_only.mode(on), on),
+    sending,
+  );
   TurnEnv {
     project: open.project.id(),
     name: Arc::from(open.project.name().as_str()),
@@ -58,5 +69,11 @@ pub(super) fn env(
     }),
     links: view.links.clone(),
     names: names.clone(),
+    plans: view.plans.clone(),
+    open: project.open.clone(),
+    change_plan: view.change_plan(),
+    changing: view.plan_only.changing.get().map(|changing| changing.seq),
+    answering,
+    rewind,
   }
 }

@@ -86,7 +86,14 @@ pub fn primary(
   if task.detail.not_shared() {
     return Some(share(ctx));
   }
-  let Some(card) = Card::waiting(task) else {
+  let card = Card::waiting(task);
+  // The pull request's CI calls for its own action once the run ended with one, in place of a merge (ORC-335).
+  if matches!(card, None | Some(Card::Decision(Waiting::Ready)))
+    && let Some(control) = crate::screens::task::ci::header::primary(ctx, task)
+  {
+    return Some(control);
+  }
+  let Some(card) = card else {
     return moves;
   };
   // On its own tab the card is in sight, and holds the action.

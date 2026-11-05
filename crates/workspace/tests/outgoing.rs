@@ -59,7 +59,7 @@ fn outgoing_stores_as_the_state_offers_once_per_key() {
     Err(OutgoingError::NoSecondWay)
   ));
   assert!(matches!(
-    plan_changes(&prepared, "Change it.", (Answerer::Person, None)),
+    plan_changes(&root, &prepared, "Change it.", (Answerer::Person, None)),
     Err(OutgoingError::NoPlan)
   ));
 }
@@ -119,7 +119,7 @@ fn outgoing_changes_written_for_one_plan_do_not_land_on_the_next() {
     Err(OutgoingError::Changed)
   ));
   assert!(matches!(
-    plan_changes(&now, "Also log it.", (Answerer::Person, Some(v1))),
+    plan_changes(&root, &now, "Also log it.", (Answerer::Person, Some(v1))),
     Err(OutgoingError::Changed)
   ));
   // A question or plan the person left is the one they saw: a new plan offers its own mode again.
@@ -187,7 +187,7 @@ fn outgoing_before_a_run_a_file_its_agent_cannot_read_is_refused_with_why() {
     &root,
     &prepared,
     (IdempotencyKey::generate(), Way::Primary),
-    ("Read the spec.", &[pdf]),
+    ("Read the spec.", &[pdf], None),
     Answerer::Person,
   );
   let Err(OutgoingError::Send(SendError::Attachments(why))) = refused else {
@@ -207,7 +207,7 @@ fn outgoing_before_a_run_a_file_its_agent_cannot_read_is_refused_with_why() {
     &root,
     &prepared,
     (IdempotencyKey::generate(), Way::Primary),
-    ("Read the notes.", &[notes]),
+    ("Read the notes.", &[notes], None),
     Answerer::Person,
   )
   .expect("text goes to Codex");

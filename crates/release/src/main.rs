@@ -1,8 +1,11 @@
 //! `orchester-release`: CI's release tool (`docs/stable-build.md`, "Releases from CI").
 //!
-//! - `orchester-release publish --api <url> --version <version> --platform <windows|macos> --arch <x86_64|aarch64>
-//!   --notes-file <file> <release file>...` signs each file with the key in `ORCHESTER_RELEASE_SIGNING_KEY` and uploads
-//!   them with the release token in `ORCHESTER_CLOUD_RELEASE_TOKEN`; it fails unless the cloud accepts every file.
+//! - `orchester-release publish --api <url> --version <version> --notes-file <file> --platform <windows|macos> --arch
+//!   <x86_64|aarch64> <release file>... [--platform <windows|macos> --arch <x86_64|aarch64> <release file>...]` signs
+//!   each file, as a file of the platform and architecture named last before it, with the key in
+//!   `ORCHESTER_RELEASE_SIGNING_KEY` and uploads them with the release token in `ORCHESTER_CLOUD_RELEASE_TOKEN`. They
+//!   are one release: it finalizes once, after the last file, because the cloud publishes at that moment. It fails
+//!   unless the cloud accepts every file.
 //! - `orchester-release key-id` names the public key and key id of the key in `ORCHESTER_RELEASE_SIGNING_KEY`.
 //! - `orchester-release generate-key` makes a new key and shows its seed once, for the secret store; run it on your own
 //!   computer, never in CI.
@@ -47,10 +50,15 @@ fn main() -> ExitCode {
 struct PublishArguments {
   api: String,
   version: ReleaseVersion,
+  notes: PathBuf,
+  files: Vec<PublishedFile>,
+}
+
+/// A release file with the platform and architecture it is signed for.
+struct PublishedFile {
+  path: PathBuf,
   platform: ReleasePlatform,
   arch: ReleaseArch,
-  notes: PathBuf,
-  files: Vec<PathBuf>,
 }
 
 impl PublishArguments {
@@ -68,11 +76,19 @@ impl PublishArguments {
       match argument.as_str() {
         "--api" => api = Some(value()?),
         "--version" => version = Some(ReleaseVersion::parse(&value()?).map_err(|error| error.to_string())?),
-        "--platform" => platform = Some(ReleasePlatform::parse(&value()?).ok_or("--platform is windows or macos")?),
+        // A new platform asks for its architecture again: a file never takes the one named for another platform.
+        "--platform" => {
+          platform = Some(ReleasePlatform::parse(&value()?).ok_or("--platform is windows or macos")?);
+          arch = None;
+        }
         "--arch" => arch = Some(ReleaseArch::parse(&value()?).ok_or("--arch is x86_64 or aarch64")?),
         "--notes-file" => notes = Some(PathBuf::from(value()?)),
         flag if flag.starts_with("--") => return Err(format!("unknown option {flag}")),
-        file => files.push(PathBuf::from(file)),
+        file => files.push(PublishedFile {
+          path: PathBuf::from(file),
+          platform: platform.ok_or_else(|| format!("name --platform before the file {file}"))?,
+          arch: arch.ok_or_else(|| format!("name --arch after --platform, before the file {file}"))?,
+        }),
       }
     }
     if files.is_empty() {
@@ -81,8 +97,6 @@ impl PublishArguments {
     Ok(Self {
       api: api.ok_or("publish needs --api")?,
       version: version.ok_or("publish needs --version")?,
-      platform: platform.ok_or("publish needs --platform")?,
-      arch: arch.ok_or("publish needs --arch")?,
       notes: notes.ok_or("publish needs --notes-file")?,
       files,
     })
@@ -131,7 +145,7 @@ fn publish(arguments: PublishArguments) -> Result<(), String> {
   let files = arguments
     .files
     .iter()
-    .map(|path| ReleaseFile::read(path, &arguments.version, arguments.platform, arguments.arch, &key))
+    .map(|file| ReleaseFile::read(&file.path, &arguments.version, file.platform, file.arch, &key))
     .collect::<Result<Vec<_>, _>>()
     .map_err(|error| error.to_string())?;
   // The deployed cloud refuses `ci_run` until it reads this contract (ORC-575); CI names its run after that.

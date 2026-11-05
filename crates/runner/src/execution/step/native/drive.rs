@@ -7,7 +7,10 @@ use std::{collections::VecDeque, future::Future, sync::Arc};
 
 use orchester_agent::{AnthropicClient, FileTools};
 use orchester_core::{
-  connection::stream::{AgentEvent, RunnerProblem},
+  connection::{
+    context_use::ContextUse,
+    stream::{AgentEvent, RunnerProblem},
+  },
   id::{ConversationId, InvocationId},
   native::{
     item::{Item, ToolCallId},
@@ -15,6 +18,7 @@ use orchester_core::{
     session::{ApprovalAsk, LoopAction, LoopEnd, LoopInput, NativeLoop, PlannedTool, ToolOutcome, ToolWork},
     store::NativeConversationStore,
   },
+  time::Timestamp,
 };
 use orchester_store::ProjectDb;
 use tokio::{sync::mpsc, task::JoinSet};
@@ -48,6 +52,7 @@ pub(super) async fn drive(
           files: Arc::clone(&files),
           updates: updates.clone(),
           pending: VecDeque::new(),
+          context: None,
         },
       };
       let work = Work {
@@ -81,6 +86,8 @@ struct Out {
   updates: mpsc::UnboundedSender<NativeUpdate>,
   /// What the loop asked for that waits on something: a model request, tool calls, a decision, its end.
   pending: VecDeque<LoopAction>,
+  /// How full the conversation's context is, as last stored for the invocation.
+  context: Option<ContextUse>,
 }
 
 /// What does the loop's work.
@@ -245,7 +252,29 @@ impl Steer {
 
   fn feed(&mut self, input: LoopInput) -> Result<(), String> {
     let actions = self.native.handle(input).map_err(|error| error.to_string())?;
+    self.keep_context();
     self.out.apply(actions)
+  }
+
+  /// Stores how full the conversation's context is, when the loop's reading changed since it was stored. A reading
+  /// that cannot be stored is only missing from what screens show: the agent works on.
+  fn keep_context(&mut self) {
+    let Some(reading) = self
+      .native
+      .context_use()
+      .filter(|reading| self.out.context != Some(*reading))
+    else {
+      return;
+    };
+    if let Err(error) = self
+      .out
+      .db
+      .save_invocation_context(self.out.invocation, &reading, Timestamp::now())
+    {
+      tracing::warn!(%error, "cannot store how full the native agent's context is");
+      return;
+    }
+    self.out.context = Some(reading);
   }
 }
 

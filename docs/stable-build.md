@@ -99,13 +99,43 @@ Options:
 options). A development build runs without a bundle: `cargo build -p orchester-runner && cargo
 run -p orchester-app` (what `tools/run.ps1` does on Windows).
 
-**Signing.** The bundle is signed ad hoc (`codesign -s -`): no Apple Developer identity, and it
-is **not notarized**. A build made on the Mac it runs on has no quarantine flag, so Gatekeeper
-lets it start. A copy downloaded or sent from another Mac is quarantined and refused; build it on
-that Mac instead (or remove the flag with `xattr -dr com.apple.quarantine Orchester.app` if you
-trust the copy). Every build has a new ad hoc signature, so after an update macOS may ask once
-more before Orchester reads the project secrets it keeps in the login keychain; choose *Always
-Allow*.
+**Signing.** What the release workflow ships is signed with a Developer ID and notarized; what you
+build yourself is signed ad hoc unless you name an identity.
+
+- **Ad hoc**, the default of `tools/package-macos.sh` and so of `tools/install-macos.sh`, which needs
+  no certificate (`codesign -s -`). It is not notarized. A build made on the Mac it runs on has no
+  quarantine flag, so Gatekeeper lets it start. A copy downloaded or sent from another Mac is
+  quarantined and refused; build it on that Mac instead (or remove the flag with `xattr -dr
+  com.apple.quarantine Orchester.app` if you trust the copy). Every build has a new ad hoc
+  signature, so after an update macOS may ask once more before Orchester reads the project secrets
+  it keeps in the login keychain; choose *Always Allow*.
+- **Developer ID**, with `--identity <name>` or the environment's `ORCHESTER_MACOS_IDENTITY`, naming
+  an identity as `security find-identity -v -p codesigning` shows it: the runner, then the bundle,
+  with the hardened runtime and a secure timestamp. The login keychain goes by the signature's
+  identifier and team, which stay the same from build to build, so an update does not ask again; the
+  first start after an ad hoc signed copy still asks once.
+- **Notarized**, with the App Store Connect API key as well: `--notary-key <.p8 file>`,
+  `--notary-key-id` and `--notary-issuer`, or the environment's `ORCHESTER_NOTARY_KEY`,
+  `ORCHESTER_NOTARY_KEY_ID` and `ORCHESTER_NOTARY_ISSUER`. The script submits the bundle with
+  `xcrun notarytool submit --wait`, staples the ticket and checks that `spctl` answers
+  `source=Notarized Developer ID`. A rejection stops it with `notarytool log` of the submission.
+- `--archives` also packs the release's two files beside the bundle (*Releases from CI*), Apple
+  silicon only, each from the stapled bundle: the disk image is signed, notarized and stapled as a
+  file of its own, so a notarized `--archives` run makes two submissions.
+
+**The hardened runtime needs no entitlements**, so the script adds none. Checked on a notarized
+bundle, on macOS 26 (2026-11-02): it read the login shell's `PATH` and opened a project with its
+runner over the Unix socket, whose peer check reads the socket's credentials and no signature; the
+runner made the run's git worktree and started an agent CLI (Orchester's stand-in), which are
+programs of their own. A small hardened app with no Apple Events entitlement moved a file to the
+Trash the way the app does, with `osascript` telling Finder. The login keychain is the file-based
+one, which takes no entitlement. The app loads no code at runtime (no plugins, no JIT), and uses no
+camera, microphone or other protected device, which are what the entitlements would be for. Add one
+only with a check that shows it is needed.
+
+macOS treats a Developer ID build as an app of its own for privacy permissions, so the first start
+asks again for what an ad hoc build was allowed, such as a project on an external volume; until that
+question is answered, the app waits at the first file it touches there.
 
 **Programs from Finder.** An app started from Finder gets a minimal `PATH`
 (`/usr/bin:/bin:/usr/sbin:/sbin`). Orchester therefore asks your login shell for its `PATH`
@@ -129,12 +159,24 @@ login shell is not asked then.
 
 ## Releases from CI
 
-GitHub Actions builds the Windows app, signs its two files with the release key and uploads them
-to Orchester Cloud, which publishes the release on Beta; then it tags the commit `app-v<version>`
-(`.github/workflows/app-release.yml`). The files live in the cloud (*Orchester Cloud upload*
-below), not on GitHub: since ORC-412 (2026-10-31) the workflow makes no GitHub Release, not even
-one with notes only, since the notes are the cloud release's and the app shows them with its
-update offer. The GitHub Releases of earlier versions stay as they are.
+GitHub Actions builds the app for Windows and for macOS (Apple silicon, signed with the Developer ID
+and notarized), signs the four files with the release key and uploads them to Orchester Cloud as
+one release, which the cloud publishes on Beta; then it tags the commit `app-v<version>`
+(`.github/workflows/app-release.yml`). The app updates from the cloud only (*Orchester Cloud
+upload* below).
+
+Once the cloud has accepted the release, the workflow's `tag` job also publishes the GitHub Release
+`app-v<version>` in `ivanzaida/orchester` (again since ORC-653, 2026-11-03, after ORC-412 had
+dropped it on 2026-10-31), titled `Orchester <version>`: the four files, the checksums as
+`SHA256SUMS-windows.txt` and `SHA256SUMS-macos.txt` (each job's `SHA256SUMS.txt`), and as its body
+the notes the cloud job wrote and uploaded, passed on as the run's artifact
+`orchester-<version>-notes`. A version with a suffix (`0.5.0-rc.1`) is a GitHub pre-release. It
+reuses the artifacts the Windows, macOS and cloud jobs uploaded, with `gh release` and the
+workflow's own token (`GH_TOKEN: github.token`); no secret reaches a command line or the log. A
+run again for a version whose GitHub Release exists makes no second one: it uploads the files again
+with `--clobber`, which replaces each file of the same name. When the cloud rejects the release,
+neither the tag nor the GitHub Release is made. The GitHub Releases of earlier versions stay as they
+are.
 
 **To release**, raise `version` in `[package]` of `crates/desktop-app/Cargo.toml` (the app's own
 version, e.g. `0.2.0` to `0.2.1`; a version with a suffix such as `0.3.0-rc.1` is a pre-release)
@@ -147,14 +189,17 @@ its releases (`server-v*` tags) are in the private platform repository `ivanzaid
 orchester-runner` as the installed app (`ORCHESTER_APP_INSTALLED_BUILD=1`, as `tools/install.ps1`
 builds it: the MCP server on its fixed address, the token in Credential Manager), with the C
 runtime linked in so the programs start without the Visual C++ Redistributable, and, in a build of
-its own, the release tool `orchester-release` (`crates/release`). The workspace's
-release profile keeps line tables (`debug = "line-tables-only"`), which on Windows land in a PDB
-beside each program (`orchester.pdb`, `orchester_runner.pdb`; on macOS in a `.dSYM`, by
-`split-debuginfo = "packed"`): GlitchTip resolves an error report's frame addresses with them
-(`docs/error-reports.md`). A release uploads both PDBs with their programs to GlitchTip before the
-files go to the cloud (*Debug files in GlitchTip* below). Neither the installer nor the zip has a
-PDB. The release has two files, which anyone downloads from the cloud without signing in, once it
-is published, at `https://api.orchester.cloud/v1/releases/<version>/files/<name>`:
+its own, the release tool `orchester-release` (`crates/release`). On a macOS runner (`macos-15`,
+Apple silicon, free for this public repository): the same build as the installed app
+(`ORCHESTER_APP_INSTALLED_BUILD=1`, as `tools/package-macos.sh` builds it; the token in the login
+keychain), for macOS 11 or later. The workspace's release profile keeps line tables
+(`debug = "line-tables-only"`), which on Windows land in a PDB beside each program (`orchester.pdb`,
+`orchester_runner.pdb`) and on macOS in a `.dSYM`, by `split-debuginfo = "packed"`: GlitchTip
+resolves an error report's frame addresses with them (`docs/error-reports.md`). A release uploads
+them to GlitchTip before the files go to the cloud (*Debug files in GlitchTip* below). No file of
+the release has a PDB or a dSYM. The release has four files, which anyone downloads from the cloud
+without signing in, once it is published, at
+`https://api.orchester.cloud/v1/releases/<version>/files/<name>`:
 
 - `Orchester-<version>-setup.exe`, the installer (Inno Setup, `tools/installer/orchester.iss`):
   for the current user, without administrator rights, into `%LOCALAPPDATA%\Programs\Orchester`
@@ -168,9 +213,30 @@ is published, at `https://api.orchester.cloud/v1/releases/<version>/files/<name>
   `orchester.exe`, `orchester-runner.exe` and a `README.txt`. `orchester.exe` is not released on
   its own: it starts the runner from beside itself and cannot open a project without it. It takes
   no `orchester://` links.
+- `Orchester-<version>-macos-aarch64.dmg`, the first install from the website: `Orchester.app` and
+  a link to `/Applications` to drag it onto. The disk image and the app in it are signed, notarized
+  and stapled.
+- `Orchester-<version>-macos-aarch64.zip`, the stapled `Orchester.app` packed with `ditto -c -k
+  --keepParent`: what the app downloads to update itself on macOS (ORC-416). Once it passes its
+  size, SHA-256 and release signature, *Restart to update* copies the databases aside, unpacks it
+  with `ditto -x -k` into `.Orchester.app.partial` beside the installed bundle, checks it with
+  `codesign --verify --deep --strict` and that its Team ID is the running copy's, and starts a
+  helper (`crates/workspace/src/app_updates/install/bundle/replace.sh`) that waits for the app to
+  exit, renames the old bundle to `.Orchester.app.old` and the new one into its place, opens it and
+  removes the old one. On a failure it puts the old bundle back, opens it, and the next start shows
+  why; the helper logs to `logs/update-<version>.log` in the data folder. A copy that cannot be
+  replaced in place says so in Settings › Updates: one not in an `.app` bundle, one macOS runs
+  translocated (move it to Applications), one in a folder the person cannot write, one without a
+  Developer ID Team ID (built from source and signed ad hoc, as `tools/install-macos.sh` does), and a
+  development or QA copy.
 
-Their SHA-256 checksums are in the run's log (*Pack the zip and the installer*) and in the cloud,
-which serves each file with `ETag: "<sha256>"`.
+macOS is released for Apple silicon only for now. The cloud refuses a second file under a name a
+release already has, whatever its platform and architecture ([cloud-api.md](cloud-api.md), "App
+releases"), so a later universal or Intel build needs a name per architecture.
+
+Their SHA-256 checksums are in the run's log (*Pack the zip and the installer*, *Write the
+checksums*), on the GitHub Release (`SHA256SUMS-windows.txt`, `SHA256SUMS-macos.txt`) and in the
+cloud, which serves each file with `ETag: "<sha256>"`.
 
 **Its Orchester Cloud** has its web pages at `https://orchester.cloud` and its API at
 `https://api.orchester.cloud/v1`, built in (`BUILD_ADDRESS` and `BUILD_API_ADDRESS` in
@@ -202,10 +268,39 @@ never close it themselves. The installer's folder is not the one `tools/install.
 it at an existing install only if that is the one you want to update (see *Installs from before
 the program's rename* above).
 
-**Not code-signed.** Neither the programs nor the installer carry a code signature, so SmartScreen
-warns (*More info*, then *Run anyway*). Code signing would be one step before packing, with a
-certificate in the repository's secrets. (The release key below signs the files for the app's
-updater and the cloud; Windows does not know it.)
+**Not code-signed on Windows.** Neither the programs nor the installer carry a code signature, so
+SmartScreen warns (*More info*, then *Run anyway*). Code signing would be one step before packing,
+with a certificate in the repository's secrets. (The release key below signs the files for the
+app's updater and the cloud; Windows does not know it.)
+
+**Signed and notarized on macOS.** The macOS job runs `tools/package-macos.sh` as *Signing* above
+describes, with a Developer ID, the hardened runtime and Apple's notarization, so a downloaded copy
+opens without a warning. Its order: *Check the release secrets*; *Build*, before any secret reaches
+the job's disk or environment, because the dependencies' build scripts run there; *Import the
+certificate into a temporary keychain*; *Sign, notarize and pack*, whose cargo has nothing left to
+do; the dSYMs; and, last and whatever happened before, *Delete the temporary keychain*. A
+notarization that Apple rejects fails the step with `notarytool log` of the submission, and nothing
+goes to the cloud.
+
+- **The secrets**, repository secrets beside the ones below, and one variable (*Settings › Secrets
+  and variables › Actions*). A release run without one of them stops before the build, with *No
+  Apple signing secrets*, naming what is missing:
+  - `MACOS_CERTIFICATE_P12`: the Developer ID Application certificate with its private key, a
+    `.p12` file in base64.
+  - `MACOS_CERTIFICATE_PASSWORD`: that `.p12`'s password.
+  - `APPLE_API_KEY_P8`: the text of the App Store Connect API key's `.p8` file, which notarizes.
+  - `APPLE_API_KEY_ID` and `APPLE_API_ISSUER_ID`: that key's id and its issuer.
+  - The variable `APPLE_TEAM_ID`: the team whose identity the job signs with, from those the
+    certificate holds.
+
+  They reach only the environment of the steps that need them, never the build's. The `.p12` and the
+  `.p8` are on the runner's disk only for the step that uses them, and no artifact holds them. No
+  command is echoed to the log, and GitHub masks the values. `security import` takes the `.p12`'s
+  password only as an argument; every other value stays in the environment or a file.
+- **When the certificate expires** (Developer ID certificates last 5 years): make a new one for the
+  same team and replace the two certificate secrets. The designated requirement names the team, not
+  the certificate, so the login keychain does not ask again. Copies signed before keep working: the
+  secure timestamp and the notarization's ticket vouch for them.
 
 **Debug files in GlitchTip.** After *Build*, the Windows job uploads `orchester.exe` with
 `orchester.pdb` and `orchester-runner.exe` with `orchester_runner.pdb` to the GlitchTip project
@@ -228,29 +323,38 @@ stored.
   release run without the secret stops before the build, with *No GlitchTip token*; replace the
   secret when the token is revoked.
 - **The dry run** uploads nothing and says so with the notice *No uploads*.
+- **macOS.** After signing and packing, the macOS job uploads `orchester.dSYM` and
+  `orchester-runner.dSYM` the same way, with the same token and checks, and with sentry-cli's
+  `sentry-cli-Darwin-arm64` download, whose SHA-256 is pinned beside the Windows one; raise them
+  together. Signing leaves a program's UUID as it is, so the dSYMs of the build match the signed
+  programs. Neither the disk image nor the zip holds a dSYM.
 - **To check a release's debug files**, open the release run's *Upload the debug files to
-  GlitchTip* step: it logs each PDB's debug ID (such as `77c4e9bf-…-1`) and the files sentry-cli
-  uploaded. GlitchTip lists a project's debug files with their debug IDs at
+  GlitchTip* steps: each logs its debug IDs (such as `77c4e9bf-…-1` for a PDB) and the files
+  sentry-cli uploaded. GlitchTip lists a project's debug files with their debug IDs at
   `GET https://errors.orchester.cloud/api/0/projects/orchester-desktop/desktop/files/dsyms/`
-  (`Authorization: Bearer <token>`); both IDs of the release are among them. The real test is a
+  (`Authorization: Bearer <token>`); all four IDs of the release are among them. The real test is a
   report: a panic in the installed release shows in its GlitchTip issue with function names, files
   and lines in its frames, not bare addresses.
 
-**Orchester Cloud upload.** The Windows job keeps both files and the release tool as the run's
-artifacts (7 days). The *Orchester Cloud* job, which alone gets the signing key and the release
-token (no checkout, no build), takes them, writes the notes the app shows with its update offer
-(*Write the release notes*: the version, the commit, *Your data stays*, *Not code-signed*; the
-staff can edit them in the cloud's release admin), and *Sign and upload to Orchester Cloud* runs
-`orchester-release publish` against `https://api.orchester.cloud/v1` ([cloud-api.md](cloud-api.md),
-"App releases"). For each of the two files it builds the signed message of the contract (version,
-`windows`, `x86_64`, name, size, SHA-256; "The signed message") and signs it with the release key.
-Then it creates the draft (`POST /releases`), declares each file with its size, SHA-256, key id
-and signature, sends the parts the cloud does not have yet (8 MiB each), and finalizes. The cloud
-checks every file and publishes the release on **Beta** only when it accepted both; a version with
-a pre-release suffix and one without alike go to Beta, and the staff promote a release without a
-suffix to Stable in the cloud's admin. The step fails unless the cloud accepted both (*Release not
-uploaded*), and then the *Tag* job does not run. Its log names the key id it signed with and each
-file's size and SHA-256.
+**Orchester Cloud upload.** The Windows and the macOS job each keep their two files as the run's
+artifact, and the Windows job the release tool too (7 days). The *Orchester Cloud* job, which alone
+gets the signing key and the release token (no checkout, no build), waits for both jobs and takes
+the artifacts. It writes the notes the app shows with its update offer (*Write the release notes*:
+the version, the commit, *Your data stays*, *On Windows: not code-signed*, *On macOS: signed and
+notarized*; the staff can edit them in the cloud's release admin), and *Sign and upload to Orchester
+Cloud* runs `orchester-release publish` against `https://api.orchester.cloud/v1`
+([cloud-api.md](cloud-api.md), "App releases"). For each of the four files it builds the signed
+message of the contract (version, platform, architecture, name, size, SHA-256; "The signed message")
+and signs it with the release key: `windows`, `x86_64` for the Windows files and `macos`, `aarch64`
+for the macOS ones, each file taking the `--platform` and `--arch` named last before it. Then it
+creates the draft (`POST /releases`), declares each file with its platform, architecture, size,
+SHA-256, key id and signature, sends the parts the cloud does not have yet (8 MiB each), and
+finalizes once, after the last file, because finalizing publishes. The cloud checks every file and
+publishes the release on **Beta** only when it accepted all four; a version with a pre-release
+suffix and one without alike go to Beta, and the staff promote a release without a suffix to Stable
+in the cloud's admin. The step fails unless the cloud accepted all four (*Release not uploaded*),
+and then the *Tag* job does not run. Its log names the key id it signed with and each file's size
+and SHA-256.
 
 - **The secrets**, both repository secrets (*Settings › Secrets and variables › Actions › New
   repository secret*); a release run without either stops before the build (*No release signing
@@ -304,16 +408,17 @@ file's size and SHA-256.
   *Orchester Cloud* job runs again, with the same files, so it takes up the draft the failed run
   left (creating it answers `409 conflict`, which it reads as "exists"), declares each file again
   and sends only the parts the cloud is missing. Do not *Re-run all jobs*: that builds new files.
+  A failed macOS or Windows job is re-run the same way: the job that passed keeps its artifact, and
+  the cloud job has not run yet.
   A draft not finalized within 7 days is deleted by the cloud. A failed *Tag* job alone (the cloud
   accepted the release) is re-run the same way; it leaves a tag it made already.
 
 **Dry run.** *Actions › App release › Run workflow*, on any branch, with *dry_run* ticked: it
-builds and packs both files and keeps them, with the checksums, as the run's artifact for 7 days,
-and releases nothing: no debug files, no cloud upload, no tag. Every run costs CI minutes.
-
-macOS is not built by CI yet; `tools/package-macos.sh` makes `Orchester.app` on a Mac and would be
-the base of a later job on a macOS runner (a bundle signed ad hoc is refused by Gatekeeper on other
-Macs, see *Signing* above).
+builds and packs the Windows and the macOS files and keeps them, with the checksums, as the run's
+two artifacts for 7 days, and releases nothing: no debug files, no cloud upload, no tag. With the
+Apple secrets set, its macOS job signs and notarizes as a release does, which is what it tests, and
+so makes two notarization submissions; without them it packs an ad hoc signed app and says so with
+the notice *Signed ad hoc*. Every run costs CI minutes.
 
 ## Embedded MCP server
 
@@ -365,9 +470,9 @@ fixed address instead (see *The new app's MCP server* below).
   rejection such as `run_not_running`, `shutting_down` or `runner_unavailable`), `list_pipelines`, `duplicate_pipeline` (copies a
   pipeline's latest published version under a new name, optionally with other published profiles on its
   agent steps, and publishes it as v1, as New pipeline, the editor and Publish do), `set_code_index`
-  (*Use code index* in Project settings, off until a person turns it on; `list_projects` shows each
+  (*Use code index* in Project settings › Context, off until a person turns it on; `list_projects` shows each
   project's setting) and
-  `update_project_limits` (Project settings › Limits: the token budgets, the default time limit,
+  `update_project_limits` (Project settings › Runs › Limits: the token budgets, the default time limit,
   *Agents working at once*, which the project's runner applies at once, and *QA apps at once*, which
   applies from the next `start_qa_app`; invalid limits are refused with `invalid_limits` and the tab's
   own words; `list_projects` shows each project's limits). A modal
@@ -452,7 +557,7 @@ which a release build grants only when its settings or `ORCHESTER_APP_MCP_WINDOW
 **Update states in a QA copy.** A QA copy never updates itself, so `update_state` always answers
 `not_this_copy` (reason `qa`). To see the other states on screen, debug builds (QA copies included) serve
 `set_update_state` (window control): it takes the very JSON `update_state` answers and shows that state in place of
-the real one, in Settings › Updates, the status bar's update item and the ready notification, with
+the real one, in Settings › General's Updates, the status bar's update item and the ready notification, with
 `updated: {version, notes}` for the status bar's *Updated to* (S6) and *What's new*. `{"real": true}` shows the real
 state again. A state set this way lives in memory only: nothing of it is written to `orchester.db`, and it is gone at
 the next start. It never checks, downloads or installs anything: *Restart to update* or *Install now* pressed in it
@@ -625,7 +730,7 @@ Automatic approvals require the separate approvals opt-in too. Secret replacemen
 draft remain person-only, irrespective of the permission opt-in. Consent is re-read before forwarded input and
 checked again when a confirmation runs; unknown, pending, revoked or failed consent cannot authorize it.
 Narrowing is always taken. The setting is off by
-default and only a person changes it, in the window, in Settings › What automation may do. No domain tool
+default and only a person changes it, in the window, in Settings › Automation. No domain tool
 changes it, and window input cannot either: while its row is on screen, lurq denies its input tools when a
 call runs (also one queued earlier, or one whose answer timed out), the server refuses every window-input
 tool of lurq's (clicks and keys by element or by coordinates, values, resizing) with `person_only`, whatever
@@ -727,11 +832,11 @@ tracks nothing in) is no write and goes to the reviewer (2026-10-18); `cargo fmt
 target directory elsewhere still ask. The person accepted (2026-10-18) that such a build runs the worktree's
 build scripts, macros, tests and repository Cargo settings under the reviewer's approval alone. *Approve for every run of this
 project* on a `start_qa_app` card keeps a rule of the project, by the QA script's git blob, which answers the
-tool in every run until the script changes or the rule is revoked in Project settings › Auto mode; only a
+tool in every run until the script changes or the rule is revoked in Project settings › Runs › Approved for every run; only a
 person makes it.
 A reviewer that fails, takes longer than 60 seconds or
 answers with something unreadable asks the person too. The reviewer is any agent connection of the
-project with a model of it and an effort, chosen in Project settings › General › Auto mode (the same model
+project with a model of it and an effort, chosen in Project settings › Runs › Approvals (the same model
 list as an agent profile's) or through the MCP server; until a person chooses, it is the first Claude Code
 connection with `claude-haiku-4-5-20251001`, else the first connection a reviewer runs on with its default
 model. Claude Code runs in print mode with no tools, no MCP servers and no settings, its instructions as

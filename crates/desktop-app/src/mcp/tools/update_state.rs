@@ -5,14 +5,15 @@ use orchester_workspace::app_updates::{
 };
 use serde_json::{Value, json};
 
-const DESCRIPTION: &str = "Where this copy's own update stands, as Settings › Updates shows it: `running` (this copy's \
+const DESCRIPTION: &str = "Where this copy's own update stands, as Settings › General's Updates shows it: `running` (this copy's \
   version), `updated` (the version and notes this start updated to, or null) and `state`: up_to_date (checked_at), \
   checking, downloading (version, received, total, percent), paused (the same: the person paused the download), ready \
   (version, notes, critical), waiting_for_runs (the same and runs), installing (the same and step: waiting_for_runs \
   with runs, stopping_runs, backing_up, handing_over), failed (version, reason: no_installer, wrong_size, \
   wrong_digest, unknown_key, bad_signature, not_saved), install_failed (version, reason, exit_code, log), \
   cloud_unreachable (last_checked), not_this_copy (reason: development, qa, script_install, portable, \
-  program_folder_unknown; newest with its download, or null) or not_on_this_platform (newest). Times are milliseconds \
+  program_folder_unknown, not_in_bundle, translocated, bundle_not_writable, no_team_id; newest with its download, or \
+  null) or not_on_this_platform (newest). Times are milliseconds \
   since the Unix epoch. Read only: an update installs only when the person presses Restart to update. In a debug \
   build, set_update_state shows a state set for testing in place of the real one, and this tool answers that one.";
 
@@ -145,5 +146,9 @@ pub(super) const fn reason_name(reason: CopyReason) -> &'static str {
     CopyReason::ScriptInstall => "script_install",
     CopyReason::Portable => "portable",
     CopyReason::ProgramFolderUnknown => "program_folder_unknown",
+    CopyReason::NotInBundle => "not_in_bundle",
+    CopyReason::Translocated => "translocated",
+    CopyReason::BundleNotWritable => "bundle_not_writable",
+    CopyReason::NoTeamId => "no_team_id",
   }
 }

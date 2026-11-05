@@ -368,9 +368,7 @@ pub fn start_messages(error: &RunRequestError) -> Vec<Message> {
       | Rejection::NoAgentSlot { .. }
       | Rejection::LowDisk { .. }
       | Rejection::ShuttingDown),
-    ) => {
-      vec![capacity_message(rejection)]
-    }
+    ) => vec![capacity_message(rejection)],
     RunRequestError::Rejected(
       Rejection::Failed { .. }
       | Rejection::RunNotInterrupted
@@ -399,6 +397,7 @@ pub fn start_messages(error: &RunRequestError) -> Vec<Message> {
       | Rejection::ChatMessageNotFound
       | Rejection::ChatBusy
       | Rejection::NoOrchestrator
+      | Rejection::NothingToCompact
       | Rejection::QuestionNotAwaited
       | Rejection::QuestionAnswered
       | Rejection::InvalidAnswer { .. }
@@ -529,6 +528,7 @@ pub fn control_message(error: &RunRequestError) -> Message {
       | Rejection::ChatMessageNotFound
       | Rejection::ChatBusy
       | Rejection::NoOrchestrator
+      | Rejection::NothingToCompact
       | Rejection::TaskNotFound
       | Rejection::TaskNotQueued
       | Rejection::TaskChangedMeanwhile

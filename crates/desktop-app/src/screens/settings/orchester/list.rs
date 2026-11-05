@@ -51,7 +51,7 @@ pub(super) fn group(
     ctx.t("settings.connectServer"),
   )
   .icon(Icon::Plus)
-  .small()
+  .in_heading()
   .opens(navigation.to(Route::Orchester(OrchesterView::connect())));
   let group = SettingGroup::new("orchester-servers", ctx.t("cloud.list.teamServers")).end(connect);
   let column = lurq::components::Column::new()

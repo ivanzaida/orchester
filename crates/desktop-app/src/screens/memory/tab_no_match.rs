@@ -104,7 +104,7 @@ fn title(ctx: &Ctx, tab: MemoryTab, filters: &Filters) -> Arc<str> {
         MemoryTab::Active => "memory.noMatch.tabSearch.active",
         MemoryTab::Deprecated => "memory.noMatch.tabSearch.deprecated",
         MemoryTab::Superseded => "memory.noMatch.tabSearch.superseded",
-        MemoryTab::Rejected | MemoryTab::Settings => "memory.noMatch.tabSearch.rejected",
+        MemoryTab::Rejected => "memory.noMatch.tabSearch.rejected",
       };
       ctx.t_args(key, [("query", query)])
     }
@@ -120,7 +120,7 @@ fn elsewhere(memory: &ProjectMemory, tab: MemoryTab, order: tabs::Order, filters
     .into_iter()
     .filter(|other| *other != tab)
     .filter_map(|other| {
-      let status = tabs::statuses(other)?;
+      let status = tabs::statuses(other);
       let in_other = Filters {
         status,
         ..filters.clone()

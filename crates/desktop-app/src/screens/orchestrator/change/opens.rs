@@ -1,4 +1,4 @@
-//! The places a change's card opens: the draft or what was published, *What automation may do* after the chat
+//! The places a change's card opens: the draft or what was published, *What the Orchestrator may do* after the chat
 //! published itself, the run's changes while a merge waits, the server in Connections, the task otherwise, and the
 //! queue for a refused release. A decision card shows them as ghosts; its event line, the first as its link.
 
@@ -16,7 +16,7 @@ use super::{
   words::{Phase, View},
 };
 use crate::{
-  routes::{Route, TaskTab},
+  routes::{ProjectPage, ProjectSettingsTab, Route, TaskTab},
   ui::icon::Icon,
 };
 
@@ -94,7 +94,7 @@ fn publish_opens(ctx: &Ctx, (project, view): (ProjectId, &View), publication: (P
         opens.push((
           Icon::Settings,
           ctx.t("orchestrator.change.publish.automation"),
-          Route::Settings,
+          Route::Project(project, ProjectPage::Settings(ProjectSettingsTab::Orchestrator)),
         ));
       }
       opens

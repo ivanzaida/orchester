@@ -2,14 +2,15 @@
 //! *General · Notifications · Accounts · Automation · Browser · Orchester Cloud* (`page`) and the open tab's column of
 //! groups under them (`frame`). *General* (`l838Ty`, `general`) holds the theme, the plan limits' warning threshold and
 //! this computer. *Notifications* (`fQTFi`, `notifications`) holds what notifies, how, quiet hours and the
-//! Orchestrator's daily report (`daily_report`). *Automation* (`aMkOw`) holds *Orchester MCP server* (`server`) and
+//! Orchestrator's daily report (`daily_report`). *Automation* (`V8aAj`) holds *Orchester MCP server* (`server`) and
 //! what automation may do (`automation`): what it may always do, and the person's own switches for what it may widen
-//! through the MCP server and whether the Orchestrator chat acts itself, which no tool can change. *Browser* (`j3Lre`,
-//! `NZECi` in `Browser · redesign`, `browser`) holds agents' browser, its profiles' folder and the Browser window's
-//! switch. On these four the header says whether every change was saved (`save_state`). *Accounts* (`t8i6m`,
-//! `accounts`) lists the person's agent CLI accounts by CLI, an account opening its page and *Add account* its own.
-//! *Orchester Cloud* (`vPV73`, `orchester`; its route keeps the id `orchester`) holds the cloud account, invites and
-//! the team servers in one column, a server opening its page and *Connect a server* its steps.
+//! through the MCP server, which no tool can change; what the Orchestrator chat does itself each project sets in its
+//! Project settings, which a row there points to (`orchestrator_row`). *Browser* (`j3Lre`, `NZECi` in `Browser ·
+//! redesign`, `browser`) holds agents' browser, its profiles' folder and the Browser window's switch. On these four the
+//! header says whether every change was saved (`save_state`). *Accounts* (`t8i6m`, `accounts`) lists the person's
+//! agent CLI accounts by CLI, an account opening its page and *Add account* its own. *Orchester Cloud* (`vPV73`,
+//! `orchester`; its route keeps the id `orchester`) holds the cloud account, invites and the team servers in one
+//! column, a server opening its page and *Connect a server* its steps.
 
 mod accounts;
 mod automation;
@@ -19,6 +20,7 @@ mod frame;
 mod general;
 mod notifications;
 pub mod orchester;
+mod orchestrator_row;
 mod page;
 mod save_state;
 mod serial;
@@ -35,34 +37,34 @@ use lurq::{
   core::Signal,
   node::Element,
 };
-use orchester_core::account::AgentAccount;
-use orchester_workspace::{
-  background,
-  messages::{self, Message},
-};
+use orchester_workspace::messages::Message;
 use parking_lot::Mutex;
 
+pub(crate) use self::automation::Consent;
 use self::save_state::SaveState;
 use crate::{
+  queries::{self, Again, Session, app},
   routes::{AccountsView, JoinTarget, OrchesterView, UpdatesShow},
-  services::Services,
   ui::{message::message_text, state::load_error},
 };
 
-/// The accounts as read, shared with the tab.
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct Listed(Arc<Vec<AgentAccount>>);
-
-impl DevtoolsInspectable for Listed {}
+/// What a route brings into view on Settings › General.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GeneralShow {
+  /// *Plan limits*, as Usage › Plan limits' menu opens it.
+  PlanLimits,
+  /// *Updates* (`wSMNG`).
+  Updates(UpdatesShow),
+}
 
 /// The open tab of Settings.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SettingsTab {
-  /// Settings › General (`l838Ty`), with its *Updates* in view when a route says so (`wSMNG`).
-  General(Option<UpdatesShow>),
+  /// Settings › General (`l838Ty`), with *Plan limits* or *Updates* in view when a route says so.
+  General(Option<GeneralShow>),
   /// Settings › Notifications (`fQTFi`).
   Notifications,
-  /// Settings › Automation (`aMkOw`).
+  /// Settings › Automation (`V8aAj`).
   Automation,
   /// Settings › Browser (`j3Lre`, `NZECi`).
   Browser,
@@ -131,8 +133,10 @@ pub fn invite(ctx: &mut Ctx, target: JoinTarget) -> Element {
 }
 
 struct SettingsScreen {
-  /// Counts the changes to the accounts, each of which reads them again.
+  /// Counts the asks to read the accounts again (*Try again*, the tab's own changes), each of which invalidates their
+  /// query; a change of the accounts from anywhere reads them again through `queries`.
   revision: Signal<u64>,
+  again: Again,
   /// What the open tab's saves did, for the header.
   saves: SaveState,
   /// The tab the saves are of: another tab starts them again.
@@ -145,6 +149,7 @@ impl Component for SettingsScreen {
   fn create(ctx: &mut Ctx) -> Self {
     Self {
       revision: ctx.signal(0),
+      again: Again::default(),
       saves: SaveState::new(ctx),
       saves_of: Mutex::new(None),
     }
@@ -154,22 +159,12 @@ impl Component for SettingsScreen {
     let Props { tab, rotation, invite } = ctx.props::<Props>().clone();
     self.follow_tab(tab);
     ctx.provide(self.saves.clone());
-    let services = Services::of(ctx);
-    let (workspace, hold) = (services.workspace, services.hold);
-    let loaded = ctx
-      .future(self.revision.get(), move |_| {
-        let (workspace, hold) = (workspace.clone(), hold.clone());
-        async move {
-          hold.released().await;
-          background::run(move || workspace.agent_accounts())
-            .await?
-            .map(|accounts| Listed(Arc::new(accounts)))
-            .map_err(|error| messages::store_error(&error))
-        }
-      })
-      .state()
-      .get();
-    let count = loaded.data.as_ref().map(|accounts| accounts.0.len());
+    ctx.provide(crate::ui::skeleton::FromFirstFrame);
+    let session = Session::of(ctx);
+    let query = ctx.query(app::agent_accounts(session));
+    self.again.follow(self.revision.get(), &query);
+    let loaded = queries::state(&query);
+    let count = loaded.data.as_ref().map(|accounts| accounts.len());
     let body = match tab {
       SettingsTab::General(show) => general::tab(ctx, show),
       SettingsTab::Notifications => notifications::tab(ctx),
@@ -188,7 +183,7 @@ impl Component for SettingsScreen {
           "settings-accounts",
           accounts::Props {
             view,
-            accounts: Arc::clone(&accounts.0),
+            accounts: Arc::clone(accounts),
             revision: self.revision.clone(),
           },
         ),

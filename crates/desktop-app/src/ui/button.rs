@@ -135,6 +135,8 @@ pub struct ActionButton {
   compact: bool,
   /// 10 at each side instead of 12 (`SHKod`).
   tight: bool,
+  /// On a group's heading line (`Hfjkt`).
+  in_heading: bool,
   /// 24 high instead of 28, as a Copy inside a command row (`PEnj5`).
   small: bool,
   /// 36 high with a 13/500 label.
@@ -172,6 +174,7 @@ impl ActionButton {
       fill: false,
       compact: false,
       tight: false,
+      in_heading: false,
       small: false,
       large: false,
       roomy: false,
@@ -293,6 +296,13 @@ impl ActionButton {
     self
   }
 
+  /// As high as a heading's line, with a 12 icon: an action on a group's heading line, so a heading with one starts and
+  /// ends where any other does (`Add provider` in `Head` `Hfjkt`).
+  pub fn in_heading(mut self) -> Self {
+    self.in_heading = true;
+    self
+  }
+
   /// 24 high, its icon and label as a button's: an action inside a command row (`Command row` `PEnj5`).
   pub fn small(mut self) -> Self {
     self.small = true;
@@ -374,7 +384,9 @@ impl ActionButton {
 impl ActionButton {
   /// Its height, and the sizes of its icon and label.
   fn metrics(&self) -> (ControlHeight, IconSize, TypographyStyle) {
-    if self.compact {
+    if self.in_heading {
+      (ControlHeight::Heading, IconSize::Sm, TypographyStyle::Button)
+    } else if self.compact {
       (
         ControlHeight::Helper,
         IconSize::Sm,

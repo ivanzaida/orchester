@@ -39,6 +39,10 @@ lurq = { workspace = true, optional = true }
 parking_lot.workspace = true
 # The tools of Orchester's own MCP server (`app_mcp`): their schemas and results.
 rmcp.workspace = true
+# Copies the databases aside before an update installs through SQLite (`VACUUM INTO`), never with the file copy that
+# drops the app's own SQLite locks on macOS (`app_updates::install::backup`, ORC-631); the store's SQLite, already built.
+# The tests also damage a run's row the way an edit outside Orchester would; the store has no API for that.
+rusqlite.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 # Digests: a draft's revision for automation (`drafts`) and the code viewer's reads (`files::Digest`).
@@ -67,6 +71,4 @@ orchester-api = { workspace = true, features = ["test-support"] }
 orchester-workspace = { workspace = true, features = ["test-support"] }
 # Signs the stand-in cloud's release files with a throwaway release key (`tests/app_updates`); already built.
 ring.workspace = true
-# Damages a run's row the way an edit outside Orchester would; the store has no API for that.
-rusqlite.workspace = true
 tempfile.workspace = true

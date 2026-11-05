@@ -36,7 +36,7 @@ use super::{
   send_menu::Ways,
   start::start,
   timeline::{TurnRow, list},
-  turns::{Arrival, Turn, turns},
+  turns::{Arrival, Turn, row_of, turns},
 };
 use crate::{
   navigation::Navigation,
@@ -50,9 +50,12 @@ use crate::{
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
+    mention::{self, MenuProps},
     message::message_text,
     notice::{Notice, NoticeTone},
+    slash::SkillReach,
     state::load_error,
+    todo_list::{PinnedPlan, PinnedProps},
   },
 };
 
@@ -64,7 +67,12 @@ pub(super) fn main(ctx: &mut Ctx, view: &View, (project, reads): (&ShownProject,
   let readiness = reads.setup.ready().map(|setup| setup.readiness());
   let sending = view.send.state().get();
   let thinking = matches!(&reads.shown, Shown::Chat(shown) if shown.thinking());
-  let state = sending_state(ctx, view, (project, reads.target), (readiness.as_ref(), thinking));
+  let state = if matches!(&reads.shown, Shown::Chat(shown) if shown.compacting()) {
+    // Nothing is sent while the session is compacted (`06b` `j7eSQO`).
+    Sending::Held(ctx.t("orchestrator.context.sendWaits"))
+  } else {
+    sending_state(ctx, view, (project, reads.target), (readiness.as_ref(), thinking))
+  };
   let problem = sending
     .error
     .as_ref()
@@ -102,7 +110,9 @@ pub(super) fn main(ctx: &mut Ctx, view: &View, (project, reads): (&ShownProject,
       (&foot, [problem, None, unread]),
     ),
     Shown::Chat(shown) => {
-      let queued = queued_problem(ctx, view);
+      let queued = queued_problem(ctx, view)
+        .or_else(|| super::compact::problem(ctx, view))
+        .or_else(|| super::rewind::problem(ctx, view));
       conversation(
         ctx,
         view,
@@ -158,8 +168,11 @@ impl Foot<'_> {
     (stop, starts): (Option<super::send_menu::Press>, bool),
   ) -> Column {
     let not_set_up = self.not_set_up();
+    let plan = (!not_set_up).then(|| super::plan_only::composer::parts(ctx, view, &project.open.repo_root));
     let placeholder = if not_set_up {
       ctx.t("orchestrator.composer.notSetUp")
+    } else if view.plan_only.on(view.of.get()) {
+      ctx.t("orchestrator.plan.placeholder")
     } else {
       placeholder
     };
@@ -174,6 +187,23 @@ impl Foot<'_> {
         open: view.runs_on.clone(),
       },
     );
+    let mentions = mention::menu(
+      ctx,
+      MenuProps {
+        id: "orchestrator-composer",
+        field: view.mention.clone(),
+        anchor: view.mention_anchor.clone(),
+        root: project.open.repo_root.clone(),
+        project: Arc::from(project.open.project.name().as_str()),
+        own: None,
+        run: None,
+        revision: project.feed.saves.get(),
+      },
+    );
+    let fresh = matches!(self.reads.shown, Shown::New);
+    let provider = self.reads.setup.ready().and_then(|setup| setup.provider());
+    let commands = super::commands::menu(ctx, view, project, (fresh, self.state.press(), provider));
+    let context = super::context::meter(ctx, view, project, (self.reads, self.readiness));
     composer(
       ctx,
       view,
@@ -183,8 +213,12 @@ impl Foot<'_> {
         focused: &view.focused,
         stop,
         runs_on,
+        context,
         set_up,
         starts,
+        menus: [mentions, commands],
+        plan,
+        reach: SkillReach::orchestrator(provider),
       },
     )
   }
@@ -252,9 +286,10 @@ fn queued_problem(ctx: &mut Ctx, view: &View) -> Option<Element> {
   )
 }
 
-/// What sending does now: nothing while the Orchestrator has nothing to run on, busy while a message or its files
-/// are on their way, and otherwise the draft goes to conversation `chat` (a new one when `None`) as a turn of its own,
-/// or, while the Orchestrator answers (`thinking`), after the answer, now or after stopping it.
+/// What sending does now: nothing while the Orchestrator has nothing to run on, busy while a message or its files are
+/// on their way, and otherwise the draft, with the skill its chip holds, goes to conversation `chat` (a new one when
+/// `None`) as a turn of its own, or, while the Orchestrator answers (`thinking`), after the answer, now or after
+/// stopping it.
 fn sending_state(
   ctx: &Ctx,
   view: &View,
@@ -314,15 +349,24 @@ fn conversation(
   let all = all_turns(view, shown, pending);
   let chat = shown.map(|shown| shown.chat.id());
   let answering = shown.is_some_and(ChatView::thinking);
-  // Another conversation opens at its own end.
+  // Another conversation opens at its own end, or at the match History's search opened it at.
   view
     .follow
     .shows(&chat.map_or_else(|| "new".to_owned(), |chat| chat.to_string()));
+  let found = (view.listing.opened_at.get())
+    .filter(|at| Some(at.chat) == chat)
+    .and_then(|at| row_of(&all, at.seq));
   let connection = match foot.readiness {
     Some(Readiness::Ready { connection, .. }) => Some(connection.clone()),
     _ => None,
   };
-  let env = Arc::new(env(view, project, (chat, connection), &foot.reads.names));
+  let env = Arc::new(env(
+    ctx,
+    view,
+    project,
+    (chat, connection, answering),
+    &foot.reads.names,
+  ));
   let can_ask = matches!(foot.state, Sending::Ready(_) | Sending::Held(_) | Sending::Empty { .. }) && chat.is_some();
   let stopping = view.stop.state().get().is_pending();
   // The newest turn, which can be stopped or asked again: a wait that started none, kept after it, is no turn, and
@@ -342,15 +386,21 @@ fn conversation(
     })
     .collect();
   let stop = (answering && !stopping).then(|| env.stop.clone());
-  let placeholder = ctx.t("orchestrator.composer.placeholder");
+  let placeholder = if shown.is_some_and(ChatView::compacting) {
+    ctx.t("orchestrator.context.placeholderCompacting")
+  } else {
+    ctx.t("orchestrator.composer.placeholder")
+  };
   let boxed = foot.composer_with(ctx, view, (project, placeholder), (stop, false));
   // Until it is set up, the chat says under its last turn that it stays readable (`02 Not set up` `Wd5CL`).
   let readable = foot.not_set_up().then(|| ctx.t("orchestrator.composer.readable"));
+  let plan = shown.and_then(|shown| pinned_plan(ctx, shown));
   let below = Column::new()
     .width(Dimension::Pct(100.0))
     .max_width(Dimension::Px(COLUMN_WIDTH))
     .spacing(SpacingSize::Sm)
     .with_children(notices.into_iter().flatten())
+    .with_children(plan)
     .child(boxed);
   // The turns scroll across the whole chat area, so the thumb sits at its right edge; each turn, the notices and
   // the composer keep to the column, centred.
@@ -369,11 +419,27 @@ fn conversation(
             .id("orchestrator-scroll")
             .width(Dimension::Pct(100.0))
             .height(Dimension::Pct(100.0))
-            .child(list(ctx, &view.follow, rows, readable)),
+            .child(list(ctx, &view.follow, (rows, found), readable)),
         ),
     )
     .child(composer_area(below))
     .into()
+}
+
+/// While the Orchestrator answers, the todo list its agent keeps for the answer, over the composer (08 `lEQgI`); its
+/// fold is the answer's own.
+fn pinned_plan(ctx: &mut Ctx, shown: &ChatView) -> Option<Element> {
+  if !shown.thinking() {
+    return None;
+  }
+  let (message, _) = shown.last_turn()?;
+  let list = shown.todo_of(message)?.clone();
+  let props = PinnedProps {
+    id: "orchestrator-plan".into(),
+    list,
+    owner: ctx.t("orchestrator.plan.owner"),
+  };
+  Some(ctx.mount_keyed::<PinnedPlan>(&format!("orchestrator-plan-{message}"), props))
 }
 
 /// The composer's area: 8 over the composer, 16 under it, 40 at the chat's sides, the column centred.

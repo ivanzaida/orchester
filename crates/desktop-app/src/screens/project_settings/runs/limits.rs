@@ -1,8 +1,9 @@
 //! Limits (`Limits` `tmV5e` in `02 · Runs`): the run and daily budgets, the time limit and how many agents and QA apps
 //! work at once, number fields with their units and read-backs, each saved as a person leaves it, with per-field
-//! validation and a change made outside the screen said under the group. Raising or removing the daily budget lets
-//! runs it stopped go on, a person's decision: window input from an MCP client saves it only while the person lets
-//! automation answer approvals.
+//! validation. A change made elsewhere (`update_project_limits`) reaches the settings' query and fills the fields in
+//! place; only while a field holds an edit not saved yet is it said under the group, with Reload. Raising or removing
+//! the daily budget lets runs it stopped go on, a person's decision: window input from an MCP client saves it only
+//! while the person lets automation answer approvals.
 use std::{path::Path, sync::Arc};
 
 use lurq::{
@@ -18,7 +19,6 @@ use lurq::{
 use orchester_core::tokens::compact_tokens;
 use orchester_workspace::{
   budget::LimitsErrors, decisions::DecisionKind, messages::Message, project_settings::LimitsText,
-  tasks::outside::Outside,
 };
 
 use super::super::{
@@ -28,6 +28,7 @@ use super::super::{
 };
 use crate::{
   mcp::input_gate::{Guarded, InputGate, input_may_decide},
+  queries::Kept,
   theme::ExtraTypography,
   ui::{
     button::{ActionButton, ButtonKind},
@@ -41,6 +42,8 @@ use crate::{
 
 /// A limit's box (`Box` `jJ4rP`).
 const FIELD_WIDTH: f32 = 160.0;
+/// The bone of what a budget reads back as while it is read.
+const READ_BACK_BONE: f32 = 60.0;
 
 #[derive(Clone)]
 pub(super) struct Limits {
@@ -50,9 +53,10 @@ pub(super) struct Limits {
   minutes: Signal<String>,
   slots: Signal<String>,
   qa: Signal<String>,
+  /// The settings the fields were filled from or last saved as: the base of the next save.
   stored: Signal<Option<Read>>,
-  revision: Signal<u64>,
-  own: work::OwnSaves,
+  /// What the page's last save read back, until the settings' query has it.
+  kept: Kept<Read>,
   separator: Arc<str>,
   submitted: Signal<Submitted>,
   /// A save asked for while another ran, with whether every input that asked for it may raise the daily budget.
@@ -133,22 +137,29 @@ impl Field {
     matches!(self, Self::Slots | Self::Qa)
   }
 }
-/// The Limits group while it is read (`10 · Project settings · Runs · loading` `lUFjj`): its heading, its note and
-/// every row's label, hint and unit real, each value a bone in its field.
+/// The Limits group while it is read (`L02L` `Nxa0L`): its heading, its note, its foot and every row's label, hint and
+/// unit real, each value a bone in its field, the daily budget's read-back a bone under it.
 pub(super) fn bones(ctx: &mut Ctx) -> Element {
   let rows = [Field::Default, Field::Daily, Field::Time, Field::Slots, Field::Qa].map(|kind| {
     let [label, hint, info, unit] = kind.keys();
     let value = if kind.counts() { 14.0 } else { 46.0 };
+    let field = skeleton::unit_field(ctx, FIELD_WIDTH, value, &ctx.t(unit));
+    let control: Element = if matches!(kind, Field::Daily) {
+      skeleton::read_back(ctx, field, READ_BACK_BONE).into()
+    } else {
+      field.into()
+    };
     SettingRow::new(format!("{}-reading", kind.row()), ctx.t(label))
       .hint(ctx.t(hint))
       .info(ctx.t(info))
-      .control(skeleton::unit_field(ctx, FIELD_WIDTH, value, &ctx.t(unit)))
+      .control(control)
       .render(ctx)
   });
   let note = Text::new(&ctx.t("project_settings.limitsNote")).variant(ExtraTypography::Note.role());
   Group::new("settings-limits-reading", ctx.t("project_settings.limits"))
     .end(note)
     .rows(rows)
+    .foot(&ctx.t("project_settings.limitsFoot"))
     .into()
 }
 impl Component for Limits {
@@ -162,8 +173,7 @@ impl Component for Limits {
       slots: ctx.signal(String::new()),
       qa: ctx.signal(String::new()),
       stored: ctx.signal(None),
-      revision: ctx.signal(0),
-      own: work::OwnSaves::new(ctx, &[Outside::Limits]),
+      kept: ctx.props::<TabProps>().kept.clone(),
       separator: ctx.t("project_settings.groupSeparator"),
       submitted: ctx.signal(Submitted(None)),
       queued: ctx.signal(None),
@@ -171,12 +181,7 @@ impl Component for Limits {
       person_only: ctx.signal(false),
     };
     let save = tab.save.clone();
-    work::follow(
-      ctx,
-      &save,
-      ctx.props::<TabProps>().status.clone(),
-      (tab.revision.clone(), tab.stored.clone(), tab.own.clone()),
-    );
+    work::follow(ctx, &save, ctx.props::<TabProps>().status.clone(), tab.kept.clone());
     let (after, next, root) = (
       tab.clone(),
       save.clone(),
@@ -187,6 +192,7 @@ impl Component for Limits {
         && state.error.is_none()
         && let Some(saved) = &state.data
       {
+        after.stored.set(Some(Read(saved.0.clone())));
         after.accept(saved.0.limits);
         if let Some(may_raise) = after.queued.get_untracked() {
           after.submit(&root, &next, may_raise);
@@ -198,17 +204,18 @@ impl Component for Limits {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<TabProps>().clone();
     let save = self.save.clone();
-    let revision = self.revision.get() + self.own.count(&props.project.feed);
-    let state = work::load(ctx, props.project.open.repo_root.clone(), revision, &self.own);
-    let Some(data) = state.data.clone().or_else(|| self.stored.get()) else {
-      return work::pending(ctx, &state, &self.revision, bones);
+    let loaded = work::load(ctx, props.project.open.repo_root.clone());
+    let shown = loaded.shown(&self.kept, save.state().get().is_pending());
+    let Some(data) = shown.or_else(|| self.stored.get()) else {
+      return work::pending(ctx, &loaded, bones);
     };
     if self.stored.get_untracked().is_none() {
       self.fill(data.clone());
     }
     let mut stored = self.stored.get().expect("fields were filled from the load");
     let changed = self.text().limits(stored.0.limits, &self.separator).as_ref() != Ok(&stored.0.limits);
-    let outside = !state.is_pending() && stored.0.limits != data.0.limits;
+    // A change made elsewhere: the settings' query has limits other than the fields' base.
+    let outside = stored.0.limits != data.0.limits;
     if outside && !changed && !save.state().get().is_pending() {
       self.fill(data.clone());
       stored = data.clone();
@@ -243,7 +250,8 @@ impl Component for Limits {
     let note = Tooltip::new("settings-changes-notice", ctx.t("project_settings.changesDetail")).wrap(ctx, note);
     let mut group = Group::new("settings-limits", ctx.t("project_settings.limits"))
       .end(note)
-      .rows(rows);
+      .rows(rows)
+      .foot(&ctx.t("project_settings.limitsFoot"));
     if let Some(error) = work::error(ctx, &save) {
       let commit = commit.clone();
       group = group.after(
@@ -261,7 +269,7 @@ impl Component for Limits {
           ),
       );
     }
-    if let Some(error) = state.error {
+    if let Some(error) = loaded.state.error {
       group = group.after(field_error("settings-limits-read-error", &message_text(ctx, &error)));
     }
     if let Some(refused) = self.person_only_line(ctx, changed) {

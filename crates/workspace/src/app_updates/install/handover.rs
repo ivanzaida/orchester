@@ -2,12 +2,12 @@
 //! [`RECORD_FILE`] of the data folder, starts the verified installer silently with its pid to wait for, and exits. The
 //! installer waits for that pid to exit, installs into the running copy's folder, and starts Orchester again; one that
 //! fails writes why to [`RESULT_FILE`] and starts the old version again. The next start reads both
-//! ([`super::outcome`]).
+//! ([`super::outcome`]). On macOS a helper takes the installer's place ([`super::bundle`]).
 
 use std::{
   fs, io,
   path::{Path, PathBuf},
-  process::{Child, Command, Stdio},
+  process::Child,
 };
 
 use orchester_api::releases::ReleaseVersion;
@@ -74,9 +74,10 @@ impl InstallRecord {
 /// How the app starts the installer.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Handover {
-  /// The verified installer.
+  /// The verified installer; on macOS the zip of the release's bundle.
   pub installer: PathBuf,
-  /// The folder the running copy was installed into, which the update replaces.
+  /// The folder the running copy was installed into, which the update replaces; on macOS the bundle's
+  /// `Contents/MacOS`.
   pub program_folder: PathBuf,
   /// The app's process, which the installer waits for.
   pub pid: u32,
@@ -104,16 +105,25 @@ impl Handover {
   }
 
   /// Starts the installer; it waits for the app to exit before it changes anything. On Windows it is started outside
-  /// the app's job when the job allows that, so the app's exit does not end it.
+  /// the app's job when the job allows that, so the app's exit does not end it. On macOS the bundle is unpacked and
+  /// checked first, and a helper replaces it ([`super::bundle`]). Blocking.
+  #[cfg(not(target_os = "macos"))]
   pub fn start(&self) -> io::Result<Child> {
     started(self, true).or_else(|error| {
       tracing::info!(%error, "cannot start the installer outside the app's job; starting it inside");
       started(self, false)
     })
   }
+
+  #[cfg(target_os = "macos")]
+  pub fn start(&self) -> io::Result<Child> {
+    super::bundle::start(self)
+  }
 }
 
+#[cfg(not(target_os = "macos"))]
 fn started(handover: &Handover, breakaway: bool) -> io::Result<Child> {
+  use std::process::{Command, Stdio};
   let mut command = Command::new(&handover.installer);
   command.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
   pass(&mut command, &handover.arguments(), breakaway);
@@ -128,7 +138,7 @@ fn quoted(name: &str, path: &Path) -> String {
 /// Inno Setup reads its command line itself: the arguments go as they are written, without Rust's quoting, and the
 /// installer gets no console and its own process group.
 #[cfg(windows)]
-fn pass(command: &mut Command, arguments: &[String], breakaway: bool) {
+fn pass(command: &mut std::process::Command, arguments: &[String], breakaway: bool) {
   use std::os::windows::process::CommandExt;
   const DETACHED_PROCESS: u32 = 0x0000_0008;
   const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
@@ -140,8 +150,8 @@ fn pass(command: &mut Command, arguments: &[String], breakaway: bool) {
   command.creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | breakaway);
 }
 
-#[cfg(not(windows))]
-fn pass(command: &mut Command, arguments: &[String], _: bool) {
+#[cfg(not(any(windows, target_os = "macos")))]
+fn pass(command: &mut std::process::Command, arguments: &[String], _: bool) {
   command.args(arguments);
 }
 

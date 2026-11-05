@@ -1,11 +1,11 @@
 //! The row inside the composer's box (`Bar` `keqaj` in `QQ2ZM`), 6 apart: *Attach* (a 15 plus in a 26 square,
 //! `hprBf`), which opens the system's picker and attaches the files chosen in it; the recipient as a pill
 //! (`Recipient` `AOjdU`, `ui::composer::recipient_pill`: a 12 `bot` and the words; a lock at its end while the
-//! recipient is fixed); and at the end the send button: `accent`, radius 6, 28 high, its icon in `on_accent` — alone
-//! in a 28 square while an agent works (`Send button/split` `wPMDa`), else with its words in 12/500, 10 in from its
-//! sides and 6 from the icon (`I4yc5z` in `YhiGC`). Where sending has two ways, a line and a chevron split the button
-//! (`KkfI8`, `ZFD5V`: 1 by 16, then 20 wide, a 12 chevron) and open the send menu over it. The permissions chip and
-//! the recipient menu are not part of this build (D4).
+//! recipient is fixed); the run's permissions chip (`super::super::permissions`, 15 `x55hWH`); and at the end the send
+//! button: `accent`, radius 6, 28 high, its icon in `on_accent` — alone in a 28 square while an agent works (`Send
+//! button/split` `wPMDa`), else with its words in 12/500, 10 in from its sides and 6 from the icon (`I4yc5z` in
+//! `YhiGC`). Where sending has two ways, a line and a chevron split the button (`KkfI8`, `ZFD5V`: 1 by 16, then 20
+//! wide, a 12 chevron) and open the send menu over it. The recipient menu is not part of this build (D4).
 
 use lurq::{
   app::{
@@ -49,6 +49,8 @@ const DIVIDER_HEIGHT: f32 = 16.0;
 pub(super) enum Sending {
   /// Nothing is written or attached yet.
   Empty,
+  /// The chip holds a skill, which a plan's changes cannot carry (ORC-634).
+  SkillHeld,
   /// The message is being sent, or the files given are still being read.
   Busy,
   /// Pressing sends: the primary way, the second where the state has one, and *Stop turn and send* while an agent
@@ -75,7 +77,14 @@ pub(super) struct Bar<'a> {
   pub(super) attached: &'a DraftAttachments,
 }
 
-pub(super) fn bar(ctx: &mut Ctx, bar: &Bar<'_>) -> Element {
+/// The row, with the *Side question* button after *Attach* once the task has a run (ORC-337, `b4mI1D`), the step's
+/// model chip and the run's permissions chip after the recipient while the run goes on, and the context meter of the
+/// step at work after the free space (`bhtch`), when one works.
+pub(super) fn bar(
+  ctx: &mut Ctx,
+  bar: &Bar<'_>,
+  (side, model, permissions, context): (Option<Element>, Option<Element>, Option<Element>, Option<Element>),
+) -> Element {
   let fixed = match bar.mode {
     ComposerMode::Answer { .. } if bar.mode.fixed_recipient().is_some() => {
       Some(ctx.t("composer.recipient.fixed.answer"))
@@ -90,8 +99,12 @@ pub(super) fn bar(ctx: &mut Ctx, bar: &Bar<'_>) -> Element {
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
     .child(attach(ctx, bar.attached))
+    .with_children(side)
     .child(recipient_pill(ctx, (&recipient, recipient_icon(bar.mode)), fixed))
+    .with_children(model)
+    .with_children(permissions)
     .child(Spacer::new().flex(1.0))
+    .with_children(context)
     .child(send(ctx, bar))
     .into()
 }
@@ -144,15 +157,16 @@ fn send(ctx: &mut Ctx, bar: &Bar<'_>) -> Element {
       .cursor(CursorIcon::Progress)
       .child(face)
       .into(),
-    Sending::Empty => inert(Button::empty())
+    Sending::Empty | Sending::SkillHeld => inert(Button::empty())
       .id("composer-send")
       .describe("state", "disabled")
       .child(face)
       .into(),
   };
-  // Faded while nothing is written: its tooltip says so.
+  // Faded while nothing is written, or while the chip holds a skill: its tooltip says so.
   let tip = match bar.sending {
     Sending::Empty => Tooltip::new("composer-send", ctx.t("composer.send.empty")),
+    Sending::SkillHeld => Tooltip::new("composer-send", ctx.t("composer.skill.planHeld")),
     Sending::Busy | Sending::Ready { .. } => {
       Tooltip::new("composer-send", label.clone()).shortcut(ctx.t("composer.keys.enter"))
     }

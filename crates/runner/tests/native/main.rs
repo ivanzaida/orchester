@@ -17,6 +17,7 @@ mod support;
 mod approvals;
 mod attachments;
 mod check;
+mod model;
 mod question;
 mod resume;
 mod skills;

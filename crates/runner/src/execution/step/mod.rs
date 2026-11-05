@@ -40,9 +40,8 @@ use orchester_core::{
   id::{InvocationId, StepExecutionId},
   memory::MemoryStore,
   permission::LaunchPermissions,
-  resource::ModelId,
   revision::Revision,
-  run::{EditProgress, Invocation, Plan, StepExecutor, StepFailure, StepStatus, execution_tokens},
+  run::{EditProgress, Invocation, Plan, StepFailure, StepStatus, execution_tokens},
   store::{ActivityStore, ConversationStore, RunStore, SettingsStore},
   time::Timestamp,
   tokens::{TokenBudget, TokensUsed},
@@ -239,7 +238,7 @@ impl RunTask {
     let mut continuation = self.begin_step(execution)?;
     self.keep_session_on_its_account(execution, &mut continuation)?;
     let (workspace, judged) = self.meet_moved_base(execution, workspace, &mut continuation, judged)?;
-    let model = self.model(execution)?;
+    let model = self.invocation_model(execution)?;
     let mut invocation = self
       .db
       .start_invocation(self.run.id(), execution, &model, Timestamp::now())?;
@@ -531,17 +530,6 @@ impl RunTask {
     let plans = self.db.plans(self.run.id()).map_err(RecordError::from)?;
     let last_started = self.last_invocation(execution)?.map(|invocation| invocation.started_at);
     Ok(Plan::awaiting_revision(&plans, execution, last_started).is_some())
-  }
-
-  fn model(&self, execution: StepExecutionId) -> Result<ModelId, ExecutionError> {
-    let step = self
-      .run
-      .execution(execution)
-      .and_then(|execution| self.run.snapshot().step(execution.step()));
-    match step.map(|step| step.executor()) {
-      Some(StepExecutor::Agent { model, .. }) => Ok(model.clone()),
-      _ => Err(ExecutionError::NotAnAgentStep(execution)),
-    }
   }
 
   /// The agent or command did not start: the problem is reported, the invocation ends and the step

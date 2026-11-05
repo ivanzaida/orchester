@@ -1,7 +1,7 @@
 //! Connection enforcement beside a profile's page (`Connection enforcement` `Lj9fe` in 01c): the CLI and when it was
 //! checked, then each setting with what enforces it and *Enforced* or *Not enforced*, the Browser (`R2Md4h` in
-//! `hQfEh`), the approval mode and the repository's agent files too, and that the limits apply to new runs after
-//! publishing.
+//! `hQfEh`) and the approval mode too, and that the limits apply to new runs after publishing. The repository's agent
+//! files are the project's, under *Set by the project* ([`super::project_sets`], S14 a).
 use std::sync::Arc;
 
 use lurq::{
@@ -40,7 +40,7 @@ pub fn enforcement(ctx: &Ctx, fields: &Fields, listed: &ProjectAgents) -> Elemen
     )
     .into();
   };
-  let rows = rows(ctx, connection, &fields.permissions.get().0, listed);
+  let rows = rows(ctx, connection, &fields.permissions.get().0);
   Column::new()
     .id("agent-enforcement")
     .width(Dimension::Pct(100.0))
@@ -68,13 +68,8 @@ pub fn enforcement(ctx: &Ctx, fields: &Fields, listed: &ProjectAgents) -> Elemen
     .into()
 }
 
-/// Each setting with what enforces it, then MCP, Approvals and the repository's agent files.
-fn rows(
-  ctx: &Ctx,
-  connection: &AgentConnection,
-  permissions: &AgentPermissions,
-  listed: &ProjectAgents,
-) -> Vec<Element> {
+/// Each setting with what enforces it, then MCP and Approvals.
+fn rows(ctx: &Ctx, connection: &AgentConnection, permissions: &AgentPermissions) -> Vec<Element> {
   let mut rows = Vec::new();
   for (key, option) in [
     (
@@ -93,7 +88,7 @@ fn rows(
     } else {
       setting(ctx, connection, permissions, option)
     };
-    rows.push(row(ctx, key, &ctx.t(key), &mechanism, State::Enforced(enforced)));
+    rows.push(row(ctx, key, &ctx.t(key), &mechanism, enforced));
   }
   // The browser tools are Orchester's own, served by its runner whatever the CLI (`docs/design/browser.md`).
   rows.push(row(
@@ -101,7 +96,7 @@ fn rows(
     "agents.browser",
     &ctx.t("agents.browser"),
     &enforcement::browser(ctx, permissions),
-    State::Enforced(true),
+    true,
   ));
   let available = !connection.provider().is_native();
   rows.push(row(
@@ -113,7 +108,7 @@ fn rows(
     } else {
       "agents.nativeUnavailable"
     }),
-    State::Enforced(available),
+    available,
   ));
   let (mode, enforced) = approval_mode(ctx, connection, permissions.approval_mode());
   rows.push(row(
@@ -121,19 +116,7 @@ fn rows(
     "agents.approvals",
     &ctx.t("agents.enforcement.approvalMode.title"),
     &mode,
-    State::Enforced(enforced),
-  ));
-  let files = ctx.t(if listed.agent_files.is_on() {
-    "agents.agentFilesOn"
-  } else {
-    "agents.agentFilesOff"
-  });
-  rows.push(row(
-    ctx,
-    "agents.agentFiles",
-    &ctx.t("agents.agentFiles"),
-    &ctx.t("agents.repositoryFilesMechanism"),
-    State::Value(files),
+    enforced,
   ));
   rows
 }
@@ -240,18 +223,12 @@ fn folders(ctx: &Ctx, connection: &AgentConnection, permissions: &AgentPermissio
   (detail, effective.is_ok())
 }
 
-/// What a row says at its end.
-enum State {
-  Enforced(bool),
-  Value(Arc<str>),
-}
-
-/// A row named by `key` (its id), saying `label`, what enforces it and `state` at its end.
-fn row(ctx: &Ctx, key: &str, label: &str, mechanism: &str, state: State) -> Element {
-  let (end, color) = match state {
-    State::Enforced(true) => (ctx.t("agents.enforcedState"), PaletteColor::Success),
-    State::Enforced(false) => (ctx.t("agents.enforcementUnavailable"), PaletteColor::Warning),
-    State::Value(value) => (value, PaletteColor::TextSecondary),
+/// A row named by `key` (its id), saying `label`, what enforces it and whether it is `enforced` at its end.
+fn row(ctx: &Ctx, key: &str, label: &str, mechanism: &str, enforced: bool) -> Element {
+  let (end, color) = if enforced {
+    (ctx.t("agents.enforcedState"), PaletteColor::Success)
+  } else {
+    (ctx.t("agents.enforcementUnavailable"), PaletteColor::Warning)
   };
   let name = key.trim_start_matches("agents.");
   Row::new()

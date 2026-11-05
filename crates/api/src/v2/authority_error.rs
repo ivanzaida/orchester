@@ -5,6 +5,8 @@ use orchester_core::id::OperationId;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::releases::ReleaseVersion;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AuthorityErrorCode {
@@ -16,6 +18,8 @@ pub enum AuthorityErrorCode {
   /// The operation id was used before with another request.
   OperationMismatch,
   ClaimConflict,
+  /// The claim or work the request names is no longer the effective one: it was released, taken over or fenced by a
+  /// newer generation. A delayed work report gets this, never a write over the new holder's state.
   ClaimLost,
   ModuleRequired,
   ModuleClaimConflict,
@@ -24,7 +28,15 @@ pub enum AuthorityErrorCode {
   DecisionRequired,
   BundleMissing,
   DeliveryNotAuthorized,
+  /// The claim is the caller's, but held by another of their sessions than the one that sent the request.
+  SessionMismatch,
+  /// A work report whose sequence is not after the last one accepted for its run (`orchester_core::run::order_report`).
+  /// A duplicate of the last accepted report is not refused: it is answered with the original result.
+  SequenceRegressed,
+  /// The caller is no longer a member of the workspace.
+  MembershipRevoked,
   CursorExpired,
+  /// Carries the oldest desktop version the server accepts ([`ErrorDetails::UnsupportedContract`]).
   UnsupportedContract,
   RateLimited,
   Unavailable,
@@ -36,7 +48,7 @@ impl AuthorityErrorCode {
     match self {
       Self::Unauthenticated => 401,
       Self::NotFound => 404,
-      Self::Forbidden | Self::DeliveryNotAuthorized => 403,
+      Self::Forbidden | Self::DeliveryNotAuthorized | Self::MembershipRevoked => 403,
       Self::Invalid => 422,
       Self::RevisionConflict
       | Self::OperationMismatch
@@ -46,7 +58,9 @@ impl AuthorityErrorCode {
       | Self::ModuleClaimConflict
       | Self::TransitionDenied
       | Self::DecisionRequired
-      | Self::BundleMissing => 409,
+      | Self::BundleMissing
+      | Self::SessionMismatch
+      | Self::SequenceRegressed => 409,
       Self::CursorExpired => 410,
       Self::UnsupportedContract => 426,
       Self::RateLimited => 429,
@@ -69,11 +83,29 @@ pub enum DecisionId {
   D9,
 }
 
-/// The details of a refusal. Every code but `decision_required` has none (`{}` on the wire).
+/// The details of a refusal. Every code but `decision_required` and `unsupported_contract` has none (`{}` on the
+/// wire).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ErrorDetails {
   None,
-  DecisionRequired { decisions: Vec<DecisionId> },
+  DecisionRequired {
+    decisions: Vec<DecisionId>,
+  },
+  /// `{required_version}`: the oldest desktop version the server accepts, so the desktop can name the update it needs.
+  UnsupportedContract {
+    required_version: ReleaseVersion,
+  },
+}
+
+impl ErrorDetails {
+  /// The one code these details belong to, `None` for the details every other code has.
+  const fn code(&self) -> Option<AuthorityErrorCode> {
+    match self {
+      Self::None => None,
+      Self::DecisionRequired { .. } => Some(AuthorityErrorCode::DecisionRequired),
+      Self::UnsupportedContract { .. } => Some(AuthorityErrorCode::UnsupportedContract),
+    }
+  }
 }
 
 #[derive(Clone, Copy, Debug, Error, PartialEq, Eq)]
@@ -99,8 +131,11 @@ impl AuthorityError {
     code: AuthorityErrorCode,
     details: ErrorDetails,
   ) -> Result<Self, AuthorityErrorShapeError> {
-    let decision_details = matches!(details, ErrorDetails::DecisionRequired { .. });
-    if decision_details != (code == AuthorityErrorCode::DecisionRequired) {
+    let detailed = matches!(
+      code,
+      AuthorityErrorCode::DecisionRequired | AuthorityErrorCode::UnsupportedContract
+    );
+    if details.code() != detailed.then_some(code) {
       return Err(AuthorityErrorShapeError::DetailsMismatch(code));
     }
     if matches!(&details, ErrorDetails::DecisionRequired { decisions } if decisions.is_empty()) {
@@ -135,20 +170,24 @@ struct Wire {
   details: DetailsWire,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct DetailsWire {
   #[serde(default, skip_serializing_if = "Option::is_none")]
   decisions: Option<Vec<DecisionId>>,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  required_version: Option<ReleaseVersion>,
 }
 
 impl TryFrom<Wire> for AuthorityError {
   type Error = AuthorityErrorShapeError;
 
   fn try_from(wire: Wire) -> Result<Self, Self::Error> {
-    let details = match wire.details.decisions {
-      Some(decisions) => ErrorDetails::DecisionRequired { decisions },
-      None => ErrorDetails::None,
+    let details = match (wire.details.decisions, wire.details.required_version) {
+      (None, None) => ErrorDetails::None,
+      (Some(decisions), None) => ErrorDetails::DecisionRequired { decisions },
+      (None, Some(required_version)) => ErrorDetails::UnsupportedContract { required_version },
+      (Some(_), Some(_)) => return Err(AuthorityErrorShapeError::DetailsMismatch(wire.code)),
     };
     Self::new(wire.operation_id, wire.code, details)
   }
@@ -156,14 +195,21 @@ impl TryFrom<Wire> for AuthorityError {
 
 impl From<AuthorityError> for Wire {
   fn from(error: AuthorityError) -> Self {
-    let decisions = match error.details {
-      ErrorDetails::DecisionRequired { decisions } => Some(decisions),
-      ErrorDetails::None => None,
+    let details = match error.details {
+      ErrorDetails::None => DetailsWire::default(),
+      ErrorDetails::DecisionRequired { decisions } => DetailsWire {
+        decisions: Some(decisions),
+        ..DetailsWire::default()
+      },
+      ErrorDetails::UnsupportedContract { required_version } => DetailsWire {
+        required_version: Some(required_version),
+        ..DetailsWire::default()
+      },
     };
     Self {
       operation_id: error.operation_id,
       code: error.code,
-      details: DetailsWire { decisions },
+      details,
     }
   }
 }

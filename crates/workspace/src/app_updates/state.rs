@@ -59,7 +59,7 @@ pub enum UpdateState {
     reason: CopyReason,
     newest: Option<NewestRelease>,
   },
-  /// Updates are not automatic on this platform yet (macOS); the newest release is downloaded by hand.
+  /// No release ships for this platform and architecture.
   NotOnThisPlatform { newest: Option<NewestRelease> },
 }
 
@@ -132,7 +132,7 @@ pub struct ReadyUpdate {
   pub notes: String,
   /// It fixes a security problem: it installs at the next restart, runs at work still waited for.
   pub critical: bool,
-  /// The verified installer in the updates folder.
+  /// The verified installer in the updates folder; on macOS the zip of the release's bundle.
   pub installer: PathBuf,
 }
 

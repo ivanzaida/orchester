@@ -215,6 +215,48 @@ fn navigate_takes_the_parameters_each_screen_has_and_answers_them_back() {
 }
 
 #[test]
+fn navigate_storage_opens_runs_subpage_and_refuses_other_tabs() {
+  let window = Window::open();
+  let navigation = window.navigation();
+  let args = json!({ "route": "project_settings", "project": PROJECT, "tab": "runs", "view": "storage" });
+  let answer = navigate(&navigation, &args).expect("Storage opens from Runs");
+  assert_eq!(
+    answer["route"]["path"],
+    json!(format!("/project/{PROJECT}/settings?tab=runs&view=storage"))
+  );
+  assert_eq!(
+    answer["route"]["params"],
+    json!({ "project": PROJECT, "tab": "runs", "view": "storage" })
+  );
+  let wrong_tab = json!({ "route": "project_settings", "project": PROJECT, "tab": "general", "view": "storage" });
+  assert!(navigate(&navigation, &wrong_tab).is_err());
+}
+
+#[test]
+fn navigate_opens_settings_general_at_plan_limits_and_answers_it_back() {
+  let window = Window::open();
+  let navigation = window.navigation();
+  let args = json!({ "route": "settings", "tab": "plan-limits" });
+  let answer = navigate(&navigation, &args).expect("a valid route");
+  assert_eq!(answer["route"]["path"], json!("/settings?tab=general&show=plan-limits"));
+  assert_eq!(answer["route"]["params"], json!({ "tab": "plan-limits" }));
+}
+
+/// The Memory page's Settings tab is gone (`S15` `BJQn0`): naming it opens Project settings › Context.
+#[test]
+fn navigate_opens_project_settings_context_for_the_memory_settings_tab() {
+  let window = Window::open();
+  let navigation = window.navigation();
+  let args = json!({ "route": "memory", "project": PROJECT, "tab": "settings" });
+  let answer = navigate(&navigation, &args).expect("a valid route");
+  assert_eq!(
+    answer["route"]["path"],
+    json!(format!("/project/{PROJECT}/settings?tab=context"))
+  );
+  assert_eq!(answer["route"]["name"], json!("project_settings"));
+}
+
+#[test]
 fn navigate_opens_every_projects_usage_without_a_project() {
   let window = Window::open();
   let navigation = window.navigation();

@@ -1,5 +1,5 @@
-//! Project settings › Secrets (`06 Secrets` `bVh1e`): its groups by environment and the filter, a secret's page
-//! (`06b` `famwr`), nothing yet (`08` `aalCu`), New secret's validation, and reading and its failure.
+//! Project settings › Environment's secrets (`06 Secrets` `bVh1e`): groups by environment and the filter, a secret's
+//! page (`06b` `famwr`), nothing yet (`08` `aalCu`), New secret's validation, and reading and its failure.
 use std::sync::atomic::Ordering;
 
 use orchester_core::secret::Environment;
@@ -22,12 +22,15 @@ fn secrets_list_groups_by_environment_and_a_secrets_page_shows_metadata_and_mcp_
     s.text(&format!("secret-row-{}-row", secret.id()))
       .contains("kontur-docs")
   );
-  assert!(!s.exists("project-settings-save-status"), "Secrets saves per action");
+  // The tab's save status is its variables'; the secrets save per action.
+  s.until("the variables' status", |s| s.exists("settings-variable-count"));
+  assert_eq!(s.text("project-settings-save-status"), "All changes saved");
   s.click(&format!("secret-row-{}-row", secret.id()));
   s.until("its page", |s| {
     s.exists("secret-uses") && s.text("secret-uses").contains("kontur-docs")
   });
-  assert_eq!(s.text("secret-crumb-back"), "Secrets");
+  assert_eq!(s.text("secret-crumb-back"), "Environment");
+  assert!(!s.exists("settings-variable-count"), "a secret's page has no variables");
   assert!(s.text("secret-inspector").contains("Never · added today"));
   // *Details* as `06b` draws them: no Kind or Value row; *Used by* names the variable the server is given it in.
   assert!(!s.exists("secret-kind-value") && !s.exists("secret-value"));
@@ -192,8 +195,10 @@ fn secrets_external_connection_edits_refresh_used_by_in_place() {
   });
 }
 
+/// A visit after the first shows the secrets read before at once, with no skeleton, while they are read again behind
+/// them; here that read is held, as QA holds reads, and released.
 #[test]
-fn secrets_loading_can_be_held_then_released() {
+fn secrets_a_visit_after_the_first_shows_the_list_while_it_is_read_again() {
   use orchester_app::routes::{ProjectPage, Route};
   let mut s = Secrets::new();
   s.list();
@@ -207,9 +212,16 @@ fn secrets_loading_can_be_held_then_released() {
     super::support::project_id(),
     ProjectPage::Secrets(Default::default()),
   ));
-  s.until("held read", |s| s.exists("secrets-loading"));
-  // While the secrets are read the toolbar works over their bones (`12 · Project settings · Secrets · loading`).
-  assert!(s.exists("secrets-add"), "Add secret works while the secrets are read");
+  s.window.pass();
+  assert!(
+    s.exists("secrets-empty"),
+    "the list read before shows in the first frame"
+  );
+  assert!(!s.exists("secrets-loading"), "no skeleton after the first read");
+  assert!(
+    s.exists("secrets-add"),
+    "Add secret works while the secrets are read again"
+  );
   hold.set(false);
   s.until("released read", |s| s.exists("secrets-empty"));
 }

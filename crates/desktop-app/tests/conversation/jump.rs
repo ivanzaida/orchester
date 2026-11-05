@@ -116,7 +116,23 @@ fn open_tall_row(window: &mut Window) -> String {
     .find(|id| window.texts(id).is_some_and(|texts| texts.concat() == TALL_COMMAND))
     .expect("the tall command's row");
   let row = row.trim_end_matches("-title").to_owned();
-  click(window, &format!("{row}-toggle"));
+  let toggle = format!("{row}-toggle");
+  // How far the wheel took the chat depends on how tall the rows under the chip are: the row is brought into view.
+  for _ in 0..20 {
+    if in_view(window, &toggle) {
+      break;
+    }
+    let top = |window: &mut Window, id: &str| {
+      window
+        .tree
+        .get_element_by_id_mut(id)
+        .and_then(|element| element.bounds())
+        .map(|bounds| bounds.y)
+    };
+    let above = top(window, &toggle) < top(window, "conversation-chat");
+    wheel(window, if above { 60.0 } else { -60.0 });
+  }
+  click(window, &toggle);
   let output = format!("{row}-output");
   window.until("the tall output", |window| window.texts(&output).is_some());
   output

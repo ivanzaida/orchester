@@ -16,43 +16,28 @@ use lurq::{
   core::Signal,
   node::Element,
 };
-use orchester_core::{source::SourcePath, time::Timestamp};
+use orchester_core::source::SourcePath;
 use orchester_workspace::{
-  background, display,
+  background,
   messages::{self, Message},
-  sources::{
-    check::Place,
-    listed::Listed,
-    project::{self, Removed},
-  },
+  sources::project::{self as sources, Removed},
   tasks::outside::Outside,
 };
 
 use super::{Status, TabProps, kit::Group};
 use crate::{
   mcp::input_gate::Guarded,
+  queries::{
+    self, Again, Session,
+    project::{self, SourcesRead},
+  },
   screens::connections::widen::{WidenConfirm, WidenLook, WidenProps},
   services::Services,
-  ui::{
-    add_source::Asked,
-    field::field_error,
-    message::message_text,
-    skeleton::{self, Skeleton},
-    state::load_error,
-  },
+  ui::{add_source::Asked, field::field_error, message::message_text, skeleton::Skeleton, state::load_error},
 };
 
-/// The project's sources as read, where a new one is checked, when they were read, and the *Try again* they were read
-/// after.
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct Read {
-  listed: Vec<Listed>,
-  place: Place,
-  checked: String,
-  retried: u64,
-}
-
-impl DevtoolsInspectable for Read {}
+/// The project's sources as read, where a new one is checked, and when they were read.
+type Read = SourcesRead;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Change {
@@ -73,9 +58,9 @@ type Save = FutureAction<(PathBuf, Change), Done, Message>;
 #[derive(Clone)]
 pub(super) struct Sources {
   save: Save,
+  /// Counts *Check again* and *Try again*, each of which reads the sources again.
   revision: Signal<u64>,
-  /// How often *Try again* was pressed after reading failed.
-  retried: Signal<u64>,
+  again: Arc<Again>,
   /// The source a person is asked about before it is added.
   asking: Signal<Option<Asked>>,
   /// The source removed last, until the next change.
@@ -91,7 +76,7 @@ impl Component for Sources {
     let tab = Self {
       save: save_action(ctx),
       revision: ctx.signal(0),
-      retried: ctx.signal(0),
+      again: Arc::new(Again::live()),
       asking: ctx.signal(None),
       removed: ctx.signal(None),
       adding: ctx.signal(false),
@@ -101,6 +86,7 @@ impl Component for Sources {
       ctx.props::<TabProps>().status.clone(),
       ctx.props::<TabProps>().project.feed.clone(),
     );
+    // A change records itself, which reads the sources again (`queries`).
     ctx.watch(&tab.save.state(), move |state| {
       if state.is_pending() {
         status.set(Status::Saving);
@@ -115,7 +101,6 @@ impl Component for Sources {
         }
         after.removed.set(removed.clone());
         status.set(Status::Saved);
-        after.revision.update(|revision| *revision += 1);
         feed.saved();
       }
     });
@@ -125,14 +110,8 @@ impl Component for Sources {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<TabProps>().clone();
     let state = self.read(ctx, &props);
-    // A failed re-read shows its error, not the list read before, which could still be changed; nor does that list
-    // show again while it is retried.
-    let retried = self.retried.get();
-    let Some(read) = state
-      .data
-      .clone()
-      .filter(|read| !state.is_rejected() && read.retried == retried)
-    else {
+    // A failed read shows its error, not the list read before, which could still be changed.
+    let Some(read) = state.data.clone().filter(|_| !state.is_rejected()) else {
       return self.pending(ctx, &state);
     };
     if !self.save.state().get().is_pending() && self.save.state().get().error.is_none() {
@@ -148,34 +127,19 @@ impl Component for Sources {
 }
 
 impl Sources {
-  /// The sources, read again after each change, *Check again* and a change elsewhere; what was read before stays
-  /// on screen meanwhile.
+  /// The sources through their query, which the project's loader read as the project opened: the last read at once,
+  /// read again behind it when the tab opens, after each change, at *Check again* and at a change elsewhere.
   fn read(&self, ctx: &mut Ctx, props: &TabProps) -> FutureState<Read, Message> {
-    let revision = self.revision.get() + props.project.feed.outside.get().of(Outside::ProjectSettings);
-    ctx
-      .future(
-        (props.project.open.repo_root.clone(), revision, self.retried.get()),
-        |(root, _, retried)| async move {
-          background::run(move || {
-            let store = |error: orchester_store::StoreError| messages::store_error(&error);
-            Ok(Read {
-              listed: project::load_in(&root).map_err(store)?,
-              place: project::place_in(&root).map_err(store)?,
-              checked: display::clock(Timestamp::now()),
-              retried,
-            })
-          })
-          .await?
-        },
-      )
-      .state()
-      .get()
+    let session = Session::of(ctx);
+    let query = ctx.query(project::project_sources(session, props.project.open.repo_root.clone()));
+    self.again.follow(self.revision.get(), &query);
+    queries::state(&query)
   }
 
   fn pending(&self, ctx: &mut Ctx, state: &FutureState<Read, Message>) -> Element {
     match state.error.as_ref().filter(|_| state.is_rejected()) {
       Some(error) => {
-        let retried = self.retried.clone();
+        let revision = self.revision.clone();
         load_error(
           ctx,
           "settings-sources-load-error",
@@ -183,13 +147,12 @@ impl Sources {
             &ctx.t("project_settings.sourcesTab.loadFailed"),
             &message_text(ctx, error),
           ),
-          move || retried.update(|retried| *retried += 1),
+          move || revision.update(|revision| *revision += 1),
         )
       }
       None => {
-        // No loading frame draws the Context tab's sources: their rows' bones stand in the group's outline.
-        let bones = skeleton::list(ctx, "settings-sources-reading", &[(180.0, 260.0), (150.0, 220.0)]);
-        Skeleton::new("settings-loading", ctx.t("project_settings.sourcesTab.reading")).show(ctx, bones)
+        let bones = view::bones(ctx);
+        Skeleton::new("settings-sources-loading", ctx.t("project_settings.sourcesTab.reading")).show(ctx, bones)
       }
     }
   }
@@ -240,7 +203,7 @@ impl Sources {
   }
 
   fn question(&self, ctx: &mut Ctx, root: &std::path::Path, path: &SourcePath) -> Element {
-    let reasons = project::widenings(path)
+    let reasons = sources::widenings(path)
       .iter()
       .map(|reason| message_text(ctx, reason))
       .collect::<Vec<_>>();
@@ -275,8 +238,8 @@ fn save_action(ctx: &mut Ctx) -> Save {
       background::run(move || {
         // Only a person's confirmed question adds one: the question is the confirmation.
         let done = match &change {
-          Change::Add(path) => project::add_in(&root, path, true).map(|()| Done(None))?,
-          Change::Remove(path) => Done(Some(project::remove_in(&root, path)?)),
+          Change::Add(path) => sources::add_in(&root, path, true).map(|()| Done(None))?,
+          Change::Remove(path) => Done(Some(sources::remove_in(&root, path)?)),
         };
         let db = orchester_store::ProjectDb::open(&root).map_err(|error| messages::store_error(&error))?;
         changes.record(db.project().id(), Outside::ProjectSettings);

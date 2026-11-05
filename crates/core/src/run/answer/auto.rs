@@ -1,4 +1,4 @@
-//! Auto-approval (user decisions 2026-10-02 and 2026-10-03): a run, or every run of a profile, in which
+//! Auto-approval (user decisions 2026-10-02 and 2026-10-03): a run in which
 //! Orchester answers the agent's requests itself. It approves only commands it knows to read or to stay
 //! in the worktree, and MCP tool calls. It never approves a command that reaches the network, nor what
 //! is dangerous: a write, move or delete outside the worktree and its writable folders (the temporary
@@ -63,12 +63,11 @@ fn command_verdict(command: &ClassifiedCommand) -> AutoVerdict {
   }
 }
 
-/// Whether Orchester auto-approves a request of a run: the run's own choice when a person made one
-/// (*Approve everything in this run*, the run's switch, *Stop*), else the asking profile's setting
-/// (*Approve automatically*).
-pub const fn auto_approves(run: Option<bool>, profile: bool) -> bool {
+/// Whether Orchester answers a request of a run itself: the run's own choice when a person made one
+/// (*Approve everything in this run*, the run's switch, *Stop*), else whether the run is in Autopilot.
+pub const fn auto_approves(run: Option<bool>, autopilot: bool) -> bool {
   match run {
     Some(chosen) => chosen,
-    None => profile,
+    None => autopilot,
   }
 }

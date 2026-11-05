@@ -6,7 +6,7 @@ use std::path::Path;
 
 use orchester_core::{
   attachment::{NewAttachment, names_text},
-  conversation::{Message, MessageBody, MessageError, Recipient, Sender, Timing},
+  conversation::{Message, MessageBody, MessageError, Recipient, Sender, Timing, skill::ChosenSkill},
   id::{ChatId, IdempotencyKey, MessageId, RunId, TaskId},
   run::{Answerer, EventSequence},
   store::ConversationStore,
@@ -18,7 +18,9 @@ use super::outgoing::{after_turn_run, answers_question, conversation_of};
 use crate::{
   attachments::Refused,
   decisions::DecisionKind,
+  mentions,
   messages::{self, Message as UiMessage},
+  skills::offered,
   tasks::detail::TaskDetail,
 };
 
@@ -35,6 +37,8 @@ pub enum SendError {
   NotAllowed,
   /// Its attachments break the message's limits, or an agent it may reach could not read one.
   Attachments(Refused),
+  /// The skill chosen for it could not be read: what the person reads.
+  Skill(UiMessage),
   Store(StoreError),
 }
 
@@ -47,6 +51,7 @@ impl SendError {
       Self::NotReadable => UiMessage::new("conversation.errors.notReadable"),
       Self::NotAllowed => UiMessage::new("appMcp.errors.automationNotAllowed"),
       Self::Attachments(refused) => refused.message(),
+      Self::Skill(message) => message.clone(),
       Self::Store(error) => messages::store_error(error),
     }
   }
@@ -67,19 +72,24 @@ pub fn send_in(
     key,
     (task, run, recovery_after),
     (recipient, timing),
-    ((text, &[]), None, Answerer::Person),
+    ((text, &[], None), None, Answerer::Person),
   )
 }
 
-/// [`send_in`] with `attachments`, decided `by`, and for the project's Orchestrator chat when `by_orchestrator` names
-/// the conversation it came from: it wrote `text` on the person's side, and the conversation names it as the chat's.
-/// A message of attachments only is kept with their names ([`names_text`]).
+/// What a person's message carries besides who sent it: its words, the files attached and the skill chosen for it.
+pub(super) type Carried<'a> = (&'a str, &'a [NewAttachment], Option<&'a ChosenSkill>);
+
+/// [`send_in`] with `attachments` and the skill the person chose for it (ORC-634), decided `by`, and for the project's
+/// Orchestrator chat when `by_orchestrator` names the conversation it came from: it wrote `text` on the person's side,
+/// and the conversation names it as the chat's. A message of attachments only is kept with their names
+/// ([`names_text`]); one with a skill with the skill's block before its words, which every agent of the run reads
+/// (`skills::offered::kept_with`).
 pub(super) fn send_as(
   repo_root: &Path,
   key: IdempotencyKey,
   (task, run, recovery_after): (TaskId, Option<RunId>, Option<EventSequence>),
   (recipient, timing): (Recipient, Timing),
-  ((text, attachments), by_orchestrator, by): ((&str, &[NewAttachment]), Option<ChatId>, Answerer),
+  ((text, attachments, skill), by_orchestrator, by): (Carried<'_>, Option<ChatId>, Answerer),
 ) -> Result<Message, SendError> {
   let named;
   let text = if text.trim().is_empty() && !attachments.is_empty() {
@@ -88,8 +98,15 @@ pub(super) fn send_as(
   } else {
     text
   };
+  let mut db = ProjectDb::open(repo_root).map_err(SendError::Store)?;
+  // The agent reads the facts of the tasks and runs the person mentioned, however the message was sent.
+  let text = mentions::facts::with_facts_from(&db, text).map_err(SendError::Store)?;
+  let text = match skill {
+    Some(chosen) => offered::kept_with(&db, chosen, &text).map_err(SendError::Skill)?,
+    None => text,
+  };
   // A new message's text is only checked for being blank.
-  let body = MessageBody::new(text).map_err(|_: MessageError| SendError::Blank)?;
+  let body = MessageBody::new(&text).map_err(|_: MessageError| SendError::Blank)?;
   let message = Message::from_person(task, run, recipient, body, Timestamp::now())
     .sent(timing)
     .expect("a new message is a person's");
@@ -112,7 +129,6 @@ pub(super) fn send_as(
       .map_err(|_| SendError::InvalidRecovery)?,
     None => message,
   };
-  let mut db = ProjectDb::open(repo_root).map_err(SendError::Store)?;
   db.send_message_with(key, &message, attachments)
     .map_err(SendError::Store)
 }

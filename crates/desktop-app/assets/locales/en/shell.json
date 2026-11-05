@@ -124,7 +124,7 @@
       "memory": "Memory",
       "skills": "Skills",
       "tools": "Tools",
-      "secrets": "Secrets",
+      "environment": "Environment",
       "connections": "Connections",
       "newConnection": "Add connection",
       "editConnection": "Edit connection",
@@ -178,6 +178,13 @@
         "one": "1 run interrupted when Orchester closed",
         "other": "{{count}} runs interrupted when Orchester closed",
         "review": "Review"
+      },
+      "low_disk": {
+        "title": "Low disk space",
+        "paused": "· {{free}} GB free · {{count}} runs paused",
+        "pausedOne": "· {{free}} GB free · {{count}} run paused",
+        "waiting": "· {{free}} GB free · new steps wait",
+        "hint": "Open Project settings › Runs › Storage to see what could be cleaned or change Keep free."
       },
       "approvals": {
         "auto": "Auto-approving",

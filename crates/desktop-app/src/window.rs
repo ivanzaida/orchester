@@ -122,6 +122,10 @@ fn run(app: App, tree: Tree, position: Option<WindowPosition>) {
     // The app draws its own title bar and frame (`chrome`); the OS keeps the rounded corners.
     .with_decorations(false)
     .with_corner_radius(WindowCornerRadius::Rounded);
+  // macOS rounds the window by clipping its view, so the window itself must not be opaque: otherwise its own
+  // background shows in the clipped corners. Windows rounds the frame itself.
+  #[cfg(target_os = "macos")]
+  let window = window.with_transparent(true);
   // Part of the window's attributes, so it opens there rather than moving after it shows.
   match position {
     Some(WindowPosition { x, y }) => {

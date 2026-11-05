@@ -4,8 +4,10 @@
 //! steps (`05b` `MrVql`, `05b2` `IBnMu`, [`connect`]), each with its crumb back. Member actions only: everything
 //! administrative is in a server's admin in the browser, which its page links to.
 //!
-//! What the tab shows is read again whenever a server's connection or the cloud account changes; the invites are read
-//! with it while an account is signed in.
+//! What the tab shows is read through lurq queries, so a visit after the first shows the last read in its first frame
+//! and reads again behind it: the snapshot ([`cloud_snapshot`]) and, while an account is signed in, its invites,
+//! two-factor authentication, team servers and accepted invites ([`reads`]), each read again whenever a server's
+//! connection or the cloud account changes.
 
 mod accepted;
 mod account;
@@ -24,6 +26,7 @@ mod parts;
 mod person;
 mod pointed;
 mod reading;
+mod reads;
 mod server;
 mod server_facts;
 mod server_parts;
@@ -52,6 +55,7 @@ use orchester_workspace::{
   },
 };
 
+pub(crate) use self::reads::{invalidate as invalidate_cloud_reads, invalidate_two_factor};
 pub use self::{
   notice::InvitesNotice,
   person::PersonOnly,
@@ -65,6 +69,7 @@ pub struct Account(pub Option<StoredCloudAccount>);
 impl DevtoolsInspectable for Account {}
 use super::frame;
 use crate::{
+  queries::{Again, Session},
   routes::{OrchesterAsk, OrchesterPanel, OrchesterView},
   services::Services,
   ui::state::load_error,
@@ -146,13 +151,21 @@ impl DevtoolsInspectable for Props {}
 pub struct OrchesterTab {
   /// Counts *Try again* after the tab could not be read.
   retry: Signal<u64>,
+  /// Reads the snapshot again at each change and *Try again*.
+  again: Again,
+  /// The invites, two-factor authentication, team servers and accepted invites, each read again as the tab mounts.
+  reads: reads::Reads,
 }
 
 impl Component for OrchesterTab {
   type Props = Props;
 
   fn create(ctx: &mut Ctx) -> Self {
-    Self { retry: ctx.signal(0) }
+    Self {
+      retry: ctx.signal(0),
+      again: Again::live(),
+      reads: reads::Reads::new(),
+    }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -169,13 +182,10 @@ impl Component for OrchesterTab {
     }
     let services = Services::of(ctx);
     let revision = follow(ctx, (&services.servers, &services.cloud)) + self.retry.get();
-    let loaded = snapshot(ctx, revision, (&services.servers, &services.cloud));
+    let loaded = snapshot(ctx, &self.again, revision);
     let snapshot = match loaded {
       Ok(Some(snapshot)) => snapshot,
-      Ok(None) => {
-        let bones = reading::column(ctx);
-        return frame::column("orchester-scroll", frame::pane("orchester-tab").child(bones));
-      }
+      Ok(None) => return skeleton(ctx),
       Err(reason) => {
         let (text, retry) = (reason.text(ctx), self.retry.clone());
         let again = move || retry.update(|count| *count += 1);
@@ -183,11 +193,8 @@ impl Component for OrchesterTab {
         return frame::column("orchester-scroll", frame::pane("orchester-tab").child(failed));
       }
     };
-    let invites = invites(ctx, revision, &services.cloud, snapshot.account.as_ref());
     let signed_in = snapshot.account.as_ref().map(|account| account.account);
-    let two_factor = two_factor::read(ctx, revision, &services.cloud, signed_in);
-    let accepted = kept(ctx, revision, &services.cloud, snapshot.account.as_ref());
-    let listed = browser_joined::listed(ctx, revision, &services.cloud, snapshot.account.as_ref());
+    let shown = self.reads.shown(ctx, signed_in);
     match view.server.and_then(|id| snapshot.server(id)) {
       Some((entry, linked)) => {
         let page = ctx.mount_keyed::<server::ServerPanel>(
@@ -202,14 +209,18 @@ impl Component for OrchesterTab {
         frame::column("orchester-server-scroll", page)
       }
       None => {
+        // A part never read yet would pop in and push the column down: the skeleton shows until each was read once.
+        let Some(shown) = shown else {
+          return skeleton(ctx);
+        };
         let page = ctx.mount_keyed::<cloud::CloudPanel>(
           "orchester-cloud",
           cloud::Props {
             snapshot: snapshot.clone(),
-            invites,
-            accepted,
-            listed,
-            two_factor,
+            invites: shown.invites,
+            accepted: shown.accepted,
+            listed: shown.listed,
+            two_factor: shown.two_factor.0,
             ask: view.ask,
             at: view.at,
           },
@@ -218,6 +229,12 @@ impl Component for OrchesterTab {
       }
     }
   }
+}
+
+/// The tab's skeleton (`L13L` `oGxJZ`), while a part of it was never read.
+fn skeleton(ctx: &mut Ctx) -> Element {
+  let bones = reading::column(ctx);
+  frame::column("orchester-scroll", frame::pane("orchester-tab").child(bones))
 }
 
 /// Counts every change of the servers' connections and of the cloud account, so what reads them reads again.
@@ -258,27 +275,27 @@ pub fn follow_shared(ctx: &mut Ctx, servers: &Servers) -> u64 {
   stream.state().get().data.unwrap_or_default()
 }
 
-/// What the tab shows, read off the UI thread at `revision`; `None` until the first read finished.
-fn snapshot(ctx: &mut Ctx, revision: u64, (servers, cloud): (&Servers, &Cloud)) -> Result<Option<Snapshot>, Said> {
-  let hold = Services::of(ctx).hold;
-  let state = ctx
-    .future(
-      (revision, servers.clone(), cloud.clone()),
-      move |(_, servers, cloud)| {
-        let hold = hold.clone();
-        async move {
-          hold.released().await;
-          background::run(move || read(&servers, &cloud))
-            .await
-            .map_err(|_| Said::new("cloud.errors.local"))?
-        }
-      },
-    )
-    .state()
-    .get();
-  match (state.data, state.error) {
-    (Some(snapshot), _) => Ok(Some(snapshot)),
-    (None, Some(error)) => Err(error),
+/// What the tab shows, through its query, which the window read as the session started: live, so the last read shows
+/// at once and it is read again behind it whenever the tab shows, and at each change of the servers' connections or of
+/// the cloud account.
+#[lurq::query(stale_time = "0s", gc_time = "24h")]
+pub(crate) async fn cloud_snapshot(session: Session) -> Result<Snapshot, Said> {
+  let Session(services) = session;
+  services.hold.released().await;
+  let (servers, cloud) = (services.servers.clone(), services.cloud.clone());
+  background::run(move || read(&servers, &cloud))
+    .await
+    .map_err(|_| Said::new("cloud.errors.local"))?
+}
+
+/// The tab's snapshot, read again at each of `revision`'s moves; `None` until the first read ever finished.
+fn snapshot(ctx: &mut Ctx, again: &Again, revision: u64) -> Result<Option<Snapshot>, Said> {
+  let session = Session::of(ctx);
+  let query = ctx.query(cloud_snapshot(session));
+  again.follow(revision, &query);
+  match (query.data(), query.error()) {
+    (Some(snapshot), _) => Ok(Some(Snapshot::clone(&snapshot))),
+    (None, Some(error)) => Err(Said::clone(&error)),
     (None, None) => Ok(None),
   }
 }
@@ -301,55 +318,8 @@ fn read(servers: &Servers, cloud: &Cloud) -> Result<Snapshot, Said> {
   })
 }
 
-/// The invites waiting for `account`, read at `revision`.
-pub fn invites(ctx: &mut Ctx, revision: u64, cloud: &Cloud, account: Option<&StoredCloudAccount>) -> Invites {
-  let signed_in = account.map(|account| account.account);
-  let state = ctx
-    .future(
-      (revision, signed_in, cloud.clone()),
-      |(_, signed_in, cloud)| async move {
-        if signed_in.is_none() {
-          return Ok::<_, ()>(Invites::SignedOut);
-        }
-        Ok(match cloud.invites().await {
-          Ok(invites) => Invites::Listed(Arc::new(invites)),
-          Err(error) => {
-            tracing::warn!(%error, "the cloud's invites could not be read");
-            Invites::Failed(words::cloud_error(&error))
-          }
-        })
-      },
-    )
-    .state()
-    .get();
-  state.data.unwrap_or(Invites::SignedOut)
-}
-
 /// The invites accepted here whose join did not finish (N1 security review 1, M2).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Kept(pub Arc<Vec<orchester_store::AcceptedInvite>>);
 
 impl DevtoolsInspectable for Kept {}
-
-/// The invites accepted here by `account`, read at `revision`.
-fn kept(ctx: &mut Ctx, revision: u64, cloud: &Cloud, account: Option<&StoredCloudAccount>) -> Kept {
-  let signed_in = account.map(|account| account.account);
-  ctx
-    .future(
-      (revision, signed_in, cloud.clone()),
-      |(_, signed_in, cloud)| async move {
-        if signed_in.is_none() {
-          return Ok::<_, ()>(Kept::default());
-        }
-        let kept = cloud
-          .accepted_invites()
-          .await
-          .map_err(|error| tracing::warn!(%error, "the invites accepted here could not be read"))?;
-        Ok(Kept(Arc::new(kept)))
-      },
-    )
-    .state()
-    .get()
-    .data
-    .unwrap_or_default()
-}

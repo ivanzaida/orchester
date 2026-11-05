@@ -36,30 +36,28 @@ fn agents_approvals_manual_lists_allowed_commands_and_network_stands_alone() {
   );
 }
 
-/// A profile that approves automatically, set before approval modes or over MCP, runs so: it shows in Approvals while
-/// it is on, and turning it off saves without asking.
+/// A profile stored before approval modes with *Approve automatically (don't ask me)* on reads as Autopilot: the page
+/// shows Autopilot chosen and no Approve automatically row.
 #[test]
-fn agents_approvals_shows_approving_automatically_while_it_is_on() {
+fn agents_approvals_old_approving_automatically_shows_as_autopilot() {
   let mut screen = Agents::new(true);
-  let id = screen.profile_with(true, |permissions| permissions.set_auto_approve(true));
-  screen.open(id);
-  let row = screen.text("agent-auto-row");
-  assert!(row.contains("Approve automatically"), "{row}");
-  assert!(
-    screen.text("agent-approvals").contains("Approve automatically"),
-    "inside the Approvals box"
-  );
-  screen.click("agent-auto");
-  screen.until("turned off", |s| {
-    assert!(!s.exists("agent-confirm-confirm"), "turning it off never asks");
-    !s.listed()
-      .profile(id)
-      .expect("profile")
-      .profile
-      .permissions()
-      .auto_approve()
+  orchester_store::ProjectDb::open(&screen.root)
+    .expect("database")
+    .save_allow_autopilot(orchester_core::run::AllowAutopilot::ON)
+    .expect("Autopilot allowed");
+  let id = screen.profile_with(true, |permissions| {
+    let mut stored = serde_json::to_value(&*permissions).expect("stored");
+    stored["auto_approve"] = serde_json::json!(true);
+    *permissions = serde_json::from_value(stored).expect("the old stored form reads");
   });
-  assert!(!screen.exists("agent-auto-row"), "gone once off");
+  assert_eq!(mode(&screen, id), ApprovalMode::Autopilot);
+  screen.open(id);
+  assert!(screen.exists("agent-still-asks"), "Autopilot's own rows show");
+  assert!(!screen.exists("agent-auto-row"));
+  assert!(
+    !screen.text("agent-approvals").contains("Approve automatically"),
+    "the old switch is gone"
+  );
 }
 
 #[test]

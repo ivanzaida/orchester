@@ -1,4 +1,4 @@
-//! Installing ripgrep when a person asks for it (Project settings › Code index › *Install ripgrep*):
+//! Installing ripgrep when a person asks for it (Project settings › Context › *Install ripgrep*):
 //! `winget install --id BurntSushi.ripgrep.MSVC --exact` on Windows, `brew install ripgrep` on macOS.
 //! Nothing runs without that request. Without the installer on the search path the install is
 //! unavailable and says which installer is missing. A running install can be cancelled and is

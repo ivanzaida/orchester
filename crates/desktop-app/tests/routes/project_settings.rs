@@ -34,6 +34,10 @@ fn connections_and_secrets_routes_are_project_settings_tabs() {
       format!("/project/{PROJECT}/secrets"),
     ),
     (
+      ProjectPage::Storage,
+      format!("/project/{PROJECT}/settings?tab=runs&view=storage"),
+    ),
+    (
       ProjectPage::ProjectRules,
       format!("/project/{PROJECT}/settings?tab=runs&view=rules"),
     ),
@@ -60,6 +64,7 @@ fn project_settings_tabs_have_their_documented_paths() {
   for (tab, path) in [
     (ProjectSettingsTab::General, root.clone()),
     (ProjectSettingsTab::Runs, format!("{root}?tab=runs")),
+    (ProjectSettingsTab::Orchestrator, format!("{root}?tab=orchestrator")),
     (ProjectSettingsTab::Context, format!("{root}?tab=context")),
     (ProjectSettingsTab::Sharing, format!("{root}?tab=sharing")),
   ] {
@@ -69,7 +74,6 @@ fn project_settings_tabs_have_their_documented_paths() {
   }
   for (old, tab) in [
     ("limits", ProjectSettingsTab::Runs),
-    ("environment", ProjectSettingsTab::Runs),
     ("sources", ProjectSettingsTab::Context),
     ("code_index", ProjectSettingsTab::Context),
   ] {
@@ -79,4 +83,36 @@ fn project_settings_tabs_have_their_documented_paths() {
       "{old}"
     );
   }
+}
+
+/// Environment (`S06`), the Secrets tab it was, keeps the secrets' path; the settings' query naming it, or Secrets, or
+/// the environment Runs once held, opens it there.
+#[test]
+fn project_settings_environment_opens_the_secrets_route() {
+  let root = format!("/project/{PROJECT}/settings");
+  for name in ["environment", "secrets"] {
+    assert_eq!(
+      Route::parse(&format!("{root}?tab={name}")),
+      Ok(at(ProjectPage::Secrets(Default::default()))),
+      "{name}"
+    );
+  }
+  assert!(matches!(
+    Route::parse(&format!("{root}?tab=nowhere")),
+    Err(RouteError::InvalidParam { .. })
+  ));
+}
+
+/// The Memory page's Settings tab (`S15` `BJQn0`) is gone: its path opens Context, where the memory settings are now.
+#[test]
+fn memory_settings_tab_route_opens_project_settings_context() {
+  let memory = format!("/project/{PROJECT}/memory");
+  assert_eq!(
+    Route::parse(&format!("{memory}?tab=settings")),
+    Ok(at(ProjectPage::Settings(ProjectSettingsTab::Context)))
+  );
+  assert!(matches!(
+    Route::parse(&format!("{memory}?tab=nowhere")),
+    Err(RouteError::InvalidParam { .. })
+  ));
 }

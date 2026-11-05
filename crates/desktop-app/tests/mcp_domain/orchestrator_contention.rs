@@ -57,7 +57,7 @@ fn chat_continues_only_storage_contention_and_only_with_the_persons_switch() {
     refusal(&refused),
     ("person_only", "orchestrator.tools.resumePersonOnly")
   );
-  allow(&served, OrchestratorConsent::ContinueInterrupted, true);
+  allow(&served, &seeded.repo, OrchestratorConsent::ContinueInterrupted, true);
   for run in [&broken, &other] {
     let refused = chat_call(&mut served, &scope, "resume_run", resume(run)).expect_err("the person's");
     assert_eq!(
@@ -146,8 +146,8 @@ fn turn_of(served: &Served, db: &mut ProjectDb, seeded: &super::kontur::Seeded, 
 fn chat_turn_of_contention_continues_once_not_again_soon_and_not_under_contention() {
   let (mut served, seeded) = Served::seeded("task-states");
   let mut db = ProjectDb::open(&seeded.repo).expect("the project's data");
-  allow(&served, OrchestratorConsent::ContinueInterrupted, true);
-  allow(&served, OrchestratorConsent::AnswerAgents, true);
+  allow(&served, &seeded.repo, OrchestratorConsent::ContinueInterrupted, true);
+  allow(&served, &seeded.repo, OrchestratorConsent::AnswerAgents, true);
   let mut busy = stopped(&mut db, BUSY, RunnerFailure::StorageContention);
   let own = turn_of(&served, &mut db, &seeded, &busy);
   let asked = chat_call(&mut served, &own, "resume_run", resume(&busy)).expect_err("no runner here");

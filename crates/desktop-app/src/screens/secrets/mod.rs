@@ -1,7 +1,8 @@
-//! Project settings › Secrets (`06 Secrets` `bVh1e`, nothing yet `08` `aalCu`): metadata and references only. The
-//! secrets by environment with what uses each and when its value was set (`list`), a secret's page with its details,
-//! what uses it, its recent access, and Replace value and Archive asked in place (`06b` `famwr`, `inspector`), and
-//! New secret as a page under the tab (`form`). Values enter the masked form and the vault, and are never shown again.
+//! Project settings › Environment's secrets (`Secrets` `PQJo1` in `S06` `EnL2D`, `06 Secrets` `bVh1e`, nothing yet
+//! `08` `aalCu`): metadata and references only. The secrets by environment with what uses each and when its value was
+//! set (`list`), a secret's page with its details, what uses it, its recent access, and Replace value and Archive asked
+//! in place (`06b` `famwr`, `inspector`), and New secret as a page under the tab (`form`). Values enter the masked form
+//! and the vault, and are never shown again. The tab scrolls what this shows, under its variables on the list.
 mod form;
 mod inspector;
 mod list;
@@ -16,20 +17,14 @@ use lurq::{
   },
   node::Element,
 };
-use orchester_workspace::{
-  background,
-  messages::{self, Message},
-  secrets::data::ProjectSecrets,
-  tasks::outside::Outside,
-};
+use orchester_workspace::{messages::Message, secrets::data::ProjectSecrets};
 use state::{EnvironmentChoice, View};
 
 use crate::{
   navigation::Navigation,
   project::ShownProject,
+  queries::{self, Again, Session, project},
   routes::{SecretsPanel, SecretsView},
-  screens::project_settings::kit,
-  services::Services,
   ui::{message::message_text, state::load_error},
 };
 
@@ -46,6 +41,8 @@ pub fn screen(ctx: &mut Ctx, project: &ShownProject, shown: SecretsView) -> Elem
 
 struct SecretsScreen {
   view: View,
+  /// The view's own asks to read the secrets again, each of which invalidates their query.
+  again: Again,
 }
 
 impl Component for SecretsScreen {
@@ -60,7 +57,10 @@ impl Component for SecretsScreen {
     };
     let chosen = view.clone();
     ctx.watch(&view.environment, move |choice| chosen.filter(choice.0));
-    Self { view }
+    Self {
+      view,
+      again: Again::live(),
+    }
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let Props(project, shown) = ctx.props::<Props>().clone();
@@ -68,32 +68,23 @@ impl Component for SecretsScreen {
     if self.view.environment.get_untracked().0 != shown.environment {
       self.view.environment.set(EnvironmentChoice(shown.environment));
     }
-    let revision = self.view.revision.get() + project.feed.outside.get().of(Outside::Connections);
-    let repo = project.open.repo_root.clone();
-    let hold = Services::of(ctx).hold;
-    let loaded = ctx
-      .future((repo, revision, shown.secret), move |(repo, _, selected)| {
-        let hold = hold.clone();
-        async move {
-          hold.released().await;
-          background::run(move || ProjectSecrets::load_selected_in(&repo, selected))
-            .await?
-            .map_err(|error| messages::store_error(&error))
-        }
-      })
-      .state()
-      .get();
+    // Through their query, which the project's loader read as the project opened (the list's); a change of the
+    // project's connections and secrets reads them again (`queries`), and so do the view's own asks.
+    let session = Session::of(ctx);
+    let query = ctx.query(project::secrets(session, project.open.repo_root.clone(), shown.secret));
+    self.again.follow(self.view.revision.get(), &query);
+    let loaded = queries::state(&query);
     let Some(listed) = loaded
       .data
       .clone()
       .filter(|_| loaded.error.is_none() || loaded.is_pending())
     else {
-      return kit::scroll(match loaded.error {
+      return match loaded.error {
         Some(ref error) if !loaded.is_pending() => self.failed(ctx, error),
         _ => list::reading(ctx, &self.view),
-      });
+      };
     };
-    kit::scroll(self.body(ctx, (&project, shown), &listed))
+    self.body(ctx, (&project, shown), &listed)
   }
 }
 

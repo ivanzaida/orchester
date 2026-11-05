@@ -170,6 +170,25 @@ fn check_executor(step: &Step, pinned: &StepSnapshot) -> Result<(), SnapshotErro
 }
 
 impl RunSnapshot {
+  /// A snapshot without sources from its parts, checked as a stored one is: the steps must be the pipeline's, each
+  /// pinned to the executor its pipeline step selects.
+  pub(super) fn from_parts(
+    (pipeline, body): (PinnedVersion, Pipeline),
+    steps: Vec<StepSnapshot>,
+    instructions: Vec<PinnedVersion>,
+    tools: Vec<PinnedVersion>,
+    skills: Vec<PinnedVersion>,
+  ) -> Result<Self, SnapshotError> {
+    Self::try_from(SnapshotFields {
+      pipeline,
+      body,
+      steps,
+      instructions,
+      tools,
+      skills,
+      sources: RunSources::default(),
+    })
+  }
   /// Resolves `version` of the pipeline `pipeline` against the published versions it
   /// references. Every step's profile or tool must be published; instructions and tools that
   /// apply to the pipeline are pinned alongside.

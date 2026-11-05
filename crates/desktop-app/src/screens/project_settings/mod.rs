@@ -1,19 +1,22 @@
-//! Project settings (`Project settings · redesign` `XGtkg`): its title with the save status over six tabs, General,
-//! Runs, Context, Connections, Secrets and Sharing, each a 720 column of groups of rows ([`kit`]). General, Runs and
-//! Context save as a person leaves a field or flips a switch, widening changes asked in place; Connections and Secrets
-//! save per action and say nothing of a save state, but Add provider says it isn't saved yet. Add, open and edit flows
-//! are pages inside their tab with a crumb
-//! back to it: a connection's, Add provider and Add MCP server under Connections, a secret's under Secrets, *Approved
-//! for every run* under Runs, and the first link (`Share`) under Sharing.
+//! Project settings (`Project settings · redesign` `XGtkg`): its title with the save status over seven tabs, General,
+//! Runs, Orchestrator, Context, Connections, Environment and Sharing, each a 720 column of groups of rows ([`kit`]).
+//! General, Runs, Orchestrator, Context and Environment's variables save as a person leaves a field or flips a switch,
+//! widening changes asked in place; Connections and Environment's secrets save per action, and Connections says
+//! nothing of a save state, but Add provider says it isn't saved yet. Add, open and edit flows are pages inside their
+//! tab with a crumb back to it: a connection's, Add provider and Add MCP server under Connections, a secret's and New
+//! secret under Environment, *Approved for every run* under Runs, and the first link (`Share`) under Sharing.
 mod context;
+mod environment;
 mod general;
 mod index;
 pub(crate) mod kit;
+mod orchestrator;
 mod page;
 mod rules;
 mod runs;
 mod sharing;
 mod sources;
+mod storage;
 mod work;
 
 use lurq::{
@@ -28,16 +31,18 @@ use orchester_core::id::ConnectionId;
 
 use crate::{
   project::ShownProject,
+  queries::Kept,
   routes::{ConnectionsView, NewConnection, ProjectPage, ProjectSettingsTab as Tab, SecretsView},
 };
 
-/// What the page shows under its tabs: one of its own tabs, a page under one, or Connections or Secrets, whose routes
-/// are their own.
+/// What the page shows under its tabs: one of its own tabs, a page under one, or Connections or Environment (the
+/// secrets' view), whose routes are their own.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Shown {
   Tab(Tab),
   /// *Approved for every run*, under Runs.
   Rules,
+  Storage,
   Connections(ConnectionsView),
   NewConnection(NewConnection),
   EditConnection(ConnectionId),
@@ -48,11 +53,21 @@ impl Shown {
   const fn section(self) -> Section {
     match self {
       Self::Tab(Tab::General) => Section::General,
-      Self::Tab(Tab::Runs) | Self::Rules => Section::Runs,
+      Self::Tab(Tab::Runs) | Self::Rules | Self::Storage => Section::Runs,
+      Self::Tab(Tab::Orchestrator) => Section::Orchestrator,
       Self::Tab(Tab::Context) => Section::Context,
       Self::Tab(Tab::Sharing) => Section::Sharing,
       Self::Connections(_) | Self::NewConnection(_) | Self::EditConnection(_) => Section::Connections,
-      Self::Secrets(_) => Section::Secrets,
+      Self::Secrets(_) => Section::Environment,
+    }
+  }
+
+  /// Whether what shows saves as a person edits it and says its save status: its tab's own page or one under it,
+  /// but not a secret's page or New secret, which save per action under Environment.
+  const fn autosaves(self) -> bool {
+    match self {
+      Self::Secrets(view) => !environment::is_page(view),
+      _ => self.section().autosaves(),
     }
   }
 
@@ -61,6 +76,7 @@ impl Shown {
     match self {
       Self::Tab(tab) => ProjectPage::Settings(tab),
       Self::Rules => ProjectPage::ProjectRules,
+      Self::Storage => ProjectPage::Storage,
       Self::Connections(view) => ProjectPage::Connections(view),
       Self::NewConnection(kind) => ProjectPage::NewConnection(kind),
       Self::EditConnection(id) => ProjectPage::EditConnection(id),
@@ -69,24 +85,28 @@ impl Shown {
   }
 }
 
-/// A tab of the page (`Tabs` `A5Sf0Q`).
+/// A tab of the page (`Tabs` `A5Sf0Q`, seven since `S03` `X8mFTS`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Section {
   General,
   Runs,
+  /// What the project's Orchestrator may do on its own (`S03` `X8mFTS`).
+  Orchestrator,
   Context,
   Connections,
-  Secrets,
+  /// The project's variables and secrets (`S06` `EnL2D`), the Secrets tab it was.
+  Environment,
   Sharing,
 }
 
 impl Section {
-  const ALL: [Self; 6] = [
+  const ALL: [Self; 7] = [
     Self::General,
     Self::Runs,
+    Self::Orchestrator,
     Self::Context,
     Self::Connections,
-    Self::Secrets,
+    Self::Environment,
     Self::Sharing,
   ];
 
@@ -95,9 +115,10 @@ impl Section {
     match self {
       Self::General => "general",
       Self::Runs => "runs",
+      Self::Orchestrator => "orchestrator",
       Self::Context => "context",
       Self::Connections => "connections",
-      Self::Secrets => "secrets",
+      Self::Environment => "environment",
       Self::Sharing => "sharing",
     }
   }
@@ -106,9 +127,10 @@ impl Section {
     match self {
       Self::General => "project_settings.general",
       Self::Runs => "project_settings.runs",
+      Self::Orchestrator => "project_settings.orchestrator.tab",
       Self::Context => "project_settings.context",
       Self::Connections => "project_settings.connections",
-      Self::Secrets => "project_settings.secrets",
+      Self::Environment => "project_settings.environment",
       Self::Sharing => "project_settings.sharing",
     }
   }
@@ -118,17 +140,18 @@ impl Section {
     match self {
       Self::General => Shown::Tab(Tab::General),
       Self::Runs => Shown::Tab(Tab::Runs),
+      Self::Orchestrator => Shown::Tab(Tab::Orchestrator),
       Self::Context => Shown::Tab(Tab::Context),
       Self::Sharing => Shown::Tab(Tab::Sharing),
       Self::Connections => Shown::Connections(ConnectionsView::default()),
-      Self::Secrets => Shown::Secrets(SecretsView::default()),
+      Self::Environment => Shown::Secrets(SecretsView::default()),
     }
   }
 
-  /// Whether the tab saves as a person edits it, and says so at the title's right; Connections and Secrets save per
-  /// action.
+  /// Whether the tab saves as a person edits it, and says so at the title's right; Connections saves per action, and
+  /// Environment's status is its variables' (its secrets save per action).
   const fn autosaves(self) -> bool {
-    !matches!(self, Self::Connections | Self::Secrets)
+    !matches!(self, Self::Connections)
   }
 }
 
@@ -145,12 +168,13 @@ impl DevtoolsInspectable for Props {}
 pub(super) struct TabProps {
   pub project: ShownProject,
   pub status: Signal<Status>,
+  /// What the page's last save of the project's settings read back, until their query has it: the page's, not a
+  /// tab's, so a tab opened right after another's save shows the save, not the read before it.
+  pub kept: Kept<work::Read>,
   /// The first link's page, which Sharing opens under its tab.
   pub link_page: Signal<sharing::LinkPage>,
   /// Sharing opens with *Make local*'s question.
   pub make_local: bool,
-  /// Whether General said how the base branch moved, forgotten once the settings close.
-  pub moved_seen: general::base_branch::MovedSeen,
 }
 impl PartialEq for TabProps {
   fn eq(&self, other: &Self) -> bool {
@@ -214,21 +238,20 @@ impl SectionStatuses {
 }
 struct SettingsScreen {
   status: Signal<Status>,
+  kept: Kept<work::Read>,
   link_page: Signal<sharing::LinkPage>,
-  /// Dropped as the settings close.
-  moved_seen: general::base_branch::MovedSeen,
 }
 impl Component for SettingsScreen {
   type Props = Props;
   fn create(ctx: &mut Ctx) -> Self {
-    let root = ctx.props::<Props>().project.open.repo_root.clone();
     Self {
       status: ctx.signal(Status::Saved),
+      kept: Kept::new(ctx),
       link_page: ctx.signal(sharing::LinkPage::default()),
-      moved_seen: general::base_branch::MovedSeen::new(root, crate::services::Services::of(ctx).runtime),
     }
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
+    ctx.provide(crate::ui::skeleton::FromFirstFrame);
     let Props {
       project,
       shown,
@@ -237,23 +260,28 @@ impl Component for SettingsScreen {
     let props = TabProps {
       project: project.clone(),
       status: self.status.clone(),
+      kept: self.kept.clone(),
       link_page: self.link_page.clone(),
       make_local,
-      moved_seen: self.moved_seen.clone(),
     };
     let content = match (shown, self.link_page.get().0) {
       (Shown::Tab(Tab::Sharing), Some(upload)) => sharing::link_page(ctx, &project, upload, &self.link_page),
       (Shown::Tab(Tab::General), _) => ctx.mount_keyed::<general::General>("project-settings-general", props),
       (Shown::Tab(Tab::Runs), _) => ctx.mount_keyed::<runs::Runs>("project-settings-runs", props),
+      (Shown::Tab(Tab::Orchestrator), _) => {
+        ctx.mount_keyed::<orchestrator::Orchestrator>("project-settings-orchestrator", props)
+      }
       (Shown::Tab(Tab::Context), _) => ctx.mount_keyed::<context::Context>("project-settings-context", props),
       (Shown::Tab(Tab::Sharing), _) => ctx.mount_keyed::<sharing::Sharing>("project-settings-sharing", props),
       (Shown::Rules, _) => ctx.mount_keyed::<rules::Rules>("project-settings-rules", props),
+      (Shown::Storage, _) => ctx.mount_keyed::<storage::StoragePage>("project-settings-storage", props),
       (Shown::Connections(view), _) => super::connections::screen(ctx, &project, view),
       (Shown::NewConnection(kind), _) => super::connections::new_connection(ctx, &project, kind),
       (Shown::EditConnection(id), _) => super::connections::edit_connection(ctx, &project, id),
-      (Shown::Secrets(view), _) => super::secrets::screen(ctx, &project, view),
+      (Shown::Secrets(view), _) => environment::tab(ctx, props, view),
     };
-    page::settings(ctx, (&project, shown), &self.status, content)
+    let body = page::tab_body(shown.section().element(), content);
+    page::settings(ctx, (&project, shown), &self.status, body)
   }
 }
 
