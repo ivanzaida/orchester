@@ -9,7 +9,8 @@ use std::{fmt, num::NonZeroU32};
 use orchester_core::{
   connection::{AgentProvider, ApiEndpoint, CheckResult, NativeModel},
   id::{
-    ChatId, ChatMessageId, ConnectionId, IdempotencyKey, ResourceId, RunId, SideQuestionId, StepExecutionId, TaskId,
+    ChatId, ChatMessageId, ConnectionId, IdempotencyKey, ResourceId, ReviewMessageId, ReviewThreadId, RunId,
+    SideQuestionId, StepExecutionId, TaskId,
   },
   integration::Leftovers,
   permission::AgentPermissions,
@@ -275,6 +276,20 @@ pub enum Command {
   /// [`Rejection::NoTurnToStop`] while no agent of the run works in a turn, [`Rejection::TurnNotStoppable`] for a
   /// native agent.
   StopTurn { run: RunId },
+  /// Answers the person's review question `message` on run `run`, which the desktop kept asked (protocol 40,
+  /// `orchester_core::review`): one read-only turn of the agent of the run's implementing step `step`, in the run's
+  /// worktree on the step's connection, model and network, resuming its session (Claude Code's as a fork); its words
+  /// and activity are kept in the thread as they come, and how it ends with the question. The run is not changed.
+  /// Answered with [`Reply::Accepted`] once the turn is under way, or was already, or ended;
+  /// [`Rejection::QuestionNotAwaited`] when no such question is kept asked.
+  AnswerReviewQuestion {
+    run: RunId,
+    step: StepKey,
+    message: ReviewMessageId,
+  },
+  /// Stops the answer under way in review thread `thread` of run `run` (*Stop answering*): its CLI ends, and what it
+  /// wrote stays. Answered with [`Reply::Accepted`], whether an answer was under way or not.
+  StopReviewAnswer { run: RunId, thread: ReviewThreadId },
   /// Estimates the story points of task `task` on auto mode's reviewer's connection and model (protocol 30), unless a
   /// person set them or they were estimated or asked from its brief and criteria as they are; what it spent is kept.
   /// Answered with [`Reply::TaskEstimated`] once it ended, [`Rejection::TaskNotFound`] for no such task.

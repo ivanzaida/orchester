@@ -7,7 +7,14 @@ use std::{
   thread,
 };
 
-use orchester_core::{id::RunId, integration::MergeError, revision::Revision};
+use orchester_core::{
+  id::RunId,
+  integration::{
+    MergeError, PreflightStage,
+    attempt::{AttemptStage, MergeAsker, MergeVia},
+  },
+  revision::Revision,
+};
 use orchester_exec::programs::Programs;
 
 use super::{Active, JobState, RunJobs};
@@ -16,8 +23,10 @@ use crate::{
   messages::{self, Message},
   secrets::Vault,
   tasks::{
-    integration::{IntegrationProblem, merge_in},
+    integration::{IntegrationProblem, integration_refusal, stage_message},
     local_integration::LegacyPolicy,
+    merge_attempts::{self, Asked},
+    merge_retry::merge_retrying,
   },
   workspace::OpenProject,
 };
@@ -85,14 +94,20 @@ impl RunJobs {
     let not_done = Message::new("statusBar.operations.runMerge.notDone")
       .with("task", key.clone())
       .with("run", number.to_string());
+    let automated = !matches!(telling, Telling::Person);
+    let asked = telling.asked();
     let made_policy = telling.policy(&open.repo_root, run);
     let result = catch_unwind(AssertUnwindSafe(|| {
-      made_policy
-        .as_ref()
-        .map_err(Clone::clone)?
-        .as_ref()
-        .map_or(Ok(()), preflight)?;
-      merge_in(&open.repo_root, &programs, (run, expected))
+      let allowed = made_policy.as_ref().map_err(Clone::clone).and_then(|policy| {
+        policy
+          .as_ref()
+          .map_or(Ok(()), |policy| preflight(&open.repo_root, policy))
+      });
+      if let Err(problem) = allowed {
+        merge_attempts::record_refused(&open.repo_root, run, asked, (AttemptStage::Policy, &problem));
+        return Err(problem);
+      }
+      merge_retrying(&open.repo_root, &programs, (run, expected, None), asked)
     }));
     let policy = made_policy.ok().flatten();
     let continues_locally = matches!(&result, Ok(Err(problem)) if problem.continues_locally());
@@ -104,16 +119,18 @@ impl RunJobs {
       }
       Ok(Err(problem)) => {
         let raw = problem.message(&separator);
-        let message = match &policy {
-          Some(policy) => policy.safe_message(raw),
-          None => raw,
+        let message = match (&policy, &problem) {
+          (Some(policy), _) => policy.safe_message(raw),
+          // An automation's policy that could not be made passes no cause through: only the stage is told.
+          (None, IntegrationProblem::Preflight { stage, .. }) if automated => stage_message(*stage),
+          (None, _) => raw,
         };
         match &problem {
           IntegrationProblem::Merge(MergeError::Conflict { files }) => conflicts.clone_from(files),
           IntegrationProblem::NotRecorded { merge, .. } => made = Some(merge.clone()),
           _ => {}
         }
-        if policy.is_some() {
+        if automated {
           running.fail(message.clone());
         } else {
           problem.end(running, not_done);
@@ -149,33 +166,38 @@ enum Telling {
 }
 
 impl Telling {
+  /// Who asked for the merge, and from where: a person or an MCP client pressing *Merge into <base>*, or `merge_run`.
+  const fn asked(&self) -> Asked {
+    match self {
+      Self::Person => (MergeAsker::Person, MergeVia::TaskPage),
+      Self::Client(_) => (MergeAsker::Automation, MergeVia::TaskPage),
+      Self::Policy(_) => (MergeAsker::Automation, MergeVia::MergeRun),
+    }
+  }
+
   /// The policy the merge goes through, none for a person; a policy that cannot be made refuses the merge.
   fn policy(self, root: &Path, run: RunId) -> Result<Option<LegacyPolicy>, IntegrationProblem> {
     match self {
       Self::Person => Ok(None),
       Self::Policy(policy) => Ok(Some(*policy)),
-      Self::Client(vault) => LegacyPolicy::new(root, run, vault).map(Some).map_err(|error| {
-        tracing::warn!(%error, "cannot make the policy of a merge an MCP client asked for");
-        IntegrationProblem::Store(Message::new("localIntegration.preflightFailed"))
-      }),
+      Self::Client(vault) => LegacyPolicy::new(root, run, vault)
+        .map(Some)
+        .map_err(integration_refusal(root, PreflightStage::Policy)),
     }
   }
 }
 
 /// Refuses a legacy merge whose result git holds already, in full or in part, or whose identities the policy cannot
 /// prove.
-fn preflight(policy: &LegacyPolicy) -> Result<(), IntegrationProblem> {
-  match policy.preflight() {
-    Ok(None) => Ok(()),
-    Ok(Some(_)) => Err(IntegrationProblem::Store(Message::new(
+fn preflight(root: &Path, policy: &LegacyPolicy) -> Result<(), IntegrationProblem> {
+  match policy
+    .preflight()
+    .map_err(integration_refusal(root, PreflightStage::Policy))?
+  {
+    None => Ok(()),
+    Some(_) => Err(IntegrationProblem::Store(Message::new(
       "localIntegration.externalResult",
     ))),
-    Err(error) => {
-      tracing::warn!(%error, "the preflight of a legacy merge failed");
-      Err(IntegrationProblem::Store(Message::new(
-        "localIntegration.preflightFailed",
-      )))
-    }
   }
 }
 

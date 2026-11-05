@@ -1,8 +1,9 @@
-//! Resolving a merge's conflicts on the *Not merged into main* card: it offers *Local integration*, *Resolve in
-//! editor* and *Ask an agent to resolve*; *Resolve in editor* merges main into the run's worktree with git's markers
-//! and starts the editor (a stand-in that writes down what it was given); *Continue* refuses while markers remain and
-//! commits the merge once they are gone, after which *Merge into main* merges; *Abort* puts the worktree back; a
-//! worktree with uncommitted work is not merged into. No runner is connected here: asking an agent waits for one.
+//! Resolving a merge's conflicts: the task's Merge row says *Conflicts* and opens the run's attempt page, which offers
+//! *Resolve in editor* and *Ask an agent to resolve*; *Resolve in editor* merges main into the run's worktree with
+//! git's markers and starts the editor (a stand-in that writes down what it was given), and the task page carries on
+//! with the merge waiting there: *Continue* refuses while markers remain and commits the merge once they are gone,
+//! after which *Merge into main* merges; *Abort* puts the worktree back; a worktree with uncommitted work is not merged
+//! into. No runner is connected here: asking an agent waits for one.
 
 use std::{
   fs,
@@ -73,7 +74,8 @@ fn git_in(dir: &Path, args: &[&str]) -> String {
   String::from_utf8_lossy(&output.stdout).trim().to_owned()
 }
 
-/// The Summary of the conflicting task after *Merge into main* stopped at its conflicts.
+/// The run's attempt page, opened from the Merge row of the conflicting task after *Merge into main* stopped at its
+/// conflicts.
 fn conflicted(editor: Option<(Editor, PathBuf)>) -> (Page, Run, Option<PathBuf>) {
   let (mut page, record) = match editor {
     Some((editor, record)) => (Page::seeded_with_editor("decisions", editor), Some(record)),
@@ -81,16 +83,32 @@ fn conflicted(editor: Option<(Editor, PathBuf)>) -> (Page, Run, Option<PathBuf>)
   };
   let run = latest_run(&page, CONFLICTING);
   page.open(CONFLICTING, "task-merge");
-  page.merge_until(("task-merge", "task-notice-title"), "Not merged into main");
-  page.until_says("task-merge-conflicts", FILES[0]);
+  page.merge_until(("task-merge", "task-property-merge-label"), "Conflicts · 2 files");
+  page.click("task-merge-row");
+  page.until_says("merge-attempt-conflicting-files", FILES[0]);
   (page, run, record)
 }
 
-/// Waits until the merge waits in the worktree for the person.
-fn resolving(page: &mut Page) {
+/// Until the attempt page read the run's worktree: *Ask an agent to resolve* then says why it cannot be used, as no
+/// runner is connected here.
+fn worktree_read(page: &mut Page) {
+  page
+    .window
+    .until_within(super::MERGE_WAIT, "the run's worktree to be read", |window| {
+      window.texts("merge-attempt-ask-agent-reason").is_some()
+    });
+}
+
+/// *Resolve in editor* on the attempt page, then back on the task page until the merge waits in the worktree for the
+/// person.
+fn resolve_in_editor(page: &mut Page) {
+  worktree_read(page);
+  page.click("merge-attempt-resolve-in-editor");
+  page.window.navigation().back();
   page
     .window
     .until_within(super::MERGE_WAIT, "the merge to wait in the worktree", |window| {
+      window.tree.tick_timers();
       window.texts("task-resolving-title").is_some()
     });
 }
@@ -128,29 +146,31 @@ fn resolve_by_hand(page: &mut Page, worktree: &Path) {
 }
 
 #[test]
-fn decision_resolve_a_conflict_offers_three_ways_and_the_editor_merges_into_the_worktree() {
+fn decision_resolve_a_conflict_offers_two_ways_and_the_editor_merges_into_the_worktree() {
   let _checkout = checkout_page();
   let folder = tempfile::tempdir().expect("a folder for the stand-in");
   let (mut page, run, record) = conflicted(Some(stand_in(folder.path())));
   let record = record.expect("the stand-in's record");
   let checkout = git_in(&page.repo, &["rev-parse", "HEAD"]);
-  assert!(page.has("task-open-local-integration"));
-  assert!(page.has("task-resolve-in-editor"));
-  assert!(page.has("task-resolve-ask-agent"));
+  worktree_read(&mut page);
+  assert!(page.has("merge-attempt-resolve-in-editor"));
+  assert!(page.has("merge-attempt-ask-agent"));
   let program = match &stand_in_program(folder.path()) {
     Editor::Named(program) => program.file_name().expect("a file").to_string_lossy().into_owned(),
     other => panic!("a named stand-in, not {other:?}"),
   };
-  assert_eq!(
-    page.text("task-resolve-editor"),
-    format!("Merges main into the run's worktree and opens it with its conflicting files in {program}.")
+  let line = page.text("merge-attempt-resolve-editor");
+  assert!(
+    line.contains(&format!(
+      "merges main into the run's worktree and opens it with its conflicting files in {program}."
+    )),
+    "{line}"
   );
   // Asking an agent goes to the runner, which is not connected here.
-  assert!(page.locked("task-resolve-ask-agent"));
-  assert_eq!(page.text("task-resolve-agent-reason"), OFFLINE);
+  assert!(page.locked("merge-attempt-ask-agent"));
+  assert_eq!(page.text("merge-attempt-ask-agent-reason"), OFFLINE);
 
-  page.click("task-resolve-in-editor");
-  resolving(&mut page);
+  resolve_in_editor(&mut page);
   let worktree = worktree(&page, &run);
   for file in FILES {
     let text = fs::read_to_string(worktree.join(file)).expect("the conflicted file");
@@ -205,9 +225,9 @@ fn decision_resolve_a_file_main_deleted_waits_for_a_side_to_be_kept() {
   git_in(&page.repo, &["commit", "--quiet", "-m", "main drops the settings"]);
   let run = latest_run(&page, CONFLICTING);
   page.open(CONFLICTING, "task-merge");
-  page.merge_until(("task-merge", "task-notice-title"), "Not merged into main");
-  page.click("task-resolve-in-editor");
-  resolving(&mut page);
+  page.merge_until(("task-merge", "task-property-merge-label"), "Conflicts · ");
+  page.click("task-merge-row");
+  resolve_in_editor(&mut page);
   assert_eq!(
     page.text("task-resolving-file-1"),
     format!(
@@ -248,13 +268,12 @@ fn decision_resolve_abort_puts_the_worktree_back() {
   let (mut page, run, _) = conflicted(Some(stand_in(folder.path())));
   let worktree = worktree(&page, &run);
   let before = git_in(&worktree, &["rev-parse", "HEAD"]);
-  page.click("task-resolve-in-editor");
-  resolving(&mut page);
+  resolve_in_editor(&mut page);
   page.click("task-resolve-abort");
   page
     .window
-    .until_within(super::MERGE_WAIT, "the conflict card again", |window| {
-      window.texts("task-resolving-title").is_none() && window.texts("task-resolve-in-editor").is_some()
+    .until_within(super::MERGE_WAIT, "the Ready card again", |window| {
+      window.texts("task-resolving-title").is_none() && window.texts("task-merge").is_some()
     });
   assert_eq!(git_in(&worktree, &["rev-parse", "HEAD"]), before);
   assert_eq!(git_in(&worktree, &["status", "--porcelain"]), "");
@@ -267,8 +286,17 @@ fn decision_resolve_refuses_a_worktree_with_uncommitted_work() {
   let (mut page, run, record) = conflicted(Some(stand_in(folder.path())));
   let worktree = worktree(&page, &run);
   fs::write(worktree.join("agent-notes.md"), "Not committed.\n").expect("uncommitted work");
-  page.click("task-resolve-in-editor");
-  page.until_says("task-resolve-failed", "agent-notes.md");
+  worktree_read(&mut page);
+  // The page may have read the worktree before or after the work was left in it: it refuses either way, before the
+  // press or when the merge into the worktree starts.
+  if !page.locked("merge-attempt-resolve-in-editor") {
+    page.click("merge-attempt-resolve-in-editor");
+    page.until_says("merge-attempt-resolve-failed", "agent-notes.md");
+  }
+  page.window.navigation().back();
+  page
+    .window
+    .until("the task page", |window| window.texts("task-merge").is_some());
   assert!(!page.has("task-resolving-title"));
   assert!(!record.expect("the stand-in's record").exists(), "no editor started");
 }
@@ -277,9 +305,12 @@ fn decision_resolve_refuses_a_worktree_with_uncommitted_work() {
 fn decision_resolve_without_an_editor_says_so() {
   let _checkout = checkout_page();
   let (mut page, ..) = conflicted(None);
-  assert!(page.locked("task-resolve-in-editor"));
+  page.window.until("Resolve in editor", |window| {
+    window.texts("merge-attempt-resolve-editor").is_some()
+  });
+  assert!(page.locked("merge-attempt-resolve-in-editor"));
   assert_eq!(
-    page.text("task-resolve-editor"),
+    page.text("merge-attempt-resolve-editor"),
     "No editor was found on this computer: install VS Code's code command, or name your editor in ORCHESTER_EDITOR."
   );
 }

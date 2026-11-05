@@ -55,14 +55,19 @@ impl MetadataOwnership {
   }
 
   fn objects(&mut self, common: &Arc<Directory>) -> Result<(), LocalGitError> {
-    let objects = common.child(OsStr::new("objects"), false)?.ok_or(LocalGitError::Io)?;
+    let objects = common
+      .child(OsStr::new("objects"), false)?
+      .ok_or_else(|| LocalGitError::missing(&common.path().join("objects")))?;
     // Every existing bucket, pack and info folder, held as Git left them.
     self.tree(&objects)?;
     // An alternates file would make objects outside this repository readable: refuse one with content.
     if let Some(info) = objects.child(OsStr::new("info"), false)?
       && let Some(alternates) = info.open_regular(OsStr::new("alternates"), false, false)?
     {
-      if alternates.metadata().map_err(|_| LocalGitError::Io)?.len() != 0 {
+      let metadata = alternates
+        .metadata()
+        .map_err(LocalGitError::io_at(&info.path().join("alternates")))?;
+      if metadata.len() != 0 {
         return Err(LocalError::Unsupported.into());
       }
       self.files.push(alternates);
@@ -83,9 +88,10 @@ impl MetadataOwnership {
     let Some(worktrees) = common.child(OsStr::new("worktrees"), false)? else {
       return Ok(());
     };
-    for entry in std::fs::read_dir(worktrees.path()).map_err(|_| LocalGitError::Io)? {
-      let entry = entry.map_err(|_| LocalGitError::Io)?;
-      if entry.file_type().map_err(|_| LocalGitError::Io)?.is_dir() {
+    let failed = || LocalGitError::io_at(worktrees.path());
+    for entry in std::fs::read_dir(worktrees.path()).map_err(failed())? {
+      let entry = entry.map_err(failed())?;
+      if entry.file_type().map_err(LocalGitError::io_at(&entry.path()))?.is_dir() {
         remove_leftover(&entry.path());
       }
     }
@@ -116,7 +122,7 @@ impl MetadataOwnership {
     self.read_pointer(
       directory
         .open_regular(OsStr::new(name), false, false)?
-        .ok_or(LocalGitError::Io)?,
+        .ok_or_else(|| LocalGitError::missing(&directory.path().join(name)))?,
     )
   }
   fn read_pointer(&mut self, mut file: File) -> Result<String, LocalGitError> {
@@ -125,7 +131,7 @@ impl MetadataOwnership {
     Read::by_ref(&mut file)
       .take(4097)
       .read_to_end(&mut bytes)
-      .map_err(|_| LocalGitError::Io)?;
+      .map_err(|error| LocalGitError::io(&error))?;
     if bytes.len() > 4096 {
       return Err(LocalError::Unsupported.into());
     }
@@ -143,9 +149,10 @@ impl MetadataOwnership {
   }
   fn tree(&mut self, directory: &Arc<Directory>) -> Result<(), LocalGitError> {
     self.pin(directory)?;
-    for entry in std::fs::read_dir(directory.path()).map_err(|_| LocalGitError::Io)? {
-      let entry = entry.map_err(|_| LocalGitError::Io)?;
-      let metadata = entry.file_type().map_err(|_| LocalGitError::Io)?;
+    let failed = || LocalGitError::io_at(directory.path());
+    for entry in std::fs::read_dir(directory.path()).map_err(failed())? {
+      let entry = entry.map_err(failed())?;
+      let metadata = entry.file_type().map_err(LocalGitError::io_at(&entry.path()))?;
       if metadata.is_symlink() {
         return Err(LocalError::Unsupported.into());
       }

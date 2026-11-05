@@ -321,6 +321,8 @@ fn the_apps_own_tools_word_their_schemas_in_single_spaces() {
     "navigate",
     "set_theme",
     "hold_reads",
+    "hold_hand_offs",
+    "hold_integration",
     "update_state",
     "set_update_state",
   ] {

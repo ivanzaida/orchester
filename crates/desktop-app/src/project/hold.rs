@@ -1,6 +1,7 @@
 //! Holds the project feeds' reads, so a screen's loading state stays on screen long enough for QA to
 //! capture it (`AGENTS.md` rule 15). Debug builds turn it on and off through the app's MCP tool
-//! `hold_reads`; nothing else holds reads, so in a release build every read goes straight through.
+//! `hold_reads`; nothing else holds reads, so in a release build every read goes straight through. A second
+//! hold of the same kind holds the review page's hand-offs to the runner (`hold_hand_offs`).
 
 use std::sync::Arc;
 

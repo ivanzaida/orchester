@@ -242,7 +242,7 @@ pub fn run_commits_in(
 }
 
 /// Where the run's own work up to `head` starts.
-fn own_start(
+pub(crate) fn own_start(
   repo_root: &Path,
   programs: &Programs,
   range: &RunRange,

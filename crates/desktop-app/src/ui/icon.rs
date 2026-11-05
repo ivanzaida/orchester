@@ -80,6 +80,8 @@ icons! {
   // The font's `arrow-up-circle`.
   CircleArrowUp => '\u{e07b}',
   CircleCheck => '\u{e226}',
+  // The font's `check-circle`, which lucide renamed `circle-check-big`.
+  CircleCheckBig => '\u{e07c}',
   CircleDashed => '\u{e4b0}',
   CircleDot => '\u{e345}',
   CircleDotDashed => '\u{e4b1}',
@@ -350,7 +352,7 @@ pub const fn screen_icon(screen: Screen) -> Icon {
     Screen::NewTask => Icon::ListPlus,
     Screen::EditTask => Icon::Pencil,
     Screen::Modules => Icon::Target,
-    Screen::MergeQueue => Icon::GitMerge,
+    Screen::MergeQueue | Screen::Merges => Icon::GitMerge,
     Screen::PullRequests => Icon::GitPullRequest,
     Screen::Usage => Icon::ChartColumn,
     Screen::Pipelines => Icon::Workflow,

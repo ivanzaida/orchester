@@ -18,7 +18,7 @@ impl LocalGit {
         Ok(Some(value.to_owned()))
       }
       Some(1) => Ok(None),
-      _ => Err(LocalGitError::Refused),
+      _ => Err(output.refused()),
     }
   }
 
@@ -29,7 +29,7 @@ impl LocalGit {
     match output.code {
       Some(0) => Ok(true),
       Some(1) => Ok(false),
-      _ => Err(LocalGitError::Refused),
+      _ => Err(output.refused()),
     }
   }
 
@@ -98,11 +98,11 @@ impl LocalGit {
       None,
     )?;
     if patches.code != Some(0) {
-      return Err(LocalGitError::Refused);
+      return Err(patches.refused());
     }
     let ids = self.raw(&["patch-id", "--verbatim"], Some(&patches.bytes), None)?;
     if ids.code != Some(0) {
-      return Err(LocalGitError::Refused);
+      return Err(ids.refused());
     }
     let text = String::from_utf8(ids.bytes).map_err(|_| LocalGitError::Data)?;
     let mut ids: Vec<String> = text

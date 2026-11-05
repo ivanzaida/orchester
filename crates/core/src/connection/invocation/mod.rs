@@ -11,6 +11,7 @@ mod http_authorization;
 pub mod mcp;
 mod orchester;
 mod provider;
+mod review_answer;
 
 use std::{
   ffi::OsString,
@@ -32,6 +33,7 @@ pub use self::{
     CLAUDE_KEY_VARIABLE, CLAUDE_MODEL_VARIABLES, CLAUDE_ROUTING, CODEX_KEY_VARIABLE, CODEX_PROVIDER_ID, OnProvider,
     codex_overrides,
   },
+  review_answer::ClaudeReviewAnswer,
 };
 use crate::{
   command::{Command, SecretVariable},

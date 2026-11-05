@@ -12,14 +12,16 @@
 
 mod beside;
 mod bring_in;
+mod left;
 mod restore;
 mod temporary;
 
-use std::path::Path;
+use std::{fmt, path::Path, time::Duration};
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+pub use self::left::{Interrupted, clear_interrupted, left_by_bring_in, put_back};
 use super::{GitError, base::Landing, git::Git};
 use crate::{
   command::CommandRunner,
@@ -29,6 +31,46 @@ use crate::{
   run::{BranchName, Run, RunStatus},
   time::Timestamp,
 };
+
+/// The step of a merge a git command ran for, as a git that stopped answering is told.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MergeStep {
+  /// Reading the checkout and the branches before anything changes.
+  Check,
+  /// Making, filling or removing the temporary worktree of the merge commit ([`temporary`]).
+  TemporaryWorktree,
+  /// Merging in the temporary worktree.
+  Merge,
+  /// Fast-forwarding the checkout to the merge ([`bring_in`]).
+  BringIn,
+  /// Putting back what a bring-in that stopped part way wrote ([`restore`]).
+  PutBack,
+}
+
+impl MergeStep {
+  /// The step's name in logs and in an MCP client's answers.
+  pub const fn name(self) -> &'static str {
+    match self {
+      Self::Check => "check",
+      Self::TemporaryWorktree => "temporary_worktree",
+      Self::Merge => "merge",
+      Self::BringIn => "bring_in",
+      Self::PutBack => "put_back",
+    }
+  }
+}
+
+impl fmt::Display for MergeStep {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    f.write_str(match self {
+      Self::Check => "checking the checkout",
+      Self::TemporaryWorktree => "preparing the temporary worktree",
+      Self::Merge => "merging",
+      Self::BringIn => "bringing the merge in",
+      Self::PutBack => "putting files back",
+    })
+  }
+}
 
 /// Refs that mean an operation is in progress in the checkout.
 const IN_PROGRESS: [&str; 3] = ["MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD"];
@@ -91,8 +133,9 @@ pub struct TemporaryLeft {
   pub detail: String,
 }
 
-/// Why a run was not merged. Except for [`MergeError::LeftChanged`] and for [`MergeError::Git`]
-/// while the checkout was being brought to the merge, nothing in the checkout changed.
+/// Why a run was not merged. Except for [`MergeError::LeftChanged`], for [`MergeError::Unanswered`] while putting
+/// files back and for [`MergeError::Git`] while the checkout was being brought to the merge, nothing in the checkout
+/// changed.
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
 pub enum MergeError {
   #[error("only a run that succeeded can be merged")]
@@ -134,11 +177,35 @@ pub enum MergeError {
   #[error("git did not merge: {0}")]
   Refused(String),
   /// Git stopped part way through bringing the merge in, and these files it had written could not be
-  /// put back: they hold the run's version. `detail` says why they could not.
+  /// put back: they do not hold the base's version, or, when a put-back that failed could not read which do, they are
+  /// every file git may have written. `detail` says why they could not. [`put_back`] tries again.
   #[error("git stopped part way and {files:?} could not be put back: {detail}")]
   LeftChanged { files: Vec<String>, detail: String },
+  /// `git <command>` wrote nothing for `after` while the merge was at `step`, and was stopped with everything it
+  /// started; the temporary worktree was removed after it, and what a bring-in had written was put back.
+  #[error("git stopped answering while {step}: `git {command}` wrote nothing for {} s and was stopped", after.as_secs())]
+  Unanswered {
+    step: MergeStep,
+    command: String,
+    after: Duration,
+  },
+  /// A bring-in of `run`'s merge stopped part way and left these files of the checkout changed: no merge reaches the
+  /// checkout until they hold the base's version again ([`put_back`]).
+  #[error("the files a merge of run {run} left changed are not put back yet: {files:?}")]
+  NotPutBack { run: RunId, files: Vec<String> },
   #[error(transparent)]
   Git(#[from] GitError),
+}
+
+impl MergeError {
+  /// This error, a git that stopped answering told at `step`; any other as it is.
+  #[must_use]
+  pub(super) fn at(self, step: MergeStep) -> Self {
+    match self {
+      Self::Git(GitError::Unanswered { command, after }) => Self::Unanswered { step, command, after },
+      other => other,
+    }
+  }
 }
 
 /// Merges the branch of `run`, a run of task `task` that succeeded, into its base branch in the
@@ -181,7 +248,9 @@ pub fn merge_run_as(
   (expected, delivering, landing): (Option<&Revision>, Option<Delivering<'_>>, Landing),
   now: Timestamp,
 ) -> Result<MergeOutcome, MergeError> {
-  let (revision, kind, left) = merge(runner, (git, repo), (run, task), (expected, delivering, landing))?;
+  let (revision, kind, left) = merge(runner, (git, repo), (run, task), (expected, delivering, landing))
+    // A git that stops answering in a step of its own was told there already.
+    .map_err(|error| error.at(MergeStep::Check))?;
   let merge = RunMerge {
     run: run.id(),
     into: run.base_branch().ok_or(MergeError::NoBaseBranch)?.clone(),
@@ -210,6 +279,7 @@ fn merge(
     return beside::merge(&git, (run, task), (into, &head), delivering);
   }
   check_checkout(&git, into)?;
+  left::refuse_left(&git)?;
   let head = run_head(&git, run, expected)?;
   let base = git
     .commit("HEAD")?
@@ -223,7 +293,7 @@ fn merge(
     return Ok((revision(&base)?, MergeKind::AlreadyMerged, None));
   }
   if delivering.is_none() && git.is_ancestor(&base, &head)? {
-    bring_in::bring_in(&git, (&base, &head))?;
+    bring_in::bring_in(&git, run.id(), (&base, &head))?;
     return Ok((revision(&head)?, MergeKind::FastForward, None));
   }
   let title = title(run, task);
@@ -234,7 +304,7 @@ fn merge(
   if git.commit("HEAD")?.as_deref() != Some(base.as_str()) {
     return Err(MergeError::BaseMoved { branch: into.clone() });
   }
-  bring_in::bring_in(&git, (&base, &merged))?;
+  bring_in::bring_in(&git, run.id(), (&base, &merged))?;
   Ok((revision(&merged)?, kind, left))
 }
 

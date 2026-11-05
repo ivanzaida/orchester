@@ -70,16 +70,17 @@ pub fn set_executable(root: &Path, path: &LocalPath, expected: &ContentHash, val
 }
 
 pub fn prepare_scratch(root: &Path, components: &[&str]) -> Result<PathBuf, LocalGitError> {
-  Ok(
-    hold_directory(root, components, true)?
-      .ok_or(LocalGitError::Io)?
-      .path()
-      .to_owned(),
-  )
+  Ok(held_directory(root, components)?.path().to_owned())
 }
 
 pub fn owned_directory(root: &Path, components: &[&str]) -> Result<Option<PathBuf>, LocalGitError> {
   Ok(hold_directory(root, components, false)?.map(|directory| directory.path().to_owned()))
+}
+
+/// The folder `components` name below `root`, created where it is missing.
+pub(crate) fn held_directory(root: &Path, components: &[&str]) -> Result<Arc<Directory>, LocalGitError> {
+  hold_directory(root, components, true)?
+    .ok_or_else(|| LocalGitError::missing(&components.iter().fold(root.to_owned(), |path, name| path.join(name))))
 }
 
 pub(crate) fn hold_directory(
@@ -102,7 +103,7 @@ pub(crate) fn hold_directory(
 }
 
 pub fn owned_store(root: &Path) -> Result<(), LocalGitError> {
-  let directory = hold_directory(root, &[".orchester"], true)?.ok_or(LocalGitError::Io)?;
+  let directory = held_directory(root, &[".orchester"])?;
   for name in [
     "orchester.db",
     "orchester.db-wal",
@@ -115,7 +116,7 @@ pub fn owned_store(root: &Path) -> Result<(), LocalGitError> {
       Ok(metadata) if linked(&metadata) || !metadata.is_file() => return Err(LocalError::Unsupported.into()),
       Ok(_) => {}
       Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-      Err(_) => return Err(LocalGitError::Io),
+      Err(error) => return Err(LocalGitError::io_at(&path)(error)),
     }
   }
   directory.ensure_current()

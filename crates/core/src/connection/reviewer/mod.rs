@@ -159,7 +159,9 @@ fn run_cli(runner: &impl CommandRunner, command: &Command) -> CliOutput {
     Err(error @ (CommandError::NotFound | CommandError::NotStarted(_) | CommandError::UnsafeScriptArgument { .. })) => {
       Err((ReviewError::CouldNotRun(error.to_string()), ReviewSpend::Nothing))
     }
-    Err(error @ CommandError::Failed(_)) => Err((ReviewError::CouldNotRun(error.to_string()), ReviewSpend::Unknown)),
+    Err(error @ (CommandError::Failed(_) | CommandError::Silent { .. })) => {
+      Err((ReviewError::CouldNotRun(error.to_string()), ReviewSpend::Unknown))
+    }
   }
 }
 

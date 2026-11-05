@@ -1,10 +1,16 @@
-//! Where the run's work stands and what can be done with it. The Ready card (`Ready card` `hyzq2`): ready
-//! for review, *Merge into main*, *Create pull request* ([`super::pull_request`]), *Ask agent* and *Review PR*,
-//! and why the ones that cannot be used are unavailable (`Unavailable reason` `QR1ER`). *Merge into main* merges the
-//! run into the checkout's branch beside the person's uncommitted work, on the job `merge_run` uses. *Merged into
-//! main* (`nqp68`): where the work went and what was cleared after it. *Not merged into main* (`D3kggY`): why, the
-//! files that conflicted (`Conflicts` `IBx7h`), *Local integration* where it carries on (uncommitted files the merge
-//! would overwrite, a conflict, this run's local integration holding work), and the same actions to merge again.
+//! The top card of a run that waits to be merged (`Decision · Ready to merge`: `wRsU7` in 01i `k9GBy`, `g03VoM` in 01j
+//! `k4C0Es`): on `surface_raised`, radius 12, 14 by 16 inside and 10 between its parts; its head (a 14 glyph, the title
+//! in 13/600 and a meta line in 12 `text_muted`, 8 apart), one line in 12.5/1.5 `text_secondary`, and its actions 8
+//! apart. While the run waits to be merged it is `success` and `git-merge`, *Ready to merge*, the task, *every step
+//! passed* and the run, then how much the run changes onto its branch. Once a merge did not land it is `warning` and
+//! `triangle-alert`: the outcome as the run's attempt page titles it, the task, the stage it stopped at and when, then
+//! the attempt in one line as a row of Review › Merges says it. Its actions: the merge's
+//! (`crate::screens::task::merge`) with its key cap; *Review changes* (`file-diff`), or *Open in Review*
+//! (`arrow-up-right`) once a merge did not land, which open the run's page under Review › Merges, its review page
+//! before any attempt and its attempt page after; *Close without merging* (`circle-check-big`), which marks the task
+//! done as *More actions* does; then *Review PR* once the run has a pull request. Under them why the merge waits, why
+//! the page's own work on it did not happen, and what came of creating the run's pull request
+//! ([`super::pull_request`]). *Merged into main* (`nqp68`): where the work went and what was cleared after it.
 
 use std::{num::NonZeroU64, sync::Arc};
 
@@ -17,28 +23,35 @@ use lurq::{
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_core::integration::{Leftovers, MergeKind, RunMerge};
+use orchester_core::integration::{Leftovers, MergeKind, RunMerge, attempt::AttemptOutcome};
 use orchester_workspace::{
   display,
   messages::Message,
-  tasks::{
-    detail::RunView,
-    integration_jobs::{JobState, MergeArgs},
-  },
+  tasks::{changes::Checkpointed, close::Closing, detail::RunView},
 };
 
 use super::{
-  super::{super::section_head, TaskContext},
+  super::TaskContext,
+  changed,
   pull_request::{self, PullRequestRead},
 };
 use crate::{
   navigation::Navigation,
-  routes::{Route, TaskView},
-  services::Services,
+  routes::{ProjectPage, Route},
+  screens::{
+    merges::{
+      attempt::standing::Standing,
+      words::{attempt_line, stage, when},
+    },
+    task::{
+      PageState, header,
+      merge::{self, Merge, MergeAction},
+    },
+  },
   theme::{ExtraSpacing, ExtraTypography, IconSize, TaskText},
   ui::{
     button::{ActionButton, ButtonKind},
-    card::{CardSurface, card},
+    field::field_error,
     icon::{Icon, icon},
     message::message_text,
     notice::{Notice, NoticeTone},
@@ -46,43 +59,106 @@ use crate::{
   },
 };
 
-/// A conflicting file's row (`Q2ISvw`).
+/// A conflicting file's row (`Q2ISvw`), in the merge waiting in the run's worktree.
 pub(super) const FILE_ROW_HEIGHT: f32 = 30.0;
+/// The branch a line names when the run did not record the one it merges into.
+const NO_BRANCH: &str = "—";
 
-/// The Ready card of a run that is not merged.
-pub fn ready(ctx: &mut Ctx, task: &TaskContext, run: &RunView, pull: &PullRequestRead) -> Element {
-  let (actions, reasons) = actions(ctx, task, run, (pull, false));
-  frame(
-    (ctx.t("decisions.ready.title"), ctx.t("decisions.ready.body")),
-    actions,
-    reasons,
-  )
+/// How the card looks: its glyph, and the tone of the glyph and the outline.
+struct Look {
+  glyph: Icon,
+  tone: PaletteColor,
+  name: &'static str,
 }
 
-/// The Ready card's frame (`Decision · Ready to merge` `I500yD`): on `surface_raised` in a `success` stroke, its head
-/// (the 14 check in `success` and its title in 13/600), what it means in 12.5 `text_secondary`, then its `actions` and
-/// why those that cannot be used are unavailable (`reasons`). A run that committed nothing and is completed rather than
-/// merged shows it too (ORC-93, `Decision · Complete the task?` `YEOlP`).
+impl Look {
+  /// The run's work passed: completing it (ORC-93, `Decision · Complete the task?` `YEOlP`).
+  const PASSED: Self = Self {
+    glyph: Icon::CircleCheck,
+    tone: PaletteColor::Success,
+    name: "success",
+  };
+  const READY: Self = Self {
+    glyph: Icon::GitMerge,
+    tone: PaletteColor::Success,
+    name: "success",
+  };
+  const NOT_MERGED: Self = Self {
+    glyph: Icon::TriangleAlert,
+    tone: PaletteColor::Warning,
+    name: "warning",
+  };
+}
+
+/// What the card shows: how the run's merge stands, the run, and what is known of its pull request.
+pub struct Shown<'a> {
+  pub merge: Merge,
+  pub run: &'a RunView,
+  pub pull: &'a PullRequestRead,
+}
+
+/// The top card as `shown` stands, `changes` being the run's changes as read.
+pub fn top(
+  ctx: &mut Ctx,
+  task: &TaskContext,
+  shown: &Shown<'_>,
+  changes: Option<&Result<Checkpointed, Message>>,
+) -> Element {
+  let Some(action) = merge::action(ctx, task, shown.merge) else {
+    return Column::new().into();
+  };
+  let (look, words) = match shown.merge {
+    Merge::Ready => (Look::READY, ready_words(ctx, task, shown.run, changes)),
+    Merge::NotMerged(standing) => (Look::NOT_MERGED, not_merged_words(ctx, task, shown.run, standing)),
+  };
+  let pull = pull_request::parts(ctx, task, shown.run, shown.pull);
+  let actions = buttons(ctx, task, shown, (&action, pull.review));
+  let under = under(ctx, &action).into_iter().chain(pull.outcome).collect();
+  framed(look, words, actions, under)
+}
+
+/// The card of a run whose work passed with `title` and `body` (`Decision · Complete the task?` `YEOlP`).
 pub(in super::super) fn frame((title, body): (Arc<str>, Arc<str>), actions: Element, reasons: Vec<Element>) -> Element {
+  framed(Look::PASSED, (title, None, body), actions, reasons)
+}
+
+/// The card in `look`: its head with `title` and `meta`, `body`, its `actions`, and `under` them what they say.
+fn framed(
+  look: Look,
+  (title, meta, body): (Arc<str>, Option<Arc<str>>, Arc<str>),
+  actions: Element,
+  under: Vec<Element>,
+) -> Element {
   let head = Row::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(icon(Icon::CircleCheck, IconSize::Md, PaletteColor::Success))
+    .child(icon(look.glyph, IconSize::Md, look.tone.clone()))
     .child(
       Text::new(&title)
         .id("task-notice-title")
-        .variant(TaskText::SectionTitle.role()),
-    );
+        .variant(TaskText::SectionTitle.role())
+        .nowrap(),
+    )
+    .with_children(meta.map(|meta| {
+      Text::new(&meta)
+        .id("task-notice-meta")
+        .variant(TypographyStyle::Description)
+        .color(PaletteColor::TextMuted)
+        .flex_shrink(1.0)
+        .min_width(Dimension::Px(0.0))
+        .nowrap()
+        .text_overflow(lurq::components::TextOverflow::Elipsis)
+    }));
   Column::new()
     .id("task-notice")
     .width(Dimension::Pct(100.0))
     .padding(Padding::symmetric(SpacingSize::Lg, ExtraSpacing::Inset.role()))
     .spacing(ExtraSpacing::Loose.role())
     .background(PaletteColor::SurfaceRaised)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Success))
+    .border(Border::inside(BorderSize::Sm, look.tone))
     .rounded(RadiusSize::Lg)
-    .describe("tone", "success")
+    .describe("tone", look.name)
     .child(head)
     .child(
       Text::new(&body)
@@ -91,8 +167,155 @@ pub(in super::super) fn frame((title, body): (Arc<str>, Arc<str>), actions: Elem
         .width(Dimension::Pct(100.0)),
     )
     .child(actions)
-    .with_children(reasons)
+    .with_children(under)
     .into()
+}
+
+/// *Ready to merge*, *KON-12 · every step passed · run 8*, and how much the run changes onto its branch once that was
+/// read.
+fn ready_words(
+  ctx: &Ctx,
+  task: &TaskContext,
+  run: &RunView,
+  changes: Option<&Result<Checkpointed, Message>>,
+) -> (Arc<str>, Option<Arc<str>>, Arc<str>) {
+  let meta = ctx.t_args(
+    "decisions.ready.meta",
+    [
+      ("key", task.key.to_string()),
+      ("run", run.run.number().get().to_string()),
+    ],
+  );
+  let body = match (run.run.base_branch(), changed::counts(changes)) {
+    (Some(branch), Some((files, (added, removed)))) => {
+      let key = if files == 1 {
+        "decisions.ready.bodyOne"
+      } else {
+        "decisions.ready.bodyOther"
+      };
+      ctx.t_args(
+        key,
+        [
+          ("files", files.to_string()),
+          ("added", added.to_string()),
+          ("removed", removed.to_string()),
+          ("branch", branch.as_str().to_owned()),
+        ],
+      )
+    }
+    _ => ctx.t("decisions.ready.body"),
+  };
+  (ctx.t("decisions.ready.title"), Some(meta), body)
+}
+
+/// The outcome as the run's attempt page titles it, *KON-12 · refused at Integration lock · 12:41*, and the last
+/// attempt in one line, as a row of Review › Merges says it.
+fn not_merged_words(
+  ctx: &Ctx,
+  task: &TaskContext,
+  run: &RunView,
+  standing: Standing,
+) -> (Arc<str>, Option<Arc<str>>, Arc<str>) {
+  let branch = run.run.base_branch().map_or(NO_BRANCH, |branch| branch.as_str());
+  let title = standing.status(ctx, branch);
+  let Some(last) = task.attempt.as_deref().and_then(|page| page.last()) else {
+    return (title, None, ctx.t("decisions.ready.notMerged.unknown"));
+  };
+  let attempt = &last.attempt;
+  let (meta, at) = match attempt.outcome() {
+    AttemptOutcome::Refused { stage: at } => ("decisions.ready.notMerged.refusedAt", Some(*at)),
+    AttemptOutcome::GitStopped { stage: at } => ("decisions.ready.notMerged.stoppedAt", Some(*at)),
+    AttemptOutcome::Interrupted { stage: at } => ("decisions.ready.notMerged.endedAt", Some(*at)),
+    _ => ("decisions.ready.notMerged.at", None),
+  };
+  let meta = ctx.t_args(
+    meta,
+    [
+      ("key", task.key.to_string()),
+      ("stage", at.map(|at| stage(ctx, at).to_string()).unwrap_or_default()),
+      ("time", when(ctx, attempt.at()).to_string()),
+    ],
+  );
+  (title, Some(meta), attempt_line(ctx, attempt, branch))
+}
+
+/// The merge's action, *Review changes* or *Open in Review*, *Close without merging*, and *Review PR* once the run has
+/// pull request `review`.
+fn buttons(
+  ctx: &mut Ctx,
+  task: &TaskContext,
+  shown: &Shown<'_>,
+  (action, review): (&MergeAction, Option<NonZeroU64>),
+) -> Element {
+  let navigation = Navigation::of(ctx);
+  let project = task.project.open.project.id();
+  let page = Route::Project(
+    project,
+    ProjectPage::MergeAttempt(task.key.clone(), shown.run.run.number()),
+  );
+  let (id, label, glyph) = match shown.merge {
+    Merge::Ready => ("task-review-changes", "decisions.ready.reviewChanges", Icon::FileDiff),
+    Merge::NotMerged(_) => (
+      "task-open-in-review",
+      "decisions.ready.openInReview",
+      Icon::ArrowUpRight,
+    ),
+  };
+  let open = ActionButton::new(id, ButtonKind::Secondary, ctx.t(label))
+    .icon(glyph)
+    .opens(navigation.to(page));
+  Row::new()
+    .id("task-ready-actions")
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .child(action.control.button())
+    .child(open)
+    .child(close(ctx, task))
+    .with_children(review.map(|number| review_pull_request(ctx, task, number)))
+    .into()
+}
+
+/// *Review PR*: the run's pull request `number` on its page.
+fn review_pull_request(ctx: &mut Ctx, task: &TaskContext, number: NonZeroU64) -> ActionButton {
+  let route = Route::Project(task.project.open.project.id(), ProjectPage::PullRequest(number, None));
+  ActionButton::new(
+    "task-review-pull-request",
+    ButtonKind::Secondary,
+    ctx.t("decisions.ready.review"),
+  )
+  .icon(Icon::GitPullRequest)
+  .opens(Navigation::of(ctx).to(route))
+}
+
+/// *Close without merging*: the task is marked done as *More actions* › *Mark as done* does, its run's work left
+/// unmerged on its branch; under way while the task closes.
+fn close(ctx: &mut Ctx, task: &TaskContext) -> ActionButton {
+  let closer = PageState::of(ctx).closer;
+  let button = ActionButton::new(
+    "task-close-without-merging",
+    ButtonKind::Ghost,
+    ctx.t("decisions.ready.close"),
+  )
+  .icon(Icon::CircleCheckBig);
+  if closer.busy() {
+    return button.loading();
+  }
+  let subject = header::subject(task);
+  button.on_click(move || closer.close(subject.clone(), Closing::Done))
+}
+
+/// Why the merge's action cannot be pressed now, and why the page's own work on the merge did not happen.
+fn under(ctx: &mut Ctx, action: &MergeAction) -> Vec<Element> {
+  let why = action
+    .waits
+    .clone()
+    .or_else(|| action.control.reason().map(|reason| reason.full.clone()))
+    .map(|why| reason_line("task-merge-reason", &why).into());
+  let failed = PageState::of(ctx).merge.failed.get().map(|reason| {
+    let words = ctx.t_args("decisions.ready.notDone", [("reason", message_text(ctx, &reason))]);
+    field_error("task-merge-failed", &words).into()
+  });
+  why.into_iter().chain(failed).collect()
 }
 
 /// *Merged into main*: where the run's work went and what was cleared after it.
@@ -155,224 +378,28 @@ fn left_behind(ctx: &Ctx, left: &Leftovers) -> Arc<str> {
   }
 }
 
-/// Why the last merge did not stand: *Not merged into main* with why and the files that conflicted, or
-/// that git merged the run (`made`) but the merge could not be recorded; on a conflict how to `resolve` it
-/// ([`super::resolve`]); then the actions to merge again, which records a merge git made.
-pub fn not_merged(
-  ctx: &mut Ctx,
-  task: &TaskContext,
-  run: &RunView,
-  (problem, made): (&Message, Option<&RunMerge>),
-  (conflicts, pull): (&[String], &PullRequestRead),
-  resolve: Option<Element>,
-) -> Vec<Element> {
-  let title = match (made, run.run.base_branch()) {
-    (Some(made), _) => ctx.t_args("decisions.ready.notRecordedTitle", [("branch", made.into.as_str())]),
-    (None, Some(branch)) => ctx.t_args("decisions.ready.notMergedTitle", [("branch", branch.as_str())]),
-    (None, None) => ctx.t("decisions.ready.notMergedNoBranch"),
+/// The merge's action while a merge waits in the run's worktree for the person to resolve it, which it waits for,
+/// with why; *Review PR* beside it once the run has a pull request.
+pub fn merge_actions(ctx: &mut Ctx, task: &TaskContext, run: &RunView, pull: &PullRequestRead) -> Element {
+  let Some(standing) = Merge::of(task) else {
+    return Column::new().into();
   };
-  let notice = Notice::new("task-notice", NoticeTone::Warning, title)
-    .icon(Icon::TriangleAlert)
-    .body(message_text(ctx, problem));
-  let notice = if task.jobs.run(run.id()).continues_locally {
-    notice.action(local_integration(ctx, task))
-  } else {
-    notice
+  let Some(action) = merge::action(ctx, task, standing) else {
+    return Column::new().into();
   };
-  let files = (!conflicts.is_empty()).then(|| conflicting(ctx, conflicts));
-  std::iter::once(notice.into())
-    .chain(files)
-    .chain(resolve)
-    .chain(std::iter::once(merge_actions(ctx, task, run, (pull, false))))
-    .collect()
-}
-
-/// The actions to merge again with why those that cannot be used now are unavailable; *Merge into main* waits
-/// while a merge waits `in_worktree` for the person to resolve it.
-pub fn merge_actions(
-  ctx: &mut Ctx,
-  task: &TaskContext,
-  run: &RunView,
-  (pull, in_worktree): (&PullRequestRead, bool),
-) -> Element {
-  let (actions, reasons) = actions(ctx, task, run, (pull, in_worktree));
-  Column::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(ExtraSpacing::Snug.role())
-    .child(actions)
-    .with_children(reasons)
-    .into()
-}
-
-/// Opens the task's Local integration, which carries on where the merge stopped.
-fn local_integration(ctx: &mut Ctx, task: &TaskContext) -> ActionButton {
-  let route = Route::Project(task.project.open.project.id(), task.page(TaskView::LocalIntegration));
-  ActionButton::new(
-    "task-open-local-integration",
-    ButtonKind::Secondary,
-    ctx.t("local_integration.title"),
-  )
-  .opens(Navigation::of(ctx).to(route))
-}
-
-/// *Conflicting files* with their count, a row per file.
-fn conflicting(ctx: &mut Ctx, files: &[String]) -> Element {
-  let rows = files.iter().map(|file| {
-    Row::new()
-      .width(Dimension::Pct(100.0))
-      .height(Dimension::Px(FILE_ROW_HEIGHT))
-      .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
-      .spacing(SpacingSize::Sm)
-      .align_items(Alignment::Center)
-      .child(icon(Icon::GitCompareArrows, IconSize::Base, PaletteColor::Warning))
-      .child(Text::new(file).variant(TypographyStyle::Mono).flex(1.0).nowrap())
-  });
-  let list = card("task-merge-conflicts", CardSurface::Outline)
-    .padding(Padding::symmetric(ExtraSpacing::Snug.role(), ExtraSpacing::Hair.role()))
-    .with_children(rows);
-  Column::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(ExtraSpacing::Loose.role())
-    .child(section_head(
-      ctx,
-      "task-merge-conflicts-head",
-      "decisions.ready.conflicts",
-      Some(files.len()),
-    ))
-    .child(list)
-    .into()
-}
-
-/// *Merge into main*, *Create pull request* with *Open as draft*, *Ask agent* and *Review PR* (`XKJdW`); what
-/// came of creating a pull request; and why the actions that cannot be used now are unavailable.
-fn actions(
-  ctx: &mut Ctx,
-  task: &TaskContext,
-  run: &RunView,
-  (pull, in_worktree): (&PullRequestRead, bool),
-) -> (Element, Vec<Element>) {
-  let (merge, merge_reason) = merge_button(ctx, task, run, in_worktree);
   let pull = pull_request::parts(ctx, task, run, pull);
-  let ask_reason = ctx.t("decisions.ready.askUnavailable");
-  let ask = ActionButton::new("task-ask-agent", ButtonKind::Secondary, ctx.t("decisions.ready.ask"))
-    .icon(Icon::MessageSquareText)
-    .unavailable(ask_reason.clone());
-  let (review, review_reason) = review_button(ctx, task, pull.review);
+  let review = pull.review.map(|number| review_pull_request(ctx, task, number));
   let row = Row::new()
     .id("task-ready-actions")
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(merge)
-    .with_children(pull.actions)
-    .child(ask)
-    .child(review);
-  let reasons = merge_reason
-    .map(|reason| ("task-merge-reason", reason))
-    .into_iter()
-    .chain(pull.reason.map(|reason| ("task-create-pull-request-reason", reason)))
-    .chain([("task-ask-agent-reason", ask_reason)])
-    .chain(review_reason.map(|reason| ("task-review-pull-request-reason", reason)))
-    .map(|(id, reason)| reason_line(id, &reason).into());
-  (row.into(), pull.outcome.into_iter().chain(reasons).collect())
-}
-
-/// *Review PR*: opens the run's pull request, unavailable until it has one.
-fn review_button(ctx: &mut Ctx, task: &TaskContext, number: Option<NonZeroU64>) -> (ActionButton, Option<Arc<str>>) {
-  let review = ActionButton::new(
-    "task-review-pull-request",
-    ButtonKind::Secondary,
-    ctx.t("decisions.ready.review"),
-  )
-  .icon(Icon::GitPullRequest);
-  let Some(number) = number else {
-    let reason = ctx.t("decisions.ready.reviewUnavailable");
-    return (review.unavailable(reason.clone()), Some(reason));
-  };
-  let navigation = crate::navigation::Navigation::of(ctx);
-  let route = crate::routes::Route::Project(
-    task.project.open.project.id(),
-    crate::routes::ProjectPage::PullRequest(number, None),
-  );
-  (review.opens(navigation.to(route)), None)
-}
-
-/// *Merge into main*: merges the run on the project's shared operations, the job Orchester's `merge_run` uses. A
-/// person's press tells them the outcome in full; an MCP client's press through the window goes through `merge_run`'s
-/// policy (`RunJobs::start_synthetic_merge`), which refuses and redacts what the tool would. Under way while git
-/// merges, waiting while the run's worktree is removed, its pull request is created, Local integration works in the
-/// checkout, another run of the project merges or a decision of Local integration waits, a merge waits in the run's
-/// worktree for the person to resolve it, and unavailable with why when the run did not record the
-/// branch it started from.
-fn merge_button(
-  ctx: &mut Ctx,
-  task: &TaskContext,
-  run: &RunView,
-  in_worktree: bool,
-) -> (ActionButton, Option<Arc<str>>) {
-  let Some(branch) = run.run.base_branch() else {
-    let reason = ctx.t("decisions.ready.mergeNoBranch");
-    let button = ActionButton::new("task-merge", ButtonKind::Primary, ctx.t("decisions.ready.mergeUnknown"))
-      .icon(Icon::GitMerge)
-      .unavailable(reason.clone());
-    return (button, Some(reason));
-  };
-  let job = task.jobs.run(run.id());
-  let label = ctx.t_args("decisions.ready.merge", [("branch", branch.as_str())]);
-  let button = ActionButton::new("task-merge", ButtonKind::Primary, label).icon(Icon::GitMerge);
-  if job.merge == JobState::Running {
-    return (button.loading(), None);
-  }
-  if task.jobs.merging().is_some_and(|other| other != run.id()) {
-    return (button.disabled(), Some(ctx.t("decisions.ready.anotherMerge")));
-  }
-  if job.creating_pull_request() {
-    return (button.disabled(), Some(ctx.t("decisions.ready.mergeWaitsPullRequest")));
-  }
-  if job.removing() {
-    return (button.disabled(), Some(ctx.t("decisions.ready.mergeWaits")));
-  }
-  if job.resolving() || in_worktree {
-    return (button.disabled(), Some(ctx.t("decisions.ready.mergeResolving")));
-  }
-  if job.busy() {
-    return (button.disabled(), Some(ctx.t("decisions.ready.mergeLocalWork")));
-  }
-  // A merge would not begin while a person answers Local integration (`RunJobs::local_decision`).
-  if task.jobs.local_decision_pending() {
-    return (button.disabled(), Some(ctx.t("decisions.ready.mergeDecision")));
-  }
-  let services = Services::of(ctx);
-  let (jobs, vault) = (
-    services.jobs.of(task.project.open.project.id()).of(run.id()),
-    services.vault,
-  );
-  let args = merge_args(ctx, task, run, branch.as_str());
-  // A merge that does not begin (another one took the project meanwhile) leaves the job's state, which
-  // the card shows, as it is.
-  let start = move || {
-    if lurq::app::events::is_synthetic_input() {
-      jobs.start_synthetic_merge(args.clone(), vault.clone());
-    } else {
-      jobs.start_merge(args.clone());
-    }
-  };
-  (button.on_click(start), None)
-}
-
-/// The merge of `run` into `branch`, reported in the status bar; once it ends the task is read again.
-fn merge_args(ctx: &mut Ctx, task: &TaskContext, run: &RunView, branch: &str) -> MergeArgs {
-  let services = Services::of(ctx);
-  let feed = task.project.feed.clone();
-  MergeArgs {
-    open: task.project.open.clone(),
-    task: task.detail.task.id(),
-    key: task.detail.task.key().to_string(),
-    number: run.run.number().get(),
-    branch: branch.to_owned(),
-    run: run.id(),
-    programs: services.programs,
-    activity: services.activity,
-    separator: ctx.t("task.listSeparator"),
-    changed: Arc::new(move || feed.saved()),
-  }
+    .child(action.control.button())
+    .with_children(review);
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(ExtraSpacing::Snug.role())
+    .child(row)
+    .with_children(under(ctx, &action))
+    .with_children(pull.outcome)
+    .into()
 }

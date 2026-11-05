@@ -6,6 +6,7 @@ use std::{
   fmt,
   path::{Path, PathBuf},
   sync::Arc,
+  time::Duration,
 };
 
 use thiserror::Error;
@@ -274,6 +275,10 @@ pub enum CommandError {
   NotFound,
   #[error("the program did not finish in time")]
   TimedOut,
+  /// The program wrote nothing for `after` and was stopped with everything it started: a runner that watches for
+  /// silence ends a program that stopped answering, e.g. on a disk that hangs.
+  #[error("the program wrote nothing for {} s and was stopped", after.as_secs())]
+  Silent { after: Duration },
   #[error("the program could not be run: {0}")]
   Failed(String),
   /// The program was never started: it could not be prepared or its process not be created, so it ran

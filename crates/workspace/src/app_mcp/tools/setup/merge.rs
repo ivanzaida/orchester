@@ -10,7 +10,10 @@ use std::{
 use orchester_core::{
   diff::{Diff, FileChange},
   id::RunId,
-  integration::MergeKind,
+  integration::{
+    MergeKind, PreflightStage,
+    attempt::{AttemptStage, MergeAsker, MergeVia},
+  },
   revision::Revision,
   run::{Run, RunStatus},
   store::{MergeStore, RunStore, TaskStore},
@@ -36,8 +39,10 @@ use crate::{
     changes::{ChangesError, Checkpointed, NotCheckpointed, RunRange, RunStage, not_checkpointed_in, run_changes_in},
     delivery::{self, Delivery},
     detail::run_store_error,
+    integration::{IntegrationProblem, integration_refusal, stage_message},
     integration_jobs::{JobState, MergeArgs, ProjectJobState},
-    local_integration::{LegacyPolicy, LocalIntent, LocalOrigin, managed_checkout},
+    local_integration::{IntegrationError, LegacyPolicy, LocalIntent, LocalOrigin, managed_checkout},
+    merge_attempts::{self, Asked},
     outside::Outside,
   },
 };
@@ -206,14 +211,15 @@ fn start(
       .map_err(|_| refused("needs_decision", "localIntegration.personRequired"))?;
     return Err(refused("needs_decision", "localIntegration.personRequired"));
   }
-  let policy = LegacyPolicy::new(&open.repo_root, run.id(), services.vault.clone()).map_err(|error| {
-    tracing::warn!(%error, "cannot make the policy of merge_run");
-    refused("integration_preflight_failed", "localIntegration.preflightFailed")
-  })?;
-  if let Some(evidence) = policy.preflight().map_err(|error| {
-    tracing::warn!(%error, "the preflight of merge_run failed");
-    refused("integration_preflight_failed", "localIntegration.preflightFailed")
-  })? {
+  let root = open.repo_root.as_path();
+  let policy = LegacyPolicy::new(root, run.id(), services.vault.clone())
+    .map_err(|error| policy_refused((root, run.id()), None, error))?;
+  if let Some(evidence) = policy
+    .preflight()
+    .map_err(|error| policy_refused((root, run.id()), Some(&policy), error))?
+  {
+    let problem = IntegrationProblem::Store(Message::new("localIntegration.externalResult"));
+    merge_attempts::record_refused(root, run.id(), MERGE_RUN, (AttemptStage::Policy, &problem));
     return Err(refused(
       if evidence.kind == orchester_core::integration::local::ResultEvidenceKind::CompleteAncestry {
         "already_integrated"
@@ -303,3 +309,18 @@ fn ready(db: &ProjectDb, run: &Run, (root, programs): (&Path, &Programs)) -> Res
 fn refused(code: &str, key: &'static str) -> ToolError {
   ToolError::refused(code, vec![Message::new(key)])
 }
+
+/// `merge_run` of `run` in the project at `root` refused by its policy for `error`, as its attempt is recorded: the
+/// stage, then the cause only as `policy` lets an MCP client read it; without a policy, the stage alone.
+fn policy_refused((root, run): (&Path, RunId), policy: Option<&LegacyPolicy>, error: IntegrationError) -> ToolError {
+  let problem = integration_refusal(root, PreflightStage::Policy)(error);
+  merge_attempts::record_refused(root, run, MERGE_RUN, (AttemptStage::Policy, &problem));
+  let mut reasons = vec![stage_message(PreflightStage::Policy)];
+  if let Some(policy) = policy {
+    reasons.push(policy.safe_message(problem.message("")));
+  }
+  ToolError::refused("integration_preflight_failed", reasons)
+}
+
+/// Who asks for `merge_run`'s merges, and from where.
+const MERGE_RUN: Asked = (MergeAsker::Automation, MergeVia::MergeRun);

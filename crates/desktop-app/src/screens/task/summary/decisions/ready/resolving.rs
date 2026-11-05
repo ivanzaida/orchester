@@ -1,10 +1,10 @@
 //! A merge of the base branch waits in the run's worktree for the person to resolve its conflicts (*Resolve in
-//! editor*, [`super::resolve`]; board 4 of `fvCVT`, *Resolving in the editor*): the notice says where the worktree
-//! is and whether the editor opened (`jI4tM`), *Conflicting files* says of each whether it still holds a conflict
-//! marker, is resolved, or waits for the person to keep a side because git could not merge it by content (a binary
-//! file, or one a side deleted; no frame has this yet), *Continue* commits the merge and waits, saying why, while a
-//! file is not resolved (`IerPj`, `Forys`), *Abort the merge* puts the worktree back (`X1UbH`), and *Merge into main*
-//! waits until the merge is done (`k3oSNb`).
+//! editor* on the run's attempt page, ORC-363; board 4 of `fvCVT`, *Resolving in the editor*): the notice says where
+//! the worktree is and whether the editor opened (`jI4tM`), *Conflicting files* says of each whether it still holds a
+//! conflict marker, is resolved, or waits for the person to keep a side because git could not merge it by content (a
+//! binary file, or one a side deleted; no frame has this yet), *Continue* commits the merge and waits, saying why,
+//! while a file is not resolved (`IerPj`, `Forys`), *Abort the merge* puts the worktree back (`X1UbH`), and *Try
+//! again* waits until the merge is done (`k3oSNb`).
 
 use std::sync::Arc;
 
@@ -29,7 +29,6 @@ use super::{
   super::{super::section_head, TaskContext},
   card::{FILE_ROW_HEIGHT, merge_actions},
   pull_request::PullRequestRead,
-  resolve::resolve_args,
 };
 use crate::{
   services::Services,
@@ -79,7 +78,7 @@ pub fn resolving(
   ]
   .into_iter()
   .chain(failure)
-  .chain(std::iter::once(merge_actions(ctx, task, run, (pull, true))))
+  .chain(std::iter::once(merge_actions(ctx, task, run, pull)))
   .collect()
 }
 
@@ -99,6 +98,19 @@ fn editor_said(ctx: &Ctx, editor: Option<&EditorOpened>) -> Arc<str> {
     Some(EditorOpened::NoEditor) => ctx.t("decisions.ready.resolve.noEditor"),
     Some(EditorOpened::Failed(_)) => ctx.t("decisions.ready.resolving.editorFailed"),
     None => ctx.t("decisions.ready.resolving.openYourself"),
+  }
+}
+
+/// What resolving `run`'s merge by hand needs; its editor is filled in where it is started.
+fn resolve_args(ctx: &mut Ctx, task: &TaskContext, run: &RunView) -> ResolveArgs {
+  let services = Services::of(ctx);
+  let feed = task.project.feed.clone();
+  ResolveArgs {
+    open: task.project.open.clone(),
+    run: run.id(),
+    programs: services.programs,
+    editor: Err(EditorOpened::NoEditor),
+    changed: Arc::new(move || feed.saved()),
   }
 }
 

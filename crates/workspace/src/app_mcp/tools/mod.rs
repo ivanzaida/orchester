@@ -13,6 +13,7 @@ mod conversation;
 mod daily_report;
 mod delivery;
 mod limits;
+mod merge_attempts;
 mod merge_queue;
 mod message_waits;
 mod messages;
@@ -28,6 +29,7 @@ mod pull_requests;
 mod questions;
 mod queue_hold;
 mod return_to_draft;
+mod review;
 mod run_list;
 mod run_task;
 mod runs;
@@ -201,11 +203,19 @@ const SPECS: &[Spec] = &[
                   conflicts with files, check_failed, base_keeps_moving with heads, stopped, later_run), merged \
                   (revision, kind merge_commit or squash, worktree_removed, branch_deleted) or removed; since, \
                   resyncs, approved_at and checked_on (the base the last passed check ran on). A run the merge queue \
-                  delivers is not merged by merge_run. checks is the CI of the pull request of the run's branch, as \
-                  get_pull_request's checks reads it (no_pull_request when the last sync stored none, not_linked \
-                  without a linked GitHub repository). The run's \
-                  link is its task's page; the waiting approvals, questions, messages and plans link to their cards \
-                  on the task's Conversation.",
+                  delivers is not merged by merge_run. merge_attempts lists every attempt to merge the run, newest \
+                  first: sequence, at, who (person, automation, merge_queue, or retry with its retry number), via \
+                  (task_page, merge_run or merge_queue), outcome (merged with revision and kind, refused, conflicts \
+                  with files, not_recorded with the revision Git merged to, git_stopped, left_changed with the files \
+                  left changed, interrupted when the app or runner ended mid-merge, stopped, moved when the base or \
+                  the run's branch moved), stage (the one it ended at, null when it landed or reached none), cause \
+                  (why it did not land, or the merge queue's words; told only as merge_run's policy allows, else \
+                  null or the policy's notice) and stages (each stage with passed, refused or not_reached: policy \
+                  for automation's attempts, integration_lock, project_database, scratch_folder, checkout_identity, \
+                  git_metadata, existing_result, merge, record). checks is the CI of the pull request of the run's \
+                  branch, as get_pull_request's checks reads it (no_pull_request when the last sync stored none, \
+                  not_linked without a linked GitHub repository). The run's link is its task's page; the waiting \
+                  approvals, questions, messages and plans link to their cards on the task's Conversation.",
     schema: schema_for_type::<runs::InRun>,
     read_only: true,
   },

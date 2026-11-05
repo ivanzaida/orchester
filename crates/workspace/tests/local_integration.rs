@@ -24,6 +24,12 @@ mod git_untouched;
 mod hooks;
 #[path = "local_integration/ignore_transitions.rs"]
 mod ignore_transitions;
+#[path = "local_integration/merge_attempts.rs"]
+mod merge_attempts;
+#[path = "local_integration/merge_record.rs"]
+mod merge_record;
+#[path = "local_integration/merge_recovery.rs"]
+mod merge_recovery;
 #[path = "local_integration/merged_in.rs"]
 mod merged_in;
 #[path = "local_integration/merged_outside.rs"]
@@ -32,6 +38,8 @@ mod merged_outside;
 mod metadata;
 #[path = "local_integration/moved_base.rs"]
 mod moved_base;
+#[path = "local_integration/preflight_stage.rs"]
+mod preflight_stage;
 #[path = "local_integration/privacy.rs"]
 mod privacy;
 #[path = "local_integration/rebase.rs"]

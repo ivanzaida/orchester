@@ -47,6 +47,8 @@ pub struct CommandScope {
   toolchains: Toolchains,
   /// What the agent's environment tells Cargo ([`Self::with_project_environment`]).
   cargo: CargoEnvironment,
+  /// The main checkout of the repository the worktree belongs to, resolved ([`Self::with_main_checkout`]).
+  main_checkout: Option<PathBuf>,
 }
 
 impl CommandScope {
@@ -63,9 +65,19 @@ impl CommandScope {
       temp: temp.map(resolved),
       toolchains: Toolchains::default(),
       cargo: CargoEnvironment::default(),
+      main_checkout: None,
     };
     scope.add_home(home);
     scope
+  }
+
+  /// This scope for a worktree of the repository whose main checkout is `folder`: the worktree reads the same
+  /// `.git` settings and hooks as git there (`git rev-parse --git-common-dir`), so git that only reads runs nothing
+  /// there the worktree's own git would not (ORC-695). What lies in it is still outside the worktree.
+  #[must_use]
+  pub fn with_main_checkout(mut self, folder: &Path) -> Self {
+    self.main_checkout = Some(resolved(folder));
+    self
   }
 
   /// Adds `home` (as written) to the home folders, with its `.cargo` and `.rustup`.
@@ -335,6 +347,11 @@ impl CommandScope {
   /// Whether `path` is the worktree itself, as written or resolved.
   pub(super) fn is_worktree(&self, path: &Path) -> bool {
     path == self.worktree || resolved(path) == resolved(&self.worktree)
+  }
+
+  /// Whether `path` is the repository's main checkout itself, resolved ([`Self::with_main_checkout`]).
+  pub(super) fn is_main_checkout(&self, path: &Path) -> bool {
+    self.main_checkout.as_ref().is_some_and(|main| resolved(path) == *main)
   }
 
   /// Whether a folder's entries may be credential locations: the home folder and the folders above it

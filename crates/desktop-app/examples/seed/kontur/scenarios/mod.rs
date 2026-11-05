@@ -26,6 +26,8 @@ mod live;
 mod loading_states;
 mod long_chats;
 mod memory;
+mod merge_attempts;
+mod merges;
 mod modules;
 mod native;
 mod orchestrator;
@@ -37,6 +39,8 @@ mod pipelines;
 mod project_settings;
 mod pull_requests;
 pub mod qa_app_asks;
+mod review_changed;
+mod review_page;
 mod run_context;
 mod run_model;
 pub mod settings;
@@ -46,6 +50,8 @@ mod side_question;
 mod slot_wait;
 mod sources;
 mod storage;
+mod task_merge_card;
+mod task_merge_row;
 mod task_states;
 mod tasks;
 mod tasks_memory;
@@ -100,7 +106,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 127] = [
+pub const ALL: [Scenario; 138] = [
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-library", agents_library::seed),
   Scenario::of("agents-browser", agents_browser::seed),
@@ -166,6 +172,17 @@ pub const ALL: [Scenario; 127] = [
   Scenario::of("delivery-blocked", delivery::blocked),
   Scenario::of("delivery-lanes", delivery::lanes),
   Scenario::of("delivery-empty", delivery::empty),
+  Scenario::of("merges", merges::seed),
+  Scenario::of("merges-outcomes", merges::outcomes),
+  Scenario::of("merges-empty", merges::empty),
+  Scenario::of("merges-many", merges::many),
+  Scenario::of("merge-attempts", merge_attempts::seed),
+  Scenario::of("review-page", review_page::seed),
+  Scenario::of("review-changed", review_changed::seed),
+  Scenario::of("task-merge-row", task_merge_row::seed),
+  Scenario::of("task-merge-card-ready", task_merge_card::ready_to_merge),
+  Scenario::of("task-merge-card-refused", task_merge_card::refused_at_lock),
+  Scenario::of("task-merge-card-conflicts", task_merge_card::conflicts),
   Scenario::of("overview-quiet", delivery::quiet),
   Scenario::of("overview-states", overview_states::seed),
   Scenario::of("interrupted", interrupted::seed),

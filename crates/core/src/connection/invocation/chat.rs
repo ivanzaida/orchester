@@ -55,10 +55,10 @@ use crate::{
 };
 
 /// Settings that keep the built-in reading tools in the working folder.
-const BLOCK_OUTSIDE_READS: &str = r#"{"permissions":{"blockReadsOutsideWorkingDirectories":true}}"#;
+pub(super) const BLOCK_OUTSIDE_READS: &str = r#"{"permissions":{"blockReadsOutsideWorkingDirectories":true}}"#;
 
 /// The built-in tools the Orchestrator's agent is offered: reading and searching, nothing that changes or runs.
-const READ_TOOLS: [&str; 3] = ["Read", "Glob", "Grep"];
+pub(super) const READ_TOOLS: [&str; 3] = ["Read", "Glob", "Grep"];
 
 /// Everything that decides how one turn of the Orchestrator chat starts Claude Code.
 #[derive(Clone, Debug, PartialEq, Eq)]

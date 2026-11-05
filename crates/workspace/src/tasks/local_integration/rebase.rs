@@ -154,7 +154,7 @@ impl Ancestry for Checkout<'_> {
     match self.0.text(&["merge-base", one, other]) {
       Ok(commit) => Ok(Some(commit).filter(|commit| !commit.is_empty())),
       // Git exits with 1 for commits that share no ancestor.
-      Err(LocalGitError::Refused) => Ok(None),
+      Err(LocalGitError::Refused(_)) => Ok(None),
       Err(error) => Err(error.into()),
     }
   }
@@ -338,7 +338,7 @@ fn rebased_checkpoint(
 fn present(main: &LocalGit, revision: &str) -> Result<bool, IntegrationError> {
   match main.text(&["cat-file", "-e", &format!("{revision}^{{commit}}")]) {
     Ok(_) => Ok(true),
-    Err(LocalGitError::Refused) => Ok(false),
+    Err(LocalGitError::Refused(_)) => Ok(false),
     Err(error) => Err(error.into()),
   }
 }

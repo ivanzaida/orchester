@@ -43,6 +43,21 @@ pub(super) fn latest(seeded: &Seeded, state: &str) -> (String, Run) {
   (task.key.clone(), run)
 }
 
+/// Presses *Merge into main* on the open task, as a person, until its Merge row says the merge conflicted, then opens
+/// the run's attempt page from the row.
+fn conflicts_on_the_attempt_page(served: &mut Served) {
+  served.until("Merge into main", |served| served.shows("task-merge"));
+  served.click_by_person("task-merge");
+  served.until("the Merge row to say Conflicts", |served| {
+    served.shows("task-property-merge-label")
+      && super::tools_window::text(served, "task-property-merge-label").starts_with("Conflicts")
+  });
+  served.click_by_person("task-merge-row");
+  served.until("the conflicting files", |served| {
+    served.shows("merge-attempt-conflicting-files")
+  });
+}
+
 fn return_to(run: &Run, step: &str) -> Value {
   json!({
     "project": "Kontur",
@@ -70,14 +85,13 @@ fn domain_ask_an_agent_returns_the_conflicting_run_to_its_writing_step() {
     "navigate",
     &json!({ "route": "task", "project": seeded.project.to_string(), "key": key, "tab": "summary" }),
   );
-  served.until("Merge into main", |served| served.shows("task-merge"));
-  served.click_by_person("task-merge");
-  served.until("the conflict and the agent's step", |served| {
-    served.shows("task-resolve-step") && served.shows("task-resolve-ask-agent")
+  conflicts_on_the_attempt_page(&mut served);
+  served.until("the agent's step", |served| {
+    served.shows("merge-attempt-resolve-step") && served.shows("merge-attempt-ask-agent")
   });
   let options: Vec<String> = served
     .tree
-    .get_element_by_id_mut("task-resolve-step")
+    .get_element_by_id_mut("merge-attempt-resolve-step")
     .and_then(|element| element.as_select())
     .expect("the step select")
     .labels()
@@ -92,9 +106,11 @@ fn domain_ask_an_agent_returns_the_conflicting_run_to_its_writing_step() {
   // Returning a run decides for the person: an MCP client's press is refused until a person lets automation answer,
   // as `continue_run` is, and then recorded as automation's.
   served
-    .click_by_client("task-resolve-ask-agent")
+    .click_by_client("merge-attempt-ask-agent")
     .expect("the press reaches the button");
-  served.until("the refusal", |served| served.shows("task-resolve-person-only"));
+  served.until("the refusal", |served| {
+    served.shows("merge-attempt-resolve-person-only")
+  });
   assert_eq!(
     stored(&seeded, run.id()).attempts().len(),
     run.attempts().len(),
@@ -102,7 +118,7 @@ fn domain_ask_an_agent_returns_the_conflicting_run_to_its_writing_step() {
   );
   let_automation_answer(&served);
   served
-    .click_by_client("task-resolve-ask-agent")
+    .click_by_client("merge-attempt-ask-agent")
     .expect("the press reaches the button");
   let returned = wait_for(&mut served, &seeded, run.id(), |stored| {
     stored.attempts().len() > run.attempts().len()
@@ -148,14 +164,23 @@ fn domain_window_input_merges_into_the_worktree_but_starts_no_editor_a_person_di
     "navigate",
     &json!({ "route": "task", "project": seeded.project.to_string(), "key": key, "tab": "summary" }),
   );
-  served.until("Merge into main", |served| served.shows("task-merge"));
-  served.click_by_person("task-merge");
-  served.until("the conflict", |served| served.shows("task-resolve-in-editor"));
+  conflicts_on_the_attempt_page(&mut served);
+  // Once the run's worktree is read, *Ask an agent to resolve* says it waits for the runner, which is not here.
+  served.until("the run's worktree read", |served| {
+    served.shows("merge-attempt-ask-agent-reason")
+  });
   served
-    .click_by_client("task-resolve-in-editor")
+    .click_by_client("merge-attempt-resolve-in-editor")
     .expect("the press reaches the button");
+  // The task page carries on with the merge waiting in the run's worktree.
+  served.ok(
+    "navigate",
+    &json!({ "route": "task", "project": seeded.project.to_string(), "key": key, "tab": "summary" }),
+  );
   served.until("the merge waiting in the worktree", |served| {
-    super::tools_window::text(served, "task-resolving-body").contains("Window input does not start an editor")
+    served.tree.tick_timers();
+    served.shows("task-resolving-body")
+      && super::tools_window::text(served, "task-resolving-body").contains("Window input does not start an editor")
   });
   let worktree = seeded.repo.join(".orchester/worktrees").join(run.id().to_string());
   assert!(

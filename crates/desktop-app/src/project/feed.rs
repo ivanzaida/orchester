@@ -40,6 +40,10 @@ use orchester_workspace::{
 };
 use parking_lot::Mutex;
 
+mod last;
+
+pub use last::{LastMerges, ReviewCounts};
+
 use super::{Projects, hold::ReadHold};
 use crate::services::Services;
 
@@ -88,6 +92,10 @@ pub struct ProjectFeed {
   pub hub_counts: Signal<Option<orchester_workspace::agents::hub::HubCounts>>,
   /// The Agents hub's tabs whose own read failed, one bit each: they show no count rather than a stale one.
   pub hub_unread: Signal<u8>,
+  /// What Review › Merges read last, which it shows again at once when it opens again and reads them anew.
+  pub merges: Signal<Option<LastMerges>>,
+  /// What the Review hub's tabs counted last, which they show again at once on each tab while they count anew.
+  pub review_counts: Signal<ReviewCounts>,
   /// Whether the sidebar's Configure section is folded for the project, in every tab of the session.
   pub configure_folded: Signal<bool>,
   /// The team's configuration as the five libraries show it, while the project is shared (`team`); `None` while it is
@@ -187,6 +195,8 @@ impl ProjectFeed {
       pipeline_names: Signal::new(PipelineNames::default()),
       hub_counts: Signal::new(None),
       hub_unread: Signal::new(0),
+      merges: Signal::new(None),
+      review_counts: Signal::new(ReviewCounts::default()),
       configure_folded: Signal::new(false),
       team: Signal::new(None),
       offline: Arc::default(),

@@ -201,6 +201,14 @@ define_id!(
   FeedbackPostId
 );
 define_id!(
+  /// One thread of a person's review of a run's diff (`crate::review`).
+  ReviewThreadId
+);
+define_id!(
+  /// One message of a review thread: the person's, or the implementing agent's.
+  ReviewMessageId
+);
+define_id!(
   /// One document of a project's Docs (`crate::docs`).
   DocId
 );

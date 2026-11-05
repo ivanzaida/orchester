@@ -7,6 +7,7 @@
 mod capped;
 mod console;
 mod exchange;
+mod watched;
 
 pub mod browser;
 pub mod clone_console;
@@ -23,6 +24,7 @@ pub mod run_processes;
 pub mod search_path;
 pub mod sign_in_terminal;
 pub mod trash;
+pub mod user;
 pub mod verifier_app;
 
 use std::{
@@ -35,7 +37,7 @@ use std::{
 
 use orchester_core::command::{Command, CommandError, CommandOutput, CommandRunner};
 
-pub use self::capped::run_capped;
+pub use self::{capped::run_capped, watched::WatchedRunner};
 
 const POLL_INTERVAL: Duration = Duration::from_millis(50);
 

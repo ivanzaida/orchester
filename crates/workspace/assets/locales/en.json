@@ -11,7 +11,17 @@
   },
   "localIntegration": {
     "sensitiveOutcome": "Integration details are unavailable under the current sensitive-data policy. Inspect the actual recorded outcome before continuing.",
-    "preflightFailed": "Local integration could not prove the current checkout and result identities. Nothing was merged.",
+    "preflight": {
+      "stage": "The merge's preflight refused at its {{stage}} stage. Nothing was merged; the branch and the checkout are unchanged.",
+      "integrationLockHeld": "Another merge or local integration held this project's checkout, so Orchester refused before Git ran: nothing was merged, and the branch and the checkout are unchanged. Merge again once it has finished.",
+      "integrationLock": "Orchester could not take this project's integration lock ({{cause}}), so it refused before Git ran: nothing was merged, and the branch and the checkout are unchanged.",
+      "projectDatabase": "Orchester could not hold this project's database and SQLite's files beside it ({{cause}}), so it refused before Git ran: nothing was merged, and the branch and the checkout are unchanged.",
+      "scratchFolder": "Orchester could not prepare its local integration folder under .orchester ({{cause}}), so it refused before Git ran: nothing was merged, and the branch and the checkout are unchanged.",
+      "checkoutIdentity": "Orchester could not prove which checkout and Git directory the merge would change ({{cause}}), so it refused before Git ran: nothing was merged, and the branch and the checkout are unchanged.",
+      "gitMetadata": "Orchester could not hold this repository's Git metadata while Git runs ({{cause}}), so it refused before Git ran: nothing was merged, and the branch and the checkout are unchanged.",
+      "existingResult": "Orchester could not tell whether Git already holds this run's work ({{cause}}), so it refused before Git ran: nothing was merged, and the branch and the checkout are unchanged.",
+      "policy": "The policy an automation's merge goes through could not check this merge ({{cause}}), so Orchester refused before Git ran: nothing was merged, and the branch and the checkout are unchanged."
+    },
     "externalResult": "Git contains all or part of this result already. Review the evidence in Local integration; no historical merge was recorded or repeated.",
     "personRequired": "A person reviews and approves the exact checked result in Local integration.",
     "running": "Integrating the local checkout for {{task}}"
@@ -691,7 +701,18 @@
         "uncommitted": "Your checkout has uncommitted changes the merge would overwrite: {{files}}. Commit or set them aside in Local integration, or yourself, then merge again. Nothing was changed.",
         "inProgress": "A merge, cherry-pick or revert is in progress in your checkout. Finish or abort it, then merge again. Nothing was changed.",
         "baseMoved": "{{branch}} got a new commit while the run was being merged. The merge was dropped and nothing was changed; merge again.",
-        "leftChanged": "Git stopped part way through the merge, and Orchester couldn’t put back {{files}}: they hold the run’s version now. Restore them yourself with git restore. Everything else is as it was. {{detail}}",
+        "leftChanged": "Git stopped part way through bringing the merge in, and Orchester couldn’t put back {{files}}: they hold the run’s version now. Put the files back, or restore them yourself with git restore; no merge reaches your checkout until they’re back. Everything else is as it was. {{detail}}",
+        "notPutBack": "A merge stopped part way through bringing its files in and left {{files}} changed in your checkout. Put the files back, or restore them yourself with git restore, then merge again. Nothing was merged.",
+        "nothingToRecord": "This run's last attempt was not a merge Git made, so there is no merge to record. The page shows where the run stands now.",
+        "mergeGone": "{{branch}} no longer holds the merge Git made, so it was not recorded: the branch was reset or rewritten since. Nothing was merged; merge the run again.",
+        "unanswered": {
+          "check": "Git stopped answering while Orchester read your checkout: git {{command}} wrote nothing for {{seconds}} s and was stopped. Nothing was changed; merge again.",
+          "temporaryWorktree": "Git stopped answering while it prepared the merge’s temporary worktree: git {{command}} wrote nothing for {{seconds}} s and was stopped, and the temporary worktree was removed. Nothing in your checkout was changed; merge again.",
+          "merge": "Git stopped answering while it merged: git {{command}} wrote nothing for {{seconds}} s and was stopped, and the temporary worktree was removed. Nothing in your checkout was changed; merge again.",
+          "bringIn": "Git stopped answering while it brought the merge into your checkout: git {{command}} wrote nothing for {{seconds}} s and was stopped, and the files it had written were put back. Merge again.",
+          "putBack": "Git stopped answering while Orchester put back the files of a merge that stopped part way: git {{command}} wrote nothing for {{seconds}} s and was stopped. Some files may still hold the run’s version: put the files back again, or restore them yourself with git restore."
+        },
+        "gitUnanswered": "Git stopped answering: git {{command}} wrote nothing for {{seconds}} s and was stopped.",
         "conflict": "The run’s changes conflict with your branch in {{files}}. The merge was undone, so your checkout is as it was. Resolve the conflicts in Local integration, or merge the run’s branch yourself.",
         "branchMissing": "The run’s branch {{branch}} no longer exists, so there is nothing to merge.",
         "baseMissing": "The base branch {{branch}} no longer exists, so there is nothing to merge into. Nothing was changed.",
@@ -1540,6 +1561,7 @@
     }
   },
   "appMcp": {
+    "mergeAttemptCause": "{{cause}}",
     "errors": {
       "noCommits": "The repository has no commit yet, and runs branch from one. Make a first commit, or create the project in Orchester’s project setup, which offers to make it.",
       "gitNotFound": "git is not installed on this computer. Orchester runs git to read the folder and runs work in git worktrees. Install git, then try again.",
@@ -2313,6 +2335,37 @@
       "first": "The run is first in line already.",
       "personOnly": "Only a person approves a merge from the merge queue. Press Merge into the base branch yourself.",
       "resolve": "The run's worktree could not be merged: {{detail}}"
+    }
+  },
+  "review": {
+    "refused": {
+      "notFound": "This review thread is gone. Read the run's review again.",
+      "notWaiting": "This run no longer waits for review: it is at work, ended without success or was merged.",
+      "implementAtWork": "Implement is at work on the comments you sent. Approve once you've reviewed its changes.",
+      "changedSinceReview": "Changed since your review: the branch moved after the head you reviewed, so nothing was merged. Review it again.",
+      "nothingToSend": "No comment waits to be sent.",
+      "noImplementingStep": "This run has no step whose agent may change its code, so there is no Implement to ask.",
+      "notEditable": "Only a comment you haven't sent yet can be changed or deleted.",
+      "notAnswered": "Ask again once Implement's answer has ended.",
+      "notAddressed": "Reply once Implement has addressed the comment.",
+      "wrongKind": "This thread is the other kind: a question is asked again, a comment is replied to.",
+      "noMessages": "A review thread starts with your message.",
+      "unknownMessage": "That message is not in this thread."
+    },
+    "failure": {
+      "runnerUnavailable": "The project's runner is not running, so Orchester could not reach Implement. Nothing was lost; try again.",
+      "lost": "The connection to the runner ended before it answered, so it isn't known whether Implement got it. Try again.",
+      "refused": "The runner refused it ({{reason}}).",
+      "notWaiting": "The run no longer waits for review.",
+      "noImplementingStep": "The run has no step whose agent may change its code.",
+      "nativeAgent": "Implement runs on Orchester's native agent, which can't answer review questions in this version.",
+      "notSignedIn": "Implement's CLI is not signed in on its connection's account.",
+      "connectionGone": "Implement's connection is gone, or is not an agent CLI any more.",
+      "account": "Implement's account can't start its CLI: {{detail}}",
+      "cannotStart": "Implement's CLI could not start: {{detail}}",
+      "failed": "Implement's CLI stopped with an error: {{detail}}",
+      "interrupted": "The runner ended before Implement finished answering.",
+      "timeLimit": "The answer ran longer than {{minutes}} minutes, so Orchester ended it."
     }
   },
   "sideQuestion": {

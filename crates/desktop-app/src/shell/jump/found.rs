@@ -270,6 +270,12 @@ fn hub_tabs(ctx: &Ctx, project: ProjectId) -> Vec<Entry> {
       within(ctx, &review, "shell.screens.pullRequests"),
       at(ProjectPage::PullRequests(Default::default())),
     ),
+    Entry::new(
+      "merges",
+      Place::Review.icon(),
+      within(ctx, &review, "shell.screens.merges"),
+      at(ProjectPage::Merges),
+    ),
   ];
   let agents = word(ctx, "shell.screens.agents");
   entries.extend(HubTab::ALL.into_iter().map(|tab| {

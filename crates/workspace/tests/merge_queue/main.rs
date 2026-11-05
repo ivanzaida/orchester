@@ -7,10 +7,12 @@
 //! Deliver step keeps its runs out of the queue. The check is a command tool whose program the tests answer for
 //! (`harness`). `cargo test -p orchester-workspace --test merge_queue merge_queue`.
 
+mod attempts;
 mod conversation;
 mod decisions;
 mod harness;
 mod lanes;
+mod preflight;
 
 use std::{fs, sync::Arc};
 

@@ -28,7 +28,7 @@ mod read;
 mod wake;
 
 pub use self::{
-  approve::{approve, reject, requeue, resolve_myself, resolved},
+  approve::{approve, reject, requeue, resolve_myself, resolved, retry_stopped},
   check::rechecks,
   checks::{DeliveryCheck, checks},
   drive::{Advance, advance, integrate_sent},
@@ -36,7 +36,7 @@ pub use self::{
   order::{Move, move_run, remove},
   read::{
     BaseState, CheckoutState, LaneLanding, PhaseState, PipelineDelivery, QueueLaneRead, QueueRead, QueueRow, RowPhase,
-    RunDelivery, TaskDelivery, delivered_by_queue, delivery_of, in_queue, read, task_delivery,
+    RunDelivery, TaskDelivery, checkout_base, delivered_by_queue, delivery_of, in_queue, read, task_delivery,
   },
   wake::{changes, wake},
 };

@@ -1,6 +1,7 @@
 //! The roots Autopilot answers a step's requests by (`orchester_core::permission::roots`,
 //! `docs/design/approval-modes.md`): the worktree as its agent starts in it, the run's branch and Sources, the
-//! repository's main checkout, and the folders the step's CLI keeps its own files of the run in.
+//! repository's main checkout, the run's own storage a read of a design may export to, and the folders the step's CLI
+//! keeps its own files of the run in.
 
 use std::path::{Path, PathBuf};
 
@@ -8,16 +9,19 @@ use orchester_core::{
   connection::{AgentConnection, AgentProvider, invocation::Platform},
   id::StepExecutionId,
   permission::roots::{AgentHomes, RunRoots},
+  workspaces::artifacts_folder,
 };
 
 use super::super::run::RunTask;
 
 impl RunTask {
-  /// The roots of `execution`, whose agent works in `worktree`; `None` when the worktree or the main checkout cannot be
-  /// read, so that Autopilot places nothing inside. Without the step's connection, its CLI's own folders are left out.
+  /// The roots of `execution`, whose agent works in `worktree`; `None` when the worktree, the main checkout or the
+  /// run's storage cannot be read, so that Autopilot places nothing inside. Without the step's connection, its CLI's
+  /// own folders are left out.
   pub(super) fn run_roots(&self, execution: StepExecutionId, worktree: &Path) -> Option<RunRoots> {
     let roots = RunRoots::new(Platform::current(), worktree, self.run.branch().as_str())
-      .and_then(|roots| roots.with_main_checkout(&self.root));
+      .and_then(|roots| roots.with_main_checkout(&self.root))
+      .and_then(|roots| roots.with_run_storage(&artifacts_folder(&self.root, self.run.id())));
     let roots = match roots {
       Ok(roots) => roots.with_sources(self.run.snapshot().sources()),
       Err(error) => {
@@ -40,6 +44,7 @@ impl RunTask {
         AgentHomes {
           temp: &temp,
           config: &config,
+          user: orchester_exec::user::user_id(),
         },
       ),
       None => roots,

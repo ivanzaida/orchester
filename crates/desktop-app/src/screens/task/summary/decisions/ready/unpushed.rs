@@ -33,7 +33,7 @@ use crate::{
 
 /// The run whose question window automation tried to answer, which only a person may.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) struct Refused(pub RunId);
+pub struct Refused(pub RunId);
 
 impl DevtoolsInspectable for Refused {}
 

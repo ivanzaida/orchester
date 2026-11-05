@@ -29,7 +29,7 @@ impl ExecutionOwnership {
         files.push(
           root
             .open_regular(OsStr::new(".git"), false, false)?
-            .ok_or(LocalGitError::Io)?,
+            .ok_or_else(|| LocalGitError::missing(&root.path().join(".git")))?,
         );
       }
       Ok(None) => return Err(LocalError::Unsupported.into()),
@@ -44,13 +44,15 @@ impl ExecutionOwnership {
     if !root
       .path()
       .canonicalize()
-      .map_err(|_| LocalGitError::Io)?
+      .map_err(LocalGitError::io_at(root.path()))?
       .starts_with(scratch)
     {
       return Err(LocalError::Unsupported.into());
     }
     // Git ignores its metadata directory even when a hook stages all files in this private copy.
-    let metadata = root.child(OsStr::new(".git"), true)?.ok_or(LocalGitError::Io)?;
+    let metadata = root
+      .child(OsStr::new(".git"), true)?
+      .ok_or_else(|| LocalGitError::missing(&root.path().join(".git")))?;
     let file = windows::pin_store_entry(&metadata, OsStr::new(".orchester-local-owner"), Pin::Anchor)?;
     let ownership = Arc::new(Self {
       directories: vec![root, metadata],

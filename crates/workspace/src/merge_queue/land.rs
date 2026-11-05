@@ -10,7 +10,8 @@ use std::path::Path;
 
 use orchester_core::{
   integration::{
-    DeliveredAs, Delivering, MergeError, MergeKind,
+    DeliveredAs, Delivering, MergeError, MergeKind, PreflightCause, PreflightStage,
+    attempt::{AttemptOutcome, MergeAsker, MergeAttempt, MergeVia},
     base::Landing,
     branch_head,
     delivery::{self, Checkout},
@@ -18,8 +19,10 @@ use orchester_core::{
   },
   merge_queue::{Blocked, CheckedOn, Delivered},
   resource::{DeliverStep, MergeMethod},
+  revision::Revision,
   run::Run,
   task::Task,
+  time::Timestamp,
 };
 use orchester_exec::programs::Programs;
 
@@ -27,14 +30,12 @@ use crate::tasks::{
   changes::GIT,
   integration::{IntegrationProblem, merge_in_as},
   local_integration::CheckoutHolder,
+  merge_attempts::{self, Asked},
+  merge_retry::retried,
 };
 
 /// Characters of the task's brief the squash commit's body keeps.
 const SUMMARY_CHARS: usize = 200;
-
-/// What `merge_in_as` says when the checkout's integration lease or its metadata cannot be taken now: another merge or
-/// local integration has them.
-const PREFLIGHT_FAILED: &str = "localIntegration.preflightFailed";
 
 /// How landing a run went.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -50,48 +51,28 @@ pub(super) enum Landed {
 
 /// Merges `run`, of `task`, which was synced and checked on `checked` (`None`: its pipeline does not check the merged
 /// result again), into its base branch in the checkout at `root`, or beside it when the run's base branch was set and
-/// the checkout has another branch, as `deliver` says.
+/// the checkout has another branch, as `deliver` says. Every attempt is recorded but one the checkout blocks before the
+/// merge, which the queue polls until the checkout changes.
 pub(super) fn land(
   (root, programs): (&Path, &Programs),
   (run, task): (&Run, &Task),
   (deliver, checked): (&DeliverStep, Option<&CheckedOn>),
 ) -> Landed {
-  let Some(base) = run.base_branch() else {
-    return Landed::Stopped("the run did not record its base branch".to_owned());
-  };
-  let landing = Landing::of(run.base_source());
-  let runner = programs.runner();
-  match delivery::checkout(&runner, Path::new(GIT), (root, base)) {
-    Ok(Checkout::OnBase { uncommitted }) if uncommitted.is_empty() => {}
-    Ok(Checkout::OnBase { uncommitted }) => return Landed::Blocked(Blocked::Uncommitted { files: uncommitted }),
-    Ok(Checkout::OtherBranch(current)) if landing.beside(base, current.as_ref()) => {}
-    Ok(Checkout::OtherBranch(current)) => {
-      return Landed::Blocked(Blocked::OtherBranch {
-        current: current.map(|branch| branch.as_str().to_owned()),
-      });
-    }
-    Ok(Checkout::InProgress) => return Landed::Blocked(Blocked::InProgress),
-    Err(error) => return Landed::Stopped(error.to_string()),
-  }
-  let heads = branch_head(&runner, Path::new(GIT), (root, base))
-    .and_then(|base_head| Ok((base_head, branch_head(&runner, Path::new(GIT), (root, run.branch()))?)));
-  let (Some(base_head), Some(tip)) = (match heads {
+  let (base_head, tip) = match heads_to_land((root, programs), run, checked) {
     Ok(heads) => heads,
-    Err(error) => return Landed::Stopped(error.to_string()),
-  }) else {
-    return Landed::Stopped(format!("{base} or {} does not exist", run.branch()));
+    Err(landed) => {
+      let outcome = match &landed {
+        Landed::Moved => AttemptOutcome::Moved { stage: None },
+        Landed::Stopped(words) => AttemptOutcome::Stopped { words: words.clone() },
+        Landed::Blocked(_) | Landed::Merged(_) => return landed,
+      };
+      merge_attempts::record(
+        root,
+        &MergeAttempt::new((run.id(), Timestamp::now()), BY_QUEUE, outcome, None),
+      );
+      return landed;
+    }
   };
-  let synced = match checked {
-    Some(checked) => checked.base == base_head && checked.tip == tip,
-    // Without a check, the branch must still hold the base as it is now.
-    None => match drift(&runner, Path::new(GIT), (root, run.branch(), &base_head)) {
-      Ok(lacks) => lacks.is_none(),
-      Err(error) => return Landed::Stopped(error.to_string()),
-    },
-  };
-  if !synced {
-    return Landed::Moved;
-  }
   let title = format!("{}: {}", task.key(), task.details().title.as_str());
   let body = squash_body(task, run);
   let as_delivered = match deliver.method() {
@@ -107,10 +88,75 @@ pub(super) fn land(
     as_delivered,
     base: &base_head,
   };
-  match merge_in_as(root, programs, (run.id(), Some(&tip), Some(delivering))) {
+  let landing = (run.id(), Some(&tip), Some(delivering));
+  let first = merge_in_as(root, programs, landing, BY_QUEUE);
+  // The queue waits for a lease another operation holds itself, for as long as that holds it ([`not_landed`]);
+  // Orchester tries again any other cause that passes.
+  let merged = if matches!(&first, Err(problem) if lease_held(problem)) {
+    first
+  } else {
+    retried(root, programs, landing, BY_QUEUE, first)
+  };
+  match merged {
     Ok(merged) => Landed::Merged(cleared(programs, (root, run), &merged)),
     Err(problem) => not_landed(problem),
   }
+}
+
+/// Another merge or local integration holds the checkout's integration lease.
+fn lease_held(problem: &IntegrationProblem) -> bool {
+  matches!(
+    problem,
+    IntegrationProblem::Preflight {
+      stage: PreflightStage::IntegrationLock,
+      cause: PreflightCause::Held,
+    }
+  )
+}
+
+/// The queue asks for its merges itself.
+const BY_QUEUE: Asked = (MergeAsker::MergeQueue, MergeVia::MergeQueue);
+
+/// The heads of `run`'s base branch and branch it lands, once the checkout at `root` takes the merge and they are as
+/// `checked` found them; else how landing went.
+fn heads_to_land(
+  (root, programs): (&Path, &Programs),
+  run: &Run,
+  checked: Option<&CheckedOn>,
+) -> Result<(Revision, Revision), Landed> {
+  let Some(base) = run.base_branch() else {
+    return Err(Landed::Stopped("the run did not record its base branch".to_owned()));
+  };
+  let landing = Landing::of(run.base_source());
+  let runner = programs.runner();
+  match delivery::checkout(&runner, Path::new(GIT), (root, base)) {
+    Ok(Checkout::OnBase { uncommitted }) if uncommitted.is_empty() => {}
+    Ok(Checkout::OnBase { uncommitted }) => return Err(Landed::Blocked(Blocked::Uncommitted { files: uncommitted })),
+    Ok(Checkout::OtherBranch(current)) if landing.beside(base, current.as_ref()) => {}
+    Ok(Checkout::OtherBranch(current)) => {
+      return Err(Landed::Blocked(Blocked::OtherBranch {
+        current: current.map(|branch| branch.as_str().to_owned()),
+      }));
+    }
+    Ok(Checkout::InProgress) => return Err(Landed::Blocked(Blocked::InProgress)),
+    Err(error) => return Err(Landed::Stopped(error.to_string())),
+  }
+  let heads = branch_head(&runner, Path::new(GIT), (root, base))
+    .and_then(|base_head| Ok((base_head, branch_head(&runner, Path::new(GIT), (root, run.branch()))?)));
+  let (Some(base_head), Some(tip)) = heads.map_err(|error| Landed::Stopped(error.to_string()))? else {
+    return Err(Landed::Stopped(format!("{base} or {} does not exist", run.branch())));
+  };
+  let synced = match checked {
+    Some(checked) => checked.base == base_head && checked.tip == tip,
+    // Without a check, the branch must still hold the base as it is now.
+    None => drift(&runner, Path::new(GIT), (root, run.branch(), &base_head))
+      .map_err(|error| Landed::Stopped(error.to_string()))?
+      .is_none(),
+  };
+  if !synced {
+    return Err(Landed::Moved);
+  }
+  Ok((base_head, tip))
 }
 
 /// What was cleared after `merged`; a squashed run's branch, which git does not see merged, is deleted once its
@@ -151,7 +197,12 @@ fn not_landed(problem: IntegrationProblem) -> Landed {
     }
     // Another merge or local integration holds the checkout's integration lease now: the run waits for it, and
     // delivery goes on by itself once it is free.
-    IntegrationProblem::Store(message) if message.key == PREFLIGHT_FAILED => Landed::Blocked(Blocked::HeldLocally),
+    IntegrationProblem::Preflight {
+      stage: PreflightStage::IntegrationLock,
+      cause: PreflightCause::Held,
+    } => Landed::Blocked(Blocked::HeldLocally),
+    // Any other refusal lasts until someone acts on its cause: waiting would hold the queue without saying why.
+    IntegrationProblem::Preflight { stage, cause } => Landed::Stopped(format!("{}: {cause}", stage.name())),
     IntegrationProblem::Merge(MergeError::BaseMoved { .. } | MergeError::BranchMoved { .. }) => Landed::Moved,
     IntegrationProblem::Merge(error) => Landed::Stopped(error.to_string()),
     IntegrationProblem::Cleanup(error) => Landed::Stopped(error.to_string()),

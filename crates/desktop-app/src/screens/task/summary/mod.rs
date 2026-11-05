@@ -13,6 +13,7 @@ mod browser_line;
 mod decisions;
 mod empty;
 mod live;
+mod merge_row;
 mod notice;
 mod output;
 mod properties;
@@ -20,7 +21,7 @@ pub(super) mod reading;
 mod run;
 mod run_account;
 mod run_facts;
-pub(super) mod runs;
+pub(crate) mod runs;
 mod steps;
 mod version;
 
@@ -37,7 +38,7 @@ use lurq::{
 };
 
 pub use self::{
-  decisions::{Waiting, decisions, returnable, waiting},
+  decisions::{PullRequestState, Waiting, decisions, pull_request_rows, returnable, waiting},
   notice::EventWords,
   version::Version,
 };

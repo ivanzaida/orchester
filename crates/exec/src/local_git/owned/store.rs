@@ -25,9 +25,11 @@ pub struct StoreOwnership {
 }
 impl StoreOwnership {
   pub fn acquire(root: &Path) -> Result<Arc<Self>, LocalGitError> {
+    let folder = root.join(".orchester");
     #[cfg(windows)]
     {
-      let directory = super::super::files::hold_directory(root, &[".orchester"], false)?.ok_or(LocalGitError::Io)?;
+      let directory = super::super::files::hold_directory(root, &[".orchester"], false)?
+        .ok_or_else(|| LocalGitError::missing(&folder))?;
       let mut files = vec![super::windows::pin_store_entry(
         &directory,
         DATABASE.as_ref(),
@@ -49,9 +51,9 @@ impl StoreOwnership {
     {
       let directory = Directory::open(root)?
         .child(".orchester".as_ref(), false)?
-        .ok_or(LocalGitError::Io)?;
+        .ok_or_else(|| LocalGitError::missing(&folder))?;
       if !directory.regular_entry(DATABASE.as_ref())? {
-        return Err(LocalGitError::Io);
+        return Err(LocalGitError::missing(&folder.join(DATABASE)));
       }
       // A sidecar SQLite deleted meanwhile is simply not there: one reading of its entry decides.
       for name in SIDECARS {

@@ -13,6 +13,7 @@
 //! budget holds new and continued work back once
 //! today's runs used it.
 
+mod active;
 mod again;
 mod attach;
 mod blocked_runs;
@@ -42,6 +43,7 @@ mod question;
 mod record;
 mod recovery;
 mod returned;
+mod review;
 mod run;
 mod side_question;
 mod step;
@@ -57,10 +59,7 @@ mod worktree_sweep;
 use std::{
   collections::HashMap,
   path::{Path, PathBuf},
-  sync::{
-    Arc,
-    atomic::{AtomicBool, Ordering},
-  },
+  sync::{Arc, atomic::AtomicBool},
   time::Duration,
 };
 
@@ -74,50 +73,25 @@ use orchester_core::{
 use orchester_ipc::{Event, Rejection};
 use orchester_store::{ProjectDb, RunStoreError};
 use parking_lot::Mutex;
-use tokio::{
-  sync::{mpsc, oneshot},
-  task::JoinHandle,
-};
+use tokio::sync::{mpsc, oneshot};
 
-pub use self::{
-  attach::Attached,
-  step::{QaSlots, outside_read_refusals},
-};
 use self::{
+  active::ActiveRun,
   board::Board,
   control::Control,
   prepare::Prepared,
   run::{RunTask, TaskContext},
   step::QaApps,
 };
+pub use self::{
+  attach::Attached,
+  step::{QaSlots, outside_read_refusals},
+};
 use crate::browser::ProjectBrowser;
 pub use crate::notify::Notifier;
 
 /// How long stopping waits for each run to end its agent and record the interruption.
 const STOP_TIMEOUT: Duration = Duration::from_secs(10);
-
-struct ActiveRun {
-  control: mpsc::UnboundedSender<Control>,
-  task: JoinHandle<()>,
-  /// Set by the task once it no longer executes the run, before the change that shows it can be
-  /// read: the run settled (paused, stopped at a limit, cancelled, interrupted or ended), waits
-  /// for a person with nothing else to do, or the task failed. The task only ends after.
-  settled: Arc<AtomicBool>,
-}
-
-impl ActiveRun {
-  /// Whether the task has ended. It lets go of its requests as it drops its state, once its last
-  /// change is recorded and its agents have ended; its [`JoinHandle`] reports it finished only a
-  /// moment later.
-  fn ended(&self) -> bool {
-    self.control.is_closed()
-  }
-
-  /// Whether the task still executes the run: it counts among the active runs.
-  fn executes(&self) -> bool {
-    !self.ended() && !self.settled.load(Ordering::Acquire)
-  }
-}
 
 /// The runs this runner executes.
 #[derive(Clone)]
@@ -150,6 +124,8 @@ struct Inner {
   plan_waits: plan_limit::PlanWaits,
   /// The turns of the Orchestrator chat under way, and the side questions being answered.
   chats: chat::Chats,
+  /// The review answers under way.
+  reviews: review::Reviews,
   side_agents: side_question::SideAgents,
   /// The disk guard's reading of free space (ORC-114), and its watch over runs paused for low disk space.
   disks: low_disk::DiskGuard,
@@ -186,6 +162,7 @@ impl Scheduler {
         blocked_runs: blocked_runs::BlockedRuns::default(),
         plan_waits: plan_limit::PlanWaits::default(),
         chats: chat::Chats::default(),
+        reviews: review::Reviews::default(),
         side_agents: side_question::SideAgents::default(),
         disks: low_disk::DiskGuard::local(),
         disk_watch: low_disk::DiskWatch::default(),
@@ -229,7 +206,7 @@ impl Scheduler {
   /// request is changing a run under the scheduler lock. The server separately tracks requests
   /// awaiting a task's answer.
   pub fn is_idle(&self) -> bool {
-    if !self.active_runs().is_empty() || self.inner.continuing.try_lock().is_err() || !self.inner.chats.idle() {
+    if !self.active_runs().is_empty() || self.inner.continuing.try_lock().is_err() || !self.turns_idle() {
       return false;
     }
     match self

@@ -55,6 +55,18 @@
       "dependsOn": "Depends on",
       "limits": "Limits",
       "branch": "Branch",
+      "merge": {
+        "label": "Merge",
+        "waits": "Waits for your review",
+        "notMerged": "Not merged · {{time}}",
+        "retrying": "Retrying · {{attempt}} of {{of}}",
+        "gitStopped": "Git stopped · {{time}}",
+        "leftChanged": "Files left changed",
+        "conflictsOne": "Conflicts · 1 file",
+        "conflictsOther": "Conflicts · {{count}} files",
+        "notRecorded": "Not recorded · {{time}}",
+        "merged": "Merged · {{time}}"
+      },
       "base": {
         "label": "Base",
         "task": "this task's base branch",

@@ -202,6 +202,23 @@ pub fn requeue(root: &Path, run: RunId, sent: Result<(), Message>, now: Timestam
   Ok(())
 }
 
+/// *Try again* on `run`, which delivery stopped at `now` for a cause that lasts until someone acts on it (the merge
+/// attempt page, 09e `s1jIpI`): it goes back in the queue in the place it had, its check and approval as they were, and
+/// is delivered in its turn.
+pub fn retry_stopped(root: &Path, run: RunId, now: Timestamp) -> Result<(), QueueRefusal> {
+  let mut db = ProjectDb::open(root)?;
+  let mut entry = entry_in(&db, run, |state| {
+    matches!(state, QueueState::Left(Left::Stopped { .. }))
+  })?;
+  let expected = std::mem::replace(&mut entry.state, QueueState::Queued);
+  entry.since = now;
+  if !db.save_merge_queue_entry(&entry, &expected, (&[QueueEvent::Requeued], now))? {
+    return Err(QueueRefusal::NotThere);
+  }
+  wake(root);
+  Ok(())
+}
+
 /// The command that sends `run`'s work back to `step` with the person's resolution of its conflicts with `base`.
 fn continued(run: &Run, step: orchester_core::resource::StepKey, base: &BranchName) -> Command {
   let note = ReviewNote::new(&format!(

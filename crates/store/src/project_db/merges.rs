@@ -1,7 +1,7 @@
 //! `run_merges`: runs whose work was merged into their base branch, one row per run.
 
 use orchester_core::{
-  id::RunId,
+  id::{RunId, TaskId},
   integration::{MergeKind, RunMerge},
   revision::Revision,
   run::{BranchName, RunStatus},
@@ -67,17 +67,61 @@ impl MergeStore for ProjectDb {
         |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
       )
       .optional()?;
-    let Some((into, revision, kind, merged_at)) = row else {
-      return Ok(None);
-    };
-    Ok(Some(RunMerge {
-      run,
-      into: BranchName::new(&into).map_err(|error| corrupt("merged branch", error))?,
-      revision: Revision::new(&revision).map_err(|error| corrupt("merge revision", error))?,
-      kind: parse_kind(&kind)?,
-      merged_at: Timestamp::from_unix_millis(merged_at),
-    }))
+    row.map(|row| merge_of(run, row)).transpose()
   }
+}
+
+impl ProjectDb {
+  /// Runs Orchester merged, with their tasks, newest first: at most `limit` of those merged before `before` (when, and
+  /// the run among those merged at the same moment), or the newest.
+  pub fn merged_runs(
+    &self,
+    before: Option<(Timestamp, RunId)>,
+    limit: usize,
+  ) -> Result<Vec<(TaskId, RunMerge)>, StoreError> {
+    // Without `before`, every merge is before the latest instant there is.
+    let (at, run) = before.map_or((i64::MAX, String::new()), |(at, run)| {
+      (at.unix_millis(), run.to_string())
+    });
+    let mut statement = self.connection.prepare(
+      "SELECT m.run_id, r.task_id, m.into_branch, m.revision, m.kind, m.merged_at
+       FROM run_merges m JOIN runs r ON r.id = m.run_id
+       WHERE m.merged_at < ?2 OR (m.merged_at = ?2 AND m.run_id < ?1)
+       ORDER BY m.merged_at DESC, m.run_id DESC
+       LIMIT ?3",
+    )?;
+    // A limit past SQLite's integers is no limit.
+    let limit = i64::try_from(limit).unwrap_or(i64::MAX);
+    let rows = statement.query_map(params![run, at, limit], |row| {
+      Ok((
+        row.get::<_, String>(0)?,
+        row.get::<_, String>(1)?,
+        (row.get(2)?, row.get(3)?, row.get(4)?, row.get(5)?),
+      ))
+    })?;
+    rows
+      .map(|row| {
+        let (run, task, merge) = row?;
+        Ok((
+          crate::rows::parse("task id", &task)?,
+          merge_of(crate::rows::parse("run id", &run)?, merge)?,
+        ))
+      })
+      .collect()
+  }
+}
+
+fn merge_of(
+  run: RunId,
+  (into, revision, kind, merged_at): (String, String, String, i64),
+) -> Result<RunMerge, StoreError> {
+  Ok(RunMerge {
+    run,
+    into: BranchName::new(&into).map_err(|error| corrupt("merged branch", error))?,
+    revision: Revision::new(&revision).map_err(|error| corrupt("merge revision", error))?,
+    kind: parse_kind(&kind)?,
+    merged_at: Timestamp::from_unix_millis(merged_at),
+  })
 }
 
 const fn kind_text(kind: MergeKind) -> &'static str {

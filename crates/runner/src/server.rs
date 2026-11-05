@@ -4,6 +4,7 @@
 
 mod browser;
 mod chat;
+mod review;
 mod side;
 
 use std::{
@@ -355,11 +356,14 @@ async fn answer(
     Command::Shutdown { mode } => return Answer::Shutdown(mode),
     Command::StopIfIdle => return Answer::StopIfIdle(id),
     Command::CheckConnection { provider, ref api } => return answer_check(&later, handle, provider, api.clone()),
-    Command::AnswerInChat { message, ref tools } => chat::answering(scheduler, message, tools.clone()).await,
-    Command::StopChat { chat } => chat::stopped(scheduler, chat),
-    Command::CompactChat { chat, ref tools } => chat::compacting(scheduler, chat, tools.clone()).await,
-    Command::SteerChat { message } => chat::steered(scheduler, message),
+    ref chat @ (Command::AnswerInChat { .. }
+    | Command::StopChat { .. }
+    | Command::CompactChat { .. }
+    | Command::SteerChat { .. }) => chat::reply(scheduler, chat).await,
     Command::StopTurn { run } => return later.answer(run, async move { handle.stop_turn(run).await }),
+    ref review @ (Command::AnswerReviewQuestion { .. } | Command::StopReviewAnswer { .. }) => {
+      return later.review(handle, review);
+    }
     Command::Browser(ref command) => return later.browser(handle, command.clone()),
     Command::EstimateTask { task } => return estimated(&later, handle, task),
     ref side @ (Command::AnswerSideQuestion { .. } | Command::StopSideQuestion { .. }) => {

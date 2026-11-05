@@ -17,8 +17,7 @@ const PYTHON_X: [&str; 5] = ["importtime", "utf8", "dev", "faulthandler", "trace
 /// `-v`).
 const SHELL_LETTERS: &str = "euxv";
 
-/// PowerShell switches that change neither what runs nor where code is loaded from; `-NoProfile` is
-/// required, since a profile is the user's code.
+/// PowerShell switches that change neither what runs nor where code is loaded from.
 const POWERSHELL_SWITCHES: [&str; 6] = ["-noprofile", "-nop", "-noninteractive", "-noni", "-nologo", "-nol"];
 
 /// Where among `args` the script file `program` runs is; `None` when it runs no file or one Orchester does
@@ -103,22 +102,18 @@ fn first_plain(args: &[String], allowed: impl Fn(&str) -> bool) -> Option<usize>
   args[..at].iter().all(|arg| allowed(arg)).then_some(at)
 }
 
-/// `pwsh -NoProfile [switches] [-ExecutionPolicy Bypass|RemoteSigned] -File script …`, names matched
-/// without case.
+/// `pwsh [switches] [-ExecutionPolicy Bypass|RemoteSigned] -File script …`, names matched without case.
+/// Without `-NoProfile` the person's own profile runs first: their code, not the agent's, which any `pwsh`
+/// they allow runs too, so `pwsh -File tools/check.ps1` is the repository's script as with it (ORC-662).
 fn powershell(args: &[String]) -> Option<usize> {
   let mut at = 0;
-  let mut no_profile = false;
   while let Some(arg) = args.get(at) {
     match arg.to_lowercase().as_str() {
       "-file" | "-f" => {
         return args
           .get(at + 1)
-          .is_some_and(|script| no_profile && !script.starts_with('-'))
+          .is_some_and(|script| !script.starts_with('-'))
           .then_some(at + 1);
-      }
-      "-noprofile" | "-nop" => {
-        no_profile = true;
-        at += 1;
       }
       "-executionpolicy" | "-ep" => {
         let policy = args.get(at + 1)?.to_lowercase();

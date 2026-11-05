@@ -2,6 +2,8 @@
 mod case_collisions;
 #[path = "local_integration/markers.rs"]
 mod markers;
+#[path = "local_integration/preflight_stage.rs"]
+mod preflight_stage;
 
 use std::{
   fs,
@@ -115,7 +117,7 @@ fn local_integration_hook_failure_creates_no_commit_and_leaves_original_index_an
   let tree = repo.git.selected_tree(&reviewed, &paths).expect("selection");
   assert!(matches!(
     repo.git.commit_selected(&reviewed, &paths, &tree, "rejected"),
-    Err(LocalGitError::Refused)
+    Err(LocalGitError::Refused(_))
   ));
   assert_eq!(repo.git.snapshot().expect("after"), reviewed);
 }

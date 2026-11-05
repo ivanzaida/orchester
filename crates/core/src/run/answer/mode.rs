@@ -198,8 +198,9 @@ pub enum ModeStep {
 }
 
 /// What `subject` touches, compared with `roots`: a command by its parts, a call of Orchester's tools that reads
-/// outside the worktree by the folder it reads in, any other call of Orchester's tools as inside. A call of another
-/// MCP server's tool cannot be placed: its arguments may name any path, and its tool may act on a remote service.
+/// outside the worktree by the folder it reads in, any other call of Orchester's tools as inside, a read of a design
+/// by its file and exports (ORC-698). Any other call of another MCP server's tool cannot be placed: its arguments may
+/// name any path, and its tool may act on a remote service.
 pub fn autopilot_check(roots: &RunRoots, subject: &ApprovalSubject) -> RootsCheck {
   match subject {
     ApprovalSubject::Command(command) => roots.check(&ToolRequest::Command(command)),
@@ -207,6 +208,13 @@ pub fn autopilot_check(roots: &RunRoots, subject: &ApprovalSubject) -> RootsChec
       reach: ToolReach::Folder { folder, .. },
       ..
     } => roots.check(&ToolRequest::Files(std::slice::from_ref(folder))),
+    ApprovalSubject::McpTool {
+      reach: ToolReach::Design(read),
+      ..
+    } => roots.check(&ToolRequest::Design {
+      file: read.file(),
+      exports: read.exports(),
+    }),
     ApprovalSubject::McpTool { server, .. } if server == SERVER => roots.check(&ToolRequest::McpTool { paths: &[] }),
     ApprovalSubject::McpTool { .. } => RootsCheck::Unknown,
   }

@@ -162,7 +162,6 @@ fn summary_the_header_offers_the_one_action_the_state_calls_for() {
   for (state, action) in [
     ("plan v2 waiting", "task-primary-review"),
     ("waits after retries", "task-primary-review"),
-    ("ready for review", "task-primary-merge"),
   ] {
     page.open(state);
     assert!(!page.has("task-primary"), "{state}: the card holds the action");
@@ -176,6 +175,14 @@ fn summary_the_header_offers_the_one_action_the_state_calls_for() {
       window.texts("task-decision").is_some()
     });
   }
+  // A run that waits to be merged has the merge's own action in the header on every tab (01i `k9GBy`, ORC-731).
+  page.open("ready for review");
+  assert!(page.has("task-primary-merge"), "the header merges beside the card");
+  page.click("task-tab-conversation");
+  page.window.until("the Conversation", |window| {
+    window.texts("conversation-toolbar").is_some()
+  });
+  assert!(page.has("task-primary-merge"), "and on the Conversation");
   page.open("latest run unreadable");
   let lock = page.text("task-unreadable-actions");
   assert!(lock.contains("are unavailable for run #"), "{lock}");

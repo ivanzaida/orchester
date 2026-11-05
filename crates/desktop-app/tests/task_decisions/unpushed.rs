@@ -1,6 +1,7 @@
-//! Create pull request when the seeded checkout's `main` has commits its `origin` (a local bare repository) doesn't
-//! have: the Ready card asks in place and pushes nothing; Cancel puts the question away; window automation can't
-//! answer it; Create anyway opens the pull request through the fake `gh` and `git push`, never pushing `main`.
+//! Create pull request, from *More actions*, when the seeded checkout's `main` has commits its `origin` (a local bare
+//! repository) doesn't have: the top card asks in place and pushes nothing; Cancel puts the question away; window
+//! automation can't answer it; Create anyway opens the pull request through the fake `gh` and `git push`, never
+//! pushing `main`.
 
 use lurq::app::events::with_synthetic_input;
 use serde_json::json;
@@ -45,16 +46,24 @@ fn out(page: &Page, args: &[&str]) -> String {
   String::from_utf8(output.stdout).expect("text").trim().to_owned()
 }
 
-/// Presses Create pull request once whether it can be used is read, until the question is shown.
+/// Chooses Create pull request in *More actions* once whether it can be used is read, until the question is shown.
 fn ask(page: &mut Page) {
   page
     .window
     .until("the question about main's unpushed commits", |window| {
-      if let Some(mut button) = window.tree.get_element_by_id_mut("task-create-pull-request") {
-        button.click();
-      }
+      choose_create(window);
       window.texts(TITLE).is_some()
     });
+}
+
+/// Opens *More actions* and chooses Create pull request there, once it can be chosen.
+fn choose_create(window: &mut super::support::Window) {
+  if window.texts("task-more-panel").is_none() {
+    window.press("task-more");
+  }
+  if window.texts("task-create-pull-request").is_some() && window.texts("task-create-pull-request-detail").is_none() {
+    window.press("task-create-pull-request");
+  }
 }
 
 /// Presses `id` as an MCP client's `lurq_interact` does (lurq marks the input synthetic), until the card says that
@@ -77,7 +86,7 @@ fn decision_create_pull_request_asks_before_including_unpushed_base_commits() {
   let fake = FakeGitHub::new();
   let mut page = linked(&fake);
   let (ahead, other) = origin_behind(&page);
-  page.open(READY, "task-create-pull-request");
+  page.open(READY, "task-merge");
   ask(&mut page);
   let title = if ahead == 1 {
     "This pull request would carry 1 commit that isn't on origin/main".to_owned()
@@ -114,10 +123,8 @@ fn decision_create_pull_request_asks_before_including_unpushed_base_commits() {
   assert_eq!(fake.pushes(), 0);
   // A person's new press asks anew, without the refusal of the question before.
   page.window.until("a new question without the refusal", |window| {
-    if window.texts(PERSON_ONLY).is_some()
-      && let Some(mut button) = window.tree.get_element_by_id_mut("task-create-pull-request")
-    {
-      button.click();
+    if window.texts(PERSON_ONLY).is_some() {
+      choose_create(window);
     }
     window.pass();
     window.texts(PERSON_ONLY).is_none() && window.texts(TITLE).is_some()
