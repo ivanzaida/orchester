@@ -18,6 +18,7 @@ mod delivery;
 mod delivery_recovery;
 mod fixture;
 mod heartbeat;
+mod here;
 mod reports;
 mod start;
 mod team_commands;

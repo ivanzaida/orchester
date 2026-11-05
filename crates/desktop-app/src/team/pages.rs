@@ -60,6 +60,19 @@ pub struct TeamClaim {
   pub here: bool,
 }
 
+impl TeamClaim {
+  /// The server's stale threshold as this claim shows it, in whole minutes: from its last renewal to when it goes
+  /// stale. The server tells the threshold itself to its admins only.
+  pub fn threshold(&self) -> String {
+    minutes(self.renewed, self.stale_at)
+  }
+}
+
+/// Whole minutes from `from` to `to`, none below zero.
+pub fn minutes(from: Timestamp, to: Timestamp) -> String {
+  ((to.unix_millis() - from.unix_millis()) / 60_000).max(0).to_string()
+}
+
 /// What the server's capabilities let the person do with a task or a module: advisory, as every command is checked
 /// again there.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -69,6 +82,8 @@ pub struct Abilities {
   pub release: bool,
   /// Change the module's branch (an Admin's).
   pub branch: bool,
+  /// Authorize the module's delivery (an Admin's).
+  pub authorize: bool,
 }
 
 /// A team task as its page shows it: the task, its revision, the slug of a pipeline this computer has none for, its
@@ -216,6 +231,7 @@ fn abilities(capabilities: &Capabilities, subject: Subject) -> Abilities {
     take_over: allowed(&["claim", "take_over"]),
     release: allowed(&["claim", "release"]),
     branch: allowed(&["module", "branch", "set"]),
+    authorize: allowed(&["delivery", "authorize"]),
   }
 }
 

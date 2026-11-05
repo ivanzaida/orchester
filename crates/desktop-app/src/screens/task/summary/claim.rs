@@ -29,7 +29,7 @@ use crate::{
     },
   },
   team::{
-    pages::TeamClaim,
+    pages::{TeamClaim, minutes},
     strip::{Strip, StripTone},
   },
   ui::{
@@ -104,11 +104,6 @@ fn mine<'a>(task: &'a TaskContext, claim: &'a TeamClaim) -> Line<'a> {
     None if running && waits => Line::NotRenewed(claim, false),
     None => Line::Yours(claim, running),
   }
-}
-
-/// Whole minutes from `from` to `to`, none below zero.
-fn minutes(from: Timestamp, to: Timestamp) -> String {
-  ((to.unix_millis() - from.unix_millis()) / 60_000).max(0).to_string()
 }
 
 fn strip(ctx: &mut Ctx, task: &TaskContext, line: &Line<'_>) -> Strip {

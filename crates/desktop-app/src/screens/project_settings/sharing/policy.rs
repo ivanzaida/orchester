@@ -24,12 +24,13 @@ use crate::{
   navigation::Navigation,
   project::ShownProject,
   routes::{Route, UpdatesShow},
+  screens::settings::orchester::PersonOnly,
   services::Services,
   team::{
     TeamFailure, TeamSource,
     act::{Acted, Acting, Holds},
     lock,
-    pages::team_module_list,
+    pages::{TeamClaim, team_module_list},
     queries::{TeamPolicy, team_admins, team_policy},
     view,
   },
@@ -50,7 +51,7 @@ pub(super) struct TeamPart {
   pub failure: Option<TeamFailure>,
   pub policy: Option<TeamPolicy>,
   /// The server's stale threshold in minutes, as a claim of the workspace shows it.
-  pub threshold: Option<i64>,
+  pub threshold: Option<String>,
   /// Who changes the policy, named.
   pub admins: Option<String>,
 }
@@ -88,7 +89,7 @@ pub(super) fn read(ctx: &mut Ctx, project: &ShownProject) -> TeamPart {
     modules
       .iter()
       .find_map(|module| module.claim.as_ref())
-      .map(|claim| (claim.stale_at.unix_millis() - claim.renewed.unix_millis()) / 60_000)
+      .map(TeamClaim::threshold)
   });
   TeamPart {
     failure: policy.error().map(|failure| (*failure).clone()),
@@ -130,10 +131,18 @@ pub(super) struct Props {
 
 impl DevtoolsInspectable for Props {}
 
+/// The switch of the automatic merge, which only a person turns.
+const SWITCH: &str = "sharing-policy-merge-switch";
+/// *Turn on again* / *Turn off again* under a conflict, which only a person presses.
+const AGAIN: &str = "sharing-policy-conflict-again";
+
 /// *Team policy*, once the policy is read.
 pub(super) struct Policy {
   /// The person kept the automatic merge someone else set first; reset by the next change.
   kept: Signal<bool>,
+  /// Turning the automatic merge lets later deliveries go without an Admin, so it is a person's (`Guarded::Sharing`);
+  /// no MCP tool changes the policy either.
+  person: PersonOnly,
 }
 
 impl Component for Policy {
@@ -142,6 +151,7 @@ impl Component for Policy {
   fn create(ctx: &mut Ctx) -> Self {
     Self {
       kept: ctx.signal(false),
+      person: PersonOnly::new(ctx),
     }
   }
 
@@ -152,9 +162,9 @@ impl Component for Policy {
       return Group::new("project-settings-sharing-policy", ctx.t("sharing.policy.title"));
     };
     let merge = self.merge_row(ctx, (&part, policy), &action);
-    let minutes = part.threshold.map_or_else(
+    let minutes = part.threshold.as_deref().map_or_else(
       || ctx.t("sharing.policy.unknown"),
-      |minutes| ctx.t_args("sharing.policy.minutes", [("minutes", minutes.to_string())]),
+      |minutes| ctx.t_args("sharing.policy.minutes", [("minutes", minutes)]),
     );
     let stale = SettingRow::new("sharing-policy-stale", ctx.t("sharing.policy.stale"))
       .hint(ctx.t("sharing.policy.staleHint"))
@@ -208,28 +218,28 @@ impl Policy {
     }
     let state = action.state().get();
     let read = policy.policy.revision;
-    let change = action.clone();
-    let switch = Toggle::new(
-      "sharing-policy-merge-switch",
-      ToggleKind::Switch,
-      on,
-      ctx.t("sharing.policy.merge"),
-    )
-    .hide_label()
-    .on_change(move |wanted| {
-      change.run(PolicyAction {
-        read,
-        automatic_merge: wanted,
+    let (change, person) = (action.clone(), self.person.clone());
+    let switch = Toggle::new(SWITCH, ToggleKind::Switch, on, ctx.t("sharing.policy.merge"))
+      .hide_label()
+      .on_change(move |wanted| {
+        // One change at a time: a second on the same revision would come back as someone else's.
+        if person.allows(SWITCH) {
+          change.run_if_idle(PolicyAction {
+            read,
+            automatic_merge: wanted,
+          });
+        }
       });
-    });
     let conflict = (!state.is_pending() && !self.kept.get())
       .then(|| state.data.clone())
       .flatten()
-      .and_then(|acted| conflict(ctx, (action, &self.kept), policy, &acted));
+      .and_then(|acted| conflict(ctx, (action, &self.kept, &self.person), policy, &acted));
+    let refused = [SWITCH, AGAIN].into_iter().find_map(|id| self.person.reason(ctx, id));
     row
       .hint(ctx.t("sharing.policy.mergeHint"))
       .control(switch)
       .under_all(conflict)
+      .under_all(refused)
       .render(ctx)
   }
 }
@@ -237,7 +247,7 @@ impl Policy {
 /// The automatic merge someone else set first (`o3iheS` in 05b): what it is now, to change again or keep.
 fn conflict(
   ctx: &Ctx,
-  (action, kept): (&FutureAction<PolicyAction, Acted, ()>, &Signal<bool>),
+  (action, kept, person): (&FutureAction<PolicyAction, Acted, ()>, &Signal<bool>, &PersonOnly),
   policy: TeamPolicy,
   acted: &Acted,
 ) -> Option<Element> {
@@ -261,14 +271,15 @@ fn conflict(
       "sharing.policy.keepOff",
     )
   };
-  let (change, read) = (action.clone(), policy.policy.revision);
-  let again =
-    ActionButton::new("sharing-policy-conflict-again", ButtonKind::Secondary, ctx.t(again)).on_click(move || {
-      change.run(PolicyAction {
+  let (change, read, person) = (action.clone(), policy.policy.revision, person.clone());
+  let again = ActionButton::new(AGAIN, ButtonKind::Secondary, ctx.t(again)).on_click(move || {
+    if person.allows(AGAIN) {
+      change.run_if_idle(PolicyAction {
         read,
         automatic_merge: !now,
       });
-    });
+    }
+  });
   let kept = kept.clone();
   let keep =
     ActionButton::new("sharing-policy-conflict-keep", ButtonKind::Ghost, ctx.t(keep)).on_click(move || kept.set(true));

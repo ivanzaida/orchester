@@ -343,7 +343,7 @@ struct TaskFrame {
   /// change the task.
   live: Signal<bool>,
   /// A team task's Take over asks first.
-  taking_over: Signal<bool>,
+  taking_over: team_controls::TakingOver,
 }
 
 impl Component for TaskFrame {
@@ -370,7 +370,7 @@ impl Component for TaskFrame {
       },
       requested: ctx.signal(None),
       live: ctx.signal(false),
-      taking_over: ctx.signal(false),
+      taking_over: team_controls::TakingOver::new(ctx),
     }
   }
 

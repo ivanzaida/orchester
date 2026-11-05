@@ -1,7 +1,9 @@
 //! The lines of a team module's *Work and delivery* ([`super::team_work`]): the module's claim (`H1zbi` in 04, `GV6tR`
-//! in 04d), its branch with *Change* for an Admin (`t3oYel`) and its question (`04b` `InYp8`, `04c` `E4Evt`), its
-//! delivery to the base by state (`04f` `Wd4G1`), what the last action did not do (`APbft` in 04d, `m8l3MZ` in 04c) and
-//! a branch someone else changed first, to reapply or keep (`QcaYU` in 04c).
+//! in 04d), its branch with *Change* for an Admin (`t3oYel`) and its question (`04b` `InYp8`, `04c` `E4Evt`), what the
+//! last action did not do (`APbft` in 04d, `m8l3MZ` in 04c) and a branch someone else changed first, to reapply or keep
+//! (`QcaYU` in 04c); its delivery is in [`super::team_work_delivery`]. Take over and Authorize are a person's: their
+//! handlers refuse an MCP client's input, as no MCP tool takes a claim over or authorizes a delivery, and the
+//! person-only note says why under the line.
 
 use std::sync::Arc;
 
@@ -12,15 +14,14 @@ use lurq::{
 };
 use orchester_api::v2::AuthorityErrorCode;
 use orchester_core::time::Timestamp;
-use orchester_workspace::team_work::DeliveryStatus;
 
 use super::team_work::{ModuleAnswer, ModuleAsk, ShownDelivery, WorkControl, WorkProps};
 use crate::{
-  screens::settings::orchester::moment,
+  screens::settings::orchester::{PersonOnly, moment},
   team::{
     act::{Acted, Holds},
     deliver::Asked,
-    pages::TeamClaim,
+    pages::{TeamClaim, minutes},
     strip::{Strip, StripTone},
   },
   ui::{
@@ -33,6 +34,11 @@ use crate::{
   },
 };
 
+/// The module's *Take over*, which only a person presses.
+pub const TAKE_OVER: &str = "module-team-take-over";
+/// *Try again* over the lines, a person's only after a Take over or an Authorize.
+pub const AGAIN: &str = "module-team-refused-again";
+
 /// What the lines are drawn from.
 pub struct View<'a> {
   pub props: &'a WorkProps,
@@ -43,6 +49,8 @@ pub struct View<'a> {
   pub branch: &'a Signal<String>,
   /// The person kept the branch someone else gave the module first.
   pub kept: &'a Signal<bool>,
+  /// Take over and Authorize, which only a person presses.
+  pub person: &'a PersonOnly,
 }
 
 impl View<'_> {
@@ -61,26 +69,32 @@ impl View<'_> {
   }
 
   /// A strip's button that asks `ask`, under way while an ask is.
-  fn ask(&self, ctx: &Ctx, (id, label, glyph): (&str, &str, Icon), ask: ModuleAsk) -> ActionButton {
+  pub(super) fn ask(&self, ctx: &Ctx, (id, label, glyph): (&str, &str, Icon), ask: ModuleAsk) -> ActionButton {
     let button = ActionButton::new(id.to_owned(), ButtonKind::Secondary, ctx.t(label))
       .icon(glyph)
       .small();
     if self.pending() {
       return button.loading();
     }
-    let action = self.action.clone();
-    button.on_click(move || action.run(ask.clone()))
+    let run = self.runs(id);
+    button.on_click(move || run(ask.clone()))
+  }
+
+  /// What a press of the button `id` does with its ask: Take over and Authorize only on a person's press.
+  fn runs(&self, id: &str) -> impl Fn(ModuleAsk) + 'static {
+    let (action, person, id) = (self.action.clone(), self.person.clone(), id.to_owned());
+    move |ask: ModuleAsk| {
+      let person_only = matches!(ask, ModuleAsk::TakeOver | ModuleAsk::Authorize);
+      if !person_only || person.allows(&id) {
+        action.run(ask);
+      }
+    }
   }
 }
 
-/// Whole minutes from `from` to `to`, none below zero.
-fn minutes(from: Timestamp, to: Timestamp) -> String {
-  ((to.unix_millis() - from.unix_millis()) / 60_000).max(0).to_string()
-}
-
-/// A commit as the lines name it: its first seven characters.
-fn short(commit: &str) -> String {
-  commit.chars().take(7).collect()
+/// Why a press of Take over, Authorize or their Try again did nothing: an MCP client pressed it.
+pub fn person_only(ctx: &Ctx, view: &View<'_>, ids: &[&str]) -> Option<Element> {
+  ids.iter().find_map(|id| view.person.reason(ctx, id))
 }
 
 /// The module's claim: who holds it and since when, stale when nothing renewed it, or nobody; with what the server
@@ -161,7 +175,7 @@ fn stale(ctx: &Ctx, view: &View<'_>, claim: &TeamClaim) -> Strip {
   let take_over = module.abilities.take_over.then(|| {
     view.ask(
       ctx,
-      ("module-team-take-over", "modules.team.work.takeOver", Icon::Hand),
+      (TAKE_OVER, "modules.team.work.takeOver", Icon::Hand),
       ModuleAsk::TakeOver,
     )
   });
@@ -197,162 +211,6 @@ pub fn branch(ctx: &Ctx, view: &View<'_>) -> Element {
     })
   });
   with(strip, change).into()
-}
-
-/// What a delivery's line offers.
-enum Offers {
-  Nothing,
-  Authorize,
-  AskAgain,
-}
-
-/// The newest delivery's line by its state: its title's and detail's keys, its tone and what it offers.
-fn delivery_line(delivery: &ShownDelivery, admin: bool) -> (&'static str, &'static str, StripTone, Offers) {
-  match &delivery.status {
-    DeliveryStatus::Requested => (
-      "modules.team.work.requestedTitle",
-      "modules.team.work.requestedDetail",
-      StripTone::Plain,
-      Offers::Nothing,
-    ),
-    DeliveryStatus::AwaitingAuthorization if admin => (
-      "modules.team.work.awaitingAdminTitle",
-      "modules.team.work.awaitingAdminDetail",
-      StripTone::Plain,
-      Offers::Authorize,
-    ),
-    DeliveryStatus::AwaitingAuthorization => (
-      "modules.team.work.awaitingTitle",
-      "modules.team.work.awaitingDetail",
-      StripTone::Plain,
-      Offers::Nothing,
-    ),
-    DeliveryStatus::Authorized { .. } => (
-      "modules.team.work.authorizedTitle",
-      "modules.team.work.authorizedDetail",
-      StripTone::Plain,
-      Offers::Nothing,
-    ),
-    DeliveryStatus::AuthorizedAutomatically => (
-      "modules.team.work.automaticTitle",
-      "modules.team.work.automaticDetail",
-      StripTone::Plain,
-      Offers::Nothing,
-    ),
-    DeliveryStatus::Delivered => (
-      "modules.team.work.deliveredTitle",
-      "modules.team.work.deliveredDetail",
-      StripTone::Plain,
-      Offers::Nothing,
-    ),
-    DeliveryStatus::Failed if delivery.merge_failed => (
-      "modules.team.work.mergeFailedTitle",
-      "modules.team.work.mergeFailedDetail",
-      StripTone::Danger,
-      Offers::AskAgain,
-    ),
-    DeliveryStatus::Failed => (
-      "modules.team.work.withdrawnTitle",
-      "modules.team.work.withdrawnDetail",
-      StripTone::Warning,
-      Offers::AskAgain,
-    ),
-    DeliveryStatus::Refused(_) => (
-      "modules.team.work.refusedTitle",
-      "modules.team.work.refusedTitle",
-      StripTone::Danger,
-      Offers::AskAgain,
-    ),
-  }
-}
-
-/// The module's delivery to its base, by the newest one this computer recorded, or by who may ask for it.
-pub fn delivery(ctx: &Ctx, view: &View<'_>) -> Element {
-  let Some(delivery) = view.delivery else {
-    return not_requested(ctx, view).into();
-  };
-  let (title, detail, tone, offers) = delivery_line(delivery, view.props.module.abilities.branch);
-  let detail = match &delivery.status {
-    DeliveryStatus::Refused(error) => refused_words(ctx, error.code()),
-    _ => ctx.t_args(
-      detail,
-      [
-        ("branch", delivery.branch.to_string()),
-        ("source", short(delivery.source_commit.as_str())),
-        ("base", delivery.base_branch.to_string()),
-        ("baseCommit", short(delivery.base_commit.as_str())),
-      ],
-    ),
-  };
-  let action = match offers {
-    Offers::Nothing => None,
-    Offers::Authorize => Some(view.ask(
-      ctx,
-      ("module-team-authorize", "modules.team.work.authorize", Icon::Check),
-      ModuleAsk::Authorize,
-    )),
-    Offers::AskAgain => Some(view.ask(
-      ctx,
-      (
-        "module-team-delivery-again",
-        "modules.team.work.askAgain",
-        Icon::RotateCcw,
-      ),
-      ModuleAsk::Deliver(None),
-    )),
-  };
-  let glyph = (Icon::GitPullRequest, PaletteColor::TextMuted);
-  let strip = Strip::new("module-team-delivery", glyph, ctx.t(title), detail).tone(tone);
-  with(strip, action).into()
-}
-
-/// No delivery recorded here: the holder on this computer asks for it; anyone else reads whose it is to ask.
-fn not_requested(ctx: &Ctx, view: &View<'_>) -> Strip {
-  let module = &view.props.module;
-  let id = "module-team-delivery";
-  let glyph = (Icon::GitPullRequest, PaletteColor::TextMuted);
-  let holder = module.claim.as_ref().filter(|claim| !claim.stale);
-  match holder {
-    Some(claim) if claim.here => {
-      let ask = view.ask(
-        ctx,
-        (
-          "module-team-delivery-ask",
-          "modules.team.work.ask",
-          Icon::GitPullRequest,
-        ),
-        ModuleAsk::Deliver(None),
-      );
-      Strip::new(
-        id,
-        glyph,
-        ctx.t("modules.team.work.notRequestedTitle"),
-        ctx.t("modules.team.work.yoursToAsk"),
-      )
-      .action(ask)
-    }
-    Some(claim) if view.props.standing.member() => Strip::new(
-      id,
-      glyph,
-      ctx.t_args(
-        "modules.team.work.theirsTitle",
-        [("holder", claim.holder.name.as_str())],
-      ),
-      ctx.t("modules.team.work.theirsDetail"),
-    ),
-    Some(claim) => Strip::new(
-      id,
-      glyph,
-      ctx.t("modules.team.work.notRequestedTitle"),
-      ctx.t_args("modules.team.work.holderAsks", [("holder", claim.holder.name.as_str())]),
-    ),
-    None => Strip::new(
-      id,
-      glyph,
-      ctx.t("modules.team.work.notRequestedTitle"),
-      ctx.t("modules.team.work.nobodyAsks"),
-    ),
-  }
 }
 
 /// What the last ask did not do, over the lines, with Try again; a branch someone else changed first is said by
@@ -398,14 +256,10 @@ pub fn refusal(ctx: &Ctx, view: &View<'_>) -> Option<Element> {
     ModuleAsk::Branch(_) => "modules.team.work.refused.branchTitle",
     ModuleAsk::Deliver(_) | ModuleAsk::Authorize => "modules.team.work.refused.deliverTitle",
   };
-  let action = view.action.clone();
-  let again = ActionButton::new(
-    "module-team-refused-again",
-    ButtonKind::Secondary,
-    ctx.t("common.tryAgain"),
-  )
-  .icon(Icon::RefreshCw)
-  .on_click(move || action.run(ask.clone()));
+  let run = view.runs(AGAIN);
+  let again = ActionButton::new(AGAIN, ButtonKind::Secondary, ctx.t("common.tryAgain"))
+    .icon(Icon::RefreshCw)
+    .on_click(move || run(ask.clone()));
   let notice = Notice::new(
     "module-team-refused",
     NoticeTone::Danger,
@@ -530,7 +384,7 @@ pub fn branch_dialog(ctx: &mut Ctx, view: &View<'_>) -> Option<Element> {
 }
 
 /// `strip`, with `action` at its end when there is one.
-fn with(strip: Strip, action: Option<ActionButton>) -> Strip {
+pub(super) fn with(strip: Strip, action: Option<ActionButton>) -> Strip {
   match action {
     Some(action) => strip.action(action),
     None => strip,
@@ -563,7 +417,7 @@ fn asked_words(ctx: &Ctx, asked: &Asked) -> Arc<str> {
 }
 
 /// A refusal's code as the module's lines say it.
-fn refused_words(ctx: &Ctx, code: AuthorityErrorCode) -> Arc<str> {
+pub(super) fn refused_words(ctx: &Ctx, code: AuthorityErrorCode) -> Arc<str> {
   let key = match code {
     AuthorityErrorCode::ClaimConflict | AuthorityErrorCode::ModuleClaimConflict => "modules.team.work.refused.conflict",
     AuthorityErrorCode::ClaimLost | AuthorityErrorCode::SessionMismatch => "modules.team.work.refused.lost",

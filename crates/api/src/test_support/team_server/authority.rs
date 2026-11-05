@@ -117,6 +117,8 @@ pub(super) struct Authority {
   planned: Vec<(&'static str, Plan)>,
   /// The modules' branches as Admins changed them, by the module's index.
   branches: HashMap<usize, work::BranchChange>,
+  /// How many claims were acquired anew here.
+  issued: u8,
 }
 
 impl Authority {
@@ -271,6 +273,20 @@ impl TeamServer {
     let mut state = self.state.lock();
     state.authority.unsupported = refused;
     state.authority.streams += 1;
+  }
+
+  /// The kind of every command asked so far (`claim.acquire`, `delivery.authorize`, …), taken or refused, in order.
+  pub fn commands(&self) -> Vec<String> {
+    let state = self.state.lock();
+    let operations = state.authority.operations.iter();
+    operations
+      .map(|(_, asked, ..)| asked["command"]["kind"].as_str().unwrap_or_default().to_owned())
+      .collect()
+  }
+
+  /// The workspace policy now: its revision and whether the automatic merge is on.
+  pub fn policy(&self) -> (u64, bool) {
+    self.state.lock().authority.policy
   }
 }
 

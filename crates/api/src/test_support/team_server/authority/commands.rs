@@ -29,6 +29,9 @@ pub enum Plan {
 /// A refusal's status and code.
 type Refused = (u16, &'static str);
 
+/// The generations the claims acquired here are numbered from, past those the reads set and their take-overs.
+const ISSUED_FROM: u8 = 0x80;
+
 /// `POST …/commands` of `project` with `body`: the receipt or the refusal, kept by the operation's id.
 pub(super) fn command(authority: &mut Authority, project: &str, body: &str) -> (u16, Value) {
   let Ok(body) = serde_json::from_str::<Value>(body) else {
@@ -153,7 +156,8 @@ fn planned(authority: &mut Authority, command: &Value, plan: Plan) -> Result<(),
 }
 
 /// `claim.acquire` or `claim.take_over` of a task or a module, by the person. The person's own claim of a task is
-/// answered unchanged; another task under someone else's module claim is theirs to claim.
+/// answered unchanged; another task under someone else's module claim is theirs to claim. Each claim acquired anew has
+/// an id of its own, as the server issues one, so it is never one released before.
 fn take(authority: &mut Authority, kind: &str, command: &Value) -> Result<Value, Refused> {
   let subject = command["subject"].clone();
   let own =
@@ -163,11 +167,16 @@ fn take(authority: &mut Authority, kind: &str, command: &Value) -> Result<Value,
     return Err((409, "module_claim_conflict"));
   }
   let number = subject_number(authority, &subject).ok_or((404, "not_found"))?;
+  authority.issued = authority.issued.wrapping_add(1);
+  let fresh = AuthorityClaim {
+    generation: ISSUED_FROM.wrapping_add(authority.issued),
+    ..AuthorityClaim::taken(Person::You, None)
+  };
   let claim = subject_claim(authority, &subject).ok_or((404, "not_found"))?;
   let taken = match (kind, *claim) {
     ("claim.acquire", Some(held)) if held.holder == Person::You => held,
     ("claim.acquire", Some(_)) => return Err((409, "claim_conflict")),
-    ("claim.acquire", None) => AuthorityClaim::taken(Person::You, None),
+    ("claim.acquire", None) => fresh,
     (_, Some(held)) if held.stale && command["observed_claim_id"] == held.id(number) => {
       AuthorityClaim::taken(Person::You, Some(&held))
     }
@@ -334,6 +343,7 @@ fn capabilities(
   ]);
   if module {
     actions.push(action("module.branch.set", admin));
+    actions.push(action("delivery.authorize", admin));
   }
   listed
 }

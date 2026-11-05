@@ -25,7 +25,7 @@ use orchester_workspace::{
 use super::{TaskContext, team::TeamTaskShown};
 use crate::{
   project::ShownProject,
-  screens::settings::orchester::moment,
+  screens::settings::orchester::{PersonOnly, moment},
   services::Services,
   team::{
     act::{Acted, Acting},
@@ -61,12 +61,35 @@ impl lurq::app::component::DevtoolsInspectable for TeamAnswer {}
 
 pub type TeamAction = FutureAction<TeamAsk, TeamAnswer, ()>;
 
+/// Take over's *Take over and start fresh*, which only a person presses.
+const TAKE_OVER: &str = "task-take-over-confirm";
+
+/// Take over's question and who may answer it.
+#[derive(Clone)]
+pub struct TakingOver {
+  /// The question is open.
+  pub open: Signal<bool>,
+  /// Taking another member's stale claim over ends their authority, which only a person decides: no MCP tool takes a
+  /// claim over either.
+  pub person: PersonOnly,
+}
+
+impl TakingOver {
+  pub fn new(ctx: &mut Ctx) -> Self {
+    Self {
+      open: ctx.signal(false),
+      person: PersonOnly::new(ctx),
+    }
+  }
+}
+
 /// The frame's team actions, which its header, Summary and menu share.
 #[derive(Clone)]
 pub struct TeamControls {
   pub action: TeamAction,
   /// Take over's question is open.
   pub taking_over: Signal<bool>,
+  person: PersonOnly,
 }
 
 impl TeamControls {
@@ -88,13 +111,8 @@ impl TeamControls {
 }
 
 /// Provides the frame's [`TeamControls`] for `shown`, the team task as last read in `project`, with Take over's
-/// question open while `taking_over` holds; made on every render, so an ask is carried out on the task as the page
-/// shows it.
-pub fn provide(
-  ctx: &mut Ctx,
-  (project, shown): (&ShownProject, Option<Arc<TeamTaskShown>>),
-  taking_over: &Signal<bool>,
-) {
+/// question as `taking_over` holds it; made on every render, so an ask is carried out on the task as the page shows it.
+pub fn provide(ctx: &mut Ctx, (project, shown): (&ShownProject, Option<Arc<TeamTaskShown>>), taking_over: &TakingOver) {
   let services = Services::of(ctx);
   let name = project.open.project.name().as_str().to_owned();
   let means = (Acting::of(&services), services.runners, services.programs);
@@ -110,7 +128,8 @@ pub fn provide(
   });
   ctx.provide(TeamControls {
     action,
-    taking_over: taking_over.clone(),
+    taking_over: taking_over.open.clone(),
+    person: taking_over.person.clone(),
   });
 }
 
@@ -195,14 +214,21 @@ pub fn can_run(task: &TaskContext) -> bool {
   !runs_here && (held || team.task.abilities.acquire)
 }
 
-/// Take over's question (`Dialog` `he6ir` in `02e`), while it is open.
+/// Take over's question (`Dialog` `he6ir` in `02e`), while it is open and the claim as read again can still be taken
+/// over; once it cannot (renewed, released, or the server no longer allows it), the question closes.
 pub fn take_over_dialog(ctx: &mut Ctx, task: &TaskContext) -> Option<Element> {
   let controls = TeamControls::of(ctx)?;
-  let team = task.team.as_ref()?;
-  let claim = team.task.claim.as_ref()?;
   if !controls.taking_over.get() {
     return None;
   }
+  let team = task.team.as_ref().filter(|team| team.task.abilities.take_over);
+  let claim = team
+    .and_then(|team| team.task.claim.as_ref())
+    .filter(|claim| claim.stale && !claim.holder.you && !claim.under_module);
+  let (Some(team), Some(claim)) = (team, claim) else {
+    controls.taking_over.set(false);
+    return None;
+  };
   let key = task.key.to_string();
   let holder = claim.holder.name.as_str();
   let computer = device::computer_name();
@@ -230,16 +256,14 @@ pub fn take_over_dialog(ctx: &mut Ctx, task: &TaskContext) -> Option<Element> {
     lines.push(dialog::line("task-take-over-merges", Icon::GitBranch, &words));
   }
   let (open, ask) = (controls.taking_over.clone(), controls.clone());
-  let confirm = ActionButton::new(
-    "task-take-over-confirm",
-    ButtonKind::Primary,
-    ctx.t("summary.team.claim.takeOver"),
-  )
-  .icon(Icon::Hand)
-  .on_click(move || {
-    open.set(false);
-    ask.run(TeamAsk::TakeOver);
-  });
+  let confirm = ActionButton::new(TAKE_OVER, ButtonKind::Primary, ctx.t("summary.team.claim.takeOver"))
+    .icon(Icon::Hand)
+    .on_click(move || {
+      if ask.person.allows(TAKE_OVER) {
+        open.set(false);
+        ask.run(TeamAsk::TakeOver);
+      }
+    });
   let title = ctx.t_args(
     "summary.team.takeOver.title",
     [("task", key.as_str()), ("holder", holder)],
@@ -251,6 +275,7 @@ pub fn take_over_dialog(ctx: &mut Ctx, task: &TaskContext) -> Option<Element> {
     ctx.t("summary.team.takeOver.cancel"),
   )
   .part(dialog::lines("task-take-over-lines", lines))
+  .under(controls.person.reason(ctx, TAKE_OVER))
   .action(confirm)
   .render(ctx, &controls.taking_over);
   Some(dialog)

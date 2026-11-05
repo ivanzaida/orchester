@@ -12,6 +12,7 @@ mod team;
 mod team_actions;
 mod team_pages;
 mod team_tasks;
+mod team_work_actions;
 
 use lurq::app::events::with_synthetic_input;
 use orchester_api::test_support::team_server::{TasksAnswer, TeamServer};

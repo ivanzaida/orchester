@@ -30,8 +30,9 @@ use orchester_workspace::{
   team_work::{DeliveryStatus, TeamDeliveryState},
 };
 
-use super::team_work_lines as lines;
+use super::{team_work_delivery as delivery, team_work_lines as lines};
 use crate::{
+  screens::settings::orchester::PersonOnly,
   services::Services,
   team::{
     TeamSource,
@@ -112,6 +113,8 @@ pub struct ModuleWork {
   kept: Signal<bool>,
   /// Counts the asks that ended, so the deliveries recorded here are read again after each.
   answered: Signal<u64>,
+  /// Take over and Authorize, which only a person presses.
+  person: PersonOnly,
 }
 
 pub type WorkControl = FutureAction<ModuleAsk, ModuleAnswer, ()>;
@@ -125,6 +128,7 @@ impl Component for ModuleWork {
       branch: ctx.signal(String::new()),
       kept: ctx.signal(false),
       answered: ctx.signal(0),
+      person: PersonOnly::new(ctx),
     }
   }
 
@@ -139,6 +143,7 @@ impl Component for ModuleWork {
       changing: &self.changing,
       branch: &self.branch,
       kept: &self.kept,
+      person: &self.person,
     };
     let heading = Text::new(&ctx.t("modules.team.work.heading"))
       .id("module-team-work-heading")
@@ -150,10 +155,13 @@ impl Component for ModuleWork {
       .spacing(ExtraSpacing::Loose.role())
       .child(heading)
       .with_children(lines::refusal(ctx, &view))
+      .with_children(lines::person_only(ctx, &view, &[lines::AGAIN]))
       .child(lines::claim(ctx, &view))
+      .with_children(lines::person_only(ctx, &view, &[lines::TAKE_OVER]))
       .with_children(lines::conflict(ctx, &view))
       .child(lines::branch(ctx, &view))
-      .child(lines::delivery(ctx, &view))
+      .child(delivery::delivery(ctx, &view))
+      .with_children(lines::person_only(ctx, &view, &[delivery::AUTHORIZE]))
       .with_children(lines::branch_dialog(ctx, &view))
   }
 }
@@ -252,7 +260,8 @@ async fn carry_out(
   ModuleAnswer::Acted(ask, act(action).await)
 }
 
-/// An Admin who holds the module here authorizes the delivery that waits for it, then asks for it on that.
+/// An Admin who holds the module here authorizes the delivery that waits for it, then asks for exactly that delivery on
+/// that authorization: the commits the page showed, not the branches' tips now.
 async fn authorize(
   ask: ModuleAsk,
   (acting, programs): (&Acting, Programs),
@@ -266,11 +275,14 @@ async fn authorize(
   let commits = (delivery.source_commit.clone(), delivery.base_commit.clone());
   match deliver::authorize(acting, &props.source, (id, claim, delivery.branch.clone()), commits).await {
     Ok(authorization) => {
-      let target = (id, claim, props.module.branch.clone());
-      ModuleAnswer::Asked(
-        ask,
-        deliver::request(acting, &props.source, programs, target, Some(authorization)).await,
-      )
+      let tips = (
+        delivery.branch,
+        delivery.source_commit,
+        delivery.base_branch,
+        delivery.base_commit,
+      );
+      let asked = deliver::request_tips(acting, &props.source, programs, (id, claim, tips), Some(authorization)).await;
+      ModuleAnswer::Asked(ask, asked)
     }
     Err(acted) => ModuleAnswer::Acted(ask, acted),
   }

@@ -60,7 +60,11 @@ pub fn deliveries(root: PathBuf, (servers, programs): (Servers, Programs), modul
   }
 }
 
-/// Asks for the delivery of `module`'s `branch` under this computer's module claim `claim`, citing `authorization`.
+/// A delivery's branch and its tip, and the branch it lands on and that one's tip.
+pub type Tips = (BranchName, CommitId, BranchName, CommitId);
+
+/// Asks for the delivery of `module`'s `branch`, as its tips are here now, under this computer's module claim `claim`,
+/// citing `authorization`.
 pub async fn request(
   acting: &Acting,
   source: &TeamSource,
@@ -68,16 +72,26 @@ pub async fn request(
   (module, claim, branch): (ModuleId, ClaimId, String),
   authorization: Option<OperationId>,
 ) -> Asked {
-  let root = source.root().to_owned();
   let tips = {
-    let (programs, root) = (programs.clone(), root.clone());
+    let (programs, root) = (programs.clone(), source.root().to_owned());
     background::run(move || tips(&programs, &root, &branch)).await
   };
-  let (branch, source_commit, base_branch, base_commit) = match tips {
-    Ok(Ok(tips)) => tips,
-    Ok(Err(asked)) => return asked,
-    Err(_) => return Asked::Failed,
-  };
+  match tips {
+    Ok(Ok(tips)) => request_tips(acting, source, programs, (module, claim, tips), authorization).await,
+    Ok(Err(asked)) => asked,
+    Err(_) => Asked::Failed,
+  }
+}
+
+/// Asks for exactly the delivery of `module` from `tips` under `claim`, citing `authorization`: after an Admin's
+/// authorization, the commits it authorized, whatever the branches are at here now.
+pub async fn request_tips(
+  acting: &Acting,
+  source: &TeamSource,
+  programs: Programs,
+  (module, claim, (branch, source_commit, base_branch, base_commit)): (ModuleId, ClaimId, Tips),
+  authorization: Option<OperationId>,
+) -> Asked {
   let request = TeamDeliveryRequest {
     operation: OperationId::generate(),
     delivery: DeliveryAction {
@@ -90,7 +104,7 @@ pub async fn request(
     },
     base_branch,
   };
-  carry_out(acting, source, (programs, root), request).await
+  carry_out(acting, source, (programs, source.root().to_owned()), request).await
 }
 
 /// An Admin's authorization of exactly the delivery of `module`'s `branch` under its claim `claim` from `source_commit`
@@ -117,7 +131,7 @@ pub async fn authorize(
 }
 
 /// The module's `branch` and the branch checked out at `root`, each with its tip.
-fn tips(programs: &Programs, root: &Path, branch: &str) -> Result<(BranchName, CommitId, BranchName, CommitId), Asked> {
+fn tips(programs: &Programs, root: &Path, branch: &str) -> Result<Tips, Asked> {
   let runner = programs.runner();
   let source_commit =
     team_work::branch_tip(runner, root, branch).map_err(|_| Asked::BranchNotFound(branch.to_owned()))?;

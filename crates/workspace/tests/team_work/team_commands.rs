@@ -45,6 +45,7 @@ fn carry_out(state: &mut State, token: &str, body: &Value) -> Option<(u16, Value
   let result = match command["kind"].as_str().expect("a kind") {
     "claim.acquire" => acquire(state, token, command),
     "claim.take_over" => take_over(state, token, command),
+    "claim.release" => release(state, token, command),
     "work.start" => start(state, token, body),
     "work.report" => {
       state.reports_sent += 1;
@@ -136,6 +137,17 @@ fn take_over(state: &mut State, token: &str, command: &Value) -> Result<Value, R
     token: token.to_owned(),
   });
   Ok(claimed(state, id))
+}
+
+/// Releases the task's claim the authority names, the caller's own.
+fn release(state: &mut State, token: &str, command: &Value) -> Result<Value, Refused> {
+  let authority = &command["authority"];
+  let claim: ClaimId = serde_json::from_value(authority["claim_id"].clone()).expect("a claim id");
+  if !holds(state, token, claim) {
+    return Err((409, "claim_lost"));
+  }
+  state.claim = None;
+  Ok(json!({"kind": "released", "subject": authority["subject"], "released_claim_id": claim, "effects": []}))
 }
 
 fn start(state: &mut State, token: &str, body: &Value) -> Result<Value, Refused> {
