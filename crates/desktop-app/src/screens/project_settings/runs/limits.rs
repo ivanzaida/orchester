@@ -60,7 +60,7 @@ pub(super) struct Limits {
   /// The project's share of *Services at once*.
   services: Signal<String>,
   /// The computer's *Services at once* once read: the most a changed share may be.
-  computer: Signal<Option<ComputerServiceSlots>>,
+  computer: Arc<parking_lot::Mutex<Option<ComputerServiceSlots>>>,
   /// The settings the fields were filled from or last saved as: the base of the next save.
   stored: Signal<Option<Read>>,
   /// What the page's last save read back, until the settings' query has it.
@@ -215,7 +215,7 @@ impl Component for Limits {
       slots: ctx.signal(String::new()),
       qa: ctx.signal(String::new()),
       services: ctx.signal(String::new()),
-      computer: ctx.signal(None),
+      computer: Arc::new(parking_lot::Mutex::new(None)),
       stored: ctx.signal(None),
       kept: ctx.props::<TabProps>().kept.clone(),
       separator: ctx.t("project_settings.groupSeparator"),
@@ -249,9 +249,7 @@ impl Component for Limits {
     let props = ctx.props::<TabProps>().clone();
     let save = self.save.clone();
     let computer = computer_limit(ctx);
-    if self.computer.get_untracked() != computer {
-      self.computer.set(computer);
-    }
+    *self.computer.lock() = computer;
     let loaded = work::load(ctx, props.project.open.repo_root.clone());
     let shown = loaded.shown(&self.kept, save.state().get().is_pending());
     let Some(data) = shown.or_else(|| self.stored.get()) else {
@@ -274,15 +272,13 @@ impl Component for Limits {
       save.state().set(lurq::app::ctx::FutureState::idle());
     }
     if !save.state().get().is_pending() && save.state().get().error.is_none() {
-      props
-        .status
-        .set(if self.read(stored.0.limits, computer).is_err() {
-          Status::Invalid
-        } else if changed {
-          Status::Unsaved
-        } else {
-          Status::Saved
-        });
+      props.status.set(if self.read(stored.0.limits, computer).is_err() {
+        Status::Invalid
+      } else if changed {
+        Status::Unsaved
+      } else {
+        Status::Saved
+      });
     }
     let errors = self
       .read(stored.0.limits, computer)
@@ -353,7 +349,11 @@ impl Limits {
     }
   }
   /// The limits the fields hold over `base`, a changed share at most the `computer`'s limit when it is read.
-  fn read(&self, base: ProjectLimits, computer: Option<ComputerServiceSlots>) -> Result<ProjectLimits, Box<LimitsErrors>> {
+  fn read(
+    &self,
+    base: ProjectLimits,
+    computer: Option<ComputerServiceSlots>,
+  ) -> Result<ProjectLimits, Box<LimitsErrors>> {
     self.text().limits(base, &self.separator, computer)
   }
   fn fill(&self, read: Read) {
@@ -412,7 +412,8 @@ impl Limits {
       return;
     };
     let text = self.text();
-    let Ok(asked) = text.limits(base.0.limits, &self.separator, self.computer.get_untracked()) else {
+    let computer = *self.computer.lock();
+    let Ok(asked) = text.limits(base.0.limits, &self.separator, computer) else {
       return;
     };
     if base.0.limits.raises_daily_budget(asked) && !may_raise {

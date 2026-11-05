@@ -241,8 +241,8 @@ fn project_settings_limits_qa_apps_at_once_saves_like_agents_and_rejects_bad_val
   page.until("the outside QA apps shown", |p| p.value("settings-qa-slots") == "16");
 }
 
-/// *Services at once* (`agehj` in `tJkyQ`): the project's share, 4 until changed, beside *Agents at once*; its hint names
-/// the computer's limit, which a share may not pass, and follows it when Settings › General changes it.
+/// *Services at once* (`agehj` in `tJkyQ`): the project's share, 4 until changed, beside *Agents at once*; its hint
+/// names the computer's limit, which a share may not pass, and follows it when Settings › General changes it.
 #[test]
 fn project_settings_limits_services_at_once_saves_the_share_within_the_computers_limit_and_reloads() {
   let mut page = Settings::new(false);

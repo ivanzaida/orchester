@@ -124,7 +124,12 @@ fn project_settings_limits_read_the_projects_share_of_services_at_once_up_to_the
     ..text.clone()
   };
   assert_eq!(
-    lowered.limits(stored, ",", computer).expect("five").service_slots().get().get(),
+    lowered
+      .limits(stored, ",", computer)
+      .expect("five")
+      .service_slots()
+      .get()
+      .get(),
     5
   );
   let above = LimitsText {
