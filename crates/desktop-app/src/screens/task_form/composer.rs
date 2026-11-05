@@ -40,7 +40,8 @@ impl TaskForm {
       .width(Dimension::Px(FORM_WIDTH))
       .spacing(TaskFormSpacing::Composer.role())
       .child(head(ctx, view, &self.nav))
-      .with_children(notes(ctx, view));
+      .with_children(notes(ctx, view))
+      .with_children(self.team_stop_part(ctx, props, view));
     if let Some(conflict) = &view.conflict {
       let pipelines = props.pipelines.as_deref().map(Vec::as_slice);
       return composer.with_children(conflict_parts(ctx, conflict, &self.choices, pipelines));

@@ -47,6 +47,9 @@ use orchester_workspace::{
   workspace::OpenProject,
 };
 
+use super::team::{self, TeamSave, TeamStop};
+use crate::team::act::Acting;
+
 /// What a save stores, and where.
 #[derive(Clone)]
 pub struct SaveArgs {
@@ -69,6 +72,9 @@ pub struct SaveArgs {
   /// A new task's sources, each confirmed by the person on the form, stored with it; a stored task's are saved as
   /// they change (`super::sources`).
   pub sources: Vec<SourcePath>,
+  /// An edit of a team project's task, which goes to its server through the dispatcher (`super::team`); `None` for a
+  /// local project's, which its writer stores as before.
+  pub team: Option<TeamSave>,
 }
 
 /// The task a save stored.
@@ -89,12 +95,13 @@ impl Problems {
   }
 }
 
-/// How a save ended: the task stored, or a newer version whose fields both changed, for the person to
-/// choose from (`Edit task · conflict` `PenUu`).
+/// How a save ended: the task stored, a newer version whose fields both changed, for the person to
+/// choose from (`Edit task · conflict` `PenUu`), or a team task's save its server did not take as a whole.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SaveOutcome {
   Stored(Arc<Task>),
   Conflict(Arc<EditConflict>),
+  Team(Arc<TeamStop>),
 }
 
 impl lurq::app::component::DevtoolsInspectable for SaveOutcome {}
@@ -102,18 +109,24 @@ impl lurq::app::component::DevtoolsInspectable for SaveOutcome {}
 pub type SaveAction = FutureAction<SaveArgs, SaveOutcome, Problems>;
 
 /// Saves the form; once a task is stored, Orchester is asked for its story points (`estimates`, which estimates them
-/// only while the person allows it and has set none). `programs` runs git for the base branch picked.
+/// only while the person allows it and has set none). `programs` runs git for the base branch picked; a team task's
+/// edit goes through `acting`.
 pub fn save_action(
   ctx: &mut Ctx,
   (servers, programs): (Servers, Programs),
   (estimates, open): (Estimates, OpenProject),
+  acting: Acting,
 ) -> SaveAction {
   ctx.future_action(move |args: SaveArgs| {
     let (servers, programs, estimates, open) = (servers.clone(), programs.clone(), estimates.clone(), open.clone());
+    let acting = acting.clone();
     async move {
-      let outcome = background::run(move || store(&args, &servers, &programs))
-        .await
-        .map_err(Problems::one)??;
+      let outcome = match (&args.team, args.target) {
+        (Some(team), SaveTarget::Task(task, read)) => team::store(&acting, team, (task, read), &args).await,
+        _ => background::run(move || store(&args, &servers, &programs))
+          .await
+          .map_err(Problems::one)??,
+      };
       if let SaveOutcome::Stored(task) = &outcome {
         estimates.request(open, task.id());
       }

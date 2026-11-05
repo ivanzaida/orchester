@@ -106,7 +106,8 @@ pub fn prepare(state: State, services: &Services, runtime: &Handle) -> Result<Te
     | State::ModuleWork
     | State::AdminWork
     | State::VersionRefused
-    | State::TeamRunning => {
+    | State::TeamRunning
+    | State::EditConflict => {
       let ids = task_ids(services)?;
       let role = member::serve_as(&server, state, &ids);
       let (kontur, id) = join_linked_as(&server, (services, runtime), (TasksAnswer::Serve, role))?;

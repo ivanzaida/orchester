@@ -56,7 +56,8 @@ pub fn to(
     | State::ModuleWork
     | State::AdminWork
     | State::VersionRefused
-    | State::TeamRunning => Err(format!("{state:?} opens the app's own window, with nothing to press").into()),
+    | State::TeamRunning
+    | State::EditConflict => Err(format!("{state:?} opens the app's own window, with nothing to press").into()),
   }
 }
 

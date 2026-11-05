@@ -74,6 +74,7 @@ fn task_form_roles_follow_the_composer() {
     (TaskFormSpacing::Side, 28.0),
     (TaskFormSpacing::Composer, 20.0),
     (TaskFormSpacing::MenuOption, 7.0),
+    (TaskFormSpacing::ConflictActions, 44.0),
   ] {
     assert_eq!(theme.spacing_value(spacing.role()), Dimension::Px(value), "{spacing:?}");
   }

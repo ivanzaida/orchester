@@ -5,7 +5,7 @@
 use orchester_core::time::Timestamp;
 use serde_json::{Value, json};
 
-use super::{AuthorityClaim, AuthorityTask, State, capabilities, commands, work};
+use super::{AuthorityClaim, AuthorityTask, State, capabilities, commands, edits, work};
 use crate::{
   test_support::team_server::{
     TasksAnswer, USER,
@@ -26,8 +26,16 @@ pub(super) fn task_id(task: &AuthorityTask) -> String {
     .unwrap_or_else(|| format!("0191c7c0-0000-7000-8000-0000001{:05x}", task.number))
 }
 
-/// The project's tasks as `TaskRead`s: those [`super::TeamServer::authority_tasks`] set, or else the v1 tasks.
-pub(super) fn tasks((project, key): (&str, &str), state: &State) -> Vec<Value> {
+/// The project's tasks as `TaskRead`s: those [`super::TeamServer::authority_tasks`] set, or else the v1 tasks, with
+/// what Admins changed of them here.
+pub(super) fn tasks(project: (&str, &str), state: &State) -> Vec<Value> {
+  listed(project, state)
+    .into_iter()
+    .map(|task| edits::applied(&state.authority, task))
+    .collect()
+}
+
+fn listed((project, key): (&str, &str), state: &State) -> Vec<Value> {
   let standing = state.authority.standing;
   let read = |task: Value| -> Value {
     let mut task = task;

@@ -6,6 +6,7 @@
 //! subscription says so too, a little later.
 
 use orchester_api::{
+  SharedTask,
   releases::ReleaseVersion,
   v2::{AuthorityErrorCode, TeamCommandValue, WorkspacePolicy},
 };
@@ -50,6 +51,8 @@ pub enum Holds {
   Branch { branch: String, by: String },
   /// The workspace's policy: its automatic merge, at the revision a change again names.
   AutomaticMerge(WorkspacePolicy),
+  /// A task as its definition route gives it, with who changed it last and when.
+  Task(Box<SharedTask>),
 }
 
 /// What the screens need to carry out a team action: the session's servers and team reads, and the runtime.
@@ -70,7 +73,7 @@ impl Acting {
   }
 
   /// The project's dispatcher in a session of its own; `None` while this computer is not signed in there.
-  async fn dispatcher(&self, source: &TeamSource) -> Option<Dispatcher> {
+  pub(super) async fn dispatcher(&self, source: &TeamSource) -> Option<Dispatcher> {
     let key = source.key();
     match self.servers.team_session(key.server, key.project).await {
       Ok(session) => Some(Dispatcher::new(
@@ -113,7 +116,7 @@ impl Acting {
 }
 
 /// What `outcome` came to, with the claim a claim command's receipt gives.
-fn acted(outcome: Result<ActionOutcome, ActionError>) -> (Acted, Option<ClaimId>) {
+pub(super) fn acted(outcome: Result<ActionOutcome, ActionError>) -> (Acted, Option<ClaimId>) {
   let outcome = match outcome {
     Ok(ActionOutcome::Team(outcome)) => outcome,
     // The project was found local after all: nothing of the team's was changed.
@@ -146,8 +149,10 @@ fn acted(outcome: Result<ActionOutcome, ActionError>) -> (Acted, Option<ClaimId>
   }
 }
 
-/// A final refusal: a revision conflict with what the subject holds now, else the server's code.
+/// A final refusal: a revision conflict with what the subject holds now, else the server's code. A definition route's
+/// `403` (`not_admin`, `forbidden`) is the Admins' alone; another of its refusals is the change's own.
 fn refused(refusal: &Refusal, current: Option<Current>) -> Acted {
+  use orchester_api::ErrorCode;
   match refusal {
     Refusal::Command(error) if error.code() == AuthorityErrorCode::RevisionConflict => {
       Acted::Changed(current.and_then(holds))
@@ -155,10 +160,12 @@ fn refused(refusal: &Refusal, current: Option<Current>) -> Acted {
     Refusal::Command(error) => Acted::Refused(error.code()),
     Refusal::NeedsVersion { required } => Acted::NeedsVersion(required.clone()),
     Refusal::PolicyRevisionConflict | Refusal::Superseded => Acted::Changed(current.and_then(holds)),
-    Refusal::Route { code, .. } if *code == orchester_api::ErrorCode::RevisionConflict => {
-      Acted::Changed(current.and_then(holds))
-    }
-    Refusal::Route { .. } => Acted::Refused(AuthorityErrorCode::Forbidden),
+    Refusal::Route { code, .. } if *code == ErrorCode::RevisionConflict => Acted::Changed(current.and_then(holds)),
+    Refusal::Route {
+      code: ErrorCode::NotAdmin | ErrorCode::Forbidden,
+      ..
+    } => Acted::Refused(AuthorityErrorCode::Forbidden),
+    Refusal::Route { .. } => Acted::Refused(AuthorityErrorCode::Invalid),
   }
 }
 
@@ -170,6 +177,7 @@ fn holds(current: Current) -> Option<Holds> {
       by: module.module.updated.by.display_name,
     }),
     Current::Policy(policy) => Some(Holds::AutomaticMerge(policy)),
-    Current::Module(_) | Current::Task(_) | Current::TaskRead(_) | Current::Tags(_) | Current::NotRead(_) => None,
+    Current::Task(task) => Some(Holds::Task(task)),
+    Current::Module(_) | Current::TaskRead(_) | Current::Tags(_) | Current::NotRead(_) => None,
   }
 }

@@ -96,7 +96,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 119] = [
+pub const ALL: [Scenario; 120] = [
   Scenario::of("reviewer-row", reviewer_rows::seed),
   Scenario::of("reviewer-row-local", reviewer_rows::local),
   Scenario::of("reviewer-row-unavailable", reviewer_rows::unavailable),
@@ -214,6 +214,7 @@ pub const ALL: [Scenario; 119] = [
   Scenario::of("team-admin-work", team::admin_work),
   Scenario::of("team-version-refused", team::version_refused),
   Scenario::with_fake_codex("team-running", team::team_running),
+  Scenario::of("team-edit-conflict", team::edit_conflict),
   Scenario::of("modules-base-branch", modules::base_branch),
   Scenario::of("loading-states", loading_states::seed),
 ];

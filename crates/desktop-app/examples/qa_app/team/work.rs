@@ -136,6 +136,7 @@ pub fn plan(state: State, server: &TeamServer) {
       server.automatic_merge(true);
       server.automatic_merge_changed_first(true);
     }
+    State::EditConflict => server.task_changed_first(12, OLHA, "urgent"),
     _ => {}
   }
 }
