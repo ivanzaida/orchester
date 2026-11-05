@@ -446,11 +446,7 @@ impl Component for TaskFrame {
       retries: self.retries.get(),
     };
     let root = props.project.open.repo_root.clone();
-    let team = props
-      .team
-      .as_ref()
-      .map(|team| (team.task.task.clone(), team.task.missing_pipeline.clone()));
-    let (detail, stale) = match read::task(ctx, root.clone(), (props.task, team), again) {
+    let (detail, stale) = match read::task(ctx, root.clone(), (props.task, team_read(&props)), again) {
       TaskRead::Loading => return reading_page(ctx, &props),
       TaskRead::Failed(reason) => return read_failed(ctx, &reason, Some(self.retries.clone())),
       TaskRead::Ready(detail, stale, pending) => (detail, self.stale(stale, pending)),
@@ -576,4 +572,12 @@ pub fn changes_count(ctx: &mut Ctx, _task: &TaskContext) -> Option<FileCount> {
 /// is read.
 pub fn memory_count(ctx: &mut Ctx, task: &TaskContext) -> Option<usize> {
   memory::active_count(ctx, task)
+}
+
+/// The page's team task as its server read it; `None` for a task of this computer's.
+fn team_read(props: &FrameProps) -> read::TeamRead {
+  props
+    .team
+    .as_ref()
+    .map(|team| (team.task.task.clone(), team.task.missing_pipeline.clone()))
 }
