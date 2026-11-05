@@ -23,6 +23,7 @@ pub mod rewind;
 pub mod run_git;
 pub mod sent;
 pub mod settings;
+pub mod task_event;
 pub mod wait;
 pub mod watch;
 
@@ -39,6 +40,7 @@ pub use self::{
   rewind::{Dropped, RewindPoint, RewoundTo},
   sent::{FromOrchestrator, SentWay},
   settings::{NoProgressError, OrchestratorSettings, WatchSettings, runs_orchestrator},
+  task_event::{TaskEvent, TaskEventKind},
   wait::{AgentWait, RunEnd, StopReason, WaitKind},
   watch::{Claim, Subscription, Subscriptions, WatchTarget},
 };
