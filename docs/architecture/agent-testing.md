@@ -257,6 +257,19 @@ re-run is the Test step's own; *Last runs* says no results are kept until the Te
 program, so an MCP client changes what it runs or publishes it only under *Let automation change agent permissions*;
 a stack widens nothing. Not built: *Duplicate*.
 
+Built (ORC-266): the Tests card on a task's Summary (`qN2FK`; `orchester-app`'s `screens::task::summary::tests`). A
+Test step that runs to its end keeps a record beside its suites' runs in the run's storage
+(`test-steps/<execution>.json`, `orchester_core::test_step::TestStepRecord`): each layer it reached or not, each
+suite's first run with its totals and time, the failed tests with file:line, message, excerpt and artifacts, the flaky
+tests (marked when quarantined), the quarantined tests that failed again, and the files the suites left. The task page
+reads the latest execution's record (`orchester_workspace::tasks::test_results`), keeping only artifacts inside the
+run's storage, and shows it under the run in place of that step's report among the output; a run without one has no
+card. A link hands a picture, archive, video or text to its default program and any other file's folder (it could be
+a program); a press of automation opens nothing, and a QA copy or a test records what it would open
+(`services::links`). While the step the failed tests went back to works on them, the run's last event says how many
+went back to which step. The seed's `summary-tests` scenario holds such a run. Not built: the other states of `je8z3`
+(running, report unreadable, timed out), *Service logs* among the artifacts, and the stacks on a layer's line.
+
 ## Phases
 
 1. Model and storage of services, stacks and suites; report parsers.

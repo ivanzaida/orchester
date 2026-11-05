@@ -66,7 +66,11 @@ pub fn section(ctx: &mut Ctx, record: &TestStepRecord, returned_to: Option<&str>
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(Text::new(&ctx.t("summary.tests.failedTitle")).variant(TestsText::Heading.role()).nowrap())
+    .child(
+      Text::new(&ctx.t("summary.tests.failedTitle"))
+        .variant(TestsText::Heading.role())
+        .nowrap(),
+    )
     .child(
       Text::new(&detail)
         .id("task-tests-failed-detail")
@@ -79,10 +83,20 @@ pub fn section(ctx: &mut Ctx, record: &TestStepRecord, returned_to: Option<&str>
   for (index, test) in failed.iter().take(MAX_FAILURES_SHOWN).enumerate() {
     let id = format!("task-tests-failed-{index}");
     let links = artifacts::links(ctx, &id, &test.artifacts);
-    rows.push(failed_row(&id, (&test.name, test.location.as_deref()), links, message(test)));
+    rows.push(failed_row(
+      &id,
+      (&test.name, test.location.as_deref()),
+      links,
+      &message(test),
+    ));
   }
   rows.extend(problems.iter().enumerate().map(|(index, (suite, problem))| {
-    failed_row(&format!("task-tests-suite-{index}"), (suite, None), Vec::new(), vec![*problem])
+    failed_row(
+      &format!("task-tests-suite-{index}"),
+      (suite, None),
+      Vec::new(),
+      &[*problem],
+    )
   }));
   let more = failed.len().saturating_sub(MAX_FAILURES_SHOWN);
   if more > 0 {
@@ -94,7 +108,10 @@ pub fn section(ctx: &mut Ctx, record: &TestStepRecord, returned_to: Option<&str>
     rows.push(
       Row::new()
         .width(Dimension::Pct(100.0))
-        .padding(Padding::symmetric(ExtraSpacing::Loose.role(), ExtraSpacing::Inset.role()))
+        .padding(Padding::symmetric(
+          ExtraSpacing::Loose.role(),
+          ExtraSpacing::Inset.role(),
+        ))
         .child(words)
         .into(),
     );
@@ -114,7 +131,7 @@ fn message(test: &TestRecord) -> Vec<&str> {
 
 /// A failed test's row, or a failed suite's: its `name` and `location`, its artifacts' `links`, and its message's
 /// `lines`.
-fn failed_row(id: &str, (name, location): (&str, Option<&str>), links: Vec<Element>, lines: Vec<&str>) -> Element {
+fn failed_row(id: &str, (name, location): (&str, Option<&str>), links: Vec<Element>, lines: &[&str]) -> Element {
   let line = Row::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
@@ -139,7 +156,11 @@ fn failed_row(id: &str, (name, location): (&str, Option<&str>), links: Vec<Eleme
       .id(format!("{id}-message-{index}"))
       .variant(TestsText::Message.role())
       .width(Dimension::Pct(100.0));
-    if index == 0 { line.color(PaletteColor::Danger) } else { line }
+    if index == 0 {
+      line.color(PaletteColor::Danger)
+    } else {
+      line
+    }
   });
   let message = (!lines.is_empty()).then(|| {
     Column::new()
@@ -155,7 +176,10 @@ fn failed_row(id: &str, (name, location): (&str, Option<&str>), links: Vec<Eleme
   Column::new()
     .id(id.to_owned())
     .width(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(ExtraSpacing::Loose.role(), ExtraSpacing::Inset.role()))
+    .padding(Padding::symmetric(
+      ExtraSpacing::Loose.role(),
+      ExtraSpacing::Inset.role(),
+    ))
     .spacing(SpacingSize::Sm)
     .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .child(line)
@@ -173,14 +197,26 @@ pub fn flaky_section(ctx: &Ctx, record: &TestStepRecord) -> Option<Element> {
     if test.quarantined {
       marks.push((BadgeTone::Neutral, quarantined.clone(), "quarantined"));
     }
-    (Icon::RefreshCw, PaletteColor::Warning, &test.name, test.location.as_deref(), marks)
+    (
+      Icon::RefreshCw,
+      PaletteColor::Warning,
+      &test.name,
+      test.location.as_deref(),
+      marks,
+    )
   });
   let held = record.quarantined().map(|test| {
     let marks = vec![
       (BadgeTone::Danger, failed_again.clone(), "failed-again"),
       (BadgeTone::Neutral, quarantined.clone(), "quarantined"),
     ];
-    (Icon::CircleX, PaletteColor::TextMuted, &test.name, test.location.as_deref(), marks)
+    (
+      Icon::CircleX,
+      PaletteColor::TextMuted,
+      &test.name,
+      test.location.as_deref(),
+      marks,
+    )
   });
   let rows: Vec<Element> = flaky
     .chain(held)
@@ -220,7 +256,10 @@ pub fn flaky_section(ctx: &Ctx, record: &TestStepRecord) -> Option<Element> {
   let section = Column::new()
     .id("task-tests-flaky")
     .width(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(ExtraSpacing::Loose.role(), ExtraSpacing::Inset.role()))
+    .padding(Padding::symmetric(
+      ExtraSpacing::Loose.role(),
+      ExtraSpacing::Inset.role(),
+    ))
     .spacing(SpacingSize::Sm)
     .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .child(Text::new(&ctx.t("summary.tests.flakyTitle")).variant(TestsText::Heading.role()))

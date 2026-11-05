@@ -159,7 +159,12 @@ impl LayerRecord {
   }
 
   fn totals(&self, count: impl Fn(&Totals) -> usize) -> usize {
-    self.suites.iter().filter_map(|suite| suite.totals.as_ref()).map(count).sum()
+    self
+      .suites
+      .iter()
+      .filter_map(|suite| suite.totals.as_ref())
+      .map(count)
+      .sum()
   }
 }
 

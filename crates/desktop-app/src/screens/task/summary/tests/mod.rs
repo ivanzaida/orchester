@@ -52,7 +52,10 @@ pub fn card(ctx: &mut Ctx, run: &RunView, tests: &TestResults) -> Element {
         .variant(TypographyStyle::Description)
         .color(PaletteColor::Danger)
         .width(Dimension::Pct(100.0))
-        .padding(Padding::symmetric(ExtraSpacing::Inline.role(), ExtraSpacing::Inset.role()))
+        .padding(Padding::symmetric(
+          ExtraSpacing::Inline.role(),
+          ExtraSpacing::Inset.role(),
+        ))
         .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border));
       return card.child(head(ctx, run, tests, None)).child(why).into();
     }
@@ -86,11 +89,12 @@ fn head(ctx: &Ctx, run: &RunView, tests: &TestResults, record: Option<&TestStepR
     .and_then(|invocation| Some((invocation.started_at, invocation.ended_at?)));
   let meta = match ended {
     Some((started, ended)) => {
+      // Only a clock that went backwards ends a step before it started: it took no time then.
       let took = u64::try_from(ended.unix_millis() - started.unix_millis()).unwrap_or(0);
       ctx.t_args(
         "summary.tests.meta",
         [
-          ("step", step.clone()),
+          ("step", step),
           ("attempt", attempt),
           ("time", display::clock(ended)),
           ("duration", words::duration(ctx, took).to_string()),
@@ -140,7 +144,14 @@ fn badges(ctx: &Ctx, record: &TestStepRecord) -> Vec<Element> {
     badges.push(badge("task-tests-flaky-badge", BadgeTone::Warning, &word).into());
   }
   if passed && failed == 0 {
-    badges.push(badge("task-tests-passed-badge", BadgeTone::Success, &ctx.t("summary.tests.allPassed")).into());
+    badges.push(
+      badge(
+        "task-tests-passed-badge",
+        BadgeTone::Success,
+        &ctx.t("summary.tests.allPassed"),
+      )
+      .into(),
+    );
   }
   badges
 }

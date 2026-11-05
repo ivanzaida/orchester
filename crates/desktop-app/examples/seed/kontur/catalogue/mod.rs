@@ -1,6 +1,8 @@
 //! What the QA project's tasks run on: the Codex connection, the design's agent profiles (Explorer, Planner,
 //! Builder, Reviewer) and the pipelines, published as people publish them.
 
+mod tested;
+
 use std::{collections::BTreeMap, path::Path};
 
 use orchester_core::{
@@ -18,6 +20,7 @@ use orchester_core::{
 };
 use orchester_store::ProjectDb;
 
+pub use self::tested::tested;
 use super::{SeedError, name};
 
 /// The version `orchester-fake-codex` stands in for, as the runner's tests record its check.

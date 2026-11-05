@@ -4,7 +4,7 @@
 //! fails and then passes when run again is flaky and does not fail the step, and the project's flaky history keeps it;
 //! a quarantined test that fails still runs, is in the result and the history, but neither fails the step nor goes
 //! back to the writing step; a failure returns to the writing step with only the failed tests, never the raw output;
-//! and the step after it reads the result it stored. Needs `git`.
+//! the step after it reads the result it stored; and each execution keeps its record for the task page. Needs `git`.
 //! Run with `cargo test -p orchester-runner --features test-agent --test test_step test_step`.
 
 mod support;
@@ -18,7 +18,11 @@ use orchester_core::{
   service::{OwnedPath, ReadyCheck, Service},
   store::ActivityStore,
   test_report::SuiteRun,
-  test_step::flaky::{FlakyKind, TestKey},
+  test_step::{
+    TestStepRecord,
+    flaky::{FlakyKind, TestKey},
+    record_file,
+  },
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
@@ -175,6 +179,30 @@ async fn test_step_runs_changed_areas_layer_by_layer_and_returns_only_failed_tes
   );
   // The test's own output and the program's are never in it.
   assert!(!text.contains("subtracting 5 - 3") && !text.contains("pid: "), "{text}");
+
+  // Each execution kept its record for the task page: the layers, the failed test, the layer not reached.
+  let storage = orchester_core::workspaces::artifacts_folder(root, run.id());
+  for execution in run
+    .attempts()
+    .iter()
+    .flat_map(|attempt| attempt.executions())
+    .filter(|execution| execution.step().as_str() == "tests")
+  {
+    let file = record_file(&storage, execution.id());
+    let record: TestStepRecord = serde_json::from_slice(&fs::read(&file).expect("the record is kept")).expect("reads");
+    let layers: Vec<(TestLayer, bool)> = record.layers.iter().map(|layer| (layer.layer, layer.ran)).collect();
+    assert_eq!(
+      layers,
+      [
+        (TestLayer::Lint, true),
+        (TestLayer::Unit, true),
+        (TestLayer::E2e, false)
+      ]
+    );
+    let failed: Vec<&str> = record.failed().map(|test| test.name.as_str()).collect();
+    assert_eq!(failed, ["subtracts numbers"]);
+    assert_eq!(record.left_out, ["api-unit"]);
+  }
 
   // Implement, the route's target, reads only the failed tests, as data.
   let prompts = reported(&db, run.id(), "prompt| ");

@@ -8,7 +8,11 @@ use orchester_core::{
   },
   service::{OwnedPath, Readiness, ReadyCheck, ReadyTimeout, Service, ServiceName, Stack, StackName},
   test_report::{self, SuiteRun, SuiteRunEnd, TestRunId},
-  test_step::{Chosen, MAX_SINGLE_RERUNS, SuiteOutcome, TestPlan, TestStepResult, flaky::Quarantine, rerun_filters},
+  test_step::{
+    ArtifactKind, Chosen, MAX_SINGLE_RERUNS, SuiteOutcome, TestPlan, TestStepRecord, TestStepResult,
+    flaky::{Quarantine, TestKey},
+    rerun_filters,
+  },
 };
 
 const FAILING: &str = "TAP version 13\n# printed by subtracts\nok 1 - adds\nnot ok 2 - subtracts\n  ---\n  \
@@ -245,5 +249,97 @@ fn test_step_failure_report_lists_only_the_failed_tests() {
   assert!(
     !report.contains("printed by subtracts"),
     "a test's output is never in it: {report}"
+  );
+}
+
+#[test]
+fn test_step_record_keeps_what_the_task_page_shows() {
+  let suite_slug = slug("web-unit");
+  let quarantine = Quarantine::new([TestKey::new(suite_slug.clone(), "subtracts").expect("key")]);
+  let flaky = SuiteOutcome::settle(
+    suite_slug,
+    TestLayer::Unit,
+    (run(2, FAILING), "t2/result.json".to_owned()),
+    &[run(3, PASSING)],
+    &quarantine,
+  );
+  let failing = SuiteOutcome::settle(
+    slug("api-unit"),
+    TestLayer::Unit,
+    (run(4, FAILING), "t4/result.json".to_owned()),
+    &[run(5, FAILING)],
+    &Quarantine::default(),
+  );
+  let lint = SuiteOutcome::settle(
+    slug("lint"),
+    TestLayer::Lint,
+    (run(1, PASSING), "t1/result.json".to_owned()),
+    &[],
+    &Quarantine::default(),
+  );
+  let result = TestStepResult {
+    reached: vec![(TestLayer::Lint, vec![lint]), (TestLayer::Unit, vec![flaky, failing])],
+    not_reached: vec![(TestLayer::E2e, vec![slug("e2e")])],
+    left_out: vec![slug("docs")],
+  };
+  let record = TestStepRecord::of(&result, &quarantine);
+  let layers: Vec<(TestLayer, bool, bool)> = record
+    .layers
+    .iter()
+    .map(|layer| (layer.layer, layer.ran, layer.passed()))
+    .collect();
+  assert_eq!(
+    layers,
+    [
+      (TestLayer::Lint, true, true),
+      (TestLayer::Unit, true, false),
+      (TestLayer::E2e, false, false),
+    ]
+  );
+  let unit = &record.layers[1];
+  assert_eq!(
+    (unit.passed_tests(), unit.failed_tests(), unit.flaky_tests()),
+    (2, 1, 1)
+  );
+  assert_eq!(unit.duration_ms(), 20, "the first runs' times");
+  // The flaky test is marked quarantined, with where it is from its first run's report.
+  let flaky: Vec<_> = record.flaky().collect();
+  assert_eq!(flaky.len(), 1);
+  assert_eq!(
+    (
+      flaky[0].name.as_str(),
+      flaky[0].location.as_deref(),
+      flaky[0].quarantined
+    ),
+    ("subtracts", Some("src/math.test.mjs:8"), true)
+  );
+  let failed: Vec<_> = record.failed().collect();
+  assert_eq!(failed[0].location.as_deref(), Some("src/math.test.mjs:8"));
+  assert_eq!(failed[0].message.as_deref(), Some("8 !== 2"));
+  assert_eq!(record.left_out, ["docs"]);
+  // It reads back as it was kept.
+  let json = serde_json::to_string(&record).expect("a record writes");
+  assert!(json.contains("\"layer\":\"e2e\""), "{json}");
+  let read: TestStepRecord = serde_json::from_str(&json).expect("a record reads");
+  assert_eq!(read, record);
+}
+
+#[test]
+fn test_step_artifacts_open_as_their_kind_or_their_folder() {
+  for (path, kind) in [
+    ("/runs/r/tests/t8/artifacts/test-failed-1.PNG", ArtifactKind::Screenshot),
+    ("C:\\runs\\r\\trace.zip", ArtifactKind::Trace),
+    ("/runs/r/tests/t8/artifacts/network-trace.json", ArtifactKind::Trace),
+    ("/runs/r/video.webm", ArtifactKind::Video),
+    ("/runs/r/server.log", ArtifactKind::Log),
+    ("/runs/r/setup.ps1", ArtifactKind::Other),
+    ("/runs/r/report", ArtifactKind::Other),
+  ] {
+    assert_eq!(ArtifactKind::of(path), kind, "{path}");
+  }
+  assert!(ArtifactKind::Screenshot.opens_itself());
+  assert!(
+    !ArtifactKind::Other.opens_itself(),
+    "a file that could be a program opens its folder"
   );
 }

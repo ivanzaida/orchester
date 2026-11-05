@@ -48,6 +48,7 @@ mod side_question;
 mod slot_wait;
 mod sources;
 mod storage;
+mod summary_tests;
 mod task_states;
 mod tasks;
 mod tasks_memory;
@@ -102,7 +103,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 129] = [
+pub const ALL: [Scenario; 130] = [
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-library", agents_library::seed),
   Scenario::of("agents-browser", agents_browser::seed),
@@ -128,6 +129,7 @@ pub const ALL: [Scenario; 129] = [
   Scenario::of("memory-only", tasks_memory::alone),
   Scenario::of("memory", memory::seed),
   Scenario::of("task-states", task_states::seed),
+  Scenario::of("summary-tests", summary_tests::seed),
   Scenario::of("conversation", conversation::seed),
   Scenario::of("conversation-context-plenty", run_context::plenty),
   Scenario::of("conversation-context-near-full", run_context::near_full),

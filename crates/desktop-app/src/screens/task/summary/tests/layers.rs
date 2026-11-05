@@ -47,7 +47,10 @@ pub fn row(ctx: &Ctx, layer: &LayerRecord) -> Element {
     .id(id.clone())
     .describe("passed", layer.passed().to_string())
     .width(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(ExtraSpacing::Inline.role(), ExtraSpacing::Inset.role()))
+    .padding(Padding::symmetric(
+      ExtraSpacing::Inline.role(),
+      ExtraSpacing::Inset.role(),
+    ))
     .spacing(lurq::app::theme::SpacingSize::Md)
     .align_items(Alignment::Center)
     .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))

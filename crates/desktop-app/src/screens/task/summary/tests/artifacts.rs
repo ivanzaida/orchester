@@ -94,9 +94,15 @@ pub fn links(ctx: &mut Ctx, id: &str, artifacts: &[String]) -> Vec<Element> {
       let word = ctx.t(word);
       let link = pressable(open(&links, target(stored, kind)))
         .id(format!("{id}-artifact-{}", kind_name(kind)))
-        .describe("a11y_name", ctx.t_args("summary.tests.artifacts.open", [("name", &*word)]))
+        .describe(
+          "a11y_name",
+          ctx.t_args("summary.tests.artifacts.open", [("name", &*word)]),
+        )
         .describe("path", stored.clone())
-        .padding(Padding::symmetric(ExtraSpacing::Tight.role(), ExtraSpacing::Tight.role()))
+        .padding(Padding::symmetric(
+          ExtraSpacing::Tight.role(),
+          ExtraSpacing::Tight.role(),
+        ))
         .rounded(RadiusSize::Sm)
         .hovered_style(Style::new().background(ExtraColor::Hover.role()))
         .child(
@@ -156,11 +162,17 @@ fn group(ctx: &Ctx, links: &Links, kind: ArtifactKind, files: &[(&str, bool)]) -
   let (glyph, name, _) = look(kind);
   let id = format!("task-tests-artifacts-{}", kind_name(kind));
   let count = if files.iter().all(|(_, attached)| *attached) {
-    ctx.t_args("summary.tests.artifacts.atFailures", [("count", files.len().to_string())])
+    ctx.t_args(
+      "summary.tests.artifacts.atFailures",
+      [("count", files.len().to_string())],
+    )
   } else {
     counted(
       ctx,
-      ("summary.tests.artifacts.files.one", "summary.tests.artifacts.files.other"),
+      (
+        "summary.tests.artifacts.files.one",
+        "summary.tests.artifacts.files.other",
+      ),
       files.len(),
     )
   };
@@ -168,7 +180,10 @@ fn group(ctx: &Ctx, links: &Links, kind: ArtifactKind, files: &[(&str, bool)]) -
   let name: Arc<str> = ctx.t(name);
   pressable(open(links, folder.clone()))
     .id(id.clone())
-    .describe("a11y_name", ctx.t_args("summary.tests.artifacts.openGroup", [("name", &*name)]))
+    .describe(
+      "a11y_name",
+      ctx.t_args("summary.tests.artifacts.openGroup", [("name", &*name)]),
+    )
     .describe("path", folder.to_string_lossy().into_owned())
     .flex(1.0)
     .min_width(Dimension::Px(0.0))
