@@ -465,11 +465,15 @@ impl RunTask {
       .map(|execution| execution.step().clone())
       .ok_or_else(|| problem("the step execution is not the run's".to_owned()))?;
     let checks = self.offered_checks(&step)?;
+    let services = self.service_names()?;
     let mut tools = StepTools::for_step(permissions, &checks)
       .with_sources(sources)
-      .with_services(permissions, &self.service_names()?)
+      .with_services(permissions, &services.names)
       .with_stacks(&self.stack_names()?)
       .with_test_suites(permissions, &self.suite_slugs()?);
+    if services.native_ui {
+      tools = tools.with_native_ui();
+    }
     if files.indexed() {
       tools = tools.with_code_index();
     }

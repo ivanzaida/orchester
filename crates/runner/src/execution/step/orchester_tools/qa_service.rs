@@ -70,6 +70,7 @@ impl ToolHost {
       processes: &self.processes,
       folders: (&self.worktree, &self.artifacts),
       qa: self.qa.as_ref(),
+      services: self.services.as_ref(),
       root: &self.repository,
       opened: &self.ui_opened,
     }

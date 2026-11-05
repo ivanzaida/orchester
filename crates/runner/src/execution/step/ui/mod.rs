@@ -1,9 +1,13 @@
 //! The `ui_*` tools of one invocation (`orchester_core::orchester_tools::ui`): `ui_open(service)` picks a service the
-//! step started, and the other calls reach its UI through the service's driver until another is opened. Only the
-//! `mcp` driver is built here: the built-in `desktop-qa` service, the invocation's QA app ([`super::qa_app`]), is
-//! reached over the run's relay to the app (`super::run_app`), as `call_run_app` without a pid reaches it, so the same
-//! rules hold: only the app this run started, through its exact discovery file, its token kept private and its PNGs
-//! saved in the run's own storage. A project's service with another driver, or none, answers why it cannot be opened.
+//! step started, and the other calls reach its UI through the service's driver until another is opened. The `mcp`
+//! driver reaches the built-in `desktop-qa` service, the invocation's QA app ([`super::qa_app`]), over the run's relay
+//! to the app (`super::run_app`), as `call_run_app` without a pid reaches it, so the same rules hold: only the app this
+//! run started, through its exact discovery file, its token kept private and its PNGs saved in the run's own storage.
+//! The `native` driver ([`native`]) reaches a project's service through the operating system's UI Automation, only in
+//! the windows of its processes the run may reach. A project's service with another driver, or none, answers why it
+//! cannot be opened.
+
+mod native;
 
 use std::{
   path::Path,
@@ -25,7 +29,12 @@ use orchester_exec::run_processes::RunProcesses;
 use parking_lot::Mutex;
 use serde_json::{Value, json};
 
-use super::{qa_app::StepQa, run_app, service::published_services};
+use self::native::NativeUi;
+use super::{
+  qa_app::StepQa,
+  run_app,
+  service::{StepServices, published_services},
+};
 
 /// What the `ui_*` calls of one invocation reach.
 pub(in crate::execution::step) struct StepUi<'a> {
@@ -34,6 +43,8 @@ pub(in crate::execution::step) struct StepUi<'a> {
   pub(in crate::execution::step) folders: (&'a Path, &'a Path),
   /// The invocation's QA app, the `desktop-qa` service.
   pub(in crate::execution::step) qa: Option<&'a StepQa>,
+  /// The invocation's services, which the `native` driver reaches.
+  pub(in crate::execution::step) services: Option<&'a StepServices>,
   /// The project's repository, whose published services say their drivers.
   pub(in crate::execution::step) root: &'a Path,
   /// The service `ui_open` opened last.
@@ -63,10 +74,25 @@ impl StepUi<'_> {
     }
   }
 
+  /// The `native` driver of the project's services.
+  fn native(&self) -> Result<NativeUi<'_>, String> {
+    Ok(NativeUi {
+      processes: self.processes,
+      services: self.services.ok_or_else(|| "this step has no services".to_owned())?,
+      artifacts: self.folders.1,
+    })
+  }
+
   /// `ui_open(name)`: the service's windows once it is the one the later calls reach.
   fn open(&self, name: &ServiceName, call: &UiCall) -> Result<Value, String> {
     if !is_qa_service(name) {
-      return Err(self.not_driven(name));
+      let driver = self.driver(name)?;
+      if driver != UiDriver::Native {
+        return Err(Self::not_driven(name, driver));
+      }
+      let answer = self.native()?.open(name)?;
+      *self.opened.lock() = Some(name.clone());
+      return Ok(answer);
     }
     let pid = self
       .qa
@@ -88,12 +114,14 @@ impl StepUi<'_> {
     Ok(answer)
   }
 
-  /// A call on the service `ui_open` opened; refused before one was.
+  /// A call on the service `ui_open` opened, through its driver; refused before one was.
   fn on_opened(&self, call: &UiCall) -> Result<Value, String> {
-    if self.opened.lock().is_none() {
-      return Err(format!(
-        "no service's UI is open in this step: call ui_open(\"{QA_SERVICE}\") after starting it"
-      ));
+    let opened = self.opened.lock().clone();
+    let Some(opened) = opened else {
+      return Err("no service's UI is open in this step: call ui_open(service) after starting it".to_owned());
+    };
+    if !is_qa_service(&opened) {
+      return self.native()?.run(&opened, call);
     }
     match call {
       UiCall::Wait {
@@ -129,22 +157,23 @@ impl StepUi<'_> {
     mcp::answer(call, &result)
   }
 
-  /// Why the service `name` cannot be opened here: it has no UI, its driver is not built yet, or it is not one the
-  /// step can reach.
-  fn not_driven(&self, name: &ServiceName) -> String {
-    let services = match published_services(self.root) {
-      Ok(services) => services,
-      Err(error) => return format!("the project's services cannot be read: {error}"),
-    };
-    match services
+  /// The driver the project's published service `name` has; why it cannot be told.
+  fn driver(&self, name: &ServiceName) -> Result<UiDriver, String> {
+    published_services(self.root)
+      .map_err(|error| format!("the project's services cannot be read: {error}"))?
       .iter()
       .find(|service| service.name() == name)
       .map(|service| service.ui_driver())
-    {
-      None => format!("the project publishes no service named `{name}`"),
-      Some(UiDriver::None) => format!("the service `{name}` has no UI driver: read it with service_logs and its URL"),
-      Some(UiDriver::Native) => format!("the service `{name}` uses the native UI driver, which is not built yet"),
-      Some(UiDriver::Mcp) => format!(
+      .ok_or_else(|| format!("the project publishes no service named `{name}`"))
+  }
+
+  /// Why the project's service `name`, with `driver`, cannot be opened here: it has no UI, or it is not one the step
+  /// can reach.
+  fn not_driven(name: &ServiceName, driver: UiDriver) -> String {
+    match driver {
+      UiDriver::None => format!("the service `{name}` has no UI driver: read it with service_logs and its URL"),
+      UiDriver::Native => format!("the service `{name}` uses the native UI driver"),
+      UiDriver::Mcp => format!(
         "the mcp driver reaches only the built-in `{QA_SERVICE}` service yet, not the project's service `{name}`"
       ),
     }

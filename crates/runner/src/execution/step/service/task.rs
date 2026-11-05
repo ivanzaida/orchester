@@ -7,7 +7,7 @@ use orchester_core::{
   connection::stream::RunnerProblem,
   id::InvocationId,
   resource::CommandEnvironment,
-  service::{ServiceName, StackName},
+  service::{ServiceName, StackName, UiDriver},
 };
 
 use super::{
@@ -19,12 +19,23 @@ use crate::execution::{
   step::{runner_note, start::problem},
 };
 
+/// The project's published services as the step's tools are offered them.
+pub(in crate::execution::step) struct ServiceNames {
+  /// Their names, which the step's service tools take.
+  pub(in crate::execution::step) names: Vec<ServiceName>,
+  /// Whether one of them has the `native` UI driver, which the `ui_*` tools drive.
+  pub(in crate::execution::step) native_ui: bool,
+}
+
 impl RunTask {
-  /// The names of the project's published services, which the step's service tools take.
-  pub(in crate::execution::step) fn service_names(&self) -> Result<Vec<ServiceName>, RunnerProblem> {
+  /// The project's published services, by name.
+  pub(in crate::execution::step) fn service_names(&self) -> Result<ServiceNames, RunnerProblem> {
     let services =
       published(&self.root).map_err(|error| problem(format!("cannot read the project's services: {error}")))?;
-    Ok(services.iter().map(|service| service.name().clone()).collect())
+    Ok(ServiceNames {
+      names: services.iter().map(|service| service.name().clone()).collect(),
+      native_ui: services.iter().any(|service| service.ui_driver() == UiDriver::Native),
+    })
   }
 
   /// The names of the project's published stacks, which `start_stack` takes.

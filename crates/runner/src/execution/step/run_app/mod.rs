@@ -2,7 +2,7 @@
 
 mod discovery;
 
-pub(in crate::execution::step) use self::discovery::user_data;
+pub(in crate::execution::step) use self::{discovery::user_data, images::save_pixels};
 mod images;
 mod transport;
 

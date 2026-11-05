@@ -282,6 +282,35 @@ impl StepServices {
     }
   }
 
+  /// The pid of the program of the service `name` while it runs in this invocation.
+  pub(in crate::execution::step) fn pid(&self, name: &ServiceName) -> Option<u32> {
+    self.state.running.lock().get(name).map(|running| running.tree.pid())
+  }
+
+  /// The texts of the last `lines` kept lines of the service `name` the invocation started, oldest first, only those
+  /// holding `filter` when it is given; `None` when it was not started.
+  pub(in crate::execution::step) fn log_lines(
+    &self,
+    name: &ServiceName,
+    lines: u32,
+    filter: Option<&str>,
+  ) -> Option<Vec<String>> {
+    let log = self
+      .state
+      .watched
+      .lock()
+      .get(name)
+      .map(|watch| Arc::clone(&watch.log))?;
+    let log = log.lock();
+    let mut kept: Vec<String> = log
+      .lines()
+      .filter(|line| filter.is_none_or(|filter| line.text().contains(filter)))
+      .map(|line| line.text().to_owned())
+      .collect();
+    kept.drain(..kept.len().saturating_sub(lines as usize));
+    Some(kept)
+  }
+
   fn may_start(&self) -> Result<(), String> {
     if self.state.ended() {
       return Err("the turn ended, so no service is started".to_owned());

@@ -23,8 +23,9 @@ use std::{
 use orchester_core::command::{Command, CommandError};
 #[cfg(unix)]
 use unix as platform;
+
 #[cfg(windows)]
-use windows as platform;
+use self::windows as platform;
 
 /// How long the processes of a tree may take to exit once asked before they are ended.
 pub const TERMINATE_GRACE: Duration = Duration::from_secs(3);

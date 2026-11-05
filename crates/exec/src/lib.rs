@@ -15,6 +15,7 @@ pub mod docker;
 pub mod external;
 pub mod launch;
 pub mod local_git;
+pub mod native_ui;
 pub mod priority;
 #[cfg(unix)]
 pub mod process_group;

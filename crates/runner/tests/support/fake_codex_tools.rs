@@ -21,6 +21,9 @@ mod fake_app_tools;
 #[path = "fake_browser_tools.rs"]
 mod fake_browser_tools;
 
+#[path = "fake_native_tools.rs"]
+mod fake_native_tools;
+
 #[path = "fake_process_tools.rs"]
 mod fake_process_tools;
 
@@ -191,7 +194,9 @@ fn named_after<'a>(prompt: &'a str, lead: &str) -> Option<&'a str> {
 
 /// "Start the service <name>." calls `start_service`, "Start the stack <name>." `start_stack`; with "Then start the
 /// service <other>." it then calls `start_service` of that one; with "Then drive its UI" it then calls the `ui_*` tools
-/// on it ([`drive_ui`]); with "Then read outside" it then reads
+/// on it ([`drive_ui`]); with "Copy the native fixture.", "Then drive the native window" and "Then open its UI" it puts
+/// the fixture window in the worktree before the start and drives or opens it after ([`fake_native_tools`]); with
+/// "Then read outside" it then reads
 /// `deps-a/notes.txt` of the repository, which asks; with "Then wait for it to end" it calls `service_status` until the
 /// service is no longer ready; with "Then wait for a crash notice" it calls `service_status` until an answer carries a
 /// notice ([`crash_notice`]); with "Then look at the service" it calls `service_status` and `service_logs`; and with
@@ -201,6 +206,9 @@ fn services(server: &mut Prompt, worktree: &Path, prompt: &str) {
   let name = named_after(prompt, "Start the service ").unwrap_or("web");
   let named = json!({"name": name});
   let look = prompt.contains("Then look at the service");
+  if prompt.contains("Copy the native fixture.") {
+    fake_native_tools::copy_fixture(worktree);
+  }
   match stack {
     Some(stack) => report_call(server, "start_stack", &json!({"name": stack})),
     None => report_call(server, "start_service", &named),
@@ -210,6 +218,12 @@ fn services(server: &mut Prompt, worktree: &Path, prompt: &str) {
   }
   if prompt.contains("Then drive its UI") {
     drive_ui(server, name);
+  }
+  if prompt.contains("Then drive the native window") {
+    fake_native_tools::drive(name, &mut |tool, arguments| report_call(server, tool, arguments));
+  }
+  if prompt.contains("Then open its UI") {
+    report_call(server, "ui_open", &json!({"service": name}));
   }
   if prompt.contains("Then read outside") {
     read_outside(server, worktree);

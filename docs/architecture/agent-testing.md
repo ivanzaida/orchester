@@ -140,6 +140,24 @@ starts it on the `tasks` scenario with the QA script's approval, `start_qa_app(s
 slots, as many as the project's *QA apps at once*. Only `desktop-qa` is driven yet: a project's service with the `mcp`
 driver answers that the driver reaches only the built-in one.
 
+Built (ORC-257): the `native` driver on Windows (`orchester_exec::native_ui`, the runner's `execution::step::ui::native`).
+A published service with it brings the `ui_*` tools (`StepTools::with_native_ui`). Each call finds the service's
+windows again: the visible top-level windows of its program's tree whose processes pass `stop_run_process`'s check
+(started since the run began, executable inside the worktree, not the runner or the agent CLI —
+`RunProcesses::tree`); a tree with none answers *refused* with each process's reason. `ui_open` moves them beyond the
+desktop without activating them (`SetWindowPos`, `SWP_NOACTIVATE`) and says whether any monitor still shows them. A
+snapshot is each window's UI Automation control view, at most 300 elements 40 deep: a ref minted from the element's
+runtime id (`u42.…`, stable while the element lives), its control type as the role (`button`, `edit`, `checkbox`, …),
+its name, its states (`disabled`, `focused`, `checked`/`unchecked`/`mixed`, `expanded`/`collapsed`, `selected`,
+`readonly`, `password`) and its value (never a password field's). `ui_act` uses patterns only: `click` Invoke, else
+Toggle, SelectionItem or ExpandCollapse; `type` Value; `scroll` ScrollItem; `select` the SelectionItem of an option
+inside it (opening it first when it is collapsed), else Value; an element without one answers *unsupported for this
+element*, and `key` always answers that the driver presses no keys. `ui_screenshot` is the window's own rendering into
+memory (`PrintWindow` with `PW_RENDERFULLCONTENT`), or that cropped to an element; `ui_wait("idle")` waits until each
+window's thread handled a `WM_NULL`; `ui_logs` reads the service's own output. On macOS every call answers that the
+driver is not supported on this platform yet. The tests drive `orchester-test-window`, a Win32 fixture in the runner's
+test support (`tests/native_ui.rs`).
+
 ## The Test step
 
 A pipeline step kind that runs suites in layers — lint, then unit, then e2e — starting what each needs and stopping at
