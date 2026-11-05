@@ -337,6 +337,7 @@ fn servers() -> (tempfile::TempDir, orchester_workspace::sharing::Servers) {
   let servers = orchester_workspace::sharing::Servers::new(
     workspace,
     orchester_workspace::secrets::Vault::with(std::sync::Arc::new(NoKeychain)),
+    orchester_api::releases::ReleaseVersion::parse("0.5.0").expect("a release version"),
   );
   (data, servers)
 }

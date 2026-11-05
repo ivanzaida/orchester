@@ -19,6 +19,7 @@ mod refusal;
 pub(super) mod run_again;
 mod run_line;
 mod run_mode;
+pub(super) mod team;
 
 use std::sync::Arc;
 
@@ -131,6 +132,7 @@ impl Component for TaskHeader {
     // On the Conversation the composer's permissions chip says the run's approval mode instead (ORC-319, 15 `x55hWH`).
     let mode = props.view.tab() != TaskTab::Conversation;
     let status_line = no_branch::status_line(ctx, &props.task, &self.no_branch, (&self.confirming, &self.remove))
+      .or_else(|| team::status_line(ctx, &props.task))
       .unwrap_or_else(|| run_line::status_line(ctx, &props.task, mode));
     Column::new()
       .id("task-header")
@@ -179,7 +181,7 @@ impl TaskHeader {
     let kept = detail.not_shared();
     let run_controls = RunControls::of(ctx);
     let pending = run_controls.pending();
-    let shown = controls(
+    let mut shown = controls(
       ctx,
       &Controls {
         detail: &detail,
@@ -188,13 +190,23 @@ impl TaskHeader {
         pending,
         requested: &run_controls.requested,
         approval_waits: props.task.waiting_approval().is_some(),
+        fenced: team::fence(&props.task).is_some(),
       },
     );
-    let primary = primary::primary(ctx, &props.task, &props.view, shown.moves.clone());
+    // A team task's first run starts through its server, never from this computer's queue (`team`).
+    if props.task.team.is_some() && detail.run.is_none() {
+      shown.moves = team::run(ctx, &props.task, ("task-run", "task.controls.run"));
+    }
+    let primary = match team::take_over(ctx, &props.task) {
+      Some(take_over) => Some(take_over),
+      None => primary::primary(ctx, &props.task, &props.view, shown.moves.clone()),
+    };
+    // A team task's run at work here pauses from the primary action (01c `Tb55G`).
+    let primary = primary.or_else(|| team::pause(&props.task, shown.pause.as_ref()));
+    let not_primary = |control: &controls::Control| primary.as_ref().is_none_or(|primary| primary.id != control.id);
     // The control that moves the run on goes in the menu while a card's action is the primary one.
-    let moves = shown
-      .moves
-      .filter(|moves| primary.as_ref().is_none_or(|primary| primary.id != moves.id));
+    let moves = shown.moves.filter(not_primary);
+    let pause = shown.pause.filter(not_primary);
     let run_again = run_again::button(
       ctx,
       check,
@@ -209,11 +221,19 @@ impl TaskHeader {
         closing: None,
       }
     } else {
+      // A team's member does not close or delete the team's task: only its Admins do.
+      let closing = (!props.task.read_only()).then(|| (self.closer.clone(), subject(&props.task)));
+      let release = team::release(ctx, &props.task);
       Held {
-        controls: moves.into_iter().chain(shown.pause).chain(shown.cancel).collect(),
+        controls: moves
+          .into_iter()
+          .chain(pause)
+          .chain(release)
+          .chain(shown.cancel)
+          .collect(),
         run_again,
         pull_request,
-        closing: Some((self.closer.clone(), subject(&props.task))),
+        closing,
       }
     };
     let conversation = props.view.tab() == TaskTab::Conversation;
@@ -269,7 +289,7 @@ pub(in crate::screens::task) fn subject(task: &TaskContext) -> Subject {
 /// to lurq: E stays theirs there.
 fn edit_key(ctx: &mut Ctx, task: &TaskContext, view: &TaskView) -> impl Fn(KeyboardEvent) + use<> {
   let own_editor = matches!(view, TaskView::LocalIntegration | TaskView::Memory);
-  let editable = task.detail.editable() && !task.detail.not_shared() && !own_editor;
+  let editable = task.detail.editable() && !task.detail.not_shared() && !task.read_only() && !own_editor;
   let navigation = Navigation::of(ctx);
   let route = Route::Project(
     task.project.open.project.id(),

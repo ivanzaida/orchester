@@ -25,12 +25,15 @@ pub use lock_watch::worst::{LockHold, LockHolds, lock_holds, reset_lock_holds};
 #[cfg(feature = "test-support")]
 pub use project_db::ProjectMigration;
 pub use project_db::{
-  ApprovedPlan, ArchiveStop, AttachmentOwner, AutoModeSave, AutomaticStatus, AutomationPoints, Bound, BoundBy,
-  BoundReference, CachedClaim, CachedModule, CachedModuleChange, CachedRunStatus, CachedTask, CachedVersion,
-  ChatDeletion, ChatFork, ChatListing, ChatRewind, ChatTurn, ConfirmedVersion, DecisionCounts, EndedRun, JoinedKey,
-  KeptAction, KeptReport, KeptWait, NamingVersion, NotSent, OrchestratorSwitch, ProjectDb, PublishState,
-  ReadOnlyProjectDb, RecordedDecisionReview, ReferenceBinding, ReferenceTarget, ResolutionStart, ResourceSharing,
-  ResourceUpdate, ReturnedTask, RunBranch, ServerAdmin, SharedEvent, SharedMember, SharedPerson, SharedSnapshot,
-  SharedStanding, SharedTaskInfo, SharingLink, StartedQueued, TaskDeletionFacts, UnsentStatus, VersionReference,
-  WaitingPublish, WaitingVersion, attachment_file, exclude_project_data,
+  AcceptedInputs, AcceptedWork, ApprovedPlan, ArchiveStop, AttachmentOwner, AutoModeSave, AutomaticStatus,
+  AutomationPoints, Bound, BoundBy, BoundReference, CachedClaim, CachedModule, CachedModuleChange, CachedRunStatus,
+  CachedTask, CachedVersion, ChatDeletion, ChatFork, ChatListing, ChatRewind, ChatTurn, ConfirmedVersion,
+  DecisionCounts, DeliveryMerge, DeliveryReport, EndedRun, JoinedKey, KeptAction, KeptReport, KeptWait, NamingVersion,
+  NewTeamOperation, NewWorkReport, NotSent, OrchestratorSwitch, ProjectDb, PublishState, ReadOnlyProjectDb,
+  RecordedDecisionReview, ReferenceBinding, ReferenceTarget, ResolutionStart, ResourceSharing, ResourceUpdate,
+  ReturnedTask, RunBranch, ServerAdmin, SharedEvent, SharedMember, SharedPerson, SharedSnapshot, SharedStanding,
+  SharedTaskInfo, SharingLink, StartedQueued, TaskDeletionFacts, TeamDelivery, TeamDeliveryStage, TeamFence,
+  TeamOperation, TeamOperationState, TeamRun, TeamSettlement, TeamStart, TeamStartStage, UnsentStatus,
+  VersionReference, WaitingPublish, WaitingVersion, WorkReportEntry, WorkReportState, attachment_file,
+  exclude_project_data,
 };

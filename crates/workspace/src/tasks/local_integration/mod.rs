@@ -30,7 +30,7 @@ use std::path::Path;
 pub use authority::{LocalAuthorization, LocalIntent, LocalOrigin};
 pub use changed::changed_since_review;
 pub use direct::CheckoutHolder;
-pub(crate) use direct::{checkout_holder, managed_checkout, settle_review};
+pub(crate) use direct::{checkout_held, checkout_holder, managed_checkout, settle_review};
 pub use discard::{DiscardFailure, DiscardReport, DiscardedFile};
 pub use external::{EvidenceInputs, external_integration};
 pub use legacy::LegacyPolicy;

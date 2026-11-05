@@ -55,12 +55,16 @@ pub struct LiveSteps<'a> {
   pub waiting: &'a [(Arc<str>, Timestamp)],
   /// The executions the runner says wait for an agent slot.
   pub slot_waits: &'a [StepExecutionId],
+  /// The team server fenced the run: the step it stands at is where it stopped for good.
+  pub fenced: bool,
 }
 
-/// The rail of `run`'s steps at `now`, the step with key `current` drawn as the one the run stands at.
+/// The rail of `run`'s steps at `now`, the step with key `current` drawn as the one the run stands at: a `circle-stop`
+/// in `danger` on `danger_muted` once the run was fenced (`03 Implement` in 03 `hWXxr`).
 pub fn rail(ctx: &mut Ctx, run: &RunView, live: &LiveSteps<'_>, current: Option<Arc<str>>, now: Timestamp) -> Element {
   let rows = rows(run, live, now);
-  ctx.mount_keyed::<LiveRail>("task-steps-rail", RailProps { rows, current })
+  let stopped = live.fenced;
+  ctx.mount_keyed::<LiveRail>("task-steps-rail", RailProps { rows, current, stopped })
 }
 
 /// The rows of `run`'s steps at `now`, in stage order.
@@ -69,6 +73,7 @@ fn rows(run: &RunView, live: &LiveSteps<'_>, now: Timestamp) -> Vec<StepRow> {
     lost,
     waiting,
     slot_waits,
+    ..
   } = *live;
   progress_with_waits(run, lost, slot_waits, now)
     .into_iter()
@@ -92,9 +97,20 @@ fn rows(run: &RunView, live: &LiveSteps<'_>, now: Timestamp) -> Vec<StepRow> {
 struct RailProps {
   rows: Vec<StepRow>,
   current: Option<Arc<str>>,
+  /// The run stopped for good at `current`.
+  stopped: bool,
 }
 
 impl lurq::app::component::DevtoolsInspectable for RailProps {}
+
+/// Whether the run stands at a step.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Stands {
+  Elsewhere,
+  Here,
+  /// The run stopped for good at the step: the team server fenced it.
+  StoppedHere,
+}
 
 /// The rail, its tooltips' active agent time going on while their agents work.
 struct LiveRail {
@@ -111,7 +127,7 @@ impl Component for LiveRail {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let RailProps { rows, current } = ctx.props::<RailProps>().clone();
+    let RailProps { rows, current, stopped } = ctx.props::<RailProps>().clone();
     let counting = rows
       .iter()
       .any(|row| row.progress.usage.is_some_and(|usage| usage.active.counting()));
@@ -132,8 +148,12 @@ impl Component for LiveRail {
             .background(PaletteColor::Border),
         );
       }
-      let here = current.as_deref() == Some(row.key());
-      rail = rail.child(chip(ctx, row, here, now));
+      let stands = match (current.as_deref() == Some(row.key()), stopped) {
+        (false, _) => Stands::Elsewhere,
+        (true, false) => Stands::Here,
+        (true, true) => Stands::StoppedHere,
+      };
+      rail = rail.child(chip(ctx, row, stands, now));
     }
     rail
   }
@@ -146,10 +166,12 @@ impl StepRow {
   }
 }
 
-/// A step's chip, `here` when the run stands at it, with what it did in its tooltip.
-fn chip(ctx: &mut Ctx, row: &StepRow, here: bool, now: Timestamp) -> Element {
+/// A step's chip, marked as `stands` says, with what it did in its tooltip.
+fn chip(ctx: &mut Ctx, row: &StepRow, stands: Stands, now: Timestamp) -> Element {
   let progress = &row.progress;
+  let here = stands != Stands::Elsewhere;
   let (glyph, color) = match (row.waits_since, unjudged(progress.state)) {
+    _ if stands == Stands::StoppedHere => (Icon::CircleStop, PaletteColor::Danger),
     (None, Some(glyph)) => (glyph, PaletteColor::Warning),
     (Some(_), _) => (Status::NeedsInput.icon(), Status::NeedsInput.color()),
     (None, None) => (status(progress.state).icon(), status(progress.state).color()),
@@ -188,10 +210,10 @@ fn chip(ctx: &mut Ctx, row: &StepRow, here: bool, now: Timestamp) -> Element {
         .color(name_color)
         .nowrap(),
     );
-  let chip = if here {
-    chip.background(PaletteColor::WarningMuted)
-  } else {
-    chip
+  let chip = match stands {
+    Stands::Elsewhere => chip,
+    Stands::Here => chip.background(PaletteColor::WarningMuted),
+    Stands::StoppedHere => chip.background(PaletteColor::DangerMuted),
   };
   Tooltip::new(format!("{id}-tip"), detail).wrap(ctx, chip)
 }

@@ -149,6 +149,13 @@ impl TaskId {
     IdempotencyKey::from_uuid(self.as_uuid())
   }
 }
+
+impl OperationId {
+  /// The key of the one run an accepted operation starts: a start repeated after a crash or a lost answer finds it.
+  pub const fn run_key(self) -> IdempotencyKey {
+    IdempotencyKey::from_uuid(self.as_uuid())
+  }
+}
 define_id!(
   /// One attempt of a run; a failure routed back to an upstream step starts a new attempt.
   AttemptId

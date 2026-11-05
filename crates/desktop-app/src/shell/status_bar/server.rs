@@ -1,7 +1,8 @@
 //! The status bar's server item (`X39PHh` in the *Settings* layer, after old 10.43 `hYres`): for a project linked to a
 //! team server, that server with its state; otherwise the one server this computer is signed in to, or how many and
 //! the worst state among them. Connected is quiet; connecting is muted; offline and signed out are warnings; a changed
-//! certificate is danger. A press opens the server's entry in Settings › Orchester (or its list for several).
+//! certificate is danger. A press opens the server's entry in Settings › Orchester (or its list for several). Once the
+//! project's team reads have ended, whether they were answered says the server's connection, not its live stream.
 
 use std::path::PathBuf;
 
@@ -26,6 +27,8 @@ use super::{
 };
 use crate::{
   routes::{OrchesterView, Route},
+  services::Services,
+  team::reached::Reached,
   ui::icon::Icon,
 };
 
@@ -68,6 +71,16 @@ impl ServerState {
     match (self, stream) {
       (Self::Connected, Some(SyncState::Reconnecting { .. })) => Self::Connecting,
       (Self::Connected | Self::Connecting, Some(SyncState::Offline { .. })) => Self::Offline,
+      (state, _) => state,
+    }
+  }
+
+  /// The state once the project's team reads last ended `reached`: answered, the server is connected while it looked
+  /// connected or connecting; unanswered, it is offline. A sign-in that ended or a changed certificate stays.
+  const fn reached(self, reached: Reached) -> Self {
+    match (self, reached) {
+      (Self::Connected | Self::Connecting, Reached::Answered) => Self::Connected,
+      (Self::Connected | Self::Connecting, Reached::Unanswered) => Self::Offline,
       (state, _) => state,
     }
   }
@@ -120,19 +133,28 @@ impl ServerFacts {
   /// The item once the shown project's live stream stands at `stream` ([`ServerState::streamed`]); the project's
   /// server is the one the item names.
   pub fn streamed(self, stream: Option<SyncState>) -> Self {
+    self.with_state(|state| state.streamed(stream))
+  }
+
+  /// The item once the shown project's team reads last ended `reached` ([`ServerState::reached`]).
+  pub fn reached(self, reached: Reached) -> Self {
+    self.with_state(|state| state.reached(reached))
+  }
+
+  fn with_state(self, change: impl FnOnce(ServerState) -> ServerState) -> Self {
     match self {
       Self::One { id, name, state } => Self::One {
         id,
         name,
-        state: state.streamed(stream),
+        state: change(state),
       },
       facts => facts,
     }
   }
 }
 
-/// The servers as the item shows them for the project at `project_root`, read again whenever a connection or the
-/// project's live stream changes.
+/// The servers as the item shows them for the project at `project_root`, read again whenever a connection, the
+/// project's live stream or how its team reads ended changes.
 pub fn server_facts(ctx: &mut Ctx, servers: &Servers, project_root: Option<PathBuf>) -> ServerFacts {
   let revision = ctx
     .stream(servers.clone(), |servers, emitter: StreamEmitter<u64, ()>| async move {
@@ -148,10 +170,11 @@ pub fn server_facts(ctx: &mut Ctx, servers: &Servers, project_root: Option<PathB
     .get()
     .data
     .unwrap_or_default();
+  let reached = reads_reached(ctx, project_root.clone());
   ctx
     .future(
-      (revision, project_root, servers.clone()),
-      |(_, root, servers)| async move {
+      (revision, project_root, servers.clone(), reached),
+      |(_, root, servers, reached)| async move {
         background::run(move || -> Result<ServerFacts, ()> {
           let entries = servers.entries().map_err(|error| {
             tracing::warn!(%error, "the status bar could not read the servers");
@@ -163,7 +186,11 @@ pub fn server_facts(ctx: &mut Ctx, servers: &Servers, project_root: Option<PathB
           }) else {
             return Ok(ServerFacts::of(&entries, None));
           };
-          Ok(ServerFacts::of(&entries, Some(link.server)).streamed(servers.sync_state(&root)))
+          let facts = ServerFacts::of(&entries, Some(link.server));
+          Ok(match reached {
+            Some(reached) => facts.reached(reached),
+            None => facts.streamed(servers.sync_state(&root)),
+          })
         })
         .await
         .map_err(drop)?
@@ -173,6 +200,37 @@ pub fn server_facts(ctx: &mut Ctx, servers: &Servers, project_root: Option<PathB
     .get()
     .data
     .unwrap_or_default()
+}
+
+/// How the team reads of a project last ended, as the status bar follows it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct ReachedNow(Option<Reached>);
+
+impl DevtoolsInspectable for ReachedNow {}
+
+/// How the team reads of the project at `root` last ended, followed as they end; `None` before any did, and without a
+/// project.
+fn reads_reached(ctx: &mut Ctx, root: Option<PathBuf>) -> Option<Reached> {
+  let reads = Services::of(ctx).team.reached().clone();
+  ctx
+    .stream(
+      (reads, root),
+      |(reads, root), emitter: StreamEmitter<ReachedNow, ()>| async move {
+        // Subscribed before the first look, so no end between the look and the wait is missed.
+        let mut changes = reads.subscribe();
+        loop {
+          let now = ReachedNow(root.as_deref().and_then(|root| reads.of(root)));
+          if !emitter.emit(now) || changes.changed().await.is_err() {
+            return;
+          }
+        }
+      },
+    )
+    .state()
+    .get()
+    .data
+    .unwrap_or_default()
+    .0
 }
 
 /// The item, or nothing when no server is in use or it is connected: connected is quiet, the health dot's card says

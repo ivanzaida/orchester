@@ -2,8 +2,9 @@
 //! Project settings, All projects and Settings; *Jump to…* (`shell::jump`); the six places for daily work; the
 //! Configure section with Pipelines and Agents, which folds per project (`configure`); the runs under way
 //! (`running`), only while there are any; and at the bottom the usage card, which opens Usage and Settings
-//! (`usage_card`). Tasks shows how many tasks the project has, a dash while they are read, and Review how many runs
-//! wait in the merge queue. The project is the tab's (`Tab::sidebar_project`): on the app's Settings the one the
+//! (`usage_card`). Tasks shows how many tasks the project has (a team project's Active tasks as its server counts
+//! them, `team_count`), a dash while they are read, and Review how many runs wait in the merge queue. The project is
+//! the tab's (`Tab::sidebar_project`): on the app's Settings the one the
 //! tab was in last; a tab that has been in no project shows only the switcher and *Jump to…*. All projects and Add
 //! project have no sidebar.
 //!
@@ -17,6 +18,7 @@ mod edges;
 pub mod place;
 pub mod running;
 pub mod switcher;
+mod team_count;
 mod usage_card;
 
 use lurq::{
@@ -36,10 +38,11 @@ use self::{
   place::Place,
   running::{Running, RunningProps, under_way},
   switcher::{Switcher, SwitcherProps},
+  team_count::{TeamCount, team_count},
 };
 use crate::{
   navigation::Navigation,
-  project::{ProjectState, Projects, TasksState},
+  project::{ProjectState, Projects, ShownProject, TasksState},
   routes::Route,
   shell::jump,
   theme::ExtraSpacing,
@@ -136,38 +139,53 @@ struct Count {
   waiting: bool,
 }
 
-/// The counts beside the places: how many tasks `project` has, a dash while they are read, and how many runs are in
-/// its merge queue beside Review, in `warning`. A count of none is left out, and so are all when the tasks cannot be
-/// read or the project is not open.
+/// The counts beside the places: how many tasks `project` has (a team project's Active tasks as its server counts
+/// them, `team_count`), a dash while they are read, and how many runs are in its merge queue beside Review, in
+/// `warning`. A count of none is left out, and so are all when the tasks cannot be read or the project is not open.
 fn counts(ctx: &mut Ctx, project: ProjectId) -> Vec<Count> {
   let projects = Projects::of(ctx);
-  if projects.state(project).is_none_or(|state| state.open().is_none()) {
+  let Some(open) = projects.state(project).and_then(|state| state.open().cloned()) else {
     return Vec::new();
-  }
-  match projects.feed(project).tasks.get() {
-    TasksState::Ready(tasks) => [
-      // A project without tasks shows no count (`a5CcQx`).
-      (Place::Tasks, tasks.tasks.len(), false),
-      (
-        Place::Review,
-        orchester_workspace::merge_queue::in_queue(tasks.merge_queue.iter()),
-        true,
-      ),
-    ]
+  };
+  let feed = projects.feed(project);
+  let unknown = ctx.t("shell.sidebar.unknownCount").to_string();
+  let tasks = match feed.tasks.get() {
+    TasksState::Ready(tasks) => tasks,
+    TasksState::Loading => return vec![Count::of(Place::Tasks, unknown)],
+    TasksState::Failed(_) => return Vec::new(),
+  };
+  // A project without tasks shows no count (`a5CcQx`).
+  let shown = |count: usize| (count > 0).then(|| count.to_string());
+  let tasks_value = if tasks.shared {
+    match team_count(ctx, &ShownProject { open, feed }) {
+      TeamCount::Counted(count) => shown(count),
+      TeamCount::Reading => Some(unknown),
+      TeamCount::Unread => None,
+    }
+  } else {
+    shown(tasks.tasks.len())
+  };
+  let in_queue = shown(orchester_workspace::merge_queue::in_queue(tasks.merge_queue.iter()));
+  let review = in_queue.map(|value| Count {
+    place: Place::Review,
+    value,
+    waiting: true,
+  });
+  tasks_value
+    .map(|value| Count::of(Place::Tasks, value))
     .into_iter()
-    .filter(|(_, count, _)| *count > 0)
-    .map(|(place, count, waiting)| Count {
+    .chain(review)
+    .collect()
+}
+
+impl Count {
+  /// A count beside `place` that counts nothing waiting for the person.
+  const fn of(place: Place, value: String) -> Self {
+    Self {
       place,
-      value: count.to_string(),
-      waiting,
-    })
-    .collect(),
-    TasksState::Loading => vec![Count {
-      place: Place::Tasks,
-      value: ctx.t("shell.sidebar.unknownCount").to_string(),
+      value,
       waiting: false,
-    }],
-    TasksState::Failed(_) => Vec::new(),
+    }
   }
 }
 

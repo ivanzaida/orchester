@@ -109,8 +109,10 @@ fn team_qa_first_download_says_when_the_origin_is_another_repository() {
   );
 }
 
+/// The list of a team project reads its tasks from the server (ORC-716), not from what came down: it waits for the
+/// server's answer and then counts every task the server has.
 #[test]
-fn team_qa_first_download_open_works_before_the_end_and_the_list_keeps_filling() {
+fn team_qa_first_download_open_works_before_the_end_and_the_list_counts_the_servers_tasks() {
   let (mut window, server) = at_84(State::DownloadProgress);
   window.press(OPEN);
   assert_eq!(
@@ -122,7 +124,10 @@ fn team_qa_first_download_open_works_before_the_end_and_the_list_keeps_filling()
       .texts("tasks-view-all-count")
       .is_some_and(|count| count.concat() == tasks)
   };
-  window.until("the 84 tasks down in the list", |window| count(window, "84"));
+  window.until("the list to wait for the server", |window| {
+    window.texts("tasks-loading").is_some()
+  });
+  assert!(!count(&mut window, "84"), "what came down is not the list");
   server.answer_tasks(TasksAnswer::Serve);
   window.until_within(
     std::time::Duration::from_secs(30),

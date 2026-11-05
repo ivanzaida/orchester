@@ -1,13 +1,19 @@
 //! The QA app's team scenarios (`examples/qa_app/team`), each state on the headless window with the stand-in team
 //! server: what the person's presses reach on the start page's *Join a team* with a code, and what the session's own
-//! work reaches with Kontur linked and joined. Nothing here starts `tools/qa-app.ps1`; the running copy is the Verify
-//! step's.
+//! work reaches with Kontur linked and joined; a team project's Tasks list read from the server is in [`team_tasks`],
+//! its Task page, Modules list and Module page in [`team_pages`]. Nothing here starts `tools/qa-app.ps1`; the running
+//! copy is the Verify step's.
 //!
 //! `cargo test -p orchester-app --test team_qa team_qa`
 
 mod first_download;
 #[path = "../../examples/qa_app/team/mod.rs"]
 mod team;
+mod team_actions;
+mod team_edit;
+mod team_pages;
+mod team_tasks;
+mod team_work_actions;
 
 use lurq::app::events::with_synthetic_input;
 use orchester_api::test_support::team_server::{TasksAnswer, TeamServer};
@@ -15,7 +21,6 @@ use orchester_app::{
   routes::{JoinWay, ProjectPage, Route, TaskList, TaskListTab},
   test_support::{Data, Window, project_id},
 };
-use orchester_workspace::sharing::project::FirstDownload;
 use team::State;
 
 const ADDRESS: &str = "join-team-code-address";
@@ -53,10 +58,6 @@ fn on_the_tasks_list(state: State) -> (Window, TeamServer) {
   let (window, server) = prepared(state);
   window.navigation().go(tasks_route());
   (window, server)
-}
-
-fn download(window: &Window) -> Option<FirstDownload> {
-  window.projects().feed(project_id()).download.get()
 }
 
 fn value(window: &mut Window, id: &str) -> String {
@@ -145,10 +146,10 @@ fn at_the_teams_projects(state: State) -> (Window, TeamServer) {
 }
 
 #[test]
-fn team_qa_shared_projects_lists_the_team_with_hints_and_an_owner() {
+fn team_qa_shared_projects_lists_the_team_with_hints_and_an_admin() {
   let (mut window, _server) = at_the_teams_projects(State::SharedProjects);
   window.until("Billing", |window| window.texts("join-team-projects-billing").is_some());
-  assert_eq!(window.text("join-team-projects-billing-role"), "you: owner");
+  assert_eq!(window.text("join-team-projects-billing-role"), "you: Admin");
   assert_eq!(window.text("join-team-projects-kontur-role"), "you: member");
 }
 
@@ -179,33 +180,22 @@ fn team_qa_offer_offers_billing_and_says_kontur_is_the_teams() {
   });
 }
 
+/// A team project's list reads its tasks from the server (ORC-716): while the server holds them, the skeleton, and
+/// nothing this computer kept; once it refuses them, that team data is unavailable.
 #[test]
-fn team_qa_downloading_shows_the_skeleton_and_keeps_it_after_a_refusal() {
+fn team_qa_downloading_shows_the_skeleton_while_the_server_holds_the_tasks() {
   let (mut window, server) = on_the_tasks_list(State::Downloading);
-  let downloading = Some(FirstDownload::Downloading {
-    server: "Acme".to_owned(),
-  });
-  // The skeleton shows for the list's first reading too: the feed says it now waits for the download.
-  let under_way = |window: &mut Window| {
-    download(window) == downloading
-      && window.texts("tasks-loading").is_some()
-      && window.texts("tasks-download-error").is_none()
-  };
-  window.until("the download's skeleton", under_way);
-  window.until("the tasks to be asked for", |_| server.tasks_asked() == 1);
-  // A held answer ends in a refusal after a while; here at once, then held again.
+  window.until("the skeleton", |window| window.texts("tasks-loading").is_some());
+  window.until("the tasks to be asked for", |_| server.authority_reads() >= 1);
+  assert!(window.texts("task-row-KON-1").is_none(), "nothing read before shows");
   server.answer_tasks(TasksAnswer::Fail);
-  window.until("the tasks to be asked for again", |_| server.tasks_asked() >= 2);
-  server.answer_tasks(TasksAnswer::Hold);
-  let asked = server.tasks_asked();
-  window.until("the answer to be held again", |_| server.tasks_asked() > asked);
-  window.until("the download to go on", under_way);
+  window.until("the outage", |window| window.texts("tasks-team-unavailable").is_some());
+  assert!(window.texts("tasks-loading").is_none());
 }
 
 #[test]
 fn team_qa_downloading_shows_the_boards_skeleton_too() {
   let (mut window, _server) = on_the_tasks_list(State::Downloading);
-  window.until("the download", |window| download(window).is_some());
   window.until("the layout switch", |window| {
     window.tree.get_element_by_id("tasks-layout-board").is_some()
   });
@@ -218,18 +208,18 @@ fn team_qa_downloading_shows_the_boards_skeleton_too() {
 }
 
 #[test]
-fn team_qa_download_failed_says_why_and_try_again_downloads_again() {
+fn team_qa_download_failed_says_team_data_is_unavailable_and_try_again_reads_again() {
   let (mut window, server) = on_the_tasks_list(State::DownloadFailed);
-  window.until("the failure", |window| window.texts("tasks-download-error").is_some());
-  let said = window.text("tasks-download-error");
-  assert!(said.contains("Kontur's tasks could not be downloaded"), "{said}");
-  assert!(said.contains("Orchester joined Acme"), "{said}");
-  assert!(said.contains("The server refused this."), "{said}");
-  let asked = server.tasks_asked();
-  window.press("tasks-download-error-retry");
-  window.until("the tasks to be asked for again", |_| server.tasks_asked() > asked);
-  window.until("the failure again", |window| {
-    window.texts("tasks-download-error").is_some()
+  window.until("the outage", |window| window.texts("tasks-team-unavailable").is_some());
+  let said = window.text("tasks-team-unavailable");
+  assert!(said.contains("Team data is unavailable"), "{said}");
+  let host = server.url().trim_start_matches("http://").to_owned();
+  assert!(said.contains(&format!("{host} hasn't answered since")), "{said}");
+  let reads = server.authority_reads();
+  window.press("tasks-team-try-again");
+  window.until("the tasks to be read again", |_| server.authority_reads() > reads);
+  window.until("the outage again", |window| {
+    window.texts("tasks-team-unavailable").is_some()
   });
 }
 

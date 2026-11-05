@@ -1,10 +1,10 @@
 //! The merge commit, made in a temporary worktree so that neither the merge nor what stops it
 //! reaches the user's checkout, whose uncommitted work stays out of it. The worktree is
-//! `<git common dir>/orchester-merge-<run id>`: inside the repository's own git folder, so on the
-//! same disk as the checkout and outside its working tree and `git status`, and named by the run,
-//! so one a killed merge left is the next merge of that run's to remove. It is detached at the
-//! checkout's commit and filled with `git reset --hard`, which unlike a checkout runs no
-//! `post-checkout` hook, and removed again on every path; no ref stays.
+//! `<git common dir>/orchester-merge-<scratch>`: inside the repository's own git folder, so on the
+//! same disk as the checkout and outside its working tree and `git status`, and named by what is
+//! merged (a run's id, or a delivered module's), so one a killed merge left is the next merge of
+//! it to remove. It is detached at the checkout's commit and filled with `git reset --hard`, which
+//! unlike a checkout runs no `post-checkout` hook, and removed again on every path; no ref stays.
 //!
 //! The merge there runs the hooks a merge commit runs (`pre-merge-commit`, `prepare-commit-msg`,
 //! `commit-msg`, `post-merge`) from the hooks folder the checkout uses (`core.hooksPath`, relative
@@ -34,12 +34,12 @@ pub(super) enum Made<'a> {
   Squash { title: &'a str, body: &'a str },
 }
 
-/// Merges `head` into `base` with the commit `made`, the merge of `run`: the commit, and the temporary worktree
-/// when it could not be removed afterwards. A git that stops answering is stopped with everything it started, and the
-/// temporary worktree is removed after it as after any merge that stopped.
+/// Merges `head` into `base` with the commit `made`, in the temporary worktree named `scratch`: the commit, and the
+/// temporary worktree when it could not be removed afterwards. A git that stops answering is stopped with everything it
+/// started, and the temporary worktree is removed after it as after any merge that stopped.
 pub(super) fn merge_commit<R: CommandRunner>(
   git: &Git<'_, R>,
-  run: RunId,
+  scratch: &str,
   (base, head): (&str, &str),
   made: Made<'_>,
 ) -> Result<(String, Option<TemporaryLeft>), MergeError> {
@@ -47,7 +47,7 @@ pub(super) fn merge_commit<R: CommandRunner>(
   let hooks = git
     .stdout(&["rev-parse", "--path-format=absolute", "--git-path", "hooks"])
     .map_err(at_worktree)?;
-  let path = temporary_path(git, run).map_err(at_worktree)?;
+  let path = temporary_path(git, scratch).map_err(at_worktree)?;
   remove(git, &path).map_err(GitError::Failed)?;
   let merged = merge_in(git, (&path, &hooks), (base, head), made);
   // A merge that stopped says why; a folder that stays after it is the next merge's to remove.
@@ -60,14 +60,15 @@ pub(super) fn merge_commit<R: CommandRunner>(
 
 /// Removes the temporary worktree a merge of `run` that the app or the runner ended left; the folder, when it stays.
 pub(super) fn remove_left<R: CommandRunner>(git: &Git<'_, R>, run: RunId) -> Result<Option<TemporaryLeft>, MergeError> {
-  let path = temporary_path(git, run).map_err(|error| MergeError::from(error).at(MergeStep::TemporaryWorktree))?;
+  let path =
+    temporary_path(git, &run.to_string()).map_err(|error| MergeError::from(error).at(MergeStep::TemporaryWorktree))?;
   Ok(remove(git, &path).err().map(|detail| TemporaryLeft { path, detail }))
 }
 
-/// `<git common dir>/orchester-merge-<run id>`.
-fn temporary_path<R: CommandRunner>(git: &Git<'_, R>, run: RunId) -> Result<String, GitError> {
+/// `<git common dir>/orchester-merge-<scratch>`: a run's id, or a module delivery's name.
+fn temporary_path<R: CommandRunner>(git: &Git<'_, R>, scratch: &str) -> Result<String, GitError> {
   let common = git.stdout(&["rev-parse", "--path-format=absolute", "--git-common-dir"])?;
-  Ok(format!("{common}/orchester-merge-{run}"))
+  Ok(format!("{common}/orchester-merge-{scratch}"))
 }
 
 fn merge_in<R: CommandRunner>(

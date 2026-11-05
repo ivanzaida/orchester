@@ -5,6 +5,7 @@
 //! ([`i18n`]); no UI toolkit is used here.
 
 pub mod accounts;
+pub mod actions;
 pub mod activity;
 pub mod agent_testing;
 pub mod agents;
@@ -61,6 +62,8 @@ pub mod skills;
 pub mod sources;
 pub mod storage;
 pub mod tasks;
+pub mod team_reads;
+pub mod team_work;
 pub mod tools;
 pub mod usage;
 pub mod warm_workspaces;

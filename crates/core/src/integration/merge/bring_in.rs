@@ -18,13 +18,17 @@ use crate::{
   },
 };
 
-/// Fast-forwards the checkout from `base`, its HEAD, to `commit`, a descendant of it, the merge of `run`.
+/// Fast-forwards the checkout from `base`, its HEAD, to `commit`, a descendant of it, the merge of `run`; a module
+/// delivery (no run) keeps no record of it.
 pub(super) fn bring_in<R: CommandRunner>(
   git: &Git<'_, R>,
-  run: RunId,
+  run: Option<RunId>,
   (base, commit): (&str, &str),
 ) -> Result<(), MergeError> {
   let touched = Touched::read(git, (base, commit)).map_err(|error| MergeError::from(error).at(MergeStep::BringIn))?;
+  let Some(run) = run else {
+    return fast_forward(git, &touched, (base, commit));
+  };
   let record = Record::save(git, run, &touched)?;
   let brought = fast_forward(git, &touched, (base, commit));
   let left_to_put_back = matches!(

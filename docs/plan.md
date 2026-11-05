@@ -1096,6 +1096,23 @@ explicitly chosen decision connection and model with a validated threshold (0.80
 disconnected and no-longer-listed choices without fallback, and exposes the person-only rule for hosted servers.
 Language defaults and effort remain unchanged. Storage and execution of decision reviewers belong to later tasks.
 Tests: `orchester-core --test decision_reviewer_choice decision_reviewer_choice`, `--test auto_mode_reviewers auto_mode`.
+OP-144 / S1 public prerequisite · Workspace `Admin` / `Member` contract, inherited server-admin capabilities and a
+last-workspace-admin invariant guard in core; API 4 role, admin-contact and error shapes. Existing local SQLite
+role encodings are preserved by the store adapter. Twenty focused core/API/store tests and `tools/check.ps1` passed.
+Server migrations,
+endpoint enforcement and platform dependency pins remain OP-144 in `ivanzaida/orchester-platform`. Contract:
+ORC-625 · Team authority S2 public contract · branch `orchester/orc-625-run-1`: validated server claim threshold
+in seconds, explicit heartbeat-edge staleness/takeover, server-admin settings, and separate v2 workspace policy,
+capabilities and optimistic revision conflict. Platform routes and persistence remain OP-145; open policy items
+remain excluded. See `docs/cloud-api.md`, “Team authority S2 shared contracts”.
+
+OP-144 / S1 public prerequisite · Additive `WorkspaceRole::Admin` / `Member`, inherited server-admin capabilities
+and a last-workspace-admin invariant guard in core; separate role-bearing DTOs in `orchester_api::v2`. Existing
+Owner/Member contracts, API clients, events, SQLite and desktop presentation remain unchanged. Server enforcement,
+versioned routes and dependency pins remain OP-144 in `ivanzaida/orchester-platform`. Twenty-three focused
+core/API/store tests and `tools/check.ps1` passed. Contract:
+`docs/architecture/workspace-roles.md`.
+
 ORC-403 · A ready step that waits for an agent slot says so · branch `orchester/orc-403-run-1` (implemented 2026-10-30;
 pipeline QA scenarios, Review and Verify follow). The runner reports ready agent steps held back only by the slots in
 `WorkSummary.slot_waits` (protocol 33); nothing is stored. `get_run` gives `status: { state: "pending", waits_for:

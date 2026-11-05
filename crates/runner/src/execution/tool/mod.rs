@@ -16,9 +16,9 @@ use std::path::{Path, PathBuf};
 use orchester_core::{
   connection::{invocation::Platform, stream::RunnerProblem},
   id::StepExecutionId,
-  resource::{CommandAction, CommandEnvironment, Tool, ToolAction},
+  resource::{CommandAction, CommandEnvironment, ToolAction},
   run::{Invocation, StepExecutor, StepFailure, StepStatus, ToolCommand},
-  store::{ActivityStore, ResourceStore},
+  store::ActivityStore,
   time::Timestamp,
 };
 use orchester_ipc::Event;
@@ -139,22 +139,16 @@ impl RunTask {
       })
       .ok_or_else(|| problem("the step is not a tool step"))?;
     let read = |error: &dyn std::error::Error| problem(&error.to_string());
-    let version = self
-      .db
-      .version::<Tool>(pinned.resource, pinned.number)
-      .map_err(|error| read(&error))?
-      .ok_or_else(|| problem("the tool's pinned version no longer exists"))?;
-    let ToolAction::Command(action) = version.body().action() else {
+    let body = self.resolver.tool(&self.db, pinned).map_err(|error| read(&error))?;
+    let ToolAction::Command(action) = body.action() else {
       return Err(problem("the tool is not a command tool"));
     };
-    let tool = self
-      .db
-      .resource(pinned.resource)
-      .map_err(|error| read(&error))?
-      .map(|resource| resource.name().as_str().to_owned())
-      .ok_or_else(|| problem("the tool no longer exists"))?;
+    let (_, name) = self
+      .resolver
+      .label(&self.db, pinned.resource, "tool")
+      .map_err(|error| read(&error))?;
     Ok(PinnedCommand {
-      tool,
+      tool: name.as_str().to_owned(),
       action: action.clone(),
     })
   }

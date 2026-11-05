@@ -13,6 +13,7 @@
 //! budget holds new and continued work back once
 //! today's runs used it.
 
+mod accepted;
 mod active;
 mod again;
 mod attach;
@@ -43,6 +44,7 @@ mod prepare;
 mod question;
 mod record;
 mod recovery;
+mod resolver;
 mod returned;
 mod review;
 mod run;

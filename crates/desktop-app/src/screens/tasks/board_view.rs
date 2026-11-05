@@ -72,6 +72,7 @@ impl TasksScreen {
         shared: shown.shared.is_some() || reading.tasks.shared,
         read_only,
         not_shared: shown.not_shared,
+        member: shown.team.is_some_and(super::team::TeamShown::member),
         filtered,
         scroll_key,
         clear: Arc::new(move || {

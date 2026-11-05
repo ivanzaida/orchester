@@ -9,6 +9,7 @@ use orchester_core::{
   id::{RunId, TaskId},
   integration::Leftovers,
   run::{Run, RunStatus},
+  task::Task,
 };
 use orchester_exec::programs::Programs;
 use orchester_workspace::{
@@ -56,22 +57,29 @@ pub fn runs(detail: &TaskDetail) -> bool {
     .is_some_and(|run| run.run.status() == &RunStatus::Running)
 }
 
-/// Reads `task` of the project at `root`, again whenever `again` changes.
-pub fn task(ctx: &mut Ctx, root: PathBuf, task: TaskId, again: ReadAgain) -> TaskRead {
+/// A team task as its server read it, and the slug of its pipeline this computer has none for.
+pub type TeamRead = Option<(Task, Option<String>)>;
+
+/// Reads `task` of the project at `root`, again whenever `again` changes; a team task (`team`) as its server read it,
+/// joined with this computer's runs of it, again whenever the server's reading changes.
+pub fn task(ctx: &mut Ctx, root: PathBuf, (task, team): (TaskId, TeamRead), again: ReadAgain) -> TaskRead {
   let services = Services::of(ctx);
   let (programs, hold) = (services.programs, services.hold);
-  let load = ctx.future((root, task, again), move |(root, task, _)| {
+  let load = ctx.future((root, task, team, again), move |(root, task, team, _)| {
     tracing::trace!(target: crate::app_log::READ_LOG, read = "task");
     let (programs, hold) = (programs.clone(), hold.clone());
     async move {
       hold.released().await;
-      background::run(move || TaskDetail::load_settled(&root, task, &programs))
-        .await?
-        .map(|detail| LoadedTask(Arc::new(detail)))
-        .map_err(|error| {
-          tracing::error!(%error, "cannot read the task");
-          messages::store_error(&error)
-        })
+      background::run(move || match team {
+        Some(read) => TaskDetail::of_team(&root, read, &programs),
+        None => TaskDetail::load_settled(&root, task, &programs),
+      })
+      .await?
+      .map(|detail| LoadedTask(Arc::new(detail)))
+      .map_err(|error| {
+        tracing::error!(%error, "cannot read the task");
+        messages::store_error(&error)
+      })
     }
   });
   let state = load.state().get();

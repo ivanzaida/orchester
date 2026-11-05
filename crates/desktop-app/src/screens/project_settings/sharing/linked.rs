@@ -30,7 +30,7 @@ pub(super) mod joined;
 mod removed;
 mod rows;
 
-use super::{Facts, make_local, members};
+use super::{Facts, make_local, members, policy};
 use crate::{
   project::ShownProject,
   screens::{
@@ -135,6 +135,7 @@ impl Component for Linked {
     let Some(link) = props.facts.link.as_ref() else {
       return Column::new();
     };
+    let part = policy::read(ctx, &props.project);
     let server = props
       .facts
       .linked_server()
@@ -147,8 +148,9 @@ impl Component for Linked {
     let role = match link.removed_at {
       Some(_) => removed::role_row(ctx, link, &shared),
       None => {
-        let words = role_words(ctx, link.role);
-        rows::role_row(ctx, &words)
+        let host = entry.map_or_else(|| missing_server(ctx, link), |entry| entry.address.authority());
+        let (words, hint) = role_words(ctx, link.role, &host);
+        rows::role_row(ctx, &words, hint)
       }
     };
     let team = Group::new("project-settings-sharing-team", ctx.t("sharing.team.title"))
@@ -186,14 +188,19 @@ impl Component for Linked {
       .facts
       .references
       .then(|| super::bindings::section(ctx, &props.project));
+    let version = policy::refusal(ctx, &part, (&server, &shared));
+    let team_policy = (link.removed_at.is_none() && part.policy.is_some())
+      .then(|| ctx.mount_keyed::<policy::Policy>("sharing-policy", policy::Props { part }));
     Column::new()
       .id("project-settings-sharing")
       .width(Dimension::Pct(100.0))
       .spacing(crate::theme::ExtraSpacing::Roomy.role())
+      .with_children(version)
       .with_children(joined_note)
       .with_children(notice)
       .with_children(here)
       .child(team)
+      .with_children(team_policy)
       .child(refused(ctx))
       .child(discovery)
       .with_children(keys)
@@ -329,14 +336,18 @@ fn refused(ctx: &mut Ctx) -> Element {
     .into()
 }
 
-/// The person's role there, as the page says it.
-fn role_words(ctx: &Ctx, role: Option<MemberRole>) -> String {
-  match role {
-    Some(MemberRole::Owner) => ctx.t("sharing.linked.owner"),
-    Some(MemberRole::Member) => ctx.t("sharing.linked.member"),
-    None => ctx.t("sharing.linked.noRole"),
-  }
-  .to_string()
+/// The person's role there, as the page says it, and what the role does (`07e` `BLTsP`); `host` names the server a
+/// Server admin administers.
+fn role_words(ctx: &Ctx, role: Option<MemberRole>, host: &str) -> (String, Arc<str>) {
+  let (words, hint) = match role {
+    Some(MemberRole::Owner) => (ctx.t("sharing.linked.owner"), ctx.t("sharing.team.roleHint.admin")),
+    Some(MemberRole::Member) => (ctx.t("sharing.linked.member"), ctx.t("sharing.team.roleHint.member")),
+    None => (
+      ctx.t("sharing.linked.noRole"),
+      ctx.t_args("sharing.team.roleHint.serverAdmin", [("server", host)]),
+    ),
+  };
+  (words.to_string(), hint)
 }
 
 /// *Members*, read-only, with who the person is there: rows of *Team server*.

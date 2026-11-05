@@ -205,6 +205,7 @@ pub(super) fn write_cached(
   }
   let created_here = before.is_none() && batch.is_some();
   let (budget, duration) = tasks::limit_columns(cached.limits)?;
+  super::task_identities::record_cached(transaction, cached.id, cached.revision)?;
   transaction.execute(
     "INSERT INTO tasks (id, number, batch_key, title, brief, pipeline_id, budget_tokens, max_duration_ms, status, \
      created_at, pipeline_version, revision, sharing, pipeline_slug, former_key, created_by, updated_by, updated_at) \

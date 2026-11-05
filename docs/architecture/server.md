@@ -474,9 +474,10 @@ Scoped invalidation subscriptions without replica snapshots. The wire shapes are
 `GET /api/v2/projects/{project}/subscription`, a server-sent event stream that a client resumes with an optional
 `Last-Event-ID`; each event is named by its `kind` and carries its cursor as the SSE `id:`. `v2::subscription` defines
 the `QueryScope`s a change can make stale (workspace, task list, task, task comments, module list, module, library,
-resource) and the `SubscriptionEvent`s: `ready` first with the stream's cursor and no snapshot, one `invalidated` per
-committed batch with its last cursor and its de-duplicated scopes, `reset` when the resume point is below the replay
-floor, and `revoked` before the stream closes. `QueryScope` is `Eq`, `Hash` and `Ord`, so a set of scopes is stable.
+resource) and the `SubscriptionEvent`s: `ready` first, only to a stream opened without `Last-Event-ID`, with the
+stream's cursor and no snapshot, one `invalidated` per committed batch with its last cursor and its de-duplicated
+scopes, `reset` when the resume point cannot be replayed, and `revoked` before the stream closes. `QueryScope` is `Eq`,
+`Hash` and `Ord`, so a set of scopes is stable.
 
 **Client race rule.** Reads stay on the ordinary routes, each answering the `EventCursor` it was taken at. An
 `EventCursor` is the server's committed event sequence position: on the wire a string holding the canonical decimal of

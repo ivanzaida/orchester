@@ -19,6 +19,7 @@ mod event;
 mod first_edit;
 mod follow_up;
 mod index_search;
+pub mod inputs;
 mod invocation;
 mod not_started;
 mod number;
@@ -74,7 +75,7 @@ pub use self::{
   },
   not_started::{GitMessage, WorktreeFailure},
   number::RunNumber,
-  outcome::{ExecutionFailure, ExecutionOutcome, ReportOrder, SequenceRegressed, order_report},
+  outcome::{ExecutionFailure, ExecutionOutcome, ReportOrder, SequenceRegressed, order_report, renews_claim},
   permissions::{AppliedPermissions, PermissionsApply, PermissionsChangedBy, RunPermissions},
   phase::TaskPhase,
   plan::{Plan, PlanDecision, PlanReview, PlanVersion, ReviewNote, ReviewNoteError},

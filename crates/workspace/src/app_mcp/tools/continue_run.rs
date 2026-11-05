@@ -12,6 +12,7 @@
 
 use std::path::Path;
 
+use orchester_api::v2::DecisionId;
 use orchester_core::{
   id::{RunId, TaskId},
   resource::StepKey,
@@ -27,7 +28,7 @@ use serde_json::Value;
 
 use super::{
   runs::{find_run, status_now},
-  wire,
+  team, wire,
 };
 use crate::{
   app_mcp::{
@@ -132,8 +133,16 @@ pub async fn continue_run(services: &Services, args: ContinueRun) -> Result<Valu
 /// `continue_run` decided by `by`: automation's decision on a waiting run, or its raise of a limit that stopped one,
 /// needs the person's consent, while a person's (the Orchestrator chat's proposal a person applied) is recorded as
 /// theirs and needs none. A resume after the daily budget raises nothing: the runner refuses it while today's budget
-/// is still used up.
+/// is still used up. A team task's limits are its Admin's (D6), so a raise is refused there; its other choices read
+/// the task from this computer's copy, so they are refused for a team project until its runs are read from their
+/// own execution records.
 pub(crate) async fn continue_as(services: &Services, args: ContinueRun, by: Answerer) -> Result<Value, ToolError> {
+  if team::of(services, &args.project).await?.is_some() {
+    return Err(match args.choice {
+      Choice::RaiseLimits { .. } | Choice::RaiseStepBudget { .. } => team::decision_required(DecisionId::D6),
+      _ => team::team_only_on_server("continue_run"),
+    });
+  }
   let reading = services.clone();
   let resolves = matches!(args.choice, Choice::ResolveConflicts { .. });
   let (project, run, request) = blocking(move || {

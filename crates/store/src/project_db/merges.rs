@@ -46,12 +46,16 @@ impl MergeStore for ProjectDb {
       |row| row.get(0),
     )?;
     let task = crate::rows::parse("task id", &task)?;
-    super::organization::automatic(
-      &transaction,
-      task,
-      orchester_core::task::organization::WorkflowStatus::Done,
-      merge.merged_at,
-    )?;
+    // A run of inputs the team server accepted never changes its task here: the server keeps the task's status, and
+    // whether a merged team run makes its task Done is open (D4).
+    if !super::run_inputs::is_team_run(&transaction, merge.run)? {
+      super::organization::automatic(
+        &transaction,
+        task,
+        orchester_core::task::organization::WorkflowStatus::Done,
+        merge.merged_at,
+      )?;
+    }
     // Story points' calibration: what the task took, beside the points it had.
     super::task_effort::record(&transaction, task, merge.merged_at)?;
     transaction.commit()?;

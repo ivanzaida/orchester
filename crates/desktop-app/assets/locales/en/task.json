@@ -13,6 +13,21 @@
       "notFoundBody": "It may have been deleted, or its key changed. The task list shows the project's tasks.",
       "toTasks": "Open the task list"
     },
+    "team": {
+      "unavailableTitle": "{{task}} can't be read now",
+      "unavailableBody": "{{server}} hasn't answered since {{time}}. The task shows again when it does; Orchester keeps no copy of it. Its runs on this computer go on: open them from Running in the sidebar.",
+      "runningOn": "Running on {{holder}}'s computer",
+      "runningElsewhere": "Running on your other computer",
+      "lastReport": "last report {{time}}",
+      "staleClaim": "Stale claim",
+      "lastRenewed": "{{holder}} · last renewed {{time}}",
+      "takenOver": "Taken over by {{holder}}",
+      "moved": "Moved to your other computer",
+      "removed": "Removed from the team",
+      "unassigned": "Unassigned by an Admin",
+      "stopped": "Run {{run}} stopped · output kept on this computer",
+      "release": "Release claim"
+    },
     "module": {
       "label": "Module",
       "none": "No module"

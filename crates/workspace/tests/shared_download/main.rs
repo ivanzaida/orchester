@@ -103,7 +103,8 @@ impl Linked {
     let database = dir.path().join("orchester.db");
     let workspace = Workspace::new(AppDb::open(&database).expect("database"));
     workspace.open(&root).expect("register Kontur");
-    let servers = Servers::new(workspace, Vault::with(Arc::new(MemoryVault::default())));
+    let version = orchester_api::releases::ReleaseVersion::parse("0.5.0").expect("a release version");
+    let servers = Servers::new(workspace, Vault::with(Arc::new(MemoryVault::default())), version);
     let runtime = Runtime::new().expect("runtime");
     let address = ServerAddress::parse(responder.url()).expect("address");
     let server = runtime

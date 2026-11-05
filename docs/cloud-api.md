@@ -377,7 +377,8 @@ in every shape below.
   burndown, history), `{kind:"library"}` (library and pickers) and `{kind:"resource",resource:ResourceId}` (its
   version list). Scopes compare by value and are totally ordered, so a set of them is stable.
 - `SubscriptionEvent`, tagged by `kind`:
-  - `{kind:"ready",cursor:EventCursor}`: sent first; the stream's position, with no snapshot.
+  - `{kind:"ready",cursor:EventCursor}`: sent first to a stream opened without `Last-Event-ID`; the stream's
+    position, with no snapshot.
   - `{kind:"invalidated",cursor,scopes:[QueryScope]}`: one per committed batch; `cursor` is the batch's last entry and
     `scopes` name each scope once.
   - `{kind:"reset",cursor}`: the resume point is below the server's replay floor; the client drops every cached query
@@ -390,6 +391,211 @@ in every shape below.
   `reset` drops everything.
 
 Existing v1 contracts, the /api/v1 client and earlier v2 types are unchanged.
+
+## Team authority S10/S11 routes
+
+The desktop's client of the S10 reads and the S11 subscription (`orchester_api::client::Authority`, through
+`Client::authority(token, project)`; ORC-713, milestone P5, routes corrected in ORC-718) calls the team server's own
+routes (platform OP-153 and OP-154, its `docs/workspace-reads.md` and `docs/workspace-subscriptions.md`) under
+`/api/v2/projects/{project}`, each with the device token as `Authorization: Bearer`. A listing that takes filters or
+a page is a `POST` of its request body, so filters never travel in a URL. The server answers these routes for whoever
+may read the workspace (a member, a workspace Admin, or a server admin without membership); anyone else, a removed
+member too, gets `404`.
+
+Every `/api/v2` request, the commands and the work routes below too, names the desktop's own version in the
+`Orchester-Client-Version` header (`orchester_api::client::CLIENT_VERSION_HEADER`, ORC-735), a `ReleaseVersion` such
+as `0.5.0`; the desktop's client sends it once made with `Client::with_client_version`. A server refuses a desktop older
+than it accepts, or one that names no version or an unreadable one, `426 unsupported_contract` with
+`details:{required_version}`, the oldest version it accepts (the team server's minimum is `0.5.0`), before the session
+or the operation is read: nothing was kept, and the same request after the update is safe. The desktop says which
+Orchester the server needs.
+
+| Method and path | Request | Answer |
+| --- | --- | --- |
+| `GET …/workspace` | | `WorkspaceMetadata` |
+| `GET …/capabilities` | | `Capabilities` |
+| `POST …/task-list` | `TaskListRequest` | `Page<TaskRead>` |
+| `POST …/task-counts` | `TaskFilters` | `TaskBoardCounts` |
+| `GET …/tasks/{task}` | | `TaskRead` |
+| `POST …/module-list` | `ModuleListRequest` | `Page<ModuleSummary>`, oldest module first |
+| `GET …/modules/{module}` | | `ModuleSummary` |
+| `GET …/modules/{module}/progress` | | `ModuleProgressRead` |
+| `GET …/modules/{module}/burndown` | | `ModuleBurndownRead`, with the forecast |
+| `POST …/modules/{module}/history` | `PageRequest` | `ModuleHistoryPage` |
+| `POST …/library` | `ResourceLibraryRequest` | `ResourceLibraryPage`, without versions |
+| `POST …/resource-picker` | `ResourcePickerRequest` | `ResourcePickerPage` |
+| `POST …/resources/{resource}/version-list` | `PageRequest` | `ResourceVersionsPage`, oldest first, each version with its body |
+| `GET …/subscription` | optional `Last-Event-ID` | the S11 event stream |
+
+There is no route for one version on its own: a version's body is read in its page of the version list, which pages
+by count and by at most 1 MiB of JSON (a larger version fills a page of its own).
+
+Refusals come in two forms. What is new to these reads is an `AuthorityError` (`AuthorityCallError::Refused`): `422
+invalid` for a page cursor that is not one or belongs to another request, `410 cursor_expired` for one whose listing
+is gone. The failures common to every route keep their `/api/v1` `{error,message}` envelope (`ClientError::Api` inside
+`AuthorityCallError::Client`): `401 unauthorized`, `404 not_found`, and `400 bad_request` for a malformed body, an
+unknown field or a malformed `Last-Event-ID`. A body in neither form, or an answer not of the route's shape, reads as
+not an Orchester server.
+
+The subscription sends a `: connected` comment first and `: keep-alive` every 20 seconds while nothing else comes.
+Opened without `Last-Event-ID` it sends `ready` at the log's cursor; resumed with one it sends no `ready`, only the
+`invalidated` batches after it, or `reset` when it cannot replay from it. `revoked` (data `{kind:"revoked"}`, no `id:`)
+ends it.
+
+The workspace's reads (`orchester_workspace::team_reads`) follow the race rule above: they wait for the
+subscription's first `ready`, are stamped with the cursor they answer at (a page's or count's snapshot, or the
+position the read was issued at for a model without one), read again when an `invalidated` event of their scope
+arrives while they are in flight, and treat every reconnect (a subscription resumed from the last cursor seen) like a
+`reset`. A `401`, a `404`, `revoked`, and a changed session end them for good.
+
+## Team authority P2 commands
+
+The team server's commands on the S4 envelopes, as it accepts them (its `docs/operation-receipts.md`,
+`docs/claim-authority.md` and `docs/module-branches.md`): `orchester_api::v2::TeamCommand` in `CommandRequest`,
+answered with `CommandResult<TeamCommandValue>`, through `Authority::command` and `Authority::operation`. The two
+enums are field for field the server's own `Command` and `CommandValue`, so the server can take them without a wire
+change. Unknown kinds and fields are refused; the server answers a kind it does not have `400`.
+
+| Method and path | Request | Answer |
+| --- | --- | --- |
+| `POST /api/v2/projects/{p}/commands` | `CommandRequest<TeamCommand>` | `201` `CommandResult<TeamCommandValue>`, `200` the same result for a repeat, or an `AuthorityError` |
+| `GET /api/v2/projects/{p}/operations/{operation}` | | `OperationRead<TeamCommandValue>`; `404 not_found` while the server has no outcome of it |
+
+- Commands, tagged by `kind`: `task.create {content:TaskContent}` (Admin), `claim.acquire {subject}`,
+  `claim.take_over {subject,observed_claim_id}`, `claim.release {authority:AuthorityRef}`,
+  `assignment.set {subject,user_id}` (`user_id` sent, `null` for nobody; Admin), `module.branch.set {module_id,branch}`
+  (Admin; `branch` is required), `work.start {authority:AuthorityRef,base_commit}`,
+  `delivery.authorize {subject,claim_id,branch,source_commit,base_commit}` (Admin; a module subject), since P4
+  `work.report` with `WorkReport`'s fields (below), and since P4c `delivery.request` and `delivery.report` ("Team
+  authority P4 module delivery").
+- Expected revisions: the module's for `module.branch.set`, the task's and its module's for `work.start`, the
+  subject's for `assignment.set` (the desktop sends it), none for the others, whose claims fence them by id.
+- Values, tagged by `kind`, each with `effects`: `task {task:SharedTask}` (until `TaskRead` is published there),
+  `work {work:WorkRead,bundle:BundleRef}`, `claim {subject,claim:ClaimRead,children:[ClaimRead]}`,
+  `released {subject,released_claim_id}`, `assignment {subject,assignee:UserRef?,revision}`,
+  `module {module:ModuleRead}` and `delivery {delivery:ModuleDeliveryRead}`. Only `work.start` and
+  `delivery.request` answer an effect, `start {work_id,bundle}` and `deliver_module`; every other list is empty.
+
+Definitions are no commands. The desktop's dispatcher (`orchester_workspace::actions`) sends these actions to the
+server's own Admin-checked routes (Authority S3, its `docs/definition-authority.md` and `docs/workspace-policy.md`),
+which refuse a member with `403` (`not_admin` on the `/api/v1` routes):
+
+| Dispatcher action | Route | Decided on |
+| --- | --- | --- |
+| Task edit, organization, move | `PATCH /api/v1/projects/{p}/tasks/{t}` `TaskPatch {revision,changes}` | the task's revision; `409 revision_conflict` carries the current task |
+| Module create | `POST /api/v1/projects/{p}/modules` `ModuleCreate` | its `idempotency_key` and `id`, both the intent's operation id |
+| Module edit | `PATCH /api/v1/projects/{p}/modules/{m}` `ModulePatch` | the module's revision and the intent's key; `409 revision_conflict` carries the current module |
+| Tag create, rename, merge, delete | `POST …/tags`, `PATCH …/tags/{tag}`, `POST …/tags/{tag}/merge`, `DELETE …/tags/{tag}` | nothing: tags have no revision |
+| Workspace policy | `PATCH /api/v2/projects/{p}/policy` `WorkspacePolicyChanges {revision,automatic_merge}` | the policy's revision; `409 {error:"policy_revision_conflict",current}` |
+
+The dispatcher records each command's id and request in the project database (`team_operations`) before sending it,
+bound to the SHA-256 of its expected revisions and command: another request under a recorded id is refused before
+anything is sent. A lost or unreadable response leaves the operation open as *acceptance unknown*; carrying it on
+reads `GET …/operations/{operation}` first and sends the same request again only on `not_found`. `unauthenticated`,
+`rate_limited`, `unavailable` and `unsupported_contract` leave it open too; every other refusal, including a lookup's
+final one, is kept as final. After `revision_conflict` the dispatcher reads the subject as it is now (`GET
+/api/v2/projects/{p}/tasks/{task}` or `…/modules/{module}`) and returns it with the refusal. A committed receipt is
+kept before its local effects: a task it answers with is recorded as a team task identity, and `start` stays pending
+on the open operation until the team start (P4, below) carries it out and completes the operation.
+
+The definition routes keep no receipt, so a definition edit is not recorded. When its response is lost, the
+dispatcher reads the subject again (`GET /api/v1/projects/{p}/tasks/{t}`, `…/tags`, `GET /api/v2/projects/{p}/policy`)
+and compares it with the edit: holding the edit, it was made; still at the revision read (a tag without the edit),
+it is sent again, which the revision or the module routes' key makes safe; otherwise it changed meanwhile and the
+edit is refused as superseded, with the current value. A revision conflict whose current value holds the edit is
+taken as made, so the same intent sent again after a lost response finds its edit rather than a refusal.
+
+## Team authority P4 work
+
+The routes of authorized work, as the team server serves them (its `http/workspace/mod.rs`, `bundles.rs`,
+`heartbeat.rs`, `docs/claim-authority.md`, `docs/module-branches.md` and `docs/work-reports.md`), through
+`orchester_api::client::Authority`, each with the device token of the session the claim executes under. Refusals are
+`AuthorityError`s.
+
+| Method and path | Request | Answer |
+| --- | --- | --- |
+| `GET /api/v2/projects/{p}/bundles/{sha256}` | | `ExecutionBundle`; `409 claim_lost` once no claim it was built for is the caller's in this session, and for a hash the workspace does not have |
+| `GET /api/v2/projects/{p}/bundles/{sha256}/files/{file}` | | the file's raw bytes (`application/octet-stream`, at most `MAX_BUNDLE_FILE_BYTES`); refused as the bundle is, `404 not_found` for a file it does not pin |
+| `POST /api/v2/projects/{p}/heartbeat` | `ExactHeartbeat {authorities:[AuthorityRef]}`, at most 256 | `Renewed {renewed:[ClaimRead],lost:[AuthorityRef]}`; `409 decision_required [D1]` while a named claim's work waits for a person or for review, `409 transition_denied` while it is not running; either renews nothing |
+| `POST /api/v2/projects/{p}/commands` | `work.report {authority,run_id,event_id,sequence,outcome,artifacts}` | `{kind:"work",work:WorkRead,bundle:BundleRef,effects:[]}`, decided as the server's `docs/work-reports.md` orders it |
+
+The desktop's team work (`orchester_workspace::team_work`) uses them so:
+
+- **Start.** From a held task claim, the start is recorded in the project database (`team_starts`) with what its caller
+  read and chose, then `work.start` goes through the dispatcher under the start's operation. The receipt's work and
+  bundle reference are kept first; then the bundle and every file it pins are read by hash, each checked
+  (`ExecutionBundle::check_file`, and the bundle's own hash, claim, task and base commit), and kept as the run's
+  accepted inputs, the files as blobs, in one transaction with the start's record; only then is the runner asked to
+  start the run (protocol 42's `StartAcceptedRun`). A crash or an outage at any boundary is carried on from it, once;
+  the operation and the runner's start are idempotent, so a retry never makes a second work or run. A refusal of the
+  start or of its bundle (`claim_lost`) is kept and starts nothing. A bundle that can never become the run's inputs
+  here (it is not the one the receipt names, or the caller's bindings do not fit it) settles the start `failed`, kept
+  with the reason; recovery carries each open start on its own, so one such start holds back no other.
+- **Inputs.** The task's number and each pinned version's label (`{slug,name}`) are the bundle's (schema 2); the
+  start's caller supplies only the local bindings and consent, and each pinned profile must be bound to a connection
+  of the CLI the bundle binds it to.
+- **Reports.** Each change of a team run's outcome (core's `ExecutionOutcome::of_status`) is queued once in
+  `work_report_outbox` with its event id, the run's next sequence, an operation id and its request, before it is sent;
+  queued reports go in sequence order, each again with the same bytes until the server acknowledges it. A transport
+  failure or a retryable refusal keeps the rest waiting in order. `claim_lost`, `membership_revoked`,
+  `session_mismatch`, and an answer whose work's newest run is another, fence the run: it reports and renews nothing
+  more, and its run, worktree and unsent reports stay on this computer. Other refusals are kept with their report.
+  A run's local status and its server acceptance (the work as the server last answered its reports, by revision) are
+  kept apart (`team_runs`).
+- **Heartbeat.** Only runs at work here (running, no step waiting for a person) are named, with their work's
+  authority; when none is, nothing is sent. `decision_required` is returned as such, not retried as a failure; a lost
+  authority fences its run. Nothing calls the team work yet: the screens adopt it in P6, automation in P7.
+
+## Team authority P4 module delivery
+
+A team task's run merges into its module's branch (D3: the accepted run's base branch is the module's); only the
+module's delivery takes that branch to the base. The commands, on `POST /api/v2/projects/{p}/commands`, as the team
+server's `docs/module-branches.md` (S7c) defines them; each answers `{kind:"delivery",delivery:ModuleDeliveryRead,
+effects}`, and refusals are `AuthorityError`s.
+
+| `command.kind` | Payload | Effects | Who |
+| --- | --- | --- | --- |
+| `delivery.authorize` | `{subject,claim_id,branch,source_commit,base_commit}` | `[]` | Workspace Admin |
+| `delivery.request` | `{authority:AuthorityRef,authorization_operation_id:OperationId?,branch,source_commit,base_commit}` | `[{kind:"deliver_module",module_id,branch,source_commit,base_commit}]`, or `[]` while it waits for the Admin | The module's holder, in its session |
+| `delivery.report` | `{authority:AuthorityRef,source_commit,base_commit,outcome}` | `[]` | The module's holder, in its session |
+
+`authority` is the module's claim with `work_id` `null`. `authorization_operation_id` is always sent: the Admin's
+`delivery.authorize` operation, or `null` for the workspace's automatic merge (D7). With `null` and the automatic
+merge off, the request is no longer refused (the server's S12, ORC-735): it is kept `requested` as the module's
+`pending_delivery` with `authorization:"awaiting_admin"` and answered with `effects:[]`. The Admin's
+`delivery.authorize` of exactly that binding turns it to `admin`, and the holder's next `delivery.request` of it, under
+an operation of its own, gets the `deliver_module` effect; an Admin may still authorize first, for a request to cite.
+A cited authorization that is not of exactly this delivery is `403 delivery_not_authorized`. `outcome`
+(`v2::DeliveryOutcome`) is `{kind:"delivered",merge_commit}` or `{kind:"failed"}`; only a `delivered` report makes the
+delivery delivered.
+
+The desktop's module delivery (`orchester_workspace::team_work::ModuleDeliveries`) uses them so:
+
+- **Request.** The delivery is recorded in the project database (`team_deliveries`) with the module, its claim and
+  branch, both commits, the cited authorization and the branch of this repository the base commit was read from,
+  then `delivery.request` goes through the dispatcher under the delivery's operation (a lost answer is looked up, not
+  sent again). It is not sent while a team run of the module still works on this computer. A refusal is kept; a
+  receipt without an effect is kept as `waiting`, awaiting an Admin's authorization, and goes no further under its
+  operation. The Module page shows the server's `pending_delivery` with who asked and when, offers an Admin
+  *Authorize* of exactly its commits, and offers its holder on this computer *Ask again* once an Admin authorized it.
+- **Merge.** Only a receipt whose effects carry `deliver_module` for exactly the requested branch and commits lets this
+  computer merge, by the merge a run takes into its base branch (core's `merge_module`, under the merge hold that
+  keeps local integration and other merges out), always as a merge commit and only while the module branch and the
+  base branch are still at those commits. The merge is marked begun before git is asked; on recovery a base branch
+  whose tip is a merge commit of exactly those two commits is taken as the merge made, so it is never made twice. A
+  busy checkout leaves the merge to try again; any other refusal of git's is reported `failed`.
+- **Report.** The merge's outcome is kept with the `delivery.report` made of it, with its own operation id, in one
+  transaction, and the request's operation is then completed. The report is sent again with the same bytes until the
+  server answers it, oldest delivery first; a report that waits for the server holds back the later ones.
+- **States.** Each delivery keeps what the server last answered (`ModuleDeliveryRead`) and reads as requested,
+  awaiting authorization, authorized by an Admin, authorized automatically, delivered, failed or refused, with its
+  merge and whether its report waits (`TeamDeliveryState`), for the screens (P6).
+- **MCP `merge_run` (P7b).** On a team project it requests the run's module's delivery: the module's claim
+  (`claim.acquire`, taken only once the request is about to be sent), the module branch's tip as `source_commit` and
+  the tip of the checkout's checked-out branch (never the module's own) as `base_commit`, citing as
+  `authorization_operation_id` the Admin's `delivery.authorize` operation its caller names in `authorization`, else
+  none (the automatic merge); it never authorizes. An open delivery of the module is carried on instead. Only a
+  delivered module is its result; every other state is a refusal naming it.
 
 ## Conventions
 

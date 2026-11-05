@@ -109,7 +109,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 141] = [
+pub const ALL: [Scenario; 157] = [
   Scenario::of("reviewer-row", reviewer_rows::seed),
   Scenario::of("reviewer-row-local", reviewer_rows::local),
   Scenario::of("reviewer-row-unavailable", reviewer_rows::unavailable),
@@ -249,6 +249,20 @@ pub const ALL: [Scenario; 141] = [
   Scenario::of("team-shared-projects", team::shared_projects),
   Scenario::of("team-shared-none", team::shared_none),
   Scenario::of("team-clone", team::clones),
+  Scenario::of("team-member", team::member),
+  Scenario::of("team-admin", team::admin),
+  Scenario::of("team-server-admin", team::server_admin),
+  Scenario::of("team-outage", team::outage),
+  Scenario::of("team-outage-running", team::outage_running),
+  Scenario::of("team-outage-later", team::outage_later),
+  Scenario::of("team-member-running", team::member_running),
+  Scenario::of("team-module-outage", team::module_outage),
+  Scenario::of("team-claims", team::claims),
+  Scenario::of("team-module-work", team::module_work),
+  Scenario::of("team-admin-work", team::admin_work),
+  Scenario::of("team-version-refused", team::version_refused),
+  Scenario::with_fake_codex("team-running", team::team_running),
+  Scenario::of("team-edit-conflict", team::edit_conflict),
   Scenario::of("modules-base-branch", modules::base_branch),
   Scenario::of("loading-states", loading_states::seed),
   Scenario::of("storage-low-disk", storage::low_disk),

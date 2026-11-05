@@ -40,8 +40,15 @@ use super::{
   keys::FormKeys,
   sources::Drafted,
   state::{Phase, Subject, View},
+  team::TeamStopped,
 };
-use crate::{project::ShownProject, routes::Screen, services::Services, theme::TaskFormSpacing};
+use crate::{
+  project::ShownProject,
+  routes::Screen,
+  services::Services,
+  team::{TeamSource, act::Acting},
+  theme::TaskFormSpacing,
+};
 
 #[derive(Clone, PartialEq)]
 pub struct FormProps {
@@ -68,6 +75,9 @@ pub struct FormProps {
   pub updated_at: Option<Timestamp>,
   /// The locale's digit group separator, for budgets.
   pub separator: Arc<str>,
+  /// A team project's reads, which Edit task read the task from and saves it through; `None` for a local project's
+  /// task and for New task.
+  pub team: Option<TeamSource>,
 }
 
 impl DevtoolsInspectable for FormProps {}
@@ -79,7 +89,7 @@ pub struct KeptAt(pub Timestamp);
 impl DevtoolsInspectable for KeptAt {}
 
 pub struct TaskForm {
-  save: SaveAction,
+  pub(super) save: SaveAction,
   run: RunAction,
   pub(super) fields: Fields,
   /// The version the edits are made on; `None` until the fields are filled.
@@ -89,6 +99,8 @@ pub struct TaskForm {
   /// The fields both versions changed, while the person chooses between them.
   pub(super) conflict: Signal<Option<Conflict>>,
   pub(super) choices: Signal<Choices>,
+  /// A team task's save the server did not take as a whole, until the person acts on it or saves again.
+  pub(super) team_stop: Signal<Option<TeamStopped>>,
   /// The last action's failure was met on an earlier version: it is not said any more.
   pub(super) dismissed: Signal<bool>,
   pub(super) kept_at: Signal<Option<KeptAt>>,
@@ -141,6 +153,7 @@ impl Component for TaskForm {
       ctx,
       (services.servers.clone(), services.programs.clone()),
       (estimates.clone(), props.project.open.clone()),
+      Acting::of(&services),
     );
     let run = run_action(
       ctx,
@@ -161,6 +174,7 @@ impl Component for TaskForm {
       newer: ctx.signal(None),
       conflict: ctx.signal(None),
       choices: ctx.signal(Choices::default()),
+      team_stop: ctx.signal(None),
       dismissed: ctx.signal(false),
       kept_at: ctx.signal(None),
       seeded: ctx.signal(false),
@@ -301,6 +315,7 @@ impl TaskForm {
       conflict: self.conflict.get(),
       choices: self.choices.get(),
       tried_run: self.tried_run.get(),
+      team_stop: self.team_stop.get(),
     }
   }
 

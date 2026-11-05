@@ -39,14 +39,15 @@ use crate::{
 /// The select's width, as the Tasks list's module filter.
 const SELECT_WIDTH: f32 = 180.0;
 
-/// The module field of `task`'s header, when the project has modules or the task is in one.
+/// The module field of `task`'s header, when the project has modules or the task is in one. A team task's module is
+/// the server's, which its Summary's properties name; moving it is an Admin's.
 pub fn field(ctx: &mut Ctx, task: &TaskContext) -> Option<Element> {
   let modules = match task.project.feed.tasks.get() {
     TasksState::Ready(tasks) => tasks.modules,
     TasksState::Loading | TasksState::Failed(_) => return None,
   };
   let current = task.detail.task.module();
-  if (modules.is_empty() && current.is_none()) || task.detail.not_shared() {
+  if (modules.is_empty() && current.is_none()) || task.detail.not_shared() || task.team.is_some() {
     return None;
   }
   Some(ctx.mount_keyed::<ModuleField>(

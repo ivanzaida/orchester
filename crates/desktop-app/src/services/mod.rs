@@ -45,7 +45,7 @@ pub mod storage;
 pub mod updates;
 
 use self::{browser_lookup::BrowserLookup, links::Links, page_file_picker::PageFilePicker};
-use crate::{mcp::chat::ChatServers, open_link::LinkInbox, project::hold::ReadHold};
+use crate::{mcp::chat::ChatServers, open_link::LinkInbox, project::hold::ReadHold, team::TeamQueries};
 
 /// The session's services. Every field is a handle: clones share the same workspace, runners and
 /// operations.
@@ -62,6 +62,8 @@ pub struct Services {
   /// Where secret values are kept: the OS keychain.
   pub vault: Vault,
   pub servers: Servers,
+  /// The team projects' reads from their servers, cached for the session's windows.
+  pub team: TeamQueries,
   /// This computer's Orchester Cloud account and its invites.
   pub cloud: Cloud,
   /// Joining a team, by the Cloud account or by a server's address and a code, with no project open.
@@ -135,7 +137,7 @@ impl Services {
       session.interrupted_since(),
       &runtime,
     );
-    let servers = Servers::new(workspace.clone(), vault.clone());
+    let servers = Servers::new(workspace.clone(), vault.clone(), updates::version());
     let cloud = Cloud::new(workspace.clone(), vault.clone(), servers.clone());
     let database = workspace
       .database_path()
@@ -148,6 +150,7 @@ impl Services {
       plan_reads: PlanReads::new(workspace.clone(), runners.clone()),
       runners,
       team_join: TeamJoin::new(servers.clone(), cloud.clone()),
+      team: TeamQueries::new(servers.clone(), runtime.clone()),
       clones: Clones::system(&workspace, programs.clone()),
       cloud,
       links: Links::from_env(),

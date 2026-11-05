@@ -17,6 +17,16 @@ mod native;
 mod orchestrator;
 mod pipelines;
 mod plan_only;
+#[allow(
+  dead_code,
+  reason = "the QA app's team scenarios, of which the seed's tests start the states only"
+)]
+#[allow(
+  clippy::duplicate_mod,
+  reason = "the QA app's own copy of its team states, which the seed's scenarios name too"
+)]
+#[path = "../../examples/qa_app/team/mod.rs"]
+mod qa_team;
 mod refusals;
 mod scenario_names;
 mod settings;

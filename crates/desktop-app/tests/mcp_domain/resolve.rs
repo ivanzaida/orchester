@@ -132,23 +132,13 @@ fn domain_ask_an_agent_returns_the_conflicting_run_to_its_writing_step() {
     panic!("a return after the run ended: {:?}", returned.attempts().last());
   };
   assert_eq!(return_to.as_str(), "implement");
+  let note = note.as_str();
   assert!(
-    note
-      .as_str()
-      .starts_with("Resolve the conflicts with main listed below"),
-    "{}",
-    note.as_str()
+    note.starts_with("Resolve the conflicts with main listed below")
+      && note.ends_with("commits the merge with your work."),
+    "{note}"
   );
-  assert!(
-    note.as_str().ends_with("commits the merge with your work."),
-    "{}",
-    note.as_str()
-  );
-  assert!(
-    !note.as_str().contains("src/"),
-    "the files are data beside the note: {}",
-    note.as_str()
-  );
+  assert!(!note.contains("src/"), "the files are data beside the note: {note}");
   let conflicts = conflicts.expect("what the return resolves");
   assert_eq!(conflicts.base.as_str(), "main");
   assert_eq!(conflicts.files, ["src/webhooks/sender.rs", "src/webhooks/settings.rs"]);

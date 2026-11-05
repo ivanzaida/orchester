@@ -48,12 +48,12 @@ pub enum Tone {
   /// `danger_muted` with the glyph in `danger`: the action destroys (`Tile` `ZVuxg` of `I4xzOf`).
   Danger,
   /// `hover` with the glyph in `text_secondary`: the action changes nothing, e.g. an export (`Tile` `C907Pu` of
-  /// `hysCz`).
+  /// `hysCz`), or a plain change, e.g. a team module's branch (`yhAB1` in `04b` `InYp8`).
   Neutral,
 }
 
 impl Tone {
-  const fn colors(self) -> (PaletteColor, PaletteColor) {
+  fn colors(self) -> (PaletteColor, PaletteColor) {
     match self {
       Self::Warning => (PaletteColor::WarningMuted, PaletteColor::Warning),
       Self::Info => (PaletteColor::InfoMuted, PaletteColor::Info),

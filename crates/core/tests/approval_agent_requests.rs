@@ -14,7 +14,7 @@ use orchester_core::{
   permission::{
     AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess,
     category::{ClassifiedCommand, CommandCategory, CommandScope},
-    roots::{AgentHomes, RootsCheck, RunRoots, ToolRequest},
+    roots::{AgentHomes, RootsCheck, RunRoots},
   },
   run::{
     AnswerKind, ApprovalSubject, AutoAsk, AutoVerdict, ModeStep, PendingToolApproval, RequestAnswer, ReviewQuestion,
@@ -153,7 +153,9 @@ fn approval_agent_requests_reads_its_own_task_output() {
   assert_eq!(
     fixture
       .roots
-      .check(&ToolRequest::Files(&[output.replacen("/private", "", 1)])),
+      .check(&orchester_core::permission::roots::ToolRequest::Files(&[
+        output.replacen("/private", "", 1)
+      ])),
     RootsCheck::Inside
   );
   // Another worktree's task output is not the run's.

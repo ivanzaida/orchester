@@ -148,7 +148,7 @@ pub struct TagMerge {
   pub into: TagId,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SharedTag {
   pub id: TagId,
   pub name: String,
@@ -197,7 +197,7 @@ pub struct Tags {
 pub struct TagResponse {
   pub tag: SharedTag,
 }
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TagsChanged {
   pub tags: Vec<SharedTag>,
   pub tasks: Vec<SharedTask>,

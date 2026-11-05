@@ -29,6 +29,8 @@ mod read;
 mod reading;
 mod sharing;
 pub(crate) mod summary;
+mod team;
+mod team_controls;
 
 use std::time::Instant;
 
@@ -121,6 +123,8 @@ impl Component for TaskPage {
         return page(reading::page(ctx, &task, &props.view));
       }
       TasksState::Failed(reason) => return page(read_failed(ctx, &reason, None)),
+      // A team project's task is read from its server ([`team`]); this computer's copy of it is not shown.
+      TasksState::Ready(tasks) if tasks.shared => return page(self.team(ctx, props)),
       // A task kept Not shared keeps its key from before the join, which a shared task may have too: its own
       // address names it. A link to a key no shared task has still finds it.
       TasksState::Ready(tasks) => {
@@ -144,8 +148,42 @@ impl Component for TaskPage {
       kept,
       view: props.view,
       opened: self.opened,
+      team: None,
     };
     page(ctx.mount_keyed::<TaskFrame>(&format!("task-frame-{task}"), frame))
+  }
+}
+
+impl TaskPage {
+  /// A team task's page: its frame once the server read it, why it cannot be read, or that the project has no such
+  /// task.
+  fn team(&self, ctx: &mut Ctx, props: PageProps) -> Element {
+    let shown = match team::read(ctx, &props.project, &props.key) {
+      team::TeamPage::Ready(shown) => shown,
+      team::TeamPage::Reading => {
+        let task = reading::Reading {
+          project: props.project.open.project.id(),
+          key: &props.key,
+          kept: false,
+          title: None,
+          since: self.opened,
+        };
+        return reading::page(ctx, &task, &props.view);
+      }
+      team::TeamPage::Missing => return not_found(ctx, &props),
+      team::TeamPage::Failed(failure) => return team::unavailable(ctx, &props.project, &props.key, &failure),
+    };
+    let task = shown.task.task.id();
+    let frame = FrameProps {
+      project: props.project,
+      task,
+      key: props.key,
+      kept: false,
+      view: props.view,
+      opened: self.opened,
+      team: Some(shown),
+    };
+    ctx.mount_keyed::<TaskFrame>(&format!("task-frame-{task}"), frame)
   }
 }
 
@@ -214,6 +252,8 @@ struct FrameProps {
   view: TaskView,
   /// When the page opened, which the reading skeleton's delay runs from.
   opened: Instant,
+  /// A team task as its server read it ([`team`]).
+  team: Option<std::sync::Arc<team::TeamTaskShown>>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for FrameProps {}
@@ -328,6 +368,8 @@ struct TaskFrame {
   /// The latest run's worktree and the merge waiting in it as last read, while it waits for review
   /// (`merge::worktree`).
   worktree: Signal<merge::worktree::InWorktree>,
+  /// A team task's Take over asks first.
+  taking_over: team_controls::TakingOver,
 }
 
 impl Component for TaskFrame {
@@ -369,6 +411,7 @@ impl Component for TaskFrame {
       ci_actions: ci::actions::CiActions::new(ctx, &props.project.feed),
       attempts: ctx.signal(merge::reader::Attempts::default()),
       worktree: ctx.signal(merge::worktree::InWorktree::default()),
+      taking_over: team_controls::TakingOver::new(ctx),
     }
   }
 
@@ -378,12 +421,7 @@ impl Component for TaskFrame {
     // only when it was made while a send ran, which holds for the page's life.
     self.composer.await_flight(ctx);
     let services = Services::of(ctx);
-    let runners = (services.runners.clone(), services.servers.clone());
-    let action = control_action(ctx, (props.project.open.clone(), props.task), runners);
-    ctx.provide(RunControls {
-      action,
-      requested: self.requested.clone(),
-    });
+    self.provide_controls(ctx, &props, &services);
     ctx.provide(self.composer.clone());
     ctx.provide(self.state.clone());
     ctx.provide(self.changes.clone());
@@ -399,7 +437,11 @@ impl Component for TaskFrame {
       retries: self.retries.get(),
     };
     let root = props.project.open.repo_root.clone();
-    let (detail, stale) = match read::task(ctx, root.clone(), props.task, again) {
+    let team = props
+      .team
+      .as_ref()
+      .map(|team| (team.task.task.clone(), team.task.missing_pipeline.clone()));
+    let (detail, stale) = match read::task(ctx, root.clone(), (props.task, team), again) {
       TaskRead::Loading => return reading_page(ctx, &props),
       TaskRead::Failed(reason) => return read_failed(ctx, &reason, Some(self.retries.clone())),
       TaskRead::Ready(detail, stale, pending) => (detail, self.stale(stale, pending)),
@@ -428,8 +470,7 @@ impl Component for TaskFrame {
     let follow = Follow::of(&detail, online, &props.view);
     self.changes.read(ctx, &root, &detail, follow);
     let (reader, ci) = self.ci(ctx, (&props.project, &detail), (saves, online));
-    let attempt = detail.run.as_ref().and_then(|run| self.attempts.get().of(run.id()));
-    let worktree = detail.run.as_ref().and_then(|run| self.worktree.get().of(run.id()));
+    let (attempt, worktree) = self.merge_reads(&detail);
     let task = TaskContext {
       project: props.project.clone(),
       key: props.key.clone(),
@@ -440,6 +481,7 @@ impl Component for TaskFrame {
       ci,
       attempt,
       worktree,
+      team: props.team.clone(),
     };
     let (readers, merge) = self.merge(ctx, &task);
     let header = HeaderProps {
@@ -447,6 +489,7 @@ impl Component for TaskFrame {
       view: props.view.clone(),
       stale,
     };
+    let take_over = team_controls::take_over_dialog(ctx, &task);
     let body = tab(ctx, &props.view, task);
     Column::new()
       .id("task-frame")
@@ -457,11 +500,27 @@ impl Component for TaskFrame {
       .child(body)
       .with_children(reader)
       .with_children(readers)
+      .with_children(take_over)
       .into()
   }
 }
 
 impl TaskFrame {
+  /// The latest run's merge attempts and the merge waiting in its worktree, as last read.
+  fn merge_reads(
+    &self,
+    detail: &orchester_workspace::tasks::detail::TaskDetail,
+  ) -> (
+    Option<std::sync::Arc<orchester_workspace::tasks::merge_attempts::page::AttemptPage>>,
+    Option<orchester_workspace::tasks::resolve::Worktree>,
+  ) {
+    let run = detail.run.as_ref().map(|run| run.id());
+    (
+      run.and_then(|run| self.attempts.get().of(run)),
+      run.and_then(|run| self.worktree.get().of(run)),
+    )
+  }
+
   /// The latest run's merge while it waits for review (ORC-731): the readers of its merge attempts and of the merge
   /// waiting in its worktree, which the top card, the header and ⌘↵ share, and what ⌘↵ presses now, if anything.
   fn merge(&self, ctx: &mut Ctx, task: &TaskContext) -> (Vec<Element>, Option<Press>) {
@@ -489,6 +548,16 @@ impl TaskFrame {
 }
 
 impl TaskFrame {
+  /// Provides the run controls, the header's and the Summary's, and a team task's actions ([`team_controls`]).
+  fn provide_controls(&self, ctx: &mut Ctx, props: &FrameProps, services: &Services) {
+    let runners = (services.runners.clone(), services.servers.clone());
+    let action = control_action(ctx, (props.project.open.clone(), props.task), runners);
+    ctx.provide(RunControls {
+      action,
+      requested: self.requested.clone(),
+    });
+    team_controls::provide(ctx, (&props.project, props.team.clone()), &self.taking_over);
+  }
   /// Why the task could not be read again: `failed` now, else what failed before while the task is
   /// read again (`pending`), so the notice does not flicker; nothing once a reading succeeded.
   fn stale(&self, failed: Option<Message>, pending: bool) -> Option<Message> {

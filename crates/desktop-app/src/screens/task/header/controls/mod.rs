@@ -69,6 +69,9 @@ pub struct Controls<'a> {
   pub requested: &'a Signal<Option<Requested>>,
   /// A tool request of the run waits for the person: nothing works, so nothing pauses.
   pub approval_waits: bool,
+  /// The team server fenced the task's run here (taken over, membership removed, another device): it stopped for good
+  /// and goes on no more (03 `hWXxr`, 03c `W6Ncf`), so only Cancel run applies, which stops its agent should one work.
+  pub fenced: bool,
 }
 
 /// The controls that apply to the task now.
@@ -104,7 +107,9 @@ pub fn controls(ctx: &Ctx, controls: &Controls) -> Shown {
     return Shown::default();
   }
   let mut shown = Shown::default();
-  if let Some(reason) = continue_removed(ctx, run) {
+  if controls.fenced {
+    // Nothing moves a fenced run on or pauses it: it stopped for good.
+  } else if let Some(reason) = continue_removed(ctx, run) {
     shown.moves = Some(control(ctx, CONTINUE, Offer::Unavailable(reason)));
   } else if *run.run.status() == RunStatus::Running && run.run.pause_requested() {
     // A pause stays under way until the run settled at its checkpoint.

@@ -2,7 +2,8 @@
 //! its steps (`steps`), and one bordered line with its last event (`Last event` `TGEq8`): where the task stands in a
 //! sentence or two in 12 `text_secondary`, after the event's 13 glyph in `text_muted`, and *Conversation →* 12/500 in
 //! `text_primary` at its end, in every state (`01`, `01b`, `01c`). 12 apart. A run this computer does not have (a
-//! teammate's of a shared task) is its last event alone, without the link.
+//! teammate's of a shared task) is its last event alone, without the link. A team run the server fenced, and a team
+//! task another computer holds, say so ([`super::team_run`]).
 
 use std::sync::Arc;
 
@@ -20,7 +21,7 @@ use orchester_workspace::tasks::detail::RunView;
 
 use super::{
   browser_line::{BrowserLine, LineProps},
-  decisions, section_head, steps,
+  decisions, section_head, steps, team_run,
 };
 use crate::{
   navigation::Navigation,
@@ -28,7 +29,10 @@ use crate::{
   screens::task::TaskContext,
   services::Services,
   theme::{ExtraSpacing, IconSize},
-  ui::{icon::icon, pressable::opening},
+  ui::{
+    icon::{Icon, icon},
+    pressable::opening,
+  },
 };
 
 /// The section of `run`, the task's latest run on this computer, if it has one.
@@ -68,13 +72,16 @@ pub fn section(ctx: &mut Ctx, task: &TaskContext, run: Option<&RunView>) -> Elem
       },
     )
   });
-  section
-    .child(last_event(ctx, task, run.is_some()))
-    .with_children(browser)
-    .into()
+  // A team run whose authority the server fenced says it stopped, and what became of its reports (03 `hWXxr`).
+  let event = match run.and_then(|run| team_run::stopped(ctx, task, run)) {
+    Some(text) => event_line(ctx, task, (Icon::CornerDownLeft, &text, "stopped"), true),
+    None => last_event(ctx, task, run.is_some()),
+  };
+  section.child(event).with_children(browser).into()
 }
 
-/// The rail of `run`'s steps, the one it stands at marked.
+/// The rail of `run`'s steps, the one it stands at marked: in `danger` the step a team run stopped in once the server
+/// fenced it.
 fn rail(ctx: &mut Ctx, task: &TaskContext, run: &RunView) -> Element {
   let lost = task.lost();
   let waiting: Vec<(Arc<str>, Timestamp)> = task
@@ -82,17 +89,24 @@ fn rail(ctx: &mut Ctx, task: &TaskContext, run: &RunView) -> Element {
     .iter()
     .filter_map(|shown| Some((shown.step_key.clone()?, shown.approval.requested_at)))
     .collect();
-  // The step the run stands at, while it has not ended: the one it stopped at, else the one at work or last run.
-  let current = (!run.run.status().is_terminal())
-    .then(|| run.stopped_step().or_else(|| run.current_step()))
-    .flatten()
-    .map(|step| Arc::from(step.key.as_str()));
+  let fenced = team_run::fence(task, run).is_some();
+  // The step the run stands at, while it has not ended: the one it stopped at, else the one at work or last run; once
+  // fenced, the one it stopped in.
+  let current = if fenced {
+    team_run::stopped_in(run)
+  } else {
+    (!run.run.status().is_terminal())
+      .then(|| run.stopped_step().or_else(|| run.current_step()))
+      .flatten()
+  };
+  let current = current.map(|step| Arc::from(step.key.as_str()));
   let slot_waits = task.slot_waits();
   let now = Services::of(ctx).clock.now();
   let live = steps::LiveSteps {
     lost,
     waiting: &waiting,
     slot_waits: &slot_waits,
+    fenced,
   };
   steps::rail(ctx, run, &live, current, now)
 }
@@ -109,7 +123,18 @@ fn last_event(ctx: &mut Ctx, task: &TaskContext, here: bool) -> Element {
     );
     (said.icon, text)
   });
-  let link = here.then(|| {
+  event_line(ctx, task, (glyph, &text, said.tone.name()), here)
+}
+
+/// One bordered line: the event's `glyph`, its `text` and *Conversation →* when `link`; `tone` names it for the MCP
+/// tree.
+pub(super) fn event_line(
+  ctx: &mut Ctx,
+  task: &TaskContext,
+  (glyph, text, tone): (Icon, &str, &str),
+  link: bool,
+) -> Element {
+  let link = link.then(|| {
     let navigation = Navigation::of(ctx);
     let route = Route::Project(
       task.project.open.project.id(),
@@ -127,7 +152,7 @@ fn last_event(ctx: &mut Ctx, task: &TaskContext, here: bool) -> Element {
   });
   lurq::components::Row::new()
     .id("task-event")
-    .describe("tone", said.tone.name())
+    .describe("tone", tone.to_owned())
     .width(Dimension::Pct(100.0))
     .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Loose.role()))
     .spacing(SpacingSize::Sm)
@@ -136,7 +161,7 @@ fn last_event(ctx: &mut Ctx, task: &TaskContext, here: bool) -> Element {
     .rounded(RadiusSize::Md)
     .child(icon(glyph, IconSize::Base, PaletteColor::TextMuted))
     .child(
-      Text::new(&text)
+      Text::new(text)
         .id("task-event-text")
         .variant(TypographyStyle::Description)
         .flex(1.0)

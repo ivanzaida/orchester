@@ -43,8 +43,9 @@ pub use self::{
   log::{LoggedCommit, MAX_LISTED, own_commits},
   made::merge_made,
   merge::{
-    DeliveredAs, Delivering, Interrupted, MergeError, MergeKind, MergeOutcome, MergeStep, RunMerge, TemporaryLeft,
-    clear_interrupted, left_by_bring_in, merge_run, merge_run_as, merge_run_at, put_back,
+    DeliveredAs, Delivering, Interrupted, MergeError, MergeKind, MergeOutcome, MergeStep, ModuleDelivery, ModuleMerge,
+    RunMerge, TemporaryLeft, clear_interrupted, left_by_bring_in, merge_module, merge_run, merge_run_as, merge_run_at,
+    module_merged, put_back,
   },
   merged::{Branches, Delivered, RunWork},
   preflight::{GitCause, IoCause, PreflightCause, PreflightStage},

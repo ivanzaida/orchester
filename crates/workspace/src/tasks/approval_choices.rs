@@ -198,7 +198,7 @@ fn run_checks(db: &ProjectDb, approval: &PendingToolApproval) -> Vec<orchester_t
   else {
     return Vec::new();
   };
-  db.run_checks(run.snapshot(), &step).unwrap_or_default()
+  db.run_checks(&run, &step).unwrap_or_default()
 }
 
 /// A profile as Always allow of a command adds to it: its latest version and whether it has a draft.

@@ -18,7 +18,14 @@ use lurq::{
   layout::Alignment,
   node::{Element, Style, dimension::Dimension, padding::Padding},
 };
-use orchester_workspace::modules::data::ModulePage;
+use orchester_core::{
+  id::{ModuleId, ProjectId},
+  module::Module,
+};
+use orchester_workspace::{
+  delivery::Forecast,
+  modules::data::{ModulePage, Progress},
+};
 
 use super::{
   page::body_padding,
@@ -78,15 +85,19 @@ impl Component for ModuleSummary {
       .flex(1.0)
       .min_width(Dimension::Px(0.0))
       .spacing(TaskSpacing::Sections.role())
-      .child(description(ctx, &page))
+      .child(description(ctx, &page.module))
       .child(tasks::section(ctx, project, &page.tasks, &self.toggled))
-      .child(burndown_line(ctx, (&props.project, &page)));
+      .child(burndown_line(
+        ctx,
+        (project, page.module.id()),
+        (page.progress, &page.forecast),
+      ));
     let properties = ctx.mount_keyed::<ModuleProperties>(
       "module-properties-component",
       PropertiesProps {
-        project: props.project.clone(),
+        project: props.project,
         module: Arc::new(page.module.clone()),
-        written: props.written.clone(),
+        written: props.written,
       },
     );
     let body = Row::new()
@@ -107,8 +118,8 @@ impl Component for ModuleSummary {
 }
 
 /// *Description* and what the module delivers, as the task's brief reads.
-fn description(ctx: &Ctx, page: &ModulePage) -> Element {
-  let words = page.module.details().description();
+pub(super) fn description(ctx: &Ctx, module: &Module) -> Element {
+  let words = module.details().description();
   let text = if words.is_empty() {
     Text::new(&ctx.t("modules.summary.noDescription")).color(PaletteColor::TextMuted)
   } else {
@@ -134,15 +145,16 @@ fn description(ctx: &Ctx, page: &ModulePage) -> Element {
 }
 
 /// `4 remaining · forecast · Burndown →`, opening the Burndown tab.
-fn burndown_line(ctx: &mut Ctx, (project, page): (&ShownProject, &ModulePage)) -> Element {
+pub(super) fn burndown_line(
+  ctx: &mut Ctx,
+  (project, module): (ProjectId, ModuleId),
+  (progress, forecast): (Progress, &Forecast),
+) -> Element {
   let navigation = Navigation::of(ctx);
-  let route = Route::Project(
-    project.open.project.id(),
-    ProjectPage::Module(page.module.id(), ModuleTab::Burndown),
-  );
+  let route = Route::Project(project, ProjectPage::Module(module, ModuleTab::Burndown));
   let remaining = ctx.t_args(
     "modules.summary.remaining",
-    [("count", page.progress.remaining().to_string())],
+    [("count", progress.remaining().to_string())],
   );
   Press::Open(navigation.to(route))
     .button()
@@ -162,7 +174,7 @@ fn burndown_line(ctx: &mut Ctx, (project, page): (&ShownProject, &ModulePage)) -
         .nowrap(),
     )
     .child(
-      Text::new(&words::forecast_line(ctx, &page.forecast))
+      Text::new(&words::forecast_line(ctx, forecast))
         .id("module-burndown-forecast-line")
         .variant(TypographyStyle::Description)
         .color(PaletteColor::TextMuted)

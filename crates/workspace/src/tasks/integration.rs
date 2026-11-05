@@ -26,7 +26,11 @@ use orchester_core::{
   store::{MergeStore, RunStore, TaskStore},
   time::Timestamp,
 };
-use orchester_exec::{programs::Programs, run_processes::RunProcesses};
+use orchester_exec::{
+  local_git::{IntegrationLease, LocalGit, LocalGitError, owned::StoreOwnership},
+  programs::Programs,
+  run_processes::RunProcesses,
+};
 use orchester_index::CodebaseIndexes;
 use orchester_store::{ProjectDb, StoreError};
 pub use preflight::stage_message;
@@ -248,6 +252,33 @@ pub fn merge_in(
     (run, expected, None),
     (MergeAsker::Person, MergeVia::TaskPage),
   )
+}
+
+/// What a module delivery's merge into the person's repository holds while git changes it: the project's integration
+/// lease, so no local integration or other merge works in it meanwhile, the ownership of its store and of its Git
+/// metadata. A run's merge holds the same through its preflight ([`preflight::hold`]), which tells each refusal's
+/// stage.
+pub(crate) struct MergeHold {
+  _lease: IntegrationLease,
+  _store_owner: Arc<StoreOwnership>,
+  _git_owner: LocalGit,
+}
+
+impl MergeHold {
+  /// Holds the repository at `repo_root`; refused while another merge or a local integration holds it.
+  pub(crate) fn acquire(repo_root: &Path) -> Result<Self, LocalGitError> {
+    let lease = IntegrationLease::acquire(repo_root)?;
+    let store_owner = StoreOwnership::acquire(repo_root)?;
+    let scratch =
+      orchester_exec::local_git::prepare_scratch(repo_root, &[".orchester", "local-integration", "legacy"])?;
+    let mut git_owner = LocalGit::new(repo_root, &scratch)?;
+    git_owner.own_metadata()?;
+    Ok(Self {
+      _lease: lease,
+      _store_owner: store_owner,
+      _git_owner: git_owner,
+    })
+  }
 }
 
 /// [`merge_in`] as `asked` asks for it, landed as `delivering` says when the merge queue delivers the run (`None`: as
