@@ -178,6 +178,8 @@ fn element(node: &Value) -> Option<UiElement> {
     reference,
     role: node["role"].as_str().unwrap_or("generic").to_owned(),
     name: node["name"].as_str().filter(|name| !name.is_empty()).map(str::to_owned),
+    states: Vec::new(),
+    value: None,
     children: node["children"]
       .as_array()
       .into_iter()

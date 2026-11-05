@@ -32,6 +32,12 @@ name = "orchester-test-command"
 path = "tests/support/test_command.rs"
 required-features = ["test-agent"]
 
+# A small native window the native UI driver's tests drive (Windows only).
+[[bin]]
+name = "orchester-test-window"
+path = "tests/support/test_window.rs"
+required-features = ["test-agent"]
+
 [[test]]
 name = "execution"
 required-features = ["test-agent"]
@@ -403,6 +409,10 @@ required-features = ["test-agent"]
 name = "disk_guard"
 required-features = ["test-agent"]
 
+[[test]]
+name = "native_ui"
+required-features = ["test-agent"]
+
 [features]
 test-agent = []
 
@@ -444,6 +454,11 @@ tokio-tungstenite.workspace = true
 futures-util.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+# The Win32 window and controls of the native UI driver's fixture (`orchester-test-window`, built only with
+# `test-agent`; a program cannot take a dev-dependency). Already built for `orchester-exec`, so it adds no crate.
+windows-sys = { workspace = true, features = ["Win32_Graphics_Gdi", "Win32_System_LibraryLoader", "Win32_UI_WindowsAndMessaging"] }
 
 [dev-dependencies]
 # The contention tests read the longest write-lock holds and shorten the time a write waits for a lock.

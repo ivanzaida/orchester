@@ -1507,26 +1507,80 @@
         "needMissing": "{{service}} needs {{need}}, which is no longer a service of this project.",
         "invalid": "This service cannot be saved as it is.",
         "gone": "This service no longer exists. It was deleted, here or by automation.",
-        "inUse": "Something still uses this service, so it was not deleted."
+        "inUse": "Something still uses this service, so it was not deleted.",
+        "httpPath": "{{path}} is not a path to ask: start it with / and leave out spaces, such as /healthz.",
+        "logPatternRequired": "Enter the pattern a log line matches once the service is ready.",
+        "logPatternTooLong": "A log pattern is at most {{max}} characters long.",
+        "logPattern": "{{pattern}} is not a regular expression.",
+        "readyTimeout": "Enter a whole number of seconds from 1 to {{max}}.",
+        "seedUrl": "Enter an http:// or https:// URL, or one that starts with a placeholder, without spaces.",
+        "captureName": "{{name}} cannot name a captured value: a lowercase letter, then lowercase letters, digits or underscores.",
+        "capturePath": "{{path}} is not a place in a JSON answer: start it with $, such as $.id or $.items[0].id.",
+        "duplicateCapture": "{{name}} is captured twice. Give each captured value a name of its own.",
+        "noSeedRequests": "Add a request, or choose None.",
+        "duplicateHeader": "The header {{name}} is set twice.",
+        "runFolderIsRoot": "Name a folder for the run's files, such as team-web.",
+        "runFolder": "{{folder}} is not a folder of the run's files: write a relative path without .., a drive or a leading slash.",
+        "uiStart": "Write where ui_open starts without spaces, or leave it empty.",
+        "ownedPath": "{{path}} is not a path in the repository: write a relative pattern without .., a drive or a leading slash, such as web/team/**.",
+        "duplicateOwnedPath": "{{path}} is owned already."
       },
       "placeholder": {
         "argument": {
           "unclosed": "Argument {{line}} opens a placeholder but never closes it.",
           "malformed": "Argument {{line}} has a placeholder with nothing or a brace inside.",
-          "unknownField": "Argument {{line}}: {{value}} is not a placeholder of a service. They are port, url, run, services.<name>.url, services.<name>.port and seed.<name>.",
+          "unknownField": "Argument {{line}}: {{value}} is not a placeholder of a service. They are port, url, run, data, services.<name>.url, services.<name>.port and seed.<name>.",
           "unknownService": "Argument {{line}} uses the service {{value}}, which is not defined.",
           "notNeeded": "Argument {{line}} uses {{value}}, which this service does not need. Add it under Needs.",
-          "unknownCapture": "Argument {{line}} uses seed.{{value}}, which no seed request captures before it."
+          "unknownCapture": "Argument {{line}} uses seed.{{value}}, which no seed request captures before it.",
+          "noRunFolder": "Argument {{line}} uses data, the run's own folder: choose Files in the run's own folder under Per-run data."
         },
         "variable": {
           "unclosed": "{{name}} opens a placeholder but never closes it.",
           "malformed": "{{name}} has a placeholder with nothing or a brace inside.",
-          "unknownField": "{{name}}: {{value}} is not a placeholder of a service. They are port, url, run, services.<name>.url, services.<name>.port and seed.<name>.",
+          "unknownField": "{{name}}: {{value}} is not a placeholder of a service. They are port, url, run, data, services.<name>.url, services.<name>.port and seed.<name>.",
           "unknownService": "{{name}} uses the service {{value}}, which is not defined.",
           "notNeeded": "{{name}} uses {{value}}, which this service does not need. Add it under Needs.",
-          "unknownCapture": "{{name}} uses seed.{{value}}, which no seed request captures."
+          "unknownCapture": "{{name}} uses seed.{{value}}, which no seed request captures.",
+          "noRunFolder": "{{name}} uses data, the run's own folder: choose Files in the run's own folder under Per-run data."
         },
-        "elsewhere": "A placeholder in the readiness check, the seed or where ui_open starts cannot be used as written."
+        "readiness": {
+          "unclosed": "The path opens a placeholder but never closes it.",
+          "malformed": "The path has a placeholder with nothing or a brace inside.",
+          "unknownField": "The path: {{value}} is not a placeholder of a service. They are port, url, run, data, services.<name>.url and services.<name>.port.",
+          "unknownService": "The path uses the service {{value}}, which is not defined.",
+          "notNeeded": "The path uses {{value}}, which this service does not need. Add it under Needs.",
+          "unknownCapture": "The path uses seed.{{value}}, but the seed runs only after the service is ready.",
+          "noRunFolder": "The path uses data, the run's own folder: choose Files in the run's own folder under Per-run data."
+        },
+        "seed": {
+          "unclosed": "Request {{request}} opens a placeholder but never closes it.",
+          "malformed": "Request {{request}} has a placeholder with nothing or a brace inside.",
+          "unknownField": "Request {{request}}: {{value}} is not a placeholder of a service. They are port, url, run, data, services.<name>.url, services.<name>.port and seed.<name>.",
+          "unknownService": "Request {{request}} uses the service {{value}}, which is not defined.",
+          "notNeeded": "Request {{request}} uses {{value}}, which this service does not need. Add it under Needs.",
+          "unknownCapture": "Request {{request}} uses seed.{{value}}, which no request before it captures.",
+          "noRunFolder": "Request {{request}} uses data, the run's own folder: choose Files in the run's own folder under Per-run data."
+        },
+        "seedArgument": {
+          "unclosed": "Argument {{line}} of the seed command opens a placeholder but never closes it.",
+          "malformed": "Argument {{line}} of the seed command has a placeholder with nothing or a brace inside.",
+          "unknownField": "Argument {{line}} of the seed command: {{value}} is not a placeholder of a service. They are port, url, run, data, services.<name>.url and services.<name>.port.",
+          "unknownService": "Argument {{line}} of the seed command uses the service {{value}}, which is not defined.",
+          "notNeeded": "Argument {{line}} of the seed command uses {{value}}, which this service does not need. Add it under Needs.",
+          "unknownCapture": "Argument {{line}} of the seed command uses seed.{{value}}, which only seed requests capture.",
+          "noRunFolder": "Argument {{line}} of the seed command uses data, the run's own folder: choose Files in the run's own folder under Per-run data."
+        },
+        "uiStart": {
+          "unclosed": "Where ui_open starts opens a placeholder but never closes it.",
+          "malformed": "Where ui_open starts has a placeholder with nothing or a brace inside.",
+          "unknownField": "Where ui_open starts: {{value}} is not a placeholder of a service. They are port, url, run, data, services.<name>.url, services.<name>.port and seed.<name>.",
+          "unknownService": "Where ui_open starts uses the service {{value}}, which is not defined.",
+          "notNeeded": "Where ui_open starts uses {{value}}, which this service does not need. Add it under Needs.",
+          "unknownCapture": "Where ui_open starts uses seed.{{value}}, which no seed request captures.",
+          "noRunFolder": "Where ui_open starts uses data, the run's own folder: choose Files in the run's own folder under Per-run data."
+        },
+        "elsewhere": "A placeholder of this service has no value in a run."
       }
     }
   },

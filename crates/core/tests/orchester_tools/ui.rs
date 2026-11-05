@@ -89,6 +89,45 @@ fn ui_tools_and_desktop_qa_come_with_start_qa_app_and_run_unasked() {
 }
 
 #[test]
+fn ui_tools_come_with_a_service_of_the_native_driver_and_run_unasked() {
+  // A read-only step on the network may start services but no QA app: the native driver alone brings the ui_* tools.
+  let read_only = online(RepositoryAccess::ReadOnly);
+  let step = StepTools::for_step(&read_only, &[])
+    .with_services(&read_only, &[web()])
+    .with_native_ui();
+  for tool in OrchesterTool::UI {
+    assert_eq!(step.policy(tool), Some(ToolPolicy::Runs), "{}", tool.as_str());
+  }
+  assert!(!step.offers_qa_service());
+  let names: Vec<&str> = step.offered().iter().map(|(tool, _)| tool.as_str()).collect();
+  let logs = names
+    .iter()
+    .position(|name| *name == "service_logs")
+    .expect("service_logs");
+  assert_eq!(names[logs + 1], "ui_open", "right after the service tools: {names:?}");
+  let open = step
+    .mcp_tools()
+    .into_iter()
+    .find(|tool| tool["name"] == "ui_open")
+    .expect("ui_open is listed");
+  assert_eq!(open["inputSchema"]["properties"]["service"]["enum"], json!(["web"]));
+  let prompt = step.prompt_paragraph(false);
+  assert!(
+    prompt.contains("ui_open(name)") && prompt.contains("UI Automation patterns") && !prompt.contains(QA_SERVICE),
+    "{prompt}"
+  );
+
+  // The QA app already brought them: nothing is offered twice.
+  let both = ui_step().with_native_ui();
+  assert_eq!(both.offered(), ui_step().offered());
+  // Off the network a step starts no service, so it drives none.
+  let offline = StepTools::for_step(&permissions(RepositoryAccess::Write), &[])
+    .with_services(&permissions(RepositoryAccess::Write), &[web()])
+    .with_native_ui();
+  assert!(offline.offered().iter().all(|(tool, _)| !tool.is_ui_tool()));
+}
+
+#[test]
 fn ui_tools_input_is_strict() {
   assert_eq!(
     ui("ui_open", &json!({"service": "desktop-qa"})),
@@ -225,11 +264,24 @@ fn ui_mcp_driver_reads_the_apps_answers_into_the_common_shape() {
     reference: "ref_1".to_owned(),
     role: "button".to_owned(),
     name: None,
+    states: Vec::new(),
+    value: None,
     children: Vec::new(),
   };
   assert_eq!(
-    serde_json::to_value(element).expect("JSON"),
+    serde_json::to_value(&element).expect("JSON"),
     json!({"ref": "ref_1", "role": "button"})
+  );
+  let field = UiElement {
+    role: "edit".to_owned(),
+    states: vec!["focused".to_owned()],
+    value: Some("Fix login".to_owned()),
+    ..element
+  };
+  assert_eq!(
+    serde_json::to_value(field).expect("JSON"),
+    json!({"ref": "ref_1", "role": "edit", "states": ["focused"], "value": "Fix login"}),
+    "a driver that reads states and values answers them"
   );
 
   let wait = UiCall::Wait {

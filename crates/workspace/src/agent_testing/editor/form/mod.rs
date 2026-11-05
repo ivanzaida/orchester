@@ -1,7 +1,9 @@
 //! The service editor's fields as a person leaves them (`02 · Service editor` `TGRTt`): the name of a new service, the
 //! program, its arguments one per line, the working folder, the variables as rows of a name and a plain value or a
-//! project secret's name, and the services it needs in order. Every value is checked by the core type it becomes;
-//! what the page does not edit yet (readiness, seed, per-run data, UI driver, owned paths) is kept as stored.
+//! project secret's name, the services it needs in order, and the sections after them ([`sections`]): readiness,
+//! seed, per-run data, UI driver and owned paths. Every value is checked by the core type it becomes.
+
+mod sections;
 
 use std::{collections::BTreeMap, fmt};
 
@@ -9,19 +11,19 @@ use orchester_core::{
   resource::{CommandArg, CommandProgram, VariableName},
   secret::{SecretName, SecretNameError},
   service::{
-    Readiness, ReadyCheck, ReadyTimeout, RelativeFolder, Service, ServiceError, ServiceName, ServiceValue,
-    ServiceVariables,
+    OwnedPath, Readiness, RelativeFolder, RunData, Seed, Service, ServiceError, ServiceName, ServiceValue,
+    ServiceVariables, UiStart,
   },
 };
 
+pub use self::sections::{
+  CaptureLine, DataForm, DataKind, METHODS, ReadinessForm, ReadinessProblems, ReadyKind, RequestLine, SeedForm,
+  SeedKind, SeedProblem, UiForm, method_name,
+};
 use crate::{
   messages::Message,
   tools::form::{parse_arguments, program_message, variable_error},
 };
-
-/// How long a new service's start waits for its port, until the Readiness section edits it: a new draft starts with
-/// port readiness, as an imported one does (`05 · Import draft` `DFWRJ`).
-const NEW_READY_SECS: u64 = 60;
 
 /// One variable as its row holds it: a plain value as written, or the name of a project secret, whose value the
 /// runner reads when it starts the service and which no screen shows.
@@ -62,6 +64,12 @@ pub struct ServiceForm {
   pub variables: Vec<VariableLine>,
   /// The services it needs, in the order they start.
   pub needs: Vec<String>,
+  pub readiness: ReadinessForm,
+  pub seed: SeedForm,
+  pub run_data: DataForm,
+  pub ui: UiForm,
+  /// The repository path patterns it owns, in the order they were added.
+  pub owned_paths: Vec<String>,
 }
 
 /// Why the fields do not make a service yet, per field.
@@ -73,6 +81,33 @@ pub struct ServiceProblems {
   pub working_folder: Option<Message>,
   pub variables: Option<Message>,
   pub needs: Option<Message>,
+  /// The chosen readiness check's path or pattern.
+  pub readiness: Option<Message>,
+  pub timeout: Option<Message>,
+  pub seed: Option<SeedProblem>,
+  pub run_data: Option<Message>,
+  pub ui_start: Option<Message>,
+  pub owned_paths: Option<Message>,
+}
+
+/// What each field makes, before they make one service.
+struct Parts {
+  name: ServiceName,
+  program: CommandProgram,
+  arguments: Vec<CommandArg>,
+  folder: RelativeFolder,
+  variables: ServiceVariables,
+  needs: Vec<ServiceName>,
+  readiness: Readiness,
+  seed: Seed,
+  run_data: RunData,
+  ui_start: Option<UiStart>,
+  owned_paths: Vec<OwnedPath>,
+}
+
+/// `result`'s value, or `None` with its error kept in `slot`.
+fn kept<T>(result: Result<T, Message>, slot: &mut Option<Message>) -> Option<T> {
+  result.map_err(|error| *slot = Some(error)).ok()
 }
 
 impl ServiceForm {
@@ -105,48 +140,114 @@ impl ServiceForm {
         })
         .collect(),
       needs: service.needs().iter().map(|need| need.as_str().to_owned()).collect(),
+      readiness: ReadinessForm::of(service.readiness()),
+      seed: SeedForm::of(service.seed()),
+      run_data: DataForm::of(service.run_data()),
+      ui: UiForm::of(service.ui_driver(), service.ui_start()),
+      owned_paths: service
+        .owned_paths()
+        .iter()
+        .map(|path| path.as_str().to_owned())
+        .collect(),
     }
   }
 
-  /// The service these fields describe. `base` is the stored service, whose name and other parts it keeps; without
-  /// one, a new service under the typed name with port readiness and nothing else.
+  /// The service these fields describe. `base` is the stored service, whose name it keeps; without one, a new service
+  /// under the typed name.
   pub fn service(&self, base: Option<&Service>) -> Result<Service, Box<ServiceProblems>> {
-    let name = match base {
-      Some(base) => Ok(base.name().clone()),
-      None => service_name(&self.name),
+    let parts = self.parts(base)?;
+    let service = Service::new(parts.name, parts.program, parts.readiness)
+      .with_arguments(parts.arguments)
+      .with_working_folder(parts.folder)
+      .with_variables(parts.variables)
+      .with_seed(parts.seed)
+      .with_run_data(parts.run_data)
+      .with_ui_driver(self.ui.driver);
+    let service = match parts.ui_start {
+      Some(start) => service.with_ui_start(start),
+      None => service,
     };
-    let program = CommandProgram::new(&self.program).map_err(|error| program_message(&error));
-    let arguments = parse_arguments(&self.arguments);
-    let folder = RelativeFolder::new(&self.working_folder).map_err(|error| service_error(&error));
-    let variables = self.variables();
-    let needs = self.needs();
-    let (Ok(name), Ok(program), Ok(arguments), Ok(folder), Ok(variables), Ok(needs)) =
-      (&name, &program, &arguments, &folder, &variables, &needs)
-    else {
-      return Err(Box::new(ServiceProblems {
-        name: name.err(),
-        program: program.err(),
-        arguments: arguments.err(),
-        working_folder: folder.err(),
-        variables: variables.err(),
-        needs: needs.err(),
-      }));
-    };
-    let readiness = base.map_or_else(new_readiness, |base| base.readiness().clone());
-    let service = Service::new(name.clone(), program.clone(), readiness)
-      .with_arguments(arguments.clone())
-      .with_working_folder(folder.clone())
-      .with_variables(variables.clone())
-      .with_needs(needs.clone())
+    service
+      .with_needs(parts.needs)
       .map_err(|error| {
         Box::new(ServiceProblems {
           needs: Some(service_error(&error)),
           ..ServiceProblems::default()
         })
-      })?;
-    Ok(match base {
-      Some(base) => kept(service, base),
-      None => service,
+      })?
+      .with_owned_paths(parts.owned_paths)
+      .map_err(|error| {
+        Box::new(ServiceProblems {
+          owned_paths: Some(sections::section_error(&error)),
+          ..ServiceProblems::default()
+        })
+      })
+  }
+
+  /// What each field makes, or every field's problem.
+  fn parts(&self, base: Option<&Service>) -> Result<Parts, Box<ServiceProblems>> {
+    let mut problems = ServiceProblems::default();
+    let name = base.map_or_else(|| service_name(&self.name), |base| Ok(base.name().clone()));
+    let name = kept(name, &mut problems.name);
+    let program = CommandProgram::new(&self.program).map_err(|error| program_message(&error));
+    let program = kept(program, &mut problems.program);
+    let arguments = kept(parse_arguments(&self.arguments), &mut problems.arguments);
+    let folder = RelativeFolder::new(&self.working_folder).map_err(|error| service_error(&error));
+    let folder = kept(folder, &mut problems.working_folder);
+    let variables = kept(self.variables(), &mut problems.variables);
+    let needs = kept(self.needs(), &mut problems.needs);
+    let readiness = self
+      .readiness
+      .readiness()
+      .map_err(|wrong| {
+        problems.readiness = wrong.check;
+        problems.timeout = wrong.timeout;
+      })
+      .ok();
+    let seed = self.seed.seed().map_err(|wrong| problems.seed = Some(wrong)).ok();
+    let run_data = kept(self.run_data.run_data(), &mut problems.run_data);
+    let ui_start = kept(self.ui.start(), &mut problems.ui_start);
+    let owned_paths = kept(sections::owned_paths(&self.owned_paths), &mut problems.owned_paths);
+    let (
+      Some(name),
+      Some(program),
+      Some(arguments),
+      Some(folder),
+      Some(variables),
+      Some(needs),
+      Some(readiness),
+      Some(seed),
+      Some(run_data),
+      Some(ui_start),
+      Some(owned_paths),
+    ) = (
+      name,
+      program,
+      arguments,
+      folder,
+      variables,
+      needs,
+      readiness,
+      seed,
+      run_data,
+      ui_start,
+      owned_paths,
+    )
+    else {
+      return Err(Box::new(problems));
+    };
+    Ok(Parts {
+      name,
+      program,
+      arguments,
+      folder,
+      variables,
+      needs,
+      readiness,
+      seed,
+      run_data,
+      ui_start,
+      owned_paths,
     })
   }
 
@@ -173,28 +274,6 @@ impl ServiceForm {
       .iter()
       .map(|need| ServiceName::new(need).map_err(|error| service_error(&error)))
       .collect()
-  }
-}
-
-/// A new service's port readiness.
-fn new_readiness() -> Readiness {
-  Readiness::new(
-    ReadyCheck::PortOpen,
-    ReadyTimeout::from_secs(NEW_READY_SECS).expect("a minute is a readiness timeout"),
-  )
-}
-
-/// `service` with what the page does not edit taken from `base`.
-fn kept(service: Service, base: &Service) -> Service {
-  let service = service
-    .with_seed(base.seed().clone())
-    .with_run_data(base.run_data().clone())
-    .with_ui_driver(base.ui_driver())
-    .with_owned_paths(base.owned_paths().to_vec())
-    .expect("a stored service owns each path once");
-  match base.ui_start() {
-    Some(start) => service.with_ui_start(start.clone()),
-    None => service,
   }
 }
 

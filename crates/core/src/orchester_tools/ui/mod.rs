@@ -116,7 +116,8 @@ pub enum UiCall {
 }
 
 /// An element of a snapshot, the shape every driver answers in: its ref, its role, its accessible name when it has
-/// one, and the elements inside it.
+/// one, its states (`disabled`, `focused`, `checked`, `expanded`, `selected`, `readonly`, …) and its value when its
+/// driver reads them, and the elements inside it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct UiElement {
   #[serde(rename = "ref")]
@@ -124,6 +125,10 @@ pub struct UiElement {
   pub role: String,
   #[serde(skip_serializing_if = "Option::is_none")]
   pub name: Option<String>,
+  #[serde(skip_serializing_if = "Vec::is_empty")]
+  pub states: Vec<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub value: Option<String>,
   #[serde(skip_serializing_if = "Vec::is_empty")]
   pub children: Vec<Self>,
 }
