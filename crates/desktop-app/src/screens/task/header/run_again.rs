@@ -86,7 +86,12 @@ pub type CheckAgain = (u64, u64, Option<TokensUsed>, u64);
 pub fn check_again(feed: &ProjectFeed) -> CheckAgain {
   let outside = feed.outside.get();
   let today = feed.usage.get().map(|usage| usage.today);
-  (feed.revision.get() + outside.tasks, feed.states.get(), today, outside.limits)
+  (
+    feed.revision.get() + outside.tasks,
+    feed.states.get(),
+    today,
+    outside.limits,
+  )
 }
 
 /// The deps of a check: where, of which task, after which run (none: nothing to check), and why again.
@@ -108,26 +113,21 @@ pub fn check(
   let deps = (root, detail.task.id(), after, again);
   // A latest run that cannot be followed checks nothing, and no line says so.
   let traced: fn(&CheckDeps) -> bool = |(_, _, after, _)| after.is_some();
-  let state = settled_read_traced(
-    ctx,
-    ("run again check", traced),
-    deps,
-    move |(root, task, after, _)| {
-      let programs = programs.clone();
-      async move {
-        let Some(after) = after else {
-          return Ok(Checked(None));
-        };
-        background::run(move || RunAgainCheck::load_in(&root, &programs, task, after))
-          .await?
-          .map(|check| Checked(Some(check)))
-          .map_err(|error| {
-            tracing::warn!(%error, "cannot check whether the task can run again");
-            messages::store_error(&error)
-          })
-      }
-    },
-  );
+  let state = settled_read_traced(ctx, ("run again check", traced), deps, move |(root, task, after, _)| {
+    let programs = programs.clone();
+    async move {
+      let Some(after) = after else {
+        return Ok(Checked(None));
+      };
+      background::run(move || RunAgainCheck::load_in(&root, &programs, task, after))
+        .await?
+        .map(|check| Checked(Some(check)))
+        .map_err(|error| {
+          tracing::warn!(%error, "cannot check whether the task can run again");
+          messages::store_error(&error)
+        })
+    }
+  });
   let after = after?;
   match (state.data, state.error) {
     // A check for an earlier run of the task says nothing about this one.

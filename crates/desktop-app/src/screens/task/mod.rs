@@ -294,6 +294,12 @@ impl PageState {
   }
 }
 
+/// The task's latest run while it ran when the task was last read (none: no run of it runs).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct LiveRun(Option<RunId>);
+
+impl lurq::app::component::DevtoolsInspectable for LiveRun {}
+
 /// One task's frame and its current tab.
 struct TaskFrame {
   retries: Signal<u64>,
@@ -308,7 +314,7 @@ struct TaskFrame {
   composer: conversation::ComposerState,
   /// The task's latest run while it ran when the task was last read: only then do its transcript's lines
   /// change the task, and only that run's.
-  live: Signal<Option<RunId>>,
+  live: Signal<LiveRun>,
   /// The latest run's pull request and its CI as last read, and what Fix CI and its switch do (`ci`).
   ci: Signal<ci::reader::Found>,
   ci_actions: ci::actions::CiActions,
@@ -339,7 +345,7 @@ impl Component for TaskFrame {
         export: header::export::RunExport::new(ctx),
       },
       requested: ctx.signal(None),
-      live: ctx.signal(None),
+      live: ctx.signal(LiveRun(None)),
       ci: ctx.signal(ci::reader::Found::default()),
       ci_actions: ci::actions::CiActions::new(ctx, &props.project.feed),
     }
@@ -366,7 +372,7 @@ impl Component for TaskFrame {
     // A run switched to Manual by an MCP client changes its mode chip and its Conversation.
     let outside = feed.outside.get();
     let saves = feed.revision.get() + outside.tasks + outside.runs + queue;
-    let live = self.live.get();
+    let LiveRun(live) = self.live.get();
     let again = ReadAgain {
       changes: run_changes::of_shown_run(ctx, &props.project, live, live.is_some()),
       saves,
@@ -383,7 +389,7 @@ impl Component for TaskFrame {
       return read_failed(ctx, reason, Some(self.retries.clone()));
     }
     // Set only when it changes: the frame then renders again, following the transcript's lines of that run or not.
-    let live = read::running(&detail);
+    let live = LiveRun(read::running(&detail));
     if self.live.get_untracked() != live {
       self.live.set(live);
     }
