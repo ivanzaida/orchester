@@ -36,7 +36,7 @@ pub use self::{
   resume::{ChatResume, Continuing, PersonsStop},
   rewind::{Dropped, RewindPoint, RewoundTo},
   sent::{FromOrchestrator, SentWay},
-  settings::{OrchestratorSettings, runs_orchestrator},
+  settings::{NoProgressError, OrchestratorSettings, WatchSettings, runs_orchestrator},
   wait::{AgentWait, RunEnd, StopReason, WaitKind},
   watch::{Claim, Subscription, Subscriptions, WatchTarget},
 };

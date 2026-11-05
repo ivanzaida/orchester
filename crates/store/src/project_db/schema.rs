@@ -59,6 +59,7 @@ mod orchestrator_switches;
 mod orchestrator_titles;
 mod orchestrator_todos;
 mod orchestrator_waits;
+mod orchestrator_watch;
 mod organization;
 mod permission_events;
 mod permitted_decisions;
