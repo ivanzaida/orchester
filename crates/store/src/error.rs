@@ -228,6 +228,9 @@ pub enum StoreError {
   /// Another active record of the scope has the key; nothing was changed.
   #[error("an active memory record with the key `{0}` already exists")]
   DuplicateMemoryKey(String),
+  /// The run waits on a task already (one at a time); nothing was kept.
+  #[error(transparent)]
+  RunWaitsOn(#[from] orchester_core::run::WaitsOnError),
 }
 
 impl StoreError {

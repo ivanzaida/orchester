@@ -589,4 +589,5 @@ ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 
   super::team_delivery::MIGRATION,
   super::team_delivery_waits::MIGRATION,
   super::reported_windows::MIGRATION,
+  super::run_waits_on::MIGRATION,
 ];

@@ -83,6 +83,7 @@ mod run_inputs;
 mod run_models;
 mod run_rebases;
 mod run_resolutions;
+mod run_waits_on;
 mod runner_failures;
 mod services;
 mod shared_configuration;
