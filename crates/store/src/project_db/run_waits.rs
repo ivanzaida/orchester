@@ -83,19 +83,43 @@ const SELECT: &str = "SELECT w.run_id, r.task_id, w.base_branch, w.waited_task_i
 
 impl ProjectDb {
   /// Keeps `wait` from `since`; refused while its run waits on a task already
-  /// ([`orchester_core::run::WaitsOnError::AlreadyWaits`]) and for a run that is not recorded. Nothing is kept then.
+  /// ([`orchester_core::run::WaitsOnError::AlreadyWaits`]), for a run that is not recorded, for a wait that names
+  /// another task as its run's than the run's recorded task ([`StoreError::RunWaitOfAnotherTask`]) and for a waited
+  /// task that is not recorded. Nothing is kept then.
   pub fn keep_run_wait(&mut self, wait: &RunWaitsOn, since: Timestamp) -> Result<(), StoreError> {
     // Written at once, so no other writer keeps a wait of the run between the check and the write.
     let transaction = self
       .connection
       .transaction_with_behavior(TransactionBehavior::Immediate)?;
-    let recorded: Option<i64> = transaction
-      .query_row("SELECT 1 FROM runs WHERE id = ?1", [wait.run().to_string()], |row| {
-        row.get(0)
-      })
+    let recorded: Option<String> = transaction
+      .query_row(
+        "SELECT task_id FROM runs WHERE id = ?1",
+        [wait.run().to_string()],
+        |row| row.get(0),
+      )
       .optional()?;
-    if recorded.is_none() {
+    let Some(recorded) = recorded else {
       return Err(StoreError::RunNotFound(wait.run()));
+    };
+    // The run's task is read back from the run, so the wait keeps only one that is the run's own: `RunWaitsOn` holds
+    // that it is not the waited task.
+    let recorded: TaskId = parse("task id", &recorded)?;
+    if recorded != wait.task() {
+      return Err(StoreError::RunWaitOfAnotherTask {
+        run: wait.run(),
+        recorded,
+        named: wait.task(),
+      });
+    }
+    let waited: Option<i64> = transaction
+      .query_row(
+        "SELECT 1 FROM task_identities WHERE id = ?1",
+        [wait.waited().to_string()],
+        |row| row.get(0),
+      )
+      .optional()?;
+    if waited.is_none() {
+      return Err(StoreError::TaskNotFound(wait.waited()));
     }
     let active = read_waits(
       &transaction,
@@ -126,12 +150,12 @@ impl ProjectDb {
     Ok(ended == 1)
   }
 
-  /// The project's active waits, oldest first.
+  /// The project's active waits, in the order they were kept.
   pub fn active_run_waits(&self) -> Result<Vec<KeptRunWait>, StoreError> {
     read_waits(&self.connection, "WHERE w.ended_at IS NULL", [])
   }
 
-  /// The active waits on task `waited`, oldest first.
+  /// The active waits on task `waited`, in the order they were kept.
   pub fn run_waits_on_task(&self, waited: TaskId) -> Result<Vec<KeptRunWait>, StoreError> {
     read_waits(
       &self.connection,
@@ -140,20 +164,21 @@ impl ProjectDb {
     )
   }
 
-  /// `run`'s latest wait, active or ended; `None` when it never waited on a task.
+  /// `run`'s latest wait, the last one kept, active or ended; `None` when it never waited on a task.
   pub fn run_wait(&self, run: RunId) -> Result<Option<KeptRunWait>, StoreError> {
     let mut waits = read_waits(&self.connection, "WHERE w.run_id = ?1", [run.to_string()])?;
     Ok(waits.pop())
   }
 }
 
-/// The waits `filter`, a fixed SQL condition on them, holds for, oldest first.
+/// The waits `filter`, a fixed SQL condition on them, holds for, in the order they were kept: by the row's
+/// increasing id, whatever `since` says (a clock that went back does not reorder them).
 fn read_waits(
   connection: &rusqlite::Connection,
   filter: &'static str,
   values: impl Params,
 ) -> Result<Vec<KeptRunWait>, StoreError> {
-  let mut statement = connection.prepare(&format!("{SELECT} {filter} ORDER BY w.since, w.id"))?;
+  let mut statement = connection.prepare(&format!("{SELECT} {filter} ORDER BY w.id"))?;
   let rows = statement
     .query_map(values, |row| {
       Ok((

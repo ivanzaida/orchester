@@ -231,6 +231,13 @@ pub enum StoreError {
   /// The run waits on a task already (one at a time); nothing was kept.
   #[error(transparent)]
   RunWaitsOn(#[from] orchester_core::run::WaitsOnError),
+  /// The wait names another task as its run's than the task the run is recorded for; nothing was kept.
+  #[error("run {run} is of task {recorded}, not of task {named}")]
+  RunWaitOfAnotherTask {
+    run: RunId,
+    recorded: TaskId,
+    named: TaskId,
+  },
 }
 
 impl StoreError {

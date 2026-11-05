@@ -175,3 +175,62 @@ fn run_waits_refuse_a_run_that_is_not_recorded() {
   );
   assert_eq!(db.active_run_waits().expect("read"), Vec::new());
 }
+
+#[test]
+fn run_waits_refuse_a_wait_naming_another_task_as_its_runs() {
+  let (_repo, mut db, run, _) = started_run();
+  let (stale, waited) = (task(&mut db, "Build it"), task(&mut db, "Test it"));
+  let project = db.project().id();
+  let wrong = |task, waited| {
+    let waiting = WaitingRun {
+      project,
+      run: run.id(),
+      task,
+      base: BranchName::new("master").expect("branch"),
+      waits_for: WaitReason::Message,
+    };
+    RunWaitsOn::new(waiting, waited, project).expect("valid on its own")
+  };
+
+  // The run's real task as the waited one: read back, it would wait on its own task.
+  let own = wrong(stale, run.task());
+  let refused = db.keep_run_wait(&own, at(20));
+  assert!(
+    matches!(refused, Err(StoreError::RunWaitOfAnotherTask { run: id, recorded, named })
+      if id == run.id() && recorded == run.task() && named == stale),
+    "{refused:?}"
+  );
+  // Another task: read back, it would be another wait than the one kept.
+  let refused = db.keep_run_wait(&wrong(stale, waited), at(21));
+  assert!(
+    matches!(refused, Err(StoreError::RunWaitOfAnotherTask { .. })),
+    "{refused:?}"
+  );
+  assert_eq!(db.active_run_waits().expect("read"), Vec::new());
+  assert_eq!(db.run_wait(run.id()).expect("read"), None);
+}
+
+#[test]
+fn run_waits_refuse_a_waited_task_that_is_not_recorded() {
+  let (_repo, mut db, run, _) = started_run();
+  let unknown = TaskId::generate();
+  let refused = db.keep_run_wait(&wait(&db, &run, unknown), at(20));
+  assert!(
+    matches!(refused, Err(StoreError::TaskNotFound(id)) if id == unknown),
+    "{refused:?}"
+  );
+  assert_eq!(db.active_run_waits().expect("read"), Vec::new());
+}
+
+#[test]
+fn run_waits_take_the_last_kept_as_a_runs_latest_whatever_its_since() {
+  let (_repo, mut db, run, _) = started_run();
+  let (first, second) = (task(&mut db, "Build it"), task(&mut db, "Test it"));
+  let earlier = wait(&db, &run, first);
+  db.keep_run_wait(&earlier, at(40)).expect("kept");
+  assert!(db.end_run_wait(run.id(), RunWaitEnd::Canceled, at(41)).expect("ended"));
+  // The clock went back: the later wait starts at an earlier time.
+  let later = wait(&db, &run, second);
+  db.keep_run_wait(&later, at(30)).expect("kept");
+  assert_eq!(db.run_wait(run.id()).expect("read"), Some(active(&later, 30)));
+}
