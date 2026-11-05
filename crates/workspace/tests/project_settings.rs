@@ -3,7 +3,7 @@ use std::{fs, time::Duration};
 
 use orchester_core::{
   id::{ConnectionId, ProjectId},
-  limits::{ProjectLimits, QaSlots},
+  limits::{ProjectLimits, QaSlots, ServiceSlots},
   name::Name,
   project::{Project, ProjectKey},
   resource::ModelId,
@@ -101,6 +101,22 @@ fn project_settings_qa_apps_at_once_read_back_and_refuse_outside_one_to_sixteen(
     assert_eq!(error.args, [("min", "1".to_owned()), ("max", "16".to_owned())]);
     assert_eq!(errors.agent_slots, None, "{qa}");
   }
+}
+
+#[test]
+fn project_settings_limits_keep_the_projects_share_of_services_at_once() {
+  let stored = ProjectLimits::DEFAULT.with_service_slots(ServiceSlots::new(9).expect("in range"));
+  let text = LimitsText {
+    qa: "5".into(),
+    ..LimitsText::of(stored, ",")
+  };
+  let read = text.limits(stored, ",").expect("limits");
+  assert_eq!(read.qa_slots().get().get(), 5);
+  assert_eq!(
+    read.service_slots(),
+    stored.service_slots(),
+    "the page has no field for the share: it keeps the one it read"
+  );
 }
 #[test]
 fn project_settings_environment_requires_confirmation_and_refuses_a_stale_baseline() {

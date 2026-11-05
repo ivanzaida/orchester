@@ -76,6 +76,7 @@ mod run_models;
 mod run_rebases;
 mod run_resolutions;
 mod runner_failures;
+mod service_slots;
 mod services;
 mod shared_configuration;
 mod shared_members;

@@ -53,7 +53,7 @@ use orchester_core::{
   tokens::TokenBudget,
 };
 use orchester_ipc::Event;
-use orchester_runner::execution::{Notifier, QaSlots, Scheduler};
+use orchester_runner::execution::{Notifier, QaSlots, Scheduler, ServiceSlots};
 use orchester_store::ProjectDb;
 use tempfile::TempDir;
 use tokio::sync::mpsc;
@@ -368,7 +368,9 @@ pub fn scheduler(root: &Path) -> (Scheduler, mpsc::UnboundedReceiver<Event>) {
 }
 
 /// A scheduler that reads secret values from `vault`. Its QA apps take QA slots of the project's own, in
-/// `.orchester/qa-slots/`, never the computer's, and its disk guard reads a disk with plenty of room.
+/// `.orchester/qa-slots/`, never the computer's; its services take service slots of its own too, in
+/// `.orchester/service-slots/`, under the limit of the application database [`services::app_settings`] (the default
+/// until a test makes it); and its disk guard reads a disk with plenty of room.
 pub fn scheduler_with(root: &Path, vault: Arc<MemoryVault>) -> (Scheduler, mpsc::UnboundedReceiver<Event>) {
   scheduler_on(root, vault, disk::TestDisk::default())
 }
@@ -382,8 +384,14 @@ pub fn scheduler_on(
   let (sender, events) = mpsc::unbounded_channel();
   let relay = PathBuf::from(env!("CARGO_BIN_EXE_orchester-runner"));
   let slots = QaSlots::in_folder(&root.join(".orchester").join("qa-slots"));
+  let service_slots = ServiceSlots::in_folder(
+    &root.join(".orchester").join("service-slots"),
+    &services::app_settings(root),
+  );
   (
-    Scheduler::new(root, Notifier::new(sender), vault, (Some(relay), slots)).with_disks(Arc::new(disk)),
+    Scheduler::new(root, Notifier::new(sender), vault, (Some(relay), slots))
+      .with_disks(Arc::new(disk))
+      .with_service_slots(service_slots),
     events,
   )
 }

@@ -1,5 +1,6 @@
-//! The service tools a run's invocation gets, and where they record a crash: in the invocation's transcript, as a
-//! runner note the run's conversation shows.
+//! The service tools a run's invocation gets, and where they record a crash and a start that waits for service slots:
+//! in the invocation's transcript, as runner notes the run's conversation shows. And the service slots a scheduler's
+//! runs take.
 
 use std::{path::Path, sync::Arc};
 
@@ -11,13 +12,25 @@ use orchester_core::{
 };
 
 use super::{
-  StepServices,
+  ServiceSlots, Services, StepServices, Waiting,
   launch::{published, published_stacks},
 };
 use crate::execution::{
+  Scheduler,
   run::RunTask,
   step::{runner_note, start::problem},
 };
+
+impl Scheduler {
+  /// This scheduler's services taking `slots`, before it is shared: what tests give it instead of the computer's.
+  #[must_use]
+  pub fn with_service_slots(mut self, slots: ServiceSlots) -> Self {
+    if let Some(inner) = Arc::get_mut(&mut self.inner) {
+      inner.services = Arc::new(Services::new(slots));
+    }
+    self
+  }
+}
 
 impl RunTask {
   /// The names of the project's published services, which the step's service tools take.
@@ -42,6 +55,8 @@ impl RunTask {
     environment: &CommandEnvironment,
   ) -> StepServices {
     let (root, run, notifier) = (self.root.clone(), self.run.id(), self.notifier.clone());
+    let noted = Arc::new(move |problem: RunnerProblem| runner_note::note(&root, (run, invocation), problem, &notifier));
+    let crash_noted = Arc::clone(&noted);
     StepServices {
       services: Arc::clone(&self.services),
       state: self.services.register(invocation),
@@ -52,9 +67,10 @@ impl RunTask {
       vault: Arc::clone(&self.vault),
       inherited: std::env::vars_os().collect(),
       project: environment.clone(),
-      crashed: Arc::new(move |crash| {
-        let problem = RunnerProblem::ServiceCrashed(crash.clone());
-        runner_note::note(&root, (run, invocation), problem, &notifier);
+      crashed: Arc::new(move |crash| crash_noted(RunnerProblem::ServiceCrashed(crash.clone()))),
+      // A note that cannot be written is logged by `runner_note`: the start waits all the same.
+      waiting: Arc::new(move |Waiting { slots, share, limit }| {
+        noted(RunnerProblem::WaitingForServiceSlots { slots, share, limit });
       }),
     }
   }

@@ -20,7 +20,7 @@ use orchester_store::{ProjectDb, StoreError};
 use parking_lot::Mutex;
 
 use super::{
-  Running, StepServices, Watch,
+  Running, ServiceSlot, StepServices, Watch,
   data::{Container, Data},
   order::Address,
   readiness,
@@ -54,11 +54,12 @@ fn latest<T: ResourceBody + Clone>(root: &Path) -> Result<Vec<T>, StoreError> {
 
 impl StepServices {
   /// Starts `service` with the addresses of the services already running, `wired`, waits until it is ready and runs
-  /// its seed, giving up when `ended` says the invocation ended.
+  /// its seed, giving up when `ended` says the invocation ended. The service holds `slot` while it runs; a start that
+  /// fails frees it.
   pub(super) fn launch(
     &self,
     service: &Service,
-    wired: &[Address],
+    (wired, slot): (&[Address], ServiceSlot),
     ended: &dyn Fn() -> bool,
   ) -> Result<Running, String> {
     let name = service.name();
@@ -108,6 +109,7 @@ impl StepServices {
         captured,
         needs: service.needs().to_vec(),
         output,
+        _slot: slot,
       }),
       Err(why) => {
         // A program that cannot be watched any more is stopped all the same; its status then says stopped.

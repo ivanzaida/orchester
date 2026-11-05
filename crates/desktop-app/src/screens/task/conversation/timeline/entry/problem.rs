@@ -125,13 +125,7 @@ pub(super) fn text(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Option<Arc<
       ),
       "conversation.problem.memoryUnreadableDetail",
     ),
-    RunnerProblem::CodexSettingsIgnored { folder } => (
-      ctx.t("conversation.problem.codexSettingsIgnored"),
-      Some(ctx.t_args(
-        "conversation.problem.codexSettingsIgnoredDetail",
-        [("folder", folder.as_str())],
-      )),
-    ),
+    RunnerProblem::CodexSettingsIgnored { folder } => codex_settings_ignored(ctx, folder),
     RunnerProblem::CodexSandboxSetupFailed { code, message } => codex_sandbox_setup(ctx, code, message),
     RunnerProblem::StderrLeftOut { lines } => counted(
       ctx,
@@ -147,7 +141,8 @@ pub(super) fn text(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Option<Arc<
     RunnerProblem::ContextCompacted { .. }
     | RunnerProblem::ModelRetrying { .. }
     | RunnerProblem::ThinkingStripped
-    | RunnerProblem::WaitingForQaSlot { .. } => note(ctx, problem),
+    | RunnerProblem::WaitingForQaSlot { .. }
+    | RunnerProblem::WaitingForServiceSlots { .. } => note(ctx, problem),
   }
 }
 
@@ -180,6 +175,14 @@ fn service_crashed(ctx: &Ctx, crash: &ServiceCrash) -> (Arc<str>, Option<Arc<str
   }
   body.extend(crash.lines.iter().map(|line| Arc::from(line.as_str())));
   (title, (!body.is_empty()).then(|| body.join("\n").into()))
+}
+
+/// The repository's own Codex settings in `folder`, which Codex did not load for the agent.
+fn codex_settings_ignored(ctx: &Ctx, folder: &str) -> (Arc<str>, Option<Arc<str>>) {
+  (
+    ctx.t("conversation.problem.codexSettingsIgnored"),
+    Some(ctx.t_args("conversation.problem.codexSettingsIgnoredDetail", [("folder", folder)])),
+  )
 }
 
 /// Codex's sandbox that could not be set up: Codex's `message`, which names the stage, and its `code`, then where
@@ -255,13 +258,30 @@ fn qa_slot_holders(ctx: &Ctx, holders: &[QaSlotHolder]) -> Arc<str> {
 }
 
 /// What happened around the agent that is no failure: a native conversation with its model compacted, a request
-/// retried, its earlier reasoning dropped; or a start that waits for a QA slot.
+/// retried, its earlier reasoning dropped; or a start that waits for a QA slot or for service slots.
 fn note(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Option<Arc<str>>) {
   match problem {
     RunnerProblem::WaitingForQaSlot { holders } => (
       ctx.t("conversation.problem.waitingForQaSlot"),
       Some(qa_slot_holders(ctx, holders)),
     ),
+    RunnerProblem::WaitingForServiceSlots { slots, share, limit } => {
+      let key = if *slots == 1 {
+        "conversation.problem.waitingForServiceSlots.one"
+      } else {
+        "conversation.problem.waitingForServiceSlots.other"
+      };
+      (
+        ctx.t_args(key, [("count", slots.to_string().as_str())]),
+        Some(ctx.t_args(
+          "conversation.problem.waitingForServiceSlotsDetail",
+          [
+            ("share", share.to_string().as_str()),
+            ("limit", limit.to_string().as_str()),
+          ],
+        )),
+      )
+    }
     RunnerProblem::ContextCompacted { before, after } => (
       ctx.t("conversation.problem.contextCompacted"),
       Some(ctx.t_args(

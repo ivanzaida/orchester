@@ -571,6 +571,11 @@
         "one": "{{count}} QA app is open ({{runs}}). This one starts when it closes.",
         "other": "{{count}} QA apps are open ({{runs}}). This one starts when one closes."
       },
+      "waitingForServiceSlots": {
+        "one": "Waiting for {{count}} service slot",
+        "other": "Waiting for {{count}} service slots"
+      },
+      "waitingForServiceSlotsDetail": "This project may run {{share}} services at once and this computer {{limit}}. This start goes on when enough of them stop.",
       "unavailableVariable": "The prompt uses {{variable}}, which has no value in this run"
     },
     "provider": {

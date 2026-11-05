@@ -10,16 +10,17 @@ use std::{
 
 use orchester_core::{
   id::RunId,
+  limits::{ComputerServiceSlots, ServiceSlots},
   name::Name,
   permission::{AgentPermissions, CommandPermission, NetworkAccess, RepositoryAccess},
   resource::{CommandArg, CommandProgram, ResourceBody, Slug},
   secret::Secret,
   service::{Readiness, ReadyCheck, ReadyTimeout, Service, ServiceName, Stack, StackName},
-  store::ResourceStore,
+  store::{ResourceStore, SettingsStore},
   time::Timestamp,
 };
 use orchester_ipc::Event;
-use orchester_store::ProjectDb;
+use orchester_store::{AppDb, ProjectDb};
 use tokio::sync::mpsc;
 
 use super::{PATIENCE, Setup, StepSpec, TestProject, project, qa::calls, tools::TEST_COMMAND};
@@ -32,6 +33,29 @@ pub fn report_folder(root: &Path) -> PathBuf {
 /// The file `what` of the report folder, as a service's argument names it.
 pub fn report_file(root: &Path, what: &str) -> String {
   report_folder(root).join(what).to_string_lossy().into_owned()
+}
+
+/// The application database whose *Services at once* the test schedulers' services follow (`super::scheduler_on`).
+pub fn app_settings(root: &Path) -> PathBuf {
+  root.join(".orchester").join("app-settings.db")
+}
+
+/// Lets the computer run `count` services at once, as Settings › General does, for the project at `root`'s scheduler.
+pub fn allow_computer_services(root: &Path, count: u64) {
+  AppDb::open(&app_settings(root))
+    .expect("the application database")
+    .set_service_slots(ComputerServiceSlots::new(count).expect("in range"))
+    .expect("saved");
+}
+
+/// Gives the project at `root` a share of `count` services at once, as its limits keep it.
+pub fn share_services(root: &Path, count: u64) {
+  let mut db = ProjectDb::open(root).expect("open");
+  let limits = db
+    .project_limits()
+    .expect("limits")
+    .with_service_slots(ServiceSlots::new(count).expect("in range"));
+  db.save_project_limits(&limits).expect("saved");
 }
 
 /// The service `name` running `orchester-test-command` with `arguments`, ready by `check` within `timeout` seconds.

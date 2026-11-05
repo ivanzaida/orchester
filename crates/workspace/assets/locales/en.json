@@ -1127,7 +1127,9 @@
     },
     "limits": {
       "agentSlotsInvalid": "Enter a whole number from {{min}} to {{max}}.",
-      "qaSlotsInvalid": "Enter a whole number from {{min}} to {{max}}."
+      "qaSlotsInvalid": "Enter a whole number from {{min}} to {{max}}.",
+      "serviceSlotsInvalid": "Enter a whole number from {{min}} to {{max}}.",
+      "serviceSlotsAboveComputer": "A project’s share can be at most this computer’s Services at once, {{limit}}."
     }
   },
   "servers": {

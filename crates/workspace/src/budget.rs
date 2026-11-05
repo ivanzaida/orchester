@@ -7,7 +7,9 @@
 use std::time::Duration;
 
 use orchester_core::{
-  limits::{AgentSlots, LONGEST_TIME_LIMIT, ProjectLimits, ProjectLimitsError, QaSlots},
+  limits::{
+    AgentSlots, ComputerServiceSlots, LONGEST_TIME_LIMIT, ProjectLimits, ProjectLimitsError, QaSlots, ServiceSlots,
+  },
   tokens::{BudgetInputError, TokenBudget, grouped, parse_budget, parse_optional_budget},
 };
 
@@ -114,6 +116,29 @@ fn qa_slots_error() -> Message {
     .with("max", QaSlots::MAX.to_string())
 }
 
+/// A project's share of `count` services at once, from [`ServiceSlots::MIN`] to the computer's `limit`; only to
+/// [`ServiceSlots::MAX`] without a limit to check it against.
+pub fn service_slots(count: u64, limit: Option<ComputerServiceSlots>) -> Result<ServiceSlots, Message> {
+  let share = ServiceSlots::new(count).map_err(|_| service_slots_error())?;
+  match limit {
+    Some(limit) if !share.fits(limit) => {
+      Err(Message::new("settings.limits.serviceSlotsAboveComputer").with("limit", limit.get().to_string()))
+    }
+    _ => Ok(share),
+  }
+}
+
+/// The computer's `count` services at once, from [`ComputerServiceSlots::MIN`] to [`ComputerServiceSlots::MAX`].
+pub fn computer_service_slots(count: u64) -> Result<ComputerServiceSlots, Message> {
+  ComputerServiceSlots::new(count).map_err(|_| service_slots_error())
+}
+
+fn service_slots_error() -> Message {
+  Message::new("settings.limits.serviceSlotsInvalid")
+    .with("min", ServiceSlots::MIN.to_string())
+    .with("max", ServiceSlots::MAX.to_string())
+}
+
 /// A time limit in a field: its whole minutes, empty for no limit.
 pub fn minutes_text(limit: Option<Duration>) -> String {
   limit.map(|limit| whole_minutes(limit).to_string()).unwrap_or_default()
@@ -150,8 +175,8 @@ pub fn holds_defaults(limits: ProjectLimits, (budget, time_limit): (&str, &str),
 }
 
 /// The deprecated app's Limits tab fields as entered. An empty default run budget or time limit means new tasks
-/// have none. It has no *QA apps at once* field: its limits carry the default QA slots. The new app reads its
-/// fields with `crate::project_settings::LimitsText`.
+/// have none. It has no *QA apps at once* or *Services at once* field: its limits carry the default QA and service
+/// slots. The new app reads its fields with `crate::project_settings::LimitsText`.
 pub struct LimitsForm<'a> {
   pub default_run_budget: &'a str,
   pub daily_budget: &'a str,
@@ -169,6 +194,9 @@ pub struct LimitsErrors {
   pub default_time_limit: Option<Message>,
   pub agent_slots: Option<Message>,
   pub qa_slots: Option<Message>,
+  pub service_slots: Option<Message>,
+  /// The computer's *Services at once*, which Orchester's MCP server changes with a project's limits.
+  pub computer_service_slots: Option<Message>,
 }
 
 impl LimitsForm<'_> {
@@ -179,6 +207,7 @@ impl LimitsForm<'_> {
       default_time_limit: read_minutes(self.default_time_limit),
       agent_slots: read_agent_slots(self.agent_slots),
       qa_slots: Ok(QaSlots::DEFAULT),
+      service_slots: Ok(ServiceSlots::DEFAULT),
     }
     .limits()
   }
@@ -192,17 +221,20 @@ pub struct ReadLimits {
   pub default_time_limit: Result<Option<Duration>, Message>,
   pub agent_slots: Result<AgentSlots, Message>,
   pub qa_slots: Result<QaSlots, Message>,
+  /// The project's share of the computer's *Services at once*.
+  pub service_slots: Result<ServiceSlots, Message>,
 }
 
 impl ReadLimits {
   /// The limits, or why they cannot be saved: each limit's own error.
   pub fn limits(self) -> Result<ProjectLimits, Box<LimitsErrors>> {
-    let (Ok(default), Ok(daily), Ok(time), Ok(slots), Ok(qa)) = (
+    let (Ok(default), Ok(daily), Ok(time), Ok(slots), Ok(qa), Ok(services)) = (
       &self.default_run_budget,
       &self.daily_budget,
       &self.default_time_limit,
       &self.agent_slots,
       &self.qa_slots,
+      &self.service_slots,
     ) else {
       return Err(Box::new(LimitsErrors {
         default_run_budget: self.default_run_budget.err(),
@@ -210,6 +242,8 @@ impl ReadLimits {
         default_time_limit: self.default_time_limit.err(),
         agent_slots: self.agent_slots.err(),
         qa_slots: self.qa_slots.err(),
+        service_slots: self.service_slots.err(),
+        computer_service_slots: None,
       }));
     };
     let limits = ProjectLimits::new(*default, *daily, *time).map_err(|error| {
@@ -222,6 +256,11 @@ impl ReadLimits {
         ..LimitsErrors::default()
       })
     })?;
-    Ok(limits.with_agent_slots(*slots).with_qa_slots(*qa))
+    Ok(
+      limits
+        .with_agent_slots(*slots)
+        .with_qa_slots(*qa)
+        .with_service_slots(*services),
+    )
   }
 }
