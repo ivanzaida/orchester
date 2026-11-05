@@ -21,8 +21,6 @@ mod port;
 mod readiness;
 mod task;
 
-pub(in crate::execution::step) use self::launch::project_secret;
-
 use std::{
   collections::{BTreeMap, HashMap},
   ffi::OsString,
@@ -46,6 +44,7 @@ use orchester_exec::process_tree::ProcessTree;
 use parking_lot::Mutex;
 use serde_json::json;
 
+pub(in crate::execution::step) use self::launch::project_secret;
 use self::{
   port::{PortLease, Ports},
   readiness::SharedLog,

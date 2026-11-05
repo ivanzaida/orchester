@@ -60,7 +60,9 @@ impl StepSuites {
       .command()
       .program()
       .check_place(&program, &self.root)
-      .map_err(|_| "the program of the suite now leads into the project's repository or off this computer".to_owned())?;
+      .map_err(|_| {
+        "the program of the suite now leads into the project's repository or off this computer".to_owned()
+      })?;
     let process = suite.process(
       (&program, &self.worktree),
       (self.inherited.iter().cloned(), &self.project),
@@ -116,9 +118,8 @@ impl StepSuites {
       None => Ok(stdout.clone()),
     };
     let format = test_report::ReportFormat::from(suite.report().format());
-    let report = text.and_then(|text| {
-      read_report(format, &redact_secrets(&text, secrets)).map_err(|error| error.to_string())
-    });
+    let report =
+      text.and_then(|text| read_report(format, &redact_secrets(&text, secrets)).map_err(|error| error.to_string()));
     let end = match report {
       Ok(report) => SuiteRunEnd::Read { report },
       Err(error) => SuiteRunEnd::Unreadable {

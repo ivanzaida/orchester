@@ -38,7 +38,11 @@ pub fn suite(arguments: &[&str], format: ReportFormat, path: Option<&str>) -> Te
     .collect();
   let command = SuiteCommand::new(program, arguments).expect("a command");
   let path = path.map(|path| SuitePath::new(path).expect("a path"));
-  TestSuite::new(command, TestReport::new(format, path).expect("a report"), TestLayer::Unit)
+  TestSuite::new(
+    command,
+    TestReport::new(format, path).expect("a report"),
+    TestLayer::Unit,
+  )
 }
 
 /// The JSON answer of a `run_tests ok: {…}` call.

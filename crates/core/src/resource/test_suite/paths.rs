@@ -41,17 +41,12 @@ impl ArtifactGlob {
     &self.0
   }
 
-  /// The folders before the first part with a wildcard, `test-results` of `test-results/**/*.png`: only files under
-  /// them can match, so a search starts there.
+  /// The folders before the first part with a wildcard, `test-results` of `test-results/**/*.png`, or before the file
+  /// of a glob without one: only files under them can match, so a search starts there.
   pub fn base(&self) -> Vec<&str> {
-    self
-      .0
-      .split('/')
-      .take_while(|part| !part.contains(['*', '?']))
-      .collect::<Vec<_>>()
-      .split_last()
-      .map(|(_, folders)| folders.to_vec())
-      .unwrap_or_default()
+    let parts: Vec<&str> = self.0.split('/').collect();
+    let literal = parts.iter().take_while(|part| !part.contains(['*', '?'])).count();
+    parts[..literal.min(parts.len() - 1)].to_vec()
   }
 
   /// Whether the file at `path`, relative to the suite's working folder with `/` between its parts, matches: `*` and

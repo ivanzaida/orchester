@@ -247,7 +247,11 @@ fn read_outside(server: &mut Prompt, worktree: &Path) {
 /// of that test of the last run `run_tests` answered.
 fn suites(server: &mut Prompt, prompt: &str) {
   let mut last_run = None;
-  for sentence in prompt.split("Run the suite ").skip(1).filter_map(|rest| rest.split('.').next()) {
+  for sentence in prompt
+    .split("Run the suite ")
+    .skip(1)
+    .filter_map(|rest| rest.split('.').next())
+  {
     let (suite, filter) = match sentence.split_once(" with filter ") {
       Some((suite, filter)) => (suite, Some(filter)),
       None => (sentence, None),

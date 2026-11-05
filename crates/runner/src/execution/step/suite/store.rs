@@ -73,7 +73,9 @@ pub(super) fn load(storage: &Path, id: TestRunId) -> Result<SuiteRun, String> {
   let text = match fs::read(&file) {
     Ok(text) => text,
     Err(error) if error.kind() == io::ErrorKind::NotFound => {
-      return Err(format!("this run has no test run {id}; run_tests names the ones it made"));
+      return Err(format!(
+        "this run has no test run {id}; run_tests names the ones it made"
+      ));
     }
     Err(error) => return Err(format!("the test run {id} cannot be read: {error}")),
   };

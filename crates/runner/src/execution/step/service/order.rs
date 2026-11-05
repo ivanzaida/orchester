@@ -73,7 +73,8 @@ impl StepServices {
   pub(in crate::execution::step) fn start_needs(&self, needs: &[Slug]) -> Result<Vec<ServiceName>, String> {
     let _one_at_a_time = self.state.starting.lock();
     let before: Vec<ServiceName> = self.state.running.lock().keys().cloned().collect();
-    let stacks = published_stacks(&self.root).map_err(|error| format!("the project's stacks cannot be read: {error}"))?;
+    let stacks =
+      published_stacks(&self.root).map_err(|error| format!("the project's stacks cannot be read: {error}"))?;
     let mut started = Ok(());
     for need in needs.iter().map(Slug::as_str) {
       let stack = stacks.iter().find(|stack| stack.name().as_str() == need);
@@ -81,13 +82,15 @@ impl StepServices {
         Some(stack) => self
           .services_of(|services| StartPlan::for_stack(services, stack).map_err(|error| error.to_string()))
           .map_err(|why| format!("the stack `{need}` the suite needs was not started fully: {why}")),
-        None => ServiceName::new(need).map_err(|error| error.to_string()).and_then(|name| {
-          self.services_of(|services| {
-            StartPlan::for_service(services, &name).map_err(|error| {
-              format!("the suite needs `{need}`, which cannot be started as a service or a stack: {error}")
+        None => ServiceName::new(need)
+          .map_err(|error| error.to_string())
+          .and_then(|name| {
+            self.services_of(|services| {
+              StartPlan::for_service(services, &name).map_err(|error| {
+                format!("the suite needs `{need}`, which cannot be started as a service or a stack: {error}")
+              })
             })
-          })
-        }),
+          }),
       }
       .map(|_| ());
       if started.is_err() {

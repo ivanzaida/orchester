@@ -185,5 +185,8 @@ fn short(message: &str) -> String {
 }
 
 fn exit_code(code: Option<i32>) -> String {
-  code.map_or_else(|| "none (stopped or ended by a signal)".to_owned(), |code| code.to_string())
+  code.map_or_else(
+    || "none (stopped or ended by a signal)".to_owned(),
+    |code| code.to_string(),
+  )
 }

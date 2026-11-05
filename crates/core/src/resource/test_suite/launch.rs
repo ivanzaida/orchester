@@ -90,5 +90,8 @@ impl TestSuite {
 
 /// `path`, which has `/` between its parts, inside `folder`.
 fn within(folder: &Path, path: &SuitePath) -> PathBuf {
-  path.as_str().split('/').fold(folder.to_path_buf(), |joined, part| joined.join(part))
+  path
+    .as_str()
+    .split('/')
+    .fold(folder.to_path_buf(), |joined, part| joined.join(part))
 }

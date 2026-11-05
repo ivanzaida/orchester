@@ -63,7 +63,10 @@ impl Copies {
 
   /// Copies the files `glob` matches under the working folder.
   fn glob(&mut self, glob: &ArtifactGlob) {
-    let base = glob.base().iter().fold(self.folder.clone(), |path, part| path.join(part));
+    let base = glob
+      .base()
+      .iter()
+      .fold(self.folder.clone(), |path, part| path.join(part));
     let mut pending = vec![base];
     let mut searched = 0;
     while let Some(folder) = pending.pop() {
@@ -123,7 +126,9 @@ impl Copies {
       return;
     }
     if self.copied.len() >= MAX_FILES {
-      self.problems.push(format!("`{source}` was not copied: a test run keeps at most {MAX_FILES} files"));
+      self.problems.push(format!(
+        "`{source}` was not copied: a test run keeps at most {MAX_FILES} files"
+      ));
       return;
     }
     let size = match fs::metadata(file) {
@@ -159,7 +164,8 @@ impl Copies {
     if !resolved.is_file() {
       return Err(format!("`{named}` is not a file"));
     }
-    relative_to(&resolved, &self.worktree).ok_or_else(|| format!("`{named}` is outside the worktree, so it was not copied"))
+    relative_to(&resolved, &self.worktree)
+      .ok_or_else(|| format!("`{named}` is outside the worktree, so it was not copied"))
   }
 }
 

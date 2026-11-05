@@ -69,7 +69,10 @@ impl StepSuites {
   ) -> ToolResult {
     let name = slug.as_str();
     let suite = match published(&self.root) {
-      Ok(suites) => suites.into_iter().find(|(published, _)| published == slug).map(|(_, suite)| suite),
+      Ok(suites) => suites
+        .into_iter()
+        .find(|(published, _)| published == slug)
+        .map(|(_, suite)| suite),
       Err(error) => return ToolResult::unavailable(&format!("the project's test suites cannot be read: {error}")),
     };
     let Some(suite) = suite else {
@@ -154,7 +157,11 @@ impl RunTask {
   }
 
   /// The test tools of an invocation whose agent works in `worktree` with the project's `environment`.
-  pub(in crate::execution::step) fn step_suites(&self, worktree: &Path, environment: &CommandEnvironment) -> StepSuites {
+  pub(in crate::execution::step) fn step_suites(
+    &self,
+    worktree: &Path,
+    environment: &CommandEnvironment,
+  ) -> StepSuites {
     StepSuites {
       root: self.root.clone(),
       worktree: worktree.to_path_buf(),

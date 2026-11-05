@@ -28,8 +28,8 @@ mod run_records;
 mod service;
 mod skills;
 mod start;
-mod suite;
 mod stderr;
+mod suite;
 mod tool_files;
 pub(super) mod worker;
 
