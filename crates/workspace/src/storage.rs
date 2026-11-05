@@ -7,7 +7,7 @@
 mod inventory;
 use std::path::Path;
 
-pub use inventory::{KeptKind, KeptRow, inventory, largest_first, measure, paused_runs};
+pub use inventory::{KeptKind, KeptRow, inventory, largest_first, measure, measure_worktree, paused_runs};
 use orchester_core::{
   integration::WORKTREES_DIR,
   store::{RunStore, SettingsStore, TaskStore, WorkspaceStore},
@@ -19,7 +19,7 @@ use thiserror::Error;
 
 use crate::{
   runner::{ExecutorFolders, RunRequestError},
-  tasks::detail::run_store_error,
+  tasks::{detail::run_store_error, run::control_message},
 };
 
 /// Why what the project's folders hold could not be read.
@@ -27,9 +27,19 @@ use crate::{
 pub enum FoldersReadError {
   #[error(transparent)]
   Store(#[from] StoreError),
-  /// The runner, which sizes the folders, did not answer.
+  /// The runner, which lists and sizes the folders, did not answer.
   #[error(transparent)]
   Runner(#[from] RunRequestError),
+}
+
+impl FoldersReadError {
+  /// What a person reads when the folders could not be read.
+  pub fn message(&self) -> crate::messages::Message {
+    match self {
+      Self::Store(error) => crate::messages::store_error(error),
+      Self::Runner(error) => control_message(error),
+    }
+  }
 }
 
 /// The disk guard of a project as it stands now.

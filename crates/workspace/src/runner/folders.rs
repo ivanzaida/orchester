@@ -5,7 +5,7 @@
 use orchester_core::{run::BranchName, workspaces::WorkspaceNumber};
 use orchester_ipc::{
   Command, Reply,
-  folders::{FolderSizes, FoldersCommand, FoldersReply},
+  folders::{ExecutorFolder, FolderList, FolderSizes, FoldersCommand, FoldersReply},
 };
 
 use super::{RequestError, RunRequestError, Runners};
@@ -13,6 +13,7 @@ use crate::workspace::OpenProject;
 
 /// A project's executor folders, asked of its runner, which is started if needed. Each call blocks until the runner
 /// answered: call it off the async runtime, as the blocking work around it already is.
+#[derive(Clone)]
 pub struct ExecutorFolders {
   runners: Runners,
   project: OpenProject,
@@ -27,6 +28,22 @@ impl ExecutorFolders {
   pub fn sizes(&self, workspaces: Vec<WorkspaceNumber>) -> Result<FolderSizes, RunRequestError> {
     match self.ask(FoldersCommand::Sizes { workspaces })? {
       FoldersReply::Sizes(sizes) => Ok(sizes),
+      other => unexpected(&other),
+    }
+  }
+
+  /// Which of warm workspaces `workspaces` have a folder, and the names of the worktrees folder's folders, unsized.
+  pub fn list(&self, workspaces: Vec<WorkspaceNumber>) -> Result<FolderList, RunRequestError> {
+    match self.ask(FoldersCommand::List { workspaces })? {
+      FoldersReply::Listed(list) => Ok(list),
+      other => unexpected(&other),
+    }
+  }
+
+  /// The size of `folder`; `None` when the runner could not read it.
+  pub fn measure(&self, folder: ExecutorFolder) -> Result<Option<u64>, RunRequestError> {
+    match self.ask(FoldersCommand::Measure { folder })? {
+      FoldersReply::Measured { bytes } => Ok(bytes),
       other => unexpected(&other),
     }
   }

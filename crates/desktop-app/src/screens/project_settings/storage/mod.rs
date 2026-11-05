@@ -64,7 +64,7 @@ impl Component for StoragePage {
       modal: ctx.signal(false),
       saved_keep: ctx.signal(None),
       save: work::save(ctx, props.project.open.clone()),
-      prepare: work::prepare(ctx, props.project.open.repo_root.clone()),
+      prepare: work::prepare(ctx, props.project.open.clone()),
       remove: work::remove(ctx, props.project.open.clone()),
       failures: ctx.signal(Failures::default()),
     };
@@ -81,7 +81,7 @@ impl Component for StoragePage {
     );
     let reading = read::follow(
       ctx,
-      props.project.open.repo_root.clone(),
+      &props.project.open,
       (
         revision,
         props.project.feed.states.get(),
@@ -240,7 +240,7 @@ impl Component for Entry {
     );
     let inventory = read::follow(
       ctx,
-      props.project.open.repo_root.clone(),
+      &props.project.open,
       (0, props.project.feed.states.get(), props.project.feed.saves.get()),
     );
     let kept = inventory

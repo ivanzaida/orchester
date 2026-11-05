@@ -1,10 +1,13 @@
 //! The desktop's requests about the folders the project's runs leave here ([`FoldersCommand`],
-//! `docs/architecture/remote-runners.md`, rules 5 and 6): the sizes of warm workspaces and of the worktrees runs made
-//! before workspaces, and cleaning, discarding or keeping a workspace's files with git, each folder taken from the
-//! execution root. The desktop reserved the workspace in the project database first and records what became of it;
-//! nothing here writes the database.
+//! `docs/architecture/remote-runners.md`, rules 5 and 6): which warm workspaces and worktrees runs made before
+//! workspaces are there and their sizes, and cleaning, discarding or keeping a workspace's files with git, each folder
+//! taken from the execution root. The desktop reserved the workspace in the project database first and records what
+//! became of it; nothing here writes the database.
 
-use std::{path::Path, time::Duration};
+use std::{
+  path::{Component, Path},
+  time::Duration,
+};
 
 use orchester_core::{
   integration::{
@@ -17,7 +20,7 @@ use orchester_core::{
 use orchester_exec::{ProcessRunner, disk_space::folder_size};
 use orchester_ipc::{
   Rejection,
-  folders::{FolderSizes, FoldersCommand, FoldersReply},
+  folders::{ExecutorFolder, FolderList, FolderSizes, FoldersCommand, FoldersReply},
 };
 
 use crate::{
@@ -46,6 +49,8 @@ fn serve(execution: &ExecutionRoot, command: FoldersCommand) -> Result<FoldersRe
     |number: WorkspaceNumber| move |error: WorkspaceGitError| failed(&format!("workspace {number}"), &error);
   match command {
     FoldersCommand::Sizes { workspaces } => Ok(FoldersReply::Sizes(sizes(execution, workspaces))),
+    FoldersCommand::List { workspaces } => list(execution, workspaces).map(FoldersReply::Listed),
+    FoldersCommand::Measure { folder } => measure(execution, &folder).map(|bytes| FoldersReply::Measured { bytes }),
     FoldersCommand::Clean { number } => {
       let path = execution.workspace(number);
       let before = folder_size(&path).unwrap_or(0);
@@ -101,4 +106,58 @@ fn sizes(execution: &ExecutionRoot, numbers: Vec<WorkspaceNumber>) -> FolderSize
     })
     .unwrap_or_default();
   FolderSizes { workspaces, worktrees }
+}
+
+/// Which of `numbers` have a folder, and the names of the worktrees folder's folders, none sized: Storage lists its
+/// rows first and measures them after ([`measure`]). A worktrees folder that is not there, as in a new project, lists
+/// none; one that cannot be listed is refused, so that it never looks empty. A name that is not text is left out, as
+/// no run's folder is named so.
+fn list(execution: &ExecutionRoot, numbers: Vec<WorkspaceNumber>) -> Result<FolderList, Rejection> {
+  let workspaces = numbers
+    .into_iter()
+    .filter(|number| execution.workspace(*number).is_dir())
+    .collect();
+  let folder = execution.repository().join(WORKTREES_DIR);
+  let entries = match std::fs::read_dir(&folder) {
+    Ok(entries) => entries,
+    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+      return Ok(FolderList {
+        workspaces,
+        worktrees: Vec::new(),
+      });
+    }
+    Err(error) => return Err(failed("the worktrees folder cannot be listed", &error)),
+  };
+  let mut worktrees = Vec::new();
+  for entry in entries {
+    let entry = entry.map_err(|error| failed("the worktrees folder cannot be listed", &error))?;
+    if entry.path().is_dir()
+      && let Ok(name) = entry.file_name().into_string()
+    {
+      worktrees.push(name);
+    }
+  }
+  Ok(FolderList { workspaces, worktrees })
+}
+
+/// The size of `folder`; `None`, logged, when it cannot be read. A worktree name that is not one folder of the
+/// worktrees folder is refused instead of sized: it could lead anywhere.
+fn measure(execution: &ExecutionRoot, folder: &ExecutorFolder) -> Result<Option<u64>, Rejection> {
+  let path = match folder {
+    ExecutorFolder::Worktree { name } => {
+      let mut parts = Path::new(name).components();
+      if !matches!((parts.next(), parts.next()), (Some(Component::Normal(_)), None)) {
+        return Err(Rejection::Failed {
+          detail: format!("{name:?} is not a folder of the worktrees folder"),
+        });
+      }
+      execution.worktree(name)
+    }
+    ExecutorFolder::Workspace { number } => execution.workspace(*number),
+  };
+  Ok(
+    folder_size(&path)
+      .inspect_err(|error| tracing::warn!(%error, path = %path.display(), "cannot measure the folder"))
+      .ok(),
+  )
 }

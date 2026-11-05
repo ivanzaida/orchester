@@ -1,4 +1,6 @@
-//! Storage's full inventory, read without sizing first, then measured off the UI thread.
+//! Storage's full inventory, listed by the project's runner without sizing first, then measured row by row off the
+//! UI thread, each row by the runner too (`docs/architecture/remote-runners.md`, rule 5). Which rows there are and
+//! what each says come from the project database here.
 use std::{
   cmp::Reverse,
   path::{Path, PathBuf},
@@ -6,15 +8,17 @@ use std::{
 
 use orchester_core::{
   id::RunId,
+  integration::WORKTREES_DIR,
   run::{PauseReason, RunStatus},
   store::{RunStore, TaskStore, WorkspaceStore},
   time::Timestamp,
   workspaces::{CleanableKind, Holder},
 };
-use orchester_exec::disk_space::folder_size;
+use orchester_ipc::folders::ExecutorFolder;
 use orchester_store::{ProjectDb, StoreError};
 
-use crate::tasks::detail::run_store_error;
+use super::FoldersReadError;
+use crate::{runner::ExecutorFolders, tasks::detail::run_store_error};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum KeptKind {
@@ -44,42 +48,46 @@ impl KeptRow {
       _ => None,
     }
   }
+
+  /// The executor's folder the row is, as the runner names it.
+  fn folder(&self) -> Option<ExecutorFolder> {
+    match self.kind {
+      KeptKind::Worktree(_) => worktree_folder(&self.path),
+      KeptKind::Workspace(number) => Some(ExecutorFolder::Workspace { number }),
+    }
+  }
 }
 
-pub fn inventory(repo_root: &Path) -> Result<Vec<KeptRow>, StoreError> {
+/// The worktrees folder's folder at `path`, by its name.
+fn worktree_folder(path: &Path) -> Option<ExecutorFolder> {
+  let name = path.file_name()?.to_str()?;
+  Some(ExecutorFolder::Worktree { name: name.to_owned() })
+}
+
+/// The rows of the project at `repo_root`, none sized: the worktrees folder's folders a run of the project owns, its
+/// own or a step's, and the warm workspaces whose folder is there, as its runner (`folders`) finds them. It blocks on
+/// the runner: read it off the UI thread and off the async runtime.
+pub fn inventory(repo_root: &Path, folders: &ExecutorFolders) -> Result<Vec<KeptRow>, FoldersReadError> {
   let db = ProjectDb::open_read_only(repo_root)?;
+  let records = db.workspaces()?;
+  let present = folders.list(records.iter().map(|record| record.number).collect())?;
   let mut rows = Vec::new();
-  let folder = repo_root.join(orchester_core::integration::WORKTREES_DIR);
-  // A new project has no worktree directory; other IO failures must not look empty.
-  let entries = match std::fs::read_dir(&folder) {
-    Ok(entries) => Some(entries),
-    Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
-    Err(source) => return Err(StoreError::Io { path: folder, source }),
-  };
-  if let Some(entries) = entries {
+  if !present.worktrees.is_empty() {
     let owners = db.worktree_folder_runs()?;
-    for entry in entries {
-      let entry = entry.map_err(|source| StoreError::Io {
-        path: folder.clone(),
-        source,
-      })?;
-      let name = entry.file_name();
-      let Some(run) = name.to_str().and_then(|name| owners.get(name)).copied() else {
+    for name in present.worktrees {
+      let Some(&run) = owners.get(&name) else {
         continue;
       };
-      let path = entry.path();
-      if path.is_dir()
-        && let Some(row) = run_row(&db, run, path)?
-      {
+      if let Some(row) = run_row(&db, run, repo_root.join(WORKTREES_DIR).join(&name))? {
         rows.push(row);
       }
     }
   }
-  for record in db.workspaces()? {
-    let path = record.number.path(repo_root);
-    if !path.is_dir() {
+  for record in records {
+    if !present.workspaces.contains(&record.number) {
       continue;
     }
+    let path = record.number.path(repo_root);
     let held = match record.holder {
       Some(Holder::Run { run }) => Some(run),
       _ => None,
@@ -139,11 +147,24 @@ fn run_row(db: &ProjectDb, run: RunId, path: PathBuf) -> Result<Option<KeptRow>,
   }))
 }
 
-/// One measured row; an unreadable size stays unknown instead of becoming zero.
-pub fn measure(row: &mut KeptRow) {
-  row.bytes = folder_size(&row.path)
-    .inspect_err(|error| tracing::warn!(%error, path = %row.path.display(), "cannot measure storage folder"))
-    .ok();
+/// One row measured by the project's runner (`folders`), which blocks; an unreadable size, or a runner that did not
+/// answer, stays unknown instead of becoming zero.
+pub fn measure(row: &mut KeptRow, folders: &ExecutorFolders) {
+  row.bytes = row.folder().and_then(|folder| measured(folders, folder, &row.path));
+}
+
+/// The size of the worktree folder at `path`, one of the worktrees folder's, measured by the project's runner
+/// (`folders`), which blocks; unknown as in [`measure`].
+pub fn measure_worktree(folders: &ExecutorFolders, path: &Path) -> Option<u64> {
+  worktree_folder(path).and_then(|folder| measured(folders, folder, path))
+}
+
+fn measured(folders: &ExecutorFolders, folder: ExecutorFolder, path: &Path) -> Option<u64> {
+  folders
+    .measure(folder)
+    .inspect_err(|error| tracing::warn!(%error, path = %path.display(), "cannot measure storage folder"))
+    .ok()
+    .flatten()
 }
 
 pub fn largest_first(rows: &mut [KeptRow]) {

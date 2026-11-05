@@ -104,6 +104,7 @@ Where the desktop touches a run's worktree today (`crates/workspace/src/`):
 | Open in editor, copy path of a run's file: still the local path, marked for a run on another computer | `files/open.rs` (`open_target`), `run_facts.rs:329` |
 | Recovery state of a run's folder: **through the runner** since protocol 44 (`Command::RunFolderState`, ORC-688) | `recovery/mod.rs` (`read_folder_states`), `runner/ask.rs`; the runner's `execution/coordinator/run_folder.rs`, `execution/executor/folder_state.rs` |
 | Warm workspaces' folders and sizes, ended worktrees' sizes | through the runner since ORC-689 (`Command::Folders`, `runner/folders.rs`); the desktop keeps the database's reservations |
+| Storage's inventory: which worktree and workspace folders are there, each row's size, the clean-up dialog's sizes | through the runner since protocol 51 (`FoldersCommand::List`, `FoldersCommand::Measure`, ORC-746): listed unsized, then measured row by row as before; the rows' rules stay the desktop's, from the database (`storage/inventory.rs`) |
 | Code index rebuild | Done (ORC-690): the runner builds it on `Command::RebuildCodeIndex` (protocol 43); `code_index::rebuild` asks it |
 | Orchestrator chat git tools in a run's worktree: **through the runner** since protocol 45 (`Command::RunGit`, ORC-691) | `orchestrator/git/host.rs`; the runner's `execution/executor/run_git.rs` |
 
