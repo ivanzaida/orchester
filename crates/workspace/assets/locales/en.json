@@ -92,6 +92,7 @@
       "localIntegration": "The merge continues in Local integration",
       "readyToMerge": "The run is ready to merge",
       "merged": "The run was merged",
+      "archived": "{{resource}} was archived on the team server: the run stopped",
       "failed": "The run failed",
       "planLimitNear": "{{percent}}% of a plan limit is used",
       "planLimitReset": "A plan limit was reset",

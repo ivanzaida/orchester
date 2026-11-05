@@ -267,6 +267,21 @@ impl RunSnapshot {
     &self.skills
   }
 
+  /// Whether the run pins any version of `resource`: its pipeline, a step's profile or tool, or an instruction, tool
+  /// or skill that reaches its agents.
+  pub fn pins(&self, resource: ResourceId) -> bool {
+    let executors = self.steps.iter().map(|step| match &step.executor {
+      StepExecutor::Agent { profile, .. } => profile,
+      StepExecutor::Tool { tool } => tool,
+    });
+    std::iter::once(&self.pipeline)
+      .chain(executors)
+      .chain(&self.instructions)
+      .chain(&self.tools)
+      .chain(&self.skills)
+      .any(|pinned| pinned.resource == resource)
+  }
+
   /// `key` and every step that depends on it, directly or transitively.
   pub fn downstream_of(&self, key: &StepKey) -> BTreeSet<StepKey> {
     let mut reached = BTreeSet::from([key.clone()]);

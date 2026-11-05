@@ -44,7 +44,7 @@ use crate::sharing::{SharingError, project::convert};
 
 /// Keeps `resource` as the server has it, with every version this computer does not have yet. While a version of it
 /// published here is being sent, its versions are read by the sending ([`RemoteResourceStore`]) instead: the server
-/// may have numbered that version already.
+/// may have numbered that version already. One archived only now stops the runs that pin it ([`Source::archived`]).
 pub(super) async fn sync(source: &impl Source, root: &Path, resource: SharedResource) -> Result<(), SharingError> {
   if resource.kind == SharedResourceKind::Skill {
     tracing::debug!(resource = %resource.id, "a shared skill is not kept on this computer yet");
@@ -82,7 +82,10 @@ pub(super) async fn sync(source: &impl Source, root: &Path, resource: SharedReso
     read = versions.len(),
     "a shared resource is kept"
   );
-  blocking(root, move |root| cache(root, &resource, &versions)).await
+  if blocking(root, move |root| cache(root, &resource, &versions)).await? {
+    source.archived(id).await;
+  }
+  Ok(())
 }
 
 /// Binds the reference of `choice` to the local connection, MCP server or secret a person chose (`None` unbinds it),
@@ -109,23 +112,25 @@ pub fn bind(root: &Path, choice: BoundReference, by: Answerer) -> Result<usize, 
 
 /// [`write`], except that a resource this computer cannot keep is left out with a warning instead of stopping the
 /// stream, which would read it again and fail again at every reconnect.
-fn cache(root: &Path, resource: &SharedResource, versions: &[SharedVersion]) -> Result<(), SharingError> {
+fn cache(root: &Path, resource: &SharedResource, versions: &[SharedVersion]) -> Result<bool, SharingError> {
   match write(root, resource, versions) {
     Err(SharingError::Store(error @ (StoreError::DuplicateSlug { .. } | StoreError::ResourceKindMismatch { .. }))) => {
       tracing::warn!(%error, resource = %resource.id, "a shared resource clashes with one of this project's");
-      Ok(())
+      Ok(false)
     }
     Err(error @ SharingError::InvalidAnswer(_)) => {
       tracing::warn!(%error, resource = %resource.id, "a shared resource's version cannot be read");
-      Ok(())
+      Ok(false)
     }
     written => written,
   }
 }
 
-fn write(root: &Path, shared: &SharedResource, versions: &[SharedVersion]) -> Result<(), SharingError> {
+/// Keeps `shared` with `versions`, archived or not as the server has it; whether it was archived only now.
+fn write(root: &Path, shared: &SharedResource, versions: &[SharedVersion]) -> Result<bool, SharingError> {
   let mut db = ProjectDb::open(root)?;
   db.keep_shared_resource(&resource(shared)?, shared.revision)?;
+  let archived_now = db.mark_shared_archived(shared.id, shared.archived, Timestamp::now())? && shared.archived;
   for version in versions {
     let bindings = bindings::bind_new(&mut db, &version.references)?;
     match shared.kind {
@@ -137,7 +142,7 @@ fn write(root: &Path, shared: &SharedResource, versions: &[SharedVersion]) -> Re
       SharedResourceKind::Skill => {}
     }
   }
-  Ok(())
+  Ok(archived_now)
 }
 
 fn resource(shared: &SharedResource) -> Result<Resource, SharingError> {

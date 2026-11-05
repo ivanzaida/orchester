@@ -686,7 +686,7 @@ count. `orchester-app` feeds it and shows what it decides (`crates/desktop-app/s
 | Group (default) | Cases |
 | --- | --- |
 | *Needs you* (on) | an agent's tool or command approval waits; an agent asks a question, or a step waits for a message; a plan waits for a decision; a run waits for a decision (retries used up, broke again, unverified, unchanged) |
-| *Stopped* (on) | a run stopped at a limit (its token budget or time limit, the daily or a group's budget, a step's budget, an account's plan limit); a run interrupted (crash, runner failure), unless the Orchestrator continued it first; the project's runner offline after its reconnects, or not started; a merge that stopped at conflicts or continues in Local integration |
+| *Stopped* (on) | a run stopped at a limit (its token budget or time limit, the daily or a group's budget, a step's budget, an account's plan limit); a run stopped because a resource it pins was archived on the team server (`docs/architecture/server.md`, row 79); a run interrupted (crash, runner failure), unless the Orchestrator continued it first; the project's runner offline after its reconnects, or not started; a merge that stopped at conflicts or continues in Local integration |
 | *Finished and info* (off) | a run ready to merge; a run merged (by the person, including a merge proposed by the Orchestrator that the person applied, or outside as git tells); a run failed with no route left; an account's plan window at 90 % or reset; an Orchestrator proposal waiting for the person; the daily report (ORC-47) once it exists |
 
 The Orchestrator's own direct actions (its answers, continuations, merges it carries out in its chat) are in its chat

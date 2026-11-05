@@ -48,6 +48,27 @@ impl ProjectDb {
   pub fn resource_removed_at(&self, id: ResourceId) -> Result<Option<Timestamp>, StoreError> {
     removed_at(&self.connection, id)
   }
+
+  /// Follows the server's archived mark of the team's resource `id`: archived, it is removed here as of `now`, so no
+  /// list shows it and no new run pins it; restored, it is back. A team resource cannot be removed here otherwise
+  /// (`RemoteResourceStore` refuses), so restoring undoes only the server's archive. Whether anything changed; a
+  /// resource this computer does not keep as the team's (a skill, or one kept *Not shared*) changes nothing.
+  pub fn mark_shared_archived(&mut self, id: ResourceId, archived: bool, now: Timestamp) -> Result<bool, StoreError> {
+    let changed = if archived {
+      self.connection.execute(
+        "INSERT INTO removed_resources (resource_id, removed_at) SELECT id, ?2 FROM resources \
+         WHERE id = ?1 AND sharing = 'shared' ON CONFLICT (resource_id) DO NOTHING",
+        params![id.to_string(), now.unix_millis()],
+      )?
+    } else {
+      self.connection.execute(
+        "DELETE FROM removed_resources WHERE resource_id = ?1 \
+         AND resource_id IN (SELECT id FROM resources WHERE sharing = 'shared')",
+        [id.to_string()],
+      )?
+    };
+    Ok(changed > 0)
+  }
 }
 
 pub(super) fn remove(
