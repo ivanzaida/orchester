@@ -233,27 +233,61 @@ async fn live_updates_merged_shared_task_done_when_git_alone_finds_the_merge() {
   assert_eq!(unsent(&desktop, task), None, "nothing says it was not sent");
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn live_updates_merged_shared_task_done_found_by_git_is_not_sent_over_a_teammates_status() {
-  let server = TeamServer::start(&[(ALICE, "Alice Moreau"), (BOB, "Bob Lind")], &[]);
-  let (desktop, task, _run) = merged_in_git(&server).await;
+/// Bob, a teammate, moves `task` to In progress on the server.
+async fn bob_moves(server: &TeamServer, task: TaskId) {
   let revision = server.revision(task);
-  Member::of(&server, BOB)
+  Member::of(server, BOB)
     .move_to(task, revision, WorkflowStatus::InProgress)
     .await;
+}
 
-  desktop.servers.end_claims(&Programs::processes()).await;
-  desktop.servers.send_automatic_statuses().await;
-
+fn assert_bobs_status_stays(server: &TeamServer, desktop: &Desktop, task: TaskId) {
   assert!(!server.claimed_now(task), "the merge completed the claim");
   assert_eq!(server.workflow(task), WorkflowStatus::InProgress, "Bob's status stays");
-  let unsent = unsent(&desktop, task).expect("the task says the Done was not sent");
+  let unsent = unsent(desktop, task).expect("the task says the Done was not sent");
   assert_eq!(
     unsent.reason,
     NotSent::Changed {
       current: WorkflowStatus::InProgress
     }
   );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn live_updates_merged_shared_task_done_found_by_git_is_not_sent_over_a_teammates_status() {
+  let server = TeamServer::start(&[(ALICE, "Alice Moreau"), (BOB, "Bob Lind")], &[]);
+  let (desktop, task, _run) = merged_in_git(&server).await;
+  bob_moves(&server, task).await;
+
+  // The sync caches Bob's status before it ends the claim.
+  desktop.servers.sync_shared(&Programs::processes()).await;
+  desktop.servers.send_automatic_statuses().await;
+
+  assert_bobs_status_stays(&server, &desktop, task);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn live_updates_merged_shared_task_done_not_sent_stays_so_when_the_claims_end_is_tried_again() {
+  let server = TeamServer::start(&[(ALICE, "Alice Moreau"), (BOB, "Bob Lind")], &[]);
+  let (mut desktop, task, run) = merged_in_git(&server).await;
+  bob_moves(&server, task).await;
+  server.refuse_run_reports(1);
+  desktop.servers.end_claims(&Programs::processes()).await;
+  assert!(server.claimed_now(task), "the refused report kept the claim");
+
+  // Orchester's merge writes its record late, and the next claim's end tries again.
+  let merge = RunMerge {
+    run: run.id(),
+    into: BranchName::new("main").expect("a branch"),
+    revision: Revision::new(&"b".repeat(40)).expect("a revision"),
+    kind: MergeKind::MergeCommit,
+    merged_at: support::at(13),
+  };
+  desktop.fixture.db.save_run_merge(&merge).expect("the merge");
+  desktop.servers.end_claims(&Programs::processes()).await;
+  desktop.servers.send_automatic_statuses().await;
+
+  assert_bobs_status_stays(&server, &desktop, task);
 }
 
 #[tokio::test(flavor = "multi_thread")]

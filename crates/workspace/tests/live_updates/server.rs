@@ -7,6 +7,7 @@
 
 mod publishing;
 mod resources;
+mod runs;
 
 use std::{
   io::Write,
@@ -17,14 +18,12 @@ use std::{
 };
 
 use orchester_api::{
-  Attribution, ClaimAction, ClaimTake, Delta, Event, RunReport, RunStatus, RunStep, SharedClaim, SharedProject,
-  SharedResource, SharedTag, SharedTask, SharedVersion, SnapshotBegin, SnapshotEnd, SnapshotTasks, TaskChanged,
-  TaskClaim, TaskContent, TaskPatch, TaskRun, UserRef,
+  Attribution, ClaimAction, ClaimTake, Delta, Event, SharedClaim, SharedProject, SharedResource, SharedTag, SharedTask,
+  SharedVersion, SnapshotBegin, SnapshotEnd, SnapshotTasks, TaskChanged, TaskClaim, TaskContent, TaskPatch, UserRef,
 };
 use orchester_core::{
   blob::ContentHash,
   id::{ClaimId, ProjectId, TagId, TaskId, UserId},
-  run::TaskPhase,
   sharing::{MemberRole, TaskRevision},
   task::{
     TaskStatus,
@@ -71,6 +70,8 @@ struct State {
   /// Streams opened before this generation end.
   generation: u64,
   refuse_streams: usize,
+  /// How many run progress reports are refused next ([`runs`]).
+  refuse_runs: usize,
   refuse_requests: bool,
   clock: i64,
 }
@@ -117,6 +118,7 @@ impl TeamServer {
         revoked: Vec::new(),
         generation: 0,
         refuse_streams: 0,
+        refuse_runs: 0,
         refuse_requests: false,
         clock: 1_000,
       }),
@@ -363,7 +365,9 @@ fn answer(shared: &Shared, project: ProjectId, mut stream: TcpStream) {
     }
     ("PATCH", ["tasks", task]) => change(shared, &user, task.parse().expect("a task id"), &request, &mut stream),
     ("POST", ["tasks", task, "claim"]) => claim(shared, &user, task.parse().expect("a task id"), &request, &mut stream),
-    ("PUT", ["tasks", task, "run"]) => run(shared, &user, task.parse().expect("a task id"), &request, &mut stream),
+    ("PUT", ["tasks", task, "run"]) => {
+      runs::run(shared, &user, task.parse().expect("a task id"), &request, &mut stream)
+    }
     ("PUT", ["catalog"]) => {
       let report = serde_json::from_slice(request.bytes()).expect("a JSON report");
       shared.state.lock().expect("state").catalogs.push(report);
@@ -446,49 +450,6 @@ fn claim(shared: &Shared, user: &UserRef, id: TaskId, request: &Request, stream:
     action: ClaimAction::Taken,
   };
   state.append(user, delta, Event::TaskClaim);
-  drop(state);
-  shared.appended.notify_all();
-  respond(stream, 200, &json!({ "task": confirmed }));
-}
-
-/// `PUT …/tasks/{task}/run`: the run's progress; a merged run's completes the task's claim.
-fn run(shared: &Shared, user: &UserRef, id: TaskId, request: &Request, stream: &mut TcpStream) {
-  let report: RunReport = request.json();
-  let mut state = shared.state.lock().expect("state");
-  let at = state.tick();
-  let task = state.task(id);
-  task.has_run = true;
-  task.run = Some(RunStatus {
-    holder: user.clone(),
-    number: report.number,
-    phase: report.phase,
-    step: report.step.clone(),
-    started_at: report.started_at,
-    phase_since: report.phase_since,
-    updated_at: at,
-  });
-  let completed = report.phase == TaskPhase::Merged && task.claim.take().is_some();
-  let confirmed = task.clone();
-  let delta = TaskRun {
-    task: id,
-    number: report.number,
-    phase: report.phase,
-    step: report.step.map(|step| RunStep {
-      key: step.to_lowercase(),
-      name: step,
-    }),
-    phase_since: report.phase_since,
-    updated_at: at,
-  };
-  state.append(user, delta, Event::TaskRun);
-  if completed {
-    let delta = TaskClaim {
-      task: id,
-      claim: None,
-      action: ClaimAction::Completed,
-    };
-    state.append(user, delta, Event::TaskClaim);
-  }
   drop(state);
   shared.appended.notify_all();
   respond(stream, 200, &json!({ "task": confirmed }));

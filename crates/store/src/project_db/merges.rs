@@ -47,8 +47,11 @@ impl MergeStore for ProjectDb {
     )?;
     let task = crate::rows::parse("task id", &task)?;
     // A run of inputs the team server accepted never changes its task here: the server keeps the task's status, and
-    // whether a merged team run makes its task Done is open (D4).
-    if !super::run_inputs::is_team_run(&transaction, merge.run)? {
+    // whether a merged team run makes its task Done is open (D4). A Done its claim's end recorded first, from git, and
+    // did not send stays not sent (ORC-750).
+    if !super::run_inputs::is_team_run(&transaction, merge.run)?
+      && !super::automatic_status::merged_done_not_sent(&transaction, task, merge.run)?
+    {
       super::organization::automatic(
         &transaction,
         task,
