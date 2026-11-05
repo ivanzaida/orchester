@@ -1,6 +1,10 @@
-use orchester_api::v2::{
-  AuthorityError, AuthorityErrorCode, AuthorityErrorShapeError, BundleRef, CommandRequest, CommandResult, DecisionId,
-  ErrorDetails, EventCursor, ExpectedRevision, ExpectedRevisions, LocalEffect, OperationRead, RevisionTarget, Subject,
+use orchester_api::{
+  releases::ReleaseVersion,
+  v2::{
+    AuthorityError, AuthorityErrorCode, AuthorityErrorShapeError, BundleRef, CommandRequest, CommandResult, DecisionId,
+    ErrorDetails, EventCursor, ExpectedRevision, ExpectedRevisions, LocalEffect, OperationRead, RevisionTarget,
+    Subject,
+  },
 };
 use orchester_core::{
   blob::ContentHash,
@@ -216,5 +220,55 @@ fn authority_operations_error_details_belong_to_their_code() {
     json!({"code":"teapot","details":{}}),
   ] {
     assert!(serde_json::from_value::<AuthorityError>(invalid).is_err());
+  }
+}
+
+#[test]
+fn authority_operations_unsupported_contract_carries_the_required_version() {
+  let required_version = ReleaseVersion::parse("0.4.0").expect("version");
+  let error = AuthorityError::new(
+    None,
+    AuthorityErrorCode::UnsupportedContract,
+    ErrorDetails::UnsupportedContract {
+      required_version: required_version.clone(),
+    },
+  )
+  .expect("error");
+  roundtrip(
+    &error,
+    &json!({"code":"unsupported_contract","details":{"required_version":"0.4.0"}}),
+  );
+  assert_eq!(error.code().status(), 426);
+  assert_eq!(error.details(), &ErrorDetails::UnsupportedContract { required_version });
+
+  assert_eq!(
+    AuthorityError::new(None, AuthorityErrorCode::UnsupportedContract, ErrorDetails::None),
+    Err(AuthorityErrorShapeError::DetailsMismatch(
+      AuthorityErrorCode::UnsupportedContract
+    ))
+  );
+  let version = ErrorDetails::UnsupportedContract {
+    required_version: ReleaseVersion::parse("0.4.0").expect("version"),
+  };
+  assert_eq!(
+    AuthorityError::new(None, AuthorityErrorCode::Unavailable, version),
+    Err(AuthorityErrorShapeError::DetailsMismatch(
+      AuthorityErrorCode::Unavailable
+    ))
+  );
+  for invalid in [
+    json!({"code":"unsupported_contract","details":{}}),
+    json!({"code":"unsupported_contract","details":{"required_version":"0.4"}}),
+    json!({"code":"unsupported_contract","details":{"required_version":"v0.4.0"}}),
+    json!({"code":"unsupported_contract","details":{"required_version":"0.4.0+build"}}),
+    json!({"code":"unsupported_contract","details":{"required_version":null}}),
+    json!({"code":"unsupported_contract","details":{"required_version":"0.4.0","decisions":["D1"]}}),
+    json!({"code":"decision_required","details":{"required_version":"0.4.0","decisions":["D1"]}}),
+    json!({"code":"invalid","details":{"required_version":"0.4.0"}}),
+  ] {
+    assert!(
+      serde_json::from_value::<AuthorityError>(invalid.clone()).is_err(),
+      "{invalid}"
+    );
   }
 }
