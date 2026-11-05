@@ -59,7 +59,10 @@ use self::{
   worker::{Stop, Worker},
 };
 pub use self::{orchester_tools::outside_read_refusals, qa_app::QaSlots};
-pub(super) use self::{qa_app::QaApps, service::Services};
+pub(super) use self::{
+  qa_app::QaApps,
+  service::{Services, ShownServiceError},
+};
 use super::{
   record::RecordError,
   run::{ExecutionError, RunTask},

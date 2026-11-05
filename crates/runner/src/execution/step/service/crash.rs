@@ -103,7 +103,7 @@ impl InvocationServices {
         stopped.iter().filter_map(|other| running.remove_entry(other)).collect();
       self.note(&name, ServicePhase::Stopped, Some(code));
       for other in &stopped {
-        self.note(other, ServicePhase::Stopped, None);
+        self.note_stopped_for(other, &name);
       }
       stop_aside(needs_it);
       let watched = self.watched.lock();

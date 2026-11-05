@@ -1,0 +1,92 @@
+{
+  "run_services": {
+    "step": "{{number}} {{step}}",
+    "header": {
+      "stack": "Stack {{names}}",
+      "started": "Started {{names}}",
+      "and": "{{first}} and {{last}}",
+      "count": {
+        "one": "1 service",
+        "other": "{{count}} services"
+      },
+      "startedBy": "started by {{step}} at {{time}}",
+      "startedByAgent": "started by the agent at {{time}}",
+      "personStarted": "{{name}} by you at {{time}}",
+      "stopAll": "Stop all"
+    },
+    "columns": {
+      "state": "State",
+      "service": "Service",
+      "port": "Port",
+      "address": "Address · opens in the Browser tab",
+      "uptime": "Uptime"
+    },
+    "state": {
+      "starting": "Starting",
+      "ready": "Ready",
+      "crashed": "Crashed",
+      "stopped": "Stopped"
+    },
+    "driver": {
+      "none": "no UI",
+      "native": "native",
+      "mcp": "mcp"
+    },
+    "port": ":{{port}}",
+    "uptime": {
+      "minutes": "{{minutes}}m {{seconds}}s",
+      "hours": "{{hours}}h {{minutes}}m",
+      "none": "—"
+    },
+    "waiting": {
+      "port": "Waiting for port {{port}} to open · {{elapsed}} s of {{timeout}} s",
+      "http": "Waiting for HTTP 2xx on {{path}} · {{elapsed}} s of {{timeout}} s",
+      "line": "Waiting for its ready line · {{elapsed}} s of {{timeout}} s",
+      "unknown": "Waiting until it is ready · {{elapsed}} s"
+    },
+    "exited": "Exited with code {{code}} at {{time}}",
+    "ended": "Ended by a signal at {{time}}",
+    "stoppedFor": "Stopped: it needs {{name}}",
+    "stoppedAt": "Stopped at {{time}}",
+    "actions": {
+      "restart": "Restart",
+      "stop": "Stop",
+      "start": "Start",
+      "showLog": "Show the log of {{name}}",
+      "hideLog": "Hide the log of {{name}}",
+      "open": "Open {{url}} in the Browser tab"
+    },
+    "refused": {
+      "restart": "{{name}} didn't restart",
+      "start": "{{name}} didn't start",
+      "stop": "{{name}} didn't stop",
+      "open": "The Browser tab didn't open the address"
+    },
+    "log": {
+      "title": "{{name}} · live log",
+      "count": {
+        "none": "no lines yet",
+        "one": "last line",
+        "other": "last {{count}} lines"
+      },
+      "follow": "Follow",
+      "openFull": "Open full log",
+      "fullTitle": "{{name}} · full log",
+      "fullWhat": "The lines Orchester keeps of {{name}}, oldest first, its secret values replaced.",
+      "close": "Close",
+      "failed": "The log of {{name}} couldn't be read"
+    },
+    "note": "Orchester stops these services when {{step}} ends, when the run pauses, and while it waits for you. Ports and URLs are this run's own.",
+    "noteNoStep": "Orchester stops these services when their step ends, when the run pauses, and while it waits for you. Ports and URLs are this run's own.",
+    "empty": {
+      "title": "No services yet",
+      "body": "When an agent of this run starts a service or a stack, it shows here with its state, address and live log."
+    },
+    "idle": {
+      "title": "No services run now",
+      "body": "A run's services live while its step works: Orchester stops them when the step ends, when the run pauses and while it waits for you."
+    },
+    "reading": "Reading the run's services…",
+    "failed": "The run's services couldn't be read"
+  }
+}

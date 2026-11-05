@@ -23,6 +23,9 @@
 //!
 //! A start asks a person once for everything it runs, unless the project's rules approve every service of it
 //! ([`order`], `orchester_core::run::ProjectScope`). Not here yet: the computer's service slots.
+//!
+//! The task page's Services tab reads a run's services, their logs, and stops and restarts them through the service
+//! tools of the run's invocations ([`shown`]).
 
 mod crash;
 mod data;
@@ -31,6 +34,7 @@ mod order;
 mod port;
 mod readiness;
 mod seed;
+mod shown;
 mod task;
 
 use std::{
@@ -50,12 +54,15 @@ use orchester_core::{
   orchester_tools::ToolResult,
   resource::CommandEnvironment,
   secret::SecretVault,
-  service::{ServiceName, ServicePhase, ServiceState, ServiceStatus},
+  service::{ServiceName, ServicePhase, ServiceState, ServiceStatus, StackName},
+  time::Timestamp,
 };
 use orchester_exec::process_tree::ProcessTree;
+use orchester_ipc::services::ServiceStarter;
 use parking_lot::Mutex;
 use serde_json::json;
 
+pub(in crate::execution) use self::shown::ShownServiceError;
 pub(in crate::execution::step) use self::{
   launch::{project_secret, published as published_services, published_stacks},
   order::Started,
@@ -65,11 +72,13 @@ use self::{
   readiness::SharedLog,
 };
 
-/// The services of the runner's invocations that have not ended, and the ports they hold.
+/// The services of the runner's invocations that have not ended, the ports they hold, and the service tools of each
+/// invocation, which the Services tab reaches them through.
 #[derive(Default)]
 pub(in crate::execution) struct Services {
   ports: Arc<Ports>,
   invocations: Mutex<HashMap<InvocationId, Arc<InvocationServices>>>,
+  tools: Mutex<HashMap<InvocationId, StepServices>>,
 }
 
 /// One invocation's services: its starts one at a time, the services it keeps, what it knows of each service it
@@ -83,9 +92,27 @@ pub(in crate::execution::step) struct InvocationServices {
   /// Set once the watcher of its crashes started ([`crash`]).
   watching: AtomicBool,
   starting: Mutex<()>,
+  /// What the start under way brings up and who asked for it, which each service it starts is noted with.
+  origin: Mutex<Origin>,
   running: Mutex<BTreeMap<ServiceName, Running>>,
   watched: Mutex<BTreeMap<ServiceName, Watch>>,
   notices: Mutex<Vec<String>>,
+}
+
+/// What a start brings up, a stack's services or a service with what it needs, and who asked for it.
+#[derive(Clone)]
+struct Origin {
+  stack: Option<StackName>,
+  by: ServiceStarter,
+}
+
+impl Default for Origin {
+  fn default() -> Self {
+    Self {
+      stack: None,
+      by: ServiceStarter::Agent,
+    }
+  }
 }
 
 impl InvocationServices {
@@ -97,14 +124,31 @@ impl InvocationServices {
     self.waiting.load(Ordering::Acquire)
   }
 
-  /// Notes that the service `name` reached `phase`, and how its program exited when `exit` says it was seen to.
+  /// Notes that the service `name` reached `phase`, and how its program exited when `exit` says it was seen to; a
+  /// service that stopped or exited is noted with when.
   fn note(&self, name: &ServiceName, phase: ServicePhase, exit: Option<Option<i32>>) {
     if let Some(watch) = self.watched.lock().get_mut(name) {
       watch.phase = phase;
       if exit.is_some() {
         watch.exit = exit;
       }
+      if (phase == ServicePhase::Stopped || watch.exit.is_some()) && watch.ended_at.is_none() {
+        watch.ended_at = Some(Timestamp::now());
+      }
     }
+  }
+
+  /// Notes that the service `name` was stopped because `crashed`, which it needs, crashed.
+  fn note_stopped_for(&self, name: &ServiceName, crashed: &ServiceName) {
+    self.note(name, ServicePhase::Stopped, None);
+    if let Some(watch) = self.watched.lock().get_mut(name) {
+      watch.stopped_for = Some(crashed.clone());
+    }
+  }
+
+  /// The starts after this one bring up `origin`'s services; the earlier origin, to note again once they are up.
+  fn set_origin(&self, origin: Origin) -> Origin {
+    std::mem::replace(&mut *self.origin.lock(), origin)
   }
 }
 
@@ -154,9 +198,16 @@ struct Watch {
   port: u16,
   url: String,
   started: Instant,
+  started_at: Timestamp,
+  /// When it was seen to exit or was stopped.
+  ended_at: Option<Timestamp>,
+  /// What brought it up, and who.
+  origin: Origin,
   phase: ServicePhase,
   /// The exit code of its program, once it was seen to exit on its own.
   exit: Option<Option<i32>>,
+  /// The service it needs whose crash stopped it.
+  stopped_for: Option<ServiceName>,
 }
 
 impl Watch {
@@ -178,6 +229,8 @@ impl Services {
 
   /// `invocation` ended: its services stop and free their ports, and a start of its still under way gives up.
   pub(in crate::execution) fn end(&self, invocation: InvocationId) {
+    // Its tools hold its services and these: forgetting them breaks that cycle.
+    self.tools.lock().remove(&invocation);
     let Some(state) = self.invocations.lock().remove(&invocation) else {
       return;
     };
@@ -217,6 +270,7 @@ fn stop_aside(running: BTreeMap<ServiceName, Running>) {
 }
 
 /// The service tools of one invocation.
+#[derive(Clone)]
 pub(in crate::execution::step) struct StepServices {
   services: Arc<Services>,
   state: Arc<InvocationServices>,

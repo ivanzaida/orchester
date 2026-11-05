@@ -142,9 +142,20 @@ pub fn clock_time(at: SystemTime) -> String {
 
 /// [`clock_time`] of a stored instant.
 pub fn clock(at: Timestamp) -> String {
+  clock_time(system_time(at))
+}
+
+/// Local wall-clock time of `at` to the second, e.g. `14:32:07`, as a service's log lines show when they came.
+pub fn clock_seconds(at: Timestamp) -> String {
+  chrono::DateTime::<chrono::Local>::from(system_time(at))
+    .format("%H:%M:%S")
+    .to_string()
+}
+
+fn system_time(at: Timestamp) -> SystemTime {
   // Stored times are after 1970; an earlier one reads as the epoch rather than failing.
   let millis = u64::try_from(at.unix_millis()).unwrap_or_default();
-  clock_time(UNIX_EPOCH + Duration::from_millis(millis))
+  UNIX_EPOCH + Duration::from_millis(millis)
 }
 
 /// The i18n keys of the months' short names, January first.

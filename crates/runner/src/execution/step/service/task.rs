@@ -45,7 +45,8 @@ impl RunTask {
     Ok(stacks.iter().map(|stack| stack.name().clone()).collect())
   }
 
-  /// The service tools of `invocation`, whose agent works in `worktree` with the project's `environment`.
+  /// The service tools of `invocation`, whose agent works in `worktree` with the project's `environment`; the
+  /// Services tab reaches the invocation's services through them until it ends.
   pub(in crate::execution::step) fn step_services(
     &self,
     invocation: InvocationId,
@@ -53,7 +54,7 @@ impl RunTask {
     environment: &CommandEnvironment,
   ) -> StepServices {
     let (root, run, notifier) = (self.root.clone(), self.run.id(), self.notifier.clone());
-    StepServices {
+    let tools = StepServices {
       services: Arc::clone(&self.services),
       state: self.services.register(invocation),
       root: self.root.clone(),
@@ -67,6 +68,8 @@ impl RunTask {
         let problem = RunnerProblem::ServiceCrashed(crash.clone());
         runner_note::note(&root, (run, invocation), problem, &notifier);
       }),
-    }
+    };
+    self.services.keep_tools(invocation, tools.clone());
+    tools
   }
 }

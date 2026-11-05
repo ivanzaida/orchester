@@ -13,7 +13,7 @@ use crate::{routes::Screen, theme::IconSize};
 /// and the table cannot drift apart. The font names some glyphs as lucide did before its renames:
 /// the design's `chart-column` is the font's `bar-chart-3`, `circle-alert` its `alert-circle`,
 /// `circle-check` its `check-circle-2`, `clock` its `clock-4`, `file-pen` its `file-edit`, `file-warning` its
-/// `file-exclamation-point`, `house` its `home`, `loader-circle` its `loader-2`,
+/// `file-exclamation-point`, `house` its `home`, `layers` its `layers-3`, `loader-circle` its `loader-2`,
 /// `message-circle-question` its `message-circle-question-mark`, `plug-zap` its `plug-zap-2`,
 /// `square-arrow-out-up-right` its `external-link` ([`Icon::ExternalLink`]), `square-plus` its `plus-square`,
 /// `shield-question` its `shield-question-mark`, `shield-x` its `shield-close`, `triangle-alert` its
@@ -173,6 +173,7 @@ icons! {
   Key => '\u{e0fd}',
   KeyRound => '\u{e4a3}',
   Laptop => '\u{e1cd}',
+  Layers => '\u{e529}',
   Layers2 => '\u{e52a}',
   LayoutDashboard => '\u{e1c1}',
   LayoutGrid => '\u{e0ff}',

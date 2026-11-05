@@ -14,6 +14,7 @@ use orchester_core::{
   secret::{SecretName, SecretValue, SecretVault},
   service::{RunValues, Service, ServiceLog, ServicePhase, Stack},
   store::{ResourceStore, SecretStore},
+  time::Timestamp,
 };
 use orchester_exec::process_tree::ProcessTree;
 use orchester_store::{ProjectDb, StoreError};
@@ -83,6 +84,7 @@ impl StepServices {
     let (mut tree, mut secrets, container) = self.start_program(service, &values, data, port)?;
     secrets.extend(headers.iter().map(|(_, secret)| secret.clone()));
     let log = Arc::new(Mutex::new(ServiceLog::new(secrets.clone())));
+    let origin = self.state.origin.lock().clone();
     self.state.watched.lock().insert(
       name.clone(),
       Watch {
@@ -90,8 +92,12 @@ impl StepServices {
         port,
         url: url.clone(),
         started: Instant::now(),
+        started_at: Timestamp::now(),
+        ended_at: None,
+        origin,
         phase: ServicePhase::Starting,
         exit: None,
+        stopped_for: None,
       },
     );
     let ready = readiness::wait(&mut tree, (service, &values), port, (&log, ended)).and_then(|output| {

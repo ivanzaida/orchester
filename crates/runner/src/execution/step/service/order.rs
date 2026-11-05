@@ -15,10 +15,11 @@ use orchester_core::{
   resource::Slug,
   service::{Service, ServiceApproval, ServiceName, Stack, StackName, StartPlan},
 };
+use orchester_ipc::services::ServiceStarter;
 use serde_json::{Map, json};
 
 use super::{
-  Running, StepServices,
+  Origin, Running, StepServices,
   launch::{published, published_stacks},
 };
 
@@ -74,6 +75,26 @@ impl StepServices {
     }
   }
 
+  /// A person's Restart or Start in the Services tab: stops the service `name` when it runs, then starts it as
+  /// published with what it needs, the person's press approving it, and waits until it is ready. Blocks while an
+  /// earlier start of the invocation runs.
+  pub(super) fn restart_for_person(&self, name: &ServiceName) -> Result<(), String> {
+    let _one_at_a_time = self.state.starting.lock();
+    let stopped = self.stop(name);
+    if stopped.is_error() {
+      return Err(stopped.text().to_owned());
+    }
+    let earlier = self.state.set_origin(Origin {
+      stack: None,
+      by: ServiceStarter::Person,
+    });
+    let started = self.services_of(None, |services| {
+      StartPlan::for_service(services, name).map_err(|error| format!("the service `{name}` cannot be started: {error}"))
+    });
+    self.state.set_origin(earlier);
+    started.map(|_| ())
+  }
+
   /// Starts every service of the published stack `name` with what they need, in order, and answers each one's URL
   /// and port; a service the invocation runs already is reused. Runs only the definitions `approved` names. Blocks
   /// while an earlier start of the invocation runs.
@@ -83,9 +104,14 @@ impl StepServices {
       Ok(stack) => stack,
       Err(refusal) => return ToolResult::unavailable(&refusal),
     };
+    let earlier = self.state.set_origin(Origin {
+      stack: Some(name.clone()),
+      by: ServiceStarter::Agent,
+    });
     let started = self.services_of(Some(approved), |services| {
       StartPlan::for_stack(services, &stack).map_err(|error| error.to_string())
     });
+    self.state.set_origin(earlier);
     let plan = match started {
       Ok(plan) => plan,
       Err(refusal) => return ToolResult::unavailable(&format!("the stack `{name}` was not started fully: {refusal}")),

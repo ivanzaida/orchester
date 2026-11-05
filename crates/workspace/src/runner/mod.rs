@@ -19,6 +19,7 @@ mod idle;
 mod lifetime;
 mod report;
 mod requests;
+mod services;
 mod side_question;
 pub mod state;
 mod work;
