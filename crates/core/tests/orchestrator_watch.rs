@@ -1,12 +1,19 @@
-//! Which Orchestrator conversation leads a task's events (`orchestrator::watch`): the most specific subscription,
-//! one leader per target, the task inside a module another conversation leads, taking a target over and stopping.
+//! The rules of `orchestrator::watch`. Which Orchestrator conversation leads a task's events (ORC-752): the most
+//! specific subscription, one leader per target, the task inside a module another conversation leads, taking a target
+//! over and stopping. When a subscription ends and what the leading conversation creates (ORC-753): a module's or a
+//! task's subscription ends by itself once its tasks are Done or Canceled, with the reason for its summary turn, while
+//! tasks without a module and the project never do; a person's stop lists what it left open and changes no run; a
+//! task the conversation creates outside its targets becomes its task subscription with the order of the turn's
+//! subscription.
 
 use orchester_core::{
   id::{ChatId, ModuleId, TaskId},
   orchestrator::{
     Claim, Subscription, Subscriptions, WatchTarget,
-    watch::{News, TwoLeaders},
+    watch::{EndReason, Ending, LeftOpen, NeverEnds, News, OpenWork, TargetTasks, TwoLeaders, created_task_watch},
   },
+  run::TaskPhase,
+  task::organization::WorkflowStatus::{self, Backlog, Canceled, Done, InProgress, InReview, Todo},
   time::Timestamp,
 };
 
@@ -242,4 +249,135 @@ fn watch_stop_ends_the_subscription_and_hands_the_tasks_back() {
     .expect("stopped");
   assert_eq!(last.told(), None, "nobody else watches the project");
   assert_eq!(last.set().leading(task, Some(module)), None);
+}
+
+#[test]
+fn watch_ending_a_task_ends_once_done_or_canceled() {
+  assert_eq!(TargetTasks::Task(Done).ending(), Ending::Ends(EndReason::TaskDone));
+  assert_eq!(
+    TargetTasks::Task(Canceled).ending(),
+    Ending::Ends(EndReason::TaskCanceled)
+  );
+  for open in [Backlog, Todo, InProgress, InReview] {
+    assert_eq!(TargetTasks::Task(open).ending(), Ending::Open, "{open:?} keeps it");
+  }
+}
+
+#[test]
+fn watch_ending_a_module_ends_once_every_task_is_done_or_canceled() {
+  assert_eq!(
+    TargetTasks::Module(&[Done, Canceled, Done]).ending(),
+    Ending::Ends(EndReason::ModuleClosed { done: 2, canceled: 1 })
+  );
+  assert_eq!(
+    TargetTasks::Module(&[Canceled]).ending(),
+    Ending::Ends(EndReason::ModuleClosed { done: 0, canceled: 1 })
+  );
+  assert_eq!(TargetTasks::Module(&[Done, InReview, Done]).ending(), Ending::Open);
+  let none: &[WorkflowStatus] = &[];
+  assert_eq!(
+    TargetTasks::Module(none).ending(),
+    Ending::Open,
+    "a module without tasks goes on"
+  );
+}
+
+#[test]
+fn watch_ending_never_for_tasks_without_a_module_or_the_project() {
+  assert_eq!(
+    TargetTasks::WithoutModule.ending(),
+    Ending::Never(NeverEnds::WithoutModule)
+  );
+  assert_eq!(TargetTasks::Project.ending(), Ending::Never(NeverEnds::Project));
+}
+
+#[test]
+fn watch_stop_lists_what_was_left_open_and_changes_no_run() {
+  let [waits, stuck, runs, queued, at_limit, paused, merged, draft] = [(); 8].map(|()| TaskId::generate());
+  let phases = [
+    (waits, TaskPhase::Waiting),
+    (stuck, TaskPhase::Stuck),
+    (runs, TaskPhase::Running),
+    (queued, TaskPhase::Queued),
+    (at_limit, TaskPhase::StoppedAtLimit),
+    (paused, TaskPhase::Paused),
+    (merged, TaskPhase::Merged),
+    (draft, TaskPhase::Draft),
+  ];
+  let left = LeftOpen::after_stop(phases.iter().copied());
+  assert_eq!(
+    left.tasks(),
+    [
+      (waits, OpenWork::Waits),
+      (stuck, OpenWork::Waits),
+      (runs, OpenWork::Runs),
+      (queued, OpenWork::Queued),
+      (at_limit, OpenWork::StoppedAtLimit),
+    ]
+  );
+  assert_eq!(left.count(OpenWork::Waits), 2);
+  assert_eq!(left.count(OpenWork::StoppedAtLimit), 1);
+  assert_eq!(
+    phases[0],
+    (waits, TaskPhase::Waiting),
+    "a stop reads the phases and changes none"
+  );
+  assert!(LeftOpen::after_stop([(merged, TaskPhase::Merged)]).is_empty());
+}
+
+#[test]
+fn watch_created_task_outside_the_targets_becomes_a_task_subscription_with_the_turns_order() {
+  let (chat, other) = (ChatId::generate(), ChatId::generate());
+  let module = ModuleId::generate();
+  let led = Subscription::new(chat, WatchTarget::Module(module), "Merge when green", at(1));
+  let all = set([
+    led.clone(),
+    watch(chat, WatchTarget::Task(TaskId::generate()), 2),
+    watch(other, WatchTarget::Project, 3),
+  ]);
+  let created = TaskId::generate();
+  assert_eq!(
+    created_task_watch(&all, chat, Some(&led), created, None, at(9)),
+    Some(Subscription::new(
+      chat,
+      WatchTarget::Task(created),
+      "Merge when green",
+      at(9)
+    )),
+    "another conversation's subscription does not take it in for this one"
+  );
+  assert_eq!(
+    created_task_watch(&all, chat, None, created, Some(ModuleId::generate()), at(9)),
+    Some(watch(chat, WatchTarget::Task(created), 9)),
+    "a turn the person started gives the default order"
+  );
+}
+
+#[test]
+fn watch_created_task_inside_a_target_adds_nothing() {
+  let chat = ChatId::generate();
+  let module = ModuleId::generate();
+  let task = TaskId::generate();
+  let by_module = Subscription::new(chat, WatchTarget::Module(module), "Ask first", at(1));
+  assert_eq!(
+    created_task_watch(
+      &set([by_module.clone()]),
+      chat,
+      Some(&by_module),
+      task,
+      Some(module),
+      at(9)
+    ),
+    None
+  );
+  let by_task = set([watch(chat, WatchTarget::Task(task), 1)]);
+  assert_eq!(created_task_watch(&by_task, chat, None, task, None, at(9)), None);
+  let without_module = set([watch(chat, WatchTarget::WithoutModule, 1)]);
+  assert_eq!(created_task_watch(&without_module, chat, None, task, None, at(9)), None);
+  assert!(created_task_watch(&without_module, chat, None, task, Some(module), at(9)).is_some());
+  let project = set([watch(chat, WatchTarget::Project, 1)]);
+  assert_eq!(
+    created_task_watch(&project, chat, None, task, Some(module), at(9)),
+    None
+  );
 }

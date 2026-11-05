@@ -4,13 +4,25 @@
 //! the one of tasks without a module, for a task with none), then the project's. With none, callers keep the rule of
 //! [`super::wait::dealt_with`], else the project's latest conversation. One conversation leads each target at most,
 //! which [`Subscriptions`] keeps, so two subscriptions never tie.
+//!
+//! The rules that need no store beside them (the orchestrator-watch design frame "What the design decides", rows
+//! Ending and Created tasks): when a subscription ends by itself ([`ending`]), what a person's stop leaves open
+//! ([`stop`]), and which task the leading conversation creates becomes a task subscription of it ([`created`]).
 
 mod change;
+pub mod created;
+pub mod ending;
+pub mod stop;
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-pub use self::change::{News, Stopped, Taken, Told};
+pub use self::{
+  change::{News, Stopped, Taken, Told},
+  created::created_task_watch,
+  ending::{EndReason, Ending, NeverEnds, TargetTasks},
+  stop::{LeftOpen, OpenWork},
+};
 use crate::{
   id::{ChatId, ModuleId, TaskId},
   time::Timestamp,
@@ -37,6 +49,16 @@ impl WatchTarget {
       module.map_or(Self::WithoutModule, Self::Module),
       Self::Project,
     ]
+  }
+
+  /// Whether the target takes in the task `task`, which is in `module` or in none.
+  pub fn covers(self, task: TaskId, module: Option<ModuleId>) -> bool {
+    match self {
+      Self::Task(watched) => watched == task,
+      Self::Module(watched) => module == Some(watched),
+      Self::WithoutModule => module.is_none(),
+      Self::Project => true,
+    }
   }
 
   /// The less specific targets that cover this one, nearest first; `task_module` is the module of a task target
