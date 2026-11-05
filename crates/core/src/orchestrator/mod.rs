@@ -12,6 +12,7 @@ mod failure;
 pub mod fork;
 pub mod git;
 pub mod instructions;
+pub mod leads;
 pub mod mcp;
 pub mod merging;
 pub mod plan;
@@ -31,6 +32,7 @@ pub use self::{
     ActionOutcome, BlankTitle, Chat, ChatAction, ChatApproval, ChatEntry, ChatEvent, ChatSession, ChatTitle,
     CompactionState, EntryKind, HeldWork, Queued, SessionChange, TurnFailure, TurnState, WaitTurn,
   },
+  leads::{Lead, Leads},
   merging::{MergeLeft, Merging},
   plan::{ChatPlan, PlanState, PlanStep, StepKind, TurnMode},
   report::{DailyReport, ReportSchedule, ReportTime},
