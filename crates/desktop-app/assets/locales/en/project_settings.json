@@ -486,6 +486,73 @@
         "stack": "Stack",
         "suite": "Test suite",
         "notBuilt": "This page is not built in this app yet."
+      },
+      "editor": {
+        "lead": "A run starts it when an agent or the Test step needs it, and stops it when the step ends, the run pauses or waits for you.",
+        "newLead": "A program Orchester starts for a run, without a shell. It is saved as a draft as you go; runs start it once it is published.",
+        "reading": "Reading the service…",
+        "loadFailed": "The service cannot be read",
+        "program": "Program",
+        "name": "Name",
+        "nameHint": "Needs and stacks name it by this; it keeps it",
+        "programHint": "A program on the PATH or in the repository; no shell",
+        "found": {
+          "onPath": "Found on the PATH",
+          "notOnPath": "Not found on the PATH",
+          "inRepository": "Found in the repository",
+          "notInRepository": "Not found in the repository",
+          "atPath": "Found at this path",
+          "notAtPath": "Nothing at this path"
+        },
+        "arguments": "Arguments",
+        "argumentsHint": "One per line, passed as written",
+        "folder": "Working folder",
+        "folderHint": "In the run's worktree",
+        "folderRoot": "The worktree itself",
+        "variables": "Variables",
+        "variablesHint": "Plain values, or a project secret by name",
+        "variableName": "Name of variable {{number}}",
+        "variableValue": "Value of {{name}}",
+        "secretOf": "Secret {{name}} takes",
+        "secret": "secret",
+        "addVariable": "Add variable",
+        "addSecret": "Add secret",
+        "needs": "Needs",
+        "needsHint": "Started first, in order; each must be ready before the next",
+        "addNeed": "Add a service",
+        "noOtherServices": "No other service yet",
+        "removeNeed": "Remove {{name}}",
+        "orderNote": "Resolved from the needs of each service",
+        "startOrder": "Start order",
+        "ready": {
+          "port": "port",
+          "http": "HTTP {{path}}",
+          "log": "log line"
+        },
+        "state": {
+          "new": "Not saved yet",
+          "draftNew": "Draft · not published yet",
+          "draft": "Draft · v{{version}} published",
+          "stale": "Draft from v{{based}} · v{{version}} is published",
+          "published": "Published v{{version}}"
+        },
+        "publish": "Publish v{{version}}",
+        "publishWaitsSave": "Publish waits until the draft is saved.",
+        "publishWaitsFix": "Fix what the fields say before publishing.",
+        "publishStale": "This draft started from an older version; v{{version}} was published since.",
+        "personOnly": "Only a person changes what a service runs, or publishes it: input from an MCP client is taken only while you let automation change agent permissions. Nothing was saved.",
+        "delete": {
+          "button": "Delete service",
+          "title": "Delete {{name}}?",
+          "gone": "Runs that start after this cannot start it, and services that need it no longer resolve.",
+          "kept": "Runs that already started it keep the version they started.",
+          "final": "This cannot be undone.",
+          "confirm": "Delete service",
+          "cancel": "Cancel",
+          "enterDeletes": "deletes",
+          "personOnly": "Only a person deletes a service: input from an MCP client is not taken here.",
+          "failed": "The service was not deleted. {{reason}}"
+        }
       }
     }
   }

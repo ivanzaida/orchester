@@ -1,14 +1,18 @@
 //! `services`: Project settings › Services with something in every group (`01 · Services` `G1sdS`): six services,
-//! five of them published (`team-web` only a draft), three stacks and five test suites of every layer. Any scenario
-//! without services shows the tab's empty state (`01b` `CdjWu`).
+//! five of them published (`team-web` only a draft, filled as its page draws it, `02` `TGRTt`), three stacks and five
+//! test suites of every layer. Any scenario without services shows the tab's empty state (`01b` `CdjWu`).
+
+use std::collections::BTreeMap;
 
 use orchester_core::{
   resource::{
     CommandArg, CommandProgram, CommandTimeout, ReportFormat, Slug, SuiteCommand, SuiteNeeds, SuitePath, TestLayer,
-    TestReport, TestSuite,
+    TestReport, TestSuite, VariableName,
   },
+  secret::SecretName,
   service::{
-    OwnedPath, Readiness, ReadyCheck, ReadyTimeout, RunData, Service, ServiceName, Stack, StackName, UiDriver,
+    OwnedPath, Readiness, ReadyCheck, ReadyTimeout, RelativeFolder, RunData, Service, ServiceName, ServiceValue,
+    ServiceVariables, Stack, StackName, UiDriver,
   },
   store::ResourceStore,
 };
@@ -68,6 +72,34 @@ fn suite(
   )
 }
 
+/// `team-web` as its page draws it (`02 · Service editor` `TGRTt`): `npm run dev --port {{port}}` in `web/team`, the
+/// team server's URL and its port as plain variables and its session secret by name.
+fn team_web() -> Result<Service, SeedError> {
+  let arguments = ["run", "dev", "--port", "{{port}}"]
+    .into_iter()
+    .map(CommandArg::new)
+    .collect::<Result<Vec<_>, _>>()
+    .map_err(invalid)?;
+  let plain = |text: &str| ServiceValue::Plain(text.to_owned());
+  let variables = [
+    ("VITE_API_URL", plain("{{services.team-server.url}}")),
+    ("PORT", plain("{{port}}")),
+    (
+      "SESSION_SECRET",
+      ServiceValue::Secret(SecretName::new("TEAM_SESSION_SECRET").map_err(invalid)?),
+    ),
+  ]
+  .into_iter()
+  .map(|(name, value)| Ok((VariableName::new(name).map_err(invalid)?, value)))
+  .collect::<Result<BTreeMap<_, _>, SeedError>>()?;
+  Ok(
+    service("team-web", &["team-server"], &["web/team/**"])?
+      .with_arguments(arguments)
+      .with_working_folder(RelativeFolder::new("web/team").map_err(invalid)?)
+      .with_variables(ServiceVariables::new(variables).map_err(invalid)?),
+  )
+}
+
 pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
   let services = [
     (
@@ -83,7 +115,7 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
       service("team-server", &["cloud-api"], &["crates/team-server/**"])?,
       true,
     ),
-    (service("team-web", &["team-server"], &["web/team/**"])?, false),
+    (team_web()?, false),
     (
       service("desktop-qa", &["cloud-api"], &[])?.with_ui_driver(UiDriver::Mcp),
       true,

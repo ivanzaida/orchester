@@ -2,8 +2,9 @@
 //! Runs, Services, Orchestrator, Context, Connections, Environment and Sharing, each a 720 column of groups of rows
 //! ([`kit`]). General, Runs, Orchestrator, Context and Environment's variables save as a person leaves a field or flips
 //! a switch, widening changes asked in place; Connections and Environment's secrets save per action, and Connections
-//! says nothing of a save state, but Add provider says it isn't saved yet; Services only lists what the project
-//! defines. Add, open and edit flows are pages inside their tab with a crumb back to it: a connection's, Add provider
+//! says nothing of a save state, but Add provider says it isn't saved yet; Services lists what the project defines,
+//! and a service's page saves its draft as a field is left. Add, open and edit flows are pages inside their tab with a
+//! crumb back to it: a connection's, Add provider
 //! and Add MCP server under Connections, a secret's and New secret under Environment, *Approved for every run* under
 //! Runs, a service's, stack's or suite's and their New pages, Import draft and Flaky tests under Services, and the
 //! first link (`Share`) under Sharing.
@@ -282,7 +283,7 @@ impl Component for SettingsScreen {
       (Shown::Tab(Tab::General), _) => ctx.mount_keyed::<general::General>("project-settings-general", props),
       (Shown::Tab(Tab::Runs), _) => ctx.mount_keyed::<runs::Runs>("project-settings-runs", props),
       (Shown::Tab(Tab::Services), _) => ctx.mount_keyed::<services::ServicesTab>("project-settings-services", props),
-      (Shown::Services(page), _) => services::not_built(ctx, &project, page),
+      (Shown::Services(page), _) => services::services_page(ctx, &props, page),
       (Shown::Tab(Tab::Orchestrator), _) => {
         ctx.mount_keyed::<orchestrator::Orchestrator>("project-settings-orchestrator", props)
       }

@@ -51,6 +51,7 @@ mod projects;
 mod pull_requests;
 mod run_model;
 mod secrets;
+mod services;
 mod settings;
 mod shadow;
 mod shell;
@@ -113,6 +114,7 @@ pub use self::{
   pull_requests::{PullRequestsSpacing, PullRequestsText},
   run_model::ModelText,
   secrets::{SECRETS_PENDING_OPACITY, SecretsSpacing, SecretsText},
+  services::ServicesText,
   settings::{SettingsSpacing, SettingsText},
   shadow::ExtraShadow,
   shell::{ShellSpacing, ShellText},
