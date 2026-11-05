@@ -2,23 +2,29 @@
 //! conversation waits for comes back to it. The new subscription takes the order of the subscription whose turn
 //! created the task; a turn the person started has none, so it takes the default order.
 
-use super::{Watch, WatchTarget};
-use crate::id::{ModuleId, TaskId};
+use super::{Subscription, Subscriptions, WatchTarget};
+use crate::{
+  id::{ChatId, ModuleId, TaskId},
+  time::Timestamp,
+};
 
-/// The task subscription the conversation with `watches` gets for the task `task` (in `module`, or in none) one of its
-/// turns created: `None` when a subscription of the conversation already takes the task in. `turn_of` is the
-/// subscription whose event turn created it, `None` for a turn of the person's.
+/// The task subscription `chat` gets, from `since` on, for the task `task` (in `module`, or in none) one of its turns
+/// created: `None` when a subscription of `chat` in `subscriptions` already takes the task in. `turn_of` is the
+/// subscription whose event turn created it, `None` for a turn of the person's (the default order).
 pub fn created_task_watch(
-  watches: &[Watch],
-  turn_of: Option<&Watch>,
+  subscriptions: &Subscriptions,
+  chat: ChatId,
+  turn_of: Option<&Subscription>,
   task: TaskId,
   module: Option<ModuleId>,
-) -> Option<Watch> {
-  if watches.iter().any(|watch| watch.target.covers(task, module)) {
+  since: Timestamp,
+) -> Option<Subscription> {
+  if subscriptions
+    .of_chat(chat)
+    .any(|watch| watch.target().covers(task, module))
+  {
     return None;
   }
-  Some(Watch {
-    target: WatchTarget::Task(task),
-    order: turn_of.and_then(|watch| watch.order.clone()),
-  })
+  let order = turn_of.and_then(Subscription::order).unwrap_or_default();
+  Some(Subscription::new(chat, WatchTarget::Task(task), order, since))
 }
