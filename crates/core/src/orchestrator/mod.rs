@@ -22,6 +22,7 @@ pub mod rewind;
 pub mod run_git;
 pub mod sent;
 pub mod settings;
+pub mod task_event;
 pub mod wait;
 
 pub use self::{
@@ -36,6 +37,7 @@ pub use self::{
   rewind::{Dropped, RewindPoint, RewoundTo},
   sent::{FromOrchestrator, SentWay},
   settings::{OrchestratorSettings, runs_orchestrator},
+  task_event::{NoProgressAfter, TaskEvent, TaskEventKind},
   wait::{AgentWait, RunEnd, StopReason, WaitKind},
 };
 
