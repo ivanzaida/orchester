@@ -28,6 +28,8 @@ fn orchestrator_roles_follow_the_design() {
     (OrchestratorText::Message, 13.0, 1.3, FontWeight::Normal, "Geist"),
     // *Plan only* on the composer's Mode line (`xptH1` in `y51fw9`).
     (OrchestratorText::Mode, 12.0, 1.3, FontWeight::Medium, "Geist"),
+    // *Settings ↗* at the runs-on picker's foot (`rIT51`).
+    (OrchestratorText::PickerLink, 12.0, 1.3, FontWeight::Normal, "Geist"),
   ] {
     let style = theme.typography_style(role.role());
     assert_eq!(

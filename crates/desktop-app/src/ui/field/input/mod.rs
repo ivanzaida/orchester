@@ -67,6 +67,8 @@ pub struct FieldInput {
   lines: Lines,
   mono: bool,
   text_style: Option<TypographyStyle>,
+  /// The placeholder's own role, where the design draws it in another type than the value.
+  placeholder_style: Option<TypographyStyle>,
   name: Arc<str>,
   /// Why the value is not accepted, said under the box, whose stroke turns `danger`.
   error: Option<Arc<str>>,
@@ -116,6 +118,7 @@ impl PartialEq for FieldInput {
       && self.lines == other.lines
       && self.mono == other.mono
       && self.text_style == other.text_style
+      && self.placeholder_style == other.placeholder_style
       && self.name == other.name
       && self.error == other.error
       && self.group_separator == other.group_separator
@@ -150,6 +153,7 @@ impl FieldInput {
       lines: Lines::One,
       mono: false,
       text_style: None,
+      placeholder_style: None,
       name: name.into(),
       error: None,
       group_separator: None,
@@ -290,6 +294,13 @@ impl FieldInput {
   /// The design's text role for the value and placeholder.
   pub fn text_style(mut self, style: TypographyStyle) -> Self {
     self.text_style = Some(style);
+    self
+  }
+
+  /// The placeholder in `style` instead of the value's, e.g. a search typed in Geist Mono whose placeholder is words
+  /// (`Search models…` `Aenob` in the runs-on picker).
+  pub fn placeholder_style(mut self, style: TypographyStyle) -> Self {
+    self.placeholder_style = Some(style);
     self
   }
 
